@@ -363,8 +363,10 @@ func TestQuantityFromWireComposesAsWritten(t *testing.T) {
 	srv := mustNewService(t, 4)
 	source := `package Q {
 	private import ScalarValues::*;
+	private import SI::*;
 	calc def Dist { in v; in dt; v * dt }
 	calc def Area { in a; in b; a * b }
+	calc def Metre { 2.0 [m] }
 }
 `
 	hash := mustVerifyModel(t, srv, source, "quantity-composes-as-written")
@@ -417,6 +419,89 @@ func TestQuantityFromWireComposesAsWritten(t *testing.T) {
 	got := describeQuantity(evaluate("Q::Dist", opaque, mustEvaluateQuantity(t, srv, hash, "1.0 [SI::s]")))
 	if got != "5 [SI::s*metres per second] = SI::metre" {
 		t.Errorf("opaque unit over the wire = %s, want 5 [SI::s*metres per second] = SI::metre", got)
+	}
+
+	// A unit written short, as an import let the sender write it, is read in the
+	// namespace of the base units it reduces to: `m` is SI::m, and cancels or
+	// merges with SI::m written in full.
+	unqualified := &pb.Quantity{
+		Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 5},
+		Unit:      "m/s",
+		UnitTerm:  speed.GetUnitTerm(),
+	}
+	got = describeQuantity(evaluate("Q::Dist", unqualified, mustEvaluateQuantity(t, srv, hash, "1.0 [SI::s]")))
+	if got != "5 [m] = SI::metre" {
+		t.Errorf("unqualified unit over the wire = %s, want 5 [m] = SI::metre", got)
+	}
+	metre := evaluate("Q::Metre")
+	if metre.GetUnit() != "m" {
+		t.Fatalf("a quantity written under an import crosses the wire in %q, want m", metre.GetUnit())
+	}
+	got = describeQuantity(evaluate("Q::Area", metre, mustEvaluateQuantity(t, srv, hash, "3.0 [SI::m]")))
+	if got != "6 [m**2] = SI::metre^2" {
+		t.Errorf("m * SI::m over the wire = %s, want 6 [m**2] = SI::metre^2", got)
+	}
+
+	// A short name those namespaces do not declare, or declare as a unit the
+	// reduction contradicts, is opaque: it was not certainly that unit.
+	for _, tc := range []struct{ unit, want string }{
+		{"ft", "6 [SI::m*ft] = SI::metre^2"},
+		{"km", "6 [SI::m*km] = SI::metre^2"},
+	} {
+		short := &pb.Quantity{
+			Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 2},
+			Unit:      tc.unit,
+			UnitTerm:  metre.GetUnitTerm(),
+		}
+		got = describeQuantity(evaluate("Q::Area", short, mustEvaluateQuantity(t, srv, hash, "3.0 [SI::m]")))
+		if got != tc.want {
+			t.Errorf("%s over a metre reduction * SI::m = %s, want %s", tc.unit, got, tc.want)
+		}
+	}
+}
+
+// TestQuantityFromWireRejectsUnitTextItsReductionContradicts pins that a unit
+// written as one thing but reduced to another is rejected rather than read as
+// the text for display and the reduction for arithmetic.
+func TestQuantityFromWireRejectsUnitTextItsReductionContradicts(t *testing.T) {
+	srv, hash, idx, sem := mustQuantityModel(t)
+	seconds := mustEvaluateQuantity(t, srv, hash, "1.0 [SI::s]").GetUnitTerm()
+	kilograms := mustEvaluateQuantity(t, srv, hash, "1.0 [SI::kg]").GetUnitTerm()
+	metres := mustEvaluateQuantity(t, srv, hash, "1.0 [SI::m]").GetUnitTerm()
+
+	for _, tc := range []struct {
+		name string
+		unit string
+		term *pb.UnitTerm
+	}{
+		{"another dimension", "SI::m", seconds},
+		{"a composed unit over another dimension", "SI::m/SI::s", kilograms},
+		{"another scale of the same dimension", "SI::km", metres},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pq := &pb.Quantity{
+				Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 1},
+				Unit:      tc.unit,
+				UnitTerm:  tc.term,
+			}
+			if _, err := ProtoToQuantity(pq, idx, sem); !errors.Is(err, ErrUnitTextMismatch) {
+				t.Errorf("ProtoToQuantity(%s over %s) err = %v, want ErrUnitTextMismatch",
+					tc.unit, describeUnitTerm(tc.term), err)
+			}
+		})
+	}
+
+	// The same text over the reduction it does have is read, in either factor order.
+	agreeing := &pb.Quantity{
+		Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 1},
+		Unit:      "SI::m/SI::s",
+		UnitTerm: &pb.UnitTerm{ScaleNum: 1, ScaleDen: 1, Factors: []*pb.UnitFactor{
+			{UnitId: "SI::second", Exponent: -1},
+			{UnitId: "SI::metre", Exponent: 1},
+		}},
+	}
+	if _, err := ProtoToQuantity(agreeing, idx, sem); err != nil {
+		t.Errorf("ProtoToQuantity(SI::m/SI::s over metre·second^-1): %v", err)
 	}
 }
 

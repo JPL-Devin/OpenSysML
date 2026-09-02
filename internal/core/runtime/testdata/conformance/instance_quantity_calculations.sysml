@@ -6,6 +6,7 @@ package test {
 	public import ISQ::*;
 	public import SI::*;
 	public import QuantityCalculations::*;
+	private import MeasurementReferences::DimensionOneValue;
 
 	part def Plot {
 		attribute side : LengthValue = 3 [m];
@@ -24,5 +25,8 @@ package test {
 		attribute label : ScalarValues::String = ToString(side);
 		attribute metres : ScalarValues::Real = ToReal(side);
 		attribute count : ScalarValues::Integer = ToInteger(side);
+		attribute ratio : DimensionOneValue = ToDimensionOneValue(2.5);
+		attribute stretched : LengthValue = ratio * side;
+		attribute grown : DimensionOneValue = ratio + 1.5;
 	}
 }

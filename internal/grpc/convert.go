@@ -371,6 +371,10 @@ var (
 	// ErrUnitNotReduced reports a named unit sent without its reduction, over
 	// which alone commensurability is decided.
 	ErrUnitNotReduced = errors.New("unit carries no reduction to base units")
+
+	// ErrUnitTextMismatch reports a unit whose text names units that do not
+	// reduce to the unit_term sent with it, so the two describe different units.
+	ErrUnitTextMismatch = errors.New("unit as written does not reduce to its unit_term")
 	// ErrUnsetNotAccepted reports the unset arm arriving as an input. It reports
 	// that a feature value holds no value, which is something to read, not to supply.
 	ErrUnsetNotAccepted = errors.New("unset is not a value a caller can supply")
@@ -452,37 +456,101 @@ func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index, sem *semantics.Model) 
 		return runtime.Value{}, fmt.Errorf("quantity in %q carries no magnitude", pq.GetUnit())
 	}
 
-	unit := runtime.Unit{Text: pq.GetUnit(), Product: unitProductOfText(pq.GetUnit(), term, idx, sem), Term: term}
+	product, err := unitProductOfText(pq.GetUnit(), term, idx, sem)
+	if err != nil {
+		return runtime.Value{}, err
+	}
+	unit := runtime.Unit{Text: pq.GetUnit(), Product: product, Term: term}
 	return runtime.NewQuantityValue(&runtime.Quantity{Num: num, Unit: unit}), nil
 }
 
 // unitProductOfText reads a unit as written (`SI::m/SI::s`) as the product of
-// the named units it composes, each resolved against the model where its name
-// is one the model declares. Text that is no unit expression is one opaque unit.
-func unitProductOfText(text string, term semantics.UnitTerm, idx *symbols.Index, sem *semantics.Model) semantics.UnitProduct {
+// the named units it composes, once every name resolves to a unit the model
+// declares and the product reduces to term. A name written short (`m`, as an
+// import let the sender write it) is looked for in the namespaces of term's base
+// units, and kept only if the product then reduces to term. Text the model
+// cannot read that way is one opaque unit, which no operation cancels against another.
+func unitProductOfText(text string, term semantics.UnitTerm, idx *symbols.Index, sem *semantics.Model) (semantics.UnitProduct, error) {
 	if text == "" {
-		return semantics.UnitProduct{}
+		return semantics.UnitProduct{}, nil
 	}
 	opaque := semantics.NamedUnitProduct(nil, text, term.Dimensionless())
 	if idx == nil || sem == nil {
-		return opaque
+		return opaque, nil
 	}
 	p := parser.New(source.New("<unit>", []byte(text)))
 	expr := p.ParseExpression()
 	if expr == nil || len(p.Diagnostics) > 0 || p.Offset() != len(text) {
-		return opaque
+		return opaque, nil
 	}
-	product, err := sem.UnitProductOfExprBy(expr, func(qn *ast.QualifiedName) (*symbols.Symbol, bool) {
-		matches := idx.LookupQualified(semantics.QualifiedNameText(qn))
+	unitAt := func(fqn string) (*symbols.Symbol, bool) {
+		matches := idx.LookupQualified(fqn)
 		if len(matches) != 1 || !sem.IsMeasurementUnit(matches[0]) {
 			return nil, false
 		}
 		return matches[0], true
+	}
+	guessed := false
+	product, err := sem.UnitProductOfExprBy(expr, func(qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+		name := semantics.QualifiedNameText(qn)
+		if sym, ok := unitAt(name); ok {
+			return sym, true
+		}
+		if len(qn.Parts) != 1 {
+			return nil, false
+		}
+		for _, ns := range baseUnitNamespaces(term) {
+			if sym, ok := unitAt(ns + "::" + name); ok {
+				guessed = true
+				return sym, true
+			}
+		}
+		return nil, false
 	})
 	if err != nil {
-		return opaque
+		return opaque, nil
 	}
-	return product
+	implied := semantics.UnitTerm{Scale: semantics.UnitScale(1)}
+	for _, f := range product.Powers {
+		if f.Unit == nil {
+			return opaque, nil
+		}
+		factor, err := sem.UnitTermOf(f.Unit)
+		if err != nil {
+			return opaque, nil
+		}
+		implied = implied.Times(factor.Pow(f.Exponent))
+	}
+	if !implied.Commensurable(term) || !sameScale(implied.Scale, term.Scale) {
+		if guessed {
+			return opaque, nil
+		}
+		return semantics.UnitProduct{}, fmt.Errorf("%w: %s reduces to %s, unit_term is %s",
+			ErrUnitTextMismatch, text, implied, term)
+	}
+	return product, nil
+}
+
+// baseUnitNamespaces lists, in factor order and once each, the namespaces
+// declaring the base units a reduction is over.
+func baseUnitNamespaces(term semantics.UnitTerm) []string {
+	var out []string
+	for _, f := range term.Factors {
+		if f.Unit == nil || f.Unit.OwnerScope == nil || f.Unit.OwnerScope.Owner() == nil {
+			continue
+		}
+		ns := symbols.FQNOf(f.Unit.OwnerScope.Owner())
+		if !slices.Contains(out, ns) {
+			out = append(out, ns)
+		}
+	}
+	return out
+}
+
+// sameScale reports whether two scale ratios agree to within floating-point
+// rounding, which composing the same factors in another order can introduce.
+func sameScale(a, b semantics.Scale) bool {
+	return math.Abs(semantics.ConvertMagnitude(1, a, b)-1) < 1e-9
 }
 
 // protoToUnitTerm rebuilds a unit's reduction, normalized so a term sent in any

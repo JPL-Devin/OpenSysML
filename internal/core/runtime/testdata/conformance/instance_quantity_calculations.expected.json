@@ -18,6 +18,9 @@
     "same": {"type": "Boolean", "value": true},
     "label": {"type": "String", "value": "3 [m]"},
     "metres": {"type": "Real", "value": 3.0},
-    "count": {"type": "Integer", "value": 3}
+    "count": {"type": "Integer", "value": 3},
+    "ratio": {"type": "Real", "value": 2.5},
+    "stretched": {"type": "Quantity", "value": 7.5, "unit": "m"},
+    "grown": {"type": "Real", "value": 4.0}
   }
 }
