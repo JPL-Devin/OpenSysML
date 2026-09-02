@@ -38,6 +38,17 @@ the Python client 0.4.0 was published to PyPI. The conformance suite and the pil
 now also render their runs as JUnit XML — and the differential as SARIF — so CI shows them as test
 results rather than artifacts to download.
 
+A profiling pass across the toolchain removed the costs a September census found rather than the
+costs assumed: a multi-file `-validate` batch is indexed once instead of once per file — 6.8 s to
+0.30 s over the 100-file training corpus, the quadratic term gone — a calc invocation reuses a
+pooled frame instead of allocating ~1.7 KiB per call, a run target resolves from a per-document
+name table instead of an O(model) scope walk, the parser's token buffer became a bounded window
+(a load allocates 30% fewer objects and holds 16% less live heap), and the `about`-metadata index
+is cached when the library index freezes, restoring the empty-session floor the census flagged.
+The census and an execution-performance measurement are recorded as project records
+([performance census](docs/project/performance-census-2026-09.md),
+[execution performance](docs/project/execution-performance-2026-09.md)).
+
 No model that validated under 0.4.2 stops validating and no import path moves.
 
 ### Added
@@ -100,6 +111,54 @@ No model that validated under 0.4.2 stops validating and no import path moves.
   design for rendering documents as semantic, styleable HTML straight from the document IR —
   proposed, not implemented.
 
+### Performance
+
+- **A multi-file `-validate` batch is indexed once.** Validation loaded each file through a path
+  that reopened the session document, reindexed it and re-expanded every wildcard import, so a
+  batch of N files paid N full indexes over a growing buffer. The batch is now a single
+  submission (`Session.LoadFilesSummary`), with each file's own syntax errors, load notices and
+  summary still printed in file order. Over the training corpus: 0.26 s → 0.12 s at 25 files,
+  0.59 s → 0.13 s at 50, 6.8 s → 0.30 s at 100 — a fixed floor plus a term that scales with the
+  input, no quadratic term. The shared symbol walk also stops rebuilding a visited map that its
+  cached, deduplicated symbol list already guarantees.
+
+- **A calc invocation reuses a pooled frame.** Each invocation allocated a fresh parameter map,
+  evaluation context, statement host and engine — ~1.7 KiB per call, and GC took half the CPU of
+  recursion-heavy evaluations. Returned frames go on a free list and the next invocation runs in
+  one; a frame is only ever held by one active invocation, so recursion never aliases. Default
+  bindings now run in the invocation's own activation, so a value read while binding is memoized
+  per invocation rather than leaking to the next one.
+
+- **A run target resolves from a per-document name table.** `RunCalc`, `RunStateMachine` and
+  `InstantiateNamed` re-walked the whole document scope tree per run, so a run cost O(model). The
+  session now tabulates its documents' simple names once per scope tree and answers lookups from
+  the table, rebuilt when a submission or reset replaces a document. At 4,000 elements a
+  state-machine start goes 204 µs → 6.4 µs, a calc 222 µs → 4.5 µs, an instantiation
+  217 µs → 3.3 µs, and the figures no longer scale with model size.
+
+- **The parser's token buffer is a bounded window.** The parser buffered every non-trivia token of
+  a file up front — ~48 bytes per token before reading any of them; consumed tokens are now
+  dropped once no checkpoint can rewind to them, so backtracking still sees what it needs while
+  the buffer stays bounded by the lookahead. With the REPL parsing each submitted file once
+  rather than twice, a load allocates 30% fewer objects and holds 16% less live heap.
+
+- **The `about`-metadata index is cached at index freeze time.** Building it walked the scope tree
+  of every document — the bundled standard library included — once per session. A frozen index is
+  immutable, so its `about`-usage symbols are recorded once at freeze and only workspace documents
+  are walked per session; the empty-session floor returns to ~0.19 ms and 117 KiB allocated,
+  −80% wall and −83% allocation, with the annotations found and their order identical.
+
+- **A repeated REPL command does not re-parse its text.** The session keeps what an argument list
+  and a command's name text parsed to, keyed by the exact text, so a repeated
+  `%calc`/`%action`/`%state`/`%instantiate` does not rebuild a source, lexer and parser per call.
+  Evaluation still runs on every call against the current session state.
+
+- **Two measurement records.** The [September 2026 performance census](docs/project/performance-census-2026-09.md)
+  measures week-over-week benchmark movement and whole-binary scaling, and flagged the regressions
+  fixed above; the [execution-performance record](docs/project/execution-performance-2026-09.md)
+  measures evaluation throughput — ~1.5 µs per calc invocation — and names the optimization gaps
+  the profiles show.
+
 ### Changed
 
 - **A `sat` is a witness the evaluator confirms; an `unsat` is claimed only where the arithmetics
@@ -126,6 +185,21 @@ No model that validated under 0.4.2 stops validating and no import path moves.
   alone, and a directory without a stamp is left alone with a warning.
 
 ### Fixed
+
+- **A wider-typed expression binds to a narrower feature.** `return : Integer = 7 / 2;` was
+  refused statically because the quotient's type is `Rational`, yet an expression's static type
+  only bounds its values — `4 / 2` is whole. A binding, argument or index is now refused
+  statically only when the two types are disjoint or the value is a literal, whose type is exact;
+  everything else is deferred to evaluation, where the value it actually turns out to be is still
+  checked. This matches the pinned pilot, which accepts the declaration and evaluates it.
+
+- **Every exported `Session` method holds the session lock.** The run, check/solve, view, document
+  and diagnostics entry points did not take it, so a Tab completion racing one of them touched the
+  lazily built index, name table and runtime context unsynchronized — 144 races under `-race`,
+  now none, with a test running every entry point concurrently.
+
+- **Node client:** restarting the service waits for the previous process to exit before
+  reconnecting, and does not wait on one that already exited.
 
 - **Arithmetic outside a type's range is reported, not returned.** A wrapped Integer sum, the
   least Integer's negation and its remainder, an infinite Real from an out-of-range literal, a
