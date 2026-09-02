@@ -68,17 +68,36 @@ func (s *Session) LoadFile(path string) ([]string, error) {
 // that spans several files reports the analysis once every file is in, a
 // reference from one file to another resolving only then.
 func (s *Session) LoadFileSummary(path string) ([]string, error) {
+	return s.LoadFilesSummary([]string{path})
+}
+
+// LoadFilesSummary is LoadFileSummary over every path as one submission, indexed and
+// analyzed once, each file still summarized on its own; a read failure is a *ReadError.
+func (s *Session) LoadFilesSummary(paths []string) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	name, data, err := project.ReadFile(expandHome(path))
-	if err != nil {
-		return nil, readError(name, err)
+	files := make([]SourceFile, 0, len(paths))
+	for _, path := range paths {
+		name, data, err := project.ReadFile(expandHome(path))
+		if err != nil {
+			return nil, readError(name, err)
+		}
+		files = append(files, SourceFile{Name: name, Text: string(data)})
 	}
-	res := s.submit(name, string(data))
-	// The analysis is reported once every file is in, but a file that does not
-	// parse is a finding about that file alone and is reported with it.
-	lines := renderSyntax(res, s.verbosity)
-	return append(append(lines, res.Notices...), renderSummary(res.ownMembers())...), nil
+	res, byFile, whole := s.submitEach(files)
+	var lines []string
+	for i, f := range files {
+		// The analysis is reported once every file is in, but a file that does not
+		// parse is a finding about that file alone and is reported with it.
+		own := res.within(s.fileSpan(f.Name))
+		lines = append(lines, renderSyntax(own, s.verbosity)...)
+		lines = append(lines, byFile[i]...)
+		if i == 0 {
+			lines = append(lines, whole...)
+		}
+		lines = append(lines, renderSummary(own.ownMembers())...)
+	}
+	return lines, nil
 }
 
 // DiagnosticLines reports the analysis of everything submitted so far as the

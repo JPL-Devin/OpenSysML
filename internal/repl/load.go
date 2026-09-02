@@ -96,12 +96,23 @@ func expandHomes(paths []string) []string {
 	return out
 }
 
-// readError reports a file that could not be read, naming the path once: the
-// read error repeats it and so does every caller that wraps this.
+// ReadError is a file a load could not read, under the name it is reported by.
+type ReadError struct {
+	Path string
+	Err  error
+}
+
+// Error names the path once: the read error repeats it and so does every
+// caller that wraps this.
+func (e *ReadError) Error() string { return fmt.Sprintf("cannot read %s: %v", e.Path, e.Err) }
+
+func (e *ReadError) Unwrap() error { return e.Err }
+
+// readError reports a file that could not be read.
 func readError(path string, err error) error {
 	var pathErr *fs.PathError
 	if errors.As(err, &pathErr) {
 		err = pathErr.Err
 	}
-	return fmt.Errorf("cannot read %s: %w", path, err)
+	return &ReadError{Path: path, Err: err}
 }
