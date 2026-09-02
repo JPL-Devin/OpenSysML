@@ -5,8 +5,9 @@
 > wants the design can ignore them.
 
 Status: **phases 1–5 implemented** — the library, side table, validation pass, the RDF
-writer/reader identity round trip, and the sync diff keyed by effective id with the
-identity-carrying Flexo fixture; the OMG issue (phase 6) is not filed. It records the design agreed for
+writer/reader identity round trip, the sync diff keyed by effective id with the
+identity-carrying Flexo fixture, and the apply of that diff to a live repository with its
+measurement against the real stack; the OMG issue (phase 6) is not filed. It records the design agreed for
 carrying stable element identity in textual notation, how that identity permeates the RDF
 mapping and repository synchronization, and the plan to submit the notation for
 standardization with OMG.
@@ -232,6 +233,17 @@ id rather than by name:
   never silently resolved. Which commit a sync last saw is sync-tool state (recorded
   outside the model text), which is what makes "changed since" detectable.
 
+Applying that diff (`sysml -sync-apply <endpoint>`, `reposync.Apply`) posts it as one commit
+through the repository's own commit path — each entry addressed by the element's id, an update
+carrying the element whole so the repository replaces it under the same id, a delete only
+when the set was produced with deletes confirmed. A set that is not appliable (a conflict, an
+unconfirmed delete) is refused as a typed error before the first write, and a repository that
+rejects a commit leaves the run failed with every change's fate reported; in neither case does
+the state move. On success the commit the repository names becomes the last-seen commit, so
+the next diff is against it and finds nothing to change. Both sides of a diff are compared under
+the repository's *representation* — what its commit path can store of a graph — so what it has
+no place for is reported as not compared rather than reapplied on every run.
+
 This subsumes the notation side of what the Flexo interoperability target needs: the
 graph OpenSysML writes can stand in for the one `flexo-mms-sysmlv2` produces *for the
 same elements across edits*, not merely for one snapshot.
@@ -289,7 +301,9 @@ one-shot tool.
 4. Reader re-materialization; round-trip tests including the stripped-`sysx:sourceText`
    form the RDF round-trip harness uses.
 5. Sync diff keyed by effective id; Flexo harness fixture carrying annotated identity;
-   re-measure and commit the interop report.
+   re-measure and commit the interop report. Then the apply of that diff to the live
+   repository, with the harness measuring update, create, gated delete and refused conflict
+   against the real stack.
 6. Draft and file the OMG issue, citing the measurements; record it in
    [omg-issues.md](omg-issues.md).
 

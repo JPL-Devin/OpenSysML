@@ -20,6 +20,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 )
 
 // Environment variables read by ConfigFromEnv. FLEXO_INTEROP is the gate: the
@@ -246,17 +248,114 @@ func (c *Client) LoadTurtle(ctx context.Context, project, branch string, turtle 
 }
 
 // PostChanges commits SysML v2 JSON changes through the service's own commit
-// path, which is the ground truth the loaded graph is compared against.
-func (c *Client) PostChanges(ctx context.Context, project string, changes []byte) error {
-	_, _, err := c.do(ctx, http.MethodPost,
-		c.cfg.SysMLV2URL+"/projects/"+url.PathEscape(project)+"/commits", changes, "application/json", nil)
-	return err
+// path and returns the commit it made. An empty branch takes the default one.
+func (c *Client) PostChanges(ctx context.Context, project, branch string, changes []byte) (Commit, error) {
+	target := c.cfg.SysMLV2URL + "/projects/" + url.PathEscape(project) + "/commits"
+	if branch != "" {
+		target += "?branchId=" + url.QueryEscape(branch)
+	}
+	content, _, err := c.do(ctx, http.MethodPost, target, changes, "application/json", nil)
+	if err != nil {
+		return Commit{}, err
+	}
+	var commit Commit
+	if err := json.Unmarshal(content, &commit); err != nil {
+		return Commit{}, fmt.Errorf("decode commit: %w", err)
+	}
+	return commit, nil
 }
 
 // Commit identifies one commit of a project.
 type Commit struct {
 	ID   string `json:"@id"`
 	Type string `json:"@type"`
+}
+
+// ErrBlankNode is a blank node in a graph read back from the stack; elements
+// are IRIs, so a sync has no way to key one.
+var ErrBlankNode = errors.New("the graph holds a blank node, which no element id can address")
+
+// sparqlResults is the SPARQL 1.1 Query Results JSON Format, as far as a
+// SELECT of triples uses it.
+type sparqlResults struct {
+	Results struct {
+		Bindings []map[string]sparqlTerm `json:"bindings"`
+	} `json:"results"`
+}
+
+type sparqlTerm struct {
+	Type     string `json:"type"`
+	Value    string `json:"value"`
+	Datatype string `json:"datatype"`
+	Lang     string `json:"xml:lang"`
+}
+
+// term maps a result binding onto an RDF term; xsd:string folds into the
+// plain literal it is equivalent to, as this project's graphs spell it.
+func (t sparqlTerm) term() (rdf.Term, error) {
+	switch t.Type {
+	case "uri":
+		return rdf.IRI(t.Value), nil
+	case "literal", "typed-literal":
+		switch {
+		case t.Lang != "":
+			return rdf.Term{Kind: rdf.TermLiteral, Value: t.Value, Lang: t.Lang}, nil
+		case t.Datatype == "" || t.Datatype == rdf.XSD+"string":
+			return rdf.String(t.Value), nil
+		}
+		return rdf.TypedLiteral(t.Value, t.Datatype), nil
+	case "bnode":
+		return rdf.Term{}, ErrBlankNode
+	}
+	return rdf.Term{}, fmt.Errorf("unknown SPARQL result term type %q", t.Type)
+}
+
+// versionGraphURL is Layer 1's SPARQL endpoint over one version of a repo:
+// a branch, or the lock the SysML v2 service keeps per commit.
+func (c *Client) versionGraphURL(project, version string) string {
+	return fmt.Sprintf("%s/orgs/%s/repos/%s/%s/query",
+		c.cfg.Layer1URL, url.PathEscape(c.cfg.Org), url.PathEscape(project), version)
+}
+
+// BranchGraph reads a branch's whole model graph through Layer 1's SPARQL
+// endpoint, in the typed form the store holds rather than Turtle's shorthand.
+func (c *Client) BranchGraph(ctx context.Context, project, branch string) (*rdf.Graph, error) {
+	return c.selectGraph(ctx, c.versionGraphURL(project, "branches/"+url.PathEscape(branch)))
+}
+
+// CommitGraph reads the model graph as one commit left it.
+func (c *Client) CommitGraph(ctx context.Context, project, commit string) (*rdf.Graph, error) {
+	return c.selectGraph(ctx, c.versionGraphURL(project, "locks/"+url.PathEscape("Commit."+commit)))
+}
+
+func (c *Client) selectGraph(ctx context.Context, target string) (*rdf.Graph, error) {
+	query := []byte("SELECT ?s ?p ?o WHERE { ?s ?p ?o } ORDER BY ?s ?p ?o")
+	content, _, err := c.do(ctx, http.MethodPost, target, query, "application/sparql-query",
+		map[string]string{"Accept": "application/sparql-results+json"})
+	if err != nil {
+		return nil, err
+	}
+	var results sparqlResults
+	if err := json.Unmarshal(content, &results); err != nil {
+		return nil, fmt.Errorf("decode SPARQL results: %w", err)
+	}
+	graph := rdf.NewGraph()
+	for _, binding := range results.Results.Bindings {
+		var triple rdf.Triple
+		for name, into := range map[string]*rdf.Term{"s": &triple.Subject, "p": &triple.Predicate, "o": &triple.Object} {
+			bound, ok := binding[name]
+			if !ok {
+				return nil, fmt.Errorf("SPARQL result binding lacks ?%s", name)
+			}
+			term, err := bound.term()
+			if err != nil {
+				return nil, err
+			}
+			*into = term
+		}
+		graph.AddTriple(triple)
+	}
+	return graph, nil
 }
 
 // Commits lists a project's commits, newest first as the service returns them.

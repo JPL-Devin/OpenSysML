@@ -10,6 +10,9 @@ import (
 func (cs *ChangeSet) Text() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "sync diff against %s\n", cs.Scope)
+	for _, left := range cs.Uncarried {
+		fmt.Fprintf(&b, "not carried by the repository, so not compared: %s (%d triple(s))\n", left.Property, left.Triples)
+	}
 	if len(cs.Changes) == 0 {
 		b.WriteString("nothing to change: the model and the repository agree\n")
 		return b.String()

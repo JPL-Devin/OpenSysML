@@ -6,6 +6,28 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+### Added
+
+- **A model's change set applies to a live repository, keyed by identity.**
+  `sysml model.sysml -sync-apply http://localhost:8083` diffs the model against its project
+  branch on a running SysML v2 API (Flexo MMS) and writes the change set as one commit through
+  the service's own commit path: a rename, move or retype under a retained id is an update of
+  that element — never a delete plus a create — a new id is a create, and a delete goes only
+  when the run confirmed deletes with `-sync-confirm-deletes`. A change set holding a conflict
+  or an unconfirmed delete is refused, as a typed error, before any write; nothing is resolved
+  silently. On success the commit the service names becomes the last-seen commit in
+  `<model>.sync.json`, never in the notation, and it is the baseline of the next run, so
+  repository changes made behind the sync's back surface as conflicts and a second apply finds
+  nothing to change. `-sync-diff` takes the same endpoint URL and stays a dry run; with neither
+  flag nothing is written. The exit status keeps its contract: 0 applied or nothing to do, 1 a
+  refusal or a repository failure (reported with each change's fate), 2 an unusable run. Both
+  sides of the diff are compared under what the service can store, so the properties it has no
+  place for are reported as not compared rather than diffed forever. The opt-in Flexo
+  harness measures the apply against the real stack — an initial load, a revision with a
+  retained-id rename and gated deletes, a conflict staged behind the sync's back — and records
+  what read back at the recorded commit
+  ([the report](internal/interop/flexo/testdata/identity_apply_expected.txt)).
+
 ### Performance
 
 - **A process starts in under 20 ms instead of 100.** Every `sysml`, `sysml-lsp` and `sysml-grpc`

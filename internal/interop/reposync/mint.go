@@ -35,12 +35,7 @@ const (
 func WriteBack(g *rdf.Graph, mints map[string]string) *rdf.Graph {
 	out := rdf.NewGraph()
 	for _, triple := range g.Triples() {
-		subject := mintedTerm(triple.Subject, mints)
-		object := mintedTerm(triple.Object, mints)
-		if triple.Predicate.Value == rdf.SysML+"elementId" && subject != triple.Subject {
-			object = rdf.String(rdf.LocalName(subject.Value))
-		}
-		out.Add(subject, triple.Predicate, object)
+		out.AddTriple(mintTriple(triple, mints))
 	}
 	for old, minted := range mints {
 		subject := rdf.IRI(rdf.Element + minted)
@@ -49,6 +44,17 @@ func WriteBack(g *rdf.Graph, mints map[string]string) *rdf.Graph {
 		}
 	}
 	return out
+}
+
+// mintTriple moves one triple onto minted spellings, its subject and object
+// alike, keeping a moved subject's elementId literal in step with its IRI.
+func mintTriple(triple rdf.Triple, mints map[string]string) rdf.Triple {
+	subject := mintedTerm(triple.Subject, mints)
+	object := mintedTerm(triple.Object, mints)
+	if triple.Predicate.Value == rdf.SysML+"elementId" && subject != triple.Subject {
+		object = rdf.String(rdf.LocalName(subject.Value))
+	}
+	return rdf.Triple{Subject: subject, Predicate: triple.Predicate, Object: object}
 }
 
 // mintedTerm maps an IRI onto its minted spelling: the element itself exactly,
