@@ -137,9 +137,18 @@ are not known up front:
   `FLEXO_LAYER1_URL` (default `http://localhost:8080`). A plaintext `http://` endpoint off this
   machine is refused (exit 2) unless `FLEXO_ALLOW_PLAIN_HTTP=1`; the compose stack on `localhost`
   needs nothing.
-- **A no-op apply still writes `<model>.sync.json`** with the head commit it compared against, and
-  a commit is refused (exit 1, `moved from commit ... since the change set was computed`) if the
-  branch head changed between the read and the write.
+  So a wrong endpoint (`http://localhost:9`, or Fuseki's `:3030`) fails at the very first read
+  with `read the repository: GET .../branches/main: ...` and exit 1 even when the model already
+  agrees with the repository — nothing is silently accepted. An unroutable opt-in endpoint
+  (`FLEXO_ALLOW_PLAIN_HTTP=1 ... http://192.0.2.10:8083`) takes ~30 s to fail with `dial tcp ...
+  i/o timeout`; wrap it in `timeout 75`.
+- **A no-op apply still writes `<model>.sync.json`** with the head commit it compared against
+  (`nothing applied: ...; head commit <id> recorded in <state>`; a second no-op run prints no
+  `recorded` and leaves the file byte-identical). Check it against `GET
+  :8083/projects/<id>/branches/main` → `.head["@id"]`. A state file naming a commit the stack does
+  not have fails with `read the repository at last-seen commit <id>: ...` (exit 1) and is left
+  untouched. A commit is refused (exit 1, `moved from commit ... since the change set was
+  computed`) if the branch head changed between the read and the write.
 - **Observe commits through the API, not the CLI**: `GET :8083/projects/<id>/commits` (count and
   ids), `GET :8083/projects/<id>/commits/<commit>/elements/<elementId>` to read an element back.
   A deleted element reads back as `{"@id": ..., "@type": null}` (emptied), not 404.
