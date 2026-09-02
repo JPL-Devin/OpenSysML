@@ -117,8 +117,10 @@ func registerTensorCalculations() {
 
 // registerAngleFunction adds a trigonometric function of an angle in radians,
 // which also accepts the angle as a quantity: `sin(30 ['°'])` is sin(π/6).
+// Over numbers it is scalar, so the compiled calc tier may call it unboxed.
 func registerAngleFunction(name string, params []string, apply func([]semantics.Value) (semantics.Value, error)) {
 	registerValueFunction(name, params, len(params), angleScalars(params, apply))
+	libraryFunctions[name].scalar = true
 }
 
 // angleScalars adapts a numeric implementation so that each argument may be a
