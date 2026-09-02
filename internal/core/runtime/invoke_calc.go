@@ -459,10 +459,11 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 	}
 
 	// A pure body runs compiled unless the run is traced, which records every
-	// sub-expression, or an argument is bound by name or is not a scalar.
-	if ctx.compileCalcs && ctx.trace == nil && len(args.named) == 0 {
-		if compiled := ctx.compiledCalcOf(shape); compiled != nil {
-			if result, ran, err := compiled.invokeBoxed(ctx, args.positional); ran {
+	// sub-expression, an argument is not a scalar, or a bound object may answer
+	// a library constant the body reads before the library does.
+	if ctx.compileCalcs && ctx.trace == nil {
+		if compiled := ctx.compiledCalcOf(shape); compiled != nil && (self == nil || !compiled.readsLibrary) {
+			if result, ran, err := compiled.invokeBoxed(ctx, args); ran {
 				return result, err
 			}
 		}
