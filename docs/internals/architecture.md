@@ -229,6 +229,8 @@ Full evaluator with **user-defined calc invocation**, **constraint evaluation**,
 - **Requirement evaluation:** Extract `subject`/`assume`/`require`/`actor` members → validate bindings → evaluate conditions
 - **Scoped evaluation:** `EvalContext.scope` for name resolution, frame stack for parameter bindings
 - **Membership unwrapping:** Runtime automatically unwraps AST Membership nodes when extracting members
+- **Compiled calc tier** (`compile.go`, `compiled_ops.go`): a calc whose body is one pure scalar expression — Integer/Real/Boolean literals, its own `in` parameters, the arithmetic, comparison, equality, identity, logical and conditional operators, invocations of other such calcs (cycles included) — is compiled on its first invocation into a tree of Go closures over an unboxed scalar frame, held in a side table on the `Context`'s `calcShape` (the AST is untouched, and a new `Context` compiles afresh). It reproduces the evaluator's values, errors and per-node step charges exactly; the differential test (`compile_differential_test.go`) checks that over every calc in the fixture and example trees. Anything outside the subset — calc usages, `out` features, feature chains, `self`, collections, quantities, strings, locals, non-literal defaults, a parameter redeclared along the specialization chain — keeps the calc, and every calc calling it, on the evaluator.
+  - **Fallback rule:** a traced `Context` (`ctx.trace != nil`), a named-argument or non-scalar invocation, and `OPENSYSML_CALC_COMPILE=0` run the whole invocation on the reference evaluator; the tier never falls back for a sub-expression.
 - **Unlocks:** Constraint checking against concrete values, `calc` execution, requirement validation, runtime behavioral verification
 
 ### Tier 4 — Behavioral AST ✅
@@ -259,6 +261,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
    - Deadlock detection via progress tracking
    - Golden trace recording with deterministic token ordering
    - APIs: `Step()`, `RunToCompletion()`, `Tokens()`, `SetBreakpoint()`, `SetTrace()`
+   - Breakpoints and stepping observe action nodes, so a calc an action invokes is one step to them; only a `TraceRecorder` observes sub-expressions, and it keeps the calc on the evaluator (Tier 3's fallback rule)
 
 2. **StateExecutor** — Event-driven state machine execution
    - Initial/final state keywords (initial/final)
