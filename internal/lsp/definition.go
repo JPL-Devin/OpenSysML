@@ -8,10 +8,11 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// Definition returns the declaration location of the reference under the cursor.
+// Definition returns the declaration location of the reference under the cursor,
+// in a workspace document or a bundled library one.
 func (s *Server) Definition(ctx context.Context, params *protocol.DefinitionParams) ([]protocol.Location, error) {
 	name := uriToName(params.TextDocument.URI)
-	doc := s.ws.Document(name)
+	doc := s.document(name)
 	if doc == nil || doc.Scope == nil {
 		return nil, nil
 	}
@@ -46,16 +47,18 @@ func (s *Server) Definition(ctx context.Context, params *protocol.DefinitionPara
 
 // symbolLocation builds a Location for a resolved symbol using the symbol's own
 // declaring document (DocName), so cross-file definitions point at the correct
-// file/bytes. Falls back to the requesting document name if the symbol was not
-// stamped (should not happen for resolved symbols).
+// file/bytes; a bundled library declaration is located in its sysml-stdlib
+// document, at the position its text gives it. Falls back to the requesting
+// document name if the symbol was not stamped (should not happen for resolved
+// symbols).
 func (s *Server) symbolLocation(reqName string, sym *symbols.Symbol) protocol.Location {
 	declName := sym.DocName
 	if declName == "" {
 		declName = reqName // fallback: symbol not stamped (shouldn't happen for resolved symbols)
 	}
 	var content []byte
-	if doc := s.ws.Document(declName); doc != nil {
+	if doc := s.document(declName); doc != nil {
 		content = doc.Content
 	}
-	return protocol.Location{URI: nameToURI(declName), Range: spanToRange(content, sym.DeclSpan)}
+	return protocol.Location{URI: s.documentURI(declName), Range: spanToRange(content, sym.DeclSpan)}
 }
