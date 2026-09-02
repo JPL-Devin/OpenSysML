@@ -41,7 +41,10 @@ to ignore, because ignoring it would answer a different question than the one as
 a misspelt `oslc.wheree` would otherwise select the whole model. A parameter
 given twice is refused for the same reason, and so is a parameter with no
 value: `oslc.select=` narrows nothing, so rather than quietly returning every
-property (which is what omitting it means), it is refused.
+property (which is what omitting it means), it is refused. A property named
+twice in one `oslc.select`, whether by the same prefix or by two prefixes that
+name the same namespace, is refused as well: it is reported once, so the second
+name could not be honored.
 
 ## Prefixes and properties
 

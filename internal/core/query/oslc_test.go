@@ -59,6 +59,36 @@ func TestParseOSLCKeepsTheSpellingOfASelectedProperty(t *testing.T) {
 	}
 }
 
+func TestParseOSLCRefusesAPropertySelectedTwice(t *testing.T) {
+	// One property is reported once, so two spellings of it in one selection
+	// cannot both be honored and are refused rather than picked between.
+	const bound = `oslc.prefix=s%3D%3Chttps://www.omg.org/spec/SysML%23%3E`
+	for _, tt := range []struct{ selection, message string }{
+		{`sysml%3Aname%2Cs%3Aname`, `"sysml:name" and "s:name" are the same property`},
+		{`sysml%3Aname%2Csysml%3Aname`, `names "sysml:name" twice`},
+	} {
+		q, err := ParseParameters(bound + `&oslc.select=` + tt.selection)
+		if err == nil {
+			t.Fatalf("%s unexpectedly parsed as %#v", tt.selection, q)
+		}
+		got, ok := err.(*Error)
+		if !ok || got.Kind != ErrMalformed {
+			t.Fatalf("%s error = %#v, want ErrMalformed", tt.selection, err)
+		}
+		if !strings.Contains(got.Message, tt.message) {
+			t.Fatalf("%s error message = %q, want it to contain %q", tt.selection, got.Message, tt.message)
+		}
+	}
+	// Two different properties under two prefixes stay a valid selection.
+	q, err := ParseParameters(bound + `&oslc.select=sysml%3Aname%2Cs%3Aowner`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(q.Select) != 2 || q.SpellingOf(PropertyName) != "sysml:name" || q.SpellingOf(PropertyOwner) != "s:owner" {
+		t.Fatalf("select = %#v, spelling = %#v", q.Select, q.Spelling)
+	}
+}
+
 func TestParseOSLCRejectsUnsupportedConstructs(t *testing.T) {
 	tests := []struct {
 		text string
