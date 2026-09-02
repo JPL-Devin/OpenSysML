@@ -2,8 +2,8 @@
 
 ## Overview
 
-**Reference:** the OMG pilot implementation's own Xpect test suites, [`org.omg.kerml.xpect.tests`](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/2026-07/org.omg.kerml.xpect.tests) and [`org.omg.sysml.xpect.tests`](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/2026-07/org.omg.sysml.xpect.tests), at release `2026-07` — the same pin as the corpora and the reference validators (`scripts/pilot-pin.sh`)
-**Provision:** `./scripts/download-pilot-xpect.sh` (writes `build/pilot-xpect-corpus/{kerml,sysml}`, gitignored, not vendored — under `build/` rather than `examples/` because the `.kerml`/`.sysml` models the suites ship are inputs to this harness, and everything that walks `examples/` would otherwise adopt them)
+**Reference:** the OMG pilot implementation's own Xpect test suites, [`org.omg.kerml.xpect.tests`](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/2026-07/org.omg.kerml.xpect.tests) and [`org.omg.sysml.xpect.tests`](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/2026-07/org.omg.sysml.xpect.tests), at release `2026-07`, commit `c7fc737d56da9e2d78f9d7df6d38efbec2e7e965` — the same pin as the corpora and the reference validators (`scripts/pilot-pin.sh`)
+**Provision:** `./scripts/download-pilot-xpect.sh` (the shared downloader of `scripts/pilot-pin.sh`, restricted to `*.xt`: the clone is refused unless the tag resolves to the pinned commit, each suite is stamped with the pin it was fetched at, and a suite stamped otherwise or not at all is re-fetched; writes `build/pilot-xpect-corpus/{kerml,sysml}`, gitignored, not vendored — under `build/` rather than `examples/` because the `.kerml`/`.sysml` models the suites ship are inputs to this harness, and everything that walks `examples/` would otherwise adopt them)
 **Run:** `go run ./cmd/pilot-xpect` (writes `build/pilot-xpect/pilot-xpect.txt` and `build/pilot-xpect/pilot-xpect.json`)
 **Baseline:** the last committed run is [pilot-xpect-baseline.json](pilot-xpect-baseline.json), which carries every non-agreeing row, so a later run can be diffed against it; `-update` re-records it and `-check` fails unless a fresh run reproduces it
 **Status:** advisory only — nothing here gates CI, for the same reason [pilot-differential.md](pilot-differential.md) does not: the corpus is an unvendored network fetch at the pinned tag, and this is a report, not a ratchet
@@ -207,8 +207,8 @@ wording, so they match by construction rather than by luck. `noErrors` and `link
 wording-independent, and they are where this oracle adjudicates most directly.
 
 Every figure above is checked against the committed baseline by
-`TestPilotXpectDocumentCountsMatchBaseline`, and the baseline's own provenance — the pin, the
-suite digests and the declared errata — by
+`TestPilotXpectDocumentCountsMatchBaseline`, and the baseline's own provenance — the pin (tag and
+commit), the suite digests and the declared errata — by
 `TestCommittedBaselineStatesThisRepositorysProvenance`; both read only committed files. A daily
 Java-backed run re-checks the measurement itself, as described in
 [pilot-differential.md](pilot-differential.md#how-this-record-is-kept-true).

@@ -25,6 +25,7 @@ func provenance(repo string, overlay *errata.Overlay, inputs []baseline.Input) (
 	}
 	return baseline.Record{
 		PilotTag:      pin.Tag,
+		PilotCommit:   pin.Commit,
 		PilotArtifact: pin.Artifact,
 		Errata:        baseline.ErrataDigest(overlay.Entries()),
 		Inputs:        inputs,

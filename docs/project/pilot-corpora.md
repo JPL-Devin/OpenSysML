@@ -3,10 +3,11 @@
 ## Overview
 
 **Corpora:** the three pinned OMG pilot corpora, fetched by `./scripts/download-pilot-corpora.sh`
+at release `2026-07`, commit `c7fc737d56da9e2d78f9d7df6d38efbec2e7e965` (`scripts/pilot-pin.sh`)
 
 | Root | Directory | Files |
 |---|---|---|
-| `sysml-examples` | `examples/pilot-corpora/sysml-examples` | 98 `.sysml` |
+| `sysml-examples` | `examples/pilot-corpora/sysml-examples` | 99 `.sysml` |
 | `sysml-validation` | `examples/pilot-corpora/sysml-validation` | 56 `.sysml` |
 | `kerml-examples` | `examples/pilot-corpora/kerml-examples` | 58 `.kerml` |
 
@@ -26,7 +27,12 @@ mechanism in `internal/core/model/corpus_gate_test.go`: one walker, one whole-ro
 `GATE NOT RUN` skip banner, one expectation-file format, one cache-independence test
 (`TestCorpusGatesCacheStateIndependent`, which covers all four roots), and one downloader
 (`pilot_fetch_subtrees` in `scripts/pilot-pin.sh`, called with one entry by
-`download-training-examples.sh` and three by `download-pilot-corpora.sh`).
+`download-training-examples.sh` and three by `download-pilot-corpora.sh`). The downloader clones
+the release tag and refuses it unless it resolves to the pinned commit, and stamps each root with
+the tag, commit and repository it came from (`.pilot-pin`); a root stamped with another pin, or
+not stamped at all, is re-fetched on the next run. The ratchet's header records the file count of
+each root, so a root whose count differs from the header is a provisioning question — a stale or
+partial copy — before it is a behaviour question; see [pilot-differential.md](pilot-differential.md).
 
 The two *policies* over that mechanism deliberately differ:
 

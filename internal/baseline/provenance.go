@@ -37,7 +37,10 @@ const (
 // Record is the provenance block a baseline carries: the identities of the run's
 // inputs, never their machine-specific paths, so any checkout can check it.
 type Record struct {
-	PilotTag      string `json:"pilotTag"`
+	PilotTag string `json:"pilotTag"`
+	// PilotCommit is the commit the tag resolved to when the run's material was
+	// fetched; the tag alone is a mutable name for it.
+	PilotCommit   string `json:"pilotCommit"`
 	PilotArtifact string `json:"pilotArtifact"`
 	// Errata is the digest of the declared overlay, which changes what the
 	// oracles read and therefore what they measure.
@@ -71,6 +74,7 @@ type Input struct {
 // Pin is the resolved pilot pin.
 type Pin struct {
 	Tag      string
+	Commit   string
 	Artifact string
 }
 
@@ -81,6 +85,7 @@ func (p Pin) Release() string {
 
 var (
 	pinTagRe      = regexp.MustCompile(`PILOT_TAG="\$\{PILOT_TAG:-([^}"]*)\}"`)
+	pinCommitRe   = regexp.MustCompile(`PILOT_COMMIT="\$\{PILOT_COMMIT:-([0-9a-f]{40})\}"`)
 	pinArtifactRe = regexp.MustCompile(`PILOT_ARTIFACT_VERSION="\$\{PILOT_ARTIFACT_VERSION:-([^}"]*)\}"`)
 )
 
@@ -92,11 +97,12 @@ func ReadPin(root string) (Pin, error) {
 		return Pin{}, fmt.Errorf("read %s: %w", PinPath, err)
 	}
 	tag := pinTagRe.FindSubmatch(content)
+	commit := pinCommitRe.FindSubmatch(content)
 	artifact := pinArtifactRe.FindSubmatch(content)
-	if tag == nil || artifact == nil {
-		return Pin{}, fmt.Errorf("%s pins no PILOT_TAG/PILOT_ARTIFACT_VERSION", PinPath)
+	if tag == nil || commit == nil || artifact == nil {
+		return Pin{}, fmt.Errorf("%s pins no PILOT_TAG/PILOT_COMMIT/PILOT_ARTIFACT_VERSION", PinPath)
 	}
-	return Pin{Tag: string(tag[1]), Artifact: string(artifact[1])}, nil
+	return Pin{Tag: string(tag[1]), Commit: string(commit[1]), Artifact: string(artifact[1])}, nil
 }
 
 // Today is the stamp -update writes into a baseline.
@@ -227,6 +233,7 @@ func Compare(recorded, current Record) []Mismatch {
 		}
 	}
 	add("pilotTag", recorded.PilotTag, current.PilotTag, CausePin)
+	add("pilotCommit", recorded.PilotCommit, current.PilotCommit, CausePin)
 	add("pilotArtifact", recorded.PilotArtifact, current.PilotArtifact, CausePin)
 	add("errataRegistry", recorded.Errata, current.Errata, CauseOurs)
 
@@ -273,7 +280,7 @@ var datePattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 // its provenance is exactly the stale baseline this package exists to catch.
 func Validate(recorded Record) error {
 	switch {
-	case recorded.PilotTag == "" || recorded.PilotArtifact == "":
+	case recorded.PilotTag == "" || recorded.PilotCommit == "" || recorded.PilotArtifact == "":
 		return fmt.Errorf("states no pilot pin")
 	case recorded.Errata == "":
 		return fmt.Errorf("states no errata registry digest")

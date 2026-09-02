@@ -5,6 +5,7 @@
   "conformance": "auto",
   "provenance": {
     "pilotTag": "2026-07",
+    "pilotCommit": "c7fc737d56da9e2d78f9d7df6d38efbec2e7e965",
     "pilotArtifact": "0.61.0",
     "errataRegistry": "sha256:2e5a631caa524d6e04675e0c8ff6cb310e020adb4d614e65c3e3d0f0016dea50",
     "tools": [
@@ -30,7 +31,7 @@
         "digest": "sha256:1807bc173996cee5a9776a987e3bec4409245d16bdbb0d71e6b4d362b60cd81f"
       }
     ],
-    "recorded": "2026-08-29"
+    "recorded": "2026-09-02"
   },
   "totals": {
     "cases": 120,
