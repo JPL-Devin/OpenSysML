@@ -135,12 +135,15 @@ func TestReadRDFXML(t *testing.T) {
 
 func TestReadRDFXMLRejectsUnsupported(t *testing.T) {
 	for name, doc := range map[string]string{
-		"parseType":  `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="x:a"><rdf:value rdf:parseType="Literal"><b/></rdf:value></rdf:Description></rdf:RDF>`,
-		"mixed":      `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="x:a"><rdf:value>text<rdf:Description/></rdf:value></rdf:Description></rdf:RDF>`,
-		"notRDF":     `<owl:Ontology xmlns:owl="http://www.w3.org/2002/07/owl#"/>`,
-		"aboutAndID": `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="x:a" rdf:nodeID="b"/></rdf:RDF>`,
-		"noBase":     `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="#a"><rdf:value>1</rdf:value></rdf:Description></rdf:RDF>`,
-		"badBase":    `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xml:base="relative/base"><rdf:Description rdf:about="#a"><rdf:value>1</rdf:value></rdf:Description></rdf:RDF>`,
+		"parseType":   `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="x:a"><rdf:value rdf:parseType="Literal"><b/></rdf:value></rdf:Description></rdf:RDF>`,
+		"mixed":       `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="x:a"><rdf:value>text<rdf:Description/></rdf:value></rdf:Description></rdf:RDF>`,
+		"notRDF":      `<owl:Ontology xmlns:owl="http://www.w3.org/2002/07/owl#"/>`,
+		"aboutAndID":  `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="x:a" rdf:nodeID="b"><rdf:value>1</rdf:value></rdf:Description></rdf:RDF>`,
+		"idAndAbout":  `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:nodeID="b" rdf:about="x:a"><rdf:value>1</rdf:value></rdf:Description></rdf:RDF>`,
+		"twoNodeIDs":  `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:nodeID="b" rdf:nodeID="c"><rdf:value>1</rdf:value></rdf:Description></rdf:RDF>`,
+		"relDatatype": `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="x:a"><rdf:value rdf:datatype="#int">1</rdf:value></rdf:Description></rdf:RDF>`,
+		"noBase":      `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="#a"><rdf:value>1</rdf:value></rdf:Description></rdf:RDF>`,
+		"badBase":     `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xml:base="relative/base"><rdf:Description rdf:about="#a"><rdf:value>1</rdf:value></rdf:Description></rdf:RDF>`,
 		// A property element takes exactly one of: reference, nested node, literal.
 		"resourceText":      `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="x:a"><rdf:value rdf:resource="x:b">text</rdf:value></rdf:Description></rdf:RDF>`,
 		"resourceDatatype":  `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="x:a"><rdf:value rdf:resource="x:b" rdf:datatype="x:d"/></rdf:Description></rdf:RDF>`,
@@ -163,6 +166,7 @@ func TestReadRDFXMLResolvesReferences(t *testing.T) {
   <rdf:Description rdf:about="#frag"><rdf:value rdf:resource="sibling"/></rdf:Description>
   <rdf:Description rdf:about="/root"><rdf:value rdf:resource="?q"/></rdf:Description>
   <rdf:Description rdf:about=""><rdf:value rdf:resource="urn:x:abs"/></rdf:Description>
+  <rdf:Description rdf:about="x:a"><rdf:value rdf:datatype="types#int">1</rdf:value></rdf:Description>
 </rdf:RDF>`
 	triples, err := ReadRDFXML(strings.NewReader(doc))
 	if err != nil {
@@ -172,6 +176,10 @@ func TestReadRDFXMLResolvesReferences(t *testing.T) {
 		"<https://example.org/spec/SysML.owl?v=1#frag> <" + RDFNS + "value> <https://example.org/spec/sibling>",
 		"<https://example.org/root> <" + RDFNS + "value> <https://example.org/spec/SysML.owl?q>",
 		"<https://example.org/spec/SysML.owl?v=1> <" + RDFNS + "value> <urn:x:abs>",
+		"<x:a> <" + RDFNS + "value> \"1\"^^<https://example.org/spec/types#int>",
+	}
+	if len(triples) != len(want) {
+		t.Fatalf("got %d triples, want %d", len(triples), len(want))
 	}
 	for i, w := range want {
 		if got := triples[i].String(); got != w {

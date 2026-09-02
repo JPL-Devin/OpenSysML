@@ -112,14 +112,19 @@ func (p *rdfxmlReader) nodeElement(start xml.StartElement) (Node, error) {
 	var subject Node
 	for _, a := range start.Attr {
 		switch {
-		case a.Name.Space == RDFNS && a.Name.Local == "about":
-			iri, err := p.resolve(a.Value)
-			if err != nil {
-				return Node{}, err
+		case a.Name.Space == RDFNS && (a.Name.Local == "about" || a.Name.Local == "nodeID"):
+			if subject.Value != "" {
+				return Node{}, fmt.Errorf("rdfxml: node element %s has two identities", start.Name.Local)
 			}
-			subject = IRI(iri)
-		case a.Name.Space == RDFNS && a.Name.Local == "nodeID":
-			subject = p.blank(a.Value)
+			if a.Name.Local == "nodeID" {
+				subject = p.blank(a.Value)
+			} else {
+				iri, err := p.resolve(a.Value)
+				if err != nil {
+					return Node{}, err
+				}
+				subject = IRI(iri)
+			}
 		case a.Name.Space == "xmlns" || a.Name.Local == "xmlns":
 		default:
 			return Node{}, fmt.Errorf("rdfxml: unsupported attribute %s on node element %s",
@@ -178,7 +183,11 @@ func (p *rdfxmlReader) propertyElement(subject Node, start xml.StartElement) err
 			}
 			resolved = true
 		case a.Name.Space == RDFNS && a.Name.Local == "datatype":
-			datatype = a.Value
+			iri, err := p.resolve(a.Value)
+			if err != nil {
+				return err
+			}
+			datatype = iri
 		default:
 			return fmt.Errorf("rdfxml: unsupported attribute %s on property element %s of %s",
 				a.Name.Local, start.Name.Local, subject)
