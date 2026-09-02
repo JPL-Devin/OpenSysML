@@ -10,6 +10,8 @@ import {
 
 import { DiagramPanels } from "./diagram";
 import { DocumentRendering } from "./document";
+import { STDLIB_SCHEME } from "./protocol";
+import { StdlibDocuments } from "./stdlib";
 
 const EXECUTABLE = process.platform === "win32" ? "sysml-lsp.exe" : "sysml-lsp";
 
@@ -18,6 +20,7 @@ let output: vscode.OutputChannel;
 let watcher: vscode.FileSystemWatcher;
 let diagrams: DiagramPanels;
 let documents: DocumentRendering;
+let stdlib: StdlibDocuments;
 // Start/stop run one at a time: overlapping restarts would otherwise leave an
 // unreferenced client, and its server process, running forever.
 let queue: Promise<void> = Promise.resolve();
@@ -35,9 +38,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // only once a server that serves them has started.
   diagrams = new DiagramPanels(context.extensionUri, output);
   documents = new DocumentRendering(output);
+  stdlib = new StdlibDocuments(output);
   context.subscriptions.push(
     diagrams,
     documents,
+    stdlib,
     vscode.commands.registerCommand("opensysml.restartServer", () => restart()),
     // The server binary is resolved at start, so pointing the setting at a fresh
     // build takes effect on the next restart rather than on reload.
@@ -91,9 +96,13 @@ async function startClient(): Promise<void> {
     debug: { command, args, transport: TransportKind.stdio },
   };
   const clientOptions: LanguageClientOptions = {
+    // The library's virtual documents are served too, so hover and navigation
+    // work inside them.
     documentSelector: [
       { scheme: "file", language: "sysml" },
       { scheme: "file", language: "kerml" },
+      { scheme: STDLIB_SCHEME, language: "sysml" },
+      { scheme: STDLIB_SCHEME, language: "kerml" },
     ],
     outputChannel: output,
     synchronize: { fileEvents: watcher },
@@ -108,6 +117,7 @@ async function startClient(): Promise<void> {
   }
   diagrams.attach(client);
   documents.attach(client);
+  stdlib.attach(client);
 }
 
 async function stopClient(): Promise<void> {
@@ -115,6 +125,7 @@ async function stopClient(): Promise<void> {
   client = undefined;
   diagrams.detach();
   documents.detach();
+  stdlib.detach();
   if (running) {
     await running.stop();
   }

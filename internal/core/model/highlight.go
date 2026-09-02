@@ -7,9 +7,13 @@ import (
 )
 
 // HighlightTokens returns the semantic tokens of a document, ordered by source
-// position. Returns nil for unknown documents.
+// position. Returns nil for unknown documents. A bundled library document is
+// highlighted from its text like a workspace one.
 func (w *Workspace) HighlightTokens(name string) []highlight.Token {
 	doc := w.Document(name)
+	if doc == nil {
+		doc = w.LibraryDocument(name)
+	}
 	if doc == nil {
 		return nil
 	}

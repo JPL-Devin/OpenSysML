@@ -43,6 +43,9 @@ type libraryFunction struct {
 	// unevaluable marks a declaration registered only to report why a call to
 	// it cannot be computed.
 	unevaluable bool
+	// scalar marks a function over numeric scalars alone, which the compiled
+	// calc tier may call with unboxed arguments.
+	scalar bool
 }
 
 // libraryApply computes one library function. It is passed the name it was
@@ -205,6 +208,7 @@ func registerStringFunctions() {
 // arguments, which is what most of the numeric library declares.
 func registerLibraryFunction(name string, params []string, apply func([]semantics.Value) (semantics.Value, error)) {
 	registerValueFunction(name, params, len(params), numericScalars(params, apply))
+	libraryFunctions[name].scalar = true
 }
 
 // registerValueFunction adds one implementation over runtime values, for the
