@@ -141,6 +141,16 @@ func TestReadRDFXMLRejectsUnsupported(t *testing.T) {
 		"aboutAndID": `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="x:a" rdf:nodeID="b"/></rdf:RDF>`,
 		"noBase":     `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="#a"><rdf:value>1</rdf:value></rdf:Description></rdf:RDF>`,
 		"badBase":    `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xml:base="relative/base"><rdf:Description rdf:about="#a"><rdf:value>1</rdf:value></rdf:Description></rdf:RDF>`,
+		// A property element takes exactly one of: reference, nested node, literal.
+		"resourceText":      `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="x:a"><rdf:value rdf:resource="x:b">text</rdf:value></rdf:Description></rdf:RDF>`,
+		"resourceDatatype":  `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="x:a"><rdf:value rdf:resource="x:b" rdf:datatype="x:d"/></rdf:Description></rdf:RDF>`,
+		"datatypeResource":  `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="x:a"><rdf:value rdf:datatype="x:d" rdf:resource="x:b"/></rdf:Description></rdf:RDF>`,
+		"nodeIDDatatype":    `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="x:a"><rdf:value rdf:nodeID="n" rdf:datatype="x:d"/></rdf:Description></rdf:RDF>`,
+		"resourceAndNodeID": `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="x:a"><rdf:value rdf:resource="x:b" rdf:nodeID="n"/></rdf:Description></rdf:RDF>`,
+		"resourceNested":    `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="x:a"><rdf:value rdf:resource="x:b"><rdf:Description/></rdf:value></rdf:Description></rdf:RDF>`,
+		"datatypeNested":    `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="x:a"><rdf:value rdf:datatype="x:d"><rdf:Description/></rdf:value></rdf:Description></rdf:RDF>`,
+		"nestedTrailing":    `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="x:a"><rdf:value><rdf:Description/>text</rdf:value></rdf:Description></rdf:RDF>`,
+		"twoNested":         `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="x:a"><rdf:value><rdf:Description/><rdf:Description/></rdf:value></rdf:Description></rdf:RDF>`,
 	} {
 		if _, err := ReadRDFXML(strings.NewReader(doc)); err == nil {
 			t.Errorf("%s: parsed without error", name)
@@ -354,7 +364,7 @@ sysml:VisibilityKind
 	}
 	for _, want := range []string{
 		"ecore:isOrdered false", `owl:maxCardinality "1"^^xsd:nonNegativeInteger`,
-		"rdfs:comment \"\"\"An <code>Element</code> is a \"constituent\".\nSecond line.\"\"\" .",
+		"rdfs:comment \"\"\"An <code>Element</code> is a \\\"constituent\\\".\nSecond line.\"\"\" .",
 	} {
 		if !strings.Contains(string(doc), want) {
 			t.Errorf("Elements turtle lacks %q:\n%s", want, doc)
@@ -383,6 +393,55 @@ func TestWriteTurtleCollections(t *testing.T) {
 	_, err = WriteTurtle([]Triple{{IRI("x:a"), IRI("x:p"), Blank("s")}, {IRI("x:b"), IRI("x:p"), Blank("s")}, {Blank("s"), IRI("x:q"), IRI("x:c")}})
 	if err == nil {
 		t.Error("shared blank node did not fail")
+	}
+}
+
+func TestWriteTurtleKeepsRepeatedListPredicates(t *testing.T) {
+	// A cell with two rdf:first or rdf:rest values is not a well-formed list;
+	// it is written as a blank node so no triple is lost.
+	doc, err := WriteTurtle([]Triple{
+		{IRI("x:a"), IRI("x:p"), Blank("l1")},
+		{Blank("l1"), IRI(RDFNS + "first"), IRI("x:b")},
+		{Blank("l1"), IRI(RDFNS + "first"), IRI("x:c")},
+		{Blank("l1"), IRI(RDFNS + "rest"), IRI(RDFNS + "nil")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "<x:p> [\n        rdf:first <x:b>, <x:c> ;\n        rdf:rest rdf:nil\n    ] .\n"; !strings.HasSuffix(string(doc), want) {
+		t.Errorf("turtle:\n%s\nwant suffix:\n%s", doc, want)
+	}
+	doc, err = WriteTurtle([]Triple{
+		{IRI("x:a"), IRI("x:p"), Blank("l1")},
+		{Blank("l1"), IRI(RDFNS + "first"), IRI("x:b")},
+		{Blank("l1"), IRI(RDFNS + "rest"), IRI(RDFNS + "nil")},
+		{Blank("l1"), IRI(RDFNS + "rest"), Blank("l2")},
+		{Blank("l2"), IRI(RDFNS + "first"), IRI("x:c")},
+		{Blank("l2"), IRI(RDFNS + "rest"), IRI(RDFNS + "nil")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "<x:p> [\n        rdf:first <x:b> ;\n        rdf:rest rdf:nil, ( <x:c> )\n    ] .\n"; !strings.HasSuffix(string(doc), want) {
+		t.Errorf("turtle:\n%s\nwant suffix:\n%s", doc, want)
+	}
+}
+
+func TestWriteTurtleMultilineLiterals(t *testing.T) {
+	for lexical, want := range map[string]string{
+		"a\nb":            "\"\"\"a\nb\"\"\"",
+		"say \"hi\"\n":    "\"\"\"say \\\"hi\\\"\n\"\"\"",
+		"x\n\"\"\"":       "\"\"\"x\n\\\"\\\"\\\"\"\"\"",
+		"\"\"\"\nq\"":     "\"\"\"\\\"\\\"\\\"\nq\\\"\"\"\"",
+		"back\\slash\n\"": "\"\"\"back\\\\slash\n\\\"\"\"\"",
+	} {
+		doc, err := WriteTurtle([]Triple{{IRI("x:a"), IRI("x:p"), Literal(lexical, "")}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := "<x:p> " + want + " .\n"; !strings.HasSuffix(string(doc), want) {
+			t.Errorf("%q: got %s want suffix %s", lexical, doc, want)
+		}
 	}
 }
 

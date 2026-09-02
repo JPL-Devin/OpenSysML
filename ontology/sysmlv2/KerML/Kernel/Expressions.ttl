@@ -16,8 +16,8 @@ sysml:CollectExpression
     a owl:Class ;
     rdfs:subClassOf sysml:OperatorExpression ;
     rdfs:label "CollectExpression" ;
-    rdfs:comment """<p>A <code>CollectExpression</code> is an <code>OperatorExpression</code> whose <code>operator</code> is <code>"collect"</code>, which resolves to the <code>Function</code> <em><code>ControlFunctions::collect</code></em> from the Kernel Functions Library.</p>
-	operator = "collect\"""" .
+    rdfs:comment """<p>A <code>CollectExpression</code> is an <code>OperatorExpression</code> whose <code>operator</code> is <code>\"collect\"</code>, which resolves to the <code>Function</code> <em><code>ControlFunctions::collect</code></em> from the Kernel Functions Library.</p>
+	operator = \"collect\"""" .
 
 sysml:FeatureChainExpression
     a owl:Class ;
@@ -27,7 +27,7 @@ sysml:FeatureChainExpression
         owl:cardinality "1"^^xsd:nonNegativeInteger
     ] ;
     rdfs:label "FeatureChainExpression" ;
-    rdfs:comment """<p>A <code>FeatureChainExpression</code> is an <code>OperatorExpression</code> whose operator is <code>"."</code>, which resolves to the <code>Function</code> <em><code>ControlFunctions::'.'</code></em> from the Kernel Functions Library. It evaluates to the result of chaining the <code>result</code> <code>Feature</code> of its single <code>argument</code> <code>Expression</code> with its <code>targetFeature</code>.</p>
+    rdfs:comment """<p>A <code>FeatureChainExpression</code> is an <code>OperatorExpression</code> whose operator is <code>\".\"</code>, which resolves to the <code>Function</code> <em><code>ControlFunctions::'.'</code></em> from the Kernel Functions Library. It evaluates to the result of chaining the <code>result</code> <code>Feature</code> of its single <code>argument</code> <code>Expression</code> with its <code>targetFeature</code>.</p>
 	let sourceParameter : Feature = sourceTargetFeature() in
 	sourceTargetFeature <> null and
 	sourceTargetFeature.redefinesFromLibrary('ControlFunctions::\\'.\\'::source::target')
@@ -267,7 +267,7 @@ sysml:OperatorExpression
     rdfs:comment """<p>An <code>OperatorExpression</code> is an <code>InvocationExpression</code> whose <code>function</code> is determined by resolving its <code>operator</code> in the context of one of the standard packages from the Kernel Function Library.</p>
 	let libFunctions : Sequence(Element) =
 	Sequence{'BaseFunctions', 'DataFunctions', 'ControlFunctions'}->
-	collect(ns | resolveGlobal(ns + "::'" + operator + "'").
+	collect(ns | resolveGlobal(ns + \"::'\" + operator + \"'\").
 	memberElement) in
 	libFunctions->includes(function)""" .
 
@@ -282,5 +282,5 @@ sysml:SelectExpression
     a owl:Class ;
     rdfs:subClassOf sysml:OperatorExpression ;
     rdfs:label "SelectExpression" ;
-    rdfs:comment """<p>A <code>SelectExpression</code> is an <code>OperatorExpression</code> whose operator is <code>"select"</code>, which resolves to the <code>Function</code> <em><code>ControlFunctions::select</code></em> from the Kernel Functions Library.</p>
+    rdfs:comment """<p>A <code>SelectExpression</code> is an <code>OperatorExpression</code> whose operator is <code>\"select\"</code>, which resolves to the <code>Function</code> <em><code>ControlFunctions::select</code></em> from the Kernel Functions Library.</p>
 	operator = 'select'""" .

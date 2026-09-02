@@ -530,7 +530,7 @@ sysml:Redefinition
 	
 	let anythingType: Type =
 	redefiningFeature.resolveGlobal('Base::Anything').modelElement.oclAsType(Type) in
-	-- Including "Anything" accounts for implicit featuringType of Features
+	-- Including \"Anything\" accounts for implicit featuringType of Features
 	-- with no explicit featuringType.
 	let redefiningFeaturingTypes: Set(Type) =
 	redefiningFeature.featuringTypes->asSet()->including(anythingType) in

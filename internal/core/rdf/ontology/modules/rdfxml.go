@@ -163,20 +163,29 @@ func (p *rdfxmlReader) propertyElement(subject Node, start xml.StartElement) err
 	)
 	for _, a := range start.Attr {
 		switch {
-		case a.Name.Space == RDFNS && a.Name.Local == "resource":
-			iri, err := p.resolve(a.Value)
-			if err != nil {
-				return err
+		case a.Name.Space == RDFNS && (a.Name.Local == "resource" || a.Name.Local == "nodeID"):
+			if resolved {
+				return fmt.Errorf("rdfxml: property %s of %s names two objects", start.Name.Local, subject)
 			}
-			object, resolved = IRI(iri), true
-		case a.Name.Space == RDFNS && a.Name.Local == "nodeID":
-			object, resolved = p.blank(a.Value), true
+			if a.Name.Local == "nodeID" {
+				object = p.blank(a.Value)
+			} else {
+				iri, err := p.resolve(a.Value)
+				if err != nil {
+					return err
+				}
+				object = IRI(iri)
+			}
+			resolved = true
 		case a.Name.Space == RDFNS && a.Name.Local == "datatype":
 			datatype = a.Value
 		default:
 			return fmt.Errorf("rdfxml: unsupported attribute %s on property element %s of %s",
 				a.Name.Local, start.Name.Local, subject)
 		}
+	}
+	if resolved && datatype != "" {
+		return fmt.Errorf("rdfxml: property %s of %s has both a reference and rdf:datatype", start.Name.Local, subject)
 	}
 	var text strings.Builder
 	for {
@@ -188,6 +197,9 @@ func (p *rdfxmlReader) propertyElement(subject Node, start xml.StartElement) err
 		case xml.EndElement:
 			if !resolved {
 				object = Literal(text.String(), datatype)
+			} else if strings.TrimSpace(text.String()) != "" {
+				return fmt.Errorf("rdfxml: property %s of %s mixes text and a reference or nested node",
+					start.Name.Local, subject)
 			}
 			p.emit(subject, predicate, object)
 			return nil
@@ -196,6 +208,10 @@ func (p *rdfxmlReader) propertyElement(subject Node, start xml.StartElement) err
 		case xml.StartElement:
 			if resolved {
 				return fmt.Errorf("rdfxml: property %s of %s has both a reference and a nested node",
+					start.Name.Local, subject)
+			}
+			if datatype != "" {
+				return fmt.Errorf("rdfxml: property %s of %s has both rdf:datatype and a nested node",
 					start.Name.Local, subject)
 			}
 			if strings.TrimSpace(text.String()) != "" {

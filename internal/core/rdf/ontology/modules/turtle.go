@@ -198,8 +198,14 @@ func (w *turtleWriter) list(head Node) ([]Node, bool) {
 		for _, t := range w.bySubject[cell] {
 			switch t.Predicate.Value {
 			case RDFNS + "first":
+				if hasFirst {
+					return nil, false
+				}
 				first, hasFirst = t.Object, true
 			case RDFNS + "rest":
+				if hasRest {
+					return nil, false
+				}
 				rest, hasRest = t.Object, true
 			default:
 				return nil, false
@@ -251,11 +257,7 @@ func (w *turtleWriter) literal(n Node) string {
 	lexical := n.Value
 	var s string
 	if strings.ContainsAny(lexical, "\n\r") {
-		escaped := strings.NewReplacer(`\`, `\\`, `"""`, `\"\"\"`).Replace(lexical)
-		if strings.HasSuffix(escaped, `"`) {
-			escaped = escaped[:len(escaped)-1] + `\"`
-		}
-		s = `"""` + escaped + `"""`
+		s = `"""` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(lexical) + `"""`
 	} else {
 		s = `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\t", `\t`).Replace(lexical) + `"`
 	}
