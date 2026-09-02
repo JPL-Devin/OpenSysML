@@ -177,9 +177,8 @@ func TestQualifiedNameThroughImportRejectedAsChecked(t *testing.T) {
 	}
 }
 
-// TestGlobalQualifiedNameThroughImport reaches an import through a name rooted
-// at the global namespace and reports a missing one with the `$::` the checker
-// writes. The expression parser does not yet read `$::`, so the name is built.
+// TestGlobalQualifiedNameThroughImport reads and rejects `$::`-rooted names as the
+// checker does; the name is built since the expression parser does not read `$::`.
 func TestGlobalQualifiedNameThroughImport(t *testing.T) {
 	ctx, root, _ := qualifiedImportRuntime(t)
 	globalName := func(parts ...string) *ast.FeatureReference {
