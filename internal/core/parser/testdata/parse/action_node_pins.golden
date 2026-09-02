@@ -1,0 +1,65 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="test" library=false standard=false
+      (Import visibility="private" all=false kind=namespace recursive=false imported="ScalarValues" filtered=false)
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Adder"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="a" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="b" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="sum" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="action" name="outer" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (LiteralInteger value="5")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="total" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="bind"
+              (Relationship kind="references" target=(expr)
+                (FeatureChainExpr member="a"
+                  (FeatureReference name="add")))
+              (FeatureReference name="x")))
+          (InitialNode name="start" successor="")
+          (Membership visibility="default"
+            (Usage kind="action" name="add" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Adder
+                (*ast.QualifiedName))
+              (Membership visibility="default"
+                (Usage kind="attribute" name="b" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+                  (LiteralInteger value="4")))))
+          (SuccessionEdge source="start" target="add")
+          (Usage kind="action" name="scaled" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (InvocationExpr type="Adder"
+              (LiteralInteger value="3")
+              (LiteralInteger value="4")))
+          (SuccessionEdge source="add" target="scaled")
+          (Usage kind="action" name="named" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (InvocationExpr type="Adder"))
+          (SuccessionEdge source="scaled" target="named")
+          (Membership visibility="default"
+            (Usage kind="action" name="fin" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Membership visibility="default"
+                (Usage kind="attribute" name="n" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="typing" target=Integer
+                    (*ast.QualifiedName))))
+              (*ast.AssignmentActionNode)))
+          (SuccessionEdge source="named" target="fin")
+          (FinalNode)
+          (SuccessionEdge source="fin" target="@done")
+          (Membership visibility="default"
+            (Usage kind="flow" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (FlowEnds from="add.sum" to="fin.n" payload="nil" declared=false))))))))

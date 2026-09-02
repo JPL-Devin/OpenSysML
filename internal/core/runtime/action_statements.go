@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
@@ -9,24 +10,29 @@ import (
 
 // actionStmtHost runs an action node's body statements: a send posts through
 // the action graph's connections, and an assignment to a name the body does not
-// declare reaches the action's own features, which is how a loop body updates
-// an attribute of the action it runs in.
+// declare reaches the features of the performance running it or of one
+// enclosing it, which is how a loop body updates an attribute of the action it
+// runs in.
 type actionStmtHost struct {
 	exec *ActionExecutor
 	node ast.Node // the action node whose body is running, for diagnostics
-	// frame is the activation the node runs in, nil in the action's own flow.
-	frame *actionFrame
+	// perf is the performance the body runs in, whose features it declares into.
+	perf *actionFrame
 	// engine runs the body, and holds the values a `perform` in it reads and
-	// writes: the action's own, and those of every block entered around it.
+	// writes: the performance's own, and those of every block entered around it.
 	engine *stmtEngine
 }
 
-// executeBody runs the lowered statements of the given action node against the
-// action's feature space.
-func (e *ActionExecutor) executeBody(frame *actionFrame, node ast.Node) error {
-	graph := e.graphOf(frame)
-	host := &actionStmtHost{exec: e, node: node, frame: frame}
-	engine := newStmtEngine(e.ctx, host, e.data)
+// executeBody runs the lowered statements graph records for node in perf, the
+// performance they belong to, with the performances around it in lexical reach.
+func (e *ActionExecutor) executeBody(perf *actionFrame, graph *lower.ActionGraph, node ast.Node) error {
+	host := &actionStmtHost{exec: e, node: node, perf: perf}
+	lexical := perf.lexical()
+	enclosing := make([]frame, 0, len(lexical)-1)
+	for _, f := range lexical[:len(lexical)-1] {
+		enclosing = append(enclosing, performanceFrame(f))
+	}
+	engine := newStmtEngineIn(e.ctx, host, performanceFrame(perf), enclosing)
 	host.engine = engine
 	// The body's activation ends with this execution of it, so a run stepping the
 	// node many times does not hold what every execution computed.
@@ -38,10 +44,10 @@ func (e *ActionExecutor) executeBody(frame *actionFrame, node ast.Node) error {
 // runNodeBody runs the statements a control or initial node's body declares,
 // which the token passing through the node performs.
 func (e *ActionExecutor) runNodeBody(frame *actionFrame, node ast.Node) error {
-	if len(e.graphOf(frame).Bodies[node]) == 0 {
+	if len(frame.graph.Bodies[node]) == 0 {
 		return nil
 	}
-	return e.executeBody(frame, node)
+	return e.executeBody(frame, frame.graph, node)
 }
 
 func (h *actionStmtHost) describe() string {
@@ -53,30 +59,30 @@ func (h *actionStmtHost) send(ec *EvalContext, s lower.Send) error {
 	if err != nil {
 		return err
 	}
-	return h.exec.ctx.post(h.exec.connectionsOf(h.frame), msg, s, h.exec.self)
+	return h.exec.ctx.post(h.exec.connectionsOf(h.perf), msg, s, h.exec.self)
 }
 
-// assignOuter writes a name the body's blocks do not declare to the feature of
-// the object performing the action, and to the action's own features — which
-// every one of its tokens shares — when the object has no such feature. A
-// feature the action declares is its own, so it is never redirected to the
-// object: it is written to the performance and binds for the caller even where
-// the object has a feature of that name.
+// assignOuter writes a name the body's blocks do not declare: to the feature the
+// performance running the body declares, else to the innermost enclosing
+// performance holding the name, else to the feature of the object performing
+// the action, and as a value the body holds when none has it. A feature the
+// action declares is its own, so it is never redirected to the object.
 func (h *actionStmtHost) assignOuter(env *stmtEnv, name string, value Value, s lower.Assign) error {
-	if h.exec.declaresAttribute(name) {
-		return h.exec.setFeature(name, value)
+	if h.perf.declares(name) {
+		return h.exec.setFrameFeature(h.perf, name, value)
 	}
-	if !h.exec.declaresParameter(name) {
-		if written, err := assignPerformerFeature(h.exec.ctx, h.exec.self, s.Scope, name, value); written || err != nil {
-			return err
-		}
+	if written, err := h.exec.assignEnclosing(h.perf, name, value); written || err != nil {
+		return err
+	}
+	if written, err := assignPerformerFeature(h.exec.ctx, h.exec.self, s.Scope, name, value); written || err != nil {
+		return err
 	}
 	return storeBodyValue(h.exec.ctx, h, env, name, value, s)
 }
 
 func (h *actionStmtHost) assignData(env *stmtEnv, name string, value Value, s lower.Assign) error {
-	if h.exec.declaresAttribute(name) {
-		return h.exec.setFeature(name, value)
+	if h.perf.declares(name) {
+		return h.exec.setFrameFeature(h.perf, name, value)
 	}
 	return storeBodyValue(h.exec.ctx, h, env, name, value, s)
 }
@@ -114,10 +120,22 @@ func (h *actionStmtHost) effect(s lower.Effect) error {
 	if err != nil {
 		return fmt.Errorf("%s: %w", h.describe(), err)
 	}
-	for name, value := range outputs {
-		if !env.assign(name, value) {
-			env.data.set(name, value)
+	names := make([]string, 0, len(outputs))
+	for name := range outputs {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if env.assign(name, outputs[name]) {
+			continue
 		}
+		if written, err := h.exec.assignEnclosing(h.perf, name, outputs[name]); written || err != nil {
+			if err != nil {
+				return fmt.Errorf("%s: %w", h.describe(), err)
+			}
+			continue
+		}
+		env.data.set(name, outputs[name])
 	}
 	return nil
 }

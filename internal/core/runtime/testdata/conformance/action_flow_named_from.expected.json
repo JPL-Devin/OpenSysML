@@ -1,8 +1,8 @@
 {
 	"type": "action",
 	"outputs": {
-		"engineTorque": {"type": "Integer", "value": 21},
-		"torqueIn": {"type": "Integer", "value": 21},
-		"amplified": {"type": "Integer", "value": 42}
+		"generateTorque.engineTorque": {"type": "Integer", "value": 21},
+		"amplifyTorque.torqueIn": {"type": "Integer", "value": 21},
+		"amplifyTorque.amplified": {"type": "Integer", "value": 42}
 	}
 }

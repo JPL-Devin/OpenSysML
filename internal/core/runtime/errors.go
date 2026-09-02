@@ -160,6 +160,18 @@ var (
 	// action-step budget.
 	ErrDoStepLimitExceeded = errors.New("state do-step limit exceeded")
 
+	// ErrActionArity is returned when an action invocation passes more
+	// positional arguments than the action declares input parameters.
+	ErrActionArity = errors.New("action argument count mismatch")
+
+	// ErrNodeNotPerformed is returned when a pin of an action node is read before
+	// any performance of the node has started.
+	ErrNodeNotPerformed = errors.New("action node read before it is performed")
+
+	// ErrNodePin is returned when a pin read, flow, or binding names a feature the
+	// action node does not declare, or the node's result where it has none.
+	ErrNodePin = errors.New("action node pin not declared")
+
 	// ErrViolated is returned when an asserted constraint or a required
 	// condition evaluates to false. It is a verdict about the model, not a
 	// failure to evaluate, so callers can tell the two apart.

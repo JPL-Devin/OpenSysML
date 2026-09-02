@@ -16,6 +16,9 @@ import (
 // its block exits, so a name it declares never leaks outward.
 type stmtEnv struct {
 	data frame
+	// enclosing are the frames the behavior's data shadows but its statements
+	// still reach, outermost first: the performances around an action node.
+	enclosing []frame
 	// outer are value maps the body reads but does not declare into, innermost
 	// last: the attributes the states enclosing the behavior own.
 	outer  []map[string]Value
@@ -69,10 +72,14 @@ func (env *stmtEnv) assignLocal(name string, value Value) bool {
 	return false
 }
 
-// values is the values a statement reads: the behavior's own, overridden by
-// those of the blocks entered around it, innermost last.
+// values is the values a statement reads: those of the frames enclosing the
+// behavior, overridden by its own, overridden by those of the blocks entered
+// around it, innermost last.
 func (env *stmtEnv) values() map[string]Value {
 	merged := make(map[string]Value, env.data.width())
+	for _, f := range env.enclosing {
+		f.each(func(name string, value Value) { merged[name] = value })
+	}
 	env.data.each(func(name string, value Value) { merged[name] = value })
 	for _, frame := range env.frames {
 		maps.Copy(merged, frame)
@@ -163,6 +170,17 @@ func newStmtEngineOver(ctx *Context, host stmtHost, data map[string]Value, outer
 	return engine
 }
 
+// newStmtEngineIn returns an engine running statements against data, a frame
+// that shadows the enclosing frames its statements still read, outermost first.
+func newStmtEngineIn(ctx *Context, host stmtHost, data frame, enclosing []frame) *stmtEngine {
+	return &stmtEngine{
+		ctx:        ctx,
+		host:       host,
+		env:        &stmtEnv{data: data, enclosing: enclosing},
+		activation: ctx.newActivation(),
+	}
+}
+
 // finish ends the activation the engine's statements ran in, discarding what the
 // calc usages read in them computed.
 func (e *stmtEngine) finish() {
@@ -173,7 +191,8 @@ func (e *stmtEngine) finish() {
 // statement was written in, reading the behavior's data and the frames entered,
 // innermost last so a block-local name shadows an outer one.
 func (e *stmtEngine) evalIn(scope *symbols.Scope) *EvalContext {
-	frames := append(e.frameBuf[:0], e.env.data)
+	frames := append(e.frameBuf[:0], e.env.enclosing...)
+	frames = append(frames, e.env.data)
 	for _, outer := range e.env.outer {
 		frames = append(frames, mapFrame(outer))
 	}

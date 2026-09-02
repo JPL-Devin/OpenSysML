@@ -26,6 +26,15 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("nested_flow_with_a_dangling_succession", testNestedFlowWithADanglingSuccession)
 	t.Run("nested_flow_that_cannot_progress", testNestedFlowThatCannotProgress)
 	t.Run("nested_flow_that_never_ends", testNestedFlowThatNeverEnds)
+	t.Run("node_pin_of_a_node_not_yet_performed", testNodePinOfANodeNotYetPerformed)
+	t.Run("node_pin_the_node_does_not_declare", testNodePinTheNodeDoesNotDeclare)
+	t.Run("node_read_as_a_value_without_a_result", testNodeReadAsAValueWithoutAResult)
+	t.Run("node_invocation_too_many_arguments", testNodeInvocationTooManyArguments)
+	t.Run("node_invocation_too_few_arguments", testNodeInvocationTooFewArguments)
+	t.Run("node_invocation_unknown_named_argument", testNodeInvocationUnknownNamedArgument)
+	t.Run("node_binding_to_a_non_parameter", testNodeBindingToANonParameter)
+	t.Run("node_binding_output_to_an_unknown_feature", testNodeBindingOutputToAnUnknownFeature)
+	t.Run("node_flow_into_a_pin_the_target_does_not_declare", testNodeFlowIntoAPinTheTargetDoesNotDeclare)
 	t.Run("fork_without_a_successor", testForkWithoutASuccessor)
 	t.Run("explicit_succession_missing_endpoint", testExplicitSuccessionMissingEndpoint)
 	t.Run("control_flow_missing_endpoint", testControlFlowMissingEndpoint)
@@ -7800,5 +7809,220 @@ func testNestedFlowThatNeverEnds(t *testing.T) {
 	}
 	if err := exec.RunToCompletion(); !errors.Is(err, ErrActionStepLimitExceeded) {
 		t.Fatalf("error = %v, want ErrActionStepLimitExceeded", err)
+	}
+}
+
+// runOuterAction runs action test::outer of src to completion and returns the
+// error, for a case whose contract is the error a nested node reports.
+func runOuterAction(t *testing.T, src string) error {
+	t.Helper()
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "outer", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action outer not found")
+	}
+	exec, err := ctx.CreateActionExecutor(sym)
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+	return exec.RunToCompletion()
+}
+
+const adderActionDef = `
+	action def Adder {
+		in a : Integer;
+		in b : Integer;
+		out sum : Integer;
+		first step;
+		action step { assign sum := a + b; }
+	}
+`
+
+// testNodePinOfANodeNotYetPerformed: a pin holds a value only once its node has
+// been performed, so reading it earlier is reported rather than answered.
+func testNodePinOfANodeNotYetPerformed(t *testing.T) {
+	src := `
+		package test {
+			action outer {
+				attribute total : Integer = 0;
+				first start;
+				then action early { assign total := late.v; }
+				then action late { out v : Integer; assign v := 1; }
+				then done;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if !errors.Is(err, ErrNodeNotPerformed) {
+		t.Fatalf("error = %v, want ErrNodeNotPerformed", err)
+	}
+	if !strings.Contains(err.Error(), "late") {
+		t.Errorf("error %q does not name the node", err)
+	}
+}
+
+// testNodePinTheNodeDoesNotDeclare: a chain through a node names one of its
+// pins; a name it does not declare is reported with the node it was read from.
+func testNodePinTheNodeDoesNotDeclare(t *testing.T) {
+	src := `
+		package test {
+			action outer {
+				attribute total : Integer = 0;
+				first start;
+				then action p { out v : Integer; assign v := 1; }
+				then action fin { assign total := p.w; }
+				then done;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if !errors.Is(err, ErrNodePin) {
+		t.Fatalf("error = %v, want ErrNodePin", err)
+	}
+	if !strings.Contains(err.Error(), "p") || !strings.Contains(err.Error(), "w") {
+		t.Errorf("error %q does not name the node and the pin", err)
+	}
+}
+
+// testNodeReadAsAValueWithoutAResult: a node read as a value stands for its
+// performance's `result`; a node whose callee declares none is reported.
+func testNodeReadAsAValueWithoutAResult(t *testing.T) {
+	src := `
+		package test {` + adderActionDef + `
+			action outer {
+				attribute total : Integer = 0;
+				first start;
+				then action add = Adder(1, 2);
+				then action fin { assign total := add; }
+				then done;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if !errors.Is(err, ErrNodePin) {
+		t.Fatalf("error = %v, want ErrNodePin", err)
+	}
+	if !strings.Contains(err.Error(), "result") {
+		t.Errorf("error %q does not name the missing result", err)
+	}
+}
+
+// testNodeInvocationTooManyArguments: positional arguments beyond the callee's
+// input parameters are reported rather than dropped.
+func testNodeInvocationTooManyArguments(t *testing.T) {
+	src := `
+		package test {` + adderActionDef + `
+			action outer {
+				first start;
+				then action add = Adder(1, 2, 3);
+				then done;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if !errors.Is(err, ErrActionArity) {
+		t.Fatalf("error = %v, want ErrActionArity", err)
+	}
+}
+
+// testNodeInvocationTooFewArguments: an input parameter that no argument and no
+// default binds is reported before the callee runs, not when its body reads it.
+func testNodeInvocationTooFewArguments(t *testing.T) {
+	src := `
+		package test {` + adderActionDef + `
+			action outer {
+				attribute b : Integer = 40;
+				first start;
+				then action add = Adder(1);
+				then done;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if !errors.Is(err, ErrUnboundParameter) {
+		t.Fatalf("error = %v, want ErrUnboundParameter", err)
+	}
+	if !strings.Contains(err.Error(), "b") {
+		t.Errorf("error %q does not name the unbound parameter", err)
+	}
+}
+
+// testNodeInvocationUnknownNamedArgument: a named argument must name an input
+// parameter of the callee.
+func testNodeInvocationUnknownNamedArgument(t *testing.T) {
+	src := `
+		package test {` + adderActionDef + `
+			action outer {
+				first start;
+				then action add = Adder(a = 1, c = 2);
+				then done;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if !errors.Is(err, ErrUnknownParameter) {
+		t.Fatalf("error = %v, want ErrUnknownParameter", err)
+	}
+}
+
+// testNodeBindingToANonParameter: a binding end at a node's pin must name a
+// parameter or attribute the node's performance holds.
+func testNodeBindingToANonParameter(t *testing.T) {
+	src := `
+		package test {` + adderActionDef + `
+			action outer {
+				attribute x : Integer = 1;
+				bind add.nope = x;
+				first start;
+				then action add : Adder { in a = 1; in b = 2; }
+				then done;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if !errors.Is(err, ErrBindingEnd) {
+		t.Fatalf("error = %v, want ErrBindingEnd", err)
+	}
+	if !strings.Contains(err.Error(), "nope") {
+		t.Errorf("error %q does not name the pin", err)
+	}
+}
+
+// testNodeBindingOutputToAnUnknownFeature: what a node's output pin is bound to
+// must be a feature the action holds, so the value has somewhere to go.
+func testNodeBindingOutputToAnUnknownFeature(t *testing.T) {
+	src := `
+		package test {` + adderActionDef + `
+			action outer {
+				bind add.sum = nowhere;
+				first start;
+				then action add : Adder { in a = 1; in b = 2; }
+				then done;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if !errors.Is(err, ErrBindingEnd) {
+		t.Fatalf("error = %v, want ErrBindingEnd", err)
+	}
+}
+
+// testNodeFlowIntoAPinTheTargetDoesNotDeclare: a flow's target pin must be a
+// feature of the node it reaches.
+func testNodeFlowIntoAPinTheTargetDoesNotDeclare(t *testing.T) {
+	src := `
+		package test {
+			action outer {
+				first start;
+				then action p { out v : Integer; assign v := 1; }
+				then action q { in w : Integer; }
+				then done;
+				flow p.v to q.nope;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if !errors.Is(err, ErrNodePin) {
+		t.Fatalf("error = %v, want ErrNodePin", err)
 	}
 }

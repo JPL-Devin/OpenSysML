@@ -37,6 +37,16 @@ type ActionGraph struct {
 	// Bodies: node → the statements that node executes, in declaration order
 	Bodies map[ast.Node][]Statement
 
+	// Features: node → the parameters and attributes the node declares itself,
+	// in declaration order; each performance of the node holds its own values.
+	Features map[ast.Node][]Feature
+
+	// Scopes: node → the namespace the node owns, which its features resolve in.
+	Scopes map[ast.Node]*symbols.Scope
+
+	// Bindings are the bindings with an end at a node's pin (`bind add.a = x;`).
+	Bindings []PinBinding
+
 	// Accepts: node → the message that node waits for
 	Accepts map[ast.Node]Accept
 
@@ -351,6 +361,28 @@ type Attribute struct {
 	Scope *symbols.Scope
 }
 
+// Feature is one parameter or attribute an action node declares itself. Value
+// is its declared value (nil when none), resolving in Scope, the node's scope.
+type Feature struct {
+	Name      string
+	Direction ast.FeatureDirection
+	Value     ast.Node
+	Node      ast.Node // the declaration, for diagnostics
+	Scope     *symbols.Scope
+}
+
+// PinBinding is a binding connector with an end at Node's pin Pin. Other is the
+// other end as written; OtherNode/OtherPin name the node pin it addresses, if any.
+type PinBinding struct {
+	Node      ast.Node
+	Pin       string
+	Other     ast.Node
+	OtherNode ast.Node
+	OtherPin  string
+	Scope     *symbols.Scope // the scope the binding was written in
+	Decl      *ast.Usage
+}
+
 // ObjectFlow represents a data flow edge between pins.
 type ObjectFlow struct {
 	// Name is the flow's own name, when it was declared with one
@@ -461,6 +493,14 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 				Decl:      n,
 			})
 		case *ast.Usage:
+			if n.Kind == ast.UsageBinding {
+				bindings, err := lowerPinBindings(graph, n, scope)
+				if err != nil {
+					return nil, err
+				}
+				graph.Bindings = append(graph.Bindings, bindings...)
+				continue
+			}
 			if n.Kind == ast.UsageSuccession {
 				if len(n.ConnectorEnds) != 2 {
 					return nil, fmt.Errorf("action succession must have exactly two connector ends, got %d", len(n.ConnectorEnds))
@@ -534,6 +574,77 @@ func resolveFirstNode(graph *ActionGraph) (map[*ast.InitialNode]ast.Node, error)
 		return node == ast.Node(initial)
 	})
 	return map[*ast.InitialNode]ast.Node{initial: named}, nil
+}
+
+// lowerPinBindings lowers a binding to one PinBinding per end that addresses a
+// pin of a node of this graph; a binding addressing no node lowers to nothing.
+func lowerPinBindings(graph *ActionGraph, u *ast.Usage, scope *symbols.Scope) ([]PinBinding, error) {
+	binding, ok := lowerBinding(u, scope)
+	if !ok {
+		return nil, nil
+	}
+	var out []PinBinding
+	for i, end := range binding.Ends {
+		node, pin := flowEnd(graph.Nodes, end.Expr)
+		if node == nil {
+			continue
+		}
+		if pin == "" {
+			return nil, fmt.Errorf("binding end %s names an action node but no pin of it", flowEndText(end.Expr))
+		}
+		other := binding.Ends[1-i].Expr
+		otherNode, otherPin := flowEnd(graph.Nodes, other)
+		out = append(out, PinBinding{
+			Node:      node,
+			Pin:       pin,
+			Other:     other,
+			OtherNode: otherNode,
+			OtherPin:  otherPin,
+			Scope:     scope,
+			Decl:      u,
+		})
+	}
+	return out, nil
+}
+
+// lowerFeatures records the parameters and attributes a node declares itself.
+func lowerFeatures(graph *ActionGraph, node *ast.Usage, scope *symbols.Scope) {
+	if graph.Features == nil {
+		graph.Features = make(map[ast.Node][]Feature)
+		graph.Scopes = make(map[ast.Node]*symbols.Scope)
+	}
+	graph.Scopes[node] = scope
+	var features []Feature
+	for _, member := range node.Members {
+		m, ok := unwrapMembership(member).(*ast.Usage)
+		if !ok || !DeclaresNodeFeature(m) {
+			continue
+		}
+		name, _ := ast.EffectiveName(m)
+		if name == "" {
+			continue
+		}
+		features = append(features, Feature{
+			Name:      name,
+			Direction: m.Direction,
+			Value:     m.Value,
+			Node:      m,
+			Scope:     scope,
+		})
+	}
+	graph.Features[node] = features
+}
+
+// DeclaresNodeFeature reports whether an action member is a parameter or attribute.
+func DeclaresNodeFeature(m *ast.Usage) bool {
+	if m.IsAccept || m.IsBodyParameter {
+		return false
+	}
+	switch m.Kind {
+	case ast.UsageAction, ast.UsageFlow, ast.UsageBinding, ast.UsageSuccession, ast.UsageConnection:
+		return false
+	}
+	return m.Direction != ast.DirNone || m.Kind == ast.UsageAttribute
 }
 
 // lowerBody records a nested action node's statements and the message it waits

@@ -34,9 +34,10 @@ type ActionExecutor struct {
 	breakpoints map[string]bool
 	// firedBreakpoints records the token visits a breakpoint already stopped on.
 	firedBreakpoints map[breakpointVisit]bool
-	// data holds the values this performance's features hold: one space every
-	// token reads and writes, so branches out of a fork see each other's effects.
-	data map[string]Value
+	// root is the action's own performance, holding the values of its features;
+	// every token in its flow reads and writes it, so branches out of a fork see
+	// each other's effects. A nested node performs in a frame of its own.
+	root *actionFrame
 	// mergeVisited tracks merge node visits, per activation of the flow the merge
 	// belongs to: a nested flow entered again merges again.
 	mergeVisited map[mergeVisit]bool
@@ -54,8 +55,8 @@ type breakpointVisit struct {
 	node  ast.Node
 }
 
-// mergeVisit identifies one merge node in one activation of the flow it belongs
-// to; frame is nil for the action's own flow.
+// mergeVisit identifies one merge node in one performance of the flow it
+// belongs to.
 type mergeVisit struct {
 	frame *actionFrame
 	node  ast.Node
@@ -110,9 +111,9 @@ func newActionExecutorForOccurrence(
 		breakpoints: make(map[string]bool),
 
 		firedBreakpoints: make(map[breakpointVisit]bool),
-		data:             make(map[string]Value),
 		mergeVisited:     make(map[mergeVisit]bool),
 	}
+	exec.root = exec.newRootFrame()
 
 	return exec, nil
 }
@@ -507,7 +508,7 @@ func (e *ActionExecutor) initializeAttributes() error {
 					ErrActionPerformanceOccurrence, attr.Name, e.occurrence.ID, err)
 			}
 			if value := fv.HeldValue(); value.Kind != ValInvalid {
-				e.data[attr.Name] = value
+				e.root.data[attr.Name] = value
 			}
 		}
 		return nil
@@ -523,7 +524,7 @@ func (e *ActionExecutor) initializeAttributes() error {
 		if err != nil {
 			return fmt.Errorf("eval attribute default %s: %w", attr.Name, err)
 		}
-		e.data[attr.Name] = value
+		e.root.data[attr.Name] = value
 	}
 
 	return nil
@@ -560,20 +561,20 @@ func (e *ActionExecutor) setFeature(name string, value Value) error {
 		// rather than by the write to that occurrence.
 		return err
 	}
-	e.data[name] = value
+	e.root.data[name] = value
 	return nil
 }
 
-// setFeatures writes several values into the feature space, in name order so a
+// setFrameFeatures writes several values into a performance, in name order so a
 // failure among them is the same one however they were collected.
-func (e *ActionExecutor) setFeatures(values map[string]Value) error {
+func (e *ActionExecutor) setFrameFeatures(frame *actionFrame, values map[string]Value) error {
 	names := make([]string, 0, len(values))
 	for name := range values {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		if err := e.setFeature(name, values[name]); err != nil {
+		if err := e.setFrameFeature(frame, name, values[name]); err != nil {
 			return err
 		}
 	}
@@ -584,20 +585,6 @@ func (e *ActionExecutor) setFeatures(values map[string]Value) error {
 // initial node has no step to perform.
 func (e *ActionExecutor) hasFlow() bool {
 	return e.graph != nil && e.graph.Initial != nil
-}
-
-// declaresParameter reports whether the action declares a parameter of this
-// name, which its own feature space holds rather than the performing object.
-func (e *ActionExecutor) declaresParameter(name string) bool {
-	if e.action == nil || e.action.Decl == nil {
-		return false
-	}
-	for _, param := range actionParameterDecls(e.action.Decl) {
-		if param.Name == name {
-			return true
-		}
-	}
-	return false
 }
 
 // parameterDirection reports the direction of the parameter of this name, and
@@ -668,7 +655,7 @@ func (e *ActionExecutor) initialize() error {
 	if err := e.checkInputNames(); err != nil {
 		return err
 	}
-	if err := e.setFeatures(e.inputs); err != nil {
+	if err := e.setFrameFeatures(e.root, e.inputs); err != nil {
 		return err
 	}
 
@@ -676,6 +663,7 @@ func (e *ActionExecutor) initialize() error {
 	token := Token{
 		ID:       e.nextTokenID,
 		Location: initialNode,
+		frame:    e.root,
 	}
 	e.nextTokenID++
 	e.tokens = append(e.tokens, token)
@@ -727,14 +715,14 @@ func (e *ActionExecutor) stepToken(tokenIdx int) error {
 // enabledSuccessions returns the successions a token at node may take, in
 // declaration order: a guard that does not hold leaves no link to pass along
 // (TransitionPerformance::transitionLink is HappensBefore[0..1]), so it is pruned.
-func (e *ActionExecutor) enabledSuccessions(graph *lower.ActionGraph, node ast.Node) ([]lower.ActionEdge, error) {
+func (e *ActionExecutor) enabledSuccessions(frame *actionFrame, node ast.Node) ([]lower.ActionEdge, error) {
+	graph := frame.graph
 	declared := graph.Edges[node]
 	if len(declared) == 0 {
 		return declared, nil
 	}
 
-	ec := NewEvalContextIn(e.ctx, graph.Scope, e.self)
-	ec.Push(e.data)
+	ec := e.evalContextFor(frame, graph.Scope)
 	defer ec.beginStep()()
 
 	enabled := make([]lower.ActionEdge, 0, len(declared))
@@ -778,7 +766,7 @@ func (e *ActionExecutor) stepInitialNode(tokenIdx int) error {
 		return err
 	}
 
-	successors, err := e.enabledSuccessions(graph, token.Location)
+	successors, err := e.enabledSuccessions(token.frame, token.Location)
 	if err != nil {
 		return err
 	}
@@ -808,7 +796,7 @@ func (e *ActionExecutor) removeToken(tokenIdx int) {
 // The last token of a nested flow instead leaves it, completing its node.
 func (e *ActionExecutor) retireToken(tokenIdx int) error {
 	frame := e.tokens[tokenIdx].frame
-	if frame == nil {
+	if frame == e.root {
 		e.removeToken(tokenIdx)
 		if len(e.tokens) == 0 {
 			e.state = StateCompleted
@@ -842,7 +830,7 @@ func (e *ActionExecutor) stepForkNode(tokenIdx int) error {
 
 	// A guard on a branch out of a fork prunes it: only the enabled branches run,
 	// and a fork whose every branch is pruned ends the flow through it.
-	successors, err := e.enabledSuccessions(graph, node)
+	successors, err := e.enabledSuccessions(frame, node)
 	if err != nil {
 		return err
 	}
@@ -865,9 +853,7 @@ func (e *ActionExecutor) stepForkNode(tokenIdx int) error {
 	// Remove original token, add new tokens
 	e.removeToken(tokenIdx)
 	e.tokens = append(e.tokens, newTokens...)
-	if frame != nil {
-		frame.live += len(successors) - 1
-	}
+	frame.live += len(successors) - 1
 
 	return nil
 }
@@ -913,7 +899,7 @@ func (e *ActionExecutor) stepJoinNode(tokenIdx int) error {
 		return fmt.Errorf("%w: join node %s has multiple successors",
 			ErrInvalidActionFlow, node.Name)
 	}
-	successors, err := e.enabledSuccessions(graph, node)
+	successors, err := e.enabledSuccessions(frame, node)
 	if err != nil {
 		return err
 	}
@@ -922,9 +908,7 @@ func (e *ActionExecutor) stepJoinNode(tokenIdx int) error {
 	// join's outcome, or to end the flow where a guard rules the succession out.
 	for i := len(atJoin) - 1; i >= 1; i-- {
 		e.removeToken(atJoin[i])
-		if frame != nil {
-			frame.live--
-		}
+		frame.live--
 	}
 	if len(successors) == 0 {
 		return e.retireToken(atJoin[0])
@@ -983,7 +967,7 @@ func (e *ActionExecutor) stepMergeNode(tokenIdx int) error {
 		return fmt.Errorf("%w: merge node %s has multiple successors (not yet supported)",
 			ErrInvalidActionFlow, mergeNode.Name)
 	}
-	successors, err := e.enabledSuccessions(graph, mergeNode)
+	successors, err := e.enabledSuccessions(token.frame, mergeNode)
 	if err != nil {
 		return err
 	}
@@ -1021,10 +1005,9 @@ func (e *ActionExecutor) stepDecisionNode(tokenIdx int) error {
 		return err
 	}
 
-	// A guard resolves in the action's scope, with the action's current feature
-	// values pushed over it so they shadow same-named declarations.
-	ec := NewEvalContextIn(e.ctx, graph.Scope, e.self)
-	ec.Push(e.data)
+	// A guard resolves in the flow's scope, with the performances' current
+	// feature values pushed over it so they shadow same-named declarations.
+	ec := e.evalContextFor(token.frame, graph.Scope)
 	defer ec.beginStep()()
 
 	// Two-pass evaluation:
@@ -1070,11 +1053,11 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 		return fmt.Errorf("expected ActionExecutionNode, got %T", token.Location)
 	}
 
-	graph := e.graphOf(token.frame)
+	frame := token.frame
+	graph := frame.graph
 	if node.Expression != nil {
-		// Evaluate in the action's scope, its feature values shadowing it.
-		ec := NewEvalContextIn(e.ctx, graph.Scope, e.self)
-		ec.Push(e.data)
+		// Evaluate in the flow's scope, its feature values shadowing it.
+		ec := e.evalContextFor(frame, graph.Scope)
 		defer ec.beginStep()()
 		result, err := ec.Eval(node.Expression)
 		if err != nil {
@@ -1089,23 +1072,23 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 				outputPin = flows[0].SourcePin
 			}
 		}
-		if err := e.setFeature(outputPin, result); err != nil {
+		if err := e.setFrameFeature(frame, outputPin, result); err != nil {
 			return err
 		}
 	} else if node.ActionRef != nil {
 		outputs, err := invokeAction(
-			e.ctx, e.action.Scope, actionInvocation{target: node.ActionRef}, e.data, e.self,
+			e.ctx, graph.Scope, actionInvocation{target: node.ActionRef}, lexicalValues(frame), e.self,
 		)
 		if err != nil {
 			return err
 		}
-		if err := e.setFeatures(outputs); err != nil {
+		if err := e.setFrameFeatures(frame, outputs); err != nil {
 			return err
 		}
 	}
 
 	// Advance to a succession its guard, where it carries one, leaves enabled.
-	successors, err := e.enabledSuccessions(graph, token.Location)
+	successors, err := e.enabledSuccessions(frame, token.Location)
 	if err != nil {
 		return err
 	}
@@ -1115,7 +1098,7 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 	}
 
 	// Apply data flows: transfer data from this node's output pins to target input pins
-	if err := e.applyDataFlows(graph, node); err != nil {
+	if err := e.applyDataFlows(frame, node); err != nil {
 		return err
 	}
 
@@ -1127,7 +1110,7 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 	return nil
 }
 
-// stepNestedAction executes a nested action usage.
+// stepNestedAction performs a nested action usage in a frame of its own.
 func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 	token := &e.tokens[tokenIdx]
 	usage, ok := token.Location.(*ast.Usage)
@@ -1143,7 +1126,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 	if isAccept && accept.Trigger != nil {
 		// A trigger waits for time to pass or for a condition to hold rather
 		// than for a message, so it is answered here and not from the queue.
-		ready, err := e.triggerHolds(graph, accept)
+		ready, err := e.triggerHolds(token.frame, accept)
 		if err != nil {
 			return err
 		}
@@ -1185,32 +1168,38 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 			if err != nil {
 				return fmt.Errorf("accept %s: %w", accept.ParamName, err)
 			}
-			if err := e.setFeature(accept.ParamName, value); err != nil {
+			// The payload is a feature of the flow the accept sits in, which the
+			// nodes after it read by its name.
+			if err := e.setFrameFeature(token.frame, accept.ParamName, value); err != nil {
 				return err
 			}
 		}
 	}
 
+	perf, err := e.beginPerformance(token.frame, usage)
+	if err != nil {
+		return err
+	}
+
 	// A usage that performs another action (perform X / action a : X / a = X(...))
 	// runs that action to completion before its own body.
 	if inv, ok := nestedInvocation(usage); ok {
-		outputs, err := invokeAction(e.ctx, e.action.Scope, inv, e.data, e.self)
-		if err != nil {
-			return err
-		}
-		if err := e.setFeatures(outputs); err != nil {
+		if err := e.performInvocation(perf, inv); err != nil {
 			return err
 		}
 	}
 
 	// A node owning a flow performs it: its steps are subperformances of the
 	// node, so the node completes only once they have.
-	if sub, owns := e.subflowOf(graph, usage); owns {
-		return e.enterSubflow(tokenIdx, sub)
+	if perf.graph != nil {
+		return e.enterSubflow(tokenIdx, perf)
 	}
 
 	// Execute the node's lowered statements in declaration order.
-	if err := e.executeBody(token.frame, usage); err != nil {
+	if err := e.executeBody(perf, graph, usage); err != nil {
+		return err
+	}
+	if err := e.endPerformance(perf); err != nil {
 		return err
 	}
 
@@ -1220,10 +1209,10 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 // completeNode takes the succession out of a node whose work is done, retiring
 // the token where its flow leads no further.
 func (e *ActionExecutor) completeNode(tokenIdx int, node ast.Node) error {
-	graph := e.tokenGraph(tokenIdx)
+	frame := e.tokens[tokenIdx].frame
 
 	// Advance to a succession its guard, where it carries one, leaves enabled.
-	successors, err := e.enabledSuccessions(graph, node)
+	successors, err := e.enabledSuccessions(frame, node)
 	if err != nil {
 		return err
 	}
@@ -1233,7 +1222,7 @@ func (e *ActionExecutor) completeNode(tokenIdx int, node ast.Node) error {
 
 	// The flows out of this node carry what its body produced to the pins the
 	// nodes downstream read.
-	if err := e.applyDataFlows(graph, node); err != nil {
+	if err := e.applyDataFlows(frame, node); err != nil {
 		return err
 	}
 
@@ -1253,11 +1242,10 @@ func (e *ActionExecutor) completeNode(tokenIdx int, node ast.Node) error {
 // polling a state machine's change transitions use. A time event needs a clock
 // the action executor does not have, so it is reported rather than treated as
 // having already fired.
-func (e *ActionExecutor) triggerHolds(graph *lower.ActionGraph, accept lower.Accept) (bool, error) {
+func (e *ActionExecutor) triggerHolds(frame *actionFrame, accept lower.Accept) (bool, error) {
 	switch t := accept.Trigger.(type) {
 	case *ast.ChangeEvent:
-		ec := NewEvalContextIn(e.ctx, graph.Scope, e.self)
-		ec.Push(e.data)
+		ec := e.evalContextFor(frame, frame.graph.Scope)
 		defer ec.beginStep()()
 		result, err := ec.Eval(t.Condition)
 		if err != nil {
@@ -1280,13 +1268,13 @@ func (e *ActionExecutor) triggerHolds(graph *lower.ActionGraph, accept lower.Acc
 // runs the statements lowering recorded for it, then leaves for its successor.
 func (e *ActionExecutor) stepStatementNode(tokenIdx int) error {
 	node := e.tokens[tokenIdx].Location
-	graph := e.tokenGraph(tokenIdx)
+	frame := e.tokens[tokenIdx].frame
 
-	if err := e.executeBody(e.tokens[tokenIdx].frame, node); err != nil {
+	if err := e.executeBody(frame, frame.graph, node); err != nil {
 		return err
 	}
 
-	successors, err := e.enabledSuccessions(graph, node)
+	successors, err := e.enabledSuccessions(frame, node)
 	if err != nil {
 		return err
 	}
@@ -1324,23 +1312,36 @@ func statementNodeKeyword(node ast.Node) string {
 
 // applyDataFlows transfers data along the object flows out of sourceNode: the
 // value at each flow's source pin becomes the value at its target pin, which is
-// what the target node reads when the token reaches it. A flow whose source pin
-// holds nothing moves nothing and is reported, since a declared flow that
-// silently carries no payload is a wrong result rather than a no-op.
-func (e *ActionExecutor) applyDataFlows(graph *lower.ActionGraph, sourceNode ast.Node) error {
-	for _, flow := range graph.DataFlows[sourceNode] {
-		sourceData, ok := e.data[flow.SourcePin]
+// what the target node's performance starts with when the token reaches it. A
+// flow whose source pin holds nothing moves nothing and is reported, since a
+// declared flow that silently carries no payload is a wrong result rather than
+// a no-op.
+func (e *ActionExecutor) applyDataFlows(frame *actionFrame, sourceNode ast.Node) error {
+	for _, flow := range frame.graph.DataFlows[sourceNode] {
+		sourceData, ok := frame.pinValue(sourceNode, flow.SourcePin)
 		if !ok {
 			return fmt.Errorf(
 				"%s: %s produced no value at %s",
 				flowDescription(flow), nodeDescription(sourceNode), orAnyPin(flow.SourcePin),
 			)
 		}
-		if err := e.setFeature(flow.TargetPin, sourceData); err != nil {
+		if err := e.deliverFlow(frame, flow, sourceData); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// deliverFlow puts a flow's payload where its target reads it: at the pin of a
+// target performing in a frame of its own, else in the flow's own features.
+func (e *ActionExecutor) deliverFlow(frame *actionFrame, flow lower.ObjectFlow, value Value) error {
+	if _, performs := flow.Target.(*ast.Usage); performs {
+		if err := e.deliver(frame, flow.Target, flow.TargetPin, value); err != nil {
+			return fmt.Errorf("%s: %w", flowDescription(flow), err)
+		}
+		return nil
+	}
+	return e.setFrameFeature(frame, flow.TargetPin, value)
 }
 
 // flowDescription names a data flow for a diagnostic: its own name when it was
@@ -1386,20 +1387,21 @@ func (e *ActionExecutor) State() ExecutionState {
 	return e.state
 }
 
-// Results returns the values the action's features currently hold: one space
-// every token shares, so every branch's effects are reported. For a performed
-// usage these mirror the performance occurrence, which every write goes through.
+// Results returns the values the action's features currently hold, and under
+// `node.pin` those the latest performance of each nested node holds. For a
+// performed usage the action's own mirror the performance occurrence, which
+// every write goes through.
 func (e *ActionExecutor) Results() map[string]Value {
-	results := make(map[string]Value, len(e.data))
-	for name, value := range e.data {
-		results[name] = value
-	}
+	results := make(map[string]Value, len(e.root.data))
+	e.root.collect("", results)
 	return results
 }
 
-// Data returns the action's live feature space, which its nodes read and write.
+// Data returns the live feature space of the action's own performance, which
+// every token in its flow reads and writes. A nested node's features live in
+// that node's performance instead and are reported by Results.
 func (e *ActionExecutor) Data() map[string]Value {
-	return e.data
+	return e.root.data
 }
 
 // SetBreakpoint adds a breakpoint at the given node name.

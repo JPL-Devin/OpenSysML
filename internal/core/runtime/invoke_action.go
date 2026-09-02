@@ -29,6 +29,11 @@ type actionInvocation struct {
 	referrer ast.Node
 }
 
+// hasArguments reports whether the invocation was written with an argument list.
+func (inv actionInvocation) hasArguments() bool {
+	return len(inv.args) > 0 || len(inv.named) > 0
+}
+
 // nestedInvocation reports the action a nested usage performs, if any. A usage
 // that only carries its own body (assignments, sends, accepts) performs nothing.
 // Only typing and reference-subsetting edges name a performed action: the port
@@ -88,9 +93,22 @@ func invokeAction(
 	defer func() { ctx.actionDepth-- }()
 
 	in, out := actionParameters(sym.Decl)
-	inputs, err := bindArguments(ctx, scope, inv, in, data)
-	if err != nil {
-		return nil, err
+	inputs := make(map[string]Value, len(in))
+	if inv.hasArguments() {
+		ec := NewEvalContext(ctx, scope)
+		ec.Push(data)
+		defer ec.beginStep()()
+		if err := bindArgumentList(ec, inv, in, inputs); err != nil {
+			return nil, err
+		}
+	} else {
+		// A bare `perform`/typed usage reads the caller's values of the parameters'
+		// own names, which is how data reaches an action performed inside a flow.
+		for _, name := range in {
+			if value, ok := data[name]; ok {
+				inputs[name] = value
+			}
+		}
 	}
 
 	results, err := ctx.ExecuteActionPerformedBy(sym, self, inputs)
@@ -139,64 +157,42 @@ func resolveActionSymbol(
 	return sym, nil
 }
 
-// bindArguments computes the callee's input bindings. An invocation with an
-// argument list binds those arguments; a bare `perform`/typed usage instead
-// passes the caller's values of the parameters' own names, which is how data
-// reaches an action performed inside a flow.
-func bindArguments(
-	ctx *Context,
-	scope *symbols.Scope,
-	inv actionInvocation,
-	in []string,
-	data map[string]Value,
-) (map[string]Value, error) {
-	inputs := make(map[string]Value, len(in))
-
-	if len(inv.args) == 0 && len(inv.named) == 0 {
-		for _, name := range in {
-			if value, ok := data[name]; ok {
-				inputs[name] = value
-			}
-		}
-		return inputs, nil
-	}
-
-	ec := NewEvalContext(ctx, scope)
-	ec.Push(data)
-	defer ec.beginStep()()
-
+// bindArgumentList binds an invocation's arguments into inputs: positional ones
+// by the callee's input parameter order, named ones by the callee's parameter
+// names. Arguments are evaluated in ec, the caller's context.
+func bindArgumentList(ec *EvalContext, inv actionInvocation, in []string, inputs map[string]Value) error {
 	if len(inv.args) > len(in) {
-		return nil, fmt.Errorf(
-			"action %s takes %d input parameter(s), got %d argument(s)",
-			qualifiedNameText(inv.target), len(in), len(inv.args),
+		return fmt.Errorf(
+			"%w: action %s takes %d input parameter(s), got %d argument(s)",
+			ErrActionArity, qualifiedNameText(inv.target), len(in), len(inv.args),
 		)
 	}
 	for i, arg := range inv.args {
 		value, err := ec.Eval(arg)
 		if err != nil {
-			return nil, fmt.Errorf("eval argument %d of %s: %w", i+1, qualifiedNameText(inv.target), err)
+			return fmt.Errorf("eval argument %d of %s: %w", i+1, qualifiedNameText(inv.target), err)
 		}
 		inputs[in[i]] = value
 	}
 
 	for _, named := range inv.named {
 		if named.Name == nil || len(named.Name.Parts) == 0 {
-			return nil, fmt.Errorf("unnamed argument in invocation of %s", qualifiedNameText(inv.target))
+			return fmt.Errorf("unnamed argument in invocation of %s", qualifiedNameText(inv.target))
 		}
 		name := named.Name.Parts[len(named.Name.Parts)-1].Text
 		if !contains(in, name) {
-			return nil, fmt.Errorf(
-				"action %s has no input parameter %q",
-				qualifiedNameText(inv.target), name,
+			return fmt.Errorf(
+				"%w: action %s has no input parameter %q",
+				ErrUnknownParameter, qualifiedNameText(inv.target), name,
 			)
 		}
 		value, err := ec.Eval(named.Value)
 		if err != nil {
-			return nil, fmt.Errorf("eval argument %q of %s: %w", name, qualifiedNameText(inv.target), err)
+			return fmt.Errorf("eval argument %q of %s: %w", name, qualifiedNameText(inv.target), err)
 		}
 		inputs[name] = value
 	}
-	return inputs, nil
+	return nil
 }
 
 // actionParameter is one parameter an action declares.
@@ -253,7 +249,12 @@ func actionParameterDecls(decl ast.Node) []actionParameter {
 // actionParameters returns the names of an action's parameters that the caller
 // writes (`in`, `inout`) and that it reads back (`out`, `inout`).
 func actionParameters(decl ast.Node) (in, out []string) {
-	for _, param := range actionParameterDecls(decl) {
+	return parameterNames(actionParameterDecls(decl))
+}
+
+// parameterNames splits parameters into those the caller writes and reads back.
+func parameterNames(params []actionParameter) (in, out []string) {
+	for _, param := range params {
 		switch param.Direction {
 		case ast.DirIn:
 			in = append(in, param.Name)

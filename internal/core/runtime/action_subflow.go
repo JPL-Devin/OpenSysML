@@ -10,27 +10,12 @@ import (
 // An action node owning a flow runs that flow as its subperformances
 // (`Actions::Action::subactions :> actions, subperformances`), which are
 // suboccurrences of it and so end no later than it does. A token entering such a
-// node pushes a frame and runs the node's own graph; the node completes, and its
-// succession fires, only when the frame's last token retires.
+// node moves into the node's performance and runs the node's own graph; the node
+// completes, and its succession fires, only when the performance's last token
+// retires (action_frame.go holds the performance itself).
 
-// actionFrame is one activation of a nested action node's own flow.
-type actionFrame struct {
-	node   ast.Node
-	graph  *lower.ActionGraph
-	parent *actionFrame
-	// live counts the tokens still running in this activation, which a fork
-	// inside it raises and a join or a retiring token lowers.
-	live int
-	// connections are the connectors a send in this flow may route through:
-	// those of every flow around it, this one's own included.
-	connections []lower.Connection
-}
-
-// graphOf returns the flow a frame runs, the action's own for the root frame.
+// graphOf returns the flow a performance runs.
 func (e *ActionExecutor) graphOf(frame *actionFrame) *lower.ActionGraph {
-	if frame == nil {
-		return e.graph
-	}
 	return frame.graph
 }
 
@@ -45,28 +30,26 @@ func (e *ActionExecutor) subflowOf(graph *lower.ActionGraph, node ast.Node) (*lo
 	return sub, owns && sub != nil
 }
 
-// enterSubflow moves a token into the flow its node owns. The flow was validated
-// at initialize(), so an unbuildable one here is reported rather than skipped.
-func (e *ActionExecutor) enterSubflow(tokenIdx int, sub *lower.Subflow) error {
+// enterSubflow moves a token into the flow its node owns, run by the node's
+// performance. The flow was validated at initialize(), so an unbuildable one
+// here is reported rather than skipped.
+func (e *ActionExecutor) enterSubflow(tokenIdx int, perf *actionFrame) error {
 	token := &e.tokens[tokenIdx]
 	node := token.Location
-	if sub.Graph == nil || sub.Graph.Initial == nil {
+	if perf.graph == nil || perf.graph.Initial == nil {
 		return fmt.Errorf("%w: action node %s owns a flow that cannot be built",
 			ErrInvalidActionFlow, ActionNodeName(node))
 	}
-	token.frame = &actionFrame{
-		node: node, graph: sub.Graph, parent: token.frame, live: 1,
-		connections: joinConnections(e.connectionsOf(token.frame), sub.Graph.Connections),
-	}
-	token.Location = sub.Graph.Initial
+	token.frame = perf
+	token.Location = perf.graph.Initial
 	if tr := e.trace(); tr != nil {
 		tr.RecordActionNodeEnter(ActionNodeName(node))
 	}
 	return nil
 }
 
-// leaveSubflow returns a token to the node whose flow has just completed and
-// takes that node's own succession.
+// leaveSubflow returns a token to the node whose flow has just completed, ends
+// that node's performance and takes the node's own succession.
 func (e *ActionExecutor) leaveSubflow(tokenIdx int) error {
 	token := &e.tokens[tokenIdx]
 	frame := token.frame
@@ -75,6 +58,9 @@ func (e *ActionExecutor) leaveSubflow(tokenIdx int) error {
 	token.Wait = nil
 	if tr := e.trace(); tr != nil {
 		tr.RecordActionNodeExit(ActionNodeName(frame.node))
+	}
+	if err := e.endPerformance(frame); err != nil {
+		return err
 	}
 	return e.completeNode(tokenIdx, frame.node)
 }
@@ -119,14 +105,11 @@ func (e *ActionExecutor) subflowNodeNames(graph *lower.ActionGraph) []string {
 	return names
 }
 
-// connectionsOf returns the connectors a send running in a frame may route
+// connectionsOf returns the connectors a send running in a performance may route
 // through: the action's own for the root flow, and every enclosing flow's for a
 // nested one, so a send deep in the nesting still reaches a connector declared
 // around it.
 func (e *ActionExecutor) connectionsOf(frame *actionFrame) []lower.Connection {
-	if frame == nil {
-		return e.graph.Connections
-	}
 	return frame.connections
 }
 

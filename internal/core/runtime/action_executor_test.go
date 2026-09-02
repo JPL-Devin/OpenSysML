@@ -233,7 +233,7 @@ func TestActionExecutor_ActionExecutionNode(t *testing.T) {
 	}
 
 	// The action's features should hold the result
-	result, ok := exec.data["result"]
+	result, ok := exec.Data()["result"]
 	if !ok {
 		t.Error("expected result in action data")
 	}
@@ -344,7 +344,7 @@ func TestActionExecutor_ForkNode_SharedFeatureSpace(t *testing.T) {
 	exec.initialize()
 
 	// Set a feature value before the fork
-	exec.data["x"] = Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 100}}
+	exec.root.data["x"] = Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 100}}
 
 	exec.stepToken(0) // start → fork
 
@@ -359,13 +359,13 @@ func TestActionExecutor_ForkNode_SharedFeatureSpace(t *testing.T) {
 	}
 
 	// The fork copies control, not values: the feature keeps the value it held.
-	if got := exec.data["x"]; got.Kind != ValConst || got.Const.Int != 100 {
+	if got := exec.root.data["x"]; got.Kind != ValConst || got.Const.Int != 100 {
 		t.Errorf("expected x = 100 after fork, got %v", got)
 	}
 
 	// A write in one branch is a write to the action's feature, so every branch
 	// and the action's results see it.
-	exec.data["x"] = Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 999}}
+	exec.root.data["x"] = Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 999}}
 	if got := exec.Results()["x"]; got.Const.Int != 999 {
 		t.Errorf("expected results to report x = 999, got %v", got)
 	}
@@ -561,7 +561,7 @@ func TestActionExecutor_JoinNode(t *testing.T) {
 	}
 
 	// The branches wrote the same feature, so it holds the last write
-	result, ok := exec.data["result"]
+	result, ok := exec.root.data["result"]
 	if !ok {
 		t.Error("expected 'result' in the action's data")
 	}
@@ -864,7 +864,7 @@ func TestActionExecutor_MergeNode_ControlOnly(t *testing.T) {
 	}
 
 	// Both branches wrote the same feature, so it holds the later write.
-	beforeMerge := exec.data["result"].Const.Int
+	beforeMerge := exec.root.data["result"].Const.Int
 	if beforeMerge != 1 && beforeMerge != 2 {
 		t.Fatalf("expected result written by one of the branches, got %d", beforeMerge)
 	}
@@ -898,7 +898,7 @@ func TestActionExecutor_MergeNode_ControlOnly(t *testing.T) {
 	}
 
 	// Discarding a token discards no value.
-	if got := exec.data["result"].Const.Int; got != beforeMerge {
+	if got := exec.root.data["result"].Const.Int; got != beforeMerge {
 		t.Errorf("expected result to stay %d after the merge, got %d", beforeMerge, got)
 	}
 }
@@ -1029,7 +1029,7 @@ func TestActionExecutor_DecisionNode(t *testing.T) {
 		exec.initialize()
 
 		// Set x=15 in the action's data
-		exec.data["x"] = Value{
+		exec.root.data["x"] = Value{
 			Kind:  ValConst,
 			Const: semantics.Value{Kind: semantics.ValInt, Int: 15},
 		}
@@ -1061,7 +1061,7 @@ func TestActionExecutor_DecisionNode(t *testing.T) {
 		exec.initialize()
 
 		// Set x=5 in the action's data
-		exec.data["x"] = Value{
+		exec.root.data["x"] = Value{
 			Kind:  ValConst,
 			Const: semantics.Value{Kind: semantics.ValInt, Int: 5},
 		}
@@ -1133,7 +1133,7 @@ func TestActionExecutor_DecisionNode(t *testing.T) {
 		}
 
 		exec.initialize()
-		exec.data["x"] = Value{
+		exec.root.data["x"] = Value{
 			Kind:  ValConst,
 			Const: semantics.Value{Kind: semantics.ValInt, Int: 50},
 		}
@@ -1222,7 +1222,7 @@ func TestActionExecutor_DecisionNode_ElseBranch(t *testing.T) {
 		}
 
 		exec.initialize()
-		exec.data["x"] = Value{
+		exec.root.data["x"] = Value{
 			Kind:  ValConst,
 			Const: semantics.Value{Kind: semantics.ValInt, Int: 15},
 		}
@@ -1250,7 +1250,7 @@ func TestActionExecutor_DecisionNode_ElseBranch(t *testing.T) {
 		}
 
 		exec.initialize()
-		exec.data["x"] = Value{
+		exec.root.data["x"] = Value{
 			Kind:  ValConst,
 			Const: semantics.Value{Kind: semantics.ValInt, Int: 5},
 		}
@@ -1414,11 +1414,11 @@ func TestActionExecutor_ObjectFlow(t *testing.T) {
 	exec.stepToken(0) // action1: execute, store result in "output" pin
 
 	// Verify action1 stored result in "output" pin
-	if _, ok := exec.data["output"]; !ok {
+	if _, ok := exec.root.data["output"]; !ok {
 		t.Fatal("expected action1 to store result in 'output' pin")
 	}
 
-	outputVal := exec.data["output"]
+	outputVal := exec.root.data["output"]
 	if outputVal.Kind != ValConst || outputVal.Const.Kind != semantics.ValInt || outputVal.Const.Int != 42 {
 		t.Errorf("expected output=42, got %v", outputVal)
 	}
@@ -1426,11 +1426,11 @@ func TestActionExecutor_ObjectFlow(t *testing.T) {
 	exec.stepToken(0) // action1 → action2 (control flow + data flow)
 
 	// Verify action2 received data in "input" pin
-	if _, ok := exec.data["input"]; !ok {
+	if _, ok := exec.root.data["input"]; !ok {
 		t.Fatal("expected action2 to receive data in 'input' pin")
 	}
 
-	inputVal := exec.data["input"]
+	inputVal := exec.root.data["input"]
 	if inputVal.Kind != ValConst || inputVal.Const.Kind != semantics.ValInt || inputVal.Const.Int != 42 {
 		t.Errorf("expected input=42, got %v", inputVal)
 	}
@@ -1913,7 +1913,7 @@ func TestActionExecutor_Integration_DecisionMerge(t *testing.T) {
 		}
 
 		exec.initialize()
-		exec.data["x"] = Value{
+		exec.root.data["x"] = Value{
 			Kind:  ValConst,
 			Const: semantics.Value{Kind: semantics.ValInt, Int: 10},
 		}
@@ -1936,7 +1936,7 @@ func TestActionExecutor_Integration_DecisionMerge(t *testing.T) {
 		}
 
 		exec.initialize()
-		exec.data["x"] = Value{
+		exec.root.data["x"] = Value{
 			Kind:  ValConst,
 			Const: semantics.Value{Kind: semantics.ValInt, Int: 3},
 		}
@@ -2245,7 +2245,7 @@ func TestActionExecutor_Integration_ParallelProcessing(t *testing.T) {
 		t.Fatalf("initialize: %v", err)
 	}
 
-	exec.data["input"] = Value{
+	exec.root.data["input"] = Value{
 		Kind:  ValConst,
 		Const: semantics.Value{Kind: semantics.ValInt, Int: 100},
 	}
@@ -2438,7 +2438,7 @@ func TestActionExecutor_GuardedSuccession_OutOfInitialNode(t *testing.T) {
 	if exec.State() != StateCompleted {
 		t.Errorf("state = %s, want StateCompleted", exec.State())
 	}
-	if _, ran := exec.data["result"]; ran {
+	if _, ran := exec.root.data["result"]; ran {
 		t.Error("s1 ran although the succession into it was pruned")
 	}
 }
@@ -2627,7 +2627,7 @@ func TestActionExecutor_GuardedSuccession_PrunedMergeStaysOpen(t *testing.T) {
 	step(merge)   // guard 2 > 1 holds: join → after
 	step(after)
 
-	if value, ran := exec.data["result"]; !ran || value.Str() != "ran" {
+	if value, ran := exec.root.data["result"]; !ran || value.Str() != "ran" {
 		t.Errorf("after did not run: result = %v", value)
 	}
 }

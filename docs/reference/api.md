@@ -393,8 +393,12 @@ Execution runtime (Tiers 1-5: instances, expressions, behaviors).
   - `RunToCompletion() error` — Execute until StateCompleted (max 10k steps)
   - `Tokens() []Token` — Get active tokens (copy)
   - `State() ExecutionState` — Current execution state (Ready/Running/Completed/Suspended)
-  - `Results() map[string]Value` — Get results after completion
-  - `Data() map[string]Value` — The action's live feature space, shared by every token
+  - `Results() map[string]Value` — The values the action's features hold, and under
+    `node.pin` (`p.v`, `leg.inner.v`) those the latest performance of each nested
+    action node holds; complete once execution has completed
+  - `Data() map[string]Value` — The live feature space of the action's own performance,
+    which every token in its flow shares. A nested action node performs in a frame of
+    its own, so its pins are not here; read them from `Results()`
   - `SetBreakpoint(nodeName string)` — Set breakpoint on node
   - `ClearBreakpoints()` — Clear all breakpoints
   - `ActionSymbol() *symbols.Symbol` — Get action symbol
