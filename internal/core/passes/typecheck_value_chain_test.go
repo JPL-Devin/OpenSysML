@@ -135,6 +135,31 @@ func TestValueChainInCollectionElements(t *testing.T) {
 	}`, "cannot bind a value of type D to a feature typed by B")
 }
 
+// `a#(i)` names one element of a, of a's own type, so an indexed segment or
+// value is judged like the sequence it selects from; `a[i]` is an expression.
+func TestValueIndexedChainIsJudged(t *testing.T) {
+	wantOneDiag(t, `package P {
+		part def A { part b : B[*]; }
+		part def B { part c : C; }
+		part def C;
+		part def D;
+		part a : A[*];
+		part x : D = a#(1).b#(1).c;
+		part ok : C = a#(1).b#(1).c;
+		part ok2 : B = a.b#(1);
+	}`, "cannot bind a value of type C to a feature typed by D")
+}
+
+func TestValueIndexedElementIsJudged(t *testing.T) {
+	wantOneDiag(t, `package P {
+		part def A;
+		part def D;
+		part a : A[*];
+		part x : D = a#(1);
+		part ok : A = a#(1);
+	}`, "cannot bind a value of type A to a feature typed by D")
+}
+
 // An unresolved or untyped segment leaves the chain unjudged.
 func TestValueChainUnresolvedIsNotJudged(t *testing.T) {
 	wantNoDiags(t, `package P {

@@ -246,7 +246,7 @@ func (ec *exprChecker) owningEnumeration(sym *symbols.Symbol) *symbols.Symbol {
 }
 
 // namesFeature reports whether a value expression names a feature outright — a
-// qualified name or a feature chain — rather than computing one.
+// qualified name, a feature chain or an element `a#(i)` — rather than computing one.
 func namesFeature(value ast.Node) bool {
 	switch v := value.(type) {
 	case *ast.FeatureReference:
@@ -255,6 +255,8 @@ func namesFeature(value ast.Node) bool {
 		return true
 	case *ast.FeatureChainExpr:
 		return v.Member != nil && namesFeature(v.Operand)
+	case *ast.IndexExpr:
+		return !v.Bracket && namesFeature(v.Operand)
 	}
 	return false
 }
