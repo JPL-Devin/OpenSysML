@@ -345,8 +345,10 @@ The rules the tree follows:
   never ends in a lone `_`.
 - **Every node carries `sysx:sourceText`**, the notation it was written as. The
   tree is *additive*: the text is what a conversion back to notation is written
-  from, so exactness does not depend on the tree being complete, and
-  `TestRoundTripIsLossless` covers the same round trip it did before.
+  from, as long as it still states the tree ([Stored text is
+  layout](#stored-text-is-layout)), so exactness does not depend on the tree
+  being complete, and `TestRoundTripIsLossless` covers the same round trip it
+  did before.
 - **Operands are ordered** by `sysx:argumentIndex`, because an RDF graph is a set
   and `a - b` is not `b - a`.
 - **Metaclasses are the standard ones** where the metamodel names them:
@@ -461,6 +463,51 @@ package Demo {
 The `comment` and `doc` keywords declare elements, so they convert both ways.
 Save straight to `.sysml` when the comments matter; that path writes the source
 and keeps everything.
+
+### Stored text is layout
+
+**The graph is authoritative; `sysx:sourceText` is how the author laid it out.**
+The text is the notation from its first token to its last, stored as written —
+line breaks, indentation, tabs, blank lines and CRLF included; nothing inside it
+is normalised on the way in — and a conversion back to notation writes it byte
+for byte, but only while it still states what the graph states. "Did not restructure" is defined by spelling: the writer spells the head
+or expression from the graph's structure, and if that spelling and the stored
+text are the same sequence of tokens — whitespace and lexical comments aside,
+a quoted name equal to its bare form, `:>` equal to `subsets` — the stored text
+is written verbatim. Otherwise the structural spelling is written: a stored
+text that names other ends, another operator or another operand than the graph
+does is never written, because a graph edited in place is right and its text
+is stale. For an expression the check reads the stored text back and maps it
+with the same encoder: every statement the graph makes about the node
+(`sysx:operator`, the operands and their order, the element a reference
+resolves to) must hold in the result, nested nodes included. A graph carrying
+no `sysx:sourceText` at all is written from its structure alone, exactly as the
+strip-and-rewrite tests do.
+
+What follows from this:
+
+- A second conversion of the graph is byte-identical to the first, since the
+  notation it is written from carries the same text: `TestRoundTripIsLossless`
+  asserts it for every fixture under `testdata/convert/` (`irregular_layout.sysml`
+  lays its heads, conditions, values and bodies out over several lines with tabs
+  and blank lines inside them) and `TestCorpusSecondConversionIsByteStable`
+  ratchets it over every example model, with the files that do not yet get that
+  far recorded in `testdata/corpus_round_trip_expected.txt`.
+- The notation the writer spells itself is indented by nesting depth; a stored
+  text is written after that indentation as it was stored, so a continuation
+  line keeps the indentation the author gave it rather than being re-indented
+  to the new depth. Comment and `doc` bodies are stored in `sysml:body` the same
+  way and come back unchanged, CRLF included.
+- A relationship clause a head states is written in the order the graph states
+  it, which is the order it was written, so `:>> x : T` does not come back as
+  `: T :>> x` and change the graph's order on the next conversion.
+- A head kept as text that the graph states no `sysx:endForm` for is written as
+  its text: there is no structural spelling to check it against, which is why
+  the form is recorded whenever the head can be rebuilt (below).
+
+Tests: `verbatim_test.go` covers the layout that survives, a stored text kept
+up to spelling, a stored head and a stored expression that disagree with the
+graph and give way to it, and the graph written with no stored text at all.
 
 ### End-binding heads
 

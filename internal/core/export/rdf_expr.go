@@ -276,9 +276,9 @@ func (d *decoder) resolveExpressions() error {
 }
 
 // expressionNodeText writes an expression node back as notation: the notation it
-// kept, or notation rebuilt from its structure when it kept none.
+// kept, when that still states the graph, or notation rebuilt from its structure.
 func (d *decoder) expressionNodeText(node rdf.Term, scope string) (string, error) {
-	if text, ok := d.graph.Lexical(node, rdf.OpenSysML+xSourceText); ok && text != "" {
+	if text, ok := d.graph.Lexical(node, rdf.OpenSysML+xSourceText); ok && text != "" && d.textStatesGraph(node, text, scope) {
 		return text, nil
 	}
 	metaclass := rdf.LocalName(d.graph.Type(node))

@@ -2932,21 +2932,30 @@ func (p *Parser) parseBodyMember() ast.Node {
 				}
 			}
 
-			// Parse as anonymous usage (attribute by default)
+			// Parse as anonymous usage: the kind an occurrence modifier implies
+			// (`ref individual v : V`), else an attribute.
+			kind, keyword := modifierImpliedKind(mods)
+			if keyword == "" {
+				kind = p.anonymousUsageKind(mods)
+			}
 			u := &ast.Usage{
-				Kind:        p.anonymousUsageKind(mods),
-				Ident:       id,
-				Visibility:  mods.visibility,
-				IsReference: mods.isReference,
-				IsVariable:  mods.isVariable,
-				IsDerived:   mods.isDerived,
-				IsComposite: mods.isComposite,
-				IsPortion:   mods.isPortion,
-				IsEnd:       mods.isEnd,
-				IsChain:     mods.isChain,
-				Direction:   mods.direction,
-				IsOrdered:   mods.isOrdered,
-				IsNonunique: mods.isNonunique,
+				Kind:         kind,
+				Keyword:      keyword,
+				Ident:        id,
+				Visibility:   mods.visibility,
+				IsReference:  mods.isReference,
+				IsIndividual: mods.isIndividual,
+				IsEvent:      mods.isEvent,
+				Portion:      mods.portion,
+				IsVariable:   mods.isVariable,
+				IsDerived:    mods.isDerived,
+				IsComposite:  mods.isComposite,
+				IsPortion:    mods.isPortion,
+				IsEnd:        mods.isEnd,
+				IsChain:      mods.isChain,
+				Direction:    mods.direction,
+				IsOrdered:    mods.isOrdered,
+				IsNonunique:  mods.isNonunique,
 			}
 
 			if hasTypeOnly {

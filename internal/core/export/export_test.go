@@ -723,8 +723,14 @@ func withoutTriples(t *testing.T, turtle []byte, property string) []byte {
 	var blocks []string
 	for _, block := range strings.Split(string(turtle), "\n\n") {
 		var kept []string
+		dropping := false // inside a dropped triple's multi-line """literal"""
 		for _, line := range strings.Split(block, "\n") {
+			if dropping {
+				dropping = !strings.Contains(line, `"""`)
+				continue
+			}
 			if strings.HasPrefix(strings.TrimSpace(line), property+" ") {
+				dropping = strings.Count(line, `"""`) == 1
 				continue
 			}
 			kept = append(kept, line)

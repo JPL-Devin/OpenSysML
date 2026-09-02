@@ -79,6 +79,7 @@ func (n endNotation) text() (string, error) {
 // is a noun (`allocation a allocate x to y`), by the form they introduce.
 var endVerbs = map[string][]string{
 	formTo:        {"connect", "allocate"},
+	formFromTo:    {"connect", "allocate"},
 	formNary:      {"connect", "allocate"},
 	formEquals:    {"bind", "of"},
 	formFirstThen: {"first"},
@@ -86,8 +87,8 @@ var endVerbs = map[string][]string{
 
 // endForm states the form an end-binding head writes its ends in, so a graph
 // without the head's source text can be written back from its structure. The
-// form is only claimed when rebuilding it reproduces the head as written: a
-// head this mapping cannot rebuild exactly stays readable as text alone.
+// form is only claimed when rebuilding it reproduces the head as written, up
+// to layout: a head this mapping cannot rebuild stays readable as text alone.
 func (e *encoder) endForm(subject rdf.Term, n *ast.Usage) {
 	if n.Kind == ast.UsageSatisfy {
 		e.satisfyForm(subject, n)
@@ -103,22 +104,42 @@ func (e *encoder) endForm(subject rdf.Term, n *ast.Usage) {
 		return
 	}
 	rebuilt, err := (endNotation{form: form, keyword: keyword, ends: ends, payload: payload}).text()
-	if err != nil || rebuilt != written {
+	if err != nil || !sameSpelling(rebuilt, written) {
 		return
 	}
 	e.graph.Add(subject, e.sysx(xEndForm), rdf.String(form))
 	if keyword != "" {
 		e.graph.Add(subject, e.sysx(xEndVerb), rdf.String(keyword))
 	}
-	if n.Keyword != "" && n.Keyword != usageKeyword(n.Kind) {
+}
+
+// verbatimKeyword states the kind keyword a verbatim head wrote where it is not
+// the one its kind implies: none at all (`first a then b;`), another spelling
+// (`verify R`), or `succession flow`, which the parser reads as a flow.
+func (e *encoder) verbatimKeyword(subject rdf.Term, n *ast.Usage) {
+	switch {
+	case n.Keyword == "" && !e.wroteKindKeyword(n):
+		e.graph.Add(subject, e.sysx(xImplicitKind), rdf.Bool(true))
+	case n.Keyword == "flow" && e.wroteSuccessionFlow(n):
+		e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String("succession flow"))
+	case n.Keyword != "" && n.Keyword != usageKeyword(n.Kind):
 		e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String(n.Keyword))
 	}
 }
 
+// wroteSuccessionFlow reports whether a flow head opened with `succession`,
+// which the parser drops on its way to the flow it reads.
+func (e *encoder) wroteSuccessionFlow(n *ast.Usage) bool {
+	end := e.firstEnd(n)
+	if end == nil {
+		return false
+	}
+	return e.wroteBefore(n, end, "succession")
+}
+
 // satisfyForm states that a satisfy head writes the requirement it subsets
 // bare, right after its keyword (`satisfy R by v`), which is what tells that
-// clause from a `subsets` one written out. The keyword goes with it, since
-// `verify` is the same kind spelled differently.
+// clause from a `subsets` one written out.
 func (e *encoder) satisfyForm(subject rdf.Term, n *ast.Usage) {
 	requirement := relationshipTarget(n, ast.RelSubsets)
 	if requirement == nil || n.Ident.Name != "" || n.Value != nil {
@@ -130,13 +151,10 @@ func (e *encoder) satisfyForm(subject rdf.Term, n *ast.Usage) {
 		}
 	}
 	head, ok := e.headTail(n, n.Span().Offset)
-	if !ok || head != strings.TrimSpace(n.Keyword+" "+e.text(requirement)+" "+e.subjectClause(n)) {
+	if !ok || !sameSpelling(head, n.Keyword+" "+e.text(requirement)+" "+e.subjectClause(n)) {
 		return
 	}
 	e.graph.Add(subject, e.sysx(xEndForm), rdf.String(formSatisfy))
-	if n.Keyword != "" && n.Keyword != usageKeyword(n.Kind) {
-		e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String(n.Keyword))
-	}
 }
 
 // subjectClause is the `by` clause of a satisfy head, or "" where it names no
@@ -170,6 +188,8 @@ func (e *encoder) endShape(n *ast.Usage) (form string, ends []string, payload st
 			return formFirstThen, ends, ""
 		case e.wroteBefore(n, n.ConnectorEnds[0].Target, "("):
 			return formNary, ends, ""
+		case len(ends) == 2 && e.wroteBefore(n, n.ConnectorEnds[0].Target, "from"):
+			return formFromTo, ends, ""
 		case len(ends) == 2:
 			return formTo, ends, ""
 		}

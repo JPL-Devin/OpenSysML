@@ -162,6 +162,25 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   through both tiers — that they agree and that a traced run takes the evaluator. The architecture
   document gains a paragraph and diagram on invoking a calc.
 
+### Fixed
+
+- **A graph converted to notation and back is the same graph, byte for byte.** The notation
+  writer used to run its output through the formatter, which re-indented every multi-line head,
+  condition, value and `doc` body, so the `sysx:sourceText` a second conversion stored differed
+  from the first in whitespace alone; it also wrote a head's relationship clauses in a fixed order,
+  moving `:>> x : T` to `: T :>> x`. The writer now emits stored text byte for byte — tabs, blank
+  lines, odd indentation and CRLF included — whenever that text still spells what the graph states,
+  compared token by token with whitespace, name quoting and `:>`-for-`subsets` set aside, and
+  spells the head or expression from the graph's structure otherwise: a stored text naming other
+  ends or another operator than the graph gives way to the graph, and a graph with no stored text
+  at all still writes as it did. Relationship clauses come back in the order the graph states them.
+  `connect`/`allocate` heads written `from a to b` record their form like the other end-binding
+  heads, and an anonymous usage opened by `ref individual` or a portion keyword keeps that kind
+  instead of parsing as an attribute. Over the 268 example models the mapping converts, 243 now
+  convert to the same graph twice where 166 did; the rest are recorded in
+  `internal/core/export/testdata/corpus_round_trip_expected.txt`, a per-file ratchet checked in
+  CI. `docs/reference/rdf-mapping.md` § Stored text is layout defines the rule.
+
 ## 0.4.3 — 2026-09-01
 
 Release 0.4.3 is where an element gets an identity the notation can carry. The SysML v2 textual

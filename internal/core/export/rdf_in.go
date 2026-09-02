@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
-	"github.com/Open-MBEE/OpenSysML/internal/core/format"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf/ontology"
@@ -53,9 +52,9 @@ type element struct {
 	expressions map[string]string
 }
 
-// ToSysML converts an RDF graph back into SysML v2 source text. The result is
-// run through the source formatter, so the output is indented the same way as a
-// formatted file rather than in whatever order the graph happened to be in.
+// ToSysML converts an RDF graph back into SysML v2 source text. Notation the
+// graph stores as source text is written verbatim where the graph did not
+// restructure it; what the writer spells itself is indented by nesting depth.
 //
 // A subject whose metaclass this mapping does not know, or which lacks the
 // properties needed to rebuild its declaration, is reported as an
@@ -86,13 +85,7 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 			return nil, err
 		}
 	}
-	out, err := format.Source("<converted>", []byte(b.String()), format.DefaultOptions)
-	if err != nil {
-		// The formatter only fails on input it cannot lex; return the
-		// unformatted text with the reason so the user can see what was built.
-		return nil, fmt.Errorf("converted source is not valid SysML: %w", err)
-	}
-	return out, nil
+	return []byte(b.String()), nil
 }
 
 // checkExtensionNamespace refuses a graph written with the pre-rename extension
@@ -140,6 +133,9 @@ type decoder struct {
 	// the member each one owns.
 	memberships      map[string]membership
 	owningMembership map[string]membership
+	// declared is the set of qualified names the graph declares, built on
+	// first use to check stored expression text against the graph.
+	declared map[string]bool
 }
 
 // build reads every subject into an element and links it to its owner,
@@ -389,9 +385,9 @@ func sortByIndex(elements []*element) {
 func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 	indent := strings.Repeat("    ", depth)
 	lead := indent + el.prefix
-	if text, ok := d.stringOf(el, rdf.OpenSysML+xSourceText); ok {
-		// A declaration whose head this mapping keeps verbatim.
-		b.WriteString(lead + strings.TrimSpace(text) + "\n")
+	if text, ok := d.stringOf(el, rdf.OpenSysML+xSourceText); ok && d.keepsText(el, text) {
+		// A declaration whose notation this mapping keeps verbatim.
+		b.WriteString(lead + text + "\n")
 		return nil
 	}
 	if handled, err := d.printBehavior(b, el, lead, depth); handled {
@@ -783,18 +779,22 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		return "", err
 	}
 	words = append(words, relationships...)
+	head := strings.Join(words, " ") + multPart
 	if hasEnds {
 		ends, err := d.endWords(el, endForm)
 		if err != nil {
 			return "", err
 		}
-		words = append(words, ends)
-		// The `= value` of a binding is one of its ends, already written above.
+		// The ends close the head (`flow f[1] of P from a to b`); the `= value`
+		// of a binding is one of them.
+		if head != "" {
+			head += " "
+		}
+		head += ends
 		if endForm == formEquals {
-			return strings.Join(words, " ") + multPart, nil
+			return head, nil
 		}
 	}
-	head := strings.Join(words, " ") + multPart
 	if value, ok := d.stringOf(el, rdf.SysML+pValue); ok {
 		head += " = " + value
 	}
@@ -1152,11 +1152,11 @@ func (d *decoder) visibility(el *element) string {
 }
 
 // relationshipWords renders the typing and specialization clauses of a
-// declaration head, in the order the grammar expects. multPart, when given, is
-// the multiplicity part the typing clause carries.
+// declaration head, in the order the graph states them. multPart, when given,
+// is the multiplicity part the typing clause carries.
 func (d *decoder) relationshipWords(el *element, multPart string, skip ...ast.RelationshipKind) ([]string, error) {
 	var words []string
-	for _, kind := range relationshipOrder {
+	for _, kind := range d.relationshipOrder(el) {
 		if slices.Contains(skip, kind) {
 			continue
 		}
@@ -1181,6 +1181,35 @@ func (d *decoder) relationshipWords(el *element, multPart string, skip ...ast.Re
 		words = append(words, relationshipSyntax[kind], clause)
 	}
 	return words, nil
+}
+
+// relationshipOrder is the order a declaration's relationship clauses are
+// written in: the order the graph states them, which is the order they were
+// written, except that the specialization part keeps ahead of the other
+// clauses as the grammar requires.
+func (d *decoder) relationshipOrder(el *element) []ast.RelationshipKind {
+	var stated []ast.RelationshipKind
+	for _, predicate := range d.graph.Predicates(rdf.IRI(el.iri)) {
+		if name, ok := strings.CutPrefix(predicate, rdf.SysML); ok {
+			if kind, ok := propertyRelationship[name]; ok {
+				stated = append(stated, kind)
+			}
+		}
+	}
+	order := make([]ast.RelationshipKind, 0, len(relationshipOrder))
+	for _, group := range [][]ast.RelationshipKind{specializationClauses, relationshipOrder} {
+		for _, kind := range stated {
+			if slices.Contains(group, kind) && !slices.Contains(order, kind) {
+				order = append(order, kind)
+			}
+		}
+	}
+	for _, kind := range relationshipOrder {
+		if !slices.Contains(order, kind) {
+			order = append(order, kind)
+		}
+	}
+	return order
 }
 
 func (d *decoder) multiplicityText(el *element) string {

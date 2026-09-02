@@ -143,6 +143,10 @@ suite checks over the fixtures in `internal/core/export/testdata/convert/`.
 The notation that comes out of a round trip is equivalent but not always character-identical: a
 reference may be written relative to a different scope, and a clause written `:>` comes back as
 `specializes`. Both forms parse to the same model, which the second conversion to RDF confirms.
+What the graph stores as text — a connector head, a condition, a feature's value, a `doc` body —
+comes back laid out as it was written, line breaks and indentation included, as long as the text
+still says what the graph says; see [Stored text is
+layout](../reference/rdf-mapping.md#stored-text-is-layout).
 
 **Saving to `.sysml` is different, and exact.** It writes the session's own source
 through the formatter rather than re-printing the graph, so comments, notes and spacing are

@@ -208,6 +208,18 @@ func (g *Graph) Object(subject Term, predicate string) (Term, bool) {
 	return Term{}, false
 }
 
+// Predicates returns the distinct predicates a subject states, in the order
+// they were first stated.
+func (g *Graph) Predicates(subject Term) []string {
+	si := g.subjects()[subject]
+	if si == nil {
+		return nil
+	}
+	out := make([]string, len(si.predicates))
+	copy(out, si.predicates)
+	return out
+}
+
 // HasProperty reports whether the subject states the predicate at all.
 func (g *Graph) HasProperty(subject Term, predicate string) bool {
 	_, ok := g.Object(subject, predicate)

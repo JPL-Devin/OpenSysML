@@ -1105,13 +1105,18 @@ func (d *decoder) transitionText(el *element, depth int) (string, error) {
 // as the members alone when it stated them without braces.
 func (d *decoder) bodyText(el *element, depth int) (string, error) {
 	indent := strings.Repeat("    ", depth)
+	braced := d.boolOf(el, rdf.OpenSysML+xHasBody)
+	memberDepth := depth
+	if braced {
+		memberDepth++
+	}
 	var members strings.Builder
 	for _, child := range el.children {
-		if err := d.print(&members, child, depth+1); err != nil {
+		if err := d.print(&members, child, memberDepth); err != nil {
 			return "", err
 		}
 	}
-	if d.boolOf(el, rdf.OpenSysML+xHasBody) {
+	if braced {
 		return "{\n" + members.String() + indent + "}", nil
 	}
 	return strings.TrimSpace(members.String()), nil

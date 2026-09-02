@@ -166,6 +166,9 @@ var relationshipProperty = map[ast.RelationshipKind]string{
 	ast.RelFeaturedBy:  "featuringType",
 }
 
+// propertyRelationship is relationshipProperty inverted.
+var propertyRelationship = map[string]ast.RelationshipKind{}
+
 // relationshipEndForm describes how a keyword-first relationship element is
 // written as a graph: its metaclass and the properties naming its two ends,
 // which the OMG metamodel keeps ordered.
@@ -234,6 +237,9 @@ var (
 )
 
 func init() {
+	for kind, property := range relationshipProperty {
+		propertyRelationship[property] = kind
+	}
 	for kind, name := range definitionMetaclass {
 		metaclassDefinition[name] = kind
 	}
@@ -245,8 +251,20 @@ func init() {
 	}
 }
 
-// relationshipOrder is the order relationships are written back into a
-// declaration head; typing comes first because it is the ':' clause.
+// specializationClauses are the clauses of a feature specialization part, which
+// the grammar takes in any order but ahead of the other relationship clauses.
+var specializationClauses = []ast.RelationshipKind{
+	ast.RelTyping,
+	ast.RelSpecializes,
+	ast.RelSubsets,
+	ast.RelRedefines,
+	ast.RelReferences,
+	ast.RelCrosses,
+}
+
+// relationshipOrder is the order relationships the graph does not state are
+// tried in when a declaration head is written back; typing comes first because
+// it is the ':' clause.
 var relationshipOrder = []ast.RelationshipKind{
 	ast.RelTyping,
 	ast.RelSpecializes,

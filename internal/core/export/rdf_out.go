@@ -411,8 +411,9 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		}
 		switch {
 		case verbatimUsage(n):
-			// A verbatim head is reproduced as written, so its keyword needs no
-			// reconstructing and never has to be refused.
+			// A verbatim head never has to be refused for its keyword; the graph
+			// states which one it wrote so a head rebuilt from the ends keeps it.
+			e.verbatimKeyword(subject, n)
 		case bareAcceptNode(n, e.text(n)):
 			// The `action` of an accept node is optional and the parser records it
 			// either way, so what the author wrote is read from the source.
