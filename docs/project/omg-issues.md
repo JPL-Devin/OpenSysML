@@ -107,6 +107,7 @@ and not from a disagreement alone.
 |---|---|---|---|---|
 | `org.omg.sysml` — `Type::ownedDisjoining` setting delegate | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | every `disjoint from` clause in a type declaration draws EMF's `The opposite features 'owningType' … and 'ownedDisjoining' … do not refer to each other` | [one cause for all six corpus diagnostics](pilot-differential.md#k6-diagnostic-by-diagnostic-f33), reproduced in three lines and probed through the pilot's API | filed upstream as [Systems-Modeling/SysML-v2-Pilot-Implementation#790](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/790) **pending adjudication**, body below |
 | `org.omg.sysml` — the `queryx/failing` Xpect fixtures | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | `QPE-Qualifier`, `QPE-Traversal` and `QPE-Wildcard` declare `XPECT noErrors`, yet the pinned validator rejects all three with `no viable alternative at input '/'`, `For input string: "."` and `no viable alternative at input '@'` | [wave12d-decisions.md](wave12d-decisions.md) — established by running the pinned pilot's own SysML validator on the three fixtures, not from a disagreement | **not filed** — question drafted below, awaiting maintainer authorisation |
+| `org.omg.kerml.xtext` — `KerMLValidator.checkFeature`, the `validateFeatureOwnedCrossSubsetting` check | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a feature with two `crosses` clauses reports `Error executing EValidator` instead of `At most one cross subsetting is allowed`: the loop indexes `refSubsettings` (the reference subsettings, collected for the check above it) with the cross-subsetting index, and throws | established from the pinned `KerMLValidator.xtend` line 649 and reproduced with `cmd/pilot-reject/testdata/negative/semantic/k42-two-cross-subsettings.kerml`; [pilot-rejection.md](pilot-rejection.md#permissiveness-gaps) records the case as a gap of ours | **not filed** — report drafted below, awaiting maintainer authorisation |
 
 ### `Type::ownedDisjoining` does not contain a `Disjoining` whose `owningType` is that `Type` (pilot `2026-05`)
 
@@ -252,6 +253,62 @@ and extends `KerMLXtextTests`.
 A second implementation reading the corpus cannot tell from the fixtures alone
 whether the declared silence is an obligation or an aspiration, which is the
 reason for asking rather than implementing.
+````
+
+### `validateFeatureOwnedCrossSubsetting` indexes the wrong list and throws (pilot `2026-07`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream. The reproduction is the rejection-corpus case
+`cmd/pilot-reject/testdata/negative/semantic/k42-two-cross-subsettings.kerml`.
+
+````markdown
+### A feature with two `crosses` clauses reports `Error executing EValidator`
+
+**Version:** `2026-07` (`jupyter-sysml-kernel` 0.61.0, the KerML standalone
+setup).
+
+#### Minimal reproduction
+
+```kerml
+package K42TwoCrossSubsettings {
+    class A {
+        feature x : A;
+        feature y : A;
+    }
+    assoc S {
+        end a : A;
+        end b : A crosses a.x crosses a.y;
+    }
+}
+```
+
+The grammar admits the second `crosses` (`FeatureSpecializationPart` repeats
+`FeatureSpecialization`), and `validateFeatureOwnedCrossSubsetting` is meant to
+report it as `At most one cross subsetting is allowed`. Instead the validator
+reports
+
+```
+k42-two-cross-subsettings.kerml:0:0: error: Error executing EValidator
+```
+
+#### Cause
+
+In `KerMLValidator.checkFeature` (`KerMLValidator.xtend`, the
+`validateFeatureOwnedCrossSubsetting` block):
+
+```xtend
+val crossSubsettings = f.ownedRelationship.filter[r | r instanceof CrossSubsetting].toList
+if (crossSubsettings.size > 1) {
+    for (var i = 1; i < crossSubsettings.size; i++)
+        error(INVALID_FEATURE_OWNED_CROSS_SUBSETTING_MSG, refSubsettings.get(i), null, INVALID_FEATURE_OWNED_CROSS_SUBSETTING)
+}
+```
+
+`refSubsettings.get(i)` reads the reference-subsetting list collected for the
+`validateFeatureOwnedReferenceSubsetting` check just above; with no `references`
+clause on the feature that list is empty and the `get(1)` throws, which Xtext
+surfaces as `Error executing EValidator`. The intended target is
+`crossSubsettings.get(i)`.
 ````
 
 ---
