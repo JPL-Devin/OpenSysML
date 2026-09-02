@@ -333,17 +333,15 @@ func (s *Session) objectIDs() []string {
 	return out
 }
 
-// objectShape is what completion knows of the object a reference reaches
-// without materializing anything: the object once it exists, and until then
-// only the type it will be an object of.
+// objectShape is what completion knows of the object a reference reaches:
+// the object once it exists, until then only its type.
 type objectShape struct {
 	inst *runtime.Instance
 	typ  *symbols.Symbol
 }
 
 // peekObject follows an object reference through what the session already
-// holds. Completion reads and never materializes, so a part not yet reached by a
-// command is followed by type alone.
+// holds, materializing nothing: an unmaterialized part is followed by type.
 func (s *Session) peekObject(text string) (objectShape, bool) {
 	if s.rtCtx == nil {
 		return objectShape{}, false
@@ -416,8 +414,8 @@ func featureNamed(features []runtime.EffectiveFeature, name string) *runtime.Eff
 	return nil
 }
 
-// heldFeatureValue is the value inst already holds for name, nil until a command
-// materializes it (or when there is no object yet to hold it).
+// heldFeatureValue is the value inst already holds for name, nil until
+// materialized or while there is no object to hold it.
 func heldFeatureValue(inst *runtime.Instance, name string) *runtime.FeatureValue {
 	if inst == nil {
 		return nil
@@ -460,9 +458,8 @@ func (s *Session) featureCompletions(shape objectShape, prefix, partial string) 
 	return out
 }
 
-// elementCount is how many elements of a multi-valued feature completion may
-// index: the elements held once materialized, before that the ones the lower
-// bound guarantees — never more than a reference then finds.
+// elementCount is how many elements completion may index: the ones held once
+// materialized, before that the ones the lower bound guarantees.
 func (s *Session) elementCount(inst *runtime.Instance, feat *runtime.EffectiveFeature) int {
 	if fv := heldFeatureValue(inst, feat.Name); fv != nil {
 		return min(len(collectionElements(fv.Values)), elementLimit)
