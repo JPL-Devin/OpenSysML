@@ -302,7 +302,7 @@ func assertSingleStringCollection(t *testing.T, name string, value Value, want s
 		t.Fatalf("%s holds %v, want a collection", name, value.Kind)
 	}
 	elements := elementsOf(value)
-	if len(elements) != 1 || elements[0].Str != want {
+	if len(elements) != 1 || elements[0].Str() != want {
 		t.Errorf("%s = %v, want one element %q", name, elements, want)
 	}
 }
@@ -671,7 +671,7 @@ func TestWritingOneValueToAManyValuedFeatureHoldsACollection(t *testing.T) {
 	if held.Kind != ValSequence && held.Kind != ValSet {
 		t.Fatalf("entries holds %v, want a collection", held.Kind)
 	}
-	if got := elementsOf(held); len(got) != 1 || got[0].Str != "first" {
+	if got := elementsOf(held); len(got) != 1 || got[0].Str() != "first" {
 		t.Errorf("entries = %v, want one element \"first\"", got)
 	}
 }
