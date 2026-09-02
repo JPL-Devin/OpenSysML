@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 120,
-        "digest": "sha256:1807bc173996cee5a9776a987e3bec4409245d16bdbb0d71e6b4d362b60cd81f"
+        "files": 121,
+        "digest": "sha256:87fcbc728cf7fe20fbc324e3ec272facbb35ccf69bac9d7a825e143465a56263"
       }
     ],
     "recorded": "2026-09-02"
   },
   "totals": {
-    "cases": 120,
-    "bothReject": 120,
+    "cases": 121,
+    "bothReject": 121,
     "pilotOnlyRejects": 0,
     "oursOnlyRejects": 0,
     "bothAccept": 0
@@ -57,6 +57,14 @@
       "source": "grammar",
       "cases": 79,
       "bothReject": 79,
+      "pilotOnlyRejects": 0,
+      "oursOnlyRejects": 0,
+      "bothAccept": 0
+    },
+    {
+      "source": "semantic",
+      "cases": 1,
+      "bothReject": 1,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 0,
       "bothAccept": 0
@@ -858,6 +866,15 @@
       "pilotErrors": 4
     },
     {
+      "path": "semantic/s01-feature-value-overriding.sysml",
+      "source": "semantic",
+      "rule": "a feature bound with `=` may not be given another value by a redefining feature; only a `default =` value may be overridden (KerML 8.3.4.10.2; pilot validateFeatureValueOverriding).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 2
+    },
+    {
       "path": "xpect/p01-public-root-import.kerml",
       "source": "xpect",
       "rule": "a root-namespace import must be private (KerML 8.2.3.5.2 validateImportTopLevelVisibility; pilot Import_RootNamspace_invalid.kerml.xt).",
@@ -1196,8 +1213,8 @@
       }
     ],
     "totals": {
-      "cases": 120,
-      "bothReject": 120,
+      "cases": 121,
+      "bothReject": 121,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 0,
       "bothAccept": 0

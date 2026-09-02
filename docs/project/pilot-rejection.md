@@ -38,7 +38,7 @@ typing) are refereed under the same conditions our workspace validates under.
 The corpus is committed under `cmd/pilot-reject/testdata/negative/`. Every file's first line is a
 mandatory header — `// Invalid: <rule> (<citation>).` — naming the one rule the case violates and
 where that rule comes from; the harness refuses a corpus file without it. Cases were derived
-systematically from three sources, one subdirectory each:
+systematically from four sources, one subdirectory each:
 
 1. **`grammar/` — grammar mutation** (78 cases; 20 in wave 8, 45 added by wave 9F along the
    *unreached* axis described below, 13 by wave 10G's second pass). For productions our corpus exercises in the
@@ -67,8 +67,14 @@ systematically from three sources, one subdirectory each:
    `Feature_invalid_noType.kerml.xt`) only error in a library-less resource set — with the
    standard library loaded, `feature f;` gets an implicit type and is legal — so only
    library-independent expectations became cases.
+4. **`semantic/` — validation rules probed against the pilot** (1 case). A semantic constraint
+   the pinned pilot enforced and we did not, found by probing `bin/sysml` against the reference
+   validator rather than by an Xpect suite; each case is the minimal reproducer of that probe,
+   citing the KerML clause and the pilot's `validate...` constraint name. `s01` restates a bound
+   feature value (`= 1`) from a redefining usage and a redefining definition
+   (`validateFeatureValueOverriding`).
 
-What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 120
+What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 121
 cases ourselves**, so the denominator measures our coverage of the rejection surface, not our
 conformance: it is a **sample, not a proof** — a clean bucket here does not mean OpenSysML rejects
 everything the reference rejects, and no official conformance suite exists to make that claim
@@ -114,7 +120,7 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-120 case(s): 120 both reject, 0 only the pilot rejects, 0 only we reject, 0 both accept
+121 case(s): 121 both reject, 0 only the pilot rejects, 0 only we reject, 0 both accept
   of which 2 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -122,6 +128,7 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 7 | 7 | 0 | 0 | 0 |
 | grammar | 79 | 79 | 0 | 0 | 0 |
+| semantic | 1 | 1 | 0 | 0 | 0 |
 | xpect | 34 | 34 | 0 | 0 | 0 |
 
 The corpus grew from 79 cases to 119 in wave 10G and to 120 with `g60` (an `alias` named by a
