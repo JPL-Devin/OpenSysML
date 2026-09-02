@@ -15,11 +15,11 @@
 # files: pilot-corpora/sysml-validation 56
 stable	action-executor-demo.sysml
 stable	combined-behavioral-demo.sysml
-refused:invocation-expr	disposal-robot-demo/robot.sysml
+whitespace-only	disposal-robot-demo/robot.sysml
 whitespace-only	disposal-team-demo/team.sysml
 stable	orthogonal-regions-demo.sysml
 stable	parser_features_demo_action_semantics.sysml
-refused:operator-expr	parser_features_demo_advanced_bodies.kerml
+stable	parser_features_demo_advanced_bodies.kerml
 refused:duplicate-declaration	parser_features_demo_advanced_connectors.kerml
 whitespace-only	parser_features_demo_binding.kerml
 whitespace-only	parser_features_demo_connectors.sysml
@@ -29,7 +29,7 @@ whitespace-only	parser_features_demo_edge_cases.kerml
 whitespace-only	parser_features_demo_messages_events.sysml
 unparseable	parser_features_demo_modifiers.kerml
 stable	parser_features_demo_relationships.kerml
-refused:operator-expr	phase-c-behavioral-bodies.sysml
+stable	phase-c-behavioral-bodies.sysml
 stable	pilot-corpora/kerml-examples/Address Book Example/AddressBookModel.kerml
 whitespace-only	pilot-corpora/kerml-examples/Association Examples/ProductSelection_N_ary.kerml
 whitespace-only	pilot-corpora/kerml-examples/Association Examples/ProductSelection_OwnedEnds.kerml
@@ -67,7 +67,7 @@ stable	pilot-corpora/kerml-examples/Simple Tests/Conjugation.kerml
 whitespace-only	pilot-corpora/kerml-examples/Simple Tests/Connectors.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Dependencies.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Expansion.kerml
-refused:operator-expr	pilot-corpora/kerml-examples/Simple Tests/Expressions.kerml
+refused:feature-declaration	pilot-corpora/kerml-examples/Simple Tests/Expressions.kerml
 unparseable	pilot-corpora/kerml-examples/Simple Tests/FeatureChains.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/FeatureInheritance.kerml
 whitespace-only	pilot-corpora/kerml-examples/Simple Tests/Features.kerml
@@ -80,7 +80,7 @@ refused:feature-declaration	pilot-corpora/kerml-examples/Simple Tests/Redefiniti
 refused:feature-declaration	pilot-corpora/kerml-examples/Simple Tests/Scoping.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/TextualRepresentation.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Types.kerml
-unwritable	pilot-corpora/kerml-examples/Variable Feature Examples/Enhancements/ExtendedOccurrences.kerml
+whitespace-only	pilot-corpora/kerml-examples/Variable Feature Examples/Enhancements/ExtendedOccurrences.kerml
 whitespace-only	pilot-corpora/kerml-examples/Variable Feature Examples/Enhancements/Moments.kerml
 refused:feature-declaration	pilot-corpora/kerml-examples/Variable Feature Examples/Enhancements/TimeVaryingFeaturesEnhanced.kerml
 whitespace-only	pilot-corpora/kerml-examples/Variable Feature Examples/Enhancements/TimeVaryingSteps.kerml
@@ -90,7 +90,7 @@ stable	pilot-corpora/kerml-examples/Vehicle Example/VehicleDefinitions.kerml
 graph-diff	pilot-corpora/kerml-examples/Vehicle Example/VehicleUsages.kerml
 refused:prefix-metadata	pilot-corpora/sysml-examples/Analysis Examples/AnalysisAnnotation.sysml
 whitespace-only	pilot-corpora/sysml-examples/Analysis Examples/Dynamics.sysml
-refused:operator-expr	pilot-corpora/sysml-examples/Analysis Examples/Turbojet Stage Analysis.sysml
+whitespace-only	pilot-corpora/sysml-examples/Analysis Examples/Turbojet Stage Analysis.sysml
 whitespace-only	pilot-corpora/sysml-examples/Analysis Examples/Vehicle Analysis Demo.sysml
 whitespace-only	pilot-corpora/sysml-examples/Arrowhead Framework Example/AHFCoreLib.sysml
 unparseable	pilot-corpora/sysml-examples/Arrowhead Framework Example/AHFNorwayTopics.sysml
@@ -140,8 +140,8 @@ whitespace-only	pilot-corpora/sysml-examples/Room Model/RoomModel.sysml
 unwritable	pilot-corpora/sysml-examples/Simple Tests/ActionTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/AliasTest.sysml
 whitespace-only	pilot-corpora/sysml-examples/Simple Tests/AllocationTest.sysml
-refused:feature-chain-expr	pilot-corpora/sysml-examples/Simple Tests/AnalysisTest.sysml
-refused:feature-reference	pilot-corpora/sysml-examples/Simple Tests/AssignmentTest.sysml
+stable	pilot-corpora/sysml-examples/Simple Tests/AnalysisTest.sysml
+stable	pilot-corpora/sysml-examples/Simple Tests/AssignmentTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/CalculationTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/CommentTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/ConjugationTest.sysml
@@ -170,9 +170,9 @@ stable	pilot-corpora/sysml-examples/Simple Tests/TextualRepresentationTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/TradeStudyTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/UseCaseTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/VariabilityTest.sysml
-refused:invocation-expr	pilot-corpora/sysml-examples/Simple Tests/VerificationTest.sysml
+stable	pilot-corpora/sysml-examples/Simple Tests/VerificationTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/ViewTest.sysml
-refused:constructor-expr	pilot-corpora/sysml-examples/State Space Representation Examples/CartSample.sysml
+whitespace-only	pilot-corpora/sysml-examples/State Space Representation Examples/CartSample.sysml
 whitespace-only	pilot-corpora/sysml-examples/State Space Representation Examples/EVSample.sysml
 whitespace-only	pilot-corpora/sysml-examples/State Space Representation Examples/EVSample1.sysml
 refused:timeslice-declaration	pilot-corpora/sysml-examples/Timeslice and Snapshot Examples/TimeVaryingAttribute.sysml
@@ -210,7 +210,7 @@ whitespace-only	pilot-corpora/sysml-validation/07-Variant Configuration/7a1-Vari
 whitespace-only	pilot-corpora/sysml-validation/07-Variant Configuration/7b-Variant Configurations.sysml
 whitespace-only	pilot-corpora/sysml-validation/08-Requirements/8-Requirements.sysml
 whitespace-only	pilot-corpora/sysml-validation/09-Verification/9-Verification-simplified.sysml
-refused:feature-chain-expr	pilot-corpora/sysml-validation/10-Analysis and Trades/10a-Analysis.sysml
+whitespace-only	pilot-corpora/sysml-validation/10-Analysis and Trades/10a-Analysis.sysml
 whitespace-only	pilot-corpora/sysml-validation/10-Analysis and Trades/10b-Trade-off Among Alternative Configurations.sysml
 refused:succession	pilot-corpora/sysml-validation/10-Analysis and Trades/10c-Fuel Economy Analysis.sysml
 stable	pilot-corpora/sysml-validation/10-Analysis and Trades/10d-Dynamics Analysis.sysml
@@ -245,10 +245,10 @@ refused:event-declaration	pilot-corpora/sysml-validation/17-Sequence Modeling/17
 refused:succession	pilot-corpora/sysml-validation/18-Use Case/18-Use Case.sysml
 stable	pseudostates-demo.sysml
 stable	rdf-interop-demo.sysml
-refused:operator-expr	relay-probe-demo/mission.sysml
-refused:operator-expr	repl-behavioral-demo.sysml
+stable	relay-probe-demo/mission.sysml
+whitespace-only	repl-behavioral-demo.sysml
 stable	self-model/behavior.sysml
-refused:invocation-expr	self-model/document.sysml
+whitespace-only	self-model/document.sysml
 whitespace-only	self-model/identity.sysml
 stable	self-model/pipeline.sysml
 whitespace-only	self-model/quality.sysml
