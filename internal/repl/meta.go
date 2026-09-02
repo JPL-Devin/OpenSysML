@@ -1223,9 +1223,10 @@ func nestedInstances(ctx *runtime.Context, fv *runtime.FeatureValue) []*runtime.
 
 // featureVerdict evaluates a constraint or requirement feature against the
 // instance that carries it and renders the outcome for a feature value listing.
-// Reports false for a feature that holds a value rather than a verdict.
+// Reports false for a feature that holds a value rather than a verdict, which a
+// multi-valued one does: it collects checks rather than being one.
 func featureVerdict(ctx *runtime.Context, feat *runtime.EffectiveFeature, inst *runtime.Instance) (string, bool) {
-	if feat.Symbol == nil {
+	if feat.Symbol == nil || !feat.Scalar() {
 		return "", false
 	}
 	var (
@@ -1280,10 +1281,13 @@ func (s *Session) doInstances() ([]string, bool, error) {
 }
 
 // formatFeatureValue renders what a feature value holds: a multi-valued feature keeps its
-// contents in Values, leaving the scalar Value unset.
+// contents in Values, leaving the scalar Value unset; a scalar holding nothing reads as unset.
 func formatFeatureValue(ctx *runtime.Context, fv *runtime.FeatureValue) string {
 	if fv.Values.Kind != runtime.ValInvalid {
 		return formatValue(ctx, fv.Values)
+	}
+	if fv.Value.Kind == runtime.ValInvalid {
+		return runtime.UnsetText
 	}
 	return formatValue(ctx, fv.Value)
 }

@@ -87,6 +87,20 @@ func (s *FeatureValue) HeldValue() Value {
 	return s.Value
 }
 
+// ReadValue is what the feature value reads as in an expression: what it holds, or the
+// empty sequence when it holds nothing and its multiplicity admits that. A required
+// feature holding nothing is uninitialized.
+func (s *FeatureValue) ReadValue(name string) (Value, error) {
+	value := s.HeldValue()
+	if value.Kind != ValInvalid {
+		return value, nil
+	}
+	if lower := s.Feature.Multiplicity.Lower; lower.Known && lower.Value == 0 {
+		return sequenceOf(nil), nil
+	}
+	return Value{}, fmt.Errorf("%w: %s", ErrUninitializedFeatureValue, name)
+}
+
 // UnsetText is how every surface spells a feature value that holds no value: a valueless
 // feature of a value type, whose instances are values rather than objects.
 const UnsetText = "<unset>"
@@ -204,7 +218,7 @@ func (ctx *Context) materialize(sym *symbols.Symbol, id int64) (*Instance, error
 
 		// Fold constant defaults the feature admits eagerly; a default that is not constant
 		// may read sibling feature values, so GetFeatureValue evaluates (and reports) it.
-		if ctx.valueBinds(feat) && isScalarFeature(feat) && !ctx.model.IsVariationFeature(feat.Symbol) &&
+		if ctx.valueBinds(feat) && feat.Scalar() && !ctx.model.IsVariationFeature(feat.Symbol) &&
 			ctx.restatedInValuedBody(feat) == "" {
 			if semVal, ok := ctx.model.Eval(feat.DefaultValue); ok {
 				val := Value{Kind: ValConst, Const: semVal}
@@ -314,13 +328,6 @@ func (ctx *Context) occursOnce(sym *symbols.Symbol) bool {
 	return !mult.Upper.Infinite && mult.Upper.Value <= 1
 }
 
-// isScalarFeature reports whether a feature holds at most one value. An
-// unbounded upper bound carries Value 0, so the infinite flag has to be tested
-// separately.
-func isScalarFeature(feat *EffectiveFeature) bool {
-	return !feat.Multiplicity.Upper.Infinite && feat.Multiplicity.Upper.Value <= 1
-}
-
 // checkDefault reports a value the feature does not admit: a count outside its
 // multiplicity (1..1 when none is declared) or an element outside its type.
 func (ctx *Context) checkDefault(inst *Instance, fv *FeatureValue, name string, val Value) error {
@@ -362,7 +369,7 @@ func (inst *Instance) SetFeatureValue(ctx *Context, name string, value Value) er
 	if err := ctx.checkDefault(inst, fv, name, value); err != nil {
 		return err
 	}
-	if isScalarFeature(fv.Feature) {
+	if fv.Feature.Scalar() {
 		fv.Value = value
 		fv.Values = Value{}
 	} else {
@@ -449,7 +456,7 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 		if err := ctx.checkDefault(inst, fv, name, val); err != nil {
 			return nil, err
 		}
-		if isScalarFeature(fv.Feature) {
+		if fv.Feature.Scalar() {
 			fv.Value = val
 		} else {
 			// A multi-valued feature holds a collection, so a single value
@@ -484,6 +491,13 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 		mult := fv.Feature.Multiplicity
 		if !mult.Upper.Known || !mult.Lower.Known {
 			return nil, fmt.Errorf("cannot materialize feature %q with unknown multiplicity", name)
+		}
+
+		// An abstract feature has no values of its own (KerML 1.0 §7.3.3.1), and
+		// an optional one demands none: each holds only what the features
+		// subsetting it hold, as a collection fills only to its lower bound.
+		if symbols.IsAbstract(fv.Feature.Symbol) || (mult.Lower.Value == 0 && fv.Feature.Scalar()) {
+			return inst.holdContributions(ctx, fv, name)
 		}
 
 		if !mult.Upper.Infinite && mult.Upper.Value == 1 {
@@ -549,6 +563,28 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 		fv.Materialized = true
 	}
 
+	return fv, nil
+}
+
+// holdContributions fills an abstract feature with the values the features
+// subsetting it contribute, checked against the multiplicity governing it.
+func (inst *Instance) holdContributions(ctx *Context, fv *FeatureValue, name string) (*FeatureValue, error) {
+	contributed, err := ctx.subsettingContributions(inst, name)
+	if err != nil {
+		return nil, err
+	}
+	if fv.Feature.Scalar() {
+		if len(contributed) > 1 {
+			return nil, fmt.Errorf("feature value %s.%s: %w: %s", inst.Type.Name, name, ErrMultiplicityViolation,
+				fv.Feature.Multiplicity.CountViolation(int64(len(contributed))))
+		}
+		if len(contributed) == 1 {
+			fv.Value = contributed[0]
+		}
+	} else {
+		fv.Values = sequenceOf(contributed)
+	}
+	fv.Materialized = true
 	return fv, nil
 }
 

@@ -408,6 +408,11 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 				if val, ok, err := ec.occurrenceReference(sym); ok {
 					return val, err
 				}
+				// A feature declared with no value, whose multiplicity admits none,
+				// states the empty sequence — what an object holding nothing reads.
+				if val, ok := ec.emptyDeclaredFeature(sym); ok {
+					return val, nil
+				}
 				if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
 					if ec.resolving == nil {
 						ec.resolving = map[string]bool{}
@@ -560,6 +565,20 @@ func (ec *EvalContext) occurrenceReference(sym *symbols.Symbol) (Value, bool, er
 	return Value{Kind: ValInstance, Instance: inst.ID}, true, nil
 }
 
+// emptyDeclaredFeature reads a valueless feature declaration whose lower bound is
+// zero as the empty sequence. A variation is a choice, not an empty feature.
+func (ec *EvalContext) emptyDeclaredFeature(sym *symbols.Symbol) (Value, bool) {
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || usage.Value != nil || ec.ctx.model.IsVariationFeature(sym) {
+		return Value{}, false
+	}
+	lower := ec.ctx.model.EffectiveMultiplicityOf(sym).Lower
+	if !lower.Known || lower.Value != 0 {
+		return Value{}, false
+	}
+	return sequenceOf(nil), true
+}
+
 // namesOccurrenceThis reports whether the name resolves to the library's
 // context occurrence feature `this` where the expression was written.
 func (ec *EvalContext) namesOccurrenceThis(name string) bool {
@@ -605,11 +624,8 @@ func (ec *EvalContext) selfFeatureValue(name string) (Value, bool, error) {
 	if err != nil {
 		return Value{}, true, err
 	}
-	value := fv.HeldValue()
-	if value.Kind == ValInvalid {
-		return Value{}, true, fmt.Errorf("%w: %s", ErrUninitializedFeatureValue, name)
-	}
-	return value, true, nil
+	value, err := fv.ReadValue(name)
+	return value, true, err
 }
 
 // evalFeatureChain evaluates a feature chain expression (e.g., obj.member.submember).
@@ -737,9 +753,9 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 	if err != nil {
 		return Value{}, err
 	}
-	member := fv.HeldValue()
-	if member.Kind == ValInvalid {
-		return Value{}, fmt.Errorf("%w: %s", ErrUninitializedFeatureValue, name)
+	member, err := fv.ReadValue(name)
+	if err != nil {
+		return Value{}, err
 	}
 	return ec.chainMemberValue(member, parts[1:], name)
 }

@@ -5,8 +5,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -113,8 +115,33 @@ func (l *Loader) add(f libraryFile, idx *symbols.Index) {
 		}
 	}
 	idx.AddDocument(f.name, f.root)
-	idx.MarkLibrary(f.name)
+	idx.MarkLibraryTier(f.name, TierOf(f.name))
 	l.loaded = append(l.loaded, doc)
+}
+
+// bundleTiers maps the directories of the bundled library to their tiers.
+var bundleTiers = []struct {
+	dir  string
+	tier symbols.LibraryTier
+}{
+	{"Kernel Libraries/Kernel Semantic Library", symbols.TierKernelSemantic},
+	{"Kernel Libraries/Kernel Data Type Library", symbols.TierKernelDataType},
+	{"Kernel Libraries/Kernel Function Library", symbols.TierKernelFunction},
+	{"Systems Library", symbols.TierSystems},
+	{"Domain Libraries", symbols.TierDomain},
+	{"OpenSysML Libraries", symbols.TierOpenSysML},
+}
+
+// TierOf classifies a library file by the directory of the bundle it is under,
+// as a Source names it; a file outside the bundle's layout is of no stated tier.
+func TierOf(name string) symbols.LibraryTier {
+	name = filepath.ToSlash(name)
+	for _, b := range bundleTiers {
+		if strings.HasPrefix(name, b.dir+"/") {
+			return b.tier
+		}
+	}
+	return symbols.TierLibrary
 }
 
 // read reads the named file of the source.

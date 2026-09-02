@@ -236,7 +236,7 @@ func (ctx *Context) ShapeDigest(sym *symbols.Symbol) string {
 	return b.String()
 }
 
-func (ctx *Context) writeShape(b *strings.Builder, sym *symbols.Symbol, open map[string]bool) {
+func (ctx *Context) writeShape(b *strings.Builder, sym *symbols.Symbol, seen map[string]bool) {
 	if sym == nil {
 		b.WriteString("<untyped>")
 		return
@@ -246,14 +246,13 @@ func (ctx *Context) writeShape(b *strings.Builder, sym *symbols.Symbol, open map
 		fqn = "<unnamed>"
 	}
 	fmt.Fprintf(b, "%s/%s", fqn, sym.Kind)
-	// A type reached through its own features is named rather than expanded
-	// again, so a recursive shape has a finite digest.
-	if open[fqn] {
+	// A type already rendered is named rather than expanded again, so the digest
+	// is finite for a recursive shape and linear in the types it reaches.
+	if seen[fqn] {
 		b.WriteString("…")
 		return
 	}
-	open[fqn] = true
-	defer delete(open, fqn)
+	seen[fqn] = true
 	b.WriteString("{")
 	features := ctx.FeaturesOf(sym)
 	for i := range features {
@@ -275,7 +274,7 @@ func (ctx *Context) writeShape(b *strings.Builder, sym *symbols.Symbol, open map
 			fmt.Fprintf(b, "|body:%s", ctx.declText(feat.Symbol, feat.Symbol.Decl.Span()))
 		}
 		b.WriteString("@")
-		ctx.writeShape(b, feat.Type, open)
+		ctx.writeShape(b, feat.Type, seen)
 		b.WriteString(";")
 	}
 	ctx.writeBoundBehaviors(b, sym)

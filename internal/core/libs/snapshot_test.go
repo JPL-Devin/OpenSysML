@@ -74,7 +74,8 @@ func TestDecodeSnapshotRefusesOtherFiles(t *testing.T) {
 	if _, err := DecodeSnapshot(stdlibSnapshot, "0000"); !errors.Is(err, ErrSnapshotStale) {
 		t.Errorf("digest mismatch: got %v, want ErrSnapshotStale", err)
 	}
-	other := []byte(snapshotMagic + "\x02\x04abcd")
+	other := append([]byte(snapshotMagic), byte(snapshotFormatVersion+1))
+	other = append(other, "\x04abcd"...)
 	if _, err := DecodeSnapshot(other, "abcd"); !errors.Is(err, ErrSnapshotStale) {
 		t.Errorf("format mismatch: got %v, want ErrSnapshotStale", err)
 	}

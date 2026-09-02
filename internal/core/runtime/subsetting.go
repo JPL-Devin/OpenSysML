@@ -27,18 +27,7 @@ import (
 // outside owner names no feature of it (`:> ISQ::mass`).
 func (ctx *Context) relatedFeatures(sym, owner *symbols.Symbol, kind ast.RelationshipKind) []*symbols.Symbol {
 	var features []*symbols.Symbol
-	for _, rel := range semantics.RelationshipsOf(sym) {
-		if rel == nil || rel.Kind != kind || rel.Target == nil {
-			continue
-		}
-		target := rel.Target
-		if fr, ok := target.(*ast.FeatureReference); ok {
-			target = fr.Name
-		}
-		qn, ok := target.(*ast.QualifiedName)
-		if !ok || len(qn.Parts) == 0 {
-			continue
-		}
+	for _, qn := range relationshipTargets(sym, kind) {
 		if resolved, ok := ctx.resolver.ResolveQualified(sym.OwnerScope, qn); ok && resolved != nil && resolved != sym {
 			if ctx.isFeatureOf(owner, resolved, sym) {
 				features = append(features, resolved)
@@ -53,6 +42,24 @@ func (ctx *Context) relatedFeatures(sym, owner *symbols.Symbol, kind ast.Relatio
 		}
 	}
 	return features
+}
+
+// relationshipTargets returns the names sym's relationships of the given kind name.
+func relationshipTargets(sym *symbols.Symbol, kind ast.RelationshipKind) []*ast.QualifiedName {
+	var names []*ast.QualifiedName
+	for _, rel := range semantics.RelationshipsOf(sym) {
+		if rel == nil || rel.Kind != kind || rel.Target == nil {
+			continue
+		}
+		target := rel.Target
+		if fr, ok := target.(*ast.FeatureReference); ok {
+			target = fr.Name
+		}
+		if qn, ok := target.(*ast.QualifiedName); ok && len(qn.Parts) > 0 {
+			names = append(names, qn)
+		}
+	}
+	return names
 }
 
 // isFeatureOf reports whether owner carries feature under its name, as its own

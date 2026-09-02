@@ -18,6 +18,12 @@ type EffectiveFeature struct {
 	DefaultDecl  *symbols.Symbol // feature the DefaultValue was written on (nil if none)
 }
 
+// Scalar reports whether the feature holds at most one value. An unbounded
+// upper bound carries Value 0, so the infinite flag has to be tested separately.
+func (f *EffectiveFeature) Scalar() bool {
+	return !f.Multiplicity.Upper.Infinite && f.Multiplicity.Upper.Value <= 1
+}
+
 // DefaultScope returns the scope DefaultValue resolves its names in, which for
 // an inherited default is where the redefined declaration wrote it.
 func (f *EffectiveFeature) DefaultScope() *symbols.Scope {
@@ -92,9 +98,9 @@ func (ctx *Context) buildFeatures(typeSym *symbols.Symbol) []EffectiveFeature {
 		if !isFeature(memberSym) {
 			continue
 		}
-		// A library-declared feature belongs to the metamodel frame every element
-		// specializes, not to the object the model asked for.
-		if ctx.libraryDeclared(memberSym) {
+		// The metamodel frame every element specializes is not a feature of the
+		// object the model asked for (see frameFeature).
+		if ctx.frameFeature(memberSym) {
 			continue
 		}
 		// A variant is a choice offered for its variation, not a feature of the
