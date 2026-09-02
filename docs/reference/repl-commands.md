@@ -52,7 +52,7 @@ quoted segment containing a space and a quoted segment in the middle of a chain:
 | `%break <node>` | Set a breakpoint at a node |
 | `%stop` | Stop the current debugging session |
 | **State machine debugging** ([guide chapter 6](../guide/06-behavior.md)) | |
-| `%state <name> [<object>]` | Debug the machine an object exhibits (`%state <part>` after `%instantiate <part>` attaches to that object's own running machine), or start a state machine, optionally performed by an instantiated object. Naming the machine the object exhibits (`%state Rover::modes rover`) attaches to that running machine too, with a note saying so, rather than performing it a second time against the same feature values; only a machine the object does not exhibit is started as a detached performance. The object is an [object argument](#object-arguments): a top-level name, a feature path such as `driver.r`, or an id such as `#3`. `%step`, `%advance`, `%current` and `%events` then drive that object's machine, and `%features` shows what it wrote |
+| `%state <name> [<object>]` | Debug the machine an object exhibits (`%state <part>` after `%instantiate <part>` attaches to that object's own running machine), or start a state machine, optionally performed by an instantiated object. Naming the machine the object exhibits (`%state Rover::modes rover`) attaches to that running machine too, with a note saying so, rather than performing it a second time against the same feature values; only a machine the object does not exhibit is started as a detached performance. A definition the object exhibits as the body of several usages names no one machine, so `%state` refuses and names the exhibited usages to name instead. The object is an [object argument](#object-arguments): a top-level name, a feature path such as `driver.r`, or an id such as `#3`. `%step`, `%advance`, `%current` and `%events` then drive that object's machine, and `%features` shows what it wrote |
 | `%events` | Show the event queue |
 | `%current` | Show the current state and configuration |
 | `%advance <time>` | Advance simulation time by `<time>` units, processing every event due |
@@ -73,8 +73,10 @@ ways:
 
 A path that stops short of an object is an error naming the segment that reached none and
 why: `Fleet::driver.x reaches no object at "x": object #1 of "Fleet::driver" has no feature
-"x"`, or `… at "level": feature "level" of object #2 holds 10, which is not an object`. An id
-the session holds no object under is `no object #99 in this session`.
+"x"`, or `… at "level": feature "level" of object #2 holds 10, which is not an object`. A
+segment whose feature value the runtime could not materialize keeps the runtime's reason: `… at
+"spare": feature "spare" of object #1 could not be materialized: … multiplicity violation …`. An
+id the session holds no object under is `no object #99 in this session`.
 
 A name nothing was instantiated under says what to instantiate. A usage whose definition alone
 has an object (`%instantiate Fleet::Rover` when `%state … Fleet::rover` wanted the usage) is

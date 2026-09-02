@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 )
 
 // %state <machine> <object>, for the machine the object exhibits, attaches to the
@@ -205,4 +207,69 @@ func TestSecondExhibitedMachineSurvivesAnUnrelatedDeclaration(t *testing.T) {
 	}
 	wants(t, run(t, s, "%advance 3"), "Current state: busy")
 	wants(t, run(t, s, "%features Pair::gauge"), "power", "off", "link", "busy")
+}
+
+// A definition an object exhibits as the body of two usages names no one
+// running machine, so %state over it refuses and names the usages that would,
+// rather than attaching to whichever was declared first. Naming a usage attaches.
+func TestStateOverASharedDefinitionNamesTheUsages(t *testing.T) {
+	s := loadFixture(t, "testdata/shared_machine.sysml")
+	run(t, s, "%instantiate Shared::lamp")
+
+	_, err := s.startStateMachine("Shared::Blink", []string{"Shared::lamp"})
+	var aerr *AmbiguousMachineError
+	if !errors.As(err, &aerr) {
+		t.Fatalf("got %v, want an AmbiguousMachineError", err)
+	}
+	if aerr.Machine != "Shared::Blink" || strings.Join(aerr.Usages, ",") != "Shared::Lamp::front,Shared::Lamp::rear" {
+		t.Errorf("got %+v, want both exhibited usages of Shared::Blink", aerr)
+	}
+	if s.stateExec != nil {
+		t.Errorf("a machine was attached to despite the ambiguity: %q", s.stateExec.machine)
+	}
+
+	got := run(t, s, "%state Shared::Blink Shared::lamp")
+	wants(t, got, "error:", `object #1 of "Shared::lamp" exhibits "Shared::Blink" as 2 machines`,
+		"name the exhibited usage instead", "Shared::Lamp::front or Shared::Lamp::rear")
+	for _, attached := range []string{"Debugging state machine", "Started state machine executor"} {
+		if strings.Contains(got, attached) {
+			t.Errorf("a machine was selected despite the ambiguity:\n%s", got)
+		}
+	}
+
+	wants(t, run(t, s, "%state Shared::Lamp::rear Shared::lamp"), `Debugging state machine "rear"`, "note:", "Current state: dark")
+	wants(t, run(t, s, "%advance 2"), "Current state: lit")
+	wants(t, run(t, s, "%features Shared::lamp"), "front", "dark", "rear", "lit")
+}
+
+// A segment whose feature value the runtime could not materialize is not a missing
+// feature: the path error carries the runtime's reason and its typed cause, and
+// the failure reaches the session status as any other command's would.
+func TestObjectPathErrorKeepsTheMaterializationFailure(t *testing.T) {
+	s := loadFixture(t, "testdata/shared_machine.sysml")
+	run(t, s, "%instantiate Shared::lamp")
+
+	_, _, err := s.objectRef("Shared::lamp.spare")
+	var perr *ObjectPathError
+	if !errors.As(err, &perr) {
+		t.Fatalf("got %v, want an ObjectPathError", err)
+	}
+	if perr.Segment != "spare" || strings.Contains(perr.Reason, "has no feature") {
+		t.Errorf("got %+v, want the segment spare reported as failing to materialize", perr)
+	}
+	wants(t, perr.Reason, `feature "spare" of object #1 could not be materialized`, "multiplicity violation")
+	if !errors.Is(err, runtime.ErrFeatureValueMaterialization) || !errors.Is(err, runtime.ErrMultiplicityViolation) {
+		t.Errorf("%v does not carry the runtime's materialization failure", err)
+	}
+
+	want := `Shared::lamp.spare reaches no object at "spare"`
+	wants(t, run(t, s, "%state Shared::lamp.spare"), "error:", want, "could not be materialized", "multiplicity violation")
+	wants(t, run(t, s, "%invoke Shared::lamp.spare flip"), "error:", want, "multiplicity violation")
+	if got := s.MaterializationFailures(); len(got) != 2 || !errors.Is(got[0], runtime.ErrMultiplicityViolation) {
+		t.Errorf("materialization failures = %v, want the multiplicity violation from each command", got)
+	}
+
+	if v := s.RunStateMachine("Shared::lamp.spare"); v.Status != VerdictUnresolved || !strings.Contains(strings.Join(v.Lines, "\n"), "multiplicity violation") {
+		t.Errorf("non-interactive run: got %+v, want an unresolved verdict naming the multiplicity violation", v)
+	}
 }

@@ -289,6 +289,54 @@ func TestStateNamesTheUsageToInstantiate(t *testing.T) {
 		2, `no instance of the definition "Fleet::Rover" itself`, `of "Fleet::rover" is typed by it`, "name Fleet::rover to address it")
 }
 
+// sharedMachineModel states a part exhibiting one state definition as two usages.
+const sharedMachineModel = `package Shared {
+    state def Blink {
+        entry; then dark;
+        state dark { accept after 2 then lit; }
+        state lit;
+    }
+    part def Lamp {
+        exhibit state front : Blink;
+        exhibit state rear : Blink;
+    }
+    part lamp : Lamp;
+}
+`
+
+// unmaterializablePartModel states a part whose value does not materialize.
+const unmaterializablePartModel = `package Shared {
+    part def Bulb;
+    part def Lamp { part spare : Bulb = null; }
+    part lamp : Lamp;
+}
+`
+
+// TestStateOverASharedDefinitionNamesTheUsages checks that -state naming a
+// definition the object exhibits twice refuses, naming the usages that address
+// one machine, and that a segment failing to materialize reports the runtime's
+// reason rather than a missing feature.
+func TestStateOverASharedDefinitionNamesTheUsages(t *testing.T) {
+	binary := buildCLI(t)
+
+	got := check(t, binary, sharedMachineModel, "-instantiate", "Shared::lamp", "-state", "Shared::Blink Shared::lamp")
+	wantReport(t, got, 2, `exhibits "Shared::Blink" as 2 machines`, "name the exhibited usage instead",
+		"Shared::Lamp::front or Shared::Lamp::rear")
+	for _, attached := range []string{"Debugging state machine", "Started state machine executor"} {
+		if strings.Contains(got.output(), attached) {
+			t.Errorf("a machine was selected despite the ambiguity:\n%s", got.output())
+		}
+	}
+	wantReport(t, check(t, binary, sharedMachineModel, "-instantiate", "Shared::lamp", "-state", "Shared::Lamp::rear Shared::lamp", "-advance", "2"),
+		0, `Debugging state machine "rear"`, "Current state: lit")
+
+	got = check(t, binary, unmaterializablePartModel, "-instantiate", "Shared::lamp", "-state", "Shared::lamp.spare")
+	wantReport(t, got, 2, `Shared::lamp.spare reaches no object at "spare"`, "could not be materialized", "multiplicity violation")
+	if strings.Contains(got.output(), `has no feature "spare"`) {
+		t.Errorf("a feature that failed to materialize was reported missing:\n%s", got.output())
+	}
+}
+
 // TestReportKeepsModelTextVerbatim checks that a value the model produced is
 // reported byte for byte, in text and in JSON, even where it spells a prompt
 // command the flags have another name for.

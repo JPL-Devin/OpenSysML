@@ -2121,6 +2121,7 @@ func (s *Session) doStateMachine(name string, performer []string) ([]string, boo
 		if errors.Is(err, errRuntimeInit) {
 			return nil, false, err
 		}
+		s.noteIfMaterializationFailure(err)
 		return []string{errPrefix + err.Error()}, false, nil
 	}
 	lines = append(lines, "", "Use %events to see queue, %current for state, %advance <time> to step")
@@ -2179,14 +2180,18 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 	// The machine the object exhibits is already running on it: a second
 	// performance would run entry and do behaviors against the same slots again.
 	if self != nil {
-		if behavior, ok := self.ExhibitedStateOf(sym); ok {
-			lines, err := s.attachExhibitedMachine(ctx, name, selfFQN, self, behavior)
+		switch exhibited := self.ExhibitedStatesOf(sym); len(exhibited) {
+		case 0:
+		case 1:
+			lines, err := s.attachExhibitedMachine(ctx, name, selfFQN, self, exhibited[0])
 			if err != nil {
 				return nil, err
 			}
 			notice := fmt.Sprintf("note: %s already exhibits %q, so this session attaches to that running machine rather than starting a second performance of it (as `%%state %s` would)",
 				objectLabel(self, selfFQN), name, performer[0])
 			return append([]string{lines[0], notice}, lines[1:]...), nil
+		default:
+			return nil, s.ambiguousMachine(name, self, selfFQN, exhibited)
 		}
 	}
 
@@ -2340,6 +2345,7 @@ func (s *Session) doInvoke(name, operation string, args []string) ([]string, boo
 		if errors.Is(err, errRuntimeInit) {
 			return nil, false, err
 		}
+		s.noteIfMaterializationFailure(err)
 		return []string{errPrefix + err.Error()}, false, nil
 	}
 	return lines, false, nil

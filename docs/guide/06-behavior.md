@@ -174,7 +174,10 @@ The two-argument form does the same when the machine it names is the one the obj
 `%state Monitor::modes Monitor` attaches to the running machine and says so in a `note:` line,
 rather than performing `modes` a second time against the same feature values (which would run
 its entry actions again, leaving `count` at `2` instead of `1`). Only a machine the object does
-not exhibit — one it merely performs — is started as a detached performance by that form.
+not exhibit — one it merely performs — is started as a detached performance by that form. When
+the object exhibits one definition as several usages (`exhibit state front : Blink; exhibit
+state rear : Blink;`), naming the definition names no one machine, so `%state Blink lamp` refuses
+and names `Lamp::front` and `Lamp::rear` to name instead.
 
 The object can also be a part reached through composition, or an id. With `part def Driver {
 part r : Monitor; }`, `part driver : Driver;` and `%instantiate driver`, `%state driver.r` debugs the nested part's own

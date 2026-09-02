@@ -177,7 +177,7 @@ written in, so the verdicts are about that object:
 | `-calc "<name>(<args>)"` | Invokes a calculation and reports what it computed |
 | `-run-query "<name> [<p>=<expr>...]"` | Executes a document query and reports its rows, as `%run-query` does — including any computed `Column(name = "<column>", expression = <expr>)` projections evaluated per row. Each binding is written as `<parameter>=<expression>` |
 | `-action "<name> [object]"` | Runs an action to completion and reports its outputs |
-| `-state "<name> [object]"` | Runs a state machine and reports where it settled. The object is one `-instantiate` created, named as `%state` names it: a usage's name, a feature path to a part it holds (`Fleet::driver.r`), or the id the report prints (`#2`). Naming the machine the object exhibits attaches to its running machine rather than performing it again; naming a usage whose definition alone was instantiated says which usage to `-instantiate` |
+| `-state "<name> [object]"` | Runs a state machine and reports where it settled. The object is one `-instantiate` created, named as `%state` names it: a usage's name, a feature path to a part it holds (`Fleet::driver.r`), or the id the report prints (`#2`). Naming the machine the object exhibits attaches to its running machine rather than performing it again (a definition exhibited as several usages is refused with the usages to name instead); naming a usage whose definition alone was instantiated says which usage to `-instantiate` |
 | `-advance <time>` | Simulated time units each `-state` machine is run for |
 | `-json` | Reports the checks as one JSON document rather than as lines |
 

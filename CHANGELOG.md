@@ -128,7 +128,11 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   that names the one-argument form; a machine the object merely performs is still started as a
   detached performance. The attached session follows the object over an unrelated declaration,
   as the one-argument form's does, and stays on the machine it was attached to when the object
-  exhibits several.
+  exhibits several. A definition the object exhibits as the body of several usages (`exhibit
+  state front : Blink; exhibit state rear : Blink;`) names no one running machine, so `%state
+  Blink lamp` refuses and names the usages that would: `object #1 of "lamp" exhibits "Blink" as
+  2 machines, so naming the definition attaches to none of them: name the exhibited usage
+  instead — Lamp::front or Lamp::rear`.
 - **`%state`, `%invoke` and `-state` reach a nested part by path and by id.** The object argument
   accepted only the name of a top-level object, so the machine of a part reached through
   composition could be watched with `%features` but neither debugged nor invoked on. The
@@ -138,6 +142,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   that reached none and why (`Fleet::driver.x reaches no object at "x": object #1 of
   "Fleet::driver" has no feature "x"`; `… at "level": feature "level" of object #2 holds 10,
   which is not an object`), and an id nothing is held under is `no object #99 in this session`.
+  A segment whose feature value the runtime could not materialize keeps the runtime's reason
+  (`… at "spare": feature "spare" of object #1 could not be materialized: … multiplicity
+  violation …`) rather than being reported as a missing feature, and reaches the session status
+  as a failed `%features` would.
 - **An object of the wrong kind is named when a usage is not instantiated.** `-state
   "Rover::modes rover"` after `-instantiate Rover` (the definition, not the usage) reported only
   `no instance of "rover" (use %instantiate first)`. The REPL and the CLI now say that an object

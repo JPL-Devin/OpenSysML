@@ -268,7 +268,8 @@ The object after the name is one `-instantiate` created, written as `%state` tak
 usage's name, a feature path to a part it holds (`-state "Fleet::driver.r"`, or
 `-state "Fleet::Rover::modes Fleet::driver.r"`), or the id the report prints (`-state "#2"`).
 Naming the machine the object exhibits attaches to its running machine, with a note saying so,
-rather than performing it a second time. The object must be the *usage*: `-instantiate
+rather than performing it a second time; a definition the object exhibits as several usages is
+refused with the usages to name instead. The object must be the *usage*: `-instantiate
 Fleet::rover` gives `-state "Fleet::Rover::modes Fleet::rover"` its object, while `-instantiate
 Fleet::Rover` creates an object of the definition, which the flag reports as such — `no instance
 of the usage "Fleet::rover": object #1 of "Fleet::Rover" is of its definition "Fleet::Rover",

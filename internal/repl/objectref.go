@@ -27,10 +27,37 @@ type ObjectPathError struct {
 	Path    string // the path, as the prompt prints names
 	Segment string // the segment that reaches no object
 	Reason  string
+	// Err is what kept the segment's feature value from materializing, nil when
+	// the segment reached a value that is no object or no feature at all.
+	Err error
 }
 
 func (e *ObjectPathError) Error() string {
 	return fmt.Sprintf("%s reaches no object at %q: %s", e.Path, e.Segment, e.Reason)
+}
+
+func (e *ObjectPathError) Unwrap() error { return e.Err }
+
+// AmbiguousMachineError reports a state definition an object exhibits as the
+// body of several usages, so naming the definition names no one machine.
+type AmbiguousMachineError struct {
+	Object  string // the object, as objectLabel prints it
+	Machine string // the definition asked for, as the prompt prints names
+	// Usages are the exhibited usages running it, in declaration order, as the
+	// prompt prints names; "" for one without a name.
+	Usages []string
+}
+
+func (e *AmbiguousMachineError) Error() string {
+	names := make([]string, len(e.Usages))
+	for i, u := range e.Usages {
+		names[i] = u
+		if u == "" {
+			names[i] = "an unnamed one"
+		}
+	}
+	return fmt.Sprintf("%s exhibits %q as %d machines, so naming the definition attaches to none of them: name the exhibited usage instead — %s",
+		e.Object, e.Machine, len(e.Usages), strings.Join(names, " or "))
 }
 
 // NotInstantiatedError reports a name no object is materialized under. When
@@ -256,8 +283,15 @@ func (s *Session) walkObjectPath(inst *runtime.Instance, name, path string, segm
 		fail := func(reason string) error {
 			return &ObjectPathError{Path: path, Segment: seg, Reason: reason}
 		}
+		if _, declared := inst.FeatureValues[seg]; !declared {
+			return nil, "", fail(fmt.Sprintf("%s has no feature %q", objectLabel(inst, name), seg))
+		}
 		fv, serr := inst.GetFeatureValue(ctx, seg)
-		if serr != nil || fv == nil {
+		if serr != nil {
+			return nil, "", &ObjectPathError{Path: path, Segment: seg, Err: serr,
+				Reason: fmt.Sprintf("feature %q of object #%d could not be materialized: %v", seg, inst.ID, serr)}
+		}
+		if fv == nil {
 			return nil, "", fail(fmt.Sprintf("%s has no feature %q", objectLabel(inst, name), seg))
 		}
 		held := fv.HeldValue()
@@ -314,6 +348,20 @@ func (s *Session) notInstantiated(sym *symbols.Symbol, fqn string) error {
 		}
 		return true
 	})
+	return e
+}
+
+// ambiguousMachine reports a definition self exhibits as the body of several
+// machines, naming the usages that would address one.
+func (s *Session) ambiguousMachine(name string, self *runtime.Instance, selfFQN string, exhibited []*runtime.ObjectBehavior) error {
+	e := &AmbiguousMachineError{Object: objectLabel(self, selfFQN), Machine: name}
+	for _, b := range exhibited {
+		usage := ""
+		if member := b.Member(); member != nil && member.Name != "" {
+			usage = notationName(s.fqnOf(member))
+		}
+		e.Usages = append(e.Usages, usage)
+	}
 	return e
 }
 
