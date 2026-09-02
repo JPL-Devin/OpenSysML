@@ -27,7 +27,8 @@ the same value, so `rdf:type=<https://www.omg.org/spec/SysML#PartUsage>`,
 qualified name is a literal, not a prefixed name: write
 `sysml:qualifiedName="Robot::Platform::battery"` with the quotes. The same
 holds for `sysml:type`, whose values are the qualified names of typing
-definitions.
+definitions. A bare name is not a value: `sysml:name=battery` is refused, and
+the diagnostic names the quoted form to write.
 
 The `oslc.where`, `oslc.select`, `oslc.orderBy`, and `oslc.prefix` parameters
 may be supplied as a URL-encoded query-parameter string. Standard decoding
@@ -115,7 +116,12 @@ exclusive with the structured `query` field. The service advertises the
 The REPL accepts `%query <oslc-query>`. The `sysml` command accepts
 `-query <oslc-query>` alongside the other model modes. Both print one matched
 element per line as qualified name and metamodel type, followed by selected
-properties. A query that matches nothing says so: the REPL prints `no
+properties. A reported property carries the name the query asked for it by, so
+`oslc.select=rdf:type` reports `rdf:type=PartUsage` and a reported row can be
+written back into a query; rebinding a prefix renames it in the answer too. The
+gRPC response instead keys properties by the query property names of the table
+above, which the structured `query` field also uses.
+A query that matches nothing says so: the REPL prints `no
 elements matched`, and the command reports it on standard error, so the result
 rows on standard output stay one line per match. `-query` with empty text is
 treated as a mistake rather than as an absent flag: it is refused instead of

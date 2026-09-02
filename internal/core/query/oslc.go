@@ -143,6 +143,12 @@ func ParseParameters(text string) (Query, error) {
 			return Query{}, err
 		}
 		q.Select = replace(q.Select, name, resolved)
+		if resolved != name {
+			if q.Spelling == nil {
+				q.Spelling = make(map[string]string)
+			}
+			q.Spelling[resolved] = name
+		}
 	}
 	return q, nil
 }
@@ -443,7 +449,12 @@ func (p *oslcParser) value() (string, error) {
 	if strings.Contains(raw, ":") {
 		return resolveValue(raw, p.prefixes)
 	}
-	return "", errorf(ErrMalformed, "invalid OSLC value %q", raw)
+	if raw == "" {
+		return "", errorf(ErrMalformed, "OSLC comparison has no value")
+	}
+	// A bare name is the answer's own spelling of a value, so say what quoting it takes.
+	return "", errorf(ErrMalformed,
+		"invalid OSLC value %q: write a name as a quoted literal %s", raw, strconv.Quote(raw))
 }
 
 func (p *oslcParser) skipSpace() {

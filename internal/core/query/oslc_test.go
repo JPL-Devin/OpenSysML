@@ -35,6 +35,28 @@ func TestParseOSLCParametersAndPrefixes(t *testing.T) {
 	if len(q.OrderBy) != 1 || !q.OrderBy[0].Desc {
 		t.Fatalf("order = %#v", q.OrderBy)
 	}
+	if q.SpellingOf(PropertyName) != "sysml:name" || q.SpellingOf(PropertyType) != "rdf:type" {
+		t.Fatalf("spelling = %#v", q.Spelling)
+	}
+}
+
+func TestParseOSLCKeepsTheSpellingOfASelectedProperty(t *testing.T) {
+	// A selected property is reported under the name the request asked for, so
+	// an answer can be pasted back into a query.
+	q, err := ParseParameters(`oslc.prefix=s%3D%3Chttps://www.omg.org/spec/SysML%23%3E&oslc.select=s%3Aname`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(q.Select) != 1 || q.Select[0] != PropertyName {
+		t.Fatalf("select = %#v", q.Select)
+	}
+	if got := q.SpellingOf(PropertyName); got != "s:name" {
+		t.Fatalf("spelling of %s = %q, want the aliased name", PropertyName, got)
+	}
+	// A property a request never named keeps its query property name.
+	if got := q.SpellingOf(PropertyOwner); got != PropertyOwner {
+		t.Fatalf("spelling of an unasked property = %q", got)
+	}
 }
 
 func TestParseOSLCRejectsUnsupportedConstructs(t *testing.T) {
@@ -176,6 +198,21 @@ func TestParseOSLCRefusesQualifiedNameValueUnquoted(t *testing.T) {
 	}
 	if q.Where[0].Values[0] != "https://example.org/a::b" {
 		t.Fatalf("value = %#v", q.Where[0].Values)
+	}
+}
+
+func TestParseOSLCRefusesBareNameValueWithTheQuotedForm(t *testing.T) {
+	// A reported value is a bare name, so its refusal names the quoted form.
+	_, err := ParseOSLC(`sysml:name=battery`)
+	got, ok := err.(*Error)
+	if !ok || got.Kind != ErrMalformed {
+		t.Fatalf("error = %#v, want ErrMalformed", err)
+	}
+	if !strings.Contains(got.Message, `quoted literal "battery"`) {
+		t.Fatalf("error message = %q, want it to name the quoted form", got.Message)
+	}
+	if _, err := ParseOSLC(`sysml:name="battery"`); err != nil {
+		t.Fatalf("quoted name: %v", err)
 	}
 }
 
