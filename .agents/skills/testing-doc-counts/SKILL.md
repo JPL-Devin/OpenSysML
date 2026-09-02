@@ -5,7 +5,7 @@ description: How to end-to-end test the generated documentation figures (cmd/doc
 
 # Testing the generated documentation figures (`cmd/doc-counts`)
 
-`cmd/doc-counts` regenerates four kinds of derived documentation from committed sources:
+`cmd/doc-counts` regenerates three kinds of derived documentation from committed sources:
 
 1. the census header line in `docs/project/spec-compliance.md` (from that file's own status markers);
 2. single-copy baseline lines in `README.md` (`**Reference differential:**`, `**Rejection oracle:**`);
@@ -13,14 +13,17 @@ description: How to end-to-end test the generated documentation figures (cmd/doc
    `<!-- doc-counts:end refereed-figures -->`, rendered from **one** template in
    `internal/doccounts/doccounts.go` into **two** consumers (`README.md` and
    `docs/internals/architecture.md`), differing only by `Block.LinkPrefix`
-   (`docs/project/` vs `../project/`);
-4. the `landing-figures` block in `overrides/home.html` — the same census as markup, for the
-   documentation site's landing band. Its conformance-record links are emitted as
-   `{{ record('project/x.md', base_url) }}`, the global `scripts/mkdocs_landing.py` installs:
-   it resolves to the page when the site publishes that record and to the file on GitHub when
-   it does not, the way `scripts/mkdocs_repo_links.py` resolves such a link in Markdown.
+   (`docs/project/` vs `../project/`).
 
-**Know which records the site publishes before writing a template link.** `mkdocs.yml`'s
+The documentation site's landing band (`overrides/home.html`) is **not** a consumer: it names the
+four oracles and links to their records without quoting a figure, so it is hand-written markup that
+never goes stale. Its record links are `{{ record('project/x.md', base_url) }}`, the global
+`scripts/mkdocs_landing.py` installs: it resolves to the page when the site publishes that record
+and to the file on GitHub when it does not, the way `scripts/mkdocs_repo_links.py` resolves such a
+link in Markdown. Keep it that way — a number typed into the band is exactly the drift `doc-counts`
+exists to prevent.
+
+**Know which records the site publishes before writing a landing link.** `mkdocs.yml`'s
 `exclude_docs` keeps the engineering records in the repository rather than on the site: as of
 this writing `omg-issues`, `pilot-xpect`, `pilot-rejection`, `pilot-corpora`,
 `pilot-execution-referee`, `grammar-coverage`, `training-examples` and `wave*` are **not
@@ -70,8 +73,7 @@ Copy **all** `build/pilot-*` dirs together: the validator launchers resolve the 
   exit 1 with `open <path>: permission denied` and write nothing (writability of *all* pending files
   is checked before any is written).
 - **Baseline propagation:** mutate one figure in each baseline JSON in turn; `-check` must name
-  **every** consumer stating it — both Markdown pages, and `overrides/home.html` too when the
-  figure is one of the four the landing band states — the guard tests must fail while the tree is stale
+  **every** consumer stating it — both Markdown pages — the guard tests must fail while the tree is stale
   (`TestCheckCommittedTreeIsCurrent`, `TestPilotDifferentialDocumentCountsMatchBaseline`,
   `TestW6FXpectDocumentCountsMatchBaseline`, `TestPilotRejectionDocumentCountsMatchBaseline`), and
   regeneration must write the new number into every one of them. Restore with `git checkout -- .`.
@@ -90,12 +92,12 @@ Copy **all** `build/pilot-*` dirs together: the validator launchers resolve the 
   `/tmp/site/index.html` and check each one — a site-relative target must exist under
   `/tmp/site`, a repository target must exist under `docs/` — then click them in a browser
   against a served copy (`python3 -m http.server -d /tmp/site`; `file://` breaks directory
-  URLs). Prove the guard is live both ways: point a link at a page that does not exist and
-  at an excluded page, and `--strict` must abort in each case.
-- **The landing band states the same figures:** its four numbers must be the differential's
-  `filesAgreeing`/`files`, the Xpect silence and scope pairs, and the rejection corpus's
-  by-default gap — the same values the prose block states. Build the site and grep
-  `site/index.html` for them, since a Jinja mistake renders as literal `{{ … }}`.
+  URLs). Prove the guard is live: a `record()` link to a page that does not exist must abort
+  `--strict`; a `record()` link to an excluded page builds clean by design (it resolves to the
+  GitHub blob URL) — only a `{{ '…'|url }}` link to an excluded page aborts.
+- **The landing band quotes no figure:** `grep -E '[0-9]+ of [0-9]+' overrides/home.html` must
+  match nothing, and the rendered `site/index.html` must carry no literal `{{ … }}` from a Jinja
+  mistake in the band's record links.
 - **The two Markdown consumers cannot drift:** extract each block with
   `sed -n '/doc-counts:begin refereed-figures/,/doc-counts:end refereed-figures/p'`, normalise
   `(../project/` → `(docs/project/` in the architecture copy, and `diff` — must be empty. Then
