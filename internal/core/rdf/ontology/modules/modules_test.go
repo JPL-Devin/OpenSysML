@@ -1,8 +1,10 @@
 package modules
 
 import (
+	"encoding/xml"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -328,7 +330,7 @@ func TestGenerateAndCheck(t *testing.T) {
 		paths = append(paths, o.Path)
 		byPath[o.Path] = string(o.Content)
 	}
-	if got := strings.Join(paths, " "); got != "KerML.ttl KerML/Root.ttl KerML/Root/Elements.ttl KerML/Root/Namespaces.ttl VERSION catalog.tsv" {
+	if got := strings.Join(paths, " "); got != "KerML.ttl KerML/Root.ttl KerML/Root/Elements.ttl KerML/Root/Namespaces.ttl VERSION catalog-v001.xml catalog.tsv" {
 		t.Errorf("outputs = %q", got)
 	}
 	ns := byPath["KerML/Root/Namespaces.ttl"]
@@ -353,6 +355,10 @@ func TestGenerateAndCheck(t *testing.T) {
 	}
 	if got := byPath["VERSION"]; !strings.Contains(got, "ontology-commit\tabc123\n") {
 		t.Errorf("VERSION:\n%s", got)
+	}
+	if got := byPath[CatalogFile]; !strings.Contains(got, `<uri name="https://example.org/modules/KerML/Root/Elements" uri="KerML/Root/Elements.ttl"></uri>`) ||
+		!strings.Contains(got, `<uri name="https://example.org/modules/KerML" uri="KerML.ttl"></uri>`) {
+		t.Errorf("%s:\n%s", CatalogFile, got)
 	}
 
 	dir := t.TempDir()
@@ -388,4 +394,86 @@ func TestGenerateAndCheck(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "KerML", "Root", "Old.ttl")); !os.IsNotExist(err) {
 		t.Errorf("stale module not removed: %v", err)
 	}
+	if got := loadClosure(t, dir, "KerML.ttl"); len(got) != 4 {
+		t.Errorf("closure from KerML.ttl = %v, want all 4 documents", got)
+	}
+}
+
+// TestCommittedModulesResolveOffline opens the committed root ontologies from
+// disk and follows every owl:imports through catalog-v001.xml, as an OWL tool
+// would, proving the tree loads without network access.
+func TestCommittedModulesResolveOffline(t *testing.T) {
+	dir := filepath.Join("..", "..", "..", "..", "..", "ontology", "sysmlv2")
+	ttl, err := filepath.Glob(filepath.Join(dir, "*", "*", "*.ttl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	leaves := len(ttl)
+	if leaves == 0 {
+		t.Fatalf("no leaf modules under %s", dir)
+	}
+	all := make(map[string]bool)
+	for _, root := range []string{"KerML.ttl", "SysML.ttl"} {
+		for _, doc := range loadClosure(t, dir, root) {
+			all[doc] = true
+		}
+	}
+	if want := leaves + 6; len(all) != want {
+		t.Errorf("closure of both roots reaches %d documents, want %d (%d leaves + 6 layers)", len(all), want, leaves)
+	}
+}
+
+// loadClosure resolves start's transitive owl:imports through the XML
+// catalog in dir and returns every document reached, failing on an IRI the
+// catalog cannot map (Ecore is external and excluded).
+func loadClosure(t *testing.T, dir, start string) []string {
+	t.Helper()
+	catData, err := os.ReadFile(filepath.Join(dir, CatalogFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cat oasisCatalog
+	if err := xml.Unmarshal(catData, &cat); err != nil {
+		t.Fatal(err)
+	}
+	files := make(map[string]string, len(cat.URIs))
+	for _, e := range cat.URIs {
+		files[e.Name] = e.URI
+	}
+	seen := map[string]bool{}
+	var visit func(file string)
+	visit = func(file string) {
+		if seen[file] {
+			return
+		}
+		seen[file] = true
+		data, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(file)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if !strings.HasPrefix(line, "owl:imports ") {
+				continue
+			}
+			for _, ref := range strings.Split(strings.TrimSuffix(strings.TrimPrefix(line, "owl:imports "), " ;"), ", ") {
+				iri := strings.Trim(ref, "<>")
+				if iri == EcoreOntology {
+					continue
+				}
+				target, ok := files[iri]
+				if !ok {
+					t.Fatalf("%s imports %s, which %s does not map", file, iri, CatalogFile)
+				}
+				visit(target)
+			}
+		}
+	}
+	visit(start)
+	docs := make([]string, 0, len(seen))
+	for f := range seen {
+		docs = append(docs, f)
+	}
+	sort.Strings(docs)
+	return docs
 }

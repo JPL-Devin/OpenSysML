@@ -437,7 +437,7 @@ regardless of this item.
 Turtle module per package of the normative KerML/SysML XMI (release `20240201`, whose class set is
 exactly the ontology's 172): 41 leaf modules (`KerML/Root/Elements`, `SysML/Systems/Requirements`,
 …) under 6 layer ontologies that import their children (`KerML`, `KerML/Core`, `SysML/Systems`, …),
-a `catalog.tsv` from every term to its module, and a `VERSION` file naming the pinned sources. A
+a `catalog.tsv` from every term to its module, a `catalog-v001.xml` resolving imports to local files, and a `VERSION` file naming the pinned sources. A
 class goes to the package that owns it, a property to the package of its `rdfs:domain`, blank-node
 content with its subject, and the union of the modules is isomorphic to the source graph. Each
 module imports whatever declares the terms it mentions, so an import closure is always complete.

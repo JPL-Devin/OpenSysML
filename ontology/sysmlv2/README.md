@@ -23,6 +23,7 @@ SysML.ttl                  imports SysML/Systems
 SysML/Systems.ttl          imports the 21 Systems packages (Parts, Actions, Requirements, …)
 SysML/Systems/*.ttl        the SysML metaclasses, one module per package
 catalog.tsv                every term → the module that declares it
+catalog-v001.xml           every ontology IRI → its file, for offline import resolution
 VERSION                    the pinned sources the modules were generated from
 ```
 
@@ -54,6 +55,11 @@ closure always contains every term it mentions. The metamodel is not a strict hi
 imports are cyclic in places (`KerML/Root/Elements` and `KerML/Root/Namespaces` refer to each
 other); OWL 2 allows this and every reasoner handles it, but a consumer wanting one package's
 terms only should read the file directly rather than its closure.
+
+The ontology IRIs are not served over HTTP. `catalog-v001.xml` is an OASIS XML catalog mapping
+each `owl:imports` target to its `.ttl` beside it; Protégé and the OWL API pick it up from the
+directory automatically, and ROBOT takes it as `--catalog`, so opening `KerML.ttl` or `SysML.ttl`
+from disk loads the whole closure.
 
 ## Regenerating
 

@@ -2,6 +2,7 @@ package modules
 
 import (
 	"bytes"
+	"encoding/xml"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,9 +24,14 @@ type Output struct {
 	Content []byte
 }
 
+// CatalogFile is the OASIS XML catalog OWL tools (Protégé, the OWL API)
+// read from an ontology's directory to resolve owl:imports to local files.
+const CatalogFile = "catalog-v001.xml"
+
 // Generate turns a partition into the module documents, the layer documents
-// that import them, a catalog mapping every term to its module, and a
-// VERSION file recording the sources. Each ontology's owl:versionInfo is
+// that import them, a catalog mapping every term to its module, an XML
+// catalog mapping every ontology IRI to its file, and a VERSION file
+// recording the sources. Each ontology's owl:versionInfo is
 // "<ontology commit>+xmi<release>".
 func Generate(p *Partition, baseIRI string, src Sources) ([]Output, error) {
 	if !strings.HasSuffix(baseIRI, "/") {
@@ -81,8 +87,13 @@ func Generate(p *Partition, baseIRI string, src Sources) ([]Output, error) {
 		}
 		outputs = append(outputs, Output{Path: layer.Path + ".ttl", Content: doc})
 	}
+	iriCatalog, err := xmlCatalog(p, baseIRI)
+	if err != nil {
+		return nil, err
+	}
 	outputs = append(outputs,
 		Output{Path: "catalog.tsv", Content: catalog(p)},
+		Output{Path: CatalogFile, Content: iriCatalog},
 		Output{Path: "VERSION", Content: []byte(fmt.Sprintf(
 			"version\t%s\nontology-repo\t%s\nontology-commit\t%s\nxmi-release\t%s\nbase-iri\t%s\n",
 			versionInfo, src.OntologyRepo, src.OntologyCommit, src.XMIRelease, baseIRI))},
@@ -110,8 +121,37 @@ func catalog(p *Partition) []byte {
 	return b.Bytes()
 }
 
-// WriteOutputs writes outputs under dir, first removing every .ttl, the
-// catalog and the version file already there so stale modules do not linger.
+type catalogEntry struct {
+	Name string `xml:"name,attr"`
+	URI  string `xml:"uri,attr"`
+}
+
+type oasisCatalog struct {
+	XMLName xml.Name       `xml:"urn:oasis:names:tc:entity:xmlns:xml:catalog catalog"`
+	Prefer  string         `xml:"prefer,attr"`
+	URIs    []catalogEntry `xml:"uri"`
+}
+
+// xmlCatalog maps each module and layer IRI to its .ttl, so a tool opening
+// any module from disk resolves the whole import closure without network.
+func xmlCatalog(p *Partition, baseIRI string) ([]byte, error) {
+	cat := oasisCatalog{Prefer: "public"}
+	for _, mod := range p.Modules {
+		cat.URIs = append(cat.URIs, catalogEntry{baseIRI + mod.Path, mod.Path + ".ttl"})
+	}
+	for _, layer := range p.Layers {
+		cat.URIs = append(cat.URIs, catalogEntry{baseIRI + layer.Path, layer.Path + ".ttl"})
+	}
+	sort.Slice(cat.URIs, func(i, j int) bool { return cat.URIs[i].Name < cat.URIs[j].Name })
+	body, err := xml.MarshalIndent(cat, "", "    ")
+	if err != nil {
+		return nil, err
+	}
+	return append(append([]byte(xml.Header), body...), '\n'), nil
+}
+
+// WriteOutputs writes outputs under dir, first removing every .ttl, both
+// catalogs and the version file already there so stale modules do not linger.
 func WriteOutputs(dir string, outputs []Output) error {
 	existing, err := listOutputs(dir)
 	if err != nil {
@@ -186,7 +226,7 @@ func listOutputs(dir string) ([]string, error) {
 			return err
 		}
 		rel = filepath.ToSlash(rel)
-		if strings.HasSuffix(rel, ".ttl") || rel == "catalog.tsv" || rel == "VERSION" {
+		if strings.HasSuffix(rel, ".ttl") || rel == "catalog.tsv" || rel == CatalogFile || rel == "VERSION" {
 			paths = append(paths, rel)
 		}
 		return nil
