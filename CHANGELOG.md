@@ -213,6 +213,21 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   through both tiers — that they agree and that a traced run takes the evaluator. The architecture
   document gains a paragraph and diagram on invoking a calc.
 
+### Fixed
+
+- **A `then` written after a flow, a binding or a standalone succession comes back from Turtle.**
+  The parser sequences a positional `then` from the nearest preceding member that is not itself
+  an edge — flows, bindings, connectors, successions and transitions are skipped, attributes and
+  docs are not — but the Turtle writer took the member written immediately before it, found the
+  flow there and refused the whole file as inconsistent. Both sides now share one rule,
+  `ast.UsageKind.IsEdge`, and the writer compares the graph's source end against the name the
+  skipped-to member answers to (an unnamed `perform x` or `action redefines x` answers to `x`, as
+  in the parser), so `first start; then a;` and `then perform run;` fold back too. A graph whose
+  `sysx:sourceMember` or `sysml:sourceFeature` names some other member is still refused. Over the
+  345-file example corpus the files the writer refused for this reason go from 14 to 0, and their
+  round trips reproduce the same graph; the training examples for action shorthand, control
+  structures, decisions, merges, terminate actions, messaging and message payloads are among them.
+
 ## 0.4.3 — 2026-09-01
 
 Release 0.4.3 is where an element gets an identity the notation can carry. The SysML v2 textual
