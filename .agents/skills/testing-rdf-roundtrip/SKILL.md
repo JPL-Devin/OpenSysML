@@ -27,16 +27,21 @@ present the decoder can rebuild the notation from the text alone, so a plain
 To make the test load-bearing, strip `sysx:sourceText` from the intermediate `.ttl` first (the same
 thing the `withoutTriples` test helper in `internal/core/export/export_test.go` does in-process) and
 only then convert back. A small Python filter is enough — drop any line containing
-`sysx:sourceText `, and when the dropped line ended the triple block with ` .`, turn the previous
-line's trailing `;` into ` .`:
+`sysx:sourceText `, keep dropping while the literal it opened with `"""` is still open (a multi-line
+head, condition or `doc` body is stored as written, line breaks included), and when the dropped
+triple ended the block with ` .`, turn the previous line's trailing `;` into ` .`:
 
 ```python
 def strip(src, preds, dst):
-    out = []
+    out, dropping = [], False
     for line in open(src):
         s = line.strip()
-        if any((p + " ") in s for p in preds):
-            if s.endswith('.') and out:
+        if dropping or any((p + " ") in s for p in preds):
+            if not dropping and s.count('"""') == 1:
+                dropping = True          # the literal continues on later lines
+            elif dropping and '"""' in s:
+                dropping = False
+            if not dropping and s.endswith('.') and out:
                 prev = out[-1].rstrip()
                 if prev.endswith(';'):
                     out[-1] = prev[:-1].rstrip() + ' .\n'
@@ -50,7 +55,10 @@ since not every load-bearing predicate lives in the `sysx:` namespace (the `sysm
 `sysml:includes` controls below use the `sysml:` prefix).
 
 Pass criterion: the source-text-free back-conversion is **byte-identical** to the source-text-backed
-one, and re-encoding it gives a `.ttl` byte-identical to `hop1.ttl`.
+one when the model was written in the writer's own spelling, and re-encoding it gives a `.ttl`
+byte-identical to `hop1.ttl` once `sysx:sourceText` is stripped from both. A model laid out by hand
+(a head broken across lines, say) comes back in the writer's spelling without its text — the layout
+was the text — so compare the two `.ttl` files stripped, not the notation.
 
 ## Negative controls that prove each predicate is load-bearing
 
@@ -159,8 +167,9 @@ construct kind from `UnsupportedError.What` without location or identifiers, e.g
 `refused:feature-declaration`, `refused:prefix-metadata`, `refused:succession`), `unwritable`
 (Turtle → notation refused), `unparseable` (the written notation no longer converts), then a
 triple-set comparison of hop 1 against hop 2: `stable` (byte-identical), `whitespace-only` (equal
-once whitespace inside `sysx:sourceText` literals is collapsed — the writer re-indented a body),
-`graph-diff` (anything else).
+once whitespace inside `sysx:sourceText` literals is collapsed — the writer re-laid a stored text
+out, which it no longer does: the stored text is written verbatim while it still states the graph,
+see `docs/reference/rdf-mapping.md` § Stored text is layout), `graph-diff` (anything else).
 
 It is a **per-file ratchet**, like the pilot corpora gate: an improvement fails it just as a
 regression does, so every movement is adjudicated. When your change moves files:
