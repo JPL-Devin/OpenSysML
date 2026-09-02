@@ -514,6 +514,26 @@ func TestGenerateAndCheck(t *testing.T) {
 	if len(siblings) != 1 {
 		t.Errorf("staging directory left behind: %v", siblings)
 	}
+
+	// A swap that fails after the old files have started moving is undone:
+	// Blocked.ttl is a non-generated directory, so the staged file cannot
+	// take its place.
+	if err := os.MkdirAll(filepath.Join(dir, "Blocked.ttl"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	blocked := append([]Output{{Path: "Blocked.ttl", Content: []byte("x")}}, outputs...)
+	if err := WriteOutputs(dir, blocked); err == nil {
+		t.Fatal("WriteOutputs onto a blocked destination did not fail")
+	}
+	if stale, err := CheckOutputs(dir, outputs); err != nil || len(stale) != 0 {
+		t.Errorf("after failed swap stale = %v, err = %v", stale, err)
+	}
+	if fi, err := os.Stat(filepath.Join(dir, "Blocked.ttl")); err != nil || !fi.IsDir() {
+		t.Errorf("non-generated entry disturbed: %v, %v", fi, err)
+	}
+	if siblings, err = os.ReadDir(filepath.Dir(dir)); err != nil || len(siblings) != 1 {
+		t.Errorf("staging directory left behind: %v, %v", siblings, err)
+	}
 }
 
 // TestCommittedModulesResolveOffline opens the committed root ontologies from

@@ -3,6 +3,7 @@ package modules
 import (
 	"bytes"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -150,8 +151,8 @@ func xmlCatalog(p *Partition, baseIRI string) ([]byte, error) {
 	return append(append([]byte(xml.Header), body...), '\n'), nil
 }
 
-// WriteOutputs replaces the generated files under dir with outputs, staging
-// them in a sibling directory first so a failed write leaves dir untouched.
+// WriteOutputs replaces the generated files under dir with outputs. They are
+// staged in a sibling directory first, and the swap is undone if it fails.
 func WriteOutputs(dir string, outputs []Output) (err error) {
 	existing, err := listOutputs(dir)
 	if err != nil {
@@ -169,8 +170,9 @@ func WriteOutputs(dir string, outputs []Output) (err error) {
 			err = rerr
 		}
 	}()
+	incoming, outgoing := filepath.Join(staging, "new"), filepath.Join(staging, "old")
 	for _, o := range outputs {
-		full := filepath.Join(staging, filepath.FromSlash(o.Path))
+		full := filepath.Join(incoming, filepath.FromSlash(o.Path))
 		if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
 			return err
 		}
@@ -179,21 +181,49 @@ func WriteOutputs(dir string, outputs []Output) (err error) {
 			return err
 		}
 	}
-	for _, path := range existing {
-		if err := os.Remove(filepath.Join(dir, filepath.FromSlash(path))); err != nil {
+	var moves []move
+	undo := func() error {
+		var first error
+		for i := len(moves) - 1; i >= 0; i-- {
+			if err := moves[i].undo(); err != nil && first == nil {
+				first = err
+			}
+		}
+		return first
+	}
+	swap := func(from, to string) error {
+		if err := os.MkdirAll(filepath.Dir(to), 0o750); err != nil {
 			return err
+		}
+		if err := os.Rename(from, to); err != nil {
+			return err
+		}
+		moves = append(moves, move{from, to})
+		return nil
+	}
+	for _, path := range existing {
+		rel := filepath.FromSlash(path)
+		if err := swap(filepath.Join(dir, rel), filepath.Join(outgoing, rel)); err != nil {
+			return errors.Join(err, undo())
 		}
 	}
 	for _, o := range outputs {
 		rel := filepath.FromSlash(o.Path)
-		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, rel)), 0o750); err != nil {
-			return err
-		}
-		if err := os.Rename(filepath.Join(staging, rel), filepath.Join(dir, rel)); err != nil {
-			return err
+		if err := swap(filepath.Join(incoming, rel), filepath.Join(dir, rel)); err != nil {
+			return errors.Join(err, undo())
 		}
 	}
 	return nil
+}
+
+// move records one rename so a half-finished swap can be reversed.
+type move struct{ from, to string }
+
+func (m move) undo() error {
+	if err := os.MkdirAll(filepath.Dir(m.from), 0o750); err != nil {
+		return err
+	}
+	return os.Rename(m.to, m.from)
 }
 
 // CheckOutputs compares outputs with the files under dir and returns the
