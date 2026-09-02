@@ -122,8 +122,15 @@ var (
 	pdfTitlePage  bool
 	pdfTOC        bool
 	pdfNumbering  bool
+	htmlCSS       stringSlice
+	htmlNoCSS     bool
+	htmlShowCSS   bool
+	htmlFragment  bool
 	strictMode    bool
 	modelChecks   checks
+	compileCalc   string
+	compileTarget string
+	compileSource bool
 
 	syncDiffWith       string
 	syncApplyTo        string
@@ -231,6 +238,13 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, "\nThe input format is taken from the file extension (.sysml, .kerml, .ttl) unless\n")
 	fmt.Fprintf(w, "-from names it. Converting to the format it is already in rewrites the input:\n")
 	fmt.Fprintf(w, "notation is reformatted, Turtle is normalized.\n")
+	fmt.Fprintf(w, "\nNative compilation:\n")
+	fmt.Fprintf(w, "  sysml model.sysml -compile Pkg::Fib -o fib           # Compile a calc def to a C executable\n")
+	fmt.Fprintf(w, "  sysml model.sysml -compile Pkg::Fib -target go -o fib # ... via Go\n")
+	fmt.Fprintf(w, "  sysml model.sysml -compile Pkg::Fib -source -o fib.c # Write the generated source only\n")
+	fmt.Fprintf(w, "\nThe executable takes the calc's parameters as arguments and prints its result;\n")
+	fmt.Fprintf(w, "it computes what `sysml -calc` computes, or fails with the same error. Only the\n")
+	fmt.Fprintf(w, "scalar subset compiles (Integer, Real, Boolean; see docs/project/native-compilation.md).\n")
 	// The notice is printed, not restated, so the help cannot drift from what a
 	// conversion reports.
 	fmt.Fprintf(w, "\n%s\n", wrapped(export.ExperimentalNotice, 78))
@@ -261,16 +275,26 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport           # Markdown on stdout\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport -o report.md\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport -doc-form pdf -o report.pdf\n")
+	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport -doc-form html -o report.html\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render-documents rendered                     # every document, linked\n")
+	fmt.Fprintf(w, "  sysml model.sysml -render-documents site -doc-form html -html-css theme.css\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport -doc-form pdf \\\n")
-	fmt.Fprintf(w, "        -pdf-engine pandoc -pdf-title-page -pdf-toc -pdf-number-sections -o report.pdf\n")
+	fmt.Fprintf(w, "        -pdf-engine pandoc -doc-title-page -doc-toc -doc-number-sections -o report.pdf\n")
+	fmt.Fprintf(w, "  sysml -html-default-css -o sysml-document.css                    # the default stylesheet\n")
 	fmt.Fprintf(w, "\nA document is a part def specializing DocumentQueries::Document. Its queries\n")
 	fmt.Fprintf(w, "are bound in the model and run against it, and the result is written as\n")
-	fmt.Fprintf(w, "CommonMark-compatible Markdown. -doc-form pdf converts that Markdown with an\n")
-	fmt.Fprintf(w, "external converter named by -pdf-engine — weasyprint (default), pandoc or\n")
-	fmt.Fprintf(w, "prince — run as a subprocess, never linked in; diagrams are pre-rendered to\n")
-	fmt.Fprintf(w, "SVG with mermaid-cli (mmdc). None of these tools is needed until PDF output\n")
-	fmt.Fprintf(w, "is asked for; scripts/download-doc-pdf-toolchain.sh provisions pinned copies.\n")
+	fmt.Fprintf(w, "CommonMark-compatible Markdown. -doc-form html writes semantic HTML instead,\n")
+	fmt.Fprintf(w, "carrying each element's identity and kind, styled by a stylesheet in a cascade\n")
+	fmt.Fprintf(w, "layer your own CSS overrides without !important. -doc-form pdf converts the\n")
+	fmt.Fprintf(w, "Markdown with an external converter named by -pdf-engine — weasyprint\n")
+	fmt.Fprintf(w, "(default), pandoc or prince — run as a subprocess, never linked in; diagrams\n")
+	fmt.Fprintf(w, "are pre-rendered to SVG with mermaid-cli (mmdc). None of these tools is needed\n")
+	fmt.Fprintf(w, "until PDF output is asked for; scripts/download-doc-pdf-toolchain.sh\n")
+	fmt.Fprintf(w, "provisions pinned copies.\n")
+	fmt.Fprintf(w, "\nHTML output needs nothing external and loads nothing: -html-css adds your own\n")
+	fmt.Fprintf(w, "stylesheets, -html-no-default-css drops the default one, -html-fragment writes\n")
+	fmt.Fprintf(w, "the document element alone to embed in a page of yours, and -html-default-css\n")
+	fmt.Fprintf(w, "writes the default sheet out to start from.\n")
 	fmt.Fprintf(w, "\nThe rendering is the one the view's render member states, and a containment tree\n")
 	fmt.Fprintf(w, "where it states none. It is tool-defined output: SysML v2 specifies the notation,\n")
 	fmt.Fprintf(w, "not how a tool draws it. Notices — an empty view, an element the rendering cannot\n")
@@ -314,11 +338,18 @@ func runCLI() int {
 	flag.StringVar(&renderForm, "render-form", "", "Form -render or -render-all writes: text, mermaid or markdown (default: destination-dependent for -render, each kind's machine form for -render-all)")
 	flag.StringVar(&renderDoc, "render-document", "", "Compile this document definition, run its queries and write the rendered Markdown")
 	flag.StringVar(&renderDocsDir, "render-documents", "", "Render every document definition as linked Markdown into this directory")
-	flag.StringVar(&docForm, "doc-form", "", "Form -render-document writes: markdown (default) or pdf, which drives an external converter")
+	flag.StringVar(&docForm, "doc-form", "", "Form -render-document and -render-documents write: markdown (default), html or pdf, which drives an external converter")
 	flag.StringVar(&pdfEngine, "pdf-engine", "", "Converter -doc-form pdf drives: weasyprint (default), pandoc or prince")
 	flag.BoolVar(&pdfTitlePage, "pdf-title-page", false, "Put the document title on a page of its own (-doc-form pdf)")
 	flag.BoolVar(&pdfTOC, "pdf-toc", false, "Write a table of contents ahead of the content (-doc-form pdf)")
 	flag.BoolVar(&pdfNumbering, "pdf-number-sections", false, "Number the section headings hierarchically (-doc-form pdf)")
+	flag.BoolVar(&pdfTitlePage, "doc-title-page", false, "Put the document title on a page of its own (-doc-form html or pdf)")
+	flag.BoolVar(&pdfTOC, "doc-toc", false, "Write a table of contents ahead of the content (-doc-form html or pdf)")
+	flag.BoolVar(&pdfNumbering, "doc-number-sections", false, "Number the section headings hierarchically (-doc-form html or pdf)")
+	flag.Var(&htmlCSS, "html-css", "Style the HTML with this stylesheet: a file is inlined, a URL is linked (repeatable, applied in order after the default sheet)")
+	flag.BoolVar(&htmlNoCSS, "html-no-default-css", false, "Leave the default stylesheet out, so only -html-css sheets style the document")
+	flag.BoolVar(&htmlShowCSS, "html-default-css", false, "Write the default document stylesheet and exit, as a starting point for your own")
+	flag.BoolVar(&htmlFragment, "html-fragment", false, "Write the document element alone, without the page shell or a stylesheet, to embed in a page of your own")
 	flag.StringVar(&syncDiffWith, "sync-diff", "", "Show the change set between the model and this repository — a graph file (.ttl) or a SysML v2 API endpoint URL — keyed by effective element id, instead of running it; never writes")
 	flag.StringVar(&syncApplyTo, "sync-apply", "", "Apply the change set to the model's project branch at this SysML v2 API endpoint URL, then record the commit in the sync state (token from "+flexo.EnvToken+")")
 	flag.StringVar(&syncBase, "sync-base", "", "Repository graph at the last-seen commit; with it, repository changes since then surface as conflicts")
@@ -338,6 +369,9 @@ func runCLI() int {
 	flag.Var(&modelChecks.states, "state", "Run this state machine, as -state \"Mission rover1\" to run it on an object (repeatable)")
 	flag.Var(&modelChecks.advance, "advance", "Simulated time units to run each -state machine for (default: only its initial transition)")
 	flag.BoolVar(&modelChecks.jsonOut, "json", false, "Report checks as one JSON document rather than as lines")
+	flag.StringVar(&compileCalc, "compile", "", "Compile this calc def to a native executable named by -o, as -compile Pkg::Fib")
+	flag.StringVar(&compileTarget, "target", "c", "Backend -compile generates code for: c (default) or go")
+	flag.BoolVar(&compileSource, "source", false, "With -compile, write the generated source to -o instead of building it")
 	flag.StringVar(&cpuProfilePath, "cpuprofile", "", "Write a CPU profile of the run to this file, for go tool pprof")
 	flag.StringVar(&memProfilePath, "memprofile", "", "Write a heap profile of the run to this file, for go tool pprof")
 	flag.BoolVar(&memStats, "memstats", false, "Report on stderr what the run cost: wall time, memory allocated, memory taken from the OS")
@@ -389,8 +423,37 @@ func runCLI() int {
 		return 2
 	}
 
-	if renderDoc == "" && (docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering) {
-		fmt.Fprintln(os.Stderr, "sysml: -doc-form, -pdf-engine, -pdf-title-page, -pdf-toc and -pdf-number-sections apply to -render-document; name the document to render")
+	// The default stylesheet is asked for on its own; it needs no model, and
+	// writing it is the whole run, so it cannot stand in for another.
+	if htmlShowCSS {
+		switch {
+		case len(args) > 0:
+			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet, which no model shapes; ask for it without model files")
+			return 2
+		case renderDoc != "" || renderDocsDir != "" || renderView != "" || renderAllDir != "" ||
+			convertFormat != "" || flagGiven("sync-diff") || flagGiven("sync-apply") ||
+			queryText != "" || len(evalExprs) > 0 || modelChecks.requested():
+			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet and nothing else; ask for it in its own run")
+			return 2
+		case docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering ||
+			len(htmlCSS) > 0 || htmlNoCSS || htmlFragment:
+			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet itself; the document and stylesheet options shape a rendered document, not the sheet")
+			return 2
+		case fromFormat != "" || strictMode || syncBase != "" || syncState != "" ||
+			syncConfirmDeletes || syncMintIDs || syncAnnotate != "":
+			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet, which reads no input; the input and repository options do not apply")
+			return 2
+		}
+		if err := runDefaultStylesheet(); err != nil {
+			return fail(err)
+		}
+		return exitHolds
+	}
+
+	if renderDoc == "" && renderDocsDir == "" &&
+		(docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering ||
+			len(htmlCSS) > 0 || htmlNoCSS || htmlFragment) {
+		fmt.Fprintln(os.Stderr, "sysml: -doc-form, the document options and the stylesheet options apply to -render-document and -render-documents; name the document to render")
 		return 2
 	}
 
@@ -402,6 +465,35 @@ func runCLI() int {
 		fmt.Fprintln(os.Stderr, "sysml: -sync-apply is empty; name the SysML v2 API endpoint to apply to")
 		return 2
 	}
+	if flagGiven("compile") && compileCalc == "" {
+		fmt.Fprintln(os.Stderr, "sysml: -compile is empty; name the calc def to compile, as -compile Pkg::Fib")
+		return 2
+	}
+	if compileCalc == "" && (flagGiven("target") || compileSource) {
+		fmt.Fprintln(os.Stderr, "sysml: -target and -source apply to -compile; name the calc def to compile")
+		return 2
+	}
+	if compileCalc != "" {
+		switch {
+		case convertFormat != "" || renderView != "" || renderAllDir != "" || renderDoc != "" || renderDocsDir != "" || queryText != "" || len(evalExprs) > 0 || fromFormat != "" || syncDiffWith != "" || syncApplyTo != "":
+			fmt.Fprintln(os.Stderr, "sysml: -compile builds an executable; it cannot be combined with -convert, -render, -render-all, -render-document, -render-documents, -query, -eval, -from, -sync-diff or -sync-apply")
+			return 2
+		case syncBase != "" || syncState != "" || syncConfirmDeletes || syncMintIDs || syncAnnotate != "":
+			fmt.Fprintln(os.Stderr, "sysml: -sync-base, -sync-state, -sync-confirm-deletes, -sync-mint-ids and -sync-annotate apply to -sync-diff or -sync-apply, not to -compile")
+			return 2
+		case modelChecks.requested():
+			return refuse(modelChecks,
+				"-compile builds an executable and decides nothing about the model; check it in its own run")
+		case outputPath == "":
+			fmt.Fprintln(os.Stderr, "sysml: -compile needs -o to name the executable (or the source file, with -source)")
+			return 2
+		}
+		if err := runCompile(args); err != nil {
+			return fail(err)
+		}
+		return exitHolds
+	}
+
 	if syncDiffWith != "" && syncApplyTo != "" {
 		fmt.Fprintln(os.Stderr, "sysml: -sync-diff shows a change set without writing and -sync-apply writes one; ask for one per run")
 		return 2
@@ -434,6 +526,9 @@ func runCLI() int {
 
 	if renderDocsDir != "" {
 		switch {
+		case htmlFragment:
+			fmt.Fprintln(os.Stderr, "sysml: -render-documents writes whole pages linking to one another; -html-fragment writes one document element to embed, so it applies to -render-document")
+			return 2
 		case renderDoc != "":
 			fmt.Fprintln(os.Stderr, "sysml: -render-documents renders every document; -render-document renders one; ask for one per run")
 			return 2
