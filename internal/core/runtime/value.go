@@ -197,30 +197,45 @@ func NewEnumLiteral(sym *symbols.Symbol) Value {
 
 // Str is the text of a ValString; "" for every other kind.
 func (v Value) Str() string {
+	if v.Kind != ValString {
+		return ""
+	}
 	s, _ := v.ref.(string)
 	return s
 }
 
 // Sequence is the collection of a ValSequence; nil for every other kind.
 func (v Value) Sequence() *Sequence {
+	if v.Kind != ValSequence {
+		return nil
+	}
 	seq, _ := v.ref.(*Sequence)
 	return seq
 }
 
 // Set is the collection of a ValSet; nil for every other kind.
 func (v Value) Set() *Set {
+	if v.Kind != ValSet {
+		return nil
+	}
 	set, _ := v.ref.(*Set)
 	return set
 }
 
 // Expr is the deferred expression of a ValExpr; nil for every other kind.
 func (v Value) Expr() ast.Node {
+	if v.Kind != ValExpr {
+		return nil
+	}
 	node, _ := v.ref.(ast.Node)
 	return node
 }
 
 // Quantity is the payload of a ValQuantity; nil for every other kind.
 func (v Value) Quantity() *Quantity {
+	if v.Kind != ValQuantity {
+		return nil
+	}
 	q, _ := v.ref.(*Quantity)
 	return q
 }

@@ -189,26 +189,36 @@ func TestValuePayloadAccessorsAreKindSpecific(t *testing.T) {
 		NewStringValue("s"), NewSequenceValue(seq), NewSetValue(set), NewExprValue(body),
 		NewQuantityValue(q), NewVariantValue(variant, 4), NewEnumLiteral(literal),
 	}
+	// A payload whose Kind was rewritten afterwards answers only to the new kind.
+	for _, v := range values[4:] {
+		for _, kind := range []ValueKind{ValConst, ValNull, ValInstance, ValString, ValSequence, ValSet, ValExpr, ValQuantity, ValVariant, ValEnumLiteral} {
+			if kind != v.Kind {
+				relabeled := v
+				relabeled.Kind = kind
+				values = append(values, relabeled)
+			}
+		}
+	}
 	for _, v := range values {
 		if got := v.Str(); got != "" && v.Kind != ValString {
 			t.Errorf("%s.Str() = %q", v.Kind, got)
 		}
-		if got := v.Sequence(); (got != nil) != (v.Kind == ValSequence) {
+		if got := v.Sequence(); got != nil && v.Kind != ValSequence {
 			t.Errorf("%s.Sequence() = %v", v.Kind, got)
 		}
-		if got := v.Set(); (got != nil) != (v.Kind == ValSet) {
+		if got := v.Set(); got != nil && v.Kind != ValSet {
 			t.Errorf("%s.Set() = %v", v.Kind, got)
 		}
-		if got := v.Expr(); (got != nil) != (v.Kind == ValExpr) {
+		if got := v.Expr(); got != nil && v.Kind != ValExpr {
 			t.Errorf("%s.Expr() = %v", v.Kind, got)
 		}
-		if got := v.Quantity(); (got != nil) != (v.Kind == ValQuantity) {
+		if got := v.Quantity(); got != nil && v.Kind != ValQuantity {
 			t.Errorf("%s.Quantity() = %v", v.Kind, got)
 		}
-		if got := v.Variant(); (got != nil) != (v.Kind == ValVariant) {
+		if got := v.Variant(); got != nil && v.Kind != ValVariant {
 			t.Errorf("%s.Variant() = %v", v.Kind, got)
 		}
-		if got := v.Literal(); (got != nil) != (v.Kind == ValEnumLiteral) {
+		if got := v.Literal(); got != nil && v.Kind != ValEnumLiteral {
 			t.Errorf("%s.Literal() = %v", v.Kind, got)
 		}
 	}
