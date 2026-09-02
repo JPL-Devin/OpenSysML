@@ -123,6 +123,7 @@ exclude_docs: |
   project/pilot-rejection.md
   project/pilot-execution-referee.md
   project/grammar-coverage.md
+  project/validation-constraints.md
   project/element-identity-annotations.md
   project/html-document-backend.md
   project/wave*.md

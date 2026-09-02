@@ -95,6 +95,12 @@ jobs:
           name: Check quoted oracle figures name the round they measured
           command: python3 scripts/check-doc-figures.py
 
+      # The census figures are derived from the committed baseline, and every
+      # table row must be a constraint the baseline records (and vice versa).
+      - run:
+          name: Check the validation-constraint census matches its baseline
+          command: go run ./cmd/validation-census -check
+
       # Each client verifies a download against the copy of the pinned digests it
       # ships, so a copy that drifts from the table pins something else.
       - run:

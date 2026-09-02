@@ -228,7 +228,8 @@ docs-counts: ## Regenerate and verify all derived documentation counts
 	@echo "Regenerating the documentation count lines and refereed figures..."
 	go run ./cmd/doc-counts
 	go run ./cmd/doc-counts -check
-	go test -count=1 ./cmd/pilot-diff ./cmd/pilot-reject ./cmd/doc-counts
+	go run ./cmd/validation-census -check
+	go test -count=1 ./cmd/pilot-diff ./cmd/pilot-reject ./cmd/doc-counts ./cmd/validation-census
 	@echo "✓ Documentation counts and refereed figures are current"
 
 docs-check: ## Verify documentation links, that reader-facing pages cite no internal label, and that quoted oracle figures name their round

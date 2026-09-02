@@ -17,6 +17,14 @@ exist. What is externally checked is enumerated in [the pilot differential](pilo
 what cannot be checked by anything is in
 [What Can't Be Claimed for Spec Compliance](#what-cant-be-claimed-for-spec-compliance).
 
+The rows below are worded in our terms, so they cannot answer "which of the pilot's named
+validation constraints do we implement?" — the pilot validators name each check
+(`validateUsageType`, `validateNamespaceDistinguishablity`, …) and most of those names occur
+nowhere in this map. The [validation-constraint census](validation-constraints.md) is that
+answer: one row per name the pinned pilot jar declares, each mapped to the pass and message that
+reports it here (or recorded as not implemented or not yet adjudicated), with a violating model
+under `cmd/validation-census/testdata/probes/` as the evidence for every mapped row.
+
 **Calculations (14/14 features):**
 - Invocation with typed parameters
 - Result evaluation (both the body's trailing expression and a bound return parameter `return : T = <expr>;`)

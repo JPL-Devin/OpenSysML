@@ -21,6 +21,9 @@ says so at the top.
   declared-intent oracle, advisory
 - **[Grammar coverage](grammar-coverage.md)** — which OMG grammar productions the project's inputs
   exercise, judged by whether an input for each exists, advisory
+- **[Validation-constraint census](validation-constraints.md)** — which of the pilot's named
+  validation constraints OpenSysML reports, each mapped to the pass and message that reports it,
+  with a violating model as evidence; the figures and the name list are gated in CI
 - **[Validation adjudications](wave10-decisions.md)** — the three adjudications the validation work
   depends on, with the measurements behind them
 - **[Parser findings](wave11b-parser-findings.md)** — the two parsing rows that were parser
