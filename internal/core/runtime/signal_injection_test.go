@@ -390,6 +390,216 @@ func TestPostedMessageTheActiveStateDefersIsHeld(t *testing.T) {
 	}
 }
 
+// A timer running out under a false guard fires nothing: LastDispatch says so,
+// for a transition out of the single active hierarchy and for one local to an
+// orthogonal region alike.
+func TestTimerUnderFalseGuardIsNotReportedFired(t *testing.T) {
+	cases := map[string]string{
+		"simple": `
+			private import ScalarValues::*;
+			state Timed {
+				attribute armed : Boolean = false;
+				entry; then waiting;
+				state waiting;
+				transition first waiting accept after 5 if armed then finished;
+				state finished;
+			}
+		`,
+		"region": `
+			private import ScalarValues::*;
+			state Timed parallel {
+				attribute armed : Boolean = false;
+				state left {
+					entry; then waiting;
+					state waiting;
+					transition first waiting accept after 5 if armed then finished;
+					state finished;
+				}
+				state right {
+					entry; then idle;
+					state idle;
+				}
+			}
+		`,
+	}
+	for name, src := range cases {
+		t.Run(name, func(t *testing.T) {
+			idx, _, ctx := buildRuntimeWithLibraries(t, "timed.sysml", parseAndBuild(t, src))
+			root := idx.DocumentRoot("timed.sysml")
+			exec, err := newStateExecutor(ctx, resolveSymbol(t, root, "Timed"), nil)
+			if err != nil {
+				t.Fatalf("newStateExecutor: %v", err)
+			}
+			if err := exec.initialize(); err != nil {
+				t.Fatalf("initialize: %v", err)
+			}
+			if exec.EventQueue().Len() != 1 {
+				t.Fatalf("queued after entering waiting: %d events, want the timer", exec.EventQueue().Len())
+			}
+			if err := exec.ProcessNextEvent(); err != nil {
+				t.Fatalf("ProcessNextEvent(timer): %v", err)
+			}
+			if !exec.isActive(stateNamed(t, exec, "waiting")) {
+				t.Fatalf("waiting left on a timer whose guard is false; active: %v", exec.ActiveStates())
+			}
+			d, ok := exec.LastDispatch()
+			if !ok || d.Event.Type != EventTime {
+				t.Fatalf("LastDispatch = %+v, %v; want the timer dispatched", d, ok)
+			}
+			if d.Fired || d.Deferred {
+				t.Errorf("LastDispatch = %+v; want neither fired nor deferred", d)
+			}
+		})
+	}
+}
+
+// A guard reaching a package-level occurrence not yet built materializes it, and
+// building it would start the behaviors its type exhibits — here a machine whose
+// entry pokes the very door being decided. Decide leaves none of that behind: no
+// object, no behavior attached or pending, no message sent, the door unmoved. The
+// dispatch that follows builds the object for real and runs it.
+func TestDecideLeavesNoBehaviorAGuardMaterializes(t *testing.T) {
+	src := `
+		private import ScalarValues::*;
+		attribute def Poke;
+		state def Ticker {
+			entry; then idle;
+			state idle { entry send Poke() to door; }
+		}
+		part def Sensor {
+			attribute level : Integer = 3;
+			exhibit state ticker : Ticker;
+		}
+		part sensor : Sensor;
+		state def Gate {
+			entry; then shut;
+			state shut;
+			transition first shut accept Poke if sensor.level > 0 then open;
+			state open;
+		}
+		part def Door { exhibit state gate : Gate; }
+		part door : Door;
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "gate.sysml", parseAndBuild(t, src))
+	root := idx.DocumentRoot("gate.sysml")
+	door, err := ctx.occurrenceOf(resolveSymbol(t, root, "door"))
+	if err != nil {
+		t.Fatalf("occurrenceOf(door): %v", err)
+	}
+	gate, _ := door.ExhibitedState()
+	poke, err := ctx.SignalMessage(resolveSymbol(t, root, "Poke"), nil, door)
+	if err != nil {
+		t.Fatalf("SignalMessage(Poke): %v", err)
+	}
+	sensor := resolveSymbol(t, root, "sensor")
+	if _, built := ctx.occurrences[sensor]; built {
+		t.Fatal("sensor is built before anything reads it")
+	}
+	instances, behaviors, pending, messages := len(ctx.instances), len(ctx.objectBehaviors), len(ctx.pendingBehaviors), len(ctx.messages)
+
+	if d, err := gate.State.Decide(poke); err != nil || len(d.Fires) != 1 {
+		t.Fatalf("Decide(Poke) = %+v, %v; want the guarded transition firing", d, err)
+	}
+	if _, built := ctx.occurrences[sensor]; built {
+		t.Error("the sensor the guard read outlives the decision")
+	}
+	if len(ctx.instances) != instances || len(ctx.objectBehaviors) != behaviors || len(ctx.pendingBehaviors) != pending || len(ctx.messages) != messages {
+		t.Errorf("after Decide: %d objects, %d behaviors (%d pending), %d messages; want %d, %d (%d), %d as before",
+			len(ctx.instances), len(ctx.objectBehaviors), len(ctx.pendingBehaviors), len(ctx.messages),
+			instances, behaviors, pending, messages)
+	}
+	if _, ok := ctx.nextRunnableBehavior(); ok {
+		t.Error("a behavior is left runnable after Decide")
+	}
+	if got := activeLeaf(gate.State); got != "shut" {
+		t.Fatalf("state after Decide = %s, want shut: the decision moved the machine", got)
+	}
+
+	ctx.PostMessage(poke)
+	if err := gate.State.ProcessNextEvent(); err != nil {
+		t.Fatalf("ProcessNextEvent(Poke): %v", err)
+	}
+	if got := activeLeaf(gate.State); got != "open" {
+		t.Fatalf("state after Poke = %s, want open", got)
+	}
+	id, built := ctx.occurrences[sensor]
+	if !built {
+		t.Fatal("dispatching Poke did not build the sensor its guard reads")
+	}
+	ticker, ok := ctx.instances[id].ExhibitedState()
+	if !ok || activeLeaf(ticker.State) != "idle" {
+		t.Fatalf("the built sensor runs no ticker at idle: ok=%v", ok)
+	}
+}
+
+// A message routed to a port of the machine is deferred as one addressed to the
+// machine is: busy defers Ping, which arrives at inPort while busy is active
+// and no transition accepts it there, so the machine takes and holds it; once a
+// timer moves it to ready the held Ping is recalled and taken via inPort.
+func TestPortRoutedMessageTheActiveStateDefersIsHeld(t *testing.T) {
+	src := `
+		item def Ping;
+		port def PingPort { in item ping : Ping; }
+		state Radio {
+			port outPort : PingPort;
+			port inPort : PingPort;
+			connect outPort to inPort;
+			entry; then busy;
+			state busy {
+				defer Ping;
+				entry send Ping() via outPort;
+			}
+			transition first busy accept after 5 then ready;
+			state ready;
+			transition first ready accept Ping via inPort then finished;
+			state finished;
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "radio.sysml", parseAndBuild(t, src))
+	root := idx.DocumentRoot("radio.sysml")
+	exec, err := newStateExecutor(ctx, resolveSymbol(t, root, "Radio"), nil)
+	if err != nil {
+		t.Fatalf("newStateExecutor: %v", err)
+	}
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	pending := ctx.PendingMessages()
+	if len(pending) != 1 || pending[0].Port != "inPort" {
+		t.Fatalf("after entering busy, on the bus: %+v; want Ping routed to inPort", pending)
+	}
+	if !exec.AcceptsMessage(pending[0]) {
+		t.Fatal("Ping at inPort, deferred in busy, is not taken")
+	}
+	if d, err := exec.Decide(pending[0]); err != nil || !d.Deferred || len(d.Fires) != 0 {
+		t.Errorf("Decide(Ping via inPort) = %+v, %v; want deferred and nothing firing", d, err)
+	}
+	if err := exec.ProcessNextEvent(); err != nil {
+		t.Fatalf("ProcessNextEvent(Ping): %v", err)
+	}
+	if got := activeLeaf(exec); got != "busy" {
+		t.Fatalf("state after a deferred Ping = %s, want busy", got)
+	}
+	if held := exec.DeferredEvents(); len(held) != 1 || len(ctx.PendingMessages()) != 0 {
+		t.Fatalf("Ping held = %d, on the bus = %d; want held once and off the bus", len(held), len(ctx.PendingMessages()))
+	}
+	if err := exec.ProcessNextEvent(); err != nil {
+		t.Fatalf("ProcessNextEvent(timer): %v", err)
+	}
+	if got := activeLeaf(exec); got != "ready" {
+		t.Fatalf("state after the timer = %s, want ready", got)
+	}
+	if held := exec.DeferredEvents(); len(held) != 0 || exec.EventQueue().Len() != 1 {
+		t.Fatalf("after leaving busy: held = %d, queued = %d; want Ping recalled to the queue", len(held), exec.EventQueue().Len())
+	}
+	if err := exec.ProcessNextEvent(); err != nil {
+		t.Fatalf("ProcessNextEvent(recalled Ping): %v", err)
+	}
+	if got := activeLeaf(exec); got != "finished" {
+		t.Fatalf("state after the recalled Ping = %s, want finished", got)
+	}
+}
+
 // ExhibitedMachineOf finds the machine an object runs by its definition or its
 // usage, and none on an object exhibiting no such machine.
 func TestExhibitedMachineOf(t *testing.T) {

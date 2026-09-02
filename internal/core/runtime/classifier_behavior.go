@@ -157,8 +157,12 @@ func (ctx *Context) classifierBehaviorsOf(typeSym *symbols.Symbol) []classifierB
 // type exhibits or performs, and runs those executions to quiescence: no due
 // event, no runnable do action, no deliverable message. A start reached from
 // inside a running behavior only attaches, leaving the run to the outermost
-// start, so materializing objects that exhibit each other terminates.
+// start, so materializing objects that exhibit each other terminates. A probe
+// starts nothing: what a behavior does to objects outliving it cannot be undone.
 func (ctx *Context) startClassifierBehaviors(inst *Instance, mark int) error {
+	if ctx.probes > 0 {
+		return nil
+	}
 	return ctx.startClassifierBehaviorsOf([]*Instance{inst}, mark)
 }
 

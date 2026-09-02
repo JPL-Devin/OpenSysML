@@ -145,6 +145,8 @@ type Context struct {
 	// OPENSYSML_CALC_COMPILE escape hatch clears it.
 	compileCalcs bool
 
+	// probes is the number of probes under way; see beginProbe.
+	probes int
 	// runDepth is the number of runs currently under way, so the step counter is
 	// reset per run rather than accumulated over the context's whole life.
 	runDepth int
@@ -371,10 +373,14 @@ func (ctx *Context) beginExecutorRun(started *bool) func() {
 
 // beginProbe brackets an evaluation previewing what a run would do: it spends the
 // run's budget while it lasts, so a runaway stays bounded, and refunds it after.
+// A probe starts no behavior (see startClassifierBehaviors), so an object it
+// materializes reads as declared and is discarded with it.
 func (ctx *Context) beginProbe() func() {
 	steps, elements := ctx.steps, ctx.elements
 	ctx.runDepth++
+	ctx.probes++
 	return func() {
+		ctx.probes--
 		ctx.runDepth--
 		ctx.steps, ctx.elements = steps, elements
 	}
