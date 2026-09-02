@@ -1,10 +1,14 @@
 package opensysml
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
+)
 
 // Value is one evaluated SysML value. It is a sealed sum: the concrete types
-// are Int, Real, Bool, String, InstanceID, Sequence, Null, Unset, Quantity and
-// EnumLiteral, and a type switch over them is exhaustive.
+// are Int, Real, Complex, Bool, String, InstanceID, Sequence, Null, Unset,
+// Quantity and EnumLiteral, and a type switch over them is exhaustive.
 type Value interface {
 	isValue()
 }
@@ -21,6 +25,10 @@ type Int int64
 
 // Real is a real value.
 type Real float64
+
+// Complex is one complex number, never a sequence of two Reals. It is not a
+// Number: a quantity's magnitude is a real magnitude.
+type Complex complex128
 
 // Bool is a boolean value.
 type Bool bool
@@ -92,6 +100,11 @@ func (q Quantity) String() string {
 	return magnitude + " " + q.Unit
 }
 
+// String renders the number in rectangular form as SysML writes it: `1.5 - 2.0i`.
+func (z Complex) String() string {
+	return runtime.FormatComplex(complex128(z))
+}
+
 // String is the literal as a reader writes it, the Name the service reported.
 func (e EnumLiteral) String() string {
 	return e.Name
@@ -113,6 +126,7 @@ func (Unset) String() string {
 
 func (Int) isValue()         { /* marker: closed Value set */ }
 func (Real) isValue()        { /* marker: closed Value set */ }
+func (Complex) isValue()     { /* marker: closed Value set */ }
 func (Bool) isValue()        { /* marker: closed Value set */ }
 func (String) isValue()      { /* marker: closed Value set */ }
 func (InstanceID) isValue()  { /* marker: closed Value set */ }

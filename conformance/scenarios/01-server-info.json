@@ -23,6 +23,7 @@
             "evaluate_subject",
             "symbol_attributes",
             "unset_value",
+            "complex_values",
             "apply_edits",
             "strict_conformance",
             "feature_values",

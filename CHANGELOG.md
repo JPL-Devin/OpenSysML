@@ -135,6 +135,18 @@ No model that validated under 0.4.2 stops validating and no import path moves.
 
 ### Added
 
+- **A complex number crosses the wire as one value.** `Value` gains a `complex` arm carrying the
+  real and imaginary parts as two doubles, so a `Complex` feature value, evaluation result, action
+  output or calc result arrives as one number rather than the `unsupported` null it was reported
+  as, and a complex action input or calc argument is accepted. Every shipped client maps it to one
+  native value — Go `opensysml.Complex`, Python `complex`, TypeScript `ComplexValue`, Java
+  `Value.ComplexValue`, Rust `Value::Complex` — and prints it in rectangular form. The service
+  advertises the `complex_values` capability; without it, a complex in a response is the
+  unsupported null as before, and a complex sent in a request is refused with `UNIMPLEMENTED`.
+  The Go and Python clients check the capability before sending one, so an older service is a
+  capability error rather than an input silently read as null. The Python generator emits
+  `complex` for a `Complex` feature (emission schema `4`).
+
 - **An element declares its repository identity in the notation.** `@ElementId { id = "…"; }`
   annotates the element it is written about, and `@ProjectRef { projectId = "…"; }` on a root
   namespace binds the document to its repository, so element-level ids inherit their scope.

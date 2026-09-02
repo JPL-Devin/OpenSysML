@@ -32,7 +32,7 @@ _OBJECT_DECODER = "_t.as_object"
 
 # Emission schema, bumped when this generator's output changes for an unchanged
 # model. Not the opensysml release version, which would churn every module.
-GENERATOR_VERSION = "3"
+GENERATOR_VERSION = "4"
 
 # The stamp hashes the model source client-side. A path, a timestamp or the
 # service version would churn without the module's content changing.
@@ -72,10 +72,12 @@ PRIMITIVE_TYPES = {
     "Integer": "int",
     "Rational": "float",
     "Real": "float",
+    "Complex": "complex",
 }
 
-# Library scalars with no sound Python counterpart, mapped to `object`.
-UNMAPPED_PRIMITIVES = frozenset({"Complex", "Number"})
+# Library scalars with no sound Python counterpart, mapped to `object`: Number is
+# the supertype of every numeric scalar, so a Number slot may hold any of them.
+UNMAPPED_PRIMITIVES = frozenset({"Number"})
 
 # Members TypedObject itself provides; a property of the same name would shadow
 # the machinery the accessors use, so such a feature is renamed.

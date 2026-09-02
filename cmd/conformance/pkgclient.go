@@ -692,6 +692,8 @@ func valueToProto(value opensysml.Value) *pb.Value {
 		return &pb.Value{Kind: &pb.Value_IntValue{IntValue: int64(v)}}
 	case opensysml.Real:
 		return &pb.Value{Kind: &pb.Value_RealValue{RealValue: float64(v)}}
+	case opensysml.Complex:
+		return &pb.Value{Kind: &pb.Value_Complex{Complex: &pb.Complex{Real: real(v), Imaginary: imag(v)}}}
 	case opensysml.Bool:
 		return &pb.Value{Kind: &pb.Value_BoolValue{BoolValue: bool(v)}}
 	case opensysml.String:
@@ -740,6 +742,8 @@ func valueFromProto(value *pb.Value) opensysml.Value {
 		return opensysml.Int(kind.IntValue)
 	case *pb.Value_RealValue:
 		return opensysml.Real(kind.RealValue)
+	case *pb.Value_Complex:
+		return opensysml.Complex(complex(kind.Complex.GetReal(), kind.Complex.GetImaginary()))
 	case *pb.Value_BoolValue:
 		return opensysml.Bool(kind.BoolValue)
 	case *pb.Value_StringValue:

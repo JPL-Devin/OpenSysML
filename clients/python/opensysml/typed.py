@@ -156,6 +156,15 @@ def as_float(feature_name: str, value: object) -> float:
     raise _mismatch(feature_name, "float", value)
 
 
+def as_complex(feature_name: str, value: object) -> complex:
+    """Decode a Complex feature value; a real value widens to complex."""
+    if isinstance(value, bool):
+        raise _mismatch(feature_name, "complex", value)
+    if isinstance(value, (complex, float, int)):
+        return complex(value)
+    raise _mismatch(feature_name, "complex", value)
+
+
 def as_str(feature_name: str, value: object) -> str:
     """Decode a String feature value."""
     if isinstance(value, str):
