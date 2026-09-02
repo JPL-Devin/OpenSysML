@@ -459,7 +459,7 @@ func (d *decoder) expressionBodyText(node rdf.Term, scope string) (string, error
 // parameter a graph states as a bare name literal is that name alone.
 func (d *decoder) bodyParameterText(param rdf.Term, scope string) (string, error) {
 	if !param.IsIRI() {
-		return "in " + param.Value + ";", nil
+		return "in " + nameText(param.Value) + ";", nil
 	}
 	el := &element{iri: param.Value, scope: scope, expressions: map[string]string{}}
 	name, ok := d.stringOf(el, rdf.SysML+pDeclaredName)

@@ -198,6 +198,27 @@ func TestExpressionBodyKeepsTheOrderOfItsDeclarations(t *testing.T) {
 	}
 }
 
+// A graph written before parameters became nodes states each one as a name
+// literal; an unrestricted name among them comes back quoted.
+func TestExpressionBodyParameterLiteralIsQuoted(t *testing.T) {
+	turtle := string(withoutTriples(t, convertFixture(t, "result_expressions"), "sysx:sourceText"))
+	const node = "sysx:bodyParameter expr:Results__Quoted___401_presultExpression_pin0 ;"
+	if !strings.Contains(turtle, node) {
+		t.Fatalf("expected the parameter node of the Quoted body in the graph:\n%s", turtle)
+	}
+	turtle = strings.Replace(turtle, node, `sysx:bodyParameter "the input" ;`, 1)
+	back, err := export.Convert("m.ttl", []byte(turtle), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from a literal parameter: %v", err)
+	}
+	if want := "{ in 'the input'; ('the input' + x) }"; !strings.Contains(string(back), want) {
+		t.Errorf("the notation rebuilt from the graph lacks %q:\n%s", want, back)
+	}
+	if _, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle); err != nil {
+		t.Fatalf("the rebuilt notation should parse: %v", err)
+	}
+}
+
 // A body parameter is named; a graph stating one without a name is refused,
 // naming the parameter, since `in ;` declares nothing the result could read.
 func TestExpressionBodyParameterNeedsItsName(t *testing.T) {
