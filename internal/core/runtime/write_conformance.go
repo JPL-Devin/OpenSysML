@@ -109,7 +109,7 @@ func storeBodyValue(ctx *Context, host stmtHost, env *stmtEnv, name string, valu
 	if err := ctx.checkBodyWrite(host, s, value); err != nil {
 		return err
 	}
-	env.data[name] = value
+	env.data.set(name, value)
 	return nil
 }
 

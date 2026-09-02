@@ -14,11 +14,11 @@ import (
 
 // EvalContext is the lexical environment during evaluation (Tier 3).
 type EvalContext struct {
-	ctx    *Context           // runtime context
-	scope  *symbols.Scope     // scope context for name resolution
-	self   *Instance          // instance a feature name resolves against, nil when unbound
-	frames []map[string]Value // stack of local bindings (innermost = frames[len-1])
-	trace  *TraceRecorder     // evaluation trace recorder, nil when not tracing
+	ctx    *Context       // runtime context
+	scope  *symbols.Scope // scope context for name resolution
+	self   *Instance      // instance a feature name resolves against, nil when unbound
+	frames []frame        // stack of local bindings (innermost = frames[len-1])
+	trace  *TraceRecorder // evaluation trace recorder, nil when not tracing
 
 	// features are the features of the element being evaluated — a requirement's
 	// or constraint's own, inherited and rebound features — which its conditions
@@ -93,7 +93,7 @@ func (ec *EvalContext) evalIn(scope *symbols.Scope) *EvalContext {
 // environment, for a declaration nested in the body being evaluated: its
 // bindings stay in force under whatever frame the nested declaration pushes.
 func (ec *EvalContext) nestedEnv(scope *symbols.Scope) *EvalContext {
-	frames := make([]map[string]Value, len(ec.frames))
+	frames := make([]frame, len(ec.frames))
 	copy(frames, ec.frames)
 	return &EvalContext{
 		ctx: ec.ctx, scope: scope, self: ec.self, frames: frames, trace: ec.trace,
@@ -104,7 +104,12 @@ func (ec *EvalContext) nestedEnv(scope *symbols.Scope) *EvalContext {
 
 // Push adds a new frame to the stack (on calc invocation, lambda entry).
 func (ec *EvalContext) Push(bindings map[string]Value) {
-	ec.frames = append(ec.frames, bindings)
+	ec.frames = append(ec.frames, mapFrame(bindings))
+}
+
+// pushFrame adds a frame to the stack.
+func (ec *EvalContext) pushFrame(f frame) {
+	ec.frames = append(ec.frames, f)
 }
 
 // Pop removes the top frame from the stack (on return, lambda exit).
@@ -117,7 +122,7 @@ func (ec *EvalContext) Pop() {
 // Lookup searches for a name in the frame stack (innermost first).
 func (ec *EvalContext) Lookup(name string) (Value, bool) {
 	for i := len(ec.frames) - 1; i >= 0; i-- {
-		if val, ok := ec.frames[i][name]; ok {
+		if val, ok := ec.frames[i].lookup(name); ok {
 			return val, true
 		}
 	}
@@ -288,6 +293,19 @@ const thisName = "this"
 // evalName evaluates a name as a reference to what it names, which is what an
 // expression written as a bare name is: `rate`, `A::B::x`.
 func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
+	// Outside an expression body no body-local declaration can shadow a bound
+	// name, so a frame binding is the answer: the common case, kept small.
+	if qn != nil && len(qn.Parts) == 1 && (ec.scope == nil || !ec.scope.BodyLocal()) {
+		if val, ok := ec.Lookup(qn.Parts[0].Text); ok {
+			return val, nil
+		}
+	}
+	return ec.evalNameGeneral(qn)
+}
+
+// evalNameGeneral evaluates a name through every source that may answer it, in
+// shadowing order.
+func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 	if qn == nil || len(qn.Parts) == 0 {
 		return Value{}, fmt.Errorf("empty feature reference")
 	}
