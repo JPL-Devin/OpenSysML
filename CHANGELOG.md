@@ -8,6 +8,20 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Added
 
+- **The bundled standard library opens in the editor.** Go-to-definition, find-references
+  and the diagram panel used to report a standard library declaration at a path no editor
+  could open, so a click on `ScalarValues::Integer` went nowhere. `sysml-lsp` now reports
+  such a location under the `sysml-stdlib:` scheme — the file's path within the library —
+  with its line and column computed from the bundled text, and serves that text through the
+  `opensysml/stdlibContent` request, announced as `openSysmlStdlibContent` in the
+  `initialize` result. The VS Code extension registers a provider for the scheme, so
+  <kbd>Ctrl</kbd>+click on a library name opens the bundled file in a read-only editor on the
+  declaring line; hover, go-to-definition, the outline and semantic highlighting work inside
+  it, so navigation continues from one library file into the next. Opening or closing such a
+  document changes nothing, and an edit to one is refused with an error rather than applied:
+  the library is what every diagnostic is judged against. Other LSP clients get the same by
+  registering a content provider for the scheme that calls the request.
+
 - **A model's change set applies to a live repository, keyed by identity.**
   `sysml model.sysml -sync-apply http://localhost:8083` diffs the model against its project
   branch on a running SysML v2 API (Flexo MMS) and writes the change set as one commit through

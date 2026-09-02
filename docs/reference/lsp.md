@@ -6,11 +6,13 @@ and the server announces that it serves them by advertising, in the `initialize`
 result:
 
 ```json
-{ "capabilities": { "experimental": { "openSysmlRender": true, "openSysmlRenderDocument": true } } }
+{ "capabilities": { "experimental": {
+    "openSysmlRender": true, "openSysmlRenderDocument": true, "openSysmlStdlibContent": true } } }
 ```
 
 `openSysmlRender` covers the view-rendering methods, `openSysmlRenderDocument`
-the document-rendering ones.
+the document-rendering ones, and `openSysmlStdlibContent` the request that serves
+the bundled standard library's text.
 
 A client that does not see that capability must not send these methods. That is
 how a new client and an older server stay compatible.
@@ -208,6 +210,49 @@ document, or names a document whose planning or query execution fails, the
 request fails with the typed error's message (for example `Observatory::Subsystem
 is not a document: one is a part def specializing DocumentQueries::Document`)
 rather than crashing or answering with partial output.
+
+## `opensysml/stdlibContent` (request)
+
+The server bundles the standard library, so a definition, reference, hover or
+rendering origin may land in a library file no client has on disk. Such a
+location is reported under the `sysml-stdlib` scheme, whose path is the file's
+path within the library, percent-encoded:
+
+```json
+{ "uri": "sysml-stdlib:///Kernel%20Libraries/Kernel%20Data%20Type%20Library/ScalarValues.kerml",
+  "range": { "start": { "line": 19, "character": 1 }, "end": { "line": 20, "character": 1 } } }
+```
+
+That is where `ScalarValues.kerml` declares `datatype Integer specializes Rational;`.
+
+Positions are in UTF-16 code units of the bundled text, as they are for workspace
+files. This request serves that text, so a client can show the location:
+
+```json
+{ "uri": "sysml-stdlib:///Kernel%20Libraries/Kernel%20Data%20Type%20Library/ScalarValues.kerml" }
+```
+
+```json
+{ "text": "standard library package ScalarValues {\n\tdoc\n\t/*\n…" }
+```
+
+A URI of another scheme, or one naming no library file, fails with an
+invalid-params error. A client that opens the document may then send it the
+ordinary requests — hover, definition, references, document symbols, semantic
+tokens — against the `sysml-stdlib:` URI; the server answers from the bundled
+text, so navigation continues from one library file into another. References
+list the workspace's uses of a library element and, with the declaration asked
+for, its library declaration; uses inside the library itself are not enumerated.
+`textDocument/didOpen` and `didClose` for such a URI are accepted and change
+nothing: the text a client sends is ignored in favour of the bundled one, and
+closing removes nothing from the library. `textDocument/didChange` is refused
+with an invalid-request error — reported to the user through `window/showMessage`
+as well — and is never applied: the library is read-only.
+
+The VS Code extension registers a content provider for the scheme that calls this
+request, so <kbd>Ctrl</kbd>+click on a library name opens the file in a read-only
+editor. Another client needs the same: a provider for `sysml-stdlib` documents
+that fetches their text with `opensysml/stdlibContent`.
 
 ## `opensysml/renderChanged` (notification, server → client)
 
