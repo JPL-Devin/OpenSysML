@@ -1340,6 +1340,8 @@ are tracked here):
 
 ### Major Features Not Implemented (UML-referenced; no SysML v2 notation or KerML performance)
 
+The behavior-execution entries below — interruptible regions, expansion regions, streaming pins, protocol state machines, positional operation arguments, routing to a second object — and a `terminate` in a body, which the runtime refuses (`'terminate' in a body is not executable`), each have a stated scope, dependency order and acceptance gate as [Track E of the roadmap](roadmap.md#track-e--behavior-execution); none is near-term.
+
 **Activity Diagrams (Advanced):**
 - Interruptible regions
 - Expansion regions (parallel/iterative)
@@ -1352,7 +1354,7 @@ are tracked here):
 
 **Object Model:**
 - Dynamic object creation/destruction (an object is materialized once, and nothing destroys it)
-- Operation invocation given as a `calc` or `constraint`, or with positional arguments (an action operation with named arguments runs — see the Classifier Behaviors map)
+- Operation invocation with positional arguments (an operation with named arguments runs, whether it is an action, a `calc` or a `constraint` — see the Classifier Behaviors map)
 - Routing to a second object of one usage (a `via` send follows the connections and an addressed send resolves an object, but the object reached is the one this context holds as its target's occurrence — see Known Limitations)
 
 **Type System:**

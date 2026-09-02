@@ -52,6 +52,17 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   traversal per run so a loop is left after its first pass. The executor is unchanged; the
   compliance rows for the join, the merge and concurrent same-feature writes cite the cases and
   stay approximate.
+- **The RDF round trip is measured over every example, and pinned per file.** `TestCorpusRoundTrip`
+  converts each of the 345 models under `examples/` — the committed models, the OMG training
+  corpus and the three pilot corpora — notation → Turtle → notation → Turtle and compares the two
+  graphs as triple sets, so a writer or encoder change that moves any file's verdict in either
+  direction fails the suite and is adjudicated, as the pilot corpora gate already does for
+  diagnostics. The baseline records 166 files stable, 71 stable up to the whitespace inside
+  `sysx:sourceText`, 14 that come back as a different graph, 15 that cannot be written back,
+  2 whose written notation no longer converts and 77 refused on the first hop, each refusal
+  classed by the construct it names. The mapping's reference now states that measurement in place
+  of the claim that a second conversion yields the same graph, which held for the fixtures alone
+  ([docs/project/rdf-corpus-roundtrip.md](docs/project/rdf-corpus-roundtrip.md)).
 
 ### Performance
 
@@ -96,6 +107,26 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   feature chains, collections, quantities, strings, locals, non-literal defaults, redeclared
   parameters) stays on the evaluator, as does every traced, named-argument or non-scalar
   invocation. `OPENSYSML_CALC_COMPILE=0` turns the tier off for bisecting.
+
+- **The compiled calc tier takes the bodies analysis models write.** Four constructs join the
+  compiled subset, each reproducing the reference evaluator's values, error text and step counts
+  exactly: statement bodies of body-local scalar declarations, `return` and `if`/`else`, compiled
+  from the lowered statements into further slots of the scalar frame with the evaluator's
+  declaration-order and shadowing rules (a local read before its declaration, a local without a
+  value, a body that may run off its end, `out` features, loops and assignments stay on the
+  evaluator); parameters redefined along the specialization chain (`in :>> x = 3.0;`,
+  `in x :>> Base::x : Integer;`), laid out as the effective parameter list the evaluator binds; the
+  standard library's scalar functions and constants (`sqrt`, `ln`, `exp`, `abs`, `floor`, `round`,
+  `min`, `max`, the trigonometric functions, `deg`, `rad`, `TrigFunctions::pi`, …), dispatched
+  through the resolved symbol to the Go implementation the evaluator uses — so an alias or an
+  import reaches it and a model's own `sqrt` does not — and `sum`/`product` over a lone scalar;
+  and named arguments (`Fib(k = n - 1)`), bound to slots at compile time with the evaluator's
+  arity and unknown-name checks ahead of dispatch. Over the repository's fixtures, examples and
+  the OMG corpora the tier now compiles 127 of 343 calc definitions (37%) instead of 42 of 263
+  (16%); a recursive tree of three-local bodies calling `sqrt` runs 12.6× faster (10.4 ms instead
+  of 132 for 131 071 invocations) and `Fib(25)` is unchanged at 21–23 ns per invocation. The
+  differential test now also compares Reals bit for bit over ±0.0, ±Inf and NaN, and focused
+  fixtures under `internal/core/runtime/testdata/compiled/` run each construct through both tiers.
 
 ### Changed
 
@@ -336,6 +367,17 @@ No model that validated under 0.4.2 stops validating and no import path moves.
   alone, and a directory without a stamp is left alone with a warning.
 
 ### Fixed
+
+- **An OSLC query's unknown-property diagnostic names properties the query can be written with.**
+  `sysml:id="x"` answered with the Go API's own property names (`@id, @type, declaredName, …`), so a
+  caller who wrote one back got a second, different error: `@type` and `@id` are not OSLC query text.
+  The list is now the OSLC predicates (`rdf:type, sysml:declaredName, …`), derived from the mapping
+  the parser reads, and `@type`/`@id` name their OSLC spelling instead — `rdf:type`, and identity,
+  which every result reports rather than asks for. The list follows the query's own `oslc.prefix`
+  bindings, since a rebound `sysml` or `rdf` changes what the parser accepts. An `oslc.prefix`
+  binding whose prefix no prefixed name can be written with (`!s=<…>`) is refused where it is
+  bound rather than accepted and never usable, and a prefix of letters outside ASCII
+  (`sÿsml=<…>`) now scans as one name in a query instead of ending mid-letter.
 
 - **An anonymous `doc` or `comment` before a kind keyword is kept.** `doc /* … */` followed by
   `attribute a;` in a definition or usage body parsed as an attribute prefixed by `doc`, so the
