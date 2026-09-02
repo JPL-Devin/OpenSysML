@@ -150,10 +150,8 @@ func xmlCatalog(p *Partition, baseIRI string) ([]byte, error) {
 	return append(append([]byte(xml.Header), body...), '\n'), nil
 }
 
-// WriteOutputs replaces the generated files under dir with outputs. Every
-// output is first written to a staging directory beside dir, so a failed
-// write leaves the existing tree untouched; only then are the stale .ttl,
-// catalogs and version file removed and the staged files moved into place.
+// WriteOutputs replaces the generated files under dir with outputs, staging
+// them in a sibling directory first so a failed write leaves dir untouched.
 func WriteOutputs(dir string, outputs []Output) (err error) {
 	existing, err := listOutputs(dir)
 	if err != nil {
