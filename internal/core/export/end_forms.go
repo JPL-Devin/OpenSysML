@@ -350,7 +350,7 @@ func (d *decoder) relatedEnds(el *element) (ends []string, payload string, err e
 	}
 	var ordered []end
 	for _, term := range d.graph.Objects(rdf.IRI(el.iri), rdf.OpenSysML+xRelatedFeature) {
-		text, err := d.expressionNodeText(term, el.scope)
+		text, err := d.expressionNodeText(term, el)
 		if err != nil {
 			return nil, "", err
 		}

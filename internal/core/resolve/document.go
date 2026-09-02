@@ -111,6 +111,12 @@ func (r *Resolver) resolveNamespaceDecl(scope *symbols.Scope, decl ast.Node) boo
 			r.ResolveQualified(scope, s)
 		}
 		return true
+	case *ast.MultiplicityDecl:
+		r.resolveMultiplicity(scope, d.Range)
+		if d.Subsets != nil {
+			r.ResolveQualified(scope, d.Subsets)
+		}
+		return true
 	case *ast.Comment:
 		for _, a := range d.About {
 			r.ResolveQualified(scope, a)
@@ -235,7 +241,7 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		}
 		return true
 	case *ast.InitialNode:
-		// Only resolve successor, not the name (which is just a label)
+		r.resolveInitial(scope, d)
 		if d.Successor != nil {
 			r.ResolveQualified(scope, d.Successor)
 		}
@@ -330,6 +336,9 @@ func (r *Resolver) resolveBehaviorDecl(scope *symbols.Scope, decl ast.Node) bool
 		r.ResolveEndpoint(scope, d.Source)
 		r.ResolveEndpoint(scope, d.Target)
 		r.resolveTrigger(scope, d.Trigger)
+		if d.Via != nil {
+			r.ResolveQualified(scope, d.Via)
+		}
 		body := symbols.TriggerScope(scope, d)
 		r.resolveExpr(body, d.Guard)
 		r.walkMembers(body, d.Effect)
@@ -1282,7 +1291,9 @@ func (r *Resolver) getOperandSymbol(scope *symbols.Scope, e ast.Node) *symbols.S
 		var ok bool
 		if len(v.Name.Parts) == 1 && !v.Name.Global {
 			sym, ok = r.LookupName(scope, v.Name.Parts[0].Text)
-			if !ok {
+			if ok {
+				r.resolvedPart(v.Name, 0, sym)
+			} else {
 				sym, ok = r.ResolveQualified(scope, v.Name)
 			}
 		} else {

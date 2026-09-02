@@ -92,6 +92,9 @@ type Resolver struct {
 	// endpoints are the vertices transition endpoints resolve to, memoized per
 	// name node: lowering consumes what this tier resolved (see ResolveEndpoint).
 	endpoints map[*ast.QualifiedName]resolution
+	// initials are the body members `first x` names, memoized per node: a name
+	// no member of the body answers to is a label the node declares.
+	initials map[*ast.InitialNode]*symbols.Symbol
 	// imports are the import declarations of a namespace-bearing node, found once
 	// and kept: see (*Resolver).importsOf.
 	imports          map[ast.Node][]*ast.Import
@@ -162,6 +165,7 @@ func New(idx *symbols.Index) *Resolver {
 		parts:            map[*ast.QualifiedName][]*symbols.Symbol{},
 		aliasNames:       map[*ast.QualifiedName][]*symbols.Symbol{},
 		endpoints:        map[*ast.QualifiedName]resolution{},
+		initials:         map[*ast.InitialNode]*symbols.Symbol{},
 		imports:          map[ast.Node][]*ast.Import{},
 		importStack:      map[*ast.Import]bool{},
 		resolvingImports: map[*ast.Import]bool{},
@@ -225,6 +229,34 @@ func (r *Resolver) PartSymbol(qn *ast.QualifiedName, i int) (*symbols.Symbol, bo
 		return nil, false
 	}
 	return syms[i], true
+}
+
+// EndSymbol returns the element the edge end qn resolved to during a previous
+// resolution: the vertex a transition endpoint was judged as, which may differ
+// from what its segments alone name, or otherwise its last segment's symbol.
+func (r *Resolver) EndSymbol(qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+	if res, done := r.endpoints[qn]; done {
+		return res.sym, res.ok
+	}
+	return r.PartSymbol(qn, len(qn.Parts)-1)
+}
+
+// resolveInitial binds `first x` to the member of the body x names, if any:
+// lowering starts the flow there instead of at the node (see lower).
+func (r *Resolver) resolveInitial(scope *symbols.Scope, n *ast.InitialNode) {
+	if n.Name == "" {
+		return
+	}
+	if sym, ok := scope.LookupLocal(n.Name); ok && sym.Decl != ast.Node(n) {
+		r.initials[n] = sym
+	}
+}
+
+// InitialSymbol returns the body member the initial node's name resolved to,
+// or false where the name is a label the node itself declares.
+func (r *Resolver) InitialSymbol(n *ast.InitialNode) (*symbols.Symbol, bool) {
+	sym, ok := r.initials[n]
+	return sym, ok
 }
 
 // PartAlias returns the alias membership the i-th segment of qn was written as,

@@ -76,14 +76,18 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 	switch n := node.(type) {
 	case *ast.InitialNode:
 		head(rdf.OpenSysMLTerm(mInitialNode))
-		// `first x` names the node the body starts at, so the name is a reference
-		// to a member rather than one this element declares.
+		// `first x` names the member the body starts at, or declares a label
+		// for transitions to name when no member answers to it.
 		if n.Name != "" {
-			e.graph.Add(subject, e.sysml(pSourceFeature), e.reference(owner, n.Name))
+			start := rdf.Term(rdf.String(n.Name))
+			if decl, fqn, ok := e.linked(e.res.InitialSymbol(n)); ok {
+				start = e.ids.subjectForNode(decl, fqn)
+			}
+			e.graph.Add(subject, e.sysml(pSourceFeature), start)
 		}
 		e.expression(subject, e.sysx(xGuard), xGuard, owner, n.Guard)
-		if successor := qualifiedText(n.Successor); successor != "" {
-			e.graph.Add(subject, e.sysml(pTargetFeature), e.reference(owner, successor))
+		if qualifiedText(n.Successor) != "" {
+			e.graph.Add(subject, e.sysml(pTargetFeature), e.reference(n.Successor))
 		} else if n.Guard != nil {
 			return true, &UnsupportedError{
 				What: fmt.Sprintf("the guarded initial node at %s", e.where(n)),
@@ -126,7 +130,7 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 			e.expression(subject, e.sysx(xExpression), xExpression, owner, n.Expression)
 		case qualifiedText(n.ActionRef) != "":
 			e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelReferences]),
-				e.reference(owner, qualifiedText(n.ActionRef)))
+				e.reference(n.ActionRef))
 		default:
 			return true, &UnsupportedError{
 				What: fmt.Sprintf("the action node at %s", e.where(n)),
@@ -302,23 +306,22 @@ func (e *encoder) encodeTransition(n *ast.TransitionMember, head func(rdf.Term),
 	head(rdf.SysMLTerm(mTransition))
 	e.name(subject, n.Name)
 	e.graph.Add(subject, e.sysx(xTransitionSyntax), rdf.String(e.transitionSyntax(n)))
-	if source := qualifiedText(n.Source); source != "" {
-		e.graph.Add(subject, e.sysml(pSourceFeature), e.reference(owner, source))
+	if qualifiedText(n.Source) != "" {
+		e.graph.Add(subject, e.sysml(pSourceFeature), e.edgeReference(n.Source))
 	}
-	target := qualifiedText(n.Target)
-	if target == "" {
+	if qualifiedText(n.Target) == "" {
 		return &UnsupportedError{
 			What: fmt.Sprintf("the transition at %s", e.where(n)),
 			Note: "it names no target state, so the edge it declares cannot be written back",
 		}
 	}
-	e.graph.Add(subject, e.sysml(pTargetFeature), e.reference(owner, target))
+	e.graph.Add(subject, e.sysml(pTargetFeature), e.edgeReference(n.Target))
 	if n.Trigger != nil {
 		e.graph.Add(subject, e.sysx(xTrigger), rdf.String(e.text(n.Trigger)))
 		e.graph.Add(subject, e.sysx(xTriggerKeyword), rdf.String(e.introducer(n, n.Trigger)))
 	}
 	if n.Via != nil {
-		e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelVia]), e.reference(owner, qualifiedText(n.Via)))
+		e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelVia]), e.reference(n.Via))
 	}
 	e.expression(subject, e.sysx(xGuard), xGuard, owner, n.Guard)
 	if len(n.Effect) > 0 {
@@ -376,7 +379,7 @@ func (e *encoder) edgeEnds(subject rdf.Term, node ast.Node, owner string, src, t
 				Note: fmt.Sprintf("it sequences %s, whose name is not a basic name, and the two-end form the graph is written back as reads only basic names", name),
 			}
 		}
-		e.graph.Add(subject, e.sysml(end.feature), e.reference(owner, name))
+		e.graph.Add(subject, e.sysml(end.feature), e.edgeReference(end.end.name))
 	}
 	return nil
 }
@@ -602,11 +605,13 @@ func (d *decoder) behaviorHead(el *element) (string, bool, error) {
 	switch el.metaclass {
 	case mInitialNode:
 		words := []string{"first"}
-		start, err := d.referenceText(el, rdf.SysML+pSourceFeature)
-		if err != nil {
-			return "", true, err
-		}
-		if start != "" {
+		// The start is a member of this body or a label, so it is written by
+		// its own name: `first` takes no qualified name.
+		if starts := d.graph.Objects(rdf.IRI(el.iri), rdf.SysML+pSourceFeature); len(starts) > 0 {
+			start, err := d.memberName(starts[0])
+			if err != nil {
+				return "", true, err
+			}
 			words = append(words, start)
 		}
 		if guard, ok := d.stringOf(el, rdf.OpenSysML+xGuard); ok {

@@ -219,7 +219,7 @@ expr:FlowsAndViews__FuelInterface___402_pflowSource
     sysx:sourceText "supplierPort.fuelSupply" ;
     sysml:elementId "FlowsAndViews__FuelInterface___402_pflowSource" ;
     sysml:argument expr:FlowsAndViews__FuelInterface___402_pflowSource_pa0 ;
-    sysml:targetFeature "fuelSupply" ;
+    sysml:targetFeature elmt:FlowsAndViews__FuelPort__fuelSupply ;
     sysx:endIndex "0"^^xsd:integer ;
     sysx:endRole "source" .
 
@@ -235,7 +235,7 @@ expr:FlowsAndViews__FuelInterface___402_pflowTarget
     sysx:sourceText "consumerPort.fuelSupply" ;
     sysml:elementId "FlowsAndViews__FuelInterface___402_pflowTarget" ;
     sysml:argument expr:FlowsAndViews__FuelInterface___402_pflowTarget_pa0 ;
-    sysml:targetFeature "fuelSupply" ;
+    sysml:targetFeature elmt:FlowsAndViews__FuelPort__fuelSupply ;
     sysx:endIndex "1"^^xsd:integer ;
     sysx:endRole "target" .
 

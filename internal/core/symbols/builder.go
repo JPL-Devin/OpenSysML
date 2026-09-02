@@ -88,6 +88,10 @@ func buildNamespaceDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia 
 		sym := newSymbol(d.Ident, SymbolDependency, d, vis, nil, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
 		return true
+	case *ast.MultiplicityDecl:
+		sym := newSymbol(d.Ident, SymbolMultiplicity, d, vis, nil, scope, trivia)
+		defineIdent(scope, d.Ident, sym)
+		return true
 	case *ast.RelationshipMember:
 		// A keyword-first relationship owns its members, and names one only when
 		// the notation gives it an identification.

@@ -23,7 +23,14 @@ func (r *Resolver) resolveControlFlowEdge(scope *symbols.Scope, edge *ast.Contro
 // position, or one the notation supplied from the member beside the keyword,
 // names nothing an author could misspell: lowering reads that member itself.
 func (r *Resolver) resolveEdgeEnd(scope *symbols.Scope, qn *ast.QualifiedName, member ast.Node, implied bool) {
-	if qn == nil || len(qn.Parts) == 0 || member != nil || implied {
+	if qn == nil || len(qn.Parts) == 0 || member != nil {
+		return
+	}
+	if implied {
+		// The name is the body's own member's; record what it binds, undiagnosed.
+		if sym, ok := scope.LookupLocal(qn.Parts[0].Text); ok && len(qn.Parts) == 1 {
+			r.resolvedPart(qn, 0, sym)
+		}
 		return
 	}
 	if inStateMachine(scope) {

@@ -22,12 +22,15 @@ type refCollector struct {
 	refs []Reference
 	// condition is set while the names of an element-filter condition are walked.
 	condition bool
+	// member is the declaration whose text is being walked.
+	member ast.Node
 }
 
 // push records a reference, marking it as a filter condition's own name when one
 // is being walked: those names resolve unfiltered, as in resolve/document.go.
 func (c *refCollector) push(ref Reference) {
 	ref.Condition = c.condition
+	ref.Member = c.member
 	c.refs = append(c.refs, ref)
 }
 
@@ -53,11 +56,34 @@ func (c *refCollector) addReference(scope *symbols.Scope, decl ast.Node, qn *ast
 }
 
 // addRedefinition records a redefinition's target, which names a feature of the
-// owning scope's generals rather than a member of the scope itself.
-func (c *refCollector) addRedefinition(scope *symbols.Scope, qn *ast.QualifiedName) {
+// owning scope's generals rather than a member of the scope itself, past the
+// name decl itself borrows from it.
+func (c *refCollector) addRedefinition(scope *symbols.Scope, decl ast.Node, qn *ast.QualifiedName) {
 	if qn != nil {
-		c.push(Reference{Scope: scope, QN: qn, Redefines: true})
+		c.push(Reference{Scope: scope, QN: qn, Referrer: decl, Redefines: true})
 	}
+}
+
+// addEndpoint records a transition endpoint, which names a vertex of the
+// enclosing machine ahead of anything else the name reaches.
+func (c *refCollector) addEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) {
+	if qn != nil {
+		c.push(Reference{Scope: scope, QN: qn, Endpoint: true})
+	}
+}
+
+// edgeEnd records the end of a succession or control flow the author named; one
+// bound by position or supplied by the notation is no reference (see
+// resolveEdgeEnd).
+func (c *refCollector) edgeEnd(scope *symbols.Scope, qn *ast.QualifiedName, member ast.Node, implied bool) {
+	if qn == nil || member != nil || implied {
+		return
+	}
+	if inStateMachine(scope) {
+		c.addEndpoint(scope, qn)
+		return
+	}
+	c.add(scope, qn)
 }
 
 // addChainMember records the member segments of a feature chain, which name
@@ -89,6 +115,9 @@ func (c *refCollector) walkMembers(scope *symbols.Scope, members []ast.Node) {
 }
 
 func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
+	prev := c.member
+	c.member = decl
+	defer func() { c.member = prev }()
 	switch {
 	case c.namespaceDecl(scope, decl):
 	case c.typeDecl(scope, decl):
@@ -293,11 +322,28 @@ func (c *refCollector) behaviorDecl(scope *symbols.Scope, decl ast.Node) bool {
 		c.walkMembers(states, d.States)
 		return true
 	case *ast.TransitionMember:
-		c.add(scope, d.Source)
-		c.add(scope, d.Target)
+		// Ends, trigger and guard scopes as in resolveBehaviorDecl.
+		c.addEndpoint(scope, d.Source)
+		c.addEndpoint(scope, d.Target)
 		c.trigger(scope, d.Trigger)
+		c.add(scope, d.Via)
+		body := symbols.TriggerScope(scope, d)
+		c.expr(body, d.Guard)
+		c.walkMembers(body, d.Effect)
+		return true
+	case *ast.InitialNode:
+		c.add(scope, d.Successor)
 		c.expr(scope, d.Guard)
-		c.walkMembers(scope, d.Effect)
+		return true
+	case *ast.SuccessionEdge:
+		c.edgeEnd(scope, d.Source, d.SourceMember, d.SourceImplied)
+		c.edgeEnd(scope, d.Target, d.TargetMember, d.TargetImplied)
+		c.walkMembers(scope, d.Members)
+		return true
+	case *ast.ControlFlowEdge:
+		c.edgeEnd(scope, d.Source, d.SourceMember, d.SourceImplied)
+		c.edgeEnd(scope, d.Target, d.TargetMember, d.TargetImplied)
+		c.expr(scope, d.Guard)
 		return true
 	case *ast.SendStatement:
 		c.expr(scope, d.Message)
@@ -383,9 +429,11 @@ func (c *refCollector) relationships(scope *symbols.Scope, decl ast.Node, rels [
 		if fr, ok := target.(*ast.FeatureReference); ok {
 			target = fr.Name
 		}
-		if rel.Kind == ast.RelRedefines {
+		// A subsetting other than of decl itself resolves as a redefinition
+		// does, as in resolveRelationships.
+		if rel.Kind == ast.RelRedefines || (rel.Kind == ast.RelSubsets && !relationshipTargetsDecl(rel, decl)) {
 			if qn, ok := target.(*ast.QualifiedName); ok {
-				c.addRedefinition(scope, qn)
+				c.addRedefinition(scope, decl, qn)
 				continue
 			}
 		}

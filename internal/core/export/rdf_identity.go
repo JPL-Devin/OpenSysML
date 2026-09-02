@@ -35,16 +35,23 @@ type identityFacts struct {
 	qualified bool
 }
 
-// documentIdentity builds the identity side table for one parsed document and
-// refuses what the graph cannot carry: an annotation whose id is not a
-// constant string, an empty id, or an id outside the element id alphabet.
-func documentIdentity(name string, root *ast.RootNamespace) (*identityFacts, error) {
+// analyzeDocument indexes one parsed document over the standard library and
+// resolves every name it writes, so the encoder can ask where each one leads.
+func analyzeDocument(name string, root *ast.RootNamespace) (*resolve.Resolver, *semantics.Model) {
 	idx := libs.NewModelIndex()
 	idx.AddDocument(name, root)
 	res := resolve.New(idx)
 	model := semantics.NewModel(res)
 	res.SetModel(model)
-	table := identity.Build(model, res, idx.DocumentRoot(name))
+	res.ResolveDocument(name, root)
+	return res, model
+}
+
+// documentIdentity builds the identity side table for one parsed document and
+// refuses what the graph cannot carry: an annotation whose id is not a
+// constant string, an empty id, or an id outside the element id alphabet.
+func documentIdentity(name string, res *resolve.Resolver, model *semantics.Model) (*identityFacts, error) {
+	table := identity.Build(model, res, res.Index().DocumentRoot(name))
 
 	facts := &identityFacts{
 		byFQN:      map[string]elementIdentity{},

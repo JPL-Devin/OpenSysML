@@ -106,30 +106,30 @@ func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) 
 	case *ast.QualifiedName:
 		// A position whose notation is a bare name holds the feature it names.
 		e.typed(subject, mFeatureReference)
-		e.graph.Add(subject, e.sysml(pReferent), e.reference(owner, qualifiedText(n)))
+		e.graph.Add(subject, e.sysml(pReferent), e.reference(n))
 
 	case *ast.FeatureReference:
 		e.typed(subject, mFeatureReference)
-		e.graph.Add(subject, e.sysml(pReferent), e.reference(owner, qualifiedText(n.Name)))
+		e.graph.Add(subject, e.sysml(pReferent), e.reference(n.Name))
 
 	case *ast.OperatorExpr:
 		e.typed(subject, mOperator)
 		e.graph.Add(subject, e.sysml(pOperator), rdf.String(n.Operator.String()))
 		e.arguments(subject, owner, n.Operands)
 		if n.TypeRef != nil {
-			e.graph.Add(subject, e.sysx(xTypeArgument), e.reference(owner, qualifiedText(n.TypeRef)))
+			e.graph.Add(subject, e.sysx(xTypeArgument), e.reference(n.TypeRef))
 		}
 
 	case *ast.CastExpr:
 		// `(as T)` is the classification operator with a type argument only.
 		e.typed(subject, mOperator)
 		e.graph.Add(subject, e.sysml(pOperator), rdf.String(ast.OpAs.String()))
-		e.graph.Add(subject, e.sysx(xTypeArgument), e.reference(owner, qualifiedText(n.TargetType)))
+		e.graph.Add(subject, e.sysx(xTypeArgument), e.reference(n.TargetType))
 
 	case *ast.FeatureChainExpr:
 		e.typed(subject, mFeatureChain)
 		e.arguments(subject, owner, []ast.Node{n.Operand})
-		e.graph.Add(subject, e.sysml(pTargetFeature), e.reference(owner, qualifiedText(n.Member)))
+		e.graph.Add(subject, e.sysml(pTargetFeature), e.reference(n.Member))
 
 	case *ast.IndexExpr:
 		e.typed(subject, mOperator)
@@ -165,7 +165,7 @@ func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) 
 
 	case *ast.MetadataAccessExpr:
 		e.typed(subject, mMetadataAccess)
-		e.graph.Add(subject, e.sysml(pReferencedElement), e.reference(owner, qualifiedText(n.Ref)))
+		e.graph.Add(subject, e.sysml(pReferencedElement), e.reference(n.Ref))
 
 	case *ast.BodyExpr:
 		// A body declares its own parameters and a result expression.
@@ -209,7 +209,7 @@ func (e *encoder) arguments(subject rdf.Term, owner string, args []ast.Node) {
 // invoked, the receiver of a `->` form, and the arguments.
 func (e *encoder) invocation(subject rdf.Term, owner string, function *ast.QualifiedName, operand ast.Node, args []ast.Node, named []ast.NamedArg) {
 	if function != nil {
-		e.graph.Add(subject, e.sysml(pFunction), e.reference(owner, qualifiedText(function)))
+		e.graph.Add(subject, e.sysml(pFunction), e.reference(function))
 	}
 	if operand != nil {
 		receiver := rdf.ExpressionIRI(subject, "operand")
@@ -263,7 +263,7 @@ func (d *decoder) resolveExpressions() error {
 			// The subject is an expression node; its parts are written with it.
 			continue
 		}
-		text, err := d.expressionNodeText(triple.Object, el.scope)
+		text, err := d.expressionNodeText(triple.Object, el)
 		if err != nil {
 			return err
 		}
@@ -277,7 +277,7 @@ func (d *decoder) resolveExpressions() error {
 
 // expressionNodeText writes an expression node back as notation: the notation it
 // kept, or notation rebuilt from its structure when it kept none.
-func (d *decoder) expressionNodeText(node rdf.Term, scope string) (string, error) {
+func (d *decoder) expressionNodeText(node rdf.Term, in *element) (string, error) {
 	if text, ok := d.graph.Lexical(node, rdf.OpenSysML+xSourceText); ok && text != "" {
 		return text, nil
 	}
@@ -306,22 +306,25 @@ func (d *decoder) expressionNodeText(node rdf.Term, scope string) (string, error
 	case mNullExpression:
 		return "null", nil
 	case mFeatureReference:
-		return d.expressionReference(node, rdf.SysML+pReferent, scope,
+		return d.expressionReference(node, rdf.SysML+pReferent, in,
 			"a feature reference names the feature it reads")
 	case mMetadataAccess:
-		name, err := d.expressionReference(node, rdf.SysML+pReferencedElement, scope,
+		name, err := d.expressionReference(node, rdf.SysML+pReferencedElement, in,
 			"a metadata access names the element it reads the metadata of")
 		if err != nil {
 			return "", err
 		}
 		return name + ".metadata", nil
 	case mFeatureChain:
-		operands, err := d.expressionArguments(node, scope)
+		operands, err := d.expressionArguments(node, in)
 		if err != nil {
 			return "", err
 		}
-		member, err := d.expressionReference(node, rdf.SysML+pTargetFeature, scope,
-			"a feature chain names the feature it reaches")
+		object, ok := d.graph.Object(node, rdf.SysML+pTargetFeature)
+		if !ok {
+			return "", unsupported("a feature chain names the feature it reaches")
+		}
+		member, err := d.memberName(object)
 		if err != nil {
 			return "", err
 		}
@@ -330,7 +333,7 @@ func (d *decoder) expressionNodeText(node rdf.Term, scope string) (string, error
 		}
 		return operands[0] + "." + member, nil
 	case mCollect, mSelect:
-		operands, err := d.expressionArguments(node, scope)
+		operands, err := d.expressionArguments(node, in)
 		if err != nil {
 			return "", err
 		}
@@ -343,16 +346,16 @@ func (d *decoder) expressionNodeText(node rdf.Term, scope string) (string, error
 		}
 		return operands[0] + separator + operands[1], nil
 	case mOperator:
-		return d.operatorText(node, scope)
+		return d.operatorText(node, in)
 	case mInvocation:
-		return d.invocationText(node, scope)
+		return d.invocationText(node, in)
 	}
 	return "", unsupported("this expression states no notation and no structure to write one from; " + rdfLimitationsNote)
 }
 
 // operatorText rebuilds an operator expression, parenthesized so the notation
 // means the tree the graph states without recording precedence.
-func (d *decoder) operatorText(node rdf.Term, scope string) (string, error) {
+func (d *decoder) operatorText(node rdf.Term, in *element) (string, error) {
 	operator, ok := d.graph.Lexical(node, rdf.SysML+pOperator)
 	if !ok {
 		return "", &UnsupportedError{
@@ -360,11 +363,11 @@ func (d *decoder) operatorText(node rdf.Term, scope string) (string, error) {
 			Note: "an operator expression states the operator it applies",
 		}
 	}
-	args, err := d.expressionArguments(node, scope)
+	args, err := d.expressionArguments(node, in)
 	if err != nil {
 		return "", err
 	}
-	typeArgument, hasType, err := d.expressionTypeArgument(node, scope)
+	typeArgument, hasType, err := d.expressionTypeArgument(node, in)
 	if err != nil {
 		return "", err
 	}
@@ -392,13 +395,13 @@ func (d *decoder) operatorText(node rdf.Term, scope string) (string, error) {
 	}
 }
 
-func (d *decoder) invocationText(node rdf.Term, scope string) (string, error) {
-	function, err := d.expressionReference(node, rdf.SysML+pFunction, scope,
+func (d *decoder) invocationText(node rdf.Term, in *element) (string, error) {
+	function, err := d.expressionReference(node, rdf.SysML+pFunction, in,
 		"an invocation names the function it invokes")
 	if err != nil {
 		return "", err
 	}
-	args, err := d.expressionArguments(node, scope)
+	args, err := d.expressionArguments(node, in)
 	if err != nil {
 		return "", err
 	}
@@ -407,7 +410,7 @@ func (d *decoder) invocationText(node rdf.Term, scope string) (string, error) {
 		call = "new " + call
 	}
 	if operand, ok := d.graph.Object(node, rdf.SysML+pOperand); ok {
-		receiver, err := d.expressionNodeText(operand, scope)
+		receiver, err := d.expressionNodeText(operand, in)
 		if err != nil {
 			return "", err
 		}
@@ -417,7 +420,7 @@ func (d *decoder) invocationText(node rdf.Term, scope string) (string, error) {
 }
 
 // expressionArguments writes the operands in the order sysx:argumentIndex records.
-func (d *decoder) expressionArguments(node rdf.Term, scope string) ([]string, error) {
+func (d *decoder) expressionArguments(node rdf.Term, in *element) ([]string, error) {
 	type argument struct {
 		index int
 		text  string
@@ -426,7 +429,7 @@ func (d *decoder) expressionArguments(node rdf.Term, scope string) ([]string, er
 	objects := d.graph.Objects(node, rdf.SysML+pArgument)
 	args := make([]argument, 0, len(objects))
 	for i, object := range objects {
-		text, err := d.expressionNodeText(object, scope)
+		text, err := d.expressionNodeText(object, in)
 		if err != nil {
 			return nil, err
 		}
@@ -454,7 +457,7 @@ func (d *decoder) expressionArguments(node rdf.Term, scope string) ([]string, er
 }
 
 // expressionReference names the element an expression property points at.
-func (d *decoder) expressionReference(node rdf.Term, property, scope, why string) (string, error) {
+func (d *decoder) expressionReference(node rdf.Term, property string, in *element, why string) (string, error) {
 	object, ok := d.graph.Object(node, property)
 	if !ok {
 		return "", &UnsupportedError{
@@ -462,16 +465,16 @@ func (d *decoder) expressionReference(node rdf.Term, property, scope, why string
 			Note: why,
 		}
 	}
-	return d.referenceName(object, scope)
+	return d.referenceName(object, in)
 }
 
 // expressionTypeArgument names the type a classification operator applies.
-func (d *decoder) expressionTypeArgument(node rdf.Term, scope string) (string, bool, error) {
+func (d *decoder) expressionTypeArgument(node rdf.Term, in *element) (string, bool, error) {
 	object, ok := d.graph.Object(node, rdf.OpenSysML+xTypeArgument)
 	if !ok {
 		return "", false, nil
 	}
-	name, err := d.referenceName(object, scope)
+	name, err := d.referenceName(object, in)
 	if err != nil {
 		return "", false, err
 	}

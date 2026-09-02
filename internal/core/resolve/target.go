@@ -209,6 +209,22 @@ type Reference struct {
 	// Condition is set when QN is a name inside an element-filter condition, which
 	// its own namespace's filters do not restrict (see InCondition).
 	Condition bool
+	// Endpoint is set when QN is a transition end, which names a vertex of the
+	// enclosing machine ahead of anything else it reaches (see ResolveEndpoint).
+	Endpoint bool
+	// Member is the declaration whose text QN is written in, when known.
+	Member ast.Node
+}
+
+// ProbeReference resolves ref as a trial reading: what a name spelled differently
+// at the same place would denote. Its diagnostics are suppressed.
+func (r *Resolver) ProbeReference(ref Reference) (*symbols.Symbol, bool) {
+	var (
+		sym *symbols.Symbol
+		ok  bool
+	)
+	r.aside(func() { sym, ok = r.ResolveReference(ref) })
+	return sym, ok
 }
 
 // ResolveReference resolves a single name occurrence, honoring both the
@@ -240,6 +256,9 @@ func (r *Resolver) ResolveReference(ref Reference) (*symbols.Symbol, bool) {
 	if ref.Redefines {
 		r.resolveRedefinition(ref.Scope, ref.QN, ref.Referrer)
 		return r.PartSymbol(ref.QN, len(ref.QN.Parts)-1)
+	}
+	if ref.Endpoint {
+		return r.ResolveEndpoint(ref.Scope, ref.QN)
 	}
 	return r.resolveQualified(ref.Scope, ref.QN, hide)
 }

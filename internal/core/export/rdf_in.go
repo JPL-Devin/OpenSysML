@@ -68,14 +68,45 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 	if err := checkExtensionNamespace(graph); err != nil {
 		return nil, err
 	}
-	d := &decoder{
+	// The first rendering writes every reference fully qualified; the names
+	// each one can be shortened to are then read off that text, and the graph
+	// is rendered again with them.
+	first := newDecoder(graph, nil)
+	text, err := first.render()
+	if err != nil {
+		return nil, err
+	}
+	names, err := chooseNames(text, first.wanted)
+	if err != nil {
+		return nil, err
+	}
+	if text, err = newDecoder(graph, names).render(); err != nil {
+		return nil, err
+	}
+	out, err := format.Source("<converted>", text, format.DefaultOptions)
+	if err != nil {
+		// The formatter only fails on input it cannot lex; return the
+		// unformatted text with the reason so the user can see what was built.
+		return nil, fmt.Errorf("converted source is not valid SysML: %w", err)
+	}
+	return out, nil
+}
+
+func newDecoder(graph *rdf.Graph, names nameChoices) *decoder {
+	return &decoder{
 		graph:            graph,
 		byIRI:            map[string]*element{},
 		byID:             map[string]*element{},
 		dupID:            map[string]bool{},
 		memberships:      map[string]membership{},
 		owningMembership: map[string]membership{},
+		names:            names,
+		wanted:           map[nameKey]string{},
 	}
+}
+
+// render writes the graph as unformatted notation.
+func (d *decoder) render() ([]byte, error) {
 	roots, err := d.build()
 	if err != nil {
 		return nil, err
@@ -86,13 +117,7 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 			return nil, err
 		}
 	}
-	out, err := format.Source("<converted>", []byte(b.String()), format.DefaultOptions)
-	if err != nil {
-		// The formatter only fails on input it cannot lex; return the
-		// unformatted text with the reason so the user can see what was built.
-		return nil, fmt.Errorf("converted source is not valid SysML: %w", err)
-	}
-	return out, nil
+	return []byte(b.String()), nil
 }
 
 // checkExtensionNamespace refuses a graph written with the pre-rename extension
@@ -140,6 +165,11 @@ type decoder struct {
 	// the member each one owns.
 	memberships      map[string]membership
 	owningMembership map[string]membership
+	// names holds the spelling chosen for each reference; while nil, references
+	// are written fully qualified and recorded in wanted with their
+	// scope-relative spelling.
+	names  nameChoices
+	wanted map[nameKey]string
 }
 
 // build reads every subject into an element and links it to its owner,
@@ -1210,7 +1240,7 @@ func (d *decoder) referenceText(el *element, property string) (string, error) {
 func (d *decoder) referenceList(el *element, property string) ([]string, error) {
 	var out []string
 	for _, term := range d.graph.Objects(rdf.IRI(el.iri), property) {
-		name, err := d.referenceName(term, el.scope)
+		name, err := d.referenceName(term, el)
 		if err != nil {
 			return nil, err
 		}
@@ -1219,9 +1249,10 @@ func (d *decoder) referenceList(el *element, property string) ([]string, error) 
 	return out, nil
 }
 
-// referenceName renders a reference term as the name to write in source: a
-// literal as written, an IRI as its element's qualified name relative to scope.
-func (d *decoder) referenceName(term rdf.Term, scope string) (string, error) {
+// referenceName renders a reference term as the name to write in the
+// declaration of el: a literal as written, an IRI as the spelling of its
+// element's qualified name that resolves to that element there (see names.go).
+func (d *decoder) referenceName(term rdf.Term, el *element) (string, error) {
 	if term.IsLiteral() {
 		if term.Datatype == rdf.OpenSysML+dtExpression {
 			return term.Value, nil
@@ -1232,13 +1263,42 @@ func (d *decoder) referenceName(term rdf.Term, scope string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	qname := target.qname
+	key := nameKey{member: el.qname, target: target.qname}
+	relative := relativeName(target.qname, el.scope)
+	if d.names == nil {
+		d.wanted[key] = relative
+		return qualifiedNameText(target.qname), nil
+	}
+	if spelling, ok := d.names[key]; ok {
+		return qualifiedNameText(spelling), nil
+	}
+	return qualifiedNameText(relative), nil
+}
+
+// memberName renders the member segment of a feature chain: a literal as
+// written, an IRI as its element's own name, since a chain segment is looked up
+// in the operand rather than in the writing scope.
+func (d *decoder) memberName(term rdf.Term) (string, error) {
+	if term.IsLiteral() {
+		return qualifiedNameText(term.Value), nil
+	}
+	target, err := d.referencedElement(term.Value)
+	if err != nil {
+		return "", err
+	}
+	return nameText(lastSegment(target.qname)), nil
+}
+
+// relativeName strips from qname the longest prefix of scope that it is
+// declared under, the textual approximation used for a reference the resolver
+// does not read.
+func relativeName(qname, scope string) string {
 	for {
 		if scope == "" {
-			return qualifiedNameText(qname), nil
+			return qname
 		}
 		if rest, found := strings.CutPrefix(qname, scope+"::"); found {
-			return qualifiedNameText(rest), nil
+			return rest
 		}
 		cut := strings.LastIndex(scope, "::")
 		if cut < 0 {
@@ -1247,6 +1307,13 @@ func (d *decoder) referenceName(term rdf.Term, scope string) (string, error) {
 		}
 		scope = scope[:cut]
 	}
+}
+
+func lastSegment(qname string) string {
+	if cut := strings.LastIndex(qname, "::"); cut >= 0 {
+		return qname[cut+2:]
+	}
+	return qname
 }
 
 func (d *decoder) stringOf(el *element, property string) (string, bool) {
