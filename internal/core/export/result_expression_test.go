@@ -95,6 +95,7 @@ func TestResultExpressionsComeBackFromTheGraphAlone(t *testing.T) {
 	}
 	for _, want := range []string{
 		"{ in y : Real; (y + x) }",
+		"{ in 'the input' : Real; ('the input' + x) }",
 		"{ in y : Real; Double(x = { in z : Real; (z + y) }) }",
 		"in expr keep : Boolean {\n            in v : Real;\n            (v > x)\n        }",
 		"Double(x = Double(x)).result",

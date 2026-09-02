@@ -18,6 +18,10 @@ package Results {
         in x : Real;
         { in y : Real; y + x }
     }
+    calc def Quoted {
+        in x : Real;
+        { in 'the input' : Real; 'the input' + x }
+    }
     calc def Nested {
         in x : Real;
         { in y : Real; Double(x = { in z : Real; z + y }) }

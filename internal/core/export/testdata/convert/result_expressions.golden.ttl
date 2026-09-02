@@ -12,9 +12,9 @@ elmt:Results
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "Results" ;
     sysx:hasBody "true"^^xsd:boolean ;
-    sysml:ownedMember elmt:Results__Real, elmt:Results__Boolean, elmt:Results__Double, elmt:Results__Only, elmt:Results__AfterMembers, elmt:Results__Body, elmt:Results__Nested, elmt:Results__Passes, elmt:Results__Predicate, elmt:Results__Chained, elmt:Results__Conditional, elmt:Results__Widened, elmt:Results__Ranged, elmt:Results__Vehicle, elmt:Results__MassAnalysis, elmt:Results__MassCheck, elmt:Results__MassCase, elmt:Results__rover ;
-    sysml:ownedMembership elmt:Results__Real_om, elmt:Results__Boolean_om, elmt:Results__Double_om, elmt:Results__Only_om, elmt:Results__AfterMembers_om, elmt:Results__Body_om, elmt:Results__Nested_om, elmt:Results__Passes_om, elmt:Results__Predicate_om, elmt:Results__Chained_om, elmt:Results__Conditional_om, elmt:Results__Widened_om, elmt:Results__Ranged_om, elmt:Results__Vehicle_om, elmt:Results__MassAnalysis_om, elmt:Results__MassCheck_om, elmt:Results__MassCase_om, elmt:Results__rover_om ;
-    sysml:ownedRelationship elmt:Results__Real_om, elmt:Results__Boolean_om, elmt:Results__Double_om, elmt:Results__Only_om, elmt:Results__AfterMembers_om, elmt:Results__Body_om, elmt:Results__Nested_om, elmt:Results__Passes_om, elmt:Results__Predicate_om, elmt:Results__Chained_om, elmt:Results__Conditional_om, elmt:Results__Widened_om, elmt:Results__Ranged_om, elmt:Results__Vehicle_om, elmt:Results__MassAnalysis_om, elmt:Results__MassCheck_om, elmt:Results__MassCase_om, elmt:Results__rover_om .
+    sysml:ownedMember elmt:Results__Real, elmt:Results__Boolean, elmt:Results__Double, elmt:Results__Only, elmt:Results__AfterMembers, elmt:Results__Body, elmt:Results__Quoted, elmt:Results__Nested, elmt:Results__Passes, elmt:Results__Predicate, elmt:Results__Chained, elmt:Results__Conditional, elmt:Results__Widened, elmt:Results__Ranged, elmt:Results__Vehicle, elmt:Results__MassAnalysis, elmt:Results__MassCheck, elmt:Results__MassCase, elmt:Results__rover ;
+    sysml:ownedMembership elmt:Results__Real_om, elmt:Results__Boolean_om, elmt:Results__Double_om, elmt:Results__Only_om, elmt:Results__AfterMembers_om, elmt:Results__Body_om, elmt:Results__Quoted_om, elmt:Results__Nested_om, elmt:Results__Passes_om, elmt:Results__Predicate_om, elmt:Results__Chained_om, elmt:Results__Conditional_om, elmt:Results__Widened_om, elmt:Results__Ranged_om, elmt:Results__Vehicle_om, elmt:Results__MassAnalysis_om, elmt:Results__MassCheck_om, elmt:Results__MassCase_om, elmt:Results__rover_om ;
+    sysml:ownedRelationship elmt:Results__Real_om, elmt:Results__Boolean_om, elmt:Results__Double_om, elmt:Results__Only_om, elmt:Results__AfterMembers_om, elmt:Results__Body_om, elmt:Results__Quoted_om, elmt:Results__Nested_om, elmt:Results__Passes_om, elmt:Results__Predicate_om, elmt:Results__Chained_om, elmt:Results__Conditional_om, elmt:Results__Widened_om, elmt:Results__Ranged_om, elmt:Results__Vehicle_om, elmt:Results__MassAnalysis_om, elmt:Results__MassCheck_om, elmt:Results__MassCase_om, elmt:Results__rover_om .
 
 elmt:Results__Real
     a sysml:AttributeDefinition ;
@@ -487,11 +487,123 @@ expr:Results__Body___401_presultExpression_presult_pa1
     sysml:referent elmt:Results__Body__x ;
     sysx:argumentIndex "1"^^xsd:integer .
 
+elmt:Results__Quoted
+    a sysml:CalculationDefinition ;
+    sysml:qualifiedName "Results::Quoted" ;
+    sysml:elementId "Results__Quoted" ;
+    sysx:memberIndex "6"^^xsd:integer ;
+    sysml:owningNamespace elmt:Results ;
+    sysml:owner elmt:Results ;
+    sysml:owningRelationship elmt:Results__Quoted_om ;
+    sysml:owningMembership elmt:Results__Quoted_om ;
+    sysml:declaredName "Quoted" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Results__Quoted__x, elmt:Results__Quoted___401 ;
+    sysml:ownedMembership elmt:Results__Quoted__x_om, elmt:Results__Quoted___401_om ;
+    sysml:ownedRelationship elmt:Results__Quoted__x_om, elmt:Results__Quoted___401_om ;
+    sysml:ownedFeature elmt:Results__Quoted__x ;
+    sysml:ownedFeatureMembership elmt:Results__Quoted__x_om .
+
+elmt:Results__Quoted_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Results__Quoted_om" ;
+    sysml:owner elmt:Results ;
+    sysml:memberElement elmt:Results__Quoted ;
+    sysml:ownedMemberElement elmt:Results__Quoted ;
+    sysml:ownedRelatedElement elmt:Results__Quoted ;
+    sysml:owningRelatedElement elmt:Results ;
+    sysml:membershipOwningNamespace elmt:Results .
+
+elmt:Results__Quoted__x
+    a sysml:ReferenceUsage ;
+    sysml:qualifiedName "Results::Quoted::x" ;
+    sysml:elementId "Results__Quoted__x" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Results__Quoted ;
+    sysml:owner elmt:Results__Quoted ;
+    sysml:owningRelationship elmt:Results__Quoted__x_om ;
+    sysml:owningMembership elmt:Results__Quoted__x_om ;
+    sysml:declaredName "x" ;
+    sysx:isKindImplicit "true"^^xsd:boolean ;
+    sysml:direction "in" ;
+    sysml:type elmt:Results__Real ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Results__Quoted__x_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Results__Quoted__x_om" ;
+    sysml:owner elmt:Results__Quoted ;
+    sysml:memberElement elmt:Results__Quoted__x ;
+    sysml:ownedMemberElement elmt:Results__Quoted__x ;
+    sysml:ownedRelatedElement elmt:Results__Quoted__x ;
+    sysml:owningRelatedElement elmt:Results__Quoted ;
+    sysml:membershipOwningNamespace elmt:Results__Quoted ;
+    sysml:ownedMemberFeature elmt:Results__Quoted__x ;
+    sysml:owningType elmt:Results__Quoted .
+
+elmt:Results__Quoted___401
+    a sysx:ResultExpressionMember ;
+    sysml:qualifiedName "Results::Quoted::@1" ;
+    sysml:elementId "Results__Quoted___401" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Results__Quoted ;
+    sysml:owner elmt:Results__Quoted ;
+    sysml:owningRelationship elmt:Results__Quoted___401_om ;
+    sysml:owningMembership elmt:Results__Quoted___401_om ;
+    sysx:resultExpression expr:Results__Quoted___401_presultExpression .
+
+elmt:Results__Quoted___401_om
+    a sysml:ResultExpressionMembership ;
+    sysml:elementId "Results__Quoted___401_om" ;
+    sysml:owner elmt:Results__Quoted ;
+    sysml:memberElement elmt:Results__Quoted___401 ;
+    sysml:ownedMemberElement elmt:Results__Quoted___401 ;
+    sysml:ownedRelatedElement elmt:Results__Quoted___401 ;
+    sysml:owningRelatedElement elmt:Results__Quoted ;
+    sysml:membershipOwningNamespace elmt:Results__Quoted ;
+    sysml:ownedResultExpression expr:Results__Quoted___401_presultExpression .
+
+expr:Results__Quoted___401_presultExpression
+    a sysml:Expression ;
+    sysx:sourceText "{ in 'the input' : Real; 'the input' + x }" ;
+    sysml:elementId "Results__Quoted___401_presultExpression" ;
+    sysx:bodyParameter expr:Results__Quoted___401_presultExpression_pin0 ;
+    sysx:resultExpression expr:Results__Quoted___401_presultExpression_presult .
+
+expr:Results__Quoted___401_presultExpression_pin0
+    a sysml:ReferenceUsage ;
+    sysml:elementId "Results__Quoted___401_presultExpression_pin0" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:direction "in" ;
+    sysml:declaredName "the input" ;
+    sysml:type elmt:Results__Real .
+
+expr:Results__Quoted___401_presultExpression_presult
+    a sysml:OperatorExpression ;
+    sysx:sourceText "'the input' + x" ;
+    sysml:elementId "Results__Quoted___401_presultExpression_presult" ;
+    sysml:operator "+" ;
+    sysml:argument expr:Results__Quoted___401_presultExpression_presult_pa0, expr:Results__Quoted___401_presultExpression_presult_pa1 .
+
+expr:Results__Quoted___401_presultExpression_presult_pa0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "'the input'" ;
+    sysml:elementId "Results__Quoted___401_presultExpression_presult_pa0" ;
+    sysml:referent "the input" ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+expr:Results__Quoted___401_presultExpression_presult_pa1
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "x" ;
+    sysml:elementId "Results__Quoted___401_presultExpression_presult_pa1" ;
+    sysml:referent elmt:Results__Quoted__x ;
+    sysx:argumentIndex "1"^^xsd:integer .
+
 elmt:Results__Nested
     a sysml:CalculationDefinition ;
     sysml:qualifiedName "Results::Nested" ;
     sysml:elementId "Results__Nested" ;
-    sysx:memberIndex "6"^^xsd:integer ;
+    sysx:memberIndex "7"^^xsd:integer ;
     sysml:owningNamespace elmt:Results ;
     sysml:owner elmt:Results ;
     sysml:owningRelationship elmt:Results__Nested_om ;
@@ -627,7 +739,7 @@ elmt:Results__Passes
     a sysml:CalculationDefinition ;
     sysml:qualifiedName "Results::Passes" ;
     sysml:elementId "Results__Passes" ;
-    sysx:memberIndex "7"^^xsd:integer ;
+    sysx:memberIndex "8"^^xsd:integer ;
     sysml:owningNamespace elmt:Results ;
     sysml:owner elmt:Results ;
     sysml:owningRelationship elmt:Results__Passes_om ;
@@ -709,7 +821,7 @@ elmt:Results__Predicate
     a sysml:CalculationDefinition ;
     sysml:qualifiedName "Results::Predicate" ;
     sysml:elementId "Results__Predicate" ;
-    sysx:memberIndex "8"^^xsd:integer ;
+    sysx:memberIndex "9"^^xsd:integer ;
     sysml:owningNamespace elmt:Results ;
     sysml:owner elmt:Results ;
     sysml:owningRelationship elmt:Results__Predicate_om ;
@@ -956,7 +1068,7 @@ elmt:Results__Chained
     a sysml:CalculationDefinition ;
     sysml:qualifiedName "Results::Chained" ;
     sysml:elementId "Results__Chained" ;
-    sysx:memberIndex "9"^^xsd:integer ;
+    sysx:memberIndex "10"^^xsd:integer ;
     sysml:owningNamespace elmt:Results ;
     sysml:owner elmt:Results ;
     sysml:owningRelationship elmt:Results__Chained_om ;
@@ -1063,7 +1175,7 @@ elmt:Results__Conditional
     a sysml:CalculationDefinition ;
     sysml:qualifiedName "Results::Conditional" ;
     sysml:elementId "Results__Conditional" ;
-    sysx:memberIndex "10"^^xsd:integer ;
+    sysx:memberIndex "11"^^xsd:integer ;
     sysml:owningNamespace elmt:Results ;
     sysml:owner elmt:Results ;
     sysml:owningRelationship elmt:Results__Conditional_om ;
@@ -1190,7 +1302,7 @@ elmt:Results__Widened
     a sysml:CalculationDefinition ;
     sysml:qualifiedName "Results::Widened" ;
     sysml:elementId "Results__Widened" ;
-    sysx:memberIndex "11"^^xsd:integer ;
+    sysx:memberIndex "12"^^xsd:integer ;
     sysml:owningNamespace elmt:Results ;
     sysml:owner elmt:Results ;
     sysml:owningRelationship elmt:Results__Widened_om ;
@@ -1280,7 +1392,7 @@ elmt:Results__Ranged
     a sysml:CalculationDefinition ;
     sysml:qualifiedName "Results::Ranged" ;
     sysml:elementId "Results__Ranged" ;
-    sysx:memberIndex "12"^^xsd:integer ;
+    sysx:memberIndex "13"^^xsd:integer ;
     sysml:owningNamespace elmt:Results ;
     sysml:owner elmt:Results ;
     sysml:owningRelationship elmt:Results__Ranged_om ;
@@ -1376,7 +1488,7 @@ elmt:Results__Vehicle
     a sysml:PartDefinition ;
     sysml:qualifiedName "Results::Vehicle" ;
     sysml:elementId "Results__Vehicle" ;
-    sysx:memberIndex "13"^^xsd:integer ;
+    sysx:memberIndex "14"^^xsd:integer ;
     sysml:owningNamespace elmt:Results ;
     sysml:owner elmt:Results ;
     sysml:owningRelationship elmt:Results__Vehicle_om ;
@@ -1428,7 +1540,7 @@ elmt:Results__MassAnalysis
     a sysml:AnalysisCaseDefinition ;
     sysml:qualifiedName "Results::MassAnalysis" ;
     sysml:elementId "Results__MassAnalysis" ;
-    sysx:memberIndex "14"^^xsd:integer ;
+    sysx:memberIndex "15"^^xsd:integer ;
     sysml:owningNamespace elmt:Results ;
     sysml:owner elmt:Results ;
     sysml:owningRelationship elmt:Results__MassAnalysis_om ;
@@ -1502,7 +1614,7 @@ elmt:Results__MassCheck
     a sysml:VerificationCaseDefinition ;
     sysml:qualifiedName "Results::MassCheck" ;
     sysml:elementId "Results__MassCheck" ;
-    sysx:memberIndex "15"^^xsd:integer ;
+    sysx:memberIndex "16"^^xsd:integer ;
     sysml:owningNamespace elmt:Results ;
     sysml:owner elmt:Results ;
     sysml:owningRelationship elmt:Results__MassCheck_om ;
@@ -1599,7 +1711,7 @@ elmt:Results__MassCase
     a sysml:CaseDefinition ;
     sysml:qualifiedName "Results::MassCase" ;
     sysml:elementId "Results__MassCase" ;
-    sysx:memberIndex "16"^^xsd:integer ;
+    sysx:memberIndex "17"^^xsd:integer ;
     sysml:owningNamespace elmt:Results ;
     sysml:owner elmt:Results ;
     sysml:owningRelationship elmt:Results__MassCase_om ;
@@ -1687,7 +1799,7 @@ elmt:Results__rover
     a sysml:PartUsage ;
     sysml:qualifiedName "Results::rover" ;
     sysml:elementId "Results__rover" ;
-    sysx:memberIndex "17"^^xsd:integer ;
+    sysx:memberIndex "18"^^xsd:integer ;
     sysml:owningNamespace elmt:Results ;
     sysml:owner elmt:Results ;
     sysml:owningRelationship elmt:Results__rover_om ;

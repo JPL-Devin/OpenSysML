@@ -467,7 +467,7 @@ func (d *decoder) bodyParameterText(param rdf.Term, scope string) (string, error
 	if d.boolOf(el, rdf.SysML+"isReference") {
 		words = append(words, "ref")
 	}
-	words = append(words, name)
+	words = append(words, nameText(name))
 	relationships, err := d.relationshipWords(el, d.multiplicityText(el))
 	if err != nil {
 		return "", err
