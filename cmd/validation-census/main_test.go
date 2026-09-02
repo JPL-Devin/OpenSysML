@@ -125,7 +125,11 @@ func TestRewriteDerivedLinesRestatesTheSummary(t *testing.T) {
 // a row the baseline lacks, a baseline name without a row, a hand-edited figure.
 func TestCheckDocumentRejectsDrift(t *testing.T) {
 	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(negativeCorpusDir)), 0o755); err != nil {
+	corpus := filepath.Join(root, filepath.FromSlash(negativeCorpusDir))
+	if err := os.MkdirAll(filepath.Join(corpus, "kerml", "dir.kerml"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(corpus, "kerml", "a.kerml"), []byte("package P;\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	base := &Baseline{Constraints: []Constraint{
@@ -137,7 +141,7 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 		"",
 		"| Constraint | Language | Checks | Implementation | Our message | Negative case | Status |",
 		"|---|---|---|---|---|---|---|",
-		"| `validateA` | KerML | a | `x.go:f` | same | none | ✅ faithful |",
+		"| `validateA` | KerML | a | `x.go:f` | same | `kerml/a.kerml` | ✅ faithful |",
 		"| `validateB` | SysML | b | — | — | none | ❌ not implemented |",
 		"",
 	}, "\n")
@@ -176,8 +180,16 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 			want: "has language \"SysML\"",
 		},
 		"missing negative case": {
-			mutate: func(s string) string { return strings.Replace(s, "| none | ✅", "| `kerml/gone.kerml` | ✅", 1) },
+			mutate: func(s string) string { return strings.Replace(s, "`kerml/a.kerml`", "`kerml/gone.kerml`", 1) },
 			want:   "does not exist",
+		},
+		"negative case is a directory": {
+			mutate: func(s string) string { return strings.Replace(s, "`kerml/a.kerml`", "`kerml/dir.kerml`", 1) },
+			want:   "is not a file",
+		},
+		"negative case is not a model": {
+			mutate: func(s string) string { return strings.Replace(s, "`kerml/a.kerml`", "`kerml`", 1) },
+			want:   "is not a .sysml or .kerml file",
 		},
 	}
 	for name, tc := range cases {

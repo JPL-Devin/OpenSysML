@@ -192,7 +192,7 @@ func checkDocument(root, content string, base *Baseline) error {
 }
 
 // checkNegativeCase verifies that a row's negative-case cell is `none` or names
-// files of the rejection corpus that exist.
+// model files of the rejection corpus that exist.
 func checkNegativeCase(root string, r row, name string) []string {
 	cell := r.Cells[5]
 	if cell == "none" {
@@ -206,8 +206,16 @@ func checkNegativeCase(root string, r row, name string) []string {
 			problems = append(problems, fmt.Sprintf("line %d: %s negative case %q is neither `none` nor a backticked corpus path", r.Line, name, ref))
 			continue
 		}
-		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(negativeCorpusDir), filepath.FromSlash(path))); err != nil {
+		if ext := filepath.Ext(path); ext != ".sysml" && ext != ".kerml" {
+			problems = append(problems, fmt.Sprintf("line %d: %s negative case %s is not a .sysml or .kerml file", r.Line, name, path))
+			continue
+		}
+		info, err := os.Stat(filepath.Join(root, filepath.FromSlash(negativeCorpusDir), filepath.FromSlash(path)))
+		switch {
+		case err != nil:
 			problems = append(problems, fmt.Sprintf("line %d: %s negative case %s/%s does not exist", r.Line, name, negativeCorpusDir, path))
+		case !info.Mode().IsRegular():
+			problems = append(problems, fmt.Sprintf("line %d: %s negative case %s/%s is not a file", r.Line, name, negativeCorpusDir, path))
 		}
 	}
 	return problems
