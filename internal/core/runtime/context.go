@@ -46,6 +46,15 @@ type Context struct {
 	// defaults, result expression) per calc symbol.
 	calcShapes map[*symbols.Symbol]*calcShape
 
+	// invocationTargets memoizes what each invocation expression denotes in the
+	// scope it is evaluated in; the model does not change under one context.
+	invocationTargets map[invocationKey]*invocationTarget
+
+	// integerLiterals and realLiterals memoize the value each numeric literal
+	// node spells, so a literal in a recursion is parsed once per context.
+	integerLiterals map[*ast.LiteralInteger]int64
+	realLiterals    map[*ast.LiteralReal]float64
+
 	// calcUsageRuns holds the evaluation of each calc usage read in an activation
 	// under way, so reading several outputs of one usage answers from one
 	// execution of its body. An activation's evaluations end with it.
@@ -178,6 +187,10 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		instances:  make(map[int64]*Instance),
 		features:   make(map[*symbols.Symbol][]EffectiveFeature),
 		calcShapes: make(map[*symbols.Symbol]*calcShape),
+
+		invocationTargets: make(map[invocationKey]*invocationTarget),
+		integerLiterals:   make(map[*ast.LiteralInteger]int64),
+		realLiterals:      make(map[*ast.LiteralReal]float64),
 
 		calcUsageRuns: make(map[int64]map[calcUsageKey]*calcRun),
 
