@@ -126,10 +126,12 @@ func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) 
 		}
 
 	case *ast.CastExpr:
-		// `(as T)` is the classification operator with a type argument only.
+		// `(as T[m])` is the classification operator with a type argument only,
+		// its multiplicity written as bounds the way a usage's is.
 		e.typed(subject, mOperator)
 		e.graph.Add(subject, e.sysml(pOperator), rdf.String(ast.OpAs.String()))
 		e.graph.Add(subject, e.sysx(xTypeArgument), e.reference(owner, qualifiedText(n.TargetType)))
+		e.multiplicity(subject, owner, n.Multiplicity)
 
 	case *ast.FeatureChainExpr:
 		e.typed(subject, mFeatureChain)
@@ -541,7 +543,11 @@ func (d *decoder) operatorText(node rdf.Term, scope string) (string, error) {
 	case hasType && len(args) == 1:
 		return "(" + args[0] + " " + operator + " " + typeArgument + ")", nil
 	case hasType && len(args) == 0:
-		return "(" + operator + " " + typeArgument + ")", nil
+		multiplicity, err := d.expressionMultiplicityText(node, scope)
+		if err != nil {
+			return "", err
+		}
+		return "(" + operator + " " + typeArgument + multiplicity + ")", nil
 	case len(args) == 1:
 		return "(" + operator + " " + args[0] + ")", nil
 	case len(args) == 2:
@@ -624,6 +630,24 @@ func (d *decoder) expressionReference(node rdf.Term, property, scope, why string
 		}
 	}
 	return d.referenceName(object, scope)
+}
+
+// expressionMultiplicityText writes the `[lower..upper]` a cast states, its
+// bounds being expressions of their own.
+func (d *decoder) expressionMultiplicityText(node rdf.Term, scope string) (string, error) {
+	el := &element{iri: node.Value, scope: scope, expressions: map[string]string{}}
+	for _, property := range []string{pLowerBound, pUpperBound} {
+		object, ok := d.graph.Object(node, rdf.SysML+property)
+		if !ok {
+			continue
+		}
+		text, err := d.expressionNodeText(object, scope)
+		if err != nil {
+			return "", err
+		}
+		el.expressions[rdf.SysML+property] = text
+	}
+	return d.multiplicityText(el), nil
 }
 
 // expressionTypeArgument names the type a classification operator applies.

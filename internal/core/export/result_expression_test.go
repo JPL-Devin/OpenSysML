@@ -99,6 +99,8 @@ func TestResultExpressionsComeBackFromTheGraphAlone(t *testing.T) {
 		"in expr keep : Boolean {\n            in v : Real;\n            (v > x)\n        }",
 		"Double(x = Double(x)).result",
 		"if (x > 0) ? x else (- x)",
+		"(as Real[2])",
+		"(as Real[1..*])",
 	} {
 		if !strings.Contains(string(fromGraph), want) {
 			t.Errorf("the notation rebuilt from the graph lacks %q:\n%s", want, fromGraph)

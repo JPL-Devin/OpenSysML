@@ -45,6 +45,14 @@ package Results {
         in x : Real;
         if x > 0 ? x else -x
     }
+    calc def Widened {
+        in x : Real;
+        (as Real[2])
+    }
+    calc def Ranged {
+        in x : Real;
+        (as Real[1..*])
+    }
     part def Vehicle {
         attribute mass : Real;
     }
