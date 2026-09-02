@@ -1775,28 +1775,53 @@ func (p *Parser) parseConstraintBody() []ast.Node {
 	return members
 }
 
-// atMetadataMember tells a metadata usage (`@M;`, `@M { … }`, `@M about x;`)
-// from a classification condition of the implicit subject (`@M`, `@M and c`).
+// atMetadataMember tells a metadata usage (`@M;`, `@M { … }`, `@ m : M about x;`)
+// from a classification condition of the implicit subject (`@M`, `@M < x`).
 func (p *Parser) atMetadataMember() bool {
 	if !p.at(lexer.At) {
 		return false
 	}
-	for n := 1; ; n++ {
-		switch t := p.peekN(n); t.Kind {
-		case lexer.Identifier, lexer.UnrestrictedName, lexer.ColonColon, lexer.Colon, lexer.Lt, lexer.Gt:
-			continue
-		case lexer.LBrace, lexer.Semicolon:
-			return true
-		case lexer.Keyword:
-			switch t.KeywordID {
-			case "defined", "typed", "by":
-				continue
-			case "about":
-				return true
-			}
+	n := 1
+	// An identification (`<sn>`? name?) is only one where a typing keyword follows.
+	m := n
+	if p.peekN(m).Kind == lexer.Lt {
+		if !isNameToken(p.peekN(m+1).Kind) || p.peekN(m+2).Kind != lexer.Gt {
+			return false
 		}
+		m += 3
+	}
+	if isNameToken(p.peekN(m).Kind) {
+		m++
+	}
+	if t := p.peekN(m); t.Kind == lexer.Colon {
+		n = m + 1
+	} else if t.Kind == lexer.Keyword && (t.KeywordID == "defined" || t.KeywordID == "typed") {
+		if by := p.peekN(m + 1); by.Kind != lexer.Keyword || by.KeywordID != "by" {
+			return false
+		}
+		n = m + 2
+	}
+	// The metaclass, a qualified name.
+	if !isNameToken(p.peekN(n).Kind) {
 		return false
 	}
+	for n++; p.peekN(n).Kind == lexer.ColonColon; n += 2 {
+		if !isNameToken(p.peekN(n + 1).Kind) {
+			return false
+		}
+	}
+	switch t := p.peekN(n); t.Kind {
+	case lexer.LBrace, lexer.Semicolon:
+		return true
+	case lexer.Keyword:
+		return t.KeywordID == "about"
+	}
+	return false
+}
+
+// isNameToken reports whether k spells a name segment.
+func isNameToken(k lexer.Kind) bool {
+	return k == lexer.Identifier || k == lexer.UnrestrictedName
 }
 
 // atConstraintCondition reports whether an `assert`/`assume` condition follows,

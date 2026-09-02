@@ -66,9 +66,14 @@ func (s *Server) identityActions(name string, doc *model.Document, want source.S
 }
 
 // declarationAt returns the declaration whose header — the text before its
-// body, or the whole declaration when it has none — the range lies in.
+// body, or the whole declaration when it has none — the range lies in, leading
+// trivia (indentation, a comment) of a selection skipped.
 func declarationAt(doc *model.Document, want source.Span) *symbols.Symbol {
-	sym := symbolAtOffset(doc.Scope, want.Offset)
+	at := want.Offset
+	if first := firstTokenOffset(doc.Content, want.Offset, want.End()); first >= 0 {
+		at = first
+	}
+	sym := symbolAtOffset(doc.Scope, at)
 	if sym == nil || sym.Decl == nil || enclosingMetadataBody(sym.OwnerScope) != nil {
 		return nil
 	}

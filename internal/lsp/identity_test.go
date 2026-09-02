@@ -151,6 +151,39 @@ func TestIdentityActionOfferedOnUnannotatedDeclaration(t *testing.T) {
 	}
 }
 
+// selection is the range from the start of the line holding from through to.
+func selection(t *testing.T, src, from, to string) protocol.Range {
+	t.Helper()
+	start, end := strings.Index(src, from), strings.Index(src, to)
+	if start < 0 || end < 0 {
+		t.Fatalf("markers %q, %q not in source", from, to)
+	}
+	start = strings.LastIndexByte(src[:start], '\n') + 1
+	return protocol.Range{Start: offsetToPosition([]byte(src), start), End: offsetToPosition([]byte(src), end+len(to))}
+}
+
+func TestIdentityActionOfferedOnSelectedHeader(t *testing.T) {
+	const file = "/tmp/identity_selected.sysml"
+	for _, tc := range []struct{ from, to, name string }{
+		{"part def Chassis", "Chassis {", "Chassis"},
+		{"// the chassis", "def Chassis", "Chassis"},
+		{"part def Axle", "Axle;", "Axle"},
+	} {
+		act := mintAction(t, file, scopedSrc, selection(t, scopedSrc, tc.from, tc.to))
+		if want := "Annotate '" + tc.name + "' with a minted element id"; act.Title != want {
+			t.Errorf("selection %q..%q: title = %q, want %q", tc.from, tc.to, act.Title, want)
+		}
+	}
+	for _, tc := range []struct{ from, to string }{
+		{"part def Chassis", "attribute mass"},
+		{"part def Axle", "part front"},
+	} {
+		if acts := identityActionsFor(t, file, scopedSrc, selection(t, scopedSrc, tc.from, tc.to)); len(acts) != 0 {
+			t.Errorf("selection %q..%q: actions = %+v, want none", tc.from, tc.to, acts)
+		}
+	}
+}
+
 func TestIdentityActionNotOfferedOnAnnotatedDeclaration(t *testing.T) {
 	const file = "/tmp/identity_annotated.sysml"
 	if acts := identityActionsFor(t, file, scopedSrc, cursorAt(t, scopedSrc, "Wheel {")); len(acts) != 0 {

@@ -140,7 +140,8 @@ func TestCodeActionFiltersByRange(t *testing.T) {
 		Start: protocol.Position{Line: 3},
 		End:   protocol.Position{Line: 3, Character: 18},
 	})
-	if len(line3) != 1 || line3[0].Title != "Change 'Whel' to 'Wheel'" {
+	// The whole line selects b's header too, so its identity rewrite comes along.
+	if len(line3) != 2 || line3[0].Title != "Change 'Whel' to 'Wheel'" || line3[1].Kind != identityActionKind {
 		t.Errorf("actions for line 3 = %+v", line3)
 	}
 	// An empty range is a cursor: it still asks for the fixes of the diagnostic

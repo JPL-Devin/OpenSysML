@@ -26,6 +26,18 @@
           (Membership visibility="default"
             (PrefixMetadata type="Tag"))))
       (Membership visibility="default"
+        (Usage kind="constraint" name="named" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (PrefixMetadata type="Tag" name="m"))))
+      (Membership visibility="default"
+        (Usage kind="constraint" name="short" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (PrefixMetadata type="Tag" name="<t>"))))
+      (Membership visibility="default"
+        (Usage kind="constraint" name="typed" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (PrefixMetadata type="Tag" name="t"))))
+      (Membership visibility="default"
         (Usage kind="constraint" name="tagged" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (ConstraintMember assert=true negated=false
             (OperatorExpr operator="@"
@@ -41,4 +53,18 @@
         (Usage kind="constraint" name="tagged3" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (ConstraintMember assert=true negated=false
             (OperatorExpr operator="@"
-              (FeatureReference name="Tag::sub"))))))))
+              (FeatureReference name="Tag::sub")))))
+      (Membership visibility="default"
+        (Usage kind="constraint" name="less" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConstraintMember assert=true negated=false
+            (OperatorExpr operator="<"
+              (OperatorExpr operator="@"
+                (FeatureReference name="Tag"))
+              (FeatureReference name="x")))))
+      (Membership visibility="default"
+        (Usage kind="constraint" name="greater" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConstraintMember assert=true negated=false
+            (OperatorExpr operator=">"
+              (OperatorExpr operator="@"
+                (FeatureReference name="Tag"))
+              (FeatureReference name="x"))))))))
