@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
@@ -149,11 +151,17 @@ func TestRepresentationCarriesWhatTheServiceStores(t *testing.T) {
 	}
 }
 
-// stack fakes the two services for one repository: the commit path records
-// what it was sent, the query path answers with a fixed result set.
-func stack(t *testing.T, results string) (*Client, *[][]byte) {
+// fakeStack fakes the two services for one repository: the branch path names
+// the head, the commit path records what it was sent and moves the head, the
+// query path answers any commit with a fixed result set.
+type fakeStack struct {
+	head   string
+	posted [][]byte
+}
+
+func stack(t *testing.T, results string) (*Client, *fakeStack) {
 	t.Helper()
-	var posted [][]byte
+	fake := &fakeStack{head: "c-0"}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer t" {
 			w.WriteHeader(http.StatusUnauthorized)
@@ -161,13 +169,16 @@ func stack(t *testing.T, results string) (*Client, *[][]byte) {
 		}
 		body, _ := io.ReadAll(r.Body)
 		switch {
+		case r.URL.Path == "/projects/p/branches/b" && r.Method == http.MethodGet:
+			fmt.Fprintf(w, `{"@id":"b","@type":"Branch","head":{"@id":%q}}`, fake.head)
 		case r.URL.Path == "/projects/p/commits":
 			if r.URL.Query().Get("branchId") != "b" {
 				t.Errorf("commit posted to branch %q, want b", r.URL.Query().Get("branchId"))
 			}
-			posted = append(posted, body)
-			_, _ = io.WriteString(w, `{"@id":"c-1","@type":"Commit"}`)
-		case r.URL.Path == "/orgs/o/repos/p/branches/b/query", r.URL.Path == "/orgs/o/repos/p/locks/Commit.c-0/query":
+			fake.posted = append(fake.posted, body)
+			fake.head = fmt.Sprintf("c-%d", len(fake.posted))
+			fmt.Fprintf(w, `{"@id":%q,"@type":"Commit"}`, fake.head)
+		case strings.HasPrefix(r.URL.Path, "/orgs/o/repos/p/locks/Commit.") && strings.HasSuffix(r.URL.Path, "/query"):
 			if r.Header.Get("Accept") != "application/sparql-results+json" {
 				t.Errorf("query without a JSON results Accept: %q", r.Header.Get("Accept"))
 			}
@@ -178,7 +189,7 @@ func stack(t *testing.T, results string) (*Client, *[][]byte) {
 		}
 	}))
 	t.Cleanup(server.Close)
-	return New(Config{Layer1URL: server.URL, SysMLV2URL: server.URL, Token: "t", Org: "o"}), &posted
+	return New(Config{Layer1URL: server.URL, SysMLV2URL: server.URL, Token: "t", Org: "o"}), fake
 }
 
 const sparqlFixture = `{"head":{"vars":["s","p","o"]},"results":{"bindings":[
@@ -189,13 +200,19 @@ const sparqlFixture = `{"head":{"vars":["s","p","o"]},"results":{"bindings":[
 ]}}`
 
 func TestRepositoryReadsGraphsAndWritesCommits(t *testing.T) {
-	client, posted := stack(t, sparqlFixture)
+	client, fake := stack(t, sparqlFixture)
 	repo := client.Repository("p", "b")
 	ctx := context.Background()
 
+	if repo.Seen() != "" {
+		t.Errorf("a repository has seen %q before any read", repo.Seen())
+	}
 	graph, err := repo.Graph(ctx)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if repo.Seen() != "c-0" {
+		t.Errorf("the read stood at %q, want the head c-0", repo.Seen())
 	}
 	x := rdf.IRI(rdf.Element + "X1")
 	if got, _ := graph.Object(x, rdf.SysML+"count"); got != rdf.TypedLiteral("3", rdf.XSD+"integer") {
@@ -215,8 +232,42 @@ func TestRepositoryReadsGraphsAndWritesCommits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if commit != "c-1" || len(*posted) != 1 {
-		t.Errorf("commit %q from %d post(s), want c-1 from 1", commit, len(*posted))
+	if commit != "c-1" || len(fake.posted) != 1 || repo.Seen() != "c-1" {
+		t.Errorf("commit %q from %d post(s), seen %q; want c-1 from 1, seen c-1", commit, len(fake.posted), repo.Seen())
+	}
+	// A second batch follows the repository's own commit without complaint.
+	if commit, err = repo.Commit(ctx, []reposync.ElementChange{{Kind: reposync.KindDelete, ID: "X1"}}, "bye"); err != nil || commit != "c-2" {
+		t.Errorf("second batch: %q, %v", commit, err)
+	}
+}
+
+func TestRepositoryRefusesToCommitPastAMovedHead(t *testing.T) {
+	client, fake := stack(t, sparqlFixture)
+	repo := client.Repository("p", "b")
+	ctx := context.Background()
+	if _, err := repo.Graph(ctx); err != nil {
+		t.Fatal(err)
+	}
+	fake.head = "c-elsewhere"
+
+	_, err := repo.Commit(ctx, []reposync.ElementChange{{Kind: reposync.KindDelete, ID: "X1"}}, "bye")
+	var stale *StaleBranchError
+	if !errors.As(err, &stale) || stale.Seen != "c-0" || stale.Head != "c-elsewhere" {
+		t.Fatalf("want a StaleBranchError from c-0 to c-elsewhere, got %v", err)
+	}
+	if len(fake.posted) != 0 {
+		t.Errorf("a stale commit was still posted %d time(s)", len(fake.posted))
+	}
+	if repo.Seen() != "c-0" {
+		t.Errorf("the refusal moved what was seen to %q", repo.Seen())
+	}
+
+	// Reading again moves to the new head, and the commit goes through.
+	if _, err := repo.Graph(ctx); err != nil || repo.Seen() != "c-elsewhere" {
+		t.Fatalf("re-read: seen %q, %v", repo.Seen(), err)
+	}
+	if _, err := repo.Commit(ctx, []reposync.ElementChange{{Kind: reposync.KindDelete, ID: "X1"}}, "bye"); err != nil || len(fake.posted) != 1 {
+		t.Errorf("commit after re-read: %d post(s), %v", len(fake.posted), err)
 	}
 }
 

@@ -18,11 +18,19 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   silently. On success the commit the service names becomes the last-seen commit in
   `<model>.sync.json`, never in the notation, and it is the baseline of the next run, so
   repository changes made behind the sync's back surface as conflicts and a second apply finds
-  nothing to change. `-sync-diff` takes the same endpoint URL and stays a dry run; with neither
-  flag nothing is written. The exit status keeps its contract: 0 applied or nothing to do, 1 a
-  refusal or a repository failure (reported with each change's fate), 2 an unusable run. Both
-  sides of the diff are compared under what the service can store, so the properties it has no
-  place for are reported as not compared rather than diffed forever. The opt-in Flexo
+  nothing to change. An apply that finds nothing to change still records the branch head it
+  compared against, so a model first pushed by other means gets its baseline from the first
+  run. The change set is computed at one head commit, and the commit is refused if the branch
+  has moved since — someone else's edit between the read and the write is a stale-head error
+  to diff again after, not a silent overwrite. `-sync-diff` takes the same endpoint URL and
+  stays a dry run; with neither flag nothing is written. A bearer token never goes over
+  plaintext `http://` to a host other than this machine: the compose stack on `localhost` works
+  as documented, anything else needs `https://` or an explicit `FLEXO_ALLOW_PLAIN_HTTP=1`. The
+  exit status keeps its contract: 0 applied or nothing to do, 1 a refusal or a repository
+  failure — a read the stack would not answer included, reported with each change's fate —
+  2 an unusable run. Both sides of the diff are compared under what the service can store, so
+  the properties it has no place for are reported as not compared rather than diffed forever.
+  The opt-in Flexo
   harness measures the apply against the real stack — an initial load, a revision with a
   retained-id rename and gated deletes, a conflict staged behind the sync's back — and records
   what read back at the recorded commit

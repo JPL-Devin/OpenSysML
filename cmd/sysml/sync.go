@@ -92,11 +92,14 @@ func runSync(files []string, target string, apply bool) int {
 		}
 	case repository.live != nil && state != nil && state.LastSeenCommit != "":
 		if opts.Base, err = repository.live.GraphAt(ctx, state.LastSeenCommit); err != nil {
-			return fail(fmt.Errorf("read the repository at last-seen commit %s: %w", state.LastSeenCommit, err))
+			return failRepository(fmt.Errorf("read the repository at last-seen commit %s: %w", state.LastSeenCommit, err))
 		}
 	}
 	remote, err := repository.graph(ctx)
 	if err != nil {
+		if repository.live != nil {
+			return failRepository(fmt.Errorf("read the repository: %w", err))
+		}
 		return fail(err)
 	}
 
@@ -142,12 +145,22 @@ func applySync(ctx context.Context, repo *flexo.Repository, set *reposync.Change
 		}
 		return exitFailed
 	}
-	if len(result.Applied) == 0 {
-		fmt.Fprintln(os.Stderr, "nothing applied: the repository already agrees with the model")
-		return exitHolds
-	}
 	if state == nil {
 		state = &reposync.State{Org: scope.Org, ProjectID: scope.ProjectID, Branch: scope.Branch}
+	}
+	if len(result.Applied) == 0 {
+		// An agreeing repository still fixes the baseline: the head just read is
+		// what later repository changes are conflicts against.
+		if head := repo.Seen(); head != state.LastSeenCommit {
+			state.LastSeenCommit = head
+			if err := state.Save(statePath); err != nil {
+				return fail(fmt.Errorf("nothing to apply, but could not record head commit %s: %w", head, err))
+			}
+			fmt.Fprintf(os.Stderr, "nothing applied: the repository already agrees with the model; head commit %s recorded in %s\n", head, statePath)
+			return exitHolds
+		}
+		fmt.Fprintln(os.Stderr, "nothing applied: the repository already agrees with the model")
+		return exitHolds
 	}
 	if err := state.Advance(result); err != nil {
 		return fail(err)
@@ -158,6 +171,13 @@ func applySync(ctx context.Context, repo *flexo.Repository, set *reposync.Change
 	fmt.Fprintf(os.Stderr, "applied %d change(s) in %d commit(s); last-seen commit %s recorded in %s\n",
 		len(result.Applied), len(result.Commits), result.LastCommit(), statePath)
 	return exitHolds
+}
+
+// failRepository reports a live repository operation that failed: status 1,
+// as a failed apply, not the misuse status an unusable run gets.
+func failRepository(err error) int {
+	fmt.Fprintf(os.Stderr, "%s%v\n", commandPrefix, err)
+	return exitFailed
 }
 
 // reportFates lists what an interrupted apply did and did not write.
@@ -186,6 +206,9 @@ func openSyncRepository(target string, scope reposync.Scope, state *reposync.Sta
 		return syncRepository{}, reposync.Options{}, fmt.Errorf("a live repository needs its bearer token: %w", err)
 	}
 	cfg.SysMLV2URL = strings.TrimRight(target, "/")
+	if err := cfg.CheckTransport(); err != nil {
+		return syncRepository{}, reposync.Options{}, err
+	}
 	if scope.ProjectID == "" {
 		return syncRepository{}, reposync.Options{}, errors.New("the model names no project; annotate it with @IdentityMetadata::ProjectRef { projectId = \"...\"; branch = \"...\"; }")
 	}

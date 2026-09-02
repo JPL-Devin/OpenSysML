@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -33,6 +34,7 @@ const (
 	EnvSysMLV2URL = "FLEXO_SYSMLV2_URL"
 	EnvToken      = "FLEXO_INTEROP_TOKEN" // #nosec G101 -- a variable name, not a credential
 	EnvOrg        = "FLEXO_SYSMLV2_ORG"
+	EnvPlainHTTP  = "FLEXO_ALLOW_PLAIN_HTTP"
 )
 
 // Defaults matching flexo-mms-sysmlv2/docker-compose/docker-compose.yml, so a
@@ -70,6 +72,43 @@ func ConfigFromEnv() (Config, error) {
 		return cfg, fmt.Errorf("%s is unset, so neither service will authorize the run", EnvToken)
 	}
 	return cfg, nil
+}
+
+// PlaintextError is a bearer token about to cross the network unencrypted: an
+// http:// URL whose host is not this machine.
+type PlaintextError struct {
+	URL string
+}
+
+func (e *PlaintextError) Error() string {
+	return fmt.Sprintf("%s would send the bearer token in the clear; use https://, or set %s=1 for a stack you trust the network to", e.URL, EnvPlainHTTP)
+}
+
+// CheckTransport refuses a token over plaintext to anything but a loopback
+// host, unless the environment opts in with FLEXO_ALLOW_PLAIN_HTTP=1.
+func (cfg Config) CheckTransport() error {
+	if os.Getenv(EnvPlainHTTP) == "1" {
+		return nil
+	}
+	for _, raw := range []string{cfg.SysMLV2URL, cfg.Layer1URL} {
+		u, err := url.Parse(raw)
+		if err != nil {
+			return fmt.Errorf("stack url %q: %w", raw, err)
+		}
+		if u.Scheme == "http" && !loopback(u.Hostname()) {
+			return &PlaintextError{URL: raw}
+		}
+	}
+	return nil
+}
+
+// loopback reports a host name that resolves to this machine without a lookup.
+func loopback(host string) bool {
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func envOr(name, fallback string) string {
@@ -271,6 +310,27 @@ type Commit struct {
 	Type string `json:"@type"`
 }
 
+// Branch is one branch as the SysML v2 API describes it: its id and the
+// commit at its head.
+type Branch struct {
+	ID   string `json:"@id"`
+	Head Commit `json:"head"`
+}
+
+// Branch reads one branch of a project, head commit included.
+func (c *Client) Branch(ctx context.Context, project, branch string) (Branch, error) {
+	content, _, err := c.do(ctx, http.MethodGet,
+		c.cfg.SysMLV2URL+"/projects/"+url.PathEscape(project)+"/branches/"+url.PathEscape(branch), nil, "", nil)
+	if err != nil {
+		return Branch{}, err
+	}
+	var read Branch
+	if err := json.Unmarshal(content, &read); err != nil {
+		return Branch{}, fmt.Errorf("decode branch: %w", err)
+	}
+	return read, nil
+}
+
 // ErrBlankNode is a blank node in a graph read back from the stack; elements
 // are IRIs, so a sync has no way to key one.
 var ErrBlankNode = errors.New("the graph holds a blank node, which no element id can address")
@@ -317,13 +377,8 @@ func (c *Client) versionGraphURL(project, version string) string {
 		c.cfg.Layer1URL, url.PathEscape(c.cfg.Org), url.PathEscape(project), version)
 }
 
-// BranchGraph reads a branch's whole model graph through Layer 1's SPARQL
-// endpoint, in the typed form the store holds rather than Turtle's shorthand.
-func (c *Client) BranchGraph(ctx context.Context, project, branch string) (*rdf.Graph, error) {
-	return c.selectGraph(ctx, c.versionGraphURL(project, "branches/"+url.PathEscape(branch)))
-}
-
-// CommitGraph reads the model graph as one commit left it.
+// CommitGraph reads the model graph as one commit left it, through Layer 1's
+// SPARQL endpoint, in the typed form the store holds rather than Turtle's shorthand.
 func (c *Client) CommitGraph(ctx context.Context, project, commit string) (*rdf.Graph, error) {
 	return c.selectGraph(ctx, c.versionGraphURL(project, "locks/"+url.PathEscape("Commit."+commit)))
 }

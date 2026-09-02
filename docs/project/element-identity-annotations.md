@@ -240,7 +240,13 @@ when the set was produced with deletes confirmed. A set that is not appliable (a
 unconfirmed delete) is refused as a typed error before the first write, and a repository that
 rejects a commit leaves the run failed with every change's fate reported; in neither case does
 the state move. On success the commit the repository names becomes the last-seen commit, so
-the next diff is against it and finds nothing to change. Both sides of a diff are compared under
+the next diff is against it and finds nothing to change; an apply with nothing to change
+records the head it compared against, so the baseline exists from the first run. The change
+set is computed at one head commit, and the adapter refuses to commit if the branch has
+moved since (`flexo.StaleBranchError`) — a check-then-post the SysML v2 API offers no atomic
+precondition for, so it narrows the window rather than closing it, but never overwrites an
+edit it has seen. A bearer token is not sent over plaintext `http://` to a host other than the
+local machine unless `FLEXO_ALLOW_PLAIN_HTTP=1` says so. Both sides of a diff are compared under
 the repository's *representation* — what its commit path can store of a graph — so what it has
 no place for is reported as not compared rather than reapplied on every run.
 

@@ -13,10 +13,13 @@ import (
 
 // Repository is one project branch as a sync's repository: read as a graph,
 // written through the service's commit path so every element keeps its id.
+// It remembers the head its last read stood at and refuses to commit past a
+// head that has since moved.
 type Repository struct {
 	client  *Client
 	project string
 	branch  string
+	seen    string
 }
 
 // Repository addresses one project branch for a sync.
@@ -24,9 +27,47 @@ func (c *Client) Repository(project, branch string) *Repository {
 	return &Repository{client: c, project: project, branch: branch}
 }
 
-// Graph reads the branch as it stands.
+// StaleBranchError is a branch whose head moved between the read a change set
+// was computed against and the commit that would have written it; nothing was
+// written, and the change set has to be recomputed against the new head.
+type StaleBranchError struct {
+	Project, Branch, Seen, Head string
+}
+
+func (e *StaleBranchError) Error() string {
+	return fmt.Sprintf("branch %s of %s moved from commit %s to %s since the change set was computed; nothing was written, so diff again against the new head",
+		e.Branch, e.Project, e.Seen, e.Head)
+}
+
+// Head is the branch's current head commit.
+func (r *Repository) Head(ctx context.Context) (string, error) {
+	branch, err := r.client.Branch(ctx, r.project, r.branch)
+	if err != nil {
+		return "", err
+	}
+	if branch.Head.ID == "" {
+		return "", fmt.Errorf("branch %s of %s names no head commit", r.branch, r.project)
+	}
+	return branch.Head.ID, nil
+}
+
+// Seen is the head commit the last Graph read stood at, or the last commit
+// this repository wrote; empty before either.
+func (r *Repository) Seen() string { return r.seen }
+
+// Graph reads the branch as its head commit left it, so the read is of one
+// commit rather than of a branch that may move under it.
 func (r *Repository) Graph(ctx context.Context) (*rdf.Graph, error) {
-	return r.client.BranchGraph(ctx, r.project, r.branch)
+	head, err := r.Head(ctx)
+	if err != nil {
+		return nil, err
+	}
+	graph, err := r.client.CommitGraph(ctx, r.project, head)
+	if err != nil {
+		return nil, err
+	}
+	r.seen = head
+	return graph, nil
 }
 
 // GraphAt reads the branch as one earlier commit left it: the last-seen graph
@@ -36,16 +77,28 @@ func (r *Repository) GraphAt(ctx context.Context, commit string) (*rdf.Graph, er
 }
 
 // Commit writes one batch as one SysML v2 commit. Creates and updates send
-// the element whole under its identity; deletes send a null payload.
+// the element whole under its identity; deletes send a null payload. The API
+// takes no precondition, so the head is re-read first and a moved one refuses
+// the write as a StaleBranchError.
 func (r *Repository) Commit(ctx context.Context, changes []reposync.ElementChange, message string) (string, error) {
 	body, err := commitRequest(changes, message)
 	if err != nil {
 		return "", err
 	}
+	if r.seen != "" {
+		head, err := r.Head(ctx)
+		if err != nil {
+			return "", err
+		}
+		if head != r.seen {
+			return "", &StaleBranchError{Project: r.project, Branch: r.branch, Seen: r.seen, Head: head}
+		}
+	}
 	commit, err := r.client.PostChanges(ctx, r.project, r.branch, body)
 	if err != nil {
 		return "", err
 	}
+	r.seen = commit.ID
 	return commit.ID, nil
 }
 
