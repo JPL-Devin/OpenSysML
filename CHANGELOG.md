@@ -81,6 +81,21 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   parameters) stays on the evaluator, as does every traced, named-argument or non-scalar
   invocation. `OPENSYSML_CALC_COMPILE=0` turns the tier off for bisecting.
 
+### Fixed
+
+- **A qualified name through an import evaluates as the checker resolves it.** The evaluator
+  used to resolve only the first segment of `Bq::x` through the resolver and walk the rest as
+  owned and inherited members, so a segment a `public import` re-exports failed with
+  `member x not found in Bq` even though the checker accepted the reference — and the library's
+  own façades are built that way, so `ISQ::speed` and `SI::speed` failed with
+  `member speed not found`. The whole name now goes through the same `ResolveQualified` the
+  checker uses: a wildcard, single-member or recursive import, a façade of a façade, a short
+  name and an `alias` (which used to fail with `cannot evaluate element type *ast.Alias`) all
+  reach the element the checker reaches, a `private import` stays reachable only from inside
+  the importing namespace, and a name the checker rejects fails with the checker's own
+  `unresolved reference: Priv::x`. A calc usage's outputs, and the "not a variant" / "not a
+  literal" reports, are unchanged.
+
 ### Changed
 
 - **The documentation site's landing page describes the four oracles instead of quoting their

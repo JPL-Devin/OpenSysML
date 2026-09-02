@@ -437,52 +437,23 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 		return Value{}, fmt.Errorf("%w: %s", ErrUnresolvedReference, name)
 	}
 
-	// Multi-part qualified names: A::B::x
-	// Spec-compliant: Use model.LookupMember for member traversal.
-	// Use resolver logic for first part (handles scope, imports, global index),
-	// then walk remaining parts with model.LookupMember for inherited members.
+	// A multi-part name A::B::x resolves as the checker resolves it — imports,
+	// visibility, aliases and inherited members included — so the two agree.
+	currentSym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, qn)
 
-	// Build single-segment qualified name for first part resolution via resolver
-	firstName := qn.Parts[0]
-	firstQN := &ast.QualifiedName{
-		Global: qn.Global,
-		Parts:  []ast.NameSegment{firstName},
+	// A calc usage's output features are computed rather than declared values,
+	// so a name qualified by one reads the rest from an evaluation of the usage.
+	for i := 0; i < len(qn.Parts)-1; i++ {
+		part, resolved := ec.ctx.resolver.PartSymbol(qn, i)
+		if !resolved {
+			break
+		}
+		if isCalcUsageSymbol(part) {
+			return ec.evalCalcUsageMembers(part, qn.Parts[i+1:])
+		}
 	}
-	firstQN.NodeBase = qn.NodeBase
-
-	// Resolve first part using resolver's qualified-name logic (handles global index)
-	currentSym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, firstQN)
 	if !ok {
-		return Value{}, fmt.Errorf("%w: %s", ErrUnresolvedReference, firstName.Text)
-	}
-
-	// Walk remaining parts using model.LookupMember (spec requirement)
-	for i := 1; i < len(qn.Parts); i++ {
-		// A calc usage's output features are computed rather than declared
-		// values, so the rest of the name is read from an evaluation of the usage.
-		if isCalcUsageSymbol(currentSym) {
-			return ec.evalCalcUsageMembers(currentSym, qn.Parts[i:])
-		}
-		memberName := qn.Parts[i].Text
-		nextSym, found := ec.ctx.model.LookupMember(currentSym, memberName)
-		if !found {
-			// A name qualified by a variation designates one of its variants, so
-			// one that is not a variant is reported as such.
-			if ec.ctx.model.IsVariationFeature(currentSym) {
-				return Value{}, fmt.Errorf("%w: %s is not a variant of %s (%s)",
-					ErrNotAVariant, memberName, currentSym.Name,
-					ec.ctx.variantSummary(currentSym))
-			}
-			// A name qualified by an enumeration designates one of its literals,
-			// so one that is no literal is reported as such.
-			if currentSym.Kind == symbols.SymbolEnumerationDef {
-				return Value{}, fmt.Errorf("%w: %s is not a literal of %s (%s)",
-					ErrNotALiteral, memberName, currentSym.Name,
-					ec.ctx.enumerationSummary(currentSym))
-			}
-			return Value{}, fmt.Errorf("member %s not found in %s", memberName, currentSym.Name)
-		}
-		currentSym = nextSym
+		return Value{}, ec.unresolvedQualifiedName(qn)
 	}
 
 	// A library feature reads through the feature seam, whatever the library
@@ -530,6 +501,29 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 	default:
 		return Value{}, fmt.Errorf("cannot evaluate element type %T", decl)
 	}
+}
+
+// unresolvedQualifiedName reports a multi-part name the resolver rejected. A
+// variation or enumeration reached by the deepest resolved segment designates
+// its variants or literals, so the segment after it is reported against those.
+func (ec *EvalContext) unresolvedQualifiedName(qn *ast.QualifiedName) error {
+	for i := len(qn.Parts) - 2; i >= 0; i-- {
+		owner, ok := ec.ctx.resolver.PartSymbol(qn, i)
+		if !ok {
+			continue
+		}
+		memberName := qn.Parts[i+1].Text
+		if ec.ctx.model.IsVariationFeature(owner) {
+			return fmt.Errorf("%w: %s is not a variant of %s (%s)",
+				ErrNotAVariant, memberName, owner.Name, ec.ctx.variantSummary(owner))
+		}
+		if owner.Kind == symbols.SymbolEnumerationDef {
+			return fmt.Errorf("%w: %s is not a literal of %s (%s)",
+				ErrNotALiteral, memberName, owner.Name, ec.ctx.enumerationSummary(owner))
+		}
+		break
+	}
+	return fmt.Errorf("%w: %s", ErrUnresolvedReference, qualifiedNameToString(qn))
 }
 
 // declaredValue evaluates the value a declaration binds in the scope it was written
