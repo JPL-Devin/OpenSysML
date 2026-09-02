@@ -44,16 +44,23 @@ export {
   ClosedConnectionError,
   DownloadError,
   EvaluationError,
+  InvalidRequestError,
   ManifestSignatureError,
+  ModelFileNotFoundError,
+  ModelNotFoundError,
   OpenSysMLError,
   ParseError,
   ServiceError,
   ServiceStartError,
+  ServiceTimeoutError,
   SymbolNotFoundError,
   UnpinnedReleaseError,
   UnsignedReleaseError,
+  UnsupportedOperationError,
 } from "./errors.js";
 export type { FailureCause, ModelDiagnostic } from "./errors.js";
+export { fromHandshakeError, fromRpcError, statusName } from "./status.js";
+export type { NotFoundSubject } from "./status.js";
 export { decodeValue, decodeVerdict, formatValue } from "./values.js";
 export type {
   EnumValue,

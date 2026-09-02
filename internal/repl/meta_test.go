@@ -147,11 +147,11 @@ func TestLookupInScopeTreeSkipsBodyLocalNames(t *testing.T) {
 		t.Fatal("package P not in the document scope")
 	}
 	for _, name := range []string{"bodyParam", "charging", "thenLocal", "elseLocal"} {
-		if syms := collectInScopeTree(doc.Scope, name); len(syms) > 0 {
+		if syms := s.nameTable().lookup(name); len(syms) > 0 {
 			t.Errorf("%s is body-local and must not be found in the scope tree", name)
 		}
 	}
-	if syms := collectInScopeTree(doc.Scope, "samples"); len(syms) == 0 {
+	if syms := s.nameTable().lookup("samples"); len(syms) == 0 {
 		t.Error("samples is a member of Sample and must still be found")
 	}
 }

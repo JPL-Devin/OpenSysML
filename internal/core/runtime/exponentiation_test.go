@@ -81,7 +81,7 @@ func TestExponentiationErrorsAtEvaluation(t *testing.T) {
 		{"integer overflow", []Value{constInt(math.MaxInt64), constInt(2)}, semantics.ErrArithmeticOverflow},
 		{"real overflow", []Value{constReal(1e300), constReal(2)}, semantics.ErrArithmeticOverflow},
 		{"boolean operand", []Value{boolValue(true), constInt(2)}, semantics.ErrArithmeticDomain},
-		{"string operand", []Value{{Kind: ValString, Str: "2"}, constInt(2)}, ErrTypeMismatch},
+		{"string operand", []Value{NewStringValue("2"), constInt(2)}, ErrTypeMismatch},
 	}
 
 	model, resolver, root := parseAndBuildModel(t, powerModel)

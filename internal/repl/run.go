@@ -68,24 +68,49 @@ func (s *Session) LoadFile(path string) ([]string, error) {
 // that spans several files reports the analysis once every file is in, a
 // reference from one file to another resolving only then.
 func (s *Session) LoadFileSummary(path string) ([]string, error) {
+	return s.LoadFilesSummary([]string{path})
+}
+
+// LoadFilesSummary is LoadFileSummary over every path as one submission, indexed and
+// analyzed once, each file still summarized on its own; a read failure is a *ReadError.
+func (s *Session) LoadFilesSummary(paths []string) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	name, data, err := project.ReadFile(expandHome(path))
-	if err != nil {
-		return nil, readError(name, err)
+	files := make([]SourceFile, 0, len(paths))
+	for _, path := range paths {
+		name, data, err := project.ReadFile(expandHome(path))
+		if err != nil {
+			return nil, readError(name, err)
+		}
+		files = append(files, SourceFile{Name: name, Text: string(data)})
 	}
-	res := s.submit(name, string(data))
-	// The analysis is reported once every file is in, but a file that does not
-	// parse is a finding about that file alone and is reported with it.
-	lines := renderSyntax(res, s.verbosity)
-	return append(append(lines, res.Notices...), renderSummary(res.ownMembers())...), nil
+	res, byFile, whole := s.submitEach(files)
+	var lines []string
+	for i, f := range files {
+		// The analysis is reported once every file is in, but a file that does not
+		// parse is a finding about that file alone and is reported with it.
+		own := res.within(s.fileSpan(f.Name))
+		lines = append(lines, renderSyntax(own, s.verbosity)...)
+		lines = append(lines, byFile[i]...)
+		if i == 0 {
+			lines = append(lines, whole...)
+		}
+		lines = append(lines, renderSummary(own.ownMembers())...)
+	}
+	return lines, nil
 }
 
 // DiagnosticLines reports the analysis of everything submitted so far as the
 // prompt prints it: the source line each finding is on, under a position naming
 // the file the finding is in, at the verbosity the session was asked for.
 func (s *Session) DiagnosticLines() []string {
-	diags := s.Diagnostics()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.diagnosticLines()
+}
+
+func (s *Session) diagnosticLines() []string {
+	diags := s.diagnostics()
 	if len(diags) == 0 {
 		return nil
 	}
@@ -115,6 +140,8 @@ func (s *Session) DiagnosticLines() []string {
 // text: a load whose file does not parse says why, and HasErrors is true, which is
 // what a non-interactive run exits on.
 func (s *Session) Diagnostics() []passes.Diagnostic {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.diagnostics()
 }
 
@@ -122,14 +149,16 @@ func (s *Session) Diagnostics() []passes.Diagnostic {
 // found, or a feature value a command could not materialize. It is what a non-interactive
 // run exits on.
 func (s *Session) HasErrors() bool {
-	return s.hasAnalysisErrors() || len(s.MaterializationFailures()) > 0
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.hasAnalysisErrors() || len(s.materializeFailures) > 0
 }
 
 // hasAnalysisErrors reports whether analysis found something that stops the model from
 // running. Notation stops it only when asked strictly, which rejects the file outright.
 func (s *Session) hasAnalysisErrors() bool {
-	strict := s.ConformanceMode().IsStrict()
-	for _, d := range s.Diagnostics() {
+	strict := s.ws.ConformanceMode().IsStrict()
+	for _, d := range s.diagnostics() {
 		if d.Blocking() || (strict && d.Severity == passes.SeverityError) {
 			return true
 		}
@@ -186,7 +215,9 @@ type Diagnostic struct {
 // finding placed in the submission it is about: the file it was loaded from, at
 // the line and column that file has it on.
 func (s *Session) LocatedDiagnostics() []Diagnostic {
-	diags := s.Diagnostics()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	diags := s.diagnostics()
 	if len(diags) == 0 {
 		return nil
 	}
@@ -231,6 +262,8 @@ func (s *Session) snippetAt(offset int) (snippet, int) {
 // EvalExpr evaluates an expression and returns the lines `%eval` prints, with an
 // error for one that could not be evaluated.
 func (s *Session) EvalExpr(expr string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	lines, err := s.evalExpr(expr)
 	if err != nil {
 		return nil, err
@@ -255,6 +288,8 @@ func (s *Session) EvalBare(expr string) ([]string, error) {
 // what `%calc` takes: a name, optionally followed by its arguments or carrying
 // them as `Fall(3, 4)`.
 func (s *Session) RunCalc(invocation string) Verdict {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	name, argText := splitCalcArgs(invocation)
 	lines, values, err := s.evalCalc(name, argText)
 	if err != nil {
@@ -267,6 +302,8 @@ func (s *Session) RunCalc(invocation string) Verdict {
 // performer names when it names one. An action that could not be run, or that
 // stopped short of completing, is unresolved: it produced no outputs to judge.
 func (s *Session) RunAction(name string, performer ...string) Verdict {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	started, err := s.startAction(name, performer)
 	if err != nil {
 		return s.withTrace(unresolvedVerdict(name, err.Error()))
@@ -287,6 +324,8 @@ func (s *Session) RunAction(name string, performer ...string) Verdict {
 // initial transition, which is `%state` alone. The values are the configuration
 // the machine settled in.
 func (s *Session) RunStateMachine(name string, performer ...string) Verdict {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.runStateMachine(name, nil, performer)
 }
 
@@ -294,6 +333,8 @@ func (s *Session) RunStateMachine(name string, performer ...string) Verdict {
 // units, which is `%state` followed by `%advance`. A duration of 0 is a run to
 // the current time, dispatching the events already due, as `%advance 0` is.
 func (s *Session) RunStateMachineFor(name string, duration float64, performer ...string) Verdict {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.runStateMachine(name, &duration, performer)
 }
 

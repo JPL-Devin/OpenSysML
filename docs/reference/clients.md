@@ -2,16 +2,16 @@
 
 OpenSysML can be reached from a program in five ways: the Go API, used in the calling process, and
 four clients of the `sysml-grpc` service. This page describes how to choose between them, what
-each covers and what each intentionally omits. Each client's own README, linked per section, is
-the detailed reference.
+each covers and what each intentionally omits. Each client has an API reference of its own, and
+[guide chapter 9](../guide/09-python.md) uses each one as a task.
 
 | Surface | Reaches the engine by | Published | Full reference |
 |---|---|---|---|
-| **Go**, `client/opensysml` | in process; or Connect, to a service someone else runs | with the core (`v*` tags) | [client/opensysml/README.md](../../client/opensysml/README.md) |
+| **Go**, `client/opensysml` | in process; or Connect, to a service someone else runs | with the core (`v*` tags) | [Go packages](api.md) |
 | **Python**, `opensysml` | gRPC, to a private child service or a named service | PyPI, on `opensysml-v*` tags | [Python API](python-api.md) |
-| **Node/TypeScript**, `@opensysml/client` | Connect, to a private child service, a named service, or one a browser page addresses | not yet | [clients/node/README.md](../../clients/node/README.md) |
-| **Java**, `io.github.open-mbee:opensysml-client` | Connect, over the JDK's own HTTP client | not yet | [clients/java/README.md](../../clients/java/README.md) |
-| **Rust**, `opensysml` | Connect, blocking, no async runtime | not yet | [clients/rust/README.md](../../clients/rust/README.md) |
+| **Node/TypeScript**, `@opensysml/client` | Connect, to a private child service, a named service, or one a browser page addresses | not yet | [Node API](node-api.md) |
+| **Java**, `org.openmbee:opensysml-client` | Connect, over the JDK's own HTTP client | not yet | [Java API](java-api.md) |
+| **Rust**, `opensysml` | Connect, blocking, no async runtime | not yet | [Rust API](rust-api.md) |
 
 The protocols and what the service serves on a single port are described in
 [service transports](service-transports.md); the release process for each client is described in
@@ -50,10 +50,11 @@ half-implemented in some:
 - `Query` and OSLC query;
 - native document queries and rendering (`RunDocumentQuery`, `RenderDocument`).
 
-Those RPCs exist and are served. Reach them from the Go or Python client, or from the generated
-stubs each client ships beside its ergonomic layer, until a v2 wraps them. Each client's
-conformance report names, per scenario, which of these a skip belongs to, so a shrinking surface
-cannot pass quietly.
+Those RPCs exist and are served. Only the Node client offers an escape hatch to them —
+`connection.rpc` is the generated Connect client — so from Java or Rust, reach them from the Go or
+Python client until a v2 wraps them: those two ship the protobuf messages but no public call that
+sends one. Each client's conformance report names, per scenario, which of these a skip belongs to,
+so a shrinking surface cannot pass quietly.
 
 The Go API covers all of them but the generated model-ergonomics types: it reads models through
 `Symbol`, `Instance` and `Value` instead.
@@ -113,6 +114,10 @@ npm --prefix clients/node run conformance -- --allow-skips
 
 The Java runner is launched from its own classpath rather than by a Maven goal; the two exact
 commands are given in [clients/java/README.md](../../clients/java/README.md#conformance).
+
+The reference runner also takes `-junit <file>`, writing the same run as JUnit XML — one suite per
+configuration and protocol, one case per scenario — which is what `make conformance` stores beside
+the JSON report and what CI renders as its test report. The JSON report stays the source of truth.
 
 Each runner writes the report format produced by `cmd/conformance`, and each is checked against
 deliberate corruption — a mutated response must fail a scenario — so a runner that asserts nothing

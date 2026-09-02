@@ -1247,9 +1247,10 @@ func testNumericLibraryCallThatHasNoValue(t *testing.T) {
 		{"VectorFunctions::vectorScalarDiv(xs, 0)", ErrDivisionByZero},
 		{"VectorFunctions::cartesianInner(xs)", ErrCalcArity},
 		{"VectorFunctions::sum(xs)", ErrUnevaluableLibraryFunction},
-		{"ComplexFunctions::'/'(ys, (0.0, 0.0))", ErrDivisionByZero},
+		{"ComplexFunctions::'/'(rect(0.0, 1.0), rect(0.0, 0.0))", ErrDivisionByZero},
 		{"ComplexFunctions::re(xs)", ErrTypeMismatch},
-		{"ComplexFunctions::ToString(ys)", ErrUnevaluableLibraryFunction},
+		{"ComplexFunctions::re(ys)", ErrTypeMismatch},
+		{"ComplexFunctions::ToString(rect(0.0, 1.0))", ErrUnevaluableLibraryFunction},
 		// includingAt inserts before a position of 1..size+1, so an index past the
 		// end of the sequence names no insertion point and is reported rather than
 		// appending or dropping the values.
@@ -2472,7 +2473,7 @@ func testCallArgumentOfWrongType(t *testing.T) {
 		}
 	}`)
 	exec.InvokeOperation("setSpeed", map[string]Value{
-		"value": {Kind: ValString, Str: "fast"},
+		"value": NewStringValue("fast"),
 	})
 	err := exec.RunToCompletion()
 	if err == nil {
@@ -7355,7 +7356,7 @@ func testWriteOfAWrongTypedValueLeavesTheFeature(t *testing.T) {
 	if err != nil {
 		t.Fatalf("instantiate: %v", err)
 	}
-	err = inst.SetFeatureValue(ctx, "reading", Value{Kind: ValString, Str: "not a number"})
+	err = inst.SetFeatureValue(ctx, "reading", NewStringValue("not a number"))
 	if !errors.Is(err, ErrTypeMismatch) {
 		t.Fatalf("error = %v, want ErrTypeMismatch", err)
 	}

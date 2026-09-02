@@ -21,10 +21,15 @@ const (
 	SpecCompliancePath = "docs/project/spec-compliance.md"
 	ReadmePath         = "README.md"
 	ArchitecturePath   = "docs/internals/architecture.md"
+	LandingPath        = "overrides/home.html"
 )
 
-// refereedBlockName is the name of the generated block the consumers share.
-const refereedBlockName = "refereed-figures"
+// Names of the generated blocks: the prose census the Markdown pages share, and
+// the documentation site's landing band, which states the same figures as markup.
+const (
+	refereedBlockName = "refereed-figures"
+	landingBlockName  = "landing-figures"
+)
 
 // statusMarkers are the row statuses the compliance map uses. '⚠' is matched
 // without its variation selector, as the map writes both spellings.
@@ -408,18 +413,22 @@ func BaselineLines() []BaselineLine {
 	}}
 }
 
-// Block describes a generated named block and its consumer-relative links.
+// Block describes a generated named block and its consumer-relative links. Name
+// selects the template the block is rendered from; LinkPrefix is where that
+// template's links to the conformance records resolve from this consumer.
 type Block struct {
 	Path       string
 	Name       string
 	LinkPrefix string
 }
 
-// Blocks lists the consumers of the shared refereed-figures block.
+// Blocks lists the consumers of the generated blocks: the two Markdown pages
+// sharing the prose census, and the site's landing band stating the same figures.
 func Blocks() []Block {
 	return []Block{
 		{Path: ReadmePath, Name: refereedBlockName, LinkPrefix: "docs/project/"},
 		{Path: ArchitecturePath, Name: refereedBlockName, LinkPrefix: "../project/"},
+		{Path: LandingPath, Name: landingBlockName, LinkPrefix: "project/"},
 	}
 }
 
@@ -555,13 +564,75 @@ const refereedBlockTemplateText = "<!-- doc-counts:begin {{.Name}} -->\n" +
 	"**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each of the {{.RuleCounts.Total}} tracked rules stays in [spec compliance]({{.LinkPrefix}}spec-compliance.md) as a census of our own row list. It moves when rows are rewritten and does not move when an oracle does, so it is not the progress measure.\n" +
 	"<!-- doc-counts:end {{.Name}} -->"
 
-var refereedBlockTemplate = template.Must(template.New(refereedBlockName).Parse(refereedBlockTemplateText))
+// landingBlockTemplateText states the same census as markup, for the band the
+// documentation site's landing page opens with: the four refereed figures and the
+// caveats that keep them readable as measurements. recordURL resolves each record
+// when the site is built, to its page when published and to the repository when not.
+const landingBlockTemplateText = `    <!-- doc-counts:begin {{.Name}} -->
+    <p class="osml-referee__eyebrow">Refereed against the OMG pilot implementation &middot; pin <code>{{.PilotTag}}</code>, artifact <code>{{.PilotArtifact}}</code></p>
+    <h2>Not self-assessed &mdash; measured against the reference implementation.</h2>
+    <p class="osml-referee__lede">
+      Both implementations validate the reference's own corpora and their diagnostics are
+      compared file by file, in both directions. Every figure below is generated from a
+      committed baseline, and anyone can reproduce it.
+    </p>
+    <div class="osml-referee__grid">
+      <a class="osml-referee__figure" href="{{recordURL .LinkPrefix "pilot-differential.md"}}">
+        <span class="osml-referee__number">{{.FilesAgreeing}} of {{.Files}}</span>
+        <span class="osml-referee__label">files agree diagnostic-by-diagnostic; {{.OursOnly}} diagnostics are ours alone and {{.PilotOnly}} the reference's alone</span>
+      </a>
+      <a class="osml-referee__figure" href="{{recordURL .LinkPrefix "pilot-xpect.md"}}">
+        <span class="osml-referee__number">{{sub .DeclaredErrors .Silent}} of {{.DeclaredErrors}}</span>
+        <span class="osml-referee__label">diagnostics the reference's own test suites declare that we report too; we are silent on {{.Silent}}</span>
+      </a>
+      <a class="osml-referee__figure" href="{{recordURL .LinkPrefix "pilot-xpect.md"}}">
+        <span class="osml-referee__number">{{.ScopeExact}} of {{.ScopeTotal}}</span>
+        <span class="osml-referee__label">declared name-resolution assertions our scopes match exactly</span>
+      </a>
+      <a class="osml-referee__figure" href="{{recordURL .LinkPrefix "pilot-rejection.md"}}">
+        <span class="osml-referee__number">{{.RejectDefaultBoth}} of {{.RejectCases}}</span>
+        <span class="osml-referee__label">invalid models we wrote ourselves that we reject by default, as the reference does; {{.RejectStrictOnly}} more only when asked strictly, {{.RejectPilotOnly}} not at all</span>
+      </a>
+    </div>
+    <p class="osml-referee__note">
+      What this is not: the corpora are demonstrations rather than an official conformance
+      suite, the comparison is of the diagnostics two implementations report on the same
+      files, and no certification or percentage of the specification is claimed. Read
+      <a href="{{recordURL .LinkPrefix "pilot-differential.md"}}">how each figure is measured</a>, or
+      <a href="{{recordURL .LinkPrefix "spec-compliance.md"}}">which rules are faithful, approximate or missing</a>
+      &mdash; including the {{.SelfAssessed}} behavioral rules the pinned reference cannot referee, because it
+      evaluates expressions but executes neither actions nor state machines.
+    </p>
+    <!-- doc-counts:end {{.Name}} -->`
+
+// blockTemplateFuncs writes the one link a Go template cannot spell literally: the
+// site's record() global, which publishes a docs/ path as a page or as the file on
+// GitHub, depending on whether the site publishes that record at all.
+var blockTemplateFuncs = template.FuncMap{
+	"recordURL": func(prefix, record string) string {
+		return fmt.Sprintf("{{ record('%s%s', base_url) }}", prefix, record)
+	},
+	// The band states every figure so that more is better; a gap counted in the
+	// baseline is the remainder of its total.
+	"sub": func(total, part int) int { return total - part },
+}
+
+// blockTemplates is the one template per generated block name. A block naming no
+// template is reported rather than written, so a consumer cannot be added without one.
+var blockTemplates = map[string]*template.Template{
+	refereedBlockName: template.Must(template.New(refereedBlockName).Parse(refereedBlockTemplateText)),
+	landingBlockName:  template.Must(template.New(landingBlockName).Funcs(blockTemplateFuncs).Parse(landingBlockTemplateText)),
+}
 
 func renderBlock(spec Block, counts RefereedCounts) (string, error) {
+	blockTemplate, ok := blockTemplates[spec.Name]
+	if !ok {
+		return "", fmt.Errorf("%s: no template renders the block named %q", spec.Path, spec.Name)
+	}
 	data := blockTemplateData{RefereedCounts: counts, Name: spec.Name, LinkPrefix: spec.LinkPrefix}
 	var rendered strings.Builder
-	if err := refereedBlockTemplate.Execute(&rendered, data); err != nil {
-		return "", fmt.Errorf("render refereed figures: %w", err)
+	if err := blockTemplate.Execute(&rendered, data); err != nil {
+		return "", fmt.Errorf("render %s: %w", spec.Name, err)
 	}
 	return rendered.String(), nil
 }

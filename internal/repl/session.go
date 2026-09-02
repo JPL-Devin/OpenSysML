@@ -73,7 +73,8 @@ type snippet struct {
 type Session struct {
 	// mu serializes the session's exported entry points, which a frontend may
 	// call from more than one goroutine: readline answers Tab from its own input
-	// goroutine while the loop is still evaluating the previous line.
+	// goroutine while the loop is still evaluating the previous line. Exported
+	// methods take it; lower-case helpers assume the caller holds it.
 	mu sync.Mutex
 
 	ws       *model.Workspace
@@ -87,7 +88,13 @@ type Session struct {
 	replaced   *runtime.Context
 	idx        *symbols.Index               // index over the session document, shared by lookup and runtime
 	idxVersion int                          // document version idx holds, 0 when it holds none
+	names      *nameTable                   // simple names of the documents, rebuilt when their scope trees change
 	instances  map[string]*runtime.Instance // FQN -> instance for %instantiate tracking
+
+	// argMemo and nameMemo hold what command text parsed to, so a repeated
+	// invocation is evaluated without being parsed again.
+	argMemo  parseMemo[parsedArgs]
+	nameMemo parseMemo[parsedName]
 
 	// Active executor sessions for debugging
 	actionExec *actionSession
@@ -220,6 +227,8 @@ func (s *Session) SetBudgets(budgets runtime.Budgets) error {
 	if err := budgets.Validate(); err != nil {
 		return err
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.budgets = budgets
 	// Dropping the context invalidates everything derived from it, instances
 	// included: their IDs restart with the next context. What goes is recorded, so
@@ -234,6 +243,8 @@ func (s *Session) SetBudgets(budgets runtime.Budgets) error {
 
 // Budgets returns the bounds this session gives its runtime contexts.
 func (s *Session) Budgets() runtime.Budgets {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.budgets
 }
 
@@ -262,7 +273,8 @@ func (s *Session) accept(origin, src string) {
 // acceptFrom parses src to compute its declared names, drops any snippet from
 // an earlier submission whose names intersect, and appends the new snippet under
 // the current submission generation. It does NOT touch the workspace (Submit
-// does).
+// does). It returns the names src declares as written, whether or not the
+// snippet recorded for it declares them.
 //
 // Only earlier submissions are replaced: redeclaring a name supersedes what was
 // submitted before it, but two files of one load are both part of the model, so
@@ -276,10 +288,11 @@ func (s *Session) accept(origin, src string) {
 //
 // A loaded file supersedes only itself and what the prompt said about the same
 // names, since several files of one model commonly open the same package.
-func (s *Session) acceptFrom(origin, src string) (drops []dropReport) {
+func (s *Session) acceptFrom(origin, src string) (declared []string, drops []dropReport) {
 	p := parser.New(source.New(parseDocName(origin), []byte(src)))
 	root := p.ParseFile()
 	names := declaredNames(root)
+	declared = names
 	text := src
 	// A submission that does not close its own text is masked out of the buffer
 	// rather than left to absorb the submissions after it, and declares nothing:
@@ -307,7 +320,7 @@ func (s *Session) acceptFrom(origin, src string) (drops []dropReport) {
 			open:   true,
 			diags:  parseDiagnostics(p),
 		})
-		return drops
+		return declared, drops
 	}
 	var (
 		comments  string
@@ -333,7 +346,7 @@ func (s *Session) acceptFrom(origin, src string) (drops []dropReport) {
 			}
 		}
 		s.snippets = append(kept, snippet{src: src, names: names, origin: origin, key: key, gen: s.version})
-		return append(drops, s.reopenedNamespaces(key, root)...)
+		return declared, append(drops, s.reopenedNamespaces(key, root)...)
 	}
 	if len(names) > 0 {
 		set := nameSet(names)
@@ -370,7 +383,7 @@ func (s *Session) acceptFrom(origin, src string) (drops []dropReport) {
 		prefix: len(comments),
 		own:    mergedOwn,
 	})
-	return drops
+	return declared, drops
 }
 
 // origins locates every file of the current submission in the joined buffer, in
@@ -700,20 +713,30 @@ func (s *Session) SubmitFiles(files []SourceFile) Result {
 }
 
 func (s *Session) submitFiles(files []SourceFile) Result {
+	res, _, _ := s.submitEach(files)
+	return res
+}
+
+// submitEach is submitFiles with the notices told apart: what accepting each
+// file dropped, in file order, and what the submission did to the session as a whole.
+func (s *Session) submitEach(files []SourceFile) (res Result, byFile [][]string, whole []string) {
 	var (
 		declared []string
 		drops    []dropReport
 	)
 	seen := map[string]bool{}
 	s.version++
-	for _, f := range files {
-		for _, name := range declaredNames(parser.New(source.New(parseDocName(f.Name), []byte(f.Text))).ParseFile()) {
+	byFile = make([][]string, len(files))
+	for i, f := range files {
+		names, dropped := s.acceptFrom(f.Name, f.Text)
+		for _, name := range names {
 			if !seen[name] {
 				seen[name] = true
 				declared = append(declared, name)
 			}
 		}
-		drops = append(drops, s.acceptFrom(f.Name, f.Text)...)
+		byFile[i] = dropNotices(dropped)
+		drops = append(drops, dropped...)
 	}
 	joined := s.joined()
 	offset := s.genOffset(joined)
@@ -741,15 +764,15 @@ func (s *Session) submitFiles(files []SourceFile) Result {
 	// why it records the version it holds.
 	s.rtCtx = nil
 	gone := goneNames(drops)
-	notices := dropNotices(drops)
-	notices = append(notices, s.carryOverObjects(over)...)
-	notices = append(notices, s.dropStaleDebugSessions(gone, over)...)
+	whole = s.carryOverObjects(over)
+	whole = append(whole, s.dropStaleDebugSessions(gone, over)...)
+	notices := append(dropNotices(drops), whole...)
 	s.rebindRestartedMachine()
 	s.keepIdentitiesOf(over.prev)
 	// The diagnostics already carry their own "did you mean" hints.
 	diags := s.diagnostics()
 	members := s.sessionMembers()
-	res := Result{
+	res = Result{
 		Members:     members,
 		Declared:    declared,
 		Diagnostics: diags,
@@ -763,7 +786,21 @@ func (s *Session) submitFiles(files []SourceFile) Result {
 		Notices: notices,
 	}
 	res.Blocked = s.blockedBy(res)
-	return res
+	return res, byFile, whole
+}
+
+// fileSpan is where the current submission's text from the named file sits in the
+// joined buffer, through the newline closing it, where a parse that ran out of text reports.
+func (s *Session) fileSpan(name string) source.Span {
+	key := fileKeyOf(name)
+	acc := 0
+	for _, sn := range s.snippets {
+		if sn.gen == s.version && sn.key == key {
+			return source.Span{Offset: acc, Len: len(sn.src) + 1}
+		}
+		acc += len(sn.src) + 1 // the newline joined() writes between snippets
+	}
+	return source.Span{Offset: acc}
 }
 
 // keepIdentitiesOf hands a replaced context's identity sequence to the context

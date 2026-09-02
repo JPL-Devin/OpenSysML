@@ -22,10 +22,7 @@ func runRenderDocument(files []string) error {
 		return err
 	}
 	if len(files) == 0 {
-		return errors.New("no model to render; name the file the document is declared in, as `sysml model.sysml -render-document MyReport`")
-	}
-	if len(files) > 1 {
-		return fmt.Errorf("-render-document renders a document of one model; unexpected extra argument %q", files[1])
+		return errors.New("no model to render; name the files the document is declared in, as `sysml model.sysml -render-document MyReport`")
 	}
 	sess, err := loadRenderingModel(files)
 	if err != nil {

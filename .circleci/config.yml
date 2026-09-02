@@ -129,7 +129,7 @@ jobs:
           command: |
             make proto-buf
             git diff --exit-code api/proto \
-              clients/java/opensysml-client/src/main/java/io/opensysml/proto
+              clients/java/opensysml-client/src/main/java/org/openmbee/opensysml/proto
       
       # The corpus is not vendored and the gate skips while it is absent, so a
       # release tag could be cut over a corpus regression without it.
@@ -295,6 +295,11 @@ jobs:
       - store_artifacts:
           path: bin/conformance-report.json
           destination: conformance-report.json
+          when: always
+
+      # The same run as JUnit XML, so the Tests tab shows per-scenario results.
+      - store_test_results:
+          path: bin/conformance-report.xml
           when: always
 
       # The same suite against the legacy grpc-go transport, so -transport grpc
@@ -695,7 +700,7 @@ jobs:
             mvn -B -q -f clients/java/pom.xml -pl opensysml-conformance \
               dependency:build-classpath -Dmdep.outputFile=/tmp/cp.txt
             java -cp "clients/java/opensysml-conformance/target/classes:$(cat /tmp/cp.txt)" \
-              io.opensysml.conformance.Main \
+              org.openmbee.opensysml.conformance.Main \
               -binary bin/sysml-grpc -protocols connect,connect-json -allow-skips \
               -report bin/conformance-report-java.json
 

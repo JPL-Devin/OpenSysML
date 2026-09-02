@@ -169,6 +169,7 @@ func (p *Parser) parseTypeFeaturingMember(start int, vis ast.Visibility, trivia 
 			p.restore(cp)
 			ident = ast.Identification{}
 		}
+		p.release()
 	} else {
 		p.advance() // 'of'
 	}

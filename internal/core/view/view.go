@@ -56,6 +56,11 @@ const (
 	KindGeometry Kind = "geometry"
 )
 
+// Kinds returns every rendering kind this package recognizes, supported or not.
+func Kinds() []Kind {
+	return []Kind{KindTree, KindInterconnection, KindState, KindAction, KindTextual, KindTable, KindSequence, KindGeometry}
+}
+
 // Supported reports whether this package produces a rendering of the kind.
 func (k Kind) Supported() bool {
 	switch k {

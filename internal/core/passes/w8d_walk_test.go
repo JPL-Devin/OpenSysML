@@ -43,13 +43,13 @@ func TestW8CSymbolWalkCachePreservesOrder(t *testing.T) {
 	nested.Scope.Define("leaf", &symbols.Symbol{Name: "leaf"})
 	root.Define("nested", nested)
 
-	direct := &w8cWalker{seen: make(map[*symbols.Symbol]bool)}
+	direct := &w8cWalker{}
 	var want []*symbols.Symbol
 	direct.walk(root, func(sym *symbols.Symbol) {
 		want = append(want, sym)
 	})
 	ctx := NewContext("test.sysml", symbols.NewIndex(), nil)
-	w := &w8cWalker{ctx: ctx, seen: make(map[*symbols.Symbol]bool)}
+	w := &w8cWalker{ctx: ctx}
 	var got []*symbols.Symbol
 	w.walk(root, func(sym *symbols.Symbol) {
 		got = append(got, sym)
@@ -71,7 +71,7 @@ func TestW8CWalkerDeduplicatesOverlappingScopes(t *testing.T) {
 	overlap.Define("shared", shared)
 	root.Define("shared", shared)
 
-	w := &w8cWalker{seen: make(map[*symbols.Symbol]bool)}
+	w := &w8cWalker{}
 	var got []*symbols.Symbol
 	w.walk(root, func(sym *symbols.Symbol) {
 		got = append(got, sym)

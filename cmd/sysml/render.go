@@ -124,7 +124,7 @@ func loadRenderingModel(files []string) (*repl.Session, error) {
 	writeLines(os.Stderr, report.Found)
 	writeLines(os.Stderr, report.Declared)
 	if report.Errors {
-		return nil, fmt.Errorf("%s did not analyse cleanly; nothing was rendered", files[0])
+		return nil, fmt.Errorf("%s did not analyse cleanly; nothing was rendered", strings.Join(files, ", "))
 	}
 	return sess, nil
 }

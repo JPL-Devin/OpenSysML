@@ -26,19 +26,40 @@ import (
 func elementsOf(val Value) []Value {
 	switch val.Kind {
 	case ValSequence:
-		if val.Sequence == nil {
+		if val.Sequence() == nil {
 			return nil
 		}
-		return val.Sequence.Elements()
+		return val.Sequence().Elements()
 	case ValSet:
-		if val.Set == nil {
+		if val.Set() == nil {
 			return nil
 		}
-		return val.Set.Elements()
+		return val.Set().Elements()
 	case ValNull, ValInvalid:
 		return nil
 	default:
 		return []Value{val}
+	}
+}
+
+// elementCount is len(elementsOf(val)) without materializing a scalar's
+// one-element sequence.
+func elementCount(val *Value) int64 {
+	switch val.Kind {
+	case ValSequence:
+		if seq := val.Sequence(); seq != nil {
+			return int64(seq.Size())
+		}
+		return 0
+	case ValSet:
+		if set := val.Set(); set != nil {
+			return int64(set.Size())
+		}
+		return 0
+	case ValNull, ValInvalid:
+		return 0
+	default:
+		return 1
 	}
 }
 
@@ -48,7 +69,7 @@ func sequenceOf(elements []Value) Value {
 	for _, elem := range elements {
 		seq.Append(elem)
 	}
-	return Value{Kind: ValSequence, Sequence: seq}
+	return NewSequenceValue(seq)
 }
 
 // newSequence builds a sequence value from elements, charging them against the
@@ -71,20 +92,23 @@ func integerValue(n int64) Value {
 // head, last and `#` of a sequence that has no such element.
 func nullValue() Value { return Value{Kind: ValNull} }
 
-// indexOf reads a sequence index: SequenceFunctions::'#' declares
-// `in index: Positive[1]`, so the index is one whole number, counting from 1. A
-// Real, a Boolean, a string or a collection is not an index and is reported
-// rather than truncated or read as a position.
+// indexOf reads a sequence index (`in index: Positive[1]`): one whole number, counting
+// from 1, so 4 / 2 indexes while a fractional Real is reported rather than truncated.
 func indexOf(op string, val Value) (int64, error) {
-	if val.Kind != ValConst || val.Const.Kind != semantics.ValInt {
-		return 0, fmt.Errorf("%w: %s requires an Integer index, got %s", ErrTypeMismatch, op, describeValue(val))
+	if val.Kind == ValConst {
+		if index, ok := val.Const.WholeNumber(); ok {
+			return index, nil
+		}
 	}
-	return val.Const.Int, nil
+	return 0, fmt.Errorf("%w: %s requires an Integer index, got %s", ErrTypeMismatch, op, describeValue(val))
 }
 
 // describeValue names a value's kind for a diagnostic, distinguishing the
 // numeric constants a single kind covers.
 func describeValue(val Value) string {
+	if val.Kind == ValComplex {
+		return "a Complex"
+	}
 	if val.Kind != ValConst {
 		return val.Kind.String()
 	}
@@ -155,9 +179,9 @@ func bodyOf(op string, val Value, arity int) (*ast.BodyExpr, error) {
 	if val.Kind != ValExpr {
 		return nil, fmt.Errorf("%w: %s requires a body expression, got %s", ErrTypeMismatch, op, describeValue(val))
 	}
-	body, ok := val.Expr.(*ast.BodyExpr)
+	body, ok := val.Expr().(*ast.BodyExpr)
 	if !ok {
-		return nil, fmt.Errorf("%w: %s requires a body expression, got %T", ErrTypeMismatch, op, val.Expr)
+		return nil, fmt.Errorf("%w: %s requires a body expression, got %T", ErrTypeMismatch, op, val.Expr())
 	}
 	if len(body.Params) != arity {
 		return nil, fmt.Errorf("%w: %s calls its body with %d argument(s), but it declares %d parameter(s)",
@@ -783,6 +807,12 @@ func aggregate(op string, args []Value, operator ast.OperatorKind) (Value, error
 			return aggregateQuantities(op, elements, operator)
 		}
 	}
+	// A Complex is a Number, so a collection holding one folds as ComplexFunctions'.
+	for _, elem := range elements {
+		if elem.Kind == ValComplex {
+			return aggregateComplex(op, args[0], operator)
+		}
+	}
 	identity := int64(0)
 	if operator == ast.OpMul {
 		identity = 1
@@ -812,7 +842,7 @@ func aggregateQuantities(op string, elements []Value, operator ast.OperatorKind)
 			return Value{}, fmt.Errorf("%w: %s requires numeric elements, got %s", ErrTypeMismatch, op, describeValue(elem))
 		}
 		if i == 0 {
-			acc = Value{Kind: ValQuantity, Quantity: q}
+			acc = NewQuantityValue(q)
 			continue
 		}
 		accQ, _ := asQuantity(acc)

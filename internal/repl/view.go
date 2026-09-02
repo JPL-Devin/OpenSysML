@@ -19,7 +19,7 @@ import (
 // reports: a name the session cannot find, or an element that is no view, is a
 // line rather than a failure of the command.
 func (s *Session) doView(name string) ([]string, bool, error) {
-	lines, err := s.View(name)
+	lines, err := s.view(name)
 	if err != nil {
 		if errors.Is(err, errRuntimeInit) {
 			return nil, false, err
@@ -33,6 +33,12 @@ func (s *Session) doView(name string) ([]string, bool, error) {
 // conforms to the viewpoints it satisfies. A view exposing nothing says so; an
 // element that is no view is semantics.ErrNotAView.
 func (s *Session) View(name string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.view(name)
+}
+
+func (s *Session) view(name string) ([]string, error) {
 	sym, fqn, err := s.lookupSymbol(name)
 	if err != nil {
 		return nil, err
@@ -110,7 +116,11 @@ func (s *Session) renderLines(name string, form view.Form) ([]string, error) {
 // SetRenderWidth sets the width a text rendering's table is written to fit. The
 // frontend sets it from the terminal; view.WidthUnbounded, the default, writes
 // every column as wide as its widest cell.
-func (s *Session) SetRenderWidth(width int) { s.renderWidth = width }
+func (s *Session) SetRenderWidth(width int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.renderWidth = width
+}
 
 // ViewRendering renders a view of the session's model. It reads the session's
 // symbols and creates nothing in it: no object, no runtime, no change to a

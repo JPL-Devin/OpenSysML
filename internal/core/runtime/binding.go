@@ -460,7 +460,7 @@ func (ctx *Context) assignBindingEndpoint(endpoint bindingEndpoint, val Value, b
 }
 
 func (ctx *Context) assignBindingValue(inst *Instance, fv *FeatureValue, name string, val Value) error {
-	if err := ctx.checkDefaultCount(inst, fv, name, val); err != nil {
+	if err := ctx.checkDefault(inst, fv, name, val); err != nil {
 		return err
 	}
 	if isScalarFeature(fv.Feature) {

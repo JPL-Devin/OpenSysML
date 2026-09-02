@@ -5437,3 +5437,73 @@ The committed walkthroughs to diff a demo run against are
 `examples/disposal-robot-demo/README.md` and — for `action-executor-demo.sysml`, whose own
 `examples/ACTION-EXECUTOR-DEMO.md` is only a pointer — `docs/guide/06-behavior.md`
 ("Token-flow patterns").
+
+## Parse-memoization / "reuse across invocations" refactors in `internal/repl`
+
+When a PR caches what command text parsed to (argument lists for `%calc`, the name a run
+target is looked up by for `%calc`/`%action`/`%state`/`%instantiate`), repeated successful calls
+prove almost nothing — a cache that wrongly held *evaluated values* would print the same `= 8`.
+The shape that actually distinguishes working from broken:
+
+- **Identical text, changed state.** `attribute k = 2;` → `%calc add k 1` → `= 3`; then type
+  `attribute k = 10;` at the prompt (this *replaces* the member, `note: replaced attribute k`, no
+  `%clear` needed) and re-run the byte-identical `%calc add k 1` → must be `= 11`. Then `%clear`,
+  redeclare only the calc, and the same text must fail with
+  `error: evaluation of argument "k" failed: unresolved reference: k`; declare `k` again and it
+  works. A `= 3` after the redeclaration is the stale-cache signature.
+- **Re-submit the target's definition** (`package 'My Pkg' { calc def add { … x * y … } }` →
+  `note: added to the existing package 'My Pkg', replacing calc def add`) and re-run the
+  identical `%calc 'My Pkg'::add 1 2` — the cached *name* must still resolve to the new symbol.
+- **Spacing variants are distinct keys**: run `%calc add 5 3` and `%calc add 5  3` both; the echo
+  line normalizes to `add(5, 3)` for both, so the check is only that the value is right.
+- **Malformed input twice**, comparing each pair byte for byte: `%calc add (5 3` →
+  `error: failed to parse argument "(5 3"`; `%calc add a=1 2` →
+  `error: named arguments are not supported here; pass arguments positionally`; `%calc add 5` →
+  `error: calc invocation failed: unbound parameter: calc add parameter "y" has no argument and no default`.
+  A cached parse error must be reported identically, and `%eval 1 + 1` → `= 2` afterwards shows
+  the session survived.
+- **Pipe the whole script through the parent-commit binary too** (contrast recipe above) and
+  `diff` the outputs — an empty diff over ~150 lines is the strongest "behavior unchanged"
+  evidence and takes seconds. Fixture scripts used for this live under `~/fixtures/pr765/` when
+  that session's box is still around; otherwise rebuild from the bullets above.
+
+## The embedded stdlib snapshot: proving the fast path and the fallback are both live (PR #776)
+
+`libs.SharedBase()` decodes `internal/core/libs/stdlib.snapshot` instead of parsing the 97 bundled
+library files, and falls back to parsing when the snapshot's recorded digest, format version or
+stream structure does not match. `bin/sysml -memstats -e '2+3' model.sysml` is the whole
+instrument: the two paths differ by an order of magnitude in allocations, so the memstats line
+tells you which one ran without any debug flag.
+
+| path | how to force it | expected memstats (b7cfcf19) |
+|---|---|---|
+| snapshot | default, or `OPENSYSML_LIBRARY_PATH=<byte-identical copy of internal/core/libs/stdlib>` | 13–17 ms, ~67k allocations |
+| parse fallback | `OPENSYSML_LIBRARY_PATH=<copy with one comment appended to any .kerml>` | ~70 ms warm / ~220 ms cold cache, ~455k allocations |
+| structurally corrupt blob | worktree, truncate `stdlib.snapshot`, `make build-sysml` | `WARN stdlib snapshot unreadable … pack: corrupt stream`, then the fallback numbers |
+
+- The unmodified-copy case is the one that catches a digest computed over the *path* instead of
+  the *content*: it must be as fast as the default, not as slow as the edited copy.
+- `cp -r internal/core/libs/stdlib /tmp/x` keeps LICENSE/NOTICE; only `.kerml`/`.sysml` enter the
+  digest, so editing those is a no-op for the fallback test — append to a `.kerml`.
+- **Byte flips inside the payload must be refused, not misread.** The header carries a CRC-32C over
+  the stream, so flipping 64 bytes in the string table (offset ~200000 of the 3.4 MB blob) has to
+  produce `WARN stdlib snapshot unreadable … checksum mismatch` and the fallback numbers. Before the
+  checksum existed such a blob decoded at full speed and silently dropped
+  `KerML::Kernel::Interaction` and `Connector::association` from `%search` — that is the failure
+  this check exists for. `TestDecodeSnapshotRejectsCorruption` covers the same flips in-process.
+- Differential battery that proved behavior-neutrality: run `-validate` over
+  `examples/*.sysml` + `testdata/passes/*.sysml`, a piped REPL transcript (`%load` robot demo,
+  `%search`, `%eval 1 [SI::m] + 2 [SI::m]`, `%instantiate`/`%features`, `%print`), `-e 2+3` and
+  `-convert ttl -o /dev/stdout`, each with `echo "exit=$?"` appended, under snapshot / edited-copy
+  (cold and warm `XDG_CACHE_HOME`) / unmodified-copy / merge-base binary, then `diff -r` the four
+  output dirs against the snapshot one. 16 files, 59 KB, all identical at b7cfcf19.
+- `Instance.features` key order from the gRPC client varies run to run on **both** old and new
+  services (Go map iteration) — not a snapshot difference; compare as sets.
+
+### Recording pitfalls seen while doing this
+- xdotool cannot type the `✓` glyph the CLI prints; `grep -v '^✓'` typed on camera becomes
+  `grep -v '^'` and filters everything. Filter on `'= 5'` / `'sysml:'` instead.
+- Konsole starts at a small font: `Ctrl++` three times before recording makes memstats lines legible.
+- The blueprint's venv is `~/pv` (see the maintenance block), but it can exist without the editable
+  `opensysml` install; `~/pv/bin/pip install -e clients/python` (or a fresh `python3 -m venv`) takes
+  under a minute and the non-tty one-shot `python script.py` with auto-start worked (35 ms connect).

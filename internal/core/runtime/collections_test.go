@@ -440,7 +440,7 @@ func TestCollectionOperationsOverSets(t *testing.T) {
 	for _, n := range []int64{3, 1, 2, 3} {
 		set.Add(integerValue(n))
 	}
-	setVal := Value{Kind: ValSet, Set: set}
+	setVal := NewSetValue(set)
 
 	if got := intsOf(t, sequenceOf(elementsOf(setVal))); !equalInts(got, []int64{3, 1, 2}) {
 		t.Fatalf("set elements = %v, want the distinct elements in insertion order", got)
@@ -489,7 +489,7 @@ func TestAggregateQuantities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sum of metres: %v", err)
 	}
-	if got.Kind != ValQuantity || got.Quantity.String() != "6.0 [m]" {
+	if got.Kind != ValQuantity || got.Quantity().String() != "6.0 [m]" {
 		t.Errorf("sum of metres = %v (%s), want 6.0 [m]", got, got.Kind)
 	}
 
@@ -498,7 +498,7 @@ func TestAggregateQuantities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sum of mixed length units: %v", err)
 	}
-	if got.Kind != ValQuantity || got.Quantity.String() != "1.5 [m]" {
+	if got.Kind != ValQuantity || got.Quantity().String() != "1.5 [m]" {
 		t.Errorf("sum of mixed length units = %v, want 1.5 [m]", got)
 	}
 

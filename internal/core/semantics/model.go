@@ -56,6 +56,8 @@ type Model struct {
 	filterTypes    map[string]*symbols.Symbol
 	annotations    map[*symbols.Symbol][]annotation
 	aboutAnnots    map[*symbols.Symbol][]annotation
+	// aboutOrder lists aboutAnnots' targets in first-annotation order.
+	aboutOrder []*symbols.Symbol
 
 	// Redefinition masking (see masking.go): the features each declaration
 	// redefines, and the elements each type does not inherit because of them.

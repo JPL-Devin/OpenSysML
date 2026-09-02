@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -44,6 +45,15 @@ type Context struct {
 	// calcShapes memoizes resolved calc invocation interfaces (parameters,
 	// defaults, result expression) per calc symbol.
 	calcShapes map[*symbols.Symbol]*calcShape
+
+	// invocationTargets memoizes what each invocation expression denotes in the
+	// scope it is evaluated in; the model does not change under one context.
+	invocationTargets map[invocationKey]*invocationTarget
+
+	// integerLiterals and realLiterals memoize the value each numeric literal
+	// node spells, so a literal in a recursion is parsed once per context.
+	integerLiterals map[*ast.LiteralInteger]int64
+	realLiterals    map[*ast.LiteralReal]float64
 
 	// calcUsageRuns holds the evaluation of each calc usage read in an activation
 	// under way, so reading several outputs of one usage answers from one
@@ -113,6 +123,22 @@ type Context struct {
 	calcDepth    int
 	maxCalcDepth int64
 
+	// freeInvocationFrames are the frames of returned calc invocations, kept so a
+	// recursion reuses storage rather than allocating per call.
+	freeInvocationFrames []*invocationFrame
+
+	// argStack holds the positional arguments of the calc invocations under way,
+	// innermost last, so an invocation borrows rather than allocates its storage.
+	argStack []Value
+
+	// scalarStack holds the unboxed arguments of the compiled calc invocations
+	// under way, innermost last, the compiled tier's counterpart of argStack.
+	scalarStack []scalar
+
+	// compileCalcs enables the compiled tier for eligible calc bodies; the
+	// OPENSYSML_CALC_COMPILE escape hatch clears it.
+	compileCalcs bool
+
 	// runDepth is the number of runs currently under way, so the step counter is
 	// reset per run rather than accumulated over the context's whole life.
 	runDepth int
@@ -173,6 +199,11 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		instances:  make(map[int64]*Instance),
 		features:   make(map[*symbols.Symbol][]EffectiveFeature),
 		calcShapes: make(map[*symbols.Symbol]*calcShape),
+
+		invocationTargets: make(map[invocationKey]*invocationTarget),
+		integerLiterals:   make(map[*ast.LiteralInteger]int64),
+		realLiterals:      make(map[*ast.LiteralReal]float64),
+		compileCalcs:      CalcCompileFromEnv(),
 
 		calcUsageRuns: make(map[int64]map[calcUsageKey]*calcRun),
 
@@ -336,9 +367,17 @@ func (ctx *Context) endActivation(activation int64) {
 func (ctx *Context) incrementStep() error {
 	ctx.steps++
 	if ctx.steps > ctx.maxSteps {
-		return fmt.Errorf("%w (%d steps; raise %s to allow more)", ErrStepLimitExceeded, ctx.maxSteps, MaxStepsEnvVar)
+		return ctx.stepLimitExceeded()
 	}
 	return nil
+}
+
+// stepLimitExceeded reports the step budget spent, naming the variable that raises
+// it; kept out of line so the step charge on every evaluation inlines.
+//
+//go:noinline
+func (ctx *Context) stepLimitExceeded() error {
+	return fmt.Errorf("%w (%d steps; raise %s to allow more)", ErrStepLimitExceeded, ctx.maxSteps, MaxStepsEnvVar)
 }
 
 // elementScope brackets one evaluation and returns the function releasing what
@@ -655,7 +694,44 @@ func (ctx *Context) CheckRequirementOn(sym *symbols.Symbol, scope *symbols.Scope
 		bindings: reqBindings,
 		negated:  NegatedDecl(sym),
 	}, conds)
+	if err != nil {
+		err = unboundSubjectError(err, "requirement", sym.Name, unboundSubjectNames(members, subject.instance))
+	}
 	return ctx.checkResultOf(holds, subject), err
+}
+
+// unboundSubjectNames are the subjects the members declare that nothing supplies
+// a value for: no binding expression, no object supplied from outside.
+func unboundSubjectNames(members []scopedMember, subject *Instance) map[string]bool {
+	if subject != nil {
+		return nil
+	}
+	names := make(map[string]bool)
+	for _, member := range members {
+		switch rm := member.node.(type) {
+		case *ast.SubjectMember:
+			if rm.BindingExpr == nil && rm.Name != "" {
+				names[rm.Name] = true
+			}
+		case *ast.Usage:
+			if rm.Kind == ast.UsageSubject {
+				if name := effectiveName(rm); name != "" {
+					names[name] = true
+				}
+			}
+		}
+	}
+	return names
+}
+
+// unboundSubjectError reports a condition that read an unbound subject as such,
+// rather than as a feature that happens to carry no value.
+func unboundSubjectError(err error, kind, element string, unbound map[string]bool) error {
+	var noValue *NoValueError
+	if !errors.As(err, &noValue) || !unbound[noValue.Feature] {
+		return err
+	}
+	return &UnboundSubjectError{Kind: kind, Element: element, Subject: noValue.Feature}
 }
 
 // ExecuteAction executes an action definition/usage to completion.

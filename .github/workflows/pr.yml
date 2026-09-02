@@ -90,7 +90,7 @@ jobs:
         run: |
           make proto-buf BUF=buf
           git diff --exit-code api/proto \
-            clients/java/opensysml-client/src/main/java/io/opensysml/proto
+            clients/java/opensysml-client/src/main/java/org/openmbee/opensysml/proto
 
       # The solver is an external process, never linked in: the solver-dependent
       # tests need one on PATH to run rather than skip.
@@ -255,6 +255,11 @@ jobs:
 
       - name: Run static analysis (staticcheck + gosec)
         run: make lint
+
+      # The embedded library snapshot is generated from the bundled OMG files;
+      # a change to either without regenerating it must not land.
+      - name: Check the library snapshot is current
+        run: make stdlib-snapshot-check
 
       - name: Check grpc-go stays out of production code
         run: ./scripts/check-grpc-imports.sh
@@ -799,7 +804,7 @@ jobs:
           mvn -B -q -f clients/java/pom.xml -pl opensysml-conformance \
             dependency:build-classpath -Dmdep.outputFile=/tmp/cp.txt
           java -cp "clients/java/opensysml-conformance/target/classes:$(cat /tmp/cp.txt)" \
-            io.opensysml.conformance.Main \
+            org.openmbee.opensysml.conformance.Main \
             -binary bin/sysml-grpc -protocols connect,connect-json -allow-skips \
             -report conformance-report-java.json
 

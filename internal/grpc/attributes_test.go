@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -155,5 +156,46 @@ func TestAttributesOfAnElementWithNoneIsEmpty(t *testing.T) {
 	}
 	if engine.WithheldLibraryAttributes == 0 {
 		t.Error("engine inherits library attributes but reports none withheld")
+	}
+}
+
+// TestAnEscapedDefaultReadsTheSameAsEvaluatingIt requires the string an
+// attribute reports to be the string evaluating the same default answers.
+func TestAnEscapedDefaultReadsTheSameAsEvaluatingIt(t *testing.T) {
+	const model = `
+package Demo {
+    part def Sign {
+        attribute caption : ScalarValues::String = "say \"hi\"\nnow";
+    }
+}
+`
+	srv := mustNewService(t, 10)
+	parsed, err := srv.ParseFile(context.Background(), &pb.ParseFileRequest{
+		Source: &pb.ParseFileRequest_Content{Content: model},
+	})
+	if err != nil {
+		t.Fatalf("ParseFile: %v", err)
+	}
+	symbol, err := srv.GetSymbol(context.Background(), &pb.GetSymbolRequest{
+		ModelHash: parsed.ModelHash,
+		SymbolId:  "Demo::Sign",
+	})
+	if err != nil || symbol.Symbol == nil {
+		t.Fatalf("GetSymbol: %v %s", err, symbol.GetError())
+	}
+	evaluated, err := srv.Evaluate(context.Background(), &pb.EvaluateRequest{
+		ModelHash:  parsed.ModelHash,
+		Expression: `"say \"hi\"\nnow"`,
+	})
+	if err != nil || evaluated.Error != "" {
+		t.Fatalf("Evaluate: %v %s", err, evaluated.GetError())
+	}
+
+	reported := byName(symbol.Symbol.Attributes)["caption"].Value.GetStringValue()
+	if want := evaluated.Result.GetStringValue(); reported != want {
+		t.Errorf("reported default %q, but evaluating it gives %q", reported, want)
+	}
+	if reported != "say \"hi\"\nnow" {
+		t.Errorf("reported default %q keeps its notation instead of its text", reported)
 	}
 }

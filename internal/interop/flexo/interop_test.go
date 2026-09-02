@@ -18,11 +18,27 @@ import (
 var updateExpectation = flag.Bool("update-flexo", false,
 	"record the measured Flexo interop report as the new expectation")
 
-const (
-	expectationPath = "testdata/interop_expected.txt"
-	fixturePath     = "testdata/model.sysml"
-	referencePath   = "testdata/reference_changes.json"
-)
+// Each fixture is measured on its own: the original model, and the
+// identity-carrying variant whose annotated UUIDs are the element ids.
+var fixtures = []struct {
+	name            string
+	fixturePath     string
+	referencePath   string
+	expectationPath string
+}{
+	{
+		name:            "model",
+		fixturePath:     "testdata/model.sysml",
+		referencePath:   "testdata/reference_changes.json",
+		expectationPath: "testdata/interop_expected.txt",
+	},
+	{
+		name:            "identity",
+		fixturePath:     "testdata/identity_model.sysml",
+		referencePath:   "testdata/identity_reference_changes.json",
+		expectationPath: "testdata/identity_interop_expected.txt",
+	},
+}
 
 const expectationHeader = `# What a real Flexo MMS stack does with this project's RDF, measured by
 # TestFlexoInterop. This is a ratchet: every line is adjudicated, and a change to
@@ -55,40 +71,44 @@ func TestFlexoInterop(t *testing.T) {
 		t.Fatalf("%s=%s but the stack does not answer: %v", EnvGate, os.Getenv(EnvGate), err)
 	}
 
-	model, err := os.ReadFile(fixturePath)
-	if err != nil {
-		t.Fatalf("read %s: %v", fixturePath, err)
-	}
-	reference, err := os.ReadFile(referencePath)
-	if err != nil {
-		t.Fatalf("read %s: %v", referencePath, err)
-	}
+	for _, fixture := range fixtures {
+		t.Run(fixture.name, func(t *testing.T) {
+			model, err := os.ReadFile(fixture.fixturePath)
+			if err != nil {
+				t.Fatalf("read %s: %v", fixture.fixturePath, err)
+			}
+			reference, err := os.ReadFile(fixture.referencePath)
+			if err != nil {
+				t.Fatalf("read %s: %v", fixture.referencePath, err)
+			}
 
-	report, err := Measure(ctx, client, fixturePath, model, reference)
-	if err != nil {
-		t.Fatalf("measure the round trip: %v", err)
-	}
-	got := report.Text(expectationHeader)
-	for _, finding := range report.Findings {
-		t.Log(finding)
-	}
+			report, err := Measure(ctx, client, fixture.fixturePath, model, reference)
+			if err != nil {
+				t.Fatalf("measure the round trip: %v", err)
+			}
+			got := report.Text(expectationHeader)
+			for _, finding := range report.Findings {
+				t.Log(finding)
+			}
 
-	if *updateExpectation {
-		if err := os.WriteFile(expectationPath, []byte(got), 0o644); err != nil {
-			t.Fatalf("write %s: %v", expectationPath, err)
-		}
-		t.Logf("recorded %s; review the diff", expectationPath)
-		return
-	}
+			if *updateExpectation {
+				if err := os.WriteFile(fixture.expectationPath, []byte(got), 0o644); err != nil {
+					t.Fatalf("write %s: %v", fixture.expectationPath, err)
+				}
+				t.Logf("recorded %s; review the diff", fixture.expectationPath)
+				return
+			}
 
-	want, err := os.ReadFile(expectationPath)
-	if err != nil {
-		t.Fatalf("read %s: %v", expectationPath, err)
-	}
-	if string(want) != got {
-		t.Errorf("the round trip no longer measures what %s records.\n"+
-			"Review the difference, then re-record it with -update-flexo:\n%s",
-			expectationPath, firstDifference(string(want), got))
+			want, err := os.ReadFile(fixture.expectationPath)
+			if err != nil {
+				t.Fatalf("read %s: %v", fixture.expectationPath, err)
+			}
+			if string(want) != got {
+				t.Errorf("the round trip no longer measures what %s records.\n"+
+					"Review the difference, then re-record it with -update-flexo:\n%s",
+					fixture.expectationPath, firstDifference(string(want), got))
+			}
+		})
 	}
 }
 

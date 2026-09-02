@@ -87,7 +87,7 @@ func submit(w io.Writer, s *Session, src string) {
 		printLines(w, lines)
 		return
 	}
-	printLines(w, renderResult(s.Submit(src), s.verbosity))
+	printLines(w, renderResult(s.Submit(src), s.Verbosity()))
 }
 
 // bareExpression reports whether src reads as an expression and not as a

@@ -94,6 +94,9 @@ var notKindPrefixKeywords = map[string]bool{
 	// `individual part p` keeps the modifier; the prefix path would drop it.
 	"individual": true,
 	"in":         true, "out": true, "inout": true,
+	// An annotation ends with its comment body, so a kind keyword after
+	// `doc /* … */` opens the next member rather than being qualified by it.
+	"doc": true, "comment": true, "rep": true, "locale": true,
 }
 
 // usageKindKeywords maps a single kind keyword to its UsageKind.
@@ -1499,6 +1502,11 @@ func (p *Parser) parseUsageIdentification(kind ast.UsageKind) ast.Identification
 		return ast.Identification{
 			Name: tok.KeywordID,
 		}
+	}
+	// `about` ends a metadata declaration (SysML.xtext MetadataUsage), so an
+	// unnamed `metadata : M about x;` is not named "about".
+	if kind == ast.UsageMetadata {
+		return p.parseIdentificationStopping("about")
 	}
 	// Default: use standard identification parsing
 	return p.parseIdentification()

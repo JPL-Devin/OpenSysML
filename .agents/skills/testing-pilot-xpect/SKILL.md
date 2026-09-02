@@ -112,15 +112,21 @@ for j in 1 3 16 0; do cmp /tmp/xj$j/pilot-xpect.json docs/project/pilot-xpect-ba
 
 ## Provisioning checks that distinguish working from broken
 
+- The script is `pilot_fetch_subtrees` from `scripts/pilot-pin.sh` with `PILOT_FETCH_GLOBS=('*.xt')`,
+  so every property of the shared downloader (commit-verified clone, `.pilot-pin` stamps, stale and
+  unstamped suites re-fetched) holds here too; see `testing-pilot-corpora-gate`.
 - Move, do not delete: `mv build/pilot-xpect-corpus /tmp/xpect-corpus-backup`. After a fresh
-  download, `diff -r /tmp/xpect-corpus-backup build/pilot-xpect-corpus` must be empty — that is the
-  strongest available evidence that the tag is pinned rather than a moving branch.
-- Idempotence: second run prints `Suite already present at ...` twice, exit 0. Prove it by
-  `stat -c '%n %Y'` on the two suite dirs before/after, not by the message.
+  download, `diff -r /tmp/xpect-corpus-backup build/pilot-xpect-corpus` must be empty apart from
+  the `.pilot-pin` stamps if the backup predates them.
+- Idempotence: second run prints `Already present at ... (pin 2026-07 c7fc737d…)` twice, exit 0.
+  Prove it by `stat -c '%n %Y'` on the two suite dirs before/after, not by the message.
 - Bogus pin: `PILOT_TAG=9999-99 ./scripts/download-pilot-xpect.sh` → git `fatal: Remote branch
-  9999-99 not found`, **exit 128** (not 1 — it is git's status under `set -e`), and
-  `build/pilot-xpect-corpus` is left absent (everything is staged in a `mktemp -d` and only `mv`d
-  in at the end). Check for a half-populated corpus with `find … -name '*.xt' | wc -l` = 0.
+  9999-99 not found` then `error: could not clone …`, **exit 1**, and `build/pilot-xpect-corpus`
+  is left as it was (everything is staged in a `mktemp -d` and only `mv`d in at the end). Check for
+  a half-populated corpus with `find … -name '*.xt' | wc -l` (0 from absent, 429 from present).
+- Moved tag: `PILOT_COMMIT=0000000000000000000000000000000000000000 ./scripts/download-pilot-xpect.sh`
+  → `error: <repo> tag 2026-07 resolves to c7fc737d…, scripts/pilot-pin.sh pins 0000…`, exit 1,
+  nothing provisioned.
 - Nothing vendored: `git status --porcelain` clean after every step.
 
 ## No-corpus degradation
@@ -410,8 +416,8 @@ census in `w5c_census_test.go` is live two ways: perturb one pinned triple (e.g.
 ## Regression neighbour
 
 `go run ./cmd/pilot-diff` (~1m12s) must still print the headline the *committed* baseline holds —
-after the relay-probe demo round that is `359 file(s), 332 fully agreeing; 34 agreed diagnostic(s), 20
-only ours, 53 only the pilot's`. Read the number out of
+after the self-model's compiled-calc round that is `366 file(s), 334 fully agreeing; 34 agreed diagnostic(s), 20
+only ours, 332 only the pilot's`. Read the number out of
 `docs/project/pilot-differential-baseline.json` rather than trusting this line, since a landing fix
 round moves it. When the baseline is itself stale (it was at `19a3ce03`, holding 273 / 281 / 317), a
 failing `cmp` against it is *not* evidence of an Xpect regression — compare the summary line, and see

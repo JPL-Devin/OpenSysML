@@ -16,7 +16,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -73,8 +72,12 @@ func run(repo, out string, jobs int, update, check bool) error {
 		return err
 	}
 
+	pin, err := baseline.ReadPin(repo)
+	if err != nil {
+		return err
+	}
 	report := &Report{
-		Pilot:   pilotPin(repo),
+		Pilot:   pin.Tag,
 		Corpus:  "build/pilot-xpect-corpus",
 		Library: "the suite's own /library* copies, loaded per fixture as its XPECT_SETUP declares them",
 		Errata:  newErrataReport(overlay),
@@ -201,22 +204,6 @@ func collectXT(dir string) ([]string, error) {
 	}
 	sort.Strings(files)
 	return files, nil
-}
-
-var pilotTagRe = regexp.MustCompile(`PILOT_TAG="\$\{PILOT_TAG:-([^}"]*)\}"`)
-
-// pilotPin reads the tag from scripts/pilot-pin.sh, the single source of the pin
-// the corpora, the validators and these suites all come from.
-func pilotPin(repo string) string {
-	// #nosec G304 -- the pin file is at a fixed path in this repository.
-	content, err := os.ReadFile(filepath.Join(repo, "scripts", "pilot-pin.sh"))
-	if err != nil {
-		return "unknown"
-	}
-	if match := pilotTagRe.FindSubmatch(content); match != nil {
-		return string(match[1])
-	}
-	return "unknown"
 }
 
 func moduleRoot() (string, error) {

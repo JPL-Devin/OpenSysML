@@ -355,6 +355,7 @@ func (p *Parser) tryParseDeclaration() ast.Node {
 
 	start := p.peek().Span.Offset
 	cp := p.checkpoint()
+	defer p.release()
 
 	node := p.parseDeclaration(start)
 

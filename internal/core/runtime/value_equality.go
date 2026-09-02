@@ -3,6 +3,7 @@ package runtime
 import (
 	"hash/fnv"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -11,6 +12,7 @@ type valueKey struct {
 	kind    ValueKind
 	intVal  int64
 	realVal float64
+	imagVal float64
 	boolVal bool
 	infVal  bool
 	strVal  string
@@ -20,37 +22,48 @@ type valueKey struct {
 	literal *symbols.Symbol
 }
 
-// valueKeyFunc extracts a comparable key from a Value.
+// valueKeyFunc extracts a comparable key from a Value. Values valueEqual holds
+// equal share a key: a whole number has the Integer's whatever kind carries it.
 func valueKeyFunc(v Value) valueKey {
 	key := valueKey{kind: v.Kind}
 	switch v.Kind {
 	case ValConst:
 		switch v.Const.Kind {
-		case 1: // semantics.ValInt
+		case semantics.ValInt:
 			key.intVal = v.Const.Int
-		case 2: // semantics.ValReal
-			key.realVal = v.Const.Real
-		case 3: // semantics.ValBool
+		case semantics.ValReal:
+			if n, ok := v.Const.WholeNumber(); ok {
+				key.intVal = n
+			} else {
+				key.realVal = v.Const.Real
+			}
+		case semantics.ValBool:
 			key.boolVal = v.Const.Bool
-		case 4: // semantics.ValInfinity
+		case semantics.ValInfinity:
 			key.infVal = true
 		}
+	case ValComplex:
+		// A complex number on the real axis is the number it equals and has its key.
+		if re, ok := v.realPart(); ok {
+			return valueKeyFunc(realConst(re))
+		}
+		key.realVal, key.imagVal = real(v.Complex()), imag(v.Complex())
 	case ValString:
-		key.strVal = v.Str
+		key.strVal = v.Str()
 	case ValInstance:
 		key.instID = v.Instance
 	case ValSequence:
-		key.colHash = hashSequence(v.Sequence)
+		key.colHash = hashSequence(v.Sequence())
 	case ValSet:
-		key.colHash = hashSet(v.Set)
+		key.colHash = hashSet(v.Set())
 	case ValVariant:
-		key.variant = v.Variant
+		key.variant = v.Variant()
 	case ValEnumLiteral:
-		key.literal = v.Literal
+		key.literal = v.Literal()
 	case ValQuantity:
-		if v.Quantity != nil {
-			key.realVal = v.Quantity.baseMagnitude()
-			key.strVal = v.Quantity.Unit.Term.DimensionKey()
+		if v.Quantity() != nil {
+			key.realVal = v.Quantity().baseMagnitude()
+			key.strVal = v.Quantity().Unit.Term.DimensionKey()
 		}
 	}
 	return key

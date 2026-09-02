@@ -165,16 +165,17 @@ func constSequence(values ...int64) Value {
 	for _, v := range values {
 		sequence.Append(Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: v}})
 	}
-	return Value{Kind: ValSequence, Sequence: sequence}
+	return NewSequenceValue(sequence)
 }
 
 // TestCalcForLoopOverParameterSequence requires a `for` loop to iterate the
-// sequence a parameter carries, in the order the sequence states.
+// sequence a parameter declared to hold one carries, in the order the sequence
+// states.
 func TestCalcForLoopOverParameterSequence(t *testing.T) {
 	const src = `
 package test {
 	calc def total {
-		in xs;
+		in xs[*];
 		attribute sum = 0;
 		for x in xs {
 			sum = sum + x;

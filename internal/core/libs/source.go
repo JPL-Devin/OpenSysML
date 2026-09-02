@@ -41,6 +41,12 @@ func DefaultSource() Source {
 	return &embedSource{}
 }
 
+// EmbeddedSource returns the bundled copy of the standard library, whatever
+// LibraryPathEnvVar says: it is what the embedded snapshot is generated from.
+func EmbeddedSource() Source {
+	return &embedSource{}
+}
+
 // NewDirSource returns a Source that reads .kerml/.sysml files from dir.
 func NewDirSource(dir string) Source {
 	return &dirSource{dir: dir}

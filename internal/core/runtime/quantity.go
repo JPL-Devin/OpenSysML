@@ -102,7 +102,7 @@ func (ec *EvalContext) evalIndexExpr(n *ast.IndexExpr) (Value, error) {
 	}
 
 	unit := Unit{Text: semantics.UnitExprText(n.Index), Term: term}
-	return Value{Kind: ValQuantity, Quantity: &Quantity{Num: magnitude.Const, Unit: unit}}, nil
+	return NewQuantityValue(&Quantity{Num: magnitude.Const, Unit: unit}), nil
 }
 
 // asQuantity views a value as a quantity: a quantity as itself, and a bare
@@ -111,7 +111,7 @@ func (ec *EvalContext) evalIndexExpr(n *ast.IndexExpr) (Value, error) {
 func asQuantity(val Value) (*Quantity, bool) {
 	switch val.Kind {
 	case ValQuantity:
-		return val.Quantity, true
+		return val.Quantity(), true
 	case ValConst:
 		if val.Const.IsNumeric() {
 			return &Quantity{Num: val.Const, Unit: Unit{Term: semantics.UnitTerm{Scale: semantics.UnitScale(1)}}}, true
@@ -161,7 +161,7 @@ func addQuantities(op ast.OperatorKind, left, right *Quantity) (Value, error) {
 	} else {
 		magnitude -= converted
 	}
-	return quantityValue(magnitude, left.Unit), nil
+	return quantityValue(magnitude, left.Unit)
 }
 
 // scaleQuantities evaluates a product or quotient of quantities, whose unit is
@@ -186,10 +186,13 @@ func scaleQuantities(op ast.OperatorKind, left, right *Quantity) (Value, error) 
 	}
 	if unit.Term.Dimensionless() {
 		// A ratio of like quantities is a number, not a quantity of no unit.
-		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal,
-			Real: semantics.ConvertMagnitude(magnitude, unit.Term.Scale, semantics.UnitScale(1))}}, nil
+		num, err := realResult(semantics.ConvertMagnitude(magnitude, unit.Term.Scale, semantics.UnitScale(1)))
+		if err != nil {
+			return Value{}, err
+		}
+		return Value{Kind: ValConst, Const: num}, nil
 	}
-	return quantityValue(magnitude, unit), nil
+	return quantityValue(magnitude, unit)
 }
 
 // powQuantity raises a quantity to a constant exponent, its unit included. The
@@ -210,7 +213,7 @@ func powQuantity(base *Quantity, exponent semantics.Value) (Value, error) {
 			Real: semantics.ConvertMagnitude(toReal(num), term.Scale, semantics.UnitScale(1))}}, nil
 	}
 	unit := Unit{Text: fmt.Sprintf("(%s)%s%s", base.Unit, ast.OpPow, exponentText(exponent)), Term: term}
-	return Value{Kind: ValQuantity, Quantity: &Quantity{Num: num, Unit: unit}}, nil
+	return NewQuantityValue(&Quantity{Num: num, Unit: unit}), nil
 }
 
 // composedUnitText renders the unit an operation on two quantities produces. A
@@ -276,13 +279,17 @@ func equalQuantities(op ast.OperatorKind, left, right *Quantity) (Value, error) 
 }
 
 // negateQuantity negates a quantity's magnitude, keeping its unit.
-func negateQuantity(q *Quantity) Value {
+func negateQuantity(q *Quantity) (Value, error) {
 	return quantityValue(-toReal(q.Num), q.Unit)
 }
 
 // quantityValue builds a quantity value from a computed magnitude, which is
 // real: a conversion factor makes it one even where both operands were whole.
-func quantityValue(magnitude float64, unit Unit) Value {
-	num := semantics.Value{Kind: semantics.ValReal, Real: magnitude}
-	return Value{Kind: ValQuantity, Quantity: &Quantity{Num: num, Unit: unit}}
+// A magnitude no Real holds is reported, as a bare Real result is.
+func quantityValue(magnitude float64, unit Unit) (Value, error) {
+	num, err := realResult(magnitude)
+	if err != nil {
+		return Value{}, err
+	}
+	return NewQuantityValue(&Quantity{Num: num, Unit: unit}), nil
 }

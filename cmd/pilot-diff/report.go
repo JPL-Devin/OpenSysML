@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/baseline"
+	"github.com/Open-MBEE/OpenSysML/internal/junit"
 )
 
 // Report is the machine-readable result. It holds the compared tuples and their
@@ -337,7 +338,21 @@ func writeReports(dir string, report *Report) ([]byte, error) {
 		return nil, err
 	}
 
-	fmt.Fprintf(os.Stderr, "wrote %s and %s\n", textPath, jsonPath)
+	junitPath := filepath.Join(dir, "pilot-diff.xml")
+	if err := junit.WriteFile(junitPath, junitReport(report)); err != nil {
+		return nil, err
+	}
+
+	sarif, err := marshalSarif(sarifReport(report))
+	if err != nil {
+		return nil, err
+	}
+	sarifPath := filepath.Join(dir, "pilot-diff.sarif")
+	if err := os.WriteFile(sarifPath, sarif, 0o600); err != nil {
+		return nil, err
+	}
+
+	fmt.Fprintf(os.Stderr, "wrote %s, %s, %s and %s\n", textPath, jsonPath, junitPath, sarifPath)
 	fmt.Fprintf(os.Stderr, "%d file(s), %d fully agreeing; %d agreed diagnostic(s), %d only ours, %d only the pilot's\n",
 		report.Totals.Files, report.Totals.FilesAgreeing, report.Totals.Agreement,
 		report.Totals.OpenSysMLOnly, report.Totals.PilotOnly)

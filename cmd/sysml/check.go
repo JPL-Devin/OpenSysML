@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -154,17 +155,16 @@ func runChecks(files []string, exprs []string, c checks) int {
 		return rep.finish()
 	}
 
-	loaded := make([][]string, 0, len(paths))
-	for _, file := range paths {
-		output, err := sess.LoadFileSummary(file)
-		if err != nil {
-			rep.failed(err.Error())
-			if c.satisfy.tookNoValue() && !fileExists(file) {
-				rep.failed(fmt.Sprintf("%s is read as a file to load; -satisfy takes a name as -satisfy=%s", file, file))
-			}
-			return rep.finish()
+	// The files are loaded as one submission, indexed and analyzed once, and
+	// each is still summarized on its own.
+	loaded, err := sess.LoadFilesSummary(paths)
+	if err != nil {
+		rep.failed(err.Error())
+		var read *repl.ReadError
+		if errors.As(err, &read) && c.satisfy.tookNoValue() && !fileExists(read.Path) {
+			rep.failed(fmt.Sprintf("%s is read as a file to load; -satisfy takes a name as -satisfy=%s", read.Path, read.Path))
 		}
-		loaded = append(loaded, output)
+		return rep.finish()
 	}
 
 	// A model that did not analyse cleanly answers nothing, so its diagnostics end
@@ -186,9 +186,7 @@ func runChecks(files []string, exprs []string, c checks) int {
 	// parsing the report reads the warnings the printed load output carries.
 	rep.diags(sess.LocatedDiagnostics())
 
-	for _, output := range loaded {
-		rep.info(output)
-	}
+	rep.info(loaded)
 
 	// An object first: a constraint, requirement or expression about a feature of
 	// a part is answered about the object that carries it, and only an existing

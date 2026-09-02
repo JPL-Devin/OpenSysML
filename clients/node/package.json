@@ -43,6 +43,8 @@
     "lint": "eslint .",
     "test": "npm run build:tools && node --test \"build/test/**/*.test.js\"",
     "test:coverage": "npm run build:tools && c8 --reporter=text --reporter=lcovonly node --test \"build/test/**/*.test.js\"",
+    "example": "npm run build:tools && node scripts/run-example.mjs",
+    "examples": "npm run build:tools && node scripts/run-example.mjs --all",
     "conformance": "npm run build:tools && node build/conformance/main.js --dir ../../conformance --repo ../..",
     "platform-packages": "node scripts/build-platform-packages.mjs"
   },

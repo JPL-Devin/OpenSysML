@@ -20,6 +20,9 @@ use crate::wire;
 const START_TIMEOUT: Duration = Duration::from_millis(2500);
 const STOP_TIMEOUT: Duration = Duration::from_secs(5);
 const STDERR_LINES_KEPT: usize = 20;
+/// Bound on a buffered response, so a runaway service cannot exhaust memory.
+/// A parse of a large model answers far above ureq's 10 MB default.
+const RESPONSE_LIMIT: u64 = 1 << 30;
 
 static PRIVATE_SERVICE: OnceLock<Mutex<Weak<PrivateService>>> = OnceLock::new();
 static HTTP_AGENT: OnceLock<ureq::Agent> = OnceLock::new();
@@ -76,12 +79,17 @@ impl Connection {
     }
 
     /// Follow the connection precedence: explicit environment, then private child.
+    ///
+    /// An empty `$OPENSYSML_SERVICE` names no address, as it does for the other
+    /// clients, so it starts a private child rather than failing to read it.
     pub fn connect() -> Result<Self, Error> {
-        if let Ok(target) = env::var("OPENSYSML_SERVICE") {
-            let (host, port) = split_target(&target)?;
-            return Self::external(host, port);
+        match env::var("OPENSYSML_SERVICE") {
+            Ok(target) if !target.trim().is_empty() => {
+                let (host, port) = split_target(&target)?;
+                Self::external(host, port)
+            }
+            _ => Self::private(),
         }
-        Self::private()
     }
 
     fn from_target(address: String, private: Option<Arc<PrivateService>>) -> Result<Self, Error> {
@@ -285,8 +293,15 @@ impl Connection {
         let status = response.status();
         let bytes = response
             .into_body()
+            .into_with_config()
+            .limit(RESPONSE_LIMIT)
             .read_to_vec()
-            .map_err(|error| Error::Transport(error.to_string()))?;
+            .map_err(|error| match error {
+                ureq::Error::BodyExceedsLimit(limit) => Error::Transport(format!(
+                    "the {method} response is larger than the {limit} bytes this client buffers"
+                )),
+                error => Error::Transport(error.to_string()),
+            })?;
         if !status.is_success() {
             return Err(connect_error(status.as_u16(), &bytes));
         }
@@ -337,10 +352,26 @@ fn format_target(host: &str, port: u16) -> String {
 }
 
 fn split_target(target: &str) -> Result<(String, u16), Error> {
+    let written = target;
+    let target = target.trim();
+    let target = match target.split_once("://") {
+        Some(("http", rest)) => rest.trim_end_matches('/'),
+        Some((scheme, _)) => {
+            return Err(Error::Transport(format!(
+                "service address {written:?} names the {scheme:?} scheme; this client speaks plaintext http"
+            )))
+        }
+        None => target,
+    };
+    if target.contains('/') {
+        return Err(Error::Transport(format!(
+            "service address {written:?} names a path; a sysml-grpc address is host:port"
+        )));
+    }
     if let Some(rest) = target.strip_prefix('[') {
         let Some(end) = rest.find(']') else {
             return Err(Error::Transport(format!(
-                "invalid service address {target:?}"
+                "invalid service address {written:?}"
             )));
         };
         let host = &rest[..end];
@@ -350,14 +381,23 @@ fn split_target(target: &str) -> Result<(String, u16), Error> {
             .and_then(|value| value.parse().ok());
         return port
             .map(|port| (host.to_owned(), port))
-            .ok_or_else(|| Error::Transport(format!("invalid service address {target:?}")));
+            .ok_or_else(|| Error::Transport(format!("invalid service address {written:?}")));
+    }
+    // An unbracketed IPv6 address has colons of its own, so its last one names
+    // no port: reading one would connect somewhere nobody asked for.
+    if target.matches(':').count() > 1 {
+        return Err(Error::Transport(format!(
+            "service address {written:?} names no port; write an IPv6 address bracketed, as [{target}]:PORT"
+        )));
     }
     let (host, port) = target.rsplit_once(':').ok_or_else(|| {
-        Error::Transport(format!("service address must be host:port, got {target:?}"))
+        Error::Transport(format!(
+            "service address must be host:port, got {written:?}"
+        ))
     })?;
     let port = port
         .parse()
-        .map_err(|_| Error::Transport(format!("invalid service port in {target:?}")))?;
+        .map_err(|_| Error::Transport(format!("invalid service port in {written:?}")))?;
     Ok((host.to_owned(), port))
 }
 
@@ -719,5 +759,43 @@ mod tests {
         for target in ["localhost", "localhost:not-a-port", "[::1", "[::1]9000"] {
             assert!(split_target(target).is_err(), "{target} should be rejected");
         }
+    }
+
+    #[test]
+    fn surrounding_whitespace_and_an_http_scheme_are_read() {
+        for target in [
+            "  localhost:9000  ",
+            "http://localhost:9000",
+            "http://localhost:9000/",
+        ] {
+            assert_eq!(
+                split_target(target).ok(),
+                Some(("localhost".to_owned(), 9000)),
+                "{target} should be read"
+            );
+        }
+    }
+
+    #[test]
+    fn an_unbracketed_ipv6_address_is_not_read_as_a_port() {
+        let error = split_target("::1:9000").expect_err("an unbracketed address names no port");
+        assert!(
+            matches!(&error, Error::Transport(message) if message.contains("[::1:9000]:PORT")),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn addresses_this_client_cannot_reach_are_legible() {
+        let error = split_target("https://localhost:9000").expect_err("no tls is spoken");
+        assert!(
+            matches!(&error, Error::Transport(message) if message.contains("https")),
+            "{error}"
+        );
+        let error = split_target("localhost:9000/sysml").expect_err("no path is served");
+        assert!(
+            matches!(&error, Error::Transport(message) if message.contains("path")),
+            "{error}"
+        );
     }
 }

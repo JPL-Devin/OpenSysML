@@ -69,6 +69,12 @@ func (r SolveReport) Satisfiable() bool { return r.Status == SolveSat }
 // CheckSolve asks a solver whether the named constraint, requirement or
 // satisfaction can be satisfied at all. Experimental: SysML v2 defines no solving.
 func (s *Session) CheckSolve(name string) []SolveReport {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.checkSolve(name)
+}
+
+func (s *Session) checkSolve(name string) []SolveReport {
 	queries, bad := s.solveQueries(name)
 	if bad != nil {
 		return []SolveReport{*bad}
@@ -97,6 +103,9 @@ func (s *Session) solveQuery(name string, solver *solve.Solver, q *solve.Query) 
 		return SolveReport{Subject: name, Status: SolveSat, Solver: result.Solver,
 			Lines: append(lines, assignmentLines(result.Model)...)}
 	case solve.StatusUnsat:
+		if report, rounded := roundedUnsatReport(name, subject, result, q); rounded {
+			return report
+		}
 		return SolveReport{Subject: name, Status: SolveUnsat, Solver: result.Solver, Lines: []string{
 			fmt.Sprintf("✗ %s is unsatisfiable (%s)", subject, solveDetail(result)),
 		}}
@@ -107,6 +116,26 @@ func (s *Session) solveQuery(name string, solver *solve.Solver, q *solve.Query) 
 		}
 		return SolveReport{Subject: name, Status: SolveUnknown, Solver: result.Solver, Lines: lines}
 	}
+}
+
+// roundedUnsat explains an exact-real unsat left undecided: the evaluator
+// rounds these conditions in float64, which the exact encoding does not model.
+const roundedUnsat = "Reason: no exact-real values satisfy it, but the evaluator rounds these conditions in floating point, which may still accept values"
+
+// roundedClaim explains a solver claim withheld outright: what it would state
+// about exact reals does not decide the evaluator's floating-point arithmetic.
+const roundedClaim = "Reason: the conditions round in floating point when evaluated, which the exact-real encoding does not decide"
+
+// roundedUnsatReport downgrades an unsat about conditions the evaluator rounds:
+// exact-real unsatisfiability does not decide the evaluator's own arithmetic.
+func roundedUnsatReport(name, subject string, result *solve.Result, q *solve.Query) (SolveReport, bool) {
+	if !q.Rounded() {
+		return SolveReport{}, false
+	}
+	return SolveReport{Subject: name, Status: SolveUnknown, Solver: result.Solver, Lines: []string{
+		fmt.Sprintf("? %s is undecided (%s)", subject, solveDetail(result)),
+		"  " + roundedUnsat,
+	}}, true
 }
 
 // solveSubject names the element a report is about, as a verdict about it would.
@@ -259,7 +288,7 @@ func oneQuery(name string, q *solve.Query, unfixed []solve.Unfixed, err error) (
 // doCheck carries out %check.
 func (s *Session) doCheck(name string) ([]string, bool, error) {
 	var out []string
-	for _, r := range s.CheckSolve(name) {
+	for _, r := range s.checkSolve(name) {
 		out = append(out, r.Lines...)
 	}
 	return out, false, nil

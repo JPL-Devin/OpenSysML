@@ -5848,8 +5848,8 @@ const file_sysml_proto_rawDesc = "" +
 	"\fEvaluateCalc\x12\x1a.sysml.EvaluateCalcRequest\x1a\x1b.sysml.EvaluateCalcResponse\x122\n" +
 	"\x05Query\x12\x13.sysml.QueryRequest\x1a\x14.sysml.QueryResponse\x12S\n" +
 	"\x10RunDocumentQuery\x12\x1e.sysml.RunDocumentQueryRequest\x1a\x1f.sysml.RunDocumentQueryResponse\x12M\n" +
-	"\x0eRenderDocument\x12\x1c.sysml.RenderDocumentRequest\x1a\x1d.sysml.RenderDocumentResponseB@\n" +
-	"\x12io.opensysml.protoP\x01Z(github.com/Open-MBEE/OpenSysML/api/protob\x06proto3"
+	"\x0eRenderDocument\x12\x1c.sysml.RenderDocumentRequest\x1a\x1d.sysml.RenderDocumentResponseBJ\n" +
+	"\x1corg.openmbee.opensysml.protoP\x01Z(github.com/Open-MBEE/OpenSysML/api/protob\x06proto3"
 
 var (
 	file_sysml_proto_rawDescOnce sync.Once

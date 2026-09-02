@@ -66,10 +66,28 @@ func TestQuantityEvaluation(t *testing.T) {
 			if got.Kind != ValQuantity {
 				t.Fatalf("%s = %v (%s), want a quantity", tc.src, got, got.Kind)
 			}
-			if got.Quantity.String() != tc.want {
-				t.Errorf("%s = %s, want %s", tc.src, got.Quantity, tc.want)
+			if got.Quantity().String() != tc.want {
+				t.Errorf("%s = %s, want %s", tc.src, got.Quantity(), tc.want)
 			}
 		})
+	}
+}
+
+// TestQuantityArithmeticReportsOverflow: a magnitude no Real holds is reported
+// for a quantity as it is for a bare Real, rather than carried as an infinity.
+func TestQuantityArithmeticReportsOverflow(t *testing.T) {
+	ctx, scope := quantityContext(t)
+
+	for _, src := range []string{
+		"1e308 [m] + 1e308 [m]",
+		"1e200 [m] * 1e200 [s]",
+		"1e308 [m] / 1e-308 [s]",
+		"1e308 [m] / 1e-308 [m]",
+	} {
+		got, err := evalIn(t, ctx, scope, src)
+		if !errors.Is(err, semantics.ErrArithmeticOverflow) {
+			t.Errorf("%s = %+v, %v; want ErrArithmeticOverflow", src, got, err)
+		}
 	}
 }
 
@@ -151,11 +169,11 @@ func TestQuantityExponentiation(t *testing.T) {
 			if got.Kind != ValQuantity {
 				t.Fatalf("%s = %v (%s), want a quantity", tc.src, got, got.Kind)
 			}
-			if got.Quantity.String() != tc.want {
-				t.Errorf("%s = %s, want %s", tc.src, got.Quantity, tc.want)
+			if got.Quantity().String() != tc.want {
+				t.Errorf("%s = %s, want %s", tc.src, got.Quantity(), tc.want)
 			}
-			if got.Quantity.Num.Kind != tc.wantKind {
-				t.Errorf("%s magnitude is %v, want %v", tc.src, got.Quantity.Num.Kind, tc.wantKind)
+			if got.Quantity().Num.Kind != tc.wantKind {
+				t.Errorf("%s magnitude is %v, want %v", tc.src, got.Quantity().Num.Kind, tc.wantKind)
 			}
 		})
 	}
@@ -231,12 +249,12 @@ func TestFormatTraceValueQuantity(t *testing.T) {
 		val  Value
 		want string
 	}{
-		{"real magnitude", Value{Kind: ValQuantity, Quantity: &Quantity{
-			Num: semantics.Value{Kind: semantics.ValReal, Real: 1.5}, Unit: metre}}, "1.5 [m/s]"},
-		{"whole real magnitude", Value{Kind: ValQuantity, Quantity: &Quantity{
-			Num: semantics.Value{Kind: semantics.ValReal, Real: 5}, Unit: metre}}, "5.0 [m/s]"},
-		{"integer magnitude", Value{Kind: ValQuantity, Quantity: &Quantity{
-			Num: semantics.Value{Kind: semantics.ValInt, Int: 5}, Unit: metre}}, "5 [m/s]"},
+		{"real magnitude", NewQuantityValue(&Quantity{
+			Num: semantics.Value{Kind: semantics.ValReal, Real: 1.5}, Unit: metre}), "1.5 [m/s]"},
+		{"whole real magnitude", NewQuantityValue(&Quantity{
+			Num: semantics.Value{Kind: semantics.ValReal, Real: 5}, Unit: metre}), "5.0 [m/s]"},
+		{"integer magnitude", NewQuantityValue(&Quantity{
+			Num: semantics.Value{Kind: semantics.ValInt, Int: 5}, Unit: metre}), "5 [m/s]"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -280,7 +298,7 @@ func TestQuantityAndIndexNotationsCoexist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("5 [m]: %v", err)
 	}
-	if quantity.Kind != ValQuantity || quantity.Quantity.String() != "5 [m]" {
+	if quantity.Kind != ValQuantity || quantity.Quantity().String() != "5 [m]" {
 		t.Errorf("5 [m] = %v (%s), want the quantity 5 [m]", quantity, quantity.Kind)
 	}
 
@@ -290,7 +308,7 @@ func TestQuantityAndIndexNotationsCoexist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("(1 [m], 2 [m])#(2): %v", err)
 	}
-	if indexed.Kind != ValQuantity || indexed.Quantity.String() != "2 [m]" {
+	if indexed.Kind != ValQuantity || indexed.Quantity().String() != "2 [m]" {
 		t.Errorf("(1 [m], 2 [m])#(2) = %v (%s), want the quantity 2 [m]", indexed, indexed.Kind)
 	}
 

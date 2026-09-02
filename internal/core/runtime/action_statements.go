@@ -116,7 +116,7 @@ func (h *actionStmtHost) effect(s lower.Effect) error {
 	}
 	for name, value := range outputs {
 		if !env.assign(name, value) {
-			env.data[name] = value
+			env.data.set(name, value)
 		}
 	}
 	return nil

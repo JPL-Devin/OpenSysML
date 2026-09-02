@@ -93,6 +93,61 @@ func TestRestoreDropsAttemptFindings(t *testing.T) {
 	}
 }
 
+// Consumed tokens are dropped from the buffer once nothing can rewind to them,
+// so a long stream is read through a bounded window; what the cursor reads,
+// the previous token's end and the sticky EOF are unaffected.
+func TestTokenWindowCompacts(t *testing.T) {
+	const n = 10 * tokenWindow
+	src := strings.Repeat("a ", n)
+	p := newParser(src)
+	for i := 0; i < n; i++ {
+		if got := p.src.Text(p.advance().Span); got != "a" {
+			t.Fatalf("token %d = %q, want a", i, got)
+		}
+		if want := 2*i + 1; p.lastEnd() != want {
+			t.Fatalf("lastEnd after token %d = %d, want %d", i, p.lastEnd(), want)
+		}
+	}
+	if !p.atEOF() || p.advance().Kind != lexer.EOF || !p.atEOF() {
+		t.Fatal("want sticky EOF after the last token")
+	}
+	if p.pos != n {
+		t.Fatalf("pos = %d, want %d", p.pos, n)
+	}
+	if p.base == 0 || len(p.buf) > 2*tokenWindow {
+		t.Fatalf("buffer not compacted: base = %d, len = %d", p.base, len(p.buf))
+	}
+}
+
+// An outstanding checkpoint pins the buffer however far the attempt reads, so
+// restoring it re-reads every token; releasing it lets the window compact again.
+func TestCheckpointPinsTokenWindow(t *testing.T) {
+	const n = 10 * tokenWindow
+	p := newParser(strings.Repeat("a ", n))
+	cp := p.checkpoint()
+	for i := 0; i < n; i++ {
+		p.advance()
+	}
+	if p.base != 0 {
+		t.Fatalf("checkpointed buffer compacted: base = %d", p.base)
+	}
+	p.restore(cp)
+	for i := 0; i < n; i++ {
+		if i == n/2 {
+			p.release()
+		}
+		if got := p.src.Text(p.advance().Span); got != "a" {
+			t.Fatalf("re-read %d = %q, want a", i, got)
+		}
+	}
+	if !p.atEOF() {
+		t.Fatal("want EOF after re-reading every token")
+	}
+	if p.base == 0 {
+		t.Fatal("released buffer did not compact")
+	}
+}
+
 // A nested-constraint attempt that finds no declaration rewinds cleanly, so the
 // asserted reference keeps the word the attempt consumed.
 func TestNestedConstraintAttemptRewinds(t *testing.T) {

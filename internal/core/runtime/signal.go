@@ -605,15 +605,15 @@ func (ctx *Context) fvObjects(inst *Instance, name string) ([]*Instance, error) 
 func heldElements(v Value) []Value {
 	switch v.Kind {
 	case ValSequence:
-		if v.Sequence == nil {
+		if v.Sequence() == nil {
 			return nil
 		}
-		return v.Sequence.Elements()
+		return v.Sequence().Elements()
 	case ValSet:
-		if v.Set == nil {
+		if v.Set() == nil {
 			return nil
 		}
-		return v.Set.Elements()
+		return v.Set().Elements()
 	}
 	return []Value{v}
 }

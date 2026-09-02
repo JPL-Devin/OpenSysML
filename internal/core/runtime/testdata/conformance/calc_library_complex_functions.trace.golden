@@ -5,22 +5,22 @@ enter calc test::imaginaryUnitSquared
           enter calc ComplexFunctions::rect
             bind re = 0.0 [argument]
             bind im = 1.0 [argument]
-          exit calc ComplexFunctions::rect -> (0.0, 1.0)
-        eval invoke rect -> (0.0, 1.0)
+          exit calc ComplexFunctions::rect -> 0.0 + 1.0i
+        eval invoke rect -> 0.0 + 1.0i
           eval literal 0.0 -> 0.0
           eval literal 1.0 -> 1.0
           enter calc ComplexFunctions::rect
             bind re = 0.0 [argument]
             bind im = 1.0 [argument]
-          exit calc ComplexFunctions::rect -> (0.0, 1.0)
-        eval invoke rect -> (0.0, 1.0)
+          exit calc ComplexFunctions::rect -> 0.0 + 1.0i
+        eval invoke rect -> 0.0 + 1.0i
         enter calc ComplexFunctions::*
-          bind x = (0.0, 1.0) [argument]
-          bind y = (0.0, 1.0) [argument]
-        exit calc ComplexFunctions::* -> (-1.0, 0.0)
-      eval invoke ComplexFunctions::* -> (-1.0, 0.0)
+          bind x = 0.0 + 1.0i [argument]
+          bind y = 0.0 + 1.0i [argument]
+        exit calc ComplexFunctions::* -> -1.0 + 0.0i
+      eval invoke ComplexFunctions::* -> -1.0 + 0.0i
       enter calc ComplexFunctions::re
-        bind x = (-1.0, 0.0) [argument]
+        bind x = -1.0 + 0.0i [argument]
       exit calc ComplexFunctions::re -> -1.0
     eval invoke re -> -1.0
 exit calc test::imaginaryUnitSquared -> -1.0

@@ -526,6 +526,15 @@ func (s *Service) Evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.Ev
 		}, nil
 	}
 
+	// The request states one expression, so text the parser leaves unread is
+	// reported rather than evaluating the prefix it did read (`1 = 1` answering 1).
+	if end := len(strings.TrimRight(req.Expression, " \t\r\n")); p.Offset() < end {
+		return &pb.EvaluateResponse{
+			Error: fmt.Sprintf("expression parse failed: unexpected %q after the expression",
+				strings.TrimSpace(req.Expression[p.Offset():])),
+		}, nil
+	}
+
 	// A subject is both what the expression is evaluated against and, unless a
 	// context is named, the namespace its features are named in — the way the
 	// prompt evaluates in the context it pinned.

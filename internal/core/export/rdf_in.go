@@ -30,9 +30,17 @@ type element struct {
 	iri         string
 	metaclass   string
 	memberIndex int
-	// qname is the element's sysml:qualifiedName, the only place its identity
-	// is read from — never the IRI, whose id is an opaque encoding.
+	// qname is the element's sysml:qualifiedName: the mutable label a
+	// reference is written back as. Identity is the element id, not the name.
 	qname string
+	// elementID is the element's sysml:elementId — its identity, which an
+	// ElementId annotation may have declared independently of the name.
+	elementID string
+	// declaredID marks an id that came from an explicit ElementId annotation,
+	// which the notation must state again: it may equal the derived id.
+	declaredID bool
+	// ProjectRef provenance of a scope root, written back as an annotation.
+	projectID, branch, org string
 	// scope is the qualified name of the namespace this element is declared
 	// in, which is what a reference written inside it is relative to.
 	scope    string
@@ -63,6 +71,8 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 	d := &decoder{
 		graph:            graph,
 		byIRI:            map[string]*element{},
+		byID:             map[string]*element{},
+		dupID:            map[string]bool{},
 		memberships:      map[string]membership{},
 		owningMembership: map[string]membership{},
 	}
@@ -122,6 +132,10 @@ type membership struct {
 type decoder struct {
 	graph *rdf.Graph
 	byIRI map[string]*element
+	// byID keys the subjects on their element id, which is their identity; a
+	// scoped graph may repeat an id across scopes, and dupID marks those.
+	byID  map[string]*element
+	dupID map[string]bool
 	// memberships is keyed by membership IRI, and owningMembership by the IRI of
 	// the member each one owns.
 	memberships      map[string]membership
@@ -163,7 +177,23 @@ func (d *decoder) build() ([]*element, error) {
 			memberIndex: d.intOf(subject, rdf.OpenSysML+xMemberIndex),
 		}
 		el.qname, _ = d.stringOf(el, rdf.SysML+pQualifiedName)
+		// The identity key. An old graph without sysml:elementId is keyed on
+		// the encoding of its name, which is what its IRIs carry.
+		if id, ok := d.stringOf(el, rdf.SysML+pElementID); ok {
+			el.elementID = id
+		} else {
+			el.elementID = rdf.EncodeElementID(el.qname)
+		}
+		el.declaredID = d.boolOf(el, rdf.OpenSysML+xDeclaredID)
+		el.projectID, _ = d.stringOf(el, rdf.OpenSysML+xProjectID)
+		el.branch, _ = d.stringOf(el, rdf.OpenSysML+xBranch)
+		el.org, _ = d.stringOf(el, rdf.OpenSysML+xOrg)
 		d.byIRI[el.iri] = el
+		if prior, seen := d.byID[el.elementID]; seen && prior != el {
+			d.dupID[el.elementID] = true
+		} else {
+			d.byID[el.elementID] = el
+		}
 		order = append(order, el)
 	}
 	for _, el := range order {
@@ -297,13 +327,18 @@ func (d *decoder) checkReferences() error {
 }
 
 // referencedElement resolves a referenced IRI to the graph subject whose
-// sysml:qualifiedName names it, reporting a reference no property can name.
+// sysml:qualifiedName names it: by IRI first, then by the element id the IRI
+// ends in. An id the graph does not define is a dangling reference.
 func (d *decoder) referencedElement(iri string) (*element, error) {
 	target, ok := d.byIRI[iri]
 	if !ok {
-		return nil, &UnsupportedError{
-			What: fmt.Sprintf("the reference <%s>", iri),
-			Note: "it is not a subject of the graph, so there is no sysml:qualifiedName to write its name back from",
+		id := rdf.LocalName(iri)
+		target, ok = d.byID[id]
+		if !ok || d.dupID[id] {
+			return nil, &UnsupportedError{
+				What: fmt.Sprintf("the reference <%s>", iri),
+				Note: fmt.Sprintf("the graph defines no element with id %q, so there is no sysml:qualifiedName to write its name back from", id),
+			}
 		}
 	}
 	if target.qname == "" {
@@ -390,7 +425,8 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 	// `parallel` marks a state's substates orthogonal, and only a body may
 	// follow it, so a parallel state with none has no notation.
 	parallel := d.boolOf(el, rdf.SysML+"isParallel")
-	if len(children) == 0 && !d.boolOf(el, rdf.OpenSysML+xHasBody) {
+	annotations := identityAnnotations(el)
+	if len(children) == 0 && len(annotations) == 0 && !d.boolOf(el, rdf.OpenSysML+xHasBody) {
 		if parallel {
 			return d.missing(el, "sysx:"+xHasBody, "a parallel state states its regions in a body")
 		}
@@ -401,6 +437,9 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 		b.WriteString(" parallel")
 	}
 	b.WriteString(" {\n")
+	for _, annotation := range annotations {
+		b.WriteString(indent + "    " + annotation + "\n")
+	}
 	for _, child := range children {
 		if err := d.print(b, child, depth+1); err != nil {
 			return err
@@ -408,6 +447,29 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 	}
 	b.WriteString(indent + "}\n")
 	return nil
+}
+
+// identityAnnotations re-materializes the identity the graph states as the
+// annotations the notation declares it with: a ProjectRef on a scope root,
+// and an ElementId wherever the id is explicit or differs from the encoding
+// of the qualified name — a rename must not turn into a new element.
+func identityAnnotations(el *element) []string {
+	var out []string
+	if el.projectID != "" || el.branch != "" || el.org != "" {
+		var fields []string
+		for _, f := range []struct{ name, value string }{
+			{"projectId", el.projectID}, {"branch", el.branch}, {"org", el.org},
+		} {
+			if f.value != "" {
+				fields = append(fields, fmt.Sprintf("%s = %s;", f.name, strconv.Quote(f.value)))
+			}
+		}
+		out = append(out, "@IdentityMetadata::ProjectRef { "+strings.Join(fields, " ")+" }")
+	}
+	if el.declaredID || (el.elementID != "" && el.elementID != rdf.EncodeElementID(el.qname)) {
+		out = append(out, fmt.Sprintf("@IdentityMetadata::ElementId { id = %s; }", strconv.Quote(el.elementID)))
+	}
+	return out
 }
 
 // head builds the declaration text up to the body or terminator.

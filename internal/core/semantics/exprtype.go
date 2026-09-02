@@ -1,6 +1,10 @@
 package semantics
 
-import "github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+import (
+	"math"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+)
 
 // PrimType classifies a symbol against the stdlib scalar value types
 // (`ScalarValues`). It is the lattice the expression type checker reasons over;
@@ -83,6 +87,31 @@ func PrimWiden(a, b PrimType) PrimType {
 		return a
 	}
 	return b
+}
+
+// PrimTypeOfValue returns the narrowest scalar type a constant is a value of;
+// a whole number is an Integer (or Natural) whatever kind computed it.
+func PrimTypeOfValue(v Value) PrimType {
+	switch v.Kind {
+	case ValBool:
+		return PrimBoolean
+	case ValInt, ValReal:
+		if whole, ok := v.WholeNumber(); ok {
+			if whole >= 0 {
+				return PrimNatural
+			}
+			return PrimInteger
+		}
+		// A finite float is a ratio; an infinity is a Real only.
+		switch {
+		case math.IsNaN(v.Real):
+			return PrimUnknown
+		case math.IsInf(v.Real, 0):
+			return PrimReal
+		}
+		return PrimRational
+	}
+	return PrimUnknown
 }
 
 // scalarFQNs maps stdlib scalar qualified names to their lattice element.

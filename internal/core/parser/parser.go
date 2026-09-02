@@ -13,12 +13,14 @@ import (
 type Parser struct {
 	src *source.SourceFile
 	lx  *lexer.Lexer
-	// buf holds every non-trivia token read so far and is only appended to;
-	// pos is the read cursor into it. Consuming a token moves the cursor, so a
-	// checkpoint can rewind over what a try-parse consumed.
+	// buf is a window of the non-trivia token stream: buf[i] is stream token
+	// base+i, and pos is the cursor's stream index.
 	buf  []lexer.Token
+	base int
 	pos  int
-	triv []ast.Trivia // trivia pending attachment to the next node
+	// checkpoints counts the outstanding checkpoints; they pin the window.
+	checkpoints int
+	triv        []ast.Trivia // trivia pending attachment to the next node
 	// Diagnostics are syntax errors: input the parser could not read as
 	// well-formed SysML.
 	Diagnostics []Diagnostic
@@ -93,17 +95,21 @@ type parseCheckpoint struct {
 	hadPending    bool
 }
 
+// tokenWindow is how many consumed tokens the buffer keeps before compacting.
+const tokenWindow = 64
+
 // New creates a Parser for the given source file.
 func New(sf *source.SourceFile) *Parser {
-	// Models measure ~5 source bytes per non-trivia token.
-	return &Parser{src: sf, lx: lexer.New(sf), buf: make([]lexer.Token, 0, sf.Len()/5)}
+	// Models measure ~5 source bytes per non-trivia token; the window caps it.
+	return &Parser{src: sf, lx: lexer.New(sf), buf: make([]lexer.Token, 0, min(sf.Len()/5+1, 2*tokenWindow))}
 }
 
 // fill ensures buf holds the token n positions ahead of the cursor (pulling
 // from the lexer, skipping trivia and recording the notes and comments among
 // it). The final EOF token is sticky (re-returned).
 func (p *Parser) fill(n int) {
-	for len(p.buf) <= p.pos+n {
+	p.compact()
+	for len(p.buf) <= p.pos-p.base+n {
 		tok := p.lx.Next()
 		for tok.IsTrivia() || tok.Kind == lexer.RegularComment {
 			if tr, ok := triviaOf(tok); ok {
@@ -131,6 +137,17 @@ func (p *Parser) fill(n int) {
 	}
 }
 
+// compact drops the consumed tokens no checkpoint can rewind to, keeping the
+// previous token for lastEnd; dropping at least half at a time amortizes the copy.
+func (p *Parser) compact() {
+	drop := p.pos - p.base - 1
+	if p.checkpoints > 0 || drop < tokenWindow || drop < len(p.buf)/2 {
+		return
+	}
+	p.buf = p.buf[:copy(p.buf, p.buf[drop:])]
+	p.base += drop
+}
+
 // triviaOf converts a note or comment token into the trivia recorded for it.
 // Whitespace is most of a file's trivia and no consumer reads it, so it is not
 // recorded.
@@ -155,7 +172,7 @@ func (p *Parser) peek() lexer.Token { return p.peekN(0) }
 // peekN returns the token n positions ahead (0 = current). The buffered fast
 // path is kept small enough to inline into the parser's hot accessors.
 func (p *Parser) peekN(n int) lexer.Token {
-	if i := p.pos + n; i < len(p.buf) {
+	if i := p.pos - p.base + n; i < len(p.buf) {
 		return p.buf[i]
 	}
 	return p.peekSlow(n)
@@ -164,18 +181,18 @@ func (p *Parser) peekN(n int) lexer.Token {
 // peekSlow pulls tokens from the lexer until the one n ahead is buffered.
 func (p *Parser) peekSlow(n int) lexer.Token {
 	p.fill(n)
-	if p.pos+n >= len(p.buf) {
-		return p.buf[len(p.buf)-1] // EOF (sticky)
+	if i := p.pos - p.base + n; i < len(p.buf) {
+		return p.buf[i]
 	}
-	return p.buf[p.pos+n]
+	return p.buf[len(p.buf)-1] // EOF (sticky)
 }
 
 // advance consumes and returns the current token.
 func (p *Parser) advance() lexer.Token {
-	if p.pos >= len(p.buf) {
+	if p.pos-p.base >= len(p.buf) {
 		p.fill(0)
 	}
-	tok := p.buf[p.pos]
+	tok := p.buf[p.pos-p.base]
 	if tok.Kind != lexer.EOF {
 		p.pos++
 	}
@@ -296,8 +313,8 @@ func (p *Parser) expect(k lexer.Kind, msg string) (lexer.Token, bool) {
 // lastEnd returns the end offset of the last consumed non-trivia token, or the
 // start of the current one when nothing has been consumed.
 func (p *Parser) lastEnd() int {
-	if p.pos > 0 && p.pos <= len(p.buf) {
-		return p.buf[p.pos-1].Span.End()
+	if i := p.pos - p.base; i > 0 && i <= len(p.buf) {
+		return p.buf[i-1].Span.End()
 	}
 	return p.peek().Span.Offset
 }
@@ -365,8 +382,10 @@ func (p *Parser) ParseFile() *ast.RootNamespace {
 	return root
 }
 
-// checkpoint captures current parser state for backtracking.
+// checkpoint captures current parser state for backtracking. The tokens it can
+// rewind to stay buffered until release is called, whether or not it is restored.
 func (p *Parser) checkpoint() parseCheckpoint {
+	p.checkpoints++
 	return parseCheckpoint{
 		pos:           p.pos,
 		diagnosticLen: len(p.Diagnostics),
@@ -388,4 +407,10 @@ func (p *Parser) restore(cp parseCheckpoint) {
 	p.Warnings = p.Warnings[:cp.warningLen]
 	p.pendingComment = cp.pendingSpan
 	p.hasPendingComment = cp.hadPending
+}
+
+// release ends a checkpoint's hold on the token buffer; a try-parse defers it
+// right after taking the checkpoint.
+func (p *Parser) release() {
+	p.checkpoints--
 }

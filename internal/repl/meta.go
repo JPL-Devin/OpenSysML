@@ -289,20 +289,20 @@ func (s *Session) metaSessionCommand(fields []string, line string) (metaResult, 
 		if verr != nil {
 			return metaOut([]string{errPrefix + verr.Error()}, false, nil), true
 		}
-		s.SetVerbosity(v)
+		s.verbosity = v
 		return metaOut([]string{fmt.Sprintf("verbosity: %s", v)}, false, nil), true
 	case "%trace":
 		if len(fields) >= 2 {
 			switch fields[1] {
 			case "on":
-				s.SetTracing(true)
+				s.setTracing(true)
 			case "off":
-				s.SetTracing(false)
+				s.setTracing(false)
 			default:
 				return metaOut([]string{fmt.Sprintf("error: unknown trace setting %q (want on or off)", fields[1])}, false, nil), true
 			}
 		}
-		return metaOut([]string{fmt.Sprintf("trace: %s", onOff(s.Tracing()))}, false, nil), true
+		return metaOut([]string{fmt.Sprintf("trace: %s", onOff(s.trace != nil))}, false, nil), true
 	case "%strict":
 		return metaOut(s.doStrict(fields[1:]), false, nil), true
 	case "%budget":
@@ -483,7 +483,7 @@ func (s *Session) doInstantiate(name string) ([]string, bool, error) {
 		return nil, false, fmt.Errorf("runtime init: %w", err)
 	}
 
-	lines, err := s.InstantiateNamed(name)
+	lines, err := s.instantiateLines(name)
 	if err != nil {
 		return []string{errPrefix + err.Error()}, false, nil
 	}
@@ -726,8 +726,8 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 		if !ok || usage.Value == nil {
 			return nil, fmt.Errorf("%q has no value to evaluate", expr)
 		}
-		// Evaluate with the symbol's owner scope for proper name resolution
-		val, err := ctx.EvalWithScope(usage.Value, sym.OwnerScope)
+		// Read as the declaration is read: in its own scope, against its declared type.
+		val, err := ctx.EvalDeclaredValue(sym)
 		if err != nil {
 			return nil, fmt.Errorf("evaluation failed: %w", err)
 		}
@@ -936,7 +936,7 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool, error) {
 // doBudget lists the bounds one run of this session may spend, each with the
 // variable that raises it.
 func (s *Session) doBudget() []string {
-	b := s.Budgets()
+	b := s.budgets
 	return []string{
 		"budgets (each bounds one run, not the session):",
 		fmt.Sprintf("  evaluation steps     %-10d %s", b.MaxSteps, runtime.MaxStepsEnvVar),
@@ -1201,9 +1201,9 @@ func nestedInstances(ctx *runtime.Context, fv *runtime.FeatureValue) []*runtime.
 	values := []runtime.Value{fv.Value}
 	switch fv.Values.Kind {
 	case runtime.ValSequence:
-		values = fv.Values.Sequence.Elements()
+		values = fv.Values.Sequence().Elements()
 	case runtime.ValSet:
-		values = fv.Values.Set.Elements()
+		values = fv.Values.Set().Elements()
 	}
 
 	var out []*runtime.Instance
@@ -1297,20 +1297,20 @@ func formatValue(ctx *runtime.Context, val runtime.Value) string {
 	}
 	switch val.Kind {
 	case runtime.ValSequence:
-		if val.Sequence == nil {
+		if val.Sequence() == nil {
 			return "[]"
 		}
-		parts := make([]string, len(val.Sequence.Elements()))
-		for i, element := range val.Sequence.Elements() {
+		parts := make([]string, len(val.Sequence().Elements()))
+		for i, element := range val.Sequence().Elements() {
 			parts[i] = formatValue(ctx, element)
 		}
 		return "[" + strings.Join(parts, ", ") + "]"
 	case runtime.ValSet:
-		if val.Set == nil {
+		if val.Set() == nil {
 			return "Set{}"
 		}
-		parts := make([]string, len(val.Set.Elements()))
-		for i, element := range val.Set.Elements() {
+		parts := make([]string, len(val.Set().Elements()))
+		for i, element := range val.Set().Elements() {
 			parts[i] = formatValue(ctx, element)
 		}
 		return "Set{" + strings.Join(parts, ", ") + "}"
@@ -1357,7 +1357,7 @@ func (s *Session) evalCalc(calcName, argText string) ([]string, []NamedValue, er
 		}
 	}
 
-	exprs, err := parseExprList(argText)
+	exprs, err := s.argExprs(argText)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1651,7 +1651,7 @@ func parseWholeExpr(text string) (ast.Node, error) {
 
 // doConstraint evaluates a constraint definition.
 func (s *Session) doConstraint(name string) ([]string, bool, error) {
-	return s.CheckConstraint(name).Lines, false, nil
+	return s.withTrace(s.checkConstraint(name)).Lines, false, nil
 }
 
 // promptScope is the namespace a prompt expression is evaluated in: the last
@@ -1745,7 +1745,7 @@ func onInstance(inst *runtime.Instance, owner string) string {
 
 // doRequirement evaluates a requirement definition.
 func (s *Session) doRequirement(name string) ([]string, bool, error) {
-	return s.CheckRequirement(name).Lines, false, nil
+	return s.withTrace(s.checkRequirement(name)).Lines, false, nil
 }
 
 // doSatisfy evaluates satisfaction assertions: every one the model states, or,
@@ -1756,7 +1756,7 @@ func (s *Session) doSatisfy(args []string) ([]string, bool, error) {
 		name = args[0]
 	}
 	var out []string
-	for _, v := range s.CheckSatisfy(name) {
+	for _, v := range s.satisfyVerdicts(name) {
 		out = append(out, v.Lines...)
 	}
 	return out, false, nil

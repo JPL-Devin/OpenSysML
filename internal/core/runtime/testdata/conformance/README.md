@@ -236,6 +236,8 @@ Supported types:
 - `String`: JSON string
 - `Null`: JSON null
 - `Quantity`: JSON number, with the `unit` the magnitude is written in
+- `Complex`: JSON number, the real part, with the imaginary part as `im`
+  (`{"type": "Complex", "value": 0.0, "im": 1.0}`)
 - `Sequence`: the `elements` it holds, in order, instead of `value` — for a
   multi-valued feature, whose order is part of its contract
 - `Instance`: an object, whose identity a case does not pin (no `value`)

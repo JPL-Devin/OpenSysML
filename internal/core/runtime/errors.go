@@ -72,6 +72,14 @@ var (
 	// input parameter of the invoked calc.
 	ErrUnknownParameter = errors.New("unknown parameter")
 
+	// ErrUnknownActionInput is returned when a supplied input names no parameter
+	// or attribute of the action performed.
+	ErrUnknownActionInput = errors.New("unknown action input")
+
+	// ErrOutputActionInput is returned when a supplied input names a parameter
+	// the action only writes back (`out`), which a caller does not seed.
+	ErrOutputActionInput = errors.New("output action parameter given as input")
+
 	// ErrNoResultExpression is returned when a calc body declares no return
 	// expression, directly or by inheritance.
 	ErrNoResultExpression = errors.New("no result expression")
@@ -164,6 +172,10 @@ var (
 	// ErrNoConditions is returned when a constraint or requirement carries no
 	// condition to evaluate: reporting a verdict would claim a check that never ran.
 	ErrNoConditions = errors.New("no condition to evaluate")
+
+	// ErrUnboundSubject is returned when a condition reads a subject nothing
+	// supplied: the check is about no object, so it reaches no verdict.
+	ErrUnboundSubject = errors.New("subject is unbound")
 
 	// ErrCyclicFeatureValue is returned when a feature value's default value depends, directly or
 	// through other feature values, on the one being computed.
@@ -333,6 +345,33 @@ func budgetExceeded(sentinel error, message string, causes ...error) error {
 	errs = append(errs, causes...)
 	return &budgetExceededError{message: message, errs: errs}
 }
+
+// NoValueError reports a feature a condition names that carries no value,
+// naming the feature so a caller can tell which one is uninitialized.
+type NoValueError struct {
+	Feature string
+}
+
+func (e *NoValueError) Error() string {
+	return fmt.Sprintf("%v for feature %s", ErrNoValue, e.Feature)
+}
+
+func (e *NoValueError) Unwrap() error { return ErrNoValue }
+
+// UnboundSubjectError reports a check whose subject nothing supplied, naming
+// the subject and how a caller supplies one.
+type UnboundSubjectError struct {
+	Kind    string // "constraint" or "requirement"
+	Element string // name of the element declaring the subject
+	Subject string // name of the subject parameter
+}
+
+func (e *UnboundSubjectError) Error() string {
+	return fmt.Sprintf("%s %s: %s %v: bind it (`subject %s = <element>`), check it on an object, or assert `satisfy %s by <element>`",
+		e.Kind, e.Element, e.Subject, ErrUnboundSubject, e.Subject, e.Element)
+}
+
+func (e *UnboundSubjectError) Unwrap() error { return ErrUnboundSubject }
 
 // ViolationError reports a condition that evaluated to false, naming the
 // condition so a verdict says which one failed. It unwraps to ErrViolated,

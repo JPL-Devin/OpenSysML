@@ -660,13 +660,12 @@ is `0.1.0-SNAPSHOT`, which Central refuses by design.
 
 None of these can be provisioned from a checkout:
 
-1. **A verified namespace.** Register `io.github.open-mbee` at
+1. **A verified namespace.** Register `org.openmbee` at
    [central.sonatype.com](https://central.sonatype.com/) → *Namespaces* → *Add
-   Namespace*. An `io.github.<org>` namespace is verified by proving control of
-   the GitHub organization: the portal names a temporary repository the
-   organization must create. The alternative, a DNS-verified `org.openmbee`,
-   needs a TXT record on `openmbee.org` — pick one and use it for every future
-   Java artifact, because the `groupId` is in every consumer's build file.
+   Namespace*. A DNS-verified namespace is proved by a TXT record on
+   `openmbee.org` that the portal names. It is the `groupId` the client and its
+   Java package (`org.openmbee.opensysml`) already declare, and it is in every
+   consumer's build file, so every future Java artifact belongs under it.
 2. **A published GPG key.** Central requires a detached signature per artifact,
    verified against a public keyserver:
 
