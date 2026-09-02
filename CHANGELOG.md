@@ -44,21 +44,24 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   node's pin, and so does `leg.inner.v` through two levels; `bind add.a = x;` and
   `flow p.v to q.w;` address the pins they name; a typed node's body-local `in a = 3;` seeds its
   own input; `action add = Adder(3, 4)` and `Adder(a = 3, b = 4)` bind the callee's inputs by the
-  callee's own parameter order and names — never by what the caller happens to name alike — and
-  the untyped `add` read as a value is the callee's `result`. A nested body still resolves a name
-  it does not declare lexically to the enclosing action's feature and writes it in place, so a
-  grandchild writing `legs` keeps working, and a perform usage on a part keeps its occurrence
-  slot. Reading a pin before its node has run, a pin the node does not declare, a surplus,
-  missing or unknown argument, and a binding at a non-parameter or into a feature no enclosing
-  action holds are typed errors (`ErrNodeNotPerformed`, `ErrNodePin`, `ErrActionArity`,
-  `ErrUnboundParameter`, `ErrUnknownParameter`, `ErrBindingEnd`). `Results()`, the REPL's
-  `%continue`/`%tokens` and a gRPC execution response report a node's pins under its path
-  (`p.v`); `Data()` stays the action's own performance. Kept for compatibility: a bare typed
-  usage `action call : Callee;` still reads an unbound `in` from the same-named enclosing
-  feature, and every invocation form still returns its `out` values into same-named enclosing
-  features that exist. Not yet: `n.pin` on an untyped `action n = Callee(args)` is refused by
-  name resolution, which does not type `n` by the invocation; read `n` itself, or type the
-  usage.
+  callee's own parameter order and names, inherited and redefined parameters in their effective
+  order — never by what the caller happens to name alike — and the untyped `add` read as a value
+  is the callee's `return` parameter, or its `out result`. Two tokens performing one node at
+  once each hold a frame of their own, take what flows delivered to its pins oldest first and
+  send their own outputs on. A nested body still resolves a name it does not declare lexically
+  to the enclosing action's feature and writes it in place, so a grandchild writing `legs` keeps
+  working, and a perform usage on a part keeps its occurrence slot. Reading a pin before its node
+  has run, a pin the node does not declare, a surplus, missing or unknown argument, and a
+  binding at a non-parameter or into a feature no enclosing action holds are typed errors
+  (`ErrNodeNotPerformed`, `ErrNodePin`, `ErrActionArity`, `ErrUnboundParameter`,
+  `ErrUnknownParameter`, `ErrBindingEnd`). `Results()`, the REPL's `%continue`/`%tokens` and a
+  gRPC execution response report a node's pins under its path (`p.v`); `Data()` stays the
+  action's own performance. Kept for compatibility: a bare typed usage `action call : Callee;`
+  still reads an unbound `in` from the same-named enclosing feature — `Callee()` passes nothing
+  and lets the callee's defaults apply — and every invocation form still returns its `out`
+  values into same-named enclosing features that exist. Not yet: `n.pin` on an untyped
+  `action n = Callee(args)` is refused by name resolution, which does not type `n` by the
+  invocation; read `n` itself, or type the usage.
 
 ### Performance
 

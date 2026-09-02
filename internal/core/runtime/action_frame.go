@@ -31,11 +31,15 @@ type actionFrame struct {
 	data map[string]Value
 	// features are the parameters and attributes the performance holds, by name.
 	features map[string]ast.FeatureDirection
-	// subactions holds the latest performance of each node of graph.
+	// result names the parameter a value read of the performance stands for,
+	// "" when the action it performs states no result parameter.
+	result string
+	// subactions holds the latest performance of each node of graph, which is
+	// what a read of the node's pins by name sees.
 	subactions map[ast.Node]*actionFrame
-	// pending holds what flows and bindings delivered to a node's pins ahead of
-	// its performance, which starts with them.
-	pending map[ast.Node]map[string]Value
+	// pending queues what flows and bindings delivered to a node's pins ahead of
+	// its performances, each of which takes the oldest delivery at each pin.
+	pending map[ast.Node]map[string][]Value
 }
 
 // newRootFrame is the performance of the action itself.
@@ -101,15 +105,13 @@ func (e *ActionExecutor) beginPerformance(parent *actionFrame, node ast.Node) (*
 		perf.connections = joinConnections(parent.connections, sub.Graph.Connections)
 		perf.subactions = make(map[ast.Node]*actionFrame)
 	}
-	pins, err := e.nodePins(graph, node)
+	pins, result, err := e.nodePins(graph, node)
 	if err != nil {
 		return nil, err
 	}
 	perf.features = pins
-	for name, value := range parent.pending[node] {
-		perf.data[name] = value
-	}
-	delete(parent.pending, node)
+	perf.result = result
+	parent.takeDeliveries(node, perf)
 	parent.subactions[node] = perf
 
 	if err := e.seedDeclaredValues(perf, graph.Features[node]); err != nil {
@@ -151,24 +153,40 @@ func (e *ActionExecutor) endPerformance(perf *actionFrame) error {
 }
 
 // nodePins returns the pins a performance of node holds: the parameters and
-// attributes it declares itself, and those of the action it performs.
-func (e *ActionExecutor) nodePins(graph *lower.ActionGraph, node ast.Node) (map[string]ast.FeatureDirection, error) {
+// attributes it declares itself, and those of the action it performs, along
+// with the name of the pin read when the node is read as a value: its `return`
+// parameter, or failing one, an output pin named `result`.
+func (e *ActionExecutor) nodePins(graph *lower.ActionGraph, node ast.Node) (map[string]ast.FeatureDirection, string, error) {
 	pins := make(map[string]ast.FeatureDirection)
 	usage, ok := node.(*ast.Usage)
 	if !ok {
-		return pins, nil
+		return pins, "", nil
 	}
+	result := ""
 	for _, feature := range graph.Features[node] {
 		pins[feature.Name] = feature.Direction
+		if feature.IsResult {
+			result = feature.Name
+		}
 	}
 	if inv, performs := nestedInvocation(usage); performs {
 		sym, err := resolveActionSymbol(e.ctx, graph.Scope, inv)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		e.addFeatureDirections(pins, e.ctx.actionBodySymbol(sym))
+		for _, param := range e.ctx.actionParametersOf(sym) {
+			if param.IsResult && result == "" {
+				result = param.Name
+			}
+		}
 	}
-	return pins, nil
+	if result == "" {
+		if dir, ok := pins["result"]; ok && (dir == ast.DirOut || dir == ast.DirInOut) {
+			result = "result"
+		}
+	}
+	return pins, result, nil
 }
 
 // describe names the performance for a diagnostic.
@@ -266,26 +284,22 @@ func (f *actionFrame) pin(name string) (Value, error) {
 }
 
 // resultValue is what the performance stands for when read as a value: the
-// `result` of the action it performs.
+// result parameter of the action it performs.
 func (f *actionFrame) resultValue() (Value, error) {
-	value, ok := f.data[resultParameterName]
-	if ok {
+	if f.result == "" {
+		return Value{}, fmt.Errorf("%w: %s declares no result to read it as a value by",
+			ErrNodePin, f.describe())
+	}
+	if value, ok := f.data[f.result]; ok {
 		return value, nil
 	}
-	if f.declares(resultParameterName) {
-		return Value{}, &NoValueError{Feature: f.path() + "." + resultParameterName}
-	}
-	return Value{}, fmt.Errorf("%w: %s declares no result to read it as a value by",
-		ErrNodePin, f.describe())
+	return Value{}, &NoValueError{Feature: f.path() + "." + f.result}
 }
-
-// resultParameterName is the parameter an action's value read stands for.
-const resultParameterName = "result"
 
 // deliver stores a value at a pin of a node of f's flow ahead of its next
 // performance, which is how a flow or binding reaches a node not yet running.
 func (e *ActionExecutor) deliver(f *actionFrame, node ast.Node, pin string, value Value) error {
-	pins, err := e.nodePins(f.graph, node)
+	pins, _, err := e.nodePins(f.graph, node)
 	if err != nil {
 		return err
 	}
@@ -296,24 +310,30 @@ func (e *ActionExecutor) deliver(f *actionFrame, node ast.Node, pin string, valu
 		return err
 	}
 	if f.pending == nil {
-		f.pending = make(map[ast.Node]map[string]Value)
+		f.pending = make(map[ast.Node]map[string][]Value)
 	}
 	if f.pending[node] == nil {
-		f.pending[node] = make(map[string]Value)
+		f.pending[node] = make(map[string][]Value)
 	}
-	f.pending[node][pin] = value
+	f.pending[node][pin] = append(f.pending[node][pin], value)
 	return nil
 }
 
-// pinValue reads the value at a pin of a node of f's flow: from the node's
-// latest performance, or from f itself for a node that holds no frame of its own.
-func (f *actionFrame) pinValue(node ast.Node, pin string) (Value, bool) {
-	if perf, performed := f.subactions[node]; performed {
-		value, ok := perf.data[pin]
-		return value, ok
+// takeDeliveries moves the oldest delivery at each pin of node into perf, so
+// that performances of one node begun in turn each start with their own inputs.
+func (f *actionFrame) takeDeliveries(node ast.Node, perf *actionFrame) {
+	queues := f.pending[node]
+	for pin, values := range queues {
+		perf.data[pin] = values[0]
+		if len(values) == 1 {
+			delete(queues, pin)
+		} else {
+			queues[pin] = values[1:]
+		}
 	}
-	value, ok := f.data[pin]
-	return value, ok
+	if len(queues) == 0 {
+		delete(f.pending, node)
+	}
 }
 
 // setFrameFeature writes a feature the performance holds, through the action's
@@ -527,9 +547,10 @@ func bindingEndText(end ast.Node) string {
 
 // performInvocation performs the action a node names, as a subperformance held
 // by perf. Arguments bind the callee's inputs by its own parameter order and
-// names; a bare usage reads what the node's pins and the enclosing performances
-// hold under those names. Every value the callee ends with becomes the node's,
-// and its outputs are also returned to the same-named features around it.
+// names, and `Callee()` passes none; a bare usage reads what the node's pins and
+// the enclosing performances hold under those names. Every value the callee
+// ends with becomes the node's, and its outputs are also returned to the
+// same-named features around it.
 func (e *ActionExecutor) performInvocation(perf *actionFrame, inv actionInvocation) error {
 	scope := perf.parent.graph.Scope
 	sym, err := resolveActionSymbol(e.ctx, scope, inv)
@@ -545,7 +566,7 @@ func (e *ActionExecutor) performInvocation(perf *actionFrame, inv actionInvocati
 	e.ctx.actionDepth++
 	defer func() { e.ctx.actionDepth-- }()
 
-	params := actionParameterDecls(e.ctx.actionBodySymbol(sym).Decl)
+	params := e.ctx.actionParametersOf(sym)
 	in, out := parameterNames(params)
 	inputs := make(map[string]Value, len(in))
 	for _, name := range in {
@@ -553,7 +574,7 @@ func (e *ActionExecutor) performInvocation(perf *actionFrame, inv actionInvocati
 			inputs[name] = value
 		}
 	}
-	if inv.hasArguments() {
+	if inv.invoked {
 		ec := e.evalContextFor(perf, scope)
 		defer ec.beginStep()()
 		if err := bindArgumentList(ec, inv, in, inputs); err != nil {

@@ -62,7 +62,7 @@ func (e *ActionExecutor) leaveSubflow(tokenIdx int) error {
 	if err := e.endPerformance(frame); err != nil {
 		return err
 	}
-	return e.completeNode(tokenIdx, frame.node)
+	return e.completeNode(tokenIdx, frame)
 }
 
 // validateSubflows reports a nested node whose own flow could not be built. It

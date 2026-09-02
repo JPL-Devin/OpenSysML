@@ -366,6 +366,7 @@ type Attribute struct {
 type Feature struct {
 	Name      string
 	Direction ast.FeatureDirection
+	IsResult  bool // a `return` parameter, what the node stands for read as a value
 	Value     ast.Node
 	Node      ast.Node // the declaration, for diagnostics
 	Scope     *symbols.Scope
@@ -627,6 +628,7 @@ func lowerFeatures(graph *ActionGraph, node *ast.Usage, scope *symbols.Scope) {
 		features = append(features, Feature{
 			Name:      name,
 			Direction: m.Direction,
+			IsResult:  m.IsResult,
 			Value:     m.Value,
 			Node:      m,
 			Scope:     scope,

@@ -22,7 +22,7 @@ func (ctx *Context) InvokeOperation(inst *Instance, name string, args map[string
 	if err != nil {
 		return nil, err
 	}
-	inputs, err := operationInputs(sym, name, args)
+	inputs, err := operationInputs(ctx.actionParametersOf(sym), name, args)
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +33,7 @@ func (ctx *Context) InvokeOperation(inst *Instance, name string, args map[string
 			return nil, fmt.Errorf("invoke %s on object #%d: %w", name, inst.ID, err)
 		}
 
-		_, out := actionParameters(sym.Decl)
+		_, out := parameterNames(ctx.actionParametersOf(sym))
 		outputs := make(map[string]Value, len(out))
 		for _, param := range out {
 			if value, ok := results[param]; ok {
@@ -135,8 +135,7 @@ func (ctx *Context) evaluateConstraintInvocation(sym *symbols.Symbol, scope *sym
 // operationInputs binds arguments to the operation's input parameters, reporting
 // an argument naming no parameter and a parameter left with no value: either
 // would otherwise run the body against values the invocation never stated.
-func operationInputs(sym *symbols.Symbol, name string, args map[string]Value) (map[string]Value, error) {
-	params := actionParameterDecls(sym.Decl)
+func operationInputs(params []actionParameter, name string, args map[string]Value) (map[string]Value, error) {
 	inputs := make(map[string]Value, len(args))
 	for _, param := range params {
 		if param.Direction == ast.DirOut {

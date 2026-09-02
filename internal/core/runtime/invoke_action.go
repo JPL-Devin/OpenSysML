@@ -22,16 +22,14 @@ const maxActionNestingDepth = 32
 //	action call = Callee(1);   // named usage, invocation expression value
 type actionInvocation struct {
 	target *ast.QualifiedName
-	args   []ast.Node
-	named  []ast.NamedArg
+	// invoked reports the `Callee(...)` form: the argument list, even an empty
+	// one, states every input the caller passes.
+	invoked bool
+	args    []ast.Node
+	named   []ast.NamedArg
 	// referrer is the usage owning a reference subsetting, whose own effective
 	// name is the one the target names (see resolve.ResolveReferenceTarget).
 	referrer ast.Node
-}
-
-// hasArguments reports whether the invocation was written with an argument list.
-func (inv actionInvocation) hasArguments() bool {
-	return len(inv.args) > 0 || len(inv.named) > 0
 }
 
 // nestedInvocation reports the action a nested usage performs, if any. A usage
@@ -41,9 +39,10 @@ func (inv actionInvocation) hasArguments() bool {
 func nestedInvocation(usage *ast.Usage) (actionInvocation, bool) {
 	if invocation, ok := usage.Value.(*ast.InvocationExpr); ok && invocation.Type != nil {
 		return actionInvocation{
-			target: invocation.Type,
-			args:   invocation.Args,
-			named:  invocation.NamedArgs,
+			target:  invocation.Type,
+			invoked: true,
+			args:    invocation.Args,
+			named:   invocation.NamedArgs,
 		}, true
 	}
 	for _, rel := range usage.Relationships {
@@ -92,9 +91,9 @@ func invokeAction(
 	ctx.actionDepth++
 	defer func() { ctx.actionDepth-- }()
 
-	in, out := actionParameters(sym.Decl)
+	in, out := parameterNames(ctx.actionParametersOf(sym))
 	inputs := make(map[string]Value, len(in))
-	if inv.hasArguments() {
+	if inv.invoked {
 		ec := NewEvalContext(ctx, scope)
 		ec.Push(data)
 		defer ec.beginStep()()
@@ -204,52 +203,28 @@ type actionParameter struct {
 	// HasDefault reports whether the declaration gives the parameter a value, so
 	// an invocation binding no argument to it still binds a value.
 	HasDefault bool
+	// IsResult marks the `return` parameter, what the action's value read yields.
+	IsResult bool
 }
 
-// actionParameterDecls returns the parameters an action declares, in declaration
-// order.
-func actionParameterDecls(decl ast.Node) []actionParameter {
-	var members []ast.Node
-	switch d := decl.(type) {
-	case *ast.Usage:
-		members = d.Members
-	case *ast.Definition:
-		members = d.Members
-	default:
-		return nil
-	}
-
+// actionParametersOf returns the parameters an action is invoked with, in
+// invocation order: those it declares, then the inherited ones none of them
+// redefines (KerML 7.4.7.2), the signature the type checker validates against.
+func (ctx *Context) actionParametersOf(sym *symbols.Symbol) []actionParameter {
 	var params []actionParameter
-	for _, member := range members {
-		if membership, ok := member.(*ast.Membership); ok {
-			member = membership.Member
-		}
-		usage, ok := member.(*ast.Usage)
-		if !ok {
+	for _, param := range ctx.model.BehaviorParametersOf(sym) {
+		if param.Symbol == nil || param.Symbol.Name == "" {
 			continue
 		}
-		if usage.Direction == ast.DirNone {
-			continue
-		}
-		// A parameter may be written as a redefinition of the one it overrides
-		// (`in redefines ifTest;`), naming it by that redefinition.
-		name, _ := ast.EffectiveName(usage)
-		if name == "" {
-			continue
-		}
+		usage, _ := param.Symbol.Decl.(*ast.Usage)
 		params = append(params, actionParameter{
-			Name:       name,
-			Direction:  usage.Direction,
-			HasDefault: usage.Value != nil,
+			Name:       param.Symbol.Name,
+			Direction:  param.Direction,
+			HasDefault: usage != nil && usage.Value != nil,
+			IsResult:   param.IsResult,
 		})
 	}
 	return params
-}
-
-// actionParameters returns the names of an action's parameters that the caller
-// writes (`in`, `inout`) and that it reads back (`out`, `inout`).
-func actionParameters(decl ast.Node) (in, out []string) {
-	return parameterNames(actionParameterDecls(decl))
 }
 
 // parameterNames splits parameters into those the caller writes and reads back.

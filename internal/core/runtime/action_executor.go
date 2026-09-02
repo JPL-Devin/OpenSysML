@@ -590,10 +590,10 @@ func (e *ActionExecutor) hasFlow() bool {
 // parameterDirection reports the direction of the parameter of this name, and
 // whether the action declares one.
 func (e *ActionExecutor) parameterDirection(name string) (ast.FeatureDirection, bool) {
-	if e.action == nil || e.action.Decl == nil {
+	if e.action == nil {
 		return ast.DirNone, false
 	}
-	for _, param := range actionParameterDecls(e.action.Decl) {
+	for _, param := range e.ctx.actionParametersOf(e.action) {
 		if param.Name == name {
 			return param.Direction, true
 		}
@@ -1098,7 +1098,7 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 	}
 
 	// Apply data flows: transfer data from this node's output pins to target input pins
-	if err := e.applyDataFlows(frame, node); err != nil {
+	if err := e.applyDataFlows(frame, node, frame.data); err != nil {
 		return err
 	}
 
@@ -1203,13 +1203,14 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 		return err
 	}
 
-	return e.completeNode(tokenIdx, usage)
+	return e.completeNode(tokenIdx, perf)
 }
 
-// completeNode takes the succession out of a node whose work is done, retiring
-// the token where its flow leads no further.
-func (e *ActionExecutor) completeNode(tokenIdx int, node ast.Node) error {
+// completeNode takes the succession out of a node whose performance perf is
+// done, retiring the token where its flow leads no further.
+func (e *ActionExecutor) completeNode(tokenIdx int, perf *actionFrame) error {
 	frame := e.tokens[tokenIdx].frame
+	node := perf.node
 
 	// Advance to a succession its guard, where it carries one, leaves enabled.
 	successors, err := e.enabledSuccessions(frame, node)
@@ -1220,9 +1221,9 @@ func (e *ActionExecutor) completeNode(tokenIdx int, node ast.Node) error {
 		return fmt.Errorf("%w: action node %s has multiple successors", ErrAmbiguousSuccession, ActionNodeName(node))
 	}
 
-	// The flows out of this node carry what its body produced to the pins the
-	// nodes downstream read.
-	if err := e.applyDataFlows(frame, node); err != nil {
+	// The flows out of this node carry what this performance produced to the
+	// pins the nodes downstream read.
+	if err := e.applyDataFlows(frame, node, perf.data); err != nil {
 		return err
 	}
 
@@ -1311,14 +1312,14 @@ func statementNodeKeyword(node ast.Node) string {
 }
 
 // applyDataFlows transfers data along the object flows out of sourceNode: the
-// value at each flow's source pin becomes the value at its target pin, which is
-// what the target node's performance starts with when the token reaches it. A
-// flow whose source pin holds nothing moves nothing and is reported, since a
-// declared flow that silently carries no payload is a wrong result rather than
-// a no-op.
-func (e *ActionExecutor) applyDataFlows(frame *actionFrame, sourceNode ast.Node) error {
+// value at each flow's source pin among what the completed performance produced
+// becomes the value at its target pin, which is what the target node's next
+// performance starts with. A flow whose source pin holds nothing moves nothing
+// and is reported, since a declared flow that silently carries no payload is a
+// wrong result rather than a no-op.
+func (e *ActionExecutor) applyDataFlows(frame *actionFrame, sourceNode ast.Node, produced map[string]Value) error {
 	for _, flow := range frame.graph.DataFlows[sourceNode] {
-		sourceData, ok := frame.pinValue(sourceNode, flow.SourcePin)
+		sourceData, ok := produced[flow.SourcePin]
 		if !ok {
 			return fmt.Errorf(
 				"%s: %s produced no value at %s",
