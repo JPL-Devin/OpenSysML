@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/libnames"
 	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
@@ -268,7 +269,7 @@ func TestLibraryFunctionUnqualifiedNames(t *testing.T) {
 		if _, ok := libraryFunctionsByLocalName[local]; ok {
 			t.Errorf("extension name %q is dispatchable without its import", local)
 		}
-		if _, ok := extensionLocalNames[local]; !ok {
+		if _, ok := libnames.ExtensionPackage(local); !ok {
 			t.Errorf("extension name %q names no import", local)
 		}
 	}
@@ -1245,7 +1246,8 @@ func TestBuiltinsListExtensionFunctionsWithTheirImport(t *testing.T) {
 	for _, b := range Builtins() {
 		listed[b.Name] = b
 	}
-	for local, pkg := range extensionLocalNames {
+	for _, local := range libnames.ExtensionNames() {
+		pkg, _ := libnames.ExtensionPackage(local)
 		b, ok := listed[local]
 		if !ok {
 			t.Errorf("extension function %q is implemented but not listed", local)

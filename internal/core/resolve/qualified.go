@@ -23,6 +23,9 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 	// Fall back to normal qualified lookup if scope is nil.
 	if len(qn.Parts) == 1 && !qn.Global && scope != nil {
 		res := r.walkUnqualifiedHiding(scope, qn.Parts[0].Text, hide)
+		if !res.ok && r.invocationNames[qn] {
+			res.sym, res.ok = r.libraryFunctionFallback(qn.Parts[0].Text)
+		}
 		if res.ok {
 			res.sym = r.resolvedPart(qn, 0, res.sym)
 		}

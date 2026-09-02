@@ -8,6 +8,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -1663,6 +1664,7 @@ type invocationKey struct {
 type invocationTarget struct {
 	qualName    string
 	builtin     func(*EvalContext, []Value) (Value, error) // the written name is a builtin's
+	ambiguous   []*symbols.Symbol                          // the equally specific declarations the written name denotes
 	calc        *symbols.Symbol                            // the declaration the written name resolves to, nil for none
 	calcBuiltin func(*EvalContext, []Value) (Value, error) // calc is a collection function declaration
 	library     *libraryFunction                           // calc is a function library declaration
@@ -1671,6 +1673,7 @@ type invocationTarget struct {
 
 // invocationTarget resolves what n denotes in this context's scope, memoized
 // per context: resolution reads only the model, which is fixed for its life.
+// The declaration is the one the checker selects for the call, so the two agree.
 func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget {
 	key := invocationKey{node: n, scope: ec.scope}
 	if target, ok := ec.ctx.invocationTargets[key]; ok {
@@ -1679,7 +1682,9 @@ func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget
 	target := &invocationTarget{qualName: qualifiedNameToString(n.Type)}
 	if fn, ok := builtins[target.qualName]; ok {
 		target.builtin = fn
-	} else if sym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, n.Type); ok && sym != nil {
+	} else if sel := passes.SelectInvocation(ec.ctx.resolver, ec.ctx.model, ec.scope, n); sel.Ambiguous {
+		target.ambiguous = sel.Applicable
+	} else if sym := selectedDeclaration(sel); sym != nil {
 		target.calc = sym
 		if fn, ok := ec.ctx.builtinFor(sym); ok {
 			target.calcBuiltin = fn
@@ -1693,10 +1698,30 @@ func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget
 	return target
 }
 
+// selectedDeclaration is the declaration a call runs: the one selected for it,
+// or the first its name denotes when no candidate fits the arguments, which
+// then reports the mismatch as it always has.
+func selectedDeclaration(sel *semantics.InvocationSelection) *symbols.Symbol {
+	if sel.Selected != nil {
+		return sel.Selected
+	}
+	if len(sel.Candidates) > 0 {
+		return sel.Candidates[0]
+	}
+	return nil
+}
+
 // evalInvocation evaluates a function/calc invocation.
 func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 	target := ec.invocationTarget(n)
 	qualName := target.qualName
+	if len(target.ambiguous) > 0 {
+		names := make([]string, len(target.ambiguous))
+		for i, sym := range target.ambiguous {
+			names[i] = symbols.FQNOf(sym)
+		}
+		return Value{}, fmt.Errorf("%w: %s denotes %s", ErrAmbiguousInvocation, qualName, strings.Join(names, ", "))
+	}
 
 	// A receiver binds by position, so it has no meaning beside arguments that
 	// bind by name: reported rather than evaluated and dropped.

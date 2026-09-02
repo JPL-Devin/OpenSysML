@@ -148,6 +148,10 @@ type Resolver struct {
 	// valuesInProgress are the usages whose value expression is being read for
 	// the type it names, so a value naming its own feature ends the walk.
 	valuesInProgress map[*ast.Usage]bool
+	// invocationNames are the bare names invocations call, which the library
+	// answers when the model does not: see ResolveInvocationName.
+	invocationNames  map[*ast.QualifiedName]bool
+	libraryFunctions map[string][]*symbols.Symbol
 }
 
 // New creates a resolver over the given index.
@@ -180,6 +184,8 @@ func New(idx *symbols.Index) *Resolver {
 		aliasTargets:      map[*symbols.Symbol]resolution{},
 		resolvingAlias:    map[*symbols.Symbol]bool{},
 		reportedQualified: map[*ast.QualifiedName]bool{},
+		invocationNames:   map[*ast.QualifiedName]bool{},
+		libraryFunctions:  map[string][]*symbols.Symbol{},
 	}
 }
 
@@ -248,13 +254,7 @@ func (r *Resolver) lookupMember(sym *symbols.Symbol, name string) (*symbols.Symb
 	if r.model == nil || sym == nil {
 		return nil, false
 	}
-	if found, ok := r.model.LookupMember(sym, name); ok {
-		return found, true
-	}
-	if found, ok := r.model.LookupContributedMember(sym, name); ok {
-		return found, true
-	}
-	if found, ok := r.triggerPayload(sym, name); ok {
+	if found, ok := r.lookupMemberOf(sym, name); ok {
 		return found, true
 	}
 	if sym.Scope == nil {
@@ -272,6 +272,18 @@ func (r *Resolver) lookupMember(sym *symbols.Symbol, name string) (*symbols.Symb
 		}
 	}
 	return nil, false
+}
+
+// lookupMemberOf resolves name as a member sym declares, inherits, or accepts as
+// a trigger payload; what its imports surface is not considered.
+func (r *Resolver) lookupMemberOf(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
+	if found, ok := r.model.LookupMember(sym, name); ok {
+		return found, true
+	}
+	if found, ok := r.model.LookupContributedMember(sym, name); ok {
+		return found, true
+	}
+	return r.triggerPayload(sym, name)
 }
 
 // lookupContributedMember resolves name as a member sym inherits or

@@ -15,49 +15,10 @@ var builtins map[string]func(*EvalContext, []Value) (Value, error)
 
 // builtinsByLocalName maps an unqualified name to the declaration a bare or
 // arrow-form call denotes — `(1,2,3)->size()` and `size((1,2,3))` are
-// `SequenceFunctions::size`. A name appears here only where every library
-// declaration of it means the same operation, and dispatch reaches it only for
-// a name the model itself declares nothing for, so a user-declared calc of the
-// same name still resolves to itself.
+// `SequenceFunctions::size`. It is derived from libnames and dispatch reaches
+// it only for a name the model itself declares nothing for, so a user-declared
+// calc of the same name still resolves to itself.
 var builtinsByLocalName map[string]func(*EvalContext, []Value) (Value, error)
-
-// builtinLocalNames records which library declaration each unqualified name
-// denotes, so the mapping can be listed as well as dispatched on.
-var builtinLocalNames = map[string]string{
-	"size":         "SequenceFunctions::size",
-	"isEmpty":      "SequenceFunctions::isEmpty",
-	"notEmpty":     "SequenceFunctions::notEmpty",
-	"includes":     "SequenceFunctions::includes",
-	"includesOnly": "SequenceFunctions::includesOnly",
-	"excludes":     "SequenceFunctions::excludes",
-	"equals":       "SequenceFunctions::equals",
-	"same":         "SequenceFunctions::same",
-	"union":        "SequenceFunctions::union",
-	"intersection": "SequenceFunctions::intersection",
-	"including":    "SequenceFunctions::including",
-	"includingAt":  "SequenceFunctions::includingAt",
-	"excluding":    "SequenceFunctions::excluding",
-	"subsequence":  "SequenceFunctions::subsequence",
-	"excludingAt":  "SequenceFunctions::excludingAt",
-	"head":         "SequenceFunctions::head",
-	"tail":         "SequenceFunctions::tail",
-	"last":         "SequenceFunctions::last",
-	"contains":     "CollectionFunctions::contains",
-	"containsAll":  "CollectionFunctions::containsAll",
-	"select":       "ControlFunctions::select",
-	"selectOne":    "ControlFunctions::selectOne",
-	"reject":       "ControlFunctions::reject",
-	"collect":      "ControlFunctions::collect",
-	"forAll":       "ControlFunctions::forAll",
-	"exists":       "ControlFunctions::exists",
-	"allTrue":      "ControlFunctions::allTrue",
-	"anyTrue":      "ControlFunctions::anyTrue",
-	"reduce":       "ControlFunctions::reduce",
-	"minimize":     "ControlFunctions::minimize",
-	"maximize":     "ControlFunctions::maximize",
-	"sum":          "NumericalFunctions::sum",
-	"product":      "NumericalFunctions::product",
-}
 
 func init() {
 	builtins = map[string]func(*EvalContext, []Value) (Value, error){
@@ -129,15 +90,6 @@ func init() {
 		"RationalFunctions::product": builtinNumericalProduct,
 		"RealFunctions::sum":         builtinNumericalSum,
 		"RealFunctions::product":     builtinNumericalProduct,
-	}
-
-	builtinsByLocalName = map[string]func(*EvalContext, []Value) (Value, error){}
-	for local, fqn := range builtinLocalNames {
-		fn, ok := builtins[fqn]
-		if !ok {
-			panic("runtime: unqualified name " + local + " maps to unregistered built-in " + fqn)
-		}
-		builtinsByLocalName[local] = fn
 	}
 }
 

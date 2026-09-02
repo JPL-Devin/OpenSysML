@@ -620,33 +620,42 @@ func (ec *exprChecker) operands(scope *symbols.Scope, e *ast.OperatorExpr) (sema
 }
 
 // inferInvocation checks the argument list of a calc/action invocation against
-// the invoked behavior's `in` parameters. In the arrow form `x->f(a)` the
-// receiver binds to the first parameter, so it is prepended to the arguments.
+// the `in` parameters of the declaration selected for it (see SelectInvocation)
+// and types the call by that declaration's result. In the arrow form `x->f(a)`
+// the receiver binds to the first parameter, so it is prepended to the arguments.
 func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationExpr) semantics.PrimType {
-	args := e.Args
-	if e.Operand != nil {
-		args = append([]ast.Node{e.Operand}, args...)
-	}
+	args := invocationArgs(e)
 	// Typed once and reused by checkArguments, so nested errors report once.
-	argTypes := make([]semantics.PrimType, len(args))
-	for i, arg := range args {
-		argTypes[i] = ec.infer(scope, arg)
-	}
-	for _, arg := range e.NamedArgs {
-		ec.infer(scope, arg.Value)
-	}
+	argTypes := ec.argumentTypes(scope, e)
 	if e.Type == nil {
+		for _, arg := range e.NamedArgs {
+			ec.infer(scope, arg.Value)
+		}
 		return semantics.PrimUnknown
 	}
-	sym, ok := ec.resolver.ResolveQualified(scope, e.Type)
-	if !ok || sym == nil {
+	sel := ec.selectInvocation(scope, e, argTypes)
+	if !sel.Resolved() {
 		return semantics.PrimUnknown
 	}
-	resolved, aliasOK := ec.resolver.ResolveAliasTarget(sym)
-	if !aliasOK {
+	if sel.Ambiguous {
+		ec.diags = append(ec.diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     e.Type.Span(),
+			Message: fmt.Sprintf("call of %s is ambiguous between %s",
+				e.Type.Parts[len(e.Type.Parts)-1].Text, candidateNames(sel.Applicable)),
+			Code:   "invocation-ambiguous",
+			Source: "type",
+		})
 		return semantics.PrimUnknown
 	}
-	sym = resolved
+	// With no candidate the arguments fit, the first is checked as before and
+	// the diagnostic names the rest.
+	var considered []*symbols.Symbol
+	sym := sel.Selected
+	if sym == nil {
+		sym = sel.Candidates[0]
+		considered = sel.Candidates
+	}
 	if !ec.isInvocationBehavior(sym, map[*symbols.Symbol]bool{}) {
 		if ec.isDefinitelyNonBehavior(sym) {
 			ec.diags = append(ec.diags, Diagnostic{
@@ -666,23 +675,37 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 	if !ok {
 		return semantics.PrimUnknown
 	}
-	ec.checkArguments(e, sym, args, argTypes, params)
-	return semantics.PrimUnknown
+	ec.checkArguments(e, sym, args, argTypes, params, considered)
+	if considered != nil {
+		return semantics.PrimUnknown
+	}
+	return ec.model.PrimTypeOf(ec.model.ResultParameterOf(sym))
 }
 
+// checkArguments reports the arguments of e that do not bind to sym's `in`
+// parameters; considered, when set, are the other declarations the call could
+// have named, listed on each report.
 func (ec *exprChecker) checkArguments(
 	e *ast.InvocationExpr,
 	sym *symbols.Symbol,
 	args []ast.Node,
 	argTypes []semantics.PrimType,
 	params []parameter,
+	considered []*symbols.Symbol,
 ) {
+	report := ec.errorf
+	if len(considered) > 1 {
+		suffix := " (candidates: " + candidateNames(considered) + ")"
+		report = func(span source.Span, format string, args ...any) {
+			ec.errorf(span, "%s"+suffix, fmt.Sprintf(format, args...))
+		}
+	}
 	if len(e.NamedArgs) > 0 {
 		// A receiver binds by position, so which parameter it binds to is
 		// unstated beside arguments that bind by name (runtime/eval.go reports
 		// the same call).
 		if e.Operand != nil {
-			ec.errorf(e.Span(), "%s cannot be called with a receiver and named arguments", sym.Name)
+			report(e.Span(), "%s cannot be called with a receiver and named arguments", sym.Name)
 		}
 		names := make(map[string]bool, len(params))
 		for _, p := range params {
@@ -693,7 +716,7 @@ func (ec *exprChecker) checkArguments(
 				continue
 			}
 			if name := arg.Name.Parts[0].Text; !names[name] {
-				ec.errorf(e.Span(), "%s has no parameter named %q", sym.Name, name)
+				report(e.Span(), "%s has no parameter named %q", sym.Name, name)
 			}
 		}
 		return
@@ -706,10 +729,10 @@ func (ec *exprChecker) checkArguments(
 	}
 	switch {
 	case len(args) > len(params):
-		ec.errorf(e.Span(), "%s takes %d argument(s), found %d", sym.Name, len(params), len(args))
+		report(e.Span(), "%s takes %d argument(s), found %d", sym.Name, len(params), len(args))
 		return
 	case len(args) < required:
-		ec.errorf(e.Span(), "%s requires %d argument(s), found %d", sym.Name, required, len(args))
+		report(e.Span(), "%s requires %d argument(s), found %d", sym.Name, required, len(args))
 		return
 	}
 	for i, arg := range args {
@@ -719,7 +742,7 @@ func (ec *exprChecker) checkArguments(
 			continue
 		}
 		if !bindable(arg, got, want) {
-			ec.errorf(arg.Span(), "argument %d of %s expects %s, found %s", i+1, sym.Name, want, got)
+			report(arg.Span(), "argument %d of %s expects %s, found %s", i+1, sym.Name, want, got)
 		}
 	}
 }

@@ -212,14 +212,8 @@ func (ec *exprChecker) invocationResultTypeSymbol(scope *symbols.Scope, value as
 	if !ok || inv.Type == nil {
 		return nil
 	}
-	sym, resolved := ec.resolver.ResolveQualified(scope, inv.Type)
-	if !resolved || sym == nil {
-		return nil
-	}
-	if target, ok := ec.resolver.ResolveAliasTarget(sym); ok && target != nil {
-		sym = target
-	}
-	if !ec.isInvocationBehavior(sym, map[*symbols.Symbol]bool{}) {
+	sym := SelectInvocation(ec.resolver, ec.model, scope, inv).Selected
+	if sym == nil || !ec.isInvocationBehavior(sym, map[*symbols.Symbol]bool{}) {
 		return nil
 	}
 	result := ec.model.ResultParameterOf(sym)

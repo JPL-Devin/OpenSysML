@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/libnames"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -22,6 +23,10 @@ var ErrUnevaluableLibraryFunction = errors.New("library function is not evaluabl
 // ErrUnimportedExtensionFunction is returned for an unqualified call to a
 // OpenSysML extension function the model imports no declaration of.
 var ErrUnimportedExtensionFunction = errors.New("function is not in scope")
+
+// ErrAmbiguousInvocation is returned for a call whose name denotes several
+// declarations the arguments fit equally well, none more specific than the rest.
+var ErrAmbiguousInvocation = errors.New("ambiguous invocation")
 
 // noVectorCollection is why the aggregations over a collection of vectors are
 // not evaluable: a sequence of them flattens, losing the grouping the
@@ -59,19 +64,8 @@ var libraryFunctions = map[string]*libraryFunction{}
 // libraryFunctionsByLocalName maps an unqualified name to the implementation a
 // call denotes when the name resolves to no declaration in the model — the OMG
 // function libraries are always in force, even in a model that imports no part
-// of them. A name only appears here when every library declaration of it
-// means the same operation.
+// of them. It is derived from libnames, the table the checker reads too.
 var libraryFunctionsByLocalName = map[string]*libraryFunction{}
-
-// extensionLocalNames maps the unqualified name of an OpenSysML extension
-// function to the package an import must name for such a call to be legal. No
-// OMG library declares these names, so nothing puts them in scope on its own.
-var extensionLocalNames = map[string]string{
-	"exp":   "OpenSysMLMathFunctions",
-	"ln":    "OpenSysMLMathFunctions",
-	"log":   "OpenSysMLMathFunctions",
-	"atan2": "OpenSysMLMathFunctions",
-}
 
 func init() {
 	// RealFunctions (Kernel Function Library). `abs`, `max` and `min` take Real
@@ -134,54 +128,6 @@ func init() {
 	registerLibraryFunction("OpenSysMLMathFunctions::ln", []string{"x"}, naturalLog)
 	registerLibraryFunction("OpenSysMLMathFunctions::log", []string{"x", "base"}, logToBase)
 	registerLibraryFunction("OpenSysMLMathFunctions::atan2", []string{"y", "x"}, atan2Real)
-
-	// The unqualified names, each mapped to the declaration a bare call denotes.
-	// `abs`, `max` and `min` map to the kind-preserving NumericalFunctions
-	// declaration the Real, Rational and Integer ones all specialize.
-	registerLocalNames(map[string]string{
-		"sqrt":   "RealFunctions::sqrt",
-		"floor":  "RealFunctions::floor",
-		"round":  "RealFunctions::round",
-		"abs":    "NumericalFunctions::abs",
-		"max":    "NumericalFunctions::max",
-		"min":    "NumericalFunctions::min",
-		"isZero": "NumericalFunctions::isZero",
-		"isUnit": "NumericalFunctions::isUnit",
-		"sin":    "TrigFunctions::sin",
-		"cos":    "TrigFunctions::cos",
-		"tan":    "TrigFunctions::tan",
-		"cot":    "TrigFunctions::cot",
-		"arcsin": "TrigFunctions::arcsin",
-		"arccos": "TrigFunctions::arccos",
-		"arctan": "TrigFunctions::arctan",
-
-		"deg": "TrigFunctions::deg",
-		"rad": "TrigFunctions::rad",
-
-		// VectorFunctions and ComplexFunctions: the names only one of the two
-		// packages declares, each mapped to the declaration that computes it for
-		// every vector or Complex this runtime represents.
-		"VectorOf":               "VectorFunctions::VectorOf",
-		"CartesianVectorOf":      "VectorFunctions::CartesianVectorOf",
-		"CartesianThreeVectorOf": "VectorFunctions::CartesianThreeVectorOf",
-		"isZeroVector":           "VectorFunctions::isZeroVector",
-		"isCartesianZeroVector":  "VectorFunctions::isCartesianZeroVector",
-		"scalarVectorMult":       "VectorFunctions::scalarVectorMult",
-		"vectorScalarMult":       "VectorFunctions::vectorScalarMult",
-		"vectorScalarDiv":        "VectorFunctions::vectorScalarDiv",
-		"inner":                  "VectorFunctions::inner",
-		"norm":                   "VectorFunctions::norm",
-		"angle":                  "VectorFunctions::angle",
-		"rect":                   "ComplexFunctions::rect",
-		"polar":                  "ComplexFunctions::polar",
-		"re":                     "ComplexFunctions::re",
-		"im":                     "ComplexFunctions::im",
-		"arg":                    "ComplexFunctions::arg",
-
-		// StringFunctions: the two names no other function library declares.
-		"Length":    "StringFunctions::Length",
-		"Substring": "StringFunctions::Substring",
-	})
 }
 
 // registerVectorFunctions registers VectorFunctions (Kernel Function Library).
@@ -311,17 +257,6 @@ func numericScalars(params []string, apply func([]semantics.Value) (semantics.Va
 	}
 }
 
-// registerLocalNames records which declaration each unqualified name denotes.
-func registerLocalNames(names map[string]string) {
-	for local, fqn := range names {
-		fn, ok := libraryFunctions[fqn]
-		if !ok {
-			panic("runtime: unqualified name " + local + " maps to unregistered library function " + fqn)
-		}
-		libraryFunctionsByLocalName[local] = fn
-	}
-}
-
 // libraryFunctionByName returns the implementation of the function with that
 // fully-qualified name.
 func libraryFunctionByName(fqn string) (*libraryFunction, bool) {
@@ -344,7 +279,7 @@ func unresolvedLibraryFunction(qn *ast.QualifiedName, written string) (*libraryF
 	if fn, ok := libraryFunctionsByLocalName[written]; ok {
 		return fn, nil
 	}
-	if pkg, ok := extensionLocalNames[written]; ok {
+	if pkg, ok := libnames.ExtensionPackage(written); ok {
 		return nil, fmt.Errorf(
 			"%w: %s is declared by %s, an OpenSysML extension no OMG library declares: write `import %s::*;` to call it",
 			ErrUnimportedExtensionFunction, written, pkg, pkg,

@@ -8,6 +8,23 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Added
 
+- **A call selects the overload its arguments fit, and the checker and the runtime select the
+  same one.** A name visible as several function or calc declarations — owned, inherited,
+  imported, re-exported, or the Kernel Function Library packages that are always in force — no
+  longer resolves to whichever declaration is found first: the candidates are filtered by arity,
+  by positional or named binding, and by argument-type conformance (the `ScalarValues` lattice,
+  strings, booleans, collections, quantities and declared types), and the most specific fit is
+  selected. `ToInteger("7")` is `IntegerFunctions::ToInteger`, `abs(-2)` answers `2` and
+  `abs(rect(3.0, 4.0))` answers `5.0` through `ComplexFunctions::abs`, where the unqualified
+  name used to be rejected with `expects Real, found String` or `requires a numeric value`. A
+  genuine tie is reported as `invocation-ambiguous`, naming the candidates, and refused at
+  runtime as `ErrAmbiguousInvocation` rather than dispatched silently; a call no candidate fits
+  keeps its argument diagnostic and names the declarations considered. The selection is
+  memoized in a side table keyed by the invocation node and scope, and the evaluator dispatches
+  the declaration recorded there. A model's own `calc` of the name still shadows the library,
+  and an argument whose type is statically unknown keeps the previous selection with no new
+  diagnostic.
+
 - **A model's change set applies to a live repository, keyed by identity.**
   `sysml model.sysml -sync-apply http://localhost:8083` diffs the model against its project
   branch on a running SysML v2 API (Flexo MMS) and writes the change set as one commit through
@@ -116,6 +133,16 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   compiles calcs until that variable says otherwise, and — invoking the model's own `StepBudget`
   through both tiers — that they agree and that a traced run takes the evaluator. The architecture
   document gains a paragraph and diagram on invoking a calc.
+
+### Fixed
+
+- **An unqualified library call the runtime answers is no longer reported `unresolved`.** The
+  checker and the runtime consult one local-name → qualified-declaration table
+  (`internal/core/libnames`), so `sqrt(4.0)` with no `import RealFunctions::*;` draws no
+  diagnostic in the LSP or `-validate` and answers `2.0`, as it always evaluated. A name neither
+  the model nor the libraries declare is still `unresolved`, and the OpenSysML extension
+  functions (`exp`, `ln`, `log`, `atan2`) still require `import OpenSysMLMathFunctions::*;` both
+  statically and at runtime.
 
 ## 0.4.3 — 2026-09-01
 

@@ -24,18 +24,29 @@ func TestW7GInvokingANonBehaviourIsReportedAsTheReferenceWordsIt(t *testing.T) {
 	}
 }
 
-// A name two imports both bring in resolves to one of them, and the rule then
-// judges that one; a behavioral target is silent however it is declared.
+// A name two imports both bring in is judged over every candidate: a call
+// selects the behavioral one where there is one, and is reported once when
+// there is none; a behavioral target is silent however it is declared.
 func TestW7GAmbiguousAndValidInvocationTargets(t *testing.T) {
-	const ambiguous = `package A1 { part def N; }
+	const mixed = `package A1 { part def N; }
 	package A2 { action def N; }
 	package C {
 		private import A1::*;
 		private import A2::*;
 		attribute x = N(1);
 	}`
-	if diags := only(f23AllDiags(t, ambiguous), "invocation-not-behavior"); len(diags) != 1 {
-		t.Fatalf("expected the resolved non-behavior to be reported once, got %v", diags)
+	if diags := only(f23AllDiags(t, mixed), "invocation-not-behavior"); len(diags) != 0 {
+		t.Fatalf("expected the behavioral candidate to be selected, got %v", diags)
+	}
+	const noBehavior = `package A1 { part def N; }
+	package A2 { attribute def N; }
+	package C {
+		private import A1::*;
+		private import A2::*;
+		attribute x = N(1);
+	}`
+	if diags := only(f23AllDiags(t, noBehavior), "invocation-not-behavior"); len(diags) != 1 {
+		t.Fatalf("expected the non-behavior to be reported once, got %v", diags)
 	}
 	const valid = `package V {
 		calc def F { in p; }

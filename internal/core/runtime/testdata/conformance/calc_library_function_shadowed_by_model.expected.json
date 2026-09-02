@@ -1,0 +1,9 @@
+{
+  "libraries": true,
+  "type": "instance",
+  "instantiate": "test::Probe",
+  "slots": {
+    "imported": {"type": "Real", "value": 40.0},
+    "unimported": {"type": "Real", "value": 99.0}
+  }
+}

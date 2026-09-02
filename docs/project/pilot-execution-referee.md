@@ -283,9 +283,12 @@ after it — but it changed one answer inside `pilot-unevaluated`: `w6d:complex-
 defined for a sequence and a sequence`. A Complex was two Reals, so the unqualified `*` saw two
 sequences; it is one value now (`runtime.ValComplex`), and an arithmetic operator over a Complex
 operand computes as the `ComplexFunctions` declaration of the same name. The pilot answers no value
-for the case, so the bucket does not move. `w6d:complex-abs` and `w6d:complex-is-zero` still report
-that `NumericalFunctions::abs`/`isZero` require a numeric value: the unqualified name still selects
-those declarations, which is the overload-selection gap named in the `ComplexFunctions` row.
+for the case, so the bucket does not move. Overload selection by argument type changed two more
+answers inside `pilot-unevaluated` without moving them: `w6d:complex-abs` answers `5.0` and
+`w6d:complex-is-zero` answers `true`, where both reported that `NumericalFunctions::abs`/`isZero`
+require a numeric value — the unqualified name now selects the `ComplexFunctions` declaration its
+argument fits (the `ComplexFunctions` row of [spec-compliance.md](spec-compliance.md)). The pilot
+answers the unevaluated `InvocationExpression` for both, so it referees neither.
 
 The two remaining `ours-error` cases are adjudicated divergences:
 

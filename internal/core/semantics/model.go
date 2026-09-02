@@ -34,6 +34,7 @@ type Model struct {
 	primTypes       map[*symbols.Symbol]PrimType
 	scalars         map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
 	params          map[*symbols.Symbol]behaviorParameters
+	invocations     map[invocationKey]*InvocationSelection
 	unioning        map[*symbols.Symbol][]*symbols.Symbol
 	ends            map[*symbols.Symbol][]*symbols.Symbol
 
@@ -96,6 +97,7 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		memberSources:     make(map[*symbols.Symbol][]*symbols.Symbol),
 		primTypes:         make(map[*symbols.Symbol]PrimType),
 		params:            make(map[*symbols.Symbol]behaviorParameters),
+		invocations:       make(map[invocationKey]*InvocationSelection),
 		unioning:          make(map[*symbols.Symbol][]*symbols.Symbol),
 		ends:              make(map[*symbols.Symbol][]*symbols.Symbol),
 
