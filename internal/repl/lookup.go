@@ -699,12 +699,13 @@ func joinTyped(segments []objectSegment) string {
 }
 
 // heldObject is the object the session holds under a label it reported — a
-// declared name, an id or a path — if it still holds one.
+// declared name, an id or a path — if it still holds one. A label joins raw
+// names, so it is spelt as notation before it is read back as a reference.
 func (s *Session) heldObject(label string) (*runtime.Instance, bool) {
 	if inst, ok := s.instances[label]; ok {
 		return inst, true
 	}
-	inst, _, err := s.resolveObject(label)
+	inst, _, err := s.resolveObject(objectText(label))
 	return inst, err == nil && inst != nil
 }
 

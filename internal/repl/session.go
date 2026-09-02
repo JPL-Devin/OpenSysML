@@ -137,6 +137,11 @@ type unnamedObject struct {
 	obj *runtime.Instance
 }
 
+// heldObjects counts the objects the session holds, named and displaced alike.
+func (s *Session) heldObjects() int {
+	return len(s.instances) + len(s.unnamed)
+}
+
 // actionSession holds an active action executor debugging session.
 type actionSession struct {
 	name string
@@ -241,7 +246,7 @@ func (s *Session) SetBudgets(budgets runtime.Budgets) error {
 	// included: their IDs restart with the next context. What goes is recorded, so
 	// a later command explains it.
 	s.rtCtx = nil
-	if n := len(s.instances); n > 0 {
+	if n := s.heldObjects(); n > 0 {
 		s.lost = lossOnBudgets(n)
 	}
 	s.instances = make(map[string]*runtime.Instance)
@@ -981,7 +986,7 @@ func (s *Session) clear() []string {
 // %instances, %features or %step explains the loss instead of reading as a session
 // that never materialized anything.
 func (s *Session) resetLoss() (notices []string, lost instanceLoss, action, state *endedSession) {
-	if n := len(s.instances); n > 0 {
+	if n := s.heldObjects(); n > 0 {
 		notices = append(notices, instancesResetNotice(n))
 		lost = lossOnReset(n)
 	}

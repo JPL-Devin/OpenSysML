@@ -88,10 +88,11 @@ func parseArgs(line string) []string {
 
 // opensName reports whether a single quote begins an unrestricted name rather
 // than being an apostrophe in ordinary text. A name starts an argument or follows
-// a `::` qualifier and is closed later on the line; anything else — a path like
-// o'brien/model.sysml — leaves the rest of the line split as it was.
+// a `::` qualifier or a `.` in an object path, and is closed later on the line;
+// anything else — a path like o'brien/model.sysml — leaves the rest of the line
+// split as it was.
 func opensName(sofar string, rest []rune) bool {
-	if sofar != "" && !strings.HasSuffix(sofar, "::") {
+	if sofar != "" && !strings.HasSuffix(sofar, "::") && !strings.HasSuffix(sofar, ".") {
 		return false
 	}
 	for i, r := range rest {

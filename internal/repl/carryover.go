@@ -61,7 +61,7 @@ func (s *Session) recordCarryover() carryover {
 // declarations, keeping those whose shape the reload still resolves to — a reload
 // of unchanged text keeps them all — and reporting the ones it had to drop.
 func (s *Session) carryOverObjects(over carryover) []string {
-	held := len(s.instances) + len(s.unnamed)
+	held := s.heldObjects()
 	if held == 0 {
 		return nil
 	}

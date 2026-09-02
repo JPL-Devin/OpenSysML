@@ -351,7 +351,7 @@ func (s *Session) featureCompletions(inst *runtime.Instance, prefix, partial str
 			candidates = append(candidates, name)
 			continue
 		}
-		for n := 1; n <= elementCount(inst, feat); n++ {
+		for n := 1; n <= s.elementCount(inst, feat.Name); n++ {
 			candidates = append(candidates, fmt.Sprintf("%s[%d]", name, n))
 		}
 	}
@@ -364,17 +364,14 @@ func (s *Session) featureCompletions(inst *runtime.Instance, prefix, partial str
 	return out
 }
 
-// elementCount is how many elements a multi-valued feature is completed to: as
-// many as it holds once materialized, otherwise as many as its multiplicity
-// admits, an unbounded one offering its lower bound and at least one.
-func elementCount(inst *runtime.Instance, feat *runtime.EffectiveFeature) int {
-	if fv, ok := inst.FeatureValues[feat.Name]; ok && fv.Materialized {
-		return len(collectionElements(fv.Values))
+// elementCount is how many elements of a multi-valued feature a reference can
+// pick: what it holds, read as resolving the reference would read it.
+func (s *Session) elementCount(inst *runtime.Instance, name string) int {
+	fv, err := inst.GetFeatureValue(s.rtCtx, name)
+	if err != nil || fv == nil {
+		return 0
 	}
-	if !feat.Multiplicity.Upper.Infinite && feat.Multiplicity.Upper.Known {
-		return min(int(feat.Multiplicity.Upper.Value), elementLimit)
-	}
-	return min(max(int(feat.Multiplicity.Lower.Value), 1), elementLimit)
+	return min(len(collectionElements(fv.Values)), elementLimit)
 }
 
 // elementLimit bounds the indexed elements one feature is completed to.

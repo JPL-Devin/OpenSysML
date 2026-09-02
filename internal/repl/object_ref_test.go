@@ -75,6 +75,28 @@ func TestInstantiateTwiceKeepsFirstObjectByID(t *testing.T) {
 	rejects(t, fl, "error")
 }
 
+// A reset counts the displaced object among what it drops, as %instances listed it.
+func TestResetCountsDisplacedObjects(t *testing.T) {
+	t.Run("clear", func(t *testing.T) {
+		s := garage(t)
+		run(t, s, "%instantiate car")
+		run(t, s, "%instantiate car")
+		wants(t, run(t, s, "%clear"), "2 instances were dropped because the session was reset")
+		wants(t, run(t, s, "%instances"), "2 instances were dropped when the session was reset")
+	})
+	t.Run("budgets", func(t *testing.T) {
+		s := garage(t)
+		run(t, s, "%instantiate car")
+		run(t, s, "%instantiate car")
+		budgets := s.Budgets()
+		budgets.MaxSteps++
+		if err := s.SetBudgets(budgets); err != nil {
+			t.Fatalf("SetBudgets: %v", err)
+		}
+		wants(t, run(t, s, "%instances"), "2 instances were dropped when the run bounds were changed")
+	})
+}
+
 // Dotted paths rooted at a name or an id, and the `::` form, walk to the same
 // nested object, which is reported under its declared root.
 func TestDottedPathsReachNestedObjects(t *testing.T) {
@@ -294,4 +316,81 @@ func TestCompleteObjectReferences(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A multi-valued part is completed to the elements it holds, not to what its
+// multiplicity admits: a ranged part materializes its lower bound, an optional
+// one nothing — and every index offered is one a reference then resolves.
+func TestCompleteIndexesOnlyHeldElements(t *testing.T) {
+	s := submitted(t, `package Fleet {
+	part def Wheel;
+	part def Truck {
+		part axles : Wheel[2..4];
+		part spare : Wheel[0..1];
+		part crew : Wheel[0..*];
+	}
+	part truck : Truck;
+}`)
+	run(t, s, "%instantiate truck")
+	got := s.Complete("%features truck.", len("%features truck."))
+	for _, want := range []string{"truck.axles[1]", "truck.axles[2]"} {
+		if !contains(got.Candidates, want) {
+			t.Errorf("want %q in %v", want, got.Candidates)
+		}
+	}
+	for _, bad := range []string{"truck.axles[3]", "truck.axles[4]", "truck.spare[1]", "truck.crew[1]"} {
+		if contains(got.Candidates, bad) {
+			t.Errorf("did not want %q in %v", bad, got.Candidates)
+		}
+	}
+	for _, c := range got.Candidates {
+		if _, _, err := s.resolveObject(c); err != nil {
+			t.Errorf("completion %q does not resolve: %v", c, err)
+		}
+	}
+}
+
+// A debugger performed by a nested object under quoted names keeps running over
+// an unrelated declaration: the label the session holds the performer under is
+// read back as the reference it spells.
+func TestQuotedNestedPerformerSurvivesUnrelatedDeclaration(t *testing.T) {
+	const model = `package 'Two Words' {
+	part def Gauge {
+		attribute count = 0;
+	}
+	part def Rack {
+		part 'main gauge' : Gauge;
+	}
+	state def Check {
+		entry; then checking;
+		state checking {
+			accept after 5 then checked;
+		}
+		state checked;
+	}
+	part 'the rack' : Rack;
+}`
+	t.Run("state", func(t *testing.T) {
+		s := submitted(t, model)
+		run(t, s, "%instantiate 'the rack'")
+		wants(t, run(t, s, "%state 'Two Words'::Check 'the rack'.'main gauge'"), "Started state machine executor")
+		if res := s.Submit("package Other { part def Unrelated; }"); len(res.Notices) > 0 {
+			t.Fatalf("unrelated declaration reported %v", res.Notices)
+		}
+		wants(t, run(t, s, "%current"), "checking")
+		wants(t, run(t, s, "%advance 5"), "Current state: checked")
+	})
+	t.Run("action", func(t *testing.T) {
+		s := submitted(t, model)
+		res := s.Submit("action tally {\n\tattribute total = 0;\n\tfirst start;\n\tthen done;\n}")
+		if len(res.Diagnostics) > 0 {
+			t.Fatalf("fixture has diagnostics: %v", res.Diagnostics)
+		}
+		run(t, s, "%instantiate 'the rack'")
+		wants(t, run(t, s, "%action tally 'the rack'.'main gauge'"), "Started action executor")
+		if res := s.Submit("package Other { part def Unrelated; }"); len(res.Notices) > 0 {
+			t.Fatalf("unrelated declaration reported %v", res.Notices)
+		}
+		rejects(t, run(t, s, "%step"), "no active action session")
+	})
 }
