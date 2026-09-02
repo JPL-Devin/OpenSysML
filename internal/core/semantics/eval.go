@@ -21,7 +21,7 @@ var (
 )
 
 // ValueKind discriminates a model-level constant value.
-type ValueKind int
+type ValueKind uint8
 
 const (
 	ValInvalid ValueKind = iota
@@ -37,9 +37,9 @@ const (
 // reals, booleans, and the infinity bound.
 type Value struct {
 	Kind ValueKind
+	Bool bool
 	Int  int64
 	Real float64
-	Bool bool
 }
 
 // IsNumeric reports whether the value is an integer or a real.

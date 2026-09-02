@@ -31,7 +31,7 @@ func articleFor(word string) string {
 // article, so a message reads "an Integer and a string".
 func describeOperand(val Value) string {
 	switch val.Kind {
-	case ValConst:
+	case ValConst, ValComplex:
 		return describeValue(val)
 	case ValString:
 		return "a string"

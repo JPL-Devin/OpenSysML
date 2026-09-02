@@ -3,10 +3,19 @@ package runtime
 import (
 	"fmt"
 	"testing"
+	"unsafe"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
+
+// A map stores an element over 128 bytes behind a pointer, so a Value past
+// that size makes every parameter binding an allocation.
+func TestValueFitsInlineInMaps(t *testing.T) {
+	if size := unsafe.Sizeof(Value{}); size > 128 {
+		t.Fatalf("Value is %d bytes, want at most 128", size)
+	}
+}
 
 func TestValueConstWrapping(t *testing.T) {
 	// Test that runtime.Value correctly wraps semantics.Value

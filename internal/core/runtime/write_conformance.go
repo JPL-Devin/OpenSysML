@@ -66,17 +66,7 @@ func (ctx *Context) checkWrite(scope *symbols.Scope, what string, target *writeT
 // writeCountRefusal says why the number of values written is outside the
 // target's multiplicity, or is empty where the count is admitted.
 func (ctx *Context) writeCountRefusal(target *writeTarget, value *Value) string {
-	return target.mult.CountViolation(ctx.boundValueCount(target.typ, value))
-}
-
-// boundValueCount counts the values of the declared type a bound value holds: its
-// elements, except that the (re, im) pair representing one Complex counts as one.
-func (ctx *Context) boundValueCount(declared *symbols.Symbol, value *Value) int64 {
-	count := elementCount(value)
-	if count == 2 && isNumericVector(*value) && ctx.model.PrimTypeOf(declared) == semantics.PrimComplex {
-		return 1
-	}
-	return count
+	return target.mult.CountViolation(elementCount(value))
 }
 
 // checkBodyWrite checks a write of a value a behavior body itself holds - a
@@ -190,7 +180,7 @@ func (ctx *Context) valueConforms(scope *symbols.Scope, value *Value, declared *
 
 // isScalarConstant reports a value written as one scalar constant.
 func isScalarConstant(value *Value) bool {
-	return value.Kind == ValConst || value.Kind == ValString
+	return value.Kind == ValConst || value.Kind == ValComplex || value.Kind == ValString
 }
 
 // quantityConforms judges a written quantity: a scalar target by the lattice, a
@@ -226,6 +216,8 @@ func valuePrimType(value *Value) semantics.PrimType {
 	switch value.Kind {
 	case ValConst:
 		return semantics.PrimTypeOfValue(value.Const)
+	case ValComplex:
+		return complexPrimType(value.Complex)
 	case ValString:
 		return semantics.PrimString
 	}

@@ -323,6 +323,8 @@ func FormatTraceValue(v Value) string {
 		return v.Variant.Name
 	case ValEnumLiteral:
 		return v.LiteralText()
+	case ValComplex:
+		return FormatComplex(v.Complex)
 	case ValExpr:
 		return fmt.Sprintf("expr(%s)", TraceLabel(v.Expr))
 	default:

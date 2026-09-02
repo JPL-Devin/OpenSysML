@@ -252,11 +252,17 @@ func calcMultiplicityContext(t *testing.T) (*Context, *symbols.Index, *symbols.S
 			calc def Unit { return : Complex = ComplexFunctions::i; }
 			calc def UnitOut { out z : Complex = ComplexFunctions::i; }
 			calc def UnitReal { return : Real = ComplexFunctions::i; }
+			calc def Units { return : Complex[2] = (ComplexFunctions::i, ComplexFunctions::rect(1.0, 0.0)); }
+			calc def UnitsOne { return : Complex = (ComplexFunctions::i, ComplexFunctions::rect(1.0, 0.0)); }
 			part def P {
 				attribute z : Complex = ComplexFunctions::rect(0.0, 1.0);
 				attribute r : Complex = 2.0;
+				attribute onAxis : Real = ComplexFunctions::rect(2.0, 0.0);
+				attribute whole : Integer = ComplexFunctions::rect(2.0, 0.0);
+				attribute half : Integer = ComplexFunctions::rect(2.5, 0.0);
+				attribute pair : Complex = (1.0, 2.0);
 				attribute triple : Complex = (1.0, 2.0, 3.0);
-				attribute pairOfReals : Real = ComplexFunctions::rect(0.0, 1.0);
+				attribute offAxis : Real = ComplexFunctions::rect(0.0, 1.0);
 			}
 			part p : P;
 		}
@@ -357,17 +363,18 @@ func TestCalcMultiplicityViolationNamesTheBinding(t *testing.T) {
 	}
 }
 
-// One Complex is represented as the (re, im) pair rect constructs, so a Complex
-// feature holds that pair as one value; any other feature counts its elements.
-func TestComplexCountsAsOneValueOfAComplexFeature(t *testing.T) {
+// One Complex is one value, however a feature is typed: a Complex feature holds
+// it, a Real feature refuses it by type, and a numeric pair is two values.
+func TestComplexCountsAsOneValue(t *testing.T) {
 	ctx, idx, scope := calcMultiplicityContext(t)
 
 	for _, tc := range []struct {
 		expr string
 		want string
 	}{
-		{"Unit()", "(0.0, 1.0)"},
-		{"UnitOut()", "(0.0, 1.0)"},
+		{"Unit()", "0.0 + 1.0i"},
+		{"UnitOut()", "0.0 + 1.0i"},
+		{"Units()", "(0.0 + 1.0i, 1.0 + 0.0i)"},
 	} {
 		got, err := evalIn(t, ctx, scope, tc.expr)
 		if err != nil {
@@ -378,12 +385,17 @@ func TestComplexCountsAsOneValueOfAComplexFeature(t *testing.T) {
 			t.Errorf("%s = %s, want %s", tc.expr, s, tc.want)
 		}
 	}
-	if _, err := evalIn(t, ctx, scope, "UnitReal()"); !errors.Is(err, ErrMultiplicityViolation) {
-		t.Errorf("UnitReal(): error = %v, want ErrMultiplicityViolation", err)
+	if _, err := evalIn(t, ctx, scope, "UnitReal()"); !errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("UnitReal(): error = %v, want ErrTypeMismatch", err)
+	}
+	if _, err := evalIn(t, ctx, scope, "UnitsOne()"); !errors.Is(err, ErrMultiplicityViolation) {
+		t.Errorf("UnitsOne(): error = %v, want ErrMultiplicityViolation", err)
 	}
 
 	inst := instantiateNamed(t, ctx, idx, "test::p")
-	for feature, want := range map[string]string{"z": "(0.0, 1.0)", "r": "2.0"} {
+	for feature, want := range map[string]string{
+		"z": "0.0 + 1.0i", "r": "2.0", "onAxis": "2.0 + 0.0i", "whole": "2.0 + 0.0i",
+	} {
 		fv, err := inst.GetFeatureValue(ctx, feature)
 		if err != nil {
 			t.Errorf("%s: %v", feature, err)
@@ -393,9 +405,14 @@ func TestComplexCountsAsOneValueOfAComplexFeature(t *testing.T) {
 			t.Errorf("%s = %s, want %s", feature, got, want)
 		}
 	}
-	for _, feature := range []string{"triple", "pairOfReals"} {
+	for _, feature := range []string{"pair", "triple"} {
 		if _, err := inst.GetFeatureValue(ctx, feature); !errors.Is(err, ErrMultiplicityViolation) {
 			t.Errorf("%s: error = %v, want ErrMultiplicityViolation", feature, err)
+		}
+	}
+	for _, feature := range []string{"half", "offAxis"} {
+		if _, err := inst.GetFeatureValue(ctx, feature); !errors.Is(err, ErrTypeMismatch) {
+			t.Errorf("%s: error = %v, want ErrTypeMismatch", feature, err)
 		}
 	}
 }

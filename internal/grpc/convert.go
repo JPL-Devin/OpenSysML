@@ -286,6 +286,10 @@ func ValueToProtoIn(rt *runtime.Context, val runtime.Value, idx *symbols.Index) 
 			return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: unresolved enumeration literal"}}
 		}
 		return &pb.Value{Kind: &pb.Value_EnumLiteral{EnumLiteral: lit}}
+	case runtime.ValComplex:
+		// The wire Value has no Complex arm, so a Complex is named unsupported
+		// rather than split into two Reals.
+		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: complex number " + runtime.FormatComplex(val.Complex)}}
 	default:
 		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported"}}
 	}

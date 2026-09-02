@@ -26,6 +26,7 @@ const (
 	ValQuantity    // a magnitude and the measurement unit it is expressed in
 	ValVariant     // the variant selected for a variation, and the object it materializes
 	ValEnumLiteral // one literal of an enumeration definition, identified by itself
+	ValComplex     // one complex number, its real and imaginary parts together
 )
 
 // FormatReal renders a Real as the shortest decimal that reads back as the same
@@ -100,9 +101,22 @@ func FormatValue(v Value) string {
 			return "<unknown>"
 		}
 		return v.Quantity.TextWithMagnitude(FormatConst(v.Quantity.Num))
+	case ValComplex:
+		return FormatComplex(v.Complex)
 	default:
 		return "<unknown>"
 	}
+}
+
+// FormatComplex renders a complex number as its parts read, `1.0 + 2.0i`, with
+// the imaginary part's sign as the operator: `1.0 - 2.0i`.
+func FormatComplex(z complex128) string {
+	re, im := real(z), imag(z)
+	sign := " + "
+	if math.Signbit(im) {
+		sign, im = " - ", -im
+	}
+	return FormatReal(re) + sign + FormatReal(im) + "i"
 }
 
 func formatValueElements(elements []Value) []string {
@@ -136,6 +150,8 @@ func (k ValueKind) String() string {
 		return "variant"
 	case ValEnumLiteral:
 		return "enumeration literal"
+	case ValComplex:
+		return "complex number"
 	default:
 		return "invalid"
 	}
@@ -158,6 +174,15 @@ type Value struct {
 	// is its own identity: two values are the same literal exactly when they name
 	// the same declaration.
 	Literal *symbols.Symbol
+	// Complex is the number a ValComplex is. One with a zero imaginary part is
+	// the Real its real part is, as 4 / 2 is the Integer 2: equal to it, and
+	// classified as it is.
+	Complex complex128
+}
+
+// NewComplex is the value of one complex number.
+func NewComplex(z complex128) Value {
+	return Value{Kind: ValComplex, Complex: z}
 }
 
 // NewEnumLiteral is the value an enumeration literal that declares no value of

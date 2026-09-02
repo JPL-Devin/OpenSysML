@@ -29,6 +29,8 @@ type ExpectedValue struct {
 	// ("m/s"). A quantity carries it, so a case asserting one pins that the unit
 	// survived the computation rather than only the magnitude.
 	Unit string `json:"unit,omitempty"`
+	// Im is the imaginary part of a Complex, whose value is its real part.
+	Im *float64 `json:"im,omitempty"`
 	// Elements are the members a Sequence holds, in order, for a case asserting a
 	// multi-valued feature. Set it instead of value.
 	Elements []ExpectedValue `json:"elements,omitempty"`
@@ -1224,6 +1226,12 @@ func expectedToRuntimeValue(t *testing.T, ev ExpectedValue) Value {
 		t.Fatalf("a variant is named by the model, so it cannot be built from a case value")
 	case "EnumLiteral":
 		t.Fatalf("an enumeration literal is declared by the model, so it cannot be built from a case value")
+	case "Complex":
+		v, ok := ev.Value.(float64)
+		if !ok || ev.Im == nil {
+			t.Fatalf("invalid Complex value: %v (im %v)", ev.Value, ev.Im)
+		}
+		return NewComplex(complex(v, *ev.Im))
 	case "Quantity":
 		v, ok := ev.Value.(float64)
 		if !ok {
@@ -1320,6 +1328,18 @@ func validateValue(t *testing.T, ctx *Context, name string, expected ExpectedVal
 		want := expected.Value.(string)
 		if got := actual.LiteralText(); got != want {
 			t.Errorf("%s: literal = %q, want %q", name, got, want)
+		}
+	case "Complex":
+		if actual.Kind != ValComplex {
+			t.Errorf("%s: type = %v, want Complex", name, actual.Kind)
+			return
+		}
+		if expected.Im == nil {
+			t.Errorf("%s: a Complex case states its im", name)
+			return
+		}
+		if want := complex(expected.Value.(float64), *expected.Im); actual.Complex != want {
+			t.Errorf("%s: value = %s, want %s", name, FormatComplex(actual.Complex), FormatComplex(want))
 		}
 	case "Quantity":
 		if actual.Kind != ValQuantity || actual.Quantity == nil {

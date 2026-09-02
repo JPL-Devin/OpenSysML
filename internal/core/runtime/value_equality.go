@@ -3,6 +3,7 @@ package runtime
 import (
 	"hash/fnv"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -11,6 +12,7 @@ type valueKey struct {
 	kind    ValueKind
 	intVal  int64
 	realVal float64
+	imagVal float64
 	boolVal bool
 	infVal  bool
 	strVal  string
@@ -26,15 +28,22 @@ func valueKeyFunc(v Value) valueKey {
 	switch v.Kind {
 	case ValConst:
 		switch v.Const.Kind {
-		case 1: // semantics.ValInt
+		case semantics.ValInt:
 			key.intVal = v.Const.Int
-		case 2: // semantics.ValReal
+		case semantics.ValReal:
 			key.realVal = v.Const.Real
-		case 3: // semantics.ValBool
+		case semantics.ValBool:
 			key.boolVal = v.Const.Bool
-		case 4: // semantics.ValInfinity
+		case semantics.ValInfinity:
 			key.infVal = true
 		}
+	case ValComplex:
+		// A complex number on the real axis is the Real it equals, so it shares
+		// that Real's key.
+		if re, ok := v.realPart(); ok {
+			return valueKeyFunc(realConst(re))
+		}
+		key.realVal, key.imagVal = real(v.Complex), imag(v.Complex)
 	case ValString:
 		key.strVal = v.Str
 	case ValInstance:

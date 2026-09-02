@@ -1,5 +1,5 @@
-// A calc body computing with ComplexFunctions: a Complex is the (re, im) pair
-// rect constructs, and i squared is -1.
+// A calc body computing with ComplexFunctions: rect constructs one Complex
+// value, and i squared is -1.
 package test {
 	private import ScalarValues::*;
 	private import ComplexFunctions::*;
