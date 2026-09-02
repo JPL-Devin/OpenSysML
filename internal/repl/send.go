@@ -161,17 +161,64 @@ func (s *Session) sendSignal(text string) ([]string, error) {
 	if len(accepting) == 0 {
 		return nil, fmt.Errorf("%s accepts no signal %s now: %s", target.label, msg.SignalType, machineStates(target.machines))
 	}
+	decisions, err := decideMachines(accepting, msg)
+	if err != nil {
+		return nil, err
+	}
+	if len(decisions) == 0 {
+		return nil, fmt.Errorf("%s would fire no transition on %s now, so it was not sent: %s", target.label, signalText(msg), guardsHolding(accepting, msg))
+	}
 	ctx.PostMessage(msg)
 
 	out := []string{fmt.Sprintf("✓ Sent %s to %s", signalText(msg), target.label)}
 	if !typed {
 		out = append(out, fmt.Sprintf("  No declaration types %s, so the signal is matched by name alone", msg.SignalType))
 	}
-	out = append(out, "  Accepted by "+machineStates(accepting))
+	for _, d := range decisions {
+		out = append(out, "  "+d.text())
+	}
 	if s.stateExec != nil && s.stateExec.executor.AcceptsMessage(msg) {
 		out = append(out, "", "Use %step or %advance <time> to dispatch it")
 	}
 	return out, nil
+}
+
+// machineDecision is what one machine decided for a message: what its dispatch
+// would do with it now.
+type machineDecision struct {
+	machine  *runtime.StateExecutor
+	decision runtime.Decision
+}
+
+// text says what the machine would do with the message when it is dispatched.
+func (d machineDecision) text() string {
+	where := machineStates([]*runtime.StateExecutor{d.machine})
+	if d.decision.Deferred {
+		return fmt.Sprintf("Deferred by %s, to be dispatched once it leaves", where)
+	}
+	return fmt.Sprintf("Accepted by %s: %s fires on it", where, strings.Join(d.decision.Fires, " and "))
+}
+
+// decideMachines decides the message with each machine as its dispatch would,
+// keeping the machines that would fire a transition on it or defer it.
+func decideMachines(machines []*runtime.StateExecutor, msg runtime.Message) ([]machineDecision, error) {
+	var out []machineDecision
+	for _, m := range machines {
+		decision, err := m.Decide(msg)
+		if err != nil {
+			return nil, fmt.Errorf("state machine %q cannot decide %s: %w", machineName(m), signalText(msg), err)
+		}
+		if decision.Enabled() {
+			out = append(out, machineDecision{machine: m, decision: decision})
+		}
+	}
+	return out, nil
+}
+
+// guardsHolding explains a message the machines accept but would fire nothing
+// on: every transition it triggers is held back by its guard.
+func guardsHolding(machines []*runtime.StateExecutor, msg runtime.Message) string {
+	return fmt.Sprintf("%s, and the guard of every transition %s triggers is false", machineStates(machines), msg.SignalType)
 }
 
 // signalTarget resolves the object a %send names, or the object the debugged
@@ -283,6 +330,31 @@ func acceptingMachines(machines []*runtime.StateExecutor, msg runtime.Message) [
 		}
 	}
 	return out
+}
+
+// droppedSignalNote says what became of a signal the last step dispatched and no
+// transition fired on; "" when one did, or when the step dispatched no signal.
+func droppedSignalNote(exec *runtime.StateExecutor) string {
+	d, ok := exec.LastDispatch()
+	if !ok || d.Fired {
+		return ""
+	}
+	msg, isSignal := d.Event.Payload.(runtime.Message)
+	if !isSignal {
+		return ""
+	}
+	if d.Deferred {
+		return msg.SignalType + " was deferred by the active state, to be dispatched again once it leaves"
+	}
+	return msg.SignalType + " was consumed by no transition: since it was sent, the state or the data its guards read had changed"
+}
+
+// appendNote adds a note unless it is empty.
+func appendNote(notes []string, note string) []string {
+	if note == "" {
+		return notes
+	}
+	return append(notes, note)
 }
 
 // machineStates names each machine with the state it is in.

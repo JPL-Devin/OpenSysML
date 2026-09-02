@@ -51,6 +51,72 @@ func TestSendCarriesNamedArguments(t *testing.T) {
 	wants(t, run(t, s, "%features bulb"), `label`, `"say \"hi\" (twice)"`)
 }
 
+// TestSendDecidesGuardsAsDispatchWould: a signal whose every triggered
+// transition is held back by its guard is refused before it is posted, the guard
+// reading the payload it carries; one a guard lets through is queued and fires.
+func TestSendDecidesGuardsAsDispatchWould(t *testing.T) {
+	s := lampSession(t)
+	run(t, s, "%state bulb")
+	wants(t, run(t, s, "%send go"), `Accepted by state machine "Lamp" in state off: transition off_on fires on it`)
+	run(t, s, "%advance 1")
+	wants(t, run(t, s, "%current"), "Current state: on")
+
+	wants(t, run(t, s, "%send Dim(level=0)"),
+		`error: object #1 of "Lamps::bulb" would fire no transition on Dim(level=0) now, so it was not sent: state machine "Lamp" in state on, and the guard of every transition Dim triggers is false`)
+	wants(t, run(t, s, "%events"), "Event queue empty")
+	wants(t, run(t, s, "%current"), "Current state: on")
+	wants(t, run(t, s, "%features bulb"), "brightness", "0")
+	if got := run(t, s, "%objects"); strings.Contains(got, "Dim") {
+		t.Errorf("deciding a refused Dim left its occurrence among the objects:\n%s", got)
+	}
+
+	wants(t, run(t, s, "%send Dim(level=3)"),
+		"✓ Sent Dim(level=3)",
+		`Accepted by state machine "Lamp" in state on: transition on_dim fires on it`)
+	wants(t, run(t, s, "%events"), "Signals in flight: 1", "Dim(level=3)")
+	out := run(t, s, "%advance 1")
+	wants(t, out, "Current state: dimmed")
+	if strings.Contains(out, "consumed by no transition") {
+		t.Errorf("a signal a transition fired on was reported dropped:\n%s", out)
+	}
+	wants(t, run(t, s, "%features bulb"), "brightness", "3")
+}
+
+// TestStepReportsASignalDispatchedToNothing: a guard true when the signal was
+// sent may be false when it is dispatched — here a Lock dispatched first shuts
+// the gate — and the step that drops the signal says so.
+func TestStepReportsASignalDispatchedToNothing(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(`package Guarded {
+		private import ScalarValues::*;
+		attribute def Poke;
+		attribute def Lock;
+		state def Gate {
+			attribute open : Boolean = true;
+			entry; then shut;
+			state shut;
+			transition lock first shut accept Lock do assign open := false then shut;
+			transition shut_through first shut accept Poke if open then through;
+			state through;
+		}
+		part def Keeper { exhibit state gate : Gate; }
+		part keeper : Keeper;
+	}`).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+	wants(t, run(t, s, "%instantiate keeper"), "✓ Created instance")
+	run(t, s, "%state keeper")
+	wants(t, run(t, s, "%send Lock"), `Accepted by state machine "Gate" in state shut: transition lock fires on it`)
+	wants(t, run(t, s, "%send Poke"), `Accepted by state machine "Gate" in state shut: transition shut_through fires on it`)
+	wants(t, run(t, s, "%events"), "Signals in flight: 2", "Lock", "Poke")
+	wants(t, run(t, s, "%step"), "✓ Event dispatched\n", "Current state: shut")
+	wants(t, run(t, s, "%features keeper"), "open = false")
+	wants(t, run(t, s, "%step"),
+		"✓ Event dispatched, but Poke was consumed by no transition: since it was sent, the state or the data its guards read had changed",
+		"Current state: shut")
+	wants(t, run(t, s, "%events"), "Event queue empty")
+}
+
 // TestParseSendLineScansQuotesLikeTheLexer keeps a string's escaped quotes, and
 // the parentheses and commas after them, inside the argument they belong to.
 func TestParseSendLineScansQuotesLikeTheLexer(t *testing.T) {

@@ -17,7 +17,7 @@ const lampSource = `
 		state off;
 		transition off_on first off accept go then on;
 		state on;
-		transition on_dim first on accept d : Dim do assign brightness := d.level then dimmed;
+		transition on_dim first on accept d : Dim if d.level > 0 do assign brightness := d.level then dimmed;
 		state dimmed;
 		transition dim_out first dimmed accept after 5 then off;
 	}
@@ -55,6 +55,9 @@ func TestSignalMessageDrivesTheExhibitedMachine(t *testing.T) {
 	if !exec.AcceptsMessage(msg) {
 		t.Fatal("the lamp in off does not accept go")
 	}
+	if d, err := exec.Decide(msg); err != nil || len(d.Fires) != 1 || d.Fires[0] != "transition off_on" || d.Deferred {
+		t.Errorf("Decide(go) = %+v, %v; want off_on firing", d, err)
+	}
 	ctx.PostMessage(msg)
 	if !exec.HasPendingSignal() {
 		t.Fatal("the posted message is not pending for the lamp")
@@ -64,6 +67,9 @@ func TestSignalMessageDrivesTheExhibitedMachine(t *testing.T) {
 	}
 	if got := activeLeaf(exec); got != "on" {
 		t.Fatalf("state after go = %s, want on", got)
+	}
+	if d, ok := exec.LastDispatch(); !ok || !d.Fired || d.Deferred {
+		t.Errorf("LastDispatch after go = %+v, %v; want the signal fired on", d, ok)
 	}
 
 	dimSym := resolveSymbol(t, root, "Dim")
@@ -82,9 +88,44 @@ func TestSignalMessageDrivesTheExhibitedMachine(t *testing.T) {
 	if len(ctx.PendingMessages()) != 0 || activeLeaf(exec) != "on" {
 		t.Errorf("a refused message left the bus or the machine changed: %d pending, state %s", len(ctx.PendingMessages()), activeLeaf(exec))
 	}
+
+	// The guard of on_dim reads the payload: deciding a level it rejects binds
+	// the payload as dispatch would, finds nothing enabled, and leaves no trace —
+	// no occurrence, no bound name, no cached value on the message. Dispatching
+	// it anyway consumes it without a transition.
+	dark, err := ctx.SignalMessage(dimSym, map[string]Value{"level": integerValue(0)}, bulb)
+	if err != nil {
+		t.Fatalf("SignalMessage(Dim 0): %v", err)
+	}
+	objects := len(ctx.instances)
+	if d, err := exec.Decide(dark); err != nil || d.Enabled() {
+		t.Errorf("Decide(Dim 0) = %+v, %v; want nothing enabled", d, err)
+	}
+	if _, bound := exec.StateData()["d"]; bound || len(ctx.instances) != objects || len(dark.Payload) != 1 {
+		t.Errorf("deciding left a trace: d bound %v, %d objects (was %d), payload %v", bound, len(ctx.instances), objects, dark.Payload)
+	}
+	if !exec.AcceptsMessage(dark) {
+		t.Error("a guarded-out Dim is not taken off the bus, though dispatch would take it")
+	}
+	ctx.PostMessage(dark)
+	if err := exec.ProcessNextEvent(); err != nil {
+		t.Fatalf("ProcessNextEvent(Dim 0): %v", err)
+	}
+	if d, ok := exec.LastDispatch(); !ok || d.Fired || d.Deferred {
+		t.Errorf("LastDispatch after a guarded-out Dim = %+v, %v; want dispatched, not fired, not deferred", d, ok)
+	} else if p, isMsg := d.Event.Payload.(Message); !isMsg || p.SignalType != "Dim" {
+		t.Errorf("LastDispatch carries %T %+v, want the Dim message", d.Event.Payload, d.Event.Payload)
+	}
+	if len(ctx.PendingMessages()) != 0 || exec.EventQueue().Len() != 0 || activeLeaf(exec) != "on" {
+		t.Errorf("a guarded-out signal was not consumed: %d pending, %d queued, state %s", len(ctx.PendingMessages()), exec.EventQueue().Len(), activeLeaf(exec))
+	}
+
 	dim, err := ctx.SignalMessage(dimSym, map[string]Value{"level": integerValue(7)}, bulb)
 	if err != nil {
 		t.Fatalf("SignalMessage(Dim): %v", err)
+	}
+	if d, err := exec.Decide(dim); err != nil || len(d.Fires) != 1 || d.Fires[0] != "transition on_dim" {
+		t.Errorf("Decide(Dim 7) = %+v, %v; want on_dim firing, its guard reading the payload", d, err)
 	}
 	ctx.PostMessage(dim)
 	if err := exec.ProcessNextEvent(); err != nil {
@@ -95,6 +136,9 @@ func TestSignalMessageDrivesTheExhibitedMachine(t *testing.T) {
 	}
 	if got := FormatValue(exec.StateData()["brightness"]); got != "7" {
 		t.Errorf("brightness = %s, want 7 written by the accept's effect", got)
+	}
+	if d, ok := exec.LastDispatch(); !ok || !d.Fired {
+		t.Errorf("LastDispatch after Dim 7 = %+v, %v; want fired", d, ok)
 	}
 
 	// A timer is now set for later; a signal in flight is still dispatched

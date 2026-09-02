@@ -55,6 +55,8 @@ type StateExecutor struct {
 	// deferred holds, in arrival order, the events an active state defers and no
 	// transition of the active configuration handled.
 	deferred []Event
+	// lastDispatch is what became of the event the last step took off the queue.
+	lastDispatch *Dispatch
 
 	// doActions are the running do behaviors, in the order their states were
 	// entered. Concurrently active states interleave one action per round, so this
@@ -494,16 +496,36 @@ func (e *StateExecutor) processNextEvent() error {
 	// Advance time
 	e.currentTime = event.Timestamp
 
-	if err := e.dispatchEvent(event); err != nil {
+	dispatch, err := e.dispatchEvent(event)
+	if err != nil {
 		return err
 	}
+	e.lastDispatch = &dispatch
 	e.recallDeferredEvents()
 	return nil
 }
 
-// dispatchEvent delivers one event to the active configuration.
-func (e *StateExecutor) dispatchEvent(event Event) error {
-	// Process event by type
+// Dispatch is what became of an event a step took off the queue: a transition
+// fired on it, a state deferred it, or nothing was enabled for it and it was dropped.
+type Dispatch struct {
+	Event    Event
+	Fired    bool
+	Deferred bool
+}
+
+// LastDispatch returns what became of the event the last ProcessNextEvent
+// dispatched, false when it dispatched none.
+func (e *StateExecutor) LastDispatch() (Dispatch, bool) {
+	if e.lastDispatch == nil {
+		return Dispatch{}, false
+	}
+	return *e.lastDispatch, true
+}
+
+// dispatchEvent delivers one event to the active configuration and reports what
+// became of it.
+func (e *StateExecutor) dispatchEvent(event Event) (Dispatch, error) {
+	dispatch := Dispatch{Event: event}
 	switch event.Type {
 	case EventTime:
 		// Fire transition - handle both old (TransitionEdge) and new (lower.Transition) for backward compatibility
@@ -516,16 +538,17 @@ func (e *StateExecutor) dispatchEvent(event Event) error {
 				// The source was left before this event came up, so the transition
 				// it carries is stale: firing it would move a state machine that is
 				// no longer there.
-				return nil
+				return dispatch, nil
 			}
+			dispatch.Fired = true
 			// A transition out of a state inside an orthogonal region is region-local:
 			// it must not tear down the sibling regions unless its target lies outside
 			// the region set. The source may be a composite state enclosing the
 			// region's active state, so the region is resolved by containment.
 			if sourceState != nil {
-				return e.fireFrom(sourceState, lowerTrans)
+				return dispatch, e.fireFrom(sourceState, lowerTrans)
 			}
-			return e.fireTransition(lowerTrans)
+			return dispatch, e.fireTransition(lowerTrans)
 		}
 
 		// Fallback for tests that use TransitionEdge directly
@@ -546,7 +569,7 @@ func (e *StateExecutor) dispatchEvent(event Event) error {
 				}
 			}
 			if sourceState == nil || targetState == nil {
-				return fmt.Errorf("could not find source/target states for transition")
+				return dispatch, fmt.Errorf("could not find source/target states for transition")
 			}
 
 			lowerTrans := &lower.Transition{
@@ -556,20 +579,23 @@ func (e *StateExecutor) dispatchEvent(event Event) error {
 				Guard:   edge.Guard,
 				Effect:  lower.LowerBehaviors(edge.Effect, e.stateMachine.Scope),
 			}
-			return e.fireTransition(lowerTrans)
+			dispatch.Fired = true
+			return dispatch, e.fireTransition(lowerTrans)
 		}
 
-		return fmt.Errorf("invalid TimeEvent payload: expected *lower.Transition or *ast.TransitionEdge")
+		return dispatch, fmt.Errorf("invalid TimeEvent payload: expected *lower.Transition or *ast.TransitionEdge")
 	default:
 		// For general events, broadcast to all active regions
 		consumed, err := e.broadcastEvent(&event)
 		if err != nil {
-			return err
+			return dispatch, err
 		}
+		dispatch.Fired = consumed
 		if !consumed && e.defersEvent(&event) {
+			dispatch.Deferred = true
 			e.deferred = append(e.deferred, event)
 		}
-		return nil
+		return dispatch, nil
 	}
 }
 
@@ -1934,8 +1960,53 @@ func (e *StateExecutor) HasPendingSignal() bool {
 
 // AcceptsMessage reports whether the active configuration would take a message in
 // flight: it reaches this machine and triggers a transition out of an active state.
+// Whether that transition fires is decided by its guard; see Decide.
 func (e *StateExecutor) AcceptsMessage(m Message) bool {
 	return e.acceptableMessage(m)
+}
+
+// Decision is what dispatching a message now would do: the transitions that
+// would fire on it, or that the active state would defer it.
+type Decision struct {
+	Fires    []string
+	Deferred bool
+}
+
+// Enabled reports whether dispatching the message would do something with it.
+func (d Decision) Enabled() bool {
+	return len(d.Fires) > 0 || d.Deferred
+}
+
+// Decide decides a message as the step dispatching it would — the payload bound,
+// the guards evaluated against the data as it stands — without taking it. The
+// machine, its data and the message are left as they were found; an occurrence
+// built to bind the payload is discarded. A payload or guard error is returned.
+func (e *StateExecutor) Decide(m Message) (Decision, error) {
+	if !e.acceptableMessage(m) {
+		return Decision{}, nil
+	}
+	mark := len(e.ctx.created)
+	defer e.ctx.abandonInstancesSince(mark)
+	probe := m
+	probe.Payload = make(map[string]Value, len(m.Payload))
+	for name, value := range m.Payload {
+		probe.Payload[name] = value
+	}
+	event := Event{Type: EventAccept, Timestamp: e.currentTime, Payload: probe}
+	candidates, err := e.selectTransitions(&event)
+	if err != nil {
+		return Decision{}, err
+	}
+	var decision Decision
+	for _, candidate := range candidates {
+		if !e.losesToNestedTransition(candidates, candidate) {
+			decision.Fires = append(decision.Fires, transitionDescription(candidate.trans))
+		}
+	}
+	if len(decision.Fires) == 0 {
+		decision.Deferred = e.defersEvent(&event)
+	}
+	return decision, nil
 }
 
 // Performer is the object this machine is performed by, nil for none.
@@ -2478,6 +2549,7 @@ func (e *StateExecutor) StateMachineSymbol() *symbols.Symbol {
 func (e *StateExecutor) ProcessNextEvent() error {
 	defer e.ctx.beginExecutorRun(&e.runStarted)()
 
+	e.lastDispatch = nil
 	ran, err := e.runDoRound()
 	if err != nil {
 		return err

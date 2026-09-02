@@ -2252,6 +2252,9 @@ func (s *Session) stateStep(exec *runtime.StateExecutor) (string, error) {
 			return "", fmt.Errorf("event processing failed: %w", err)
 		}
 		s.stateExec.now = math.Max(s.stateExec.now, exec.CurrentTime())
+		if note := droppedSignalNote(exec); note != "" {
+			return "Event dispatched, but " + note, nil
+		}
 		return "Event dispatched", nil
 	}
 	if exec.HasPendingDoWork() {
@@ -2489,6 +2492,7 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 	maxEvents, maxDoActions := s.budgets.MaxStateEvents, s.budgets.MaxDoSteps
 	startTime := exec.CurrentTime()
 	var processed, doActions int64
+	var dropped []string
 	for exec.State() == runtime.StateRunning &&
 		processed < maxEvents && doActions < maxDoActions {
 		// The poll comes first, and runs once more at quiescence, so a condition
@@ -2509,6 +2513,7 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 				return nil, fmt.Errorf("event processing failed: %w", err)
 			}
 			processed++
+			dropped = appendNote(dropped, droppedSignalNote(exec))
 			continue
 		}
 		if queue := exec.EventQueue(); queue.Len() == 0 || queue.Peek().Timestamp > deadline {
@@ -2531,6 +2536,7 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 			return nil, fmt.Errorf("event processing failed: %w", err)
 		}
 		processed++
+		dropped = appendNote(dropped, droppedSignalNote(exec))
 	}
 	s.stateExec.now = math.Max(deadline, exec.CurrentTime())
 
@@ -2553,6 +2559,9 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 
 	if doActions > 0 {
 		out = append(out, fmt.Sprintf("  Do behavior actions run: %d", doActions))
+	}
+	for _, note := range dropped {
+		out = append(out, "  "+note)
 	}
 
 	// A drain the bound cut short has work left, so say so rather than let it

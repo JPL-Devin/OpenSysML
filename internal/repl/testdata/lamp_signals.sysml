@@ -1,5 +1,6 @@
 // A lamp driven by signals, so %send has accepts to trigger: a bare signal, a
-// signal carrying a level, a part exhibiting the machine and one exhibiting none.
+// signal carrying a level its guard reads, a part exhibiting the machine and one
+// exhibiting none.
 package Lamps {
 	private import ScalarValues::*;
 
@@ -24,6 +25,7 @@ package Lamps {
 		state on;
 		transition on_dim first on
 			accept d : Dim
+			if d.level > 0
 			do assign brightness := d.level
 			then dimmed;
 		state dimmed;
