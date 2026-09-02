@@ -257,9 +257,8 @@ func calcBody(chain []*symbols.Symbol) ([]lower.Statement, *symbols.Symbol) {
 	return stated, owner
 }
 
-// unboundResultHint explains a body whose `return` declares a result parameter
-// without binding it — `return h;` names a new parameter h, it does not return
-// the member h — and shows the two forms that state a computed result.
+// unboundResultHint explains a `return` that declares a result parameter without
+// binding it (`return h;` declares h, it does not return the member h).
 func unboundResultHint(chain []*symbols.Symbol) string {
 	for i := len(chain) - 1; i >= 0; i-- {
 		if chain[i] == nil {
