@@ -52,7 +52,10 @@ trap 'rm -rf "$work"' EXIT
 
 pilot_clone "$work/pilot" "${wanted_paths[@]}"
 
-mkdir -p "$target"
+# Assembled aside and swapped in whole, so a refresh cannot leave a grammar
+# from the previous pin beside the new ones.
+staged="$work/grammars"
+mkdir -p "$staged"
 for index in "${!wanted_paths[@]}"; do
 	source_path="${wanted_paths[$index]}"
 	name="${wanted_names[$index]}"
@@ -60,14 +63,18 @@ for index in "${!wanted_paths[@]}"; do
 		echo "error: $source_path is missing from $PILOT_REPO at $PILOT_TAG" >&2
 		exit 1
 	fi
-	mv "$work/pilot/$source_path" "$target/$name"
-	lines="$(wc -l <"$target/$name" | tr -d ' ')"
+	mv "$work/pilot/$source_path" "$staged/$name"
+	lines="$(wc -l <"$staged/$name" | tr -d ' ')"
 	echo "Downloaded $name ($lines lines) from $source_path"
 done
 
 # Recorded so the report can name the release it measured.
-printf '%s\n' "$PILOT_TAG" >"$target/PILOT_TAG"
-printf '%s\n' "$pin" >"$stamp"
+printf '%s\n' "$PILOT_TAG" >"$staged/PILOT_TAG"
+printf '%s\n' "$pin" >"$staged/.pilot-pin"
+
+mkdir -p "$(dirname "$target")"
+rm -rf "$target"
+mv "$staged" "$target"
 
 echo "Measure our production coverage against them with:"
 echo "  go run ./cmd/grammar-coverage"
