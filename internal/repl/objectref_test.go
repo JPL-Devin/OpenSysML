@@ -137,8 +137,21 @@ func TestNotInstantiatedNamesWhatToInstantiate(t *testing.T) {
 		t.Errorf("got %v (%+v), want a NotInstantiatedError naming Fleet::Rover's object", err, nerr)
 	}
 
-	// A nested object of the definition counts too, under the path reaching it.
+	// A nested object of the definition counts once it exists, under the path
+	// reaching it. The error does not create it: the part stays unread, and its
+	// machine's entry action unrun, until something asks for it.
 	run(t, s, "%instantiate Fleet::driver")
+	got = run(t, s, "%state Fleet::Rover::modes Fleet::rover")
+	wants(t, got, `object #`+defOnly+` of "Fleet::Rover"`, "or name Fleet::Rover to address it")
+	if strings.Contains(got, "Fleet::driver::r") {
+		t.Errorf("the error names a part nothing has read:\n%s", got)
+	}
+	wants(t, run(t, s, "%invoke Fleet::rover bump"), `no instance of the usage "Fleet::rover"`)
+	if fv := s.instances["Fleet::driver"].FeatureValues["r"]; fv.Materialized || fv.Written {
+		t.Errorf("the failed lookup materialized Fleet::driver.r: %+v", fv)
+	}
+
+	wants(t, run(t, s, "%features Fleet::driver.r"), `log = "W"`)
 	wants(t, run(t, s, "%state Fleet::Rover::modes Fleet::rover"), `of "Fleet::driver::r"`, "or name Fleet::Rover or Fleet::driver::r to address one of them")
 
 	// Asking for the definition when only a usage's object exists names the usage.
@@ -168,4 +181,28 @@ func TestNestedObjectMachineSurvivesAnUnrelatedDeclaration(t *testing.T) {
 	wants(t, run(t, s, "%current"), "waiting")
 	wants(t, run(t, s, "%features #"+id), "Fleet::driver::r", `log = "W"`)
 	wants(t, run(t, s, "%advance 5"), "Current state: moving")
+}
+
+// A session attached to the second of two exhibited machines follows that
+// machine through the restart an unrelated declaration causes, not the first.
+func TestSecondExhibitedMachineSurvivesAnUnrelatedDeclaration(t *testing.T) {
+	s := loadFixture(t, "testdata/two_machines.sysml")
+	run(t, s, "%instantiate Pair::gauge")
+	wants(t, run(t, s, "%state Pair::Gauge::link Pair::gauge"), `Debugging state machine "link"`, "Current state: idle")
+
+	res := s.Submit("package Other { part def Unrelated; }")
+	if len(res.Diagnostics) > 0 {
+		t.Fatalf("unrelated declaration has diagnostics: %v", res.Diagnostics)
+	}
+	if hasNotice(res, "debugging session") {
+		t.Errorf("the session over the second machine was ended:\n%s", strings.Join(res.Notices, "\n"))
+	}
+
+	current := run(t, s, "%current")
+	wants(t, current, "idle")
+	if strings.Contains(current, "off") {
+		t.Errorf("the session moved to the first exhibited machine:\n%s", current)
+	}
+	wants(t, run(t, s, "%advance 3"), "Current state: busy")
+	wants(t, run(t, s, "%features Pair::gauge"), "power", "off", "link", "busy")
 }

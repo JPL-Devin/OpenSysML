@@ -307,7 +307,8 @@ func (s *Session) notInstantiated(sym *symbols.Symbol, fqn string) error {
 		return e
 	}
 	e.Definition = notationName(s.fqnOf(definition))
-	s.walkObjects(ctx, func(cur carrier) bool {
+	// An error names what exists; it materializes nothing to find it.
+	s.walkObjects(materializedObjectsIn(ctx), func(cur carrier) bool {
 		if carriesDeclaration(model, cur.inst.Type, definition.Decl) {
 			e.Objects = append(e.Objects, ObjectRef{ID: cur.inst.ID, Name: notationName(cur.name)})
 		}

@@ -212,7 +212,7 @@ func (s *Session) carrierInstances(sym *symbols.Symbol) []string {
 	var names []string
 	// A feature is read from the outermost object carrying it; its own nested
 	// objects are of other types and are not searched again.
-	s.walkObjects(ctx, func(cur carrier) bool {
+	s.walkObjects(nestedObjectsIn(ctx), func(cur carrier) bool {
 		if !carriesDeclaration(model, cur.inst.Type, declaring.Decl) {
 			return true
 		}
@@ -224,8 +224,8 @@ func (s *Session) carrierInstances(sym *symbols.Symbol) []string {
 }
 
 // walkObjects visits the session's objects and, while visit reports true, the
-// objects they hold, breadth-first in name order and within carrierLimit.
-func (s *Session) walkObjects(ctx *runtime.Context, visit func(carrier) bool) {
+// objects nested yields for them, breadth-first in name order and within carrierLimit.
+func (s *Session) walkObjects(nested func(carrier) []carrier, visit func(carrier) bool) {
 	seen := make(map[int64]bool, len(s.instances))
 	queue := make([]carrier, 0, len(s.instances))
 	for name, inst := range s.instances {
@@ -242,7 +242,7 @@ func (s *Session) walkObjects(ctx *runtime.Context, visit func(carrier) bool) {
 		}
 		seen[cur.inst.ID] = true
 		if visit(cur) {
-			queue = append(queue, nestedObjects(ctx, cur)...)
+			queue = append(queue, nested(cur)...)
 		}
 	}
 }
@@ -254,9 +254,32 @@ type carrier struct {
 	inst *runtime.Instance
 }
 
-// nestedObjects returns the objects held in an object's feature values, in feature-value-name
-// order, each under the name it is reached by.
-func nestedObjects(ctx *runtime.Context, of carrier) []carrier {
+// nestedObjectsIn yields the objects held in an object's feature values, in
+// feature-value-name order, each under the name it is reached by. A part feature
+// value holds its object only once it is asked for, so asking materializes it.
+func nestedObjectsIn(ctx *runtime.Context) func(carrier) []carrier {
+	return func(of carrier) []carrier {
+		return nestedObjects(ctx, of, func(name string) (*runtime.FeatureValue, bool) {
+			fv, err := of.inst.GetFeatureValue(ctx, name)
+			return fv, err == nil && fv != nil
+		})
+	}
+}
+
+// materializedObjectsIn yields only the objects an object's feature values already
+// hold, so a walk over them leaves the runtime as it found it.
+func materializedObjectsIn(ctx *runtime.Context) func(carrier) []carrier {
+	return func(of carrier) []carrier {
+		return nestedObjects(ctx, of, func(name string) (*runtime.FeatureValue, bool) {
+			fv := of.inst.FeatureValues[name]
+			return fv, fv != nil && fv.Materialized
+		})
+	}
+}
+
+// nestedObjects returns the objects held in the feature values read yields for
+// an object, in feature-value-name order, each under the name it is reached by.
+func nestedObjects(ctx *runtime.Context, of carrier, read func(string) (*runtime.FeatureValue, bool)) []carrier {
 	fvs := make([]string, 0, len(of.inst.FeatureValues))
 	for name := range of.inst.FeatureValues {
 		fvs = append(fvs, name)
@@ -264,9 +287,8 @@ func nestedObjects(ctx *runtime.Context, of carrier) []carrier {
 	sort.Strings(fvs)
 	out := make([]carrier, 0, len(fvs))
 	for _, name := range fvs {
-		// A part feature value holds its object only once it is asked for.
-		fv, err := of.inst.GetFeatureValue(ctx, name)
-		if err != nil || fv == nil {
+		fv, ok := read(name)
+		if !ok {
 			continue
 		}
 		id, isObject := fv.Value.Object()

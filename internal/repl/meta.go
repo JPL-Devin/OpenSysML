@@ -2247,13 +2247,15 @@ func (s *Session) attachExhibitedMachine(
 	behavior.State.SetTrace(s.trace)
 
 	s.stateExec = &stateSession{
-		name:     name,
-		fqn:      held,
-		selfFQN:  held,
-		symbol:   behavior.Symbol,
-		executor: behavior.State,
-		rtCtx:    ctx,
-		now:      behavior.State.CurrentTime(),
+		name:      name,
+		fqn:       held,
+		selfFQN:   held,
+		symbol:    behavior.Symbol,
+		executor:  behavior.State,
+		machine:   behavior.Name,
+		machineAt: exhibitedPosition(behavior),
+		rtCtx:     ctx,
+		now:       behavior.State.CurrentTime(),
 	}
 	s.endedState = nil
 

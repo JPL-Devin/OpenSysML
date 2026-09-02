@@ -127,7 +127,8 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   machine by its declaration and attaches to the running performance, saying so in a `note:` line
   that names the one-argument form; a machine the object merely performs is still started as a
   detached performance. The attached session follows the object over an unrelated declaration,
-  as the one-argument form's does.
+  as the one-argument form's does, and stays on the machine it was attached to when the object
+  exhibits several.
 - **`%state`, `%invoke` and `-state` reach a nested part by path and by id.** The object argument
   accepted only the name of a top-level object, so the machine of a part reached through
   composition could be watched with `%features` but neither debugged nor invoked on. The
@@ -142,11 +143,9 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   `no instance of "rover" (use %instantiate first)`. The REPL and the CLI now say that an object
   of the definition exists, not of the usage, and name what to instantiate instead: `no instance
   of the usage "Fleet::rover": object #1 of "Fleet::Rover" is of its definition "Fleet::Rover",
-  not of the usage — use -instantiate Fleet::rover to create the usage's object, or name
+  not of the usage — use %instantiate Fleet::rover to create the usage's object, or name
   Fleet::Rover to address it`. Asking for a definition when only usages typed by it have
-  objects names those usages the same way; with no related object the plain hint stands. The
-  CLI spells the hint with its own flags (`-instantiate`, `-state`, `-action`) rather than the
-  prompt's commands.
+  objects names those usages the same way; with no related object the plain hint stands.
 
 ## 0.4.3 — 2026-09-01
 

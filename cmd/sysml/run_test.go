@@ -239,7 +239,7 @@ func TestStateAttachesToTheExhibitedMachine(t *testing.T) {
 
 	got := check(t, binary, fleetModel, "-instantiate", "Fleet::rover", "-state", "Fleet::Rover::modes Fleet::rover", "-advance", "5")
 	wantReport(t, got, 0, `Debugging state machine "modes" exhibited by object #`, `already exhibits "Fleet::Rover::modes"`,
-		"attaches to that running machine", "`-state Fleet::rover`", "Current state: moving")
+		"attaches to that running machine", "`%state Fleet::rover`", "Current state: moving")
 	if strings.Contains(got.output(), "Started state machine executor") {
 		t.Errorf("the exhibited machine was performed a second time:\n%s", got.output())
 	}
@@ -261,7 +261,7 @@ func TestStateAddressesANestedPart(t *testing.T) {
 	wantReport(t, check(t, binary, fleetModel, "-instantiate", "Fleet::driver", "-state", "Fleet::driver::r"),
 		0, `exhibited by object #`+id+` of "Fleet::driver::r"`)
 	wantReport(t, check(t, binary, fleetModel, "-instantiate", "Fleet::driver", "-state", "Fleet::Rover::modes Fleet::driver.r"),
-		0, `exhibited by object #`+id+` of "Fleet::driver::r"`, "attaches to that running machine", "`-state Fleet::driver.r`")
+		0, `exhibited by object #`+id+` of "Fleet::driver::r"`, "attaches to that running machine", "`%state Fleet::driver.r`")
 
 	wantReport(t, check(t, binary, fleetModel, "-instantiate", "Fleet::driver", "-state", "Fleet::driver.x"),
 		2, `Fleet::driver.x reaches no object at "x"`, `has no feature "x"`)
@@ -272,23 +272,57 @@ func TestStateAddressesANestedPart(t *testing.T) {
 }
 
 // TestStateNamesTheUsageToInstantiate checks that -state asked about a usage whose
-// definition alone was instantiated says so, naming the usage to -instantiate.
+// definition alone was instantiated says so, naming the usage to instantiate, in
+// the words the prompt uses for it.
 func TestStateNamesTheUsageToInstantiate(t *testing.T) {
 	binary := buildCLI(t)
 
 	wantReport(t, check(t, binary, fleetModel, "-state", "Fleet::Rover::modes Fleet::rover"),
-		2, `no instance of "Fleet::rover" (use -instantiate first)`)
+		2, `no instance of "Fleet::rover" (use %instantiate first)`)
 
 	got := check(t, binary, fleetModel, "-instantiate", "Fleet::Rover", "-state", "Fleet::Rover::modes Fleet::rover")
 	wantReport(t, got, 2, `sysml: no instance of the usage "Fleet::rover"`,
 		`of "Fleet::Rover" is of its definition "Fleet::Rover", not of the usage`,
-		"use -instantiate Fleet::rover to create the usage's object", "or name Fleet::Rover to address it")
-	if strings.Contains(got.output(), "%instantiate") {
-		t.Errorf("a command report names a prompt command:\n%s", got.output())
-	}
+		"use %instantiate Fleet::rover to create the usage's object", "or name Fleet::Rover to address it")
 
 	wantReport(t, check(t, binary, fleetModel, "-instantiate", "Fleet::rover", "-state", "Fleet::Rover::modes Fleet::Rover"),
 		2, `no instance of the definition "Fleet::Rover" itself`, `of "Fleet::rover" is typed by it`, "name Fleet::rover to address it")
+}
+
+// TestReportKeepsModelTextVerbatim checks that a value the model produced is
+// reported byte for byte, in text and in JSON, even where it spells a prompt
+// command the flags have another name for.
+func TestReportKeepsModelTextVerbatim(t *testing.T) {
+	binary := buildCLI(t)
+	const model = `package Notes {
+    private import ScalarValues::*;
+    calc def Hint { "%state m %action a %instantiate x" }
+}`
+	const text = `"%state m %action a %instantiate x"`
+
+	wantReport(t, check(t, binary, model, "-calc", "Notes::Hint()"), 0, "= "+text)
+
+	got := check(t, binary, model, "-calc", "Notes::Hint()", "-json")
+	var report struct {
+		Checks []struct {
+			Values []struct {
+				Value string `json:"value"`
+			} `json:"values"`
+			Lines []string `json:"lines"`
+		} `json:"checks"`
+	}
+	if err := json.Unmarshal([]byte(got.stdout), &report); err != nil {
+		t.Fatalf("stdout is not the reported JSON: %v\n%s", err, got.stdout)
+	}
+	if len(report.Checks) != 1 || len(report.Checks[0].Values) != 1 {
+		t.Fatalf("report carries no single value:\n%s", got.stdout)
+	}
+	if v := report.Checks[0].Values[0].Value; v != text {
+		t.Errorf("value = %q, want %q", v, text)
+	}
+	if !strings.Contains(strings.Join(report.Checks[0].Lines, "\n"), text) {
+		t.Errorf("lines rewrite the value:\n%s", strings.Join(report.Checks[0].Lines, "\n"))
+	}
 }
 
 // TestJSONReport checks the document a build step parses: the status it exits

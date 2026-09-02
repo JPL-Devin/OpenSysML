@@ -272,8 +272,9 @@ rather than performing it a second time. The object must be the *usage*: `-insta
 Fleet::rover` gives `-state "Fleet::Rover::modes Fleet::rover"` its object, while `-instantiate
 Fleet::Rover` creates an object of the definition, which the flag reports as such — `no instance
 of the usage "Fleet::rover": object #1 of "Fleet::Rover" is of its definition "Fleet::Rover",
-not of the usage — use -instantiate Fleet::rover to create the usage's object, or name
-Fleet::Rover to address it`. A path that stops short of an object names the segment that failed.
+not of the usage — use %instantiate Fleet::rover to create the usage's object, or name
+Fleet::Rover to address it` (the prompt's `%instantiate` is the flag's `-instantiate`). A path
+that stops short of an object names the segment that failed.
 
 ## Machine-readable results
 
