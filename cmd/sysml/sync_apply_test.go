@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -350,6 +351,82 @@ func TestSyncApplyReportsARefusedCommit(t *testing.T) {
 	}
 	if _, err := os.Stat(model + ".sync.json"); !os.IsNotExist(err) {
 		t.Error("a failed apply advanced the sync state")
+	}
+}
+
+func TestSyncApplyWritesTheAnnotationOnlyOnceTheCommitLands(t *testing.T) {
+	binary := buildCLI(t)
+	stack := newFakeStack(t, liveGraph(t, syncedModel))
+	stack.set(func(s *fakeStack) { s.refuse = true })
+	dir := t.TempDir()
+	model := writeModel(t, dir, "model.sysml", renamedModel)
+	annotated := filepath.Join(dir, "annotated.sysml")
+	mint := []string{model, "-sync-apply", stack.server.URL, "-sync-mint-ids", "-sync-annotate", annotated}
+
+	out, code := exitCode(t, syncCommand(stack, binary, mint...))
+	if code != 1 || !strings.Contains(out, "apply failed") {
+		t.Fatalf("refused commit: exit %d:\n%s", code, out)
+	}
+	if _, err := os.Stat(annotated); !os.IsNotExist(err) {
+		t.Fatal("a failed apply wrote minted ids the repository never received")
+	}
+
+	stack.set(func(s *fakeStack) { s.refuse = false })
+	out, code = exitCode(t, syncCommand(stack, binary, mint...))
+	if code != 0 || len(stack.posted()) != 1 || !strings.Contains(out, "wrote "+annotated) {
+		t.Fatalf("apply with minting: exit %d, %d commit(s):\n%s", code, len(stack.posted()), out)
+	}
+	data, err := os.ReadFile(annotated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	minted := regexp.MustCompile(`about P::Wheel \{ id = "([^"]+)"; \}`).FindSubmatch(data)
+	if minted == nil {
+		t.Fatalf("the annotated model does not declare Wheel's minted id:\n%s", data)
+	}
+	if !strings.Contains(string(stack.posted()[0]), `"identity":{"@id":"`+string(minted[1])+`"}`) {
+		t.Errorf("the id written back (%s) is not the one the repository received:\n%s", minted[1], stack.posted()[0])
+	}
+
+	// The annotated model, synced, is what the repository holds.
+	out, code = exitCode(t, syncCommand(stack, binary, annotated, "-sync-diff", stack.server.URL, "-sync-state", model+".sync.json"))
+	if code != 0 || !strings.Contains(out, "nothing to change") {
+		t.Errorf("re-diff of the annotated model: exit %d\n%s", code, out)
+	}
+}
+
+func TestSyncApplyRefusesMintedIDsItCannotWriteBack(t *testing.T) {
+	binary := buildCLI(t)
+	stack := newFakeStack(t, liveGraph(t, syncedModel))
+	dir := t.TempDir()
+	model := writeModel(t, dir, "model.sysml", `package P {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; branch = "main"; }
+	part def Vehicle {
+		@IdentityMetadata::ElementId { id = "8f3a41d0"; }
+	}
+	part : Vehicle;
+}
+`)
+	annotated := filepath.Join(dir, "annotated.sysml")
+
+	out, code := exitCode(t, syncCommand(stack, binary, model, "-sync-apply", stack.server.URL, "-sync-mint-ids", "-sync-annotate", annotated))
+	if code != 1 || len(stack.posted()) != 0 {
+		t.Fatalf("unnamed minted element: exit %d, %d commit(s):\n%s", code, len(stack.posted()), out)
+	}
+	if !strings.Contains(out, "refused to apply") || !strings.Contains(out, "have no name") || !strings.Contains(out, "without -sync-mint-ids") {
+		t.Errorf("the refusal does not explain the unnamed element:\n%s", out)
+	}
+	if _, err := os.Stat(annotated); !os.IsNotExist(err) {
+		t.Error("a refused apply wrote the annotated model")
+	}
+	if _, err := os.Stat(model + ".sync.json"); !os.IsNotExist(err) {
+		t.Error("a refused apply wrote sync state")
+	}
+
+	// Without minting the unnamed part keeps its derived id and the apply goes through.
+	out, code = exitCode(t, syncCommand(stack, binary, model, "-sync-apply", stack.server.URL))
+	if code != 0 || len(stack.posted()) != 1 {
+		t.Fatalf("apply without minting: exit %d, %d commit(s):\n%s", code, len(stack.posted()), out)
 	}
 }
 

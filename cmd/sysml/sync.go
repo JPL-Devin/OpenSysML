@@ -112,13 +112,25 @@ func runSync(files []string, target string, apply bool) int {
 		fmt.Fprintf(os.Stderr, "note: the sync state last saw commit %s; pass its graph with -sync-base to surface repository changes since then as conflicts\n", state.LastSeenCommit)
 	}
 
+	var annotated *annotation
 	if syncAnnotate != "" {
-		if err := writeAnnotated(local, model, set, syncAnnotate); err != nil {
+		if annotated, err = prepareAnnotation(local, model, set, syncAnnotate); err != nil {
 			return fail(err)
 		}
 	}
 
 	if !apply {
+		if annotated != nil {
+			for _, change := range annotated.unnamed {
+				fmt.Fprintf(os.Stderr, "note: %s (%s) has no name to write an annotation against; its minted id %s stays in the repository only\n", change.ID, change.Metaclass, change.MintedID)
+			}
+			if len(annotated.clauses) == 0 {
+				return fail(fmt.Errorf("nothing to annotate: no minted element has a name to write an annotation against, so %s would repeat the model unchanged", annotated.path))
+			}
+			if err := annotated.write(); err != nil {
+				return fail(err)
+			}
+		}
 		if err := set.Appliable(); err != nil {
 			fmt.Fprintf(os.Stderr, "note: applying would be refused: %v\n", err)
 		}
@@ -127,14 +139,19 @@ func runSync(files []string, target string, apply bool) int {
 		}
 		return exitHolds
 	}
-	return applySync(ctx, repository.live, set, state, scope, statePath)
+	return applySync(ctx, repository.live, set, state, scope, statePath, annotated)
 }
 
 // applySync writes an appliable change set and records its last commit; the
-// state only moves past a complete apply.
-func applySync(ctx context.Context, repo *flexo.Repository, set *reposync.ChangeSet, state *reposync.State, scope reposync.Scope, statePath string) int {
+// state only moves past a complete apply, and the annotated model is written
+// only once the repository holds the ids it declares.
+func applySync(ctx context.Context, repo *flexo.Repository, set *reposync.ChangeSet, state *reposync.State, scope reposync.Scope, statePath string, annotated *annotation) int {
 	if err := set.Appliable(); err != nil {
 		fmt.Fprintf(os.Stderr, "%srefused to apply: %v\n", commandPrefix, err)
+		return exitFailed
+	}
+	if annotated != nil && len(annotated.unnamed) > 0 {
+		fmt.Fprintf(os.Stderr, "%srefused to apply: %v\n", commandPrefix, &UnannotatableError{Changes: annotated.unnamed})
 		return exitFailed
 	}
 	result, err := reposync.Apply(ctx, repo, set, reposync.ApplyOptions{Message: "sysml -sync-apply"})
@@ -170,7 +187,31 @@ func applySync(ctx context.Context, repo *flexo.Repository, set *reposync.Change
 	}
 	fmt.Fprintf(os.Stderr, "applied %d change(s) in %d commit(s); last-seen commit %s recorded in %s\n",
 		len(result.Applied), len(result.Commits), result.LastCommit(), statePath)
+	if annotated != nil {
+		if err := annotated.write(); err != nil {
+			fmt.Fprintf(os.Stderr, "%scommit %s holds the minted ids, but the annotated model could not be written: %v\ndeclare them by hand so the next sync finds these elements again:\n", commandPrefix, result.LastCommit(), err)
+			for _, clause := range annotated.clauses {
+				fmt.Fprintf(os.Stderr, "  %s\n", clause)
+			}
+			return exitFailed
+		}
+	}
 	return exitHolds
+}
+
+// UnannotatableError is an apply that would mint ids the notation cannot keep:
+// the elements have no name for an about-form annotation to address.
+type UnannotatableError struct {
+	Changes []reposync.Change
+}
+
+func (e *UnannotatableError) Error() string {
+	var ids []string
+	for _, change := range e.Changes {
+		ids = append(ids, fmt.Sprintf("%s (%s)", change.ID, change.Metaclass))
+	}
+	return fmt.Sprintf("%d minted id(s) could not be written back because the elements have no name: %s; name them, declare their ids, or apply without -sync-mint-ids",
+		len(e.Changes), strings.Join(ids, ", "))
 }
 
 // failRepository reports a live repository operation that failed: status 1,
@@ -274,44 +315,56 @@ func loadSyncState(path string, scope reposync.Scope) (*reposync.State, error) {
 	return state, nil
 }
 
-// writeAnnotated appends an about-form ElementId annotation per minted id to
-// the model's original text, preserving comments — the explicit opt-in write-back.
-func writeAnnotated(local *rdf.Graph, model string, set *reposync.ChangeSet, path string) error {
+// annotation is the model's original text with an about-form ElementId per
+// minted id appended, analyzed and ready to write; unnamed elements, which no
+// about clause can address, are listed rather than annotated.
+type annotation struct {
+	path     string
+	notation []byte
+	clauses  []string
+	unnamed  []reposync.Change
+}
+
+// prepareAnnotation builds the annotated notation and checks that it analyzes,
+// so the write-back is known good before anything reaches a repository.
+func prepareAnnotation(local *rdf.Graph, model string, set *reposync.ChangeSet, path string) (*annotation, error) {
 	minted := mintedChanges(set)
 	if len(minted) == 0 {
-		return fmt.Errorf("nothing to annotate: no id was minted, so %s would repeat the model unchanged", path)
+		return nil, fmt.Errorf("nothing to annotate: no id was minted, so %s would repeat the model unchanged", path)
 	}
 	if project.IsStdin(model) {
-		return errors.New("-sync-annotate keeps the model's text, so the model must be a file, not stdin")
+		return nil, errors.New("-sync-annotate keeps the model's text, so the model must be a file, not stdin")
 	}
 	name, data, err := project.ReadFile(model)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var out strings.Builder
 	out.Write(data)
 	if len(data) > 0 && data[len(data)-1] != '\n' {
 		out.WriteByte('\n')
 	}
-	annotated := 0
+	a := &annotation{path: path}
 	for _, change := range minted {
 		target := annotationPath(local, change.Subject)
 		if target == "" {
-			fmt.Fprintf(os.Stderr, "note: %s (%s) has no name to write an annotation against; its minted id %s stays in the repository only\n", change.ID, change.Metaclass, change.MintedID)
+			a.unnamed = append(a.unnamed, change)
 			continue
 		}
-		fmt.Fprintf(&out, "metadata : IdentityMetadata::ElementId about %s { id = \"%s\"; }\n",
-			target, change.MintedID)
-		annotated++
+		clause := fmt.Sprintf("metadata : IdentityMetadata::ElementId about %s { id = \"%s\"; }", target, change.MintedID)
+		out.WriteString(clause + "\n")
+		a.clauses = append(a.clauses, clause)
 	}
-	if annotated == 0 {
-		return fmt.Errorf("nothing to annotate: no minted element has a name to write an annotation against, so %s would repeat the model unchanged", path)
+	a.notation = []byte(out.String())
+	if _, err := export.SysMLToRDF(name, a.notation); err != nil {
+		return nil, fmt.Errorf("the annotated notation does not analyze: %w", err)
 	}
-	notation := []byte(out.String())
-	if _, err := export.SysMLToRDF(name, notation); err != nil {
-		return fmt.Errorf("the annotated notation does not analyze: %w", err)
-	}
-	replaced, err := export.WriteFile(path, notation)
+	return a, nil
+}
+
+// write puts the annotated notation at its path — the explicit opt-in write-back.
+func (a *annotation) write() error {
+	replaced, err := export.WriteFile(a.path, a.notation)
 	if err != nil {
 		return err
 	}
@@ -319,7 +372,7 @@ func writeAnnotated(local *rdf.Graph, model string, set *reposync.ChangeSet, pat
 	if replaced {
 		what = ", replaced the existing file"
 	}
-	fmt.Fprintf(os.Stderr, "wrote %s with %d minted id(s) annotated (%d bytes%s)\n", path, annotated, len(notation), what)
+	fmt.Fprintf(os.Stderr, "wrote %s with %d minted id(s) annotated (%d bytes%s)\n", a.path, len(a.clauses), len(a.notation), what)
 	return nil
 }
 

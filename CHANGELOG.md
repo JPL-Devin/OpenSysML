@@ -25,16 +25,17 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   to diff again after, not a silent overwrite. `-sync-diff` takes the same endpoint URL and
   stays a dry run; with neither flag nothing is written. A bearer token never goes over
   plaintext `http://` to a host other than this machine: the compose stack on `localhost` works
-  as documented, anything else needs `https://` or an explicit `FLEXO_ALLOW_PLAIN_HTTP=1`. The
-  exit status keeps its contract: 0 applied or nothing to do, 1 a refusal or a repository
-  failure — a read the stack would not answer included, reported with each change's fate —
-  2 an unusable run. Both sides of the diff are compared under what the service can store, so
-  the properties it has no place for are reported as not compared rather than diffed forever.
-  The opt-in Flexo
-  harness measures the apply against the real stack — an initial load, a revision with a
-  retained-id rename and gated deletes, a conflict staged behind the sync's back — and records
-  what read back at the recorded commit
-  ([the report](internal/interop/flexo/testdata/identity_apply_expected.txt)).
+  as documented, anything else needs `https://` or an explicit `FLEXO_ALLOW_PLAIN_HTTP=1`. An
+  apply that mints ids writes the `-sync-annotate` model only after the commit holding them
+  lands, and is refused when a minted element has no name to annotate — an id the notation
+  cannot keep would be minted again on the next run. The exit status keeps its contract: 0
+  applied or nothing to do, 1 a refusal or a repository failure — a read the stack would not
+  answer included, reported with each change's fate — 2 an unusable run. Both sides of the
+  diff are compared under what the service can store, so the properties it has no place for
+  are reported as not compared rather than diffed forever. The opt-in Flexo harness measures
+  the apply against the real stack — an initial load, a revision with a retained-id rename and
+  gated deletes, a conflict staged behind the sync's back — and records what read back at the
+  recorded commit ([the report](internal/interop/flexo/testdata/identity_apply_expected.txt)).
 
 ### Performance
 

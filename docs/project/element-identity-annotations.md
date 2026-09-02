@@ -246,9 +246,13 @@ set is computed at one head commit, and the adapter refuses to commit if the bra
 moved since (`flexo.StaleBranchError`) — a check-then-post the SysML v2 API offers no atomic
 precondition for, so it narrows the window rather than closing it, but never overwrites an
 edit it has seen. A bearer token is not sent over plaintext `http://` to a host other than the
-local machine unless `FLEXO_ALLOW_PLAIN_HTTP=1` says so. Both sides of a diff are compared under
-the repository's *representation* — what its commit path can store of a graph — so what it has
-no place for is reported as not compared rather than reapplied on every run.
+local machine unless `FLEXO_ALLOW_PLAIN_HTTP=1` says so. An apply that mints ids
+(`-sync-mint-ids -sync-annotate`) writes the annotated model only after the commit holding
+those ids lands, and is refused before any write when a minted element has no name for an
+annotation to address — an id the notation cannot keep would be lost to the next parse. Both
+sides of a diff are compared under the repository's *representation* — what its commit path
+can store of a graph — so what it has no place for is reported as not compared rather than
+reapplied on every run.
 
 This subsumes the notation side of what the Flexo interoperability target needs: the
 graph OpenSysML writes can stand in for the one `flexo-mms-sysmlv2` produces *for the
