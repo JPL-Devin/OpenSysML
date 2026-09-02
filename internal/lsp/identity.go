@@ -66,15 +66,12 @@ func (s *Server) identityActions(name string, doc *model.Document, want source.S
 }
 
 // declarationAt returns the declaration whose header — the text before its
-// body, or the whole declaration when it has none — the range lies in, leading
-// trivia and comments of a selection skipped.
+// body, or the whole declaration when it has none — the range lies in, trivia
+// and comments at either end of a selection (a whole-line selection) skipped.
 func declarationAt(doc *model.Document, want source.Span) *symbols.Symbol {
-	at := want.Offset
-	for _, tok := range tokensIn(doc.Content, want) {
-		if tok.Kind != lexer.RegularComment {
-			at = tok.Span.Offset
-			break
-		}
+	at, until := want.Offset, want.End()
+	if tokens := trimComments(tokensIn(doc.Content, want)); len(tokens) > 0 {
+		at, until = tokens[0].Span.Offset, tokens[len(tokens)-1].Span.End()
 	}
 	sym := symbolAtOffset(doc.Scope, at)
 	if sym == nil || sym.Decl == nil || enclosingMetadataBody(sym.OwnerScope) != nil {
@@ -85,10 +82,21 @@ func declarationAt(doc *model.Document, want source.Span) *symbols.Symbol {
 	if hasBody {
 		end = body.Offset + 1
 	}
-	if want.End() > end {
+	if until > end {
 		return nil
 	}
 	return sym
+}
+
+// trimComments drops the regular comments at either end of tokens.
+func trimComments(tokens []lexer.Token) []lexer.Token {
+	for len(tokens) > 0 && tokens[0].Kind == lexer.RegularComment {
+		tokens = tokens[1:]
+	}
+	for len(tokens) > 0 && tokens[len(tokens)-1].Kind == lexer.RegularComment {
+		tokens = tokens[:len(tokens)-1]
+	}
+	return tokens
 }
 
 // annotation is one metadata annotation to write: inline in the target's body

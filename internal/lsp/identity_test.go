@@ -168,6 +168,8 @@ func TestIdentityActionOfferedOnSelectedHeader(t *testing.T) {
 		{"part def Chassis", "Chassis {", "Chassis"},
 		{"// the chassis", "def Chassis", "Chassis"},
 		{"/* two per vehicle */", "Axle;", "Axle"},
+		{"part def Chassis", "Chassis {\n", "Chassis"},
+		{"part def Axle", "Axle;\n", "Axle"},
 	} {
 		act := mintAction(t, file, scopedSrc, selection(t, scopedSrc, tc.from, tc.to))
 		if want := "Annotate '" + tc.name + "' with a minted element id"; act.Title != want {
