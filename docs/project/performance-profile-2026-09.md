@@ -26,8 +26,13 @@ Everything in this record is a **fresh measurement** unless a paragraph says
 same processor family as the two earlier records, so absolute figures compare
 directly with them. Treat them as ratios elsewhere.
 
-**Revision.** `main` at `7ccf3c6f`, with the benchmark package this record adds
-(`internal/perfbench`) and no other change.
+**Revision.** Sections 1–6: `main` at `7ccf3c6f`, with the benchmark package
+this record adds (`internal/perfbench`) and no other change. The PGO section
+was re-measured on `main` at `80e0450a`, after the calc-evaluator and
+standard-library start-up work of the same month had merged. Those two areas
+are out of scope here, but figures in sections 1–6 that include library
+start-up (an empty `-validate` run, process RSS at start) predate the embedded
+snapshot and are higher than the current binary's.
 
 **Workloads.** Two models, chosen so every area has one real and one large
 input:
@@ -1072,7 +1077,7 @@ lexer work (§5).
 
 The one change this record ships: `cmd/sysml/default.pgo`,
 `cmd/sysml-lsp/default.pgo` and `cmd/sysml-grpc/default.pgo`, one merged CPU
-profile (339 s of samples) of the package test suites, the `internal/repl`,
+profile (301 s of samples) of the package test suites, the `internal/repl`,
 `internal/grpc` and `internal/perfbench` benchmarks, and the CLI validating
 every model in the checkout and evaluating three expressions. `go build` in
 Go 1.21+ applies a `default.pgo` beside a main package automatically
@@ -1080,10 +1085,12 @@ Go 1.21+ applies a `default.pgo` beside a main package automatically
 see `DEVELOPING.md`.
 
 **Method.** Before is `-pgo=off`, after is the committed profile, same
-revision, same machine, nothing else running. Benchmarks: `benchstat` over
-`-count 6` (both orders) and over 8 interleaved runs of prebuilt test binaries.
-CLI and LSP: the two binaries run alternately, 11 runs each, median of the
-`-memstats` wall time or the driver's `didOpen`→`publishDiagnostics` time.
+revision (`main` at 80e0450a, which already carries the sibling calc-evaluator
+and embedded-stdlib-snapshot work), same machine, nothing else running.
+Benchmarks: `benchstat` over 6 interleaved runs of prebuilt test binaries
+(`go test -c -pgo=off` / `-pgo=cmd/sysml/default.pgo`). CLI and LSP: the two
+binaries run alternately, 11 runs each, median of the `-memstats` wall time or
+the driver's `didOpen`→`publishDiagnostics` time.
 
 ```bash
 go test ./internal/repl -run '^$' -bench . -benchmem -count 6 -pgo=off > before.txt
@@ -1097,52 +1104,61 @@ benchmarks in effect):
 
 | benchmark | before | after | Δ time | Δ allocs/op |
 | --------- | ------ | ----- | ------ | ----------- |
-| `RunCalc/elements=250` | 2.29 µs | 1.93 µs | −15.7% (p=0.002) | 26 → 22 |
-| `RunCalc/elements=4000` | 2.26 µs | 2.09 µs | −7.5% (p=0.026) | 26 → 22 |
-| `Instantiate/elements=250` | 3.40 µs | 2.48 µs | −27% (p=0.009) | 29 → 27 |
-| `RunStateMachine/elements=250` | 6.30 µs | 5.84 µs | −7.3% (p=0.002) | 110 → 106 |
-| `Diagnostics/attributes=200` | 299 µs | 256 µs | −14% (p=0.002) | 1 255 → 1 251 |
-| `LoadModel/elements=1000` | 58.7 ms | 59.1 ms | ~ (p=0.94) | 313 k → 289 k (−7.7%) |
-| geomean | | | −9.3% | −6.6% |
+| `RunCalc/elements=250` | 2.15 µs | 1.61 µs | −25% (p=0.004) | 25 → 23 |
+| `RunCalc/elements=1000` | 1.96 µs | 1.67 µs | −15% (p=0.009) | 25 → 23 |
+| `Instantiate/elements=4000` | 2.56 µs | 2.32 µs | −9.6% (p=0.009) | 29 → 27 |
+| `RunStateMachine/elements=4000` | 6.02 µs | 5.49 µs | −8.8% (p=0.015) | 110 → 108 |
+| `Diagnostics/attributes=200` | 297 µs | 250 µs | −16% (p=0.002) | 1 255 → 1 255 |
+| `Diagnostics/attributes=800` | 1.19 ms | 1.02 ms | −14% (p=0.002) | 5 409 → 5 409 |
+| `LoadModel/elements=1000` | 60.4 ms | 55.8 ms | ~ (p=0.18) | 314 k → 298 k (−4.9%) |
+| geomean | | | −10.0% | −4.1% |
 
-**This record's benchmarks** (`internal/perfbench`, interleaved, n=8):
+**This record's benchmarks** (`internal/perfbench`, interleaved, n=6):
 
 | benchmark | before | after | Δ |
 | --------- | ------ | ----- | - |
-| `BatchConstraints` | 3.40 ms | 2.91 ms | −14.2% (p<0.001); allocs 18 530 → 16 670 |
-| `ExecuteAction` | 10.5 µs | 9.48 µs | −9.6% (p=0.003) |
-| `ExecuteState` (n=6) | 172 µs | 163 µs | −5.4% (p=0.002) |
-| `Analyze/synthetic` (n=6) | 530 ms | 527 ms | ~; allocs 2.27 M → 1.99 M (−12%) |
-| `WorkspaceEditSmallDocBesideLarge` | 55.3 ms | 55.9 ms | ~ (p=1.0) |
-| `REPLEvalExpr` | 77.5 ms | 79.2 ms | ~ (p=0.065) |
-| `GRPCEvaluate` (n=6) | 271 µs | 275 µs | ~ (p=0.39) |
-| `Parse/synthetic` | 78.3 ms | 80.7 ms | **+3.0%** (p=0.028) |
+| `BatchConstraints` | 3.35 ms | 2.69 ms | −19.7% (p=0.002) |
+| `ExecuteAction` | 8.94 µs | 7.92 µs | ~ (p=0.065) |
+| `ExecuteState` | 158 µs | 144 µs | ~ (p=0.065); allocs 2 814 → 2 610 (−7.3%) |
+| `GRPCEvaluate` | 272 µs | 259 µs | −4.7% (p=0.041); allocs 938 → 916 |
+| `Analyze/synthetic` | 526 ms | 545 ms | ~ (p=0.70); allocs 2.27 M → 2.12 M (−6.6%) |
+| `WorkspaceEditSmallDocBesideLarge` | 66.7 ms | 66.2 ms | ~ (p=0.70) |
+| `REPLEvalExpr` | 77.6 ms | 79.5 ms | ~ (p=0.49) |
+| `Parse/synthetic` | 79.4 ms | 81.0 ms | ~ (p=0.24) |
+| `Parse/vehicle` | 2.27 ms | 2.35 ms | ~ (p=0.13) |
 
 **Whole binaries** (median of 11 interleaved runs):
 
 | workload | before | after |
 | -------- | ------ | ----- |
-| stdlib load (`sysml -validate empty.sysml`) | 104 ms | 107 ms |
-| `sysml -e RobotBehavior::Approach(3.0, 4.0)` ×1 / ×201 | 141 / 288 ms | 139 / 289 ms |
-| marginal `-e` calc invocation | 735 µs | 750 µs |
-| `sysml -validate` synthetic (1 000 blocks) | 922 ms | 935 ms |
-| `sysml -validate` vehicle | 410 ms | 409 ms |
-| LSP `didOpen`→diagnostics, synthetic / vehicle | 683 / 304 ms | 669 / 288 ms |
-| LSP full-document `didChange`→diagnostics, synthetic / vehicle | 653 / 287 ms | 609 / 283 ms |
-| binary size `sysml` / `sysml-lsp` / `sysml-grpc` | 16.87 / 14.11 / 29.95 MB | 17.79 / 14.91 / 30.89 MB (+5.4% / +5.7% / +3.1%) |
+| stdlib load (`sysml -validate empty.sysml`, embedded snapshot) | 14 ms | 13 ms |
+| `sysml -e RobotBehavior::Approach(3.0, 4.0)` ×1 / ×201 | 49 / 176 ms | 50 / 177 ms |
+| marginal `-e` calc invocation | 635 µs | 635 µs |
+| `sysml -validate` synthetic (1 000 blocks) | 838 ms | 814 ms |
+| `sysml -validate` vehicle | 288 ms | 288 ms |
+| LSP `didOpen`→diagnostics, synthetic / vehicle | 682 / 269 ms | 649 / 274 ms |
+| LSP full-document `didChange`→diagnostics, synthetic / vehicle | 671 / 271 ms | 618 / 269 ms |
+| binary size `sysml` / `sysml-lsp` / `sysml-grpc` | 20.48 / 17.73 / 33.85 MB | 21.50 / 18.54 / 34.89 MB (+5.0% / +4.6% / +3.1%) |
+
+An earlier run of the same procedure on the pre-merge revision (before the
+sibling calc and stdlib work landed) gave the same picture: −9.3% geomean on
+the `internal/repl` benchmarks, −14% on `BatchConstraints`, `Parse/synthetic`
++3.0% (p=0.028), whole-binary wall times within noise.
 
 **Reading.** PGO pays where the profile has hot, inlinable call chains: the
-executors, constraint checking, calc invocation inside the REPL (−7% to −27%),
+executors, constraint checking, calc invocation inside the REPL (−9% to −25%),
 and it removes allocations outright where inlining lets escape analysis keep a
-value on the stack (`RunCalc` 26 → 22 allocs, `LoadModel` −7.7%,
-`Analyze/synthetic` −12%). It does nothing measurable for the parser, the
-workspace pipeline or the whole-binary wall times, whose cost is spread over
-thousands of small frames and the collector — and the parser is 3% slower,
-consistent with the code-size growth. The stdlib-load and marginal-calc
-figures are within run-to-run noise (±3%) in both directions. Net: a modest,
-real win on execution-heavy paths for +0.8–0.9 MB per binary, and no
-semantic exposure. Refresh the profile when a hot path changes shape (the
-standard-library and calc work in flight both qualify).
+value on the stack (`RunCalc` 25 → 23 allocs, `LoadModel` −4.9%,
+`Analyze/synthetic` −6.6%, `ExecuteState` −7.3%). It does nothing measurable
+for the parser, the workspace pipeline or the whole-binary wall times, whose
+cost is spread over thousands of small frames and the collector; the parser
+trends 1–3% slower across both runs, consistent with the code-size growth,
+though only the first run reached significance. The stdlib-load and
+marginal-calc figures are within run-to-run noise in both directions; the
+embedded snapshot has already taken stdlib load to ~14 ms, so there is little
+left for PGO to find there. Net: a modest, real win on execution-heavy paths
+for +0.8–1.0 MB per binary, and no semantic exposure. Refresh the profile
+when a hot path changes shape.
 
 ## What was not measured
 
