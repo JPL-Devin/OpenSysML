@@ -117,17 +117,22 @@ func (ctx *Context) PendingMessages() []Message {
 	return out
 }
 
-// SignalMessage builds the message `send Signal(args) to <object>` posts, for
-// PostMessage; a nil object is one anyone may take, an unknown argument is refused.
+// SignalMessage builds the message `send Signal(args) to <object>` posts, for PostMessage;
+// a nil object is one anyone may take, an argument no feature of the signal admits is refused.
 func (ctx *Context) SignalMessage(signal *symbols.Symbol, args map[string]Value, to *Instance) (Message, error) {
 	if !isDefinitionSymbol(signal) {
 		return Message{}, fmt.Errorf("%w: %s", ErrNotASignal, symbolText(signal))
 	}
+	features := ctx.FeaturesOf(signal)
 	payload := make(map[string]Value, len(args))
 	for _, name := range sortedArgNames(args) {
-		if !ctx.carriesFeature(signal, name) {
+		feat := carriedFeature(features, name)
+		if feat == nil {
 			return Message{}, fmt.Errorf("%w: %s carries no feature %q%s",
-				ErrSignalArgument, symbolText(signal), name, ctx.carriedFeaturesNote(signal))
+				ErrSignalArgument, symbolText(signal), name, carriedFeaturesNote(features))
+		}
+		if err := ctx.checkAdmits(feat, symbolText(signal)+"."+name, args[name]); err != nil {
+			return Message{}, fmt.Errorf("%w: %w", ErrSignalArgument, err)
 		}
 		payload[name] = args[name]
 	}
@@ -156,19 +161,18 @@ func sortedArgNames(args map[string]Value) []string {
 	return names
 }
 
-// carriesFeature reports whether a signal definition carries a feature of the name.
-func (ctx *Context) carriesFeature(signal *symbols.Symbol, name string) bool {
-	for _, feat := range ctx.FeaturesOf(signal) {
-		if feat.Name == name {
-			return true
+// carriedFeature is the feature of the name, nil when none has it.
+func carriedFeature(features []EffectiveFeature, name string) *EffectiveFeature {
+	for i := range features {
+		if features[i].Name == name {
+			return &features[i]
 		}
 	}
-	return false
+	return nil
 }
 
 // carriedFeaturesNote names the features a signal carries, for an argument error.
-func (ctx *Context) carriedFeaturesNote(signal *symbols.Symbol) string {
-	features := ctx.FeaturesOf(signal)
+func carriedFeaturesNote(features []EffectiveFeature) string {
 	if len(features) == 0 {
 		return " (it carries none)"
 	}

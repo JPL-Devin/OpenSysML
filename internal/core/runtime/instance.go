@@ -324,11 +324,16 @@ func isScalarFeature(feat *EffectiveFeature) bool {
 // checkDefault reports a value the feature does not admit: a count outside its
 // multiplicity (1..1 when none is declared) or an element outside its type.
 func (ctx *Context) checkDefault(inst *Instance, fv *FeatureValue, name string, val Value) error {
-	what := fmt.Sprintf("feature value %s.%s", inst.Type.Name, name)
-	if msg := fv.Feature.Multiplicity.CountViolation(elementCount(&val)); msg != "" {
+	return ctx.checkAdmits(fv.Feature, fmt.Sprintf("feature value %s.%s", inst.Type.Name, name), val)
+}
+
+// checkAdmits reports a value the feature does not admit, by count or by type,
+// naming the value as what.
+func (ctx *Context) checkAdmits(feat *EffectiveFeature, what string, val Value) error {
+	if msg := feat.Multiplicity.CountViolation(elementCount(&val)); msg != "" {
 		return fmt.Errorf("%s: %w: %s", what, ErrMultiplicityViolation, msg)
 	}
-	return ctx.checkWriteType(fv.Feature.DeclScope(), what, fv.Feature.Type, val)
+	return ctx.checkWriteType(feat.DeclScope(), what, feat.Type, val)
 }
 
 // GetFeatureValue retrieves the feature value for the named feature, materializing it lazily

@@ -7,8 +7,10 @@ import (
 )
 
 const lampSource = `
+	private import ScalarValues::*;
 	attribute def go;
 	attribute def Dim { attribute level : Integer; }
+	attribute def Batch { attribute levels : Integer[2..*]; }
 	state def Lamp {
 		attribute brightness : Integer = 0;
 		entry; then off;
@@ -27,8 +29,8 @@ const lampSource = `
 // A message built from outside the model is typed by its definition, addressed
 // to its object, and delivered by the same step a model's send is.
 func TestSignalMessageDrivesTheExhibitedMachine(t *testing.T) {
-	model, resolver, root := parseAndBuildModel(t, lampSource)
-	ctx := NewContext(model, resolver, 10000)
+	idx, _, ctx := buildRuntimeWithLibraries(t, "lamp.sysml", parseAndBuild(t, lampSource))
+	root := idx.DocumentRoot("lamp.sysml")
 	bulb, err := ctx.Instantiate(resolveSymbol(t, root, "Bulb"))
 	if err != nil {
 		t.Fatalf("Instantiate: %v", err)
@@ -69,6 +71,16 @@ func TestSignalMessageDrivesTheExhibitedMachine(t *testing.T) {
 		t.Errorf("an argument Dim carries no feature for gave %v, want ErrSignalArgument", err)
 	} else if !strings.Contains(err.Error(), "(it carries level)") {
 		t.Errorf("the argument error does not name what Dim carries: %v", err)
+	}
+	if _, err := ctx.SignalMessage(dimSym, map[string]Value{"level": NewStringValue("x")}, bulb); !errors.Is(err, ErrSignalArgument) || !errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("a string for Dim.level gave %v, want ErrSignalArgument wrapping ErrTypeMismatch", err)
+	}
+	batchSym := resolveSymbol(t, root, "Batch")
+	if _, err := ctx.SignalMessage(batchSym, map[string]Value{"levels": integerValue(1)}, bulb); !errors.Is(err, ErrSignalArgument) || !errors.Is(err, ErrMultiplicityViolation) {
+		t.Errorf("one value for Batch.levels[2..*] gave %v, want ErrSignalArgument wrapping ErrMultiplicityViolation", err)
+	}
+	if len(ctx.PendingMessages()) != 0 || activeLeaf(exec) != "on" {
+		t.Errorf("a refused message left the bus or the machine changed: %d pending, state %s", len(ctx.PendingMessages()), activeLeaf(exec))
 	}
 	dim, err := ctx.SignalMessage(dimSym, map[string]Value{"level": integerValue(7)}, bulb)
 	if err != nil {
@@ -136,8 +148,8 @@ func TestProcessNextEventTakesAPendingSignalBeforeALaterTimer(t *testing.T) {
 // ExhibitedMachineOf finds the machine an object runs by its definition or its
 // usage, and none on an object exhibiting no such machine.
 func TestExhibitedMachineOf(t *testing.T) {
-	model, resolver, root := parseAndBuildModel(t, lampSource)
-	ctx := NewContext(model, resolver, 10000)
+	idx, _, ctx := buildRuntimeWithLibraries(t, "lamp.sysml", parseAndBuild(t, lampSource))
+	root := idx.DocumentRoot("lamp.sysml")
 	bulb, err := ctx.Instantiate(resolveSymbol(t, root, "Bulb"))
 	if err != nil {
 		t.Fatalf("Instantiate Bulb: %v", err)

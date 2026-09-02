@@ -43,7 +43,8 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   `%step` or `%advance` dispatches it. Without `to`, the signal goes to the object whose machine
   the `%state` session is debugging, and with no session the command says so rather than
   guessing. Arguments are written `<parameter>=<expression>` as for `%invoke` and are checked
-  against the signal's declaration; an unresolved signal name gets the usual unresolved-reference
+  against the signal's declaration — the feature it names, and the type and multiplicity that
+  feature admits — before anything is sent; an unresolved signal name gets the usual unresolved-reference
   report, an object that runs no machine is reported as such, and a signal nothing in the
   machine's current state accepts is refused up front with the state named, never queued to be
   dropped in silence. A signal in flight is due now, so a single step dispatches it ahead of a

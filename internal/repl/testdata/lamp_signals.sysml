@@ -8,9 +8,16 @@ package Lamps {
 		attribute level : Integer;
 	}
 	attribute def Reset;
+	attribute def Batch {
+		attribute levels : Integer[2..*];
+	}
+	attribute def Label {
+		attribute text : String;
+	}
 
 	state def Lamp {
 		attribute brightness : Integer = 0;
+		attribute label : String = "";
 		entry; then off;
 		state off;
 		transition off_on first off accept go then on;
@@ -20,6 +27,11 @@ package Lamps {
 			do assign brightness := d.level
 			then dimmed;
 		state dimmed;
+		transition dim_label first dimmed
+			accept l : Label
+			do assign label := l.text
+			then labeled;
+		state labeled;
 	}
 
 	part def Bulb {

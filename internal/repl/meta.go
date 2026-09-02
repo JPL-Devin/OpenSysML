@@ -1549,7 +1549,7 @@ func splitTopLevel(text string) [][]string {
 	var groups [][]string
 	var frags []string
 	var frag strings.Builder
-	depth, quoted, named := 0, false, false
+	depth, q := 0, quoteTracker{}
 
 	flushFrag := func() {
 		if frag.Len() > 0 {
@@ -1559,19 +1559,8 @@ func splitTopLevel(text string) [][]string {
 	}
 	for _, r := range text {
 		switch {
-		case quoted:
-			if r == '"' {
-				quoted = false
-			}
-		case named:
-			// A quoted name is one fragment, space and comma included.
-			if r == '\'' {
-				named = false
-			}
-		case r == '"':
-			quoted = true
-		case r == '\'':
-			named = true
+		case q.inside(r):
+			// A string or quoted name is one fragment, space and comma included.
 		case r == '(' || r == '[':
 			depth++
 		case r == ')' || r == ']':
@@ -1596,21 +1585,10 @@ func splitTopLevel(text string) [][]string {
 // binding is the argument's own: an `=` nested in a call, in a bracket or in a
 // string belongs to that expression.
 func isNamedArgument(text string) bool {
-	depth, quoted, named := 0, false, false
+	depth, q := 0, quoteTracker{}
 	for i, r := range text {
 		switch {
-		case quoted:
-			if r == '"' {
-				quoted = false
-			}
-		case named:
-			if r == '\'' {
-				named = false
-			}
-		case r == '"':
-			quoted = true
-		case r == '\'':
-			named = true
+		case q.inside(r):
 		case r == '(' || r == '[':
 			depth++
 		case r == ')' || r == ']':

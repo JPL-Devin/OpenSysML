@@ -44,6 +44,41 @@ func TestSendCarriesNamedArguments(t *testing.T) {
 	wants(t, run(t, s, "%send Dim(level = 2 + 5)"), "✓ Sent Dim(level=7)", `Accepted by state machine "Lamp" in state on`)
 	wants(t, run(t, s, "%advance 1"), "Current state: dimmed")
 	wants(t, run(t, s, "%features bulb"), "brightness", "7")
+
+	// A string payload keeps its escaped quotes and the parentheses after them.
+	wants(t, run(t, s, `%send Label(text = "say \"hi\" (twice)")`), `✓ Sent Label(text="say \"hi\" (twice)")`, `Accepted by state machine "Lamp" in state dimmed`)
+	wants(t, run(t, s, "%advance 1"), "Current state: labeled")
+	wants(t, run(t, s, "%features bulb"), `label`, `"say \"hi\" (twice)"`)
+}
+
+// TestParseSendLineScansQuotesLikeTheLexer keeps a string's escaped quotes, and
+// the parentheses and commas after them, inside the argument they belong to.
+func TestParseSendLineScansQuotesLikeTheLexer(t *testing.T) {
+	cases := []struct {
+		line   string
+		signal string
+		args   []string
+		target string
+	}{
+		{`Label(text="a\"b") to bulb`, "Label", []string{`text="a\"b"`}, "bulb"},
+		{`Label(text="(\") , x", n=1) to bulb`, "Label", []string{`text="(\") , x"`, "n=1"}, "bulb"},
+		{`Label(text="\\") to bulb`, "Label", []string{`text="\\"`}, "bulb"},
+		{`Label(text='a (\') b') to bulb`, "Label", []string{`text='a (\') b'`}, "bulb"},
+		{`'my signal'(text=")") to 'the bulb'`, "'my signal'", []string{`text=")"`}, "'the bulb'"},
+	}
+	for _, tc := range cases {
+		req, err := parseSendLine(tc.line)
+		if err != nil {
+			t.Errorf("parseSendLine(%s): %v", tc.line, err)
+			continue
+		}
+		if req.signal != tc.signal || req.target != tc.target || strings.Join(req.args, "|") != strings.Join(tc.args, "|") {
+			t.Errorf("parseSendLine(%s) = %+v, want signal %s args %q target %s", tc.line, req, tc.signal, tc.args, tc.target)
+		}
+	}
+	if _, err := parseSendLine(`Label(text="a\") to bulb`); err == nil || !strings.Contains(err.Error(), "is not closed") {
+		t.Errorf("an escaped quote that leaves the string open gave %v, want the list reported unclosed", err)
+	}
 }
 
 // TestSendToNamedObjectNeedsNoSession delivers to an object named after `to`,
@@ -97,6 +132,9 @@ func TestSendRefusesWhatCannotBeDelivered(t *testing.T) {
 	wants(t, run(t, s, "%send Dim(7)"), `argument "7" is not written as <parameter>=<expression>`)
 	wants(t, run(t, s, "%send Dim(level=1, level=2)"), "error: argument level is given twice")
 	wants(t, run(t, s, "%send Dim(level=nosuch)"), "error: argument level:")
+	// A value the feature does not admit is refused here, not when the accept binds it.
+	wants(t, run(t, s, `%send Dim(level="x")`), "error: signal argument: Dim.level: type mismatch", `cannot write "x" (string) to a feature typed by Integer`)
+	wants(t, run(t, s, "%send Batch(levels=1)"), "error: signal argument: Batch.levels: multiplicity violation")
 
 	// A signal the machine does not take in its current state is refused, not
 	// left in flight. The queue stays empty.

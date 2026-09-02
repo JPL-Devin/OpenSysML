@@ -72,20 +72,39 @@ func parseSendLine(text string) (sendRequest, error) {
 	return req, nil
 }
 
+// quoteTracker follows the lexer's quoting through a prompt argument: a string
+// or quoted name is opaque to a scanner, its escaped characters included.
+type quoteTracker struct {
+	quote   rune
+	escaped bool
+}
+
+// inside consumes r, reporting whether it is part of a string or quoted name.
+func (q *quoteTracker) inside(r rune) bool {
+	switch {
+	case q.escaped:
+		q.escaped = false
+	case q.quote != 0:
+		if r == '\\' {
+			q.escaped = true
+		} else if r == q.quote {
+			q.quote = 0
+		}
+	case r == '"' || r == '\'':
+		q.quote = r
+	default:
+		return false
+	}
+	return true
+}
+
 // closingParen indexes the parenthesis closing the one text opens with, -1 when
 // none does; parentheses inside a string or quoted name do not count.
 func closingParen(text string) int {
-	depth, quoted, named := 0, false, false
+	depth, q := 0, quoteTracker{}
 	for i, r := range text {
 		switch {
-		case quoted:
-			quoted = r != '"'
-		case named:
-			named = r != '\''
-		case r == '"':
-			quoted = true
-		case r == '\'':
-			named = true
+		case q.inside(r):
 		case r == '(':
 			depth++
 		case r == ')':
