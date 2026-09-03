@@ -677,11 +677,6 @@ calc def TintedThroughInvocation :> Query {
 	in source : Element;
 	Tinted(source = source, hue = Color::red)
 }
-calc def TintedByAttribute :> Query {
-	in source : Element;
-	in hue : Color = paint;
-	OwnedElements(source = source)
-}
 `)
 	source := Bindings{"source": {ElementValue(fixture.symbol(t, "root"))}}
 	for _, test := range []struct {
@@ -718,7 +713,6 @@ calc def TintedByAttribute :> Query {
 			"source": source["source"],
 			"hue":    {ElementValue(fixture.symbol(t, "paint"))},
 		}},
-		{"an attribute default", "TintedByAttribute", source},
 	} {
 		_, err := fixture.execute(t, test.query, test.bindings, Options{})
 		if !errors.As(err, &executionError) || executionError.Kind != ErrorBindingType ||
@@ -739,8 +733,7 @@ part other {
 	part motor;
 }
 attribute label : String = "m";
-attribute def Tag;
-attribute tag : Tag;
+attribute limit : Natural;
 calc def Defaulted :> Query {
 	in source : Element = root;
 	in pattern : String default "m";
@@ -751,29 +744,9 @@ calc def DerivedDefault :> Query {
 	in candidates : Element[0..*] = OwnedElements(source = source);
 	WhereName(source = candidates, operator = "startsWith", value = "m")
 }
-calc def MismatchedDefault :> Query {
-	in source : Element;
-	in pattern : String default 3;
-	WhereName(source = OwnedElements(source = source), operator = "startsWith", value = pattern)
-}
-calc def AttributeAsStringDefault :> Query {
-	in source : Element;
-	in pattern : String = label;
-	WhereName(source = OwnedElements(source = source), operator = "startsWith", value = pattern)
-}
-calc def AttributeAsScalarValueDefault :> Query {
-	in source : Element;
-	in amount : ScalarValue = label;
-	OwnedElements(source = source)
-}
-calc def AttributeAsTagDefault :> Query {
-	in source : Element;
-	in marker : Tag = tag;
-	OwnedElements(source = source)
-}
 calc def OverfullDefault :> Query {
-	in pool : Element;
-	in source : Element = OwnedElements(source = pool);
+	in pool : Element[0..limit];
+	in source : Element = pool;
 	OwnedElements(source = source)
 }
 calc def ChainedDefaults :> Query {
@@ -840,20 +813,6 @@ calc def NestedElementDefault :> Query {
 		t.Fatalf("derived default rows = %v, want [mount]", got)
 	}
 	var executionError *Error
-	_, err = fixture.execute(t, "MismatchedDefault", Bindings{
-		"source": {ElementValue(fixture.symbol(t, "root"))},
-	}, Options{})
-	if !errors.As(err, &executionError) || executionError.Kind != ErrorBindingType ||
-		executionError.Parameter != "pattern" || executionError.Actual != string(ValueInteger) {
-		t.Fatalf("default type error = %v", err)
-	}
-	_, err = fixture.execute(t, "AttributeAsStringDefault", Bindings{
-		"source": {ElementValue(fixture.symbol(t, "root"))},
-	}, Options{})
-	if !errors.As(err, &executionError) || executionError.Kind != ErrorBindingType ||
-		executionError.Parameter != "pattern" || executionError.Actual != string(ValueElement) {
-		t.Fatalf("attribute-as-string default error = %v", err)
-	}
 	_, err = fixture.execute(t, "Defaulted", Bindings{
 		"pattern": {ElementValue(fixture.symbol(t, "label"))},
 	}, Options{})
@@ -861,23 +820,12 @@ calc def NestedElementDefault :> Query {
 		executionError.Parameter != "pattern" || executionError.Actual != string(ValueElement) {
 		t.Fatalf("attribute-as-string binding error = %v", err)
 	}
-	for _, test := range []struct{ query, parameter string }{
-		{"AttributeAsScalarValueDefault", "amount"},
-		{"AttributeAsTagDefault", "marker"},
-	} {
-		_, err = fixture.execute(t, test.query, Bindings{
-			"source": {ElementValue(fixture.symbol(t, "root"))},
-		}, Options{})
-		if !errors.As(err, &executionError) || executionError.Kind != ErrorBindingType ||
-			executionError.Parameter != test.parameter || executionError.Actual != string(ValueElement) {
-			t.Fatalf("%s default error = %v", test.query, err)
-		}
-	}
+	// pool's multiplicity is unknown at planning, so the default's count is only checked here.
 	_, err = fixture.execute(t, "OverfullDefault", Bindings{
-		"pool": {ElementValue(fixture.symbol(t, "root"))},
+		"pool": {ElementValue(fixture.symbol(t, "root")), ElementValue(fixture.symbol(t, "other"))},
 	}, Options{})
 	if !errors.As(err, &executionError) || executionError.Kind != ErrorBindingMultiplicity ||
-		executionError.Parameter != "source" || executionError.Actual != "3" {
+		executionError.Parameter != "source" || executionError.Actual != "2" {
 		t.Fatalf("default multiplicity error = %v", err)
 	}
 	result, err = fixture.execute(t, "ChainedDefaults", Bindings{}, Options{})
@@ -1332,6 +1280,65 @@ calc def InvokesRequired :> Query {
 	}
 	if executionError.Query != "Observatory::RequiredResults" {
 		t.Fatalf("result multiplicity error query = %s", executionError.Query)
+	}
+}
+
+func TestExecuteDefaultMismatchFailsAtPlanning(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root;
+part other;
+attribute label : String = "m";
+attribute def Tag;
+attribute tag : Tag;
+enum def Color { red; green; }
+enum def Size { small; large; }
+calc def LiteralAsString :> Query {
+	in pattern : String default 3;
+	WhereName(source = OwnedElements(source = root), operator = "startsWith", value = pattern)
+}
+calc def AttributeAsString :> Query {
+	in pattern : String = label;
+	WhereName(source = OwnedElements(source = root), operator = "startsWith", value = pattern)
+}
+calc def AttributeAsScalarValue :> Query {
+	in amount : ScalarValue = label;
+	OwnedElements(source = root)
+}
+calc def AttributeAsTag :> Query {
+	in marker : Tag = tag;
+	OwnedElements(source = root)
+}
+calc def OtherEnumerationAsColor :> Query {
+	in hue : Color = Size::small;
+	OwnedElements(source = root)
+}
+calc def OverfullSequence :> Query {
+	in source : Element = (root, other);
+	OwnedElements(source = source)
+}
+calc def OverfullInvocation :> Query {
+	in source : Element = OwnedElements(source = root);
+	OwnedElements(source = source)
+}
+`)
+	for _, test := range []struct {
+		query     string
+		kind      queryplan.ErrorKind
+		parameter string
+	}{
+		{"LiteralAsString", queryplan.ErrorDefaultType, "pattern"},
+		{"AttributeAsString", queryplan.ErrorDefaultType, "pattern"},
+		{"AttributeAsScalarValue", queryplan.ErrorDefaultType, "amount"},
+		{"AttributeAsTag", queryplan.ErrorDefaultType, "marker"},
+		{"OtherEnumerationAsColor", queryplan.ErrorDefaultType, "hue"},
+		{"OverfullSequence", queryplan.ErrorDefaultMultiplicity, "source"},
+		{"OverfullInvocation", queryplan.ErrorDefaultMultiplicity, "source"},
+	} {
+		_, err := queryplan.Compile(fixture.index, fixture.model, fixture.resolver, fixture.symbol(t, test.query))
+		var planningError *queryplan.Error
+		if !errors.As(err, &planningError) || planningError.Kind != test.kind || planningError.Parameter != test.parameter {
+			t.Fatalf("%s planning error = %v", test.query, err)
+		}
 	}
 }
 

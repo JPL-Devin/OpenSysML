@@ -275,10 +275,44 @@ func (c *compiler) compileDefault(
 		if err != nil {
 			return err
 		}
+		if err := c.validateDefault(query, *param, value, provenance.Node(owner.DocName, usage.Value)); err != nil {
+			return err
+		}
 		param.HasDefault = true
-		param.Default = value
+		param.Default = value.expression
 		param.DefaultQuery = symbols.FQNOf(owner)
 		return nil
+	}
+	return nil
+}
+
+// validateDefault applies the planning checks of an explicit argument to a
+// parameter's default; what is only known at execution stays for bindValues.
+func (c *compiler) validateDefault(
+	query *symbols.Symbol,
+	param Parameter,
+	value typedExpression,
+	origin provenance.Origin,
+) error {
+	if actual, ok := c.valueTypeConforms(param, value); !ok {
+		return &Error{
+			Kind:      ErrorDefaultType,
+			Query:     symbols.FQNOf(query),
+			Parameter: param.Name,
+			Expected:  param.Type,
+			Actual:    actual,
+			Origin:    origin,
+		}
+	}
+	if !multiplicityConforms(value.multiplicity, param.Multiplicity) {
+		return &Error{
+			Kind:      ErrorDefaultMultiplicity,
+			Query:     symbols.FQNOf(query),
+			Parameter: param.Name,
+			Expected:  multiplicityString(param.Multiplicity),
+			Actual:    multiplicityString(value.multiplicity),
+			Origin:    origin,
+		}
 	}
 	return nil
 }
@@ -302,21 +336,21 @@ func (c *compiler) compileDefaultExpression(
 	params []Parameter,
 	node ast.Node,
 	dependency func(string),
-) (Expression, error) {
+) (typedExpression, error) {
 	value, err := c.compileExpression(query, owner, params, node, dependency)
 	if err != nil {
 		var planning *Error
 		if errors.As(err, &planning) && planning.Kind == ErrorUnsupportedExpression {
-			return Expression{}, &Error{
+			return typedExpression{}, &Error{
 				Kind:      ErrorUnsupportedDefault,
 				Query:     symbols.FQNOf(query),
 				Parameter: parameter,
 				Origin:    planning.Origin,
 			}
 		}
-		return Expression{}, err
+		return typedExpression{}, err
 	}
-	return value.expression, nil
+	return value, nil
 }
 
 func (c *compiler) parameterType(sym *symbols.Symbol) string {
@@ -975,30 +1009,15 @@ func (c *compiler) validateArgument(
 	value typedExpression,
 	origin provenance.Origin,
 ) error {
-	if want := c.typeSymbol(param.Type); want != nil {
-		actual := typeNames(value.types)
-		conforms := c.argumentTypesConform(value.types, want)
-		for _, element := range value.elements {
-			if !c.elementConforms(element, want) {
-				actual = symbols.FQNOf(element)
-				conforms = false
-				break
-			}
-		}
-		if value.nonconformingType != "" {
-			actual = value.nonconformingType
-			conforms = false
-		}
-		if !conforms {
-			return &Error{
-				Kind:      ErrorArgumentType,
-				Query:     symbols.FQNOf(query),
-				Target:    target,
-				Parameter: param.Name,
-				Expected:  param.Type,
-				Actual:    actual,
-				Origin:    origin,
-			}
+	if actual, ok := c.valueTypeConforms(param, value); !ok {
+		return &Error{
+			Kind:      ErrorArgumentType,
+			Query:     symbols.FQNOf(query),
+			Target:    target,
+			Parameter: param.Name,
+			Expected:  param.Type,
+			Actual:    actual,
+			Origin:    origin,
 		}
 	}
 	if !multiplicityConforms(value.multiplicity, param.Multiplicity) {
@@ -1013,6 +1032,27 @@ func (c *compiler) validateArgument(
 		}
 	}
 	return nil
+}
+
+// valueTypeConforms reports whether value's statically known types, fixed
+// elements and literals fit param's type, naming the offender when not.
+func (c *compiler) valueTypeConforms(param Parameter, value typedExpression) (string, bool) {
+	want := c.typeSymbol(param.Type)
+	if want == nil {
+		return "", true
+	}
+	if value.nonconformingType != "" {
+		return value.nonconformingType, false
+	}
+	for _, element := range value.elements {
+		if !c.elementConforms(element, want) {
+			return symbols.FQNOf(element), false
+		}
+	}
+	if !c.argumentTypesConform(value.types, want) {
+		return typeNames(value.types), false
+	}
+	return "", true
 }
 
 func (c *compiler) argumentTypesConform(actual []*symbols.Symbol, expected *symbols.Symbol) bool {

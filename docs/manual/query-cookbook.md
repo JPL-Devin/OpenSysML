@@ -136,13 +136,20 @@ calc def LightSubsystems :> HeavySubsystems {
 - Defaults are inherited: `LightSubsystems` keeps `root = telescope` from
   `HeavySubsystems`, and its own `threshold` default replaces the inherited one.
   The nearest default along the redefinition chain wins.
-- The value a default produces is checked against the parameter's type and
-  multiplicity exactly like an explicit binding, and an explicit binding always
-  overrides the default. A named element is never a data value — `= label` is
-  refused for a `String` parameter even when `label` is a `String` attribute —
-  except an enumeration literal, which is a value of its enumeration: `in hue :
-  Color = Color::red;` binds the literal, and a literal of another enumeration
-  is refused.
+- A default is checked against the parameter's type and multiplicity exactly
+  like an explicit binding, and an explicit binding always overrides the
+  default. What the default's text already settles is refused when the query is
+  planned, as `document-query-default-type` or
+  `document-query-default-multiplicity` naming the parameter: a literal or
+  named element of the wrong type, and a list or invocation whose size cannot
+  fit (`in source : Element = (telescope, groundStation);`). A named element is
+  never a data value — `= label` is refused for a `String` parameter even when
+  `label` is a `String` attribute — except an enumeration literal, which is a
+  value of its enumeration: `in hue : Color = Color::red;` binds the literal,
+  and a literal of another enumeration is refused. What only the values decide
+  — a parameter reference whose multiplicity is not known statically — is
+  checked when the default is evaluated, with the failures an explicit binding
+  gets.
 - A default the plan cannot represent (a form the query expression language has
   no operation for) is a planning error naming the parameter, reported with the
   other `document-query-*` diagnostics rather than at execution time.

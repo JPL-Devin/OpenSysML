@@ -7,8 +7,11 @@
   default is evaluated — once per query execution, before any row is produced, in the scope
   of the query that declared it, within the same visit and invocation budgets as the query
   body. Inherited defaults apply, a redefining parameter's default replaces the inherited one,
-  the value passes the same type and multiplicity checks as an explicit binding, and an
-  explicit binding still overrides. `%run-query`, `-run-query`, `RunDocumentQuery`,
+  the value passes the same type and multiplicity checks as an explicit binding — what the
+  default's text already settles (a literal or named element of the wrong type, a list or
+  invocation whose size cannot fit) is refused when the query is planned as
+  `document-query-default-type` or `document-query-default-multiplicity`, the rest when the
+  default is evaluated — and an explicit binding still overrides. `%run-query`, `-run-query`, `RunDocumentQuery`,
   a document content block that leaves the parameter unbound, and a query invoked by another
   query all take the default through the one executor. A default written in a form the query
   expression language has no operation for is refused when the query is planned

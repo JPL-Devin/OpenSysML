@@ -536,6 +536,127 @@ calc def ResultAsValue :> Query {
 	}
 }
 
+func TestCompileValidatesParameterDefaults(t *testing.T) {
+	fixture := loadQueryFixture(t, `
+part def Telescope;
+part telescope : Telescope;
+part groundStation;
+attribute label : String = "scope";
+attribute def Tag;
+attribute tag : Tag;
+attribute limit : Natural;
+enum def Color { red; green; }
+enum def Size { small; large; }
+attribute paint : Color = red;
+calc def Named :> Query {
+	in source : Element;
+	OwnedElements(source = source)
+}
+calc def ElementAsString :> Query {
+	in pattern : String = telescope;
+	WhereName(source = OwnedElements(source = telescope), operator = "startsWith", value = pattern)
+}
+calc def StringAttributeAsString :> Query {
+	in pattern : String = label;
+	WhereName(source = OwnedElements(source = telescope), operator = "startsWith", value = pattern)
+}
+calc def LiteralAsString :> Query {
+	in pattern : String default 3;
+	WhereName(source = OwnedElements(source = telescope), operator = "startsWith", value = pattern)
+}
+calc def AttributeAsScalarValue :> Query {
+	in amount : ScalarValue = label;
+	OwnedElements(source = telescope)
+}
+calc def AttributeAsTag :> Query {
+	in marker : Tag = tag;
+	OwnedElements(source = telescope)
+}
+calc def AttributeAsColor :> Query {
+	in hue : Color = paint;
+	OwnedElements(source = telescope)
+}
+calc def OtherEnumerationAsColor :> Query {
+	in hue : Color = Size::small;
+	OwnedElements(source = telescope)
+}
+calc def WrongElementType :> Query {
+	in scope : Telescope = groundStation;
+	OwnedElements(source = scope)
+}
+calc def OverfullSequence :> Query {
+	in source : Element = (telescope, groundStation);
+	OwnedElements(source = source)
+}
+calc def OverfullInvocation :> Query {
+	in source : Element = OwnedElements(source = telescope);
+	OwnedElements(source = source)
+}
+calc def OverfullNamedInvocation :> Query {
+	in source : Element = Named(source = telescope);
+	OwnedElements(source = source)
+}
+calc def UnderfullSequence :> Query {
+	in sources : Element[3..*] = (telescope, groundStation);
+	OwnedElements(source = sources)
+}
+calc def InheritedMismatch :> Query {
+	in hue : Color = Color::red;
+	OwnedElements(source = telescope)
+}
+calc def NarrowedInheritedDefault :> InheritedMismatch {
+	in redefines hue : Size;
+}
+calc def DynamicMultiplicity :> Query {
+	in pool : Element[0..limit];
+	in source : Element = pool;
+	OwnedElements(source = source)
+}
+`)
+	tests := []struct {
+		name      string
+		kind      ErrorKind
+		parameter string
+		expected  string
+		actual    string
+		value     string
+	}{
+		{"ElementAsString", ErrorDefaultType, "pattern", "ScalarValues::String", "Fixture::telescope", "telescope"},
+		{"StringAttributeAsString", ErrorDefaultType, "pattern", "ScalarValues::String", "Fixture::label", "label"},
+		{"LiteralAsString", ErrorDefaultType, "pattern", "ScalarValues::String", "ScalarValues::Integer", "3"},
+		{"AttributeAsScalarValue", ErrorDefaultType, "amount", "ScalarValues::ScalarValue", "Fixture::label", "label"},
+		{"AttributeAsTag", ErrorDefaultType, "marker", "Fixture::Tag", "Fixture::tag", "tag"},
+		{"AttributeAsColor", ErrorDefaultType, "hue", "Fixture::Color", "Fixture::paint", "paint"},
+		{"OtherEnumerationAsColor", ErrorDefaultType, "hue", "Fixture::Color", "Fixture::Size::small", "Size::small"},
+		{"WrongElementType", ErrorDefaultType, "scope", "Fixture::Telescope", "Fixture::groundStation", "groundStation"},
+		{"OverfullSequence", ErrorDefaultMultiplicity, "source", "[1..1]", "[2..2]", "(telescope, groundStation)"},
+		{"OverfullInvocation", ErrorDefaultMultiplicity, "source", "[1..1]", "[0..*]", "OwnedElements(source = telescope)"},
+		{"OverfullNamedInvocation", ErrorDefaultMultiplicity, "source", "[1..1]", "[0..*]", "Named(source = telescope)"},
+		{"UnderfullSequence", ErrorDefaultMultiplicity, "sources", "[3..*]", "[2..2]", "(telescope, groundStation)"},
+		{"NarrowedInheritedDefault", ErrorDefaultType, "hue", "Fixture::Size", "Fixture::Color::red", "Color::red"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := Compile(fixture.index, fixture.model, fixture.resolver, fixture.symbol(t, test.name))
+			planning := planningError(t, err, test.kind)
+			if planning.Parameter != test.parameter ||
+				planning.Expected != test.expected ||
+				planning.Actual != test.actual {
+				t.Fatalf("error = %+v", planning)
+			}
+			span := planning.Origin.Span
+			if got := fixture.content[span.Offset:span.End()]; got != test.value {
+				t.Fatalf("default origin = %q, want %q", got, test.value)
+			}
+		})
+	}
+	params := fixture.compile(t, "DynamicMultiplicity").Definitions()[0].Parameters()
+	if len(params) != 2 || params[0].Multiplicity.Known || !params[1].HasDefault ||
+		params[1].Default.Operation() != OperationParameter {
+		t.Fatalf("DynamicMultiplicity parameters = %+v, want an unknown pool multiplicity and a retained default", params)
+	}
+}
+
 func TestCompileResolvesInheritedAndRedefinedDefaults(t *testing.T) {
 	fixture := loadQueryFixture(t, `
 package Library {

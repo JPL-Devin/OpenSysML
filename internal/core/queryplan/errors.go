@@ -31,6 +31,8 @@ const (
 	ErrorUnknownParameter       ErrorKind = "unknown-parameter"
 	ErrorUnsupportedExpression  ErrorKind = "unsupported-expression"
 	ErrorUnsupportedDefault     ErrorKind = "unsupported-default"
+	ErrorDefaultType            ErrorKind = "default-type"
+	ErrorDefaultMultiplicity    ErrorKind = "default-multiplicity"
 	ErrorInvalidColumn          ErrorKind = "invalid-column"
 	ErrorColumnName             ErrorKind = "column-name"
 	ErrorUnknownColumnProperty  ErrorKind = "unknown-column-property"
@@ -108,6 +110,22 @@ func (e *Error) Error() string {
 		return fmt.Sprintf("query %s contains an unsupported result expression", e.Query)
 	case ErrorUnsupportedDefault:
 		return fmt.Sprintf("query %s parameter %s declares a default the plan cannot represent", e.Query, e.Parameter)
+	case ErrorDefaultType:
+		return fmt.Sprintf(
+			"query %s parameter %s declares a default of type %s, expected %s",
+			e.Query,
+			e.Parameter,
+			e.Actual,
+			e.Expected,
+		)
+	case ErrorDefaultMultiplicity:
+		return fmt.Sprintf(
+			"query %s parameter %s declares a default with multiplicity %s, expected %s",
+			e.Query,
+			e.Parameter,
+			e.Actual,
+			e.Expected,
+		)
 	case ErrorInvalidColumn:
 		return fmt.Sprintf("query %s must build the columns of Project from Column(name, expression) invocations", e.Query)
 	case ErrorColumnName:
