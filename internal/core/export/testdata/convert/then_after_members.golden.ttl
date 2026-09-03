@@ -1443,7 +1443,7 @@ elmt:ThenAfterMembers__AfterPerform___403
     sysml:owningRelationship elmt:ThenAfterMembers__AfterPerform___403_om ;
     sysml:owningMembership elmt:ThenAfterMembers__AfterPerform___403_om ;
     sysx:endForm "then" ;
-    sysml:sourceFeature elmt:ThenAfterMembers__stride ;
+    sysml:sourceFeature elmt:ThenAfterMembers__AfterPerform___400 ;
     sysml:targetFeature elmt:ThenAfterMembers__AfterPerform__b ;
     sysx:sourceText "" .
 

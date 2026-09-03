@@ -292,7 +292,7 @@ elmt:R90___400
     sysml:owningRelatedElement elmt:R90 ;
     sysml:importOwningNamespace elmt:R90 ;
     sysml:visibility "public" ;
-    sysml:importedNamespace "OtherPkg" ;
+    sysml:importedNamespace elmt:OtherPkg ;
     sysx:isNamespaceImport "true"^^xsd:boolean ;
     sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "    public import OtherPkg::*;\n" .
@@ -1116,7 +1116,7 @@ elmt:Filtered___400
     sysml:owningRelatedElement elmt:Filtered ;
     sysml:importOwningNamespace elmt:Filtered ;
     sysml:visibility "public" ;
-    sysml:importedNamespace "Meta" ;
+    sysml:importedNamespace elmt:Meta ;
     sysx:isNamespaceImport "true"^^xsd:boolean ;
     sysx:filter expr:Filtered___400_pfilter ;
     sysx:hasBody "false"^^xsd:boolean ;

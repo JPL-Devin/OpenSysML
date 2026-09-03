@@ -96,7 +96,7 @@ elmt:Scopes___400
     sysml:owningRelatedElement elmt:Scopes ;
     sysml:importOwningNamespace elmt:Scopes ;
     sysml:visibility "public" ;
-    sysml:importedNamespace "Lib" ;
+    sysml:importedNamespace elmt:Lib ;
     sysx:isNamespaceImport "true"^^xsd:boolean ;
     sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "    public import Lib::*;\n" .

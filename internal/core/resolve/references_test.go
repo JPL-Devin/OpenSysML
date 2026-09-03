@@ -3,6 +3,7 @@
 package resolve_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -180,6 +181,268 @@ package App {
 	}
 }
 
+// A named multiplicity's bounds and the multiplicity it subsets are names an
+// editor navigates, so the collector has to report them.
+func TestNamedMultiplicitiesReferencesAreCollected(t *testing.T) {
+	const src = `package M {
+	attribute def Count;
+	attribute limit : Count;
+	multiplicity exactlyOne [1];
+	multiplicity upToLimit [0..limit];
+	multiplicity fewer subsets upToLimit;
+}`
+	r, root, rootScope := resolvedDocNamed(t, "m.kerml", src)
+	found := map[string]bool{}
+	for _, ref := range resolve.References(root, rootScope) {
+		found[nameText(ref.QN)] = true
+		if _, ok := r.ResolveReference(ref); !ok {
+			t.Errorf("%s does not resolve on its own", nameText(ref.QN))
+		}
+	}
+	for _, want := range []string{"Count", "limit", "upToLimit"} {
+		if !found[want] {
+			t.Errorf("References does not report %s", want)
+		}
+	}
+}
+
+// A named multiplicity's body declares members whose references resolve from
+// that body, and the document walk and the collector both descend into it.
+func TestMultiplicityBodyMembersResolveFromTheBody(t *testing.T) {
+	const src = `package M {
+	datatype T;
+	feature base : T;
+	multiplicity m [1..2] {
+		datatype T;
+		feature f : T;
+		feature g subsets base;
+	}
+}`
+	walk, root, rootScope := resolvedDocNamed(t, "m.kerml", src)
+	if len(walk.Diagnostics) != 0 {
+		t.Fatalf("the document walk must resolve every name: %v", walk.Diagnostics)
+	}
+	var found []string
+	for _, ref := range resolve.References(root, rootScope) {
+		sym, ok := walk.ResolveReference(ref)
+		if !ok {
+			t.Errorf("%s does not resolve on its own", nameText(ref.QN))
+			continue
+		}
+		found = append(found, nameText(ref.QN)+" -> "+symbols.FQNOf(sym))
+	}
+	want := []string{"T -> M::T", "T -> M::m::T", "base -> M::base"}
+	if !reflect.DeepEqual(found, want) {
+		t.Errorf("References resolve as %v, want %v", found, want)
+	}
+}
+
+// A cast names its type and may bound it by a feature; both are references the
+// document walk resolves and the collector reports.
+func TestCastReferencesAreCollected(t *testing.T) {
+	const src = `package C {
+	part def Shape;
+	attribute limit;
+	part s : Shape;
+	attribute one = (as Shape);
+	attribute some = (as Shape[0..limit]);
+}`
+	walk, root, rootScope := resolvedDocNamed(t, "c.sysml", src)
+	if len(walk.Diagnostics) != 0 {
+		t.Fatalf("the document walk must resolve every name: %v", walk.Diagnostics)
+	}
+	found := map[string]int{}
+	for _, ref := range resolve.References(root, rootScope) {
+		found[nameText(ref.QN)]++
+		if _, ok := walk.ResolveReference(ref); !ok {
+			t.Errorf("%s does not resolve on its own", nameText(ref.QN))
+		}
+	}
+	if found["Shape"] != 3 || found["limit"] != 1 {
+		t.Errorf("References reports Shape %d times and limit %d times, want 3 and 1", found["Shape"], found["limit"])
+	}
+}
+
+// A chain segment spelled as a qualified name the operand has no member for
+// reads outward, as the document walk reads it: `w.Gen::G2::x` names G2's x,
+// not the x the operand inherits first.
+func TestAQualifiedChainSegmentResolvesOutwardOnItsOwn(t *testing.T) {
+	const src = `package Gen {
+	part def G1 { attribute x; }
+	part def G2 { attribute x; }
+}
+package Chains {
+	part def Wheel :> Gen::G1, Gen::G2;
+	part w : Wheel;
+	attribute a = w.x;
+	attribute b = w.Gen::G2::x;
+}`
+	_, root, rootScope := resolvedDocNamed(t, "chains.sysml", src)
+	query, _, _ := resolvedDocNamed(t, "chains.sysml", src) // a fresh resolver, as the editor's is
+	reached := map[string]string{}
+	for _, ref := range resolve.References(root, rootScope) {
+		if ref.Chain == nil {
+			continue
+		}
+		sym, ok := query.ResolveReference(ref)
+		if !ok {
+			t.Errorf("%s does not resolve on its own", nameText(ref.QN))
+			continue
+		}
+		reached[nameText(ref.QN)] = symbols.FQNOf(sym)
+	}
+	want := map[string]string{"x": "Gen::G1::x", "Gen::G2::x": "Gen::G2::x"}
+	for name, fqn := range want {
+		if reached[name] != fqn {
+			t.Errorf("`w.%s` reaches %q, want %q", name, reached[name], fqn)
+		}
+	}
+}
+
+// An import's target is collected as the import's reference, read with its rule:
+// a spelling only the import itself surfaces reaches nothing, while an `import
+// all` reaches a private member.
+func TestImportTargetsResolveWithoutTheImport(t *testing.T) {
+	const src = `package Lib {
+	part def Cell;
+	private part def Hidden;
+}
+package Consumer {
+	package Lib {
+		part def Cell;
+	}
+	private import Lib::Cell;
+}
+package Opener {
+	private import all Lib::Hidden;
+}`
+	r, root, rootScope := resolvedDoc(t, src)
+	var refs []resolve.Reference
+	for _, ref := range resolve.References(root, rootScope) {
+		if ref.Import != nil {
+			refs = append(refs, ref)
+		}
+	}
+	if len(refs) != 2 {
+		t.Fatalf("References tags %d import targets, want 2", len(refs))
+	}
+	cell, ok := r.ProbeReference(refs[0])
+	if !ok || nameText(refs[0].QN) != "Lib::Cell" {
+		t.Fatalf("`import Lib::Cell` = %v, %v; want the nested Lib's Cell", cell, ok)
+	}
+	if sym, ok := r.ProbeReference(refs[0].Spelled(spelling(false, "Cell"))); ok {
+		t.Errorf("`Cell` written as the import's own target reaches %s through the import itself", sym.Name)
+	}
+	if sym, ok := r.ProbeReference(refs[1]); !ok || sym.Name != "Hidden" {
+		t.Errorf("`import all Lib::Hidden` = %v, %v; want the private member", sym, ok)
+	}
+	if sym, ok := r.ProbeReference(refs[1].Spelled(spelling(true, "Lib", "Hidden"))); !ok || sym.Name != "Hidden" {
+		t.Errorf("`$::Lib::Hidden` read as an `import all` target = %v, %v; want the private member", sym, ok)
+	}
+}
+
+// spelling is a qualified name on a fresh node, as a trial spelling is.
+func spelling(global bool, parts ...string) *ast.QualifiedName {
+	qn := &ast.QualifiedName{Global: global}
+	for _, part := range parts {
+		qn.Parts = append(qn.Parts, ast.NameSegment{Text: part})
+	}
+	return qn
+}
+
+// `first x` may be written before `x` is declared in the same body, so the
+// initial node names that later declaration rather than its own label.
+func TestAnInitialReferenceReachesALaterDeclaration(t *testing.T) {
+	const src = `package P {
+	action def Drive {
+		first go;
+		then action stop;
+		action go;
+	}
+	action def Idle {
+		first start;
+		then action wait;
+	}
+}`
+	r, root, _ := resolvedDoc(t, src)
+	initials := map[string]*ast.InitialNode{}
+	for _, def := range declared(root.Members[0]).(*ast.Package).Members {
+		for _, member := range declared(def).(*ast.Definition).Members {
+			if n, ok := declared(member).(*ast.InitialNode); ok {
+				initials[n.Name] = n
+			}
+		}
+	}
+	sym, ok := r.InitialSymbol(initials["go"])
+	if !ok {
+		t.Fatal("`first go` names the action declared after it, but InitialSymbol reports none")
+	}
+	if usage, isUsage := sym.Decl.(*ast.Usage); !isUsage || usage.Ident.Name != "go" {
+		t.Errorf("`first go` names %T, want the action usage `go`", sym.Decl)
+	}
+	if sym, ok := r.InitialSymbol(initials["start"]); ok {
+		t.Errorf("`first start` names %T, but no member is called start", sym.Decl)
+	}
+}
+
+// A state machine's initial successor is a transition endpoint, reaching a nested
+// state or one in a sibling region; an action body's is an ordinary member name.
+func TestAnInitialSuccessorInAMachineIsAnEndpoint(t *testing.T) {
+	const src = `package P {
+	state def M {
+		first start then nested;
+		state outer {
+			state nested;
+		}
+	}
+	state def Q parallel {
+		state a {
+			state a1;
+		}
+		state b {
+			first start then a1;
+		}
+	}
+	action def A {
+		first start then step;
+		action step;
+	}
+}`
+	walk, root, rootScope := resolvedDoc(t, src)
+	if len(walk.Diagnostics) != 0 {
+		t.Fatalf("the document walk must resolve every successor: %v", walk.Diagnostics)
+	}
+	want := map[string]bool{"nested": true, "a1": true, "step": false}
+	seen := map[string]bool{}
+	for _, ref := range resolve.References(root, rootScope) {
+		name := nameText(ref.QN)
+		endpoint, wanted := want[name]
+		if !wanted {
+			continue
+		}
+		seen[name] = true
+		if ref.Endpoint != endpoint {
+			t.Errorf("`then %s` collected with Endpoint=%v, want %v", name, ref.Endpoint, endpoint)
+		}
+		sym, ok := walk.ResolveReference(ref)
+		if !ok {
+			t.Errorf("`then %s` does not resolve on its own", name)
+			continue
+		}
+		if walked, ok := walk.EndSymbol(ref.QN); endpoint && (!ok || walked != sym) {
+			t.Errorf("`then %s` is not what the document walk bound as an endpoint", name)
+		}
+		if walked, ok := walk.PartSymbol(ref.QN, 0); !endpoint && (!ok || walked != sym) {
+			t.Errorf("`then %s` is not what the document walk bound as a member", name)
+		}
+	}
+	for name := range want {
+		if !seen[name] {
+			t.Errorf("`then %s` was not collected", name)
+		}
+	}
+}
+
 // resolvedDoc parses and resolves src the way the workspace does, with the model
 // attached before the walk.
 func resolvedDoc(t *testing.T, src string) (*resolve.Resolver, *ast.RootNamespace, *symbols.Scope) {
@@ -199,6 +462,14 @@ func resolvedDocNamed(t *testing.T, name, src string) (*resolve.Resolver, *ast.R
 	r.SetModel(semantics.NewModel(r))
 	r.ResolveDocument(name, root)
 	return r, root, idx.DocumentRoot(name)
+}
+
+// declared is the member a membership wraps, or the node itself.
+func declared(n ast.Node) ast.Node {
+	if m, ok := n.(*ast.Membership); ok {
+		return m.Member
+	}
+	return n
 }
 
 // nameText renders a qualified name the way it was written.

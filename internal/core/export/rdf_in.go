@@ -12,8 +12,10 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf/ontology"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // sysmlPrefix qualifies a SysML vocabulary property as a diagnostic names it.
@@ -37,6 +39,7 @@ type element struct {
 	trailing bool
 	// qname is the element's sysml:qualifiedName: the mutable label a
 	// reference is written back as. Identity is the element id, not the name.
+	// An element stating none is named by its position, as the encoder names it.
 	qname string
 	// elementID is the element's sysml:elementId — its identity, which an
 	// ElementId annotation may have declared independently of the name.
@@ -92,6 +95,39 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 	if err := checkCardinality(graph); err != nil {
 		return nil, err
 	}
+	// The first rendering writes every reference fully qualified; reading it
+	// chooses each the shortest spelling that reaches its element. Later
+	// renderings are re-read the same way until every spelling still does.
+	first := newDecoder(graph, metaclasses, nil)
+	text, roots, err := first.notation()
+	if err != nil {
+		return nil, err
+	}
+	name, ok := first.candidateName(roots)
+	if !ok {
+		name = "<converted>"
+	}
+	names, _, err := chooseNames(name, text, first.wanted, nil)
+	if err != nil {
+		return nil, err
+	}
+	for {
+		d := newDecoder(graph, metaclasses, names)
+		if text, _, err = d.notation(); err != nil {
+			return nil, err
+		}
+		revised, changed, err := chooseNames(name, text, d.wanted, names)
+		if err != nil {
+			return nil, err
+		}
+		if !changed {
+			return text, nil
+		}
+		names = revised
+	}
+}
+
+func newDecoder(graph *rdf.Graph, metaclasses map[rdf.Term]string, names *nameChoices) *decoder {
 	d := &decoder{
 		graph:            graph,
 		metaclasses:      metaclasses,
@@ -100,20 +136,27 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 		dupID:            map[string]bool{},
 		memberships:      map[string]membership{},
 		owningMembership: map[string]membership{},
+		names:            names,
+		wanted:           newWanted(),
 		demoted:          map[*element]bool{},
 		demotedExpr:      map[string]bool{},
 		folded:           map[*element]*element{},
 	}
+	return d
+}
+
+// notation writes the graph and returns its roots with the text.
+func (d *decoder) notation() ([]byte, []*element, error) {
 	roots, err := d.build()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	d.nl = d.newline()
-	notation, err := d.render(roots)
+	text, err := d.render(roots)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return []byte(notation), nil
+	return []byte(text), roots, nil
 }
 
 // checkExtensionNamespace refuses a graph written with the pre-rename extension
@@ -463,6 +506,10 @@ type decoder struct {
 	// the member each one owns.
 	memberships      map[string]membership
 	owningMembership map[string]membership
+	// names is the spelling chosen for each reference; while nil, references are
+	// written fully qualified. wanted notes what was written for chooseNames.
+	names  *nameChoices
+	wanted *wanted
 	// printed and usedExpr are written as source text in this pass and rebuilt
 	// canonically; demoted and demotedExpr had their text proved stale earlier.
 	printed     map[*element]bool
@@ -574,7 +621,6 @@ func (d *decoder) build() ([]*element, error) {
 			roots = append(roots, el)
 			continue
 		}
-		el.scope = parent.qname
 		el.owner = parent
 		parent.children = append(parent.children, el)
 	}
@@ -585,6 +631,7 @@ func (d *decoder) build() ([]*element, error) {
 	for _, el := range order {
 		sortByIndex(el.children)
 	}
+	nameMembers(roots, "")
 	if err := d.checkReachable(roots, order); err != nil {
 		return nil, err
 	}
@@ -787,7 +834,7 @@ func (d *decoder) referencedElement(iri string) (*element, error) {
 			}
 		}
 	}
-	if target.qname == "" {
+	if !d.graph.HasProperty(rdf.IRI(target.iri), rdf.SysML+pQualifiedName) {
 		return nil, &UnsupportedError{
 			What: fmt.Sprintf("the element <%s>", target.iri),
 			Note: "it is referenced but carries no sysml:qualifiedName, which is where a reference's name is read from",
@@ -843,6 +890,19 @@ func (d *decoder) checkReachable(roots, all []*element) error {
 		}
 	}
 	return nil
+}
+
+// nameMembers scopes each member in its owner and names one the graph leaves
+// unnamed by its position, as the encoder names it when the notation is read
+// back, so that a reference it writes is keyed as it reads.
+func nameMembers(members []*element, owner string) {
+	for i, el := range members {
+		el.scope = owner
+		if el.qname == "" {
+			el.qname = qualify(owner, "", i)
+		}
+		nameMembers(el.children, el.qname)
+	}
 }
 
 // sortByIndex orders members by sysx:memberIndex, a result expression stated
@@ -976,7 +1036,7 @@ func identityAnnotations(el *element) []string {
 // head builds the declaration text up to the body or terminator.
 func (d *decoder) head(el *element) (string, error) {
 	if d.isResultExpression(el) {
-		return d.expressionNodeText(rdf.IRI(el.iri), el.scope)
+		return d.expressionNodeText(rdf.IRI(el.iri), el)
 	}
 	switch el.metaclass {
 	case "Package", "Namespace":
@@ -1193,8 +1253,10 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		// notation rather than as a `references` clause.
 		skip = append(skip, ast.RelReferences)
 	}
-	// A satisfy head writes the requirement it subsets bare, after the keyword.
-	if endForm == formSatisfy {
+	// A satisfy head writes the requirement it subsets bare, after the keyword;
+	// without that form it declares a requirement usage of its own.
+	switch {
+	case endForm == formSatisfy:
 		targets, err := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelSubsets])
 		if err != nil {
 			return "", err
@@ -1205,6 +1267,8 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		}
 		words = append(words, strings.Join(targets, ", "))
 		skip = append(skip, ast.RelSubsets)
+	case kind == ast.UsageSatisfy:
+		words = append(words, "requirement")
 	}
 	if noun := memberDeclarationKeyword(kind); noun != "" {
 		targets, err := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelReferences])
@@ -1387,11 +1451,13 @@ func (d *decoder) importHead(el *element) (string, error) {
 			words = append(words, "all")
 		}
 	}
-	imported, ok := d.stringOf(el, rdf.SysML+pImportedNamespace)
-	if !ok {
+	imported, err := d.referenceText(el, rdf.SysML+pImportedNamespace)
+	if err != nil {
+		return "", err
+	}
+	if imported == "" {
 		return "", d.missing(el, sysmlPrefix+pImportedNamespace, "an import names the namespace it imports")
 	}
-	imported = qualifiedNameText(imported)
 	// `P::*::**` imports the members of P recursively; `P::**` imports P itself
 	// and, recursively, its members. Both flags may hold at once.
 	if d.boolOf(el, rdf.OpenSysML+xNamespaceImport) {
@@ -1681,13 +1747,7 @@ func (d *decoder) relationshipWords(el *element, multPart string, skip ...ast.Re
 		if slices.Contains(skip, kind) {
 			continue
 		}
-		var targets []string
-		var err error
-		if kind == ast.RelRedefines {
-			targets, err = d.redefinedList(el)
-		} else {
-			targets, err = d.referenceList(el, rdf.SysML+relationshipProperty[kind])
-		}
+		targets, err := d.referenceList(el, rdf.SysML+relationshipProperty[kind])
 		if err != nil {
 			return nil, err
 		}
@@ -1737,7 +1797,7 @@ func (d *decoder) referenceText(el *element, property string) (string, error) {
 func (d *decoder) referenceList(el *element, property string) ([]string, error) {
 	var out []string
 	for _, term := range d.graph.Objects(rdf.IRI(el.iri), property) {
-		name, err := d.referenceName(term, el.scope)
+		name, err := d.referenceName(term, el)
 		if err != nil {
 			return nil, err
 		}
@@ -1746,74 +1806,9 @@ func (d *decoder) referenceList(el *element, property string) ([]string, error) 
 	return out, nil
 }
 
-// redefinedList renders the redefinition targets of el. A linked target is
-// written by its own name when that is the one feature so named among the
-// owner's generals; otherwise the qualified spelling keeps the linked one.
-func (d *decoder) redefinedList(el *element) ([]string, error) {
-	var out []string
-	for _, term := range d.graph.Objects(rdf.IRI(el.iri), rdf.SysML+relationshipProperty[ast.RelRedefines]) {
-		if !term.IsLiteral() {
-			target, err := d.referencedElement(term.Value)
-			if err != nil {
-				return nil, err
-			}
-			if name, ok := d.stringOf(target, rdf.SysML+pDeclaredName); ok && el.owner != nil {
-				if named := d.inheritedNamed(el.owner, name); len(named) == 1 && named[0] == target {
-					out = append(out, qualifiedNameText(name))
-					continue
-				}
-			}
-		}
-		name, err := d.referenceName(term, el.scope)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, name)
-	}
-	return out, nil
-}
-
-// inheritedNamed collects the members named name that el's generals declare,
-// followed transitively, each general's own member masking its generals'.
-func (d *decoder) inheritedNamed(el *element, name string) []*element {
-	seen := map[string]bool{el.iri: true}
-	var found []*element
-	var walk func(el *element)
-	walk = func(el *element) {
-		for _, kind := range []ast.RelationshipKind{ast.RelSpecializes, ast.RelTyping, ast.RelSubsets, ast.RelRedefines} {
-			for _, term := range d.graph.Objects(rdf.IRI(el.iri), rdf.SysML+relationshipProperty[kind]) {
-				if term.IsLiteral() {
-					continue
-				}
-				general, err := d.referencedElement(term.Value)
-				if err != nil || seen[general.iri] {
-					continue
-				}
-				seen[general.iri] = true
-				if member := d.memberNamed(general, name); member != nil {
-					found = append(found, member)
-					continue
-				}
-				walk(general)
-			}
-		}
-	}
-	walk(el)
-	return found
-}
-
-func (d *decoder) memberNamed(el *element, name string) *element {
-	for _, child := range el.children {
-		if declared, ok := d.stringOf(child, rdf.SysML+pDeclaredName); ok && declared == name {
-			return child
-		}
-	}
-	return nil
-}
-
-// referenceName renders a reference term as the name to write in source: a
-// literal as written, an IRI as its element's qualified name relative to scope.
-func (d *decoder) referenceName(term rdf.Term, scope string) (string, error) {
+// referenceName renders a reference term for the declaration of el: a literal
+// as written, an IRI as the spelling that resolves to its element there.
+func (d *decoder) referenceName(term rdf.Term, el *element) (string, error) {
 	if term.IsLiteral() {
 		if term.Datatype == rdf.OpenSysML+dtExpression {
 			return term.Value, nil
@@ -1824,13 +1819,127 @@ func (d *decoder) referenceName(term rdf.Term, scope string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	qname := target.qname
+	spelled := d.spelledName(target)
+	key := nameKey{member: el.qname, target: target.qname}
+	written := spelled
+	if d.names != nil {
+		var ok bool
+		if written, ok = d.names.references[key]; !ok {
+			written = relativeName(spelled, el.scope)
+		}
+	}
+	d.wanted.references[key] = wantedReference{
+		qualified: spelled,
+		written:   written,
+		count:     d.wanted.references[key].count + 1,
+	}
+	return qualifiedNameText(written), nil
+}
+
+// memberName renders a chain segment or `first` start, looked up in its operand
+// or body: a literal as written, an IRI as its element's own name.
+func (d *decoder) memberName(term rdf.Term) (string, *element, error) {
+	if term.IsLiteral() {
+		return qualifiedNameText(term.Value), nil, nil
+	}
+	target, name, err := d.namedMember(term)
+	if err != nil {
+		return "", nil, err
+	}
+	return nameText(name), target, nil
+}
+
+// namedMember is the element an IRI names and the name it is looked up by.
+func (d *decoder) namedMember(term rdf.Term) (*element, string, error) {
+	target, err := d.referencedElement(term.Value)
+	if err != nil {
+		return nil, "", err
+	}
+	name, ok := d.effectiveName(target)
+	if !ok {
+		return nil, "", &UnsupportedError{
+			What: fmt.Sprintf("the element <%s>", target.iri),
+			Note: "a feature chain or `first` names it, but it declares no name and takes none from a feature it references or redefines",
+		}
+	}
+	return target, name, nil
+}
+
+// spelledName is el's qualified name as notation states it: an unnamed usage's
+// segment is the name it answers to, and a membership holding its member (rather
+// than standing as a usage, as a subject does) has no segment of its own.
+func (d *decoder) spelledName(el *element) string {
+	segments := strings.Split(el.qname, "::")
+	spelled := make([]string, 0, len(segments))
+	for i, cur := len(segments)-1, el; i >= 0; i-- {
+		segment := segments[i]
+		if cur != nil && strings.HasPrefix(segment, "@") {
+			if name, ok := d.effectiveName(cur); ok {
+				segment = name
+			} else if ontology.IsAncestorOrSelf(cur.metaclass, mOwningMembership) {
+				cur = cur.owner
+				continue
+			}
+		}
+		spelled = append(spelled, segment)
+		if cur != nil {
+			cur = cur.owner
+		}
+	}
+	slices.Reverse(spelled)
+	return strings.Join(spelled, "::")
+}
+
+// effectiveName is the name el answers to: its declared name, else the one its
+// naming feature supplies, as answersTo picks it.
+func (d *decoder) effectiveName(el *element) (string, bool) {
+	seen := map[string]bool{}
+	for !seen[el.iri] {
+		seen[el.iri] = true
+		if name, ok := d.stringOf(el, rdf.SysML+pDeclaredName); ok {
+			return name, true
+		}
+		naming, ok := d.namingFeature(el)
+		if !ok {
+			return "", false
+		}
+		if naming.IsLiteral() {
+			return literalTargetName(naming)
+		}
+		next, err := d.referencedElement(naming.Value)
+		if err != nil {
+			return "", false
+		}
+		el = next
+	}
+	return "", false
+}
+
+// namingFeature is the feature an unnamed usage takes its name from, the one
+// it references, else the one it alone redefines (KerML 7.3.4.5).
+func (d *decoder) namingFeature(el *element) (rdf.Term, bool) {
+	if _, usage := metaclassUsage[el.metaclass]; !usage {
+		return rdf.Term{}, false
+	}
+	subject := rdf.IRI(el.iri)
+	if refs := d.graph.Objects(subject, rdf.SysML+relationshipProperty[ast.RelReferences]); len(refs) == 1 {
+		return refs[0], true
+	}
+	if redefs := d.graph.Objects(subject, rdf.SysML+relationshipProperty[ast.RelRedefines]); len(redefs) == 1 {
+		return redefs[0], true
+	}
+	return rdf.Term{}, false
+}
+
+// relativeName strips from qname the longest prefix of scope it is declared
+// under, the textual approximation for a reference the resolver does not read.
+func relativeName(qname, scope string) string {
 	for {
 		if scope == "" {
-			return qualifiedNameText(qname), nil
+			return qname
 		}
 		if rest, found := strings.CutPrefix(qname, scope+"::"); found {
-			return qualifiedNameText(rest), nil
+			return rest
 		}
 		cut := strings.LastIndex(scope, "::")
 		if cut < 0 {
@@ -1839,6 +1948,23 @@ func (d *decoder) referenceName(term rdf.Term, scope string) (string, error) {
 		}
 		scope = scope[:cut]
 	}
+}
+
+// literalTargetName is the name a usage takes from a naming feature the graph
+// keeps as text: the last segment of a name, or of the member a chain reaches.
+func literalTargetName(term rdf.Term) (string, bool) {
+	if term.Datatype != rdf.OpenSysML+dtExpression {
+		return lastSegment(term.Value), true
+	}
+	name, _ := ast.TargetName(parser.New(source.New("<naming>", []byte(term.Value))).ParseExpression())
+	return name, name != ""
+}
+
+func lastSegment(qname string) string {
+	if cut := strings.LastIndex(qname, "::"); cut >= 0 {
+		return qname[cut+2:]
+	}
+	return qname
 }
 
 func (d *decoder) stringOf(el *element, property string) (string, bool) {
