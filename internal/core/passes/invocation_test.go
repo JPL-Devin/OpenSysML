@@ -443,6 +443,82 @@ func TestInvocationOverloadReexportedAndInheritedCandidates(t *testing.T) {
 		"type.expr", "argument 1 of pick expects Integer, found String")
 }
 
+// A general type's protected and public imports each contribute their overloads to
+// the bodies specializing it, not only the first import's.
+func TestInvocationOverloadCandidatesThroughInheritedImports(t *testing.T) {
+	const src = `package P {
+		private import ScalarValues::*;
+		package A { calc def pick { in x : Integer; return : Integer = x; } }
+		package B { calc def pick { in x : String; return : String = x; } }
+		part def Base {
+			protected import A::*;
+			%s import B::*;
+		}
+		part def Derived :> Base {
+			attribute i : Integer = pick(2);
+			attribute s = pick("s");
+		}
+		part p : Base {
+			attribute i : Integer = pick(2);
+			attribute s = pick("s");
+		}
+	}`
+	for _, visibility := range []string{"protected", "public"} {
+		for _, d := range libraryDiags(t, fmt.Sprintf(src, visibility)) {
+			if d.Code != "name-conflict" || d.Severity != SeverityWarning {
+				t.Fatalf("%s import: expected only name-conflict warnings, got %v", visibility, d)
+			}
+		}
+	}
+	// A private import is not inherited, so only A's overload is visible.
+	diags := libraryDiags(t, fmt.Sprintf(src, "private"))
+	if len(diags) != 2 {
+		t.Fatalf("expected one rejected call per body, got %v", diags)
+	}
+	for _, d := range diags {
+		if d.Code != "type.expr" || d.Message != "argument 1 of pick expects Integer, found String" {
+			t.Fatalf("unexpected diagnostic %v", d)
+		}
+	}
+}
+
+// A collection literal is typed by the type its elements share, so overloads
+// differing by element type select; a mixed one selects as an unknown type does.
+func TestInvocationOverloadSelectsByCollectionLiteralElementType(t *testing.T) {
+	const src = `package P {
+		private import ScalarValues::*;
+		package A { calc def count { in xs : String[*]; return : Integer = 1; } }
+		package B { calc def count { in xs : Integer[*]; return : Integer = 2; } }
+		package C {
+			private import A::*;
+			private import B::*;
+			attribute n : Integer = count(%s);
+		}
+	}`
+	wantLibraryClean(t, fmt.Sprintf(src, `("a", "b")`))
+	wantLibraryClean(t, fmt.Sprintf(src, `(1, 2, 3)`))
+	wantLibraryClean(t, fmt.Sprintf(src, `(1, "b")`))
+	wantLibraryClean(t, fmt.Sprintf(src, `()`))
+	wantLibraryDiag(t, fmt.Sprintf(src, `(true, false)`),
+		"type.expr", "argument 1 of count expects String, found Boolean (candidates: P::A::count, P::B::count)")
+
+	// Features typed by sibling types select by the declared type their elements share.
+	wantLibraryClean(t, `package P {
+		private import ScalarValues::*;
+		attribute def Mass :> Real;
+		attribute def Volume :> Real;
+		package A { calc def total { in ms : P::Mass[*]; return : Integer = 1; } }
+		package B { calc def total { in vs : P::Volume[*]; return : Integer = 2; } }
+		package C {
+			private import A::*;
+			private import B::*;
+			attribute m1 : Mass; attribute m2 : Mass; attribute v : Volume;
+			attribute n : Integer = total((m1, m2));
+			attribute k : Integer = total((v));
+		}
+	}`)
+}
+
 // Every general type, owned member and recursive-import descendant contributes its
 // declaration; two sharing a name is a warning, not a lost candidate.
 func TestInvocationOverloadCandidatesFromEveryGeneralAndRecursiveImport(t *testing.T) {

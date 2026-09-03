@@ -31,12 +31,21 @@ func (ec *exprChecker) argumentTypes(scope *symbols.Scope, e *ast.InvocationExpr
 		named:      make([]semantics.PrimType, len(e.NamedArgs)),
 	}
 	for i, arg := range args {
-		types.positional[i] = ec.infer(scope, arg)
+		types.positional[i] = ec.argumentType(scope, arg)
 	}
 	for i, arg := range e.NamedArgs {
-		types.named[i] = ec.infer(scope, arg.Value)
+		types.named[i] = ec.argumentType(scope, arg.Value)
 	}
 	return types
+}
+
+// argumentType is the scalar type an argument binds as: a collection literal
+// binds its elements, so it is typed by the type they have in common.
+func (ec *exprChecker) argumentType(scope *symbols.Scope, arg ast.Node) semantics.PrimType {
+	if seq, ok := arg.(*ast.SequenceExpr); ok {
+		return ec.commonElementType(scope, seq)
+	}
+	return ec.infer(scope, arg)
 }
 
 // invocationArgs returns e's positional arguments, the receiver first.
@@ -73,11 +82,51 @@ func namedArgumentName(arg ast.NamedArg) (string, bool) {
 // argument describes value as an argument of scalar type prim: the declared type
 // of the feature it names, or of the result of the call it makes, is carried too.
 func (ec *exprChecker) argument(scope *symbols.Scope, value ast.Node, prim semantics.PrimType, name string) semantics.Argument {
-	declared := ec.valueTypeSymbol(scope, value)
-	if declared == nil {
-		declared = ec.invocationResultTypeSymbol(scope, value)
+	if seq, ok := value.(*ast.SequenceExpr); ok {
+		return semantics.Argument{
+			Prim:  prim,
+			Type:  ec.commonElementTypeSymbol(scope, seq),
+			Exact: len(seq.Elements) > 0 && allSpellOneValue(seq.Elements),
+			Name:  name,
+		}
 	}
-	return semantics.Argument{Prim: prim, Type: declared, Exact: spellsOneValue(value), Name: name}
+	return semantics.Argument{Prim: prim, Type: ec.declaredValueType(scope, value), Exact: spellsOneValue(value), Name: name}
+}
+
+// declaredValueType is the declared type of the feature value names, or of the
+// result of the call it makes; nil when neither.
+func (ec *exprChecker) declaredValueType(scope *symbols.Scope, value ast.Node) *symbols.Symbol {
+	if declared := ec.valueTypeSymbol(scope, value); declared != nil {
+		return declared
+	}
+	return ec.invocationResultTypeSymbol(scope, value)
+}
+
+// commonElementTypeSymbol is the declared type every element of seq conforms to,
+// nil when one has none or they share none.
+func (ec *exprChecker) commonElementTypeSymbol(scope *symbols.Scope, seq *ast.SequenceExpr) *symbols.Symbol {
+	var common *symbols.Symbol
+	for _, el := range seq.Elements {
+		elem := ec.declaredValueType(scope, el)
+		switch {
+		case elem == nil:
+			return nil
+		case common == nil, ec.model.Conforms(common, elem):
+			common = elem
+		case !ec.model.Conforms(elem, common):
+			return nil
+		}
+	}
+	return common
+}
+
+func allSpellOneValue(elements []ast.Node) bool {
+	for _, el := range elements {
+		if !spellsOneValue(el) {
+			return false
+		}
+	}
+	return true
 }
 
 // candidateNames lists declarations for a diagnostic by qualified name, in order.

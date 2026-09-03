@@ -24,6 +24,8 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("calc_call_crossed_specificity_is_ambiguous", testCalcCallCrossedSpecificityIsAmbiguous)
 	t.Run("calc_call_repeated_named_argument_binds_last", testCalcCallRepeatedNamedArgumentBindsLast)
 	t.Run("calc_call_selects_among_owned_inherited_and_recursive_import", testCalcCallSelectsAmongOwnedInheritedAndRecursiveImport)
+	t.Run("calc_call_selects_among_inherited_imports", testCalcCallSelectsAmongInheritedImports)
+	t.Run("calc_call_selects_by_collection_literal_element_type", testCalcCallSelectsByCollectionLiteralElementType)
 	t.Run("action_call_selects_by_argument_type", testActionCallSelectsByArgumentType)
 	t.Run("action_call_ambiguous_between_two_imports", testActionCallAmbiguousBetweenTwoImports)
 	t.Run("action_call_receiver_binds_first_input", testActionCallReceiverBindsFirstInput)
@@ -528,6 +530,72 @@ func testCalcCallSelectsBySiblingScalarType(t *testing.T) {
 		}
 		arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 3}}
 		result, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
+		if err != nil {
+			t.Fatalf("%s: %v", calc, err)
+		}
+		if result.Kind != ValConst || result.Const.Int != want {
+			t.Fatalf("%s = %+v, want %d", calc, result, want)
+		}
+	}
+}
+
+// Every protected import of a general type contributes its overload to the
+// specializing body, not only the first import's.
+func testCalcCallSelectsAmongInheritedImports(t *testing.T) {
+	src := `
+		package A { private import ScalarValues::*; calc def pick { in x : Integer; return : Integer = 1; } }
+		package B { private import ScalarValues::*; calc def pick { in x : String; return : Integer = 2; } }
+		package test {
+			private import ScalarValues::*;
+			part def Base { protected import A::*; protected import B::*; }
+			part def Derived :> Base {
+				attribute i : Integer = pick(3);
+				attribute s : Integer = pick("s");
+			}
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	derived := findSymbolByName(idx.DocumentRoot("<test>"), "Derived", ast.DefPart)
+	if derived == nil {
+		t.Fatal("Derived part def not found")
+	}
+	inst, err := ctx.Instantiate(derived)
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	for attr, want := range map[string]string{"i": "1", "s": "2"} {
+		fv, err := inst.GetFeatureValue(ctx, attr)
+		if err != nil {
+			t.Fatalf("%s: %v", attr, err)
+		}
+		if got := FormatTraceValue(fv.HeldValue()); got != want {
+			t.Fatalf("%s = %s, want %s", attr, got, want)
+		}
+	}
+}
+
+// A collection literal is typed by its elements, so overloads differing only
+// in element type are told apart.
+func testCalcCallSelectsByCollectionLiteralElementType(t *testing.T) {
+	src := `
+		package A { private import ScalarValues::*; calc def count { in xs : String[*]; return : Integer = 1; } }
+		package B { private import ScalarValues::*; calc def count { in xs : Integer[*]; return : Integer = 2; } }
+		package test {
+			private import ScalarValues::*;
+			private import A::*;
+			private import B::*;
+			calc ofText { count(("a", "b")) }
+			calc ofNumbers { count((1, 2, 3)) }
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	for calc, want := range map[string]int64{"ofText": 1, "ofNumbers": 2} {
+		sym := findSymbolByName(rootScope, calc, ast.DefCalc)
+		if sym == nil {
+			t.Fatalf("%s calc not found", calc)
+		}
+		result, err := ctx.InvokeCalc(sym, nil, rootScope)
 		if err != nil {
 			t.Fatalf("%s: %v", calc, err)
 		}
