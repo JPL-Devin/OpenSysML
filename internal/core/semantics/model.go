@@ -641,6 +641,12 @@ func IsCollection(sym *symbols.Symbol) bool {
 	return sym != nil && strings.HasPrefix(symbols.FQNOf(sym), "Collections::")
 }
 
+// IsElementType reports whether sym is KerML::Root::Element, the metaclass every model
+// element is an instance of, so a parameter it types takes the element any argument names.
+func IsElementType(sym *symbols.Symbol) bool {
+	return sym != nil && symbols.FQNOf(sym) == "KerML::Root::Element"
+}
+
 // isAnything reports whether sym is Base::Anything, the classifier every type
 // specializes (KerML 8.3.2.1), whether or not the chain to it is declared.
 func isAnything(sym *symbols.Symbol) bool {
