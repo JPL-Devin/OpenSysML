@@ -1271,15 +1271,6 @@ func qualifiedText(name *ast.QualifiedName) string {
 	return out
 }
 
-// unquote strips the quotes the parser keeps on a string token, so the graph
-// carries the value rather than its notation.
-func unquote(text string) string {
-	if len(text) >= 2 && strings.HasPrefix(text, `"`) && strings.HasSuffix(text, `"`) {
-		return text[1 : len(text)-1]
-	}
-	return text
-}
-
 // commentBody strips the /* */ delimiters from a comment token, leaving the
 // text the printer re-wraps.
 func commentBody(raw string) string {

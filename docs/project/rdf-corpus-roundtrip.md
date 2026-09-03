@@ -59,22 +59,22 @@ Recorded against the corpus above, reproduced byte-identically on a second run:
 
 | Verdict | Files |
 |---|---|
-| `stable` | 267 |
+| `stable` | 274 |
 | `whitespace-only` | 0 |
 | `graph-diff` | 0 |
 | `unwritable` | 1 |
 | `unparseable` | 0 |
-| `refused` | 77 |
+| `refused` | 70 |
 | **total** | **345** |
 
-So 268 of 345 files convert to Turtle, and of those 267 come back as the same Turtle byte for
+So 275 of 345 files convert to Turtle, and of those 274 come back as the same Turtle byte for
 byte. That is the source text at work: the decoder writes each file back from the `sysx:sourceText`
-it carries (see [What the gate does not do](#what-the-gate-does-not-do)), so the 71 files that
-came back up to whitespace, the 14 that came back as a different graph and the 16 that could not
-be written back or re-read from canonical notation all moved to `stable` when it landed. The one
-`unwritable` file has an element whose owner is not in the graph, which no text can repair.
+it carries (see [What the gate does not do](#what-the-gate-does-not-do)), so the files that came
+back up to whitespace, as a different graph, or that could not be written back or re-read from
+canonical notation all moved to `stable` when it landed. The one `unwritable` file has an element
+whose owner is not in the graph, which no text can repair.
 The refusals by class: 19 `feature-declaration`,
-18 `prefix-metadata`, 9 `event-declaration`, 7 `succession`, 6 `operator-expr`,
+18 `prefix-metadata`, 9 `event-declaration`, 6 `operator-expr`,
 4 `duplicate-declaration`, 3 each of `snapshot-declaration`, `invocation-expr` and
 `assert-declaration`, 2 `feature-chain-expr`, and 1 each of `timeslice-declaration`,
 `feature-reference` and `constructor-expr`.

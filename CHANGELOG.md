@@ -8,6 +8,24 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Added
 
+- **`%features` reads out a whole object tree, as text or as JSON.** A large run could not
+  be read out: the listing stopped at 200 lines with `… (listing truncated)`, so the
+  counters two levels under a context of twelve parts were simply absent, and there was no
+  flag to see them and no machine-readable form. `%features <name> all` now lifts both the
+  size and the nesting bound and lists the tree in full; `%features <name> depth <n>`
+  expands nesting `n` levels and names what it left alone (`machine : Machine (not
+  expanded: depth 1)`); and `%features <name> json` writes the object and everything
+  reachable from it as one document in the shape the API's `Instantiate` returns
+  (`instance`, `instances`, `diagnostics`), so a client reads the same shape whether it
+  asked the service or the prompt. The default stays bounded — reading a feature value
+  builds the objects it holds, so an unbounded listing costs objects, not just output — but
+  a listing that is cut short now says how to see the rest (`… (listing truncated;
+  %features ctx all shows it whole, %features ctx depth <n> to a depth)`), and a JSON graph
+  cut short at 1000 objects carries the same advice as a `warning` diagnostic. The options
+  work in a piped session (`printf '%%instantiate ctx\n%%features ctx all json\n' | sysml
+  model.sysml`), which is how a script gets the complete state of a run
+  (Open-MBEE/OpenSysML#93).
+
 - **The bundled standard library opens in the editor.** Go-to-definition, find-references
   and the diagram panel used to report a standard library declaration at a path no editor
   could open, so a click on `ScalarValues::Integer` went nowhere. `sysml-lsp` now reports
@@ -237,6 +255,19 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Fixed
 
+- **`satisfy … by config.child` is evaluated on the nested object it names.** A satisfaction
+  assertion whose `by` operand is a feature chain used to be read as its last name alone:
+  `%satisfy` and `-satisfy` reported `? satisfy r2 by child could not be evaluated — no subject
+  to satisfy the requirement: child`, and only the reporter's workaround of binding the
+  requirement's `subject` to the chain reached a verdict. The chain is now resolved through
+  each feature in turn — the object of `config` is materialized and the one its `child` holds
+  is the subject — so the assertion holds or fails on that nested object, at any depth and
+  through parts typed by definitions with nested parts of their own. The verdict and every
+  diagnostic spell the chain as written (`satisfy r2 by config.child`), and a chain whose
+  segment resolves to nothing says so under its full name (`no subject to satisfy the
+  requirement: config.nope`). A repeated `%satisfy` is about the same nested object, which
+  `%features S::config::child` can then inspect. (Open-MBEE/OpenSysML#94)
+
 - **`%state <machine> <object>` attaches to the machine the object exhibits instead of performing
   it again.** Naming an object's own exhibited machine (`%state Rover::modes rover`, or `-state
   "Rover::modes rover"`) used to start a second performance of it on the same object, so its
@@ -288,6 +319,26 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   345-file example corpus the files the writer refused for this reason go from 14 to 0, and their
   round trips reproduce the same graph; the training examples for action shorthand, control
   structures, decisions, merges, terminate actions, messaging and message payloads are among them.
+
+- **The notation the RDF writer spells is read back to the same graph.** Converting a model to
+  Turtle, back to notation and to Turtle again lost flags the first graph carried, because the
+  writer re-spelled a head in a form the parser read differently: `ref x subsets y;` and
+  `composite frontWheel redefines w[2];` lost `ref` and `composite` (the parser only continued a
+  modifier-led declaration into a symbolic `:>`, not the keyword spellings), `#derive end r : R;`
+  lost `end` and `end ref attribute e : S;` lost `ref` (the `end … kind` path applied only the
+  end flag), a nested `private import Pkg1::*;` came back as `Pkg1::**` (the two import suffixes
+  were written as exclusive), and a succession end whose name needs quotes was carried as text
+  and refused when written. The parser now reads every modifier ahead of the kind keyword, the
+  writer spells the modifiers in the grammar's order with the multiplicity beside the clause it
+  qualifies, an import writes `::*` and `::**` independently, and a quoted succession end is a
+  reference to the element like an unquoted one. Five fixtures under
+  `internal/core/export/testdata/convert/` lock this in by re-encoding the notation written
+  from the graph alone and comparing the two graphs as triple sets; a relationship's symbolic or
+  keyword spelling and a doc body's line endings are documented as normalised. On the corpus
+  ratchet, six files move from a differing graph to the same one and six refused for a quoted
+  succession end now round-trip; the seventh is written back, but its guarded succession
+  (`succession S first A1 if x == 0 then A2;`) is spelled as a `transition` the parser does not
+  read, which is a separate writer defect.
 
 ## 0.4.3 — 2026-09-01
 

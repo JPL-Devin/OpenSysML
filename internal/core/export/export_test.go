@@ -21,7 +21,7 @@ var update = flag.Bool("update", false, "rewrite the .golden.ttl and .golden.sys
 // back to: as written with its source text, `.canonical.golden.sysml` without.
 func TestGoldenConversions(t *testing.T) {
 	for _, path := range modelFiles(t) {
-		name := strings.TrimSuffix(filepath.Base(path), ".sysml")
+		name, ext := fixtureName(path)
 		t.Run(name, func(t *testing.T) {
 			src, err := os.ReadFile(path)
 			if err != nil {
@@ -42,10 +42,10 @@ func TestGoldenConversions(t *testing.T) {
 			if err != nil {
 				canonical = []byte("sysml: " + err.Error() + "\n")
 			}
-			base := strings.TrimSuffix(path, ".sysml")
-			checkGolden(t, base+".golden.ttl", turtle)
-			checkGolden(t, base+".golden.sysml", back)
-			checkGolden(t, base+".canonical.golden.sysml", canonical)
+			stem := strings.TrimSuffix(path, ext)
+			checkGolden(t, stem+".golden.ttl", turtle)
+			checkGolden(t, stem+".golden"+ext, back)
+			checkGolden(t, stem+".canonical.golden"+ext, canonical)
 		})
 	}
 }
@@ -54,7 +54,7 @@ func TestGoldenConversions(t *testing.T) {
 // valid SysML: it must parse without a single syntax error.
 func TestConvertedNotationParses(t *testing.T) {
 	for _, path := range modelFiles(t) {
-		name := strings.TrimSuffix(filepath.Base(path), ".sysml")
+		name, ext := fixtureName(path)
 		t.Run(name, func(t *testing.T) {
 			src, err := os.ReadFile(path)
 			if err != nil {
@@ -68,7 +68,7 @@ func TestConvertedNotationParses(t *testing.T) {
 			if err != nil {
 				t.Fatalf("back to notation: %v", err)
 			}
-			p := parser.New(source.New(name+".converted.sysml", back))
+			p := parser.New(source.New(name+".converted"+ext, back))
 			p.ParseFile()
 			if len(p.Diagnostics) > 0 {
 				t.Errorf("converted notation does not parse: %v\n%s", p.Diagnostics, back)
@@ -84,7 +84,7 @@ func TestConvertedNotationParses(t *testing.T) {
 // relative to its scope, a keyword written in place of its symbol).
 func TestRoundTripIsLossless(t *testing.T) {
 	for _, path := range modelFiles(t) {
-		name := strings.TrimSuffix(filepath.Base(path), ".sysml")
+		name, ext := fixtureName(path)
 		t.Run(name, func(t *testing.T) {
 			src, err := os.ReadFile(path)
 			if err != nil {
@@ -98,7 +98,7 @@ func TestRoundTripIsLossless(t *testing.T) {
 			if err != nil {
 				t.Fatalf("back to notation: %v", err)
 			}
-			second, err := export.Convert(name+".sysml", back, export.FormatSysML, export.FormatTurtle)
+			second, err := export.Convert(name+ext, back, export.FormatSysML, export.FormatTurtle)
 			if err != nil {
 				t.Fatalf("to turtle again: %v", err)
 			}
@@ -107,6 +107,78 @@ func TestRoundTripIsLossless(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestFixturesComeBackFromTheGraphAlone strips sysx:sourceText before writing back,
+// so the structural triples alone must carry each head and survive a second hop.
+func TestFixturesComeBackFromTheGraphAlone(t *testing.T) {
+	fixtures := []string{
+		"ref_subsets.sysml",
+		"composite_multiplicity.kerml",
+		"end_prefix_metadata.sysml",
+		"nested_namespace_import.sysml",
+		"quoted_succession_ends.sysml",
+	}
+	for _, fixture := range fixtures {
+		path := filepath.Join("testdata", "convert", fixture)
+		name, ext := fixtureName(path)
+		t.Run(name, func(t *testing.T) {
+			src, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			first, err := export.Convert(path, src, export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle: %v", err)
+			}
+			back, err := export.Convert(name+".ttl", withoutTriples(t, first, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation: %v", err)
+			}
+			second, err := export.Convert(name+ext, back, export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle again: %v", err)
+			}
+			structural := func(turtle []byte) []byte {
+				for _, property := range []string{"sysx:sourceText", "sysx:sourceTail", "sysx:sourceLanguage"} {
+					turtle = withoutTriples(t, turtle, property)
+				}
+				return turtle
+			}
+			if lost, gained := tripleSetDiff(t, structural(first), structural(second)); len(lost)+len(gained) > 0 {
+				t.Errorf("the second hop changed the graph\n--- notation ---\n%s\n--- lost ---\n%s\n--- gained ---\n%s",
+					back, strings.Join(lost, "\n"), strings.Join(gained, "\n"))
+			}
+		})
+	}
+}
+
+// tripleSetDiff parses two Turtle documents and returns the triples only the
+// first holds, then the triples only the second holds, each in document order.
+func tripleSetDiff(t *testing.T, first, second []byte) (lost, gained []string) {
+	t.Helper()
+	parse := func(data []byte) []rdf.Triple {
+		graph, err := rdf.ParseTurtle(data)
+		if err != nil {
+			t.Fatalf("parse turtle: %v", err)
+		}
+		return graph.Triples()
+	}
+	only := func(triples, others []rdf.Triple) []string {
+		seen := make(map[rdf.Triple]bool, len(others))
+		for _, triple := range others {
+			seen[triple] = true
+		}
+		var out []string
+		for _, triple := range triples {
+			if !seen[triple] {
+				out = append(out, triple.Subject.String()+" "+triple.Predicate.String()+" "+triple.Object.String())
+			}
+		}
+		return out
+	}
+	a, b := parse(first), parse(second)
+	return only(a, b), only(b, a)
 }
 
 // TestSaveKeepsComments covers the notation-to-notation path a save uses: every
@@ -1191,23 +1263,33 @@ func TestLegacyExtensionNamespaceIsRefused(t *testing.T) {
 	}
 }
 
+// modelFiles lists the notation fixtures in testdata/convert, `.sysml` and
+// `.kerml` alike; the goldens beside them are not models.
 func modelFiles(t *testing.T) []string {
 	t.Helper()
-	paths, err := filepath.Glob(filepath.Join("testdata", "convert", "*.sysml"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	var out []string
-	for _, path := range paths {
-		if strings.HasSuffix(path, ".golden.sysml") {
-			continue
+	for _, pattern := range []string{"*.sysml", "*.kerml"} {
+		paths, err := filepath.Glob(filepath.Join("testdata", "convert", pattern))
+		if err != nil {
+			t.Fatal(err)
 		}
-		out = append(out, path)
+		for _, path := range paths {
+			if strings.Contains(path, ".golden.") {
+				continue
+			}
+			out = append(out, path)
+		}
 	}
 	if len(out) == 0 {
 		t.Fatal("no models in testdata/convert")
 	}
 	return out
+}
+
+// fixtureName is a fixture's stem, and its extension: the notation it is written in.
+func fixtureName(path string) (name, ext string) {
+	ext = filepath.Ext(path)
+	return strings.TrimSuffix(filepath.Base(path), ext), ext
 }
 
 func checkGolden(t *testing.T, path string, got []byte) {
