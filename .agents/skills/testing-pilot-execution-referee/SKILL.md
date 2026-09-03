@@ -107,7 +107,7 @@ rather than a verdict against us — the pilot answers `false` for
   such file or directory`.
 - **Additivity.** `go run ./cmd/pilot-diff` must still print the headline the
   committed baseline holds (`366 file(s), 334 fully agreeing; 34 agreed
-  diagnostic(s), 20 only ours, 332 only the pilot's` after the self-model's compiled-calc round — read it from the baseline JSON, not from this line, since each
+  diagnostic(s), 20 only ours, 333 only the pilot's` after the control-node succession pass joined the self-model — read it from the baseline JSON, not from this line, since each
   fix round moves it) and `jq -S` diff clean against
   `docs/project/pilot-differential-baseline.json`; `git status --porcelain`
   empty at the end.

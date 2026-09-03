@@ -218,9 +218,9 @@ nor double-counted as two independent disagreements.
 | `examples/pilot-corpora/sysml-validation` | 56 | 56 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `examples/pilot-corpora/kerml-examples` | 58 | 51 | 3 | 6 | 0 | 0 | 3 | 6 |
 | `testdata` | 17 | 10 | 38 | 55 | 34 | 1 | 3 | 20 |
-| `examples` | 32 | 21 | 2 | 307 | 0 | 1 | 1 | 306 |
+| `examples` | 32 | 21 | 2 | 308 | 0 | 1 | 1 | 307 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **366** | **334** | **56** | **368** | **34** | **2** | **20** | **332** |
+| **Total** | **366** | **334** | **56** | **369** | **34** | **2** | **20** | **333** |
 
 **Read the `only ours` total by root, never as one number.** Step 2 removes nine resolver false
 positives from the reference's **own** corpora: `pilot-examples` 16 → **7** and
@@ -346,8 +346,8 @@ cascades through the rest of the file. The movement is entirely one file,
 
 | Count | Before the initializer rewrite | Now |
 |---|---:|---:|
-| only pilot | 82 | **332** |
-| pilot diagnostics | 123 | **368** |
+| only pilot | 82 | **333** |
+| pilot diagnostics | 123 | **369** |
 | severity-only | 9 | **2** |
 
 The rewrite itself took only-pilot to 61 and pilot diagnostics to 101; the `Now` column states
@@ -551,7 +551,7 @@ Per category, the only-ours totals are: `pilot-examples` 4 `unmapped`, 2
 `units`, 1 `kind-mismatch`; `kerml-examples` 3 `unmapped`; `examples` 1 syntax; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 12 `kind-mismatch`, 3 `unmapped`, 3 syntax, 2 `unresolved-reference`;
-`examples` 10 syntax, 44 `unmapped`, 71 `kind-mismatch`, 181 `unresolved-reference` — of which
+`examples` 10 syntax, 45 `unmapped`, 71 `kind-mismatch`, 181 `unresolved-reference` — of which
 `relay-probe-demo/mission.sysml` carries three: two `unmapped` where the pilot rejects a snapshot
 redefining the mass its individual binds (`Cannot override a binding feature value`) and one
 `kind-mismatch` on its send of a `Telemetry` instantiation, the same two rules it already flags on
@@ -559,8 +559,8 @@ redefining the mass its individual binds (`Cannot override a binding feature val
 `.sysml`, none `.kerml`, which is the F96 fixture round below;
 `kerml-examples` 6 `unmapped` (K6).
 
-The architecture self-model under `examples/self-model` adds twenty of the shapes this root
-already carries: eighteen `unmapped` where `pipeline.sysml`, `surfaces.sysml` and `identity.sysml`
+The architecture self-model under `examples/self-model` adds twenty-one of the shapes this root
+already carries: nineteen `unmapped` where `pipeline.sysml`, `surfaces.sysml` and `identity.sysml`
 redefine an inherited attribute's default (`Cannot override a binding feature value`, the rule
 `solver-demo.sysml` and `relay-probe-demo/mission.sysml` already draw — the self-model draws it once
 per validation pass it marks element-scoped, per rendering kind it marks unsupported, per budget
@@ -569,7 +569,8 @@ where `views.sysml` frames a concern, which the reference rejects on `views-demo
 way. The accuracy round that modelled the pass registry, the six runtime budgets and the rendering
 kinds took the `unmapped` count from five to fifteen without adding a shape; modelling the library
 snapshot, its gating check and the evaluator's memoization took it to seventeen the same way, and
-the compiled calc tier, memoized like the evaluator it sits beside, to eighteen.
+the compiled calc tier, memoized like the evaluator it sits beside, to eighteen, and the
+control-node succession check, element-scoped like the passes beside it, to nineteen.
 
 **`self-model/document.sysml` carries 259 pilot-only rows on its own, and every one of them has a
 single cause: the reference has no `DocumentQueries` library.** The file is the architecture
@@ -578,13 +579,13 @@ project bundles as an OpenSysML library ([the authoring chapter](../manual/autho
 reference cannot resolve that namespace, and the cascade is 180 `unresolved-reference`, 66
 `kind-mismatch` (`Must invoke a behavior or a behavioral feature`, once per query invocation whose
 calc def did not resolve) and 13 `unmapped`. It is the first file in any root that depends on a
-library the reference does not ship, which is why the `examples` only-pilot column jumps 34 → 306
+library the reference does not ship, which is why the `examples` only-pilot column jumps 34 → 307
 without a single one of our own diagnostics moving: only-ours stays at 20 and our diagnostics at 56.
 The cascade grows with the document (182 rows when the self-model landed, 240 after its accuracy
 round added queries over the pass registry, the budgets and the rendering kinds, 249 after the
 section on loading the library snapshot, 259 after the paragraph and diagram on invoking a calc),
 so its size measures how much the document asks of the library, not conformance. Read this root's
-only-pilot total as "one file the reference has no library for, plus the 47 rows the other files
+only-pilot total as "one file the reference has no library for, plus the 48 rows the other files
 carry", not as a conformance movement.
 
 **`pilot-examples` is the row to read carefully: its total falls 68 → 63 and its mix barely
@@ -625,7 +626,7 @@ For round 3, the fresh control column is the `1af78d94` base, before the wave-12
 | `pilot-examples`: only ours | **43** | **7** |
 | `pilot-validation`: only ours | **1** | **0** |
 | `kerml-examples`: only ours | **3** | **3** |
-| `examples`: only pilot | **40** | **306** |
+| `examples`: only pilot | **40** | **307** |
 | `examples`: fully agreeing | **15** | **21** |
 | `unmapped`, our side | **20** | **19** |
 
@@ -2465,6 +2466,52 @@ complementary and whose type conforms. A flow with like directions, a flow namin
 interface with no flow all still warn, which `TestConstraintInterfaceFlowPairsDirectedFeatures` and
 `TestW8GInterfaceConjugationStaysAWarning` hold in place — the check keeps its scope, its severity and
 its message, and the pilot remains silent on the whole family.
+
+### Control-node successions the pilot does not validate
+
+SysML v2 §8.3.17 places nine validation constraints on the successions of a control node
+(`ControlNode`, `DecisionNode`, `ForkNode`, `JoinNode`, `MergeNode`), and
+`internal/core/passes/control_node.go` enforces all nine. The pinned pilot implements only
+`validateControlNodeOwningType`; the other eight are `// TODO: Check validate… (?)` comments in the
+`@Check` methods of `SysMLValidator.xtend` (`:857–888` at `c7fc737`), so a model the specification
+rejects on any of them validates clean there. These rules are refereed against the specification's
+OCL, not against the pilot. The differential corpora are unaffected: no file under `examples/`,
+`testdata/`, the standard library or the four OMG corpora violates any of the nine, so the
+only-ours column does not move and `pilot-diff -check` holds. The rejection corpus does move —
+the eight cases below land in **ours-only-rejects**, the bucket the oracle counts rather than
+adjudicates, and each is adjudicated here as a **pilot gap**, not as a candidate false positive:
+
+| Case (`cmd/pilot-reject/testdata/negative/semantic/`) | Constraint | OCL (SysML v2 §8.3.17) | Verdict |
+|---|---|---|---|
+| `cn01-fork-two-incoming` | `validateForkNodeIncomingSuccessions` | `targetConnector->selectByKind(Succession)->size() <= 1` | **pilot gap** — `checkForkNode` is empty |
+| `cn02-join-two-outgoing` | `validateJoinNodeOutgoingSuccessions` | `sourceConnector->selectByKind(Succession)->size() <= 1` | **pilot gap** — `checkJoinNode` is empty |
+| `cn03-merge-two-outgoing` | `validateMergeNodeOutgoingSuccessions` | `sourceConnector->selectByKind(Succession)->size() <= 1` | **pilot gap** — `checkMergeNode` is empty |
+| `cn04-decide-two-incoming` | `validateDecisionNodeIncomingSuccessions` | `targetConnector->selectByKind(Succession)->size() <= 1` | **pilot gap** — `checkDecisionNode` is empty |
+| `cn06-fork-incoming-target-multiplicity` | `validateControlNodeIncomingSuccessions` | `targetConnector->selectByKind(Succession)->collect(connectorEnd->at(2).multiplicity)->forAll(targetMult \| multiplicityHasBounds(targetMult, 1, 1))` | **pilot gap** — `checkControlNode` checks the owning type only |
+| `cn07-join-outgoing-source-multiplicity` | `validateControlNodeOutgoingSuccessions` | `sourceConnector->selectByKind(Succession)->collect(connectorEnd->at(1).multiplicity)->forAll(sourceMult \| multiplicityHasBounds(sourceMult, 1, 1))` | **pilot gap** — as above |
+| `cn08-merge-incoming-source-multiplicity` | `validateMergeNodeIncomingSuccessions` | `targetConnector->selectByKind(Succession)->collect(connectorEnd->at(1))->forAll(sourceMult \| multiplicityHasBounds(sourceMult, 0, 1))` | **pilot gap** — `checkMergeNode` is empty |
+| `cn09-decide-outgoing-target-multiplicity` | `validateDecisionNodeOutgoingSuccessions` | `sourceConnector->selectByKind(Succession)->collect(connectorEnd->at(2).multiplicity)->forAll(targetMult \| multiplicityHasBounds(targetMult, 0, 1))` | **pilot gap** — `checkDecisionNode` is empty |
+
+`cn05-control-node-outside-action` (`validateControlNodeOwningType`) is the ninth case and lands in
+**both-reject**: the pilot and we each report the fork in the constraint definition and the decision in
+the constraint usage, at the same two lines.
+
+Two readings had to be settled against the specification because the pilot offers no verdict. First,
+what a `Succession` into or out of a node is: `Feature::sourceConnector`/`targetConnector` collect
+every connector whose source or target feature is the node, so the count includes a `succession`
+usage, `first a then b;`, the member-attached `then b;`, and the `Succession` a guarded or default
+branch out of a decision owns (`if g then b;`, `else b;` — a `TransitionUsage` in the pilot's grammar,
+`GuardedTargetSuccession`/`DefaultTargetSuccession` at `SysML.xtext:1708–1717`, whose owned succession
+runs from the decision to the target); a `connect`, `bind` or `flow` is not a `Succession` and does
+not count. Second, an end written without a multiplicity: `multiplicityHasBounds` requires
+`mult <> null`, and the pilot's `SuccessionAdapter`/`ConnectorAdapter` give an unwritten end no
+multiplicity, so a literal evaluation of the four multiplicity constraints would reject `first a then
+f;` — and with it every control-node example in §7.17.3, which the specification says the rules hold
+for "even if not shown explicitly in the concrete syntax notation". We take the only reading under
+which the specification's own examples are well formed: an unwritten end multiplicity is the required
+one, and only a written multiplicity is judged. Both readings are recorded in the drafted upstream
+question in [omg-issues.md](omg-issues.md#eight-control-node-succession-constraints-are-unimplemented-todos-pilot-2026-07);
+nothing has been filed.
 
 ### The baseline this replaces
 

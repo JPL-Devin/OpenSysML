@@ -61,7 +61,7 @@
         "dir": "examples",
         "origin": "ours",
         "files": 32,
-        "digest": "sha256:3d441910f351e067ec2915a73b439c8fef24a89525574b6d652e5165f19523e6"
+        "digest": "sha256:0eb515f9b049b262517135f3d32abe25a18c0a23daa89873be6d183c64e8d2f7"
       },
       {
         "name": "probes",
@@ -79,9 +79,9 @@
     "agreement": 34,
     "severityMismatch": 2,
     "openSysMLOnly": 20,
-    "pilotOnly": 332,
+    "pilotOnly": 333,
     "openSysMLDiagnostics": 56,
-    "pilotDiagnostics": 368
+    "pilotDiagnostics": 369
   },
   "roots": [
     {
@@ -739,9 +739,9 @@
         "agreement": 0,
         "severityMismatch": 1,
         "openSysMLOnly": 1,
-        "pilotOnly": 306,
+        "pilotOnly": 307,
         "openSysMLDiagnostics": 2,
-        "pilotDiagnostics": 307
+        "pilotDiagnostics": 308
       },
       "files": [
         {
@@ -2368,13 +2368,19 @@
               "count": 1
             },
             {
-              "line": 339,
+              "line": 251,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 348,
+              "line": 343,
+              "severity": "error",
+              "category": "unmapped",
+              "count": 1
+            },
+            {
+              "line": 352,
               "severity": "error",
               "category": "unmapped",
               "count": 1
@@ -2574,7 +2580,7 @@
     {
       "side": "pilot",
       "message": "Cannot override a binding feature value",
-      "count": 29
+      "count": 30
     },
     {
       "side": "pilot",
@@ -2814,9 +2820,9 @@
       "agreement": 34,
       "severityMismatch": 2,
       "openSysMLOnly": 19,
-      "pilotOnly": 332,
+      "pilotOnly": 333,
       "openSysMLDiagnostics": 55,
-      "pilotDiagnostics": 368
+      "pilotDiagnostics": 369
     },
     "findings": [
       {
