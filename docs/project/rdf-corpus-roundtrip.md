@@ -59,25 +59,22 @@ Recorded against the corpus above, reproduced byte-identically on a second run:
 
 | Verdict | Files |
 |---|---|
-| `stable` | 255 |
+| `stable` | 268 |
 | `whitespace-only` | 0 |
-| `graph-diff` | 8 |
+| `graph-diff` | 1 |
 | `unwritable` | 2 |
-| `unparseable` | 3 |
-| `refused` | 77 |
+| `unparseable` | 4 |
+| `refused` | 70 |
 | **total** | **345** |
 
-So 268 of 345 files convert to Turtle, and of those 255 come back as the same Turtle byte for
-byte. Before the writer emitted stored text verbatim the split was 166 stable, 71
-`whitespace-only` and 14 `graph-diff`: the 71 moved to `stable` along with 6 of the 14, whose
+So 275 of 345 files convert to Turtle, and of those 268 come back as the same Turtle byte for
+byte. Before the writer emitted stored text verbatim the split was 184 stable, 78
+`whitespace-only` and 7 `graph-diff`: the 78 moved to `stable` along with 6 of the 7, whose
 difference was of the same kind but outside the normalisation — a CRLF inside a `doc` body, a
 comment inside an expression's stored text, redefinitions coming back in a fixed order, or a
-`connect ( a, b )` head spaced differently from its rebuilt spelling losing its end form. When
-the writer then learnt to fold a positional `then` past the edge members the parser skips, 14 of
-the 15 `unwritable` files came back: 12 to `stable`, one to `graph-diff` and one to
-`unparseable`, each now failing at the next gate down. The
+`connect ( a, b )` head spaced differently from its rebuilt spelling losing its end form. The
 refusals by class: 19 `feature-declaration`,
-18 `prefix-metadata`, 9 `event-declaration`, 7 `succession`, 6 `operator-expr`,
+18 `prefix-metadata`, 9 `event-declaration`, 6 `operator-expr`,
 4 `duplicate-declaration`, 3 each of `snapshot-declaration`, `invocation-expr` and
 `assert-declaration`, 2 `feature-chain-expr`, and 1 each of `timeslice-declaration`,
 `feature-reference` and `constructor-expr`.
