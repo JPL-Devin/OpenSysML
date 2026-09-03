@@ -5,7 +5,7 @@ package test {
 		attribute value : Integer;
 	}
 
-	// `send Data(reading) via commPort` sends the signal the invocation names,
+	// `send new Data(reading) via commPort` sends the signal the constructor names,
 	// carrying its argument, and the accept on the far end of the port binds that
 	// payload to its parameter.
 	action telemetry {
@@ -18,7 +18,7 @@ package test {
 		first start;
 
 		action transmit {
-			send Data(reading) via commPort;
+			send new Data(reading) via commPort;
 		}
 
 		action receive accept msg : Data via groundPort;

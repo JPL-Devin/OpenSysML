@@ -26,7 +26,7 @@ package SendSameNameDistinct {
 
 			state sending {
 				entry action issue {
-					send Alpha::Ping() via p;
+					send new Alpha::Ping() via p;
 					assign sent := sent + 1;
 				}
 			}

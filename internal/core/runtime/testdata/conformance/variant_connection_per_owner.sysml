@@ -24,7 +24,7 @@ package VariantRouting {
 			state start;
 
 			state sending {
-				entry send Ping() via outPort;
+				entry send new Ping() via outPort;
 			}
 			state arrived;
 			state diverted;

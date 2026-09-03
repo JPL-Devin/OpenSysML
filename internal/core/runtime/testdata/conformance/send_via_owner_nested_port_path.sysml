@@ -23,7 +23,7 @@ package test {
 
 				state sending {
 					entry action downlink {
-						send Telemetry(frames = 5.0) via radio.tx;
+						send new Telemetry(frames = 5.0) via radio.tx;
 					}
 				}
 			}

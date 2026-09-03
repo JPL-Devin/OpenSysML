@@ -14,7 +14,7 @@ package test {
 				entry; then sending;
 
 				state sending {
-					entry send Ping() to b;
+					entry send new Ping() to b;
 					accept Pong then answered;
 				}
 				state answered;
@@ -29,7 +29,7 @@ package test {
 					accept Ping then replied;
 				}
 				state replied {
-					entry send Pong() to a;
+					entry send new Pong() to a;
 				}
 			}
 		}

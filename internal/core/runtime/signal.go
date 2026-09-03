@@ -33,7 +33,10 @@ type Message struct {
 	// nil where the message's type is known only as a name. An accept matches it
 	// by conformance, so a subtype message satisfies a supertype accept and
 	// same-named definitions of different packages stay apart.
-	Signal   *symbols.Symbol
+	Signal *symbols.Symbol
+	// Event is the feature the send read its message from (`send shutDown to x`),
+	// empty for any other message; an accept subsetting that feature takes it.
+	Event    string
 	Target   string
 	Port     string
 	Object   int64
@@ -648,10 +651,11 @@ func (ctx *Context) post(conns []lower.Connection, msg Message, send lower.Send,
 	return ctx.postTo(msg, send, self)
 }
 
-// carriesSignal reports whether this message satisfies an accept of signalType.
-// An empty signalType accepts any message: the model asked for no type.
+// carriesSignal reports whether this message satisfies an accept of signalType,
+// by its type or by the event feature it was sent from. An empty signalType
+// accepts any message: the model asked for no type.
 func (m Message) carriesSignal(signalType string) bool {
-	return signalType == "" || signalType == m.SignalType
+	return signalType == "" || signalType == m.SignalType || signalType == m.Event
 }
 
 // messageMatches reports whether a message satisfies an accept whose parameter
@@ -675,8 +679,10 @@ func (ctx *Context) messageMatches(m Message, want *ast.QualifiedName, scope *sy
 //
 // A send whose message names a type sends that type with no payload
 // (`send Ping to m`, where `item def Ping;`) — the notation this subset offers
-// for a signal that carries nothing. Any other message expression is evaluated,
-// and the message is typed by the value's type, carrying it as `value`.
+// for a signal that carries nothing. A send whose message constructs an
+// occurrence (`send new Ping(3) to m`) sends that type carrying the arguments.
+// Any other message expression is evaluated, and the message is typed by the
+// value's type, carrying it as `value`.
 //
 // A via send keeps a receiver target when one was stated; postVia fills in the
 // reached port and final delivery kind.
@@ -688,14 +694,15 @@ func (e *EvalContext) buildMessage(scope *symbols.Scope, send lower.Send) (Messa
 	if sym, ok := e.namedType(scope, send.Message); ok {
 		return Message{SignalType: sym.Name, Signal: sym, Target: target, Payload: map[string]Value{}}, nil
 	}
+	if constructor, ok := send.Message.(*ast.ConstructorExpr); ok {
+		return e.buildConstructedMessage(scope, constructor, target)
+	}
 
-	// `send Data(data) via p`, `send shutDown() to self`: the invoked name is
-	// what the message is, whether it names a signal definition or an event
-	// feature, and its arguments are the payload it carries. An accept matches
-	// on that name, so building the message never evaluates the invocation as a
-	// call — there is no function of that name to call.
-	// A calculation of that name is called, though: what is sent is the value it
-	// returns, not a message named after it.
+	// `send shutDown() to self`: the invoked behavioral feature is what the
+	// message is, and its arguments are the payload it carries. An accept
+	// matches on that name, so building the message never evaluates the
+	// invocation as a call. A calculation of that name is called, though: what
+	// is sent is the value it returns, not a message named after it.
 	if invocation, ok := send.Message.(*ast.InvocationExpr); ok && !e.invokesCalc(scope, invocation) {
 		return e.buildInvokedMessage(scope, invocation, target)
 	}
@@ -718,9 +725,19 @@ func (e *EvalContext) buildMessage(scope *symbols.Scope, send lower.Send) (Messa
 	return Message{
 		SignalType: signalType,
 		Signal:     signal,
+		Event:      sentFeatureName(send.Message),
 		Target:     target,
 		Payload:    map[string]Value{"value": value},
 	}, nil
+}
+
+// sentFeatureName is the name of the feature a send reads its message from
+// (`send shutDown to x`, `send a.b via p`), or "" for any other message.
+func sentFeatureName(message ast.Node) string {
+	if chain, ok := message.(*ast.FeatureChainExpr); ok {
+		return ast.SimpleName(chain.Member)
+	}
+	return ast.SimpleName(message)
 }
 
 // acceptedValue is the value an accept binds its payload name to: the single
@@ -804,32 +821,45 @@ func (e *EvalContext) invokesCalc(scope *symbols.Scope, invocation *ast.Invocati
 	return isCalcDecl(sym.Decl)
 }
 
-// buildInvokedMessage builds the message of a send written as an invocation.
-// The invoked name types the message; each argument is a value it carries,
-// named where the send named it and by position where it did not. A single
-// positional argument is also carried as `value`, which is what an accept binds
-// its payload parameter to.
+// buildInvokedMessage builds the message of a send written as an invocation of
+// a behavioral feature (`send shutDown() to self`): the invoked name types the
+// message and its arguments are the payload.
 func (e *EvalContext) buildInvokedMessage(scope *symbols.Scope, invocation *ast.InvocationExpr, target string) (Message, error) {
-	signalType := ast.SimpleName(invocation.Type)
+	if invocation.Operand != nil {
+		return Message{}, fmt.Errorf("send %s: a message is not sent through a receiver", ast.SimpleName(invocation.Type))
+	}
+	return e.buildTypedMessage(scope, invocation.Type, invocation.Args, invocation.NamedArgs, target)
+}
+
+// buildConstructedMessage builds the message of a send written as a constructor
+// (`send new Telemetry(frames = 3) via antenna`): the constructed definition
+// types the message and its arguments are the features the occurrence binds.
+func (e *EvalContext) buildConstructedMessage(scope *symbols.Scope, constructor *ast.ConstructorExpr, target string) (Message, error) {
+	return e.buildTypedMessage(scope, constructor.Type, constructor.Args, constructor.NamedArgs, target)
+}
+
+// buildTypedMessage builds a message typed by a name and carrying its arguments,
+// named where the send named them and by position where it did not. A single
+// positional argument is also carried as `value`, which is what an accept binds
+// its payload parameter to. The occurrence itself is materialized on accept.
+func (e *EvalContext) buildTypedMessage(scope *symbols.Scope, typeRef *ast.QualifiedName, args []ast.Node, named []ast.NamedArg, target string) (Message, error) {
+	signalType := ast.SimpleName(typeRef)
 	if signalType == "" {
 		return Message{}, fmt.Errorf("send: the message names no signal")
 	}
-	if invocation.Operand != nil {
-		return Message{}, fmt.Errorf("send %s: a message is not sent through a receiver", signalType)
-	}
 
-	payload := make(map[string]Value, len(invocation.Args)+len(invocation.NamedArgs))
-	for i, arg := range invocation.Args {
+	payload := make(map[string]Value, len(args)+len(named))
+	for i, arg := range args {
 		value, err := e.Eval(arg)
 		if err != nil {
 			return Message{}, fmt.Errorf("eval argument %d of send %s: %w", i+1, signalType, err)
 		}
 		payload[fmt.Sprintf("arg%d", i+1)] = value
-		if len(invocation.Args) == 1 && len(invocation.NamedArgs) == 0 {
+		if len(args) == 1 && len(named) == 0 {
 			payload["value"] = value
 		}
 	}
-	for _, arg := range invocation.NamedArgs {
+	for _, arg := range named {
 		name := ast.SimpleName(arg.Name)
 		if name == "" {
 			return Message{}, fmt.Errorf("send %s: an argument is named by nothing", signalType)
@@ -843,7 +873,7 @@ func (e *EvalContext) buildInvokedMessage(scope *symbols.Scope, invocation *ast.
 
 	var signal *symbols.Symbol
 	if scope != nil && e.ctx != nil && e.ctx.resolver != nil {
-		if sym, ok := e.ctx.resolver.ResolveQualified(scope, invocation.Type); ok && isDefinitionSymbol(sym) {
+		if sym, ok := e.ctx.resolver.ResolveQualified(scope, typeRef); ok && isDefinitionSymbol(sym) {
 			signal = sym
 		}
 	}

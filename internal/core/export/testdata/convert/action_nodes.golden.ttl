@@ -455,8 +455,9 @@ elmt:ActionNodes__Drive___4013_om
 
 expr:ActionNodes__Drive___4013_ppayload
     a sysml:InvocationExpression ;
-    sysx:sourceText "Command()" ;
+    sysx:sourceText "new Command()" ;
     sysml:elementId "ActionNodes__Drive___4013_ppayload" ;
+    sysx:isConstructor "true"^^xsd:boolean ;
     sysml:function elmt:ActionNodes__Command .
 
 expr:ActionNodes__Drive___4013_preceiver
@@ -492,8 +493,9 @@ elmt:ActionNodes__Drive___4014_om
 
 expr:ActionNodes__Drive___4014_ppayload
     a sysml:InvocationExpression ;
-    sysx:sourceText "Command()" ;
+    sysx:sourceText "new Command()" ;
     sysml:elementId "ActionNodes__Drive___4014_ppayload" ;
+    sysx:isConstructor "true"^^xsd:boolean ;
     sysml:function elmt:ActionNodes__Command .
 
 expr:ActionNodes__Drive___4014_preceiver

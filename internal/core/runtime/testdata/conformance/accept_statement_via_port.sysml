@@ -17,7 +17,7 @@ package test {
 		first start;
 
 		action transmit {
-			send Data(reading) via commPort;
+			send new Data(reading) via commPort;
 		}
 
 		then accept msg : Data via groundPort;

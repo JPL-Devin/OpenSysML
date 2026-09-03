@@ -908,7 +908,7 @@ func TestMutuallyAddressedObjectsAreMaterializedOnce(t *testing.T) {
 					exhibit state pinging {
 						entry; then sending;
 						state sending {
-							entry send Ping() to b;
+							entry send new Ping() to b;
 							accept Pong then answered;
 						}
 						state answered;
@@ -918,7 +918,7 @@ func TestMutuallyAddressedObjectsAreMaterializedOnce(t *testing.T) {
 					exhibit state replying {
 						entry; then waiting;
 						state waiting { accept Ping then replied; }
-						state replied { entry send Pong() to a; }
+						state replied { entry send new Pong() to a; }
 					}
 				}
 			}

@@ -24,7 +24,7 @@ package SendSubtypeAccept {
 
 			state sending {
 				entry action issue {
-					send Halt(9) via command;
+					send new Halt(9) via command;
 					assign sent := sent + 1;
 				}
 			}

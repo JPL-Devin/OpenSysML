@@ -23,7 +23,7 @@ package SendOwnerConnection {
 
 			state sending {
 				entry action issue {
-					send Command(7) via command;
+					send new Command(7) via command;
 					assign sent := sent + 1;
 				}
 			}

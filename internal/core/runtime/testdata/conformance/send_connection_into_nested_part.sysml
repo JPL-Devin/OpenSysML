@@ -49,7 +49,7 @@ package SendDelegation {
 
 			state sending {
 				entry action issue {
-					send Command(4) via command;
+					send new Command(4) via command;
 					assign sent := sent + 1;
 				}
 			}

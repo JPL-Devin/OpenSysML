@@ -32,5 +32,5 @@
                   (*ast.QualifiedName)))))
           (TransitionMember source="idle" target="alerting"
             (SendStatement via=false
-              (InvocationExpr type="Alert")
+              (ConstructorExpr type="Alert")
               (FeatureReference name="operator"))))))))

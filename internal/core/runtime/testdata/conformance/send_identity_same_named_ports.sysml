@@ -17,7 +17,7 @@ package SendIdentity {
 			state start;
 
 			state waiting {
-				entry send Ping() to alpha.inPort;
+				entry send new Ping() to alpha.inPort;
 			}
 			state received;
 			state strayed;
