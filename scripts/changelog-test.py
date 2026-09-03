@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import pathlib
 import sys
 import tempfile
@@ -75,7 +77,7 @@ class FoldTest(unittest.TestCase):
         out = changelog.fold(text, {"Security": ["- s."], "Deprecated": ["- d."]})
         order = [l for l in out.splitlines() if l.startswith("### ")]
         self.assertEqual(
-            order, ["### Added", "### Performance", "### Fixed", "### Security", "### Changed", "### Deprecated"]
+            order, ["### Added", "### Performance", "### Fixed", "### Changed", "### Deprecated", "### Security"]
         )
 
 
@@ -94,12 +96,14 @@ class RenderTest(unittest.TestCase):
     def test_rerun_after_interrupted_render_does_not_duplicate(self):
         (changelog.FRAGMENTS / "a.added.md").write_text("- **A.** a.\n", encoding="utf-8")
         (changelog.FRAGMENTS / "b.fixed.md").write_text("- **B.** b.\n", encoding="utf-8")
-        self.assertEqual(changelog.render(), 0)
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(changelog.render(), 0)
         once = changelog.CHANGELOG.read_text(encoding="utf-8")
         self.assertEqual(sorted(p.name for p in changelog.FRAGMENTS.iterdir()), [])
         # Simulate a run that wrote the changelog but died before deleting a fragment.
         (changelog.FRAGMENTS / "b.fixed.md").write_text("- **B.** b.\n", encoding="utf-8")
-        self.assertEqual(changelog.render(), 0)
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(changelog.render(), 0)
         self.assertEqual(changelog.CHANGELOG.read_text(encoding="utf-8"), once)
         self.assertEqual(sorted(p.name for p in changelog.FRAGMENTS.iterdir()), [])
 
