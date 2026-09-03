@@ -38,6 +38,7 @@ type InvocationSelection struct {
 	Selected   *symbols.Symbol   // the one called; nil when none applies or they tie
 	Ambiguous  bool              // several applicable candidates are equally specific
 	Tied       []*symbols.Symbol // the applicable candidates none is more specific than, when Ambiguous
+	callable   *symbols.Symbol   // the first candidate that is a behavior, when any is
 }
 
 // Resolved reports whether the name denotes at least one declaration.
@@ -45,14 +46,16 @@ func (s *InvocationSelection) Resolved() bool {
 	return s != nil && len(s.Candidates) > 0
 }
 
-// Called is the declaration a call runs: the one selected, or the first its name
-// denotes when no candidate fits, which then reports the mismatch; nil when none.
+// Called is the declaration a call runs: the one selected, or when no candidate fits the
+// first callable one (else the first at all), which then reports the mismatch; nil when none.
 func (s *InvocationSelection) Called() *symbols.Symbol {
 	switch {
 	case s == nil:
 		return nil
 	case s.Selected != nil:
 		return s.Selected
+	case s.callable != nil:
+		return s.callable
 	case len(s.Candidates) > 0:
 		return s.Candidates[0]
 	}
@@ -112,6 +115,7 @@ func (m *Model) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, ar
 		sel.Selected = sel.Candidates[0]
 		return sel
 	}
+	sel.callable = behaviors[0]
 
 	signatures := make([]invocationSignature, len(behaviors))
 	for i, c := range behaviors {

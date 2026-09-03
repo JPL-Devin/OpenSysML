@@ -17,6 +17,7 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("calc_call_ambiguous_between_two_imports", testCalcCallAmbiguousBetweenTwoImports)
 	t.Run("calc_call_ambiguity_names_only_the_tied_best", testCalcCallAmbiguityNamesOnlyTheTiedBest)
 	t.Run("calc_call_fits_no_visible_candidate", testCalcCallFitsNoVisibleCandidate)
+	t.Run("calc_call_fits_no_visible_candidate_behind_a_non_callable", testCalcCallFitsNoVisibleCandidateBehindANonCallable)
 	t.Run("calc_call_selects_by_argument_type", testCalcCallSelectsByArgumentType)
 	t.Run("calc_call_selects_by_named_argument", testCalcCallSelectsByNamedArgument)
 	t.Run("calc_call_selects_by_sibling_scalar_type", testCalcCallSelectsBySiblingScalarType)
@@ -350,6 +351,34 @@ func testCalcCallFitsNoVisibleCandidate(t *testing.T) {
 	}
 	arg := NewStringValue("x")
 	result, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
+	if err == nil {
+		t.Fatalf("expected a type mismatch, calc returned %+v", result)
+	}
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("expected ErrTypeMismatch, got: %v", err)
+	}
+}
+
+// A non-callable declaration found before the callable one does not take the
+// call: the mismatch is reported against the callable's parameter.
+func testCalcCallFitsNoVisibleCandidateBehindANonCallable(t *testing.T) {
+	src := `
+		package A { attribute def pick; }
+		package B { private import ScalarValues::*; calc def pick { in x : Integer; return : Integer = x; } }
+		package test {
+			private import ScalarValues::*;
+			private import A::*;
+			private import B::*;
+			calc choose { in v : String; pick(v) }
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "choose", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("choose calc not found")
+	}
+	result, err := ctx.InvokeCalc(sym, []Value{NewStringValue("x")}, rootScope)
 	if err == nil {
 		t.Fatalf("expected a type mismatch, calc returned %+v", result)
 	}
