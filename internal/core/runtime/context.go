@@ -3,6 +3,8 @@ package runtime
 import (
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
@@ -67,6 +69,8 @@ type Context struct {
 	// occurrences holds the object each usage carrying no value of its own
 	// denotes, so a feature chain through a part reads one occurrence of it.
 	occurrences map[*symbols.Symbol]int64
+	// behaving memoizes runsBehaviors per type; the model is fixed for the context's life.
+	behaving map[*symbols.Symbol]bool
 
 	// variantObjects holds the object a variant stands for per owner that
 	// selected it, so repeated reads of one selection read the same object.
@@ -107,6 +111,10 @@ type Context struct {
 	// behaviorRunDepth is the number of classifier-behavior starts under way.
 	behaviorRunDepth int
 
+	// heldBehaviors are the behaviors already holding work when the outermost
+	// start under way began: a driver put it in flight, and dispatches it.
+	heldBehaviors map[*ObjectBehavior]bool
+
 	// objectBehaviors are every behavior an object of this context runs, so a
 	// drain to quiescence can re-run one a sibling's send woke.
 	objectBehaviors []*ObjectBehavior
@@ -145,6 +153,22 @@ type Context struct {
 	// OPENSYSML_CALC_COMPILE escape hatch clears it.
 	compileCalcs bool
 
+	// probes is the number of probes under way; see beginProbe.
+	probes int
+	// journals is the number of probes and transactions under way: while one is,
+	// every change is journaled for it to undo; see beginJournal.
+	journals int
+	// journalWrites are the feature values the journals under way changed, with
+	// what each held before, restored as each is undone.
+	journalWrites []journalWrite
+	// journalUndos restore what else the journals under way changed on an object —
+	// the identities it keeps for connectors not yet materialized — run in reverse
+	// as each is undone; see noteProbeUndo.
+	journalUndos []func()
+	// runBoundaries mark, innermost last, where in objectBehaviors and in
+	// pendingBehaviors the behaviors a change still to be kept or undone attached
+	// begin: the only ones a drain under it may run (see nextRunnableBehavior).
+	runBoundaries []runBoundary
 	// runDepth is the number of runs currently under way, so the step counter is
 	// reset per run rather than accumulated over the context's whole life.
 	runDepth int
@@ -220,6 +244,7 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		maxCalcDepth:   DefaultMaxCalcDepth,
 
 		occurrences:      make(map[*symbols.Symbol]int64),
+		behaving:         make(map[*symbols.Symbol]bool),
 		variantObjects:   make(map[variantObject]int64),
 		selectedVariants: make(map[variantSelection]string),
 
@@ -281,6 +306,27 @@ func (ctx *Context) SetTrace(tr *TraceRecorder) {
 // Model returns the semantic model this context operates over.
 func (ctx *Context) Model() *semantics.Model {
 	return ctx.model
+}
+
+// conforms is the model's conformance across scope trees: the index and a
+// document each build a symbol of their own for one declaration, so a symbol
+// conforms to another declared by the same node as it or one of its supertypes.
+func (ctx *Context) conforms(a, b *symbols.Symbol) bool {
+	if ctx.model.Conforms(a, b) {
+		return true
+	}
+	if a == nil || b == nil || b.Decl == nil {
+		return false
+	}
+	if a.Decl == b.Decl {
+		return true
+	}
+	for _, sup := range ctx.model.AllSupertypes(a) {
+		if sup != nil && sup.Decl == b.Decl {
+			return true
+		}
+	}
+	return false
 }
 
 // Resolver returns the name resolver this context resolves references with.
@@ -346,6 +392,111 @@ func (ctx *Context) beginExecutorRun(started *bool) func() {
 	*started = true
 	ctx.runDepth++
 	return func() { ctx.runDepth-- }
+}
+
+// beginProbe brackets an evaluation previewing what a run would do, restoring the
+// budget, trace, bus, variant selections, every feature value written (see
+// noteProbeWrite) and every other change noted (see noteProbeUndo) after.
+// Behaviors the probe starts are the only ones it runs (see nextRunnableBehavior).
+func (ctx *Context) beginProbe() func() {
+	steps, elements, trace := ctx.steps, ctx.elements, ctx.trace
+	selected := maps.Clone(ctx.selectedVariants)
+	endBoundary := func() {}
+	if ctx.probes == 0 {
+		endBoundary = ctx.beginRunBoundary()
+	}
+	_, rollback := ctx.beginJournal()
+	ctx.trace = nil
+	ctx.runDepth++
+	ctx.probes++
+	return func() {
+		rollback()
+		endBoundary()
+		ctx.selectedVariants = selected
+		ctx.probes--
+		ctx.runDepth--
+		ctx.steps, ctx.elements, ctx.trace = steps, elements, trace
+	}
+}
+
+// runBoundary is where in objectBehaviors and pendingBehaviors the behaviors
+// attached since a change began start.
+type runBoundary struct {
+	behaviors, pending int
+}
+
+// beginRunBoundary confines drains to the behaviors attached from now until the
+// returned function is called: what an older behavior does cannot be undone.
+func (ctx *Context) beginRunBoundary() func() {
+	ctx.runBoundaries = append(ctx.runBoundaries, runBoundary{
+		behaviors: len(ctx.objectBehaviors),
+		pending:   len(ctx.pendingBehaviors),
+	})
+	return func() { ctx.runBoundaries = ctx.runBoundaries[:len(ctx.runBoundaries)-1] }
+}
+
+// beginJournal brackets a change to be kept whole or not at all: the feature
+// values written (see noteProbeWrite), the other changes noted (see
+// noteProbeUndo) and the bus are journaled until commit keeps them or rollback
+// restores them. A commit inside an enclosing journal leaves the entries to it.
+func (ctx *Context) beginJournal() (commit, rollback func()) {
+	mark, undoMark := len(ctx.journalWrites), len(ctx.journalUndos)
+	messages := cloneMessages(ctx.messages)
+	ctx.journals++
+	commit = func() {
+		ctx.journals--
+		if ctx.journals == 0 {
+			ctx.journalWrites, ctx.journalUndos = ctx.journalWrites[:mark], ctx.journalUndos[:undoMark]
+		}
+	}
+	rollback = func() {
+		ctx.journals--
+		for i := len(ctx.journalWrites) - 1; i >= mark; i-- {
+			*ctx.journalWrites[i].fv = ctx.journalWrites[i].prior
+		}
+		ctx.journalWrites = ctx.journalWrites[:mark]
+		for i := len(ctx.journalUndos) - 1; i >= undoMark; i-- {
+			ctx.journalUndos[i]()
+		}
+		ctx.journalUndos = ctx.journalUndos[:undoMark]
+		ctx.messages = messages
+	}
+	return commit, rollback
+}
+
+// cloneMessages copies messages in flight, payloads included: what a probe caches
+// on a payload (see acceptedValue) names objects the probe discards.
+func cloneMessages(messages []Message) []Message {
+	cloned := slices.Clone(messages)
+	for i := range cloned {
+		cloned[i].Payload = maps.Clone(cloned[i].Payload)
+	}
+	return cloned
+}
+
+// journalWrite is a feature value a journal changed and what it held before.
+type journalWrite struct {
+	fv    *FeatureValue
+	prior FeatureValue
+}
+
+// noteProbeWrite records a feature value about to change, for the probe or
+// transaction under way to restore; outside one it records nothing.
+func (ctx *Context) noteProbeWrite(fv *FeatureValue) {
+	if ctx.journals == 0 {
+		return
+	}
+	ctx.journalWrites = append(ctx.journalWrites, journalWrite{fv: fv, prior: *fv})
+}
+
+// noteProbeUndo records how to restore state no feature value holds that is about
+// to change, for the probe or transaction under way to run; outside one it
+// records nothing.
+func (ctx *Context) noteProbeUndo(undo func()) {
+	if ctx.journals == 0 {
+		return
+	}
+	ctx.journalUndos = append(ctx.journalUndos, undo)
 }
 
 // newActivation begins one activation: the identity of a single execution of a
@@ -419,6 +570,17 @@ func (ctx *Context) chargeElements(n int64) error {
 // reach the object it names.
 func (ctx *Context) Instance(id int64) (*Instance, bool) {
 	return ctx.getInstance(id)
+}
+
+// InstanceIDs lists the identities of every object this context holds, in
+// ascending order, so a caller can say which ids an unknown one is not among.
+func (ctx *Context) InstanceIDs() []int64 {
+	ids := make([]int64, 0, len(ctx.instances))
+	for id := range ctx.instances {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	return ids
 }
 
 // getInstance retrieves an instance by ID.
@@ -519,14 +681,15 @@ func (ctx *Context) CheckConstraintOn(sym *symbols.Symbol, scope *symbols.Scope,
 // CheckResult is the outcome of one check: whether it holds, the object its
 // conditions were evaluated against — nil when they were evaluated against the
 // declaration because no object carries the checked element — and, for a nested
-// subject, the object the search started from plus the features walked from it —
-// ending in the declaration the object materializes, as an ambiguity names it —
-// which are how a caller names an object holding no name of its own.
+// subject, the object the search started from plus the features walked from it,
+// one name a segment — ending in the declaration the object materializes, as an
+// ambiguity names it — which are how a caller names an object holding no name of
+// its own.
 type CheckResult struct {
 	Holds       bool
 	Subject     *Instance
 	SubjectRoot *Instance
-	SubjectPath string
+	SubjectPath []string
 }
 
 // checkResultOf reports a verdict about the object a check resolved to.

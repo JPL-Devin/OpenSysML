@@ -30,6 +30,16 @@ func convertFixture(t *testing.T, name string) []byte {
 // leaving the results of expression bodies in place.
 var memberResultLink = regexp.MustCompile(` ;\n    sysx:resultExpression expr:[^ \n]+_presultExpression \.\n`)
 
+// withoutSourceText drops the text triples — sysx:sourceText, sysx:sourceTail
+// and sysx:sourceLanguage — leaving the structure the mapping must carry.
+func withoutSourceText(t *testing.T, turtle []byte) []byte {
+	t.Helper()
+	for _, property := range []string{"sysx:sourceText", "sysx:sourceTail", "sysx:sourceLanguage"} {
+		turtle = withoutTriples(t, turtle, property)
+	}
+	return turtle
+}
+
 // withoutMemberResultLinks drops the member-level sysx:resultExpression triples.
 func withoutMemberResultLinks(t *testing.T, turtle []byte) []byte {
 	t.Helper()
@@ -48,7 +58,7 @@ func TestResultExpressionIsAResultExpressionMembership(t *testing.T) {
 	for _, want := range []string{
 		"elmt:Results__AfterMembers___403\n    a sysx:ResultExpressionMember ;",
 		"sysx:memberIndex \"3\"^^xsd:integer ;\n    sysml:owningNamespace elmt:Results__AfterMembers ;",
-		"sysx:resultExpression expr:Results__AfterMembers___403_presultExpression .",
+		"sysx:resultExpression expr:Results__AfterMembers___403_presultExpression ;\n    sysx:sourceText \"        y * y\\n\" .",
 		"elmt:Results__AfterMembers___403_om\n    a sysml:ResultExpressionMembership ;",
 		"sysml:ownedResultExpression expr:Results__AfterMembers___403_presultExpression .",
 		"expr:Results__AfterMembers___403_presultExpression\n    a sysml:OperatorExpression ;\n    sysx:sourceText \"y * y\" ;",
@@ -76,7 +86,7 @@ func TestResultExpressionsComeBackFromTheGraphAlone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("back to notation: %v", err)
 	}
-	stripped := withoutTriples(t, turtle, "sysx:sourceText")
+	stripped := withoutSourceText(t, turtle)
 	if strings.Contains(string(stripped), "sysx:sourceText") {
 		t.Fatal("the stripped graph still carries source text")
 	}
@@ -90,7 +100,7 @@ func TestResultExpressionsComeBackFromTheGraphAlone(t *testing.T) {
 	}
 	// Rebuilt notation parenthesizes every operator, so its text differs; the
 	// model it states must not: the re-encoded graph is the first one.
-	if string(withoutTriples(t, again, "sysx:sourceText")) != string(stripped) {
+	if string(withoutSourceText(t, again)) != string(stripped) {
 		t.Errorf("the structure alone did not carry the result expressions\n--- with text ---\n%s\n--- from the graph ---\n%s\n--- first ---\n%s\n--- second ---\n%s", withText, fromGraph, turtle, again)
 	}
 	for _, want := range []string{
@@ -114,7 +124,7 @@ func TestResultExpressionsComeBackFromTheGraphAlone(t *testing.T) {
 // membership's ownedResultExpression; that is enough to write the body back.
 func TestResultExpressionComesBackFromItsMembershipAlone(t *testing.T) {
 	turtle := convertFixture(t, "result_expressions")
-	stripped := withoutMemberResultLinks(t, withoutTriples(t, turtle, "sysx:sourceText"))
+	stripped := withoutMemberResultLinks(t, withoutSourceText(t, turtle))
 	back, err := export.Convert("m.ttl", stripped, export.FormatTurtle, export.FormatSysML)
 	if err != nil {
 		t.Fatalf("back to notation from the membership alone: %v", err)
@@ -128,7 +138,7 @@ func TestResultExpressionComesBackFromItsMembershipAlone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("to turtle again: %v", err)
 	}
-	if string(withoutTriples(t, again, "sysx:sourceText")) != string(withoutTriples(t, turtle, "sysx:sourceText")) {
+	if string(withoutSourceText(t, again)) != string(withoutSourceText(t, turtle)) {
 		t.Errorf("the membership alone did not carry the result expressions\n--- first ---\n%s\n--- second ---\n%s", turtle, again)
 	}
 }

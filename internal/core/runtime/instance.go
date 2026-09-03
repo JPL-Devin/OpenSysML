@@ -29,14 +29,13 @@ type Instance struct {
 	// own is identified by.
 	Ends []ConnectorEnd
 
-	// anonymous holds the objects the instance's anonymous connectors
-	// materialized to, nil until they are asked for. An empty slice means there
-	// are none.
+	// anonymous holds, per anonymous connector declared, the object it materialized
+	// to, 0 for one not materialized yet; nil until any is asked for.
 	anonymous []int64
 
-	// keptAnonymous holds the identities those objects had before a carry-over, in
-	// declaration order, which the ones materialized again here take back.
-	keptAnonymous []int64
+	// keptAnonymous holds the identities those objects had before a carry-over, by
+	// the declaration each was of, until the one materialized again here takes it back.
+	keptAnonymous []keptAnonymous
 
 	// keptConnectors holds, per feature value of a named connector, the identity the object
 	// of it had before a carry-over, which the one materialized again takes back.
@@ -51,6 +50,10 @@ type Instance struct {
 	// through it.
 	owner        *Instance
 	ownerFeature string
+
+	// explicit marks an object a caller asked for by name, which stands on its
+	// own even where its usage is a feature of a type.
+	explicit bool
 }
 
 // Owner answers the object holding this one and the feature of it that does, or
@@ -85,6 +88,20 @@ func (s *FeatureValue) HeldValue() Value {
 		return s.Values
 	}
 	return s.Value
+}
+
+// ReadValue is what the feature value reads as in an expression: what it holds, or the
+// empty sequence when it holds nothing and its multiplicity admits that. A required
+// feature holding nothing is uninitialized.
+func (s *FeatureValue) ReadValue(name string) (Value, error) {
+	value := s.HeldValue()
+	if value.Kind != ValInvalid {
+		return value, nil
+	}
+	if lower := s.Feature.Multiplicity.Lower; lower.Known && !lower.Infinite && lower.Value == 0 {
+		return sequenceOf(nil), nil
+	}
+	return Value{}, fmt.Errorf("%w: %s", ErrUninitializedFeatureValue, name)
 }
 
 // UnsetText is how every surface spells a feature value that holds no value: a valueless
@@ -125,9 +142,29 @@ func isValueTypeSymbol(sym *symbols.Symbol) bool {
 // performs and runs them to quiescence. Returns the instance or an error.
 //
 // Each call materializes a distinct object with an identity and behaviors of its
-// own; occurrenceOf is the path that reads one object of a usage twice.
+// own. The object becomes what the usage denotes from then on, so an expression
+// naming the usage or a feature path under it reads this object as it was run.
 func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
-	return ctx.instantiateAs(sym, 0)
+	mark := len(ctx.created)
+	inst, err := ctx.materializeOwnedBy(sym, 0, nil, "")
+	if err != nil {
+		ctx.abandonInstancesSince(mark)
+		return nil, err
+	}
+	// Registered before its behaviors start, so one of them naming the usage
+	// reaches this object; a failed start abandons the occurrence with it.
+	inst.explicit = true
+	prior, hadPrior := ctx.occurrences[sym]
+	if ctx.namesOneObject(sym) {
+		ctx.occurrences[sym] = inst.ID
+	}
+	if err := ctx.startClassifierBehaviors(inst, mark); err != nil {
+		if hadPrior {
+			ctx.occurrences[sym] = prior
+		}
+		return nil, err
+	}
+	return inst, nil
 }
 
 // instantiateAs materializes an object under the given identity, falling back to
@@ -204,7 +241,7 @@ func (ctx *Context) materialize(sym *symbols.Symbol, id int64) (*Instance, error
 
 		// Fold constant defaults the feature admits eagerly; a default that is not constant
 		// may read sibling feature values, so GetFeatureValue evaluates (and reports) it.
-		if ctx.valueBinds(feat) && isScalarFeature(feat) && !ctx.model.IsVariationFeature(feat.Symbol) &&
+		if ctx.valueBinds(feat) && feat.Scalar() && !ctx.model.IsVariationFeature(feat.Symbol) &&
 			ctx.restatedInValuedBody(feat) == "" {
 			if semVal, ok := ctx.model.Eval(feat.DefaultValue); ok {
 				val := Value{Kind: ValConst, Const: semVal}
@@ -281,7 +318,7 @@ func isOccurrenceUsage(sym *symbols.Symbol) bool {
 // a name evaluates to and a feature chain reads members from — rather than a
 // value: an occurrence, or a structured value whose own features carry it.
 func (ctx *Context) namesOneObject(sym *symbols.Symbol) bool {
-	if sym == nil || !ctx.occursOnce(sym) {
+	if sym == nil || !ctx.occursOnce(sym) || ctx.optionalValueless(sym) {
 		return false
 	}
 	// A variation classifies its variants abstractly, so it is no object of
@@ -310,25 +347,38 @@ func (ctx *Context) namesStructuredValue(sym *symbols.Symbol) bool {
 // occursOnce reports whether a usage names at most one occurrence; several
 // occurrences are a collection rather than one object to read features from.
 func (ctx *Context) occursOnce(sym *symbols.Symbol) bool {
-	mult, _ := ctx.extractMultiplicity(sym)
+	mult := ctx.featureMultiplicity(sym, ctx.findOwnerType(sym))
 	return !mult.Upper.Infinite && mult.Upper.Value <= 1
 }
 
-// isScalarFeature reports whether a feature holds at most one value. An
-// unbounded upper bound carries Value 0, so the infinite flag has to be tested
-// separately.
-func isScalarFeature(feat *EffectiveFeature) bool {
-	return !feat.Multiplicity.Upper.Infinite && feat.Multiplicity.Upper.Value <= 1
+// optionalValueless reports whether a usage or subject declares no value and a
+// lower bound of zero: it holds only what is contributed to it, so of itself it is empty.
+func (ctx *Context) optionalValueless(sym *symbols.Symbol) bool {
+	switch sym.Decl.(type) {
+	case *ast.Usage, *ast.SubjectMember:
+	default:
+		return false
+	}
+	if ctx.extractDefaultValue(sym) != nil {
+		return false
+	}
+	lower := ctx.featureMultiplicity(sym, ctx.findOwnerType(sym)).Lower
+	return lower.Known && !lower.Infinite && lower.Value == 0
 }
 
 // checkDefault reports a value the feature does not admit: a count outside its
 // multiplicity (1..1 when none is declared) or an element outside its type.
 func (ctx *Context) checkDefault(inst *Instance, fv *FeatureValue, name string, val Value) error {
-	what := fmt.Sprintf("feature value %s.%s", inst.Type.Name, name)
-	if msg := fv.Feature.Multiplicity.CountViolation(elementCount(&val)); msg != "" {
+	return ctx.checkAdmits(fv.Feature, fmt.Sprintf("feature value %s.%s", inst.Type.Name, name), val)
+}
+
+// checkAdmits reports a value the feature does not admit, by count or by type,
+// naming the value as what.
+func (ctx *Context) checkAdmits(feat *EffectiveFeature, what string, val Value) error {
+	if msg := feat.Multiplicity.CountViolation(elementCount(&val)); msg != "" {
 		return fmt.Errorf("%s: %w: %s", what, ErrMultiplicityViolation, msg)
 	}
-	return ctx.checkWriteType(fv.Feature.DeclScope(), what, fv.Feature.Type, val)
+	return ctx.checkWriteType(feat.DeclScope(), what, feat.Type, val)
 }
 
 // GetFeatureValue retrieves the feature value for the named feature, materializing it lazily
@@ -362,7 +412,8 @@ func (inst *Instance) SetFeatureValue(ctx *Context, name string, value Value) er
 	if err := ctx.checkDefault(inst, fv, name, value); err != nil {
 		return err
 	}
-	if isScalarFeature(fv.Feature) {
+	ctx.noteProbeWrite(fv)
+	if fv.Feature.Scalar() {
 		fv.Value = value
 		fv.Values = Value{}
 	} else {
@@ -411,6 +462,7 @@ func (inst *Instance) materializeFeatureValue(ctx *Context, name string) (*Featu
 // binding connectors; binding resolution calls it to inspect an endpoint.
 func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string) (*FeatureValue, error) {
 	fv := inst.FeatureValues[name]
+	ctx.noteProbeWrite(fv)
 
 	// A variation holds the variant it was bound to, and nothing until it is
 	// bound: it classifies its variants abstractly, so it is no object of itself.
@@ -449,7 +501,7 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 		if err := ctx.checkDefault(inst, fv, name, val); err != nil {
 			return nil, err
 		}
-		if isScalarFeature(fv.Feature) {
+		if fv.Feature.Scalar() {
 			fv.Value = val
 		} else {
 			// A multi-valued feature holds a collection, so a single value
@@ -467,6 +519,12 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 		}
 		fv.Materialized = true
 		return fv, nil
+	}
+
+	// An abstract feature has no values of its own (KerML 1.0 §7.3.3.1) and an
+	// optional one demands none: each, a connector included, holds only contributions.
+	if fv.Feature.HoldsOnlyContributions() && (ctx.model.IsConnectorUsage(fv.Feature.Symbol) || ctx.CompositeTypeOf(fv.Feature) != nil) {
+		return inst.holdContributions(ctx, fv, name)
 	}
 
 	// A connector holds the features it connects at its ends rather than objects
@@ -552,6 +610,38 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 	return fv, nil
 }
 
+// HoldsOnlyContributions reports whether a feature of known multiplicity
+// materializes no object of its own: it is abstract, or a scalar whose lower
+// bound demands none.
+func (f *EffectiveFeature) HoldsOnlyContributions() bool {
+	mult := f.Multiplicity
+	if !mult.Lower.Known || !mult.Upper.Known {
+		return false
+	}
+	return symbols.IsAbstract(f.Symbol) || (!mult.Lower.Infinite && mult.Lower.Value == 0 && f.Scalar())
+}
+
+// holdContributions fills an abstract or optional feature with the values the
+// features subsetting it contribute, checked against the multiplicity governing it.
+func (inst *Instance) holdContributions(ctx *Context, fv *FeatureValue, name string) (*FeatureValue, error) {
+	contributed, err := ctx.subsettingContributions(inst, name)
+	if err != nil {
+		return nil, err
+	}
+	if why := fv.Feature.Multiplicity.CountViolation(int64(len(contributed))); why != "" {
+		return nil, fmt.Errorf("feature value %s.%s: %w: %s", inst.Type.Name, name, ErrMultiplicityViolation, why)
+	}
+	if fv.Feature.Scalar() {
+		if len(contributed) == 1 {
+			fv.Value = contributed[0]
+		}
+	} else {
+		fv.Values = sequenceOf(contributed)
+	}
+	fv.Materialized = true
+	return fv, nil
+}
+
 // CompositeTypeOf returns what a feature is materialized from, or nil for one
 // that holds a value rather than an object — a default that binds takes precedence
 // over instantiation, as in GetFeatureValue above. A usage with features of its own is
@@ -567,10 +657,29 @@ func (ctx *Context) CompositeTypeOf(feat *EffectiveFeature) *symbols.Symbol {
 	if ctx.model.IsVariationFeature(feat.Symbol) {
 		return nil
 	}
+	// A subject is a reference usage (SysML.xtext SubjectUsage): it holds what
+	// is bound to it, never an object of its own.
+	if isSubjectUsage(feat.Symbol) {
+		return nil
+	}
 	if feat.Symbol != nil && declaresFeatures(feat.Symbol) {
 		return feat.Symbol
 	}
 	return feat.Type
+}
+
+// isSubjectUsage reports whether sym is the subject parameter of a case.
+func isSubjectUsage(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	switch decl := sym.Decl.(type) {
+	case *ast.SubjectMember:
+		return true
+	case *ast.Usage:
+		return decl.Kind == ast.UsageSubject
+	}
+	return false
 }
 
 // declaresFeatures reports whether a usage's own body restates or adds features,

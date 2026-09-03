@@ -257,6 +257,39 @@ func TestAmbiguousCarriersAreNamedByTheirPath(t *testing.T) {
 	}
 }
 
+// A walked feature is one segment of a carrier's path however it is spelled, so
+// a name quoted around a `::` is written back quoted rather than as two names.
+func TestAmbiguousCarrierPathsQuoteFeatureNames(t *testing.T) {
+	src := `package test {
+	part def Bolt {
+		attribute torque : Real = 1.0;
+		constraint tight { torque > 10.0 }
+	}
+	part def Axle {
+		part 'in::out' : Bolt;
+	}
+	part def Car {
+		part 'front axle' : Axle;
+		part rear : Axle;
+	}
+	part car : Car;
+}`
+	ctx, pkg := nestedSubjectFixture(t, src)
+	if _, err := ctx.Instantiate(memberPath(t, pkg, "car")); err != nil {
+		t.Fatalf("instantiate car: %v", err)
+	}
+	tight := memberPath(t, pkg, "Bolt", "tight")
+	_, err := ctx.EvaluateConstraint(tight, tight.OwnerScope)
+	if !errors.Is(err, ErrAmbiguousSubject) {
+		t.Fatalf("tight with two nested carriers: err = %v, want ErrAmbiguousSubject", err)
+	}
+	for _, want := range []string{"('front axle'::'in::out')", "(rear::'in::out')"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("%q does not name a carrier %q", err, want)
+		}
+	}
+}
+
 // A definition nested in another definition is a declaration objects of their
 // own materialize, not a feature reached through a holder, so a condition it
 // declares is about such an object.

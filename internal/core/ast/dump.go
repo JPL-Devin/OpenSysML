@@ -380,6 +380,9 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 		if v.IsEnd {
 			b.WriteString(` end=true`)
 		}
+		if v.IsChain {
+			b.WriteString(` chain=true`)
+		}
 		if v.IsIndividual {
 			b.WriteString(` individual=true`)
 		}
@@ -566,6 +569,13 @@ func dumpBehavior(b *strings.Builder, n Node, depth int) bool {
 		}
 		if v.Via != nil {
 			fmt.Fprintf(b, ` via=%q`, qnString(v.Via))
+		}
+		// Braces holding nothing leave no child to show them by.
+		if v.HasEffect && len(v.Effect) == 0 {
+			b.WriteString(` emptyEffect=true`)
+		}
+		if v.HasBody && len(v.Members) == 0 {
+			b.WriteString(` emptyBody=true`)
 		}
 		kids := make([]Node, 0, len(v.Effect)+2)
 		// A trigger written as a bare name — `accept 'Ground Station Ping'` —

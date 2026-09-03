@@ -10,11 +10,14 @@ elmt:Results
     sysml:qualifiedName "Results" ;
     sysml:elementId "Results" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Results" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Results__Real, elmt:Results__Boolean, elmt:Results__Double, elmt:Results__Only, elmt:Results__AfterMembers, elmt:Results__Body, elmt:Results__Quoted, elmt:Results__Nested, elmt:Results__Documented, elmt:Results__Passes, elmt:Results__Predicate, elmt:Results__Chained, elmt:Results__Conditional, elmt:Results__Widened, elmt:Results__Ranged, elmt:Results__Vehicle, elmt:Results__MassAnalysis, elmt:Results__MassCheck, elmt:Results__MassCase, elmt:Results__rover ;
     sysml:ownedMembership elmt:Results__Real_om, elmt:Results__Boolean_om, elmt:Results__Double_om, elmt:Results__Only_om, elmt:Results__AfterMembers_om, elmt:Results__Body_om, elmt:Results__Quoted_om, elmt:Results__Nested_om, elmt:Results__Documented_om, elmt:Results__Passes_om, elmt:Results__Predicate_om, elmt:Results__Chained_om, elmt:Results__Conditional_om, elmt:Results__Widened_om, elmt:Results__Ranged_om, elmt:Results__Vehicle_om, elmt:Results__MassAnalysis_om, elmt:Results__MassCheck_om, elmt:Results__MassCase_om, elmt:Results__rover_om ;
-    sysml:ownedRelationship elmt:Results__Real_om, elmt:Results__Boolean_om, elmt:Results__Double_om, elmt:Results__Only_om, elmt:Results__AfterMembers_om, elmt:Results__Body_om, elmt:Results__Quoted_om, elmt:Results__Nested_om, elmt:Results__Documented_om, elmt:Results__Passes_om, elmt:Results__Predicate_om, elmt:Results__Chained_om, elmt:Results__Conditional_om, elmt:Results__Widened_om, elmt:Results__Ranged_om, elmt:Results__Vehicle_om, elmt:Results__MassAnalysis_om, elmt:Results__MassCheck_om, elmt:Results__MassCase_om, elmt:Results__rover_om .
+    sysml:ownedRelationship elmt:Results__Real_om, elmt:Results__Boolean_om, elmt:Results__Double_om, elmt:Results__Only_om, elmt:Results__AfterMembers_om, elmt:Results__Body_om, elmt:Results__Quoted_om, elmt:Results__Nested_om, elmt:Results__Documented_om, elmt:Results__Passes_om, elmt:Results__Predicate_om, elmt:Results__Chained_om, elmt:Results__Conditional_om, elmt:Results__Widened_om, elmt:Results__Ranged_om, elmt:Results__Vehicle_om, elmt:Results__MassAnalysis_om, elmt:Results__MassCheck_om, elmt:Results__MassCase_om, elmt:Results__rover_om ;
+    sysx:sourceText "package Results {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:Results__Real
     a sysml:AttributeDefinition ;
@@ -26,7 +29,8 @@ elmt:Results__Real
     sysml:owningRelationship elmt:Results__Real_om ;
     sysml:owningMembership elmt:Results__Real_om ;
     sysml:declaredName "Real" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    attribute def Real;\n" .
 
 elmt:Results__Real_om
     a sysml:OwningMembership ;
@@ -48,7 +52,8 @@ elmt:Results__Boolean
     sysml:owningRelationship elmt:Results__Boolean_om ;
     sysml:owningMembership elmt:Results__Boolean_om ;
     sysml:declaredName "Boolean" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    attribute def Boolean;\n" .
 
 elmt:Results__Boolean_om
     a sysml:OwningMembership ;
@@ -75,7 +80,9 @@ elmt:Results__Double
     sysml:ownedMembership elmt:Results__Double__x_om, elmt:Results__Double___401_om ;
     sysml:ownedRelationship elmt:Results__Double__x_om, elmt:Results__Double___401_om ;
     sysml:ownedFeature elmt:Results__Double__x ;
-    sysml:ownedFeatureMembership elmt:Results__Double__x_om .
+    sysml:ownedFeatureMembership elmt:Results__Double__x_om ;
+    sysx:sourceText "    calc def Double {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Results__Double_om
     a sysml:OwningMembership ;
@@ -100,7 +107,8 @@ elmt:Results__Double__x
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:type elmt:Results__Real ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        in x : Real;\n" .
 
 elmt:Results__Double__x_om
     a sysml:FeatureMembership ;
@@ -123,7 +131,8 @@ elmt:Results__Double___401
     sysml:owner elmt:Results__Double ;
     sysml:owningRelationship elmt:Results__Double___401_om ;
     sysml:owningMembership elmt:Results__Double___401_om ;
-    sysx:resultExpression expr:Results__Double___401_presultExpression .
+    sysx:resultExpression expr:Results__Double___401_presultExpression ;
+    sysx:sourceText "        x * 2\n" .
 
 elmt:Results__Double___401_om
     a sysml:ResultExpressionMembership ;
@@ -170,7 +179,9 @@ elmt:Results__Only
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Results__Only___400 ;
     sysml:ownedMembership elmt:Results__Only___400_om ;
-    sysml:ownedRelationship elmt:Results__Only___400_om .
+    sysml:ownedRelationship elmt:Results__Only___400_om ;
+    sysx:sourceText "    calc def Only {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Results__Only_om
     a sysml:OwningMembership ;
@@ -191,7 +202,8 @@ elmt:Results__Only___400
     sysml:owner elmt:Results__Only ;
     sysml:owningRelationship elmt:Results__Only___400_om ;
     sysml:owningMembership elmt:Results__Only___400_om ;
-    sysx:resultExpression expr:Results__Only___400_presultExpression .
+    sysx:resultExpression expr:Results__Only___400_presultExpression ;
+    sysx:sourceText "        42\n" .
 
 elmt:Results__Only___400_om
     a sysml:ResultExpressionMembership ;
@@ -225,7 +237,9 @@ elmt:Results__AfterMembers
     sysml:ownedMembership elmt:Results__AfterMembers__x_om, elmt:Results__AfterMembers___401_om, elmt:Results__AfterMembers__y_om, elmt:Results__AfterMembers___403_om ;
     sysml:ownedRelationship elmt:Results__AfterMembers__x_om, elmt:Results__AfterMembers___401_om, elmt:Results__AfterMembers__y_om, elmt:Results__AfterMembers___403_om ;
     sysml:ownedFeature elmt:Results__AfterMembers__x, elmt:Results__AfterMembers__y ;
-    sysml:ownedFeatureMembership elmt:Results__AfterMembers__x_om, elmt:Results__AfterMembers__y_om .
+    sysml:ownedFeatureMembership elmt:Results__AfterMembers__x_om, elmt:Results__AfterMembers__y_om ;
+    sysx:sourceText "    calc def AfterMembers {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Results__AfterMembers_om
     a sysml:OwningMembership ;
@@ -250,7 +264,8 @@ elmt:Results__AfterMembers__x
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:type elmt:Results__Real ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        in x : Real;\n" .
 
 elmt:Results__AfterMembers__x_om
     a sysml:FeatureMembership ;
@@ -273,7 +288,8 @@ elmt:Results__AfterMembers___401
     sysml:owner elmt:Results__AfterMembers ;
     sysml:owningRelationship elmt:Results__AfterMembers___401_om ;
     sysml:owningMembership elmt:Results__AfterMembers___401_om ;
-    sysml:body " the answer " .
+    sysml:body " the answer " ;
+    sysx:sourceText "        doc /* the answer */\n" .
 
 elmt:Results__AfterMembers___401_om
     a sysml:OwningMembership ;
@@ -297,7 +313,8 @@ elmt:Results__AfterMembers__y
     sysml:declaredName "y" ;
     sysml:type elmt:Results__Real ;
     sysml:value expr:Results__AfterMembers__y_pvalue ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute y : Real = x + 1;\n" .
 
 elmt:Results__AfterMembers__y_om
     a sysml:FeatureMembership ;
@@ -341,7 +358,8 @@ elmt:Results__AfterMembers___403
     sysml:owner elmt:Results__AfterMembers ;
     sysml:owningRelationship elmt:Results__AfterMembers___403_om ;
     sysml:owningMembership elmt:Results__AfterMembers___403_om ;
-    sysx:resultExpression expr:Results__AfterMembers___403_presultExpression .
+    sysx:resultExpression expr:Results__AfterMembers___403_presultExpression ;
+    sysx:sourceText "        y * y\n" .
 
 elmt:Results__AfterMembers___403_om
     a sysml:ResultExpressionMembership ;
@@ -390,7 +408,9 @@ elmt:Results__Body
     sysml:ownedMembership elmt:Results__Body__x_om, elmt:Results__Body___401_om ;
     sysml:ownedRelationship elmt:Results__Body__x_om, elmt:Results__Body___401_om ;
     sysml:ownedFeature elmt:Results__Body__x ;
-    sysml:ownedFeatureMembership elmt:Results__Body__x_om .
+    sysml:ownedFeatureMembership elmt:Results__Body__x_om ;
+    sysx:sourceText "    calc def Body {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Results__Body_om
     a sysml:OwningMembership ;
@@ -415,7 +435,8 @@ elmt:Results__Body__x
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:type elmt:Results__Real ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        in x : Real;\n" .
 
 elmt:Results__Body__x_om
     a sysml:FeatureMembership ;
@@ -438,7 +459,8 @@ elmt:Results__Body___401
     sysml:owner elmt:Results__Body ;
     sysml:owningRelationship elmt:Results__Body___401_om ;
     sysml:owningMembership elmt:Results__Body___401_om ;
-    sysx:resultExpression expr:Results__Body___401_presultExpression .
+    sysx:resultExpression expr:Results__Body___401_presultExpression ;
+    sysx:sourceText "        { in y : Real; y + x }\n" .
 
 elmt:Results__Body___401_om
     a sysml:ResultExpressionMembership ;
@@ -502,7 +524,9 @@ elmt:Results__Quoted
     sysml:ownedMembership elmt:Results__Quoted__x_om, elmt:Results__Quoted___401_om ;
     sysml:ownedRelationship elmt:Results__Quoted__x_om, elmt:Results__Quoted___401_om ;
     sysml:ownedFeature elmt:Results__Quoted__x ;
-    sysml:ownedFeatureMembership elmt:Results__Quoted__x_om .
+    sysml:ownedFeatureMembership elmt:Results__Quoted__x_om ;
+    sysx:sourceText "    calc def Quoted {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Results__Quoted_om
     a sysml:OwningMembership ;
@@ -527,7 +551,8 @@ elmt:Results__Quoted__x
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:type elmt:Results__Real ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        in x : Real;\n" .
 
 elmt:Results__Quoted__x_om
     a sysml:FeatureMembership ;
@@ -550,7 +575,8 @@ elmt:Results__Quoted___401
     sysml:owner elmt:Results__Quoted ;
     sysml:owningRelationship elmt:Results__Quoted___401_om ;
     sysml:owningMembership elmt:Results__Quoted___401_om ;
-    sysx:resultExpression expr:Results__Quoted___401_presultExpression .
+    sysx:resultExpression expr:Results__Quoted___401_presultExpression ;
+    sysx:sourceText "        { in 'the input' : Real; 'the input' + x }\n" .
 
 elmt:Results__Quoted___401_om
     a sysml:ResultExpressionMembership ;
@@ -614,7 +640,9 @@ elmt:Results__Nested
     sysml:ownedMembership elmt:Results__Nested__x_om, elmt:Results__Nested___401_om ;
     sysml:ownedRelationship elmt:Results__Nested__x_om, elmt:Results__Nested___401_om ;
     sysml:ownedFeature elmt:Results__Nested__x ;
-    sysml:ownedFeatureMembership elmt:Results__Nested__x_om .
+    sysml:ownedFeatureMembership elmt:Results__Nested__x_om ;
+    sysx:sourceText "    calc def Nested {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Results__Nested_om
     a sysml:OwningMembership ;
@@ -639,7 +667,8 @@ elmt:Results__Nested__x
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:type elmt:Results__Real ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        in x : Real;\n" .
 
 elmt:Results__Nested__x_om
     a sysml:FeatureMembership ;
@@ -662,7 +691,8 @@ elmt:Results__Nested___401
     sysml:owner elmt:Results__Nested ;
     sysml:owningRelationship elmt:Results__Nested___401_om ;
     sysml:owningMembership elmt:Results__Nested___401_om ;
-    sysx:resultExpression expr:Results__Nested___401_presultExpression .
+    sysx:resultExpression expr:Results__Nested___401_presultExpression ;
+    sysx:sourceText "        { in y : Real; Double(x = { in z : Real; z + y }) }\n" .
 
 elmt:Results__Nested___401_om
     a sysml:ResultExpressionMembership ;
@@ -750,7 +780,9 @@ elmt:Results__Documented
     sysml:ownedMembership elmt:Results__Documented__x_om, elmt:Results__Documented___401_om ;
     sysml:ownedRelationship elmt:Results__Documented__x_om, elmt:Results__Documented___401_om ;
     sysml:ownedFeature elmt:Results__Documented__x ;
-    sysml:ownedFeatureMembership elmt:Results__Documented__x_om .
+    sysml:ownedFeatureMembership elmt:Results__Documented__x_om ;
+    sysx:sourceText "    calc def Documented {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Results__Documented_om
     a sysml:OwningMembership ;
@@ -775,7 +807,8 @@ elmt:Results__Documented__x
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:type elmt:Results__Real ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        in x : Real;\n" .
 
 elmt:Results__Documented__x_om
     a sysml:FeatureMembership ;
@@ -798,7 +831,8 @@ elmt:Results__Documented___401
     sysml:owner elmt:Results__Documented ;
     sysml:owningRelationship elmt:Results__Documented___401_om ;
     sysml:owningMembership elmt:Results__Documented___401_om ;
-    sysx:resultExpression expr:Results__Documented___401_presultExpression .
+    sysx:resultExpression expr:Results__Documented___401_presultExpression ;
+    sysx:sourceText "        { doc /* the parameter, unchanged */ in y : Real; y }\n" .
 
 elmt:Results__Documented___401_om
     a sysml:ResultExpressionMembership ;
@@ -823,7 +857,7 @@ expr:Results__Documented___401_presultExpression_pm0
     a sysml:Documentation ;
     sysml:elementId "Results__Documented___401_presultExpression_pm0" ;
     sysx:memberIndex "0"^^xsd:integer ;
-    sysx:sourceText "doc /* the parameter, unchanged */" ;
+    sysx:sourceText "doc" ;
     sysml:body " the parameter, unchanged " .
 
 expr:Results__Documented___401_presultExpression_pin1
@@ -855,7 +889,9 @@ elmt:Results__Passes
     sysml:ownedMembership elmt:Results__Passes__ok_om, elmt:Results__Passes___401_om ;
     sysml:ownedRelationship elmt:Results__Passes__ok_om, elmt:Results__Passes___401_om ;
     sysml:ownedFeature elmt:Results__Passes__ok ;
-    sysml:ownedFeatureMembership elmt:Results__Passes__ok_om .
+    sysml:ownedFeatureMembership elmt:Results__Passes__ok_om ;
+    sysx:sourceText "    calc def Passes {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Results__Passes_om
     a sysml:OwningMembership ;
@@ -880,7 +916,8 @@ elmt:Results__Passes__ok
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:type elmt:Results__Boolean ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        in ok : Boolean;\n" .
 
 elmt:Results__Passes__ok_om
     a sysml:FeatureMembership ;
@@ -903,7 +940,8 @@ elmt:Results__Passes___401
     sysml:owner elmt:Results__Passes ;
     sysml:owningRelationship elmt:Results__Passes___401_om ;
     sysml:owningMembership elmt:Results__Passes___401_om ;
-    sysx:resultExpression expr:Results__Passes___401_presultExpression .
+    sysx:resultExpression expr:Results__Passes___401_presultExpression ;
+    sysx:sourceText "        ok\n" .
 
 elmt:Results__Passes___401_om
     a sysml:ResultExpressionMembership ;
@@ -937,7 +975,9 @@ elmt:Results__Predicate
     sysml:ownedMembership elmt:Results__Predicate__x_om, elmt:Results__Predicate__keep_om, elmt:Results__Predicate__always_om, elmt:Results__Predicate___403_om ;
     sysml:ownedRelationship elmt:Results__Predicate__x_om, elmt:Results__Predicate__keep_om, elmt:Results__Predicate__always_om, elmt:Results__Predicate___403_om ;
     sysml:ownedFeature elmt:Results__Predicate__x, elmt:Results__Predicate__keep, elmt:Results__Predicate__always ;
-    sysml:ownedFeatureMembership elmt:Results__Predicate__x_om, elmt:Results__Predicate__keep_om, elmt:Results__Predicate__always_om .
+    sysml:ownedFeatureMembership elmt:Results__Predicate__x_om, elmt:Results__Predicate__keep_om, elmt:Results__Predicate__always_om ;
+    sysx:sourceText "    calc def Predicate {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Results__Predicate_om
     a sysml:OwningMembership ;
@@ -962,7 +1002,8 @@ elmt:Results__Predicate__x
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:type elmt:Results__Real ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        in x : Real;\n" .
 
 elmt:Results__Predicate__x_om
     a sysml:FeatureMembership ;
@@ -993,7 +1034,8 @@ elmt:Results__Predicate__keep
     sysml:ownedMembership elmt:Results__Predicate__keep__v_om, elmt:Results__Predicate__keep___401_om ;
     sysml:ownedRelationship elmt:Results__Predicate__keep__v_om, elmt:Results__Predicate__keep___401_om ;
     sysml:ownedFeature elmt:Results__Predicate__keep__v ;
-    sysml:ownedFeatureMembership elmt:Results__Predicate__keep__v_om .
+    sysml:ownedFeatureMembership elmt:Results__Predicate__keep__v_om ;
+    sysx:sourceText "        in expr keep : Boolean { in v : Real; v > x }\n" .
 
 elmt:Results__Predicate__keep_om
     a sysml:FeatureMembership ;
@@ -1091,7 +1133,8 @@ elmt:Results__Predicate__always
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Results__Predicate__always___400 ;
     sysml:ownedMembership elmt:Results__Predicate__always___400_om ;
-    sysml:ownedRelationship elmt:Results__Predicate__always___400_om .
+    sysml:ownedRelationship elmt:Results__Predicate__always___400_om ;
+    sysx:sourceText "        in expr always { true }\n" .
 
 elmt:Results__Predicate__always_om
     a sysml:FeatureMembership ;
@@ -1142,7 +1185,8 @@ elmt:Results__Predicate___403
     sysml:owner elmt:Results__Predicate ;
     sysml:owningRelationship elmt:Results__Predicate___403_om ;
     sysml:owningMembership elmt:Results__Predicate___403_om ;
-    sysx:resultExpression expr:Results__Predicate___403_presultExpression .
+    sysx:resultExpression expr:Results__Predicate___403_presultExpression ;
+    sysx:sourceText "        keep(x)\n" .
 
 elmt:Results__Predicate___403_om
     a sysml:ResultExpressionMembership ;
@@ -1184,7 +1228,9 @@ elmt:Results__Chained
     sysml:ownedMembership elmt:Results__Chained__x_om, elmt:Results__Chained___401_om ;
     sysml:ownedRelationship elmt:Results__Chained__x_om, elmt:Results__Chained___401_om ;
     sysml:ownedFeature elmt:Results__Chained__x ;
-    sysml:ownedFeatureMembership elmt:Results__Chained__x_om .
+    sysml:ownedFeatureMembership elmt:Results__Chained__x_om ;
+    sysx:sourceText "    calc def Chained {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Results__Chained_om
     a sysml:OwningMembership ;
@@ -1209,7 +1255,8 @@ elmt:Results__Chained__x
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:type elmt:Results__Real ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        in x : Real;\n" .
 
 elmt:Results__Chained__x_om
     a sysml:FeatureMembership ;
@@ -1232,7 +1279,8 @@ elmt:Results__Chained___401
     sysml:owner elmt:Results__Chained ;
     sysml:owningRelationship elmt:Results__Chained___401_om ;
     sysml:owningMembership elmt:Results__Chained___401_om ;
-    sysx:resultExpression expr:Results__Chained___401_presultExpression .
+    sysx:resultExpression expr:Results__Chained___401_presultExpression ;
+    sysx:sourceText "        Double(x = Double(x)).result\n" .
 
 elmt:Results__Chained___401_om
     a sysml:ResultExpressionMembership ;
@@ -1291,7 +1339,9 @@ elmt:Results__Conditional
     sysml:ownedMembership elmt:Results__Conditional__x_om, elmt:Results__Conditional___401_om ;
     sysml:ownedRelationship elmt:Results__Conditional__x_om, elmt:Results__Conditional___401_om ;
     sysml:ownedFeature elmt:Results__Conditional__x ;
-    sysml:ownedFeatureMembership elmt:Results__Conditional__x_om .
+    sysml:ownedFeatureMembership elmt:Results__Conditional__x_om ;
+    sysx:sourceText "    calc def Conditional {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Results__Conditional_om
     a sysml:OwningMembership ;
@@ -1316,7 +1366,8 @@ elmt:Results__Conditional__x
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:type elmt:Results__Real ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        in x : Real;\n" .
 
 elmt:Results__Conditional__x_om
     a sysml:FeatureMembership ;
@@ -1339,7 +1390,8 @@ elmt:Results__Conditional___401
     sysml:owner elmt:Results__Conditional ;
     sysml:owningRelationship elmt:Results__Conditional___401_om ;
     sysml:owningMembership elmt:Results__Conditional___401_om ;
-    sysx:resultExpression expr:Results__Conditional___401_presultExpression .
+    sysx:resultExpression expr:Results__Conditional___401_presultExpression ;
+    sysx:sourceText "        if x > 0 ? x else -x\n" .
 
 elmt:Results__Conditional___401_om
     a sysml:ResultExpressionMembership ;
@@ -1418,7 +1470,9 @@ elmt:Results__Widened
     sysml:ownedMembership elmt:Results__Widened__x_om, elmt:Results__Widened___401_om ;
     sysml:ownedRelationship elmt:Results__Widened__x_om, elmt:Results__Widened___401_om ;
     sysml:ownedFeature elmt:Results__Widened__x ;
-    sysml:ownedFeatureMembership elmt:Results__Widened__x_om .
+    sysml:ownedFeatureMembership elmt:Results__Widened__x_om ;
+    sysx:sourceText "    calc def Widened {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Results__Widened_om
     a sysml:OwningMembership ;
@@ -1443,7 +1497,8 @@ elmt:Results__Widened__x
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:type elmt:Results__Real ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        in x : Real;\n" .
 
 elmt:Results__Widened__x_om
     a sysml:FeatureMembership ;
@@ -1466,7 +1521,8 @@ elmt:Results__Widened___401
     sysml:owner elmt:Results__Widened ;
     sysml:owningRelationship elmt:Results__Widened___401_om ;
     sysml:owningMembership elmt:Results__Widened___401_om ;
-    sysx:resultExpression expr:Results__Widened___401_presultExpression .
+    sysx:resultExpression expr:Results__Widened___401_presultExpression ;
+    sysx:sourceText "        (as Real[2])\n" .
 
 elmt:Results__Widened___401_om
     a sysml:ResultExpressionMembership ;
@@ -1508,7 +1564,9 @@ elmt:Results__Ranged
     sysml:ownedMembership elmt:Results__Ranged__x_om, elmt:Results__Ranged___401_om ;
     sysml:ownedRelationship elmt:Results__Ranged__x_om, elmt:Results__Ranged___401_om ;
     sysml:ownedFeature elmt:Results__Ranged__x ;
-    sysml:ownedFeatureMembership elmt:Results__Ranged__x_om .
+    sysml:ownedFeatureMembership elmt:Results__Ranged__x_om ;
+    sysx:sourceText "    calc def Ranged {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Results__Ranged_om
     a sysml:OwningMembership ;
@@ -1533,7 +1591,8 @@ elmt:Results__Ranged__x
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:type elmt:Results__Real ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        in x : Real;\n" .
 
 elmt:Results__Ranged__x_om
     a sysml:FeatureMembership ;
@@ -1556,7 +1615,8 @@ elmt:Results__Ranged___401
     sysml:owner elmt:Results__Ranged ;
     sysml:owningRelationship elmt:Results__Ranged___401_om ;
     sysml:owningMembership elmt:Results__Ranged___401_om ;
-    sysx:resultExpression expr:Results__Ranged___401_presultExpression .
+    sysx:resultExpression expr:Results__Ranged___401_presultExpression ;
+    sysx:sourceText "        (as Real[1..*])\n" .
 
 elmt:Results__Ranged___401_om
     a sysml:ResultExpressionMembership ;
@@ -1604,7 +1664,9 @@ elmt:Results__Vehicle
     sysml:ownedMembership elmt:Results__Vehicle__mass_om ;
     sysml:ownedRelationship elmt:Results__Vehicle__mass_om ;
     sysml:ownedFeature elmt:Results__Vehicle__mass ;
-    sysml:ownedFeatureMembership elmt:Results__Vehicle__mass_om .
+    sysml:ownedFeatureMembership elmt:Results__Vehicle__mass_om ;
+    sysx:sourceText "    part def Vehicle {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Results__Vehicle_om
     a sysml:OwningMembership ;
@@ -1627,7 +1689,8 @@ elmt:Results__Vehicle__mass
     sysml:owningMembership elmt:Results__Vehicle__mass_om ;
     sysml:declaredName "mass" ;
     sysml:type elmt:Results__Real ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute mass : Real;\n" .
 
 elmt:Results__Vehicle__mass_om
     a sysml:FeatureMembership ;
@@ -1655,7 +1718,9 @@ elmt:Results__MassAnalysis
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedRelationship elmt:Results__MassAnalysis__v, elmt:Results__MassAnalysis___401_om ;
     sysml:ownedMember elmt:Results__MassAnalysis___401 ;
-    sysml:ownedMembership elmt:Results__MassAnalysis___401_om .
+    sysml:ownedMembership elmt:Results__MassAnalysis___401_om ;
+    sysx:sourceText "    analysis def MassAnalysis {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Results__MassAnalysis_om
     a sysml:OwningMembership ;
@@ -1677,7 +1742,8 @@ elmt:Results__MassAnalysis__v
     sysml:owningRelatedElement elmt:Results__MassAnalysis ;
     sysml:declaredName "v" ;
     sysml:type elmt:Results__Vehicle ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        subject v : Vehicle;\n" .
 
 elmt:Results__MassAnalysis___401
     a sysx:ResultExpressionMember ;
@@ -1688,7 +1754,8 @@ elmt:Results__MassAnalysis___401
     sysml:owner elmt:Results__MassAnalysis ;
     sysml:owningRelationship elmt:Results__MassAnalysis___401_om ;
     sysml:owningMembership elmt:Results__MassAnalysis___401_om ;
-    sysx:resultExpression expr:Results__MassAnalysis___401_presultExpression .
+    sysx:resultExpression expr:Results__MassAnalysis___401_presultExpression ;
+    sysx:sourceText "        v.mass\n" .
 
 elmt:Results__MassAnalysis___401_om
     a sysml:ResultExpressionMembership ;
@@ -1729,7 +1796,9 @@ elmt:Results__MassCheck
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedRelationship elmt:Results__MassCheck__v, elmt:Results__MassCheck___401_om ;
     sysml:ownedMember elmt:Results__MassCheck___401 ;
-    sysml:ownedMembership elmt:Results__MassCheck___401_om .
+    sysml:ownedMembership elmt:Results__MassCheck___401_om ;
+    sysx:sourceText "    verification def MassCheck {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Results__MassCheck_om
     a sysml:OwningMembership ;
@@ -1751,7 +1820,8 @@ elmt:Results__MassCheck__v
     sysml:owningRelatedElement elmt:Results__MassCheck ;
     sysml:declaredName "v" ;
     sysml:type elmt:Results__Vehicle ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        subject v : Vehicle;\n" .
 
 elmt:Results__MassCheck___401
     a sysx:ResultExpressionMember ;
@@ -1762,7 +1832,8 @@ elmt:Results__MassCheck___401
     sysml:owner elmt:Results__MassCheck ;
     sysml:owningRelationship elmt:Results__MassCheck___401_om ;
     sysml:owningMembership elmt:Results__MassCheck___401_om ;
-    sysx:resultExpression expr:Results__MassCheck___401_presultExpression .
+    sysx:resultExpression expr:Results__MassCheck___401_presultExpression ;
+    sysx:sourceText "        Passes(v.mass > 0)\n" .
 
 elmt:Results__MassCheck___401_om
     a sysml:ResultExpressionMembership ;
@@ -1825,7 +1896,9 @@ elmt:Results__MassCase
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedRelationship elmt:Results__MassCase__v, elmt:Results__MassCase___401_om ;
     sysml:ownedMember elmt:Results__MassCase___401 ;
-    sysml:ownedMembership elmt:Results__MassCase___401_om .
+    sysml:ownedMembership elmt:Results__MassCase___401_om ;
+    sysx:sourceText "    case def MassCase {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Results__MassCase_om
     a sysml:OwningMembership ;
@@ -1847,7 +1920,8 @@ elmt:Results__MassCase__v
     sysml:owningRelatedElement elmt:Results__MassCase ;
     sysml:declaredName "v" ;
     sysml:type elmt:Results__Vehicle ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        subject v : Vehicle;\n" .
 
 elmt:Results__MassCase___401
     a sysx:ResultExpressionMember ;
@@ -1858,7 +1932,8 @@ elmt:Results__MassCase___401
     sysml:owner elmt:Results__MassCase ;
     sysml:owningRelationship elmt:Results__MassCase___401_om ;
     sysml:owningMembership elmt:Results__MassCase___401_om ;
-    sysx:resultExpression expr:Results__MassCase___401_presultExpression .
+    sysx:resultExpression expr:Results__MassCase___401_presultExpression ;
+    sysx:sourceText "        v.mass * 2\n" .
 
 elmt:Results__MassCase___401_om
     a sysml:ResultExpressionMembership ;
@@ -1916,7 +1991,9 @@ elmt:Results__rover
     sysml:ownedMembership elmt:Results__rover__twice_om ;
     sysml:ownedRelationship elmt:Results__rover__twice_om ;
     sysml:ownedFeature elmt:Results__rover__twice ;
-    sysml:ownedFeatureMembership elmt:Results__rover__twice_om .
+    sysml:ownedFeatureMembership elmt:Results__rover__twice_om ;
+    sysx:sourceText "    part rover : Vehicle {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Results__rover_om
     a sysml:OwningMembership ;
@@ -1944,7 +2021,9 @@ elmt:Results__rover__twice
     sysml:ownedMembership elmt:Results__rover__twice__x_om, elmt:Results__rover__twice___401_om ;
     sysml:ownedRelationship elmt:Results__rover__twice__x_om, elmt:Results__rover__twice___401_om ;
     sysml:ownedFeature elmt:Results__rover__twice__x ;
-    sysml:ownedFeatureMembership elmt:Results__rover__twice__x_om .
+    sysml:ownedFeatureMembership elmt:Results__rover__twice__x_om ;
+    sysx:sourceText "        calc twice : Double {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:Results__rover__twice_om
     a sysml:FeatureMembership ;
@@ -1971,7 +2050,8 @@ elmt:Results__rover__twice__x
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:value expr:Results__rover__twice__x_pvalue ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            in x = mass;\n" .
 
 elmt:Results__rover__twice__x_om
     a sysml:FeatureMembership ;
@@ -2000,7 +2080,8 @@ elmt:Results__rover__twice___401
     sysml:owner elmt:Results__rover__twice ;
     sysml:owningRelationship elmt:Results__rover__twice___401_om ;
     sysml:owningMembership elmt:Results__rover__twice___401_om ;
-    sysx:resultExpression expr:Results__rover__twice___401_presultExpression .
+    sysx:resultExpression expr:Results__rover__twice___401_presultExpression ;
+    sysx:sourceText "            x + x\n" .
 
 elmt:Results__rover__twice___401_om
     a sysml:ResultExpressionMembership ;

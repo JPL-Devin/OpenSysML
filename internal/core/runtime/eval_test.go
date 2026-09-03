@@ -264,6 +264,12 @@ func TestEval_EqualityNull(t *testing.T) {
 	}{
 		{"null == null", true},
 		{"null != null", false},
+		{"null == ()", true},
+		{"() == null", true},
+		{"() != null", false},
+		{"null === ()", true},
+		{"() !== null", false},
+		{"() == 0", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.src, func(t *testing.T) {

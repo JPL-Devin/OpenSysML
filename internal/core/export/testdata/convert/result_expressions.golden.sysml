@@ -36,13 +36,8 @@ package Results {
     }
     calc def Predicate {
         in x : Real;
-        in expr keep : Boolean {
-            in v : Real;
-            v > x
-        }
-        in expr always {
-            true
-        }
+        in expr keep : Boolean { in v : Real; v > x }
+        in expr always { true }
         keep(x)
     }
     calc def Chained {

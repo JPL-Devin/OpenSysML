@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"fmt"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -27,6 +29,10 @@ import (
 //
 // Object identifies the object the message reached, 0 for none, and Delivery
 // what of that destination a consumer must satisfy to take the message.
+//
+// PortID identifies the port object the message reached, 0 where the run holds
+// none. A binding connector makes a boundary port and an inner port one object,
+// so an accept on either port takes a message that reached the other.
 type Message struct {
 	SignalType string
 	// Signal is the definition SignalType resolved to when the send was built,
@@ -37,6 +43,7 @@ type Message struct {
 	Target   string
 	Port     string
 	Object   int64
+	PortID   int64
 	Delivery DeliveryKind
 	Payload  map[string]Value
 }
@@ -98,10 +105,11 @@ func deliveryOf(msg Message) DeliveryKind {
 
 // TakeMessage removes and returns the oldest message satisfying match. Messages
 // that do not match keep their place in the queue, so a consumer looking for
-// one type does not consume or reorder another's.
+// one type does not consume or reorder another's. A match probing the machines
+// may post and drop messages behind the one it examines; those are visited too.
 func (ctx *Context) TakeMessage(match func(Message) bool) (Message, bool) {
-	for i, msg := range ctx.messages {
-		if match(msg) {
+	for i := 0; i < len(ctx.messages); i++ {
+		if msg := ctx.messages[i]; match(msg) {
 			ctx.messages = append(ctx.messages[:i], ctx.messages[i+1:]...)
 			return msg, true
 		}
@@ -114,6 +122,92 @@ func (ctx *Context) PendingMessages() []Message {
 	out := make([]Message, len(ctx.messages))
 	copy(out, ctx.messages)
 	return out
+}
+
+// SignalDefinitionKinds are the definitions a signal is declared as: what an
+// accept may be typed by and a send may carry. A behavior definition is neither.
+var SignalDefinitionKinds = []symbols.SymbolKind{
+	symbols.SymbolAttributeDef,
+	symbols.SymbolItemDef,
+	symbols.SymbolOccurrenceDef,
+	symbols.SymbolPartDef,
+	symbols.SymbolIndividualDef,
+	symbols.SymbolEnumerationDef,
+	symbols.SymbolMetadataDef,
+}
+
+// IsSignalDefinition reports whether a symbol declares a definition a signal may
+// be typed by, one of SignalDefinitionKinds.
+func IsSignalDefinition(sym *symbols.Symbol) bool {
+	return isDefinitionSymbol(sym) && slices.Contains(SignalDefinitionKinds, sym.Kind)
+}
+
+// SignalMessage builds the message `send Signal(args) to <object>` posts, for PostMessage;
+// a nil object is one anyone may take, an argument no feature of the signal admits is refused.
+// An element that is no signal definition (see SignalDefinitionKinds) is refused with
+// ErrNotASignal.
+func (ctx *Context) SignalMessage(signal *symbols.Symbol, args map[string]Value, to *Instance) (Message, error) {
+	if !IsSignalDefinition(signal) {
+		return Message{}, fmt.Errorf("%w: %s", ErrNotASignal, symbolText(signal))
+	}
+	features := ctx.FeaturesOf(signal)
+	payload := make(map[string]Value, len(args))
+	for _, name := range sortedArgNames(args) {
+		feat := carriedFeature(features, name)
+		if feat == nil {
+			return Message{}, fmt.Errorf("%w: %s carries no feature %q%s",
+				ErrSignalArgument, symbolText(signal), name, carriedFeaturesNote(features))
+		}
+		if err := ctx.checkAdmits(feat, symbolText(signal)+"."+name, args[name]); err != nil {
+			return Message{}, fmt.Errorf("%w: %w", ErrSignalArgument, err)
+		}
+		payload[name] = args[name]
+	}
+	msg := NamedSignalMessage(signal.Name, to)
+	msg.Signal, msg.Payload = signal, payload
+	return msg, nil
+}
+
+// NamedSignalMessage builds the message a send of a signal no declaration types
+// posts: matched by name alone, addressed to the object when there is one.
+func NamedSignalMessage(name string, to *Instance) Message {
+	msg := Message{SignalType: name}
+	if addr, ok := objectAddress(objectID(to)); ok {
+		msg.Object, msg.Delivery = addr.Object, addr.Delivery
+	}
+	return msg
+}
+
+// sortedArgNames lists the argument names in a stable order.
+func sortedArgNames(args map[string]Value) []string {
+	names := make([]string, 0, len(args))
+	for name := range args {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// carriedFeature is the feature of the name, nil when none has it.
+func carriedFeature(features []EffectiveFeature, name string) *EffectiveFeature {
+	for i := range features {
+		if features[i].Name == name {
+			return &features[i]
+		}
+	}
+	return nil
+}
+
+// carriedFeaturesNote names the features a signal carries, for an argument error.
+func carriedFeaturesNote(features []EffectiveFeature) string {
+	if len(features) == 0 {
+		return " (it carries none)"
+	}
+	names := make([]string, 0, len(features))
+	for _, feat := range features {
+		names = append(names, feat.Name)
+	}
+	return " (it carries " + strings.Join(names, ", ") + ")"
 }
 
 // reaches reports whether a consumer named name, accepting on port and performed
@@ -142,6 +236,59 @@ func objectID(inst *Instance) int64 {
 		return 0
 	}
 	return inst.ID
+}
+
+// messageReaches reports whether a consumer named name, accepting on port and
+// performed by self, may take message m: by the destination as written, or by
+// the identity of the port object it reached — a port a binding connector
+// joins to another is that other port, whichever object's feature names it.
+// Resolving the consumer's port may materialize it, which can fail.
+func (ctx *Context) messageReaches(m Message, name, port string, self *Instance) (bool, error) {
+	if m.reaches(name, port, objectID(self)) {
+		return true, nil
+	}
+	if m.PortID == 0 || port == "" {
+		return false, nil
+	}
+	portID, err := ctx.portInstanceID(self, port)
+	if err != nil {
+		return false, err
+	}
+	if m.PortID != portID {
+		return false, nil
+	}
+	switch m.Delivery {
+	case DeliverPort:
+		return true, nil
+	case DeliverPortReceiver:
+		return m.Target == name, nil
+	}
+	return false, nil
+}
+
+// portInstanceID is the identity of the port object a dotted port path of
+// holder names, materializing it; 0 where the path names no port object.
+func (ctx *Context) portInstanceID(holder *Instance, port string) (int64, error) {
+	if holder == nil || port == "" {
+		return 0, nil
+	}
+	current := holder
+	segments := strings.Split(port, ".")
+	for i, segment := range segments {
+		fv, held := current.FeatureValues[segment]
+		if !held || (i == len(segments)-1 && !isPortFeature(fv.Feature)) {
+			return 0, nil
+		}
+		next, ok, err := ctx.fvObject(current, segment)
+		if err != nil {
+			return 0, err
+		}
+		if !ok {
+			return 0, nil
+		}
+		current = next
+	}
+	return current.ID, nil
 }
 
 // postVia routes a message out of a sending port: every port joined to it that
@@ -190,22 +337,41 @@ func (ctx *Context) postVia(conns []lower.Connection, msg Message, send lower.Se
 		return &UnroutableSendError{Port: send.Target, Outbound: outbound}
 	}
 	// A connection joins two objects, so each copy is held to the identity of the
-	// object whose port the end resolved to rather than to the sender's.
+	// object whose port the end resolved to rather than to the sender's. Two
+	// destinations naming one port object (through a binding) get one copy.
+	// Every destination is resolved before any copy is queued, so a failure
+	// leaves nothing behind.
 	posted := map[ownerDelivery]bool{}
+	postedPorts := map[int64]bool{}
+	var routed []Message
 	for _, delivery := range append(receiving, crossing...) {
 		if posted[delivery] {
 			continue
 		}
 		posted[delivery] = true
-		routed := msg
-		routed.Target = receiver
-		routed.Port = delivery.port
-		routed.Object = delivery.object
-		routed.Delivery = DeliverPort
-		if receiver != "" {
-			routed.Delivery = DeliverPortReceiver
+		portID, err := ctx.portInstanceID(ctx.instances[delivery.object], delivery.port)
+		if err != nil {
+			return err
 		}
-		ctx.PostMessage(routed)
+		if portID != 0 {
+			if postedPorts[portID] {
+				continue
+			}
+			postedPorts[portID] = true
+		}
+		copied := msg
+		copied.Target = receiver
+		copied.Port = delivery.port
+		copied.Object = delivery.object
+		copied.PortID = portID
+		copied.Delivery = DeliverPort
+		if receiver != "" {
+			copied.Delivery = DeliverPortReceiver
+		}
+		routed = append(routed, copied)
+	}
+	for _, m := range routed {
+		ctx.PostMessage(m)
 	}
 	return nil
 }
@@ -331,10 +497,20 @@ func (ctx *Context) postTo(msg Message, send lower.Send, self *Instance) error {
 	if err != nil {
 		return err
 	}
+	copies := make([]Message, 0, len(addrs))
 	for _, addr := range addrs {
 		copied := msg
 		copied.Target, copied.Port, copied.Object = addr.Name, addr.Port, addr.Object
 		copied.Delivery = addr.Delivery
+		if addr.Delivery == DeliverPort {
+			copied.PortID, err = ctx.portInstanceID(ctx.instances[addr.Object], addr.Port)
+			if err != nil {
+				return err
+			}
+		}
+		copies = append(copies, copied)
+	}
+	for _, copied := range copies {
 		ctx.PostMessage(copied)
 	}
 	return nil
@@ -665,7 +841,7 @@ func (ctx *Context) messageMatches(m Message, want *ast.QualifiedName, scope *sy
 	}
 	if m.Signal != nil && ctx.model != nil {
 		if wantSym := ctx.resolveTypeRef(scope, want); wantSym != nil {
-			return ctx.model.Conforms(m.Signal, wantSym)
+			return ctx.conforms(m.Signal, wantSym)
 		}
 	}
 	return m.carriesSignal(want.Parts[len(want.Parts)-1].Text)

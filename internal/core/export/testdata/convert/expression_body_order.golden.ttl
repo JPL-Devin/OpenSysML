@@ -10,11 +10,14 @@ elmt:Ordered
     sysml:qualifiedName "Ordered" ;
     sysml:elementId "Ordered" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Ordered" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Ordered__Real, elmt:Ordered__Mixed, elmt:Ordered__Declares ;
     sysml:ownedMembership elmt:Ordered__Real_om, elmt:Ordered__Mixed_om, elmt:Ordered__Declares_om ;
-    sysml:ownedRelationship elmt:Ordered__Real_om, elmt:Ordered__Mixed_om, elmt:Ordered__Declares_om .
+    sysml:ownedRelationship elmt:Ordered__Real_om, elmt:Ordered__Mixed_om, elmt:Ordered__Declares_om ;
+    sysx:sourceText "package Ordered {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:Ordered__Real
     a sysml:AttributeDefinition ;
@@ -26,7 +29,8 @@ elmt:Ordered__Real
     sysml:owningRelationship elmt:Ordered__Real_om ;
     sysml:owningMembership elmt:Ordered__Real_om ;
     sysml:declaredName "Real" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    attribute def Real;\n" .
 
 elmt:Ordered__Real_om
     a sysml:OwningMembership ;
@@ -53,7 +57,9 @@ elmt:Ordered__Mixed
     sysml:ownedMembership elmt:Ordered__Mixed__x_om, elmt:Ordered__Mixed___401_om ;
     sysml:ownedRelationship elmt:Ordered__Mixed__x_om, elmt:Ordered__Mixed___401_om ;
     sysml:ownedFeature elmt:Ordered__Mixed__x ;
-    sysml:ownedFeatureMembership elmt:Ordered__Mixed__x_om .
+    sysml:ownedFeatureMembership elmt:Ordered__Mixed__x_om ;
+    sysx:sourceText "    calc def Mixed {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Ordered__Mixed_om
     a sysml:OwningMembership ;
@@ -78,7 +84,8 @@ elmt:Ordered__Mixed__x
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:type elmt:Ordered__Real ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        in x : Real;\n" .
 
 elmt:Ordered__Mixed__x_om
     a sysml:FeatureMembership ;
@@ -101,7 +108,8 @@ elmt:Ordered__Mixed___401
     sysml:owner elmt:Ordered__Mixed ;
     sysml:owningRelationship elmt:Ordered__Mixed___401_om ;
     sysml:owningMembership elmt:Ordered__Mixed___401_om ;
-    sysx:resultExpression expr:Ordered__Mixed___401_presultExpression .
+    sysx:resultExpression expr:Ordered__Mixed___401_presultExpression ;
+    sysx:sourceText "        { in a : Real; private attribute k : Real = 1; in b : Real; a + b + k * x }\n" .
 
 elmt:Ordered__Mixed___401_om
     a sysml:ResultExpressionMembership ;
@@ -208,7 +216,9 @@ elmt:Ordered__Declares
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Ordered__Declares___400 ;
     sysml:ownedMembership elmt:Ordered__Declares___400_om ;
-    sysml:ownedRelationship elmt:Ordered__Declares___400_om .
+    sysml:ownedRelationship elmt:Ordered__Declares___400_om ;
+    sysx:sourceText "    calc def Declares {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Ordered__Declares_om
     a sysml:OwningMembership ;
@@ -229,7 +239,8 @@ elmt:Ordered__Declares___400
     sysml:owner elmt:Ordered__Declares ;
     sysml:owningRelationship elmt:Ordered__Declares___400_om ;
     sysml:owningMembership elmt:Ordered__Declares___400_om ;
-    sysx:resultExpression expr:Ordered__Declares___400_presultExpression .
+    sysx:resultExpression expr:Ordered__Declares___400_presultExpression ;
+    sysx:sourceText "        { private attribute k : Real = 1; }\n" .
 
 elmt:Ordered__Declares___400_om
     a sysml:ResultExpressionMembership ;

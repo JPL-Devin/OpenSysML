@@ -12,7 +12,7 @@ package FlowsAndViews {
     part tanks : Tank[*] nonunique;
     part vehicle {
         part tank : Tank;
-        part spares : Tank[0..2] nonunique subsets tanks;
+        part spares : Tank[0..2] nonunique :> tanks;
         part firstSpare : spares.self;
         part engine : Engine;
         allocate tank to engine;

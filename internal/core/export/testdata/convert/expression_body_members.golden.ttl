@@ -10,11 +10,14 @@ elmt:Bodies
     sysml:qualifiedName "Bodies" ;
     sysml:elementId "Bodies" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Bodies" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Bodies__Real, elmt:Bodies__Scaled ;
     sysml:ownedMembership elmt:Bodies__Real_om, elmt:Bodies__Scaled_om ;
-    sysml:ownedRelationship elmt:Bodies__Real_om, elmt:Bodies__Scaled_om .
+    sysml:ownedRelationship elmt:Bodies__Real_om, elmt:Bodies__Scaled_om ;
+    sysx:sourceText "package Bodies {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:Bodies__Real
     a sysml:AttributeDefinition ;
@@ -26,7 +29,8 @@ elmt:Bodies__Real
     sysml:owningRelationship elmt:Bodies__Real_om ;
     sysml:owningMembership elmt:Bodies__Real_om ;
     sysml:declaredName "Real" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    attribute def Real;\n" .
 
 elmt:Bodies__Real_om
     a sysml:OwningMembership ;
@@ -53,7 +57,9 @@ elmt:Bodies__Scaled
     sysml:ownedMembership elmt:Bodies__Scaled__x_om, elmt:Bodies__Scaled___401_om ;
     sysml:ownedRelationship elmt:Bodies__Scaled__x_om, elmt:Bodies__Scaled___401_om ;
     sysml:ownedFeature elmt:Bodies__Scaled__x ;
-    sysml:ownedFeatureMembership elmt:Bodies__Scaled__x_om .
+    sysml:ownedFeatureMembership elmt:Bodies__Scaled__x_om ;
+    sysx:sourceText "    calc def Scaled {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Bodies__Scaled_om
     a sysml:OwningMembership ;
@@ -78,7 +84,8 @@ elmt:Bodies__Scaled__x
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:type elmt:Bodies__Real ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        in x : Real;\n" .
 
 elmt:Bodies__Scaled__x_om
     a sysml:FeatureMembership ;
@@ -101,7 +108,8 @@ elmt:Bodies__Scaled___401
     sysml:owner elmt:Bodies__Scaled ;
     sysml:owningRelationship elmt:Bodies__Scaled___401_om ;
     sysml:owningMembership elmt:Bodies__Scaled___401_om ;
-    sysx:resultExpression expr:Bodies__Scaled___401_presultExpression .
+    sysx:resultExpression expr:Bodies__Scaled___401_presultExpression ;
+    sysx:sourceText "        { in y : Real; private attribute k : Real = 2; y * k + x }\n" .
 
 elmt:Bodies__Scaled___401_om
     a sysml:ResultExpressionMembership ;

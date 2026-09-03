@@ -65,7 +65,6 @@ var (
 	docDeclaredSilencePattern = regexp.MustCompile("^- \\*\\*Declared-diagnostic silence:\\*\\* of the ([0-9]+) declared `errors` rows in the reference's own Xpect suites, we report nothing for ([0-9]+)\\. ([0-9]+) we report word-for-word; ([0-9]+) wording-only and ([0-9]+) location-only differences are agreement in substance and are not counted as gaps; ([0-9]+) more we report as a warning and ([0-9]+) elsewhere in the file")
 	docScopeAgreementPattern  = regexp.MustCompile(`^- \*\*Scope agreement:\*\* ([0-9]+) of ([0-9]+) declared scope assertions match exactly`)
 	docPermissivenessPattern  = regexp.MustCompile(`^- \*\*Permissiveness gaps:\*\* of ([0-9]+) invalid models we wrote ourselves, the reference rejects ([0-9]+) that we accept by default, and ([0-9]+) both reject; ([0-9]+) further cases agree only when we are asked strictly`)
-	docSelfAssessedPattern    = regexp.MustCompile(`^- \*\*Self-assessed surface:\*\* ([0-9]+) of the tracked rules have no external referee at all`)
 	docErrataPattern          = regexp.MustCompile(`^- \*\*Declared errata:\*\* the registry declares ([0-9]+) defect\(s\) in the published reference material — ([0-9]+) with a specification-derived correction, ([0-9]+) documented without one, since no intended reading can be inferred \(\[OMG issues\]\([^)]+\), ` + "`internal/errata`" + `\)\. Every figure above is as published and stays the conformance statement; running the same oracles over the corrected text instead reports ([0-9]+) of ([0-9]+) files agreeing, ([0-9]+) diagnostics ours alone and ([0-9]+) the reference's alone, ([0-9]+) declared rows we are silent on, and ([0-9]+) of ([0-9]+) authored cases the reference alone rejects\.`)
 	docRejectionLinePattern   = regexp.MustCompile(`^\*\*Rejection oracle:\*\* the reverse direction — do we reject what the reference rejects\? ([0-9]+) hand-written invalid models validated by both implementations, ([0-9]+) rejected by both, ([0-9]+) the pinned pilot rejects and we accept;`)
 )
@@ -76,7 +75,9 @@ var (
 // Causal claims, attributions, historical movement columns and adjudication-section counts are
 // out of scope: this checks numbers, not why they moved. It also guards the five refereed
 // headline numbers the README and architecture guide lead with, each against the
-// baseline of the harness that measured it, and the compliance header against its rows.
+// baseline of the harness that measured it. The compliance map's own census is counted
+// when the documentation site is built, so no committed line states it; only a 🚧 row,
+// which that census refuses, is guarded here.
 func TestPilotDifferentialDocumentCountsMatchBaseline(t *testing.T) {
 	lines := docReadNumberedDocument(t)
 	report := docReadBaselineReport(t)
@@ -106,13 +107,11 @@ func TestPilotDifferentialDocumentCountsMatchBaseline(t *testing.T) {
 	docAssertRejectionLine(t, docRequireLineContainingPath(t, readmeLines, docCountReadmePath, docCountRejectionMarker), refereed)
 	docAssertRefereedHeadline(t, docCountReadmePath, readmeLines, refereed)
 	docAssertRefereedHeadline(t, docCountArchitecturePath, architectureLines, refereed)
-	byPath := map[string][]docLine{
-		docCountSpecCompliancePath: docReadNumberedFile(t, docCountSpecCompliancePath),
-		docCountReadmePath:         readmeLines,
-		docCountArchitecturePath:   architectureLines,
+	if ruleCounts.Total == 0 {
+		docFailPathAt(t, docCountSpecCompliancePath, 1, "no rule rows to count")
 	}
-	for _, spec := range doccounts.Lines() {
-		docAssertRuleStatusLine(t, spec, byPath[spec.Path], ruleCounts)
+	if ruleCounts.KnownFailure != 0 {
+		docFailPathAt(t, docCountSpecCompliancePath, 1, "%d 🚧 rows have no place in the census; give them a status it states", ruleCounts.KnownFailure)
 	}
 }
 
@@ -183,8 +182,7 @@ func docReadRefereedCounts(t *testing.T) doccounts.RefereedCounts {
 }
 
 // docAssertRefereedHeadline checks the five refereed numbers against the baselines
-// they are read from. The row-bookkeeping line beside them is census-derived and is
-// checked by docAssertRuleStatusLine instead.
+// they are read from.
 func docAssertRefereedHeadline(t *testing.T, path string, lines []docLine, counts doccounts.RefereedCounts) {
 	t.Helper()
 	checks := []struct {
@@ -218,10 +216,6 @@ func docAssertRefereedHeadline(t *testing.T, path string, lines []docLine, count
 			"diagnostics only ours with the errata", "diagnostics only the pilot's with the errata",
 			"declared rows we are silent on with the errata",
 			"cases only the pilot rejects with the errata", "authored cases with the errata"},
-	}, {
-		docSelfAssessedPattern, "**Self-assessed surface:**",
-		[]int{counts.SelfAssessed},
-		[]string{"rows with no external referee"},
 	}}
 	for _, check := range checks {
 		line := docRequireLineContainingPath(t, lines, path, check.marker)
@@ -300,52 +294,6 @@ func docAssertReferenceLine(t *testing.T, line docLine, report Report) {
 		docErrorPathAt(t, docCountReadmePath, line.number, "Reference differential fully agreeing: want %d (baseline totals.filesFullyAgreeing), got %d", report.Totals.FilesAgreeing, gotAgreement)
 	}
 	docAssertBareNumbersConsumed(t, docCountReadmePath, line, consumed, "Reference differential line")
-}
-
-// docAssertRuleStatusLine checks one census-derived line against the row census,
-// through the same line specification `cmd/doc-counts` regenerates it from. A
-// mismatch means the line is stale: run `make docs-counts`.
-func docAssertRuleStatusLine(t *testing.T, spec doccounts.Line, lines []docLine, counts doccounts.RuleCounts) {
-	t.Helper()
-	line := docRequireLineContainingPath(t, lines, spec.Path, spec.Marker)
-	match := spec.Pattern.FindStringSubmatchIndex(line.text)
-	if match == nil {
-		docFailPathAt(t, spec.Path, line.number, "malformed coverage status line")
-	}
-	wants := spec.Values(counts)
-	if got := len(match)/2 - 1; got != len(wants) {
-		docFailPathAt(t, spec.Path, line.number, "coverage status line states %d numbers, the census states %d", got, len(wants))
-	}
-	values := make([]int, len(wants))
-	for i := range values {
-		value, err := strconv.Atoi(line.text[match[2+i*2]:match[3+i*2]])
-		if err != nil {
-			docFailPathAt(t, spec.Path, line.number, "coverage count %d: malformed number %q", i+1, line.text[match[2+i*2]:match[3+i*2]])
-		}
-		values[i] = value
-	}
-	for i := range values {
-		if values[i] != wants[i] {
-			docErrorPathAt(t, spec.Path, line.number, "coverage %s: want %d (%s), got %d — run `make docs-counts`", spec.Labels[i], wants[i], spec.Sources[i], values[i])
-		}
-	}
-	if counts.KnownFailure != 0 {
-		docFailPathAt(t, spec.Path, line.number, "coverage status omits %d 🚧 rows from spec-compliance.md", counts.KnownFailure)
-	}
-	if len(values) > 1 {
-		sum := 0
-		for _, value := range values[1:] {
-			sum += value
-		}
-		if values[0] != sum {
-			docErrorPathAt(t, spec.Path, line.number, "coverage counts are internally inconsistent: total %d, status sum %d", values[0], sum)
-		}
-	}
-	consumed := make([]docNumber, 0, len(values))
-	for i := range values {
-		consumed = append(consumed, docNumbersInRange(line, match[2+i*2], match[3+i*2])...)
-	}
-	docAssertBareNumbersConsumed(t, spec.Path, line, consumed, "coverage status line")
 }
 
 func docNumbersInRange(line docLine, start, end int) []docNumber {

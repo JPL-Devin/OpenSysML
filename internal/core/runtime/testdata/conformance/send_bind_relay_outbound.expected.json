@@ -1,0 +1,17 @@
+{
+  "type": "instance",
+  "instantiate": "BindRelayOutbound::ctx",
+  "objects": [
+    {
+      "path": "asm.child",
+      "finalState": "S1",
+      "stateVisits": ["S1"]
+    },
+    {
+      "path": "env",
+      "finalState": "Got",
+      "stateVisits": ["Idle", "Got"],
+      "slots": {"got": {"type": "Integer", "value": 1}}
+    }
+  ]
+}

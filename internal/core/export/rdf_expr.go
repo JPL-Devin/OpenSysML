@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 )
 
@@ -50,7 +51,6 @@ const (
 	xTypeArgument     = "typeArgument"
 	xIsConstructor    = "isConstructor"
 	xBodyParameter    = "bodyParameter"
-	xBodyMember       = "bodyMember"
 	xResultExpression = "resultExpression"
 )
 
@@ -92,7 +92,7 @@ func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) 
 
 	case *ast.LiteralString:
 		e.typed(subject, mLiteralString)
-		e.graph.Add(subject, e.sysml(pValue), rdf.String(unquote(n.Value)))
+		e.graph.Add(subject, e.sysml(pValue), rdf.String(lexer.StringValue(n.Value)))
 
 	case *ast.LiteralInteger:
 		e.typed(subject, mLiteralInteger)
@@ -358,9 +358,9 @@ func (d *decoder) resolveExpressions() error {
 }
 
 // expressionNodeText writes an expression node back as notation: the notation it
-// kept, or notation rebuilt from its structure when it kept none.
+// kept, or notation rebuilt from its structure when it kept none it can use.
 func (d *decoder) expressionNodeText(node rdf.Term, scope string) (string, error) {
-	if text, ok := d.graph.Lexical(node, rdf.OpenSysML+xSourceText); ok && text != "" {
+	if text, ok := d.expressionText(node); ok {
 		return text, nil
 	}
 	metaclass := rdf.LocalName(d.graph.Type(node))
@@ -382,7 +382,7 @@ func (d *decoder) expressionNodeText(node rdf.Term, scope string) (string, error
 		if !ok {
 			return "", unsupported("a literal expression states the value it evaluates to")
 		}
-		return `"` + value + `"`, nil
+		return lexer.StringText(value), nil
 	case mLiteralInfinity:
 		return "*", nil
 	case mNullExpression:
@@ -521,7 +521,7 @@ func (d *decoder) bodyDeclarationsText(node rdf.Term, scope string) ([]string, e
 		declarations = append(declarations, declaration{term: member})
 	}
 	sort.SliceStable(declarations, func(i, j int) bool {
-		return d.intOf(declarations[i].term, rdf.OpenSysML+xMemberIndex) < d.intOf(declarations[j].term, rdf.OpenSysML+xMemberIndex)
+		return intOf(d.graph, declarations[i].term, rdf.OpenSysML+xMemberIndex) < intOf(d.graph, declarations[j].term, rdf.OpenSysML+xMemberIndex)
 	})
 	var out []string
 	for _, decl := range declarations {
