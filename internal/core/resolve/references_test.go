@@ -182,12 +182,13 @@ package App {
 }
 
 // A send's receiver (`via p to ground`) is a name like its payload and port; a
-// constructor's argument label (`new T(frames = …)`) names a feature of T, so it
-// is neither resolved in the sender's scope nor rewritten when a same-named
-// feature there is renamed.
-func TestSendReceiverIsAReferenceAndConstructorLabelsAreNot(t *testing.T) {
+// constructor's argument label (`new T(frames = …)`) names a feature of T — its
+// own or inherited — so it is collected as one and resolves to T's feature, never
+// to a same-named feature in the sender's scope.
+func TestSendReceiverAndConstructorLabelsAreReferences(t *testing.T) {
 	const src = `package App {
 	item def Telemetry { attribute frames; }
+	item def Burst :> Telemetry { attribute rate; }
 	port def Radio;
 	part def Station;
 	action def Downlink {
@@ -195,22 +196,65 @@ func TestSendReceiverIsAReferenceAndConstructorLabelsAreNot(t *testing.T) {
 		part ground : Station;
 		attribute frames;
 		send new Telemetry(frames = 3) via antenna to ground;
-		send new Telemetry(frames = 4) via antenna to missing;
+		send new Burst(frames = 4, rate = 2) via antenna to missing;
 	}
 }`
 	walk, root, rootScope := resolvedDoc(t, src)
 	if len(walk.Diagnostics) != 1 || !strings.Contains(walk.Diagnostics[0].Message, "missing") {
 		t.Fatalf("the unresolved receiver `missing` must be the one diagnostic, got %v", walk.Diagnostics)
 	}
+	pkg := unwrapMember(root.Members[0])
+	telemetry := rootScope.ChildFor(pkg).ChildFor(memberOf(pkg, 0))
+	want, ok := telemetry.LookupLocal("frames")
+	if !ok || want == nil {
+		t.Fatal("Telemetry's `attribute frames` was not indexed")
+	}
+	cold := resolve.New(walk.Index())
+	cold.SetModel(semantics.NewModel(cold))
 	byName := map[string]int{}
 	for _, ref := range resolve.References(root, rootScope) {
-		byName[nameText(ref.QN)]++
+		name := nameText(ref.QN)
+		byName[name]++
+		if name != "frames" && name != "rate" {
+			continue
+		}
+		if ref.Constructed == nil {
+			t.Errorf("label `%s` at %v is not tagged as a constructor argument", name, ref.QN.Span())
+		}
+		sym, ok := cold.ResolveReference(ref)
+		if !ok {
+			t.Fatalf("label `%s` at %v did not resolve", name, ref.QN.Span())
+		}
+		if name == "frames" && sym != want {
+			t.Errorf("label `frames` at %v resolved to %s's feature, want Telemetry's", ref.QN.Span(), sym.Name)
+		}
 	}
 	if byName["ground"] != 1 || byName["missing"] != 1 {
 		t.Errorf("receivers collected: ground=%d missing=%d, want 1 and 1", byName["ground"], byName["missing"])
 	}
-	if byName["frames"] != 0 {
-		t.Errorf("`frames` collected %d time(s) as a reference; a constructor label names the constructed type's feature", byName["frames"])
+	if byName["frames"] != 2 || byName["rate"] != 1 {
+		t.Errorf("labels collected: frames=%d rate=%d, want 2 and 1", byName["frames"], byName["rate"])
+	}
+}
+
+// A label naming no feature of the constructed type is unresolved where it is
+// written, though the sender's scope declares that name.
+func TestConstructorLabelMustNameAFeatureOfTheConstructedType(t *testing.T) {
+	const src = `package App {
+	item def Telemetry { attribute frames; }
+	part def Station;
+	action def Downlink {
+		part ground : Station;
+		attribute count;
+		send new Telemetry(count = 3) to ground;
+	}
+}`
+	walk, _, _ := resolvedDoc(t, src)
+	if len(walk.Diagnostics) != 1 || !strings.Contains(walk.Diagnostics[0].Message, "count") {
+		t.Fatalf("the label `count` must be the one unresolved name, got %v", walk.Diagnostics)
+	}
+	if got, want := walk.Diagnostics[0].Span.Offset, strings.LastIndex(src, "count = 3"); got != want {
+		t.Errorf("reported at offset %d, want the label at %d", got, want)
 	}
 }
 

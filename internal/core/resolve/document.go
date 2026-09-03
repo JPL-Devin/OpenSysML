@@ -1128,13 +1128,18 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 		r.resolveExpr(scope, v.Operand)
 		r.resolveExpr(scope, v.Body)
 	case *ast.ConstructorExpr:
+		var typ *symbols.Symbol
 		if v.Type != nil {
-			r.ResolveQualified(scope, v.Type)
+			typ, _ = r.ResolveQualified(scope, v.Type)
 		}
 		for _, a := range v.Args {
 			r.resolveExpr(scope, a)
 		}
 		for _, na := range v.NamedArgs {
+			// A label names a feature of the instantiated type, not of scope.
+			if typ != nil && na.Name != nil {
+				r.resolveMemberChain(typ, na.Name)
+			}
 			r.resolveExpr(scope, na.Value)
 		}
 	case *ast.BodyExpr:

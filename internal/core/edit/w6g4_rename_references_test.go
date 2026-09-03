@@ -188,6 +188,41 @@ func TestRenameReportsEveryRewrittenSpan(t *testing.T) {
 	assertOnlySpanChanged(t, m, res)
 }
 
+// A constructor's argument label names a feature of the constructed type, so
+// renaming that feature rewrites the label and renaming a same-named feature of
+// the sender leaves it alone.
+func TestRenameRewritesConstructorLabels(t *testing.T) {
+	const src = "package App {\n\titem def Telemetry { attribute frames; }\n" +
+		"\titem def Burst :> Telemetry;\n\tpart def Station;\n\taction def Downlink {\n" +
+		"\t\tpart ground : Station;\n\t\tattribute frames;\n" +
+		"\t\tsend new Telemetry(frames = 3) to ground;\n" +
+		"\t\tsend new Burst(frames = frames) to ground;\n\t}\n}\n"
+
+	got := renamed(t, "labels.sysml", src, "App::Telemetry::frames", "count")
+	for _, want := range []string{
+		"item def Telemetry { attribute count; }",
+		"send new Telemetry(count = 3) to ground;",
+		"send new Burst(count = frames) to ground;",
+		"\t\tattribute frames;\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q:\n%s", want, got)
+		}
+	}
+
+	got = renamed(t, "labels.sysml", src, "App::Downlink::frames", "local")
+	for _, want := range []string{
+		"item def Telemetry { attribute frames; }",
+		"\t\tattribute local;\n",
+		"send new Telemetry(frames = 3) to ground;",
+		"send new Burst(frames = local) to ground;",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q:\n%s", want, got)
+		}
+	}
+}
+
 // A transition's guard and effect see the parameter its accept declares, so
 // renaming a same-named feature of the machine leaves them alone.
 func TestRenameLeavesTriggerParameterReferencesAlone(t *testing.T) {

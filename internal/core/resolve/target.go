@@ -203,6 +203,9 @@ type Reference struct {
 	// Chain is set when QN is the member of a feature chain, whose segments are
 	// members of the operand rather than of Scope (SysML 7.6.6).
 	Chain *ast.FeatureChainExpr
+	// Constructed is set when QN labels a constructor argument, which names a
+	// feature of the instantiated type Constructed names rather than of Scope.
+	Constructed *ast.QualifiedName
 	// Redefines is set when QN is the target of a redefinition, which names a
 	// feature of Scope's generals rather than a member of Scope itself.
 	Redefines bool
@@ -232,6 +235,13 @@ func (r *Resolver) ResolveReference(ref Reference) (*symbols.Symbol, bool) {
 	}
 	if ref.Chain != nil {
 		owner, ok := r.resolveTarget(ref.Scope, ref.Chain.Operand, hide)
+		if !ok {
+			return nil, false
+		}
+		return r.memberChain(owner, ref.QN)
+	}
+	if ref.Constructed != nil {
+		owner, ok := r.resolveQualified(ref.Scope, ref.Constructed, hide)
 		if !ok {
 			return nil, false
 		}

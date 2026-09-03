@@ -60,6 +60,14 @@ func (c *refCollector) addRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 	}
 }
 
+// addConstructed records a constructor argument's label, which names a feature
+// of the instantiated type rather than an element of scope.
+func (c *refCollector) addConstructed(scope *symbols.Scope, typ, label *ast.QualifiedName) {
+	if typ != nil && label != nil {
+		c.push(Reference{Scope: scope, QN: label, Constructed: typ})
+	}
+}
+
 // addChainMember records the member segments of a feature chain, which name
 // members of the operand rather than elements of scope.
 func (c *refCollector) addChainMember(scope *symbols.Scope, decl ast.Node, chain *ast.FeatureChainExpr) {
@@ -507,7 +515,7 @@ func (c *refCollector) expr(scope *symbols.Scope, e ast.Node) {
 			c.expr(scope, a)
 		}
 		for _, na := range v.NamedArgs {
-			// na.Name labels a feature of the constructed type, not of scope.
+			c.addConstructed(scope, v.Type, na.Name)
 			c.expr(scope, na.Value)
 		}
 	case *ast.BodyExpr:
