@@ -243,6 +243,10 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		// The node's own name is a label, not a reference.
 		c.add(scope, d.Successor)
 		c.expr(scope, d.Guard)
+		c.walkMembers(c.bodyScope(scope, d), d.Members)
+		return true
+	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
+		c.walkMembers(c.bodyScope(scope, d), ast.NodeBodyMembers(d))
 		return true
 	case *ast.ConstraintMember:
 		c.expr(scope, d.Expression)

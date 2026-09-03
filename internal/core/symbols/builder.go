@@ -180,16 +180,21 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 		}
 		return true
 	case *ast.InitialNode:
-		// Register initial node by name so transitions can reference it
-		if d.Name != "" {
-			id := ast.Identification{Name: d.Name}
-			child := NewScope(scope, d)
-			// Use attribute usage kind (control flow nodes are structural members)
-			sym := newSymbol(id, SymbolAttributeUsage, d, vis, child, scope, trivia)
-			defineIdent(scope, id, sym)
-			scope.AddChild(child)
-			buildMembers(child, d.Members)
+		// Register initial node by name so transitions can reference it; an
+		// unnamed one with a body still owns the scope its body declares into.
+		if d.Name == "" {
+			if len(d.Members) > 0 {
+				buildAnonymousNode(scope, d, SymbolActionUsage, d.Members, vis, trivia)
+			}
+			return true
 		}
+		id := ast.Identification{Name: d.Name}
+		child := NewScope(scope, d)
+		// Use attribute usage kind (control flow nodes are structural members)
+		sym := newSymbol(id, SymbolAttributeUsage, d, vis, child, scope, trivia)
+		defineIdent(scope, id, sym)
+		scope.AddChild(child)
+		buildMembers(child, d.Members)
 		return true
 	case *ast.SendStatement:
 		// The send is the action usage it was written on (`action a send x { in x; }`),
@@ -383,9 +388,13 @@ func buildMetadataBodyScope(parent *Scope, prefix *ast.PrefixMetadata) *Scope {
 }
 
 // buildControlNode registers a named fork/join/merge/decision node the way a
-// final node is registered, at its name's span; an unnamed one declares none.
+// final node is registered, at its name's span; an unnamed one declares no name
+// but still owns the scope its body declares into.
 func buildControlNode(scope *Scope, decl ast.Node, name string, nameSpan source.Span, vis ast.Visibility, trivia []ast.Trivia) {
 	if name == "" {
+		if members := ast.NodeBodyMembers(decl); len(members) > 0 {
+			buildAnonymousNode(scope, decl, SymbolActionUsage, members, vis, trivia)
+		}
 		return
 	}
 	id := ast.Identification{Name: name, NameSpan: nameSpan}

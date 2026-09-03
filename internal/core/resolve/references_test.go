@@ -422,6 +422,78 @@ func TestUnnamedTransitionBodyDeclaresItsOwnScope(t *testing.T) {
 	}
 }
 
+// A control node's body — an initial node's, a named fork's, an unnamed decision's —
+// declares into a scope of the node's own and is resolved and collected there, so
+// a constructor's unknown type or label in it is reported like one anywhere else.
+func TestControlNodeBodiesResolveInTheirOwnScope(t *testing.T) {
+	const src = `package App {
+	item def Request { attribute id; }
+	action def Flow {
+		attribute retries;
+		action a;
+		action b;
+		first start then a {
+			attribute retries;
+			send new Request(id = retries) to a;
+			send new Missing() to a;
+		}
+		fork f {
+			attribute retries;
+			send new Request(nope = retries) to b;
+		}
+		decide {
+			attribute retries;
+			send new Request(id = retries) to b;
+			send new Request(id = 1) to gone;
+		}
+	}
+}`
+	walk, root, rootScope := resolvedDoc(t, src)
+	if len(walk.Diagnostics) != 3 {
+		t.Fatalf("the type `Missing`, the label `nope` and the receiver `gone` must be the three unresolved names, got %v", walk.Diagnostics)
+	}
+	pkg := unwrapMember(root.Members[0])
+	flow := memberOf(pkg, 1)
+	flowScope := rootScope.ChildFor(pkg).ChildFor(flow)
+	outer, ok := flowScope.LookupLocal("retries")
+	if !ok {
+		t.Fatal("the action's own `attribute retries` was not indexed")
+	}
+	locals := map[*symbols.Symbol]bool{}
+	for i := 3; i <= 5; i++ {
+		node := memberOf(flow, i)
+		body := flowScope.ChildFor(node)
+		if body == nil {
+			t.Fatalf("the %T owns no scope", node)
+		}
+		local, ok := body.LookupLocal("retries")
+		if !ok || local == outer {
+			t.Fatalf("the %T body's `attribute retries` is not a member of the node's scope", node)
+		}
+		locals[local] = true
+	}
+	cold := resolve.New(walk.Index())
+	cold.SetModel(semantics.NewModel(cold))
+	byName := map[string]int{}
+	for _, ref := range resolve.References(root, rootScope) {
+		name := nameText(ref.QN)
+		byName[name]++
+		if name != "retries" && name != "id" {
+			continue
+		}
+		sym, ok := cold.ResolveReference(ref)
+		if !ok {
+			t.Errorf("`%s` at %v did not resolve", name, ref.QN.Span())
+		}
+		if name == "retries" && !locals[sym] {
+			t.Errorf("`retries` at %v reached %v, want the body's own declaration", ref.QN.Span(), sym)
+		}
+	}
+	if byName["retries"] != 3 || byName["id"] != 3 || byName["Missing"] != 1 || byName["nope"] != 1 || byName["gone"] != 1 {
+		t.Errorf("body references collected: %v, want retries and id thrice, Missing, nope and gone once", byName)
+	}
+}
+
 // memberOf returns the i-th member declaration of a package or definition node.
 func memberOf(n ast.Node, i int) ast.Node {
 	switch v := n.(type) {
