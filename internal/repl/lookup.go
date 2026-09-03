@@ -272,7 +272,8 @@ func (s *Session) rootCarriers() []carrier {
 }
 
 // carrierLess orders carrier labels: named objects alphabetically before
-// displaced ones, which go by id.
+// displaced ones, which go by id; indexed elements go by index, so wheels[2]
+// precedes wheels[10].
 func carrierLess(a, b string) bool {
 	aID, aOK := labelRootID(a)
 	bID, bOK := labelRootID(b)
@@ -282,7 +283,18 @@ func carrierLess(a, b string) bool {
 	case aOK && aID != bID:
 		return aID < bID
 	}
-	return a < b
+	as, bs := strings.Split(a, "::"), strings.Split(b, "::")
+	for i := 0; i < len(as) && i < len(bs); i++ {
+		aName, aIndex := splitIndex(as[i])
+		bName, bIndex := splitIndex(bs[i])
+		if aName != bName {
+			return aName < bName
+		}
+		if aIndex != bIndex {
+			return aIndex < bIndex
+		}
+	}
+	return len(as) < len(bs)
 }
 
 // labelRootID is the id a carrier label is rooted at, if it is rooted at one.
@@ -309,7 +321,8 @@ func (s *Session) carrierObject(label string) (*runtime.Instance, string) {
 }
 
 // nestedObjects returns the objects held in an object's feature values, in feature-value-name
-// order, each under the name it is reached by.
+// order, each under the name it is reached by; the elements of a multi-valued
+// feature are reached by their 1-based index, `wheels[2]`.
 func nestedObjects(ctx *runtime.Context, of carrier) []carrier {
 	fvs := make([]string, 0, len(of.inst.FeatureValues))
 	for name := range of.inst.FeatureValues {
@@ -317,21 +330,26 @@ func nestedObjects(ctx *runtime.Context, of carrier) []carrier {
 	}
 	sort.Strings(fvs)
 	out := make([]carrier, 0, len(fvs))
+	add := func(name string, val runtime.Value) {
+		if id, isObject := val.Object(); isObject {
+			if child, ok := ctx.Instance(id); ok && child != nil {
+				out = append(out, carrier{name: of.name + "::" + name, inst: child})
+			}
+		}
+	}
 	for _, name := range fvs {
 		// A part feature value holds its object only once it is asked for.
 		fv, err := of.inst.GetFeatureValue(ctx, name)
 		if err != nil || fv == nil {
 			continue
 		}
-		id, isObject := fv.Value.Object()
-		if !isObject {
+		if fv.Values.Kind == runtime.ValInvalid {
+			add(name, fv.Value)
 			continue
 		}
-		child, ok := ctx.Instance(id)
-		if !ok || child == nil {
-			continue
+		for i, val := range collectionElements(fv.Values) {
+			add(fmt.Sprintf("%s[%d]", name, i+1), val)
 		}
-		out = append(out, carrier{name: of.name + "::" + name, inst: child})
 	}
 	return out
 }
@@ -384,7 +402,8 @@ func (s *Session) walkFeatureValues(inst *runtime.Instance, name string, segment
 	}
 	path := make([]objectSegment, 0, len(segments))
 	for _, seg := range segments {
-		path = append(path, objectSegment{name: seg})
+		name, index := splitIndex(seg)
+		path = append(path, objectSegment{text: seg, name: name, index: index})
 	}
 	inst, name, err = s.walkObjectPath(ctx, inst, name, path)
 	if err != nil {
@@ -493,13 +512,26 @@ func objectText(label string) string {
 		if isObjectID(segment) {
 			continue
 		}
-		name, index := segment, ""
-		if cut := strings.LastIndex(segment, "["); cut > 0 && strings.HasSuffix(segment, "]") {
-			name, index = segment[:cut], segment[cut:]
+		name, index := splitIndex(segment)
+		segments[i] = lexer.NameText(name)
+		if index > 0 {
+			segments[i] += fmt.Sprintf("[%d]", index)
 		}
-		segments[i] = lexer.NameText(name) + index
 	}
 	return strings.Join(segments, "::")
+}
+
+// splitIndex splits the `[<n>]` a label segment ends in from the feature name.
+func splitIndex(segment string) (name string, index int) {
+	cut := strings.LastIndex(segment, "[")
+	if cut <= 0 || !strings.HasSuffix(segment, "]") {
+		return segment, 0
+	}
+	index, err := strconv.Atoi(segment[cut+1 : len(segment)-1])
+	if err != nil || index < 1 {
+		return segment, 0
+	}
+	return segment[:cut], index
 }
 
 // isObjectID reports whether text is an id segment, `#` followed by digits.

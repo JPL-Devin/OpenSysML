@@ -4,8 +4,9 @@ This chapter describes what the runtime evaluates and how each kind of check rep
 A constraint declared on a definition is checked against the object that carries it, so
 instantiate the definition first if you want a verdict about a concrete value rather than a
 default. When several objects the session holds carry it — two `%instantiate`s of one name leave
-the first object reachable as `#<id>` — the check names them and asks you to pick one, with
-`%eval in #1 : ...` or the named object.
+the first object reachable as `#<id>`, and a multi-valued part holds one carrier per element — the
+check names them (`car::wheels[1]`, `car::wheels[2]`, `#1::wheels[1]`, …) and asks you to pick one,
+with `%eval in car.wheels[2] : ...` or `%eval in #1 : ...`.
 
 ## Expressions
 
