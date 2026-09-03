@@ -62,6 +62,7 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   `subject vehicle : Part = box;` now binds the subject on the object — it was left unset, as the
   binding was only read while checking the requirement — and the inherited `subj` reads the same
   object.
+
 - **The Connect + JSON wire contract is written down for clients with no library.** A
   MATLAB, R, Julia, C or shell program that posts JSON to `sysml-grpc` by hand had only the
   proto file and two rules on the transports page to decode answers with, and the questions
@@ -331,11 +332,15 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 - **A conversion from RDF returns the notation as written.** Every element written to `.ttl`
   carries its lines as `sysx:sourceText` — comments, blank lines and keyword synonyms included —
-  and an element with members carries the lines closing its body as `sysx:sourceTail`; the writer
-  formats the file before slicing it, and the two properties are one-line literals with newlines
-  escaped. `sysml model.ttl -convert sysml` now writes that text back, so a formatted
-  `.sysml → .ttl → .sysml` round trip is byte for byte and an unformatted one comes back formatted,
-  where before it came back canonical with its `//` and `/* */` comments dropped. The graph stays
+  and an element with members carries the lines closing its body as `sysx:sourceTail`; the text
+  is the file's own bytes — tabs, irregular indentation, blank lines inside a head, CRLF line
+  endings and the notes after the last root included, never a formatted copy — and the two
+  properties are one-line literals with newlines escaped. `sysml model.ttl -convert sysml` now
+  writes that text back untouched, so a `.sysml → .ttl → .sysml` round trip is byte for byte for
+  any file, where before it came back canonical with its `//` and `/* */` comments dropped. A head
+  laid out over several lines or with a comment inside it is recorded in the mapping
+  (`sysx:endForm`, `sysx:declaredKeyword`) like one written on a line, since the graph states
+  tokens, not layout. The graph stays
   authoritative: the candidate notation is converted back to RDF and compared with the graph, and
   each element whose text no longer states its triples — a flag set, a value changed, a member
   removed or an identity annotation dropped after the export — is written canonically instead,
