@@ -991,8 +991,7 @@ func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 		words = append(words, "not")
 	}
 	// Prefix metadata follows the member keyword and introduces a constraint
-	// declaration: `assume #goal constraint c` (SysML.xtext
-	// RequirementConstraintUsage `UsageExtensionKeyword* ConstraintUsageKeyword`).
+	// declaration: `assume #goal constraint c` (RequirementConstraintUsage).
 	prefixes, err := d.prefixWords(el)
 	if err != nil {
 		return "", err
