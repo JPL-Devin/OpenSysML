@@ -302,7 +302,11 @@ elmt:Demo__Vehicle
   `sysml:ownedResultExpression`, `sysml:ownedRelatedElement`) name different
   elements, one whose end is a literal rather than an element, and a second
   membership owning an element another already owns — rather than keeping one
-  edge and dropping the rest.
+  edge and dropping the rest. The element's side is held to the same rule: its
+  `sysml:owningMembership`/`sysml:owningRelationship` must agree with each other
+  and with the membership that claims it, and its `sysml:owner`,
+  `sysml:owningNamespace` and `sysml:owningRelatedElement` with the namespace
+  that membership puts it under.
 
 Tests: `ownership_graph_test.go` (element ids, roots, membership wiring, the
 tree coming back from the memberships with `sysx:sourceText` and

@@ -407,11 +407,12 @@ func (d *decoder) isMembership(subject rdf.Term) bool {
 // that disagree, a literal end, or a second membership claiming the member are
 // refused, since each would drop an edge.
 func (d *decoder) readMembership(subject rdf.Term) error {
-	owner, hasOwner, err := d.agreedObject(subject, pMembershipOwningNamespace, pOwningRelatedElement)
+	what := fmt.Sprintf("the membership <%s>", subject.Value)
+	owner, hasOwner, err := d.agreedObject(subject, what, "owning namespace", pMembershipOwningNamespace, pOwningRelatedElement)
 	if err != nil {
 		return err
 	}
-	member, hasMember, err := d.agreedObject(subject, pMemberElement, pOwnedMemberElement, pOwnedMemberFeature, pOwnedResultExpression, pOwnedRelatedElement)
+	member, hasMember, err := d.agreedObject(subject, what, "member", pMemberElement, pOwnedMemberElement, pOwnedMemberFeature, pOwnedResultExpression, pOwnedRelatedElement)
 	if err != nil {
 		return err
 	}
@@ -433,9 +434,10 @@ func (d *decoder) readMembership(subject rdf.Term) error {
 	return nil
 }
 
-// agreedObject returns the one object the subject states under any of
-// properties, spellings of a single-valued end, or an error when they differ.
-func (d *decoder) agreedObject(subject rdf.Term, properties ...string) (rdf.Term, bool, error) {
+// agreedObject returns the one object the subject, described by what, states
+// under any of properties — spellings of the single-valued end named end — or
+// an error when they differ or one is a literal.
+func (d *decoder) agreedObject(subject rdf.Term, what, end string, properties ...string) (rdf.Term, bool, error) {
 	var agreed rdf.Term
 	found := false
 	for _, property := range properties {
@@ -443,28 +445,21 @@ func (d *decoder) agreedObject(subject rdf.Term, properties ...string) (rdf.Term
 			switch {
 			case !object.IsIRI():
 				return rdf.Term{}, false, &UnsupportedError{
-					What: fmt.Sprintf("the membership <%s>", subject.Value),
-					Note: fmt.Sprintf("its %s is the literal %s, and an end of a membership is an element in the graph", curie(rdf.SysML+property), rdf.String(object.Value).String()),
+					What: what,
+					Note: fmt.Sprintf("its %s is the literal %s, and its %s is an element in the graph", curie(rdf.SysML+property), rdf.String(object.Value).String(), end),
 				}
 			case !found:
 				agreed, found = object, true
 			case object != agreed:
 				return rdf.Term{}, false, &UnsupportedError{
-					What: fmt.Sprintf("the membership <%s>", subject.Value),
+					What: what,
 					Note: fmt.Sprintf("it states both <%s> and <%s> as its %s, and every spelling of that end (%s) must name the one element, or one of them is dropped",
-						agreed.Value, object.Value, endName(properties[0]), curieList(properties)),
+						agreed.Value, object.Value, end, curieList(properties)),
 				}
 			}
 		}
 	}
 	return agreed, found, nil
-}
-
-func endName(property string) string {
-	if property == pMembershipOwningNamespace {
-		return "owning namespace"
-	}
-	return "member"
 }
 
 func curieList(properties []string) string {
@@ -475,33 +470,29 @@ func curieList(properties []string) string {
 	return strings.Join(curies, ", ")
 }
 
-// firstObject returns the object of the first of properties the subject states.
-func (d *decoder) firstObject(subject rdf.Term, properties ...string) (rdf.Term, bool) {
-	for _, property := range properties {
-		if object, ok := d.graph.Object(subject, rdf.SysML+property); ok {
-			return object, true
-		}
-	}
-	return rdf.Term{}, false
-}
-
-// ownerOf returns the element that owns el, or nil when it is a root. Ownership
-// is read through the element's OwningMembership, which is where the abstract
-// syntax puts it — from the element's side, or from the membership's alone when
-// the graph states only that; a graph carrying only the compact
-// sysml:owningNamespace shape this tool wrote before memberships were
-// materialized is still read.
+// ownerOf returns the element that owns el, or nil when it is a root, reading
+// the element's owning membership, the membership's claim, or a bare owner
+// triple; spellings that disagree are refused rather than one dropped.
 func (d *decoder) ownerOf(el *element) (*element, error) {
+	subject, what := rdf.IRI(el.iri), fmt.Sprintf("the element <%s>", el.iri)
+	relationship, hasRelationship, err := d.agreedObject(subject, what, "owning relationship", pOwningMembership, pOwningRelationship)
+	if err != nil {
+		return nil, err
+	}
+	owner, hasOwner, err := d.agreedObject(subject, what, "owner", pOwningRelatedElement, pOwningNamespace, pOwner)
+	if err != nil {
+		return nil, err
+	}
 	ownerIRI := ""
 	m, owned := d.owningMembership[el.iri]
-	switch relationship, ok := d.firstObject(rdf.IRI(el.iri), pOwningMembership, pOwningRelationship); {
-	case ok:
+	switch {
+	case hasRelationship:
 		// The owning relationship is either a membership standing between the
 		// element and its owner, or the owner itself when a relationship owns
 		// the element directly, as a state owns its entry action.
 		if owned && m.iri != relationship.Value {
 			return nil, &UnsupportedError{
-				What: fmt.Sprintf("the element <%s>", el.iri),
+				What: what,
 				Note: fmt.Sprintf("it states <%s> as its owning relationship while the membership <%s> owns it, and following one would drop the other", relationship.Value, m.iri),
 			}
 		}
@@ -512,14 +503,18 @@ func (d *decoder) ownerOf(el *element) (*element, error) {
 		}
 	case owned:
 		ownerIRI = m.owner
-	default:
+	case hasOwner:
 		// A relationship a namespace declares — an import, a dependency, a
 		// membership — states the element that owns it rather than a membership.
-		owner, hasOwner := d.firstObject(rdf.IRI(el.iri), pOwningRelatedElement, pOwningNamespace, pOwner)
-		if !hasOwner {
-			return nil, nil
-		}
 		ownerIRI = owner.Value
+	default:
+		return nil, nil
+	}
+	if hasOwner && owner.Value != ownerIRI {
+		return nil, &UnsupportedError{
+			What: what,
+			Note: fmt.Sprintf("it states <%s> as its owner while its owning relationship puts it under <%s>, and following one would drop the other", owner.Value, ownerIRI),
+		}
 	}
 	parent, known := d.byIRI[ownerIRI]
 	if !known {

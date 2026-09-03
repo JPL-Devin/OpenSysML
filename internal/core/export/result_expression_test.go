@@ -202,6 +202,24 @@ func TestMalformedMembershipEndsAreRefused(t *testing.T) {
 			"elmt:Results__Only___400_named a sysml:OwningMembership ;\n    sysml:qualifiedName \"Results::Only::named\" ;\n    sysml:owningRelatedElement elmt:Results__Only ;\n    sysml:memberElement elmt:Results__Only___400 .",
 			"the element <urn:sysmlv2:element:Results__Only___400>: it states <urn:sysmlv2:element:Results__Only___400_named> as its owning relationship while the membership <urn:sysmlv2:element:Results__Only___400_om> owns it",
 		},
+		{
+			"    sysml:owningRelationship elmt:Results__Only___400_om ;\n    sysml:owningMembership elmt:Results__Only___400_om ;",
+			"    sysml:owningRelationship elmt:Results__Double___401_om ;\n    sysml:owningMembership elmt:Results__Only___400_om ;",
+			"",
+			"the element <urn:sysmlv2:element:Results__Only___400>: it states both <urn:sysmlv2:element:Results__Only___400_om> and <urn:sysmlv2:element:Results__Double___401_om> as its owning relationship",
+		},
+		{
+			"    sysml:owningRelationship elmt:Results__Only___400_om ;\n    sysml:owningMembership elmt:Results__Only___400_om ;",
+			"    sysml:owningRelationship elmt:Results__Only___400_om ;\n    sysml:owningMembership elmt:Results__Only___400_om ;\n    sysml:owningRelatedElement elmt:Results__Double ;",
+			"",
+			"the element <urn:sysmlv2:element:Results__Only___400>: it states both <urn:sysmlv2:element:Results__Double> and <urn:sysmlv2:element:Results__Only> as its owner",
+		},
+		{
+			"    sysml:owningNamespace elmt:Results__Only ;\n    sysml:owner elmt:Results__Only ;\n    sysml:owningRelationship elmt:Results__Only___400_om ;",
+			"    sysml:owningNamespace elmt:Results__Double ;\n    sysml:owner elmt:Results__Double ;\n    sysml:owningRelationship elmt:Results__Only___400_om ;",
+			"",
+			"the element <urn:sysmlv2:element:Results__Only___400>: it states <urn:sysmlv2:element:Results__Double> as its owner while its owning relationship puts it under <urn:sysmlv2:element:Results__Only>",
+		},
 	} {
 		if !strings.Contains(turtle, tc.from) {
 			t.Fatalf("expected %q in the graph:\n%s", tc.from, turtle)
