@@ -138,21 +138,6 @@ func TestEval_SequenceExpr(t *testing.T) {
 	}
 }
 
-func TestEval_CollectExpr(t *testing.T) {
-	// Defer to integration tests — parser may not support body syntax yet
-	t.Skip("defer collection operations to integration tests")
-}
-
-func TestEval_SelectExpr(t *testing.T) {
-	// Defer to integration tests — parser may not support body syntax yet
-	t.Skip("defer collection operations to integration tests")
-}
-
-func TestEval_BuiltinInvocation(t *testing.T) {
-	// Verify builtin dispatch works (test with SequenceFunctions::size)
-	t.Skip("defer to integration — requires InvocationExpr parse")
-}
-
 func TestEval_StepLimit(t *testing.T) {
 	// Verify step counter triggers on deep recursion
 	// (Step counter already wired in Context.incrementStep + eval.go)
