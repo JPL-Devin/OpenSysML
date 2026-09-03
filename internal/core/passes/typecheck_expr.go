@@ -632,8 +632,9 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 	for i, arg := range args {
 		argTypes[i] = ec.infer(scope, arg)
 	}
-	for _, arg := range e.NamedArgs {
-		ec.infer(scope, arg.Value)
+	namedTypes := make([]semantics.PrimType, len(e.NamedArgs))
+	for i, arg := range e.NamedArgs {
+		namedTypes[i] = ec.infer(scope, arg.Value)
 	}
 	if e.Type == nil {
 		return semantics.PrimUnknown
@@ -666,8 +667,69 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 	if !ok {
 		return semantics.PrimUnknown
 	}
-	ec.checkArguments(e, sym, args, argTypes, params)
+	if len(e.NamedArgs) > 0 {
+		ec.checkNamedArguments(e, sym, namedTypes, params)
+	} else {
+		ec.checkArguments(e, sym, args, argTypes, params)
+	}
 	return semantics.PrimUnknown
+}
+
+// checkNamedArguments checks a call whose arguments bind by name: each names a
+// parameter once, binds a value of its type, and no required parameter is left.
+func (ec *exprChecker) checkNamedArguments(
+	e *ast.InvocationExpr,
+	sym *symbols.Symbol,
+	namedTypes []semantics.PrimType,
+	params []parameter,
+) {
+	// A receiver binds by position, so which parameter it binds to is
+	// unstated beside arguments that bind by name (runtime/eval.go reports
+	// the same call).
+	if e.Operand != nil {
+		ec.errorf(e.Span(), "%s cannot be called with a receiver and named arguments", sym.Name)
+		return
+	}
+	byName := make(map[string]int, len(params))
+	for i, p := range params {
+		byName[p.name()] = i
+	}
+	bound := make([]bool, len(params))
+	unknown := false
+	for i, arg := range e.NamedArgs {
+		if arg.Name == nil || len(arg.Name.Parts) != 1 {
+			continue
+		}
+		name := arg.Name.Parts[0].Text
+		p, ok := byName[name]
+		if !ok {
+			ec.errorf(e.Span(), "%s has no parameter named %q", sym.Name, name)
+			unknown = true
+			continue
+		}
+		if bound[p] {
+			ec.errorf(arg.Value.Span(), "%s binds parameter %q twice", sym.Name, name)
+			continue
+		}
+		bound[p] = true
+		want := ec.declaredPrimType(params[p].scope(), params[p].usage.Relationships)
+		got := namedTypes[i]
+		if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
+			continue
+		}
+		if !bindable(arg.Value, got, want) {
+			ec.errorf(arg.Value.Span(), "argument %s of %s expects %s, found %s", name, sym.Name, want, got)
+		}
+	}
+	// An unknown name is most likely a misspelt parameter, reported once as such.
+	if unknown {
+		return
+	}
+	for i, p := range params {
+		if !bound[i] && p.required(ec.model) {
+			ec.errorf(e.Span(), "%s requires an argument for parameter %s", sym.Name, p.name())
+		}
+	}
 }
 
 func (ec *exprChecker) checkArguments(
@@ -677,31 +739,11 @@ func (ec *exprChecker) checkArguments(
 	argTypes []semantics.PrimType,
 	params []parameter,
 ) {
-	if len(e.NamedArgs) > 0 {
-		// A receiver binds by position, so which parameter it binds to is
-		// unstated beside arguments that bind by name (runtime/eval.go reports
-		// the same call).
-		if e.Operand != nil {
-			ec.errorf(e.Span(), "%s cannot be called with a receiver and named arguments", sym.Name)
-		}
-		names := make(map[string]bool, len(params))
-		for _, p := range params {
-			names[p.name()] = true
-		}
-		for _, arg := range e.NamedArgs {
-			if arg.Name == nil || len(arg.Name.Parts) != 1 {
-				continue
-			}
-			if name := arg.Name.Parts[0].Text; !names[name] {
-				ec.errorf(e.Span(), "%s has no parameter named %q", sym.Name, name)
-			}
-		}
-		return
-	}
+	// Arguments bind in order, so a call must reach the last required parameter.
 	required := 0
-	for _, p := range params {
-		if p.usage.Value == nil {
-			required++
+	for i, p := range params {
+		if p.required(ec.model) {
+			required = i + 1
 		}
 	}
 	switch {
@@ -831,6 +873,25 @@ func isRequirementDeclaration(decl ast.Node) bool {
 type parameter struct {
 	usage *ast.Usage
 	owner *symbols.Symbol
+	// redefined is the inherited parameter this declaration redefines, whose
+	// default and multiplicity it keeps where it states none (KerML 1.0 §7.3.4.5).
+	redefined *parameter
+}
+
+// required reports whether an invocation must supply the parameter: it has no
+// default, its own or inherited, and its multiplicity admits no omission.
+func (p parameter) required(m *semantics.Model) bool {
+	for q := &p; q != nil; q = q.redefined {
+		if q.usage.Value != nil {
+			return false
+		}
+	}
+	for q := &p; q != nil; q = q.redefined {
+		if q.usage.Multiplicity != nil {
+			return !m.IsOptionalParameter(q.usage)
+		}
+	}
+	return true
 }
 
 // name returns the name the parameter answers to, which a declaration written
@@ -919,7 +980,7 @@ func mergeParameters(inherited []parameter, sym *symbols.Symbol) []parameter {
 	merged := make([]parameter, 0, len(declared)+len(inherited))
 	claimed := make([]bool, len(inherited))
 	for position, u := range declared {
-		merged = append(merged, parameter{usage: u, owner: sym})
+		p := parameter{usage: u, owner: sym}
 		i := indexOfRedefined(inherited, u)
 		if i < 0 {
 			i = position
@@ -928,7 +989,9 @@ func mergeParameters(inherited []parameter, sym *symbols.Symbol) []parameter {
 		// inherited parameter there stays in the list.
 		if i < len(inherited) && inherited[i].usage.Direction == u.Direction {
 			claimed[i] = true
+			p.redefined = &inherited[i]
 		}
+		merged = append(merged, p)
 	}
 	for i, p := range inherited {
 		if !claimed[i] {
