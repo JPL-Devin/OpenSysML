@@ -150,7 +150,7 @@ var metaCommandTable = []metaCommand{
 
 	{group: groupRuntime, name: "%instantiate", args: argName, desc: "create an instance of a part def"},
 	{group: groupRuntime, name: "%eval", args: "[in <name>|<path>|#<id> :] <expr>", desc: "evaluate an expression, in the named element or object when one is named"},
-	{group: groupRuntime, name: "%features", args: argName, desc: "show an object's features and their values"},
+	{group: groupRuntime, name: "%features", args: "<name> [all|depth <n>] [json]", desc: "show an object's features and their values, bounded unless all or a depth is asked for; json writes the object graph as the API does"},
 	{group: groupRuntime, name: "%instances", desc: "list all instantiated objects"},
 	{group: groupRuntime, name: "%invoke", args: "<object> <op> [<p>=<expr>]", desc: "invoke an operation of an object's type, performed by that object (a name, a path such as driver.r, or an id such as #3)"},
 
@@ -357,9 +357,13 @@ func (s *Session) metaModelCommand(fields []string, line string) (metaResult, bo
 		return metaOut(s.doEvalLine(strings.TrimSpace(tail))), true
 	case "%features":
 		if len(fields) < 2 {
-			return metaOut([]string{"usage: %features <name>"}, false, nil), true
+			return metaOut([]string{featuresUsage}, false, nil), true
 		}
-		return metaOut(s.doFeatures(fields[1])), true
+		listing, perr := parseFeatureListing(fields[2:])
+		if perr != nil {
+			return metaOut([]string{errPrefix + perr.Error(), featuresUsage}, false, nil), true
+		}
+		return metaOut(s.doFeatures(fields[1], listing)), true
 	case "%instances":
 		return metaOut(s.doInstances()), true
 	case "%calc":
@@ -1047,7 +1051,7 @@ func isSymbolReference(expr string) bool {
 }
 
 // doFeatures shows what an object holds for each feature of its type.
-func (s *Session) doFeatures(name string) ([]string, bool, error) {
+func (s *Session) doFeatures(name string, listing featureListing) ([]string, bool, error) {
 	inst, held, oerr := s.objectRef(name)
 	if oerr != nil {
 		if errors.Is(oerr, errRuntimeInit) {
@@ -1067,16 +1071,26 @@ func (s *Session) doFeatures(name string) ([]string, bool, error) {
 		return nil, false, fmt.Errorf("runtime init: %w", err)
 	}
 
+	if listing.json {
+		return s.featuresJSON(ctx, inst, name, listing)
+	}
+
 	lines := []string{
 		fmt.Sprintf("Instance: %s (ID: %d)", objectName(heldName(inst, held)), inst.ID),
 		"Features:",
 	}
-	w := &featureValueWalk{ctx: ctx, onPath: map[*symbols.Symbol]bool{inst.Type: true}, budget: maxFeatureValueLines}
-	listing := w.lines(inst, "  ", 0)
+	w := &featureValueWalk{
+		ctx:      ctx,
+		onPath:   map[*symbols.Symbol]bool{inst.Type: true},
+		maxDepth: listing.depth,
+		budget:   listing.budget,
+		hint:     listing.truncationHint(name),
+	}
+	out := w.lines(inst, "  ", 0)
 	// A feature value the listing rendered as an error is one the session could not answer
 	// about, which a non-interactive run exits on.
 	s.noteMaterializationFailure(w.errs...)
-	return append(lines, listing...), false, nil
+	return append(lines, out...), false, nil
 }
 
 const (
@@ -1090,11 +1104,16 @@ const (
 // featureValueWalk expands an object graph for %features under three bounds: onPath holds
 // the types being expanded above the current one (a part containing its own
 // kind materializes a fresh instance per descent, so instance identity cannot
-// detect the cycle), depth, and a line budget shared across the listing.
+// detect the cycle), maxDepth, and a line budget shared across the listing.
 type featureValueWalk struct {
-	ctx    *runtime.Context
-	onPath map[*symbols.Symbol]bool
-	budget int
+	ctx      *runtime.Context
+	onPath   map[*symbols.Symbol]bool
+	maxDepth int
+	budget   int
+	// hint is the truncation line's advice on how to see the rest; cut records
+	// that the line was written, so unwinding the walk does not repeat it.
+	hint string
+	cut  bool
 	// errs are the feature values the listing could not materialize, rendered as errors in
 	// its lines and reported as findings about the model by the caller.
 	errs []error
@@ -1110,7 +1129,7 @@ func (w *featureValueWalk) lines(inst *runtime.Instance, indent string, depth in
 	// Connector lines already spent their share of the budget, so a truncated
 	// listing still shows them rather than dropping what it charged for.
 	truncated := func(lines []string, pad string) []string {
-		return append(append(lines, connectors...), indent+pad+"… (listing truncated)")
+		return w.truncate(append(lines, connectors...), indent+pad)
 	}
 
 	var lines []string
@@ -1126,7 +1145,7 @@ func (w *featureValueWalk) lines(inst *runtime.Instance, indent string, depth in
 			continue
 		}
 		if held, elided := w.elided(feat, depth); elided {
-			lines = w.emit(lines, fmt.Sprintf("%s%s : %s (not expanded: %s)", indent, feat.Name, held, elisionReason(depth)))
+			lines = w.emit(lines, fmt.Sprintf("%s%s : %s (not expanded: %s)", indent, feat.Name, held, w.elisionReason(depth)))
 			continue
 		}
 		fv, err := inst.GetFeatureValue(w.ctx, feat.Name)
@@ -1163,7 +1182,7 @@ func (w *featureValueWalk) connectors(inst *runtime.Instance, indent string) []s
 			formatValue(w.ctx, runtime.Value{Kind: runtime.ValInstance, Instance: conn.ID})))
 		for _, end := range conn.Ends {
 			if w.budget <= 0 {
-				return append(lines, indent+"  … (listing truncated)")
+				return w.truncate(lines, indent+"  ")
 			}
 			lines = w.emit(lines, fmt.Sprintf("%s  %s = %s", indent, endLabel(end), formatValue(w.ctx, end.Value)))
 		}
@@ -1196,6 +1215,15 @@ func (w *featureValueWalk) emit(lines []string, line string) []string {
 	return append(lines, line)
 }
 
+// truncate ends the listing, saying so once and how to see the rest.
+func (w *featureValueWalk) truncate(lines []string, indent string) []string {
+	if w.cut {
+		return lines
+	}
+	w.cut = true
+	return append(lines, indent+"… (listing truncated; "+w.hint+")")
+}
+
 // elided reports whether expanding a feature would revisit a type already on
 // the path or exceed the depth bound, naming the type it holds. Asked before
 // the feature value is read, since reading it materializes the object.
@@ -1204,20 +1232,20 @@ func (w *featureValueWalk) elided(feat *runtime.EffectiveFeature, depth int) (st
 	if held == nil {
 		// A variation is materialized from the variant it selects, so the depth
 		// bound applies to it too.
-		if w.ctx.IsVariationFeature(feat) && depth >= maxFeatureValueDepth {
+		if w.ctx.IsVariationFeature(feat) && depth >= w.maxDepth {
 			return feat.Name, true
 		}
 		return "", false
 	}
-	if depth >= maxFeatureValueDepth || w.onPath[held] {
+	if depth >= w.maxDepth || w.onPath[held] {
 		return held.Name, true
 	}
 	return "", false
 }
 
-func elisionReason(depth int) string {
-	if depth >= maxFeatureValueDepth {
-		return fmt.Sprintf("depth %d", maxFeatureValueDepth)
+func (w *featureValueWalk) elisionReason(depth int) string {
+	if depth >= w.maxDepth {
+		return fmt.Sprintf("depth %d", w.maxDepth)
 	}
 	return "contains its own kind"
 }
@@ -1799,10 +1827,7 @@ func (s *Session) satisfyVerdict(ctx *runtime.Context, a *runtime.SatisfyAsserti
 		// No object of the subject exists yet, so the verdict is about a fresh
 		// one, created here rather than inside the evaluation so it can be named.
 		if inst, serr := ctx.SatisfySubject(a); serr == nil {
-			subject, owner = inst, s.subjectName(a)
-			// Kept like %instantiate would, so a repeated %satisfy is about the
-			// same object rather than another copy of it.
-			s.instances[owner] = inst
+			subject, owner = inst, s.keepSubject(a, inst)
 		}
 	}
 	result, err := ctx.CheckSatisfactionOn(a, subject)
@@ -1822,24 +1847,76 @@ func (s *Session) satisfyVerdict(ctx *runtime.Context, a *runtime.SatisfyAsserti
 }
 
 // subjectInstance returns the object the session has already created for an
-// assertion's subject, with the name it was created under, or nil for none.
+// assertion's subject, with the name it was created under, or nil for none. A
+// chained subject is the object reached from the one created for the feature
+// the chain starts from.
 func (s *Session) subjectInstance(a *runtime.SatisfyAssertion) (*runtime.Instance, string) {
 	name := s.subjectName(a)
+	if a.SubjectChain != nil {
+		if inst, held, err := s.objectAt(name); err == nil && inst != nil {
+			return inst, held
+		}
+		return nil, ""
+	}
 	if inst, ok := s.instances[name]; ok {
 		return inst, name
 	}
 	return nil, ""
 }
 
+// keepSubject holds the object created for an assertion's subject like
+// %instantiate would, so a repeated %satisfy is about the same object rather
+// than another copy of it, and returns the name it is reached by. For a chained
+// subject the object held is the one the chain starts from, which owns the rest.
+func (s *Session) keepSubject(a *runtime.SatisfyAssertion, inst *runtime.Instance) string {
+	if a.SubjectChain == nil {
+		name := s.subjectName(a)
+		s.instances[name] = inst
+		return name
+	}
+	root := inst
+	for {
+		owner, _ := root.Owner()
+		if owner == nil {
+			break
+		}
+		root = owner
+	}
+	if name := s.rootName(a); name != "" && s.instanceName(root) == "" {
+		s.instances[name] = root
+	}
+	if name := s.nameOf(inst); name != "" {
+		return name
+	}
+	return s.subjectName(a)
+}
+
 // subjectName is the name an assertion's subject is known by: its
 // fully-qualified name, or the reference as written when it resolves to nothing.
+// A chained subject is known by the name of the feature the chain starts from
+// and the features walked from it, as objectAt reaches it.
 func (s *Session) subjectName(a *runtime.SatisfyAssertion) string {
+	if a.SubjectChain != nil {
+		if root := s.rootName(a); root != "" {
+			return strings.Join(append([]string{root}, a.SubjectPath...), "::")
+		}
+		return a.SubjectRef
+	}
 	if idx := s.symbolIndex(); idx != nil && a.Subject != nil {
 		if fqn := idx.GetFQN(a.Subject); fqn != "" {
 			return fqn
 		}
 	}
 	return a.SubjectRef
+}
+
+// rootName is the fully-qualified name of the feature a chained subject starts
+// from, "" when it resolves to nothing.
+func (s *Session) rootName(a *runtime.SatisfyAssertion) string {
+	if idx := s.symbolIndex(); idx != nil && a.SubjectRoot != nil {
+		return idx.GetFQN(a.SubjectRoot)
+	}
+	return ""
 }
 
 // performingObject resolves the object a debugging session's behavior is
