@@ -16,7 +16,8 @@ func (r *Resolver) ResolveInvocationName(scope *symbols.Scope, qn *ast.Qualified
 }
 
 // InvocationCandidates returns every declaration a called name may denote from scope, in
-// lookup order (ResolveInvocationName reaches the first); library functions need an import.
+// lookup order (ResolveInvocationName reaches the first), an alias standing for its target;
+// library functions need an import.
 func (r *Resolver) InvocationCandidates(scope *symbols.Scope, qn *ast.QualifiedName) []*symbols.Symbol {
 	if qn == nil || len(qn.Parts) == 0 {
 		return nil
@@ -56,11 +57,11 @@ func (r *Resolver) qualifiedCandidates(scope *symbols.Scope, qn *ast.QualifiedNa
 	return r.appendNamed(out, append(all, r.surfacedMembers(qualifier, scope, qn.Parts[last].Text)...))
 }
 
-// appendNamed appends the element each of found names, skipping aliases of nothing.
+// appendNamed appends each of found, an alias standing for its target, skipping aliases of nothing.
 func (r *Resolver) appendNamed(out, found []*symbols.Symbol) []*symbols.Symbol {
 	for _, sym := range found {
 		if !r.AliasNamesNothing(sym) {
-			out = appendSymbol(out, r.AliasedElement(sym))
+			out = appendSymbol(out, sym)
 		}
 	}
 	return out
