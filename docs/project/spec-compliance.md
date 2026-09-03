@@ -10,7 +10,9 @@
 
 ### ✅ Fully Implemented & Tested
 
-The map below tracks 834 semantic rules: **741 ✅ faithful, 86 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
+<!-- doc-counts:begin census -->
+The map below tracks every rule row on this page. Its census — how many rows are ✅ faithful, ⚠️ approximate, ❌ not implemented or ⛔ deliberate divergence, and how many have no external referee — is counted from the rows when the documentation site is built and published at [opensysml.org](https://opensysml.org/project/spec-compliance/); no count is typed in or committed here.
+<!-- doc-counts:end census -->
 Read that as progress, not as a compliance percentage — the denominator is the list of rules *we*
 chose to track, so it moves when we add a row, and a specification-derived denominator does not
 exist. What is externally checked is enumerated in [the pilot differential](pilot-differential.md);

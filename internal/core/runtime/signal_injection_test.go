@@ -1606,7 +1606,7 @@ func TestPreviewsLeaveACarriedObjectsConnectorIdentitiesKept(t *testing.T) {
 	}
 	ctx.abandonInstancesSince(mark)
 	end()
-	if obj.anonymous != nil || len(obj.keptAnonymous) != 1 || obj.keptAnonymous[0] != anonymousID {
+	if obj.anonymous != nil || len(obj.keptAnonymous) != 1 || obj.keptAnonymous[0].id != anonymousID {
 		t.Errorf("after the probe: anonymous %v keeping %v; want none materialized keeping %d", obj.anonymous, obj.keptAnonymous, anonymousID)
 	}
 

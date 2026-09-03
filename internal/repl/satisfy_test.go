@@ -90,15 +90,15 @@ func TestSatisfyChainedSubject(t *testing.T) {
 	out := run(t, s, "%satisfy")
 	wants(t, out,
 		"✓ satisfy r1 by direct holds (on S::direct ID: 1)",
-		"✓ satisfy r2 by config.child holds (on S::config::child ID: 3)",
+		"✓ satisfy r2 by config.child holds (on S::config.child ID: 3)",
 	)
 	rejects(t, out, "by child")
-	wants(t, run(t, s, "%satisfy"), "✓ satisfy r2 by config.child holds (on S::config::child ID: 3)")
+	wants(t, run(t, s, "%satisfy"), "✓ satisfy r2 by config.child holds (on S::config.child ID: 3)")
 	wants(t, run(t, s, "%features S::config::child"), "mass")
 
 	// A quoted member keeps its quotes, so a dot inside it is not a chain step.
 	s.Submit("package Q { private import S::*; part def Box { part 'inner.part' : Part; } part box : Box; requirement r4 : MassReq { attribute :>> m = box.'inner.part'.mass; } satisfy r4 by box.'inner.part'; }")
-	wants(t, run(t, s, "%satisfy Q"), "✓ satisfy r4 by box.'inner.part' holds (on Q::box::'inner.part' ID: ")
+	wants(t, run(t, s, "%satisfy Q"), "✓ satisfy r4 by box.'inner.part' holds (on Q::box.'inner.part' ID: ")
 
 	// A chain whose segment resolves to nothing is reported as written.
 	s.Submit("package N { private import S::*; requirement r3 : MassReq; satisfy r3 by config.nope; }")
