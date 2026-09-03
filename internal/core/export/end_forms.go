@@ -103,7 +103,7 @@ func (e *encoder) endForm(subject rdf.Term, n *ast.Usage) {
 		return
 	}
 	rebuilt, err := (endNotation{form: form, keyword: keyword, ends: ends, payload: payload}).text()
-	if err != nil || rebuilt != written {
+	if err != nil || !sameSpelling(rebuilt, written) {
 		return
 	}
 	e.graph.Add(subject, e.sysx(xEndForm), rdf.String(form))
@@ -130,7 +130,7 @@ func (e *encoder) satisfyForm(subject rdf.Term, n *ast.Usage) {
 		}
 	}
 	head, ok := e.headTail(n, n.Span().Offset)
-	if !ok || head != strings.TrimSpace(n.Keyword+" "+e.text(requirement)+" "+e.subjectClause(n)) {
+	if !ok || !sameSpelling(head, n.Keyword+" "+e.text(requirement)+" "+e.subjectClause(n)) {
 		return
 	}
 	e.graph.Add(subject, e.sysx(xEndForm), rdf.String(formSatisfy))
@@ -267,7 +267,7 @@ func (e *encoder) headTail(n *ast.Usage, from int) (string, bool) {
 	if from < n.Span().Offset || from >= end {
 		return "", false
 	}
-	text := strings.TrimSpace(e.src.slice(source.Span{Offset: from, Len: end - from}))
+	text := strings.TrimSpace(e.src.code(source.Span{Offset: from, Len: end - from}))
 	if strings.ContainsAny(text, "{}") {
 		return "", false
 	}

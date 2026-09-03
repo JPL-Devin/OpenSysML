@@ -986,7 +986,7 @@ func (d *decoder) printBehavior(b *strings.Builder, el *element, indent string, 
 		if err != nil {
 			return true, err
 		}
-		b.WriteString(indent + text + "\n")
+		b.WriteString(indent + text + d.nl)
 		return true, nil
 
 	case mIfAction:
@@ -994,7 +994,7 @@ func (d *decoder) printBehavior(b *strings.Builder, el *element, indent string, 
 		if err != nil {
 			return true, err
 		}
-		b.WriteString(indent + text + "\n")
+		b.WriteString(indent + text + d.nl)
 		return true, nil
 
 	case mSubaction:
@@ -1002,7 +1002,7 @@ func (d *decoder) printBehavior(b *strings.Builder, el *element, indent string, 
 		if err != nil {
 			return true, err
 		}
-		b.WriteString(indent + text + "\n")
+		b.WriteString(indent + text + d.nl)
 		return true, nil
 
 	case mIfBranch:
@@ -1023,9 +1023,9 @@ func (d *decoder) printBehavior(b *strings.Builder, el *element, indent string, 
 			return true, err
 		}
 		if body == "" {
-			b.WriteString(indent + text + ";\n")
+			b.WriteString(indent + text + ";" + d.nl)
 		} else {
-			b.WriteString(indent + text + " " + body + "\n")
+			b.WriteString(indent + text + " " + body + d.nl)
 		}
 		return true, nil
 	}
@@ -1234,16 +1234,21 @@ func (d *decoder) bodyText(el *element, depth int) (string, error) {
 	return d.membersText(el.children, d.boolOf(el, rdf.OpenSysML+xHasBody), depth)
 }
 
-// membersText writes members one per line, in braces when braced.
+// membersText writes members one per line, in braces when braced; an unbraced
+// member continues the line the head is on, at its depth.
 func (d *decoder) membersText(members []*element, braced bool, depth int) (string, error) {
+	memberDepth := depth
+	if braced {
+		memberDepth = depth + 1
+	}
 	var b strings.Builder
 	for _, child := range members {
-		if err := d.print(&b, child, depth+1); err != nil {
+		if err := d.print(&b, child, memberDepth); err != nil {
 			return "", err
 		}
 	}
 	if braced {
-		return "{\n" + b.String() + strings.Repeat("    ", depth) + "}", nil
+		return "{" + d.nl + b.String() + strings.Repeat("    ", depth) + "}", nil
 	}
 	return strings.TrimSpace(b.String()), nil
 }

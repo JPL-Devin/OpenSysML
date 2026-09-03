@@ -173,13 +173,9 @@ func encodeDocument(file *source.SourceFile, root *ast.RootNamespace) (*encoder,
 	if err != nil {
 		return nil, err
 	}
-	formatted, err := newFormattedSource(file)
-	if err != nil {
-		return nil, err
-	}
 	e := &encoder{
 		file:     file,
-		src:      formatted,
+		src:      newAuthoredSource(file),
 		graph:    rdf.NewGraph(),
 		declared: map[string]bool{},
 		fqn:      map[ast.Node]string{},
@@ -239,8 +235,8 @@ func (e *encoder) sourceText() {
 
 type encoder struct {
 	file *source.SourceFile
-	// src is the formatted text of file, which is what sysx:sourceText carries.
-	src      *formattedSource
+	// src is the text of file as written, which is what sysx:sourceText carries.
+	src      *authoredSource
 	graph    *rdf.Graph
 	declared map[string]bool
 	// fqn is the qualified name of each member node, which is how a succession
@@ -356,6 +352,13 @@ func (e *encoder) encode(members []ast.Node, owner string, ownerTerm rdf.Term) e
 	// Members written on their owner's own lines, such as an accept's payload,
 	// are part of its text: the owner is written whole or rebuilt whole.
 	inline := !e.src.wholeLines(regions)
+	if ownerTerm.Value == "" && len(regions) > 0 {
+		// The document has no subject: roots sharing a line each keep their
+		// slice of it, and what follows the last root is that root's.
+		inline = false
+		e.src.shareLines(regions, spans)
+		regions[len(regions)-1].end = len(e.src.text)
+	}
 	if !inline && len(regions) > 0 && ownerTerm.Value != "" {
 		body := region{regions[0].start, regions[len(regions)-1].end}
 		if prior, ok := e.bodies[ownerTerm]; ok {
@@ -1141,12 +1144,13 @@ func (e *encoder) reference(owner, name string) rdf.Term {
 	return rdf.String(name)
 }
 
-// text is the formatted notation of a node, as the graph carries it.
+// text is the notation of a node as written, without the trivia its span runs
+// on over.
 func (e *encoder) text(node ast.Node) string {
 	if node == nil {
 		return ""
 	}
-	return strings.TrimSpace(e.src.slice(node.Span()))
+	return strings.TrimSpace(e.src.code(node.Span()))
 }
 
 // headEnd is the offset of the `{` or `;` ending a usage's head, found after
