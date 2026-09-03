@@ -49,14 +49,15 @@ func (w *wanted) empty() bool {
 	return len(w.references) == 0 && len(w.segments) == 0 && len(w.starts) == 0
 }
 
-// chooseNames reads notation written with every reference fully qualified and
-// picks each a spelling that resolves to its target there; none is a refusal.
-func chooseNames(text []byte, want *wanted) (nameChoices, error) {
+// chooseNames reads notation written with every reference fully qualified, as
+// the language name says, and picks each a spelling that resolves to its target
+// there; none is a refusal.
+func chooseNames(name string, text []byte, want *wanted) (nameChoices, error) {
 	names := nameChoices{}
 	if want.empty() {
 		return names, nil
 	}
-	file, root, ok := readNotation(text)
+	file, root, ok := readNotation(name, text)
 	if !ok {
 		return names, nil
 	}
@@ -70,14 +71,13 @@ func chooseNames(text []byte, want *wanted) (nameChoices, error) {
 	}
 	written := writtenKeys(want.references)
 	occurrences := map[nameKey][]resolve.Reference{}
+	var chains []resolve.Reference
 	for _, ref := range resolve.References(root, e.res.Index().DocumentRoot(file.Name())) {
 		if ref.QN == nil || ref.Member == nil {
 			continue
 		}
 		if ref.Chain != nil {
-			if err := e.checkSegment(ref, want.segments); err != nil {
-				return nil, err
-			}
+			chains = append(chains, ref)
 			continue
 		}
 		member := e.fqn[ref.Member]
@@ -105,6 +105,7 @@ func chooseNames(text []byte, want *wanted) (nameChoices, error) {
 			}
 		}
 	}
+	chosen := map[*ast.QualifiedName]string{}
 	for key, refs := range occurrences {
 		target, ok := declared[key.target]
 		if !ok {
@@ -119,6 +120,16 @@ func chooseNames(text []byte, want *wanted) (nameChoices, error) {
 			}
 		}
 		names[key] = spelling
+		for _, ref := range refs {
+			chosen[ref.QN] = spelling
+		}
+	}
+	// A chain reads from its root, so its segments are checked once the root is
+	// spelled: the fully qualified first spelling may reach nothing from there.
+	for _, ref := range chains {
+		if err := e.checkSegment(ref, want.segments, chosen); err != nil {
+			return nil, err
+		}
 	}
 	return names, nil
 }
@@ -143,11 +154,15 @@ func writtenKeys(references map[nameKey]string) map[nameKey]nameKey {
 }
 
 // checkSegment refuses a chain segment that does not read, from the operand it
-// is written after, as the one element the graph names by it there.
-func (e *encoder) checkSegment(ref resolve.Reference, segments map[segmentKey]map[string]bool) error {
+// is written after, as the one element the graph names by it there. The chain
+// is read with its root spelled as chosen.
+func (e *encoder) checkSegment(ref resolve.Reference, segments map[segmentKey]map[string]bool, chosen map[*ast.QualifiedName]string) error {
+	read := ref
+	read.Chain = respelled(ref.Chain, chosen)
+	read.QN = read.Chain.Member
 	key := segmentKey{member: e.fqn[ref.Member], name: qualifiedText(ref.QN)}
 	var targets map[string]bool
-	for _, operand := range e.operandKeys(ref.Chain) {
+	for _, operand := range e.operandKeys(read) {
 		key.operand = operand
 		if targets = segments[key]; len(targets) > 0 {
 			break
@@ -162,7 +177,7 @@ func (e *encoder) checkSegment(ref resolve.Reference, segments map[segmentKey]ma
 			Note: "written after the same operand, the segments name different elements in the graph, which one spelling cannot state",
 		}
 	}
-	if _, reached, ok := e.referent(ref.QN); ok && targets[reached] {
+	if _, reached, ok := e.reads(read); ok && targets[reached] {
 		return nil
 	}
 	return &UnsupportedError{
@@ -171,21 +186,60 @@ func (e *encoder) checkSegment(ref resolve.Reference, segments map[segmentKey]ma
 	}
 }
 
-// operandKeys are the operands a chain's segment may be noted after: the element
+// operandKeys are the operands a chain segment may be noted after: the element
 // the operand reads as, then the operand as written, which is all the graph
 // keeps where it links the operand to no element.
-func (e *encoder) operandKeys(chain *ast.FeatureChainExpr) []string {
-	var name *ast.QualifiedName
-	if inner, ok := chain.Operand.(*ast.FeatureChainExpr); ok {
-		name = inner.Member
+func (e *encoder) operandKeys(ref resolve.Reference) []string {
+	operand := ref
+	if inner, ok := ref.Chain.Operand.(*ast.FeatureChainExpr); ok {
+		operand.Chain, operand.QN = inner, inner.Member
 	} else {
-		name = ast.AsQualifiedName(chain.Operand)
+		operand.Chain, operand.QN = nil, ast.AsQualifiedName(ref.Chain.Operand)
 	}
-	if name == nil {
+	if operand.QN == nil {
 		return []string{""}
 	}
-	_, fqn, _ := e.referent(name)
-	return []string{fqn, qualifiedText(name)}
+	_, fqn, _ := e.reads(operand)
+	return []string{fqn, qualifiedText(operand.QN)}
+}
+
+// reads is the element a reference reads as where it is written.
+func (e *encoder) reads(ref resolve.Reference) (ast.Node, string, bool) {
+	sym, ok := e.res.ProbeReference(ref)
+	return e.linkedElement(ref.QN, sym, ok)
+}
+
+// respelled is chain with its root written as chosen, on fresh nodes so the
+// resolver's memo of the first spelling is kept; chain itself when unchanged.
+func respelled(chain *ast.FeatureChainExpr, chosen map[*ast.QualifiedName]string) *ast.FeatureChainExpr {
+	operand, changed := respelledOperand(chain.Operand, chosen)
+	if !changed {
+		return chain
+	}
+	return &ast.FeatureChainExpr{Operand: operand, Member: spelledName(qualifiedText(chain.Member))}
+}
+
+func respelledOperand(node ast.Node, chosen map[*ast.QualifiedName]string) (ast.Node, bool) {
+	switch n := node.(type) {
+	case *ast.FeatureChainExpr:
+		inner := respelled(n, chosen)
+		return inner, inner != n
+	case *ast.IndexExpr:
+		operand, changed := respelledOperand(n.Operand, chosen)
+		if !changed {
+			return n, false
+		}
+		return &ast.IndexExpr{Operand: operand, Index: n.Index, Bracket: n.Bracket}, true
+	case *ast.FeatureReference:
+		if spelling, ok := chosen[n.Name]; ok {
+			return &ast.FeatureReference{Name: spelledName(spelling)}, true
+		}
+	case *ast.QualifiedName:
+		if spelling, ok := chosen[n]; ok {
+			return spelledName(spelling), true
+		}
+	}
+	return node, false
 }
 
 // checkStarts refuses a `first` whose start does not read as the member the
@@ -226,18 +280,16 @@ func (e *encoder) writtenTarget(ref resolve.Reference) string {
 	return qualifiedText(ref.QN)
 }
 
-// readNotation parses text in whichever of the two languages reads it clean,
-// since the graph does not record which one it was written in.
-func readNotation(text []byte) (*source.SourceFile, *ast.RootNamespace, bool) {
-	for _, kind := range []source.Kind{source.KindSysML, source.KindKerML} {
-		file := source.NewWithKind("<converted>", text, kind)
-		p := parser.New(file)
-		root := p.ParseFile()
-		if len(p.Diagnostics) == 0 {
-			return file, root, true
-		}
+// readNotation parses text as the language name's extension says, or as an
+// extensionless buffer when it has none.
+func readNotation(name string, text []byte) (*source.SourceFile, *ast.RootNamespace, bool) {
+	file := source.New(name, text)
+	p := parser.New(file)
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		return nil, nil, false
 	}
-	return nil, nil, false
+	return file, root, true
 }
 
 // spellingFor tries qname's suffixes shortest first, then the global form,
@@ -245,23 +297,32 @@ func readNotation(text []byte) (*source.SourceFile, *ast.RootNamespace, bool) {
 func spellingFor(res *resolve.Resolver, refs []resolve.Reference, qname string, target ast.Node) (string, bool) {
 	segments := strings.Split(qname, "::")
 	for i := len(segments) - 1; i >= 0; i-- {
-		if resolvesTo(res, refs, segments[i:], false, target) {
-			return strings.Join(segments[i:], "::"), true
+		if spelling := strings.Join(segments[i:], "::"); resolvesTo(res, refs, spelling, target) {
+			return spelling, true
 		}
 	}
-	if resolvesTo(res, refs, segments, true, target) {
-		return "$::" + qname, true
+	if spelling := "$::" + qname; resolvesTo(res, refs, spelling, target) {
+		return spelling, true
 	}
 	return "", false
 }
 
-func resolvesTo(res *resolve.Resolver, refs []resolve.Reference, segments []string, global bool, target ast.Node) bool {
+// spelledName is the qualified name written as text, on a fresh node: the
+// resolver memoizes by node.
+func spelledName(text string) *ast.QualifiedName {
+	qn := &ast.QualifiedName{}
+	if rest, ok := strings.CutPrefix(text, "$::"); ok {
+		qn.Global, text = true, rest
+	}
+	for _, segment := range strings.Split(text, "::") {
+		qn.Parts = append(qn.Parts, ast.NameSegment{Text: segment})
+	}
+	return qn
+}
+
+func resolvesTo(res *resolve.Resolver, refs []resolve.Reference, spelling string, target ast.Node) bool {
 	for _, ref := range refs {
-		// A fresh node per reading: the resolver memoizes by node.
-		qn := &ast.QualifiedName{Global: global}
-		for _, segment := range segments {
-			qn.Parts = append(qn.Parts, ast.NameSegment{Text: segment})
-		}
+		qn := spelledName(spelling)
 		sym, ok := res.ProbeReference(ref.Spelled(qn))
 		if !ok || sym == nil {
 			return false

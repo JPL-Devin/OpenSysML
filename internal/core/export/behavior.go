@@ -794,6 +794,7 @@ func (d *decoder) positionalSuccessions(children []*element) ([]*element, error)
 				return nil, err
 			}
 			last().prefix = "then "
+			d.folded[child] = last()
 			continue
 		}
 		// The target is a member elsewhere in the body, so the succession

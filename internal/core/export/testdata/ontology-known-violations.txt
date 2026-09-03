@@ -69,6 +69,9 @@ unknown-property PartDefinition specializes                  # specialization is
 unknown-property ClassUsage specializes                      # specialization is a Specialization element, not a property
 unknown-property PartUsage subsets                           # subsetting is a Subsetting element, not a property
 unknown-property ReferenceUsage subsets                      # subsetting is a Subsetting element, not a property
+unknown-property SatisfyRequirementUsage subsets             # subsetting is a Subsetting element, not a property
+unknown-property SubjectMembership subsets                   # subsetting is a Subsetting element, not a property
+unknown-property AnalysisCaseUsage subsets                   # subsetting is a Subsetting element, not a property
 unknown-property urn:opensysml:sysml:MultiplicityDeclaration subsets # a MultiplicitySubset's bounds, written the same way as any other subsetting
 unknown-property PartUsage redefines                         # redefinition is a Redefinition element, not a property
 unknown-property AttributeUsage redefines                    # redefinition is a Redefinition element, not a property
@@ -82,6 +85,7 @@ unknown-property ReferenceUsage references                   # a connector end r
 unknown-property ViewRenderingMembership references          # a referenced element is a ReferenceUsage or Membership, not a property
 unknown-property urn:opensysml:sysml:AssumeMember references # a referenced element is a ReferenceUsage or Membership, not a property
 unknown-property urn:opensysml:sysml:Alias aliasedElement    # an alias target is a Membership's memberElement, not a property
+unknown-property SatisfyRequirementUsage subject             # the feature `by` names, standardly the satisfyingFeature through a SubjectMembership
 unknown-property ActionUsage via                             # the port an accept trigger listens on, which the metamodel reaches through the accept action's parameters
 unknown-property TransitionUsage via                         # the port a transition's trigger listens on, reached the same way
 unknown-property ReferenceUsage isAccept                     # notation flag for an accept parameter, no metamodel property

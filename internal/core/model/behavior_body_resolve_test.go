@@ -194,6 +194,16 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 				succession first wait then done;
 			}
 		}`},
+		{"first label written before the action it starts at", `package P {
+			action def Focus { out image; }
+			action def TakePicture {
+				first focus then shoot;
+				action focus : Focus { out image; }
+				action shoot : Focus { out image; }
+				flow from focus.image to shoot.image;
+				flow from TakePicture::focus.image to TakePicture::shoot.image;
+			}
+		}`},
 		{"named transition trigger parameters", `package P {
 			private import ScalarValues::*;
 			item def Warning;

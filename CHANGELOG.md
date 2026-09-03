@@ -160,8 +160,55 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   differential test now also compares Reals bit for bit over ±0.0, ±Inf and NaN, and focused
   fixtures under `internal/core/runtime/testdata/compiled/` run each construct through both tiers.
 
+### Fixed
+
+- **A qualified name through an import evaluates as the checker resolves it.** The evaluator
+  used to resolve only the first segment of `Bq::x` through the resolver and walk the rest as
+  owned and inherited members, so a segment a `public import` re-exports failed with
+  `member x not found in Bq` even though the checker accepted the reference — and the library's
+  own façades are built that way, so `ISQ::speed` and `SI::speed` failed with
+  `member speed not found`. The whole name now goes through the same `ResolveQualified` the
+  checker uses: a wildcard, single-member or recursive import, a façade of a façade, a short
+  name and an `alias` (which used to fail with `cannot evaluate element type *ast.Alias`) all
+  reach the element the checker reaches, a `private import` stays reachable only from inside
+  the importing namespace, and a name the checker rejects fails with the checker's own
+  `unresolved reference: Priv::x` or, when several members answer to it, its own
+  `ambiguous reference: Twice::t (2 candidates)`. The evaluator reads the name through a new
+  `Resolver.ReadQualified`, whose answer (element, segments, ambiguity) is memoized by scope and
+  node rather than by node alone, so one parsed expression evaluated in two scopes that each
+  hold their own `A::x` answers with each scope's value. A calc usage's outputs, and the "not a
+  variant" / "not a literal" reports, are unchanged.
+
 ### Changed
 
+- **A conversion from RDF returns the notation as written.** Every element written to `.ttl`
+  carries its lines as `sysx:sourceText` — comments, blank lines and keyword synonyms included —
+  and an element with members carries the lines closing its body as `sysx:sourceTail`; the writer
+  formats the file before slicing it, and the two properties are one-line literals with newlines
+  escaped. `sysml model.ttl -convert sysml` now writes that text back, so a formatted
+  `.sysml → .ttl → .sysml` round trip is byte for byte and an unformatted one comes back formatted,
+  where before it came back canonical with its `//` and `/* */` comments dropped. The graph stays
+  authoritative: the candidate notation is converted back to RDF and compared with the graph, and
+  each element whose text no longer states its triples — a flag set, a value changed, a member
+  removed or an identity annotation dropped after the export — is written canonically instead,
+  with `@IdentityMetadata::ElementId` and `ProjectRef` materialized exactly as for a graph without
+  text; text that no longer parses demotes the whole file. A member written on its owner's lines,
+  such as an accept's payload, carries no text of its own, so an edit to it rebuilds the owner
+  whole rather than splicing a line into it. Each root records the grammar its file was written in
+  as `sysx:sourceLanguage`, so KerML text is checked as KerML rather than as the SysML it may also
+  read as; a buffer with no extension records none and is checked as such a buffer again. With the
+  notation written from its text, the corpus round-trip ratchet moves 101 files to `stable` — every
+  `whitespace-only`, `graph-diff` and `unparseable` verdict and all but one `unwritable` — which says
+  the text survives, not that the structural predicates alone would (that remains the stripping
+  tests' job). A `LiteralString` node's `sysml:value` is now the value
+  the notation's escapes read to rather than the text between the quotes, and a value edited in the
+  graph is written back as a literal that reads to it, whatever characters it holds. A graph without `sysx:sourceText` — from
+  another tool, or stripped — converts as before, and the round-trip tests keep stripping it to
+  prove the structural predicates carry the model; each fixture under
+  `internal/core/export/testdata/convert` now locks both notations. The
+  [saving guide](docs/guide/07-saving-and-rdf.md), the
+  [RDF mapping](docs/reference/rdf-mapping.md#source-text) and the round-trip testing skill
+  describe the precedence.
 - **A calc whose `return` declares a result parameter it never binds says so.** In the notation
   `return` introduces a result *parameter* (SysML.xtext ReturnParameterMember), so `return h;`
   after `attribute h : Real = …;` declares a second member named `h` — the pilot flags the
@@ -236,6 +283,22 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   document gains a paragraph and diagram on invoking a calc.
 
 ### Fixed
+
+- **Messages cross a binding connector at an assembly's boundary port, in both directions**
+  (Open-MBEE/OpenSysML#92). An assembly that binds its boundary port to a port of a part it
+  holds (`part def Assembly { port bi : ~PP; part child : Inner; bind bi = child.i; }`) used
+  to swallow messages at the boundary: a `send Ping() via o` over a context-level
+  `connect env.o to asm.bi` arrived at `asm.bi` and stayed there, so the inner part's
+  `accept Ping via i` never fired and its counters stayed at 0, with no diagnostic; and a send
+  by the inner part through its own port was reported as reaching no receiving port, although
+  the boundary port it is bound to was connected. A binding connector now makes the two ports
+  one port for message delivery: an accept on either takes a message that reached the other,
+  and a send through either leaves over the connectors joined to the other, through any depth
+  of nested assemblies. Bindings chained through several assemblies also keep every bound port
+  the same object whichever end is read first — a chain used to split when the outer boundary
+  port was materialized before the inner assembly's. A send whose bound boundary port is
+  joined to nothing still reports `send reaches no receiving port` where it was written.
+  Delivery does not depend on the order connectors, bindings and parts are declared.
 
 - **`satisfy … by config.child` is evaluated on the nested object it names.** A satisfaction
   assertion whose `by` operand is a feature chain used to be read as its last name alone:
@@ -329,8 +392,9 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   scope of its own, as a named one's does, so a succession between its members links both ends and
   the trigger's parameters reach however deeply the effect nests. A `then` after `first x` now
   sequences from the member `x` names, as the initial node itself does, so the pilot use-case model
-  that redefines `start` comes back from its graph. Over the example corpus one file moves:
-  `Packets.sysml` from a different graph to byte-identical; none regresses.
+  that redefines `start` comes back from its graph. The corpus gate writes each file back from the
+  source text it carries, so its verdicts do not move; written from the graph alone, `Packets.sysml`
+  now comes back as the same graph rather than a different one, and no file regresses.
   `TestRoundTripIsLossless` now also writes every
   fixture back from its graph with the source text removed and requires the same graph again, and
   a fixture reproduces each shadowing

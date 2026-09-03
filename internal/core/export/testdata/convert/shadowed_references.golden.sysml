@@ -5,21 +5,34 @@ package Shadowing {
         attribute 'data field' : Field;
         part payload;
     }
-    part def 'Thermal Packet' specializes Packet {
-        attribute 'packet data field' redefines 'packet data field';
-        attribute 'data field' redefines 'data field' {
+    part def 'Thermal Packet' :> Packet {
+        attribute 'packet data field' :>> Shadowing::'packet data field';
+        attribute 'data field' :>> Packet::'data field' {
             attribute 'data field' : Field;
         }
     }
     part payload;
     part def Bus {
-        part payload subsets Shadowing::payload;
-        part cargo subsets Shadowing::payload;
+        part payload :> Shadowing::payload;
+        part cargo :> Shadowing::payload;
         ref part carried references payload;
         part def Packet;
         part wrapped : Shadowing::Packet;
         part raw : Packet;
         connection link connect wrapped.payload to Shadowing::payload;
+        requirement def Budget;
+        assert satisfy requirement budgeted : Shadowing::Budget by payload;
+    }
+    requirement def Budget;
+    requirement budget : Budget;
+    satisfy budget by payload;
+    part bus : Bus;
+    analysis def Study { subject vehicle : Bus; }
+    analysis study : Study {
+        subject :>> vehicle :> bus;
+    }
+    analysis deeper :> study {
+        attribute load = vehicle.cargo;
     }
     part def Frame {
         part def Frame;

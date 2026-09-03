@@ -20,6 +20,19 @@ package Shadowing {
         part wrapped : Shadowing::Packet;
         part raw : Packet;
         connection link connect wrapped.payload to Shadowing::payload;
+        requirement def Budget;
+        assert satisfy requirement budgeted : Shadowing::Budget by payload;
+    }
+    requirement def Budget;
+    requirement budget : Budget;
+    satisfy budget by payload;
+    part bus : Bus;
+    analysis def Study { subject vehicle : Bus; }
+    analysis study : Study {
+        subject :>> vehicle :> bus;
+    }
+    analysis deeper :> study {
+        attribute load = vehicle.cargo;
     }
     part def Frame {
         part def Frame;
