@@ -1275,7 +1275,7 @@ func (d *decoder) referenceName(term rdf.Term, el *element) (string, error) {
 	spelled := d.spelledName(target)
 	key := nameKey{member: el.qname, target: target.qname}
 	if d.names == nil {
-		d.wanted.references[key] = true
+		d.wanted.references[key] = spelled
 		return qualifiedNameText(spelled), nil
 	}
 	if spelling, ok := d.names[key]; ok {

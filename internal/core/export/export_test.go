@@ -193,6 +193,25 @@ func TestWrittenReferencesResolveWhereWritten(t *testing.T) {
 	}
 }
 
+// TestGlobalSpellingIsReachedPastAShadowedRoot covers a target whose short
+// name and whose qualified name are both captured where it is written: only the
+// global form reaches it, so that is what the graph alone must write.
+func TestGlobalSpellingIsReachedPastAShadowedRoot(t *testing.T) {
+	src := "package Root {\n    part def Target;\n    part def Holder {\n        part def Root {\n            part def Target;\n        }\n" +
+		"        part def Target;\n        part t : $::Root::Target;\n    }\n}\n"
+	graph, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	if want := "sysml:type elmt:Root__Target ;"; !strings.Contains(string(graph), want) {
+		t.Fatalf("graph does not record %q\n%s", want, graph)
+	}
+	notation := structuralRoundTrip(t, "shadowed_root", graph)
+	if want := "part t : $::Root::Target;"; !strings.Contains(string(notation), want) {
+		t.Errorf("notation does not write %q\n%s", want, notation)
+	}
+}
+
 // TestPacketsRoundTripsStructurally is the corpus case the spelling rule was
 // found on: a redefining attribute that bears its target's own name.
 func TestPacketsRoundTripsStructurally(t *testing.T) {
@@ -327,6 +346,48 @@ func TestChainSegmentMustReachTheGraphsTarget(t *testing.T) {
 	second := "    sysml:argument expr:P__w_pvalue_pa1_pa0 ;\n    sysml:targetFeature elmt:P__A__x ;"
 	refusedAsUnsupported(t, "chain-repeated", relinked(t, structural, second, strings.Replace(second, "A__x", "B__x", 1)),
 		"name different elements in the graph")
+}
+
+// TestSharedChainIsCheckedInEveryDeclaration covers one FeatureChainExpression
+// two declarations share: written in each, its segment must reach the graph's
+// element from each, not only from the owner met last.
+func TestSharedChainIsCheckedInEveryDeclaration(t *testing.T) {
+	src := `package P {
+    part def A { attribute x; }
+    part def B { attribute x; }
+    part a : A;
+    attribute v = a.x;
+    part def H {
+        part a : B;
+        attribute w = a.x;
+    }
+}`
+	graph, err := export.Convert("shared.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structural := withoutTriples(t, graph, "sysx:sourceText")
+	// w's value is v's chain: its root, linked to P::a, is spelled to reach it
+	// from both declarations, so both state A::x.
+	shared := relinked(t, structural, "sysml:value expr:P__H__w_pvalue ;", "sysml:value expr:P__v_pvalue ;")
+	back, err := export.Convert("shared.ttl", shared, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v\n%s", err, shared)
+	}
+	for _, want := range []string{"attribute v = a.x;", "attribute w = P::a.x;"} {
+		if !strings.Contains(string(back), want) {
+			t.Errorf("notation does not write %q\n%s", want, back)
+		}
+	}
+	// With the root a name as written, `a.x` reads A::x from v but B::x from w:
+	// the declaration that reads it otherwise refuses, whichever owner is met last.
+	const why = "does not read as the element the graph names from the operand"
+	byName := relinked(t, shared, "sysml:referent elmt:P__a ;", `sysml:referent "a" ;`)
+	refusedAsUnsupported(t, "shared-by-name", byName, why)
+	// The same with w's chain shared into v, so the refusing owner is the other one.
+	shared = relinked(t, structural, "sysml:value expr:P__v_pvalue ;", "sysml:value expr:P__H__w_pvalue ;")
+	byName = relinked(t, shared, "sysml:referent elmt:P__H__a ;", `sysml:referent "a" ;`)
+	refusedAsUnsupported(t, "shared-by-name-reversed", byName, why)
 }
 
 // TestInitialStartMustBeAMemberOfItsBody covers a `first` whose start the graph

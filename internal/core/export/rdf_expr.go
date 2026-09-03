@@ -254,12 +254,12 @@ func (d *decoder) isExpressionNode(subject rdf.Term) bool {
 // resolveExpressions renders every element's expression-valued properties as
 // notation, so the printer reads one text per property.
 func (d *decoder) resolveExpressions() error {
-	parents := map[string]rdf.Term{}
+	parents := map[string][]rdf.Term{}
 	for _, triple := range d.graph.Triples() {
 		if !d.isExpressionNode(triple.Object) {
 			continue
 		}
-		parents[triple.Object.Value] = triple.Subject
+		parents[triple.Object.Value] = append(parents[triple.Object.Value], triple.Subject)
 		el, ok := d.byIRI[triple.Subject.Value]
 		if !ok {
 			// The subject is an expression node; its parts are written with it.
@@ -282,7 +282,7 @@ func (d *decoder) resolveExpressions() error {
 
 // noteSegments records in wanted the element every feature chain reaches, kept
 // notation included, so chooseNames checks the segment reads as it there.
-func (d *decoder) noteSegments(parents map[string]rdf.Term) error {
+func (d *decoder) noteSegments(parents map[string][]rdf.Term) error {
 	for _, node := range d.graph.Subjects() {
 		if rdf.LocalName(d.graph.Type(node)) != mFeatureChain {
 			continue
@@ -291,25 +291,29 @@ func (d *decoder) noteSegments(parents map[string]rdf.Term) error {
 		if !ok || !object.IsIRI() {
 			continue
 		}
-		in, ok := d.expressionOwner(node, parents)
-		if !ok {
+		owners := d.expressionOwners(node, parents)
+		if len(owners) == 0 {
 			continue
 		}
 		target, name, err := d.namedMember(object)
 		if err != nil {
 			return err
 		}
-		key := segmentKey{member: in.qname, operand: d.operandElement(node), name: name}
-		if d.wanted.segments[key] == nil {
-			d.wanted.segments[key] = map[string]bool{}
+		operand := d.operandElement(node)
+		for _, in := range owners {
+			key := segmentKey{member: in.qname, operand: operand, name: name}
+			if d.wanted.segments[key] == nil {
+				d.wanted.segments[key] = map[string]bool{}
+			}
+			d.wanted.segments[key][target.qname] = true
 		}
-		d.wanted.segments[key][target.qname] = true
 	}
 	return nil
 }
 
 // operandElement is the qualified name of the element a chain's operand links
-// to: a feature reference's referent or an inner chain's target, else "".
+// to: a feature reference's referent or an inner chain's target, the name as
+// written where the graph keeps only that, else "".
 func (d *decoder) operandElement(chain rdf.Term) string {
 	operands := d.graph.Objects(chain, rdf.SysML+pArgument)
 	if len(operands) != 1 {
@@ -325,7 +329,13 @@ func (d *decoder) operandElement(chain rdf.Term) string {
 		return ""
 	}
 	object, ok := d.graph.Object(operands[0], rdf.SysML+property)
-	if !ok || !object.IsIRI() {
+	if !ok {
+		return ""
+	}
+	if object.IsLiteral() {
+		return object.Value
+	}
+	if !object.IsIRI() {
 		return ""
 	}
 	el, err := d.referencedElement(object.Value)
@@ -335,21 +345,25 @@ func (d *decoder) operandElement(chain rdf.Term) string {
 	return el.qname
 }
 
-// expressionOwner is the element whose declaration an expression node is part of.
-func (d *decoder) expressionOwner(node rdf.Term, parents map[string]rdf.Term) (*element, bool) {
+// expressionOwners are the elements whose declarations an expression node is
+// part of: every element reached up the parents, a node shared by several included.
+func (d *decoder) expressionOwners(node rdf.Term, parents map[string][]rdf.Term) []*element {
+	var owners []*element
 	seen := map[string]bool{}
-	for !seen[node.Value] {
+	pending := []rdf.Term{node}
+	for len(pending) > 0 {
+		node, pending = pending[0], pending[1:]
+		if seen[node.Value] {
+			continue
+		}
 		seen[node.Value] = true
 		if el, ok := d.byIRI[node.Value]; ok {
-			return el, true
+			owners = append(owners, el)
+			continue
 		}
-		parent, ok := parents[node.Value]
-		if !ok {
-			return nil, false
-		}
-		node = parent
+		pending = append(pending, parents[node.Value]...)
 	}
-	return nil, false
+	return owners
 }
 
 // expressionNodeText writes an expression node back as notation: the notation it

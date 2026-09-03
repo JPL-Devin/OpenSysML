@@ -29,7 +29,8 @@ type segmentKey struct {
 // wanted is what the fully qualified rendering notes for chooseNames: the
 // references to spell, and the names read in an operand or body to check.
 type wanted struct {
-	references map[nameKey]bool
+	// references holds, per reference, the qualified spelling it was written as.
+	references map[nameKey]string
 	// segments holds the elements the graph names by each chain segment.
 	segments map[segmentKey]map[string]bool
 	// starts holds the member each `first` names, keyed by the initial node.
@@ -38,7 +39,7 @@ type wanted struct {
 
 func newWanted() *wanted {
 	return &wanted{
-		references: map[nameKey]bool{},
+		references: map[nameKey]string{},
 		segments:   map[segmentKey]map[string]bool{},
 		starts:     map[string]string{},
 	}
@@ -67,6 +68,7 @@ func chooseNames(text []byte, want *wanted) (nameChoices, error) {
 	for node, fqn := range e.fqn {
 		declared[fqn] = node
 	}
+	written := writtenKeys(want.references)
 	occurrences := map[nameKey][]resolve.Reference{}
 	for _, ref := range resolve.References(root, e.res.Index().DocumentRoot(file.Name())) {
 		if ref.QN == nil || ref.Member == nil {
@@ -78,10 +80,17 @@ func chooseNames(text []byte, want *wanted) (nameChoices, error) {
 			}
 			continue
 		}
-		key := nameKey{member: e.fqn[ref.Member], target: e.writtenTarget(ref)}
-		if _, ok := want.references[key]; ok {
-			occurrences[key] = append(occurrences[key], ref)
+		member := e.fqn[ref.Member]
+		key := nameKey{member: member, target: e.writtenTarget(ref)}
+		if _, ok := want.references[key]; !ok {
+			// The spelling written may read as another element here; it is
+			// still the occurrence of the reference written that way.
+			key, ok = written[nameKey{member: member, target: qualifiedText(ref.QN)}]
+			if !ok {
+				continue
+			}
 		}
+		occurrences[key] = append(occurrences[key], ref)
 	}
 	if err := e.checkStarts(want.starts, declared); err != nil {
 		return nil, err
@@ -104,11 +113,36 @@ func chooseNames(text []byte, want *wanted) (nameChoices, error) {
 	return names, nil
 }
 
+// writtenKeys indexes the wanted references by the member and the spelling
+// they were written as; a spelling two targets share in one member is left out.
+func writtenKeys(references map[nameKey]string) map[nameKey]nameKey {
+	written := map[nameKey]nameKey{}
+	shared := map[nameKey]bool{}
+	for key, spelled := range references {
+		as := nameKey{member: key.member, target: spelled}
+		if _, dup := written[as]; dup {
+			shared[as] = true
+			continue
+		}
+		written[as] = key
+	}
+	for as := range shared {
+		delete(written, as)
+	}
+	return written
+}
+
 // checkSegment refuses a chain segment that does not read, from the operand it
 // is written after, as the one element the graph names by it there.
 func (e *encoder) checkSegment(ref resolve.Reference, segments map[segmentKey]map[string]bool) error {
-	key := segmentKey{member: e.fqn[ref.Member], operand: e.operandElement(ref.Chain), name: qualifiedText(ref.QN)}
-	targets := segments[key]
+	key := segmentKey{member: e.fqn[ref.Member], name: qualifiedText(ref.QN)}
+	var targets map[string]bool
+	for _, operand := range e.operandKeys(ref.Chain) {
+		key.operand = operand
+		if targets = segments[key]; len(targets) > 0 {
+			break
+		}
+	}
 	if len(targets) == 0 {
 		return nil
 	}
@@ -127,9 +161,10 @@ func (e *encoder) checkSegment(ref resolve.Reference, segments map[segmentKey]ma
 	}
 }
 
-// operandElement is the qualified name of the element the graph links a chain's
-// operand to: the name it is, or the segment an inner chain reaches.
-func (e *encoder) operandElement(chain *ast.FeatureChainExpr) string {
+// operandKeys are the operands a chain's segment may be noted after: the element
+// the operand reads as, then the operand as written, which is all the graph
+// keeps where it links the operand to no element.
+func (e *encoder) operandKeys(chain *ast.FeatureChainExpr) []string {
 	var name *ast.QualifiedName
 	if inner, ok := chain.Operand.(*ast.FeatureChainExpr); ok {
 		name = inner.Member
@@ -137,10 +172,10 @@ func (e *encoder) operandElement(chain *ast.FeatureChainExpr) string {
 		name = ast.AsQualifiedName(chain.Operand)
 	}
 	if name == nil {
-		return ""
+		return []string{""}
 	}
 	_, fqn, _ := e.referent(name)
-	return fqn
+	return []string{fqn, qualifiedText(name)}
 }
 
 // checkStarts refuses a `first` whose start does not read as the member the
