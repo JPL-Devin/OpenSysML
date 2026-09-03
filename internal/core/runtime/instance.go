@@ -132,13 +132,24 @@ func isValueTypeSymbol(sym *symbols.Symbol) bool {
 // own. The object becomes what the usage denotes from then on, so an expression
 // naming the usage or a feature path under it reads this object as it was run.
 func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
-	inst, err := ctx.instantiateAs(sym, 0)
+	mark := len(ctx.created)
+	inst, err := ctx.materializeOwnedBy(sym, 0, nil, "")
 	if err != nil {
+		ctx.abandonInstancesSince(mark)
 		return nil, err
 	}
+	// Registered before its behaviors start, so one of them naming the usage
+	// reaches this object; a failed start abandons the occurrence with it.
 	inst.explicit = true
+	prior, hadPrior := ctx.occurrences[sym]
 	if ctx.namesOneObject(sym) {
 		ctx.occurrences[sym] = inst.ID
+	}
+	if err := ctx.startClassifierBehaviors(inst, mark); err != nil {
+		if hadPrior {
+			ctx.occurrences[sym] = prior
+		}
+		return nil, err
 	}
 	return inst, nil
 }

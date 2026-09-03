@@ -256,7 +256,10 @@ func (ctx *Context) startBehaviorsOfAll(objects []*Instance) error {
 			ctx.behaviorRunDepth--
 			return err
 		}
-		ctx.materializeBehavingParts(inst)
+		if err := ctx.materializeBehavingParts(inst); err != nil {
+			ctx.behaviorRunDepth--
+			return err
+		}
 	}
 	ctx.behaviorRunDepth--
 	return ctx.runAttachedBehaviors()
@@ -264,8 +267,9 @@ func (ctx *Context) startBehaviorsOfAll(objects []*Instance) error {
 
 // materializeBehavingParts materializes the composite parts of an object whose
 // type runs behaviors, so the object runs to quiescence as a whole when it is
-// created rather than part by part in the order its parts are first read.
-func (ctx *Context) materializeBehavingParts(inst *Instance) {
+// created rather than part by part in the order its parts are first read. A
+// part that fails to materialize or start fails the creation of its holder.
+func (ctx *Context) materializeBehavingParts(inst *Instance) error {
 	for _, feat := range ctx.FeaturesOf(inst.Type) {
 		fv, ok := inst.FeatureValues[feat.Name]
 		if !ok || fv.Materialized || ctx.model.IsConnectorUsage(feat.Symbol) {
@@ -278,10 +282,11 @@ func (ctx *Context) materializeBehavingParts(inst *Instance) {
 		if !ctx.runsBehaviors(composite, make(map[*symbols.Symbol]bool)) {
 			continue
 		}
-		// A part that fails to materialize stays unmaterialized: the read that
-		// reaches it reports the failure, as for any lazy feature.
-		_, _ = inst.GetFeatureValue(ctx, feat.Name)
+		if _, err := inst.GetFeatureValue(ctx, feat.Name); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // runsBehaviors reports whether objects of a type run behaviors, of their own or

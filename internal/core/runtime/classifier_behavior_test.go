@@ -952,9 +952,10 @@ func machineOf(t *testing.T, inst *Instance, name string) *ObjectBehavior {
 	return behavior
 }
 
-// A failed creation leaves no object holding a neighbour it removed: the feature
-// that reached the removed object is read again against the objects that remain.
-func TestFailedMaterializationLeavesNoDanglingHolder(t *testing.T) {
+// A holder's creation fails with the creation of a part it runs, and leaves
+// nothing behind: neither the holder, nor the neighbour the failed part reached,
+// nor any behavior of theirs.
+func TestFailedNestedStartFailsTheHolder(t *testing.T) {
 	src := `
 		package test {
 			item def Ping;
@@ -979,28 +980,71 @@ func TestFailedMaterializationLeavesNoDanglingHolder(t *testing.T) {
 				part good : Listener;
 				part bad : Broken;
 			}
+			part group : Group;
 		}
 	`
 	model, resolver, root := parseAndBuildModel(t, src)
 	pkg := resolveSymbol(t, root, "test")
 	ctx := NewContext(model, resolver, 10000)
 
-	group, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "Group"))
-	if err != nil {
-		t.Fatalf("Instantiate Group: %v", err)
+	sym := resolveSymbol(t, pkg.Scope, "group")
+	if _, err := ctx.Instantiate(sym); err == nil {
+		t.Fatal("expected the part whose machine has no initial state to fail its holder's creation")
 	}
-	if _, err := group.GetFeatureValue(ctx, "bad"); err == nil {
-		t.Fatal("expected the machine with no initial state to fail materialization")
+	if got := len(ctx.instances); got != 0 {
+		t.Errorf("%d object(s) left alive after a failed creation, want none", got)
+	}
+	if got := len(ctx.objectBehaviors); got != 0 {
+		t.Errorf("%d behavior(s) left attached after a failed creation", got)
+	}
+	if _, named := ctx.occurrences[sym]; named {
+		t.Error("the failed creation is still what the usage denotes")
+	}
+}
+
+// A behavior started by a creation that names its own usage reaches the object
+// being created, and a second creation of the usage is what it denotes from then
+// on; a failed second creation leaves the first as what the usage denotes.
+func TestStartupNamingItsOwnUsageReachesTheObjectCreated(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			part def Counter {
+				attribute n : Integer = 0;
+				attribute seen : Integer = 0;
+				exhibit state sm {
+					entry; then s1;
+					state s1 { entry assign seen := counter.n + 1; }
+				}
+			}
+			part counter : Counter;
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	pkg := resolveSymbol(t, root, "test")
+	ctx := NewContext(model, resolver, 10000)
+	sym := resolveSymbol(t, pkg.Scope, "counter")
+
+	first, err := ctx.Instantiate(sym)
+	if err != nil {
+		t.Fatalf("Instantiate counter: %v", err)
+	}
+	if got := len(ctx.instances); got != 2 {
+		t.Errorf("%d objects materialized, want the counter and its state performance", got)
+	}
+	if id := ctx.occurrences[sym]; id != first.ID {
+		t.Errorf("counter denotes object %d, want the one created, %d", id, first.ID)
 	}
 
-	// The neighbour the failed creation materialized is gone, so reading it again
-	// materializes an object the session holds.
-	good := instanceAtPath(t, ctx, group, "good")
-	if _, held := ctx.Instance(good.ID); !held {
-		t.Errorf("good names object %d, which the context does not hold", good.ID)
+	second, err := ctx.Instantiate(sym)
+	if err != nil {
+		t.Fatalf("Instantiate counter again: %v", err)
 	}
-	if _, ok := good.ExhibitedState(); !ok {
-		t.Error("the object materialized again exhibits no machine")
+	if id := ctx.occurrences[sym]; id != second.ID {
+		t.Errorf("counter denotes object %d after a second creation, want %d", id, second.ID)
+	}
+	if _, held := ctx.Instance(first.ID); !held {
+		t.Error("the first object is gone after a second creation")
 	}
 }
 
