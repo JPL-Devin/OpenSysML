@@ -204,6 +204,7 @@ expr:Scopes__D__one_pvalue_pa0
     a sysml:Expression ;
     sysx:sourceText "{in limit; limit}" ;
     sysml:elementId "Scopes__D__one_pvalue_pa0" ;
+    sysx:hasBody "true"^^xsd:boolean ;
     sysx:bodyParameter expr:Scopes__D__one_pvalue_pa0_pin0 ;
     sysx:resultExpression expr:Scopes__D__one_pvalue_pa0_presult ;
     sysx:argumentIndex "0"^^xsd:integer .
@@ -265,6 +266,7 @@ expr:Scopes__D__two_pvalue_pa0
     a sysml:Expression ;
     sysx:sourceText "{in Gauge; Gauge}" ;
     sysml:elementId "Scopes__D__two_pvalue_pa0" ;
+    sysx:hasBody "true"^^xsd:boolean ;
     sysx:bodyParameter expr:Scopes__D__two_pvalue_pa0_pin0 ;
     sysx:resultExpression expr:Scopes__D__two_pvalue_pa0_presult ;
     sysx:argumentIndex "0"^^xsd:integer .
