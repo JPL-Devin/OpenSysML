@@ -54,6 +54,9 @@ const triggerFixture = `package P {
 		attribute loop = loop;
 		in attribute given = true;
 		part h : Holder;
+		attribute viaDelay :> h.delay;
+		attribute viaInstant :> h.instant;
+		attribute viaOk :> h.ok;
 		state a;
 		state b;
 		%s
@@ -141,6 +144,7 @@ func TestTriggerAfterAcceptsDurations(t *testing.T) {
 		"after d",
 		"after d2",
 		"after h.delay",
+		"after viaDelay",
 		"after d + 5 [s]",
 		"after 2 [one] * d",
 		"after -d",
@@ -173,6 +177,8 @@ func TestTriggerAtRejectsNonTimeInstant(t *testing.T) {
 		{"at 5 [s]", "a quantity in second (a DurationUnit)"},
 		{"at d", "DurationValue"},
 		{"at h.delay", "Delay"},
+		{"at viaDelay", "Delay"},
+		{"at viaOk", "Boolean"},
 		{"at x", "Integer"},
 		{"at flag", "Boolean"},
 		{"at Twice(d)", "DurationValue"},
@@ -193,6 +199,7 @@ func TestTriggerAtAcceptsTimeInstants(t *testing.T) {
 		"at t",
 		"at t2",
 		"at h.instant",
+		"at viaInstant",
 		"at Later(t)",
 		"at TimeOf(a)",
 		"at t + d",
@@ -211,6 +218,8 @@ func TestTriggerWhenRejectsNonBoolean(t *testing.T) {
 		{"when \"yes\"", "String"},
 		{"when d", "DurationValue"},
 		{"when h.delay", "Delay"},
+		{"when viaDelay", "Delay"},
+		{"when viaInstant", "Iso8601DateTime"},
 		{"when untyped", "an untyped feature"},
 		{"when lazy", "an untyped feature"},
 		{"when given", "an untyped feature"},
@@ -236,6 +245,7 @@ func TestTriggerWhenAcceptsBooleans(t *testing.T) {
 		"when x > 3",
 		"when flag",
 		"when h.ok",
+		"when viaOk",
 		"when x > 3 and flag",
 		"when not flag",
 		"when x == 1 or h.ok",

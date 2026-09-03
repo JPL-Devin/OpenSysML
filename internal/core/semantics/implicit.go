@@ -381,7 +381,7 @@ func (m *Model) implicitKerMLFeatureBase(sym *symbols.Symbol) *symbols.Symbol {
 }
 
 // relationshipTarget resolves the element rel names from sym's scope, following
-// an alias to what it names.
+// an alias to what it names; a chain target (`subsets b.f`) is its final feature.
 func (m *Model) relationshipTarget(sym *symbols.Symbol, rel *ast.Relationship) *symbols.Symbol {
 	if m.resolver == nil {
 		return nil
@@ -389,6 +389,13 @@ func (m *Model) relationshipTarget(sym *symbols.Symbol, rel *ast.Relationship) *
 	node := rel.Target
 	if fr, ok := node.(*ast.FeatureReference); ok {
 		node = fr.Name
+	}
+	if fc, ok := node.(*ast.FeatureChainExpr); ok {
+		target, ok := m.resolver.ResolveTarget(sym.OwnerScope, fc)
+		if !ok || target == nil {
+			return nil
+		}
+		return target
 	}
 	qn, ok := node.(*ast.QualifiedName)
 	if !ok {
