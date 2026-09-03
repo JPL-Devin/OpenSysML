@@ -838,26 +838,7 @@ func (p *Parser) parseNamespace(start int) ast.Node {
 // prefixLookahead returns the buffer index of the token following all
 // leading `# QualifiedName` prefixes, without consuming anything.
 func (p *Parser) prefixLookahead() int {
-	i := 0
-	for p.peekN(i).Kind == lexer.Hash {
-		i++ // '#'
-		// QualifiedName: Name (:: Name)*
-		// Allow keywords as metadata type names (e.g., #scenario, #cause)
-		k := p.peekN(i).Kind
-		if k != lexer.Identifier && k != lexer.UnrestrictedName && k != lexer.Keyword {
-			return i
-		}
-		i++
-		for p.peekN(i).Kind == lexer.ColonColon {
-			i++
-			k := p.peekN(i).Kind
-			if k != lexer.Identifier && k != lexer.UnrestrictedName && k != lexer.Keyword {
-				return i
-			}
-			i++
-		}
-	}
-	return i
+	return p.prefixMetadataEndAt(0)
 }
 
 func (p *Parser) leadingPrefixIsPackage() bool {

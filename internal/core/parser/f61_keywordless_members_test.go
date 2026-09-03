@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -212,6 +213,42 @@ func TestF61KeywordlessMembers(t *testing.T) {
 		}
 		if u := usageAt(t, def.Members, 10); !u.HasBody || ast.QualifiedText(u.Prefixes[0].Type) != "B::M" {
 			t.Errorf("#B::M { doc } = %#v, want a body and a qualified prefix", u)
+		}
+	})
+
+	t.Run("globally_qualified_metadata_prefixed_enum_values", func(t *testing.T) {
+		pkg := parsePkg(t, "package B { metadata def M; enum def S { #$::B::M a; #$::B::M = 1; #$::B::M #M b; #M #$::B::M c; #$::B::M d : S = 2; #$::B::M; private #$::B::M enum := 3; #$::B::M k default = 4; } }")
+		def := pkg.Members[1].(*ast.Membership).Member.(*ast.Definition)
+		if len(def.Members) != 8 {
+			t.Fatalf("members = %d, want 8", len(def.Members))
+		}
+		for i, want := range []struct {
+			name     string
+			prefixes []string
+		}{
+			{"a", []string{"$::B::M"}}, {"", []string{"$::B::M"}}, {"b", []string{"$::B::M", "M"}}, {"c", []string{"M", "$::B::M"}},
+			{"d", []string{"$::B::M"}}, {"", []string{"$::B::M"}}, {"", []string{"$::B::M"}}, {"k", []string{"$::B::M"}},
+		} {
+			u := usageAt(t, def.Members, i)
+			if u.Kind != ast.UsageEnumeration || u.Ident.Name != want.name {
+				t.Errorf("member %d = kind %v %q, want enumerated value %q", i, u.Kind, u.Ident.Name, want.name)
+			}
+			var got []string
+			for _, pre := range u.Prefixes {
+				got = append(got, ast.QualifiedText(pre.Type))
+			}
+			if strings.Join(got, " ") != strings.Join(want.prefixes, " ") {
+				t.Errorf("member %d prefixes = %v, want %v", i, got, want.prefixes)
+			}
+			if u.Prefixes[0].Type.Global != (want.prefixes[0] == "$::B::M") {
+				t.Errorf("member %d first prefix global = %v", i, u.Prefixes[0].Type.Global)
+			}
+		}
+		if u := usageAt(t, def.Members, 4); len(u.Relationships) != 1 || u.Relationships[0].Kind != ast.RelTyping || u.Value == nil {
+			t.Errorf("#$::B::M d : S = 2 = %#v, want a typing and a value", u)
+		}
+		if u := usageAt(t, def.Members, 6); u.Visibility != ast.VisibilityPrivate || u.Keyword != "enum" || u.Value == nil {
+			t.Errorf("private #$::B::M enum := 3 = %#v, want private enum with a value", u)
 		}
 	})
 
