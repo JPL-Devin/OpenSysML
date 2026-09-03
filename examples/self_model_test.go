@@ -774,7 +774,7 @@ var repositoryPathPattern = regexp.MustCompile(
 var makeTargetPattern = regexp.MustCompile(`(?m)^([a-z-]+):`)
 
 // syncFlagPattern matches the definition of one -sync-* flag in cmd/sysml.
-var syncFlagPattern = regexp.MustCompile(`flag\.\w+Var\(&\w+, "(sync-[a-z-]+)"`)
+var syncFlagPattern = regexp.MustCompile(`\w+\.\w+Var\(&\w+, "(sync-[a-z-]+)"`)
 
 // analyseSelfModel indexes the self-model over the standard library and returns
 // a runtime over it, so a test can instantiate and evaluate what it declares.
