@@ -3,6 +3,7 @@
 package resolve_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -177,6 +178,39 @@ package App {
 	}
 	if plain == 0 {
 		t.Error("the import's own name must be reported as an ordinary reference")
+	}
+}
+
+// A send's receiver (`via p to ground`) is a name like its payload and port; a
+// constructor's argument label (`new T(frames = …)`) names a feature of T, so it
+// is neither resolved in the sender's scope nor rewritten when a same-named
+// feature there is renamed.
+func TestSendReceiverIsAReferenceAndConstructorLabelsAreNot(t *testing.T) {
+	const src = `package App {
+	item def Telemetry { attribute frames; }
+	port def Radio;
+	part def Station;
+	action def Downlink {
+		port antenna : Radio;
+		part ground : Station;
+		attribute frames;
+		send new Telemetry(frames = 3) via antenna to ground;
+		send new Telemetry(frames = 4) via antenna to missing;
+	}
+}`
+	walk, root, rootScope := resolvedDoc(t, src)
+	if len(walk.Diagnostics) != 1 || !strings.Contains(walk.Diagnostics[0].Message, "missing") {
+		t.Fatalf("the unresolved receiver `missing` must be the one diagnostic, got %v", walk.Diagnostics)
+	}
+	byName := map[string]int{}
+	for _, ref := range resolve.References(root, rootScope) {
+		byName[nameText(ref.QN)]++
+	}
+	if byName["ground"] != 1 || byName["missing"] != 1 {
+		t.Errorf("receivers collected: ground=%d missing=%d, want 1 and 1", byName["ground"], byName["missing"])
+	}
+	if byName["frames"] != 0 {
+		t.Errorf("`frames` collected %d time(s) as a reference; a constructor label names the constructed type's feature", byName["frames"])
 	}
 }
 

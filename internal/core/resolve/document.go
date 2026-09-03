@@ -337,6 +337,7 @@ func (r *Resolver) resolveBehaviorDecl(scope *symbols.Scope, decl ast.Node) bool
 	case *ast.SendStatement:
 		r.resolveExpr(scope, d.Message)
 		r.resolveExpr(scope, d.Target)
+		r.resolveExpr(scope, d.Receiver)
 		return true
 	case *ast.TerminateStatement:
 		r.resolveExpr(scope, d.Target)

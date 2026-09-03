@@ -302,6 +302,7 @@ func (c *refCollector) behaviorDecl(scope *symbols.Scope, decl ast.Node) bool {
 	case *ast.SendStatement:
 		c.expr(scope, d.Message)
 		c.expr(scope, d.Target)
+		c.expr(scope, d.Receiver)
 		return true
 	case *ast.TerminateStatement:
 		c.expr(scope, d.Target)
@@ -492,7 +493,7 @@ func (c *refCollector) expr(scope *symbols.Scope, e ast.Node) {
 			c.expr(scope, a)
 		}
 		for _, na := range v.NamedArgs {
-			c.add(scope, na.Name)
+			// na.Name labels a feature of the constructed type, not of scope.
 			c.expr(scope, na.Value)
 		}
 	case *ast.BodyExpr:
