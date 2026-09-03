@@ -155,6 +155,31 @@ package Q {
 	}
 }
 
+// A reference into another project scope — which the typed triple spells with that
+// scope's qualifier — reads from the annotation's bare id when no other subject carries it.
+func TestAnnotatedReferencesReachAcrossScopes(t *testing.T) {
+	turtle := structural(t, idTurtle(t, `package P {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; org = "acme"; }
+	part def A :> Q::B, Q::C;
+}
+package Q {
+	@IdentityMetadata::ProjectRef { projectId = "proj-2"; org = "acme"; }
+	part def B {
+		@IdentityMetadata::ElementId { id = "b-id"; }
+	}
+	part def C;
+}
+`))
+	if !strings.Contains(turtle, "sysml:specializes elmt:acme.proj-2:b-id, elmt:acme.proj-2:Q__C ;") {
+		t.Fatalf("the fixture does not reference across scopes:\n%s", turtle)
+	}
+	want := toNotation(t, []byte(turtle))
+	back := toNotation(t, withoutTriples(t, []byte(turtle), "sysml:specializes"))
+	if back != want || !strings.Contains(back, "part def A specializes Q::B, Q::C;") {
+		t.Errorf("the annotation-only graph reads differently:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+}
+
 // A reference the annotation alone states to an element the graph does not
 // describe is refused as a dangling reference, as a typed triple's would be.
 func TestAnnotatedReferenceToAnAbsentElementIsRefused(t *testing.T) {
