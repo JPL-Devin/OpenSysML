@@ -442,7 +442,7 @@ See [the guide](../guide/) for VS Code configuration.
 **Runtime execution:**
 - `%instantiate <name>` — Create instance from part def
 - `%eval <expr>` — Evaluate expression (feature refs + literals)
-- `%features <name> [all|depth <n>] [json]` — Show an object's features and their values, bounded unless asked for whole or to a depth; `json` writes the graph in the API's `InstantiateResponse` shape
+- `%features <object> [all|depth <n>] [json]` — Show an object's features and their values, bounded unless asked for whole or to a depth; `json` writes the graph in the API's `InstantiateResponse` shape
 - `%instances` — List all created instances
 
 **Behavioral execution:**

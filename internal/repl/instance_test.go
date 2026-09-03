@@ -551,7 +551,7 @@ func TestNestedPartMemberBindsToTheNestedInstance(t *testing.T) {
 	rejects(t, got, "on Nested::Car ID")
 	wants(t, run(t, s, "%eval Nested::Car::mass"), "on Nested::Car ID", "= 1500.0")
 	wants(t, run(t, s, "%constraint Nested::Car::engine::light"),
-		"passed", "on Nested::Car::engine")
+		"passed", "on Nested::Car.engine")
 }
 
 // A multi-valued feature shows what the object holds, not <unknown>.
