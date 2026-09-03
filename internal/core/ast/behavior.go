@@ -305,8 +305,10 @@ type SuccessionEdge struct {
 	SourceImplied bool
 	TargetImplied bool
 	// Members are the body an action target succession carries
-	// (SysML.xtext:1698 ActionTargetSuccession ends in a UsageBody).
+	// (SysML.xtext:1698 ActionTargetSuccession ends in a UsageBody), and
+	// HasBody that it was written with one rather than ended by ';'.
 	Members []Node
+	HasBody bool
 }
 
 // ControlFlowEdge is guarded control flow from decision nodes.

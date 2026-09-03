@@ -33,6 +33,7 @@ package Bodies {
             first a2 then a3 { }
             action a4;
             then a3 { }
+            then a4 /* { */;
         }
     }
 }
