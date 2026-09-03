@@ -190,7 +190,7 @@ type signatureParameter struct {
 	name     string
 	typ      *symbols.Symbol // the declared type, nil when untyped or unresolved
 	prim     PrimType
-	untyped  bool // declares no type at all, so it is typed Anything
+	untyped  bool // typed Anything, whether written or by declaring no type
 	optional bool // declares a default value
 }
 
@@ -214,7 +214,12 @@ func (m *Model) signatureOf(sym *symbols.Symbol) invocationSignature {
 			prim:     m.PrimTypeOf(p.Symbol),
 			optional: isUsage && u.Value != nil,
 		}
-		param.untyped = param.typ == nil && param.prim == PrimUnknown && !m.declaresType(p.Symbol)
+		switch {
+		case isAnything(param.typ):
+			param.typ, param.untyped = nil, true
+		case param.typ == nil && param.prim == PrimUnknown && !m.declaresType(p.Symbol):
+			param.untyped = true
+		}
 		sig.params = append(sig.params, param)
 	}
 	// A parameterless declaration with supertypes may inherit an unseen signature.

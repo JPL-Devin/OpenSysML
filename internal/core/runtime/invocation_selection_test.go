@@ -20,6 +20,7 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("calc_call_selects_by_named_argument", testCalcCallSelectsByNamedArgument)
 	t.Run("calc_call_selects_by_sibling_scalar_type", testCalcCallSelectsBySiblingScalarType)
 	t.Run("calc_call_typed_parameter_beats_untyped", testCalcCallTypedParameterBeatsUntyped)
+	t.Run("calc_call_explicit_anything_ties_with_untyped", testCalcCallExplicitAnythingTiesWithUntyped)
 	t.Run("calc_call_repeated_named_argument_binds_last", testCalcCallRepeatedNamedArgumentBindsLast)
 	t.Run("calc_call_selects_among_owned_inherited_and_recursive_import", testCalcCallSelectsAmongOwnedInheritedAndRecursiveImport)
 	t.Run("action_call_selects_by_argument_type", testActionCallSelectsByArgumentType)
@@ -389,6 +390,41 @@ func testCalcCallTypedParameterBeatsUntyped(t *testing.T) {
 		}
 		if result.Kind != ValConst || result.Const.Int != want {
 			t.Fatalf("%s = %+v, want %d", calc, result, want)
+		}
+	}
+}
+
+// A parameter written `: Anything` and one declaring no type are the same parameter,
+// so two candidates differing only in that spelling tie and the call is refused.
+func testCalcCallExplicitAnythingTiesWithUntyped(t *testing.T) {
+	src := `
+		package A { private import ScalarValues::*; private import Base::Anything; calc def pick { in x : Real; in y : Anything; return : Integer = 1; } }
+		package B { private import ScalarValues::*; calc def pick { in x : Real; in y; return : Integer = 2; } }
+		package test {
+			private import ScalarValues::*;
+			private import A::*;
+			private import B::*;
+			calc choose { in w : Real; in v : Integer; pick(w, v) }
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "choose", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("choose calc not found")
+	}
+	real := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 1.5}}
+	integer := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}
+	result, err := ctx.InvokeCalc(sym, []Value{real, integer}, rootScope)
+	if err == nil {
+		t.Fatalf("expected an ambiguity error, calc returned %+v", result)
+	}
+	if !errors.Is(err, ErrAmbiguousInvocation) {
+		t.Fatalf("expected ErrAmbiguousInvocation, got: %v", err)
+	}
+	for _, want := range []string{"A::pick", "B::pick"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name candidate %s", err, want)
 		}
 	}
 }

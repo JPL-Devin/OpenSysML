@@ -205,6 +205,31 @@ func TestInvocationOverloadUntypedParameterIsLeastSpecific(t *testing.T) {
 	}
 }
 
+// A parameter typed `Anything` in writing is the same least specific parameter as one
+// declaring no type: the two spellings tie, and either loses to a typed parameter.
+func TestInvocationOverloadExplicitAnythingEqualsUntyped(t *testing.T) {
+	const model = `package P {
+		private import ScalarValues::*;
+		private import Base::Anything;
+		package A { calc def pick { in x : Real; in y : Anything; return : String = "a"; } }
+		package B { calc def pick { in x : Real; in y%s; return : Integer = 2; } }
+		package C {
+			private import A::*;
+			private import B::*;
+			attribute w : Real = 1.0;
+			attribute v : Integer = 2;
+			attribute %s
+		}
+	}`
+	wantLibraryDiag(t, fmt.Sprintf(model, ``, `r = pick(w, v);`),
+		"invocation-ambiguous", "call of pick is ambiguous between P::A::pick, P::B::pick")
+	wantLibraryDiag(t, fmt.Sprintf(model, ``, `r = pick(1, 2);`),
+		"invocation-ambiguous", "call of pick is ambiguous between P::A::pick, P::B::pick")
+	wantLibraryClean(t, fmt.Sprintf(model, ` : Integer`, `r : Integer = pick(w, v);`))
+	wantLibraryDiag(t, fmt.Sprintf(model, ` : Integer`, `r : String = pick(w, v);`),
+		"type.expr", "cannot bind Integer value to a feature typed by String")
+}
+
 // A calc the model declares under a library function's name shadows every
 // library declaration, imported or not, however its arguments are typed.
 func TestInvocationOverloadModelShadowsLibrary(t *testing.T) {
