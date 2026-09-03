@@ -471,7 +471,9 @@ the annotation alone — what that service writes back for a graph it holds —
 is materialized as typed triples in the annotation's order before decoding, a
 `{"@id": …}` member resolving to the subject with that id in the scope the id
 spells — the referring subject's own when it spells none — or, absent one,
-standing as an element IRI that dangles as any other unresolved reference does.
+standing as an element IRI that dangles as any other unresolved reference does;
+a subject outside the element and expression namespaces is never the target,
+whatever its local name.
 An annotation that names a cross-scope target by its bare id disagrees with the
 qualified typed triple and is refused as a conflict rather than retargeted to
 the referrer's scope. An id that both an element and an expression node carry

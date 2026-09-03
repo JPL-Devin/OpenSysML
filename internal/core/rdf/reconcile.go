@@ -176,11 +176,12 @@ func sameMembers(a, b []string) bool {
 	return true
 }
 
-// subjectsByID indexes IRI subjects by scope-qualified id.
+// subjectsByID indexes the subjects minted in an identity namespace by
+// scope-qualified id; a subject in any other namespace is no reference target.
 func subjectsByID(graph *Graph) map[string][]Term {
 	ids := map[string][]Term{}
 	for _, subject := range graph.Subjects() {
-		if subject.IsIRI() {
+		if subject.IsIRI() && namespaceOf(subject.Value) != "" {
 			id := ownerID(subject.Value)
 			ids[id] = append(ids[id], subject)
 		}
@@ -189,7 +190,8 @@ func subjectsByID(graph *Graph) map[string][]Term {
 }
 
 // materialize turns an annotation member into the term a typed triple would hold:
-// the subject carrying the id in the scope the @id names; an unknown id dangles as usual.
+// the element or expression node carrying the id in the scope the @id names; an
+// unknown id stays the element IRI, dangling as usual.
 func materialize(member CollectionMember, referrer Term, ids map[string][]Term) (Term, error) {
 	if member.ID == "" {
 		return member.Literal, nil

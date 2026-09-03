@@ -106,6 +106,23 @@ func TestMaterializedReferencesFollowTheReferrersNamespace(t *testing.T) {
 	}
 }
 
+// A subject outside the element and expression namespaces is no reference
+// target, however its local name reads: the @id stays an element IRI and dangles.
+func TestForeignSubjectsAreNotReferenceTargets(t *testing.T) {
+	subject, foreign := IRI(Element+"P"), IRI("urn:other:A")
+	g := NewGraph()
+	g.Add(subject, IRI(RDFType), SysMLTerm("Package"))
+	g.Add(foreign, IRI(RDFType), SysMLTerm("PartDefinition"))
+	g.Add(subject, AnnotationJSONTerm("ownedMember"), String(`[{"@id":"A"}]`))
+	out, err := ReconcileCollections(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := out.Objects(subject, SysML+"ownedMember"); len(got) != 1 || got[0] != IRI(Element+"A") {
+		t.Errorf("the member resolved to %v, want the dangling %s", got, IRI(Element+"A"))
+	}
+}
+
 // A graph holds each triple once, so an annotation that repeats a member cannot
 // round-trip; it is refused, whether the member is a reference or a primitive.
 func TestRepeatedAnnotationMembersAreRefused(t *testing.T) {
