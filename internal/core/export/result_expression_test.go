@@ -158,42 +158,56 @@ func TestResultExpressionComesBackFromItsMembershipAlone(t *testing.T) {
 // edge; each is refused, naming the membership.
 func TestMalformedMembershipEndsAreRefused(t *testing.T) {
 	turtle := string(withoutTriples(t, convertFixture(t, "result_expressions"), "sysx:sourceText"))
-	for _, tc := range []struct{ from, to, want string }{
+	for _, tc := range []struct{ from, to, extra, want string }{
 		{
 			"    sysml:ownedResultExpression elmt:Results__AfterMembers___403 .",
 			"    sysml:ownedResultExpression elmt:Results__Only___400 .",
+			"",
 			"the membership <urn:sysmlv2:element:Results__AfterMembers___403_om>: it states both <urn:sysmlv2:element:Results__AfterMembers___403> and <urn:sysmlv2:element:Results__Only___400> as its member",
 		},
 		{
 			"    sysml:memberElement elmt:Results__Only___400 ;",
 			"    sysml:memberElement elmt:Results__Only___400, elmt:Results__Only ;",
+			"",
 			"the membership <urn:sysmlv2:element:Results__Only___400_om>: it states both <urn:sysmlv2:element:Results__Only___400> and <urn:sysmlv2:element:Results__Only> as its member",
 		},
 		{
 			"    sysml:owningRelatedElement elmt:Results__Only ;\n    sysml:membershipOwningNamespace elmt:Results__Only ;",
 			"    sysml:owningRelatedElement elmt:Results ;\n    sysml:membershipOwningNamespace elmt:Results__Only ;",
+			"",
 			"the membership <urn:sysmlv2:element:Results__Only___400_om>: it states both <urn:sysmlv2:element:Results__Only> and <urn:sysmlv2:element:Results> as its owning namespace",
 		},
 		{
 			"    sysml:ownedResultExpression elmt:Results__AfterMembers___403 .",
 			`    sysml:ownedResultExpression "Results__AfterMembers___403" .`,
+			"",
 			`the membership <urn:sysmlv2:element:Results__AfterMembers___403_om>: its sysml:ownedResultExpression is the literal "Results__AfterMembers___403"`,
 		},
 		{
 			"    sysml:owningRelatedElement elmt:Results__Only ;\n    sysml:membershipOwningNamespace elmt:Results__Only ;",
 			"    sysml:owningRelatedElement elmt:Results__Only ;\n    sysml:membershipOwningNamespace \"Results::Only\" ;",
+			"",
 			`the membership <urn:sysmlv2:element:Results__Only___400_om>: its sysml:membershipOwningNamespace is the literal "Results::Only"`,
 		},
 		{
 			"    sysml:ownedResultExpression elmt:Results__Only___400 .",
-			"    sysml:ownedResultExpression elmt:Results__Only___400 .\n\nelmt:Results__Only___400_om2 a sysml:ResultExpressionMembership ;\n    sysml:membershipOwningNamespace elmt:Results__Double ;\n    sysml:memberElement elmt:Results__Only___400 .",
+			"    sysml:ownedResultExpression elmt:Results__Only___400 .",
+			"elmt:Results__Only___400_om2 a sysml:ResultExpressionMembership ;\n    sysml:membershipOwningNamespace elmt:Results__Double ;\n    sysml:memberElement elmt:Results__Only___400 .",
 			"both own <urn:sysmlv2:element:Results__Only___400>",
+		},
+		{
+			"    sysml:owningRelationship elmt:Results__Only___400_om ;\n    sysml:owningMembership elmt:Results__Only___400_om ;",
+			"    sysml:owningRelationship elmt:Results__Only___400_named ;\n    sysml:owningMembership elmt:Results__Only___400_named ;",
+			// A named membership is the member it is, not an ownership edge.
+			"elmt:Results__Only___400_named a sysml:OwningMembership ;\n    sysml:qualifiedName \"Results::Only::named\" ;\n    sysml:owningRelatedElement elmt:Results__Only ;\n    sysml:memberElement elmt:Results__Only___400 .",
+			"the element <urn:sysmlv2:element:Results__Only___400>: it states <urn:sysmlv2:element:Results__Only___400_named> as its owning relationship while the membership <urn:sysmlv2:element:Results__Only___400_om> owns it",
 		},
 	} {
 		if !strings.Contains(turtle, tc.from) {
 			t.Fatalf("expected %q in the graph:\n%s", tc.from, turtle)
 		}
-		_, err := export.Convert("m.ttl", []byte(strings.Replace(turtle, tc.from, tc.to, 1)), export.FormatTurtle, export.FormatSysML)
+		mutated := strings.Replace(turtle, tc.from, tc.to, 1) + "\n" + tc.extra + "\n"
+		_, err := export.Convert("m.ttl", []byte(mutated), export.FormatTurtle, export.FormatSysML)
 		var unsupported *export.UnsupportedError
 		if !errors.As(err, &unsupported) {
 			t.Fatalf("want an UnsupportedError for %q, got %v", tc.to, err)

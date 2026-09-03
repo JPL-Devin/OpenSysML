@@ -499,6 +499,12 @@ func (d *decoder) ownerOf(el *element) (*element, error) {
 		// The owning relationship is either a membership standing between the
 		// element and its owner, or the owner itself when a relationship owns
 		// the element directly, as a state owns its entry action.
+		if owned && m.iri != relationship.Value {
+			return nil, &UnsupportedError{
+				What: fmt.Sprintf("the element <%s>", el.iri),
+				Note: fmt.Sprintf("it states <%s> as its owning relationship while the membership <%s> owns it, and following one would drop the other", relationship.Value, m.iri),
+			}
+		}
 		if m, known := d.memberships[relationship.Value]; known {
 			ownerIRI = m.owner
 		} else {
