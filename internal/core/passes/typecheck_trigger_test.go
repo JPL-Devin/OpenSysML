@@ -275,3 +275,19 @@ func TestRequireNamesRequirementResult(t *testing.T) {
 		t.Fatalf("want one Integer diagnostic, got %v", diags)
 	}
 }
+
+// An untyped feature holds nothing statically: a trigger's `when` requires a
+// Boolean and reports it, while an `if`, `while` or `require` condition is
+// left to evaluation, as before.
+func TestUntypedConditionIsLeftToEvaluationOutsideTriggers(t *testing.T) {
+	diags := libraryTypeDiags(t, `package P {
+		calc def C { in x; if x { return : ScalarValues::Real = 1.0; } return : ScalarValues::Real = 0.0; }
+		attribute u;
+		action def A { while u { } }
+		requirement group { require u; }
+	}`)
+	if len(diags) != 0 {
+		t.Fatalf("want no type diagnostics, got %v", diags)
+	}
+	wantTriggerDiag(t, "transition first a accept when untyped then b;", "trigger-when-boolean", "found an untyped feature")
+}

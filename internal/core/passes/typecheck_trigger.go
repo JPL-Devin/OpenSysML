@@ -29,7 +29,7 @@ func (ec *exprChecker) checkTrigger(scope *symbols.Scope, trigger ast.Node) {
 	switch t := trigger.(type) {
 	case nil:
 	case *ast.ChangeEvent:
-		ec.checkCondition(scope, t.Condition, codeTriggerWhenBoolean, msgTriggerWhenBoolean)
+		ec.checkCondition(scope, t.Condition, codeTriggerWhenBoolean, msgTriggerWhenBoolean, true)
 	case *ast.TimeEvent:
 		ec.checkTimeEvent(scope, t)
 	case *ast.Usage:
@@ -38,7 +38,7 @@ func (ec *exprChecker) checkTrigger(scope *symbols.Scope, trigger ast.Node) {
 		}
 	case *ast.FeatureReference, *ast.QualifiedName, *ast.AcceptEvent, *ast.CallEvent:
 	default:
-		ec.checkCondition(scope, trigger, codeTriggerWhenBoolean, msgTriggerWhenBoolean)
+		ec.checkCondition(scope, trigger, codeTriggerWhenBoolean, msgTriggerWhenBoolean, true)
 	}
 }
 

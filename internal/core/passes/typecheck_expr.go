@@ -143,12 +143,13 @@ func (ec *exprChecker) resolveTarget(scope *symbols.Scope, target ast.Node) *sym
 
 // checkBoolean checks an expression used where a condition is required.
 func (ec *exprChecker) checkBoolean(scope *symbols.Scope, n ast.Node, context string) {
-	ec.checkCondition(scope, n, "type.expr", context+" must be Boolean, found %s")
+	ec.checkCondition(scope, n, "type.expr", context+" must be Boolean, found %s", false)
 }
 
 // checkCondition is checkBoolean reporting under a rule's own code and message,
-// whose one verb takes the type found.
-func (ec *exprChecker) checkCondition(scope *symbols.Scope, n ast.Node, code, format string) {
+// whose one verb takes the type found. A condition naming an untyped feature is
+// left to evaluation unless the rule requires a Boolean statically (mustType).
+func (ec *exprChecker) checkCondition(scope *symbols.Scope, n ast.Node, code, format string, mustType bool) {
 	if n == nil {
 		return
 	}
@@ -157,7 +158,7 @@ func (ec *exprChecker) checkCondition(scope *symbols.Scope, n ast.Node, code, fo
 		return
 	}
 	if got == semantics.PrimUnknown {
-		ec.checkNonScalarCondition(scope, n, code, format)
+		ec.checkNonScalarCondition(scope, n, code, format, mustType)
 		return
 	}
 	ec.errorCode(code, n.Span(), format, got)
@@ -167,13 +168,14 @@ func (ec *exprChecker) checkCondition(scope *symbols.Scope, n ast.Node, code, fo
 // something no Boolean can come from: a part, an item, an enumeration — or
 // one whose type is inherited, chained to or computed and is not Boolean: a
 // redefined duration, a quantity.
-func (ec *exprChecker) checkNonScalarCondition(scope *symbols.Scope, n ast.Node, code, format string) {
+func (ec *exprChecker) checkNonScalarCondition(scope *symbols.Scope, n ast.Node, code, format string, mustType bool) {
 	typeSym := ec.valueTypeSymbol(scope, n)
 	if typeSym == nil {
 		typeSym = ec.invocationResultTypeSymbol(scope, n)
 	}
 	if typeSym == nil {
-		if c := ec.model.ExprConformsToLibrary(scope, n, semantics.FQNBoolean); c.Known && !c.Holds {
+		c := ec.model.ExprConformsToLibrary(scope, n, semantics.FQNBoolean)
+		if c.Known && !c.Holds && (mustType || !c.Untyped) {
 			ec.errorCode(code, n.Span(), format, c.Found)
 		}
 		return

@@ -28,6 +28,9 @@ type Conformance struct {
 	Holds bool
 	// Found describes what the value is, for a diagnostic when Holds is false.
 	Found string
+	// Untyped marks a value naming a feature that declares no type: it holds
+	// nothing statically, and a rule may leave it to evaluation.
+	Untyped bool
 }
 
 func conformanceUnknown() Conformance { return Conformance{} }
@@ -136,11 +139,10 @@ func (m *Model) featureConformance(sym *symbols.Symbol, want *symbols.Symbol) Co
 	if !m.generalizationsResolve(sym) {
 		return conformanceUnknown()
 	}
-	found := "an untyped feature"
 	if typ := m.nearestDeclaredType(sym); typ != nil {
-		found = leafName(typ.Name)
+		return Conformance{Known: true, Found: leafName(typ.Name)}
 	}
-	return Conformance{Known: true, Found: found}
+	return Conformance{Known: true, Found: "an untyped feature", Untyped: true}
 }
 
 // typingValue returns the value a feature is implicitly typed by: a non-default
@@ -307,8 +309,27 @@ func (m *Model) operatorConformance(scope *symbols.Scope, e *ast.OperatorExpr, w
 		if got, ok := m.DimensionOfExpr(scope, e); ok && !got.Term.Dimensionless() {
 			return m.typeConformance(m.libSymbol(fqnScalarQuantityValue), want)
 		}
+		if m.operandsAreQuantities(scope, e) {
+			return m.typeConformance(m.libSymbol(fqnScalarQuantityValue), want)
+		}
 	}
 	return conformanceUnknown()
+}
+
+// operandsAreQuantities reports whether every operand of an arithmetic
+// expression is known to be a ScalarQuantityValue, so the expression is the
+// QuantityCalculations function's ScalarQuantityValue whatever its dimension.
+func (m *Model) operandsAreQuantities(scope *symbols.Scope, e *ast.OperatorExpr) bool {
+	quantity := m.libSymbol(fqnScalarQuantityValue)
+	if quantity == nil || len(e.Operands) == 0 {
+		return false
+	}
+	for _, operand := range e.Operands {
+		if c := m.exprConformance(scope, operand, quantity, false); !c.Known || !c.Holds {
+			return false
+		}
+	}
+	return true
 }
 
 // dimensionConformance judges an expression whose value is a quantity of a
