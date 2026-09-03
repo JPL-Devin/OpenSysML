@@ -230,17 +230,18 @@ func newEncoder(file *source.SourceFile, root *ast.RootNamespace) (*encoder, err
 		return nil, err
 	}
 	e := &encoder{
-		file:     file,
-		graph:    rdf.NewGraph(),
-		res:      res,
-		declared: map[string]bool{},
-		fqn:      map[ast.Node]string{},
-		links:    map[*ast.QualifiedName]*symbols.Symbol{},
-		ids:      ids,
-		subjects: map[string]string{},
-		regions:  map[rdf.Term]region{},
-		bodies:   map[rdf.Term]region{},
-		offsets:  map[string]int{},
+		file:      file,
+		graph:     rdf.NewGraph(),
+		res:       res,
+		declared:  map[string]bool{},
+		fqn:       map[ast.Node]string{},
+		links:     map[*ast.QualifiedName]*symbols.Symbol{},
+		preceding: map[ast.Node]ast.Node{},
+		ids:       ids,
+		subjects:  map[string]string{},
+		regions:   map[rdf.Term]region{},
+		bodies:    map[rdf.Term]region{},
+		offsets:   map[string]int{},
 	}
 	for _, ref := range resolve.References(root, res.Index().DocumentRoot(file.Name())) {
 		if sym, ok := res.ProbeReference(ref); ok && sym != nil {
@@ -268,6 +269,9 @@ type encoder struct {
 	// links is what each written reference resolves to, read with the rule of
 	// its position (a redefinition among the generals, an edge end as a vertex).
 	links map[*ast.QualifiedName]*symbols.Symbol
+	// preceding is the member a `then` after each member sequences from: the last
+	// member before it that is not itself an edge, as the parser reads it.
+	preceding map[ast.Node]ast.Node
 	// ids is the document's identity side table: effective ids, declaredness,
 	// scopes, and the annotation nodes consumed into it.
 	ids *identityFacts
@@ -403,16 +407,42 @@ func (e *encoder) encodeInline(members []ast.Node, owner string, ownerTerm rdf.T
 }
 
 func (e *encoder) encodeMembers(kept []ast.Node, regions []region, inline bool, owner string, ownerTerm rdf.Term) error {
+	// last and beforeLast are the latest members that are not edges; a
+	// member-attached `then` follows its target, so its source is beforeLast.
+	var last, beforeLast ast.Node
 	for i, member := range kept {
 		node, visibility := unwrapMember(member)
 		if node == nil {
 			continue
 		}
+		if preceding := last; preceding != nil {
+			if edge, ok := node.(*ast.SuccessionEdge); ok && edge.TargetImplied {
+				preceding = beforeLast
+			}
+			if preceding != nil {
+				e.preceding[node] = preceding
+			}
+		}
 		if err := e.encodeMember(node, visibility, regions[i], inline, owner, ownerTerm, i); err != nil {
 			return err
 		}
+		if !isEdgeNode(node) {
+			last, beforeLast = node, last
+		}
 	}
 	return nil
+}
+
+// isEdgeNode reports whether a member is an edge between other members, which a
+// `then` sequences past (parser.isEdgeMember).
+func isEdgeNode(node ast.Node) bool {
+	switch n := node.(type) {
+	case *ast.SuccessionEdge, *ast.ControlFlowEdge, *ast.ObjectFlowEdge, *ast.TransitionMember:
+		return true
+	case *ast.Usage:
+		return n.Kind.IsEdge()
+	}
+	return false
 }
 
 // kept filters out the identity annotations consumed into the graph's

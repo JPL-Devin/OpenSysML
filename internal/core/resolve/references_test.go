@@ -231,6 +231,42 @@ func TestCastReferencesAreCollected(t *testing.T) {
 	}
 }
 
+// A chain segment spelled as a qualified name the operand has no member for
+// reads outward, as the document walk reads it: `w.Gen::G2::x` names G2's x,
+// not the x the operand inherits first.
+func TestAQualifiedChainSegmentResolvesOutwardOnItsOwn(t *testing.T) {
+	const src = `package Gen {
+	part def G1 { attribute x; }
+	part def G2 { attribute x; }
+}
+package Chains {
+	part def Wheel :> Gen::G1, Gen::G2;
+	part w : Wheel;
+	attribute a = w.x;
+	attribute b = w.Gen::G2::x;
+}`
+	_, root, rootScope := resolvedDocNamed(t, "chains.sysml", src)
+	query, _, _ := resolvedDocNamed(t, "chains.sysml", src) // a fresh resolver, as the editor's is
+	reached := map[string]string{}
+	for _, ref := range resolve.References(root, rootScope) {
+		if ref.Chain == nil {
+			continue
+		}
+		sym, ok := query.ResolveReference(ref)
+		if !ok {
+			t.Errorf("%s does not resolve on its own", nameText(ref.QN))
+			continue
+		}
+		reached[nameText(ref.QN)] = symbols.FQNOf(sym)
+	}
+	want := map[string]string{"x": "Gen::G1::x", "Gen::G2::x": "Gen::G2::x"}
+	for name, fqn := range want {
+		if reached[name] != fqn {
+			t.Errorf("`w.%s` reaches %q, want %q", name, reached[name], fqn)
+		}
+	}
+}
+
 // An import's target is collected as the import's reference, read with its rule:
 // a spelling only the import itself surfaces reaches nothing, while an `import
 // all` reaches a private member.

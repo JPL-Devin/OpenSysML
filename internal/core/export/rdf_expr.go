@@ -312,6 +312,26 @@ func (d *decoder) noteSegments(parents map[string][]rdf.Term) error {
 	return nil
 }
 
+// segmentName renders the segment a chain written in `in` reaches: a literal as
+// written, an IRI as its element's own name, qualified as chooseNames chose
+// where that name alone reads as another element after the operand.
+func (d *decoder) segmentName(chain, term rdf.Term, in *element) (string, error) {
+	if term.IsLiteral() {
+		return qualifiedNameText(term.Value), nil
+	}
+	_, name, err := d.namedMember(term)
+	if err != nil {
+		return "", err
+	}
+	if d.names != nil {
+		key := segmentKey{member: in.qname, operand: d.operandElement(chain), name: name}
+		if spelling, ok := d.names.segments[key]; ok {
+			return qualifiedNameText(spelling), nil
+		}
+	}
+	return nameText(name), nil
+}
+
 // operandElement is the qualified name of the element a chain's operand links
 // to: a feature reference's referent or an inner chain's target, the name as
 // written where the graph keeps only that, else "".
@@ -416,7 +436,7 @@ func (d *decoder) expressionNodeText(node rdf.Term, in *element) (string, error)
 		if !ok {
 			return "", unsupported("a feature chain names the feature it reaches")
 		}
-		member, _, err := d.memberName(object)
+		member, err := d.segmentName(node, object, in)
 		if err != nil {
 			return "", err
 		}

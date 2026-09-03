@@ -209,6 +209,12 @@ type Reference struct {
 	// Condition is set when QN is a name inside an element-filter condition, which
 	// its own namespace's filters do not restrict (see InCondition).
 	Condition bool
+	// Invocation is set when QN is the name an invocation calls, which overload
+	// selection may resolve to one of several declarations (see ResolveInvocationName).
+	Invocation *ast.InvocationExpr
+	// Performed is set when Invocation is the value of an action usage, which
+	// runs the action it names rather than evaluating a calc of that name.
+	Performed bool
 	// Endpoint is set when QN is a transition end, which names a vertex of the
 	// enclosing machine ahead of anything else it reaches (see ResolveEndpoint).
 	Endpoint bool
@@ -271,6 +277,19 @@ func (r *Resolver) ResolveReference(ref Reference) (*symbols.Symbol, bool) {
 		if !ok {
 			return nil, false
 		}
+		// A qualified segment the owner has no member for reads outward, as
+		// resolveFeatureChain does.
+		if len(ref.QN.Parts) > 1 {
+			if _, member := r.chainMember(owner, ref.QN.Parts[0].Text); !member {
+				var outward *symbols.Symbol
+				if r.probe(ref.QN, func() bool {
+					outward, ok = r.resolveQualified(ref.Scope, ref.QN, hide)
+					return ok
+				}) {
+					return outward, true
+				}
+			}
+		}
 		return r.memberChain(owner, ref.QN)
 	}
 	if ref.Redefines {
@@ -282,6 +301,9 @@ func (r *Resolver) ResolveReference(ref Reference) (*symbols.Symbol, bool) {
 	}
 	if ref.Import != nil {
 		return r.resolveImportName(ref.Scope, ref.QN, ref.Import)
+	}
+	if ref.Invocation != nil {
+		return r.ResolveInvocationName(ref.Scope, ref.QN)
 	}
 	return r.resolveQualified(ref.Scope, ref.QN, hide)
 }

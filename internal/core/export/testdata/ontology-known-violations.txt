@@ -37,6 +37,7 @@ literal-for-object-property PartUsage type                                      
 literal-for-object-property urn:opensysml:sysml:InitialNode sourceFeature        # Connector_sourceFeature: a succession end is written as a name (D2)
 literal-for-object-property SuccessionAsUsage sourceFeature                       # Connector_sourceFeature: a `then` after `first start` sequences from the name start, which is no element of the graph (D2)
 literal-for-object-property FeatureReferenceExpression referent                   # FeatureReferenceExpression_referent: a name resolving outside the graph is written as a name, as every reference this tool cannot link is (D7)
+literal-for-object-property InvocationExpression function                         # Expression_function: a library function such as collect resolves outside the graph and is written as a name (D7)
 
 # 3. Metaclass names this tool writes into the SysML namespace that the 202407
 # rendering does not declare at all.
@@ -93,3 +94,4 @@ unknown-property ReferenceUsage isResult                     # notation flag for
 unknown-property OccurrenceUsage isSnapshot                  # notation flag for the `snapshot` keyword, no metamodel property
 unknown-property OccurrenceUsage isTimeslice                 # notation flag for the `timeslice` keyword, no metamodel property
 unknown-property PartUsage isChain                           # notation flag for a feature chain, no metamodel property
+literal-for-object-property FeatureChainExpression targetFeature                   # FeatureChainExpression_targetFeature: a library feature such as an action's done resolves outside the graph and is written as a name (D7)

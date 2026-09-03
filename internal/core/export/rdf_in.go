@@ -98,7 +98,7 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 	return text, nil
 }
 
-func newDecoder(graph *rdf.Graph, names nameChoices) *decoder {
+func newDecoder(graph *rdf.Graph, names *nameChoices) *decoder {
 	d := &decoder{
 		graph:            graph,
 		byIRI:            map[string]*element{},
@@ -176,7 +176,7 @@ type decoder struct {
 	owningMembership map[string]membership
 	// names is the spelling chosen for each reference; while nil, references are
 	// written fully qualified and noted in wanted for chooseNames to read.
-	names  nameChoices
+	names  *nameChoices
 	wanted *wanted
 	// printed and usedExpr are written as source text in this pass and rebuilt
 	// canonically; demoted and demotedExpr had their text proved stale earlier.
@@ -1361,7 +1361,7 @@ func (d *decoder) referenceName(term rdf.Term, el *element) (string, error) {
 		d.wanted.references[key] = spelled
 		return qualifiedNameText(spelled), nil
 	}
-	if spelling, ok := d.names[key]; ok {
+	if spelling, ok := d.names.references[key]; ok {
 		return qualifiedNameText(spelling), nil
 	}
 	return qualifiedNameText(relativeName(spelled, el.scope)), nil
