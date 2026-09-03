@@ -150,6 +150,44 @@ func TestResolveNestedAssertBodyNamesDoNotLeakOutward(t *testing.T) {
 	}
 }
 
+// An unnamed control node's body is an action body of its own: its successions
+// resolve the actions it declares, and those actions are unresolved outside it.
+func TestResolveUnnamedControlNodeBodyIsLocal(t *testing.T) {
+	src := `package P {
+		action def A {
+			fork { action x; action y; fork f; first x then f; first f then y; }
+			join { action x; action y; join j; first x then j; first j then y; }
+			merge { action x; action y; merge m; first x then m; first m then y; }
+			decide { action x; action y; decide d; first x then d; first d then y; }
+			action q;
+			first q then y;
+		}
+	}`
+	r := resolveDoc(t, "d.sysml", src)
+	if len(r.Diagnostics) != 1 {
+		t.Fatalf("expected one diagnostic for the name read outside the bodies, got %v", r.Diagnostics)
+	}
+	d := r.Diagnostics[0]
+	if !strings.Contains(d.Message, "y") {
+		t.Errorf("diagnostic %q does not name y", d.Message)
+	}
+	if want := strings.LastIndex(src, "y"); d.Span.Offset != want {
+		t.Errorf("y reported at offset %d, want %d", d.Span.Offset, want)
+	}
+}
+
+// A misspelled succession end inside a control node's body is reported there,
+// whether the node is named or not.
+func TestResolveTypoInControlNodeBody(t *testing.T) {
+	for _, src := range []string{
+		`package P { action def A { fork { action x; first x then nosuchInBody; } } }`,
+		`package P { action def A { join j { action x; first x then nosuchInBody; } } }`,
+	} {
+		r := resolveDoc(t, "d.sysml", src)
+		assertUnresolvedAt(t, r, src, "nosuchInBody")
+	}
+}
+
 // assertUnresolvedAt asserts one unresolved diagnostic spanning name in src.
 func assertUnresolvedAt(t *testing.T, r *Resolver, src, name string) {
 	t.Helper()

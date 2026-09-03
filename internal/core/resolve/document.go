@@ -251,11 +251,17 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		// Final nodes have no references
 		return true
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
-		// Control flow nodes have no references to resolve (names are just labels)
+		// The node's own name is a label; its action body resolves in the scope
+		// the body declares into (see symbols.buildControlNode).
+		body := scope
+		if child := r.childScope(scope, d); child != nil {
+			body = child
+		}
+		r.walkMembers(body, ast.NodeBodyMembers(d))
 		return true
 	case *ast.ConstraintMember:
 		r.resolveExpr(scope, d.Expression)
-		r.walkMembers(scope, d.Body)
+		r.walkConstraintBody(scope, d, nil, d.Body)
 		return true
 	case *ast.AssumeMember:
 		r.resolvePrefixes(scope, d.Prefixes)

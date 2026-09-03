@@ -748,6 +748,54 @@ func TestControlNodeInAnonymousActionBodiesIsSilent(t *testing.T) {
 }`)
 }
 
+// A control node's own body is an action body: the nodes and successions it
+// declares are checked as a unit whether or not the node has a name.
+func TestControlNodeInUnnamedControlNodeBodies(t *testing.T) {
+	for _, tc := range []struct {
+		name, src string
+		want      []controlNodeWant
+	}{
+		{"fork body", `package P {
+	action def A {
+		fork { action x; action y; action z; fork f; first x then f; first y then f; first f then z; }
+	}
+}`, []controlNodeWant{{CodeForkIncomingSuccessions, 3, "fork f has 2 incoming successions"}}},
+		{"join body", `package P {
+	action def A {
+		join { action x; action y; action z; merge m; first x then m; first m then y; first m then z; }
+	}
+}`, []controlNodeWant{{CodeMergeOutgoingSuccessions, 3, "merge m has 2 outgoing successions"}}},
+		{"merge body", `package P {
+	action def A {
+		merge { action x; action y; decide d; first x then d; first y then d; }
+	}
+}`, []controlNodeWant{{CodeDecisionIncomingSuccessions, 3, "decide d has 2 incoming successions"}}},
+		{"decide body", `package P {
+	action def A {
+		decide { action x; action y; action z; join j; first x then j; first j then y; first j then z; }
+	}
+}`, []controlNodeWant{{CodeJoinOutgoingSuccessions, 3, "join j has 2 outgoing successions"}}},
+		{"body end multiplicity", `package P {
+	action def A {
+		fork { action x; action y; merge m; succession s first [1..1] x then m; first m then y; }
+	}
+}`, []controlNodeWant{{CodeMergeIncomingMultiplicity, 3, "source multiplicity [1]; successions into a merge node must have source multiplicity [0..1]"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			wantControlNodeErrors(t, tc.src, tc.want...)
+		})
+	}
+	wantControlNodesClean(t, `package P {
+	action def A {
+		fork { action x; action y; fork f; first x then f; first f then y; }
+		join { action x; action y; join j; first x then j; first j then y; }
+		merge { action x; action y; merge m; first x then m; first m then y; }
+		decide { action x; action y; decide d; first x then d; first d then y; }
+		fork named { action x; action y; fork f; first x then f; first f then y; }
+	}
+}`)
+}
+
 // The runtime rejects a join or merge with several successors when it runs
 // them; the static rule reports the same graphs before anything runs.
 func TestControlNodeStaticRuleAgreesWithRuntime(t *testing.T) {

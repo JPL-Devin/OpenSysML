@@ -377,9 +377,18 @@ func buildMetadataBodyScope(parent *Scope, prefix *ast.PrefixMetadata) *Scope {
 }
 
 // buildControlNode registers a named fork/join/merge/decision node the way a
-// final node is registered, at its name's span; an unnamed one declares none.
+// final node is registered, at its name's span; an unnamed one declares no
+// symbol, but its body members still go into a scope local to that body.
 func buildControlNode(scope *Scope, decl ast.Node, name string, nameSpan source.Span, vis ast.Visibility, trivia []ast.Trivia) {
+	body := ast.NodeBodyMembers(decl)
 	if name == "" {
+		if len(body) == 0 {
+			return
+		}
+		child := NewScope(scope, decl)
+		child.markBodyLocal()
+		scope.AddChild(child)
+		buildMembers(child, body)
 		return
 	}
 	id := ast.Identification{Name: name, NameSpan: nameSpan}
