@@ -1965,32 +1965,31 @@ func (e *StateExecutor) acceptsSignal(msg Message) bool {
 }
 
 // acceptsSignalFrom reports whether a transition out of one state is triggered
-// by this message's signal. A port that fails to resolve counts as accepting:
-// the step this provokes surfaces the failure from enabledTransition.
+// by this message's signal. A port that fails to resolve counts as accepting a
+// message of the right signal: the step this provokes surfaces the failure
+// from enabledTransition.
 func (e *StateExecutor) acceptsSignalFrom(state *ast.StateNode, msg Message) bool {
 	for _, trans := range e.graph.Transitions[state] {
 		accept, ok := trans.Trigger.(*ast.AcceptEvent)
-		if !ok {
+		if !ok || !e.triggerSignalMatches(accept, trans.Scope, msg) {
 			continue
 		}
 		reaches, err := e.ctx.messageReaches(msg, e.stateMachine.Name, trans.Via, e.self)
-		if err != nil {
-			return true
-		}
-		if !reaches {
-			continue
-		}
-		if typed := ast.AsQualifiedName(accept.SignalType); typed != nil && len(typed.Parts) > 0 {
-			if e.ctx.messageMatches(msg, typed, trans.Scope) {
-				return true
-			}
-			continue
-		}
-		if signal := ast.SimpleName(accept.Subsets); signal != "" && msg.carriesSignal(signal) {
+		if err != nil || reaches {
 			return true
 		}
 	}
 	return false
+}
+
+// triggerSignalMatches reports whether the message carries the signal an
+// accept trigger names, by type or by the event it subsets.
+func (e *StateExecutor) triggerSignalMatches(accept *ast.AcceptEvent, scope *symbols.Scope, msg Message) bool {
+	if typed := ast.AsQualifiedName(accept.SignalType); typed != nil && len(typed.Parts) > 0 {
+		return e.ctx.messageMatches(msg, typed, scope)
+	}
+	signal := ast.SimpleName(accept.Subsets)
+	return signal != "" && msg.carriesSignal(signal)
 }
 
 // activeStates returns the states currently active, in region declaration

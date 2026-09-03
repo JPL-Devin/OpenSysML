@@ -167,6 +167,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("send_via_unconnected_port", testSendViaUnconnectedPort)
 	t.Run("send_via_connector_into_an_empty_part", testSendViaConnectorIntoAnEmptyPart)
 	t.Run("send_via_bound_boundary_port_joined_to_nothing", testSendViaBoundBoundaryPortJoinedToNothing)
+	t.Run("send_fan_out_to_a_port_that_fails_to_materialize", testSendFanOutToAPortThatFailsToMaterialize)
+	t.Run("accept_via_a_port_that_fails_to_materialize", testAcceptViaAPortThatFailsToMaterialize)
 	t.Run("send_addressed_to_an_unreachable_target", testSendAddressedToAnUnreachableTarget)
 	t.Run("routed_send_via_unknown_port", testRoutedSendViaUnknownPort)
 	t.Run("routed_send_port_type_mismatch", testRoutedSendPortTypeMismatch)
@@ -2646,6 +2648,99 @@ func testSendViaBoundBoundaryPortJoinedToNothing(t *testing.T) {
 	}
 	if pending := ctx.PendingMessages(); len(pending) != 0 {
 		t.Errorf("pending messages = %+v, want none", pending)
+	}
+}
+
+// testSendFanOutToAPortThatFailsToMaterialize: a send fanning out over two
+// connectors, where the second receiving port cannot be materialized, is
+// reported as that failure and leaves no copy queued for the first — a retry
+// must not find the earlier copy already there.
+func testSendFanOutToAPortThatFailsToMaterialize(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;`+directedPorts+`
+		part def Good { port in : ~Chan; }
+		part def Bad { port in : ~Chan = 1 / 0; }
+		part def Hub {
+			port command : Chan;
+			part good : Good;
+			part bad : Bad;
+			connect command to good.in;
+			connect command to bad.in;
+		}
+		part hub : Hub {
+			action ship {
+				first start;
+				action sender { send 9 via command; }
+				done;
+				succession first start then sender;
+				succession first sender then done;
+			}
+		}
+	}`))
+	hub, err := ctx.Instantiate(oneSymbol(t, idx, "P::hub"))
+	if err != nil {
+		t.Fatalf("instantiate hub: %v", err)
+	}
+	_, err = ctx.ExecuteActionPerformedBy(oneSymbol(t, idx, "P::hub::ship"), hub, nil)
+	if !errors.Is(err, ErrDivisionByZero) {
+		t.Fatalf("execute action: err = %v, want the port's %v", err, ErrDivisionByZero)
+	}
+	if pending := ctx.PendingMessages(); len(pending) != 0 {
+		t.Errorf("pending messages = %+v, want none", pending)
+	}
+}
+
+// testAcceptViaAPortThatFailsToMaterialize: a machine whose accept names a port
+// that cannot be materialized leaves a message of another signal in flight
+// untouched, and reports the port's failure when a message of its own signal
+// arrives, rather than consuming either silently.
+func testAcceptViaAPortThatFailsToMaterialize(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;`+directedPorts+`
+		part def Listener {
+			port in : ~Chan = 1 / 0;
+			exhibit state sm {
+				entry; then Idle;
+				state Idle { accept v : Integer via in then Got; }
+				state Got;
+			}
+		}
+		part listener : Listener;
+	}`))
+	listener, err := ctx.Instantiate(oneSymbol(t, idx, "P::listener"))
+	if err != nil {
+		t.Fatalf("instantiate listener: %v", err)
+	}
+	exec, err := ctx.CreateStateExecutorFor(oneSymbol(t, idx, "P::Listener::sm"), listener)
+	if err != nil {
+		t.Fatalf("create state executor: %v", err)
+	}
+	// Delivered to a port object by identity, under a name the accept does not
+	// use, so only materializing `in` can tell whether it is the same port.
+	viaPort := func(signal string, value Value) Message {
+		return Message{SignalType: signal, Port: "other", Object: listener.ID, PortID: -1,
+			Delivery: DeliverPort, Payload: map[string]Value{"value": value}}
+	}
+	ctx.PostMessage(viaPort("String", NewStringValue("not for you")))
+	if exec.HasPendingSignal() {
+		t.Fatal("a String is not the Integer the accept names, yet the machine claims it")
+	}
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run with only a String in flight: %v", err)
+	}
+	if pending := ctx.PendingMessages(); len(pending) != 1 || pending[0].SignalType != "String" {
+		t.Fatalf("pending messages = %+v, want the String still in flight", pending)
+	}
+	ctx.PostMessage(viaPort("Integer", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 4}}))
+	if !exec.HasPendingSignal() {
+		t.Fatal("an Integer that may be for the accept is not claimed")
+	}
+	err = exec.RunToCompletion()
+	if !errors.Is(err, ErrDivisionByZero) {
+		t.Fatalf("run with an Integer in flight: err = %v, want the port's %v", err, ErrDivisionByZero)
+	}
+	if visits := exec.GetStateVisits(); len(visits) != 1 || visits[0] != "Idle" {
+		t.Errorf("state visits = %v, want [Idle]", visits)
 	}
 }
 

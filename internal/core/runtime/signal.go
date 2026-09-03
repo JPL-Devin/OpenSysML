@@ -250,8 +250,11 @@ func (ctx *Context) postVia(conns []lower.Connection, msg Message, send lower.Se
 	// A connection joins two objects, so each copy is held to the identity of the
 	// object whose port the end resolved to rather than to the sender's. Two
 	// destinations naming one port object (through a binding) get one copy.
+	// Every destination is resolved before any copy is queued, so a failure
+	// leaves nothing behind.
 	posted := map[ownerDelivery]bool{}
 	postedPorts := map[int64]bool{}
+	var routed []Message
 	for _, delivery := range append(receiving, crossing...) {
 		if posted[delivery] {
 			continue
@@ -267,16 +270,19 @@ func (ctx *Context) postVia(conns []lower.Connection, msg Message, send lower.Se
 			}
 			postedPorts[portID] = true
 		}
-		routed := msg
-		routed.Target = receiver
-		routed.Port = delivery.port
-		routed.Object = delivery.object
-		routed.PortID = portID
-		routed.Delivery = DeliverPort
+		copied := msg
+		copied.Target = receiver
+		copied.Port = delivery.port
+		copied.Object = delivery.object
+		copied.PortID = portID
+		copied.Delivery = DeliverPort
 		if receiver != "" {
-			routed.Delivery = DeliverPortReceiver
+			copied.Delivery = DeliverPortReceiver
 		}
-		ctx.PostMessage(routed)
+		routed = append(routed, copied)
+	}
+	for _, m := range routed {
+		ctx.PostMessage(m)
 	}
 	return nil
 }
@@ -402,6 +408,7 @@ func (ctx *Context) postTo(msg Message, send lower.Send, self *Instance) error {
 	if err != nil {
 		return err
 	}
+	copies := make([]Message, 0, len(addrs))
 	for _, addr := range addrs {
 		copied := msg
 		copied.Target, copied.Port, copied.Object = addr.Name, addr.Port, addr.Object
@@ -412,6 +419,9 @@ func (ctx *Context) postTo(msg Message, send lower.Send, self *Instance) error {
 				return err
 			}
 		}
+		copies = append(copies, copied)
+	}
+	for _, copied := range copies {
 		ctx.PostMessage(copied)
 	}
 	return nil
