@@ -1,0 +1,12 @@
+{
+	"type": "state",
+	"libraries": true,
+	"finalState": "done",
+	"stateVisits": ["init", "active", "done"],
+	"outputs": {
+		"seen": {"type": "Integer", "value": 5},
+		"total": {"type": "Integer", "value": 11},
+		"doubled": {"type": "Integer", "value": 22},
+		"checked": {"type": "Integer", "value": 1111}
+	}
+}
