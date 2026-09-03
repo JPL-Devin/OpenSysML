@@ -12,6 +12,13 @@ import (
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 )
 
+// The REPL imports this package for its feature-value serialization, so a test
+// comparing the two runs as an external package and borrows these.
+var (
+	MustNewServiceForTest = mustNewService
+	QueryModelForTest     = queryModel
+)
+
 const convertModelSource = `package Demo {
     // a comment, which notation keeps and RDF does not
 part def Engine { attribute power : Real = 300.0; }
