@@ -169,6 +169,7 @@ nav:
       - Java API: reference/java-api.md
       - Rust API: reference/rust-api.md
       - Service transports: reference/service-transports.md
+      - Wire contract: reference/wire-contract.md
       - RDF mapping: reference/rdf-mapping.md
       - Grammar: reference/grammar/README.md
       - Grammar conformance audit: reference/grammar/conformance-audit.md

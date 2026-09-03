@@ -120,6 +120,11 @@ $ curl -X POST http://localhost:50051/sysml.SysMLService/Evaluate \
    status. Every client in every protocol must map them identically; the conformance suite
    asserts that it does.
 
+Those two are the minimum. The rest of what a hand-written JSON client has to decode — every
+arm of `Value`, the three ways to have no value, the diagnostics and verdict shapes, the code
+table, and how long a `modelHash` stays valid — is on
+[the wire contract](wire-contract.md), with every example captured from a running service.
+
 ## A browser client
 
 Three prerequisites, in the order you will run into them:
