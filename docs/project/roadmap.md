@@ -1,36 +1,52 @@
 # OpenSysML — Roadmap
 
-Baseline: `main` @ `1f136d27`, verified locally on 2026-09-02 with Go 1.25.0.
+Baseline: `main` @ `4e3d5f2e`, verified locally on 2026-09-03 with Go 1.25.0.
 Read `AGENTS.md` first; it governs everything below.
 
 > **Labels.** This is an engineering record. The RDF items keep the `D` numbers (`D1`, `D2`,
-> `D3.4`, `D7`, `D8`) that other records, the known-violations inventory and the ontology
-> package's README cross-reference; `L3` names the remaining library item, `N` the native
-> compilation track, `R` the release follow-through, and `E` the behavior-execution semantics
-> the runtime does not yet have. Each is stated in full where it is introduced, and a reader who
-> wants only the gap can ignore the label.
+> `D3.4`, `D7`, `D8`, `D9`) that other records, the known-violations inventory and the ontology
+> package's README cross-reference; `L` names the library items, `N` the native compilation
+> track, `R` the release follow-through, `E` the behavior-execution semantics the runtime does
+> not yet have, `X` the expression forms it parses but does not evaluate, `Q` the runtime query
+> surface, `A` analysis and simulation execution, `V` the validation census, `I` the language
+> integrations, and `M` the embedded target. Each is stated in full where it is introduced, and a
+> reader who wants only the gap can ignore the label.
+>
+> **Status words.** *Landed* means merged to `main` at the baseline. *Open* names a pull request
+> that exists and is not merged; *conflicts* means it no longer merges cleanly onto `main` and
+> needs a rebase before review. *In progress* means the work is being implemented and has no
+> pull request yet. *Not started* means exactly that. A status is taken from the pull request
+> itself, never from a branch name or a commit message.
 
 `v0.4.3` is the newest tag on `Open-MBEE/OpenSysML` (`99e02003`, 2026-09-02, the "Identity
 Release"); the tag's CI release job publishes `sysml`, `sysml-lsp` and `sysml-grpc` for five
 platforms and the Homebrew bundles, and the Python client is on PyPI as `opensysml` 0.4.0. The
-tag includes this roadmap's baseline commit, so no track below describes work that is still
-unreleased. `CHANGELOG.md` has not caught up with it: the entries under **Unreleased** (the
-serialized library snapshot, the calc-evaluator work and the self-model updates describing them)
-are ancestors of the tag and shipped in it, while the **0.4.3** heading is dated 2026-09-01 — see
-R1. Everything in "Release follow-through" is maintainer- or account-gated; everything after it is
-ordinary engineering work.
+baseline is **ahead of the tag** by the work listed in the next paragraph, so the tracks below
+state what is on `main`, not what a `v0.4.3` binary does. `CHANGELOG.md` has not caught up with
+the tag either: the entries under **Unreleased** that predate `99e02003` (the serialized library
+snapshot, the calc-evaluator work and the self-model updates describing them) shipped in it, while
+the **0.4.3** heading is dated 2026-09-01 — see R1. Everything in "Release follow-through" is
+maintainer- or account-gated; everything after it is ordinary engineering work.
 
-**What closed since the last baseline** (`1127a93b`, 2026-08-27) is recorded in `CHANGELOG.md`
-rather than kept here, but the roadmap items it retired are: element identity in the notation
-(`@ElementId`/`@ProjectRef`, the RDF identity round trip, `-sync-diff`, and the OMG submission —
-[design record](element-identity-annotations.md)); document generation from a `doc def` in the
-model, as Markdown and as PDF, with executing document queries and a linked multi-document set
-([manual](../manual/README.md)); the September performance census and every gap it found
-([census](performance-census-2026-09.md), [execution](execution-performance-2026-09.md)); the
-Node, Java and Rust clients and the public Go API exercised end to end by worked examples; the
-solver's witnesses replayed through the evaluator; the pilot pinned to a commit; the Homebrew
-tap's remaining question (see R3 below); and, within the RDF track, expression trees and
-end-binding structure in the graph (which narrows D1 and D2 to what is stated under them).
+**What closed since the last baseline** (`1f136d27`, 2026-09-02) — in `CHANGELOG.md` for the
+detail, listed here because each retires or narrows a roadmap line: native compilation landed in
+four pull requests (#778 the scalar spike, #781 the interpreter's closure fast path, #796
+statement bodies, redefined parameters, library intrinsics and named arguments, #828 sequences,
+`for` and the collection libraries), which moves Track N from "in review" to the second phase
+below; `x @ T` on a value evaluates as `istype` (#794), a feature named `chain` is a name again
+(#795) and the stale test skips are gone (#797); a qualified name through a `public import`
+evaluates (#801) and an unqualified library call resolves as the checker does (#816); `%state`
+attaches to the machine an object already exhibits and objects are addressed by id or path (#810),
+a superseded object is no longer addressed by its old id (#836), and `%features` reads a whole
+object tree (#841); identity-keyed change sets apply to a live Flexo repository (`-sync-apply`,
+#791); the RDF round trip is ratcheted per file over every example (#800, #834) and writes back the
+notation it was written from (#793, #813, #814); documents render as semantic HTML (#790, #820);
+the LSP serves the standard library read-only (#806) and mints identity annotations (#789); a
+library-derived semantic oracle adjudicates action and state execution (#804); the behavior
+execution review's findings became Track E (#802); and the identity design record states itself
+fully implemented (#844). The earlier baseline's retirements — element identity, document
+generation, the performance census, the client tours, the pilot pin — stay retired and are not
+repeated.
 
 ## Where the repository stands
 
@@ -46,20 +62,21 @@ before re-recording anything.
 | OMG training corpus | **100/100 clean** — asserted, not ratcheted: no file reports a semantic error |
 | OMG pilot corpora (ratchet) | 213 files; 5 report a diagnostic, each adjudicated in [pilot-corpora.md](pilot-corpora.md) and [omg-issues.md](omg-issues.md) |
 | Stdlib parser conformance | 97/97 clean — 94 vendored OMG files and 3 non-normative OpenSysML extensions |
-| Execution conformance cases | 444 (`TestExecutionConformance`) |
-| Golden execution traces | 125 (`TestExecutionTrace`) |
-| Runtime robustness cases | 251 first-level subtests of `TestRuntimeRobustness` |
+| Execution conformance cases | 454 (`TestExecutionConformance`) |
+| Golden execution traces | 128 (`TestExecutionTrace`) |
+| Runtime robustness cases | 252 first-level subtests of `TestRuntimeRobustness` |
 | gRPC conformance fixtures / robustness cases | 15 / 10 |
-| Golden AST fixtures | 156 (`TestGolden`) |
-| Negative parser subtests | 261 (`TestNegative`) |
+| Golden AST fixtures | 158 (`TestGolden`) |
+| Negative parser subtests | 201 first-level subtests of `TestNegative` (319 across every `*Negative*` parser test) |
 
 The pilot differential, the Xpect oracle, the scope oracle and the rejection oracle are the
 external conformance statement, and their figures are generated into `README.md` by `make
 docs-counts` from the committed baselines; they are not repeated here.
 
-The figures above are counted by hand, and the hand-counted surfaces have drifted: `README.md`
-still says 380 conformance cases, 118 traces, 146 golden ASTs, 256 robustness cases and 8 gRPC
-robustness cases, and `docs/project/spec-compliance.md` says 389 and 266. `releasing.md` requires
+The figures above are counted from `go test -v` at the baseline, and the hand-counted surfaces
+have drifted: `README.md` still says 380 conformance cases, 118 traces, 146 golden ASTs, 261
+negatives, 256 robustness cases and 8 gRPC robustness cases, and
+`docs/project/spec-compliance.md` says 389 and 266. `releasing.md` requires
 the four surfaces allowed to repeat these counts to agree and be recounted in one commit. That
 recount — or, better, folding these counts into `cmd/doc-counts` so they are generated like the
 pilot figures and can no longer drift — is a small open item and is listed under sequencing.
@@ -164,22 +181,81 @@ posting: the three dimensional-analysis errata in the pilot's example corpus and
 about the `queryx/failing` Xpect fixtures. All four are in [omg-issues.md](omg-issues.md), body
 and status; none needs code here until an answer arrives.
 
+---
+
+# Track L — the standard library at run time
+
+Loading is closed: every library file is parsed and indexed on every load path, built once and
+frozen, read through a per-model overlay (`libs.Loader`, `libs.SharedBase`, `symbols.NewOverlay`)
+rather than copied per model, and the serialized snapshot brings a process up in under 20 ms.
+Name resolution caught up at this baseline: a qualified name through a `public import` (`ISQ::speed`
+or any user façade package) evaluates (#801, landed) and an unqualified library call resolves at
+evaluation exactly as the checker resolved it (#816, landed). What remains is *evaluation*: which
+library declarations compute, which features a library type contributes to an object, and how the
+failures are named. The library review after `v0.4.3` measured it against the Kernel Function
+Library's 279 declarations in 17 packages and against the domain libraries; the items below are
+its findings.
+
 ## L3 — evaluation does not reach standard-library-inherited features
 
-The library work is otherwise closed: every library file is parsed and indexed on every load path,
-built once and frozen, and read through a per-model overlay (`libs.Loader`, `libs.SharedBase`,
-`symbols.NewOverlay`) rather than copied per model; the serialized library snapshot brings a
-process up in under 20 ms; and gRPC reports an element's own and non-library-inherited attributes
-and counts the standard-library-inherited ones it withholds rather than omitting them silently.
+A feature a user type inherits from the standard library has no value at run time. With `part def
+Box :> Item; part b : Box;`, both `b.isSolid` (declared `isSolid = isEmpty(voids)` in `Systems
+Library/Items.sysml`) and `b.voids` report `member … not found in instance`; the cause is
+`runtime/shape.go` skipping every `libraryDeclared` feature when it lays out an object, so
+`Model.Eval` never gets as far as folding the library's value expression. **Open, mergeable:**
+[PR #830](https://github.com/JPL-Devin/OpenSysML/pull/830) materializes Systems and Domain library
+features on objects in tiers (a feature's own value, then inherited value expressions), and needs a
+rebase onto `main` before review. The solver has the mirror gap and is not in
+that PR: its translatable subset does not take library-declared conditions, and `solve`'s
+differential harness still indexes the standard library as ordinary documents (`parseLibraries`)
+to reach them. [wave12c-lossless-library-records.md](wave12c-lossless-library-records.md) records
+what was measured.
 
-**Still open**, and unchanged: a feature a user type inherits from the standard library has no
-value at run time. With `part def Box :> Item; part b : Box;`, both `b.isSolid` (declared
-`isSolid = isEmpty(voids)` in `Systems Library/Items.sysml`) and `b.voids` report `member … not
-found in instance`, so `Model.Eval` never gets as far as folding the library's value expression.
-The solver has the mirror gap: its translatable subset does not take library-declared conditions,
-and `solve`'s differential harness still indexes the standard library as ordinary documents
-(`parseLibraries`) to reach them. [wave12c-lossless-library-records.md](wave12c-lossless-library-records.md)
-records what was measured.
+## L4 — every Kernel Function Library declaration dispatches by name
+
+At the baseline ~135 runtime names are registered explicitly (`runtime/builtin_names.go`,
+`library_functions.go`), operators and the core builtins are handled separately, and **12 of the 17
+KFL packages have no dispatch gate**: a call to one of their ~38 named functions — every
+`ToString`/`ToInteger`/`ToReal`/… conversion in `BaseFunctions`/`ScalarFunctions`, `Rational
+floor/round/gcd`, `sum0`, the generic `max`/`min`, the explicit operator-call spellings `'+'(a, b)`
+— falls through to `no result expression` naming the wrong thing, instead of either computing or
+failing as `library function X is not implemented`. **Open, mergeable:**
+[PR #821](https://github.com/JPL-Devin/OpenSysML/pull/821) adds the gate and implementations for
+every KFL declaration; with it a call either computes the library's stated result or is refused by
+name. The named-reducer forms (`->reduce '+'`) are the same mechanism read from a different
+position and are X5 below.
+
+## L5 — `QuantityCalculations`, unit canonicalization and domain failures
+
+`QuantityCalculations` (28 declarations) has no runtime registration at the baseline, and a model
+that imports it loses `->sum()` over quantities (measured; the import brings a `sum` declaration
+nothing dispatches into scope ahead of the scalar one). Composed units have no canonical rendering.
+**Open, mergeable:** [PR #818](https://github.com/JPL-Devin/OpenSysML/pull/818) dispatches the
+package and renders composed units canonically. Domain failures (`sqrt` of a negative quantity, a unit mismatch in `+`)
+must stay typed errors naming the function and the units, as the scalar library's already do.
+
+## L6 — invocation overloads selected by argument type
+
+The checker and the runtime pick a library overload by name and arity, so `max(1, 2)` and
+`max(1.0, 2.0)` reach the same declaration and a `Real`/`Integer`/`Natural` result type is
+whatever that declaration says. KerML resolves the overload by the argument types. **Open,
+mergeable:** [PR #825](https://github.com/JPL-Devin/OpenSysML/pull/825) shares one selection
+between `semantics` and `runtime`, so the static type and the evaluated value agree.
+
+## L7 — the analysis libraries do not run
+
+`SampledFunctions::interpolateLinear` fails on the library's own examples: a feature inherited
+with `[0..*]` yields the sequence `[0.0]` where KerML reads a singleton sequence *as* the scalar,
+and every arithmetic operator refuses a sequence operand. `SampledFunctions::Sample` needs the
+constructor form `new Sample(…)` (X1) and a function-typed parameter (X6). `StateSpaceRepresentation`
+and `TradeStudies` load and type-check but depend on A1–A4. `VectorFunctions` computes over a
+sequence standing in for the vector (the Cartesian operations, norms, the zero vector — conformance
+`calc_library_vector_*`), but a vector is not a value kind of its own, so `VectorValues`,
+`TensorValues` and the measurement-reference libraries have nothing to type against (X7). Closing
+this item is closing X2, X1 and X6 and then adding a *measured
+per-library conformance table* — package → declarations → evaluated → refused by name → wrong — to
+`spec-compliance.md`, so the library's status stops being anecdotal. Not started; it depends on
+L4 and the X items it names.
 
 ---
 
@@ -193,58 +269,61 @@ standalone native program that computes exactly what `sysml -calc` computes, pri
 way and fails on the same inputs, or refuses to compile with a typed error naming the construct
 outside the subset. Nothing is compiled approximately.
 
-## N1 — scalar calcs to C or Go (in review)
+## N1 — scalar and collection calcs to C or Go (landed)
 
-[PR #778](https://github.com/JPL-Devin/OpenSysML/pull/778) is the spike and is open: `sysml
-model.sysml -compile Pkg::Fib -o fib` translates a `calc def` (or a calc usage) into an
+`sysml model.sysml -compile Pkg::Fib -o fib` translates a `calc def` (or a calc usage) into an
 executable through C (`cc -O3 -flto`, the default) or Go, with `-source` writing the generated
-source alone. The pipeline is `parser → resolve → semantics` plus `lower.CalcBody` into
-`codegen.Compiler`, a typed IR (`codegen.Program`), and `EmitC`/`EmitGo`; its design and
-measurements are in the native-compilation record that PR adds under `docs/project/` (link it
-from here once it merges). The compiled
-subset is scalar `Integer`/`Natural`/`Positive`/`Real`/`Boolean` parameters, literals, checked
-arithmetic and comparison, the logical and conditional operators, body-local attributes and
-assignment, `if`/`while`/`loop … until`, and direct and mutual recursion between compilable calcs.
-Everything else — strings, sequences, structured values, defaults, library-function invocations,
-`for` and the collection operations, quantities and units, redefinition with members — refuses
-with `codegen.UnsupportedError`. A differential test runs every compiled program against the
-interpreter, and the Go backend is the second implementation the C is checked against.
+source alone; the design, the measurements and the phase plan are in
+[native-compilation.md](native-compilation.md). The pipeline is `parser → resolve → semantics`
+plus `lower.CalcBody` into `codegen.Compiler`, a typed IR (`codegen.Program`), and
+`EmitC`/`EmitGo`. Landed in four pull requests: #778 the scalar subset (`Integer`/`Natural`/
+`Positive`/`Real`/`Boolean` parameters, literals, checked arithmetic and comparison, the logical
+and conditional operators, body-local attributes and assignment, `if`/`while`/`loop … until`,
+direct and mutual recursion); #796 statement bodies, redefined parameters, the scalar library
+intrinsics and named arguments; #828 homogeneous sequences of the scalar types with any
+multiplicity, the shape rules, `for`, the sequence and control libraries and the element budget;
+and, on the interpreter side, #781's closure fast path for pure calc bodies, which is the tier
+between interpreting and compiling. Everything outside the subset refuses with
+`codegen.UnsupportedError` naming the construct; a differential test runs every compiled program
+against the interpreter in both backends, and the gate stays green with `cc` absent (the C tests
+skip; the Go ones do not).
 
 Measured (Xeon 8559C, GCC 11.4, 2026-09-02): `Fib(25)` 261 ms interpreted, 919 µs as Go, 221 µs
 as C; `SumTo(1000000)` 1216 ms / 764 µs / 379 µs; `Collatz(27)` 206 µs / 5.2 µs / 0.98 µs. C beats
 Go by 2–5× on every loop or recursion, which is what justified keeping two backends: C is the
 default and Go the fallback where no C compiler is installed.
 
-To land it: review, and the gate must stay green with `cc` absent (the C tests skip; the Go ones
-do not).
+## N2 — the rest of the value phase, and the whole-model phases
 
-## N2 — what the spike leaves open
+[native-compilation.md](native-compilation.md) states the target as a dependency-free executable
+or a library with a small C API that runs a whole model, in seven phases: values, instances,
+constraints and requirements, documents, actions, state machines, embedding. Phase 1 is half done
+(the collection half above). In the order they matter:
 
-In the order they matter:
-
-1. **The step budget.** The interpreter stops a runaway loop at `OPENSYSML_MAX_STEPS`; compiled
-   code counts nothing, so a `while` that never terminates runs forever. This is the one bound
-   the interpreter has that compiled code lacks. Decide whether a compiled program carries an
-   optional iteration counter (cheap in C, and it would let the differential test keep the budget
-   on) or whether "a compiled program is a program" is the documented contract.
-2. **Collections and structured values.** Sequences, `for`, the collection operations
-   (`select`/`collect`), quantities with units, and structured parameters are what stand between
-   "a calc compiles" and "an analysis case compiles". The IR needs a sequence type and a record
-   type before any of them; design those first.
-3. **Library functions.** `ScalarFunctions::sqrt` and the rest of the Kernel Function Library
-   the interpreter evaluates natively need C and Go equivalents with the interpreter's exact
-   results and failure behaviour (domain errors, Integer range).
-4. **Linking into the toolchain.** The output is a standalone executable. A stable C ABI entry
-   point would let the REPL and `sysml-grpc` call a compiled calc in place of interpreting it,
-   and would drop the per-run `setjmp`/`recover` harness that bounds the trivial cases at 12 ns.
-   Not before N2.1 is decided, since a linked-in calc must honour the host's budget.
+1. **Records, enums and record field access** — the remainder of phase 1. `type X is not
+   Integer, Real or Boolean` is the refusal today, as is a sequence mixing `Integer` and `Real`
+   elements. Quantities with units and structured parameters follow from the record type. This is
+   what stands between "a calc compiles" and "an analysis case compiles" (A1).
+2. **The step budget.** The interpreter stops a runaway loop at `OPENSYSML_MAX_STEPS`; compiled
+   code counts elements (the element budget landed with #828) but not steps, so a `while` that
+   never terminates runs forever. Decide whether a compiled program carries an optional iteration
+   counter or whether "a compiled program is a program" is the documented contract; N2.4 and M1
+   both wait on the answer.
+3. **The rest of the library.** What L4 registers in the interpreter needs C and Go equivalents
+   with the interpreter's exact results and failure behaviour (domain errors, Integer range) as
+   each package is reached; the interpreted/compiled differential is the gate.
+4. **A stable C ABI.** One entry point per compiled calc — typed arguments in, a typed result or a
+   typed failure out, no allocation the caller does not control — would let the REPL and
+   `sysml-grpc` call a compiled calc in place of interpreting it, is what I4 (the C client) links
+   against, and is what M4 (the embedded host interface) is a restriction of. Design it once for
+   all three; not before N2.2 is decided, since a linked-in calc must honour the host's budget.
 5. **Packaging.** The C backend needs GNU C (`__int128`, `__builtin_*_overflow`,
-   `setjmp`/`longjmp`); document the toolchain requirement in the install guide when the flag
-   ships, and decide whether the release bundles should carry a prebuilt runtime shim.
-
-Actions, state machines, constraints, requirements and instance graphs are out of scope for this
-track until N2.2 is in: they are token and event semantics, not arithmetic, and the interpreter's
-trace is the contract there.
+   `setjmp`/`longjmp`); document the toolchain requirement in the install guide, and decide whether
+   the release bundles should carry a prebuilt runtime shim.
+6. **Phases 2–7** — instances, constraints, documents, actions, state machines, embedding — in the
+   record's order. Actions and state machines are token and event semantics, not arithmetic, and
+   the interpreter's trace is their contract; their closed IR is Track M's first item (M1), so the
+   two tracks meet there rather than duplicating the work.
 
 ---
 
@@ -257,19 +336,35 @@ Saving and SysML ↔ RDF Turtle conversion landed (`internal/core/rdf`,
 The RDF direction ships **experimental**, because of D1, D2, D3.4 and D7 below: its vocabulary
 may change without a compatibility path, and the one triplestore interop measured — Flexo — still
 drops what those items carry. Every surface says so (`export.ExperimentalNotice`), and promoting
-it to stable is closing D3.4 and re-measuring the harness, not a documentation change.
+it to stable is landing D3.4 (#850) and re-measuring the harness, not a documentation change.
 
-Measured on the built binary at this baseline, **268 of the 345 models under `examples/`
-convert** (the training corpus, the three pilot corpora and this repository's own demos),
-including their behavior: action and state bodies round-trip `notation → RDF → notation`
-byte-identically (`internal/core/export/behavior.go`, `docs/reference/rdf-mapping.md` § Behavior).
-A model the mapping cannot write back is refused rather than converted lossily, and the 77
-refusals sort into: 35 declarations that name no element of their own (the notation cannot be
-rebuilt from a graph keyed by name), 18 prefix metadata, 13 expressions standing as a body
-member — a calc's trailing result expression such as `a - b`, which the mapping writes only in a
-valued position (**D1**), 7 successions whose end is not a basic name (**D2**), and 4 duplicate
-declarations, where two members of one namespace share a name the graph would merge. The
-refusal classes are the same as at the last baseline; the counts moved with the corpus.
+Measured by the per-file ratchet at this baseline (`TestCorpusRoundTrip`,
+`internal/core/export/testdata/corpus_roundtrip_expected.txt`), **275 of the 345 models under
+`examples/` convert** (the training corpus, the three pilot corpora and this repository's own
+demos): 184 round-trip `notation → RDF → notation → RDF` byte-identically, 78 differ only in the
+whitespace inside source-text literals, 7 differ as graphs, 4 write notation that no longer parses
+and 2 write a graph the decoder refuses — each pinned by file, so a movement in any direction has
+to be adjudicated ([rdf-corpus-roundtrip.md](rdf-corpus-roundtrip.md)). A model the mapping cannot
+write back is refused rather than converted lossily, and the 70 refusals sort into: 35 declarations
+that name no element of their own (19 features, 9 events, 3 snapshots, 3 asserts, 1 timeslice — the
+notation cannot be rebuilt from a graph keyed by name), 18 prefix metadata, 13 expressions standing
+as a body member — a calc's trailing result expression such as `a - b`, which the mapping writes
+only in a valued position (**D1**), and 4 duplicate declarations, where two members of one namespace
+share a name the graph would merge. The 7 successions whose end was not a basic name at the last
+baseline convert now (#814 quotes the end); the other classes are unchanged.
+
+**In flight against these numbers**, every one open, and every one but #842 in conflict with
+`main` since the ratchet file moved under it: [#815](https://github.com/JPL-Devin/OpenSysML/pull/815)
+carries a calc's trailing result expression as a `ResultExpressionMembership` (the 13 refusals
+above) and [#835](https://github.com/JPL-Devin/OpenSysML/pull/835), branched from it, makes the
+expression itself the member so a foreign graph reads — they land in that order;
+[#824](https://github.com/JPL-Devin/OpenSysML/pull/824) writes metadata bodies and prefix metadata
+as owned `MetadataUsage`s (the 18); [#819](https://github.com/JPL-Devin/OpenSysML/pull/819) writes
+stored source text byte for byte when it still states the graph (the 78 whitespace-only verdicts);
+[#827](https://github.com/JPL-Devin/OpenSysML/pull/827) spells a reference back so it re-resolves
+to the element the graph named; [#842](https://github.com/JPL-Devin/OpenSysML/pull/842) keeps the
+body of an end-binding usage as elements. Each moves rows of the ratchet and must regenerate it in
+the same change; rebase each onto the current ratchet, re-run it, and adjudicate the rows it moves.
 
 ## The target, stated precisely
 
@@ -339,8 +434,16 @@ annotation literal at `urn:sysmlv2:annotation:json:<key>`, which it parses as JS
 Anything multi-valued we emit as bare repeated triples is silently dropped on read. So
 the encoder must write both forms for collections, and the decoder must accept the
 annotation form when reading a foreign graph. This is the last of D3 and the smallest item in
-the track; when it lands, re-record the harness (`go test ./internal/interop/flexo -run
-TestFlexoInterop -update-flexo` against a live stack) and the 15 become 15 of 15.
+the track. [PR #850](https://github.com/JPL-Devin/OpenSysML/pull/850) does it: one `json:<key>`
+literal per multi-valued `sysml:` property beside the typed triples (shape taken from the service's
+`CommitApi.kt`, cited in the mapping page), a decoder that accepts either spelling or both and
+refuses a graph whose two spellings disagree, `reposync` keeping the literal in step when it mints
+ids, and the harness re-recorded against a live stack: the 14 multi-valued *standard* properties
+went 0 → 14 of 14 and the total 355/424 → 369/452 (the denominator grew with source-text
+properties the mapping added since the previous recording; the fifteenth multi-valued property in
+the recording above is `sysx:relatedFeature`, which stays dropped with the rest of D1/D2). **Open**
+(mergeable at the last check). It also rewrites this section, so whichever of it and this page
+lands second reconciles the other.
 
 ## D1 — expression trees are standard in shape, non-standard in vocabulary
 
@@ -383,9 +486,9 @@ What remains: the vocabulary is ours, so the hop drops it (`endForm`, `endIndex`
 `Connector::connectorEnd` — end features owned through `EndFeatureMembership`s — with
 `sourceFeature`/`targetFeature` over them, the same `Connector_sourceFeature`/`targetFeature`
 domain findings the ontology gate records for transitions (D8). Emitting those is an
-encoder/decoder change, not a parser one; the ends are already in hand. The 7 refusals whose end
-is not a basic name (`drive vehicle`, `1stGear`) belong with it: a real end triple names the
-element by IRI and needs no basic name.
+encoder/decoder change, not a parser one; the ends are already in hand. The ends that are not a
+basic name (`drive vehicle`, `1stGear`) convert since #814 by quoting them in the head text; a real
+end triple would name the element by IRI and need no quoting, which is the same change.
 
 ## D7 — reference-valued properties are emitted as strings, and one metaclass is abstract
 
@@ -461,10 +564,40 @@ term table and the Flexo export; the profile can import the module a metaclass l
 the monolith, and a consumer wanting only, say, the requirements vocabulary has a file to import.
 `ontology/sysmlv2/README.md` is the consumer's guide.
 
-**Open:** the profile plumbing itself — about one session now that the table, the gate and the
-modules exist. Conformance beyond that is gated on D1 and D2 rather than on this item: `sysx:`
+**Not started:** the profile plumbing itself — about one session now that the table, the gate and
+the modules exist. Conformance beyond that is gated on D1 and D2 rather than on this item: `sysx:`
 has no place in the ontology, so an ontology-profile graph is conformant only as far as those
 have landed, and the profile's documentation should say so.
+
+## D9 — Flexo as a place models live, not only a place graphs are tested
+
+What exists at the baseline, all landed: `-sync-diff <repo.ttl | endpoint>` computes an
+identity-keyed change set between the model and a repository branch, reading the branch through
+the SysML v2 API when given an endpoint and never writing; `-sync-apply <endpoint>` writes that
+change set as one commit or a batched series through `flexo-mms-sysmlv2`, records the commit in
+the sync state, refuses a set it cannot apply whole and leaves what did land committed (#791,
+`internal/interop/reposync`, `internal/interop/flexo`); and the harness above loads a whole
+converted graph into a Layer 1 branch by `PUT` and measures what the service reads back. Both
+directions are refereed against the live stack, and both are element-keyed, which is what identity
+bought.
+
+What is missing is the round trip a modeller expects from a repository, and each piece is small
+once D3.4 (#850) is in:
+
+1. **Read a branch as notation.** `-sync-diff` reads a branch to compare it; nothing converts a
+   branch to `.sysml`. `sysml -convert sysml -from <endpoint or flexo:// URL>` is the decoder D3.4
+   completes, applied to the graph the service serves, and `-sync-state` already knows the branch
+   and the last commit. Before D3.4 the read loses every collection, so it waits.
+2. **Push a whole graph.** The harness's `PUT .../branches/{branch}/graph` with the ETag
+   precondition and `?message=` is the fast path for a first load or a re-baseline, where the
+   element-wise commit of `-sync-apply` is the wrong shape. Expose it as the write half of the
+   same flag, with the token from `flexo.EnvToken` as today.
+3. **What survives the hop.** D3.4, then D2 and D1, decide how much of a pushed model the read
+   path gets back; the harness's 355 of 424 is the number to move, and it is re-measured, not
+   asserted, after each.
+
+Nothing here is a new subsystem; the order is D3.4 → D9.1 → D9.2, and D9.3 is the RDF track's
+existing order applied to this use.
 
 ---
 
@@ -498,6 +631,32 @@ feature by name. Second, the proof for every item is the four-layer contract of 
 failure mode, and the row in `spec-compliance.md` moving out of the "not supported" list — and
 every item is self-assessed, since the pinned pilot evaluates expressions and executes no action
 or state machine ([pilot-execution-referee.md](pilot-execution-referee.md)).
+
+**In flight ahead of E1–E7**, all open and mergeable at the baseline: the one structural finding
+of the review — nested action nodes share the enclosing action's flat feature space, so `p.v` and
+`q.v` collide and same-named outputs overwrite each other — is
+[PR #823](https://github.com/JPL-Devin/OpenSysML/pull/823), which gives each performance its own
+frame with the callee's pins, precedence-ordered binding (flow payload, then `bind`, then the
+declared value) and block-flow nodes inside `if`/loop bodies as real nodes. Message delivery
+through a binding connector between an assembly's boundary port and a part's port
+([PR #839](https://github.com/JPL-Devin/OpenSysML/pull/839)) fixes `accept … via i` never firing
+on the inner part. On the debugging surfaces, [PR #843](https://github.com/JPL-Devin/OpenSysML/pull/843)
+makes every expression surface read the instantiated object after `-instantiate` (the stale `0`
+beside `%features`' `1`, and `%eval in #1` being an unresolved reference),
+[PR #805](https://github.com/JPL-Devin/OpenSysML/pull/805) reads a valueless feature as `<unset>`
+in `%eval in` and lists behaviors, [PR #808](https://github.com/JPL-Devin/OpenSysML/pull/808) adds
+`%send` and [PR #809](https://github.com/JPL-Devin/OpenSysML/pull/809) one object-reference grammar
+for every REPL command — the last two overlap #810, which landed first, and need reconciling
+against it before review. What the review found *after* #810 is that `%state <machine>` in its
+one-argument form attaches a fresh, detached performance rather than the one materialized object
+that exhibits the machine (after `%instantiate TA::Sys; %state lp; %advance 2.5 [s]`, object `#1`
+still reads `n = 1` where `%state #1` gives `n = 3`). The cause was a `StateExecutor` built with
+no `self`, so `entry`/`do` writes landed in the executor's own frame;
+[PR #845](https://github.com/JPL-Devin/OpenSysML/pull/845) makes the machine form walk the held
+objects and attach to the single exhibitor's running machine, refuses with a typed error naming the
+objects (or, before any object exists, the types) when there are zero or several, and leaves a
+truly unbound `state def` running detached. **Open** (mergeable at the last check). The double
+initial-`do` the review first reported is not reproducible on `main` since #810 and is retired.
 
 ## E1 — `terminate` in a body
 
@@ -753,6 +912,365 @@ there is no second object to address.
 
 ---
 
+# Track X — expression forms the evaluator does not reach
+
+Expression evaluation is the most externally refereed part of the runtime: when
+`cmd/pilot-exec-diff` was re-run for the review (2026-09-02, at `1f136d27` — a snapshot of that
+round, not the current baseline), 55 cases agreed with the pinned pilot, 1 agreed in kind only, 1
+disagreement and 2 errors of ours were adjudicated, and 35 cases the pilot cannot evaluate; 70 of
+the 71 grammar forms in `KerMLExpressions.xtext` have a corpus witness (only `%` lacks one).
+Scalars, Booleans, strings, enumerations, quantities, `Complex` (#777, #788), collection bodies, indexing, qualified names, the
+lazy conditionals, `??`, most of the Kernel Function Library, the step and element budgets, RDF
+expression trees and the native scalar/collection fast path are done. The review after `v0.4.3`
+found two defects, both landed since (#794: `x @ T` on a value is `istype`, with `@@` still the
+metadata classification; #795: a feature named `chain` resolves as a name where the lookahead does
+not establish the `chain` modifier — `step chain …` still does not parse and is a separate parser
+item), and the following forms that parse and type-check but do not evaluate. Each refuses today
+with a typed error; the item is the evaluation, and each one ends with what depends on it.
+
+## X1 — constructors: `new Pt(1, 2)`
+
+`ast.ConstructorExpr` parses and types as the definition it names; the evaluator refuses it.
+The value is an object of the definition with positional and named arguments bound to its features
+in declaration order, created in the evaluating context the way `%instantiate` creates one, so it
+has an identity and `%features` can read it. Needed by `SampledFunctions::Sample` (`new
+SampledFunction(samples = …)`, `new SamplePair(x, calculation(x))` — L7), by any
+analysis case that builds its own records, and by the interpreted/native differential once N2.1
+gives the compiled side a record type.
+
+## X2 — a singleton sequence is the scalar
+
+KerML has no scalar/sequence distinction: a one-element sequence *is* the value, and `[0..*]`
+features with one value take part in arithmetic. The runtime keeps a `Sequence` kind distinct from
+the scalar kinds, so `interpolateLinear`'s `[0.0]` refuses `+`. The fix is in one place — operand
+coercion in the operator and library dispatch — plus the mirror: a scalar where a sequence is
+expected is the one-element sequence. It must not weaken the multiplicity checks (a `[2..*]`
+feature holding one value is still an error); it changes only how a legal value is read. Unblocks
+L7 and A1, and is the first of the approved order's second step.
+
+## X3 — casts: `r as Integer`
+
+Parses (`ast.CastExpr`), refused at evaluation. Semantics are the metamodel's: the result is
+the value if it conforms to the type, otherwise the empty sequence — not a conversion (`ToInteger`
+is L4). Small; it is listed because analysis models from the training corpus use it.
+
+## X4 — `*` as a value, and `.metadata`
+
+`*` in a value position (unbounded, the Infinity of `ScalarValues`) has no runtime value, so
+`multiplicity [0..*]` reads fine but `x = *` does not evaluate; and `elem.metadata` — the metadata
+access path the metadata library defines — parses but is not evaluated, while `@@` classification
+is. Both are representation items: an infinity kind (or a flag on the numeric kinds) and a metadata
+value the evaluator can hand back from the side tables the checker already keeps.
+
+## X5 — `all`, and named reducers
+
+`all T` (every instance of a type) is the expression form of Q2 and is refused until there is a
+runtime population to enumerate. `->reduce '+'` and the other named-reducer spellings resolve to a
+library function by name where the collection operations today take only an inline body; with L4's
+dispatch by name they are the same lookup from a different position, and they should land together.
+
+## X6 — function values
+
+A calc-typed parameter (`in calc calculation { in x; }` in `SampledFunctions::Sample`, invoked in
+its body as `calculation(x)`) or a feature typed by a calc cannot be given a value: there is no
+function value kind. Analysis libraries pass behaviors as data (`SampledFunctions`,
+`TradeStudies::evaluationFunction`), so A2 and L7 need it. The representation
+is a reference to a lowered calc plus the environment it closes over, invoked through the same path
+as a calc usage; it is not an arbitrary closure over statements.
+
+## X7 — vectors, arrays and set-producing expressions
+
+A vector is a sequence today (L7), so `VectorValues` and `TensorValues` types have nothing to type
+against, multidimensional indexing (`m[i][j]`, `m[i, j]`) has no shape to check, and a set-producing
+expression (`->distinct`, the set operators) yields a sequence in which order is significant where
+the library says it is not. Three representation decisions — vector kind, array shape, set kind —
+each with the operator table, the static element type (X8) and the RDF literal form to match.
+Larger than the others and last in the track.
+
+## X8 — static element types through collection bodies, and the two harnesses
+
+The checker types a collection operation's result as its input's element type, not what the body
+returns, so `xs->collect { in x; x.mass }` is typed as the part not the quantity, and a downstream
+error names the wrong type. Interpreted and compiled evaluation are held equal by one differential
+over the compiled subset; the pilot differential (`cmd/pilot-exec-diff`) still needs its normalization
+of numeric spellings and its adjudication file to say why each of the remaining disagreements is
+ours or the pilot's; and the RDF expression trees have no round trip of their own — a tree is
+written, read and rewritten only as part of a whole model. Three hygiene items that make every X
+change measurable; do X8's harness half first when starting the track.
+
+---
+
+# Track Q — queries over the running model
+
+Four query surfaces exist and are landed: the standard API `Query` over a project's elements
+(`internal/grpc`, the OSLC query grammar with its diagnostics — #798, #812), the native document
+query (`query def` with parameters, planned by `internal/core/queryplan` and run by
+`internal/core/queryexec`, from the CLI, the REPL and gRPC), `Evaluate`/`-eval`/`%eval in`, and the
+solver's `solve`. All four read the *model*: its elements, its declarations and the expressions
+over them. **None reaches the runtime** — the objects `%instantiate` and `-instantiate` create,
+their current state, or the trace `-trace` prints — and the documentation does not yet say which
+surface answers which question. That is the whole track.
+
+## Q1 — say which query is which
+
+One page distinguishing the four: document queries over elements, the API `Query` over a project,
+`Evaluate` over one expression in one scope, and `solve` over constraints; what each returns, what
+each cannot see, and where runtime queries (Q2–Q4) will sit. Cheap, and it stops each later item
+from re-explaining the boundary. Not started.
+
+## Q2 — a runtime population: `all T`, and predicates over instances
+
+`all Vehicle` (every object typed by `Vehicle` in the session), and the collection operations over
+it — `all Vehicle->select { in v; v.mass > 1000 [kg] }` — are the expression form of a runtime
+query. The runtime already keeps every object it materialized (`Context.instances`, with identity
+across rebuilds — `keepIdentitiesOf`); what is missing is the enumeration as a value, its static
+type (`T[0..*]`), and the REPL/CLI/gRPC binding so a document query parameter can be bound to it.
+Depends on a stable object representation, which #810/#836/#843 have been settling; goes after them.
+
+## Q3 — state and event queries
+
+"Which state is `#1.lp` in?", "which objects are in `run`?", "what did `#1` accept between
+`t = 1 [s]` and `t = 2.5 [s]`?" — the state executor and the trace have the answers
+(`StateExecutor.getCurrentState`, the event log `-trace` prints) and no query reads them. Q3 is a runtime
+query vocabulary over current state and over the trace as a time-ordered relation, with the same
+filter forms as Q2, so the trace stops being something one reads by eye. Depends on Q2's population
+and on the trace representation staying stable while A5 (the shared clock) changes it; sequence
+Q3 after A5.
+
+## Q4 — document-query parameter defaults evaluate
+
+A `query def` parameter with a default (`in limit : Natural = 10;`) is refused at execution with
+`relies on a default not retained in the plan` — the plan records `HasDefault` and not the
+expression. The fix keeps the compiled default in the immutable plan, evaluates it in the declaring
+scope once per execution (not per row), honours inheritance and redefinition, and lets an explicit
+binding override it; `ErrorDefaultUnavailable` goes when nothing reaches it.
+[PR #849](https://github.com/JPL-Devin/OpenSysML/pull/849) does that — the plan carries each
+default as a compiled expression with its declaring query, an unrepresentable default is a typed
+refusal at planning and a self-referencing one a composition-cycle error — with REPL, CLI, gRPC,
+document and nested-invocation tests. **Open** (mergeable at the last check).
+
+---
+
+# Track A — analysis and simulation execution
+
+The Systems Library's analysis vocabulary loads and type-checks — `AnalysisCases`, `TradeStudies`,
+`StateSpaceRepresentation`, `SampledFunctions`, `VerificationCases` — and the runtime executes
+calcs, constraints, requirements, actions and state machines. It does not execute an *analysis*:
+the review after `v0.4.3` found that the keystone is missing and that each simulation capability
+people expect from "SysML v2 execution" hangs off it. Every item below is self-assessed (the pilot
+executes none of this) and every one is refused today with a typed error rather than answered
+wrongly.
+
+## A1 — an analysis case runs
+
+`-calc` and `-action` refuse an `analysis` usage; its `then`-sequenced body is not lowered; its
+`subject`, `objective` and `return` are read as declarations only. A1 lowers an analysis case (and,
+because they share the grammar, a verification case body — A6) to the action graph it is — the
+body's steps in `then` order, each a calc or action performance, the `return` bound from the last
+step — and adds `-analysis Pkg::Case` / `%analysis` beside `-calc` and `-action`. Acceptance: the
+library's own `AnalysisCases` examples and the training corpus's analysis models run and their
+returns match a hand computation. Depends on X2 for the library's sampled functions and on N2.1 if
+the case is to compile; the dependency is on *expression and library semantics being sufficient*,
+which is why the approved order puts A1 first and X2 immediately after it rather than the reverse —
+A1's lowering can land against calcs that already evaluate, and X2 widens what those calcs can be.
+
+## A2 — a trade study iterates, evaluates and selects
+
+`TradeStudies::TradeStudy` is recognised (its `objective` metadata is read) but `selectedAlternative`
+materializes as an empty object: the study does not iterate `alternatives`, does not invoke
+`evaluationFunction` on each, and does not apply `MaximizeObjective`/`MinimizeObjective`. A2 is the
+library's own semantics run: for each alternative, evaluate the function, keep the best under the
+objective, bind `selectedAlternative`. Needs A1 (a study is an analysis case) and X6 (the function
+is a value).
+
+## A3 — parameter sweeps, Monte Carlo and result tables
+
+Running one analysis over a range of an input, or over N samples of a distribution, and collecting
+the returns as a table is what every analysis pipeline asks for next; today it is a shell loop over
+`-calc`. A3 is a `-sweep`/`-samples` surface over A1 with a deterministic seed, a result table with
+one row per run (the inputs, the return, the wall time), and the same table from gRPC. It is
+orchestration over A1, with no new semantics; a document query over the table (Track Q) follows.
+
+## A4 — continuous time: a state-space runner
+
+`StateSpaceRepresentation` declares the protocol (a state vector, its derivative, an output) and
+nothing integrates it: there is no time-stepping runner, no integrator (the RK4 lunar-descent
+conformance case is a calc that hand-rolls its stages), and no zero-crossing detection to hand an
+event to a state machine. A4 is a fixed-step runner over a state-space definition with at least
+Euler and RK4, an event when a guard expression crosses zero, and a trace of `(t, x)` — with the
+runner sharing A5's clock so a state machine and a continuous model advance together.
+
+## A5 — one clock for actions and states
+
+`accept after 1 [s]` in a state machine advances against the executor's clock (`%advance`,
+`-advance`); a time-triggered action in the ordinary action path has no clock to consult and is
+refused (`a time-triggered accept with no clock`, robustness). A5 makes the clock a property of the
+runtime context shared by both executors and by A4's runner, so `-advance` moves everything that is
+waiting on time in one deterministic order (state machines first or actions first, stated and
+tested with a trace golden). This is what "coherent action/state simulation" needs and is a
+prerequisite for A4 and Q3; it precedes both in the approved order.
+
+## A6 — verification cases give verdicts from their bodies
+
+A `verification` case's verdict is computed today from `requirement` satisfaction
+(`-requirement`, `-satisfy`, `%requirement`, `%satisfy`, the `VerifyRequirement` RPC) and the
+solver's checks, not from running the case body, and the library's `PassIf` is recorded as
+intentionally non-normative in `spec-compliance.md`. With A1 the body runs; A6 binds the case's
+`verdict` to the `VerificationCases` library's `PassIf`/`VerdictKind` semantics over that run and
+reports it on the same surfaces beside the satisfaction verdicts. Small once A1 is in.
+
+---
+
+# Track V — validation against the pilot's named constraints
+
+Everything the oracles see is at or near parity: 118 of 120 self-authored invalid models agree with
+the pinned pilot by default, and the pilot's 217 named `validate*` constraints are the denominator
+the review chose to measure against. Of those `spec-compliance.md` names 59 under the pilot's own
+names by the review's count (about 70 by #822's, which reads the names from the jar) and covers
+more under our own diagnostic wording; a 24-probe sample of the rest found 5 models we accept
+silently that the pilot rejects. The track is one item with a queue behind it, and most of the
+queue is already open:
+
+- **The census and its gate** — [PR #822](https://github.com/JPL-Devin/OpenSysML/pull/822) (open,
+  mergeable): the 217 names read from the pinned jar with each one's status, and a gate that keeps
+  the table honest; implements no rule.
+- **Negative cases for the 100 SysML constraint names the corpus owns** —
+  [PR #831](https://github.com/JPL-Devin/OpenSysML/pull/831) (open, mergeable): one minimal
+  pilot-refereed invalid model per name, or a stated reason none can exist.
+- **Rules the sample found missing**, each a pass of the type or constraint tier:
+  overriding a bound (`=`) feature value — [PR #826](https://github.com/JPL-Devin/OpenSysML/pull/826)
+  (open, mergeable; carries the `=`/`default =` distinction through the AST, which the parser dropped);
+  control-node succession counts and placement — [PR #832](https://github.com/JPL-Devin/OpenSysML/pull/832)
+  (open, mergeable); trigger arguments (`after` a duration, `at` an instant, `when` a Boolean) —
+  [PR #833](https://github.com/JPL-Devin/OpenSysML/pull/833) (open, conflicts); `send` payload,
+  `via` and `to` typing — [PR #838](https://github.com/JPL-Devin/OpenSysML/pull/838) (open,
+  mergeable); [PR #817](https://github.com/JPL-Devin/OpenSysML/pull/817) adds further rejection
+  cases (open, mergeable).
+- **One finding adjudicated as not a defect** —
+  [PR #837](https://github.com/JPL-Devin/OpenSysML/pull/837) (open, mergeable) records why the
+  inherited-name warning beside a typing error stays: the pilot reports both.
+- **Still to take**: `enum def F :> E` (an enumeration specializing another) — related to
+  [PR #811](https://github.com/JPL-Devin/OpenSysML/pull/811) (open, mergeable), which treats
+  enumeration definitions as variations and must be reconciled with the rule before either lands —
+  and whatever the census marks *uncovered* once #822 is in. The order is #822, then #831 (they
+  define the denominator and the corpus), then the rule PRs in any order, each moving its census
+  row.
+
+---
+
+# Track I — language integrations
+
+`sysml-grpc` speaks gRPC, Connect and Connect-JSON over one port, with optional TLS, exact-origin
+CORS, a health port and stdio; there are clients in Go (the public API), Python (`opensysml` on
+PyPI), Node, Java and Rust, each with a worked tour. Verified at this baseline against the rebuilt
+binary: plain HTTP/1.1 + JSON reaches every method (`ParseSources` takes `documents`, not
+`sources`; `Evaluate` on `2 * 1500` answered `{"result":{"realValue":3000}}`), which means MATLAB,
+R, Julia and C can integrate *today* with their HTTP and JSON libraries and no generated code. What
+is missing is the contract that makes such a client correct rather than lucky, and a thin package
+per language so nobody re-derives it.
+
+## I1 — the wire contract, written down
+
+There was no page a hand-written client can be built from: which field names (proto3
+lowerCamelCase), which `Value` arm is which (`intValue` as a JSON *string* for 64-bit,
+`realValue`, `boolValue`, `stringValue`, quantity with unit, enumeration by identity not display
+name, instance references, `Complex`), how *unset* differs from *absent* and from *no result*, how a
+diagnostic and a Connect error arrive, the model-hash lifetime, and how a behavior call and a query
+are made. I1 is a `wire-contract` page under `docs/reference/`: every example captured from the
+running service, all eleven `Value` arms, the Connect code table, the
+`Instantiate`/`ExecuteState`/`Verify*`/`Query` answer shapes, and R, Julia, MATLAB and C
+illustrations marked untested, linked from the transports, clients and API pages. **Open** (#848,
+mergeable at the last check). Everything else in the track reads from it.
+
+## I2 — shared conformance fixtures for handwritten clients
+
+One directory of request/response pairs — every `Value` arm, a diagnostic, a Connect error, a
+behavior call, a document query — that the five existing clients and any new one replay, so "the
+client decodes the contract" is a test and not a claim. Depends on I1; small.
+
+## I3 — thin R, Julia and MATLAB packages
+
+Each is a few hundred lines over the language's HTTP+JSON: connect, parse, evaluate, query, run a
+behavior, decode `Value` by the I1 rules (64-bit integers, quantities, enumerations, unset), and
+surface diagnostics as the language's errors. Each ships with the I2 fixtures as its tests and a
+page on starting `sysml-grpc` (binary provisioning from the release, the flags, TLS, the health
+check). Not started; each is about a session once I1 and I2 exist, and they can go in parallel.
+Publishing (CRAN, the Julia registry, File Exchange) is account-gated and goes with R2.
+
+## I4 — a C client, and the C ABI
+
+C is two different things. A **C client** is I3 for C — an HTTP+JSON client over `libcurl` and a
+JSON library, and the natural base for anything that embeds by FFI. A **C ABI** is in-process:
+calling a compiled calc (N2.4) or, later, an embedded state machine (M4) through a stable header
+with no service. The client depends only on I1/I2; the ABI depends on N2.4's design and is the same
+artifact as M4's host interface, so design it once and let the three consumers (host tools, the C
+client's optional in-process mode, the embedded target) restrict it. The client comes first.
+
+---
+
+# Track M — an embedded, RTOS-compatible target
+
+The question was whether OpenSysML models could run on a microcontroller under an RTOS, and what
+"embedded SysML v2" would mean. The review's answer, from the code: not by shrinking the interpreter
+— `internal/core/runtime` depends on maps, allocation, `big.Rat`, and the parser and semantic
+packages, and `lower.ActionGraph`/`lower.StateGraph` reference AST nodes, symbol scopes and
+expression trees, so they are not closed artifacts that can leave the process (TinyGo is therefore
+not a route). The route is Track N's discipline applied to behavior: a **closed, serializable
+behavior IR**, an **AOT C backend** that emits static tables and no allocation, and a refusal —
+typed, naming the construct — for any model the target cannot bound. What the runtime can promise
+is *bounded and reproducible* execution; hard real-time guarantees (WCET) are properties of the
+target, the compiler and the RTOS configuration, and the documentation must say so rather than
+imply them.
+
+## M1 — a closed behavior IR
+
+The lowered graphs, made self-contained: nodes, successions, guards, triggers, effects, states,
+transitions, regions, pins and connections with every reference resolved to an index and every
+expression carried as N2's typed IR, with no pointer into the AST or the symbol tables — so it can
+be serialized, diffed, and handed to a backend. Lowering to it must be lossless over the existing
+conformance corpus (the interpreter can run *from* it, which is the proof), and it is the meeting
+point with N2.6: the native track's action and state phases start here rather than duplicating it.
+This item gates everything else in the track.
+
+## M2 — a state and action C backend over static tables
+
+From M1: state and transition tables, a static Petri-net-style scheduler for the action graph
+(token counts per place, no dynamic node creation), fixed-size event queues sized from the model,
+static port/connection routing, expression evaluation through N2's C emitter, and no `malloc`
+after initialization. A model that cannot be bounded — unbounded multiplicity, recursion the
+compiler cannot bound, `all T`, dynamic `new` — is refused by name. Differential against the
+interpreter over the state and action conformance corpus, exactly as N1 is refereed.
+
+## M3 — a resource report, and refusal of the unbounded
+
+Every compiled model states its RAM (tables, queues, the state vector), its stack bound per entry
+point and its code size, before it is flashed; a budget file the model must fit is a build error
+when exceeded. This is what makes the target honest: the report is part of the artifact.
+
+## M4 — the host interface: `init`, `tick(dt)`, `post(event)`, `read(feature)`
+
+A generated model is a library the RTOS task calls: initialise, advance by `dt` (the shared clock of
+A5, restricted to a fixed step), post an event into the fixed-size queue, read a feature. This is
+the embedded restriction of the C ABI in N2.4/I4 — same header shape, no allocation, no callbacks
+into the host except the ones the model declares. Designed with N2.4 and I4, implemented here.
+
+## M5 — Zephyr on QEMU as the proof
+
+One state machine and one action from the conformance corpus, compiled by M2, linked into a Zephyr
+application, run under QEMU (`qemu_cortex_m3`) with the trace read back over the serial console and
+compared with the interpreter's trace golden. CI runs it in a container with the Zephyr SDK; a
+maintainer runs it on hardware. The claim "runs under an RTOS" is made only once this passes.
+
+## M6 — embedded metadata and library definitions
+
+`EmbeddedTarget` metadata (the MCU, the step, the queue depths, the budget), and a small library
+package of fixed-width numeric types and bounded collections the compiler recognises, so a model
+says what it is for and the checker can refuse a `Real` where the target has no FPU. Declared in
+the notation, checked by the existing passes, read by M2/M3. Last, because it depends on knowing
+what M2 needs.
+
+---
+
 # Proposed, not started
 
 **The PDF path onto the HTML backend.** The backend
@@ -774,27 +1292,75 @@ not more harness work.
 
 # Suggested sequencing
 
-1. **R1** first — fold the shipped Unreleased entries into the 0.4.3 notes — with the gate-count
-   recount (or its move into `cmd/doc-counts`) in the same pass, because `releasing.md` checks it
-   before the next tag. **R2**–**R5** as the accounts and hardware appear: publisher tokens
-   for npm, Maven Central and crates.io, a real Mac for the tap, an Apple Developer and an OV/EV
-   certificate to sign with, and a marketplace publisher for the extension. None of them gates
-   the others or anything below.
-2. **Track N**: land N1 (PR #778), then decide N2.1 (the budget) before anything else in the
-   track, since collections (N2.2) and linking (N2.4) both depend on the answer. N2.3 (library
-   functions) can go in parallel with N2.2.
-3. **Track D** is independent of the rest. Take **D3.4** first — it is small, it is the last of D3,
-   and it is the item that moves the harness from 355/424 toward the commit path's 158/158. Then
-   **D7**, mechanical now that identity is stable. Then **D2** and **D1** together, since both are
-   the same move — from `sysx:` structure to the metamodel's own elements and properties — and
-   the ontology gate's inventory is their checklist; D2 is the smaller and goes first. **D8**'s
-   profile after PR #774 merges, since it only becomes conformant behind D1 and D2.
-4. **L3** is independent of everything above and is a runtime item: materialize
-   library-inherited features on an instance, then fold their value expressions, then hand
-   library-declared conditions to the solver.
-5. **Track E** is not scheduled; each item states what would prioritize it. If one is picked up
-   without such a trigger, the order is **E1** (termination of an ongoing performance, which
-   **E2** and **E4** build on), then **E2**, then **E4**; **E6** whenever asked, being a day's
-   work; **E3** and **E5** only after their design records; **E7** after the object-model item
-   it depends on. The `lowerBody` silent drop noted under E1 is a defect and does not wait for
-   the track.
+Two orders, because there are two kinds of item. The **track-local** orders say where to start
+inside a track; the **cross-cutting** order says which tracks' first items go first when a session
+must choose, and it is the one that has been agreed. Everything in flight (the open pull requests
+named above) lands or is closed before either order is consulted — they are already the next
+thing.
+
+## Cross-cutting order (agreed)
+
+1. **A1, then A2** — analysis-case execution, then trade-study execution. The keystone: verification
+   bodies (A6) and the analysis library (L7) fall out of it, and nothing else on this list is asked
+   for as often. Depends on expression and library semantics being *sufficient*, which they are for
+   a case over calcs that evaluate today; the next step widens them.
+2. **X2, X1, X6** — the singleton sequence read as the scalar, constructors, function values. The
+   three items the standard analysis library (`SampledFunctions`, `TradeStudies`) needs to run, and
+   what A2 waits on for `evaluationFunction`. L4 (dispatch by name) and X5's named reducers go in
+   the same pass, since they are one lookup.
+3. **The REPL state attachment** — `%state <machine>` attaching to the exhibiting object (#845,
+   open), *after* validating on `main` that #810 closed the original duplicate initial `do`,
+   which the review did (it no longer reproduces; the probe and its oracle are recorded under
+   Track E). Small, and it is what makes an accumulator-style simulation trustworthy from the REPL.
+4. **Q2, then Q1** — runtime query bindings and `all T`, with the page that says which query is
+   which. Depends on the object, state and trace representations being stable, which #810, #836
+   and #843 are settling; Q4 (parameter defaults, #849, open) lands independently before it.
+5. **I1, I2, I3, then I4's client** — the wire contract, the shared fixtures, the thin R, Julia and
+   MATLAB packages, the C client. Documentation first because every client is derived from it;
+   the C *ABI* half of I4 is not here — it is step 9.
+6. **D3.4, then D2 and D1, then D9.1 and D9.2** — Flexo: the collection JSON annotations (#850,
+   open), the standard vocabulary for expression trees and end structure, then the
+   authenticated push and the branch read. Push and read depend on the collection and vocabulary
+   quality, which is why they come last in the step; re-record the live-stack harness after D3.4
+   and again after D1/D2.
+7. **A5, then A4** — one clock for actions and states, then the continuous-time runner. The clock
+   is prerequisite to coherent action/state simulation and to Q3, which follows it; A3 (sweeps,
+   Monte Carlo, tables) is orchestration over A1 and goes wherever a user asks for it.
+8. **M1, then M2 (with N2.6)** — the closed behavior IR, then the state and action C backend over
+   static tables. Embedded behavior compilation depends on the closed IR; the native track's action
+   and state phases start from the same IR rather than a second one. M3 and M5 prove it; M6 last.
+9. **The shared C ABI** — N2.4 / I4 / M4 designed once, after N2.2 (the budget) is decided and
+   after M1 fixes what an embedded entry point looks like, so a stable native/embedded calling
+   contract exists to design against rather than three.
+
+## Track-local orders
+
+- **Release follow-through.** **R1** first — fold the shipped Unreleased entries into the 0.4.3
+  notes — with the gate-count recount (or its move into `cmd/doc-counts`) in the same pass, because
+  `releasing.md` checks it before the next tag. **R2**–**R5** as the accounts and hardware appear:
+  publisher tokens for npm, Maven Central and crates.io, a real Mac for the tap, an Apple Developer
+  and an OV/EV certificate to sign with, and a marketplace publisher for the extension. None gates
+  the others or anything below.
+- **Track L.** The three open pull requests (#821 dispatch, #818 `QuantityCalculations`, #825
+  overloads) are mergeable and need review before anything new; #830 (L3) likewise. Then L7, which is
+  step 2 above.
+- **Track N.** N2.1 (records and enums) first, since A1's "an analysis case compiles" and the
+  differential's record coverage both need it; decide N2.2 (the budget) before N2.4; N2.3 tracks L4
+  package by package; N2.6's actions and states are Track M's M1/M2.
+- **Track D.** Rebase and land the open RDF work (#815, #835, #824, #819, #827; #842 and #850 are
+  clean) first; then step 6 above; **D7** is mechanical now that identity is stable and fits anywhere; **D8**'s
+  profile after #774 merges, since it only becomes conformant behind D1 and D2.
+- **Track E.** Land the in-flight fixes (#823 nested frames, #839, #843, #805, #808, #809, #845)
+  first.
+  The track itself is not scheduled; each item states what would prioritize it. If one is picked
+  up without such a trigger, the order is **E1** (termination of an ongoing performance, which
+  **E2** and **E4** build on), then **E2**, then **E4**; **E6** whenever asked, being a day's
+  work; **E3** and **E5** only after their design records; **E7** after the object-model item it
+  depends on. The `lowerBody` silent drop noted under E1 is a defect and does not wait for the
+  track.
+- **Track X.** X8's harness half (normalization, adjudication, the RDF expression round trip)
+  first so every later X item is measured; then step 2 above; X3 and X4 whenever a model needs
+  them; X7 last.
+- **Track V.** #822 (the census), then #831 (the negative cases), then the rule pull requests in
+  any order; reconcile #811 with the `enum def F :> E` rule before either lands.
+- **Track Q, A, I, M.** Entirely given by the cross-cutting order above.

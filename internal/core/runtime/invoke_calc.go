@@ -3,8 +3,10 @@ package runtime
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -147,7 +149,7 @@ func (ctx *Context) calcShapeOf(sym *symbols.Symbol) (*calcShape, error) {
 	// A calc computes nothing when it neither returns a value nor binds an output
 	// feature — by a declaration or by an assignment in its body.
 	if !lower.Returns(shape.Body) && len(shape.BodyOutputs) == 0 && shape.ResultExpr == nil {
-		return nil, fmt.Errorf("%w: calc %s has no return expression", ErrNoResultExpression, name)
+		return nil, fmt.Errorf("%w: calc %s has no return expression%s", ErrNoResultExpression, name, unboundResultHint(chain))
 	}
 
 	ctx.calcShapes[sym] = shape
@@ -255,6 +257,89 @@ func calcBody(chain []*symbols.Symbol) ([]lower.Statement, *symbols.Symbol) {
 		}
 	}
 	return stated, owner
+}
+
+// unboundResultHint explains a `return` that declares a result parameter without
+// binding it (`return h;` declares h, it does not return the member h).
+func unboundResultHint(chain []*symbols.Symbol) string {
+	for i := len(chain) - 1; i >= 0; i-- {
+		if chain[i] == nil {
+			continue
+		}
+		members := declMembers(chain[i].Decl)
+		result := unboundResultParameter(members)
+		if result == nil {
+			continue
+		}
+		name, _ := ast.EffectiveName(result)
+		who, trailing, expr := "the result parameter", "of the body", "<expr>"
+		typ := usageTypeText(result)
+		if name != "" {
+			spelled := lexer.NameText(name)
+			who = "result parameter " + spelled
+			if sibling := valuedMemberNamed(members, name, result); sibling != nil {
+				trailing, expr = "`"+spelled+"`", spelled
+				if typ == "" {
+					typ = usageTypeText(sibling)
+				}
+			}
+		}
+		if typ == "" {
+			typ = "<type>"
+		}
+		return fmt.Sprintf(": %s binds no value; write the result as the trailing expression %s, or bind it with `return : %s = %s;`",
+			who, trailing, typ, expr)
+	}
+	return ""
+}
+
+// unboundResultParameter returns the body's `return` member that binds no value.
+func unboundResultParameter(members []ast.Node) *ast.Usage {
+	for _, member := range members {
+		if u, ok := member.(*ast.Usage); ok && u.IsResult && u.Value == nil {
+			return u
+		}
+	}
+	return nil
+}
+
+// valuedMemberNamed returns the body member called name, other than except,
+// whose declaration binds a value; an unbound one would not compute a result.
+func valuedMemberNamed(members []ast.Node, name string, except *ast.Usage) *ast.Usage {
+	for _, member := range members {
+		u, ok := member.(*ast.Usage)
+		if !ok || u == except || u.Value == nil {
+			continue
+		}
+		if actual, _ := ast.EffectiveName(u); actual == name {
+			return u
+		}
+	}
+	return nil
+}
+
+// usageTypeText spells the type a usage declares with `:` as the notation
+// writes it (each segment quoted when it must be), or "" without one.
+func usageTypeText(u *ast.Usage) string {
+	for _, rel := range u.Relationships {
+		if rel == nil || rel.Kind != ast.RelTyping {
+			continue
+		}
+		qn, ok := rel.Target.(*ast.QualifiedName)
+		if !ok || len(qn.Parts) == 0 {
+			continue
+		}
+		segments := make([]string, 0, len(qn.Parts))
+		for _, part := range qn.Parts {
+			segments = append(segments, lexer.NameText(part.Text))
+		}
+		text := strings.Join(segments, "::")
+		if qn.Global {
+			text = "$::" + text
+		}
+		return text
+	}
+	return ""
 }
 
 // calcArgs are the arguments of one calc invocation. The notation keeps the two

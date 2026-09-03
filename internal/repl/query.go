@@ -397,6 +397,9 @@ func (s *Session) instantiateNamed(name string) ([]string, error) {
 	if again && previous != nil && previous.ID != inst.ID {
 		out = append(out, fmt.Sprintf("  note: %s now denotes this object; object #%d is no longer named%s",
 			notationName(fqn), previous.ID, behaviorsDropped(previous)))
+		for _, notice := range s.dropSupersededDebugSessions(fqn) {
+			out = append(out, "  "+notice)
+		}
 	}
 	return append(out, fmt.Sprintf("  Use %%features %s to inspect", name)), nil
 }
