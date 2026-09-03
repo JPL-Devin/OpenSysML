@@ -44,6 +44,8 @@ type wanted struct {
 
 type wantedReference struct {
 	qualified, written string
+	// count is how many times the rendering wrote the reference.
+	count int
 }
 
 func newWanted() *wanted {
@@ -89,7 +91,7 @@ func chooseNames(name string, text []byte, want *wanted, previous *nameChoices) 
 	}
 	written := writtenKeys(want.references)
 	occurrences := map[nameKey][]resolve.Reference{}
-	var chains []resolve.Reference
+	var chains, misread []resolve.Reference
 	for _, ref := range resolve.References(root, e.res.Index().DocumentRoot(file.Name())) {
 		if ref.QN == nil || ref.Member == nil {
 			continue
@@ -98,15 +100,19 @@ func chooseNames(name string, text []byte, want *wanted, previous *nameChoices) 
 			chains = append(chains, ref)
 			continue
 		}
-		member := e.fqn[ref.Member]
-		key := nameKey{member: member, target: e.writtenTarget(ref)}
-		if _, ok := want.references[key]; !ok {
-			// The spelling written may read as another element here; it is
-			// still the occurrence of the reference written that way.
-			key, ok = written[nameKey{member: member, target: qualifiedText(ref.QN)}]
-			if !ok {
-				continue
-			}
+		key := nameKey{member: e.fqn[ref.Member], target: e.writtenTarget(ref)}
+		if _, ok := want.references[key]; ok {
+			occurrences[key] = append(occurrences[key], ref)
+			continue
+		}
+		misread = append(misread, ref)
+	}
+	// A spelling read as another element is still an occurrence of the reference
+	// written that way, unless every writing of it already read back correctly.
+	for _, ref := range misread {
+		key, ok := written[nameKey{member: e.fqn[ref.Member], target: qualifiedText(ref.QN)}]
+		if !ok || len(occurrences[key]) >= want.references[key].count {
+			continue
 		}
 		occurrences[key] = append(occurrences[key], ref)
 	}

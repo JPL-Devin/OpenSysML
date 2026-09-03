@@ -115,6 +115,11 @@ const dtExpression = "Expression"
 const (
 	mOwningMembership  = "OwningMembership"
 	mFeatureMembership = "FeatureMembership"
+	// The membership a body owns its result expression through, which states
+	// the expression as sysml:ownedResultExpression.
+	mResultExpressionMembership = "ResultExpressionMembership"
+	pOwnedResultExpression      = "ownedResultExpression"
+	mDocumentation              = "Documentation"
 )
 
 // Metaclass names for the constructs that have no SysML metaclass of their own
@@ -129,6 +134,9 @@ const (
 	mConstraint = "ConstraintMember"
 	mAssume     = "AssumeMember"
 	mRequire    = "RequireMember"
+	// The bare expression a calculation or case body ends in, which the
+	// abstract syntax owns through a ResultExpressionMembership.
+	mResultExpression = "ResultExpressionMember"
 )
 
 // boolProperty pairs an RDF property name with the AST flag it mirrors. Only
@@ -695,12 +703,8 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		return nil
 
 	case *ast.Documentation:
-		head(rdf.SysMLTerm("Documentation"))
-		e.ident(subject, n.Ident)
-		if n.Locale != "" {
-			e.graph.Add(subject, e.sysml(pLocale), rdf.String(lexer.StringValue(n.Locale)))
-		}
-		e.graph.Add(subject, e.sysml(pBody), rdf.String(commentBody(e.src.slice(n.BodySpan))))
+		head(rdf.SysMLTerm(mDocumentation))
+		e.documentation(subject, n)
 		return nil
 
 	case *ast.TextualRepresentation:
@@ -770,6 +774,15 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 			Note: "fix the syntax error before converting",
 		}
 	}
+	// A bare expression among a body's members is the result the body computes.
+	if isExpressionMember(node) {
+		head(rdf.OpenSysMLTerm(mResultExpression))
+		e.expression(subject, e.sysx(xResultExpression), xResultExpression, owner, node)
+		if membership, ok := e.graph.Object(subject, rdf.SysML+pOwningMembership); ok {
+			e.graph.Add(membership, e.sysml(pOwnedResultExpression), rdf.ExpressionIRI(subject, xResultExpression))
+		}
+		return nil
+	}
 	// A behavioral node — a control node, statement, loop, conditional, state or
 	// transition — is mapped by the behavior half of this encoder.
 	if handled, err := e.encodeBehavior(node, head, subject, fqn, owner, index); handled {
@@ -822,8 +835,11 @@ func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string) rdf
 	e.graph.Add(member, e.sysml(pOwningMembership), membership)
 
 	metaclass := mOwningMembership
-	if feature {
+	switch {
+	case feature:
 		metaclass = mFeatureMembership
+	case e.graph.Type(member) == rdf.OpenSysML+mResultExpression:
+		metaclass = mResultExpressionMembership
 	}
 	e.graph.Add(membership, rdf.IRI(rdf.RDFType), e.sysml(metaclass))
 	e.graph.Add(membership, e.sysml(pElementID), rdf.String(rdf.LocalName(membership.Value)))
@@ -978,6 +994,15 @@ func (e *encoder) bindingEnd(subject rdf.Term, owner, slot string, index int, ro
 
 func (e *encoder) sysml(name string) rdf.Term { return rdf.SysMLTerm(name) }
 func (e *encoder) sysx(name string) rdf.Term  { return rdf.OpenSysMLTerm(name) }
+
+// documentation emits what a `doc` states: its identification, locale and body.
+func (e *encoder) documentation(subject rdf.Term, n *ast.Documentation) {
+	e.ident(subject, n.Ident)
+	if n.Locale != "" {
+		e.graph.Add(subject, e.sysml(pLocale), rdf.String(lexer.StringValue(n.Locale)))
+	}
+	e.graph.Add(subject, e.sysml(pBody), rdf.String(commentBody(e.src.slice(n.BodySpan))))
+}
 
 func (e *encoder) ident(subject rdf.Term, ident ast.Identification) {
 	if ident.Name != "" {

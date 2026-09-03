@@ -1153,6 +1153,7 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 				r.ResolveQualified(scope, p.Type)
 			}
 			r.resolveRelationships(scope, v, p.Relationships)
+			r.resolveMultiplicity(scope, p.Multiplicity)
 			r.resolveExpr(scope, p.Value)
 		}
 		// A body expression's parameters and declarations live in a scope of its

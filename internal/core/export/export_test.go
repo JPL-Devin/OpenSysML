@@ -81,8 +81,8 @@ func TestConvertedNotationParses(t *testing.T) {
 // without its source text, by the refusal it must keep reporting for them.
 var textOnlyFixtures = map[string]string{
 	"action_nodes":               "this expression states no notation and no structure",
-	"body_scopes":                "this expression states no notation and no structure",
-	"shadowing_body":             "this expression states no notation and no structure",
+	"expression_body_members":    "a declaration inside an expression body is carried as its notation",
+	"expression_body_order":      "a declaration inside an expression body is carried as its notation",
 	"payload_declaration_bodies": "it has no sysx:endForm",
 }
 

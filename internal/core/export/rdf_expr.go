@@ -54,6 +54,10 @@ const (
 	xResultExpression = "resultExpression"
 )
 
+// mBodyMember types a declaration an expression body makes between its
+// parameters and its result, carried as its notation.
+const mBodyMember = "BodyMember"
+
 // Operator spellings whose notation is not the plain infix form.
 const (
 	opSequence = ","
@@ -122,10 +126,12 @@ func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) 
 		}
 
 	case *ast.CastExpr:
-		// `(as T)` is the classification operator with a type argument only.
+		// `(as T[m])` is the classification operator with a type argument only,
+		// its multiplicity written as bounds the way a usage's is.
 		e.typed(subject, mOperator)
 		e.graph.Add(subject, e.sysml(pOperator), rdf.String(ast.OpAs.String()))
 		e.graph.Add(subject, e.sysx(xTypeArgument), e.reference(n.TargetType))
+		e.multiplicity(subject, owner, n.Multiplicity)
 
 	case *ast.FeatureChainExpr:
 		e.typed(subject, mFeatureChain)
@@ -169,13 +175,10 @@ func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) 
 		e.graph.Add(subject, e.sysml(pReferencedElement), e.reference(n.Ref))
 
 	case *ast.BodyExpr:
-		// A body declares its own parameters and a result expression.
+		// A body declares its own parameters and members, then a result expression.
+		// The parameters' annotations are read outside the body, the result inside.
 		e.typed(subject, mExpression)
-		for _, param := range n.Params {
-			if param.Name != "" {
-				e.graph.Add(subject, e.sysx(xBodyParameter), rdf.String(param.Name))
-			}
-		}
+		e.bodyDeclarations(subject, owner, n.Params, n.Members)
 		if n.Result != nil {
 			result := rdf.ExpressionIRI(subject, "result")
 			e.graph.Add(subject, e.sysx(xResultExpression), result)
@@ -190,6 +193,83 @@ func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) 
 
 func (e *encoder) typed(subject rdf.Term, metaclass string) {
 	e.graph.Add(subject, rdf.IRI(rdf.RDFType), rdf.SysMLTerm(metaclass))
+}
+
+// isExpressionMember reports whether a body member is a bare expression: the
+// result a calculation or case body ends in.
+func isExpressionMember(node ast.Node) bool {
+	switch node.(type) {
+	case *ast.LiteralBool, *ast.LiteralString, *ast.LiteralInteger, *ast.LiteralReal,
+		*ast.LiteralInfinity, *ast.NullExpr, *ast.FeatureReference, *ast.OperatorExpr,
+		*ast.CastExpr, *ast.FeatureChainExpr, *ast.IndexExpr, *ast.InvocationExpr,
+		*ast.ConstructorExpr, *ast.CollectExpr, *ast.SelectExpr, *ast.SequenceExpr,
+		*ast.MetadataAccessExpr, *ast.BodyExpr:
+		return true
+	}
+	return false
+}
+
+// bodyDeclarations emits what an expression body declares ahead of its result,
+// parameters and members alike, indexed in the one order they were written.
+func (e *encoder) bodyDeclarations(subject rdf.Term, owner string, params []ast.BodyParam, members []ast.Node) {
+	type declaration struct {
+		offset int
+		param  *ast.BodyParam
+		member ast.Node
+	}
+	declarations := make([]declaration, 0, len(params)+len(members))
+	for i := range params {
+		declarations = append(declarations, declaration{offset: params[i].Span.Offset, param: &params[i]})
+	}
+	for _, member := range members {
+		declarations = append(declarations, declaration{offset: member.Span().Offset, member: member})
+	}
+	sort.SliceStable(declarations, func(i, j int) bool {
+		return declarations[i].offset < declarations[j].offset
+	})
+	for i, decl := range declarations {
+		if decl.param != nil {
+			e.bodyParameter(subject, owner, i, *decl.param)
+		} else {
+			e.bodyMember(subject, i, decl.member)
+		}
+	}
+}
+
+// bodyParameter emits one parameter of an expression body as a node of its
+// own, so its type, value and bounds are structure, not text.
+func (e *encoder) bodyParameter(subject rdf.Term, owner string, index int, param ast.BodyParam) {
+	node := rdf.ExpressionIRI(subject, fmt.Sprintf("in%d", index))
+	e.graph.Add(subject, e.sysx(xBodyParameter), node)
+	e.graph.Add(node, rdf.IRI(rdf.RDFType), rdf.SysMLTerm(keywordMetaclass["ref"]))
+	e.graph.Add(node, e.sysml(pElementID), rdf.String(rdf.LocalName(node.Value)))
+	e.graph.Add(node, e.sysx(xMemberIndex), rdf.Int(index))
+	e.graph.Add(node, e.sysml(pDirection), rdf.String(directionKeyword(ast.DirIn)))
+	e.name(node, param.Name)
+	e.flags(node, []boolProperty{{"isReference", param.IsReference}})
+	if param.Type != nil {
+		e.graph.Add(node, e.sysml(relationshipProperty[ast.RelTyping]), e.reference(param.Type))
+	}
+	e.relationships(node, owner, param.Relationships)
+	e.multiplicity(node, owner, param.Multiplicity)
+	e.expression(node, e.sysml(pValue), pValue, owner, param.Value)
+	e.bodyDeclarations(node, owner, nil, param.Members)
+}
+
+// bodyMember carries one declaration of an expression body, or of one of its
+// parameters. Documentation is structure; any other declaration is its notation.
+func (e *encoder) bodyMember(subject rdf.Term, index int, member ast.Node) {
+	node := rdf.ExpressionIRI(subject, fmt.Sprintf("m%d", index))
+	e.graph.Add(subject, e.sysx(xBodyMember), node)
+	e.graph.Add(node, e.sysml(pElementID), rdf.String(rdf.LocalName(node.Value)))
+	e.graph.Add(node, e.sysx(xMemberIndex), rdf.Int(index))
+	e.graph.Add(node, e.sysx(xSourceText), rdf.String(e.text(member)))
+	if doc, ok := member.(*ast.Documentation); ok {
+		e.typed(node, mDocumentation)
+		e.documentation(node, doc)
+		return
+	}
+	e.graph.Add(node, rdf.IRI(rdf.RDFType), rdf.OpenSysMLTerm(mBodyMember))
 }
 
 // arguments emits the operands of an expression, each carrying the position it
@@ -241,7 +321,8 @@ var expressionMetaclasses = map[string]bool{
 }
 
 // isExpressionNode reports whether a subject is an expression node rather than
-// an element: it is in the expression namespace, or its metaclass is one.
+// an element: it is in the expression namespace, or its metaclass is one and it
+// has no qualified name (an `expr` usage is typed sysml:Expression too).
 func (d *decoder) isExpressionNode(subject rdf.Term) bool {
 	if !subject.IsIRI() {
 		return false
@@ -249,7 +330,8 @@ func (d *decoder) isExpressionNode(subject rdf.Term) bool {
 	if strings.HasPrefix(subject.Value, rdf.Expression) {
 		return true
 	}
-	return expressionMetaclasses[rdf.LocalName(d.graph.Type(subject))]
+	return expressionMetaclasses[rdf.LocalName(d.graph.Type(subject))] &&
+		!d.graph.HasProperty(subject, rdf.SysML+pQualifiedName)
 }
 
 // resolveExpressions renders every element's expression-valued properties as
@@ -458,8 +540,140 @@ func (d *decoder) expressionNodeText(node rdf.Term, in *element) (string, error)
 		return d.operatorText(node, in)
 	case mInvocation:
 		return d.invocationText(node, in)
+	case mExpression:
+		if d.graph.HasProperty(node, rdf.OpenSysML+xResultExpression) ||
+			d.graph.HasProperty(node, rdf.OpenSysML+xBodyParameter) ||
+			d.graph.HasProperty(node, rdf.OpenSysML+xBodyMember) {
+			return d.expressionBodyText(node, in)
+		}
 	}
 	return "", unsupported("this expression states no notation and no structure to write one from; " + rdfLimitationsNote)
+}
+
+// expressionBodyText rebuilds an expression body: its declarations and its
+// result, in the order the graph records.
+func (d *decoder) expressionBodyText(node rdf.Term, in *element) (string, error) {
+	parts, err := d.bodyDeclarationsText(node, in)
+	if err != nil {
+		return "", err
+	}
+	if result, ok := d.graph.Object(node, rdf.OpenSysML+xResultExpression); ok {
+		text, err := d.expressionNodeText(result, in)
+		if err != nil {
+			return "", err
+		}
+		parts = append(parts, text)
+	}
+	return "{ " + strings.Join(parts, " ") + " }", nil
+}
+
+// bodyParameterText rebuilds one `in` parameter of an expression body. A
+// parameter a graph states as a bare name literal is that name alone.
+func (d *decoder) bodyParameterText(param rdf.Term, in *element) (string, error) {
+	if !param.IsIRI() {
+		return "in " + nameText(param.Value) + ";", nil
+	}
+	el := d.expressionElement(param, in)
+	name, ok := d.stringOf(el, rdf.SysML+pDeclaredName)
+	if !ok {
+		return "", &UnsupportedError{
+			What: fmt.Sprintf("the body parameter <%s>", param.Value),
+			Note: "a parameter of an expression body is named, and this one states no sysml:declaredName",
+		}
+	}
+	// The bounds and the value are expressions, resolved here since the
+	// parameter is not an element of the model.
+	for _, property := range []string{pLowerBound, pUpperBound, pValue} {
+		object, ok := d.graph.Object(param, rdf.SysML+property)
+		if !ok {
+			continue
+		}
+		text, err := d.expressionNodeText(object, in)
+		if err != nil {
+			return "", err
+		}
+		el.expressions[rdf.SysML+property] = text
+	}
+	words := []string{"in"}
+	if d.boolOf(el, rdf.SysML+"isReference") {
+		words = append(words, "ref")
+	}
+	words = append(words, nameText(name))
+	relationships, err := d.relationshipWords(el, d.multiplicityText(el))
+	if err != nil {
+		return "", err
+	}
+	words = append(words, relationships...)
+	head := strings.Join(words, " ")
+	if value, ok := d.stringOf(el, rdf.SysML+pValue); ok {
+		head += " = " + value
+	}
+	members, err := d.bodyDeclarationsText(param, in)
+	if err != nil {
+		return "", err
+	}
+	if len(members) == 0 {
+		return head + ";", nil
+	}
+	return head + " { " + strings.Join(members, " ") + " }", nil
+}
+
+// expressionElement stands for an expression node written inside element in:
+// the node's own properties, read where in's references are.
+func (d *decoder) expressionElement(node rdf.Term, in *element) *element {
+	return &element{iri: node.Value, qname: in.qname, scope: in.scope, expressions: map[string]string{}}
+}
+
+// bodyDeclarationsText writes what an expression body declares, parameters and
+// members merged by the one sysx:memberIndex they were written in.
+func (d *decoder) bodyDeclarationsText(node rdf.Term, in *element) ([]string, error) {
+	type declaration struct {
+		term  rdf.Term
+		param bool
+	}
+	var declarations []declaration
+	for _, param := range d.graph.Objects(node, rdf.OpenSysML+xBodyParameter) {
+		declarations = append(declarations, declaration{term: param, param: true})
+	}
+	for _, member := range d.graph.Objects(node, rdf.OpenSysML+xBodyMember) {
+		declarations = append(declarations, declaration{term: member})
+	}
+	sort.SliceStable(declarations, func(i, j int) bool {
+		return intOf(d.graph, declarations[i].term, rdf.OpenSysML+xMemberIndex) < intOf(d.graph, declarations[j].term, rdf.OpenSysML+xMemberIndex)
+	})
+	var out []string
+	for _, decl := range declarations {
+		var (
+			text string
+			err  error
+		)
+		if decl.param {
+			text, err = d.bodyParameterText(decl.term, in)
+		} else {
+			text, err = d.bodyMemberText(decl.term, in)
+		}
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, text)
+	}
+	return out, nil
+}
+
+// bodyMemberText writes one declaration of an expression body: documentation
+// from its structure, anything else from its notation, or reports it by name.
+func (d *decoder) bodyMemberText(member rdf.Term, in *element) (string, error) {
+	if rdf.LocalName(d.graph.Type(member)) == mDocumentation {
+		return d.documentationHead(d.expressionElement(member, in)), nil
+	}
+	text, ok := d.graph.Lexical(member, rdf.OpenSysML+xSourceText)
+	if !ok || text == "" {
+		return "", &UnsupportedError{
+			What: fmt.Sprintf("the body member <%s>", member.Value),
+			Note: "a declaration inside an expression body is carried as its notation in sysx:sourceText, and this one has none; " + rdfLimitationsNote,
+		}
+	}
+	return strings.TrimSpace(text), nil
 }
 
 // operatorText rebuilds an operator expression, parenthesized so the notation
@@ -492,7 +706,11 @@ func (d *decoder) operatorText(node rdf.Term, in *element) (string, error) {
 	case hasType && len(args) == 1:
 		return "(" + args[0] + " " + operator + " " + typeArgument + ")", nil
 	case hasType && len(args) == 0:
-		return "(" + operator + " " + typeArgument + ")", nil
+		multiplicity, err := d.expressionMultiplicityText(node, in)
+		if err != nil {
+			return "", err
+		}
+		return "(" + operator + " " + typeArgument + multiplicity + ")", nil
 	case len(args) == 1:
 		return "(" + operator + " " + args[0] + ")", nil
 	case len(args) == 2:
@@ -575,6 +793,24 @@ func (d *decoder) expressionReference(node rdf.Term, property string, in *elemen
 		}
 	}
 	return d.referenceName(object, in)
+}
+
+// expressionMultiplicityText writes the `[lower..upper]` a cast states, its
+// bounds being expressions of their own.
+func (d *decoder) expressionMultiplicityText(node rdf.Term, in *element) (string, error) {
+	el := d.expressionElement(node, in)
+	for _, property := range []string{pLowerBound, pUpperBound} {
+		object, ok := d.graph.Object(node, rdf.SysML+property)
+		if !ok {
+			continue
+		}
+		text, err := d.expressionNodeText(object, in)
+		if err != nil {
+			return "", err
+		}
+		el.expressions[rdf.SysML+property] = text
+	}
+	return d.multiplicityText(el), nil
 }
 
 // expressionTypeArgument names the type a classification operator applies.
