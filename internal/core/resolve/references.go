@@ -491,6 +491,10 @@ func (c *refCollector) expr(scope *symbols.Scope, e ast.Node) {
 		for _, a := range v.Args {
 			c.expr(scope, a)
 		}
+		for _, na := range v.NamedArgs {
+			c.add(scope, na.Name)
+			c.expr(scope, na.Value)
+		}
 	case *ast.BodyExpr:
 		for i := range v.Params {
 			p := &v.Params[i]

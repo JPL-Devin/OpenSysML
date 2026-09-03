@@ -184,7 +184,7 @@ func (m *Model) compileConstructor(scope *symbols.Scope, e *ast.ConstructorExpr)
 	if !ok {
 		return unsupported(span, fmt.Sprintf("the constructed type %s does not resolve", qnText(e.Type)))
 	}
-	for _, arg := range e.Args {
+	for _, arg := range constructorArgs(e) {
 		if p := m.compileCondition(scope, arg); p.Op == symbols.FilterUnsupported {
 			return p
 		}

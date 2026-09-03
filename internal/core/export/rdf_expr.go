@@ -148,7 +148,7 @@ func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) 
 		// The 202407 rendering declares no ConstructorExpression, so `new` is a flag.
 		e.typed(subject, mInvocation)
 		e.graph.Add(subject, e.sysx(xIsConstructor), rdf.Bool(true))
-		e.invocation(subject, owner, n.Type, nil, n.Args, nil)
+		e.invocation(subject, owner, n.Type, nil, n.Args, n.NamedArgs)
 
 	case *ast.CollectExpr:
 		e.typed(subject, mCollect)

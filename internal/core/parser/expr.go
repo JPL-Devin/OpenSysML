@@ -489,7 +489,7 @@ func (p *Parser) parseConstructor(start int) ast.Node {
 	qn := p.parseQualifiedName()
 	c := &ast.ConstructorExpr{Type: qn}
 	if p.at(lexer.LParen) {
-		c.Args, _ = p.parseArgList()
+		c.Args, c.NamedArgs = p.parseArgList()
 	}
 	c.NodeSpan = p.spanFrom(start)
 	return c

@@ -1122,6 +1122,9 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 		for _, a := range v.Args {
 			r.resolveExpr(scope, a)
 		}
+		for _, na := range v.NamedArgs {
+			r.resolveExpr(scope, na.Value)
+		}
 	case *ast.BodyExpr:
 		for i := range v.Params {
 			p := &v.Params[i]

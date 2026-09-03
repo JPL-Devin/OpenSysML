@@ -729,6 +729,7 @@ func (e *Encoder) encodeFields(node ast.Node) {
 		e.base(&n.NodeBase)
 		e.node(n.Type)
 		e.nodes(n.Args)
+		e.namedArgs(n.NamedArgs)
 	case *ast.ControlFlowEdge:
 		e.base(&n.NodeBase)
 		e.node(n.Source)
@@ -1202,6 +1203,7 @@ func (d *Decoder) decodeFields(node ast.Node) {
 		d.base(&n.NodeBase)
 		n.Type = typed[*ast.QualifiedName](d)
 		n.Args = d.nodes()
+		n.NamedArgs = d.namedArgs()
 	case *ast.ControlFlowEdge:
 		d.base(&n.NodeBase)
 		n.Source = typed[*ast.QualifiedName](d)

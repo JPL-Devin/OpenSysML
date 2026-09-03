@@ -231,6 +231,9 @@ func (c *featureReferenceChecker) walkExpr(site refSite, scope *symbols.Scope, n
 		for _, a := range e.Args {
 			c.walkExpr(site, scope, a)
 		}
+		for _, na := range e.NamedArgs {
+			c.walkExpr(site, scope, na.Value)
+		}
 	case *ast.SequenceExpr:
 		for _, el := range e.Elements {
 			c.walkExpr(site, scope, el)

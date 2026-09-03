@@ -155,11 +155,12 @@ type SelectExpr struct {
 	Body    Node
 }
 
-// ConstructorExpr is `new Type ( args )`.
+// ConstructorExpr is `new Type ( args )`, with positional or named arguments.
 type ConstructorExpr struct {
 	NodeBase
-	Type *QualifiedName
-	Args []Node
+	Type      *QualifiedName
+	Args      []Node
+	NamedArgs []NamedArg
 }
 
 // BodyExpr is `{ (in param ;)* resultExpr }`.

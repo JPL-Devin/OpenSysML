@@ -412,6 +412,9 @@ func bodyScopesInExpr(scope *Scope, e ast.Node) {
 		for _, a := range v.Args {
 			bodyScopesInExpr(scope, a)
 		}
+		for _, na := range v.NamedArgs {
+			bodyScopesInExpr(scope, na.Value)
+		}
 	case *ast.BodyExpr:
 		for i := range v.Params {
 			bodyScopesInExpr(scope, v.Params[i].Value)

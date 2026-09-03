@@ -195,7 +195,7 @@ func dumpExpression(b *strings.Builder, n Node, depth int) bool {
 		return true
 	case *ConstructorExpr:
 		fmt.Fprintf(b, `(ConstructorExpr type=%q`, qnString(v.Type))
-		writeChildren(b, depth, v.Args)
+		writeConstructorArgs(b, depth, v)
 		return true
 	case *SequenceExpr:
 		b.WriteString(`(SequenceExpr`)
@@ -750,6 +750,22 @@ func invocationChildren(v *InvocationExpr) []Node {
 	}
 	kids = append(kids, v.Args...)
 	return kids
+}
+
+// writeConstructorArgs writes the arguments of `new T(…)`, each named one as
+// `(NamedArg name="n" …)` so a golden locks which feature the value fills.
+func writeConstructorArgs(b *strings.Builder, depth int, v *ConstructorExpr) {
+	for _, a := range v.Args {
+		b.WriteString("\n")
+		dumpNode(b, a, depth+1)
+	}
+	for _, na := range v.NamedArgs {
+		b.WriteString("\n")
+		indent(b, depth+1)
+		fmt.Fprintf(b, `(NamedArg name=%q`, qnString(na.Name))
+		writeChildren(b, depth+1, []Node{na.Value})
+	}
+	b.WriteString(")")
 }
 
 func visibilityString(v Visibility) string {
