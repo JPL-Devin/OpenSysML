@@ -237,6 +237,37 @@ func TestConstructorPositionsSkipCalcUsages(t *testing.T) {
 	assertOneConstructorDiag(t, src, constructorDiags(t, src), "3", "new Frame takes 2 argument(s), found 3")
 }
 
+// A label binds only a feature the constructor binds: one the type inherits from
+// its library kind is refused with the restatement that would admit it, and a
+// restatement, under its own name or redefining one, is bound as declared.
+func TestConstructorLabelMustNameConstructibleFeature(t *testing.T) {
+	const solid = `item def Solid :> Telemetry { attribute :>> isSolid = false; } `
+	const renamed = `item def Hollow :> Telemetry { attribute hollow redefines isSolid = false; } `
+	silent := map[string]string{
+		"restated":            solid + `send new Solid(frames = 1, isSolid = true) to ground;`,
+		"restated positional": solid + `send new Solid(true, 1, "x", 2) to ground;`,
+		"renamed":             renamed + `send new Hollow(hollow = true) to ground;`,
+	}
+	for name, send := range silent {
+		t.Run(name, func(t *testing.T) {
+			if got := constructorDiags(t, constructorModel(send)); len(got) != 0 {
+				t.Errorf("unexpected diagnostics: %+v", got)
+			}
+		})
+	}
+	reported := map[string]struct{ send, at, want string }{
+		"inherited descriptor": {send: `send new Telemetry(frames = 1, isSolid = true) to ground;`, at: "isSolid", want: "isSolid is not a feature a constructor of Telemetry binds: Item declares it for every Item; redefine it in Telemetry to bind it"},
+		"outside a send":       {send: `item t : Telemetry = new Telemetry(isSolid = true);`, at: "isSolid", want: "isSolid is not a feature a constructor of Telemetry binds"},
+		"renamed twice":        {send: renamed + `send new Hollow(hollow = true, Hollow::hollow = false) to ground;`, at: "Hollow::hollow", want: "hollow of Hollow is already bound by an earlier argument"},
+	}
+	for name, c := range reported {
+		t.Run(name, func(t *testing.T) {
+			src := constructorModel(c.send)
+			assertOneConstructorDiag(t, src, constructorDiags(t, src), c.at, c.want)
+		})
+	}
+}
+
 // A constructed library type is checked like any other: the features its own
 // library declares for it bind by position or label, the kind's descriptors not.
 func TestConstructorOfLibraryTypeIsChecked(t *testing.T) {

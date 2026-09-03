@@ -191,31 +191,51 @@ func TestSendNewRejectsExcessPositionalArgumentsAtSend(t *testing.T) {
 	}
 }
 
-// A label may name a feature the constructed type inherits from its library
-// kind, which holds no position: the accepted object carries the value.
-func TestSendNewBindsInheritedLibraryFeatureByLabel(t *testing.T) {
+// A label names only a feature the constructor binds: one the constructed type
+// inherits from its library kind holds no position and is refused at the send,
+// while a restatement of it in the type is bound as any declared feature.
+func TestSendNewLabelMustNameConstructibleFeature(t *testing.T) {
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
 		private import ScalarValues::*;
 		item def Box { attribute w : Integer; }
-		action pipeline {
+		item def Solid :> Box { attribute :>> isSolid = false; }
+		action inherited {
+			first start;
+			action sender { send new Box(w = 7, isSolid = true) to reader; }
+			action reader accept b : Box;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
+		}
+		action restated {
 			attribute got : Integer = 0;
 			attribute solid : Boolean = false;
 			first start;
-			action sender { send new Box(w = 7, isSolid = true) to reader; }
-			action reader accept b : Box { assign got := b.w; assign solid := b.isSolid; }
+			action sender { send new Solid(w = 7, isSolid = true) to reader; }
+			action reader accept b : Solid { assign got := b.w; assign solid := b.isSolid; }
 			done;
 			succession first start then sender;
 			succession first sender then reader;
 			succession first reader then done;
 		}
 	}`))
-	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+	root := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(root, "inherited", ast.DefAction)
 	if sym == nil {
-		t.Fatal("action pipeline not found")
+		t.Fatal("action inherited not found")
+	}
+	const want = "isSolid is not a feature a constructor of Box binds"
+	if _, err := ctx.ExecuteAction(sym); err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("inherited: error %v, want %q", err, want)
+	}
+	sym = findSymbolByName(root, "restated", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action restated not found")
 	}
 	outputs, err := ctx.ExecuteAction(sym)
 	if err != nil {
-		t.Fatalf("execute: %v", err)
+		t.Fatalf("restated: %v", err)
 	}
 	assertIntOutput(t, outputs, "got", 7)
 	if v := outputs["solid"]; v.Kind != ValConst || !v.Const.Bool {

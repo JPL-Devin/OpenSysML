@@ -1207,7 +1207,7 @@ func (e *EvalContext) constructorLabel(scope *symbols.Scope, signal *symbols.Sym
 	}
 	slot := e.ctx.model.ConstructibleFeatureFor(signal, shape[i].Declared)
 	if slot == nil {
-		slot = shape[i].Declared
+		return "", fmt.Errorf("%s is not a feature a constructor of %s binds", label, signal.Name)
 	}
 	name := shape[i].Name
 	if earlier, twice := bound[slot]; twice {
