@@ -289,11 +289,11 @@ func (ctx *Context) materializeBehavingParts(inst *Instance) error {
 
 // requiredPartType is the type of the objects a composite feature is required to
 // hold, or nil when it may hold none: an optional part (finite lower bound 0) or
-// one whose multiplicity is unknown.
+// one whose lower bound is unknown.
 func (ctx *Context) requiredPartType(feat *EffectiveFeature) *symbols.Symbol {
 	composite := ctx.CompositeTypeOf(feat)
 	mult := feat.Multiplicity
-	if composite == nil || !mult.Upper.Known || !mult.Lower.Known {
+	if composite == nil || !mult.Lower.Known {
 		return nil
 	}
 	if !mult.Lower.Infinite && mult.Lower.Value == 0 {

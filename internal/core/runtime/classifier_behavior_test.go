@@ -1064,6 +1064,24 @@ func TestOptionalBehavingPartIsNotCreatedWithItsHolder(t *testing.T) {
 	if _, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "holder")); !errors.Is(err, ErrMultiplicityViolation) {
 		t.Errorf("creating a holder of an unbounded required part: got %v, want ErrMultiplicityViolation", err)
 	}
+
+	// A required part whose upper bound cannot be determined is not optional
+	// either: it fails its holder as reading it would.
+	src = `
+		package test {
+			part def Ticker {
+				exhibit state ticking { entry; then on; state on; }
+			}
+			part def Holder { part some : Ticker [1..n]; }
+			part holder : Holder;
+		}
+	`
+	model, resolver, root = parseAndBuildModel(t, src)
+	pkg = resolveSymbol(t, root, "test")
+	ctx = NewContext(model, resolver, 10000)
+	if _, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "holder")); err == nil || !strings.Contains(err.Error(), "unknown multiplicity") {
+		t.Errorf("creating a holder of a required part of unknown upper bound: got %v, want an unknown-multiplicity error", err)
+	}
 }
 
 // A behavior started by a creation that names its own usage reaches the object
