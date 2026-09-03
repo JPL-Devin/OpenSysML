@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -17,7 +18,10 @@ elmt:CompositeMultiplicity
     sysml:ownedMembership elmt:CompositeMultiplicity__Wheel_om, elmt:CompositeMultiplicity__Lugbolt_om, elmt:CompositeMultiplicity__Vehicle_om, elmt:CompositeMultiplicity__Car_om ;
     sysml:ownedRelationship elmt:CompositeMultiplicity__Wheel_om, elmt:CompositeMultiplicity__Lugbolt_om, elmt:CompositeMultiplicity__Vehicle_om, elmt:CompositeMultiplicity__Car_om ;
     sysx:sourceText "package CompositeMultiplicity {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"CompositeMultiplicity__Wheel\"},{\"@id\":\"CompositeMultiplicity__Lugbolt\"},{\"@id\":\"CompositeMultiplicity__Vehicle\"},{\"@id\":\"CompositeMultiplicity__Car\"}]" ;
+    json:ownedMembership "[{\"@id\":\"CompositeMultiplicity__Wheel_om\"},{\"@id\":\"CompositeMultiplicity__Lugbolt_om\"},{\"@id\":\"CompositeMultiplicity__Vehicle_om\"},{\"@id\":\"CompositeMultiplicity__Car_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"CompositeMultiplicity__Wheel_om\"},{\"@id\":\"CompositeMultiplicity__Lugbolt_om\"},{\"@id\":\"CompositeMultiplicity__Vehicle_om\"},{\"@id\":\"CompositeMultiplicity__Car_om\"}]" .
 
 elmt:CompositeMultiplicity__Wheel
     a sysml:ClassUsage ;
@@ -189,7 +193,10 @@ elmt:CompositeMultiplicity__Car
     sysml:ownedMembership elmt:CompositeMultiplicity__Car__frontWheel_om, elmt:CompositeMultiplicity__Car__rearWheel_om ;
     sysml:ownedRelationship elmt:CompositeMultiplicity__Car__frontWheel_om, elmt:CompositeMultiplicity__Car__rearWheel_om ;
     sysx:sourceText "    class Car specializes Vehicle {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"CompositeMultiplicity__Car__frontWheel\"},{\"@id\":\"CompositeMultiplicity__Car__rearWheel\"}]" ;
+    json:ownedMembership "[{\"@id\":\"CompositeMultiplicity__Car__frontWheel_om\"},{\"@id\":\"CompositeMultiplicity__Car__rearWheel_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"CompositeMultiplicity__Car__frontWheel_om\"},{\"@id\":\"CompositeMultiplicity__Car__rearWheel_om\"}]" .
 
 elmt:CompositeMultiplicity__Car_om
     a sysml:OwningMembership ;

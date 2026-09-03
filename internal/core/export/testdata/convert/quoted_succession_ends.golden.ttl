@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -17,7 +18,10 @@ elmt:QuotedSuccessionEnds
     sysml:ownedMembership elmt:QuotedSuccessionEnds__provide_20power_om, elmt:QuotedSuccessionEnds__drive_om ;
     sysml:ownedRelationship elmt:QuotedSuccessionEnds__provide_20power_om, elmt:QuotedSuccessionEnds__drive_om ;
     sysx:sourceText "package QuotedSuccessionEnds {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"QuotedSuccessionEnds__provide_20power\"},{\"@id\":\"QuotedSuccessionEnds__drive\"}]" ;
+    json:ownedMembership "[{\"@id\":\"QuotedSuccessionEnds__provide_20power_om\"},{\"@id\":\"QuotedSuccessionEnds__drive_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"QuotedSuccessionEnds__provide_20power_om\"},{\"@id\":\"QuotedSuccessionEnds__drive_om\"}]" .
 
 elmt:QuotedSuccessionEnds__provide_20power
     a sysml:ActionDefinition ;
@@ -36,7 +40,12 @@ elmt:QuotedSuccessionEnds__provide_20power
     sysml:ownedFeature elmt:QuotedSuccessionEnds__provide_20power__engineStarted, elmt:QuotedSuccessionEnds__provide_20power__generate_20torque, elmt:QuotedSuccessionEnds__provide_20power__amplify_20torque, elmt:QuotedSuccessionEnds__provide_20power__s ;
     sysml:ownedFeatureMembership elmt:QuotedSuccessionEnds__provide_20power__engineStarted_om, elmt:QuotedSuccessionEnds__provide_20power__generate_20torque_om, elmt:QuotedSuccessionEnds__provide_20power__amplify_20torque_om, elmt:QuotedSuccessionEnds__provide_20power__s_om ;
     sysx:sourceText "    action def 'provide power' {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"QuotedSuccessionEnds__provide_20power__engineStarted\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power__generate_20torque\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power__amplify_20torque\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power___403\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power___404\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power___405\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power__s\"}]" ;
+    json:ownedMembership "[{\"@id\":\"QuotedSuccessionEnds__provide_20power__engineStarted_om\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power__generate_20torque_om\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power__amplify_20torque_om\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power___403_om\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power___404_om\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power___405_om\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power__s_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"QuotedSuccessionEnds__provide_20power__engineStarted_om\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power__generate_20torque_om\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power__amplify_20torque_om\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power___403_om\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power___404_om\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power___405_om\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power__s_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"QuotedSuccessionEnds__provide_20power__engineStarted\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power__generate_20torque\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power__amplify_20torque\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power__s\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"QuotedSuccessionEnds__provide_20power__engineStarted_om\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power__generate_20torque_om\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power__amplify_20torque_om\"},{\"@id\":\"QuotedSuccessionEnds__provide_20power__s_om\"}]" .
 
 elmt:QuotedSuccessionEnds__provide_20power_om
     a sysml:OwningMembership ;
@@ -250,7 +259,12 @@ elmt:QuotedSuccessionEnds__drive
     sysml:ownedFeature elmt:QuotedSuccessionEnds__drive__enter_20vehicle, elmt:QuotedSuccessionEnds__drive___401, elmt:QuotedSuccessionEnds__drive__start_20engine, elmt:QuotedSuccessionEnds__drive___403, elmt:QuotedSuccessionEnds__drive__drive_20vehicle ;
     sysml:ownedFeatureMembership elmt:QuotedSuccessionEnds__drive__enter_20vehicle_om, elmt:QuotedSuccessionEnds__drive___401_om, elmt:QuotedSuccessionEnds__drive__start_20engine_om, elmt:QuotedSuccessionEnds__drive___403_om, elmt:QuotedSuccessionEnds__drive__drive_20vehicle_om ;
     sysx:sourceText "    action def 'drive' {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"QuotedSuccessionEnds__drive__enter_20vehicle\"},{\"@id\":\"QuotedSuccessionEnds__drive___401\"},{\"@id\":\"QuotedSuccessionEnds__drive__start_20engine\"},{\"@id\":\"QuotedSuccessionEnds__drive___403\"},{\"@id\":\"QuotedSuccessionEnds__drive__drive_20vehicle\"}]" ;
+    json:ownedMembership "[{\"@id\":\"QuotedSuccessionEnds__drive__enter_20vehicle_om\"},{\"@id\":\"QuotedSuccessionEnds__drive___401_om\"},{\"@id\":\"QuotedSuccessionEnds__drive__start_20engine_om\"},{\"@id\":\"QuotedSuccessionEnds__drive___403_om\"},{\"@id\":\"QuotedSuccessionEnds__drive__drive_20vehicle_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"QuotedSuccessionEnds__drive__enter_20vehicle_om\"},{\"@id\":\"QuotedSuccessionEnds__drive___401_om\"},{\"@id\":\"QuotedSuccessionEnds__drive__start_20engine_om\"},{\"@id\":\"QuotedSuccessionEnds__drive___403_om\"},{\"@id\":\"QuotedSuccessionEnds__drive__drive_20vehicle_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"QuotedSuccessionEnds__drive__enter_20vehicle\"},{\"@id\":\"QuotedSuccessionEnds__drive___401\"},{\"@id\":\"QuotedSuccessionEnds__drive__start_20engine\"},{\"@id\":\"QuotedSuccessionEnds__drive___403\"},{\"@id\":\"QuotedSuccessionEnds__drive__drive_20vehicle\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"QuotedSuccessionEnds__drive__enter_20vehicle_om\"},{\"@id\":\"QuotedSuccessionEnds__drive___401_om\"},{\"@id\":\"QuotedSuccessionEnds__drive__start_20engine_om\"},{\"@id\":\"QuotedSuccessionEnds__drive___403_om\"},{\"@id\":\"QuotedSuccessionEnds__drive__drive_20vehicle_om\"}]" .
 
 elmt:QuotedSuccessionEnds__drive_om
     a sysml:OwningMembership ;

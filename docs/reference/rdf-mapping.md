@@ -31,15 +31,13 @@ report:
   `requireValidId` (`[a-zA-Z0-9_-]+`). Every element carries the
   `sysml:elementId` that paged listing and query select use, and ownership is
   written as the memberships and owner references the roots endpoint filters on.
-  A round trip through a running Flexo MMS stack, measured before that work was
-  done, delivered every element of the reference fixture but only 86 of its 142
-  properties, while the same model posted through the service's own commit path
-  lost nothing. What no test here shows yet is a graph carrying the current output
-  loaded into a live service and read back; that is separate work. Known
-  mismatches remain: the reader ignores predicates outside `sysml:` and
-  `urn:sysmlv2:annotation:json:`, so the 56 `sysx:` properties of that fixture
-  do not survive the path, and a standard property carrying more than one value
-  is skipped because it has no JSON annotation. The measurement lives in
+  A collection-valued property is written twice, as the typed triples and as the
+  JSON annotation literal that service reads a collection from
+  ([Collections](#collections)). A round trip through a running Flexo MMS stack
+  delivers every element of the reference fixture and every one of its standard
+  properties, the multi-valued ones included; what it loses is the `sysx:`
+  properties, since the reader ignores predicates outside `sysml:` and
+  `urn:sysmlv2:annotation:json:`. The measurement lives in
   `internal/interop/flexo`, an opt-in gate described in
   `.agents/skills/flexo-interop`, and its committed report records what changes
   as the remaining work lands.
@@ -60,6 +58,7 @@ and `experimental_notice`, which the Python client raises as an
 | `elmt:`  | `urn:sysmlv2:element:`                        | The elements of the converted model |
 | `sysx:`  | `urn:opensysml:sysml:`                        | The few properties the metamodel does not define |
 | `expr:`  | `urn:opensysml:expr:`                         | The expressions an element's positions hold, see [Expressions](#expressions) |
+| `json:`  | `urn:sysmlv2:annotation:json:`                | One JSON literal per collection-valued property, see [Collections](#collections) |
 | `rdf:`, `xsd:` | the standard RDF and XML Schema namespaces | `rdf:type`, literal datatypes |
 
 The `sysml:` vocabulary and the `elmt:` element base match the ones the
@@ -69,9 +68,10 @@ element's `@id` from the substring after the final `:`, and `requireValidId`
 permits only `[a-zA-Z0-9_-]+`. OpenSysML's encoded element ids satisfy both, and
 so do the `expr:` node ids. (A node's id used to contain a `.`, which that service
 refused to read; the position is now joined with `_p` and encoded instead.)
-Other mismatches remain: the reader ignores predicates outside `sysml:` and
-`urn:sysmlv2:annotation:json:`, so `sysx:` triples do not survive that path, and
-collection properties carry no JSON annotation. See
+The `json:` annotation base is that service's `ANNOTATION_JSON` (`Namespaces.kt`),
+the one its reader takes a collection from ([Collections](#collections)). One
+mismatch remains: the reader ignores predicates outside `sysml:` and
+`urn:sysmlv2:annotation:json:`, so `sysx:` triples do not survive that path. See
 [Status](#status-experimental).
 
 OpenSysML's own additions live in a separate `sysx:` namespace so a consumer can
@@ -386,6 +386,95 @@ elmt:Demo__Vehicle
 Tests: `ownership_graph_test.go` (element ids, roots, membership wiring, the
 tree coming back from the memberships with `sysx:sourceText` and
 `sysml:owningNamespace` stripped, the compact shape, malformed memberships).
+
+### Collections
+
+A property with several values is stated twice: as one typed `sysml:` triple per
+value, which is what RDF states, and as one literal on the same key in the
+`json:` namespace holding the whole collection as a JSON array:
+
+```
+package Demo { part def A; part def B; part def C specializes A, B; }
+```
+
+```turtle
+elmt:Demo
+    sysml:ownedMember elmt:Demo__A, elmt:Demo__B, elmt:Demo__C ;
+    json:ownedMember "[{\"@id\":\"Demo__A\"},{\"@id\":\"Demo__B\"},{\"@id\":\"Demo__C\"}]" .
+
+elmt:Demo__C
+    sysml:specializes elmt:Demo__A, elmt:Demo__B ;
+    json:specializes "[{\"@id\":\"Demo__A\"},{\"@id\":\"Demo__B\"}]" .
+```
+
+The second spelling exists because of how the
+[Flexo MMS SysML v2 service](https://github.com/Open-MBEE/flexo-mms-sysmlv2)
+reads a graph. `ElementApi.extractModelElementToJson` indexes a subject's
+outgoing triples by predicate; a `sysml:` predicate with more than one object is
+an array to it, and it **skips** the typed triples and reads the property from
+the literal at `urn:sysmlv2:annotation:json:<key>` instead, which must be
+exactly one RDF literal, parsed as JSON. Its own commit path (`CommitApi.kt`)
+stores a posted array both ways: one JSON annotation literal holding the array,
+plus a typed triple per member — an IRI for a `{"@id": …}` member, a typed
+literal for a primitive. The mapping writes what that path writes, so a graph
+OpenSysML produces reads back through that service with its collections intact;
+the live measurement is in `internal/interop/flexo/testdata/interop_expected.txt`.
+
+The JSON shape is the commit path's:
+
+- a **reference** is `{"@id": "<id>"}`, the id being the part of the IRI after
+  the final `:`, for elements and expression nodes alike;
+- a **primitive** is a JSON string, boolean or number: `xsd:boolean` as
+  `true`/`false`, `xsd:integer`, `xsd:decimal`, `xsd:double` and `xsd:float` as
+  numbers, every other literal as a string of its lexical form;
+- the array is compact, without HTML escaping, and its **order is the triple
+  order** of the graph, which the mapping writes deterministically (declaration
+  order for members, source order for a head's targets), so the same model
+  yields the same literal.
+
+**Which properties carry it.** Every `sysml:` property a subject states more
+than once, and only those; a single-valued property is unchanged. Which
+properties that is follows from the mapping rather than from a list: the
+ownership collections `ownedMember`, `ownedMembership`, `ownedRelationship`,
+`ownedFeature`, `ownedFeatureMembership`, `ownedImport`, and on a relationship
+element that itself owns members (an objective, a requirement's `satisfy`) the
+`ownedRelatedElement`, `memberElement`, `ownedMemberElement` and
+`ownedMemberFeature` it states per member; a head's
+relationships when it names several targets — `type`, `specializes`, `subsets`,
+`redefines`, `references`, `disjointFrom`, `intersects`, `unions`, `differences`,
+`chains`; a dependency's `supplier`; and an expression node's `argument`
+([Expressions](#expressions)). A relationship the head states by a name the
+model does not resolve is a plain literal in the typed triples and a JSON string
+in the annotation, so one collection can mix references and strings. Over the
+corpora under `examples/` these are the keys that occur; a model that states
+another property twice gets the annotation on that property too.
+
+**Reading a graph back** accepts either spelling or both. A collection stated by
+the annotation alone — what that service writes back for a graph it holds —
+is materialized as typed triples in the annotation's order before decoding, a
+`{"@id": …}` member resolving to the subject with that id or, absent one,
+standing as an element IRI that dangles as any other unresolved reference does.
+A string member reads as a plain literal, since the annotation carries no
+datatype: a head target written as an expression comes back from the annotation
+alone as a name, where the typed triple would have carried `sysx:Expression`.
+A collection stated by typed triples alone — a graph an earlier release or
+another tool wrote — reads as before. Where both are present they must agree as
+multisets, typed triples carrying no order, and the annotation's order is the
+one the decoder takes; two spellings that disagree are refused with an
+`rdf.CollectionConflictError` naming the subject and the key, rather than one of
+them being picked. An annotation that is not one literal, or not a JSON array
+of references and primitives, is refused naming the subject and the key.
+
+The sync (`-sync-diff`) compares the typed triples and treats the annotation as
+their restatement, reconciling it first; the service's commit path regenerates
+it from the array the sync posts. Minting ids into a model rewrites the
+references inside the annotation together with the typed ones.
+
+Code: `rdf.AnnotateCollections` (encoder pass), `rdf.ReconcileCollections`
+(decoder pass), `rdf.CollectionJSON`/`rdf.ParseCollectionJSON` (the shape).
+Tests: `internal/core/rdf/annotation_test.go`,
+`internal/core/export/rdf_collections_test.go`,
+`internal/interop/reposync/diff_test.go`.
 
 ## Expressions
 

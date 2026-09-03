@@ -1,4 +1,5 @@
 @prefix elmt: <urn:sysmlv2:element:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -33,7 +34,10 @@ elmt:Outer__Inner
     sysml:ownedMembership elmt:Outer__Inner__Widget_om, elmt:Outer__Inner__Sub_om ;
     sysml:ownedRelationship elmt:Outer__Inner__Widget_om, elmt:Outer__Inner__Sub_om ;
     sysx:sourceText "    package Inner {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Outer__Inner__Widget\"},{\"@id\":\"Outer__Inner__Sub\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Outer__Inner__Widget_om\"},{\"@id\":\"Outer__Inner__Sub_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Outer__Inner__Widget_om\"},{\"@id\":\"Outer__Inner__Sub_om\"}]" .
 
 elmt:Outer__Inner_om
     a sysml:OwningMembership ;

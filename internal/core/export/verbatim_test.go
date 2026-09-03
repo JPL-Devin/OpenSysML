@@ -270,17 +270,24 @@ func TestPositionalSuccessionEditsRebuildTheirTarget(t *testing.T) {
 	}
 }
 
-// withoutMember drops the given member of P from a Turtle document, its own
-// members with it, as an edit to the graph after export would, leaving the
-// other members numbered as before.
+// withoutMember drops the given member of P from a Turtle document, its own members
+// with it, from the owner's typed triples and JSON annotations alike; the rest keep their numbers.
 func withoutMember(t *testing.T, turtle []byte, member string) []byte {
 	t.Helper()
+	id := strings.TrimPrefix(member, "elmt:")
 	var kept []string
 	for _, line := range strings.Split(string(turtle), "\n") {
 		if strings.Contains(line, member) && !strings.HasPrefix(line, member) {
 			for _, ref := range []string{member + "_om", member} {
 				line = strings.ReplaceAll(line, ", "+ref, "")
 				line = strings.ReplaceAll(line, ref+", ", "")
+			}
+		}
+		if strings.HasPrefix(strings.TrimSpace(line), "json:") {
+			for _, ref := range []string{id + "_om", id} {
+				entry := `{\"@id\":\"` + ref + `\"}`
+				line = strings.ReplaceAll(line, entry+",", "")
+				line = strings.ReplaceAll(line, ","+entry, "")
 			}
 		}
 		kept = append(kept, line)

@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -17,7 +18,10 @@ elmt:Bounds
     sysml:ownedMembership elmt:Bounds__Vehicle_om, elmt:Bounds__Fleet_om ;
     sysml:ownedRelationship elmt:Bounds__Vehicle_om, elmt:Bounds__Fleet_om ;
     sysx:sourceText "package Bounds {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Bounds__Vehicle\"},{\"@id\":\"Bounds__Fleet\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Bounds__Vehicle_om\"},{\"@id\":\"Bounds__Fleet_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Bounds__Vehicle_om\"},{\"@id\":\"Bounds__Fleet_om\"}]" .
 
 elmt:Bounds__Vehicle
     a sysml:PartDefinition ;
@@ -59,7 +63,12 @@ elmt:Bounds__Fleet
     sysml:ownedFeature elmt:Bounds__Fleet__exact, elmt:Bounds__Fleet__range, elmt:Bounds__Fleet__many, elmt:Bounds__Fleet__loose, elmt:Bounds__Fleet__shared, elmt:Bounds__Fleet__owned, elmt:Bounds__Fleet__count ;
     sysml:ownedFeatureMembership elmt:Bounds__Fleet__exact_om, elmt:Bounds__Fleet__range_om, elmt:Bounds__Fleet__many_om, elmt:Bounds__Fleet__loose_om, elmt:Bounds__Fleet__shared_om, elmt:Bounds__Fleet__owned_om, elmt:Bounds__Fleet__count_om ;
     sysx:sourceText "    part def Fleet {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Bounds__Fleet__exact\"},{\"@id\":\"Bounds__Fleet__range\"},{\"@id\":\"Bounds__Fleet__many\"},{\"@id\":\"Bounds__Fleet__loose\"},{\"@id\":\"Bounds__Fleet__shared\"},{\"@id\":\"Bounds__Fleet__owned\"},{\"@id\":\"Bounds__Fleet__count\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Bounds__Fleet__exact_om\"},{\"@id\":\"Bounds__Fleet__range_om\"},{\"@id\":\"Bounds__Fleet__many_om\"},{\"@id\":\"Bounds__Fleet__loose_om\"},{\"@id\":\"Bounds__Fleet__shared_om\"},{\"@id\":\"Bounds__Fleet__owned_om\"},{\"@id\":\"Bounds__Fleet__count_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Bounds__Fleet__exact_om\"},{\"@id\":\"Bounds__Fleet__range_om\"},{\"@id\":\"Bounds__Fleet__many_om\"},{\"@id\":\"Bounds__Fleet__loose_om\"},{\"@id\":\"Bounds__Fleet__shared_om\"},{\"@id\":\"Bounds__Fleet__owned_om\"},{\"@id\":\"Bounds__Fleet__count_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Bounds__Fleet__exact\"},{\"@id\":\"Bounds__Fleet__range\"},{\"@id\":\"Bounds__Fleet__many\"},{\"@id\":\"Bounds__Fleet__loose\"},{\"@id\":\"Bounds__Fleet__shared\"},{\"@id\":\"Bounds__Fleet__owned\"},{\"@id\":\"Bounds__Fleet__count\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Bounds__Fleet__exact_om\"},{\"@id\":\"Bounds__Fleet__range_om\"},{\"@id\":\"Bounds__Fleet__many_om\"},{\"@id\":\"Bounds__Fleet__loose_om\"},{\"@id\":\"Bounds__Fleet__shared_om\"},{\"@id\":\"Bounds__Fleet__owned_om\"},{\"@id\":\"Bounds__Fleet__count_om\"}]" .
 
 elmt:Bounds__Fleet_om
     a sysml:OwningMembership ;

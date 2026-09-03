@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -17,7 +18,10 @@ elmt:ReferenceSubsets
     sysml:ownedMembership elmt:ReferenceSubsets__Vehicle_om, elmt:ReferenceSubsets__vehicle_5fc1_om, elmt:ReferenceSubsets__Person_om, elmt:ReferenceSubsets__design_om ;
     sysml:ownedRelationship elmt:ReferenceSubsets__Vehicle_om, elmt:ReferenceSubsets__vehicle_5fc1_om, elmt:ReferenceSubsets__Person_om, elmt:ReferenceSubsets__design_om ;
     sysx:sourceText "package ReferenceSubsets {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"ReferenceSubsets__Vehicle\"},{\"@id\":\"ReferenceSubsets__vehicle_5fc1\"},{\"@id\":\"ReferenceSubsets__Person\"},{\"@id\":\"ReferenceSubsets__design\"}]" ;
+    json:ownedMembership "[{\"@id\":\"ReferenceSubsets__Vehicle_om\"},{\"@id\":\"ReferenceSubsets__vehicle_5fc1_om\"},{\"@id\":\"ReferenceSubsets__Person_om\"},{\"@id\":\"ReferenceSubsets__design_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"ReferenceSubsets__Vehicle_om\"},{\"@id\":\"ReferenceSubsets__vehicle_5fc1_om\"},{\"@id\":\"ReferenceSubsets__Person_om\"},{\"@id\":\"ReferenceSubsets__design_om\"}]" .
 
 elmt:ReferenceSubsets__Vehicle
     a sysml:PartDefinition ;
@@ -106,7 +110,12 @@ elmt:ReferenceSubsets__design
     sysml:ownedFeature elmt:ReferenceSubsets__design__vehicle_5fdesign, elmt:ReferenceSubsets__design__spare, elmt:ReferenceSubsets__design__spare_20wheel, elmt:ReferenceSubsets__design__fleet, elmt:ReferenceSubsets__design__presidentOfCountry ;
     sysml:ownedFeatureMembership elmt:ReferenceSubsets__design__vehicle_5fdesign_om, elmt:ReferenceSubsets__design__spare_om, elmt:ReferenceSubsets__design__spare_20wheel_om, elmt:ReferenceSubsets__design__fleet_om, elmt:ReferenceSubsets__design__presidentOfCountry_om ;
     sysx:sourceText "    part design {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"ReferenceSubsets__design__vehicle_5fdesign\"},{\"@id\":\"ReferenceSubsets__design__spare\"},{\"@id\":\"ReferenceSubsets__design__spare_20wheel\"},{\"@id\":\"ReferenceSubsets__design__fleet\"},{\"@id\":\"ReferenceSubsets__design__presidentOfCountry\"}]" ;
+    json:ownedMembership "[{\"@id\":\"ReferenceSubsets__design__vehicle_5fdesign_om\"},{\"@id\":\"ReferenceSubsets__design__spare_om\"},{\"@id\":\"ReferenceSubsets__design__spare_20wheel_om\"},{\"@id\":\"ReferenceSubsets__design__fleet_om\"},{\"@id\":\"ReferenceSubsets__design__presidentOfCountry_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"ReferenceSubsets__design__vehicle_5fdesign_om\"},{\"@id\":\"ReferenceSubsets__design__spare_om\"},{\"@id\":\"ReferenceSubsets__design__spare_20wheel_om\"},{\"@id\":\"ReferenceSubsets__design__fleet_om\"},{\"@id\":\"ReferenceSubsets__design__presidentOfCountry_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"ReferenceSubsets__design__vehicle_5fdesign\"},{\"@id\":\"ReferenceSubsets__design__spare\"},{\"@id\":\"ReferenceSubsets__design__spare_20wheel\"},{\"@id\":\"ReferenceSubsets__design__fleet\"},{\"@id\":\"ReferenceSubsets__design__presidentOfCountry\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"ReferenceSubsets__design__vehicle_5fdesign_om\"},{\"@id\":\"ReferenceSubsets__design__spare_om\"},{\"@id\":\"ReferenceSubsets__design__spare_20wheel_om\"},{\"@id\":\"ReferenceSubsets__design__fleet_om\"},{\"@id\":\"ReferenceSubsets__design__presidentOfCountry_om\"}]" .
 
 elmt:ReferenceSubsets__design_om
     a sysml:OwningMembership ;

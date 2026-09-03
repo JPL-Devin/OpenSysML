@@ -334,8 +334,13 @@ func identityPredicate(iri string) bool {
 // viewOf indexes a graph by effective element id, reducing each subject to the
 // view the comparison works on. The full IRI — scope-qualified or not — only
 // carries the id; two subjects sharing one id in one graph is an error. It also
-// tallies the properties the representation has no place for.
+// tallies the properties the representation has no place for; a collection's
+// JSON annotation restates typed triples and is reconciled, not tallied.
 func viewOf(g *rdf.Graph, rep Representation) (map[string]*subjectView, []UncarriedProperty, error) {
+	g, err := rdf.ReconcileCollections(g)
+	if err != nil {
+		return nil, nil, err
+	}
 	views := map[string]*subjectView{}
 	uncarried := map[string]int{}
 	for _, triple := range g.Triples() {
@@ -360,7 +365,7 @@ func viewOf(g *rdf.Graph, rep Representation) (map[string]*subjectView, []Uncarr
 			view.content = append(view.content, triple)
 			continue
 		}
-		if identityPredicate(triple.Predicate.Value) {
+		if identityPredicate(triple.Predicate.Value) || rdf.IsAnnotationJSON(triple.Predicate.Value) {
 			continue
 		}
 		if rep != nil {

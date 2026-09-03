@@ -20,7 +20,7 @@ revision	identity_model_revised.sysml
 [apply.initial]
 base	no
 diff	creates=15	updates=0	deletes=0	conflicts=0
-uncarried	sysx:hasBody,sysx:memberIndex,sysx:sourceText
+uncarried	sysx:hasBody,sysx:memberIndex,sysx:sourceLanguage,sysx:sourceTail,sysx:sourceText
 refused	-
 applied	yes
 commits	1
@@ -51,7 +51,7 @@ create	IdentityInterop__Rover_om	OwningMembership
 [apply.revision]
 base	yes
 diff	creates=5	updates=3	deletes=7	conflicts=0
-uncarried	sysx:hasBody,sysx:memberIndex,sysx:sourceText
+uncarried	sysx:hasBody,sysx:memberIndex,sysx:sourceLanguage,sysx:sourceTail,sysx:sourceText
 refused	7 delete(s) need explicit confirmation before this change set can be applied
 applied	yes
 commits	2
@@ -95,7 +95,7 @@ IdentityInterop__Component__mass_pvalue	value=1.5
 [apply.repository-changed]
 base	yes
 diff	creates=0	updates=0	deletes=0	conflicts=1
-uncarried	sysx:hasBody,sysx:memberIndex,sysx:sourceText
+uncarried	sysx:hasBody,sysx:memberIndex,sysx:sourceLanguage,sysx:sourceTail,sysx:sourceText
 refused	1 conflict(s) must be resolved before this change set can be applied
 applied	no
 commits	3

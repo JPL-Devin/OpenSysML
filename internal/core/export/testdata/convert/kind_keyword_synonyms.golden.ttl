@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -17,7 +18,10 @@ elmt:Synonyms
     sysml:ownedMembership elmt:Synonyms__Temperature_om, elmt:Synonyms__reading_om, elmt:Synonyms__Average_om, elmt:Synonyms__base_om, elmt:Synonyms__atStart_om, elmt:Synonyms__during_om, elmt:Synonyms__note_om, elmt:Synonyms___407_om, elmt:Synonyms__Drive_om, elmt:Synonyms__Safe_om, elmt:Synonyms__Idle_om, elmt:Synonyms__Vehicle_om, elmt:Synonyms__AsTree_om, elmt:Synonyms__Dashboard_om ;
     sysml:ownedRelationship elmt:Synonyms__Temperature_om, elmt:Synonyms__reading_om, elmt:Synonyms__Average_om, elmt:Synonyms__base_om, elmt:Synonyms__atStart_om, elmt:Synonyms__during_om, elmt:Synonyms__note_om, elmt:Synonyms___407_om, elmt:Synonyms__Drive_om, elmt:Synonyms__Safe_om, elmt:Synonyms__Idle_om, elmt:Synonyms__Vehicle_om, elmt:Synonyms__AsTree_om, elmt:Synonyms__Dashboard_om ;
     sysx:sourceText "package Synonyms {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Synonyms__Temperature\"},{\"@id\":\"Synonyms__reading\"},{\"@id\":\"Synonyms__Average\"},{\"@id\":\"Synonyms__base\"},{\"@id\":\"Synonyms__atStart\"},{\"@id\":\"Synonyms__during\"},{\"@id\":\"Synonyms__note\"},{\"@id\":\"Synonyms___407\"},{\"@id\":\"Synonyms__Drive\"},{\"@id\":\"Synonyms__Safe\"},{\"@id\":\"Synonyms__Idle\"},{\"@id\":\"Synonyms__Vehicle\"},{\"@id\":\"Synonyms__AsTree\"},{\"@id\":\"Synonyms__Dashboard\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Synonyms__Temperature_om\"},{\"@id\":\"Synonyms__reading_om\"},{\"@id\":\"Synonyms__Average_om\"},{\"@id\":\"Synonyms__base_om\"},{\"@id\":\"Synonyms__atStart_om\"},{\"@id\":\"Synonyms__during_om\"},{\"@id\":\"Synonyms__note_om\"},{\"@id\":\"Synonyms___407_om\"},{\"@id\":\"Synonyms__Drive_om\"},{\"@id\":\"Synonyms__Safe_om\"},{\"@id\":\"Synonyms__Idle_om\"},{\"@id\":\"Synonyms__Vehicle_om\"},{\"@id\":\"Synonyms__AsTree_om\"},{\"@id\":\"Synonyms__Dashboard_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Synonyms__Temperature_om\"},{\"@id\":\"Synonyms__reading_om\"},{\"@id\":\"Synonyms__Average_om\"},{\"@id\":\"Synonyms__base_om\"},{\"@id\":\"Synonyms__atStart_om\"},{\"@id\":\"Synonyms__during_om\"},{\"@id\":\"Synonyms__note_om\"},{\"@id\":\"Synonyms___407_om\"},{\"@id\":\"Synonyms__Drive_om\"},{\"@id\":\"Synonyms__Safe_om\"},{\"@id\":\"Synonyms__Idle_om\"},{\"@id\":\"Synonyms__Vehicle_om\"},{\"@id\":\"Synonyms__AsTree_om\"},{\"@id\":\"Synonyms__Dashboard_om\"}]" .
 
 elmt:Synonyms__Temperature
     a sysml:DataType ;
@@ -311,7 +315,12 @@ elmt:Synonyms__Vehicle
     sysml:ownedFeature elmt:Synonyms__Vehicle___400, elmt:Synonyms__Vehicle__safe, elmt:Synonyms__Vehicle__alsoSafe ;
     sysml:ownedFeatureMembership elmt:Synonyms__Vehicle___400_om, elmt:Synonyms__Vehicle__safe_om, elmt:Synonyms__Vehicle__alsoSafe_om ;
     sysx:sourceText "    part def Vehicle {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Synonyms__Vehicle___400\"},{\"@id\":\"Synonyms__Vehicle__safe\"},{\"@id\":\"Synonyms__Vehicle__alsoSafe\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Synonyms__Vehicle___400_om\"},{\"@id\":\"Synonyms__Vehicle__safe_om\"},{\"@id\":\"Synonyms__Vehicle__alsoSafe_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Synonyms__Vehicle___400_om\"},{\"@id\":\"Synonyms__Vehicle__safe_om\"},{\"@id\":\"Synonyms__Vehicle__alsoSafe_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Synonyms__Vehicle___400\"},{\"@id\":\"Synonyms__Vehicle__safe\"},{\"@id\":\"Synonyms__Vehicle__alsoSafe\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Synonyms__Vehicle___400_om\"},{\"@id\":\"Synonyms__Vehicle__safe_om\"},{\"@id\":\"Synonyms__Vehicle__alsoSafe_om\"}]" .
 
 elmt:Synonyms__Vehicle_om
     a sysml:OwningMembership ;
@@ -440,7 +449,8 @@ elmt:Synonyms__Dashboard
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedRelationship elmt:Synonyms__Dashboard___400, elmt:Synonyms__Dashboard___401 ;
     sysx:sourceText "    view def Dashboard {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedRelationship "[{\"@id\":\"Synonyms__Dashboard___400\"},{\"@id\":\"Synonyms__Dashboard___401\"}]" .
 
 elmt:Synonyms__Dashboard_om
     a sysml:OwningMembership ;

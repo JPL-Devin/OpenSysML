@@ -46,15 +46,43 @@ func WriteBack(g *rdf.Graph, mints map[string]string) *rdf.Graph {
 	return out
 }
 
-// mintTriple moves one triple onto minted spellings, its subject and object
-// alike, keeping a moved subject's elementId literal in step with its IRI.
+// mintTriple moves one triple onto minted spellings, its subject and object alike,
+// keeping a moved subject's elementId literal and its collection annotations in step.
 func mintTriple(triple rdf.Triple, mints map[string]string) rdf.Triple {
 	subject := mintedTerm(triple.Subject, mints)
 	object := mintedTerm(triple.Object, mints)
-	if triple.Predicate.Value == rdf.SysML+"elementId" && subject != triple.Subject {
+	switch {
+	case triple.Predicate.Value == rdf.SysML+"elementId" && subject != triple.Subject:
 		object = rdf.String(rdf.LocalName(subject.Value))
+	case rdf.IsAnnotationJSON(triple.Predicate.Value) && object.IsLiteral():
+		if text, ok := mintedAnnotation(object.Value, mints); ok {
+			object = rdf.String(text)
+		}
 	}
 	return rdf.Triple{Subject: subject, Predicate: triple.Predicate, Object: object}
+}
+
+// mintedAnnotation rewrites the references of a collection annotation onto their
+// minted ids. A literal that is not a collection stays as it is, for the reader to refuse.
+func mintedAnnotation(text string, mints map[string]string) (string, bool) {
+	members, err := rdf.ParseCollectionJSON(text)
+	if err != nil {
+		return "", false
+	}
+	values := make([]rdf.Term, 0, len(members))
+	for _, member := range members {
+		if member.ID == "" {
+			values = append(values, member.Literal)
+			continue
+		}
+		term := mintedTerm(rdf.IRI(rdf.Element+member.ID), mints)
+		if rdf.LocalName(term.Value) == member.ID {
+			term = mintedTerm(rdf.IRI(rdf.Expression+member.ID), mints)
+		}
+		values = append(values, term)
+	}
+	minted, err := rdf.CollectionJSON(values)
+	return minted, err == nil
 }
 
 // mintedTerm maps an IRI onto its minted spelling: the element itself exactly,

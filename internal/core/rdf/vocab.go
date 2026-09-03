@@ -25,6 +25,9 @@ const (
 	// subexpressions of a value, bound, guard or condition, which are elements
 	// of the abstract syntax without a qualified name of their own.
 	Expression = "urn:opensysml:expr:"
+	// AnnotationJSON is the namespace of the JSON literals Flexo reads a collection
+	// from (ANNOTATION_JSON in Namespaces.kt); <AnnotationJSON><key> holds the array.
+	AnnotationJSON = "urn:sysmlv2:annotation:json:"
 	// LegacyExtension is the extension namespace this tool wrote before the
 	// project was renamed. It is recognized only so a graph carrying it can be
 	// refused rather than read as if its properties were absent.
@@ -35,12 +38,14 @@ const (
 const RDFType = RDFNS + "type"
 
 // DefaultPrefixes are the prefix bindings written on every serialized graph.
+// The labels match the service's own prefix mapping.
 var DefaultPrefixes = map[string]string{
 	"rdf":   RDFNS,
 	"xsd":   XSD,
 	"sysml": SysML,
 	"elmt":  Element,
 	"sysx":  OpenSysML,
+	"json":  AnnotationJSON,
 }
 
 // ElementIRI returns the element IRI for a fully-qualified SysML name: the

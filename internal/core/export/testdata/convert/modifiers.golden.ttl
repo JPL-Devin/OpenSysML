@@ -1,4 +1,5 @@
 @prefix elmt: <urn:sysmlv2:element:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -16,7 +17,10 @@ elmt:Modifiers
     sysml:ownedMembership elmt:Modifiers__Hidden_om, elmt:Modifiers__Shown_om, elmt:Modifiers__Base_om, elmt:Modifiers__Derived_om, elmt:Modifiers__Choice_om ;
     sysml:ownedRelationship elmt:Modifiers__Hidden_om, elmt:Modifiers__Shown_om, elmt:Modifiers__Base_om, elmt:Modifiers__Derived_om, elmt:Modifiers__Choice_om ;
     sysx:sourceText "package Modifiers {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Modifiers__Hidden\"},{\"@id\":\"Modifiers__Shown\"},{\"@id\":\"Modifiers__Base\"},{\"@id\":\"Modifiers__Derived\"},{\"@id\":\"Modifiers__Choice\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Modifiers__Hidden_om\"},{\"@id\":\"Modifiers__Shown_om\"},{\"@id\":\"Modifiers__Base_om\"},{\"@id\":\"Modifiers__Derived_om\"},{\"@id\":\"Modifiers__Choice_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Modifiers__Hidden_om\"},{\"@id\":\"Modifiers__Shown_om\"},{\"@id\":\"Modifiers__Base_om\"},{\"@id\":\"Modifiers__Derived_om\"},{\"@id\":\"Modifiers__Choice_om\"}]" .
 
 elmt:Modifiers__Hidden
     a sysml:PartDefinition ;

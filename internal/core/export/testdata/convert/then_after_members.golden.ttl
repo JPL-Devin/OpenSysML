@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -17,7 +18,10 @@ elmt:ThenAfterMembers
     sysml:ownedMembership elmt:ThenAfterMembers__Signal_om, elmt:ThenAfterMembers__Step_om, elmt:ThenAfterMembers__AfterFlow_om, elmt:ThenAfterMembers__AfterBind_om, elmt:ThenAfterMembers__AfterAttribute_om, elmt:ThenAfterMembers__AfterDoc_om, elmt:ThenAfterMembers__AfterSuccession_om, elmt:ThenAfterMembers__AfterFirstThen_om, elmt:ThenAfterMembers__AfterFirstStart_om, elmt:ThenAfterMembers__stride_om, elmt:ThenAfterMembers__AfterPerform_om, elmt:ThenAfterMembers__ThenAlone_om, elmt:ThenAfterMembers__Lamp_om, elmt:ThenAfterMembers__Switch_om ;
     sysml:ownedRelationship elmt:ThenAfterMembers__Signal_om, elmt:ThenAfterMembers__Step_om, elmt:ThenAfterMembers__AfterFlow_om, elmt:ThenAfterMembers__AfterBind_om, elmt:ThenAfterMembers__AfterAttribute_om, elmt:ThenAfterMembers__AfterDoc_om, elmt:ThenAfterMembers__AfterSuccession_om, elmt:ThenAfterMembers__AfterFirstThen_om, elmt:ThenAfterMembers__AfterFirstStart_om, elmt:ThenAfterMembers__stride_om, elmt:ThenAfterMembers__AfterPerform_om, elmt:ThenAfterMembers__ThenAlone_om, elmt:ThenAfterMembers__Lamp_om, elmt:ThenAfterMembers__Switch_om ;
     sysx:sourceText "package ThenAfterMembers {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"ThenAfterMembers__Signal\"},{\"@id\":\"ThenAfterMembers__Step\"},{\"@id\":\"ThenAfterMembers__AfterFlow\"},{\"@id\":\"ThenAfterMembers__AfterBind\"},{\"@id\":\"ThenAfterMembers__AfterAttribute\"},{\"@id\":\"ThenAfterMembers__AfterDoc\"},{\"@id\":\"ThenAfterMembers__AfterSuccession\"},{\"@id\":\"ThenAfterMembers__AfterFirstThen\"},{\"@id\":\"ThenAfterMembers__AfterFirstStart\"},{\"@id\":\"ThenAfterMembers__stride\"},{\"@id\":\"ThenAfterMembers__AfterPerform\"},{\"@id\":\"ThenAfterMembers__ThenAlone\"},{\"@id\":\"ThenAfterMembers__Lamp\"},{\"@id\":\"ThenAfterMembers__Switch\"}]" ;
+    json:ownedMembership "[{\"@id\":\"ThenAfterMembers__Signal_om\"},{\"@id\":\"ThenAfterMembers__Step_om\"},{\"@id\":\"ThenAfterMembers__AfterFlow_om\"},{\"@id\":\"ThenAfterMembers__AfterBind_om\"},{\"@id\":\"ThenAfterMembers__AfterAttribute_om\"},{\"@id\":\"ThenAfterMembers__AfterDoc_om\"},{\"@id\":\"ThenAfterMembers__AfterSuccession_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstThen_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstStart_om\"},{\"@id\":\"ThenAfterMembers__stride_om\"},{\"@id\":\"ThenAfterMembers__AfterPerform_om\"},{\"@id\":\"ThenAfterMembers__ThenAlone_om\"},{\"@id\":\"ThenAfterMembers__Lamp_om\"},{\"@id\":\"ThenAfterMembers__Switch_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"ThenAfterMembers__Signal_om\"},{\"@id\":\"ThenAfterMembers__Step_om\"},{\"@id\":\"ThenAfterMembers__AfterFlow_om\"},{\"@id\":\"ThenAfterMembers__AfterBind_om\"},{\"@id\":\"ThenAfterMembers__AfterAttribute_om\"},{\"@id\":\"ThenAfterMembers__AfterDoc_om\"},{\"@id\":\"ThenAfterMembers__AfterSuccession_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstThen_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstStart_om\"},{\"@id\":\"ThenAfterMembers__stride_om\"},{\"@id\":\"ThenAfterMembers__AfterPerform_om\"},{\"@id\":\"ThenAfterMembers__ThenAlone_om\"},{\"@id\":\"ThenAfterMembers__Lamp_om\"},{\"@id\":\"ThenAfterMembers__Switch_om\"}]" .
 
 elmt:ThenAfterMembers__Signal
     a sysml:ItemDefinition ;
@@ -59,7 +63,12 @@ elmt:ThenAfterMembers__Step
     sysml:ownedFeature elmt:ThenAfterMembers__Step__x, elmt:ThenAfterMembers__Step__y ;
     sysml:ownedFeatureMembership elmt:ThenAfterMembers__Step__x_om, elmt:ThenAfterMembers__Step__y_om ;
     sysx:sourceText "    action def Step {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"ThenAfterMembers__Step__x\"},{\"@id\":\"ThenAfterMembers__Step__y\"}]" ;
+    json:ownedMembership "[{\"@id\":\"ThenAfterMembers__Step__x_om\"},{\"@id\":\"ThenAfterMembers__Step__y_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"ThenAfterMembers__Step__x_om\"},{\"@id\":\"ThenAfterMembers__Step__y_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"ThenAfterMembers__Step__x\"},{\"@id\":\"ThenAfterMembers__Step__y\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"ThenAfterMembers__Step__x_om\"},{\"@id\":\"ThenAfterMembers__Step__y_om\"}]" .
 
 elmt:ThenAfterMembers__Step_om
     a sysml:OwningMembership ;
@@ -142,7 +151,12 @@ elmt:ThenAfterMembers__AfterFlow
     sysml:ownedFeature elmt:ThenAfterMembers__AfterFlow__a, elmt:ThenAfterMembers__AfterFlow__b, elmt:ThenAfterMembers__AfterFlow___403 ;
     sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterFlow__a_om, elmt:ThenAfterMembers__AfterFlow__b_om, elmt:ThenAfterMembers__AfterFlow___403_om ;
     sysx:sourceText "    action def AfterFlow {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"ThenAfterMembers__AfterFlow__a\"},{\"@id\":\"ThenAfterMembers__AfterFlow___401\"},{\"@id\":\"ThenAfterMembers__AfterFlow__b\"},{\"@id\":\"ThenAfterMembers__AfterFlow___403\"}]" ;
+    json:ownedMembership "[{\"@id\":\"ThenAfterMembers__AfterFlow__a_om\"},{\"@id\":\"ThenAfterMembers__AfterFlow___401_om\"},{\"@id\":\"ThenAfterMembers__AfterFlow__b_om\"},{\"@id\":\"ThenAfterMembers__AfterFlow___403_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"ThenAfterMembers__AfterFlow__a_om\"},{\"@id\":\"ThenAfterMembers__AfterFlow___401_om\"},{\"@id\":\"ThenAfterMembers__AfterFlow__b_om\"},{\"@id\":\"ThenAfterMembers__AfterFlow___403_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"ThenAfterMembers__AfterFlow__a\"},{\"@id\":\"ThenAfterMembers__AfterFlow__b\"},{\"@id\":\"ThenAfterMembers__AfterFlow___403\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"ThenAfterMembers__AfterFlow__a_om\"},{\"@id\":\"ThenAfterMembers__AfterFlow__b_om\"},{\"@id\":\"ThenAfterMembers__AfterFlow___403_om\"}]" .
 
 elmt:ThenAfterMembers__AfterFlow_om
     a sysml:OwningMembership ;
@@ -304,7 +318,12 @@ elmt:ThenAfterMembers__AfterBind
     sysml:ownedFeature elmt:ThenAfterMembers__AfterBind__k, elmt:ThenAfterMembers__AfterBind__m, elmt:ThenAfterMembers__AfterBind__a, elmt:ThenAfterMembers__AfterBind___403, elmt:ThenAfterMembers__AfterBind__b, elmt:ThenAfterMembers__AfterBind___405 ;
     sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterBind__k_om, elmt:ThenAfterMembers__AfterBind__m_om, elmt:ThenAfterMembers__AfterBind__a_om, elmt:ThenAfterMembers__AfterBind___403_om, elmt:ThenAfterMembers__AfterBind__b_om, elmt:ThenAfterMembers__AfterBind___405_om ;
     sysx:sourceText "    action def AfterBind {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"ThenAfterMembers__AfterBind__k\"},{\"@id\":\"ThenAfterMembers__AfterBind__m\"},{\"@id\":\"ThenAfterMembers__AfterBind__a\"},{\"@id\":\"ThenAfterMembers__AfterBind___403\"},{\"@id\":\"ThenAfterMembers__AfterBind__b\"},{\"@id\":\"ThenAfterMembers__AfterBind___405\"}]" ;
+    json:ownedMembership "[{\"@id\":\"ThenAfterMembers__AfterBind__k_om\"},{\"@id\":\"ThenAfterMembers__AfterBind__m_om\"},{\"@id\":\"ThenAfterMembers__AfterBind__a_om\"},{\"@id\":\"ThenAfterMembers__AfterBind___403_om\"},{\"@id\":\"ThenAfterMembers__AfterBind__b_om\"},{\"@id\":\"ThenAfterMembers__AfterBind___405_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"ThenAfterMembers__AfterBind__k_om\"},{\"@id\":\"ThenAfterMembers__AfterBind__m_om\"},{\"@id\":\"ThenAfterMembers__AfterBind__a_om\"},{\"@id\":\"ThenAfterMembers__AfterBind___403_om\"},{\"@id\":\"ThenAfterMembers__AfterBind__b_om\"},{\"@id\":\"ThenAfterMembers__AfterBind___405_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"ThenAfterMembers__AfterBind__k\"},{\"@id\":\"ThenAfterMembers__AfterBind__m\"},{\"@id\":\"ThenAfterMembers__AfterBind__a\"},{\"@id\":\"ThenAfterMembers__AfterBind___403\"},{\"@id\":\"ThenAfterMembers__AfterBind__b\"},{\"@id\":\"ThenAfterMembers__AfterBind___405\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"ThenAfterMembers__AfterBind__k_om\"},{\"@id\":\"ThenAfterMembers__AfterBind__m_om\"},{\"@id\":\"ThenAfterMembers__AfterBind__a_om\"},{\"@id\":\"ThenAfterMembers__AfterBind___403_om\"},{\"@id\":\"ThenAfterMembers__AfterBind__b_om\"},{\"@id\":\"ThenAfterMembers__AfterBind___405_om\"}]" .
 
 elmt:ThenAfterMembers__AfterBind_om
     a sysml:OwningMembership ;
@@ -496,7 +515,12 @@ elmt:ThenAfterMembers__AfterAttribute
     sysml:ownedFeature elmt:ThenAfterMembers__AfterAttribute__a, elmt:ThenAfterMembers__AfterAttribute__k, elmt:ThenAfterMembers__AfterAttribute__b, elmt:ThenAfterMembers__AfterAttribute___403 ;
     sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterAttribute__a_om, elmt:ThenAfterMembers__AfterAttribute__k_om, elmt:ThenAfterMembers__AfterAttribute__b_om, elmt:ThenAfterMembers__AfterAttribute___403_om ;
     sysx:sourceText "    action def AfterAttribute {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"ThenAfterMembers__AfterAttribute__a\"},{\"@id\":\"ThenAfterMembers__AfterAttribute__k\"},{\"@id\":\"ThenAfterMembers__AfterAttribute__b\"},{\"@id\":\"ThenAfterMembers__AfterAttribute___403\"}]" ;
+    json:ownedMembership "[{\"@id\":\"ThenAfterMembers__AfterAttribute__a_om\"},{\"@id\":\"ThenAfterMembers__AfterAttribute__k_om\"},{\"@id\":\"ThenAfterMembers__AfterAttribute__b_om\"},{\"@id\":\"ThenAfterMembers__AfterAttribute___403_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"ThenAfterMembers__AfterAttribute__a_om\"},{\"@id\":\"ThenAfterMembers__AfterAttribute__k_om\"},{\"@id\":\"ThenAfterMembers__AfterAttribute__b_om\"},{\"@id\":\"ThenAfterMembers__AfterAttribute___403_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"ThenAfterMembers__AfterAttribute__a\"},{\"@id\":\"ThenAfterMembers__AfterAttribute__k\"},{\"@id\":\"ThenAfterMembers__AfterAttribute__b\"},{\"@id\":\"ThenAfterMembers__AfterAttribute___403\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"ThenAfterMembers__AfterAttribute__a_om\"},{\"@id\":\"ThenAfterMembers__AfterAttribute__k_om\"},{\"@id\":\"ThenAfterMembers__AfterAttribute__b_om\"},{\"@id\":\"ThenAfterMembers__AfterAttribute___403_om\"}]" .
 
 elmt:ThenAfterMembers__AfterAttribute_om
     a sysml:OwningMembership ;
@@ -629,7 +653,12 @@ elmt:ThenAfterMembers__AfterDoc
     sysml:ownedFeature elmt:ThenAfterMembers__AfterDoc__a, elmt:ThenAfterMembers__AfterDoc__b, elmt:ThenAfterMembers__AfterDoc___403 ;
     sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterDoc__a_om, elmt:ThenAfterMembers__AfterDoc__b_om, elmt:ThenAfterMembers__AfterDoc___403_om ;
     sysx:sourceText "    action def AfterDoc {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"ThenAfterMembers__AfterDoc__a\"},{\"@id\":\"ThenAfterMembers__AfterDoc___401\"},{\"@id\":\"ThenAfterMembers__AfterDoc__b\"},{\"@id\":\"ThenAfterMembers__AfterDoc___403\"}]" ;
+    json:ownedMembership "[{\"@id\":\"ThenAfterMembers__AfterDoc__a_om\"},{\"@id\":\"ThenAfterMembers__AfterDoc___401_om\"},{\"@id\":\"ThenAfterMembers__AfterDoc__b_om\"},{\"@id\":\"ThenAfterMembers__AfterDoc___403_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"ThenAfterMembers__AfterDoc__a_om\"},{\"@id\":\"ThenAfterMembers__AfterDoc___401_om\"},{\"@id\":\"ThenAfterMembers__AfterDoc__b_om\"},{\"@id\":\"ThenAfterMembers__AfterDoc___403_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"ThenAfterMembers__AfterDoc__a\"},{\"@id\":\"ThenAfterMembers__AfterDoc__b\"},{\"@id\":\"ThenAfterMembers__AfterDoc___403\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"ThenAfterMembers__AfterDoc__a_om\"},{\"@id\":\"ThenAfterMembers__AfterDoc__b_om\"},{\"@id\":\"ThenAfterMembers__AfterDoc___403_om\"}]" .
 
 elmt:ThenAfterMembers__AfterDoc_om
     a sysml:OwningMembership ;
@@ -757,7 +786,12 @@ elmt:ThenAfterMembers__AfterSuccession
     sysml:ownedFeature elmt:ThenAfterMembers__AfterSuccession__a, elmt:ThenAfterMembers__AfterSuccession__c, elmt:ThenAfterMembers__AfterSuccession___402, elmt:ThenAfterMembers__AfterSuccession__b, elmt:ThenAfterMembers__AfterSuccession___404 ;
     sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterSuccession__a_om, elmt:ThenAfterMembers__AfterSuccession__c_om, elmt:ThenAfterMembers__AfterSuccession___402_om, elmt:ThenAfterMembers__AfterSuccession__b_om, elmt:ThenAfterMembers__AfterSuccession___404_om ;
     sysx:sourceText "    action def AfterSuccession {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"ThenAfterMembers__AfterSuccession__a\"},{\"@id\":\"ThenAfterMembers__AfterSuccession__c\"},{\"@id\":\"ThenAfterMembers__AfterSuccession___402\"},{\"@id\":\"ThenAfterMembers__AfterSuccession__b\"},{\"@id\":\"ThenAfterMembers__AfterSuccession___404\"}]" ;
+    json:ownedMembership "[{\"@id\":\"ThenAfterMembers__AfterSuccession__a_om\"},{\"@id\":\"ThenAfterMembers__AfterSuccession__c_om\"},{\"@id\":\"ThenAfterMembers__AfterSuccession___402_om\"},{\"@id\":\"ThenAfterMembers__AfterSuccession__b_om\"},{\"@id\":\"ThenAfterMembers__AfterSuccession___404_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"ThenAfterMembers__AfterSuccession__a_om\"},{\"@id\":\"ThenAfterMembers__AfterSuccession__c_om\"},{\"@id\":\"ThenAfterMembers__AfterSuccession___402_om\"},{\"@id\":\"ThenAfterMembers__AfterSuccession__b_om\"},{\"@id\":\"ThenAfterMembers__AfterSuccession___404_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"ThenAfterMembers__AfterSuccession__a\"},{\"@id\":\"ThenAfterMembers__AfterSuccession__c\"},{\"@id\":\"ThenAfterMembers__AfterSuccession___402\"},{\"@id\":\"ThenAfterMembers__AfterSuccession__b\"},{\"@id\":\"ThenAfterMembers__AfterSuccession___404\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"ThenAfterMembers__AfterSuccession__a_om\"},{\"@id\":\"ThenAfterMembers__AfterSuccession__c_om\"},{\"@id\":\"ThenAfterMembers__AfterSuccession___402_om\"},{\"@id\":\"ThenAfterMembers__AfterSuccession__b_om\"},{\"@id\":\"ThenAfterMembers__AfterSuccession___404_om\"}]" .
 
 elmt:ThenAfterMembers__AfterSuccession_om
     a sysml:OwningMembership ;
@@ -930,7 +964,12 @@ elmt:ThenAfterMembers__AfterFirstThen
     sysml:ownedFeature elmt:ThenAfterMembers__AfterFirstThen__a, elmt:ThenAfterMembers__AfterFirstThen__b, elmt:ThenAfterMembers__AfterFirstThen___403, elmt:ThenAfterMembers__AfterFirstThen__c ;
     sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterFirstThen__a_om, elmt:ThenAfterMembers__AfterFirstThen__b_om, elmt:ThenAfterMembers__AfterFirstThen___403_om, elmt:ThenAfterMembers__AfterFirstThen__c_om ;
     sysx:sourceText "    action def AfterFirstThen {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"ThenAfterMembers__AfterFirstThen__a\"},{\"@id\":\"ThenAfterMembers__AfterFirstThen___401\"},{\"@id\":\"ThenAfterMembers__AfterFirstThen__b\"},{\"@id\":\"ThenAfterMembers__AfterFirstThen___403\"},{\"@id\":\"ThenAfterMembers__AfterFirstThen__c\"}]" ;
+    json:ownedMembership "[{\"@id\":\"ThenAfterMembers__AfterFirstThen__a_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstThen___401_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstThen__b_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstThen___403_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstThen__c_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"ThenAfterMembers__AfterFirstThen__a_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstThen___401_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstThen__b_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstThen___403_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstThen__c_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"ThenAfterMembers__AfterFirstThen__a\"},{\"@id\":\"ThenAfterMembers__AfterFirstThen__b\"},{\"@id\":\"ThenAfterMembers__AfterFirstThen___403\"},{\"@id\":\"ThenAfterMembers__AfterFirstThen__c\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"ThenAfterMembers__AfterFirstThen__a_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstThen__b_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstThen___403_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstThen__c_om\"}]" .
 
 elmt:ThenAfterMembers__AfterFirstThen_om
     a sysml:OwningMembership ;
@@ -1086,7 +1125,12 @@ elmt:ThenAfterMembers__AfterFirstStart
     sysml:ownedFeature elmt:ThenAfterMembers__AfterFirstStart__a, elmt:ThenAfterMembers__AfterFirstStart___402, elmt:ThenAfterMembers__AfterFirstStart___404 ;
     sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterFirstStart__a_om, elmt:ThenAfterMembers__AfterFirstStart___402_om, elmt:ThenAfterMembers__AfterFirstStart___404_om ;
     sysx:sourceText "    action def AfterFirstStart {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"ThenAfterMembers__AfterFirstStart___400\"},{\"@id\":\"ThenAfterMembers__AfterFirstStart__a\"},{\"@id\":\"ThenAfterMembers__AfterFirstStart___402\"},{\"@id\":\"ThenAfterMembers__AfterFirstStart___403\"},{\"@id\":\"ThenAfterMembers__AfterFirstStart___404\"}]" ;
+    json:ownedMembership "[{\"@id\":\"ThenAfterMembers__AfterFirstStart___400_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstStart__a_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstStart___402_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstStart___403_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstStart___404_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"ThenAfterMembers__AfterFirstStart___400_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstStart__a_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstStart___402_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstStart___403_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstStart___404_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"ThenAfterMembers__AfterFirstStart__a\"},{\"@id\":\"ThenAfterMembers__AfterFirstStart___402\"},{\"@id\":\"ThenAfterMembers__AfterFirstStart___404\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"ThenAfterMembers__AfterFirstStart__a_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstStart___402_om\"},{\"@id\":\"ThenAfterMembers__AfterFirstStart___404_om\"}]" .
 
 elmt:ThenAfterMembers__AfterFirstStart_om
     a sysml:OwningMembership ;
@@ -1260,7 +1304,12 @@ elmt:ThenAfterMembers__AfterPerform
     sysml:ownedFeature elmt:ThenAfterMembers__AfterPerform___400, elmt:ThenAfterMembers__AfterPerform__b, elmt:ThenAfterMembers__AfterPerform___403 ;
     sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterPerform___400_om, elmt:ThenAfterMembers__AfterPerform__b_om, elmt:ThenAfterMembers__AfterPerform___403_om ;
     sysx:sourceText "    action def AfterPerform {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"ThenAfterMembers__AfterPerform___400\"},{\"@id\":\"ThenAfterMembers__AfterPerform___401\"},{\"@id\":\"ThenAfterMembers__AfterPerform__b\"},{\"@id\":\"ThenAfterMembers__AfterPerform___403\"}]" ;
+    json:ownedMembership "[{\"@id\":\"ThenAfterMembers__AfterPerform___400_om\"},{\"@id\":\"ThenAfterMembers__AfterPerform___401_om\"},{\"@id\":\"ThenAfterMembers__AfterPerform__b_om\"},{\"@id\":\"ThenAfterMembers__AfterPerform___403_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"ThenAfterMembers__AfterPerform___400_om\"},{\"@id\":\"ThenAfterMembers__AfterPerform___401_om\"},{\"@id\":\"ThenAfterMembers__AfterPerform__b_om\"},{\"@id\":\"ThenAfterMembers__AfterPerform___403_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"ThenAfterMembers__AfterPerform___400\"},{\"@id\":\"ThenAfterMembers__AfterPerform__b\"},{\"@id\":\"ThenAfterMembers__AfterPerform___403\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"ThenAfterMembers__AfterPerform___400_om\"},{\"@id\":\"ThenAfterMembers__AfterPerform__b_om\"},{\"@id\":\"ThenAfterMembers__AfterPerform___403_om\"}]" .
 
 elmt:ThenAfterMembers__AfterPerform_om
     a sysml:OwningMembership ;
@@ -1422,7 +1471,12 @@ elmt:ThenAfterMembers__ThenAlone
     sysml:ownedFeature elmt:ThenAfterMembers__ThenAlone__a, elmt:ThenAfterMembers__ThenAlone___402, elmt:ThenAfterMembers__ThenAlone__b ;
     sysml:ownedFeatureMembership elmt:ThenAfterMembers__ThenAlone__a_om, elmt:ThenAfterMembers__ThenAlone___402_om, elmt:ThenAfterMembers__ThenAlone__b_om ;
     sysx:sourceText "    action def ThenAlone {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"ThenAfterMembers__ThenAlone__a\"},{\"@id\":\"ThenAfterMembers__ThenAlone___401\"},{\"@id\":\"ThenAfterMembers__ThenAlone___402\"},{\"@id\":\"ThenAfterMembers__ThenAlone__b\"}]" ;
+    json:ownedMembership "[{\"@id\":\"ThenAfterMembers__ThenAlone__a_om\"},{\"@id\":\"ThenAfterMembers__ThenAlone___401_om\"},{\"@id\":\"ThenAfterMembers__ThenAlone___402_om\"},{\"@id\":\"ThenAfterMembers__ThenAlone__b_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"ThenAfterMembers__ThenAlone__a_om\"},{\"@id\":\"ThenAfterMembers__ThenAlone___401_om\"},{\"@id\":\"ThenAfterMembers__ThenAlone___402_om\"},{\"@id\":\"ThenAfterMembers__ThenAlone__b_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"ThenAfterMembers__ThenAlone__a\"},{\"@id\":\"ThenAfterMembers__ThenAlone___402\"},{\"@id\":\"ThenAfterMembers__ThenAlone__b\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"ThenAfterMembers__ThenAlone__a_om\"},{\"@id\":\"ThenAfterMembers__ThenAlone___402_om\"},{\"@id\":\"ThenAfterMembers__ThenAlone__b_om\"}]" .
 
 elmt:ThenAfterMembers__ThenAlone_om
     a sysml:OwningMembership ;
@@ -1584,7 +1638,12 @@ elmt:ThenAfterMembers__Lamp
     sysml:ownedFeature elmt:ThenAfterMembers__Lamp__level, elmt:ThenAfterMembers__Lamp__on, elmt:ThenAfterMembers__Lamp___403, elmt:ThenAfterMembers__Lamp__off, elmt:ThenAfterMembers__Lamp___405 ;
     sysml:ownedFeatureMembership elmt:ThenAfterMembers__Lamp__level_om, elmt:ThenAfterMembers__Lamp__on_om, elmt:ThenAfterMembers__Lamp___403_om, elmt:ThenAfterMembers__Lamp__off_om, elmt:ThenAfterMembers__Lamp___405_om ;
     sysx:sourceText "    state def Lamp {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"ThenAfterMembers__Lamp__level\"},{\"@id\":\"ThenAfterMembers__Lamp__on\"},{\"@id\":\"ThenAfterMembers__Lamp___402\"},{\"@id\":\"ThenAfterMembers__Lamp___403\"},{\"@id\":\"ThenAfterMembers__Lamp__off\"},{\"@id\":\"ThenAfterMembers__Lamp___405\"}]" ;
+    json:ownedMembership "[{\"@id\":\"ThenAfterMembers__Lamp__level_om\"},{\"@id\":\"ThenAfterMembers__Lamp__on_om\"},{\"@id\":\"ThenAfterMembers__Lamp___402_om\"},{\"@id\":\"ThenAfterMembers__Lamp___403_om\"},{\"@id\":\"ThenAfterMembers__Lamp__off_om\"},{\"@id\":\"ThenAfterMembers__Lamp___405_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"ThenAfterMembers__Lamp__level_om\"},{\"@id\":\"ThenAfterMembers__Lamp__on_om\"},{\"@id\":\"ThenAfterMembers__Lamp___402_om\"},{\"@id\":\"ThenAfterMembers__Lamp___403_om\"},{\"@id\":\"ThenAfterMembers__Lamp__off_om\"},{\"@id\":\"ThenAfterMembers__Lamp___405_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"ThenAfterMembers__Lamp__level\"},{\"@id\":\"ThenAfterMembers__Lamp__on\"},{\"@id\":\"ThenAfterMembers__Lamp___403\"},{\"@id\":\"ThenAfterMembers__Lamp__off\"},{\"@id\":\"ThenAfterMembers__Lamp___405\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"ThenAfterMembers__Lamp__level_om\"},{\"@id\":\"ThenAfterMembers__Lamp__on_om\"},{\"@id\":\"ThenAfterMembers__Lamp___403_om\"},{\"@id\":\"ThenAfterMembers__Lamp__off_om\"},{\"@id\":\"ThenAfterMembers__Lamp___405_om\"}]" .
 
 elmt:ThenAfterMembers__Lamp_om
     a sysml:OwningMembership ;
@@ -1762,7 +1821,12 @@ elmt:ThenAfterMembers__Switch
     sysml:ownedFeature elmt:ThenAfterMembers__Switch__pressed, elmt:ThenAfterMembers__Switch___402, elmt:ThenAfterMembers__Switch__idle ;
     sysml:ownedFeatureMembership elmt:ThenAfterMembers__Switch__pressed_om, elmt:ThenAfterMembers__Switch___402_om, elmt:ThenAfterMembers__Switch__idle_om ;
     sysx:sourceText "    state def Switch {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedRelationship "[{\"@id\":\"ThenAfterMembers__Switch___400\"},{\"@id\":\"ThenAfterMembers__Switch__pressed_om\"},{\"@id\":\"ThenAfterMembers__Switch___402_om\"},{\"@id\":\"ThenAfterMembers__Switch__idle_om\"}]" ;
+    json:ownedMember "[{\"@id\":\"ThenAfterMembers__Switch__pressed\"},{\"@id\":\"ThenAfterMembers__Switch___402\"},{\"@id\":\"ThenAfterMembers__Switch__idle\"}]" ;
+    json:ownedMembership "[{\"@id\":\"ThenAfterMembers__Switch__pressed_om\"},{\"@id\":\"ThenAfterMembers__Switch___402_om\"},{\"@id\":\"ThenAfterMembers__Switch__idle_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"ThenAfterMembers__Switch__pressed\"},{\"@id\":\"ThenAfterMembers__Switch___402\"},{\"@id\":\"ThenAfterMembers__Switch__idle\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"ThenAfterMembers__Switch__pressed_om\"},{\"@id\":\"ThenAfterMembers__Switch___402_om\"},{\"@id\":\"ThenAfterMembers__Switch__idle_om\"}]" .
 
 elmt:ThenAfterMembers__Switch_om
     a sysml:OwningMembership ;

@@ -81,6 +81,31 @@ func TestRevisedFixtureStagesEveryKindOfChange(t *testing.T) {
 	}
 }
 
+// A collection's JSON annotation is what the commit path writes for the array
+// the diff posts, so it is carried, not left out.
+func TestCollectionAnnotationsAreCarried(t *testing.T) {
+	original := fixtureGraph(t, applyFixturePath)
+	if !original.HasProperty(rdf.ElementIRIForID("IdentityInterop"), rdf.AnnotationJSON+"ownedMember") {
+		t.Fatal("the fixture's package states no ownedMember annotation")
+	}
+	set, err := reposync.Diff(original, rdf.NewGraph(), reposync.Options{Representation: Representation{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, left := range set.Uncarried {
+		if strings.HasPrefix(left.Property, "json:") {
+			t.Errorf("%s is reported as uncarried", left.Property)
+		}
+	}
+	graphWritten := writtenFromGraph(original)
+	if _, ok := graphWritten["IdentityInterop"].props["json:ownedMember"]; ok {
+		t.Error("the harness counts the annotation as a property of its own")
+	}
+	if got := graphWritten["IdentityInterop"].props["sysml:ownedMember"]; got.kind != "array" || got.count < 2 {
+		t.Errorf("sysml:ownedMember is written as %+v, want a multi-valued array", got)
+	}
+}
+
 func TestEmptiedRecognisesADeletedRead(t *testing.T) {
 	deleted := Element{"@id": json.RawMessage(`"X"`), "@type": json.RawMessage(`null`)}
 	if !emptied(deleted) {

@@ -1,4 +1,5 @@
 @prefix elmt: <urn:sysmlv2:element:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -16,7 +17,10 @@ elmt:Relations
     sysml:ownedMembership elmt:Relations__Base_om, elmt:Relations__Sub_om, elmt:Relations__Other_om ;
     sysml:ownedRelationship elmt:Relations__Base_om, elmt:Relations__Sub_om, elmt:Relations__Other_om ;
     sysx:sourceText "package Relations {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Relations__Base\"},{\"@id\":\"Relations__Sub\"},{\"@id\":\"Relations__Other\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Relations__Base_om\"},{\"@id\":\"Relations__Sub_om\"},{\"@id\":\"Relations__Other_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Relations__Base_om\"},{\"@id\":\"Relations__Sub_om\"},{\"@id\":\"Relations__Other_om\"}]" .
 
 elmt:Relations__Base
     a sysml:PartDefinition ;
@@ -82,7 +86,12 @@ elmt:Relations__Other
     sysml:ownedFeature elmt:Relations__Other__b, elmt:Relations__Other__r, elmt:Relations__Other__s ;
     sysml:ownedFeatureMembership elmt:Relations__Other__b_om, elmt:Relations__Other__r_om, elmt:Relations__Other__s_om ;
     sysx:sourceText "    part def Other {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Relations__Other__b\"},{\"@id\":\"Relations__Other__r\"},{\"@id\":\"Relations__Other__s\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Relations__Other__b_om\"},{\"@id\":\"Relations__Other__r_om\"},{\"@id\":\"Relations__Other__s_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Relations__Other__b_om\"},{\"@id\":\"Relations__Other__r_om\"},{\"@id\":\"Relations__Other__s_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Relations__Other__b\"},{\"@id\":\"Relations__Other__r\"},{\"@id\":\"Relations__Other__s\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Relations__Other__b_om\"},{\"@id\":\"Relations__Other__r_om\"},{\"@id\":\"Relations__Other__s_om\"}]" .
 
 elmt:Relations__Other_om
     a sysml:OwningMembership ;

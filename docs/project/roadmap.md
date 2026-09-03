@@ -254,10 +254,10 @@ Saving and SysML ↔ RDF Turtle conversion landed (`internal/core/rdf`,
 `internal/core/export`, `%save`, `sysml -convert`, `-sync-diff`); see
 [the RDF mapping](../reference/rdf-mapping.md).
 
-The RDF direction ships **experimental**, because of D1, D2, D3.4 and D7 below: its vocabulary
+The RDF direction ships **experimental**, because of D1, D2 and D7 below: its vocabulary
 may change without a compatibility path, and the one triplestore interop measured — Flexo — still
 drops what those items carry. Every surface says so (`export.ExperimentalNotice`), and promoting
-it to stable is closing D3.4 and re-measuring the harness, not a documentation change.
+it to stable is re-measuring the harness once those land, not a documentation change.
 
 Measured on the built binary at this baseline, **268 of the 345 models under `examples/`
 convert** (the training corpus, the three pilot corpora and this repository's own demos),
@@ -314,33 +314,36 @@ asserting the fix, so every item below shows up as movement in
 `internal/interop/flexo/testdata/interop_expected.txt`. Keep it out of `go test ./...`.
 
 What the current recording measures, for the identity-carrying fixture: **49 of 49 elements
-listed and 355 of 424 properties delivered** on the graph-load side, against 33 of 33 and 158 of
+listed and 369 of 452 properties delivered** on the graph-load side, against 33 of 33 and 158 of
 158 for the same model posted through the service's own commit path; 9 of 49 read as roots, and 9
 have no owner in the model; every element is readable directly by id; no subject of the graph is
-outside the element namespace. The 69 lost properties are exactly two things:
+outside the element namespace. **Every standard property is delivered, the 14 multi-valued ones
+included** — `ownedMember`, `ownedMembership`, `ownedRelationship` (3/3 each), `ownedFeature`,
+`ownedFeatureMembership` (2/2 each), `specializes` (1/1) — since D3.4 landed. The 83 lost
+properties are one thing:
 
-- **8 property keys in `sysx:`** — `sourceText`, `hasBody`, `memberIndex`, `argumentIndex`,
-  `declaredKeyword`, `endForm`, `endIndex`, `relatedFeature` — dropped unread. That is the D1/D2
-  residue below, and it is the reason the expression trees and end structure the mapping now
-  writes do not survive the hop.
-- **0 of 15 multi-valued standard properties delivered** — `ownedMember`, `ownedMembership`,
-  `ownedRelationship` (0/3 each), `ownedFeature`, `ownedFeatureMembership` (0/2 each),
-  `specializes` (0/1) — which is **D3.4**.
+- **10 property keys in `sysx:`** — `sourceText`, `sourceTail`, `sourceLanguage`, `hasBody`,
+  `memberIndex`, `argumentIndex`, `declaredKeyword`, `endForm`, `endIndex`, `relatedFeature` —
+  dropped unread. That is the D1/D2 residue below, and it is the reason the expression trees and
+  end structure the mapping now writes do not survive the hop. (The one multi-valued property
+  still lost, `relatedFeature` on 0/1, is among them.)
 
 The commit path delivers 6 of 6 of its own multi-valued properties, because it stores each array
-whole as a JSON annotation literal alongside the typed triples. Two deployed behaviours differ
+whole as a JSON annotation literal alongside the typed triples; the graph now carries the same
+literal, and the two paths deliver every array alike. Two deployed behaviours differ
 from the sources: the element listing ignores `pageSize`/`pageAfter` and returns every subject,
 and project delete is a soft annotation that leaves the Layer 1 branch behind.
 
-### D3.4 — collection-valued properties need the JSON annotation
+### D3.4 — collection-valued properties need the JSON annotation (done)
 
 The reader **skips** a `sysml:` predicate with more than one object and prefers the
 annotation literal at `urn:sysmlv2:annotation:json:<key>`, which it parses as JSON.
-Anything multi-valued we emit as bare repeated triples is silently dropped on read. So
-the encoder must write both forms for collections, and the decoder must accept the
-annotation form when reading a foreign graph. This is the last of D3 and the smallest item in
-the track; when it lands, re-record the harness (`go test ./internal/interop/flexo -run
-TestFlexoInterop -update-flexo` against a live stack) and the 15 become 15 of 15.
+Anything multi-valued emitted as bare repeated triples alone is silently dropped on read. The
+encoder now writes both forms for every collection, and the decoder accepts either or both,
+refusing a graph whose two spellings disagree (`rdf-mapping.md` § Collections). Re-recorded
+against the live stack, the multi-valued standard properties went from 0 of 14 to 14 of 14
+delivered, and the total from 355/424 to 369/452 (the denominator moved with the source-text
+properties the mapping added since the previous recording).
 
 ## D1 — expression trees are standard in shape, non-standard in vocabulary
 
@@ -780,9 +783,9 @@ not more harness work.
 2. **Track N**: land N1 (PR #778), then decide N2.1 (the budget) before anything else in the
    track, since collections (N2.2) and linking (N2.4) both depend on the answer. N2.3 (library
    functions) can go in parallel with N2.2.
-3. **Track D** is independent of the rest. Take **D3.4** first — it is small, it is the last of D3,
-   and it is the item that moves the harness from 355/424 toward the commit path's 158/158. Then
-   **D7**, mechanical now that identity is stable. Then **D2** and **D1** together, since both are
+3. **Track D** is independent of the rest. **D3.4** landed, closing D3 and moving the harness
+   from 355/424 to 369/452; every remaining loss is a `sysx:` property. Next **D7**,
+   mechanical now that identity is stable. Then **D2** and **D1** together, since both are
    the same move — from `sysx:` structure to the metamodel's own elements and properties — and
    the ontology gate's inventory is their checklist; D2 is the smaller and goes first. **D8**'s
    profile after PR #774 merges, since it only becomes conformant behind D1 and D2.
