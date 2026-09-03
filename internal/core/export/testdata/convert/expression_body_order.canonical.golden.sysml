@@ -1,0 +1,1 @@
+sysml: cannot convert the body member <urn:opensysml:expr:Ordered__Mixed___401_presultExpression_pm1>: a declaration inside an expression body is carried as its notation in sysx:sourceText, and this one has none; save to .sysml or .kerml instead, which writes the source exactly; see docs/reference/rdf-mapping.md § Limitations

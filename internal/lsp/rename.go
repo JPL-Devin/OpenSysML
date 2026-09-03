@@ -100,6 +100,9 @@ func (s *Server) renameTarget(name string, pos protocol.Position) (*symbols.Symb
 			if i < len(segs) && segs[i] != nil {
 				return s.renameable(segs[i], part.Span)
 			}
+			if i == len(ref.QN.Parts)-1 && len(s.ws.AmbiguousInvocationInDoc(name, *ref)) > 0 {
+				return nil, source.Span{}, fmt.Errorf("cannot rename %q: the call is ambiguous between several overloads", part.Text)
+			}
 			return nil, source.Span{}, fmt.Errorf("cannot rename %q: unresolved", part.Text)
 		}
 	}
