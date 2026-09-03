@@ -1023,11 +1023,10 @@ func (e *StateExecutor) triggerMatches(trigger ast.Node, scope *symbols.Scope, e
 		if typed := ast.AsQualifiedName(acceptEvent.SignalType); typed != nil && len(typed.Parts) > 0 {
 			return e.ctx.messageMatches(msg, typed, scope)
 		}
-		subsets := lower.FeaturePath(acceptEvent.Subsets)
-		if subsets == "" {
+		if lower.FeaturePath(acceptEvent.Subsets) == "" {
 			return false
 		}
-		return e.ctx.carriesEvent(msg, subsets, scope)
+		return e.triggerEval(scope).carriesEvent(msg, acceptEvent.Subsets)
 
 	case EventCall:
 		callEvent, ok := trigger.(*ast.CallEvent)
@@ -2007,8 +2006,16 @@ func (e *StateExecutor) triggerSignalMatches(accept *ast.AcceptEvent, scope *sym
 	if typed := ast.AsQualifiedName(accept.SignalType); typed != nil && len(typed.Parts) > 0 {
 		return e.ctx.messageMatches(msg, typed, scope)
 	}
-	signal := lower.FeaturePath(accept.Subsets)
-	return signal != "" && e.ctx.carriesEvent(msg, signal, scope)
+	return lower.FeaturePath(accept.Subsets) != "" && e.triggerEval(scope).carriesEvent(msg, accept.Subsets)
+}
+
+// triggerEval evaluates what a trigger declared in scope names, over the
+// machine's data.
+func (e *StateExecutor) triggerEval(scope *symbols.Scope) *EvalContext {
+	ec := NewEvalContextIn(e.ctx, scope, e.self)
+	ec.inBehaviorBody = true
+	ec.Push(e.stateData)
+	return ec
 }
 
 // activeStates returns the states currently active, in region declaration

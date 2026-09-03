@@ -324,7 +324,7 @@ func (Unsupported) statement() { /* marker: closed Statement set */ }
 // port it arrived at, so the two forms do not consume each other's messages.
 //
 // SubsetsEvent is the event feature the payload subsets (`accept :> shutDown`),
-// as the path written, empty for none: the accept waits for that one event.
+// as written, nil for none: the accept waits for that one event.
 //
 // Trigger is the time or change event of `accept at t` / `accept after d` /
 // `accept when c`, nil when the accept waits for a message instead.
@@ -332,7 +332,7 @@ type Accept struct {
 	ParamName    string
 	SignalType   *ast.QualifiedName
 	ViaPort      string
-	SubsetsEvent string
+	SubsetsEvent ast.Node
 	Trigger      ast.Node
 	// Scope is the scope the accept was declared in, in which SignalType resolves.
 	Scope *symbols.Scope
@@ -796,7 +796,7 @@ func acceptPort(node *ast.Usage) string {
 
 // subsettingTarget is the feature a usage subsets (`:> e`, `:>> a.e`) as the
 // path written, or "" for none.
-func subsettingTarget(usage *ast.Usage) string {
+func subsettingTarget(usage *ast.Usage) ast.Node {
 	for _, rel := range usage.Relationships {
 		if rel == nil {
 			continue
@@ -806,11 +806,11 @@ func subsettingTarget(usage *ast.Usage) string {
 		default:
 			continue
 		}
-		if name := FeaturePath(rel.Target); name != "" {
-			return name
+		if FeaturePath(rel.Target) != "" {
+			return rel.Target
 		}
 	}
-	return ""
+	return nil
 }
 
 // typingTarget returns the name a usage was typed with (`: T`) as written,

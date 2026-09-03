@@ -358,11 +358,13 @@ func (e *ActionExecutor) HasPendingSignal() bool {
 
 // acceptMatch is the predicate an accept node holds a message to: it reaches
 // the node, and conforms to the type the accept names or carries the event it
-// subsets. The signal is tested first, so only a message of the accept's own
-// signal resolves the `via` port; if that fails the predicate matches nothing
-// and the failure is left in the returned error slot.
+// subsets, read over the action's data. The signal is tested first, so only a
+// message of the accept's own signal resolves the `via` port; if that fails the
+// predicate matches nothing and the failure is left in the returned error slot.
 func (e *ActionExecutor) acceptMatch(accept lower.Accept, usage *ast.Usage) (func(Message) bool, *error) {
 	var failed error
+	ec := NewEvalContextIn(e.ctx, accept.Scope, e.self)
+	ec.Push(e.data)
 	return func(m Message) bool {
 		if failed != nil {
 			return false
@@ -371,7 +373,7 @@ func (e *ActionExecutor) acceptMatch(accept lower.Accept, usage *ast.Usage) (fun
 			if !e.ctx.messageMatches(m, accept.SignalType, accept.Scope) {
 				return false
 			}
-		} else if !e.ctx.carriesEvent(m, accept.SubsetsEvent, accept.Scope) {
+		} else if !ec.carriesEvent(m, accept.SubsetsEvent) {
 			return false
 		}
 		reaches, err := e.ctx.messageReaches(m, ActionNodeName(usage), accept.ViaPort, e.self)
@@ -1176,7 +1178,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 		// the type it was typed with, or of the event it subsets.
 		want := ast.QualifiedText(accept.SignalType)
 		if want == "" {
-			want = accept.SubsetsEvent
+			want = lower.FeaturePath(accept.SubsetsEvent)
 		}
 		matches, failed := e.acceptMatch(accept, usage)
 		msg, taken := e.ctx.TakeMessage(matches)

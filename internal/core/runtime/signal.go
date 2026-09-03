@@ -40,14 +40,17 @@ type Message struct {
 	Signal *symbols.Symbol
 	// Event is the feature the message was sent from (`send shutDown to x`), nil
 	// where none or unresolved; EventName is its written name, the fallback then.
-	Event     *symbols.Symbol
-	EventName string
-	Target    string
-	Port      string
-	Object    int64
-	PortID    int64
-	Delivery  DeliveryKind
-	Payload   map[string]Value
+	// EventObject is the occurrence that feature held when sent, 0 for none: two
+	// parts of one type hold their own occurrences of the one declared event.
+	Event       *symbols.Symbol
+	EventName   string
+	EventObject int64
+	Target      string
+	Port        string
+	Object      int64
+	PortID      int64
+	Delivery    DeliveryKind
+	Payload     map[string]Value
 }
 
 // DeliveryKind is what a message's destination resolved to, and so what a
@@ -740,17 +743,28 @@ func (ctx *Context) post(conns []lower.Connection, msg Message, send lower.Send,
 }
 
 // carriesEvent reports whether m was sent from the event feature an accept
-// subsets (`accept :> shutDown`): by identity once the feature resolves, so a
-// typed message of a same-named type never satisfies it; by name otherwise.
-func (ctx *Context) carriesEvent(m Message, subsets string, scope *symbols.Scope) bool {
-	if subsets == "" {
+// subsets (`accept :> left.alert`), as evaluated in ec: the same declaration
+// once it resolves, so a typed message of a same-named type never satisfies it,
+// and the same occurrence where both sides hold one, so a sibling part's event
+// never does either; by name where the feature does not resolve.
+func (ec *EvalContext) carriesEvent(m Message, subsets ast.Node) bool {
+	path := lower.FeaturePath(subsets)
+	if path == "" {
 		return true
 	}
-	if want, ok := ctx.featureSymbol(scope, subsets); ok {
-		return m.Event != nil && want == m.Event
+	want, ok := ec.ctx.featureSymbol(ec.scope, path)
+	if !ok {
+		name := lastSegment(path)
+		return name == m.EventName || name == m.SignalType
 	}
-	name := lastSegment(subsets)
-	return name == m.EventName || name == m.SignalType
+	if m.Event == nil || want != m.Event {
+		return false
+	}
+	if m.EventObject == 0 {
+		return true
+	}
+	value, err := ec.eval(subsets)
+	return err != nil || value.Kind != ValInstance || value.Instance == m.EventObject
 }
 
 // lastSegment is the feature a dotted path ends at.
@@ -841,14 +855,18 @@ func (e *EvalContext) buildMessage(scope *symbols.Scope, send lower.Send) (Messa
 		return Message{}, fmt.Errorf("send: message of kind %v has no signal type", value.Kind)
 	}
 	event, eventName := e.sentFeature(scope, send.Message)
-	return Message{
+	msg := Message{
 		SignalType: signalType,
 		Signal:     signal,
 		Event:      event,
 		EventName:  eventName,
 		Target:     target,
 		Payload:    map[string]Value{"value": value},
-	}, nil
+	}
+	if event != nil && value.Kind == ValInstance {
+		msg.EventObject = value.Instance
+	}
+	return msg, nil
 }
 
 // sentFeature is the feature a send reads its message from (`send a.b via p`)
