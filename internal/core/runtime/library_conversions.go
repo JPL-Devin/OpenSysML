@@ -216,13 +216,13 @@ func numberToInteger(name string, _ *Context, args []Value) (Value, error) {
 }
 
 // realToRational is RealFunctions::ToRational; with a Rational held as a
-// float64 the value is the Real itself.
+// float64 the value is the Real x is bound as, an Integer argument widened.
 func realToRational(name string, _ *Context, args []Value) (Value, error) {
 	x, err := numericArg(name, "x", args[0])
 	if err != nil {
 		return Value{}, err
 	}
-	return Value{Kind: ValConst, Const: x}, nil
+	return checkedReal(asReal(x))
 }
 
 // realPartOfReal is RealFunctions::re: a Real is its own real part.

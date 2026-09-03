@@ -24,6 +24,8 @@
     "integerFromNegativeReal": {"type": "Integer", "value": -2},
     "integerFromRational": {"type": "Integer", "value": 0},
     "rationalFromReal": {"type": "Real", "value": 0.75},
+    "rationalFromInteger": {"type": "Real", "value": 2.0},
+    "rationalFromIntegerIsReal": {"type": "Boolean", "value": true},
     "realPart": {"type": "Real", "value": 2.5},
     "imaginaryPart": {"type": "Real", "value": 0.0},
     "argument": {"type": "Real", "value": 0.0},

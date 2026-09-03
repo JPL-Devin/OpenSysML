@@ -61,6 +61,7 @@ func TestConversionFunctionValues(t *testing.T) {
 		{"RealFunctions::ToInteger", []Value{constInt(4)}, constInt(4)},
 		{"RationalFunctions::ToInteger", []Value{constReal(0.5)}, constInt(0)},
 		{"RealFunctions::ToRational", []Value{constReal(0.75)}, constReal(0.75)},
+		{"RealFunctions::ToRational", []Value{constInt(2)}, constReal(2)},
 
 		{"RealFunctions::re", []Value{constReal(2.5)}, constReal(2.5)},
 		{"RealFunctions::re", []Value{constInt(2)}, constReal(2)},

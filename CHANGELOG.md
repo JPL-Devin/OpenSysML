@@ -145,7 +145,8 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   `Inf` and a hexadecimal float are invalid notation wherever a Real is read, a compiled
   calculation's command-line arguments included). A `RealFunctions`
   operator form binds an Integer argument as the Real it equals and answers a Real
-  (`RealFunctions::'+'(1, 2)` is `3.0`; a product too large for an Integer stays finite), while
+  (`RealFunctions::'+'(1, 2)` is `3.0`, `RealFunctions::ToRational(2)` is `2.0`; a product too
+  large for an Integer stays finite), while
   `RationalFunctions` keep an Integer's kind as their `abs`/`max`/`min` do. A direct
   invocation of a built-in through the runtime API (`InvokeCalc`, `InvokeCalcNamed`) binds
   and computes as the written call does, a body value handed to an `expr` parameter applied

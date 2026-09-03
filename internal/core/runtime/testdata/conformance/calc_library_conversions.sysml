@@ -27,6 +27,8 @@ package test {
 		out integerFromNegativeReal = RealFunctions::ToInteger(-2.7);
 		out integerFromRational = RationalFunctions::ToInteger(0.75);
 		out rationalFromReal = RealFunctions::ToRational(0.75);
+		out rationalFromInteger = RealFunctions::ToRational(2);
+		out rationalFromIntegerIsReal = RealFunctions::ToRational(2) === 2.0;
 		out realPart = RealFunctions::re(2.5);
 		out imaginaryPart = RealFunctions::im(2.5);
 		out argument = RealFunctions::arg(2.5);
