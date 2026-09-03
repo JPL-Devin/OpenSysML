@@ -710,7 +710,13 @@ func (ctx *Context) messageMatches(m Message, want *ast.QualifiedName, scope *sy
 //
 // A via send keeps a receiver target when one was stated; postVia fills in the
 // reached port and final delivery kind.
+//
+// Names resolve in the send's declaring scope, which sees what a nested block
+// imports; scope is the fallback where the lowered send records none.
 func (e *EvalContext) buildMessage(scope *symbols.Scope, send lower.Send) (Message, error) {
+	if send.Scope != nil {
+		scope = send.Scope
+	}
 	target := send.Target
 	if send.IsVia {
 		target = send.Receiver
@@ -845,17 +851,14 @@ func (e *EvalContext) invokesCalc(scope *symbols.Scope, invocation *ast.Invocati
 	if invocation.Type == nil {
 		return false
 	}
-	if _, isBuiltin := builtins[qualifiedNameToString(invocation.Type)]; isBuiltin {
-		return true
-	}
 	if e.ctx == nil || e.ctx.resolver == nil || scope == nil {
 		return false
 	}
 	sym, ok := e.ctx.resolver.ResolveQualified(scope, invocation.Type)
-	if !ok || sym == nil {
+	if !ok {
 		return false
 	}
-	return isCalcDecl(sym.Decl)
+	return isCalcSymbol(sym)
 }
 
 // buildInvokedMessage builds the message of `send shutDown() to self`: the

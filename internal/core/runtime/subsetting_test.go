@@ -27,7 +27,7 @@ const redefinedCollectionModel = `
 func TestRedefinedCollectionReadsSubsetsUnderEitherName(t *testing.T) {
 	for _, first := range []string{"Subsystems", "subsystems"} {
 		t.Run(first, func(t *testing.T) {
-			idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, redefinedCollectionModel))
+			idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, redefinedCollectionModel))
 			matches := idx.LookupQualified("test::sat")
 			if len(matches) != 1 {
 				t.Fatalf("test::sat: %d matching symbols, want 1", len(matches))
