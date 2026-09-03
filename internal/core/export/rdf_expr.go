@@ -325,6 +325,10 @@ func expressionScope(el *element, property string) string {
 	switch property {
 	case rdf.OpenSysML + xWhileCondition, rdf.OpenSysML + xUntilCondition:
 		return el.qname
+	case rdf.OpenSysML + xGuard:
+		if el.metaclass == mTransition {
+			return el.qname
+		}
 	}
 	return el.scope
 }

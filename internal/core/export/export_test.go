@@ -1870,6 +1870,55 @@ func structuralTriples(t *testing.T, turtle []byte) map[rdf.Triple]bool {
 	return out
 }
 
+// A body parameter, a loop variable or a trigger parameter that shadows an
+// outer feature of the same name is no element of the graph, so the reference
+// stays a name rather than linking the feature it hides.
+func TestShadowingParametersStayNames(t *testing.T) {
+	// A body declaring its parameter is written from its notation alone, so
+	// that fixture is checked in the graph only.
+	body := toTurtle(t, filepath.Join("testdata", "convert", "shadowing_body.sysml"))
+	if want := "sysml:referent elmt:ShadowBody__Sensor__readings ."; !strings.Contains(body, want) {
+		t.Errorf("the graph should carry %q\n%s", want, body)
+	}
+	if wrong := "sysml:referent elmt:ShadowBody__Sensor__value"; strings.Contains(body, wrong) {
+		t.Errorf("the graph should not link %q\n%s", wrong, body)
+	}
+	if want := `sysml:referent "value" ;`; !strings.Contains(body, want) {
+		t.Errorf("the graph should carry %q\n%s", want, body)
+	}
+
+	turtle := toTurtle(t, filepath.Join("testdata", "convert", "shadowing_parameters.sysml"))
+	for _, want := range []string{
+		`sysml:referent "value" ;`,
+		`sysml:referent "value" .`,
+		`sysml:referent "w" ;`,
+		"sysml:referent elmt:Shadows__Sweep__items .",
+	} {
+		if !strings.Contains(turtle, want) {
+			t.Errorf("the graph should carry %q\n%s", want, turtle)
+		}
+	}
+	for _, wrong := range []string{
+		"sysml:referent elmt:Shadows__Sweep__value",
+		"sysml:referent elmt:Shadows__Governor__value",
+		"sysml:referent elmt:Shadows__Governor__w",
+	} {
+		if strings.Contains(turtle, wrong) {
+			t.Errorf("the graph should not link %q\n%s", wrong, turtle)
+		}
+	}
+	back := backFromTheGraphAlone(t, turtle)
+	for _, want := range []string{
+		"accept setSpeed(value) if (value > 0) then fast;",
+		"accept w : Speed if (w > 0) then idle;",
+		"attribute cur = value;",
+	} {
+		if !strings.Contains(back, want) {
+			t.Errorf("the notation should read %q\n%s", want, back)
+		}
+	}
+}
+
 // A chain member inherited by the operand's type from two generals under one
 // name comes back qualified, so the spelling reaches the linked one — behind a
 // nested chain too; a member reached under its name alone comes back as that name.

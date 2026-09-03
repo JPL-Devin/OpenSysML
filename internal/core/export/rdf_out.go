@@ -278,6 +278,9 @@ func (e *encoder) collectScopes(scope *symbols.Scope, owner string) {
 		return
 	}
 	e.scopes[owner] = scope
+	if trans, ok := scope.Node().(*ast.TransitionMember); ok {
+		e.scopes[owner] = symbols.TriggerScope(scope.Parent(), trans)
+	}
 	for _, child := range scope.Children() {
 		if fqn, ok := e.fqn[child.Node()]; ok {
 			e.collectScopes(child, fqn)
@@ -1190,8 +1193,11 @@ func (e *encoder) linkReference(owner string, ref resolve.Reference) rdf.Term {
 	if ref.QN == nil || len(ref.QN.Parts) == 0 {
 		return rdf.String("")
 	}
-	if fqn, ok := e.resolveIn(owner, ref); ok {
+	switch fqn, found := e.resolveIn(owner, ref); found {
+	case linked:
 		return e.ids.subjectFor(fqn)
+	case unrepresented:
+		return rdf.String(qualifiedText(ref.QN))
 	}
 	return e.reference(owner, qualifiedText(ref.QN))
 }
@@ -1228,20 +1234,36 @@ func (e *encoder) scopeOf(owner string) *symbols.Scope {
 	return scope
 }
 
+// resolution is what resolving a name from its scope found.
+type resolution int
+
+const (
+	// unresolved: the name reaches nothing the resolver knows.
+	unresolved resolution = iota
+	// unrepresented: the name reaches a declaration the graph has no element for,
+	// such as a body parameter; it must not be linked to anything else.
+	unrepresented
+	// linked: the name reaches an element of this document.
+	linked
+)
+
 // resolveIn resolves ref from its scope, owner's unless set, reporting the
 // qualified name of the declaration it reaches when that is in this document.
-func (e *encoder) resolveIn(owner string, ref resolve.Reference) (string, bool) {
+func (e *encoder) resolveIn(owner string, ref resolve.Reference) (string, resolution) {
 	if ref.Scope == nil {
 		ref.Scope = e.scopeOf(owner)
 	}
 	if ref.Scope == nil {
-		return "", false
+		return "", unresolved
 	}
 	sym, ok := e.resolver.ResolveReference(ref)
 	if !ok || sym == nil {
-		return "", false
+		return "", unresolved
 	}
-	return e.declaredFQN(sym.Decl)
+	if fqn, ok := e.declaredFQN(sym.Decl); ok {
+		return fqn, linked
+	}
+	return "", unrepresented
 }
 
 // declaredFQN is the qualified name decl is declared under in this document.

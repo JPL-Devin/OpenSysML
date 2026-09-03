@@ -333,7 +333,8 @@ func (e *encoder) encodeTransition(n *ast.TransitionMember, head func(rdf.Term),
 	if n.Via != nil {
 		e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelVia]), e.link(owner, n.Via))
 	}
-	e.expression(subject, e.sysx(xGuard), xGuard, owner, n.Guard)
+	// The guard reads the parameters the trigger declares, in the transition's scope.
+	e.expression(subject, e.sysx(xGuard), xGuard, fqn, n.Guard)
 	if n.HasEffect {
 		e.graph.Add(subject, e.sysx(xBracedEffect), rdf.Bool(len(n.Effect) == 0 || e.bracedBody(n, n.Effect)))
 	}

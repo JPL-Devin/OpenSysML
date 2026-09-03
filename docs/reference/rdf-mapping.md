@@ -199,7 +199,9 @@ never by parsing the id — a declared id may legitimately end in `_om` or embed
   or the owner's generals, else qualified. A transition or `then` end in a
   state machine links the vertex it names anywhere in the machine, in a nested
   state or a sibling region; a loop's `while` or `until` condition links the
-  actions the loop body declares.
+  actions the loop body declares. A body expression's parameter, a `for` loop's
+  variable and a trigger's parameter are no elements of the graph: a reference
+  to one stays its name, even where it shadows a feature of the same name.
 - `sysml:lowerBound`, `sysml:upperBound` — multiplicity, as expression nodes
   ([Expressions](#expressions))
 - `sysml:value` — a feature's value, as an expression node
