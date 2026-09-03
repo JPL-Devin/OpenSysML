@@ -3,6 +3,7 @@ package repl
 import (
 	"strings"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 )
 
@@ -27,7 +28,26 @@ func satisfyText(a *runtime.SatisfyAssertion) string {
 	}
 	if a.SubjectRef != "" {
 		b.WriteString(" by ")
-		b.WriteString(notationName(a.SubjectRef))
+		if a.SubjectChain != nil {
+			b.WriteString(chainNotation(a.SubjectChain))
+		} else {
+			b.WriteString(notationName(a.SubjectRef))
+		}
 	}
 	return b.String()
+}
+
+// chainNotation spells a feature chain as the notation writes it: each member
+// quoted on its own from the syntax, so a dot inside a quoted name stays inside
+// its quotes, joined by the dots between members.
+func chainNotation(node ast.Node) string {
+	switch n := node.(type) {
+	case *ast.FeatureChainExpr:
+		return chainNotation(n.Operand) + "." + notationName(qualifiedText(n.Member))
+	case *ast.FeatureReference:
+		return notationName(qualifiedText(n.Name))
+	case *ast.QualifiedName:
+		return notationName(qualifiedText(n))
+	}
+	return ""
 }

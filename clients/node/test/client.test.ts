@@ -118,7 +118,7 @@ test("a complex number is one value over gRPC, Connect protobuf and Connect JSON
     await using connection = await connect(options);
     assert.ok((await connection.serverInfo()).has(CAPABILITY_COMPLEX_VALUES));
     await using model = await connection.loads(COMPLEX_MODEL);
-    assert.deepEqual(await model.eval("rect(1.0, -1.0)"), {
+    assert.deepEqual(await model.eval("ComplexFunctions::rect(1.0, -1.0)"), {
       kind: "complex",
       value: { real: 1, imaginary: -1 },
     });

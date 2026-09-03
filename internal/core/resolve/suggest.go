@@ -112,7 +112,13 @@ func (r *Resolver) suggestTable() *suggest.Table {
 // reports. The hint belongs to the diagnostic, not to one renderer, so the CLI,
 // the REPL and the LSP all show it.
 func (r *Resolver) unresolvedMessage(scope *symbols.Scope, name string) string {
-	return suggest.With(unresolvedReferencePrefix+name, name, r.suggestFor(scope, name))
+	return unresolvedReferencePrefix + r.UnresolvedName(scope, name)
+}
+
+// UnresolvedName is the text after "unresolved reference: " for an unqualified
+// name in scope that resolves to nothing: the name and the spellings it may mean.
+func (r *Resolver) UnresolvedName(scope *symbols.Scope, name string) string {
+	return suggest.With(name, name, r.suggestFor(scope, name))
 }
 
 // unresolvedReferencePrefix is how a reference that resolves to nothing reads.
