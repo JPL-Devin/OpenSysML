@@ -1039,6 +1039,24 @@ func TestOptionalBehavingPartIsNotCreatedWithItsHolder(t *testing.T) {
 	if got := len(ctx.instances); got != 3 {
 		t.Errorf("%d object(s) after creating the holder, want 3", got)
 	}
+
+	// A part required in unbounded number is not optional: it fails its holder
+	// as reading it would.
+	src = `
+		package test {
+			part def Ticker {
+				exhibit state ticking { entry; then on; state on; }
+			}
+			part def Holder { part all : Ticker [*..*]; }
+			part holder : Holder;
+		}
+	`
+	model, resolver, root = parseAndBuildModel(t, src)
+	pkg = resolveSymbol(t, root, "test")
+	ctx = NewContext(model, resolver, 10000)
+	if _, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "holder")); !errors.Is(err, ErrMultiplicityViolation) {
+		t.Errorf("creating a holder of an unbounded required part: got %v, want ErrMultiplicityViolation", err)
+	}
 }
 
 // A behavior started by a creation that names its own usage reaches the object

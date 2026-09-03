@@ -278,7 +278,10 @@ func (ctx *Context) materializeBehavingParts(inst *Instance) error {
 		}
 		composite := ctx.CompositeTypeOf(fv.Feature)
 		mult := fv.Feature.Multiplicity
-		if composite == nil || !mult.Upper.Known || !mult.Lower.Known || mult.Lower.Value == 0 {
+		if composite == nil || !mult.Upper.Known || !mult.Lower.Known {
+			continue
+		}
+		if !mult.Lower.Infinite && mult.Lower.Value == 0 {
 			continue
 		}
 		if !ctx.runsBehaviors(composite, make(map[*symbols.Symbol]bool)) {
