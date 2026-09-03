@@ -400,11 +400,13 @@ func (ctx *Context) invokeCalcWithSelf(sym *symbols.Symbol, args calcArgs, scope
 // invokeBuiltinValues applies a built-in to arguments a direct invocation has
 // already evaluated, bound to its declared parameters as a call would bind them.
 func (ctx *Context) invokeBuiltinValues(sym *symbols.Symbol, fn builtinFunc, args calcArgs, callerScope *symbols.Scope, self *Instance) (Value, error) {
-	bound, err := bindBuiltinValues(ctx.qualifiedSymbolName(sym), args)
-	if err != nil {
-		return Value{}, err
-	}
-	return fn(NewEvalContextIn(ctx, ctx.calcScope(sym, nil, callerScope), self), bound)
+	name := ctx.qualifiedSymbolName(sym)
+	return tracedBuiltin(ctx.trace, name,
+		func() ([]Value, error) { return bindBuiltinValues(name, args) },
+		func(bound []Value) (Value, error) {
+			return fn(NewEvalContextIn(ctx, ctx.calcScope(sym, nil, callerScope), self), bound)
+		},
+	)
 }
 
 // invocationFrame is the storage one calc invocation runs in, held off the

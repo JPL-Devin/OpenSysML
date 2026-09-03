@@ -100,11 +100,39 @@ var builtinSignatures = map[string][]declaredParam{
 // invokeBuiltin binds the arguments of a call to the built-in name to its
 // declared parameters and applies fn to them.
 func (ec *EvalContext) invokeBuiltin(name string, fn builtinFunc, exprs []ast.Node, named []ast.NamedArg) (Value, error) {
-	args, err := ec.bindBuiltinArgs(name, exprs, named)
+	return tracedBuiltin(ec.trace, name,
+		func() ([]Value, error) { return ec.bindBuiltinArgs(name, exprs, named) },
+		func(args []Value) (Value, error) { return fn(ec, args) },
+	)
+}
+
+// tracedBuiltin binds and applies a built-in within the calc events an
+// invocation records, so it reads in a trace like any other function; a
+// binding failure closes the level it opened.
+func tracedBuiltin(tr *TraceRecorder, name string, bind func() ([]Value, error), apply func([]Value) (Value, error)) (Value, error) {
+	if tr == nil {
+		args, err := bind()
+		if err != nil {
+			return Value{}, err
+		}
+		return apply(args)
+	}
+	tr.RecordCalcEnter(name)
+	args, err := bind()
 	if err != nil {
+		tr.RecordCalcExitError(name, err)
 		return Value{}, err
 	}
-	return fn(ec, args)
+	for i, p := range builtinSignatures[name] {
+		tr.RecordCalcBind(p.name, args[i], "argument")
+	}
+	result, err := apply(args)
+	if err != nil {
+		tr.RecordCalcExitError(name, err)
+		return Value{}, err
+	}
+	tr.RecordCalcExit(name, result)
+	return result, nil
 }
 
 // bindBuiltinArgs evaluates a call's arguments into one value per declared
