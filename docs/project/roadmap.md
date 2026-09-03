@@ -334,10 +334,10 @@ Saving and SysML ↔ RDF Turtle conversion landed (`internal/core/rdf`,
 `internal/core/export`, `%save`, `sysml -convert`, `-sync-diff`); see
 [the RDF mapping](../reference/rdf-mapping.md).
 
-The RDF direction ships **experimental**, because of D1, D2, D3.4 and D7 below: its vocabulary
+The RDF direction ships **experimental**, because of D1, D2 and D7 below: its vocabulary
 may change without a compatibility path, and the one triplestore interop measured — Flexo — still
 drops what those items carry. Every surface says so (`export.ExperimentalNotice`), and promoting
-it to stable is landing D3.4 (#850) and re-measuring the harness, not a documentation change.
+it to stable is re-measuring the harness once those land, not a documentation change.
 
 Measured by the per-file ratchet at this baseline (`TestCorpusRoundTrip`,
 `internal/core/export/testdata/corpus_roundtrip_expected.txt`), **275 of the 345 models under
@@ -410,41 +410,39 @@ asserting the fix, so every item below shows up as movement in
 `internal/interop/flexo/testdata/interop_expected.txt`. Keep it out of `go test ./...`.
 
 What the current recording measures, for the identity-carrying fixture: **49 of 49 elements
-listed and 355 of 424 properties delivered** on the graph-load side, against 33 of 33 and 158 of
+listed and 369 of 452 properties delivered** on the graph-load side, against 33 of 33 and 158 of
 158 for the same model posted through the service's own commit path; 9 of 49 read as roots, and 9
 have no owner in the model; every element is readable directly by id; no subject of the graph is
-outside the element namespace. The 69 lost properties are exactly two things:
+outside the element namespace. **Every standard property is delivered, the 14 multi-valued ones
+included** — `ownedMember`, `ownedMembership`, `ownedRelationship` (3/3 each), `ownedFeature`,
+`ownedFeatureMembership` (2/2 each), `specializes` (1/1) — since D3.4 landed. The 83 lost
+properties are one thing:
 
-- **8 property keys in `sysx:`** — `sourceText`, `hasBody`, `memberIndex`, `argumentIndex`,
-  `declaredKeyword`, `endForm`, `endIndex`, `relatedFeature` — dropped unread. That is the D1/D2
-  residue below, and it is the reason the expression trees and end structure the mapping now
-  writes do not survive the hop.
-- **0 of 15 multi-valued standard properties delivered** — `ownedMember`, `ownedMembership`,
-  `ownedRelationship` (0/3 each), `ownedFeature`, `ownedFeatureMembership` (0/2 each),
-  `specializes` (0/1) — which is **D3.4**.
+- **10 property keys in `sysx:`** — `sourceText`, `sourceTail`, `sourceLanguage`, `hasBody`,
+  `memberIndex`, `argumentIndex`, `declaredKeyword`, `endForm`, `endIndex`, `relatedFeature` —
+  dropped unread. That is the D1/D2 residue below, and it is the reason the expression trees and
+  end structure the mapping now writes do not survive the hop. (The one multi-valued property
+  still lost, `relatedFeature` on 0/1, is among them.)
 
 The commit path delivers 6 of 6 of its own multi-valued properties, because it stores each array
-whole as a JSON annotation literal alongside the typed triples. Two deployed behaviours differ
+whole as a JSON annotation literal alongside the typed triples; the graph now carries the same
+literal, and the two paths deliver every array alike. Two deployed behaviours differ
 from the sources: the element listing ignores `pageSize`/`pageAfter` and returns every subject,
 and project delete is a soft annotation that leaves the Layer 1 branch behind.
 
-### D3.4 — collection-valued properties need the JSON annotation
+### D3.4 — collection-valued properties need the JSON annotation (done)
 
 The reader **skips** a `sysml:` predicate with more than one object and prefers the
 annotation literal at `urn:sysmlv2:annotation:json:<key>`, which it parses as JSON.
-Anything multi-valued we emit as bare repeated triples is silently dropped on read. So
-the encoder must write both forms for collections, and the decoder must accept the
-annotation form when reading a foreign graph. This is the last of D3 and the smallest item in
-the track. [PR #850](https://github.com/JPL-Devin/OpenSysML/pull/850) does it: one `json:<key>`
-literal per multi-valued `sysml:` property beside the typed triples (shape taken from the service's
-`CommitApi.kt`, cited in the mapping page), a decoder that accepts either spelling or both and
-refuses a graph whose two spellings disagree, `reposync` keeping the literal in step when it mints
-ids, and the harness re-recorded against a live stack: the 14 multi-valued *standard* properties
-went 0 → 14 of 14 and the total 355/424 → 369/452 (the denominator grew with source-text
-properties the mapping added since the previous recording; the fifteenth multi-valued property in
-the recording above is `sysx:relatedFeature`, which stays dropped with the rest of D1/D2). **Open**
-(mergeable at the last check). It also rewrites this section, so whichever of it and this page
-lands second reconciles the other.
+Anything multi-valued emitted as bare repeated triples alone is silently dropped on read.
+[PR #850](https://github.com/JPL-Devin/OpenSysML/pull/850) closed it, and D3 with it: one
+`json:<key>` literal per multi-valued `sysml:` property beside the typed triples (shape taken from
+the service's `CommitApi.kt`, cited in `rdf-mapping.md` § Collections), a decoder that accepts
+either spelling or both and refuses a graph whose two spellings disagree, and `reposync` keeping
+the literal in step when it mints ids. Re-recorded against the live stack, the multi-valued
+standard properties went from 0 of 14 to 14 of 14 delivered, and the total from 355/424 to 369/452
+(the denominator moved with the source-text properties the mapping added since the previous
+recording; the one multi-valued property still lost is `sysx:relatedFeature`, D1/D2 residue).
 
 ## D1 — expression trees are standard in shape, non-standard in vocabulary
 
@@ -581,22 +579,22 @@ directions are refereed against the live stack, and both are element-keyed, whic
 bought.
 
 What is missing is the round trip a modeller expects from a repository, and each piece is small
-once D3.4 (#850) is in:
+now that D3.4 is in:
 
 1. **Read a branch as notation.** `-sync-diff` reads a branch to compare it; nothing converts a
    branch to `.sysml`. `sysml -convert sysml -from <endpoint or flexo:// URL>` is the decoder D3.4
-   completes, applied to the graph the service serves, and `-sync-state` already knows the branch
-   and the last commit. Before D3.4 the read loses every collection, so it waits.
+   completed, applied to the graph the service serves, and `-sync-state` already knows the branch
+   and the last commit.
 2. **Push a whole graph.** The harness's `PUT .../branches/{branch}/graph` with the ETag
    precondition and `?message=` is the fast path for a first load or a re-baseline, where the
    element-wise commit of `-sync-apply` is the wrong shape. Expose it as the write half of the
    same flag, with the token from `flexo.EnvToken` as today.
-3. **What survives the hop.** D3.4, then D2 and D1, decide how much of a pushed model the read
-   path gets back; the harness's 355 of 424 is the number to move, and it is re-measured, not
-   asserted, after each.
+3. **What survives the hop.** D2 and D1 decide how much of a pushed model the read path gets
+   back; the harness's 369 of 452 is the number to move, and it is re-measured, not asserted,
+   after each.
 
-Nothing here is a new subsystem; the order is D3.4 → D9.1 → D9.2, and D9.3 is the RDF track's
-existing order applied to this use.
+Nothing here is a new subsystem; the order is D9.1 → D9.2, and D9.3 is the RDF track's existing
+order applied to this use.
 
 ---
 
@@ -1317,11 +1315,10 @@ thing.
 5. **I2, I3, then I4's client** — the shared fixtures, the thin R, Julia and MATLAB packages, the
    C client, each derived from the wire contract (I1, landed in #848); the C *ABI* half of I4 is
    not here — it is step 9.
-6. **D3.4, then D2 and D1, then D9.1 and D9.2** — Flexo: the collection JSON annotations (#850,
-   open), the standard vocabulary for expression trees and end structure, then the
-   authenticated push and the branch read. Push and read depend on the collection and vocabulary
-   quality, which is why they come last in the step; re-record the live-stack harness after D3.4
-   and again after D1/D2.
+6. **D2 and D1, then D9.1 and D9.2** — Flexo: the standard vocabulary for expression trees and
+   end structure, then the authenticated push and the branch read (the collection JSON annotations,
+   D3.4, landed in #850). Push and read depend on the vocabulary quality, which is why they come
+   last in the step; re-record the live-stack harness after D1/D2.
 7. **A5, then A4** — one clock for actions and states, then the continuous-time runner. The clock
    is prerequisite to coherent action/state simulation and to Q3, which follows it; A3 (sweeps,
    Monte Carlo, tables) is orchestration over A1 and goes wherever a user asks for it.
@@ -1346,8 +1343,8 @@ thing.
 - **Track N.** N2.1 (records and enums) first, since A1's "an analysis case compiles" and the
   differential's record coverage both need it; decide N2.2 (the budget) before N2.4; N2.3 tracks L4
   package by package; N2.6's actions and states are Track M's M1/M2.
-- **Track D.** Rebase and land the open RDF work (#815, #835, #824, #819, #827; #842 and #850 are
-  clean) first; then step 6 above; **D7** is mechanical now that identity is stable and fits anywhere; **D8**'s
+- **Track D.** Rebase and land the open RDF work (#815, #835, #824, #819, #827; #842 is clean)
+  first; then step 6 above; **D7** is mechanical now that identity is stable and fits anywhere; **D8**'s
   profile after #774 merges, since it only becomes conformant behind D1 and D2.
 - **Track E.** Land the in-flight fixes (#823 nested frames, #839, #843, #805, #808, #809, #845)
   first.

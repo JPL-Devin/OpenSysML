@@ -1,6 +1,7 @@
 package export
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"regexp"
@@ -68,6 +69,14 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 		return nil, &UnsupportedError{What: "an empty graph", Note: "nothing to convert"}
 	}
 	if err := checkExtensionNamespace(graph); err != nil {
+		return nil, err
+	}
+	graph, err := rdf.ReconcileCollections(graph)
+	if err != nil {
+		var malformed *rdf.AnnotationError
+		if errors.As(err, &malformed) {
+			return nil, &UnsupportedError{What: fmt.Sprintf("the annotation json:%s of <%s>", malformed.Key, malformed.Subject), Note: malformed.Note}
+		}
 		return nil, err
 	}
 	if err := checkLiterals(graph); err != nil {

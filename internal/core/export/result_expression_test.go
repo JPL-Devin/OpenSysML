@@ -46,7 +46,8 @@ func TestResultExpressionIsAResultExpressionMembership(t *testing.T) {
 	for _, want := range []string{
 		"elmt:Results__AfterMembers___403\n    a sysml:OperatorExpression ;",
 		"sysx:memberIndex \"3\"^^xsd:integer ;\n    sysml:owningNamespace elmt:Results__AfterMembers ;",
-		"sysml:operator \"*\" ;\n    sysml:argument expr:Results__AfterMembers___403_pa0, expr:Results__AfterMembers___403_pa1 ;\n    sysx:sourceText \"        y * y\\n\" .",
+		"sysml:operator \"*\" ;\n    sysml:argument expr:Results__AfterMembers___403_pa0, expr:Results__AfterMembers___403_pa1 ;\n    sysx:sourceText \"        y * y\\n\" ;",
+		"json:argument \"[{\\\"@id\\\":\\\"Results__AfterMembers___403_pa0\\\"},{\\\"@id\\\":\\\"Results__AfterMembers___403_pa1\\\"}]\" .",
 		"elmt:Results__AfterMembers___403_om\n    a sysml:ResultExpressionMembership ;",
 		"sysml:ownedMemberElement elmt:Results__AfterMembers___403 ;",
 		"sysml:ownedMemberFeature elmt:Results__AfterMembers___403 ;",
@@ -253,7 +254,8 @@ func TestMalformedMembershipEndsAreRefused(t *testing.T) {
 // dropped.
 func TestResultExpressionWithoutAnExpressionIsRefused(t *testing.T) {
 	turtle := string(withoutTriples(t, convertFixture(t, "result_expressions"), "sysx:sourceText"))
-	const operands = "    sysml:operator \"*\" ;\n    sysml:argument expr:Results__AfterMembers___403_pa0, expr:Results__AfterMembers___403_pa1 .\n"
+	const operands = "    sysml:operator \"*\" ;\n    sysml:argument expr:Results__AfterMembers___403_pa0, expr:Results__AfterMembers___403_pa1 ;\n" +
+		"    json:argument \"[{\\\"@id\\\":\\\"Results__AfterMembers___403_pa0\\\"},{\\\"@id\\\":\\\"Results__AfterMembers___403_pa1\\\"}]\" .\n"
 	if !strings.Contains(turtle, operands) {
 		t.Fatalf("expected the operands of the AfterMembers result in the graph:\n%s", turtle)
 	}

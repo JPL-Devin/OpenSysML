@@ -203,6 +203,9 @@ func encodeDocument(file *source.SourceFile, root *ast.RootNamespace) (*encoder,
 		return nil, e.idErr
 	}
 	e.sourceText()
+	if err := rdf.AnnotateCollections(e.graph); err != nil {
+		return nil, err
+	}
 	return e, nil
 }
 

@@ -1600,17 +1600,8 @@ func (c *compiler) compileBindings(
 			}
 			continue
 		}
-		if parameter.HasDefault {
-			return nil, &Error{
-				Kind:      ErrorDefaultUnavailable,
-				Document:  c.document,
-				Content:   c.contentName(content),
-				Query:     entry,
-				Parameter: parameter.Name,
-				Origin:    provenance.Symbol(usage),
-			}
-		}
-		if parameter.Multiplicity.Known && parameter.Multiplicity.Lower == 0 {
+		// An unbound defaulted parameter is evaluated by the query executor.
+		if parameter.HasDefault || (parameter.Multiplicity.Known && parameter.Multiplicity.Lower == 0) {
 			continue
 		}
 		return nil, &Error{

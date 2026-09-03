@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -17,7 +18,10 @@ elmt:Ordered
     sysml:ownedMembership elmt:Ordered__Real_om, elmt:Ordered__Mixed_om, elmt:Ordered__Declares_om ;
     sysml:ownedRelationship elmt:Ordered__Real_om, elmt:Ordered__Mixed_om, elmt:Ordered__Declares_om ;
     sysx:sourceText "package Ordered {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Ordered__Real\"},{\"@id\":\"Ordered__Mixed\"},{\"@id\":\"Ordered__Declares\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Ordered__Real_om\"},{\"@id\":\"Ordered__Mixed_om\"},{\"@id\":\"Ordered__Declares_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Ordered__Real_om\"},{\"@id\":\"Ordered__Mixed_om\"},{\"@id\":\"Ordered__Declares_om\"}]" .
 
 elmt:Ordered__Real
     a sysml:AttributeDefinition ;
@@ -59,7 +63,12 @@ elmt:Ordered__Mixed
     sysml:ownedFeature elmt:Ordered__Mixed__x, elmt:Ordered__Mixed___401 ;
     sysml:ownedFeatureMembership elmt:Ordered__Mixed__x_om, elmt:Ordered__Mixed___401_om ;
     sysx:sourceText "    calc def Mixed {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Ordered__Mixed__x\"},{\"@id\":\"Ordered__Mixed___401\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Ordered__Mixed__x_om\"},{\"@id\":\"Ordered__Mixed___401_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Ordered__Mixed__x_om\"},{\"@id\":\"Ordered__Mixed___401_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Ordered__Mixed__x\"},{\"@id\":\"Ordered__Mixed___401\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Ordered__Mixed__x_om\"},{\"@id\":\"Ordered__Mixed___401_om\"}]" .
 
 elmt:Ordered__Mixed_om
     a sysml:OwningMembership ;
@@ -154,7 +163,8 @@ expr:Ordered__Mixed___401_presult
     sysx:sourceText "a + b + k * x" ;
     sysml:elementId "Ordered__Mixed___401_presult" ;
     sysml:operator "+" ;
-    sysml:argument expr:Ordered__Mixed___401_presult_pa0, expr:Ordered__Mixed___401_presult_pa1 .
+    sysml:argument expr:Ordered__Mixed___401_presult_pa0, expr:Ordered__Mixed___401_presult_pa1 ;
+    json:argument "[{\"@id\":\"Ordered__Mixed___401_presult_pa0\"},{\"@id\":\"Ordered__Mixed___401_presult_pa1\"}]" .
 
 expr:Ordered__Mixed___401_presult_pa0
     a sysml:OperatorExpression ;
@@ -162,7 +172,8 @@ expr:Ordered__Mixed___401_presult_pa0
     sysml:elementId "Ordered__Mixed___401_presult_pa0" ;
     sysml:operator "+" ;
     sysml:argument expr:Ordered__Mixed___401_presult_pa0_pa0, expr:Ordered__Mixed___401_presult_pa0_pa1 ;
-    sysx:argumentIndex "0"^^xsd:integer .
+    sysx:argumentIndex "0"^^xsd:integer ;
+    json:argument "[{\"@id\":\"Ordered__Mixed___401_presult_pa0_pa0\"},{\"@id\":\"Ordered__Mixed___401_presult_pa0_pa1\"}]" .
 
 expr:Ordered__Mixed___401_presult_pa0_pa0
     a sysml:FeatureReferenceExpression ;
@@ -184,7 +195,8 @@ expr:Ordered__Mixed___401_presult_pa1
     sysml:elementId "Ordered__Mixed___401_presult_pa1" ;
     sysml:operator "*" ;
     sysml:argument expr:Ordered__Mixed___401_presult_pa1_pa0, expr:Ordered__Mixed___401_presult_pa1_pa1 ;
-    sysx:argumentIndex "1"^^xsd:integer .
+    sysx:argumentIndex "1"^^xsd:integer ;
+    json:argument "[{\"@id\":\"Ordered__Mixed___401_presult_pa1_pa0\"},{\"@id\":\"Ordered__Mixed___401_presult_pa1_pa1\"}]" .
 
 expr:Ordered__Mixed___401_presult_pa1_pa0
     a sysml:FeatureReferenceExpression ;

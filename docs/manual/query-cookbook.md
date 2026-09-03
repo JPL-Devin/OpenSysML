@@ -87,13 +87,72 @@ calc def MassTable :> Query {
 - Its `in` parameters are the entry bindings a caller supplies — an element,
   a string, a number, a boolean, or a sequence of them.
 - Its body is one expression composing the library operations; `source`
-  arguments chain them, innermost first.
+  arguments chain them, innermost first. A name in an argument reads the
+  query's parameter of that name, or binds the model element it refers to
+  (`OwnedElements(source = telescope)` starts from that part), just as a
+  `%run-query` binding does. The element is checked against the parameter's
+  type when the query is planned.
 - A query can invoke another query by name, with its own bindings. Invocation
   is dependency-ordered and cycle-checked, with depth and count budgets.
 
 Results are ordered element sequences. Order is the model's declaration order
 until an `OrderBy` says otherwise, and elements are deduplicated by identity,
 so a query is deterministic by construction.
+
+## Parameter defaults
+
+An `in` parameter may declare a default, and a caller that leaves it unbound
+gets that default — from `%run-query`, `-run-query`, `RunDocumentQuery`, a
+document's content block, or another query's invocation alike:
+
+```sysml
+calc def HeavySubsystems :> Query {
+	in root : Element = telescope;         // a name binds the element it refers to
+	in threshold : String default "10";    // anything else is evaluated
+	WhereFeature(
+		source = Descendants(source = root, maxDepth = 3),
+		'feature' = "mass", operator = ">=", value = threshold
+	)
+}
+
+calc def LightSubsystems :> HeavySubsystems {
+	in redefines threshold default "5";    // a redefining default wins
+}
+```
+
+- A default follows the binding rule of `%run-query <p>=<expr>`: a default that
+  names a model element binds that element; any other default is an expression.
+  The rule applies wherever a value is expected, so `in roots : Element[0..*] =
+  (telescope, groundStation);` binds both elements, a list may mix element names
+  with parameters and query invocations, and `in candidates : Element[0..*] =
+  OwnedElements(source = telescope);` starts the traversal from that part.
+- An expression default is evaluated once per query execution, before any row is
+  produced, in the scope of the query that declared it — it may name that
+  query's other parameters (`in candidates : Element[0..*] = OwnedElements(source = root);`)
+  or invoke another query, within the usual visit and invocation budgets.
+  Defaults are filled in parameter order after the explicit bindings, so a
+  default may read a parameter bound explicitly or defaulted before it; one that
+  reads a later, still unbound parameter fails as a missing binding.
+- Defaults are inherited: `LightSubsystems` keeps `root = telescope` from
+  `HeavySubsystems`, and its own `threshold` default replaces the inherited one.
+  The nearest default along the redefinition chain wins.
+- A default is checked against the parameter's type and multiplicity exactly
+  like an explicit binding, and an explicit binding always overrides the
+  default. What the default's text already settles is refused when the query is
+  planned, as `document-query-default-type` or
+  `document-query-default-multiplicity` naming the parameter: a literal or
+  named element of the wrong type, and a list or invocation whose size cannot
+  fit (`in source : Element = (telescope, groundStation);`). A named element is
+  never a data value — `= label` is refused for a `String` parameter even when
+  `label` is a `String` attribute — except an enumeration literal, which is a
+  value of its enumeration: `in hue : Color = Color::red;` binds the literal,
+  and a literal of another enumeration is refused. What only the values decide
+  — a parameter reference whose multiplicity is not known statically — is
+  checked when the default is evaluated, with the failures an explicit binding
+  gets.
+- A default the plan cannot represent (a form the query expression language has
+  no operation for) is a planning error naming the parameter, reported with the
+  other `document-query-*` diagnostics rather than at execution time.
 
 ## Collection
 
