@@ -194,13 +194,7 @@ func (ec *exprChecker) infer(scope *symbols.Scope, n ast.Node) semantics.PrimTyp
 		return ec.inferInvocation(scope, e)
 	case *ast.ConstructorExpr:
 		// An instance has no scalar type; the arguments are checked in place.
-		for _, a := range e.Args {
-			ec.infer(scope, a)
-		}
-		for _, na := range e.NamedArgs {
-			ec.infer(scope, na.Value)
-		}
-		return semantics.PrimUnknown
+		return ec.inferConstructor(scope, e)
 	case *ast.SequenceExpr:
 		// A sequence has no scalar type of its own; walking the elements keeps
 		// errors inside them reported.
@@ -731,6 +725,109 @@ func (ec *exprChecker) checkArguments(
 			ec.errorf(arg.Span(), "argument %d of %s expects %s, found %s", i+1, sym.Name, want, got)
 		}
 	}
+}
+
+// inferConstructor checks the arguments of `new T(…)` against T's features: a
+// positional argument binds the feature at its position, a label the feature it
+// names, and a feature is bound at most once.
+func (ec *exprChecker) inferConstructor(scope *symbols.Scope, e *ast.ConstructorExpr) semantics.PrimType {
+	argTypes := make([]semantics.PrimType, len(e.Args))
+	for i, a := range e.Args {
+		argTypes[i] = ec.infer(scope, a)
+	}
+	namedTypes := make([]semantics.PrimType, len(e.NamedArgs))
+	for i, na := range e.NamedArgs {
+		namedTypes[i] = ec.infer(scope, na.Value)
+	}
+	if e.Type == nil {
+		return semantics.PrimUnknown
+	}
+	typ, idx := ec.resolveTarget(scope, e.Type), ec.resolver.Index()
+	if typ == nil || idx == nil || idx.Library(typ) {
+		return semantics.PrimUnknown
+	}
+	features := ec.constructedFeatures(typ, idx)
+	bound := make(map[*symbols.Symbol]bool, len(features))
+	for i, arg := range e.Args {
+		if i >= len(features) {
+			ec.errorf(arg.Span(), "new %s takes %d argument(s), found %d", typ.Name, len(features), len(e.Args))
+			break
+		}
+		bound[features[i]] = true
+		ec.checkFeatureBinding(arg, argTypes[i], features[i], typ)
+	}
+	for i, na := range e.NamedArgs {
+		if na.Name == nil {
+			continue
+		}
+		// An unresolved label is the resolver's to report.
+		feature, ok := ec.resolver.ResolveReference(resolve.Reference{Scope: scope, QN: na.Name, Constructed: e.Type})
+		if !ok || feature == nil {
+			continue
+		}
+		if !ec.memberOf(typ, feature) {
+			ec.errorf(na.Name.Span(), "%s is not a feature of %s", ast.QualifiedText(na.Name), typ.Name)
+			continue
+		}
+		if bound[feature] {
+			ec.errorf(na.Name.Span(), "%s of %s is already bound by an earlier argument", feature.Name, typ.Name)
+			continue
+		}
+		bound[feature] = true
+		ec.checkFeatureBinding(na.Value, namedTypes[i], feature, typ)
+	}
+	return semantics.PrimUnknown
+}
+
+// checkFeatureBinding reports a constructor argument whose scalar type cannot
+// bind the feature it is written for.
+func (ec *exprChecker) checkFeatureBinding(arg ast.Node, got semantics.PrimType, feature, typ *symbols.Symbol) {
+	u, ok := feature.Decl.(*ast.Usage)
+	if !ok {
+		return
+	}
+	want := ec.declaredPrimType(feature.OwnerScope, u.Relationships)
+	if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
+		return
+	}
+	if !bindable(arg, got, want) {
+		ec.errorf(arg.Span(), "%s of %s expects %s, found %s", feature.Name, typ.Name, want, got)
+	}
+}
+
+// memberOf reports whether feature is a member typ declares or inherits.
+func (ec *exprChecker) memberOf(typ, feature *symbols.Symbol) bool {
+	for _, m := range ec.model.MembersOf(typ) {
+		if m == feature {
+			return true
+		}
+	}
+	return false
+}
+
+// constructedFeatures returns the features a constructor's positional
+// arguments bind, in the order the runtime shape lists them: the type's own
+// features first, then the inherited ones, without those the library declares
+// for every element.
+func (ec *exprChecker) constructedFeatures(typ *symbols.Symbol, idx *symbols.Index) []*symbols.Symbol {
+	var features []*symbols.Symbol
+	seen := map[*symbols.Symbol]bool{}
+	names := map[string]bool{}
+	for _, m := range ec.model.MembersOf(typ) {
+		if seen[m] || names[m.Name] {
+			continue
+		}
+		seen[m] = true
+		if _, isUsage := m.Decl.(*ast.Usage); !isUsage || idx.Library(m) {
+			continue
+		}
+		if ec.model.VariationPointOwning(m) != nil {
+			continue
+		}
+		names[m.Name] = true
+		features = append(features, m)
+	}
+	return features
 }
 
 // isBehaviorKind reports the behavior kinds whose parameter lists are checked.

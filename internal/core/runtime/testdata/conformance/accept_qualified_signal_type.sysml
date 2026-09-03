@@ -27,7 +27,7 @@ package AcceptQualified {
 
 			state sending {
 				entry action issue {
-					send new Alpha::Ping(7) via p;
+					send new Alpha::Ping() via p;
 					assign sent := sent + 1;
 				}
 			}

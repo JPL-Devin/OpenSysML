@@ -196,13 +196,15 @@ func TestRenameRewritesConstructorLabels(t *testing.T) {
 		"\titem def Burst :> Telemetry;\n\tpart def Station;\n\taction def Downlink {\n" +
 		"\t\tpart ground : Station;\n\t\tattribute frames;\n" +
 		"\t\tsend new Telemetry(frames = 3) to ground;\n" +
-		"\t\tsend new Burst(frames = frames) to ground;\n\t}\n}\n"
+		"\t\tsend new Burst(frames = frames) to ground;\n" +
+		"\t\tsend new Burst(Telemetry::frames = frames) to ground;\n\t}\n}\n"
 
 	got := renamed(t, "labels.sysml", src, "App::Telemetry::frames", "count")
 	for _, want := range []string{
 		"item def Telemetry { attribute count; }",
 		"send new Telemetry(count = 3) to ground;",
 		"send new Burst(count = frames) to ground;",
+		"send new Burst(Telemetry::count = frames) to ground;",
 		"\t\tattribute frames;\n",
 	} {
 		if !strings.Contains(got, want) {
@@ -216,6 +218,7 @@ func TestRenameRewritesConstructorLabels(t *testing.T) {
 		"\t\tattribute local;\n",
 		"send new Telemetry(frames = 3) to ground;",
 		"send new Burst(frames = local) to ground;",
+		"send new Burst(Telemetry::frames = local) to ground;",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q:\n%s", want, got)

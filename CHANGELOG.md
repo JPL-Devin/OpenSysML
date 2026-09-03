@@ -98,6 +98,13 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   positional or named arguments exactly as the invocation form used to. An accept subsetting a
   declared event (`accept :> shutDown`) now takes a message sent from that event feature
   (`send shutDown to interrupt`), not only one of its type.
+- **A constructor's arguments are checked against the type it instantiates.** `new T(…)` binds
+  the type's features — its own first, then the inherited ones — by position or by label, and the
+  type tier now reports a positional argument beyond them, a label bound twice, a qualified label
+  naming another type's feature, and an argument whose scalar type cannot bind its feature, each at
+  the offending argument. A simple label resolves as a feature of the constructed type rather than
+  of the surrounding scope, so an unknown one is reported where it is written and renaming the
+  feature rewrites its labels.
 - **Action and state execution has a referee outside the executor.** Six conformance cases —
   a join fed by branches of unequal length, a join fed twice over one succession, a node two
   successions reach, two fork branches writing one feature, the specification's `ChargeBattery`

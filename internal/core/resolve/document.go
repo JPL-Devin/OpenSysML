@@ -1136,8 +1136,13 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 			r.resolveExpr(scope, a)
 		}
 		for _, na := range v.NamedArgs {
-			// A label names a feature of the instantiated type, not of scope.
-			if typ != nil && na.Name != nil {
+			// A simple label is a feature of the instantiated type; a qualified
+			// one is resolved in scope.
+			switch {
+			case na.Name == nil:
+			case len(na.Name.Parts) > 1:
+				r.ResolveQualified(scope, na.Name)
+			case typ != nil:
 				r.resolveMemberChain(typ, na.Name)
 			}
 			r.resolveExpr(scope, na.Value)
