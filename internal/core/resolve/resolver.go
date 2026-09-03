@@ -246,15 +246,25 @@ func (r *Resolver) resolveInitial(scope *symbols.Scope, n *ast.InitialNode) {
 	if n.Name == "" {
 		return
 	}
-	var others []*symbols.Symbol
-	for _, sym := range scope.LookupLocalAll(n.Name) {
-		if sym.Decl != ast.Node(n) {
-			others = append(others, sym)
+	if sym, ok := memberPastLabels(scope, n.Name); ok {
+		r.initials[n] = sym
+	}
+}
+
+// memberPastLabels is the member of scope that name reaches past the labels
+// initial nodes declare; false where only a label bears it.
+func memberPastLabels(scope *symbols.Scope, name string) (*symbols.Symbol, bool) {
+	var members []*symbols.Symbol
+	for _, sym := range scope.LookupLocalAll(name) {
+		if _, label := sym.Decl.(*ast.InitialNode); label {
+			continue
 		}
+		members = append(members, sym)
 	}
-	if len(others) > 0 {
-		r.initials[n] = symbols.PreferDeclared(others)[0]
+	if len(members) == 0 {
+		return nil, false
 	}
+	return symbols.PreferDeclared(members)[0], true
 }
 
 // InitialSymbol returns the body member the initial node's name resolved to,

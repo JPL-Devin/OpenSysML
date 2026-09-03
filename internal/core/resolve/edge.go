@@ -27,8 +27,16 @@ func (r *Resolver) resolveEdgeEnd(scope *symbols.Scope, qn *ast.QualifiedName, m
 		return
 	}
 	if implied {
-		// The name is the body's own member's; record what it binds, undiagnosed.
-		if sym, ok := scope.LookupLocal(qn.Parts[0].Text); ok && len(qn.Parts) == 1 {
+		// The name is the body's own member's, the one a `first x` label also
+		// starts at; record what it binds, undiagnosed.
+		if len(qn.Parts) != 1 {
+			return
+		}
+		sym, ok := memberPastLabels(scope, qn.Parts[0].Text)
+		if !ok {
+			sym, ok = scope.LookupLocal(qn.Parts[0].Text)
+		}
+		if ok {
 			r.resolvedPart(qn, 0, sym)
 		}
 		return

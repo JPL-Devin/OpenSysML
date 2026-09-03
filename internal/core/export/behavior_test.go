@@ -282,6 +282,28 @@ func TestThenSequencesFromTheNameAnUnnamedUsageAnswersTo(t *testing.T) {
 	}
 }
 
+// A `then` after `first start;` sequences from the member `start` names, the
+// one the initial node links to, so the graph reads back unchanged.
+func TestThenAfterFirstSequencesFromTheMemberTheStartNames(t *testing.T) {
+	src := "package P {\n    use case enter;\n    use case drive {\n        ref redefines start {\n            doc /* pre */\n        }\n" +
+		"        first start;\n        then include enter;\n        then done;\n    }\n}\n"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	const start = "sysml:sourceFeature elmt:P__drive___400"
+	if n := strings.Count(string(turtle), start); n != 2 {
+		t.Fatalf("the initial node and the then after it should both state %s, found %d:\n%s", start, n, turtle)
+	}
+	back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from the mapping alone: %v\n%s", err, turtle)
+	}
+	if string(back) != src {
+		t.Fatalf("the notation changed\n--- want ---\n%s\n--- got ---\n%s", src, back)
+	}
+}
+
 // A `then` folded into the member it introduces sequences from one member only,
 // so a graph whose source end is any other member — an earlier action, or the
 // flow the `then` is read past — cannot be written in that form and is refused.
