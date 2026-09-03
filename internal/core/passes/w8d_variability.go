@@ -54,8 +54,10 @@ func (vc *w8dVariabilityChecker) check(sym *symbols.Symbol) {
 }
 
 // checkMembers reports every owned usage of a variation that is not a variant;
-// only a variation usage's objective is exempt, as in the reference. An
-// enumerated value is the variant form an enumeration definition owns.
+// only a variation usage's objective is exempt, as in the reference. A metadata
+// usage in a body annotates its owner (SysML.xtext AnnotatingMember) rather than
+// being a feature of it. An enumerated value is the variant form an enumeration
+// definition owns.
 func (vc *w8dVariabilityChecker) checkMembers(sym *symbols.Symbol) {
 	_, isUsage := sym.Decl.(*ast.Usage)
 	isEnum := sym.Kind == symbols.SymbolEnumerationDef
@@ -66,7 +68,7 @@ func (vc *w8dVariabilityChecker) checkMembers(sym *symbols.Symbol) {
 			continue
 		}
 		u, ok := node.(*ast.Usage)
-		if !ok || u.IsVariant {
+		if !ok || u.IsVariant || u.Kind == ast.UsageMetadata {
 			continue
 		}
 		if isUsage && u.Kind == ast.UsageObjective {

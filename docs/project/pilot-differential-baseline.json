@@ -61,7 +61,7 @@
         "dir": "examples",
         "origin": "ours",
         "files": 32,
-        "digest": "sha256:3d441910f351e067ec2915a73b439c8fef24a89525574b6d652e5165f19523e6"
+        "digest": "sha256:85cec24b6622b327b46116ebad66eb8f02fde0827556e165791101dd46e22583"
       },
       {
         "name": "probes",
@@ -71,7 +71,7 @@
         "digest": "sha256:b0153c55bbfcdacabab911725dc44e0e7f4d3a501a281b1f3f2a13cda19737c6"
       }
     ],
-    "recorded": "2026-09-02"
+    "recorded": "2026-09-03"
   },
   "totals": {
     "files": 366,
@@ -2320,61 +2320,61 @@
               "count": 1
             },
             {
-              "line": 185,
+              "line": 186,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 190,
+              "line": 191,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 194,
+              "line": 195,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 199,
+              "line": 200,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 204,
+              "line": 205,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 208,
+              "line": 209,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 220,
+              "line": 221,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 226,
+              "line": 227,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 339,
+              "line": 340,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 348,
+              "line": 349,
               "severity": "error",
               "category": "unmapped",
               "count": 1

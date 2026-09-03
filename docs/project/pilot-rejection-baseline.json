@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 121,
-        "digest": "sha256:021cdaa729e1443435961f2a49a3a735237a02a6392b1535857d76b47b5c07cb"
+        "files": 122,
+        "digest": "sha256:c7c393ffe1608a84528dddd9e03f0b88d6feecb12d7ededf63a32672e63254c5"
       }
     ],
-    "recorded": "2026-09-02"
+    "recorded": "2026-09-03"
   },
   "totals": {
-    "cases": 121,
-    "bothReject": 121,
+    "cases": 122,
+    "bothReject": 122,
     "pilotOnlyRejects": 0,
     "oursOnlyRejects": 0,
     "bothAccept": 0
@@ -55,8 +55,8 @@
     },
     {
       "source": "grammar",
-      "cases": 79,
-      "bothReject": 79,
+      "cases": 80,
+      "bothReject": 80,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 0,
       "bothAccept": 0
@@ -695,6 +695,15 @@
       "pilotErrors": 1
     },
     {
+      "path": "grammar/g61-definition-in-enumeration-body.sysml",
+      "source": "grammar",
+      "rule": "an enumeration body admits only enumerated values and annotating elements, not a nested definition (SysML.xtext EnumerationBody).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
       "path": "grammar/k01-specializes-without-target.kerml",
       "source": "grammar",
       "rule": "OwnedSpecialization requires a general type after 'specializes' (KerML.xtext SpecializationPart).",
@@ -1213,8 +1222,8 @@
       }
     ],
     "totals": {
-      "cases": 121,
-      "bothReject": 121,
+      "cases": 122,
+      "bothReject": 122,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 0,
       "bothAccept": 0
