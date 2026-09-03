@@ -3,6 +3,7 @@
 package test {
     private import ScalarValues::Real;
     private import RealFunctions::*;
+    private import SequenceFunctions::*;
 
     part def Sub {
         attribute volume : Real = 1.0;

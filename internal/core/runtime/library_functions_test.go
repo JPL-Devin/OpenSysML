@@ -246,55 +246,71 @@ func TestOpenSysMLMathFunctionsMatchTheShippedDeclarations(t *testing.T) {
 	}
 }
 
-// Every unqualified name denotes a registered function, and dispatch by
-// unqualified name is what makes a call evaluable in a model that imports no
-// part of the function library.
+// An unqualified call denotes the library function of that name exactly where
+// the validator resolves it to one: under an import of the package that declares
+// it. Without the import the call fails with a typed error carrying the same
+// hint the validator's diagnostic does — the qualified names the model may have
+// meant, whose package an import would make visible — rather than being answered
+// by a declaration the model never made visible.
 func TestLibraryFunctionUnqualifiedNames(t *testing.T) {
-	for local, fn := range libraryFunctionsByLocalName {
-		if _, ok := libraryFunctions[fn.name]; !ok {
-			t.Errorf("unqualified name %q maps to unregistered %q", local, fn.name)
-		}
+	cases := []struct {
+		name     string
+		call     string
+		imported string
+		want     string
+		hints    []string
+	}{
+		{"sqrt", "sqrt(x)", "RealFunctions", "2.0", []string{"RealFunctions::sqrt"}},
+		{"abs", "abs(-x)", "RealFunctions", "4.0", []string{"RealFunctions::abs", "IntegerFunctions::abs"}},
+		{"floor", "floor(x)", "RealFunctions", "4", []string{"RealFunctions::floor"}},
+		{"sin", "sin(0.0 * x)", "TrigFunctions", "0.0", []string{"TrigFunctions::sin"}},
+		{"exp", "exp(0.0 * x)", "OpenSysMLMathFunctions", "1.0", []string{"OpenSysMLMathFunctions::exp"}},
+		{"size", "(x, x)->size()", "SequenceFunctions", "2", []string{"SequenceFunctions::size", "CollectionFunctions::size"}},
 	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			model := func(imports string) string {
+				return "package test {\n" + imports + "\n\tcalc f { in x : Real; " + tc.call + " }\n}"
+			}
 
-	for _, local := range []string{"sqrt", "abs", "max", "min", "floor", "round", "sin", "cos", "tan", "cot", "arcsin", "arccos", "arctan", "isZero", "isUnit"} {
-		if _, ok := libraryFunctionsByLocalName[local]; !ok {
-			t.Errorf("unqualified name %q is not dispatchable", local)
-		}
-	}
+			ctx, idx := libraryModelContext(t, model(""))
+			sym := lookupOne(t, idx, "test::f")
+			_, err := ctx.InvokeCalc(sym, []Value{constReal(4)}, nil)
+			if !errors.Is(err, ErrUnresolvedReference) {
+				t.Fatalf("%s without an import: error = %v, want %v", tc.call, err, ErrUnresolvedReference)
+			}
+			if !strings.Contains(err.Error(), ": unresolved reference: "+tc.name+" — did you mean ") {
+				t.Errorf("error %q does not read as the validator's diagnostic", err)
+			}
+			for _, hint := range tc.hints {
+				if !strings.Contains(err.Error(), hint) {
+					t.Errorf("error %q does not offer %s", err, hint)
+				}
+			}
 
-	// The extension names are no part of any OMG library, so nothing puts them
-	// in scope and they are dispatched by their import alone.
-	for _, local := range []string{"exp", "ln", "log", "atan2"} {
-		if _, ok := libraryFunctionsByLocalName[local]; ok {
-			t.Errorf("extension name %q is dispatchable without its import", local)
-		}
-		if _, ok := extensionLocalNames[local]; !ok {
-			t.Errorf("extension name %q names no import", local)
-		}
+			ctx, idx = libraryModelContext(t, model("\tprivate import "+tc.imported+"::*;"))
+			sym = lookupOne(t, idx, "test::f")
+			got, err := ctx.InvokeCalc(sym, []Value{constReal(4)}, nil)
+			if err != nil {
+				t.Fatalf("%s under import %s::*: %v", tc.call, tc.imported, err)
+			}
+			if FormatValue(got) != tc.want {
+				t.Errorf("%s under import %s::* = %s, want %s", tc.call, tc.imported, FormatValue(got), tc.want)
+			}
+		})
 	}
 }
 
-// An unimported extension call fails with a typed error naming the function and
-// the import that makes it legal, rather than being answered by a declaration
-// the model never made visible.
-func TestUnimportedExtensionFunctionCallIsATypedError(t *testing.T) {
-	fn, err := unresolvedLibraryFunction(&ast.QualifiedName{Parts: []ast.NameSegment{{Text: "exp"}}}, "exp")
-	if fn != nil {
-		t.Fatalf("exp dispatched to %v without its import", fn.name)
-	}
-	if !errors.Is(err, ErrUnimportedExtensionFunction) {
-		t.Fatalf("error = %v, want %v", err, ErrUnimportedExtensionFunction)
-	}
-	for _, want := range []string{"exp", "import OpenSysMLMathFunctions::*;"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("error %q does not mention %q", err, want)
-		}
-	}
-
-	// The qualified name is the model's own reading and stays dispatchable.
-	qualified := &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "OpenSysMLMathFunctions"}, {Text: "exp"}}}
-	if fn, err := unresolvedLibraryFunction(qualified, "OpenSysMLMathFunctions::exp"); fn == nil || err != nil {
-		t.Fatalf("qualified exp = %v, %v; want the implementation", fn, err)
+// A qualified name reaches a library function whatever the model imports: the
+// library packages are members of the root namespace, so the qualified spelling
+// is the model's own reading of the declaration.
+func TestLibraryFunctionQualifiedCallNeedsNoImport(t *testing.T) {
+	ctx, idx := libraryModelContext(t, `package test {
+	calc f { in x : Real; OpenSysMLMathFunctions::exp(0.0 * x) + RealFunctions::sqrt(x) + (x, x)->SequenceFunctions::size() }
+}`)
+	got, err := ctx.InvokeCalc(lookupOne(t, idx, "test::f"), []Value{constReal(4)}, nil)
+	if err != nil || FormatValue(got) != "5.0" {
+		t.Fatalf("qualified calls = %s, %v; want 5.0", FormatValue(got), err)
 	}
 }
 
@@ -395,6 +411,18 @@ func TestLibraryFunctionDoesNotClaimANonCalcDeclaration(t *testing.T) {
 	if _, err := ctx.InvokeCalc(sym, []Value{constReal(2)}, nil); !errors.Is(err, ErrNotACalc) {
 		t.Fatalf("InvokeCalc(attribute sqrt) error = %v; want ErrNotACalc", err)
 	}
+}
+
+// libraryModelContext indexes src as a model over the standard library and
+// returns a runtime context over it.
+func libraryModelContext(t *testing.T, src string) (*Context, *symbols.Index) {
+	t.Helper()
+	file := parser.New(source.New("<test>", []byte(src))).ParseFile()
+	idx := libs.NewModelIndex()
+	idx.AddDocument("<test>", file)
+	idx.ExpandWildcardImports()
+	resolver := resolve.New(idx)
+	return NewContext(semantics.NewModel(resolver), resolver, 10000), idx
 }
 
 // contextForSource indexes src as one document and returns a runtime context
@@ -1237,28 +1265,53 @@ func TestLibraryFunctionAnswersALibraryDeclarationWithABody(t *testing.T) {
 	}
 }
 
-// The listing covers every implemented function, an extension one carrying the
-// import its unqualified name needs, so a working function is never advertised
-// as unsupported nor as callable bare.
-func TestBuiltinsListExtensionFunctionsWithTheirImport(t *testing.T) {
+// The listing covers every implemented function a model calls by name, each
+// with the package an import must name for the unqualified call to resolve, so
+// a working function is never advertised as unsupported nor as callable bare.
+func TestBuiltinsListEveryFunctionWithItsPackage(t *testing.T) {
 	listed := make(map[string]Builtin)
 	for _, b := range Builtins() {
-		listed[b.Name] = b
+		listed[b.FQN] = b
+		if want := b.Package + "::" + b.Name; b.FQN != want {
+			t.Errorf("%q is listed under package %q and name %q", b.FQN, b.Package, b.Name)
+		}
 	}
-	for local, pkg := range extensionLocalNames {
-		b, ok := listed[local]
-		if !ok {
-			t.Errorf("extension function %q is implemented but not listed", local)
+	for fqn, fn := range libraryFunctions {
+		if _, operator := builtinNamed(fqn); !operator || fn.unevaluable {
+			if _, ok := listed[fqn]; ok {
+				t.Errorf("%q is listed, want operators and unevaluable declarations left out", fqn)
+			}
 			continue
 		}
-		if b.RequiresImport != pkg {
-			t.Errorf("%q requires import %q, want %q", local, b.RequiresImport, pkg)
+		b, ok := listed[fqn]
+		if !ok {
+			t.Errorf("%q is implemented but not listed", fqn)
+			continue
 		}
-		if want := pkg + "::" + local; b.FQN != want {
-			t.Errorf("%q is listed as %q, want %q", local, b.FQN, want)
+		if b.Collection || strings.Join(b.Params, ",") != strings.Join(fn.params, ",") {
+			t.Errorf("%q is listed as %+v, want a scalar function with parameters %v", fqn, b, fn.params)
 		}
 	}
-	if b, ok := listed["sqrt"]; !ok || b.RequiresImport != "" {
-		t.Errorf("sqrt is listed as %+v, want an OMG function needing no import", b)
+	for fqn := range builtins {
+		if _, named := builtinNamed(fqn); !named {
+			continue
+		}
+		if b, ok := listed[fqn]; !ok || !b.Collection {
+			t.Errorf("%q is listed as %+v, want a collection function", fqn, b)
+		}
+	}
+	for _, want := range []struct{ fqn, pkg string }{
+		{"RealFunctions::sqrt", "RealFunctions"},
+		{"OpenSysMLMathFunctions::exp", "OpenSysMLMathFunctions"},
+		{"SequenceFunctions::size", "SequenceFunctions"},
+	} {
+		if b := listed[want.fqn]; b.Package != want.pkg {
+			t.Errorf("%s is listed as %+v, want package %s", want.fqn, b, want.pkg)
+		}
+	}
+	for _, absent := range []string{"SequenceFunctions::#", "IntegerFunctions::..", "VectorFunctions::sum", "ComplexFunctions::ToString"} {
+		if b, ok := listed[absent]; ok {
+			t.Errorf("%s is listed as %+v, want it left out", absent, b)
+		}
 	}
 }

@@ -1,5 +1,6 @@
 package test {
 	private import ScalarValues::*;
+	private import ControlFunctions::*;
 
 	part def Holder {
 		attribute shared : Integer = 7;

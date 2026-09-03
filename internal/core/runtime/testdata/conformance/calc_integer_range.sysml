@@ -1,5 +1,6 @@
 package test {
     private import ScalarValues::*;
+    private import ControlFunctions::*;
 
     // `..` is the ordered sequence of integers the library declares it to be, so
     // the sequence operations, indexing and `for` apply to it unchanged and a
