@@ -207,6 +207,30 @@ func TestHoverNamesAmbiguousOverloads(t *testing.T) {
 	}
 }
 
+// The ambiguous-call hover ranges over the content its reference was collected
+// from, so a document removed between the two steps of one request cannot crash it.
+func TestAmbiguousHoverSurvivesDocumentRemoval(t *testing.T) {
+	ws, s, name := openAmbiguousNavigation(t)
+	doc := ws.Document(name)
+	content := doc.Content
+	off := strings.Index(string(content), "pick(2)")
+	ref := refAtOffset(collectRefs(doc.AST, doc.Scope), off)
+	if ref == nil {
+		t.Fatal("no reference at pick(2)")
+	}
+	ws.Remove(name)
+	if s.document(name) != nil {
+		t.Fatal("document still present after removal")
+	}
+	hov := s.ambiguousCallHover(name, content, *ref, off)
+	if hov == nil {
+		t.Fatal("ambiguousCallHover = nil, want the tied overloads")
+	}
+	if hov.Range == nil || hov.Range.Start.Line != lineOfSrc(t, string(content), "pick(2)") {
+		t.Errorf("hover range = %v, want the call's name", hov.Range)
+	}
+}
+
 // qualifiedAmbiguitySrc reaches two equally specific `pick(Integer)` overloads through
 // the qualifier `Both` and through two aliases named `choose`, so `Both::pick(2)` and
 // `choose(2)` are tied while `Both::pick("s")` selects the String one.

@@ -37,7 +37,7 @@ func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 				Range:    &rng,
 			}, nil
 		}
-		if hover := s.ambiguousCallHover(name, *ref, offset); hover != nil {
+		if hover := s.ambiguousCallHover(name, content, *ref, offset); hover != nil {
 			return hover, nil
 		}
 	}
@@ -71,8 +71,9 @@ func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 }
 
 // ambiguousCallHover lists the overloads a call's arguments leave tied when the
-// cursor is on the called name itself; nil on a qualifier or a `::`.
-func (s *Server) ambiguousCallHover(doc string, ref resolve.Reference, offset int) *protocol.Hover {
+// cursor is on the called name itself; nil on a qualifier or a `::`. content is the
+// document text ref was collected from.
+func (s *Server) ambiguousCallHover(doc string, content []byte, ref resolve.Reference, offset int) *protocol.Hover {
 	parts := ref.QN.Parts
 	if len(parts) == 0 || segmentAt(ref, offset) != len(parts)-1 {
 		return nil
@@ -86,7 +87,7 @@ func (s *Server) ambiguousCallHover(doc string, ref resolve.Reference, offset in
 	for i, sym := range overloads {
 		lines[i] = sym.Notation() + " " + s.ws.FQNOf(sym)
 	}
-	rng := spanToRange(s.document(doc).Content, last.Span)
+	rng := spanToRange(content, last.Span)
 	return &protocol.Hover{
 		Contents: s.hoverContents(strings.Join(lines, "\n"), []string{"Ambiguous call: the arguments fit each of these overloads equally."}),
 		Range:    &rng,
