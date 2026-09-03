@@ -69,6 +69,8 @@ func (w *bodyWalker) walkNode(scope *symbols.Scope, node ast.Node) {
 		w.walk(body, n.Members)
 	case *ast.SendStatement:
 		w.walk(childScopeOr(scope, n), n.Members)
+	case *ast.SuccessionEdge:
+		w.walk(childScopeOr(scope, n), n.Members)
 	case *ast.WhileLoopActionNode:
 		w.walk(childScopeOr(scope, n), n.Body)
 	case *ast.IfActionNode:

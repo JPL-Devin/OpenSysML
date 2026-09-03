@@ -295,6 +295,27 @@ func TestTriggerOnAcceptActions(t *testing.T) {
 		"found a quantity in metre (a LengthUnit)")
 }
 
+// The body an action target succession carries (`then starting { ... }`) is a
+// behavior body like any other: its triggers and assignments are checked in
+// the enclosing scope, the one its members are declared in.
+func TestTriggerInSuccessionBody(t *testing.T) {
+	const succession = `do action body {
+		action prep;
+		action starting;
+		first prep;
+		then starting { %s }
+	}`
+	body := func(stmt string) string { return strings.Replace(succession, "%s", stmt, 1) }
+	wantTriggerSilent(t, body("accept after 5 [s]; assign x := 1;"))
+	wantTriggerDiag(t, body("accept after 5;"), "trigger-after-duration", "found Natural")
+	wantTriggerDiag(t, body("accept at d;"), "trigger-at-time-instant", "found DurationValue")
+	wantTriggerDiag(t, body("accept when x;"), "trigger-when-boolean", "found Integer")
+	diags := triggerDiags(t, body(`assign x := "s";`))
+	if len(diags) != 1 || !strings.Contains(diags[0].Message, "cannot bind String value to a feature typed by Integer") {
+		t.Fatalf("want one assignment diagnostic, got %v", diags)
+	}
+}
+
 // An argument the type tier cannot type — an unresolved name, which the name
 // tier reports — is not reported again here.
 func TestTriggerUnresolvedArgumentIsSilent(t *testing.T) {
