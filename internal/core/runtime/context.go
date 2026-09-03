@@ -3,6 +3,7 @@ package runtime
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -379,12 +380,14 @@ func (ctx *Context) beginExecutorRun(started *bool) func() {
 }
 
 // beginProbe brackets an evaluation previewing what a run would do, restoring the
-// budget, trace, bus and every feature value written (see noteProbeWrite) after.
-// Behaviors the probe starts are the only ones it runs (see nextRunnableBehavior).
+// budget, trace, bus, variant selections and every feature value written (see
+// noteProbeWrite) after. Behaviors the probe starts are the only ones it runs
+// (see nextRunnableBehavior).
 func (ctx *Context) beginProbe() func() {
 	steps, elements, trace := ctx.steps, ctx.elements, ctx.trace
 	mark := len(ctx.probeWrites)
 	messages := slices.Clone(ctx.messages)
+	selected := maps.Clone(ctx.selectedVariants)
 	if ctx.probes == 0 {
 		ctx.probeBehaviors = len(ctx.objectBehaviors)
 	}
@@ -397,6 +400,7 @@ func (ctx *Context) beginProbe() func() {
 		}
 		ctx.probeWrites = ctx.probeWrites[:mark]
 		ctx.messages = messages
+		ctx.selectedVariants = selected
 		ctx.probes--
 		ctx.runDepth--
 		ctx.steps, ctx.elements, ctx.trace = steps, elements, trace

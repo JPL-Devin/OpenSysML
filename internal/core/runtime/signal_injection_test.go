@@ -635,6 +635,73 @@ func TestPortRoutedMessageTheActiveStateDefersIsHeld(t *testing.T) {
 	}
 }
 
+// A variant that is a value stands for no object, so its selection is recorded
+// alone; Decide reading it through a guard leaves that record as it found it,
+// and the dispatch that follows makes the selection for real.
+func TestDecideLeavesNoValueVariantSelectionAGuardMakes(t *testing.T) {
+	src := `
+		private import ScalarValues::*;
+		attribute def Poke;
+		part def Car {
+			variation attribute power : Real {
+				variant attribute strong = 150.0;
+				variant attribute weak = 120.0;
+			}
+			exhibit state gate {
+				entry; then shut;
+				state shut;
+				transition first shut accept Poke if power > 130.0 then open;
+				state open;
+			}
+		}
+		part car : Car { attribute :>> power = power::%s; }
+	`
+	for variant, fires := range map[string]bool{"strong": true, "weak": false} {
+		t.Run(variant, func(t *testing.T) {
+			idx, _, ctx := buildRuntimeWithLibraries(t, "car.sysml", parseAndBuild(t, fmt.Sprintf(src, variant)))
+			root := idx.DocumentRoot("car.sysml")
+			car, err := ctx.occurrenceOf(resolveSymbol(t, root, "car"))
+			if err != nil {
+				t.Fatalf("occurrenceOf(car): %v", err)
+			}
+			gate, _ := car.ExhibitedState()
+			poke, err := ctx.SignalMessage(resolveSymbol(t, root, "Poke"), nil, car)
+			if err != nil {
+				t.Fatalf("SignalMessage(Poke): %v", err)
+			}
+			selection := variantSelection{owner: car.ID, variation: "power"}
+			if chosen, ok := ctx.selectedVariants[selection]; ok {
+				t.Fatalf("power selected %q before anything read it", chosen)
+			}
+			selections := len(ctx.selectedVariants)
+
+			d, err := gate.State.Decide(poke)
+			if err != nil || (len(d.Fires) == 1) != fires {
+				t.Fatalf("Decide(Poke) = %+v, %v; want firing=%v", d, err, fires)
+			}
+			if chosen, ok := ctx.selectedVariants[selection]; ok || len(ctx.selectedVariants) != selections {
+				t.Errorf("after Decide: power selected %q (%v), %d selections; want none made, %d as before",
+					chosen, ok, len(ctx.selectedVariants), selections)
+			}
+
+			ctx.PostMessage(poke)
+			if err := gate.State.ProcessNextEvent(); err != nil {
+				t.Fatalf("ProcessNextEvent(Poke): %v", err)
+			}
+			want := "shut"
+			if fires {
+				want = "open"
+			}
+			if got := activeLeaf(gate.State); got != want {
+				t.Fatalf("state after Poke = %s, want %s", got, want)
+			}
+			if chosen := ctx.selectedVariants[selection]; chosen != variant {
+				t.Errorf("after dispatch: power selected %q, want %s", chosen, variant)
+			}
+		})
+	}
+}
+
 // A guard reading a variation of the performer that nothing has read yet
 // materializes its selection: the variant chosen for that owner, the object it
 // stands for, and the feature value holding it. Decide leaves none of that on
