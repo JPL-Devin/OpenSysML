@@ -464,10 +464,8 @@ func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index, sem *semantics.Model) 
 	return runtime.NewQuantityValue(&runtime.Quantity{Num: num, Unit: unit}), nil
 }
 
-// unitProductOfText reads a unit as written (`SI::m/SI::s`) as the product of
-// the model's units it names, kept only if it reduces to term. A short name
-// (`m`) is whichever unit so named makes it reduce so, if exactly one does.
-// Text not readable that way is one opaque unit, which cancels against nothing.
+// unitProductOfText reads unit text as a product of the model's units that reduces
+// to term; a short name is the one unit so named that fits. Otherwise the text is opaque.
 func unitProductOfText(text string, term semantics.UnitTerm, idx *symbols.Index, sem *semantics.Model) (semantics.UnitProduct, error) {
 	if text == "" {
 		return semantics.UnitProduct{}, nil
