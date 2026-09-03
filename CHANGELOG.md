@@ -247,8 +247,9 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   parsing as an attribute. Over the 268 example models the mapping converts,
   `TestCorpusRoundTrip` recorded 166 whose second Turtle is byte-identical to the first; this
   change moves the 71 `whitespace-only` and 6 `graph-diff` verdicts to `stable` and nothing else,
-  and with the positional-`then` fix below the baseline now records 255 `stable`, 8 `graph-diff`,
-  2 `unwritable`, 3 `unparseable` and 77 `refused`. `docs/reference/rdf-mapping.md` § Stored text
+  and with the positional-`then` and usage-flag fixes below the baseline now records, over the 275
+  models that convert, 268 `stable`, 1 `graph-diff`, 2 `unwritable`, 4 `unparseable` and 70
+  `refused`. `docs/reference/rdf-mapping.md` § Stored text
   is layout defines the rule.
   A `LiteralString`'s `sysml:value` is now the string it evaluates to — `"two\nlines"` stores a
   value with a line break, where it stored the notation body with the escape intact — and a
@@ -319,6 +320,26 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   345-file example corpus the files the writer refused for this reason go from 14 to 0, and their
   round trips reproduce the same graph; the training examples for action shorthand, control
   structures, decisions, merges, terminate actions, messaging and message payloads are among them.
+
+- **The notation the RDF writer spells is read back to the same graph.** Converting a model to
+  Turtle, back to notation and to Turtle again lost flags the first graph carried, because the
+  writer re-spelled a head in a form the parser read differently: `ref x subsets y;` and
+  `composite frontWheel redefines w[2];` lost `ref` and `composite` (the parser only continued a
+  modifier-led declaration into a symbolic `:>`, not the keyword spellings), `#derive end r : R;`
+  lost `end` and `end ref attribute e : S;` lost `ref` (the `end … kind` path applied only the
+  end flag), a nested `private import Pkg1::*;` came back as `Pkg1::**` (the two import suffixes
+  were written as exclusive), and a succession end whose name needs quotes was carried as text
+  and refused when written. The parser now reads every modifier ahead of the kind keyword, the
+  writer spells the modifiers in the grammar's order with the multiplicity beside the clause it
+  qualifies, an import writes `::*` and `::**` independently, and a quoted succession end is a
+  reference to the element like an unquoted one. Five fixtures under
+  `internal/core/export/testdata/convert/` lock this in by re-encoding the notation written
+  from the graph alone and comparing the two graphs as triple sets; a relationship's symbolic or
+  keyword spelling and a doc body's line endings are documented as normalised. On the corpus
+  ratchet, six files move from a differing graph to the same one and six refused for a quoted
+  succession end now round-trip; the seventh is written back, but its guarded succession
+  (`succession S first A1 if x == 0 then A2;`) is spelled as a `transition` the parser does not
+  read, which is a separate writer defect.
 
 ## 0.4.3 — 2026-09-01
 
