@@ -875,6 +875,180 @@ func TestEndBindingHeadsComeBackFromTheGraphAlone(t *testing.T) {
 	}
 }
 
+// An end-binding usage's body members are elements of their own and come back
+// from the structure alone (Open-MBEE/OpenSysML#89).
+func TestEndBindingBodiesComeBackFromTheGraphAlone(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("testdata", "convert", "end_binding_bodies.sysml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	turtle, err := export.Convert("m.sysml", src, export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	graph := string(turtle)
+	for _, triple := range []string{
+		"elmt:R89__Ctx__seam__coupling\n    a sysml:AttributeUsage ;",
+		"sysml:declaredName \"coupling\" ;",
+		"sysx:memberIndex \"0\"^^xsd:integer ;\n    sysml:owningNamespace elmt:R89__Ctx__seam ;",
+		"sysml:ownedMember elmt:R89__Ctx__seam__coupling ;",
+		"sysml:ownedFeature elmt:R89__Ctx__seam__coupling ;",
+		"sysml:ownedMembership elmt:R89__Ctx__seam__coupling_om ;",
+		"elmt:R89__Ctx__seam__coupling_om\n    a sysml:FeatureMembership ;",
+		"sysx:sourceText \"        interface seam connect w.outp to r.inp {\\n\" ;",
+	} {
+		if !strings.Contains(graph, triple) {
+			t.Errorf("the graph should carry the body of the interface usage:\nmissing %q in\n%s", triple, graph)
+		}
+	}
+	if !strings.Contains(graph, "elmt:R89__Ctx__seam__coupling\n") || !strings.Contains(graph, "sysml:type elmt:R89__SeamCoupling") || !strings.Contains(graph, "SeamCoupling::learnFromData") {
+		t.Errorf("the attribute should keep its type and value:\n%s", graph)
+	}
+	// The text of a usage stops at its body; the members are text of their own.
+	if strings.Count(graph, "attribute w : Prio;") != 11 || strings.Contains(graph, "to r.inp {\\n            attribute coupling") {
+		t.Errorf("the body should not be carried as its owner's text:\n%s", graph)
+	}
+	// Without the text, the notation is rebuilt from the mapping alone; it may
+	// differ in layout from the notation the text writes, never in what it says.
+	structural := withoutTriples(t, withoutTriples(t, turtle, "sysx:sourceText"), "sysx:sourceTail")
+	back, err := export.Convert("m.ttl", structural, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation without source text: %v", err)
+	}
+	withText, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	if string(withText) != string(src) {
+		t.Errorf("the text should write the model as written\n--- written ---\n%s\n--- got ---\n%s", src, withText)
+	}
+	if strings.Count(string(back), "attribute w : Prio;") != 11 || !strings.Contains(string(back), "interface seam connect w.outp to r.inp {\n            attribute coupling : SeamCoupling = SeamCoupling::learnFromData;\n        }") {
+		t.Errorf("every body should come back with its members:\n%s", back)
+	}
+	for _, transition := range []string{
+		"transition t1 first off then on {\n                attribute w : Prio;\n            }",
+		"transition first on do assign x.a := 1 then off {\n            }",
+		"transition first off do {\n                assign x.a := 2;\n            } then on {\n                attribute w : Prio;\n            }",
+	} {
+		if !strings.Contains(string(back), transition) {
+			t.Errorf("a transition should keep its effect apart from its body:\nmissing %q in\n%s", transition, back)
+		}
+	}
+	again, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle again: %v", err)
+	}
+	if got := withoutTriples(t, withoutTriples(t, again, "sysx:sourceText"), "sysx:sourceTail"); string(got) != string(structural) {
+		t.Errorf("the second hop changed the graph\n--- first ---\n%s\n--- second ---\n%s", structural, got)
+	}
+}
+
+// An empty `do { }` and an empty trailing body are transition blocks with no
+// members to link, so the graph states each one's presence outright.
+func TestEmptyTransitionBlocksComeBackFromTheGraphAlone(t *testing.T) {
+	// Each transition with the canonical notation it is written back as.
+	transitions := map[string]string{
+		"transition first s1 do { } then s2;":    "transition first s1 do {\n        } then s2;",
+		"transition first s1 then s2 { }":        "transition first s1 then s2 {\n        }",
+		"transition first s1 do { } then s2 { }": "transition first s1 do {\n        } then s2 {\n        }",
+	}
+	for transition, want := range transitions {
+		t.Run(transition, func(t *testing.T) {
+			src := "package P {\n\tstate def M {\n\t\tstate s1;\n\t\tstate s2;\n\t\t" + transition + "\n\t}\n}"
+			turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle: %v", err)
+			}
+			stripped := withoutTriples(t, withoutTriples(t, turtle, "sysx:sourceText"), "sysx:sourceTail")
+			back, err := export.Convert("m.ttl", stripped, export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation: %v", err)
+			}
+			if !strings.Contains(string(back), want) {
+				t.Errorf("expected %q in:\n%s", want, back)
+			}
+		})
+	}
+}
+
+// A transition graph written before members were linked as effect or body
+// owns the effect alone, with sysx:hasBody recording its braces. Such a graph
+// still reads as the effect it was, braced or not.
+func TestLegacyTransitionEffectsStayEffects(t *testing.T) {
+	// Each effect with the canonical notation it is written back as.
+	effects := map[string][2]string{
+		"unbraced": {"do action stop : Warm", "transition first s1 do action stop : Warm then s2;"},
+		"braced":   {"do { action stop : Warm; }", "transition first s1 do {\n            action stop : Warm;\n        } then s2;"},
+	}
+	for name, effect := range effects {
+		effect, want := effect[0], effect[1]
+		t.Run(name, func(t *testing.T) {
+			src := "package P {\n\taction def Warm;\n\tstate def M {\n\t\tstate s1;\n\t\tstate s2;\n\t\ttransition first s1 " + effect + " then s2;\n\t}\n}"
+			turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle: %v", err)
+			}
+			for _, property := range []string{"sysx:sourceText", "sysx:sourceTail", "sysx:effectMember", "sysx:bodyMember"} {
+				turtle = withoutTriples(t, turtle, property)
+			}
+			legacy := strings.ReplaceAll(string(turtle), "sysx:bracedEffect ", "sysx:hasBody ")
+			if !strings.Contains(legacy, "sysx:hasBody") {
+				t.Fatalf("the legacy shape needs sysx:hasBody for the effect's braces:\n%s", legacy)
+			}
+			back, err := export.Convert("m.ttl", []byte(legacy), export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation: %v", err)
+			}
+			if !strings.Contains(string(back), want) {
+				t.Errorf("the effect did not come back as one:\n%s", back)
+			}
+			if strings.Contains(string(back), "then s2 {") {
+				t.Errorf("the effect became a body:\n%s", back)
+			}
+		})
+	}
+}
+
+// The effect and body links of a transition must partition its members: a graph
+// whose links are missing, doubled or dangling is refused rather than have an
+// action silently moved after the target.
+func TestInconsistentTransitionLinksAreRefused(t *testing.T) {
+	src := "package P {\n\taction def Warm;\n\tstate def M {\n\t\tstate s1;\n\t\tstate s2;\n\t\ttransition first s1 do { action stop : Warm; } then s2 { action tidy : Warm; }\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	const effect, body = "sysx:effectMember elmt:P__M___402__stop", "sysx:bodyMember elmt:P__M___402__tidy"
+	if !strings.Contains(string(turtle), effect) || !strings.Contains(string(turtle), body) {
+		t.Fatalf("the links are not the ones the test rewrites:\n%s", turtle)
+	}
+	faults := map[string]func(string) string{
+		"missing effect link": func(g string) string { return string(withoutTriples(t, []byte(g), "sysx:effectMember")) },
+		"missing body link":   func(g string) string { return string(withoutTriples(t, []byte(g), "sysx:bodyMember")) },
+		"overlapping links": func(g string) string {
+			return strings.Replace(g, body, "sysx:bodyMember elmt:P__M___402__stop", 1)
+		},
+		"dangling effect link": func(g string) string {
+			return strings.Replace(g, effect, "sysx:effectMember elmt:P__M___402__gone", 1)
+		},
+		"dangling body link": func(g string) string {
+			return strings.Replace(g, body, "sysx:bodyMember elmt:P__M___402__gone", 1)
+		},
+	}
+	for name, fault := range faults {
+		t.Run(name, func(t *testing.T) {
+			var unsupported *export.UnsupportedError
+			_, err := export.Convert("m.ttl", []byte(fault(string(turtle))), export.FormatTurtle, export.FormatSysML)
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("got %v, want an UnsupportedError", err)
+			}
+			if !strings.Contains(err.Error(), "P__M___402") {
+				t.Errorf("the error does not name the transition: %v", err)
+			}
+		})
+	}
+}
+
 // A transition and an accept state their trigger and payload in the head too,
 // inside the bodies that allow them.
 func TestBehavioralHeadsComeBackFromTheGraphAlone(t *testing.T) {
