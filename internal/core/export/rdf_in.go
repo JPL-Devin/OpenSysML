@@ -1008,9 +1008,9 @@ func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 	}
 	var skip []ast.RelationshipKind
 	// The declaration form states its keyword; a graph written before it did
-	// is one only where nothing is referenced.
+	// is one only where a body follows and nothing is referenced.
 	declaredKeyword, _ := d.stringOf(el, rdf.OpenSysML+xDeclaredKeyword)
-	_, hasBody := d.stringOf(el, rdf.OpenSysML+xHasBody)
+	hasBody := d.boolOf(el, rdf.OpenSysML+xHasBody)
 	declared := declaredKeyword == "constraint" || (hasBody && len(references) == 0)
 	switch condition, ok := d.stringOf(el, rdf.OpenSysML+xCondition); {
 	case ok:

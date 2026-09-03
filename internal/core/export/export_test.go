@@ -1068,6 +1068,31 @@ func TestPrefixOnAConditionWithoutADeclarationIsReported(t *testing.T) {
 	}
 }
 
+// A condition member stating no condition, reference, keyword or body
+// (`sysx:hasBody false`) is refused, not written as an invented constraint.
+func TestConditionWithoutAConditionIsReported(t *testing.T) {
+	src := "package P {\n\tconstraint def C;\n\trequirement def R {\n\t\tassume constraint c;\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structural := string(withoutTriples(t, turtle, "sysx:sourceText"))
+	for _, want := range []string{`sysx:declaredKeyword "constraint" ;`, `sysx:hasBody "false"^^xsd:boolean .`} {
+		if !strings.Contains(structural, want) {
+			t.Fatalf("%s was not found in the graph:\n%s", want, structural)
+		}
+	}
+	edited := strings.Replace(structural, `sysx:declaredKeyword "constraint" ;`, "", 1)
+	_, err = export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML)
+	var unsupported *export.UnsupportedError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("expected an unsupported error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "a condition member states a condition") {
+		t.Errorf("unexpected error: %s", err.Error())
+	}
+}
+
 // A head kept as source text writes its prefix annotations in that text; when
 // the text and the graph disagree, the text is stale and the head is rebuilt
 // from the graph rather than the annotation lost.
