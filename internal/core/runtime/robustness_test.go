@@ -169,6 +169,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("send_via_bound_boundary_port_joined_to_nothing", testSendViaBoundBoundaryPortJoinedToNothing)
 	t.Run("send_fan_out_to_a_port_that_fails_to_materialize", testSendFanOutToAPortThatFailsToMaterialize)
 	t.Run("accept_via_a_port_that_fails_to_materialize", testAcceptViaAPortThatFailsToMaterialize)
+	t.Run("action_accept_via_a_port_that_fails_to_materialize", testActionAcceptViaAPortThatFailsToMaterialize)
 	t.Run("send_addressed_to_an_unreachable_target", testSendAddressedToAnUnreachableTarget)
 	t.Run("routed_send_via_unknown_port", testRoutedSendViaUnknownPort)
 	t.Run("routed_send_port_type_mismatch", testRoutedSendPortTypeMismatch)
@@ -2741,6 +2742,65 @@ func testAcceptViaAPortThatFailsToMaterialize(t *testing.T) {
 	}
 	if visits := exec.GetStateVisits(); len(visits) != 1 || visits[0] != "Idle" {
 		t.Errorf("state visits = %v, want [Idle]", visits)
+	}
+}
+
+// testActionAcceptViaAPortThatFailsToMaterialize: the action-node counterpart
+// of the machine case above: a parked accept whose port cannot be materialized
+// leaves a message of another signal in flight and stays parked, and reports
+// the port's failure only for a message of its own signal.
+func testActionAcceptViaAPortThatFailsToMaterialize(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;`+directedPorts+`
+		part def Listener {
+			port in : ~Chan = 1 / 0;
+			action listen {
+				first start;
+				action reader accept v : Integer via in;
+				done;
+				succession first start then reader;
+				succession first reader then done;
+			}
+		}
+		part listener : Listener;
+	}`))
+	listener, err := ctx.Instantiate(oneSymbol(t, idx, "P::listener"))
+	if err != nil {
+		t.Fatalf("instantiate listener: %v", err)
+	}
+	exec, err := ctx.CreateActionExecutorFor(oneSymbol(t, idx, "P::Listener::listen"), listener)
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+	for i := 0; i < 10 && exec.State() != StateWaiting; i++ {
+		if err := exec.Step(); err != nil {
+			t.Fatalf("step %d: %v", i, err)
+		}
+	}
+	if exec.State() != StateWaiting {
+		t.Fatalf("state = %v, want %v", exec.State(), StateWaiting)
+	}
+	viaPort := func(signal string, value Value) Message {
+		return Message{SignalType: signal, Target: "reader", Port: "other", Object: listener.ID, PortID: -1,
+			Delivery: DeliverPort, Payload: map[string]Value{"value": value}}
+	}
+	ctx.PostMessage(viaPort("String", NewStringValue("not for you")))
+	if exec.HasPendingSignal() {
+		t.Fatal("a String is not the Integer the accept names, yet the action claims it")
+	}
+	if err := exec.Step(); err != nil {
+		t.Fatalf("step with only a String in flight: %v", err)
+	}
+	if exec.State() != StateWaiting {
+		t.Fatalf("state = %v, want still %v", exec.State(), StateWaiting)
+	}
+	if pending := ctx.PendingMessages(); len(pending) != 1 || pending[0].SignalType != "String" {
+		t.Fatalf("pending messages = %+v, want the String still in flight", pending)
+	}
+	ctx.PostMessage(viaPort("Integer", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 4}}))
+	err = exec.RunToCompletion()
+	if !errors.Is(err, ErrDivisionByZero) {
+		t.Fatalf("run with an Integer in flight: err = %v, want the port's %v", err, ErrDivisionByZero)
 	}
 }
 

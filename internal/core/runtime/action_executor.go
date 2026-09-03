@@ -358,26 +358,27 @@ func (e *ActionExecutor) HasPendingSignal() bool {
 
 // acceptMatch is the predicate an accept node holds a message to: it reaches
 // the node, and conforms to the type the accept names or carries the event it
-// subsets. Resolving the `via` port may fail; the predicate then matches
-// nothing and the failure is left in the returned error slot.
+// subsets. The signal is tested first, so only a message of the accept's own
+// signal resolves the `via` port; if that fails the predicate matches nothing
+// and the failure is left in the returned error slot.
 func (e *ActionExecutor) acceptMatch(accept lower.Accept, usage *ast.Usage) (func(Message) bool, *error) {
 	var failed error
 	return func(m Message) bool {
 		if failed != nil {
 			return false
 		}
+		if accept.SignalType != nil {
+			if !e.ctx.messageMatches(m, accept.SignalType, accept.Scope) {
+				return false
+			}
+		} else if !m.carriesSignal(accept.SubsetsEvent) {
+			return false
+		}
 		reaches, err := e.ctx.messageReaches(m, ActionNodeName(usage), accept.ViaPort, e.self)
 		if err != nil {
 			failed = err
-			return false
 		}
-		if !reaches {
-			return false
-		}
-		if accept.SignalType != nil {
-			return e.ctx.messageMatches(m, accept.SignalType, accept.Scope)
-		}
-		return m.carriesSignal(accept.SubsetsEvent)
+		return err == nil && reaches
 	}, &failed
 }
 
