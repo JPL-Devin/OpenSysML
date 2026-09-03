@@ -242,15 +242,17 @@ type endedSession struct {
 	// objectGone records that what ended it was the loss of the object performing
 	// the behavior, which rootName then names.
 	objectGone bool
-	// superseded records that a second %instantiate of rootName left the object
-	// objectID, which performed the behavior, unreachable.
-	superseded bool
-	objectID   int64
-	// reset records that a reset ended it, which belongs to no submission and
-	// names no declaration.
-	reset   bool
+	// outside is the cause when no submission ended it — a reset or new run
+	// bounds — which names no declaration.
+	outside string
 	version int // the submission that did it
 }
+
+// The causes outside any submission that end a debugging session.
+const (
+	sessionReset  = "the session was reset"
+	boundsChanged = "the run bounds were changed"
+)
 
 // reason explains an ended debugging session in the past tense, for a command
 // that found none active.
@@ -258,12 +260,8 @@ func (e *endedSession) reason() string {
 	if e == nil {
 		return ""
 	}
-	if e.reset {
-		return fmt.Sprintf("the %s session for %q ended when the session was reset", e.kind, e.name)
-	}
-	if e.superseded {
-		return fmt.Sprintf("the %s session for %q ended when a second %%instantiate %s superseded the object #%d performing it",
-			e.kind, e.name, notationName(e.rootName), e.objectID)
+	if e.outside != "" {
+		return fmt.Sprintf("the %s session for %q ended when %s", e.kind, e.name, e.outside)
 	}
 	if e.objectGone {
 		return fmt.Sprintf("the %s session for %q ended when the object %s performing it was dropped at submission %d",

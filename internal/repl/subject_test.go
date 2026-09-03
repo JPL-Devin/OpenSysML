@@ -69,7 +69,7 @@ func TestEvalThroughDeclarationKeepsItsSubjectAcrossSubmissions(t *testing.T) {
 		if !strings.Contains(got, "9.0") {
 			t.Errorf("%%eval %s = %v, want the redefined value", path, lines)
 		}
-		if !strings.Contains(got, "A::o::inner::b") {
+		if !strings.Contains(got, "(on A::o.inner.b ID:") {
 			t.Errorf("%%eval %s = %v, want the carrying object named", path, lines)
 		}
 	}
