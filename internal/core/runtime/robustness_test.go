@@ -1291,6 +1291,8 @@ func testNamedLibraryCallThatHasNoValue(t *testing.T) {
 	}{
 		{`RealFunctions::ToReal("1.5 meters")`, ErrInvalidNotation},
 		{`RealFunctions::ToReal("NaN")`, ErrInvalidNotation},
+		{`RealFunctions::ToReal(" 1.5 ")`, ErrInvalidNotation},
+		{`IntegerFunctions::ToInteger(" 7")`, ErrInvalidNotation},
 		{`RationalFunctions::ToRational("1/3")`, ErrInvalidNotation},
 		{`IntegerFunctions::ToInteger("2.0")`, ErrInvalidNotation},
 		{`IntegerFunctions::ToInteger("99999999999999999999")`, semantics.ErrArithmeticOverflow},

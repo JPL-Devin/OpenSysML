@@ -266,12 +266,19 @@ func (v Value) Expr() ast.Node {
 }
 
 // exprEnv is the environment a ValExpr closes over, or in where it closes over
-// none.
+// none. Tracing is the applying context's: a body applied later is recorded
+// as the evaluation reaching it is, not as its creation was.
 func (v Value) exprEnv(in *EvalContext) *EvalContext {
-	if closure, ok := v.ref.(*exprValue); ok && v.Kind == ValExpr && closure.env != nil {
+	closure, ok := v.ref.(*exprValue)
+	if !ok || v.Kind != ValExpr || closure.env == nil {
+		return in
+	}
+	if closure.env.trace == in.trace {
 		return closure.env
 	}
-	return in
+	env := *closure.env
+	env.trace = in.trace
+	return &env
 }
 
 // Quantity is the payload of a ValQuantity; nil for every other kind.

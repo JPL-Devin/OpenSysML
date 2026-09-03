@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 )
@@ -130,7 +129,7 @@ func stringToBoolean(name string, _ *Context, args []Value) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	switch strings.TrimSpace(s) {
+	switch s {
 	case "true":
 		return boolValue(true), nil
 	case "false":
@@ -280,13 +279,12 @@ func rationalGCD(args []semantics.Value) (semantics.Value, error) {
 // parseInteger reads decimal Integer notation, reporting anything else as an
 // invalid notation for the named type and an out-of-range value as overflow.
 func parseInteger(name, s, typeName string) (int64, error) {
-	text := strings.TrimSpace(s)
-	x, err := strconv.ParseInt(text, 10, 64)
+	x, err := strconv.ParseInt(s, 10, 64)
 	if err == nil {
 		return x, nil
 	}
 	if errors.Is(err, strconv.ErrRange) {
-		return 0, fmt.Errorf("%w: function %s: %s exceeds the Integer range", semantics.ErrArithmeticOverflow, name, text)
+		return 0, fmt.Errorf("%w: function %s: %s exceeds the Integer range", semantics.ErrArithmeticOverflow, name, s)
 	}
 	return 0, invalidNotation(name, s, typeName)
 }
@@ -295,13 +293,12 @@ func parseInteger(name, s, typeName string) (int64, error) {
 // other notation as invalid for the named type and a magnitude float64
 // cannot hold as overflow.
 func parseReal(name, s, typeName string) (Value, error) {
-	text := strings.TrimSpace(s)
-	x, err := semantics.ParseReal(text)
+	x, err := semantics.ParseReal(s)
 	if errors.Is(err, semantics.ErrRealNotation) {
 		return Value{}, invalidNotation(name, s, typeName)
 	}
 	if err != nil {
-		return Value{}, fmt.Errorf("%w: function %s: %s is outside the Real range", err, name, text)
+		return Value{}, fmt.Errorf("%w: function %s: %s is outside the Real range", err, name, s)
 	}
 	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: x}}, nil
 }
