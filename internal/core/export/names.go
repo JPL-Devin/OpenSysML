@@ -105,12 +105,18 @@ func chooseNames(text []byte, want *wanted) (nameChoices, error) {
 }
 
 // checkSegment refuses a chain segment that does not read, from the operand it
-// is written after, as one of the elements the graph names by it there.
+// is written after, as the one element the graph names by it there.
 func (e *encoder) checkSegment(ref resolve.Reference, segments map[segmentKey]map[string]bool) error {
 	key := segmentKey{member: e.fqn[ref.Member], operand: e.operandElement(ref.Chain), name: qualifiedText(ref.QN)}
 	targets := segments[key]
 	if len(targets) == 0 {
 		return nil
+	}
+	if len(targets) > 1 {
+		return &UnsupportedError{
+			What: fmt.Sprintf("the feature chains in %s reaching %s", key.member, key.name),
+			Note: "written after the same operand, the segments name different elements in the graph, which one spelling cannot state",
+		}
 	}
 	if _, reached, ok := e.referent(ref.QN); ok && targets[reached] {
 		return nil

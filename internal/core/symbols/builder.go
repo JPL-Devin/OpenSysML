@@ -244,9 +244,10 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 			child.AddChild(body)
 			defineParams(body)
 		}
+		params := len(body.AllMembers())
 		buildMembers(body, d.Effect)
 		if body != child {
-			ownEffectMembers(child, body, d.Effect)
+			ownEffectMembers(child, body.AllMembers()[params:])
 		}
 		defineTransitionEffect(child, body, d)
 		return true
@@ -487,18 +488,15 @@ func defineTransitionEffect(scope, body *Scope, trans *ast.TransitionMember) {
 	body.AddChild(statement)
 }
 
-// ownEffectMembers makes the effect members built in body (the scope of the
-// trigger's parameters) features of the transition's scope, which owns them.
-func ownEffectMembers(scope, body *Scope, effect []ast.Node) {
-	for _, m := range effect {
-		decl, _ := unwrapMember(m)
-		if decl == nil {
+// ownEffectMembers makes the members an effect built after the trigger's
+// parameters (an action's symbol, a `do send`'s own parameters) the transition's.
+func ownEffectMembers(scope *Scope, members []*Symbol) {
+	seen := map[*Symbol]bool{}
+	for _, sym := range members {
+		if seen[sym] {
 			continue
 		}
-		sym, ok := memberDeclaring(body, decl)
-		if !ok {
-			continue
-		}
+		seen[sym] = true
 		sym.OwnerScope = scope
 		defineIdent(scope, ast.Identification{Name: sym.Name, ShortName: sym.ShortName}, sym)
 	}

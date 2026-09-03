@@ -92,3 +92,39 @@ func TestBodyExprScopeWithoutParameters(t *testing.T) {
 		t.Fatalf("body-expression scopes = %d, want 0", len(bodies))
 	}
 }
+
+// An effect's members are the transition's own features (SysML v2 §7.19.2),
+// whether it is an action or a `do send` with parameters; the trigger's are not.
+func TestTriggeredTransitionOwnsItsEffectMembers(t *testing.T) {
+	root := build(t, `package P {
+	item def Warning;
+	state S {
+		port line;
+		state a; state b;
+		transition relay first a accept w : Warning
+			do send w via line { in payload = w; } then b;
+		transition alert first a accept v : Warning
+			do action raise { in cause = v; } then b;
+	}
+}`)
+	p, _ := root.LookupLocal("P")
+	s, _ := p.Scope.LookupLocal("S")
+	for _, tc := range []struct{ transition, member, param string }{
+		{"relay", "payload", "w"},
+		{"alert", "raise", "v"},
+	} {
+		trans, ok := s.Scope.LookupLocal(tc.transition)
+		if !ok {
+			t.Fatalf("transition %s not defined", tc.transition)
+		}
+		member, ok := trans.Scope.LookupLocal(tc.member)
+		if !ok {
+			t.Errorf("%s.%s is not a member of the transition", tc.transition, tc.member)
+		} else if member.OwnerScope != trans.Scope {
+			t.Errorf("%s.%s is owned by %v, want the transition", tc.transition, tc.member, member.OwnerScope.Node())
+		}
+		if _, ok := trans.Scope.LookupLocal(tc.param); ok {
+			t.Errorf("trigger parameter %s is a member of transition %s", tc.param, tc.transition)
+		}
+	}
+}

@@ -298,6 +298,7 @@ func TestChainSegmentMustReachTheGraphsTarget(t *testing.T) {
     part a : A;
     part b : B;
     attribute v = a.x;
+    attribute w = a.x + a.x;
     connect a.x to b.x;
 }`
 	graph, err := export.Convert("chain.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
@@ -316,10 +317,15 @@ func TestChainSegmentMustReachTheGraphsTarget(t *testing.T) {
 	// first end, whether or not the notation is kept with the graph.
 	value := "    sysml:argument expr:P__v_pvalue_pa0 ;\n    sysml:targetFeature elmt:P__A__x ."
 	refusedAsUnsupported(t, "chain", relinked(t, structural, value, strings.Replace(value, "A__x", "B__x", 1)), why)
-	end := "    sysml:argument expr:P___405_pend0_pa0 ;\n    sysml:targetFeature elmt:P__A__x ;"
+	end := "    sysml:argument expr:P___406_pend0_pa0 ;\n    sysml:targetFeature elmt:P__A__x ;"
 	for name, g := range map[string][]byte{"structure": structural, "notation": graph} {
 		refusedAsUnsupported(t, "chain-"+name, relinked(t, g, end, strings.Replace(end, "A__x", "B__x", 1)), why)
 	}
+	// The sum repeats `a.x`: the occurrence still reaching A::x must not vouch
+	// for the one relinked to B::x.
+	second := "    sysml:argument expr:P__w_pvalue_pa1_pa0 ;\n    sysml:targetFeature elmt:P__A__x ;"
+	refusedAsUnsupported(t, "chain-repeated", relinked(t, structural, second, strings.Replace(second, "A__x", "B__x", 1)),
+		"name different elements in the graph")
 }
 
 // TestInitialStartMustBeAMemberOfItsBody covers a `first` whose start the graph

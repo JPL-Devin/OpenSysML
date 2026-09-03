@@ -245,7 +245,7 @@ func TestTriggerParametersDoNotEscapeTheirTransition(t *testing.T) {
 		attribute speed = value;
 	}`
 	if got := diagnose(t, "trigparams", src); len(got) != 2 {
-		t.Errorf("references to imported trigger parameters reported %v, want two findings", got)
+		t.Errorf("references to imported trigger parameters reported %v, want three findings", got)
 	}
 }
 
@@ -258,6 +258,7 @@ func TestTriggerParametersReachNestedEffects(t *testing.T) {
 		item def Warning { attribute level : Integer; }
 		state S {
 			attribute level : Integer = 0;
+			port line;
 			state a; state b;
 			transition alert first a accept w : Warning do action {
 				first start;
@@ -266,19 +267,22 @@ func TestTriggerParametersReachNestedEffects(t *testing.T) {
 			} then b;
 			transition setSpeed first a accept req(value) if value > 0
 				do action set { in target = value; } then b;
+			transition relay first a accept w : Warning
+				do send w via line { in payload = w; } then b;
 		}
 		package Q {
 			private import P::S::**;
 			attribute effectOf = setSpeed.set;
+			attribute relayed = relay.payload;
 		}
 	}`
 	if got := diagnose(t, "nestedeffects", src); len(got) != 0 {
 		t.Errorf("expected no findings in a well-formed model, got %v", got)
 	}
 	// The nested bodies are walked: a name they misspell is reported.
-	misspelled := strings.NewReplacer("w.level", "ww.level", "= value;", "= vaule;").Replace(src)
-	if got := diagnose(t, "nestedeffects", misspelled); len(got) != 2 {
-		t.Errorf("misspelled parameters in nested effects reported %v, want two findings", got)
+	misspelled := strings.NewReplacer("w.level", "ww.level", "= value;", "= vaule;", "relay.payload", "relay.paylaod").Replace(src)
+	if got := diagnose(t, "nestedeffects", misspelled); len(got) != 3 {
+		t.Errorf("misspelled parameters in nested effects reported %v, want three findings", got)
 	}
 }
 
