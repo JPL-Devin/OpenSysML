@@ -2,6 +2,7 @@ package libs
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"os"
 	"path/filepath"
@@ -74,9 +75,12 @@ func TestDecodeSnapshotRefusesOtherFiles(t *testing.T) {
 	if _, err := DecodeSnapshot(stdlibSnapshot, "0000"); !errors.Is(err, ErrSnapshotStale) {
 		t.Errorf("digest mismatch: got %v, want ErrSnapshotStale", err)
 	}
-	other := []byte(snapshotMagic + "\x02\x04abcd")
-	if _, err := DecodeSnapshot(other, "abcd"); !errors.Is(err, ErrSnapshotStale) {
-		t.Errorf("format mismatch: got %v, want ErrSnapshotStale", err)
+	for _, version := range []uint64{snapshotFormatVersion - 1, snapshotFormatVersion + 1} {
+		other := binary.AppendUvarint([]byte(snapshotMagic), version)
+		other = append(other, "\x04abcd"...)
+		if _, err := DecodeSnapshot(other, "abcd"); !errors.Is(err, ErrSnapshotStale) {
+			t.Errorf("format version %d: got %v, want ErrSnapshotStale", version, err)
+		}
 	}
 }
 
