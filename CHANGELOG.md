@@ -23,7 +23,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   memoized in a side table keyed by the invocation node and scope, and the evaluator dispatches
   the declaration recorded there. A model's own `calc` of the name still shadows the library,
   and an argument whose type is statically unknown keeps the previous selection with no new
-  diagnostic.
+  diagnostic. `ComplexFunctions::sum` and `product`, which a Real collection now selects where
+  `ComplexFunctions` is imported and `RealFunctions` is not, fold Real elements as the library's
+  `reduce '+'` does — on the real axis — so `sum((1.0, 2.0))` stays the Real `3.0` rather than
+  becoming `3.0 + 0.0i`.
 
 - **The bundled standard library opens in the editor.** Go-to-definition, find-references
   and the diagram panel used to report a standard library declaration at a path no editor

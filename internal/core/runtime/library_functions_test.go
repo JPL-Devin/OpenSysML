@@ -662,6 +662,32 @@ func TestComplexFunctionScalarValues(t *testing.T) {
 	}
 }
 
+// The library's `reduce '+'` over Reals stays on the real axis, so the Complex
+// aggregations keep the elements' kind unless one is a Complex.
+func TestComplexAggregationsKeepRealElementsReal(t *testing.T) {
+	cases := []struct {
+		fn   string
+		args []Value
+		want semantics.Value
+	}{
+		{"ComplexFunctions::sum", []Value{vec(constReal(1), constReal(2))}, semantics.Value{Kind: semantics.ValReal, Real: 3}},
+		{"ComplexFunctions::sum", []Value{vec(constInt(1), constInt(2))}, semantics.Value{Kind: semantics.ValInt, Int: 3}},
+		{"ComplexFunctions::product", []Value{vec(constInt(2), constReal(1.5))}, semantics.Value{Kind: semantics.ValReal, Real: 3}},
+		{"ComplexFunctions::product", []Value{constInt(4)}, semantics.Value{Kind: semantics.ValInt, Int: 4}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.fn, func(t *testing.T) {
+			got, err := applyLibrary(t, tc.fn, tc.args...)
+			if err != nil {
+				t.Fatalf("%s = error %v", tc.fn, err)
+			}
+			if got.Kind != ValConst || got.Const != tc.want {
+				t.Fatalf("%s = %s, want %+v", tc.fn, FormatValue(got), tc.want)
+			}
+		})
+	}
+}
+
 // A numeric pair is a vector, not a Complex: only rect, polar, i and the
 // Complex operations make one, so a sequence never binds to a Complex parameter.
 func TestComplexFunctionsRejectNumericPairs(t *testing.T) {

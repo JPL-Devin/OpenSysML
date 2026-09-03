@@ -808,10 +808,8 @@ func aggregate(op string, args []Value, operator ast.OperatorKind) (Value, error
 		}
 	}
 	// A Complex is a Number, so a collection holding one folds as ComplexFunctions'.
-	for _, elem := range elements {
-		if elem.Kind == ValComplex {
-			return aggregateComplex(op, args[0], operator)
-		}
+	if holdsComplex(elements) {
+		return aggregateComplex(op, args[0], operator)
 	}
 	identity := int64(0)
 	if operator == ast.OpMul {

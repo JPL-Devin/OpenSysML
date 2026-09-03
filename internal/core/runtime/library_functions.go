@@ -1370,12 +1370,18 @@ func complexProduct(name string, _ *Context, args []Value) (Value, error) {
 
 // aggregateComplex folds a collection's elements as complex numbers under the
 // sum or product, from its identity; an element that is no number is reported.
+// The library's `reduce '+'` keeps Real elements on the real axis, so only a
+// collection holding a Complex, or none at all, folds to a Complex.
 func aggregateComplex(name string, collection Value, operator ast.OperatorKind) (Value, error) {
+	elements := elementsOf(collection)
+	if len(elements) > 0 && !holdsComplex(elements) {
+		return aggregate(name, []Value{collection}, operator)
+	}
 	acc := complex(0, 0)
 	if operator == ast.OpMul {
 		acc = 1
 	}
-	for _, elem := range elementsOf(collection) {
+	for _, elem := range elements {
 		z, err := asComplex(name, "collection", elem)
 		if err != nil {
 			return Value{}, err

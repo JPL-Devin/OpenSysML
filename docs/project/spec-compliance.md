@@ -635,7 +635,8 @@ Real, `rect(0.0, 1.0)` a Complex), while it stays one value however it is typed.
 The runtime has no vector value kind, so an operation whose argument is a
 *collection of* vectors cannot tell it from one flat vector and is reported by
 name rather than answered (below); a collection of Complex values is a sequence
-of them, so `ComplexFunctions::sum`/`product` fold it.
+of them, so `ComplexFunctions::sum`/`product` fold it, keeping Real elements Real as the
+library's `reduce '+'` does (`aggregateComplex`; fixture `calc_library_complex_sum_real_axis`).
 
 A library **feature** — a named constant a library declares and gives no
 evaluable value — takes its value from a seam of its own: `libraryFeatures` maps
