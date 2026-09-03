@@ -193,6 +193,8 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		bodyScopesInExpr(scope, d.Target)
 		bodyScopesInExpr(scope, d.Receiver)
 		buildBodyScopes(nodeBodyScope(scope, d), d.Members)
+	case *ast.SuccessionEdge:
+		buildBodyScopes(nodeBodyScope(scope, d), d.Members)
 	case *ast.TerminateStatement:
 		bodyScopesInExpr(scope, d.Target)
 	case *ast.AssignmentActionNode:

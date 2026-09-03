@@ -243,6 +243,7 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		return true
 	case *ast.SuccessionEdge:
 		r.resolveSuccessionEdge(scope, d)
+		r.walkMembers(r.bodyScope(scope, d), d.Members)
 		return true
 	case *ast.ControlFlowEdge:
 		r.resolveControlFlowEdge(scope, d)
@@ -338,6 +339,7 @@ func (r *Resolver) resolveBehaviorDecl(scope *symbols.Scope, decl ast.Node) bool
 		r.resolveExpr(scope, d.Message)
 		r.resolveExpr(scope, d.Target)
 		r.resolveExpr(scope, d.Receiver)
+		r.walkMembers(r.bodyScope(scope, d), d.Members)
 		return true
 	case *ast.TerminateStatement:
 		r.resolveExpr(scope, d.Target)
@@ -489,6 +491,15 @@ func ParameterizedByName(sym *symbols.Symbol) bool {
 // childScope finds the child scope whose node is decl.
 func (r *Resolver) childScope(scope *symbols.Scope, decl ast.Node) *symbols.Scope {
 	return scope.ChildFor(decl)
+}
+
+// bodyScope is the scope the body of an action node resolves against: its own
+// where the builder gave it one, and the enclosing scope otherwise.
+func (r *Resolver) bodyScope(scope *symbols.Scope, node ast.Node) *symbols.Scope {
+	if child := r.childScope(scope, node); child != nil {
+		return child
+	}
+	return scope
 }
 
 func (r *Resolver) resolvePrefixes(scope *symbols.Scope, prefixes []*ast.PrefixMetadata) {

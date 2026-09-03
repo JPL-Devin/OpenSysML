@@ -77,6 +77,15 @@ func (c *refCollector) childScope(scope *symbols.Scope, decl ast.Node) *symbols.
 	return nil
 }
 
+// bodyScope is the scope the body of an action node resolves against: its own
+// where the builder gave it one, and the enclosing scope otherwise.
+func (c *refCollector) bodyScope(scope *symbols.Scope, decl ast.Node) *symbols.Scope {
+	if child := c.childScope(scope, decl); child != nil {
+		return child
+	}
+	return scope
+}
+
 func (c *refCollector) walkMembers(scope *symbols.Scope, members []ast.Node) {
 	for _, m := range members {
 		decl := m
@@ -304,6 +313,10 @@ func (c *refCollector) behaviorDecl(scope *symbols.Scope, decl ast.Node) bool {
 		c.expr(scope, d.Message)
 		c.expr(scope, d.Target)
 		c.expr(scope, d.Receiver)
+		c.walkMembers(c.bodyScope(scope, d), d.Members)
+		return true
+	case *ast.SuccessionEdge:
+		c.walkMembers(c.bodyScope(scope, d), d.Members)
 		return true
 	case *ast.TerminateStatement:
 		c.expr(scope, d.Target)

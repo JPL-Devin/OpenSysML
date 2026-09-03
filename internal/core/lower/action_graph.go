@@ -686,12 +686,48 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 // SendPayload returns the message a send with no argument carries: the value
 // its body binds the payload parameter to (`send { in :>> payload = s; }`).
 func SendPayload(m *ast.SendStatement) ast.Node {
-	for _, member := range m.Members {
-		if u, ok := unwrapMembership(member).(*ast.Usage); ok && u.Direction == ast.DirIn && u.Value != nil {
-			return u.Value
-		}
+	if payload := sendPayloadParameter(m); payload != nil {
+		return payload.Value
 	}
 	return nil
+}
+
+// sendPayloadParameter returns the body feature redefining SendAction::payload:
+// by name in a `:>>` clause, else by position as the first parameter of an argument-less send.
+func sendPayloadParameter(m *ast.SendStatement) *ast.Usage {
+	var byPosition *ast.Usage
+	positional := m.Message == nil && m.Target == nil
+	for _, member := range m.Members {
+		u, ok := unwrapMembership(member).(*ast.Usage)
+		if !ok || u.Direction == ast.DirNone || u.IsResult {
+			continue
+		}
+		redefined := redefinedNames(u)
+		for _, target := range redefined {
+			if target == "payload" {
+				return u
+			}
+		}
+		if positional && len(redefined) == 0 && u.Direction == ast.DirIn {
+			byPosition = u
+		}
+		positional = false
+	}
+	return byPosition
+}
+
+// redefinedNames returns the last segment of every feature a usage redefines.
+func redefinedNames(u *ast.Usage) []string {
+	var out []string
+	for _, rel := range u.Relationships {
+		if rel == nil || rel.Kind != ast.RelRedefines {
+			continue
+		}
+		if name, _ := ast.TargetName(rel.Target); name != "" {
+			out = append(out, name)
+		}
+	}
+	return out
 }
 
 // lowerBlock lowers the body of a loop or of one branch of a conditional. owner

@@ -190,9 +190,20 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 		}
 		return true
 	case *ast.SendStatement:
-		// A send's body declares the node's own parameters, and the node is the
-		// action the send was written on (`action a send x via p { in x; }`).
-		buildMembers(scope, d.Members)
+		// The send is the action usage it was written on (`action a send x { in x; }`),
+		// whose body declares the parameters; anywhere else it is a node of its own.
+		if usage, ok := scope.Node().(*ast.Usage); ok && usage.Kind == ast.UsageAction {
+			buildMembers(scope, d.Members)
+			return true
+		}
+		buildAnonymousNode(scope, d, SymbolActionUsage, d.Members, vis, trivia)
+		return true
+	case *ast.SuccessionEdge:
+		// A succession with a body is a SuccessionAsUsage whose body declares its
+		// own features (SysML.xtext ActionTargetSuccession ends in a UsageBody).
+		if len(d.Members) > 0 {
+			buildAnonymousNode(scope, d, SymbolSuccessionUsage, d.Members, vis, trivia)
+		}
 		return true
 	case *ast.StateNode:
 		// Register state node by name (including initial/final pseudostates)
@@ -519,6 +530,16 @@ func namingTargetNode(target ast.Node) ast.Node {
 		return qn
 	}
 	return target
+}
+
+// buildAnonymousNode registers an unnamed node as a member of scope with a
+// child scope its body members are built in.
+func buildAnonymousNode(scope *Scope, node ast.Node, kind SymbolKind, members []ast.Node, vis ast.Visibility, trivia []ast.Trivia) {
+	child := NewScope(scope, node)
+	sym := newSymbol(ast.Identification{}, kind, node, vis, child, scope, trivia)
+	defineIdent(scope, ast.Identification{}, sym)
+	scope.AddChild(child)
+	buildMembers(child, members)
 }
 
 // defineIdent registers sym under its short and primary name keys, skipping

@@ -83,6 +83,18 @@ func TestSendPayloadInvokingNonBehaviorIsReported(t *testing.T) {
 			action def A { part r : Receiver; action outer { action inner {
 				send Sig() to r;
 			} } } }`},
+		"succession body": {at: "Sig", src: `package P {` + sendPrelude + `
+			action def A { part r : Receiver; action a; action b;
+				then b { send Sig() to r; }
+			} }`},
+		"body payload binding of a bare send in a definition": {at: "Sig", src: `package P {` + sendPrelude + `
+			action def A { part r : Receiver;
+				send to r { in :>> payload = Sig(); }
+			} }`},
+		"body payload binding in a branch": {at: "Sig", src: `package P {` + sendPrelude + `
+			action def A { part r : Receiver;
+				if true { send to r { in :>> payload = Sig(); } }
+			} }`},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -190,6 +202,14 @@ func TestSendSubactionWithoutPayloadIsReported(t *testing.T) {
 			part def V { part r : Receiver; exhibit state m {
 				entry send to r;
 			} } }`},
+		"body binds an input that is not the payload": {at: "send to r { in delay = 3; }", src: `package P {` + sendPrelude + `
+			state def M { part r : Receiver;
+				entry send to r { in delay = 3; }
+			} }`},
+		"body binds only the sender": {at: "send to r { in :>> sender = r; }", src: `package P {` + sendPrelude + `
+			state def M { part r : Receiver;
+				entry send to r { in :>> sender = r; }
+			} }`},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -218,6 +238,17 @@ func TestSendWellFormedShapesAreSilent(t *testing.T) {
 			part def V { port q : PD; part r : Receiver; action a { send Ping() via q to r; } } }`,
 		"body binds the payload": `package P {` + sendPrelude + `
 			part def V { part r : Receiver; action a { send to r { in :>> payload = new Sig(); } } } }`,
+		"body binds the payload of a bare send in a definition": `package P {` + sendPrelude + `
+			action def A { part r : Receiver; send to r { in :>> payload = new Sig(); } } }`,
+		"body binds the payload in a branch": `package P {` + sendPrelude + `
+			action def A { part r : Receiver; if true { send to r { in :>> payload = new Sig(); } } } }`,
+		"body binds the payload in a succession body": `package P {` + sendPrelude + `
+			action def A { part r : Receiver; action a; action b;
+				then b { send to r { in :>> payload = new Sig(); } } } }`,
+		"body binds the payload by position": `package P {` + sendPrelude + `
+			state def M { part r : Receiver; entry send { in msg = new Sig(); } } }`,
+		"body declares the payload parameter beside an argument": `package P {` + sendPrelude + `
+			part def V { port q : PD; item m : Msg; action a send m via q { in m : Msg; } } }`,
 		"state entry with payload": `package P {` + sendPrelude + `
 			state def M { part r : Receiver; entry send Ping() to r; } }`,
 		"transition effect with a bound payload": `package P {` + sendPrelude + `
@@ -261,12 +292,59 @@ func TestSendWellFormedShapesAreSilent(t *testing.T) {
 	}
 }
 
+// The payload parameter a send body redefines resolves wherever the send is
+// written: on an action node, bare in a definition, in a branch or a succession.
+func TestSendBodyPayloadResolvesInEveryHost(t *testing.T) {
+	cases := map[string]string{
+		"action node": `package P {` + sendPrelude + `
+			action def A { part r : Receiver; action s send to r { in :>> payload = new Sig(); } } }`,
+		"bare in a definition": `package P {` + sendPrelude + `
+			action def A { part r : Receiver; send to r { in :>> payload = new Sig(); } } }`,
+		"in a branch": `package P {` + sendPrelude + `
+			action def A { part r : Receiver; if true { send to r { in :>> payload = new Sig(); } } } }`,
+		"in a succession body": `package P {` + sendPrelude + `
+			action def A { part r : Receiver; action a; action b;
+				then b { send to r { in :>> payload = new Sig(); } } } }`,
+		"state entry": `package P {` + sendPrelude + `
+			state def M { part r : Receiver; entry send to r { in :>> payload = new Sig(); } } }`,
+	}
+	for name, src := range cases {
+		t.Run(name, func(t *testing.T) {
+			for _, d := range analyzeAll(t, "send.sysml", src) {
+				if d.Severity == SeverityError {
+					t.Errorf("unexpected error: %s %s", d.Code, d.Message)
+				}
+			}
+		})
+	}
+}
+
 // A send whose arguments fail to resolve is left to the name-resolution tier:
-// the rule does not pile a second diagnostic on an unresolved receiver.
+// the rule does not pile a second diagnostic on an unresolved receiver, nor on
+// an unresolved payload the body binds.
 func TestSendGatesOnUnresolvedArguments(t *testing.T) {
-	got := sendDiags(t, `package P {`+sendPrelude+`
-		action def A { action s send Ping() to nowhere; } }`)
-	if len(got) != 0 {
-		t.Errorf("expected the send rule to stay silent on an unresolved receiver, got %+v", got)
+	cases := map[string]struct{ src, unresolved string }{
+		"receiver": {unresolved: "nowhere", src: `package P {` + sendPrelude + `
+			action def A { action s send Ping() to nowhere; } }`},
+		"body-bound payload": {unresolved: "Missing", src: `package P {` + sendPrelude + `
+			action def A { part r : Receiver; action s send to r { in :>> payload = Missing(); } } }`},
+		"body-bound payload of a bare send": {unresolved: "Missing", src: `package P {` + sendPrelude + `
+			action def A { part r : Receiver; send to r { in :>> payload = Missing(); } } }`},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			var unresolved []Diagnostic
+			for _, d := range analyzeAll(t, "send.sysml", tc.src) {
+				if d.Code == "unresolved" {
+					unresolved = append(unresolved, d)
+				}
+			}
+			if len(unresolved) != 1 || !strings.Contains(unresolved[0].Message, tc.unresolved) {
+				t.Fatalf("expected one unresolved reference to %s, got %+v", tc.unresolved, unresolved)
+			}
+			if got := sendDiags(t, tc.src); len(got) != 0 {
+				t.Errorf("expected the send rule to stay silent on an unresolved argument, got %+v", got)
+			}
+		})
 	}
 }
