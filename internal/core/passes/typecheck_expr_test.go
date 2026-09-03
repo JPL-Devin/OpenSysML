@@ -455,6 +455,10 @@ func TestExprInvocationReceiverWithNamedArguments(t *testing.T) {
 	wantOneDiag(t,
 		`package P { `+calcAdd+` calc c { 1->add(a = 1, b = 2) } }`,
 		"add cannot be called with a receiver and named arguments")
+	// The receiver may be the missing argument, so nothing else is reported.
+	wantOneDiag(t,
+		`package P { `+calcAdd+` calc c { 1->add(b = 2) } }`,
+		"add cannot be called with a receiver and named arguments")
 }
 
 func TestExprInvocationNamedArgumentsOK(t *testing.T) {

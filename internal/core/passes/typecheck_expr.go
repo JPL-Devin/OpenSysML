@@ -688,6 +688,7 @@ func (ec *exprChecker) checkNamedArguments(
 	// the same call).
 	if e.Operand != nil {
 		ec.errorf(e.Span(), "%s cannot be called with a receiver and named arguments", sym.Name)
+		return
 	}
 	byName := make(map[string]int, len(params))
 	for i, p := range params {
