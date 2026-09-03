@@ -1235,7 +1235,13 @@ func (d *decoder) relationshipWords(el *element, multPart string, skip ...ast.Re
 		if slices.Contains(skip, kind) {
 			continue
 		}
-		targets, err := d.referenceList(el, rdf.SysML+relationshipProperty[kind])
+		var targets []string
+		var err error
+		if kind == ast.RelRedefines {
+			targets, err = d.redefinedList(el)
+		} else {
+			targets, err = d.referenceList(el, rdf.SysML+relationshipProperty[kind])
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -1285,6 +1291,30 @@ func (d *decoder) referenceText(el *element, property string) (string, error) {
 func (d *decoder) referenceList(el *element, property string) ([]string, error) {
 	var out []string
 	for _, term := range d.graph.Objects(rdf.IRI(el.iri), property) {
+		name, err := d.referenceName(term, el.scope)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, name)
+	}
+	return out, nil
+}
+
+// redefinedList renders the redefinition targets of el. A linked target is a
+// feature of a general, which a redefinition names by the feature's own name.
+func (d *decoder) redefinedList(el *element) ([]string, error) {
+	var out []string
+	for _, term := range d.graph.Objects(rdf.IRI(el.iri), rdf.SysML+relationshipProperty[ast.RelRedefines]) {
+		if !term.IsLiteral() {
+			target, err := d.referencedElement(term.Value)
+			if err != nil {
+				return nil, err
+			}
+			if name, ok := d.stringOf(target, rdf.SysML+pDeclaredName); ok {
+				out = append(out, qualifiedNameText(name))
+				continue
+			}
+		}
 		name, err := d.referenceName(term, el.scope)
 		if err != nil {
 			return nil, err

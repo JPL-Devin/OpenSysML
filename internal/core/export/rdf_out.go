@@ -10,7 +10,9 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf/ontology"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // Property names in the SysML vocabulary.
@@ -184,6 +186,7 @@ func encodeDocument(file *source.SourceFile, root *ast.RootNamespace) (*encoder,
 		regions:  map[rdf.Term]region{},
 		bodies:   map[rdf.Term]region{},
 		offsets:  map[string]int{},
+		scopes:   map[string]*symbols.Scope{},
 	}
 	// The first pass records which qualified names this document declares, so
 	// the second can decide whether a relationship target is a link to an
@@ -191,6 +194,9 @@ func encodeDocument(file *source.SourceFile, root *ast.RootNamespace) (*encoder,
 	if err := e.collect(root.Members, ""); err != nil {
 		return nil, err
 	}
+	idx := symbols.NewIndexFromDoc(file.Name(), root)
+	e.resolver = resolve.New(idx)
+	e.collectScopes(idx.DocumentRoot(file.Name()), "")
 	if err := e.encode(root.Members, "", rdf.Term{}); err != nil {
 		return nil, err
 	}
@@ -255,6 +261,27 @@ type encoder struct {
 	bodies  map[rdf.Term]region
 	// offsets holds where in file each element's declaration starts.
 	offsets map[string]int
+	// resolver reads references the way the language does — through imports,
+	// aliases and nested qualification — and scopes holds the scope each
+	// declared namespace owns, keyed by its qualified name.
+	resolver *resolve.Resolver
+	scopes   map[string]*symbols.Scope
+}
+
+// collectScopes records the scope each declared member owns under the
+// qualified name collect gave that member; the document root is "".
+func (e *encoder) collectScopes(scope *symbols.Scope, owner string) {
+	if scope == nil {
+		return
+	}
+	e.scopes[owner] = scope
+	for _, child := range scope.Children() {
+		fqn, ok := e.fqn[child.Node()]
+		if !ok {
+			fqn = owner
+		}
+		e.collectScopes(child, fqn)
+	}
 }
 
 // claim reserves an IRI for what it stands for, returning the holder it
@@ -588,7 +615,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 	case *ast.Alias:
 		head(rdf.OpenSysMLTerm(mAlias))
 		e.ident(subject, n.Ident)
-		e.graph.Add(subject, e.sysml(pAliasFor), e.reference(owner, qualifiedText(n.For)))
+		e.graph.Add(subject, e.sysml(pAliasFor), e.link(owner, n.For))
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Body, fqn, subject)
 
@@ -615,10 +642,10 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		head(rdf.SysMLTerm("Dependency"))
 		e.ident(subject, n.Ident)
 		for _, client := range n.Clients {
-			e.graph.Add(subject, e.sysml(pClient), e.reference(owner, qualifiedText(client)))
+			e.graph.Add(subject, e.sysml(pClient), e.link(owner, client))
 		}
 		for _, supplier := range n.Suppliers {
-			e.graph.Add(subject, e.sysml(pSupplier), e.reference(owner, qualifiedText(supplier)))
+			e.graph.Add(subject, e.sysml(pSupplier), e.link(owner, supplier))
 		}
 		if err := e.prefixes(subject, n, n.Prefixes); err != nil {
 			return err
@@ -630,7 +657,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		head(rdf.SysMLTerm("Comment"))
 		e.ident(subject, n.Ident)
 		for _, about := range n.About {
-			e.graph.Add(subject, e.sysml(pAnnotatedElement), e.reference(owner, qualifiedText(about)))
+			e.graph.Add(subject, e.sysml(pAnnotatedElement), e.link(owner, about))
 		}
 		if n.Locale != "" {
 			e.graph.Add(subject, e.sysml(pLocale), rdf.String(lexer.StringValue(n.Locale)))
@@ -661,7 +688,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		// A MultiplicitySubset states its bounds by subsetting, not as a range.
 		if n.Subsets != nil {
 			e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelSubsets]),
-				e.reference(owner, qualifiedText(n.Subsets)))
+				e.link(owner, n.Subsets))
 		}
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Members, fqn, subject)
@@ -695,7 +722,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 			e.graph.Add(subject, e.sysml(pDeclaredName), rdf.String(n.Name))
 		}
 		if n.TypeRef != nil {
-			e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelTyping]), e.reference(owner, qualifiedText(n.TypeRef)))
+			e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelTyping]), e.link(owner, n.TypeRef))
 		}
 		e.relationships(subject, owner, n.Relationships)
 		e.multiplicity(subject, owner, n.Multiplicity)
@@ -838,7 +865,7 @@ func (e *encoder) condition(subject rdf.Term, fqn, owner string, expr ast.Node, 
 		return nil
 	}
 	if ref != nil {
-		e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelReferences]), e.reference(owner, qualifiedText(ref)))
+		e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelReferences]), e.link(owner, ref))
 	}
 	// Both remaining forms — a nested constraint and the constraint a member
 	// names — are written with a body, whether or not it has members.
@@ -1074,7 +1101,8 @@ func (e *encoder) relationships(subject rdf.Term, owner string, rels []*ast.Rela
 		// declares it; a feature chain or other expression is not a name, so it
 		// is carried as the text it was written as.
 		if name, ok := rel.Target.(*ast.QualifiedName); ok {
-			e.graph.Add(subject, e.sysml(property), e.reference(owner, qualifiedText(name)))
+			ref := resolve.Reference{QN: name, Redefines: rel.Kind == ast.RelRedefines}
+			e.graph.Add(subject, e.sysml(property), e.linkReference(owner, ref))
 			continue
 		}
 		e.graph.Add(subject, e.sysml(property), rdf.TypedLiteral(e.text(rel.Target), rdf.OpenSysML+dtExpression))
@@ -1088,7 +1116,7 @@ func (e *encoder) relationshipEnd(subject rdf.Term, owner, property string, end 
 		return
 	}
 	if name, ok := end.(*ast.QualifiedName); ok {
-		e.graph.Add(subject, e.sysml(property), e.reference(owner, qualifiedText(name)))
+		e.graph.Add(subject, e.sysml(property), e.link(owner, name))
 		return
 	}
 	e.graph.Add(subject, e.sysml(property), rdf.TypedLiteral(e.text(end), rdf.OpenSysML+dtExpression))
@@ -1142,6 +1170,55 @@ func (e *encoder) reference(owner, name string) rdf.Term {
 	// A name that links to nothing is carried as the plain name; the quotes an
 	// unrestricted name needs are notation, added when it is written back out.
 	return rdf.String(name)
+}
+
+// link renders a qualified name written at owner as reference does, but reads
+// it first with the resolver, so a name reaching an element of this document
+// through an import, an alias or a nested path is the element's link.
+func (e *encoder) link(owner string, name *ast.QualifiedName) rdf.Term {
+	return e.linkReference(owner, resolve.Reference{QN: name})
+}
+
+// linkReference is link for a name occurrence with its own resolution rule,
+// such as a redefinition's target, which names a feature of the owner's generals.
+func (e *encoder) linkReference(owner string, ref resolve.Reference) rdf.Term {
+	if ref.QN == nil || len(ref.QN.Parts) == 0 {
+		return rdf.String("")
+	}
+	if fqn, ok := e.resolveIn(owner, ref); ok {
+		return e.ids.subjectFor(fqn)
+	}
+	return e.reference(owner, qualifiedText(ref.QN))
+}
+
+// resolveIn resolves ref from the scope of owner, reporting the qualified name
+// of the declaration it reaches when that declaration is in this document.
+func (e *encoder) resolveIn(owner string, ref resolve.Reference) (string, bool) {
+	scope := e.scopes[owner]
+	for scope == nil && owner != "" {
+		cut := strings.LastIndex(owner, "::")
+		if cut < 0 {
+			owner = ""
+		} else {
+			owner = owner[:cut]
+		}
+		scope = e.scopes[owner]
+	}
+	if scope == nil {
+		return "", false
+	}
+	ref.Scope = scope
+	sym, ok := e.resolver.ResolveReference(ref)
+	if !ok || sym == nil {
+		return "", false
+	}
+	// A start node or a loop variable is reached by a name its element does not
+	// declare; such an element has no name in the graph to be written back as.
+	if name, _ := declaredNameAndMembers(sym.Decl); name == "" {
+		return "", false
+	}
+	fqn, ok := e.fqn[sym.Decl]
+	return fqn, ok && e.declared[fqn]
 }
 
 // text is the notation of a node as written, without the trivia its span runs

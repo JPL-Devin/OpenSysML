@@ -184,7 +184,9 @@ never by parsing the id — a declared id may legitimately end in `_om` or embed
   `isOrdered`, `isNonunique`, `isEnd`, `isConstant`, `isEvent`, `isIndividual`,
   `isSnapshot`, `isConjugated`, `isAll`, `isAccept`, `isResult`
 - Declaration-head relationships, as element IRIs where the target resolves
-  inside the model and as plain literals where it does not: `sysml:type`
+  inside the model — by name resolution, so a name reached through an import,
+  an alias or a nested package qualification links to the same element its
+  fully qualified spelling does — and as plain literals where it does not: `sysml:type`
   (the `:` clause), `specializes`, `subsets`, `redefines`, `references`,
   `crosses`, `disjointFrom`, `intersects`, `inverseOf`, `unions`, `chains`,
   `includes`, `via`, `annotates`, `subject`. A literal carries the name itself,

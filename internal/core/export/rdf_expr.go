@@ -107,30 +107,30 @@ func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) 
 	case *ast.QualifiedName:
 		// A position whose notation is a bare name holds the feature it names.
 		e.typed(subject, mFeatureReference)
-		e.graph.Add(subject, e.sysml(pReferent), e.reference(owner, qualifiedText(n)))
+		e.graph.Add(subject, e.sysml(pReferent), e.link(owner, n))
 
 	case *ast.FeatureReference:
 		e.typed(subject, mFeatureReference)
-		e.graph.Add(subject, e.sysml(pReferent), e.reference(owner, qualifiedText(n.Name)))
+		e.graph.Add(subject, e.sysml(pReferent), e.link(owner, n.Name))
 
 	case *ast.OperatorExpr:
 		e.typed(subject, mOperator)
 		e.graph.Add(subject, e.sysml(pOperator), rdf.String(n.Operator.String()))
 		e.arguments(subject, owner, n.Operands)
 		if n.TypeRef != nil {
-			e.graph.Add(subject, e.sysx(xTypeArgument), e.reference(owner, qualifiedText(n.TypeRef)))
+			e.graph.Add(subject, e.sysx(xTypeArgument), e.link(owner, n.TypeRef))
 		}
 
 	case *ast.CastExpr:
 		// `(as T)` is the classification operator with a type argument only.
 		e.typed(subject, mOperator)
 		e.graph.Add(subject, e.sysml(pOperator), rdf.String(ast.OpAs.String()))
-		e.graph.Add(subject, e.sysx(xTypeArgument), e.reference(owner, qualifiedText(n.TargetType)))
+		e.graph.Add(subject, e.sysx(xTypeArgument), e.link(owner, n.TargetType))
 
 	case *ast.FeatureChainExpr:
 		e.typed(subject, mFeatureChain)
 		e.arguments(subject, owner, []ast.Node{n.Operand})
-		e.graph.Add(subject, e.sysml(pTargetFeature), e.reference(owner, qualifiedText(n.Member)))
+		e.graph.Add(subject, e.sysml(pTargetFeature), e.link(owner, n.Member))
 
 	case *ast.IndexExpr:
 		e.typed(subject, mOperator)
@@ -166,7 +166,7 @@ func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) 
 
 	case *ast.MetadataAccessExpr:
 		e.typed(subject, mMetadataAccess)
-		e.graph.Add(subject, e.sysml(pReferencedElement), e.reference(owner, qualifiedText(n.Ref)))
+		e.graph.Add(subject, e.sysml(pReferencedElement), e.link(owner, n.Ref))
 
 	case *ast.BodyExpr:
 		// A body declares its own parameters and a result expression.
@@ -210,7 +210,7 @@ func (e *encoder) arguments(subject rdf.Term, owner string, args []ast.Node) {
 // invoked, the receiver of a `->` form, and the arguments.
 func (e *encoder) invocation(subject rdf.Term, owner string, function *ast.QualifiedName, operand ast.Node, args []ast.Node, named []ast.NamedArg) {
 	if function != nil {
-		e.graph.Add(subject, e.sysml(pFunction), e.reference(owner, qualifiedText(function)))
+		e.graph.Add(subject, e.sysml(pFunction), e.link(owner, function))
 	}
 	if operand != nil {
 		receiver := rdf.ExpressionIRI(subject, "operand")

@@ -202,7 +202,7 @@ elmt:NestedNamespaceImport__Pkg2__a
     sysml:owningRelationship elmt:NestedNamespaceImport__Pkg2__a_om ;
     sysml:owningMembership elmt:NestedNamespaceImport__Pkg2__a_om ;
     sysml:declaredName "a" ;
-    sysml:type "A" ;
+    sysml:type elmt:NestedNamespaceImport__Pkg1__A ;
     sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        part a : A;\n" .
 
@@ -226,7 +226,7 @@ elmt:NestedNamespaceImport__Pkg2__b
     sysml:owningRelationship elmt:NestedNamespaceImport__Pkg2__b_om ;
     sysml:owningMembership elmt:NestedNamespaceImport__Pkg2__b_om ;
     sysml:declaredName "b" ;
-    sysml:type "B" ;
+    sysml:type elmt:NestedNamespaceImport__Pkg1__Pkg11__B ;
     sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        part b : B;\n" .
 

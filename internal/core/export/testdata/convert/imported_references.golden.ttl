@@ -1,0 +1,501 @@
+@prefix elmt: <urn:sysmlv2:element:> .
+@prefix expr: <urn:opensysml:expr:> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix sysx: <urn:opensysml:sysml:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+elmt:OtherPkg
+    a sysml:Package ;
+    sysml:qualifiedName "OtherPkg" ;
+    sysml:elementId "OtherPkg" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
+    sysml:declaredName "OtherPkg" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:OtherPkg__BudgetLedger, elmt:OtherPkg__Tempo, elmt:OtherPkg__Inner ;
+    sysml:ownedMembership elmt:OtherPkg__BudgetLedger_om, elmt:OtherPkg__Tempo_om, elmt:OtherPkg__Inner_om ;
+    sysml:ownedRelationship elmt:OtherPkg__BudgetLedger_om, elmt:OtherPkg__Tempo_om, elmt:OtherPkg__Inner_om ;
+    sysx:sourceText "package OtherPkg {\n" ;
+    sysx:sourceTail "}\n" .
+
+elmt:OtherPkg__BudgetLedger
+    a sysml:ItemDefinition ;
+    sysml:qualifiedName "OtherPkg::BudgetLedger" ;
+    sysml:elementId "OtherPkg__BudgetLedger" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:OtherPkg ;
+    sysml:owner elmt:OtherPkg ;
+    sysml:owningRelationship elmt:OtherPkg__BudgetLedger_om ;
+    sysml:owningMembership elmt:OtherPkg__BudgetLedger_om ;
+    sysml:declaredName "BudgetLedger" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    item def BudgetLedger;\n" .
+
+elmt:OtherPkg__BudgetLedger_om
+    a sysml:OwningMembership ;
+    sysml:elementId "OtherPkg__BudgetLedger_om" ;
+    sysml:owner elmt:OtherPkg ;
+    sysml:memberElement elmt:OtherPkg__BudgetLedger ;
+    sysml:ownedMemberElement elmt:OtherPkg__BudgetLedger ;
+    sysml:ownedRelatedElement elmt:OtherPkg__BudgetLedger ;
+    sysml:owningRelatedElement elmt:OtherPkg ;
+    sysml:membershipOwningNamespace elmt:OtherPkg .
+
+elmt:OtherPkg__Tempo
+    a sysml:EnumerationDefinition ;
+    sysml:qualifiedName "OtherPkg::Tempo" ;
+    sysml:elementId "OtherPkg__Tempo" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:OtherPkg ;
+    sysml:owner elmt:OtherPkg ;
+    sysml:owningRelationship elmt:OtherPkg__Tempo_om ;
+    sysml:owningMembership elmt:OtherPkg__Tempo_om ;
+    sysml:declaredName "Tempo" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:OtherPkg__Tempo__operative, elmt:OtherPkg__Tempo__planning ;
+    sysml:ownedMembership elmt:OtherPkg__Tempo__operative_om, elmt:OtherPkg__Tempo__planning_om ;
+    sysml:ownedRelationship elmt:OtherPkg__Tempo__operative_om, elmt:OtherPkg__Tempo__planning_om ;
+    sysml:ownedFeature elmt:OtherPkg__Tempo__operative, elmt:OtherPkg__Tempo__planning ;
+    sysml:ownedFeatureMembership elmt:OtherPkg__Tempo__operative_om, elmt:OtherPkg__Tempo__planning_om ;
+    sysx:sourceText "    enum def Tempo {\n" ;
+    sysx:sourceTail "    }\n" .
+
+elmt:OtherPkg__Tempo_om
+    a sysml:OwningMembership ;
+    sysml:elementId "OtherPkg__Tempo_om" ;
+    sysml:owner elmt:OtherPkg ;
+    sysml:memberElement elmt:OtherPkg__Tempo ;
+    sysml:ownedMemberElement elmt:OtherPkg__Tempo ;
+    sysml:ownedRelatedElement elmt:OtherPkg__Tempo ;
+    sysml:owningRelatedElement elmt:OtherPkg ;
+    sysml:membershipOwningNamespace elmt:OtherPkg .
+
+elmt:OtherPkg__Tempo__operative
+    a sysml:EnumerationUsage ;
+    sysml:qualifiedName "OtherPkg::Tempo::operative" ;
+    sysml:elementId "OtherPkg__Tempo__operative" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:OtherPkg__Tempo ;
+    sysml:owner elmt:OtherPkg__Tempo ;
+    sysml:owningRelationship elmt:OtherPkg__Tempo__operative_om ;
+    sysml:owningMembership elmt:OtherPkg__Tempo__operative_om ;
+    sysml:declaredName "operative" ;
+    sysx:isKindImplicit "true"^^xsd:boolean ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        operative;\n" .
+
+elmt:OtherPkg__Tempo__operative_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "OtherPkg__Tempo__operative_om" ;
+    sysml:owner elmt:OtherPkg__Tempo ;
+    sysml:memberElement elmt:OtherPkg__Tempo__operative ;
+    sysml:ownedMemberElement elmt:OtherPkg__Tempo__operative ;
+    sysml:ownedRelatedElement elmt:OtherPkg__Tempo__operative ;
+    sysml:owningRelatedElement elmt:OtherPkg__Tempo ;
+    sysml:membershipOwningNamespace elmt:OtherPkg__Tempo ;
+    sysml:ownedMemberFeature elmt:OtherPkg__Tempo__operative ;
+    sysml:owningType elmt:OtherPkg__Tempo .
+
+elmt:OtherPkg__Tempo__planning
+    a sysml:EnumerationUsage ;
+    sysml:qualifiedName "OtherPkg::Tempo::planning" ;
+    sysml:elementId "OtherPkg__Tempo__planning" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:OtherPkg__Tempo ;
+    sysml:owner elmt:OtherPkg__Tempo ;
+    sysml:owningRelationship elmt:OtherPkg__Tempo__planning_om ;
+    sysml:owningMembership elmt:OtherPkg__Tempo__planning_om ;
+    sysml:declaredName "planning" ;
+    sysx:isKindImplicit "true"^^xsd:boolean ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        planning;\n" .
+
+elmt:OtherPkg__Tempo__planning_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "OtherPkg__Tempo__planning_om" ;
+    sysml:owner elmt:OtherPkg__Tempo ;
+    sysml:memberElement elmt:OtherPkg__Tempo__planning ;
+    sysml:ownedMemberElement elmt:OtherPkg__Tempo__planning ;
+    sysml:ownedRelatedElement elmt:OtherPkg__Tempo__planning ;
+    sysml:owningRelatedElement elmt:OtherPkg__Tempo ;
+    sysml:membershipOwningNamespace elmt:OtherPkg__Tempo ;
+    sysml:ownedMemberFeature elmt:OtherPkg__Tempo__planning ;
+    sysml:owningType elmt:OtherPkg__Tempo .
+
+elmt:OtherPkg__Inner
+    a sysml:Package ;
+    sysml:qualifiedName "OtherPkg::Inner" ;
+    sysml:elementId "OtherPkg__Inner" ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:OtherPkg ;
+    sysml:owner elmt:OtherPkg ;
+    sysml:owningRelationship elmt:OtherPkg__Inner_om ;
+    sysml:owningMembership elmt:OtherPkg__Inner_om ;
+    sysml:declaredName "Inner" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:OtherPkg__Inner__Wheel, elmt:OtherPkg__Inner__wheels ;
+    sysml:ownedMembership elmt:OtherPkg__Inner__Wheel_om, elmt:OtherPkg__Inner__wheels_om ;
+    sysml:ownedRelationship elmt:OtherPkg__Inner__Wheel_om, elmt:OtherPkg__Inner__wheels_om ;
+    sysx:sourceText "    package Inner {\n" ;
+    sysx:sourceTail "    }\n" .
+
+elmt:OtherPkg__Inner_om
+    a sysml:OwningMembership ;
+    sysml:elementId "OtherPkg__Inner_om" ;
+    sysml:owner elmt:OtherPkg ;
+    sysml:memberElement elmt:OtherPkg__Inner ;
+    sysml:ownedMemberElement elmt:OtherPkg__Inner ;
+    sysml:ownedRelatedElement elmt:OtherPkg__Inner ;
+    sysml:owningRelatedElement elmt:OtherPkg ;
+    sysml:membershipOwningNamespace elmt:OtherPkg .
+
+elmt:OtherPkg__Inner__Wheel
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "OtherPkg::Inner::Wheel" ;
+    sysml:elementId "OtherPkg__Inner__Wheel" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:OtherPkg__Inner ;
+    sysml:owner elmt:OtherPkg__Inner ;
+    sysml:owningRelationship elmt:OtherPkg__Inner__Wheel_om ;
+    sysml:owningMembership elmt:OtherPkg__Inner__Wheel_om ;
+    sysml:declaredName "Wheel" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part def Wheel;\n" .
+
+elmt:OtherPkg__Inner__Wheel_om
+    a sysml:OwningMembership ;
+    sysml:elementId "OtherPkg__Inner__Wheel_om" ;
+    sysml:owner elmt:OtherPkg__Inner ;
+    sysml:memberElement elmt:OtherPkg__Inner__Wheel ;
+    sysml:ownedMemberElement elmt:OtherPkg__Inner__Wheel ;
+    sysml:ownedRelatedElement elmt:OtherPkg__Inner__Wheel ;
+    sysml:owningRelatedElement elmt:OtherPkg__Inner ;
+    sysml:membershipOwningNamespace elmt:OtherPkg__Inner .
+
+elmt:OtherPkg__Inner__wheels
+    a sysml:PartUsage ;
+    sysml:qualifiedName "OtherPkg::Inner::wheels" ;
+    sysml:elementId "OtherPkg__Inner__wheels" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:OtherPkg__Inner ;
+    sysml:owner elmt:OtherPkg__Inner ;
+    sysml:owningRelationship elmt:OtherPkg__Inner__wheels_om ;
+    sysml:owningMembership elmt:OtherPkg__Inner__wheels_om ;
+    sysml:declaredName "wheels" ;
+    sysml:type elmt:OtherPkg__Inner__Wheel ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part wheels : Wheel;\n" .
+
+elmt:OtherPkg__Inner__wheels_om
+    a sysml:OwningMembership ;
+    sysml:elementId "OtherPkg__Inner__wheels_om" ;
+    sysml:owner elmt:OtherPkg__Inner ;
+    sysml:memberElement elmt:OtherPkg__Inner__wheels ;
+    sysml:ownedMemberElement elmt:OtherPkg__Inner__wheels ;
+    sysml:ownedRelatedElement elmt:OtherPkg__Inner__wheels ;
+    sysml:owningRelatedElement elmt:OtherPkg__Inner ;
+    sysml:membershipOwningNamespace elmt:OtherPkg__Inner .
+
+elmt:R90
+    a sysml:Package ;
+    sysml:qualifiedName "R90" ;
+    sysml:elementId "R90" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
+    sysml:declaredName "R90" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedRelationship elmt:R90___400, elmt:R90__Ledger_om, elmt:R90__A_om, elmt:R90__B_om ;
+    sysml:ownedImport elmt:R90___400 ;
+    sysml:ownedMember elmt:R90__Ledger, elmt:R90__A, elmt:R90__B ;
+    sysml:ownedMembership elmt:R90__Ledger_om, elmt:R90__A_om, elmt:R90__B_om ;
+    sysx:sourceText "package R90 {\n" ;
+    sysx:sourceTail "}\n" .
+
+elmt:R90___400
+    a sysml:Import ;
+    sysml:qualifiedName "R90::@0" ;
+    sysml:elementId "R90___400" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:R90 ;
+    sysml:owner elmt:R90 ;
+    sysml:owningRelatedElement elmt:R90 ;
+    sysml:importOwningNamespace elmt:R90 ;
+    sysml:visibility "public" ;
+    sysml:importedNamespace "OtherPkg" ;
+    sysx:isNamespaceImport "true"^^xsd:boolean ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    public import OtherPkg::*;\n" .
+
+elmt:R90__Ledger
+    a sysx:Alias ;
+    sysml:qualifiedName "R90::Ledger" ;
+    sysml:elementId "R90__Ledger" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:R90 ;
+    sysml:owner elmt:R90 ;
+    sysml:owningRelationship elmt:R90__Ledger_om ;
+    sysml:owningMembership elmt:R90__Ledger_om ;
+    sysml:declaredName "Ledger" ;
+    sysml:aliasedElement elmt:OtherPkg__BudgetLedger ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    alias Ledger for OtherPkg::BudgetLedger;\n" .
+
+elmt:R90__Ledger_om
+    a sysml:OwningMembership ;
+    sysml:elementId "R90__Ledger_om" ;
+    sysml:owner elmt:R90 ;
+    sysml:memberElement elmt:R90__Ledger ;
+    sysml:ownedMemberElement elmt:R90__Ledger ;
+    sysml:ownedRelatedElement elmt:R90__Ledger ;
+    sysml:owningRelatedElement elmt:R90 ;
+    sysml:membershipOwningNamespace elmt:R90 .
+
+elmt:R90__A
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "R90::A" ;
+    sysml:elementId "R90__A" ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:R90 ;
+    sysml:owner elmt:R90 ;
+    sysml:owningRelationship elmt:R90__A_om ;
+    sysml:owningMembership elmt:R90__A_om ;
+    sysml:declaredName "A" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:R90__A__custodyBudget, elmt:R90__A__t, elmt:R90__A__b2, elmt:R90__A__b3, elmt:R90__A__w, elmt:R90__A__unresolved ;
+    sysml:ownedMembership elmt:R90__A__custodyBudget_om, elmt:R90__A__t_om, elmt:R90__A__b2_om, elmt:R90__A__b3_om, elmt:R90__A__w_om, elmt:R90__A__unresolved_om ;
+    sysml:ownedRelationship elmt:R90__A__custodyBudget_om, elmt:R90__A__t_om, elmt:R90__A__b2_om, elmt:R90__A__b3_om, elmt:R90__A__w_om, elmt:R90__A__unresolved_om ;
+    sysml:ownedFeature elmt:R90__A__custodyBudget, elmt:R90__A__t, elmt:R90__A__b2, elmt:R90__A__b3, elmt:R90__A__w, elmt:R90__A__unresolved ;
+    sysml:ownedFeatureMembership elmt:R90__A__custodyBudget_om, elmt:R90__A__t_om, elmt:R90__A__b2_om, elmt:R90__A__b3_om, elmt:R90__A__w_om, elmt:R90__A__unresolved_om ;
+    sysx:sourceText "    part def A {\n" ;
+    sysx:sourceTail "    }\n" .
+
+elmt:R90__A_om
+    a sysml:OwningMembership ;
+    sysml:elementId "R90__A_om" ;
+    sysml:owner elmt:R90 ;
+    sysml:memberElement elmt:R90__A ;
+    sysml:ownedMemberElement elmt:R90__A ;
+    sysml:ownedRelatedElement elmt:R90__A ;
+    sysml:owningRelatedElement elmt:R90 ;
+    sysml:membershipOwningNamespace elmt:R90 .
+
+elmt:R90__A__custodyBudget
+    a sysml:ItemUsage ;
+    sysml:qualifiedName "R90::A::custodyBudget" ;
+    sysml:elementId "R90__A__custodyBudget" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:R90__A ;
+    sysml:owner elmt:R90__A ;
+    sysml:owningRelationship elmt:R90__A__custodyBudget_om ;
+    sysml:owningMembership elmt:R90__A__custodyBudget_om ;
+    sysml:declaredName "custodyBudget" ;
+    sysml:type elmt:OtherPkg__BudgetLedger ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        item custodyBudget : OtherPkg::BudgetLedger;\n" .
+
+elmt:R90__A__custodyBudget_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "R90__A__custodyBudget_om" ;
+    sysml:owner elmt:R90__A ;
+    sysml:memberElement elmt:R90__A__custodyBudget ;
+    sysml:ownedMemberElement elmt:R90__A__custodyBudget ;
+    sysml:ownedRelatedElement elmt:R90__A__custodyBudget ;
+    sysml:owningRelatedElement elmt:R90__A ;
+    sysml:membershipOwningNamespace elmt:R90__A ;
+    sysml:ownedMemberFeature elmt:R90__A__custodyBudget ;
+    sysml:owningType elmt:R90__A .
+
+elmt:R90__A__t
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "R90::A::t" ;
+    sysml:elementId "R90__A__t" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:R90__A ;
+    sysml:owner elmt:R90__A ;
+    sysml:owningRelationship elmt:R90__A__t_om ;
+    sysml:owningMembership elmt:R90__A__t_om ;
+    sysml:declaredName "t" ;
+    sysml:type elmt:OtherPkg__Tempo ;
+    sysml:value expr:R90__A__t_pvalue ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute t : Tempo = Tempo::operative;\n" .
+
+elmt:R90__A__t_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "R90__A__t_om" ;
+    sysml:owner elmt:R90__A ;
+    sysml:memberElement elmt:R90__A__t ;
+    sysml:ownedMemberElement elmt:R90__A__t ;
+    sysml:ownedRelatedElement elmt:R90__A__t ;
+    sysml:owningRelatedElement elmt:R90__A ;
+    sysml:membershipOwningNamespace elmt:R90__A ;
+    sysml:ownedMemberFeature elmt:R90__A__t ;
+    sysml:owningType elmt:R90__A .
+
+expr:R90__A__t_pvalue
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "Tempo::operative" ;
+    sysml:elementId "R90__A__t_pvalue" ;
+    sysml:referent elmt:OtherPkg__Tempo__operative .
+
+elmt:R90__A__b2
+    a sysml:ItemUsage ;
+    sysml:qualifiedName "R90::A::b2" ;
+    sysml:elementId "R90__A__b2" ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:R90__A ;
+    sysml:owner elmt:R90__A ;
+    sysml:owningRelationship elmt:R90__A__b2_om ;
+    sysml:owningMembership elmt:R90__A__b2_om ;
+    sysml:declaredName "b2" ;
+    sysml:type elmt:OtherPkg__BudgetLedger ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        item b2 : BudgetLedger;\n" .
+
+elmt:R90__A__b2_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "R90__A__b2_om" ;
+    sysml:owner elmt:R90__A ;
+    sysml:memberElement elmt:R90__A__b2 ;
+    sysml:ownedMemberElement elmt:R90__A__b2 ;
+    sysml:ownedRelatedElement elmt:R90__A__b2 ;
+    sysml:owningRelatedElement elmt:R90__A ;
+    sysml:membershipOwningNamespace elmt:R90__A ;
+    sysml:ownedMemberFeature elmt:R90__A__b2 ;
+    sysml:owningType elmt:R90__A .
+
+elmt:R90__A__b3
+    a sysml:ItemUsage ;
+    sysml:qualifiedName "R90::A::b3" ;
+    sysml:elementId "R90__A__b3" ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:owningNamespace elmt:R90__A ;
+    sysml:owner elmt:R90__A ;
+    sysml:owningRelationship elmt:R90__A__b3_om ;
+    sysml:owningMembership elmt:R90__A__b3_om ;
+    sysml:declaredName "b3" ;
+    sysml:type elmt:OtherPkg__BudgetLedger ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        item b3 : Ledger;\n" .
+
+elmt:R90__A__b3_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "R90__A__b3_om" ;
+    sysml:owner elmt:R90__A ;
+    sysml:memberElement elmt:R90__A__b3 ;
+    sysml:ownedMemberElement elmt:R90__A__b3 ;
+    sysml:ownedRelatedElement elmt:R90__A__b3 ;
+    sysml:owningRelatedElement elmt:R90__A ;
+    sysml:membershipOwningNamespace elmt:R90__A ;
+    sysml:ownedMemberFeature elmt:R90__A__b3 ;
+    sysml:owningType elmt:R90__A .
+
+elmt:R90__A__w
+    a sysml:PartUsage ;
+    sysml:qualifiedName "R90::A::w" ;
+    sysml:elementId "R90__A__w" ;
+    sysx:memberIndex "4"^^xsd:integer ;
+    sysml:owningNamespace elmt:R90__A ;
+    sysml:owner elmt:R90__A ;
+    sysml:owningRelationship elmt:R90__A__w_om ;
+    sysml:owningMembership elmt:R90__A__w_om ;
+    sysml:declaredName "w" ;
+    sysml:type elmt:OtherPkg__Inner__Wheel ;
+    sysml:subsets elmt:OtherPkg__Inner__wheels ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part w : Inner::Wheel :> Inner::wheels;\n" .
+
+elmt:R90__A__w_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "R90__A__w_om" ;
+    sysml:owner elmt:R90__A ;
+    sysml:memberElement elmt:R90__A__w ;
+    sysml:ownedMemberElement elmt:R90__A__w ;
+    sysml:ownedRelatedElement elmt:R90__A__w ;
+    sysml:owningRelatedElement elmt:R90__A ;
+    sysml:membershipOwningNamespace elmt:R90__A ;
+    sysml:ownedMemberFeature elmt:R90__A__w ;
+    sysml:owningType elmt:R90__A .
+
+elmt:R90__A__unresolved
+    a sysml:PartUsage ;
+    sysml:qualifiedName "R90::A::unresolved" ;
+    sysml:elementId "R90__A__unresolved" ;
+    sysx:memberIndex "5"^^xsd:integer ;
+    sysml:owningNamespace elmt:R90__A ;
+    sysml:owner elmt:R90__A ;
+    sysml:owningRelationship elmt:R90__A__unresolved_om ;
+    sysml:owningMembership elmt:R90__A__unresolved_om ;
+    sysml:declaredName "unresolved" ;
+    sysml:type "Elsewhere::Missing" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part unresolved : Elsewhere::Missing;\n" .
+
+elmt:R90__A__unresolved_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "R90__A__unresolved_om" ;
+    sysml:owner elmt:R90__A ;
+    sysml:memberElement elmt:R90__A__unresolved ;
+    sysml:ownedMemberElement elmt:R90__A__unresolved ;
+    sysml:ownedRelatedElement elmt:R90__A__unresolved ;
+    sysml:owningRelatedElement elmt:R90__A ;
+    sysml:membershipOwningNamespace elmt:R90__A ;
+    sysml:ownedMemberFeature elmt:R90__A__unresolved ;
+    sysml:owningType elmt:R90__A .
+
+elmt:R90__B
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "R90::B" ;
+    sysml:elementId "R90__B" ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:owningNamespace elmt:R90 ;
+    sysml:owner elmt:R90 ;
+    sysml:owningRelationship elmt:R90__B_om ;
+    sysml:owningMembership elmt:R90__B_om ;
+    sysml:declaredName "B" ;
+    sysml:specializes elmt:R90__A ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:R90__B___400 ;
+    sysml:ownedMembership elmt:R90__B___400_om ;
+    sysml:ownedRelationship elmt:R90__B___400_om ;
+    sysml:ownedFeature elmt:R90__B___400 ;
+    sysml:ownedFeatureMembership elmt:R90__B___400_om ;
+    sysx:sourceText "    part def B :> A {\n" ;
+    sysx:sourceTail "    }\n" .
+
+elmt:R90__B_om
+    a sysml:OwningMembership ;
+    sysml:elementId "R90__B_om" ;
+    sysml:owner elmt:R90 ;
+    sysml:memberElement elmt:R90__B ;
+    sysml:ownedMemberElement elmt:R90__B ;
+    sysml:ownedRelatedElement elmt:R90__B ;
+    sysml:owningRelatedElement elmt:R90 ;
+    sysml:membershipOwningNamespace elmt:R90 .
+
+elmt:R90__B___400
+    a sysml:PartUsage ;
+    sysml:qualifiedName "R90::B::@0" ;
+    sysml:elementId "R90__B___400" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:R90__B ;
+    sysml:owner elmt:R90__B ;
+    sysml:owningRelationship elmt:R90__B___400_om ;
+    sysml:owningMembership elmt:R90__B___400_om ;
+    sysml:redefines elmt:R90__A__w ;
+    sysml:type elmt:OtherPkg__Inner__Wheel ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part :>> w : Inner::Wheel;\n" .
+
+elmt:R90__B___400_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "R90__B___400_om" ;
+    sysml:owner elmt:R90__B ;
+    sysml:memberElement elmt:R90__B___400 ;
+    sysml:ownedMemberElement elmt:R90__B___400 ;
+    sysml:ownedRelatedElement elmt:R90__B___400 ;
+    sysml:owningRelatedElement elmt:R90__B ;
+    sysml:membershipOwningNamespace elmt:R90__B ;
+    sysml:ownedMemberFeature elmt:R90__B___400 ;
+    sysml:owningType elmt:R90__B .

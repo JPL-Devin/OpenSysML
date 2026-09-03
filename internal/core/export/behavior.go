@@ -132,7 +132,7 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 			e.expression(subject, e.sysx(xExpression), xExpression, owner, n.Expression)
 		case qualifiedText(n.ActionRef) != "":
 			e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelReferences]),
-				e.reference(owner, qualifiedText(n.ActionRef)))
+				e.link(owner, n.ActionRef))
 		default:
 			return true, &UnsupportedError{
 				What: fmt.Sprintf("the action node at %s", e.where(n)),
@@ -330,7 +330,7 @@ func (e *encoder) encodeTransition(n *ast.TransitionMember, head func(rdf.Term),
 		e.graph.Add(subject, e.sysx(xTriggerKeyword), rdf.String(e.introducer(n, n.Trigger)))
 	}
 	if n.Via != nil {
-		e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelVia]), e.reference(owner, qualifiedText(n.Via)))
+		e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelVia]), e.link(owner, n.Via))
 	}
 	e.expression(subject, e.sysx(xGuard), xGuard, owner, n.Guard)
 	if n.HasEffect {
@@ -909,7 +909,28 @@ func (d *decoder) sequencesTo(el, to *element) bool {
 		return false
 	}
 	answers, ok := d.answersTo(to)
-	return ok && target.Equal(answers)
+	return ok && d.sameEnd(target, answers)
+}
+
+// sameEnd reports whether two end terms name one member: the same term, or a
+// name and the linked element that declares it.
+func (d *decoder) sameEnd(a, b rdf.Term) bool {
+	if a.Equal(b) {
+		return true
+	}
+	if a.IsLiteral() == b.IsLiteral() {
+		return false
+	}
+	name, link := a, b
+	if !name.IsLiteral() {
+		name, link = b, a
+	}
+	target, err := d.referencedElement(link.Value)
+	if err != nil {
+		return false
+	}
+	declared, ok := d.stringOf(target, rdf.SysML+pDeclaredName)
+	return ok && declared == name.Value
 }
 
 // sourceEnd returns the end a succession sequences from, by position or by the
@@ -929,7 +950,7 @@ func (d *decoder) sequencesFrom(el, from *element) bool {
 		return false
 	}
 	answers, ok := d.answersTo(from)
-	return ok && source.Equal(answers)
+	return ok && d.sameEnd(source, answers)
 }
 
 // impliedSource checks a `then <target>`, whose source end is the member before

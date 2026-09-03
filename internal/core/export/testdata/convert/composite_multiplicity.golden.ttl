@@ -213,7 +213,7 @@ elmt:CompositeMultiplicity__Car__frontWheel
     sysml:declaredName "frontWheel" ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:isComposite "true"^^xsd:boolean ;
-    sysml:redefines "w" ;
+    sysml:redefines elmt:CompositeMultiplicity__Vehicle__w ;
     sysml:upperBound expr:CompositeMultiplicity__Car__frontWheel_pupperBound ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:CompositeMultiplicity__Car__frontWheel__lugbolt ;
@@ -288,7 +288,7 @@ elmt:CompositeMultiplicity__Car__rearWheel
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:isComposite "true"^^xsd:boolean ;
     sysml:isOrdered "true"^^xsd:boolean ;
-    sysml:redefines "w" ;
+    sysml:redefines elmt:CompositeMultiplicity__Vehicle__w ;
     sysml:upperBound expr:CompositeMultiplicity__Car__rearWheel_pupperBound ;
     sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        composite rearWheel[2] ordered :>> w;\n" .
