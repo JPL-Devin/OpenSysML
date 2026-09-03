@@ -1114,6 +1114,8 @@ func (e *EvalContext) buildConstructedMessage(scope *symbols.Scope, constructor 
 
 // buildTypedMessage builds a message typed by a name carrying its arguments by
 // name or position (a lone positional one also as `value`, what accepts bind).
+// Two labels for one feature (the same label twice, qualified or not, or a
+// redefinition and its target) are an error rather than the last value.
 func (e *EvalContext) buildTypedMessage(scope *symbols.Scope, typeRef *ast.QualifiedName, args []ast.Node, named []ast.NamedArg, target string) (Message, error) {
 	signalType := ast.SimpleName(typeRef)
 	if signalType == "" {
@@ -1136,6 +1138,9 @@ func (e *EvalContext) buildTypedMessage(scope *symbols.Scope, typeRef *ast.Quali
 		if name == "" {
 			return Message{}, fmt.Errorf("send %s: an argument is named by nothing", signalType)
 		}
+		if _, bound := payload[name]; bound {
+			return Message{}, fmt.Errorf("send %s: %s is bound twice", signalType, name)
+		}
 		value, err := e.Eval(arg.Value)
 		if err != nil {
 			return Message{}, fmt.Errorf("eval argument %s of send %s: %w", name, signalType, err)
@@ -1146,8 +1151,34 @@ func (e *EvalContext) buildTypedMessage(scope *symbols.Scope, typeRef *ast.Quali
 	signal, ok := e.definitionNamed(scope, typeRef)
 	if ok {
 		signalType = signal.Name
+		if err := e.labelsBindEachFeatureOnce(signal, named); err != nil {
+			return Message{}, fmt.Errorf("send %s: %w", signalType, err)
+		}
 	}
 	return Message{SignalType: signalType, Signal: signal, Target: target, Payload: payload}, nil
+}
+
+// labelsBindEachFeatureOnce reports the first distinct label reaching a
+// constructor slot of signal that an earlier label already binds.
+func (e *EvalContext) labelsBindEachFeatureOnce(signal *symbols.Symbol, named []ast.NamedArg) error {
+	bound := make(map[*symbols.Symbol]string, len(named))
+	shape := e.ctx.model.ShapeFeatures(signal)
+	for _, arg := range named {
+		name := ast.SimpleName(arg.Name)
+		i := slices.IndexFunc(shape, func(f semantics.ShapeFeature) bool { return f.Name == name })
+		if i < 0 {
+			continue
+		}
+		slot := e.ctx.model.ConstructibleFeatureFor(signal, shape[i].Declared)
+		if slot == nil {
+			slot = shape[i].Declared
+		}
+		if earlier, twice := bound[slot]; twice {
+			return fmt.Errorf("%s and %s are one feature, bound twice", earlier, name)
+		}
+		bound[slot] = name
+	}
+	return nil
 }
 
 // triggerName describes a transition's trigger for traces. Traces are compared

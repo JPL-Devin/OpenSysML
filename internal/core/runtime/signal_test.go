@@ -53,6 +53,45 @@ func TestMaterializeAcceptedBindsRedefinedFeatureOnce(t *testing.T) {
 	}
 }
 
+// A constructor that labels one feature twice fails at the send, whichever
+// spelling names it: the same label, its qualified form, or the name it
+// redefines. Nothing is validated first; the runtime alone rejects it.
+func TestSendNewRejectsDuplicateLabelsAtSend(t *testing.T) {
+	for _, tc := range []struct{ args, want string }{
+		{"b = 1, b = 2", "b is bound twice"},
+		{"b = 1, Sub::b = 2", "b is bound twice"},
+		{"a = 1, b = 2", "a and b are one feature, bound twice"},
+	} {
+		t.Run(tc.args, func(t *testing.T) {
+			idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+				private import ScalarValues::*;
+				attribute def Base { attribute a : Integer; attribute k : Integer; }
+				attribute def Sub :> Base { attribute b redefines a; }
+				action pipeline {
+					first start;
+					action sender { send new Sub(`+tc.args+`) to reader; }
+					action reader accept got : Sub;
+					done;
+					succession first start then sender;
+					succession first sender then reader;
+					succession first reader then done;
+				}
+			}`))
+			sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+			if sym == nil {
+				t.Fatal("action pipeline not found")
+			}
+			_, err := ctx.ExecuteAction(sym)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("send new Sub(%s): error %v, want %q", tc.args, err, tc.want)
+			}
+			if errors.Is(err, ErrAcceptDeadlock) {
+				t.Errorf("send new Sub(%s): reported as a deadlock, want the send itself rejected", tc.args)
+			}
+		})
+	}
+}
+
 // executeActionSource executes the named action declared in src.
 func executeActionSource(t *testing.T, name, src string) (map[string]Value, error) {
 	t.Helper()
