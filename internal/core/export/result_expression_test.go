@@ -2,6 +2,7 @@ package export_test
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -706,6 +707,34 @@ func TestExpressionBodyParameterOfAnotherShapeIsRefused(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("got %v\nwant %s", err, tc.want)
+			}
+		})
+	}
+}
+
+// A class of another vocabulary names no metaclass, whatever its local name: a
+// body parameter or an element typed with one is refused, not read by the name.
+func TestForeignClassWithAKnownLocalNameIsRefused(t *testing.T) {
+	turtle := string(withoutTriples(t, convertFixture(t, "result_expressions"), "sysx:sourceText"))
+	turtle = "@prefix foreign: <urn:example:vocab#> .\n" + turtle
+	cases := []struct{ name, from, to, subject, class string }{
+		{"body parameter", "expr:Results__Quoted___401_pin0\n    a sysml:ReferenceUsage ;", "expr:Results__Quoted___401_pin0\n    a foreign:ReferenceUsage ;", "urn:opensysml:expr:Results__Quoted___401_pin0", "<urn:example:vocab#ReferenceUsage>"},
+		{"element", "elmt:Results\n    a sysml:Package ;", "elmt:Results\n    a foreign:Package ;", "urn:sysmlv2:element:Results", "<urn:example:vocab#Package>"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			graph := strings.Replace(turtle, tc.from, tc.to, 1)
+			if graph == turtle {
+				t.Fatalf("%q was not found in the graph:\n%s", tc.from, turtle)
+			}
+			_, err := export.Convert("m.ttl", []byte(graph), export.FormatTurtle, export.FormatSysML)
+			var unsupported *export.UnsupportedError
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("want an UnsupportedError, got %v", err)
+			}
+			want := fmt.Sprintf("the subject <%s>: its rdf:type %s is not a class of the SysML vocabulary", tc.subject, tc.class)
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("got %v\nwant %s", err, want)
 			}
 		})
 	}

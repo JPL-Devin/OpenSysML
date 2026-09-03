@@ -71,6 +71,9 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 	if err := checkExtensionNamespace(graph); err != nil {
 		return nil, err
 	}
+	if err := checkTypes(graph); err != nil {
+		return nil, err
+	}
 	graph, err := rdf.ReconcileCollections(graph)
 	if err != nil {
 		var malformed *rdf.AnnotationError
@@ -130,6 +133,26 @@ func legacyNamespaceError(iri string) error {
 		What: fmt.Sprintf("the term <%s>", iri),
 		Note: fmt.Sprintf("it is in the pre-rename extension namespace %s, which this version does not read; convert the model from source again to write %s", rdf.LegacyExtension, rdf.OpenSysML),
 	}
+}
+
+// checkTypes refuses an rdf:type outside the SysML vocabulary and this mapping's
+// extension: a class of another vocabulary names no metaclass, whatever its
+// local name, so reading it as one would rewrite the subject as something else.
+func checkTypes(graph *rdf.Graph) error {
+	for _, triple := range graph.Triples() {
+		if triple.Predicate.Value != rdf.RDFType {
+			continue
+		}
+		class := triple.Object
+		if class.IsIRI() && (strings.HasPrefix(class.Value, rdf.SysML) || strings.HasPrefix(class.Value, rdf.OpenSysML)) {
+			continue
+		}
+		return &UnsupportedError{
+			What: fmt.Sprintf("the subject <%s>", triple.Subject.Value),
+			Note: fmt.Sprintf("its rdf:type %s is not a class of the SysML vocabulary (%s) or of this mapping's extension (%s), so it names no metaclass to write", class.String(), rdf.SysML, rdf.OpenSysML),
+		}
+	}
+	return nil
 }
 
 // checkLiterals refuses a literal whose datatype its property does not take
