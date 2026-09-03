@@ -65,6 +65,12 @@ package App {
 		state running;
 		state stopped;
 		transition running_to_stopped first running then stopped;
+		transition first running accept f : Fuel then stopped {
+			action halt;
+			action rest;
+			first halt then rest;
+			attribute got : Fuel = f;
+		}
 	}
 	constraint def Positive {
 		in attribute limit : Torque;
