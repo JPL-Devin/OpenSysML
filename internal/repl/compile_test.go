@@ -127,6 +127,7 @@ var compiledCases = []compiledCase{
 	{"Seq::BodySel", []string{"(1,2,3)"}}, {"Seq::BodySel", []string{"()"}},
 	{"Seq::BodyUnread", []string{"(1,2,3)"}}, // the local is never read, so its failing initializer never runs
 	{"Seq::BodyCond", []string{"(1,2)"}}, {"Seq::BodyCond", []string{"(1,2,3)"}},
+	{"Seq::BodyDoc", []string{"(1,2,3)"}}, {"Seq::BodyDoc", []string{"null"}},
 	{"Seq::Cnt", []string{"(1,2,3)"}}, {"Seq::Cnt", []string{"null"}}, {"Seq::Cnt", []string{"(1,3)"}},
 	{"Seq::IncAt", []string{"(1,2)", "1"}}, {"Seq::IncAt", []string{"(1,2)", "3"}}, {"Seq::IncAt", []string{"(1,2)", "4"}}, {"Seq::IncAt", []string{"null", "1"}}, {"Seq::IncAt", []string{"null", "2"}},
 	{"Seq::Sub3", []string{"(1,2,3)", "1", "2"}}, {"Seq::Sub3", []string{"(1,2,3)", "2", "1"}}, {"Seq::Sub3", []string{"(1,2,3)", "0", "2"}}, {"Seq::Sub3", []string{"(1,2,3)", "1", "4"}}, {"Seq::Sub3", []string{"null", "1", "1"}},

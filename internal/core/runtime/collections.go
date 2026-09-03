@@ -203,6 +203,9 @@ func (ec *EvalContext) applyBody(body *ast.BodyExpr, args ...Value) (Value, erro
 		if membership, ok := member.(*ast.Membership); ok {
 			decl = membership.Member
 		}
+		if _, ok := decl.(*ast.Documentation); ok {
+			continue
+		}
 		if _, ok := decl.(*ast.Usage); !ok {
 			if decl == nil {
 				return Value{}, fmt.Errorf("%w: nil body member", ErrUnsupportedBodyDeclaration)

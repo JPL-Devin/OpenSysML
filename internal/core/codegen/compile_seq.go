@@ -494,6 +494,9 @@ func (fc *funcCompiler) compileLambda(op SeqOp, b *ast.BodyExpr, paramTypes []Ty
 	}
 	var result ast.Node
 	for _, member := range b.Members {
+		if _, ok := unwrap(member).(*ast.Documentation); ok {
+			continue
+		}
 		if u, ok := unwrap(member).(*ast.Usage); ok {
 			decl, err := fc.compileDeclare(lower.Declare{Name: usageName(u), Value: u.Value, Node: u, Scope: fc.scope})
 			if err != nil {

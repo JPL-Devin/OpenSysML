@@ -333,6 +333,7 @@ package Compiled {
 		calc def BodySel { in x : Integer[0..*]; return : Integer[0..*] = x->select {in v : Integer; attribute big : Boolean = v > 1; big}; }
 		calc def BodyUnread { in x : Integer[0..*]; return : Integer[0..*] = x->collect {in v : Integer; attribute d : Integer = x#(9); v + 1}; }
 		calc def BodyCond { in x : Integer[0..*]; return : Integer[0..*] = x->collect {in v : Integer; attribute d : Integer = x#(9); if v > 2 ? d else v}; }
+		calc def BodyDoc { in x : Integer[0..*]; return : Integer[0..*] = x->collect {doc /* doubled, plus one */ in v : Integer; attribute d : Integer = v * 2; d + 1}; }
 		calc def Cnt { in x : Integer[0..*]; return : Boolean = contains(x, 2); }
 		calc def IncAt { in x : Integer[0..*]; in i : Integer; return : Integer[0..*] = includingAt(x, 9, i); }
 		calc def Sub3 { in x : Integer[0..*]; in i : Integer; in j : Integer; return : Integer[0..*] = subsequence(x, i, j); }
