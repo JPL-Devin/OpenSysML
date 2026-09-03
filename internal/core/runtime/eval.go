@@ -523,6 +523,10 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 // a feature nothing gives a value to is uninitialized, not unresolved.
 func (ec *EvalContext) resolvedWithoutValue(sym *symbols.Symbol, qn *ast.QualifiedName) error {
 	spelled := qualifiedNameToString(qn)
+	// Definitions are types, not values.
+	if declaresType(sym) {
+		return fmt.Errorf("cannot evaluate definition %s", spelled)
+	}
 	// A calc usage is an evaluation, not a value: it is read through the output
 	// features it computes, since a name it does not designate a result for has
 	// no one value.
@@ -532,15 +536,26 @@ func (ec *EvalContext) resolvedWithoutValue(sym *symbols.Symbol, qn *ast.Qualifi
 			ErrNoValue, spelled, ec.ctx.calcUsageOutputSummary(sym),
 		)
 	}
-	// Definitions are types, not values.
-	if isDefinitionSymbol(sym) {
-		return fmt.Errorf("cannot evaluate definition %s", spelled)
-	}
 	// A usage of any kind — a subject or a state included — is a feature.
 	if _, usage := sym.Decl.(*ast.Usage); usage || isFeature(sym) {
 		return &NoValueError{Feature: spelled, Ref: qn}
 	}
 	return fmt.Errorf("cannot evaluate %s %s", sym.Kind, spelled)
+}
+
+// declaresType reports a symbol that declares a type: a definition, or a KerML
+// class, struct, behavior, datatype or function, which the parser records as a
+// usage and the symbol builder classifies as the type it declares.
+func declaresType(sym *symbols.Symbol) bool {
+	if isDefinitionSymbol(sym) {
+		return true
+	}
+	switch sym.Kind {
+	case symbols.SymbolKerMLType, symbols.SymbolMetaclass, symbols.SymbolAttributeDef, symbols.SymbolCalcDef:
+		return true
+	default:
+		return false
+	}
 }
 
 // declaredValue evaluates the value a declaration binds in the scope it was written

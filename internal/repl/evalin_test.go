@@ -238,6 +238,31 @@ func TestEvalInDeclarationScopeChainOverValuelessOperandStillResolvesItsMembers(
 	wants(t, run(t, s, "%eval in car : wheels.radius"), "✓ wheels.radius (in car)", "= "+runtime.UnsetText)
 }
 
+// A KerML type declaration — a class, struct, behavior, datatype or function —
+// is a type, not a feature: reading one in declaration scope is the error a
+// definition gets, never unset.
+func TestEvalInDeclarationScopeDoesNotReadTypeDeclarationsAsUnset(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(`private import ScalarValues::*;
+package K {
+    class Vehicle;
+    struct Frame;
+    behavior Drive;
+    datatype Mass;
+    function Twice { in x : Real; return r : Real = x * 2.0; }
+    part def Car { attribute unsetMass : Real; }
+    part car : Car;
+}`).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+	for _, name := range []string{"Vehicle", "Frame", "Drive", "Mass", "Twice", "Car"} {
+		got := run(t, s, "%eval in K::car : "+name)
+		wants(t, got, "error", "cannot evaluate definition "+name)
+		rejects(t, got, "✓", "= "+runtime.UnsetText, "unresolved reference", "no value")
+	}
+	wants(t, run(t, s, "%eval in K::car : unsetMass"), "✓ unsetMass (in K::car)", "= "+runtime.UnsetText)
+}
+
 // Once the object exists, the same features read the values it holds.
 func TestEvalInObjectReadsMultiValuedFeatures(t *testing.T) {
 	s := NewSession()

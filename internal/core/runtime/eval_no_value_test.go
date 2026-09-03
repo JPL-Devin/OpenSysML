@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -80,6 +81,44 @@ func TestChainOverValuelessOperandResolvesItsMembers(t *testing.T) {
 		if errors.As(err, &noValue) {
 			t.Errorf("%s: a chain naming nothing was reported as a missing value: %v", name, err)
 		}
+	}
+}
+
+// TestTypeDeclarationIsNotAValuelessFeature: a KerML type the parser records as
+// a usage — a class, struct, behavior, datatype or function — is a type like a
+// definition, not a feature that lacks a value.
+func TestTypeDeclarationIsNotAValuelessFeature(t *testing.T) {
+	model, resolver, root := parseAndBuildModel(t, `
+package test {
+	private import ScalarValues::*;
+	class Vehicle;
+	struct Frame;
+	behavior Drive;
+	datatype Mass;
+	function Twice { in x : Real; return r : Real = x * 2.0; }
+	part def Car;
+	part car : Car { attribute unsetMass : Real; }
+}
+`)
+	ctx := NewContext(model, resolver, 10000)
+	pkg, _ := root.LookupLocal("test")
+	scope := pkg.Scope
+
+	for _, name := range []string{"Vehicle", "Frame", "Drive", "Mass", "Twice", "Car"} {
+		_, err := ctx.EvalWithScope(parseExpr(t, name), scope)
+		if err == nil || !strings.Contains(err.Error(), "cannot evaluate definition "+name) {
+			t.Errorf("%s: err = %v; want cannot evaluate definition", name, err)
+		}
+		var noValue *NoValueError
+		if errors.As(err, &noValue) {
+			t.Errorf("%s: a type declaration was reported as a valueless feature: %v", name, err)
+		}
+	}
+
+	car, _ := scope.LookupLocal("car")
+	var noValue *NoValueError
+	if _, err := ctx.EvalWithScope(parseExpr(t, "unsetMass"), car.Scope); !errors.As(err, &noValue) {
+		t.Errorf("unsetMass: err = %v; want NoValueError", err)
 	}
 }
 
