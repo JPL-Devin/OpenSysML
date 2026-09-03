@@ -554,6 +554,9 @@ does not:
   frontWheel[2] redefines w`). The parser reads the same flags in either order
   and either position (`export_test.go:TestFixturesComeBackFromTheGraphAlone`).
 
+A second conversion of such notation gives the same graph; only
+`sysx:sourceText`, which quotes the source verbatim, shows the respelling.
+
 ### End-binding heads
 
 **A head that binds ends records the form it writes them in.** A `connect`,
