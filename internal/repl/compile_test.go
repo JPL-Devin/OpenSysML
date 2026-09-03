@@ -132,6 +132,9 @@ var compiledCases = []compiledCase{
 	{"Seq::Sub3", []string{"(1,2,3)", "1", "2"}}, {"Seq::Sub3", []string{"(1,2,3)", "2", "1"}}, {"Seq::Sub3", []string{"(1,2,3)", "0", "2"}}, {"Seq::Sub3", []string{"(1,2,3)", "1", "4"}}, {"Seq::Sub3", []string{"null", "1", "1"}},
 	{"Seq::ExAt", []string{"(1,2,3)", "1", "2"}}, {"Seq::ExAt", []string{"(1,2,3)", "0", "2"}}, {"Seq::ExAt", []string{"null", "1", "1"}}, {"Seq::ExAt", []string{"4", "1", "1"}},
 	{"Seq::ForR", []string{"(1,2,3)"}}, {"Seq::ForR", []string{"null"}}, {"Seq::ForR", []string{"4"}},
+	{"Seq::Churn", []string{"0"}}, {"Seq::Churn", []string{"7"}},
+	{"Seq::ChurnFor", []string{"0"}}, {"Seq::ChurnFor", []string{"9"}},
+	{"Seq::ChurnNest", []string{"0"}}, {"Seq::ChurnNest", []string{"5"}},
 	{"Seq::ForB", []string{"4"}}, {"Seq::ForB", []string{"0"}},
 	{"Seq::RS", []string{"(1,2,3)"}}, {"Seq::RS", []string{"null"}}, {"Seq::RS", []string{"4"}},
 	{"Seq::MaxS", []string{"(1.5,2.5)"}}, {"Seq::MaxS", []string{"null"}},
@@ -360,6 +363,34 @@ func TestCompiledBudgetChargesInputsAndWidening(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A C loop that keeps materializing collections runs in memory bounded by what
+// it keeps live, not by how many passes it makes: a run whose dead temporaries
+// alone would total gigabytes completes under a 64 MB address-space limit.
+func TestCompiledCLoopMemoryIsBounded(t *testing.T) {
+	if _, err := exec.LookPath("cc"); err != nil {
+		t.Skip("no C compiler on PATH")
+	}
+	if out, err := exec.Command("sh", "-c", "ulimit -v 65536").CombinedOutput(); err != nil {
+		t.Skipf("no address-space limit here: %v %s", err, out)
+	}
+	s := loadCompileFixture(t)
+	dir := t.TempDir()
+	for calc, arg := range map[string]string{"Churn": "50000", "ChurnFor": "50000", "ChurnNest": "10000"} {
+		program, err := s.CompileCalc("Compiled::Seq::" + calc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		exe := filepath.Join(dir, calc)
+		if err := codegen.Build(program, codegen.TargetC, exe); err != nil {
+			t.Fatal(err)
+		}
+		out, err := exec.Command("sh", "-c", `ulimit -v 65536 && exec "$0" "$1"`, exe, arg).CombinedOutput()
+		if err != nil {
+			t.Errorf("%s(%s) under a 64 MB limit: %v\n%s", calc, arg, err, out)
+		}
 	}
 }
 

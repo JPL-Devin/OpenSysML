@@ -458,11 +458,86 @@ func (e *cEmitter) block(stmts []Stmt) {
 	held := fmt.Sprintf("sysml_h%d", e.temps)
 	e.linef("sysml_int %s = sysml_elements;", held)
 	for _, s := range stmts {
+		if _, ok := s.(Return); ok {
+			e.stmt(s)
+			continue
+		}
+		mark := e.arenaMark()
 		e.stmt(s)
-		if _, ok := s.(Return); !ok {
-			e.linef("sysml_elements = %s;", held)
+		if len(escapingSeqs(s)) == 0 {
+			e.linef("sysml_arena_release(%s);", mark)
+		}
+		e.linef("sysml_elements = %s;", held)
+	}
+}
+
+// arenaMark records the arena's top in a fresh local and returns its name.
+func (e *cEmitter) arenaMark() string {
+	e.temps++
+	mark := fmt.Sprintf("sysml_m%d", e.temps)
+	e.linef("sysml_mark %s = sysml_arena_mark();", mark)
+	return mark
+}
+
+// compact releases the arena to mark, carrying over the collections a loop
+// pass stored into variables that outlive it, so a loop's memory is bounded
+// by what it keeps live rather than by how many times it ran.
+func (e *cEmitter) compact(kept []Var, mark string) {
+	saved := make([]string, len(kept))
+	for i, v := range kept {
+		e.temps++
+		saved[i] = fmt.Sprintf("sysml_k%d", e.temps)
+		e.linef("%s *%s = sysml_save_%s(%s, %s);", cType(v.T.Elem()), saved[i], cSeqSuffix(v.T), cLocal(v.Name), mark)
+	}
+	e.linef("sysml_arena_release(%s);", mark)
+	for i, v := range kept {
+		e.linef("sysml_restore_%s(&%s, %s);", cSeqSuffix(v.T), cLocal(v.Name), saved[i])
+	}
+}
+
+// escapingSeqs lists the collection variables a statement stores into that
+// outlive it: its own declaration and every assignment to an enclosing
+// scope's variable, in first-store order.
+func escapingSeqs(s Stmt) []Var {
+	var out []Var
+	seen := map[string]bool{}
+	var walk func(s Stmt, inner map[string]bool)
+	walk = func(s Stmt, inner map[string]bool) {
+		store := func(name string, t Type) {
+			if !t.Many() || inner[name] || seen[name] {
+				return
+			}
+			seen[name] = true
+			out = append(out, Var{Name: name, T: t})
+		}
+		block := func(stmts []Stmt) {
+			scope := map[string]bool{}
+			for k := range inner {
+				scope[k] = true
+			}
+			for _, s := range stmts {
+				if d, ok := s.(Declare); ok {
+					scope[d.Name] = true
+				}
+				walk(s, scope)
+			}
+		}
+		switch s := s.(type) {
+		case Declare:
+			store(s.Name, s.T)
+		case Assign:
+			store(s.Name, s.Value.Type())
+		case If:
+			block(s.Then)
+			block(s.Else)
+		case While:
+			block(s.Body)
+		case ForEach:
+			block(s.Body)
 		}
 	}
+	walk(s, map[string]bool{})
+	return out
 }
 
 func (e *cEmitter) stmt(s Stmt) {
@@ -484,9 +559,16 @@ func (e *cEmitter) stmt(s Stmt) {
 		}
 		e.linef("}")
 	case While:
+		var mark string
+		if e.collections {
+			mark = e.arenaMark()
+		}
 		e.linef("while (%s) {", e.expr(s.Cond))
 		e.indent++
 		e.block(s.Body)
+		if e.collections {
+			e.compact(escapingSeqs(s), mark)
+		}
 		if s.Until != nil {
 			e.linef("if (%s) break;", e.expr(s.Until))
 		}

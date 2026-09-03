@@ -31,6 +31,16 @@ static void sysml_arena_release(sysml_mark m) {
 	if (sysml_arena) sysml_arena->used = m.used;
 }
 
+/* Whether p lies in memory a release to m would reclaim. */
+static bool sysml_above_mark(const void *p, sysml_mark m) {
+	const char *c = p;
+	for (sysml_block *b = sysml_arena; b; b = b->next) {
+		if (c >= b->data && c < b->data + b->used) return b != m.block || (size_t)(c - b->data) >= m.used;
+		if (b == m.block) break;
+	}
+	return false;
+}
+
 /* A run owns what it allocates until the next run begins, so its result outlives it. */
 static void sysml_run_begin(void) {
 	static sysml_mark mark;
@@ -114,6 +124,23 @@ static inline sysml_seq_SFX sysml_one_SFX(ELEM v) {
 static sysml_seq_SFX sysml_many_SFX(sysml_int n) {
 	sysml_charge(n);
 	return (sysml_seq_SFX){SYSML_MANY, n, n ? sysml_alloc((size_t)n * sizeof(ELEM)) : NULL};
+}
+
+/* Copies s out of the arena when a release to m would reclaim it; NULL when it would not. */
+static ELEM *sysml_save_SFX(sysml_seq_SFX s, sysml_mark m) {
+	if (!s.len || !sysml_above_mark(s.data, m)) return NULL;
+	ELEM *t = malloc((size_t)s.len * sizeof(ELEM));
+	if (!t) sysml_fail("out of memory");
+	memcpy(t, s.data, (size_t)s.len * sizeof(ELEM));
+	return t;
+}
+
+/* Moves a saved copy back into the arena after the release. */
+static void sysml_restore_SFX(sysml_seq_SFX *s, ELEM *t) {
+	if (!t) return;
+	s->data = sysml_alloc((size_t)s->len * sizeof(ELEM));
+	memcpy(s->data, t, (size_t)s->len * sizeof(ELEM));
+	free(t);
 }
 
 static sysml_seq_SFX sysml_concat_SFX(int n, const sysml_seq_SFX *parts) {
@@ -634,10 +661,12 @@ func (e *cEmitter) forEach(s ForEach) {
 	e.linef("{ %s %s = %s;", cType(s.Seq.Type()), seq, e.expr(s.Seq))
 	e.indent++
 	e.linef("if (%s.shape == SYSML_ONE) sysml_fail(\"type mismatch: 'for' iterates a collection, and %s is not one\");", seq, article(elem))
+	mark := e.arenaMark()
 	e.linef("for (sysml_int sysml_i = 0; sysml_i < %s.len; sysml_i++) {", seq)
 	e.indent++
 	e.linef("%s %s = %s.data[sysml_i];", cType(elem), cLocal(s.Var), seq)
 	e.block(s.Body)
+	e.compact(escapingSeqs(s), mark)
 	e.indent--
 	e.linef("}")
 	e.indent--

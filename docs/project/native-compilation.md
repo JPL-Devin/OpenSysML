@@ -112,7 +112,11 @@ arithmetic rather than the host language's:
   sequence a program builds or is given counts against the interpreter's element budget
   (`OPENSYSML_MAX_ELEMENTS`, default 1,000,000), reset per run under `--repeat` with the
   arguments still charged. A local a `{in v; …}` body declares is read on demand, as the
-  interpreter reads it, so an initializer the result never names never runs. On the command
+  interpreter reads it, so an initializer the result never names never runs. The C program's
+  memory is bounded the same way: its arena is released at the end of every statement that stores
+  no collection and at the end of every loop pass, the collections a pass stored into longer-lived
+  variables being copied down first (`TestCompiledCLoopMemoryIsBounded`); Go leaves this to its
+  collector. On the command
   line a sequence argument is written as the interpreter would read it: `null`, `4`, `(4)`,
   `(1, 2)`, `()`.
 
