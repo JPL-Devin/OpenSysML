@@ -38,8 +38,13 @@ func (s *Server) Definition(ctx context.Context, params *protocol.DefinitionPara
 		}
 		return nil, nil
 	}
-	// A call its arguments leave tied between overloads goes to every one of them.
-	if overloads := s.ws.AmbiguousInvocationInDoc(name, *ref); len(overloads) > 0 {
+	// A qualifier goes to the namespace it names; the called name, when the
+	// arguments leave it tied between overloads, goes to every one of them.
+	if !onCalledName(*ref, offset) {
+		if sym, _, ok := s.referencedSegment(name, *ref, offset); ok && sym != nil {
+			return []protocol.Location{s.symbolLocation(name, sym)}, nil
+		}
+	} else if overloads := s.ws.AmbiguousInvocationInDoc(name, *ref); len(overloads) > 0 {
 		locs := make([]protocol.Location, len(overloads))
 		for i, sym := range overloads {
 			locs[i] = s.symbolLocation(name, sym)

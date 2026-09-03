@@ -526,9 +526,12 @@ func (w *Workspace) ResolveReferenceNameSegmentsInDoc(name string, ref resolve.R
 			out[i] = sym
 		}
 	}
+	// A written alias stays the name, unless the call it makes is tied: then no
+	// one alias is what it names.
 	last := len(out) - 1
-	if _, aliased := r.PartAlias(ref.QN, last); !aliased {
-		out[last] = calledDeclaration(invocationSelection(r, sem, ref), out[last])
+	sel := invocationSelection(r, sem, ref)
+	if _, aliased := r.PartAlias(ref.QN, last); !aliased || (sel != nil && sel.Ambiguous) {
+		out[last] = calledDeclaration(sel, out[last])
 	}
 	return out
 }

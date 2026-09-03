@@ -206,3 +206,150 @@ func TestHoverNamesAmbiguousOverloads(t *testing.T) {
 		t.Errorf("hover range = %v, want the call's name", hov.Range)
 	}
 }
+
+// qualifiedAmbiguitySrc reaches two equally specific `pick(Integer)` overloads through
+// the qualifier `Both` and through two aliases named `choose`, so `Both::pick(2)` and
+// `choose(2)` are tied while `Both::pick("s")` selects the String one.
+const qualifiedAmbiguitySrc = `package A {
+	private import ScalarValues::*;
+	calc def pick { in x : Integer; return : Integer = 1; }
+}
+package B {
+	private import ScalarValues::*;
+	calc def pick { in x : Integer; return : Integer = 2; }
+}
+package S {
+	private import ScalarValues::*;
+	calc def pick { in x : String; return : Integer = 3; }
+}
+package Both {
+	public import A::*;
+	public import B::*;
+	public import S::*;
+}
+package AL { alias choose for A::pick; }
+package BL { alias choose for B::pick; }
+package Q {
+	private import ScalarValues::*;
+	private import AL::*;
+	private import BL::*;
+	attribute qi : Integer = Both::pick(2);
+	attribute qs : Integer = Both::pick("s");
+	attribute ci : Integer = choose(2);
+}
+`
+
+func openQualifiedAmbiguity(t *testing.T) (*model.Workspace, *Server, string) {
+	t.Helper()
+	ws := model.NewWorkspace()
+	name := uri.File("/tmp/qualified_ambiguity.sysml").Filename()
+	ws.Open(name, []byte(qualifiedAmbiguitySrc), 1)
+	return ws, NewServer(ws), name
+}
+
+// startLines are the zero-based lines the locations start on, in order.
+func startLines(locs []protocol.Location) []uint32 {
+	out := make([]uint32, len(locs))
+	for i, loc := range locs {
+		out[i] = loc.Range.Start.Line
+	}
+	return out
+}
+
+// On a qualified ambiguous call, only the called name lists the tied overloads;
+// the qualifier goes to the namespace it names as anywhere else.
+func TestDefinitionOnQualifiedAmbiguousCall(t *testing.T) {
+	_, s, name := openQualifiedAmbiguity(t)
+	src := qualifiedAmbiguitySrc
+
+	locs := definitionOf(t, s, name, src, "Both::pick(2)")
+	if want := []uint32{lineOfSrc(t, src, "package Both")}; !equalLines(startLines(locs), want) {
+		t.Errorf("qualifier Both: lines = %v, want %v", startLines(locs), want)
+	}
+
+	locs = definitionOf(t, s, name, src, "pick(2)")
+	want := []uint32{
+		lineOfSrc(t, src, "in x : Integer; return : Integer = 1;"),
+		lineOfSrc(t, src, "in x : Integer; return : Integer = 2;"),
+	}
+	if !equalLines(startLines(locs), want) {
+		t.Errorf("Both::pick(2): lines = %v, want the two tied overloads %v", startLines(locs), want)
+	}
+
+	locs = definitionOf(t, s, name, src, `pick("s")`)
+	if want := []uint32{lineOfSrc(t, src, "in x : String")}; !equalLines(startLines(locs), want) {
+		t.Errorf(`Both::pick("s"): lines = %v, want %v`, startLines(locs), want)
+	}
+}
+
+// The qualifier of an ambiguous call is still a reference to its namespace, both
+// when listing the namespace's references and when starting from the qualifier;
+// only the called name is left out.
+func TestReferencesOnQualifiedAmbiguousCall(t *testing.T) {
+	_, s, name := openQualifiedAmbiguity(t)
+	src := qualifiedAmbiguitySrc
+
+	wantBoth := []uint32{lineOfSrc(t, src, "Both::pick(2)"), lineOfSrc(t, src, `Both::pick("s")`)}
+	for _, at := range []string{"Both {", "Both::pick(2)"} {
+		locs := referencesAt(t, s, name, src, at)
+		if !equalLines(startLines(locs), wantBoth) {
+			t.Errorf("from %q: reference lines = %v, want both qualified calls %v", at, startLines(locs), wantBoth)
+		}
+	}
+	if locs := referencesAt(t, s, name, src, "pick(2)"); len(locs) != 0 {
+		t.Errorf("from the tied called name: references = %v, want none", locs)
+	}
+	for decl, alias := range map[string]string{
+		"pick { in x : Integer; return : Integer = 1;": "alias choose for A::pick",
+		"pick { in x : Integer; return : Integer = 2;": "alias choose for B::pick",
+	} {
+		locs := referencesAt(t, s, name, src, decl)
+		if want := []uint32{lineOfSrc(t, src, alias)}; !equalLines(startLines(locs), want) {
+			t.Errorf("%s: reference lines = %v, want only its alias %v (every call to it is tied)", decl, startLines(locs), want)
+		}
+	}
+	locs := referencesAt(t, s, name, src, "pick { in x : String")
+	if want := []uint32{lineOfSrc(t, src, `Both::pick("s")`)}; !equalLines(startLines(locs), want) {
+		t.Errorf("String overload: reference lines = %v, want %v", startLines(locs), want)
+	}
+}
+
+// A call written through an alias is tied when the aliases in scope name equally
+// specific overloads: rename refuses to start from it, renaming either alias leaves
+// it as written, and neither alias counts it among its references.
+func TestRenameSkipsAliasedAmbiguousCall(t *testing.T) {
+	ws, s, name := openQualifiedAmbiguity(t)
+	src := qualifiedAmbiguitySrc
+
+	if _, err := applyRename(t, ws, name, "choose(2)", "select"); err == nil || !strings.Contains(err.Error(), "ambiguous") {
+		t.Errorf("rename from the aliased ambiguous call: err = %v, want an ambiguity error", err)
+	}
+	for _, alias := range []string{"choose for A::pick", "choose for B::pick"} {
+		out, err := applyRename(t, ws, name, alias, "select")
+		if err != nil {
+			t.Fatalf("rename %q: err = %v", alias, err)
+		}
+		got := out[name]
+		if !strings.Contains(got, "alias select for "+strings.TrimPrefix(alias, "choose for ")) {
+			t.Errorf("rename %q: alias not renamed:\n%s", alias, got)
+		}
+		if !strings.Contains(got, "= choose(2);") {
+			t.Errorf("rename %q: the tied call was rewritten:\n%s", alias, got)
+		}
+		if locs := referencesAt(t, s, name, src, alias); len(locs) != 0 {
+			t.Errorf("alias %q: references = %v, want none (its only call is tied)", alias, locs)
+		}
+	}
+}
+
+func equalLines(got, want []uint32) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
+}
