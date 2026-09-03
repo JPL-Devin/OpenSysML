@@ -544,6 +544,7 @@ type TransitionMember struct {
 	TriggerSpan source.Span
 	Guard       Node   // optional guard expression
 	Effect      []Node // optional effect actions
+	HasEffect   bool   // a `do` was written, even one whose braces hold nothing
 	// Via is the port the trigger's message must arrive at
 	// (`accept :> ping via commPort`), nil when the trigger named none.
 	Via *QualifiedName

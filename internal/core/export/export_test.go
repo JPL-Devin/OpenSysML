@@ -943,6 +943,34 @@ func TestEndBindingBodiesComeBackFromTheGraphAlone(t *testing.T) {
 	}
 }
 
+// An empty `do { }` and an empty trailing body are transition blocks with no
+// members to link, so the graph states each one's presence outright.
+func TestEmptyTransitionBlocksComeBackFromTheGraphAlone(t *testing.T) {
+	// Each transition with the canonical notation it is written back as.
+	transitions := map[string]string{
+		"transition first s1 do { } then s2;":    "transition first s1 do {\n        } then s2;",
+		"transition first s1 then s2 { }":        "transition first s1 then s2 {\n        }",
+		"transition first s1 do { } then s2 { }": "transition first s1 do {\n        } then s2 {\n        }",
+	}
+	for transition, want := range transitions {
+		t.Run(transition, func(t *testing.T) {
+			src := "package P {\n\tstate def M {\n\t\tstate s1;\n\t\tstate s2;\n\t\t" + transition + "\n\t}\n}"
+			turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle: %v", err)
+			}
+			stripped := withoutTriples(t, withoutTriples(t, turtle, "sysx:sourceText"), "sysx:sourceTail")
+			back, err := export.Convert("m.ttl", stripped, export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation: %v", err)
+			}
+			if !strings.Contains(string(back), want) {
+				t.Errorf("expected %q in:\n%s", want, back)
+			}
+		})
+	}
+}
+
 // A transition graph written before members were linked as effect or body
 // owns the effect alone, with sysx:hasBody recording its braces. Such a graph
 // still reads as the effect it was, braced or not.

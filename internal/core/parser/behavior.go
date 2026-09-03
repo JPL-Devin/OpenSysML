@@ -3185,6 +3185,7 @@ func (p *Parser) parseTransitionTail(start int, name ast.NameSegment, source *as
 				return err
 			}
 			node.Effect = effect
+			node.HasEffect = true
 			continue
 		case p.atKeyword("then"):
 			p.advance() // consume 'then'

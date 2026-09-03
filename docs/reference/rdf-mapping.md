@@ -498,7 +498,7 @@ the node, that name is used; the rest are `sysx:` terms, marked below.
 | `entry`/`do`/`exit`, `entry do { … }` (whatever separates the `do` from the body) | `sysml:StateSubactionMembership` | `sysx:subactionKind`, `sysx:declaredKeyword`, its actions |
 | `defer sig, other;` | `sysx:DeferMember` | `sysx:deferredEvent` per event |
 | `choice`, `junction`, `fork`, `join`, `entry point`, `exit point`, `shallow`/`deep history` | `sysx:Pseudostate` | `sysx:pseudostateKind`, `sysx:declaredKeyword` |
-| `transition [n] [first] s [accept t] [if g] [do e] then t;`, `… then t { … }` | `sysml:TransitionUsage` | `sysml:sourceFeature`, `sysml:targetFeature`, `sysx:trigger`, `sysx:triggerKeyword`, `sysx:guard`, `sysx:transitionSyntax`, its effect and body as members, linked by `sysx:effectMember` and `sysx:bodyMember`, with `sysx:bracedEffect` for the effect's braces; a graph linking neither owns an effect alone, `sysx:hasBody` its braces |
+| `transition [n] [first] s [accept t] [if g] [do e] then t;`, `… then t { … }` | `sysml:TransitionUsage` | `sysml:sourceFeature`, `sysml:targetFeature`, `sysx:trigger`, `sysx:triggerKeyword`, `sysx:guard`, `sysx:transitionSyntax`, its effect and body as members, linked by `sysx:effectMember` and `sysx:bodyMember`, with `sysx:bracedEffect` on every transition written with `do` (true for its braces, so an empty `do { }` survives) and `sysx:hasBody` for a trailing body; a graph with members linked by neither owns an effect alone, `sysx:hasBody` its braces |
 
 A state's members are held in the AST in one bucket per kind (entry, do, exit,
 defer, substates); they are written back in the order they were

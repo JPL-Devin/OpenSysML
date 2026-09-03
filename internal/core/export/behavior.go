@@ -333,8 +333,8 @@ func (e *encoder) encodeTransition(n *ast.TransitionMember, head func(rdf.Term),
 		e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelVia]), e.reference(owner, qualifiedText(n.Via)))
 	}
 	e.expression(subject, e.sysx(xGuard), xGuard, owner, n.Guard)
-	if len(n.Effect) > 0 {
-		e.graph.Add(subject, e.sysx(xBracedEffect), rdf.Bool(e.bracedBody(n, n.Effect)))
+	if n.HasEffect {
+		e.graph.Add(subject, e.sysx(xBracedEffect), rdf.Bool(len(n.Effect) == 0 || e.bracedBody(n, n.Effect)))
 	}
 	if err := e.transitionMemberLinks(n, subject, xEffectMember, n.Effect); err != nil {
 		return err
@@ -1183,15 +1183,16 @@ func (d *decoder) transitionText(el *element, depth int) (string, string, error)
 	if guard, ok := d.stringOf(el, rdf.OpenSysML+xGuard); ok {
 		words = append(words, "if", guard)
 	}
-	// Members are linked as effect or body. A graph that links neither is from
-	// a mapping that owned the effect alone, with sysx:hasBody its braces.
+	// Members are linked as effect or body; unlinked members are from a mapping
+	// that owned the effect alone, with sysx:hasBody its braces.
 	inEffect := d.linked(el, xEffectMember)
 	inBody := d.linked(el, xBodyMember)
-	legacy := len(inEffect) == 0 && len(inBody) == 0
+	legacy := len(el.children) > 0 && len(inEffect) == 0 && len(inBody) == 0
 	braced := d.boolOf(el, rdf.OpenSysML+xBracedEffect)
+	hasEffect := d.graph.HasProperty(rdf.IRI(el.iri), rdf.OpenSysML+xBracedEffect)
 	hasBody := d.boolOf(el, rdf.OpenSysML+xHasBody)
 	if legacy {
-		braced, hasBody = hasBody, false
+		braced, hasEffect, hasBody = hasBody, true, false
 	}
 	var effect, body []*element
 	for _, child := range el.children {
@@ -1201,7 +1202,7 @@ func (d *decoder) transitionText(el *element, depth int) (string, string, error)
 			body = append(body, child)
 		}
 	}
-	if len(effect) > 0 {
+	if hasEffect {
 		text, err := d.membersText(effect, braced, depth)
 		if err != nil {
 			return "", "", err
