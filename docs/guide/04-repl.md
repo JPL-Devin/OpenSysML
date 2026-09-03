@@ -297,8 +297,8 @@ expression; the `::` inside a qualified name is not a separator.
 
 Every command that takes an object — `%features`, `%invoke`, `%eval in`, and the object `%action`
 and `%state` work on — accepts the same three spellings: the name the object was instantiated
-under, the id `%instantiate` printed, and either followed by a path into the parts it holds, an
-element of a multi-valued part picked by index counted from 1:
+under, the id `%instantiate` printed, and either followed by a path into the objects it holds, an
+element of a multi-valued feature picked by index counted from 1:
 
 ```
 sysml> %eval in Demo::Vehicle : mass * 2
@@ -311,11 +311,13 @@ sysml> %features Demo::Vehicle.wheels[2]
 The id is the object's identity for the rest of the session: a later submission that carries the
 object over keeps it, and so does a second `%instantiate` of the same name, which creates a new
 object and re-points the name — the first object is still there as `#1`, and `%instances` lists it
-as such. A path walks part features only; an attribute at the end of one is a value, and the error
-says so. In a path `.` and `::` mean the same thing, so `Demo::Vehicle::engine` and
-`Demo::Vehicle.engine` are the same object. The forms and every error a bad reference produces are
+as such. A path walks the features that hold objects — parts, ports, connectors, and structured
+attributes, the ones `%features` shows as `Instance(ID: n)`; an attribute holding a plain value at
+the end of one is not an object, and the error says so. In a path `.` and `::` mean the same
+thing, so `Demo::Vehicle::engine` and `Demo::Vehicle.engine` are the same object. The forms and
+every error a bad reference produces are
 listed in the [reference](../reference/repl-commands.md#object-references). <kbd>Tab</kbd>
-completes them: `#` offers the ids there are, `car.` the parts `car` holds.
+completes them: `#` offers the ids there are, `car.` the objects `car` holds.
 
 ## Command summary
 

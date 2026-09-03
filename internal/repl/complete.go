@@ -384,7 +384,11 @@ func (s *Session) peekObject(text string) (objectShape, bool) {
 	shape := objectShape{inst: root, typ: root.Type}
 	for _, seg := range rest {
 		feat := featureNamed(s.rtCtx.FeaturesOf(shape.typ), seg.name)
-		if feat == nil || !feat.HoldsObjects() || feat.IsScalar() != (seg.index == 0) {
+		if feat == nil || feat.IsScalar() != (seg.index == 0) {
+			return objectShape{}, false
+		}
+		typ := s.objectTypeOf(feat)
+		if typ == nil {
 			return objectShape{}, false
 		}
 		if fv := heldFeatureValue(shape.inst, seg.name); fv != nil {
@@ -410,13 +414,25 @@ func (s *Session) peekObject(text string) (objectShape, bool) {
 		if seg.index > s.elementCount(shape.inst, feat) {
 			return objectShape{}, false
 		}
-		typ := s.rtCtx.CompositeTypeOf(feat)
-		if typ == nil {
-			return objectShape{}, false
-		}
 		shape = objectShape{typ: typ}
 	}
 	return shape, true
+}
+
+// objectTypeOf is the type of the object a feature holds once read, as the
+// runtime materializes it (a part, port or structured attribute from its type, a
+// connector from its own usage), or nil for a feature a value binds.
+func (s *Session) objectTypeOf(feat *runtime.EffectiveFeature) *symbols.Symbol {
+	if feat.Name == "" {
+		return nil
+	}
+	if typ := s.rtCtx.CompositeTypeOf(feat); typ != nil {
+		return typ
+	}
+	if s.rtCtx.Model().IsConnectorUsage(feat.Symbol) {
+		return feat.Symbol
+	}
+	return nil
 }
 
 // featureNamed is the effective feature called name, or nil.
@@ -452,7 +468,7 @@ func (s *Session) featureCompletions(shape objectShape, prefix, partial string) 
 	features := s.rtCtx.FeaturesOf(shape.typ)
 	for i := range features {
 		feat := &features[i]
-		if feat.Name == "" || !feat.HoldsObjects() {
+		if s.objectTypeOf(feat) == nil {
 			continue
 		}
 		name := prefix + lexer.NameText(feat.Name)

@@ -81,21 +81,23 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 - **The REPL addresses an object by id and by path, not only by name.** Every command that takes
   an object — `%features`, `%invoke`, `%eval in`, and the object `%action` and `%state` work on —
   reads the same reference: the name the object was instantiated under, the id `%instantiate`
-  printed (`%features #3`), or either followed by a path into the parts it holds (`car.fl.hub`,
-  `#3.fl`), one element of a multi-valued part picked by an index counted from 1
+  printed (`%features #3`), or either followed by a path into the objects it holds (`car.fl.hub`,
+  `#3.fl`) — parts, ports, connectors and structured attributes alike, every feature the runtime
+  holds an object for — one element of a multi-valued feature picked by an index counted from 1
   (`car.wheels[2]`). In a path `.` and `::` mean the same thing. The id is the object's identity
   for the session: it survives the carry-over an unrelated declaration triggers, and a second
   `%instantiate` of the same name, which re-points the name and now says how the first object is
   still reached; `%instances` lists such an object as `#3 (ID: 3, formerly Demo::car)`. The old
   object still counts: a `%constraint`, `%requirement` or `%eval` that names no object and whose
   condition both carry says so and names both (`Demo::car, #3`) rather than answering about the
-  new one, and `%state #3` debugs a state machine the session holds by id or path as it does by
+  new one — the elements of a multi-valued part among the carriers, each by its index
+  (`car::wheels[2]`) — and `%state #3` debugs a state machine the session holds by id or path as it does by
   name. A bad
   reference is reported in the same words by every command: an unknown id lists the ids there
   are, a segment that is no feature names the object and its features, an attribute at the end
   of a path says it holds a value, and a multi-valued part with no index says how many objects it
   holds and how to pick one. <kbd>Tab</kbd> completes references where a command takes one: `#`
-  offers the ids, `car.` the parts `car` holds ([reference](docs/reference/repl-commands.md#object-references)).
+  offers the ids, `car.` the objects `car` holds ([reference](docs/reference/repl-commands.md#object-references)).
   Names that need quoting are completed as the notation writes them, `'the ra` to `'the rack'` and
   `Q::'the ra` to `Q::'the rack'`, the closing quote typed or not.
 

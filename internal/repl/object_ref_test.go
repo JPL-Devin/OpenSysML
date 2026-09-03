@@ -418,6 +418,47 @@ func TestCompleteIndexesOnlyHeldElements(t *testing.T) {
 	}
 }
 
+// A path follows every feature the runtime holds an object for — a structured
+// attribute (an `attribute def` with attributes of its own) as much as a part —
+// and completion offers exactly those, before and after they are materialized;
+// an attribute holding a plain value is offered by neither.
+func TestStructuredAttributesAreObjects(t *testing.T) {
+	s := submitted(t, `package Geo {
+	attribute def Point {
+		attribute x : ScalarValues::Real = 1.0;
+		attribute y : ScalarValues::Real = 2.0;
+	}
+	part def Hub { attribute bolts : ScalarValues::Integer = 5; }
+	part def Wheel {
+		attribute center : Point;
+		attribute radius : ScalarValues::Real = 0.3;
+		part hub : Hub;
+	}
+	part wheel : Wheel;
+}`)
+	run(t, s, "%instantiate wheel")
+	check := func(when string) {
+		got := s.Complete("%features wheel.", len("%features wheel.")).Candidates
+		if want := []string{"wheel.center", "wheel.hub"}; fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("%s: completion offered %v, want %v", when, got, want)
+		}
+		for _, c := range got {
+			if _, _, err := s.resolveObject(c); err != nil {
+				t.Errorf("%s: completion %q does not resolve: %v", when, c, err)
+			}
+		}
+	}
+	check("before materialization")
+	wants(t, run(t, s, "%features wheel.center"), "Instance: Geo::wheel::center", "x = 1.0", "y = 2.0")
+	wants(t, run(t, s, "%eval in wheel.center : x"), "= 1.0")
+	wants(t, run(t, s, "%eval in wheel::center : y"), "= 2.0")
+	wants(t, run(t, s, "%features wheel.radius"), "error:", "radius of Geo::wheel holds a value (0.3), not an object")
+	wants(t, run(t, s, "%features wheel.center.x"), "error:", "x of Geo::wheel::center holds a value (1.0), not an object")
+	check("after materialization")
+	id := objectIDIn(t, run(t, s, "%features wheel.center"))
+	wants(t, run(t, s, "%features #"+id), "Instance: #"+id+" (ID: "+id+")", "x = 1.0")
+}
+
 // A debugger performed by a nested object under quoted names keeps running over
 // an unrelated declaration: the label the session holds the performer under is
 // read back as the reference it spells.
@@ -549,5 +590,46 @@ func TestDisplacedObjectsCarryImplicitSubjects(t *testing.T) {
 		run(t, s, "%instantiate rack")
 		wants(t, run(t, s, "%eval Lab::Sensor::reading"),
 			"carried by more than one object of this session (Lab::rack::gauge, #"+rack+"::gauge)")
+	})
+}
+
+// The elements of a multi-valued part carry their type's conditions like any
+// nested object, each under its index, so an unpinned check names them rather
+// than answering about declared defaults.
+func TestCollectionElementsCarryImplicitSubjects(t *testing.T) {
+	const garage = `package Garage {
+	part def Wheel {
+		attribute psi : ScalarValues::Real = 32.0;
+		constraint inflated { psi > 20.0 }
+	}
+	part def Car { part wheels : Wheel[2]; }
+	part def Cart { part wheel : Wheel[1..3]; }
+	part car : Car;
+	part cart : Cart;
+}`
+	t.Run("one element", func(t *testing.T) {
+		s := submitted(t, garage)
+		cart := objectIDIn(t, run(t, s, "%instantiate cart"))
+		out := run(t, s, "%constraint Garage::Wheel::inflated")
+		wants(t, out, "passed (on Garage::cart::wheel[1] ID: ")
+		rejects(t, out, "ID: "+cart+")")
+		wants(t, run(t, s, "%eval Garage::Wheel::psi"), "32.0")
+	})
+
+	t.Run("several elements", func(t *testing.T) {
+		s := submitted(t, garage)
+		run(t, s, "%instantiate car")
+		both := "carried by more than one object of this session (Garage::car::wheels[1], Garage::car::wheels[2])"
+		wants(t, run(t, s, "%constraint Garage::Wheel::inflated"), "error:", both)
+		wants(t, run(t, s, "%eval Garage::Wheel::psi"), "error:", both)
+		wants(t, run(t, s, "%eval in car.wheels[2] : psi"), "32.0")
+	})
+
+	t.Run("elements of a displaced object", func(t *testing.T) {
+		s := submitted(t, garage)
+		car := objectIDIn(t, run(t, s, "%instantiate car"))
+		run(t, s, "%instantiate car")
+		wants(t, run(t, s, "%eval Garage::Wheel::psi"),
+			"carried by more than one object of this session (Garage::car::wheels[1], Garage::car::wheels[2], #"+car+"::wheels[1], #"+car+"::wheels[2])")
 	})
 }

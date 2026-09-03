@@ -64,7 +64,7 @@ into the parts it holds (`car.fl.hub`, `#3.fl`, `car.wheels[2]`).
 | `%advance <time>` | Advance simulation time by `<time>` units, processing every event due |
 | **Control** | |
 | `%quit` | Exit the REPL |
-| `Tab` | Complete meta commands, symbol names (after `%print`, `%instantiate`, `%features` …; a name that needs quoting is offered in quotes, `Q::'the ra` completing to `Q::'the rack'`), object references where a command takes one (`#` offers the ids there are; `car.` offers the parts `car` holds, a multi-valued one as `car.wheels[1]`, `car.wheels[2]` …; completing reads and materializes nothing, so a part no command has reached yet is offered by type, and only the elements its lower bound guarantees), the form after `%render <name>`, and file paths after `%load` and `%save` |
+| `Tab` | Complete meta commands, symbol names (after `%print`, `%instantiate`, `%features` …; a name that needs quoting is offered in quotes, `Q::'the ra` completing to `Q::'the rack'`), object references where a command takes one (`#` offers the ids there are; `car.` offers the object-holding features of `car` — the same ones a path may pass through — a multi-valued one as `car.wheels[1]`, `car.wheels[2]` …; completing reads and materializes nothing, so a part no command has reached yet is offered by type, and only the elements its lower bound guarantees), the form after `%render <name>`, and file paths after `%load` and `%save` |
 | `Ctrl-D` | Exit REPL |
 
 ## Object references
@@ -75,10 +75,10 @@ An object reference names one object the session holds. It is one of:
 |------|---------|
 | `car`, `Demo::car` | the object `%instantiate car` created, by the name it was created under (unqualified or qualified, quoted segments included) |
 | `#3` | the object whose id `%instantiate` printed as `ID: 3`. Ids count up from 1 and never change: an object keeps its id when a later submission carries it over, and when a second `%instantiate` of its name creates a new object — the name then denotes the new one, and `#3` is how the old one is reached (`%instances` lists it as `#3 (ID: 3, formerly Demo::car)`) |
-| `car.fl`, `#3.fl`, `car.fl.hub` | a path from a named object or an id through the part features it holds, one nested object per segment. `.` and `::` are interchangeable in a path, so `car::fl` and `car.fl` are the same object; `.` is the shorter spelling and `::` is what the named root itself may contain |
-| `car.wheels[2]` | one element of a multi-valued part feature (`part wheels : Wheel[4]`), counted from 1 in the order the feature holds them |
+| `car.fl`, `#3.fl`, `car.fl.hub` | a path from a named object or an id through the features that hold objects, one nested object per segment: parts, ports, connectors, and structured attributes (an attribute typed by an `attribute def` with attributes of its own, which `%features` shows as `Instance(ID: n)`). An attribute holding a plain value ends a path with an error. `.` and `::` are interchangeable in a path, so `car::fl` and `car.fl` are the same object; `.` is the shorter spelling and `::` is what the named root itself may contain |
+| `car.wheels[2]` | one element of a multi-valued feature (`part wheels : Wheel[4]`), counted from 1 in the order the feature holds them |
 
-Reading a path materializes the nested parts it passes through, exactly as `%features car` does.
+Reading a path materializes the nested objects it passes through, exactly as `%features car` does.
 
 Every command reports a bad reference in the same words:
 
