@@ -981,6 +981,11 @@ func (ec *EvalContext) evalTypeSubject(node ast.Node) (Value, error) {
 	if !ok || sym == nil {
 		return ec.Eval(node)
 	}
+	// A variation is a choice, not an object or an empty collection: the
+	// evaluator reports one that nothing selected a variant for.
+	if ec.ctx.model.IsVariationFeature(sym) {
+		return ec.Eval(node)
+	}
 	// Classification treats an optional valueless usage as its empty collection.
 	if ec.ctx.optionalValueless(sym) {
 		return NewSequenceValue(NewSequence()), nil
