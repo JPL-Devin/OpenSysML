@@ -64,6 +64,7 @@ const (
 	xTriggerKeyword   = "triggerKeyword"
 	xEffectMember     = "effectMember"
 	xBracedEffect     = "bracedEffect"
+	xBodyMember       = "bodyMember"
 	xDeferredEvent    = "deferredEvent"
 	xAssignOperator   = "assignmentOperator"
 	xPayload          = "payload"
@@ -335,19 +336,11 @@ func (e *encoder) encodeTransition(n *ast.TransitionMember, head func(rdf.Term),
 	if len(n.Effect) > 0 {
 		e.graph.Add(subject, e.sysx(xBracedEffect), rdf.Bool(e.bracedBody(n, n.Effect)))
 	}
-	for _, member := range e.kept(n.Effect) {
-		node, _ := unwrapMember(member)
-		if node == nil {
-			continue
-		}
-		memberFQN, ok := e.fqn[node]
-		if !ok {
-			return &UnsupportedError{
-				What: fmt.Sprintf("the transition at %s", e.where(n)),
-				Note: "its effect has a member the graph gives no identity, so the effect cannot be told from the body",
-			}
-		}
-		e.graph.Add(subject, e.sysx(xEffectMember), e.ids.subjectForNode(node, memberFQN))
+	if err := e.transitionMemberLinks(n, subject, xEffectMember, n.Effect); err != nil {
+		return err
+	}
+	if err := e.transitionMemberLinks(n, subject, xBodyMember, n.Members); err != nil {
+		return err
 	}
 	if n.HasBody {
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(true))
@@ -358,6 +351,26 @@ func (e *encoder) encodeTransition(n *ast.TransitionMember, head func(rdf.Term),
 		return e.encodeInline(transitionMembers(n), fqn, subject)
 	}
 	return e.encode(transitionMembers(n), fqn, subject)
+}
+
+// transitionMemberLinks marks each member of a transition's effect or body as
+// such, so a reader can tell the two apart.
+func (e *encoder) transitionMemberLinks(n *ast.TransitionMember, subject rdf.Term, property string, members []ast.Node) error {
+	for _, member := range e.kept(members) {
+		node, _ := unwrapMember(member)
+		if node == nil {
+			continue
+		}
+		memberFQN, ok := e.fqn[node]
+		if !ok {
+			return &UnsupportedError{
+				What: fmt.Sprintf("the transition at %s", e.where(n)),
+				Note: "it owns a member the graph gives no identity, so its effect cannot be told from its body",
+			}
+		}
+		e.graph.Add(subject, e.sysx(property), e.ids.subjectForNode(node, memberFQN))
+	}
+	return nil
 }
 
 // transitionMembers lists what a transition owns in written order: the actions
@@ -1170,22 +1183,26 @@ func (d *decoder) transitionText(el *element, depth int) (string, string, error)
 	if guard, ok := d.stringOf(el, rdf.OpenSysML+xGuard); ok {
 		words = append(words, "if", guard)
 	}
-	// The effect's actions are the members the transition links as such; the
-	// rest are its body.
-	inEffect := map[string]bool{}
-	for _, term := range d.graph.Objects(rdf.IRI(el.iri), rdf.OpenSysML+xEffectMember) {
-		inEffect[term.Value] = true
+	// Members are linked as effect or body. A graph that links neither is from
+	// a mapping that owned the effect alone, with sysx:hasBody its braces.
+	inEffect := d.linked(el, xEffectMember)
+	inBody := d.linked(el, xBodyMember)
+	legacy := len(inEffect) == 0 && len(inBody) == 0
+	braced := d.boolOf(el, rdf.OpenSysML+xBracedEffect)
+	hasBody := d.boolOf(el, rdf.OpenSysML+xHasBody)
+	if legacy {
+		braced, hasBody = hasBody, false
 	}
 	var effect, body []*element
 	for _, child := range el.children {
-		if inEffect[child.iri] {
+		if legacy || inEffect[child.iri] {
 			effect = append(effect, child)
 		} else {
 			body = append(body, child)
 		}
 	}
 	if len(effect) > 0 {
-		text, err := d.membersText(effect, d.boolOf(el, rdf.OpenSysML+xBracedEffect), depth)
+		text, err := d.membersText(effect, braced, depth)
 		if err != nil {
 			return "", "", err
 		}
@@ -1193,12 +1210,21 @@ func (d *decoder) transitionText(el *element, depth int) (string, string, error)
 	}
 	words = append(words, "then", target)
 	var bodyText string
-	if len(body) > 0 || d.boolOf(el, rdf.OpenSysML+xHasBody) {
+	if len(body) > 0 || hasBody {
 		if bodyText, err = d.membersText(body, true, depth); err != nil {
 			return "", "", err
 		}
 	}
 	return strings.Join(words, " "), bodyText, nil
+}
+
+// linked is the set of members the element links through the property.
+func (d *decoder) linked(el *element, property string) map[string]bool {
+	set := map[string]bool{}
+	for _, term := range d.graph.Objects(rdf.IRI(el.iri), rdf.OpenSysML+property) {
+		set[term.Value] = true
+	}
+	return set
 }
 
 // bodyText writes the members of an element: braced when the notation was, and

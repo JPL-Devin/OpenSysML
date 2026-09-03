@@ -1781,6 +1781,7 @@ elmt:Bodies__Ctx__Machine__t1
     sysx:transitionSyntax "first" ;
     sysml:sourceFeature elmt:Bodies__Ctx__Machine__off ;
     sysml:targetFeature elmt:Bodies__Ctx__Machine__on ;
+    sysx:bodyMember elmt:Bodies__Ctx__Machine__t1__w ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Bodies__Ctx__Machine__t1__w ;
     sysml:ownedMembership elmt:Bodies__Ctx__Machine__t1__w_om ;
@@ -1921,6 +1922,7 @@ elmt:Bodies__Ctx__Machine___404
     sysml:targetFeature elmt:Bodies__Ctx__Machine__on ;
     sysx:bracedEffect "true"^^xsd:boolean ;
     sysx:effectMember elmt:Bodies__Ctx__Machine___404___400 ;
+    sysx:bodyMember elmt:Bodies__Ctx__Machine___404__w ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Bodies__Ctx__Machine___404___400, elmt:Bodies__Ctx__Machine___404__w ;
     sysml:ownedMembership elmt:Bodies__Ctx__Machine___404___400_om, elmt:Bodies__Ctx__Machine___404__w_om ;

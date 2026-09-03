@@ -943,6 +943,44 @@ func TestEndBindingBodiesComeBackFromTheGraphAlone(t *testing.T) {
 	}
 }
 
+// A transition graph written before members were linked as effect or body
+// owns the effect alone, with sysx:hasBody recording its braces. Such a graph
+// still reads as the effect it was, braced or not.
+func TestLegacyTransitionEffectsStayEffects(t *testing.T) {
+	// Each effect with the canonical notation it is written back as.
+	effects := map[string][2]string{
+		"unbraced": {"do action stop : Warm", "transition first s1 do action stop : Warm then s2;"},
+		"braced":   {"do { action stop : Warm; }", "transition first s1 do {\n            action stop : Warm;\n        } then s2;"},
+	}
+	for name, effect := range effects {
+		effect, want := effect[0], effect[1]
+		t.Run(name, func(t *testing.T) {
+			src := "package P {\n\taction def Warm;\n\tstate def M {\n\t\tstate s1;\n\t\tstate s2;\n\t\ttransition first s1 " + effect + " then s2;\n\t}\n}"
+			turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle: %v", err)
+			}
+			for _, property := range []string{"sysx:sourceText", "sysx:sourceTail", "sysx:effectMember", "sysx:bodyMember"} {
+				turtle = withoutTriples(t, turtle, property)
+			}
+			legacy := strings.ReplaceAll(string(turtle), "sysx:bracedEffect ", "sysx:hasBody ")
+			if !strings.Contains(legacy, "sysx:hasBody") {
+				t.Fatalf("the legacy shape needs sysx:hasBody for the effect's braces:\n%s", legacy)
+			}
+			back, err := export.Convert("m.ttl", []byte(legacy), export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation: %v", err)
+			}
+			if !strings.Contains(string(back), want) {
+				t.Errorf("the effect did not come back as one:\n%s", back)
+			}
+			if strings.Contains(string(back), "then s2 {") {
+				t.Errorf("the effect became a body:\n%s", back)
+			}
+		})
+	}
+}
+
 // A transition and an accept state their trigger and payload in the head too,
 // inside the bodies that allow them.
 func TestBehavioralHeadsComeBackFromTheGraphAlone(t *testing.T) {
