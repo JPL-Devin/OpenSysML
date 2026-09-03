@@ -36,6 +36,14 @@ package Lamps {
 		state labeled;
 	}
 
+	// A machine no part exhibits, so %state of the definition alone runs it detached.
+	state def Loose {
+		entry; then off;
+		state off;
+		transition off_on first off accept go then on;
+		state on;
+	}
+
 	part def Bulb {
 		exhibit state lamp : Lamp;
 	}

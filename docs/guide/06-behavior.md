@@ -235,18 +235,18 @@ sysml> %features Monitor
 Instance: Monitor (ID: 1)
 Features:
   count = 11
-  modes = Instance(ID: 2)
-    idle = <unknown>
-    awake = <unknown>
-  bumpBy = Instance(ID: 3)
-    n = <unknown>
-    apply = <unknown>
+Behaviors:
+  modes: exhibited state machine, current state awake
+  bumpBy: action, not running
 ```
 
 `%instantiate` started the machine, and `%state Monitor` attached the debugger to *that object's*
 machine rather than to a detached run of the usage. `%step`, `%advance`, `%current` and `%events`
 therefore drive that machine, and `%features` shows the values its entry actions wrote: `1` from
-`idle`, then `10` more from `awake` once the timer fired.
+`idle`, then `10` more from `awake` once the timer fired. The machine and the operation are not
+values the object holds, so they are listed under `Behaviors:` with what the object is doing with
+each: the exhibited machine's current state is the one `%current` reports, and `bumpBy`, which the
+type declares but does not perform, is not running.
 
 The two-argument form does the same when the machine it names is the one the object exhibits:
 `%state Monitor::modes Monitor` attaches to the running machine and says so in a `note:` line,
@@ -256,6 +256,15 @@ not exhibit — one it merely performs — is started as a detached performance 
 the object exhibits one definition as several usages (`exhibit state front : Blink; exhibit
 state rear : Blink;`), naming the definition names no one machine, so `%state Blink lamp` refuses
 and names `Lamp::front` and `Lamp::rear` to name instead.
+
+Naming the machine alone attaches the same way when one held object exhibits it: `%state modes`
+(or `%state Monitor::modes`) after `%instantiate Monitor` drives that object's running machine,
+so what its `do` and `entry` actions write shows up in `%features Monitor`. It never performs
+the machine detached from its object: with no object exhibiting it (`%state modes` before any
+`%instantiate`), or several (a second `Monitor` held as a part of another object), `%state`
+refuses and names the objects — or, before any exists, the type exhibiting the machine — and you
+name one with `%state <object>` or `%state <machine> <object>`. Only a `state def` no type
+exhibits is started as a detached performance by that form.
 
 The object can also be a part reached through composition, or an id. With `part def Driver {
 part r : Monitor; }`, `part driver : Driver;` and `%instantiate driver`, `%state driver.r` debugs the nested part's own
@@ -313,12 +322,9 @@ sysml> %features Monitor
 Instance: Monitor (ID: 1)
 Features:
   count = 15
-  modes = Instance(ID: 2)
-    idle = <unknown>
-    awake = <unknown>
-  bumpBy = Instance(ID: 3)
-    n = <unknown>
-    apply = <unknown>
+Behaviors:
+  modes: exhibited state machine, current state awake
+  bumpBy: action, not running
 ```
 
 Each argument is written as `<parameter>=<expression>`. An unbound parameter, an argument that

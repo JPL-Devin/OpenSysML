@@ -198,6 +198,26 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Fixed
 
+- **`%state <machine>` drives the object that exhibits the machine.** Naming an exhibited
+  machine alone (`%state lp` after `%instantiate TA::Sys`, or `-state lp` on the command line)
+  used to start a detached performance of it, one with no performing object: `%advance` reported
+  the timer events it dispatched, but the `do`, `entry` and `effect` writes of that run went to
+  the detached run's own frame, so `%features #1` still showed the values `%instantiate` had
+  left (`n = 1` for `n = 3`), while `%state #1` over the same object was right. The form now
+  attaches to the running machine of the one held object exhibiting it — the same object
+  `%instances` and `%features #1` show — so the two forms agree. When no held object exhibits
+  the machine, or several do, `%state` refuses with a typed error (`ExhibitorsError`) naming
+  the objects and both forms that address one (`%state <object>`, `%state <machine>
+  <object>`), rather than guessing or performing the machine detached; with no object yet
+  held, it names the types whose objects run the machine, whether they exhibit it inline,
+  through usages typed by a shared definition (`exhibit state front : Blink`), or through a
+  usage referencing another (`state spare : Blink; exhibit state active ::> spare;`): every
+  binding on the way to the body addresses the machine, with the object named or alone. A
+  definition one object exhibits as several usages refuses as it does with the object named.
+  Held objects are the ones the session has built: a nested part counts once it has been
+  reached, by `%features` or a machine that wrote it. A machine no type exhibits (`state def
+  Blink` alone) still starts as before, since no object's performance of it exists to attach to.
+
 - **A qualified name through an import evaluates as the checker resolves it.** The evaluator
   used to resolve only the first segment of `Bq::x` through the resolver and walk the rest as
   owned and inherited members, so a segment a `public import` re-exports failed with
@@ -317,8 +337,51 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   compiles calcs until that variable says otherwise, and — invoking the model's own `StepBudget`
   through both tiers — that they agree and that a traced run takes the evaluator. The architecture
   document gains a paragraph and diagram on invoking a calc.
+- **`%features` lists an object's behaviors under their own heading instead of as `<unknown>`
+  values.** A state or action a type declares holds no value, and the listing used to render each
+  as a feature row reading `<unknown>` — `off = <unknown>`, nested state by nested state — while the
+  running state was only visible through `%current`. The values are now followed by a `Behaviors:`
+  section that says what the object is doing with each: the current active state of a machine it
+  exhibits (`modes: exhibited state machine, current state off`, the very state `%current`
+  reports, before and after the debugger drives it), the execution state of an action it performs
+  (`tick: performed action, completed`), and `not running` for a state or action the type declares
+  but the object neither exhibits nor performs. A named transition is listed as the step it
+  declares (`toggle: transition, modes.closed → modes.opened`), not as an idle action. The values
+  a running behavior owns — the attributes of the machine's own occurrence, an action's parameters
+  and outputs — are listed under its row, apart from the performer's own values of the same name.
+  A nested object's behaviors are listed under its own row. Nothing is invented: a machine that
+  has not started reads `not started`, one that reached its end reads `completed`.
 
 ### Fixed
+
+- **`%eval in <part> : <feature>` reads a valueless feature as `<unset>` rather than calling it
+  unresolved.** Before an object exists, `%eval in car : wheels` for a multi-valued
+  `part wheels : Wheel[4]` — and `wheels.radius`, an attribute with no default, or a multi-valued
+  `String[3]` attribute — reported `unresolved reference`, though the name resolved perfectly well
+  and its single-valued neighbours evaluated. A feature the declarations give no value to now reads
+  `= <unset>`, as it does on an object; `unresolved reference` is reserved for a name nothing
+  declares. Only a bare read of the feature is unset: an expression over one (`unsetMass + 1`) or a
+  feature whose value depends on one still fails, naming the feature that has no value. The same
+  distinction holds throughout the evaluator: a declared name with no value is a typed no-value
+  error carrying the name, never an unresolved reference, so a qualified `car::wheels` reports that
+  it has no value to evaluate.
+
+### Fixed
+
+- **An expression evaluated after `-instantiate` reads the object that was created and run.**
+  `sysml model.sysml -instantiate P::ctx -e "ctx.recv.got"`, the bare line `ctx.recv.got` after
+  `%instantiate P::ctx`, and even `%eval in P::ctx : recv.got` — which printed
+  `(on P::ctx ID: 1)` — answered `0` while `%features #1` showed `got = 1` for that same object:
+  a name in the expression materialized a fresh object of the usage instead of the one
+  `%instantiate` created, and a nested part whose machine sends or accepts a signal ran only
+  once something read it, so what a read saw depended on the order the parts were first
+  inspected in. An instantiated usage now denotes the object created under it, and creating an
+  object materializes and runs the nested parts whose types exhibit or perform behaviors with
+  it, so the whole runs to quiescence once and every later read — a CLI `-e`, a piped
+  expression line, `%eval`, `%eval in` and `%features` — reports the same values.
+  `%eval in` also takes an object the way `%features` and `%state` do: by id (`%eval in #1 :
+  recv.got`) or by a path under a named object (`%eval in ctx.recv : got`), and its usage line
+  lists the forms. (Open-MBEE/OpenSysML#91)
 
 - **Messages cross a binding connector at an assembly's boundary port, in both directions**
   (Open-MBEE/OpenSysML#92). An assembly that binds its boundary port to a port of a part it
