@@ -184,13 +184,24 @@ never by parsing the id — a declared id may legitimately end in `_om` or embed
   `isOrdered`, `isNonunique`, `isEnd`, `isConstant`, `isEvent`, `isIndividual`,
   `isSnapshot`, `isConjugated`, `isAll`, `isAccept`, `isResult`
 - Declaration-head relationships, as element IRIs where the target resolves
-  inside the model and as plain literals where it does not: `sysml:type`
+  inside the model — by name resolution, so a name reached through an import,
+  an alias or a nested package qualification links to the same element its
+  fully qualified spelling does — and as plain literals where it does not: `sysml:type`
   (the `:` clause), `specializes`, `subsets`, `redefines`, `references`,
   `crosses`, `disjointFrom`, `intersects`, `inverseOf`, `unions`, `chains`,
   `includes`, `via`, `annotates`, `subject`. A literal carries the name itself,
   without the quotes an unrestricted name is written with; a target that is an
   expression rather than a name (a feature chain, say) is carried as the text it
-  was written as, typed `sysx:Expression` to tell the two apart.
+  was written as, typed `sysx:Expression` to tell the two apart. A feature
+  chain's `sysml:targetFeature` links the member the chain reaches in its
+  operand's type, a redefinition the general's feature; written back, each is
+  spelled by its own name where that reaches one feature among the operand's
+  or the owner's generals, else qualified. A transition or `then` end in a
+  state machine links the vertex it names anywhere in the machine, in a nested
+  state or a sibling region; a loop's `while` or `until` condition links the
+  actions the loop body declares. A body expression's parameter, a `for` loop's
+  variable and a trigger's parameter are no elements of the graph: a reference
+  to one stays its name, even where it shadows a feature of the same name.
 - `sysml:lowerBound`, `sysml:upperBound` — multiplicity, as expression nodes
   ([Expressions](#expressions))
 - `sysml:value` — a feature's value, as an expression node
@@ -210,7 +221,7 @@ The `sysx:` properties:
 | `sysx:declaredPrefix` | The keyword qualifying the kind keyword after it — the `assert` of `assert constraint c : C`. It says what the declaration is for, and the AST kind alone does not carry it. |
 | `sysx:endForm` | The notation an end-binding head writes its ends in — `to`, `nary`, `equals`, `firstThen`, `fromTo`, `flowTo`, `satisfy`, `then` — so the head is rebuilt from the graph rather than read back from its text. See [End-binding heads](#end-binding-heads). |
 | `sysx:endVerb` | The verb a head writes ahead of its ends when its own keyword is the noun form (`connection c connect a to b`). Without it the verb would be missing or doubled. |
-| `sysx:sourceMember`, `sysx:targetMember` | The member a succession sequences from or to where the notation names no end (`then b;`, or a `then` beside an unnamed member). The end is the element itself rather than a name, since there is none to write. |
+| `sysx:sourceMember`, `sysx:targetMember` | The member a succession sequences from or to where the notation names no end (`then b;`, or a `then` beside an unnamed member), or where the name the notation supplies for an end links no element (a `then` after `action redefines walk;` whose `walk` is inherited). The end is the element itself rather than only a name, so a same-named member elsewhere cannot be mistaken for it. |
 | `sysx:condition` | The condition a condition member states, as its notation. |
 | `sysx:prefixMetadata` | A metadata annotation as written (`#Safety`). It states what the element it prefixes is, and the AST records no span for it, so the notation is read from the source. |
 | `sysx:declaredId` | The element's id came from an explicit `@IdentityMetadata::ElementId` annotation, see [Element identity](#element-identity). |

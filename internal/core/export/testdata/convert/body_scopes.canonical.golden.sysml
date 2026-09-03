@@ -1,0 +1,1 @@
+sysml: cannot convert the expression <urn:opensysml:expr:Scopes__D__one_pvalue_pa0>: this expression states no notation and no structure to write one from; save to .sysml or .kerml instead, which writes the source exactly; see docs/reference/rdf-mapping.md § Limitations

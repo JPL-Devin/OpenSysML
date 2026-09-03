@@ -223,7 +223,7 @@ expr:ThenAfterMembers__AfterFlow___401_pflowSource
     sysx:sourceText "a.y" ;
     sysml:elementId "ThenAfterMembers__AfterFlow___401_pflowSource" ;
     sysml:argument expr:ThenAfterMembers__AfterFlow___401_pflowSource_pa0 ;
-    sysml:targetFeature "y" ;
+    sysml:targetFeature elmt:ThenAfterMembers__Step__y ;
     sysx:endIndex "0"^^xsd:integer ;
     sysx:endRole "source" .
 
@@ -239,7 +239,7 @@ expr:ThenAfterMembers__AfterFlow___401_pflowTarget
     sysx:sourceText "b.x" ;
     sysml:elementId "ThenAfterMembers__AfterFlow___401_pflowTarget" ;
     sysml:argument expr:ThenAfterMembers__AfterFlow___401_pflowTarget_pa0 ;
-    sysml:targetFeature "x" ;
+    sysml:targetFeature elmt:ThenAfterMembers__Step__x ;
     sysx:endIndex "1"^^xsd:integer ;
     sysx:endRole "target" .
 
@@ -1204,6 +1204,7 @@ elmt:ThenAfterMembers__AfterFirstStart___402
     sysml:owningMembership elmt:ThenAfterMembers__AfterFirstStart___402_om ;
     sysx:endForm "then" ;
     sysml:sourceFeature "start" ;
+    sysx:sourceMember elmt:ThenAfterMembers__AfterFirstStart___400 ;
     sysml:targetFeature elmt:ThenAfterMembers__AfterFirstStart__a ;
     sysx:sourceText "" .
 
@@ -1379,7 +1380,7 @@ expr:ThenAfterMembers__AfterPerform___401_pflowSource
     sysx:sourceText "stride.y" ;
     sysml:elementId "ThenAfterMembers__AfterPerform___401_pflowSource" ;
     sysml:argument expr:ThenAfterMembers__AfterPerform___401_pflowSource_pa0 ;
-    sysml:targetFeature "y" ;
+    sysml:targetFeature elmt:ThenAfterMembers__Step__y ;
     sysx:endIndex "0"^^xsd:integer ;
     sysx:endRole "source" .
 
@@ -1395,7 +1396,7 @@ expr:ThenAfterMembers__AfterPerform___401_pflowTarget
     sysx:sourceText "b.x" ;
     sysml:elementId "ThenAfterMembers__AfterPerform___401_pflowTarget" ;
     sysml:argument expr:ThenAfterMembers__AfterPerform___401_pflowTarget_pa0 ;
-    sysml:targetFeature "x" ;
+    sysml:targetFeature elmt:ThenAfterMembers__Step__x ;
     sysx:endIndex "1"^^xsd:integer ;
     sysx:endRole "target" .
 
@@ -1547,7 +1548,7 @@ expr:ThenAfterMembers__ThenAlone___401_pflowSource
     sysx:sourceText "a.y" ;
     sysml:elementId "ThenAfterMembers__ThenAlone___401_pflowSource" ;
     sysml:argument expr:ThenAfterMembers__ThenAlone___401_pflowSource_pa0 ;
-    sysml:targetFeature "y" ;
+    sysml:targetFeature elmt:ThenAfterMembers__Step__y ;
     sysx:endIndex "0"^^xsd:integer ;
     sysx:endRole "source" .
 
@@ -1563,7 +1564,7 @@ expr:ThenAfterMembers__ThenAlone___401_pflowTarget
     sysx:sourceText "b.x" ;
     sysml:elementId "ThenAfterMembers__ThenAlone___401_pflowTarget" ;
     sysml:argument expr:ThenAfterMembers__ThenAlone___401_pflowTarget_pa0 ;
-    sysml:targetFeature "x" ;
+    sysml:targetFeature elmt:ThenAfterMembers__Step__x ;
     sysx:endIndex "1"^^xsd:integer ;
     sysx:endRole "target" .
 

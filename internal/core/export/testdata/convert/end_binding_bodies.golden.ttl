@@ -400,7 +400,7 @@ expr:R89__Ctx__seam_pend0
     sysx:sourceText "w.outp" ;
     sysml:elementId "R89__Ctx__seam_pend0" ;
     sysml:argument expr:R89__Ctx__seam_pend0_pa0 ;
-    sysml:targetFeature "outp" ;
+    sysml:targetFeature elmt:R89__W__outp ;
     sysx:endIndex "0"^^xsd:integer .
 
 expr:R89__Ctx__seam_pend0_pa0
@@ -415,7 +415,7 @@ expr:R89__Ctx__seam_pend1
     sysx:sourceText "r.inp" ;
     sysml:elementId "R89__Ctx__seam_pend1" ;
     sysml:argument expr:R89__Ctx__seam_pend1_pa0 ;
-    sysml:targetFeature "inp" ;
+    sysml:targetFeature elmt:R89__Rd__inp ;
     sysx:endIndex "1"^^xsd:integer .
 
 expr:R89__Ctx__seam_pend1_pa0
@@ -868,7 +868,7 @@ expr:Bodies__Ctx__c_pend0
     sysx:sourceText "x.p" ;
     sysml:elementId "Bodies__Ctx__c_pend0" ;
     sysml:argument expr:Bodies__Ctx__c_pend0_pa0 ;
-    sysml:targetFeature "p" ;
+    sysml:targetFeature elmt:Bodies__A__p ;
     sysx:endIndex "0"^^xsd:integer .
 
 expr:Bodies__Ctx__c_pend0_pa0
@@ -883,7 +883,7 @@ expr:Bodies__Ctx__c_pend1
     sysx:sourceText "y.q" ;
     sysml:elementId "Bodies__Ctx__c_pend1" ;
     sysml:argument expr:Bodies__Ctx__c_pend1_pa0 ;
-    sysml:targetFeature "q" ;
+    sysml:targetFeature elmt:Bodies__B__q ;
     sysx:endIndex "1"^^xsd:integer .
 
 expr:Bodies__Ctx__c_pend1_pa0
@@ -957,7 +957,7 @@ expr:Bodies__Ctx___403_pend0
     sysx:sourceText "x.p" ;
     sysml:elementId "Bodies__Ctx___403_pend0" ;
     sysml:argument expr:Bodies__Ctx___403_pend0_pa0 ;
-    sysml:targetFeature "p" ;
+    sysml:targetFeature elmt:Bodies__A__p ;
     sysx:endIndex "0"^^xsd:integer .
 
 expr:Bodies__Ctx___403_pend0_pa0
@@ -972,7 +972,7 @@ expr:Bodies__Ctx___403_pend1
     sysx:sourceText "y.q" ;
     sysml:elementId "Bodies__Ctx___403_pend1" ;
     sysml:argument expr:Bodies__Ctx___403_pend1_pa0 ;
-    sysml:targetFeature "q" ;
+    sysml:targetFeature elmt:Bodies__B__q ;
     sysx:endIndex "1"^^xsd:integer .
 
 expr:Bodies__Ctx___403_pend1_pa0
@@ -1042,7 +1042,7 @@ expr:Bodies__Ctx__f_pflowSource
     sysx:sourceText "x.i" ;
     sysml:elementId "Bodies__Ctx__f_pflowSource" ;
     sysml:argument expr:Bodies__Ctx__f_pflowSource_pa0 ;
-    sysml:targetFeature "i" ;
+    sysml:targetFeature elmt:Bodies__A__i ;
     sysx:endIndex "0"^^xsd:integer ;
     sysx:endRole "source" .
 
@@ -1058,7 +1058,7 @@ expr:Bodies__Ctx__f_pflowTarget
     sysx:sourceText "y.j" ;
     sysml:elementId "Bodies__Ctx__f_pflowTarget" ;
     sysml:argument expr:Bodies__Ctx__f_pflowTarget_pa0 ;
-    sysml:targetFeature "j" ;
+    sysml:targetFeature elmt:Bodies__B__j ;
     sysx:endIndex "1"^^xsd:integer ;
     sysx:endRole "target" .
 
@@ -1133,7 +1133,7 @@ expr:Bodies__Ctx__bd_pvalue
     sysx:sourceText "y.b" ;
     sysml:elementId "Bodies__Ctx__bd_pvalue" ;
     sysml:argument expr:Bodies__Ctx__bd_pvalue_pa0 ;
-    sysml:targetFeature "b" .
+    sysml:targetFeature elmt:Bodies__B__b .
 
 expr:Bodies__Ctx__bd_pvalue_pa0
     a sysml:FeatureReferenceExpression ;
@@ -1207,7 +1207,7 @@ expr:Bodies__Ctx___406_pvalue
     sysx:sourceText "y.b" ;
     sysml:elementId "Bodies__Ctx___406_pvalue" ;
     sysml:argument expr:Bodies__Ctx___406_pvalue_pa0 ;
-    sysml:targetFeature "b" .
+    sysml:targetFeature elmt:Bodies__B__b .
 
 expr:Bodies__Ctx___406_pvalue_pa0
     a sysml:FeatureReferenceExpression ;
@@ -1935,7 +1935,7 @@ expr:Bodies__Ctx__Machine___403___400_ptarget
     sysx:sourceText "x.a" ;
     sysml:elementId "Bodies__Ctx__Machine___403___400_ptarget" ;
     sysml:argument expr:Bodies__Ctx__Machine___403___400_ptarget_pa0 ;
-    sysml:targetFeature "a" .
+    sysml:targetFeature elmt:Bodies__A__a .
 
 expr:Bodies__Ctx__Machine___403___400_ptarget_pa0
     a sysml:FeatureReferenceExpression ;
@@ -2020,7 +2020,7 @@ expr:Bodies__Ctx__Machine___404___400_ptarget
     sysx:sourceText "x.a" ;
     sysml:elementId "Bodies__Ctx__Machine___404___400_ptarget" ;
     sysml:argument expr:Bodies__Ctx__Machine___404___400_ptarget_pa0 ;
-    sysml:targetFeature "a" .
+    sysml:targetFeature elmt:Bodies__A__a .
 
 expr:Bodies__Ctx__Machine___404___400_ptarget_pa0
     a sysml:FeatureReferenceExpression ;
