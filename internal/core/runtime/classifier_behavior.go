@@ -221,14 +221,17 @@ func (ctx *Context) startClassifierBehaviors(inst *Instance, mark int) error {
 func (ctx *Context) startClassifierBehaviorsOf(objects []*Instance, mark int) error {
 	attached := len(ctx.objectBehaviors)
 	if err := ctx.startBehaviorsOfAll(objects); err != nil {
-		// A creation that failed leaves nothing behind: neither the objects its
-		// behaviors materialized nor any behavior of theirs survives into the next,
-		// unrelated command.
-		ctx.forgetBehaviorsFrom(attached)
-		ctx.abandonInstancesSince(mark)
+		ctx.abandonCreationSince(mark, attached)
 		return err
 	}
 	return nil
+}
+
+// abandonCreationSince undoes a creation that failed: neither the objects it
+// registered after mark nor the behaviors attached after attached survive it.
+func (ctx *Context) abandonCreationSince(mark, attached int) {
+	ctx.forgetBehaviorsFrom(attached)
+	ctx.abandonInstancesSince(mark)
 }
 
 // abandonInstancesSince removes objects registered after mark, which a failed
@@ -529,14 +532,15 @@ func (ctx *Context) drainObjectBehaviors() error {
 }
 
 // nextRunnableBehavior returns the next behavior with work to do: one not yet
-// started, else one holding an event delivered while it was suspended, unless it
-// held work before the start began (see holdDrivenWork). Under a probe only a
-// behavior the probe attached is run: what one outliving the probe does cannot be
-// undone.
+// started, else one holding an event delivered while suspended — unless it held
+// work before the start began (holdDrivenWork), or was attached before the
+// innermost run boundary, as what it does cannot be undone with the change under way.
 func (ctx *Context) nextRunnableBehavior() (*ObjectBehavior, bool) {
 	first, attached := 0, 0
-	if ctx.probes > 0 {
-		first, attached = min(ctx.probePending, len(ctx.pendingBehaviors)), ctx.probeBehaviors
+	if n := len(ctx.runBoundaries); n > 0 {
+		boundary := ctx.runBoundaries[n-1]
+		first = min(boundary.pending, len(ctx.pendingBehaviors))
+		attached = min(boundary.behaviors, len(ctx.objectBehaviors))
 	}
 	if first < len(ctx.pendingBehaviors) {
 		behavior := ctx.pendingBehaviors[first]
