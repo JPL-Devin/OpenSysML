@@ -9,22 +9,20 @@ enter calc test::firstAbove
       stmt assign seen
         eval feature i -> 1
       stmt node check
-        stmt action body
-          stmt if
-              eval feature seen -> 1
-              eval literal 1 -> 1
-            eval operator > -> false
+        stmt if
+            eval feature seen -> 1
+            eval literal 1 -> 1
+          eval operator > -> false
       stmt assign seen
         eval literal 0 -> 0
     iteration 2
       stmt assign seen
         eval feature i -> 2
       stmt node check
-        stmt action body
-          stmt if
-              eval feature seen -> 2
-              eval literal 1 -> 1
-            eval operator > -> true
-            stmt return
-              eval feature seen -> 2
+        stmt if
+            eval feature seen -> 2
+            eval literal 1 -> 1
+          eval operator > -> true
+          stmt return
+            eval feature seen -> 2
 exit calc test::firstAbove -> 2

@@ -22,6 +22,10 @@ type Token struct {
 	// frame is the activation of a nested action node's own flow this token is
 	// running in, nil for a token in the action's own flow (action_subflow.go).
 	frame *actionFrame
+
+	// body is the work of this token's step a breakpoint paused, resumed by the
+	// next step (action_body_run.go); nil for a token with none pending.
+	body *bodyRun
 }
 
 // AcceptWait describes the message a parked token is waiting for. It is the

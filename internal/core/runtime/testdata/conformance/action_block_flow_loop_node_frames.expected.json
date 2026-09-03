@@ -1,0 +1,12 @@
+{
+	"type": "action",
+	"evaluate": "test::sum",
+	"outputs": {
+		"total": {"type": "Integer", "value": 14},
+		"cubes": {"type": "Integer", "value": 36},
+		"iterate.square.n": {"type": "Integer", "value": 3},
+		"iterate.square.s": {"type": "Integer", "value": 9},
+		"iterate.cube.x": {"type": "Integer", "value": 3},
+		"iterate.cube.sq": {"type": "Integer", "value": 9}
+	}
+}

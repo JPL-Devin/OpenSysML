@@ -1,0 +1,14 @@
+{
+	"type": "action",
+	"evaluate": "test::pipeline",
+	"trace": true,
+	"outputs": {
+		"scaled": {"type": "Integer", "value": 30},
+		"collected": {"type": "Integer", "value": 30},
+		"left.v": {"type": "Integer", "value": 1},
+		"right.v": {"type": "Integer", "value": 2},
+		"stage.x": {"type": "Integer", "value": 1},
+		"stage.y": {"type": "Integer", "value": 10},
+		"collect.z": {"type": "Integer", "value": 10}
+	}
+}

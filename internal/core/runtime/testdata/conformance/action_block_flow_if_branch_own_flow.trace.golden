@@ -1,0 +1,21 @@
+step 1: token 1@choose
+stmt if
+    eval feature mode -> 1
+    eval literal 1 -> 1
+  eval operator == -> true
+  stmt node split
+enter action node: split
+    stmt assign b
+      eval literal 20 -> 20
+    stmt assign a
+      eval literal 10 -> 10
+    stmt assign sum
+        eval chain a -> 10
+        eval chain b -> 20
+      eval operator + -> 30
+leave action node: split
+  stmt node report
+    stmt assign total
+      eval chain sum -> 30
+step 2: token 1@done
+step 3: no active tokens

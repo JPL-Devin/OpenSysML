@@ -1,0 +1,10 @@
+{
+	"type": "state",
+	"libraries": true,
+	"finalState": "done",
+	"stateVisits": ["init", "active", "done"],
+	"outputs": {
+		"total": {"type": "Integer", "value": 21},
+		"v": {"type": "Integer", "value": 100}
+	}
+}
