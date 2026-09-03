@@ -189,6 +189,25 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   differential test now also compares Reals bit for bit over ±0.0, ±Inf and NaN, and focused
   fixtures under `internal/core/runtime/testdata/compiled/` run each construct through both tiers.
 
+### Fixed
+
+- **A qualified name through an import evaluates as the checker resolves it.** The evaluator
+  used to resolve only the first segment of `Bq::x` through the resolver and walk the rest as
+  owned and inherited members, so a segment a `public import` re-exports failed with
+  `member x not found in Bq` even though the checker accepted the reference — and the library's
+  own façades are built that way, so `ISQ::speed` and `SI::speed` failed with
+  `member speed not found`. The whole name now goes through the same `ResolveQualified` the
+  checker uses: a wildcard, single-member or recursive import, a façade of a façade, a short
+  name and an `alias` (which used to fail with `cannot evaluate element type *ast.Alias`) all
+  reach the element the checker reaches, a `private import` stays reachable only from inside
+  the importing namespace, and a name the checker rejects fails with the checker's own
+  `unresolved reference: Priv::x` or, when several members answer to it, its own
+  `ambiguous reference: Twice::t (2 candidates)`. The evaluator reads the name through a new
+  `Resolver.ReadQualified`, whose answer (element, segments, ambiguity) is memoized by scope and
+  node rather than by node alone, so one parsed expression evaluated in two scopes that each
+  hold their own `A::x` answers with each scope's value. A calc usage's outputs, and the "not a
+  variant" / "not a literal" reports, are unchanged.
+
 ### Changed
 
 - **A conversion from RDF returns the notation as written.** Every element written to `.ttl`
