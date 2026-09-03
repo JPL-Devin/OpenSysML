@@ -126,10 +126,18 @@ func (s *Session) doSend(text string) ([]string, bool, error) {
 }
 
 // sendSignal resolves the signal and its destination, refuses what no machine
-// there would accept, and posts the rest.
+// there would accept, and posts the rest. The arguments are parsed before the
+// destination is reached, so a malformed one materializes nothing.
 func (s *Session) sendSignal(text string) ([]string, error) {
 	req, err := parseSendLine(text)
 	if err != nil {
+		return nil, err
+	}
+	args, err := parseArguments(req.args)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkArgumentNames(args); err != nil {
 		return nil, err
 	}
 	ctx, err := s.getOrCreateRuntime()
@@ -140,7 +148,7 @@ func (s *Session) sendSignal(text string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	msg, typed, err := s.signalMessage(ctx, req, target)
+	msg, typed, err := s.signalMessage(ctx, req.signal, args, target)
 	if err != nil {
 		return nil, err
 	}
@@ -274,14 +282,14 @@ func (s *Session) machinesOf(inst *runtime.Instance) []*runtime.StateExecutor {
 
 // signalMessage builds the message to post, typed by the definition the name
 // resolves to; a bare name no declaration types is matched by name, as `accept go` is.
-func (s *Session) signalMessage(ctx *runtime.Context, req sendRequest, target signalTarget) (runtime.Message, bool, error) {
-	sym, _, lerr := s.lookupSymbolOfKinds(req.signal, runtime.SignalDefinitionKinds...)
+func (s *Session) signalMessage(ctx *runtime.Context, signal string, args []argument, target signalTarget) (runtime.Message, bool, error) {
+	sym, _, lerr := s.lookupSymbolOfKinds(signal, runtime.SignalDefinitionKinds...)
 	if lerr != nil {
 		if !errors.Is(lerr, runtime.ErrUnresolvedReference) {
 			return runtime.Message{}, false, lerr
 		}
-		named := runtime.NamedSignalMessage(nameText(req.signal), target.object)
-		if len(req.args) > 0 {
+		named := runtime.NamedSignalMessage(nameText(signal), target.object)
+		if len(args) > 0 {
 			return runtime.Message{}, false, lerr
 		}
 		accepting, err := acceptingMachines(target.machines, named)
@@ -294,12 +302,9 @@ func (s *Session) signalMessage(ctx *runtime.Context, req sendRequest, target si
 		return named, false, nil
 	}
 	if !runtime.IsSignalDefinition(sym) {
-		return runtime.Message{}, false, fmt.Errorf("%s is a %s, not a signal definition", req.signal, sym.Notation())
+		return runtime.Message{}, false, fmt.Errorf("%s is a %s, not a signal definition", signal, sym.Notation())
 	}
-	if err := checkArgumentNames(req.args); err != nil {
-		return runtime.Message{}, false, err
-	}
-	bound, err := s.operationArguments(ctx, req.args)
+	bound, err := s.evalArguments(ctx, args)
 	if err != nil {
 		return runtime.Message{}, false, err
 	}
@@ -312,18 +317,13 @@ func (s *Session) signalMessage(ctx *runtime.Context, req sendRequest, target si
 
 // checkArgumentNames refuses an argument list that binds one parameter twice,
 // which a map of bindings would otherwise silently reduce to the last.
-func checkArgumentNames(args []string) error {
+func checkArgumentNames(args []argument) error {
 	seen := make(map[string]bool, len(args))
 	for _, arg := range args {
-		param, _, ok := strings.Cut(arg, "=")
-		param = strings.TrimSpace(param)
-		if !ok || param == "" {
-			return fmt.Errorf("argument %q is not written as <parameter>=<expression>", arg)
+		if seen[arg.param] {
+			return fmt.Errorf("argument %s is given twice", arg.param)
 		}
-		if seen[param] {
-			return fmt.Errorf("argument %s is given twice", param)
-		}
-		seen[param] = true
+		seen[arg.param] = true
 	}
 	return nil
 }

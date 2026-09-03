@@ -336,6 +336,39 @@ func TestStateOverASharedDefinitionNamesTheUsages(t *testing.T) {
 	wants(t, run(t, s, "%features Shared::lamp"), "front", "dark", "rear", "lit")
 }
 
+// A command's expressions are parsed before its object is reached: a malformed
+// one names a part not yet materialized without creating it or using up an id.
+func TestMalformedExpressionsMaterializeNothing(t *testing.T) {
+	for _, tc := range []struct{ line, reject string }{
+		{"%eval in car.fl : radius *", "car.fl"},
+		{"%invoke car.fl spin turns=1 +", "car.fl"},
+		{"%invoke car.fl spin 1", "car.fl"},
+		{"%send Spin(turns=1 +) to car.fl", "car.fl"},
+		{"%send Spin(1) to car.fl", "car.fl"},
+		{"%send Spin(turns=1, turns=2) to car.fl", "car.fl"},
+	} {
+		t.Run(tc.line, func(t *testing.T) {
+			s := loadSource(t, `package Demo {
+				private import ScalarValues::*;
+				item def Spin { attribute turns : Integer; }
+				part def Wheel { attribute radius = 0.3; }
+				part def Car { part fl : Wheel; }
+				part car : Car;
+			}`)
+			wants(t, run(t, s, "%instantiate Demo::car"), "ID: 1")
+			held := s.rtCtx.InstanceIDs()
+
+			got := run(t, s, tc.line)
+			wants(t, got, "error:")
+			rejects(t, got, tc.reject)
+			if now := s.rtCtx.InstanceIDs(); len(now) != len(held) {
+				t.Fatalf("the rejected command materialized objects: %v were held, now %v", held, now)
+			}
+			wants(t, run(t, s, "%eval in car.fl : radius * 2"), "= 0.6", "(on Demo::car.fl ID: 2)")
+		})
+	}
+}
+
 // A segment whose feature value the runtime could not materialize is not a missing
 // feature: the path error carries the runtime's reason and its typed cause, and
 // the failure reaches the session status as any other command's would.

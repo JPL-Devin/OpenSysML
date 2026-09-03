@@ -576,8 +576,16 @@ func contextSeparator(tail string) int {
 // evalIn evaluates an expression in the context the command pinned: the object
 // the reference denotes (`ctx`, `#3`, `ctx.recv`), whose feature values it then
 // reads as `%eval` does after `%instantiate`, or else the named element's own
-// namespace.
+// namespace. The expression is parsed first: a malformed one is rejected before
+// the reference can materialize anything.
 func (s *Session) evalIn(name, expr string) ([]string, error) {
+	node, diags := parseExprAlone(expr)
+	if len(diags) > 0 {
+		return nil, exprError(expr, diags[0].Message, diags[0].Span, len(exprPrefix))
+	}
+	if node == nil {
+		return nil, errors.New("could not parse expression")
+	}
 	inst, label, rerr := s.resolveObject(name)
 	var noInstance *NotInstantiatedError
 	if rerr != nil && (looksLikeObjectPath(name) || !errors.As(rerr, &noInstance)) {
@@ -598,13 +606,6 @@ func (s *Session) evalIn(name, expr string) ([]string, error) {
 	ctx, err := s.getOrCreateRuntime()
 	if err != nil {
 		return nil, err
-	}
-	node, diags := parseExprAlone(expr)
-	if len(diags) > 0 {
-		return nil, exprError(expr, diags[0].Message, diags[0].Span, len(exprPrefix))
-	}
-	if node == nil {
-		return nil, errors.New("could not parse expression")
 	}
 	scope := s.contextScope(sym)
 	if scope == nil {
@@ -2761,8 +2762,13 @@ func (s *Session) doInvoke(name, operation string, args []string) ([]string, boo
 }
 
 // invokeOperation binds the arguments written as `name=<expression>` and runs the
-// operation the object's type owns, performed by that object.
+// operation the object's type owns, performed by that object. The arguments are
+// parsed first, so a malformed one is rejected before the object is reached.
 func (s *Session) invokeOperation(name, operation string, args []string) ([]string, error) {
+	parsed, err := parseArguments(args)
+	if err != nil {
+		return nil, err
+	}
 	ctx, err := s.getOrCreateRuntime()
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", errRuntimeInit, err)
@@ -2771,7 +2777,7 @@ func (s *Session) invokeOperation(name, operation string, args []string) ([]stri
 	if rerr != nil {
 		return nil, rerr
 	}
-	bound, err := s.operationArguments(ctx, args)
+	bound, err := s.evalArguments(ctx, parsed)
 	if err != nil {
 		return nil, err
 	}
@@ -2789,14 +2795,16 @@ func (s *Session) invokeOperation(name, operation string, args []string) ([]stri
 	return out, nil
 }
 
-// operationArguments evaluates the `name=<expression>` arguments of %invoke,
-// where the prompt evaluates any expression.
-func (s *Session) operationArguments(ctx *runtime.Context, args []string) (map[string]runtime.Value, error) {
-	if len(args) == 0 {
-		return nil, nil
-	}
-	scope := s.promptScope()
-	bound := make(map[string]runtime.Value, len(args))
+// argument is one `name=<expression>` argument of %invoke or %send, parsed and
+// not yet evaluated.
+type argument struct {
+	param string
+	node  ast.Node
+}
+
+// parseArguments takes apart and parses `name=<expression>` arguments.
+func parseArguments(args []string) ([]argument, error) {
+	parsed := make([]argument, 0, len(args))
 	for _, arg := range args {
 		param, expr, ok := strings.Cut(arg, "=")
 		param, expr = strings.TrimSpace(param), strings.TrimSpace(expr)
@@ -2810,11 +2818,25 @@ func (s *Session) operationArguments(ctx *runtime.Context, args []string) (map[s
 		if node == nil {
 			return nil, fmt.Errorf("argument %s: could not parse %q", param, expr)
 		}
-		value, err := ctx.EvalWithScope(node, scope)
+		parsed = append(parsed, argument{param: param, node: node})
+	}
+	return parsed, nil
+}
+
+// evalArguments evaluates parsed arguments where the prompt evaluates any
+// expression, binding each to its parameter.
+func (s *Session) evalArguments(ctx *runtime.Context, parsed []argument) (map[string]runtime.Value, error) {
+	if len(parsed) == 0 {
+		return nil, nil
+	}
+	scope := s.promptScope()
+	bound := make(map[string]runtime.Value, len(parsed))
+	for _, arg := range parsed {
+		value, err := ctx.EvalWithScope(arg.node, scope)
 		if err != nil {
-			return nil, fmt.Errorf("argument %s: %w", param, err)
+			return nil, fmt.Errorf("argument %s: %w", arg.param, err)
 		}
-		bound[param] = value
+		bound[arg.param] = value
 	}
 	return bound, nil
 }
