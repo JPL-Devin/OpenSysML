@@ -142,8 +142,8 @@ suite checks over the fixtures in `internal/core/export/testdata/convert/`.
 
 The notation that comes out of a round trip is the source itself when the graph still carries it:
 every element written to `.ttl` carries its lines as `sysx:sourceText`, comments and blank lines
-included, and converting back returns them, so a formatted file comes back byte for byte and an
-unformatted one comes back formatted, as it would from a save. The graph stays authoritative: an
+included, exactly as the file spells them — tabs, odd indentation, CRLF and all — and converting
+back returns them, so the file comes back byte for byte. The graph stays authoritative: an
 element whose triples were edited after the export — a flag set, a value changed, a member
 removed — is written back from its structure in canonical notation, and only that element's
 lines change. A graph without source text, from another tool or with the text stripped, is

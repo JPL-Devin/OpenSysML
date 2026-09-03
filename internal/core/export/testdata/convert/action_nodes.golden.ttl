@@ -670,6 +670,7 @@ elmt:ActionNodes__Drive___4019
     sysx:relatedFeature expr:ActionNodes__Drive___4019_pend0, expr:ActionNodes__Drive___4019_pend1 ;
     sysx:endForm "firstThen" ;
     sysx:endVerb "first" ;
+    sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        succession first start then brake;\n" .
 
 elmt:ActionNodes__Drive___4019_om
@@ -710,6 +711,7 @@ elmt:ActionNodes__Drive___4020
     sysx:relatedFeature expr:ActionNodes__Drive___4020_pend0, expr:ActionNodes__Drive___4020_pend1 ;
     sysx:endForm "firstThen" ;
     sysx:endVerb "first" ;
+    sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        succession first brake then done;\n" .
 
 elmt:ActionNodes__Drive___4020_om
