@@ -14,7 +14,7 @@ each one demonstrates.
 **[Document generation manual](manual/README.md)** — how to generate documents from your models using
 the built-in document queries: [concepts](manual/introduction.md), [getting started](manual/getting-started.md),
 a [query cookbook](manual/query-cookbook.md), [document authoring](manual/authoring.md),
-[outputs](manual/outputs.md) (Markdown and PDF), [interfaces](manual/interfaces.md),
+[outputs](manual/outputs.md) (Markdown, HTML and PDF), [interfaces](manual/interfaces.md),
 a [complete worked example](manual/worked-example.md) and
 [limitations and troubleshooting](manual/troubleshooting.md).
 
