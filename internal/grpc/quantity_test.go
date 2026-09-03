@@ -543,6 +543,22 @@ package Imperial {
 			t.Errorf("%s, sent without unit text, = %s, want %s", tc.name, got, tc.want)
 		}
 	}
+	// A scaled ratio sent nameless names no dimension-one unit: it scales what it
+	// multiplies and cancels to a number, as an unnamed ratio does locally.
+	hundredth := unnamed(&pb.UnitTerm{ScaleNum: 1, ScaleDen: 100})
+	if got := describeQuantity(evaluate("Q::Area", hundredth, metre)); got != "4 [(1/100)*m] = 1/100·SI::metre" {
+		t.Errorf("a nameless hundredth * m = %s, want 4 [(1/100)*m] = 1/100·SI::metre", got)
+	}
+	resp, err := srv.EvaluateCalc(context.Background(), &pb.EvaluateCalcRequest{
+		ModelHash: hash, SymbolId: "Q::Area",
+		Arguments: []*pb.Value{{Kind: &pb.Value_Quantity{Quantity: hundredth}}, {Kind: &pb.Value_Quantity{Quantity: hundredth}}},
+	})
+	if err != nil || resp.Error != "" {
+		t.Fatalf("EvaluateCalc Q::Area over nameless hundredths: %v %q", err, resp.GetError())
+	}
+	if real, ok := resp.Result.GetKind().(*pb.Value_RealValue); !ok || real.RealValue != 0.0004 {
+		t.Errorf("a nameless hundredth squared = %v, want the number 0.0004", resp.Result)
+	}
 }
 
 // TestQuantityFromWireRejectsUnitTextItsReductionContradicts pins that a unit

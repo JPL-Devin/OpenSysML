@@ -648,10 +648,10 @@ func baseUnitNamespaces(term semantics.UnitTerm) []string {
 }
 
 // unnamedUnitProduct is the unit of a quantity sent under no text: its base units
-// at scale one, else the reduction as one opaque unit; a bare number names nothing.
+// at scale one, else the reduction as one opaque unit that names no dimension-one unit.
 func unnamedUnitProduct(term semantics.UnitTerm) semantics.UnitProduct {
 	if !sameScale(term.Scale, semantics.UnitScale(1)) {
-		return semantics.NamedUnitProduct(nil, term.String(), term.Dimensionless())
+		return semantics.NamedUnitProduct(nil, term.String(), false)
 	}
 	product := semantics.UnitProduct{}
 	for _, f := range term.Factors {
