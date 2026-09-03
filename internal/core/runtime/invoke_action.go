@@ -61,10 +61,8 @@ func nestedInvocation(usage *ast.Usage) (actionInvocation, bool) {
 }
 
 // invokeAction runs the action named by inv to completion as a sub-execution of
-// the caller, and returns the values its features ended with — the pins of the
-// node performing it — and, among them, those of its output parameters. The
-// performed action runs as self, the object performing the caller, so what it
-// accepts and sends carries that object's identity.
+// the caller, performed by self, and returns the values its features ended with
+// and, among them, those of its output parameters.
 //
 // The callee gets a fresh executor with its own tokens, so values cross the
 // boundary only through parameters: pins, the values of the parameters the

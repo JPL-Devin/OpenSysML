@@ -119,11 +119,8 @@ func (h *stateStmtHost) effect(s lower.Effect) error {
 	return fmt.Errorf("%s: '%s' in a body is not executable", h.describe(), s.Kind)
 }
 
-// performNode runs a nested action declared in a block of the body in a frame of
-// the body. One naming an action performs it with the pins it declares; the
-// callee's final features become the node's, and its outputs come back to the
-// same-named block local, state attribute or state datum that exists, as they
-// do to an enclosing action's features.
+// performNode runs a nested action of a block in a frame of the body; a typed one
+// performs its callee, whose final features become the node's pins.
 func (h *stateStmtHost) performNode(engine *stmtEngine, graph *lower.ActionGraph, node *ast.Usage) (stmtFlow, error) {
 	inv, performs := nestedInvocation(node)
 	if !performs {
