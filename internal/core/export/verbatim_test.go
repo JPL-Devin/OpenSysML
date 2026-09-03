@@ -175,6 +175,31 @@ func TestStoredExpressionThatDisagreesWithTheGraphIsRebuilt(t *testing.T) {
 	}
 }
 
+// A string literal's sysml:value is the string itself, not its notation: editing
+// it to one with quotes, backslashes and line breaks, the stale stored text left
+// in place, writes a literal that reads back as the edited value.
+func TestEditedStringValueIsWrittenEscaped(t *testing.T) {
+	src := `package P {
+    attribute s = "plain";
+}
+`
+	first := graphOf(t, src)
+	if !strings.Contains(first, `sysml:value "plain" .`) {
+		t.Fatalf("graph does not carry the string's value\n%s", first)
+	}
+	edited := strings.Replace(first, `sysml:value "plain" .`,
+		"sysml:value \"\"\"say \\\"hi\\\"\\\\\ttab\nnext\"\"\" .", 1)
+	back := toNotation(t, []byte(edited))
+	want := `attribute s = "say \"hi\"\\\ttab\nnext";`
+	if !strings.Contains(back, want) {
+		t.Fatalf("edited value was not written as a valid escaped literal\nwant %s\n%s", want, back)
+	}
+	again := graphOf(t, back)
+	if !strings.Contains(again, "sysml:value \"\"\"say \\\"hi\\\"\\\\\ttab\nnext\"\"\" .") {
+		t.Errorf("written literal does not read back as the edited value\n%s", again)
+	}
+}
+
 // The order in which a Turtle document lists the objects of one property states
 // nothing, so listing an expression's operands the other way round keeps the
 // stored text: sysx:argumentIndex carries their order.

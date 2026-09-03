@@ -340,7 +340,8 @@ expr:IrregularLayout__Rover__label_pvalue
     a sysml:LiteralString ;
     sysx:sourceText "\"two\\nlines\"" ;
     sysml:elementId "IrregularLayout__Rover__label_pvalue" ;
-    sysml:value "two\\nlines" .
+    sysml:value """two
+lines""" .
 
 elmt:IrregularLayout__Rover__tabbed
     a sysml:AttributeUsage ;

@@ -1199,6 +1199,35 @@ func unquote(text string) string {
 	return text
 }
 
+// stringLiteral spells a string value as a STRING_VALUE token, with the
+// escapes KerML §8.2.2 defines, so it reads back as the same value.
+func stringLiteral(value string) string {
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range value {
+		switch r {
+		case '"':
+			b.WriteString(`\"`)
+		case '\\':
+			b.WriteString(`\\`)
+		case '\b':
+			b.WriteString(`\b`)
+		case '\t':
+			b.WriteString(`\t`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\f':
+			b.WriteString(`\f`)
+		case '\r':
+			b.WriteString(`\r`)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}
+
 // commentBody strips the /* */ delimiters from a comment token, leaving the
 // text the printer re-wraps.
 func commentBody(raw string) string {

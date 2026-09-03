@@ -350,6 +350,12 @@ The rules the tree follows:
   did before.
 - **Operands are ordered** by `sysx:argumentIndex`, because an RDF graph is a set
   and `a - b` is not `b - a`.
+- **A `LiteralString` holds the string it evaluates to** as `sysml:value`, not
+  its notation: `"two\nlines"` in notation is a value with a line break in it.
+  Written back from the graph, the value is spelled as a `STRING_VALUE` token
+  with the escapes KerML §8.2.2 defines (`\"`, `\\`, `\b`, `\t`, `\n`, `\f`,
+  `\r`), so a value edited in the graph — quotes, backslashes, line breaks and
+  all — reads back as that value.
 - **Metaclasses are the standard ones** where the metamodel names them:
   `LiteralBoolean`, `LiteralInteger`, `LiteralRational`, `LiteralString`,
   `LiteralInfinity`, `NullExpression`, `FeatureReferenceExpression`,
