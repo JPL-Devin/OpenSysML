@@ -161,14 +161,17 @@ func (ctx *Context) startClassifierBehaviors(inst *Instance, mark int) error {
 func (ctx *Context) startClassifierBehaviorsOf(objects []*Instance, mark int) error {
 	attached := len(ctx.objectBehaviors)
 	if err := ctx.startBehaviorsOfAll(objects); err != nil {
-		// A creation that failed leaves nothing behind: neither the objects its
-		// behaviors materialized nor any behavior of theirs survives into the next,
-		// unrelated command.
-		ctx.forgetBehaviorsFrom(attached)
-		ctx.abandonInstancesSince(mark)
+		ctx.abandonCreationSince(mark, attached)
 		return err
 	}
 	return nil
+}
+
+// abandonCreationSince undoes a creation that failed: neither the objects it
+// registered after mark nor the behaviors attached after attached survive it.
+func (ctx *Context) abandonCreationSince(mark, attached int) {
+	ctx.forgetBehaviorsFrom(attached)
+	ctx.abandonInstancesSince(mark)
 }
 
 // abandonInstancesSince removes objects registered after mark, which a failed

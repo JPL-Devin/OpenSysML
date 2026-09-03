@@ -435,6 +435,50 @@ func TestObjectIDsStableAcrossCarryover(t *testing.T) {
 		fmt.Sprintf("%s (ID: %d, displaced from Garage::car)", id, car.ID))
 }
 
+// Each object is carried over on its own, so a change can drop the one named
+// while a displaced one, which never selected what changed, survives; %instances
+// then lists the survivor by its id rather than reporting an empty session.
+func TestInstancesListsADisplacedObjectThatAloneSurvived(t *testing.T) {
+	s := submitted(t, `package Demo {
+	part def Engine { attribute size = 1.0; }
+	abstract part family {
+		variation part engine : Engine {
+			variant part electric : Engine;
+			variant part petrol : Engine;
+		}
+	}
+	part sedan :> family { part :>> engine = engine::electric; }
+}`)
+	run(t, s, "%instantiate sedan")
+	first := s.instances["Demo::sedan"]
+	run(t, s, "%instantiate sedan")
+	second := s.instances["Demo::sedan"]
+	wants(t, run(t, s, "%features sedan"), "engine = electric")
+
+	res := s.Submit(`package Demo {
+	abstract part family {
+		variation part engine : Engine {
+			variant part electric : Engine { attribute :>> size = 3.0; }
+			variant part petrol : Engine;
+		}
+	}
+}`)
+	if errs := errorDiagnostics(res.Diagnostics); len(errs) > 0 {
+		t.Fatalf("declaration has errors: %v", errs)
+	}
+	wants(t, strings.Join(res.Notices, "\n"), "1 instance was dropped")
+	if _, named := s.instances["Demo::sedan"]; named {
+		t.Fatalf("the object that selected the changed variant, #%d, was carried over", second.ID)
+	}
+	id := fmt.Sprintf("#%d", first.ID)
+	listing := run(t, s, "%instances")
+	wants(t, listing, "Instances:",
+		fmt.Sprintf("%s (ID: %d, displaced from Demo::sedan)", id, first.ID),
+		"(1 instance was also dropped when the declarations changed at submission 2 — re-run %instantiate)")
+	rejects(t, listing, "no instances created", fmt.Sprintf("ID: %d)", second.ID))
+	wants(t, run(t, s, "%features "+id), fmt.Sprintf("Instance: %s (ID: %d)", id, first.ID), "engine = electric", "size = 3.0")
+}
+
 // Where a command takes an object, completion offers the ids the session holds
 // and walks a typed reference into the object-holding features of the object
 // it names, an element of a multi-valued one picked by index; elsewhere names

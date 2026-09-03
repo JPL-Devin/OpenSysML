@@ -244,6 +244,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("feature_chain_spends_the_element_budget", testFeatureChainSpendsTheElementBudget)
 	t.Run("mutually_subsetting_features", testMutuallySubsettingFeatures)
 	t.Run("unattachable_connector_end", testUnattachableConnectorEnd)
+	t.Run("unattachable_connector_leaves_no_behavior", testUnattachableConnectorLeavesNoBehavior)
 	t.Run("multiplicity_on_a_connector", testMultiplicityOnAConnector)
 	t.Run("connector_attached_to_itself", testConnectorAttachedToItself)
 	t.Run("mutually_attached_connectors", testMutuallyAttachedConnectors)

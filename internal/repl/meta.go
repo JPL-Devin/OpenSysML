@@ -1292,9 +1292,9 @@ func featureVerdict(ctx *runtime.Context, feat *runtime.EffectiveFeature, inst *
 	}
 }
 
-// doInstances lists all instantiated objects.
+// doInstances lists the objects the session holds, named and displaced alike.
 func (s *Session) doInstances() ([]string, bool, error) {
-	if len(s.instances) == 0 {
+	if s.heldObjects() == 0 {
 		if note := s.lost.goneNote(); note != "" {
 			return []string{note}, false, nil
 		}

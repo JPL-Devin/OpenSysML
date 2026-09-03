@@ -356,6 +356,47 @@ func testUnattachableConnectorEnd(t *testing.T) {
 	}
 }
 
+// testUnattachableConnectorLeavesNoBehavior: a connector that cannot be attached
+// runs nothing either — the behaviors its type binds, started when the connector
+// was created, go with it, so a later run drains only surviving objects' work.
+func testUnattachableConnectorLeavesNoBehavior(t *testing.T) {
+	inst, ctx := instantiatePart(t, "Sys", `
+		package test {
+			port def P;
+			part def A { port p : P; }
+			connection def Link {
+				attribute n : Integer = 0;
+				exhibit state life { entry; then up; state up { entry action bump { assign n := 1; } } }
+			}
+			part def Sys {
+				part a : A;
+				connection link : Link connect a.p to a.missing;
+				connection ok : Link connect a.p to a.p;
+			}
+		}
+	`)
+	if _, err := inst.GetFeatureValue(ctx, "link"); !errors.Is(err, ErrConnectorEnd) {
+		t.Fatalf("expected ErrConnectorEnd, got: %v", err)
+	}
+	if got := len(ctx.objectBehaviors); got != 0 {
+		t.Errorf("%d behavior(s) left attached by the connector that could not be attached", got)
+	}
+	if got := len(ctx.pendingBehaviors); got != 0 {
+		t.Errorf("%d behavior(s) left queued by the connector that could not be attached", got)
+	}
+
+	ok := fvInstance(t, ctx, inst, "ok")
+	if got := len(ctx.objectBehaviors); got != 1 {
+		t.Errorf("%d behavior(s) attached, want the attached connector's alone", got)
+	}
+	if _, running := ok.ExhibitedState(); !running {
+		t.Error("the connector that attached exhibits no machine")
+	}
+	if got := featureInt(t, ctx, ok, "n"); got != 1 {
+		t.Errorf("n = %d, want 1 once the connector's machine entered up", got)
+	}
+}
+
 // testMultiplicityOnAConnector: a connector usage holding more than one
 // connector is not one connection, so there is no set of ends to attach — that
 // is reported rather than filled with objects of the connector's type.
