@@ -102,13 +102,16 @@ func (ec *EvalContext) nestedEnv(scope *symbols.Scope) *EvalContext {
 }
 
 // closure snapshots the environment for an expression evaluated later; bindings
-// are copied since an invocation's frame storage is reused once it returns.
+// are copied since an invocation's frame storage is reused once it returns, and
+// the calc evaluation whose outputs it may name is detached from that storage.
 func (ec *EvalContext) closure() *EvalContext {
 	frames := make([]frame, len(ec.frames))
 	for i, f := range ec.frames {
 		frames[i] = f.snapshot()
 	}
-	return ec.over(ec.scope, frames)
+	out := ec.over(ec.scope, frames)
+	out.calcRun = ec.calcRun.detached()
+	return out
 }
 
 // over is this environment resolving names in scope over frames of its own.

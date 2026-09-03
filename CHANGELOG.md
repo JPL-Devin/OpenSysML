@@ -136,7 +136,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   passed on through an `expr` parameter (`Keep(xs, { in x; x > threshold })` with `Keep`
   doing `xs->select pred`) is applied in the scope it was written in, so it reads its writer's
   `threshold`, and one a control function selects is applied rather than answered as a body;
-  a body a calc returns keeps the parameter it closes over after that calc has returned.
+  a body a calc returns keeps the parameter it closes over after that calc has returned, and
+  one that names an output of that calc (`out threshold = n; out pred : expr = { in x; x >
+  threshold }; bind result = pred;`, or a usage nested in its body) still works it out from
+  the invocation's own parameters once the frame that invocation ran in has been reused.
   A nonzero Real notation too small for a Real (`1e-400`, as a literal or through `ToReal`)
   is an overflow error rather than `0.0`, and only decimal notation is a Real at all (`NaN`,
   `Inf` and a hexadecimal float are invalid notation wherever a Real is read, a compiled
