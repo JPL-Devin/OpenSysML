@@ -1160,6 +1160,7 @@ elmt:ThenAfterMembers__AfterFirstStart___402
     sysml:owningMembership elmt:ThenAfterMembers__AfterFirstStart___402_om ;
     sysx:endForm "then" ;
     sysml:sourceFeature "start" ;
+    sysx:sourceMember elmt:ThenAfterMembers__AfterFirstStart___400 ;
     sysml:targetFeature elmt:ThenAfterMembers__AfterFirstStart__a ;
     sysx:sourceText "" .
 

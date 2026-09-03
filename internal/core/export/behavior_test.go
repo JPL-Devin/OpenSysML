@@ -282,45 +282,52 @@ func TestThenSequencesFromTheNameAnUnnamedUsageAnswersTo(t *testing.T) {
 	}
 }
 
-// A written end that is only a name is read in the succession's body: where that
-// body declares a member of the name, a linked member of another body that
-// happens to share it is not the end, so a `then` beside it is refused rather
-// than folded there — and folds beside the body's own member when that is adjacent.
-func TestANamedEndIsNotFoldedBesideASameNamedLinkedMember(t *testing.T) {
-	const linked, named = "sysml:sourceFeature elmt:P__A__walk", `sysml:sourceFeature "walk"`
-	graphOf := func(t *testing.T, src string) []byte {
-		turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
-		if err != nil {
-			t.Fatalf("to turtle: %v", err)
-		}
-		if strings.Count(string(turtle), linked) != 1 {
-			t.Fatalf("the succession should state its source once as %s:\n%s", linked, turtle)
-		}
-		graph := withoutTriples(t, turtle, "sysx:sourceText")
-		return []byte(strings.Replace(string(graph), linked, named, 1))
+// A source end that is only a name is no member of the body: a `then` whose
+// graph names its source so is not folded beside a linked neighbour that merely
+// declares the name, since another member may be what the name reaches. The
+// encoder states such a source by position too, so its own graphs come back.
+func TestANameOnlySourceIsNotFoldedBesideASameNamedLinkedMember(t *testing.T) {
+	const positional = "sysx:sourceMember elmt:P__A___401"
+	src := "package P {\n    action def Step;\n    action def Base {\n        action walk : Step;\n    }\n" +
+		"    action def A specializes Base {\n        action walk : Step;\n        action redefines Base::walk;\n        then action b : Step;\n    }\n}\n"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
 	}
-	head := "package P {\n    action def Step;\n    action def Base {\n        action walk : Step;\n    }\n    action def A specializes Base {\n"
-	t.Run("beside the linked member", func(t *testing.T) {
-		graph := graphOf(t, head+"        action walk : Step;\n        action redefines Base::walk;\n        then action b : Step;\n    }\n}\n")
-		_, err := export.Convert("m.ttl", graph, export.FormatTurtle, export.FormatSysML)
-		var unsupported *export.UnsupportedError
-		if !errors.As(err, &unsupported) {
-			t.Fatalf("want an UnsupportedError, got %v", err)
-		}
-		if !strings.Contains(err.Error(), "sequences from the member written before the member it introduces") {
-			t.Errorf("the refusal should say which order the graph states: %v", err)
-		}
-	})
-	t.Run("beside the body's own member", func(t *testing.T) {
-		src := head + "        action redefines walk;\n        action walk : Step;\n        then action b : Step;\n    }\n}\n"
-		back, err := export.Convert("m.ttl", graphOf(t, src), export.FormatTurtle, export.FormatSysML)
-		if err != nil {
-			t.Fatalf("back to notation: %v", err)
-		}
-		if string(back) != src {
-			t.Fatalf("the notation changed\n--- want ---\n%s\n--- got ---\n%s", src, back)
-		}
-	})
+	// The parser names the source after the redefinition, and that name reaches
+	// the body's own walk, so it is linked to that member and no position is stated.
+	if !strings.Contains(string(turtle), "sysml:sourceFeature elmt:P__A__walk") || strings.Contains(string(turtle), positional) {
+		t.Fatalf("the source should link the body's own walk by name alone:\n%s", turtle)
+	}
+	edited := strings.Replace(string(withoutTriples(t, turtle, "sysx:sourceText")),
+		"sysml:sourceFeature elmt:P__A__walk", `sysml:sourceFeature "walk"`, 1)
+	_, err = export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML)
+	var unsupported *export.UnsupportedError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("want an UnsupportedError for a name-only source beside a linked member, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "sequences from the member written before the member it introduces") {
+		t.Errorf("the refusal should say which order the graph states: %v", err)
+	}
+
+	// Without a member of the name in the body the name links nothing, and the
+	// encoder states the member before the `then` by position instead.
+	own := "package P {\n    action def Step;\n    action def Base {\n        action walk : Step;\n    }\n" +
+		"    action def A specializes Base {\n        action w : Step;\n        action redefines walk;\n        then action b : Step;\n    }\n}\n"
+	turtle, err = export.Convert("m.sysml", []byte(own), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	if !strings.Contains(string(turtle), `sysml:sourceFeature "walk"`) || !strings.Contains(string(turtle), positional) {
+		t.Fatalf("the source should be the name and the member's position:\n%s", turtle)
+	}
+	back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	if string(back) != own {
+		t.Fatalf("the notation changed\n--- want ---\n%s\n--- got ---\n%s", own, back)
+	}
 }
 
 // A `then` folded into the member it introduces sequences from one member only,

@@ -426,7 +426,15 @@ func (e *encoder) edgeEnds(subject rdf.Term, node ast.Node, owner string, src, t
 			e.graph.Add(subject, e.sysx(end.member), e.ids.subjectForNode(end.end.member, fqn))
 			continue
 		}
-		e.graph.Add(subject, e.sysml(end.feature), e.linkEndpoint(owner, end.end.name))
+		term := e.linkEndpoint(owner, end.end.name)
+		e.graph.Add(subject, e.sysml(end.feature), term)
+		// A name the parser took from the member before that links no element
+		// still binds that member: the graph states it by position as well.
+		if before, ok := e.preceding[node]; ok && end.end.implied && term.IsLiteral() {
+			if fqn, ok := e.fqn[before]; ok {
+				e.graph.Add(subject, e.sysx(end.member), e.ids.subjectForNode(before, fqn))
+			}
+		}
 	}
 	return nil
 }
@@ -910,36 +918,7 @@ func (d *decoder) sequencesTo(el, to *element) bool {
 		return false
 	}
 	answers, ok := d.answersTo(to)
-	return ok && d.sameEnd(el, target, answers)
-}
-
-// sameEnd reports whether two ends of the succession el name one member: the
-// same term, or a name and its linked declarer when no member of el's body shadows it.
-func (d *decoder) sameEnd(el *element, a, b rdf.Term) bool {
-	if a.Equal(b) {
-		return true
-	}
-	if a.IsLiteral() == b.IsLiteral() {
-		return false
-	}
-	name, link := a, b
-	if !name.IsLiteral() {
-		name, link = b, a
-	}
-	target, err := d.referencedElement(link.Value)
-	if err != nil {
-		return false
-	}
-	declared, ok := d.stringOf(target, rdf.SysML+pDeclaredName)
-	if !ok || declared != name.Value {
-		return false
-	}
-	if el.owner != nil {
-		if sibling := d.memberNamed(el.owner, name.Value); sibling != nil && sibling != target {
-			return false
-		}
-	}
-	return true
+	return ok && target.Equal(answers)
 }
 
 // sourceEnd returns the end a succession sequences from, by position or by the
@@ -954,12 +933,18 @@ func (d *decoder) sourceEnd(el *element) (rdf.Term, bool) {
 // sequencesFrom reports whether the source end el states is the one a `then`
 // written after from records.
 func (d *decoder) sequencesFrom(el, from *element) bool {
-	source, states := d.sourceEnd(el)
-	if !states {
+	if from == nil {
+		return false
+	}
+	if term, positional := d.graph.Object(rdf.IRI(el.iri), rdf.OpenSysML+xSourceMember); positional {
+		return term.Value == from.iri
+	}
+	source, ok := d.graph.Object(rdf.IRI(el.iri), rdf.SysML+pSourceFeature)
+	if !ok {
 		return false
 	}
 	answers, ok := d.answersTo(from)
-	return ok && d.sameEnd(el, source, answers)
+	return ok && source.Equal(answers)
 }
 
 // impliedSource checks a `then <target>`, whose source end is the member before
