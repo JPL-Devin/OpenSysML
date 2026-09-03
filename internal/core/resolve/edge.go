@@ -19,7 +19,7 @@ func (r *Resolver) resolveControlFlowEdge(scope *symbols.Scope, edge *ast.Contro
 	r.resolveEdgeEnd(scope, edge.Target, edge.TargetMember, edge.TargetImplied)
 }
 
-// resolveEdgeEnd resolves an end the author named. An end bound to a member by
+// resolveEdgeEnd resolves an edge or initial-node end the author named. An end bound to a member by
 // position, or one the notation supplied from the member beside the keyword,
 // names nothing an author could misspell: lowering reads that member itself.
 func (r *Resolver) resolveEdgeEnd(scope *symbols.Scope, qn *ast.QualifiedName, member ast.Node, implied bool) {

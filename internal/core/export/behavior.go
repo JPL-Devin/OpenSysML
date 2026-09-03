@@ -90,7 +90,7 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 		}
 		e.expression(subject, e.sysx(xGuard), xGuard, owner, n.Guard)
 		if qualifiedText(n.Successor) != "" {
-			e.graph.Add(subject, e.sysml(pTargetFeature), e.reference(n.Successor))
+			e.graph.Add(subject, e.sysml(pTargetFeature), e.edgeReference(n.Successor))
 		} else if n.Guard != nil {
 			return true, &UnsupportedError{
 				What: fmt.Sprintf("the guarded initial node at %s", e.where(n)),

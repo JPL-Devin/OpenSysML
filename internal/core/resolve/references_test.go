@@ -353,6 +353,64 @@ func TestAnInitialReferenceReachesALaterDeclaration(t *testing.T) {
 	}
 }
 
+// A state machine's initial successor is a transition endpoint, reaching a nested
+// state or one in a sibling region; an action body's is an ordinary member name.
+func TestAnInitialSuccessorInAMachineIsAnEndpoint(t *testing.T) {
+	const src = `package P {
+	state def M {
+		first start then nested;
+		state outer {
+			state nested;
+		}
+	}
+	state def Q parallel {
+		state a {
+			state a1;
+		}
+		state b {
+			first start then a1;
+		}
+	}
+	action def A {
+		first start then step;
+		action step;
+	}
+}`
+	walk, root, rootScope := resolvedDoc(t, src)
+	if len(walk.Diagnostics) != 0 {
+		t.Fatalf("the document walk must resolve every successor: %v", walk.Diagnostics)
+	}
+	want := map[string]bool{"nested": true, "a1": true, "step": false}
+	seen := map[string]bool{}
+	for _, ref := range resolve.References(root, rootScope) {
+		name := nameText(ref.QN)
+		endpoint, wanted := want[name]
+		if !wanted {
+			continue
+		}
+		seen[name] = true
+		if ref.Endpoint != endpoint {
+			t.Errorf("`then %s` collected with Endpoint=%v, want %v", name, ref.Endpoint, endpoint)
+		}
+		sym, ok := walk.ResolveReference(ref)
+		if !ok {
+			t.Errorf("`then %s` does not resolve on its own", name)
+			continue
+		}
+		if walked, ok := walk.EndSymbol(ref.QN); endpoint && (!ok || walked != sym) {
+			t.Errorf("`then %s` is not what the document walk bound as an endpoint", name)
+		}
+		if walked, ok := walk.PartSymbol(ref.QN, 0); !endpoint && (!ok || walked != sym) {
+			t.Errorf("`then %s` is not what the document walk bound as a member", name)
+		}
+	}
+	for name := range want {
+		if !seen[name] {
+			t.Errorf("`then %s` was not collected", name)
+		}
+	}
+}
+
 // resolvedDoc parses and resolves src the way the workspace does, with the model
 // attached before the walk.
 func resolvedDoc(t *testing.T, src string) (*resolve.Resolver, *ast.RootNamespace, *symbols.Scope) {

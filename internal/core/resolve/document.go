@@ -242,9 +242,7 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		return true
 	case *ast.InitialNode:
 		r.resolveInitial(scope, d)
-		if d.Successor != nil {
-			r.ResolveQualified(scope, d.Successor)
-		}
+		r.resolveEdgeEnd(scope, d.Successor, nil, false)
 		r.resolveExpr(scope, d.Guard)
 		if child := r.childScope(scope, d); child != nil {
 			r.walkMembers(child, d.Members)

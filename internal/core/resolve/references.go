@@ -260,7 +260,7 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		return true
 	case *ast.InitialNode:
 		// The node's own name is a label, not a reference.
-		c.add(scope, d.Successor)
+		c.edgeEnd(scope, d.Successor, nil, false)
 		c.expr(scope, d.Guard)
 		if child := c.childScope(scope, d); child != nil {
 			c.walkMembers(child, d.Members)
@@ -347,7 +347,7 @@ func (c *refCollector) behaviorDecl(scope *symbols.Scope, decl ast.Node) bool {
 		c.walkMembers(members, d.Members)
 		return true
 	case *ast.InitialNode:
-		c.add(scope, d.Successor)
+		c.edgeEnd(scope, d.Successor, nil, false)
 		c.expr(scope, d.Guard)
 		if child := c.childScope(scope, d); child != nil {
 			c.walkMembers(child, d.Members)
