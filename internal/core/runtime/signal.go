@@ -42,8 +42,9 @@ type Message struct {
 	Signal *symbols.Symbol
 	// Event is the feature the message was sent from (`send shutDown to x`), nil
 	// where none or unresolved; EventName is its written name, the fallback then.
-	// EventObject is the occurrence that feature held when sent, 0 for none: two
-	// parts of one type hold their own occurrences of the one declared event.
+	// EventObject is the occurrence that feature held when sent, or the object
+	// performing a behavioral feature (`send alert()`), 0 for none: two parts of
+	// one type hold their own occurrences of the one declared event.
 	Event       *symbols.Symbol
 	EventName   string
 	EventObject int64
@@ -810,10 +811,15 @@ func isPortFeature(feature *EffectiveFeature) bool {
 // isBehaviorFeature reports whether a feature is a behavior an object performs,
 // which receives by name rather than being an object of its own.
 func isBehaviorFeature(feature *EffectiveFeature) bool {
-	if feature == nil || feature.Symbol == nil {
+	return feature != nil && isBehaviorSymbol(feature.Symbol)
+}
+
+// isBehaviorSymbol reports whether sym declares a behavior an object performs.
+func isBehaviorSymbol(sym *symbols.Symbol) bool {
+	if sym == nil {
 		return false
 	}
-	switch feature.Symbol.Kind {
+	switch sym.Kind {
 	case symbols.SymbolActionUsage, symbols.SymbolStateUsage:
 		return true
 	}
@@ -852,8 +858,25 @@ func (ec *EvalContext) carriesEvent(m Message, subsets ast.Node) bool {
 	if m.EventObject == 0 {
 		return true
 	}
+	occurrence, ok := ec.eventOccurrence(subsets, want)
+	return ok && occurrence == m.EventObject
+}
+
+// eventOccurrence is the occurrence an accept's event path names in ec: what the
+// feature holds, or the object performing a behavioral feature (`left.alert`, `alert`).
+func (ec *EvalContext) eventOccurrence(subsets ast.Node, event *symbols.Symbol) (int64, bool) {
+	if isBehaviorSymbol(event) {
+		chain, ok := subsets.(*ast.FeatureChainExpr)
+		if !ok {
+			return objectID(ec.self), ec.self != nil
+		}
+		subsets = chain.Operand
+	}
 	value, err := ec.eval(subsets)
-	return err == nil && value.Kind == ValInstance && value.Instance == m.EventObject
+	if err != nil || value.Kind != ValInstance {
+		return 0, false
+	}
+	return value.Instance, true
 }
 
 // lastSegment is the feature a dotted path ends at.
@@ -925,6 +948,9 @@ func (e *EvalContext) buildMessage(scope *symbols.Scope, send lower.Send) (Messa
 			return Message{}, err
 		}
 		msg.Event, msg.EventName = e.sentFeature(scope, invocation.Type)
+		if isBehaviorSymbol(msg.Event) {
+			msg.EventObject = objectID(e.self)
+		}
 		return msg, nil
 	}
 

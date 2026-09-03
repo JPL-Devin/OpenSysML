@@ -1,0 +1,8 @@
+{
+	"type": "instance",
+	"instantiate": "test::Group",
+	"slots": {
+		"left.heard": {"type": "Integer", "value": 1},
+		"right.heard": {"type": "Integer", "value": 0}
+	}
+}
