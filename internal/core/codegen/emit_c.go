@@ -289,31 +289,44 @@ static sysml_int sysml_parse_int(const char *s, const char *name) {
 	return v;
 }
 
-/* Whether the significand of s has a nonzero digit, so a zero it parsed to is an underflow. */
-static bool sysml_nonzero_notation(const char *s) {
+/* Whether s is decimal Real notation: optional sign, digits with an optional fraction, optional decimal exponent. */
+static bool sysml_real_notation(const char *s) {
 	if (*s == '+' || *s == '-') s++;
-	bool hex = s[0] == '0' && (s[1] == 'x' || s[1] == 'X');
-	if (hex) s += 2;
-	for (; *s; s++) {
-		if (*s == (hex ? 'p' : 'e') || *s == (hex ? 'P' : 'E')) return false;
+	int digits = 0;
+	for (; *s >= '0' && *s <= '9'; s++) digits++;
+	if (*s == '.') {
+		s++;
+		for (; *s >= '0' && *s <= '9'; s++) digits++;
+	}
+	if (digits == 0) return false;
+	if (*s == 'e' || *s == 'E') {
+		s++;
+		if (*s == '+' || *s == '-') s++;
+		int exponent = 0;
+		for (; *s >= '0' && *s <= '9'; s++) exponent++;
+		if (exponent == 0) return false;
+	}
+	return *s == 0;
+}
+
+/* Whether the significand of decimal notation s has a nonzero digit, so a zero it parsed to is an underflow. */
+static bool sysml_nonzero_notation(const char *s) {
+	for (; *s && *s != 'e' && *s != 'E'; s++) {
 		if (*s >= '1' && *s <= '9') return true;
-		if (hex && ((*s >= 'a' && *s <= 'f') || (*s >= 'A' && *s <= 'F'))) return true;
 	}
 	return false;
 }
 
 static sysml_real sysml_parse_real(const char *s, const char *name) {
-	char *end;
+	if (!sysml_real_notation(s)) {
+		fprintf(stderr, "argument %s: %s is not a finite Real in decimal notation\n", name, s);
+		exit(2);
+	}
 	errno = 0;
-	double v = strtod(s, &end);
-	bool notation = *s != 0 && *end == 0;
-	if (notation && ((isinf(v) && errno == ERANGE) || (v == 0 && sysml_nonzero_notation(s)))) {
+	double v = strtod(s, NULL);
+	if ((isinf(v) && errno == ERANGE) || (v == 0 && sysml_nonzero_notation(s))) {
 		fprintf(stderr, "argument %s: arithmetic overflow: %s is outside the Real range\n", name, s);
 		exit(1);
-	}
-	if (!notation || !isfinite(v)) {
-		fprintf(stderr, "argument %s: %s is not a finite Real\n", name, s);
-		exit(2);
 	}
 	return v;
 }

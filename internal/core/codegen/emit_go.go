@@ -251,30 +251,59 @@ func sysmlParseInt(s, name string) int64 {
 }
 
 func sysmlParseReal(s, name string) float64 {
+	if !sysmlRealNotation(s) {
+		fmt.Fprintf(os.Stderr, "argument %s: %s is not a finite Real in decimal notation\n", name, s)
+		os.Exit(2)
+	}
 	v, err := strconv.ParseFloat(s, 64)
-	if errors.Is(err, strconv.ErrRange) || err == nil && v == 0 && sysmlNonzeroNotation(s) {
+	if err != nil || v == 0 && sysmlNonzeroNotation(s) {
 		fmt.Fprintf(os.Stderr, "argument %s: arithmetic overflow: %s is outside the Real range\n", name, s)
 		os.Exit(1)
-	}
-	if err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
-		fmt.Fprintf(os.Stderr, "argument %s: %s is not a finite Real\n", name, s)
-		os.Exit(2)
 	}
 	return v
 }
 
-// sysmlNonzeroNotation reports whether the significand of s has a nonzero
-// digit, so a zero it parsed to is an underflow.
-func sysmlNonzeroNotation(s string) bool {
-	s = strings.ToLower(strings.TrimLeft(s, "+-"))
-	significand, digits := s, "123456789"
-	if strings.HasPrefix(s, "0x") {
-		significand, _, _ = strings.Cut(s[2:], "p")
-		digits += "abcdef"
-	} else {
-		significand, _, _ = strings.Cut(s, "e")
+// sysmlRealNotation reports whether s is decimal Real notation: an optional
+// sign, digits with an optional fraction, and an optional decimal exponent.
+func sysmlRealNotation(s string) bool {
+	i := 0
+	if i < len(s) && (s[i] == '+' || s[i] == '-') {
+		i++
 	}
-	return strings.ContainsAny(significand, digits)
+	digits := 0
+	for i < len(s) && '0' <= s[i] && s[i] <= '9' {
+		i, digits = i+1, digits+1
+	}
+	if i < len(s) && s[i] == '.' {
+		i++
+		for i < len(s) && '0' <= s[i] && s[i] <= '9' {
+			i, digits = i+1, digits+1
+		}
+	}
+	if digits == 0 {
+		return false
+	}
+	if i < len(s) && (s[i] == 'e' || s[i] == 'E') {
+		i++
+		if i < len(s) && (s[i] == '+' || s[i] == '-') {
+			i++
+		}
+		exponent := 0
+		for i < len(s) && '0' <= s[i] && s[i] <= '9' {
+			i, exponent = i+1, exponent+1
+		}
+		if exponent == 0 {
+			return false
+		}
+	}
+	return i == len(s)
+}
+
+// sysmlNonzeroNotation reports whether the significand of decimal notation s
+// has a nonzero digit, so a zero it parsed to is an underflow.
+func sysmlNonzeroNotation(s string) bool {
+	significand, _, _ := strings.Cut(strings.ToLower(s), "e")
+	return strings.ContainsAny(significand, "123456789")
 }
 
 func sysmlParseBool(s, name string) bool {

@@ -101,7 +101,8 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   a body a calc returns keeps the parameter it closes over after that calc has returned.
   A nonzero Real notation too small for a Real (`1e-400`, as a literal or through `ToReal`)
   is an overflow error rather than `0.0`, and only decimal notation is a Real at all (`NaN`,
-  `Inf` and a hexadecimal float are invalid notation wherever a Real is read). A `RealFunctions`
+  `Inf` and a hexadecimal float are invalid notation wherever a Real is read, a compiled
+  calculation's command-line arguments included). A `RealFunctions`
   operator form binds an Integer argument as the Real it equals and answers a Real
   (`RealFunctions::'+'(1, 2)` is `3.0`; a product too large for an Integer stays finite), while
   `RationalFunctions` keep an Integer's kind as their `abs`/`max`/`min` do. A direct
