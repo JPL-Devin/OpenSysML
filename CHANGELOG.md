@@ -8,6 +8,18 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Added
 
+- **The Connect + JSON wire contract is written down for clients with no library.** A
+  MATLAB, R, Julia, C or shell program that posts JSON to `sysml-grpc` by hand had only the
+  proto file and two rules on the transports page to decode answers with, and the questions
+  that page leaves open — how long a `modelHash` lives and what a stale one answers, how the
+  eleven arms of `Value` are told apart and which of `unset`, `null` and an absent `result`
+  means what, how a parse diagnostic differs from an in-body `error` and both from a Connect
+  `{"code","message"}`, and what `Instantiate`, the behavior calls, `Verify*`, `Query` and
+  `RunDocumentQuery` answer — are now on
+  [docs/reference/wire-contract.md](docs/reference/wire-contract.md), each with a request and
+  the response captured verbatim from the service, and with a short illustrative decoder in
+  each of the four languages that is explicitly not a shipped client.
+
 - **`%features` reads out a whole object tree, as text or as JSON.** A large run could not
   be read out: the listing stopped at 200 lines with `… (listing truncated)`, so the
   counters two levels under a context of twelve parts were simply absent, and there was no
@@ -95,6 +107,30 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   classed by the construct it names. The mapping's reference now states that measurement in place
   of the claim that a second conversion yields the same graph, which held for the fixtures alone
   ([docs/project/rdf-corpus-roundtrip.md](docs/project/rdf-corpus-roundtrip.md)).
+- **The REPL sends a signal into a running machine.** `%send go` and
+  `%send Dim(level=3+4) to bulb` put the signal on the runtime's message bus exactly as a
+  `send` from an action body would, so a `transition ... accept go then on` is driven from the
+  prompt without writing an action just to fire it: `%events` lists the signal in flight, and
+  `%step` or `%advance` dispatches it. Without `to`, the signal goes to the object whose machine
+  the `%state` session is debugging, and with no session the command says so rather than
+  guessing. Arguments are written `<parameter>=<expression>` as for `%invoke` and are checked
+  against the signal's declaration — the feature it names, and the type and multiplicity that
+  feature admits — before anything is sent; an unresolved signal name gets the usual unresolved-reference
+  report, an object that runs no machine is reported as such, and a signal nothing in the
+  machine's current state accepts is refused up front with the state named, never queued to be
+  dropped in silence — and so is one whose every triggered transition is held back by its guard,
+  decided as the dispatch would decide it with the payload bound; a guard that cannot be evaluated
+  is an error. A signal the current state defers rather than accepts is sent and said to be
+  deferred: the step dispatching it holds it, `%events` lists it as held, and it is recalled to
+  fire once the machine reaches a state that accepts it — as a machine now holds any message
+  addressed to it that its active state defers, instead of leaving it on the bus. A signal in
+  flight is due now, so a single step dispatches it ahead of a timer set
+  for later, as a run holding time where it is would; a step that dispatches a signal no transition
+  fires on, because the state or the data its guards read changed since it was sent, says so.
+  When an object runs several machines, `%send` decides the signal with each of them and reports
+  which would fire on it, and a machine whose guards would drop it leaves it in flight for a
+  sibling that fires on or defers it — at the prompt and in a run alike — so the machine `%send`
+  named as accepting a signal is the one that gets it.
 
 ### Performance
 
@@ -283,6 +319,22 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   document gains a paragraph and diagram on invoking a calc.
 
 ### Fixed
+
+- **Messages cross a binding connector at an assembly's boundary port, in both directions**
+  (Open-MBEE/OpenSysML#92). An assembly that binds its boundary port to a port of a part it
+  holds (`part def Assembly { port bi : ~PP; part child : Inner; bind bi = child.i; }`) used
+  to swallow messages at the boundary: a `send Ping() via o` over a context-level
+  `connect env.o to asm.bi` arrived at `asm.bi` and stayed there, so the inner part's
+  `accept Ping via i` never fired and its counters stayed at 0, with no diagnostic; and a send
+  by the inner part through its own port was reported as reaching no receiving port, although
+  the boundary port it is bound to was connected. A binding connector now makes the two ports
+  one port for message delivery: an accept on either takes a message that reached the other,
+  and a send through either leaves over the connectors joined to the other, through any depth
+  of nested assemblies. Bindings chained through several assemblies also keep every bound port
+  the same object whichever end is read first — a chain used to split when the outer boundary
+  port was materialized before the inner assembly's. A send whose bound boundary port is
+  joined to nothing still reports `send reaches no receiving port` where it was written.
+  Delivery does not depend on the order connectors, bindings and parts are declared.
 
 - **`satisfy … by config.child` is evaluated on the nested object it names.** A satisfaction
   assertion whose `by` operand is a feature chain used to be read as its last name alone:
