@@ -227,6 +227,26 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Fixed
 
+- **`%state <machine>` drives the object that exhibits the machine.** Naming an exhibited
+  machine alone (`%state lp` after `%instantiate TA::Sys`, or `-state lp` on the command line)
+  used to start a detached performance of it, one with no performing object: `%advance` reported
+  the timer events it dispatched, but the `do`, `entry` and `effect` writes of that run went to
+  the detached run's own frame, so `%features #1` still showed the values `%instantiate` had
+  left (`n = 1` for `n = 3`), while `%state #1` over the same object was right. The form now
+  attaches to the running machine of the one held object exhibiting it — the same object
+  `%instances` and `%features #1` show — so the two forms agree. When no held object exhibits
+  the machine, or several do, `%state` refuses with a typed error (`ExhibitorsError`) naming
+  the objects and both forms that address one (`%state <object>`, `%state <machine>
+  <object>`), rather than guessing or performing the machine detached; with no object yet
+  held, it names the types whose objects run the machine, whether they exhibit it inline,
+  through usages typed by a shared definition (`exhibit state front : Blink`), or through a
+  usage referencing another (`state spare : Blink; exhibit state active ::> spare;`): every
+  binding on the way to the body addresses the machine, with the object named or alone. A
+  definition one object exhibits as several usages refuses as it does with the object named.
+  Held objects are the ones the session has built: a nested part counts once it has been
+  reached, by `%features` or a machine that wrote it. A machine no type exhibits (`state def
+  Blink` alone) still starts as before, since no object's performance of it exists to attach to.
+
 - **A qualified name through an import evaluates as the checker resolves it.** The evaluator
   used to resolve only the first segment of `Bq::x` through the resolver and walk the rest as
   owned and inherited members, so a segment a `public import` re-exports failed with
@@ -348,6 +368,21 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   document gains a paragraph and diagram on invoking a calc.
 
 ### Fixed
+
+- **An expression evaluated after `-instantiate` reads the object that was created and run.**
+  `sysml model.sysml -instantiate P::ctx -e "ctx.recv.got"`, the bare line `ctx.recv.got` after
+  `%instantiate P::ctx`, and even `%eval in P::ctx : recv.got` — which printed
+  `(on P::ctx ID: 1)` — answered `0` while `%features #1` showed `got = 1` for that same object:
+  a name in the expression materialized a fresh object of the usage instead of the one
+  `%instantiate` created, and a nested part whose machine sends or accepts a signal ran only
+  once something read it, so what a read saw depended on the order the parts were first
+  inspected in. An instantiated usage now denotes the object created under it, and creating an
+  object materializes and runs the nested parts whose types exhibit or perform behaviors with
+  it, so the whole runs to quiescence once and every later read — a CLI `-e`, a piped
+  expression line, `%eval`, `%eval in` and `%features` — reports the same values.
+  `%eval in` also takes an object the way `%features` and `%state` do: by id (`%eval in #1 :
+  recv.got`) or by a path under a named object (`%eval in ctx.recv : got`), and its usage line
+  lists the forms. (Open-MBEE/OpenSysML#91)
 
 - **Messages cross a binding connector at an assembly's boundary port, in both directions**
   (Open-MBEE/OpenSysML#92). An assembly that binds its boundary port to a port of a part it
