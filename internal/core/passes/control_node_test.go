@@ -886,6 +886,63 @@ func TestControlNodeUnrelatedFaultsKeepDiagnostics(t *testing.T) {
 	}
 }
 
+// A lower-tier fault is a span in the document being checked; an inherited node
+// or succession declared in another document is not gated by it, however its
+// own offsets happen to line up.
+func TestControlNodeOtherDocumentFaultsDoNotGateInheritedNodes(t *testing.T) {
+	const base = `package Gen {
+	action def A {
+		action a; action b;
+		fork forkNode;
+		first a then forkNode;
+		first forkNode then b;
+	}
+}`
+	// alignedTo pads the derived document so unresolved `Missing8` occupies the
+	// same byte range as text in the base document.
+	alignedTo := func(text string) string {
+		offset := strings.Index(base, text)
+		if offset < 0 {
+			t.Fatalf("%q not in base", text)
+		}
+		head := "package D { action def B :> Gen::A { attribute pad :"
+		if offset < len(head)+1 {
+			t.Fatalf("%q too early in base to align with", text)
+		}
+		return head + strings.Repeat(" ", offset-len(head)) + "Missing8; action x; first x then forkNode; } }"
+	}
+	for _, text := range []string{"fork for", "forkNode;\n\t\tfirst forkNode"} {
+		src := alignedTo(text)
+		if strings.Index(src, "Missing8") != strings.Index(base, text) {
+			t.Fatalf("Missing8 at %d, want %d", strings.Index(src, "Missing8"), strings.Index(base, text))
+		}
+		idx := newTestIndex()
+		baseRoot := parser.New(source.New("base.sysml", []byte(base))).ParseFile()
+		idx.AddDocument("base.sysml", baseRoot)
+		p := parser.New(source.New("d.sysml", []byte(src)))
+		root := p.ParseFile()
+		if len(p.Diagnostics) != 0 {
+			t.Fatalf("unexpected parse diagnostics: %+v", p.Diagnostics)
+		}
+		idx.AddDocument("d.sysml", root)
+		var codes []string
+		lower := 0
+		for _, d := range Analyze("d.sysml", root, nil, idx) {
+			if d.Source == "control-node" {
+				codes = append(codes, d.Code)
+			} else if d.Severity == SeverityError {
+				lower++
+			}
+		}
+		if lower == 0 {
+			t.Fatalf("aligned with %q: the unresolved reference was not reported", text)
+		}
+		if want := []string{CodeForkIncomingSuccessions}; strings.Join(codes, ",") != strings.Join(want, ",") {
+			t.Fatalf("aligned with %q: got control-node codes %v, want %v", text, codes, want)
+		}
+	}
+}
+
 // The rule reaches the CLI and LSP through the shared registry.
 func TestControlNodeRuleIsRegistered(t *testing.T) {
 	src := `package P {

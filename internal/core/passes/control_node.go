@@ -204,7 +204,9 @@ func (c *controlNodeChecker) checkBlock(scope *symbols.Scope, body []ast.Node) {
 
 // controlNodeFlows are the successions into and out of one control node.
 type controlNodeFlows struct {
-	node     ast.Node
+	node ast.Node
+	// local is whether node is declared in the document being checked.
+	local    bool
 	incoming []semantics.ActionSuccession
 	outgoing []semantics.ActionSuccession
 }
@@ -215,13 +217,14 @@ type controlNodeFlows struct {
 func (c *controlNodeChecker) check(owner *symbols.Symbol, succs []semantics.ActionSuccession) {
 	var order []ast.Node
 	flows := map[ast.Node]*controlNodeFlows{}
-	attach := func(node ast.Node, s semantics.ActionSuccession, incoming bool) {
+	attach := func(end semantics.ActionSuccessionEnd, s semantics.ActionSuccession, incoming bool) {
+		node := end.Node
 		if !isControlNode(node) {
 			return
 		}
 		f := flows[node]
 		if f == nil {
-			f = &controlNodeFlows{node: node}
+			f = &controlNodeFlows{node: node, local: c.localEnd(s, end)}
 			flows[node] = f
 			order = append(order, node)
 		}
@@ -234,16 +237,16 @@ func (c *controlNodeChecker) check(owner *symbols.Symbol, succs []semantics.Acti
 	// Each end rests on its own reference alone: a fault elsewhere in the
 	// succession — its guard, effect or body — leaves the end sound.
 	for _, s := range succs {
-		if !c.unsoundEnd(s.Target) {
-			attach(s.Target.Node, s, true)
+		if !c.unsoundEnd(s, s.Target) {
+			attach(s.Target, s, true)
 		}
-		if !c.unsoundEnd(s.Source) {
-			attach(s.Source.Node, s, false)
+		if !c.unsoundEnd(s, s.Source) {
+			attach(s.Source, s, false)
 		}
 	}
 	for _, node := range order {
 		f := flows[node]
-		if c.ctx.downstreamSpan(declarationHead(node)) {
+		if f.local && c.ctx.downstreamSpan(declarationHead(node)) {
 			continue
 		}
 		own := owner == nil || c.declares(owner, node)
@@ -280,9 +283,34 @@ func (c *controlNodeChecker) check(owner *symbols.Symbol, succs []semantics.Acti
 	}
 }
 
-// unsoundEnd reports an end whose reference carries a lower-tier fault.
-func (c *controlNodeChecker) unsoundEnd(end semantics.ActionSuccessionEnd) bool {
-	return end.Span.Len > 0 && c.ctx.downstreamSpan(end.Span)
+// unsoundEnd reports an end whose reference carries a lower-tier fault. The
+// faults are spans in the document being checked, so only an end written there
+// can carry one.
+func (c *controlNodeChecker) unsoundEnd(s semantics.ActionSuccession, end semantics.ActionSuccessionEnd) bool {
+	return end.Span.Len > 0 && c.local(s.Owner) && c.ctx.downstreamSpan(end.Span)
+}
+
+// localEnd reports whether the node end attaches to is declared in the document
+// being checked: where its symbol is, or the succession's owner for a
+// positional end.
+func (c *controlNodeChecker) localEnd(s semantics.ActionSuccession, end semantics.ActionSuccessionEnd) bool {
+	if end.Symbol != nil {
+		return c.local(end.Symbol)
+	}
+	return c.local(s.Owner)
+}
+
+// local reports whether sym is declared in the document being checked; a nil
+// sym stands for a body-local block of it.
+func (c *controlNodeChecker) local(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return true
+	}
+	doc := symbols.DocNameOf(sym.OwnerScope)
+	if doc == "" {
+		doc = sym.DocName
+	}
+	return doc == "" || doc == c.ctx.Name
 }
 
 // declarationHead is the span of a node up to its body: what a rule about the

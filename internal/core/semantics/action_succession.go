@@ -27,6 +27,9 @@ type ActionSuccessionEnd struct {
 	// Node is the declaration the end attaches to; nil when it names none the
 	// model declares (an implied `start`/`done`, or an unresolved name).
 	Node ast.Node
+	// Symbol declares Node when the end reached it by name; nil for an end
+	// bound by position, whose Node is a member of the succession's owner.
+	Symbol *symbols.Symbol
 	// Multiplicity is the multiplicity the end writes, nil when it writes none.
 	Multiplicity *ast.Multiplicity
 	// Span is the reference the end was resolved from; empty when the end is
@@ -120,10 +123,14 @@ func (m *Model) DeclaredSuccessions(scope *symbols.Scope, owner *symbols.Symbol,
 			if n.Successor == nil {
 				continue
 			}
+			source := ActionSuccessionEnd{Span: n.NameSpan}
+			if sym := m.actionSymbolNamed(scope, owner, n.Name); sym != nil {
+				source.Node, source.Symbol = sym.Decl, sym
+			}
 			out = append(out, ActionSuccession{
 				Decl:   n,
 				Owner:  owner,
-				Source: ActionSuccessionEnd{Node: m.actionNodeNamed(scope, owner, n.Name), Span: n.NameSpan},
+				Source: source,
 				Target: m.referenceEnd(scope, owner, n.Successor),
 			})
 		case *ast.SuccessionEdge:
@@ -205,23 +212,24 @@ func (m *Model) referenceEnd(scope *symbols.Scope, owner *symbols.Symbol, target
 	if _, initial := sym.Decl.(*ast.InitialNode); initial {
 		// `first a` registers a symbol of its own under a's name; the end is the
 		// node declared under that name.
-		e.Node = m.actionNodeNamed(sym.OwnerScope, owner, sym.Name)
-	} else {
-		e.Node = sym.Decl
+		sym = m.actionSymbolNamed(sym.OwnerScope, owner, sym.Name)
+	}
+	if sym != nil {
+		e.Node, e.Symbol = sym.Decl, sym
 	}
 	return e
 }
 
-// actionNodeNamed is the node an action declares or inherits under name, as a
-// `first a` names it: the nearest declaration of that name that is not itself an
-// initial-node marker.
-func (m *Model) actionNodeNamed(scope *symbols.Scope, owner *symbols.Symbol, name string) ast.Node {
+// actionSymbolNamed is the symbol an action declares or inherits under name, as
+// a `first a` names it: the nearest declaration of that name that is not itself
+// an initial-node marker.
+func (m *Model) actionSymbolNamed(scope *symbols.Scope, owner *symbols.Symbol, name string) *symbols.Symbol {
 	if name == "" {
 		return nil
 	}
 	if scope != nil {
-		if node := nonInitialDecl(scope.LookupLocalAll(name)); node != nil {
-			return node
+		if sym := nonInitialDecl(scope.LookupLocalAll(name)); sym != nil {
+			return sym
 		}
 	}
 	if owner == nil {
@@ -233,8 +241,8 @@ func (m *Model) actionNodeNamed(scope *symbols.Scope, owner *symbols.Symbol, nam
 			candidates = append(candidates, member)
 		}
 	}
-	if node := nonInitialDecl(candidates); node != nil {
-		return node
+	if sym := nonInitialDecl(candidates); sym != nil {
+		return sym
 	}
 	// A `first j then …` names j without declaring it, but its symbol masks the
 	// inherited j in MembersOf; look the node up where it is declared.
@@ -242,17 +250,17 @@ func (m *Model) actionNodeNamed(scope *symbols.Scope, owner *symbols.Symbol, nam
 		if src == nil || src.Scope == nil {
 			continue
 		}
-		if node := nonInitialDecl(src.Scope.LookupLocalAll(name)); node != nil {
-			return node
+		if sym := nonInitialDecl(src.Scope.LookupLocalAll(name)); sym != nil {
+			return sym
 		}
 	}
 	return nil
 }
 
-func nonInitialDecl(syms []*symbols.Symbol) ast.Node {
+func nonInitialDecl(syms []*symbols.Symbol) *symbols.Symbol {
 	for _, sym := range syms {
 		if _, initial := sym.Decl.(*ast.InitialNode); !initial && sym.Decl != nil {
-			return sym.Decl
+			return sym
 		}
 	}
 	return nil
