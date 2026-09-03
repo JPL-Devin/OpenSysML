@@ -107,6 +107,16 @@ class RenderTest(unittest.TestCase):
         self.assertEqual(changelog.CHANGELOG.read_text(encoding="utf-8"), once)
         self.assertEqual(sorted(p.name for p in changelog.FRAGMENTS.iterdir()), [])
 
+    def test_same_text_in_another_section_or_inside_a_longer_entry_is_still_folded(self):
+        # BASE already has "- **Old added entry.** Text." under Added only.
+        (changelog.FRAGMENTS / "a.fixed.md").write_text("- **Old added entry.** Text.\n", encoding="utf-8")
+        (changelog.FRAGMENTS / "b.added.md").write_text("- **Old added entry.**\n", encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(changelog.render(), 0)
+        out = changelog.CHANGELOG.read_text(encoding="utf-8")
+        self.assertIn("### Added\n\n- **Old added entry.** Text.\n\n- **Old added entry.**\n\n### Fixed", out)
+        self.assertIn("### Fixed\n\n- **Old fixed entry.** Text.\n\n- **Old added entry.** Text.\n\n## 0.4.3", out)
+
 
 class FragmentTest(unittest.TestCase):
     def _frag(self, name: str, body: str) -> pathlib.Path:

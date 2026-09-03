@@ -105,17 +105,30 @@ def _unreleased_bounds(text: str) -> tuple[int, int]:
     return start, end
 
 
-def fold(text: str, entries: dict[str, list[str]]) -> str:
-    """Return CHANGELOG text with entries appended under their sections in "## Unreleased"."""
-    start, end = _unreleased_bounds(text)
-    body = text[start:end]
-
+def _split_sections(body: str) -> tuple[str, list[tuple[str, str]]]:
+    """Split an Unreleased body into its preamble and (heading, content) pairs."""
     heads = list(SECTION_HEADING.finditer(body))
     preamble = body[: heads[0].start()] if heads else body
     sections: list[tuple[str, str]] = []
     for i, h in enumerate(heads):
         content_end = heads[i + 1].start() if i + 1 < len(heads) else len(body)
         sections.append((h.group("name"), body[h.end() : content_end]))
+    return preamble, sections
+
+
+def _already_folded(body: str, section: str, entry: str) -> bool:
+    """True if `entry` is a whole item under `section` (a previous render wrote it)."""
+    for name, content in _split_sections(body)[1]:
+        if name == section and entry in content.strip("\n").split("\n\n"):
+            return True
+    return False
+
+
+def fold(text: str, entries: dict[str, list[str]]) -> str:
+    """Return CHANGELOG text with entries appended under their sections in "## Unreleased"."""
+    start, end = _unreleased_bounds(text)
+    body = text[start:end]
+    preamble, sections = _split_sections(body)
 
     for section in SECTIONS:
         items = entries.get(section)
@@ -153,7 +166,7 @@ def render(dry_run: bool = False) -> int:
     for p in paths:
         section, body = parse_fragment(p)
         # Already folded by an interrupted run: only the deletion is outstanding.
-        if body in text[start:end]:
+        if _already_folded(text[start:end], section, body):
             continue
         entries.setdefault(section, []).append(body)
     new = fold(text, entries) if entries else text
