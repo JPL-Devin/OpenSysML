@@ -180,7 +180,7 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 			edgeEnd{name: n.Target, member: n.TargetMember}); err != nil {
 			return true, err
 		}
-		if len(n.Members) > 0 {
+		if e.bracedBody(n, n.Members) {
 			e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(true))
 		}
 		return true, e.encode(n.Members, fqn, subject)

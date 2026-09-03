@@ -1314,11 +1314,11 @@ elmt:Bodies__Ctx__Act
     sysml:owningMembership elmt:Bodies__Ctx__Act_om ;
     sysml:declaredName "Act" ;
     sysx:hasBody "true"^^xsd:boolean ;
-    sysml:ownedMember elmt:Bodies__Ctx__Act__a1, elmt:Bodies__Ctx__Act__a2, elmt:Bodies__Ctx__Act___402, elmt:Bodies__Ctx__Act___403 ;
-    sysml:ownedMembership elmt:Bodies__Ctx__Act__a1_om, elmt:Bodies__Ctx__Act__a2_om, elmt:Bodies__Ctx__Act___402_om, elmt:Bodies__Ctx__Act___403_om ;
-    sysml:ownedRelationship elmt:Bodies__Ctx__Act__a1_om, elmt:Bodies__Ctx__Act__a2_om, elmt:Bodies__Ctx__Act___402_om, elmt:Bodies__Ctx__Act___403_om ;
-    sysml:ownedFeature elmt:Bodies__Ctx__Act__a1, elmt:Bodies__Ctx__Act__a2, elmt:Bodies__Ctx__Act___402 ;
-    sysml:ownedFeatureMembership elmt:Bodies__Ctx__Act__a1_om, elmt:Bodies__Ctx__Act__a2_om, elmt:Bodies__Ctx__Act___402_om .
+    sysml:ownedMember elmt:Bodies__Ctx__Act__a1, elmt:Bodies__Ctx__Act__a2, elmt:Bodies__Ctx__Act___402, elmt:Bodies__Ctx__Act___403, elmt:Bodies__Ctx__Act__a3, elmt:Bodies__Ctx__Act___405, elmt:Bodies__Ctx__Act__a4, elmt:Bodies__Ctx__Act___407 ;
+    sysml:ownedMembership elmt:Bodies__Ctx__Act__a1_om, elmt:Bodies__Ctx__Act__a2_om, elmt:Bodies__Ctx__Act___402_om, elmt:Bodies__Ctx__Act___403_om, elmt:Bodies__Ctx__Act__a3_om, elmt:Bodies__Ctx__Act___405_om, elmt:Bodies__Ctx__Act__a4_om, elmt:Bodies__Ctx__Act___407_om ;
+    sysml:ownedRelationship elmt:Bodies__Ctx__Act__a1_om, elmt:Bodies__Ctx__Act__a2_om, elmt:Bodies__Ctx__Act___402_om, elmt:Bodies__Ctx__Act___403_om, elmt:Bodies__Ctx__Act__a3_om, elmt:Bodies__Ctx__Act___405_om, elmt:Bodies__Ctx__Act__a4_om, elmt:Bodies__Ctx__Act___407_om ;
+    sysml:ownedFeature elmt:Bodies__Ctx__Act__a1, elmt:Bodies__Ctx__Act__a2, elmt:Bodies__Ctx__Act___402, elmt:Bodies__Ctx__Act__a3, elmt:Bodies__Ctx__Act__a4, elmt:Bodies__Ctx__Act___407 ;
+    sysml:ownedFeatureMembership elmt:Bodies__Ctx__Act__a1_om, elmt:Bodies__Ctx__Act__a2_om, elmt:Bodies__Ctx__Act___402_om, elmt:Bodies__Ctx__Act__a3_om, elmt:Bodies__Ctx__Act__a4_om, elmt:Bodies__Ctx__Act___407_om .
 
 elmt:Bodies__Ctx__Act_om
     a sysml:OwningMembership ;
@@ -1497,3 +1497,100 @@ elmt:Bodies__Ctx__Act___403__w_om
     sysml:ownedRelatedElement elmt:Bodies__Ctx__Act___403__w ;
     sysml:owningRelatedElement elmt:Bodies__Ctx__Act___403 ;
     sysml:membershipOwningNamespace elmt:Bodies__Ctx__Act___403 .
+
+elmt:Bodies__Ctx__Act__a3
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "Bodies::Ctx::Act::a3" ;
+    sysml:elementId "Bodies__Ctx__Act__a3" ;
+    sysx:memberIndex "4"^^xsd:integer ;
+    sysml:owningNamespace elmt:Bodies__Ctx__Act ;
+    sysml:owner elmt:Bodies__Ctx__Act ;
+    sysml:owningRelationship elmt:Bodies__Ctx__Act__a3_om ;
+    sysml:owningMembership elmt:Bodies__Ctx__Act__a3_om ;
+    sysml:declaredName "a3" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Bodies__Ctx__Act__a3_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Bodies__Ctx__Act__a3_om" ;
+    sysml:owner elmt:Bodies__Ctx__Act ;
+    sysml:memberElement elmt:Bodies__Ctx__Act__a3 ;
+    sysml:ownedMemberElement elmt:Bodies__Ctx__Act__a3 ;
+    sysml:ownedRelatedElement elmt:Bodies__Ctx__Act__a3 ;
+    sysml:owningRelatedElement elmt:Bodies__Ctx__Act ;
+    sysml:membershipOwningNamespace elmt:Bodies__Ctx__Act ;
+    sysml:ownedMemberFeature elmt:Bodies__Ctx__Act__a3 ;
+    sysml:owningType elmt:Bodies__Ctx__Act .
+
+elmt:Bodies__Ctx__Act___405
+    a sysx:InitialNode ;
+    sysml:qualifiedName "Bodies::Ctx::Act::@5" ;
+    sysml:elementId "Bodies__Ctx__Act___405" ;
+    sysx:memberIndex "5"^^xsd:integer ;
+    sysml:owningNamespace elmt:Bodies__Ctx__Act ;
+    sysml:owner elmt:Bodies__Ctx__Act ;
+    sysml:owningRelationship elmt:Bodies__Ctx__Act___405_om ;
+    sysml:owningMembership elmt:Bodies__Ctx__Act___405_om ;
+    sysml:sourceFeature elmt:Bodies__Ctx__Act__a2 ;
+    sysml:targetFeature elmt:Bodies__Ctx__Act__a3 ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:Bodies__Ctx__Act___405_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Bodies__Ctx__Act___405_om" ;
+    sysml:owner elmt:Bodies__Ctx__Act ;
+    sysml:memberElement elmt:Bodies__Ctx__Act___405 ;
+    sysml:ownedMemberElement elmt:Bodies__Ctx__Act___405 ;
+    sysml:ownedRelatedElement elmt:Bodies__Ctx__Act___405 ;
+    sysml:owningRelatedElement elmt:Bodies__Ctx__Act ;
+    sysml:membershipOwningNamespace elmt:Bodies__Ctx__Act .
+
+elmt:Bodies__Ctx__Act__a4
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "Bodies::Ctx::Act::a4" ;
+    sysml:elementId "Bodies__Ctx__Act__a4" ;
+    sysx:memberIndex "6"^^xsd:integer ;
+    sysml:owningNamespace elmt:Bodies__Ctx__Act ;
+    sysml:owner elmt:Bodies__Ctx__Act ;
+    sysml:owningRelationship elmt:Bodies__Ctx__Act__a4_om ;
+    sysml:owningMembership elmt:Bodies__Ctx__Act__a4_om ;
+    sysml:declaredName "a4" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Bodies__Ctx__Act__a4_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Bodies__Ctx__Act__a4_om" ;
+    sysml:owner elmt:Bodies__Ctx__Act ;
+    sysml:memberElement elmt:Bodies__Ctx__Act__a4 ;
+    sysml:ownedMemberElement elmt:Bodies__Ctx__Act__a4 ;
+    sysml:ownedRelatedElement elmt:Bodies__Ctx__Act__a4 ;
+    sysml:owningRelatedElement elmt:Bodies__Ctx__Act ;
+    sysml:membershipOwningNamespace elmt:Bodies__Ctx__Act ;
+    sysml:ownedMemberFeature elmt:Bodies__Ctx__Act__a4 ;
+    sysml:owningType elmt:Bodies__Ctx__Act .
+
+elmt:Bodies__Ctx__Act___407
+    a sysml:SuccessionAsUsage ;
+    sysml:qualifiedName "Bodies::Ctx::Act::@7" ;
+    sysml:elementId "Bodies__Ctx__Act___407" ;
+    sysx:memberIndex "7"^^xsd:integer ;
+    sysml:owningNamespace elmt:Bodies__Ctx__Act ;
+    sysml:owner elmt:Bodies__Ctx__Act ;
+    sysml:owningRelationship elmt:Bodies__Ctx__Act___407_om ;
+    sysml:owningMembership elmt:Bodies__Ctx__Act___407_om ;
+    sysx:endForm "then" ;
+    sysml:sourceFeature elmt:Bodies__Ctx__Act__a4 ;
+    sysml:targetFeature elmt:Bodies__Ctx__Act__a3 ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:Bodies__Ctx__Act___407_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Bodies__Ctx__Act___407_om" ;
+    sysml:owner elmt:Bodies__Ctx__Act ;
+    sysml:memberElement elmt:Bodies__Ctx__Act___407 ;
+    sysml:ownedMemberElement elmt:Bodies__Ctx__Act___407 ;
+    sysml:ownedRelatedElement elmt:Bodies__Ctx__Act___407 ;
+    sysml:owningRelatedElement elmt:Bodies__Ctx__Act ;
+    sysml:membershipOwningNamespace elmt:Bodies__Ctx__Act ;
+    sysml:ownedMemberFeature elmt:Bodies__Ctx__Act___407 ;
+    sysml:owningType elmt:Bodies__Ctx__Act .

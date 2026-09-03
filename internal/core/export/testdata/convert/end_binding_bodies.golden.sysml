@@ -66,6 +66,12 @@ package Bodies {
             first a1 then a2 {
                 attribute w : Prio;
             }
+            action a3;
+            first a2 then a3 {
+            }
+            action a4;
+            then a3 {
+            }
         }
     }
 }
