@@ -20,13 +20,14 @@ func TestFeaturesListsInheritedLibraryFeatures(t *testing.T) {
 }
 
 // A requirement reads the subject, actors, stakeholders and constraint
-// collections Requirements::RequirementCheck gives it.
+// collections Requirements::RequirementCheck gives it; `subject … = box` binds
+// both the declared subject and the inherited subj.
 func TestFeaturesListsInheritedRequirementFeatures(t *testing.T) {
 	s := loadFixture(t, "testdata/library_box.sysml")
 	run(t, s, "%instantiate Demo::massLimit")
 
 	got := run(t, s, "%features Demo::massLimit")
 	wants(t, got, "\n  limit = 10 [kg]", "\n  actors = []", "\n  stakeholders = []",
-		"\n  assumptions = []", "\n  constraints = []", "\n  subj = ")
+		"\n  assumptions = []", "\n  constraints = []", "\n  vehicle = Instance(", "\n  subj = Instance(")
 	rejects(t, got, "self =", "portions =", "timeSlices =")
 }

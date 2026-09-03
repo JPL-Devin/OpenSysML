@@ -26,7 +26,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   every feature of the object asked about; nested expansions share the lines that remain. The
   Kernel frame stays out, a model that inherits nothing from these libraries keeps its shape
   digest, and a value the runtime cannot evaluate — the Geometry library's edge bindings among
-  them — is the typed error it already was, not a silent null.
+  them — is the typed error it already was, not a silent null. A requirement's
+  `subject vehicle : Part = box;` now binds the subject on the object — it was left unset, as the
+  binding was only read while checking the requirement — and the inherited `subj` reads the same
+  object.
 - **The bundled standard library opens in the editor.** Go-to-definition, find-references
   and the diagram panel used to report a standard library declaration at a path no editor
   could open, so a click on `ScalarValues::Integer` went nowhere. `sysml-lsp` now reports
