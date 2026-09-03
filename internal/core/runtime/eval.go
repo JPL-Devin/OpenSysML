@@ -115,11 +115,15 @@ func (ec *EvalContext) pushFrame(f frame) {
 
 // lookupSubaction finds the node named name in the flow of an action performance
 // on the stack, innermost first, and returns its latest performance. Where the
-// name resolves in the reading scope, it is that declaration's node.
+// name resolves in the reading scope, it is that declaration's node — or no node
+// at all when the declaration is a feature, which shadows a same-named node.
 func (ec *EvalContext) lookupSubaction(name string) (perf *actionFrame, declared bool, err error) {
 	var decl ast.Node
 	if ec.ctx.resolver != nil {
 		if sym, ok := ec.ctx.resolver.LookupName(ec.scope, name); ok && sym != nil {
+			if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Kind != ast.UsageAction {
+				return nil, false, nil
+			}
 			decl = sym.Decl
 		}
 	}
@@ -136,7 +140,8 @@ func (ec *EvalContext) lookupSubaction(name string) (perf *actionFrame, declared
 }
 
 // evalSubactionPath reads `node.pin` or `node.inner.pin` through the performances
-// of the nodes the path names, the last part being a pin or a node read as a value.
+// of the nodes the path names; the rest of the path past a pin (`node.pin.member`)
+// is chained through the pin's value, and a path ending at a node reads its result.
 func (ec *EvalContext) evalSubactionPath(perf *actionFrame, parts []ast.NameSegment) (Value, error) {
 	for i, part := range parts {
 		if inner, declared, err := perf.subaction(part.Text, nil); declared {
@@ -146,11 +151,15 @@ func (ec *EvalContext) evalSubactionPath(perf *actionFrame, parts []ast.NameSegm
 			perf = inner
 			continue
 		}
-		if i != len(parts)-1 {
-			return Value{}, fmt.Errorf("%w: %s declares no node %s to read %s through",
+		if i != len(parts)-1 && !perf.declares(part.Text) {
+			return Value{}, fmt.Errorf("%w: %s declares no node or pin %s to read %s through",
 				ErrNodePin, perf.describe(), part.Text, parts[len(parts)-1].Text)
 		}
-		return perf.pin(part.Text)
+		value, err := perf.pin(part.Text)
+		if err != nil {
+			return Value{}, err
+		}
+		return ec.chainMemberValue(value, parts[i+1:], perf.path()+"."+part.Text)
 	}
 	return perf.resultValue()
 }
