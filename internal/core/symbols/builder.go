@@ -215,12 +215,13 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 		// A named transition is a feature of the state that declares it (SysML v2
 		// §7.19.2: TransitionUsage specializes ActionUsage), and its effect
 		// behaviors are features of the transition, so `t.effectAction` resolves.
-		// Its action body (`then b { … }`) declares its members too.
+		// An unnamed one declares its effect and body members in a local scope.
 		if d.Name == "" {
-			if d.HasBody {
+			if d.HasBody || len(d.Effect) > 0 {
 				child := NewScope(scope, d)
 				child.markBodyLocal()
 				scope.AddChild(child)
+				buildMembers(child, d.Effect)
 				buildMembers(child, d.Members)
 			}
 			return true

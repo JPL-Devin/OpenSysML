@@ -133,6 +133,7 @@ func (c *controlNodeChecker) walkNode(scope *symbols.Scope, owner, decl ast.Node
 		c.walk(child, n, n.States)
 	case *ast.TransitionMember:
 		c.checkAction(scope, n, n.Members)
+		c.checkBlock(child, n.Effect)
 		c.walk(child, n, n.Effect)
 		c.walk(child, n, n.Members)
 	case *ast.SendStatement:
