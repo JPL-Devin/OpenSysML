@@ -380,9 +380,8 @@ func buildControlNode(scope *Scope, decl ast.Node, name string, nameSpan source.
 	buildMembers(child, ast.NodeBodyMembers(decl))
 }
 
-// buildRequirementConstraint registers the constraint usage an assume/require
-// member declares as a member of its requirement (SysML v2 §7.20.5), anonymous
-// when neither a name nor a naming feature names it.
+// buildRequirementConstraint registers the constraint usage an assume/require member
+// declares as a member of its requirement (SysML v2 §7.20.5), anonymous if unnamed.
 func buildRequirementConstraint(scope *Scope, decl ast.Node, body []ast.Node, vis ast.Visibility, trivia []ast.Trivia) {
 	oc, ok := ast.OwnedConstraintOf(decl)
 	if !ok {

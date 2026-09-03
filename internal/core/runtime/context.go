@@ -623,8 +623,8 @@ type scopedMember struct {
 // first, followed by sym's own. A usage that takes its conditions from a
 // definition (constraint limit : MassLimit) carries no members itself. A library
 // supertype states the metamodel frame every element specializes rather than the
-// model's own objectives, conditions or parameters, so it contributes none. A
-// supertype whose result expression a redefinition replaces keeps its other members.
+// model's own objectives, conditions or parameters, so it contributes none.
+// A supertype whose result expression a redefinition replaces keeps its other members.
 func (ctx *Context) chainMembers(sym *symbols.Symbol, scope *symbols.Scope) []scopedMember {
 	var out []scopedMember
 	supers := ctx.model.AllSupertypes(sym)
@@ -647,11 +647,8 @@ func (ctx *Context) chainMembers(sym *symbols.Symbol, scope *symbols.Scope) []sc
 	return out
 }
 
-// replacedResultExpressions returns the supertypes whose result expression a
-// constraint's chain leaves out: those a redefinition owning a result expression
-// replaces, and what only they reach. A body owning none — `;`, `{ }`, docs or
-// nested constraints only — inherits the redefined one, as the pilot's
-// getResultExpressionOf falls back to the inherited result expression.
+// replacedResultExpressions returns the supertypes a redefinition owning a result
+// expression replaces (and those only they reach); a body owning none inherits it.
 func (ctx *Context) replacedResultExpressions(sym *symbols.Symbol, supers []*symbols.Symbol) map[*symbols.Symbol]bool {
 	if !isConstraintSymbol(sym) {
 		return nil
@@ -689,8 +686,7 @@ func (ctx *Context) replacedResultExpressions(sym *symbols.Symbol, supers []*sym
 	return skipped
 }
 
-// ownsResultExpression reports whether one of a body's members is its result
-// expression.
+// ownsResultExpression reports whether one of a body's members is its result expression.
 func ownsResultExpression(members []ast.Node) bool {
 	for _, member := range members {
 		if isResultExpression(member) {
@@ -700,9 +696,8 @@ func ownsResultExpression(members []ast.Node) bool {
 	return false
 }
 
-// isResultExpression reports whether node is a bare condition (`x > 0`), the
-// result expression of the body stating it. A nested `assert constraint { … }`,
-// a reference (`assert c;`) or a require/assume member is a feature instead.
+// isResultExpression reports whether node is a bare condition (`x > 0`), the body's
+// result expression; a nested `assert constraint { … }` or reference is a feature instead.
 func isResultExpression(node ast.Node) bool {
 	c, ok := node.(*ast.ConstraintMember)
 	return ok && c.Keyword == "" && c.Expression != nil

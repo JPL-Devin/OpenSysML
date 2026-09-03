@@ -42,11 +42,9 @@ type Condition struct {
 // Label renders the condition as written, negation and grouping included.
 func (c Condition) Label() string { return conditionLabel(c) }
 
-// Owner is the element declaring the condition, which is the supertype it was
-// inherited from for an inherited one, or nil when the scope has no owner.
+// Owner is the nearest named element declaring the condition (the supertype an
+// inherited one came from), or nil; a body-local or anonymous scope is skipped.
 func (c Condition) Owner() *symbols.Symbol {
-	// A body-local scope owns no symbol and an anonymous constraint has no name
-	// to report, so the declaring element is the nearest enclosing named one.
 	for s := c.Scope; s != nil; s = s.Parent() {
 		if owner := s.Owner(); owner != nil && owner.Name != "" {
 			return owner
