@@ -32,7 +32,7 @@ package Annotated {
     }
     metadata tagged : Safety about Car;
     metadata Safety about car;
-    metadata $::Annotated::Safety about Car {
+    metadata Safety about Car {
         level = 4;
     }
 }

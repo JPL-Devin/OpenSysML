@@ -419,7 +419,7 @@ elmt:Annotated__car___402___400
     sysml:owningRelationship elmt:Annotated__car___402___400_om ;
     sysml:owningMembership elmt:Annotated__car___402___400_om ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
-    sysml:redefines "level" ;
+    sysml:redefines elmt:Annotated__Safety__level ;
     sysml:value expr:Annotated__car___402___400_pvalue ;
     sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "            :>> level = 3;\n" .
@@ -689,7 +689,7 @@ expr:Annotated___403__level_pvalue
     sysx:sourceText "car.range" ;
     sysml:elementId "Annotated___403__level_pvalue" ;
     sysml:argument expr:Annotated___403__level_pvalue_pa0 ;
-    sysml:targetFeature "range" .
+    sysml:targetFeature elmt:Annotated__car__range .
 
 expr:Annotated___403__level_pvalue_pa0
     a sysml:FeatureReferenceExpression ;
@@ -789,7 +789,7 @@ elmt:Annotated___406
     sysml:owner elmt:Annotated ;
     sysml:owningRelationship elmt:Annotated___406_om ;
     sysml:owningMembership elmt:Annotated___406_om ;
-    sysml:type "$::Annotated::Safety" ;
+    sysml:type elmt:Annotated__Safety ;
     sysml:annotatedElement elmt:Annotated__Car ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Annotated___406__level ;

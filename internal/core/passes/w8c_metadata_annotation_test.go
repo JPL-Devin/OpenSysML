@@ -1,6 +1,7 @@
 package passes
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -130,6 +131,67 @@ func TestMetadataAnnotatedElementMustConform(t *testing.T) {
 	}
 	if want := msgCannotAnnotate + "Class"; found[0].Msg != want {
 		t.Errorf("message %q, want %q", found[0].Msg, want)
+	}
+}
+
+// A metadata value calling an overloaded name is judged by the overload its
+// arguments select — the checker's and runtime's choice — not the first found.
+func TestMetadataBodyValueSelectsTheOverloadItCalls(t *testing.T) {
+	const body = `package P {
+	private import ScalarValues::*;
+	private import %s::*;
+	private import %s::*;
+	package Q {
+		private import ScalarValues::*;
+		function 'if' { in test : Boolean; in t : String; in f : String; return : String; }
+	}
+	metadata def A { feature x; feature y; }
+	feature a {
+		@A {
+			x = 'if'(true, 1, 2);
+			y = 'if'(true, "a", "b");
+		}
+	}
+}`
+	for _, imports := range [][2]string{{"ControlFunctions", "Q"}, {"Q", "ControlFunctions"}} {
+		src := fmt.Sprintf(body, imports[0], imports[1])
+		found := findingsWithCode(metadataDiags(t, src), "metadata-value-not-evaluable")
+		if len(found) != 1 || found[0].Text != `= 'if'(true, "a", "b")` {
+			t.Errorf("imports %v: findings %v, want only the call selecting Q::'if'", imports, found)
+		}
+	}
+}
+
+// A body value is judged in the body's own scope, where the metadata type's
+// members shadow what the annotated element sees: the call and the read below
+// name A's own function and feature, not the imported one and the evaluable one.
+func TestMetadataBodyValueIsJudgedInTheBodyScope(t *testing.T) {
+	src := `package P {
+	private import ScalarValues::*;
+	private import ControlFunctions::*;
+	feature k = 2;
+	metadata def A {
+		feature x;
+		feature y;
+		feature k;
+		function 'if' { in test : Boolean; in t : Integer; in f : Integer; return : Integer; }
+	}
+	feature a {
+		@A {
+			x = 'if'(true, 1, 2);
+			y = k;
+		}
+	}
+}`
+	found := findingsWithCode(metadataDiags(t, src), "metadata-value-not-evaluable")
+	want := []string{"= 'if'(true, 1, 2)", "= k"}
+	if len(found) != len(want) {
+		t.Fatalf("findings %v, want %v", found, want)
+	}
+	for i, f := range found {
+		if f.Text != want[i] {
+			t.Errorf("finding %d is %q, want %q", i, f.Text, want[i])
+		}
 	}
 }
 

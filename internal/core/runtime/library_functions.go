@@ -21,6 +21,10 @@ import (
 // so a model is told which declaration it is rather than answered wrongly.
 var ErrUnevaluableLibraryFunction = errors.New("library function is not evaluable")
 
+// ErrAmbiguousInvocation is returned for a call whose name denotes several
+// declarations the arguments fit equally well, none more specific than the rest.
+var ErrAmbiguousInvocation = errors.New("ambiguous invocation")
+
 // noVectorCollection is why the aggregations over a collection of vectors are
 // not evaluable: a sequence of them flattens, losing the grouping the
 // aggregation sums over.
@@ -44,8 +48,8 @@ type libraryFunction struct {
 	// unevaluable marks a declaration registered only to report why a call to
 	// it cannot be computed.
 	unevaluable bool
-	// scalar marks a function over numeric scalars alone, which the compiled
-	// calc tier may call with unboxed arguments.
+	// scalar marks a function whose result is a scalar whenever its arguments
+	// are, which the compiled calc tier may call with unboxed arguments.
 	scalar bool
 }
 
@@ -181,12 +185,12 @@ func registerVectorFunctions() {
 func registerComplexFunctions() {
 	registerValueFunction("ComplexFunctions::rect", []string{"re", "im"}, 2, complexRect)
 	registerValueFunction("ComplexFunctions::polar", []string{"abs", "arg"}, 2, complexPolar)
-	registerValueFunction("ComplexFunctions::re", []string{"x"}, 1, complexRealPart)
-	registerValueFunction("ComplexFunctions::im", []string{"x"}, 1, complexImagPart)
-	registerValueFunction("ComplexFunctions::isZero", []string{"x"}, 1, complexIsZero)
-	registerValueFunction("ComplexFunctions::isUnit", []string{"x"}, 1, complexIsUnit)
-	registerValueFunction("ComplexFunctions::abs", []string{"x"}, 1, complexModulus)
-	registerValueFunction("ComplexFunctions::arg", []string{"x"}, 1, complexArgument)
+	registerScalarResultFunction("ComplexFunctions::re", []string{"x"}, complexRealPart)
+	registerScalarResultFunction("ComplexFunctions::im", []string{"x"}, complexImagPart)
+	registerScalarResultFunction("ComplexFunctions::isZero", []string{"x"}, complexIsZero)
+	registerScalarResultFunction("ComplexFunctions::isUnit", []string{"x"}, complexIsUnit)
+	registerScalarResultFunction("ComplexFunctions::abs", []string{"x"}, complexModulus)
+	registerScalarResultFunction("ComplexFunctions::arg", []string{"x"}, complexArgument)
 	registerValueFunction("ComplexFunctions::+", []string{"x", "y"}, 1, complexAdd)
 	registerValueFunction("ComplexFunctions::-", []string{"x", "y"}, 1, complexSubtract)
 	registerValueFunction("ComplexFunctions::*", []string{"x", "y"}, 2, complexMultiply)
@@ -225,6 +229,13 @@ func registerStringFunctions() {
 // arguments, which is what most of the numeric library declares.
 func registerLibraryFunction(name string, params []string, apply func([]semantics.Value) (semantics.Value, error)) {
 	registerValueFunction(name, params, len(params), numericScalars(params, apply))
+	libraryFunctions[name].scalar = true
+}
+
+// registerScalarResultFunction adds an implementation whose result is always a scalar
+// (Real or Boolean), so the compiled tier may call it where a scalar argument selects it.
+func registerScalarResultFunction(name string, params []string, apply libraryApply) {
+	registerValueFunction(name, params, len(params), apply)
 	libraryFunctions[name].scalar = true
 }
 
@@ -1457,14 +1468,18 @@ func complexProduct(name string, _ *Context, args []Value) (Value, error) {
 	return aggregateComplex(name, args[0], ast.OpMul)
 }
 
-// aggregateComplex folds a collection's elements as complex numbers under the
-// sum or product, from its identity; an element that is no number is reported.
+// aggregateComplex folds a collection under sum or product from its identity; like the
+// library's `reduce '+'`, only a collection holding a Complex (or none) folds to a Complex.
 func aggregateComplex(name string, collection Value, operator ast.OperatorKind) (Value, error) {
+	elements := elementsOf(collection)
+	if len(elements) > 0 && !holdsComplex(elements) {
+		return aggregate(name, []Value{collection}, operator, false)
+	}
 	acc := complex(0, 0)
 	if operator == ast.OpMul {
 		acc = 1
 	}
-	for _, elem := range elementsOf(collection) {
+	for _, elem := range elements {
 		z, err := asComplex(name, "collection", elem)
 		if err != nil {
 			return Value{}, err
