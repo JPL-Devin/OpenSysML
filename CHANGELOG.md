@@ -206,9 +206,11 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   KerML `connector … from a to b` heads record their form like the other end-binding heads, and
   an anonymous usage opened by `ref individual` or a portion keyword keeps that kind instead of
   parsing as an attribute. Over the 268 example models the mapping converts,
-  `TestCorpusRoundTrip` now records 243 whose second Turtle is byte-identical to the first where
-  it recorded 166, with the 71 `whitespace-only` and 6 `graph-diff` verdicts moved to `stable` and
-  no other movement. `docs/reference/rdf-mapping.md` § Stored text is layout defines the rule.
+  `TestCorpusRoundTrip` recorded 166 whose second Turtle is byte-identical to the first; this
+  change moves the 71 `whitespace-only` and 6 `graph-diff` verdicts to `stable` and nothing else,
+  and with the positional-`then` fix below the baseline now records 255 `stable`, 8 `graph-diff`,
+  2 `unwritable`, 3 `unparseable` and 77 `refused`. `docs/reference/rdf-mapping.md` § Stored text
+  is layout defines the rule.
   A `LiteralString`'s `sysml:value` is now the string it evaluates to — `"two\nlines"` stores a
   value with a line break, where it stored the notation body with the escape intact — and a
   value written back from the graph is spelled with the escapes KerML defines, so a value edited
