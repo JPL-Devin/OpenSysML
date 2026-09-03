@@ -135,16 +135,16 @@ func legacyNamespaceError(iri string) error {
 	}
 }
 
-// checkTypes refuses an rdf:type outside the SysML vocabulary and this mapping's
-// extension: a class of another vocabulary names no metaclass, whatever its
-// local name, so reading it as one would rewrite the subject as something else.
+// checkTypes refuses an rdf:type that is no term of the SysML vocabulary or of
+// this mapping's extension: a class of another vocabulary names no metaclass,
+// whatever its local name, so reading it as one would rewrite the subject.
 func checkTypes(graph *rdf.Graph) error {
 	for _, triple := range graph.Triples() {
 		if triple.Predicate.Value != rdf.RDFType {
 			continue
 		}
 		class := triple.Object
-		if class.IsIRI() && (strings.HasPrefix(class.Value, rdf.SysML) || strings.HasPrefix(class.Value, rdf.OpenSysML)) {
+		if class.IsIRI() && isVocabularyTerm(class.Value) {
 			continue
 		}
 		return &UnsupportedError{
@@ -153,6 +153,13 @@ func checkTypes(graph *rdf.Graph) error {
 		}
 	}
 	return nil
+}
+
+// isVocabularyTerm reports whether iri is a namespace this mapping reads followed
+// by a bare local name, so that the name the decoder classifies by is the term.
+func isVocabularyTerm(iri string) bool {
+	local := rdf.LocalName(iri)
+	return local != "" && (iri == rdf.SysML+local || iri == rdf.OpenSysML+local)
 }
 
 // checkLiterals refuses a literal whose datatype its property does not take

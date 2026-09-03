@@ -720,6 +720,8 @@ func TestForeignClassWithAKnownLocalNameIsRefused(t *testing.T) {
 	cases := []struct{ name, from, to, subject, class string }{
 		{"body parameter", "expr:Results__Quoted___401_pin0\n    a sysml:ReferenceUsage ;", "expr:Results__Quoted___401_pin0\n    a foreign:ReferenceUsage ;", "urn:opensysml:expr:Results__Quoted___401_pin0", "<urn:example:vocab#ReferenceUsage>"},
 		{"element", "elmt:Results\n    a sysml:Package ;", "elmt:Results\n    a foreign:Package ;", "urn:sysmlv2:element:Results", "<urn:example:vocab#Package>"},
+		{"nested under sysml", "elmt:Results\n    a sysml:Package ;", "elmt:Results\n    a <https://www.omg.org/spec/SysML#foreign/Package> ;", "urn:sysmlv2:element:Results", "<https://www.omg.org/spec/SysML#foreign/Package>"},
+		{"nested under sysx", "elmt:Results\n    a sysml:Package ;", "elmt:Results\n    a <urn:opensysml:sysml:foreign:Alias> ;", "urn:sysmlv2:element:Results", "<urn:opensysml:sysml:foreign:Alias>"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
