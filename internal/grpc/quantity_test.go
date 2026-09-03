@@ -146,6 +146,7 @@ func TestQuantityRoundTrip(t *testing.T) {
 		"4.0 [(SI::m*SI::s)**2]",
 		"8.0 [(SI::m**2)**3]",
 		"6.0 [SI::m/SI::s/SI::kg]",
+		"2.0 [SI::'m/s²'] * 3.0 [SI::s]",
 	} {
 		t.Run(expr, func(t *testing.T) {
 			sent := mustEvaluateQuantity(t, srv, modelHash, expr)
@@ -445,6 +446,27 @@ package Imperial {
 	}
 	if got := describeQuantity(evaluate("Q::Area", density, density)); got != "4 [SI::'A/m'**2] = SI::ampere^2·SI::metre^-2" {
 		t.Errorf("'A/m' * 'A/m' over the wire = %s, want 4 [SI::'A/m'**2] = SI::ampere^2·SI::metre^-2", got)
+	}
+
+	// A unit named through an alias is the unit the alias stands for: SI::'m/s²'
+	// merges with SI::'m⋅s⁻²' and composes with SI::s, keeping the spelling sent.
+	accel := mustEvaluateQuantity(t, srv, hash, "2.0 [SI::'m/s²']")
+	if accel.GetUnit() != "SI::'m/s²'" {
+		t.Fatalf("an aliased unit crosses the wire in %q, want SI::'m/s²'", accel.GetUnit())
+	}
+	if got := describeQuantity(evaluate("Q::Area", accel, mustEvaluateQuantity(t, srv, hash, "3.0 [SI::'m⋅s⁻²']"))); got != "6 [SI::'m/s²'**2] = SI::metre^2·SI::second^-4" {
+		t.Errorf("'m/s²' * 'm⋅s⁻²' over the wire = %s, want 6 [SI::'m/s²'**2] = SI::metre^2·SI::second^-4", got)
+	}
+	if got := describeQuantity(evaluate("Q::Dist", accel, mustEvaluateQuantity(t, srv, hash, "3.0 [SI::s]"))); got != "6 [SI::'m/s²'*SI::s] = SI::metre·SI::second^-1" {
+		t.Errorf("'m/s²' * s over the wire = %s, want 6 [SI::'m/s²'*SI::s] = SI::metre·SI::second^-1", got)
+	}
+	shortAlias := &pb.Quantity{
+		Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 2},
+		Unit:      "'m/s²'*s",
+		UnitTerm:  speed.GetUnitTerm(),
+	}
+	if got := describeQuantity(evaluate("Q::Dist", shortAlias, mustEvaluateQuantity(t, srv, hash, "3.0 [SI::s]"))); got != "6 ['m/s²'*s**2] = SI::metre" {
+		t.Errorf("short 'm/s²'*s over the wire * s = %s, want 6 ['m/s²'*s**2] = SI::metre", got)
 	}
 
 	// Unit text that is no unit expression is one opaque unit: still a quantity

@@ -279,6 +279,23 @@ func (m *Model) IsMeasurementUnit(sym *symbols.Symbol) bool {
 	return m.Conforms(sym, unitDef)
 }
 
+// MeasurementUnitOf is the measurement unit sym names: sym itself, or the unit
+// an alias such as SI::'m/s²' stands for; false for anything else.
+func (m *Model) MeasurementUnitOf(sym *symbols.Symbol) (*symbols.Symbol, bool) {
+	if m == nil || sym == nil {
+		return nil, false
+	}
+	if m.resolver != nil {
+		if target, ok := m.resolver.ResolveAliasTarget(sym); ok {
+			sym = target
+		}
+	}
+	if !m.IsMeasurementUnit(sym) {
+		return nil, false
+	}
+	return sym, true
+}
+
 // UnitTermOf reduces a measurement unit to base units. A unit declared with a
 // conversion to a reference unit contributes that conversion's factor; a unit
 // declared as an expression of other units reduces through that expression; a

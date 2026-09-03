@@ -486,10 +486,10 @@ func unitProductOfText(text string, term semantics.UnitTerm, idx *symbols.Index,
 	}
 	unitAt := func(fqn string) (*symbols.Symbol, bool) {
 		matches := idx.LookupQualified(fqn)
-		if len(matches) != 1 || !sem.IsMeasurementUnit(matches[0]) {
+		if len(matches) != 1 {
 			return nil, false
 		}
-		return matches[0], true
+		return sem.MeasurementUnitOf(matches[0])
 	}
 	var short []string
 	product, err := sem.UnitProductOfExprBy(expr, func(qn *ast.QualifiedName) (*symbols.Symbol, bool) {
@@ -596,8 +596,8 @@ func unitsNamed(name string, idx *symbols.Index, sem *semantics.Model) []*symbol
 	var units []*symbols.Symbol
 	for _, fqn := range idx.FQNsEndingIn(name, math.MaxInt) {
 		for _, sym := range idx.LookupQualified(fqn) {
-			if sem.IsMeasurementUnit(sym) && !slices.Contains(units, sym) {
-				units = append(units, sym)
+			if unit, ok := sem.MeasurementUnitOf(sym); ok && !slices.Contains(units, unit) {
+				units = append(units, unit)
 			}
 		}
 	}
@@ -692,11 +692,12 @@ func protoToUnitTerm(pt *pb.UnitTerm, idx *symbols.Index, sem *semantics.Model) 
 		if len(matches) != 1 {
 			return semantics.UnitTerm{}, fmt.Errorf("%w: %s", ErrUnknownBaseUnit, f.GetUnitId())
 		}
-		if !sem.IsMeasurementUnit(matches[0]) {
+		unit, ok := sem.MeasurementUnitOf(matches[0])
+		if !ok {
 			return semantics.UnitTerm{}, fmt.Errorf("%w: %s", ErrNotAMeasurementUnit, f.GetUnitId())
 		}
 		term.Factors = append(term.Factors, semantics.UnitFactor{
-			Unit:     matches[0],
+			Unit:     unit,
 			Exponent: f.GetExponent(),
 		})
 	}
