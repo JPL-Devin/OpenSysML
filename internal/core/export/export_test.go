@@ -842,6 +842,69 @@ func TestMetadataUsageTypedByANonMetadataDefinitionIsReported(t *testing.T) {
 	}
 }
 
+// A metadata usage typed by a literal is typed by a name the graph does not
+// define; a literal that is no name — a number, a boolean, a tagged or an
+// expression-typed string, an empty or broken qualified name — is refused in
+// each of the three forms rather than written as `@42` or `@1 + 2`.
+func TestMetadataUsageTypedByANonNameLiteralIsReported(t *testing.T) {
+	src := "package P {\n\tmetadata def M;\n\tpart def Car;\n\tmetadata m : M about Car;\n\t@M;\n\t#M part def Truck;\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structural := string(withoutTriples(t, turtle, "sysx:sourceText"))
+	const typing = "    sysml:type elmt:P__M ;\n"
+	typings := strings.Split(structural, typing)
+	if len(typings) != 4 {
+		t.Fatalf("expected three metadata usages typed by M in the graph:\n%s", structural)
+	}
+	retyped := func(i int, object string) string {
+		graph := typings[0]
+		for n, rest := range typings[1:] {
+			if n == i {
+				graph += "    sysml:type " + object + " ;\n" + rest
+			} else {
+				graph += typing + rest
+			}
+		}
+		return graph
+	}
+	// Control: a name the graph does not define is written as that name.
+	for i, want := range []string{"metadata m : Ext::'Safety Level' about Car;", "@Ext::'Safety Level';", "#Ext::'Safety Level' part def Truck;"} {
+		back, err := export.Convert("m.ttl", []byte(retyped(i, `"Ext::Safety Level"`)), export.FormatTurtle, export.FormatSysML)
+		if err != nil {
+			t.Fatalf("usage %d typed by a plain name: %v", i, err)
+		}
+		if !strings.Contains(string(back), want) {
+			t.Errorf("usage %d typed by a plain name: expected %q in:\n%s", i, want, back)
+		}
+	}
+	for _, literal := range []struct{ object, why string }{
+		{`"42"^^xsd:integer`, "not a string"},
+		{`"true"^^xsd:boolean`, "not a string"},
+		{`"M"@en`, "tagged @en"},
+		{`"1 + 2"^^sysx:Expression`, "an expression, not a name"},
+		{`""`, "is empty"},
+		{`"P::"`, "an empty name segment"},
+		{`"$::"`, "an empty name segment"},
+		{"\"Safety\\nLevel\"", "a line break"},
+		{`"M\\"`, "ending in a backslash"},
+	} {
+		for i := 0; i < 3; i++ {
+			_, err := export.Convert("m.ttl", []byte(retyped(i, literal.object)), export.FormatTurtle, export.FormatSysML)
+			var unsupported *export.UnsupportedError
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("usage %d typed by %s: expected an unsupported error, got %v", i, literal.object, err)
+			}
+			for _, want := range []string{"the element <urn:sysmlv2:element:P__", "sysml:type", literal.why, "names the one metadata definition it applies"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("usage %d typed by %s: expected %q in error:\n%s", i, literal.object, want, err.Error())
+				}
+			}
+		}
+	}
+}
+
 // A metadata usage's keyword is `metadata`, `@` or `#`; a graph stating any
 // other is refused rather than written as a declaration of that other kind,
 // and a `#` prefix owned by no declaration has nothing to prefix.

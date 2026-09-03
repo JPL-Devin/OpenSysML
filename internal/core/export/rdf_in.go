@@ -1466,12 +1466,22 @@ func (d *decoder) metadataHead(el *element) (string, error) {
 // metadataDefinition is the one metadata definition a metadata usage applies;
 // a usage typed by none, by several, or by an element of another metaclass has
 // no notation and is refused. A literal type is a name the graph does not
-// define, so its metaclass cannot be checked.
+// define, so its metaclass cannot be checked; it must at least be a name.
 func (d *decoder) metadataDefinition(el *element) (rdf.Term, error) {
 	types := d.graph.Objects(rdf.IRI(el.iri), rdf.SysML+relationshipProperty[ast.RelTyping])
 	switch len(types) {
 	case 1:
 		if types[0].IsLiteral() {
+			why := notAName(types[0])
+			if types[0].Datatype == rdf.OpenSysML+dtExpression {
+				why = "it is an expression, not a name"
+			}
+			if why != "" {
+				return rdf.Term{}, &UnsupportedError{
+					What: fmt.Sprintf("the element <%s>", el.iri),
+					Note: fmt.Sprintf("its %s %s: %s, and a metadata usage names the one metadata definition it applies", sysmlPrefix+relationshipProperty[ast.RelTyping], types[0], why),
+				}
+			}
 			return types[0], nil
 		}
 		target, err := d.referencedElement(types[0].Value)
@@ -1579,11 +1589,18 @@ func (d *decoder) referenceList(el *element, property string) ([]string, error) 
 }
 
 // referenceName renders a reference term as the name to write in source: a
-// literal as written, an IRI as its element's qualified name relative to scope.
+// literal as written (refused unless it is a name), an IRI as its element's
+// qualified name relative to scope.
 func (d *decoder) referenceName(term rdf.Term, scope string) (string, error) {
 	if term.IsLiteral() {
 		if term.Datatype == rdf.OpenSysML+dtExpression {
 			return term.Value, nil
+		}
+		if why := notAName(term); why != "" {
+			return "", &UnsupportedError{
+				What: fmt.Sprintf("the reference %s", term),
+				Note: why + ", and a reference the graph does not define is carried as the plain name to write",
+			}
 		}
 		return qualifiedNameText(term.Value), nil
 	}
@@ -1606,6 +1623,30 @@ func (d *decoder) referenceName(term rdf.Term, scope string) (string, error) {
 		}
 		scope = scope[:cut]
 	}
+}
+
+// notAName says why a literal cannot be written as a qualified name — an
+// untagged string whose every segment fits between unrestricted-name quotes.
+func notAName(term rdf.Term) string {
+	switch {
+	case term.Lang != "":
+		return fmt.Sprintf("it is tagged @%s", term.Lang)
+	case term.Datatype != "" && term.Datatype != rdf.XSD+"string":
+		return fmt.Sprintf("it is typed <%s>, not a string", term.Datatype)
+	case term.Value == "":
+		return "it is empty"
+	}
+	for _, segment := range strings.Split(strings.TrimPrefix(term.Value, "$::"), "::") {
+		switch {
+		case segment == "":
+			return "it has an empty name segment"
+		case strings.ContainsAny(segment, "\n\r"):
+			return "it has a name segment holding a line break"
+		case (len(segment)-len(strings.TrimRight(segment, `\`)))%2 == 1:
+			return "it has a name segment ending in a backslash"
+		}
+	}
+	return ""
 }
 
 func (d *decoder) stringOf(el *element, property string) (string, bool) {

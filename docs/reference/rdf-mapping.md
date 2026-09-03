@@ -200,7 +200,10 @@ never by parsing the id — a declared id may legitimately end in `_om` or embed
   literal carries the name itself,
   without the quotes an unrestricted name is written with; a target that is an
   expression rather than a name (a feature chain, say) is carried as the text it
-  was written as, typed `sysx:Expression` to tell the two apart.
+  was written as, typed `sysx:Expression` to tell the two apart. Reading a graph
+  back, a literal that is neither — a number, a boolean, a language-tagged
+  string, an empty or broken qualified name — is refused rather than written
+  into the notation as it stands.
 - `sysml:lowerBound`, `sysml:upperBound` — multiplicity, as expression nodes
   ([Expressions](#expressions))
 - `sysml:value` — a feature's value, as an expression node
