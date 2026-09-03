@@ -85,19 +85,15 @@ func (l featureListing) truncationHint(name string) string {
 // listing that comes back is a real answer about part of the run.
 func (s *Session) featuresJSON(ctx *runtime.Context, inst *runtime.Instance, name string, listing featureListing) ([]string, bool, error) {
 	bounds := grpc.GraphBounds{Depth: listing.depth, Instances: listing.budget}
-	root, all, truncated := grpc.InstanceGraphToProtoWithin(ctx, inst, s.symbolIndex(), bounds)
+	graph := grpc.InstanceGraphToProtoWithin(ctx, inst, s.symbolIndex(), bounds)
 
-	resp := &pb.InstantiateResponse{Instance: root, Instances: all}
-	for _, pbInst := range all {
-		// A feature value the API reports as an error is one the session could not
-		// answer about, which a non-interactive run exits on.
-		for _, fv := range pbInst.FeatureValues {
-			if fv.Error != "" {
-				s.noteMaterializationFailure(errors.New(fv.Error))
-			}
-		}
+	resp := &pb.InstantiateResponse{Instance: graph.Root, Instances: graph.All}
+	// A feature value the graph reports as an error is one the session could not
+	// answer about, which a non-interactive run exits on.
+	for _, err := range graph.Errors {
+		s.noteMaterializationFailure(err)
 	}
-	if truncated {
+	if graph.Truncated {
 		resp.Diagnostics = append(resp.Diagnostics, &pb.Diagnostic{
 			Severity: "warning",
 			Message: fmt.Sprintf("graph truncated at %d objects; %s",

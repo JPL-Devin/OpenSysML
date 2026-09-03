@@ -63,8 +63,12 @@ func TestFeatureValuesJSONCarriesMaterializationFailureIntoStatus(t *testing.T) 
 	if !s.HasErrors() {
 		t.Error("a serialized materialization failure did not reach the session status")
 	}
-	if failures := s.MaterializationFailures(); len(failures) == 0 {
-		t.Error("materialization failures = none, want the one the graph reported")
+	failures := s.MaterializationFailures()
+	if len(failures) != 1 {
+		t.Fatalf("materialization failures = %v, want one", failures)
+	}
+	if !errors.Is(failures[0], runtime.ErrMultiplicityViolation) {
+		t.Errorf("failure %v is not the multiplicity violation the runtime reported", failures[0])
 	}
 }
 
