@@ -5,7 +5,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 const adoptSrc = `package Demo {
@@ -361,4 +365,83 @@ func indexOfFeature(t *testing.T, features []EffectiveFeature, name string) int 
 	}
 	t.Fatalf("no feature %q among %d", name, len(features))
 	return 0
+}
+
+const crateSrc = `package Demo {
+	private import Shapes::*;
+	part def Crate { part box : Box; }
+}`
+
+// crateContextOver indexes the crate model over a Shapes library of its own,
+// Domain content whose text the index vouches for unless vouch is false.
+func crateContextOver(t *testing.T, lib string, vouch bool) *Context {
+	t.Helper()
+	idx := symbols.NewIndex()
+	idx.AddDocument("Shapes.sysml", parser.New(source.New("Shapes.sysml", []byte(lib))).ParseFile())
+	doc := symbols.LibraryDocument{Tier: symbols.TierDomain}
+	if vouch {
+		doc.Digest = symbols.TextDigest([]byte(lib))
+	}
+	idx.MarkLibraryDocument("Shapes.sysml", doc)
+	idx.AddDocument("<test>", parser.New(source.New("<test>", []byte(crateSrc))).ParseFile())
+	idx.ExpandWildcardImports()
+	resolver := resolve.New(idx)
+	ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
+	ctx.RegisterSource(source.New("<test>", []byte(crateSrc)))
+	ctx.RegisterSource(source.New("Shapes.sysml", []byte(lib)))
+	return ctx
+}
+
+// crateIn materializes a crate and the box part inside it.
+func crateIn(t *testing.T, ctx *Context) *Instance {
+	t.Helper()
+	obj, err := ctx.Instantiate(lookupOne(t, ctx.resolver.Index(), "Demo::Crate"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if _, err := obj.GetFeatureValue(ctx, "box"); err != nil {
+		t.Fatalf("GetFeatureValue(box): %v", err)
+	}
+	return obj
+}
+
+// A shape digest names a library type instead of expanding it, so it must say
+// which library: two indexes loaded on their own may declare a type of the same
+// name with different features, and an object of one is refused by the other.
+func TestAdoptRefusesASameNamedLibraryTypeOfAnotherLibrary(t *testing.T) {
+	const lib = `package Shapes { part def Box { attribute n = 1; } }`
+	prev := crateContextOver(t, lib, true)
+	obj := crateIn(t, prev)
+	shapes := prev.ShapesOf(obj)
+
+	same := crateContextOver(t, lib, true)
+	if _, err := same.Adopt(prev, shapes, obj); err != nil {
+		t.Fatalf("Adopt over the same library: %v", err)
+	}
+
+	other := crateContextOver(t, strings.Replace(lib, "attribute n = 1;", "attribute n = 1; attribute m = 2;", 1), true)
+	if _, err := other.Adopt(prev, shapes, obj); err == nil {
+		t.Fatal("Adopt accepted an object whose box type gained a feature in the other library")
+	}
+	if _, found := other.Instance(obj.ID); found {
+		t.Error("the refused object was left in the context")
+	}
+}
+
+// A library whose text the index does not vouch for is expanded like the model,
+// so the digest still follows what its types declare.
+func TestShapeDigestExpandsALibraryOfUnknownText(t *testing.T) {
+	const lib = `package Shapes { part def Box { attribute n = 1; } }`
+	ctx := crateContextOver(t, lib, false)
+	if _, known := ctx.resolver.Index().LibraryIdentity(); known {
+		t.Fatal("LibraryIdentity is known for a library document of no digest")
+	}
+	digest := ctx.ShapeDigest(lookupOne(t, ctx.resolver.Index(), "Demo::Crate"))
+	if !strings.Contains(digest, "Shapes::Box/partDef{n:1..1=1@") {
+		t.Errorf("digest names the library type without expanding it: %s", digest)
+	}
+	other := crateContextOver(t, strings.Replace(lib, "n = 1", "n = 2", 1), false)
+	if other.ShapeDigest(lookupOne(t, other.resolver.Index(), "Demo::Crate")) == digest {
+		t.Error("digest unchanged by an edit to the library type it expands")
+	}
 }
