@@ -326,14 +326,15 @@ func (r *Resolver) resolveBehaviorDecl(scope *symbols.Scope, decl ast.Node) bool
 		// Source and target name vertices of the enclosing machine: resolved here,
 		// so a misspelled endpoint reports with the other name diagnostics rather
 		// than at lowering, which consumes what this resolved.
-		// The guard and effect resolve against the parameters the transition's
-		// call trigger declares, which live in a scope of their own.
+		// The guard, effect and body resolve against the parameters the
+		// transition's call trigger declares, which live in a scope of their own.
 		r.ResolveEndpoint(scope, d.Source)
 		r.ResolveEndpoint(scope, d.Target)
 		r.resolveTrigger(scope, d.Trigger)
 		body := symbols.TriggerScope(scope, d)
 		r.resolveExpr(body, d.Guard)
 		r.walkMembers(body, d.Effect)
+		r.walkMembers(body, d.Members)
 		return true
 	case *ast.SendStatement:
 		r.resolveExpr(scope, d.Message)

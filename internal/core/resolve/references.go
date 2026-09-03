@@ -316,6 +316,7 @@ func (c *refCollector) behaviorDecl(scope *symbols.Scope, decl ast.Node) bool {
 		body := symbols.TriggerScope(scope, d)
 		c.expr(body, d.Guard)
 		c.walkMembers(body, d.Effect)
+		c.walkMembers(body, d.Members)
 		return true
 	case *ast.SendStatement:
 		c.expr(scope, d.Message)

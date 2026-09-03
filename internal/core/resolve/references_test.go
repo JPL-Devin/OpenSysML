@@ -303,6 +303,57 @@ func TestTransitionEffectReferencesResolveInTriggerScope(t *testing.T) {
 	}
 }
 
+// A transition's trailing body (`then busy { … }`) resolves and is collected like
+// its effect: in the trigger's scope, so its sends reach the accept's parameter
+// and an unresolved receiver or constructor label in it is reported.
+func TestTransitionBodyResolvesInTriggerScope(t *testing.T) {
+	const src = `package App {
+	item def Request { attribute id; }
+	state def Server {
+		state idle;
+		state busy;
+		transition t first idle accept origin : Request then busy {
+			action log;
+			send new Request(id = 1) to origin;
+			send new Request(count = 1) to missing;
+		}
+	}
+}`
+	walk, root, rootScope := resolvedDoc(t, src)
+	if len(walk.Diagnostics) != 2 {
+		t.Fatalf("the label `count` and the receiver `missing` must be the two unresolved names, got %v", walk.Diagnostics)
+	}
+	for _, d := range walk.Diagnostics {
+		if !strings.Contains(d.Message, "count") && !strings.Contains(d.Message, "missing") {
+			t.Errorf("unexpected diagnostic %v", d)
+		}
+	}
+	cold := resolve.New(walk.Index())
+	cold.SetModel(semantics.NewModel(cold))
+	byName := map[string]int{}
+	for _, ref := range resolve.References(root, rootScope) {
+		name := nameText(ref.QN)
+		byName[name]++
+		if name != "origin" && name != "id" {
+			continue
+		}
+		if _, ok := cold.ResolveReference(ref); !ok {
+			t.Errorf("`%s` at %v did not resolve", name, ref.QN.Span())
+		}
+	}
+	if byName["origin"] != 1 || byName["id"] != 1 || byName["count"] != 1 || byName["missing"] != 1 {
+		t.Errorf("body references collected: %v, want origin, id, count and missing once each", byName)
+	}
+	pkg := unwrapMember(root.Members[0])
+	trans, ok := rootScope.ChildFor(pkg).ChildFor(memberOf(pkg, 1)).LookupLocal("t")
+	if !ok || trans == nil || trans.Scope == nil {
+		t.Fatal("the transition `t` was not indexed with a scope")
+	}
+	if _, ok := trans.Scope.LookupLocal("log"); !ok {
+		t.Error("the body's `action log` is not a member of the transition")
+	}
+}
+
 // memberOf returns the i-th member declaration of a package or definition node.
 func memberOf(n ast.Node, i int) ast.Node {
 	switch v := n.(type) {

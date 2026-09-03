@@ -235,6 +235,7 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 		defineIdent(scope, id, sym)
 		scope.AddChild(child)
 		buildMembers(child, d.Effect)
+		buildMembers(child, d.Members)
 		defineTransitionEffect(child, d)
 		return true
 	case *ast.StateRegion:
