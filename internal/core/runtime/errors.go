@@ -20,6 +20,9 @@ var (
 	// ErrUnresolvedReference is returned when a feature reference cannot be resolved.
 	ErrUnresolvedReference = errors.New("unresolved reference")
 
+	// ErrAmbiguousReference is returned when a qualified name names several elements.
+	ErrAmbiguousReference = errors.New("ambiguous reference")
+
 	// ErrTypeMismatch is returned when an operation receives a value of unexpected type.
 	ErrTypeMismatch = errors.New("type mismatch")
 
