@@ -126,6 +126,63 @@ func ActionNodeInScope(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, *
 	return inheritedActionNode(body, name, qualifier, make(map[*symbols.Symbol]bool))
 }
 
+// ActionNodeOfBody finds the action node a name written in an action's body
+// names there: one the body declares, else one its declaration inherits.
+func ActionNodeOfBody(body *symbols.Scope, name string) (ast.Node, bool) {
+	if body == nil || name == "" {
+		return nil, false
+	}
+	if member, ok := body.LookupLocal(name); ok {
+		return member.Decl, isActionNode(member.Decl)
+	}
+	decl, _, found, _ := inheritedActionNode(body, name, nil, make(map[*symbols.Symbol]bool))
+	return decl, found
+}
+
+// RedefinesActionNode reports whether node, declared in body, redefines decl —
+// directly or through a node it redefines that does — from the scope tree alone.
+func RedefinesActionNode(body *symbols.Scope, node *ast.Usage, decl ast.Node) bool {
+	return redefinesActionNode(body, node, decl, make(map[*ast.Usage]bool))
+}
+
+func redefinesActionNode(body *symbols.Scope, node *ast.Usage, decl ast.Node, seen map[*ast.Usage]bool) bool {
+	if body == nil || node == nil || seen[node] {
+		return false
+	}
+	seen[node] = true
+	for _, rel := range node.Relationships {
+		if rel == nil || rel.Kind != ast.RelRedefines {
+			continue
+		}
+		target := rel.Target
+		if fr, ok := target.(*ast.FeatureReference); ok {
+			target = fr.Name
+		}
+		qn, ok := target.(*ast.QualifiedName)
+		if !ok || len(qn.Parts) == 0 {
+			continue
+		}
+		var qualifier *symbols.Symbol
+		if len(qn.Parts) > 1 {
+			if qualifier, ok = lookupScopeParts(body.Parent(), qn.Parts[:len(qn.Parts)-1]); !ok {
+				continue
+			}
+		}
+		name := qn.Parts[len(qn.Parts)-1].Text
+		redefined, redefinedBody, found, _ := inheritedActionNode(body, name, qualifier, make(map[*symbols.Symbol]bool))
+		if !found {
+			continue
+		}
+		if redefined == decl {
+			return true
+		}
+		if u, ok := redefined.(*ast.Usage); ok && redefinesActionNode(redefinedBody, u, decl, seen) {
+			return true
+		}
+	}
+	return false
+}
+
 func enclosingActionScope(scope *symbols.Scope) *symbols.Scope {
 	for s := scope; s != nil; s = s.Parent() {
 		switch n := s.Node().(type) {

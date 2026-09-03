@@ -2,8 +2,6 @@ package runtime
 
 import (
 	"fmt"
-	"maps"
-	"slices"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
@@ -12,9 +10,11 @@ import (
 // stateStmtHost runs the statements of a state machine behavior written as an
 // inline action body: an assignment to a name the body does not declare reaches
 // the machine's state data, and a send posts through the machine's connections.
+// The behavior's execution is a performance whose nodes the body's blocks declare.
 type stateStmtHost struct {
 	exec     *StateExecutor
 	behavior lower.StateBehavior
+	perfs    performances
 }
 
 // executeBehavior runs one behavior of a state or transition: the statements it
@@ -24,12 +24,37 @@ func (e *StateExecutor) executeBehavior(behavior lower.StateBehavior) error {
 		return nil
 	}
 	host := &stateStmtHost{exec: e, behavior: behavior}
-	engine := newStmtEngineOver(e.ctx, host, e.stateData, e.attrFramesFor(behavior.Owner))
+	attrs := e.attrFramesFor(behavior.Owner)
+	host.perfs = performances{ctx: e.ctx, self: e.self, root: host.rootFrame(attrs), owner: host}
+	engine := newStmtEngineOver(e.ctx, host, e.stateData, attrs)
+	engine.env.perf = host.perfs.root
 	// The activation ends with this execution of the body, so a behavior run
 	// again does not read what an earlier execution computed.
 	defer engine.finish()
 	_, err := engine.run(behavior.Body)
 	return err
+}
+
+// rootFrame is the performance of the behavior itself: it holds no feature of its
+// own, and reads the machine's data and the enclosing states' attributes around it.
+func (h *stateStmtHost) rootFrame(attrs []map[string]Value) *actionFrame {
+	root := &actionFrame{
+		scope:       h.behavior.Scope,
+		connections: h.exec.graph.Connections,
+		data:        make(map[string]Value),
+		features:    make(map[string]ast.FeatureDirection),
+		subactions:  make(map[ast.Node]*actionFrame),
+		nodes:       h.behavior.Nodes,
+		label:       h.describe(),
+		outer:       []frame{mapFrame(h.exec.stateData)},
+	}
+	if root.scope == nil {
+		root.scope = h.exec.stateMachine.Scope
+	}
+	for _, attr := range attrs {
+		root.outer = append(root.outer, mapFrame(attr))
+	}
+	return root
 }
 
 func (h *stateStmtHost) describe() string {
@@ -119,54 +144,47 @@ func (h *stateStmtHost) effect(s lower.Effect) error {
 	return fmt.Errorf("%s: '%s' in a body is not executable", h.describe(), s.Kind)
 }
 
-// performNode runs a nested action of a block in a frame of the body; a typed one
-// performs its callee, whose final features become the node's pins and whose
-// outputs return outward once the node's own body has run.
+// performNode performs a nested action of a block as a subperformance of the
+// behavior's, in a frame of its own (performances.performNode).
 func (h *stateStmtHost) performNode(engine *stmtEngine, graph *lower.ActionGraph, node *ast.Usage) (stmtFlow, error) {
-	inv, performs := nestedInvocation(node)
-	if !performs {
-		_, flow, err := engine.nodeInBlock(graph, node, nil)
-		return flow, err
-	}
-	caller := engine.env.values()
-	var outputs []string
-	frame, flow, err := engine.nodeInBlock(graph, node, func(pins map[string]Value) (map[string]Value, error) {
-		features, out, err := invokeBoundAction(h.exec.ctx, nodeScope(graph, node), inv, pins, caller, h.exec.self)
-		if err != nil {
-			return nil, err
-		}
-		outputs = slices.Sorted(maps.Keys(out))
-		return features, nil
-	})
-	if err != nil {
-		return flow, err
-	}
-	for _, name := range outputs {
-		if value, ok := frame[name]; ok {
-			if err := h.returnOutput(engine.env, name, value); err != nil {
-				return flow, err
-			}
-		}
-	}
-	return flow, nil
+	return h.perfs.performNode(h.perfs.root, engine, graph, node)
 }
 
-// returnOutput writes an output a node's performance produced to the innermost
-// binding around the node that holds its name, if one does.
-func (h *stateStmtHost) returnOutput(env *stmtEnv, name string, value Value) error {
-	if env.assignLocal(name, value) {
-		return nil
-	}
-	if written, err := h.assignStateAttribute(name, value); written || err != nil {
+// setFeature writes a feature the behavior's performance holds; it holds none, so
+// the write reaches what is around it.
+func (h *stateStmtHost) setFeature(name string, value Value) error {
+	if written, err := h.assignAround(name, value); written || err != nil {
 		return err
 	}
+	return fmt.Errorf("%w: %s holds no %s", ErrBindingEnd, h.describe(), name)
+}
+
+// assignAround writes what a node's performance returns to the state's attribute,
+// the machine's attribute or the state datum of that name, whichever exists.
+func (h *stateStmtHost) assignAround(name string, value Value) (bool, error) {
+	if written, err := h.assignStateAttribute(name, value); written || err != nil {
+		return written, err
+	}
 	if h.exec.declaresAttribute(name) {
-		return h.exec.assignAttribute(name, value)
+		return true, h.exec.assignAttribute(name, value)
 	}
-	if env.data.has(name) {
-		env.data.set(name, value)
+	if _, ok := h.exec.stateData[name]; ok {
+		h.exec.stateData[name] = value
+		return true, nil
 	}
+	return false, nil
+}
+
+// pauseAt sets no breakpoint: a state behavior's nodes are not stepped.
+func (h *stateStmtHost) pauseAt(ast.Node) error {
 	return nil
+}
+
+// runOwnFlow refuses the flow a node states of its own: a state behavior has no
+// token flow to run it in.
+func (h *stateStmtHost) runOwnFlow(perf *actionFrame) error {
+	return fmt.Errorf("%s: the flow %s states of its own in a body is not executable",
+		h.describe(), nodeDescription(perf.node))
 }
 
 // performedInvocation reports the action a `perform` statement names, in either

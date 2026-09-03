@@ -43,6 +43,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("state_entry_action_input_bound_by_nothing", testStateEntryActionInputBoundByNothing)
 	t.Run("state_block_typed_node_input_bound_by_nothing", testStateBlockTypedNodeInputBoundByNothing)
 	t.Run("state_block_node_unvalued_pin_write_checked", testStateBlockNodeUnvaluedPinWriteChecked)
+	t.Run("state_block_node_pin_read_before_performed", testStateBlockNodePinReadBeforePerformed)
+	t.Run("state_block_node_bound_at_no_pin", testStateBlockNodeBoundAtNoPin)
+	t.Run("state_block_node_own_flow_not_executable", testStateBlockNodeOwnFlowNotExecutable)
 	t.Run("calc_block_node_unvalued_pin_write_checked", testCalcBlockNodeUnvaluedPinWriteChecked)
 	t.Run("node_binding_to_a_non_parameter", testNodeBindingToANonParameter)
 	t.Run("node_undirected_binding_carried_to_a_non_parameter", testNodeUndirectedBindingCarriedToANonParameter)
@@ -54,6 +57,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("block_node_own_flow_where_nodes_are_not_performed", testBlockNodeOwnFlowWhereNodesAreNotPerformed)
 	t.Run("block_node_own_flow_that_never_ends", testBlockNodeOwnFlowThatNeverEnds)
 	t.Run("inherited_binding_names_a_node_without_a_pin", testInheritedBindingNamesANodeWithoutAPin)
+	t.Run("inherited_binding_does_not_reach_a_masking_node", testInheritedBindingDoesNotReachAMaskingNode)
 	t.Run("node_inherited_default_that_cannot_be_evaluated", testNodeInheritedDefaultThatCannotBeEvaluated)
 	t.Run("node_binding_output_to_an_unknown_feature", testNodeBindingOutputToAnUnknownFeature)
 	t.Run("node_binding_output_through_a_scalar_chain", testNodeBindingOutputThroughAScalarChain)
@@ -8586,6 +8590,102 @@ func testStateBlockTypedNodeInputBoundByNothing(t *testing.T) {
 	}
 }
 
+// testStateBlockNodePinReadBeforePerformed: a state body's node has a frame of its
+// own, so a sibling reading its pin before it performs is ErrNodeNotPerformed.
+func testStateBlockNodePinReadBeforePerformed(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		private import ScalarValues::*;
+		state Machine {
+			attribute total : Integer = 0;
+			entry; then init;
+			state init;
+			state active {
+				entry action {
+					if total == 0 {
+						action early { assign total := late.v; }
+						action late { out v : Integer; assign v := 1; }
+					}
+				}
+			}
+			succession first init then active;
+			succession first active then done;
+		}
+	}`)
+	err := exec.RunToCompletion()
+	if !errors.Is(err, ErrNodeNotPerformed) {
+		t.Fatalf("error = %v, want ErrNodeNotPerformed", err)
+	}
+	if !strings.Contains(err.Error(), "late") {
+		t.Errorf("error %q does not name the node", err)
+	}
+}
+
+// testStateBlockNodeBoundAtNoPin: a binding in a state body at a pin the node does
+// not declare is ErrBindingEnd, as it is in an action's flow.
+func testStateBlockNodeBoundAtNoPin(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {`+adderActionDef+`
+		state Machine {
+			attribute total : Integer = 0;
+			entry; then init;
+			state init;
+			state active {
+				entry action {
+					if total == 0 {
+						bind adding.c = total;
+						action adding : Adder { in a = 1; in b = 2; }
+						assign total := adding.sum;
+					}
+				}
+			}
+			succession first init then active;
+			succession first active then done;
+		}
+	}`)
+	err := exec.RunToCompletion()
+	if !errors.Is(err, ErrBindingEnd) {
+		t.Fatalf("error = %v, want ErrBindingEnd", err)
+	}
+	if !strings.Contains(err.Error(), "c") {
+		t.Errorf("error %q does not name the pin", err)
+	}
+	if total := exec.StateData()["total"]; !valueEqual(total, integerValue(0)) {
+		t.Errorf("total = %v, want 0: the node must not run", total)
+	}
+}
+
+// testStateBlockNodeOwnFlowNotExecutable: a state behavior has no token flow, so a
+// node of its body stating a flow of its own is reported when reached, not run.
+func testStateBlockNodeOwnFlowNotExecutable(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		private import ScalarValues::*;
+		state Machine {
+			attribute total : Integer = 0;
+			entry; then init;
+			state init;
+			state active {
+				entry action {
+					if total == 0 {
+						action step {
+							first start;
+							then action one { assign total := total + 1; }
+							then done;
+						}
+					}
+				}
+			}
+			succession first init then active;
+			succession first active then done;
+		}
+	}`)
+	err := exec.RunToCompletion()
+	if err == nil || !strings.Contains(err.Error(), "the flow node step states of its own in a body is not executable") {
+		t.Errorf("expected the node's own flow to be reported, got: %v", err)
+	}
+	if total := exec.StateData()["total"]; !valueEqual(total, integerValue(0)) {
+		t.Errorf("total = %v, want 0: the node's flow must not run", total)
+	}
+}
+
 // testStateBlockNodeUnvaluedPinWriteChecked: a write to a pin a node in a state's
 // body declares without a value is checked against that pin's declaration, and the
 // machine's same-named attribute is left as it was.
@@ -8844,6 +8944,46 @@ func testInheritedBindingNamesANodeWithoutAPin(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), `binding end "add" names an action node but no pin of it`) {
 		t.Errorf("error %q does not explain the binding end", err)
+	}
+}
+
+// testInheritedBindingDoesNotReachAMaskingNode: a base's binding at a node it
+// declares does not bind the same-named pin of a node the derived action
+// declares in its place, so that pin stays unvalued.
+func testInheritedBindingDoesNotReachAMaskingNode(t *testing.T) {
+	src := `
+		package test {
+			action def Base {
+				attribute x : Integer = 5;
+				action add { in a : Integer; out sum : Integer; assign sum := a; }
+				bind add.a = x;
+			}
+			action def Derived :> Base {
+				action add { in a : Integer; out sum : Integer; assign sum := a + 1; }
+				first start then add;
+				succession add then done;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Derived", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action Derived not found")
+	}
+	exec, err := ctx.CreateActionExecutor(sym)
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+	err = exec.RunToCompletion()
+	if err == nil {
+		t.Fatal("the masking node's pin took the base's binding")
+	}
+	var noValue *NoValueError
+	if !errors.As(err, &noValue) || noValue.Feature != "a" {
+		t.Errorf("error %v, want %T for a", err, noValue)
+	}
+	if v, ok := exec.Results()["add.sum"]; ok {
+		t.Errorf("add.sum = %v, want no value", v)
 	}
 }
 

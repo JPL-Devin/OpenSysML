@@ -512,7 +512,7 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 			})
 		case *ast.Usage:
 			if n.Kind == ast.UsageBinding {
-				bindings, err := lowerPinBindings(graph, graph.Nodes, n, scope)
+				bindings, err := lowerPinBindings(graph, nodesNamed(graph.Nodes), n, scope)
 				if err != nil {
 					return nil, err
 				}
@@ -553,7 +553,7 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 			if n.Kind != ast.UsageFlow || n.FlowEnds == nil {
 				continue
 			}
-			source, flow, err := lowerFlow(graph.Nodes, n)
+			source, flow, err := lowerFlow(nodesNamed(graph.Nodes), n)
 			if err != nil {
 				return nil, err
 			}
@@ -573,6 +573,7 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 // the action inherits keeps the connections its declaring action stated at it.
 func lowerInheritedPinConnections(graph *ActionGraph, scope *symbols.Scope) error {
 	for _, body := range resolve.ActionGeneralBodies(scope) {
+		nodes := inheritedNodeLookup(graph, body)
 		for _, member := range declMembers(body.Node()) {
 			u, ok := unwrapMembership(member).(*ast.Usage)
 			if !ok {
@@ -580,7 +581,7 @@ func lowerInheritedPinConnections(graph *ActionGraph, scope *symbols.Scope) erro
 			}
 			switch u.Kind {
 			case ast.UsageBinding:
-				bindings, err := lowerPinBindings(graph, graph.Nodes, u, body)
+				bindings, err := lowerPinBindings(graph, nodes, u, body)
 				if err != nil {
 					return err
 				}
@@ -589,13 +590,13 @@ func lowerInheritedPinConnections(graph *ActionGraph, scope *symbols.Scope) erro
 				if u.FlowEnds == nil {
 					continue
 				}
-				if from, _ := flowEnd(graph.Nodes, u.FlowEnds.From); from == nil {
+				if from, _ := flowEnd(nodes, u.FlowEnds.From); from == nil {
 					continue
 				}
-				if to, _ := flowEnd(graph.Nodes, u.FlowEnds.To); to == nil {
+				if to, _ := flowEnd(nodes, u.FlowEnds.To); to == nil {
 					continue
 				}
-				source, flow, err := lowerFlow(graph.Nodes, u)
+				source, flow, err := lowerFlow(nodes, u)
 				if err != nil {
 					return err
 				}
@@ -604,6 +605,42 @@ func lowerInheritedPinConnections(graph *ActionGraph, scope *symbols.Scope) erro
 		}
 	}
 	return nil
+}
+
+// nodeLookup returns the node of a graph a connector end names, nil for none.
+type nodeLookup func(name string) ast.Node
+
+// nodesNamed looks a connector end up among nodes by the names they answer to.
+func nodesNamed(nodes []ast.Node) nodeLookup {
+	return func(name string) ast.Node { return nodeAnswering(nodes, name) }
+}
+
+// inheritedNodeLookup resolves an end a general body's connector writes to the
+// node of graph standing for the declaration that name has in that body — the
+// declaration itself or a node redefining it — never to an unrelated node that
+// took the name in the specializing action.
+func inheritedNodeLookup(graph *ActionGraph, body *symbols.Scope) nodeLookup {
+	return func(name string) ast.Node {
+		decl, ok := resolve.ActionNodeOfBody(body, name)
+		if !ok {
+			return nil
+		}
+		for _, node := range graph.Nodes {
+			if node == decl {
+				return node
+			}
+		}
+		for _, node := range graph.Nodes {
+			u, ok := node.(*ast.Usage)
+			if !ok {
+				continue
+			}
+			if nodeScope := graph.Scopes[node]; nodeScope != nil && resolve.RedefinesActionNode(nodeScope.Parent(), u, decl) {
+				return node
+			}
+		}
+		return nil
+	}
 }
 
 // resolveFirstNode reinterprets a `first a …;` whose name is a node the body
@@ -637,8 +674,8 @@ func resolveFirstNode(graph *ActionGraph) (map[*ast.InitialNode]ast.Node, error)
 }
 
 // lowerPinBindings lowers a binding to one PinBinding per end that addresses a
-// pin of one of nodes, which are nodes of graph; a binding addressing no node lowers to nothing.
-func lowerPinBindings(graph *ActionGraph, nodes []ast.Node, u *ast.Usage, scope *symbols.Scope) ([]PinBinding, error) {
+// pin of a node nodes resolves; a binding addressing no node lowers to nothing.
+func lowerPinBindings(graph *ActionGraph, nodes nodeLookup, u *ast.Usage, scope *symbols.Scope) ([]PinBinding, error) {
 	binding, ok := lowerBinding(u, scope)
 	if !ok {
 		return nil, nil
@@ -681,16 +718,16 @@ func lowerPinBindings(graph *ActionGraph, nodes []ast.Node, u *ast.Usage, scope 
 	return out, nil
 }
 
-// pinPath resolves a binding end to the node among nodes it addresses, the nodes it
+// pinPath resolves a binding end to the node nodes resolves it to, the nodes it
 // reaches through under that one, and the pin: `leg.inner.v` is leg, [inner], v. node
-// is nil for an end addressing none of nodes; a path reaching into a node that holds no
+// is nil for an end addressing no node; a path reaching into a node that holds no
 // such nested action is an error.
-func pinPath(graph *ActionGraph, nodes []ast.Node, end ast.Node) (node ast.Node, path []ast.Node, pin string, err error) {
+func pinPath(graph *ActionGraph, nodes nodeLookup, end ast.Node) (node ast.Node, path []ast.Node, pin string, err error) {
 	segments := endSegments(end)
 	if len(segments) == 0 {
 		return nil, nil, "", nil
 	}
-	node = nodeAnswering(nodes, segments[0])
+	node = nodes(segments[0])
 	if node == nil || len(segments) == 1 {
 		return node, nil, "", nil
 	}
@@ -1251,7 +1288,7 @@ func getNodeName(node ast.Node) string {
 // Both ends must name action nodes of this graph, since a data flow moves a
 // value from one node's output to another's input; an end naming anything else
 // is reported rather than dropped.
-func lowerFlow(nodes []ast.Node, flow *ast.Usage) (ast.Node, ObjectFlow, error) {
+func lowerFlow(nodes nodeLookup, flow *ast.Usage) (ast.Node, ObjectFlow, error) {
 	name, _ := ast.EffectiveName(flow)
 	sourceNode, sourcePin := flowEnd(nodes, flow.FlowEnds.From)
 	targetNode, targetPin := flowEnd(nodes, flow.FlowEnds.To)
@@ -1307,12 +1344,12 @@ func lowerFlow(nodes []ast.Node, flow *ast.Usage) (ast.Node, ObjectFlow, error) 
 // names. A chain (`generateTorque.engineTorque`) names a node and its pin; a
 // bare name (`generateTorque`) names the node alone, and the pin is whatever
 // the flow's payload names.
-func flowEnd(nodes []ast.Node, end ast.Node) (ast.Node, string) {
+func flowEnd(nodes nodeLookup, end ast.Node) (ast.Node, string) {
 	segments := endSegments(end)
 	if len(segments) == 0 {
 		return nil, ""
 	}
-	node := nodeAnswering(nodes, segments[0])
+	node := nodes(segments[0])
 	if len(segments) == 1 {
 		return node, ""
 	}
@@ -1359,7 +1396,7 @@ func parsePinReference(nodes []ast.Node, qname *ast.QualifiedName) (ast.Node, st
 	if qname == nil {
 		return nil, ""
 	}
-	return flowEnd(nodes, qname)
+	return flowEnd(nodesNamed(nodes), qname)
 }
 
 // statementKeyword names a body statement for a diagnostic.

@@ -152,7 +152,13 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   before it failed as a statement a body cannot run; where both branches declare a `p`, a read
   of `p.v` in a branch is of that branch's node. A typed or invoked node adopts the subactions
   of the action it performed, so `call.inner.v` reads a pin inside the callee through it and
-  `Results()` reports it under `call.inner.v`. A typed action node in a branch or loop of a
+  `Results()` reports it under `call.inner.v`. A node in a state's entry/do/exit or transition
+  body performs in a frame of its own as one in an action body does, with the machine's data and
+  the enclosing states' attributes in reach, so a sibling reads its pins as `p.v`, two nodes'
+  same-named pins keep apart, and a `bind` or `flow` the body states at its pins — from a state
+  attribute into a pin, between two nodes' pins, or an output back to a state attribute — is
+  applied; before, such a connector was reported as a statement a body cannot run and `p.v`
+  found no `p`. A typed action node in a branch or loop of a
   state's entry/do/exit body performs the action it names with the `in` values and arguments
   it states, holds every pin of the callee as it ended (an argument overriding the node's own
   default included) for its body to read, and returns its `out` values to a same-named block
@@ -168,7 +174,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   general action is found rather than reported unresolved, and a `bind` or `flow` the general
   action states at that node's pins applies to the derived action's performance of it, in the
   general action's scope — before, only the derived action's own connectors were lowered and the
-  inherited node ran with its input unbound. An action declared in a branch or loop body that
+  inherited node ran with its input unbound. Such a connector follows the node's declaration: a
+  node the derived action declares of its own under the inherited node's name does not take it
+  (the connector lowers to nothing, and the replacement's same-named pin stays unbound), while
+  a node redefining the inherited one (`action add :>> add`) does. An action declared in a branch or loop body that
   states a flow of its own (`first`, successions, forks and joins among its nodes) now runs that
   flow to completion in its frame, and its steps spend the action's own token-flow budget
   (`OPENSYSML_MAX_ACTION_STEPS`, `ErrActionStepLimitExceeded`) as the enclosing flow's do;

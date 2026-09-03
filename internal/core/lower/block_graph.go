@@ -340,7 +340,8 @@ func blockStep(graph *ActionGraph, nodes []ast.Node, member ast.Node, scope *sym
 
 // lowerBlockConnector lowers a binding or flow at a pin of one of the block's nodes into
 // graph and reports whether u is one; one that cannot be lowered becomes an Unsupported step.
-func lowerBlockConnector(graph *ActionGraph, nodes []ast.Node, u *ast.Usage, scope *symbols.Scope) (Statement, bool) {
+func lowerBlockConnector(graph *ActionGraph, blockNodes []ast.Node, u *ast.Usage, scope *symbols.Scope) (Statement, bool) {
+	nodes := nodesNamed(blockNodes)
 	switch {
 	case u.Kind == ast.UsageBinding:
 		bindings, err := lowerPinBindings(graph, nodes, u, scope)

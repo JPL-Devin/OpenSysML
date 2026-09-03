@@ -21,7 +21,7 @@ func (e *ActionExecutor) tokenGraph(tokenIdx int) *lower.ActionGraph {
 }
 
 // subflowOf returns the flow a node owns, and whether it owns one.
-func (e *ActionExecutor) subflowOf(graph *lower.ActionGraph, node ast.Node) (*lower.Subflow, bool) {
+func (e *performances) subflowOf(graph *lower.ActionGraph, node ast.Node) (*lower.Subflow, bool) {
 	sub, owns := graph.Subflows[node]
 	return sub, owns && sub != nil
 }
@@ -218,12 +218,6 @@ func (e *ActionExecutor) flowNodeNames(graph *lower.ActionGraph) []string {
 		names = append(names, ActionNodeNames(node)...)
 	}
 	return append(names, e.subflowNodeNames(graph)...)
-}
-
-// connectionsOf returns the connectors a send in a performance may route through:
-// the action's own, plus every enclosing flow's for a nested one.
-func (e *ActionExecutor) connectionsOf(frame *actionFrame) []lower.Connection {
-	return frame.connections
 }
 
 // joinConnections appends the connectors a nested flow declares to those around it.

@@ -9,10 +9,10 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 )
 
-// actionStmtHost runs an action node's body statements: a send posts through the graph's
+// actionStmtHost runs an action node's body statements: a send posts through the flow's
 // connections, and an assignment to an undeclared name reaches the enclosing performances.
 type actionStmtHost struct {
-	exec *ActionExecutor
+	exec *performances
 	node ast.Node // the action node whose body is running, for diagnostics
 	// perf is the performance the body runs in, whose features it declares into.
 	perf *actionFrame
@@ -23,7 +23,7 @@ type actionStmtHost struct {
 
 // executeBody runs the lowered statements graph records for node in perf, the
 // performance they belong to, with the performances around it in lexical reach.
-func (e *ActionExecutor) executeBody(perf *actionFrame, graph *lower.ActionGraph, node ast.Node) error {
+func (e *performances) executeBody(perf *actionFrame, graph *lower.ActionGraph, node ast.Node) error {
 	host := &actionStmtHost{exec: e, node: node, perf: perf}
 	lexical := perf.lexicalFrames()
 	engine := newStmtEngineIn(e.ctx, host, lexical[len(lexical)-1], lexical[:len(lexical)-1])
@@ -49,11 +49,11 @@ func (h *actionStmtHost) describe() string {
 }
 
 func (h *actionStmtHost) send(ec *EvalContext, s lower.Send) error {
-	msg, err := ec.buildMessage(h.exec.action.Scope, s)
+	msg, err := ec.buildMessage(h.exec.root.scope, s)
 	if err != nil {
 		return err
 	}
-	return h.exec.ctx.post(h.exec.connectionsOf(h.perf), msg, s, h.exec.self)
+	return h.exec.ctx.post(h.perf.connections, msg, s, h.exec.self)
 }
 
 // assignOuter writes a name the body's blocks do not declare: to the running performance,
@@ -132,33 +132,38 @@ func (h *actionStmtHost) effect(s lower.Effect) error {
 }
 
 // performNode performs a nested action a block of the body declares as a
-// subperformance of the body's, with the block-locals entered around it in reach;
-// a node owning a flow runs it to completion here. A breakpoint on the node
-// pauses the run before it performs.
+// subperformance of the body's.
 func (h *actionStmtHost) performNode(engine *stmtEngine, graph *lower.ActionGraph, node *ast.Usage) (stmtFlow, error) {
-	if err := h.exec.pauseAt(node); err != nil {
+	return h.exec.performNode(h.perf, engine, graph, node)
+}
+
+// performNode performs node, which a block of parent's body declares, as a subperformance
+// of parent with the block-locals entered around it in reach; a node owning a flow runs it
+// to completion here. A breakpoint on the node pauses the run before it performs.
+func (e *performances) performNode(parent *actionFrame, engine *stmtEngine, graph *lower.ActionGraph, node *ast.Usage) (stmtFlow, error) {
+	if err := e.owner.pauseAt(node); err != nil {
 		return flowNext, err
 	}
-	perf, err := h.exec.beginPerformance(h.perf, graph, node, slices.Clone(engine.env.frames))
+	perf, err := e.beginPerformance(parent, graph, node, slices.Clone(engine.env.frames))
 	if err != nil {
 		return flowNext, err
 	}
 	if inv, ok := nestedInvocation(node); ok {
-		if err := h.exec.performInvocation(perf, inv); err != nil {
+		if err := e.performInvocation(perf, inv); err != nil {
 			return flowNext, err
 		}
 	}
 	if perf.graph != nil {
-		if err := h.exec.runSubflow(perf); err != nil {
+		if err := e.owner.runOwnFlow(perf); err != nil {
 			return flowNext, err
 		}
-	} else if err := h.exec.executeBody(perf, graph, node); err != nil {
+	} else if err := e.executeBody(perf, graph, node); err != nil {
 		return flowNext, err
 	}
-	if err := h.exec.endPerformance(perf); err != nil {
+	if err := e.endPerformance(perf); err != nil {
 		return flowNext, err
 	}
-	return flowNext, h.exec.applyDataFlows(h.perf, graph, node, perf.data)
+	return flowNext, e.applyDataFlows(parent, graph, node, perf.data)
 }
 
 // declaredOutput reports no output features: an action node's parameters live

@@ -21,7 +21,10 @@ type stmtEnv struct {
 	enclosing []frame
 	// outer are value maps the body reads but does not declare into, innermost
 	// last: the attributes the states enclosing the behavior own.
-	outer  []map[string]Value
+	outer []map[string]Value
+	// perf is the performance the body runs as where data is not its frame — a state
+	// behavior's — whose nodes a read of `p.v` names. nil where data is the frame.
+	perf   *actionFrame
 	frames []map[string]Value
 	// unvalued names, per frame, the features a frame declares but holds no value
 	// for yet (`out v : Integer;`), which an assignment writes into that frame.
@@ -222,6 +225,9 @@ func (e *stmtEngine) evalIn(scope *symbols.Scope) *EvalContext {
 	frames = append(frames, e.env.data)
 	for _, outer := range e.env.outer {
 		frames = append(frames, mapFrame(outer))
+	}
+	if e.env.perf != nil {
+		frames = append(frames, performanceFrame(e.env.perf))
 	}
 	for _, local := range e.env.frames {
 		frames = append(frames, mapFrame(local))
@@ -425,89 +431,6 @@ func (e *stmtEngine) blockNode(graph *lower.ActionGraph, node ast.Node) (stmtFlo
 		return e.host.performNode(e, graph, usage)
 	}
 	return e.run(graph.Bodies[node])
-}
-
-// nodeInBlock runs a nested action of a block's flow for a host keeping no
-// performances: its pins — the arguments it passes its callee, then the defaults it
-// declares — are declared in a frame of the body its body runs in, and perform, when
-// given, performs the action the node names with those pins and returns the features
-// the performance ended with, which join the frame before the body runs. A feature
-// the node declares without a value is the frame's too, unvalued until the body
-// assigns it. It returns the frame as the body left it.
-func (e *stmtEngine) nodeInBlock(
-	graph *lower.ActionGraph,
-	node *ast.Usage,
-	perform func(pins map[string]Value) (map[string]Value, error),
-) (map[string]Value, stmtFlow, error) {
-	if connectsPins(graph, node) {
-		return nil, flowNext, fmt.Errorf("%s: a binding or flow at a pin of %s in a body is not executable",
-			e.host.describe(), nodeDescription(node))
-	}
-	if sub, owns := graph.Subflows[node]; owns && sub != nil {
-		return nil, flowNext, fmt.Errorf("%s: the flow %s states of its own in a body is not executable",
-			e.host.describe(), nodeDescription(node))
-	}
-	frame := e.env.enter()
-	defer e.env.leave()
-	defer e.enterActivation()()
-	pins := make(map[string]Value, len(graph.Features[node]))
-	if inv, performs := nestedInvocation(node); performs {
-		scope := nodeScope(graph, node)
-		arguments, err := invocationArguments(e.ctx, scope, inv, e.evalIn(scope))
-		if err != nil {
-			return nil, flowNext, err
-		}
-		for name, value := range arguments {
-			e.env.declare(name, value)
-			pins[name] = value
-		}
-	}
-	for _, feature := range graph.Features[node] {
-		if _, held := pins[feature.Name]; held {
-			continue
-		}
-		if feature.Value == nil {
-			e.env.declareUnvalued(feature.Name)
-			continue
-		}
-		value, err := e.evalIn(feature.Scope).Eval(feature.Value)
-		if err != nil {
-			return nil, flowNext, fmt.Errorf("eval %s of %s: %w", feature.Name, nodeDescription(node), err)
-		}
-		e.env.declare(feature.Name, value)
-		pins[feature.Name] = value
-	}
-	if perform != nil {
-		features, err := perform(pins)
-		if err != nil {
-			return nil, flowNext, err
-		}
-		for name, value := range features {
-			e.env.declare(name, value)
-		}
-	}
-	flow, err := e.run(graph.Bodies[node])
-	return frame, flow, err
-}
-
-// connectsPins reports whether graph states a binding or flow at a pin of node.
-func connectsPins(graph *lower.ActionGraph, node ast.Node) bool {
-	for _, binding := range graph.Bindings {
-		if binding.Node == node {
-			return true
-		}
-	}
-	if len(graph.DataFlows[node]) > 0 {
-		return true
-	}
-	for _, flows := range graph.DataFlows {
-		for _, flow := range flows {
-			if flow.Target == node {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // enterActivation runs what follows in a new activation and returns the

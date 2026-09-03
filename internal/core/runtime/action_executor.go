@@ -19,11 +19,11 @@ var ErrAmbiguousSuccession = errors.New("more than one succession is enabled")
 
 // ActionExecutor executes action bodies using token-flow semantics.
 type ActionExecutor struct {
-	ctx    *Context
+	// performances holds the action's own performance, root, and runs its nodes' as
+	// its subperformances; self is the object performing the action, whose
+	// connections route what it sends.
+	performances
 	action *symbols.Symbol
-	// self is the object performing the action: its connections route what the
-	// action sends, and its selections decide which variant's connection does.
-	self *Instance
 	// occurrence is the action performance materialized for a performed usage. It
 	// holds what the action's own features hold, and data mirrors it.
 	occurrence *Instance
@@ -38,9 +38,6 @@ type ActionExecutor struct {
 	breakpoints map[string]bool
 	// firedBreakpoints records the token visits a breakpoint already stopped on.
 	firedBreakpoints map[breakpointVisit]bool
-	// root is the action's own performance, shared by every token in its flow;
-	// a nested node performs in a frame of its own.
-	root *actionFrame
 	// mergeVisited tracks merge node visits, per activation of the flow the merge
 	// belongs to: a nested flow entered again merges again.
 	mergeVisited map[mergeVisit]bool
@@ -127,21 +124,21 @@ func newActionExecutorForOccurrence(
 	}
 
 	exec := &ActionExecutor{
-		ctx:         ctx,
-		action:      action,
-		self:        self,
-		occurrence:  occurrence,
-		graph:       graph,
-		tokens:      make([]Token, 0),
-		state:       StateReady,
-		nextTokenID: 1,
-		breakpoints: make(map[string]bool),
+		performances: performances{ctx: ctx, self: self},
+		action:       action,
+		occurrence:   occurrence,
+		graph:        graph,
+		tokens:       make([]Token, 0),
+		state:        StateReady,
+		nextTokenID:  1,
+		breakpoints:  make(map[string]bool),
 
 		firedBreakpoints: make(map[breakpointVisit]bool),
 		mergeVisited:     make(map[mergeVisit]bool),
 	}
 	exec.features = exec.performanceFeatures()
 	exec.root = exec.newRootFrame()
+	exec.owner = exec
 
 	return exec, nil
 }
@@ -653,6 +650,16 @@ func (e *ActionExecutor) declaresAttribute(name string) bool {
 		}
 	}
 	return false
+}
+
+// assignAround holds nothing: an action's performance is the outermost its nodes reach.
+func (e *ActionExecutor) assignAround(string, Value) (bool, error) {
+	return false, nil
+}
+
+// runOwnFlow runs the flow a block-declared node states of its own to completion.
+func (e *ActionExecutor) runOwnFlow(perf *actionFrame) error {
+	return e.runSubflow(perf)
 }
 
 // setFeature writes into the action's feature space, through the performance
@@ -1433,7 +1440,7 @@ func statementNodeKeyword(node ast.Node) string {
 
 // applyDataFlows moves what the completed performance produced along graph's flows out
 // of sourceNode to the target pins; a source pin holding nothing is an error, not a no-op.
-func (e *ActionExecutor) applyDataFlows(frame *actionFrame, graph *lower.ActionGraph, sourceNode ast.Node, produced map[string]Value) error {
+func (e *performances) applyDataFlows(frame *actionFrame, graph *lower.ActionGraph, sourceNode ast.Node, produced map[string]Value) error {
 	for _, flow := range graph.DataFlows[sourceNode] {
 		sourceData, ok := produced[flow.SourcePin]
 		if !ok {
@@ -1451,7 +1458,7 @@ func (e *ActionExecutor) applyDataFlows(frame *actionFrame, graph *lower.ActionG
 
 // deliverFlow puts a flow's payload where its target reads it: at the pin of a
 // target performing in a frame of its own, else in the flow's own features.
-func (e *ActionExecutor) deliverFlow(frame *actionFrame, graph *lower.ActionGraph, flow lower.ObjectFlow, value Value) error {
+func (e *performances) deliverFlow(frame *actionFrame, graph *lower.ActionGraph, flow lower.ObjectFlow, value Value) error {
 	if _, performs := flow.Target.(*ast.Usage); performs {
 		if err := e.deliver(frame, graph, flow.Target, nil, flow.TargetPin, value); err != nil {
 			return fmt.Errorf("%s: %w", flowDescription(flow), err)

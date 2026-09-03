@@ -268,6 +268,75 @@ func TestToActionGraphInheritedPinConnections(t *testing.T) {
 	}
 }
 
+// A base's connector follows its node's declaration: a same-named local node does
+// not take it (it lowers to nothing), a node redefining the base's does.
+func TestToActionGraphInheritedPinConnectionsFollowDeclarationIdentity(t *testing.T) {
+	src := `
+		action def Base {
+			attribute x : Integer = 5;
+			action add { in a : Integer; out sum : Integer; }
+			action fin { in n : Integer; }
+			bind add.a = x;
+			flow add.sum to fin.n;
+		}
+		action def Masked :> Base {
+			action add { out total : Integer; }
+			action fin { in k : Integer; }
+			first start then add;
+			succession add then fin;
+			then done;
+		}
+		action def Redefined :> Base {
+			action add :>> add { in a : Integer; out sum : Integer; }
+			first start then add;
+			succession add then fin;
+			then done;
+		}
+		action def Twice :> Redefined {
+			action again :>> Redefined::add { in a : Integer; out sum : Integer; }
+			first start then again;
+			succession again then fin;
+			then done;
+		}
+	`
+	masked, scope, root := inheritedActionDecl(t, src, "Masked")
+	graph, err := ToActionGraph(masked, scope)
+	if err != nil {
+		t.Fatalf("ToActionGraph(Masked): %v", err)
+	}
+	if namedNode(graph, "add") != actionMember(t, root, "Masked", "add") {
+		t.Fatal("the local add is not the graph's add")
+	}
+	if len(graph.Bindings) != 0 {
+		t.Errorf("a base binding was lowered at a local node taking its node's name: %+v", graph.Bindings)
+	}
+	for source, flows := range graph.DataFlows {
+		t.Errorf("a base flow out of %s was lowered at local nodes taking its nodes' names: %+v", getNodeName(source), flows)
+	}
+
+	for _, tc := range []struct{ action, node string }{{"Redefined", "add"}, {"Twice", "again"}} {
+		derived, scope, root := inheritedActionDecl(t, src, tc.action)
+		graph, err := ToActionGraph(derived, scope)
+		if err != nil {
+			t.Fatalf("ToActionGraph(%s): %v", tc.action, err)
+		}
+		redefining := actionMember(t, root, tc.action, tc.node)
+		fin := namedNode(graph, "fin")
+		if fin == nil || fin != actionMember(t, root, "Base", "fin") {
+			t.Fatalf("%s: fin = %v, want the inherited declaration", tc.action, fin)
+		}
+		baseBody := scope.Parent().ChildFor(actionDefinition(t, root, "Base"))
+		if len(graph.Bindings) != 1 || graph.Bindings[0].Node != redefining || graph.Bindings[0].Pin != "a" ||
+			FeaturePath(graph.Bindings[0].Other) != "x" || graph.Bindings[0].Scope != baseBody {
+			t.Errorf("%s: bindings = %+v, want one binding of x at %s.a in Base's scope", tc.action, graph.Bindings, tc.node)
+		}
+		flows := graph.DataFlows[redefining]
+		if len(flows) != 1 || flows[0].Target != fin || flows[0].SourcePin != "sum" || flows[0].TargetPin != "n" {
+			t.Errorf("%s: data flows out of %s = %+v, want one flow to fin.n", tc.action, tc.node, flows)
+		}
+	}
+}
+
 func scopeName(s *symbols.Scope) string {
 	if s == nil {
 		return "<nil>"
