@@ -927,7 +927,7 @@ func (d *decoder) printBehavior(b *strings.Builder, el *element, indent string, 
 		if err != nil {
 			return true, err
 		}
-		b.WriteString(indent + text + "\n")
+		b.WriteString(indent + text + d.nl)
 		return true, nil
 
 	case mIfAction:
@@ -935,7 +935,7 @@ func (d *decoder) printBehavior(b *strings.Builder, el *element, indent string, 
 		if err != nil {
 			return true, err
 		}
-		b.WriteString(indent + text + "\n")
+		b.WriteString(indent + text + d.nl)
 		return true, nil
 
 	case mSubaction:
@@ -943,7 +943,7 @@ func (d *decoder) printBehavior(b *strings.Builder, el *element, indent string, 
 		if err != nil {
 			return true, err
 		}
-		b.WriteString(indent + text + "\n")
+		b.WriteString(indent + text + d.nl)
 		return true, nil
 
 	case mIfBranch:
@@ -963,7 +963,7 @@ func (d *decoder) printBehavior(b *strings.Builder, el *element, indent string, 
 		if err != nil {
 			return true, err
 		}
-		b.WriteString(indent + text + ";\n")
+		b.WriteString(indent + text + ";" + d.nl)
 		return true, nil
 	}
 	return false, nil
@@ -1134,14 +1134,20 @@ func (d *decoder) transitionText(el *element, depth int) (string, error) {
 // as the members alone when it stated them without braces.
 func (d *decoder) bodyText(el *element, depth int) (string, error) {
 	indent := strings.Repeat("    ", depth)
+	braced := d.boolOf(el, rdf.OpenSysML+xHasBody)
+	// An unbraced member continues the line the head is on, at its depth.
+	memberDepth := depth
+	if braced {
+		memberDepth = depth + 1
+	}
 	var members strings.Builder
 	for _, child := range el.children {
-		if err := d.print(&members, child, depth+1); err != nil {
+		if err := d.print(&members, child, memberDepth); err != nil {
 			return "", err
 		}
 	}
-	if d.boolOf(el, rdf.OpenSysML+xHasBody) {
-		return "{\n" + members.String() + indent + "}", nil
+	if braced {
+		return "{" + d.nl + members.String() + indent + "}", nil
 	}
 	return strings.TrimSpace(members.String()), nil
 }
