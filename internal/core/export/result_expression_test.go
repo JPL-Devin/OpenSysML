@@ -741,3 +741,84 @@ func TestForeignClassWithAKnownLocalNameIsRefused(t *testing.T) {
 		})
 	}
 }
+
+// rdf:type statements are unordered, so a graph stating an element's class
+// after its superclasses — as an inferencing store or a producer spelling out
+// the hierarchy does — reads as the most specific class, whatever comes first.
+func TestSuperclassesStatedFirstStillClassify(t *testing.T) {
+	turtle := string(withoutSourceText(t, convertFixture(t, "result_expressions")))
+	widened := turtle
+	for _, tc := range []struct{ from, to string }{
+		{
+			"elmt:Results__AfterMembers___403_om\n    a sysml:ResultExpressionMembership ;",
+			"elmt:Results__AfterMembers___403_om\n    a sysml:Relationship, sysml:OwningMembership, sysml:FeatureMembership, sysml:ResultExpressionMembership ;",
+		},
+		{
+			"elmt:Results__AfterMembers___403\n    a sysml:OperatorExpression ;",
+			"elmt:Results__AfterMembers___403\n    a sysml:Feature, sysml:Expression, sysml:OperatorExpression ;",
+		},
+		{
+			"elmt:Results__AfterMembers\n    a sysml:CalculationDefinition ;",
+			"elmt:Results__AfterMembers\n    a sysml:Namespace, sysml:CalculationDefinition, sysml:Behavior ;",
+		},
+		{
+			"expr:Results__AfterMembers__y_pvalue\n    a sysml:OperatorExpression ;",
+			"expr:Results__AfterMembers__y_pvalue\n    a sysml:Element, sysml:OperatorExpression ;",
+		},
+	} {
+		if !strings.Contains(widened, tc.from) {
+			t.Fatalf("expected %q in the graph:\n%s", tc.from, widened)
+		}
+		widened = strings.Replace(widened, tc.from, tc.to, 1)
+	}
+	want, err := export.Convert("m.ttl", []byte(turtle), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	got, err := export.Convert("m.ttl", []byte(widened), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation with superclasses stated: %v", err)
+	}
+	if string(got) != string(want) {
+		t.Errorf("stating the superclasses changed the notation\n--- want ---\n%s\n--- got ---\n%s", want, got)
+	}
+	if !strings.Contains(string(got), "attribute y : Real = (x + 1);\n        (y * y)\n    }") {
+		t.Errorf("the result expression did not come back bare after its members:\n%s", got)
+	}
+}
+
+// Two classes neither of which is a superclass of the other name no single
+// metaclass to write; the subject is refused by name rather than read as the
+// class that happens to be stated first.
+func TestUnrelatedClassesAreRefused(t *testing.T) {
+	turtle := string(convertFixture(t, "result_expressions"))
+	for _, tc := range []struct{ from, to, want string }{
+		{
+			"elmt:Results__AfterMembers___403_om\n    a sysml:ResultExpressionMembership ;",
+			"elmt:Results__AfterMembers___403_om\n    a sysml:ResultExpressionMembership, sysml:ReturnParameterMembership ;",
+			"the subject <urn:sysmlv2:element:Results__AfterMembers___403_om>: its rdf:types sysml:ResultExpressionMembership and sysml:ReturnParameterMembership are not one class and a superclass of it",
+		},
+		{
+			"elmt:Results__AfterMembers___403\n    a sysml:OperatorExpression ;",
+			"elmt:Results__AfterMembers___403\n    a sysml:PartUsage, sysml:OperatorExpression ;",
+			"the subject <urn:sysmlv2:element:Results__AfterMembers___403>: its rdf:types sysml:PartUsage and sysml:OperatorExpression are not one class and a superclass of it",
+		},
+		{
+			"elmt:Results__AfterMembers___403\n    a sysml:OperatorExpression ;",
+			"elmt:Results__AfterMembers___403\n    a sysml:OperatorExpression, sysx:BodyMember ;",
+			"the subject <urn:sysmlv2:element:Results__AfterMembers___403>: its rdf:types sysml:OperatorExpression and sysx:BodyMember are not one class and a superclass of it",
+		},
+	} {
+		if !strings.Contains(turtle, tc.from) {
+			t.Fatalf("expected %q in the graph:\n%s", tc.from, turtle)
+		}
+		_, err := export.Convert("m.ttl", []byte(strings.Replace(turtle, tc.from, tc.to, 1)), export.FormatTurtle, export.FormatSysML)
+		var unsupported *export.UnsupportedError
+		if !errors.As(err, &unsupported) {
+			t.Fatalf("want an UnsupportedError for %q, got %v", tc.to, err)
+		}
+		if !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("for %q:\n got %v\nwant %s", tc.to, err, tc.want)
+		}
+	}
+}

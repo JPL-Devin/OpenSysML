@@ -402,7 +402,7 @@ func (d *decoder) isExpressionNode(subject rdf.Term) bool {
 		return true
 	}
 	_, owned := d.owningMembership[subject.Value]
-	return expressionMetaclasses[rdf.LocalName(d.graph.Type(subject))] &&
+	return expressionMetaclasses[d.metaclass(subject)] &&
 		!d.graph.HasProperty(subject, rdf.SysML+pQualifiedName) &&
 		!d.graph.HasProperty(subject, rdf.SysML+pOwningMembership) && !owned
 }
@@ -473,7 +473,7 @@ func (d *decoder) expressionNodeText(node rdf.Term, scope string) (string, error
 	if text, ok := d.expressionText(node); ok {
 		return text, nil
 	}
-	metaclass := rdf.LocalName(d.graph.Type(node))
+	metaclass := d.metaclass(node)
 	unsupported := func(note string) error {
 		return &UnsupportedError{
 			What: fmt.Sprintf("the expression <%s>", node.Value),
@@ -596,7 +596,7 @@ func (d *decoder) bodyParameterText(param rdf.Term, scope string) (string, error
 	what := fmt.Sprintf("the body parameter <%s>", param.Value)
 	// A body parameter is written `in name`, so the node must be a Feature whose
 	// direction, when stated, is in; any other shape would be rewritten, not kept.
-	if metaclass := rdf.LocalName(d.graph.Type(param)); !ontology.IsAncestorOrSelf(metaclass, "Feature") {
+	if metaclass := d.metaclass(param); !ontology.IsAncestorOrSelf(metaclass, "Feature") {
 		return "", &UnsupportedError{
 			What: what,
 			Note: fmt.Sprintf("a parameter of an expression body is a Feature, and this one is %s", typeDescription(metaclass)),
@@ -698,7 +698,7 @@ func (d *decoder) bodyDeclarationsText(node rdf.Term, scope string) ([]string, e
 // bodyMemberText writes one declaration of an expression body: documentation
 // from its structure, anything else from its notation, or reports it by name.
 func (d *decoder) bodyMemberText(member rdf.Term, scope string) (string, error) {
-	if rdf.LocalName(d.graph.Type(member)) == mDocumentation {
+	if d.metaclass(member) == mDocumentation {
 		return d.documentationHead(&element{iri: member.Value, scope: scope, expressions: map[string]string{}}), nil
 	}
 	text, ok := d.graph.Lexical(member, rdf.OpenSysML+xSourceText)
@@ -859,7 +859,7 @@ func (d *decoder) chainOperand(node rdf.Term) (*element, bool) {
 	}
 	var linked rdf.Term
 	ok = false
-	switch rdf.LocalName(d.graph.Type(arg)) {
+	switch d.metaclass(arg) {
 	case mFeatureReference:
 		linked, ok = d.graph.Object(arg, rdf.SysML+pReferent)
 	case mFeatureChain:

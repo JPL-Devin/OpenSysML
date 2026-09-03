@@ -71,10 +71,11 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 	if err := checkExtensionNamespace(graph); err != nil {
 		return nil, err
 	}
-	if err := checkTypes(graph); err != nil {
+	metaclasses, err := checkTypes(graph)
+	if err != nil {
 		return nil, err
 	}
-	graph, err := rdf.ReconcileCollections(graph)
+	graph, err = rdf.ReconcileCollections(graph)
 	if err != nil {
 		var malformed *rdf.AnnotationError
 		if errors.As(err, &malformed) {
@@ -82,7 +83,7 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 		}
 		return nil, err
 	}
-	if err := checkLiterals(graph); err != nil {
+	if err := checkLiterals(graph, metaclasses); err != nil {
 		return nil, err
 	}
 	if err := checkCardinality(graph); err != nil {
@@ -90,6 +91,7 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 	}
 	d := &decoder{
 		graph:            graph,
+		metaclasses:      metaclasses,
 		byIRI:            map[string]*element{},
 		byID:             map[string]*element{},
 		dupID:            map[string]bool{},
@@ -135,24 +137,50 @@ func legacyNamespaceError(iri string) error {
 	}
 }
 
-// checkTypes refuses an rdf:type that is no term of the SysML vocabulary or of
-// this mapping's extension: a class of another vocabulary names no metaclass,
-// whatever its local name, so reading it as one would rewrite the subject.
-func checkTypes(graph *rdf.Graph) error {
+// checkTypes settles the one metaclass each subject is written as, keyed by
+// subject. An rdf:type that is no term of the SysML vocabulary or of this
+// mapping's extension is refused: a class of another vocabulary names no
+// metaclass, whatever its local name. A subject stating several classes is
+// the most specific of them, provided the others are its superclasses; rdf:type
+// statements are unordered, so the first one written settles nothing.
+func checkTypes(graph *rdf.Graph) (map[rdf.Term]string, error) {
+	metaclasses := map[rdf.Term]string{}
 	for _, triple := range graph.Triples() {
 		if triple.Predicate.Value != rdf.RDFType {
 			continue
 		}
 		class := triple.Object
-		if class.IsIRI() && isVocabularyTerm(class.Value) {
-			continue
+		if !class.IsIRI() || !isVocabularyTerm(class.Value) {
+			return nil, &UnsupportedError{
+				What: fmt.Sprintf("the subject <%s>", triple.Subject.Value),
+				Note: fmt.Sprintf("its rdf:type %s is not a class of the SysML vocabulary (%s) or of this mapping's extension (%s), so it names no metaclass to write", class.String(), rdf.SysML, rdf.OpenSysML),
+			}
 		}
-		return &UnsupportedError{
-			What: fmt.Sprintf("the subject <%s>", triple.Subject.Value),
-			Note: fmt.Sprintf("its rdf:type %s is not a class of the SysML vocabulary (%s) or of this mapping's extension (%s), so it names no metaclass to write", class.String(), rdf.SysML, rdf.OpenSysML),
+		settled, ok := metaclasses[triple.Subject]
+		switch {
+		case !ok || subclassOf(class.Value, settled):
+			metaclasses[triple.Subject] = class.Value
+		case !subclassOf(settled, class.Value):
+			return nil, &UnsupportedError{
+				What: fmt.Sprintf("the subject <%s>", triple.Subject.Value),
+				Note: fmt.Sprintf("its rdf:types %s and %s are not one class and a superclass of it, so they name no single metaclass to write", curie(settled), curie(class.Value)),
+			}
 		}
 	}
-	return nil
+	return metaclasses, nil
+}
+
+// subclassOf reports whether the class iri is ancestor or a subclass of it in
+// the SysML ontology; a class of this mapping's extension has no superclass.
+func subclassOf(class, ancestor string) bool {
+	return class == ancestor || strings.HasPrefix(class, rdf.SysML) && strings.HasPrefix(ancestor, rdf.SysML) &&
+		ontology.IsAncestorOrSelf(rdf.LocalName(class), rdf.LocalName(ancestor))
+}
+
+// metaclass returns the local name of the class subject is written as, or ""
+// when it states none.
+func (d *decoder) metaclass(subject rdf.Term) string {
+	return rdf.LocalName(d.metaclasses[subject])
 }
 
 // isVocabularyTerm reports whether iri is a namespace this mapping reads followed
@@ -164,7 +192,7 @@ func isVocabularyTerm(iri string) bool {
 
 // checkLiterals refuses a literal whose datatype its property does not take
 // ("3"^^xsd:integer as a name) or whose text is outside it ("false"^^xsd:int).
-func checkLiterals(graph *rdf.Graph) error {
+func checkLiterals(graph *rdf.Graph, metaclasses map[rdf.Term]string) error {
 	for _, triple := range graph.Triples() {
 		object := triple.Object
 		if !object.IsLiteral() || !mappingPredicate(triple.Predicate.Value) {
@@ -173,7 +201,7 @@ func checkLiterals(graph *rdf.Graph) error {
 		if object.Lang != "" {
 			return literalError(triple, "a language-tagged literal is an rdf:langString, and no property this mapping reads takes one")
 		}
-		allowed := literalDatatypes(rdf.LocalName(graph.Type(triple.Subject)), triple.Predicate.Value)
+		allowed := literalDatatypes(rdf.LocalName(metaclasses[triple.Subject]), triple.Predicate.Value)
 		if !slices.Contains(allowed, object.Datatype) {
 			return literalError(triple, fmt.Sprintf("%s takes %s", curie(triple.Predicate.Value), datatypeList(allowed)))
 		}
@@ -396,7 +424,9 @@ type membership struct {
 
 type decoder struct {
 	graph *rdf.Graph
-	byIRI map[string]*element
+	// metaclasses is the class each subject is written as, settled by checkTypes.
+	metaclasses map[rdf.Term]string
+	byIRI       map[string]*element
 	// byID keys the subjects on their element id, which is their identity; a
 	// scoped graph may repeat an id across scopes, and dupID marks those.
 	byID  map[string]*element
@@ -471,7 +501,7 @@ func (d *decoder) build() ([]*element, error) {
 			// the expression, not to an element of its own.
 			continue
 		}
-		metaclass := rdf.LocalName(d.graph.Type(subject))
+		metaclass := d.metaclass(subject)
 		if metaclass == "" {
 			return nil, &UnsupportedError{
 				What: fmt.Sprintf("the subject <%s>", subject.Value),
@@ -536,7 +566,7 @@ func (d *decoder) build() ([]*element, error) {
 // declaration of its own: an OwningMembership with no qualified name. One with
 // a name, such as a state's entry membership, is written as the member it is.
 func (d *decoder) isMembership(subject rdf.Term) bool {
-	metaclass := rdf.LocalName(d.graph.Type(subject))
+	metaclass := d.metaclass(subject)
 	return metaclass != "" && ontology.IsAncestorOrSelf(metaclass, mOwningMembership) &&
 		!d.graph.HasProperty(subject, rdf.SysML+pQualifiedName)
 }
@@ -1275,7 +1305,7 @@ func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 // the Expression a ResultExpressionMembership owns, written back bare.
 func (d *decoder) isResultExpression(el *element) bool {
 	m, owned := d.owningMembership[el.iri]
-	return owned && rdf.LocalName(d.graph.Type(rdf.IRI(m.iri))) == mResultExpressionMembership
+	return owned && d.metaclass(rdf.IRI(m.iri)) == mResultExpressionMembership
 }
 
 // acceptParam returns the synthetic parameter of an accept shorthand, whose

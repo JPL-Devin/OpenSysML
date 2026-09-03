@@ -11,7 +11,9 @@
   A `sysx:` index that is negative or too large for `int` is refused too, where it was read as 0
   and moved its member to the front, and so is a subject stating a single-valued `sysx:`
   property twice (a body with two `sysx:resultExpression`s), where the first was kept and the
-  rest dropped.
+  rest dropped. A subject stating several `rdf:type`s is read as the most specific class when the
+  others are its superclasses, whichever is written first, where the first one was read; two
+  classes neither of which is a superclass of the other are refused naming the subject.
 - **A result expression rebuilt from its graph is spelled as the grammar requires.** A
   `sysml:LiteralString` whose value holds a quote, a backslash or a line break is written back
   as the escaped string token; a `LiteralRational` value is written as a real token (`"3"^^xsd:decimal`

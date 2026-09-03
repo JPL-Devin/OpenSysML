@@ -160,7 +160,11 @@ qualified name, which is what its IRIs carry. The notation writer re-materialize
 the id differs from the encoding of the qualified name, and one `@ProjectRef`
 per root carrying provenance. Subjects are classified by their `rdf:type`,
 never by parsing the id — a declared id may legitimately end in `_om` or embed
-`_p` without being a membership or expression node.
+`_p` without being a membership or expression node. A subject stating several
+classes is read as the most specific one, provided the others are its
+superclasses in the SysML ontology (`sysml:OwningMembership, sysml:ResultExpressionMembership`
+is a `ResultExpressionMembership`, in whichever order the triples come); two
+classes neither of which is a superclass of the other are refused, naming the subject.
 
 ### What each element carries
 
@@ -964,7 +968,8 @@ would be refused as a duplicate.
 
 - blank nodes and `[ ... ]` — every element must have a stable IRI
 - RDF collections `( ... )` — order is carried by `sysx:memberIndex`
-- an element with no `rdf:type`, or a metaclass outside the mapping
+- an element with no `rdf:type`, or a metaclass outside the mapping, or two
+  `rdf:type`s neither of which is a superclass of the other
 - a reference whose IRI names no subject of the graph and whose id no subject
   carries as `sysml:elementId`; a dangling id is reported as such, never left
   as a silently unresolvable name
