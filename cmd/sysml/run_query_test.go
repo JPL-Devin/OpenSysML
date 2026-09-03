@@ -47,6 +47,11 @@ const queryModel = `package Observatory {
 		WhereName(source = OwnedElements(source = root), operator = "startsWith", value = pattern)
 	}
 
+	calc def DefaultedTelescopeParts :> NamedTelescopeParts {
+		in redefines root = telescope;
+		in redefines pattern default "op";
+	}
+
 	calc def ComposedQuery :> Query {
 		in root : Element;
 		HeavySubsystems(root = root)
@@ -90,6 +95,14 @@ func TestRunQueryFlag(t *testing.T) {
 	// A binding expression may contain unquoted spaces.
 	wantReport(t, check(t, binary, queryModel, "-run-query", `NamedTelescopeParts root=telescope pattern="m" + "o"`),
 		0, "✓ Query Observatory::NamedTelescopeParts returned 1 row")
+
+	// Omitted parameters take their declared defaults; an explicit binding overrides one.
+	wantReport(t, check(t, binary, queryModel, "-run-query", "DefaultedTelescopeParts"),
+		0, "✓ Query Observatory::DefaultedTelescopeParts returned 1 row",
+		"Row 1: Observatory::telescope::optics")
+	wantReport(t, check(t, binary, queryModel, "-run-query", `DefaultedTelescopeParts pattern="mo"`),
+		0, "✓ Query Observatory::DefaultedTelescopeParts returned 1 row",
+		"Row 1: Observatory::telescope::mount")
 
 	// The flag repeats, and a later failure gates the run.
 	wantReport(t, check(t, binary, queryModel,

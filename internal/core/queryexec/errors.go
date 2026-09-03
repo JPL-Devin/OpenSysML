@@ -17,7 +17,7 @@ const (
 	ErrorMissingBinding        ErrorKind = "missing-binding"
 	ErrorBindingType           ErrorKind = "binding-type"
 	ErrorBindingMultiplicity   ErrorKind = "binding-multiplicity"
-	ErrorDefaultUnavailable    ErrorKind = "default-unavailable"
+	ErrorMissingElement        ErrorKind = "missing-element"
 	ErrorUnsupportedOperation  ErrorKind = "unsupported-operation"
 	ErrorInvalidArgument       ErrorKind = "invalid-argument"
 	ErrorInvalidOperator       ErrorKind = "invalid-operator"
@@ -66,8 +66,8 @@ func (e *Error) Error() string {
 		return fmt.Sprintf("query %s binding %s has type %s, expected %s", e.Query, e.Parameter, e.Actual, e.Expected)
 	case ErrorBindingMultiplicity:
 		return fmt.Sprintf("query %s binding %s has multiplicity %s, expected %s", e.Query, e.Parameter, e.Actual, e.Expected)
-	case ErrorDefaultUnavailable:
-		return fmt.Sprintf("query %s binding %s relies on a default not retained in the plan", e.Query, e.Parameter)
+	case ErrorMissingElement:
+		return fmt.Sprintf("query %s names an element that is not retained in the plan", e.Query)
 	case ErrorUnsupportedOperation:
 		return fmt.Sprintf("query %s operation %s is not executable in this engine version", e.Query, e.Operation)
 	case ErrorInvalidArgument:
