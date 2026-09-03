@@ -217,11 +217,14 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   vertices of the machine, feature-chain members in the operand's scope, `first x` labels and loop
   variables not links at all), and the writer spells each link as the short name only when the
   resolver reads it there as the linked element, else the shortest qualified suffix that it does,
-  else the global form, and refuses a reference no spelling reaches. Over the example corpus two
-  files move: `Packets.sysml` from a different graph to byte-identical and the pilot
-  `3a-Function-based Behavior-1.sysml` to identical up to `sysx:sourceText` whitespace; none
-  regresses. `TestRoundTripIsLossless` now also writes every fixture back from its graph with the
-  source text removed and requires the same graph again, and a fixture reproduces each shadowing
+  else the global form, and refuses a reference no spelling reaches. An unnamed usage that
+  redefines or references a feature takes that feature's name, so a reference to it is a graph
+  link written back by that name rather than a literal. Over the example corpus fifteen files
+  move: `Packets.sysml` from a different graph to byte-identical, two pilot behavior files to
+  identical up to `sysx:sourceText` whitespace, and twelve files that could not be written back
+  from Turtle now round-trip; none regresses. `TestRoundTripIsLossless` now also writes every
+  fixture back from its graph with the source text removed and requires the same graph again, and
+  a fixture reproduces each shadowing
   ([docs/reference/rdf-mapping.md](docs/reference/rdf-mapping.md#limitations)).
 
 ## 0.4.3 — 2026-09-01
