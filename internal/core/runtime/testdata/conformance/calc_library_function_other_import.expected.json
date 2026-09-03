@@ -1,0 +1,5 @@
+{
+  "libraries": true,
+  "type": "calc",
+  "error": "unresolved reference: size — did you mean SequenceFunctions::size or CollectionFunctions::size?"
+}

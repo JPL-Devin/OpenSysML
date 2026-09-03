@@ -12,6 +12,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
@@ -860,8 +861,9 @@ func parseExprAlone(expr string) (ast.Node, []parser.Diagnostic) {
 
 // errWithoutDeclarations reports why an expression an empty session could not
 // answer failed. Only a failure declarations would answer — a name nothing
-// declares — is met with the no-declarations message; a syntax error or a real
-// evaluation failure, such as a division by zero, is the answer itself.
+// declares — is met with the no-declarations message, carrying the resolver's
+// hint for the name; a syntax error or a real evaluation failure, such as a
+// division by zero, is the answer itself.
 func (s *Session) errWithoutDeclarations(expr string) error {
 	value, diags := parseExprAlone(expr)
 	if len(diags) > 0 {
@@ -873,10 +875,16 @@ func (s *Session) errWithoutDeclarations(expr string) error {
 			if evalErr != nil && !declarationsWouldAnswer(evalErr) {
 				return evalError(expr, evalErr, len(exprPrefix))
 			}
+			if errors.Is(evalErr, runtime.ErrUnresolvedReference) {
+				return fmt.Errorf("%s: %w", noDeclarationsLoaded, evalErr)
+			}
 		}
 	}
-	return errors.New("no declarations loaded (literals work, but feature references need declarations)")
+	return errors.New(noDeclarationsLoaded)
 }
+
+// noDeclarationsLoaded is why an empty session cannot answer a name.
+const noDeclarationsLoaded = "no declarations loaded (literals work, but feature references need declarations)"
 
 // declarationsWouldAnswer reports whether err is a failure declarations would
 // answer — a name, a unit or a value nothing declares — rather than the answer
@@ -915,7 +923,7 @@ func mismatchInExpr(expr string, operand *runtime.OperandTypeError, base int) bo
 // emptyRuntime is a context over an empty model, which answers an expression of
 // literals alone and nothing a session declares.
 func emptyRuntime(budgets runtime.Budgets) (*runtime.Context, error) {
-	emptyIdx := symbols.NewIndex()
+	emptyIdx := libs.NewModelIndex()
 	emptyModel := semantics.NewModel(resolve.New(emptyIdx))
 	ctx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), budgets.MaxSteps)
 	if err := ctx.SetBudgets(budgets); err != nil {

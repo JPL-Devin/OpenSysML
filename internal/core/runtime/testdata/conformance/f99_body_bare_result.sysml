@@ -1,5 +1,6 @@
 package test {
 	private import ScalarValues::*;
+	private import ControlFunctions::*;
 
 	calc def BodyBareResult {
 		attribute k : Integer = 99;
