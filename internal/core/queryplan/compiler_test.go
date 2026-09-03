@@ -185,6 +185,576 @@ calc def Caller :> Query {
 	}
 }
 
+func literalOf(t *testing.T, expression Expression, kind LiteralKind, value string) {
+	t.Helper()
+	gotKind, gotValue := expression.Literal()
+	if expression.Operation() != OperationLiteral || gotKind != kind || gotValue != value {
+		t.Fatalf("expression = %+v, want %s literal %q", expression, kind, value)
+	}
+}
+
+func TestCompileRetainsParameterDefaults(t *testing.T) {
+	fixture := loadQueryFixture(t, `
+part shared;
+part spare;
+calc def Helper :> Query {
+	in source : Element;
+	OwnedElements(source = source)
+}
+calc def Defaulted :> Query {
+	in source : Element = shared;
+	in pattern : String default "m";
+	in depth : Integer = 2;
+	in candidates : Element[0..*] = Helper(source = source);
+	in optional : Element[0..*] = null;
+	in roots : Element[0..*] = (shared, spare);
+	in mixed : Element[0..*] = (spare, source, Helper(source = source));
+	in owned : Element[0..*] = OwnedElements(source = spare);
+	in helped : Element[0..*] = Helper(source = spare);
+	WhereName(source = candidates, operator = "startsWith", value = pattern)
+}
+`)
+	program := fixture.compile(t, "Defaulted")
+	definitions := program.Definitions()
+	if len(definitions) != 2 || definitions[0].Name() != "Fixture::Helper" {
+		t.Fatalf("definitions = %+v, want Helper compiled ahead of Defaulted", definitions)
+	}
+	definition := definitions[1]
+	if got := definition.Dependencies(); !slices.Equal(got, []string{"Fixture::Helper"}) {
+		t.Fatalf("dependencies = %v, want the default's invocation recorded", got)
+	}
+	params := make(map[string]Parameter)
+	for _, param := range definition.Parameters() {
+		if !param.HasDefault {
+			t.Fatalf("parameter %s must retain its default", param.Name)
+		}
+		if param.DefaultQuery != "Fixture::Defaulted" {
+			t.Fatalf("parameter %s declaring query = %q", param.Name, param.DefaultQuery)
+		}
+		if !param.Default.Origin().Located() {
+			t.Fatalf("parameter %s default must retain provenance", param.Name)
+		}
+		params[param.Name] = param
+	}
+	source := params["source"].Default
+	element, ok := source.Element()
+	if source.Operation() != OperationElement || !ok || element != fixture.symbol(t, "shared") ||
+		source.Target() != "Fixture::shared" {
+		t.Fatalf("source default = %+v, want the shared element bound", source)
+	}
+	literalOf(t, params["pattern"].Default, LiteralString, `"m"`)
+	literalOf(t, params["depth"].Default, LiteralInteger, "2")
+	candidates := params["candidates"].Default
+	if candidates.Operation() != OperationInvoke || candidates.Target() != "Fixture::Helper" {
+		t.Fatalf("candidates default = %+v", candidates)
+	}
+	if arguments := candidates.Arguments(); len(arguments) != 1 ||
+		arguments[0].Value.Operation() != OperationParameter || arguments[0].Value.Target() != "source" {
+		t.Fatalf("candidates default arguments = %+v", arguments)
+	}
+	literalOf(t, params["optional"].Default, LiteralNull, "null")
+	roots := params["roots"].Default
+	if roots.Operation() != OperationSequence || len(roots.Arguments()) != 2 {
+		t.Fatalf("roots default = %+v, want a sequence of two elements", roots)
+	}
+	for i, name := range []string{"shared", "spare"} {
+		member := roots.Arguments()[i].Value
+		element, ok := member.Element()
+		if !ok || element != fixture.symbol(t, name) {
+			t.Fatalf("roots default member %d = %+v, want %s bound", i, member, name)
+		}
+	}
+	mixed := params["mixed"].Default.Arguments()
+	if len(mixed) != 3 {
+		t.Fatalf("mixed default = %+v, want three members", mixed)
+	}
+	if element, ok := mixed[0].Value.Element(); !ok || element != fixture.symbol(t, "spare") {
+		t.Fatalf("mixed default member 0 = %+v, want spare bound", mixed[0].Value)
+	}
+	if mixed[1].Value.Operation() != OperationParameter || mixed[1].Value.Target() != "source" {
+		t.Fatalf("mixed default member 1 = %+v, want the source parameter", mixed[1].Value)
+	}
+	if mixed[2].Value.Operation() != OperationInvoke || mixed[2].Value.Target() != "Fixture::Helper" {
+		t.Fatalf("mixed default member 2 = %+v, want Helper invoked", mixed[2].Value)
+	}
+	for name, operation := range map[string]Operation{
+		"owned":  OperationOwnedElements,
+		"helped": OperationInvoke,
+	} {
+		nested := params[name].Default
+		if nested.Operation() != operation || len(nested.Arguments()) != 1 {
+			t.Fatalf("%s default = %+v, want %s with one argument", name, nested, operation)
+		}
+		argument := nested.Arguments()[0].Value
+		if element, ok := argument.Element(); !ok || element != fixture.symbol(t, "spare") ||
+			!argument.Origin().Located() {
+			t.Fatalf("%s default argument = %+v, want spare bound", name, argument)
+		}
+	}
+
+	mutable := definition.Parameters()
+	mutable[3].Default.Arguments()[0] = Argument{}
+	mutable[3] = Parameter{}
+	fresh := definition.Parameters()[3]
+	if !fresh.HasDefault || fresh.Default.Arguments()[0].Name != "source" {
+		t.Fatal("mutating returned parameters changed the compiled default")
+	}
+}
+
+func TestCompileBindsElementsNamedInQueryBodies(t *testing.T) {
+	fixture := loadQueryFixture(t, `
+part def Telescope;
+part telescope : Telescope;
+part groundStation;
+calc def Helper :> Query {
+	in source : Element;
+	OwnedElements(source = source)
+}
+calc def Pointed :> Query {
+	in scope : Telescope;
+	OwnedElements(source = telescope)
+}
+calc def FixedBody :> Query {
+	in pattern : String;
+	WhereName(source = OwnedElements(source = telescope), operator = "startsWith", value = pattern)
+}
+calc def FixedQueryArgument :> Query {
+	Helper(source = telescope)
+}
+calc def FixedList :> Query {
+	in extra : Element[0..*];
+	OwnedElements(source = (telescope, extra, groundStation))
+}
+calc def FixedTyped :> Query {
+	Pointed(scope = telescope)
+}
+calc def NamesParameterType :> Query {
+	in scope : Telescope;
+	OwnedElements(source = Telescope)
+}
+`)
+	body := fixture.compile(t, "FixedBody").Definitions()[0].Expression()
+	if body.Operation() != OperationWhereName || len(body.Arguments()) != 3 {
+		t.Fatalf("body = %+v", body)
+	}
+	source := body.Arguments()[0].Value
+	if source.Operation() != OperationOwnedElements || len(source.Arguments()) != 1 {
+		t.Fatalf("source = %+v, want OwnedElements", source)
+	}
+	if element, ok := source.Arguments()[0].Value.Element(); !ok || element != fixture.symbol(t, "telescope") {
+		t.Fatalf("source argument = %+v, want telescope bound", source.Arguments()[0].Value)
+	}
+	if value := body.Arguments()[2].Value; value.Operation() != OperationParameter || value.Target() != "pattern" {
+		t.Fatalf("value = %+v, want the pattern parameter", value)
+	}
+
+	definitions := fixture.compile(t, "FixedQueryArgument").Definitions()
+	invoked := definitions[len(definitions)-1]
+	if got := invoked.Dependencies(); !slices.Equal(got, []string{"Fixture::Helper"}) {
+		t.Fatalf("dependencies = %v", got)
+	}
+	call := invoked.Expression()
+	if call.Operation() != OperationInvoke || len(call.Arguments()) != 1 {
+		t.Fatalf("call = %+v", call)
+	}
+	if element, ok := call.Arguments()[0].Value.Element(); !ok || element != fixture.symbol(t, "telescope") {
+		t.Fatalf("call argument = %+v, want telescope bound", call.Arguments()[0].Value)
+	}
+
+	list := fixture.compile(t, "FixedList").Definitions()[0].Expression().Arguments()[0].Value
+	if list.Operation() != OperationSequence || len(list.Arguments()) != 3 {
+		t.Fatalf("list = %+v", list)
+	}
+	if element, ok := list.Arguments()[0].Value.Element(); !ok || element != fixture.symbol(t, "telescope") {
+		t.Fatalf("list member 0 = %+v", list.Arguments()[0].Value)
+	}
+	if member := list.Arguments()[1].Value; member.Operation() != OperationParameter || member.Target() != "extra" {
+		t.Fatalf("list member 1 = %+v", member)
+	}
+	if element, ok := list.Arguments()[2].Value.Element(); !ok || element != fixture.symbol(t, "groundStation") {
+		t.Fatalf("list member 2 = %+v", list.Arguments()[2].Value)
+	}
+
+	fixture.compile(t, "FixedTyped")
+
+	typed := fixture.compile(t, "NamesParameterType").Definitions()[0]
+	if params := typed.Parameters(); len(params) != 1 || params[0].Name != "scope" || params[0].Type != "Fixture::Telescope" {
+		t.Fatalf("parameters = %+v", params)
+	}
+	source = typed.Expression().Arguments()[0].Value
+	if element, ok := source.Element(); !ok || element != fixture.symbol(t, "Telescope") {
+		t.Fatalf("source = %+v, want the Telescope definition, not the scope parameter", source)
+	}
+}
+
+func TestCompileBindsEnumerationLiterals(t *testing.T) {
+	fixture := loadQueryFixture(t, `
+part telescope;
+enum def Color { red; green; }
+enum def Warm :> Color;
+calc def TakesColor :> Query {
+	in hue : Color;
+	OwnedElements(source = telescope)
+}
+calc def LiteralArgument :> Query {
+	TakesColor(hue = Color::green)
+}
+calc def SpecializedLiteralArgument :> Query {
+	TakesColor(hue = Warm::red)
+}
+calc def LiteralDefault :> Query {
+	in hue : Color = Color::red;
+	TakesColor(hue = hue)
+}
+calc def LiteralListDefault :> Query {
+	in hues : Color[0..*] = (Color::red, Color::green);
+	OwnedElements(source = telescope)
+}
+`)
+	definitions := fixture.compile(t, "LiteralArgument").Definitions()
+	call := definitions[len(definitions)-1].Expression()
+	if element, ok := call.Arguments()[0].Value.Element(); !ok || element != fixture.symbol(t, "Color::green") {
+		t.Fatalf("call argument = %+v, want Color::green bound", call.Arguments()[0].Value)
+	}
+
+	fixture.compile(t, "SpecializedLiteralArgument")
+
+	definitions = fixture.compile(t, "LiteralDefault").Definitions()
+	hue := definitions[len(definitions)-1].Parameters()[0]
+	if element, ok := hue.Default.Element(); !hue.HasDefault || !ok || element != fixture.symbol(t, "Color::red") {
+		t.Fatalf("hue = %+v, want Color::red as its default", hue)
+	}
+
+	hues := fixture.compile(t, "LiteralListDefault").Definitions()[0].Parameters()[0]
+	if hues.Default.Operation() != OperationSequence || len(hues.Default.Arguments()) != 2 {
+		t.Fatalf("hues default = %+v", hues.Default)
+	}
+	if element, ok := hues.Default.Arguments()[1].Value.Element(); !ok || element != fixture.symbol(t, "Color::green") {
+		t.Fatalf("hues default member 1 = %+v", hues.Default.Arguments()[1].Value)
+	}
+}
+
+func TestCompileValidatesElementsNamedInArguments(t *testing.T) {
+	fixture := loadQueryFixture(t, `
+part def Telescope;
+part telescope : Telescope;
+part groundStation;
+attribute label : String = "scope";
+attribute def Tag;
+attribute tag : Tag;
+enum def Color { red; green; }
+enum def Size { small; large; }
+attribute paint : Color = red;
+calc def Pointed :> Query {
+	in scope : Telescope;
+	OwnedElements(source = telescope)
+}
+calc def TakesScalar :> Query {
+	in amount : ScalarValue;
+	OwnedElements(source = telescope)
+}
+calc def TakesTag :> Query {
+	in marker : Tag;
+	OwnedElements(source = telescope)
+}
+calc def TakesColor :> Query {
+	in hue : Color;
+	OwnedElements(source = telescope)
+}
+calc def NeedsMany :> Query {
+	in sources : Element[2..*];
+	OwnedElements(source = sources)
+}
+calc def WrongElementType :> Query {
+	Pointed(scope = groundStation)
+}
+calc def ElementAsString :> Query {
+	WhereName(source = OwnedElements(source = telescope), operator = "startsWith", value = telescope)
+}
+calc def StringAttributeAsString :> Query {
+	WhereName(source = OwnedElements(source = telescope), operator = "startsWith", value = label)
+}
+calc def AttributeAsScalarValue :> Query {
+	TakesScalar(amount = label)
+}
+calc def AttributeAsTag :> Query {
+	TakesTag(marker = tag)
+}
+calc def AttributeAsColor :> Query {
+	TakesColor(hue = paint)
+}
+calc def OtherEnumerationAsColor :> Query {
+	TakesColor(hue = Size::small)
+}
+calc def LiteralAsString :> Query {
+	WhereName(source = OwnedElements(source = telescope), operator = "startsWith", value = Color::red)
+}
+calc def OneElementForMany :> Query {
+	NeedsMany(sources = telescope)
+}
+calc def Unresolved :> Query {
+	OwnedElements(source = missing)
+}
+calc def ResultAsValue :> Query {
+	OwnedElements(source = result)
+}
+`)
+	tests := []struct {
+		name      string
+		kind      ErrorKind
+		parameter string
+		expected  string
+		actual    string
+		argument  string
+	}{
+		{"WrongElementType", ErrorArgumentType, "scope", "Fixture::Telescope", "Fixture::groundStation", "groundStation"},
+		{"ElementAsString", ErrorArgumentType, "value", "ScalarValues::String", "Fixture::telescope", "telescope"},
+		{"StringAttributeAsString", ErrorArgumentType, "value", "ScalarValues::String", "Fixture::label", "label"},
+		{"AttributeAsScalarValue", ErrorArgumentType, "amount", "ScalarValues::ScalarValue", "Fixture::label", "label"},
+		{"AttributeAsTag", ErrorArgumentType, "marker", "Fixture::Tag", "Fixture::tag", "tag"},
+		{"AttributeAsColor", ErrorArgumentType, "hue", "Fixture::Color", "Fixture::paint", "paint"},
+		{"OtherEnumerationAsColor", ErrorArgumentType, "hue", "Fixture::Color", "Fixture::Size::small", "Size::small"},
+		{"LiteralAsString", ErrorArgumentType, "value", "ScalarValues::String", "Fixture::Color::red", "Color::red"},
+		{"OneElementForMany", ErrorArgumentMultiplicity, "sources", "[2..*]", "[1..1]", "telescope"},
+		{"Unresolved", ErrorUnknownParameter, "missing", "", "", "missing"},
+		{"ResultAsValue", ErrorUnknownParameter, "result", "", "", "result"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := Compile(fixture.index, fixture.model, fixture.resolver, fixture.symbol(t, test.name))
+			planning := planningError(t, err, test.kind)
+			if planning.Parameter != test.parameter ||
+				planning.Expected != test.expected ||
+				planning.Actual != test.actual {
+				t.Fatalf("error = %+v", planning)
+			}
+			span := planning.Origin.Span
+			if got := fixture.content[span.Offset:span.End()]; got != test.argument {
+				t.Fatalf("argument origin = %q, want %q", got, test.argument)
+			}
+		})
+	}
+}
+
+func TestCompileValidatesParameterDefaults(t *testing.T) {
+	fixture := loadQueryFixture(t, `
+part def Telescope;
+part telescope : Telescope;
+part groundStation;
+attribute label : String = "scope";
+attribute def Tag;
+attribute tag : Tag;
+attribute limit : Natural;
+enum def Color { red; green; }
+enum def Size { small; large; }
+attribute paint : Color = red;
+calc def Named :> Query {
+	in source : Element;
+	OwnedElements(source = source)
+}
+calc def ElementAsString :> Query {
+	in pattern : String = telescope;
+	WhereName(source = OwnedElements(source = telescope), operator = "startsWith", value = pattern)
+}
+calc def StringAttributeAsString :> Query {
+	in pattern : String = label;
+	WhereName(source = OwnedElements(source = telescope), operator = "startsWith", value = pattern)
+}
+calc def LiteralAsString :> Query {
+	in pattern : String default 3;
+	WhereName(source = OwnedElements(source = telescope), operator = "startsWith", value = pattern)
+}
+calc def AttributeAsScalarValue :> Query {
+	in amount : ScalarValue = label;
+	OwnedElements(source = telescope)
+}
+calc def AttributeAsTag :> Query {
+	in marker : Tag = tag;
+	OwnedElements(source = telescope)
+}
+calc def AttributeAsColor :> Query {
+	in hue : Color = paint;
+	OwnedElements(source = telescope)
+}
+calc def OtherEnumerationAsColor :> Query {
+	in hue : Color = Size::small;
+	OwnedElements(source = telescope)
+}
+calc def WrongElementType :> Query {
+	in scope : Telescope = groundStation;
+	OwnedElements(source = scope)
+}
+calc def OverfullSequence :> Query {
+	in source : Element = (telescope, groundStation);
+	OwnedElements(source = source)
+}
+calc def OverfullInvocation :> Query {
+	in source : Element = OwnedElements(source = telescope);
+	OwnedElements(source = source)
+}
+calc def OverfullNamedInvocation :> Query {
+	in source : Element = Named(source = telescope);
+	OwnedElements(source = source)
+}
+calc def UnderfullSequence :> Query {
+	in sources : Element[3..*] = (telescope, groundStation);
+	OwnedElements(source = sources)
+}
+calc def InheritedMismatch :> Query {
+	in hue : Color = Color::red;
+	OwnedElements(source = telescope)
+}
+calc def NarrowedInheritedDefault :> InheritedMismatch {
+	in redefines hue : Size;
+}
+calc def DynamicMultiplicity :> Query {
+	in pool : Element[0..limit];
+	in source : Element = pool;
+	OwnedElements(source = source)
+}
+`)
+	tests := []struct {
+		name      string
+		kind      ErrorKind
+		parameter string
+		expected  string
+		actual    string
+		value     string
+	}{
+		{"ElementAsString", ErrorDefaultType, "pattern", "ScalarValues::String", "Fixture::telescope", "telescope"},
+		{"StringAttributeAsString", ErrorDefaultType, "pattern", "ScalarValues::String", "Fixture::label", "label"},
+		{"LiteralAsString", ErrorDefaultType, "pattern", "ScalarValues::String", "ScalarValues::Integer", "3"},
+		{"AttributeAsScalarValue", ErrorDefaultType, "amount", "ScalarValues::ScalarValue", "Fixture::label", "label"},
+		{"AttributeAsTag", ErrorDefaultType, "marker", "Fixture::Tag", "Fixture::tag", "tag"},
+		{"AttributeAsColor", ErrorDefaultType, "hue", "Fixture::Color", "Fixture::paint", "paint"},
+		{"OtherEnumerationAsColor", ErrorDefaultType, "hue", "Fixture::Color", "Fixture::Size::small", "Size::small"},
+		{"WrongElementType", ErrorDefaultType, "scope", "Fixture::Telescope", "Fixture::groundStation", "groundStation"},
+		{"OverfullSequence", ErrorDefaultMultiplicity, "source", "[1..1]", "[2..2]", "(telescope, groundStation)"},
+		{"OverfullInvocation", ErrorDefaultMultiplicity, "source", "[1..1]", "[0..*]", "OwnedElements(source = telescope)"},
+		{"OverfullNamedInvocation", ErrorDefaultMultiplicity, "source", "[1..1]", "[0..*]", "Named(source = telescope)"},
+		{"UnderfullSequence", ErrorDefaultMultiplicity, "sources", "[3..*]", "[2..2]", "(telescope, groundStation)"},
+		{"NarrowedInheritedDefault", ErrorDefaultType, "hue", "Fixture::Size", "Fixture::Color::red", "Color::red"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := Compile(fixture.index, fixture.model, fixture.resolver, fixture.symbol(t, test.name))
+			planning := planningError(t, err, test.kind)
+			if planning.Parameter != test.parameter ||
+				planning.Expected != test.expected ||
+				planning.Actual != test.actual {
+				t.Fatalf("error = %+v", planning)
+			}
+			span := planning.Origin.Span
+			if got := fixture.content[span.Offset:span.End()]; got != test.value {
+				t.Fatalf("default origin = %q, want %q", got, test.value)
+			}
+		})
+	}
+	params := fixture.compile(t, "DynamicMultiplicity").Definitions()[0].Parameters()
+	if len(params) != 2 || params[0].Multiplicity.Known || !params[1].HasDefault ||
+		params[1].Default.Operation() != OperationParameter {
+		t.Fatalf("DynamicMultiplicity parameters = %+v, want an unknown pool multiplicity and a retained default", params)
+	}
+}
+
+func TestCompileResolvesInheritedAndRedefinedDefaults(t *testing.T) {
+	fixture := loadQueryFixture(t, `
+package Library {
+	part fallback;
+	calc def Base :> Query {
+		in source : Element = fallback;
+		in pattern : String default "m";
+		WhereName(source = OwnedElements(source = source), operator = "startsWith", value = pattern)
+	}
+}
+part fallback;
+calc def Inherits :> Library::Base {
+	in redefines source;
+}
+calc def Redefines :> Library::Base {
+	in redefines pattern default "s";
+}
+calc def Restated :> Redefines {
+	in redefines pattern;
+}
+`)
+	inherited := fixture.compile(t, "Inherits").Definitions()[0].Parameters()
+	if len(inherited) != 2 {
+		t.Fatalf("Inherits parameters = %+v", inherited)
+	}
+	source := inherited[0]
+	element, ok := source.Default.Element()
+	if source.Name != "source" || !source.HasDefault || !ok ||
+		element != fixture.symbol(t, "Library::fallback") ||
+		source.DefaultQuery != "Fixture::Library::Base" {
+		t.Fatalf("inherited source default = %+v, want Library::fallback from Base", source)
+	}
+	if pattern := inherited[1]; pattern.Name != "pattern" || !pattern.HasDefault ||
+		pattern.DefaultQuery != "Fixture::Library::Base" {
+		t.Fatalf("inherited pattern default = %+v", pattern)
+	}
+	literalOf(t, inherited[1].Default, LiteralString, `"m"`)
+
+	for _, name := range []string{"Redefines", "Restated"} {
+		params := make(map[string]Parameter)
+		for _, param := range fixture.compile(t, name).Definitions()[0].Parameters() {
+			params[param.Name] = param
+		}
+		if len(params) != 2 {
+			t.Fatalf("%s parameters = %+v", name, params)
+		}
+		if pattern := params["pattern"]; !pattern.HasDefault || pattern.DefaultQuery != "Fixture::Redefines" {
+			t.Fatalf("%s pattern default = %+v, want the redefining default", name, pattern)
+		}
+		literalOf(t, params["pattern"].Default, LiteralString, `"s"`)
+		if source := params["source"]; !source.HasDefault || source.DefaultQuery != "Fixture::Library::Base" {
+			t.Fatalf("%s source default = %+v, want the inherited default", name, source)
+		}
+	}
+}
+
+func TestCompileRejectsUnrepresentableDefaults(t *testing.T) {
+	fixture := loadQueryFixture(t, `
+part root;
+calc def Chained :> Query {
+	in source : Element = root.name;
+	OwnedElements(source = source)
+}
+calc def Arithmetic :> Query {
+	in source : Element;
+	in depth : Integer = 1 + 1;
+	Descendants(source = source, maxDepth = depth)
+}
+calc def Inherited :> Arithmetic {
+	in redefines source;
+}
+calc def Caller :> Query {
+	in source : Element;
+	Chained(source = source)
+}
+`)
+	for _, test := range []struct {
+		name  string
+		param string
+	}{
+		{"Chained", "source"},
+		{"Arithmetic", "depth"},
+		{"Inherited", "depth"},
+		{"Caller", "source"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := Compile(fixture.index, fixture.model, fixture.resolver, fixture.symbol(t, test.name))
+			planning := planningError(t, err, ErrorUnsupportedDefault)
+			if planning.Parameter != test.param || !planning.Origin.Located() {
+				t.Fatalf("error = %+v, want parameter %s with provenance", planning, test.param)
+			}
+			if !strings.Contains(planning.Error(), test.param) {
+				t.Fatalf("message %q must name the parameter", planning.Error())
+			}
+		})
+	}
+}
+
 func TestCompileInheritsQueryResultExpression(t *testing.T) {
 	fixture := loadQueryFixture(t, `
 calc def Base :> Query {
@@ -272,6 +842,45 @@ calc def CycleC :> Query { in subsystem : Element; CycleA(subsystem = subsystem)
 			root: "CycleA",
 			path: []string{"Fixture::CycleA", "Fixture::CycleB", "Fixture::CycleC", "Fixture::CycleA"},
 			call: "CycleA(subsystem = subsystem)",
+		},
+		{
+			name: "default invokes its own query",
+			body: `
+calc def SelfDefault :> Query {
+	in candidates : Element[0..*] = SelfDefault();
+	OwnedElements(source = candidates)
+}`,
+			root: "SelfDefault",
+			path: []string{"Fixture::SelfDefault", "Fixture::SelfDefault"},
+			call: "SelfDefault()",
+		},
+		{
+			name: "default invokes the query being compiled",
+			body: `
+calc def Outer :> Query { in subsystem : Element; Inner(subsystem = subsystem) }
+calc def Inner :> Query {
+	in subsystem : Element;
+	in candidates : Element[0..*] = Outer(subsystem = subsystem);
+	OwnedElements(source = candidates)
+}`,
+			root: "Outer",
+			path: []string{"Fixture::Outer", "Fixture::Inner", "Fixture::Outer"},
+			call: "Outer(subsystem = subsystem)",
+		},
+		{
+			name: "defaults invoke each other",
+			body: `
+calc def DefaultA :> Query {
+	in candidates : Element[0..*] = DefaultB();
+	OwnedElements(source = candidates)
+}
+calc def DefaultB :> Query {
+	in candidates : Element[0..*] = DefaultA();
+	OwnedElements(source = candidates)
+}`,
+			root: "DefaultA",
+			path: []string{"Fixture::DefaultA", "Fixture::DefaultB", "Fixture::DefaultA"},
+			call: "DefaultA()",
 		},
 	}
 	for _, test := range tests {

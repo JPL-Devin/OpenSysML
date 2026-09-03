@@ -106,6 +106,15 @@ type PerformActionNode struct {
 	ActionRef Node // qualified name or invocation expression
 }
 
+// PerformedInvocation is the call the statement performs (`perform tag(x);`);
+// nil when it names the action without arguments.
+func (n *PerformActionNode) PerformedInvocation() *InvocationExpr {
+	if inv, ok := n.ActionRef.(*InvocationExpr); ok && inv.Type != nil {
+		return inv
+	}
+	return nil
+}
+
 // LoopKind discriminates the loop forms, which share one node because they
 // share a body and a condition but differ in when the condition is tested.
 type LoopKind int

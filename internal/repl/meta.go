@@ -2162,7 +2162,8 @@ func (s *Session) startAction(name string, performer []string) ([]string, error)
 	}
 	exec.SetTrace(s.trace)
 
-	// Store session
+	// Store session, letting go of the one it replaces
+	s.actionExec.release()
 	s.actionExec = &actionSession{
 		name:     name,
 		fqn:      qualifiedOr(fqn, name),
@@ -2211,6 +2212,9 @@ func (s *Session) doStep() ([]string, bool, error) {
 		"✓ Step complete",
 		fmt.Sprintf("  State: %s", exec.State()),
 		fmt.Sprintf("  Tokens: %d", len(tokens)),
+	}
+	if node := exec.PausedAt(); node != "" {
+		out = append(out, fmt.Sprintf("  ⏸ Paused at breakpoint %q", node))
 	}
 
 	if exec.State() == runtime.StateCompleted {
@@ -2303,9 +2307,9 @@ func (s *Session) doTokens() ([]string, bool, error) {
 		out = append(out, fmt.Sprintf("  Token %d @ %s", tok.ID, locName))
 	}
 
-	// A token carries no values of its own: every one of them reads and writes
-	// the action's features, so those are shown once.
-	if values := namedValues(s.actionExec.contextOf(), exec.Data()); len(values) > 0 {
+	// A token carries no values of its own: it reads and writes the features of
+	// the performance it is in, so those are shown once, a node's under its path.
+	if values := namedValues(s.actionExec.contextOf(), exec.Results()); len(values) > 0 {
 		out = append(out, "  Values:")
 		for _, v := range values {
 			out = append(out, fmt.Sprintf("    %s = %s", v.Name, v.Value))
@@ -2371,6 +2375,7 @@ func (s *Session) doStop() ([]string, bool, error) {
 	sessionName := ""
 	if s.actionExec != nil {
 		sessionName = s.actionExec.name
+		s.actionExec.release()
 		s.actionExec = nil
 	} else if s.stateExec != nil {
 		sessionName = s.stateExec.name

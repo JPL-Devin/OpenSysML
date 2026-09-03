@@ -1,4 +1,5 @@
 @prefix elmt: <urn:sysmlv2:element:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -16,7 +17,10 @@ elmt:Conjugation
     sysml:ownedMembership elmt:Conjugation__CommunicationPort_om, elmt:Conjugation__Ground_om, elmt:Conjugation__Link_om ;
     sysml:ownedRelationship elmt:Conjugation__CommunicationPort_om, elmt:Conjugation__Ground_om, elmt:Conjugation__Link_om ;
     sysx:sourceText "package Conjugation {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Conjugation__CommunicationPort\"},{\"@id\":\"Conjugation__Ground\"},{\"@id\":\"Conjugation__Link\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Conjugation__CommunicationPort_om\"},{\"@id\":\"Conjugation__Ground_om\"},{\"@id\":\"Conjugation__Link_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Conjugation__CommunicationPort_om\"},{\"@id\":\"Conjugation__Ground_om\"},{\"@id\":\"Conjugation__Link_om\"}]" .
 
 elmt:Conjugation__CommunicationPort
     a sysml:PortDefinition ;
@@ -90,7 +94,12 @@ elmt:Conjugation__Ground
     sysml:ownedFeature elmt:Conjugation__Ground__groundPort, elmt:Conjugation__Ground__spacePort ;
     sysml:ownedFeatureMembership elmt:Conjugation__Ground__groundPort_om, elmt:Conjugation__Ground__spacePort_om ;
     sysx:sourceText "    part def Ground {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Conjugation__Ground__groundPort\"},{\"@id\":\"Conjugation__Ground__spacePort\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Conjugation__Ground__groundPort_om\"},{\"@id\":\"Conjugation__Ground__spacePort_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Conjugation__Ground__groundPort_om\"},{\"@id\":\"Conjugation__Ground__spacePort_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Conjugation__Ground__groundPort\"},{\"@id\":\"Conjugation__Ground__spacePort\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Conjugation__Ground__groundPort_om\"},{\"@id\":\"Conjugation__Ground__spacePort_om\"}]" .
 
 elmt:Conjugation__Ground_om
     a sysml:OwningMembership ;
@@ -172,7 +181,12 @@ elmt:Conjugation__Link
     sysml:ownedFeature elmt:Conjugation__Link__a, elmt:Conjugation__Link__b ;
     sysml:ownedFeatureMembership elmt:Conjugation__Link__a_om, elmt:Conjugation__Link__b_om ;
     sysx:sourceText "    interface def Link {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Conjugation__Link__a\"},{\"@id\":\"Conjugation__Link__b\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Conjugation__Link__a_om\"},{\"@id\":\"Conjugation__Link__b_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Conjugation__Link__a_om\"},{\"@id\":\"Conjugation__Link__b_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Conjugation__Link__a\"},{\"@id\":\"Conjugation__Link__b\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Conjugation__Link__a_om\"},{\"@id\":\"Conjugation__Link__b_om\"}]" .
 
 elmt:Conjugation__Link_om
     a sysml:OwningMembership ;

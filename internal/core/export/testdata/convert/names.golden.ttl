@@ -1,4 +1,5 @@
 @prefix elmt: <urn:sysmlv2:element:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -16,7 +17,10 @@ elmt:Named
     sysml:ownedMembership elmt:Named__Vehicle_om, elmt:Named__Car_om, elmt:Named__Mass_om ;
     sysml:ownedRelationship elmt:Named__Vehicle_om, elmt:Named__Car_om, elmt:Named__Mass_om ;
     sysx:sourceText "package Named {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Named__Vehicle\"},{\"@id\":\"Named__Car\"},{\"@id\":\"Named__Mass\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Named__Vehicle_om\"},{\"@id\":\"Named__Car_om\"},{\"@id\":\"Named__Mass_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Named__Vehicle_om\"},{\"@id\":\"Named__Car_om\"},{\"@id\":\"Named__Mass_om\"}]" .
 
 elmt:Named__Vehicle
     a sysml:PartDefinition ;

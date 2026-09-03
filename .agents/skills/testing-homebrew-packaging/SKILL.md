@@ -146,6 +146,44 @@ which is not an executable file` and *no* fallback verdict; `OPENSYSML_SMT_TIMEO
 the long `install z3 (…)` error, and `%eval`/`%requirement`/`%satisfy` output byte-identical to
 a run with z3 present (`diff` the two runs — that is the real "solver is optional" proof).
 
+## Manual pages in the bundle (formula installs `share/man/man1/*.1`)
+
+The release bundle archives now carry the pages beside the binaries
+(`tar czf … sysml sysml-lsp share`), and the formula does
+`man1.install Dir["share/man/man1/*.1"]`. No *published* release has that layout yet, so the
+only way to exercise it is a hand-built bundle served over `file://`:
+
+```bash
+make build VERSION=v9.9.9
+R=/tmp/rel/Open-MBEE/OpenSysML/releases/download/v9.9.9; mkdir -p "$R" /tmp/stage/share/man/man1
+cp bin/sysml bin/sysml-lsp /tmp/stage/; cp man/man1/*.1 /tmp/stage/share/man/man1/
+tar czf "$R/opensysml-linux-amd64.tar.gz" -C /tmp/stage sysml sysml-lsp share
+# hand-made SHA256SUMS with that one sum repeated for all four assets, then render, then in the
+# tap copy only: s|https://github.com/…/download|file:///tmp/rel/…/download|g
+```
+
+Caveats learned the hard way:
+
+- Homebrew cannot scan a version out of a `file://` (or `127.0.0.1`) URL — it reads `64` from
+  `-amd64`, so `assert_match version.to_s` in `test do` becomes meaningless or fails. Add an
+  explicit `version "9.9.9"` line **to the tap copy only** and build the binaries with
+  `make build VERSION=v9.9.9` so the version assertions stay real. Disclose it as a harness
+  artifact; never add it to the committed template (`brew audit --strict` rejects a redundant
+  `version` when the URL is a real github release URL).
+- `man` may not exist on this box: `/usr/bin/man` is the Ubuntu "system has been minimized"
+  stub that prints a notice and exits 0, which silently looks like a page that renders to
+  nothing. Install the real one first — `sudo apt-get install -y man-db` (passwordless sudo
+  works here) — then `MANPATH=/home/linuxbrew/.linuxbrew/share/man man -w sysml` must print a
+  path under `Cellar/opensysml/<v>/share/man/man1`.
+- Make the man assertion load-bearing with a counterfactual: delete `man1.install …` from the
+  tap copy, `brew reinstall`, and `brew test` must fail with
+  `Minitest::Assertion: Expected #<Pathname:…/share/man/man1/sysml.1> to be exist?`. Restore and
+  reinstall. A green `brew test` alone proves nothing.
+- `brew audit --strict` is stricter than the formula's own style: `assert_predicate man1/"x.1",
+  :exist?` fails with ``Use `assert_path_exists <path_to_file>` instead of `assert_predicate
+  …```. Prefer `assert_path_exists man1/"sysml.1"`. Audit the **unmodified github.com** rendering
+  (offline) and attribute any failure by deleting just the suspect line and re-auditing.
+
 ## Recording
 
 This is CLI work, so record a real terminal: see the "Recording setup" section of

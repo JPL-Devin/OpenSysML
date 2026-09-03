@@ -1,0 +1,28 @@
+{
+  "libraries": true,
+  "type": "calcUsage",
+  "evaluate": "test::p",
+  "outputs": {
+    "aboveTwo": {
+      "type": "Sequence",
+      "elements": [
+        {"type": "Integer", "value": 3},
+        {"type": "Integer", "value": 4}
+      ]
+    },
+    "aboveTwoNested": {
+      "type": "Sequence",
+      "elements": [
+        {"type": "Integer", "value": 3},
+        {"type": "Integer", "value": 4}
+      ]
+    },
+    "aboveThree": {
+      "type": "Sequence",
+      "elements": [
+        {"type": "Integer", "value": 4},
+        {"type": "Integer", "value": 5}
+      ]
+    }
+  }
+}

@@ -87,11 +87,13 @@ func rangeBound(op, which string, val Value) (int64, error) {
 	return val.Const.Int, nil
 }
 
-// builtinIntegerRange is IntegerFunctions::'..' called as a function.
-func builtinIntegerRange(ec *EvalContext, args []Value) (Value, error) {
-	const op = "IntegerFunctions::'..'"
-	if err := checkArity(op, args, 2); err != nil {
-		return Value{}, err
+// rangeBuiltin is the range function op ('..' at any level of the library)
+// called as a function.
+func rangeBuiltin(op string) builtinFunc {
+	return func(ec *EvalContext, args []Value) (Value, error) {
+		if err := checkArity(op, args, 2); err != nil {
+			return Value{}, err
+		}
+		return ec.rangeSequence(op, args[0], args[1])
 	}
-	return ec.rangeSequence(op, args[0], args[1])
 }

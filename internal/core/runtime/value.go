@@ -169,7 +169,7 @@ type Value struct {
 	Const    semantics.Value // ValConst: reuse static evaluator
 	Instance int64           // ValInstance: instance ID; ValVariant: materialized object, 0 for none
 	// ref holds the kind-specific payload of the remaining kinds: a string
-	// (ValString), *Sequence, *Set, ast.Node (ValExpr), *Quantity, a complex128
+	// (ValString), *Sequence, *Set, *exprValue (ValExpr), *Quantity, a complex128
 	// (ValComplex), or the *symbols.Symbol of a variant (ValVariant) or
 	// enumeration literal (ValEnumLiteral).
 	ref any
@@ -197,9 +197,17 @@ func NewSetValue(set *Set) Value {
 	return Value{Kind: ValSet, ref: set}
 }
 
-// NewExprValue defers evaluation of an expression body.
-func NewExprValue(node ast.Node) Value {
-	return Value{Kind: ValExpr, ref: node}
+// exprValue is a deferred expression closed over the environment it was
+// written in; a nil env evaluates it where it is applied.
+type exprValue struct {
+	node ast.Node
+	env  *EvalContext
+}
+
+// NewExprValue defers evaluation of an expression, closing over env: the
+// bindings and scope in force where it was written.
+func NewExprValue(node ast.Node, env *EvalContext) Value {
+	return Value{Kind: ValExpr, ref: &exprValue{node: node, env: env}}
 }
 
 // NewQuantityValue wraps a magnitude expressed in a measurement unit.
@@ -251,8 +259,26 @@ func (v Value) Expr() ast.Node {
 	if v.Kind != ValExpr {
 		return nil
 	}
-	node, _ := v.ref.(ast.Node)
-	return node
+	if closure, ok := v.ref.(*exprValue); ok {
+		return closure.node
+	}
+	return nil
+}
+
+// exprEnv is the environment a ValExpr closes over, or in where it closes over
+// none. Tracing is the applying context's: a body applied later is recorded
+// as the evaluation reaching it is, not as its creation was.
+func (v Value) exprEnv(in *EvalContext) *EvalContext {
+	closure, ok := v.ref.(*exprValue)
+	if !ok || v.Kind != ValExpr || closure.env == nil {
+		return in
+	}
+	if closure.env.trace == in.trace {
+		return closure.env
+	}
+	env := *closure.env
+	env.trace = in.trace
+	return &env
 }
 
 // Quantity is the payload of a ValQuantity; nil for every other kind.

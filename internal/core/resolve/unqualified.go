@@ -351,11 +351,33 @@ func importsOf(node ast.Node) []*ast.Import {
 // either: another element of the same name elsewhere in an imported subtree may
 // be admitted.
 func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name string) (*symbols.Symbol, bool) {
+	var found *symbols.Symbol
+	r.eachImportMatch(scope, imp, name, func(sym *symbols.Symbol) bool {
+		found = sym
+		return false
+	})
+	return found, found != nil
+}
+
+// importMatchesAll is matchImport collecting every element the import surfaces
+// under name, in the order matchImport would find them, without duplicates.
+func (r *Resolver) importMatchesAll(scope *symbols.Scope, imp *ast.Import, name string) []*symbols.Symbol {
+	var out []*symbols.Symbol
+	r.eachImportMatch(scope, imp, name, func(sym *symbols.Symbol) bool {
+		out = appendSymbol(out, sym)
+		return true
+	})
+	return out
+}
+
+// eachImportMatch calls yield with each element imp surfaces under name until
+// yield returns false.
+func (r *Resolver) eachImportMatch(scope *symbols.Scope, imp *ast.Import, name string, yield func(*symbols.Symbol) bool) {
 	if imp.Imported == nil || len(imp.Imported.Parts) == 0 {
-		return nil, false
+		return
 	}
 	if r.resolvingImports[imp] {
-		return nil, false
+		return
 	}
 	r.resolvingImports[imp] = true
 	// Resolved aside: a miss here may only mean sibling imports were suspended
@@ -365,7 +387,7 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 	r.aside(func() { target, ok = r.resolveImportTarget(scope, imp) })
 	delete(r.resolvingImports, imp)
 	if !ok {
-		return nil, false
+		return
 	}
 	admit := r.importAdmits(scope, imp)
 	if imp.Kind == ast.ImportMembership {
@@ -381,23 +403,27 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 			targetName = targetName[idx+2:]
 		}
 		if (targetName == name || (target.ShortName != "" && target.ShortName == name)) && admit(target) {
-			return target, true
-		}
-		if imp.IsRecursive {
-			if sym, ok := r.lookupInSubtree(scope, target, name, imp, admit); ok {
-				return sym, true
+			if !yield(target) {
+				return
 			}
 		}
-		return nil, false
+		if imp.IsRecursive {
+			r.eachSubtreeMatch(scope, target, name, imp, admit, yield)
+		}
+		return
 	}
 	// Namespace import: visible members of the target's scope are surfaced.
 	// Check scope first if available
 	if target.Scope != nil {
-		if sym, ok := target.Scope.LookupLocal(name); ok && visibleThroughImport(imp, sym) && admit(sym) {
-			return sym, true
+		for _, sym := range symbols.PreferDeclared(target.Scope.LookupLocalAll(name)) {
+			if visibleThroughImport(imp, sym) && admit(sym) && !yield(sym) {
+				return
+			}
 		}
 		if sym, ok := r.lookupImportedMember(target, target.Scope, scope, name); ok && symbols.VisibleOutside(sym.Visibility) && admit(sym) {
-			return sym, true
+			if !yield(sym) {
+				return
+			}
 		}
 	}
 	// Also check FQN index for re-exported symbols (wildcard imports populate index, not scope)
@@ -432,16 +458,15 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 				continue
 			}
 			if r.importSurfaces(imp, targetFQN, sym) && admit(sym) {
-				return sym, true
+				if !yield(sym) {
+					return
+				}
 			}
 		}
 	}
 	if imp.IsRecursive {
-		if sym, ok := r.lookupInSubtree(scope, target, name, imp, admit); ok {
-			return sym, true
-		}
+		r.eachSubtreeMatch(scope, target, name, imp, admit, yield)
 	}
-	return nil, false
 }
 
 func (r *Resolver) importPrefixAvailable(scope *symbols.Scope, imp *ast.Import, name string) bool {
@@ -464,17 +489,16 @@ func (r *Resolver) importPrefixAvailable(scope *symbols.Scope, imp *ast.Import, 
 	return false
 }
 
-// lookupInSubtree searches the target namespace and its visible descendants for
-// a name, including memberships re-exported through nested imports.
-func (r *Resolver) lookupInSubtree(scope *symbols.Scope, target *symbols.Symbol, name string, imp *ast.Import, admit func(*symbols.Symbol) bool) (*symbols.Symbol, bool) {
+// eachSubtreeMatch yields each element named name in the target namespace and its visible
+// descendants, nested re-exports included, until yield returns false.
+func (r *Resolver) eachSubtreeMatch(scope *symbols.Scope, target *symbols.Symbol, name string, imp *ast.Import, admit func(*symbols.Symbol) bool, yield func(*symbols.Symbol) bool) {
 	out := newElementList()
 	r.appendSubtree(out, scope, target, imp, admit, map[symbols.ElementKey]bool{})
 	for _, sym := range out.elems {
-		if localNameOf(sym) == name || sym.ShortName == name {
-			return sym, true
+		if (localNameOf(sym) == name || sym.ShortName == name) && !yield(sym) {
+			return
 		}
 	}
-	return nil, false
 }
 
 // LookupNameExcluding resolves name from scope as LookupName does, with decl's

@@ -822,6 +822,50 @@ func TestExhibitsStateResolvesTheBodyABindingRuns(t *testing.T) {
 	}
 }
 
+// An exhibited usage stating its own body under a definition's type is still a
+// machine of that definition, and of the definitions it specializes, so the
+// definition addresses it — while an unrelated definition does not.
+func TestExhibitsStateThroughTheTypeOfABodyStatingUsage(t *testing.T) {
+	src := `
+		state def Base { entry; then idle; state idle; }
+		state def Blink :> Base { entry; then dark; state dark; }
+		state def Check { entry; then checking; state checking; }
+		part def Lamp {
+			exhibit state tuned : Blink { state bright; }
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 10000)
+	lamp := resolveSymbol(t, root, "Lamp")
+	tuned, ok := lamp.Scope.LookupLocal("tuned")
+	if !ok {
+		t.Fatal("Lamp declares no tuned")
+	}
+	def := func(name string) *symbols.Symbol { return resolveSymbol(t, root, name) }
+
+	for _, tc := range []struct {
+		machine string
+		want    bool
+	}{{"Blink", true}, {"Base", true}, {"Check", false}} {
+		if got := ctx.ExhibitsState(tuned, def(tc.machine)); got != tc.want {
+			t.Errorf("ExhibitsState(tuned, %s) = %v, want %v", tc.machine, got, tc.want)
+		}
+	}
+
+	inst, err := ctx.Instantiate(lamp)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	for _, machine := range []string{"Blink", "Base"} {
+		if got := inst.ExhibitedStatesOf(def(machine)); len(got) != 1 || got[0].Member() != tuned {
+			t.Errorf("ExhibitedStatesOf(%s) = %v, want tuned", machine, got)
+		}
+	}
+	if got := inst.ExhibitedStatesOf(def("Check")); len(got) != 0 {
+		t.Errorf("ExhibitedStatesOf(Check) = %v, want none", got)
+	}
+}
+
 // featureInt is the integer an object's feature value holds.
 func featureInt(t *testing.T, ctx *Context, inst *Instance, name string) int64 {
 	t.Helper()

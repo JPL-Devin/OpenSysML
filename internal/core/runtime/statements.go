@@ -16,16 +16,26 @@ import (
 // its block exits, so a name it declares never leaks outward.
 type stmtEnv struct {
 	data frame
+	// enclosing are the frames the behavior's data shadows but its statements
+	// still reach, outermost first: the performances around an action node.
+	enclosing []frame
 	// outer are value maps the body reads but does not declare into, innermost
 	// last: the attributes the states enclosing the behavior own.
-	outer  []map[string]Value
+	outer []map[string]Value
+	// perf is the performance the body runs as where data is not its frame — a state
+	// behavior's — whose nodes a read of `p.v` names. nil where data is the frame.
+	perf   *actionFrame
 	frames []map[string]Value
+	// unvalued names, per frame, the features a frame declares but holds no value
+	// for yet (`out v : Integer;`), which an assignment writes into that frame.
+	unvalued []map[string]bool
 }
 
 // enter pushes a frame for a block about to run and returns it.
 func (env *stmtEnv) enter() map[string]Value {
 	frame := make(map[string]Value)
 	env.frames = append(env.frames, frame)
+	env.unvalued = append(env.unvalued, nil)
 	return frame
 }
 
@@ -33,7 +43,28 @@ func (env *stmtEnv) enter() map[string]Value {
 func (env *stmtEnv) leave() {
 	if len(env.frames) > 0 {
 		env.frames = env.frames[:len(env.frames)-1]
+		env.unvalued = env.unvalued[:len(env.unvalued)-1]
 	}
+}
+
+// declareUnvalued marks a name the innermost entered block declares without a value.
+func (env *stmtEnv) declareUnvalued(name string) {
+	depth := len(env.frames)
+	if depth == 0 {
+		return
+	}
+	if env.unvalued[depth-1] == nil {
+		env.unvalued[depth-1] = make(map[string]bool)
+	}
+	env.unvalued[depth-1][name] = true
+}
+
+// frameDeclares reports whether the i-th entered block declares name, valued or not.
+func (env *stmtEnv) frameDeclares(i int, name string) bool {
+	if _, ok := env.frames[i][name]; ok {
+		return true
+	}
+	return env.unvalued[i][name]
 }
 
 // declare binds a name the innermost entered block declares, or a name of the
@@ -49,7 +80,7 @@ func (env *stmtEnv) declare(name string, value Value) {
 // holdsLocal reports whether an entered block declares name.
 func (env *stmtEnv) holdsLocal(name string) bool {
 	for i := len(env.frames) - 1; i >= 0; i-- {
-		if _, ok := env.frames[i][name]; ok {
+		if env.frameDeclares(i, name) {
 			return true
 		}
 	}
@@ -61,7 +92,7 @@ func (env *stmtEnv) holdsLocal(name string) bool {
 // behavior's own, including one of its output features.
 func (env *stmtEnv) assignLocal(name string, value Value) bool {
 	for i := len(env.frames) - 1; i >= 0; i-- {
-		if _, ok := env.frames[i][name]; ok {
+		if env.frameDeclares(i, name) {
 			env.frames[i][name] = value
 			return true
 		}
@@ -69,10 +100,13 @@ func (env *stmtEnv) assignLocal(name string, value Value) bool {
 	return false
 }
 
-// values is the values a statement reads: the behavior's own, overridden by
-// those of the blocks entered around it, innermost last.
+// values is the values a statement reads: the enclosing frames, overridden by the
+// behavior's own, overridden by the blocks entered around it, innermost last.
 func (env *stmtEnv) values() map[string]Value {
 	merged := make(map[string]Value, env.data.width())
+	for _, f := range env.enclosing {
+		f.each(func(name string, value Value) { merged[name] = value })
+	}
 	env.data.each(func(name string, value Value) { merged[name] = value })
 	for _, frame := range env.frames {
 		maps.Copy(merged, frame)
@@ -127,6 +161,9 @@ type stmtHost interface {
 	acceptReturn(value Value, s lower.Return) error
 	// effect states an effect on the world outside the body.
 	effect(s lower.Effect) error
+	// performNode runs a nested action a block's flow declares, node of graph,
+	// as a performance of its own with engine's block-locals in reach.
+	performNode(engine *stmtEngine, graph *lower.ActionGraph, node *ast.Usage) (stmtFlow, error)
 	// performer is the object running the behavior, nil when it runs outside any
 	// object: what the body's names read and write through.
 	performer() *Instance
@@ -163,6 +200,17 @@ func newStmtEngineOver(ctx *Context, host stmtHost, data map[string]Value, outer
 	return engine
 }
 
+// newStmtEngineIn returns an engine running statements against data, a frame
+// that shadows the enclosing frames its statements still read, outermost first.
+func newStmtEngineIn(ctx *Context, host stmtHost, data frame, enclosing []frame) *stmtEngine {
+	return &stmtEngine{
+		ctx:        ctx,
+		host:       host,
+		env:        &stmtEnv{data: data, enclosing: enclosing},
+		activation: ctx.newActivation(),
+	}
+}
+
 // finish ends the activation the engine's statements ran in, discarding what the
 // calc usages read in them computed.
 func (e *stmtEngine) finish() {
@@ -173,9 +221,13 @@ func (e *stmtEngine) finish() {
 // statement was written in, reading the behavior's data and the frames entered,
 // innermost last so a block-local name shadows an outer one.
 func (e *stmtEngine) evalIn(scope *symbols.Scope) *EvalContext {
-	frames := append(e.frameBuf[:0], e.env.data)
+	frames := append(e.frameBuf[:0], e.env.enclosing...)
+	frames = append(frames, e.env.data)
 	for _, outer := range e.env.outer {
 		frames = append(frames, mapFrame(outer))
+	}
+	if e.env.perf != nil {
+		frames = append(frames, performanceFrame(e.env.perf))
 	}
 	for _, local := range e.env.frames {
 		frames = append(frames, mapFrame(local))
@@ -363,15 +415,20 @@ func (e *stmtEngine) blockFlow(block lower.Block) (stmtFlow, error) {
 	return flowNext, nil
 }
 
-// blockNode runs one node of a block's flow. A node declaring a namespace of its
-// own was lowered to a block, which enters a frame of its own; a node standing
-// for a run of statements shares the frame the enclosing block entered.
+// blockNode runs one node of a block's flow: the host performs an action usage in
+// a frame of its own; a run of statements runs in the frame the block entered.
 func (e *stmtEngine) blockNode(graph *lower.ActionGraph, node ast.Node) (stmtFlow, error) {
-	if name := ActionNodeName(node); name != "" && !graph.StatementRuns[node] {
-		if tr := e.ctx.trace; tr != nil {
+	if graph.StatementRuns[node] {
+		return e.run(graph.Bodies[node])
+	}
+	if tr := e.ctx.trace; tr != nil {
+		if name := ActionNodeName(node); name != "" {
 			tr.RecordStatement("node " + name)
 			defer tr.EndStatement()
 		}
+	}
+	if usage, ok := node.(*ast.Usage); ok {
+		return e.host.performNode(e, graph, usage)
 	}
 	return e.run(graph.Bodies[node])
 }

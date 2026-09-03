@@ -1,0 +1,14 @@
+{
+	"type": "action",
+	"evaluate": "test::outer",
+	"outputs": {
+		"seen": {"type": "Integer", "value": 42},
+		"unchanged": {"type": "Integer", "value": 7},
+		"given": {"type": "Integer", "value": 9},
+		"downstream": {"type": "Integer", "value": 84},
+		"acc.total": {"type": "Integer", "value": 42},
+		"acc.k": {"type": "Integer", "value": 7},
+		"next.n": {"type": "Integer", "value": 42},
+		"giver.v": {"type": "Integer", "value": 9}
+	}
+}
