@@ -1,0 +1,12 @@
+{
+	"type": "action",
+	"evaluate": "test::outer",
+	"outputs": {
+		"n": {"type": "Integer", "value": 2},
+		"total": {"type": "Integer", "value": 6},
+		"first_.v": {"type": "Integer", "value": 2},
+		"first_.w": {"type": "Integer", "value": 2},
+		"second.v": {"type": "Integer", "value": 4},
+		"second.w": {"type": "Integer", "value": 4}
+	}
+}

@@ -114,10 +114,14 @@ func (e *ActionExecutor) beginPerformance(parent *actionFrame, node ast.Node) (*
 	parent.takeDeliveries(node, perf)
 	parent.subactions[node] = perf
 
-	if err := e.bindInputPins(perf); err != nil {
+	// The bindings and defaults are one evaluation: a calc usage two of them read
+	// answers once, and another performance evaluates it anew.
+	activation, endStep := e.ctx.beginStep()
+	defer endStep()
+	if err := e.bindInputPins(perf, activation); err != nil {
 		return nil, err
 	}
-	if err := e.seedDeclaredValues(perf, graph.Features[node]); err != nil {
+	if err := e.seedDeclaredValues(perf, graph.Features[node], activation); err != nil {
 		return nil, err
 	}
 	return perf, nil
@@ -125,7 +129,7 @@ func (e *ActionExecutor) beginPerformance(parent *actionFrame, node ast.Node) (*
 
 // seedDeclaredValues evaluates the values a node's own declarations give its
 // features (`in a = 3;`), where no delivery or binding at the pin holds one yet.
-func (e *ActionExecutor) seedDeclaredValues(perf *actionFrame, features []lower.Feature) error {
+func (e *ActionExecutor) seedDeclaredValues(perf *actionFrame, features []lower.Feature, activation int64) error {
 	for _, feature := range features {
 		if feature.Value == nil {
 			continue
@@ -134,6 +138,7 @@ func (e *ActionExecutor) seedDeclaredValues(perf *actionFrame, features []lower.
 			continue
 		}
 		ec := e.evalContextFor(perf, feature.Scope)
+		ec.activation = activation
 		value, err := ec.Eval(feature.Value)
 		if err != nil {
 			return fmt.Errorf("eval %s of %s: %w", feature.Name, nodeDescription(perf.node), err)
@@ -410,7 +415,7 @@ func (f *actionFrame) collect(prefix string, into map[string]Value) {
 
 // bindInputPins seeds the pins a performance reads from the bindings at them,
 // where nothing delivered ahead of the performance already holds a value.
-func (e *ActionExecutor) bindInputPins(perf *actionFrame) error {
+func (e *ActionExecutor) bindInputPins(perf *actionFrame, activation int64) error {
 	for _, binding := range e.bindingsAt(perf) {
 		dir, err := e.boundPin(perf, binding)
 		if err != nil {
@@ -422,7 +427,7 @@ func (e *ActionExecutor) bindInputPins(perf *actionFrame) error {
 		if _, held := perf.data[binding.Pin]; held {
 			continue
 		}
-		value, err := e.bindingOtherValue(perf, binding)
+		value, err := e.bindingOtherValue(perf, binding, activation)
 		if err != nil {
 			return err
 		}
@@ -496,7 +501,7 @@ func (e *ActionExecutor) boundPin(perf *actionFrame, binding lower.PinBinding) (
 
 // bindingOtherValue reads the value the other end of a binding at perf's pin
 // holds: another node's pin, or an expression over the enclosing performances.
-func (e *ActionExecutor) bindingOtherValue(perf *actionFrame, binding lower.PinBinding) (Value, error) {
+func (e *ActionExecutor) bindingOtherValue(perf *actionFrame, binding lower.PinBinding, activation int64) (Value, error) {
 	if binding.OtherNode != nil {
 		other, performed := perf.parent.subactions[binding.OtherNode]
 		if !performed {
@@ -510,6 +515,7 @@ func (e *ActionExecutor) bindingOtherValue(perf *actionFrame, binding lower.PinB
 		return value, nil
 	}
 	ec := e.evalContextFor(perf.parent, binding.Scope)
+	ec.activation = activation
 	value, err := ec.Eval(binding.Other)
 	if err != nil {
 		return Value{}, fmt.Errorf("%w: %s.%s is bound to %s: %v",
@@ -546,9 +552,10 @@ func bindingEndText(end ast.Node) string {
 }
 
 // performInvocation performs the action a node names, as a subperformance held
-// by perf. Arguments bind the callee's inputs by its own parameter order and
-// names, and `Callee()` passes none; a bare usage reads what the node's pins and
-// the enclosing performances hold under those names. Every value the callee
+// by perf. Arguments, expressions of the enclosing performance, bind the callee's
+// inputs by its own parameter order and names, and `Callee()` passes none; a
+// bare usage reads what the node's pins and the enclosing performances hold
+// under those names. Every value the callee
 // ends with becomes the node's, and its outputs are also returned to the
 // same-named features around it.
 func (e *ActionExecutor) performInvocation(perf *actionFrame, inv actionInvocation) error {
@@ -575,7 +582,7 @@ func (e *ActionExecutor) performInvocation(perf *actionFrame, inv actionInvocati
 		}
 	}
 	if inv.invoked {
-		ec := e.evalContextFor(perf, scope)
+		ec := e.evalContextFor(perf.parent, scope)
 		defer ec.beginStep()()
 		if err := bindArgumentList(ec, inv, in, inputs); err != nil {
 			return err
