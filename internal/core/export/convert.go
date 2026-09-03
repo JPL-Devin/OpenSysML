@@ -21,35 +21,20 @@
 // Each element carries its metaclass as rdf:type and its declaration as SysML
 // metamodel properties: declaredName, declaredShortName, owningNamespace,
 // visibility, direction, the feature flags, the typing and specialization
-// clauses, multiplicity bounds and its value. Three properties the metamodel
-// does not define live in a separate urn:opensysml:sysml: namespace so a
-// consumer can tell them from the standard vocabulary: memberIndex (declaration
-// order, which the notation is sensitive to and RDF is not), hasBody, and
-// sourceText.
+// clauses, multiplicity bounds and its value; expression-valued positions are
+// expression trees. Properties the metamodel does not define live in a separate
+// urn:opensysml:sysml: namespace so a consumer can tell them from the standard
+// vocabulary: memberIndex (declaration order, which the notation is sensitive to
+// and RDF is not), hasBody, the end forms of heads that bind ends, and each
+// element's lines as written, comments included, as sourceText and sourceTail.
 //
-// # Known limitations
+// # RDF back to notation
 //
-// Expression-valued positions — feature values, multiplicity bounds, filter
-// conditions, succession guards, the result expression a calculation or case
-// body ends in — are carried as expression trees with their source text
-// alongside. They convert back exactly from the text, and from the tree alone
-// where a graph carries none; a constraint or requirement condition is still
-// carried as its text only, and a declaration inside an expression body as its
-// text beside the body's parameters and result.
-//
-// A declaration whose head binds ends rather than naming a single feature —
-// connect, bind, flow, succession, transition, accept and satisfy — is carried
-// as sourceText, with its structural properties alongside. Those heads convert
-// back exactly, but a graph produced by another tool will not have the text, and
-// converting such an element to notation then reports it as unsupported rather
-// than guessing at the ends.
-//
-// Lexical comments do not survive a round trip through RDF. Saving straight to
-// notation keeps them, because that path writes the source; converting to Turtle
-// keeps only what the model declares, and `//` and `/* */` trivia is attached to
-// no element. The comment and doc keywords are declarations rather than trivia,
-// so those do convert both ways. A model whose comments matter should be saved
-// to notation, which is why the two paths differ.
+// The structural triples are authoritative. An element is written from its
+// source text while that text still states what the graph states — so comments
+// and layout survive a round trip of an unedited model — and canonically where
+// the two disagree or the graph carries no text, as one from another tool does
+// not. docs/reference/rdf-mapping.md documents the mapping and its limitations.
 package export
 
 import (

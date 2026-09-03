@@ -59,18 +59,36 @@ Recorded against the corpus above, reproduced byte-identically on a second run:
 
 | Verdict | Files |
 |---|---|
-| `stable` | 190 |
-| `whitespace-only` | 85 |
-| `graph-diff` | 7 |
-| `unwritable` | 1 |
-| `unparseable` | 4 |
-| `refused` | 58 |
+| `stable` | 285 |
+| `whitespace-only` | 0 |
+| `graph-diff` | 0 |
+| `unwritable` | 0 |
+| `unparseable` | 0 |
+| `refused` | 60 |
 | **total** | **345** |
 
-So 287 of 345 files convert to Turtle, and of those 275 come back as the same graph (190 exactly,
-85 up to `sysx:sourceText` whitespace). The refusals by class: 20 `feature-declaration`,
-18 `prefix-metadata`, 9 `event-declaration`, 4 `duplicate-declaration`, 3 each of
-`snapshot-declaration` and `assert-declaration`, and 1 `timeslice-declaration`.
+So 285 of 345 files convert to Turtle, and every one of them comes back as the same Turtle byte for
+byte. That is the source text at work: the decoder writes each file back from the `sysx:sourceText`
+it carries (see [What the gate does not do](#what-the-gate-does-not-do)), so the files that came
+back up to whitespace, as a different graph, or that could not be written back or re-read from
+canonical notation all moved to `stable` when it landed. The refusals by class: 21
+`feature-declaration`, 19 `prefix-metadata`, 9 `event-declaration`, 4 `duplicate-declaration`,
+3 each of `snapshot-declaration` and `assert-declaration`, and 1 `timeslice-declaration`. No file
+is refused for an expression any longer: a body's result expression is mapped
+([rdf-mapping.md § Result expressions](../reference/rdf-mapping.md#result-expressions)), which
+took the 13 files refused for one from `refused` to `stable` (12) or to the standing refusal of an
+anonymous `feature` declaration (`Simple Tests/Expressions.kerml`), and the one `unwritable` file
+(`ExtendedOccurrences.kerml`) with it.
+
+Two of the refusals were `stable` verdicts while the body of an
+end-binding usage (`connector = c2 { end feature references a; }`, `#causation connect b to d {
+@CausationMetadata { … } }`) travelled inside the head's `sysx:sourceText`:
+`Simple Tests/Connectors.kerml` and `Cause and Effect Examples/CauseAndEffectExample.sysml`. Such a
+body is now mapped as members (see
+[rdf-mapping.md § End-binding heads](../reference/rdf-mapping.md#end-binding-heads)), so those two
+files meet the mapping's standing refusals of an anonymous `feature` declaration and of a metadata
+annotation with a body — the refusals the same members draw in any other body. The refusal is the
+honest verdict; the earlier one measured text, not structure.
 
 ## Policy
 
@@ -95,8 +113,8 @@ adjudicated:
   poor mapping of the model, and a `refused` file's refusal may be a defect. Correctness is the
   fixture tests' job; this gate measures whether the second hop reproduces the first.
 - **It does not exercise the structural predicates on their own.** Every node carries
-  `sysx:sourceText`, and the decoder writes notation from it where it can, so a `stable` verdict
-  here does not prove the graph could be written back without the text. That is what the
+  `sysx:sourceText`, and the decoder writes notation from it while it still states the graph, so a
+  `stable` verdict here does not prove the graph could be written back without the text. That is what the
   `sysx:sourceText`-stripping tests in `export_test.go` are for; see
   `.agents/skills/testing-rdf-roundtrip/SKILL.md`.
 - **It does not run when the downloaded corpora are absent**, except in CI, where the require

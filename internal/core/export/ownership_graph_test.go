@@ -11,16 +11,16 @@ import (
 // ownershipModel nests packages, definitions, usages and a state's entry action,
 // so it covers ownership by a namespace and ownership by a relationship.
 const ownershipModel = `package Outer {
-	package Inner {
-		part def Vehicle {
-			attribute mass;
-			private part wheel;
-		}
-		state def Modes {
-			entry action warm;
-			state off;
-		}
-	}
+    package Inner {
+        part def Vehicle {
+            attribute mass;
+            private part wheel;
+        }
+        state def Modes {
+            entry action warm;
+            state off;
+        }
+    }
 }
 `
 

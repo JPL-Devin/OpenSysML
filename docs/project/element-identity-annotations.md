@@ -4,10 +4,13 @@
 > name entries of [the roadmap](roadmap.md), where each is stated in full; a reader who only
 > wants the design can ignore them.
 
-Status: **phases 1–5 implemented** — the library, side table, validation pass, the RDF
-writer/reader identity round trip, the sync diff keyed by effective id with the
-identity-carrying Flexo fixture, and the apply of that diff to a live repository with its
-measurement against the real stack; the OMG issue (phase 6) is not filed. It records the design agreed for
+Status: **all six phases implemented** — the library, side table, validation pass, the RDF
+writer/reader identity round trip (comments and formatting preserved through the graph's
+source text), the sync diff keyed by effective id with the identity-carrying Flexo fixture,
+the apply of that diff to a live repository with its measurement against the real stack,
+the LSP minting code action, and the OMG issue filed as
+[INBOX-2510](https://issues.omg.org/browse/INBOX-2510) (see
+[omg-issues.md](omg-issues.md)). It records the design agreed for
 carrying stable element identity in textual notation, how that identity permeates the RDF
 mapping and repository synchronization, and the plan to submit the notation for
 standardization with OMG.

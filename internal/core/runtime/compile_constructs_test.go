@@ -48,9 +48,8 @@ var compiledFixtures = []struct {
 		ineligible: []string{"Length", "SumOfSequence", "OwnPi"},
 	},
 	{
-		file:       "named_arguments.sysml",
-		eligible:   []string{"Weighted", "InOrder", "Reordered", "Defaulted", "OnlyRequired", "Failing", "LibraryNamed", "Fib", "Scaled", "Duplicate"},
-		ineligible: []string{"Missing"},
+		file:     "named_arguments.sysml",
+		eligible: []string{"Weighted", "InOrder", "Reordered", "Defaulted", "OnlyRequired", "Failing", "LibraryNamed", "Fib", "Scaled"},
 	},
 }
 
@@ -69,6 +68,11 @@ func loadCompiledFixture(t *testing.T, file string) *compiledFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	return buildCompiledFixture(path, src)
+}
+
+// buildCompiledFixture builds the model in src with the libraries.
+func buildCompiledFixture(path string, src []byte) *compiledFixture {
 	idx := libs.NewModelIndex()
 	idx.AddDocument(path, parser.New(source.New(path, src)).ParseFile())
 	idx.ExpandWildcardImports()
@@ -339,9 +343,6 @@ func TestCompiledNamedArguments(t *testing.T) {
 
 	failing := f.same(t, "Failing", intArg(0))
 	wantErrorIs(t, "Failing(0)", failing, ErrDivisionByZero)
-	missing := f.same(t, "Missing", realArg(1))
-	wantErrorIs(t, "Missing(1)", missing, ErrUnboundParameter)
-	wantOutcomeReal(t, "Duplicate(1)", f.same(t, "Duplicate", realArg(1)), 2)
 
 	// The entry binding by name reaches the compiled tier too.
 	wantOutcomeReal(t, "Weighted(offset = 1, value = 2)",
@@ -356,5 +357,32 @@ func TestCompiledNamedArguments(t *testing.T) {
 	wantErrorIs(t, "Weighted(value = true)", mistyped, ErrTypeMismatch)
 	if stringy := f.sameNamed(t, "Weighted", map[string]Value{"value": NewStringValue("x")}); !errors.Is(stringy.err, ErrTypeMismatch) {
 		t.Errorf("Weighted(value = \"x\") = %v", stringy.err)
+	}
+}
+
+// Calls the type checker refuses (a required parameter left unbound, a name
+// bound twice) are ineligible for the compiled tier and fail on the evaluator
+// as the checker says they do.
+func TestCompiledNamedArgumentsIllFormed(t *testing.T) {
+	f := buildCompiledFixture("ill_formed_named.sysml", []byte(`package test {
+		private import ScalarValues::*;
+		calc def Weighted {
+			in value : Real;
+			in weight : Real = 1.0;
+			return : Real = value * weight;
+		}
+		calc def Missing { in v : Real; return : Real = Weighted(weight = v); }
+		calc def Duplicate { in v : Real; return : Real = Weighted(value = v, value = 2.0); }
+	}`))
+	for _, name := range []string{"Missing", "Duplicate"} {
+		if ok, why := f.eligible(t, name); ok || why == "" {
+			t.Errorf("%s: eligible %v, reason %q", name, ok, why)
+		}
+	}
+	wantErrorIs(t, "Missing(1)", f.same(t, "Missing", realArg(1)), ErrUnboundParameter)
+	duplicate := f.same(t, "Duplicate", realArg(1))
+	wantErrorIs(t, "Duplicate(1)", duplicate, ErrCalcArity)
+	if !strings.Contains(duplicate.err.Error(), `binds parameter "value" twice`) {
+		t.Errorf("Duplicate(1) = %v", duplicate.err)
 	}
 }

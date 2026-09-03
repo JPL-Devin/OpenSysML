@@ -1,0 +1,6 @@
+{
+  "libraries": true,
+  "type": "calc",
+  "inputs": [],
+  "result": {"type": "Integer", "value": 12}
+}

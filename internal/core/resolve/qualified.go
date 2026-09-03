@@ -252,6 +252,7 @@ func rootOf(scope *symbols.Scope) *symbols.Scope {
 // a simple name may have meant. A qualified name already says where to look, so
 // only an unqualified one is second-guessed.
 func (r *Resolver) unresolved(scope *symbols.Scope, qn *ast.QualifiedName) {
+	delete(r.ambiguities, qn)
 	msg := unresolvedReferencePrefix + qnText(qn)
 	var fixes []quickfix.Fix
 	if len(qn.Parts) == 1 && !qn.Global {
@@ -284,6 +285,7 @@ func (r *Resolver) unresolvedNamespace(qn *ast.QualifiedName, ns string) {
 
 // ambiguous records an ambiguity diagnostic reporting the number of matches.
 func (r *Resolver) ambiguous(qn *ast.QualifiedName, n int) {
+	r.ambiguities[qn] = n
 	r.reportQualified(qn, Diagnostic{
 		Span:    qn.Span(),
 		Message: fmt.Sprintf("ambiguous reference: %s (%d candidates)", qnText(qn), n),

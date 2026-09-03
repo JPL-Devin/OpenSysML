@@ -9,11 +9,14 @@ elmt:Chains
     sysml:qualifiedName "Chains" ;
     sysml:elementId "Chains" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Chains" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Chains___400, elmt:Chains__V, elmt:Chains__v, elmt:Chains__c, elmt:Chains__Named ;
     sysml:ownedMembership elmt:Chains___400_om, elmt:Chains__V_om, elmt:Chains__v_om, elmt:Chains__c_om, elmt:Chains__Named_om ;
-    sysml:ownedRelationship elmt:Chains___400_om, elmt:Chains__V_om, elmt:Chains__v_om, elmt:Chains__c_om, elmt:Chains__Named_om .
+    sysml:ownedRelationship elmt:Chains___400_om, elmt:Chains__V_om, elmt:Chains__v_om, elmt:Chains__c_om, elmt:Chains__Named_om ;
+    sysx:sourceText "package Chains {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:Chains___400
     a sysml:Comment ;
@@ -24,7 +27,8 @@ elmt:Chains___400
     sysml:owner elmt:Chains ;
     sysml:owningRelationship elmt:Chains___400_om ;
     sysml:owningMembership elmt:Chains___400_om ;
-    sysml:body " a comment with no name and no about clause " .
+    sysml:body " a comment with no name and no about clause " ;
+    sysx:sourceText "    comment /* a comment with no name and no about clause */\n" .
 
 elmt:Chains___400_om
     a sysml:OwningMembership ;
@@ -51,7 +55,9 @@ elmt:Chains__V
     sysml:ownedMembership elmt:Chains__V__e_om ;
     sysml:ownedRelationship elmt:Chains__V__e_om ;
     sysml:ownedFeature elmt:Chains__V__e ;
-    sysml:ownedFeatureMembership elmt:Chains__V__e_om .
+    sysml:ownedFeatureMembership elmt:Chains__V__e_om ;
+    sysx:sourceText "    part def V {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Chains__V_om
     a sysml:OwningMembership ;
@@ -74,7 +80,8 @@ elmt:Chains__V__e
     sysml:owningMembership elmt:Chains__V__e_om ;
     sysml:declaredName "e" ;
     sysml:type elmt:Chains__V ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part e : V;\n" .
 
 elmt:Chains__V__e_om
     a sysml:FeatureMembership ;
@@ -99,7 +106,8 @@ elmt:Chains__v
     sysml:owningMembership elmt:Chains__v_om ;
     sysml:declaredName "v" ;
     sysml:type elmt:Chains__V ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    part v : V;\n" .
 
 elmt:Chains__v_om
     a sysml:OwningMembership ;
@@ -123,7 +131,8 @@ elmt:Chains__c
     sysml:declaredName "c" ;
     sysml:isChain "true"^^xsd:boolean ;
     sysml:type elmt:Chains__V ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    part chain c : V;\n" .
 
 elmt:Chains__c_om
     a sysml:OwningMembership ;
@@ -146,7 +155,8 @@ elmt:Chains__Named
     sysml:owningMembership elmt:Chains__Named_om ;
     sysml:declaredName "Named" ;
     sysml:annotatedElement elmt:Chains__V ;
-    sysml:body " a comment that is identified " .
+    sysml:body " a comment that is identified " ;
+    sysx:sourceText "    comment Named about V /* a comment that is identified */\n" .
 
 elmt:Chains__Named_om
     a sysml:OwningMembership ;

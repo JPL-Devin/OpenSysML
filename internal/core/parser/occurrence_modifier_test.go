@@ -124,6 +124,12 @@ func TestParseUsageOccurrenceModifiersInBody(t *testing.T) {
 		{"timeslice", "timeslice ts;", ast.UsageOccurrence, false, ast.PortionTimeslice},
 		{"timeslice_item", "timeslice item ti;", ast.UsageItem, false, ast.PortionTimeslice},
 		{"plain_part", "part p;", ast.UsagePart, false, ast.PortionNone},
+		// A feature modifier ahead of the occurrence modifier takes the member
+		// down the anonymous-feature path, which must keep the modifier too.
+		{"ref_individual", "ref individual v : V;", ast.UsageIndividual, true, ast.PortionNone},
+		{"ref_individual_redefines", "ref individual redefines v : V;", ast.UsageIndividual, true, ast.PortionNone},
+		{"ref_individual_shorthand", "ref individual :>> v : V;", ast.UsageIndividual, true, ast.PortionNone},
+		{"ref_timeslice", "ref timeslice ts : T;", ast.UsageOccurrence, false, ast.PortionTimeslice},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

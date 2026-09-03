@@ -65,7 +65,10 @@ package MyModel {
 ```
 
 Each flag may be repeated. `-instantiate` always runs first, whatever order the flags are
-written in, so the verdicts that follow apply to the object it created:
+written in, so the verdicts that follow apply to the object it created. The object is created
+whole — the parts nested in it whose types exhibit or perform behaviors are created and run
+with it — so an `-e` expression naming the usage or a feature under it (`-e "ctx.recv.got"`)
+reads what that object holds after its behaviors ran, as `%features` shows it:
 
 ```bash
 $ sysml -instantiate MyModel::cold -constraint MyModel::cold::inRange checks.sysml

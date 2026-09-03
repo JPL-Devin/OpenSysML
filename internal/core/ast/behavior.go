@@ -305,8 +305,10 @@ type SuccessionEdge struct {
 	SourceImplied bool
 	TargetImplied bool
 	// Members are the body an action target succession carries
-	// (SysML.xtext:1698 ActionTargetSuccession ends in a UsageBody).
+	// (SysML.xtext:1698 ActionTargetSuccession ends in a UsageBody), and
+	// HasBody that it was written with one rather than ended by ';'.
 	Members []Node
+	HasBody bool
 }
 
 // ControlFlowEdge is guarded control flow from decision nodes.
@@ -542,6 +544,7 @@ type TransitionMember struct {
 	TriggerSpan source.Span
 	Guard       Node   // optional guard expression
 	Effect      []Node // optional effect actions
+	HasEffect   bool   // a `do` was written, even one whose braces hold nothing
 	// Via is the port the trigger's message must arrive at
 	// (`accept :> ping via commPort`), nil when the trigger named none.
 	Via *QualifiedName

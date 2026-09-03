@@ -37,7 +37,7 @@ func Builtins() []Builtin {
 			continue
 		}
 		if b, ok := builtinNamed(fqn); ok {
-			b.Params = fn.params
+			b.Params = fn.paramNames()
 			out = append(out, b)
 		}
 	}

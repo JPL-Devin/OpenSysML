@@ -51,7 +51,6 @@ const (
 	xTypeArgument     = "typeArgument"
 	xIsConstructor    = "isConstructor"
 	xBodyParameter    = "bodyParameter"
-	xBodyMember       = "bodyMember"
 	xResultExpression = "resultExpression"
 )
 
@@ -86,6 +85,12 @@ func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) 
 	// The id an API reader addresses the node by, as on an element: a node has no
 	// qualified name, but its position in the model gives it a valid id.
 	e.graph.Add(subject, e.sysml(pElementID), rdf.String(rdf.LocalName(subject.Value)))
+	e.expressionStructure(subject, owner, node)
+}
+
+// expressionStructure emits an expression's type and operands; an Expression
+// element states its text as an element does, so it takes none here.
+func (e *encoder) expressionStructure(subject rdf.Term, owner string, node ast.Node) {
 	e.typed(subject, expressionMetaclass(node))
 	switch n := node.(type) {
 	case *ast.LiteralBool:
@@ -404,9 +409,9 @@ func realValueText(lexical string) (string, bool) {
 }
 
 // expressionNodeText writes an expression node back as notation: the notation it
-// kept, or notation rebuilt from its structure when it kept none.
+// kept, or notation rebuilt from its structure when it kept none it can use.
 func (d *decoder) expressionNodeText(node rdf.Term, scope string) (string, error) {
-	if text, ok := d.graph.Lexical(node, rdf.OpenSysML+xSourceText); ok && text != "" {
+	if text, ok := d.expressionText(node); ok {
 		return text, nil
 	}
 	metaclass := rdf.LocalName(d.graph.Type(node))
@@ -589,7 +594,7 @@ func (d *decoder) bodyDeclarationsText(node rdf.Term, scope string) ([]string, e
 		declarations = append(declarations, declaration{term: member})
 	}
 	sort.SliceStable(declarations, func(i, j int) bool {
-		return d.intOf(declarations[i].term, rdf.OpenSysML+xMemberIndex) < d.intOf(declarations[j].term, rdf.OpenSysML+xMemberIndex)
+		return intOf(d.graph, declarations[i].term, rdf.OpenSysML+xMemberIndex) < intOf(d.graph, declarations[j].term, rdf.OpenSysML+xMemberIndex)
 	})
 	var out []string
 	for _, decl := range declarations {

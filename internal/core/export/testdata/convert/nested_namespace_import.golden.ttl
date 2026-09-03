@@ -9,11 +9,14 @@ elmt:NestedNamespaceImport
     sysml:qualifiedName "NestedNamespaceImport" ;
     sysml:elementId "NestedNamespaceImport" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "NestedNamespaceImport" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:NestedNamespaceImport__Pkg1, elmt:NestedNamespaceImport__Pkg2 ;
     sysml:ownedMembership elmt:NestedNamespaceImport__Pkg1_om, elmt:NestedNamespaceImport__Pkg2_om ;
-    sysml:ownedRelationship elmt:NestedNamespaceImport__Pkg1_om, elmt:NestedNamespaceImport__Pkg2_om .
+    sysml:ownedRelationship elmt:NestedNamespaceImport__Pkg1_om, elmt:NestedNamespaceImport__Pkg2_om ;
+    sysx:sourceText "package NestedNamespaceImport {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:NestedNamespaceImport__Pkg1
     a sysml:Package ;
@@ -28,7 +31,9 @@ elmt:NestedNamespaceImport__Pkg1
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:NestedNamespaceImport__Pkg1__A, elmt:NestedNamespaceImport__Pkg1__Pkg11 ;
     sysml:ownedMembership elmt:NestedNamespaceImport__Pkg1__A_om, elmt:NestedNamespaceImport__Pkg1__Pkg11_om ;
-    sysml:ownedRelationship elmt:NestedNamespaceImport__Pkg1__A_om, elmt:NestedNamespaceImport__Pkg1__Pkg11_om .
+    sysml:ownedRelationship elmt:NestedNamespaceImport__Pkg1__A_om, elmt:NestedNamespaceImport__Pkg1__Pkg11_om ;
+    sysx:sourceText "    package Pkg1 {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:NestedNamespaceImport__Pkg1_om
     a sysml:OwningMembership ;
@@ -50,7 +55,8 @@ elmt:NestedNamespaceImport__Pkg1__A
     sysml:owningRelationship elmt:NestedNamespaceImport__Pkg1__A_om ;
     sysml:owningMembership elmt:NestedNamespaceImport__Pkg1__A_om ;
     sysml:declaredName "A" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part def A;\n" .
 
 elmt:NestedNamespaceImport__Pkg1__A_om
     a sysml:OwningMembership ;
@@ -75,7 +81,9 @@ elmt:NestedNamespaceImport__Pkg1__Pkg11
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:NestedNamespaceImport__Pkg1__Pkg11__B ;
     sysml:ownedMembership elmt:NestedNamespaceImport__Pkg1__Pkg11__B_om ;
-    sysml:ownedRelationship elmt:NestedNamespaceImport__Pkg1__Pkg11__B_om .
+    sysml:ownedRelationship elmt:NestedNamespaceImport__Pkg1__Pkg11__B_om ;
+    sysx:sourceText "        package Pkg11 {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:NestedNamespaceImport__Pkg1__Pkg11_om
     a sysml:OwningMembership ;
@@ -97,7 +105,8 @@ elmt:NestedNamespaceImport__Pkg1__Pkg11__B
     sysml:owningRelationship elmt:NestedNamespaceImport__Pkg1__Pkg11__B_om ;
     sysml:owningMembership elmt:NestedNamespaceImport__Pkg1__Pkg11__B_om ;
     sysml:declaredName "B" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            part def B;\n" .
 
 elmt:NestedNamespaceImport__Pkg1__Pkg11__B_om
     a sysml:OwningMembership ;
@@ -123,7 +132,9 @@ elmt:NestedNamespaceImport__Pkg2
     sysml:ownedRelationship elmt:NestedNamespaceImport__Pkg2___400, elmt:NestedNamespaceImport__Pkg2___401, elmt:NestedNamespaceImport__Pkg2___402, elmt:NestedNamespaceImport__Pkg2__a_om, elmt:NestedNamespaceImport__Pkg2__b_om ;
     sysml:ownedImport elmt:NestedNamespaceImport__Pkg2___400, elmt:NestedNamespaceImport__Pkg2___401, elmt:NestedNamespaceImport__Pkg2___402 ;
     sysml:ownedMember elmt:NestedNamespaceImport__Pkg2__a, elmt:NestedNamespaceImport__Pkg2__b ;
-    sysml:ownedMembership elmt:NestedNamespaceImport__Pkg2__a_om, elmt:NestedNamespaceImport__Pkg2__b_om .
+    sysml:ownedMembership elmt:NestedNamespaceImport__Pkg2__a_om, elmt:NestedNamespaceImport__Pkg2__b_om ;
+    sysx:sourceText "    package Pkg2 {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:NestedNamespaceImport__Pkg2_om
     a sysml:OwningMembership ;
@@ -147,7 +158,8 @@ elmt:NestedNamespaceImport__Pkg2___400
     sysml:visibility "private" ;
     sysml:importedNamespace "Pkg1" ;
     sysx:isNamespaceImport "true"^^xsd:boolean ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        private import Pkg1::*;\n" .
 
 elmt:NestedNamespaceImport__Pkg2___401
     a sysml:Import ;
@@ -161,7 +173,8 @@ elmt:NestedNamespaceImport__Pkg2___401
     sysml:visibility "public" ;
     sysml:importedNamespace "Pkg1" ;
     sysx:isRecursive "true"^^xsd:boolean ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        public import Pkg1::**;\n" .
 
 elmt:NestedNamespaceImport__Pkg2___402
     a sysml:Import ;
@@ -176,7 +189,8 @@ elmt:NestedNamespaceImport__Pkg2___402
     sysml:importedNamespace "Pkg1" ;
     sysx:isNamespaceImport "true"^^xsd:boolean ;
     sysx:isRecursive "true"^^xsd:boolean ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        private import Pkg1::*::**;\n" .
 
 elmt:NestedNamespaceImport__Pkg2__a
     a sysml:PartUsage ;
@@ -189,7 +203,8 @@ elmt:NestedNamespaceImport__Pkg2__a
     sysml:owningMembership elmt:NestedNamespaceImport__Pkg2__a_om ;
     sysml:declaredName "a" ;
     sysml:type "A" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part a : A;\n" .
 
 elmt:NestedNamespaceImport__Pkg2__a_om
     a sysml:OwningMembership ;
@@ -212,7 +227,8 @@ elmt:NestedNamespaceImport__Pkg2__b
     sysml:owningMembership elmt:NestedNamespaceImport__Pkg2__b_om ;
     sysml:declaredName "b" ;
     sysml:type "B" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part b : B;\n" .
 
 elmt:NestedNamespaceImport__Pkg2__b_om
     a sysml:OwningMembership ;

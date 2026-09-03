@@ -1,0 +1,16 @@
+{
+  "type": "instance",
+  "instantiate": "test::Crate",
+  "libraries": true,
+  "slots": {
+    "box.length": {"type": "Quantity", "value": 2, "unit": "m"},
+    "box.isSolid": {"type": "Boolean", "value": true},
+    "box.voids": {"type": "Sequence", "elements": []},
+    "box.shape": {"type": "Sequence", "elements": []},
+    "box.subitems": {"type": "Sequence", "elements": []},
+    "box.self": {"error": "feature \"self\" not found"},
+    "box.timeSlices": {"error": "feature \"timeSlices\" not found"},
+    "box.startShot": {"error": "feature \"startShot\" not found"},
+    "box.start": {"error": "feature \"start\" not found"}
+  }
+}

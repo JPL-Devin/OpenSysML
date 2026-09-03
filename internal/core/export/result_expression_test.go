@@ -28,6 +28,16 @@ func convertFixture(t *testing.T, name string) []byte {
 	return turtle
 }
 
+// withoutSourceText drops the text triples — sysx:sourceText, sysx:sourceTail
+// and sysx:sourceLanguage — leaving the structure the mapping must carry.
+func withoutSourceText(t *testing.T, turtle []byte) []byte {
+	t.Helper()
+	for _, property := range []string{"sysx:sourceText", "sysx:sourceTail", "sysx:sourceLanguage"} {
+		turtle = withoutTriples(t, turtle, property)
+	}
+	return turtle
+}
+
 // A result expression is the Expression element itself, owned through a
 // ResultExpressionMembership whose member it is, and it keeps its place among
 // the body's other members.
@@ -36,7 +46,7 @@ func TestResultExpressionIsAResultExpressionMembership(t *testing.T) {
 	for _, want := range []string{
 		"elmt:Results__AfterMembers___403\n    a sysml:OperatorExpression ;",
 		"sysx:memberIndex \"3\"^^xsd:integer ;\n    sysml:owningNamespace elmt:Results__AfterMembers ;",
-		"sysx:sourceText \"y * y\" ;\n    sysml:operator \"*\" ;",
+		"sysml:operator \"*\" ;\n    sysml:argument expr:Results__AfterMembers___403_pa0, expr:Results__AfterMembers___403_pa1 ;\n    sysx:sourceText \"        y * y\\n\" .",
 		"elmt:Results__AfterMembers___403_om\n    a sysml:ResultExpressionMembership ;",
 		"sysml:ownedMemberElement elmt:Results__AfterMembers___403 ;",
 		"sysml:ownedMemberFeature elmt:Results__AfterMembers___403 ;",
@@ -70,7 +80,7 @@ func TestResultExpressionsComeBackFromTheGraphAlone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("back to notation: %v", err)
 	}
-	stripped := withoutTriples(t, turtle, "sysx:sourceText")
+	stripped := withoutSourceText(t, turtle)
 	if strings.Contains(string(stripped), "sysx:sourceText") {
 		t.Fatal("the stripped graph still carries source text")
 	}
@@ -84,7 +94,7 @@ func TestResultExpressionsComeBackFromTheGraphAlone(t *testing.T) {
 	}
 	// Rebuilt notation parenthesizes every operator, so its text differs; the
 	// model it states must not: the re-encoded graph is the first one.
-	if string(withoutTriples(t, again, "sysx:sourceText")) != string(stripped) {
+	if string(withoutSourceText(t, again)) != string(stripped) {
 		t.Errorf("the structure alone did not carry the result expressions\n--- with text ---\n%s\n--- from the graph ---\n%s\n--- first ---\n%s\n--- second ---\n%s", withText, fromGraph, turtle, again)
 	}
 	for _, want := range []string{
@@ -133,7 +143,7 @@ func withoutResultMembers(t *testing.T, turtle []byte) []byte {
 // membership's ownedResultExpression; that is enough to write the body back.
 func TestResultExpressionComesBackFromItsMembershipAlone(t *testing.T) {
 	turtle := convertFixture(t, "result_expressions")
-	stripped := withoutResultMembers(t, withoutTriples(t, turtle, "sysx:sourceText"))
+	stripped := withoutResultMembers(t, withoutSourceText(t, turtle))
 	if !strings.Contains(string(stripped), "sysml:owningType elmt:Results__AfterMembers ;\n    sysml:ownedResultExpression elmt:Results__AfterMembers___403 .") {
 		t.Fatalf("expected the result membership to keep only its ownedResultExpression:\n%s", stripped)
 	}
@@ -150,7 +160,7 @@ func TestResultExpressionComesBackFromItsMembershipAlone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("to turtle again: %v", err)
 	}
-	if string(withoutTriples(t, again, "sysx:sourceText")) != string(withoutTriples(t, turtle, "sysx:sourceText")) {
+	if string(withoutSourceText(t, again)) != string(withoutSourceText(t, turtle)) {
 		t.Errorf("the membership alone did not carry the result expressions\n--- first ---\n%s\n--- second ---\n%s", turtle, again)
 	}
 }
@@ -394,8 +404,8 @@ func TestRepeatedSingleValuedPropertiesAreRefused(t *testing.T) {
 	for _, tc := range []struct{ fixture, from, to, want string }{
 		{
 			"result_expressions",
-			`sysx:resultExpression expr:Results__Body___401_presult .`,
-			`sysx:resultExpression expr:Results__Body___401_presult , expr:Results__Quoted___401_presult .`,
+			`sysx:resultExpression expr:Results__Body___401_presult ;`,
+			`sysx:resultExpression expr:Results__Body___401_presult , expr:Results__Quoted___401_presult ;`,
 			"it states sysx:resultExpression twice, as <urn:opensysml:expr:Results__Body___401_presult> and <urn:opensysml:expr:Results__Quoted___401_presult>",
 		},
 		{

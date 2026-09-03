@@ -10,11 +10,14 @@ elmt:Synonyms
     sysml:qualifiedName "Synonyms" ;
     sysml:elementId "Synonyms" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Synonyms" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Synonyms__Temperature, elmt:Synonyms__reading, elmt:Synonyms__Average, elmt:Synonyms__base, elmt:Synonyms__atStart, elmt:Synonyms__during, elmt:Synonyms__note, elmt:Synonyms___407, elmt:Synonyms__Drive, elmt:Synonyms__Safe, elmt:Synonyms__Idle, elmt:Synonyms__Vehicle, elmt:Synonyms__AsTree, elmt:Synonyms__Dashboard ;
     sysml:ownedMembership elmt:Synonyms__Temperature_om, elmt:Synonyms__reading_om, elmt:Synonyms__Average_om, elmt:Synonyms__base_om, elmt:Synonyms__atStart_om, elmt:Synonyms__during_om, elmt:Synonyms__note_om, elmt:Synonyms___407_om, elmt:Synonyms__Drive_om, elmt:Synonyms__Safe_om, elmt:Synonyms__Idle_om, elmt:Synonyms__Vehicle_om, elmt:Synonyms__AsTree_om, elmt:Synonyms__Dashboard_om ;
-    sysml:ownedRelationship elmt:Synonyms__Temperature_om, elmt:Synonyms__reading_om, elmt:Synonyms__Average_om, elmt:Synonyms__base_om, elmt:Synonyms__atStart_om, elmt:Synonyms__during_om, elmt:Synonyms__note_om, elmt:Synonyms___407_om, elmt:Synonyms__Drive_om, elmt:Synonyms__Safe_om, elmt:Synonyms__Idle_om, elmt:Synonyms__Vehicle_om, elmt:Synonyms__AsTree_om, elmt:Synonyms__Dashboard_om .
+    sysml:ownedRelationship elmt:Synonyms__Temperature_om, elmt:Synonyms__reading_om, elmt:Synonyms__Average_om, elmt:Synonyms__base_om, elmt:Synonyms__atStart_om, elmt:Synonyms__during_om, elmt:Synonyms__note_om, elmt:Synonyms___407_om, elmt:Synonyms__Drive_om, elmt:Synonyms__Safe_om, elmt:Synonyms__Idle_om, elmt:Synonyms__Vehicle_om, elmt:Synonyms__AsTree_om, elmt:Synonyms__Dashboard_om ;
+    sysx:sourceText "package Synonyms {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:Synonyms__Temperature
     a sysml:DataType ;
@@ -27,7 +30,8 @@ elmt:Synonyms__Temperature
     sysml:owningMembership elmt:Synonyms__Temperature_om ;
     sysml:declaredName "Temperature" ;
     sysx:declaredKeyword "datatype" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    datatype Temperature;\n" .
 
 elmt:Synonyms__Temperature_om
     a sysml:OwningMembership ;
@@ -51,7 +55,8 @@ elmt:Synonyms__reading
     sysml:declaredName "reading" ;
     sysx:declaredKeyword "feature" ;
     sysml:type elmt:Synonyms__Temperature ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    feature reading : Temperature;\n" .
 
 elmt:Synonyms__reading_om
     a sysml:OwningMembership ;
@@ -74,7 +79,8 @@ elmt:Synonyms__Average
     sysml:owningMembership elmt:Synonyms__Average_om ;
     sysml:declaredName "Average" ;
     sysx:declaredKeyword "function" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    function def Average;\n" .
 
 elmt:Synonyms__Average_om
     a sysml:OwningMembership ;
@@ -96,7 +102,8 @@ elmt:Synonyms__base
     sysml:owningRelationship elmt:Synonyms__base_om ;
     sysml:owningMembership elmt:Synonyms__base_om ;
     sysml:declaredName "base" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    occurrence base;\n" .
 
 elmt:Synonyms__base_om
     a sysml:OwningMembership ;
@@ -120,7 +127,8 @@ elmt:Synonyms__atStart
     sysml:declaredName "atStart" ;
     sysx:declaredKeyword "snapshot" ;
     sysml:isSnapshot "true"^^xsd:boolean ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    snapshot atStart;\n" .
 
 elmt:Synonyms__atStart_om
     a sysml:OwningMembership ;
@@ -144,7 +152,8 @@ elmt:Synonyms__during
     sysml:declaredName "during" ;
     sysx:declaredKeyword "timeslice" ;
     sysml:isTimeslice "true"^^xsd:boolean ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    timeslice during;\n" .
 
 elmt:Synonyms__during_om
     a sysml:OwningMembership ;
@@ -166,7 +175,8 @@ elmt:Synonyms__note
     sysml:owningRelationship elmt:Synonyms__note_om ;
     sysml:owningMembership elmt:Synonyms__note_om ;
     sysml:declaredName "note" ;
-    sysx:sourceText "message note;" .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    message note;\n" .
 
 elmt:Synonyms__note_om
     a sysml:OwningMembership ;
@@ -187,10 +197,11 @@ elmt:Synonyms___407
     sysml:owner elmt:Synonyms ;
     sysml:owningRelationship elmt:Synonyms___407_om ;
     sysml:owningMembership elmt:Synonyms___407_om ;
-    sysx:sourceText "allocate reading to base;" ;
     sysx:relatedFeature expr:Synonyms___407_pend0, expr:Synonyms___407_pend1 ;
     sysx:endForm "to" ;
-    sysx:declaredKeyword "allocate" .
+    sysx:declaredKeyword "allocate" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    allocate reading to base;\n" .
 
 elmt:Synonyms___407_om
     a sysml:OwningMembership ;
@@ -226,7 +237,8 @@ elmt:Synonyms__Drive
     sysml:owningRelationship elmt:Synonyms__Drive_om ;
     sysml:owningMembership elmt:Synonyms__Drive_om ;
     sysml:declaredName "Drive" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    use case def Drive;\n" .
 
 elmt:Synonyms__Drive_om
     a sysml:OwningMembership ;
@@ -248,7 +260,8 @@ elmt:Synonyms__Safe
     sysml:owningRelationship elmt:Synonyms__Safe_om ;
     sysml:owningMembership elmt:Synonyms__Safe_om ;
     sysml:declaredName "Safe" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    constraint def Safe;\n" .
 
 elmt:Synonyms__Safe_om
     a sysml:OwningMembership ;
@@ -270,7 +283,8 @@ elmt:Synonyms__Idle
     sysml:owningRelationship elmt:Synonyms__Idle_om ;
     sysml:owningMembership elmt:Synonyms__Idle_om ;
     sysml:declaredName "Idle" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    state def Idle;\n" .
 
 elmt:Synonyms__Idle_om
     a sysml:OwningMembership ;
@@ -297,7 +311,9 @@ elmt:Synonyms__Vehicle
     sysml:ownedMembership elmt:Synonyms__Vehicle___400_om, elmt:Synonyms__Vehicle__safe_om, elmt:Synonyms__Vehicle__alsoSafe_om ;
     sysml:ownedRelationship elmt:Synonyms__Vehicle___400_om, elmt:Synonyms__Vehicle__safe_om, elmt:Synonyms__Vehicle__alsoSafe_om ;
     sysml:ownedFeature elmt:Synonyms__Vehicle___400, elmt:Synonyms__Vehicle__safe, elmt:Synonyms__Vehicle__alsoSafe ;
-    sysml:ownedFeatureMembership elmt:Synonyms__Vehicle___400_om, elmt:Synonyms__Vehicle__safe_om, elmt:Synonyms__Vehicle__alsoSafe_om .
+    sysml:ownedFeatureMembership elmt:Synonyms__Vehicle___400_om, elmt:Synonyms__Vehicle__safe_om, elmt:Synonyms__Vehicle__alsoSafe_om ;
+    sysx:sourceText "    part def Vehicle {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Synonyms__Vehicle_om
     a sysml:OwningMembership ;
@@ -321,7 +337,8 @@ elmt:Synonyms__Vehicle___400
     sysx:declaredKeyword "exhibit" ;
     sysml:references "idling" ;
     sysml:type elmt:Synonyms__Idle ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        exhibit idling : Idle;\n" .
 
 elmt:Synonyms__Vehicle___400_om
     a sysml:FeatureMembership ;
@@ -347,7 +364,8 @@ elmt:Synonyms__Vehicle__safe
     sysml:declaredName "safe" ;
     sysx:declaredKeyword "assert" ;
     sysml:type elmt:Synonyms__Safe ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        assert safe : Safe;\n" .
 
 elmt:Synonyms__Vehicle__safe_om
     a sysml:FeatureMembership ;
@@ -373,7 +391,8 @@ elmt:Synonyms__Vehicle__alsoSafe
     sysml:declaredName "alsoSafe" ;
     sysx:declaredKeyword "inv" ;
     sysml:type elmt:Synonyms__Safe ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        inv alsoSafe : Safe;\n" .
 
 elmt:Synonyms__Vehicle__alsoSafe_om
     a sysml:FeatureMembership ;
@@ -397,7 +416,8 @@ elmt:Synonyms__AsTree
     sysml:owningRelationship elmt:Synonyms__AsTree_om ;
     sysml:owningMembership elmt:Synonyms__AsTree_om ;
     sysml:declaredName "AsTree" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    rendering def AsTree;\n" .
 
 elmt:Synonyms__AsTree_om
     a sysml:OwningMembership ;
@@ -420,7 +440,9 @@ elmt:Synonyms__Dashboard
     sysml:owningMembership elmt:Synonyms__Dashboard_om ;
     sysml:declaredName "Dashboard" ;
     sysx:hasBody "true"^^xsd:boolean ;
-    sysml:ownedRelationship elmt:Synonyms__Dashboard___400, elmt:Synonyms__Dashboard___401 .
+    sysml:ownedRelationship elmt:Synonyms__Dashboard___400, elmt:Synonyms__Dashboard___401 ;
+    sysx:sourceText "    view def Dashboard {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Synonyms__Dashboard_om
     a sysml:OwningMembership ;
@@ -441,7 +463,8 @@ elmt:Synonyms__Dashboard___400
     sysml:owner elmt:Synonyms__Dashboard ;
     sysml:owningRelatedElement elmt:Synonyms__Dashboard ;
     sysml:references "display" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        render display;\n" .
 
 elmt:Synonyms__Dashboard___401
     a sysml:ViewRenderingMembership ;
@@ -452,4 +475,5 @@ elmt:Synonyms__Dashboard___401
     sysml:owner elmt:Synonyms__Dashboard ;
     sysml:owningRelatedElement elmt:Synonyms__Dashboard ;
     sysml:type elmt:Synonyms__AsTree ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        render rendering : AsTree;\n" .

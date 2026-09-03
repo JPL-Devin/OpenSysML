@@ -124,6 +124,9 @@ func (ctx *Context) recordReached(sym *symbols.Symbol, shapes *Shapes) {
 	}
 	shapes.digests[fqn] = ctx.ShapeDigest(sym)
 	shapes.types = append(shapes.types, fqn)
+	if _, named := ctx.libraryShapeIdentity(sym); named {
+		return
+	}
 	features := ctx.FeaturesOf(sym)
 	for i := range features {
 		ctx.recordReached(features[i].Type, shapes)
@@ -246,6 +249,12 @@ func (ctx *Context) writeShape(b *strings.Builder, sym *symbols.Symbol, open map
 		fqn = "<unnamed>"
 	}
 	fmt.Fprintf(b, "%s/%s", fqn, sym.Kind)
+	// Over the same library a type resolves the same way in every context, so its
+	// name and the library's identity say all its expansion would.
+	if identity, named := ctx.libraryShapeIdentity(sym); named {
+		fmt.Fprintf(b, "#%s", identity)
+		return
+	}
 	// A type reached through its own features is named rather than expanded
 	// again, so a recursive shape has a finite digest.
 	if open[fqn] {
@@ -324,6 +333,15 @@ func (ctx *Context) declText(owner *symbols.Symbol, span source.Span) string {
 		return strings.Join(strings.Fields(sf.Text(span)), " ")
 	}
 	return fmt.Sprintf("%s#%d+%d", file, span.Offset, span.Len)
+}
+
+// libraryShapeIdentity is the digest of the library declaring sym, when the index
+// states one; a library of unknown text is expanded like the model.
+func (ctx *Context) libraryShapeIdentity(sym *symbols.Symbol) (string, bool) {
+	if !ctx.libraryTier(sym).Library() {
+		return "", false
+	}
+	return ctx.resolver.Index().LibraryIdentity()
 }
 
 func (ctx *Context) fqnOf(sym *symbols.Symbol) string {
@@ -557,6 +575,7 @@ func (a *adoption) commit() {
 	adopted := make(map[int64]bool, len(a.plans))
 	for id, plan := range a.plans {
 		adopted[id] = true
+		prevType := plan.obj.Type
 		plan.obj.Type = plan.typeSym
 		// Names of one redefined feature share a feature value, which is rebound once, to
 		// the feature of the name the shared feature value was created under.
@@ -597,9 +616,7 @@ func (a *adoption) commit() {
 		// The connectors the owner names no name are reached by no name here, so
 		// they are materialized again against the declarations as they are now —
 		// under the identities they had, which name the same connectors.
-		if plan.obj.anonymous != nil {
-			plan.obj.keptAnonymous, plan.obj.anonymous = plan.obj.anonymous, nil
-		}
+		plan.obj.keepAnonymous(a.ctx, a.prev, prevType)
 		a.ctx.registerInstance(plan.obj)
 		a.ctx.ids.atLeast(id + 1)
 	}

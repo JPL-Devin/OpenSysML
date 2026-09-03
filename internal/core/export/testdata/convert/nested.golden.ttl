@@ -9,11 +9,14 @@ elmt:Outer
     sysml:qualifiedName "Outer" ;
     sysml:elementId "Outer" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Outer" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Outer__Inner ;
     sysml:ownedMembership elmt:Outer__Inner_om ;
-    sysml:ownedRelationship elmt:Outer__Inner_om .
+    sysml:ownedRelationship elmt:Outer__Inner_om ;
+    sysx:sourceText "package Outer {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:Outer__Inner
     a sysml:Package ;
@@ -28,7 +31,9 @@ elmt:Outer__Inner
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Outer__Inner__Widget, elmt:Outer__Inner__Sub ;
     sysml:ownedMembership elmt:Outer__Inner__Widget_om, elmt:Outer__Inner__Sub_om ;
-    sysml:ownedRelationship elmt:Outer__Inner__Widget_om, elmt:Outer__Inner__Sub_om .
+    sysml:ownedRelationship elmt:Outer__Inner__Widget_om, elmt:Outer__Inner__Sub_om ;
+    sysx:sourceText "    package Inner {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Outer__Inner_om
     a sysml:OwningMembership ;
@@ -50,7 +55,8 @@ elmt:Outer__Inner__Widget
     sysml:owningRelationship elmt:Outer__Inner__Widget_om ;
     sysml:owningMembership elmt:Outer__Inner__Widget_om ;
     sysml:declaredName "Widget" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part def Widget;\n" .
 
 elmt:Outer__Inner__Widget_om
     a sysml:OwningMembership ;
@@ -75,7 +81,9 @@ elmt:Outer__Inner__Sub
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Outer__Inner__Sub__Gear ;
     sysml:ownedMembership elmt:Outer__Inner__Sub__Gear_om ;
-    sysml:ownedRelationship elmt:Outer__Inner__Sub__Gear_om .
+    sysml:ownedRelationship elmt:Outer__Inner__Sub__Gear_om ;
+    sysx:sourceText "        namespace Sub {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:Outer__Inner__Sub_om
     a sysml:OwningMembership ;
@@ -97,7 +105,8 @@ elmt:Outer__Inner__Sub__Gear
     sysml:owningRelationship elmt:Outer__Inner__Sub__Gear_om ;
     sysml:owningMembership elmt:Outer__Inner__Sub__Gear_om ;
     sysml:declaredName "Gear" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            part def Gear;\n" .
 
 elmt:Outer__Inner__Sub__Gear_om
     a sysml:OwningMembership ;

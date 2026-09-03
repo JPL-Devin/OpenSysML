@@ -10,11 +10,14 @@ elmt:LoopsAndConditionals
     sysml:qualifiedName "LoopsAndConditionals" ;
     sysml:elementId "LoopsAndConditionals" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "LoopsAndConditionals" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:LoopsAndConditionals__Tick, elmt:LoopsAndConditionals__Control ;
     sysml:ownedMembership elmt:LoopsAndConditionals__Tick_om, elmt:LoopsAndConditionals__Control_om ;
-    sysml:ownedRelationship elmt:LoopsAndConditionals__Tick_om, elmt:LoopsAndConditionals__Control_om .
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Tick_om, elmt:LoopsAndConditionals__Control_om ;
+    sysx:sourceText "package LoopsAndConditionals {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:LoopsAndConditionals__Tick
     a sysml:ActionDefinition ;
@@ -26,7 +29,8 @@ elmt:LoopsAndConditionals__Tick
     sysml:owningRelationship elmt:LoopsAndConditionals__Tick_om ;
     sysml:owningMembership elmt:LoopsAndConditionals__Tick_om ;
     sysml:declaredName "Tick" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    action def Tick;\n" .
 
 elmt:LoopsAndConditionals__Tick_om
     a sysml:OwningMembership ;
@@ -53,7 +57,9 @@ elmt:LoopsAndConditionals__Control
     sysml:ownedMembership elmt:LoopsAndConditionals__Control__count_om, elmt:LoopsAndConditionals__Control__total_om, elmt:LoopsAndConditionals__Control__tick_om, elmt:LoopsAndConditionals__Control___403_om, elmt:LoopsAndConditionals__Control___404_om, elmt:LoopsAndConditionals__Control___405_om, elmt:LoopsAndConditionals__Control___406_om, elmt:LoopsAndConditionals__Control___407_om, elmt:LoopsAndConditionals__Control___408_om, elmt:LoopsAndConditionals__Control___409_om ;
     sysml:ownedRelationship elmt:LoopsAndConditionals__Control__count_om, elmt:LoopsAndConditionals__Control__total_om, elmt:LoopsAndConditionals__Control__tick_om, elmt:LoopsAndConditionals__Control___403_om, elmt:LoopsAndConditionals__Control___404_om, elmt:LoopsAndConditionals__Control___405_om, elmt:LoopsAndConditionals__Control___406_om, elmt:LoopsAndConditionals__Control___407_om, elmt:LoopsAndConditionals__Control___408_om, elmt:LoopsAndConditionals__Control___409_om ;
     sysml:ownedFeature elmt:LoopsAndConditionals__Control__count, elmt:LoopsAndConditionals__Control__total, elmt:LoopsAndConditionals__Control__tick, elmt:LoopsAndConditionals__Control___403, elmt:LoopsAndConditionals__Control___404, elmt:LoopsAndConditionals__Control___405, elmt:LoopsAndConditionals__Control___406, elmt:LoopsAndConditionals__Control___407, elmt:LoopsAndConditionals__Control___408, elmt:LoopsAndConditionals__Control___409 ;
-    sysml:ownedFeatureMembership elmt:LoopsAndConditionals__Control__count_om, elmt:LoopsAndConditionals__Control__total_om, elmt:LoopsAndConditionals__Control__tick_om, elmt:LoopsAndConditionals__Control___403_om, elmt:LoopsAndConditionals__Control___404_om, elmt:LoopsAndConditionals__Control___405_om, elmt:LoopsAndConditionals__Control___406_om, elmt:LoopsAndConditionals__Control___407_om, elmt:LoopsAndConditionals__Control___408_om, elmt:LoopsAndConditionals__Control___409_om .
+    sysml:ownedFeatureMembership elmt:LoopsAndConditionals__Control__count_om, elmt:LoopsAndConditionals__Control__total_om, elmt:LoopsAndConditionals__Control__tick_om, elmt:LoopsAndConditionals__Control___403_om, elmt:LoopsAndConditionals__Control___404_om, elmt:LoopsAndConditionals__Control___405_om, elmt:LoopsAndConditionals__Control___406_om, elmt:LoopsAndConditionals__Control___407_om, elmt:LoopsAndConditionals__Control___408_om, elmt:LoopsAndConditionals__Control___409_om ;
+    sysx:sourceText "    action def Control {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:LoopsAndConditionals__Control_om
     a sysml:OwningMembership ;
@@ -76,7 +82,8 @@ elmt:LoopsAndConditionals__Control__count
     sysml:owningMembership elmt:LoopsAndConditionals__Control__count_om ;
     sysml:declaredName "count" ;
     sysml:direction "in" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        in attribute count;\n" .
 
 elmt:LoopsAndConditionals__Control__count_om
     a sysml:FeatureMembership ;
@@ -100,7 +107,8 @@ elmt:LoopsAndConditionals__Control__total
     sysml:owningRelationship elmt:LoopsAndConditionals__Control__total_om ;
     sysml:owningMembership elmt:LoopsAndConditionals__Control__total_om ;
     sysml:declaredName "total" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute total;\n" .
 
 elmt:LoopsAndConditionals__Control__total_om
     a sysml:FeatureMembership ;
@@ -125,7 +133,8 @@ elmt:LoopsAndConditionals__Control__tick
     sysml:owningMembership elmt:LoopsAndConditionals__Control__tick_om ;
     sysml:declaredName "tick" ;
     sysml:type elmt:LoopsAndConditionals__Tick ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action tick : Tick;\n" .
 
 elmt:LoopsAndConditionals__Control__tick_om
     a sysml:FeatureMembership ;
@@ -154,7 +163,9 @@ elmt:LoopsAndConditionals__Control___403
     sysml:ownedMembership elmt:LoopsAndConditionals__Control___403___400_om ;
     sysml:ownedRelationship elmt:LoopsAndConditionals__Control___403___400_om ;
     sysml:ownedFeature elmt:LoopsAndConditionals__Control___403___400 ;
-    sysml:ownedFeatureMembership elmt:LoopsAndConditionals__Control___403___400_om .
+    sysml:ownedFeatureMembership elmt:LoopsAndConditionals__Control___403___400_om ;
+    sysx:sourceText "        while count > 0 {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:LoopsAndConditionals__Control___403_om
     a sysml:FeatureMembership ;
@@ -200,7 +211,8 @@ elmt:LoopsAndConditionals__Control___403___400
     sysml:owningMembership elmt:LoopsAndConditionals__Control___403___400_om ;
     sysx:declaredKeyword "perform" ;
     sysml:references elmt:LoopsAndConditionals__Control__tick ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            perform tick;\n" .
 
 elmt:LoopsAndConditionals__Control___403___400_om
     a sysml:FeatureMembership ;
@@ -228,7 +240,9 @@ elmt:LoopsAndConditionals__Control___404
     sysml:ownedMembership elmt:LoopsAndConditionals__Control___404___400_om ;
     sysml:ownedRelationship elmt:LoopsAndConditionals__Control___404___400_om ;
     sysml:ownedFeature elmt:LoopsAndConditionals__Control___404___400 ;
-    sysml:ownedFeatureMembership elmt:LoopsAndConditionals__Control___404___400_om .
+    sysml:ownedFeatureMembership elmt:LoopsAndConditionals__Control___404___400_om ;
+    sysx:sourceText "        loop {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:LoopsAndConditionals__Control___404_om
     a sysml:FeatureMembership ;
@@ -253,7 +267,8 @@ elmt:LoopsAndConditionals__Control___404___400
     sysml:owningMembership elmt:LoopsAndConditionals__Control___404___400_om ;
     sysx:declaredKeyword "assign" ;
     sysx:target expr:LoopsAndConditionals__Control___404___400_ptarget ;
-    sysml:value expr:LoopsAndConditionals__Control___404___400_pvalue .
+    sysml:value expr:LoopsAndConditionals__Control___404___400_pvalue ;
+    sysx:sourceText "            assign total := total + 1;\n" .
 
 elmt:LoopsAndConditionals__Control___404___400_om
     a sysml:FeatureMembership ;
@@ -309,7 +324,9 @@ elmt:LoopsAndConditionals__Control___405
     sysml:ownedMembership elmt:LoopsAndConditionals__Control___405___400_om ;
     sysml:ownedRelationship elmt:LoopsAndConditionals__Control___405___400_om ;
     sysml:ownedFeature elmt:LoopsAndConditionals__Control___405___400 ;
-    sysml:ownedFeatureMembership elmt:LoopsAndConditionals__Control___405___400_om .
+    sysml:ownedFeatureMembership elmt:LoopsAndConditionals__Control___405___400_om ;
+    sysx:sourceText "        loop {\n" ;
+    sysx:sourceTail "        } until total > 100;\n" .
 
 elmt:LoopsAndConditionals__Control___405_om
     a sysml:FeatureMembership ;
@@ -355,7 +372,8 @@ elmt:LoopsAndConditionals__Control___405___400
     sysml:owningMembership elmt:LoopsAndConditionals__Control___405___400_om ;
     sysx:declaredKeyword "perform" ;
     sysml:references elmt:LoopsAndConditionals__Control__tick ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            perform tick;\n" .
 
 elmt:LoopsAndConditionals__Control___405___400_om
     a sysml:FeatureMembership ;
@@ -385,7 +403,9 @@ elmt:LoopsAndConditionals__Control___406
     sysml:ownedMembership elmt:LoopsAndConditionals__Control___406___400_om ;
     sysml:ownedRelationship elmt:LoopsAndConditionals__Control___406___400_om ;
     sysml:ownedFeature elmt:LoopsAndConditionals__Control___406___400 ;
-    sysml:ownedFeatureMembership elmt:LoopsAndConditionals__Control___406___400_om .
+    sysml:ownedFeatureMembership elmt:LoopsAndConditionals__Control___406___400_om ;
+    sysx:sourceText "        for idx in 1..10 {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:LoopsAndConditionals__Control___406_om
     a sysml:FeatureMembership ;
@@ -431,7 +451,8 @@ elmt:LoopsAndConditionals__Control___406___400
     sysml:owningMembership elmt:LoopsAndConditionals__Control___406___400_om ;
     sysx:declaredKeyword "assign" ;
     sysx:target expr:LoopsAndConditionals__Control___406___400_ptarget ;
-    sysml:value expr:LoopsAndConditionals__Control___406___400_pvalue .
+    sysml:value expr:LoopsAndConditionals__Control___406___400_pvalue ;
+    sysx:sourceText "            assign total := total + idx;\n" .
 
 elmt:LoopsAndConditionals__Control___406___400_om
     a sysml:FeatureMembership ;
@@ -484,7 +505,8 @@ elmt:LoopsAndConditionals__Control___407
     sysx:condition expr:LoopsAndConditionals__Control___407_pcondition ;
     sysml:ownedMember elmt:LoopsAndConditionals__Control___407___400 ;
     sysml:ownedMembership elmt:LoopsAndConditionals__Control___407___400_om ;
-    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___407___400_om .
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___407___400_om ;
+    sysx:sourceText "        if count > 0 {\n            perform tick;\n        }\n" .
 
 elmt:LoopsAndConditionals__Control___407_om
     a sysml:FeatureMembership ;
@@ -555,7 +577,8 @@ elmt:LoopsAndConditionals__Control___407___400___400
     sysml:owningMembership elmt:LoopsAndConditionals__Control___407___400___400_om ;
     sysx:declaredKeyword "perform" ;
     sysml:references elmt:LoopsAndConditionals__Control__tick ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            perform tick;\n" .
 
 elmt:LoopsAndConditionals__Control___407___400___400_om
     a sysml:OwningMembership ;
@@ -579,7 +602,8 @@ elmt:LoopsAndConditionals__Control___408
     sysx:condition expr:LoopsAndConditionals__Control___408_pcondition ;
     sysml:ownedMember elmt:LoopsAndConditionals__Control___408___400, elmt:LoopsAndConditionals__Control___408___401 ;
     sysml:ownedMembership elmt:LoopsAndConditionals__Control___408___400_om, elmt:LoopsAndConditionals__Control___408___401_om ;
-    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___408___400_om, elmt:LoopsAndConditionals__Control___408___401_om .
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___408___400_om, elmt:LoopsAndConditionals__Control___408___401_om ;
+    sysx:sourceText "        if count > 0 {\n            perform tick;\n        } else {\n            assign total := 0;\n        }\n" .
 
 elmt:LoopsAndConditionals__Control___408_om
     a sysml:FeatureMembership ;
@@ -650,7 +674,8 @@ elmt:LoopsAndConditionals__Control___408___400___400
     sysml:owningMembership elmt:LoopsAndConditionals__Control___408___400___400_om ;
     sysx:declaredKeyword "perform" ;
     sysml:references elmt:LoopsAndConditionals__Control__tick ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            perform tick;\n" .
 
 elmt:LoopsAndConditionals__Control___408___400___400_om
     a sysml:OwningMembership ;
@@ -698,7 +723,8 @@ elmt:LoopsAndConditionals__Control___408___401___400
     sysml:owningMembership elmt:LoopsAndConditionals__Control___408___401___400_om ;
     sysx:declaredKeyword "assign" ;
     sysx:target expr:LoopsAndConditionals__Control___408___401___400_ptarget ;
-    sysml:value expr:LoopsAndConditionals__Control___408___401___400_pvalue .
+    sysml:value expr:LoopsAndConditionals__Control___408___401___400_pvalue ;
+    sysx:sourceText "            assign total := 0;\n" .
 
 elmt:LoopsAndConditionals__Control___408___401___400_om
     a sysml:OwningMembership ;
@@ -734,7 +760,8 @@ elmt:LoopsAndConditionals__Control___409
     sysx:condition expr:LoopsAndConditionals__Control___409_pcondition ;
     sysml:ownedMember elmt:LoopsAndConditionals__Control___409___400, elmt:LoopsAndConditionals__Control___409___401 ;
     sysml:ownedMembership elmt:LoopsAndConditionals__Control___409___400_om, elmt:LoopsAndConditionals__Control___409___401_om ;
-    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___409___400_om, elmt:LoopsAndConditionals__Control___409___401_om .
+    sysml:ownedRelationship elmt:LoopsAndConditionals__Control___409___400_om, elmt:LoopsAndConditionals__Control___409___401_om ;
+    sysx:sourceText "        if count > 0 {\n            perform tick;\n        } else if total > 0 {\n            assign total := 0;\n        }\n" .
 
 elmt:LoopsAndConditionals__Control___409_om
     a sysml:FeatureMembership ;
@@ -805,7 +832,8 @@ elmt:LoopsAndConditionals__Control___409___400___400
     sysml:owningMembership elmt:LoopsAndConditionals__Control___409___400___400_om ;
     sysx:declaredKeyword "perform" ;
     sysml:references elmt:LoopsAndConditionals__Control__tick ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            perform tick;\n" .
 
 elmt:LoopsAndConditionals__Control___409___400___400_om
     a sysml:OwningMembership ;
@@ -923,7 +951,8 @@ elmt:LoopsAndConditionals__Control___409___401___400___400___400
     sysml:owningMembership elmt:LoopsAndConditionals__Control___409___401___400___400___400_om ;
     sysx:declaredKeyword "assign" ;
     sysx:target expr:LoopsAndConditionals__Control___409___401___400___400___400_ptarget ;
-    sysml:value expr:LoopsAndConditionals__Control___409___401___400___400___400_pvalue .
+    sysml:value expr:LoopsAndConditionals__Control___409___401___400___400___400_pvalue ;
+    sysx:sourceText "            assign total := 0;\n" .
 
 elmt:LoopsAndConditionals__Control___409___401___400___400___400_om
     a sysml:OwningMembership ;

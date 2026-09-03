@@ -51,10 +51,10 @@ var compiledCases = []compiledCase{
 	{"UntilLoop", []string{"0"}}, {"UntilLoop", []string{"-3"}}, {"UntilLoop", []string{"5"}},
 	{"UntilLocal", []string{"0"}}, {"UntilLocal", []string{"3"}},
 	{"WhileUntil", []string{"0"}}, {"WhileUntil", []string{"5"}}, {"WhileUntil", []string{"20"}},
-	{"Hypot", []string{"1e-400", "4.0"}}, {"Hypot", []string{"1e-320", "4.0"}},
+	{"Hypot", []string{"1e-400", "4.0"}}, {"Hypot", []string{"1e-320", "4.0"}}, {"Hypot", []string{"1e400", "4.0"}},
+	{"Hypot", []string{"0e-400", "4.0"}}, {"Hypot", []string{"3.0E0", "+4.0"}},
 	{"fib", []string{"10"}}, {"Specialized", []string{"12"}}, {"ViaUsage", []string{"11"}},
 	{"NamedOrder", []string{"0", "9223372036854775807"}}, {"NamedOrder", []string{"3", "4"}},
-	{"NamedTwice", []string{"0", "9223372036854775807"}}, {"NamedTwice", []string{"3", "9223372036854775807"}}, {"NamedTwice", []string{"3", "4"}},
 	{"OrderArgs", []string{"0", "9223372036854775807"}}, {"OrderArgs", []string{"3", "9223372036854775807"}},
 	{"Nat", []string{"5"}}, {"Nat", []string{"0"}}, {"Nat", []string{"-1"}},
 	{"Pos", []string{"2"}}, {"Pos", []string{"1"}}, {"Pos", []string{"0"}},
@@ -115,7 +115,7 @@ var compiledCases = []compiledCase{
 	{"Seq::Ass", []string{"(1,2)"}}, {"Seq::Ass", []string{"(1,2,3)"}}, {"Seq::Ass", []string{"null"}},
 	{"Seq::Ret1", []string{"(1)"}}, {"Seq::Ret1", []string{"(1,2)"}}, {"Seq::Ret1", []string{"null"}},
 	{"Seq::RetN", []string{"(1,2)"}}, {"Seq::RetN", []string{"(-1,2)"}}, {"Seq::RetN", []string{"null"}},
-	{"Seq::Coal", []string{"(1,2)"}}, {"Seq::Coal", []string{"null"}}, {"Seq::Coal", []string{"(3)"}},
+	{"Seq::Coal", []string{"(1,2)"}}, {"Seq::Coal", []string{"null"}}, {"Seq::Coal", []string{"(3)"}}, {"Seq::Coal", []string{"()"}},
 	{"Seq::Tern", []string{"true", "(1,2)"}}, {"Seq::Tern", []string{"false", "(1,2)"}}, {"Seq::Tern", []string{"true", "null"}},
 	{"Seq::Big", []string{"1000"}}, {"Seq::Big", []string{"1000000"}}, // the second exceeds the element budget
 	{"Seq::Big2", []string{"1000000"}},
@@ -279,6 +279,13 @@ func TestCompiledCalcsAgreeWithInterpreter(t *testing.T) {
 					t.Errorf("--repeat %q: got %v %q, want usage and exit status 2", repeat, err, out)
 				}
 			}
+			for _, arg := range []string{"inf", "-inf", "nan", "1x", "", "0x1p-2", "0x1.8p1", "1_000.5", " 1.5", "1.5 ", "+", ".", "1e", "1e+", "Infinity"} {
+				out, err := exec.Command(exes["Hypot"], arg, "4.0").CombinedOutput()
+				var exit *exec.ExitError
+				if !errors.As(err, &exit) || exit.ExitCode() != 2 || !strings.Contains(string(out), "is not a finite Real") {
+					t.Errorf("Hypot(%q, 4.0): got %v %q, want not a Real and exit status 2", arg, err, out)
+				}
+			}
 			if out, err := exec.Command(exes["Fib"], "--repeat", "3", "10").Output(); err != nil || strings.TrimSpace(string(out)) != "55" {
 				t.Errorf("--repeat 3: got %q, %v", out, err)
 			}
@@ -430,6 +437,25 @@ func TestCompileRefusesWhatItCannotCompile(t *testing.T) {
 	}
 	if _, err := s.CompileCalc("Compiled::Nowhere"); err == nil {
 		t.Error("an unknown calc compiled")
+	}
+}
+
+// A call binding one parameter by name twice is refused by the type checker;
+// the native target declines it rather than binding the later value.
+func TestCompileRefusesAParameterBoundTwice(t *testing.T) {
+	s := NewSession()
+	res := s.Submit(`package Twice {
+		private import ScalarValues::*;
+		calc def Add { in a : Integer; in b : Integer; return : Integer = a + b; }
+		calc def Dup { in x : Integer; return : Integer = Add(a = x, a = 1, b = 2); }
+	}`)
+	errs := errorDiagnostics(res.Diagnostics)
+	if len(errs) != 1 || !strings.Contains(errs[0].Message, `Add binds parameter "a" twice`) {
+		t.Fatalf("diagnostics = %v, want Add binds parameter \"a\" twice", errs)
+	}
+	_, err := s.CompileCalc("Twice::Dup")
+	if !errors.Is(err, codegen.ErrUnsupported) || !strings.Contains(err.Error(), "binds parameter a twice") {
+		t.Fatalf("CompileCalc(Twice::Dup) = %v, want an ErrUnsupported naming the parameter", err)
 	}
 }
 

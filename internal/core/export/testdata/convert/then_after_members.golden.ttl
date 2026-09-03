@@ -10,11 +10,14 @@ elmt:ThenAfterMembers
     sysml:qualifiedName "ThenAfterMembers" ;
     sysml:elementId "ThenAfterMembers" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "ThenAfterMembers" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:ThenAfterMembers__Signal, elmt:ThenAfterMembers__Step, elmt:ThenAfterMembers__AfterFlow, elmt:ThenAfterMembers__AfterBind, elmt:ThenAfterMembers__AfterAttribute, elmt:ThenAfterMembers__AfterDoc, elmt:ThenAfterMembers__AfterSuccession, elmt:ThenAfterMembers__AfterFirstThen, elmt:ThenAfterMembers__AfterFirstStart, elmt:ThenAfterMembers__stride, elmt:ThenAfterMembers__AfterPerform, elmt:ThenAfterMembers__ThenAlone, elmt:ThenAfterMembers__Lamp, elmt:ThenAfterMembers__Switch ;
     sysml:ownedMembership elmt:ThenAfterMembers__Signal_om, elmt:ThenAfterMembers__Step_om, elmt:ThenAfterMembers__AfterFlow_om, elmt:ThenAfterMembers__AfterBind_om, elmt:ThenAfterMembers__AfterAttribute_om, elmt:ThenAfterMembers__AfterDoc_om, elmt:ThenAfterMembers__AfterSuccession_om, elmt:ThenAfterMembers__AfterFirstThen_om, elmt:ThenAfterMembers__AfterFirstStart_om, elmt:ThenAfterMembers__stride_om, elmt:ThenAfterMembers__AfterPerform_om, elmt:ThenAfterMembers__ThenAlone_om, elmt:ThenAfterMembers__Lamp_om, elmt:ThenAfterMembers__Switch_om ;
-    sysml:ownedRelationship elmt:ThenAfterMembers__Signal_om, elmt:ThenAfterMembers__Step_om, elmt:ThenAfterMembers__AfterFlow_om, elmt:ThenAfterMembers__AfterBind_om, elmt:ThenAfterMembers__AfterAttribute_om, elmt:ThenAfterMembers__AfterDoc_om, elmt:ThenAfterMembers__AfterSuccession_om, elmt:ThenAfterMembers__AfterFirstThen_om, elmt:ThenAfterMembers__AfterFirstStart_om, elmt:ThenAfterMembers__stride_om, elmt:ThenAfterMembers__AfterPerform_om, elmt:ThenAfterMembers__ThenAlone_om, elmt:ThenAfterMembers__Lamp_om, elmt:ThenAfterMembers__Switch_om .
+    sysml:ownedRelationship elmt:ThenAfterMembers__Signal_om, elmt:ThenAfterMembers__Step_om, elmt:ThenAfterMembers__AfterFlow_om, elmt:ThenAfterMembers__AfterBind_om, elmt:ThenAfterMembers__AfterAttribute_om, elmt:ThenAfterMembers__AfterDoc_om, elmt:ThenAfterMembers__AfterSuccession_om, elmt:ThenAfterMembers__AfterFirstThen_om, elmt:ThenAfterMembers__AfterFirstStart_om, elmt:ThenAfterMembers__stride_om, elmt:ThenAfterMembers__AfterPerform_om, elmt:ThenAfterMembers__ThenAlone_om, elmt:ThenAfterMembers__Lamp_om, elmt:ThenAfterMembers__Switch_om ;
+    sysx:sourceText "package ThenAfterMembers {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:ThenAfterMembers__Signal
     a sysml:ItemDefinition ;
@@ -26,7 +29,8 @@ elmt:ThenAfterMembers__Signal
     sysml:owningRelationship elmt:ThenAfterMembers__Signal_om ;
     sysml:owningMembership elmt:ThenAfterMembers__Signal_om ;
     sysml:declaredName "Signal" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    item def Signal;\n" .
 
 elmt:ThenAfterMembers__Signal_om
     a sysml:OwningMembership ;
@@ -53,7 +57,9 @@ elmt:ThenAfterMembers__Step
     sysml:ownedMembership elmt:ThenAfterMembers__Step__x_om, elmt:ThenAfterMembers__Step__y_om ;
     sysml:ownedRelationship elmt:ThenAfterMembers__Step__x_om, elmt:ThenAfterMembers__Step__y_om ;
     sysml:ownedFeature elmt:ThenAfterMembers__Step__x, elmt:ThenAfterMembers__Step__y ;
-    sysml:ownedFeatureMembership elmt:ThenAfterMembers__Step__x_om, elmt:ThenAfterMembers__Step__y_om .
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__Step__x_om, elmt:ThenAfterMembers__Step__y_om ;
+    sysx:sourceText "    action def Step {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:ThenAfterMembers__Step_om
     a sysml:OwningMembership ;
@@ -77,7 +83,8 @@ elmt:ThenAfterMembers__Step__x
     sysml:declaredName "x" ;
     sysml:direction "in" ;
     sysml:type elmt:ThenAfterMembers__Signal ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        in item x : Signal;\n" .
 
 elmt:ThenAfterMembers__Step__x_om
     a sysml:FeatureMembership ;
@@ -103,7 +110,8 @@ elmt:ThenAfterMembers__Step__y
     sysml:declaredName "y" ;
     sysml:direction "out" ;
     sysml:type elmt:ThenAfterMembers__Signal ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        out item y : Signal;\n" .
 
 elmt:ThenAfterMembers__Step__y_om
     a sysml:FeatureMembership ;
@@ -132,7 +140,9 @@ elmt:ThenAfterMembers__AfterFlow
     sysml:ownedMembership elmt:ThenAfterMembers__AfterFlow__a_om, elmt:ThenAfterMembers__AfterFlow___401_om, elmt:ThenAfterMembers__AfterFlow__b_om, elmt:ThenAfterMembers__AfterFlow___403_om ;
     sysml:ownedRelationship elmt:ThenAfterMembers__AfterFlow__a_om, elmt:ThenAfterMembers__AfterFlow___401_om, elmt:ThenAfterMembers__AfterFlow__b_om, elmt:ThenAfterMembers__AfterFlow___403_om ;
     sysml:ownedFeature elmt:ThenAfterMembers__AfterFlow__a, elmt:ThenAfterMembers__AfterFlow__b, elmt:ThenAfterMembers__AfterFlow___403 ;
-    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterFlow__a_om, elmt:ThenAfterMembers__AfterFlow__b_om, elmt:ThenAfterMembers__AfterFlow___403_om .
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterFlow__a_om, elmt:ThenAfterMembers__AfterFlow__b_om, elmt:ThenAfterMembers__AfterFlow___403_om ;
+    sysx:sourceText "    action def AfterFlow {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:ThenAfterMembers__AfterFlow_om
     a sysml:OwningMembership ;
@@ -155,7 +165,8 @@ elmt:ThenAfterMembers__AfterFlow__a
     sysml:owningMembership elmt:ThenAfterMembers__AfterFlow__a_om ;
     sysml:declaredName "a" ;
     sysml:type elmt:ThenAfterMembers__Step ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action a : Step;\n" .
 
 elmt:ThenAfterMembers__AfterFlow__a_om
     a sysml:FeatureMembership ;
@@ -178,9 +189,10 @@ elmt:ThenAfterMembers__AfterFlow___401
     sysml:owner elmt:ThenAfterMembers__AfterFlow ;
     sysml:owningRelationship elmt:ThenAfterMembers__AfterFlow___401_om ;
     sysml:owningMembership elmt:ThenAfterMembers__AfterFlow___401_om ;
-    sysx:sourceText "flow from a.y to b.x;" ;
     sysx:relatedFeature expr:ThenAfterMembers__AfterFlow___401_pflowSource, expr:ThenAfterMembers__AfterFlow___401_pflowTarget ;
-    sysx:endForm "fromTo" .
+    sysx:endForm "fromTo" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        flow from a.y to b.x;\n" .
 
 elmt:ThenAfterMembers__AfterFlow___401_om
     a sysml:OwningMembership ;
@@ -235,7 +247,8 @@ elmt:ThenAfterMembers__AfterFlow__b
     sysml:owningMembership elmt:ThenAfterMembers__AfterFlow__b_om ;
     sysml:declaredName "b" ;
     sysml:type elmt:ThenAfterMembers__Step ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        then action b : Step;\n" .
 
 elmt:ThenAfterMembers__AfterFlow__b_om
     a sysml:FeatureMembership ;
@@ -260,7 +273,8 @@ elmt:ThenAfterMembers__AfterFlow___403
     sysml:owningMembership elmt:ThenAfterMembers__AfterFlow___403_om ;
     sysx:endForm "then" ;
     sysml:sourceFeature elmt:ThenAfterMembers__AfterFlow__a ;
-    sysml:targetFeature elmt:ThenAfterMembers__AfterFlow__b .
+    sysml:targetFeature elmt:ThenAfterMembers__AfterFlow__b ;
+    sysx:sourceText "" .
 
 elmt:ThenAfterMembers__AfterFlow___403_om
     a sysml:FeatureMembership ;
@@ -289,7 +303,9 @@ elmt:ThenAfterMembers__AfterBind
     sysml:ownedMembership elmt:ThenAfterMembers__AfterBind__k_om, elmt:ThenAfterMembers__AfterBind__m_om, elmt:ThenAfterMembers__AfterBind__a_om, elmt:ThenAfterMembers__AfterBind___403_om, elmt:ThenAfterMembers__AfterBind__b_om, elmt:ThenAfterMembers__AfterBind___405_om ;
     sysml:ownedRelationship elmt:ThenAfterMembers__AfterBind__k_om, elmt:ThenAfterMembers__AfterBind__m_om, elmt:ThenAfterMembers__AfterBind__a_om, elmt:ThenAfterMembers__AfterBind___403_om, elmt:ThenAfterMembers__AfterBind__b_om, elmt:ThenAfterMembers__AfterBind___405_om ;
     sysml:ownedFeature elmt:ThenAfterMembers__AfterBind__k, elmt:ThenAfterMembers__AfterBind__m, elmt:ThenAfterMembers__AfterBind__a, elmt:ThenAfterMembers__AfterBind___403, elmt:ThenAfterMembers__AfterBind__b, elmt:ThenAfterMembers__AfterBind___405 ;
-    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterBind__k_om, elmt:ThenAfterMembers__AfterBind__m_om, elmt:ThenAfterMembers__AfterBind__a_om, elmt:ThenAfterMembers__AfterBind___403_om, elmt:ThenAfterMembers__AfterBind__b_om, elmt:ThenAfterMembers__AfterBind___405_om .
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterBind__k_om, elmt:ThenAfterMembers__AfterBind__m_om, elmt:ThenAfterMembers__AfterBind__a_om, elmt:ThenAfterMembers__AfterBind___403_om, elmt:ThenAfterMembers__AfterBind__b_om, elmt:ThenAfterMembers__AfterBind___405_om ;
+    sysx:sourceText "    action def AfterBind {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:ThenAfterMembers__AfterBind_om
     a sysml:OwningMembership ;
@@ -312,7 +328,8 @@ elmt:ThenAfterMembers__AfterBind__k
     sysml:owningMembership elmt:ThenAfterMembers__AfterBind__k_om ;
     sysml:declaredName "k" ;
     sysml:type "ScalarValues::Integer" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute k : ScalarValues::Integer;\n" .
 
 elmt:ThenAfterMembers__AfterBind__k_om
     a sysml:FeatureMembership ;
@@ -337,7 +354,8 @@ elmt:ThenAfterMembers__AfterBind__m
     sysml:owningMembership elmt:ThenAfterMembers__AfterBind__m_om ;
     sysml:declaredName "m" ;
     sysml:type "ScalarValues::Integer" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute m : ScalarValues::Integer;\n" .
 
 elmt:ThenAfterMembers__AfterBind__m_om
     a sysml:FeatureMembership ;
@@ -362,7 +380,8 @@ elmt:ThenAfterMembers__AfterBind__a
     sysml:owningMembership elmt:ThenAfterMembers__AfterBind__a_om ;
     sysml:declaredName "a" ;
     sysml:type elmt:ThenAfterMembers__Step ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action a : Step;\n" .
 
 elmt:ThenAfterMembers__AfterBind__a_om
     a sysml:FeatureMembership ;
@@ -387,9 +406,10 @@ elmt:ThenAfterMembers__AfterBind___403
     sysml:owningMembership elmt:ThenAfterMembers__AfterBind___403_om ;
     sysml:references elmt:ThenAfterMembers__AfterBind__k ;
     sysml:value expr:ThenAfterMembers__AfterBind___403_pvalue ;
-    sysx:sourceText "bind k = m;" ;
     sysx:endForm "equals" ;
-    sysx:declaredKeyword "bind" .
+    sysx:declaredKeyword "bind" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        bind k = m;\n" .
 
 elmt:ThenAfterMembers__AfterBind___403_om
     a sysml:FeatureMembership ;
@@ -420,7 +440,8 @@ elmt:ThenAfterMembers__AfterBind__b
     sysml:owningMembership elmt:ThenAfterMembers__AfterBind__b_om ;
     sysml:declaredName "b" ;
     sysml:type elmt:ThenAfterMembers__Step ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        then action b : Step;\n" .
 
 elmt:ThenAfterMembers__AfterBind__b_om
     a sysml:FeatureMembership ;
@@ -445,7 +466,8 @@ elmt:ThenAfterMembers__AfterBind___405
     sysml:owningMembership elmt:ThenAfterMembers__AfterBind___405_om ;
     sysx:endForm "then" ;
     sysml:sourceFeature elmt:ThenAfterMembers__AfterBind__a ;
-    sysml:targetFeature elmt:ThenAfterMembers__AfterBind__b .
+    sysml:targetFeature elmt:ThenAfterMembers__AfterBind__b ;
+    sysx:sourceText "" .
 
 elmt:ThenAfterMembers__AfterBind___405_om
     a sysml:FeatureMembership ;
@@ -474,7 +496,9 @@ elmt:ThenAfterMembers__AfterAttribute
     sysml:ownedMembership elmt:ThenAfterMembers__AfterAttribute__a_om, elmt:ThenAfterMembers__AfterAttribute__k_om, elmt:ThenAfterMembers__AfterAttribute__b_om, elmt:ThenAfterMembers__AfterAttribute___403_om ;
     sysml:ownedRelationship elmt:ThenAfterMembers__AfterAttribute__a_om, elmt:ThenAfterMembers__AfterAttribute__k_om, elmt:ThenAfterMembers__AfterAttribute__b_om, elmt:ThenAfterMembers__AfterAttribute___403_om ;
     sysml:ownedFeature elmt:ThenAfterMembers__AfterAttribute__a, elmt:ThenAfterMembers__AfterAttribute__k, elmt:ThenAfterMembers__AfterAttribute__b, elmt:ThenAfterMembers__AfterAttribute___403 ;
-    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterAttribute__a_om, elmt:ThenAfterMembers__AfterAttribute__k_om, elmt:ThenAfterMembers__AfterAttribute__b_om, elmt:ThenAfterMembers__AfterAttribute___403_om .
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterAttribute__a_om, elmt:ThenAfterMembers__AfterAttribute__k_om, elmt:ThenAfterMembers__AfterAttribute__b_om, elmt:ThenAfterMembers__AfterAttribute___403_om ;
+    sysx:sourceText "    action def AfterAttribute {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:ThenAfterMembers__AfterAttribute_om
     a sysml:OwningMembership ;
@@ -497,7 +521,8 @@ elmt:ThenAfterMembers__AfterAttribute__a
     sysml:owningMembership elmt:ThenAfterMembers__AfterAttribute__a_om ;
     sysml:declaredName "a" ;
     sysml:type elmt:ThenAfterMembers__Step ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action a : Step;\n" .
 
 elmt:ThenAfterMembers__AfterAttribute__a_om
     a sysml:FeatureMembership ;
@@ -522,7 +547,8 @@ elmt:ThenAfterMembers__AfterAttribute__k
     sysml:owningMembership elmt:ThenAfterMembers__AfterAttribute__k_om ;
     sysml:declaredName "k" ;
     sysml:type "ScalarValues::Integer" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute k : ScalarValues::Integer;\n" .
 
 elmt:ThenAfterMembers__AfterAttribute__k_om
     a sysml:FeatureMembership ;
@@ -547,7 +573,8 @@ elmt:ThenAfterMembers__AfterAttribute__b
     sysml:owningMembership elmt:ThenAfterMembers__AfterAttribute__b_om ;
     sysml:declaredName "b" ;
     sysml:type elmt:ThenAfterMembers__Step ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        then action b : Step;\n" .
 
 elmt:ThenAfterMembers__AfterAttribute__b_om
     a sysml:FeatureMembership ;
@@ -572,7 +599,8 @@ elmt:ThenAfterMembers__AfterAttribute___403
     sysml:owningMembership elmt:ThenAfterMembers__AfterAttribute___403_om ;
     sysx:endForm "then" ;
     sysml:sourceFeature elmt:ThenAfterMembers__AfterAttribute__k ;
-    sysml:targetFeature elmt:ThenAfterMembers__AfterAttribute__b .
+    sysml:targetFeature elmt:ThenAfterMembers__AfterAttribute__b ;
+    sysx:sourceText "" .
 
 elmt:ThenAfterMembers__AfterAttribute___403_om
     a sysml:FeatureMembership ;
@@ -601,7 +629,9 @@ elmt:ThenAfterMembers__AfterDoc
     sysml:ownedMembership elmt:ThenAfterMembers__AfterDoc__a_om, elmt:ThenAfterMembers__AfterDoc___401_om, elmt:ThenAfterMembers__AfterDoc__b_om, elmt:ThenAfterMembers__AfterDoc___403_om ;
     sysml:ownedRelationship elmt:ThenAfterMembers__AfterDoc__a_om, elmt:ThenAfterMembers__AfterDoc___401_om, elmt:ThenAfterMembers__AfterDoc__b_om, elmt:ThenAfterMembers__AfterDoc___403_om ;
     sysml:ownedFeature elmt:ThenAfterMembers__AfterDoc__a, elmt:ThenAfterMembers__AfterDoc__b, elmt:ThenAfterMembers__AfterDoc___403 ;
-    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterDoc__a_om, elmt:ThenAfterMembers__AfterDoc__b_om, elmt:ThenAfterMembers__AfterDoc___403_om .
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterDoc__a_om, elmt:ThenAfterMembers__AfterDoc__b_om, elmt:ThenAfterMembers__AfterDoc___403_om ;
+    sysx:sourceText "    action def AfterDoc {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:ThenAfterMembers__AfterDoc_om
     a sysml:OwningMembership ;
@@ -624,7 +654,8 @@ elmt:ThenAfterMembers__AfterDoc__a
     sysml:owningMembership elmt:ThenAfterMembers__AfterDoc__a_om ;
     sysml:declaredName "a" ;
     sysml:type elmt:ThenAfterMembers__Step ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action a : Step;\n" .
 
 elmt:ThenAfterMembers__AfterDoc__a_om
     a sysml:FeatureMembership ;
@@ -647,7 +678,8 @@ elmt:ThenAfterMembers__AfterDoc___401
     sysml:owner elmt:ThenAfterMembers__AfterDoc ;
     sysml:owningRelationship elmt:ThenAfterMembers__AfterDoc___401_om ;
     sysml:owningMembership elmt:ThenAfterMembers__AfterDoc___401_om ;
-    sysml:body " a is followed by b " .
+    sysml:body " a is followed by b " ;
+    sysx:sourceText "        doc /* a is followed by b */\n" .
 
 elmt:ThenAfterMembers__AfterDoc___401_om
     a sysml:OwningMembership ;
@@ -670,7 +702,8 @@ elmt:ThenAfterMembers__AfterDoc__b
     sysml:owningMembership elmt:ThenAfterMembers__AfterDoc__b_om ;
     sysml:declaredName "b" ;
     sysml:type elmt:ThenAfterMembers__Step ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        then action b : Step;\n" .
 
 elmt:ThenAfterMembers__AfterDoc__b_om
     a sysml:FeatureMembership ;
@@ -694,7 +727,8 @@ elmt:ThenAfterMembers__AfterDoc___403
     sysml:owningRelationship elmt:ThenAfterMembers__AfterDoc___403_om ;
     sysml:owningMembership elmt:ThenAfterMembers__AfterDoc___403_om ;
     sysx:sourceMember elmt:ThenAfterMembers__AfterDoc___401 ;
-    sysml:targetFeature elmt:ThenAfterMembers__AfterDoc__b .
+    sysml:targetFeature elmt:ThenAfterMembers__AfterDoc__b ;
+    sysx:sourceText "" .
 
 elmt:ThenAfterMembers__AfterDoc___403_om
     a sysml:FeatureMembership ;
@@ -723,7 +757,9 @@ elmt:ThenAfterMembers__AfterSuccession
     sysml:ownedMembership elmt:ThenAfterMembers__AfterSuccession__a_om, elmt:ThenAfterMembers__AfterSuccession__c_om, elmt:ThenAfterMembers__AfterSuccession___402_om, elmt:ThenAfterMembers__AfterSuccession__b_om, elmt:ThenAfterMembers__AfterSuccession___404_om ;
     sysml:ownedRelationship elmt:ThenAfterMembers__AfterSuccession__a_om, elmt:ThenAfterMembers__AfterSuccession__c_om, elmt:ThenAfterMembers__AfterSuccession___402_om, elmt:ThenAfterMembers__AfterSuccession__b_om, elmt:ThenAfterMembers__AfterSuccession___404_om ;
     sysml:ownedFeature elmt:ThenAfterMembers__AfterSuccession__a, elmt:ThenAfterMembers__AfterSuccession__c, elmt:ThenAfterMembers__AfterSuccession___402, elmt:ThenAfterMembers__AfterSuccession__b, elmt:ThenAfterMembers__AfterSuccession___404 ;
-    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterSuccession__a_om, elmt:ThenAfterMembers__AfterSuccession__c_om, elmt:ThenAfterMembers__AfterSuccession___402_om, elmt:ThenAfterMembers__AfterSuccession__b_om, elmt:ThenAfterMembers__AfterSuccession___404_om .
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterSuccession__a_om, elmt:ThenAfterMembers__AfterSuccession__c_om, elmt:ThenAfterMembers__AfterSuccession___402_om, elmt:ThenAfterMembers__AfterSuccession__b_om, elmt:ThenAfterMembers__AfterSuccession___404_om ;
+    sysx:sourceText "    action def AfterSuccession {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:ThenAfterMembers__AfterSuccession_om
     a sysml:OwningMembership ;
@@ -746,7 +782,8 @@ elmt:ThenAfterMembers__AfterSuccession__a
     sysml:owningMembership elmt:ThenAfterMembers__AfterSuccession__a_om ;
     sysml:declaredName "a" ;
     sysml:type elmt:ThenAfterMembers__Step ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action a : Step;\n" .
 
 elmt:ThenAfterMembers__AfterSuccession__a_om
     a sysml:FeatureMembership ;
@@ -771,7 +808,8 @@ elmt:ThenAfterMembers__AfterSuccession__c
     sysml:owningMembership elmt:ThenAfterMembers__AfterSuccession__c_om ;
     sysml:declaredName "c" ;
     sysml:type elmt:ThenAfterMembers__Step ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action c : Step;\n" .
 
 elmt:ThenAfterMembers__AfterSuccession__c_om
     a sysml:FeatureMembership ;
@@ -794,10 +832,11 @@ elmt:ThenAfterMembers__AfterSuccession___402
     sysml:owner elmt:ThenAfterMembers__AfterSuccession ;
     sysml:owningRelationship elmt:ThenAfterMembers__AfterSuccession___402_om ;
     sysml:owningMembership elmt:ThenAfterMembers__AfterSuccession___402_om ;
-    sysx:sourceText "succession first a then c;" ;
     sysx:relatedFeature expr:ThenAfterMembers__AfterSuccession___402_pend0, expr:ThenAfterMembers__AfterSuccession___402_pend1 ;
     sysx:endForm "firstThen" ;
-    sysx:endVerb "first" .
+    sysx:endVerb "first" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        succession first a then c;\n" .
 
 elmt:ThenAfterMembers__AfterSuccession___402_om
     a sysml:FeatureMembership ;
@@ -836,7 +875,8 @@ elmt:ThenAfterMembers__AfterSuccession__b
     sysml:owningMembership elmt:ThenAfterMembers__AfterSuccession__b_om ;
     sysml:declaredName "b" ;
     sysml:type elmt:ThenAfterMembers__Step ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        then action b : Step;\n" .
 
 elmt:ThenAfterMembers__AfterSuccession__b_om
     a sysml:FeatureMembership ;
@@ -861,7 +901,8 @@ elmt:ThenAfterMembers__AfterSuccession___404
     sysml:owningMembership elmt:ThenAfterMembers__AfterSuccession___404_om ;
     sysx:endForm "then" ;
     sysml:sourceFeature elmt:ThenAfterMembers__AfterSuccession__c ;
-    sysml:targetFeature elmt:ThenAfterMembers__AfterSuccession__b .
+    sysml:targetFeature elmt:ThenAfterMembers__AfterSuccession__b ;
+    sysx:sourceText "" .
 
 elmt:ThenAfterMembers__AfterSuccession___404_om
     a sysml:FeatureMembership ;
@@ -890,7 +931,9 @@ elmt:ThenAfterMembers__AfterFirstThen
     sysml:ownedMembership elmt:ThenAfterMembers__AfterFirstThen__a_om, elmt:ThenAfterMembers__AfterFirstThen___401_om, elmt:ThenAfterMembers__AfterFirstThen__b_om, elmt:ThenAfterMembers__AfterFirstThen___403_om, elmt:ThenAfterMembers__AfterFirstThen__c_om ;
     sysml:ownedRelationship elmt:ThenAfterMembers__AfterFirstThen__a_om, elmt:ThenAfterMembers__AfterFirstThen___401_om, elmt:ThenAfterMembers__AfterFirstThen__b_om, elmt:ThenAfterMembers__AfterFirstThen___403_om, elmt:ThenAfterMembers__AfterFirstThen__c_om ;
     sysml:ownedFeature elmt:ThenAfterMembers__AfterFirstThen__a, elmt:ThenAfterMembers__AfterFirstThen__b, elmt:ThenAfterMembers__AfterFirstThen___403, elmt:ThenAfterMembers__AfterFirstThen__c ;
-    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterFirstThen__a_om, elmt:ThenAfterMembers__AfterFirstThen__b_om, elmt:ThenAfterMembers__AfterFirstThen___403_om, elmt:ThenAfterMembers__AfterFirstThen__c_om .
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterFirstThen__a_om, elmt:ThenAfterMembers__AfterFirstThen__b_om, elmt:ThenAfterMembers__AfterFirstThen___403_om, elmt:ThenAfterMembers__AfterFirstThen__c_om ;
+    sysx:sourceText "    action def AfterFirstThen {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:ThenAfterMembers__AfterFirstThen_om
     a sysml:OwningMembership ;
@@ -913,7 +956,8 @@ elmt:ThenAfterMembers__AfterFirstThen__a
     sysml:owningMembership elmt:ThenAfterMembers__AfterFirstThen__a_om ;
     sysml:declaredName "a" ;
     sysml:type elmt:ThenAfterMembers__Step ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action a : Step;\n" .
 
 elmt:ThenAfterMembers__AfterFirstThen__a_om
     a sysml:FeatureMembership ;
@@ -937,7 +981,8 @@ elmt:ThenAfterMembers__AfterFirstThen___401
     sysml:owningRelationship elmt:ThenAfterMembers__AfterFirstThen___401_om ;
     sysml:owningMembership elmt:ThenAfterMembers__AfterFirstThen___401_om ;
     sysml:sourceFeature elmt:ThenAfterMembers__AfterFirstThen__a ;
-    sysml:targetFeature elmt:ThenAfterMembers__AfterFirstThen__c .
+    sysml:targetFeature elmt:ThenAfterMembers__AfterFirstThen__c ;
+    sysx:sourceText "        first a then c;\n" .
 
 elmt:ThenAfterMembers__AfterFirstThen___401_om
     a sysml:OwningMembership ;
@@ -960,7 +1005,8 @@ elmt:ThenAfterMembers__AfterFirstThen__b
     sysml:owningMembership elmt:ThenAfterMembers__AfterFirstThen__b_om ;
     sysml:declaredName "b" ;
     sysml:type elmt:ThenAfterMembers__Step ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        then action b : Step;\n" .
 
 elmt:ThenAfterMembers__AfterFirstThen__b_om
     a sysml:FeatureMembership ;
@@ -985,7 +1031,8 @@ elmt:ThenAfterMembers__AfterFirstThen___403
     sysml:owningMembership elmt:ThenAfterMembers__AfterFirstThen___403_om ;
     sysx:endForm "then" ;
     sysml:sourceFeature elmt:ThenAfterMembers__AfterFirstThen__a ;
-    sysml:targetFeature elmt:ThenAfterMembers__AfterFirstThen__b .
+    sysml:targetFeature elmt:ThenAfterMembers__AfterFirstThen__b ;
+    sysx:sourceText "" .
 
 elmt:ThenAfterMembers__AfterFirstThen___403_om
     a sysml:FeatureMembership ;
@@ -1010,7 +1057,8 @@ elmt:ThenAfterMembers__AfterFirstThen__c
     sysml:owningMembership elmt:ThenAfterMembers__AfterFirstThen__c_om ;
     sysml:declaredName "c" ;
     sysml:type elmt:ThenAfterMembers__Step ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action c : Step;\n" .
 
 elmt:ThenAfterMembers__AfterFirstThen__c_om
     a sysml:FeatureMembership ;
@@ -1039,7 +1087,9 @@ elmt:ThenAfterMembers__AfterFirstStart
     sysml:ownedMembership elmt:ThenAfterMembers__AfterFirstStart___400_om, elmt:ThenAfterMembers__AfterFirstStart__a_om, elmt:ThenAfterMembers__AfterFirstStart___402_om, elmt:ThenAfterMembers__AfterFirstStart___403_om, elmt:ThenAfterMembers__AfterFirstStart___404_om ;
     sysml:ownedRelationship elmt:ThenAfterMembers__AfterFirstStart___400_om, elmt:ThenAfterMembers__AfterFirstStart__a_om, elmt:ThenAfterMembers__AfterFirstStart___402_om, elmt:ThenAfterMembers__AfterFirstStart___403_om, elmt:ThenAfterMembers__AfterFirstStart___404_om ;
     sysml:ownedFeature elmt:ThenAfterMembers__AfterFirstStart__a, elmt:ThenAfterMembers__AfterFirstStart___402, elmt:ThenAfterMembers__AfterFirstStart___404 ;
-    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterFirstStart__a_om, elmt:ThenAfterMembers__AfterFirstStart___402_om, elmt:ThenAfterMembers__AfterFirstStart___404_om .
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterFirstStart__a_om, elmt:ThenAfterMembers__AfterFirstStart___402_om, elmt:ThenAfterMembers__AfterFirstStart___404_om ;
+    sysx:sourceText "    action def AfterFirstStart {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:ThenAfterMembers__AfterFirstStart_om
     a sysml:OwningMembership ;
@@ -1060,7 +1110,8 @@ elmt:ThenAfterMembers__AfterFirstStart___400
     sysml:owner elmt:ThenAfterMembers__AfterFirstStart ;
     sysml:owningRelationship elmt:ThenAfterMembers__AfterFirstStart___400_om ;
     sysml:owningMembership elmt:ThenAfterMembers__AfterFirstStart___400_om ;
-    sysml:sourceFeature "start" .
+    sysml:sourceFeature "start" ;
+    sysx:sourceText "        first start;\n" .
 
 elmt:ThenAfterMembers__AfterFirstStart___400_om
     a sysml:OwningMembership ;
@@ -1083,7 +1134,8 @@ elmt:ThenAfterMembers__AfterFirstStart__a
     sysml:owningMembership elmt:ThenAfterMembers__AfterFirstStart__a_om ;
     sysml:declaredName "a" ;
     sysml:type elmt:ThenAfterMembers__Step ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        then action a : Step;\n" .
 
 elmt:ThenAfterMembers__AfterFirstStart__a_om
     a sysml:FeatureMembership ;
@@ -1108,7 +1160,8 @@ elmt:ThenAfterMembers__AfterFirstStart___402
     sysml:owningMembership elmt:ThenAfterMembers__AfterFirstStart___402_om ;
     sysx:endForm "then" ;
     sysml:sourceFeature "start" ;
-    sysml:targetFeature elmt:ThenAfterMembers__AfterFirstStart__a .
+    sysml:targetFeature elmt:ThenAfterMembers__AfterFirstStart__a ;
+    sysx:sourceText "" .
 
 elmt:ThenAfterMembers__AfterFirstStart___402_om
     a sysml:FeatureMembership ;
@@ -1130,7 +1183,8 @@ elmt:ThenAfterMembers__AfterFirstStart___403
     sysml:owningNamespace elmt:ThenAfterMembers__AfterFirstStart ;
     sysml:owner elmt:ThenAfterMembers__AfterFirstStart ;
     sysml:owningRelationship elmt:ThenAfterMembers__AfterFirstStart___403_om ;
-    sysml:owningMembership elmt:ThenAfterMembers__AfterFirstStart___403_om .
+    sysml:owningMembership elmt:ThenAfterMembers__AfterFirstStart___403_om ;
+    sysx:sourceText "        then done;\n" .
 
 elmt:ThenAfterMembers__AfterFirstStart___403_om
     a sysml:OwningMembership ;
@@ -1153,7 +1207,8 @@ elmt:ThenAfterMembers__AfterFirstStart___404
     sysml:owningMembership elmt:ThenAfterMembers__AfterFirstStart___404_om ;
     sysx:endForm "then" ;
     sysml:sourceFeature elmt:ThenAfterMembers__AfterFirstStart__a ;
-    sysx:targetMember elmt:ThenAfterMembers__AfterFirstStart___403 .
+    sysx:targetMember elmt:ThenAfterMembers__AfterFirstStart___403 ;
+    sysx:sourceText "" .
 
 elmt:ThenAfterMembers__AfterFirstStart___404_om
     a sysml:FeatureMembership ;
@@ -1178,7 +1233,8 @@ elmt:ThenAfterMembers__stride
     sysml:owningMembership elmt:ThenAfterMembers__stride_om ;
     sysml:declaredName "stride" ;
     sysml:type elmt:ThenAfterMembers__Step ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    action stride : Step;\n" .
 
 elmt:ThenAfterMembers__stride_om
     a sysml:OwningMembership ;
@@ -1205,7 +1261,9 @@ elmt:ThenAfterMembers__AfterPerform
     sysml:ownedMembership elmt:ThenAfterMembers__AfterPerform___400_om, elmt:ThenAfterMembers__AfterPerform___401_om, elmt:ThenAfterMembers__AfterPerform__b_om, elmt:ThenAfterMembers__AfterPerform___403_om ;
     sysml:ownedRelationship elmt:ThenAfterMembers__AfterPerform___400_om, elmt:ThenAfterMembers__AfterPerform___401_om, elmt:ThenAfterMembers__AfterPerform__b_om, elmt:ThenAfterMembers__AfterPerform___403_om ;
     sysml:ownedFeature elmt:ThenAfterMembers__AfterPerform___400, elmt:ThenAfterMembers__AfterPerform__b, elmt:ThenAfterMembers__AfterPerform___403 ;
-    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterPerform___400_om, elmt:ThenAfterMembers__AfterPerform__b_om, elmt:ThenAfterMembers__AfterPerform___403_om .
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterPerform___400_om, elmt:ThenAfterMembers__AfterPerform__b_om, elmt:ThenAfterMembers__AfterPerform___403_om ;
+    sysx:sourceText "    action def AfterPerform {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:ThenAfterMembers__AfterPerform_om
     a sysml:OwningMembership ;
@@ -1228,7 +1286,8 @@ elmt:ThenAfterMembers__AfterPerform___400
     sysml:owningMembership elmt:ThenAfterMembers__AfterPerform___400_om ;
     sysx:declaredKeyword "perform" ;
     sysml:references elmt:ThenAfterMembers__stride ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        perform stride;\n" .
 
 elmt:ThenAfterMembers__AfterPerform___400_om
     a sysml:FeatureMembership ;
@@ -1251,9 +1310,10 @@ elmt:ThenAfterMembers__AfterPerform___401
     sysml:owner elmt:ThenAfterMembers__AfterPerform ;
     sysml:owningRelationship elmt:ThenAfterMembers__AfterPerform___401_om ;
     sysml:owningMembership elmt:ThenAfterMembers__AfterPerform___401_om ;
-    sysx:sourceText "flow from stride.y to b.x;" ;
     sysx:relatedFeature expr:ThenAfterMembers__AfterPerform___401_pflowSource, expr:ThenAfterMembers__AfterPerform___401_pflowTarget ;
-    sysx:endForm "fromTo" .
+    sysx:endForm "fromTo" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        flow from stride.y to b.x;\n" .
 
 elmt:ThenAfterMembers__AfterPerform___401_om
     a sysml:OwningMembership ;
@@ -1308,7 +1368,8 @@ elmt:ThenAfterMembers__AfterPerform__b
     sysml:owningMembership elmt:ThenAfterMembers__AfterPerform__b_om ;
     sysml:declaredName "b" ;
     sysml:type elmt:ThenAfterMembers__Step ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        then action b : Step;\n" .
 
 elmt:ThenAfterMembers__AfterPerform__b_om
     a sysml:FeatureMembership ;
@@ -1333,7 +1394,8 @@ elmt:ThenAfterMembers__AfterPerform___403
     sysml:owningMembership elmt:ThenAfterMembers__AfterPerform___403_om ;
     sysx:endForm "then" ;
     sysml:sourceFeature elmt:ThenAfterMembers__stride ;
-    sysml:targetFeature elmt:ThenAfterMembers__AfterPerform__b .
+    sysml:targetFeature elmt:ThenAfterMembers__AfterPerform__b ;
+    sysx:sourceText "" .
 
 elmt:ThenAfterMembers__AfterPerform___403_om
     a sysml:FeatureMembership ;
@@ -1362,7 +1424,9 @@ elmt:ThenAfterMembers__ThenAlone
     sysml:ownedMembership elmt:ThenAfterMembers__ThenAlone__a_om, elmt:ThenAfterMembers__ThenAlone___401_om, elmt:ThenAfterMembers__ThenAlone___402_om, elmt:ThenAfterMembers__ThenAlone__b_om ;
     sysml:ownedRelationship elmt:ThenAfterMembers__ThenAlone__a_om, elmt:ThenAfterMembers__ThenAlone___401_om, elmt:ThenAfterMembers__ThenAlone___402_om, elmt:ThenAfterMembers__ThenAlone__b_om ;
     sysml:ownedFeature elmt:ThenAfterMembers__ThenAlone__a, elmt:ThenAfterMembers__ThenAlone___402, elmt:ThenAfterMembers__ThenAlone__b ;
-    sysml:ownedFeatureMembership elmt:ThenAfterMembers__ThenAlone__a_om, elmt:ThenAfterMembers__ThenAlone___402_om, elmt:ThenAfterMembers__ThenAlone__b_om .
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__ThenAlone__a_om, elmt:ThenAfterMembers__ThenAlone___402_om, elmt:ThenAfterMembers__ThenAlone__b_om ;
+    sysx:sourceText "    action def ThenAlone {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:ThenAfterMembers__ThenAlone_om
     a sysml:OwningMembership ;
@@ -1385,7 +1449,8 @@ elmt:ThenAfterMembers__ThenAlone__a
     sysml:owningMembership elmt:ThenAfterMembers__ThenAlone__a_om ;
     sysml:declaredName "a" ;
     sysml:type elmt:ThenAfterMembers__Step ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action a : Step;\n" .
 
 elmt:ThenAfterMembers__ThenAlone__a_om
     a sysml:FeatureMembership ;
@@ -1408,9 +1473,10 @@ elmt:ThenAfterMembers__ThenAlone___401
     sysml:owner elmt:ThenAfterMembers__ThenAlone ;
     sysml:owningRelationship elmt:ThenAfterMembers__ThenAlone___401_om ;
     sysml:owningMembership elmt:ThenAfterMembers__ThenAlone___401_om ;
-    sysx:sourceText "flow from a.y to b.x;" ;
     sysx:relatedFeature expr:ThenAfterMembers__ThenAlone___401_pflowSource, expr:ThenAfterMembers__ThenAlone___401_pflowTarget ;
-    sysx:endForm "fromTo" .
+    sysx:endForm "fromTo" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        flow from a.y to b.x;\n" .
 
 elmt:ThenAfterMembers__ThenAlone___401_om
     a sysml:OwningMembership ;
@@ -1465,7 +1531,8 @@ elmt:ThenAfterMembers__ThenAlone___402
     sysml:owningMembership elmt:ThenAfterMembers__ThenAlone___402_om ;
     sysx:endForm "then" ;
     sysml:sourceFeature elmt:ThenAfterMembers__ThenAlone__a ;
-    sysml:targetFeature elmt:ThenAfterMembers__ThenAlone__b .
+    sysml:targetFeature elmt:ThenAfterMembers__ThenAlone__b ;
+    sysx:sourceText "        then b;\n" .
 
 elmt:ThenAfterMembers__ThenAlone___402_om
     a sysml:FeatureMembership ;
@@ -1490,7 +1557,8 @@ elmt:ThenAfterMembers__ThenAlone__b
     sysml:owningMembership elmt:ThenAfterMembers__ThenAlone__b_om ;
     sysml:declaredName "b" ;
     sysml:type elmt:ThenAfterMembers__Step ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action b : Step;\n" .
 
 elmt:ThenAfterMembers__ThenAlone__b_om
     a sysml:FeatureMembership ;
@@ -1519,7 +1587,9 @@ elmt:ThenAfterMembers__Lamp
     sysml:ownedMembership elmt:ThenAfterMembers__Lamp__level_om, elmt:ThenAfterMembers__Lamp__on_om, elmt:ThenAfterMembers__Lamp___402_om, elmt:ThenAfterMembers__Lamp___403_om, elmt:ThenAfterMembers__Lamp__off_om, elmt:ThenAfterMembers__Lamp___405_om ;
     sysml:ownedRelationship elmt:ThenAfterMembers__Lamp__level_om, elmt:ThenAfterMembers__Lamp__on_om, elmt:ThenAfterMembers__Lamp___402_om, elmt:ThenAfterMembers__Lamp___403_om, elmt:ThenAfterMembers__Lamp__off_om, elmt:ThenAfterMembers__Lamp___405_om ;
     sysml:ownedFeature elmt:ThenAfterMembers__Lamp__level, elmt:ThenAfterMembers__Lamp__on, elmt:ThenAfterMembers__Lamp___403, elmt:ThenAfterMembers__Lamp__off, elmt:ThenAfterMembers__Lamp___405 ;
-    sysml:ownedFeatureMembership elmt:ThenAfterMembers__Lamp__level_om, elmt:ThenAfterMembers__Lamp__on_om, elmt:ThenAfterMembers__Lamp___403_om, elmt:ThenAfterMembers__Lamp__off_om, elmt:ThenAfterMembers__Lamp___405_om .
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__Lamp__level_om, elmt:ThenAfterMembers__Lamp__on_om, elmt:ThenAfterMembers__Lamp___403_om, elmt:ThenAfterMembers__Lamp__off_om, elmt:ThenAfterMembers__Lamp___405_om ;
+    sysx:sourceText "    state def Lamp {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:ThenAfterMembers__Lamp_om
     a sysml:OwningMembership ;
@@ -1542,7 +1612,8 @@ elmt:ThenAfterMembers__Lamp__level
     sysml:owningMembership elmt:ThenAfterMembers__Lamp__level_om ;
     sysml:declaredName "level" ;
     sysml:type "ScalarValues::Integer" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute level : ScalarValues::Integer;\n" .
 
 elmt:ThenAfterMembers__Lamp__level_om
     a sysml:FeatureMembership ;
@@ -1566,7 +1637,8 @@ elmt:ThenAfterMembers__Lamp__on
     sysml:owningRelationship elmt:ThenAfterMembers__Lamp__on_om ;
     sysml:owningMembership elmt:ThenAfterMembers__Lamp__on_om ;
     sysml:declaredName "on" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        state on;\n" .
 
 elmt:ThenAfterMembers__Lamp__on_om
     a sysml:FeatureMembership ;
@@ -1589,7 +1661,8 @@ elmt:ThenAfterMembers__Lamp___402
     sysml:owner elmt:ThenAfterMembers__Lamp ;
     sysml:owningRelationship elmt:ThenAfterMembers__Lamp___402_om ;
     sysml:owningMembership elmt:ThenAfterMembers__Lamp___402_om ;
-    sysml:body " on precedes off " .
+    sysml:body " on precedes off " ;
+    sysx:sourceText "        doc /* on precedes off */\n" .
 
 elmt:ThenAfterMembers__Lamp___402_om
     a sysml:OwningMembership ;
@@ -1612,7 +1685,8 @@ elmt:ThenAfterMembers__Lamp___403
     sysml:owningMembership elmt:ThenAfterMembers__Lamp___403_om ;
     sysx:transitionSyntax "first" ;
     sysml:sourceFeature elmt:ThenAfterMembers__Lamp__on ;
-    sysml:targetFeature elmt:ThenAfterMembers__Lamp__off .
+    sysml:targetFeature elmt:ThenAfterMembers__Lamp__off ;
+    sysx:sourceText "        transition first on then off;\n" .
 
 elmt:ThenAfterMembers__Lamp___403_om
     a sysml:FeatureMembership ;
@@ -1636,7 +1710,8 @@ elmt:ThenAfterMembers__Lamp__off
     sysml:owningRelationship elmt:ThenAfterMembers__Lamp__off_om ;
     sysml:owningMembership elmt:ThenAfterMembers__Lamp__off_om ;
     sysml:declaredName "off" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        then state off;\n" .
 
 elmt:ThenAfterMembers__Lamp__off_om
     a sysml:FeatureMembership ;
@@ -1660,7 +1735,8 @@ elmt:ThenAfterMembers__Lamp___405
     sysml:owningRelationship elmt:ThenAfterMembers__Lamp___405_om ;
     sysml:owningMembership elmt:ThenAfterMembers__Lamp___405_om ;
     sysx:sourceMember elmt:ThenAfterMembers__Lamp___402 ;
-    sysml:targetFeature elmt:ThenAfterMembers__Lamp__off .
+    sysml:targetFeature elmt:ThenAfterMembers__Lamp__off ;
+    sysx:sourceText "" .
 
 elmt:ThenAfterMembers__Lamp___405_om
     a sysml:FeatureMembership ;
@@ -1689,7 +1765,9 @@ elmt:ThenAfterMembers__Switch
     sysml:ownedMember elmt:ThenAfterMembers__Switch__pressed, elmt:ThenAfterMembers__Switch___402, elmt:ThenAfterMembers__Switch__idle ;
     sysml:ownedMembership elmt:ThenAfterMembers__Switch__pressed_om, elmt:ThenAfterMembers__Switch___402_om, elmt:ThenAfterMembers__Switch__idle_om ;
     sysml:ownedFeature elmt:ThenAfterMembers__Switch__pressed, elmt:ThenAfterMembers__Switch___402, elmt:ThenAfterMembers__Switch__idle ;
-    sysml:ownedFeatureMembership elmt:ThenAfterMembers__Switch__pressed_om, elmt:ThenAfterMembers__Switch___402_om, elmt:ThenAfterMembers__Switch__idle_om .
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__Switch__pressed_om, elmt:ThenAfterMembers__Switch___402_om, elmt:ThenAfterMembers__Switch__idle_om ;
+    sysx:sourceText "    state def Switch {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:ThenAfterMembers__Switch_om
     a sysml:OwningMembership ;
@@ -1710,7 +1788,8 @@ elmt:ThenAfterMembers__Switch___400
     sysml:owner elmt:ThenAfterMembers__Switch ;
     sysml:owningRelatedElement elmt:ThenAfterMembers__Switch ;
     sysx:subactionKind "entry" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        entry;\n" .
 
 elmt:ThenAfterMembers__Switch__pressed
     a sysml:AttributeUsage ;
@@ -1723,7 +1802,8 @@ elmt:ThenAfterMembers__Switch__pressed
     sysml:owningMembership elmt:ThenAfterMembers__Switch__pressed_om ;
     sysml:declaredName "pressed" ;
     sysml:type "ScalarValues::Boolean" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute pressed : ScalarValues::Boolean;\n" .
 
 elmt:ThenAfterMembers__Switch__pressed_om
     a sysml:FeatureMembership ;
@@ -1748,7 +1828,8 @@ elmt:ThenAfterMembers__Switch___402
     sysml:owningMembership elmt:ThenAfterMembers__Switch___402_om ;
     sysx:endForm "then" ;
     sysml:sourceFeature elmt:ThenAfterMembers__Switch__pressed ;
-    sysml:targetFeature elmt:ThenAfterMembers__Switch__idle .
+    sysml:targetFeature elmt:ThenAfterMembers__Switch__idle ;
+    sysx:sourceText "        then idle;\n" .
 
 elmt:ThenAfterMembers__Switch___402_om
     a sysml:FeatureMembership ;
@@ -1772,7 +1853,8 @@ elmt:ThenAfterMembers__Switch__idle
     sysml:owningRelationship elmt:ThenAfterMembers__Switch__idle_om ;
     sysml:owningMembership elmt:ThenAfterMembers__Switch__idle_om ;
     sysml:declaredName "idle" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        state idle;\n" .
 
 elmt:ThenAfterMembers__Switch__idle_om
     a sysml:FeatureMembership ;

@@ -9,11 +9,14 @@ elmt:Colors
     sysml:qualifiedName "Colors" ;
     sysml:elementId "Colors" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Colors" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Colors__Color ;
     sysml:ownedMembership elmt:Colors__Color_om ;
-    sysml:ownedRelationship elmt:Colors__Color_om .
+    sysml:ownedRelationship elmt:Colors__Color_om ;
+    sysx:sourceText "package Colors {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:Colors__Color
     a sysml:EnumerationDefinition ;
@@ -30,7 +33,9 @@ elmt:Colors__Color
     sysml:ownedMembership elmt:Colors__Color__red_om, elmt:Colors__Color__green_om, elmt:Colors__Color__blue_om ;
     sysml:ownedRelationship elmt:Colors__Color__red_om, elmt:Colors__Color__green_om, elmt:Colors__Color__blue_om ;
     sysml:ownedFeature elmt:Colors__Color__red, elmt:Colors__Color__green, elmt:Colors__Color__blue ;
-    sysml:ownedFeatureMembership elmt:Colors__Color__red_om, elmt:Colors__Color__green_om, elmt:Colors__Color__blue_om .
+    sysml:ownedFeatureMembership elmt:Colors__Color__red_om, elmt:Colors__Color__green_om, elmt:Colors__Color__blue_om ;
+    sysx:sourceText "    enum def Color {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Colors__Color_om
     a sysml:OwningMembership ;
@@ -52,7 +57,8 @@ elmt:Colors__Color__red
     sysml:owningRelationship elmt:Colors__Color__red_om ;
     sysml:owningMembership elmt:Colors__Color__red_om ;
     sysml:declaredName "red" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        enum red;\n" .
 
 elmt:Colors__Color__red_om
     a sysml:FeatureMembership ;
@@ -76,7 +82,8 @@ elmt:Colors__Color__green
     sysml:owningRelationship elmt:Colors__Color__green_om ;
     sysml:owningMembership elmt:Colors__Color__green_om ;
     sysml:declaredName "green" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        enum green;\n" .
 
 elmt:Colors__Color__green_om
     a sysml:FeatureMembership ;
@@ -100,7 +107,8 @@ elmt:Colors__Color__blue
     sysml:owningRelationship elmt:Colors__Color__blue_om ;
     sysml:owningMembership elmt:Colors__Color__blue_om ;
     sysml:declaredName "blue" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        enum blue;\n" .
 
 elmt:Colors__Color__blue_om
     a sysml:FeatureMembership ;

@@ -211,11 +211,11 @@ Run it with `go run ./cmd/pilot-exec-diff` after `./scripts/download-pilot-evalu
 execution artifact absent it prints a provisioning instruction, exits 0 and writes nothing, so
 `cmd/pilot-diff` and its committed baseline are untouched. The bucket counts below are as measured
 when this record was last updated and are not the current baseline — `go run ./cmd/pilot-exec-diff`
-prints the current ones. State of the 104 committed cases, the original 32, the 62 the
-expression round added and the 10 of `value_classification.cases`:
+prints the current ones. State of the 107 committed cases, the original 32, the 62 the
+expression round added, the 10 of `value_classification.cases` and the 3 of `contextual_names.cases`:
 
 ```
-agree: 65 · kind-only: 1 · order-only: 0 · disagree: 1
+agree: 68 · kind-only: 1 · order-only: 0 · disagree: 1
 pilot-unevaluated: 21 · pilot-silent: 4 · pilot-error: 2 · ours-error: 2 · both-error: 8
 nondeterministic: 0
 ```
@@ -228,6 +228,11 @@ reported a scalar as classifying no element. `x @ Safety` with a metadata type k
 metadata reading, which the pilot does not share (its `@` is `istype` throughout, so it answers
 `false`); no committed case probes it, since the corpus was written model-level and the
 annotation forms are pinned by the runtime conformance fixtures instead.
+
+The three `contextual_names.cases` all agree, and they were added with the parser fix they
+referee: `chain` is the feature chain modifier only when a name follows it, so `attribute chain =
+1;` declares a feature named `chain` and `chain + 1` reads it — where before the parser took the
+word for the modifier, declared an anonymous attribute and left `chain` unresolved.
 
 A later round of runtime fixes moved five of the six `ours-error` cases to `agree`
 (`dot-perform-out`, `dot-machine-attr`, `w6d:inherited-value-no-body`,
