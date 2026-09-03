@@ -19,5 +19,6 @@
 - [ ] `make test` and `make lint` pass locally
 - [ ] Tests added or updated for the change
 - [ ] Documentation extended where it already covers the surface (see CONTRIBUTING.md)
+- [ ] Changelog entry added as `changes/unreleased/<slug>.<section>.md`, not as an edit to `CHANGELOG.md`
 - [ ] `make docs-counts` run if a compliance row changed; baselines regenerated if a gate count moved
 - [ ] No internal work-item labels (waves, slices, `F4`, `K5`) in the body, docs, or changelog
