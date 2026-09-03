@@ -9,12 +9,15 @@ package test {
 		out difference = RealFunctions::'-'(1.5, 2);
 		out product = NumericalFunctions::'*'(3, 4);
 		out quotient = IntegerFunctions::'/'(1, 4);
+		out naturalQuotient = NaturalFunctions::'/'(6, 3);
 		out remainder = IntegerFunctions::'%'(7, 3);
 		out power = IntegerFunctions::'**'(2, 10);
 		out caret = RealFunctions::'^'(2.0, -1);
 		out concatenated = ScalarFunctions::'+'("a", "b");
 		out equal = DataFunctions::'=='(1, 1);
 		out equalAcrossKinds = BaseFunctions::'=='(1, 1.0);
+		out realEqualsInteger = RealFunctions::'=='(2, 2.0);
+		out naturalEquals = NaturalFunctions::'=='(2, 3);
 		out unequal = BaseFunctions::'!='(1, 2);
 		out identical = DataFunctions::'==='(1, 1);
 		out notIdenticalAcrossKinds = BaseFunctions::'!=='(1, 1.0);

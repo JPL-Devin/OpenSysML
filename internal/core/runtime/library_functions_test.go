@@ -3,6 +3,7 @@ package runtime
 import (
 	"errors"
 	"math"
+	"slices"
 	"strings"
 	"testing"
 
@@ -1036,8 +1037,8 @@ func TestUnevaluableLibraryFunctionsNameThemselves(t *testing.T) {
 // vendors. The declarations the implementations are registered against cannot
 // drift from the registry: every function these packages declare is either
 // implemented here with the declared parameter names in the declared order, or
-// implemented as a built-in over collections (builtins.go), which takes its
-// arguments positionally.
+// implemented as a built-in over collections (builtins.go) whose signature
+// (builtins_signature.go) states the declared names, optionality and `expr`.
 var vendoredFunctionPackages = map[string]string{
 	"BaseFunctions":          "Kernel Libraries/Kernel Function Library/BaseFunctions.kerml",
 	"BooleanFunctions":       "Kernel Libraries/Kernel Function Library/BooleanFunctions.kerml",
@@ -1090,7 +1091,9 @@ func TestVendoredFunctionsAreAllDispatchable(t *testing.T) {
 				if !ok {
 					if _, isBuiltin := builtins[fqn]; !isBuiltin {
 						t.Errorf("%s is declared in %s and is not dispatchable", fqn, path)
+						continue
 					}
+					checkBuiltinSignature(t, ctx, fqn, sym)
 					continue
 				}
 				var params []string
@@ -1111,6 +1114,47 @@ func TestVendoredFunctionsAreAllDispatchable(t *testing.T) {
 				t.Fatalf("%s declares no function in %s; the package name or path is wrong", pkg, path)
 			}
 		})
+	}
+}
+
+// checkBuiltinSignature holds the registered signature of the built-in fqn to
+// the parameters sym declares: name, order, optionality and `expr`.
+func checkBuiltinSignature(t *testing.T, ctx *Context, fqn string, sym *symbols.Symbol) {
+	t.Helper()
+	sig, ok := builtinSignatures[fqn]
+	if !ok {
+		t.Errorf("%s is a built-in with no signature in builtinSignatures", fqn)
+		return
+	}
+	var declared []builtinParam
+	for _, member := range declMembers(sym.Decl) {
+		usage, ok := member.(*ast.Usage)
+		if !ok || (usage.Direction != ast.DirIn && usage.Direction != ast.DirInOut) {
+			continue
+		}
+		name, _ := ast.EffectiveName(usage)
+		declared = append(declared, builtinParam{
+			name:     name,
+			optional: usage.Value != nil || ctx.model.IsOptionalParameter(usage),
+			deferred: usage.Kind == ast.UsageExpr,
+		})
+	}
+	if !slices.Equal(declared, sig) {
+		t.Errorf("%s declares %+v, builtinSignatures has %+v", fqn, declared, sig)
+	}
+}
+
+// Every registered signature belongs to a registered built-in.
+func TestBuiltinSignaturesNameBuiltins(t *testing.T) {
+	for name := range builtinSignatures {
+		if _, ok := builtins[name]; !ok {
+			t.Errorf("builtinSignatures has %s, which is no built-in", name)
+		}
+	}
+	for name := range builtins {
+		if _, ok := builtinSignatures[name]; !ok {
+			t.Errorf("built-in %s has no signature", name)
+		}
 	}
 }
 

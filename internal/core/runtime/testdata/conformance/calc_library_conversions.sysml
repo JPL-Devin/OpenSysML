@@ -3,6 +3,8 @@
 package test {
 	private import ScalarValues::*;
 
+	enum def Color { red; green; }
+
 	calc def Conversions {
 		out realFromString = RealFunctions::ToReal("1.5");
 		out realFromExponent = RealFunctions::ToReal("-2.5e3");
@@ -17,6 +19,8 @@ package test {
 		out stringFromWholeReal = RealFunctions::ToString(1.0);
 		out stringFromRational = RationalFunctions::ToString(0.5);
 		out stringFromAnything = BaseFunctions::ToString(3);
+		out stringFromNull = BaseFunctions::ToString(null);
+		out stringFromLiteral = BaseFunctions::ToString(Color::red);
 		out roundTrip = RealFunctions::ToReal(RealFunctions::ToString(0.1)) == 0.1;
 		out naturalFromInteger = IntegerFunctions::ToNatural(9);
 		out integerFromReal = RealFunctions::ToInteger(2.7);

@@ -65,10 +65,16 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   for an empty collection; `DataFunctions`/`ScalarFunctions::max`/`min` over numbers,
   strings and quantities; every operator as a function — `IntegerFunctions::'+'(1, 2)`,
   `DataFunctions::'=='(1, 1)`, `BaseFunctions::'#'(xs, 2)`, `ScalarFunctions::'..'(1, 3)`,
-  `BooleanFunctions::'not'`/`'xor'` — each evaluated by the operator's own code; and
+  `BooleanFunctions::'not'`/`'xor'` — each evaluated by the operator's own code, with each
+  package's parameter types imposed (`IntegerFunctions::'=='(2, 2.0)` is a type mismatch where
+  `BaseFunctions::'=='` answers `true`) and `NaturalFunctions::'/'` answering the Natural it
+  declares (`'/'(6, 3)` is `2`; `'/'(7, 2)` is a domain error, not `3.5`); and
   `ControlFunctions::'if'`, `'and'`, `'or'`, `'implies'` and `'??'`, which evaluate only the
-  operand they select. `RationalFunctions::rat`/`numer`/`denom` (a Rational is a float64
-  here), `CollectionFunctions::'array#'` and `BaseFunctions::'['` (no Array value kind),
+  operand they select and accept an omitted second operand when the first decides. Built-in
+  functions bind named arguments (`sum0(zero = 0, collection = xs)`), and a model's own calc
+  named like a library function is no longer shadowed by the built-in of that name.
+  `RationalFunctions::rat`/`numer`/`denom` (a Rational is a float64 here),
+  `CollectionFunctions::'array#'` and `BaseFunctions::'['` (no Array value kind),
   `BaseFunctions::all`/`as`/`meta`/`istype`/`hastype`/`'@'`/`'@@'` and `ControlFunctions::'.'`
   (evaluated from their own notation, not as functions), `DataFunctions`/`ScalarFunctions::'~'`
   and every `OccurrenceFunctions` declaration report themselves by name. An operator-named

@@ -16,6 +16,8 @@
     "stringFromWholeReal": {"type": "String", "value": "1.0"},
     "stringFromRational": {"type": "String", "value": "0.5"},
     "stringFromAnything": {"type": "String", "value": "3"},
+    "stringFromNull": {"type": "String", "value": "null"},
+    "stringFromLiteral": {"type": "String", "value": "Color::red"},
     "roundTrip": {"type": "Boolean", "value": true},
     "naturalFromInteger": {"type": "Integer", "value": 9},
     "integerFromReal": {"type": "Integer", "value": 2},

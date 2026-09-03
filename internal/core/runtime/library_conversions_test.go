@@ -28,6 +28,12 @@ func TestConversionFunctionValues(t *testing.T) {
 		{"BaseFunctions::ToString", []Value{constReal(1e21)}, NewStringValue("1e+21")},
 		{"BaseFunctions::ToString", []Value{constBool(true)}, NewStringValue("true")},
 		{"BaseFunctions::ToString", []Value{NewStringValue("as is")}, NewStringValue("as is")},
+		{"BaseFunctions::ToString", []Value{nullValue()}, NewStringValue("null")},
+		{"BaseFunctions::ToString", []Value{NewSequenceValue(NewSequence())}, NewStringValue("null")},
+		{"BaseFunctions::ToString", []Value{constSequence(3)}, NewStringValue("3")},
+		{"BaseFunctions::ToString", []Value{Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInfinity}}}, NewStringValue("*")},
+		{"BaseFunctions::ToString", []Value{NewQuantityValue(&Quantity{
+			Num: semantics.Value{Kind: semantics.ValReal, Real: 1.5}, Unit: Unit{Text: "m", Term: semantics.UnitTerm{Scale: semantics.UnitScale(1)}}})}, NewStringValue("1.5 [m]")},
 		{"BooleanFunctions::ToString", []Value{constBool(false)}, NewStringValue("false")},
 		{"IntegerFunctions::ToString", []Value{constInt(-7)}, NewStringValue("-7")},
 		{"NaturalFunctions::ToString", []Value{constInt(7)}, NewStringValue("7")},
@@ -129,7 +135,9 @@ func TestConversionFunctionErrors(t *testing.T) {
 		{"RealFunctions::re", []Value{NewStringValue("1")}, ErrTypeMismatch},
 		{"NaturalFunctions::ToString", []Value{constInt(-1)}, ErrTypeMismatch},
 		{"IntegerFunctions::ToString", []Value{constReal(1)}, ErrTypeMismatch},
-		{"BaseFunctions::ToString", []Value{NewSequenceValue(NewSequence())}, ErrTypeMismatch},
+		{"BaseFunctions::ToString", []Value{constSequence(1, 2)}, ErrMultiplicityViolation},
+		{"BaseFunctions::ToString", []Value{{Kind: ValInstance, Instance: 3}}, ErrTypeMismatch},
+		{"BaseFunctions::ToString", []Value{cx(1, 1)}, ErrUnevaluableLibraryFunction},
 		{"RationalFunctions::gcd", []Value{constReal(0.5), constInt(2)}, semantics.ErrArithmeticDomain},
 		{"RationalFunctions::gcd", []Value{constInt(math.MinInt64), constInt(2)}, semantics.ErrArithmeticOverflow},
 	}

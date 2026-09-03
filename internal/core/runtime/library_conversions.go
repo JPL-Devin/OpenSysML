@@ -64,16 +64,32 @@ func registerConversionFunctions() {
 	})
 }
 
-// anythingToString is BaseFunctions::ToString over the values the concrete
-// ToString declarations render: Booleans, Integers, Reals and Strings.
+// anythingToString is BaseFunctions::ToString, the notation x is written with in
+// a model: a literal, an enumeration literal by name, a quantity with its unit.
+// x is Anything[0..1], so an omitted x is the null value and reads `null`.
 func anythingToString(name string, _ *Context, args []Value) (Value, error) {
-	x := args[0]
-	switch {
-	case x.Kind == ValString:
+	elements := elementsOf(args[0])
+	if len(elements) > 1 {
+		return Value{}, fmt.Errorf(
+			"%w: function %s parameter %q is Anything[0..1], got %d values",
+			ErrMultiplicityViolation, name, "x", len(elements),
+		)
+	}
+	if len(elements) == 0 {
+		return NewStringValue("null"), nil
+	}
+	x := elements[0]
+	switch x.Kind {
+	case ValString:
 		return x, nil
-	case x.Kind == ValConst && (x.Const.IsNumeric() || x.Const.Kind == semantics.ValBool):
+	case ValConst:
+		if x.Const.Kind == semantics.ValInfinity {
+			return NewStringValue("*"), nil
+		}
 		return NewStringValue(FormatConst(x.Const)), nil
-	case x.Kind == ValComplex:
+	case ValQuantity, ValEnumLiteral:
+		return NewStringValue(FormatValue(x)), nil
+	case ValComplex:
 		return Value{}, fmt.Errorf("%w: %s: no string notation for a Complex value is defined", ErrUnevaluableLibraryFunction, name)
 	}
 	return Value{}, fmt.Errorf(

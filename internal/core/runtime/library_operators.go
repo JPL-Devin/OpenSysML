@@ -26,7 +26,7 @@ var operatorForms = []struct {
 	{"RationalFunctions", []string{"+", "-", "*", "/", "**", "^", "<", "<=", ">", ">="}, realOperand},
 	{"IntegerFunctions", []string{"+", "-", "*", "/", "%", "<", "<=", ">", ">="}, integerOperand},
 	{"IntegerFunctions", []string{"**", "^"}, integerBaseNaturalExponent},
-	{"NaturalFunctions", []string{"+", "*", "/", "%", "<", "<=", ">", ">="}, naturalOperand},
+	{"NaturalFunctions", []string{"+", "*", "%", "<", "<=", ">", ">="}, naturalOperand},
 	{"BooleanFunctions", []string{"not", "xor", "|", "&"}, booleanOperand},
 }
 
@@ -38,10 +38,16 @@ var operatorKinds = map[string]ast.OperatorKind{
 	"not": ast.OpNot, "xor": ast.OpXor, "|": ast.OpOr, "&": ast.OpAnd,
 }
 
-// equalityForms are the `'=='` declarations, each over two [0..1] operands.
-var equalityForms = []string{
-	"BaseFunctions::==", "DataFunctions::==", "BooleanFunctions::==",
-	"IntegerFunctions::==", "NaturalFunctions::==", "RationalFunctions::==", "RealFunctions::==",
+// equalityForms are the `'=='` declarations, each over two [0..1] operands
+// of the package's type; an omitted operand is outside every domain check.
+var equalityForms = map[string]operandDomain{
+	"BaseFunctions::==":     anyOperand,
+	"DataFunctions::==":     anyOperand,
+	"BooleanFunctions::==":  booleanOperand,
+	"IntegerFunctions::==":  integerOperand,
+	"NaturalFunctions::==":  naturalOperand,
+	"RationalFunctions::==": realOperand,
+	"RealFunctions::==":     realOperand,
 }
 
 // registerOperatorFunctions registers the explicit function form of every
@@ -52,10 +58,11 @@ func registerOperatorFunctions() {
 			registerOperatorForm(form.pkg+"::"+op, op, form.domain)
 		}
 	}
-	for _, fqn := range equalityForms {
-		registerValueFunction(fqn, []string{"x", "y"}, 0, equalityForm(ast.OpEq))
+	for fqn, domain := range equalityForms {
+		registerValueFunction(fqn, []string{"x", "y"}, 0, equalityForm(ast.OpEq, domain))
 	}
-	registerValueFunction("BaseFunctions::!=", []string{"x", "y"}, 0, equalityForm(ast.OpNeq))
+	registerValueFunction("NaturalFunctions::/", []string{"x", "y"}, 2, naturalDivision)
+	registerValueFunction("BaseFunctions::!=", []string{"x", "y"}, 0, equalityForm(ast.OpNeq, anyOperand))
 	registerValueFunction("BaseFunctions::===", []string{"x", "y"}, 0, identityForm(false))
 	registerValueFunction("DataFunctions::===", []string{"x", "y"}, 0, identityForm(false))
 	registerValueFunction("BaseFunctions::!==", []string{"x", "y"}, 0, identityForm(true))
@@ -118,6 +125,26 @@ func arithmeticForm(op ast.OperatorKind, domain operandDomain) libraryApply {
 	}
 }
 
+// naturalDivision is NaturalFunctions::'/', declared to return a Natural: the
+// exact quotient when y divides x, and no value otherwise, since truncating
+// would compute something the declaration does not promise.
+func naturalDivision(name string, _ *Context, args []Value) (Value, error) {
+	if err := checkOperands(name, naturalOperand, args); err != nil {
+		return Value{}, err
+	}
+	x, y := args[0].Const.Int, args[1].Const.Int
+	if y == 0 {
+		return Value{}, fmt.Errorf("%w: function %s: %d / 0", ErrDivisionByZero, name, x)
+	}
+	if x%y != 0 {
+		return Value{}, fmt.Errorf(
+			"%w: function %s has no Natural result for %d / %d; the quotient is %s",
+			semantics.ErrArithmeticDomain, name, x, y, FormatReal(float64(x)/float64(y)),
+		)
+	}
+	return integerValue(x / y), nil
+}
+
 // comparisonForm is `'<'`, `'<='`, `'>'` and `'>='` as functions.
 func comparisonForm(op ast.OperatorKind, domain operandDomain) libraryApply {
 	return func(name string, _ *Context, args []Value) (Value, error) {
@@ -161,8 +188,16 @@ func unaryForm(op ast.OperatorKind, domain operandDomain) libraryApply {
 
 // equalityForm is `'=='` or `'!='` as a function; an omitted operand is null,
 // so two omitted operands are equal and an omitted one equals no value.
-func equalityForm(op ast.OperatorKind) libraryApply {
+func equalityForm(op ast.OperatorKind, domain operandDomain) libraryApply {
 	return func(name string, ctx *Context, args []Value) (Value, error) {
+		for i, param := range []string{"x", "y"} {
+			if argumentOmitted(args[i]) {
+				continue
+			}
+			if err := domain(name, param, args[i]); err != nil {
+				return Value{}, err
+			}
+		}
 		val, err := ctx.equalityValues(op, args[0], args[1])
 		return operatorResult(name, val, err)
 	}

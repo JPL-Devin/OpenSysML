@@ -72,17 +72,17 @@ var builtinSignatures = map[string][]builtinParam{
 	"ControlFunctions::and":       {param("firstValue"), exprParam("secondValue")},
 	"ControlFunctions::or":        {param("firstValue"), exprParam("secondValue")},
 	"ControlFunctions::implies":   {param("firstValue"), exprParam("secondValue")},
-	"ControlFunctions::select":    {optionalParam("collection"), optionalParam("selector")},
-	"ControlFunctions::selectOne": {optionalParam("collection"), optionalParam("selector1")},
-	"ControlFunctions::reject":    {optionalParam("collection"), optionalParam("rejector")},
-	"ControlFunctions::collect":   {optionalParam("collection"), optionalParam("mapper")},
-	"ControlFunctions::forAll":    {optionalParam("collection"), optionalParam("test")},
-	"ControlFunctions::exists":    {optionalParam("collection"), optionalParam("test")},
+	"ControlFunctions::select":    {optionalParam("collection"), exprParam("selector")},
+	"ControlFunctions::selectOne": {optionalParam("collection"), exprParam("selector1")},
+	"ControlFunctions::reject":    {optionalParam("collection"), exprParam("rejector")},
+	"ControlFunctions::collect":   {optionalParam("collection"), exprParam("mapper")},
+	"ControlFunctions::forAll":    {optionalParam("collection"), exprParam("test")},
+	"ControlFunctions::exists":    {optionalParam("collection"), exprParam("test")},
 	"ControlFunctions::allTrue":   {optionalParam("collection")},
 	"ControlFunctions::anyTrue":   {optionalParam("collection")},
-	"ControlFunctions::reduce":    {optionalParam("collection"), optionalParam("reducer")},
-	"ControlFunctions::minimize":  {param("collection"), optionalParam("fn")},
-	"ControlFunctions::maximize":  {param("collection"), optionalParam("fn")},
+	"ControlFunctions::reduce":    {optionalParam("collection"), exprParam("reducer")},
+	"ControlFunctions::minimize":  {param("collection"), exprParam("fn")},
+	"ControlFunctions::maximize":  {param("collection"), exprParam("fn")},
 
 	"NumericalFunctions::sum":      {optionalParam("collection")},
 	"NumericalFunctions::product":  {optionalParam("collection")},
@@ -139,6 +139,9 @@ func (ec *EvalContext) bindBuiltinArgs(name string, exprs []ast.Node, named []as
 			return nil, fmt.Errorf("%w: function %s has no input parameter %q (expected %s)",
 				ErrUnknownParameter, written, argName, builtinParameterList(params))
 		}
+		if bound[i] {
+			return nil, fmt.Errorf("%w: function %s binds parameter %q twice", ErrCalcArity, written, argName)
+		}
 		val, err := ec.evalArgument(params, i, arg.Value)
 		if err != nil {
 			return nil, err
@@ -163,10 +166,10 @@ func (ec *EvalContext) bindBuiltinArgs(name string, exprs []ast.Node, named []as
 }
 
 // evalArgument evaluates the argument bound to parameter i, or keeps it as
-// written for an `expr` parameter. A position past the declared parameters is
-// evaluated for the built-in's own arity report.
+// written for an `expr` parameter. A body literal is a function already, so it
+// is evaluated (to itself) like any other argument, which the trace records.
 func (ec *EvalContext) evalArgument(params []builtinParam, i int, arg ast.Node) (Value, error) {
-	if i < len(params) && params[i].deferred {
+	if _, body := arg.(*ast.BodyExpr); !body && i < len(params) && params[i].deferred {
 		return NewExprValue(arg), nil
 	}
 	return ec.Eval(arg)

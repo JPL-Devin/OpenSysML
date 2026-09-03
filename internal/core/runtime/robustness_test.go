@@ -218,6 +218,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("collection_operand_of_the_wrong_kind", testCollectionOperandOfTheWrongKind)
 	t.Run("numeric_library_call_that_has_no_value", testNumericLibraryCallThatHasNoValue)
 	t.Run("named_library_call_that_has_no_value", testNamedLibraryCallThatHasNoValue)
+	t.Run("builtin_named_argument_that_binds_nothing", testBuiltinNamedArgumentThatBindsNothing)
 	t.Run("string_operand_of_the_wrong_kind", testStringOperandOfTheWrongKind)
 	t.Run("collection_body_of_the_wrong_arity", testCollectionBodyOfTheWrongArity)
 	t.Run("select_predicate_is_not_a_condition", testSelectPredicateIsNotACondition)
@@ -1294,6 +1295,12 @@ func testNamedLibraryCallThatHasNoValue(t *testing.T) {
 		{`OccurrenceFunctions::isDuring(xs)`, ErrUnevaluableLibraryFunction},
 		{`IntegerFunctions::'+'("a", 1)`, ErrTypeMismatch},
 		{`IntegerFunctions::'/'(1, 0)`, ErrDivisionByZero},
+		{`NaturalFunctions::'/'(7, 2)`, semantics.ErrArithmeticDomain},
+		{`NaturalFunctions::'/'(6, 0)`, ErrDivisionByZero},
+		{`NaturalFunctions::'/'(6, -3)`, ErrTypeMismatch},
+		{`IntegerFunctions::'=='(2, 2.0)`, ErrTypeMismatch},
+		{`BooleanFunctions::'=='(true, 1)`, ErrTypeMismatch},
+		{`BaseFunctions::ToString(xs)`, ErrMultiplicityViolation},
 		{`IntegerFunctions::'%'(1, 0)`, ErrDivisionByZero},
 		{`IntegerFunctions::'*'(9223372036854775807, 2)`, semantics.ErrArithmeticOverflow},
 		{`RealFunctions::'**'(-8.0, 0.5)`, semantics.ErrArithmeticDomain},
@@ -1307,12 +1314,41 @@ func testNamedLibraryCallThatHasNoValue(t *testing.T) {
 		{`ControlFunctions::'if'(true, {in x; x}, 3)`, ErrBodyArity},
 		{`ControlFunctions::'and'(true, 1)`, ErrTypeMismatch},
 		{`ControlFunctions::'and'(1, true)`, ErrTypeMismatch},
+		{`ControlFunctions::'and'(true)`, ErrMultiplicityViolation},
+		{`ControlFunctions::'or'(false)`, ErrMultiplicityViolation},
+		{`ControlFunctions::'implies'(true)`, ErrMultiplicityViolation},
 		{`ControlFunctions::'implies'(true, xs)`, ErrTypeMismatch},
 		{`NumericalFunctions::sum0(xs, 1)`, ErrTypeMismatch},
 		{`NumericalFunctions::product1(xs, 0)`, ErrTypeMismatch},
 		{`NumericalFunctions::sum0(flags, 0)`, ErrTypeMismatch},
 		{`NumericalFunctions::sum0((9223372036854775807, 1), 0)`, semantics.ErrArithmeticOverflow},
 		{`NumericalFunctions::sum0(xs)`, ErrCalcArity},
+	} {
+		got, err := evalCollectionExpr(t, tt.expr)
+		if !errors.Is(err, tt.want) {
+			t.Errorf("%s = (%v, %v), want %v", tt.expr, got, err, tt.want)
+		}
+	}
+}
+
+// testBuiltinNamedArgumentThatBindsNothing: a named argument to a built-in that
+// names no parameter, names one twice, sits beside a positional argument, or
+// leaves a required parameter unbound is reported rather than bound by position;
+// a body passed by reference that denotes no body is reported too.
+func testBuiltinNamedArgumentThatBindsNothing(t *testing.T) {
+	for _, tt := range []struct {
+		expr string
+		want error
+	}{
+		{`NumericalFunctions::sum0(zero = 0, elements = xs)`, ErrUnknownParameter},
+		{`NumericalFunctions::sum0(zero = 0, zero = 1)`, ErrCalcArity},
+		{`NumericalFunctions::sum0(collection = xs)`, ErrCalcArity},
+		{`ControlFunctions::'if'(thenValue = 1, elseValue = 2)`, ErrCalcArity},
+		{`ControlFunctions::'if'(test = true, thenValue = {in x; x})`, ErrBodyArity},
+		{`ControlFunctions::'and'(secondValue = true)`, ErrCalcArity},
+		{`SequenceFunctions::'#'(seq = xs, index = 0)`, ErrIndexOutOfRange},
+		{`ControlFunctions::select(collection = xs, selector = factor)`, ErrTypeMismatch},
+		{`xs->select factor`, ErrTypeMismatch},
 	} {
 		got, err := evalCollectionExpr(t, tt.expr)
 		if !errors.Is(err, tt.want) {

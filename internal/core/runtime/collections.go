@@ -171,17 +171,24 @@ func (ec *EvalContext) evalSequenceIndex(n *ast.IndexExpr) (Value, error) {
 }
 
 // bodyOf reads the body expression a collection operation takes as its
-// function-valued parameter (`select`'s selector, `collect`'s mapper), checking
-// that it declares the parameters the operation calls it with. A body is
-// evaluated to a ValExpr rather than to a result, which is what makes it a
-// function rather than a value.
-func bodyOf(op string, val Value, arity int) (*ast.BodyExpr, error) {
+// function-valued parameter, checking it declares the parameters the operation
+// calls it with. An argument that is not itself a body is evaluated to the body it denotes.
+func (ec *EvalContext) bodyOf(op string, val Value, arity int) (*ast.BodyExpr, error) {
 	if val.Kind != ValExpr {
 		return nil, fmt.Errorf("%w: %s requires a body expression, got %s", ErrTypeMismatch, op, describeValue(val))
 	}
 	body, ok := val.Expr().(*ast.BodyExpr)
 	if !ok {
-		return nil, fmt.Errorf("%w: %s requires a body expression, got %T", ErrTypeMismatch, op, val.Expr())
+		denoted, err := ec.Eval(val.Expr())
+		if err != nil {
+			return nil, err
+		}
+		if denoted.Kind != ValExpr {
+			return nil, fmt.Errorf("%w: %s requires a body expression, got %s", ErrTypeMismatch, op, describeValue(denoted))
+		}
+		if body, ok = denoted.Expr().(*ast.BodyExpr); !ok {
+			return nil, fmt.Errorf("%w: %s requires a body expression, got %T", ErrTypeMismatch, op, denoted.Expr())
+		}
 	}
 	if len(body.Params) != arity {
 		return nil, fmt.Errorf("%w: %s calls its body with %d argument(s), but it declares %d parameter(s)",
@@ -586,7 +593,7 @@ func (ec *EvalContext) filter(op string, args []Value, keep bool) (Value, error)
 	if err := checkArity(op, args, 2); err != nil {
 		return Value{}, err
 	}
-	body, err := bodyOf(op, args[1], 1)
+	body, err := ec.bodyOf(op, args[1], 1)
 	if err != nil {
 		return Value{}, err
 	}
@@ -621,7 +628,7 @@ func builtinControlCollect(ec *EvalContext, args []Value) (Value, error) {
 	if err := checkArity(op, args, 2); err != nil {
 		return Value{}, err
 	}
-	body, err := bodyOf(op, args[1], 1)
+	body, err := ec.bodyOf(op, args[1], 1)
 	if err != nil {
 		return Value{}, err
 	}
@@ -654,7 +661,7 @@ func builtinControlReduce(ec *EvalContext, args []Value) (Value, error) {
 	if err := checkArity(op, args, 2); err != nil {
 		return Value{}, err
 	}
-	body, err := bodyOf(op, args[1], 2)
+	body, err := ec.bodyOf(op, args[1], 2)
 	if err != nil {
 		return Value{}, err
 	}
@@ -690,7 +697,7 @@ func (ec *EvalContext) extremum(op string, args []Value, least bool) (Value, err
 	if err := checkArity(op, args, 2); err != nil {
 		return Value{}, err
 	}
-	body, err := bodyOf(op, args[1], 1)
+	body, err := ec.bodyOf(op, args[1], 1)
 	if err != nil {
 		return Value{}, err
 	}
@@ -740,7 +747,7 @@ func (ec *EvalContext) quantify(op string, args []Value, universal bool) (Value,
 	if err := checkArity(op, args, 2); err != nil {
 		return Value{}, err
 	}
-	body, err := bodyOf(op, args[1], 1)
+	body, err := ec.bodyOf(op, args[1], 1)
 	if err != nil {
 		return Value{}, err
 	}
@@ -934,6 +941,15 @@ func containsValue(elements []Value, val Value) bool {
 func checkArity(op string, args []Value, want int) error {
 	if len(args) != want {
 		return fmt.Errorf("%w: %s takes %d argument(s), got %d", ErrCalcArity, op, want, len(args))
+	}
+	return nil
+}
+
+// checkArityRange reports an argument count outside min..max, for a built-in
+// whose trailing parameters are `[0..1]`.
+func checkArityRange(op string, args []Value, min, max int) error {
+	if len(args) < min || len(args) > max {
+		return fmt.Errorf("%w: %s takes %d..%d argument(s), got %d", ErrCalcArity, op, min, max, len(args))
 	}
 	return nil
 }

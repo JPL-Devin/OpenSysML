@@ -52,8 +52,8 @@ func (ec *EvalContext) evalDeferred(op string, val Value) (Value, error) {
 // selected branch alone is evaluated, and an omitted else branch is null.
 func builtinControlIf(ec *EvalContext, args []Value) (Value, error) {
 	const op = "ControlFunctions::'if'"
-	if len(args) != 2 && len(args) != 3 {
-		return Value{}, fmt.Errorf("%w: %s takes 2..3 argument(s), got %d", ErrCalcArity, op, len(args))
+	if err := checkArityRange(op, args, 2, 3); err != nil {
+		return Value{}, err
 	}
 	held, err := boolOperand("test of "+op, args[0])
 	if err != nil {
@@ -69,22 +69,27 @@ func builtinControlIf(ec *EvalContext, args []Value) (Value, error) {
 }
 
 // builtinControlNullCoalesce is ControlFunctions::'??'(firstValue, secondValue),
-// which evaluates secondValue only when firstValue is null.
+// which evaluates secondValue only when firstValue is null. secondValue is
+// `[0..1]`: omitted, it has no value, so a null firstValue stays null.
 func builtinControlNullCoalesce(ec *EvalContext, args []Value) (Value, error) {
 	const op = "ControlFunctions::'??'"
-	if err := checkArity(op, args, 2); err != nil {
+	if err := checkArityRange(op, args, 1, 2); err != nil {
 		return Value{}, err
+	}
+	if len(args) == 1 {
+		return args[0], nil
 	}
 	return coalesceNull(args[0], func() (Value, error) { return ec.evalDeferred(op, args[1]) })
 }
 
 // builtinControlLogical is ControlFunctions::'and', 'or' or 'implies': the
 // first value decides alone where it can, and secondValue is evaluated only
-// where it cannot.
+// where it cannot. secondValue is `[0..1]` while the result is `Boolean[1]`, so
+// a first value that does not decide reports an omitted second.
 func builtinControlLogical(op ast.OperatorKind) builtinFunc {
 	name := fmt.Sprintf("ControlFunctions::'%s'", op)
 	return func(ec *EvalContext, args []Value) (Value, error) {
-		if err := checkArity(name, args, 2); err != nil {
+		if err := checkArityRange(name, args, 1, 2); err != nil {
 			return Value{}, err
 		}
 		l, err := boolOperand("firstValue of "+name, args[0])
@@ -93,6 +98,10 @@ func builtinControlLogical(op ast.OperatorKind) builtinFunc {
 		}
 		if decided, result := shortCircuit(op, l); decided {
 			return boolValue(result), nil
+		}
+		if len(args) == 1 {
+			return Value{}, fmt.Errorf("%w: %s(%t) is decided by secondValue, which was not given; the result is Boolean[1]",
+				ErrMultiplicityViolation, name, l)
 		}
 		second, err := ec.evalDeferred(name, args[1])
 		if err != nil {
