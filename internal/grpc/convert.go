@@ -536,6 +536,18 @@ const (
 	maxGraphInstances = 1000
 )
 
+// GraphBounds is how far InstanceGraphToProtoWithin expands an object graph:
+// nested objects to Depth, and Instances objects in all.
+type GraphBounds struct {
+	Depth     int
+	Instances int
+}
+
+// DefaultGraphBounds are the bounds the service serializes an instance graph under.
+func DefaultGraphBounds() GraphBounds {
+	return GraphBounds{Depth: maxGraphDepth, Instances: maxGraphInstances}
+}
+
 // InstanceGraphToProto converts inst and every instance reachable from it. The
 // root is returned first; runtime instances live only for the duration of a
 // request, so the whole reachable graph is serialized while the context is alive.
@@ -545,13 +557,26 @@ const (
 // holds, so a self-referential part would otherwise instantiate forever. An
 // unexpanded child stays a bare instance id.
 func InstanceGraphToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.Index) (*pb.Instance, []*pb.Instance) {
+	root, all, _ := InstanceGraphToProtoWithin(rt, inst, idx, DefaultGraphBounds())
+	return root, all
+}
+
+// InstanceGraphToProtoWithin is InstanceGraphToProto under the given bounds. The
+// third result reports whether the instance bound cut the graph short; the type
+// cycle guard applies whatever the bounds.
+func InstanceGraphToProtoWithin(rt *runtime.Context, inst *runtime.Instance, idx *symbols.Index, bounds GraphBounds) (*pb.Instance, []*pb.Instance, bool) {
 	var all []*pb.Instance
+	truncated := false
 	seen := make(map[int64]bool)
 	onPath := make(map[*symbols.Symbol]bool)
 
 	var walk func(*runtime.Instance, int) *pb.Instance
 	walk = func(cur *runtime.Instance, depth int) *pb.Instance {
-		if seen[cur.ID] || len(all) >= maxGraphInstances {
+		if seen[cur.ID] {
+			return nil
+		}
+		if len(all) >= bounds.Instances {
+			truncated = true
 			return nil
 		}
 		seen[cur.ID] = true
@@ -563,7 +588,7 @@ func InstanceGraphToProto(rt *runtime.Context, inst *runtime.Instance, idx *symb
 		pbInst := InstanceToProto(rt, cur, idx)
 		all = append(all, pbInst)
 
-		if depth >= maxGraphDepth {
+		if depth >= bounds.Depth {
 			return pbInst
 		}
 
@@ -581,7 +606,7 @@ func InstanceGraphToProto(rt *runtime.Context, inst *runtime.Instance, idx *symb
 	}
 
 	root := walk(inst, 0)
-	return root, all
+	return root, all, truncated
 }
 
 // instanceRefs collects the instance IDs a feature value references, scalar or not.
