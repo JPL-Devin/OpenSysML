@@ -34,6 +34,7 @@ package test {
 		out rounded = RationalFunctions::round(2.5);
 		out divisor = RationalFunctions::gcd(-12, 18);
 		out divisorOfZeros = RationalFunctions::gcd(0, 0);
+		out divisorOfLargeRationals = RationalFunctions::gcd(1.0e20, 6.0e18);
 	}
 
 	calc c : Conversions;

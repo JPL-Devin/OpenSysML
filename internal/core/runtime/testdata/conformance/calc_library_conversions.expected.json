@@ -30,6 +30,7 @@
     "floored": {"type": "Integer", "value": -1},
     "rounded": {"type": "Integer", "value": 3},
     "divisor": {"type": "Integer", "value": 6},
-    "divisorOfZeros": {"type": "Integer", "value": 0}
+    "divisorOfZeros": {"type": "Integer", "value": 0},
+    "divisorOfLargeRationals": {"type": "Integer", "value": 2000000000000000000}
   }
 }

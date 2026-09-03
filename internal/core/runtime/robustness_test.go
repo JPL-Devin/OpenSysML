@@ -1303,6 +1303,7 @@ func testNamedLibraryCallThatHasNoValue(t *testing.T) {
 		{`RealFunctions::ToReal(xs)`, ErrTypeMismatch},
 		{`RationalFunctions::gcd(1.5, 2)`, semantics.ErrArithmeticDomain},
 		{`RationalFunctions::gcd("1", 2)`, ErrTypeMismatch},
+		{`RationalFunctions::gcd(1.0e19, 1.0e19)`, semantics.ErrArithmeticOverflow},
 		{`RationalFunctions::rat(1, 3)`, ErrUnevaluableLibraryFunction},
 		{`RationalFunctions::numer(0.5)`, ErrUnevaluableLibraryFunction},
 		{`CollectionFunctions::'array#'(xs, (1, 1))`, ErrUnevaluableLibraryFunction},

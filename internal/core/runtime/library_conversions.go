@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"strconv"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -253,32 +254,38 @@ func argumentOfReal(name string, _ *Context, args []Value) (Value, error) {
 // whole values as a non-negative Integer; gcd(0, 0) is 0. A Rational with a
 // fractional part has no Integer divisor to answer with.
 func rationalGCD(args []semantics.Value) (semantics.Value, error) {
-	x, okX := args[0].WholeNumber()
-	y, okY := args[1].WholeNumber()
+	x, okX := wholeInteger(args[0])
+	y, okY := wholeInteger(args[1])
 	if !okX || !okY {
 		return semantics.Value{}, fmt.Errorf(
 			"%w: gcd is defined over whole values, got %s and %s",
 			semantics.ErrArithmeticDomain, FormatConst(args[0]), FormatConst(args[1]),
 		)
 	}
-	// Magnitudes are unsigned so the divisor of MinInt64 is found; only a
-	// divisor of 2^63 itself has no Integer to answer with.
-	a, b := magnitude(x), magnitude(y)
-	for b != 0 {
-		a, b = b, a%b
+	// Exact over any whole operand, so MinInt64 and whole Reals past the Integer
+	// range are divisors like any other; only the result must be an Integer.
+	gcd := new(big.Int).GCD(nil, nil, x.Abs(x), y.Abs(y))
+	if !gcd.IsInt64() {
+		return semantics.Value{}, fmt.Errorf("%w: gcd(%s, %s) exceeds the Integer range",
+			semantics.ErrArithmeticOverflow, FormatConst(args[0]), FormatConst(args[1]))
 	}
-	if a > math.MaxInt64 {
-		return semantics.Value{}, fmt.Errorf("%w: gcd(%d, %d) exceeds the Integer range", semantics.ErrArithmeticOverflow, x, y)
-	}
-	return semantics.Value{Kind: semantics.ValInt, Int: int64(a)}, nil
+	return semantics.Value{Kind: semantics.ValInt, Int: gcd.Int64()}, nil
 }
 
-// magnitude is |x| as a uint64, defined for every int64 including MinInt64.
-func magnitude(x int64) uint64 {
-	if x < 0 {
-		return uint64(-(x + 1)) + 1 // #nosec G115 -- -(x+1) is non-negative for every negative x
+// wholeInteger is the exact integer a whole numeric value holds: any Integer,
+// or a finite Real with no fractional part, however large.
+func wholeInteger(v semantics.Value) (*big.Int, bool) {
+	switch v.Kind {
+	case semantics.ValInt:
+		return big.NewInt(v.Int), true
+	case semantics.ValReal:
+		if math.IsInf(v.Real, 0) || math.IsNaN(v.Real) || v.Real != math.Trunc(v.Real) {
+			return nil, false
+		}
+		n, _ := new(big.Float).SetFloat64(v.Real).Int(nil)
+		return n, true
 	}
-	return uint64(x) // #nosec G115 -- x is non-negative here
+	return nil, false
 }
 
 // parseInteger reads decimal Integer notation, reporting anything else as an

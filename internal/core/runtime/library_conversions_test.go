@@ -80,6 +80,10 @@ func TestConversionFunctionValues(t *testing.T) {
 		{"RationalFunctions::gcd", []Value{constInt(math.MinInt64), constInt(1 << 62)}, constInt(1 << 62)},
 		{"RationalFunctions::gcd", []Value{constInt(math.MinInt64), constInt(math.MaxInt64)}, constInt(1)},
 		{"RationalFunctions::gcd", []Value{constInt(math.MinInt64), constInt(math.MinInt64 + 1)}, constInt(1)},
+		{"RationalFunctions::gcd", []Value{constReal(math.Ldexp(1, 63)), constInt(2)}, constInt(2)},
+		{"RationalFunctions::gcd", []Value{constInt(6), constReal(math.Ldexp(1, 64))}, constInt(2)},
+		{"RationalFunctions::gcd", []Value{constReal(1e20), constReal(6e18)}, constInt(2e18)},
+		{"RationalFunctions::gcd", []Value{constReal(-1e300), constInt(1 << 62)}, constInt(1 << 62)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.fn+"/"+FormatValue(tc.args[0]), func(t *testing.T) {
@@ -161,6 +165,10 @@ func TestConversionFunctionErrors(t *testing.T) {
 		{"RationalFunctions::gcd", []Value{constReal(0.5), constInt(2)}, semantics.ErrArithmeticDomain},
 		{"RationalFunctions::gcd", []Value{constInt(math.MinInt64), constInt(0)}, semantics.ErrArithmeticOverflow},
 		{"RationalFunctions::gcd", []Value{constInt(math.MinInt64), constInt(math.MinInt64)}, semantics.ErrArithmeticOverflow},
+		{"RationalFunctions::gcd", []Value{constReal(math.Ldexp(1, 63)), constReal(0)}, semantics.ErrArithmeticOverflow},
+		{"RationalFunctions::gcd", []Value{constReal(1e19), constReal(1e19)}, semantics.ErrArithmeticOverflow},
+		{"RationalFunctions::gcd", []Value{constReal(-1e300), constInt(math.MinInt64)}, semantics.ErrArithmeticOverflow},
+		{"RationalFunctions::gcd", []Value{constReal(math.Inf(1)), constInt(2)}, semantics.ErrArithmeticDomain},
 	}
 	for _, tc := range cases {
 		t.Run(tc.fn+"/"+FormatValue(tc.args[0]), func(t *testing.T) {
