@@ -1,0 +1,32 @@
+{
+  "libraries": true,
+  "type": "calcUsage",
+  "evaluate": "test::c",
+  "outputs": {
+    "sizeOfNothing": {"type": "Integer", "value": 0},
+    "sumOfNothing": {"type": "Integer", "value": 0},
+    "productOfNothing": {"type": "Integer", "value": 1},
+    "nothingIsEmpty": {"type": "Boolean", "value": true},
+    "includesNothing": {"type": "Boolean", "value": true},
+    "untaken": {"type": "Null"},
+    "untakenByName": {"type": "Null"},
+    "coalescesNothing": {"type": "Null"},
+    "coalescesNullAlone": {"type": "Null"},
+    "toEnd": {"type": "Sequence", "elements": [
+      {"type": "Integer", "value": 2},
+      {"type": "Integer", "value": 3}
+    ]},
+    "toEndByName": {"type": "Sequence", "elements": [
+      {"type": "Integer", "value": 2},
+      {"type": "Integer", "value": 3}
+    ]},
+    "withoutOne": {"type": "Sequence", "elements": [
+      {"type": "Integer", "value": 1},
+      {"type": "Integer", "value": 3}
+    ]},
+    "withoutOneByName": {"type": "Sequence", "elements": [
+      {"type": "Integer", "value": 1},
+      {"type": "Integer", "value": 3}
+    ]}
+  }
+}

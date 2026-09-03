@@ -42,6 +42,11 @@ func TestControlFunctionCallForms(t *testing.T) {
 		{"ControlFunctions::'implies'(true, true)", "true"},
 		{"ControlFunctions::'??'(null, 5)", "5"},
 		{"ControlFunctions::'??'(3, 1 / 0)", "3"},
+		{"ControlFunctions::'if'(false)", "null"},
+		{"ControlFunctions::'if'(test = false, thenValue = 1)", "null"},
+		{"ControlFunctions::'??'()", "null"},
+		{"ControlFunctions::'??'(null)", "null"},
+		{"ControlFunctions::'and'(false)", "false"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.expr, func(t *testing.T) {
@@ -69,6 +74,9 @@ func TestControlFunctionCallFormErrors(t *testing.T) {
 		{"ControlFunctions::'and'(true, 1)", ErrTypeMismatch},
 		{"ControlFunctions::'or'(1, true)", ErrTypeMismatch},
 		{"ControlFunctions::'??'(null, 1 / 0)", ErrDivisionByZero},
+		{"ControlFunctions::'if'()", ErrCalcArity},
+		{"ControlFunctions::'if'(true, 1, 2, 3)", ErrCalcArity},
+		{"ControlFunctions::'and'(true)", ErrMultiplicityViolation},
 	}
 	for _, tc := range cases {
 		t.Run(tc.expr, func(t *testing.T) {
@@ -98,6 +106,9 @@ func TestAggregationsWithIdentity(t *testing.T) {
 		{"NumericalFunctions::product1((), 1.0)", "1.0"},
 		{"sum0((1, 2), 0)", "3"},
 		{"product1((2, 5), 1)", "10"},
+		{"NumericalFunctions::sum0(zero = 0)", "0"},
+		{"NumericalFunctions::sum()", "0"},
+		{"NumericalFunctions::product()", "1"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.expr, func(t *testing.T) {
@@ -153,6 +164,11 @@ func TestSequenceOperatorCallForms(t *testing.T) {
 		{"BaseFunctions::','((1, 2), (3))", "[1, 2, 3]"},
 		{"CollectionFunctions::'=='((1, 2), (1, 2))", "true"},
 		{"CollectionFunctions::'=='((1, 2), (2, 1))", "false"},
+		{"SequenceFunctions::size()", "0"},
+		{"SequenceFunctions::isEmpty()", "true"},
+		{"SequenceFunctions::subsequence(test::xs, 2)", "[2, 3]"},
+		{"SequenceFunctions::subsequence(startIndex = 2, seq = test::xs)", "[2, 3]"},
+		{"SequenceFunctions::excludingAt(test::xs, 2)", "[1, 3]"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.expr, func(t *testing.T) {

@@ -469,9 +469,8 @@ func builtinSequenceIncludingAt(ec *EvalContext, args []Value) (Value, error) {
 // own `tail` is `subsequence(seq, 2)` for a one-element sequence — but an index
 // beyond the sequence is reported rather than silently clamped.
 func builtinSequenceSubsequence(ec *EvalContext, args []Value) (Value, error) {
-	if len(args) != 2 && len(args) != 3 {
-		return Value{}, fmt.Errorf("%w: SequenceFunctions::subsequence takes 2 or 3 arguments, got %d",
-			ErrCalcArity, len(args))
+	if err := checkArity("SequenceFunctions::subsequence", args, 3); err != nil {
+		return Value{}, err
 	}
 	elements := elementsOf(args[0])
 	start, err := indexOf("SequenceFunctions::subsequence", args[1])
@@ -479,7 +478,7 @@ func builtinSequenceSubsequence(ec *EvalContext, args []Value) (Value, error) {
 		return Value{}, err
 	}
 	end := int64(len(elements))
-	if len(args) == 3 {
+	if args[2].Kind != ValNull {
 		if end, err = indexOf("SequenceFunctions::subsequence", args[2]); err != nil {
 			return Value{}, err
 		}
@@ -505,8 +504,8 @@ func builtinSequenceSubsequence(ec *EvalContext, args []Value) (Value, error) {
 // removes one element.
 func builtinSequenceExcludingAt(ec *EvalContext, args []Value) (Value, error) {
 	const op = "SequenceFunctions::excludingAt"
-	if len(args) != 2 && len(args) != 3 {
-		return Value{}, fmt.Errorf("%w: %s takes 2 or 3 arguments, got %d", ErrCalcArity, op, len(args))
+	if err := checkArity(op, args, 3); err != nil {
+		return Value{}, err
 	}
 	elements := elementsOf(args[0])
 	start, err := indexOf(op, args[1])
@@ -514,7 +513,7 @@ func builtinSequenceExcludingAt(ec *EvalContext, args []Value) (Value, error) {
 		return Value{}, err
 	}
 	end := start
-	if len(args) == 3 {
+	if args[2].Kind != ValNull {
 		if end, err = indexOf(op, args[2]); err != nil {
 			return Value{}, err
 		}
@@ -950,15 +949,6 @@ func containsValue(elements []Value, val Value) bool {
 func checkArity(op string, args []Value, want int) error {
 	if len(args) != want {
 		return fmt.Errorf("%w: %s takes %d argument(s), got %d", ErrCalcArity, op, want, len(args))
-	}
-	return nil
-}
-
-// checkArityRange reports an argument count outside min..max, for a built-in
-// whose trailing parameters are `[0..1]`.
-func checkArityRange(op string, args []Value, min, max int) error {
-	if len(args) < min || len(args) > max {
-		return fmt.Errorf("%w: %s takes %d..%d argument(s), got %d", ErrCalcArity, op, min, max, len(args))
 	}
 	return nil
 }

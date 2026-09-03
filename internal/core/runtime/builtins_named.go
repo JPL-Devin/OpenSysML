@@ -58,10 +58,10 @@ func (ec *EvalContext) evalDeferred(op string, val Value) (Value, error) {
 }
 
 // builtinControlIf is ControlFunctions::'if'(test, thenValue, elseValue): the
-// selected branch alone is evaluated, and an omitted else branch is null.
+// selected branch alone is evaluated, and an omitted branch is null.
 func builtinControlIf(ec *EvalContext, args []Value) (Value, error) {
 	const op = "ControlFunctions::'if'"
-	if err := checkArityRange(op, args, 2, 3); err != nil {
+	if err := checkArity(op, args, 3); err != nil {
 		return Value{}, err
 	}
 	held, err := boolOperand("test of "+op, args[0])
@@ -71,9 +71,6 @@ func builtinControlIf(ec *EvalContext, args []Value) (Value, error) {
 	if held {
 		return ec.evalDeferred(op, args[1])
 	}
-	if len(args) == 2 {
-		return nullValue(), nil
-	}
 	return ec.evalDeferred(op, args[2])
 }
 
@@ -82,11 +79,8 @@ func builtinControlIf(ec *EvalContext, args []Value) (Value, error) {
 // `[0..1]`: omitted, it has no value, so a null firstValue stays null.
 func builtinControlNullCoalesce(ec *EvalContext, args []Value) (Value, error) {
 	const op = "ControlFunctions::'??'"
-	if err := checkArityRange(op, args, 1, 2); err != nil {
+	if err := checkArity(op, args, 2); err != nil {
 		return Value{}, err
-	}
-	if len(args) == 1 {
-		return args[0], nil
 	}
 	return coalesceNull(args[0], func() (Value, error) { return ec.evalDeferred(op, args[1]) })
 }
@@ -98,7 +92,7 @@ func builtinControlNullCoalesce(ec *EvalContext, args []Value) (Value, error) {
 func builtinControlLogical(op ast.OperatorKind) builtinFunc {
 	name := fmt.Sprintf("ControlFunctions::'%s'", op)
 	return func(ec *EvalContext, args []Value) (Value, error) {
-		if err := checkArityRange(name, args, 1, 2); err != nil {
+		if err := checkArity(name, args, 2); err != nil {
 			return Value{}, err
 		}
 		l, err := boolOperand("firstValue of "+name, args[0])
@@ -108,7 +102,7 @@ func builtinControlLogical(op ast.OperatorKind) builtinFunc {
 		if decided, result := shortCircuit(op, l); decided {
 			return boolValue(result), nil
 		}
-		if len(args) == 1 {
+		if args[1].Kind == ValNull {
 			return Value{}, fmt.Errorf("%w: %s(%t) is decided by secondValue, which was not given; the result is Boolean[1]",
 				ErrMultiplicityViolation, name, l)
 		}

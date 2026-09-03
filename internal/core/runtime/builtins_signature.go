@@ -106,29 +106,35 @@ func (ec *EvalContext) invokeBuiltin(name string, fn builtinFunc, exprs []ast.No
 	return fn(ec, args)
 }
 
-// bindBuiltinArgs evaluates a call's arguments into parameter order. Positional
-// arguments bind in sequence; named ones bind the parameter of their name, an
-// unbound optional parameter ahead of them binding null. An `expr` parameter's
+// bindBuiltinArgs evaluates a call's arguments into one value per declared
+// parameter. Positional arguments bind in sequence; named ones bind the
+// parameter of their name. A parameter left unbound is null when its
+// multiplicity admits no value and reported otherwise. An `expr` parameter's
 // argument is bound unevaluated either way.
 func (ec *EvalContext) bindBuiltinArgs(name string, exprs []ast.Node, named []ast.NamedArg) ([]Value, error) {
 	params := builtinSignatures[name]
+	written := writtenName(name)
+	args := make([]Value, len(params))
+	bound := make([]bool, len(params))
 	if len(named) == 0 {
-		args := make([]Value, len(exprs))
 		for i, arg := range exprs {
 			val, err := ec.evalArgument(params, i, arg)
 			if err != nil {
 				return nil, err
 			}
-			args[i] = val
+			if i < len(params) {
+				args[i], bound[i] = val, true
+			}
 		}
-		return args, nil
+		if len(exprs) > len(params) {
+			return nil, fmt.Errorf("%w: function %s takes %d argument(s), got %d",
+				ErrCalcArity, written, len(params), len(exprs))
+		}
+		return fillUnbound(written, params, args, bound)
 	}
-	written := writtenName(name)
 	if len(exprs) > 0 {
 		return nil, fmt.Errorf("%w: function %s takes either positional or named arguments", ErrCalcArity, written)
 	}
-	args := make([]Value, len(params))
-	bound := make([]bool, len(params))
 	for _, arg := range named {
 		if arg.Name == nil || len(arg.Name.Parts) == 0 {
 			return nil, fmt.Errorf("unnamed argument in invocation of %s", written)
@@ -148,21 +154,23 @@ func (ec *EvalContext) bindBuiltinArgs(name string, exprs []ast.Node, named []as
 		}
 		args[i], bound[i] = val, true
 	}
-	last := len(params)
-	for last > 0 && !bound[last-1] {
-		last--
-	}
-	for i := 0; i < last; i++ {
+	return fillUnbound(written, params, args, bound)
+}
+
+// fillUnbound binds null to every optional parameter no argument was written
+// for and reports the first required one.
+func fillUnbound(written string, params []builtinParam, args []Value, bound []bool) ([]Value, error) {
+	for i, p := range params {
 		if bound[i] {
 			continue
 		}
-		if !params[i].optional {
+		if !p.optional {
 			return nil, fmt.Errorf("%w: function %s is called without an argument for parameter %q",
-				ErrCalcArity, written, params[i].name)
+				ErrCalcArity, written, p.name)
 		}
 		args[i] = nullValue()
 	}
-	return args[:last], nil
+	return args, nil
 }
 
 // evalArgument evaluates the argument bound to parameter i, or keeps it as
