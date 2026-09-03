@@ -22,9 +22,15 @@ const overloadImports = `
 	private import ScalarValues::*;
 `
 
-// compileOverloaded plans Fixture::<query> from content, selecting calls as the
-// checker does: by argument type, not by the first declaration a name finds.
-func compileOverloaded(t *testing.T, content, query string) (*queryplan.Program, error) {
+// overloadModel is a parsed fixture with its resolver and semantic model, its
+// calls selected as the checker selects them once typed is called.
+type overloadModel struct {
+	index    *symbols.Index
+	resolver *resolve.Resolver
+	model    *semantics.Model
+}
+
+func parseOverloaded(t *testing.T, content string) overloadModel {
 	t.Helper()
 	index := libs.NewModelIndex()
 	p := parser.New(source.New("queries.sysml", []byte(content)))
@@ -37,12 +43,28 @@ func compileOverloaded(t *testing.T, content, query string) (*queryplan.Program,
 	resolver := resolve.New(index)
 	model := semantics.NewModel(resolver)
 	resolver.SetModel(model)
-	model.SetArgumentTyper(passes.NewArgumentTyper(resolver, model))
-	matches := symbols.PreferDeclared(index.LookupQualified("Fixture::" + query))
+	return overloadModel{index: index, resolver: resolver, model: model}
+}
+
+func (m overloadModel) typed() overloadModel {
+	m.model.SetArgumentTyper(passes.NewArgumentTyper(m.resolver, m.model))
+	return m
+}
+
+func (m overloadModel) compile(t *testing.T, query string) (*queryplan.Program, error) {
+	t.Helper()
+	matches := symbols.PreferDeclared(m.index.LookupQualified("Fixture::" + query))
 	if len(matches) != 1 {
 		t.Fatalf("lookup %s: got %d symbols", query, len(matches))
 	}
-	return queryplan.Compile(index, model, resolver, matches[0])
+	return queryplan.Compile(m.index, m.model, m.resolver, matches[0])
+}
+
+// compileOverloaded plans Fixture::<query> from content, selecting calls as the
+// checker does: by argument type, not by the first declaration a name finds.
+func compileOverloaded(t *testing.T, content, query string) (*queryplan.Program, error) {
+	t.Helper()
+	return parseOverloaded(t, content).typed().compile(t, query)
 }
 
 func dependencyOf(t *testing.T, program *queryplan.Program, query string) string {
@@ -91,6 +113,30 @@ func TestCompileSelectsQueryOverloadByArgumentType(t *testing.T) {
 		if got := dependencyOf(t, program, "Fixture::ByType"); got != "B::Pick" {
 			t.Fatalf("%s: ByType calls %s, want B::Pick", imports, got)
 		}
+	}
+}
+
+// Selections memoized before the checker's typing was installed do not outlive it.
+func TestCompileFollowsTheArgumentTypingInstalledLast(t *testing.T) {
+	const src = `
+		package A { %[1]s calc def Pick :> Query { in source : Element; in depth : Integer; Descendants(source = source, maxDepth = depth) } }
+		package B { %[1]s calc def Pick :> Query { in source : Element; in depth : String; WhereType(source = source, type = depth) } }
+		package Fixture {
+			%[1]s private import A::*; private import B::*;
+			calc def ByType :> Query { in s : Element; Pick(source = s, depth = "PartUsage") }
+		}
+	`
+	m := parseOverloaded(t, fmt.Sprintf(src, overloadImports))
+	var planning *queryplan.Error
+	if _, err := m.compile(t, "ByType"); !errors.As(err, &planning) || planning.Kind != queryplan.ErrorArgumentType {
+		t.Fatalf("untyped: error = %v, want %s against A::Pick", err, queryplan.ErrorArgumentType)
+	}
+	program, err := m.typed().compile(t, "ByType")
+	if err != nil {
+		t.Fatalf("typed: %v", err)
+	}
+	if got := dependencyOf(t, program, "Fixture::ByType"); got != "B::Pick" {
+		t.Fatalf("typed: ByType calls %s, want B::Pick", got)
 	}
 }
 

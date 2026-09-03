@@ -25,9 +25,11 @@ type ArgumentTyper interface {
 	InvocationArguments(scope *symbols.Scope, e *ast.InvocationExpr) []Argument
 }
 
-// SetArgumentTyper installs the checker's argument typing on the model.
+// SetArgumentTyper installs the checker's argument typing on the model. Selections
+// memoized under the previous typing are dropped, so none outlives the typing it read.
 func (m *Model) SetArgumentTyper(t ArgumentTyper) {
 	m.arguments = t
+	clear(m.invocations)
 }
 
 // SelectCall selects what e calls, its arguments typed as the checker types them; with no
