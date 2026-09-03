@@ -201,7 +201,7 @@ func (e *ActionExecutor) nodePins(graph *lower.ActionGraph, node ast.Node) (map[
 		}
 	}
 	if inv, performs := nestedInvocation(usage); performs {
-		sym, err := resolveActionSymbol(e.ctx, graph.Scope, inv)
+		sym, err := resolveActionSymbol(e.ctx, nodeScope(graph, node), inv)
 		if err != nil {
 			return nil, "", err
 		}
@@ -218,6 +218,15 @@ func (e *ActionExecutor) nodePins(graph *lower.ActionGraph, node ast.Node) (map[
 		}
 	}
 	return pins, result, nil
+}
+
+// nodeScope is the namespace a node's declaration resolves in: its own where the
+// flow retains it (an inherited node keeps its declaring action's), else the flow's.
+func nodeScope(graph *lower.ActionGraph, node ast.Node) *symbols.Scope {
+	if scope := graph.Scopes[node]; scope != nil {
+		return scope
+	}
+	return graph.Scope
 }
 
 // describe names the performance for a diagnostic.
@@ -661,7 +670,7 @@ func bindingEndText(end ast.Node) string {
 // arguments bind the callee's inputs by its order/names, its final values become the node's,
 // and its outputs return to enclosing features when the node's own performance ends.
 func (e *ActionExecutor) performInvocation(perf *actionFrame, inv actionInvocation) error {
-	scope := perf.flow.Scope
+	scope := nodeScope(perf.flow, perf.node)
 	sym, err := resolveActionSymbol(e.ctx, scope, inv)
 	if err != nil {
 		return err
