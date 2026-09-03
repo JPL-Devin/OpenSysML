@@ -11,6 +11,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/model"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
@@ -179,9 +180,11 @@ type stateSession struct {
 	selfFQN  string
 	symbol   *symbols.Symbol
 	executor *runtime.StateExecutor
-	// exhibited is the object's own machine the session drives, nil when it
-	// drives an execution of its own.
-	exhibited *runtime.ObjectBehavior
+	// machine names the exhibited machine the session is attached to, and
+	// machineAt is its position among the object's exhibited machines, so a
+	// restart rebinds to the same one when the object exhibits several.
+	machine   string
+	machineAt int
 	// rtCtx is the context the executor runs in; see actionSession.rtCtx.
 	rtCtx *runtime.Context
 	// now is the debugger's clock. The executor's own clock only moves when an
@@ -827,25 +830,61 @@ func (s *Session) rebindRestartedMachine() {
 	// Only a session over an object's own exhibited machine follows the restart:
 	// a machine the object merely performs is the debugger's own execution, which
 	// no restart replaced.
-	if s.stateExec == nil || s.stateExec.exhibited == nil {
+	if s.stateExec == nil || s.stateExec.selfFQN == "" || s.stateExec.fqn != s.stateExec.selfFQN {
 		return
 	}
-	inst, ok := s.instances[s.stateExec.selfFQN]
+	inst, ok := s.heldObject(s.stateExec.selfFQN)
 	if !ok {
 		return
 	}
-	// The restart put a machine under the same binding, so a session over the
-	// second of an object's machines stays on the second.
-	behavior, ok := inst.ExhibitedMachineLike(s.stateExec.exhibited)
+	behavior, ok := s.stateExec.restartedMachine(inst)
 	if !ok || behavior.State == s.stateExec.executor {
 		return
 	}
 	behavior.State.SetTrace(s.trace)
 	s.stateExec.symbol = behavior.Symbol
 	s.stateExec.executor = behavior.State
-	s.stateExec.exhibited = behavior
 	s.stateExec.rtCtx = s.rtCtx
 	s.stateExec.now = behavior.State.CurrentTime()
+}
+
+// restartedMachine finds, among the machines the rebuilt object exhibits, the
+// one this session was attached to: the machine of the same name, or for an
+// unnamed one, the machine declared in the same position.
+func (st *stateSession) restartedMachine(inst *runtime.Instance) (*runtime.ObjectBehavior, bool) {
+	var atPosition *runtime.ObjectBehavior
+	position := 0
+	for _, b := range inst.Behaviors() {
+		if b.Kind != lower.ExhibitedState {
+			continue
+		}
+		if st.machine != "" && b.Name == st.machine {
+			return b, true
+		}
+		if position == st.machineAt {
+			atPosition = b
+		}
+		position++
+	}
+	if st.machine == "" && atPosition != nil {
+		return atPosition, true
+	}
+	return nil, false
+}
+
+// exhibitedPosition is behavior's position among the machines its object
+// exhibits, which identifies it when it has no name.
+func exhibitedPosition(behavior *runtime.ObjectBehavior) int {
+	position := 0
+	for _, b := range behavior.Object.Behaviors() {
+		if b == behavior {
+			return position
+		}
+		if b.Kind == lower.ExhibitedState {
+			position++
+		}
+	}
+	return position
 }
 
 // dropStaleDebugSessions ends the debugging sessions this submission
@@ -900,7 +939,7 @@ func (s *Session) staleDebugState(gone []string, fqn, selfFQN string, shapes *ru
 	// The behavior is performed by an object this submission dropped, so what it
 	// runs against is no longer part of the session.
 	if selfFQN != "" {
-		if _, kept := s.instances[selfFQN]; !kept {
+		if _, kept := s.heldObject(selfFQN); !kept {
 			return selfFQN, true, true
 		}
 	}

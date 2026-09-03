@@ -333,11 +333,11 @@ func TestSignalIdentityCrossesScopeTrees(t *testing.T) {
 	if exec.AcceptsMessage(batch) {
 		t.Error("Batch is accepted in off, though no transition there takes it")
 	}
-	if m, ok := ctx.ExhibitedMachineOf(bulb, resolveSymbol(t, other, "Lamp")); !ok || m.State != exec {
-		t.Errorf("ExhibitedMachineOf(bulb, Lamp from another tree) = %v, %v; want the lamp", m, ok)
+	if ms := bulb.ExhibitedStatesOf(resolveSymbol(t, other, "Lamp")); len(ms) != 1 || ms[0].State != exec {
+		t.Errorf("ExhibitedStatesOf(Lamp from another tree) = %v; want the lamp", ms)
 	}
-	if _, ok := ctx.ExhibitedMachineOf(bulb, resolveSymbol(t, other, "Plain")); ok {
-		t.Error("ExhibitedMachineOf(bulb, Plain) found a machine")
+	if ms := bulb.ExhibitedStatesOf(resolveSymbol(t, other, "Plain")); len(ms) != 0 {
+		t.Errorf("ExhibitedStatesOf(Plain) = %v; want none", ms)
 	}
 }
 
@@ -1077,9 +1077,9 @@ func TestDecideStartsTheBehaviorsOfAnObjectAGuardMaterializes(t *testing.T) {
 	}
 }
 
-// ExhibitedMachineOf finds the machine an object runs by its definition or its
+// ExhibitedStatesOf finds the machine an object runs by its definition or its
 // usage, and none on an object exhibiting no such machine.
-func TestExhibitedMachineOf(t *testing.T) {
+func TestExhibitedStatesOf(t *testing.T) {
 	idx, _, ctx := buildRuntimeWithLibraries(t, "lamp.sysml", parseAndBuild(t, lampSource))
 	root := idx.DocumentRoot("lamp.sysml")
 	bulb, err := ctx.Instantiate(resolveSymbol(t, root, "Bulb"))
@@ -1092,18 +1092,18 @@ func TestExhibitedMachineOf(t *testing.T) {
 	}
 	lampDef := resolveSymbol(t, root, "Lamp")
 
-	byDef, ok := ctx.ExhibitedMachineOf(bulb, lampDef)
-	if !ok || byDef.Name != "lamp" {
-		t.Fatalf("ExhibitedMachineOf(bulb, Lamp) = %v, %v; want the lamp usage", byDef, ok)
+	byDef := bulb.ExhibitedStatesOf(lampDef)
+	if len(byDef) != 1 || byDef[0].Name != "lamp" {
+		t.Fatalf("ExhibitedStatesOf(Lamp) = %v; want the lamp usage", byDef)
 	}
-	if byUsage, ok := ctx.ExhibitedMachineOf(bulb, byDef.Symbol); !ok || byUsage != byDef {
-		t.Errorf("ExhibitedMachineOf(bulb, Bulb::lamp) = %v, %v; want the same machine", byUsage, ok)
+	if byUsage := bulb.ExhibitedStatesOf(byDef[0].Member()); len(byUsage) != 1 || byUsage[0] != byDef[0] {
+		t.Errorf("ExhibitedStatesOf(Bulb::lamp) = %v; want the same machine", byUsage)
 	}
-	if _, ok := ctx.ExhibitedMachineOf(plain, lampDef); ok {
-		t.Error("ExhibitedMachineOf(plain, Lamp) found a machine on an object exhibiting none")
+	if ms := plain.ExhibitedStatesOf(lampDef); len(ms) != 0 {
+		t.Errorf("ExhibitedStatesOf(Lamp) on an object exhibiting none = %v", ms)
 	}
-	if _, ok := ctx.ExhibitedMachineOf(nil, lampDef); ok {
-		t.Error("ExhibitedMachineOf(nil, Lamp) found a machine")
+	if ms := bulb.ExhibitedStatesOf(nil); len(ms) != 0 {
+		t.Errorf("ExhibitedStatesOf(nil) = %v; want none", ms)
 	}
 }
 

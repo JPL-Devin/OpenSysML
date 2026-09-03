@@ -99,36 +99,33 @@ func (inst *Instance) ExhibitedState() (*ObjectBehavior, bool) {
 	return nil, false
 }
 
-// ExhibitedMachineLike returns the machine the object exhibits under the same
-// binding as the given one: the machine a restart put in its place. False when
-// the object exhibits none such.
-func (inst *Instance) ExhibitedMachineLike(prev *ObjectBehavior) (*ObjectBehavior, bool) {
-	if prev == nil {
-		return nil, false
+// ExhibitedStatesOf returns the machines the object exhibits under sym's declaration:
+// the one sym itself binds, or else every one running sym's body, since one
+// definition can be the body of several exhibited usages. Declarations are compared.
+func (inst *Instance) ExhibitedStatesOf(sym *symbols.Symbol) []*ObjectBehavior {
+	if sym == nil || sym.Decl == nil {
+		return nil
 	}
-	for _, b := range inst.behaviors {
-		if b.Kind == lower.ExhibitedState && b.binding == prev.binding && b.Name == prev.Name {
-			return b, true
-		}
-	}
-	return nil, false
-}
-
-// ExhibitedMachineOf returns the machine the object exhibits that is, or is
-// typed by, the given state definition or usage; false when it runs none.
-func (ctx *Context) ExhibitedMachineOf(inst *Instance, machine *symbols.Symbol) (*ObjectBehavior, bool) {
-	if inst == nil || machine == nil {
-		return nil, false
-	}
+	var bodies []*ObjectBehavior
 	for _, b := range inst.behaviors {
 		if b.Kind != lower.ExhibitedState {
 			continue
 		}
-		if ctx.conforms(b.member, machine) || ctx.conforms(b.Symbol, machine) {
-			return b, true
+		if b.member != nil && b.member.Decl == sym.Decl {
+			return []*ObjectBehavior{b}
+		}
+		if b.Symbol != nil && b.Symbol.Decl == sym.Decl {
+			bodies = append(bodies, b)
 		}
 	}
-	return nil, false
+	return bodies
+}
+
+// Member is the declaration binding the behavior to the object's type: the
+// exhibiting or performing usage, which is what addresses this behavior
+// when several run the same body.
+func (b *ObjectBehavior) Member() *symbols.Symbol {
+	return b.member
 }
 
 // classifierBehaviorsOf reports the behaviors every object of a type runs:

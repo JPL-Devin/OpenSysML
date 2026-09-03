@@ -179,7 +179,7 @@ the state or the data a guard reads changes between the send and the dispatch, t
 - `%stop` — Stop debugging
 
 **State machine debugging commands:**
-- `%state <name> [<object>]` — Start a state machine debugging session; naming an instantiated object runs the machine on behalf of that object, so what it sends routes over that object's connections. An object already exhibiting a running machine of that kind is debugged on that machine rather than given a second one
+- `%state <name> [<object>]` — Start a state machine debugging session; naming an instantiated object runs the machine on behalf of that object, so what it sends routes over that object's connections. Naming the machine the object exhibits attaches to its running machine instead (see [below](#an-object-runs-the-behaviors-its-type-exhibits))
 - `%send <signal>[(<p>=<expr>, ...)] [to <object>]` — Send a signal to an object's machine over the runtime's message bus; by default to the object being debugged
 - `%events` — Show event queue and signals in flight
 - `%current` — Show current state, stack, data
@@ -248,6 +248,34 @@ machine rather than to a detached run of the usage. `%step`, `%advance`, `%curre
 therefore drive that machine, and `%features` shows the values its entry actions wrote: `1` from
 `idle`, then `10` more from `awake` once the timer fired.
 
+The two-argument form does the same when the machine it names is the one the object exhibits:
+`%state Monitor::modes Monitor` attaches to the running machine and says so in a `note:` line,
+rather than performing `modes` a second time against the same feature values (which would run
+its entry actions again, leaving `count` at `2` instead of `1`). Only a machine the object does
+not exhibit — one it merely performs — is started as a detached performance by that form. When
+the object exhibits one definition as several usages (`exhibit state front : Blink; exhibit
+state rear : Blink;`), naming the definition names no one machine, so `%state Blink lamp` refuses
+and names `Lamp::front` and `Lamp::rear` to name instead.
+
+The object can also be a part reached through composition, or an id. With `part def Driver {
+part r : Monitor; }`, `part driver : Driver;` and `%instantiate driver`, `%state driver.r` debugs the nested part's own
+machine, and `%state #2` the same by the identity `%features driver` prints for it (`r =
+Instance(ID: 2)`). A path that stops short of an object says which segment failed:
+
+```sysml
+sysml> %state driver.x
+error: driver.x reaches no object at "x": object #1 of "driver" has no feature "x"
+```
+
+Naming a usage whose *definition* alone was instantiated is reported as such, with what to
+instantiate instead. With `part monitor : Monitor;` declared:
+
+```sysml
+sysml> %instantiate Monitor
+sysml> %state Monitor::modes monitor
+error: no instance of the usage "monitor": object #1 of "Monitor" is of its definition "Monitor", not of the usage — use %instantiate monitor to create the usage's object, or name Monitor to address it
+```
+
 **When a machine starts, and how far it runs.** The object's feature values are built and its
 constant defaults evaluated first, so an entry action sees the declared initial values. The
 machine is then initialized and run until it is *quiescent*: no event is due at the current
@@ -274,7 +302,8 @@ runs (its type's features, or the body of a machine or action it runs) produces 
 object, so the original is dropped with a stated reason and `%instantiate` creates a new one.
 
 **Invoking an operation.** `%invoke <object> <op> [<p>=<expr>]` runs an action owned by the
-object's type, performed by that object:
+object's type, performed by that object — named as `%state` names one, so `%invoke driver.r bumpBy
+n=4` and `%invoke #2 bumpBy n=4` reach a nested part:
 
 ```sysml
 sysml> %invoke Monitor bumpBy n=4

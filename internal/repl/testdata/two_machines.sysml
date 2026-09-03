@@ -1,27 +1,23 @@
-// A part exhibiting two machines, so a session over the second has a first it
-// could be confused with when the object's machines are restarted.
-package Twins {
-	attribute def heat;
-	attribute def spin;
+// A part exhibiting two machines, so a debugger attached to the second has a
+// first to be confused with.
+package Pair {
+	part def Gauge {
+		exhibit state power {
+			entry; then off;
+			state off {
+				accept after 5 then on;
+			}
+			state on;
+		}
 
-	state def Heater {
-		entry; then cold;
-		state cold;
-		transition first cold accept heat then warm;
-		state warm;
+		exhibit state link {
+			entry; then idle;
+			state idle {
+				accept after 3 then busy;
+			}
+			state busy;
+		}
 	}
 
-	state def Fan {
-		entry; then still;
-		state still;
-		transition first still accept spin then spinning;
-		state spinning;
-	}
-
-	part def Unit {
-		exhibit state heater : Heater;
-		exhibit state fan : Fan;
-	}
-
-	part unit : Unit;
+	part gauge : Gauge;
 }

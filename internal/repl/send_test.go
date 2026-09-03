@@ -327,7 +327,7 @@ func TestStateOnAnObjectAttachesToItsRunningMachine(t *testing.T) {
 	s := lampSession(t)
 	wants(t, run(t, s, "%state Lamp bulb"),
 		`✓ Debugging state machine "lamp" exhibited by object #1 of "Lamps::bulb"`,
-		"Attached to the machine already running rather than starting a second one",
+		"attaches to that running machine rather than starting a second performance of it",
 		"Current state: off")
 	rejects(t, run(t, s, "%state Lamp bulb"), "Started state machine executor")
 
@@ -339,7 +339,7 @@ func TestStateOnAnObjectAttachesToItsRunningMachine(t *testing.T) {
 
 	// The usage form keeps attaching too.
 	run(t, s, "%stop")
-	wants(t, run(t, s, "%state Lamps::Bulb::lamp bulb"), `✓ Debugging state machine "lamp" exhibited by object #1`, "Attached to the machine already running")
+	wants(t, run(t, s, "%state Lamps::Bulb::lamp bulb"), `✓ Debugging state machine "lamp" exhibited by object #1`, "attaches to that running machine")
 }
 
 // TestSendDefersWhatTheActiveStateDefers: a signal the active state defers
@@ -370,11 +370,11 @@ func TestSendDefersWhatTheActiveStateDefers(t *testing.T) {
 // declaration restarts the object's machines, rather than falling back to the
 // first.
 func TestStateOnASecondMachineFollowsItOverARestart(t *testing.T) {
-	s := loadFixture(t, "testdata/two_machines.sysml")
+	s := loadFixture(t, "testdata/twin_machines.sysml")
 	run(t, s, "%instantiate Twins::unit")
 	wants(t, run(t, s, "%state Twins::Fan Twins::unit"),
 		`✓ Debugging state machine "fan" exhibited by object #1 of "Twins::unit"`,
-		"Attached to the machine already running", "Current state: still")
+		"attaches to that running machine", "Current state: still")
 	run(t, s, "%send spin")
 	wants(t, run(t, s, "%advance 1"), "Current state: spinning")
 
@@ -396,7 +396,7 @@ func TestStateOnASecondMachineFollowsItOverARestart(t *testing.T) {
 
 	// The heater was restarted beside it, and is found by its definition.
 	run(t, s, "%stop")
-	wants(t, run(t, s, "%state Twins::Heater Twins::unit"), `Debugging state machine "heater"`, "Attached to the machine already running", "Current state: cold")
+	wants(t, run(t, s, "%state Twins::Heater Twins::unit"), `Debugging state machine "heater"`, "attaches to that running machine", "Current state: cold")
 }
 
 // TestSendReachesTheMachineWhoseGuardLetsItThrough: of two machines on one
@@ -422,7 +422,7 @@ func TestSendReachesTheMachineWhoseGuardLetsItThrough(t *testing.T) {
 	wants(t, run(t, s, "%events"), "Signals in flight: 1", "  tap")
 
 	run(t, s, "%stop")
-	wants(t, run(t, s, "%state Shared::Unit::fan Shared::unit"), "Attached to the machine already running", "Current state: still")
+	wants(t, run(t, s, "%state Shared::Unit::fan Shared::unit"), "attaches to that running machine", "Current state: still")
 	wants(t, run(t, s, "%step"), "Event dispatched")
 	wants(t, run(t, s, "%current"), "Current state: spinning")
 	wants(t, run(t, s, "%events"), "Event queue empty")
