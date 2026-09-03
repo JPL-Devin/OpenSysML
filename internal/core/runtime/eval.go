@@ -1714,7 +1714,7 @@ func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget
 	target := &invocationTarget{qualName: qualifiedNameToString(n.Type)}
 	if sel := passes.SelectInvocation(ec.ctx.resolver, ec.ctx.model, ec.scope, n); sel.Ambiguous {
 		target.ambiguous = sel.Tied
-	} else if sym := selectedDeclaration(sel); sym != nil {
+	} else if sym := sel.Called(); sym != nil {
 		target.calc = sym
 		if fn, ok := ec.ctx.builtinFor(sym); ok {
 			target.calcBuiltin = fn
@@ -1726,18 +1726,6 @@ func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget
 	}
 	ec.ctx.invocationTargets[key] = target
 	return target
-}
-
-// selectedDeclaration is the declaration a call runs: the one selected for it, or the
-// first its name denotes when no candidate fits, which then reports the mismatch.
-func selectedDeclaration(sel *semantics.InvocationSelection) *symbols.Symbol {
-	if sel.Selected != nil {
-		return sel.Selected
-	}
-	if len(sel.Candidates) > 0 {
-		return sel.Candidates[0]
-	}
-	return nil
 }
 
 // ambiguousInvocationError names the equally specific declarations a call of

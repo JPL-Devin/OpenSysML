@@ -466,6 +466,42 @@ func TestInvocationOverloadReexportedAndInheritedCandidates(t *testing.T) {
 		"type.expr", "argument 1 of pick expects Integer, found String")
 }
 
+// A qualified call reaches every overload its qualifier surfaces through public
+// imports or generals, not only the first; an owned overload hides them.
+func TestInvocationOverloadQualifiedReexportedAndInheritedCandidates(t *testing.T) {
+	wantLibraryClean(t, `package P {
+		private import ScalarValues::*;
+		package A { calc def pick { in x : Integer; return : Integer = 1; } }
+		package B { calc def pick { in x : String; return : String = x; } }
+		package Both {
+			public import A::*;
+			public import B::*;
+		}
+		attribute i : Integer = Both::pick(2);
+		attribute s : String = Both::pick("s");
+	}`)
+	diags := libraryDiags(t, `package P {
+		private import ScalarValues::*;
+		part def ByNumber { calc def pick { in x : Integer; return : Integer = x; } }
+		part def ByText { calc def pick { in x : String; return : String = x; } }
+		part def Derived :> ByNumber, ByText;
+		attribute i : Integer = Derived::pick(2);
+		attribute s : String = Derived::pick("s");
+	}`)
+	if len(diags) != 1 || diags[0].Code != "name-conflict" || diags[0].Severity != SeverityWarning {
+		t.Fatalf("expected only the inherited name-conflict warning, got %v", diags)
+	}
+	wantLibraryDiag(t, `package P {
+		private import ScalarValues::*;
+		package A { calc def pick { in x : Integer; return : Integer = 1; } }
+		package Both {
+			public import A::*;
+			calc def pick { in x : String; return : String = x; }
+		}
+		attribute i : String = Both::pick(2);
+	}`, "type.expr", "argument 1 of pick expects String, found Natural")
+}
+
 // A general type's protected and public imports each contribute their overloads to
 // the bodies specializing it, not only the first import's.
 func TestInvocationOverloadCandidatesThroughInheritedImports(t *testing.T) {

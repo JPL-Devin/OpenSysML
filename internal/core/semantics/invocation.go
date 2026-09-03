@@ -34,6 +34,20 @@ func (s *InvocationSelection) Resolved() bool {
 	return s != nil && len(s.Candidates) > 0
 }
 
+// Called is the declaration a call runs: the one selected, or the first its name
+// denotes when no candidate fits, which then reports the mismatch; nil when none.
+func (s *InvocationSelection) Called() *symbols.Symbol {
+	switch {
+	case s == nil:
+		return nil
+	case s.Selected != nil:
+		return s.Selected
+	case len(s.Candidates) > 0:
+		return s.Candidates[0]
+	}
+	return nil
+}
+
 // invocationKey identifies an invocation expression in the scope it is read in.
 type invocationKey struct {
 	node  *ast.InvocationExpr

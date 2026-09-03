@@ -140,7 +140,7 @@ func resolveActionSymbol(
 		if sel.Ambiguous {
 			return nil, ambiguousInvocationError(name, sel.Tied)
 		}
-		sym = selectedDeclaration(sel)
+		sym = sel.Called()
 		ok = sym != nil
 	default:
 		sym, ok = ctx.resolver.ResolveQualified(scope, target)

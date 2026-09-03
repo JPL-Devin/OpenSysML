@@ -8,6 +8,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -859,8 +860,18 @@ func (fc *funcCompiler) compileCall(n *ast.InvocationExpr) (Expr, error) {
 	if n.Type == nil {
 		return nil, fc.unsupported("an invocation naming no calc")
 	}
-	sym, ok := fc.c.resolver.ResolveQualified(fc.scope, n.Type)
-	if !ok {
+	// The declaration the checker and interpreter select by the arguments' types.
+	sel := passes.SelectInvocation(fc.c.resolver, fc.c.model, fc.scope, n)
+	if sel.Ambiguous {
+		names := make([]string, len(sel.Tied))
+		for i, tied := range sel.Tied {
+			names[i] = fc.c.name(tied)
+		}
+		return nil, fc.unsupported(fmt.Sprintf("invocation of %s, which is ambiguous between %s",
+			qnText(n.Type), strings.Join(names, ", ")))
+	}
+	sym := sel.Called()
+	if sym == nil {
 		// As the interpreter: a name that denotes nothing is not the library
 		// function of that name.
 		written := qnText(n.Type)

@@ -675,6 +675,20 @@ func testCalcCallSelectsAmongOwnedInheritedAndRecursiveImport(t *testing.T) {
 				calc byStr { in v : String; pick(v) }
 			}
 		}
+		package Qualified {
+			private import ScalarValues::*;
+			package A { calc def pick { in x : Integer; return : Integer = 1; } }
+			package B { calc def pick { in x : String; return : Integer = 2; } }
+			package Both {
+				public import A::*;
+				public import B::*;
+			}
+			calc def Derived :> Inherited::ByNumber, Inherited::ByText;
+			calc reexportedInt { in v : Integer; Both::pick(v) }
+			calc reexportedStr { in v : String; Both::pick(v) }
+			calc inheritedInt { in v : Integer; Derived::pick(v) }
+			calc inheritedStr { in v : String; Derived::pick(v) }
+		}
 	`
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
 	rootScope := idx.DocumentRoot("<test>")
@@ -694,6 +708,10 @@ func testCalcCallSelectsAmongOwnedInheritedAndRecursiveImport(t *testing.T) {
 		{"Inherited::oneBaseStr", NewStringValue("s"), 2},
 		{"Recursive::C::byInt", intArg, 1},
 		{"Recursive::C::byStr", NewStringValue("s"), 2},
+		{"Qualified::reexportedInt", intArg, 1},
+		{"Qualified::reexportedStr", NewStringValue("s"), 2},
+		{"Qualified::inheritedInt", intArg, 1},
+		{"Qualified::inheritedStr", NewStringValue("s"), 2},
 	}
 	for _, tc := range cases {
 		matches := idx.LookupQualified(tc.qual)
