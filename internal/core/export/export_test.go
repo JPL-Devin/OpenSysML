@@ -680,6 +680,41 @@ func TestPrefixAnnotationWithABodyIsReported(t *testing.T) {
 	}
 }
 
+// A `metadata` usage typed by no definition, or by several, is refused in every
+// written form rather than written as a declaration that does not parse.
+func TestMetadataUsageWithoutOneDefinitionIsReported(t *testing.T) {
+	src := "package P {\n\tmetadata def M;\n\tpart def Car;\n\tmetadata m : M about Car;\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structural := string(withoutTriples(t, turtle, "sysx:sourceText"))
+	if !strings.Contains(structural, "    sysml:type elmt:P__M ;\n") {
+		t.Fatalf("the metadata usage's typing was not found in the graph:\n%s", structural)
+	}
+	for _, form := range []struct{ keyword, replacement string }{
+		{"metadata", ""},
+		{"metadata", "    sysml:type elmt:P__M, elmt:P__Car ;\n"},
+		{"@", ""},
+		{"@", "    sysml:type elmt:P__M, elmt:P__Car ;\n"},
+	} {
+		graph := strings.Replace(structural, "    sysml:type elmt:P__M ;\n", form.replacement, 1)
+		if form.keyword == "@" {
+			graph = strings.Replace(graph, `sysml:declaredName "m" ;`, `sysml:declaredName "m" ;`+"\n"+`    sysx:declaredKeyword "@" ;`, 1)
+		}
+		_, err := export.Convert("m.ttl", []byte(graph), export.FormatTurtle, export.FormatSysML)
+		var unsupported *export.UnsupportedError
+		if !errors.As(err, &unsupported) {
+			t.Fatalf("%s form, types %q: expected an unsupported error, got %v", form.keyword, form.replacement, err)
+		}
+		for _, want := range []string{"the element <urn:sysmlv2:element:P__m>", "sysml:type", "names the one metadata definition it applies"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("%s form, types %q: expected %q in error:\n%s", form.keyword, form.replacement, want, err.Error())
+			}
+		}
+	}
+}
+
 // A prefix annotation on an element whose notation has no place for one is
 // refused rather than dropped from the body it was read from.
 func TestPrefixOnAnUnprefixableHeadIsReported(t *testing.T) {

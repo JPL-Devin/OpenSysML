@@ -547,8 +547,15 @@ func (d *decoder) head(el *element) (string, error) {
 	case mRequire:
 		return d.conditionHead(el, "require")
 	}
-	if d.metadataSigil(el) == "@" {
-		return d.metadataHead(el)
+	// Every form of a metadata usage is typed by its one definition
+	// (SysML.xtext MetadataUsageDeclaration), whichever keyword writes it.
+	if el.metaclass == usageMetaclass[ast.UsageMetadata] {
+		if _, err := d.metadataDefinition(el); err != nil {
+			return "", err
+		}
+		if d.metadataSigil(el) == "@" {
+			return d.metadataHead(el)
+		}
 	}
 	// A succession carrying its ends as references is the one the parser builds
 	// for a succession, written back as `succession first <source> then <target>;`.
@@ -1277,11 +1284,11 @@ func (d *decoder) prefixAnnotations(el *element) ([]prefixAnnotation, error) {
 		if d.metadataSigil(child) != "#" {
 			continue
 		}
-		types := d.graph.Objects(rdf.IRI(child.iri), rdf.SysML+relationshipProperty[ast.RelTyping])
-		if len(types) != 1 {
-			return nil, d.missing(child, sysmlPrefix+relationshipProperty[ast.RelTyping], "a prefix annotation names the one metadata definition it applies")
+		definition, err := d.metadataDefinition(child)
+		if err != nil {
+			return nil, err
 		}
-		typed, err := d.referenceName(types[0], child.scope)
+		typed, err := d.referenceName(definition, child.scope)
 		if err != nil {
 			return nil, err
 		}
@@ -1297,8 +1304,8 @@ func (d *decoder) prefixAnnotations(el *element) ([]prefixAnnotation, error) {
 			}
 		}
 		annotation := prefixAnnotation{word: "#" + typed}
-		if !types[0].IsLiteral() {
-			target, err := d.referencedElement(types[0].Value)
+		if !definition.IsLiteral() {
+			target, err := d.referencedElement(definition.Value)
 			if err != nil {
 				return nil, err
 			}
@@ -1427,16 +1434,17 @@ func (d *decoder) bodyChildren(el *element) []*element {
 // metadataHead writes a metadata usage member: `@M`, `@ m : M`, with the
 // elements it is about (SysML.xtext MetadataUsage).
 func (d *decoder) metadataHead(el *element) (string, error) {
-	typed, err := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelTyping])
+	definition, err := d.metadataDefinition(el)
 	if err != nil {
 		return "", err
 	}
-	if len(typed) != 1 {
-		return "", d.missing(el, sysmlPrefix+relationshipProperty[ast.RelTyping], "a metadata usage names the one metadata definition it applies")
+	typed, err := d.referenceName(definition, el.scope)
+	if err != nil {
+		return "", err
 	}
-	head := "@" + typed[0]
+	head := "@" + typed
 	if ident := d.identWords(el); len(ident) > 0 {
-		head = "@ " + strings.Join(ident, " ") + " : " + typed[0]
+		head = "@ " + strings.Join(ident, " ") + " : " + typed
 	}
 	if keyword := d.visibility(el); keyword != "" {
 		head = keyword + " " + head
@@ -1449,6 +1457,22 @@ func (d *decoder) metadataHead(el *element) (string, error) {
 		head += " about " + strings.Join(about, ", ")
 	}
 	return head, nil
+}
+
+// metadataDefinition is the one metadata definition a metadata usage applies;
+// a usage typed by none or by several has no notation and is refused.
+func (d *decoder) metadataDefinition(el *element) (rdf.Term, error) {
+	types := d.graph.Objects(rdf.IRI(el.iri), rdf.SysML+relationshipProperty[ast.RelTyping])
+	switch len(types) {
+	case 1:
+		return types[0], nil
+	case 0:
+		return rdf.Term{}, d.missing(el, sysmlPrefix+relationshipProperty[ast.RelTyping], "a metadata usage names the one metadata definition it applies")
+	}
+	return rdf.Term{}, &UnsupportedError{
+		What: fmt.Sprintf("the element <%s>", el.iri),
+		Note: fmt.Sprintf("it has %d %s, and a metadata usage names the one metadata definition it applies, so no valid declaration can be written for it", len(types), sysmlPrefix+relationshipProperty[ast.RelTyping]),
+	}
 }
 
 // visibility reads the visibility a member was declared with, which the abstract
