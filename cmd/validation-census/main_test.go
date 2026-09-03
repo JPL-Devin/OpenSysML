@@ -76,6 +76,10 @@ func TestRecordedDateFollowsContent(t *testing.T) {
 	if got := recordedDate(nil, same); got != baseline.Today() {
 		t.Errorf("first recording dated %q, want today", got)
 	}
+	previous.Recorded = ""
+	if got := recordedDate(previous, same); got != baseline.Today() {
+		t.Errorf("undated previous baseline kept %q, want today", got)
+	}
 }
 
 // TestUpdateIsIdempotentAcrossDays runs -update over a copy of the committed
@@ -182,7 +186,59 @@ func testBaseline(constraints ...Constraint) *Baseline {
 	return &Baseline{
 		PilotTag: "2026-07", PilotCommit: "c7fc737d", PilotArtifact: "0.61.0",
 		Jar:         JarRecord{Name: "kernel-0.61.0-all.jar", Digest: "sha256:abc"},
+		Extraction:  extractionRecord(),
+		Recorded:    "2026-09-02",
 		Constraints: constraints,
+	}
+}
+
+// TestValidateRequiresARecordingDate: the baseline must carry an ISO calendar
+// date that exists, like every other committed provenance record.
+func TestValidateRequiresARecordingDate(t *testing.T) {
+	if err := testBaseline().validate(); err != nil {
+		t.Fatalf("a dated baseline must validate: %v", err)
+	}
+	for name, date := range map[string]string{
+		"missing":    "",
+		"prose":      "August 2026",
+		"timestamp":  "2026-09-02T00:00:00Z",
+		"impossible": "2026-02-30",
+	} {
+		t.Run(name, func(t *testing.T) {
+			base := testBaseline()
+			base.Recorded = date
+			err := base.validate()
+			if err == nil || !strings.Contains(err.Error(), "records no ISO recording date") {
+				t.Fatalf("error = %v, want the missing date named", err)
+			}
+		})
+	}
+}
+
+// TestCompareJarChecksTheRecordedName: a baseline naming a jar other than the
+// pinned artifact fails before any digest is read, jar present or not.
+func TestCompareJarChecksTheRecordedName(t *testing.T) {
+	root := t.TempDir()
+	pinPath := filepath.Join(root, filepath.FromSlash(baseline.PinPath))
+	if err := os.MkdirAll(filepath.Dir(pinPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	pin := "PILOT_TAG=\"${PILOT_TAG:-2026-07}\"\n" +
+		"PILOT_COMMIT=\"${PILOT_COMMIT:-c7fc737d56da9e2d78f9d7df6d38efbec2e7e965}\"\n" +
+		"PILOT_ARTIFACT_VERSION=\"${PILOT_ARTIFACT_VERSION:-0.61.0}\"\n"
+	if err := os.WriteFile(pinPath, []byte(pin), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	base := testBaseline()
+	base.PilotCommit = "c7fc737d56da9e2d78f9d7df6d38efbec2e7e965"
+	base.Jar.Name = "jupyter-sysml-kernel-0.61.0-all.jar"
+	if err := compareJar(root, base, options{}, io.Discard); err != nil {
+		t.Fatalf("the pinned name must pass without a jar: %v", err)
+	}
+	base.Jar.Name = "jupyter-sysml-kernel-0.62.0-all.jar"
+	err := compareJar(root, base, options{}, io.Discard)
+	if err == nil || !strings.Contains(err.Error(), `records jar "jupyter-sysml-kernel-0.62.0-all.jar" but the pin names "jupyter-sysml-kernel-0.61.0-all.jar"`) {
+		t.Fatalf("error = %v, want the recorded name rejected", err)
 	}
 }
 
@@ -228,14 +284,16 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 	base := testBaseline(
 		Constraint{Name: "validateA", Source: "kerml", Status: StatusFaithful},
 		Constraint{Name: "validateB", Source: "sysml", Status: StatusNotImplemented},
+		Constraint{Name: "validateC", Source: "sysml", Status: StatusUnknown},
 	)
 	doc := testProvenance + strings.Join([]string{
-		"**Census:** 1 of 2 named constraints are reported by OpenSysML — 1 ✅ faithful and 0 ⚠️ approximate; 1 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 0 ❔ unknown.",
+		"**Census:** 1 of 3 named constraints are reported by OpenSysML — 1 ✅ faithful and 0 ⚠️ approximate; 1 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 1 ❔ unknown.",
 		"",
 		"| Constraint | Language | Checks | Implementation | Our message | Negative case | Status |",
 		"|---|---|---|---|---|---|---|",
 		"| `validateA` | KerML | a | `x.go:f` | same | `kerml/a.kerml` | ✅ faithful |",
 		"| `validateB` | SysML | b | — | — | none | ❌ not implemented |",
+		"| `validateC` | SysML | c | — | — | none | ❔ unknown — no case and no identifiable pass yet |",
 		"",
 	}, "\n")
 	if err := checkDocument(root, doc, base); err != nil {
@@ -248,9 +306,9 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 		"extra row": {
 			mutate: func(s string) string {
 				row := "| `validateB` | SysML | b | — | — | none | ❌ not implemented |\n"
-				return strings.Replace(s, row, row+"| `validateC` | SysML | c | — | — | none | ❌ not implemented |\n", 1)
+				return strings.Replace(s, row, row+"| `validateD` | SysML | d | — | — | none | ❌ not implemented |\n", 1)
 			},
-			want: "validateC is in the table but not in",
+			want: "validateD is in the table but not in",
 		},
 		"missing row": {
 			mutate: func(s string) string {
@@ -259,7 +317,7 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 			want: "validateB is in docs/project/validation-constraints-baseline.json but has no row",
 		},
 		"hand-edited figure": {
-			mutate: func(s string) string { return strings.Replace(s, "1 of 2", "2 of 2", 1) },
+			mutate: func(s string) string { return strings.Replace(s, "1 of 3", "2 of 3", 1) },
 			want:   "line is stale",
 		},
 		"stale release": {
@@ -287,6 +345,16 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 		"status disagrees": {
 			mutate: func(s string) string { return strings.Replace(s, "| ✅ faithful |", "| ⚠️ approximate |", 1) },
 			want:   "the baseline records faithful",
+		},
+		"status carries a suffix": {
+			mutate: func(s string) string { return strings.Replace(s, "| ✅ faithful |", "| ✅ faithfulish |", 1) },
+			want:   "the baseline records faithful",
+		},
+		"unknown status lacks its explanation": {
+			mutate: func(s string) string {
+				return strings.Replace(s, "| ❔ unknown — no case and no identifiable pass yet |", "| ❔ unknown |", 1)
+			},
+			want: "the baseline records unknown",
 		},
 		"language disagrees": {
 			mutate: func(s string) string {

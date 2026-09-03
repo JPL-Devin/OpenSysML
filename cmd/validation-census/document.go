@@ -197,7 +197,7 @@ func checkDocument(root, content string, base *Baseline) error {
 			problems = append(problems, fmt.Sprintf("line %d: %s has language %q, the baseline source %s says %q", r.Line, name, r.Cells[1], c.Source, want))
 		}
 		marker, _ := markerFor(c.Status)
-		if !strings.HasPrefix(r.Cells[6], marker) {
+		if r.Cells[6] != marker {
 			problems = append(problems, fmt.Sprintf("line %d: %s has status %q, the baseline records %s (%q)", r.Line, name, r.Cells[6], c.Status, marker))
 		}
 		if implemented(c.Status) && (r.Cells[3] == "" || r.Cells[3] == "—") {

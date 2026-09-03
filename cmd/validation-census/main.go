@@ -68,12 +68,16 @@ type options struct {
 	requireJar bool
 }
 
+// pinnedJarName is the filename of the artifact the pin designates.
+func pinnedJarName(pin baseline.Pin) string {
+	return fmt.Sprintf("jupyter-sysml-kernel-%s-all.jar", pin.Artifact)
+}
+
 // jarPath resolves the jar to compare against and whether it is present.
 func (o options) jarPath(root string, pin baseline.Pin) (string, bool, error) {
 	path := o.jar
 	if path == "" {
-		path = filepath.Join(root, "build", "pilot-validator", "target", "sysml-download", "sysml",
-			fmt.Sprintf("jupyter-sysml-kernel-%s-all.jar", pin.Artifact))
+		path = filepath.Join(root, "build", "pilot-validator", "target", "sysml-download", "sysml", pinnedJarName(pin))
 	}
 	if _, err := os.Stat(path); err != nil {
 		if os.IsNotExist(err) && o.jar == "" && !o.requireJar {
@@ -197,10 +201,10 @@ func runUpdate(root string, opts options, out io.Writer) error {
 	return nil
 }
 
-// recordedDate keeps the previous date when nothing but the date would change,
-// so -update on a current tree is byte-identical across days.
+// recordedDate keeps a valid previous date when nothing but the date would
+// change, so -update on a current tree is byte-identical across days.
 func recordedDate(previous, next *Baseline) string {
-	if previous != nil {
+	if previous != nil && validRecordedDate(previous.Recorded) {
 		dated := *next
 		dated.Recorded = previous.Recorded
 		if reflect.DeepEqual(&dated, previous) {
@@ -220,6 +224,9 @@ func compareJar(root string, base *Baseline, opts options, out io.Writer) error 
 	if base.PilotTag != pin.Tag || base.PilotCommit != pin.Commit || base.PilotArtifact != pin.Artifact {
 		return fmt.Errorf("%s records pilot %s/%s/%s but %s pins %s/%s/%s: re-record with -update",
 			baselinePath, base.PilotTag, base.PilotCommit, base.PilotArtifact, baseline.PinPath, pin.Tag, pin.Commit, pin.Artifact)
+	}
+	if want := pinnedJarName(pin); base.Jar.Name != want {
+		return fmt.Errorf("%s records jar %q but the pin names %q: re-record with -update", baselinePath, base.Jar.Name, want)
 	}
 	jar, present, err := opts.jarPath(root, pin)
 	if err != nil {

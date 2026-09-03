@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
 const (
@@ -26,7 +28,7 @@ const (
 	StatusUnknown        = "unknown"
 )
 
-// statusMarkers maps each recorded status to the phrase that opens its status
+// statusMarkers maps each recorded status to the exact text of its status
 // cell in the census table, in the order the summary line states them.
 var statusMarkers = []struct {
 	Status string
@@ -37,7 +39,19 @@ var statusMarkers = []struct {
 	{StatusNotImplemented, "❌ not implemented"},
 	{StatusDeliberate, "⛔ deliberate"},
 	{StatusKnownFailure, "🚧 known failure"},
-	{StatusUnknown, "❔ unknown"},
+	{StatusUnknown, "❔ unknown — no case and no identifiable pass yet"},
+}
+
+// recordedDatePattern is the ISO calendar date the baseline's recorded field must hold.
+var recordedDatePattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+
+// validRecordedDate reports whether s is an ISO calendar date that exists.
+func validRecordedDate(s string) bool {
+	if !recordedDatePattern.MatchString(s) {
+		return false
+	}
+	_, err := time.Parse("2006-01-02", s)
+	return err == nil
 }
 
 func markerFor(status string) (string, bool) {
@@ -124,6 +138,9 @@ func writeBaseline(root string, base *Baseline) error {
 // validate checks the baseline on its own: sorted unique names, known sources
 // and statuses, and the extraction record this program would write.
 func (b *Baseline) validate() error {
+	if !validRecordedDate(b.Recorded) {
+		return fmt.Errorf("%s: records no ISO recording date (%q); re-record with -update", baselinePath, b.Recorded)
+	}
 	if b.Extraction.Method != extractionMethod {
 		return fmt.Errorf("%s: extraction method differs from this program's; re-record with -update", baselinePath)
 	}

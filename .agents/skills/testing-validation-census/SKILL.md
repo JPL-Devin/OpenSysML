@@ -45,7 +45,10 @@ afterwards (`git checkout -- <file>` on a clean tree, or keep a copy).
 - Delete a table row: "`<name>` is in the baseline but has no row".
 - Change a digit of the `**Census:**` line, or the release, commit, artifact, jar name or digest
   on the `**Pilot:**`/`**Jar:**` lines: "a derived line is stale".
-- Change a row's status marker or language: the row is reported as disagreeing with the baseline.
+- Change a row's status marker or language, or append anything to a status cell (`✅ faithfulish`):
+  the row is reported as disagreeing with the baseline.
+- Blank or misspell the baseline's `recorded` date, or change its `jar.name` away from the pinned
+  artifact's filename: the baseline is rejected before any jar is read.
 - Point a row's *Negative case* at a file that is not under `cmd/pilot-reject/testdata/negative/`.
 - Delete a probe of a ✅/⚠️ row, or add a probe for a ❌/❔ row.
 - Delete the `.sysml` (or `.kerml`) probe of a row whose language is `both`: each notation needs one.
