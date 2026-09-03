@@ -1009,6 +1009,46 @@ func TestLegacyTransitionEffectsStayEffects(t *testing.T) {
 	}
 }
 
+// The effect and body links of a transition must partition its members: a graph
+// whose links are missing, doubled or dangling is refused rather than have an
+// action silently moved after the target.
+func TestInconsistentTransitionLinksAreRefused(t *testing.T) {
+	src := "package P {\n\taction def Warm;\n\tstate def M {\n\t\tstate s1;\n\t\tstate s2;\n\t\ttransition first s1 do { action stop : Warm; } then s2 { action tidy : Warm; }\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	const effect, body = "sysx:effectMember elmt:P__M___402__stop", "sysx:bodyMember elmt:P__M___402__tidy"
+	if !strings.Contains(string(turtle), effect) || !strings.Contains(string(turtle), body) {
+		t.Fatalf("the links are not the ones the test rewrites:\n%s", turtle)
+	}
+	faults := map[string]func(string) string{
+		"missing effect link": func(g string) string { return string(withoutTriples(t, []byte(g), "sysx:effectMember")) },
+		"missing body link":   func(g string) string { return string(withoutTriples(t, []byte(g), "sysx:bodyMember")) },
+		"overlapping links": func(g string) string {
+			return strings.Replace(g, body, "sysx:bodyMember elmt:P__M___402__stop", 1)
+		},
+		"dangling effect link": func(g string) string {
+			return strings.Replace(g, effect, "sysx:effectMember elmt:P__M___402__gone", 1)
+		},
+		"dangling body link": func(g string) string {
+			return strings.Replace(g, body, "sysx:bodyMember elmt:P__M___402__gone", 1)
+		},
+	}
+	for name, fault := range faults {
+		t.Run(name, func(t *testing.T) {
+			var unsupported *export.UnsupportedError
+			_, err := export.Convert("m.ttl", []byte(fault(string(turtle))), export.FormatTurtle, export.FormatSysML)
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("got %v, want an UnsupportedError", err)
+			}
+			if !strings.Contains(err.Error(), "P__M___402") {
+				t.Errorf("the error does not name the transition: %v", err)
+			}
+		})
+	}
+}
+
 // A transition and an accept state their trigger and payload in the head too,
 // inside the bodies that allow them.
 func TestBehavioralHeadsComeBackFromTheGraphAlone(t *testing.T) {

@@ -1196,11 +1196,24 @@ func (d *decoder) transitionText(el *element, depth int) (string, string, error)
 	}
 	var effect, body []*element
 	for _, child := range el.children {
-		if legacy || inEffect[child.iri] {
+		switch {
+		case legacy, inEffect[child.iri] && !inBody[child.iri]:
 			effect = append(effect, child)
-		} else {
+		case inBody[child.iri] && !inEffect[child.iri]:
 			body = append(body, child)
+		case inBody[child.iri]:
+			return "", "", transitionLinkError(el, child.iri, "is linked as both effect and body")
+		default:
+			return "", "", transitionLinkError(el, child.iri, "is linked as neither effect nor body")
 		}
+		delete(inEffect, child.iri)
+		delete(inBody, child.iri)
+	}
+	for iri := range inEffect {
+		return "", "", transitionLinkError(el, iri, "is linked as an effect but is no member")
+	}
+	for iri := range inBody {
+		return "", "", transitionLinkError(el, iri, "is linked as a body member but is no member")
 	}
 	if hasEffect {
 		text, err := d.membersText(effect, braced, depth)
@@ -1217,6 +1230,15 @@ func (d *decoder) transitionText(el *element, depth int) (string, string, error)
 		}
 	}
 	return strings.Join(words, " "), bodyText, nil
+}
+
+// transitionLinkError refuses a transition whose effect and body links do not
+// partition its members.
+func transitionLinkError(el *element, member, fault string) error {
+	return &UnsupportedError{
+		What: fmt.Sprintf("the transition %s", el.iri),
+		Note: fmt.Sprintf("%s %s, so its actions cannot be placed", member, fault),
+	}
 }
 
 // linked is the set of members the element links through the property.
