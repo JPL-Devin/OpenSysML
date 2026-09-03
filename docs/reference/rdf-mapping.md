@@ -296,7 +296,11 @@ elmt:Demo__Vehicle
 - **The compact shape still reads.** `sysml:owningNamespace` is still written,
   and a graph carrying only it — what earlier releases wrote — converts back
   unchanged. A membership that states neither of its ends is reported as
-  unsupported naming `sysml:memberElement`, rather than dropping the member.
+  unsupported naming `sysml:memberElement`, rather than dropping the member; so
+  is one whose spellings of an end (`sysml:memberElement`,
+  `sysml:ownedMemberElement`, `sysml:ownedMemberFeature`,
+  `sysml:ownedResultExpression`, `sysml:ownedRelatedElement`) name different
+  elements, rather than keeping one and dropping the rest.
 
 Tests: `ownership_graph_test.go` (element ids, roots, membership wiring, the
 tree coming back from the memberships with `sysx:sourceText` and
@@ -732,8 +736,8 @@ would be refused as a duplicate.
 - a literal whose text is outside its datatype's lexical space
   (`"false"^^xsd:int`, `"yes"^^xsd:boolean`, `"1e3"^^xsd:decimal`): it is no
   term of that datatype, so it is reported rather than read as the text it
-  spells. `owl:real`, which names no lexical forms of its own, takes a finite
-  `xsd:double`'s
+  spells, as is an `xsd:int` outside its 32-bit value space. `owl:real`, which
+  names no lexical forms of its own, takes a finite `xsd:double`'s
 
 A graph that uses none of OpenSysML's `sysx:` properties (one produced by
 another tool) converts as far as the mapping allows and errors on the first

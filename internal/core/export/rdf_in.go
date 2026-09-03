@@ -141,6 +141,11 @@ func checkLiterals(graph *rdf.Graph) error {
 		if !inLexicalSpace(object.Datatype, object.Value) {
 			return literalError(triple, fmt.Sprintf("%q is not in the lexical space of %s", object.Value, curie(object.Datatype)))
 		}
+		if object.Datatype == rdf.XSD+"int" {
+			if _, err := strconv.ParseInt(object.Value, 10, 32); err != nil {
+				return literalError(triple, fmt.Sprintf("%q is outside the value space of xsd:int, -2147483648 to 2147483647", object.Value))
+			}
+		}
 	}
 	return nil
 }
@@ -398,10 +403,17 @@ func (d *decoder) isMembership(subject rdf.Term) bool {
 // readMembership records the ownership edge an OwningMembership stands for. Both
 // ends are stated twice in the abstract syntax — once under the membership's own
 // name for the property and once under the Relationship's — and either spelling
-// is accepted, since a graph from another tool may carry only one.
+// is accepted, since a graph from another tool may carry only one; spellings
+// that disagree are refused, since one of them would be dropped.
 func (d *decoder) readMembership(subject rdf.Term) error {
-	owner, hasOwner := d.firstObject(subject, pMembershipOwningNamespace, pOwningRelatedElement)
-	member, hasMember := d.firstObject(subject, pMemberElement, pOwnedMemberElement, pOwnedMemberFeature, pOwnedResultExpression, pOwnedRelatedElement)
+	owner, hasOwner, err := d.agreedObject(subject, pMembershipOwningNamespace, pOwningRelatedElement)
+	if err != nil {
+		return err
+	}
+	member, hasMember, err := d.agreedObject(subject, pMemberElement, pOwnedMemberElement, pOwnedMemberFeature, pOwnedResultExpression, pOwnedRelatedElement)
+	if err != nil {
+		return err
+	}
 	if !hasOwner || !hasMember {
 		return &UnsupportedError{
 			What: fmt.Sprintf("the membership <%s>", subject.Value),
@@ -412,6 +424,43 @@ func (d *decoder) readMembership(subject rdf.Term) error {
 	d.memberships[m.iri] = m
 	d.owningMembership[m.member] = m
 	return nil
+}
+
+// agreedObject returns the one object the subject states under any of
+// properties, spellings of a single-valued end, or an error when they differ.
+func (d *decoder) agreedObject(subject rdf.Term, properties ...string) (rdf.Term, bool, error) {
+	var agreed rdf.Term
+	found := false
+	for _, property := range properties {
+		for _, object := range d.graph.Objects(subject, rdf.SysML+property) {
+			switch {
+			case !found:
+				agreed, found = object, true
+			case object != agreed:
+				return rdf.Term{}, false, &UnsupportedError{
+					What: fmt.Sprintf("the membership <%s>", subject.Value),
+					Note: fmt.Sprintf("it states both <%s> and <%s> as its %s, and every spelling of that end (%s) must name the one element, or one of them is dropped",
+						agreed.Value, object.Value, endName(properties[0]), curieList(properties)),
+				}
+			}
+		}
+	}
+	return agreed, found, nil
+}
+
+func endName(property string) string {
+	if property == pMembershipOwningNamespace {
+		return "owning namespace"
+	}
+	return "member"
+}
+
+func curieList(properties []string) string {
+	curies := make([]string, len(properties))
+	for i, property := range properties {
+		curies[i] = curie(rdf.SysML + property)
+	}
+	return strings.Join(curies, ", ")
 }
 
 // firstObject returns the object of the first of properties the subject states.

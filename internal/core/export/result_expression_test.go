@@ -153,6 +153,41 @@ func TestResultExpressionComesBackFromItsMembershipAlone(t *testing.T) {
 	}
 }
 
+// A membership whose spellings of one end name different elements would drop
+// one of them; it is refused, naming the membership and both elements.
+func TestMembershipNamingTwoMembersIsRefused(t *testing.T) {
+	turtle := string(withoutTriples(t, convertFixture(t, "result_expressions"), "sysx:sourceText"))
+	for _, tc := range []struct{ from, to, want string }{
+		{
+			"    sysml:ownedResultExpression elmt:Results__AfterMembers___403 .",
+			"    sysml:ownedResultExpression elmt:Results__Only___400 .",
+			"the membership <urn:sysmlv2:element:Results__AfterMembers___403_om>: it states both <urn:sysmlv2:element:Results__AfterMembers___403> and <urn:sysmlv2:element:Results__Only___400> as its member",
+		},
+		{
+			"    sysml:memberElement elmt:Results__Only___400 ;",
+			"    sysml:memberElement elmt:Results__Only___400, elmt:Results__Only ;",
+			"the membership <urn:sysmlv2:element:Results__Only___400_om>: it states both <urn:sysmlv2:element:Results__Only___400> and <urn:sysmlv2:element:Results__Only> as its member",
+		},
+		{
+			"    sysml:owningRelatedElement elmt:Results__Only ;\n    sysml:membershipOwningNamespace elmt:Results__Only ;",
+			"    sysml:owningRelatedElement elmt:Results ;\n    sysml:membershipOwningNamespace elmt:Results__Only ;",
+			"the membership <urn:sysmlv2:element:Results__Only___400_om>: it states both <urn:sysmlv2:element:Results__Only> and <urn:sysmlv2:element:Results> as its owning namespace",
+		},
+	} {
+		if !strings.Contains(turtle, tc.from) {
+			t.Fatalf("expected %q in the graph:\n%s", tc.from, turtle)
+		}
+		_, err := export.Convert("m.ttl", []byte(strings.Replace(turtle, tc.from, tc.to, 1)), export.FormatTurtle, export.FormatSysML)
+		var unsupported *export.UnsupportedError
+		if !errors.As(err, &unsupported) {
+			t.Fatalf("want an UnsupportedError for %q, got %v", tc.to, err)
+		}
+		if !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("for %q:\n got %v\nwant %s", tc.to, err, tc.want)
+		}
+	}
+}
+
 // A result expression whose graph states no structure to rebuild it from
 // cannot be written as a bare expression; it is refused by name rather than
 // dropped.
@@ -241,6 +276,33 @@ ex:r_b a sysml:LiteralRational ; sysml:value "0.5"^^owl:real .
 	}
 	if want := "abstract calc def C {\n        (2 + 0.5)\n    }"; !strings.Contains(string(back), want) {
 		t.Errorf("the notation lacks %q:\n%s", want, back)
+	}
+}
+
+// The bounds of xsd:int are values, and xsd:integer is unbounded.
+func TestIntegerLiteralsAtTheBoundsAreRead(t *testing.T) {
+	turtle := string(withoutTriples(t, convertFixture(t, "result_expressions"), "sysx:sourceText"))
+	const from = `sysml:value "2"^^xsd:integer ;`
+	for to, want := range map[string]string{
+		`sysml:value "2147483647"^^xsd:int ;`:                "(x * 2147483647)",
+		`sysml:value "-2147483648"^^xsd:int ;`:               "",
+		`sysml:value "2147483648"^^xsd:integer ;`:            "(x * 2147483648)",
+		`sysml:value "340282366920938463463"^^xsd:integer ;`: "(x * 340282366920938463463)",
+	} {
+		back, err := export.Convert("m.ttl", []byte(strings.Replace(turtle, from, to, 1)), export.FormatTurtle, export.FormatSysML)
+		if want == "" {
+			var unsupported *export.UnsupportedError
+			if !errors.As(err, &unsupported) || !strings.Contains(err.Error(), `not "-2147483648"`) {
+				t.Errorf("a signed value is in xsd:int but no token spells it; want that refusal for %s, got %v", to, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("back to notation with %s: %v", to, err)
+		}
+		if !strings.Contains(string(back), want) {
+			t.Errorf("for %s the notation lacks %q:\n%s", to, want, back)
+		}
 	}
 }
 
@@ -427,6 +489,8 @@ func TestMistypedLiteralsAreRefusedEverywhere(t *testing.T) {
 		{"result_expressions", `sysml:value "true"^^xsd:boolean .`, `sysml:value "yes"^^xsd:boolean .`, `"yes" is not in the lexical space of xsd:boolean`},
 		{"result_expressions", `sysx:hasBody "true"^^xsd:boolean ;`, `sysx:hasBody "True"^^xsd:boolean ;`, `"True" is not in the lexical space of xsd:boolean`},
 		{"result_expressions", `sysx:memberIndex "0"^^xsd:integer ;`, `sysx:memberIndex "first"^^xsd:integer ;`, `"first" is not in the lexical space of xsd:integer`},
+		{"result_expressions", `sysml:value "2"^^xsd:integer ;`, `sysml:value "2147483648"^^xsd:int ;`, `"2147483648" is outside the value space of xsd:int`},
+		{"result_expressions", `sysml:value "2"^^xsd:integer ;`, `sysml:value "-2147483649"^^xsd:int ;`, `"-2147483649" is outside the value space of xsd:int`},
 	} {
 		turtle := string(convertFixture(t, tc.fixture))
 		if !strings.Contains(turtle, tc.from) {
