@@ -1,0 +1,12 @@
+{
+	"type": "action",
+	"evaluate": "test::outer",
+	"trace": true,
+	"outputs": {
+		"mode": {"type": "Integer", "value": 1},
+		"total": {"type": "Integer", "value": 30},
+		"choose.split.sum": {"type": "Integer", "value": 30},
+		"choose.split.left.a": {"type": "Integer", "value": 10},
+		"choose.split.right.b": {"type": "Integer", "value": 20}
+	}
+}

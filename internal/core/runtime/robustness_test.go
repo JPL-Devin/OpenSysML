@@ -45,6 +45,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("block_node_binding_to_a_non_parameter", testBlockNodeBindingToANonParameter)
 	t.Run("block_node_binding_names_a_node_without_a_pin", testBlockNodeBindingNamesANodeWithoutAPin)
 	t.Run("block_node_pin_bound_where_nodes_are_not_performed", testBlockNodePinBoundWhereNodesAreNotPerformed)
+	t.Run("block_node_own_flow_malformed", testBlockNodeOwnFlowMalformed)
+	t.Run("block_node_own_flow_where_nodes_are_not_performed", testBlockNodeOwnFlowWhereNodesAreNotPerformed)
+	t.Run("inherited_binding_names_a_node_without_a_pin", testInheritedBindingNamesANodeWithoutAPin)
 	t.Run("node_inherited_default_that_cannot_be_evaluated", testNodeInheritedDefaultThatCannotBeEvaluated)
 	t.Run("node_binding_output_to_an_unknown_feature", testNodeBindingOutputToAnUnknownFeature)
 	t.Run("node_flow_into_a_pin_the_target_does_not_declare", testNodeFlowIntoAPinTheTargetDoesNotDeclare)
@@ -8593,6 +8596,97 @@ func testBlockNodePinBoundWhereNodesAreNotPerformed(t *testing.T) {
 	err := calcUsageOutputInSource(t, src, "c", "result", 10000)
 	if err == nil || !strings.Contains(err.Error(), "a binding or flow at a pin of node p in a body is not executable") {
 		t.Errorf("expected the binding at p's pin to be reported, got: %v", err)
+	}
+}
+
+// testBlockNodeOwnFlowMalformed: the flow an action in a loop body states of its
+// own is validated with the action's, so a dangling succession in it is reported
+// at initialize() as an invalid flow rather than when the loop reaches it.
+func testBlockNodeOwnFlowMalformed(t *testing.T) {
+	src := `
+		package test {
+			action outer {
+				attribute i : Integer = 0;
+				first start;
+				then action iterate {
+					while i < 2 {
+						action step {
+							first start;
+							then action one { assign i := i + 1; }
+							succession one then missing;
+						}
+					}
+				}
+				then done;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "outer", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action outer not found")
+	}
+	_, err := ctx.CreateActionExecutor(sym)
+	if !errors.Is(err, ErrInvalidActionFlow) {
+		t.Fatalf("expected ErrInvalidActionFlow for step's dangling succession, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "action node step") || !strings.Contains(err.Error(), "missing") {
+		t.Errorf("error %q does not name the node and the undefined target", err)
+	}
+}
+
+// testInheritedBindingNamesANodeWithoutAPin: a binding a base action states at an
+// inherited node itself is reported when the derived action's flow is built.
+func testInheritedBindingNamesANodeWithoutAPin(t *testing.T) {
+	src := `
+		package test {
+			action def Base {
+				attribute x : Integer = 5;
+				action add { in a : Integer; }
+				bind add = x;
+			}
+			action def Derived :> Base {
+				first start then add;
+				succession add then done;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Derived", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action Derived not found")
+	}
+	_, err := ctx.CreateActionExecutor(sym)
+	if err == nil {
+		t.Fatal("expected the inherited binding at the node itself to be reported")
+	}
+	if !strings.Contains(err.Error(), `binding end "add" names an action node but no pin of it`) {
+		t.Errorf("error %q does not explain the binding end", err)
+	}
+}
+
+// testBlockNodeOwnFlowWhereNodesAreNotPerformed: a calc body keeps no performances
+// of its nested actions, so one stating a flow of its own is reported, not run.
+func testBlockNodeOwnFlowWhereNodesAreNotPerformed(t *testing.T) {
+	src := `
+		package test {
+			calc c {
+				attribute x : Integer = 3;
+				attribute seen : Integer = 0;
+				if x > 0 {
+					action p {
+						first start;
+						then action bump { assign seen := 1; }
+						then done;
+					}
+				}
+				return : Integer = seen;
+			}
+		}
+	`
+	err := calcUsageOutputInSource(t, src, "c", "result", 10000)
+	if err == nil || !strings.Contains(err.Error(), "the flow node p states of its own in a body is not executable") {
+		t.Errorf("expected p's own flow to be reported, got: %v", err)
 	}
 }
 

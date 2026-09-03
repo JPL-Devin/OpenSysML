@@ -215,8 +215,13 @@ func acceptsMessage(node *ast.Usage) bool {
 }
 
 // lowerNestedNode records a nested action declared in a block like a node of the
-// action's flow: the features it declares, and the statements or flow its members state.
+// action's flow: the features it declares, and the statements or flow its members
+// state — a flow of its own (`first`, a succession) as the subflow the node owns.
 func lowerNestedNode(graph *ActionGraph, node *ast.Usage, scope *symbols.Scope) {
+	if statesOwnFlow(node.Members) {
+		lowerActionNode(graph, node, scope)
+		return
+	}
 	lowerFeatures(graph, node, scope)
 	if blockNeedsFlow(node.Members) {
 		graph.Bodies[node] = []Statement{Block{

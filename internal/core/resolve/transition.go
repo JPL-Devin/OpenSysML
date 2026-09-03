@@ -142,7 +142,35 @@ func enclosingActionScope(scope *symbols.Scope) *symbols.Scope {
 	return nil
 }
 
-func inheritedActionNode(body *symbols.Scope, name string, qualifier *symbols.Symbol, seen map[*symbols.Symbol]bool) (ast.Node, *symbols.Scope, bool, bool) {
+// ActionGeneralBodies returns the bodies of the actions the action enclosing
+// scope specializes or is typed by, nearest first and each once, found from the
+// scope tree alone — where a member the action inherits was declared.
+func ActionGeneralBodies(scope *symbols.Scope) []*symbols.Scope {
+	body := enclosingActionScope(scope)
+	if body == nil {
+		return nil
+	}
+	var bodies []*symbols.Scope
+	seen := make(map[*symbols.Symbol]bool)
+	var collect func(body *symbols.Scope)
+	collect = func(body *symbols.Scope) {
+		supers, _ := declaredGenerals(body)
+		for _, super := range supers {
+			if seen[super] || super.Scope == nil {
+				continue
+			}
+			seen[super] = true
+			bodies = append(bodies, super.Scope)
+			collect(super.Scope)
+		}
+	}
+	collect(body)
+	return bodies
+}
+
+// declaredGenerals returns the symbols the generalizations body's declaration
+// states, in declaration order, and whether one of them resolves to nothing.
+func declaredGenerals(body *symbols.Scope) ([]*symbols.Symbol, bool) {
 	var rels []*ast.Relationship
 	switch n := body.Node().(type) {
 	case *ast.Definition:
@@ -150,8 +178,9 @@ func inheritedActionNode(body *symbols.Scope, name string, qualifier *symbols.Sy
 	case *ast.Usage:
 		rels = n.Relationships
 	default:
-		return nil, nil, false, false
+		return nil, false
 	}
+	var supers []*symbols.Symbol
 	var uncertain bool
 	for _, rel := range rels {
 		if rel == nil || (rel.Kind != ast.RelSpecializes && rel.Kind != ast.RelTyping &&
@@ -171,6 +200,14 @@ func inheritedActionNode(body *symbols.Scope, name string, qualifier *symbols.Sy
 			uncertain = true
 			continue
 		}
+		supers = append(supers, super)
+	}
+	return supers, uncertain
+}
+
+func inheritedActionNode(body *symbols.Scope, name string, qualifier *symbols.Symbol, seen map[*symbols.Symbol]bool) (ast.Node, *symbols.Scope, bool, bool) {
+	supers, uncertain := declaredGenerals(body)
+	for _, super := range supers {
 		if qualifier != nil && super != qualifier {
 			continue
 		}

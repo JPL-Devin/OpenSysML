@@ -269,12 +269,13 @@ func (e *ActionExecutor) anyTokenWaiting() bool {
 	return false
 }
 
-// waitingTokens returns the parked tokens, in token-ID order, so that a report
-// of what an action is waiting for does not depend on step scheduling.
-func (e *ActionExecutor) waitingTokens() []Token {
+// waitingTokens returns the parked tokens of perf's flow (of the whole action for
+// nil), in token-ID order, so that a report of what an action is waiting for does
+// not depend on step scheduling.
+func (e *ActionExecutor) waitingTokens(perf *actionFrame) []Token {
 	waiting := make([]Token, 0, len(e.tokens))
 	for _, token := range e.tokens {
-		if token.Wait != nil {
+		if token.Wait != nil && token.inFlowOf(perf) {
 			waiting = append(waiting, token)
 		}
 	}
@@ -283,19 +284,24 @@ func (e *ActionExecutor) waitingTokens() []Token {
 }
 
 // deadlockError describes a suspension that can never end: the accepts still
-// waiting, and any token blocked for another reason alongside them.
-func (e *ActionExecutor) deadlockError() error {
-	waiting := e.waitingTokens()
+// waiting in perf's flow (the action's for nil), and any token of it blocked for
+// another reason alongside them.
+func (e *ActionExecutor) deadlockError(perf *actionFrame) error {
+	waiting := e.waitingTokens(perf)
 	descriptions := make([]string, 0, len(waiting))
 	for _, token := range waiting {
 		descriptions = append(descriptions, token.Wait.String())
 	}
-	if blocked := len(e.tokens) - len(waiting); blocked > 0 {
+	if blocked := len(e.tokensIn(perf)) - len(waiting); blocked > 0 {
 		descriptions = append(descriptions,
 			fmt.Sprintf("%d token(s) blocked for another reason", blocked))
 	}
-	return fmt.Errorf("%w in action %s: nothing can post the awaited message (%s)",
-		ErrAcceptDeadlock, e.action.Name, strings.Join(descriptions, "; "))
+	where := "action " + e.action.Name
+	if perf != nil {
+		where = perf.describe()
+	}
+	return fmt.Errorf("%w in %s: nothing can post the awaited message (%s)",
+		ErrAcceptDeadlock, where, strings.Join(descriptions, "; "))
 }
 
 // RunToCompletion executes until StateCompleted, a breakpoint, or error.
@@ -341,7 +347,7 @@ func (e *ActionExecutor) RunToCompletion() error {
 			return err
 		}
 		if e.state == StateWaiting {
-			return e.deadlockError()
+			return e.deadlockError(nil)
 		}
 
 		steps++
@@ -840,7 +846,8 @@ func (e *ActionExecutor) removeToken(tokenIdx int) {
 
 // retireToken ends a token's flow. Its effects live in the action's features, so
 // retiring it carries nothing out; the action completes once no token is left.
-// The last token of a nested flow instead leaves it, completing its node.
+// The last token of a nested flow instead leaves it, completing its node — unless
+// a body statement runs that flow, which completes the node once the run ends.
 func (e *ActionExecutor) retireToken(tokenIdx int) error {
 	frame := e.tokens[tokenIdx].frame
 	if frame == e.root {
@@ -852,7 +859,7 @@ func (e *ActionExecutor) retireToken(tokenIdx int) error {
 	}
 
 	frame.live--
-	if frame.live > 0 {
+	if frame.live > 0 || frame.inBody {
 		e.removeToken(tokenIdx)
 		return nil
 	}

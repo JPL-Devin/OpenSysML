@@ -416,6 +416,10 @@ func (e *stmtEngine) nodeInBlock(
 		return nil, flowNext, fmt.Errorf("%s: a binding or flow at a pin of %s in a body is not executable",
 			e.host.describe(), nodeDescription(node))
 	}
+	if sub, owns := graph.Subflows[node]; owns && sub != nil {
+		return nil, flowNext, fmt.Errorf("%s: the flow %s states of its own in a body is not executable",
+			e.host.describe(), nodeDescription(node))
+	}
 	frame := e.env.enter()
 	defer e.env.leave()
 	defer e.enterActivation()()

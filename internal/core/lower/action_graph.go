@@ -548,8 +548,49 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 		}
 	}
 
+	if err := lowerInheritedPinConnections(graph, scope); err != nil {
+		return nil, err
+	}
 	recordBlockNodes(graph)
 	return graph, nil
+}
+
+// lowerInheritedPinConnections lowers the bindings and flows the actions the
+// action specializes wrote at pins of its nodes, nearest general first: a node
+// the action inherits keeps the connections its declaring action stated at it.
+func lowerInheritedPinConnections(graph *ActionGraph, scope *symbols.Scope) error {
+	for _, body := range resolve.ActionGeneralBodies(scope) {
+		for _, member := range declMembers(body.Node()) {
+			u, ok := unwrapMembership(member).(*ast.Usage)
+			if !ok {
+				continue
+			}
+			switch u.Kind {
+			case ast.UsageBinding:
+				bindings, err := lowerPinBindings(graph.Nodes, u, body)
+				if err != nil {
+					return err
+				}
+				graph.Bindings = append(graph.Bindings, bindings...)
+			case ast.UsageFlow:
+				if u.FlowEnds == nil {
+					continue
+				}
+				if from, _ := flowEnd(graph.Nodes, u.FlowEnds.From); from == nil {
+					continue
+				}
+				if to, _ := flowEnd(graph.Nodes, u.FlowEnds.To); to == nil {
+					continue
+				}
+				source, flow, err := lowerFlow(graph.Nodes, u)
+				if err != nil {
+					return err
+				}
+				graph.DataFlows[source] = append(graph.DataFlows[source], flow)
+			}
+		}
+	}
+	return nil
 }
 
 // resolveFirstNode reinterprets a `first a …;` whose name is a node the body

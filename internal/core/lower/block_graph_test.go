@@ -292,6 +292,68 @@ func TestBlockBindingsAndFlowsAtItsNodesPinsAreLoweredIntoItsFlow(t *testing.T) 
 	}
 }
 
+// A block-declared action stating a flow of its own (`first`, a succession) owns
+// that flow as a subflow of the block's graph, as a node of the action's flow
+// would, rather than lowering its flow constructs to unsupported statements.
+func TestBlockNodeStatingItsOwnFlowOwnsASubflow(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action test {
+			attribute total : Integer = 0;
+			first start;
+			action accumulate {
+				for i in 1..3 {
+					action step {
+						out v : Integer;
+						first start;
+						then action one { out w : Integer; assign w := i; }
+						succession one then two;
+						action two { assign v := one.w + 1; }
+						then done;
+					}
+					assign total := total + step.v;
+				}
+			}
+			done;
+			succession first start then accumulate;
+			succession first accumulate then done;
+		}
+	`)
+
+	flow := loopBodyOf(t, graph, "accumulate").Graph
+	if flow == nil {
+		t.Fatal("loop body lowered to statements, want a flow of its own")
+	}
+	step := nodeNamed(t, flow, "step")
+	sub, owns := flow.Subflows[step]
+	if !owns || sub == nil {
+		t.Fatalf("step owns no subflow: %#v", flow.Subflows)
+	}
+	if sub.Err != nil {
+		t.Fatalf("step's own flow failed to lower: %v", sub.Err)
+	}
+	if len(flow.Bodies[step]) != 0 {
+		t.Errorf("step lowered statements %#v beside its own flow", flow.Bodies[step])
+	}
+	if len(flow.Features[step]) != 1 || flow.Features[step][0].Name != "v" {
+		t.Errorf("step declares features %#v, want its pin v", flow.Features[step])
+	}
+	if sub.Graph.Initial == nil {
+		t.Fatal("step's own flow has no initial node")
+	}
+	one, two := nodeNamed(t, sub.Graph, "one"), nodeNamed(t, sub.Graph, "two")
+	if next := sub.Graph.Edges[one]; len(next) != 1 || next[0].Target != two {
+		t.Errorf("one succeeds to %v, want two", next)
+	}
+	if len(sub.Graph.Features[one]) != 1 || sub.Graph.Features[one][0].Name != "w" {
+		t.Errorf("one declares features %#v, want its pin w", sub.Graph.Features[one])
+	}
+	if next := sub.Graph.Edges[two]; len(next) != 1 {
+		t.Errorf("two succeeds to %v, want done", next)
+	} else if _, done := next[0].Target.(*ast.FinalNode); !done {
+		t.Errorf("two succeeds to %T, want the final node", next[0].Target)
+	}
+}
+
 // loopBodyOf returns the block the named action node's loop runs.
 func loopBodyOf(t *testing.T, graph *ActionGraph, node string) Block {
 	t.Helper()

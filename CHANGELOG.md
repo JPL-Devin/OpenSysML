@@ -131,7 +131,12 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   those `out` values return once the node's own body has run, so a body that rewrites an output
   returns what it wrote rather than what the callee produced. A typed or invoked node a derived
   action inherits resolves its callee where the node was declared, so one visible only to the
-  general action is found rather than reported unresolved. A
+  general action is found rather than reported unresolved, and a `bind` or `flow` the general
+  action states at that node's pins applies to the derived action's performance of it, in the
+  general action's scope — before, only the derived action's own connectors were lowered and the
+  inherited node ran with its input unbound. An action declared in a branch or loop body that
+  states a flow of its own (`first`, successions, forks and joins among its nodes) now runs that
+  flow to completion in its frame; before, its `first` was reported as not executable. A
   `perform` in statement form and a
   state's entry/do/exit action now refuse an `in` without a default that nothing binds
   (`ErrUnboundParameter`) instead of failing later inside the callee. A

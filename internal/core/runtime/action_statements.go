@@ -132,7 +132,8 @@ func (h *actionStmtHost) effect(s lower.Effect) error {
 }
 
 // performNode performs a nested action a block of the body declares as a
-// subperformance of the body's, with the block-locals entered around it in reach.
+// subperformance of the body's, with the block-locals entered around it in reach;
+// a node owning a flow runs it to completion here.
 func (h *actionStmtHost) performNode(engine *stmtEngine, graph *lower.ActionGraph, node *ast.Usage) (stmtFlow, error) {
 	perf, err := h.exec.beginPerformance(h.perf, graph, node, slices.Clone(engine.env.frames))
 	if err != nil {
@@ -143,7 +144,11 @@ func (h *actionStmtHost) performNode(engine *stmtEngine, graph *lower.ActionGrap
 			return flowNext, err
 		}
 	}
-	if err := h.exec.executeBody(perf, graph, node); err != nil {
+	if perf.graph != nil {
+		if err := h.exec.runSubflow(perf); err != nil {
+			return flowNext, err
+		}
+	} else if err := h.exec.executeBody(perf, graph, node); err != nil {
 		return flowNext, err
 	}
 	if err := h.exec.endPerformance(perf); err != nil {

@@ -28,6 +28,9 @@ type actionFrame struct {
 	// live counts the tokens still running in this performance's flow, which a
 	// fork inside it raises and a join or a retiring token lowers.
 	live int
+	// inBody marks a flow a body statement runs to completion (runSubflow) rather
+	// than a token of the enclosing flow, so its last token retires instead of leaving.
+	inBody bool
 	// connections are the connectors a send in this flow may route through:
 	// those of every flow around it, this one's own included.
 	connections []lower.Connection
