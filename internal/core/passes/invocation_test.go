@@ -207,6 +207,7 @@ func TestInvocationUnimportedLibraryFunction(t *testing.T) {
 		attribute r = sqrt(4.0);
 		attribute a = abs(-2);
 		attribute n = size(r);
+		attribute s = ToString("x");
 	}`)
 	wantLibraryDiag(t, `package P {
 		private import ScalarValues::*;
@@ -393,6 +394,22 @@ func TestInvocationOverloadCandidatesFromEveryGeneralAndRecursiveImport(t *testi
 	}`)
 	if len(diags) != 1 || diags[0].Code != "name-conflict" || diags[0].Severity != SeverityWarning {
 		t.Fatalf("expected only the inherited name-conflict warning, got %v", diags)
+	}
+	diags = libraryDiags(t, `package P {
+		private import ScalarValues::*;
+		part def Base {
+			calc def pick { in x : Integer; return : Integer = x; }
+			calc def pick { in x : String; return : String = x; }
+		}
+		part def Derived :> Base {
+			attribute i : Integer = pick(2);
+			attribute s : String = pick("s");
+		}
+	}`)
+	for _, d := range diags {
+		if d.Code != "name-conflict" || d.Severity != SeverityWarning {
+			t.Fatalf("expected only name-conflict warnings for Base's overloads, got %v", diags)
+		}
 	}
 	diags = libraryDiags(t, `package P {
 		private import ScalarValues::*;

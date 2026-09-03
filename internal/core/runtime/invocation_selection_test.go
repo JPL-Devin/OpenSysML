@@ -278,6 +278,12 @@ func testCalcCallSelectsAmongOwnedInheritedAndRecursiveImport(t *testing.T) {
 			calc def ByText { calc def pick { in x : String; return : Integer = 2; } }
 			calc def byInt :> ByNumber, ByText { in v : Integer; return : Integer = pick(v); }
 			calc def byStr :> ByNumber, ByText { in v : String; return : Integer = pick(v); }
+			calc def Base {
+				calc def pick { in x : Integer; return : Integer = 1; }
+				calc def pick { in x : String; return : Integer = 2; }
+			}
+			calc def oneBaseInt :> Base { in v : Integer; return : Integer = pick(v); }
+			calc def oneBaseStr :> Base { in v : String; return : Integer = pick(v); }
 		}
 		package Recursive {
 			private import ScalarValues::*;
@@ -307,6 +313,8 @@ func testCalcCallSelectsAmongOwnedInheritedAndRecursiveImport(t *testing.T) {
 		{"Owned::qualifiedStr", NewStringValue("s"), 2},
 		{"Inherited::byInt", intArg, 1},
 		{"Inherited::byStr", NewStringValue("s"), 2},
+		{"Inherited::oneBaseInt", intArg, 1},
+		{"Inherited::oneBaseStr", NewStringValue("s"), 2},
 		{"Recursive::C::byInt", intArg, 1},
 		{"Recursive::C::byStr", NewStringValue("s"), 2},
 	}

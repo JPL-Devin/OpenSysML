@@ -171,8 +171,10 @@ func (m *Model) eachContributedMember(sym *symbols.Symbol, name string, yield fu
 	}
 	for _, sup := range m.MemberSources(sym) {
 		if sup.Scope != nil {
-			if s, ok := sup.Scope.LookupLocal(name); ok && !yield(s) {
-				return
+			for _, s := range symbols.PreferDeclared(sup.Scope.LookupLocalAll(name)) {
+				if !yield(s) {
+					return
+				}
 			}
 			continue
 		}
@@ -182,11 +184,8 @@ func (m *Model) eachContributedMember(sym *symbols.Symbol, name string, yield fu
 			if lastIdx := lastDoubleColon(child.Name); lastIdx >= 0 {
 				leafName = child.Name[lastIdx+2:]
 			}
-			if leafName == name {
-				if !yield(child) {
-					return
-				}
-				break
+			if leafName == name && !yield(child) {
+				return
 			}
 		}
 	}
