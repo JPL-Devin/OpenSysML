@@ -247,3 +247,46 @@ func TestExpressionBodyParameterNeedsItsName(t *testing.T) {
 		t.Errorf("the refusal should name the parameter: %v", err)
 	}
 }
+
+// A body parameter's type, bounds and default are read where the body is
+// written, not inside it: a parameter named like the outer feature or type it
+// is declared from links to that declaration, not to itself.
+func TestExpressionBodyParameterIsDeclaredOutsideTheBody(t *testing.T) {
+	src := []byte(`package Params {
+    attribute def Gauge;
+    attribute limit : Gauge;
+    attribute upper : Gauge;
+    attribute xs : Gauge[*];
+    attribute one = xs->select({ in Gauge : Gauge; Gauge });
+    attribute two = xs->collect({ in limit : Gauge [1..upper] = limit; limit });
+}
+`)
+	turtle, err := export.Convert("m.sysml", src, export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	for _, want := range []string{
+		"expr:Params__one_pvalue_pa0_pin0\n    a sysml:ReferenceUsage ;",
+		"sysml:declaredName \"Gauge\" ;\n    sysml:type elmt:Params__Gauge .",
+		"expr:Params__two_pvalue_pa0_pin0\n    a sysml:ReferenceUsage ;",
+		"sysml:declaredName \"limit\" ;\n    sysml:type elmt:Params__Gauge ;\n    sysml:lowerBound expr:Params__two_pvalue_pa0_pin0_plowerBound ;\n    sysml:upperBound expr:Params__two_pvalue_pa0_pin0_pupperBound ;\n    sysml:value expr:Params__two_pvalue_pa0_pin0_pvalue .",
+		"expr:Params__two_pvalue_pa0_pin0_pupperBound\n    a sysml:FeatureReferenceExpression ;\n    sysx:sourceText \"upper\" ;\n    sysml:elementId \"Params__two_pvalue_pa0_pin0_pupperBound\" ;\n    sysml:referent elmt:Params__upper .",
+		"expr:Params__two_pvalue_pa0_pin0_pvalue\n    a sysml:FeatureReferenceExpression ;\n    sysx:sourceText \"limit\" ;\n    sysml:elementId \"Params__two_pvalue_pa0_pin0_pvalue\" ;\n    sysml:referent elmt:Params__limit .",
+	} {
+		if !strings.Contains(string(turtle), want) {
+			t.Errorf("the graph lacks\n%s\n--- graph ---\n%s", want, turtle)
+		}
+	}
+	fromGraph, err := export.Convert("m.ttl", withoutSourceText(t, turtle), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from the mapping alone: %v", err)
+	}
+	for _, want := range []string{
+		"xs->select({ in Gauge : Gauge; Gauge })",
+		"xs->collect({ in limit : Gauge[1..upper] = limit; limit })",
+	} {
+		if !strings.Contains(string(fromGraph), want) {
+			t.Errorf("the notation rebuilt from the graph lacks %q:\n%s", want, fromGraph)
+		}
+	}
+}

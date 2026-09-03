@@ -219,13 +219,13 @@ func (e *encoder) expressionNode(subject rdf.Term, in exprScope, node ast.Node) 
 
 	case *ast.BodyExpr:
 		// A body declares its own parameters and members, then a result expression.
+		// The parameters' annotations are read outside the body, the result inside.
 		e.typed(subject, mExpression)
-		body := in.inBody(e, n)
-		e.bodyDeclarations(subject, body, n.Params, n.Members)
+		e.bodyDeclarations(subject, in, n.Params, n.Members)
 		if n.Result != nil {
 			result := rdf.ExpressionIRI(subject, "result")
 			e.graph.Add(subject, e.sysx(xResultExpression), result)
-			e.expressionNode(result, body, n.Result)
+			e.expressionNode(result, in.inBody(e, n), n.Result)
 		}
 
 	default:
@@ -254,6 +254,7 @@ func isExpressionMember(node ast.Node) bool {
 
 // bodyDeclarations emits what an expression body declares ahead of its result,
 // parameters and members alike, indexed in the one order they were written.
+// in is the scope enclosing the body, where a parameter's own names are read.
 func (e *encoder) bodyDeclarations(subject rdf.Term, in exprScope, params []ast.BodyParam, members []ast.Node) {
 	type declaration struct {
 		offset int
