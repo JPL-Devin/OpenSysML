@@ -390,12 +390,8 @@ var expressionMetaclasses = map[string]bool{
 	mMetadataAccess: true,
 }
 
-// isExpressionNode reports whether a subject is an expression node rather than
-// an element. Whatever its IRI, a subject a membership owns is an element (a
-// body's result is an Expression element); otherwise it is a node when it is in
-// the expression namespace, or its metaclass is one and it has no qualified
-// name (an `expr` usage is typed sysml:Expression too). Memberships are read
-// before elements, so the ownership index is complete here.
+// isExpressionNode reports whether a subject is an expression node rather than an
+// element: unowned, and in the expression namespace or an unnamed expression class.
 func (d *decoder) isExpressionNode(subject rdf.Term) bool {
 	if !subject.IsIRI() {
 		return false
