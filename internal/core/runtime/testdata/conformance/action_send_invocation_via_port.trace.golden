@@ -2,8 +2,10 @@ step 1: token 1@transmit
 stmt send
   eval feature reading -> 7
 step 2: token 1@receive
+materialize: Data #1
 step 3: token 1@record
 stmt assign received
-  eval feature msg -> 7
+    eval feature msg -> instance#1
+  eval chain value -> 7
 step 4: token 1@done
 step 5: no active tokens

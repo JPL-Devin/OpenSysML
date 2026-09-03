@@ -24,7 +24,7 @@ package test {
 		action receive accept msg : Data via groundPort;
 
 		action record {
-			assign received := msg;
+			assign received := msg.value;
 		}
 
 		done;

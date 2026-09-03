@@ -1097,25 +1097,33 @@ func (e *EvalContext) invokesCalc(scope *symbols.Scope, invocation *ast.Invocati
 	return isCalcSymbol(sym)
 }
 
-// buildInvokedMessage builds the message of `send shutDown() to self`: the
-// invoked behavioral feature types it and the arguments are its payload.
+// buildInvokedMessage builds the message of `send shutDown(7) to self`: the
+// invoked behavioral feature types it and the arguments are its payload, a lone
+// positional one also as `value`, which an accept binds its parameter to.
 func (e *EvalContext) buildInvokedMessage(scope *symbols.Scope, invocation *ast.InvocationExpr, target string) (Message, error) {
 	if invocation.Operand != nil {
 		return Message{}, fmt.Errorf("send %s: a message is not sent through a receiver", ast.SimpleName(invocation.Type))
 	}
-	return e.buildTypedMessage(scope, invocation.Type, invocation.Args, invocation.NamedArgs, target)
+	msg, err := e.buildTypedMessage(scope, invocation.Type, invocation.Args, invocation.NamedArgs, target)
+	if err != nil {
+		return Message{}, err
+	}
+	if len(invocation.Args) == 1 && len(invocation.NamedArgs) == 0 {
+		msg.Payload["value"] = msg.Payload["arg1"]
+	}
+	return msg, nil
 }
 
-// buildConstructedMessage builds the message of `send new Telemetry(frames = 3)
-// via antenna`: the constructed definition types it, the arguments bind features.
+// buildConstructedMessage builds the message of `send new Telemetry(3) via
+// antenna`: the constructed definition types it and the arguments bind its
+// features, so an accept binds a Telemetry whose first feature is 3, never the 3.
 func (e *EvalContext) buildConstructedMessage(scope *symbols.Scope, constructor *ast.ConstructorExpr, target string) (Message, error) {
 	return e.buildTypedMessage(scope, constructor.Type, constructor.Args, constructor.NamedArgs, target)
 }
 
 // buildTypedMessage builds a message typed by a name carrying its arguments by
-// name or position (a lone positional one also as `value`, what accepts bind).
-// Two labels for one feature (the same label twice, qualified or not, or a
-// redefinition and its target) are an error rather than the last value.
+// name or position. Two labels for one feature (the same label twice, qualified
+// or not, or a redefinition and its target) are an error rather than the last value.
 func (e *EvalContext) buildTypedMessage(scope *symbols.Scope, typeRef *ast.QualifiedName, args []ast.Node, named []ast.NamedArg, target string) (Message, error) {
 	signalType := ast.SimpleName(typeRef)
 	if signalType == "" {
@@ -1129,9 +1137,6 @@ func (e *EvalContext) buildTypedMessage(scope *symbols.Scope, typeRef *ast.Quali
 			return Message{}, fmt.Errorf("eval argument %d of send %s: %w", i+1, signalType, err)
 		}
 		payload[fmt.Sprintf("arg%d", i+1)] = value
-		if len(args) == 1 && len(named) == 0 {
-			payload["value"] = value
-		}
 	}
 	for _, arg := range named {
 		name := ast.SimpleName(arg.Name)

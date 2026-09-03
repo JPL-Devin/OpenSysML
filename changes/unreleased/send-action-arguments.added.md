@@ -13,7 +13,9 @@
 - **`send new Def(args)` constructs the message it sends.** The notation's constructor keeps its
   named arguments (`send new Telemetry(frames = 3.0) via antenna;`) through the AST, the RDF
   export and the runtime, which builds the message from the constructed definition and its
-  positional or named arguments exactly as the invocation form used to. An accept subsetting a
+  positional or named arguments. An accept binds the constructed occurrence, whatever the
+  argument count: `accept d : Data` of a `send new Data(7)` binds a `Data` whose first feature
+  is 7, so read `d.value`, not `d`. An accept subsetting a
   declared event (`accept :> shutDown`) now takes a message sent from that event feature
   (`send shutDown to interrupt`), not only one of its type.
 - **A constructor's arguments are checked against the type it instantiates.** `new T(…)` binds

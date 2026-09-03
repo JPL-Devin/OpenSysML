@@ -29,7 +29,7 @@ package SendDelegation {
 
 			transition first standingBy
 				accept order : Command via command
-				do assign lastCode := order
+				do assign lastCode := order.code
 				then working;
 		}
 	}
