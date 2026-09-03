@@ -858,7 +858,12 @@ func (ec *EvalContext) evalOperator(n *ast.OperatorExpr) (Value, error) {
 		return ec.evalUnary(n)
 	case ast.OpRange:
 		return ec.evalRange(n)
-	case ast.OpAt, ast.OpMetaAt:
+	case ast.OpAt:
+		if ec.classifiesValue(n) {
+			return ec.evalTypeClassification(n)
+		}
+		return ec.evalClassification(n)
+	case ast.OpMetaAt:
 		return ec.evalClassification(n)
 	case ast.OpHasType, ast.OpIsType:
 		return ec.evalTypeClassification(n)
@@ -870,18 +875,40 @@ func (ec *EvalContext) evalOperator(n *ast.OperatorExpr) (Value, error) {
 	}
 }
 
+// classifiesValue reports whether `x @ T` is `x istype T`: a subject is written
+// and T is an ordinary type, not a metadata type (which only annotations have).
+func (ec *EvalContext) classifiesValue(n *ast.OperatorExpr) bool {
+	if len(n.Operands) != 1 || n.TypeRef == nil {
+		return false
+	}
+	target, ok := ec.resolveClassificationType(n.TypeRef)
+	return ok && !semantics.IsMetadataType(target)
+}
+
+// resolveClassificationType resolves the type a classification names, seeing
+// through an alias to the type it stands for.
+func (ec *EvalContext) resolveClassificationType(qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+	target, ok := ec.ctx.resolver.ResolveQualified(ec.scope, qn)
+	if !ok || target == nil {
+		return nil, false
+	}
+	if canonical, ok := ec.ctx.resolver.ResolveAliasTarget(target); ok {
+		target = canonical
+	}
+	return target, true
+}
+
+// evalTypeClassification evaluates `x hastype T`, `x istype T` and the value
+// form of `x @ T`; only `hastype` demands the value's direct type be T itself.
 func (ec *EvalContext) evalTypeClassification(n *ast.OperatorExpr) (Value, error) {
 	if len(n.Operands) != 1 || n.TypeRef == nil {
 		return Value{}, fmt.Errorf("%w: '%s' requires one value and one type",
 			ErrTypeMismatch, n.Operator)
 	}
-	target, ok := ec.ctx.resolver.ResolveQualified(ec.scope, n.TypeRef)
-	if !ok || target == nil {
+	target, ok := ec.resolveClassificationType(n.TypeRef)
+	if !ok {
 		return Value{}, fmt.Errorf("%w: %s", ErrUnresolvedType,
 			qualifiedNameToString(n.TypeRef))
-	}
-	if canonical, ok := ec.ctx.resolver.ResolveAliasTarget(target); ok {
-		target = canonical
 	}
 	value, err := ec.evalTypeSubject(n.Operands[0])
 	if err != nil {
