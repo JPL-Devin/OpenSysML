@@ -10,11 +10,14 @@ elmt:Quoted_20Names
     sysml:qualifiedName "Quoted Names" ;
     sysml:elementId "Quoted_20Names" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Quoted Names" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Quoted_20Names__Mass_20_28kg_29, elmt:Quoted_20Names__Rover_20Model, elmt:Quoted_20Names__the_20rover, elmt:Quoted_20Names__my_20rover, elmt:Quoted_20Names__off_20model, elmt:Quoted_20Names__state, elmt:Quoted_20Names__a_20state ;
     sysml:ownedMembership elmt:Quoted_20Names__Mass_20_28kg_29_om, elmt:Quoted_20Names__Rover_20Model_om, elmt:Quoted_20Names__the_20rover_om, elmt:Quoted_20Names__my_20rover_om, elmt:Quoted_20Names__off_20model_om, elmt:Quoted_20Names__state_om, elmt:Quoted_20Names__a_20state_om ;
-    sysml:ownedRelationship elmt:Quoted_20Names__Mass_20_28kg_29_om, elmt:Quoted_20Names__Rover_20Model_om, elmt:Quoted_20Names__the_20rover_om, elmt:Quoted_20Names__my_20rover_om, elmt:Quoted_20Names__off_20model_om, elmt:Quoted_20Names__state_om, elmt:Quoted_20Names__a_20state_om .
+    sysml:ownedRelationship elmt:Quoted_20Names__Mass_20_28kg_29_om, elmt:Quoted_20Names__Rover_20Model_om, elmt:Quoted_20Names__the_20rover_om, elmt:Quoted_20Names__my_20rover_om, elmt:Quoted_20Names__off_20model_om, elmt:Quoted_20Names__state_om, elmt:Quoted_20Names__a_20state_om ;
+    sysx:sourceText "package 'Quoted Names' {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:Quoted_20Names__Mass_20_28kg_29
     a sysml:AttributeDefinition ;
@@ -26,7 +29,8 @@ elmt:Quoted_20Names__Mass_20_28kg_29
     sysml:owningRelationship elmt:Quoted_20Names__Mass_20_28kg_29_om ;
     sysml:owningMembership elmt:Quoted_20Names__Mass_20_28kg_29_om ;
     sysml:declaredName "Mass (kg)" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    attribute def 'Mass (kg)';\n" .
 
 elmt:Quoted_20Names__Mass_20_28kg_29_om
     a sysml:OwningMembership ;
@@ -54,7 +58,9 @@ elmt:Quoted_20Names__Rover_20Model
     sysml:ownedMembership elmt:Quoted_20Names__Rover_20Model__dry_20mass_om, elmt:Quoted_20Names__Rover_20Model__mass_20limit_om, elmt:Quoted_20Names__Rover_20Model__is_20light_om ;
     sysml:ownedRelationship elmt:Quoted_20Names__Rover_20Model__dry_20mass_om, elmt:Quoted_20Names__Rover_20Model__mass_20limit_om, elmt:Quoted_20Names__Rover_20Model__is_20light_om ;
     sysml:ownedFeature elmt:Quoted_20Names__Rover_20Model__dry_20mass, elmt:Quoted_20Names__Rover_20Model__mass_20limit, elmt:Quoted_20Names__Rover_20Model__is_20light ;
-    sysml:ownedFeatureMembership elmt:Quoted_20Names__Rover_20Model__dry_20mass_om, elmt:Quoted_20Names__Rover_20Model__mass_20limit_om, elmt:Quoted_20Names__Rover_20Model__is_20light_om .
+    sysml:ownedFeatureMembership elmt:Quoted_20Names__Rover_20Model__dry_20mass_om, elmt:Quoted_20Names__Rover_20Model__mass_20limit_om, elmt:Quoted_20Names__Rover_20Model__is_20light_om ;
+    sysx:sourceText "    part def <'1'> 'Rover Model' {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Quoted_20Names__Rover_20Model_om
     a sysml:OwningMembership ;
@@ -77,7 +83,8 @@ elmt:Quoted_20Names__Rover_20Model__dry_20mass
     sysml:owningMembership elmt:Quoted_20Names__Rover_20Model__dry_20mass_om ;
     sysml:declaredName "dry mass" ;
     sysml:type elmt:Quoted_20Names__Mass_20_28kg_29 ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute 'dry mass' : 'Mass (kg)';\n" .
 
 elmt:Quoted_20Names__Rover_20Model__dry_20mass_om
     a sysml:FeatureMembership ;
@@ -104,7 +111,9 @@ elmt:Quoted_20Names__Rover_20Model__mass_20limit
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Quoted_20Names__Rover_20Model__mass_20limit___400 ;
     sysml:ownedMembership elmt:Quoted_20Names__Rover_20Model__mass_20limit___400_om ;
-    sysml:ownedRelationship elmt:Quoted_20Names__Rover_20Model__mass_20limit___400_om .
+    sysml:ownedRelationship elmt:Quoted_20Names__Rover_20Model__mass_20limit___400_om ;
+    sysx:sourceText "        constraint 'mass limit' {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:Quoted_20Names__Rover_20Model__mass_20limit_om
     a sysml:FeatureMembership ;
@@ -127,7 +136,8 @@ elmt:Quoted_20Names__Rover_20Model__mass_20limit___400
     sysml:owner elmt:Quoted_20Names__Rover_20Model__mass_20limit ;
     sysml:owningRelationship elmt:Quoted_20Names__Rover_20Model__mass_20limit___400_om ;
     sysml:owningMembership elmt:Quoted_20Names__Rover_20Model__mass_20limit___400_om ;
-    sysx:condition expr:Quoted_20Names__Rover_20Model__mass_20limit___400_pcondition .
+    sysx:condition expr:Quoted_20Names__Rover_20Model__mass_20limit___400_pcondition ;
+    sysx:sourceText "            'dry mass' > 0\n" .
 
 elmt:Quoted_20Names__Rover_20Model__mass_20limit___400_om
     a sysml:OwningMembership ;
@@ -172,7 +182,8 @@ elmt:Quoted_20Names__Rover_20Model__is_20light
     sysml:declaredName "is light" ;
     sysx:declaredPrefix "assert" ;
     sysml:type elmt:Quoted_20Names__Rover_20Model__mass_20limit ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        assert constraint 'is light' : 'mass limit';\n" .
 
 elmt:Quoted_20Names__Rover_20Model__is_20light_om
     a sysml:FeatureMembership ;
@@ -197,7 +208,8 @@ elmt:Quoted_20Names__the_20rover
     sysml:owningMembership elmt:Quoted_20Names__the_20rover_om ;
     sysml:declaredName "the rover" ;
     sysml:aliasedElement elmt:Quoted_20Names__Rover_20Model ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    alias 'the rover' for 'Rover Model';\n" .
 
 elmt:Quoted_20Names__the_20rover_om
     a sysml:OwningMembership ;
@@ -221,7 +233,8 @@ elmt:Quoted_20Names__my_20rover
     sysml:declaredName "my rover" ;
     sysml:type elmt:Quoted_20Names__Rover_20Model ;
     sysml:subsets elmt:Quoted_20Names__Rover_20Model ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    part 'my rover' : 'Rover Model' :> 'Rover Model';\n" .
 
 elmt:Quoted_20Names__my_20rover_om
     a sysml:OwningMembership ;
@@ -244,7 +257,8 @@ elmt:Quoted_20Names__off_20model
     sysml:owningMembership elmt:Quoted_20Names__off_20model_om ;
     sysml:declaredName "off model" ;
     sysml:type "Not Declared Here" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    part 'off model' : 'Not Declared Here';\n" .
 
 elmt:Quoted_20Names__off_20model_om
     a sysml:OwningMembership ;
@@ -266,7 +280,8 @@ elmt:Quoted_20Names__state
     sysml:owningRelationship elmt:Quoted_20Names__state_om ;
     sysml:owningMembership elmt:Quoted_20Names__state_om ;
     sysml:declaredName "state" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    part def 'state';\n" .
 
 elmt:Quoted_20Names__state_om
     a sysml:OwningMembership ;
@@ -289,7 +304,8 @@ elmt:Quoted_20Names__a_20state
     sysml:owningMembership elmt:Quoted_20Names__a_20state_om ;
     sysml:declaredName "a state" ;
     sysml:type elmt:Quoted_20Names__state ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    part 'a state' : 'state';\n" .
 
 elmt:Quoted_20Names__a_20state_om
     a sysml:OwningMembership ;
@@ -306,12 +322,15 @@ elmt:Consumer
     sysml:qualifiedName "Consumer" ;
     sysml:elementId "Consumer" ;
     sysx:memberIndex "1"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Consumer" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedRelationship elmt:Consumer___400, elmt:Consumer__r_om, elmt:Consumer___402 ;
     sysml:ownedImport elmt:Consumer___400 ;
     sysml:ownedMember elmt:Consumer__r ;
-    sysml:ownedMembership elmt:Consumer__r_om .
+    sysml:ownedMembership elmt:Consumer__r_om ;
+    sysx:sourceText "package Consumer {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:Consumer___400
     a sysml:Import ;
@@ -325,7 +344,8 @@ elmt:Consumer___400
     sysml:visibility "private" ;
     sysml:importedNamespace "Quoted Names" ;
     sysx:isNamespaceImport "true"^^xsd:boolean ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    private import 'Quoted Names'::*;\n" .
 
 elmt:Consumer__r
     a sysml:PartUsage ;
@@ -338,7 +358,8 @@ elmt:Consumer__r
     sysml:owningMembership elmt:Consumer__r_om ;
     sysml:declaredName "r" ;
     sysml:type elmt:Quoted_20Names__Rover_20Model ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    part r : 'Quoted Names'::'Rover Model';\n" .
 
 elmt:Consumer__r_om
     a sysml:OwningMembership ;
@@ -360,4 +381,5 @@ elmt:Consumer___402
     sysml:owningRelatedElement elmt:Consumer ;
     sysml:client elmt:Consumer__r ;
     sysml:supplier elmt:Quoted_20Names__Rover_20Model ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    dependency from r to 'Quoted Names'::'Rover Model';\n" .
