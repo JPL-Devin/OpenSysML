@@ -1156,14 +1156,16 @@ per language so nobody re-derives it.
 
 ## I1 — the wire contract, written down
 
-There is no page a hand-written client can be built from: which field names (proto3
-lowerCamelCase), which `Value` arm is which (`integerValue` as a JSON *string* for 64-bit,
-`realValue`, `booleanValue`, `stringValue`, quantity with unit, enumeration by identity not display
+There was no page a hand-written client can be built from: which field names (proto3
+lowerCamelCase), which `Value` arm is which (`intValue` as a JSON *string* for 64-bit,
+`realValue`, `boolValue`, `stringValue`, quantity with unit, enumeration by identity not display
 name, instance references, `Complex`), how *unset* differs from *absent* and from *no result*, how a
 diagnostic and a Connect error arrive, the model-hash lifetime, and how a behavior call and a query
-are made. I1 is a wire-contract reference page under `docs/reference/` with real responses from
-the running service and short R, Julia, MATLAB and C snippets, linked from the clients page. **In
-progress** (no pull request at the baseline). Everything else in the track reads from it.
+are made. I1 is a `wire-contract` page under `docs/reference/`: every example captured from the
+running service, all eleven `Value` arms, the Connect code table, the
+`Instantiate`/`ExecuteState`/`Verify*`/`Query` answer shapes, and R, Julia, MATLAB and C
+illustrations marked untested, linked from the transports, clients and API pages. **Open** (#848,
+mergeable at the last check). Everything else in the track reads from it.
 
 ## I2 — shared conformance fixtures for handwritten clients
 
@@ -1278,7 +1280,7 @@ not more harness work.
 Two orders, because there are two kinds of item. The **track-local** orders say where to start
 inside a track; the **cross-cutting** order says which tracks' first items go first when a session
 must choose, and it is the one that has been agreed. Everything in flight (the open pull requests
-named above, the four items marked *in progress*) lands or is closed before either order is
+named above, the three items marked *in progress*) lands or is closed before either order is
 consulted — they are already the next thing.
 
 ## Cross-cutting order (agreed)
