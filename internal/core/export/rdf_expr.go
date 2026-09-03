@@ -391,21 +391,20 @@ var expressionMetaclasses = map[string]bool{
 }
 
 // isExpressionNode reports whether a subject is an expression node rather than
-// an element: it is in the expression namespace, or its metaclass is one and it
-// has no qualified name (an `expr` usage is typed sysml:Expression too) and no
-// membership owns it (a body's result is an Expression element). Memberships
-// are read before elements, so the ownership index is complete here.
+// an element. Whatever its IRI, a subject a membership owns is an element (a
+// body's result is an Expression element); otherwise it is a node when it is in
+// the expression namespace, or its metaclass is one and it has no qualified
+// name (an `expr` usage is typed sysml:Expression too). Memberships are read
+// before elements, so the ownership index is complete here.
 func (d *decoder) isExpressionNode(subject rdf.Term) bool {
 	if !subject.IsIRI() {
 		return false
 	}
-	if strings.HasPrefix(subject.Value, rdf.Expression) {
-		return true
+	if _, owned := d.owningMembership[subject.Value]; owned || d.graph.HasProperty(subject, rdf.SysML+pOwningMembership) {
+		return false
 	}
-	_, owned := d.owningMembership[subject.Value]
-	return expressionMetaclasses[d.metaclass(subject)] &&
-		!d.graph.HasProperty(subject, rdf.SysML+pQualifiedName) &&
-		!d.graph.HasProperty(subject, rdf.SysML+pOwningMembership) && !owned
+	return strings.HasPrefix(subject.Value, rdf.Expression) ||
+		expressionMetaclasses[d.metaclass(subject)] && !d.graph.HasProperty(subject, rdf.SysML+pQualifiedName)
 }
 
 // resolveExpressions renders every element's expression-valued properties as

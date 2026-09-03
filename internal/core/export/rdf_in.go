@@ -104,11 +104,11 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 		demotedExpr:      map[string]bool{},
 		folded:           map[*element]*element{},
 	}
-	d.nl = d.newline()
 	roots, err := d.build()
 	if err != nil {
 		return nil, err
 	}
+	d.nl = d.newline()
 	notation, err := d.render(roots)
 	if err != nil {
 		return nil, err

@@ -314,6 +314,20 @@ ex:r_b a sysml:LiteralInteger ; sysml:value "2"^^xsd:integer .
 	if !strings.Contains(string(back), want) {
 		t.Errorf("the result owned from the membership side alone is lost:\n%s", back)
 	}
+
+	// An IRI is an identifier: a result minted under this mapping's expression
+	// namespace is still the element its membership owns, not an inline node.
+	inExprNamespace := strings.ReplaceAll(membershipOnly, "ex:r ", "<urn:opensysml:expr:r> ")
+	if inExprNamespace == membershipOnly {
+		t.Fatal("the result was not moved into the expression namespace")
+	}
+	back, err = export.Convert("m.ttl", []byte(inExprNamespace), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation with the result in the expression namespace: %v", err)
+	}
+	if !strings.Contains(string(back), want) {
+		t.Errorf("the result in the expression namespace is lost:\n%s", back)
+	}
 }
 
 // A standard graph states no sysx:memberIndex, and a graph is unordered: its
