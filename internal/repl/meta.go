@@ -1126,9 +1126,15 @@ type featureValueWalk struct {
 }
 
 func (w *featureValueWalk) lines(inst *runtime.Instance, indent string, depth int) []string {
+	return w.rows(inst, indent, depth, true)
+}
+
+// rows lists an object's values and, when asked, its behaviors; a behavior's
+// occurrence is listed without its own, since its row already reports what runs.
+func (w *featureValueWalk) rows(inst *runtime.Instance, indent string, depth int, withBehaviors bool) []string {
 	features := w.ctx.FeaturesOf(inst.Type)
 	connectors := w.connectors(inst, indent)
-	if len(features) == 0 && len(connectors) == 0 {
+	if len(features) == 0 && len(connectors) == 0 && withBehaviors {
 		return w.emit(nil, indent+"(no features)")
 	}
 
@@ -1148,7 +1154,9 @@ func (w *featureValueWalk) lines(inst *runtime.Instance, indent string, depth in
 		// A state or action holds no value either; what it has is a run, or none,
 		// which is listed under its own heading after the values.
 		if isBehaviorFeature(feat) {
-			behaviors = append(behaviors, feat)
+			if withBehaviors {
+				behaviors = append(behaviors, feat)
+			}
 			continue
 		}
 		// A constraint or requirement the part carries has no value; what it has
@@ -1197,11 +1205,8 @@ func isBehaviorFeature(feat *runtime.EffectiveFeature) bool {
 	}
 }
 
-// behaviorLines lists the behaviors an object's type declares under a heading
-// of their own, reporting what each is doing: the active state of a machine the
-// object exhibits, the execution state of an action it performs, or that the
-// object runs no such behavior. The listed object's heading is a sibling of
-// "Features:"; a nested object's sits under its row.
+// behaviorLines lists an object's behaviors under their own heading with what each
+// is doing, and the values a running one's occurrence holds beneath its row.
 func (w *featureValueWalk) behaviorLines(inst *runtime.Instance, behaviors []*runtime.EffectiveFeature, indent string, depth int) []string {
 	if len(behaviors) == 0 {
 		return nil
@@ -1215,7 +1220,30 @@ func (w *featureValueWalk) behaviorLines(inst *runtime.Instance, behaviors []*ru
 		if w.budget <= 0 {
 			return w.truncate(lines, rowIndent)
 		}
-		lines = w.emit(lines, fmt.Sprintf("%s%s: %s", rowIndent, feat.Name, behaviorStatus(w.ctx, inst, feat)))
+		row := fmt.Sprintf("%s%s: %s", rowIndent, feat.Name, behaviorStatus(w.ctx, inst, feat))
+		if _, runs := w.ctx.BehaviorNamed(inst, feat.Name); !runs {
+			lines = w.emit(lines, row)
+			continue
+		}
+		if _, elided := w.elided(feat, depth); elided {
+			lines = w.emit(lines, fmt.Sprintf("%s (not expanded: %s)", row, w.elisionReason(depth)))
+			continue
+		}
+		lines = w.emit(lines, row)
+		fv, err := inst.GetFeatureValue(w.ctx, feat.Name)
+		if err != nil {
+			w.errs = append(w.errs, err)
+			lines = w.emit(lines, fmt.Sprintf("%s  <error: %v>", rowIndent, err))
+			continue
+		}
+		for _, occurrence := range nestedInstances(w.ctx, fv) {
+			if w.budget <= 0 {
+				return w.truncate(lines, rowIndent+"  ")
+			}
+			w.onPath[occurrence.Type] = true
+			lines = append(lines, w.rows(occurrence, rowIndent+"  ", depth+1, false)...)
+			delete(w.onPath, occurrence.Type)
+		}
 	}
 	return lines
 }

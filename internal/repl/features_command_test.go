@@ -162,6 +162,49 @@ func TestFeaturesListsNestedBehaviorsUnderTheNestedObject(t *testing.T) {
 	rejects(t, got, "\nBehaviors:", "<unknown>")
 }
 
+// A running behavior's occurrence owns values of its own — a machine's attributes,
+// an action's parameters and outputs — which the listing keeps under the behavior's
+// row, distinct from the performer's same-named values, without listing the
+// occurrence's states and steps as values.
+func TestFeaturesListsTheValuesARunningBehaviorOwns(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(`private import ScalarValues::*;
+state def Counting {
+    attribute count : Integer = 0;
+    entry; then running;
+    state running { entry action bump { assign count := count + 1; } }
+}
+part def Counter {
+    attribute count : Integer = 10;
+    exhibit state modes : Counting;
+    perform action tick { out total : Integer = 7; action step; }
+    action idle { in n : Real; }
+}
+part counter : Counter;`).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+	run(t, s, "%instantiate counter")
+
+	got := run(t, s, "%features counter")
+	wants(t, got,
+		"Features:\n  count = 10\nBehaviors:\n",
+		"  modes: exhibited state machine, current state running\n    count = 1\n",
+		"  tick: performed action, not started\n    total = 7\n",
+		"  idle: action, not running",
+	)
+	rejects(t, got, "<unknown>", "running = ", "step = ", "bump = ", "n = ", "modes = Instance", "tick = Instance")
+	wants(t, run(t, s, "%eval in counter : modes.count"), "1")
+	wants(t, run(t, s, "%eval in counter : tick.total"), "7")
+
+	// The depth bound applies to an occurrence as to any nested object.
+	got = run(t, s, "%features counter depth 0")
+	wants(t, got,
+		"  modes: exhibited state machine, current state running (not expanded: depth 0)",
+		"  tick: performed action, not started (not expanded: depth 0)",
+	)
+	rejects(t, got, "count = 1\n", "total = 7")
+}
+
 // A redefinition renames the behavior it redefines, so the object runs one
 // machine and one action under two names each: both names report that one
 // execution, and neither reads "not running" while the other runs.

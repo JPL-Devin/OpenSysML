@@ -290,9 +290,11 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   reports, before and after the debugger drives it), the execution state of an action it performs
   (`tick: performed action, completed`), and `not running` for a state or action the type declares
   but the object neither exhibits nor performs. A named transition is listed as the step it
-  declares (`toggle: transition, modes.closed → modes.opened`), not as an idle action. A nested
-  object's behaviors are listed under its own row. Nothing is invented: a machine that has not
-  started reads `not started`, one that reached its end reads `completed`.
+  declares (`toggle: transition, modes.closed → modes.opened`), not as an idle action. The values
+  a running behavior owns — the attributes of the machine's own occurrence, an action's parameters
+  and outputs — are listed under its row, apart from the performer's own values of the same name.
+  A nested object's behaviors are listed under its own row. Nothing is invented: a machine that
+  has not started reads `not started`, one that reached its end reads `completed`.
 
 ### Fixed
 
