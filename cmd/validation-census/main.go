@@ -20,6 +20,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/baseline"
@@ -180,7 +181,6 @@ func runUpdate(root string, opts options, out io.Writer) error {
 		PilotArtifact: pin.Artifact,
 		Jar:           JarRecord{Name: filepath.Base(jar), Digest: digest},
 		Extraction:    extractionRecord(),
-		Recorded:      baseline.Today(),
 	}
 	for _, e := range extracted {
 		status, known := statuses[e.Name]
@@ -189,11 +189,25 @@ func runUpdate(root string, opts options, out io.Writer) error {
 		}
 		next.Constraints = append(next.Constraints, Constraint{Name: e.Name, Raw: e.Raw, Source: e.Source, Status: status})
 	}
+	next.Recorded = recordedDate(previous, next)
 	if err := writeBaseline(root, next); err != nil {
 		return err
 	}
 	fmt.Fprintf(out, "validation-census: recorded %d constraints from %s\n", len(next.Constraints), filepath.Base(jar))
 	return nil
+}
+
+// recordedDate keeps the previous date when nothing but the date would change,
+// so -update on a current tree is byte-identical across days.
+func recordedDate(previous, next *Baseline) string {
+	if previous != nil {
+		dated := *next
+		dated.Recorded = previous.Recorded
+		if reflect.DeepEqual(&dated, previous) {
+			return previous.Recorded
+		}
+	}
+	return baseline.Today()
 }
 
 // compareJar checks the baseline's list and digest against the jar when it is

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -56,6 +57,80 @@ func TestExtractionMatchesBaseline(t *testing.T) {
 	}
 	if len(extracted) != len(base.Constraints) {
 		t.Fatalf("extracted %d constraints, baseline records %d", len(extracted), len(base.Constraints))
+	}
+}
+
+// TestRecordedDateFollowsContent: an unchanged baseline keeps its date, a
+// changed one is stamped today, and a first recording is dated.
+func TestRecordedDateFollowsContent(t *testing.T) {
+	previous := testBaseline(Constraint{Name: "validateA", Source: "kerml", Status: StatusFaithful})
+	previous.Recorded = "2020-01-01"
+	same := testBaseline(Constraint{Name: "validateA", Source: "kerml", Status: StatusFaithful})
+	if got := recordedDate(previous, same); got != "2020-01-01" {
+		t.Errorf("unchanged baseline re-dated to %q", got)
+	}
+	changed := testBaseline(Constraint{Name: "validateA", Source: "kerml", Status: StatusFaithful}, Constraint{Name: "validateB", Source: "sysml", Status: StatusUnknown})
+	if got := recordedDate(previous, changed); got != baseline.Today() {
+		t.Errorf("changed baseline dated %q, want today", got)
+	}
+	if got := recordedDate(nil, same); got != baseline.Today() {
+		t.Errorf("first recording dated %q, want today", got)
+	}
+}
+
+// TestUpdateIsIdempotentAcrossDays runs -update over a copy of the committed
+// baseline carrying an old date; with the jar present it must not change a byte.
+func TestUpdateIsIdempotentAcrossDays(t *testing.T) {
+	repo, err := moduleRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pin, err := baseline.ReadPin(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jar, present, err := options{}.jarPath(repo, pin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !present {
+		t.Skipf("pinned jar not provisioned at %s", jar)
+	}
+	root := t.TempDir()
+	for _, rel := range []string{baseline.PinPath, baselinePath} {
+		content, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		dst := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(dst, content, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	base, err := loadBaseline(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base.Recorded = "2020-01-01"
+	if err := writeBaseline(root, base); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(baselinePath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runUpdate(root, options{jar: jar}, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(baselinePath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("-update over an unchanged extraction rewrote the baseline:\n%s", after)
 	}
 }
 
