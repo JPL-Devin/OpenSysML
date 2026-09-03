@@ -122,7 +122,7 @@ func (ctx *Context) calcShapeOf(sym *symbols.Symbol) (*calcShape, error) {
 	}
 
 	name := ctx.qualifiedSymbolName(sym)
-	if !isCalcDecl(sym.Decl) {
+	if !isCalcDecl(sym.Decl) && !ctx.calcTypedFeature(sym) {
 		return nil, fmt.Errorf("%w: %s is %s, not a calc definition or usage", ErrNotACalc, name, describeDecl(sym.Decl))
 	}
 
@@ -721,6 +721,15 @@ func (ctx *Context) hasCalcBody(sym *symbols.Symbol) bool {
 		return true
 	}
 	return len(assignedOutputs(calcSteps(body), ctx.calcOutputs(chain))) > 0
+}
+
+// calcTypedFeature reports whether sym is a feature typed by a calc — a step, which an
+// invocation performs as the calc it is typed by.
+func (ctx *Context) calcTypedFeature(sym *symbols.Symbol) bool {
+	if _, ok := sym.Decl.(*ast.Usage); !ok {
+		return false
+	}
+	return len(ctx.calcChain(sym)) > 1
 }
 
 // isCalcDecl reports whether a declaration is a calc definition or calc usage.

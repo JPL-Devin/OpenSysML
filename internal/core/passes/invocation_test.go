@@ -213,6 +213,27 @@ func TestInvocationOverloadNoneApplicableReportsAgainstTheCallable(t *testing.T)
 	}`, "type.expr", `argument 1 of pick expects Integer, found String (candidates: P::A::pick, P::B::pick)`)
 }
 
+// A feature typed by a calc performs that calc, so it is a candidate beside a same-named
+// calc: each call is checked against the one its argument fits, and only a call neither
+// fits is reported, naming both.
+func TestInvocationOverloadFeatureTypedByABehavior(t *testing.T) {
+	const src = `package P {
+		private import ScalarValues::*;
+		package A { calc def pick { in x : String; return : Integer = 1; } }
+		package B { calc def Twice { in x : Integer; return : Integer = 2 * x; } ref pick : Twice; }
+		package C {
+			private import A::*;
+			private import B::*;
+			attribute i : Integer = pick(3);
+			attribute s : Integer = pick("s");
+			%s
+		}
+	}`
+	wantLibraryClean(t, fmt.Sprintf(src, ""))
+	wantLibraryDiag(t, fmt.Sprintf(src, `attribute b : Integer = pick(true);`),
+		"type.expr", "argument 1 of pick expects String, found Boolean (candidates: P::A::pick, P::B::pick)")
+}
+
 // An argument of unknown type binds to any parameter, so the first candidate
 // in lookup order is kept and nothing new is reported.
 func TestInvocationOverloadUnknownArgumentType(t *testing.T) {

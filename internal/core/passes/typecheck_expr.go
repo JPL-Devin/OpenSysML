@@ -689,7 +689,7 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 	}
 	// A performed call runs its behavior, so it must name an action (SysML v2
 	// §8.3.16.7 validatePerformActionUsage), as the runtime requires.
-	if performs == semantics.PerformsAction && !performs.Performable(sym) {
+	if performs == semantics.PerformsAction && !ec.model.Performable(performs, sym) {
 		ec.diags = append(ec.diags, Diagnostic{
 			Severity: SeverityError,
 			Span:     e.Type.Span(),
