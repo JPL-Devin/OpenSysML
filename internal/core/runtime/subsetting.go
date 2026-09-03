@@ -209,28 +209,22 @@ func (ctx *Context) redefinedNames(sym, owner *symbols.Symbol) []string {
 	return names
 }
 
-// subsettingContributions returns the values the features subsetting the named
-// feature contribute to it, in declaration order. A redefinition shares one feature value
-// under two names, so membership is decided by the feature value a subsetted name reads
-// rather than by the name this collection was read under. Reading a subsetting
-// feature materializes it, so a cycle between subsetting features is reported as
-// ErrCyclicFeatureValue rather than recursing until the step budget runs out.
-func (ctx *Context) subsettingContributions(inst *Instance, name string) ([]Value, error) {
-	target := inst.FeatureValues[name]
-	key := featureValueRef{instance: inst.ID, feature: name}
-	if ctx.collectingSubsets[key] {
-		return nil, fmt.Errorf("%w: %s.%s subsets itself", ErrCyclicFeatureValue, inst.Type.Name, name)
+// SubsettingFeatures returns the features of typ whose values the named feature
+// holds by subsetting it, in declaration order, reading nothing. On inst, a name
+// a redefinition makes read the target's feature value is the target too; inst
+// is nil for an object not yet materialized, known only by type.
+func (ctx *Context) SubsettingFeatures(inst *Instance, typ *symbols.Symbol, name string) []EffectiveFeature {
+	var target *FeatureValue
+	if inst != nil {
+		target = inst.FeatureValues[name]
 	}
-	ctx.collectingSubsets[key] = true
-	defer delete(ctx.collectingSubsets, key)
-
-	var values []Value
-	for _, feat := range ctx.FeaturesOf(inst.Type) {
+	var subsetting []EffectiveFeature
+	for _, feat := range ctx.FeaturesOf(typ) {
 		if feat.Name == name || feat.Symbol == nil {
 			continue
 		}
 		subsets := false
-		for _, subsetted := range ctx.relatedFeatureNames(feat.Symbol, inst.Type, ast.RelSubsets) {
+		for _, subsetted := range ctx.relatedFeatureNames(feat.Symbol, typ, ast.RelSubsets) {
 			if subsetted == name || (target != nil && inst.FeatureValues[subsetted] == target) {
 				subsets = true
 				break
@@ -239,10 +233,32 @@ func (ctx *Context) subsettingContributions(inst *Instance, name string) ([]Valu
 		if !subsets {
 			continue
 		}
-		fv, ok := inst.FeatureValues[feat.Name]
-		if !ok || fv == inst.FeatureValues[name] {
-			continue
+		if inst != nil {
+			if fv, ok := inst.FeatureValues[feat.Name]; !ok || fv == target {
+				continue
+			}
 		}
+		subsetting = append(subsetting, feat)
+	}
+	return subsetting
+}
+
+// subsettingContributions returns the values the features subsetting the named
+// feature contribute to it, in declaration order. A redefinition shares one feature value
+// under two names, so membership is decided by the feature value a subsetted name reads
+// rather than by the name this collection was read under. Reading a subsetting
+// feature materializes it, so a cycle between subsetting features is reported as
+// ErrCyclicFeatureValue rather than recursing until the step budget runs out.
+func (ctx *Context) subsettingContributions(inst *Instance, name string) ([]Value, error) {
+	key := featureValueRef{instance: inst.ID, feature: name}
+	if ctx.collectingSubsets[key] {
+		return nil, fmt.Errorf("%w: %s.%s subsets itself", ErrCyclicFeatureValue, inst.Type.Name, name)
+	}
+	ctx.collectingSubsets[key] = true
+	defer delete(ctx.collectingSubsets, key)
+
+	var values []Value
+	for _, feat := range ctx.SubsettingFeatures(inst, inst.Type, name) {
 		sub, err := inst.GetFeatureValue(ctx, feat.Name)
 		if err != nil {
 			return nil, fmt.Errorf("subsetting feature %s of %s: %w", feat.Name, name, err)

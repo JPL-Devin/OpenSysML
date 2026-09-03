@@ -408,7 +408,7 @@ func (s *Session) peekObject(text string) (objectShape, bool) {
 			continue
 		}
 		typ := s.objectTypeOf(feat)
-		if typ == nil || seg.index > s.elementCount(shape.inst, feat) {
+		if typ == nil || seg.index > s.elementCount(shape, feat) {
 			return objectShape{}, false
 		}
 		shape = objectShape{typ: typ}
@@ -494,7 +494,7 @@ func (s *Session) featureCompletions(shape objectShape, prefix, partial string) 
 			candidates = append(candidates, name)
 			continue
 		}
-		for n := 1; n <= s.elementCount(shape.inst, feat); n++ {
+		for n := 1; n <= s.elementCount(shape, feat); n++ {
 			candidates = append(candidates, fmt.Sprintf("%s[%d]", name, n))
 		}
 	}
@@ -508,16 +508,42 @@ func (s *Session) featureCompletions(shape objectShape, prefix, partial string) 
 }
 
 // elementCount is how many elements completion may index: the ones held once
-// materialized, before that the ones the lower bound guarantees.
-func (s *Session) elementCount(inst *runtime.Instance, feat *runtime.EffectiveFeature) int {
-	if fv := heldFeatureValue(inst, feat.Name); fv != nil {
-		return min(len(collectionElements(fv.Values)), elementLimit)
+// materialized, before that the ones reading the feature would hold.
+func (s *Session) elementCount(shape objectShape, feat *runtime.EffectiveFeature) int {
+	return min(s.elementsToHold(shape, feat, map[string]bool{}), elementLimit)
+}
+
+// elementsToHold is how many objects feat holds, or would once read, as the
+// runtime materializes a collection: what the features subsetting it contribute
+// first, then anonymous objects up to its lower bound. reading guards a cycle of
+// subsetting features, which reading reports instead.
+func (s *Session) elementsToHold(shape objectShape, feat *runtime.EffectiveFeature, reading map[string]bool) int {
+	if fv := heldFeatureValue(shape.inst, feat.Name); fv != nil {
+		if fv.Values.Kind == runtime.ValInvalid {
+			if _, isObject := fv.Value.Object(); isObject {
+				return 1
+			}
+			return 0
+		}
+		return len(collectionElements(fv.Values))
+	}
+	if reading[feat.Name] || s.objectTypeOf(feat) == nil {
+		return 0
+	}
+	if feat.IsScalar() {
+		return 1
 	}
 	lower := feat.Multiplicity.Lower
 	if !lower.Known || lower.Infinite {
 		return 0
 	}
-	return min(int(lower.Value), elementLimit)
+	reading[feat.Name] = true
+	defer delete(reading, feat.Name)
+	contributed := 0
+	for _, sub := range s.rtCtx.SubsettingFeatures(shape.inst, shape.typ, feat.Name) {
+		contributed += s.elementsToHold(shape, &sub, reading)
+	}
+	return max(contributed, int(lower.Value))
 }
 
 // elementLimit bounds the indexed elements one feature is completed to.

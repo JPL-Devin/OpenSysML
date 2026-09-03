@@ -233,8 +233,10 @@ func NewSession() *Session {
 	}
 }
 
-// SetBudgets sets the bounds for runtime contexts created from here on. It
-// errors on a non-positive bound, which no run could make progress under.
+// SetBudgets sets the bounds for runtime contexts created from here on, dropping
+// the current one with its objects and the debuggers driving it, which the next
+// command reports. It errors on a non-positive bound, which no run could make
+// progress under.
 func (s *Session) SetBudgets(budgets runtime.Budgets) error {
 	if err := budgets.Validate(); err != nil {
 		return err
@@ -242,16 +244,27 @@ func (s *Session) SetBudgets(budgets runtime.Budgets) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.budgets = budgets
-	// Dropping the context invalidates everything derived from it, instances
-	// included: their IDs restart with the next context. What goes is recorded, so
-	// a later command explains it.
 	s.rtCtx = nil
 	if n := s.heldObjects(); n > 0 {
 		s.lost = lossOnBudgets(n)
 	}
 	s.instances = make(map[string]*runtime.Instance)
 	s.unnamed = nil
+	s.endDebugSessions(boundsChanged)
 	return nil
+}
+
+// endDebugSessions ends both debuggers for a cause outside any submission,
+// recording it for the next debugging command.
+func (s *Session) endDebugSessions(cause string) {
+	if s.actionExec != nil {
+		s.endedAction = &endedSession{kind: "action", name: s.actionExec.name, outside: cause}
+		s.actionExec = nil
+	}
+	if s.stateExec != nil {
+		s.endedState = &endedSession{kind: "state machine", name: s.stateExec.name, outside: cause}
+		s.stateExec = nil
+	}
 }
 
 // Budgets returns the bounds this session gives its runtime contexts.
@@ -944,7 +957,7 @@ func (s *Session) staleDebugState(gone []string, fqn, selfFQN string, shapes *ru
 // debugSessionResetEnded reports a debugging session a reset ended, which no
 // redeclaration accounts for.
 func debugSessionResetEnded(kind, name string) string {
-	return fmt.Sprintf("note: %s debugging session for %q ended (the session was reset)", kind, name)
+	return fmt.Sprintf("note: %s debugging session for %q ended (%s)", kind, name, sessionReset)
 }
 
 func debugSessionEnded(kind, name, superseded string, objectGone bool) string {
@@ -980,7 +993,7 @@ func (s *Session) Clear() []string {
 // declaration, so nothing materialized from the old one can be rebound: what
 // goes is reported and recorded rather than silently emptied.
 func (s *Session) clear() []string {
-	notices, lost, endedAction, endedState := s.resetLoss()
+	notices, lost := s.resetLoss()
 	s.ws.Remove(docName)
 	s.ws.Remove(kermlDocName)
 	s.snippets = nil
@@ -994,9 +1007,9 @@ func (s *Session) clear() []string {
 	}
 	s.instances = make(map[string]*runtime.Instance)
 	s.unnamed = nil
-	s.actionExec = nil
-	s.stateExec = nil
-	s.lost, s.endedAction, s.endedState = lost, endedAction, endedState
+	s.lost = lost
+	s.endedAction, s.endedState = nil, nil
+	s.endDebugSessions(sessionReset)
 	s.notedBlocker.record("")
 	return notices
 }
@@ -1004,20 +1017,18 @@ func (s *Session) clear() []string {
 // resetLoss reports what a reset takes with it and records why, so a later
 // %instances, %features or %step explains the loss instead of reading as a session
 // that never materialized anything.
-func (s *Session) resetLoss() (notices []string, lost instanceLoss, action, state *endedSession) {
+func (s *Session) resetLoss() (notices []string, lost instanceLoss) {
 	if n := s.heldObjects(); n > 0 {
 		notices = append(notices, instancesResetNotice(n))
 		lost = lossOnReset(n)
 	}
 	if s.actionExec != nil {
 		notices = append(notices, debugSessionResetEnded("action", s.actionExec.name))
-		action = &endedSession{kind: "action", name: s.actionExec.name, reset: true}
 	}
 	if s.stateExec != nil {
 		notices = append(notices, debugSessionResetEnded("state", s.stateExec.name))
-		state = &endedSession{kind: "state machine", name: s.stateExec.name, reset: true}
 	}
-	return notices, lost, action, state
+	return notices, lost
 }
 
 // getOrCreateRuntime lazily creates runtime context when first needed.

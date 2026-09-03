@@ -97,6 +97,48 @@ func TestResetCountsDisplacedObjects(t *testing.T) {
 	})
 }
 
+// New run bounds drop the runtime context, and with it the debuggers driving
+// it: the next object gets the old id, and must not be taken for the performer.
+func TestBudgetsEndDebuggers(t *testing.T) {
+	rebound := func(t *testing.T, s *Session) {
+		budgets := s.Budgets()
+		budgets.MaxSteps++
+		if err := s.SetBudgets(budgets); err != nil {
+			t.Fatalf("SetBudgets: %v", err)
+		}
+	}
+	t.Run("exhibited machine", func(t *testing.T) {
+		s := loadFixture(t, "testdata/exhibited_machine.sysml")
+		first := objectIDIn(t, run(t, s, "%instantiate Obj::Monitor"))
+		wants(t, run(t, s, "%state Obj::Monitor"), "exhibited by object #"+first)
+		rebound(t, s)
+		if s.stateExec != nil {
+			t.Fatal("the state machine session outlived its runtime context")
+		}
+		again := objectIDIn(t, run(t, s, "%instantiate Obj::Monitor"))
+		if again != first {
+			t.Fatalf("the new context gave id %s, want %s reused", again, first)
+		}
+		wants(t, run(t, s, "%advance 10"),
+			`no active state machine session: the state machine session for "Obj::Monitor" ended when the run bounds were changed`)
+		wants(t, run(t, s, "%features #"+first), "count = 1")
+	})
+	t.Run("action performer", func(t *testing.T) {
+		s := NewSession()
+		s.Submit("part def Rack { attribute size = 1.0; }")
+		s.Submit("action tally {\n\tattribute total = 0;\n\tfirst start;\n\tthen done;\n}")
+		run(t, s, "%instantiate Rack")
+		wants(t, run(t, s, "%action tally Rack"), "Started action executor")
+		rebound(t, s)
+		if s.actionExec != nil {
+			t.Fatal("the action session outlived its runtime context")
+		}
+		run(t, s, "%instantiate Rack")
+		wants(t, run(t, s, "%step"),
+			`no active action session: the action session for "tally" ended when the run bounds were changed`)
+	})
+}
+
 // Dotted paths rooted at a name or an id, and the `::` form, walk to the same
 // nested object, which is reported under its declared root.
 func TestDottedPathsReachNestedObjects(t *testing.T) {
@@ -538,6 +580,54 @@ func TestCompleteIndexesOnlyHeldElements(t *testing.T) {
 	for _, c := range got.Candidates {
 		if _, _, err := s.resolveObject(c); err != nil {
 			t.Errorf("completion %q does not resolve: %v", c, err)
+		}
+	}
+}
+
+// A collection holds the objects of the features subsetting it, then anonymous
+// objects up to its lower bound; completion offers exactly those indexes before
+// anything is materialized, for an object it holds and for one known by type.
+func TestCompleteIndexesSubsettingContributions(t *testing.T) {
+	s := submitted(t, `package Fleet {
+	part def Wheel { attribute radius = 0.3; }
+	part def Car {
+		part wheels : Wheel[0..4];
+		part frontLeft : Wheel subsets wheels;
+		part frontRight : Wheel subsets wheels;
+		part axles : Wheel[3];
+		part rear : Wheel subsets axles;
+		part slots : Wheel[1..*];
+		part filled : Wheel[2] subsets slots;
+	}
+	part def Garage { part parked : Car; }
+	part car : Car;
+	part garage : Garage;
+}`)
+	run(t, s, "%instantiate car")
+	run(t, s, "%instantiate garage")
+	ids := fmt.Sprint(s.rtCtx.InstanceIDs())
+	for _, root := range []string{"car", "garage.parked"} {
+		got := s.Complete("%features "+root+".", len("%features "+root+".")).Candidates
+		want := []string{root + ".axles[1]", root + ".axles[2]", root + ".axles[3]",
+			root + ".filled[1]", root + ".filled[2]", root + ".frontLeft", root + ".frontRight", root + ".rear",
+			root + ".slots[1]", root + ".slots[2]", root + ".wheels[1]", root + ".wheels[2]"}
+		if fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("%s: completion offered %v, want %v", root, got, want)
+		}
+	}
+	if now := fmt.Sprint(s.rtCtx.InstanceIDs()); now != ids {
+		t.Fatalf("completion materialized objects: ids %s, were %s", now, ids)
+	}
+	for _, root := range []string{"car", "garage.parked"} {
+		for _, c := range s.Complete("%features "+root+".", len("%features "+root+".")).Candidates {
+			if _, _, err := s.resolveObject(c); err != nil {
+				t.Errorf("completion %q does not resolve: %v", c, err)
+			}
+		}
+		for _, bad := range []string{".wheels[3]", ".axles[4]", ".slots[3]"} {
+			if _, _, err := s.resolveObject(root + bad); err == nil {
+				t.Errorf("%s%s resolves, though completion did not offer it", root, bad)
+			}
 		}
 	}
 }
