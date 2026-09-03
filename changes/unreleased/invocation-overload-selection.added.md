@@ -16,4 +16,8 @@
   diagnostic. `ComplexFunctions::sum` and `product`, which a Real collection now selects where
   `ComplexFunctions` is imported and `RealFunctions` is not, fold Real elements as the library's
   `reduce '+'` does — on the real axis — so `sum((1.0, 2.0))` stays the Real `3.0` rather than
-  becoming `3.0 + 0.0i`.
+  becoming `3.0 + 0.0i`. A feature typed by a calc (`ref pick : Twice;`) is a candidate beside
+  a same-named calc, performing the calc it is typed by, so the call whose argument only its
+  signature fits selects and runs it. An explicit empty action call, `action call = tag();`,
+  binds nothing: a required input stays unbound and a defaulted one takes its default, where it
+  used to read the caller's same-named value as a bare `perform tag;` does.

@@ -21,6 +21,7 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("calc_call_fits_no_visible_candidate", testCalcCallFitsNoVisibleCandidate)
 	t.Run("calc_call_fits_no_visible_candidate_behind_a_non_callable", testCalcCallFitsNoVisibleCandidateBehindANonCallable)
 	t.Run("calc_call_selects_by_argument_type", testCalcCallSelectsByArgumentType)
+	t.Run("calc_call_selects_a_feature_typed_by_a_calc", testCalcCallSelectsAFeatureTypedByACalc)
 	t.Run("global_root_call_selects_by_argument_type", testGlobalRootCallSelectsByArgumentType)
 	t.Run("bare_call_selects_among_other_documents_root_declarations", testBareCallSelectsAmongOtherDocumentsRootDeclarations)
 	t.Run("bare_call_reaches_private_root_declarations_of_other_documents", testBareCallReachesPrivateRootDeclarationsOfOtherDocuments)
@@ -496,6 +497,49 @@ func testCalcCallSelectsByArgumentType(t *testing.T) {
 	}{
 		{"chooseInt", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}, 1},
 		{"chooseStr", NewStringValue("s"), 2},
+	}
+	for _, tc := range cases {
+		sym := findSymbolByName(rootScope, tc.calc, ast.DefCalc)
+		if sym == nil {
+			t.Fatalf("%s calc not found", tc.calc)
+		}
+		result, err := ctx.InvokeCalc(sym, []Value{tc.arg}, rootScope)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.calc, err)
+		}
+		if result.Kind != ValConst || result.Const.Int != tc.want {
+			t.Fatalf("%s = %+v, want %d", tc.calc, result, tc.want)
+		}
+	}
+}
+
+// A feature typed by a calc is a candidate performing that calc: it is run when
+// only its signature fits, and the same-named calc when only that one does.
+func testCalcCallSelectsAFeatureTypedByACalc(t *testing.T) {
+	src := `
+		package A { private import ScalarValues::*; calc def pick { in x : String; return : Integer = 1; } }
+		package B {
+			private import ScalarValues::*;
+			calc def Twice { in x : Integer; return : Integer = 2 * x; }
+			ref pick : Twice;
+		}
+		package test {
+			private import ScalarValues::*;
+			private import A::*;
+			private import B::*;
+			calc chooseInt { in v : Integer; pick(v) }
+			calc chooseStr { in v : String; pick(v) }
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	cases := []struct {
+		calc string
+		arg  Value
+		want int64
+	}{
+		{"chooseInt", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}, 6},
+		{"chooseStr", NewStringValue("s"), 1},
 	}
 	for _, tc := range cases {
 		sym := findSymbolByName(rootScope, tc.calc, ast.DefCalc)

@@ -41,12 +41,21 @@ const (
 	PerformsAction
 )
 
-// Performable reports whether a call site of kind p can run sym.
-func (p Performs) Performable(sym *symbols.Symbol) bool {
+// Performable reports whether a call site of kind p can run sym: a behavior, or for an
+// evaluated call a feature typed by one, which performs that behavior.
+func (m *Model) Performable(p Performs, sym *symbols.Symbol) bool {
 	if p == PerformsAction {
 		return sym.Kind == symbols.SymbolActionDef || sym.Kind == symbols.SymbolActionUsage
 	}
-	return behaviorLike(sym)
+	visited := map[*symbols.Symbol]bool{}
+	for sym != nil && !visited[sym] {
+		if behaviorLike(sym) {
+			return true
+		}
+		visited[sym] = true
+		sym = m.featureType(sym)
+	}
+	return false
 }
 
 // InvocationSelection is which declaration an invocation calls, out of every
@@ -121,7 +130,7 @@ func (m *Model) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, ar
 	}
 	behaviors := make([]*symbols.Symbol, 0, len(sel.Candidates))
 	for _, c := range sel.Candidates {
-		if performs.Performable(c) {
+		if m.Performable(performs, c) {
 			behaviors = append(behaviors, c)
 		}
 	}

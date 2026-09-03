@@ -152,7 +152,7 @@ func resolveActionSymbol(
 	if inv.referrer != nil && sym.Decl == inv.referrer {
 		return nil, fmt.Errorf("unresolved action reference: %s (a perform statement cannot perform itself)", name)
 	}
-	if !semantics.PerformsAction.Performable(sym) {
+	if !ctx.model.Performable(semantics.PerformsAction, sym) {
 		return nil, fmt.Errorf("%s is not an action (%v)", name, sym.Kind)
 	}
 	return sym, nil
@@ -179,7 +179,8 @@ func bindArguments(
 			ErrReceiverWithNamedArgs, qualifiedNameText(inv.target),
 		)
 	}
-	if len(inv.args) == 0 && len(inv.named) == 0 {
+	// An explicit `tag()` states there is nothing to bind; only the bare forms read the caller.
+	if inv.expr == nil {
 		for _, name := range in {
 			if value, ok := data[name]; ok {
 				inputs[name] = value
