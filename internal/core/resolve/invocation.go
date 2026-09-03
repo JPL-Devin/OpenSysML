@@ -82,7 +82,7 @@ func (r *Resolver) unqualifiedCandidates(scope *symbols.Scope, name string) []*s
 		if out, ok := r.visibleMemberCandidates(r.scopeOwner(s), name); ok {
 			return out
 		}
-		if out, ok := one(r.lookupInheritedImports(s, name)); ok {
+		if out := r.namingSomething(r.inheritedImportCandidates(s, name)); len(out) > 0 {
 			return out
 		}
 		for enclosing := s.Parent(); enclosing != nil; enclosing = enclosing.Parent() {
@@ -200,6 +200,17 @@ func (r *Resolver) importMatches(scope *symbols.Scope, name string) []*symbols.S
 			if !r.AliasNamesNothing(sym) {
 				out = appendSymbol(out, sym)
 			}
+		}
+	}
+	return out
+}
+
+// namingSomething drops the aliases of syms that name nothing.
+func (r *Resolver) namingSomething(syms []*symbols.Symbol) []*symbols.Symbol {
+	var out []*symbols.Symbol
+	for _, sym := range syms {
+		if !r.AliasNamesNothing(sym) {
+			out = appendSymbol(out, sym)
 		}
 	}
 	return out
