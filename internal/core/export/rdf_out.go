@@ -328,8 +328,7 @@ func (e *encoder) mint(node ast.Node, fqn string) (rdf.Term, error) {
 }
 
 // head types an element and states its identity, position and membership in
-// its owner. A metaclass name this mapping invents is typed in the OpenSysML
-// namespace, so a consumer can tell it from the standard OMG vocabulary.
+// its owner; a metaclass this mapping invents is typed in the OpenSysML namespace.
 func (e *encoder) head(subject rdf.Term, node ast.Node, visibility ast.Visibility, fqn string, ownerTerm rdf.Term, index int, metaclass rdf.Term) {
 	e.graph.Add(subject, rdf.IRI(rdf.RDFType), metaclass)
 	e.graph.Add(subject, e.sysml(pQualifiedName), rdf.String(fqn))
@@ -909,8 +908,7 @@ func isExtensionFlag(name string) bool {
 }
 
 // prefixes maps the `#M` annotations ahead of a declaration as metadata usages
-// the declaration owns, placed after its body members (SysML.xtext
-// PrefixMetadataMember). The sigil marks them as prefixes for the writer.
+// it owns after its body members (PrefixMetadataMember), keyed `#` for the writer.
 func (e *encoder) prefixes(subject rdf.Term, fqn string, prefixes []*ast.PrefixMetadata, members []ast.Node) error {
 	index := len(e.kept(members))
 	for _, prefix := range prefixes {
@@ -932,9 +930,8 @@ func (e *encoder) prefixes(subject rdf.Term, fqn string, prefixes []*ast.PrefixM
 	return nil
 }
 
-// metadataUsage states what an annotation declares: the metadata definition it
-// is typed by, the elements it is about, and the body binding the definition's
-// features. The sigil it was written with is its declared keyword.
+// metadataUsage states an annotation's definition, the elements it is about and
+// its body; the sigil it was written with is its declared keyword.
 func (e *encoder) metadataUsage(subject rdf.Term, fqn, owner string, n *ast.PrefixMetadata, sigil string) error {
 	if n.Type == nil {
 		return &UnsupportedError{

@@ -1303,10 +1303,8 @@ func checkWrittenPrefixes(el *element, text string, prefixes []prefixAnnotation)
 	return nil
 }
 
-// writtenAs reports whether a written `#name` names this annotation's
-// definition: its qualified name, or a trailing run of its segments as a
-// scope-relative name would be; a definition the graph only names is matched
-// as written.
+// writtenAs reports whether a written `#name` is this annotation's definition:
+// its qualified name or a trailing run of its segments.
 func (p prefixAnnotation) writtenAs(written string) bool {
 	name := strings.TrimPrefix(strings.TrimPrefix(written, "#"), "$::")
 	if p.qname == "" {
@@ -1316,10 +1314,8 @@ func (p prefixAnnotation) writtenAs(written string) bool {
 	return name == qname || strings.HasSuffix(qname, "::"+name)
 }
 
-// writtenPrefixes lexes a declaration and returns each `#` annotation its head
-// writes as `#` plus its qualified name, without the trivia between tokens.
-// The head ends at the `;` or body that follows it; a `#` that no name follows
-// is a sequence index, not an annotation.
+// writtenPrefixes returns the `#name` annotations a declaration's head writes,
+// up to its `;` or `{`; a `#` that no name follows is a sequence index.
 func writtenPrefixes(text string) []string {
 	var tokens []lexer.Token
 	lx := lexer.New(source.New("head.sysml", []byte(text)))
