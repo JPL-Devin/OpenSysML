@@ -103,8 +103,9 @@ func (ctx *Context) appendConditions(out []Condition, node ast.Node, scope *symb
 			return out
 		}
 		var body []Condition
+		bodyScope := symbols.ConstraintBodyScope(scope, m)
 		for _, nested := range m.Body {
-			body = ctx.appendConditions(body, nested, scope, true, false, seen)
+			body = ctx.appendConditions(body, nested, bodyScope, true, false, seen)
 		}
 		if !negated {
 			for _, c := range body {

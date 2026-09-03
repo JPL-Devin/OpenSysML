@@ -1748,13 +1748,7 @@ func (p *Parser) parseConstraintBody() []ast.Node {
 		} else if p.atKeyword("assert") || p.atKeyword("assume") {
 			// Parse constraint expression (assert/assume)
 			members = append(members, p.parseConstraintMember())
-		} else if p.atKeyword("return") {
-			// Parse return member (for constraint defs that return result)
-			// Example: return result = expr { doc }
-			members = append(members, p.parseBodyMember())
-		} else if p.atDefUsageStart() || p.atRelationshipKeyword() || p.atKindlessFeatureTyping() || p.atMetadataMember() {
-			// A declaration, a relationship where a name would go (`:>> x = v;`),
-			// or a metadata usage (`@M { … }`).
+		} else if p.atConstraintBodyDeclaration() {
 			members = append(members, p.parseBodyMember())
 		} else if p.atCalcStatement() || p.atActionNodeMember() {
 			// A constraint body is a calculation body (SysML.xtext CalculationBody), so it
@@ -1773,6 +1767,14 @@ func (p *Parser) parseConstraintBody() []ast.Node {
 
 	p.expect(lexer.RBrace, "expected '}' after constraint body")
 	return members
+}
+
+// atConstraintBodyDeclaration reports whether a declaration member of a
+// calculation body follows: a `return` member, a definition or usage, a
+// relationship where a name would go (`:>> x = v;`) or a metadata usage (`@M { … }`).
+func (p *Parser) atConstraintBodyDeclaration() bool {
+	return p.atKeyword("return") || p.atDefUsageStart() || p.atRelationshipKeyword() ||
+		p.atKindlessFeatureTyping() || p.atMetadataMember()
 }
 
 // atMetadataMember tells a metadata usage (`@M;`, `@M { … }`, `@ m : M about x;`)
@@ -2407,9 +2409,9 @@ func (p *Parser) tryParseNestedConstraint(start int, isAssert, isNegated bool, k
 
 // parseNestedConstraintConditions parses the body of the anonymous constraint an
 // `assume`/`require constraint { … }` member owns, through its closing brace,
-// and returns its ConstraintMembers. Every condition is kept: a constraint body
-// may state more than one. Its statements and action nodes are kept too, the
-// nodes for the owning-type rule.
+// and returns its members. Every condition is kept: a constraint body may state
+// more than one. Its declarations, statements and action nodes are kept too: a
+// constraint body is a calculation body (SysML.xtext CalculationBody).
 func (p *Parser) parseNestedConstraintConditions() []ast.Node {
 	var conditions []ast.Node
 	for !p.at(lexer.RBrace) && !p.atEOF() {
@@ -2418,10 +2420,23 @@ func (p *Parser) parseNestedConstraintConditions() []ast.Node {
 			p.parseDocumentation(before)
 			continue
 		}
-		if p.atCalcStatement() || p.atActionNodeMember() {
-			conditions = append(conditions, p.parseActionMember())
-		} else if c, ok := p.parseConstraintMember().(*ast.ConstraintMember); ok && (c.Expression != nil || len(c.Body) > 0) {
-			conditions = append(conditions, c)
+		var member ast.Node
+		switch {
+		case p.atKeyword("assert") || p.atKeyword("assume"):
+			member = p.parseConstraintMember()
+		case p.atConstraintBodyDeclaration():
+			member = p.parseBodyMember()
+		case p.atCalcStatement() || p.atActionNodeMember():
+			member = p.parseActionMember()
+		default:
+			member = p.parseConstraintMember()
+		}
+		// A condition with nothing in it is a reported parse error, not a member.
+		if c, ok := member.(*ast.ConstraintMember); ok && c.Expression == nil && len(c.Body) == 0 {
+			member = nil
+		}
+		if member != nil {
+			conditions = append(conditions, member)
 		}
 		// Force progress: a member that consumed nothing would spin the loop.
 		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {

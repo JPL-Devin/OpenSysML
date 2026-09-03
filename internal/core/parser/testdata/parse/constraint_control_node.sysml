@@ -37,3 +37,31 @@ requirement def Bounds {
     assume constraint { while x > 0 { join j; } }
     assume constraint { if x > 0 ? true else false }
 }
+// A nested constraint body declares parameters and features like any other
+// calculation body, mixed with its statements, nodes and trailing condition.
+requirement def Ranged {
+    require constraint {
+        in attribute x : ScalarValues::Real;
+        attribute limit : ScalarValues::Real = 10.0;
+        doc /* the bound */
+        y = x + 1.0;
+        if y > limit { fork f; }
+        return result : ScalarValues::Boolean;
+        y < limit
+    }
+    assume constraint c {
+        in attribute z : ScalarValues::Real;
+        :>> limit = 5.0;
+        @Safety;
+        assert constraint inner { in attribute w : ScalarValues::Real; w > 0.0 }
+        z > 0.0
+    }
+}
+part def Gauge {
+    assert constraint c {
+        in attribute w : ScalarValues::Real;
+        attribute k : ScalarValues::Real = 2.0;
+        merge m;
+        w * k > 0.0
+    }
+}

@@ -78,7 +78,7 @@ func (c *assignmentReferentChecker) walkNode(scope *symbols.Scope, node ast.Node
 	case *ast.SubjectMember:
 		c.walk(childScopeOr(scope, n), n.Body)
 	case *ast.ConstraintMember:
-		c.walk(scope, n.Body)
+		c.walk(symbols.ConstraintBodyScope(scope, n), n.Body)
 	case *ast.AssumeMember:
 		c.walk(symbols.ConstraintBodyScope(scope, n), n.Body)
 	case *ast.RequireMember:

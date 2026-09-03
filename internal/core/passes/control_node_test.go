@@ -601,6 +601,29 @@ func TestControlNodeInConstraintBodyStatements(t *testing.T) {
 		controlNodeWant{CodeForkIncomingSuccessions, 15, "fork f has 2 incoming successions"})
 }
 
+// A nested constraint body declares parameters and features before its
+// statements and condition; the nodes among them are reached all the same.
+func TestControlNodeAfterNestedConstraintDeclarations(t *testing.T) {
+	wantControlNodeErrors(t, `package P {
+	requirement def R {
+		require constraint {
+			in attribute x : ScalarValues::Real;
+			attribute y : ScalarValues::Real = x + 1.0;
+			if y > 0.0 { action a; action b; action c; fork f; first a then f; first b then f; first f then c; }
+			merge m;
+			y > 0.0
+		}
+		assume constraint c {
+			in attribute z : ScalarValues::Real;
+			assert constraint inner { in attribute w : ScalarValues::Real; decide d; w > z }
+			z > 0.0
+		}
+	}
+}`, controlNodeWant{CodeForkIncomingSuccessions, 6, "fork f has 2 incoming successions"},
+		controlNodeWant{CodeControlNodeOwner, 7, "merge m is declared in an unnamed constraint"},
+		controlNodeWant{CodeControlNodeOwner, 12, "decide d is declared in constraint inner"})
+}
+
 // The action body a transition, a send, a guarded succession, or a state's
 // entry/do/exit block ends in is an action of its own, whose successions are
 // counted as a unit even when the body has no name.

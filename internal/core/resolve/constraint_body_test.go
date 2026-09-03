@@ -104,6 +104,52 @@ func TestResolveRequireBodyNamesDoNotLeakOutward(t *testing.T) {
 	}
 }
 
+// A nested constraint body declares parameters and features of its own, read by
+// its statements and conditions and by the nested constraints it owns.
+func TestResolveNestedConstraintBodyDeclarations(t *testing.T) {
+	r := resolveDoc(t, "d.sysml", `package P {
+		attribute limit;
+		requirement def R {
+			require constraint {
+				in attribute x;
+				attribute y = x + 1.0;
+				if y > limit { action a; action b; fork f; first a then f; first f then b; }
+				y < limit
+			}
+			assume constraint c {
+				in attribute z;
+				assert constraint inner { in attribute w; w > z }
+				z > 0.0
+			}
+		}
+		constraint def C {
+			assert constraint { in attribute v; v > 0.0 }
+		}
+	}`)
+	if len(r.Diagnostics) != 0 {
+		t.Fatalf("expected no diagnostics, got %v", r.Diagnostics)
+	}
+}
+
+// What a nested `assert constraint { … }` body declares is its own: unresolved
+// from the constraint around it.
+func TestResolveNestedAssertBodyNamesDoNotLeakOutward(t *testing.T) {
+	src := `package P {
+		constraint def C {
+			assert constraint { in attribute bodyOnly; bodyOnly > 0.0 }
+			bodyOnly > 0.0
+		}
+	}`
+	r := resolveDoc(t, "d.sysml", src)
+	if len(r.Diagnostics) != 1 {
+		t.Fatalf("expected one diagnostic for the leaked name, got %v", r.Diagnostics)
+	}
+	d := r.Diagnostics[0]
+	if want := strings.LastIndex(src, "bodyOnly"); d.Span.Offset != want {
+		t.Errorf("bodyOnly reported at offset %d, want %d", d.Span.Offset, want)
+	}
+}
+
 // assertUnresolvedAt asserts one unresolved diagnostic spanning name in src.
 func assertUnresolvedAt(t *testing.T, r *Resolver, src, name string) {
 	t.Helper()
