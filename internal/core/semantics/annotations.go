@@ -527,6 +527,13 @@ func (m *Model) metaclassOf(sym *symbols.Symbol) *symbols.Symbol {
 			return meta
 		}
 	}
+	// A named multiplicity is a KerML element in either language, and a cached
+	// one keeps the kind without the declaration.
+	if sym.Kind == symbols.SymbolMultiplicity {
+		if meta := m.kermlMetaclass(multiplicityMetaclassName(sym)); meta != nil {
+			return meta
+		}
+	}
 	if meta := m.kermlMetaclass(kermlMetaclassName(sym, m.isKerMLDoc(sym))); meta != nil {
 		return meta
 	}
@@ -561,6 +568,15 @@ func relationshipMetaclassName(rel *ast.RelationshipMember) string {
 		return "Conjugation"
 	}
 	return relationshipMetaclassNames[rel.Kind]
+}
+
+// multiplicityMetaclassName is the metaclass of a named multiplicity: a range
+// (`multiplicity m [1..2]`) is a MultiplicityRange, a subset a Multiplicity.
+func multiplicityMetaclassName(sym *symbols.Symbol) string {
+	if mult, ok := sym.Decl.(*ast.MultiplicityDecl); ok && mult.Range != nil {
+		return "MultiplicityRange"
+	}
+	return "Multiplicity"
 }
 
 // relationshipMetaclassNames maps the kind of a relationship written
