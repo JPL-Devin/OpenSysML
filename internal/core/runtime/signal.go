@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"fmt"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -110,10 +112,11 @@ func deliveryOf(msg Message) DeliveryKind {
 
 // TakeMessage removes and returns the oldest message satisfying match. Messages
 // that do not match keep their place in the queue, so a consumer looking for
-// one type does not consume or reorder another's.
+// one type does not consume or reorder another's. A match probing the machines
+// may post and drop messages behind the one it examines; those are visited too.
 func (ctx *Context) TakeMessage(match func(Message) bool) (Message, bool) {
-	for i, msg := range ctx.messages {
-		if match(msg) {
+	for i := 0; i < len(ctx.messages); i++ {
+		if msg := ctx.messages[i]; match(msg) {
 			ctx.messages = append(ctx.messages[:i], ctx.messages[i+1:]...)
 			return msg, true
 		}
@@ -126,6 +129,92 @@ func (ctx *Context) PendingMessages() []Message {
 	out := make([]Message, len(ctx.messages))
 	copy(out, ctx.messages)
 	return out
+}
+
+// SignalDefinitionKinds are the definitions a signal is declared as: what an
+// accept may be typed by and a send may carry. A behavior definition is neither.
+var SignalDefinitionKinds = []symbols.SymbolKind{
+	symbols.SymbolAttributeDef,
+	symbols.SymbolItemDef,
+	symbols.SymbolOccurrenceDef,
+	symbols.SymbolPartDef,
+	symbols.SymbolIndividualDef,
+	symbols.SymbolEnumerationDef,
+	symbols.SymbolMetadataDef,
+}
+
+// IsSignalDefinition reports whether a symbol declares a definition a signal may
+// be typed by, one of SignalDefinitionKinds.
+func IsSignalDefinition(sym *symbols.Symbol) bool {
+	return isDefinitionSymbol(sym) && slices.Contains(SignalDefinitionKinds, sym.Kind)
+}
+
+// SignalMessage builds the message `send Signal(args) to <object>` posts, for PostMessage;
+// a nil object is one anyone may take, an argument no feature of the signal admits is refused.
+// An element that is no signal definition (see SignalDefinitionKinds) is refused with
+// ErrNotASignal.
+func (ctx *Context) SignalMessage(signal *symbols.Symbol, args map[string]Value, to *Instance) (Message, error) {
+	if !IsSignalDefinition(signal) {
+		return Message{}, fmt.Errorf("%w: %s", ErrNotASignal, symbolText(signal))
+	}
+	features := ctx.FeaturesOf(signal)
+	payload := make(map[string]Value, len(args))
+	for _, name := range sortedArgNames(args) {
+		feat := carriedFeature(features, name)
+		if feat == nil {
+			return Message{}, fmt.Errorf("%w: %s carries no feature %q%s",
+				ErrSignalArgument, symbolText(signal), name, carriedFeaturesNote(features))
+		}
+		if err := ctx.checkAdmits(feat, symbolText(signal)+"."+name, args[name]); err != nil {
+			return Message{}, fmt.Errorf("%w: %w", ErrSignalArgument, err)
+		}
+		payload[name] = args[name]
+	}
+	msg := NamedSignalMessage(signal.Name, to)
+	msg.Signal, msg.Payload = signal, payload
+	return msg, nil
+}
+
+// NamedSignalMessage builds the message a send of a signal no declaration types
+// posts: matched by name alone, addressed to the object when there is one.
+func NamedSignalMessage(name string, to *Instance) Message {
+	msg := Message{SignalType: name}
+	if addr, ok := objectAddress(objectID(to)); ok {
+		msg.Object, msg.Delivery = addr.Object, addr.Delivery
+	}
+	return msg
+}
+
+// sortedArgNames lists the argument names in a stable order.
+func sortedArgNames(args map[string]Value) []string {
+	names := make([]string, 0, len(args))
+	for name := range args {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// carriedFeature is the feature of the name, nil when none has it.
+func carriedFeature(features []EffectiveFeature, name string) *EffectiveFeature {
+	for i := range features {
+		if features[i].Name == name {
+			return &features[i]
+		}
+	}
+	return nil
+}
+
+// carriedFeaturesNote names the features a signal carries, for an argument error.
+func carriedFeaturesNote(features []EffectiveFeature) string {
+	if len(features) == 0 {
+		return " (it carries none)"
+	}
+	names := make([]string, 0, len(features))
+	for _, feat := range features {
+		names = append(names, feat.Name)
+	}
+	return " (it carries " + strings.Join(names, ", ") + ")"
 }
 
 // reaches reports whether a consumer named name, accepting on port and performed
@@ -797,7 +886,7 @@ func (ctx *Context) messageMatches(m Message, want *ast.QualifiedName, scope *sy
 	}
 	if m.Signal != nil && ctx.model != nil {
 		if wantSym := ctx.resolveTypeRef(scope, want); wantSym != nil {
-			return ctx.model.Conforms(m.Signal, wantSym)
+			return ctx.conforms(m.Signal, wantSym)
 		}
 	}
 	return m.SignalType == want.Parts[len(want.Parts)-1].Text
