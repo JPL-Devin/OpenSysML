@@ -287,17 +287,14 @@ func (s *Session) reportedSubject(result runtime.CheckResult, inst *runtime.Inst
 		// rather than reported under the wrong one.
 		return inst, owner
 	}
-	if result.SubjectPath == "" {
-		return result.Subject, root
-	}
 	return result.Subject, root + featurePath(result.SubjectPath)
 }
 
-// featurePath spells a `::`-joined run of walked feature names as a label's
-// tail, each after a `.`: `engine::mount` → `.engine.mount`.
-func featurePath(path string) string {
+// featurePath spells walked feature names as a label's tail, each after a `.`
+// and quoted where its spelling needs it: `engine`, `mount` → `.engine.mount`.
+func featurePath(names []string) string {
 	var out strings.Builder
-	for _, name := range strings.Split(path, "::") {
+	for _, name := range names {
 		out.WriteString(".")
 		out.WriteString(lexer.NameText(name))
 	}

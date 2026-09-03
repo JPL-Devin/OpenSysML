@@ -1033,3 +1033,53 @@ func TestReservedLookingNamesStayNames(t *testing.T) {
 		wants(t, run(t, s, "%advance 5"), "Current state: checked")
 	})
 }
+
+// A verdict about a nested object spells each walked feature as one segment,
+// so a name spelled with `::` inside its quotes stays one feature — and the
+// label a constraint, a requirement and a satisfaction print reads back to the
+// object they were about.
+func TestVerdictLabelsKeepQuotedFeatureNamesWhole(t *testing.T) {
+	s := submitted(t, `package Lab {
+	part def Sensor {
+		attribute reading : ScalarValues::Real = 1.0;
+		constraint inRange { reading < 5.0 }
+		requirement lim {
+			require constraint { reading < 5.0 }
+		}
+		assert satisfy lim;
+	}
+	part def Rack { part 'in::out' : Sensor; }
+	part rack : Rack;
+}`)
+	rack := objectIDIn(t, run(t, s, "%instantiate rack"))
+	nested, _, err := s.resolveObject("rack.'in::out'")
+	if err != nil {
+		t.Fatalf("rack.'in::out': %v", err)
+	}
+	if fmt.Sprint(nested.ID) == rack {
+		t.Fatalf("rack.'in::out' resolved to the rack itself, #%s", rack)
+	}
+	on := fmt.Sprintf("(on Lab::rack.'in::out' ID: %d)", nested.ID)
+	for _, check := range []struct{ line, verdict string }{
+		{"%constraint Lab::Sensor::inRange", "✓ Constraint Lab::Sensor::inRange passed "},
+		{"%requirement Lab::Sensor::lim", "✓ Requirement Lab::Sensor::lim satisfied "},
+		{"%satisfy Lab::Sensor", "✓ satisfy lim holds "},
+	} {
+		out := run(t, s, check.line)
+		wants(t, out, check.verdict+on)
+		rejects(t, out, "rack.in.out", "rack.'in'.'out'")
+		_, label, ok := strings.Cut(out, "(on ")
+		label, _, _ = strings.Cut(label, " ID:")
+		if !ok {
+			t.Fatalf("%s reported no object:\n%s", check.line, out)
+		}
+		inst, reported, err := s.resolveObject(label)
+		if err != nil {
+			t.Errorf("%s label %s does not read back: %v", check.line, label, err)
+			continue
+		}
+		if inst.ID != nested.ID || reported != label {
+			t.Errorf("%s label %s reads back as %s (#%d), want #%d", check.line, label, reported, inst.ID, nested.ID)
+		}
+	}
+}

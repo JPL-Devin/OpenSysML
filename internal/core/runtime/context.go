@@ -531,14 +531,15 @@ func (ctx *Context) CheckConstraintOn(sym *symbols.Symbol, scope *symbols.Scope,
 // CheckResult is the outcome of one check: whether it holds, the object its
 // conditions were evaluated against — nil when they were evaluated against the
 // declaration because no object carries the checked element — and, for a nested
-// subject, the object the search started from plus the features walked from it —
-// ending in the declaration the object materializes, as an ambiguity names it —
-// which are how a caller names an object holding no name of its own.
+// subject, the object the search started from plus the features walked from it,
+// one name a segment — ending in the declaration the object materializes, as an
+// ambiguity names it — which are how a caller names an object holding no name of
+// its own.
 type CheckResult struct {
 	Holds       bool
 	Subject     *Instance
 	SubjectRoot *Instance
-	SubjectPath string
+	SubjectPath []string
 }
 
 // checkResultOf reports a verdict about the object a check resolved to.
