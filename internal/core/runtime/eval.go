@@ -572,12 +572,7 @@ func (ec *EvalContext) occurrenceReference(sym *symbols.Symbol) (Value, bool, er
 // emptyDeclaredFeature reads a valueless feature declaration whose lower bound is
 // zero as the empty sequence. A variation is a choice, not an empty feature.
 func (ec *EvalContext) emptyDeclaredFeature(sym *symbols.Symbol) (Value, bool) {
-	usage, ok := sym.Decl.(*ast.Usage)
-	if !ok || usage.Value != nil || ec.ctx.model.IsVariationFeature(sym) {
-		return Value{}, false
-	}
-	lower := ec.ctx.model.EffectiveMultiplicityOf(sym).Lower
-	if !lower.Known || lower.Value != 0 {
+	if !ec.ctx.optionalValueless(sym) || ec.ctx.model.IsVariationFeature(sym) {
 		return Value{}, false
 	}
 	return sequenceOf(nil), true
@@ -986,19 +981,16 @@ func (ec *EvalContext) evalTypeSubject(node ast.Node) (Value, error) {
 	if !ok || sym == nil {
 		return ec.Eval(node)
 	}
+	// Classification treats an optional valueless usage as its empty collection.
+	if ec.ctx.optionalValueless(sym) {
+		return NewSequenceValue(NewSequence()), nil
+	}
 	if isOccurrenceUsage(sym) {
 		inst, err := ec.ctx.occurrenceOf(sym)
 		if err != nil {
 			return Value{}, err
 		}
 		return Value{Kind: ValInstance, Instance: inst.ID}, nil
-	}
-	if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value == nil {
-		mult, _ := ec.ctx.extractMultiplicity(sym)
-		if !mult.Lower.Infinite && mult.Lower.Value == 0 {
-			// Classification treats an optional valueless usage as its empty collection.
-			return NewSequenceValue(NewSequence()), nil
-		}
 	}
 	return ec.Eval(node)
 }

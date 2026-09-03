@@ -190,3 +190,60 @@ func TestRequiredUnsetFeatureReadsAsUninitialized(t *testing.T) {
 		t.Errorf("reading unset tags: %s, %v; want the empty sequence", FormatValue(read), err)
 	}
 }
+
+// An optional part or item declaration names no object of its own: read directly,
+// bare or qualified, it is the empty sequence — as through an instantiated owner.
+func TestOptionalOccurrenceDeclarationEvaluatesEmpty(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		private import ScalarValues::*;
+		part def Wheel { attribute radius : Real = 0.3; }
+		item def Tag;
+		part def Car {
+			part spare : Wheel[0..1];
+			item label : Tag[0..1];
+			part fitted : Wheel;
+		}
+		part spare : Wheel[0..1];
+		item label : Tag[0..1];
+		part fitted : Wheel;
+	}`))
+	pkg, ok := idx.DocumentRoot("<test>").LookupLocal("test")
+	if !ok || pkg.Scope == nil {
+		t.Fatal("test package not indexed")
+	}
+	before := len(ctx.instances)
+	for _, src := range []string{"spare", "test::spare", "label", "test::label", "Car::spare", "test::Car::label", "spare.radius"} {
+		val, err := evalIn(t, ctx, pkg.Scope, src)
+		if err != nil || elementCount(&val) != 0 {
+			t.Errorf("%s = %s, %v; want the empty sequence", src, FormatValue(val), err)
+		}
+	}
+	if val, err := evalIn(t, ctx, pkg.Scope, "spare istype Wheel"); err != nil || val.Kind != ValConst || !val.Const.Bool {
+		t.Errorf("spare istype Wheel = %s, %v; want true of nothing", FormatValue(val), err)
+	}
+	if made := len(ctx.instances) - before; made != 0 {
+		t.Errorf("reading the optional declarations made %d object(s), want none", made)
+	}
+	for _, src := range []string{"fitted", "test::fitted"} {
+		val, err := evalIn(t, ctx, pkg.Scope, src)
+		if err != nil || val.Kind != ValInstance {
+			t.Errorf("%s = %s, %v; want the one object", src, FormatValue(val), err)
+		}
+	}
+	if val, err := evalIn(t, ctx, pkg.Scope, "fitted.radius"); err != nil || val.Kind != ValConst || val.Const.Real != 0.3 {
+		t.Errorf("fitted.radius = %s, %v; want 0.3", FormatValue(val), err)
+	}
+	car, err := ctx.Instantiate(oneSymbol(t, idx, "test::Car"))
+	if err != nil {
+		t.Fatalf("instantiate Car: %v", err)
+	}
+	for _, name := range []string{"spare", "label"} {
+		fv, err := car.GetFeatureValue(ctx, name)
+		if err != nil {
+			t.Fatalf("car.%s: %v", name, err)
+		}
+		if read, err := fv.ReadValue(name); err != nil || elementCount(&read) != 0 {
+			t.Errorf("car.%s reads %s, %v; want the empty sequence", name, FormatValue(read), err)
+		}
+	}
+}

@@ -295,7 +295,7 @@ func isOccurrenceUsage(sym *symbols.Symbol) bool {
 // a name evaluates to and a feature chain reads members from — rather than a
 // value: an occurrence, or a structured value whose own features carry it.
 func (ctx *Context) namesOneObject(sym *symbols.Symbol) bool {
-	if sym == nil || !ctx.occursOnce(sym) {
+	if sym == nil || !ctx.occursOnce(sym) || ctx.optionalValueless(sym) {
 		return false
 	}
 	// A variation classifies its variants abstractly, so it is no object of
@@ -326,6 +326,17 @@ func (ctx *Context) namesStructuredValue(sym *symbols.Symbol) bool {
 func (ctx *Context) occursOnce(sym *symbols.Symbol) bool {
 	mult, _ := ctx.extractMultiplicity(sym)
 	return !mult.Upper.Infinite && mult.Upper.Value <= 1
+}
+
+// optionalValueless reports whether a usage declares no value and a lower bound
+// of zero: it holds only what is contributed to it, so of itself it is empty.
+func (ctx *Context) optionalValueless(sym *symbols.Symbol) bool {
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || usage.Value != nil {
+		return false
+	}
+	lower := ctx.model.EffectiveMultiplicityOf(sym).Lower
+	return lower.Known && !lower.Infinite && lower.Value == 0
 }
 
 // checkDefault reports a value the feature does not admit: a count outside its
