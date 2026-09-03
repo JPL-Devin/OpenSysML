@@ -451,6 +451,9 @@ func (ctx *Context) EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope
 // RequireConstraint returns an ErrNotAConstraint usage error unless sym
 // declares a constraint, so a caller can settle the kind before evaluating.
 func RequireConstraint(sym *symbols.Symbol) error {
+	if _, ok := ast.OwnedConstraintOf(sym.Decl); ok {
+		return nil
+	}
 	switch decl := sym.Decl.(type) {
 	case *ast.Definition:
 		if decl.Kind == ast.DefConstraint {

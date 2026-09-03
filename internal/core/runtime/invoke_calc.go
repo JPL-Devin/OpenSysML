@@ -698,10 +698,13 @@ func isStateSymbol(sym *symbols.Symbol) bool {
 	return sym.Kind == symbols.SymbolStateDef || sym.Kind == symbols.SymbolStateUsage
 }
 
-// declMembers returns the body members of a definition or usage, unwrapping the
-// Membership wrappers the parser produces.
+// declMembers returns the body members of a definition, usage or named owned
+// constraint, unwrapping the Membership wrappers the parser produces.
 func declMembers(decl ast.Node) []ast.Node {
 	var members []ast.Node
+	if oc, ok := ast.OwnedConstraintOf(decl); ok {
+		return oc.Body
+	}
 	switch d := decl.(type) {
 	case *ast.Definition:
 		members = d.Members

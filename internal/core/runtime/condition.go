@@ -128,21 +128,31 @@ func (ctx *Context) appendConditions(out []Condition, node ast.Node, scope *symb
 			out = append(out, Condition{Expr: m.Expression, Scope: scope, Required: true})
 		}
 		out = ctx.appendReferencedConditions(out, m.Reference, scope, true, seen)
-		// The body is a scope of its own, which is where a condition it states
-		// reads the names it declares.
-		body := symbols.ConstraintBodyScope(scope, m)
-		for _, nested := range m.Body {
-			out = ctx.appendConditions(out, nested, body, true, false, seen)
-		}
+		out = ctx.appendOwnedConditions(out, m, m.Body, scope, true, seen)
 	case *ast.AssumeMember:
 		if m.Expression != nil {
 			out = append(out, Condition{Expr: m.Expression, Scope: scope})
 		}
 		out = ctx.appendReferencedConditions(out, m.Reference, scope, false, seen)
-		body := symbols.ConstraintBodyScope(scope, m)
-		for _, nested := range m.Body {
-			out = ctx.appendConditions(out, nested, body, false, false, seen)
+		out = ctx.appendOwnedConditions(out, m, m.Body, scope, false, seen)
+	}
+	return out
+}
+
+// appendOwnedConditions appends what a require/assume member's constraint states:
+// a named one its whole chain, an anonymous body its own conditions.
+func (ctx *Context) appendOwnedConditions(out []Condition, member ast.Node, body []ast.Node, scope *symbols.Scope,
+	required bool, seen map[*symbols.Symbol]bool) []Condition {
+	bodyScope := symbols.ConstraintBodyScope(scope, member)
+	if bodyScope != nil && bodyScope != scope && bodyScope.Owner() != nil && bodyScope.Owner().Decl == member {
+		owner := bodyScope.Owner()
+		for _, m := range ctx.chainMembers(owner, scope) {
+			out = ctx.appendConditions(out, m.node, m.scope, required, false, seen)
 		}
+		return out
+	}
+	for _, nested := range body {
+		out = ctx.appendConditions(out, nested, bodyScope, required, false, seen)
 	}
 	return out
 }
