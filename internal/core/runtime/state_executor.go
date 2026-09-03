@@ -55,6 +55,8 @@ type StateExecutor struct {
 	// deferred holds, in arrival order, the events an active state defers and no
 	// transition of the active configuration handled.
 	deferred []Event
+	// lastDispatch is what became of the event the last step took off the queue.
+	lastDispatch *Dispatch
 
 	// doActions are the running do behaviors, in the order their states were
 	// entered. Concurrently active states interleave one action per round, so this
@@ -494,16 +496,36 @@ func (e *StateExecutor) processNextEvent() error {
 	// Advance time
 	e.currentTime = event.Timestamp
 
-	if err := e.dispatchEvent(event); err != nil {
+	dispatch, err := e.dispatchEvent(event)
+	if err != nil {
 		return err
 	}
+	e.lastDispatch = &dispatch
 	e.recallDeferredEvents()
 	return nil
 }
 
-// dispatchEvent delivers one event to the active configuration.
-func (e *StateExecutor) dispatchEvent(event Event) error {
-	// Process event by type
+// Dispatch is what became of an event a step took off the queue: a transition
+// fired on it, a state deferred it, or nothing was enabled for it and it was dropped.
+type Dispatch struct {
+	Event    Event
+	Fired    bool
+	Deferred bool
+}
+
+// LastDispatch returns what became of the event the last ProcessNextEvent
+// dispatched, false when it dispatched none.
+func (e *StateExecutor) LastDispatch() (Dispatch, bool) {
+	if e.lastDispatch == nil {
+		return Dispatch{}, false
+	}
+	return *e.lastDispatch, true
+}
+
+// dispatchEvent delivers one event to the active configuration and reports what
+// became of it.
+func (e *StateExecutor) dispatchEvent(event Event) (Dispatch, error) {
+	dispatch := Dispatch{Event: event}
 	switch event.Type {
 	case EventTime:
 		// Fire transition - handle both old (TransitionEdge) and new (lower.Transition) for backward compatibility
@@ -516,16 +538,19 @@ func (e *StateExecutor) dispatchEvent(event Event) error {
 				// The source was left before this event came up, so the transition
 				// it carries is stale: firing it would move a state machine that is
 				// no longer there.
-				return nil
+				return dispatch, nil
 			}
 			// A transition out of a state inside an orthogonal region is region-local:
 			// it must not tear down the sibling regions unless its target lies outside
 			// the region set. The source may be a composite state enclosing the
 			// region's active state, so the region is resolved by containment.
+			var err error
 			if sourceState != nil {
-				return e.fireFrom(sourceState, lowerTrans)
+				dispatch.Fired, err = e.fireFrom(sourceState, lowerTrans)
+			} else {
+				dispatch.Fired, err = e.fireTransition(lowerTrans)
 			}
-			return e.fireTransition(lowerTrans)
+			return dispatch, err
 		}
 
 		// Fallback for tests that use TransitionEdge directly
@@ -546,7 +571,7 @@ func (e *StateExecutor) dispatchEvent(event Event) error {
 				}
 			}
 			if sourceState == nil || targetState == nil {
-				return fmt.Errorf("could not find source/target states for transition")
+				return dispatch, fmt.Errorf("could not find source/target states for transition")
 			}
 
 			lowerTrans := &lower.Transition{
@@ -556,20 +581,24 @@ func (e *StateExecutor) dispatchEvent(event Event) error {
 				Guard:   edge.Guard,
 				Effect:  lower.LowerBehaviors(edge.Effect, e.stateMachine.Scope),
 			}
-			return e.fireTransition(lowerTrans)
+			var err error
+			dispatch.Fired, err = e.fireTransition(lowerTrans)
+			return dispatch, err
 		}
 
-		return fmt.Errorf("invalid TimeEvent payload: expected *lower.Transition or *ast.TransitionEdge")
+		return dispatch, fmt.Errorf("invalid TimeEvent payload: expected *lower.Transition or *ast.TransitionEdge")
 	default:
 		// For general events, broadcast to all active regions
 		consumed, err := e.broadcastEvent(&event)
 		if err != nil {
-			return err
+			return dispatch, err
 		}
+		dispatch.Fired = consumed
 		if !consumed && e.defersEvent(&event) {
+			dispatch.Deferred = true
 			e.deferred = append(e.deferred, event)
 		}
-		return nil
+		return dispatch, nil
 	}
 }
 
@@ -638,10 +667,11 @@ func (e *StateExecutor) broadcastEvent(event *Event) (bool, error) {
 			unbind()
 			return consumed, fmt.Errorf("state %s: %w", candidate.source.Name, err)
 		}
-		if err := e.fireFrom(candidate.source, candidate.trans); err != nil {
+		fired, err := e.fireFrom(candidate.source, candidate.trans)
+		if err != nil {
 			return consumed, fmt.Errorf("fire transition out of %s: %w", candidate.source.Name, err)
 		}
-		consumed = true
+		consumed = consumed || fired
 		if e.state == StateCompleted {
 			return consumed, nil
 		}
@@ -819,7 +849,7 @@ func lessPath(a, b []int) bool {
 // either the active leaf or a composite state enclosing it. A source lying in an
 // active orthogonal region moves that region; one outside every active region
 // moves the machine's single active hierarchy.
-func (e *StateExecutor) fireFrom(source *ast.StateNode, trans *lower.Transition) error {
+func (e *StateExecutor) fireFrom(source *ast.StateNode, trans *lower.Transition) (bool, error) {
 	if region := e.activeRegionOf(source); region != nil {
 		return e.fireTransitionInRegion(region, trans)
 	}
@@ -859,7 +889,11 @@ func (e *StateExecutor) enclosesActiveRegion(state *ast.StateNode) bool {
 // was: the caller binds the trigger's arguments again before firing.
 func (e *StateExecutor) enabledTransition(state *ast.StateNode, event *Event) (*lower.Transition, error) {
 	for _, trans := range e.graph.Transitions[state] {
-		if !e.matchesEvent(trans, event) {
+		matches, err := e.matchesEvent(trans, event)
+		if err != nil {
+			return nil, err
+		}
+		if !matches {
 			continue
 		}
 		// A call trigger's arguments are bound before the guard runs: the guard is
@@ -875,7 +909,16 @@ func (e *StateExecutor) enabledTransition(state *ast.StateNode, event *Event) (*
 		if err != nil {
 			return nil, err
 		}
-		if pass {
+		if !pass {
+			continue
+		}
+		// A transition into a join whose other branches have not arrived is not
+		// enabled either: firing it would move nothing.
+		synchronized, err := e.joinSynchronized(trans)
+		if err != nil {
+			return nil, err
+		}
+		if synchronized {
 			return trans, nil
 		}
 	}
@@ -962,37 +1005,41 @@ func (e *StateExecutor) restoreData(names []ast.NameSegment) func() {
 	}
 }
 
-// matchesEvent checks if a transition matches the given event.
-func (e *StateExecutor) matchesEvent(trans *lower.Transition, event *Event) bool {
+// matchesEvent checks if a transition matches the given event. Resolving the
+// port a `via` names may materialize it, which can fail.
+func (e *StateExecutor) matchesEvent(trans *lower.Transition, event *Event) (bool, error) {
 	// Completion transition (nil trigger) doesn't match external events
 	if trans.Trigger == nil {
-		return false
+		return false, nil
 	}
 
 	switch event.Type {
 	case EventAccept, EventCall, EventChange:
 		if !e.triggerMatches(trans.Trigger, trans.Scope, event) {
-			return false
+			return false, nil
 		}
 		// `accept … via <port>` takes only an occurrence that arrived at that
 		// port; a trigger naming none takes it whatever route it came by.
 		if trans.Via == "" {
-			return true
+			return true, nil
 		}
 		msg, ok := event.Payload.(Message)
-		return ok && msg.reaches(e.stateMachine.Name, trans.Via, objectID(e.self))
+		if !ok {
+			return false, nil
+		}
+		return e.ctx.messageReaches(msg, e.stateMachine.Name, trans.Via, e.self)
 
 	case EventTime:
 		// Time events carry the specific transition in Payload
 		// If matchesEvent is called for time events (shouldn't normally happen),
 		// match if this transition is the one in the payload
 		if transPayload, ok := event.Payload.(*lower.Transition); ok {
-			return trans == transPayload
+			return trans == transPayload, nil
 		}
-		return false
+		return false, nil
 
 	default:
-		return false
+		return false, nil
 	}
 }
 
@@ -1056,18 +1103,23 @@ func (e *StateExecutor) triggerMatches(trigger ast.Node, scope *symbols.Scope, e
 	}
 }
 
-// fireTransition executes a state transition.
-func (e *StateExecutor) fireTransition(trans *lower.Transition) error {
-	// Fork and join reshape the active configuration rather than moving to a
-	// single state, so they are fired whole.
-	if ps, ok := trans.Target.(*ast.PseudostateNode); ok {
+// fireTransition takes a state transition, reporting whether it was taken: one
+// whose guard is false leaves the machine where it is.
+func (e *StateExecutor) fireTransition(trans *lower.Transition) (bool, error) {
+	// Fork, join and history reshape the active configuration rather than moving
+	// to a single state, so they are fired whole.
+	if ps, ok := trans.Target.(*ast.PseudostateNode); ok && isSynchronizationTarget(ps) {
+		pass, err := e.passesGuard(trans)
+		if err != nil || !pass {
+			return false, err
+		}
 		switch ps.Kind {
 		case ast.PseudostateFork:
-			return e.fireForkTransition(trans, ps)
+			return true, e.fireForkTransition(trans, ps)
 		case ast.PseudostateJoin:
 			return e.fireJoinTransition(trans, ps)
-		case ast.PseudostateShallowHistory, ast.PseudostateDeepHistory:
-			return e.fireHistoryTransition(trans, ps)
+		default:
+			return true, e.fireHistoryTransition(trans, ps)
 		}
 	}
 
@@ -1082,30 +1134,27 @@ func (e *StateExecutor) fireTransition(trans *lower.Transition) error {
 		// A choice, junction or entry/exit point routes the transition onwards:
 		// following it yields the state the transition really enters.
 		if !transientPseudostate(target.Kind) {
-			return fmt.Errorf("unsupported pseudostate kind: %v", target.Kind)
+			return false, fmt.Errorf("unsupported pseudostate kind: %v", target.Kind)
 		}
 		var err error
 		targetState, err = e.pseudostateTarget(target)
 		if err != nil {
-			return fmt.Errorf("evaluate pseudostate: %w", err)
+			return false, fmt.Errorf("evaluate pseudostate: %w", err)
 		}
 	default:
-		return fmt.Errorf("transition target must be StateNode or PseudostateNode, got %T", trans.Target)
+		return false, fmt.Errorf("transition target must be StateNode or PseudostateNode, got %T", trans.Target)
 	}
 
 	if targetState == nil {
-		return fmt.Errorf("transition target state not found")
+		return false, fmt.Errorf("transition target state not found")
 	}
 
 	pass, err := e.passesGuard(trans)
-	if err != nil {
-		return err
-	}
-	if !pass {
-		return nil // Remain in current state
+	if err != nil || !pass {
+		return false, err
 	}
 
-	return e.transitionTo(trans, targetState)
+	return true, e.transitionTo(trans, targetState)
 }
 
 // transitionTo moves the active configuration from the current state to
@@ -1358,11 +1407,6 @@ func (e *StateExecutor) forgetRegionHistory(region *ast.StateRegion) {
 // A shallow history restores the substate that was active; a deep history keeps
 // descending, restoring the innermost one.
 func (e *StateExecutor) fireHistoryTransition(trans *lower.Transition, hist *ast.PseudostateNode) error {
-	pass, err := e.passesGuard(trans)
-	if err != nil || !pass {
-		return err
-	}
-
 	owner, ok := e.graph.PseudostateOwner[hist]
 	if !ok || owner == nil {
 		return fmt.Errorf("history %s must be declared inside the composite state it restores", hist.Name)
@@ -1439,11 +1483,6 @@ func (e *StateExecutor) deepestRecorded(state *ast.StateNode, branches map[*ast.
 // taken at once, making one state active per orthogonal region of the composite
 // state that owns them.
 func (e *StateExecutor) fireForkTransition(trans *lower.Transition, fork *ast.PseudostateNode) error {
-	pass, err := e.passesGuard(trans)
-	if err != nil || !pass {
-		return err
-	}
-
 	branches := e.graph.Transitions[fork]
 	if len(branches) < 2 {
 		return fmt.Errorf("fork %s needs at least two outgoing transitions, found %d", fork.Name, len(branches))
@@ -1506,31 +1545,24 @@ func (e *StateExecutor) fireForkTransition(trans *lower.Transition, fork *ast.Ps
 	return nil
 }
 
-// fireJoinTransition takes a transition into a join. The join only fires once
-// every one of its incoming branches has an active source state; until then the
-// completed branch simply waits.
-func (e *StateExecutor) fireJoinTransition(trans *lower.Transition, join *ast.PseudostateNode) error {
-	pass, err := e.passesGuard(trans)
-	if err != nil || !pass {
-		return err
-	}
-
+// fireJoinTransition takes a transition into a join, reporting whether the join
+// fired. It only fires once every one of its incoming branches has an active
+// source state; until then the completed branch simply waits.
+func (e *StateExecutor) fireJoinTransition(trans *lower.Transition, join *ast.PseudostateNode) (bool, error) {
 	sources, err := e.joinSources(join)
 	if err != nil {
-		return err
+		return false, err
 	}
-	for _, source := range sources {
-		if !e.isActive(source) {
-			return nil // Not yet synchronized: wait for the other branches.
-		}
+	if !e.allActive(sources) {
+		return false, nil // Not yet synchronized: wait for the other branches.
 	}
 
 	target, err := e.pseudostateTarget(join)
 	if err != nil {
-		return fmt.Errorf("evaluate pseudostate: %w", err)
+		return false, fmt.Errorf("evaluate pseudostate: %w", err)
 	}
 	if target == nil {
-		return fmt.Errorf("join %s has no target state", join.Name)
+		return false, fmt.Errorf("join %s has no target state", join.Name)
 	}
 
 	// Exit every synchronized branch, then continue from the composite state
@@ -1541,13 +1573,37 @@ func (e *StateExecutor) fireJoinTransition(trans *lower.Transition, join *ast.Ps
 			owner = e.graph.RegionOwner[region]
 		}
 		if err := e.exitState(source); err != nil {
-			return fmt.Errorf("exit state: %w", err)
+			return false, fmt.Errorf("exit state: %w", err)
 		}
 	}
 	e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
 	e.activeConfig.simpleState = owner
 
-	return e.transitionTo(trans, target)
+	return true, e.transitionTo(trans, target)
+}
+
+// joinSynchronized reports whether a transition is enabled as far as its target
+// goes: one into a join only while every source of the join is active.
+func (e *StateExecutor) joinSynchronized(trans *lower.Transition) (bool, error) {
+	join, ok := trans.Target.(*ast.PseudostateNode)
+	if !ok || join.Kind != ast.PseudostateJoin {
+		return true, nil
+	}
+	sources, err := e.joinSources(join)
+	if err != nil {
+		return false, err
+	}
+	return e.allActive(sources), nil
+}
+
+// allActive reports whether every state is part of the active configuration.
+func (e *StateExecutor) allActive(states []*ast.StateNode) bool {
+	for _, state := range states {
+		if !e.isActive(state) {
+			return false
+		}
+	}
+	return true
 }
 
 // joinSources returns the source state of every transition into join, in state
@@ -1739,7 +1795,11 @@ func (e *StateExecutor) run(atCurrentTime bool) error {
 			events++
 			continue
 		}
-		if !e.hasDueEvent(atCurrentTime) && !e.deliverPendingSignal() {
+		delivered, err := e.deliverPendingSignal(atCurrentTime)
+		if err != nil {
+			return err
+		}
+		if !delivered {
 			if ran > 0 {
 				continue // do behaviors are still running; they may yet queue events
 			}
@@ -1901,28 +1961,102 @@ func (e *StateExecutor) enqueueSignal(msg Message) {
 	e.nextEventID++
 }
 
-// deliverPendingSignal takes a message off the context bus that the active
-// configuration can react to and queues it, reporting whether it found one.
-// A message no active transition accepts stays on the bus for another consumer:
-// this machine must not swallow a message addressed to a different behavior.
-func (e *StateExecutor) deliverPendingSignal() bool {
-	msg, ok := e.ctx.TakeMessage(e.acceptableMessage)
+// deliverPendingSignal reports whether an event is due, first queueing a bus
+// message this machine takes: one in flight is due now, so it goes ahead of a
+// timer set for later rather than after the run has advanced to it. Messages
+// this machine leaves, and one whose port fails to resolve, stay in flight.
+func (e *StateExecutor) deliverPendingSignal(atCurrentTime bool) (bool, error) {
+	var failed error
+	msg, ok := e.ctx.TakeMessage(func(m Message) bool {
+		if failed != nil {
+			return false
+		}
+		takes, err := e.takesMessage(m)
+		if err != nil {
+			failed = err
+			return false
+		}
+		return takes
+	})
+	if failed != nil {
+		return false, failed
+	}
 	if !ok {
-		return false
+		return e.hasDueEvent(atCurrentTime), nil
 	}
 	e.enqueueSignal(msg)
-	return true
+	return true, nil
+}
+
+// takesMessage reports whether this machine is the one to take a message in
+// flight: one it can react to, unless its guards would drop it while a sibling
+// machine of the same object would fire on or defer it.
+func (e *StateExecutor) takesMessage(m Message) (bool, error) {
+	if accepted, err := e.acceptableMessage(m); err != nil || !accepted {
+		return accepted, err
+	}
+	return !e.yieldsTo(m), nil
+}
+
+// yieldsTo reports whether a machine the performer also exhibits, one that
+// would fire on or defer the message where this one would only drop it, should
+// take it instead. A guard error is left for the dispatch of the machine whose
+// guard it is to report: this machine takes the message when its own guard
+// fails, and leaves it when a sibling's does.
+func (e *StateExecutor) yieldsTo(m Message) bool {
+	siblings := e.siblingsAccepting(m)
+	if len(siblings) == 0 {
+		return false
+	}
+	if own, err := e.Decide(m); err != nil || own.Enabled() {
+		return false
+	}
+	for _, sibling := range siblings {
+		if theirs, err := sibling.Decide(m); err != nil || theirs.Enabled() {
+			return true
+		}
+	}
+	return false
+}
+
+// siblingsAccepting lists the other machines the performer exhibits whose active
+// configuration accepts the message, in the order they were attached. One whose
+// accept port fails to resolve is listed too: its own dispatch reports that.
+func (e *StateExecutor) siblingsAccepting(m Message) []*StateExecutor {
+	if e.self == nil {
+		return nil
+	}
+	var siblings []*StateExecutor
+	for _, behavior := range e.ctx.objectBehaviors {
+		sibling := behavior.State
+		if sibling == nil || sibling == e || behavior.Object != e.self {
+			continue
+		}
+		if accepted, err := sibling.acceptableMessage(m); err != nil || accepted {
+			siblings = append(siblings, sibling)
+		}
+	}
+	return siblings
 }
 
 // acceptableMessage reports whether a message in flight is one this machine can
-// react to now. A message routed to a port is for this machine only if a
-// transition out of the active configuration accepts it `via` that port; one
-// routed to no port must also be addressed to the machine.
-func (e *StateExecutor) acceptableMessage(m Message) bool {
-	if m.Port != "" {
-		return e.acceptsSignal(m)
+// react to now: a transition out of the active configuration accepts it (one
+// routed to a port only `via` that port), or the message reaches this machine —
+// addressed to it, or at a port of the object performing it — and a state of the
+// configuration defers it, to be held until a transition accepts it. Resolving
+// the port a `via` names may materialize it, which can fail.
+func (e *StateExecutor) acceptableMessage(m Message) (bool, error) {
+	if accepted, err := e.acceptsSignal(m); err != nil || accepted {
+		return accepted, err
 	}
-	return m.reaches(e.stateMachine.Name, "", objectID(e.self)) && e.acceptsSignal(m)
+	return m.reaches(e.stateMachine.Name, m.Port, objectID(e.self)) && e.defersMessage(m), nil
+}
+
+// defersMessage reports whether the active configuration defers a message,
+// whatever route it came by, as a trigger naming no port takes it.
+func (e *StateExecutor) defersMessage(m Message) bool {
+	event := Event{Type: EventAccept, Timestamp: e.currentTime, Payload: m}
+	return e.defersEvent(&event)
 }
 
 // HasPendingSignal reports whether a signal this machine accepts is in flight.
@@ -1932,11 +2066,92 @@ func (e *StateExecutor) HasPendingSignal() bool {
 	return e.hasPendingSignal()
 }
 
-// hasPendingSignal reports whether a message in flight would be delivered by
-// the next step, without consuming it.
+// AcceptsMessage reports whether the active configuration would take a message in
+// flight: it reaches this machine and triggers a transition out of an active
+// state, or is deferred by one. Whether a transition fires is decided by its
+// guard; see Decide. Resolving the port a trigger accepts `via` may fail; a port
+// it materializes on the way is discarded, as everything the preview builds.
+func (e *StateExecutor) AcceptsMessage(m Message) (accepted bool, err error) {
+	e.preview(func() { accepted, err = e.acceptableMessage(m) })
+	return accepted, err
+}
+
+// preview runs fn as a probe of the context, discarding the objects it
+// materializes and the behaviors they start along with what beginProbe restores.
+func (e *StateExecutor) preview(fn func()) {
+	defer e.ctx.beginProbe()()
+	mark, attached := len(e.ctx.created), len(e.ctx.objectBehaviors)
+	defer func() {
+		e.ctx.forgetBehaviorsFrom(attached)
+		e.ctx.abandonInstancesSince(mark)
+	}()
+	fn()
+}
+
+// Decision is what dispatching a message now would do: the transitions that
+// would fire on it, or that the active state would defer it.
+type Decision struct {
+	Fires    []string
+	Deferred bool
+}
+
+// Enabled reports whether dispatching the message would do something with it.
+func (d Decision) Enabled() bool {
+	return len(d.Fires) > 0 || d.Deferred
+}
+
+// Decide decides a message as the step dispatching it would — the payload bound,
+// the guards evaluated against the data as it stands — without taking it. The
+// machine, its data, its budget and the message are left as they were found: a
+// value a guard derives on the way is derived again when dispatch reads it, and an
+// object materialized on the way — to bind the payload, or by a guard reaching an
+// occurrence not yet built — starts its behaviors as under dispatch, so the guard
+// reads what they make of it, then is discarded along with them and anything they
+// sent. So is a port materialized to tell whether the message reaches the machine
+// at all. A payload or guard error is returned.
+func (e *StateExecutor) Decide(m Message) (decision Decision, err error) {
+	e.preview(func() { decision, err = e.decide(m) })
+	return decision, err
+}
+
+// decide is Decide under the preview that discards what it builds.
+func (e *StateExecutor) decide(m Message) (Decision, error) {
+	if accepted, err := e.acceptableMessage(m); err != nil || !accepted {
+		return Decision{}, err
+	}
+	probe := m
+	probe.Payload = make(map[string]Value, len(m.Payload))
+	for name, value := range m.Payload {
+		probe.Payload[name] = value
+	}
+	event := Event{Type: EventAccept, Timestamp: e.currentTime, Payload: probe}
+	candidates, err := e.selectTransitions(&event)
+	if err != nil {
+		return Decision{}, err
+	}
+	var decision Decision
+	for _, candidate := range candidates {
+		if !e.losesToNestedTransition(candidates, candidate) {
+			decision.Fires = append(decision.Fires, transitionDescription(candidate.trans))
+		}
+	}
+	if len(decision.Fires) == 0 {
+		decision.Deferred = e.defersEvent(&event)
+	}
+	return decision, nil
+}
+
+// Performer is the object this machine is performed by, nil for none.
+func (e *StateExecutor) Performer() *Instance {
+	return e.self
+}
+
+// hasPendingSignal reports whether the next step would act on a message in
+// flight, without consuming it: deliver one, or report an accept port that
+// fails to resolve.
 func (e *StateExecutor) hasPendingSignal() bool {
 	for _, msg := range e.ctx.PendingMessages() {
-		if e.acceptableMessage(msg) {
+		if takes, err := e.takesMessage(msg); err != nil || takes {
 			return true
 		}
 	}
@@ -1945,39 +2160,42 @@ func (e *StateExecutor) hasPendingSignal() bool {
 
 // acceptsSignal reports whether any transition out of the active configuration,
 // or out of a composite state enclosing it, is triggered by this signal.
-func (e *StateExecutor) acceptsSignal(msg Message) bool {
+func (e *StateExecutor) acceptsSignal(msg Message) (bool, error) {
 	for _, leaf := range e.activeStates() {
 		for _, state := range e.getParentChain(leaf) {
-			if e.acceptsSignalFrom(state, msg) {
-				return true
+			if accepted, err := e.acceptsSignalFrom(state, msg); err != nil || accepted {
+				return accepted, err
 			}
 		}
 	}
-	return false
+	return false, nil
 }
 
 // acceptsSignalFrom reports whether a transition out of one state is triggered
-// by this message's signal.
-func (e *StateExecutor) acceptsSignalFrom(state *ast.StateNode, msg Message) bool {
+// by this message's signal. Only a message of the right signal resolves the
+// transition's `via` port; a failure to do so is returned.
+func (e *StateExecutor) acceptsSignalFrom(state *ast.StateNode, msg Message) (bool, error) {
 	for _, trans := range e.graph.Transitions[state] {
 		accept, ok := trans.Trigger.(*ast.AcceptEvent)
-		if !ok {
+		if !ok || !e.triggerSignalMatches(accept, trans.Scope, msg) {
 			continue
 		}
-		if !msg.reaches(e.stateMachine.Name, trans.Via, objectID(e.self)) {
-			continue
-		}
-		if typed := ast.AsQualifiedName(accept.SignalType); typed != nil && len(typed.Parts) > 0 {
-			if e.ctx.messageMatches(msg, typed, trans.Scope) {
-				return true
-			}
-			continue
-		}
-		if signal := ast.SimpleName(accept.Subsets); signal != "" && msg.carriesSignal(signal) {
-			return true
+		reaches, err := e.ctx.messageReaches(msg, e.stateMachine.Name, trans.Via, e.self)
+		if err != nil || reaches {
+			return reaches, err
 		}
 	}
-	return false
+	return false, nil
+}
+
+// triggerSignalMatches reports whether the message carries the signal an
+// accept trigger names, by type or by the event it subsets.
+func (e *StateExecutor) triggerSignalMatches(accept *ast.AcceptEvent, scope *symbols.Scope, msg Message) bool {
+	if typed := ast.AsQualifiedName(accept.SignalType); typed != nil && len(typed.Parts) > 0 {
+		return e.ctx.messageMatches(msg, typed, scope)
+	}
+	signal := ast.SimpleName(accept.Subsets)
+	return signal != "" && msg.carriesSignal(signal)
 }
 
 // activeStates returns the states currently active, in region declaration
@@ -2423,6 +2641,13 @@ func (e *StateExecutor) EventQueue() *EventQueue {
 	return e.eventQueue
 }
 
+// DeferredEvents returns the events the active configuration holds deferred, in
+// the order they were deferred; they return to the queue once no active state
+// defers them.
+func (e *StateExecutor) DeferredEvents() []Event {
+	return append([]Event(nil), e.deferred...)
+}
+
 // CurrentTime returns the current simulation time.
 func (e *StateExecutor) CurrentTime() float64 {
 	return e.currentTime
@@ -2467,6 +2692,7 @@ func (e *StateExecutor) StateMachineSymbol() *symbols.Symbol {
 func (e *StateExecutor) ProcessNextEvent() error {
 	defer e.ctx.beginExecutorRun(&e.runStarted)()
 
+	e.lastDispatch = nil
 	ran, err := e.runDoRound()
 	if err != nil {
 		return err
@@ -2481,7 +2707,11 @@ func (e *StateExecutor) ProcessNextEvent() error {
 	}
 	// A signal sent by a behavior sharing this context is dispatched by the same
 	// step RunToCompletion takes, so stepping and running agree.
-	if e.eventQueue.Len() == 0 && !e.deliverPendingSignal() && ran > 0 {
+	delivered, err := e.deliverPendingSignal(false)
+	if err != nil {
+		return err
+	}
+	if !delivered && ran > 0 {
 		return nil
 	}
 	return e.processNextEvent()
