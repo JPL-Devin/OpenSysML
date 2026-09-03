@@ -95,7 +95,7 @@ func (s *FeatureValue) ReadValue(name string) (Value, error) {
 	if value.Kind != ValInvalid {
 		return value, nil
 	}
-	if lower := s.Feature.Multiplicity.Lower; lower.Known && lower.Value == 0 {
+	if lower := s.Feature.Multiplicity.Lower; lower.Known && !lower.Infinite && lower.Value == 0 {
 		return sequenceOf(nil), nil
 	}
 	return Value{}, fmt.Errorf("%w: %s", ErrUninitializedFeatureValue, name)
@@ -324,7 +324,7 @@ func (ctx *Context) namesStructuredValue(sym *symbols.Symbol) bool {
 // occursOnce reports whether a usage names at most one occurrence; several
 // occurrences are a collection rather than one object to read features from.
 func (ctx *Context) occursOnce(sym *symbols.Symbol) bool {
-	mult, _ := ctx.extractMultiplicity(sym)
+	mult := ctx.featureMultiplicity(sym, ctx.findOwnerType(sym))
 	return !mult.Upper.Infinite && mult.Upper.Value <= 1
 }
 
@@ -335,7 +335,7 @@ func (ctx *Context) optionalValueless(sym *symbols.Symbol) bool {
 	if !ok || usage.Value != nil {
 		return false
 	}
-	lower := ctx.model.EffectiveMultiplicityOf(sym).Lower
+	lower := ctx.featureMultiplicity(sym, ctx.findOwnerType(sym)).Lower
 	return lower.Known && !lower.Infinite && lower.Value == 0
 }
 

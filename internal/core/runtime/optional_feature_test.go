@@ -3,6 +3,8 @@ package runtime
 import (
 	"errors"
 	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 )
 
 // An optional composite feature fills to its lower bound like a collection:
@@ -162,6 +164,57 @@ func TestValuelessOptionalDeclarationEvaluatesEmptyHoweverSpelled(t *testing.T) 
 		if val, err := evalIn(t, ctx, pkg.Scope, src); err == nil {
 			t.Errorf("%s = %s, want a no-value error", src, FormatValue(val))
 		}
+	}
+}
+
+// A declaration bound to an optional multiplicity by what it redefines or, if
+// abstract, subsets evaluates as it does on an object: empty, bare or qualified.
+func TestInheritedOptionalDeclarationEvaluatesEmpty(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		part def Wheel;
+		part def Car {
+			part wheels : Wheel[0..*];
+			abstract part spares :> wheels;
+			part fitted : Wheel[1..*];
+			abstract part needed :> fitted;
+		}
+		part def Van :> Car {
+			part :>> wheels;
+		}
+		part wheels : Wheel[0..*];
+		abstract part spares :> wheels;
+	}`))
+	pkg, ok := idx.DocumentRoot("<test>").LookupLocal("test")
+	if !ok || pkg.Scope == nil {
+		t.Fatal("test package not indexed")
+	}
+	before := len(ctx.instances)
+	for _, src := range []string{"spares", "test::spares", "Car::spares", "test::Car::spares", "Van::wheels"} {
+		val, err := evalIn(t, ctx, pkg.Scope, src)
+		if err != nil || elementCount(&val) != 0 {
+			t.Errorf("%s = %s, %v; want the empty sequence", src, FormatValue(val), err)
+		}
+	}
+	if val, err := evalIn(t, ctx, pkg.Scope, "spares istype Wheel"); err != nil || val.Kind != ValConst || !val.Const.Bool {
+		t.Errorf("spares istype Wheel = %s, %v; want true of nothing", FormatValue(val), err)
+	}
+	if made := len(ctx.instances) - before; made != 0 {
+		t.Errorf("reading the inherited optional declarations made %d object(s), want none", made)
+	}
+	if val, err := evalIn(t, ctx, pkg.Scope, "Car::needed"); err == nil {
+		t.Errorf("Car::needed = %s, want an error through fitted's [1..*]", FormatValue(val))
+	}
+}
+
+// A feature whose lower bound is infinite admits no count, so holding nothing
+// does not read as empty.
+func TestInfiniteLowerBoundDoesNotReadAsEmpty(t *testing.T) {
+	fv := &FeatureValue{Feature: &EffectiveFeature{Name: "p", Multiplicity: semantics.Range{
+		Lower: semantics.Bound{Known: true, Infinite: true},
+		Upper: semantics.Bound{Known: true, Infinite: true},
+	}}}
+	if read, err := fv.ReadValue("p"); !errors.Is(err, ErrUninitializedFeatureValue) {
+		t.Errorf("reading unset [*..*] p: %s, %v; want %v", FormatValue(read), err, ErrUninitializedFeatureValue)
 	}
 }
 

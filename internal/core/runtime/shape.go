@@ -112,12 +112,7 @@ func (ctx *Context) buildFeatures(typeSym *symbols.Symbol) []EffectiveFeature {
 
 		name := memberSym.Name
 		typ := ctx.extractType(memberSym)
-		mult, multStated := ctx.extractMultiplicity(memberSym)
-		if !multStated {
-			if inherited, ok := ctx.inheritedMultiplicity(memberSym, typeSym, map[*symbols.Symbol]bool{memberSym: true}); ok {
-				mult = inherited
-			}
-		}
+		mult := ctx.featureMultiplicity(memberSym, typeSym)
 		defaultVal := ctx.extractDefaultValue(memberSym)
 		defaultDecl := memberSym
 		if defaultVal == nil {
@@ -225,6 +220,19 @@ func (ctx *Context) extractDefaultValue(featureSym *symbols.Symbol) ast.Node {
 		return decl.BindingExpr
 	}
 	return nil
+}
+
+// featureMultiplicity is the multiplicity a feature has on owner: as stated, else
+// as inherited from what it redefines or subsets, else the assumed 1..1.
+func (ctx *Context) featureMultiplicity(sym, owner *symbols.Symbol) semantics.Range {
+	mult, stated := ctx.extractMultiplicity(sym)
+	if stated {
+		return mult
+	}
+	if inherited, ok := ctx.inheritedMultiplicity(sym, owner, map[*symbols.Symbol]bool{sym: true}); ok {
+		return inherited
+	}
+	return mult
 }
 
 // inheritedMultiplicity is the intersection of the multiplicities a feature declaring
