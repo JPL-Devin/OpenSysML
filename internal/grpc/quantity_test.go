@@ -521,6 +521,28 @@ package Imperial {
 	if got != "4 [Nautical::fathom*fathom] = 3.34450944/1·SI::metre^2" {
 		t.Errorf("ambiguous fathom * Nautical::fathom over the wire = %s, want 4 [Nautical::fathom*fathom] = 3.34450944/1·SI::metre^2", got)
 	}
+
+	// A quantity sent under no unit text is its base units, composing with the named
+	// units they are; under a scale it is the reduction itself, opaque.
+	unnamed := func(term *pb.UnitTerm) *pb.Quantity {
+		return &pb.Quantity{Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 2}, UnitTerm: term}
+	}
+	second := mustEvaluateQuantity(t, srv, hash, "1.0 [SI::s]")
+	for _, tc := range []struct {
+		name string
+		calc string
+		args []*pb.Quantity
+		want string
+	}{
+		{"speed times seconds", "Q::Dist", []*pb.Quantity{unnamed(speed.GetUnitTerm()), second}, "2 [SI::metre] = SI::metre"},
+		{"speed times a metre", "Q::Area", []*pb.Quantity{unnamed(speed.GetUnitTerm()), metre}, "4 [m**2/SI::second] = SI::metre^2·SI::second^-1"},
+		{"kilometres times a metre", "Q::Area", []*pb.Quantity{unnamed(byHand.GetUnitTerm()), metre}, "4 [(1000·metre)*m] = 1000/1·SI::metre^2"},
+		{"kilometres alone", "Q::Area", []*pb.Quantity{unnamed(byHand.GetUnitTerm()), unnamed(byHand.GetUnitTerm())}, "4 [(1000·metre)**2] = 1e+06/1·SI::metre^2"},
+	} {
+		if got := describeQuantity(evaluate(tc.calc, tc.args...)); got != tc.want {
+			t.Errorf("%s, sent without unit text, = %s, want %s", tc.name, got, tc.want)
+		}
+	}
 }
 
 // TestQuantityFromWireRejectsUnitTextItsReductionContradicts pins that a unit

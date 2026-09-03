@@ -460,7 +460,11 @@ func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index, sem *semantics.Model) 
 	if err != nil {
 		return runtime.Value{}, err
 	}
-	unit := runtime.Unit{Text: pq.GetUnit(), Product: product, Term: term}
+	text := pq.GetUnit()
+	if text == "" && !product.IsEmpty() {
+		text = product.String()
+	}
+	unit := runtime.Unit{Text: text, Product: product, Term: term}
 	return runtime.NewQuantityValue(&runtime.Quantity{Num: num, Unit: unit}), nil
 }
 
@@ -468,7 +472,7 @@ func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index, sem *semantics.Model) 
 // to term; a short name is the one unit so named that fits. Otherwise the text is opaque.
 func unitProductOfText(text string, term semantics.UnitTerm, idx *symbols.Index, sem *semantics.Model) (semantics.UnitProduct, error) {
 	if text == "" {
-		return semantics.UnitProduct{}, nil
+		return unnamedUnitProduct(term), nil
 	}
 	opaque := semantics.NamedUnitProduct(nil, text, term.Dimensionless())
 	if idx == nil || sem == nil {
@@ -641,6 +645,19 @@ func baseUnitNamespaces(term semantics.UnitTerm) []string {
 		}
 	}
 	return out
+}
+
+// unnamedUnitProduct is the unit of a quantity sent under no text: its base units
+// at scale one, else the reduction as one opaque unit; a bare number names nothing.
+func unnamedUnitProduct(term semantics.UnitTerm) semantics.UnitProduct {
+	if !sameScale(term.Scale, semantics.UnitScale(1)) {
+		return semantics.NamedUnitProduct(nil, term.String(), term.Dimensionless())
+	}
+	product := semantics.UnitProduct{}
+	for _, f := range term.Factors {
+		product = product.Times(semantics.NamedUnitProduct(f.Unit, symbols.FQNOf(f.Unit), false).Pow(f.Exponent))
+	}
+	return product
 }
 
 // sameScale reports whether two scale ratios agree to within floating-point
