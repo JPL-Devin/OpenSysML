@@ -33,10 +33,9 @@ type Instance struct {
 	// to, 0 for one not materialized yet; nil until any is asked for.
 	anonymous []int64
 
-	// keptAnonymous holds the identities those objects had before a carry-over, in
-	// declaration order, which the ones materialized again here take back; 0 once
-	// taken back or never had.
-	keptAnonymous []int64
+	// keptAnonymous holds the identities those objects had before a carry-over, by
+	// the declaration each was of, until the one materialized again here takes it back.
+	keptAnonymous []keptAnonymous
 
 	// keptConnectors holds, per feature value of a named connector, the identity the object
 	// of it had before a carry-over, which the one materialized again takes back.

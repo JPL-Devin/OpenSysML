@@ -3,6 +3,8 @@ package runtime
 import (
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"testing"
 
@@ -414,6 +416,126 @@ func TestRestoreConnectorThatFailsKeepsEveryIdentity(t *testing.T) {
 	}
 	if got := ctx.InstanceIDs(); len(got) != len(held)+1 {
 		t.Errorf("the objects held are %v, want those before, %v, and the connector alone", got, held)
+	}
+}
+
+const adoptTwoConnectSrc = `package Demo {
+	port def P;
+	part def A { port p : P; port r : P; }
+	part def B { port q : P; port s : P; }
+	part def Sys { part a : A; part b : B; connect a.p to b.q; connect a.r to b.s; }
+}`
+
+// endsOf names the ports the connector's ends hold, `a.p-b.q`, on the object owning them.
+func endsOf(t *testing.T, ctx *Context, owner, conn *Instance) string {
+	t.Helper()
+	var names []string
+	for _, end := range conn.Ends {
+		id, held := end.Value.Object()
+		if !held {
+			t.Fatalf("connector %d's end holds %v, want a port object", conn.ID, end.Value)
+		}
+		for _, path := range [][2]string{{"a", "p"}, {"a", "r"}, {"b", "q"}, {"b", "s"}} {
+			if fvInstance(t, ctx, owner, path[0], path[1]).ID == id {
+				names = append(names, path[0]+"."+path[1])
+			}
+		}
+	}
+	return strings.Join(names, "-")
+}
+
+// A kept identity follows its declaration wherever it now stands among its siblings;
+// the identity of a declaration edited away or removed is dropped, not handed on.
+func TestKeptConnectorIdentitiesFollowTheirDeclarations(t *testing.T) {
+	const (
+		first  = "connect a.p to b.q;"
+		second = "connect a.r to b.s;"
+	)
+	cases := []struct {
+		name  string
+		decls string
+		// want maps the ends of each connector materialized before to those the
+		// connector under its identity has after, "" for an identity dropped.
+		want map[string]string
+		// fresh is the connectors the new declarations add, by ends.
+		fresh []string
+	}{
+		{"inserted before", "connect a.p to b.s; " + first + " " + second, map[string]string{"a.p-b.q": "a.p-b.q", "a.r-b.s": "a.r-b.s"}, []string{"a.p-b.s"}},
+		{"reordered", second + " " + first, map[string]string{"a.p-b.q": "a.p-b.q", "a.r-b.s": "a.r-b.s"}, nil},
+		{"edited", first + " connect a.r to b.q;", map[string]string{"a.p-b.q": "a.p-b.q", "a.r-b.s": ""}, []string{"a.r-b.q"}},
+		{"removed", first, map[string]string{"a.p-b.q": "a.p-b.q", "a.r-b.s": ""}, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			prev := contextOver(t, adoptTwoConnectSrc)
+			owner, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::Sys"))
+			if err != nil {
+				t.Fatalf("Instantiate: %v", err)
+			}
+			conns, err := owner.OwnedConnectors(prev)
+			if err != nil {
+				t.Fatalf("OwnedConnectors: %v", err)
+			}
+			before := make(map[string]int64, len(conns))
+			for _, conn := range conns {
+				before[endsOf(t, prev, owner, conn)] = conn.ID
+			}
+			if len(before) != 2 {
+				t.Fatalf("the connectors before are %v, want two with distinct ends", before)
+			}
+			shapes := prev.ShapesOf(owner)
+
+			ctx := contextOver(t, strings.Replace(adoptTwoConnectSrc, first+" "+second, tc.decls, 1))
+			if _, err := ctx.Adopt(prev, shapes, owner); err != nil {
+				t.Fatalf("Adopt: %v", err)
+			}
+			var kept []int64
+			for ends, id := range before {
+				if tc.want[ends] != "" {
+					kept = append(kept, id)
+				}
+			}
+			slices.Sort(kept)
+			if got := owner.KeptConnectorIDs(); fmt.Sprint(got) != fmt.Sprint(kept) {
+				t.Errorf("KeptConnectorIDs() = %v, want %v: the identities of the declarations still there", got, kept)
+			}
+			for ends, id := range before {
+				conn, err := owner.RestoreConnector(ctx, id)
+				if err != nil {
+					t.Fatalf("RestoreConnector(%d): %v", id, err)
+				}
+				if tc.want[ends] == "" {
+					if conn != nil {
+						t.Errorf("RestoreConnector(%d) of the %s connector = the %s connector, want nothing: its declaration is gone", id, ends, endsOf(t, ctx, owner, conn))
+					}
+					continue
+				}
+				if conn == nil || conn.ID != id {
+					t.Fatalf("RestoreConnector(%d) = %v, want the connector under that identity", id, conn)
+				}
+				if got := endsOf(t, ctx, owner, conn); got != tc.want[ends] {
+					t.Errorf("connector %d connects %s after the carry-over, want %s as before", id, got, tc.want[ends])
+				}
+			}
+			after, err := owner.OwnedConnectors(ctx)
+			if err != nil {
+				t.Fatalf("OwnedConnectors after the carry-over: %v", err)
+			}
+			var fresh []string
+			for _, conn := range after {
+				if slices.Contains(slices.Collect(maps.Values(before)), conn.ID) {
+					continue
+				}
+				fresh = append(fresh, endsOf(t, ctx, owner, conn))
+			}
+			slices.Sort(fresh)
+			if fmt.Sprint(fresh) != fmt.Sprint(tc.fresh) {
+				t.Errorf("the connectors under new identities connect %v, want %v", fresh, tc.fresh)
+			}
+			if got := owner.KeptConnectorIDs(); len(got) != 0 {
+				t.Errorf("KeptConnectorIDs() = %v once all are materialized again, want none", got)
+			}
+		})
 	}
 }
 

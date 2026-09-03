@@ -897,6 +897,37 @@ func TestStateMachineObjectsByReference(t *testing.T) {
 	wants(t, run(t, s, "%state monitor.nope"), "error:", `Plant::monitor has no feature "nope"`)
 }
 
+// %state on the name of an object that does not exist yet says so with the
+// resolver's guidance, whether or not the object would exhibit a machine, while
+// a machine's own name still runs the machine.
+func TestStateNamesAnObjectNotYetInstantiated(t *testing.T) {
+	s := submitted(t, `package Fleet {
+	part def Plain { attribute n = 1; }
+	part def Rover {
+		exhibit state modes { entry; then idle; state idle; }
+	}
+	part plain : Plain;
+	part rover : Rover;
+	part spare : Rover;
+}`)
+
+	wants(t, run(t, s, "%state rover"), "error:", `"rover" is not a state machine, and no instance of "Fleet::rover" (use %instantiate first)`)
+	wants(t, run(t, s, "%state plain"), "error:", `"plain" is not a state machine, and no instance of "Fleet::plain" (use %instantiate first)`)
+
+	id := objectIDIn(t, run(t, s, "%instantiate spare"))
+	wants(t, run(t, s, "%state rover"), "error:",
+		`no instance of the usage "Fleet::rover": object #`+id+` of "Fleet::spare" is of its definition "Fleet::Rover", not of the usage`,
+		"use %instantiate Fleet::rover to create the usage's object, or name Fleet::spare to address it")
+	wants(t, run(t, s, "%state Fleet::Rover::modes"), `Debugging state machine "modes" exhibited by object #`+id+` of "Fleet::spare"`, "Current state: idle")
+
+	rover := objectIDIn(t, run(t, s, "%instantiate rover"))
+	wants(t, run(t, s, "%state rover"), `Debugging state machine "modes" exhibited by object #`+rover+` of "Fleet::rover"`, "Current state: idle")
+	run(t, s, "%instantiate plain")
+	got := run(t, s, "%state plain")
+	wants(t, got, "error:", `object "Fleet::plain" exhibits no state machine`)
+	rejects(t, got, "%instantiate")
+}
+
 // An object displaced from its name still carries its type's conditions, so an
 // unpinned check or evaluation names it as one of the objects it could be about
 // instead of quietly answering about the currently named one.

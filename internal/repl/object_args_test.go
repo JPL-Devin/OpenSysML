@@ -755,6 +755,70 @@ func TestReachingOneKeptConnectorLeavesItsSiblingsSetAside(t *testing.T) {
 	wants(t, run(t, s, "%instantiate Demo::A"), next)
 }
 
+// The id %features printed for an anonymous connector keeps naming the connector
+// of the declaration it was materialized from when the owner is declared again
+// with its connectors reordered or one inserted before them; a connector whose
+// declaration is gone is gone with it, its id unknown rather than another's.
+func TestKeptConnectorIDsFollowTheirDeclarations(t *testing.T) {
+	const (
+		first  = "connect a.p to b.q;"
+		second = "connect a.r to b.s;"
+	)
+	sys := func(connects string) string {
+		return `package Demo {
+		port def P;
+		part def A { port p : P; port r : P; }
+		part def B { port q : P; port s : P; }
+		part def Sys { part a : A; part b : B; ` + connects + ` }
+	}`
+	}
+	// ends reads the ports a connector's listing shows its ends holding.
+	ends := func(listing string) string {
+		return objectIDIn(t, featureLine(t, listing, "source")) + "-" + objectIDIn(t, featureLine(t, listing, "target"))
+	}
+	cases := []struct {
+		name, connects string
+		kept           bool // whether the second connector's declaration is still there
+	}{
+		{"inserted before", "connect a.p to b.s; " + first + " " + second, true},
+		{"reordered", second + " " + first, true},
+		{"removed", first, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := loadSource(t, sys(first+" "+second))
+			wants(t, run(t, s, "%instantiate Demo::Sys"), "ID: 1")
+			conns := connectorLines(t, run(t, s, "%features Demo::Sys"))
+			if len(conns) != 2 {
+				t.Fatalf("the listing shows %d anonymous connectors, want 2", len(conns))
+			}
+			a, b := objectIDIn(t, conns[0]), objectIDIn(t, conns[1])
+			aEnds, bEnds := ends(run(t, s, "%features #"+a)), ends(run(t, s, "%features #"+b))
+
+			if res := s.Submit(sys(tc.connects)); len(res.Notices) != 1 {
+				t.Fatalf("the declaration reported %v", res.Notices)
+			}
+			wants(t, run(t, s, "%instances"), "Demo::Sys (ID: 1)")
+			if got := ends(run(t, s, "%features #"+a)); got != aEnds {
+				t.Errorf("#%s connects %s after the declaration, want %s as before", a, got, aEnds)
+			}
+			got := run(t, s, "%features #"+b)
+			if !tc.kept {
+				wants(t, got, "error: no object #"+b+" in this session")
+				rejects(t, got, "Instance: #"+b)
+				return
+			}
+			if ends(got) != bEnds {
+				t.Errorf("#%s connects %s after the declaration, want %s as before", b, ends(got), bEnds)
+			}
+			listed := connectorLines(t, run(t, s, "%features Demo::Sys"))
+			if len(listed) != strings.Count(tc.connects, "connect") {
+				t.Errorf("the owner lists %d connectors, want one per declaration: %q", len(listed), listed)
+			}
+		})
+	}
+}
+
 // connectorLines returns the lines of a %features listing that hold the object's
 // anonymous connectors, in the order listed.
 func connectorLines(t *testing.T, listing string) []string {

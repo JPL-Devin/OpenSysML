@@ -2429,6 +2429,10 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 			return nil, lerr
 		}
 		if !isMachineSymbol(sym) {
+			var noInstance *NotInstantiatedError
+			if errors.As(rerr, &noInstance) {
+				return nil, fmt.Errorf("%q is not a state machine, and %w", name, rerr)
+			}
 			return nil, fmt.Errorf("%q is not a state machine", name)
 		}
 	}

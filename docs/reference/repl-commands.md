@@ -140,7 +140,9 @@ does not list and `#<id>` completion does not offer. A connector is the one obje
 aside: a declaration that leaves its owner's shape alone keeps the owner and attaches the connector's
 ends again when it is next read, and the id `%features` printed for it — anonymous or named — goes on
 reaching it and being offered by completion in the meantime, naming it being what reads it — that
-one alone, its sibling connectors waiting for their own turn. An end that cannot be attached again is
+one alone, its sibling connectors waiting for their own turn. The id follows the connector's own
+declaration, however the owner's connectors are reordered or added to around it; the id of one whose
+declaration is gone is gone with it, never handed to another. An end that cannot be attached again is
 reported with the id, and the id stays reachable for another attempt: `no object #4 in this session:
 the connector that had that identity cannot be materialized again: …`.
 
