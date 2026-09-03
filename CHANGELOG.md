@@ -24,11 +24,13 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 - **A body's result expression converts to RDF and back.** `sysml -convert ttl` refused any
   calculation, analysis, verification or case whose body ends in a bare expression
   (`calc def Double { in x : Real; x * 2 }`), which is how the OMG corpora write most of theirs.
-  The expression now converts as the metamodel states it: a `sysx:ResultExpressionMember` at its
-  `sysx:memberIndex`, owned through a standard `sysml:ResultExpressionMembership` that carries the
-  expression tree as `sysml:ownedResultExpression`, so a graph without `sysx:sourceText` still
-  writes the notation back. Expression bodies — `{ in y : Real; y + x }` as a result, nested, or
-  as the body of an `in expr` parameter — carry their parameters and result structurally as
+  The expression now converts as the metamodel states it: the Expression element itself, at its
+  `sysx:memberIndex`, owned through a standard `sysml:ResultExpressionMembership` that states it
+  as both its member and its `sysml:ownedResultExpression`, so a graph without `sysx:sourceText`
+  still writes the notation back, and any Expression a `ResultExpressionMembership` owns — in a
+  graph another tool wrote, with no `sysx:` term on it — is written back as its body's result.
+  Expression bodies — `{ in y : Real; y + x }` as a result, nested, or as the body of an `in expr`
+  parameter — carry their parameters and result structurally as
   `sysx:bodyParameter` and `sysx:resultExpression`, and a `doc` opening one as a
   `sysml:Documentation` node (the parser now keeps it); any other declaration inside one stays a
   `sysx:BodyMember` with its text, and is refused by name when the text is absent. Across the 345
@@ -155,6 +157,16 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   of 132 for 131 071 invocations) and `Fib(25)` is unchanged at 21–23 ns per invocation. The
   differential test now also compares Reals bit for bit over ±0.0, ±Inf and NaN, and focused
   fixtures under `internal/core/runtime/testdata/compiled/` run each construct through both tiers.
+
+### Fixed
+
+- **A literal of the wrong datatype is no longer read as a name.** The Turtle reader took every
+  literal by its lexical form, so `sysml:declaredName "3"^^xsd:integer` or a `sysx:bodyParameter`
+  stated as `"x"@en` came back as the name `3` or `x`. Every metamodel property the mapping
+  reads as text is a `String`; a language-tagged literal, or one whose datatype its property does
+  not take, is now refused before anything is read, naming the literal and the subject that
+  states it. Plain and `xsd:string` literals read as before, and the counting properties keep
+  their `xsd:integer`, `xsd:decimal` and `xsd:boolean` forms.
 
 ### Changed
 
