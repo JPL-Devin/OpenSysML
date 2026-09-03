@@ -361,7 +361,7 @@ func toDimensionOneValue(name string, _ *Context, args []Value) (Value, error) {
 // unit; an empty collection has no unit, so it is the dimensionless 0 or 1.
 func quantityAggregate(op ast.OperatorKind) libraryApply {
 	return func(name string, _ *Context, args []Value) (Value, error) {
-		return aggregate(name, args, op)
+		return aggregate(name, args, op, false)
 	}
 }
 
