@@ -414,8 +414,8 @@ func (r *Resolver) eachImportMatch(scope *symbols.Scope, imp *ast.Import, name s
 	// Namespace import: visible members of the target's scope are surfaced.
 	// Check scope first if available
 	if target.Scope != nil {
-		if sym, ok := target.Scope.LookupLocal(name); ok && visibleThroughImport(imp, sym) && admit(sym) {
-			if !yield(sym) {
+		for _, sym := range symbols.PreferDeclared(target.Scope.LookupLocalAll(name)) {
+			if visibleThroughImport(imp, sym) && admit(sym) && !yield(sym) {
 				return
 			}
 		}

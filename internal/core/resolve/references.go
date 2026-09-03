@@ -472,7 +472,9 @@ func (c *refCollector) expr(scope *symbols.Scope, e ast.Node) {
 		c.expr(scope, v.Index)
 	case *ast.InvocationExpr:
 		c.expr(scope, v.Operand)
-		c.add(scope, v.Type)
+		if v.Type != nil {
+			c.push(Reference{Scope: scope, QN: v.Type, Invocation: v})
+		}
 		for _, a := range v.Args {
 			c.expr(scope, a)
 		}

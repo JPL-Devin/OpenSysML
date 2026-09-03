@@ -431,8 +431,21 @@ func (w *Workspace) ResolveQualifiedInDoc(name string, scope *symbols.Scope, qn 
 func (w *Workspace) ResolveReferenceInDoc(name string, ref resolve.Reference) (*symbols.Symbol, bool) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	resolver, _ := w.newResolver()
-	return resolver.ResolveReference(ref)
+	resolver, sem := w.newResolver()
+	sym, ok := resolver.ResolveReference(ref)
+	if selected := selectedInvocation(resolver, sem, ref); selected != nil {
+		return selected, true
+	}
+	return sym, ok
+}
+
+// selectedInvocation is the overload an invocation's arguments select, when the
+// reference is the name it calls; nil leaves the name-only resolution standing.
+func selectedInvocation(resolver *resolve.Resolver, sem *semantics.Model, ref resolve.Reference) *symbols.Symbol {
+	if ref.Invocation == nil {
+		return nil
+	}
+	return passes.SelectInvocation(resolver, sem, ref.Scope, ref.Invocation).Selected
 }
 
 // ResolveQualifiedSegmentsInDoc resolves a qualified name and returns the symbol
@@ -451,13 +464,16 @@ func (w *Workspace) ResolveReferenceSegmentsInDoc(name string, ref resolve.Refer
 	}
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	r, _ := w.newResolver()
+	r, sem := w.newResolver()
 	r.ResolveReference(ref)
 	out := make([]*symbols.Symbol, len(ref.QN.Parts))
 	for i := range ref.QN.Parts {
 		if sym, ok := r.PartSymbol(ref.QN, i); ok {
 			out[i] = sym
 		}
+	}
+	if selected := selectedInvocation(r, sem, ref); selected != nil {
+		out[len(out)-1] = selected
 	}
 	return out
 }
@@ -471,7 +487,7 @@ func (w *Workspace) ResolveReferenceNameSegmentsInDoc(name string, ref resolve.R
 	}
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	r, _ := w.newResolver()
+	r, sem := w.newResolver()
 	r.ResolveReference(ref)
 	out := make([]*symbols.Symbol, len(ref.QN.Parts))
 	for i := range ref.QN.Parts {
@@ -481,6 +497,12 @@ func (w *Workspace) ResolveReferenceNameSegmentsInDoc(name string, ref resolve.R
 		}
 		if sym, ok := r.PartSymbol(ref.QN, i); ok {
 			out[i] = sym
+		}
+	}
+	last := len(out) - 1
+	if _, aliased := r.PartAlias(ref.QN, last); !aliased {
+		if selected := selectedInvocation(r, sem, ref); selected != nil {
+			out[last] = selected
 		}
 	}
 	return out
