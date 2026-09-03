@@ -799,6 +799,7 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		words = append(words, prefixes...)
 	default:
 		words = append(words, prefixes...)
+		keywordAt = len(words)
 		if keyword != "" {
 			words = append(words, keyword)
 		}

@@ -577,12 +577,14 @@ func TestPrefixMetadataComesBackFromTheGraphAlone(t *testing.T) {
 		"#Safety dependency from Car to Vehicle;",
 		"requirement def R {\n        subject #Safety s : Car;\n    }",
 		"use case def U {\n        objective #Safety o : Goal;\n    }",
+		"use case def U {\n        #Safety include Ride;\n    }",
+		"use case def U {\n        #Safety include use case ride : Ride;\n    }",
 		"requirement def R {\n        assume #Reviewed constraint {\n            true;\n        }\n    }",
 		"requirement def R {\n        require #Safety constraint {\n            true;\n        }\n    }",
 	}
 	for _, head := range heads {
 		t.Run(head, func(t *testing.T) {
-			src := "package P {\n\tmetadata def <safe> Safety;\n\tmetadata def Reviewed;\n\tpart def Vehicle;\n\trequirement def Goal;\n\t" + head + "\n}"
+			src := "package P {\n\tmetadata def <safe> Safety;\n\tmetadata def Reviewed;\n\tpart def Vehicle;\n\trequirement def Goal;\n\tuse case def Ride;\n\t" + head + "\n}"
 			turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
 			if err != nil {
 				t.Fatalf("to turtle: %v", err)
