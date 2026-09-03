@@ -1103,6 +1103,7 @@ func TestDecideLeavesNoValueAGuardMaterializes(t *testing.T) {
 
 // An object a guard materializes starts its behaviors under Decide as under
 // dispatch (its entry sets level to 10), and is gone with them after the decision.
+// The sensor is optional so that the controller's creation leaves it to the guard.
 func TestDecideStartsTheBehaviorsOfAnObjectAGuardMaterializes(t *testing.T) {
 	src := `
 		private import ScalarValues::*;
@@ -1116,7 +1117,7 @@ func TestDecideStartsTheBehaviorsOfAnObjectAGuardMaterializes(t *testing.T) {
 			}
 		}
 		part def Controller {
-			part sensor : Sensor;
+			part sensor : Sensor [0..1];
 			exhibit state life {
 				entry; then off;
 				state off;
@@ -1297,7 +1298,8 @@ func TestProbeDrainLeavesThePendingStartupRunsOfTheStartUnderWay(t *testing.T) {
 // A message in flight is left as Decide found it, payload included: the machine
 // of an object a guard materializes may take it under the probe and cache the
 // occurrence it binds on the payload, an object the probe discards. Dispatch
-// then binds a live occurrence.
+// then binds a live occurrence. The sensor is optional so that the controller's
+// creation leaves it to the guard.
 func TestDecideLeavesNoOccurrenceCachedOnAMessageInFlight(t *testing.T) {
 	src := `
 		private import ScalarValues::*;
@@ -1313,7 +1315,7 @@ func TestDecideLeavesNoOccurrenceCachedOnAMessageInFlight(t *testing.T) {
 			}
 		}
 		part def Controller {
-			part sensor : Sensor;
+			part sensor : Sensor [0..1];
 			exhibit state life {
 				entry; then off;
 				state off;

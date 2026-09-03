@@ -245,6 +245,22 @@ func TestStateAttachesToTheExhibitedMachine(t *testing.T) {
 	}
 }
 
+// TestStateNamingTheMachineAloneDrivesItsExhibitor checks that -state naming only
+// the machine one object exhibits drives that object's performance, and refuses
+// when no object exhibits it rather than performing it detached.
+func TestStateNamingTheMachineAloneDrivesItsExhibitor(t *testing.T) {
+	binary := buildCLI(t)
+
+	got := check(t, binary, fleetModel, "-instantiate", "Fleet::rover", "-state", "Fleet::Rover::modes", "-advance", "5")
+	wantReport(t, got, 0, `Debugging state machine "modes" exhibited by object #`, `of "Fleet::rover"`, "Current state: moving")
+	if strings.Contains(got.output(), "Started state machine executor") {
+		t.Errorf("the exhibited machine was performed detached from its object:\n%s", got.output())
+	}
+
+	wantReport(t, check(t, binary, fleetModel, "-state", "Fleet::Rover::modes", "-advance", "5"),
+		2, `no object of this session exhibits "Fleet::Rover::modes"`, "%state <object>", "%state Fleet::Rover::modes <object>")
+}
+
 // TestStateAddressesANestedPart checks that -state reaches a part nested in a
 // top-level object by a feature path, by its qualified name and by the id the
 // report prints, and that a path reaching no object names the segment.

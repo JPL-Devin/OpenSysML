@@ -399,6 +399,7 @@ func testUnattachableConnectorLeavesNoBehavior(t *testing.T) {
 
 // testUnattachableConnectorAbandonsWhatItsEndsMaterialized: an object an earlier
 // end materialized goes with the connector a later end fails, its behaviors too.
+// The part is optional, so creating Sys leaves it for the end to materialize.
 func testUnattachableConnectorAbandonsWhatItsEndsMaterialized(t *testing.T) {
 	inst, ctx := instantiatePart(t, "Sys", `
 		package test {
@@ -408,11 +409,14 @@ func testUnattachableConnectorAbandonsWhatItsEndsMaterialized(t *testing.T) {
 				exhibit state life { entry; then on; state on; }
 			}
 			part def Sys {
-				part a : Ticking;
+				part a : Ticking[0..1];
 				connection link connect a.p to a.missing;
 			}
 		}
 	`)
+	if fv := inst.FeatureValues["a"]; fv == nil || fv.Materialized {
+		t.Fatalf("a was materialized with Sys: %+v", fv)
+	}
 	before := len(ctx.InstanceIDs())
 	if _, err := inst.GetFeatureValue(ctx, "link"); !errors.Is(err, ErrConnectorEnd) {
 		t.Fatalf("expected ErrConnectorEnd, got: %v", err)

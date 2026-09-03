@@ -150,7 +150,7 @@ var metaCommandTable = []metaCommand{
 	{group: groupLibrary, name: "%render", args: "<name> [form]", desc: "render a view as the rendering it states — as text, or as a Mermaid diagram or a Markdown table"},
 
 	{group: groupRuntime, name: "%instantiate", args: argName, desc: "create an instance of a part def"},
-	{group: groupRuntime, name: "%eval", args: "[in <name> :] <expr>", desc: "evaluate an expression, in the named element or object when one is named"},
+	{group: groupRuntime, name: "%eval", args: "[in <name>|<path>|#<id> :] <expr>", desc: "evaluate an expression, in the named element or object when one is named"},
 	{group: groupRuntime, name: "%features", args: "<object> [all|depth <n>] [json]", desc: "show an object's features and their values, bounded unless all or a depth is asked for; json writes the object graph as the API does; an object is named, #<id>, or a path such as car.fl or #1.wheels[2]"},
 	{group: groupRuntime, name: "%instances", desc: "list all instantiated objects"},
 	{group: groupRuntime, name: "%invoke", args: "<object> <op> [<p>=<expr>]", desc: "invoke an operation of an object's type, performed by that object; an object is named, #<id>, or a path such as car.fl"},
@@ -174,7 +174,7 @@ var metaCommandTable = []metaCommand{
 	{group: groupAction, name: "%break", args: "<node>", desc: "set breakpoint at node"},
 	{group: groupAction, name: "%stop", desc: "stop current debugging session"},
 
-	{group: groupState, name: "%state", args: "<name> [<object>]", desc: "debug the machine an object exhibits (naming that machine attaches too), or a state machine performed by an object; an object is named, #<id>, or a path such as car.fl"},
+	{group: groupState, name: "%state", args: "<name> [<object>]", desc: "debug the machine an object exhibits (naming that machine alone attaches to the one object exhibiting it; with none or several, name the object), or a state machine performed by an object; an object is named, #<id>, or a path such as car.fl"},
 	{group: groupState, name: "%send", args: "<signal>[(<p>=<expr>, ...)] [to <object>]", desc: "send a signal to an object's machine, by default the one being debugged; an object is named, #<id>, or a path such as car.fl"},
 	{group: groupState, name: "%events", desc: "show event queue and signals in flight"},
 	{group: groupState, name: "%current", desc: "show current state and configuration"},
@@ -503,7 +503,7 @@ func (s *Session) doInstantiate(name string) ([]string, bool, error) {
 
 // evalUsage is what %eval accepts: an expression, optionally pinned to the
 // context it is evaluated in.
-const evalUsage = "usage: %eval [in <qualified-name> :] <expression>"
+const evalUsage = "usage: %eval [in <qualified-name> | <object-path> | #<id> :] <expression>"
 
 // doEvalLine carries out %eval, in the context the line pins when it names one.
 func (s *Session) doEvalLine(tail string) ([]string, bool, error) {
@@ -574,8 +574,9 @@ func contextSeparator(tail string) int {
 }
 
 // evalIn evaluates an expression in the context the command pinned: the object
-// the reference denotes, whose feature values it then reads as `%eval` does after
-// `%instantiate`, or else the named element's own namespace.
+// the reference denotes (`ctx`, `#3`, `ctx.recv`), whose feature values it then
+// reads as `%eval` does after `%instantiate`, or else the named element's own
+// namespace.
 func (s *Session) evalIn(name, expr string) ([]string, error) {
 	inst, label, rerr := s.resolveObject(name)
 	var noInstance *NotInstantiatedError
@@ -2233,6 +2234,25 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 		}
 	}
 
+	// A machine named alone runs on the one held object exhibiting it. Zero or
+	// several exhibitors is refused: a detached run would write to no object.
+	if len(performer) == 0 {
+		switch exhibitors := s.exhibitorsOf(ctx, sym); len(exhibitors) {
+		case 0:
+			if types := s.exhibitingTypes(ctx, sym); len(types) > 0 {
+				return nil, s.exhibitorsError(name, types, nil)
+			}
+		case 1:
+			ex := exhibitors[0]
+			if len(ex.machines) > 1 {
+				return nil, ambiguousMachine(name, ex.inst, ex.name, ex.machines)
+			}
+			return s.attachExhibitedMachine(ctx, name, ex.name, ex.inst, ex.machines[0]), nil
+		default:
+			return nil, s.exhibitorsError(name, nil, exhibitors)
+		}
+	}
+
 	self, selfFQN, perr := s.performingObject(performer)
 	if perr != nil {
 		return nil, perr
@@ -2337,6 +2357,96 @@ func (s *Session) attachExhibitedMachine(
 		timeLabel + runtime.FormatReal(behavior.State.CurrentTime()),
 		fmt.Sprintf("  Events: %d", behavior.State.EventQueue().Len()),
 	}
+}
+
+// ExhibitorsError reports a machine `%state <machine>` alone cannot attach to:
+// no held object exhibits it, or several do, so no one running performance is meant.
+type ExhibitorsError struct {
+	Machine string          // the machine asked for, as the prompt prints names
+	Types   []string        // the types declaring an exhibit of it, in declaration order, as the prompt prints names
+	Objects []RelatedObject // the held objects exhibiting it, in walk order; none when no object does
+}
+
+func (e *ExhibitorsError) Error() string {
+	if len(e.Objects) == 0 {
+		types := make([]string, len(e.Types))
+		for i, t := range e.Types {
+			types[i] = fmt.Sprintf("%q", t)
+		}
+		return fmt.Sprintf("no object of this session exhibits %q, which runs only on an object of %s: use %%instantiate to create one, then %%state <object> or %%state %s <object>",
+			e.Machine, strings.Join(types, " or "), e.Machine)
+	}
+	labels := make([]string, len(e.Objects))
+	for i, o := range e.Objects {
+		labels[i] = fmt.Sprintf("#%d", o.ID)
+		if o.Label != "" {
+			labels[i] = fmt.Sprintf("#%d of %q", o.ID, o.Label)
+		}
+	}
+	return fmt.Sprintf("%d objects of this session exhibit %q (%s), so naming the machine alone attaches to none of them: use %%state <object> or %%state %s <object> to name one",
+		len(e.Objects), e.Machine, strings.Join(labels, ", "), e.Machine)
+}
+
+// exhibitor is a held object running a machine, with the machines of it that run
+// under one declaration.
+type exhibitor struct {
+	carrier
+	machines []*runtime.ObjectBehavior
+}
+
+// exhibitorsOf finds the held objects exhibiting sym's machine, in carrier order.
+// Nothing is materialized: an object not yet held runs no machine to attach to.
+func (s *Session) exhibitorsOf(ctx *runtime.Context, sym *symbols.Symbol) []exhibitor {
+	var found []exhibitor
+	s.walkHeldObjects(ctx, func(cur carrier) bool {
+		if machines := cur.inst.ExhibitedStatesOf(sym); len(machines) > 0 {
+			found = append(found, exhibitor{carrier: cur, machines: machines})
+		}
+		return true
+	})
+	return found
+}
+
+// exhibitingTypes finds the types of the session's documents declaring an exhibit
+// of sym's machine (the usage itself, or one typed by or naming it), in declaration order.
+func (s *Session) exhibitingTypes(ctx *runtime.Context, sym *symbols.Symbol) []*symbols.Symbol {
+	var types []*symbols.Symbol
+	var collect func(scope *symbols.Scope)
+	collect = func(scope *symbols.Scope) {
+		if scope == nil {
+			return
+		}
+		for _, member := range scope.Members() {
+			if owner := scope.Owner(); owner != nil && ctx.ExhibitsState(member, sym) {
+				types = append(types, owner)
+				break
+			}
+		}
+		for _, child := range scope.Children() {
+			collect(child)
+		}
+	}
+	for _, scope := range s.docScopes() {
+		collect(scope)
+	}
+	return types
+}
+
+// exhibitorsError reports sym's machine as one `%state <machine>` alone cannot
+// attach to, naming the types declaring an exhibit of it and the objects exhibiting it.
+func (s *Session) exhibitorsError(name string, types []*symbols.Symbol, exhibitors []exhibitor) error {
+	e := &ExhibitorsError{Machine: name}
+	for _, typ := range types {
+		e.Types = append(e.Types, notationName(symbols.FQNOf(typ)))
+	}
+	for _, ex := range exhibitors {
+		ref := RelatedObject{ID: ex.inst.ID}
+		if !isObjectID(ex.name) {
+			ref.Label = ex.name
+		}
+		e.Objects = append(e.Objects, ref)
+	}
+	return e
 }
 
 // AmbiguousMachineError reports a state definition an object exhibits as the

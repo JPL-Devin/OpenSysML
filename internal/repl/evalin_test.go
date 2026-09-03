@@ -109,7 +109,7 @@ func TestEvalInFailuresAreTypedNotPanics(t *testing.T) {
 
 // %help documents the form, which is how a user finds it.
 func TestHelpDocumentsPinnedEval(t *testing.T) {
-	wants(t, joinLines(helpText()), "%eval", "in <name> :")
+	wants(t, joinLines(helpText()), "%eval", "in <name>|<path>|#<id> :")
 }
 
 // A pinned evaluation is one run, so the step budget bounds it as it bounds an
@@ -132,4 +132,34 @@ func TestEvalInInstanceIsBoundedByTheStepBudget(t *testing.T) {
 	wants(t, run(t, s, "%eval in Demo::Vehicle : "+expr), "step limit exceeded")
 	// The budget bounds one run, not the session.
 	wants(t, run(t, s, "%eval in Demo::Vehicle : mass + 1.0"), "= 1501")
+}
+
+// After %instantiate, every way of reading a feature of the object — a bare
+// expression, %eval pinned to the name, to the object's id and to a path under it
+// — reads the object that was created and run, not a fresh materialization.
+func TestReadsAfterInstantiateSeeTheRunObject(t *testing.T) {
+	s := loadFixture(t, "testdata/ping_counter.sysml")
+	wants(t, run(t, s, "%instantiate P::ctx"), "ID: 1")
+
+	bare, err := s.EvalBare("ctx.recv.got")
+	if err != nil {
+		t.Fatalf("ctx.recv.got: %v", err)
+	}
+	wants(t, joinLines(bare), "= 1")
+	wants(t, run(t, s, "%eval ctx.recv.got"), "= 1")
+	wants(t, run(t, s, "%eval in P::ctx : recv.got"), "recv.got (on P::ctx ID: 1)", "= 1")
+	wants(t, run(t, s, "%eval in #1 : recv.got"), "recv.got (on #1 ID: 1)", "= 1")
+	wants(t, run(t, s, "%eval in ctx.recv : got"), "got (on P::ctx.recv ID: ", "= 1")
+	wants(t, run(t, s, "%eval in P::ctx.recv : got + 1"), "= 2")
+	wants(t, run(t, s, "%features #1"), "got = 1")
+}
+
+// %eval in rejects an object form that names nothing the session holds the way
+// the other object-taking commands do, and its usage lists the accepted forms.
+func TestEvalInObjectFormErrors(t *testing.T) {
+	s := loadFixture(t, "testdata/ping_counter.sysml")
+	wants(t, run(t, s, "%eval in #1 : recv.got"), "error:", "#1")
+	run(t, s, "%instantiate P::ctx")
+	wants(t, run(t, s, "%eval in ctx.nowhere : got"), "error:", "nowhere")
+	wants(t, run(t, s, "%eval in"), "usage: %eval [in <qualified-name> | <object-path> | #<id> :] <expression>")
 }

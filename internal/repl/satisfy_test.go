@@ -90,10 +90,10 @@ func TestSatisfyChainedSubject(t *testing.T) {
 	out := run(t, s, "%satisfy")
 	wants(t, out,
 		"✓ satisfy r1 by direct holds (on S::direct ID: 1)",
-		"✓ satisfy r2 by config.child holds (on S::config.child ID: 4)",
+		"✓ satisfy r2 by config.child holds (on S::config.child ID: 3)",
 	)
 	rejects(t, out, "by child")
-	wants(t, run(t, s, "%satisfy"), "✓ satisfy r2 by config.child holds (on S::config.child ID: 4)")
+	wants(t, run(t, s, "%satisfy"), "✓ satisfy r2 by config.child holds (on S::config.child ID: 3)")
 	wants(t, run(t, s, "%features S::config::child"), "mass")
 
 	// A quoted member keeps its quotes, so a dot inside it is not a chain step.
