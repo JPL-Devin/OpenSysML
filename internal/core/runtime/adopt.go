@@ -597,9 +597,7 @@ func (a *adoption) commit() {
 		// The connectors the owner names no name are reached by no name here, so
 		// they are materialized again against the declarations as they are now —
 		// under the identities they had, which name the same connectors.
-		if plan.obj.anonymous != nil {
-			plan.obj.keptAnonymous, plan.obj.anonymous = plan.obj.anonymous, nil
-		}
+		plan.obj.keepAnonymous()
 		a.ctx.registerInstance(plan.obj)
 		a.ctx.ids.atLeast(id + 1)
 	}

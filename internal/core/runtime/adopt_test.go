@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -228,6 +229,152 @@ func TestAdoptKeepsTheIdentitiesOfConnectorsSetAside(t *testing.T) {
 	}
 	if len(ctx.InstanceIDs()) != held+2 {
 		t.Errorf("materializing the two connectors again left %v, want the two objects more", ctx.InstanceIDs())
+	}
+}
+
+// carriedSysWithThreeConnectors materializes a Sys owning three anonymous
+// connectors, carries it into a re-analysis, and returns the carried object with
+// the identities its connectors had, in declaration order.
+func carriedSysWithThreeConnectors(t *testing.T) (*Context, *Instance, []int64) {
+	t.Helper()
+	src := strings.Replace(adoptConnectSrc, "connect a.p to b.q;", "connect a.p to b.q; connect a.p to b.q; connect a.p to b.q;", 1)
+	prev := contextOver(t, src)
+	obj, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::Sys"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	conns, err := obj.OwnedConnectors(prev)
+	if err != nil {
+		t.Fatalf("OwnedConnectors: %v", err)
+	}
+	if len(conns) != 3 {
+		t.Fatalf("the object owns %d anonymous connectors, want 3", len(conns))
+	}
+	ids := make([]int64, 0, 3)
+	for _, conn := range conns {
+		ids = append(ids, conn.ID)
+	}
+	shapes := prev.ShapesOf(obj)
+	ctx := contextOver(t, src+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, shapes, obj); err != nil {
+		t.Fatalf("Adopt: %v", err)
+	}
+	return ctx, obj, ids
+}
+
+// restoreCost measures the steps restoring one of those connectors alone spends.
+func restoreCost(t *testing.T) int64 {
+	t.Helper()
+	ctx, obj, ids := carriedSysWithThreeConnectors(t)
+	spent := ctx.steps
+	if _, err := obj.RestoreConnector(ctx, ids[2]); err != nil {
+		t.Fatalf("RestoreConnector(%d): %v", ids[2], err)
+	}
+	return ctx.steps - spent
+}
+
+// Asking for one connector a carry-over set aside materializes that connector
+// alone: its siblings stay set aside, under their identities, until each is asked
+// for — so a budget that admits the one asked for does not have to admit them all.
+func TestRestoreConnectorMaterializesTheOneAskedForAlone(t *testing.T) {
+	ctx, obj, ids := carriedSysWithThreeConnectors(t)
+	held := len(ctx.InstanceIDs())
+	last, err := obj.RestoreConnector(ctx, ids[2])
+	if err != nil {
+		t.Fatalf("RestoreConnector(%d): %v", ids[2], err)
+	}
+	if last == nil || last.ID != ids[2] {
+		t.Fatalf("RestoreConnector(%d) = %v, want the connector under that identity", ids[2], last)
+	}
+	// The ends read objects carried with the owner, so the connector is all that is new.
+	if got := len(ctx.InstanceIDs()); got != held+1 {
+		t.Errorf("restoring one connector left %d objects, want %d: it alone", got, held+1)
+	}
+	for _, id := range ids[:2] {
+		if _, found := ctx.Instance(id); found {
+			t.Errorf("restoring %d materialized its sibling %d", ids[2], id)
+		}
+	}
+	if got := obj.KeptConnectorIDs(); fmt.Sprint(got) != fmt.Sprint(ids[:2]) {
+		t.Errorf("KeptConnectorIDs() = %v after restoring %d, want its siblings %v still set aside", got, ids[2], ids[:2])
+	}
+	if got := obj.MaterializedConnectors(ctx); len(got) != 1 || got[0].ID != ids[2] {
+		t.Errorf("MaterializedConnectors() = %v, want the one restored, %d", got, ids[2])
+	}
+
+	// A budget admitting exactly the one asked for admits it, whatever its siblings would cost.
+	cost := restoreCost(t)
+	ctx, obj, ids = carriedSysWithThreeConnectors(t)
+	ctx.maxSteps = ctx.steps + cost
+	if conn, err := obj.RestoreConnector(ctx, ids[2]); err != nil || conn == nil || conn.ID != ids[2] {
+		t.Fatalf("RestoreConnector(%d) under a budget admitting it alone = %v, %v; want the connector", ids[2], conn, err)
+	}
+	if got := obj.KeptConnectorIDs(); fmt.Sprint(got) != fmt.Sprint(ids[:2]) {
+		t.Errorf("KeptConnectorIDs() = %v, want the siblings %v still set aside", got, ids[:2])
+	}
+	// The siblings take their identities back when asked for, in either order.
+	ctx.maxSteps = ctx.steps + 2*cost
+	for _, id := range []int64{ids[0], ids[1]} {
+		conn, err := obj.RestoreConnector(ctx, id)
+		if err != nil || conn == nil || conn.ID != id {
+			t.Fatalf("RestoreConnector(%d) = %v, %v; want the connector under that identity", id, conn, err)
+		}
+	}
+	if got := obj.KeptConnectorIDs(); len(got) != 0 {
+		t.Errorf("KeptConnectorIDs() = %v once all are materialized again, want none", got)
+	}
+	conns, err := obj.OwnedConnectors(ctx)
+	if err != nil {
+		t.Fatalf("OwnedConnectors: %v", err)
+	}
+	var got []int64
+	for _, conn := range conns {
+		got = append(got, conn.ID)
+	}
+	if fmt.Sprint(got) != fmt.Sprint(ids) {
+		t.Errorf("OwnedConnectors() = %v, want the connectors under their identities %v in declaration order", got, ids)
+	}
+}
+
+// A restoration that fails leaves every identity set aside, the one asked for
+// included, and no object behind, so asking again under a budget that admits it
+// materializes the connector under its identity.
+func TestRestoreConnectorThatFailsKeepsEveryIdentity(t *testing.T) {
+	cost := restoreCost(t)
+	ctx, obj, ids := carriedSysWithThreeConnectors(t)
+	held := ctx.InstanceIDs()
+	ctx.maxSteps = ctx.steps + cost - 1
+	conn, err := obj.RestoreConnector(ctx, ids[1])
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Fatalf("RestoreConnector(%d) one step short = %v, %v; want the budget spent", ids[1], conn, err)
+	}
+	if got := obj.KeptConnectorIDs(); fmt.Sprint(got) != fmt.Sprint(ids) {
+		t.Errorf("KeptConnectorIDs() = %v after the failure, want all of %v still set aside", got, ids)
+	}
+	if got := obj.MaterializedConnectors(ctx); len(got) != 0 {
+		t.Errorf("MaterializedConnectors() = %v after the failure, want none", got)
+	}
+	for _, id := range ids {
+		if _, found := ctx.Instance(id); found {
+			t.Errorf("the failed restoration left connector %d behind", id)
+		}
+	}
+
+	ctx.maxSteps = ctx.Budgets().MaxSteps + 1000
+	conn, err = obj.RestoreConnector(ctx, ids[1])
+	if err != nil || conn == nil || conn.ID != ids[1] {
+		t.Fatalf("RestoreConnector(%d) asked again = %v, %v; want the connector under that identity", ids[1], conn, err)
+	}
+	port := fvInstance(t, ctx, obj, "a", "p")
+	if end := conn.Ends[0].Value; !holdsObject(end, port.ID) {
+		t.Errorf("the connector's end holds %v, want the port object %d", end, port.ID)
+	}
+	want := []int64{ids[0], ids[2]}
+	if got := obj.KeptConnectorIDs(); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("KeptConnectorIDs() = %v, want the siblings %v still set aside", got, want)
+	}
+	if got := ctx.InstanceIDs(); len(got) != len(held)+1 {
+		t.Errorf("the objects held are %v, want those before, %v, and the connector alone", got, held)
 	}
 }
 

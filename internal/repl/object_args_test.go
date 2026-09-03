@@ -708,6 +708,73 @@ func TestShownConnectorsStayAddressableByIDAcrossCarryOver(t *testing.T) {
 	wants(t, run(t, s, "%instantiate Demo::A"), next)
 }
 
+// Reaching one connector set aside by id materializes that one alone: its
+// siblings stay set aside, still offered and reachable by their ids, and the
+// owner's listing shows them all under their ids once they are.
+func TestReachingOneKeptConnectorLeavesItsSiblingsSetAside(t *testing.T) {
+	s := loadSource(t, `package Demo {
+		port def P;
+		part def A { port p : P; }
+		part def B { port q : P; }
+		part def Sys { part a : A; part b : B; connect a.p to b.q; connect b.q to a.p; }
+	}`)
+	wants(t, run(t, s, "%instantiate Demo::Sys"), "ID: 1")
+	listing := run(t, s, "%features Demo::Sys")
+	conns := connectorLines(t, listing)
+	if len(conns) != 2 {
+		t.Fatalf("the listing shows %d anonymous connectors, want 2:\n%s", len(conns), listing)
+	}
+	first, second := objectIDIn(t, conns[0]), objectIDIn(t, conns[1])
+	shown := s.Complete("%features #", len("%features #")).Candidates
+
+	if res := s.Submit("part def Widget;"); len(res.Notices) != 0 {
+		t.Fatalf("the declaration reported %v", res.Notices)
+	}
+	held := len(s.rtCtx.InstanceIDs())
+	wants(t, run(t, s, "%features #"+second), "Instance: #"+second+" (ID: "+second+")", "source = ")
+	if got := len(s.rtCtx.InstanceIDs()); got != held+1 {
+		t.Errorf("reaching #%s materialized %d objects, want it alone", second, got-held)
+	}
+	if _, found := s.rtCtx.Instance(mustID(t, first)); found {
+		t.Errorf("reaching #%s materialized its sibling #%s", second, first)
+	}
+	if got := s.Complete("%features #", len("%features #")).Candidates; !slices.Equal(got, shown) {
+		t.Errorf("completion offers %v, want %v: the sibling set aside among them", got, shown)
+	}
+	wants(t, run(t, s, "%features #99"), "the objects are "+strings.Join(shown, ", ")+")")
+
+	wants(t, run(t, s, "%features #"+first), "Instance: #"+first+" (ID: "+first+")", "source = ")
+	if got := connectorLines(t, run(t, s, "%features Demo::Sys")); len(got) != 2 ||
+		objectIDIn(t, got[0]) != first || objectIDIn(t, got[1]) != second {
+		t.Errorf("the owner lists its connectors as %q, want #%s then #%s", got, first, second)
+	}
+	next := fmt.Sprintf("ID: %d", slices.Max(s.rtCtx.InstanceIDs())+1)
+	wants(t, run(t, s, "%instantiate Demo::A"), next)
+}
+
+// connectorLines returns the lines of a %features listing that hold the object's
+// anonymous connectors, in the order listed.
+func connectorLines(t *testing.T, listing string) []string {
+	t.Helper()
+	var lines []string
+	for _, line := range strings.Split(listing, "\n") {
+		if strings.Contains(line, "(anonymous connector)") {
+			lines = append(lines, strings.TrimSpace(line))
+		}
+	}
+	return lines
+}
+
+// mustID parses the digits of an object identity a listing showed.
+func mustID(t *testing.T, digits string) int64 {
+	t.Helper()
+	id, err := strconv.ParseInt(digits, 10, 64)
+	if err != nil {
+		t.Fatalf("%q is no object identity: %v", digits, err)
+	}
+	return id
+}
+
 // featureLine returns the line of a %features listing that shows feature's value.
 func featureLine(t *testing.T, listing, feature string) string {
 	t.Helper()

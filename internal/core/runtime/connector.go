@@ -122,6 +122,9 @@ func (ctx *Context) materializeConnectorAs(owner *Instance, connSym, base *symbo
 	ctx.materializingConnectors[key] = true
 	defer delete(ctx.materializingConnectors, key)
 
+	// A connector an end of which cannot attach leaves nothing behind, itself
+	// included, so its identity stays free for another attempt.
+	mark := len(ctx.created)
 	inst, err := ctx.instantiateAs(base, id)
 	if err != nil {
 		return nil, err
@@ -131,6 +134,7 @@ func (ctx *Context) materializeConnectorAs(owner *Instance, connSym, base *symbo
 	for _, end := range ends {
 		val, err := ctx.attachConnectorEnd(owner, connSym, end)
 		if err != nil {
+			ctx.abandonInstancesSince(mark)
 			return nil, err
 		}
 		inst.Ends = append(inst.Ends, ConnectorEnd{Name: end.Name, Value: val})
@@ -233,24 +237,35 @@ func participants(n int) semantics.Range {
 }
 
 // OwnedConnectors returns the connectors the instance owns that no feature names —
-// an anonymous `connect a.p to b.q` member — materializing them once, in
+// an anonymous `connect a.p to b.q` member — materializing each once, in
 // declaration order. A named connector is reached through its feature value instead.
 func (inst *Instance) OwnedConnectors(ctx *Context) ([]*Instance, error) {
 	defer ctx.beginRun()()
-	if inst.anonymous != nil {
-		return inst.anonymousConnectors(ctx)
-	}
-	inst.anonymous = []int64{}
-	for i, member := range ctx.anonymousConnectors(inst.Type) {
-		conn, err := ctx.materializeConnectorAs(inst, member, member, inst.keptIdentity(i))
-		if err != nil {
-			inst.anonymous = nil
+	members := ctx.anonymousConnectors(inst.Type)
+	inst.holdAnonymous(len(members))
+	for i, member := range members {
+		if inst.anonymous[i] != 0 {
+			continue
+		}
+		if _, err := inst.materializeAnonymousConnector(ctx, i, member); err != nil {
 			return nil, err
 		}
-		inst.anonymous = append(inst.anonymous, conn.ID)
 	}
-	inst.keptAnonymous = nil
 	return inst.anonymousConnectors(ctx)
+}
+
+// materializeAnonymousConnector materializes the instance's i-th anonymous
+// connector, member, under the identity a carry-over kept for it, if any.
+func (inst *Instance) materializeAnonymousConnector(ctx *Context, i int, member *symbols.Symbol) (*Instance, error) {
+	conn, err := ctx.materializeConnectorAs(inst, member, member, inst.keptIdentity(i))
+	if err != nil {
+		return nil, err
+	}
+	inst.anonymous[i] = conn.ID
+	if i < len(inst.keptAnonymous) {
+		inst.keptAnonymous[i] = 0
+	}
+	return conn, nil
 }
 
 // MaterializedConnectors returns the anonymous connectors the instance has
@@ -285,12 +300,8 @@ func (inst *Instance) RestoreConnector(ctx *Context, id int64) (*Instance, error
 	if id == 0 {
 		return nil, nil
 	}
-	if slices.Contains(inst.keptAnonymous, id) {
-		if _, err := inst.OwnedConnectors(ctx); err != nil {
-			return nil, err
-		}
-		conn, _ := ctx.Instance(id)
-		return conn, nil
+	if i := slices.Index(inst.keptAnonymous, id); i >= 0 {
+		return inst.restoreAnonymousConnector(ctx, i)
 	}
 	for name, fv := range inst.FeatureValues {
 		if inst.keptConnectors[fv] != id {
@@ -305,6 +316,45 @@ func (inst *Instance) RestoreConnector(ctx *Context, id int64) (*Instance, error
 	return nil, nil
 }
 
+// restoreAnonymousConnector materializes the instance's i-th anonymous connector
+// alone, leaving its siblings and the identities kept for them as they are; nil
+// when the declarations as they are now have no i-th one.
+func (inst *Instance) restoreAnonymousConnector(ctx *Context, i int) (*Instance, error) {
+	defer ctx.beginRun()()
+	members := ctx.anonymousConnectors(inst.Type)
+	if i >= len(members) {
+		return nil, nil
+	}
+	inst.holdAnonymous(len(members))
+	return inst.materializeAnonymousConnector(ctx, i, members[i])
+}
+
+// holdAnonymous gives the instance a slot per anonymous connector declared, n of
+// them, 0 standing for one not materialized yet.
+func (inst *Instance) holdAnonymous(n int) {
+	if inst.anonymous == nil {
+		inst.anonymous = []int64{}
+	}
+	for len(inst.anonymous) < n {
+		inst.anonymous = append(inst.anonymous, 0)
+	}
+}
+
+// keepAnonymous sets aside, for a carry-over, the identities of the anonymous
+// connectors materialized here, alongside any kept earlier and not taken back yet.
+func (inst *Instance) keepAnonymous() {
+	for i, id := range inst.anonymous {
+		if id == 0 {
+			continue
+		}
+		for len(inst.keptAnonymous) <= i {
+			inst.keptAnonymous = append(inst.keptAnonymous, 0)
+		}
+		inst.keptAnonymous[i] = id
+	}
+	inst.anonymous = nil
+}
+
 // keptIdentity returns the identity the instance's i-th anonymous connector had
 // before a carry-over, 0 when it had none.
 func (inst *Instance) keptIdentity(i int) int64 {
@@ -315,10 +365,14 @@ func (inst *Instance) keptIdentity(i int) int64 {
 }
 
 // anonymousConnectors returns the objects the instance's anonymous connectors
-// materialized to, dropping any the context no longer holds.
+// materialized to, skipping those not materialized yet and dropping any the
+// context no longer holds.
 func (inst *Instance) anonymousConnectors(ctx *Context) ([]*Instance, error) {
 	out := make([]*Instance, 0, len(inst.anonymous))
 	for _, id := range inst.anonymous {
+		if id == 0 {
+			continue
+		}
 		if conn, ok := ctx.Instance(id); ok {
 			out = append(out, conn)
 		}

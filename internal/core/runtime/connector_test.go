@@ -349,6 +349,11 @@ func testUnattachableConnectorEnd(t *testing.T) {
 	if !strings.Contains(endErr.Location, "<test>") {
 		t.Errorf("error is located at %q, want the file the end was written in", endErr.Location)
 	}
+	for _, id := range ctx.InstanceIDs() {
+		if obj, _ := ctx.Instance(id); obj.Ends != nil || obj.Type.Name == "link" {
+			t.Errorf("the connector that could not be attached was left behind as object %d", id)
+		}
+	}
 }
 
 // testMultiplicityOnAConnector: a connector usage holding more than one

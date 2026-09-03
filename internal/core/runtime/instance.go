@@ -29,13 +29,13 @@ type Instance struct {
 	// own is identified by.
 	Ends []ConnectorEnd
 
-	// anonymous holds the objects the instance's anonymous connectors
-	// materialized to, nil until they are asked for. An empty slice means there
-	// are none.
+	// anonymous holds, per anonymous connector declared, the object it materialized
+	// to, 0 for one not materialized yet; nil until any is asked for.
 	anonymous []int64
 
 	// keptAnonymous holds the identities those objects had before a carry-over, in
-	// declaration order, which the ones materialized again here take back.
+	// declaration order, which the ones materialized again here take back; 0 once
+	// taken back or never had.
 	keptAnonymous []int64
 
 	// keptConnectors holds, per feature value of a named connector, the identity the object

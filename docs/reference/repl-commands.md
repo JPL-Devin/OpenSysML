@@ -136,9 +136,10 @@ made in passing — by `%eval in` on a usage nothing was instantiated under, say
 does not list and `#<id>` completion does not offer. A connector is the one object a submission sets
 aside: a declaration that leaves its owner's shape alone keeps the owner and attaches the connector's
 ends again when it is next read, and the id `%features` printed for it — anonymous or named — goes on
-reaching it and being offered by completion in the meantime, naming it being what reads it. An end
-that cannot be attached again is reported with the id: `no object #4 in this session: the connector
-that had that identity cannot be materialized again: …`.
+reaching it and being offered by completion in the meantime, naming it being what reads it — that
+one alone, its sibling connectors waiting for their own turn. An end that cannot be attached again is
+reported with the id, and the id stays reachable for another attempt: `no object #4 in this session:
+the connector that had that identity cannot be materialized again: …`.
 
 ## Rendering a view
 
