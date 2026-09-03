@@ -910,12 +910,12 @@ func (d *decoder) sequencesTo(el, to *element) bool {
 		return false
 	}
 	answers, ok := d.answersTo(to)
-	return ok && d.sameEnd(target, answers)
+	return ok && d.sameEnd(el, target, answers)
 }
 
-// sameEnd reports whether two end terms name one member: the same term, or a
-// name and the linked element that declares it.
-func (d *decoder) sameEnd(a, b rdf.Term) bool {
+// sameEnd reports whether two ends of the succession el name one member: the
+// same term, or a name and its linked declarer when no member of el's body shadows it.
+func (d *decoder) sameEnd(el *element, a, b rdf.Term) bool {
 	if a.Equal(b) {
 		return true
 	}
@@ -931,7 +931,15 @@ func (d *decoder) sameEnd(a, b rdf.Term) bool {
 		return false
 	}
 	declared, ok := d.stringOf(target, rdf.SysML+pDeclaredName)
-	return ok && declared == name.Value
+	if !ok || declared != name.Value {
+		return false
+	}
+	if el.owner != nil {
+		if sibling := d.memberNamed(el.owner, name.Value); sibling != nil && sibling != target {
+			return false
+		}
+	}
+	return true
 }
 
 // sourceEnd returns the end a succession sequences from, by position or by the
@@ -951,7 +959,7 @@ func (d *decoder) sequencesFrom(el, from *element) bool {
 		return false
 	}
 	answers, ok := d.answersTo(from)
-	return ok && d.sameEnd(source, answers)
+	return ok && d.sameEnd(el, source, answers)
 }
 
 // impliedSource checks a `then <target>`, whose source end is the member before

@@ -282,6 +282,47 @@ func TestThenSequencesFromTheNameAnUnnamedUsageAnswersTo(t *testing.T) {
 	}
 }
 
+// A written end that is only a name is read in the succession's body: where that
+// body declares a member of the name, a linked member of another body that
+// happens to share it is not the end, so a `then` beside it is refused rather
+// than folded there — and folds beside the body's own member when that is adjacent.
+func TestANamedEndIsNotFoldedBesideASameNamedLinkedMember(t *testing.T) {
+	const linked, named = "sysml:sourceFeature elmt:P__A__walk", `sysml:sourceFeature "walk"`
+	graphOf := func(t *testing.T, src string) []byte {
+		turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+		if err != nil {
+			t.Fatalf("to turtle: %v", err)
+		}
+		if strings.Count(string(turtle), linked) != 1 {
+			t.Fatalf("the succession should state its source once as %s:\n%s", linked, turtle)
+		}
+		graph := withoutTriples(t, turtle, "sysx:sourceText")
+		return []byte(strings.Replace(string(graph), linked, named, 1))
+	}
+	head := "package P {\n    action def Step;\n    action def Base {\n        action walk : Step;\n    }\n    action def A specializes Base {\n"
+	t.Run("beside the linked member", func(t *testing.T) {
+		graph := graphOf(t, head+"        action walk : Step;\n        action redefines Base::walk;\n        then action b : Step;\n    }\n}\n")
+		_, err := export.Convert("m.ttl", graph, export.FormatTurtle, export.FormatSysML)
+		var unsupported *export.UnsupportedError
+		if !errors.As(err, &unsupported) {
+			t.Fatalf("want an UnsupportedError, got %v", err)
+		}
+		if !strings.Contains(err.Error(), "sequences from the member written before the member it introduces") {
+			t.Errorf("the refusal should say which order the graph states: %v", err)
+		}
+	})
+	t.Run("beside the body's own member", func(t *testing.T) {
+		src := head + "        action redefines walk;\n        action walk : Step;\n        then action b : Step;\n    }\n}\n"
+		back, err := export.Convert("m.ttl", graphOf(t, src), export.FormatTurtle, export.FormatSysML)
+		if err != nil {
+			t.Fatalf("back to notation: %v", err)
+		}
+		if string(back) != src {
+			t.Fatalf("the notation changed\n--- want ---\n%s\n--- got ---\n%s", src, back)
+		}
+	})
+}
+
 // A `then` folded into the member it introduces sequences from one member only,
 // so a graph whose source end is any other member — an earlier action, or the
 // flow the `then` is read past — cannot be written in that form and is refused.
