@@ -336,7 +336,7 @@ Saving and SysML ↔ RDF Turtle conversion landed (`internal/core/rdf`,
 The RDF direction ships **experimental**, because of D1, D2, D3.4 and D7 below: its vocabulary
 may change without a compatibility path, and the one triplestore interop measured — Flexo — still
 drops what those items carry. Every surface says so (`export.ExperimentalNotice`), and promoting
-it to stable is closing D3.4 and re-measuring the harness, not a documentation change.
+it to stable is landing D3.4 (#850) and re-measuring the harness, not a documentation change.
 
 Measured by the per-file ratchet at this baseline (`TestCorpusRoundTrip`,
 `internal/core/export/testdata/corpus_roundtrip_expected.txt`), **275 of the 345 models under
@@ -434,9 +434,16 @@ annotation literal at `urn:sysmlv2:annotation:json:<key>`, which it parses as JS
 Anything multi-valued we emit as bare repeated triples is silently dropped on read. So
 the encoder must write both forms for collections, and the decoder must accept the
 annotation form when reading a foreign graph. This is the last of D3 and the smallest item in
-the track; when it lands, re-record the harness (`go test ./internal/interop/flexo -run
-TestFlexoInterop -update-flexo` against a live stack) and the 15 become 15 of 15. **In progress**
-(no pull request at the baseline).
+the track. [PR #850](https://github.com/JPL-Devin/OpenSysML/pull/850) does it: one `json:<key>`
+literal per multi-valued `sysml:` property beside the typed triples (shape taken from the service's
+`CommitApi.kt`, cited in the mapping page), a decoder that accepts either spelling or both and
+refuses a graph whose two spellings disagree, `reposync` keeping the literal in step when it mints
+ids, and the harness re-recorded against a live stack: the 14 multi-valued *standard* properties
+went 0 → 14 of 14 and the total 355/424 → 369/452 (the denominator grew with source-text
+properties the mapping added since the previous recording; the fifteenth multi-valued property in
+the recording above is `sysx:relatedFeature`, which stays dropped with the rest of D1/D2). **Open**
+(mergeable at the last check). It also rewrites this section, so whichever of it and this page
+lands second reconciles the other.
 
 ## D1 — expression trees are standard in shape, non-standard in vocabulary
 
@@ -573,7 +580,7 @@ directions are refereed against the live stack, and both are element-keyed, whic
 bought.
 
 What is missing is the round trip a modeller expects from a repository, and each piece is small
-once D3.4 is in:
+once D3.4 (#850) is in:
 
 1. **Read a branch as notation.** `-sync-diff` reads a branch to compare it; nothing converts a
    branch to `.sysml`. `sysml -convert sysml -from <endpoint or flexo:// URL>` is the decoder D3.4
@@ -1286,8 +1293,8 @@ not more harness work.
 Two orders, because there are two kinds of item. The **track-local** orders say where to start
 inside a track; the **cross-cutting** order says which tracks' first items go first when a session
 must choose, and it is the one that has been agreed. Everything in flight (the open pull requests
-named above, the item marked *in progress*) lands or is closed before either order is
-consulted — they are already the next thing.
+named above) lands or is closed before either order is consulted — they are already the next
+thing.
 
 ## Cross-cutting order (agreed)
 
@@ -1309,8 +1316,8 @@ consulted — they are already the next thing.
 5. **I1, I2, I3, then I4's client** — the wire contract, the shared fixtures, the thin R, Julia and
    MATLAB packages, the C client. Documentation first because every client is derived from it;
    the C *ABI* half of I4 is not here — it is step 9.
-6. **D3.4, then D2 and D1, then D9.1 and D9.2** — Flexo: the collection JSON annotations (in
-   progress), the standard vocabulary for expression trees and end structure, then the
+6. **D3.4, then D2 and D1, then D9.1 and D9.2** — Flexo: the collection JSON annotations (#850,
+   open), the standard vocabulary for expression trees and end structure, then the
    authenticated push and the branch read. Push and read depend on the collection and vocabulary
    quality, which is why they come last in the step; re-record the live-stack harness after D3.4
    and again after D1/D2.
@@ -1338,10 +1345,11 @@ consulted — they are already the next thing.
 - **Track N.** N2.1 (records and enums) first, since A1's "an analysis case compiles" and the
   differential's record coverage both need it; decide N2.2 (the budget) before N2.4; N2.3 tracks L4
   package by package; N2.6's actions and states are Track M's M1/M2.
-- **Track D.** Rebase and land the open RDF work (#815, #835, #824, #819, #827; #842 is clean) first; then
-  step 6 above; **D7** is mechanical now that identity is stable and fits anywhere; **D8**'s
+- **Track D.** Rebase and land the open RDF work (#815, #835, #824, #819, #827; #842 and #850 are
+  clean) first; then step 6 above; **D7** is mechanical now that identity is stable and fits anywhere; **D8**'s
   profile after #774 merges, since it only becomes conformant behind D1 and D2.
-- **Track E.** Land the in-flight fixes (#823 nested frames, #839, #843, #805, #808, #809) first.
+- **Track E.** Land the in-flight fixes (#823 nested frames, #839, #843, #805, #808, #809, #845)
+  first.
   The track itself is not scheduled; each item states what would prioritize it. If one is picked
   up without such a trigger, the order is **E1** (termination of an ongoing performance, which
   **E2** and **E4** build on), then **E2**, then **E4**; **E6** whenever asked, being a day's
