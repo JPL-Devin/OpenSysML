@@ -98,26 +98,44 @@ func TestStringConstantsReadsThePool(t *testing.T) {
 	}
 }
 
-// TestRewriteDerivedLinesRestatesTheSummary checks the summary line is rewritten
-// from the baseline and nothing else moves.
+// testProvenance are the provenance lines of a census document whose baseline
+// is testBaseline.
+const testProvenance = "**Pilot:** [Pilot](https://example.test) release `2026-07`, commit `c7fc737d`, artifact `jupyter-sysml-kernel 0.61.0` — the pin\n" +
+	"**Jar:** `kernel-0.61.0-all.jar` (`sha256:abc`), provisioned by a script\n"
+
+func testBaseline(constraints ...Constraint) *Baseline {
+	return &Baseline{
+		PilotTag: "2026-07", PilotCommit: "c7fc737d", PilotArtifact: "0.61.0",
+		Jar:         JarRecord{Name: "kernel-0.61.0-all.jar", Digest: "sha256:abc"},
+		Constraints: constraints,
+	}
+}
+
+// TestRewriteDerivedLinesRestatesTheSummary checks the provenance and summary
+// lines are rewritten from the baseline and nothing else moves.
 func TestRewriteDerivedLinesRestatesTheSummary(t *testing.T) {
-	base := &Baseline{Constraints: []Constraint{
-		{Name: "validateA", Status: StatusFaithful},
-		{Name: "validateB", Status: StatusApproximate},
-		{Name: "validateC", Status: StatusNotImplemented},
-		{Name: "validateD", Status: StatusUnknown},
-	}}
-	content := "# Census\n\n**Census:** 0 of 0 named constraints are reported by OpenSysML — 0 ✅ faithful and 0 ⚠️ approximate; 0 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 0 ❔ unknown.\n\ntrailing\n"
+	base := testBaseline(
+		Constraint{Name: "validateA", Status: StatusFaithful},
+		Constraint{Name: "validateB", Status: StatusApproximate},
+		Constraint{Name: "validateC", Status: StatusNotImplemented},
+		Constraint{Name: "validateD", Status: StatusUnknown},
+	)
+	stale := "**Pilot:** [Pilot](https://example.test) release `2025-01`, commit `old`, artifact `jupyter-sysml-kernel 0.50.0` — the pin\n" +
+		"**Jar:** `kernel-0.50.0-all.jar` (`sha256:old`), provisioned by a script\n"
+	content := "# Census\n\n" + stale + "\n**Census:** 0 of 0 named constraints are reported by OpenSysML — 0 ✅ faithful and 0 ⚠️ approximate; 0 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 0 ❔ unknown.\n\ntrailing\n"
 	got, err := rewriteDerivedLines(content, base)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "# Census\n\n**Census:** 2 of 4 named constraints are reported by OpenSysML — 1 ✅ faithful and 1 ⚠️ approximate; 1 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 1 ❔ unknown.\n\ntrailing\n"
+	want := "# Census\n\n" + testProvenance + "\n**Census:** 2 of 4 named constraints are reported by OpenSysML — 1 ✅ faithful and 1 ⚠️ approximate; 1 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 1 ❔ unknown.\n\ntrailing\n"
 	if got != want {
 		t.Fatalf("rewrite:\n%s\nwant:\n%s", got, want)
 	}
-	if _, err := rewriteDerivedLines("no summary here\n", base); err == nil {
+	if _, err := rewriteDerivedLines(testProvenance+"no summary here\n", base); err == nil {
 		t.Fatal("a document without the summary line must be rejected")
+	}
+	if _, err := rewriteDerivedLines("**Pilot:** unrecognised\n", base); err == nil {
+		t.Fatal("a provenance line the pattern does not match must be rejected")
 	}
 }
 
@@ -132,11 +150,11 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(corpus, "kerml", "a.kerml"), []byte("package P;\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	base := &Baseline{Constraints: []Constraint{
-		{Name: "validateA", Source: "kerml", Status: StatusFaithful},
-		{Name: "validateB", Source: "sysml", Status: StatusNotImplemented},
-	}}
-	doc := strings.Join([]string{
+	base := testBaseline(
+		Constraint{Name: "validateA", Source: "kerml", Status: StatusFaithful},
+		Constraint{Name: "validateB", Source: "sysml", Status: StatusNotImplemented},
+	)
+	doc := testProvenance + strings.Join([]string{
 		"**Census:** 1 of 2 named constraints are reported by OpenSysML — 1 ✅ faithful and 0 ⚠️ approximate; 1 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 0 ❔ unknown.",
 		"",
 		"| Constraint | Language | Checks | Implementation | Our message | Negative case | Status |",
@@ -167,6 +185,28 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 		},
 		"hand-edited figure": {
 			mutate: func(s string) string { return strings.Replace(s, "1 of 2", "2 of 2", 1) },
+			want:   "line is stale",
+		},
+		"stale release": {
+			mutate: func(s string) string { return strings.Replace(s, "release `2026-07`", "release `2025-01`", 1) },
+			want:   "line is stale",
+		},
+		"stale commit": {
+			mutate: func(s string) string { return strings.Replace(s, "commit `c7fc737d`", "commit `deadbeef`", 1) },
+			want:   "line is stale",
+		},
+		"stale artifact": {
+			mutate: func(s string) string { return strings.Replace(s, "kernel 0.61.0`", "kernel 0.62.0`", 1) },
+			want:   "line is stale",
+		},
+		"stale jar name": {
+			mutate: func(s string) string {
+				return strings.Replace(s, "`kernel-0.61.0-all.jar`", "`kernel-0.62.0-all.jar`", 1)
+			},
+			want: "line is stale",
+		},
+		"stale digest": {
+			mutate: func(s string) string { return strings.Replace(s, "`sha256:abc`", "`sha256:def`", 1) },
 			want:   "line is stale",
 		},
 		"status disagrees": {

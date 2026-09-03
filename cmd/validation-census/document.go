@@ -10,11 +10,34 @@ import (
 	"strings"
 )
 
-// The summary line of the census document is derived from the baseline: this
-// program writes it and -check refuses a hand-edited figure.
+// The provenance and summary lines of the census document are derived from the
+// baseline: this program writes them and -check refuses a hand-edited value.
 const summaryMarker = "**Census:**"
 
-var summaryPattern = regexp.MustCompile(`^\*\*Census:\*\* (\d+) of (\d+) named constraints are reported by OpenSysML — (\d+) ✅ faithful and (\d+) ⚠️ approximate; (\d+) ❌ not implemented, (\d+) ⛔ deliberate, (\d+) 🚧 known failure, (\d+) ❔ unknown\.$`)
+// derivedLine is one document line whose capture groups the baseline dictates.
+type derivedLine struct {
+	marker  string
+	pattern *regexp.Regexp
+	values  func(*Baseline) []string
+}
+
+var derivedLines = []derivedLine{
+	{
+		marker:  "**Pilot:**",
+		pattern: regexp.MustCompile("^\\*\\*Pilot:\\*\\* .* release `([^`]*)`, commit `([^`]*)`, artifact `jupyter-sysml-kernel ([^`]*)` — .*$"),
+		values:  func(b *Baseline) []string { return []string{b.PilotTag, b.PilotCommit, b.PilotArtifact} },
+	},
+	{
+		marker:  "**Jar:**",
+		pattern: regexp.MustCompile("^\\*\\*Jar:\\*\\* `([^`]*)` \\(`([^`]*)`\\), .*$"),
+		values:  func(b *Baseline) []string { return []string{b.Jar.Name, b.Jar.Digest} },
+	},
+	{
+		marker:  summaryMarker,
+		pattern: regexp.MustCompile(`^\*\*Census:\*\* (\d+) of (\d+) named constraints are reported by OpenSysML — (\d+) ✅ faithful and (\d+) ⚠️ approximate; (\d+) ❌ not implemented, (\d+) ⛔ deliberate, (\d+) 🚧 known failure, (\d+) ❔ unknown\.$`),
+		values:  func(b *Baseline) []string { return summaryValues(b.counts()) },
+	},
+}
 
 func summaryValues(c counts) []string {
 	return []string{
@@ -25,32 +48,34 @@ func summaryValues(c counts) []string {
 	}
 }
 
-// rewriteDerivedLines restates the summary line from the baseline and leaves
-// every other byte of the document alone.
+// rewriteDerivedLines restates the provenance and summary lines from the
+// baseline and leaves every other byte of the document alone.
 func rewriteDerivedLines(content string, base *Baseline) (string, error) {
 	lines := strings.Split(content, "\n")
-	index := -1
-	for i, line := range lines {
-		if strings.HasPrefix(line, summaryMarker) {
-			if index >= 0 {
-				return "", fmt.Errorf("%s: two lines carry %s", censusDocPath, summaryMarker)
+	for _, d := range derivedLines {
+		index := -1
+		for i, line := range lines {
+			if strings.HasPrefix(line, d.marker) {
+				if index >= 0 {
+					return "", fmt.Errorf("%s: two lines carry %s", censusDocPath, d.marker)
+				}
+				index = i
 			}
-			index = i
 		}
+		if index < 0 {
+			return "", fmt.Errorf("%s: no line carries %s", censusDocPath, d.marker)
+		}
+		match := d.pattern.FindStringSubmatchIndex(lines[index])
+		if match == nil {
+			return "", fmt.Errorf("%s:%d: the %s line does not match the derived-line pattern", censusDocPath, index+1, d.marker)
+		}
+		values := d.values(base)
+		rewritten := lines[index]
+		for i := len(values) - 1; i >= 0; i-- {
+			rewritten = rewritten[:match[2+i*2]] + values[i] + rewritten[match[3+i*2]:]
+		}
+		lines[index] = rewritten
 	}
-	if index < 0 {
-		return "", fmt.Errorf("%s: no line carries %s", censusDocPath, summaryMarker)
-	}
-	match := summaryPattern.FindStringSubmatchIndex(lines[index])
-	if match == nil {
-		return "", fmt.Errorf("%s:%d: the %s line does not match the derived-line pattern", censusDocPath, index+1, summaryMarker)
-	}
-	values := summaryValues(base.counts())
-	rewritten := lines[index]
-	for i := len(values) - 1; i >= 0; i-- {
-		rewritten = rewritten[:match[2+i*2]] + values[i] + rewritten[match[3+i*2]:]
-	}
-	lines[index] = rewritten
 	return strings.Join(lines, "\n"), nil
 }
 
@@ -140,7 +165,7 @@ func checkDocument(root, content string, base *Baseline) error {
 		return err
 	}
 	if rewritten != content {
-		return fmt.Errorf("%s: the %s line is stale; run `go run ./cmd/validation-census`", censusDocPath, summaryMarker)
+		return fmt.Errorf("%s: a derived line is stale; run `go run ./cmd/validation-census`", censusDocPath)
 	}
 	rows, err := parseTable(content)
 	if err != nil {

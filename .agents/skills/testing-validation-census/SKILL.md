@@ -30,8 +30,8 @@ go test -count=1 ./cmd/validation-census         # the same gate plus every prob
 
 Reproduction of the baseline: `-update` re-extracts the names and keeps every recorded status,
 so on a current tree it must leave the file byte-identical (`git diff --exit-code docs/project/validation-constraints-baseline.json`).
-`go run ./cmd/validation-census` (no flag) rewrites the `**Census:**` summary line from the
-baseline's statuses and must likewise be a no-op on a current tree.
+`go run ./cmd/validation-census` (no flag) rewrites the `**Pilot:**`, `**Jar:**` and `**Census:**`
+lines from the baseline and must likewise be a no-op on a current tree.
 
 ## Mutations the gate must catch
 
@@ -43,7 +43,8 @@ afterwards (`git checkout -- <file>` on a clean tree, or keep a copy).
 - Insert a table row for a name the baseline lacks (inside the table, not after its blank line):
   "`<name>` is in the table but not in docs/project/validation-constraints-baseline.json".
 - Delete a table row: "`<name>` is in the baseline but has no row".
-- Change a digit of the `**Census:**` line: "the **Census:** line is stale".
+- Change a digit of the `**Census:**` line, or the release, commit, artifact, jar name or digest
+  on the `**Pilot:**`/`**Jar:**` lines: "a derived line is stale".
 - Change a row's status marker or language: the row is reported as disagreeing with the baseline.
 - Point a row's *Negative case* at a file that is not under `cmd/pilot-reject/testdata/negative/`.
 - Delete a probe of a ✅/⚠️ row, or add a probe for a ❌/❔ row.

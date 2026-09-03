@@ -2,7 +2,7 @@
 
 **Pilot:** [SysML v2 Pilot Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) release `2026-07`, commit `c7fc737d56da9e2d78f9d7df6d38efbec2e7e965`, artifact `jupyter-sysml-kernel 0.61.0` — the pin in `scripts/pilot-pin.sh`
 **Jar:** `jupyter-sysml-kernel-0.61.0-all.jar` (`sha256:602b53fa64d5af84480aa00e06e590a140d7d5c3651d4d76ac0e0055f89f0079`), provisioned by `./scripts/download-pilot-validator.sh`
-**Run:** `go run ./cmd/validation-census` (restates the summary line below from the baseline); `go run ./cmd/validation-census -check` (the gate); `go run ./cmd/validation-census -update` (re-extracts the names from the jar, keeping every recorded status)
+**Run:** `go run ./cmd/validation-census` (restates the **Pilot**, **Jar** and **Census** lines from the baseline); `go run ./cmd/validation-census -check` (the gate); `go run ./cmd/validation-census -update` (re-extracts the names from the jar, keeping every recorded status)
 **Baseline:** [validation-constraints-baseline.json](validation-constraints-baseline.json) — the constraint names read from the pinned jar, with the pin, the jar digest, the extraction method and each name's census status
 **Evidence:** `cmd/validation-census/testdata/probes/` — one minimal violating model per implemented row, run by `go test ./cmd/validation-census`
 
@@ -22,8 +22,9 @@ the diagnostic it reports was recorded as that row's probe.
 
 **Census:** 108 of 217 named constraints are reported by OpenSysML — 97 ✅ faithful and 11 ⚠️ approximate; 27 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 82 ❔ unknown.
 
-The figures on that line are written by `go run ./cmd/validation-census` from the baseline's
-statuses; `-check` fails on a hand-edited figure, on a table row the baseline does not record, on
+The figures on that line, and the pin and digest quoted above, are written by
+`go run ./cmd/validation-census` from the baseline; `-check` fails on a hand-edited figure or
+provenance value, on a table row the baseline does not record, on
 a baseline name the table lacks, on an implemented row without a probe, and — when the pinned
 jar is present, or always with `-require-jar` — on a baseline that no longer lists what the jar
 contains. It runs under `make docs-counts`; the jar comparison runs in the scheduled
