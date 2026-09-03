@@ -34,6 +34,38 @@ func TestInvocationCandidatesAtTheGlobalRoot(t *testing.T) {
 	}
 }
 
+// A bare `pick(v)` that only other documents' root declarations answer has each of
+// them as a candidate, while a root declaring its own still hides the rest.
+func TestUnqualifiedInvocationCandidatesAcrossDocuments(t *testing.T) {
+	idx := indexOf(t, map[string]string{
+		"a.sysml": "calc def pick { in x : ScalarValues::Integer; } package App { attribute v = 1; }",
+		"b.sysml": "calc def pick { in x : ScalarValues::String; }",
+		"c.sysml": "package Other { calc def pick { in x : ScalarValues::Boolean; } }",
+		"d.sysml": "package Caller { attribute v = 1; }",
+	})
+	r := New(idx)
+
+	caller := scopeOf(t, idx.DocumentRoot("d.sysml"), "Caller")
+	cands := r.InvocationCandidates(caller, qn(false, "pick"))
+	if len(cands) != 2 {
+		t.Fatalf("pick from Caller has %d candidates, want the two root-level calcs: %v", len(cands), fqnsOf(idx, cands))
+	}
+	for _, c := range cands {
+		if c.Kind != symbols.SymbolCalcDef || idx.GetFQN(c) != "pick" {
+			t.Errorf("candidate %s (%v) is not a root-level pick", idx.GetFQN(c), c.Kind)
+		}
+	}
+	if sym, ok := r.ResolveQualified(caller, qn(false, "pick")); !ok || sym != cands[0] {
+		t.Errorf("the name alone resolves to %v, want the first candidate", sym)
+	}
+
+	aRoot := idx.DocumentRoot("a.sysml")
+	aPick, _ := aRoot.LookupLocal("pick")
+	if own := r.InvocationCandidates(scopeOf(t, aRoot, "App"), qn(false, "pick")); len(own) != 1 || own[0] != aPick {
+		t.Errorf("pick from App has candidates %v, want a.sysml's own only", fqnsOf(idx, own))
+	}
+}
+
 func fqnsOf(idx *symbols.Index, syms []*symbols.Symbol) []string {
 	out := make([]string, len(syms))
 	for i, s := range syms {

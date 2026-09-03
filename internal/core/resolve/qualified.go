@@ -232,12 +232,9 @@ func (r *Resolver) lookupInRoot(scope *symbols.Scope, name string) *symbols.Symb
 // Namespace's own members must be distinguishable, and the global namespace is
 // not one.
 func (r *Resolver) lookupGlobalTop(scope *symbols.Scope, name string) *symbols.Symbol {
-	if r.idx == nil {
-		return nil
-	}
 	// A name reached here may be one a filtered import surfaced at a document's
 	// root, so the conditions of the routes registering it decide it here too.
-	syms := r.admittedUnder(r.documentOf(scope), r.ReferringNamespaceFQN(scope), name, r.idx.LookupQualified(name))
+	syms := r.globalCandidates(scope, name)
 	if len(syms) == 0 {
 		return nil
 	}
