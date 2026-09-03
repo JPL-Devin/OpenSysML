@@ -29,6 +29,8 @@ SKIP_PREFIX = tuple(f"{scheme}://" for scheme in ("http", "https", "ftp")) + ("m
 CITED = re.compile(r"`(docs/[A-Za-z0-9_./-]+\.md)`")
 # Records of what a plan created at the time; their paths are history, not pointers.
 HISTORICAL = ("docs/internals/notes/", "docs/internals/design/")
+# A changelog fragment is folded into CHANGELOG.md, so its links are written from the root.
+FRAGMENTS = "changes/unreleased/"
 
 
 def prose(text: str) -> str:
@@ -87,7 +89,8 @@ def link_failure(md: Path, link: str, root: Path, anchors: dict[Path, set[str]])
     """What is wrong with one link, or None if it resolves."""
     target, _, fragment = link.partition("#")
     if target:
-        dest = (md.parent / target).resolve()
+        base = root if md.as_posix().startswith(FRAGMENTS) else md.parent
+        dest = (base / target).resolve()
         if not dest.is_relative_to(root):
             return f"{md}: escapes the repository: {link}"
         if not dest.exists():
