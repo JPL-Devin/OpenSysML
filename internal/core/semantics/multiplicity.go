@@ -72,8 +72,8 @@ func (m *Model) RangeOf(mult *ast.Multiplicity) (Range, bool) {
 	return m.multiplicityRange(mult)
 }
 
-// MultiplicityOf returns the extracted multiplicity range of a usage symbol, or
-// ok=false when the symbol is not a usage or declares no multiplicity.
+// MultiplicityOf returns the extracted multiplicity range of a usage symbol, a
+// subject included, or ok=false when the symbol is not a usage or declares none.
 func (m *Model) MultiplicityOf(sym *symbols.Symbol) (Range, bool) {
 	mult := UsageMultiplicityOf(sym)
 	if mult == nil {
@@ -82,8 +82,8 @@ func (m *Model) MultiplicityOf(sym *symbols.Symbol) (Range, bool) {
 	return m.multiplicityRange(mult)
 }
 
-// UsageMultiplicityOf returns the multiplicity a usage symbol declares, the
-// constraint an assume/require member owns included, or nil.
+// UsageMultiplicityOf returns the multiplicity a usage symbol declares, a subject
+// or the constraint an assume/require member owns included, or nil.
 func UsageMultiplicityOf(sym *symbols.Symbol) *ast.Multiplicity {
 	if sym == nil {
 		return nil
@@ -91,8 +91,11 @@ func UsageMultiplicityOf(sym *symbols.Symbol) *ast.Multiplicity {
 	if oc, ok := ast.OwnedConstraintOf(sym.Decl); ok {
 		return oc.Multiplicity
 	}
-	if u, ok := sym.Decl.(*ast.Usage); ok {
-		return u.Multiplicity
+	switch decl := sym.Decl.(type) {
+	case *ast.Usage:
+		return decl.Multiplicity
+	case *ast.SubjectMember:
+		return decl.Multiplicity
 	}
 	return nil
 }
@@ -114,6 +117,36 @@ func (m *Model) EffectiveMultiplicityOf(sym *symbols.Symbol) Range {
 		return r
 	}
 	return AssumedRange()
+}
+
+// Intersect returns the range both ranges allow: the greater lower bound and the
+// lesser upper bound, an unknown bound deferring to a known one.
+func (r Range) Intersect(o Range) Range {
+	return Range{Lower: greaterBound(r.Lower, o.Lower), Upper: lesserBound(r.Upper, o.Upper)}
+}
+
+func greaterBound(a, b Bound) Bound {
+	switch {
+	case !a.Known:
+		return b
+	case !b.Known, a.Infinite:
+		return a
+	case b.Infinite, b.Value > a.Value:
+		return b
+	}
+	return a
+}
+
+func lesserBound(a, b Bound) Bound {
+	switch {
+	case !a.Known:
+		return b
+	case !b.Known, b.Infinite:
+		return a
+	case a.Infinite, b.Value < a.Value:
+		return b
+	}
+	return a
 }
 
 // CountViolation returns why count values do not conform to the range, phrased

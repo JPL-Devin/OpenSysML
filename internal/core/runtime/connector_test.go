@@ -105,6 +105,61 @@ func TestWritingAConnectedPortIsReadThroughTheEnd(t *testing.T) {
 	}
 }
 
+// An optional or abstract connector links nothing of its own — it holds what a
+// connector subsetting it holds — while a required one still links its ends.
+func TestOptionalConnectorLinksNothingOfItsOwn(t *testing.T) {
+	inst, ctx := instantiatePart(t, "Sys", `
+		package test {
+			port def P;
+			part def A { port p : P; }
+			part def B { port q : P; }
+			connection def Link { end source : P; end target : P; }
+			part def Sys {
+				part a : A;
+				part b : B;
+				connection hitch : Link[0..1] connect a.p to b.q;
+				interface spare[0..1] connect a.p to b.q;
+				abstract connection links : Link[0..*];
+				connection fitted : Link[0..1] connect a.p to b.q;
+				connection tow : Link :> fitted connect a.p to b.q;
+				connection link : Link connect a.p to b.q;
+			}
+		}`)
+	before := len(ctx.instances)
+	for _, name := range []string{"hitch", "spare"} {
+		fv, err := inst.GetFeatureValue(ctx, name)
+		if err != nil {
+			t.Fatalf("sys.%s: %v", name, err)
+		}
+		if held := fv.HeldValue(); held.Kind != ValInvalid {
+			t.Errorf("sys.%s = %s, want no link", name, FormatValue(held))
+		}
+		if read, err := fv.ReadValue(name); err != nil || elementCount(&read) != 0 {
+			t.Errorf("sys.%s reads %s, %v; want the empty sequence", name, FormatValue(read), err)
+		}
+	}
+	links, err := inst.GetFeatureValue(ctx, "links")
+	if err != nil {
+		t.Fatalf("sys.links: %v", err)
+	}
+	if held := links.HeldValue(); held.Kind != ValSequence || elementCount(&held) != 0 {
+		t.Errorf("sys.links = %s, want an empty collection", FormatValue(held))
+	}
+	if n := len(ctx.instances); n != before {
+		t.Errorf("reading the optional connectors made %d object(s), want none", n-before)
+	}
+	tow := fvInstance(t, ctx, inst, "tow")
+	if got := fvInstance(t, ctx, inst, "fitted"); got.ID != tow.ID {
+		t.Errorf("sys.fitted is object %d, want the tow that subsets it (%d)", got.ID, tow.ID)
+	}
+	port := fvInstance(t, ctx, inst, "a", "p")
+	for _, name := range []string{"tow", "link"} {
+		if got := fvInstance(t, ctx, fvInstance(t, ctx, inst, name), "source"); got.ID != port.ID {
+			t.Errorf("%s.source is object %d, want a.p (%d)", name, got.ID, port.ID)
+		}
+	}
+}
+
 // An untyped connector usage names no definition, so its type is implicit
 // (SysML v2 §8.3.13): it materializes all the same, with the connected features
 // at its ends, rather than reading as an unknown value.

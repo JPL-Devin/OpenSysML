@@ -257,22 +257,14 @@ func TestQualifiedNameThroughImportKeepsTypedErrors(t *testing.T) {
 // TestLibraryQuantityThroughFacadeResolves reaches a library quantity through
 // the ISQ and SI façades, which re-export the ISQ part packages: the name
 // resolves to the declaration its home package answers with, so the evaluator
-// reports that declaration (a valueless quantity) rather than a missing member.
+// answers with that declaration — a valueless `[*]` quantity, read as empty —
+// rather than a missing member.
 func TestLibraryQuantityThroughFacadeResolves(t *testing.T) {
 	ctx, root, _ := qualifiedImportRuntime(t)
-	_, direct := evalIn(t, ctx, root, "ISQSpaceTime::speed")
-	if direct == nil || errors.Is(direct, ErrUnresolvedReference) {
-		t.Fatalf("ISQSpaceTime::speed: err = %v, want the valueless declaration reported", direct)
-	}
-	for _, src := range []string{"ISQ::speed", "SI::speed"} {
-		_, err := evalIn(t, ctx, root, src)
-		if err == nil || errors.Is(err, ErrUnresolvedReference) {
-			t.Errorf("%s: err = %v, want the same report as ISQSpaceTime::speed", src, err)
-			continue
-		}
-		want := strings.Replace(direct.Error(), "ISQSpaceTime::speed", src, 1)
-		if err.Error() != want {
-			t.Errorf("%s: err = %q, want %q", src, err, want)
+	for _, src := range []string{"ISQSpaceTime::speed", "ISQ::speed", "SI::speed"} {
+		val, err := evalIn(t, ctx, root, src)
+		if err != nil || elementCount(&val) != 0 {
+			t.Errorf("%s = (%s, %v), want the empty sequence the valueless [*] quantity holds", src, FormatValue(val), err)
 		}
 	}
 	val, err := evalIn(t, ctx, root, "TrigFunctions::pi")
