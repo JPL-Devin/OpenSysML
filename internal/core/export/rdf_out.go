@@ -575,22 +575,31 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		// A condition of a constraint body, written bare (`x > 0`) or as a
 		// nested constraint (`assert constraint [name] { … }`).
 		head(rdf.OpenSysMLTerm(mConstraint))
-		if n.Name != "" {
-			e.graph.Add(subject, e.sysml(pDeclaredName), rdf.String(n.Name))
-		}
 		if n.Keyword != "" {
 			e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String(n.Keyword))
 		}
 		e.flags(subject, []boolProperty{{"isNegated", n.IsNegated}})
-		return e.condition(subject, fqn, owner, n.Expression, nil, n.Body)
+		return e.condition(subject, fqn, owner, conditionDecl{
+			expression: n.Expression, name: n.Name, body: n.Body, hasBody: n.Expression == nil,
+		})
 
 	case *ast.AssumeMember:
 		head(rdf.OpenSysMLTerm(mAssume))
-		return e.condition(subject, fqn, owner, n.Expression, n.Reference, n.Body)
+		return e.condition(subject, fqn, owner, conditionDecl{
+			expression: n.Expression, reference: n.Reference, declares: n.Reference == nil,
+			name: n.Name, relationships: n.Relationships, multiplicity: n.Multiplicity,
+			value: n.Value, isDefault: n.ValueIsDefault, isInitial: n.ValueIsInitial,
+			body: n.Body, hasBody: n.HasBody,
+		})
 
 	case *ast.RequireMember:
 		head(rdf.OpenSysMLTerm(mRequire))
-		return e.condition(subject, fqn, owner, n.Expression, n.Reference, n.Body)
+		return e.condition(subject, fqn, owner, conditionDecl{
+			expression: n.Expression, reference: n.Reference, declares: n.Reference == nil,
+			name: n.Name, relationships: n.Relationships, multiplicity: n.Multiplicity,
+			value: n.Value, isDefault: n.ValueIsDefault, isInitial: n.ValueIsInitial,
+			body: n.Body, hasBody: n.HasBody,
+		})
 
 	case *ast.SubjectMember:
 		// A subject parameter is a usage of its own (SysML v2 8.2.2.16), so it
@@ -737,18 +746,43 @@ func isRelationship(metaclass string) bool {
 // condition emits the three forms a condition member is written in: an inline
 // expression, a reference to the constraint it states (`require R { … }`), or a
 // nested constraint stating its conditions in a body.
-func (e *encoder) condition(subject rdf.Term, fqn, owner string, expr ast.Node, ref *ast.QualifiedName, body []ast.Node) error {
-	if expr != nil {
-		e.expression(subject, e.sysx(xCondition), xCondition, owner, expr)
+// conditionDecl is what a condition member states: a condition, the constraint
+// it references, or the constraint it declares, each of which may own a body.
+type conditionDecl struct {
+	expression ast.Node
+	reference  *ast.QualifiedName
+	// declares marks an `assume`/`require constraint …` declaration, which the
+	// `constraint` keyword tells from a reference even when it declares nothing else.
+	declares      bool
+	name          string
+	relationships []*ast.Relationship
+	multiplicity  *ast.Multiplicity
+	value         ast.Node
+	isDefault     bool
+	isInitial     bool
+	body          []ast.Node
+	hasBody       bool
+}
+
+func (e *encoder) condition(subject rdf.Term, fqn, owner string, decl conditionDecl) error {
+	if decl.expression != nil {
+		e.expression(subject, e.sysx(xCondition), xCondition, owner, decl.expression)
 		return nil
 	}
-	if ref != nil {
-		e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelReferences]), e.reference(owner, qualifiedText(ref)))
+	if decl.reference != nil {
+		e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelReferences]), e.reference(owner, qualifiedText(decl.reference)))
 	}
-	// Both remaining forms — a nested constraint and the constraint a member
-	// names — are written with a body, whether or not it has members.
-	e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(true))
-	return e.encode(body, fqn, subject)
+	if decl.declares {
+		e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String("constraint"))
+	}
+	if decl.name != "" {
+		e.graph.Add(subject, e.sysml(pDeclaredName), rdf.String(decl.name))
+	}
+	e.relationships(subject, owner, decl.relationships)
+	e.multiplicity(subject, owner, decl.multiplicity)
+	e.featureValue(subject, owner, decl.value, decl.isDefault, decl.isInitial)
+	e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(decl.hasBody))
+	return e.encode(decl.body, fqn, subject)
 }
 
 // shorthandRelationship reports whether a usage's identification is the first
@@ -1161,9 +1195,9 @@ func declaredNameAndMembers(node ast.Node) (string, []ast.Node) {
 	case *ast.ConstraintMember:
 		return n.Name, n.Body
 	case *ast.AssumeMember:
-		return "", n.Body
+		return n.Name, n.Body
 	case *ast.RequireMember:
-		return "", n.Body
+		return n.Name, n.Body
 	case *ast.SubjectMember:
 		return n.Name, n.Body
 	case *ast.Comment:

@@ -45,3 +45,26 @@ func TestFeatureValueOperatorsSurviveRDF(t *testing.T) {
 		}
 	}
 }
+
+// A requirement's `assume`/`require constraint` declares a constraint usage of
+// its own, whose name, specializations, multiplicity and value are as much a
+// part of the model as those of any other usage.
+func TestOwnedConstraintDeclarationsSurviveRDF(t *testing.T) {
+	roundTripsExactly(t, `package P {
+	constraint def C;
+	constraint c0 : C;
+	requirement def R {
+		assume constraint c1 : C[1] = c0;
+		require constraint c2 : C default = c0;
+		require constraint c3 subsets c0 := c0;
+		assume constraint c4 : C subsets c0[1] default := c0 {
+			true;
+		}
+		require constraint c5;
+		assume constraint c6 {
+		}
+		require c0[1] subsets c0;
+	}
+}
+`)
+}

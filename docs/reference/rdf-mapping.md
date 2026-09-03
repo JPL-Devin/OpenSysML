@@ -208,7 +208,7 @@ The `sysx:` properties:
 | `sysx:memberIndex` | Declaration order. The notation is sensitive to the order of members; an RDF graph is an unordered set, so the index is what lets a conversion back to notation reproduce the original sequence. |
 | `sysx:hasBody` | Distinguishes `part def A;` from `part def A { }`, which are different source and would otherwise convert back identically. |
 | `sysx:sourceText` | The verbatim source of the constructs described under *Limitations*. |
-| `sysx:declaredKeyword` | The kind keyword as written, when it is one of the synonyms several keywords share (`datatype` and `attribute`, `function` and `calc`, `snapshot` and `occurrence`). The AST records one kind for all of them, so without this the notation would come back rewritten. Also the keyword a constraint body's condition is stated with (`assert`, `assume`, or absent for a bare condition, which asserts implicitly). |
+| `sysx:declaredKeyword` | The kind keyword as written, when it is one of the synonyms several keywords share (`datatype` and `attribute`, `function` and `calc`, `snapshot` and `occurrence`). The AST records one kind for all of them, so without this the notation would come back rewritten. Also the keyword a constraint body's condition is stated with (`assert`, `assume`, or absent for a bare condition, which asserts implicitly), and the `constraint` of a requirement's `assume`/`require` member that declares one rather than stating an expression. |
 | `sysx:declaredPrefix` | The keyword qualifying the kind keyword after it — the `assert` of `assert constraint c : C`. It says what the declaration is for, and the AST kind alone does not carry it. |
 | `sysx:endForm` | The notation an end-binding head writes its ends in — `to`, `nary`, `equals`, `firstThen`, `fromTo`, `flowTo`, `satisfy`, `then` — so the head is rebuilt from the graph rather than read back from its text. See [End-binding heads](#end-binding-heads). |
 | `sysx:endVerb` | The verb a head writes ahead of its ends when its own keyword is the noun form (`connection c connect a to b`). Without it the verb would be missing or doubled. |
@@ -593,9 +593,10 @@ a condition are carried, each as the `sysx:` metaclass named above with its
 condition as `sysx:condition`: a constraint body's conditions (`assert`,
 `assume`, a bare condition, and the `not` of `assert not …` as
 `sysml:isNegated`), a nested `assert constraint [name] { … }`, a requirement's
-`assume`/`require` members in all three forms (an expression, the constraint
-they name, or a body), `subject s : X;` as the `sysml:SubjectMembership` it
-declares. The `assert` prefixing a named usage
+`assume`/`require` members in all their forms (an expression, the constraint
+they name, or a constraint they declare — with its name, typing, multiplicity,
+value and the value's `default`/`:=` operator, and its body if any), `subject s : X;`
+as the `sysml:SubjectMembership` it declares. The `assert` prefixing a named usage
 (`assert constraint c : C`) is carried as `sysx:declaredPrefix`. The conditions
 themselves are notation, with the limits stated above.
 

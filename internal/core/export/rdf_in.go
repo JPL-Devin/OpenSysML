@@ -503,11 +503,11 @@ func (d *decoder) head(el *element) (string, error) {
 	case mConstraint:
 		// A bare condition states no keyword of its own; it asserts implicitly.
 		keyword, _ := d.stringOf(el, rdf.OpenSysML+xDeclaredKeyword)
-		return d.conditionHead(el, keyword)
+		return d.conditionHead(el, keyword, d.boolOf(el, rdf.OpenSysML+xHasBody))
 	case mAssume:
-		return d.conditionHead(el, "assume")
+		return d.conditionHead(el, "assume", d.declaresConstraint(el))
 	case mRequire:
-		return d.conditionHead(el, "require")
+		return d.conditionHead(el, "require", d.declaresConstraint(el))
 	}
 	// A succession carrying its ends as references is the one the parser builds
 	// for a succession, written back as `succession first <source> then <target>;`.
@@ -815,9 +815,10 @@ func (d *decoder) valueOperator(el *element) string {
 }
 
 // conditionHead rebuilds a condition member from its properties: an inline
-// condition (`assert x > 0`), the constraint it states (`require R`), or a
-// nested constraint whose conditions are its body (`assume constraint { … }`).
-func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
+// condition (`assert x > 0`), the constraint it states (`require R [1] :> S`),
+// or the constraint it declares (`assume constraint c : C = v`, or a nested
+// `constraint { … }`), where declares reports the last form.
+func (d *decoder) conditionHead(el *element, keyword string, declares bool) (string, error) {
 	var words []string
 	if keyword != "" {
 		words = append(words, keyword)
@@ -831,18 +832,48 @@ func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 	}
 	switch condition, ok := d.stringOf(el, rdf.OpenSysML+xCondition); {
 	case ok:
-		words = append(words, condition)
+		return strings.Join(append(words, condition), " "), nil
 	case reference != "":
-		words = append(words, reference)
-	case d.boolOf(el, rdf.OpenSysML+xHasBody):
-		// The nested-constraint form spells out the kind it declares, so the
-		// braces that follow are read as a constraint body rather than a name.
+		words = append(words, reference+d.multiplicityText(el))
+	case declares:
+		// The declared form spells out the kind it declares, so the braces that
+		// follow are read as a constraint body rather than a name.
 		words = append(words, "constraint")
 		words = append(words, d.identWords(el)...)
 	default:
 		return "", d.missing(el, "sysx:"+xCondition, "a condition member states a condition")
 	}
-	return strings.Join(words, " "), nil
+	return d.declarationTail(el, words, reference != "")
+}
+
+// declaresConstraint reports whether an `assume`/`require` member declares the
+// constraint it owns (`assume constraint c : C;`) rather than referencing one.
+// A graph written before the keyword was recorded carried the body alone.
+func (d *decoder) declaresConstraint(el *element) bool {
+	keyword, _ := d.stringOf(el, rdf.OpenSysML+xDeclaredKeyword)
+	return keyword == "constraint" || d.boolOf(el, rdf.OpenSysML+xHasBody)
+}
+
+// declarationTail finishes a condition member's head with the specializations,
+// multiplicity and value it declares. A reference has been written with its
+// multiplicity already; a declaration's follows its specializations.
+func (d *decoder) declarationTail(el *element, words []string, references bool) (string, error) {
+	multPart := ""
+	var skip []ast.RelationshipKind
+	if references {
+		skip = append(skip, ast.RelReferences)
+	} else {
+		multPart = d.multiplicityText(el)
+	}
+	relationships, err := d.relationshipWords(el, "", skip...)
+	if err != nil {
+		return "", err
+	}
+	head := strings.Join(append(words, relationships...), " ") + multPart
+	if value, ok := d.stringOf(el, rdf.SysML+pValue); ok {
+		head += " " + d.valueOperator(el) + " " + value
+	}
+	return head, nil
 }
 
 // acceptParam returns the synthetic parameter of an accept shorthand, whose
