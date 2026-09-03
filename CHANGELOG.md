@@ -122,6 +122,30 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   classed by the construct it names. The mapping's reference now states that measurement in place
   of the claim that a second conversion yields the same graph, which held for the fixtures alone
   ([docs/project/rdf-corpus-roundtrip.md](docs/project/rdf-corpus-roundtrip.md)).
+- **The REPL sends a signal into a running machine.** `%send go` and
+  `%send Dim(level=3+4) to bulb` put the signal on the runtime's message bus exactly as a
+  `send` from an action body would, so a `transition ... accept go then on` is driven from the
+  prompt without writing an action just to fire it: `%events` lists the signal in flight, and
+  `%step` or `%advance` dispatches it. Without `to`, the signal goes to the object whose machine
+  the `%state` session is debugging, and with no session the command says so rather than
+  guessing. Arguments are written `<parameter>=<expression>` as for `%invoke` and are checked
+  against the signal's declaration — the feature it names, and the type and multiplicity that
+  feature admits — before anything is sent; an unresolved signal name gets the usual unresolved-reference
+  report, an object that runs no machine is reported as such, and a signal nothing in the
+  machine's current state accepts is refused up front with the state named, never queued to be
+  dropped in silence — and so is one whose every triggered transition is held back by its guard,
+  decided as the dispatch would decide it with the payload bound; a guard that cannot be evaluated
+  is an error. A signal the current state defers rather than accepts is sent and said to be
+  deferred: the step dispatching it holds it, `%events` lists it as held, and it is recalled to
+  fire once the machine reaches a state that accepts it — as a machine now holds any message
+  addressed to it that its active state defers, instead of leaving it on the bus. A signal in
+  flight is due now, so a single step dispatches it ahead of a timer set
+  for later, as a run holding time where it is would; a step that dispatches a signal no transition
+  fires on, because the state or the data its guards read changed since it was sent, says so.
+  When an object runs several machines, `%send` decides the signal with each of them and reports
+  which would fire on it, and a machine whose guards would drop it leaves it in flight for a
+  sibling that fires on or defers it — at the prompt and in a run alike — so the machine `%send`
+  named as accepting a signal is the one that gets it.
 
 ### Performance
 
