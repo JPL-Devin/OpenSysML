@@ -658,10 +658,29 @@ func (ctx *Context) CompositeTypeOf(feat *EffectiveFeature) *symbols.Symbol {
 	if ctx.model.IsVariationFeature(feat.Symbol) {
 		return nil
 	}
+	// A subject is a reference usage (SysML.xtext SubjectUsage): it holds what
+	// is bound to it, never an object of its own.
+	if isSubjectUsage(feat.Symbol) {
+		return nil
+	}
 	if feat.Symbol != nil && declaresFeatures(feat.Symbol) {
 		return feat.Symbol
 	}
 	return feat.Type
+}
+
+// isSubjectUsage reports whether sym is the subject parameter of a case.
+func isSubjectUsage(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	switch decl := sym.Decl.(type) {
+	case *ast.SubjectMember:
+		return true
+	case *ast.Usage:
+		return decl.Kind == ast.UsageSubject
+	}
+	return false
 }
 
 // declaresFeatures reports whether a usage's own body restates or adds features,

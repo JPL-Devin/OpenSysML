@@ -388,6 +388,81 @@ func TestSubjectAndObjectiveShareTheInheritedRoleFeature(t *testing.T) {
 	shared("test::An", "o", "obj")
 }
 
+// A subject's declared type governs what binds to it, declared or inherited:
+// an object of an unrelated type is refused and leaves the subject untouched.
+func TestSubjectDeclaredTypeGovernsItsBinding(t *testing.T) {
+	ctx, idx := libraryShapeContext(t, `package test {
+		part def Vehicle;
+		part def Rock;
+		part car : Vehicle;
+		part rock : Rock;
+		requirement def MassLimit { subject v : Vehicle; }
+		requirement def TruckMassLimit :> MassLimit;
+	}`)
+	objectOf := func(fqn string) Value {
+		obj, err := ctx.Instantiate(oneSymbol(t, idx, fqn))
+		if err != nil {
+			t.Fatalf("instantiate %s: %v", fqn, err)
+		}
+		return Value{Kind: ValInstance, Instance: obj.ID}
+	}
+	car, rock := objectOf("test::car"), objectOf("test::rock")
+	for _, fqn := range []string{"test::MassLimit", "test::TruckMassLimit"} {
+		req, err := ctx.Instantiate(oneSymbol(t, idx, fqn))
+		if err != nil {
+			t.Fatalf("instantiate %s: %v", fqn, err)
+		}
+		subject, err := req.GetFeatureValue(ctx, "v")
+		if err != nil {
+			t.Fatalf("%s.v: %v", fqn, err)
+		}
+		if subject.Feature.Type == nil || subject.Feature.Type.Name != "Vehicle" {
+			t.Fatalf("%s.v is typed %v, want Vehicle", fqn, subject.Feature.Type)
+		}
+		err = req.SetFeatureValue(ctx, "v", rock)
+		if !errors.Is(err, ErrTypeMismatch) {
+			t.Errorf("%s.v = rock: %v, want ErrTypeMismatch", fqn, err)
+		}
+		if held := subject.HeldValue(); held.Kind != ValInvalid || subject.Written {
+			t.Errorf("%s.v holds %s after the refused binding, want it untouched", fqn, FormatValue(held))
+		}
+		if err := req.SetFeatureValue(ctx, "v", car); err != nil {
+			t.Errorf("%s.v = car: %v", fqn, err)
+		}
+	}
+}
+
+// A case has one subject: the one a requirement declares redefines each general's,
+// by `:>>` or implicitly (the pinned pilot accepts this without "Only one subject").
+func TestSubjectRedefinesEveryInheritedSubject(t *testing.T) {
+	ctx, idx := libraryShapeContext(t, `package test {
+		private import ScalarValues::*;
+		requirement def Weight { subject w : Real; }
+		requirement def Volume { subject vol : Real; }
+		requirement def Both :> Weight, Volume { subject s : Real :>> w; }
+	}`)
+	obj, err := ctx.Instantiate(oneSymbol(t, idx, "test::Both"))
+	if err != nil {
+		t.Fatalf("instantiate Both: %v", err)
+	}
+	if err := obj.SetFeatureValue(ctx, "s", realConst(2.5)); err != nil {
+		t.Fatalf("Both.s = 2.5: %v", err)
+	}
+	for _, name := range []string{"s", "w", "vol"} {
+		fv, err := obj.GetFeatureValue(ctx, name)
+		if err != nil {
+			t.Fatalf("Both.%s: %v", name, err)
+		}
+		got, err := fv.ReadValue(name)
+		if err != nil {
+			t.Fatalf("Both.%s: %v", name, err)
+		}
+		if got.Kind != ValConst || got.Const.Real != 2.5 {
+			t.Errorf("Both.%s = %s, want 2.5 through the one subject", name, FormatValue(got))
+		}
+	}
+}
+
 // A redefinition chain is followed through a declaration masking its target
 // in the object's own type: a Box face reads `shape` as Items::Item::shape,
 // which redefines the `spaceBoundary` the face carries as

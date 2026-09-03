@@ -1229,8 +1229,7 @@ func (w *featureValueWalk) rows(inst *runtime.Instance, indent string, depth int
 // isBehaviorFeature reports whether a feature is a state or action usage — a
 // named transition among them — a behavior of the object rather than a value it holds.
 func isBehaviorFeature(feat *runtime.EffectiveFeature) bool {
-	// An abstract one (Part::performedActions, ownedStates) classifies the
-	// behaviors the object runs: a collection it holds, not a run of its own.
+	// An abstract one (Part::performedActions) is a collection held, not a run.
 	if feat.Symbol == nil || symbols.IsAbstract(feat.Symbol) {
 		return false
 	}
