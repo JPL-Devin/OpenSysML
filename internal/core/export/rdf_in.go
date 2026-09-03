@@ -395,7 +395,7 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 	lead := indent + el.prefix
 	if text, ok := d.stringOf(el, rdf.OpenSysML+xSourceText); ok {
 		// A declaration whose head this mapping keeps verbatim, prefixes included.
-		prefixes, err := d.prefixWords(el)
+		prefixes, err := d.prefixAnnotations(el)
 		if err != nil {
 			return err
 		}
@@ -1222,21 +1222,41 @@ func (d *decoder) metadataSigil(el *element) string {
 	return ""
 }
 
+// prefixAnnotation is a `#M` annotation a declaration owns: the name to write
+// it by, and the qualified name of its definition when the graph has one.
+type prefixAnnotation struct {
+	word  string
+	qname string
+}
+
 // prefixWords writes the `#M` annotations a declaration owns as prefixes, which
 // are written into its head rather than its body.
 func (d *decoder) prefixWords(el *element) ([]string, error) {
+	annotations, err := d.prefixAnnotations(el)
+	if err != nil {
+		return nil, err
+	}
+	words := make([]string, len(annotations))
+	for i, annotation := range annotations {
+		words[i] = annotation.word
+	}
+	return words, nil
+}
+
+func (d *decoder) prefixAnnotations(el *element) ([]prefixAnnotation, error) {
 	d.prefixed[el] = true
-	var words []string
+	var annotations []prefixAnnotation
 	for _, child := range el.children {
 		if d.metadataSigil(child) != "#" {
 			continue
 		}
-		typed, err := d.referenceList(child, rdf.SysML+relationshipProperty[ast.RelTyping])
+		types := d.graph.Objects(rdf.IRI(child.iri), rdf.SysML+relationshipProperty[ast.RelTyping])
+		if len(types) != 1 {
+			return nil, d.missing(child, sysmlPrefix+relationshipProperty[ast.RelTyping], "a prefix annotation names the one metadata definition it applies")
+		}
+		typed, err := d.referenceName(types[0], child.scope)
 		if err != nil {
 			return nil, err
-		}
-		if len(typed) != 1 {
-			return nil, d.missing(child, sysmlPrefix+relationshipProperty[ast.RelTyping], "a prefix annotation names the one metadata definition it applies")
 		}
 		// A prefix is spelled as its type alone (SysML.xtext PrefixMetadataUsage).
 		about, err := d.referenceList(child, rdf.SysML+pAnnotatedElement)
@@ -1249,21 +1269,27 @@ func (d *decoder) prefixWords(el *element) ([]string, error) {
 				Note: "a prefix names only its metadata definition; a name, an about clause or a body is written by the `@` member form",
 			}
 		}
-		words = append(words, "#"+typed[0])
+		annotation := prefixAnnotation{word: "#" + typed}
+		if !types[0].IsLiteral() {
+			target, err := d.referencedElement(types[0].Value)
+			if err != nil {
+				return nil, err
+			}
+			annotation.qname = qualifiedNameText(target.qname)
+		}
+		annotations = append(annotations, annotation)
 	}
-	return words, nil
+	return annotations, nil
 }
 
-// checkWrittenPrefixes reports a verbatim head whose `#` prefixes are not the
-// ones the graph states — in number, order or name — so none is dropped or
-// invented. Names match on their written segments, since the text may qualify
-// a name more or less than the scope-relative name the graph renders.
-func checkWrittenPrefixes(el *element, text string, prefixes []string) error {
+// checkWrittenPrefixes refuses a verbatim head whose `#` prefixes differ from
+// the graph's in number, order or the definition they name.
+func checkWrittenPrefixes(el *element, text string, prefixes []prefixAnnotation) error {
 	written := writtenPrefixes(text)
 	for i, prefix := range prefixes {
-		if i >= len(written) || !sameNameTail(written[i], prefix) {
+		if i >= len(written) || !prefix.writtenAs(written[i]) {
 			return &UnsupportedError{
-				What: fmt.Sprintf("the prefix annotation %s on <%s>", prefix, el.iri),
+				What: fmt.Sprintf("the prefix annotation %s on <%s>", prefix.word, el.iri),
 				Note: "the head is kept as the text it was written as, and that text does not write the annotation",
 			}
 		}
@@ -1277,12 +1303,30 @@ func checkWrittenPrefixes(el *element, text string, prefixes []string) error {
 	return nil
 }
 
-// writtenPrefixes lexes a head and returns each `#` annotation it writes as
-// `#` plus its qualified name, without the trivia between tokens.
+// writtenAs reports whether a written `#name` names this annotation's
+// definition: its qualified name, or a trailing run of its segments as a
+// scope-relative name would be; a definition the graph only names is matched
+// as written.
+func (p prefixAnnotation) writtenAs(written string) bool {
+	name := strings.TrimPrefix(strings.TrimPrefix(written, "#"), "$::")
+	if p.qname == "" {
+		return name == strings.TrimPrefix(strings.TrimPrefix(p.word, "#"), "$::")
+	}
+	qname := strings.TrimPrefix(p.qname, "$::")
+	return name == qname || strings.HasSuffix(qname, "::"+name)
+}
+
+// writtenPrefixes lexes a declaration and returns each `#` annotation its head
+// writes as `#` plus its qualified name, without the trivia between tokens.
+// The head ends at the `;` or body that follows it; a `#` that no name follows
+// is a sequence index, not an annotation.
 func writtenPrefixes(text string) []string {
 	var tokens []lexer.Token
 	lx := lexer.New(source.New("head.sysml", []byte(text)))
 	for tok := lx.Next(); tok.Kind != lexer.EOF; tok = lx.Next() {
+		if tok.Kind == lexer.Semicolon || tok.Kind == lexer.LBrace {
+			break
+		}
 		if !tok.IsTrivia() && tok.Kind != lexer.RegularComment {
 			tokens = append(tokens, tok)
 		}
@@ -1309,6 +1353,9 @@ func writtenPrefixes(text string) []string {
 			name += "$::"
 			j += 2
 		}
+		if !isName(j) {
+			continue
+		}
 		for isName(j) {
 			name += lexeme(tokens[j])
 			j++
@@ -1323,14 +1370,6 @@ func writtenPrefixes(text string) []string {
 		i = j - 1
 	}
 	return out
-}
-
-// sameNameTail reports whether two `#`-prefixed names agree as far as their
-// written segments go: equal, or one the tail of the other.
-func sameNameTail(a, b string) bool {
-	a = strings.TrimPrefix(strings.TrimPrefix(a, "#"), "$::")
-	b = strings.TrimPrefix(strings.TrimPrefix(b, "#"), "$::")
-	return a == b || strings.HasSuffix(a, "::"+b) || strings.HasSuffix(b, "::"+a)
 }
 
 // unwrittenPrefix reports a `#M` annotation on an element whose head has no

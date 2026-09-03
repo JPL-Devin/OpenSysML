@@ -632,10 +632,19 @@ func TestPrefixOnAnUnprefixableHeadIsReported(t *testing.T) {
 // A head kept as source text writes its prefix annotations in that text; when
 // the text and the graph disagree, the annotation is refused rather than lost.
 func TestPrefixOnAVerbatimHeadIsWrittenOrReported(t *testing.T) {
-	// The text may space or qualify a prefix in ways the graph's rendering does not.
-	heads := []string{"#Safety connect x to y;", "# Safety connect x to y;", "#P::Safety #Audit connect x to y;", "#$::P::Safety connect x to y;"}
+	// The text may space or qualify a prefix in ways the graph's rendering does
+	// not; a `#` in the body or in a sequence index is not a prefix.
+	heads := []string{
+		"#Safety connect x to y;",
+		"# Safety connect x to y;",
+		"#P::Safety #Audit connect x to y;",
+		"#$::P::Safety connect x to y;",
+		"#Safety connect x to y {\n\t\t\t#Audit part p;\n\t\t}",
+		"connect x to y {\n\t\t\t#Safety part p;\n\t\t}",
+		"transition t first x if xs#(1) > 0 then y;",
+	}
 	for _, head := range heads {
-		src := "package P {\n\tmetadata def Safety;\n\tmetadata def Audit;\n\tpart def A {\n\t\tport x;\n\t\tport y;\n\t}\n\tpart a : A {\n\t\t" + head + "\n\t}\n}"
+		src := "package P {\n\tmetadata def Safety;\n\tmetadata def Audit;\n\tattribute xs : Integer[*];\n\tpart def A {\n\t\tport x;\n\t\tport y;\n\t}\n\tpart a : A {\n\t\t" + head + "\n\t}\n}"
 		turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
 		if err != nil {
 			t.Fatalf("%s: to turtle: %v", head, err)
@@ -644,7 +653,8 @@ func TestPrefixOnAVerbatimHeadIsWrittenOrReported(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: back to notation: %v", head, err)
 		}
-		if !strings.Contains(string(back), head) {
+		spaced := func(s string) string { return strings.Join(strings.Fields(s), " ") }
+		if !strings.Contains(spaced(string(back)), spaced(head)) {
 			t.Errorf("%s: the prefixed head should come back as written:\n%s", head, back)
 		}
 	}
@@ -663,6 +673,7 @@ func TestPrefixOnAVerbatimHeadIsWrittenOrReported(t *testing.T) {
 	cases := []struct{ text, what, note string }{
 		{`"connect x to y;"`, "the prefix annotation #Safety on <urn:sysmlv2:element:P__a__", "that text does not write the annotation"},
 		{`"#Audit connect x to y;"`, "the prefix annotation #Safety on <urn:sysmlv2:element:P__a__", "that text does not write the annotation"},
+		{`"#Q::Safety connect x to y;"`, "the prefix annotation #Safety on <urn:sysmlv2:element:P__a__", "that text does not write the annotation"},
 		{`"#Safety #Safety connect x to y;"`, "the prefix annotation #Safety on <urn:sysmlv2:element:P__a__", "writes an annotation the graph does not state"},
 	}
 	for _, tc := range cases {
