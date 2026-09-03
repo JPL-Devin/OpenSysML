@@ -3,6 +3,8 @@ package runtime
 import (
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
@@ -145,6 +147,19 @@ type Context struct {
 	// OPENSYSML_CALC_COMPILE escape hatch clears it.
 	compileCalcs bool
 
+	// probes is the number of probes under way; see beginProbe.
+	probes int
+	// probeWrites are the feature values the probes under way changed, with what
+	// each held before, restored as each probe ends.
+	probeWrites []probeWrite
+	// probeUndos restore what else the probes under way changed on an object — the
+	// identities it keeps for connectors not yet materialized — run in reverse as
+	// each probe ends; see noteProbeUndo.
+	probeUndos []func()
+	// probeBehaviors and probePending are where in objectBehaviors and in
+	// pendingBehaviors those the probes under way attached begin: the only ones a
+	// drain under a probe may run.
+	probeBehaviors, probePending int
 	// runDepth is the number of runs currently under way, so the step counter is
 	// reset per run rather than accumulated over the context's whole life.
 	runDepth int
@@ -283,6 +298,27 @@ func (ctx *Context) Model() *semantics.Model {
 	return ctx.model
 }
 
+// conforms is the model's conformance across scope trees: the index and a
+// document each build a symbol of their own for one declaration, so a symbol
+// conforms to another declared by the same node as it or one of its supertypes.
+func (ctx *Context) conforms(a, b *symbols.Symbol) bool {
+	if ctx.model.Conforms(a, b) {
+		return true
+	}
+	if a == nil || b == nil || b.Decl == nil {
+		return false
+	}
+	if a.Decl == b.Decl {
+		return true
+	}
+	for _, sup := range ctx.model.AllSupertypes(a) {
+		if sup != nil && sup.Decl == b.Decl {
+			return true
+		}
+	}
+	return false
+}
+
 // Resolver returns the name resolver this context resolves references with.
 func (ctx *Context) Resolver() *resolve.Resolver {
 	return ctx.resolver
@@ -346,6 +382,72 @@ func (ctx *Context) beginExecutorRun(started *bool) func() {
 	*started = true
 	ctx.runDepth++
 	return func() { ctx.runDepth-- }
+}
+
+// beginProbe brackets an evaluation previewing what a run would do, restoring the
+// budget, trace, bus, variant selections, every feature value written (see
+// noteProbeWrite) and every other change noted (see noteProbeUndo) after.
+// Behaviors the probe starts are the only ones it runs (see nextRunnableBehavior).
+func (ctx *Context) beginProbe() func() {
+	steps, elements, trace := ctx.steps, ctx.elements, ctx.trace
+	mark, undoMark := len(ctx.probeWrites), len(ctx.probeUndos)
+	messages := cloneMessages(ctx.messages)
+	selected := maps.Clone(ctx.selectedVariants)
+	if ctx.probes == 0 {
+		ctx.probeBehaviors, ctx.probePending = len(ctx.objectBehaviors), len(ctx.pendingBehaviors)
+	}
+	ctx.trace = nil
+	ctx.runDepth++
+	ctx.probes++
+	return func() {
+		for i := len(ctx.probeWrites) - 1; i >= mark; i-- {
+			*ctx.probeWrites[i].fv = ctx.probeWrites[i].prior
+		}
+		ctx.probeWrites = ctx.probeWrites[:mark]
+		for i := len(ctx.probeUndos) - 1; i >= undoMark; i-- {
+			ctx.probeUndos[i]()
+		}
+		ctx.probeUndos = ctx.probeUndos[:undoMark]
+		ctx.messages = messages
+		ctx.selectedVariants = selected
+		ctx.probes--
+		ctx.runDepth--
+		ctx.steps, ctx.elements, ctx.trace = steps, elements, trace
+	}
+}
+
+// cloneMessages copies messages in flight, payloads included: what a probe caches
+// on a payload (see acceptedValue) names objects the probe discards.
+func cloneMessages(messages []Message) []Message {
+	cloned := slices.Clone(messages)
+	for i := range cloned {
+		cloned[i].Payload = maps.Clone(cloned[i].Payload)
+	}
+	return cloned
+}
+
+// probeWrite is a feature value a probe changed and what it held before.
+type probeWrite struct {
+	fv    *FeatureValue
+	prior FeatureValue
+}
+
+// noteProbeWrite records a feature value about to change, for the probe under
+// way to restore; outside a probe it records nothing.
+func (ctx *Context) noteProbeWrite(fv *FeatureValue) {
+	if ctx.probes == 0 {
+		return
+	}
+	ctx.probeWrites = append(ctx.probeWrites, probeWrite{fv: fv, prior: *fv})
+}
+
+// noteProbeUndo records how to restore state no feature value holds that is about
+// to change, for the probe under way to run; outside a probe it records nothing.
+func (ctx *Context) noteProbeUndo(undo func()) {
+	if ctx.probes == 0 {
+		return
+	}
+	ctx.probeUndos = append(ctx.probeUndos, undo)
 }
 
 // newActivation begins one activation: the identity of a single execution of a
