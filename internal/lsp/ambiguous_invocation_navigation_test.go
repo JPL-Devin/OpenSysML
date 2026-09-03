@@ -353,3 +353,86 @@ func equalLines(got, want []uint32) bool {
 	}
 	return true
 }
+
+// hoverOf hovers the first occurrence of needle.
+func hoverOf(t *testing.T, s *Server, name, src, needle string) *protocol.Hover {
+	t.Helper()
+	off := strings.Index(src, needle)
+	if off < 0 {
+		t.Fatalf("%q not in source", needle)
+	}
+	hov, err := s.Hover(context.Background(), &protocol.HoverParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+			Position:     offsetToPosition([]byte(src), off),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Hover err = %v", err)
+	}
+	return hov
+}
+
+// A cursor on the `::` of a qualified call is on no segment: hover describes the
+// enclosing declaration, as for any qualified name, while definition and references
+// treat the separator as the whole reference — the tied set for an ambiguous call,
+// the selected overload otherwise.
+func TestSeparatorOfQualifiedAmbiguousCall(t *testing.T) {
+	_, s, name := openQualifiedAmbiguity(t)
+	src := qualifiedAmbiguitySrc
+
+	for _, at := range []string{"::pick(2)", `::pick("s")`} {
+		hov := hoverOf(t, s, name, src, at)
+		if hov == nil || !strings.Contains(hov.Contents.Value, "attribute q") || strings.Contains(hov.Contents.Value, "Ambiguous") {
+			t.Errorf("hover on %q = %v, want the enclosing attribute", at, hov)
+		}
+	}
+
+	locs := definitionOf(t, s, name, src, "::pick(2)")
+	want := []uint32{
+		lineOfSrc(t, src, "in x : Integer; return : Integer = 1;"),
+		lineOfSrc(t, src, "in x : Integer; return : Integer = 2;"),
+	}
+	if !equalLines(startLines(locs), want) {
+		t.Errorf("definition on `::` of Both::pick(2): lines = %v, want the tied overloads %v", startLines(locs), want)
+	}
+	if locs := referencesAt(t, s, name, src, "::pick(2)"); len(locs) != 0 {
+		t.Errorf("references on `::` of Both::pick(2) = %v, want none", locs)
+	}
+
+	locs = definitionOf(t, s, name, src, `::pick("s")`)
+	if want := []uint32{lineOfSrc(t, src, "in x : String")}; !equalLines(startLines(locs), want) {
+		t.Errorf(`definition on "::" of Both::pick("s"): lines = %v, want %v`, startLines(locs), want)
+	}
+}
+
+// A `$::` with no name after it — mid-edit — is a reference with no segments;
+// references and rename scan every reference and must pass over it.
+func TestReferencesAndRenameSkipNamelessReference(t *testing.T) {
+	src := `package P {
+	part def Wheel;
+	part w : Wheel;
+	part x : $::;
+}
+`
+	ws := model.NewWorkspace()
+	name := uri.File("/tmp/nameless_ref.sysml").Filename()
+	ws.Open(name, []byte(src), 1)
+	s := NewServer(ws)
+
+	locs := referencesAt(t, s, name, src, "Wheel;")
+	if want := []uint32{lineOfSrc(t, src, "w : Wheel")}; !equalLines(startLines(locs), want) {
+		t.Errorf("references of Wheel: lines = %v, want %v", startLines(locs), want)
+	}
+
+	out, err := applyRename(t, ws, name, "Wheel;", "Tyre")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	got := out[name]
+	for _, want := range []string{"part def Tyre;", "part w : Tyre;", "part x : $::;"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("renamed source lacks %q:\n%s", want, got)
+		}
+	}
+}

@@ -36,7 +36,8 @@ func segmentAt(ref resolve.Reference, offset int) int {
 }
 
 // onCalledName reports whether offset is on the last segment of ref, the one an
-// invocation calls, rather than on a qualifier before it.
+// invocation calls, rather than on a qualifier before it. A `::` between
+// segments counts as the whole reference, which names what the last segment does.
 func onCalledName(ref resolve.Reference, offset int) bool {
 	idx := segmentAt(ref, offset)
 	return idx < 0 || idx == len(ref.QN.Parts)-1

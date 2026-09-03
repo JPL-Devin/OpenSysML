@@ -71,13 +71,10 @@ func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 }
 
 // ambiguousCallHover lists the overloads a call's arguments leave tied when the
-// cursor is on the name it calls; nil for any other position.
+// cursor is on the called name itself; nil on a qualifier or a `::`.
 func (s *Server) ambiguousCallHover(doc string, ref resolve.Reference, offset int) *protocol.Hover {
 	parts := ref.QN.Parts
-	if len(parts) == 0 {
-		return nil
-	}
-	if !onCalledName(ref, offset) {
+	if len(parts) == 0 || segmentAt(ref, offset) != len(parts)-1 {
 		return nil
 	}
 	last := parts[len(parts)-1]

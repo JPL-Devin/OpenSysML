@@ -487,7 +487,7 @@ func (w *Workspace) ResolveQualifiedSegmentsInDoc(name string, scope *symbols.Sc
 // ResolveReferenceSegmentsInDoc is ResolveQualifiedSegmentsInDoc for one name
 // occurrence (see ResolveReferenceInDoc).
 func (w *Workspace) ResolveReferenceSegmentsInDoc(name string, ref resolve.Reference) []*symbols.Symbol {
-	if ref.QN == nil {
+	if ref.QN == nil || len(ref.QN.Parts) == 0 {
 		return nil
 	}
 	w.mu.RLock()
@@ -509,7 +509,7 @@ func (w *Workspace) ResolveReferenceSegmentsInDoc(name string, ref resolve.Refer
 // what each segment's name *is* rather than the element it reaches, so a segment
 // written as an alias name is the alias. Rename edits names, not elements.
 func (w *Workspace) ResolveReferenceNameSegmentsInDoc(name string, ref resolve.Reference) []*symbols.Symbol {
-	if ref.QN == nil {
+	if ref.QN == nil || len(ref.QN.Parts) == 0 {
 		return nil
 	}
 	w.mu.RLock()
