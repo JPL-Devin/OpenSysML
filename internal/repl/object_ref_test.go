@@ -459,6 +459,39 @@ func TestStructuredAttributesAreObjects(t *testing.T) {
 	wants(t, run(t, s, "%features #"+id), "Instance: #"+id+" (ID: "+id+")", "x = 1.0")
 }
 
+// A variation's object is of whichever variant is selected, so completion offers
+// the path to it once the selection is materialized, and the object-holding
+// features of the variant beyond it, still reading and materializing nothing.
+func TestCompleteSelectedVariation(t *testing.T) {
+	s := submitted(t, `package Demo {
+	part def Block { attribute mass = 2.0; }
+	part def Engine { attribute size = 1.0; part block : Block; }
+	abstract part family {
+		variation part engine : Engine {
+			variant part electric : Engine;
+			variant part petrol : Engine;
+		}
+	}
+	part sedan :> family { part :>> engine = engine::electric; }
+}`)
+	run(t, s, "%instantiate sedan")
+	if got := s.Complete("%features sedan.", len("%features sedan.")).Candidates; contains(got, "sedan.engine") {
+		t.Errorf("an unread variation, whose variant is not known yet, was offered: %v", got)
+	}
+	wants(t, run(t, s, "%features sedan"), "engine = electric (Instance ID: 2)")
+	before := s.rtCtx.InstanceIDs()
+	if got := s.Complete("%features sedan.", len("%features sedan.")).Candidates; !contains(got, "sedan.engine") {
+		t.Errorf("the selected variation is not offered: %v", got)
+	}
+	if got := s.Complete("%features sedan.engine.", len("%features sedan.engine.")).Candidates; fmt.Sprint(got) != "[sedan.engine.block]" {
+		t.Errorf("the variant's parts are not offered: %v", got)
+	}
+	if after := s.rtCtx.InstanceIDs(); fmt.Sprint(after) != fmt.Sprint(before) {
+		t.Errorf("completion materialized objects: ids %v, were %v", after, before)
+	}
+	wants(t, run(t, s, "%features sedan.engine.block"), "mass = 2.0")
+}
+
 // A debugger performed by a nested object under quoted names keeps running over
 // an unrelated declaration: the label the session holds the performer under is
 // read back as the reference it spells.
@@ -631,5 +664,111 @@ func TestCollectionElementsCarryImplicitSubjects(t *testing.T) {
 		run(t, s, "%instantiate car")
 		wants(t, run(t, s, "%eval Garage::Wheel::psi"),
 			"carried by more than one object of this session (Garage::car::wheels[1], Garage::car::wheels[2], #"+car+"::wheels[1], #"+car+"::wheels[2])")
+	})
+}
+
+// A declared name spelled like an id ('#3') or an indexed element ('hub[2]') is
+// a name: the REPL reports it quoted, so every label it prints reads back to
+// the object it printed it for, and the generated `#<id>` and `[<n>]` stay
+// distinguishable from names.
+func TestReservedLookingNamesStayNames(t *testing.T) {
+	const odd = `package Odd {
+	part def Hub {
+		attribute bolts : ScalarValues::Integer = 5;
+		constraint tight { bolts > 4 }
+	}
+	part def Wheel {
+		part '#7' : Hub;
+		part 'hub[2]' : Hub;
+	}
+	part def Cart { part 'wheel[2]' : Wheel[1..3]; }
+	state def Check {
+		entry; then checking;
+		state checking {
+			accept after 5 then checked;
+		}
+		state checked;
+	}
+	part '#3' : Wheel;
+	part 'car[2]' : Wheel;
+	part cart : Cart;
+}`
+	// carriersIn reads the labels an ambiguity lists back out of its message.
+	carriersIn := func(t *testing.T, out string) []string {
+		t.Helper()
+		_, listed, ok := strings.Cut(out, "of this session (")
+		listed, _, _ = strings.Cut(listed, ")")
+		if !ok || listed == "" {
+			t.Fatalf("no carriers listed in:\n%s", out)
+		}
+		return strings.Split(listed, ", ")
+	}
+	// eachResolves asserts every label names an object of its own.
+	eachResolves := func(t *testing.T, s *Session, labels []string) {
+		t.Helper()
+		seen := make(map[int64]string, len(labels))
+		for _, label := range labels {
+			inst, reported, err := s.resolveObject(label)
+			if err != nil {
+				t.Errorf("label %s does not read back: %v", label, err)
+				continue
+			}
+			if reported != label {
+				t.Errorf("label %s reads back as %s", label, reported)
+			}
+			if other, dup := seen[inst.ID]; dup {
+				t.Errorf("labels %s and %s name one object, #%d", other, label, inst.ID)
+			}
+			seen[inst.ID] = label
+		}
+	}
+
+	t.Run("roots and features", func(t *testing.T) {
+		s := submitted(t, odd)
+		wants(t, run(t, s, "%instantiate '#3'"), "Created instance of Odd::'#3'", "ID: 1")
+		wants(t, run(t, s, "%features '#3'"), "Instance: Odd::'#3' (ID: 1)")
+		wants(t, run(t, s, "%features #1"), "Instance: #1 (ID: 1)")
+		wants(t, run(t, s, "%features #3"), "Instance: #3 (ID: 3)")
+		wants(t, run(t, s, "%features '#3'.'#7'"), "Instance: Odd::'#3'::'#7' (ID: ", "bolts = 5")
+		wants(t, run(t, s, "%features '#3'::'hub[2]'"), "Instance: Odd::'#3'::'hub[2]' (ID: ", "bolts = 5")
+		wants(t, run(t, s, "%features '#3'.hub[2]"), "error:", `Odd::'#3' has no feature "hub"`)
+		if got := s.Complete("%features '#3'.", len("%features '#3'.")).Candidates; fmt.Sprint(got) != "['#3'.'#7' '#3'.'hub[2]']" {
+			t.Errorf("completion offered %v", got)
+		}
+		wants(t, run(t, s, "%instantiate 'car[2]'"), "Created instance of Odd::'car[2]'")
+		wants(t, run(t, s, "%features 'car[2]'"), "Instance: Odd::'car[2]' (ID: ")
+		wants(t, run(t, s, "%features car[2]"), "error:", "car[2] takes no index")
+		wants(t, run(t, s, "%eval in 'car[2]'.'hub[2]' : bolts"), "= 5", "(on Odd::'car[2]'::'hub[2]' ID: ")
+
+		out := run(t, s, "%eval Odd::Hub::bolts")
+		wants(t, out, "error:", "carried by more than one object of this session (Odd::'#3'::'#7', Odd::'#3'::'hub[2]', Odd::'car[2]'::'#7', Odd::'car[2]'::'hub[2]')")
+		eachResolves(t, s, carriersIn(t, out))
+	})
+
+	t.Run("displaced root and indexed element", func(t *testing.T) {
+		s := submitted(t, odd)
+		run(t, s, "%instantiate '#3'")
+		run(t, s, "%instantiate '#3'")
+		wants(t, run(t, s, "%features #1"), "Instance: #1 (ID: 1)")
+		rejects(t, run(t, s, "%features '#3'"), "(ID: 1)")
+		wants(t, run(t, s, "%instantiate cart"), "Created instance of Odd::cart")
+		wants(t, run(t, s, "%features cart.'wheel[2]'[1]"), "Instance: Odd::cart::'wheel[2]'[1] (ID: ")
+		wants(t, run(t, s, "%features cart.'wheel[2]'"), "error:", "'wheel[2]' of Odd::cart holds 1 object: pick one by index, 'wheel[2]'[1] to 'wheel[2]'[1]")
+		wants(t, run(t, s, "%features cart.'wheel[2]'[1].'#7'"), "Instance: Odd::cart::'wheel[2]'[1]::'#7' (ID: ")
+
+		out := run(t, s, "%constraint Odd::Hub::tight")
+		wants(t, out, "error:", "(Odd::'#3'::'#7', Odd::'#3'::'hub[2]', Odd::cart::'wheel[2]'[1]::'#7', Odd::cart::'wheel[2]'[1]::'hub[2]', #1::'#7', #1::'hub[2]')")
+		eachResolves(t, s, carriersIn(t, out))
+	})
+
+	t.Run("debugger performer", func(t *testing.T) {
+		s := submitted(t, odd)
+		run(t, s, "%instantiate '#3'")
+		wants(t, run(t, s, "%state Odd::Check '#3'.'hub[2]'"), "Started state machine executor")
+		if res := s.Submit("package Other { part def Unrelated; }"); len(res.Notices) > 0 {
+			t.Fatalf("unrelated declaration reported %v", res.Notices)
+		}
+		wants(t, run(t, s, "%current"), "checking")
+		wants(t, run(t, s, "%advance 5"), "Current state: checked")
 	})
 }

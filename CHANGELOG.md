@@ -97,9 +97,12 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   are, a segment that is no feature names the object and its features, an attribute at the end
   of a path says it holds a value, and a multi-valued part with no index says how many objects it
   holds and how to pick one. <kbd>Tab</kbd> completes references where a command takes one: `#`
-  offers the ids, `car.` the objects `car` holds ([reference](docs/reference/repl-commands.md#object-references)).
+  offers the ids, `car.` the objects `car` holds — a variation among them once a command has read
+  which variant it selected ([reference](docs/reference/repl-commands.md#object-references)).
   Names that need quoting are completed as the notation writes them, `'the ra` to `'the rack'` and
-  `Q::'the ra` to `Q::'the rack'`, the closing quote typed or not.
+  `Q::'the ra` to `Q::'the rack'`, the closing quote typed or not, and every object a command
+  reports is spelled that way too, so a name that merely looks like an id or an index (`Demo::'#3'`,
+  `car::'hub[2]'`) reads back as the name it is.
 
 ### Performance
 
