@@ -48,6 +48,32 @@ func TestOptionalScalarFeatureHoldsOnlyContributions(t *testing.T) {
 	}
 }
 
+// A valueless optional declaration evaluates to the empty sequence whether it is
+// named bare or qualified; a required one keeps its no-value error both ways.
+func TestValuelessOptionalDeclarationEvaluatesEmptyHoweverSpelled(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		private import ScalarValues::*;
+		part def P { attribute tags : String[0..*]; attribute mass : Real; }
+		attribute names : String[0..*];
+		attribute weight : Real;
+	}`))
+	pkg, ok := idx.DocumentRoot("<test>").LookupLocal("test")
+	if !ok || pkg.Scope == nil {
+		t.Fatal("test package not indexed")
+	}
+	for _, src := range []string{"names", "test::names", "P::tags", "test::P::tags"} {
+		val, err := evalIn(t, ctx, pkg.Scope, src)
+		if err != nil || elementCount(&val) != 0 {
+			t.Errorf("%s = %s, %v; want the empty sequence", src, FormatValue(val), err)
+		}
+	}
+	for _, src := range []string{"weight", "test::weight", "P::mass", "test::P::mass"} {
+		if val, err := evalIn(t, ctx, pkg.Scope, src); err == nil {
+			t.Errorf("%s = %s, want a no-value error", src, FormatValue(val))
+		}
+	}
+}
+
 // A required feature holding nothing is still uninitialized when read.
 func TestRequiredUnsetFeatureReadsAsUninitialized(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {

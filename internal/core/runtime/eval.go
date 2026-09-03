@@ -528,6 +528,10 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 				ErrNoValue, qualifiedNameToString(qn), ec.ctx.calcUsageOutputSummary(currentSym),
 			)
 		}
+		// A valueless feature admitting nothing is the empty sequence, however spelled.
+		if val, ok := ec.emptyDeclaredFeature(currentSym); ok {
+			return val, nil
+		}
 		return Value{}, fmt.Errorf("usage %s has no value", qualifiedNameToString(qn))
 	case *ast.Definition:
 		// Definitions are types, not values
