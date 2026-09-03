@@ -120,25 +120,35 @@ func (h *stateStmtHost) effect(s lower.Effect) error {
 }
 
 // performNode runs a nested action of a block in a frame of the body; a typed one
-// performs its callee, whose final features become the node's pins.
+// performs its callee, whose final features become the node's pins and whose
+// outputs return outward once the node's own body has run.
 func (h *stateStmtHost) performNode(engine *stmtEngine, graph *lower.ActionGraph, node *ast.Usage) (stmtFlow, error) {
 	inv, performs := nestedInvocation(node)
 	if !performs {
-		return engine.nodeInBlock(graph, node, nil)
+		_, flow, err := engine.nodeInBlock(graph, node, nil)
+		return flow, err
 	}
 	caller := engine.env.values()
-	return engine.nodeInBlock(graph, node, func(pins map[string]Value) (map[string]Value, error) {
-		features, outputs, err := invokeAction(h.exec.ctx, graph.Scope, inv, pins, caller, h.exec.self)
+	var outputs []string
+	frame, flow, err := engine.nodeInBlock(graph, node, func(pins map[string]Value) (map[string]Value, error) {
+		features, out, err := invokeAction(h.exec.ctx, graph.Scope, inv, pins, caller, h.exec.self)
 		if err != nil {
 			return nil, err
 		}
-		for _, name := range slices.Sorted(maps.Keys(outputs)) {
-			if err := h.returnOutput(engine.env, name, outputs[name]); err != nil {
-				return nil, err
-			}
-		}
+		outputs = slices.Sorted(maps.Keys(out))
 		return features, nil
 	})
+	if err != nil {
+		return flow, err
+	}
+	for _, name := range outputs {
+		if value, ok := frame[name]; ok {
+			if err := h.returnOutput(engine.env, name, value); err != nil {
+				return flow, err
+			}
+		}
+	}
+	return flow, nil
 }
 
 // returnOutput writes an output a node's performance produced to the innermost

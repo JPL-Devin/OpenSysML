@@ -43,6 +43,9 @@ type actionFrame struct {
 	// performs is the flow of the action a typed or invoked node performed, whose
 	// subactions the node's performance adopted as its own. nil otherwise.
 	performs *lower.ActionGraph
+	// outputs names the output parameters of that action, which return to the
+	// same-named enclosing features once the performance ends.
+	outputs []string
 	// subactions holds the latest performance of each node of graph, which is
 	// what a read of the node's pins by name sees.
 	subactions map[ast.Node]*actionFrame
@@ -166,9 +169,19 @@ func (e *ActionExecutor) seedDeclaredValues(perf *actionFrame, features []lower.
 	return nil
 }
 
-// endPerformance completes a performance: the bindings at its output pins carry
-// what it produced to their other ends.
+// endPerformance completes a performance: the outputs of the action it performed
+// return to same-named enclosing features, and the bindings at its output pins
+// carry what it produced to their other ends.
 func (e *ActionExecutor) endPerformance(perf *actionFrame) error {
+	for _, name := range perf.outputs {
+		value, ok := perf.data[name]
+		if !ok {
+			continue
+		}
+		if _, err := e.assignEnclosing(perf, name, value); err != nil {
+			return err
+		}
+	}
 	return e.bindOutputPins(perf)
 }
 
@@ -645,7 +658,8 @@ func bindingEndText(end ast.Node) string {
 }
 
 // performInvocation performs the action a node names as a subperformance of perf: caller-side
-// arguments bind the callee's inputs by its order/names, its final values become the node's.
+// arguments bind the callee's inputs by its order/names, its final values become the node's,
+// and its outputs return to enclosing features when the node's own performance ends.
 func (e *ActionExecutor) performInvocation(perf *actionFrame, inv actionInvocation) error {
 	scope := perf.flow.Scope
 	sym, err := resolveActionSymbol(e.ctx, scope, inv)
@@ -693,18 +707,9 @@ func (e *ActionExecutor) performInvocation(perf *actionFrame, inv actionInvocati
 	if err != nil {
 		return fmt.Errorf("invoke action %s: %w", qualifiedNameText(inv.target), err)
 	}
-	results := callee.root.data
 	perf.adopt(callee)
 	sort.Strings(out)
-	for _, name := range out {
-		value, ok := results[name]
-		if !ok {
-			continue
-		}
-		if _, err := e.assignEnclosing(perf, name, value); err != nil {
-			return err
-		}
-	}
+	perf.outputs = out
 	return nil
 }
 

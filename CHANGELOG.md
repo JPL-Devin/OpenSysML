@@ -115,7 +115,9 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   it states, holds every pin of the callee as it ended (an argument overriding the node's own
   default included) for its body to read, and returns its `out` values to a same-named block
   local, state attribute or state datum that exists — before, the node's `in x = i` and body
-  statements were skipped and the callee saw only state data. A
+  statements were skipped and the callee saw only state data. In an action body as in a state's,
+  those `out` values return once the node's own body has run, so a body that rewrites an output
+  returns what it wrote rather than what the callee produced. A
   `perform` in statement form and a
   state's entry/do/exit action now refuse an `in` without a default that nothing binds
   (`ErrUnboundParameter`) instead of failing later inside the callee. A
