@@ -35,7 +35,6 @@ func (TypeCheckPass) Run(ctx *Context, name string, root *ast.RootNamespace) []D
 	}
 	tc.expr.walkMembers = tc.walk
 	tc.walk(rootScope, root.Members)
-	(&assignWalker{expr: tc.expr}).walk(rootScope, root.Members)
 	return append(tc.diags, tc.expr.diags...)
 }
 
@@ -91,7 +90,9 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 }
 
 // checkBehaviorMember types the expressions carried by behavior body members
-// (calc results, constraints, guards, conditions, assignments).
+// (calc results, constraints, guards, conditions, assignments) and descends
+// every body a state, transition or action node declares, in the scope the
+// symbol builder gave that body.
 func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 	switch m := n.(type) {
 	case *ast.ConstraintMember:
@@ -129,10 +130,37 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 		tc.expr.checkBoolean(body, m.Until, "condition of 'until'")
 		tc.walk(body, m.Body)
 	case *ast.TransitionMember:
+		// The effect and body see the parameters the trigger declares; the
+		// guard is the transition guard pass's.
 		tc.checkTrigger(scope, m.Trigger)
+		body := symbols.TriggerScope(scope, m)
+		tc.walk(body, m.Effect)
+		tc.walk(body, m.Members)
+	case *ast.EntryMember:
+		tc.walk(scope, m.Actions)
+	case *ast.DoMember:
+		tc.walk(scope, m.Actions)
+	case *ast.ExitMember:
+		tc.walk(scope, m.Actions)
+	case *ast.StateNode:
+		body := childScopeOr(scope, m)
+		tc.walk(body, m.Entry)
+		tc.walk(body, m.Do)
+		tc.walk(body, m.Exit)
+		tc.walk(body, m.Substates)
+		for _, region := range m.Regions {
+			tc.checkBehaviorMember(body, region)
+		}
+	case *ast.StateRegion:
+		tc.walk(childScopeOr(scope, m), m.States)
+	case *ast.SendStatement:
+		tc.walk(childScopeOr(scope, m), m.Members)
+	case *ast.SuccessionEdge:
+		tc.walk(childScopeOr(scope, m), m.Members)
+	case *ast.InitialNode, *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
+		tc.walk(childScopeOr(scope, m), ast.NodeBodyMembers(m))
 	case *ast.AssignmentActionNode:
-		// Both the value and the feature it is written to are checked by the
-		// assignment walk, which reaches every body an `assign` may stand in.
+		tc.expr.checkAssignmentValue(scope, m)
 	case *ast.ActionExecutionNode:
 		tc.expr.infer(scope, m.Expression)
 	case *ast.SubjectMember:

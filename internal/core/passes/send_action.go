@@ -157,7 +157,8 @@ func (c *sendActionChecker) checkPayload(send *ast.SendStatement) {
 	})
 }
 
-// check types the arguments of one send and checks its sender and receiver.
+// check types the arguments of one send and checks its sender and receiver; the
+// body's declarations, a payload binding among them, are the type checker's.
 func (c *sendActionChecker) check(scope *symbols.Scope, send *ast.SendStatement) {
 	if send.Message != nil && !c.ctx.DownstreamOfFailure(send.Message) {
 		c.expr.infer(scope, send.Message)
@@ -168,11 +169,7 @@ func (c *sendActionChecker) check(scope *symbols.Scope, send *ast.SendStatement)
 		c.checkSender(scope, send.Target)
 	}
 	c.checkReceiver(scope, receiver)
-	body := childScopeOr(scope, send)
-	if payload := lower.SendPayload(send); payload != nil && !c.ctx.DownstreamOfFailure(payload) {
-		c.expr.infer(body, payload)
-	}
-	c.walk(body, send.Members)
+	c.walk(childScopeOr(scope, send), send.Members)
 }
 
 // sendArgument is a send argument as classified: the feature it names, or else

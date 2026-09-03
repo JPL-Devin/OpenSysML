@@ -127,6 +127,43 @@ func TestConstructorArgumentTypeMismatchIsReported(t *testing.T) {
 	}
 }
 
+// A constructor written in the body a send, a succession, a transition or a
+// state subaction declares is checked like one written anywhere else.
+func TestConstructorInActionNodeBodiesIsChecked(t *testing.T) {
+	bodies := map[string]func(value string) string{
+		"send body": func(value string) string {
+			return `action m; send m to ground { in delay = ` + value + `; }`
+		},
+		"succession body": func(value string) string {
+			return `action m; action n; first m; then n { attribute q = ` + value + `; }`
+		},
+		"transition body": func(value string) string {
+			return `state def S { state s; state u; transition s then u { attribute z = ` + value + `; } }`
+		},
+		"state subaction body": func(value string) string {
+			return `state def S { state s { entry action e { attribute w = ` + value + `; } } }`
+		},
+	}
+	values := map[string]struct{ value, at, want string }{
+		"arity": {value: `new Telemetry(3, "hi", 7, 9)`, at: "9", want: "new Telemetry takes 3 argument(s), found 4"},
+		"label": {value: `new Telemetry(frames = 3, frames = 4)`, at: "frames", want: "frames of Telemetry is already bound"},
+		"type":  {value: `new Telemetry("hi")`, at: `"hi"`, want: "frames of Telemetry expects Integer, found String"},
+	}
+	for bodyName, body := range bodies {
+		for valueName, c := range values {
+			t.Run(bodyName+"/"+valueName, func(t *testing.T) {
+				src := constructorModel(body(c.value))
+				assertOneConstructorDiag(t, src, constructorDiags(t, src), c.at, c.want)
+			})
+		}
+		t.Run(bodyName+"/well-formed", func(t *testing.T) {
+			if got := analyzeAll(t, "ctor.sysml", constructorModel(body(`new Telemetry(3, "hi", 7)`))); len(got) != 0 {
+				t.Errorf("unexpected diagnostics: %+v", got)
+			}
+		})
+	}
+}
+
 // A qualified label is resolved in scope and must still name a feature of the
 // constructed type.
 func TestConstructorQualifiedLabelMustBeAFeatureOfTheType(t *testing.T) {
