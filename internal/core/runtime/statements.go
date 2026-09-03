@@ -403,8 +403,14 @@ func (e *stmtEngine) blockNode(graph *lower.ActionGraph, node ast.Node) (stmtFlo
 }
 
 // nodeInBlock runs a nested action of a block's flow for a host keeping no
-// performances: its features are declared in a frame of the body its body runs in.
-func (e *stmtEngine) nodeInBlock(graph *lower.ActionGraph, node *ast.Usage) (stmtFlow, error) {
+// performances: its features are declared in a frame of the body its body runs in,
+// and perform, when given, performs the action the node names with those pins,
+// its outputs joining the frame before the body runs.
+func (e *stmtEngine) nodeInBlock(
+	graph *lower.ActionGraph,
+	node *ast.Usage,
+	perform func(pins map[string]Value) (map[string]Value, error),
+) (stmtFlow, error) {
 	if connectsPins(graph, node) {
 		return flowNext, fmt.Errorf("%s: a binding or flow at a pin of %s in a body is not executable",
 			e.host.describe(), nodeDescription(node))
@@ -412,6 +418,7 @@ func (e *stmtEngine) nodeInBlock(graph *lower.ActionGraph, node *ast.Usage) (stm
 	e.env.enter()
 	defer e.env.leave()
 	defer e.enterActivation()()
+	pins := make(map[string]Value, len(graph.Features[node]))
 	for _, feature := range graph.Features[node] {
 		if feature.Value == nil {
 			continue
@@ -421,6 +428,16 @@ func (e *stmtEngine) nodeInBlock(graph *lower.ActionGraph, node *ast.Usage) (stm
 			return flowNext, fmt.Errorf("eval %s of %s: %w", feature.Name, nodeDescription(node), err)
 		}
 		e.env.declare(feature.Name, value)
+		pins[feature.Name] = value
+	}
+	if perform != nil {
+		outputs, err := perform(pins)
+		if err != nil {
+			return flowNext, err
+		}
+		for name, value := range outputs {
+			e.env.declare(name, value)
+		}
 	}
 	return e.run(graph.Bodies[node])
 }

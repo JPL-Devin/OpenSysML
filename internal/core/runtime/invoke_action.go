@@ -66,7 +66,8 @@ func nestedInvocation(usage *ast.Usage) (actionInvocation, bool) {
 // accepts and sends carries that object's identity.
 //
 // The callee gets a fresh executor with its own tokens, so values cross the
-// boundary only through parameters: arguments (or, for an argument-less
+// boundary only through parameters: pins, the values of the parameters the
+// performing node declares itself, then arguments (or, for an argument-less
 // invocation, caller values of the same name) seed the callee's `in` and `inout`
 // parameters, and its `out` and `inout` parameters come back to the caller. An
 // action with no parameters therefore reads and writes nothing in its caller.
@@ -74,6 +75,7 @@ func invokeAction(
 	ctx *Context,
 	scope *symbols.Scope,
 	inv actionInvocation,
+	pins map[string]Value,
 	data map[string]Value,
 	self *Instance,
 ) (map[string]Value, error) {
@@ -94,6 +96,11 @@ func invokeAction(
 	params := ctx.actionParametersOf(sym)
 	in, out := parameterNames(params)
 	inputs := make(map[string]Value, len(in))
+	for _, name := range in {
+		if value, ok := pins[name]; ok {
+			inputs[name] = value
+		}
+	}
 	if inv.invoked {
 		ec := NewEvalContext(ctx, scope)
 		ec.Push(data)
@@ -105,6 +112,9 @@ func invokeAction(
 		// A bare `perform`/typed usage reads the caller's values of the parameters'
 		// own names, which is how data reaches an action performed inside a flow.
 		for _, name := range in {
+			if _, bound := inputs[name]; bound {
+				continue
+			}
 			if value, ok := data[name]; ok {
 				inputs[name] = value
 			}

@@ -38,6 +38,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("node_invocation_unknown_named_argument", testNodeInvocationUnknownNamedArgument)
 	t.Run("performed_action_input_bound_by_nothing", testPerformedActionInputBoundByNothing)
 	t.Run("state_entry_action_input_bound_by_nothing", testStateEntryActionInputBoundByNothing)
+	t.Run("state_block_typed_node_input_bound_by_nothing", testStateBlockTypedNodeInputBoundByNothing)
 	t.Run("node_binding_to_a_non_parameter", testNodeBindingToANonParameter)
 	t.Run("node_pin_bound_to_unequal_values", testNodePinBoundToUnequalValues)
 	t.Run("block_node_binding_to_a_non_parameter", testBlockNodeBindingToANonParameter)
@@ -8233,6 +8234,41 @@ func testStateEntryActionInputBoundByNothing(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "b") {
 		t.Errorf("error %q does not name the unbound parameter", err)
+	}
+}
+
+// testStateBlockTypedNodeInputBoundByNothing: a typed node in a branch of a
+// state's body binds the callee's inputs from the pins it declares and the
+// values in scope, so one it leaves unbound is reported before its body runs.
+func testStateBlockTypedNodeInputBoundByNothing(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {`+adderActionDef+`
+		state Machine {
+			attribute total : Integer = 0;
+			entry; then init;
+			state init;
+			state active {
+				entry action {
+					if total == 0 {
+						action adding : Adder {
+							in a = 1;
+							assign total := sum;
+						}
+					}
+				}
+			}
+			succession first init then active;
+			succession first active then done;
+		}
+	}`)
+	err := exec.RunToCompletion()
+	if !errors.Is(err, ErrUnboundParameter) {
+		t.Fatalf("error = %v, want ErrUnboundParameter", err)
+	}
+	if !strings.Contains(err.Error(), "b") {
+		t.Errorf("error %q does not name the unbound parameter", err)
+	}
+	if total := exec.StateData()["total"]; !valueEqual(total, integerValue(0)) {
+		t.Errorf("total = %v, want 0: the node's body must not run", total)
 	}
 }
 

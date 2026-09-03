@@ -107,7 +107,7 @@ func (h *actionStmtHost) effect(s lower.Effect) error {
 	// The performed action reads the values in scope where it is performed and its
 	// outputs come back to them, so a perform in a loop body sees that iteration.
 	env := h.engine.env
-	outputs, err := invokeAction(h.exec.ctx, s.Scope, inv, env.values(), h.exec.self)
+	outputs, err := invokeAction(h.exec.ctx, s.Scope, inv, nil, env.values(), h.exec.self)
 	if err != nil {
 		return fmt.Errorf("%s: %w", h.describe(), err)
 	}

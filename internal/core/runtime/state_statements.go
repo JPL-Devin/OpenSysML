@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
@@ -117,13 +119,42 @@ func (h *stateStmtHost) effect(s lower.Effect) error {
 	return fmt.Errorf("%s: '%s' in a body is not executable", h.describe(), s.Kind)
 }
 
-// performNode runs a nested action declared in a block of the body: one naming
-// an action to perform performs it, any other runs in a frame of the body.
+// performNode runs a nested action declared in a block of the body in a frame of
+// the body. One naming an action performs it with the pins it declares: outputs
+// the node declares are its own, any other writes state data as a `perform` does.
 func (h *stateStmtHost) performNode(engine *stmtEngine, graph *lower.ActionGraph, node *ast.Usage) (stmtFlow, error) {
-	if inv, performs := nestedInvocation(node); performs {
-		return flowNext, h.exec.invokeNested(inv)
+	inv, performs := nestedInvocation(node)
+	if !performs {
+		return engine.nodeInBlock(graph, node, nil)
 	}
-	return engine.nodeInBlock(graph, node)
+	caller := engine.env.values()
+	return engine.nodeInBlock(graph, node, func(pins map[string]Value) (map[string]Value, error) {
+		outputs, err := invokeAction(h.exec.ctx, graph.Scope, inv, pins, caller, h.exec.self)
+		if err != nil {
+			return nil, err
+		}
+		own := make(map[string]Value, len(outputs))
+		for _, name := range slices.Sorted(maps.Keys(outputs)) {
+			if declaresFeature(graph, node, name) {
+				own[name] = outputs[name]
+				continue
+			}
+			if err := h.exec.writeStateValue(name, outputs[name]); err != nil {
+				return nil, err
+			}
+		}
+		return own, nil
+	})
+}
+
+// declaresFeature reports whether node declares a parameter or attribute named name.
+func declaresFeature(graph *lower.ActionGraph, node ast.Node, name string) bool {
+	for _, feature := range graph.Features[node] {
+		if feature.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 // performedInvocation reports the action a `perform` statement names, in either

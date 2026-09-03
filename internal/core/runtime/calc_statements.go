@@ -95,5 +95,5 @@ func (h *calcStmtHost) performNode(engine *stmtEngine, graph *lower.ActionGraph,
 	if _, performs := nestedInvocation(node); performs {
 		return flowNext, fmt.Errorf("%w: a calculation cannot perform action %s", ErrCalcSideEffect, ActionNodeName(node))
 	}
-	return engine.nodeInBlock(graph, node)
+	return engine.nodeInBlock(graph, node, nil)
 }

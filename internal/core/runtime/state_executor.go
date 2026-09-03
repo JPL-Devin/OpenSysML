@@ -2,7 +2,9 @@ package runtime
 
 import (
 	"fmt"
+	"maps"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 
@@ -2300,19 +2302,25 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 // passing state data in through the callee's input parameters and merging its
 // output parameters back into state data.
 func (e *StateExecutor) invokeNested(inv actionInvocation) error {
-	outputs, err := invokeAction(e.ctx, e.stateMachine.Scope, inv, e.stateData, e.self)
+	outputs, err := invokeAction(e.ctx, e.stateMachine.Scope, inv, nil, e.stateData, e.self)
 	if err != nil {
 		return err
 	}
-	for name, value := range outputs {
-		if e.declaresAttribute(name) {
-			if err := e.assignAttribute(name, value); err != nil {
-				return err
-			}
-			continue
+	for _, name := range slices.Sorted(maps.Keys(outputs)) {
+		if err := e.writeStateValue(name, outputs[name]); err != nil {
+			return err
 		}
-		e.stateData[name] = value
 	}
+	return nil
+}
+
+// writeStateValue writes a value a performed action returned to the machine's
+// attribute of that name, or to its state data where it declares none.
+func (e *StateExecutor) writeStateValue(name string, value Value) error {
+	if e.declaresAttribute(name) {
+		return e.assignAttribute(name, value)
+	}
+	e.stateData[name] = value
 	return nil
 }
 
