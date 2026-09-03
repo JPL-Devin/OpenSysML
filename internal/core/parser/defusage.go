@@ -628,8 +628,7 @@ func endsEnumeratedValueName(t lexer.Token) bool {
 }
 
 // prefixMetadataEndAt returns the offset just past the `#Name` prefixes that
-// begin off tokens ahead, or off when none do. The name is read as
-// parseQualifiedNameRelaxed reads it: an optional `$::`, then keywords allowed.
+// begin off tokens ahead, reading each name as parseQualifiedNameRelaxed does.
 func (p *Parser) prefixMetadataEndAt(off int) int {
 	for p.peekN(off).Kind == lexer.Hash {
 		off++
