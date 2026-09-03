@@ -14,7 +14,10 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-const queryBaseFQN = "DocumentQueries::Query"
+const (
+	queryBaseFQN = "DocumentQueries::Query"
+	elementFQN   = "KerML::Root::Element"
+)
 
 type builtin struct {
 	operation Operation
@@ -33,9 +36,13 @@ var builtins = map[string]builtin{
 	"DocumentQueries::Project":         {OperationProject},
 }
 
+// typedExpression pairs a compiled expression with what planning knows of its
+// value: the types it may take, the fixed model elements it names, and its
+// multiplicity.
 type typedExpression struct {
 	expression        Expression
 	types             []*symbols.Symbol
+	elements          []*symbols.Symbol
 	multiplicity      Multiplicity
 	nonconformingType string
 }
@@ -297,32 +304,6 @@ func (c *compiler) compileDefaultExpression(
 	node ast.Node,
 	dependency func(string),
 ) (Expression, error) {
-	switch expression := node.(type) {
-	case *ast.FeatureReference:
-		if element, ok := c.namedElement(query, owner, expression); ok {
-			return Expression{
-				operation: OperationElement,
-				target:    symbols.FQNOf(element),
-				element:   element,
-				origin:    provenance.Node(owner.DocName, node),
-			}, nil
-		}
-	case *ast.SequenceExpr:
-		// Element naming applies to each member, so a list of names binds those elements.
-		args := make([]Argument, 0, len(expression.Elements))
-		for _, element := range expression.Elements {
-			value, err := c.compileDefaultExpression(query, owner, parameter, params, element, dependency)
-			if err != nil {
-				return Expression{}, err
-			}
-			args = append(args, Argument{Value: value})
-		}
-		return Expression{
-			operation: OperationSequence,
-			arguments: args,
-			origin:    provenance.Node(owner.DocName, node),
-		}, nil
-	}
 	value, err := c.compileExpression(query, owner, params, node, dependency)
 	if err != nil {
 		var planning *Error
@@ -337,28 +318,6 @@ func (c *compiler) compileDefaultExpression(
 		return Expression{}, err
 	}
 	return value.expression, nil
-}
-
-// namedElement resolves a default's name to a model element that is not one
-// of the query's own parameters.
-func (c *compiler) namedElement(
-	query *symbols.Symbol,
-	owner *symbols.Symbol,
-	reference *ast.FeatureReference,
-) (*symbols.Symbol, bool) {
-	target, ok := c.resolver.ResolveQualified(owner.Scope, reference.Name)
-	if !ok || target == nil {
-		return nil, false
-	}
-	for _, param := range c.model.BehaviorParametersOf(query) {
-		if c.parameterIncludes(param.Symbol, target) {
-			return nil, false
-		}
-	}
-	if canonical, ok := c.resolver.ResolveAliasTarget(target); ok {
-		target = canonical
-	}
-	return target, true
 }
 
 func (c *compiler) parameterType(sym *symbols.Symbol) string {
@@ -555,12 +514,12 @@ func (c *compiler) compileExpression(
 ) (typedExpression, error) {
 	switch expression := node.(type) {
 	case *ast.FeatureReference:
-		return c.compileParameterReference(query, owner, expression)
+		return c.compileReference(query, owner, expression)
 	case *ast.InvocationExpr:
 		return c.compileInvocation(query, owner, params, expression, dependency)
 	case *ast.SequenceExpr:
 		args := make([]Argument, 0, len(expression.Elements))
-		var types []*symbols.Symbol
+		var types, elements []*symbols.Symbol
 		multiplicity := Multiplicity{Known: true}
 		nonconformingType := ""
 		for _, element := range expression.Elements {
@@ -570,6 +529,7 @@ func (c *compiler) compileExpression(
 			}
 			args = append(args, Argument{Value: value.expression})
 			types = append(types, value.types...)
+			elements = append(elements, value.elements...)
 			multiplicity = sumMultiplicity(multiplicity, value.multiplicity)
 			if nonconformingType == "" {
 				nonconformingType = value.nonconformingType
@@ -582,6 +542,7 @@ func (c *compiler) compileExpression(
 				origin:    provenance.Node(owner.DocName, node),
 			},
 			types:             types,
+			elements:          elements,
 			multiplicity:      multiplicity,
 			nonconformingType: nonconformingType,
 		}, nil
@@ -616,34 +577,54 @@ func (c *compiler) compileExpression(
 	}
 }
 
-func (c *compiler) compileParameterReference(
+// compileReference follows the %run-query binding rule: a name that denotes
+// one of the query's input parameters reads that parameter, and any other
+// name that denotes a model element binds that element.
+func (c *compiler) compileReference(
 	query *symbols.Symbol,
 	owner *symbols.Symbol,
 	expression *ast.FeatureReference,
 ) (typedExpression, error) {
-	target, ok := c.resolver.ResolveQualified(owner.Scope, expression.Name)
-	if ok {
-		for _, param := range c.model.BehaviorParametersOf(query) {
-			if !param.IsResult && c.parameterIncludes(param.Symbol, target) {
-				return typedExpression{
-					expression: Expression{
-						operation: OperationParameter,
-						target:    param.Symbol.Name,
-						origin:    provenance.Node(owner.DocName, expression),
-					},
-					types:        symbolSlice(c.parameterTypeSymbol(param.Symbol)),
-					multiplicity: c.parameterMultiplicity(param.Symbol),
-				}, nil
-			}
-		}
-	}
-	name := qualifiedName(expression.Name)
-	return typedExpression{}, &Error{
+	unknown := &Error{
 		Kind:      ErrorUnknownParameter,
 		Query:     symbols.FQNOf(query),
-		Parameter: name,
+		Parameter: qualifiedName(expression.Name),
 		Origin:    provenance.Node(owner.DocName, expression),
 	}
+	target, ok := c.resolver.ResolveQualified(owner.Scope, expression.Name)
+	if !ok || target == nil {
+		return typedExpression{}, unknown
+	}
+	for _, param := range c.model.BehaviorParametersOf(query) {
+		if !c.parameterIncludes(param.Symbol, target) {
+			continue
+		}
+		if param.IsResult {
+			return typedExpression{}, unknown
+		}
+		return typedExpression{
+			expression: Expression{
+				operation: OperationParameter,
+				target:    param.Symbol.Name,
+				origin:    provenance.Node(owner.DocName, expression),
+			},
+			types:        symbolSlice(c.parameterTypeSymbol(param.Symbol)),
+			multiplicity: c.parameterMultiplicity(param.Symbol),
+		}, nil
+	}
+	if canonical, ok := c.resolver.ResolveAliasTarget(target); ok {
+		target = canonical
+	}
+	return typedExpression{
+		expression: Expression{
+			operation: OperationElement,
+			target:    symbols.FQNOf(target),
+			element:   target,
+			origin:    provenance.Node(owner.DocName, expression),
+		},
+		elements:     []*symbols.Symbol{target},
+		multiplicity: Multiplicity{Lower: 1, Upper: 1, Known: true},
+	}, nil
 }
 
 func (c *compiler) parameterIncludes(param, target *symbols.Symbol) bool {
@@ -981,6 +962,13 @@ func (c *compiler) validateArgument(
 	if want := c.typeSymbol(param.Type); want != nil {
 		actual := typeNames(value.types)
 		conforms := c.argumentTypesConform(value.types, want)
+		for _, element := range value.elements {
+			if !c.elementConforms(element, want) {
+				actual = symbols.FQNOf(element)
+				conforms = false
+				break
+			}
+		}
 		if value.nonconformingType != "" {
 			actual = value.nonconformingType
 			conforms = false
@@ -1030,6 +1018,15 @@ func (c *compiler) argumentTypesConform(actual []*symbols.Symbol, expected *symb
 		return false
 	}
 	return true
+}
+
+// elementConforms mirrors the executor's check of an element value against a
+// parameter type: every model element is an Element.
+func (c *compiler) elementConforms(element, expected *symbols.Symbol) bool {
+	if symbols.SameElement(element, expected) || c.model.Conforms(element, expected) {
+		return true
+	}
+	return symbols.FQNOf(expected) == elementFQN
 }
 
 func (c *compiler) typeSymbol(name string) *symbols.Symbol {

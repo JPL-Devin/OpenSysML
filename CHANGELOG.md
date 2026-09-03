@@ -25,6 +25,14 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   (`document-query-unsupported-default`, naming the parameter) rather than at execution;
   the `default-unavailable` execution failure no longer exists.
 
+- **A query expression may name a model element wherever a value is expected.** A name in
+  a default, a list, or an operation or named-query argument that is not one of the query's
+  parameters now binds the element it denotes — `OwnedElements(source = telescope)` starts
+  from that part, in a default or in the query body alike — where planning previously refused
+  it as an unknown parameter. The element is checked against the receiving parameter's type
+  and multiplicity when the query is planned, with the same typed `argument-type` and
+  `argument-multiplicity` failures a mismatched parameter reference gets.
+
 - **The Connect + JSON wire contract is written down for clients with no library.** A
   MATLAB, R, Julia, C or shell program that posts JSON to `sysml-grpc` by hand had only the
   proto file and two rules on the transports page to decode answers with, and the questions

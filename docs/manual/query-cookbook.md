@@ -87,7 +87,11 @@ calc def MassTable :> Query {
 - Its `in` parameters are the entry bindings a caller supplies — an element,
   a string, a number, a boolean, or a sequence of them.
 - Its body is one expression composing the library operations; `source`
-  arguments chain them, innermost first.
+  arguments chain them, innermost first. A name in an argument reads the
+  query's parameter of that name, or binds the model element it refers to
+  (`OwnedElements(source = telescope)` starts from that part), just as a
+  `%run-query` binding does. The element is checked against the parameter's
+  type when the query is planned.
 - A query can invoke another query by name, with its own bindings. Invocation
   is dependency-ordered and cycle-checked, with depth and count budgets.
 
@@ -118,9 +122,10 @@ calc def LightSubsystems :> HeavySubsystems {
 
 - A default follows the binding rule of `%run-query <p>=<expr>`: a default that
   names a model element binds that element; any other default is an expression.
-  The rule applies inside a list too, so `in roots : Element[0..*] = (telescope,
-  groundStation);` binds both elements, and a list may mix element names with
-  parameters and query invocations.
+  The rule applies wherever a value is expected, so `in roots : Element[0..*] =
+  (telescope, groundStation);` binds both elements, a list may mix element names
+  with parameters and query invocations, and `in candidates : Element[0..*] =
+  OwnedElements(source = telescope);` starts the traversal from that part.
 - An expression default is evaluated once per query execution, before any row is
   produced, in the scope of the query that declared it — it may name that
   query's other parameters (`in candidates : Element[0..*] = OwnedElements(source = root);`)

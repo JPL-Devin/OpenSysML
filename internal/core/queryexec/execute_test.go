@@ -704,6 +704,15 @@ calc def MixedListDefault :> Query {
 	in roots : Element[0..*] = (root, extra);
 	WhereName(source = OwnedElements(source = roots), operator = "startsWith", value = "m")
 }
+calc def Named :> Query {
+	in source : Element;
+	OwnedElements(source = source)
+}
+calc def NestedElementDefault :> Query {
+	in candidates : Element[0..*] = OwnedElements(source = other);
+	in named : Element[0..*] = Named(source = root);
+	WhereName(source = (candidates, named), operator = "startsWith", value = "m")
+}
 `)
 	result, err := fixture.execute(t, "Defaulted", Bindings{}, Options{})
 	if err != nil {
@@ -790,6 +799,66 @@ calc def MixedListDefault :> Query {
 	}
 	if got := elementNames(result); !slices.Equal(got, []string{"mount", "motor"}) {
 		t.Fatalf("mixed element-list default rows = %v, want [mount motor]", got)
+	}
+	result, err = fixture.execute(t, "NestedElementDefault", Bindings{}, Options{})
+	if err != nil {
+		t.Fatalf("execute defaults naming elements inside arguments: %v", err)
+	}
+	if got := elementNames(result); !slices.Equal(got, []string{"motor", "mount"}) {
+		t.Fatalf("nested element default rows = %v, want [motor mount]", got)
+	}
+}
+
+func TestExecuteBindsElementsNamedInQueryBodies(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part def Telescope;
+part telescope : Telescope {
+	part mount;
+	part optics;
+}
+part groundStation {
+	part antenna;
+	part modem;
+}
+calc def Named :> Query {
+	in scope : Telescope;
+	in pattern : String;
+	WhereName(source = OwnedElements(source = telescope), operator = "startsWith", value = pattern)
+}
+calc def FixedBody :> Query {
+	in pattern : String;
+	WhereName(source = OwnedElements(source = groundStation), operator = "startsWith", value = pattern)
+}
+calc def FixedQueryArgument :> Query {
+	Named(scope = telescope, pattern = "m")
+}
+calc def FixedList :> Query {
+	in extra : Element[0..*];
+	WhereName(source = OwnedElements(source = (telescope, extra)), operator = "startsWith", value = "m")
+}
+`)
+	result, err := fixture.execute(t, "FixedBody", Bindings{"pattern": {StringValue("a")}}, Options{})
+	if err != nil {
+		t.Fatalf("execute body naming an element: %v", err)
+	}
+	if got := elementNames(result); !slices.Equal(got, []string{"antenna"}) {
+		t.Fatalf("fixed body rows = %v, want [antenna]", got)
+	}
+	result, err = fixture.execute(t, "FixedQueryArgument", Bindings{}, Options{})
+	if err != nil {
+		t.Fatalf("execute named query with an element argument: %v", err)
+	}
+	if got := elementNames(result); !slices.Equal(got, []string{"mount"}) {
+		t.Fatalf("fixed query argument rows = %v, want [mount]", got)
+	}
+	result, err = fixture.execute(t, "FixedList", Bindings{
+		"extra": {ElementValue(fixture.symbol(t, "groundStation"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute list mixing an element with a parameter: %v", err)
+	}
+	if got := elementNames(result); !slices.Equal(got, []string{"mount", "modem"}) {
+		t.Fatalf("fixed list rows = %v, want [mount modem]", got)
 	}
 }
 

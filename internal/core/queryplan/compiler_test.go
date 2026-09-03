@@ -209,6 +209,8 @@ calc def Defaulted :> Query {
 	in optional : Element[0..*] = null;
 	in roots : Element[0..*] = (shared, spare);
 	in mixed : Element[0..*] = (spare, source, Helper(source = source));
+	in owned : Element[0..*] = OwnedElements(source = spare);
+	in helped : Element[0..*] = Helper(source = spare);
 	WhereName(source = candidates, operator = "startsWith", value = pattern)
 }
 `)
@@ -275,6 +277,20 @@ calc def Defaulted :> Query {
 	if mixed[2].Value.Operation() != OperationInvoke || mixed[2].Value.Target() != "Fixture::Helper" {
 		t.Fatalf("mixed default member 2 = %+v, want Helper invoked", mixed[2].Value)
 	}
+	for name, operation := range map[string]Operation{
+		"owned":  OperationOwnedElements,
+		"helped": OperationInvoke,
+	} {
+		nested := params[name].Default
+		if nested.Operation() != operation || len(nested.Arguments()) != 1 {
+			t.Fatalf("%s default = %+v, want %s with one argument", name, nested, operation)
+		}
+		argument := nested.Arguments()[0].Value
+		if element, ok := argument.Element(); !ok || element != fixture.symbol(t, "spare") ||
+			!argument.Origin().Located() {
+			t.Fatalf("%s default argument = %+v, want spare bound", name, argument)
+		}
+	}
 
 	mutable := definition.Parameters()
 	mutable[3].Default.Arguments()[0] = Argument{}
@@ -282,6 +298,139 @@ calc def Defaulted :> Query {
 	fresh := definition.Parameters()[3]
 	if !fresh.HasDefault || fresh.Default.Arguments()[0].Name != "source" {
 		t.Fatal("mutating returned parameters changed the compiled default")
+	}
+}
+
+func TestCompileBindsElementsNamedInQueryBodies(t *testing.T) {
+	fixture := loadQueryFixture(t, `
+part def Telescope;
+part telescope : Telescope;
+part groundStation;
+calc def Helper :> Query {
+	in source : Element;
+	OwnedElements(source = source)
+}
+calc def Pointed :> Query {
+	in scope : Telescope;
+	OwnedElements(source = telescope)
+}
+calc def FixedBody :> Query {
+	in pattern : String;
+	WhereName(source = OwnedElements(source = telescope), operator = "startsWith", value = pattern)
+}
+calc def FixedQueryArgument :> Query {
+	Helper(source = telescope)
+}
+calc def FixedList :> Query {
+	in extra : Element[0..*];
+	OwnedElements(source = (telescope, extra, groundStation))
+}
+calc def FixedTyped :> Query {
+	Pointed(scope = telescope)
+}
+`)
+	body := fixture.compile(t, "FixedBody").Definitions()[0].Expression()
+	if body.Operation() != OperationWhereName || len(body.Arguments()) != 3 {
+		t.Fatalf("body = %+v", body)
+	}
+	source := body.Arguments()[0].Value
+	if source.Operation() != OperationOwnedElements || len(source.Arguments()) != 1 {
+		t.Fatalf("source = %+v, want OwnedElements", source)
+	}
+	if element, ok := source.Arguments()[0].Value.Element(); !ok || element != fixture.symbol(t, "telescope") {
+		t.Fatalf("source argument = %+v, want telescope bound", source.Arguments()[0].Value)
+	}
+	if value := body.Arguments()[2].Value; value.Operation() != OperationParameter || value.Target() != "pattern" {
+		t.Fatalf("value = %+v, want the pattern parameter", value)
+	}
+
+	definitions := fixture.compile(t, "FixedQueryArgument").Definitions()
+	invoked := definitions[len(definitions)-1]
+	if got := invoked.Dependencies(); !slices.Equal(got, []string{"Fixture::Helper"}) {
+		t.Fatalf("dependencies = %v", got)
+	}
+	call := invoked.Expression()
+	if call.Operation() != OperationInvoke || len(call.Arguments()) != 1 {
+		t.Fatalf("call = %+v", call)
+	}
+	if element, ok := call.Arguments()[0].Value.Element(); !ok || element != fixture.symbol(t, "telescope") {
+		t.Fatalf("call argument = %+v, want telescope bound", call.Arguments()[0].Value)
+	}
+
+	list := fixture.compile(t, "FixedList").Definitions()[0].Expression().Arguments()[0].Value
+	if list.Operation() != OperationSequence || len(list.Arguments()) != 3 {
+		t.Fatalf("list = %+v", list)
+	}
+	if element, ok := list.Arguments()[0].Value.Element(); !ok || element != fixture.symbol(t, "telescope") {
+		t.Fatalf("list member 0 = %+v", list.Arguments()[0].Value)
+	}
+	if member := list.Arguments()[1].Value; member.Operation() != OperationParameter || member.Target() != "extra" {
+		t.Fatalf("list member 1 = %+v", member)
+	}
+	if element, ok := list.Arguments()[2].Value.Element(); !ok || element != fixture.symbol(t, "groundStation") {
+		t.Fatalf("list member 2 = %+v", list.Arguments()[2].Value)
+	}
+
+	fixture.compile(t, "FixedTyped")
+}
+
+func TestCompileValidatesElementsNamedInArguments(t *testing.T) {
+	fixture := loadQueryFixture(t, `
+part def Telescope;
+part telescope : Telescope;
+part groundStation;
+calc def Pointed :> Query {
+	in scope : Telescope;
+	OwnedElements(source = telescope)
+}
+calc def NeedsMany :> Query {
+	in sources : Element[2..*];
+	OwnedElements(source = sources)
+}
+calc def WrongElementType :> Query {
+	Pointed(scope = groundStation)
+}
+calc def ElementAsString :> Query {
+	WhereName(source = OwnedElements(source = telescope), operator = "startsWith", value = telescope)
+}
+calc def OneElementForMany :> Query {
+	NeedsMany(sources = telescope)
+}
+calc def Unresolved :> Query {
+	OwnedElements(source = missing)
+}
+calc def ResultAsValue :> Query {
+	OwnedElements(source = result)
+}
+`)
+	tests := []struct {
+		name      string
+		kind      ErrorKind
+		parameter string
+		expected  string
+		actual    string
+		argument  string
+	}{
+		{"WrongElementType", ErrorArgumentType, "scope", "Fixture::Telescope", "Fixture::groundStation", "groundStation"},
+		{"ElementAsString", ErrorArgumentType, "value", "ScalarValues::String", "Fixture::telescope", "telescope"},
+		{"OneElementForMany", ErrorArgumentMultiplicity, "sources", "[2..*]", "[1..1]", "telescope"},
+		{"Unresolved", ErrorUnknownParameter, "missing", "", "", "missing"},
+		{"ResultAsValue", ErrorUnknownParameter, "result", "", "", "result"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := Compile(fixture.index, fixture.model, fixture.resolver, fixture.symbol(t, test.name))
+			planning := planningError(t, err, test.kind)
+			if planning.Parameter != test.parameter ||
+				planning.Expected != test.expected ||
+				planning.Actual != test.actual {
+				t.Fatalf("error = %+v", planning)
+			}
+			span := planning.Origin.Span
+			if got := fixture.content[span.Offset:span.End()]; got != test.argument {
+				t.Fatalf("argument origin = %q, want %q", got, test.argument)
+			}
+		})
 	}
 }
 
