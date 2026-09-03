@@ -91,7 +91,8 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   ISQ examples do — no longer breaks `(1 [m], 2 [m])->sum()`, which computes `3 [m]` with the
   import and without it (where `sum` is the `NumericalFunctions::sum` the model imports). The
   `TrigFunctions` take an angle quantity (`sin(90 ['°'])`, `cos(0 [rad])`) through its declared
-  scale. `VectorCalculations` over a numeric vector
+  scale, and only an angle: a bit, a byte, a steradian or `one` is dimension one but no angle,
+  and is a type mismatch. `VectorCalculations` over a numeric vector
   compute as the Kernel `VectorFunctions` do; the quantity-scaled vector forms, `outer`, and
   every `MeasurementRefCalculations` and `TensorCalculations` declaration report themselves by
   name with the reason instead of `no result expression`. A gate asserts every declaration of
@@ -104,7 +105,11 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   product of quantities keeps the magnitude kind bare arithmetic gives, so `l1 * l1` and
   `l1 ** 2` agree. The REPL, the trace and the gRPC `unit` field all render the one text, and
   a quantity sent over gRPC composes as one written locally does: `SI::m/SI::s` times `SI::s`
-  is `SI::m`. Only the trigonometric functions take a dimension-one quantity for a number;
+  is `SI::m`. A unit text the model cannot read as a whole is read name by name, so the units
+  it does declare stay factors of their own: `SI::s` composed into `metres per second` is
+  `'metres per second'*SI::s`, and dividing by `SI::s` after a round trip gives the opaque unit
+  back; text that is no unit name is quoted so the product reads back as itself. Only the
+  trigonometric functions take a dimension-one quantity for a number;
   `IntegerFunctions::abs(1 [rad])` is a type mismatch, as its declaration says.
 - **Action and state execution has a referee outside the executor.** Six conformance cases —
   a join fed by branches of unequal length, a join fed twice over one succession, a node two
