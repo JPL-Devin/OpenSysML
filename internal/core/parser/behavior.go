@@ -568,10 +568,12 @@ func (p *Parser) parseActionMember() ast.Node {
 func (p *Parser) parseInitialNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 	var name string
+	var nameSpan source.Span
 
 	if p.at(lexer.Identifier) || p.atNameOrKeyword() {
 		nameToken := p.peek()
 		name = p.src.Text(nameToken.Span)
+		nameSpan = nameToken.Span
 		p.advance()
 	}
 
@@ -599,6 +601,7 @@ func (p *Parser) parseInitialNode(tok lexer.Token) ast.Node {
 
 	node := &ast.InitialNode{
 		Name:      name,
+		NameSpan:  nameSpan,
 		Successor: successor,
 		Guard:     guard,
 		Members:   members,

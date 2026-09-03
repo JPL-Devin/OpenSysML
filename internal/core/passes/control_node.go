@@ -155,7 +155,7 @@ func (c *controlNodeChecker) walkNode(scope *symbols.Scope, owner, decl ast.Node
 // checkOwner reports a control node whose owner is not an action definition or
 // usage.
 func (c *controlNodeChecker) checkOwner(node, owner ast.Node) {
-	if actionOwner(owner) || c.ctx.DownstreamOfFailure(node) {
+	if actionOwner(owner) || c.ctx.downstreamSpan(declarationHead(node)) {
 		return
 	}
 	where := "outside any action"
@@ -231,16 +231,19 @@ func (c *controlNodeChecker) check(owner *symbols.Symbol, succs []semantics.Acti
 			f.outgoing = append(f.outgoing, s)
 		}
 	}
+	// Each end rests on its own reference alone: a fault elsewhere in the
+	// succession — its guard, effect or body — leaves the end sound.
 	for _, s := range succs {
-		if c.ctx.DownstreamOfFailure(s.Decl) {
-			continue
+		if !c.unsoundEnd(s.Target) {
+			attach(s.Target.Node, s, true)
 		}
-		attach(s.Target.Node, s, true)
-		attach(s.Source.Node, s, false)
+		if !c.unsoundEnd(s.Source) {
+			attach(s.Source.Node, s, false)
+		}
 	}
 	for _, node := range order {
 		f := flows[node]
-		if c.ctx.DownstreamOfFailure(node) {
+		if c.ctx.downstreamSpan(declarationHead(node)) {
 			continue
 		}
 		own := owner == nil || c.declares(owner, node)
@@ -275,6 +278,21 @@ func (c *controlNodeChecker) check(owner *symbols.Symbol, succs []semantics.Acti
 			}
 		}
 	}
+}
+
+// unsoundEnd reports an end whose reference carries a lower-tier fault.
+func (c *controlNodeChecker) unsoundEnd(end semantics.ActionSuccessionEnd) bool {
+	return end.Span.Len > 0 && c.ctx.downstreamSpan(end.Span)
+}
+
+// declarationHead is the span of a node up to its body: what a rule about the
+// node itself, rather than about its members, rests on.
+func declarationHead(node ast.Node) source.Span {
+	span := node.Span()
+	if body := ast.NodeBodyMembers(node); len(body) > 0 {
+		span.Len = body[0].Span().Offset - span.Offset
+	}
+	return span
 }
 
 // checkCount reports a node with more than one succession on the bounded side.
@@ -312,7 +330,7 @@ func (c *controlNodeChecker) checkCount(owner *symbols.Symbol, own bool, node as
 // notation does not show them), so only a written multiplicity can be wrong.
 func (c *controlNodeChecker) checkEndMultiplicity(owner *symbols.Symbol, own bool, node ast.Node,
 	s semantics.ActionSuccession, end semantics.ActionSuccessionEnd, lower, upper int64, direction, endName, code string) {
-	if end.Multiplicity == nil || (!own && s.Owner != owner) {
+	if end.Multiplicity == nil || (!own && s.Owner != owner) || c.ctx.DownstreamOfFailure(end.Multiplicity) {
 		return
 	}
 	r, ok := c.model.RangeOf(end.Multiplicity)

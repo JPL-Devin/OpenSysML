@@ -10,7 +10,8 @@ import (
 // with each end resolved to the member it attaches to. It is the KerML view a
 // Feature's sourceConnector/targetConnector give of the successions written as
 // `succession s first a then b`, `first a then b`, `then b`, or a guarded
-// `if`/`else` edge (whose transition owns a succession).
+// `if`/`else` edge or `succession s first a if g then b` (a transition owning a
+// succession).
 type ActionSuccession struct {
 	// Decl is the syntax declaring the succession.
 	Decl ast.Node
@@ -28,7 +29,8 @@ type ActionSuccessionEnd struct {
 	Node ast.Node
 	// Multiplicity is the multiplicity the end writes, nil when it writes none.
 	Multiplicity *ast.Multiplicity
-	// Span locates the end as written, or the succession when the end is implied.
+	// Span is the reference the end was resolved from; empty when the end is
+	// bound by position or implied, and so rests on no reference.
 	Span source.Span
 }
 
@@ -104,8 +106,8 @@ func (m *Model) DeclaredSuccessions(scope *symbols.Scope, owner *symbols.Symbol,
 			out = append(out, ActionSuccession{
 				Decl:   n,
 				Owner:  owner,
-				Source: m.connectorEndOf(scope, owner, n.ConnectorEnds[0], n.Span()),
-				Target: m.connectorEndOf(scope, owner, n.ConnectorEnds[1], n.Span()),
+				Source: m.connectorEndOf(scope, owner, n.ConnectorEnds[0]),
+				Target: m.connectorEndOf(scope, owner, n.ConnectorEnds[1]),
 			})
 		case *ast.InitialNode:
 			if n.Successor == nil {
@@ -114,52 +116,68 @@ func (m *Model) DeclaredSuccessions(scope *symbols.Scope, owner *symbols.Symbol,
 			out = append(out, ActionSuccession{
 				Decl:   n,
 				Owner:  owner,
-				Source: ActionSuccessionEnd{Node: m.actionNodeNamed(scope, owner, n.Name), Span: n.Span()},
-				Target: m.referenceEnd(scope, owner, n.Successor, n.Span()),
+				Source: ActionSuccessionEnd{Node: m.actionNodeNamed(scope, owner, n.Name), Span: n.NameSpan},
+				Target: m.referenceEnd(scope, owner, n.Successor),
 			})
 		case *ast.SuccessionEdge:
 			out = append(out, ActionSuccession{
 				Decl:   n,
 				Owner:  owner,
-				Source: m.edgeEnd(scope, owner, n.Source, n.SourceMember, n.Span()),
-				Target: m.edgeEnd(scope, owner, n.Target, n.TargetMember, n.Span()),
+				Source: m.edgeEnd(scope, owner, n.Source, n.SourceMember),
+				Target: m.edgeEnd(scope, owner, n.Target, n.TargetMember),
 			})
 		case *ast.ControlFlowEdge:
 			out = append(out, ActionSuccession{
 				Decl:   n,
 				Owner:  owner,
-				Source: m.edgeEnd(scope, owner, n.Source, n.SourceMember, n.Span()),
-				Target: m.edgeEnd(scope, owner, n.Target, n.TargetMember, n.Span()),
+				Source: m.edgeEnd(scope, owner, n.Source, n.SourceMember),
+				Target: m.edgeEnd(scope, owner, n.Target, n.TargetMember),
+			})
+		case *ast.TransitionMember:
+			// A guarded succession (`succession s first a if g then b`) is a
+			// transition usage owning a succession from a to b.
+			if n.Target == nil {
+				continue
+			}
+			var source ActionSuccessionEnd
+			if n.Source != nil {
+				source = m.referenceEnd(scope, owner, n.Source)
+			}
+			out = append(out, ActionSuccession{
+				Decl:   n,
+				Owner:  owner,
+				Source: source,
+				Target: m.referenceEnd(scope, owner, n.Target),
 			})
 		}
 	}
 	return out
 }
 
-func (m *Model) connectorEndOf(scope *symbols.Scope, owner *symbols.Symbol, end *ast.ConnectorEnd, at source.Span) ActionSuccessionEnd {
+func (m *Model) connectorEndOf(scope *symbols.Scope, owner *symbols.Symbol, end *ast.ConnectorEnd) ActionSuccessionEnd {
 	if end == nil {
-		return ActionSuccessionEnd{Span: at}
+		return ActionSuccessionEnd{}
 	}
-	e := m.referenceEnd(scope, owner, end.AttachedTarget(), end.Span())
+	e := m.referenceEnd(scope, owner, end.AttachedTarget())
 	e.Multiplicity = end.Multiplicity
 	return e
 }
 
 // edgeEnd is an end of an edge member: bound to a neighbouring member by
 // position (`then b` after `action a`), or named.
-func (m *Model) edgeEnd(scope *symbols.Scope, owner *symbols.Symbol, ref *ast.QualifiedName, member ast.Node, at source.Span) ActionSuccessionEnd {
+func (m *Model) edgeEnd(scope *symbols.Scope, owner *symbols.Symbol, ref *ast.QualifiedName, member ast.Node) ActionSuccessionEnd {
 	if member != nil {
-		return ActionSuccessionEnd{Node: member, Span: at}
+		return ActionSuccessionEnd{Node: member}
 	}
 	if ref == nil {
-		return ActionSuccessionEnd{Span: at}
+		return ActionSuccessionEnd{}
 	}
-	return m.referenceEnd(scope, owner, ref, at)
+	return m.referenceEnd(scope, owner, ref)
 }
 
-func (m *Model) referenceEnd(scope *symbols.Scope, owner *symbols.Symbol, target ast.Node, at source.Span) ActionSuccessionEnd {
+func (m *Model) referenceEnd(scope *symbols.Scope, owner *symbols.Symbol, target ast.Node) ActionSuccessionEnd {
 	if target == nil {
-		return ActionSuccessionEnd{Span: at}
+		return ActionSuccessionEnd{}
 	}
 	e := ActionSuccessionEnd{Span: target.Span()}
 	sym, ok := m.resolver.ResolveTarget(scope, target)

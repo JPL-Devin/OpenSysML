@@ -210,6 +210,57 @@ func TestDecisionWithTwoIncomingSuccessions(t *testing.T) {
 }`, controlNodeWant{CodeDecisionIncomingSuccessions, 5, "decide d has 2 incoming successions; a decision node may have at most one"})
 }
 
+// A named guarded succession (`succession s first a if g then b`) is a
+// transition usage owning a succession, and counts on both of its ends.
+func TestControlNodeGuardedSuccessionsCount(t *testing.T) {
+	wantControlNodeErrors(t, `package P {
+	action def A {
+		action x; action y; action z;
+		fork f;
+		succession s1 first x if true then f;
+		succession s2 first y if true then f;
+		first f then z;
+	}
+	action def B {
+		action x; action y; action z;
+		join j;
+		first x then j; first y then j;
+		succession s3 first j if true then z;
+		first j then z;
+	}
+	action def C {
+		action x; action y;
+		merge m;
+		first x then m; first m then y;
+		succession s4 first m if false then x;
+	}
+	action def D {
+		action x; action y;
+		decide d;
+		first x then d;
+		succession s5 first y if true then d;
+		first d then y;
+	}
+}`,
+		controlNodeWant{CodeForkIncomingSuccessions, 4, "fork f has 2 incoming successions"},
+		controlNodeWant{CodeJoinOutgoingSuccessions, 11, "join j has 2 outgoing successions"},
+		controlNodeWant{CodeMergeOutgoingSuccessions, 18, "merge m has 2 outgoing successions"},
+		controlNodeWant{CodeDecisionIncomingSuccessions, 24, "decide d has 2 incoming successions"})
+	wantControlNodesClean(t, `package P {
+	action def A {
+		action x; action y; action z;
+		decide d;
+		first x then d;
+		succession s1 first d if true then y;
+		succession s2 first d if false then z;
+		merge m;
+		succession s3 first y if true then m;
+		succession s4 first z if true then m;
+		first m then x;
+	}
+}`)
+}
+
 // The bounded side is the only one bounded: three successions out of a fork or
 // decision, or into a join or merge, are legal.
 func TestControlNodeUnboundedSideIsSilent(t *testing.T) {
@@ -564,6 +615,77 @@ func TestControlNodeStaticRuleAgreesWithRuntime(t *testing.T) {
 	}
 }`, controlNodeWant{CodeJoinOutgoingSuccessions, 4, "join j has 2 outgoing successions"},
 		controlNodeWant{CodeMergeOutgoingSuccessions, 8, "merge m has 2 outgoing successions"})
+}
+
+// analyzedControlNodeCodes runs the full registry and returns the codes of the
+// control-node diagnostics beside the count of lower-tier ones.
+func analyzedControlNodeCodes(t *testing.T, src string) (codes []string, lower int) {
+	t.Helper()
+	sf := source.New("t.sysml", []byte(src))
+	p := parser.New(sf)
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("unexpected parse diagnostics: %+v", p.Diagnostics)
+	}
+	for _, d := range Analyze("t.sysml", root, nil, newTestIndexFromDoc("t.sysml", root)) {
+		if d.Source == "control-node" {
+			codes = append(codes, d.Code)
+		} else if d.Severity == SeverityError {
+			lower++
+		}
+	}
+	return codes, lower
+}
+
+// A lower-tier fault in a node's or succession's body, guard or effect is
+// beside the point of the rules, which rest on the node's kind and the
+// successions' end references; only an end whose own reference is faulty is
+// left out of the count.
+func TestControlNodeUnrelatedFaultsKeepDiagnostics(t *testing.T) {
+	codes, lower := analyzedControlNodeCodes(t, `package P {
+	occurrence def O {
+		fork f { action a : Missing; }
+	}
+	action def A {
+		action a; action b; action c;
+		fork f;
+		first a then f { action z : Missing; }
+		first b if nope then f;
+		first f then c;
+		join j;
+		first a then j; first b then j;
+		succession s1 first j then a { action z : Missing; }
+		succession s2 first j if nope then b;
+	}
+}`)
+	if lower == 0 {
+		t.Fatal("the unresolved references were not reported")
+	}
+	want := []string{CodeControlNodeOwner, CodeForkIncomingSuccessions, CodeJoinOutgoingSuccessions}
+	if strings.Join(codes, ",") != strings.Join(want, ",") {
+		t.Fatalf("got control-node codes %v, want %v", codes, want)
+	}
+
+	// A succession whose target is unresolved still leaves its source, and
+	// reaches no node through the faulty end.
+	codes, lower = analyzedControlNodeCodes(t, `package P {
+	action def A {
+		action a; action b;
+		join j;
+		first a then j;
+		first j then b;
+		succession s first j then Missing;
+		fork f;
+		first a then f;
+		first b then Missing::f;
+	}
+}`)
+	if lower == 0 {
+		t.Fatal("the unresolved references were not reported")
+	}
+	if want := []string{CodeJoinOutgoingSuccessions}; strings.Join(codes, ",") != strings.Join(want, ",") {
+		t.Fatalf("got control-node codes %v, want %v", codes, want)
+	}
 }
 
 // The rule reaches the CLI and LSP through the shared registry.

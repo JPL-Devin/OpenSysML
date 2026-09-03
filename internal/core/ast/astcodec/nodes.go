@@ -850,6 +850,7 @@ func (e *Encoder) encodeFields(node ast.Node) {
 	case *ast.InitialNode:
 		e.base(&n.NodeBase)
 		e.w.String(n.Name)
+		e.span(n.NameSpan)
 		e.node(n.Successor)
 		e.node(n.Guard)
 		e.nodes(n.Members)
@@ -1323,6 +1324,7 @@ func (d *Decoder) decodeFields(node ast.Node) {
 	case *ast.InitialNode:
 		d.base(&n.NodeBase)
 		n.Name = d.r.String()
+		n.NameSpan = d.span()
 		n.Successor = typed[*ast.QualifiedName](d)
 		n.Guard = d.node()
 		n.Members = d.nodes()
