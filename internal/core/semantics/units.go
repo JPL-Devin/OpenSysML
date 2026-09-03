@@ -33,8 +33,9 @@ var (
 // Names of the library elements the unit model is defined by (SysML v2
 // Quantities and Units domain library).
 const (
-	fqnMeasurementUnit  = "MeasurementReferences::MeasurementUnit"
-	fqnDimensionOneUnit = "MeasurementReferences::DimensionOneUnit"
+	fqnMeasurementUnit    = "MeasurementReferences::MeasurementUnit"
+	fqnDimensionOneUnit   = "MeasurementReferences::DimensionOneUnit"
+	fqnAngularMeasureUnit = "ISQSpaceTime::AngularMeasureUnit"
 
 	memberUnitConversion   = "unitConversion"
 	memberReferenceUnit    = "referenceUnit"
@@ -294,6 +295,16 @@ func (m *Model) MeasurementUnitOf(sym *symbols.Symbol) (*symbols.Symbol, bool) {
 		return nil, false
 	}
 	return sym, true
+}
+
+// IsAngularMeasureUnit reports whether sym is a unit of plane angle (rad, °, ′):
+// one of the dimension-one units a trigonometric function may take.
+func (m *Model) IsAngularMeasureUnit(sym *symbols.Symbol) bool {
+	if m == nil || sym == nil {
+		return false
+	}
+	angleDef := m.libSymbol(fqnAngularMeasureUnit)
+	return angleDef != nil && m.Conforms(sym, angleDef)
 }
 
 // UnitTermOf reduces a measurement unit to base units. A unit declared with a

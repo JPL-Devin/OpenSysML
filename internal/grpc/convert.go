@@ -470,8 +470,10 @@ func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index, sem *semantics.Model) 
 }
 
 // unitProductOfText reads unit text as a product of the model's units that reduces
-// to term; a short name is the one unit so named that fits. Otherwise the text is opaque.
-// The reduction returned is the model's where the text is read, else term as sent.
+// to term; a short name is the one unit so named that fits. Text that does not read
+// so keeps the factors it can name, the rest opaque (see partialUnitProduct); text
+// that is no unit expression is one opaque unit. The reduction returned is the
+// model's where the text is read in full, else term as sent.
 func unitProductOfText(text string, term semantics.UnitTerm, idx *symbols.Index, sem *semantics.Model) (semantics.UnitProduct, semantics.UnitTerm, error) {
 	if text == "" {
 		return unnamedUnitProduct(term), term, nil
@@ -508,7 +510,7 @@ func unitProductOfText(text string, term semantics.UnitTerm, idx *symbols.Index,
 	if len(short) == 0 {
 		implied, ok := impliedTerm(product, sem)
 		if !ok {
-			return opaque, term, nil
+			return partialUnitProduct(expr, opaque, term, unitAt, idx, sem), term, nil
 		}
 		if !reducesTo(implied, term) {
 			return semantics.UnitProduct{}, semantics.UnitTerm{}, fmt.Errorf("%w: %s reduces to %s, unit_term is %s",
@@ -547,9 +549,57 @@ func unitProductOfText(text string, term semantics.UnitTerm, idx *symbols.Index,
 		})
 	}
 	if len(matches) != 1 {
-		return opaque, term, nil
+		return partialUnitProduct(expr, opaque, term, unitAt, idx, sem), term, nil
 	}
 	return matches[0].product, matches[0].term, nil
+}
+
+// partialUnitProduct reads a unit text name by name — a qualified name or a short name
+// one unit bears is that unit, any other an opaque factor — so the units read still cancel.
+// Text whose every name reads, yet contradicts term, is opaque as a whole.
+func partialUnitProduct(
+	expr ast.Node,
+	opaque semantics.UnitProduct,
+	term semantics.UnitTerm,
+	unitAt func(string) (*symbols.Symbol, bool),
+	idx *symbols.Index,
+	sem *semantics.Model,
+) semantics.UnitProduct {
+	product, err := sem.UnitProductOfExprBy(expr, func(qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+		if sym, ok := unitAt(semantics.QualifiedNameText(qn)); ok {
+			return sym, true
+		}
+		if len(qn.Parts) == 1 {
+			if units := unitsNamed(semantics.QualifiedNameText(qn), idx, sem); len(units) == 1 {
+				return units[0], true
+			}
+		}
+		return nil, false
+	})
+	if err != nil {
+		return opaque
+	}
+	known := semantics.UnitTerm{Scale: semantics.UnitScale(1)}
+	var unread []int
+	for i, f := range product.Powers {
+		if f.Unit == nil {
+			unread = append(unread, i)
+			continue
+		}
+		factor, err := sem.UnitTermOf(f.Unit)
+		if err != nil {
+			return opaque
+		}
+		known = known.Times(factor.Pow(f.Exponent))
+	}
+	if len(unread) == 0 {
+		return opaque
+	}
+	// A lone opaque factor is what term leaves once the units read are taken out.
+	if len(unread) == 1 {
+		product.Powers[unread[0]].DimensionOne = term.DividedBy(known).Dimensionless()
+	}
+	return product
 }
 
 // shortUnitReading is one assignment of a unit text's short names, occurrence by

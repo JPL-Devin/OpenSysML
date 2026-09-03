@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"errors"
+	"math"
 	"strings"
 	"testing"
 
@@ -269,6 +270,71 @@ func TestQuantityCalculationsReport(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), tc.text) {
 				t.Errorf("%s: error %q does not mention %q", tc.src, err, tc.text)
+			}
+		})
+	}
+}
+
+// TestTrigFunctionsTakeAngles: a trigonometric function takes a number of radians
+// or a quantity in an angular unit; a dimension-one quantity in any other unit
+// (bit, sr, one) or an angle raised to a power is rejected, not read as radians.
+func TestTrigFunctionsTakeAngles(t *testing.T) {
+	ctx, scope := quantityCalculationsContext(t)
+
+	accepted := []struct {
+		src  string
+		want float64
+	}{
+		{"sin(0.5)", math.Sin(0.5)},
+		{"sin(0.5 [rad])", math.Sin(0.5)},
+		{"cos(0.5 [rad])", math.Cos(0.5)},
+		{"tan(0.5 [rad])", math.Tan(0.5)},
+		{"cot(0.5 [rad])", 1 / math.Tan(0.5)},
+		{"sin(30 ['°'])", math.Sin(30 * 1.745329e-02)},
+		{"cos(60 ['°'])", math.Cos(60 * 1.745329e-02)},
+		{"tan(45 ['°'])", math.Tan(45 * 1.745329e-02)},
+		{"cot(45 ['°'])", 1 / math.Tan(45*1.745329e-02)},
+		{"sin(60 [arcmin])", math.Sin(60 * 2.908882e-04)},
+		{"sin(0.5 [rad] * 2 [m] / 1 [m])", math.Sin(1)},
+		{"sin(1 [m] / 2 [m])", math.Sin(0.5)},
+	}
+	for _, tc := range accepted {
+		t.Run(tc.src, func(t *testing.T) {
+			got, err := evalIn(t, ctx, scope, tc.src)
+			if err != nil {
+				t.Fatalf("%s: %v", tc.src, err)
+			}
+			if got.Kind != ValConst || got.Const.Kind != semantics.ValReal || math.Abs(got.Const.Real-tc.want) > 1e-12 {
+				t.Errorf("%s = %s, want %v", tc.src, FormatValue(got), tc.want)
+			}
+		})
+	}
+
+	rejected := []struct {
+		src string
+		got string
+	}{
+		{"sin(1 [bit])", "a quantity in bit"},
+		{"cos(1 [B])", "a quantity in B"},
+		{"tan(1 [sr])", "a quantity in sr"},
+		{"cot(1 [MeasurementReferences::one])", "a quantity in MeasurementReferences::one"},
+		{"sin(1 [rad**2])", "a quantity in rad**2"},
+		{"sin(1 [rad] * 1 ['°'])", "a quantity in '°'*rad"},
+		{"sin(1 [rad*bit])", "a quantity in rad*bit"},
+		{"sin(1 [m])", "a quantity in m"},
+	}
+	for _, tc := range rejected {
+		t.Run(tc.src, func(t *testing.T) {
+			got, err := evalIn(t, ctx, scope, tc.src)
+			if err == nil {
+				t.Fatalf("%s = %s, want %v", tc.src, FormatValue(got), ErrTypeMismatch)
+			}
+			if !errors.Is(err, ErrTypeMismatch) {
+				t.Errorf("%s: error %v, want %v", tc.src, err, ErrTypeMismatch)
+			}
+			want := `requires a number of radians or an angle quantity, got ` + tc.got
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("%s: error %q does not mention %q", tc.src, err, want)
 			}
 		})
 	}

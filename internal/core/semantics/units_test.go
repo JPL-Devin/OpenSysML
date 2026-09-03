@@ -93,6 +93,33 @@ func TestUnitExprTextReadsBack(t *testing.T) {
 	}
 }
 
+// TestNamedUnitProductSpellsOneName: a named unit stays one factor of a product —
+// text that is no name is quoted, one that cannot be quoted is grouped.
+func TestNamedUnitProductSpellsOneName(t *testing.T) {
+	tests := []struct{ name, want, timesM string }{
+		{"m", "m", "m**2"},
+		{"SI::m", "SI::m", "SI::m*m"},
+		{"'A/m'", "'A/m'", "'A/m'*m"},
+		{"SI::'A/m'", "SI::'A/m'", "SI::'A/m'*m"},
+		{"metres per second", "'metres per second'", "'metres per second'*m"},
+		{"1000·metre", "'1000·metre'", "'1000·metre'*m"},
+		{"SI::km*km", "'SI::km*km'", "'SI::km*km'*m"},
+		{"'SI::km*km'", "'SI::km*km'", "'SI::km*km'*m"},
+		{"'A/m'*m", "('A/m'*m)", "('A/m'*m)*m"},
+		{"a'b*c", "(a'b*c)", "(a'b*c)*m"},
+	}
+	m := NamedUnitProduct(nil, "m", false)
+	for _, tc := range tests {
+		got := NamedUnitProduct(nil, tc.name, false)
+		if got.String() != tc.want {
+			t.Errorf("NamedUnitProduct(%q) = %q, want %q", tc.name, got, tc.want)
+		}
+		if product := got.Times(m).String(); product != tc.timesM {
+			t.Errorf("NamedUnitProduct(%q) * m = %q, want %q", tc.name, product, tc.timesM)
+		}
+	}
+}
+
 // TestUnitTermAlgebra composes and compares terms over base units, which is what
 // makes two quantities comparable.
 func TestUnitTermAlgebra(t *testing.T) {

@@ -472,15 +472,16 @@ package Imperial {
 	}
 
 	// Unit text that is no unit expression is one opaque unit: still a quantity
-	// over the reduction sent, and still what the sender wrote.
+	// over the reduction sent, and still what the sender wrote, quoted as one name
+	// once composed so that it reads back as one unit.
 	opaque := &pb.Quantity{
 		Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 5},
 		Unit:      "metres per second",
 		UnitTerm:  speed.GetUnitTerm(),
 	}
 	got := describeQuantity(evaluate("Q::Dist", opaque, mustEvaluateQuantity(t, srv, hash, "1.0 [SI::s]")))
-	if got != "5 [SI::s*metres per second] = SI::metre" {
-		t.Errorf("opaque unit over the wire = %s, want 5 [SI::s*metres per second] = SI::metre", got)
+	if got != "5 ['metres per second'*SI::s] = SI::metre" {
+		t.Errorf("opaque unit over the wire = %s, want 5 ['metres per second'*SI::s] = SI::metre", got)
 	}
 
 	// A unit written short, as an import let the sender write it, is the unit of
@@ -596,8 +597,8 @@ package Imperial {
 	}{
 		{"speed times seconds", "Q::Dist", []*pb.Quantity{unnamed(speed.GetUnitTerm()), second}, "2 [SI::metre] = SI::metre"},
 		{"speed times a metre", "Q::Area", []*pb.Quantity{unnamed(speed.GetUnitTerm()), metre}, "4 [m**2/SI::second] = SI::metre^2·SI::second^-1"},
-		{"kilometres times a metre", "Q::Area", []*pb.Quantity{unnamed(byHand.GetUnitTerm()), metre}, "4 [(1000·metre)*m] = 1000/1·SI::metre^2"},
-		{"kilometres alone", "Q::Area", []*pb.Quantity{unnamed(byHand.GetUnitTerm()), unnamed(byHand.GetUnitTerm())}, "4 [(1000·metre)**2] = 1e+06/1·SI::metre^2"},
+		{"kilometres times a metre", "Q::Area", []*pb.Quantity{unnamed(byHand.GetUnitTerm()), metre}, "4 ['1000·metre'*m] = 1000/1·SI::metre^2"},
+		{"kilometres alone", "Q::Area", []*pb.Quantity{unnamed(byHand.GetUnitTerm()), unnamed(byHand.GetUnitTerm())}, "4 ['1000·metre'**2] = 1e+06/1·SI::metre^2"},
 	} {
 		if got := describeQuantity(evaluate(tc.calc, tc.args...)); got != tc.want {
 			t.Errorf("%s, sent without unit text, = %s, want %s", tc.name, got, tc.want)
@@ -606,8 +607,8 @@ package Imperial {
 	// A scaled ratio sent nameless names no dimension-one unit: it scales what it
 	// multiplies and cancels to a number, as an unnamed ratio does locally.
 	hundredth := unnamed(&pb.UnitTerm{ScaleNum: 1, ScaleDen: 100})
-	if got := describeQuantity(evaluate("Q::Area", hundredth, metre)); got != "4 [(1/100)*m] = 1/100·SI::metre" {
-		t.Errorf("a nameless hundredth * m = %s, want 4 [(1/100)*m] = 1/100·SI::metre", got)
+	if got := describeQuantity(evaluate("Q::Area", hundredth, metre)); got != "4 ['1/100'*m] = 1/100·SI::metre" {
+		t.Errorf("a nameless hundredth * m = %s, want 4 ['1/100'*m] = 1/100·SI::metre", got)
 	}
 	resp, err := srv.EvaluateCalc(context.Background(), &pb.EvaluateCalcRequest{
 		ModelHash: hash, SymbolId: "Q::Area",
@@ -618,6 +619,130 @@ package Imperial {
 	}
 	if real, ok := resp.Result.GetKind().(*pb.Value_RealValue); !ok || real.RealValue != 0.0004 {
 		t.Errorf("a nameless hundredth squared = %v, want the number 0.0004", resp.Result)
+	}
+}
+
+// TestOpaqueUnitFactorsSurviveTheWire pins that a unit composed of an opaque
+// factor and a unit the model declares crosses the wire with that boundary
+// intact: read back, the declared unit still cancels and the opaque factor
+// remains, whatever made it opaque — text that is no unit expression, a name no
+// unit or two units bear, or a scaled reduction sent nameless.
+func TestOpaqueUnitFactorsSurviveTheWire(t *testing.T) {
+	srv := mustNewService(t, 4)
+	source := `package Q {
+	private import ScalarValues::*;
+	private import SI::*;
+	calc def Times { in a; in b; a * b }
+	calc def Per { in a; in b; a / b }
+}
+package Nautical {
+	private import MeasurementReferences::*;
+	private import ISQ::*;
+	private import SI::*;
+	attribute <fathom> 'fathom' : LengthUnit { :>> unitConversion: ConversionByConvention { :>> referenceUnit = m; :>> conversionFactor = 1.8288; } }
+	calc def Fathom { 1.0 [fathom] }
+}
+package Imperial {
+	private import MeasurementReferences::*;
+	private import ISQ::*;
+	private import SI::*;
+	attribute <fathom> 'fathom' : LengthUnit { :>> unitConversion: ConversionByConvention { :>> referenceUnit = m; :>> conversionFactor = 1.8288; } }
+}
+`
+	hash := mustVerifyModel(t, srv, source, "opaque-factors-survive-the-wire")
+	evaluate := func(calc string, args ...*pb.Quantity) *pb.Quantity {
+		t.Helper()
+		req := &pb.EvaluateCalcRequest{ModelHash: hash, SymbolId: calc}
+		for _, arg := range args {
+			req.Arguments = append(req.Arguments, &pb.Value{Kind: &pb.Value_Quantity{Quantity: arg}})
+		}
+		resp, err := srv.EvaluateCalc(context.Background(), req)
+		if err != nil {
+			t.Fatalf("EvaluateCalc %s: %v", calc, err)
+		}
+		if resp.Error != "" {
+			t.Fatalf("EvaluateCalc %s reported %q", calc, resp.Error)
+		}
+		if resp.Result.GetQuantity() == nil {
+			t.Fatalf("EvaluateCalc %s = %v, want a quantity", calc, resp.Result)
+		}
+		return resp.Result.GetQuantity()
+	}
+	quantity := func(magnitude float64, unit string, term *pb.UnitTerm) *pb.Quantity {
+		return &pb.Quantity{Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: magnitude}, Unit: unit, UnitTerm: term}
+	}
+	sent := func(unit string, term *pb.UnitTerm) *pb.Quantity { return quantity(6, unit, term) }
+	second := mustEvaluateQuantity(t, srv, hash, "1.0 [SI::s]")
+	metre := mustEvaluateQuantity(t, srv, hash, "1.0 [SI::m]")
+	speedTerm := mustEvaluateQuantity(t, srv, hash, "1.0 [SI::m] / 1.0 [SI::s]").GetUnitTerm()
+	kilometreTerm := mustEvaluateQuantity(t, srv, hash, "1.0 [SI::km]").GetUnitTerm()
+	fathomTerm := evaluate("Nautical::Fathom").GetUnitTerm()
+	nauticalFathom := quantity(1, "Nautical::fathom", fathomTerm)
+
+	for _, tc := range []struct {
+		name                        string
+		opaque, known               *pb.Quantity
+		composed, divided, restored string
+	}{
+		{
+			"text that is no unit expression",
+			sent("metres per second", speedTerm), second,
+			"6 ['metres per second'*SI::s] = SI::metre",
+			"6 ['metres per second'] = SI::metre·SI::second^-1",
+			"1 [SI::s] = SI::second",
+		},
+		{
+			"a short name no unit bears",
+			sent("smoot", metre.GetUnitTerm()), metre,
+			"6 [SI::m*smoot] = SI::metre^2",
+			"6 [smoot] = SI::metre",
+			"1 [SI::m] = SI::metre",
+		},
+		{
+			"a qualified name no unit bears",
+			sent("Imperial::smoot", metre.GetUnitTerm()), metre,
+			"6 [Imperial::smoot*SI::m] = SI::metre^2",
+			"6 [Imperial::smoot] = SI::metre",
+			"1 [SI::m] = SI::metre",
+		},
+		{
+			"a short name two units bear",
+			sent("fathom", fathomTerm), nauticalFathom,
+			"6 [Nautical::fathom*fathom] = 3.34450944/1·SI::metre^2",
+			"6 [fathom] = 3.34450944/1.8288·SI::metre",
+			"1 [Nautical::fathom] = 3.34450944/1.8288·SI::metre",
+		},
+		{
+			"a scaled reduction sent nameless",
+			sent("", kilometreTerm), metre,
+			"6 ['1000·metre'*SI::m] = 1000/1·SI::metre^2",
+			"6 ['1000·metre'] = 1000/1·SI::metre",
+			"1 [SI::m] = SI::metre",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			composed := evaluate("Q::Times", tc.known, tc.opaque)
+			if got := describeQuantity(composed); got != tc.composed {
+				t.Fatalf("known * opaque = %s, want %s", got, tc.composed)
+			}
+			if got := describeQuantity(evaluate("Q::Per", composed, tc.known)); got != tc.divided {
+				t.Errorf("(known * opaque) over the wire / known = %s, want %s", got, tc.divided)
+			}
+			// The opaque factor is one unit under one spelling: sent again, it cancels itself.
+			if got := describeQuantity(evaluate("Q::Per", composed, tc.opaque)); got != tc.restored {
+				t.Errorf("(known * opaque) over the wire / opaque = %s, want %s", got, tc.restored)
+			}
+		})
+	}
+
+	// A text every name of which reads as a unit, yet contradicting the reduction
+	// sent, has no factor to blame: it stays one opaque unit through the wire.
+	contradiction := evaluate("Q::Times", sent("km", metre.GetUnitTerm()), mustEvaluateQuantity(t, srv, hash, "1.0 [SI::km]"))
+	if got := describeQuantity(contradiction); got != "6 [SI::km*km] = 1000/1·SI::metre^2" {
+		t.Fatalf("SI::km * a km reducing to a metre = %s, want 6 [SI::km*km] = 1000/1·SI::metre^2", got)
+	}
+	if got := describeQuantity(evaluate("Q::Per", contradiction, mustEvaluateQuantity(t, srv, hash, "1.0 [SI::km]"))); got != "6 ['SI::km*km'/SI::km] = SI::metre" {
+		t.Errorf("(SI::km * opaque km) over the wire / SI::km = %s, want 6 ['SI::km*km'/SI::km] = SI::metre", got)
 	}
 }
 

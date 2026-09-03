@@ -26,9 +26,19 @@ type UnitProduct struct {
 	Powers []UnitPower
 }
 
-// NamedUnitProduct is the product of one named unit to the first power.
+// NamedUnitProduct is the product of one named unit to the first power, spelt
+// as one name: text that is no name is quoted so the product reads back as itself.
 func NamedUnitProduct(unit *symbols.Symbol, name string, dimensionOne bool) UnitProduct {
-	return UnitProduct{Powers: []UnitPower{{Unit: unit, Name: name, Exponent: 1, DimensionOne: dimensionOne}}}
+	return UnitProduct{Powers: []UnitPower{{Unit: unit, Name: unitNameSpelling(name), Exponent: 1, DimensionOne: dimensionOne}}}
+}
+
+// unitNameSpelling quotes a name the notation cannot read as one name (`metres per
+// second`, `1000·metre`); one it cannot quote either, holding a quote, stays as it is.
+func unitNameSpelling(name string) string {
+	if name == "" || atomicName(name) || strings.ContainsAny(name, "'\n\r") {
+		return name
+	}
+	return "'" + name + "'"
 }
 
 // IsEmpty reports whether the product names no unit, as a bare number does.
@@ -119,16 +129,37 @@ func powerText(name string, exp float64) string {
 // atomicName reports whether name is one qualified name as the notation spells it,
 // each segment a basic name or quoted, so its operator characters are all in quotes.
 func atomicName(name string) bool {
-	for _, segment := range strings.Split(name, "::") {
-		if lexer.IsIdentifier(segment) {
-			continue
-		}
-		if len(segment) < 2 || segment[0] != '\'' || segment[len(segment)-1] != '\'' ||
-			strings.Contains(segment[1:len(segment)-1], "'") {
+	for name != "" {
+		rest, ok := afterNameSegment(name)
+		if !ok {
 			return false
 		}
+		if rest == "" {
+			return true
+		}
+		if !strings.HasPrefix(rest, "::") {
+			return false
+		}
+		name = rest[2:]
 	}
-	return true
+	return false
+}
+
+// afterNameSegment strips one leading name segment, a basic name or a quoted
+// one (which may hold `::`), reporting false where name starts with neither.
+func afterNameSegment(name string) (string, bool) {
+	if strings.HasPrefix(name, "'") {
+		end := strings.IndexByte(name[1:], '\'')
+		if end < 1 {
+			return "", false
+		}
+		return name[end+2:], true
+	}
+	segment, rest := name, ""
+	if at := strings.Index(name, "::"); at >= 0 {
+		segment, rest = name[:at], name[at:]
+	}
+	return rest, lexer.IsIdentifier(segment)
 }
 
 // combineProducts multiplies two products, with the exponents of the second

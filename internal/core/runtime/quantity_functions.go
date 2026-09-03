@@ -124,13 +124,13 @@ func registerAngleFunction(name string, params []string, apply func([]semantics.
 }
 
 // angleScalars adapts a numeric implementation so that each argument may be a
-// number of radians or a quantity of dimension one (an angle, a ratio), read as
-// the number it reduces to; a quantity of any other dimension is not an angle.
+// number of radians or an angle quantity, read as the radians it reduces to; a
+// quantity in any other unit, of dimension one (bit, sr) or not, is not an angle.
 func angleScalars(params []string, apply func([]semantics.Value) (semantics.Value, error)) libraryApply {
-	return func(name string, _ *Context, args []Value) (Value, error) {
+	return func(name string, ctx *Context, args []Value) (Value, error) {
 		values := make([]semantics.Value, len(args))
 		for i, arg := range args {
-			num, ok := angleArgument(arg)
+			num, ok := angleArgument(ctx, arg)
 			if !ok {
 				return Value{}, fmt.Errorf(
 					"%w: function %s parameter %q requires a number of radians or an angle quantity, got %s",
@@ -147,15 +147,15 @@ func angleScalars(params []string, apply func([]semantics.Value) (semantics.Valu
 	}
 }
 
-// angleArgument reads an angle: a number, or a dimension-one quantity as the
-// number it reduces to.
-func angleArgument(val Value) (semantics.Value, bool) {
+// angleArgument reads an angle in radians: a number, a ratio that cancelled to
+// a number (`m/m`), or a quantity in an angular unit converted to radians.
+func angleArgument(ctx *Context, val Value) (semantics.Value, bool) {
 	switch val.Kind {
 	case ValConst:
 		return val.Const, val.Const.IsNumeric()
 	case ValQuantity:
 		q := val.Quantity()
-		if !q.Unit.Term.Dimensionless() {
+		if !q.Unit.Term.Dimensionless() || !(q.Unit.Product.IsEmpty() || isAngleUnit(ctx, q.Unit.Product)) {
 			return semantics.Value{}, false
 		}
 		if q.Unit.Term.Scale == semantics.UnitScale(1) {
@@ -164,6 +164,16 @@ func angleArgument(val Value) (semantics.Value, bool) {
 		return semantics.Value{Kind: semantics.ValReal, Real: q.baseMagnitude()}, true
 	}
 	return semantics.Value{}, false
+}
+
+// isAngleUnit reports whether the product is one angular-measure unit (rad, °),
+// as the model classifies it; `rad**2` or an unresolved unit is not an angle.
+func isAngleUnit(ctx *Context, product semantics.UnitProduct) bool {
+	if ctx == nil || ctx.model == nil || len(product.Powers) != 1 {
+		return false
+	}
+	f := product.Powers[0]
+	return f.Exponent == 1 && ctx.model.IsAngularMeasureUnit(f.Unit)
 }
 
 // quantityArg reads a ScalarQuantityValue argument: a quantity, or a number,
