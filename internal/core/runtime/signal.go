@@ -745,8 +745,8 @@ func (ctx *Context) post(conns []lower.Connection, msg Message, send lower.Send,
 // carriesEvent reports whether m was sent from the event feature an accept
 // subsets (`accept :> left.alert`), as evaluated in ec: the same declaration
 // once it resolves, so a typed message of a same-named type never satisfies it,
-// and the same occurrence where both sides hold one, so a sibling part's event
-// never does either; by name where the feature does not resolve.
+// and the same occurrence where the message holds one, so a sibling part's event
+// or an accept path evaluating to none never does; by name where it does not resolve.
 func (ec *EvalContext) carriesEvent(m Message, subsets ast.Node) bool {
 	path := lower.FeaturePath(subsets)
 	if path == "" {
@@ -764,7 +764,7 @@ func (ec *EvalContext) carriesEvent(m Message, subsets ast.Node) bool {
 		return true
 	}
 	value, err := ec.eval(subsets)
-	return err != nil || value.Kind != ValInstance || value.Instance == m.EventObject
+	return err == nil && value.Kind == ValInstance && value.Instance == m.EventObject
 }
 
 // lastSegment is the feature a dotted path ends at.
