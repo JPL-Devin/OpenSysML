@@ -44,6 +44,7 @@ case_() {
 
 case_ docs-only docs docs/guide/index.md
 case_ changelog-only docs CHANGELOG.md
+case_ changelog-fragment docs changes/unreleased/repl-thing.added.md
 case_ java-only java clients/java/opensysml-client/pom.xml
 case_ node-only node clients/node/package.json
 case_ python-only python clients/python/opensysml/connection.py

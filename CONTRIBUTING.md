@@ -181,7 +181,7 @@ test(semantics): add conformance checking test cases
 
 - [ ] All tests pass
 - [ ] Documentation updated
-- [ ] CHANGELOG updated (if maintained)
+- [ ] Changelog fragments folded in (`python3 scripts/changelog.py release X.Y.Z`)
 - [ ] Version tag follows semver (`vX.Y.Z`)
 - [ ] Release notes prepared
 
@@ -307,6 +307,11 @@ When a change needs documenting:
   guard (`go test ./cmd/pilot-diff`) still fails on a stale line rather than fixing it, so run
   the target before committing. It does not touch the externally refereed oracle numbers, which
   come from the baseline JSONs.
+- **Changelog entries are fragments, not edits to `CHANGELOG.md`.** A change that a user
+  should read about adds one file, `changes/unreleased/<slug>.<section>.md`, holding the list
+  item(s) for that section (`added`, `changed`, `fixed`, …); see the README there. Two branches
+  then never touch the same changelog lines. `python3 scripts/changelog.py check` validates the
+  fragments and runs in CI; the release procedure folds them into `CHANGELOG.md`.
 - **Internal work-item labels stay out of what a reader reads.** Waves and slices (`wave 12A`,
   `W8G`), follow-up rows (`F4`), adjudication probes (`P1`) and diagnostic classes (`K5`, `S10`)
   have no public referent, so `CHANGELOG.md`, `README.md`, the guide, the reference, the internals

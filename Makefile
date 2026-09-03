@@ -1,4 +1,4 @@
-.PHONY: all build build-sysml build-lsp build-grpc pgo-profile conformance conformance-pkg conformance-rust test coverage lint clean install help python-test python-coverage node-coverage python-install proto proto-buf python-proto proto-ts proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check self-model
+.PHONY: all build build-sysml build-lsp build-grpc pgo-profile conformance conformance-pkg conformance-rust test coverage lint clean install help python-test python-coverage node-coverage python-install proto proto-buf python-proto proto-ts proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check changelog-check changelog-render self-model
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -231,10 +231,18 @@ docs-counts: ## Regenerate and verify all derived documentation counts
 	go test -count=1 ./cmd/pilot-diff ./cmd/pilot-reject ./cmd/doc-counts
 	@echo "✓ Documentation counts and refereed figures are current"
 
-docs-check: ## Verify documentation links, that reader-facing pages cite no internal label, and that quoted oracle figures name their round
+docs-check: ## Verify documentation links, that reader-facing pages cite no internal label, that quoted oracle figures name their round, and that changelog fragments are well-formed
 	$(PYTHON) scripts/check-doc-links.py
 	$(PYTHON) scripts/check-doc-ids.py
 	$(PYTHON) scripts/check-doc-figures.py
+	$(PYTHON) scripts/changelog.py check
+
+changelog-check: ## Verify every changelog fragment under changes/unreleased/ and the folding script
+	$(PYTHON) scripts/changelog-test.py
+	$(PYTHON) scripts/changelog.py check
+
+changelog-render: ## Fold changes/unreleased/ fragments into the Unreleased section of CHANGELOG.md
+	$(PYTHON) scripts/changelog.py render
 
 docs-install: ## Install the documentation site toolchain
 	$(PYTHON) -m pip install -r docs-requirements.txt
