@@ -183,8 +183,12 @@ func (ec *EvalContext) bodyOf(op string, val Value, arity int) (Value, error) {
 
 // bodyOver is bodyOf for an operation over elements whose body parameter is
 // `[0..*]`: empty over no elements, there is nothing to call it with and
-// applied reports false. Any body given is checked as bodyOf checks it.
+// applied reports false. A body literal is checked as bodyOf checks it; a
+// deferred argument that is not one is evaluated only where an element needs it.
 func (ec *EvalContext) bodyOver(op string, val Value, arity int, elements []Value) (body Value, applied bool, err error) {
+	if len(elements) == 0 && isDeferredNonBody(val) {
+		return Value{}, false, nil
+	}
 	val, err = ec.denotedBody(val)
 	if err != nil {
 		return Value{}, false, err
@@ -194,6 +198,16 @@ func (ec *EvalContext) bodyOver(op string, val Value, arity int, elements []Valu
 	}
 	body, err = checkBody(op, val, arity)
 	return body, err == nil, err
+}
+
+// isDeferredNonBody reports a deferred argument that denotes a body rather
+// than being one, so reading it means evaluating it.
+func isDeferredNonBody(val Value) bool {
+	if val.Kind != ValExpr {
+		return false
+	}
+	_, isBody := val.Expr().(*ast.BodyExpr)
+	return !isBody
 }
 
 // denotedBody evaluates a deferred argument that is not itself a body to the

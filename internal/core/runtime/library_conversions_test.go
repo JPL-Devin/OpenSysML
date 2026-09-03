@@ -74,6 +74,12 @@ func TestConversionFunctionValues(t *testing.T) {
 		{"RationalFunctions::gcd", []Value{constInt(0), constInt(0)}, constInt(0)},
 		{"RationalFunctions::gcd", []Value{constInt(0), constInt(-5)}, constInt(5)},
 		{"RationalFunctions::gcd", []Value{constReal(12), constInt(8)}, constInt(4)},
+		{"RationalFunctions::gcd", []Value{constInt(math.MinInt64), constInt(2)}, constInt(2)},
+		{"RationalFunctions::gcd", []Value{constInt(6), constInt(math.MinInt64)}, constInt(2)},
+		{"RationalFunctions::gcd", []Value{constInt(math.MinInt64), constInt(3)}, constInt(1)},
+		{"RationalFunctions::gcd", []Value{constInt(math.MinInt64), constInt(1 << 62)}, constInt(1 << 62)},
+		{"RationalFunctions::gcd", []Value{constInt(math.MinInt64), constInt(math.MaxInt64)}, constInt(1)},
+		{"RationalFunctions::gcd", []Value{constInt(math.MinInt64), constInt(math.MinInt64 + 1)}, constInt(1)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.fn+"/"+FormatValue(tc.args[0]), func(t *testing.T) {
@@ -153,7 +159,8 @@ func TestConversionFunctionErrors(t *testing.T) {
 		{"BaseFunctions::ToString", []Value{{Kind: ValInstance, Instance: 3}}, ErrTypeMismatch},
 		{"BaseFunctions::ToString", []Value{cx(1, 1)}, ErrUnevaluableLibraryFunction},
 		{"RationalFunctions::gcd", []Value{constReal(0.5), constInt(2)}, semantics.ErrArithmeticDomain},
-		{"RationalFunctions::gcd", []Value{constInt(math.MinInt64), constInt(2)}, semantics.ErrArithmeticOverflow},
+		{"RationalFunctions::gcd", []Value{constInt(math.MinInt64), constInt(0)}, semantics.ErrArithmeticOverflow},
+		{"RationalFunctions::gcd", []Value{constInt(math.MinInt64), constInt(math.MinInt64)}, semantics.ErrArithmeticOverflow},
 	}
 	for _, tc := range cases {
 		t.Run(tc.fn+"/"+FormatValue(tc.args[0]), func(t *testing.T) {

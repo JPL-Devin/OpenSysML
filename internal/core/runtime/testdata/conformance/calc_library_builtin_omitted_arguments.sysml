@@ -2,7 +2,7 @@
 // the call, positionally or by name, and binds no value: `size()` counts an
 // empty sequence, `sum()` is its identity, an `if` with no else is null, a
 // trailing index defaults as the library declares, and a body over an empty
-// collection is never called for.
+// collection is never called for — nor evaluated, where an argument denotes it.
 package test {
 	private import ScalarValues::*;
 
@@ -27,6 +27,8 @@ package test {
 		out selectsNoOne : Integer[0..1] = ControlFunctions::selectOne(());
 		out allOfNothing = ControlFunctions::forAll(());
 		out anyOfNothing = ControlFunctions::exists(());
+		out unreadSelector : Integer[*] = ControlFunctions::select((), 1 / 0);
+		out unreadReducer : Integer[0..1] = ControlFunctions::reduce((), 1 / 0);
 	}
 
 	calc c : Omitted;

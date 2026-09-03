@@ -261,19 +261,24 @@ func rationalGCD(args []semantics.Value) (semantics.Value, error) {
 			semantics.ErrArithmeticDomain, FormatConst(args[0]), FormatConst(args[1]),
 		)
 	}
-	if x == math.MinInt64 || y == math.MinInt64 {
+	// Magnitudes are unsigned so the divisor of MinInt64 is found; only a
+	// divisor of 2^63 itself has no Integer to answer with.
+	a, b := magnitude(x), magnitude(y)
+	for b != 0 {
+		a, b = b, a%b
+	}
+	if a > math.MaxInt64 {
 		return semantics.Value{}, fmt.Errorf("%w: gcd(%d, %d) exceeds the Integer range", semantics.ErrArithmeticOverflow, x, y)
 	}
+	return semantics.Value{Kind: semantics.ValInt, Int: int64(a)}, nil
+}
+
+// magnitude is |x| as a uint64, defined for every int64 including MinInt64.
+func magnitude(x int64) uint64 {
 	if x < 0 {
-		x = -x
+		return uint64(-(x + 1)) + 1 // #nosec G115 -- -(x+1) is non-negative for every negative x
 	}
-	if y < 0 {
-		y = -y
-	}
-	for y != 0 {
-		x, y = y, x%y
-	}
-	return semantics.Value{Kind: semantics.ValInt, Int: x}, nil
+	return uint64(x) // #nosec G115 -- x is non-negative here
 }
 
 // parseInteger reads decimal Integer notation, reporting anything else as an

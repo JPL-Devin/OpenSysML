@@ -208,6 +208,8 @@ func TestAggregationsWithQuantityIdentity(t *testing.T) {
 
 // A `[0..*]` body may be omitted or empty over an empty collection, which
 // answers the operation's empty result; over any element the body is required.
+// A deferred argument that is not a body literal is evaluated only where an
+// element needs it, so one that would fail is harmless over no elements.
 func TestCollectionOperationsWithOmittedBody(t *testing.T) {
 	for _, tc := range []struct {
 		expr string
@@ -230,6 +232,15 @@ func TestCollectionOperationsWithOmittedBody(t *testing.T) {
 		{"ControlFunctions::selectOne((), ())", "null"},
 		{"ControlFunctions::forAll(collection = (), test = ())", "true"},
 		{"ControlFunctions::exists((), ())", "false"},
+		{"ControlFunctions::select((), 1 / 0)", "[]"},
+		{"ControlFunctions::reject((), 1 / 0)", "[]"},
+		{"ControlFunctions::collect((), 1 / 0)", "[]"},
+		{"ControlFunctions::reduce((), 1 / 0)", "null"},
+		{"ControlFunctions::selectOne((), 1 / 0)", "null"},
+		{"ControlFunctions::forAll((), 1 / 0)", "true"},
+		{"ControlFunctions::exists(collection = (), test = 1 / 0)", "false"},
+		{"ControlFunctions::select((), 5)", "[]"},
+		{"test::xs->select {in x; x > 3}->select (1 / 0)", "[]"},
 	} {
 		t.Run(tc.expr, func(t *testing.T) {
 			got, err := evalLibraryCall(t, tc.expr)
@@ -252,8 +263,11 @@ func TestCollectionOperationsWithOmittedBody(t *testing.T) {
 		{"ControlFunctions::selectOne(test::xs)", ErrTypeMismatch},
 		{"ControlFunctions::forAll(test::xs)", ErrTypeMismatch},
 		{"ControlFunctions::exists(test::xs)", ErrTypeMismatch},
-		{"ControlFunctions::select((), 5)", ErrTypeMismatch},
 		{"ControlFunctions::select(test::xs, ())", ErrTypeMismatch},
+		{"ControlFunctions::select(test::xs, 5)", ErrTypeMismatch},
+		{"ControlFunctions::select(test::xs, 1 / 0)", ErrDivisionByZero},
+		{"ControlFunctions::reduce(test::xs, 1 / 0)", ErrDivisionByZero},
+		{"ControlFunctions::forAll(test::xs, 1 / 0)", ErrDivisionByZero},
 		{"ControlFunctions::forAll(test::xs, null)", ErrTypeMismatch},
 		{"ControlFunctions::reduce((), {in a; a})", ErrBodyArity},
 		{"ControlFunctions::minimize(())", ErrMultiplicityViolation},

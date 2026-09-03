@@ -34,6 +34,8 @@
     "reducesNothing": {"type": "Null"},
     "selectsNoOne": {"type": "Null"},
     "allOfNothing": {"type": "Boolean", "value": true},
-    "anyOfNothing": {"type": "Boolean", "value": false}
+    "anyOfNothing": {"type": "Boolean", "value": false},
+    "unreadSelector": {"type": "Sequence", "elements": []},
+    "unreadReducer": {"type": "Null"}
   }
 }
