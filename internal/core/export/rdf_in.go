@@ -78,6 +78,7 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 		owningMembership: map[string]membership{},
 		demoted:          map[*element]bool{},
 		demotedExpr:      map[string]bool{},
+		folded:           map[*element]*element{},
 	}
 	roots, err := d.build()
 	if err != nil {
@@ -148,6 +149,9 @@ type decoder struct {
 	demoted     map[*element]bool
 	usedExpr    map[string]bool
 	demotedExpr map[string]bool
+	// folded maps a succession written as the `then` ahead of its target to
+	// that target, whose notation states it.
+	folded map[*element]*element
 	// written records where each element landed in this pass's notation, the
 	// members of one ahead of it.
 	written []writing

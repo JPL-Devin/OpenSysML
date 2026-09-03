@@ -174,6 +174,9 @@ func (d *decoder) blame(iri string, check *encoder) (*element, string) {
 	for iri != "" && !visited[iri] {
 		visited[iri] = true
 		if el, ok := d.byIRI[iri]; ok {
+			if target, ok := d.folded[el]; ok {
+				el = target
+			}
 			return d.nearestVerbatim(el), expr
 		}
 		if d.usedExpr[iri] {

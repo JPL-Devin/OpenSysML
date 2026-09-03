@@ -241,8 +241,11 @@ members carry their own; a `package P { … }` is written as its head, its
 members in `sysx:memberIndex` order, and its `}`. A member written on its
 owner's own lines — an accept's payload (`accept sig : Cmd;`), the branches of
 an `if` — carries no text of its own: it is part of its owner's text, and an
-edit to it rebuilds the owner whole rather than splicing one line. Expression
-nodes carry `sysx:sourceText` too, as described under [Expressions](#expressions).
+edit to it rebuilds the owner whole rather than splicing one line. A succession
+written as the `then` ahead of its target is likewise part of the target's
+text: a succession added to or removed from the graph rebuilds that target.
+Expression nodes carry `sysx:sourceText` too, as described under
+[Expressions](#expressions).
 
 The text is the notation **as the formatter writes it**: the encoder formats the
 file before slicing it, and the decoder formats what it writes back, so a
@@ -306,8 +309,8 @@ spelled canonically. That path is what the round-trip tests exercise — see
 
 Tests: `verbatim_test.go` (byte-for-byte return, the stripped graph's canonical
 notation, an edited flag, an edited expression, an edited string, an edited
-accept payload, a removed member, dropped identity annotations, text that does
-not parse) and `export_test.go`
+accept payload, a removed member, an added and a removed `then`, dropped
+identity annotations, text that does not parse) and `export_test.go`
 (`TestGoldenConversions` locks both notations for every fixture).
 
 ### Ownership

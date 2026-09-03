@@ -232,6 +232,44 @@ func TestThenIsNotWrittenTwice(t *testing.T) {
 	}
 }
 
+// A positional succession is written as the `then` ahead of its target, so a
+// target whose text does not state one the graph holds — or states one it no
+// longer holds — is rebuilt, and the rest of the body is kept as written.
+func TestPositionalSuccessionEditsRebuildTheirTarget(t *testing.T) {
+	sequenced := `package P {
+    action def Q {
+        // first
+        action a;
+        // b follows
+        then action b;
+        // last
+        action c;
+    }
+}
+`
+	turtle := idTurtle(t, sequenced)
+	added := editTurtle(t, turtle, `        then action b;\n`, `        action b;\n`)
+	want := strings.Replace(sequenced, "        // b follows\n", "", 1)
+	if back := toNotation(t, added); back != want {
+		t.Errorf("an added succession was not written:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+	if got, want := structural(t, idTurtle(t, toNotation(t, added))), structural(t, turtle); got != want {
+		t.Errorf("the notation does not state the added succession:\n--- want ---\n%s--- got ---\n%s", want, got)
+	}
+
+	removed := withoutMember(t, turtle, "elmt:P__Q___402")
+	want = strings.Replace(want, "        then action b;\n", "        action b;\n", 1)
+	if back := toNotation(t, removed); back != want {
+		t.Errorf("a removed succession was still written:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+	unnumbered := func(turtle []byte) string {
+		return string(withoutTriples(t, []byte(structural(t, turtle)), "sysx:memberIndex"))
+	}
+	if got, want := unnumbered(idTurtle(t, toNotation(t, removed))), unnumbered(removed); got != want {
+		t.Errorf("the notation still states the removed succession:\n--- want ---\n%s--- got ---\n%s", want, got)
+	}
+}
+
 // withoutMember drops the given member of P from a Turtle document, its own
 // members with it, as an edit to the graph after export would, leaving the
 // other members numbered as before.
