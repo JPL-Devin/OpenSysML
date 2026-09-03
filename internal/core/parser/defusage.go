@@ -344,7 +344,7 @@ func (p *Parser) atVarPrefix() bool {
 		return false
 	}
 	next := p.peekN(1)
-	return p.isKindKeyword(next) ||
+	return p.isKindKeyword(next) || next.Kind == lexer.Hash ||
 		(next.Kind == lexer.Keyword && featureModifierKeywords[next.KeywordID])
 }
 
@@ -389,8 +389,8 @@ func (p *Parser) atKindPrefix() bool {
 	if p.atUseCase() {
 		return false
 	}
-	if kw == varPrefixWord && p.peekN(1).Kind == lexer.Keyword &&
-		featureModifierKeywords[p.peekN(1).KeywordID] {
+	if kw == varPrefixWord && (p.peekN(1).Kind == lexer.Hash ||
+		p.peekN(1).Kind == lexer.Keyword && featureModifierKeywords[p.peekN(1).KeywordID]) {
 		return true
 	}
 	if !p.isKindKeyword(p.peekN(1)) {
@@ -728,7 +728,8 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 		}
 		if t.Kind == lexer.Identifier && p.src.Text(t.Span) == varPrefixWord {
 			next := p.peekN(1)
-			isModifier := p.isKindKeyword(next) ||
+			// KerML FeaturePrefix puts prefix metadata after `var`: `var #M feature f`.
+			isModifier := p.isKindKeyword(next) || next.Kind == lexer.Hash ||
 				(next.Kind == lexer.Keyword && featureModifierKeywords[next.KeywordID]) ||
 				p.atVarPrefixedFeature()
 			if isModifier {
@@ -1011,9 +1012,10 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		// its keyword: `actor #B a;` (SysML.xtext SubjectUsage, ActorUsage,
 		// StakeholderUsage, ObjectiveRequirementUsage, each `'keyword'
 		// UsageExtensionKeyword* …`), as does a keyword that qualifies the
-		// declaration after it: `variant #B part v;`, `assert #B constraint c;`
-		// (VariantUsageElement, AssertConstraintUsage).
-		if kw == "subject" || kw == "actor" || kw == "stakeholder" || kw == "objective" || kw == "variant" || kindPrefixKeywords[kw] {
+		// declaration after it: `variant #B part v;`, `assume #B constraint c;`
+		// (VariantUsageElement, RequirementConstraintUsage) — not `assert`, whose
+		// OccurrenceUsagePrefix puts them ahead of it: `#B assert not constraint c;`.
+		if kw == "subject" || kw == "actor" || kw == "stakeholder" || kw == "objective" || kw == "variant" || kw == "assume" || kw == "require" {
 			prefixes = append(prefixes, p.parsePrefixMetadata()...)
 		}
 		// `variant x` declares a variant of the variation that owns it

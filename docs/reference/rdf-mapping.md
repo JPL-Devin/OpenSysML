@@ -236,7 +236,10 @@ never by parsing the id — a declared id may legitimately end in `_om` or embed
   `sysml:redefines`, a nested feature keeps its own kind, and `sysx:memberIndex`
   orders them. A `#` prefix is an owned member of the declaration it prefixes,
   indexed after the body's members so their indices are the same with or without
-  it, and is written back at the head of that declaration rather than in its body.
+  it, and is written back at the head of that declaration rather than in its body,
+  in the grammar's position: ahead of the kind keyword and of `assert`/`perform`
+  (`#Safety assert not constraint c;`), after `subject`, `actor`, `stakeholder`,
+  `objective`, `variant`, `assume`, `require` and `var` (`assume #Safety constraint c;`).
 
 The `sysx:` properties:
 

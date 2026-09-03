@@ -581,10 +581,14 @@ func TestPrefixMetadataComesBackFromTheGraphAlone(t *testing.T) {
 		"use case def U {\n        #Safety include use case ride : Ride;\n    }",
 		"requirement def R {\n        assume #Reviewed constraint {\n            true;\n        }\n    }",
 		"requirement def R {\n        require #Safety constraint {\n            true;\n        }\n    }",
+		"part def Q {\n        #Safety assert constraint ok : Stopped;\n    }",
+		"part def Q {\n        #Safety assert not constraint bad : Stopped;\n    }",
+		"part def Q {\n        ref #Safety assert not constraint bad : Stopped;\n    }",
+		"part def Q {\n        #Safety perform action go : Move;\n    }",
 	}
 	for _, head := range heads {
 		t.Run(head, func(t *testing.T) {
-			src := "package P {\n    metadata def <safe> Safety;\n    metadata def Reviewed;\n    part def Vehicle;\n    requirement def Goal;\n    use case def Ride;\n    " + head + "\n}\n"
+			src := "package P {\n    metadata def <safe> Safety;\n    metadata def Reviewed;\n    part def Vehicle;\n    requirement def Goal;\n    use case def Ride;\n    constraint def Stopped;\n    action def Move;\n    " + head + "\n}\n"
 			turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
 			if err != nil {
 				t.Fatalf("to turtle: %v", err)
@@ -600,6 +604,38 @@ func TestPrefixMetadataComesBackFromTheGraphAlone(t *testing.T) {
 				t.Fatalf("the head should come back as written:\n%s", back)
 			}
 			again, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle again: %v", err)
+			}
+			if string(again) != string(turtle) {
+				t.Errorf("the second hop changed the graph\n--- first ---\n%s\n--- second ---\n%s", turtle, again)
+			}
+		})
+	}
+}
+
+// KerML's FeaturePrefix puts prefix metadata after `var`, so a variable
+// feature's `#M` comes back there from the graph alone.
+func TestVarPrefixMetadataComesBackFromTheGraphAlone(t *testing.T) {
+	heads := []string{
+		"var #Safety feature x;",
+		"derived var #Safety feature y : Safety;",
+	}
+	for _, head := range heads {
+		t.Run(head, func(t *testing.T) {
+			src := "package P {\n    metadata def Safety;\n    class C {\n        " + head + "\n    }\n}\n"
+			turtle, err := export.Convert("m.kerml", []byte(src), export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle: %v", err)
+			}
+			back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation: %v", err)
+			}
+			if !strings.Contains(string(back), head) {
+				t.Fatalf("the head should come back as written:\n%s", back)
+			}
+			again, err := export.Convert("m.kerml", back, export.FormatSysML, export.FormatTurtle)
 			if err != nil {
 				t.Fatalf("to turtle again: %v", err)
 			}

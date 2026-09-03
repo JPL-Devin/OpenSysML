@@ -24,3 +24,9 @@
   `assume constraint { }` and `require constraint { }`. The name, specializations, multiplicity
   and value of the constraint usage the member owns are now carried as they are for any usage,
   and a body-less member comes back with its `;` rather than an empty body.
+- **Prefix metadata is written back where the grammar puts it.** A prefixed assertion came back
+  as `assert not #Safety constraint c;`, which no grammar production spells, so the notation
+  did not parse; it is now written `#Safety assert not constraint c;` (AssertConstraintUsage
+  `OccurrenceUsagePrefix 'assert'`), and the parser no longer accepts the prefix after `assert`.
+  KerML's `var #Safety feature x;` (FeaturePrefix) now parses, so a variable feature's prefix
+  survives the round trip too.

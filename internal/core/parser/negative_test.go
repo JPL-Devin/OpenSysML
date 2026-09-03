@@ -60,6 +60,10 @@ func TestNegative(t *testing.T) {
 		// Prefix metadata needs a name, and the declaration after it a terminator.
 		{"require_prefix_metadata_no_type", "requirement r { require #; }"},
 		{"require_prefix_metadata_unterminated", "requirement r { require #goal c }"},
+		// An assertion's prefix metadata comes ahead of `assert`, not after it or
+		// its `not` (SysML.xtext AssertConstraintUsage `OccurrenceUsagePrefix 'assert'`).
+		{"assert_prefix_metadata_after_keyword", "package P { part def D { assert #B constraint c; } }"},
+		{"assert_prefix_metadata_after_not", "package P { part def D { assert not #B constraint c; } }"},
 		// A target succession's body closes, and its ends are still required
 		// (SysML.xtext:1698 ActionTargetSuccession).
 		{"succession_body_unclosed", "package P { action def A { action a; first a; then a { doc /* x */ } }"},

@@ -10,6 +10,12 @@ package Prefixed {
     #Reviewed package Notes;
     #Safety dependency from Car to Vehicle;
     constraint def Stopped;
+    action def Move;
+    part context : Car {
+        #Safety assert constraint stopped : Stopped;
+        #Reviewed assert not constraint moving : Stopped;
+        #Safety perform action go : Move;
+    }
     requirement def Braking {
         subject #Safety brakes : Car;
         assume #Reviewed constraint { true }

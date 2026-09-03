@@ -793,20 +793,6 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 			words = append(words, flag.keyword)
 		}
 	}
-	// A prefix qualifies the kind keyword after it, and the `not` of
-	// `assert not constraint c` negates the declaration that prefix introduces.
-	// Negation on its own has no notation, so it is reported rather than dropped.
-	prefix, hasPrefix := d.stringOf(el, rdf.OpenSysML+xDeclaredPrefix)
-	negated := d.boolOf(el, rdf.SysML+"isNegated")
-	switch {
-	case hasPrefix:
-		words = append(words, prefix)
-		if negated {
-			words = append(words, "not")
-		}
-	case negated:
-		return "", d.missing(el, "sysx:"+xDeclaredPrefix, "the `not` of a negated declaration qualifies the prefix keyword it follows")
-	}
 	// Prefix metadata ends the usage prefix, ahead of the kind keyword
 	// (SysML.xtext UsagePrefix `UnextendedUsagePrefix UsageExtensionKeyword*`);
 	// a subject, actor, stakeholder or objective takes it after its keyword
@@ -814,6 +800,27 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	prefixes, err := d.prefixWords(el)
 	if err != nil {
 		return "", err
+	}
+	// A prefix qualifies the kind keyword after it, and the `not` of
+	// `assert not constraint c` negates the declaration that prefix introduces.
+	// Negation on its own has no notation, so it is reported rather than dropped.
+	prefix, hasPrefix := d.stringOf(el, rdf.OpenSysML+xDeclaredPrefix)
+	negated := d.boolOf(el, rdf.SysML+"isNegated")
+	switch {
+	case hasPrefix:
+		// `#M assert not constraint c` ends the occurrence prefix ahead of the
+		// qualifying keyword (SysML.xtext AssertConstraintUsage, PerformActionUsage);
+		// `assume #M constraint c` takes it after (RequirementConstraintUsage).
+		if !annotationsFollowPrefix[prefix] {
+			words = append(words, prefixes...)
+			prefixes = nil
+		}
+		words = append(words, prefix)
+		if negated {
+			words = append(words, "not")
+		}
+	case negated:
+		return "", d.missing(el, "sysx:"+xDeclaredPrefix, "the `not` of a negated declaration qualifies the prefix keyword it follows")
 	}
 	keywordAt := len(words)
 	switch kind {
@@ -1371,6 +1378,14 @@ func (d *decoder) metadataSigil(el *element) string {
 		return ""
 	}
 	return keyword
+}
+
+// annotationsFollowPrefix lists the qualifying keywords written ahead of the
+// `#M` annotations they own (RequirementConstraintUsage, KerML FeaturePrefix).
+var annotationsFollowPrefix = map[string]bool{
+	"assume":  true,
+	"require": true,
+	"var":     true,
 }
 
 // prefixWords writes the `#M` annotations a declaration owns as prefixes, which
