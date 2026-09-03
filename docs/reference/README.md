@@ -17,6 +17,8 @@ reading order.
 - **[Rust API](rust-api.md)** — the `opensysml` crate, blocking, and its one error enum
 - **[Service transports](service-transports.md)** — what `sysml-grpc` serves on one port, which
   body encoding a client should choose, and the flags for CORS, TLS and health
+- **[Wire contract](wire-contract.md)** — Connect + JSON field by field, for a MATLAB, R, Julia,
+  C or shell client with no generated library: the session, every `Value` arm, errors, answers
 - **[RDF mapping](rdf-mapping.md)** — which triples a model becomes, what is not mapped, and
   why the mapping is experimental
 - **[OSLC Query text](oslc-query.md)** — element-identification query syntax and semantics

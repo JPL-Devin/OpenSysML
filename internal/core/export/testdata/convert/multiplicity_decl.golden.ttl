@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -10,11 +11,17 @@ elmt:Mult
     sysml:qualifiedName "Mult" ;
     sysml:elementId "Mult" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Mult" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Mult__exactlyOne, elmt:Mult__optional, elmt:Mult__single ;
     sysml:ownedMembership elmt:Mult__exactlyOne_om, elmt:Mult__optional_om, elmt:Mult__single_om ;
-    sysml:ownedRelationship elmt:Mult__exactlyOne_om, elmt:Mult__optional_om, elmt:Mult__single_om .
+    sysml:ownedRelationship elmt:Mult__exactlyOne_om, elmt:Mult__optional_om, elmt:Mult__single_om ;
+    sysx:sourceText "package Mult {\n" ;
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Mult__exactlyOne\"},{\"@id\":\"Mult__optional\"},{\"@id\":\"Mult__single\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Mult__exactlyOne_om\"},{\"@id\":\"Mult__optional_om\"},{\"@id\":\"Mult__single_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Mult__exactlyOne_om\"},{\"@id\":\"Mult__optional_om\"},{\"@id\":\"Mult__single_om\"}]" .
 
 elmt:Mult__exactlyOne
     a sysx:MultiplicityDeclaration ;
@@ -28,7 +35,8 @@ elmt:Mult__exactlyOne
     sysml:declaredName "exactlyOne" ;
     sysml:lowerBound expr:Mult__exactlyOne_plowerBound ;
     sysml:upperBound expr:Mult__exactlyOne_pupperBound ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    multiplicity exactlyOne [1..1];\n" .
 
 elmt:Mult__exactlyOne_om
     a sysml:OwningMembership ;
@@ -64,7 +72,8 @@ elmt:Mult__optional
     sysml:declaredName "optional" ;
     sysml:lowerBound expr:Mult__optional_plowerBound ;
     sysml:upperBound expr:Mult__optional_pupperBound ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    multiplicity optional [0..1];\n" .
 
 elmt:Mult__optional_om
     a sysml:OwningMembership ;
@@ -99,7 +108,8 @@ elmt:Mult__single
     sysml:owningMembership elmt:Mult__single_om ;
     sysml:declaredName "single" ;
     sysml:subsets elmt:Mult__exactlyOne ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    multiplicity single subsets exactlyOne;\n" .
 
 elmt:Mult__single_om
     a sysml:OwningMembership ;

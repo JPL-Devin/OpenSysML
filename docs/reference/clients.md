@@ -85,6 +85,18 @@ reflects a measurement rather than a preference: a 468 KB response costs about 6
 a protobuf body against about 42 ms with JSON, and the difference is `protojson` and `json_format`
 CPU time rather than bytes on the wire. See [service transports](service-transports.md).
 
+## Runtime integrations
+
+An analysis environment with no client above — MATLAB, R, Julia, C, a shell script — can still
+reach the service, because Connect with a JSON body is an ordinary HTTP `POST` its own HTTP
+library can make. What such a hand-written client has to decode is written down once, field by
+field and with every example captured from a running service, on
+[the wire contract](wire-contract.md): the `ParseSources` session and how long a `modelHash`
+lives, every arm of `Value` and how to tell them apart, diagnostics against Connect errors, the
+behavior and query answer shapes, and a short illustrative decoder in each of the four
+languages. Those illustrations are not shipped clients; a client that claims to be one runs the
+conformance scenarios below through its own API.
+
 ## Providing the service binary
 
 Only the Python and Node clients download a binary, and both pin a SHA-256 per release asset and

@@ -1,4 +1,4 @@
-.PHONY: all build build-sysml build-lsp build-grpc pgo-profile conformance conformance-pkg conformance-rust test coverage lint clean install help python-test python-coverage node-coverage python-install proto proto-buf python-proto proto-ts proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check self-model
+.PHONY: all build build-sysml build-lsp build-grpc man man-check install-tree pgo-profile conformance conformance-pkg conformance-rust test coverage lint clean install help python-test python-coverage node-coverage python-install proto proto-buf python-proto proto-ts proto-rust proto-lint proto-breaking vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts docs-check changelog-check changelog-render self-model
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -37,6 +37,21 @@ SELF_MODEL_DIR := examples/self-model
 SELF_MODEL_OUT ?= build/self-model
 LIBS_DIR := internal/core/libs
 
+# The commands whose manual pages are generated and shipped, in section 1.
+COMMANDS := sysml sysml-lsp sysml-grpc
+MAN_DIR := man/man1
+MAN_PAGES := $(addprefix $(MAN_DIR)/,$(addsuffix .1,$(COMMANDS)))
+
+# Installation paths, as a distribution's packaging expects to set them.
+DESTDIR ?=
+prefix ?= /usr/local
+exec_prefix ?= $(prefix)
+bindir ?= $(exec_prefix)/bin
+datarootdir ?= $(prefix)/share
+mandir ?= $(datarootdir)/man
+man1dir ?= $(mandir)/man1
+INSTALL ?= install
+
 all: build test python-test ## Build and test everything
 
 build: build-sysml build-lsp build-grpc ## Build all binaries
@@ -58,6 +73,27 @@ build-grpc: ## Build sysml-grpc binary
 	@mkdir -p $(BIN_DIR)
 	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/sysml-grpc ./cmd/sysml-grpc
 	@echo "✓ Built $(BIN_DIR)/sysml-grpc ($(VERSION))"
+
+man: ## Regenerate the shipped manual pages from each command's description
+	@echo "Writing the manual pages..."
+	@mkdir -p $(MAN_DIR)
+	@for cmd in $(COMMANDS); do \
+		go run ./cmd/$$cmd -man > $(MAN_DIR)/$$cmd.1 || exit 1; \
+	done
+	@echo "✓ Wrote $(MAN_PAGES)"
+
+man-check: ## Verify the shipped pages are current and formatter-clean
+	@echo "Checking the manual pages..."
+	go test -count=1 -run 'TestTheShippedManualPage|TestTheManualPage' ./cmd/sysml ./cmd/sysml-lsp ./cmd/sysml-grpc
+	@# mandoc is the strictest reader; groff is the one always at hand.
+	@if command -v mandoc >/dev/null 2>&1; then \
+		mandoc -T lint -W warning $(MAN_PAGES) || exit 1; \
+	elif command -v groff >/dev/null 2>&1; then \
+		groff -man -Tutf8 -ww -z $(MAN_PAGES) || exit 1; \
+	else \
+		echo "note: neither mandoc nor groff is installed; the pages were not formatted"; \
+	fi
+	@echo "✓ Manual pages are current"
 
 pgo-profile: ## Regenerate cmd/*/default.pgo, the CPU profile go build optimizes the binaries against
 	@echo "Collecting the PGO profile..."
@@ -134,6 +170,17 @@ install: build ## Install binaries to $GOPATH/bin
 	go install -ldflags "$(LDFLAGS)" ./cmd/sysml-lsp
 	go install -ldflags "$(LDFLAGS)" ./cmd/sysml-grpc
 	@echo "✓ Installed"
+
+# What a distribution's package build calls: staged under DESTDIR, into the
+# GNU-conventional paths, binaries and manual pages together.
+install-tree: build ## Install binaries and manual pages under DESTDIR/prefix
+	@echo "Installing to $(DESTDIR)$(prefix)..."
+	$(INSTALL) -d "$(DESTDIR)$(bindir)" "$(DESTDIR)$(man1dir)"
+	@for cmd in $(COMMANDS); do \
+		$(INSTALL) -m 0755 "$(BIN_DIR)/$$cmd" "$(DESTDIR)$(bindir)/$$cmd" || exit 1; \
+		$(INSTALL) -m 0644 "$(MAN_DIR)/$$cmd.1" "$(DESTDIR)$(man1dir)/$$cmd.1" || exit 1; \
+	done
+	@echo "✓ Installed into $(DESTDIR)$(bindir) and $(DESTDIR)$(man1dir)"
 
 version: ## Show version information
 	@echo "Version:    $(VERSION)"
@@ -232,10 +279,19 @@ docs-counts: ## Regenerate and verify all derived documentation counts
 	go test -count=1 ./cmd/pilot-diff ./cmd/pilot-reject ./cmd/doc-counts ./cmd/validation-census
 	@echo "✓ Documentation counts and refereed figures are current"
 
-docs-check: ## Verify documentation links, that reader-facing pages cite no internal label, and that quoted oracle figures name their round
+docs-check: ## Verify documentation links, internal-label hygiene, quoted oracle figures, changelog fragments and the build-time compliance census
 	$(PYTHON) scripts/check-doc-links.py
 	$(PYTHON) scripts/check-doc-ids.py
 	$(PYTHON) scripts/check-doc-figures.py
+	$(PYTHON) scripts/changelog.py check
+	$(PYTHON) scripts/mkdocs_census-test.py
+
+changelog-check: ## Verify every changelog fragment under changes/unreleased/ and the folding script
+	$(PYTHON) scripts/changelog-test.py
+	$(PYTHON) scripts/changelog.py check
+
+changelog-render: ## Fold changes/unreleased/ fragments into the Unreleased section of CHANGELOG.md
+	$(PYTHON) scripts/changelog.py render
 
 docs-install: ## Install the documentation site toolchain
 	$(PYTHON) -m pip install -r docs-requirements.txt

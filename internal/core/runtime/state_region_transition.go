@@ -185,7 +185,7 @@ func (e *StateExecutor) runEffect(trans *lower.Transition) error {
 // a target outside it leaves the whole region set, which is what makes a
 // transition through a choice, junction or entry/exit point reachable from
 // inside a region.
-func (e *StateExecutor) fireTransitionInRegion(region *ast.StateRegion, trans *lower.Transition) error {
+func (e *StateExecutor) fireTransitionInRegion(region *ast.StateRegion, trans *lower.Transition) (bool, error) {
 	// Fork, join and history replace the entire active configuration rather than
 	// move one region, so they are fired whole.
 	if isSynchronizationTarget(trans.Target) {
@@ -194,25 +194,25 @@ func (e *StateExecutor) fireTransitionInRegion(region *ast.StateRegion, trans *l
 
 	pass, err := e.passesGuard(trans)
 	if err != nil || !pass {
-		return err
+		return false, err
 	}
 
 	target, err := e.transitionTarget(trans)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if target == nil {
-		return fmt.Errorf("transition out of region %s has no target state", region.Name)
+		return false, fmt.Errorf("transition out of region %s has no target state", region.Name)
 	}
 
 	source := e.activeConfig.regionStates[region]
 	if e.regionContains(region, target) {
-		return e.moveBetweenRegions(region, region, source, trans, target)
+		return true, e.moveBetweenRegions(region, region, source, trans, target)
 	}
 	if exit, sibling := e.concurrentRegionsFor(region, target); sibling != nil {
-		return e.moveBetweenRegions(exit, e.innermostActiveRegion(sibling, target), source, trans, target)
+		return true, e.moveBetweenRegions(exit, e.innermostActiveRegion(sibling, target), source, trans, target)
 	}
-	return e.leaveRegion(region, trans, target)
+	return true, e.leaveRegion(region, trans, target)
 }
 
 // concurrentRegionsFor finds the level at which target lies in a region concurrent

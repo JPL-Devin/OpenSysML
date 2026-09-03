@@ -15,8 +15,6 @@ const (
 
 **No external referee:** self-assessed.
 
-The map below tracks 99 semantic rules: **99 ✅ faithful, 0 ⚠️ approximate, 0 ❌ not implemented, 0 ⛔ deliberate divergence.**
-
 | Rule | Status |
 |---|---|
 | a | ✅ Faithful |
@@ -48,18 +46,16 @@ func TestRunRewritesEveryDerivedLineAndIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first run: %v", err)
 	}
-	if rewritten != 3 {
-		t.Fatalf("first run rewrote %d files, want 3", rewritten)
+	if rewritten != 2 {
+		t.Fatalf("first run rewrote %d files, want 2", rewritten)
+	}
+	if read(t, root, doccounts.SpecCompliancePath) != fixtureCompliance {
+		t.Fatal("the compliance map is not a derived file and must not be rewritten")
 	}
 	first := map[string]string{}
-	for _, path := range []string{doccounts.SpecCompliancePath, doccounts.ReadmePath, doccounts.ArchitecturePath} {
-		first[path] = read(t, root, path)
-	}
-	if want := "The map below tracks 2 semantic rules: **1 ✅ faithful, 1 ⚠️ approximate, 0 ❌ not implemented, 0 ⛔ deliberate divergence.**"; !strings.Contains(first[doccounts.SpecCompliancePath], want) {
-		t.Fatalf("header not restated:\n%s", first[doccounts.SpecCompliancePath])
-	}
 	for _, path := range []string{doccounts.ReadmePath, doccounts.ArchitecturePath} {
-		if !strings.Contains(first[path], "status of each of the 2 tracked rules stays in [spec compliance]") {
+		first[path] = read(t, root, path)
+		if !strings.Contains(first[path], "status of each tracked rule stays in [spec compliance]") {
 			t.Fatalf("%s bookkeeping line not restated:\n%s", path, first[path])
 		}
 		if !strings.Contains(first[path], "Nothing else on this line's neighbours moves.") {
@@ -86,37 +82,45 @@ func TestRunRewritesEveryDerivedLineAndIsIdempotent(t *testing.T) {
 func TestRunWritesNothingWhenALaterFileCannotBeRewritten(t *testing.T) {
 	root := writeFixture(t)
 	writeAt(t, root, doccounts.ArchitecturePath, "**Row bookkeeping:** reworded, and no longer the line the pattern states.\n")
-	before := read(t, root, doccounts.SpecCompliancePath)
+	before := read(t, root, doccounts.ReadmePath)
 
 	if _, err := run(root, io.Discard); err == nil {
 		t.Fatal("want an error for a derived line the pattern does not match")
 	}
-	if read(t, root, doccounts.SpecCompliancePath) != before {
+	if read(t, root, doccounts.ReadmePath) != before {
 		t.Fatal("a failed run rewrote an earlier file")
 	}
 }
 
 func TestRunWritesNothingWhenAFileIsNotWritable(t *testing.T) {
 	root := writeFixture(t)
-	readonly := filepath.Join(root, filepath.FromSlash(doccounts.ReadmePath))
+	readonly := filepath.Join(root, filepath.FromSlash(doccounts.ArchitecturePath))
 	if err := os.Chmod(readonly, 0o444); err != nil {
 		t.Fatalf("chmod: %v", err)
 	}
-	before := read(t, root, doccounts.SpecCompliancePath)
+	before := read(t, root, doccounts.ReadmePath)
 
 	if _, err := run(root, io.Discard); err == nil {
 		t.Fatal("want an error for a file that cannot be written")
 	}
-	if read(t, root, doccounts.SpecCompliancePath) != before {
+	if read(t, root, doccounts.ReadmePath) != before {
 		t.Fatal("a failed run rewrote an earlier file")
 	}
 }
 
 func TestRunReportsAMapWithNoRuleRows(t *testing.T) {
 	root := t.TempDir()
-	writeAt(t, root, doccounts.SpecCompliancePath, "# Compliance\n\nThe map below tracks 0 semantic rules: **0 ✅ faithful, 0 ⚠️ approximate, 0 ❌ not implemented, 0 ⛔ deliberate divergence.**\n")
+	writeAt(t, root, doccounts.SpecCompliancePath, "# Compliance\n")
 	if _, err := run(root, io.Discard); err == nil {
 		t.Fatal("want an error when the compliance map states no rule rows")
+	}
+}
+
+func TestRunReportsAKnownFailureRow(t *testing.T) {
+	root := writeFixture(t)
+	writeAt(t, root, doccounts.SpecCompliancePath, fixtureCompliance+"| c | 🚧 Known failure |\n")
+	if _, err := run(root, io.Discard); err == nil || !strings.Contains(err.Error(), "🚧") {
+		t.Fatalf("want an error naming the 🚧 row, got %v", err)
 	}
 }
 
@@ -128,8 +132,8 @@ func TestCheckReportsStaleFilesWithoutWriting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}
-	if stale != 3 {
-		t.Fatalf("check reported %d stale files, want 3", stale)
+	if stale != 2 {
+		t.Fatalf("check reported %d stale files, want 2", stale)
 	}
 	if !strings.Contains(output.String(), "README.md is stale") {
 		t.Fatalf("check report does not name README.md:\n%s", output.String())

@@ -1,4 +1,5 @@
 @prefix elmt: <urn:sysmlv2:element:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -9,11 +10,17 @@ elmt:Structural
     sysml:qualifiedName "Structural" ;
     sysml:elementId "Structural" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Structural" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Structural__Frame, elmt:Structural__Move, elmt:Structural__Thing, elmt:Structural__Link ;
     sysml:ownedMembership elmt:Structural__Frame_om, elmt:Structural__Move_om, elmt:Structural__Thing_om, elmt:Structural__Link_om ;
-    sysml:ownedRelationship elmt:Structural__Frame_om, elmt:Structural__Move_om, elmt:Structural__Thing_om, elmt:Structural__Link_om .
+    sysml:ownedRelationship elmt:Structural__Frame_om, elmt:Structural__Move_om, elmt:Structural__Thing_om, elmt:Structural__Link_om ;
+    sysx:sourceText "package Structural {\n" ;
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Structural__Frame\"},{\"@id\":\"Structural__Move\"},{\"@id\":\"Structural__Thing\"},{\"@id\":\"Structural__Link\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Structural__Frame_om\"},{\"@id\":\"Structural__Move_om\"},{\"@id\":\"Structural__Thing_om\"},{\"@id\":\"Structural__Link_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Structural__Frame_om\"},{\"@id\":\"Structural__Move_om\"},{\"@id\":\"Structural__Thing_om\"},{\"@id\":\"Structural__Link_om\"}]" .
 
 elmt:Structural__Frame
     a sysml:Structure ;
@@ -25,7 +32,8 @@ elmt:Structural__Frame
     sysml:owningRelationship elmt:Structural__Frame_om ;
     sysml:owningMembership elmt:Structural__Frame_om ;
     sysml:declaredName "Frame" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    struct def Frame;\n" .
 
 elmt:Structural__Frame_om
     a sysml:OwningMembership ;
@@ -47,7 +55,8 @@ elmt:Structural__Move
     sysml:owningRelationship elmt:Structural__Move_om ;
     sysml:owningMembership elmt:Structural__Move_om ;
     sysml:declaredName "Move" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    behavior def Move;\n" .
 
 elmt:Structural__Move_om
     a sysml:OwningMembership ;
@@ -69,7 +78,8 @@ elmt:Structural__Thing
     sysml:owningRelationship elmt:Structural__Thing_om ;
     sysml:owningMembership elmt:Structural__Thing_om ;
     sysml:declaredName "Thing" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    class def Thing;\n" .
 
 elmt:Structural__Thing_om
     a sysml:OwningMembership ;
@@ -91,7 +101,8 @@ elmt:Structural__Link
     sysml:owningRelationship elmt:Structural__Link_om ;
     sysml:owningMembership elmt:Structural__Link_om ;
     sysml:declaredName "Link" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    assoc def Link;\n" .
 
 elmt:Structural__Link_om
     a sysml:OwningMembership ;

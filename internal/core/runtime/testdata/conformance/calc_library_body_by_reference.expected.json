@@ -1,0 +1,10 @@
+{
+  "libraries": true,
+  "type": "calcUsage",
+  "evaluate": "test::p",
+  "outputs": {
+    "byArrow": {"type": "Sequence", "elements": [{"type": "Integer", "value": 2}, {"type": "Integer", "value": 3}]},
+    "byName": {"type": "Sequence", "elements": [{"type": "Integer", "value": 2}, {"type": "Integer", "value": 3}]},
+    "byNamedArgs": {"type": "Sequence", "elements": [{"type": "Integer", "value": 2}, {"type": "Integer", "value": 3}]}
+  }
+}

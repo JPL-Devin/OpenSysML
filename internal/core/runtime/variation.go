@@ -135,11 +135,14 @@ func (ctx *Context) variantValue(variation, variant *symbols.Symbol, owner int64
 			return NewVariantValue(variant, id), nil
 		}
 	}
-	inst, err := ctx.variantInstance(variant, owner)
+	var inst *Instance
+	err := ctx.variantInstance(variant, owner, func(created *Instance) {
+		inst = created
+		ctx.variantObjects[key] = inst.ID
+	})
 	if err != nil {
 		return Value{}, fmt.Errorf("variant %s: %w", variant.Name, err)
 	}
-	ctx.variantObjects[key] = inst.ID
 	return NewVariantValue(variant, inst.ID), nil
 }
 
@@ -148,17 +151,22 @@ func (ctx *Context) variantValue(variation, variant *symbols.Symbol, owner int64
 // connect engagementRing.ringPort to band.ringPort` — is the connection the
 // selection realizes, so it is materialized as a connector of the object that
 // selected it, with its ends attached to that object's features. A variant of
-// any other kind is an ordinary object of itself.
-func (ctx *Context) variantInstance(variant *symbols.Symbol, owner int64) (*Instance, error) {
+// any other kind is an ordinary object of itself. keep receives the object once created.
+func (ctx *Context) variantInstance(variant *symbols.Symbol, owner int64, keep func(*Instance)) error {
 	if !ctx.model.IsConnectorUsage(variant) {
-		return ctx.Instantiate(variant)
+		inst, err := ctx.instantiateAs(variant, 0)
+		if err != nil {
+			return err
+		}
+		keep(inst)
+		return nil
 	}
 	ownerInst, ok := ctx.Instance(owner)
 	if !ok {
-		return nil, fmt.Errorf("%w: %s connects features of the object selecting it, and no object selected it",
+		return fmt.Errorf("%w: %s connects features of the object selecting it, and no object selected it",
 			ErrConnectorEnd, variant.Name)
 	}
-	return ctx.materializeConnector(ownerInst, variant, ctx.variantConnectorBase(variant))
+	return ctx.materializeConnector(ownerInst, variant, ctx.variantConnectorBase(variant), keep)
 }
 
 // variantConnectorBase returns the type an object of a variant connector is

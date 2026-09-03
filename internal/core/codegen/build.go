@@ -25,8 +25,9 @@ func Targets() []Target { return []Target{TargetC, TargetGo} }
 // CCompilerEnvVar names the C compiler TargetC drives (default: cc).
 const CCompilerEnvVar = "OPENSYSML_CC"
 
-// CFlags are the C compiler options; the prelude's explicit checks keep -O3 safe.
-var CFlags = []string{"-O3", "-flto", "-std=gnu11", "-Wall", "-Wextra", "-Wno-unused-function", "-Wno-unused-parameter"}
+// CFlags are the C compiler options; the prelude's explicit checks keep -O3 safe,
+// and no contraction keeps every Real operation rounded as the interpreter rounds it.
+var CFlags = []string{"-O3", "-flto", "-ffp-contract=off", "-std=gnu11", "-Wall", "-Wextra", "-Wno-unused-function", "-Wno-unused-parameter"}
 
 // Source renders program for target, as a complete program with a main.
 func Source(p *Program, target Target) ([]byte, error) {

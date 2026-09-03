@@ -1,11 +1,18 @@
 package runtime
 
 import (
+	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 const adoptSrc = `package Demo {
@@ -162,6 +169,373 @@ func TestAdoptCarriesAnObjectOwningAnAnonymousConnector(t *testing.T) {
 	port := fvInstance(t, ctx, obj, "a", "p")
 	if end := conns[0].Ends[0].Value; !holdsObject(end, port.ID) {
 		t.Errorf("the connector end holds %v, want the port object %d of the carried object", end, port.ID)
+	}
+}
+
+// The identities of the connectors a carry-over set aside are known without
+// materializing them, and asking for one materializes it again under its identity.
+func TestAdoptKeepsTheIdentitiesOfConnectorsSetAside(t *testing.T) {
+	src := strings.Replace(adoptConnectSrc, "connect a.p to b.q;", "connect a.p to b.q; connection c connect a.p to b.q;", 1)
+	prev := contextOver(t, src)
+	obj, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::Sys"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if got := obj.KeptConnectorIDs(); len(got) != 0 {
+		t.Fatalf("KeptConnectorIDs() = %v before any carry-over, want none", got)
+	}
+	conns, err := obj.OwnedConnectors(prev)
+	if err != nil {
+		t.Fatalf("OwnedConnectors: %v", err)
+	}
+	named := fvInstance(t, prev, obj, "c")
+	anon := conns[0].ID
+	shapes := prev.ShapesOf(obj)
+
+	ctx := contextOver(t, src+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, shapes, obj); err != nil {
+		t.Fatalf("Adopt: %v", err)
+	}
+	want := []int64{min(anon, named.ID), max(anon, named.ID)}
+	if got := obj.KeptConnectorIDs(); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("KeptConnectorIDs() = %v after the carry-over, want %v", got, want)
+	}
+	if got := obj.MaterializedConnectors(ctx); len(got) != 0 {
+		t.Errorf("MaterializedConnectors() = %v, want none until they are asked for", got)
+	}
+	held := len(ctx.InstanceIDs())
+	if got, err := obj.RestoreConnector(ctx, 99); got != nil || err != nil {
+		t.Errorf("RestoreConnector(99) = %v, %v; want nothing for an identity never kept", got, err)
+	}
+	if len(ctx.InstanceIDs()) != held {
+		t.Fatalf("asking after the identities materialized objects: %v", ctx.InstanceIDs())
+	}
+
+	for _, id := range []int64{anon, named.ID} {
+		conn, err := obj.RestoreConnector(ctx, id)
+		if err != nil {
+			t.Fatalf("RestoreConnector(%d): %v", id, err)
+		}
+		if conn == nil || conn.ID != id {
+			t.Fatalf("RestoreConnector(%d) = %v, want the connector under that identity", id, conn)
+		}
+		if got, found := ctx.Instance(id); !found || got != conn {
+			t.Errorf("Instance(%d) = %v, %v; want the connector materialized again", id, got, found)
+		}
+		port := fvInstance(t, ctx, obj, "a", "p")
+		if end := conn.Ends[0].Value; !holdsObject(end, port.ID) {
+			t.Errorf("connector %d's end holds %v, want the port object %d", id, end, port.ID)
+		}
+	}
+	if got := obj.KeptConnectorIDs(); len(got) != 0 {
+		t.Errorf("KeptConnectorIDs() = %v once both are materialized again, want none", got)
+	}
+	if got := obj.MaterializedConnectors(ctx); len(got) != 1 || got[0].ID != anon {
+		t.Errorf("MaterializedConnectors() = %v, want the anonymous connector %d", got, anon)
+	}
+	if len(ctx.InstanceIDs()) != held+2 {
+		t.Errorf("materializing the two connectors again left %v, want the two objects more", ctx.InstanceIDs())
+	}
+}
+
+// carriedSysWithThreeConnectors materializes a Sys owning three anonymous
+// connectors, carries it into a re-analysis, and returns the carried object with
+// the identities its connectors had, in declaration order.
+func carriedSysWithThreeConnectors(t *testing.T) (*Context, *Instance, []int64) {
+	t.Helper()
+	src := strings.Replace(adoptConnectSrc, "connect a.p to b.q;", "connect a.p to b.q; connect a.p to b.q; connect a.p to b.q;", 1)
+	prev := contextOver(t, src)
+	obj, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::Sys"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	conns, err := obj.OwnedConnectors(prev)
+	if err != nil {
+		t.Fatalf("OwnedConnectors: %v", err)
+	}
+	if len(conns) != 3 {
+		t.Fatalf("the object owns %d anonymous connectors, want 3", len(conns))
+	}
+	ids := make([]int64, 0, 3)
+	for _, conn := range conns {
+		ids = append(ids, conn.ID)
+	}
+	shapes := prev.ShapesOf(obj)
+	ctx := contextOver(t, src+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, shapes, obj); err != nil {
+		t.Fatalf("Adopt: %v", err)
+	}
+	return ctx, obj, ids
+}
+
+// restoreCost measures the steps restoring one of those connectors alone spends.
+func restoreCost(t *testing.T) int64 {
+	t.Helper()
+	ctx, obj, ids := carriedSysWithThreeConnectors(t)
+	spent := ctx.steps
+	if _, err := obj.RestoreConnector(ctx, ids[2]); err != nil {
+		t.Fatalf("RestoreConnector(%d): %v", ids[2], err)
+	}
+	return ctx.steps - spent
+}
+
+// Asking for one connector a carry-over set aside materializes that connector
+// alone: its siblings stay set aside, under their identities, until each is asked
+// for — so a budget that admits the one asked for does not have to admit them all.
+func TestRestoreConnectorMaterializesTheOneAskedForAlone(t *testing.T) {
+	ctx, obj, ids := carriedSysWithThreeConnectors(t)
+	held := len(ctx.InstanceIDs())
+	last, err := obj.RestoreConnector(ctx, ids[2])
+	if err != nil {
+		t.Fatalf("RestoreConnector(%d): %v", ids[2], err)
+	}
+	if last == nil || last.ID != ids[2] {
+		t.Fatalf("RestoreConnector(%d) = %v, want the connector under that identity", ids[2], last)
+	}
+	// The ends read objects carried with the owner, so the connector is all that is new.
+	if got := len(ctx.InstanceIDs()); got != held+1 {
+		t.Errorf("restoring one connector left %d objects, want %d: it alone", got, held+1)
+	}
+	for _, id := range ids[:2] {
+		if _, found := ctx.Instance(id); found {
+			t.Errorf("restoring %d materialized its sibling %d", ids[2], id)
+		}
+	}
+	if got := obj.KeptConnectorIDs(); fmt.Sprint(got) != fmt.Sprint(ids[:2]) {
+		t.Errorf("KeptConnectorIDs() = %v after restoring %d, want its siblings %v still set aside", got, ids[2], ids[:2])
+	}
+	if got := obj.MaterializedConnectors(ctx); len(got) != 1 || got[0].ID != ids[2] {
+		t.Errorf("MaterializedConnectors() = %v, want the one restored, %d", got, ids[2])
+	}
+
+	// A budget admitting exactly the one asked for admits it, whatever its siblings would cost.
+	cost := restoreCost(t)
+	ctx, obj, ids = carriedSysWithThreeConnectors(t)
+	ctx.maxSteps = ctx.steps + cost
+	if conn, err := obj.RestoreConnector(ctx, ids[2]); err != nil || conn == nil || conn.ID != ids[2] {
+		t.Fatalf("RestoreConnector(%d) under a budget admitting it alone = %v, %v; want the connector", ids[2], conn, err)
+	}
+	if got := obj.KeptConnectorIDs(); fmt.Sprint(got) != fmt.Sprint(ids[:2]) {
+		t.Errorf("KeptConnectorIDs() = %v, want the siblings %v still set aside", got, ids[:2])
+	}
+	// The siblings take their identities back when asked for, in either order.
+	ctx.maxSteps = ctx.steps + 2*cost
+	for _, id := range []int64{ids[0], ids[1]} {
+		conn, err := obj.RestoreConnector(ctx, id)
+		if err != nil || conn == nil || conn.ID != id {
+			t.Fatalf("RestoreConnector(%d) = %v, %v; want the connector under that identity", id, conn, err)
+		}
+	}
+	if got := obj.KeptConnectorIDs(); len(got) != 0 {
+		t.Errorf("KeptConnectorIDs() = %v once all are materialized again, want none", got)
+	}
+	conns, err := obj.OwnedConnectors(ctx)
+	if err != nil {
+		t.Fatalf("OwnedConnectors: %v", err)
+	}
+	var got []int64
+	for _, conn := range conns {
+		got = append(got, conn.ID)
+	}
+	if fmt.Sprint(got) != fmt.Sprint(ids) {
+		t.Errorf("OwnedConnectors() = %v, want the connectors under their identities %v in declaration order", got, ids)
+	}
+}
+
+// A probe that restores one set-aside connector discards it with the probe and
+// leaves the object as it found it: every identity kept, the one restored
+// included, and what was materialized before still so.
+func TestProbedRestorationLeavesTheIdentitiesKept(t *testing.T) {
+	ctx, obj, ids := carriedSysWithThreeConnectors(t)
+	if first, err := obj.RestoreConnector(ctx, ids[0]); err != nil || first == nil || first.ID != ids[0] {
+		t.Fatalf("RestoreConnector(%d) = %v, %v; want the connector", ids[0], first, err)
+	}
+	held := len(ctx.InstanceIDs())
+
+	end := ctx.beginProbe()
+	mark := len(ctx.created)
+	if last, err := obj.RestoreConnector(ctx, ids[2]); err != nil || last == nil || last.ID != ids[2] {
+		t.Fatalf("RestoreConnector(%d) under a probe = %v, %v; want the connector under that identity", ids[2], last, err)
+	}
+	ctx.abandonInstancesSince(mark)
+	end()
+
+	if got := obj.KeptConnectorIDs(); fmt.Sprint(got) != fmt.Sprint(ids[1:]) {
+		t.Errorf("KeptConnectorIDs() after the probe = %v, want %v set aside as before it", got, ids[1:])
+	}
+	if got := obj.MaterializedConnectors(ctx); len(got) != 1 || got[0].ID != ids[0] {
+		t.Errorf("MaterializedConnectors() after the probe = %v, want the one restored before it, %d", got, ids[0])
+	}
+	if got := len(ctx.InstanceIDs()); got != held {
+		t.Errorf("the probe left %d objects, want %d as before it", got, held)
+	}
+	if last, err := obj.RestoreConnector(ctx, ids[2]); err != nil || last == nil || last.ID != ids[2] {
+		t.Errorf("RestoreConnector(%d) after the probe = %v, %v; want the connector under that identity", ids[2], last, err)
+	}
+	if got := obj.KeptConnectorIDs(); fmt.Sprint(got) != fmt.Sprint(ids[1:2]) {
+		t.Errorf("KeptConnectorIDs() = %v, want the sibling %v alone still set aside", got, ids[1:2])
+	}
+}
+
+// A restoration that fails leaves every identity set aside, the one asked for
+// included, and no object behind, so asking again under a budget that admits it
+// materializes the connector under its identity.
+func TestRestoreConnectorThatFailsKeepsEveryIdentity(t *testing.T) {
+	cost := restoreCost(t)
+	ctx, obj, ids := carriedSysWithThreeConnectors(t)
+	held := ctx.InstanceIDs()
+	ctx.maxSteps = ctx.steps + cost - 1
+	conn, err := obj.RestoreConnector(ctx, ids[1])
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Fatalf("RestoreConnector(%d) one step short = %v, %v; want the budget spent", ids[1], conn, err)
+	}
+	if got := obj.KeptConnectorIDs(); fmt.Sprint(got) != fmt.Sprint(ids) {
+		t.Errorf("KeptConnectorIDs() = %v after the failure, want all of %v still set aside", got, ids)
+	}
+	if got := obj.MaterializedConnectors(ctx); len(got) != 0 {
+		t.Errorf("MaterializedConnectors() = %v after the failure, want none", got)
+	}
+	for _, id := range ids {
+		if _, found := ctx.Instance(id); found {
+			t.Errorf("the failed restoration left connector %d behind", id)
+		}
+	}
+
+	ctx.maxSteps = ctx.Budgets().MaxSteps + 1000
+	conn, err = obj.RestoreConnector(ctx, ids[1])
+	if err != nil || conn == nil || conn.ID != ids[1] {
+		t.Fatalf("RestoreConnector(%d) asked again = %v, %v; want the connector under that identity", ids[1], conn, err)
+	}
+	port := fvInstance(t, ctx, obj, "a", "p")
+	if end := conn.Ends[0].Value; !holdsObject(end, port.ID) {
+		t.Errorf("the connector's end holds %v, want the port object %d", end, port.ID)
+	}
+	want := []int64{ids[0], ids[2]}
+	if got := obj.KeptConnectorIDs(); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("KeptConnectorIDs() = %v, want the siblings %v still set aside", got, want)
+	}
+	if got := ctx.InstanceIDs(); len(got) != len(held)+1 {
+		t.Errorf("the objects held are %v, want those before, %v, and the connector alone", got, held)
+	}
+}
+
+const adoptTwoConnectSrc = `package Demo {
+	port def P;
+	part def A { port p : P; port r : P; }
+	part def B { port q : P; port s : P; }
+	part def Sys { part a : A; part b : B; connect a.p to b.q; connect a.r to b.s; }
+}`
+
+// endsOf names the ports the connector's ends hold, `a.p-b.q`, on the object owning them.
+func endsOf(t *testing.T, ctx *Context, owner, conn *Instance) string {
+	t.Helper()
+	var names []string
+	for _, end := range conn.Ends {
+		id, held := end.Value.Object()
+		if !held {
+			t.Fatalf("connector %d's end holds %v, want a port object", conn.ID, end.Value)
+		}
+		for _, path := range [][2]string{{"a", "p"}, {"a", "r"}, {"b", "q"}, {"b", "s"}} {
+			if fvInstance(t, ctx, owner, path[0], path[1]).ID == id {
+				names = append(names, path[0]+"."+path[1])
+			}
+		}
+	}
+	return strings.Join(names, "-")
+}
+
+// A kept identity follows its declaration wherever it now stands among its siblings;
+// the identity of a declaration edited away or removed is dropped, not handed on.
+func TestKeptConnectorIdentitiesFollowTheirDeclarations(t *testing.T) {
+	const (
+		first  = "connect a.p to b.q;"
+		second = "connect a.r to b.s;"
+	)
+	cases := []struct {
+		name  string
+		decls string
+		// want maps the ends of each connector materialized before to those the
+		// connector under its identity has after, "" for an identity dropped.
+		want map[string]string
+		// fresh is the connectors the new declarations add, by ends.
+		fresh []string
+	}{
+		{"inserted before", "connect a.p to b.s; " + first + " " + second, map[string]string{"a.p-b.q": "a.p-b.q", "a.r-b.s": "a.r-b.s"}, []string{"a.p-b.s"}},
+		{"reordered", second + " " + first, map[string]string{"a.p-b.q": "a.p-b.q", "a.r-b.s": "a.r-b.s"}, nil},
+		{"edited", first + " connect a.r to b.q;", map[string]string{"a.p-b.q": "a.p-b.q", "a.r-b.s": ""}, []string{"a.r-b.q"}},
+		{"removed", first, map[string]string{"a.p-b.q": "a.p-b.q", "a.r-b.s": ""}, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			prev := contextOver(t, adoptTwoConnectSrc)
+			owner, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::Sys"))
+			if err != nil {
+				t.Fatalf("Instantiate: %v", err)
+			}
+			conns, err := owner.OwnedConnectors(prev)
+			if err != nil {
+				t.Fatalf("OwnedConnectors: %v", err)
+			}
+			before := make(map[string]int64, len(conns))
+			for _, conn := range conns {
+				before[endsOf(t, prev, owner, conn)] = conn.ID
+			}
+			if len(before) != 2 {
+				t.Fatalf("the connectors before are %v, want two with distinct ends", before)
+			}
+			shapes := prev.ShapesOf(owner)
+
+			ctx := contextOver(t, strings.Replace(adoptTwoConnectSrc, first+" "+second, tc.decls, 1))
+			if _, err := ctx.Adopt(prev, shapes, owner); err != nil {
+				t.Fatalf("Adopt: %v", err)
+			}
+			var kept []int64
+			for ends, id := range before {
+				if tc.want[ends] != "" {
+					kept = append(kept, id)
+				}
+			}
+			slices.Sort(kept)
+			if got := owner.KeptConnectorIDs(); fmt.Sprint(got) != fmt.Sprint(kept) {
+				t.Errorf("KeptConnectorIDs() = %v, want %v: the identities of the declarations still there", got, kept)
+			}
+			for ends, id := range before {
+				conn, err := owner.RestoreConnector(ctx, id)
+				if err != nil {
+					t.Fatalf("RestoreConnector(%d): %v", id, err)
+				}
+				if tc.want[ends] == "" {
+					if conn != nil {
+						t.Errorf("RestoreConnector(%d) of the %s connector = the %s connector, want nothing: its declaration is gone", id, ends, endsOf(t, ctx, owner, conn))
+					}
+					continue
+				}
+				if conn == nil || conn.ID != id {
+					t.Fatalf("RestoreConnector(%d) = %v, want the connector under that identity", id, conn)
+				}
+				if got := endsOf(t, ctx, owner, conn); got != tc.want[ends] {
+					t.Errorf("connector %d connects %s after the carry-over, want %s as before", id, got, tc.want[ends])
+				}
+			}
+			after, err := owner.OwnedConnectors(ctx)
+			if err != nil {
+				t.Fatalf("OwnedConnectors after the carry-over: %v", err)
+			}
+			var fresh []string
+			for _, conn := range after {
+				if slices.Contains(slices.Collect(maps.Values(before)), conn.ID) {
+					continue
+				}
+				fresh = append(fresh, endsOf(t, ctx, owner, conn))
+			}
+			slices.Sort(fresh)
+			if fmt.Sprint(fresh) != fmt.Sprint(tc.fresh) {
+				t.Errorf("the connectors under new identities connect %v, want %v", fresh, tc.fresh)
+			}
+			if got := owner.KeptConnectorIDs(); len(got) != 0 {
+				t.Errorf("KeptConnectorIDs() = %v once all are materialized again, want none", got)
+			}
+		})
 	}
 }
 
@@ -361,4 +735,83 @@ func indexOfFeature(t *testing.T, features []EffectiveFeature, name string) int 
 	}
 	t.Fatalf("no feature %q among %d", name, len(features))
 	return 0
+}
+
+const crateSrc = `package Demo {
+	private import Shapes::*;
+	part def Crate { part box : Box; }
+}`
+
+// crateContextOver indexes the crate model over a Shapes library of its own,
+// Domain content whose text the index vouches for unless vouch is false.
+func crateContextOver(t *testing.T, lib string, vouch bool) *Context {
+	t.Helper()
+	idx := symbols.NewIndex()
+	idx.AddDocument("Shapes.sysml", parser.New(source.New("Shapes.sysml", []byte(lib))).ParseFile())
+	doc := symbols.LibraryDocument{Tier: symbols.TierDomain}
+	if vouch {
+		doc.Digest = symbols.TextDigest([]byte(lib))
+	}
+	idx.MarkLibraryDocument("Shapes.sysml", doc)
+	idx.AddDocument("<test>", parser.New(source.New("<test>", []byte(crateSrc))).ParseFile())
+	idx.ExpandWildcardImports()
+	resolver := resolve.New(idx)
+	ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
+	ctx.RegisterSource(source.New("<test>", []byte(crateSrc)))
+	ctx.RegisterSource(source.New("Shapes.sysml", []byte(lib)))
+	return ctx
+}
+
+// crateIn materializes a crate and the box part inside it.
+func crateIn(t *testing.T, ctx *Context) *Instance {
+	t.Helper()
+	obj, err := ctx.Instantiate(lookupOne(t, ctx.resolver.Index(), "Demo::Crate"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if _, err := obj.GetFeatureValue(ctx, "box"); err != nil {
+		t.Fatalf("GetFeatureValue(box): %v", err)
+	}
+	return obj
+}
+
+// A shape digest names a library type instead of expanding it, so it must say
+// which library: two indexes loaded on their own may declare a type of the same
+// name with different features, and an object of one is refused by the other.
+func TestAdoptRefusesASameNamedLibraryTypeOfAnotherLibrary(t *testing.T) {
+	const lib = `package Shapes { part def Box { attribute n = 1; } }`
+	prev := crateContextOver(t, lib, true)
+	obj := crateIn(t, prev)
+	shapes := prev.ShapesOf(obj)
+
+	same := crateContextOver(t, lib, true)
+	if _, err := same.Adopt(prev, shapes, obj); err != nil {
+		t.Fatalf("Adopt over the same library: %v", err)
+	}
+
+	other := crateContextOver(t, strings.Replace(lib, "attribute n = 1;", "attribute n = 1; attribute m = 2;", 1), true)
+	if _, err := other.Adopt(prev, shapes, obj); err == nil {
+		t.Fatal("Adopt accepted an object whose box type gained a feature in the other library")
+	}
+	if _, found := other.Instance(obj.ID); found {
+		t.Error("the refused object was left in the context")
+	}
+}
+
+// A library whose text the index does not vouch for is expanded like the model,
+// so the digest still follows what its types declare.
+func TestShapeDigestExpandsALibraryOfUnknownText(t *testing.T) {
+	const lib = `package Shapes { part def Box { attribute n = 1; } }`
+	ctx := crateContextOver(t, lib, false)
+	if _, known := ctx.resolver.Index().LibraryIdentity(); known {
+		t.Fatal("LibraryIdentity is known for a library document of no digest")
+	}
+	digest := ctx.ShapeDigest(lookupOne(t, ctx.resolver.Index(), "Demo::Crate"))
+	if !strings.Contains(digest, "Shapes::Box/partDef{n:1..1=1@") {
+		t.Errorf("digest names the library type without expanding it: %s", digest)
+	}
+	other := crateContextOver(t, strings.Replace(lib, "n = 1", "n = 2", 1), false)
+	if other.ShapeDigest(lookupOne(t, other.resolver.Index(), "Demo::Crate")) == digest {
+		t.Error("digest unchanged by an edit to the library type it expands")
+	}
 }

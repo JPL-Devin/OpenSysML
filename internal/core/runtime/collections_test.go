@@ -266,6 +266,8 @@ func TestCollectionScalarResults(t *testing.T) {
 		// collection, as the library's own sum0/product1 compute it.
 		{"sum(())", integerValue(0)},
 		{"product(())", integerValue(1)},
+		{"RealFunctions::sum(())", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 0}}},
+		{"RealFunctions::product(xs)", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 6}}},
 		{"sum((1, 2.5))", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 3.5}}},
 		{"xs.{in x; x * 2}->sum()", integerValue(12)},
 		{"xs->forAll {in x; x > 0}", boolValue(true)},
@@ -484,8 +486,8 @@ func TestSequenceIndexKeepsQuantityForm(t *testing.T) {
 	}
 }
 
-// TestAggregateQuantities: a roll-up over measured values answers a measured
-// value, in the unit of the first element, and refuses a bare number mixed in.
+// TestAggregateQuantities: a roll-up over measured values answers one in the first
+// element's unit, of the kind the bare magnitudes give, and refuses a bare number mixed in.
 func TestAggregateQuantities(t *testing.T) {
 	ctx, scope := quantityContext(t)
 
@@ -493,8 +495,8 @@ func TestAggregateQuantities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sum of metres: %v", err)
 	}
-	if got.Kind != ValQuantity || got.Quantity().String() != "6.0 [m]" {
-		t.Errorf("sum of metres = %v (%s), want 6.0 [m]", got, got.Kind)
+	if got.Kind != ValQuantity || got.Quantity().String() != "6 [m]" {
+		t.Errorf("sum of metres = %v (%s), want 6 [m]", got, got.Kind)
 	}
 
 	// A commensurable element converts into the first element's unit.

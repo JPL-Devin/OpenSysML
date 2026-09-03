@@ -60,8 +60,8 @@ func (c *compiler) compileColumn(
 	if !ok || invocation.Operand != nil {
 		return Expression{}, invalid
 	}
-	target, resolved := c.resolver.ResolveQualified(owner.Scope, invocation.Type)
-	if !resolved || symbols.FQNOf(target) != columnFQN {
+	selection := c.model.SelectCall(owner.Scope, invocation, semantics.PerformsBehavior)
+	if selection.Ambiguous || symbols.FQNOf(selection.Called()) != columnFQN {
 		return Expression{}, invalid
 	}
 	nameNode, expressionNode, err := c.columnArguments(query, owner, invocation)

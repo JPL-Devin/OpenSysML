@@ -62,6 +62,9 @@ const (
 	xTransitionSyntax = "transitionSyntax"
 	xTrigger          = "trigger"
 	xTriggerKeyword   = "triggerKeyword"
+	xEffectMember     = "effectMember"
+	xBracedEffect     = "bracedEffect"
+	xBodyMember       = "bodyMember"
 	xDeferredEvent    = "deferredEvent"
 	xAssignOperator   = "assignmentOperator"
 	xPayload          = "payload"
@@ -82,15 +85,18 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 			e.graph.Add(subject, e.sysml(pSourceFeature), e.reference(owner, n.Name))
 		}
 		e.expression(subject, e.sysx(xGuard), xGuard, owner, n.Guard)
-		if successor := qualifiedText(n.Successor); successor != "" {
-			e.graph.Add(subject, e.sysml(pTargetFeature), e.reference(owner, successor))
+		if qualifiedText(n.Successor) != "" {
+			e.graph.Add(subject, e.sysml(pTargetFeature), e.linkEndpoint(owner, n.Successor))
 		} else if n.Guard != nil {
 			return true, &UnsupportedError{
 				What: fmt.Sprintf("the guarded initial node at %s", e.where(n)),
 				Note: "it names no successor, so the branch its guard states cannot be written back",
 			}
 		}
-		return true, nil
+		if n.HasBody {
+			e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(true))
+		}
+		return true, e.encode(n.Members, fqn, subject)
 
 	case *ast.FinalNode:
 		head(rdf.OpenSysMLTerm(mFinalNode))
@@ -126,7 +132,7 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 			e.expression(subject, e.sysx(xExpression), xExpression, owner, n.Expression)
 		case qualifiedText(n.ActionRef) != "":
 			e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelReferences]),
-				e.reference(owner, qualifiedText(n.ActionRef)))
+				e.link(owner, n.ActionRef))
 		default:
 			return true, &UnsupportedError{
 				What: fmt.Sprintf("the action node at %s", e.where(n)),
@@ -172,9 +178,15 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 			// member written before it, which the form records.
 			e.graph.Add(subject, e.sysx(xEndForm), rdf.String(formThen))
 		}
-		return true, e.edgeEnds(subject, n, owner,
+		if err := e.edgeEnds(subject, n, owner,
 			edgeEnd{name: n.Source, member: n.SourceMember, implied: implied},
-			edgeEnd{name: n.Target, member: n.TargetMember})
+			edgeEnd{name: n.Target, member: n.TargetMember}); err != nil {
+			return true, err
+		}
+		if n.HasBody {
+			e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(true))
+		}
+		return true, e.encode(n.Members, fqn, subject)
 
 	case *ast.ControlFlowEdge:
 		// A guarded branch of a decision, or the `else` branch taken when no
@@ -253,6 +265,8 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 // encodeLoop emits a loop of an action body. Which conditions it carries is what
 // tells the three forms apart: a `while` states its condition before the body, a
 // `loop` only in an `until` clause after it, and a `for` iterates a collection.
+// A condition is read in the loop's own scope, whose body declares the actions
+// it tests; the collection is evaluated before the loop is entered.
 func (e *encoder) encodeLoop(n *ast.WhileLoopActionNode, head func(rdf.Term), subject rdf.Term, fqn, owner string) error {
 	if n.Kind == ast.LoopFor {
 		head(rdf.SysMLTerm(mForLoop))
@@ -268,12 +282,12 @@ func (e *encoder) encodeLoop(n *ast.WhileLoopActionNode, head func(rdf.Term), su
 		head(rdf.SysMLTerm(mWhileLoop))
 		switch n.Kind {
 		case ast.LoopWhile:
-			e.expression(subject, e.sysx(xWhileCondition), xWhileCondition, owner, n.Condition)
-			e.expression(subject, e.sysx(xUntilCondition), xUntilCondition, owner, n.Until)
+			e.expression(subject, e.sysx(xWhileCondition), xWhileCondition, fqn, n.Condition)
+			e.expression(subject, e.sysx(xUntilCondition), xUntilCondition, fqn, n.Until)
 		default:
 			// A `loop` tests its condition after each iteration, which is what an
 			// `until` clause states; without one it has no condition at all.
-			e.expression(subject, e.sysx(xUntilCondition), xUntilCondition, owner, n.Condition)
+			e.expression(subject, e.sysx(xUntilCondition), xUntilCondition, fqn, n.Condition)
 		}
 	}
 	e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(e.bracedBody(n, n.Body)))
@@ -297,34 +311,79 @@ func (e *encoder) encodeSubaction(n ast.Node, actions []ast.Node, kind string, h
 
 // encodeTransition emits a transition of a state machine: its ends as
 // references, its trigger and guard as the text they were written as, and its
-// effect as the actions it owns.
+// effect and body as the members it owns, the effect's linked as such.
 func (e *encoder) encodeTransition(n *ast.TransitionMember, head func(rdf.Term), subject rdf.Term, fqn, owner string) error {
 	head(rdf.SysMLTerm(mTransition))
 	e.name(subject, n.Name)
 	e.graph.Add(subject, e.sysx(xTransitionSyntax), rdf.String(e.transitionSyntax(n)))
-	if source := qualifiedText(n.Source); source != "" {
-		e.graph.Add(subject, e.sysml(pSourceFeature), e.reference(owner, source))
+	if qualifiedText(n.Source) != "" {
+		e.graph.Add(subject, e.sysml(pSourceFeature), e.linkEndpoint(owner, n.Source))
 	}
-	target := qualifiedText(n.Target)
-	if target == "" {
+	if qualifiedText(n.Target) == "" {
 		return &UnsupportedError{
 			What: fmt.Sprintf("the transition at %s", e.where(n)),
 			Note: "it names no target state, so the edge it declares cannot be written back",
 		}
 	}
-	e.graph.Add(subject, e.sysml(pTargetFeature), e.reference(owner, target))
+	e.graph.Add(subject, e.sysml(pTargetFeature), e.linkEndpoint(owner, n.Target))
 	if n.Trigger != nil {
 		e.graph.Add(subject, e.sysx(xTrigger), rdf.String(e.text(n.Trigger)))
 		e.graph.Add(subject, e.sysx(xTriggerKeyword), rdf.String(e.introducer(n, n.Trigger)))
 	}
 	if n.Via != nil {
-		e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelVia]), e.reference(owner, qualifiedText(n.Via)))
+		e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelVia]), e.link(owner, n.Via))
 	}
-	e.expression(subject, e.sysx(xGuard), xGuard, owner, n.Guard)
-	if len(n.Effect) > 0 {
-		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(e.bracedBody(n, n.Effect)))
+	// The guard reads the parameters the trigger declares, in the transition's scope.
+	e.expression(subject, e.sysx(xGuard), xGuard, fqn, n.Guard)
+	if n.HasEffect {
+		e.graph.Add(subject, e.sysx(xBracedEffect), rdf.Bool(len(n.Effect) == 0 || e.bracedBody(n, n.Effect)))
 	}
-	return e.encode(n.Effect, fqn, subject)
+	if err := e.transitionMemberLinks(n, subject, xEffectMember, n.Effect); err != nil {
+		return err
+	}
+	if err := e.transitionMemberLinks(n, subject, xBodyMember, n.Members); err != nil {
+		return err
+	}
+	if n.HasBody {
+		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(true))
+	}
+	// `then t` lies between the effect and the body, so neither tiles the
+	// transition's lines on its own.
+	if len(n.Effect) > 0 && len(n.Members) > 0 {
+		return e.encodeInline(transitionMembers(n), fqn, subject)
+	}
+	return e.encode(transitionMembers(n), fqn, subject)
+}
+
+// transitionMemberLinks marks each member of a transition's effect or body as
+// such, so a reader can tell the two apart.
+func (e *encoder) transitionMemberLinks(n *ast.TransitionMember, subject rdf.Term, property string, members []ast.Node) error {
+	for _, member := range e.kept(members) {
+		node, _ := unwrapMember(member)
+		if node == nil {
+			continue
+		}
+		memberFQN, ok := e.fqn[node]
+		if !ok {
+			return &UnsupportedError{
+				What: fmt.Sprintf("the transition at %s", e.where(n)),
+				Note: "it owns a member the graph gives no identity, so its effect cannot be told from its body",
+			}
+		}
+		e.graph.Add(subject, e.sysx(property), e.ids.subjectForNode(node, memberFQN))
+	}
+	return nil
+}
+
+// transitionMembers lists what a transition owns in written order: the actions
+// of its `do` effect, then the members of its body.
+func transitionMembers(n *ast.TransitionMember) []ast.Node {
+	if len(n.Effect) == 0 {
+		return n.Members
+	}
+	members := make([]ast.Node, 0, len(n.Effect)+len(n.Members))
+	members = append(members, n.Effect...)
+	return append(members, n.Members...)
 }
 
 // impliedSource reports whether the source name came from the member before the
@@ -356,8 +415,7 @@ func (e *encoder) edgeEnds(subject rdf.Term, node ast.Node, owner string, src, t
 		{tgt, pTargetFeature, xTargetMember, "sequences to"},
 	}
 	for _, end := range ends {
-		name := qualifiedText(end.end.name)
-		if name == "" {
+		if qualifiedText(end.end.name) == "" {
 			fqn, ok := e.fqn[end.end.member]
 			if !ok {
 				return &UnsupportedError{
@@ -368,29 +426,17 @@ func (e *encoder) edgeEnds(subject rdf.Term, node ast.Node, owner string, src, t
 			e.graph.Add(subject, e.sysx(end.member), e.ids.subjectForNode(end.end.member, fqn))
 			continue
 		}
-		// The two-name form is read only as basic names, so an end needing quotes
-		// is refused; an implied end is not written, so its spelling is free.
-		if quotedName(name) && !end.end.implied {
-			return &UnsupportedError{
-				What: fmt.Sprintf("the succession at %s", e.where(node)),
-				Note: fmt.Sprintf("it sequences %s, whose name is not a basic name, and the two-end form the graph is written back as reads only basic names", name),
+		term := e.linkEndpoint(owner, end.end.name)
+		e.graph.Add(subject, e.sysml(end.feature), term)
+		// A name the parser took from the member before that links no element
+		// still binds that member: the graph states it by position as well.
+		if before, ok := e.preceding[node]; ok && end.end.implied && term.IsLiteral() {
+			if fqn, ok := e.fqn[before]; ok {
+				e.graph.Add(subject, e.sysx(end.member), e.ids.subjectForNode(before, fqn))
 			}
 		}
-		e.graph.Add(subject, e.sysml(end.feature), e.reference(owner, name))
 	}
 	return nil
-}
-
-// quotedName reports whether any segment of a qualified name is written with
-// quotes, the spelling nameText gives it back.
-func quotedName(qualified string) bool {
-	for _, segment := range strings.Split(qualified, "::") {
-		segment = strings.TrimSpace(segment)
-		if nameText(unquote(segment)) != segment {
-			return true
-		}
-	}
-	return false
 }
 
 func (e *encoder) name(subject rdf.Term, name string) {
@@ -555,7 +601,9 @@ func behaviorNameAndMembers(node ast.Node) (string, []ast.Node, bool) {
 	switch n := node.(type) {
 	case *ast.InitialNode:
 		// Its name references the starting member, so it declares none.
-		return "", nil, true
+		return "", n.Members, true
+	case *ast.SuccessionEdge:
+		return "", n.Members, true
 	case *ast.FinalNode:
 		return "", nil, true
 	case *ast.ForkNode:
@@ -591,7 +639,7 @@ func behaviorNameAndMembers(node ast.Node) (string, []ast.Node, bool) {
 	case *ast.ExitMember:
 		return "", n.Actions, true
 	case *ast.TransitionMember:
-		return n.Name, n.Effect, true
+		return n.Name, transitionMembers(n), true
 	}
 	return "", nil, false
 }
@@ -804,6 +852,7 @@ func (d *decoder) positionalSuccessions(children []*element) ([]*element, error)
 				return nil, err
 			}
 			last().prefix = "then "
+			d.folded[child] = last()
 			continue
 		}
 		// The target is a member elsewhere in the body, so the succession
@@ -884,8 +933,14 @@ func (d *decoder) sourceEnd(el *element) (rdf.Term, bool) {
 // sequencesFrom reports whether the source end el states is the one a `then`
 // written after from records.
 func (d *decoder) sequencesFrom(el, from *element) bool {
-	source, states := d.sourceEnd(el)
-	if !states {
+	if from == nil {
+		return false
+	}
+	if term, positional := d.graph.Object(rdf.IRI(el.iri), rdf.OpenSysML+xSourceMember); positional {
+		return term.Value == from.iri
+	}
+	source, ok := d.graph.Object(rdf.IRI(el.iri), rdf.SysML+pSourceFeature)
+	if !ok {
 		return false
 	}
 	answers, ok := d.answersTo(from)
@@ -946,7 +1001,7 @@ func (d *decoder) printBehavior(b *strings.Builder, el *element, indent string, 
 		if err != nil {
 			return true, err
 		}
-		b.WriteString(indent + text + "\n")
+		b.WriteString(indent + text + d.nl)
 		return true, nil
 
 	case mIfAction:
@@ -954,7 +1009,7 @@ func (d *decoder) printBehavior(b *strings.Builder, el *element, indent string, 
 		if err != nil {
 			return true, err
 		}
-		b.WriteString(indent + text + "\n")
+		b.WriteString(indent + text + d.nl)
 		return true, nil
 
 	case mSubaction:
@@ -962,7 +1017,7 @@ func (d *decoder) printBehavior(b *strings.Builder, el *element, indent string, 
 		if err != nil {
 			return true, err
 		}
-		b.WriteString(indent + text + "\n")
+		b.WriteString(indent + text + d.nl)
 		return true, nil
 
 	case mIfBranch:
@@ -978,11 +1033,15 @@ func (d *decoder) printBehavior(b *strings.Builder, el *element, indent string, 
 		if _, structural := d.graph.Object(rdf.IRI(el.iri), rdf.SysML+pTargetFeature); !structural {
 			return false, nil
 		}
-		text, err := d.transitionText(el, depth)
+		text, body, err := d.transitionText(el, depth)
 		if err != nil {
 			return true, err
 		}
-		b.WriteString(indent + text + ";\n")
+		if body == "" {
+			b.WriteString(indent + text + ";" + d.nl)
+		} else {
+			b.WriteString(indent + text + " " + body + d.nl)
+		}
 		return true, nil
 	}
 	return false, nil
@@ -1092,15 +1151,16 @@ func (d *decoder) subactionText(el *element, depth int) (string, error) {
 }
 
 // transitionText writes a transition of a state machine, in the spelling it was
-// written in, with its trigger, guard and effect.
-func (d *decoder) transitionText(el *element, depth int) (string, error) {
+// written in, with its trigger, guard and effect; the body it ends in, if any,
+// is returned separately.
+func (d *decoder) transitionText(el *element, depth int) (string, string, error) {
 	source, err := d.referenceText(el, rdf.SysML+pSourceFeature)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	target, err := d.referenceText(el, rdf.SysML+pTargetFeature)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	syntax := "first"
 	if written, ok := d.stringOf(el, rdf.OpenSysML+xTransitionSyntax); ok {
@@ -1112,7 +1172,7 @@ func (d *decoder) transitionText(el *element, depth int) (string, error) {
 		// The transition of a state body that states only its trigger.
 	default:
 		if source == "" {
-			return "", d.missing(el, "sysml:"+pSourceFeature, "a transition written with `transition` names the state it leaves")
+			return "", "", d.missing(el, "sysml:"+pSourceFeature, "a transition written with `transition` names the state it leaves")
 		}
 		words = append(words, "transition")
 		words = append(words, d.identWords(el)...)
@@ -1129,7 +1189,7 @@ func (d *decoder) transitionText(el *element, depth int) (string, error) {
 		words = append(words, keyword, trigger)
 		via, err := d.referenceText(el, rdf.SysML+relationshipProperty[ast.RelVia])
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 		if via != "" {
 			words = append(words, "via", via)
@@ -1138,31 +1198,96 @@ func (d *decoder) transitionText(el *element, depth int) (string, error) {
 	if guard, ok := d.stringOf(el, rdf.OpenSysML+xGuard); ok {
 		words = append(words, "if", guard)
 	}
-	if len(el.children) > 0 {
-		effect, err := d.bodyText(el, depth)
-		if err != nil {
-			return "", err
+	// Members are linked as effect or body; unlinked members are from a mapping
+	// that owned the effect alone, with sysx:hasBody its braces.
+	inEffect := d.linked(el, xEffectMember)
+	inBody := d.linked(el, xBodyMember)
+	legacy := len(el.children) > 0 && len(inEffect) == 0 && len(inBody) == 0
+	braced := d.boolOf(el, rdf.OpenSysML+xBracedEffect)
+	hasEffect := d.graph.HasProperty(rdf.IRI(el.iri), rdf.OpenSysML+xBracedEffect)
+	hasBody := d.boolOf(el, rdf.OpenSysML+xHasBody)
+	if legacy {
+		braced, hasEffect, hasBody = hasBody, true, false
+	}
+	var effect, body []*element
+	for _, child := range el.children {
+		switch {
+		case legacy, inEffect[child.iri] && !inBody[child.iri]:
+			effect = append(effect, child)
+		case inBody[child.iri] && !inEffect[child.iri]:
+			body = append(body, child)
+		case inBody[child.iri]:
+			return "", "", transitionLinkError(el, child.iri, "is linked as both effect and body")
+		default:
+			return "", "", transitionLinkError(el, child.iri, "is linked as neither effect nor body")
 		}
-		words = append(words, "do", strings.TrimSuffix(effect, ";"))
+		delete(inEffect, child.iri)
+		delete(inBody, child.iri)
+	}
+	for iri := range inEffect {
+		return "", "", transitionLinkError(el, iri, "is linked as an effect but is no member")
+	}
+	for iri := range inBody {
+		return "", "", transitionLinkError(el, iri, "is linked as a body member but is no member")
+	}
+	if hasEffect {
+		text, err := d.membersText(effect, braced, depth)
+		if err != nil {
+			return "", "", err
+		}
+		words = append(words, "do", strings.TrimSuffix(text, ";"))
 	}
 	words = append(words, "then", target)
-	return strings.Join(words, " "), nil
+	var bodyText string
+	if len(body) > 0 || hasBody {
+		if bodyText, err = d.membersText(body, true, depth); err != nil {
+			return "", "", err
+		}
+	}
+	return strings.Join(words, " "), bodyText, nil
+}
+
+// transitionLinkError refuses a transition whose effect and body links do not
+// partition its members.
+func transitionLinkError(el *element, member, fault string) error {
+	return &UnsupportedError{
+		What: fmt.Sprintf("the transition %s", el.iri),
+		Note: fmt.Sprintf("%s %s, so its actions cannot be placed", member, fault),
+	}
+}
+
+// linked is the set of members the element links through the property.
+func (d *decoder) linked(el *element, property string) map[string]bool {
+	set := map[string]bool{}
+	for _, term := range d.graph.Objects(rdf.IRI(el.iri), rdf.OpenSysML+property) {
+		set[term.Value] = true
+	}
+	return set
 }
 
 // bodyText writes the members of an element: braced when the notation was, and
 // as the members alone when it stated them without braces.
 func (d *decoder) bodyText(el *element, depth int) (string, error) {
-	indent := strings.Repeat("    ", depth)
-	var members strings.Builder
-	for _, child := range el.children {
-		if err := d.print(&members, child, depth+1); err != nil {
+	return d.membersText(el.children, d.boolOf(el, rdf.OpenSysML+xHasBody), depth)
+}
+
+// membersText writes members one per line, in braces when braced; an unbraced
+// member continues the line the head is on, at its depth.
+func (d *decoder) membersText(members []*element, braced bool, depth int) (string, error) {
+	memberDepth := depth
+	if braced {
+		memberDepth = depth + 1
+	}
+	var b strings.Builder
+	for _, child := range members {
+		if err := d.print(&b, child, memberDepth); err != nil {
 			return "", err
 		}
 	}
-	if d.boolOf(el, rdf.OpenSysML+xHasBody) {
-		return "{\n" + members.String() + indent + "}", nil
+	if braced {
+		return "{" + d.nl + b.String() + strings.Repeat("    ", depth) + "}", nil
 	}
-	return strings.TrimSpace(members.String()), nil
+	return strings.TrimSpace(b.String()), nil
 }
 
 // referenceMemberKeyword reports whether a keyword introduces a member that

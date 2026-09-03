@@ -4,7 +4,7 @@
   "instantiate": "test::Ctx",
   "slots": {
     "subsystem": {"type": "Sequence", "elements": []},
-    "totalVolume": {"type": "Integer", "value": 0},
+    "totalVolume": {"type": "Real", "value": 0.0},
     "count": {"type": "Integer", "value": 0}
   }
 }

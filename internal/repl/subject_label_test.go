@@ -29,6 +29,6 @@ func TestVerdictNamesTheNestedSubject(t *testing.T) {
 
 	v := s.CheckConstraint("A::Inner::small")
 	wantVerdict(t, v, VerdictFails,
-		"✗ Constraint A::Inner::small failed (on A::o::b ID:")
+		"✗ Constraint A::Inner::small failed (on A::o.b ID:")
 	rejectVerdict(t, v, "(on A::o ID:")
 }

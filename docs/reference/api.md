@@ -30,7 +30,8 @@ resolves and a diagnostic locates itself in the file it came from.
 
 Its errors, ownership rules, capability negotiation and v1 boundary are in
 [client/opensysml/README.md](../../client/opensysml/README.md), and the other client languages are on
-[client libraries](clients.md).
+[client libraries](clients.md). A program with no client library that posts JSON to the service
+by hand decodes the answers by [the wire contract](wire-contract.md).
 
 ## Python authoring
 
@@ -389,14 +390,26 @@ Execution runtime (Tiers 1-5: instances, expressions, behaviors).
   - `Location ast.Node` — Current node (InitialNode, ActionExecutionNode, etc.)
 
 - **`ActionExecutor`** — Petri-net token-flow execution engine
-  - `Step() error` — Advance all tokens one step
+  - `Step() error` — Advance all tokens one step; a breakpoint met inside a token's body
+    ends the step there, with no other token stepped, and the next step steps the other
+    tokens before resuming the paused one
   - `RunToCompletion() error` — Execute until StateCompleted (max 10k steps)
   - `Tokens() []Token` — Get active tokens (copy)
   - `State() ExecutionState` — Current execution state (Ready/Running/Completed/Suspended)
-  - `Results() map[string]Value` — Get results after completion
-  - `Data() map[string]Value` — The action's live feature space, shared by every token
-  - `SetBreakpoint(nodeName string)` — Set breakpoint on node
+  - `Results() map[string]Value` — The values the action's features hold, and under
+    `node.pin` (`p.v`, `leg.inner.v`) those the latest performance of each nested
+    action node holds; complete once execution has completed
+  - `Data() map[string]Value` — The live feature space of the action's own performance,
+    which every token in its flow shares. A nested action node performs in a frame of
+    its own, so its pins are not here; read them from `Results()`
+  - `SetBreakpoint(nodeName string)` — Set breakpoint on node: a run pauses when a token
+    reaches it, or before a body performs it when it is a node an `if` branch or a loop body
+    declares; `NodeNames()` lists every node a breakpoint may name
   - `ClearBreakpoints()` — Clear all breakpoints
+  - `Release()` — End the run for good, ending the paused work of every token a breakpoint
+    left mid-body; a later `Step()` or `RunToCompletion()` returns `ErrExecutorReleased`,
+    whether the run had completed or not. Call it when abandoning an executor that may be
+    suspended
   - `ActionSymbol() *symbols.Symbol` — Get action symbol
 
 - **`StateExecutor`** — Event-driven state machine execution
@@ -614,7 +627,9 @@ can filter a model OpenSysML parsed. The standard's schema is authoritative:
 
 **Implementation:** `internal/grpc/query.go` (`Service.Query`), reported from
 `GetServerInfo` as the `query` capability. Python: `model.query(...)`
-(`clients/python/opensysml/query.py`).
+(`clients/python/opensysml/query.py`). The JSON a hand-written client sends and
+receives for this call is shown, captured, on
+[the wire contract](wire-contract.md#query).
 
 ### The query model
 
@@ -786,7 +801,8 @@ rpc RenderDocument(RenderDocumentRequest) returns (RenderDocumentResponse);
 `Service.RenderDocument`), reported from `GetServerInfo` as the
 `document_query` and `render_document` capabilities. Python:
 `model.run_document_query(...)` and `model.render_document(...)`
-(`clients/python/opensysml/document.py`).
+(`clients/python/opensysml/document.py`). The JSON shape of a binding and of the
+result table, captured, is on [the wire contract](wire-contract.md#rundocumentquery).
 
 Both name a loaded model by its hash and a definition by qualified name, and
 compose the engine packages the REPL and CLI compose — `queryplan` →
@@ -960,4 +976,5 @@ Test fixtures in `testdata/*.sysml`.
 
 - **[ARCHITECTURE.md](../internals/architecture.md)** — System architecture and design decisions
 - **[the guide](../guide/)** — Getting started guide
+- **[Wire contract](wire-contract.md)** — Connect + JSON field by field, for a client with no generated library
 - **[OMG SysML v2.1 Beta 1 Spec](https://www.omg.org/spec/SysML/2.0)** — Language specification (2026-07 release)

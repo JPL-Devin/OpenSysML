@@ -57,8 +57,10 @@ baseline to regenerate.
 
 Then check the release-facing text:
 
-- `CHANGELOG.md` has an entry for this version, dated, with the previous
-  version's entry unchanged.
+- The changelog fragments under `changes/unreleased/` are folded into a dated entry for this
+  version: `python3 scripts/changelog.py release X.Y.Z` (or `--date YYYY-MM-DD`) appends them
+  to the `## Unreleased` section, renames it, and deletes the fragments. Commit `CHANGELOG.md`
+  and the deletions together. The previous version's entry stays unchanged.
 - `README.md` and `docs/guide/` transcripts match what the binary prints.
   Build it (`make build-sysml`) and paste a few commands through it.
 - `python3 scripts/check-doc-links.py` reports no broken link (CI gates on it too).
@@ -96,7 +98,10 @@ fails the suite fails the release workflow before anything is published.
 - per-binary archives — `sysml-<os>-<arch>.tar.gz`,
   `sysml-lsp-<os>-<arch>.tar.gz` (`.zip` on Windows);
 - bundle archives — `opensysml-<os>-<arch>.tar.gz` holding both binaries under
-  their plain names, which is the layout Homebrew and a PATH install expect;
+  their plain names, which is the layout Homebrew and a PATH install expect,
+  plus their section 1 manual pages under `share/man/man1` (the Unix archives
+  only; the Windows bundle has no use for them, and `sysml-grpc.1` stays out
+  of a bundle that does not carry `sysml-grpc`);
 - `sysml-grpc-<os>-<arch>`, published raw with a `.sha256` sidecar rather than
   archived, because that is what `opensysml` downloads and verifies
   (`clients/python/opensysml/binary.py`) when it starts the service for a Python caller;

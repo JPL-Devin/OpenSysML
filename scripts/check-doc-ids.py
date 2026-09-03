@@ -24,6 +24,7 @@ import sys
 # state this rule, CONTRIBUTING.md and AGENTS.md, which have to quote examples.
 READER_FACING = [
     "CHANGELOG.md",
+    "changes/unreleased",
     "README.md",
     "docs/index.md",
     "docs/guide",

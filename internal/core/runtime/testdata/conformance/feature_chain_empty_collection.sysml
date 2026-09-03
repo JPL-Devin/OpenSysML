@@ -1,5 +1,5 @@
 // A chain over a collection holding nothing has no values, so the roll-up over
-// it is the sum's identity rather than an error.
+// it is the sum's identity rather than an error: RealFunctions::sum's is 0.0.
 package test {
     private import ScalarValues::Real;
     private import RealFunctions::*;

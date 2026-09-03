@@ -1,0 +1,16 @@
+{
+  "type": "instance",
+  "instantiate": "test::MassLimit",
+  "libraries": true,
+  "slots": {
+    "limit": {"type": "Real", "value": 1500.0},
+    "actors": {"type": "Sequence", "elements": []},
+    "stakeholders": {"type": "Sequence", "elements": []},
+    "assumptions": {"type": "Sequence", "elements": []},
+    "constraints": {"type": "Sequence", "elements": []},
+    "subj": {"error": "uninitialized feature value: subj"},
+    "result": {"error": "feature \"result\" not found"},
+    "requirement": {"error": "feature \"requirement\" not found"},
+    "self": {"error": "feature \"self\" not found"}
+  }
+}

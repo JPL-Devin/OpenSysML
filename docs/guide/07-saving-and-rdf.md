@@ -140,15 +140,23 @@ The client API is documented in [reference/python-api.md](../reference/python-ap
 `notation → RDF → notation → RDF` gives back the *same graph*. This is the property the test
 suite checks over the fixtures in `internal/core/export/testdata/convert/`.
 
-The notation that comes out of a round trip is equivalent but not always character-identical: a
-reference may be written relative to a different scope, and a clause written `:>` comes back as
-`specializes`. Both forms parse to the same model, which the second conversion to RDF confirms.
+The notation that comes out of a round trip is the source itself when the graph still carries it:
+every element written to `.ttl` carries its lines as `sysx:sourceText`, comments and blank lines
+included, exactly as the file spells them — tabs, odd indentation, CRLF and all — and converting
+back returns them, so the file comes back byte for byte. The graph stays authoritative: an
+element whose triples were edited after the export — a flag set, a value changed, a member
+removed — is written back from its structure in canonical notation, and only that element's
+lines change. A graph without source text, from another tool or with the text stripped, is
+written entirely from its structure: a reference may then be written relative to a different
+scope, and a clause written `:>` comes back as `specializes`. Both forms parse to the same model,
+which the second conversion to RDF confirms. The rules are in
+[reference/rdf-mapping.md](../reference/rdf-mapping.md#source-text).
 
-**Saving to `.sysml` is different, and exact.** It writes the session's own source
-through the formatter rather than re-printing the graph, so comments, notes and spacing are
-preserved. Only the `.ttl` direction uses the mapping. Syntax is checked in every direction, and
-notation the parser cannot read is rejected, so a save never silently reformats a model that does
-not parse.
+**Saving to `.sysml` writes the source directly.** It writes the session's own source through
+the formatter rather than re-printing the graph, so comments, notes and spacing are preserved
+whether or not the model was edited. Only the `.ttl` direction uses the mapping. Syntax is
+checked in every direction, and notation the parser cannot read is rejected, so a save never
+silently reformats a model that does not parse.
 
 ## A worked example
 
@@ -167,18 +175,19 @@ wrote /tmp/rover-back.sysml (sysml, 877 bytes)
 ```
 
 Converting the returned notation again produces a byte-identical graph, which is the round-trip
-property described above. The `//` header comment is the only thing lost, as explained in
+property described above. The `//` header comment comes back with the source text the graph
+carries and is lost once that text is stripped, as explained in
 [reference/rdf-mapping.md](../reference/rdf-mapping.md); the package's `doc` and `comment` are
-declarations and survive.
+declarations and survive either way.
 
 [`examples/semantic-layer/demo.sysml`](../../examples/semantic-layer/demo.sysml)
 and [`examples/repl-behavioral-demo.sysml`](../../examples/repl-behavioral-demo.sysml)
-also convert, as do most `parser_features_demo_*.kerml` files. The exceptions are
-`..._advanced_bodies.kerml`, which computes a value, and two files that each declare one name
-twice. The behavior written in a body converts too: states, regions, substates, action nodes,
-assignments and transitions all have a mapping. Conversion is refused for constructs the notation
-could not be rebuilt from, such as an expression the graph would have to compute, a name
-shared by two members of one body, or a declaration without a name. A refusal names the construct
+also convert, as do most `parser_features_demo_*.kerml` files. The exceptions are a file that
+declares one name twice and one whose `feature` declarations name no element of their own. The
+behavior written in a body converts too: states, regions, substates, action nodes, assignments,
+transitions and the result expression a calculation ends in all have a mapping. Conversion is
+refused for constructs the notation could not be rebuilt from, such as a name shared by two
+members of one body or a declaration without a name. A refusal names the construct
 where conversion stopped and suggests saving the source instead:
 
 ```bash
@@ -188,12 +197,12 @@ wrote /tmp/action-semantics.ttl (ttl, 21671 bytes)
 0
 ```
 
-For example, an advanced body that contains an operator expression is refused:
+For example, a body that declares the same name twice is refused:
 
 ```bash
-$ sysml examples/parser_features_demo_advanced_bodies.kerml -convert ttl; echo $?
+$ sysml examples/parser_features_demo_advanced_connectors.kerml -convert ttl; echo $?
 note: RDF conversion is experimental: the mapping covers model structure and the behavior its bodies state, refuses what it cannot write back, and its vocabulary may change without a compatibility path; see docs/reference/rdf-mapping.md § Status
-sysml: cannot convert the operator expr at examples/parser_features_demo_advanced_bodies.kerml:87:9: save to .sysml or .kerml instead, which writes the source exactly; see docs/reference/rdf-mapping.md § Limitations
+sysml: cannot convert the duplicate declaration of "transitionLink" at examples/parser_features_demo_advanced_connectors.kerml:21:5: a name identifies an element in the graph, so two members of one namespace cannot share it
 2
 ```
 

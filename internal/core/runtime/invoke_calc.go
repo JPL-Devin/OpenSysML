@@ -3,8 +3,10 @@ package runtime
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -120,7 +122,7 @@ func (ctx *Context) calcShapeOf(sym *symbols.Symbol) (*calcShape, error) {
 	}
 
 	name := ctx.qualifiedSymbolName(sym)
-	if !isCalcDecl(sym.Decl) {
+	if !isCalcDecl(sym.Decl) && !ctx.calcTypedFeature(sym) {
 		return nil, fmt.Errorf("%w: %s is %s, not a calc definition or usage", ErrNotACalc, name, describeDecl(sym.Decl))
 	}
 
@@ -147,7 +149,7 @@ func (ctx *Context) calcShapeOf(sym *symbols.Symbol) (*calcShape, error) {
 	// A calc computes nothing when it neither returns a value nor binds an output
 	// feature — by a declaration or by an assignment in its body.
 	if !lower.Returns(shape.Body) && len(shape.BodyOutputs) == 0 && shape.ResultExpr == nil {
-		return nil, fmt.Errorf("%w: calc %s has no return expression", ErrNoResultExpression, name)
+		return nil, fmt.Errorf("%w: calc %s has no return expression%s", ErrNoResultExpression, name, unboundResultHint(chain))
 	}
 
 	ctx.calcShapes[sym] = shape
@@ -257,6 +259,89 @@ func calcBody(chain []*symbols.Symbol) ([]lower.Statement, *symbols.Symbol) {
 	return stated, owner
 }
 
+// unboundResultHint explains a `return` that declares a result parameter without
+// binding it (`return h;` declares h, it does not return the member h).
+func unboundResultHint(chain []*symbols.Symbol) string {
+	for i := len(chain) - 1; i >= 0; i-- {
+		if chain[i] == nil {
+			continue
+		}
+		members := declMembers(chain[i].Decl)
+		result := unboundResultParameter(members)
+		if result == nil {
+			continue
+		}
+		name, _ := ast.EffectiveName(result)
+		who, trailing, expr := "the result parameter", "of the body", "<expr>"
+		typ := usageTypeText(result)
+		if name != "" {
+			spelled := lexer.NameText(name)
+			who = "result parameter " + spelled
+			if sibling := valuedMemberNamed(members, name, result); sibling != nil {
+				trailing, expr = "`"+spelled+"`", spelled
+				if typ == "" {
+					typ = usageTypeText(sibling)
+				}
+			}
+		}
+		if typ == "" {
+			typ = "<type>"
+		}
+		return fmt.Sprintf(": %s binds no value; write the result as the trailing expression %s, or bind it with `return : %s = %s;`",
+			who, trailing, typ, expr)
+	}
+	return ""
+}
+
+// unboundResultParameter returns the body's `return` member that binds no value.
+func unboundResultParameter(members []ast.Node) *ast.Usage {
+	for _, member := range members {
+		if u, ok := member.(*ast.Usage); ok && u.IsResult && u.Value == nil {
+			return u
+		}
+	}
+	return nil
+}
+
+// valuedMemberNamed returns the body member called name, other than except,
+// whose declaration binds a value; an unbound one would not compute a result.
+func valuedMemberNamed(members []ast.Node, name string, except *ast.Usage) *ast.Usage {
+	for _, member := range members {
+		u, ok := member.(*ast.Usage)
+		if !ok || u == except || u.Value == nil {
+			continue
+		}
+		if actual, _ := ast.EffectiveName(u); actual == name {
+			return u
+		}
+	}
+	return nil
+}
+
+// usageTypeText spells the type a usage declares with `:` as the notation
+// writes it (each segment quoted when it must be), or "" without one.
+func usageTypeText(u *ast.Usage) string {
+	for _, rel := range u.Relationships {
+		if rel == nil || rel.Kind != ast.RelTyping {
+			continue
+		}
+		qn, ok := rel.Target.(*ast.QualifiedName)
+		if !ok || len(qn.Parts) == 0 {
+			continue
+		}
+		segments := make([]string, 0, len(qn.Parts))
+		for _, part := range qn.Parts {
+			segments = append(segments, lexer.NameText(part.Text))
+		}
+		text := strings.Join(segments, "::")
+		if qn.Global {
+			text = "$::" + text
+		}
+		return text
+	}
+	return ""
+}
+
 // calcArgs are the arguments of one calc invocation. The notation keeps the two
 // forms mutually exclusive: positional arguments bind in parameter order, named
 // arguments by parameter name.
@@ -269,7 +354,9 @@ type calcArgs struct {
 // returns its result. Arguments bind to the calc's input parameters in
 // declaration order; a parameter with no argument falls back to its declared
 // default. The body is evaluated in the calc's own scope, so scope is used only
-// as a fallback for a symbol that owns no scope.
+// as a fallback for a symbol that owns no scope. A library function's `expr`
+// parameter takes a body or expression value, applied only when selected, or
+// the operand's value itself.
 func (ctx *Context) InvokeCalc(sym *symbols.Symbol, args []Value, scope *symbols.Scope) (Value, error) {
 	defer ctx.beginRun()()
 
@@ -296,6 +383,12 @@ func (ctx *Context) invokeCalc(sym *symbols.Symbol, args calcArgs, scope *symbol
 }
 
 func (ctx *Context) invokeCalcWithSelf(sym *symbols.Symbol, args calcArgs, scope *symbols.Scope, self *Instance) (Value, error) {
+	if lib := ctx.libraryCalcPerformed(sym); lib != nil {
+		sym = lib
+	}
+	if fn, ok := ctx.builtinFor(sym); ok {
+		return ctx.invokeBuiltinValues(sym, fn, args, scope, self)
+	}
 	if fn, ok := ctx.libraryFunctionFor(sym); ok {
 		return fn.invoke(ctx, args)
 	}
@@ -305,6 +398,18 @@ func (ctx *Context) invokeCalcWithSelf(sym *symbols.Symbol, args calcArgs, scope
 		return Value{}, err
 	}
 	return ctx.invokeCalcShape(shape, args, scope, self)
+}
+
+// invokeBuiltinValues applies a built-in to arguments a direct invocation has
+// already evaluated, bound to its declared parameters as a call would bind them.
+func (ctx *Context) invokeBuiltinValues(sym *symbols.Symbol, fn builtinFunc, args calcArgs, callerScope *symbols.Scope, self *Instance) (Value, error) {
+	name := ctx.qualifiedSymbolName(sym)
+	return tracedBuiltin(ctx.trace, name,
+		func() ([]Value, error) { return bindBuiltinValues(name, args) },
+		func(bound []Value) (Value, error) {
+			return fn(NewEvalContextIn(ctx, ctx.calcScope(sym, nil, callerScope), self), bound)
+		},
+	)
 }
 
 // invocationFrame is the storage one calc invocation runs in, held off the
@@ -570,6 +675,12 @@ func (shape *calcShape) checkArgs(args calcArgs) error {
 	return nil
 }
 
+// optional reports whether the parameter may go without an argument: its
+// declared multiplicity admits no value, as `[0..1]` does.
+func (param *calcParameter) optional() bool {
+	return param.Decl.Target != nil && param.Decl.multStated && param.Decl.Target.mult.AllowsNone()
+}
+
 // hasParameter reports whether the calc declares an input parameter of that name.
 func (shape *calcShape) hasParameter(name string) bool {
 	for _, param := range shape.Params {
@@ -581,8 +692,9 @@ func (shape *calcShape) hasParameter(name string) bool {
 }
 
 // bindCalcParameter resolves the value of one parameter: its argument (by
-// position or by name), else its declared default. A parameter with neither is
-// unbound, which is a modeling error rather than a null value.
+// position or by name), else its declared default, else null for one whose
+// multiplicity admits no value. A parameter with none of these is unbound,
+// which is a modeling error rather than a null value.
 func (ec *EvalContext) bindCalcParameter(
 	shape *calcShape,
 	param *calcParameter,
@@ -596,6 +708,9 @@ func (ec *EvalContext) bindCalcParameter(
 		return value, "argument", nil
 	}
 	if param.Default == nil {
+		if param.optional() {
+			return nullValue(), "omitted", nil
+		}
 		return Value{}, "", fmt.Errorf(
 			"%w: calc %s parameter %q has no argument and no default",
 			ErrUnboundParameter, shape.Name, param.Name,
@@ -622,17 +737,41 @@ func (ctx *Context) calcScope(declarer, invoked *symbols.Symbol, callerScope *sy
 	return callerScope
 }
 
-// hasCalcBody reports whether sym's calc chain states a computation of its own:
-// a result expression, or a body assigning an output it declares. A library
-// function declared without one — or a symbol loaded from the library index,
-// which carries no declaration at all — has no body.
-func (ctx *Context) hasCalcBody(sym *symbols.Symbol) bool {
-	if sym == nil || sym.Decl == nil || !isCalcDecl(sym.Decl) {
+// calcTypedFeature reports whether sym is a feature typed by a calc — a step, which an
+// invocation performs as the calc it is typed by.
+func (ctx *Context) calcTypedFeature(sym *symbols.Symbol) bool {
+	if _, ok := sym.Decl.(*ast.Usage); !ok {
 		return false
 	}
-	chain := ctx.calcChain(sym)
+	return len(ctx.calcChain(sym)) > 1
+}
+
+// libraryCalcPerformed returns the library function whose implementation a call of
+// sym applies: the nearest one sym specializes, when neither sym nor a model calc
+// between them states a computation of its own; nil otherwise.
+func (ctx *Context) libraryCalcPerformed(sym *symbols.Symbol) *symbols.Symbol {
+	if sym == nil || ctx.model == nil || ctx.libraryDeclared(sym) {
+		return nil
+	}
+	if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
+		return nil
+	}
+	if ctx.calcComputes(ctx.calcChain(sym)) {
+		return nil
+	}
+	for _, super := range ctx.model.AllSupertypes(sym) {
+		if super != nil && isCalcDecl(super.Decl) && ctx.libraryDeclared(super) {
+			return super
+		}
+	}
+	return nil
+}
+
+// calcComputes reports whether a calc chain states a computation: a body that
+// returns or assigns an output, or a binding of the result.
+func (ctx *Context) calcComputes(chain []*symbols.Symbol) bool {
 	body, _ := calcBody(chain)
-	if lower.Returns(body) {
+	if lower.Returns(body) || resultBindingExpr(calcBindings(chain)) != nil {
 		return true
 	}
 	return len(assignedOutputs(calcSteps(body), ctx.calcOutputs(chain))) > 0

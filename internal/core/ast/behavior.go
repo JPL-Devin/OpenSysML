@@ -106,6 +106,15 @@ type PerformActionNode struct {
 	ActionRef Node // qualified name or invocation expression
 }
 
+// PerformedInvocation is the call the statement performs (`perform tag(x);`);
+// nil when it names the action without arguments.
+func (n *PerformActionNode) PerformedInvocation() *InvocationExpr {
+	if inv, ok := n.ActionRef.(*InvocationExpr); ok && inv.Type != nil {
+		return inv
+	}
+	return nil
+}
+
 // LoopKind discriminates the loop forms, which share one node because they
 // share a body and a condition but differ in when the condition is tested.
 type LoopKind int
@@ -305,8 +314,10 @@ type SuccessionEdge struct {
 	SourceImplied bool
 	TargetImplied bool
 	// Members are the body an action target succession carries
-	// (SysML.xtext:1698 ActionTargetSuccession ends in a UsageBody).
+	// (SysML.xtext:1698 ActionTargetSuccession ends in a UsageBody), and
+	// HasBody that it was written with one rather than ended by ';'.
 	Members []Node
+	HasBody bool
 }
 
 // ControlFlowEdge is guarded control flow from decision nodes.
@@ -542,6 +553,7 @@ type TransitionMember struct {
 	TriggerSpan source.Span
 	Guard       Node   // optional guard expression
 	Effect      []Node // optional effect actions
+	HasEffect   bool   // a `do` was written, even one whose braces hold nothing
 	// Via is the port the trigger's message must arrive at
 	// (`accept :> ping via commPort`), nil when the trigger named none.
 	Via *QualifiedName

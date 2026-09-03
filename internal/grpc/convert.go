@@ -9,6 +9,7 @@ import (
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
@@ -371,6 +372,10 @@ var (
 	// ErrUnitNotReduced reports a named unit sent without its reduction, over
 	// which alone commensurability is decided.
 	ErrUnitNotReduced = errors.New("unit carries no reduction to base units")
+
+	// ErrUnitTextMismatch reports a unit whose text names units that do not
+	// reduce to the unit_term sent with it, so the two describe different units.
+	ErrUnitTextMismatch = errors.New("unit as written does not reduce to its unit_term")
 	// ErrUnsetNotAccepted reports the unset arm arriving as an input. It reports
 	// that a feature value holds no value, which is something to read, not to supply.
 	ErrUnsetNotAccepted = errors.New("unset is not a value a caller can supply")
@@ -424,7 +429,9 @@ func ProtoToValueIn(pv *pb.Value, idx *symbols.Index, sem *semantics.Model) (run
 }
 
 // ProtoToQuantity rebuilds a quantity from the wire: the magnitude as sent, in
-// the unit as written, over the base units idx resolves its reduction to.
+// the unit as written — read as the product of the named units it composes, so
+// an operation over it cancels and merges them — over the base units idx
+// resolves its reduction to.
 func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index, sem *semantics.Model) (runtime.Value, error) {
 	if pq == nil {
 		return runtime.Value{Kind: runtime.ValNull}, nil
@@ -450,8 +457,289 @@ func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index, sem *semantics.Model) 
 		return runtime.Value{}, fmt.Errorf("quantity in %q carries no magnitude", pq.GetUnit())
 	}
 
-	quantity := &runtime.Quantity{Num: num, Unit: runtime.Unit{Text: pq.GetUnit(), Term: term}}
-	return runtime.NewQuantityValue(quantity), nil
+	product, term, err := unitProductOfText(pq.GetUnit(), term, idx, sem)
+	if err != nil {
+		return runtime.Value{}, err
+	}
+	text := pq.GetUnit()
+	if text == "" && !product.IsEmpty() {
+		text = product.String()
+	}
+	unit := runtime.Unit{Text: text, Product: product, Term: term}
+	return runtime.NewQuantityValue(&runtime.Quantity{Num: num, Unit: unit}), nil
+}
+
+// unitProductOfText reads unit text as a product of the model's units that reduces
+// to term; a short name is the one unit so named that fits. Text that does not read
+// so keeps the factors it can name, the rest opaque (see partialUnitProduct); text
+// that is no unit expression is one opaque unit. The reduction returned is the
+// model's where the text is read in full, else term as sent.
+func unitProductOfText(text string, term semantics.UnitTerm, idx *symbols.Index, sem *semantics.Model) (semantics.UnitProduct, semantics.UnitTerm, error) {
+	if text == "" {
+		return unnamedUnitProduct(term), term, nil
+	}
+	opaque := semantics.OpaqueUnitProduct(text, term)
+	if idx == nil || sem == nil {
+		return opaque, term, nil
+	}
+	p := parser.New(source.New("<unit>", []byte(text)))
+	expr := p.ParseExpression()
+	if expr == nil || len(p.Diagnostics) > 0 || p.Offset() != len(text) {
+		return opaque, term, nil
+	}
+	unitAt := func(fqn string) (*symbols.Symbol, bool) {
+		matches := idx.LookupQualified(fqn)
+		if len(matches) != 1 {
+			return nil, false
+		}
+		return sem.MeasurementUnitOf(matches[0])
+	}
+	var short []*ast.QualifiedName
+	product, err := sem.UnitProductOfExprBy(expr, func(qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+		if sym, ok := unitAt(semantics.QualifiedNameText(qn)); ok {
+			return sym, true
+		}
+		if len(qn.Parts) == 1 && !slices.Contains(short, qn) {
+			short = append(short, qn)
+		}
+		return nil, false
+	})
+	if err != nil {
+		return opaque, term, nil
+	}
+	if len(short) == 0 {
+		implied, ok := impliedTerm(product, sem)
+		if !ok {
+			return partialUnitProduct(expr, opaque, term, unitAt, idx, sem), term, nil
+		}
+		if !reducesTo(implied, term) {
+			return semantics.UnitProduct{}, semantics.UnitTerm{}, fmt.Errorf("%w: %s reduces to %s, unit_term is %s",
+				ErrUnitTextMismatch, text, implied, term)
+		}
+		return product, implied, nil
+	}
+
+	readings := shortUnitReadings(short, idx, sem)
+	var matches []shortUnitReading
+	for _, reading := range readings {
+		product, err := sem.UnitProductOfExprBy(expr, func(qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+			if sym, ok := unitAt(semantics.QualifiedNameText(qn)); ok {
+				return sym, true
+			}
+			sym, ok := reading.units[qn]
+			return sym, ok
+		})
+		if err != nil {
+			continue
+		}
+		implied, ok := impliedTerm(product, sem)
+		if !ok || !reducesTo(implied, term) {
+			continue
+		}
+		// Two readings of one product, `m*m` as A::m·B::m and as B::m·A::m, are one reading.
+		if slices.ContainsFunc(matches, func(m shortUnitReading) bool { return m.product.Equal(product) }) {
+			continue
+		}
+		reading.product, reading.term = product, implied
+		matches = append(matches, reading)
+	}
+	if len(matches) > 1 {
+		matches = slices.DeleteFunc(matches, func(r shortUnitReading) bool {
+			return !r.besideBaseUnits(term)
+		})
+	}
+	if len(matches) != 1 {
+		return partialUnitProduct(expr, opaque, term, unitAt, idx, sem), term, nil
+	}
+	return matches[0].product, matches[0].term, nil
+}
+
+// partialUnitProduct reads a unit text name by name — a qualified name or a short name
+// one unit bears is that unit, any other an opaque factor — so the units read still cancel.
+// Text whose every name reads, yet contradicts term, is opaque as a whole.
+func partialUnitProduct(
+	expr ast.Node,
+	opaque semantics.UnitProduct,
+	term semantics.UnitTerm,
+	unitAt func(string) (*symbols.Symbol, bool),
+	idx *symbols.Index,
+	sem *semantics.Model,
+) semantics.UnitProduct {
+	unreadNames := map[string]int{}
+	product, err := sem.UnitProductOfExprBy(expr, func(qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+		if sym, ok := unitAt(semantics.QualifiedNameText(qn)); ok {
+			return sym, true
+		}
+		if len(qn.Parts) == 1 {
+			if units := unitsNamed(semantics.QualifiedNameText(qn), idx, sem); len(units) == 1 {
+				return units[0], true
+			}
+		}
+		unreadNames[semantics.QualifiedNameText(qn)]++
+		return nil, false
+	})
+	if err != nil {
+		return opaque
+	}
+	// One unread name written twice is two units the text cannot tell apart.
+	for _, n := range unreadNames {
+		if n > 1 {
+			return opaque
+		}
+	}
+	known := semantics.UnitTerm{Scale: semantics.UnitScale(1)}
+	var unread []int
+	for i, f := range product.Powers {
+		if f.Unit == nil {
+			unread = append(unread, i)
+			continue
+		}
+		factor, err := sem.UnitTermOf(f.Unit)
+		if err != nil {
+			return opaque
+		}
+		known = known.Times(factor.Pow(f.Exponent))
+	}
+	if len(unread) == 0 {
+		return opaque
+	}
+	// A lone opaque factor is what term leaves once the units read are taken out.
+	if len(unread) == 1 {
+		f := &product.Powers[unread[0]]
+		reduces := term.DividedBy(known).Pow(1 / f.Exponent)
+		f.DimensionOne, f.Reduces = reduces.Dimensionless(), &reduces
+	}
+	return product
+}
+
+// shortUnitReading is one assignment of a unit text's short names, occurrence by
+// occurrence, to units: `m*m` may name two units both written m.
+type shortUnitReading struct {
+	units   map[*ast.QualifiedName]*symbols.Symbol
+	product semantics.UnitProduct
+	term    semantics.UnitTerm
+}
+
+// besideBaseUnits reports whether every unit read is declared beside a base unit of term.
+func (r shortUnitReading) besideBaseUnits(term semantics.UnitTerm) bool {
+	namespaces := baseUnitNamespaces(term)
+	for _, sym := range r.units {
+		if !slices.Contains(namespaces, namespaceOf(sym)) {
+			return false
+		}
+	}
+	return true
+}
+
+// maxShortUnitReadings bounds the readings tried for one unit text.
+const maxShortUnitReadings = 1024
+
+// shortUnitReadings enumerates, in a fixed order, every assignment of the short
+// name occurrences to units so named; none if a name has no unit or there are too many.
+func shortUnitReadings(names []*ast.QualifiedName, idx *symbols.Index, sem *semantics.Model) []shortUnitReading {
+	candidates := make([][]*symbols.Symbol, len(names))
+	total := 1
+	for i, qn := range names {
+		candidates[i] = unitsNamed(semantics.QualifiedNameText(qn), idx, sem)
+		total *= len(candidates[i])
+		if total == 0 || total > maxShortUnitReadings {
+			return nil
+		}
+	}
+	readings := make([]shortUnitReading, 0, total)
+	for k := range total {
+		units := make(map[*ast.QualifiedName]*symbols.Symbol, len(names))
+		rem := k
+		for i, qn := range names {
+			units[qn] = candidates[i][rem%len(candidates[i])]
+			rem /= len(candidates[i])
+		}
+		readings = append(readings, shortUnitReading{units: units})
+	}
+	return readings
+}
+
+// unitsNamed lists, once each in qualified-name order, the units under a short name.
+func unitsNamed(name string, idx *symbols.Index, sem *semantics.Model) []*symbols.Symbol {
+	var units []*symbols.Symbol
+	for _, fqn := range idx.FQNsEndingIn(name, math.MaxInt) {
+		for _, sym := range idx.LookupQualified(fqn) {
+			if unit, ok := sem.MeasurementUnitOf(sym); ok && !slices.Contains(units, unit) {
+				units = append(units, unit)
+			}
+		}
+	}
+	return units
+}
+
+// impliedTerm reduces a product of resolved units; false if one is unresolved or unreducible.
+func impliedTerm(product semantics.UnitProduct, sem *semantics.Model) (semantics.UnitTerm, bool) {
+	implied := semantics.UnitTerm{Scale: semantics.UnitScale(1)}
+	for _, f := range product.Powers {
+		if f.Unit == nil {
+			return semantics.UnitTerm{}, false
+		}
+		factor, err := sem.UnitTermOf(f.Unit)
+		if err != nil {
+			return semantics.UnitTerm{}, false
+		}
+		implied = implied.Times(factor.Pow(f.Exponent))
+	}
+	return implied, true
+}
+
+// reducesTo reports whether two reductions are one unit: commensurable at one scale.
+func reducesTo(implied, term semantics.UnitTerm) bool {
+	return implied.Commensurable(term) && sameScale(implied.Scale, term.Scale)
+}
+
+// namespaceOf is the qualified name of the namespace declaring sym, or "" for a root.
+func namespaceOf(sym *symbols.Symbol) string {
+	if sym.OwnerScope == nil || sym.OwnerScope.Owner() == nil {
+		return ""
+	}
+	return symbols.FQNOf(sym.OwnerScope.Owner())
+}
+
+// baseUnitNamespaces lists, in factor order and once each, the namespaces
+// declaring the base units a reduction is over.
+func baseUnitNamespaces(term semantics.UnitTerm) []string {
+	var out []string
+	for _, f := range term.Factors {
+		if f.Unit == nil {
+			continue
+		}
+		if ns := namespaceOf(f.Unit); ns != "" && !slices.Contains(out, ns) {
+			out = append(out, ns)
+		}
+	}
+	return out
+}
+
+// unnamedUnitProduct is the unit of a quantity sent under no text: its base units
+// at scale one, else the reduction as one opaque unit that names no dimension-one unit.
+func unnamedUnitProduct(term semantics.UnitTerm) semantics.UnitProduct {
+	if !sameScale(term.Scale, semantics.UnitScale(1)) {
+		product := semantics.OpaqueUnitProduct(term.String(), term)
+		product.Powers[0].DimensionOne = false
+		return product
+	}
+	product := semantics.UnitProduct{}
+	for _, f := range term.Factors {
+		name := lexer.QualifiedNameText(symbols.FQNOf(f.Unit))
+		product = product.Times(semantics.NamedUnitProduct(f.Unit, name, false).Pow(f.Exponent))
+	}
+	return product
+}
+
+// scaleTolerance is the relative difference two orders of composing one scale's
+// factors can round to: a fraction of an ulp per multiplication, over at most dozens.
+const scaleTolerance = 64 * 0x1p-52
+
+// sameScale reports whether two scale ratios agree to within the rounding of
+// composing them; a ratio further off is another scale, not noise.
+func sameScale(a, b semantics.Scale) bool {
+	return math.Abs(semantics.ConvertMagnitude(1, a, b)-1) <= scaleTolerance
 }
 
 // protoToUnitTerm rebuilds a unit's reduction, normalized so a term sent in any
@@ -478,11 +766,12 @@ func protoToUnitTerm(pt *pb.UnitTerm, idx *symbols.Index, sem *semantics.Model) 
 		if len(matches) != 1 {
 			return semantics.UnitTerm{}, fmt.Errorf("%w: %s", ErrUnknownBaseUnit, f.GetUnitId())
 		}
-		if !sem.IsMeasurementUnit(matches[0]) {
+		unit, ok := sem.MeasurementUnitOf(matches[0])
+		if !ok {
 			return semantics.UnitTerm{}, fmt.Errorf("%w: %s", ErrNotAMeasurementUnit, f.GetUnitId())
 		}
 		term.Factors = append(term.Factors, semantics.UnitFactor{
-			Unit:     matches[0],
+			Unit:     unit,
 			Exponent: f.GetExponent(),
 		})
 	}
@@ -687,11 +976,15 @@ func instanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.I
 		}
 
 		// Check multiplicity to determine single- vs multi-valued
-		mult := fv.Feature.Multiplicity
-		if !mult.Upper.Infinite && mult.Upper.Value <= 1 {
+		if fv.Feature.Scalar() {
 			// Single-valued. An unmaterialized one holds no value; marshalling it
-			// anyway would report the empty value as an unsupported null.
-			if fv.Materialized {
+			// anyway would report the empty value as an unsupported null. A
+			// materialized one holding nothing is unset, as every surface reads it.
+			switch {
+			case !fv.Materialized:
+			case fv.Value.Kind == runtime.ValInvalid:
+				pbValue.Value = &pb.Value{Kind: &pb.Value_Unset{Unset: true}}
+			default:
 				pbValue.Value = ValueToProtoIn(rt, fv.Value, idx)
 			}
 		} else {

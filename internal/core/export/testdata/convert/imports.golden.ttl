@@ -1,4 +1,5 @@
 @prefix elmt: <urn:sysmlv2:element:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -9,10 +10,15 @@ elmt:Importer
     sysml:qualifiedName "Importer" ;
     sysml:elementId "Importer" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Importer" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedRelationship elmt:Importer___400, elmt:Importer___401, elmt:Importer___402 ;
-    sysml:ownedImport elmt:Importer___400, elmt:Importer___401, elmt:Importer___402 .
+    sysml:ownedImport elmt:Importer___400, elmt:Importer___401, elmt:Importer___402 ;
+    sysx:sourceText "package Importer {\n" ;
+    sysx:sourceTail "}\n" ;
+    json:ownedRelationship "[{\"@id\":\"Importer___400\"},{\"@id\":\"Importer___401\"},{\"@id\":\"Importer___402\"}]" ;
+    json:ownedImport "[{\"@id\":\"Importer___400\"},{\"@id\":\"Importer___401\"},{\"@id\":\"Importer___402\"}]" .
 
 elmt:Importer___400
     a sysml:Import ;
@@ -26,7 +32,8 @@ elmt:Importer___400
     sysml:visibility "private" ;
     sysml:importedNamespace "ISQ" ;
     sysx:isNamespaceImport "true"^^xsd:boolean ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    private import ISQ::*;\n" .
 
 elmt:Importer___401
     a sysml:Import ;
@@ -39,7 +46,8 @@ elmt:Importer___401
     sysml:importOwningNamespace elmt:Importer ;
     sysml:visibility "private" ;
     sysml:importedNamespace "ScalarValues::Real" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    private import ScalarValues::Real;\n" .
 
 elmt:Importer___402
     a sysml:Import ;
@@ -53,4 +61,5 @@ elmt:Importer___402
     sysml:visibility "private" ;
     sysml:importedNamespace "Deep" ;
     sysx:isRecursive "true"^^xsd:boolean ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    private import Deep::**;\n" .

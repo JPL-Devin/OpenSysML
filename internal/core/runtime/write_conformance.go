@@ -158,6 +158,14 @@ func (ctx *Context) valueConforms(scope *symbols.Scope, value *Value, declared *
 		return true, "", nil
 	case ValQuantity:
 		return ctx.quantityConforms(*value, declared)
+	case ValInstance:
+		// An object is what its usage is, implicit bases included: a `part box : Box`
+		// is a Part as well as a Box.
+		inst, ok := ctx.instances[value.Instance]
+		if !ok || inst == nil || inst.Type == nil {
+			return false, "", fmt.Errorf("%w: instance %d", ErrUndeterminedValueType, value.Instance)
+		}
+		return ctx.model.Conforms(inst.Type, declared), "", nil
 	}
 	prim := ctx.model.PrimTypeOf(declared)
 	if got := valuePrimType(value); prim != semantics.PrimUnknown && got != semantics.PrimUnknown {

@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -58,6 +59,20 @@ func wants(t *testing.T, got string, fragments ...string) {
 		if !strings.Contains(got, fragment) {
 			t.Errorf("expected %q in output:\n%s", fragment, got)
 		}
+	}
+}
+
+// wantsInOrder asserts every fragment appears in got, each after the one before it.
+func wantsInOrder(t *testing.T, got string, fragments ...string) {
+	t.Helper()
+	from := 0
+	for _, fragment := range fragments {
+		at := strings.Index(got[from:], fragment)
+		if at < 0 {
+			t.Errorf("expected %q after the fragments before it in output:\n%s", fragment, got)
+			return
+		}
+		from += at + len(fragment)
 	}
 }
 
@@ -457,6 +472,71 @@ func TestBreakpointOnInitialNodeStops(t *testing.T) {
 	wants(t, run(t, s, "%continue"), "✓ Action completed", "total = 5")
 }
 
+// %break names a node a loop body declares: the run pauses before each of its
+// performances, with the token at the node running the loop, and resumes once per pause.
+func TestBreakpointOnABlockNodePausesEachIteration(t *testing.T) {
+	s := loadFixture(t, "testdata/action_block_debug.sysml")
+	run(t, s, "%action count")
+
+	wants(t, run(t, s, "%break add"), `✓ Breakpoint set at node "add"`)
+
+	paused := run(t, s, "%continue")
+	wants(t, paused, `⏸ Paused at breakpoint "add"`, "Tokens: 1")
+	rejects(t, paused, "Action completed")
+	wants(t, run(t, s, "%tokens"), "Token 1 @ iterate", "total = 0")
+
+	wants(t, run(t, s, "%step"), "✓ Step complete", `⏸ Paused at breakpoint "add"`)
+	wants(t, run(t, s, "%tokens"), "Token 1 @ iterate", "total = 1")
+
+	wants(t, run(t, s, "%continue"), `⏸ Paused at breakpoint "add"`)
+	wants(t, run(t, s, "%tokens"), "total = 3")
+	wants(t, run(t, s, "%continue"), "✓ Action completed", "total = 6")
+}
+
+// Ending a session paused in a block node — by %stop, by starting another, or
+// by redeclaring the action — releases its executor: the paused run ends and
+// the executor takes no further step.
+func TestEndingAPausedSessionReleasesItsRun(t *testing.T) {
+	pauseAtAdd := func(t *testing.T) (*Session, *runtime.ActionExecutor) {
+		t.Helper()
+		s := loadFixture(t, "testdata/action_block_debug.sysml")
+		run(t, s, "%action count")
+		run(t, s, "%break add")
+		wants(t, run(t, s, "%continue"), `⏸ Paused at breakpoint "add"`)
+		return s, s.actionExec.executor
+	}
+	released := func(t *testing.T, exec *runtime.ActionExecutor) {
+		t.Helper()
+		if err := exec.Step(); !errors.Is(err, runtime.ErrExecutorReleased) {
+			t.Errorf("Step of the ended session's executor = %v, want ErrExecutorReleased", err)
+		}
+	}
+
+	t.Run("stop", func(t *testing.T) {
+		s, exec := pauseAtAdd(t)
+		wants(t, run(t, s, "%stop"), `✓ Stopped debugging session for "count"`)
+		released(t, exec)
+	})
+	t.Run("another session", func(t *testing.T) {
+		s, exec := pauseAtAdd(t)
+		wants(t, run(t, s, "%action count"), `✓ Started action executor for "count"`)
+		released(t, exec)
+	})
+	t.Run("redeclared", func(t *testing.T) {
+		s, exec := pauseAtAdd(t)
+		res := s.Submit(`package Debug { action count { attribute total : Integer = 1; } }`)
+		wants(t, strings.Join(res.Notices, "\n"), `action debugging session for "count" ended`)
+		released(t, exec)
+	})
+	t.Run("unrelated declaration keeps it", func(t *testing.T) {
+		s, _ := pauseAtAdd(t)
+		if res := s.Submit(`package Other { attribute x = 1; }`); len(res.Notices) > 0 {
+			t.Fatalf("unrelated declaration ended the session: %v", res.Notices)
+		}
+		wants(t, run(t, s, "%step"), "✓ Step complete", `⏸ Paused at breakpoint "add"`)
+	})
+}
+
 func TestBreakpointRejectsUnknownNode(t *testing.T) {
 	s := loadFixture(t, "testdata/action_debug.sysml")
 	run(t, s, "%action tally")
@@ -690,12 +770,12 @@ func TestPromptScopeIsTheLastNamespaceDeclared(t *testing.T) {
 // spaces — a quantity, a parenthesized expression, a nested call — survives.
 func TestCalcParsesExpressionArguments(t *testing.T) {
 	s := quantitySession(t)
-	wants(t, run(t, s, "%calc Fall -15.0 [m/s] 8.5 [s]"), "✓ Fall(-15.0 [m/s], 8.5 [s])", "= -127.5 [(m/s)*s]")
+	wants(t, run(t, s, "%calc Fall -15.0 [m/s] 8.5 [s]"), "✓ Fall(-15.0 [m/s], 8.5 [s])", "= -127.5 [m]")
 	// The same invocation written the way the notation writes one.
-	wants(t, run(t, s, "%calc Fall(-15.0 [m/s], 8.5 [s])"), "= -127.5 [(m/s)*s]")
+	wants(t, run(t, s, "%calc Fall(-15.0 [m/s], 8.5 [s])"), "= -127.5 [m]")
 	// A parenthesized subexpression, and a call standing as an argument.
-	wants(t, run(t, s, "%calc Fall (-5.0 [m/s] - 10.0 [m/s]) 8.5 [s]"), "= -127.5 [(m/s)*s]")
-	wants(t, run(t, s, "%calc Fall -15.0 [m/s] (4.0 [s] + 4.5 [s])"), "= -127.5 [(m/s)*s]")
+	wants(t, run(t, s, "%calc Fall (-5.0 [m/s] - 10.0 [m/s]) 8.5 [s]"), "= -127.5 [m]")
+	wants(t, run(t, s, "%calc Fall -15.0 [m/s] (4.0 [s] + 4.5 [s])"), "= -127.5 [m]")
 	// Named arguments are a different production; the limitation is reported.
 	wants(t, run(t, s, "%calc Fall v0=-15.0 [m/s] tb=8.5 [s]"), "named arguments are not supported")
 }
@@ -753,7 +833,7 @@ func TestFormatValueQuantityUsesRealFormatting(t *testing.T) {
 	wants(t, run(t, s, "%eval -15.200531548598184 [m/s]"), "= -15.200531548598184 [m/s]")
 	wants(t, run(t, s, "%eval 32.99999999999993 [s]"), "= 32.99999999999993 [s]")
 	// A whole magnitude keeps its ".0", as a bare Real does.
-	wants(t, run(t, s, "%eval 2.0 [m] * 3.0 [m]"), "= 6.0 [m*m]")
+	wants(t, run(t, s, "%eval 2.0 [m] * 3.0 [m]"), "= 6.0 [m**2]")
 	// A magnitude below what two decimals can show reads as itself, not as zero.
 	wants(t, run(t, s, "%eval 0.0001 [m]"), "= 0.0001 [m]")
 }

@@ -10,7 +10,10 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf/ontology"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // Property names in the SysML vocabulary.
@@ -64,6 +67,8 @@ const (
 	xMemberIndex     = "memberIndex"
 	xHasBody         = "hasBody"
 	xSourceText      = "sourceText"
+	xSourceTail      = "sourceTail"
+	xSourceLanguage  = "sourceLanguage"
 	xPrefixMetadata  = "prefixMetadata"
 	xFilter          = "filter"
 	xNamespaceImport = "isNamespaceImport"
@@ -111,6 +116,11 @@ const dtExpression = "Expression"
 const (
 	mOwningMembership  = "OwningMembership"
 	mFeatureMembership = "FeatureMembership"
+	// The membership a body owns its result expression through, which states
+	// the expression as sysml:ownedResultExpression.
+	mResultExpressionMembership = "ResultExpressionMembership"
+	pOwnedResultExpression      = "ownedResultExpression"
+	mDocumentation              = "Documentation"
 )
 
 // Metaclass names for the constructs that have no SysML metaclass of their own
@@ -150,10 +160,20 @@ func (e *UnsupportedError) Error() string {
 }
 
 // ToRDF converts a parsed document into an RDF graph. file must be the source
-// the tree was parsed from: an expression-valued position carries the notation
-// it was written as alongside the graph of the expression, so the conversion
-// needs the bytes as well as the tree.
+// the tree was parsed from: every element and expression carries the notation
+// it was written as alongside its structural triples, so the conversion needs
+// the bytes as well as the tree.
 func ToRDF(file *source.SourceFile, root *ast.RootNamespace) (*rdf.Graph, error) {
+	e, err := encodeDocument(file, root)
+	if err != nil {
+		return nil, err
+	}
+	return e.graph, nil
+}
+
+// encodeDocument converts a parsed document, returning the encoder that holds
+// the graph and where in file each element was written.
+func encodeDocument(file *source.SourceFile, root *ast.RootNamespace) (*encoder, error) {
 	if file == nil || root == nil {
 		return nil, &UnsupportedError{What: "an empty document", Note: "nothing to convert"}
 	}
@@ -162,12 +182,18 @@ func ToRDF(file *source.SourceFile, root *ast.RootNamespace) (*rdf.Graph, error)
 		return nil, err
 	}
 	e := &encoder{
-		file:     file,
-		graph:    rdf.NewGraph(),
-		declared: map[string]bool{},
-		fqn:      map[ast.Node]string{},
-		ids:      ids,
-		subjects: map[string]string{},
+		file:      file,
+		src:       newAuthoredSource(file),
+		graph:     rdf.NewGraph(),
+		declared:  map[string]bool{},
+		fqn:       map[ast.Node]string{},
+		preceding: map[ast.Node]ast.Node{},
+		ids:       ids,
+		subjects:  map[string]string{},
+		regions:   map[rdf.Term]region{},
+		bodies:    map[rdf.Term]region{},
+		offsets:   map[string]int{},
+		scopes:    map[string]*symbols.Scope{},
 	}
 	// The first pass records which qualified names this document declares, so
 	// the second can decide whether a relationship target is a link to an
@@ -175,22 +201,67 @@ func ToRDF(file *source.SourceFile, root *ast.RootNamespace) (*rdf.Graph, error)
 	if err := e.collect(root.Members, ""); err != nil {
 		return nil, err
 	}
+	idx := symbols.NewIndexFromDoc(file.Name(), root)
+	e.resolver = resolve.New(idx)
+	e.resolver.SetModel(semantics.NewModel(e.resolver))
+	e.collectScopes(idx.DocumentRoot(file.Name()), "")
 	if err := e.encode(root.Members, "", rdf.Term{}); err != nil {
 		return nil, err
 	}
 	if e.idErr != nil {
 		return nil, e.idErr
 	}
-	return e.graph, nil
+	e.sourceText()
+	if err := rdf.AnnotateCollections(e.graph); err != nil {
+		return nil, err
+	}
+	return e, nil
+}
+
+// languageName is the name a document's grammar is recorded under on its roots,
+// so the text is read back in the grammar it was written in. A file with no
+// model extension is read as neither grammar exactly, so none is recorded.
+func languageName(kind source.Kind) string {
+	switch kind {
+	case source.KindKerML:
+		return "kerml"
+	case source.KindSysML:
+		return "sysml"
+	}
+	return ""
+}
+
+// sourceText gives every element its lines as written, comments included; one
+// with members carries the lines before them and, as its tail, those after.
+func (e *encoder) sourceText() {
+	for _, subject := range e.graph.Subjects() {
+		own, ok := e.regions[subject]
+		if !ok {
+			continue
+		}
+		members, ok := e.bodies[subject]
+		if !ok {
+			e.graph.Add(subject, e.sysx(xSourceText), rdf.String(e.src.region(own)))
+			continue
+		}
+		head, tail := e.src.split(own, members)
+		e.graph.Add(subject, e.sysx(xSourceText), rdf.String(head))
+		e.graph.Add(subject, e.sysx(xSourceTail), rdf.String(tail))
+	}
 }
 
 type encoder struct {
-	file     *source.SourceFile
+	file *source.SourceFile
+	// src is the text of file as written, which is what sysx:sourceText carries.
+	src      *authoredSource
 	graph    *rdf.Graph
 	declared map[string]bool
 	// fqn is the qualified name of each member node, which is how a succession
 	// end the notation leaves unnamed addresses the member it binds.
 	fqn map[ast.Node]string
+	// preceding is the member a `then` after each member sequences from: the last
+	// member before it that is not itself an edge, as the parser reads it.
+	preceding map[ast.Node]ast.Node
 	// ids is the document's identity side table: effective ids, declaredness,
 	// scopes, and the annotation nodes consumed into it.
 	ids *identityFacts
@@ -199,6 +270,34 @@ type encoder struct {
 	subjects map[string]string
 	// idErr holds a collision found where no error can propagate directly.
 	idErr error
+	// regions holds each element's lines, bodies the lines its members tile.
+	regions map[rdf.Term]region
+	bodies  map[rdf.Term]region
+	// offsets holds where in file each element's declaration starts.
+	offsets map[string]int
+	// resolver reads references the way the language does — through imports,
+	// aliases and nested qualification — and scopes holds the scope each
+	// declared namespace owns, keyed by its qualified name.
+	resolver *resolve.Resolver
+	scopes   map[string]*symbols.Scope
+}
+
+// collectScopes records the scope each declared member owns under the
+// qualified name collect gave that member; the document root is "". A scope
+// of no element — a body expression's — is reached from its expression instead.
+func (e *encoder) collectScopes(scope *symbols.Scope, owner string) {
+	if scope == nil {
+		return
+	}
+	e.scopes[owner] = scope
+	if trans, ok := scope.Node().(*ast.TransitionMember); ok {
+		e.scopes[owner] = symbols.TriggerScope(scope.Parent(), trans)
+	}
+	for _, child := range scope.Children() {
+		if fqn, ok := e.fqn[child.Node()]; ok {
+			e.collectScopes(child, fqn)
+		}
+	}
 }
 
 // claim reserves an IRI for what it stands for, returning the holder it
@@ -287,16 +386,76 @@ func (e *encoder) collect(members []ast.Node, owner string) error {
 
 // encode walks the members of one namespace, emitting the triples for each.
 func (e *encoder) encode(members []ast.Node, owner string, ownerTerm rdf.Term) error {
-	for i, member := range e.kept(members) {
+	kept := e.kept(members)
+	spans := make([]source.Span, len(kept))
+	for i, member := range kept {
+		spans[i] = member.Span()
+	}
+	regions := e.src.tile(spans)
+	// Members written on their owner's own lines, such as an accept's payload,
+	// are part of its text: the owner is written whole or rebuilt whole.
+	inline := !e.src.wholeLines(regions)
+	if ownerTerm.Value == "" && len(regions) > 0 {
+		// The document has no subject: roots sharing a line each keep their
+		// slice of it, and what follows the last root is that root's.
+		inline = false
+		e.src.shareLines(regions, spans)
+		regions[len(regions)-1].end = len(e.src.text)
+	}
+	if !inline && len(regions) > 0 && ownerTerm.Value != "" {
+		body := region{regions[0].start, regions[len(regions)-1].end}
+		if prior, ok := e.bodies[ownerTerm]; ok {
+			body = region{min(prior.start, body.start), max(prior.end, body.end)}
+		}
+		e.bodies[ownerTerm] = body
+	}
+	return e.encodeMembers(kept, regions, inline, owner, ownerTerm)
+}
+
+// encodeInline walks members whose lines interleave with their owner's own
+// notation, so the owner is written whole or rebuilt whole.
+func (e *encoder) encodeInline(members []ast.Node, owner string, ownerTerm rdf.Term) error {
+	kept := e.kept(members)
+	return e.encodeMembers(kept, make([]region, len(kept)), true, owner, ownerTerm)
+}
+
+func (e *encoder) encodeMembers(kept []ast.Node, regions []region, inline bool, owner string, ownerTerm rdf.Term) error {
+	// last and beforeLast are the latest members that are not edges; a
+	// member-attached `then` follows its target, so its source is beforeLast.
+	var last, beforeLast ast.Node
+	for i, member := range kept {
 		node, visibility := unwrapMember(member)
 		if node == nil {
 			continue
 		}
-		if err := e.encodeMember(node, visibility, owner, ownerTerm, i); err != nil {
+		if preceding := last; preceding != nil {
+			if edge, ok := node.(*ast.SuccessionEdge); ok && edge.TargetImplied {
+				preceding = beforeLast
+			}
+			if preceding != nil {
+				e.preceding[node] = preceding
+			}
+		}
+		if err := e.encodeMember(node, visibility, regions[i], inline, owner, ownerTerm, i); err != nil {
 			return err
+		}
+		if !isEdgeNode(node) {
+			last, beforeLast = node, last
 		}
 	}
 	return nil
+}
+
+// isEdgeNode reports whether a member is an edge between other members, which a
+// `then` sequences past (parser.isEdgeMember).
+func isEdgeNode(node ast.Node) bool {
+	switch n := node.(type) {
+	case *ast.SuccessionEdge, *ast.ControlFlowEdge, *ast.ObjectFlowEdge, *ast.TransitionMember:
+		return true
+	case *ast.Usage:
+		return n.Kind.IsEdge()
+	}
+	return false
 }
 
 // kept filters out the identity annotations consumed into the graph's
@@ -312,7 +471,9 @@ func (e *encoder) kept(members []ast.Node) []ast.Node {
 	return out
 }
 
-func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner string, ownerTerm rdf.Term, index int) error {
+// encodeMember maps one member: node is the declaration inside its membership
+// wrapper, and lines the text of the member, wrapper and all, unless inline.
+func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines region, inline bool, owner string, ownerTerm rdf.Term, index int) error {
 	name, _ := declaredNameAndMembers(node)
 	fqn := qualify(owner, name, index)
 	subject := e.ids.subjectForNode(node, fqn)
@@ -322,6 +483,8 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 			Note: fmt.Sprintf("its id lands on the same IRI as %s, and merging two elements into one subject would be a different model", prior),
 		}
 	}
+	// A bare expression among a body's members is the result the body computes.
+	result := isExpressionMember(node)
 
 	// A metaclass name this mapping invents is typed in the OpenSysML namespace,
 	// so a consumer can tell it from the standard OMG vocabulary.
@@ -332,6 +495,13 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		// IRI ends in, so the two cannot disagree.
 		e.graph.Add(subject, e.sysml(pElementID), rdf.String(rdf.LocalName(subject.Value)))
 		e.graph.Add(subject, e.sysx(xMemberIndex), rdf.Int(index))
+		e.offsets[subject.Value] = node.Span().Offset
+		if !inline {
+			e.regions[subject] = lines
+		}
+		if language := languageName(e.file.Kind()); ownerTerm.Value == "" && language != "" {
+			e.graph.Add(subject, e.sysx(xSourceLanguage), rdf.String(language))
+		}
 		if e.ids.declaredIDAt(node) {
 			e.graph.Add(subject, e.sysx(xDeclaredID), rdf.Bool(true))
 		}
@@ -339,7 +509,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		membership := rdf.Term{}
 		if ownerTerm.Value != "" {
 			e.graph.Add(subject, e.sysml(pOwningNamespace), ownerTerm)
-			membership = e.owningMembership(subject, ownerTerm, fqn)
+			membership = e.owningMembership(subject, ownerTerm, fqn, result)
 		}
 		if keyword := visibilityKeyword(visibility); keyword != "" {
 			// The membership states the visibility a member is declared with; a
@@ -396,7 +566,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		if err := e.prefixes(subject, n, n.Prefixes); err != nil {
 			return err
 		}
-		e.relationships(subject, owner, n.Relationships)
+		e.relationships(subject, n, owner, n.Relationships)
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Members, fqn, subject)
 
@@ -460,20 +630,18 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		if keyword := directionKeyword(n.Direction); keyword != "" {
 			e.graph.Add(subject, e.sysml(pDirection), rdf.String(keyword))
 		}
-		e.relationships(subject, owner, n.Relationships)
+		e.relationships(subject, n, owner, n.Relationships)
 		e.multiplicity(subject, owner, n.Multiplicity)
 		e.expression(subject, e.sysml(pValue), pValue, owner, n.Value)
 		// A declaration head that binds ends (connect/bind/flow/succession),
-		// a transition, an accept action or a satisfy usage is kept as source
-		// text: its head is not reconstructible from the properties above.
+		// a transition, an accept action or a satisfy usage states its ends
+		// and form structurally, since the properties above do not.
 		if verbatimUsage(n) {
-			e.graph.Add(subject, e.sysx(xSourceText), rdf.String(e.text(n)))
 			e.bindingEnds(subject, owner, n)
 			e.endForm(subject, n)
-			return nil
 		}
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
-		return e.encode(n.Members, fqn, subject)
+		return e.encode(bodyMembers(n), fqn, subject)
 
 	case *ast.Import:
 		head(rdf.SysMLTerm("Import"))
@@ -484,14 +652,14 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 			{xRecursive, n.IsRecursive},
 			{xExpose, n.IsExpose},
 		})
-		e.expression(subject, e.sysx(xFilter), xFilter, owner, n.FilterExpr)
+		e.filterExpression(subject, e.sysx(xFilter), xFilter, owner, n.FilterExpr)
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Body, fqn, subject)
 
 	case *ast.Alias:
 		head(rdf.OpenSysMLTerm(mAlias))
 		e.ident(subject, n.Ident)
-		e.graph.Add(subject, e.sysml(pAliasFor), e.reference(owner, qualifiedText(n.For)))
+		e.graph.Add(subject, e.sysml(pAliasFor), e.link(owner, n.For))
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Body, fqn, subject)
 
@@ -518,10 +686,10 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		head(rdf.SysMLTerm("Dependency"))
 		e.ident(subject, n.Ident)
 		for _, client := range n.Clients {
-			e.graph.Add(subject, e.sysml(pClient), e.reference(owner, qualifiedText(client)))
+			e.graph.Add(subject, e.sysml(pClient), e.link(owner, client))
 		}
 		for _, supplier := range n.Suppliers {
-			e.graph.Add(subject, e.sysml(pSupplier), e.reference(owner, qualifiedText(supplier)))
+			e.graph.Add(subject, e.sysml(pSupplier), e.link(owner, supplier))
 		}
 		if err := e.prefixes(subject, n, n.Prefixes); err != nil {
 			return err
@@ -533,28 +701,24 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		head(rdf.SysMLTerm("Comment"))
 		e.ident(subject, n.Ident)
 		for _, about := range n.About {
-			e.graph.Add(subject, e.sysml(pAnnotatedElement), e.reference(owner, qualifiedText(about)))
+			e.graph.Add(subject, e.sysml(pAnnotatedElement), e.link(owner, about))
 		}
 		if n.Locale != "" {
-			e.graph.Add(subject, e.sysml(pLocale), rdf.String(unquote(n.Locale)))
+			e.graph.Add(subject, e.sysml(pLocale), rdf.String(lexer.StringValue(n.Locale)))
 		}
-		e.graph.Add(subject, e.sysml(pBody), rdf.String(commentBody(e.file.Text(n.BodySpan))))
+		e.graph.Add(subject, e.sysml(pBody), rdf.String(commentBody(e.src.slice(n.BodySpan))))
 		return nil
 
 	case *ast.Documentation:
-		head(rdf.SysMLTerm("Documentation"))
-		e.ident(subject, n.Ident)
-		if n.Locale != "" {
-			e.graph.Add(subject, e.sysml(pLocale), rdf.String(unquote(n.Locale)))
-		}
-		e.graph.Add(subject, e.sysml(pBody), rdf.String(commentBody(e.file.Text(n.BodySpan))))
+		head(rdf.SysMLTerm(mDocumentation))
+		e.documentation(subject, n)
 		return nil
 
 	case *ast.TextualRepresentation:
 		head(rdf.SysMLTerm("TextualRepresentation"))
 		e.ident(subject, n.Ident)
-		e.graph.Add(subject, e.sysml(pLanguage), rdf.String(unquote(n.Language)))
-		e.graph.Add(subject, e.sysml(pBody), rdf.String(commentBody(e.file.Text(n.BodySpan))))
+		e.graph.Add(subject, e.sysml(pLanguage), rdf.String(lexer.StringValue(n.Language)))
+		e.graph.Add(subject, e.sysml(pBody), rdf.String(commentBody(e.src.slice(n.BodySpan))))
 		return nil
 
 	case *ast.MultiplicityDecl:
@@ -564,7 +728,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		// A MultiplicitySubset states its bounds by subsetting, not as a range.
 		if n.Subsets != nil {
 			e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelSubsets]),
-				e.reference(owner, qualifiedText(n.Subsets)))
+				e.link(owner, n.Subsets))
 		}
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Members, fqn, subject)
@@ -598,9 +762,9 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 			e.graph.Add(subject, e.sysml(pDeclaredName), rdf.String(n.Name))
 		}
 		if n.TypeRef != nil {
-			e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelTyping]), e.reference(owner, qualifiedText(n.TypeRef)))
+			e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelTyping]), e.link(owner, n.TypeRef))
 		}
-		e.relationships(subject, owner, n.Relationships)
+		e.relationships(subject, n, owner, n.Relationships)
 		e.multiplicity(subject, owner, n.Multiplicity)
 		e.expression(subject, e.sysml(pValue), pValue, owner, n.BindingExpr)
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
@@ -608,7 +772,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 
 	case *ast.FilterMember:
 		head(rdf.OpenSysMLTerm(mFilter))
-		e.expression(subject, e.sysx(xFilter), xFilter, owner, n.Condition)
+		e.filterExpression(subject, e.sysx(xFilter), xFilter, owner, n.Condition)
 		return nil
 
 	case *ast.ErrorNode:
@@ -616,6 +780,17 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 			What: fmt.Sprintf("the malformed declaration at %s", e.where(n)),
 			Note: "fix the syntax error before converting",
 		}
+	}
+	// The result is the Expression element itself, owned through its
+	// ResultExpressionMembership as the abstract syntax has it.
+	if result {
+		head(rdf.SysMLTerm(expressionMetaclass(node)))
+		e.graph.Prefixes[rdf.ExpressionPrefix] = rdf.Expression
+		e.expressionStructure(subject, exprScope{owner: owner}, node)
+		if membership, ok := e.graph.Object(subject, rdf.SysML+pOwningMembership); ok {
+			e.graph.Add(membership, e.sysml(pOwnedResultExpression), subject)
+		}
+		return nil
 	}
 	// A behavioral node — a control node, statement, loop, conditional, state or
 	// transition — is mapped by the behavior half of this encoder.
@@ -632,8 +807,9 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 // returning the membership minted between them, or the empty term when no
 // membership stands between the two. The API's payloads reach a member through
 // its membership, so a compact owner triple alone leaves a client walking down
-// from a root with nothing to follow.
-func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string) rdf.Term {
+// from a root with nothing to follow. result marks a body's result expression,
+// which a ResultExpressionMembership owns.
+func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string, result bool) rdf.Term {
 	ownerClass, memberClass := e.metaclassOf(owner), e.metaclassOf(member)
 	switch {
 	case isRelationship(ownerClass):
@@ -669,7 +845,10 @@ func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string) rdf
 	e.graph.Add(member, e.sysml(pOwningMembership), membership)
 
 	metaclass := mOwningMembership
-	if feature {
+	switch {
+	case result:
+		metaclass = mResultExpressionMembership
+	case feature:
 		metaclass = mFeatureMembership
 	}
 	e.graph.Add(membership, rdf.IRI(rdf.RDFType), e.sysml(metaclass))
@@ -741,7 +920,7 @@ func (e *encoder) condition(subject rdf.Term, fqn, owner string, expr ast.Node, 
 		return nil
 	}
 	if ref != nil {
-		e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelReferences]), e.reference(owner, qualifiedText(ref)))
+		e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelReferences]), e.link(owner, ref))
 	}
 	// Both remaining forms — a nested constraint and the constraint a member
 	// names — are written with a body, whether or not it has members.
@@ -754,6 +933,21 @@ func (e *encoder) condition(subject rdf.Term, fqn, owner string, expr ast.Node, 
 // named form spells the kind out (`binding b bind x = y;`).
 func shorthandRelationship(n *ast.Usage) bool {
 	return n.Kind == ast.UsageBinding && n.Keyword == "bind"
+}
+
+// bodyMembers returns the members written in a usage's body: a payload declared
+// inline by `of name : Type` is parsed as a member but belongs to the head.
+func bodyMembers(n *ast.Usage) []ast.Node {
+	if n.FlowEnds == nil || n.FlowEnds.PayloadDecl == nil {
+		return n.Members
+	}
+	members := make([]ast.Node, 0, len(n.Members))
+	for _, m := range n.Members {
+		if m != ast.Node(n.FlowEnds.PayloadDecl) {
+			members = append(members, m)
+		}
+	}
+	return members
 }
 
 // verbatimUsage reports whether a usage's declaration head has to be carried as
@@ -810,6 +1004,15 @@ func (e *encoder) bindingEnd(subject rdf.Term, owner, slot string, index int, ro
 
 func (e *encoder) sysml(name string) rdf.Term { return rdf.SysMLTerm(name) }
 func (e *encoder) sysx(name string) rdf.Term  { return rdf.OpenSysMLTerm(name) }
+
+// documentation emits what a `doc` states: its identification, locale and body.
+func (e *encoder) documentation(subject rdf.Term, n *ast.Documentation) {
+	e.ident(subject, n.Ident)
+	if n.Locale != "" {
+		e.graph.Add(subject, e.sysml(pLocale), rdf.String(lexer.StringValue(n.Locale)))
+	}
+	e.graph.Add(subject, e.sysml(pBody), rdf.String(commentBody(e.src.slice(n.BodySpan))))
+}
 
 func (e *encoder) ident(subject rdf.Term, ident ast.Identification) {
 	if ident.Name != "" {
@@ -949,7 +1152,13 @@ func (e *encoder) sigilBefore(offset int) string {
 	return ""
 }
 
-func (e *encoder) relationships(subject rdf.Term, owner string, rels []*ast.Relationship) {
+func (e *encoder) relationships(subject rdf.Term, decl ast.Node, owner string, rels []*ast.Relationship) {
+	e.relationshipsIn(subject, decl, exprScope{owner: owner}, rels)
+}
+
+// relationshipsIn is relationships for a declaration read in scope in, such as
+// a parameter an expression body declares.
+func (e *encoder) relationshipsIn(subject rdf.Term, decl ast.Node, in exprScope, rels []*ast.Relationship) {
 	for _, rel := range rels {
 		if rel == nil || rel.Target == nil {
 			continue
@@ -960,9 +1169,14 @@ func (e *encoder) relationships(subject rdf.Term, owner string, rels []*ast.Rela
 		}
 		// A name is mapped as a reference, which links it when this document
 		// declares it; a feature chain or other expression is not a name, so it
-		// is carried as the text it was written as.
+		// is carried as the text it was written as. A reference subsetting names
+		// past decl's own binding of the name, a redefinition a general's feature.
 		if name, ok := rel.Target.(*ast.QualifiedName); ok {
-			e.graph.Add(subject, e.sysml(property), e.reference(owner, qualifiedText(name)))
+			ref := resolve.Reference{QN: name, Redefines: rel.Kind == ast.RelRedefines}
+			if rel.Kind == ast.RelReferences {
+				ref.Referrer = decl
+			}
+			e.graph.Add(subject, e.sysml(property), in.linkReference(e, ref))
 			continue
 		}
 		e.graph.Add(subject, e.sysml(property), rdf.TypedLiteral(e.text(rel.Target), rdf.OpenSysML+dtExpression))
@@ -976,13 +1190,18 @@ func (e *encoder) relationshipEnd(subject rdf.Term, owner, property string, end 
 		return
 	}
 	if name, ok := end.(*ast.QualifiedName); ok {
-		e.graph.Add(subject, e.sysml(property), e.reference(owner, qualifiedText(name)))
+		e.graph.Add(subject, e.sysml(property), e.link(owner, name))
 		return
 	}
 	e.graph.Add(subject, e.sysml(property), rdf.TypedLiteral(e.text(end), rdf.OpenSysML+dtExpression))
 }
 
 func (e *encoder) multiplicity(subject rdf.Term, owner string, mult *ast.Multiplicity) {
+	e.multiplicityIn(subject, exprScope{owner: owner}, mult)
+}
+
+// multiplicityIn is multiplicity for bounds read in scope in.
+func (e *encoder) multiplicityIn(subject rdf.Term, in exprScope, mult *ast.Multiplicity) {
 	if mult == nil {
 		return
 	}
@@ -990,11 +1209,11 @@ func (e *encoder) multiplicity(subject rdf.Term, owner string, mult *ast.Multipl
 	// that as lower and upper both being n, so it is written as the upper bound
 	// alone and the printer renders it back as `[n]`.
 	if !mult.IsRange {
-		e.expression(subject, e.sysml(pUpperBound), pUpperBound, owner, mult.Lower)
+		e.expressionIn(subject, e.sysml(pUpperBound), pUpperBound, in, mult.Lower)
 		return
 	}
-	e.expression(subject, e.sysml(pLowerBound), pLowerBound, owner, mult.Lower)
-	e.expression(subject, e.sysml(pUpperBound), pUpperBound, owner, mult.Upper)
+	e.expressionIn(subject, e.sysml(pLowerBound), pLowerBound, in, mult.Lower)
+	e.expressionIn(subject, e.sysml(pUpperBound), pUpperBound, in, mult.Upper)
 }
 
 // reference renders a name reference as a link when it names an element this
@@ -1032,11 +1251,177 @@ func (e *encoder) reference(owner, name string) rdf.Term {
 	return rdf.String(name)
 }
 
+// link renders a qualified name written at owner as reference does, but reads
+// it first with the resolver, so a name reaching an element of this document
+// through an import, an alias or a nested path is the element's link.
+func (e *encoder) link(owner string, name *ast.QualifiedName) rdf.Term {
+	return e.linkReference(owner, resolve.Reference{QN: name})
+}
+
+// linkReference is link for a name occurrence with its own resolution rule,
+// such as a redefinition's target, which names a feature of the owner's generals.
+func (e *encoder) linkReference(owner string, ref resolve.Reference) rdf.Term {
+	if ref.QN == nil || len(ref.QN.Parts) == 0 {
+		return rdf.String("")
+	}
+	switch fqn, found := e.resolveIn(owner, ref); found {
+	case linked:
+		return e.ids.subjectFor(fqn)
+	case unrepresented:
+		return rdf.String(qualifiedText(ref.QN))
+	}
+	return e.reference(owner, qualifiedText(ref.QN))
+}
+
+// linkEndpoint is link for a transition or succession end, which in a state
+// machine may name a vertex across a region or inside a nested state.
+func (e *encoder) linkEndpoint(owner string, name *ast.QualifiedName) rdf.Term {
+	if name == nil || len(name.Parts) == 0 {
+		return rdf.String("")
+	}
+	if scope := e.scopeOf(owner); scope != nil {
+		if decl, ok := e.resolver.Endpoint(scope, name); ok {
+			if fqn, ok := e.declaredFQN(decl); ok {
+				return e.ids.subjectFor(fqn)
+			}
+		}
+	}
+	return e.reference(owner, qualifiedText(name))
+}
+
+// scopeOf is the scope of the element owner names, or of the nearest enclosing
+// element that owns one.
+func (e *encoder) scopeOf(owner string) *symbols.Scope {
+	scope := e.scopes[owner]
+	for scope == nil && owner != "" {
+		cut := strings.LastIndex(owner, "::")
+		if cut < 0 {
+			owner = ""
+		} else {
+			owner = owner[:cut]
+		}
+		scope = e.scopes[owner]
+	}
+	return scope
+}
+
+// resolution is what resolving a name from its scope found.
+type resolution int
+
+const (
+	// unresolved: the name reaches nothing the resolver knows.
+	unresolved resolution = iota
+	// unrepresented: the name reaches a declaration the graph has no element for,
+	// such as a body parameter; it must not be linked to anything else.
+	unrepresented
+	// linked: the name reaches an element of this document.
+	linked
+)
+
+// resolveIn resolves ref from its scope, owner's unless set, reporting the
+// qualified name of the declaration it reaches when that is in this document.
+func (e *encoder) resolveIn(owner string, ref resolve.Reference) (string, resolution) {
+	if ref.Scope == nil {
+		ref.Scope = e.scopeOf(owner)
+	}
+	if ref.Scope == nil {
+		return "", unresolved
+	}
+	sym, ok := e.resolver.ResolveReference(ref)
+	if !ok || sym == nil {
+		return "", unresolved
+	}
+	if fqn, ok := e.declaredFQN(sym.Decl); ok {
+		return fqn, linked
+	}
+	return "", unrepresented
+}
+
+// declaredFQN is the qualified name decl is declared under in this document.
+// A start node or a loop variable is reached by a name its element does not
+// declare; such an element has no name in the graph to be written back as.
+func (e *encoder) declaredFQN(decl ast.Node) (string, bool) {
+	if name, _ := declaredNameAndMembers(decl); name == "" {
+		return "", false
+	}
+	fqn, ok := e.fqn[decl]
+	return fqn, ok && e.declared[fqn]
+}
+
+// text is the notation of a node as written, without the trivia its span runs
+// on over.
 func (e *encoder) text(node ast.Node) string {
 	if node == nil {
 		return ""
 	}
-	return strings.TrimSpace(e.file.Text(node.Span()))
+	return strings.TrimSpace(e.src.code(node.Span()))
+}
+
+// headEnd is the offset of the `{` or `;` ending a usage's head, found after
+// stepping over the head's own nodes so a value's braces are not mistaken for it.
+func (e *encoder) headEnd(n *ast.Usage) int {
+	span := n.Span()
+	from := span.Offset
+	for _, node := range headNodes(n) {
+		if end := node.Span().End(); end > from && end <= span.End() {
+			from = end
+		}
+	}
+	tail := e.file.Text(source.Span{Offset: from, Len: span.End() - from})
+	lx := lexer.New(source.New("head.sysml", []byte(tail)))
+	for tok := lx.Next(); tok.Kind != lexer.EOF; tok = lx.Next() {
+		if tok.Kind == lexer.LBrace || tok.Kind == lexer.Semicolon {
+			return from + tok.Span.Offset
+		}
+	}
+	return span.End()
+}
+
+// headNodes lists the non-nil nodes a usage's head is written from.
+func headNodes(n *ast.Usage) []ast.Node {
+	var nodes []ast.Node
+	add := func(candidates ...ast.Node) {
+		for _, node := range candidates {
+			if node != nil {
+				nodes = append(nodes, node)
+			}
+		}
+	}
+	add(n.Value)
+	if n.Multiplicity != nil {
+		add(n.Multiplicity)
+	}
+	if n.CrossFeature != nil {
+		add(n.CrossFeature)
+	}
+	for _, prefix := range n.Prefixes {
+		if prefix != nil && prefix.Type != nil {
+			add(prefix.Type)
+		}
+	}
+	for _, rel := range n.Relationships {
+		if rel != nil {
+			add(rel, rel.Target)
+		}
+	}
+	for _, end := range n.ConnectorEnds {
+		if end != nil {
+			add(end, end.Target, end.Reference)
+			if end.Multiplicity != nil {
+				add(end.Multiplicity)
+			}
+		}
+	}
+	if flow := n.FlowEnds; flow != nil {
+		add(flow, flow.From, flow.To, flow.Payload)
+		if flow.PayloadDecl != nil {
+			add(flow.PayloadDecl)
+		}
+		if flow.PayloadMultiplicity != nil {
+			add(flow.PayloadMultiplicity)
+		}
+	}
+	return nodes
 }
 
 // rdfLimitationsNote is the remedy for a construct the RDF mapping does not
@@ -1126,13 +1511,10 @@ func declaredNameAndMembers(node ast.Node) (string, []ast.Node) {
 	case *ast.Definition:
 		return n.Ident.Name, n.Members
 	case *ast.Usage:
-		if verbatimUsage(n) {
-			if shorthandRelationship(n) {
-				return "", nil
-			}
-			return n.Ident.Name, nil
+		if shorthandRelationship(n) {
+			return "", bodyMembers(n)
 		}
-		return n.Ident.Name, n.Members
+		return n.Ident.Name, bodyMembers(n)
 	case *ast.Import:
 		return "", n.Body
 	case *ast.Alias:
@@ -1187,15 +1569,6 @@ func qualifiedText(name *ast.QualifiedName) string {
 		return "$::" + out
 	}
 	return out
-}
-
-// unquote strips the quotes the parser keeps on a string token, so the graph
-// carries the value rather than its notation.
-func unquote(text string) string {
-	if len(text) >= 2 && strings.HasPrefix(text, `"`) && strings.HasSuffix(text, `"`) {
-		return text[1 : len(text)-1]
-	}
-	return text
 }
 
 // commentBody strips the /* */ delimiters from a comment token, leaving the

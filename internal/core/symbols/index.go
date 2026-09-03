@@ -106,11 +106,16 @@ type Index struct {
 	lastTargets *layer[string, []resolvedImport]
 
 	// libraryDocs names the documents that hold bundled library content rather
-	// than the workspace's own, and librarySyms the symbols they declare, so a
-	// consumer can tell a library name from one the user wrote. Both are dropped
-	// with the document.
-	libraryDocs *layer[string, bool]
-	librarySyms *layer[*Symbol, bool]
+	// than the workspace's own, with the tier and text digest of each, and
+	// librarySyms the symbols they declare, so a consumer can tell a library name
+	// from one the user wrote and the frame from the libraries with semantics of
+	// their own. Both are dropped with the document.
+	libraryDocs *layer[string, LibraryDocument]
+	librarySyms *layer[*Symbol, LibraryTier]
+
+	// libraryIdentity memoizes LibraryIdentity as of the generation it was taken
+	// at; a frozen index takes it once, when it freezes, and is not written after.
+	libraryIdentity libraryIdentityMemo
 
 	// nsFilters holds the element-filter conditions a namespace declares per
 	// document that declares it, alongside wildcardMeta and for the same reason:
@@ -196,8 +201,8 @@ func NewIndex() *Index {
 		bySegment:           newLayer[string, map[string]bool](gen),
 		dirtyNS:             make(map[string]nsChange),
 		lastTargets:         newLayer[string, []resolvedImport](gen),
-		libraryDocs:         newLayer[string, bool](gen),
-		librarySyms:         newLayer[*Symbol, bool](gen),
+		libraryDocs:         newLayer[string, LibraryDocument](gen),
+		librarySyms:         newLayer[*Symbol, LibraryTier](gen),
 		nsFilters:           newLayer[string, map[string][]ElementFilter](gen),
 	}
 }
@@ -216,6 +221,7 @@ func (idx *Index) Freeze() {
 			idx.aboutUsages[name] = usages
 		}
 	}
+	idx.takeLibraryIdentity()
 	idx.frozen = true
 }
 
@@ -772,7 +778,7 @@ func (idx *Index) RemoveDocument(name string) {
 		return
 	}
 
-	library := idx.libraryDocs.at(name)
+	library := idx.libraryDocs.at(name).Tier.Library()
 	for _, e := range idx.contributions.at(name) {
 		if idx.declaredAt.at(e.sym) == e.fqn {
 			idx.declaredAt.del(e.sym)
@@ -812,28 +818,101 @@ func (idx *Index) RemoveDocument(name string) {
 }
 
 // MarkLibrary records that the named document holds bundled library content,
-// not the workspace's own. Call it after the document is added: adding a
-// document removes its previous contributions, and the mark with them. Only
-// what the document declares is marked, not the names it re-exports.
+// not the workspace's own, of no stated tier. Call it after the document is
+// added: adding a document removes its previous contributions, and the mark
+// with them. Only what the document declares is marked, not the names it
+// re-exports.
 func (idx *Index) MarkLibrary(name string) {
-	idx.mustBeWritable("MarkLibrary")
-	idx.libraryDocs.set(name, true)
+	idx.MarkLibraryTier(name, TierLibrary)
+}
+
+// MarkLibraryTier records that the named document holds bundled library content
+// of the given tier and unstated text; TierNone unmarks it. See MarkLibrary for
+// when to call it.
+func (idx *Index) MarkLibraryTier(name string, tier LibraryTier) {
+	idx.MarkLibraryDocument(name, LibraryDocument{Tier: tier})
+}
+
+// MarkLibraryDocument records that the named document holds the described
+// bundled library content; a document of TierNone is unmarked. See MarkLibrary
+// for when to call it.
+func (idx *Index) MarkLibraryDocument(name string, doc LibraryDocument) {
+	idx.mustBeWritable("MarkLibraryDocument")
+	if doc.Tier == TierNone {
+		idx.libraryDocs.del(name)
+	} else {
+		idx.libraryDocs.set(name, doc)
+	}
 	for _, e := range idx.contributions.at(name) {
-		if idx.declaredAt.at(e.sym) == e.fqn {
-			idx.librarySyms.set(e.sym, true)
+		if idx.declaredAt.at(e.sym) != e.fqn {
+			continue
+		}
+		if doc.Tier == TierNone {
+			idx.librarySyms.del(e.sym)
+		} else {
+			idx.librarySyms.set(e.sym, doc.Tier)
 		}
 	}
 }
 
+// LibraryIdentity digests the library content the index holds — every library
+// document's name, tier and text — so two indexes that agree on it declare the
+// same library. It is unknown while a library document states no text digest.
+func (idx *Index) LibraryIdentity() (string, bool) {
+	if !idx.frozen && (!idx.libraryIdentity.taken || idx.libraryIdentity.gen != idx.generation.get()) {
+		idx.takeLibraryIdentity()
+	}
+	return idx.libraryIdentity.value, idx.libraryIdentity.known
+}
+
+// libraryIdentityMemo is LibraryIdentity as of the index generation it was taken at.
+type libraryIdentityMemo struct {
+	taken bool
+	gen   uint64
+	value string
+	known bool
+}
+
+func (idx *Index) takeLibraryIdentity() {
+	docs := make(map[string]LibraryDocument)
+	for _, name := range idx.libraryDocs.keys() {
+		docs[name] = idx.libraryDocs.at(name)
+	}
+	idx.libraryIdentity.value, idx.libraryIdentity.known = libraryIdentityOf(docs)
+	idx.libraryIdentity.gen = idx.generation.get()
+	idx.libraryIdentity.taken = true
+}
+
 // Library reports whether sym is declared by bundled library content.
 func (idx *Index) Library(sym *Symbol) bool {
-	return sym != nil && idx.librarySyms.at(sym)
+	return idx.LibraryTier(sym).Library()
+}
+
+// LibraryTier reports the tier of the bundled library content that declares
+// sym, TierNone for a symbol the workspace declares.
+func (idx *Index) LibraryTier(sym *Symbol) LibraryTier {
+	if sym == nil {
+		return TierNone
+	}
+	return idx.librarySyms.at(sym)
+}
+
+// DocumentLibraryTier reports the tier the named document was marked with,
+// TierNone for a workspace document.
+func (idx *Index) DocumentLibraryTier(name string) LibraryTier {
+	return idx.libraryDocs.at(name).Tier
+}
+
+// LibraryDocumentOf reports what the named document was marked as holding, a
+// LibraryDocument of TierNone for a workspace document.
+func (idx *Index) LibraryDocumentOf(name string) LibraryDocument {
+	return idx.libraryDocs.at(name)
 }
 
 // IsLibraryDocument reports whether the named document holds bundled library
 // content (see MarkLibrary).
 func (idx *Index) IsLibraryDocument(name string) bool {
-	return idx.libraryDocs.at(name)
+	return idx.DocumentLibraryTier(name).Library()
 }
 
 // knows reports whether the index holds anything for the named document.
@@ -1672,7 +1751,7 @@ func (idx *Index) Documents() []string {
 func (idx *Index) WorkspaceDocuments() []string {
 	var out []string
 	for _, name := range idx.docRoots.keys() {
-		if !idx.libraryDocs.at(name) {
+		if !idx.libraryDocs.at(name).Tier.Library() {
 			out = append(out, name)
 		}
 	}

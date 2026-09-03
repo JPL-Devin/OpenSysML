@@ -107,13 +107,36 @@ func (r *Resolver) specializationChain(from *symbols.Symbol) []*symbols.Symbol {
 // `part def Sub :> Base` it consults Base's protected imports. A feature typing
 // is a generalization edge (KerML 8.3.4.6), so `part p : Base` reaches them too.
 func (r *Resolver) lookupInheritedImports(scope *symbols.Scope, name string) (*symbols.Symbol, bool) {
+	var found *symbols.Symbol
+	r.eachInheritedImport(scope, name, func(from *symbols.Scope, imp *ast.Import) bool {
+		found, _ = r.matchImport(from, imp, name)
+		return found == nil
+	})
+	return found, found != nil
+}
+
+// inheritedImportCandidates is lookupInheritedImports collecting every declaration the
+// inherited imports surface under name, in the order lookupInheritedImports searches.
+func (r *Resolver) inheritedImportCandidates(scope *symbols.Scope, name string) []*symbols.Symbol {
+	var out []*symbols.Symbol
+	r.eachInheritedImport(scope, name, func(from *symbols.Scope, imp *ast.Import) bool {
+		for _, sym := range r.importMatchesAll(from, imp, name) {
+			out = appendSymbol(out, sym)
+		}
+		return true
+	})
+	return out
+}
+
+// eachInheritedImport calls yield with each import that may surface name to scope
+// through what its owner specializes, until yield returns false.
+func (r *Resolver) eachInheritedImport(scope *symbols.Scope, name string, yield func(*symbols.Scope, *ast.Import) bool) {
 	owner := scope.Owner()
 	if owner == nil || r.inheritedImports[owner] {
-		return nil, false
+		return
 	}
-	_, ok := r.model.(supertypeProvider)
-	if !ok {
-		return nil, false
+	if _, ok := r.model.(supertypeProvider); !ok {
+		return
 	}
 	// Resolving an inherited import's target resolves names again, which may
 	// arrive back here: one visit per owner per lookup.
@@ -121,21 +144,18 @@ func (r *Resolver) lookupInheritedImports(scope *symbols.Scope, name string) (*s
 	defer delete(r.inheritedImports, owner)
 
 	for _, sup := range r.specializationChain(owner) {
-		if sup.Scope != nil {
-			for _, imp := range importsOf(sup.Scope.Node()) {
-				if !inheritedThroughSpecialization(imp) {
-					continue
-				}
-				if !r.importPrefixAvailable(sup.Scope, imp, name) {
-					continue
-				}
-				if sym, ok := r.matchImport(sup.Scope, imp, name); ok {
-					return sym, true
-				}
+		if sup.Scope == nil {
+			continue
+		}
+		for _, imp := range importsOf(sup.Scope.Node()) {
+			if !inheritedThroughSpecialization(imp) || !r.importPrefixAvailable(sup.Scope, imp, name) {
+				continue
+			}
+			if !yield(sup.Scope, imp) {
+				return
 			}
 		}
 	}
-	return nil, false
 }
 
 // ImportTarget is the namespace or membership an import names, as the import

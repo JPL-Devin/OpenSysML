@@ -13,10 +13,11 @@ const (
 	objectiveRole
 )
 
-// ImplicitRoleRedefinitions returns same-role features of the owner's generals.
+// ImplicitRoleRedefinitions returns the same-role features of the owner's generals
+// that sym does not redefine by name: a role redefines every one it inherits.
 func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol {
 	role := roleOf(sym)
-	if role == noCaseRole || hasExplicitRedefinition(sym) || sym.OwnerScope == nil {
+	if role == noCaseRole || sym.OwnerScope == nil {
 		return nil
 	}
 	owner := sym.OwnerScope.Owner()
@@ -25,7 +26,7 @@ func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol
 	}
 	var out []*symbols.Symbol
 	seenCases := map[*symbols.Symbol]bool{}
-	seenRoles := map[*symbols.Symbol]bool{}
+	seenRoles := m.explicitRedefinitions(sym)
 	for _, sup := range m.DirectSupertypes(owner) {
 		if behaviorLike(sup) {
 			for _, inherited := range m.effectiveRoles(sup, role, seenCases) {
@@ -101,11 +102,16 @@ func roleOfNode(node ast.Node) caseRole {
 	return noCaseRole
 }
 
-func hasExplicitRedefinition(sym *symbols.Symbol) bool {
+// explicitRedefinitions returns the features sym's own `:>>` clauses resolve to.
+func (m *Model) explicitRedefinitions(sym *symbols.Symbol) map[*symbols.Symbol]bool {
+	out := map[*symbols.Symbol]bool{}
 	for _, rel := range RelationshipsOf(sym) {
-		if rel != nil && rel.Kind == ast.RelRedefines {
-			return true
+		if rel == nil || rel.Kind != ast.RelRedefines || rel.Target == nil {
+			continue
+		}
+		if target := m.resolveRelTarget(sym, rel); target != nil {
+			out[target] = true
 		}
 	}
-	return false
+	return out
 }
