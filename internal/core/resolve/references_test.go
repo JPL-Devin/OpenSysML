@@ -205,6 +205,32 @@ func TestNamedMultiplicitiesReferencesAreCollected(t *testing.T) {
 	}
 }
 
+// A cast names its type and may bound it by a feature; both are references the
+// document walk resolves and the collector reports.
+func TestCastReferencesAreCollected(t *testing.T) {
+	const src = `package C {
+	part def Shape;
+	attribute limit;
+	part s : Shape;
+	attribute one = (as Shape);
+	attribute some = (as Shape[0..limit]);
+}`
+	walk, root, rootScope := resolvedDocNamed(t, "c.sysml", src)
+	if len(walk.Diagnostics) != 0 {
+		t.Fatalf("the document walk must resolve every name: %v", walk.Diagnostics)
+	}
+	found := map[string]int{}
+	for _, ref := range resolve.References(root, rootScope) {
+		found[nameText(ref.QN)]++
+		if _, ok := walk.ResolveReference(ref); !ok {
+			t.Errorf("%s does not resolve on its own", nameText(ref.QN))
+		}
+	}
+	if found["Shape"] != 3 || found["limit"] != 1 {
+		t.Errorf("References reports Shape %d times and limit %d times, want 3 and 1", found["Shape"], found["limit"])
+	}
+}
+
 // `first x` may be written before `x` is declared in the same body, so the
 // initial node names that later declaration rather than its own label.
 func TestAnInitialReferenceReachesALaterDeclaration(t *testing.T) {

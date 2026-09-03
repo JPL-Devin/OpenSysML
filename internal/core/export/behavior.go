@@ -708,10 +708,6 @@ var controlNodeKeyword = map[string]string{
 
 // successionHead writes a succession back using standard end notation.
 func (d *decoder) successionHead(el *element) (string, error) {
-	source, err := d.referenceText(el, rdf.SysML+pSourceFeature)
-	if err != nil {
-		return "", err
-	}
 	target, err := d.referenceText(el, rdf.SysML+pTargetFeature)
 	if err != nil {
 		return "", err
@@ -737,6 +733,12 @@ func (d *decoder) successionHead(el *element) (string, error) {
 		// The source end is the member written before, which this form leaves
 		// unwritten.
 		return "then " + target, nil
+	}
+	// Only the forms that name the source read it, so no spelling is chosen
+	// for one the notation leaves unwritten.
+	source, err := d.referenceText(el, rdf.SysML+pSourceFeature)
+	if err != nil {
+		return "", err
 	}
 	if source == "" {
 		return "", &UnsupportedError{
@@ -1083,10 +1085,6 @@ func (d *decoder) subactionText(el *element, depth int) (string, error) {
 // transitionText writes a transition of a state machine, in the spelling it was
 // written in, with its trigger, guard and effect.
 func (d *decoder) transitionText(el *element, depth int) (string, error) {
-	source, err := d.referenceText(el, rdf.SysML+pSourceFeature)
-	if err != nil {
-		return "", err
-	}
 	target, err := d.referenceText(el, rdf.SysML+pTargetFeature)
 	if err != nil {
 		return "", err
@@ -1100,6 +1098,10 @@ func (d *decoder) transitionText(el *element, depth int) (string, error) {
 	case "accept":
 		// The transition of a state body that states only its trigger.
 	default:
+		source, err := d.referenceText(el, rdf.SysML+pSourceFeature)
+		if err != nil {
+			return "", err
+		}
 		if source == "" {
 			return "", d.missing(el, "sysml:"+pSourceFeature, "a transition written with `transition` names the state it leaves")
 		}

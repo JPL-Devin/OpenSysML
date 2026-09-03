@@ -212,6 +212,34 @@ func TestGlobalSpellingIsReachedPastAShadowedRoot(t *testing.T) {
 	}
 }
 
+// TestCastTypeIsSpelledForItsScope covers the type of a cast, a reference the
+// expression tree carries: written where a nearer definition bears its name, the
+// graph alone must keep the qualified spelling, and relinked to that nearer
+// definition it must write the short one.
+func TestCastTypeIsSpelledForItsScope(t *testing.T) {
+	src := "package P {\n    part def T;\n    part def H {\n        part def T;\n        attribute v = (as P::T);\n    }\n}\n"
+	graph, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	if want := "sysx:typeArgument elmt:P__T ."; !strings.Contains(string(graph), want) {
+		t.Fatalf("graph does not record %q\n%s", want, graph)
+	}
+	notation := structuralRoundTrip(t, "cast_type", graph)
+	if want := "attribute v = (as P::T);"; !strings.Contains(string(notation), want) {
+		t.Errorf("notation does not write %q\n%s", want, notation)
+	}
+	structural := withoutTriples(t, graph, "sysx:sourceText")
+	relinkedGraph := relinked(t, structural, "sysx:typeArgument elmt:P__T .", "sysx:typeArgument elmt:P__H__T .")
+	back, err := export.Convert("cast_type.ttl", relinkedGraph, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v\n%s", err, relinkedGraph)
+	}
+	if want := "attribute v = (as T);"; !strings.Contains(string(back), want) {
+		t.Errorf("notation does not write %q\n%s", want, back)
+	}
+}
+
 // TestPacketsRoundTripsStructurally is the corpus case the spelling rule was
 // found on: a redefining attribute that bears its target's own name.
 func TestPacketsRoundTripsStructurally(t *testing.T) {

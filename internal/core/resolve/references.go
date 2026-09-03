@@ -564,6 +564,9 @@ func (c *refCollector) expr(scope *symbols.Scope, e ast.Node) {
 		}
 	case *ast.MetadataAccessExpr:
 		c.add(scope, v.Ref)
+	case *ast.CastExpr:
+		c.add(scope, v.TargetType)
+		c.multiplicity(scope, v.Multiplicity)
 	case *ast.QualifiedName:
 		// A bare name in expression position parses straight to a qualified
 		// name rather than to a FeatureReference wrapper: `return r = speed;`

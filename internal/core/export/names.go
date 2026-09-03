@@ -95,6 +95,16 @@ func chooseNames(text []byte, want *wanted) (nameChoices, error) {
 	if err := e.checkStarts(want.starts, declared); err != nil {
 		return nil, err
 	}
+	for key := range want.references {
+		if _, ok := occurrences[key]; !ok {
+			// A reference written but never read back cannot be checked to reach
+			// its element, so it is not spelled by guess.
+			return nil, &UnsupportedError{
+				What: fmt.Sprintf("the reference to %s from %s", key.target, key.member),
+				Note: "the notation written for it does not read back as a reference, so the spelling cannot be checked",
+			}
+		}
+	}
 	for key, refs := range occurrences {
 		target, ok := declared[key.target]
 		if !ok {
