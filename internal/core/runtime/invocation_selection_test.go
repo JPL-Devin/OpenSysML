@@ -737,6 +737,8 @@ func testCalcCallBindsALibraryFunctionThroughRedeclaredInputs(t *testing.T) {
 			calc def Floor :> max { in floor :>> y = 0.0; }
 			calc def Empty :> isEmpty { in items :>> seq; }
 			calc def Required :> isEmpty { in seq :>> seq [1]; }
+			calc def Narrowed :> sqrt { in n : Integer :>> x; }
+			calc def AtLeastNext :> max { in x :>> x; in y :>> y = x + 1.0; }
 			calc def OwnBody :> sqrt { in y :>> x; return : Real = y; }
 			ref renamed : Renamed;
 			ref defaulted : Defaulted;
@@ -753,6 +755,11 @@ func testCalcCallBindsALibraryFunctionThroughRedeclaredInputs(t *testing.T) {
 			calc emptyOmitted { Empty() }
 			calc emptyGiven { Empty(items = 3) }
 			calc requiredOmitted { Required() }
+			calc requiredNull { Required(null) }
+			calc narrowedFits { Narrowed(4) }
+			calc narrowedReal { Narrowed(2.5) }
+			calc nextDefault { AtLeastNext(2.0) }
+			calc nextGiven { AtLeastNext(2.0, 1.0) }
 			calc ownBody { OwnBody(16.0) }
 			calc featureNamed { renamed(y = 16.0) }
 			calc featureDefault { defaulted() }
@@ -779,6 +786,9 @@ func testCalcCallBindsALibraryFunctionThroughRedeclaredInputs(t *testing.T) {
 		{"floorGiven", real(7)},
 		{"emptyOmitted", boolean(true)},
 		{"emptyGiven", boolean(false)},
+		{"narrowedFits", real(2)},
+		{"nextDefault", real(3)},
+		{"nextGiven", real(2)},
 		{"ownBody", real(16)},
 		{"featureNamed", real(4)},
 		{"featureDefault", real(4)},
@@ -803,6 +813,8 @@ func testCalcCallBindsALibraryFunctionThroughRedeclaredInputs(t *testing.T) {
 		{"renamedUnbound", ErrUnboundParameter},
 		{"floorUnbound", ErrUnboundParameter},
 		{"requiredOmitted", ErrUnboundParameter},
+		{"requiredNull", ErrMultiplicityViolation},
+		{"narrowedReal", ErrTypeMismatch},
 	} {
 		sym := findSymbolByName(rootScope, tc.calc, ast.DefCalc)
 		if sym == nil {
@@ -830,6 +842,14 @@ func testCalcCallBindsALibraryFunctionThroughRedeclaredInputs(t *testing.T) {
 	floor := findSymbolByName(rootScope, "Floor", ast.DefCalc)
 	if result, err := ctx.InvokeCalcNamed(floor, map[string]Value{"x": real(-3)}, rootScope); err != nil || !valueEqual(result, real(0)) {
 		t.Fatalf("InvokeCalcNamed(Floor, x = -3) = %+v, %v; want 0", result, err)
+	}
+	narrowed := findSymbolByName(rootScope, "Narrowed", ast.DefCalc)
+	if _, err := ctx.InvokeCalc(narrowed, []Value{real(2.5)}, rootScope); !errors.Is(err, ErrTypeMismatch) || !strings.Contains(err.Error(), "calc test::Narrowed") {
+		t.Fatalf("InvokeCalc(Narrowed, 2.5) error = %v, want ErrTypeMismatch from test::Narrowed", err)
+	}
+	next := findSymbolByName(rootScope, "AtLeastNext", ast.DefCalc)
+	if result, err := ctx.InvokeCalcNamed(next, map[string]Value{"x": real(2)}, rootScope); err != nil || !valueEqual(result, real(3)) {
+		t.Fatalf("InvokeCalcNamed(AtLeastNext, x = 2) = %+v, %v; want 3", result, err)
 	}
 }
 

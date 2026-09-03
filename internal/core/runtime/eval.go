@@ -1965,7 +1965,7 @@ func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget
 func (ctx *Context) implementInvocation(target *invocationTarget, sym *symbols.Symbol) {
 	target.calc = sym
 	if perf := ctx.libraryCalcPerformed(sym); perf != nil {
-		if len(perf.params) > 0 {
+		if perf.signature != nil {
 			return
 		}
 		sym = perf.lib
