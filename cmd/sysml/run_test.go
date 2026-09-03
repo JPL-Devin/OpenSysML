@@ -214,7 +214,7 @@ const fleetModel = `package Fleet {
                     assign log := log + "W";
                     assign level := level + 10;
                 }
-                accept after 5 then moving;
+                accept after 5 [SI::s] then moving;
             }
             state moving {
                 entry action m {
@@ -309,7 +309,7 @@ func TestStateNamesTheUsageToInstantiate(t *testing.T) {
 const sharedMachineModel = `package Shared {
     state def Blink {
         entry; then dark;
-        state dark { accept after 2 then lit; }
+        state dark { accept after 2 [SI::s] then lit; }
         state lit;
     }
     part def Lamp {

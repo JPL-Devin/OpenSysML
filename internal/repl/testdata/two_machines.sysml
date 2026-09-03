@@ -5,7 +5,7 @@ package Pair {
 		exhibit state power {
 			entry; then off;
 			state off {
-				accept after 5 then on;
+				accept after 5 [SI::s] then on;
 			}
 			state on;
 		}
@@ -13,7 +13,7 @@ package Pair {
 		exhibit state link {
 			entry; then idle;
 			state idle {
-				accept after 3 then busy;
+				accept after 3 [SI::s] then busy;
 			}
 			state busy;
 		}
