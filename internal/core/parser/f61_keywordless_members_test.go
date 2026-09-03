@@ -157,6 +157,46 @@ func TestF61KeywordlessMembers(t *testing.T) {
 		}
 	})
 
+	t.Run("metadata_prefixed_enum_values", func(t *testing.T) {
+		pkg := parsePkg(t, "package B { metadata def M; enum def S { #M a; #M b : S; #M enum c; private #M e; #M <f> ff; #M g [1]; #M h :> a; #M = 1; #M enum := 2; #M; #B::M { doc /* d */ } #M k default = 3; } }")
+		def := pkg.Members[1].(*ast.Membership).Member.(*ast.Definition)
+		if len(def.Members) != 12 {
+			t.Fatalf("members = %d, want 12", len(def.Members))
+		}
+		for i, want := range []struct{ short, name string }{{"", "a"}, {"", "b"}, {"", "c"}, {"", "e"}, {"f", "ff"}, {"", "g"}, {"", "h"}, {"", ""}, {"", ""}, {"", ""}, {"", ""}, {"", "k"}} {
+			u := usageAt(t, def.Members, i)
+			if u.Kind != ast.UsageEnumeration || u.Ident.ShortName != want.short || u.Ident.Name != want.name {
+				t.Errorf("member %d = kind %v <%q> %q, want enumerated value <%q> %q", i, u.Kind, u.Ident.ShortName, u.Ident.Name, want.short, want.name)
+			}
+			if len(u.Prefixes) != 1 || ast.SimpleName(u.Prefixes[0].Type) != "M" {
+				t.Errorf("member %d prefixes = %#v, want one #M", i, u.Prefixes)
+			}
+		}
+		if u := usageAt(t, def.Members, 1); len(u.Relationships) != 1 || u.Relationships[0].Kind != ast.RelTyping {
+			t.Errorf("#M b : S = %#v, want a typing", u)
+		}
+		if u := usageAt(t, def.Members, 2); u.Keyword != "enum" {
+			t.Errorf("#M enum c keyword = %q, want enum", u.Keyword)
+		}
+		if u := usageAt(t, def.Members, 3); u.Visibility != ast.VisibilityPrivate {
+			t.Errorf("private #M e visibility = %v, want private", u.Visibility)
+		}
+		if u := usageAt(t, def.Members, 5); u.Multiplicity == nil {
+			t.Errorf("#M g [1] has no multiplicity")
+		}
+		if u := usageAt(t, def.Members, 6); len(u.Relationships) != 1 || u.Relationships[0].Kind != ast.RelSubsets {
+			t.Errorf("#M h :> a = %#v, want a subsetting", u)
+		}
+		for _, i := range []int{7, 8, 11} {
+			if u := usageAt(t, def.Members, i); u.Value == nil {
+				t.Errorf("member %d has no value", i)
+			}
+		}
+		if u := usageAt(t, def.Members, 10); !u.HasBody || ast.QualifiedText(u.Prefixes[0].Type) != "B::M" {
+			t.Errorf("#B::M { doc } = %#v, want a body and a qualified prefix", u)
+		}
+	})
+
 	t.Run("enum_value_trivia_stays_with_the_next_member", func(t *testing.T) {
 		pkg := parsePkg(t, "package B { enum def S { a; /* c */ b; /* d */ doc /* e */ } }")
 		def := pkg.Members[0].(*ast.Membership).Member.(*ast.Definition)

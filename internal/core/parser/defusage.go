@@ -582,9 +582,10 @@ func (p *Parser) atKindlessFeatureTyping() bool {
 }
 
 // atEnumeratedValueDeclaration reports whether an enumeration body member is
-// an enumerated value with no `enum` keyword that opens with a short name or
-// states a specialization or multiplicity, named or not (SysML.xtext
-// EnumeratedValue over FeatureDeclaration), behind an optional visibility.
+// an enumerated value the body loop reads itself (SysML.xtext EnumeratedValue:
+// `#M`* `enum`? Usage behind an optional visibility): one with prefix metadata
+// or no `enum` keyword that is anonymous, opens with a short name, or states a
+// specialization or multiplicity.
 func (p *Parser) atEnumeratedValueDeclaration() bool {
 	off := 0
 	if t := p.peek(); t.Kind == lexer.Keyword {
@@ -593,13 +594,74 @@ func (p *Parser) atEnumeratedValueDeclaration() bool {
 			off = 1
 		}
 	}
+	end := p.prefixMetadataEndAt(off)
+	prefixed := end > off
+	off = end
+	if t := p.peekN(off); t.Kind == lexer.Keyword && t.KeywordID == "enum" {
+		if prefixed {
+			return true
+		}
+		off++
+		return p.peekN(off).Kind == lexer.Eq || p.peekN(off).Kind == lexer.ColonEq
+	}
 	switch t := p.peekN(off); t.Kind {
-	case lexer.Lt:
+	case lexer.Eq, lexer.ColonEq, lexer.Lt:
 		return true
+	case lexer.Semicolon, lexer.LBrace:
+		return prefixed
 	case lexer.Identifier, lexer.UnrestrictedName:
 		off++
+		if prefixed && endsEnumeratedValueName(p.peekN(off)) {
+			return true
+		}
 	}
 	return p.atFeatureSpecializationPartAt(off)
+}
+
+// endsEnumeratedValueName reports whether t follows the name of an enumerated
+// value that states no specialization: its value, body or `;`.
+func endsEnumeratedValueName(t lexer.Token) bool {
+	switch t.Kind {
+	case lexer.Semicolon, lexer.LBrace, lexer.Eq, lexer.ColonEq:
+		return true
+	case lexer.Keyword:
+		return t.KeywordID == "default"
+	}
+	return false
+}
+
+// prefixMetadataEndAt returns the offset just past the `#Name` prefixes that
+// begin off tokens ahead, or off when none do.
+func (p *Parser) prefixMetadataEndAt(off int) int {
+	for p.peekN(off).Kind == lexer.Hash {
+		off++
+		for {
+			switch p.peekN(off).Kind {
+			case lexer.Identifier, lexer.UnrestrictedName, lexer.Keyword:
+				off++
+			default:
+				return off
+			}
+			if p.peekN(off).Kind != lexer.ColonColon {
+				break
+			}
+			off++
+		}
+	}
+	return off
+}
+
+// parsePrefixMetadataRelaxed reads the `#Name` prefixes at the cursor
+// (SysML.xtext UsageExtensionKeyword), keywords allowed as names (`#scenario`).
+func (p *Parser) parsePrefixMetadataRelaxed() []*ast.PrefixMetadata {
+	var prefixes []*ast.PrefixMetadata
+	for p.at(lexer.Hash) {
+		p.advance()
+		if metaName := p.parseQualifiedNameRelaxed(); metaName != nil {
+			prefixes = append(prefixes, &ast.PrefixMetadata{Type: metaName})
+		}
+	}
+	return prefixes
 }
 
 // atFeatureSpecializationPartAt reports whether the token off positions ahead
@@ -939,17 +1001,7 @@ func (p *Parser) warnAmbiguousModifierKind(mods featureMods, isKind func(lexer.T
 // already established (via atDefUsageStart) that a def/usage begins here.
 func (p *Parser) parseDefUsage(start int) ast.Node {
 	// Parse optional `#MetadataType` prefixes (user-defined keywords)
-	var prefixes []*ast.PrefixMetadata
-	for p.at(lexer.Hash) {
-		p.advance() // consume #
-		// Allow keywords as metadata type names (e.g., #scenario, #cause)
-		metaName := p.parseQualifiedNameRelaxed()
-		if metaName != nil {
-			prefixes = append(prefixes, &ast.PrefixMetadata{
-				Type: metaName,
-			})
-		}
-	}
+	prefixes := p.parsePrefixMetadataRelaxed()
 
 	// Helper to apply prefixes to result node
 	applyPrefixes := func(node ast.Node) ast.Node {
@@ -982,12 +1034,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 
 	// UsagePrefix ends in UsageExtensionKeyword* (SysML.xtext:582), so prefix
 	// metadata may follow the modifiers: `abstract #Classified z;`.
-	for p.at(lexer.Hash) {
-		p.advance()
-		if metaName := p.parseQualifiedNameRelaxed(); metaName != nil {
-			prefixes = append(prefixes, &ast.PrefixMetadata{Type: metaName})
-		}
-	}
+	prefixes = append(prefixes, p.parsePrefixMetadataRelaxed()...)
 
 	// `snapshot` and `timeslice` portion the occurrence usage they prefix:
 	// `timeslice item i;` as well as the bare `timeslice t;`
@@ -2358,34 +2405,27 @@ func (p *Parser) parseEnumBody() []ast.Node {
 	body := p.newBodyBuilder()
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		before := p.peek().Span.Offset
-		anonymousValue := p.at(lexer.Eq) || p.at(lexer.ColonEq)
-		if p.atKeyword("enum") &&
-			(p.peekN(1).Kind == lexer.Eq || p.peekN(1).Kind == lexer.ColonEq) {
-			anonymousValue = true
-		}
-		if anonymousValue {
-			start := p.peek().Span.Offset
-			trivia := p.takeTrivia()
-			if p.atKeyword("enum") {
-				p.advance()
-			}
-			u := &ast.Usage{Kind: ast.UsageEnumeration}
-			p.parseUsageValue(u)
-			p.expect(lexer.Semicolon, "expected ';' after enumerated value")
-			u.NodeSpan = p.spanFrom(start)
-			m := &ast.Membership{Member: u}
-			m.NodeSpan = p.spanFrom(start)
-			m.SetLeadingTrivia(trivia)
-			body.add(m)
-			continue
-		}
-		// `uncl : Level = 0;`, `<u> uncl;` and `: Level;` are enumerated values
-		// (SysML.xtext EnumeratedValue), not keyword-less attributes.
+		// `= 60.0;`, `uncl : Level = 0;`, `<u> uncl;`, `: Level;` and `#M a;` are
+		// enumerated values (SysML.xtext EnumeratedValue), not keyword-less attributes.
 		if p.atEnumeratedValueDeclaration() {
 			start := p.peek().Span.Offset
 			trivia := p.takeTrivia()
 			vis := p.parseVisibility()
-			u := p.parseUsage(start, ast.UsageEnumeration, "", featureMods{visibility: vis}, false)
+			prefixes := p.parsePrefixMetadataRelaxed()
+			keyword := ""
+			if p.acceptKeyword("enum") {
+				keyword = "enum"
+			}
+			var u *ast.Usage
+			if p.at(lexer.Eq) || p.at(lexer.ColonEq) {
+				u = &ast.Usage{Kind: ast.UsageEnumeration, Keyword: keyword, Visibility: vis}
+				p.parseUsageValue(u)
+				p.expect(lexer.Semicolon, "expected ';' after enumerated value")
+				u.NodeSpan = p.spanFrom(start)
+			} else {
+				u = p.parseUsage(start, ast.UsageEnumeration, keyword, featureMods{visibility: vis}, false)
+			}
+			u.Prefixes = prefixes
 			m := &ast.Membership{Visibility: vis, Member: u}
 			m.NodeSpan = p.spanFrom(start)
 			m.SetLeadingTrivia(trivia)

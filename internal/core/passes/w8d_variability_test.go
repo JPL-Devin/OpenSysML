@@ -140,6 +140,8 @@ func TestW8DLegalEnumerationStaysSilent(t *testing.T) {
 		enum def L { enum m; = 1; doc /* the levels */ }
 		attribute def AD { attribute q : Integer; }
 		enum def M :> AD { x; y; <s1> z : M; <s2>; : M; [1]; private <s3> w; }
+		metadata def Tag;
+		enum def T { #Tag a; #Tag b : T; #Tag enum c; private #Tag d; #Tag <e> ee; #Tag f [1]; #Tag g :> a; #Tag = 1; #Tag; }
 		attribute def Plain :> E;
 		enum def N :> Plain;
 		part def P1 { attribute e : E = E::a; enum f : E; attribute g : Real; }
