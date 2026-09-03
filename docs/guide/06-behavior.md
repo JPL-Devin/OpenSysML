@@ -181,7 +181,9 @@ budget error rather than hanging. Instantiating the same name twice creates a se
 its own identity and its own machines: `%instantiate` reports the new object, and the name then
 refers to it, while the first object keeps running and is still addressed by its id
 (`%state #1`, `%invoke #1 bumpBy n=4`, `%features #1`; see
-[addressing an object](04-repl.md#addressing-an-object)). A machine a nested part exhibits is
+[addressing an object](04-repl.md#addressing-an-object)). A `%state` or `%action` session
+started on the first object stays with it — it now knows the object as `#1` — and it ends only if
+that object is later dropped. A machine a nested part exhibits is
 debugged by naming that part through its owner, `%state Monitor.sensor` or `%state #1.sensor`.
 An exhibited machine with no initial state is reported as such. A performed action
 that declares no flow has nothing to step, but the object is still created. A performed action

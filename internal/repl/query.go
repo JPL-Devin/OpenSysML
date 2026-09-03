@@ -391,6 +391,10 @@ func (s *Session) instantiateNamed(name string) ([]string, error) {
 	// Keyed by the resolved name, so %features finds the instance whichever
 	// spelling of the name created it.
 	previous, again := s.instances[fqn]
+	displaced := again && previous != nil && previous.ID != inst.ID
+	if displaced {
+		s.releaseDebuggedName(fqn)
+	}
 	s.instances[fqn] = inst
 	s.lost = instanceLoss{}
 	out := []string{
@@ -399,7 +403,7 @@ func (s *Session) instantiateNamed(name string) ([]string, error) {
 	}
 	// A second instantiation is a second object, so say which one the name now
 	// denotes rather than let the earlier one look like it was reused.
-	if again && previous != nil && previous.ID != inst.ID {
+	if displaced {
 		s.unnamed = append(s.unnamed, unnamedObject{fqn: fqn, obj: previous})
 		out = append(out, fmt.Sprintf("  note: %s now denotes this object; object #%d is no longer named%s (address it as #%d)",
 			notationName(fqn), previous.ID, behaviorsOf(previous), previous.ID))

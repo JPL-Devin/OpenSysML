@@ -855,6 +855,25 @@ func (s *Session) rebindRestartedMachine() {
 	s.stateExec.now = behavior.State.CurrentTime()
 }
 
+// releaseDebuggedName respells the debuggers' object labels rooted at the object
+// fqn names by its id, before the name is given to another object, so they keep
+// following the object they were started on.
+func (s *Session) releaseDebuggedName(fqn string) {
+	if a := s.actionExec; a != nil && a.selfFQN != "" {
+		a.selfFQN = s.relabelByID(a.selfFQN, fqn)
+	}
+	st := s.stateExec
+	if st == nil || st.selfFQN == "" {
+		return
+	}
+	// An exhibited machine is held under its object's label as both.
+	exhibited := st.fqn == st.selfFQN
+	st.selfFQN = s.relabelByID(st.selfFQN, fqn)
+	if exhibited {
+		st.fqn = st.selfFQN
+	}
+}
+
 // dropStaleDebugSessions ends the debugging sessions this submission
 // invalidated, and reports each one it ended. A session over a declaration the
 // submission left alone survives — including one merged into a namespace that

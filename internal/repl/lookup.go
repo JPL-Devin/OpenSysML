@@ -782,6 +782,25 @@ func (s *Session) heldObject(label string) (*runtime.Instance, bool) {
 	return inst, err == nil && inst != nil
 }
 
+// relabelByID respells a label rooted at the object fqn currently names with the
+// object's id, `Obj::Monitor::modes` → `#1::modes`, so the label still reaches
+// it once the name denotes another object. Other labels are returned unchanged.
+func (s *Session) relabelByID(label, fqn string) string {
+	ref := parseLabel(label)
+	if ref.id > 0 {
+		return label
+	}
+	inst, root, rest, err := s.namedRoot(ref)
+	if err != nil || root != fqn {
+		return label
+	}
+	relabelled := fmt.Sprintf("#%d", inst.ID)
+	for _, seg := range rest {
+		relabelled += "::" + seg.text
+	}
+	return relabelled
+}
+
 // walkObjectPath follows segments through feature values from inst, labelled
 // label, to the object they reach. Each segment must name a feature of the
 // object before it that holds an object — one, or one picked by index from a

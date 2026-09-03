@@ -243,6 +243,72 @@ func TestDebuggersAddressObjectsByID(t *testing.T) {
 	})
 }
 
+// A debugger started on a named object stays on that object when the name is
+// given to a second one: after an unrelated declaration rebuilds the runtime it
+// drives the first object's machine, and losing that object is what ends it.
+func TestDebuggerFollowsDisplacedObject(t *testing.T) {
+	t.Run("exhibited machine", func(t *testing.T) {
+		s := loadFixture(t, "testdata/exhibited_machine.sysml")
+		first := objectIDIn(t, run(t, s, "%instantiate Obj::Monitor"))
+		wants(t, run(t, s, "%state Obj::Monitor"), "exhibited by object #"+first)
+		second := objectIDIn(t, run(t, s, "%instantiate Obj::Monitor"))
+		if got := s.stateExec.selfFQN; got != "#"+first {
+			t.Fatalf("debugger label after displacement = %q, want #%s", got, first)
+		}
+		res := s.Submit("package Other { part def Unrelated; }")
+		if errs := errorDiagnostics(res.Diagnostics); len(errs) > 0 {
+			t.Fatalf("declaration has errors: %v", errs)
+		}
+		if s.stateExec == nil {
+			t.Fatal("the debugging session ended")
+		}
+		machine, ok := s.unnamed[0].obj.ExhibitedState()
+		if !ok || machine.State != s.stateExec.executor {
+			t.Fatalf("debugger drives another object's machine, not #%s's", first)
+		}
+		wants(t, run(t, s, "%advance 10"), "Current state: awake")
+		wants(t, run(t, s, "%features #"+first), "count = 11")
+		wants(t, run(t, s, "%features #"+second), "count = 1")
+
+		// Redeclaring the definition drops the displaced object, which ends it.
+		s.Submit("package Obj { part def Monitor { attribute count = 0; } }")
+		wants(t, run(t, s, "%advance 1"), "the object #"+first+" performing it was dropped")
+	})
+
+	t.Run("performing object", func(t *testing.T) {
+		s := NewSession()
+		s.Submit("part def Holder { attribute size = 1.0; }")
+		res := s.Submit("action tally {\n\tattribute total = 0;\n\tfirst start;\n\tthen done;\n}")
+		if len(res.Diagnostics) > 0 {
+			t.Fatalf("fixture has diagnostics: %v", res.Diagnostics)
+		}
+		id := objectIDIn(t, run(t, s, "%instantiate Holder"))
+		wants(t, run(t, s, "%action tally Holder"), "Started action executor")
+		run(t, s, "%instantiate Holder")
+		if got := s.actionExec.selfFQN; got != "#"+id {
+			t.Fatalf("performer label after displacement = %q, want #%s", got, id)
+		}
+		s.Submit("package Other { part def Unrelated; }")
+		wants(t, run(t, s, "%step"), "State:")
+		s.Submit("part def Holder { attribute size = 2.0; }")
+		wants(t, run(t, s, "%step"), "no active action session", "the object #"+id+" performing it was dropped")
+	})
+
+	t.Run("nested performing object", func(t *testing.T) {
+		s := NewSession()
+		s.Submit("part def Holder { attribute size = 1.0; }\npart def Rack { part holder : Holder; }")
+		s.Submit("action tally {\n\tattribute total = 0;\n\tfirst start;\n\tthen done;\n}")
+		rack := objectIDIn(t, run(t, s, "%instantiate Rack"))
+		wants(t, run(t, s, "%action tally Rack.holder"), "Started action executor")
+		run(t, s, "%instantiate Rack")
+		if got, want := s.actionExec.selfFQN, "#"+rack+"::holder"; got != want {
+			t.Fatalf("performer label after displacement = %q, want %s", got, want)
+		}
+		s.Submit("package Other { part def Unrelated; }")
+		wants(t, run(t, s, "%step"), "State:")
+	})
+}
+
 // Ids survive the carry-over an unrelated declaration triggers: the same
 // objects, nested ones included, answer to the same ids and paths afterwards.
 func TestObjectIDsStableAcrossCarryover(t *testing.T) {

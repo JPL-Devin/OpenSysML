@@ -88,7 +88,8 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   always a feature of the object before it, never a declaration. The id is the object's identity
   for the session: it survives the carry-over an unrelated declaration triggers, and a second
   `%instantiate` of the same name, which re-points the name and now says how the first object is
-  still reached; `%instances` lists such an object as `#3 (ID: 3, formerly Demo::car)`. The old
+  still reached; `%instances` lists such an object as `#3 (ID: 3, formerly Demo::car)`, and a
+  `%state` or `%action` session started on it stays with it under that id. The old
   object still counts: a `%constraint`, `%requirement` or `%eval` that names no object and whose
   condition both carry says so and names both (`Demo::car, #3`) rather than answering about the
   new one — the elements of a multi-valued part among the carriers, each by its index
