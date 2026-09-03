@@ -66,6 +66,30 @@ func (e *AmbiguousMachineError) Error() string {
 		e.Object, e.Machine, len(e.Usages), strings.Join(names, " or "))
 }
 
+// ExhibitorsError reports a machine `%state <machine>` alone cannot attach to:
+// no held object exhibits it, or several do, so no one running performance is meant.
+type ExhibitorsError struct {
+	Machine string      // the machine asked for, as the prompt prints names
+	Type    string      // the type exhibiting it, as the prompt prints names
+	Objects []ObjectRef // the held objects exhibiting it, in walk order; none when no object does
+}
+
+func (e *ExhibitorsError) Error() string {
+	if len(e.Objects) == 0 {
+		return fmt.Sprintf("no object of this session exhibits %q, which runs only on an object of %q: use %%instantiate to create one, then %%state <object> or %%state %s <object>",
+			e.Machine, e.Type, e.Machine)
+	}
+	labels := make([]string, len(e.Objects))
+	for i, o := range e.Objects {
+		labels[i] = fmt.Sprintf("#%d", o.ID)
+		if o.Name != "" {
+			labels[i] = fmt.Sprintf("#%d of %q", o.ID, o.Name)
+		}
+	}
+	return fmt.Sprintf("%d objects of this session exhibit %q (%s), so naming the machine alone attaches to none of them: use %%state <object> or %%state %s <object> to name one",
+		len(e.Objects), e.Machine, strings.Join(labels, ", "), e.Machine)
+}
+
 // NotInstantiatedError reports a name no object is materialized under. When
 // objects of the definition that name is typed by (or, for a definition, objects
 // of usages typed by it) exist, it says so and names what to instantiate.
@@ -398,6 +422,45 @@ func (s *Session) notInstantiated(sym *symbols.Symbol, fqn string) error {
 		}
 		return true
 	})
+	return e
+}
+
+// exhibitor is a held object running a machine, with the machines of it that run
+// under one declaration.
+type exhibitor struct {
+	carrier
+	machines []*runtime.ObjectBehavior
+}
+
+// exhibitorsOf finds the held objects exhibiting sym's machine, in name order.
+// Nothing is materialized: an object not yet held runs no machine to attach to.
+func (s *Session) exhibitorsOf(ctx *runtime.Context, sym *symbols.Symbol) []exhibitor {
+	var found []exhibitor
+	s.walkHeldObjects(ctx, func(cur carrier) bool {
+		if machines := cur.inst.ExhibitedStatesOf(sym); len(machines) > 0 {
+			found = append(found, exhibitor{carrier: cur, machines: machines})
+		}
+		return true
+	})
+	return found
+}
+
+// exhibitorsError reports sym's machine as one `%state <machine>` alone cannot
+// attach to, naming the objects exhibiting it.
+func (s *Session) exhibitorsError(name string, sym *symbols.Symbol, exhibitors []exhibitor) error {
+	e := &ExhibitorsError{Machine: name}
+	if sym.OwnerScope != nil {
+		if declaring := sym.OwnerScope.Owner(); declaring != nil {
+			e.Type = notationName(s.fqnOf(declaring))
+		}
+	}
+	for _, ex := range exhibitors {
+		ref := ObjectRef{ID: ex.inst.ID}
+		if _, byIdentity := objectID(ex.name); !byIdentity {
+			ref.Name = notationName(ex.name)
+		}
+		e.Objects = append(e.Objects, ref)
+	}
 	return e
 }
 

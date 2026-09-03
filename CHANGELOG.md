@@ -162,6 +162,21 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Fixed
 
+- **`%state <machine>` drives the object that exhibits the machine.** Naming an exhibited
+  machine alone (`%state lp` after `%instantiate TA::Sys`, or `-state lp` on the command line)
+  used to start a detached performance of it, one with no performing object: `%advance` reported
+  the timer events it dispatched, but the `do`, `entry` and `effect` writes of that run went to
+  the detached run's own frame, so `%features #1` still showed the values `%instantiate` had
+  left (`n = 1` for `n = 3`), while `%state #1` over the same object was right. The form now
+  attaches to the running machine of the one held object exhibiting it — the same object
+  `%instances` and `%features #1` show — so the two forms agree. When no held object exhibits
+  the machine, or several do, `%state` refuses with a typed error (`ExhibitorsError`) naming
+  the objects and both forms that address one (`%state <object>`, `%state <machine>
+  <object>`), rather than guessing or performing the machine detached; a definition one object
+  exhibits as several usages refuses as it does with the object named. A machine no type
+  exhibits (`state def Blink` alone) still starts as before, since no object's performance of
+  it exists to attach to.
+
 - **A qualified name through an import evaluates as the checker resolves it.** The evaluator
   used to resolve only the first segment of `Bq::x` through the resolver and walk the rest as
   owned and inherited members, so a segment a `public import` re-exports failed with

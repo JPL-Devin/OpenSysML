@@ -13,6 +13,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
@@ -173,7 +174,7 @@ var metaCommandTable = []metaCommand{
 	{group: groupAction, name: "%break", args: "<node>", desc: "set breakpoint at node"},
 	{group: groupAction, name: "%stop", desc: "stop current debugging session"},
 
-	{group: groupState, name: "%state", args: "<name> [<object>]", desc: "debug the machine an object exhibits (naming that machine attaches too), or a state machine performed by an object; an object is a name, a path such as driver.r, or an id such as #3"},
+	{group: groupState, name: "%state", args: "<name> [<object>]", desc: "debug the machine an object exhibits (naming that machine alone attaches to the one object exhibiting it; with none or several, name the object), or a state machine performed by an object; an object is a name, a path such as driver.r, or an id such as #3"},
 	{group: groupState, name: "%events", desc: "show event queue"},
 	{group: groupState, name: "%current", desc: "show current state and configuration"},
 	{group: groupState, name: "%advance", args: "<time>", desc: "advance simulation time by <time> units, processing every event due"},
@@ -2256,6 +2257,25 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 
 	if !isMachine {
 		return nil, fmt.Errorf("%q is not a state machine", name)
+	}
+
+	// A machine named alone runs on the one held object exhibiting it. Zero or
+	// several exhibitors is refused: a detached run would write to no object.
+	if len(performer) == 0 {
+		switch exhibitors := s.exhibitorsOf(ctx, sym); len(exhibitors) {
+		case 0:
+			if _, bound := lower.ClassifierBehaviorOf(sym.Decl); bound {
+				return nil, s.exhibitorsError(name, sym, nil)
+			}
+		case 1:
+			ex := exhibitors[0]
+			if len(ex.machines) > 1 {
+				return nil, s.ambiguousMachine(name, ex.inst, ex.name, ex.machines)
+			}
+			return s.attachExhibitedMachine(ctx, name, heldName(ex.inst, ex.name), ex.inst, ex.machines[0])
+		default:
+			return nil, s.exhibitorsError(name, sym, exhibitors)
+		}
 	}
 
 	self, selfFQN, perr := s.performingObject(performer)
