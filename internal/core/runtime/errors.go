@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
@@ -365,6 +366,9 @@ func budgetExceeded(sentinel error, message string, causes ...error) error {
 // naming the feature so a caller can tell which one is uninitialized.
 type NoValueError struct {
 	Feature string
+	// Ref is the written name whose read found no value, so a caller can tell a
+	// read of its own expression from one made while evaluating a default.
+	Ref *ast.QualifiedName
 }
 
 func (e *NoValueError) Error() string {
