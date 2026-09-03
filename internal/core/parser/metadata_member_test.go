@@ -107,6 +107,28 @@ func TestGloballyQualifiedPrefixMetadata(t *testing.T) {
 	}
 }
 
+// An objective takes prefix metadata after its keyword, as a subject does
+// (SysML.xtext ObjectiveRequirementUsage `UsageExtensionKeyword* …`).
+func TestObjectivePrefixMetadataFollowsTheKeyword(t *testing.T) {
+	src := "package P { metadata def M; requirement def R; use case def U { objective #M o : R { subject s; } } }"
+	p := New(source.New("test.sysml", []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) > 0 {
+		t.Fatalf("expected no diagnostics, got %v", p.Diagnostics)
+	}
+	useCase := memberAt(t, root, 0, 2).(*ast.Definition)
+	objective, ok := unwrapMember(t, useCase.Members[0]).(*ast.Usage)
+	if !ok || objective.Kind != ast.UsageObjective {
+		t.Fatalf("first member = %T %v, want an objective usage", useCase.Members[0], objective)
+	}
+	if len(objective.Prefixes) != 1 || ast.SimpleName(objective.Prefixes[0].Type) != "M" {
+		t.Fatalf("objective prefixes = %v, want #M", objective.Prefixes)
+	}
+	if objective.Ident.Name != "o" || len(objective.Relationships) != 1 || len(objective.Members) != 1 {
+		t.Errorf("objective declaration lost: name %q, %d relationships, %d members", objective.Ident.Name, len(objective.Relationships), len(objective.Members))
+	}
+}
+
 // An unterminated metadata usage is reported rather than read as a prefix of the
 // declaration after it; `#Type` is the prefix spelling.
 func TestMetadataUsageRequiresTerminator(t *testing.T) {

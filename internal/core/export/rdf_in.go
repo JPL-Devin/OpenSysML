@@ -719,14 +719,15 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	}
 	// Prefix metadata ends the usage prefix, ahead of the kind keyword
 	// (SysML.xtext UsagePrefix `UnextendedUsagePrefix UsageExtensionKeyword*`);
-	// a subject, actor or stakeholder takes it after its keyword instead.
+	// a subject, actor, stakeholder or objective takes it after its keyword
+	// instead (SubjectUsage, ActorUsage, StakeholderUsage, ObjectiveRequirementUsage).
 	prefixes, err := d.prefixWords(el)
 	if err != nil {
 		return "", err
 	}
 	keywordAt := len(words)
 	switch kind {
-	case ast.UsageSubject, ast.UsageActor, ast.UsageStakeholder:
+	case ast.UsageSubject, ast.UsageActor, ast.UsageStakeholder, ast.UsageObjective:
 		if keyword == "" && len(prefixes) > 0 {
 			return "", d.missing(el, "sysx:"+xDeclaredKeyword, "a prefix annotation on a "+usageKeyword(kind)+" follows its keyword")
 		}

@@ -981,13 +981,13 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		}
 
 		p.advance() // consume the kind keyword
-		// A subject, actor or stakeholder takes prefix metadata after its
-		// keyword: `actor #B a;` (SysML.xtext SubjectUsage, ActorUsage,
-		// StakeholderUsage, each `'keyword' UsageExtensionKeyword* Usage`), as
-		// does a keyword that qualifies the declaration after it: `variant #B
-		// part v;`, `assert #B constraint c;` (VariantUsageElement,
-		// AssertConstraintUsage `UsageExtensionKeyword* ConstraintUsageKeyword`).
-		if kw == "subject" || kw == "actor" || kw == "stakeholder" || kw == "variant" || kindPrefixKeywords[kw] {
+		// A subject, actor, stakeholder or objective takes prefix metadata after
+		// its keyword: `actor #B a;` (SysML.xtext SubjectUsage, ActorUsage,
+		// StakeholderUsage, ObjectiveRequirementUsage, each `'keyword'
+		// UsageExtensionKeyword* …`), as does a keyword that qualifies the
+		// declaration after it: `variant #B part v;`, `assert #B constraint c;`
+		// (VariantUsageElement, AssertConstraintUsage).
+		if kw == "subject" || kw == "actor" || kw == "stakeholder" || kw == "objective" || kw == "variant" || kindPrefixKeywords[kw] {
 			prefixes = append(prefixes, p.parsePrefixMetadata()...)
 		}
 		// `variant x` declares a variant of the variation that owns it
