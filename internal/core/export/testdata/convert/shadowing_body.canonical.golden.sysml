@@ -1,1 +1,9 @@
-sysml: cannot convert the expression <urn:opensysml:expr:ShadowBody__Sensor__highs_pvalue_pa0>: this expression states no notation and no structure to write one from; save to .sysml or .kerml instead, which writes the source exactly; see docs/reference/rdf-mapping.md § Limitations
+package ShadowBody {
+    private import ControlFunctions::*;
+    attribute def Speed;
+    part def Sensor {
+        attribute value : Speed;
+        attribute readings : Speed[*];
+        attribute highs = readings->select({ in value; (value > 5) });
+    }
+}
