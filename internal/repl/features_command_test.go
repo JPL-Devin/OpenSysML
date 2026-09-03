@@ -248,7 +248,7 @@ part door : Door;`).Diagnostics); len(errs) > 0 {
 
 // A transition end whose name is not a basic one — a name with spaces, a keyword —
 // is rendered with its quotes, so the row reads as the model does and can be
-// typed back into a command, with `.` and `::` kept as written.
+// typed back into a command, with `.`, `::` and a `$::` root kept as written.
 func TestFeaturesTransitionEndsKeepUnrestrictedNameQuotes(t *testing.T) {
 	s := NewSession()
 	if errs := errorDiagnostics(s.Submit(`private import ScalarValues::*;
@@ -262,6 +262,7 @@ part def Lamp {
     attribute watts : Real = 40.0;
     exhibit state modes : LampModes;
     transition flip first modes.'switched off' then LampModes::'state';
+    transition reset first $::LampModes::'state' then modes.'switched off';
 }
 part lamp : Lamp;`).Diagnostics); len(errs) > 0 {
 		t.Fatalf("model has errors: %v", errs)
@@ -269,8 +270,11 @@ part lamp : Lamp;`).Diagnostics); len(errs) > 0 {
 
 	run(t, s, "%instantiate lamp")
 	got := run(t, s, "%features lamp")
-	wants(t, got, "  flip: transition, modes.'switched off' → LampModes::'state'")
-	rejects(t, got, "modes.switched off", "::state\n")
+	wants(t, got,
+		"  flip: transition, modes.'switched off' → LampModes::'state'",
+		"  reset: transition, $::LampModes::'state' → modes.'switched off'",
+	)
+	rejects(t, got, "modes.switched off", "::state\n", "transition, LampModes::'state'")
 
 	run(t, s, "%instantiate LampModes")
 	got = run(t, s, "%features LampModes")

@@ -1245,6 +1245,9 @@ func stateNameAsWritten(qn *ast.QualifiedName) string {
 		return "<?>"
 	}
 	var sb strings.Builder
+	if qn.Global {
+		sb.WriteString("$::")
+	}
 	for i, p := range qn.Parts {
 		switch {
 		case i == 0:
