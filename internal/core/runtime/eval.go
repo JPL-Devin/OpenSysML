@@ -1711,16 +1711,22 @@ func selectedDeclaration(sel *semantics.InvocationSelection) *symbols.Symbol {
 	return nil
 }
 
+// ambiguousInvocationError names the equally specific declarations a call of
+// qualName denotes.
+func ambiguousInvocationError(qualName string, candidates []*symbols.Symbol) error {
+	names := make([]string, len(candidates))
+	for i, sym := range candidates {
+		names[i] = symbols.FQNOf(sym)
+	}
+	return fmt.Errorf("%w: %s denotes %s", ErrAmbiguousInvocation, qualName, strings.Join(names, ", "))
+}
+
 // evalInvocation evaluates a function/calc invocation.
 func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 	target := ec.invocationTarget(n)
 	qualName := target.qualName
 	if len(target.ambiguous) > 0 {
-		names := make([]string, len(target.ambiguous))
-		for i, sym := range target.ambiguous {
-			names[i] = symbols.FQNOf(sym)
-		}
-		return Value{}, fmt.Errorf("%w: %s denotes %s", ErrAmbiguousInvocation, qualName, strings.Join(names, ", "))
+		return Value{}, ambiguousInvocationError(qualName, target.ambiguous)
 	}
 
 	// A receiver binds by position, so it has no meaning beside arguments that

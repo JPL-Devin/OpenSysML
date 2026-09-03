@@ -255,6 +255,48 @@ func TestInvocationOverloadNamedArguments(t *testing.T) {
 		"type.expr", "candidates: P::A::pick, P::B::pick")
 }
 
+// A named argument written twice binds its last value, as the evaluator does,
+// so only the last value decides the overload and is type-checked.
+func TestInvocationOverloadRepeatedNamedArgumentBindsLast(t *testing.T) {
+	const model = `package P {
+		private import ScalarValues::*;
+		package A { calc def pick { in x : Integer; return : Integer = 1; } }
+		package B { calc def pick { in x : String; return : String = "s"; } }
+		package C {
+			private import A::*;
+			private import B::*;
+			attribute %s
+		}
+		calc def one { in x : Integer; return : Integer = x; }
+		attribute %s
+	}`
+	wantLibraryClean(t, fmt.Sprintf(model, `s : String = pick(x = 1, x = "s");`, `o : Integer = one(x = "s", x = 1);`))
+	wantLibraryDiag(t, fmt.Sprintf(model, `s : String = pick(x = "s", x = 1);`, `o : Integer = one(x = 1);`),
+		"type.expr", "cannot bind Integer value to a feature typed by String")
+	wantLibraryDiag(t, fmt.Sprintf(model, `s : String = pick(x = 1, x = "s");`, `o : Integer = one(x = 1, x = "s");`),
+		"type.expr", "expects Integer, found String")
+}
+
+// Two same-named calcs one wildcard import surfaces are both candidates.
+func TestInvocationOverloadSiblingsThroughOneWildcardImport(t *testing.T) {
+	const model = `package Lib {
+		private import ScalarValues::*;
+		calc def pick { in x : Integer; return : Integer = x; }
+		calc def pick { in x : String; return : String = x; }
+	}
+	package P {
+		private import ScalarValues::*;
+		private import Lib::*;
+		attribute i : Integer = pick(2);
+		attribute s : String = pick("s");
+	}`
+	for _, d := range libraryDiags(t, model) {
+		if d.Severity != SeverityWarning || d.Code != "name-conflict" {
+			t.Fatalf("expected only the owned name-conflict warnings, got %v", d)
+		}
+	}
+}
+
 // Parameters typed by sibling specializations of one scalar type are told apart
 // by the argument's declared type; a bare scalar is not an ambiguity.
 func TestInvocationOverloadSiblingScalarTypes(t *testing.T) {

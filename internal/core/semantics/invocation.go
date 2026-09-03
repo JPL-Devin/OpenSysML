@@ -56,6 +56,7 @@ func (m *Model) SelectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, ar
 }
 
 func (m *Model) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, args []Argument) *InvocationSelection {
+	args = lastNamedWins(args)
 	sel := &InvocationSelection{}
 	for _, sym := range m.resolver.InvocationCandidates(scope, e.Type) {
 		target, ok := m.resolver.ResolveAliasTarget(sym)
@@ -292,6 +293,28 @@ func (m *Model) argumentBinds(arg Argument, p signatureParameter, mode bindMode)
 		return fitOpen, true
 	}
 	return fitOpen, false
+}
+
+// lastNamedWins drops every named argument a later one of the same name
+// rebinds, as the evaluator's argument map does.
+func lastNamedWins(args []Argument) []Argument {
+	out := make([]Argument, 0, len(args))
+	for i, arg := range args {
+		if arg.Name != "" && namedAfter(args[i+1:], arg.Name) {
+			continue
+		}
+		out = append(out, arg)
+	}
+	return out
+}
+
+func namedAfter(args []Argument, name string) bool {
+	for _, arg := range args {
+		if arg.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func argumentsKnown(args []Argument) bool {

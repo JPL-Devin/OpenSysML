@@ -760,6 +760,10 @@ func (ec *exprChecker) checkNamedArguments(
 			continue
 		}
 		bound[name] = true
+		// A name written again later rebinds it; the evaluator keeps the last value.
+		if rebound(e.NamedArgs[i+1:], name) {
+			continue
+		}
 		if !ec.argumentFits(arg.Value, namedTypes[i], p) {
 			report(arg.Value.Span(), "argument %s of %s expects %s, found %s",
 				name, sym.Name, ec.parameterPrimType(p), namedTypes[i])
@@ -774,6 +778,15 @@ func (ec *exprChecker) checkNamedArguments(
 			report(e.Span(), "%s requires an argument for %s", sym.Name, p.name())
 		}
 	}
+}
+
+func rebound(later []ast.NamedArg, name string) bool {
+	for _, arg := range later {
+		if n, ok := namedArgumentName(arg); ok && n == name {
+			return true
+		}
+	}
+	return false
 }
 
 // parameterPrimType is the scalar type p is declared with, PrimUnknown when none is known.

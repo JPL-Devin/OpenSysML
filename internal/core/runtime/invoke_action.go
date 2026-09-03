@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -24,6 +25,9 @@ type actionInvocation struct {
 	target *ast.QualifiedName
 	args   []ast.Node
 	named  []ast.NamedArg
+	// expr is the invocation expression form, whose arguments select among
+	// same-named actions as they do for calcs.
+	expr *ast.InvocationExpr
 	// referrer is the usage owning a reference subsetting, whose own effective
 	// name is the one the target names (see resolve.ResolveReferenceTarget).
 	referrer ast.Node
@@ -39,6 +43,7 @@ func nestedInvocation(usage *ast.Usage) (actionInvocation, bool) {
 			target: invocation.Type,
 			args:   invocation.Args,
 			named:  invocation.NamedArgs,
+			expr:   invocation,
 		}, true
 	}
 	for _, rel := range usage.Relationships {
@@ -122,9 +127,17 @@ func resolveActionSymbol(
 	}
 	var sym *symbols.Symbol
 	var ok bool
-	if inv.referrer != nil {
+	switch {
+	case inv.referrer != nil:
 		sym, ok = ctx.resolver.ResolveReferenceTarget(scope, inv.referrer, target)
-	} else {
+	case inv.expr != nil:
+		sel := passes.SelectInvocation(ctx.resolver, ctx.model, scope, inv.expr)
+		if sel.Ambiguous {
+			return nil, ambiguousInvocationError(name, sel.Applicable)
+		}
+		sym = selectedDeclaration(sel)
+		ok = sym != nil
+	default:
 		sym, ok = ctx.resolver.ResolveQualified(scope, target)
 	}
 	if !ok || sym == nil {

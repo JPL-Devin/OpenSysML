@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -17,7 +18,77 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("calc_call_selects_by_argument_type", testCalcCallSelectsByArgumentType)
 	t.Run("calc_call_selects_by_named_argument", testCalcCallSelectsByNamedArgument)
 	t.Run("calc_call_selects_by_sibling_scalar_type", testCalcCallSelectsBySiblingScalarType)
+	t.Run("calc_call_repeated_named_argument_binds_last", testCalcCallRepeatedNamedArgumentBindsLast)
 	t.Run("calc_call_selects_among_owned_inherited_and_recursive_import", testCalcCallSelectsAmongOwnedInheritedAndRecursiveImport)
+	t.Run("action_call_selects_by_argument_type", testActionCallSelectsByArgumentType)
+	t.Run("action_call_ambiguous_between_two_imports", testActionCallAmbiguousBetweenTwoImports)
+}
+
+// overloadedActionsSrc declares two imported same-named actions, told apart
+// by the type of their one input.
+const overloadedActionsSrc = `
+	package A {
+		private import ScalarValues::*;
+		action def tag { in x : Integer; out code : Integer; first start; action set { assign code := 1; } done; succession first start then set; succession first set then done; }
+	}
+	package B {
+		private import ScalarValues::*;
+		action def tag { in x : %s; out code : Integer; first start; action set { assign code := 2; } done; succession first start then set; succession first set then done; }
+	}
+	package test {
+		private import ScalarValues::*;
+		private import A::*;
+		private import B::*;
+		action def Outer {
+			attribute code : Integer = 0;
+			first start;
+			action call = tag(%s);
+			done;
+			succession first start then call;
+			succession first call then done;
+		}
+	}
+`
+
+func runOverloadedAction(t *testing.T, paramType, arg string) (map[string]Value, error) {
+	t.Helper()
+	src := fmt.Sprintf(overloadedActionsSrc, paramType, arg)
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	outer := findSymbolByName(idx.DocumentRoot("<test>"), "Outer", ast.DefAction)
+	if outer == nil {
+		t.Fatal("Outer action not found")
+	}
+	return ctx.ExecuteAction(outer)
+}
+
+// A nested action invocation runs the same-named action its argument fits,
+// as a calc call does.
+func testActionCallSelectsByArgumentType(t *testing.T) {
+	for arg, want := range map[string]int64{"3": 1, `"s"`: 2} {
+		outputs, err := runOverloadedAction(t, "String", arg)
+		if err != nil {
+			t.Fatalf("tag(%s): %v", arg, err)
+		}
+		if got := intOutput(t, outputs, "code"); got != want {
+			t.Errorf("tag(%s) code = %d, want %d", arg, got, want)
+		}
+	}
+}
+
+// Two imported actions taking the same argument type are refused as ambiguous.
+func testActionCallAmbiguousBetweenTwoImports(t *testing.T) {
+	outputs, err := runOverloadedAction(t, "Integer", "3")
+	if err == nil {
+		t.Fatalf("expected an ambiguity error, action returned %v", outputs)
+	}
+	if !errors.Is(err, ErrAmbiguousInvocation) {
+		t.Fatalf("expected ErrAmbiguousInvocation, got: %v", err)
+	}
+	for _, want := range []string{"A::tag", "B::tag"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name candidate %s", err, want)
+		}
+	}
 }
 
 // Two imported calcs with the same name take the same argument type, and the
@@ -117,6 +188,38 @@ func testCalcCallSelectsByArgumentType(t *testing.T) {
 		}
 		if result.Kind != ValConst || result.Const.Int != tc.want {
 			t.Fatalf("%s = %+v, want %d", tc.calc, result, tc.want)
+		}
+	}
+}
+
+// A named argument written twice binds its last value, so the overload that
+// value fits is the one run.
+func testCalcCallRepeatedNamedArgumentBindsLast(t *testing.T) {
+	src := `
+		package A { private import ScalarValues::*; calc def pick { in x : Integer; return : Integer = 1; } }
+		package B { private import ScalarValues::*; calc def pick { in x : String; return : Integer = 2; } }
+		package test {
+			private import ScalarValues::*;
+			private import A::*;
+			private import B::*;
+			calc lastStr { in i : Integer; in s : String; pick(x = i, x = s) }
+			calc lastInt { in i : Integer; in s : String; pick(x = s, x = i) }
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	intArg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}
+	for calc, want := range map[string]int64{"lastStr": 2, "lastInt": 1} {
+		sym := findSymbolByName(rootScope, calc, ast.DefCalc)
+		if sym == nil {
+			t.Fatalf("%s calc not found", calc)
+		}
+		result, err := ctx.InvokeCalc(sym, []Value{intArg, NewStringValue("s")}, rootScope)
+		if err != nil {
+			t.Fatalf("%s: %v", calc, err)
+		}
+		if result.Kind != ValConst || result.Const.Int != want {
+			t.Fatalf("%s = %+v, want %d", calc, result, want)
 		}
 	}
 }
