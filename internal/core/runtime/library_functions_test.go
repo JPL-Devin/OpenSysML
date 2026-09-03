@@ -231,19 +231,7 @@ func TestOpenSysMLMathFunctionsMatchTheShippedDeclarations(t *testing.T) {
 			t.Errorf("%s is declared in %s but has no built-in implementation", fqn, path)
 			continue
 		}
-		var params []string
-		for _, param := range ctx.calcParameters(ctx.calcChain(sym)) {
-			params = append(params, param.Name)
-		}
-		if len(params) != len(fn.params) {
-			t.Errorf("%s declares %v, implementation takes %v", fqn, params, fn.params)
-			continue
-		}
-		for i, name := range params {
-			if fn.params[i] != name {
-				t.Errorf("%s parameter %d is %q, implementation names it %q", fqn, i, name, fn.params[i])
-			}
-		}
+		checkLibrarySignature(t, ctx, fqn, sym, fn)
 	}
 	if declared != 4 {
 		t.Errorf("%s declares %d functions, want 4 (exp, ln, log, atan2)", path, declared)
@@ -1090,6 +1078,38 @@ func TestUnevaluableLibraryFunctionsNameThemselves(t *testing.T) {
 	}
 }
 
+// An unevaluable declaration keeps its multiplicities: `group [0..*]` may be
+// omitted by name, a missing required `occ`/`index` is an arity error first.
+func TestUnevaluableOccurrenceFunctionArity(t *testing.T) {
+	one := constInt(1)
+	for _, tc := range []struct {
+		fn   string
+		args calcArgs
+		want error
+	}{
+		{"OccurrenceFunctions::addNew", calcArgs{positional: []Value{one}}, ErrCalcArity},
+		{"OccurrenceFunctions::addNew", calcArgs{named: map[string]Value{"group": one}}, ErrCalcArity},
+		{"OccurrenceFunctions::addNew", calcArgs{named: map[string]Value{"occ": one}}, ErrUnevaluableLibraryFunction},
+		{"OccurrenceFunctions::addNew", calcArgs{positional: []Value{one, one}}, ErrUnevaluableLibraryFunction},
+		{"OccurrenceFunctions::addNewAt", calcArgs{positional: []Value{one, one}}, ErrCalcArity},
+		{"OccurrenceFunctions::addNewAt", calcArgs{named: map[string]Value{"occ": one}}, ErrCalcArity},
+		{"OccurrenceFunctions::addNewAt", calcArgs{named: map[string]Value{"group": one, "index": one}}, ErrCalcArity},
+		{"OccurrenceFunctions::addNewAt", calcArgs{named: map[string]Value{"occ": one, "index": one}}, ErrUnevaluableLibraryFunction},
+		{"OccurrenceFunctions::addNewAt", calcArgs{positional: []Value{one, one, one}}, ErrUnevaluableLibraryFunction},
+		{"OccurrenceFunctions::create", calcArgs{}, ErrCalcArity},
+		{"OccurrenceFunctions::destroy", calcArgs{}, ErrUnevaluableLibraryFunction},
+	} {
+		fn, ok := libraryFunctionByName(tc.fn)
+		if !ok {
+			t.Fatalf("%s is not registered", tc.fn)
+		}
+		_, err := fn.invoke(libCtx(t), tc.args)
+		if !errors.Is(err, tc.want) {
+			t.Errorf("%s(%+v) error = %v, want %v", tc.fn, tc.args, err, tc.want)
+		}
+	}
+}
+
 // vendoredFunctionPackages lists every function library package the runtime
 // vendors. The declarations the implementations are registered against cannot
 // drift from the registry: every function these packages declare is either
@@ -1153,24 +1173,28 @@ func TestVendoredFunctionsAreAllDispatchable(t *testing.T) {
 					checkBuiltinSignature(t, ctx, fqn, sym)
 					continue
 				}
-				var params []string
-				for _, param := range ctx.calcParameters(ctx.calcChain(sym)) {
-					params = append(params, param.Name)
-				}
-				if len(params) != len(fn.params) {
-					t.Errorf("%s declares %v, implementation takes %v", fqn, params, fn.params)
-					continue
-				}
-				for i, name := range params {
-					if fn.params[i] != name {
-						t.Errorf("%s parameter %d is %q, implementation names it %q", fqn, i, name, fn.params[i])
-					}
-				}
+				checkLibrarySignature(t, ctx, fqn, sym, fn)
 			}
 			if declared == 0 {
 				t.Fatalf("%s declares no function in %s; the package name or path is wrong", pkg, path)
 			}
 		})
+	}
+}
+
+// checkLibrarySignature holds the registered signature of the library function
+// fqn to the parameters sym declares: name, order and optionality.
+func checkLibrarySignature(t *testing.T, ctx *Context, fqn string, sym *symbols.Symbol, fn *libraryFunction) {
+	t.Helper()
+	var declared []declaredParam
+	for _, param := range ctx.calcParameters(ctx.calcChain(sym)) {
+		declared = append(declared, declaredParam{
+			name:     param.Name,
+			optional: param.Default != nil || param.optional(),
+		})
+	}
+	if !slices.Equal(declared, fn.params) {
+		t.Errorf("%s declares %+v, implementation takes %+v", fqn, declared, fn.params)
 	}
 }
 
@@ -1183,14 +1207,14 @@ func checkBuiltinSignature(t *testing.T, ctx *Context, fqn string, sym *symbols.
 		t.Errorf("%s is a built-in with no signature in builtinSignatures", fqn)
 		return
 	}
-	var declared []builtinParam
+	var declared []declaredParam
 	for _, member := range declMembers(sym.Decl) {
 		usage, ok := member.(*ast.Usage)
 		if !ok || (usage.Direction != ast.DirIn && usage.Direction != ast.DirInOut) {
 			continue
 		}
 		name, _ := ast.EffectiveName(usage)
-		declared = append(declared, builtinParam{
+		declared = append(declared, declaredParam{
 			name:     name,
 			optional: usage.Value != nil || ctx.model.IsOptionalParameter(usage),
 			deferred: usage.Kind == ast.UsageExpr,
@@ -1409,8 +1433,8 @@ func TestBuiltinsListEveryFunctionWithItsPackage(t *testing.T) {
 			t.Errorf("%q is implemented but not listed", fqn)
 			continue
 		}
-		if b.Collection || strings.Join(b.Params, ",") != strings.Join(fn.params, ",") {
-			t.Errorf("%q is listed as %+v, want a scalar function with parameters %v", fqn, b, fn.params)
+		if b.Collection || !slices.Equal(b.Params, fn.paramNames()) {
+			t.Errorf("%q is listed as %+v, want a scalar function with parameters %v", fqn, b, fn.paramNames())
 		}
 	}
 	for fqn := range builtins {

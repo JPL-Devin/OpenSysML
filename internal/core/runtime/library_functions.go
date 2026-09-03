@@ -36,12 +36,11 @@ const libraryPi = math.Pi
 // declaration. Its name is the fully-qualified name dispatch matches, and its
 // parameters carry the names and order the declared signature gives.
 type libraryFunction struct {
-	name   string
-	params []string
-	// required is how many leading parameters the signature declares [1]; the
-	// rest are declared [0..1] and bind null where a call omits them.
-	required int
-	apply    libraryApply
+	name string
+	// params are the declared parameters in declared order; one declared [0..1]
+	// binds null where a call omits it.
+	params []declaredParam
+	apply  libraryApply
 	// unevaluable marks a declaration registered only to report why a call to
 	// it cannot be computed.
 	unevaluable bool
@@ -153,7 +152,7 @@ func registerVectorFunctions() {
 	registerValueFunction("VectorFunctions::-", []string{"v", "w"}, 1, vectorSubtract)
 	registerValueFunction("VectorFunctions::cartesian-", []string{"v", "w"}, 1, vectorSubtract)
 	registerValueFunction("VectorFunctions::VectorOf", []string{"components"}, 1, vectorOf)
-	registerValueFunction("VectorFunctions::CartesianVectorOf", []string{"components"}, 1, cartesianVectorOf)
+	registerValueFunction("VectorFunctions::CartesianVectorOf", []string{"components"}, 0, cartesianVectorOf)
 	registerValueFunction("VectorFunctions::CartesianThreeVectorOf", []string{"components"}, 1, cartesianThreeVectorOf)
 	registerValueFunction("VectorFunctions::inner", []string{"v", "w"}, 2, vectorInner)
 	registerValueFunction("VectorFunctions::cartesianInner", []string{"v", "w"}, 2, vectorInner)
@@ -171,8 +170,8 @@ func registerVectorFunctions() {
 	registerValueFunction("VectorFunctions::cartesianVectorScalarMult", []string{"v", "x"}, 2, vectorScalarMult)
 	registerValueFunction("VectorFunctions::vectorScalarDiv", []string{"v", "x"}, 2, vectorScalarDiv)
 
-	registerUnevaluable("VectorFunctions::sum0", []string{"coll", "zero"}, 2, noVectorCollection)
-	registerUnevaluable("VectorFunctions::sum", []string{"coll"}, 1, noVectorCollection)
+	registerUnevaluable("VectorFunctions::sum0", []declaredParam{optionalParam("coll"), param("zero")}, noVectorCollection)
+	registerUnevaluable("VectorFunctions::sum", []declaredParam{optionalParam("coll")}, noVectorCollection)
 }
 
 // registerComplexFunctions registers ComplexFunctions (Kernel Function Library).
@@ -196,15 +195,15 @@ func registerComplexFunctions() {
 	registerValueFunction("ComplexFunctions::^", []string{"x", "y"}, 2, complexPower)
 	registerValueFunction("ComplexFunctions::==", []string{"x", "y"}, 0, complexEquals)
 
-	registerValueFunction("ComplexFunctions::sum", []string{"collection"}, 1, complexSum)
-	registerValueFunction("ComplexFunctions::product", []string{"collection"}, 1, complexProduct)
+	registerValueFunction("ComplexFunctions::sum", []string{"collection"}, 0, complexSum)
+	registerValueFunction("ComplexFunctions::product", []string{"collection"}, 0, complexProduct)
 
 	// The two string conversions of a Complex: the library defines no notation
 	// for one, and inventing a rendering would make ToComplex(ToString(x)) a
 	// value nothing else in the library agrees on.
-	registerUnevaluable("ComplexFunctions::ToString", []string{"x"}, 1,
+	registerUnevaluable("ComplexFunctions::ToString", []declaredParam{param("x")},
 		"no string notation for a Complex value is defined")
-	registerUnevaluable("ComplexFunctions::ToComplex", []string{"x"}, 1,
+	registerUnevaluable("ComplexFunctions::ToComplex", []declaredParam{param("x")},
 		"no string notation for a Complex value is defined")
 }
 
@@ -231,16 +230,27 @@ func registerLibraryFunction(name string, params []string, apply func([]semantic
 
 // registerValueFunction adds one implementation over runtime values, for the
 // declarations whose parameters or results are not scalars: a vector, a Complex,
-// or a parameter the signature declares [0..1].
+// or a parameter the signature declares [0..1]. The first required parameters
+// are declared [1]; the rest [0..1].
 func registerValueFunction(name string, params []string, required int, apply libraryApply) {
-	libraryFunctions[name] = &libraryFunction{name: name, params: params, required: required, apply: apply}
+	declared := make([]declaredParam, len(params))
+	for i, p := range params {
+		declared[i] = declaredParam{name: p, optional: i >= required}
+	}
+	registerDeclaredFunction(name, declared, apply)
+}
+
+// registerDeclaredFunction adds one implementation under the signature the
+// library declares, parameter by parameter.
+func registerDeclaredFunction(name string, params []declaredParam, apply libraryApply) {
+	libraryFunctions[name] = &libraryFunction{name: name, params: params, apply: apply}
 }
 
 // registerUnevaluable registers a declaration this runtime cannot evaluate, so
 // that a call to it is reported by name with the reason rather than resolving to
 // a library body that computes something else or to no declaration at all.
-func registerUnevaluable(name string, params []string, required int, reason string) {
-	registerValueFunction(name, params, required, func(called string, _ *Context, _ []Value) (Value, error) {
+func registerUnevaluable(name string, params []declaredParam, reason string) {
+	registerDeclaredFunction(name, params, func(called string, _ *Context, _ []Value) (Value, error) {
 		return Value{}, fmt.Errorf("%w: %s: %s", ErrUnevaluableLibraryFunction, called, reason)
 	})
 	libraryFunctions[name].unevaluable = true
@@ -282,7 +292,32 @@ func LibraryFunctionParams(fqn string) (params []string, ok bool) {
 	if !ok {
 		return nil, false
 	}
-	return slices.Clone(fn.params), true
+	return fn.paramNames(), true
+}
+
+// paramNames lists the declared parameter names in declared order.
+func (fn *libraryFunction) paramNames() []string {
+	names := make([]string, len(fn.params))
+	for i, p := range fn.params {
+		names[i] = p.name
+	}
+	return names
+}
+
+// hasOptional reports whether any parameter may be omitted.
+func (fn *libraryFunction) hasOptional() bool {
+	return slices.ContainsFunc(fn.params, func(p declaredParam) bool { return p.optional })
+}
+
+// leastPositional is the fewest positional arguments that bind every required
+// parameter: one past the last of them.
+func (fn *libraryFunction) leastPositional() int {
+	for i := len(fn.params) - 1; i >= 0; i-- {
+		if !fn.params[i].optional {
+			return i + 1
+		}
+	}
+	return 0
 }
 
 // libraryFunctionFor answers the implementation of a library-declared scalar
@@ -343,21 +378,21 @@ func (fn *libraryFunction) invoke(ctx *Context, args calcArgs) (Value, error) {
 // bindAndApply resolves each declared parameter to an argument and applies the
 // function. A parameter the signature declares [1] must be given an argument; a
 // parameter it declares [0..1] binds null where the call omits it, which is how
-// the library's own one-argument `'+'` and `'-'` are called.
+// the library's own one-argument `'+'` and `'-'` are called. Positional
+// arguments fill the parameters in order, so they must reach the last required one.
 func (fn *libraryFunction) bindAndApply(ctx *Context, args calcArgs) (Value, error) {
 	if len(args.positional) > 0 && len(args.named) > 0 {
 		return Value{}, fmt.Errorf("%w: function %s takes either positional or named arguments", ErrCalcArity, fn.written())
 	}
-	given := len(args.positional) + len(args.named)
-	if given < fn.required || given > len(fn.params) {
+	if len(args.named) > 0 {
+		if err := fn.checkNamedArguments(args); err != nil {
+			return Value{}, err
+		}
+	} else if given := len(args.positional); given < fn.leastPositional() || given > len(fn.params) {
 		return Value{}, fmt.Errorf(
 			"%w: function %s takes %s argument(s), got %d",
 			ErrCalcArity, fn.written(), fn.arity(), given,
 		)
-	}
-
-	if err := fn.checkNamedArguments(args); err != nil {
-		return Value{}, err
 	}
 
 	values := make([]Value, len(fn.params))
@@ -368,7 +403,7 @@ func (fn *libraryFunction) bindAndApply(ctx *Context, args calcArgs) (Value, err
 		}
 		values[i] = arg
 		if ctx.trace != nil {
-			ctx.trace.RecordCalcBind(param, arg, "argument")
+			ctx.trace.RecordCalcBind(param.name, arg, "argument")
 		}
 	}
 	return fn.apply(fn.written(), ctx, values)
@@ -379,7 +414,7 @@ func (fn *libraryFunction) bindAndApply(ctx *Context, args calcArgs) (Value, err
 func (fn *libraryFunction) checkNamedArguments(args calcArgs) error {
 	unknown := make([]string, 0, len(args.named))
 	for name := range args.named {
-		if !slices.Contains(fn.params, name) {
+		if !slices.Contains(fn.paramNames(), name) {
 			unknown = append(unknown, name)
 		}
 	}
@@ -397,7 +432,7 @@ func (fn *libraryFunction) checkNamedArguments(args calcArgs) error {
 func (fn *libraryFunction) parameterList() string {
 	quoted := make([]string, len(fn.params))
 	for i, param := range fn.params {
-		quoted[i] = fmt.Sprintf("%q", param)
+		quoted[i] = fmt.Sprintf("%q", param.name)
 	}
 	return strings.Join(quoted, ", ")
 }
@@ -405,15 +440,15 @@ func (fn *libraryFunction) parameterList() string {
 // argumentFor returns the argument bound to the i-th declared parameter: the
 // positional argument in that place, the named argument the library's own
 // parameter name matches, or null for an omitted [0..1] parameter.
-func (fn *libraryFunction) argumentFor(i int, param string, args calcArgs) (Value, error) {
+func (fn *libraryFunction) argumentFor(i int, param declaredParam, args calcArgs) (Value, error) {
 	if len(args.named) > 0 {
-		if bound, ok := args.named[param]; ok {
+		if bound, ok := args.named[param.name]; ok {
 			return bound, nil
 		}
-		if i < fn.required {
+		if !param.optional {
 			return Value{}, fmt.Errorf(
-				"%w: function %s has no input parameter matching the arguments given (expected %q)",
-				ErrUnknownParameter, fn.written(), param,
+				"%w: function %s is called without an argument for parameter %q",
+				ErrCalcArity, fn.written(), param.name,
 			)
 		}
 		return nullValue(), nil
@@ -424,13 +459,14 @@ func (fn *libraryFunction) argumentFor(i int, param string, args calcArgs) (Valu
 	return nullValue(), nil
 }
 
-// arity reports the argument count the signature accepts, as one number or as
-// the range an optional parameter opens.
+// arity reports the positional argument count the signature accepts, as one
+// number or as the range a trailing optional parameter opens.
 func (fn *libraryFunction) arity() string {
-	if fn.required == len(fn.params) {
-		return fmt.Sprintf("%d", fn.required)
+	least := fn.leastPositional()
+	if least == len(fn.params) {
+		return fmt.Sprintf("%d", least)
 	}
-	return fmt.Sprintf("%d..%d", fn.required, len(fn.params))
+	return fmt.Sprintf("%d..%d", least, len(fn.params))
 }
 
 // realUnary adapts a one-argument function over the reals: the argument widens

@@ -47,9 +47,9 @@ func registerConversionFunctions() {
 	registerLibraryFunction("RationalFunctions::gcd", []string{"x", "y"}, rationalGCD)
 
 	exactRational := "the runtime represents a Rational as a float64, not an exact numerator and denominator (docs/project/exact-rational-evaluation.md)"
-	registerUnevaluable("RationalFunctions::rat", []string{"numer", "denum"}, 2, exactRational)
-	registerUnevaluable("RationalFunctions::numer", []string{"rat"}, 1, exactRational)
-	registerUnevaluable("RationalFunctions::denom", []string{"rat"}, 1, exactRational)
+	registerUnevaluable("RationalFunctions::rat", []declaredParam{param("numer"), param("denum")}, exactRational)
+	registerUnevaluable("RationalFunctions::numer", []declaredParam{param("rat")}, exactRational)
+	registerUnevaluable("RationalFunctions::denom", []declaredParam{param("rat")}, exactRational)
 }
 
 // anythingToString is BaseFunctions::ToString, the notation x is written with in
@@ -291,58 +291,20 @@ func parseInteger(name, s, typeName string) (int64, error) {
 	return 0, invalidNotation(name, s, typeName)
 }
 
-// parseReal reads decimal Real notation into a finite Real. Go's parser also
-// accepts hexadecimal floats, infinities and NaN, which the library's notation
-// does not include.
+// parseReal reads decimal Real notation into a finite Real, reporting any
+// other notation as invalid for the named type and a magnitude float64
+// cannot hold as overflow.
 func parseReal(name, s, typeName string) (Value, error) {
 	text := strings.TrimSpace(s)
-	if !isDecimalNotation(text) {
+	x, err := semantics.ParseReal(text)
+	if errors.Is(err, semantics.ErrRealNotation) {
 		return Value{}, invalidNotation(name, s, typeName)
 	}
-	x, err := semantics.ParseReal(text)
 	if err != nil {
 		return Value{}, fmt.Errorf("%w: function %s: %s is outside the Real range", err, name, text)
 	}
 	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: x}}, nil
 }
-
-// isDecimalNotation reports whether text is a decimal number: an optional sign,
-// digits with an optional fraction, and an optional exponent.
-func isDecimalNotation(text string) bool {
-	i := 0
-	if i < len(text) && (text[i] == '+' || text[i] == '-') {
-		i++
-	}
-	digits := 0
-	for i < len(text) && isDigit(text[i]) {
-		i, digits = i+1, digits+1
-	}
-	if i < len(text) && text[i] == '.' {
-		i++
-		for i < len(text) && isDigit(text[i]) {
-			i, digits = i+1, digits+1
-		}
-	}
-	if digits == 0 {
-		return false
-	}
-	if i < len(text) && (text[i] == 'e' || text[i] == 'E') {
-		i++
-		if i < len(text) && (text[i] == '+' || text[i] == '-') {
-			i++
-		}
-		exponent := 0
-		for i < len(text) && isDigit(text[i]) {
-			i, exponent = i+1, exponent+1
-		}
-		if exponent == 0 {
-			return false
-		}
-	}
-	return i == len(text)
-}
-
-func isDigit(c byte) bool { return '0' <= c && c <= '9' }
 
 // invalidNotation is the error for a String that is no notation of a type.
 func invalidNotation(name, s, typeName string) error {

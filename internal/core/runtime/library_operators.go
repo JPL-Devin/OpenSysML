@@ -8,9 +8,10 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
-// operandDomain checks that an argument conforms to the parameter type one
-// function library package declares for its operators.
-type operandDomain func(ctx *Context, name, param string, val Value) error
+// operandDomain binds an argument to the parameter type one function library
+// package declares for its operators: the value the parameter holds, or why
+// the argument does not conform.
+type operandDomain func(ctx *Context, name, param string, val Value) (Value, error)
 
 // operatorForms lists the operator functions each package declares over `x`
 // and `y`, with the domain its parameter types impose. `..` is a builtin.
@@ -23,7 +24,7 @@ var operatorForms = []struct {
 	{"ScalarFunctions", []string{"+", "-", "*", "/", "%", "**", "^", "<", "<=", ">", ">=", "not", "xor", "|", "&"}, anyOperand},
 	{"NumericalFunctions", []string{"+", "-", "*", "/", "%", "**", "^", "<", "<=", ">", ">="}, numericalOperand},
 	{"RealFunctions", []string{"+", "-", "*", "/", "**", "^", "<", "<=", ">", ">="}, realOperand},
-	{"RationalFunctions", []string{"+", "-", "*", "/", "**", "^", "<", "<=", ">", ">="}, realOperand},
+	{"RationalFunctions", []string{"+", "-", "*", "/", "**", "^", "<", "<=", ">", ">="}, rationalOperand},
 	{"IntegerFunctions", []string{"+", "-", "*", "/", "%", "<", "<=", ">", ">="}, integerOperand},
 	{"IntegerFunctions", []string{"**", "^"}, integerBaseNaturalExponent},
 	{"NaturalFunctions", []string{"+", "*", "%", "<", "<=", ">", ">="}, naturalOperand},
@@ -46,7 +47,7 @@ var equalityForms = map[string]operandDomain{
 	"BooleanFunctions::==":  booleanOperand,
 	"IntegerFunctions::==":  integerOperand,
 	"NaturalFunctions::==":  naturalOperand,
-	"RationalFunctions::==": realOperand,
+	"RationalFunctions::==": rationalOperand,
 	"RealFunctions::==":     realOperand,
 }
 
@@ -86,14 +87,17 @@ func registerOperatorForm(fqn, op string, domain operandDomain) {
 	}
 }
 
-// checkOperands applies the package's domain to each argument given.
-func checkOperands(ctx *Context, name string, domain operandDomain, args []Value) error {
+// checkOperands binds each argument given through the package's domain.
+func checkOperands(ctx *Context, name string, domain operandDomain, args []Value) ([]Value, error) {
+	bound := make([]Value, len(args))
 	for i, param := range []string{"x", "y"}[:len(args)] {
-		if err := domain(ctx, name, param, args[i]); err != nil {
-			return err
+		val, err := domain(ctx, name, param, args[i])
+		if err != nil {
+			return nil, err
 		}
+		bound[i] = val
 	}
-	return nil
+	return bound, nil
 }
 
 // singleOperands binds `x` and `y`, each declared `[0..1]`: an omitted one is
@@ -108,14 +112,15 @@ func singleOperands(ctx *Context, name string, domain operandDomain, args []Valu
 			bound[i] = nullValue()
 			continue
 		case 1:
-			bound[i] = elements[0]
 		default:
 			return nil, fmt.Errorf("%w: function %s parameter %q holds %d values, at most 1 allowed",
 				ErrMultiplicityViolation, name, param, len(elements))
 		}
-		if err := domain(ctx, name, param, bound[i]); err != nil {
+		val, err := domain(ctx, name, param, elements[0])
+		if err != nil {
 			return nil, err
 		}
+		bound[i] = val
 	}
 	return bound, nil
 }
@@ -127,7 +132,8 @@ func arithmeticForm(op ast.OperatorKind, domain operandDomain) libraryApply {
 		if len(args) == 2 && argumentOmitted(args[1]) {
 			args = args[:1]
 		}
-		if err := checkOperands(ctx, name, domain, args); err != nil {
+		args, err := checkOperands(ctx, name, domain, args)
+		if err != nil {
 			return Value{}, err
 		}
 		if len(args) == 1 {
@@ -147,7 +153,7 @@ func arithmeticForm(op ast.OperatorKind, domain operandDomain) libraryApply {
 // exact quotient when y divides x, and no value otherwise, since truncating
 // would compute something the declaration does not promise.
 func naturalDivision(name string, ctx *Context, args []Value) (Value, error) {
-	if err := checkOperands(ctx, name, naturalOperand, args); err != nil {
+	if _, err := checkOperands(ctx, name, naturalOperand, args); err != nil {
 		return Value{}, err
 	}
 	x, y := args[0].Const.Int, args[1].Const.Int
@@ -166,7 +172,8 @@ func naturalDivision(name string, ctx *Context, args []Value) (Value, error) {
 // comparisonForm is `'<'`, `'<='`, `'>'` and `'>='` as functions.
 func comparisonForm(op ast.OperatorKind, domain operandDomain) libraryApply {
 	return func(name string, ctx *Context, args []Value) (Value, error) {
-		if err := checkOperands(ctx, name, domain, args); err != nil {
+		args, err := checkOperands(ctx, name, domain, args)
+		if err != nil {
 			return Value{}, err
 		}
 		val, err := comparisonValues(op, args[0], args[1], source.Span{})
@@ -178,7 +185,7 @@ func comparisonForm(op ast.OperatorKind, domain operandDomain) libraryApply {
 // given, so nothing is short-circuited.
 func booleanForm(op ast.OperatorKind, domain operandDomain) libraryApply {
 	return func(name string, ctx *Context, args []Value) (Value, error) {
-		if err := checkOperands(ctx, name, domain, args); err != nil {
+		if _, err := checkOperands(ctx, name, domain, args); err != nil {
 			return Value{}, err
 		}
 		l, err := boolOperand(fmt.Sprintf("function %s parameter %q", name, "x"), args[0])
@@ -196,7 +203,8 @@ func booleanForm(op ast.OperatorKind, domain operandDomain) libraryApply {
 // unaryForm is `'not'` as a function.
 func unaryForm(op ast.OperatorKind, domain operandDomain) libraryApply {
 	return func(name string, ctx *Context, args []Value) (Value, error) {
-		if err := checkOperands(ctx, name, domain, args); err != nil {
+		args, err := checkOperands(ctx, name, domain, args)
+		if err != nil {
 			return Value{}, err
 		}
 		val, err := unaryValue(op, args[0])
@@ -276,27 +284,27 @@ func operatorResult(name string, val Value, err error) (Value, error) {
 
 // anyOperand is the domain of BaseFunctions and ScalarFunctions, whose
 // operators the evaluator defines for whichever values it can.
-func anyOperand(*Context, string, string, Value) error { return nil }
+func anyOperand(_ *Context, _, _ string, val Value) (Value, error) { return val, nil }
 
 // dataOperand admits a DataValue: a scalar, a collection of them, or an object
 // whose type conforms to Base::DataValue — not a part, item or other occurrence.
-func dataOperand(ctx *Context, name, param string, val Value) error {
+func dataOperand(ctx *Context, name, param string, val Value) (Value, error) {
 	switch val.Kind {
 	case ValConst, ValString, ValQuantity, ValEnumLiteral, ValComplex:
-		return nil
+		return val, nil
 	case ValSequence, ValSet:
 		for _, element := range elementsOf(val) {
-			if err := dataOperand(ctx, name, param, element); err != nil {
-				return err
+			if _, err := dataOperand(ctx, name, param, element); err != nil {
+				return Value{}, err
 			}
 		}
-		return nil
+		return val, nil
 	case ValInstance, ValVariant:
 		if ctx.isDataValue(val) {
-			return nil
+			return val, nil
 		}
 	}
-	return operandMismatch(name, param, "a DataValue", val)
+	return Value{}, operandMismatch(name, param, "a DataValue", val)
 }
 
 // isDataValue reports whether an object's type conforms to Base::DataValue.
@@ -310,43 +318,53 @@ func (ctx *Context) isDataValue(val Value) bool {
 }
 
 // numericalOperand admits the NumericalValues: Integers, Reals and Complexes.
-func numericalOperand(_ *Context, name, param string, val Value) error {
+func numericalOperand(_ *Context, name, param string, val Value) (Value, error) {
 	if val.Kind == ValComplex || (val.Kind == ValConst && val.Const.IsNumeric()) {
-		return nil
+		return val, nil
 	}
-	return operandMismatch(name, param, "a numeric", val)
+	return Value{}, operandMismatch(name, param, "a numeric", val)
 }
 
-// realOperand admits an Integer or a Real, which both conform to Real.
-func realOperand(_ *Context, name, param string, val Value) error {
+// realOperand binds an Integer or a Real to a Real parameter, which holds the
+// Real the argument equals: RealFunctions compute over Reals and answer one.
+func realOperand(_ *Context, name, param string, val Value) (Value, error) {
 	if val.Kind == ValConst && val.Const.IsNumeric() {
-		return nil
+		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: asReal(val.Const)}}, nil
 	}
-	return operandMismatch(name, param, "a Real", val)
+	return Value{}, operandMismatch(name, param, "a Real", val)
+}
+
+// rationalOperand admits an Integer or a Real as a Rational; an Integer keeps
+// its kind, as RationalFunctions::abs/max/min keep it.
+func rationalOperand(_ *Context, name, param string, val Value) (Value, error) {
+	if val.Kind == ValConst && val.Const.IsNumeric() {
+		return val, nil
+	}
+	return Value{}, operandMismatch(name, param, "a Rational", val)
 }
 
 // integerOperand admits an Integer only: a Real does not conform to Integer.
-func integerOperand(_ *Context, name, param string, val Value) error {
+func integerOperand(_ *Context, name, param string, val Value) (Value, error) {
 	if val.Kind == ValConst && val.Const.Kind == semantics.ValInt {
-		return nil
+		return val, nil
 	}
-	return operandMismatch(name, param, "an Integer", val)
+	return Value{}, operandMismatch(name, param, "an Integer", val)
 }
 
 // naturalOperand admits a non-negative Integer.
-func naturalOperand(ctx *Context, name, param string, val Value) error {
-	if err := integerOperand(ctx, name, param, val); err != nil {
-		return err
+func naturalOperand(ctx *Context, name, param string, val Value) (Value, error) {
+	if _, err := integerOperand(ctx, name, param, val); err != nil {
+		return Value{}, err
 	}
 	if val.Const.Int < 0 {
-		return fmt.Errorf("%w: function %s parameter %q requires a Natural value, got %d", ErrTypeMismatch, name, param, val.Const.Int)
+		return Value{}, fmt.Errorf("%w: function %s parameter %q requires a Natural value, got %d", ErrTypeMismatch, name, param, val.Const.Int)
 	}
-	return nil
+	return val, nil
 }
 
 // integerBaseNaturalExponent is IntegerFunctions::'**' and '^': `x` an Integer
 // and `y` a Natural, so the result is an Integer.
-func integerBaseNaturalExponent(ctx *Context, name, param string, val Value) error {
+func integerBaseNaturalExponent(ctx *Context, name, param string, val Value) (Value, error) {
 	if param == "y" {
 		return naturalOperand(ctx, name, param, val)
 	}
@@ -354,11 +372,11 @@ func integerBaseNaturalExponent(ctx *Context, name, param string, val Value) err
 }
 
 // booleanOperand admits a Boolean.
-func booleanOperand(_ *Context, name, param string, val Value) error {
+func booleanOperand(_ *Context, name, param string, val Value) (Value, error) {
 	if val.Kind == ValConst && val.Const.Kind == semantics.ValBool {
-		return nil
+		return val, nil
 	}
-	return operandMismatch(name, param, "a Boolean", val)
+	return Value{}, operandMismatch(name, param, "a Boolean", val)
 }
 
 func operandMismatch(name, param, want string, val Value) error {

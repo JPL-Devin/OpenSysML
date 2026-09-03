@@ -12,23 +12,24 @@ import (
 // values that the evaluation context calls with its arguments in parameter order.
 type builtinFunc = func(*EvalContext, []Value) (Value, error)
 
-// builtinParam is one input parameter of a built-in, as the library declares it.
-type builtinParam struct {
+// declaredParam is one input parameter of a built-in or library function, as
+// the library declares it.
+type declaredParam struct {
 	name     string
 	optional bool // its multiplicity admits no value, so an unbound argument is null
 	deferred bool // declared `expr`: the argument binds unevaluated for the function to evaluate
 }
 
-func param(name string) builtinParam         { return builtinParam{name: name} }
-func optionalParam(name string) builtinParam { return builtinParam{name: name, optional: true} }
-func exprParam(name string) builtinParam {
-	return builtinParam{name: name, optional: true, deferred: true}
+func param(name string) declaredParam         { return declaredParam{name: name} }
+func optionalParam(name string) declaredParam { return declaredParam{name: name, optional: true} }
+func exprParam(name string) declaredParam {
+	return declaredParam{name: name, optional: true, deferred: true}
 }
 
 // builtinSignatures lists each built-in's parameters in the library's declared
 // order, which is what an argument written by name binds against. The
 // dispatch gate (library_functions_test.go) holds them to the declarations.
-var builtinSignatures = map[string][]builtinParam{
+var builtinSignatures = map[string][]declaredParam{
 	"SequenceFunctions::#":            {optionalParam("seq"), param("index")},
 	"SequenceFunctions::size":         {optionalParam("seq")},
 	"SequenceFunctions::isEmpty":      {optionalParam("seq")},
@@ -167,7 +168,7 @@ func bindBuiltin(name string, positional int, named []string, bind func(param, a
 		args[i], bound[i] = val, true
 	}
 	for j, argName := range named {
-		i := slices.IndexFunc(params, func(p builtinParam) bool { return p.name == argName })
+		i := slices.IndexFunc(params, func(p declaredParam) bool { return p.name == argName })
 		if i < 0 {
 			return nil, fmt.Errorf("%w: function %s has no input parameter %q (expected %s)",
 				ErrUnknownParameter, written, argName, builtinParameterList(params))
@@ -186,7 +187,7 @@ func bindBuiltin(name string, positional int, named []string, bind func(param, a
 
 // fillUnbound binds null to every optional parameter no argument was written
 // for and reports the first required one.
-func fillUnbound(written string, params []builtinParam, args []Value, bound []bool) ([]Value, error) {
+func fillUnbound(written string, params []declaredParam, args []Value, bound []bool) ([]Value, error) {
 	for i, p := range params {
 		if bound[i] {
 			continue
@@ -203,7 +204,7 @@ func fillUnbound(written string, params []builtinParam, args []Value, bound []bo
 // evalArgument evaluates the argument bound to parameter i, or keeps it as
 // written for an `expr` parameter. A body literal is a function already, so it
 // is evaluated (to itself) like any other argument, which the trace records.
-func (ec *EvalContext) evalArgument(params []builtinParam, i int, arg ast.Node) (Value, error) {
+func (ec *EvalContext) evalArgument(params []declaredParam, i int, arg ast.Node) (Value, error) {
 	if _, body := arg.(*ast.BodyExpr); !body && i < len(params) && params[i].deferred {
 		return NewExprValue(arg, ec.closure()), nil
 	}
@@ -211,7 +212,7 @@ func (ec *EvalContext) evalArgument(params []builtinParam, i int, arg ast.Node) 
 }
 
 // builtinParameterList renders the declared parameter names for an error.
-func builtinParameterList(params []builtinParam) string {
+func builtinParameterList(params []declaredParam) string {
 	names := make([]string, len(params))
 	for i, p := range params {
 		names[i] = p.name

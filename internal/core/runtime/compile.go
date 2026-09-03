@@ -718,13 +718,13 @@ func (c *calcCompiler) compileLibraryCall(fn *libraryFunction, args *callArgumen
 	if !fn.scalar {
 		return nil, ineligible(fmt.Sprintf("library function %s is not over scalars alone", fn.name))
 	}
-	if len(fn.params) > libraryArity || fn.required != len(fn.params) {
+	if len(fn.params) > libraryArity || fn.hasOptional() {
 		return nil, ineligible(fmt.Sprintf("library function %s has optional or many parameters", fn.name))
 	}
 	if len(args.exprs) != len(fn.params) {
 		return nil, ineligible(fmt.Sprintf("%s called with %d arguments for %d parameters", fn.name, len(args.exprs), len(fn.params)))
 	}
-	slots, bound, err := args.slotsFor(fn.params)
+	slots, bound, err := args.slotsFor(fn.paramNames())
 	if err != nil {
 		return nil, ineligible(fmt.Sprintf("%s: %v", fn.name, err))
 	}

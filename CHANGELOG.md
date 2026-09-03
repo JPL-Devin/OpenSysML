@@ -100,9 +100,14 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   `threshold`, and one a control function selects is applied rather than answered as a body;
   a body a calc returns keeps the parameter it closes over after that calc has returned.
   A nonzero Real notation too small for a Real (`1e-400`, as a literal or through `ToReal`)
-  is an overflow error rather than `0.0`. A direct invocation of a built-in through the
-  runtime API (`InvokeCalc`, `InvokeCalcNamed`) binds and computes as the written call does,
-  a body value handed to an `expr` parameter applied only when selected.
+  is an overflow error rather than `0.0`, and only decimal notation is a Real at all (`NaN`,
+  `Inf` and a hexadecimal float are invalid notation wherever a Real is read). A `RealFunctions`
+  operator form binds an Integer argument as the Real it equals and answers a Real
+  (`RealFunctions::'+'(1, 2)` is `3.0`; a product too large for an Integer stays finite), while
+  `RationalFunctions` keep an Integer's kind as their `abs`/`max`/`min` do. A direct
+  invocation of a built-in through the runtime API (`InvokeCalc`, `InvokeCalcNamed`) binds
+  and computes as the written call does, a body value handed to an `expr` parameter applied
+  only when selected.
   `DataFunctions::'=='`/`'==='` take DataValues only: a part or other occurrence is a type
   mismatch, where `BaseFunctions::'=='` compares anything. The equality and identity forms
   hold their `[0..1]` operands to one value: an empty collection is null (`'=='((), null)` is
@@ -114,7 +119,9 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   `BaseFunctions::'#'` (no Array value kind),
   `BaseFunctions::all`/`as`/`meta`/`istype`/`hastype`/`'@'`/`'@@'` and `ControlFunctions::'.'`
   (evaluated from their own notation, not as functions), `DataFunctions`/`ScalarFunctions::'~'`
-  and every `OccurrenceFunctions` declaration report themselves by name. An operator-named
+  and every `OccurrenceFunctions` declaration report themselves by name, each holding its
+  declared multiplicities (`addNew(occ = o)` omits the `[0..*]` group; a call missing a
+  required parameter is an arity error first). An operator-named
   function reports itself as the model writes it (`IntegerFunctions::'+'`).
 - **Action and state execution has a referee outside the executor.** Six conformance cases —
   a join fed by branches of unequal length, a join fed twice over one succession, a node two
