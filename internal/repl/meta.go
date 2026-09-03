@@ -12,6 +12,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
@@ -149,9 +150,9 @@ var metaCommandTable = []metaCommand{
 
 	{group: groupRuntime, name: "%instantiate", args: argName, desc: "create an instance of a part def"},
 	{group: groupRuntime, name: "%eval", args: "[in <name> :] <expr>", desc: "evaluate an expression, in the named element or object when one is named"},
-	{group: groupRuntime, name: "%features", args: argName, desc: "show an object's features and their values"},
+	{group: groupRuntime, name: "%features", args: "<name> [all|depth <n>] [json]", desc: "show an object's features and their values, bounded unless all or a depth is asked for; json writes the object graph as the API does"},
 	{group: groupRuntime, name: "%instances", desc: "list all instantiated objects"},
-	{group: groupRuntime, name: "%invoke", args: "<object> <op> [<p>=<expr>]", desc: "invoke an operation of an object's type, performed by that object"},
+	{group: groupRuntime, name: "%invoke", args: "<object> <op> [<p>=<expr>]", desc: "invoke an operation of an object's type, performed by that object (a name, a path such as driver.r, or an id such as #3)"},
 
 	{group: groupBehavioral, name: "%calc", args: "<name> <args>", desc: "invoke a calculation with arguments"},
 	{group: groupBehavioral, name: cmdRunQuery, args: "<name> [<p>=<expr>...]", desc: "execute a document query and print its rows, with each binding written as <parameter>=<expression>"},
@@ -172,8 +173,9 @@ var metaCommandTable = []metaCommand{
 	{group: groupAction, name: "%break", args: "<node>", desc: "set breakpoint at node"},
 	{group: groupAction, name: "%stop", desc: "stop current debugging session"},
 
-	{group: groupState, name: "%state", args: "<name> [<object>]", desc: "debug the machine an object exhibits, or a state machine performed by an object"},
-	{group: groupState, name: "%events", desc: "show event queue"},
+	{group: groupState, name: "%state", args: "<name> [<object>]", desc: "debug the machine an object exhibits (naming that machine attaches too), or a state machine performed by an object; an object is a name, a path such as driver.r, or an id such as #3"},
+	{group: groupState, name: "%send", args: "<signal>[(<p>=<expr>, ...)] [to <object>]", desc: "send a signal to an object's machine, by default the one being debugged"},
+	{group: groupState, name: "%events", desc: "show event queue and signals in flight"},
 	{group: groupState, name: "%current", desc: "show current state and configuration"},
 	{group: groupState, name: "%advance", args: "<time>", desc: "advance simulation time by <time> units, processing every event due"},
 }
@@ -356,9 +358,13 @@ func (s *Session) metaModelCommand(fields []string, line string) (metaResult, bo
 		return metaOut(s.doEvalLine(strings.TrimSpace(tail))), true
 	case "%features":
 		if len(fields) < 2 {
-			return metaOut([]string{"usage: %features <name>"}, false, nil), true
+			return metaOut([]string{featuresUsage}, false, nil), true
 		}
-		return metaOut(s.doFeatures(fields[1])), true
+		listing, perr := parseFeatureListing(fields[2:])
+		if perr != nil {
+			return metaOut([]string{errPrefix + perr.Error(), featuresUsage}, false, nil), true
+		}
+		return metaOut(s.doFeatures(fields[1], listing)), true
 	case "%instances":
 		return metaOut(s.doInstances()), true
 	case "%calc":
@@ -464,6 +470,8 @@ func (s *Session) metaDebugCommand(fields []string, line string) (metaResult, bo
 			return metaOut([]string{"no elements matched"}, false, nil), true
 		}
 		return metaOut(lines, false, nil), true
+	case "%send":
+		return metaOut(s.doSend(strings.TrimPrefix(strings.TrimSpace(line), "%send"))), true
 	case "%events":
 		return metaOut(s.doEvents()), true
 	case "%current":
@@ -828,8 +836,9 @@ func parseExprAlone(expr string) (ast.Node, []parser.Diagnostic) {
 
 // errWithoutDeclarations reports why an expression an empty session could not
 // answer failed. Only a failure declarations would answer — a name nothing
-// declares — is met with the no-declarations message; a syntax error or a real
-// evaluation failure, such as a division by zero, is the answer itself.
+// declares — is met with the no-declarations message, carrying the resolver's
+// hint for the name; a syntax error or a real evaluation failure, such as a
+// division by zero, is the answer itself.
 func (s *Session) errWithoutDeclarations(expr string) error {
 	value, diags := parseExprAlone(expr)
 	if len(diags) > 0 {
@@ -841,10 +850,16 @@ func (s *Session) errWithoutDeclarations(expr string) error {
 			if evalErr != nil && !declarationsWouldAnswer(evalErr) {
 				return evalError(expr, evalErr, len(exprPrefix))
 			}
+			if errors.Is(evalErr, runtime.ErrUnresolvedReference) {
+				return fmt.Errorf("%s: %w", noDeclarationsLoaded, evalErr)
+			}
 		}
 	}
-	return errors.New("no declarations loaded (literals work, but feature references need declarations)")
+	return errors.New(noDeclarationsLoaded)
 }
+
+// noDeclarationsLoaded is why an empty session cannot answer a name.
+const noDeclarationsLoaded = "no declarations loaded (literals work, but feature references need declarations)"
 
 // declarationsWouldAnswer reports whether err is a failure declarations would
 // answer — a name, a unit or a value nothing declares — rather than the answer
@@ -883,7 +898,7 @@ func mismatchInExpr(expr string, operand *runtime.OperandTypeError, base int) bo
 // emptyRuntime is a context over an empty model, which answers an expression of
 // literals alone and nothing a session declares.
 func emptyRuntime(budgets runtime.Budgets) (*runtime.Context, error) {
-	emptyIdx := symbols.NewIndex()
+	emptyIdx := libs.NewModelIndex()
 	emptyModel := semantics.NewModel(resolve.New(emptyIdx))
 	ctx := runtime.NewContext(emptyModel, resolve.New(emptyIdx), budgets.MaxSteps)
 	if err := ctx.SetBudgets(budgets); err != nil {
@@ -1013,23 +1028,15 @@ func isSymbolReference(expr string) bool {
 }
 
 // doFeatures shows what an object holds for each feature of its type.
-func (s *Session) doFeatures(name string) ([]string, bool, error) {
-	_, fqn, lerr := s.lookupSymbol(name)
-	if lerr != nil {
-		out := []string{errPrefix + lerr.Error()}
-		// The declaration may be gone with the objects materialized from it, which a
-		// bare unresolved reference does not explain.
-		if note := s.lost.lostNote(); note != "" {
-			out = append(out, note)
+func (s *Session) doFeatures(name string, listing featureListing) ([]string, bool, error) {
+	inst, held, oerr := s.objectRef(name)
+	if oerr != nil {
+		if errors.Is(oerr, errRuntimeInit) {
+			return nil, false, oerr
 		}
-		return out, false, nil
-	}
-
-	inst, ok := s.instances[fqn]
-	if !ok {
-		out := []string{fmt.Sprintf("error: no instance of %q (use %%instantiate first)", notationName(fqn))}
-		// The object may have been there and gone, which is a different answer from
-		// one never created.
+		out := []string{errPrefix + oerr.Error()}
+		// The declaration may be gone with the objects materialized from it, which
+		// neither an unresolved reference nor a missing instance explains.
 		if note := s.lost.lostNote(); note != "" {
 			out = append(out, note)
 		}
@@ -1041,16 +1048,26 @@ func (s *Session) doFeatures(name string) ([]string, bool, error) {
 		return nil, false, fmt.Errorf("runtime init: %w", err)
 	}
 
+	if listing.json {
+		return s.featuresJSON(ctx, inst, name, listing)
+	}
+
 	lines := []string{
-		fmt.Sprintf("Instance: %s (ID: %d)", notationName(fqn), inst.ID),
+		fmt.Sprintf("Instance: %s (ID: %d)", objectName(heldName(inst, held)), inst.ID),
 		"Features:",
 	}
-	w := &featureValueWalk{ctx: ctx, onPath: map[*symbols.Symbol]bool{inst.Type: true}, budget: maxFeatureValueLines}
-	listing := w.lines(inst, "  ", 0)
+	w := &featureValueWalk{
+		ctx:      ctx,
+		onPath:   map[*symbols.Symbol]bool{inst.Type: true},
+		maxDepth: listing.depth,
+		budget:   listing.budget,
+		hint:     listing.truncationHint(name),
+	}
+	out := w.lines(inst, "  ", 0)
 	// A feature value the listing rendered as an error is one the session could not answer
 	// about, which a non-interactive run exits on.
 	s.noteMaterializationFailure(w.errs...)
-	return append(lines, listing...), false, nil
+	return append(lines, out...), false, nil
 }
 
 const (
@@ -1064,11 +1081,16 @@ const (
 // featureValueWalk expands an object graph for %features under three bounds: onPath holds
 // the types being expanded above the current one (a part containing its own
 // kind materializes a fresh instance per descent, so instance identity cannot
-// detect the cycle), depth, and a line budget shared across the listing.
+// detect the cycle), maxDepth, and a line budget shared across the listing.
 type featureValueWalk struct {
-	ctx    *runtime.Context
-	onPath map[*symbols.Symbol]bool
-	budget int
+	ctx      *runtime.Context
+	onPath   map[*symbols.Symbol]bool
+	maxDepth int
+	budget   int
+	// hint is the truncation line's advice on how to see the rest; cut records
+	// that the line was written, so unwinding the walk does not repeat it.
+	hint string
+	cut  bool
 	// errs are the feature values the listing could not materialize, rendered as errors in
 	// its lines and reported as findings about the model by the caller.
 	errs []error
@@ -1084,7 +1106,7 @@ func (w *featureValueWalk) lines(inst *runtime.Instance, indent string, depth in
 	// Connector lines already spent their share of the budget, so a truncated
 	// listing still shows them rather than dropping what it charged for.
 	truncated := func(lines []string, pad string) []string {
-		return append(append(lines, connectors...), indent+pad+"… (listing truncated)")
+		return w.truncate(append(lines, connectors...), indent+pad)
 	}
 
 	var lines []string
@@ -1100,7 +1122,7 @@ func (w *featureValueWalk) lines(inst *runtime.Instance, indent string, depth in
 			continue
 		}
 		if held, elided := w.elided(feat, depth); elided {
-			lines = w.emit(lines, fmt.Sprintf("%s%s : %s (not expanded: %s)", indent, feat.Name, held, elisionReason(depth)))
+			lines = w.emit(lines, fmt.Sprintf("%s%s : %s (not expanded: %s)", indent, feat.Name, held, w.elisionReason(depth)))
 			continue
 		}
 		fv, err := inst.GetFeatureValue(w.ctx, feat.Name)
@@ -1137,7 +1159,7 @@ func (w *featureValueWalk) connectors(inst *runtime.Instance, indent string) []s
 			formatValue(w.ctx, runtime.Value{Kind: runtime.ValInstance, Instance: conn.ID})))
 		for _, end := range conn.Ends {
 			if w.budget <= 0 {
-				return append(lines, indent+"  … (listing truncated)")
+				return w.truncate(lines, indent+"  ")
 			}
 			lines = w.emit(lines, fmt.Sprintf("%s  %s = %s", indent, endLabel(end), formatValue(w.ctx, end.Value)))
 		}
@@ -1170,6 +1192,15 @@ func (w *featureValueWalk) emit(lines []string, line string) []string {
 	return append(lines, line)
 }
 
+// truncate ends the listing, saying so once and how to see the rest.
+func (w *featureValueWalk) truncate(lines []string, indent string) []string {
+	if w.cut {
+		return lines
+	}
+	w.cut = true
+	return append(lines, indent+"… (listing truncated; "+w.hint+")")
+}
+
 // elided reports whether expanding a feature would revisit a type already on
 // the path or exceed the depth bound, naming the type it holds. Asked before
 // the feature value is read, since reading it materializes the object.
@@ -1178,20 +1209,20 @@ func (w *featureValueWalk) elided(feat *runtime.EffectiveFeature, depth int) (st
 	if held == nil {
 		// A variation is materialized from the variant it selects, so the depth
 		// bound applies to it too.
-		if w.ctx.IsVariationFeature(feat) && depth >= maxFeatureValueDepth {
+		if w.ctx.IsVariationFeature(feat) && depth >= w.maxDepth {
 			return feat.Name, true
 		}
 		return "", false
 	}
-	if depth >= maxFeatureValueDepth || w.onPath[held] {
+	if depth >= w.maxDepth || w.onPath[held] {
 		return held.Name, true
 	}
 	return "", false
 }
 
-func elisionReason(depth int) string {
-	if depth >= maxFeatureValueDepth {
-		return fmt.Sprintf("depth %d", maxFeatureValueDepth)
+func (w *featureValueWalk) elisionReason(depth int) string {
+	if depth >= w.maxDepth {
+		return fmt.Sprintf("depth %d", w.maxDepth)
 	}
 	return "contains its own kind"
 }
@@ -1546,7 +1577,7 @@ func splitTopLevel(text string) [][]string {
 	var groups [][]string
 	var frags []string
 	var frag strings.Builder
-	depth, quoted, named := 0, false, false
+	depth, q := 0, quoteTracker{}
 
 	flushFrag := func() {
 		if frag.Len() > 0 {
@@ -1556,19 +1587,8 @@ func splitTopLevel(text string) [][]string {
 	}
 	for _, r := range text {
 		switch {
-		case quoted:
-			if r == '"' {
-				quoted = false
-			}
-		case named:
-			// A quoted name is one fragment, space and comma included.
-			if r == '\'' {
-				named = false
-			}
-		case r == '"':
-			quoted = true
-		case r == '\'':
-			named = true
+		case q.inside(r):
+			// A string or quoted name is one fragment, space and comma included.
 		case r == '(' || r == '[':
 			depth++
 		case r == ')' || r == ']':
@@ -1593,21 +1613,10 @@ func splitTopLevel(text string) [][]string {
 // binding is the argument's own: an `=` nested in a call, in a bracket or in a
 // string belongs to that expression.
 func isNamedArgument(text string) bool {
-	depth, quoted, named := 0, false, false
+	depth, q := 0, quoteTracker{}
 	for i, r := range text {
 		switch {
-		case quoted:
-			if r == '"' {
-				quoted = false
-			}
-		case named:
-			if r == '\'' {
-				named = false
-			}
-		case r == '"':
-			quoted = true
-		case r == '\'':
-			named = true
+		case q.inside(r):
 		case r == '(' || r == '[':
 			depth++
 		case r == ')' || r == ']':
@@ -1742,7 +1751,7 @@ func onInstance(inst *runtime.Instance, owner string) string {
 	if inst == nil {
 		return ""
 	}
-	return fmt.Sprintf(" (on %s ID: %d)", notationName(owner), inst.ID)
+	return fmt.Sprintf(" (on %s ID: %d)", objectName(owner), inst.ID)
 }
 
 // doRequirement evaluates a requirement definition.
@@ -1773,10 +1782,7 @@ func (s *Session) satisfyVerdict(ctx *runtime.Context, a *runtime.SatisfyAsserti
 		// No object of the subject exists yet, so the verdict is about a fresh
 		// one, created here rather than inside the evaluation so it can be named.
 		if inst, serr := ctx.SatisfySubject(a); serr == nil {
-			subject, owner = inst, s.subjectName(a)
-			// Kept like %instantiate would, so a repeated %satisfy is about the
-			// same object rather than another copy of it.
-			s.instances[owner] = inst
+			subject, owner = inst, s.keepSubject(a, inst)
 		}
 	}
 	result, err := ctx.CheckSatisfactionOn(a, subject)
@@ -1796,18 +1802,61 @@ func (s *Session) satisfyVerdict(ctx *runtime.Context, a *runtime.SatisfyAsserti
 }
 
 // subjectInstance returns the object the session has already created for an
-// assertion's subject, with the name it was created under, or nil for none.
+// assertion's subject, with the name it was created under, or nil for none. A
+// chained subject is the object reached from the one created for the feature
+// the chain starts from.
 func (s *Session) subjectInstance(a *runtime.SatisfyAssertion) (*runtime.Instance, string) {
 	name := s.subjectName(a)
+	if a.SubjectChain != nil {
+		if inst, held, err := s.objectAt(name); err == nil && inst != nil {
+			return inst, held
+		}
+		return nil, ""
+	}
 	if inst, ok := s.instances[name]; ok {
 		return inst, name
 	}
 	return nil, ""
 }
 
+// keepSubject holds the object created for an assertion's subject like
+// %instantiate would, so a repeated %satisfy is about the same object rather
+// than another copy of it, and returns the name it is reached by. For a chained
+// subject the object held is the one the chain starts from, which owns the rest.
+func (s *Session) keepSubject(a *runtime.SatisfyAssertion, inst *runtime.Instance) string {
+	if a.SubjectChain == nil {
+		name := s.subjectName(a)
+		s.instances[name] = inst
+		return name
+	}
+	root := inst
+	for {
+		owner, _ := root.Owner()
+		if owner == nil {
+			break
+		}
+		root = owner
+	}
+	if name := s.rootName(a); name != "" && s.instanceName(root) == "" {
+		s.instances[name] = root
+	}
+	if name := s.nameOf(inst); name != "" {
+		return name
+	}
+	return s.subjectName(a)
+}
+
 // subjectName is the name an assertion's subject is known by: its
 // fully-qualified name, or the reference as written when it resolves to nothing.
+// A chained subject is known by the name of the feature the chain starts from
+// and the features walked from it, as objectAt reaches it.
 func (s *Session) subjectName(a *runtime.SatisfyAssertion) string {
+	if a.SubjectChain != nil {
+		if root := s.rootName(a); root != "" {
+			return strings.Join(append([]string{root}, a.SubjectPath...), "::")
+		}
+		return a.SubjectRef
+	}
 	if idx := s.symbolIndex(); idx != nil && a.Subject != nil {
 		if fqn := idx.GetFQN(a.Subject); fqn != "" {
 			return fqn
@@ -1816,24 +1865,55 @@ func (s *Session) subjectName(a *runtime.SatisfyAssertion) string {
 	return a.SubjectRef
 }
 
+// rootName is the fully-qualified name of the feature a chained subject starts
+// from, "" when it resolves to nothing.
+func (s *Session) rootName(a *runtime.SatisfyAssertion) string {
+	if idx := s.symbolIndex(); idx != nil && a.SubjectRoot != nil {
+		return idx.GetFQN(a.SubjectRoot)
+	}
+	return ""
+}
+
 // performingObject resolves the object a debugging session's behavior is
 // performed by: its connections route what the behavior sends. No argument
 // performs the behavior outside any object.
-// It also returns the name that object is held under, so a submission that drops
-// it can end the session.
+// It also returns the name that object is held under — its id when no name
+// reaches it — so a submission that drops it can end the session.
 func (s *Session) performingObject(args []string) (*runtime.Instance, string, error) {
 	if len(args) == 0 {
 		return nil, "", nil
 	}
-	_, fqn, lerr := s.lookupSymbol(args[0])
-	if lerr != nil {
-		return nil, "", lerr
+	inst, held, err := s.objectRef(args[0])
+	if err != nil {
+		return nil, "", err
 	}
-	inst, ok := s.instances[fqn]
-	if !ok {
-		return nil, "", fmt.Errorf("no instance of %q (use %%instantiate first)", notationName(fqn))
+	return inst, heldName(inst, held), nil
+}
+
+// heldName is the name a session tracks an object by: the one reaching it, or
+// its `#<n>` identity when none does.
+func heldName(inst *runtime.Instance, held string) string {
+	if held == "" {
+		return fmt.Sprintf("#%d", inst.ID)
 	}
-	return inst, fqn, nil
+	return held
+}
+
+// objectName prints a held name as the prompt does, an identity unquoted.
+func objectName(held string) string {
+	if _, isID := objectID(held); isID || held == "" {
+		return held
+	}
+	return notationName(held)
+}
+
+// objectLabel names an object in a report: `object #3 of "S1::driver::r"`, or
+// `object #3` for one no name reaches.
+func objectLabel(inst *runtime.Instance, held string) string {
+	if _, isID := objectID(held); isID || held == "" {
+		return fmt.Sprintf("object #%d", inst.ID)
+	}
+	return fmt.Sprintf("object #%d of %q", inst.ID, notationName(held))
 }
 
 // --- Action Debugging Commands ---
@@ -1885,6 +1965,7 @@ func (s *Session) startAction(name string, performer []string) ([]string, error)
 		name:     name,
 		fqn:      qualifiedOr(fqn, name),
 		selfFQN:  selfFQN,
+		self:     self,
 		symbol:   sym,
 		executor: exec,
 		rtCtx:    ctx,
@@ -2107,6 +2188,7 @@ func (s *Session) doStateMachine(name string, performer []string) ([]string, boo
 		if errors.Is(err, errRuntimeInit) {
 			return nil, false, err
 		}
+		s.noteIfMaterializationFailure(err)
 		return []string{errPrefix + err.Error()}, false, nil
 	}
 	lines = append(lines, "", "Use %events to see queue, %current for state, %advance <time> to step")
@@ -2121,6 +2203,16 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 		return nil, fmt.Errorf("%w: %w", errRuntimeInit, err)
 	}
 
+	// An object id or a feature path denotes an object, never a machine, so it
+	// names the machine that object exhibits.
+	if len(performer) == 0 && isObjectSpelling(name) {
+		inst, held, oerr := s.objectRef(name)
+		if oerr != nil {
+			return nil, oerr
+		}
+		return s.debugExhibitedMachine(ctx, name, heldName(inst, held), inst, nil)
+	}
+
 	sym, fqn, lerr := s.lookupSymbolOfKinds(name, symbols.SymbolStateDef, symbols.SymbolStateUsage)
 	if lerr != nil {
 		return nil, lerr
@@ -2128,14 +2220,18 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 
 	isMachine := sym.Kind == symbols.SymbolStateDef || sym.Kind == symbols.SymbolStateUsage
 
-	// A name the session materialized denotes that object, whose exhibited
-	// machine is already running: the debugger drives that machine rather than a
-	// detached run of the shared usage. A materialized state machine exhibits
-	// none, so it stays debuggable — including as a machine another object
-	// performs.
-	if inst, ok := s.instances[fqn]; ok {
+	// A name the session materialized, or reaches through what it materialized,
+	// denotes that object, whose exhibited machine is already running: the
+	// debugger drives that machine rather than a detached run of the shared
+	// usage. A materialized state machine exhibits none, so it stays debuggable —
+	// including as a machine another object performs.
+	inst, held, oerr := s.objectDenoted(name, fqn)
+	if errors.Is(oerr, errRuntimeInit) {
+		return nil, oerr
+	}
+	if oerr == nil && inst != nil {
 		if _, exhibits := inst.ExhibitedState(); exhibits || !isMachine {
-			return s.debugExhibitedMachine(ctx, name, fqn, inst, performer)
+			return s.debugExhibitedMachine(ctx, name, held, inst, performer)
 		}
 	}
 
@@ -2146,6 +2242,24 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 	self, selfFQN, perr := s.performingObject(performer)
 	if perr != nil {
 		return nil, perr
+	}
+
+	// The machine the object exhibits is already running on it: a second
+	// performance would run entry and do behaviors against the same slots again.
+	if self != nil {
+		switch exhibited := self.ExhibitedStatesOf(sym); len(exhibited) {
+		case 0:
+		case 1:
+			lines, err := s.attachExhibitedMachine(ctx, name, selfFQN, self, exhibited[0])
+			if err != nil {
+				return nil, err
+			}
+			notice := fmt.Sprintf("note: %s already exhibits %q, so this session attaches to that running machine rather than starting a second performance of it (as `%%state %s` would)",
+				objectLabel(self, selfFQN), name, performer[0])
+			return append([]string{lines[0], notice}, lines[1:]...), nil
+		default:
+			return nil, s.ambiguousMachine(name, self, selfFQN, exhibited)
+		}
 	}
 
 	// Create executor
@@ -2160,6 +2274,7 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 		name:     name,
 		fqn:      qualifiedOr(fqn, name),
 		selfFQN:  selfFQN,
+		self:     self,
 		symbol:   sym,
 		executor: exec,
 		rtCtx:    ctx,
@@ -2167,12 +2282,15 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 	}
 	s.endedState = nil
 
-	return []string{
-		fmt.Sprintf("✓ Started state machine executor for %q", name),
+	lines := []string{fmt.Sprintf("✓ Started state machine executor for %q", name)}
+	if self != nil {
+		lines = append(lines, fmt.Sprintf("  Performed by object #%d of %q, which exhibits no running machine of this kind", self.ID, notationName(selfFQN)))
+	}
+	return append(lines,
 		fmt.Sprintf("  Current state: %s", currentStateName(exec)),
-		timeLabel + runtime.FormatReal(exec.CurrentTime()),
+		timeLabel+runtime.FormatReal(exec.CurrentTime()),
 		fmt.Sprintf("  Events: %d", exec.EventQueue().Len()),
-	}, nil
+	), nil
 }
 
 // debugExhibitedMachine binds the debugging session to the machine an object
@@ -2185,31 +2303,55 @@ func (s *Session) debugExhibitedMachine(
 	performer []string,
 ) ([]string, error) {
 	if len(performer) > 0 {
-		return nil, fmt.Errorf("%q is an object, which performs its exhibited machine itself", notationName(fqn))
+		return nil, fmt.Errorf("%s is an object, which performs its exhibited machine itself", objectLabel(inst, fqn))
 	}
 	behavior, ok := inst.ExhibitedState()
 	if !ok {
-		return nil, fmt.Errorf("object %q exhibits no state machine", notationName(fqn))
+		return nil, fmt.Errorf("%s exhibits no state machine", objectLabel(inst, fqn))
 	}
+	return s.attachExhibitedMachine(ctx, name, qualifiedOr(fqn, name), inst, behavior)
+}
+
+// attachExhibitedMachine binds the session to a machine an object exhibits. The
+// session is keyed by the object, so a restart of the machine rebinds it.
+func (s *Session) attachExhibitedMachine(
+	ctx *runtime.Context,
+	name, held string,
+	inst *runtime.Instance,
+	behavior *runtime.ObjectBehavior,
+) ([]string, error) {
 	behavior.State.SetTrace(s.trace)
 
 	s.stateExec = &stateSession{
-		name:     name,
-		fqn:      qualifiedOr(fqn, name),
-		selfFQN:  qualifiedOr(fqn, name),
-		symbol:   behavior.Symbol,
-		executor: behavior.State,
-		rtCtx:    ctx,
-		now:      behavior.State.CurrentTime(),
+		name:      name,
+		fqn:       held,
+		selfFQN:   held,
+		self:      inst,
+		symbol:    behavior.Symbol,
+		executor:  behavior.State,
+		machine:   behavior.Name,
+		machineAt: exhibitedPosition(behavior),
+		rtCtx:     ctx,
+		now:       behavior.State.CurrentTime(),
 	}
 	s.endedState = nil
 
 	return []string{
-		fmt.Sprintf("✓ Debugging state machine %q exhibited by object #%d of %q", behavior.Name, inst.ID, notationName(fqn)),
+		fmt.Sprintf("✓ Debugging state machine %q exhibited by %s", behavior.Name, objectLabel(inst, held)),
 		fmt.Sprintf("  Current state: %s", currentStateName(behavior.State)),
 		timeLabel + runtime.FormatReal(behavior.State.CurrentTime()),
 		fmt.Sprintf("  Events: %d", behavior.State.EventQueue().Len()),
 	}, nil
+}
+
+// isObjectSpelling reports an argument that can only denote an object: an id the
+// prompt printed, or a feature path walked from a name.
+func isObjectSpelling(arg string) bool {
+	if _, ok := objectID(arg); ok {
+		return true
+	}
+	_, segments, ok := objectPath(arg)
+	return ok && len(segments) > 0
 }
 
 // stepState takes the machine's next step: a change condition that has become
@@ -2251,6 +2393,9 @@ func (s *Session) stateStep(exec *runtime.StateExecutor) (string, error) {
 			return "", fmt.Errorf("event processing failed: %w", err)
 		}
 		s.stateExec.now = math.Max(s.stateExec.now, exec.CurrentTime())
+		if note := droppedSignalNote(exec); note != "" {
+			return "Event dispatched, but " + note, nil
+		}
 		return "Event dispatched", nil
 	}
 	if exec.HasPendingDoWork() {
@@ -2275,6 +2420,7 @@ func (s *Session) doInvoke(name, operation string, args []string) ([]string, boo
 		if errors.Is(err, errRuntimeInit) {
 			return nil, false, err
 		}
+		s.noteIfMaterializationFailure(err)
 		return []string{errPrefix + err.Error()}, false, nil
 	}
 	return lines, false, nil
@@ -2287,7 +2433,7 @@ func (s *Session) invokeOperation(name, operation string, args []string) ([]stri
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", errRuntimeInit, err)
 	}
-	inst, fqn, perr := s.performingObject([]string{name})
+	inst, held, perr := s.performingObject([]string{name})
 	if perr != nil {
 		return nil, perr
 	}
@@ -2299,7 +2445,7 @@ func (s *Session) invokeOperation(name, operation string, args []string) ([]stri
 	if err != nil {
 		return nil, err
 	}
-	out := []string{fmt.Sprintf("✓ Invoked %s on object #%d of %q", operation, inst.ID, notationName(fqn))}
+	out := []string{fmt.Sprintf("✓ Invoked %s on %s", operation, objectLabel(inst, held))}
 	if values := namedValues(ctx, results); len(values) > 0 {
 		out = append(out, "", "Results:")
 		for _, v := range values {
@@ -2347,16 +2493,50 @@ func (s *Session) doEvents() ([]string, bool, error) {
 
 	exec := s.stateExec.executor
 	queue := exec.EventQueue()
+	signals, err := s.signalsInFlight(exec)
+	if err != nil {
+		return nil, false, err
+	}
+	deferred := exec.DeferredEvents()
 
-	if queue.Len() == 0 {
+	if queue.Len() == 0 && len(signals) == 0 && len(deferred) == 0 {
 		return []string{"Event queue empty"}, false, nil
 	}
 
 	// Note: EventQueue doesn't expose events directly, so just show count
-	return []string{
-		fmt.Sprintf("Event queue: %d events", queue.Len()),
-		"Use %advance <time> to process next event",
-	}, false, nil
+	var out []string
+	if queue.Len() > 0 {
+		out = append(out, fmt.Sprintf("Event queue: %d events", queue.Len()))
+	}
+	if len(signals) > 0 {
+		out = append(out, fmt.Sprintf("Signals in flight: %d", len(signals)))
+		for _, msg := range signals {
+			out = append(out, "  "+signalText(msg))
+		}
+	}
+	if len(deferred) > 0 {
+		out = append(out, fmt.Sprintf("Deferred by the active state, held until it leaves: %d", len(deferred)))
+		for _, event := range deferred {
+			out = append(out, "  "+eventText(event))
+		}
+	}
+	return append(out, "Use %advance <time> to process next event"), false, nil
+}
+
+// signalsInFlight lists the messages on the bus the debugged machine would
+// deliver on its next step.
+func (s *Session) signalsInFlight(exec *runtime.StateExecutor) ([]runtime.Message, error) {
+	var out []runtime.Message
+	for _, msg := range s.stateExec.rtCtx.PendingMessages() {
+		accepted, err := exec.AcceptsMessage(msg)
+		if err != nil {
+			return nil, fmt.Errorf("state machine %q cannot accept %s: %w", s.stateExec.name, signalText(msg), err)
+		}
+		if accepted {
+			out = append(out, msg)
+		}
+	}
+	return out, nil
 }
 
 // doCurrent shows current state and configuration.
@@ -2468,6 +2648,7 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 	maxEvents, maxDoActions := s.budgets.MaxStateEvents, s.budgets.MaxDoSteps
 	startTime := exec.CurrentTime()
 	var processed, doActions int64
+	var dropped []string
 	for exec.State() == runtime.StateRunning &&
 		processed < maxEvents && doActions < maxDoActions {
 		// The poll comes first, and runs once more at quiescence, so a condition
@@ -2483,11 +2664,12 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 		}
 		// A signal in flight is due now, whatever the deadline: dispatching it is
 		// the step RunToCompletion would take here.
-		if exec.EventQueue().Len() == 0 && exec.HasPendingSignal() {
+		if exec.HasPendingSignal() {
 			if err := exec.ProcessNextEvent(); err != nil {
 				return nil, fmt.Errorf("event processing failed: %w", err)
 			}
 			processed++
+			dropped = appendNote(dropped, droppedSignalNote(exec))
 			continue
 		}
 		if queue := exec.EventQueue(); queue.Len() == 0 || queue.Peek().Timestamp > deadline {
@@ -2510,6 +2692,7 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 			return nil, fmt.Errorf("event processing failed: %w", err)
 		}
 		processed++
+		dropped = appendNote(dropped, droppedSignalNote(exec))
 	}
 	s.stateExec.now = math.Max(deadline, exec.CurrentTime())
 
@@ -2532,6 +2715,9 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 
 	if doActions > 0 {
 		out = append(out, fmt.Sprintf("  Do behavior actions run: %d", doActions))
+	}
+	for _, note := range dropped {
+		out = append(out, "  "+note)
 	}
 
 	// A drain the bound cut short has work left, so say so rather than let it

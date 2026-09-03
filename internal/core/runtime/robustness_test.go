@@ -56,6 +56,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
 	t.Run("calc_calls_an_unimported_extension_function", testCalcCallsAnUnimportedExtensionFunction)
+	t.Run("calc_calls_an_unimported_library_function", testCalcCallsAnUnimportedLibraryFunction)
 	t.Run("calc_unbound_keyword_named_parameter", testCalcUnboundKeywordNamedParameter)
 	t.Run("calc_too_many_arguments", testCalcTooManyArguments)
 	t.Run("calc_unknown_named_argument", testCalcUnknownNamedArgument)
@@ -165,6 +166,10 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("accept_of_unsent_type", testAcceptOfUnsentTypeReports)
 	t.Run("send_via_unconnected_port", testSendViaUnconnectedPort)
 	t.Run("send_via_connector_into_an_empty_part", testSendViaConnectorIntoAnEmptyPart)
+	t.Run("send_via_bound_boundary_port_joined_to_nothing", testSendViaBoundBoundaryPortJoinedToNothing)
+	t.Run("send_fan_out_to_a_port_that_fails_to_materialize", testSendFanOutToAPortThatFailsToMaterialize)
+	t.Run("accept_via_a_port_that_fails_to_materialize", testAcceptViaAPortThatFailsToMaterialize)
+	t.Run("action_accept_via_a_port_that_fails_to_materialize", testActionAcceptViaAPortThatFailsToMaterialize)
 	t.Run("send_addressed_to_an_unreachable_target", testSendAddressedToAnUnreachableTarget)
 	t.Run("routed_send_via_unknown_port", testRoutedSendViaUnknownPort)
 	t.Run("routed_send_port_type_mismatch", testRoutedSendPortTypeMismatch)
@@ -1247,10 +1252,10 @@ func testNumericLibraryCallThatHasNoValue(t *testing.T) {
 		{"VectorFunctions::vectorScalarDiv(xs, 0)", ErrDivisionByZero},
 		{"VectorFunctions::cartesianInner(xs)", ErrCalcArity},
 		{"VectorFunctions::sum(xs)", ErrUnevaluableLibraryFunction},
-		{"ComplexFunctions::'/'(rect(0.0, 1.0), rect(0.0, 0.0))", ErrDivisionByZero},
+		{"ComplexFunctions::'/'(ComplexFunctions::rect(0.0, 1.0), ComplexFunctions::rect(0.0, 0.0))", ErrDivisionByZero},
 		{"ComplexFunctions::re(xs)", ErrTypeMismatch},
 		{"ComplexFunctions::re(ys)", ErrTypeMismatch},
-		{"ComplexFunctions::ToString(rect(0.0, 1.0))", ErrUnevaluableLibraryFunction},
+		{"ComplexFunctions::ToString(ComplexFunctions::rect(0.0, 1.0))", ErrUnevaluableLibraryFunction},
 		// includingAt inserts before a position of 1..size+1, so an index past the
 		// end of the sequence names no insertion point and is reported rather than
 		// appending or dropping the values.
@@ -2505,7 +2510,7 @@ func testHistoryOutsideCompositeState(t *testing.T) {
 	}
 	fire(t, exec, "init", "away")
 
-	err := exec.fireTransition(transitionBetween(t, exec, "away", "H"))
+	_, err := exec.fireTransition(transitionBetween(t, exec, "away", "H"))
 	if err == nil {
 		t.Fatal("expected an error for a history outside any composite state")
 	}
@@ -2540,7 +2545,7 @@ func testHistoryWithoutRecordOrDefault(t *testing.T) {
 	}
 	fire(t, exec, "init", "away")
 
-	err := exec.fireTransition(transitionBetween(t, exec, "away", "H"))
+	_, err := exec.fireTransition(transitionBetween(t, exec, "away", "H"))
 	if err == nil {
 		t.Fatal("expected an error: nothing recorded and no default history transition")
 	}
@@ -2606,6 +2611,202 @@ func testSendViaConnectorIntoAnEmptyPart(t *testing.T) {
 	}
 	if pending := ctx.PendingMessages(); len(pending) != 0 {
 		t.Errorf("pending messages = %+v, want none", pending)
+	}
+}
+
+// testSendViaBoundBoundaryPortJoinedToNothing: the inner part's port is bound to
+// the assembly's boundary port, but nothing in the context joins that boundary
+// port, so the send reaches no receiving port. It is reported where the inner
+// machine sent it, the same as an unconnected port of the sender's own, rather
+// than dropped silently.
+func testSendViaBoundBoundaryPortJoinedToNothing(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {`+directedPorts+`
+		part def Inner {
+			port out : Chan;
+			exhibit state sm {
+				entry; then sending;
+				state sending { entry send 9 via out; }
+			}
+		}
+		part def Assembly {
+			port boundary : Chan;
+			part child : Inner;
+			bind boundary = child.out;
+		}
+		part def Env { port in : ~Chan; }
+		part ctx {
+			part asm : Assembly;
+			part env : Env;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::ctx"))
+	if err != nil {
+		t.Fatalf("instantiate ctx: %v", err)
+	}
+	_, err = featureValueAtPath(t, ctx, inst, "asm.child")
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Fatalf("materialize asm.child: err = %v, want %v", err, ErrUnroutableSend)
+	}
+	if pending := ctx.PendingMessages(); len(pending) != 0 {
+		t.Errorf("pending messages = %+v, want none", pending)
+	}
+}
+
+// testSendFanOutToAPortThatFailsToMaterialize: a send fanning out over two
+// connectors, where the second receiving port cannot be materialized, is
+// reported as that failure and leaves no copy queued for the first — a retry
+// must not find the earlier copy already there.
+func testSendFanOutToAPortThatFailsToMaterialize(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;`+directedPorts+`
+		part def Good { port in : ~Chan; }
+		part def Bad { port in : ~Chan = 1 / 0; }
+		part def Hub {
+			port command : Chan;
+			part good : Good;
+			part bad : Bad;
+			connect command to good.in;
+			connect command to bad.in;
+		}
+		part hub : Hub {
+			action ship {
+				first start;
+				action sender { send 9 via command; }
+				done;
+				succession first start then sender;
+				succession first sender then done;
+			}
+		}
+	}`))
+	hub, err := ctx.Instantiate(oneSymbol(t, idx, "P::hub"))
+	if err != nil {
+		t.Fatalf("instantiate hub: %v", err)
+	}
+	_, err = ctx.ExecuteActionPerformedBy(oneSymbol(t, idx, "P::hub::ship"), hub, nil)
+	if !errors.Is(err, ErrDivisionByZero) {
+		t.Fatalf("execute action: err = %v, want the port's %v", err, ErrDivisionByZero)
+	}
+	if pending := ctx.PendingMessages(); len(pending) != 0 {
+		t.Errorf("pending messages = %+v, want none", pending)
+	}
+}
+
+// testAcceptViaAPortThatFailsToMaterialize: a machine whose accept names a port
+// that cannot be materialized leaves a message of another signal in flight
+// untouched, and reports the port's failure when a message of its own signal
+// arrives, rather than consuming either silently.
+func testAcceptViaAPortThatFailsToMaterialize(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;`+directedPorts+`
+		part def Listener {
+			port in : ~Chan = 1 / 0;
+			exhibit state sm {
+				entry; then Idle;
+				state Idle { accept v : Integer via in then Got; }
+				state Got;
+			}
+		}
+		part listener : Listener;
+	}`))
+	listener, err := ctx.Instantiate(oneSymbol(t, idx, "P::listener"))
+	if err != nil {
+		t.Fatalf("instantiate listener: %v", err)
+	}
+	exec, err := ctx.CreateStateExecutorFor(oneSymbol(t, idx, "P::Listener::sm"), listener)
+	if err != nil {
+		t.Fatalf("create state executor: %v", err)
+	}
+	// Delivered to a port object by identity, under a name the accept does not
+	// use, so only materializing `in` can tell whether it is the same port.
+	viaPort := func(signal string, value Value) Message {
+		return Message{SignalType: signal, Port: "other", Object: listener.ID, PortID: -1,
+			Delivery: DeliverPort, Payload: map[string]Value{"value": value}}
+	}
+	ctx.PostMessage(viaPort("String", NewStringValue("not for you")))
+	if exec.HasPendingSignal() {
+		t.Fatal("a String is not the Integer the accept names, yet the machine claims it")
+	}
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run with only a String in flight: %v", err)
+	}
+	if pending := ctx.PendingMessages(); len(pending) != 1 || pending[0].SignalType != "String" {
+		t.Fatalf("pending messages = %+v, want the String still in flight", pending)
+	}
+	ctx.PostMessage(viaPort("Integer", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 4}}))
+	if !exec.HasPendingSignal() {
+		t.Fatal("an Integer that may be for the accept is not claimed")
+	}
+	err = exec.RunToCompletion()
+	if !errors.Is(err, ErrDivisionByZero) {
+		t.Fatalf("run with an Integer in flight: err = %v, want the port's %v", err, ErrDivisionByZero)
+	}
+	if visits := exec.GetStateVisits(); len(visits) != 1 || visits[0] != "Idle" {
+		t.Errorf("state visits = %v, want [Idle]", visits)
+	}
+	if pending := ctx.PendingMessages(); len(pending) != 2 || pending[0].SignalType != "String" || pending[1].SignalType != "Integer" {
+		t.Errorf("pending messages = %+v, want the String then the Integer still in flight", pending)
+	}
+}
+
+// testActionAcceptViaAPortThatFailsToMaterialize: the action-node counterpart
+// of the machine case above: a parked accept whose port cannot be materialized
+// leaves a message of another signal in flight and stays parked, and reports
+// the port's failure only for a message of its own signal.
+func testActionAcceptViaAPortThatFailsToMaterialize(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;`+directedPorts+`
+		part def Listener {
+			port in : ~Chan = 1 / 0;
+			action listen {
+				first start;
+				action reader accept v : Integer via in;
+				done;
+				succession first start then reader;
+				succession first reader then done;
+			}
+		}
+		part listener : Listener;
+	}`))
+	listener, err := ctx.Instantiate(oneSymbol(t, idx, "P::listener"))
+	if err != nil {
+		t.Fatalf("instantiate listener: %v", err)
+	}
+	exec, err := ctx.CreateActionExecutorFor(oneSymbol(t, idx, "P::Listener::listen"), listener)
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+	for i := 0; i < 10 && exec.State() != StateWaiting; i++ {
+		if err := exec.Step(); err != nil {
+			t.Fatalf("step %d: %v", i, err)
+		}
+	}
+	if exec.State() != StateWaiting {
+		t.Fatalf("state = %v, want %v", exec.State(), StateWaiting)
+	}
+	viaPort := func(signal string, value Value) Message {
+		return Message{SignalType: signal, Target: "reader", Port: "other", Object: listener.ID, PortID: -1,
+			Delivery: DeliverPort, Payload: map[string]Value{"value": value}}
+	}
+	ctx.PostMessage(viaPort("String", NewStringValue("not for you")))
+	if exec.HasPendingSignal() {
+		t.Fatal("a String is not the Integer the accept names, yet the action claims it")
+	}
+	if err := exec.Step(); err != nil {
+		t.Fatalf("step with only a String in flight: %v", err)
+	}
+	if exec.State() != StateWaiting {
+		t.Fatalf("state = %v, want still %v", exec.State(), StateWaiting)
+	}
+	if pending := ctx.PendingMessages(); len(pending) != 1 || pending[0].SignalType != "String" {
+		t.Fatalf("pending messages = %+v, want the String still in flight", pending)
+	}
+	ctx.PostMessage(viaPort("Integer", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 4}}))
+	err = exec.RunToCompletion()
+	if !errors.Is(err, ErrDivisionByZero) {
+		t.Fatalf("run with an Integer in flight: err = %v, want the port's %v", err, ErrDivisionByZero)
+	}
+	if pending := ctx.PendingMessages(); len(pending) != 2 || pending[0].SignalType != "String" || pending[1].SignalType != "Integer" {
+		t.Errorf("pending messages = %+v, want the String then the Integer still in flight", pending)
 	}
 }
 
@@ -3914,7 +4115,8 @@ func testCalcUnboundParameter(t *testing.T) {
 
 // testCalcCallsAnUnimportedExtensionFunction: `exp(x)` with no import of the
 // OpenSysML extension library is reported unresolved by name resolution, so the
-// call fails with a typed error naming the import rather than being answered.
+// call fails with a typed error naming the declaration whose package an import
+// would make visible, rather than being answered.
 func testCalcCallsAnUnimportedExtensionFunction(t *testing.T) {
 	src := `
 		package test {
@@ -3924,7 +4126,7 @@ func testCalcCallsAnUnimportedExtensionFunction(t *testing.T) {
 			}
 		}
 	`
-	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
 	rootScope := idx.DocumentRoot("<test>")
 	sym := findSymbolByName(rootScope, "grow", ast.DefCalc)
 	if sym == nil {
@@ -3934,13 +4136,61 @@ func testCalcCallsAnUnimportedExtensionFunction(t *testing.T) {
 	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 1}}
 	result, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
 	if err == nil {
-		t.Fatalf("expected an out-of-scope error, calc returned %+v", result)
+		t.Fatalf("expected an unresolved-reference error, calc returned %+v", result)
 	}
-	if !errors.Is(err, ErrUnimportedExtensionFunction) {
-		t.Fatalf("expected ErrUnimportedExtensionFunction, got: %v", err)
+	if !errors.Is(err, ErrUnresolvedReference) {
+		t.Fatalf("expected ErrUnresolvedReference, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "import OpenSysMLMathFunctions::*;") {
-		t.Errorf("error %q does not name the import that makes the call legal", err)
+	if want := ": unresolved reference: exp — did you mean OpenSysMLMathFunctions::exp?"; !strings.HasSuffix(err.Error(), want) {
+		t.Errorf("error %q does not end in %q", err, want)
+	}
+}
+
+// testCalcCallsAnUnimportedLibraryFunction: `wheels->size()` in a model that
+// imports no part of SequenceFunctions is reported unresolved by name
+// resolution, so the call fails with a typed error carrying the validator's own
+// hint — the library declarations of that name, whose package an import would
+// make visible — rather than being answered by dispatch on the bare name. The
+// same body evaluates once the import is written.
+func testCalcCallsAnUnimportedLibraryFunction(t *testing.T) {
+	model := func(imports string) string {
+		return `
+		package test {
+			` + imports + `
+			attribute wheels : Integer[*] = (1, 2, 3, 4);
+			calc count {
+				wheels->size()
+			}
+		}
+	`
+	}
+
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, model("")))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "count", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("count calc not found")
+	}
+	result, err := ctx.InvokeCalc(sym, nil, rootScope)
+	if err == nil {
+		t.Fatalf("expected an unresolved-reference error, calc returned %+v", result)
+	}
+	if !errors.Is(err, ErrUnresolvedReference) {
+		t.Fatalf("expected ErrUnresolvedReference, got: %v", err)
+	}
+	if want := ": unresolved reference: size — did you mean SequenceFunctions::size or CollectionFunctions::size?"; !strings.HasSuffix(err.Error(), want) {
+		t.Errorf("error %q does not end in %q", err, want)
+	}
+
+	idx, _, ctx = buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, model("private import SequenceFunctions::*;")))
+	rootScope = idx.DocumentRoot("<test>")
+	sym = findSymbolByName(rootScope, "count", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("count calc not found")
+	}
+	result, err = ctx.InvokeCalc(sym, nil, rootScope)
+	if err != nil || result.Kind != ValConst || result.Const.Int != 4 {
+		t.Fatalf("wheels->size() under import SequenceFunctions::* = %+v, %v; want 4", result, err)
 	}
 }
 
@@ -5365,13 +5615,14 @@ func parseAndBuild(t *testing.T, src string) *ast.RootNamespace {
 func testLibraryFunctionOutsideItsDomain(t *testing.T) {
 	src := `
 		package test {
+			private import RealFunctions::*;
 			calc root {
 				in x : Real;
 				return : Real = sqrt(x);
 			}
 		}
 	`
-	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
 	rootScope := idx.DocumentRoot("<test>")
 	sym := findSymbolByName(rootScope, "root", ast.DefCalc)
 	if sym == nil {

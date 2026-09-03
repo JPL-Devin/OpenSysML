@@ -114,6 +114,7 @@ exclude_docs: |
   project/performance-census-2026-09.md
   project/execution-performance-2026-09.md
   project/performance-profile-2026-09.md
+  project/native-compilation.md
   project/releasing.md
   project/macos-distribution.md
   project/demo.md
@@ -168,6 +169,7 @@ nav:
       - Java API: reference/java-api.md
       - Rust API: reference/rust-api.md
       - Service transports: reference/service-transports.md
+      - Wire contract: reference/wire-contract.md
       - RDF mapping: reference/rdf-mapping.md
       - Grammar: reference/grammar/README.md
       - Grammar conformance audit: reference/grammar/conformance-audit.md

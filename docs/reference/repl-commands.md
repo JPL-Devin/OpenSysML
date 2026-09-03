@@ -22,21 +22,21 @@ quoted segment containing a space and a quoted segment in the middle of a chain:
 | `%budget` | Show the five bounds one run may spend, each with the variable that raises it |
 | **Library Discovery** | |
 | `%search <substring>` | List the declared and library symbols whose qualified name contains the substring, with the kind of each |
-| `%builtins` | List the library functions the runtime implements directly (`sqrt`, `abs`, `max`, `floor`, `x->isEmpty()`, `x->sum()` …) |
+| `%builtins` | List the library functions the runtime implements directly (`sqrt`, `abs`, `max`, `floor`, `x->isEmpty()`, `x->sum()` …), each with the package an `import` must name for its bare name to resolve; the qualified name (`RealFunctions::sqrt(2.0)`) resolves anywhere |
 | `%view <name>` | Show what a view exposes: its own `expose` relationships plus the protected ones of the views it specializes, the views nested in it (each with its own exposed set), and its conformance to every viewpoint it satisfies. Conformance is a verdict of `conforms`, `violated` or `unevaluable` per viewpoint and per framed concern, with the reason, the exposed element a concern's condition failed for, and `(from <view>)` where the `satisfy` is inherited. Asking about an element that is not a view says so |
 | `%render <name> [form]` | Render a view's exposed set in the kind its `render` member states: a containment tree with nested views as subtrees, an interconnection diagram of the exposed parts and the connections between them, a state machine's states and transitions, an action's nodes and successions, or a table of the exposed elements and what they declare. A view with no `render` member renders as a tree. Output is indented text by default, or the machine-readable form of the kind: a [Mermaid](#rendering-a-view) diagram with `mermaid`, a Markdown table with `markdown`. Asking for a form the kind cannot be written in tells you which form it uses. Read-only: it creates no object and leaves a `%action`/`%state` debugging session running. A view that exposes nothing renders empty and says so; a rendering kind this build does not produce is reported by kind and view rather than rendered as something else; an element the rendering cannot represent is reported, not dropped |
 | **Instantiation & Inspection** | |
 | `%instantiate <name>` | Create an object of a part definition and start the behaviors its type exhibits or performs. Each object runs its own machine, initialized after its feature values are built and run until it is quiescent. A second `%instantiate` of the same name creates a new object, and the name then refers to that one. A later submission keeps the object's identity but restarts its behaviors from their initial states, and says so |
-| `%features <name>` | Show what an object holds for each feature of its type |
+| `%features <name> [all\|depth <n>] [json]` | Show what an object holds for each feature of its type. Reading a feature value builds the objects it holds, so the listing is bounded by default — 200 lines, nesting 8 deep — and a listing cut short says which form shows the rest. `all` lifts both bounds and reads the whole tree out; `depth <n>` bounds nesting at `n` levels and lifts the size bound, naming what it did not expand (`machine : Machine (not expanded: depth 1)`). `json` writes the object and everything reachable from it as one document in the shape the API's `Instantiate` returns (`instance`, `instances`, `diagnostics`), bounded by default at 1000 objects, with a graph cut short reported as a `warning` diagnostic. `all`/`depth` and `json` combine (`%features ctx all json`); `all` and `depth` together, a missing or negative depth, and an unknown word are errors naming the usage |
 | `%instances` | List all created objects |
-| `%eval <expr>` | Evaluate expression, in the last namespace the session declared |
+| `%eval <expr>` | Evaluate expression, in the last namespace the session declared; a library function is reached by its bare name only where that namespace imports its package, as the checker resolves it, and by its qualified name anywhere |
 | `%eval in <name> : <expr>` | Evaluate expression in the named element's own namespace, or, when an object has been instantiated under that name, on that object, so that a feature reads its value. The separator is the first `:` outside a quoted name that is not part of a `::`, so `%eval in Demo : Vehicle::mass` works |
 | **Behavioral Execution** | |
 | `%calc <name> [args...]` | Invoke calculation with arguments |
 | `%run-query <name> [<p>=<expr>...]` | Execute a document query (a `calc def` specializing `DocumentQueries::Query`) and print its rows and projected cells. A projection lists declared property names and may add computed columns: `Column(name = "<column>", expression = <expr>)` entries evaluated once per row over the row element's features, with arithmetic (`+`, `-`, `*`, `/`), string concatenation and `??` defaults for absent values. A column expression that fails (including a reference that resolves to no value and has no `??` default) fails the query with a typed error rather than producing an empty cell. Each binding is written as `<parameter>=<expression>`; a name binds the element it refers to, anything else is evaluated as an expression. Named query invocation and relationship traversal (`RelatedElements` over specialization, subsetting, redefinition, typing, connection, allocation, satisfaction and verification edges, outgoing or incoming) are supported; a parameter default written as an expression is reported as an error, since the engine does not evaluate those yet. See the [query cookbook](../manual/query-cookbook.md) |
 | `%render-document <name>` | Compile a document definition (a `part def` specializing `DocumentQueries::Document`), run its queries against the model and print the rendered Markdown. A document binds its queries' parameters in the model, so the name is the whole invocation. The output is deterministic CommonMark: the title and sections as ATX headings; paragraphs from text runs (`Span` runs with a `plain`/`emphasis`/`strong`/`code` style, `Link` runs to a URL, `Ref` runs linking to another content block's anchor, and query-produced values styled through nested `SpanColumn`/`LinkColumn` column runs); GitHub-flavored pipe tables with the projected column names (one subtable per group value when the table has a `groupBy` column); bullet and numbered lists; diagram blocks as fenced ` ```mermaid ` blocks rendered through the view engine (a table-kind view as a pipe table), with an optional caption and `TB`/`LR`/`RL`/`BT` flow direction. Markdown metacharacters in content are escaped. Markdown is the only form the REPL writes; the CLI's `-doc-form html` renders the same document tree as semantic HTML ([Rendering a document as HTML](cli.md#rendering-a-document-as-html)) and `-doc-form pdf` converts the Markdown to PDF ([Rendering a document as PDF](cli.md#rendering-a-document-as-pdf)). See the [document generation manual](../manual/README.md) |
 | `%constraint <name>` | Evaluate constraint (assert/assume) |
-| `%invoke <object> <op> [<p>=<expr>]` | Invoke an operation of an object's type (an action it owns), performed by that object, with each argument written as `<parameter>=<expression>`. Assignments in the body write that object's feature values; declared outputs are reported. Not yet supported: an operation given as a `calc` or `constraint`, and positional arguments |
+| `%invoke <object> <op> [<p>=<expr>]` | Invoke an operation of an object's type (an action it owns), performed by that object, with each argument written as `<parameter>=<expression>`. The object is an [object argument](#object-arguments): a top-level name, a feature path such as `driver.r`, or an id such as `#3`. Assignments in the body write that object's feature values; declared outputs are reported. Not yet supported: an operation given as a `calc` or `constraint`, and positional arguments |
 | `%requirement <name>` | Evaluate requirement (subject/assume/require/actor) |
 | `%satisfy [name]` | Evaluate satisfaction assertions of the model, or of one element |
 | `%check <name>` | **Experimental.** Ask an external SMT solver whether a constraint, requirement or satisfaction assertion *can* be satisfied, and on `sat` print an assignment. Reports `sat`, `unsat` or `unknown`, kept distinct. Needs `z3` or `cvc5` on `PATH` (or `OPENSYSML_SMT`; see [installing a solver](../guide/01-install.md#installing-a-solver-optional)) and reports an error rather than a verdict when none is installed. Satisfiability is not evaluation: use `%constraint`/`%satisfy` to find out what holds for an object |
@@ -52,14 +52,52 @@ quoted segment containing a space and a quoted segment in the middle of a chain:
 | `%break <node>` | Set a breakpoint at a node |
 | `%stop` | Stop the current debugging session |
 | **State machine debugging** ([guide chapter 6](../guide/06-behavior.md)) | |
-| `%state <name> [<object>]` | Debug the machine an object exhibits (`%state <part>` after `%instantiate <part>` attaches to that object's own running machine), or start a state machine, optionally performed by an instantiated object. `%step`, `%advance`, `%current` and `%events` then drive that object's machine, and `%features` shows what it wrote |
-| `%events` | Show the event queue |
+| `%state <name> [<object>]` | Debug the machine an object exhibits (`%state <part>` after `%instantiate <part>` attaches to that object's own running machine), or start a state machine, optionally performed by an instantiated object. Naming the machine the object exhibits (`%state Rover::modes rover`) attaches to that running machine too, with a note saying so, rather than performing it a second time against the same feature values; only a machine the object does not exhibit is started as a detached performance. A definition the object exhibits as the body of several usages names no one machine, so `%state` refuses and names the exhibited usages to name instead. The object is an [object argument](#object-arguments): a top-level name, a feature path such as `driver.r`, or an id such as `#3`. `%step`, `%advance`, `%current` and `%events` then drive that object's machine, and `%features` shows what it wrote |
+| `%send <signal>[(<p>=<expr>, ...)] [to <object>]` | Send a signal to an object's machine through the runtime's own message bus, as `send <signal>(...) to <object>` from an action would. `<signal>` is a definition the model declares (an `attribute def`, `item def` or other signal-like definition; qualified names allowed), or a bare name an active `accept` matches by name when no declaration types it. Each argument is written `<parameter>=<expression>` as for `%invoke`, evaluated at the prompt, and must name a feature the signal carries with a value that feature admits (its type and multiplicity, checked before anything is sent); a feature left out is left unset. Without `to`, the target is the object whose machine the current `%state` session is debugging, and with no session the command says so rather than guessing. The signal is refused, with the machine's current state, when no machine of the object accepts it there, or when the guard of every transition it triggers is false — decided as the dispatch would decide it, the payload bound, so a guard that reads it is honoured; a guard that cannot be evaluated is an error. A signal the current state defers rather than accepts is sent and reported as deferred: the step dispatching it holds it (`%events` lists it as held) until the machine reaches a state that accepts it, when it is recalled and fires. Otherwise it is in flight (shown by `%events`) until `%step` or `%advance` dispatches it, and the transition it triggers fires as it would for a send from an action; should the state or the data a guard reads change before the dispatch, the step that drops the signal says so. An object running several machines is sent the signal as a whole: `%send` reports each machine that would fire on or defer it, a machine whose guards would drop it leaves it in flight for a sibling that would not, and the report says when the machine being debugged is such a one |
+| `%state <name> [<object>]` | Debug the machine an object exhibits (`%state <part>` after `%instantiate <part>` attaches to that object's own running machine), or start a state machine, optionally performed by an instantiated object. `%state <machine> <object>` first looks at what the object already runs: when it exhibits a running machine that *is* or is *typed by* `<machine>`, the debugger attaches to that machine and says so, so the object never runs two of them; only an object that exhibits no such machine gets a new executor, and the report says that too. `%step`, `%advance`, `%current` and `%events` then drive that object's machine, and `%features` shows what it wrote |
 | `%current` | Show the current state and configuration |
 | `%advance <time>` | Advance simulation time by `<time>` units, processing every event due |
 | **Control** | |
 | `%quit` | Exit the REPL |
 | `Tab` | Complete meta commands, symbol names (after `%print`, `%instantiate`, `%features` …), the form after `%render <name>`, and file paths after `%load` and `%save` |
 | `Ctrl-D` | Exit REPL |
+
+## Object arguments
+
+`%features`, `%invoke` and `%state` take an object the session holds, written in any of three
+ways:
+
+- the name it was instantiated under (`rover`, `Fleet::rover`);
+- a feature path from such a name, following the parts an object holds (`driver.r`,
+  `driver.r.motor`, or `Fleet::driver::r`);
+- the identity the prompt prints for it (`#3`, from `ID: 3` or `object #3`).
+
+A qualified path is read as typed: with both `Fleet::Driver` and `Fleet::driver` instantiated,
+`Fleet::driver::r` is the usage's part, not the definition's, although the feature `r` is
+declared in `Fleet::Driver`. A member of a multi-valued part (`part bays : Rover[2]`) is reached
+by no path, since `garage.bays` holds all of them: the prompt names such an object by its
+identity alone, and `%state #3` debugs its machine.
+
+A path that stops short of an object is an error naming the segment that reached none and
+why: `Fleet::driver.x reaches no object at "x": object #1 of "Fleet::driver" has no feature
+"x"`, or `… at "level": feature "level" of object #2 holds 10, which is not an object`. A
+segment whose feature value the runtime could not materialize keeps the runtime's reason: `… at
+"spare": feature "spare" of object #1 could not be materialized: … multiplicity violation …`. An
+id the session holds no object under is `no object #99 in this session`.
+
+An id denotes only an object the session holds: one it named, or one a materialized feature of
+such an object holds. Instantiating a name a second time makes a new object and leaves the
+earlier one unnamed (`object #1 is no longer named`), so `#1` then reaches nothing: `no object
+#1 in this session: it was superseded, and nothing the session names reaches it`. A debugging
+session over the superseded object ends with that `%instantiate`, with a `note:` saying so.
+
+A name nothing was instantiated under says what to instantiate. A usage whose definition alone
+has an object (`%instantiate Fleet::Rover` when `%state … Fleet::rover` wanted the usage) is
+reported as `no instance of the usage "Fleet::rover": object #1 of "Fleet::Rover" is of its
+definition "Fleet::Rover", not of the usage — use %instantiate Fleet::rover to create the
+usage's object, or name Fleet::Rover to address it`; a definition whose only objects are
+usages typed by it names those usages the same way. With no related object, the error is
+`no instance of "Fleet::rover" (use %instantiate first)`.
 
 ## Rendering a view
 

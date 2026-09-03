@@ -9,11 +9,14 @@ elmt:Modifiers
     sysml:qualifiedName "Modifiers" ;
     sysml:elementId "Modifiers" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Modifiers" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Modifiers__Hidden, elmt:Modifiers__Shown, elmt:Modifiers__Base, elmt:Modifiers__Derived, elmt:Modifiers__Choice ;
     sysml:ownedMembership elmt:Modifiers__Hidden_om, elmt:Modifiers__Shown_om, elmt:Modifiers__Base_om, elmt:Modifiers__Derived_om, elmt:Modifiers__Choice_om ;
-    sysml:ownedRelationship elmt:Modifiers__Hidden_om, elmt:Modifiers__Shown_om, elmt:Modifiers__Base_om, elmt:Modifiers__Derived_om, elmt:Modifiers__Choice_om .
+    sysml:ownedRelationship elmt:Modifiers__Hidden_om, elmt:Modifiers__Shown_om, elmt:Modifiers__Base_om, elmt:Modifiers__Derived_om, elmt:Modifiers__Choice_om ;
+    sysx:sourceText "package Modifiers {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:Modifiers__Hidden
     a sysml:PartDefinition ;
@@ -25,7 +28,8 @@ elmt:Modifiers__Hidden
     sysml:owningRelationship elmt:Modifiers__Hidden_om ;
     sysml:owningMembership elmt:Modifiers__Hidden_om ;
     sysml:declaredName "Hidden" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    private part def Hidden;\n" .
 
 elmt:Modifiers__Hidden_om
     a sysml:OwningMembership ;
@@ -48,7 +52,8 @@ elmt:Modifiers__Shown
     sysml:owningRelationship elmt:Modifiers__Shown_om ;
     sysml:owningMembership elmt:Modifiers__Shown_om ;
     sysml:declaredName "Shown" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    public part def Shown;\n" .
 
 elmt:Modifiers__Shown_om
     a sysml:OwningMembership ;
@@ -72,7 +77,8 @@ elmt:Modifiers__Base
     sysml:owningMembership elmt:Modifiers__Base_om ;
     sysml:declaredName "Base" ;
     sysml:isAbstract "true"^^xsd:boolean ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    abstract part def Base;\n" .
 
 elmt:Modifiers__Base_om
     a sysml:OwningMembership ;
@@ -95,7 +101,8 @@ elmt:Modifiers__Derived
     sysml:owningMembership elmt:Modifiers__Derived_om ;
     sysml:declaredName "Derived" ;
     sysml:specializes elmt:Modifiers__Base ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    part def Derived :> Base;\n" .
 
 elmt:Modifiers__Derived_om
     a sysml:OwningMembership ;
@@ -118,7 +125,8 @@ elmt:Modifiers__Choice
     sysml:owningMembership elmt:Modifiers__Choice_om ;
     sysml:declaredName "Choice" ;
     sysml:isVariation "true"^^xsd:boolean ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    variation part def Choice;\n" .
 
 elmt:Modifiers__Choice_om
     a sysml:OwningMembership ;

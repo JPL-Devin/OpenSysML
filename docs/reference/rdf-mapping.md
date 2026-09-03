@@ -12,11 +12,11 @@ of the following is a deliberate property of the mapping rather than a defect to
 report:
 
 - **What is not mapped is refused, not partly converted**, and the refusal names
-  the construct. 268 of the 345 models under `examples/` (committed, training and
-  pilot corpora) convert to Turtle; the other 77 are refused. Of the 268, a second
-  conversion of the written-back notation reproduces the graph for 237 (166
-  byte-for-byte, 71 up to the whitespace inside `sysx:sourceText`), differs for
-  14, and 17 cannot be written back or re-read at all. These figures are the
+  the construct. 275 of the 345 models under `examples/` (committed, training and
+  pilot corpora) convert to Turtle; the other 70 are refused. Of the 275, a second
+  conversion of the written-back notation reproduces the Turtle byte for byte for
+  274 — the notation is written from the [source text](#source-text) the graph
+  carries — and 1 cannot be written back. These figures are the
   per-file ratchet in `internal/core/export/corpus_roundtrip_test.go`, described
   in [rdf-corpus-roundtrip.md](../project/rdf-corpus-roundtrip.md). See
   [Behavior](#behavior) and [Limitations](#limitations).
@@ -204,7 +204,8 @@ The `sysx:` properties:
 |----------|---------------|
 | `sysx:memberIndex` | Declaration order. The notation is sensitive to the order of members; an RDF graph is an unordered set, so the index is what lets a conversion back to notation reproduce the original sequence. |
 | `sysx:hasBody` | Distinguishes `part def A;` from `part def A { }`, which are different source and would otherwise convert back identically. |
-| `sysx:sourceText` | The verbatim source of the constructs described under *Limitations*. |
+| `sysx:sourceText`, `sysx:sourceTail` | The element's lines as written, comments and blank lines included, which a conversion back to notation prefers while they still state what the graph states. An element with members carries the lines ahead of them as its text and those after them as its tail. See [Source text](#source-text). |
+| `sysx:sourceLanguage` | On each root element, the grammar the file was written in — `sysml` or `kerml` — so the text is read back under the grammar it was written under. Absent for a buffer with no model extension (standard input, a REPL session), which the parser reads as SysML with KerML's `all` prefix. See [Source text](#source-text). |
 | `sysx:declaredKeyword` | The kind keyword as written, when it is one of the synonyms several keywords share (`datatype` and `attribute`, `function` and `calc`, `snapshot` and `occurrence`). The AST records one kind for all of them, so without this the notation would come back rewritten. Also the keyword a constraint body's condition is stated with (`assert`, `assume`, or absent for a bare condition, which asserts implicitly). |
 | `sysx:declaredPrefix` | The keyword qualifying the kind keyword after it — the `assert` of `assert constraint c : C`. It says what the declaration is for, and the AST kind alone does not carry it. |
 | `sysx:endForm` | The notation an end-binding head writes its ends in — `to`, `nary`, `equals`, `firstThen`, `fromTo`, `flowTo`, `satisfy`, `then` — so the head is rebuilt from the graph rather than read back from its text. See [End-binding heads](#end-binding-heads). |
@@ -227,6 +228,92 @@ standard metaclasses: `sysx:Alias`, `sysx:FilterMember`,
 Comments, documentation and textual representations convert as their own
 elements (`sysml:Comment`, `sysml:Documentation`, `sysml:TextualRepresentation`)
 carrying `sysml:body`.
+
+### Source text
+
+Every element carries the notation it was written as, so a conversion back to
+notation can return the file rather than a canonical rendering of it. The text
+is the element's **lines**, trivia included: the `//` and `/* */` comments and
+blank lines ahead of a member belong to it, and a comment on its last line too.
+An element with members carries the lines ahead of its first member as
+`sysx:sourceText` and those after its last as `sysx:sourceTail`, since the
+members carry their own; a `package P { … }` is written as its head, its
+members in `sysx:memberIndex` order, and its `}`. A member written on its
+owner's own lines — an accept's payload (`accept sig : Cmd;`), the branches of
+an `if` — carries no text of its own: it is part of its owner's text, and an
+edit to it rebuilds the owner whole rather than splicing one line. A succession
+written as the `then` ahead of its target is likewise part of the target's
+text: a succession added to or removed from the graph rebuilds that target.
+Expression nodes carry `sysx:sourceText` too, as described under
+[Expressions](#expressions).
+
+The text is the notation **as the formatter writes it**: the encoder formats the
+file before slicing it, and the decoder formats what it writes back, so a
+formatted file — what `sysml -fmt` and a save to `.sysml` produce — converts to
+RDF and back **byte for byte**, and an unformatted one comes back formatted, as
+it would from a save. Tokens are never rewritten by either step, so a synonym
+(`:>` for `specializes`, `datatype` for `attribute def`), an unusual member
+order, or a reference written relative to another scope all come back as
+written.
+
+**The graph is authoritative.** The text is a rendering of the structural
+triples, not a second copy of the model, and the decoder checks it before
+trusting it: the candidate notation is converted back to RDF and compared with
+the graph being read, source text aside. The candidate is read under the
+grammar the roots record as `sysx:sourceLanguage`, since KerML text can read
+clean as SysML and mean something else (`binding [1] a = b` names the binding
+`a` there); a root recording no language was read as a buffer with no
+extension, and its text is read as one again, `all` as a prefix rather than a
+name. Roots recording different languages are not read at all, and the graph
+is written canonically. `sysx:memberIndex` is set aside too:
+the notation lists members in index order whatever the numbers, so a member
+removed from the middle of a body leaves those after it standing as written,
+their indices no longer running on from zero. Each triple the two disagree on is
+charged to the nearest element whose text it falls under — or to the outermost
+expression node written from its text — which is then written in canonical
+notation instead, and the notation is built and checked again until the two
+graphs agree. So a graph edited after it was written (a flag set, a value
+changed, a member removed, an id or `ProjectRef` dropped) comes back stating
+the edit, with the stale text replaced only where it was stale:
+
+```sysml
+// The rover, as modelled.
+package Rover {
+    /* Definitions come first. */
+    part def Wheel :> Part; // a synonym the printer would spell out
+    abstract part def Hub;
+
+    part def Vehicle {
+        doc /* what a vehicle is for */
+        part wheels : Wheel[4]; // four of them
+    }
+}
+```
+
+Here `sysml:isAbstract` was added to `Hub` after the export: its line — and the
+note that was written above it — is rebuilt from the graph, and every other
+line is kept, the blank line after it included, since that belongs to
+`Vehicle`. Text that no longer parses, or whose disagreement cannot be placed on
+one element, demotes every element to canonical notation rather than writing
+an invalid or contradictory file; one that lands on notation already rebuilt is
+the graph's own (a `declaredName` edited without its `qualifiedName`) and
+demotes nothing further. Identity annotations follow the same rule:
+text that still carries its `@IdentityMetadata::ElementId` or `ProjectRef` is
+kept as written, and text that has lost one is rebuilt with the annotation the
+graph states, exactly as a graph without text is written
+([Element identity](#element-identity)).
+
+**A graph without source text converts to canonical notation**, unchanged from
+before: a graph from another tool, or one with `sysx:sourceText` stripped, is
+written from its structural triples alone, with trivia gone and every keyword
+spelled canonically. That path is what the round-trip tests exercise — see
+[Limitations](#limitations) — and this one adds to it rather than replacing it.
+
+Tests: `verbatim_test.go` (byte-for-byte return, the stripped graph's canonical
+notation, an edited flag, an edited expression, an edited string, an edited
+accept payload, a removed member, an added and a removed `then`, dropped
+identity annotations, text that does not parse) and `export_test.go`
+(`TestGoldenConversions` locks both notations for every fixture).
 
 ### Ownership
 
@@ -345,8 +432,10 @@ The rules the tree follows:
   never ends in a lone `_`.
 - **Every node carries `sysx:sourceText`**, the notation it was written as. The
   tree is *additive*: the text is what a conversion back to notation is written
-  from, so exactness does not depend on the tree being complete, and
-  `TestRoundTripIsLossless` covers the same round trip it did before.
+  from while it still states the tree ([Source text](#source-text)), so
+  exactness does not depend on the tree being complete, and
+  `TestRoundTripIsLossless` covers the same round trip it did before. A node
+  whose tree was edited after export is written back from the tree instead.
 - **Operands are ordered** by `sysx:argumentIndex`, because an RDF graph is a set
   and `a - b` is not `b - a`.
 - **Metaclasses are the standard ones** where the metamodel names them:
@@ -357,6 +446,11 @@ The rules the tree follows:
   `MetadataAccessExpression`, `Expression` for a body. `sysx:operator`,
   `sysx:argumentIndex` and `sysx:sourceText` are the properties the metamodel
   does not define.
+- **A `LiteralString` carries its value**, the escapes of the notation read: a
+  `"say \"hi\""` in the file is `sysml:value "say \"hi\""` in Turtle, and a
+  value edited in the graph is written back as the literal that reads to it.
+  Control characters are written with Turtle's own escapes (`\b`, `\f`, `\uXXXX`),
+  so every triple stays a single line of valid Turtle.
 - **A feature reference links to the element** it names (`sysml:referent`) when
   that element is in the graph, and carries its name as a literal when it
   resolves outside it, the same rule the declaration-head relationships follow.
@@ -423,11 +517,6 @@ What is still refused, naming the node:
   shape would mean inferring which node an edge belongs to from member position,
   which could silently reattach edges, so it is reported instead. Nine of the
   eighteen remaining refusals under `examples/` are this shape.
-- **A succession end whose name is not a basic name.** The two-end form the
-  graph is written back as (`succession first a then b;`) is read by the parser
-  only when both ends are basic names, so `succession first 'enter vehicle'
-  then 'drive vehicle';` would not parse. The edge is reported rather than
-  written.
 - **Prefix metadata** (`#Safety part p;`, `@M { … }`) and an **operator
   expression member**, both unchanged from before.
 
@@ -446,21 +535,47 @@ abstract syntax models an expression. A conversion back to notation is written
 from the text each node was written as. A consumer that wants the metamodel's own
 shape does not get it from this mapping.
 
-**Lexical comments do not survive the RDF hop.** `//` and `/* */` trivia is
-attached to no element, so a `notation → RDF → notation` round trip drops it:
+**Lexical comments survive the RDF hop only as source text.** `//` and `/* */`
+trivia is attached to no element in the graph's structure; it comes back because
+the lines carrying it are the `sysx:sourceText` of the member they precede
+([Source text](#source-text)). A graph without that text — from another tool,
+or stripped — drops it:
 
 ```sysml
-// this line is lost through .ttl
+// this line comes back with the source text, and is gone without it
 package Demo {
-    doc /* this is kept: doc is a declaration, not trivia */
+    doc /* this is kept either way: doc is a declaration, not trivia */
     comment about Wheel /* kept for the same reason */
     part def Wheel;
 }
 ```
 
-The `comment` and `doc` keywords declare elements, so they convert both ways.
-Save straight to `.sysml` when the comments matter; that path writes the source
-and keeps everything.
+The `comment` and `doc` keywords declare elements, so they convert both ways. An
+element whose text is stale — its graph was edited after export — is rebuilt
+canonically, and a comment on its lines goes with the text. Save straight to
+`.sysml` when the comments must survive an edit; that path writes the source and
+keeps everything.
+
+**A head comes back in one spelling.** The graph carries what a head declares,
+not how it was spelled, so the notation written back is normalised where the
+notation offers a choice and the model does not:
+
+- A relationship written as a symbol or as its keyword (`:>` or `subsets`,
+  `:>>` or `redefines`, `::>` or `references`) is the same relationship
+  element, so no spelling is recorded and the writer uses one form. This differs
+  from `sysx:declaredKeyword`, which is kept where the notation's synonyms name
+  *different* declarations (`datatype` and `attribute`).
+- The modifiers of a usage are written in the grammar's order (`end #derive r1
+  : R;`, `end ref cause : S[*];`), and a multiplicity goes with the typing
+  clause it qualifies, or with the name when there is none (`composite
+  frontWheel[2] redefines w`). The parser reads the same flags in either order
+  and either position (`export_test.go:TestFixturesComeBackFromTheGraphAlone`).
+- A `doc` or `comment` body is carried with the line endings it was written
+  with, but the notation written back uses the document's own — a body written
+  with CRLF comes back with LF. The text is otherwise verbatim.
+
+A second conversion of the notation written back gives the same graph; only
+`sysx:sourceText`, which quotes the source verbatim, shows the respelling.
 
 ### End-binding heads
 
@@ -499,7 +614,7 @@ expr:P__Car___402.end0
 | `fromTo` | `[of <payload>] from <end0> to <end1>` | `flow of P from a to b` |
 | `flowTo` | `[of <payload>] <end0> to <end1>` | `flow a to b` |
 | `satisfy` | `<requirement>` (the `sysml:subsets` end, written bare) | `satisfy R by v`, `verify R` |
-| `then` | the source end is the member written before it | `then b;`, `then part b;` |
+| `then` | the source end is the nearest member written before it that is not itself an edge | `then b;`, `then part b;` |
 
 A head whose own keyword is the noun form writes a verb ahead of its ends, and
 that verb is `sysx:endVerb` (`connection c connect a to b`). Where the keyword
@@ -545,31 +660,36 @@ the notation leaves unnamed (`then send Show(x) to screen;`, a state's
 (`unnamed-succession-end`) and the encoder used to refuse. Both ends are
 positions in one body, so writing them back is exact: the source end is the
 member before the succession, and a target that *is* that preceding member is
-the declaration the `then` was written ahead of. A graph describing a position the
-notation cannot express (sequencing from a member elsewhere in the body) is
-reported rather than written back somewhere else
+the declaration the `then` was written ahead of.
+
+The member a `then` sequences from is the one the parser gives it: the nearest
+member before it that is not itself an edge. A `flow`, `bind`, `connect`,
+`succession` or `transition` relates other members rather than declaring one,
+so a `then` written after it is read past it, while an `attribute`, a `doc` or
+any other declaration is the source. The writer folds a succession back into
+`then` by the same rule, shared with the parser as `ast.UsageKind.IsEdge`, so
+`action a; flow from a.x to b.x; then action b;` comes back as written. The
+source end is compared as the name the member answers to, which is what the
+parser records: a `first a then b;` sequences from `a`, and a `perform walk;`
+or `action redefines walk;` that declares no name of its own answers to `walk`
+(KerML 7.3.4.5). A graph describing a position the notation cannot express —
+sequencing from an earlier member, or from the flow the `then` is read past —
+is reported rather than written back somewhere else
 (`export_test.go:TestUnnamedSuccessionEndComesBackFromTheGraph`,
-`TestHalfNamedSuccessionInAGraphIsReported`).
+`TestHalfNamedSuccessionInAGraphIsReported`,
+`behavior_test.go:TestThenComesBackPastTheMembersTheParserSkips`,
+`TestThenIsRefusedWhenTheGraphSequencesFromAnotherMember`).
 
 Every body that can carry a succession (definition, usage, action, state,
 including a parallel state's regions, calculation and requirement) reads these
 forms back as the same node, and on the fixtures a second conversion writes the
 same Turtle byte for byte (`export_test.go:TestSuccessionRoundTripsInEveryBody`).
 That is a statement about the fixtures, not the mapping: over the example corpus
-the second hop reproduces the graph exactly for 166 of the 268 files that
-convert, up to `sysx:sourceText` whitespace for 71 more, and differs for the
-rest ([rdf-corpus-roundtrip.md](../project/rdf-corpus-roundtrip.md)). The
-explicit two-ended form reads only basic names, so a succession naming an end
-that needs quotes is reported rather than written as notation the parser would
-reject.
-
-**A reference end is written back in a spelling the parser reads
-differently.** `end [*] ref cause : Situation;` is carried faithfully (the
-graph records `sysml:isReference`) and comes back as
-`end ref attribute cause : Situation[*];`, but the parser records no reference
-flag for a `ref` that follows `end`, so converting *that* notation again drops
-the `ref`. The graph is right; a stable second hop needs the parser to record
-the flag.
+the second hop reproduces the graph for 274 of the 275 files that convert, but
+from the source text they carry, which the corpus gate does not strip
+([rdf-corpus-roundtrip.md](../project/rdf-corpus-roundtrip.md)). An end
+whose name needs quotes (`first a then 'drive vehicle';`) is a reference to the
+element like any other; the writer quotes the name as the notation requires.
 
 **Conditions convert as their notation.** The members that express
 a condition are carried, each as the `sysx:` metaclass named above with its
