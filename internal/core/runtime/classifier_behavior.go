@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -31,6 +32,9 @@ type ObjectBehavior struct {
 	// bindings is the chain from member to Symbol: each element names the next,
 	// so a machine addressed by any of them is this one.
 	bindings []*symbols.Symbol
+	// binding is member's position among the type's behavior bindings, which
+	// outlives the symbols and so tells the behavior a restart puts in its place.
+	binding int
 	// State is the machine the object exhibits, nil for a performed action.
 	State *StateExecutor
 	// Action is the action the object performs, nil for an exhibited machine.
@@ -218,8 +222,27 @@ func (ctx *Context) abandonInstancesSince(mark int) {
 			delete(ctx.occurrences, sym)
 		}
 	}
+	ctx.forgetVariantsNaming(abandoned)
 	ctx.forgetValuesNaming(abandoned)
 	ctx.forgetMessagesTo(abandoned)
+}
+
+// forgetVariantsNaming unselects every variant whose object is abandoned, so the
+// selection is made again, and its object built again, when next read.
+func (ctx *Context) forgetVariantsNaming(abandoned map[int64]bool) {
+	for key, id := range ctx.variantObjects {
+		if !abandoned[id] {
+			continue
+		}
+		delete(ctx.variantObjects, key)
+		if key.variation == nil {
+			continue
+		}
+		selection := variantSelection{owner: key.owner, variation: key.variation.Name}
+		if ctx.selectedVariants[selection] == key.variant.Name {
+			delete(ctx.selectedVariants, selection)
+		}
+	}
 }
 
 // forgetValuesNaming unmaterializes every feature value of a surviving object
@@ -237,15 +260,26 @@ func (ctx *Context) forgetValuesNaming(abandoned map[int64]bool) {
 	}
 }
 
-// namesAbandoned reports whether a feature value holds an object that is gone.
+// namesAbandoned reports whether a feature value holds an object that is gone,
+// directly or as the object a selected variant stands for.
 func namesAbandoned(fv *FeatureValue, abandoned map[int64]bool) bool {
-	if fv.Value.Kind == ValInstance && abandoned[fv.Value.Instance] {
+	if namesAbandonedObject(fv.Value, abandoned) {
 		return true
 	}
 	for _, val := range elementsOf(fv.Values) {
-		if val.Kind == ValInstance && abandoned[val.Instance] {
+		if namesAbandonedObject(val, abandoned) {
 			return true
 		}
+	}
+	return false
+}
+
+// namesAbandonedObject reports whether a value is, or a variant standing for, an
+// object that is gone.
+func namesAbandonedObject(val Value, abandoned map[int64]bool) bool {
+	switch val.Kind {
+	case ValInstance, ValVariant:
+		return abandoned[val.Instance]
 	}
 	return false
 }
@@ -292,7 +326,7 @@ func (ctx *Context) startBehaviorsOfAll(objects []*Instance) error {
 // startBehaviorsOf attaches the object's behaviors and, at the outermost start,
 // runs everything attached.
 func (ctx *Context) startBehaviorsOf(inst *Instance) error {
-	for _, decl := range ctx.classifierBehaviorsOf(inst.Type) {
+	for i, decl := range ctx.classifierBehaviorsOf(inst.Type) {
 		if inst.runsBound(decl.member) {
 			continue
 		}
@@ -303,6 +337,7 @@ func (ctx *Context) startBehaviorsOf(inst *Instance) error {
 		if err != nil {
 			return err
 		}
+		behavior.binding = i
 		inst.behaviors = append(inst.behaviors, behavior)
 		ctx.pendingBehaviors = append(ctx.pendingBehaviors, behavior)
 		ctx.objectBehaviors = append(ctx.objectBehaviors, behavior)
@@ -375,14 +410,20 @@ func (ctx *Context) drainObjectBehaviors() error {
 }
 
 // nextRunnableBehavior returns the next behavior with work to do: one not yet
-// started, else one holding an event delivered while it was suspended.
+// started, else one holding an event delivered while it was suspended. Under a
+// probe only a behavior the probe attached is run: what one outliving the probe
+// does cannot be undone.
 func (ctx *Context) nextRunnableBehavior() (*ObjectBehavior, bool) {
-	if len(ctx.pendingBehaviors) > 0 {
-		behavior := ctx.pendingBehaviors[0]
-		ctx.pendingBehaviors = ctx.pendingBehaviors[1:]
+	first, attached := 0, 0
+	if ctx.probes > 0 {
+		first, attached = min(ctx.probePending, len(ctx.pendingBehaviors)), ctx.probeBehaviors
+	}
+	if first < len(ctx.pendingBehaviors) {
+		behavior := ctx.pendingBehaviors[first]
+		ctx.pendingBehaviors = slices.Delete(ctx.pendingBehaviors, first, first+1)
 		return behavior, true
 	}
-	for _, behavior := range ctx.objectBehaviors {
+	for _, behavior := range ctx.objectBehaviors[attached:] {
 		if behavior.hasPendingWork() {
 			return behavior, true
 		}
@@ -509,6 +550,7 @@ func (ctx *Context) performanceOccurrence(
 			return nil, fmt.Errorf("%w: materialize %s of object #%d: %w",
 				sentinel, name, inst.ID, err)
 		}
+		ctx.noteProbeWrite(fv)
 		fv.Value = Value{Kind: ValInstance, Instance: occurrence.ID}
 		fv.Materialized = true
 		return occurrence, nil
