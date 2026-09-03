@@ -109,6 +109,49 @@ sysml> %calc distance 3 4
   = 25
 ```
 
+**Library functions:**
+
+The KerML function libraries (`RealFunctions::sqrt`, `SequenceFunctions::size`,
+`NumericalFunctions::sum`, …) are ordinary library packages, and an expression reaches one of
+their functions by the same rule the checker applies to every name: the qualified name resolves
+anywhere, and the bare name resolves only where the model imports the package that declares it.
+Evaluation follows the checker, so a call the checker reports as an unresolved reference does not
+evaluate either; the error names the qualified spellings the call may have meant, and importing
+one of those packages makes it resolve.
+
+```sysml
+sysml> package Demo {
+  ...>     attribute wheels : ScalarValues::Integer[*] = (1, 2, 3, 4);
+  ...>     attribute wheelCount = wheels->size();
+  ...> }
+3:36: error: unresolved reference: size — did you mean SequenceFunctions::size or CollectionFunctions::size?
+    attribute wheelCount = wheels->size();
+                                   ^~~~
+
+sysml> %eval Demo::wheelCount
+error: evaluation failed: unresolved reference: size — did you mean SequenceFunctions::size or CollectionFunctions::size?
+
+sysml> %eval SequenceFunctions::size(Demo::wheels)
+✓ SequenceFunctions::size(Demo::wheels)
+  = 4
+
+sysml> package Demo {
+  ...>     private import SequenceFunctions::*;
+  ...>     attribute wheels : ScalarValues::Integer[*] = (1, 2, 3, 4);
+  ...>     attribute wheelCount = wheels->size();
+  ...> }
+✓ package Demo
+note: added to the existing package Demo, replacing attribute wheels, attribute wheelCount
+
+sysml> %eval Demo::wheelCount
+✓ Demo::wheelCount
+  = 4
+```
+
+A `calc` the model declares under a library function's name is what a call resolves to, even where
+the library is also imported. `%builtins` lists every function the build evaluates, each with the
+package an `import` must name for its bare name to resolve.
+
 **Constraints:**
 ```sysml
 sysml> constraint ValidSpeed {
