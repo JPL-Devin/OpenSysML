@@ -37,6 +37,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("node_invocation_too_many_arguments", testNodeInvocationTooManyArguments)
 	t.Run("node_invocation_too_few_arguments", testNodeInvocationTooFewArguments)
 	t.Run("node_invocation_unknown_named_argument", testNodeInvocationUnknownNamedArgument)
+	t.Run("node_invocation_argument_fails_before_defaults", testNodeInvocationArgumentFailsBeforeDefaults)
 	t.Run("performed_action_input_bound_by_nothing", testPerformedActionInputBoundByNothing)
 	t.Run("state_entry_action_input_bound_by_nothing", testStateEntryActionInputBoundByNothing)
 	t.Run("state_block_typed_node_input_bound_by_nothing", testStateBlockTypedNodeInputBoundByNothing)
@@ -8382,6 +8383,32 @@ func testNodeInvocationTooFewArguments(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "b") {
 		t.Errorf("error %q does not name the unbound parameter", err)
+	}
+}
+
+// testNodeInvocationArgumentFailsBeforeDefaults: an argument that fails to evaluate
+// is the error reported, not the default it replaces (which is never evaluated) nor
+// a default reading the pin it would have bound.
+func testNodeInvocationArgumentFailsBeforeDefaults(t *testing.T) {
+	src := `
+		package test {` + adderActionDef + `
+			action outer {
+				attribute zero : Integer = 0;
+				first start;
+				then action add = Adder(a = 1 / zero) {
+					in a = 5;
+					in b = a + 1;
+				}
+				then done;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if !errors.Is(err, ErrDivisionByZero) {
+		t.Fatalf("error = %v, want ErrDivisionByZero", err)
+	}
+	if !strings.Contains(err.Error(), `argument "a" of Adder`) {
+		t.Errorf("error %q does not name the argument that failed", err)
 	}
 }
 

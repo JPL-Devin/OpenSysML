@@ -2520,7 +2520,7 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 // passing state data in through the callee's input parameters and merging its
 // output parameters back into state data.
 func (e *StateExecutor) invokeNested(inv actionInvocation) error {
-	_, outputs, err := invokeAction(e.ctx, e.stateMachine.Scope, inv, nil, e.stateData, e.self)
+	_, outputs, err := invokeAction(e.ctx, e.stateMachine.Scope, inv, e.stateData, e.self)
 	if err != nil {
 		return err
 	}

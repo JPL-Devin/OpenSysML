@@ -131,7 +131,7 @@ func (h *stateStmtHost) performNode(engine *stmtEngine, graph *lower.ActionGraph
 	caller := engine.env.values()
 	var outputs []string
 	frame, flow, err := engine.nodeInBlock(graph, node, func(pins map[string]Value) (map[string]Value, error) {
-		features, out, err := invokeAction(h.exec.ctx, nodeScope(graph, node), inv, pins, caller, h.exec.self)
+		features, out, err := invokeBoundAction(h.exec.ctx, nodeScope(graph, node), inv, pins, caller, h.exec.self)
 		if err != nil {
 			return nil, err
 		}

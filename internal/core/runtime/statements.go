@@ -403,10 +403,11 @@ func (e *stmtEngine) blockNode(graph *lower.ActionGraph, node ast.Node) (stmtFlo
 }
 
 // nodeInBlock runs a nested action of a block's flow for a host keeping no
-// performances: its features are declared in a frame of the body its body runs in,
-// and perform, when given, performs the action the node names with those pins and
-// returns the features the performance ended with, which join the frame before
-// the body runs. It returns the frame as the body left it.
+// performances: its pins — the arguments it passes its callee, then the defaults it
+// declares — are declared in a frame of the body its body runs in, and perform, when
+// given, performs the action the node names with those pins and returns the features
+// the performance ended with, which join the frame before the body runs. It returns
+// the frame as the body left it.
 func (e *stmtEngine) nodeInBlock(
 	graph *lower.ActionGraph,
 	node *ast.Usage,
@@ -424,8 +425,22 @@ func (e *stmtEngine) nodeInBlock(
 	defer e.env.leave()
 	defer e.enterActivation()()
 	pins := make(map[string]Value, len(graph.Features[node]))
+	if inv, performs := nestedInvocation(node); performs {
+		scope := nodeScope(graph, node)
+		arguments, err := invocationArguments(e.ctx, scope, inv, e.evalIn(scope))
+		if err != nil {
+			return nil, flowNext, err
+		}
+		for name, value := range arguments {
+			e.env.declare(name, value)
+			pins[name] = value
+		}
+	}
 	for _, feature := range graph.Features[node] {
 		if feature.Value == nil {
+			continue
+		}
+		if _, held := pins[feature.Name]; held {
 			continue
 		}
 		value, err := e.evalIn(feature.Scope).Eval(feature.Value)

@@ -1131,7 +1131,7 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 		}
 	} else if node.ActionRef != nil {
 		_, outputs, err := invokeAction(
-			e.ctx, graph.Scope, actionInvocation{target: node.ActionRef}, nil, lexicalValues(frame), e.self,
+			e.ctx, graph.Scope, actionInvocation{target: node.ActionRef}, lexicalValues(frame), e.self,
 		)
 		if err != nil {
 			return err

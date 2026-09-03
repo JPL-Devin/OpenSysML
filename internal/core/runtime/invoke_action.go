@@ -60,17 +60,56 @@ func nestedInvocation(usage *ast.Usage) (actionInvocation, bool) {
 	return actionInvocation{}, false
 }
 
+// invocationArguments evaluates the arguments of a `Callee(...)` invocation in ec, the
+// caller's context, keyed by the callee's input parameter they bind; nil for the other forms.
+func invocationArguments(
+	ctx *Context, scope *symbols.Scope, inv actionInvocation, ec *EvalContext,
+) (map[string]Value, error) {
+	if !inv.invoked {
+		return nil, nil
+	}
+	sym, err := resolveActionSymbol(ctx, scope, inv)
+	if err != nil {
+		return nil, err
+	}
+	in, _ := parameterNames(ctx.actionParametersOf(sym))
+	arguments := make(map[string]Value, len(inv.args)+len(inv.named))
+	if err := bindArgumentList(ec, inv, in, arguments); err != nil {
+		return nil, err
+	}
+	return arguments, nil
+}
+
 // invokeAction runs the action named by inv to completion as a sub-execution of
 // the caller, performed by self, and returns the values its features ended with
 // and, among them, those of its output parameters.
 //
 // The callee gets a fresh executor with its own tokens, so values cross the
-// boundary only through parameters: pins, the values of the parameters the
-// performing node declares itself, then arguments (or, for an argument-less
-// invocation, caller values of the same name) seed the callee's `in` and `inout`
-// parameters, and its `out` and `inout` parameters come back to the caller. An
-// action with no parameters therefore reads and writes nothing in its caller.
+// boundary only through parameters: arguments, evaluated in the caller's data (or,
+// for an argument-less invocation, caller values of the same name) seed the
+// callee's `in` and `inout` parameters, and its `out` and `inout` parameters come
+// back to the caller. An action with no parameters therefore reads and writes
+// nothing in its caller.
 func invokeAction(
+	ctx *Context,
+	scope *symbols.Scope,
+	inv actionInvocation,
+	data map[string]Value,
+	self *Instance,
+) (features, outputs map[string]Value, err error) {
+	ec := NewEvalContext(ctx, scope)
+	ec.Push(data)
+	defer ec.beginStep()()
+	arguments, err := invocationArguments(ctx, scope, inv, ec)
+	if err != nil {
+		return nil, nil, err
+	}
+	return invokeBoundAction(ctx, scope, inv, arguments, data, self)
+}
+
+// invokeBoundAction is invokeAction with the callee's inputs already bound in pins (the
+// performing node's, arguments included); a bare `perform`/typed usage still reads data.
+func invokeBoundAction(
 	ctx *Context,
 	scope *symbols.Scope,
 	inv actionInvocation,
@@ -100,14 +139,7 @@ func invokeAction(
 			inputs[name] = value
 		}
 	}
-	if inv.invoked {
-		ec := NewEvalContext(ctx, scope)
-		ec.Push(data)
-		defer ec.beginStep()()
-		if err := bindArgumentList(ec, inv, in, inputs); err != nil {
-			return nil, nil, err
-		}
-	} else {
+	if !inv.invoked {
 		// A bare `perform`/typed usage reads the caller's values of the parameters'
 		// own names, which is how data reaches an action performed inside a flow.
 		for _, name := range in {

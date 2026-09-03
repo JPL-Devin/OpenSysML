@@ -99,7 +99,8 @@ func (e *ActionExecutor) addFeatureDirections(features map[string]ast.FeatureDir
 }
 
 // beginPerformance starts a performance of node (of parent's flow, or a block's with locals bound),
-// seeding its pins from deliveries, then input bindings, then its own declared defaults.
+// seeding its pins from deliveries, then the arguments it passes its callee, then input bindings,
+// then its own declared defaults.
 func (e *ActionExecutor) beginPerformance(
 	parent *actionFrame, flow *lower.ActionGraph, node ast.Node, locals []map[string]Value,
 ) (*actionFrame, error) {
@@ -134,11 +135,14 @@ func (e *ActionExecutor) beginPerformance(
 	}
 	parent.subactions[node] = perf
 
-	// The bindings and defaults are one evaluation: a calc usage two of them read
-	// answers once, and another performance evaluates it anew.
+	// The arguments, bindings and defaults are one evaluation: a calc usage two of them
+	// read answers once, and another performance evaluates it anew.
 	activation, endStep := e.ctx.beginStep()
 	defer endStep()
 	perf.began = activation
+	if err := e.bindArguments(perf, activation); err != nil {
+		return nil, err
+	}
 	if err := e.bindInputPins(perf, activation); err != nil {
 		return nil, err
 	}
@@ -148,8 +152,34 @@ func (e *ActionExecutor) beginPerformance(
 	return perf, nil
 }
 
+// bindArguments writes the arguments a node passes its callee (`F(a = 3)`) to its pins,
+// evaluated in the caller's context: they stand over deliveries, bindings and defaults.
+func (e *ActionExecutor) bindArguments(perf *actionFrame, activation int64) error {
+	usage, ok := perf.node.(*ast.Usage)
+	if !ok {
+		return nil
+	}
+	inv, performs := nestedInvocation(usage)
+	if !performs || !inv.invoked {
+		return nil
+	}
+	scope := nodeScope(perf.flow, perf.node)
+	ec := e.evalContextAround(perf, scope)
+	ec.activation = activation
+	arguments, err := invocationArguments(e.ctx, scope, inv, ec)
+	if err != nil {
+		return err
+	}
+	for name, value := range arguments {
+		if err := e.setFrameFeature(perf, name, value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // seedDeclaredValues evaluates the values a node's own declarations give its
-// features (`in a = 3;`), where no delivery or binding at the pin holds one yet.
+// features (`in a = 3;`), where no delivery, argument or binding at the pin holds one yet.
 func (e *ActionExecutor) seedDeclaredValues(perf *actionFrame, features []lower.Feature, activation int64) error {
 	for _, feature := range features {
 		if feature.Value == nil {
@@ -669,8 +699,8 @@ func bindingEndText(end ast.Node) string {
 	return fmt.Sprintf("%T", end)
 }
 
-// performInvocation performs the action a node names as a subperformance of perf: caller-side
-// arguments bind the callee's inputs by its order/names, its final values become the node's,
+// performInvocation performs the action a node names as a subperformance of perf: the node's
+// pins (its arguments among them) bind the callee's inputs, its final values become the node's,
 // and its outputs return to enclosing features when the node's own performance ends.
 func (e *ActionExecutor) performInvocation(perf *actionFrame, inv actionInvocation) error {
 	scope := nodeScope(perf.flow, perf.node)
@@ -695,13 +725,7 @@ func (e *ActionExecutor) performInvocation(perf *actionFrame, inv actionInvocati
 			inputs[name] = value
 		}
 	}
-	if inv.invoked {
-		ec := e.evalContextAround(perf, scope)
-		defer ec.beginStep()()
-		if err := bindArgumentList(ec, inv, in, inputs); err != nil {
-			return err
-		}
-	} else {
+	if !inv.invoked {
 		for _, name := range in {
 			if _, bound := inputs[name]; bound {
 				continue
