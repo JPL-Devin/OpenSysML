@@ -529,7 +529,11 @@ func TestCallEventMatchesOperationName(t *testing.T) {
 		{"undeclared arguments ignored", callTrigger("open"), callEvent("open", "angle"), true},
 	}
 	for _, tc := range tests {
-		if got := exec.matchesEvent(tc.trans, tc.event); got != tc.matches {
+		got, err := exec.matchesEvent(tc.trans, tc.event)
+		if err != nil {
+			t.Fatalf("%s: matchesEvent: %v", tc.name, err)
+		}
+		if got != tc.matches {
 			t.Errorf("%s: matchesEvent = %v, want %v", tc.name, got, tc.matches)
 		}
 	}
