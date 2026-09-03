@@ -1173,7 +1173,7 @@ func (ec *EvalContext) evalConditional(n *ast.OperatorExpr) (Value, error) {
 	return ec.Eval(n.Operands[2])
 }
 
-// evalNullCoalesce evaluates `a ?? b`, evaluating b only when a is null.
+// evalNullCoalesce evaluates `a ?? b`, evaluating b only when a is empty.
 func (ec *EvalContext) evalNullCoalesce(n *ast.OperatorExpr) (Value, error) {
 	if len(n.Operands) != 2 {
 		return Value{}, fmt.Errorf("'??' requires 2 operands, got %d", len(n.Operands))
@@ -1186,12 +1186,24 @@ func (ec *EvalContext) evalNullCoalesce(n *ast.OperatorExpr) (Value, error) {
 }
 
 // coalesceNull is `??` over an evaluated first operand: the operand unless it
-// is null, else the second operand, evaluated only then.
+// is empty, else the second operand, evaluated only then.
 func coalesceNull(first Value, second func() (Value, error)) (Value, error) {
-	if first.Kind != ValNull {
+	if !isEmptyValue(first) {
 		return first, nil
 	}
 	return second()
+}
+
+// isEmptyValue reports whether a value is the empty sequence, which `null`,
+// `()` and an empty set all denote.
+func isEmptyValue(val Value) bool {
+	switch val.Kind {
+	case ValNull:
+		return true
+	case ValSequence, ValSet:
+		return len(elementsOf(val)) == 0
+	}
+	return false
 }
 
 // evalIdentity evaluates the identity operators (===, !==). Two values are the
@@ -1223,6 +1235,9 @@ func (ec *EvalContext) evalIdentity(n *ast.OperatorExpr) (Value, error) {
 // kind, is never the same value, so an Integer is not identical to a Real of
 // equal magnitude.
 func valueIdentical(left, right Value) bool {
+	if isEmptyValue(left) || isEmptyValue(right) {
+		return isEmptyValue(left) && isEmptyValue(right)
+	}
 	if left.Kind != right.Kind {
 		return false
 	}
@@ -1896,6 +1911,9 @@ func qualifiedNameToString(qn *ast.QualifiedName) string {
 
 // valueEqual checks deep equality of two runtime values.
 func valueEqual(a, b Value) bool {
+	if isEmptyValue(a) || isEmptyValue(b) {
+		return isEmptyValue(a) && isEmptyValue(b)
+	}
 	// A complex number equals the number it is, whichever kind carries it.
 	if a.Kind == ValComplex || b.Kind == ValComplex {
 		return complexEqual(a, b)

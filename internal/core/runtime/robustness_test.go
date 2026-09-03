@@ -223,6 +223,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("body_by_reference_that_cannot_be_applied", testBodyByReferenceThatCannotBeApplied)
 	t.Run("bodiless_model_calc_named_as_a_builtin", testBodilessModelCalcNamedAsABuiltin)
 	t.Run("data_equality_over_a_part", testDataEqualityOverAPart)
+	t.Run("base_index_with_several_indexes", testBaseIndexWithSeveralIndexes)
 	t.Run("real_literal_that_underflows", testRealLiteralThatUnderflows)
 	t.Run("string_operand_of_the_wrong_kind", testStringOperandOfTheWrongKind)
 	t.Run("collection_body_of_the_wrong_arity", testCollectionBodyOfTheWrongArity)
@@ -1441,6 +1442,25 @@ func testDataEqualityOverAPart(t *testing.T) {
 		got, err := invoke(calc, args...)
 		if err != nil || !valueIdentical(got, constBool(true)) {
 			t.Errorf("%s = %s, %v; want true", calc, FormatValue(got), err)
+		}
+	}
+}
+
+// testBaseIndexWithSeveralIndexes: BaseFunctions::'#' declares `Positive[1..*]`
+// indexes; several address an Array the runtime cannot represent, and none is a
+// multiplicity violation, so each is reported rather than indexed anyhow.
+func testBaseIndexWithSeveralIndexes(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			calc def Cell { return : Integer = BaseFunctions::'#'((1, 2, 3, 4), (2, 2)); }
+			calc def NoIndex { return : Integer = BaseFunctions::'#'((1, 2, 3, 4), ()); }
+		}
+	`
+	for calc, want := range map[string]error{"Cell": ErrUnevaluableLibraryFunction, "NoIndex": ErrMultiplicityViolation} {
+		err := calcErrorWithLibraries(t, src, calc, nil, 10000)
+		if !errors.Is(err, want) || !strings.Contains(err.Error(), "BaseFunctions::'#'") {
+			t.Errorf("%s = %v, want %v naming BaseFunctions::'#'", calc, err, want)
 		}
 	}
 }

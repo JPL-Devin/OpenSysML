@@ -10,9 +10,9 @@ import (
 // whose results are collections or whose arguments are expressions, and the
 // aggregations that take an explicit identity element.
 func registerNamedOperatorBuiltins() {
-	// BaseFunctions declares '#' and ',' over any sequence; SequenceFunctions'
-	// index and union are the same operations.
-	builtins["BaseFunctions::#"] = builtinSequenceIndex
+	// BaseFunctions declares '#' and ',' over any sequence; ',' is
+	// SequenceFunctions' union, '#' its index when given one index.
+	builtins["BaseFunctions::#"] = builtinBaseIndex
 	builtins["BaseFunctions::,"] = builtinSequenceConcat
 	// CollectionFunctions::'==' is `col1.elements->equals(col2.elements)`.
 	builtins["CollectionFunctions::=="] = builtinSequenceEquals

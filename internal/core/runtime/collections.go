@@ -267,14 +267,43 @@ func (ec *EvalContext) applyPredicate(op string, body Value, arg Value) (bool, e
 
 // builtinSequenceIndex is SequenceFunctions::'#' called as a function.
 func builtinSequenceIndex(ec *EvalContext, args []Value) (Value, error) {
-	if err := checkArity("SequenceFunctions::'#'", args, 2); err != nil {
+	return sequenceIndex("SequenceFunctions::'#'", args)
+}
+
+// builtinCollectionIndex is CollectionFunctions::'#', the index over a
+// collection's elements.
+func builtinCollectionIndex(ec *EvalContext, args []Value) (Value, error) {
+	return sequenceIndex("CollectionFunctions::'#'", args)
+}
+
+// sequenceIndex is a scalar-index `'#'` form: the element at one Positive index.
+func sequenceIndex(op string, args []Value) (Value, error) {
+	if err := checkArity(op, args, 2); err != nil {
 		return Value{}, err
 	}
-	index, err := indexOf("SequenceFunctions::'#'", args[1])
+	index, err := indexOf(op, args[1])
 	if err != nil {
 		return Value{}, err
 	}
-	return elementAt("SequenceFunctions::'#' index", elementsOf(args[0]), index)
+	return elementAt(op+" index", elementsOf(args[0]), index)
+}
+
+// builtinBaseIndex is BaseFunctions::'#', whose `Positive[1..*]` index selects
+// from a sequence when single and addresses an Array's dimensions when several.
+func builtinBaseIndex(ec *EvalContext, args []Value) (Value, error) {
+	const op = "BaseFunctions::'#'"
+	if err := checkArity(op, args, 2); err != nil {
+		return Value{}, err
+	}
+	indexes := elementsOf(args[1])
+	switch {
+	case len(indexes) == 0:
+		return Value{}, fmt.Errorf("%w: %s requires at least one index, got none", ErrMultiplicityViolation, op)
+	case len(indexes) > 1:
+		return Value{}, fmt.Errorf("%w: %s: %d indexes address an Array, and the runtime has no Array value kind",
+			ErrUnevaluableLibraryFunction, op, len(indexes))
+	}
+	return sequenceIndex(op, []Value{args[0], indexes[0]})
 }
 
 // builtinSequenceSize is SequenceFunctions::size.

@@ -14,6 +14,16 @@
     "impliesShortCircuits": {"type": "Boolean", "value": true},
     "impliesEvaluates": {"type": "Boolean", "value": false},
     "coalescesNull": {"type": "Integer", "value": 5},
+    "coalescesEmpty": {"type": "Integer", "value": 5},
+    "coalescesFiltered": {"type": "Integer", "value": 5},
+    "coalescesEmptyOperator": {"type": "Integer", "value": 5},
+    "keepsNonEmpty": {
+      "type": "Sequence",
+      "elements": [
+        {"type": "Integer", "value": 1},
+        {"type": "Integer", "value": 2}
+      ]
+    },
     "keepsValue": {"type": "Integer", "value": 3},
     "andDecidedByFirst": {"type": "Boolean", "value": false},
     "orDecidedByFirst": {"type": "Boolean", "value": true},

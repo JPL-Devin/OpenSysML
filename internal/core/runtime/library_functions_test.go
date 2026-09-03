@@ -29,6 +29,8 @@ func constInt(i int64) Value {
 	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: i}}
 }
 
+func emptySequence() Value { return NewSequenceValue(NewSequence()) }
+
 func constReal(f float64) Value {
 	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: f}}
 }

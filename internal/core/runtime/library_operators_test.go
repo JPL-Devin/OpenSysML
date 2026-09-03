@@ -33,6 +33,15 @@ func TestOperatorFunctionValues(t *testing.T) {
 		{"NaturalFunctions::==", []Value{constInt(2), nullValue()}, constBool(false)},
 		{"IntegerFunctions::==", nil, constBool(true)},
 		{"IntegerFunctions::==", []Value{constInt(2)}, constBool(false)},
+		{"IntegerFunctions::==", []Value{emptySequence(), nullValue()}, constBool(true)},
+		{"BaseFunctions::==", []Value{emptySequence(), nullValue()}, constBool(true)},
+		{"BaseFunctions::==", []Value{nullValue(), NewSetValue(NewSet())}, constBool(true)},
+		{"BaseFunctions::==", []Value{emptySequence(), constInt(0)}, constBool(false)},
+		{"BaseFunctions::!=", []Value{emptySequence(), nullValue()}, constBool(false)},
+		{"BaseFunctions::===", []Value{nullValue(), emptySequence()}, constBool(true)},
+		{"BaseFunctions::!==", []Value{emptySequence(), NewStringValue("")}, constBool(true)},
+		{"DataFunctions::==", []Value{emptySequence(), nullValue()}, constBool(true)},
+		{"DataFunctions::===", []Value{emptySequence(), nullValue()}, constBool(true)},
 		{"NaturalFunctions::+", []Value{constInt(1), constInt(2)}, constInt(3)},
 		{"NaturalFunctions::/", []Value{constInt(6), constInt(3)}, constInt(2)},
 		{"NaturalFunctions::/", []Value{constInt(0), constInt(3)}, constInt(0)},
@@ -127,10 +136,18 @@ func TestDataOperatorFunctionsRequireDataValues(t *testing.T) {
 		}
 	}
 	for _, fn := range []string{"DataFunctions::==", "DataFunctions::==="} {
-		for _, args := range [][]Value{{widget, widget}, {widget, nullValue()}, {point, widget}, {NewSequenceValue(mixed), nullValue()}} {
+		for _, args := range [][]Value{{widget, widget}, {widget, nullValue()}, {point, widget}} {
 			_, err := apply(fn, args...)
 			if !errors.Is(err, ErrTypeMismatch) || !strings.Contains(err.Error(), "a DataValue") {
 				t.Errorf("%s over a part = %v, want %v naming DataValue", fn, err, ErrTypeMismatch)
+			}
+		}
+	}
+	for _, fn := range []string{"DataFunctions::==", "DataFunctions::===", "BaseFunctions::==", "BaseFunctions::!=="} {
+		for _, args := range [][]Value{{NewSequenceValue(mixed), nullValue()}, {constInt(1), NewSequenceValue(mixed)}} {
+			_, err := apply(fn, args...)
+			if !errors.Is(err, ErrMultiplicityViolation) || !strings.Contains(err.Error(), "holds 2 values") {
+				t.Errorf("%s over two values = %v, want %v", fn, err, ErrMultiplicityViolation)
 			}
 		}
 	}

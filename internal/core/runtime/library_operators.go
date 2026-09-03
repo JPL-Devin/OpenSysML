@@ -96,18 +96,28 @@ func checkOperands(ctx *Context, name string, domain operandDomain, args []Value
 	return nil
 }
 
-// checkOptionalOperands applies the domain to `x` and `y`, each of which the
-// declaration admits omitted: null is outside every domain check.
-func checkOptionalOperands(ctx *Context, name string, domain operandDomain, args []Value) error {
+// singleOperands binds `x` and `y`, each declared `[0..1]`: an omitted one is
+// null and outside every domain check, a sole element stands for itself, and
+// several elements violate the multiplicity.
+func singleOperands(ctx *Context, name string, domain operandDomain, args []Value) ([]Value, error) {
+	bound := make([]Value, 2)
 	for i, param := range []string{"x", "y"} {
-		if argumentOmitted(args[i]) {
+		elements := elementsOf(args[i])
+		switch len(elements) {
+		case 0:
+			bound[i] = nullValue()
 			continue
+		case 1:
+			bound[i] = elements[0]
+		default:
+			return nil, fmt.Errorf("%w: function %s parameter %q holds %d values, at most 1 allowed",
+				ErrMultiplicityViolation, name, param, len(elements))
 		}
-		if err := domain(ctx, name, param, args[i]); err != nil {
-			return err
+		if err := domain(ctx, name, param, bound[i]); err != nil {
+			return nil, err
 		}
 	}
-	return nil
+	return bound, nil
 }
 
 // arithmeticForm is `'+'`, `'-'`, `'*'`, `'/'`, `'%'`, `'**'` and `'^'` as
@@ -198,7 +208,8 @@ func unaryForm(op ast.OperatorKind, domain operandDomain) libraryApply {
 // so two omitted operands are equal and an omitted one equals no value.
 func equalityForm(op ast.OperatorKind, domain operandDomain) libraryApply {
 	return func(name string, ctx *Context, args []Value) (Value, error) {
-		if err := checkOptionalOperands(ctx, name, domain, args); err != nil {
+		args, err := singleOperands(ctx, name, domain, args)
+		if err != nil {
 			return Value{}, err
 		}
 		val, err := ctx.equalityValues(op, args[0], args[1])
@@ -210,7 +221,8 @@ func equalityForm(op ast.OperatorKind, domain operandDomain) libraryApply {
 // package's operand domain.
 func identityForm(negated bool, domain operandDomain) libraryApply {
 	return func(name string, ctx *Context, args []Value) (Value, error) {
-		if err := checkOptionalOperands(ctx, name, domain, args); err != nil {
+		args, err := singleOperands(ctx, name, domain, args)
+		if err != nil {
 			return Value{}, err
 		}
 		return boolValue(valueIdentical(args[0], args[1]) != negated), nil

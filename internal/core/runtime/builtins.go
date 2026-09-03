@@ -40,7 +40,7 @@ func init() {
 		// CollectionFunctions: the same operations on a Collection, each defined
 		// by the library as the sequence operation over the collection's
 		// elements.
-		"CollectionFunctions::#":           builtinSequenceIndex,
+		"CollectionFunctions::#":           builtinCollectionIndex,
 		"CollectionFunctions::size":        builtinSequenceSize,
 		"CollectionFunctions::isEmpty":     builtinSequenceIsEmpty,
 		"CollectionFunctions::notEmpty":    builtinSequenceNotEmpty,

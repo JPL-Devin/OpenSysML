@@ -104,9 +104,14 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   runtime API (`InvokeCalc`, `InvokeCalcNamed`) binds and computes as the written call does,
   a body value handed to an `expr` parameter applied only when selected.
   `DataFunctions::'=='`/`'==='` take DataValues only: a part or other occurrence is a type
-  mismatch, where `BaseFunctions::'=='` compares anything.
+  mismatch, where `BaseFunctions::'=='` compares anything. The equality and identity forms
+  hold their `[0..1]` operands to one value: an empty collection is null (`'=='((), null)` is
+  `true`, as `() == null` is) and two or more values are a multiplicity violation; `??` in
+  either notation falls back over an empty collection, not only over `null`.
+  `BaseFunctions::'#'` selects by one index and reports several, which address an Array.
   `RationalFunctions::rat`/`numer`/`denom` (a Rational is a float64 here),
-  `CollectionFunctions::'array#'` and `BaseFunctions::'['` (no Array value kind),
+  `CollectionFunctions::'array#'`, `BaseFunctions::'['` and the several-index
+  `BaseFunctions::'#'` (no Array value kind),
   `BaseFunctions::all`/`as`/`meta`/`istype`/`hastype`/`'@'`/`'@@'` and `ControlFunctions::'.'`
   (evaluated from their own notation, not as functions), `DataFunctions`/`ScalarFunctions::'~'`
   and every `OccurrenceFunctions` declaration report themselves by name. An operator-named

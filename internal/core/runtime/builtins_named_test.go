@@ -14,6 +14,7 @@ func evalLibraryCall(t *testing.T, expr string) (Value, error) {
 	t.Helper()
 	return evalNamedAttribute(t, `package test {
 	private import NumericalFunctions::*;
+	private import ControlFunctions::*;
 	attribute xs = (1, 2, 3);
 	attribute result = `+expr+`;
 }`, "result")
@@ -42,6 +43,10 @@ func TestControlFunctionCallForms(t *testing.T) {
 		{"ControlFunctions::'implies'(true, false)", "false"},
 		{"ControlFunctions::'implies'(true, true)", "true"},
 		{"ControlFunctions::'??'(null, 5)", "5"},
+		{"ControlFunctions::'??'((), 5)", "5"},
+		{"ControlFunctions::'??'(test::xs->select {in x; x > 3}, 5)", "5"},
+		{"ControlFunctions::'??'((), {1 + 1})", "2"},
+		{"ControlFunctions::'??'((1, 2), 1 / 0)", "[1, 2]"},
 		{"ControlFunctions::'??'(3, 1 / 0)", "3"},
 		{"ControlFunctions::'if'(false)", "null"},
 		{"ControlFunctions::'if'(test = false, thenValue = 1)", "null"},
@@ -75,6 +80,7 @@ func TestControlFunctionCallFormErrors(t *testing.T) {
 		{"ControlFunctions::'and'(true, 1)", ErrTypeMismatch},
 		{"ControlFunctions::'or'(1, true)", ErrTypeMismatch},
 		{"ControlFunctions::'??'(null, 1 / 0)", ErrDivisionByZero},
+		{"ControlFunctions::'??'((), 1 / 0)", ErrDivisionByZero},
 		{"ControlFunctions::'if'()", ErrCalcArity},
 		{"ControlFunctions::'if'(true, 1, 2, 3)", ErrCalcArity},
 		{"ControlFunctions::'and'(true)", ErrMultiplicityViolation},
@@ -162,6 +168,9 @@ func TestSequenceOperatorCallForms(t *testing.T) {
 		{"DataFunctions::'..'(3, 1)", "[]"},
 		{"IntegerFunctions::'..'(-1, 1)", "[-1, 0, 1]"},
 		{"BaseFunctions::'#'((10, 20, 30), 2)", "20"},
+		{"BaseFunctions::'#'((10, 20, 30), (3))", "30"},
+		{"BaseFunctions::'#'(index = 1, seq = test::xs)", "1"},
+		{"CollectionFunctions::'#'(test::xs, 3)", "3"},
 		{"BaseFunctions::','((1, 2), (3))", "[1, 2, 3]"},
 		{"CollectionFunctions::'=='((1, 2), (1, 2))", "true"},
 		{"CollectionFunctions::'=='((1, 2), (2, 1))", "false"},
@@ -179,6 +188,35 @@ func TestSequenceOperatorCallForms(t *testing.T) {
 			}
 			if FormatValue(got) != tc.want {
 				t.Fatalf("%s = %s, want %s", tc.expr, FormatValue(got), tc.want)
+			}
+		})
+	}
+}
+
+// BaseFunctions::'#' takes `Positive[1..*]` indexes: several address an Array,
+// which the runtime cannot represent, and none violates the multiplicity; the
+// scalar-index forms name themselves in their errors.
+func TestIndexCallFormErrors(t *testing.T) {
+	cases := []struct {
+		expr string
+		want error
+		text string
+	}{
+		{"BaseFunctions::'#'((1, 2, 3, 4), (2, 2))", ErrUnevaluableLibraryFunction, "BaseFunctions::'#': 2 indexes address an Array"},
+		{"BaseFunctions::'#'((1, 2), ())", ErrMultiplicityViolation, "BaseFunctions::'#' requires at least one index"},
+		{"BaseFunctions::'#'((1, 2), 3)", ErrIndexOutOfRange, "BaseFunctions::'#' index 3"},
+		{`BaseFunctions::'#'((1, 2), "1")`, ErrTypeMismatch, "BaseFunctions::'#' requires an Integer index"},
+		{"CollectionFunctions::'#'((1, 2), 3)", ErrIndexOutOfRange, "CollectionFunctions::'#' index 3"},
+		{"SequenceFunctions::'#'((1, 2), (1, 2))", ErrTypeMismatch, "SequenceFunctions::'#' requires an Integer index"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.expr, func(t *testing.T) {
+			_, err := evalLibraryCall(t, tc.expr)
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("%s error = %v, want %v", tc.expr, err, tc.want)
+			}
+			if !strings.Contains(err.Error(), tc.text) {
+				t.Fatalf("%s error = %q, want it to mention %q", tc.expr, err, tc.text)
 			}
 		})
 	}
