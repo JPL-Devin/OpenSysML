@@ -2805,13 +2805,13 @@ func (p *Parser) parseTriggerExpression() ast.Node {
 	return evt
 }
 
-// ParseValueExpression parses the notation a value position holds: an expression,
-// or the trigger expression (`when …`, `at …`, `after …`) an accept payload takes.
-func (p *Parser) ParseValueExpression() ast.Node {
-	if p.atTriggerKeyword() {
-		return p.parseTriggerExpression()
+// ParseTriggerExpression parses the trigger expression an accept payload takes
+// its value from (`when …`, `at …`, `after …`); nil when the input opens with none.
+func (p *Parser) ParseTriggerExpression() ast.Node {
+	if !p.atTriggerKeyword() {
+		return nil
 	}
-	return p.ParseExpression()
+	return p.parseTriggerExpression()
 }
 
 // parseTriggerEvent parses the event of a transition trigger, the part after

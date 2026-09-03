@@ -844,7 +844,7 @@ func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 // notation belongs in its parent's declaration head.
 func (d *decoder) acceptParam(el *element) *element {
 	for _, child := range el.children {
-		if d.boolOf(child, rdf.SysML+"isAccept") {
+		if d.boolOf(child, rdf.SysML+pIsAccept) {
 			return child
 		}
 	}

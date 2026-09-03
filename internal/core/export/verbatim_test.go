@@ -358,6 +358,7 @@ func TestTextOnlyExpressionThatDoesNotLexCleanIsRefused(t *testing.T) {
 		"open comment": `"{in v; v > 0} /* rest"`,
 		"cut short":    `"{in v; v > }"`,
 		"trailing":     `"{in v; v > 0} x"`,
+		"trigger":      `"when v > 0"`,
 	} {
 		edited := restated(t, textOnly, `"{in v; v > 0}"`, stale)
 		back, err := export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML)
@@ -376,7 +377,7 @@ func TestTextOnlyExpressionThatDoesNotLexCleanIsRefused(t *testing.T) {
 	if back, err := export.Convert("m.ttl", []byte(untyped), export.FormatTurtle, export.FormatSysML); err == nil {
 		t.Fatalf("untyped text-only expression was written from stale text\n%s", back)
 	}
-	// A trigger the mapping keeps as text alone parses as a value, not an expression.
+	// An accept payload's value is a trigger expression, and only there is one read.
 	trigger := graphOf(t, "package P {\n    action def A {\n        action a accept when  x > 0;\n    }\n}\n")
 	if !strings.Contains(trigger, `sysx:sourceText "when  x > 0"`) {
 		t.Fatalf("trigger is not stored as text\n%s", trigger)
@@ -384,9 +385,11 @@ func TestTextOnlyExpressionThatDoesNotLexCleanIsRefused(t *testing.T) {
 	if back := toNotation(t, []byte(trigger)); !strings.Contains(back, "accept when  x > 0;") {
 		t.Errorf("stored trigger was not written as stored\n%s", back)
 	}
-	cut := restated(t, trigger, `"when  x > 0"`, `"when  x >"`)
-	if back, err := export.Convert("m.ttl", []byte(cut), export.FormatTurtle, export.FormatSysML); err == nil {
-		t.Fatalf("cut-short trigger was written\n%s", back)
+	for name, stale := range map[string]string{"cut short": `"when  x >"`, "no trigger": `"x > 0"`} {
+		edited := restated(t, trigger, `"when  x > 0"`, stale)
+		if back, err := export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML); err == nil {
+			t.Fatalf("%s trigger was written\n%s", name, back)
+		}
 	}
 }
 

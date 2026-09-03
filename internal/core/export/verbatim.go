@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
@@ -130,14 +131,20 @@ func (d *decoder) textStatesElementIn(el *element, text string, kind source.Kind
 // exactly the structure the graph carries for it: the text is parsed and mapped
 // with the same encoder, and the two graphs must make the same statements about
 // the node. A node the graph keeps as text alone is contradicted by no text,
-// though the text must still lex clean and parse whole as one value expression.
-func (d *decoder) textStatesGraph(node rdf.Term, text, scope string) bool {
+// though the text must still lex clean and parse whole as one expression — a
+// trigger expression (`when …`, `at …`, `after …`) where an accept payload's value is read.
+func (d *decoder) textStatesGraph(node rdf.Term, text, scope string, trigger bool) bool {
 	if !lexesClean(text) {
 		return false
 	}
 	sf := source.New("<expression>", []byte(text))
 	p := parser.New(sf)
-	expr := p.ParseValueExpression()
+	var expr ast.Node
+	if trigger {
+		expr = p.ParseTriggerExpression()
+	} else {
+		expr = p.ParseExpression()
+	}
 	if expr == nil || len(p.Diagnostics) > 0 || p.Offset() != len(text) {
 		return false
 	}

@@ -53,6 +53,7 @@ const (
 	pLocale                    = "locale"
 	pAnnotatedElement          = "annotatedElement"
 	pIsImportAll               = "isImportAll"
+	pIsAccept                  = "isAccept"
 	pSourceFeature             = "sourceFeature"
 	pTargetFeature             = "targetFeature"
 )
@@ -451,7 +452,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 			{"isOrdered", n.IsOrdered},
 			{"isNonunique", n.IsNonunique},
 			{"isConjugated", n.HasConjugatedTyping()},
-			{"isAccept", n.IsAccept},
+			{pIsAccept, n.IsAccept},
 			{"isResult", n.IsResult},
 			{"isParallel", n.IsParallel},
 		})

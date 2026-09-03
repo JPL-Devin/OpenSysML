@@ -481,9 +481,11 @@ never written, because a graph edited in place is right and its text is stale;
 nor is one that leaves a comment, note, string or quoted name open, since it
 would swallow whatever is written after it. An expression the graph keeps as
 text alone (an accept's `when …` trigger, or a node whose structure was removed)
-is held to the same bar: its text must lex clean and parse whole as one value
-expression with no diagnostic, or the node is refused as stating nothing — a
-closed but cut-short `x >` is never written as notation.
+is held to the same bar: its text must lex clean and parse whole with no
+diagnostic as what its position reads — a trigger expression (`when …`, `at …`,
+`after …`) as an accept payload's value, an expression everywhere else — or the
+node is refused as stating nothing: a closed but cut-short `x >` is never
+written as notation, nor is `when x > 0` as an attribute's value.
 For an expression the check reads the stored text back and maps it with the
 same encoder: the graph and the result must make the same statements about the
 node (`sysx:operator`, the operands, the element a reference resolves to),
