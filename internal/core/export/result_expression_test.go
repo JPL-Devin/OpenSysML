@@ -316,6 +316,40 @@ ex:r_b a sysml:LiteralInteger ; sysml:value "2"^^xsd:integer .
 	}
 }
 
+// A standard graph states no sysx:memberIndex, and a graph is unordered: its
+// result expression comes last in the body however its subjects are listed.
+func TestUnindexedResultExpressionIsWrittenLast(t *testing.T) {
+	const turtle = `@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ex: <urn:example:> .
+
+ex:P a sysml:Package ; sysml:qualifiedName "P" ; sysml:declaredName "P" .
+ex:Real a sysml:AttributeDefinition ; sysml:qualifiedName "P::Real" ; sysml:declaredName "Real" ; sysml:owningMembership ex:Real_m .
+ex:Real_m a sysml:OwningMembership ; sysml:membershipOwningNamespace ex:P ; sysml:memberElement ex:Real .
+ex:C a sysml:CalculationDefinition ; sysml:qualifiedName "P::C" ; sysml:declaredName "C" ; sysml:owningMembership ex:C_m .
+ex:C_m a sysml:OwningMembership ; sysml:membershipOwningNamespace ex:P ; sysml:memberElement ex:C .
+ex:r a sysml:OperatorExpression ; sysml:operator "*" ; sysml:argument ex:r_a, ex:r_b ; sysml:owningMembership ex:r_m .
+ex:r_m a sysml:ResultExpressionMembership ; sysml:membershipOwningNamespace ex:C ; sysml:ownedMemberFeature ex:r ; sysml:ownedResultExpression ex:r .
+ex:r_a a sysml:FeatureReferenceExpression ; sysml:referent ex:x .
+ex:r_b a sysml:LiteralInteger ; sysml:value "2"^^xsd:integer .
+ex:x a sysml:ReferenceUsage ; sysml:qualifiedName "P::C::x" ; sysml:declaredName "x" ; sysml:direction "in" ; sysml:type ex:Real ; sysml:owningMembership ex:x_m .
+ex:x_m a sysml:ParameterMembership ; sysml:membershipOwningNamespace ex:C ; sysml:memberElement ex:x .
+ex:y a sysml:AttributeUsage ; sysml:qualifiedName "P::C::y" ; sysml:declaredName "y" ; sysml:type ex:Real ; sysml:owningMembership ex:y_m .
+ex:y_m a sysml:FeatureMembership ; sysml:membershipOwningNamespace ex:C ; sysml:memberElement ex:y .
+`
+	const want = "calc def C {\n        in attribute x : Real;\n        attribute y : Real;\n        (x * 2)\n    }"
+	back, err := export.Convert("m.ttl", []byte(turtle), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation with the result listed first: %v", err)
+	}
+	if !strings.Contains(string(back), want) {
+		t.Errorf("the notation lacks %q:\n%s", want, back)
+	}
+	if _, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle); err != nil {
+		t.Fatalf("the notation written does not parse: %v", err)
+	}
+}
+
 // The datatypes the SysML ontology declares — xsd:int for a LiteralInteger,
 // owl:real for a LiteralRational, xsd:string for a name — are the ones a
 // conforming tool writes, and are read alongside this tool's own.

@@ -655,7 +655,8 @@ syntax owns that expression through a `ResultExpressionMembership` whose
 member — and so does the graph: the expression is an element of its own, typed
 by its expression metaclass, placed by `sysx:memberIndex` like every other
 member so a body whose result follows other declarations comes back in the same
-order, and owned through a membership typed `sysml:ResultExpressionMembership`
+order (a graph that states no index, as a standard one does, gets it last, where
+the grammar has it), and owned through a membership typed `sysml:ResultExpressionMembership`
 that states it as both `sysml:memberElement` and `sysml:ownedResultExpression`:
 
 ```turtle

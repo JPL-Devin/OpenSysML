@@ -26,3 +26,6 @@
   `xsd:decimal`'s does not. An empty expression body `{}` states `sysx:hasBody` so it comes
   back without its `sysx:sourceText`, and a named invocation argument whose name is not a basic
   name (`f('the value' = x)`) keeps its quotes.
+- A result expression a graph owns without a `sysx:memberIndex` — as a graph written by another
+  tool does — is now written last in its body, where the grammar has it, rather than wherever the
+  graph happened to list it, which could put it ahead of the parameters it reads.
