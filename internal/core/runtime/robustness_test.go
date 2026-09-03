@@ -60,6 +60,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_unbound_keyword_named_parameter", testCalcUnboundKeywordNamedParameter)
 	t.Run("calc_too_many_arguments", testCalcTooManyArguments)
 	t.Run("calc_unknown_named_argument", testCalcUnknownNamedArgument)
+	t.Run("calc_parameter_named_twice", testCalcParameterNamedTwice)
 	t.Run("calc_without_result", testCalcWithoutResult)
 	t.Run("calc_symbol_is_not_a_calc", testCalcSymbolIsNotACalc)
 	t.Run("calc_direct_recursion", testCalcDirectRecursion)
@@ -4541,6 +4542,27 @@ func testCalcUnknownNamedArgument(t *testing.T) {
 	}
 	if !errors.Is(err, ErrUnknownParameter) {
 		t.Errorf("expected ErrUnknownParameter, got: %v", err)
+	}
+}
+
+// testCalcParameterNamedTwice: an invocation naming one parameter twice is
+// reported rather than binding the later value.
+func testCalcParameterNamedTwice(t *testing.T) {
+	src := `
+		package test {
+			calc def Scale { in x : Integer; in factor : Integer = 2; return : Integer = x * factor; }
+			calc twice { Scale(x = 1, x = 3, factor = 4) }
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "twice", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("twice calc not found")
+	}
+	_, err := ctx.InvokeCalc(sym, nil, rootScope)
+	if !errors.Is(err, ErrCalcArity) || !strings.Contains(err.Error(), `binds parameter "x" twice`) {
+		t.Errorf("expected ErrCalcArity naming x, got: %v", err)
 	}
 }
 

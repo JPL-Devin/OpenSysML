@@ -612,7 +612,7 @@ func callArgumentsOf(n *ast.InvocationExpr) (callArguments, error) {
 }
 
 // slotsFor places the arguments in parameter slots by position or by name; a
-// name written twice binds twice, the later winning, as the evaluator's map does.
+// name written twice is left to the evaluator's report.
 func (a *callArguments) slotsFor(params []string) ([]int, paramSet, error) {
 	slots := make([]int, len(a.exprs))
 	var bound paramSet
@@ -628,6 +628,9 @@ func (a *callArguments) slotsFor(params []string) ([]int, paramSet, error) {
 			}
 			if slot < 0 {
 				return nil, 0, ineligible(fmt.Sprintf("no parameter %q to bind by name", a.names[i]))
+			}
+			if bound.has(slot) {
+				return nil, 0, ineligible(fmt.Sprintf("parameter %q bound by name twice", a.names[i]))
 			}
 		}
 		slots[i] = slot

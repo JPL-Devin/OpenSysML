@@ -459,6 +459,37 @@ func TestExprInvocationReceiverWithNamedArguments(t *testing.T) {
 
 func TestExprInvocationNamedArgumentsOK(t *testing.T) {
 	wantNoDiags(t, `package P { `+calcAdd+` calc c { add(a = 1, b = 2) } }`)
+	wantNoDiags(t, `package P { `+calcAdd+` calc c { add(b = 2, a = 1) } }`)
+}
+
+// Arguments that bind by name are held to the parameters as positional ones
+// are: each parameter once, in its type, and none required left unbound.
+func TestExprInvocationNamedArgumentsChecked(t *testing.T) {
+	wantOneDiag(t,
+		`package P { `+calcAdd+` calc c { add(a = 1) } }`,
+		"add requires an argument for parameter b")
+	wantOneDiag(t,
+		`package P { `+calcAdd+` calc c { add(a = 1, a = 2, b = 3) } }`,
+		`add binds parameter "a" twice`)
+	wantOneDiag(t,
+		`package P { `+calcAdd+` calc c { add(b = "two", a = 1) } }`,
+		"argument b of add expects Integer, found String")
+	wantOneDiag(t,
+		`package P { `+calcAdd+` calc c { add(a = 1, c = 2) } }`,
+		`add has no parameter named "c"`)
+	const model = `package P {
+		calc def Scale {
+			in factor : ScalarValues::Integer[0..1];
+			in offset : ScalarValues::Integer = 0;
+			in x : ScalarValues::Integer;
+			x
+		}
+		calc c { %s }
+	}`
+	wantNoDiags(t, fmt.Sprintf(model, `Scale(x = 5)`))
+	wantNoDiags(t, fmt.Sprintf(model, `Scale(offset = 1, x = 5, factor = 2)`))
+	wantOneDiag(t, fmt.Sprintf(model, `Scale(factor = 2, offset = 1)`),
+		"Scale requires an argument for parameter x")
 }
 
 func TestExprLiteralConformsToNatural(t *testing.T) {

@@ -954,6 +954,9 @@ func (fc *funcCompiler) bindArgs(n *ast.InvocationExpr, callee string, params []
 			if i < 0 {
 				return nil, fc.unsupported(fmt.Sprintf("%s has no parameter %s", callee, qnText(na.Name)))
 			}
+			if bound[i] {
+				return nil, fc.unsupported(fmt.Sprintf("%s binds parameter %s twice", callee, params[i]))
+			}
 			v, err := fc.compileExpr(na.Value)
 			if err != nil {
 				return nil, err

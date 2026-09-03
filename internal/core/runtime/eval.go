@@ -1909,11 +1909,15 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 		if arg.Name == nil || len(arg.Name.Parts) == 0 {
 			return Value{}, fmt.Errorf("unnamed argument in invocation of %s", qualName)
 		}
+		name := arg.Name.Parts[len(arg.Name.Parts)-1].Text
+		if _, dup := named[name]; dup {
+			return Value{}, fmt.Errorf("%w: %s binds parameter %q twice", ErrCalcArity, qualName, name)
+		}
 		val, err := ec.Eval(arg.Value)
 		if err != nil {
 			return Value{}, err
 		}
-		named[arg.Name.Parts[len(arg.Name.Parts)-1].Text] = val
+		named[name] = val
 	}
 
 	// An argument that fails is reported before the target is judged. A name

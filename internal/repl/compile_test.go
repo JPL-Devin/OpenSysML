@@ -55,7 +55,6 @@ var compiledCases = []compiledCase{
 	{"Hypot", []string{"0e-400", "4.0"}}, {"Hypot", []string{"3.0E0", "+4.0"}},
 	{"fib", []string{"10"}}, {"Specialized", []string{"12"}}, {"ViaUsage", []string{"11"}},
 	{"NamedOrder", []string{"0", "9223372036854775807"}}, {"NamedOrder", []string{"3", "4"}},
-	{"NamedTwice", []string{"0", "9223372036854775807"}}, {"NamedTwice", []string{"3", "9223372036854775807"}}, {"NamedTwice", []string{"3", "4"}},
 	{"OrderArgs", []string{"0", "9223372036854775807"}}, {"OrderArgs", []string{"3", "9223372036854775807"}},
 	{"Nat", []string{"5"}}, {"Nat", []string{"0"}}, {"Nat", []string{"-1"}},
 	{"Pos", []string{"2"}}, {"Pos", []string{"1"}}, {"Pos", []string{"0"}},
@@ -437,6 +436,25 @@ func TestCompileRefusesWhatItCannotCompile(t *testing.T) {
 	}
 	if _, err := s.CompileCalc("Compiled::Nowhere"); err == nil {
 		t.Error("an unknown calc compiled")
+	}
+}
+
+// A call binding one parameter by name twice is refused by the type checker;
+// the native target declines it rather than binding the later value.
+func TestCompileRefusesAParameterBoundTwice(t *testing.T) {
+	s := NewSession()
+	res := s.Submit(`package Twice {
+		private import ScalarValues::*;
+		calc def Add { in a : Integer; in b : Integer; return : Integer = a + b; }
+		calc def Dup { in x : Integer; return : Integer = Add(a = x, a = 1, b = 2); }
+	}`)
+	errs := errorDiagnostics(res.Diagnostics)
+	if len(errs) != 1 || !strings.Contains(errs[0].Message, `Add binds parameter "a" twice`) {
+		t.Fatalf("diagnostics = %v, want Add binds parameter \"a\" twice", errs)
+	}
+	_, err := s.CompileCalc("Twice::Dup")
+	if !errors.Is(err, codegen.ErrUnsupported) || !strings.Contains(err.Error(), "binds parameter a twice") {
+		t.Fatalf("CompileCalc(Twice::Dup) = %v, want an ErrUnsupported naming the parameter", err)
 	}
 }
 
