@@ -51,6 +51,10 @@ type Instance struct {
 	// through it.
 	owner        *Instance
 	ownerFeature string
+
+	// explicit marks an object a caller asked for by name, which stands on its
+	// own even where its usage is a feature of a type.
+	explicit bool
 }
 
 // Owner answers the object holding this one and the feature of it that does, or
@@ -139,9 +143,29 @@ func isValueTypeSymbol(sym *symbols.Symbol) bool {
 // performs and runs them to quiescence. Returns the instance or an error.
 //
 // Each call materializes a distinct object with an identity and behaviors of its
-// own; occurrenceOf is the path that reads one object of a usage twice.
+// own. The object becomes what the usage denotes from then on, so an expression
+// naming the usage or a feature path under it reads this object as it was run.
 func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
-	return ctx.instantiateAs(sym, 0)
+	mark := len(ctx.created)
+	inst, err := ctx.materializeOwnedBy(sym, 0, nil, "")
+	if err != nil {
+		ctx.abandonInstancesSince(mark)
+		return nil, err
+	}
+	// Registered before its behaviors start, so one of them naming the usage
+	// reaches this object; a failed start abandons the occurrence with it.
+	inst.explicit = true
+	prior, hadPrior := ctx.occurrences[sym]
+	if ctx.namesOneObject(sym) {
+		ctx.occurrences[sym] = inst.ID
+	}
+	if err := ctx.startClassifierBehaviors(inst, mark); err != nil {
+		if hadPrior {
+			ctx.occurrences[sym] = prior
+		}
+		return nil, err
+	}
+	return inst, nil
 }
 
 // instantiateAs materializes an object under the given identity, falling back to
