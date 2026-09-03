@@ -354,6 +354,74 @@ func TestTransitionBodyResolvesInTriggerScope(t *testing.T) {
 	}
 }
 
+// An unnamed transition's trailing body declares into a scope of its own, nested
+// under the state and holding the trigger's parameters below it: a feature it
+// declares is seen by a later member, and its sends reach the accept's parameter.
+func TestUnnamedTransitionBodyDeclaresItsOwnScope(t *testing.T) {
+	const src = `package App {
+	item def Request { attribute id; }
+	state def Server {
+		attribute retries;
+		state idle;
+		state busy;
+		transition first idle accept origin : Request then busy {
+			attribute retries;
+			send new Request(id = retries) to origin;
+			send new Request(count = 1) to missing;
+		}
+	}
+}`
+	walk, root, rootScope := resolvedDoc(t, src)
+	if len(walk.Diagnostics) != 2 {
+		t.Fatalf("the label `count` and the receiver `missing` must be the two unresolved names, got %v", walk.Diagnostics)
+	}
+	pkg := unwrapMember(root.Members[0])
+	server := memberOf(pkg, 1)
+	serverScope := rootScope.ChildFor(pkg).ChildFor(server)
+	trans, ok := memberOf(server, 3).(*ast.TransitionMember)
+	if !ok {
+		t.Fatalf("the transition is a %T", memberOf(server, 3))
+	}
+	body := serverScope.ChildFor(trans)
+	if body == nil {
+		t.Fatal("the unnamed transition owns no scope")
+	}
+	local, ok := body.LookupLocal("retries")
+	if !ok || local.Decl == memberOf(server, 0) {
+		t.Fatal("the body's `attribute retries` is not a member of the transition's scope")
+	}
+	if _, ok := serverScope.LookupLocal("retries"); !ok {
+		t.Fatal("the state's own `attribute retries` was not indexed")
+	}
+	trigger := symbols.TriggerScope(serverScope, trans)
+	if trigger == nil || trigger.Parent() != body {
+		t.Fatalf("TriggerScope is %v, want the parameter scope nested in the transition's", trigger)
+	}
+	if _, ok := trigger.LookupLocal("origin"); !ok {
+		t.Error("the accept's parameter is not declared in the trigger scope")
+	}
+	cold := resolve.New(walk.Index())
+	cold.SetModel(semantics.NewModel(cold))
+	byName := map[string]int{}
+	for _, ref := range resolve.References(root, rootScope) {
+		name := nameText(ref.QN)
+		byName[name]++
+		if name != "retries" && name != "origin" && name != "id" {
+			continue
+		}
+		sym, ok := cold.ResolveReference(ref)
+		if !ok {
+			t.Errorf("`%s` at %v did not resolve", name, ref.QN.Span())
+		}
+		if name == "retries" && sym != local {
+			t.Errorf("`retries` at %v reached %v, want the body's own declaration", ref.QN.Span(), sym)
+		}
+	}
+	if byName["retries"] != 1 || byName["origin"] != 1 || byName["id"] != 1 || byName["count"] != 1 || byName["missing"] != 1 {
+		t.Errorf("body references collected: %v, want retries, origin, id, count and missing once each", byName)
+	}
+}
+
 // memberOf returns the i-th member declaration of a package or definition node.
 func memberOf(n ast.Node, i int) ast.Node {
 	switch v := n.(type) {

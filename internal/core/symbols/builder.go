@@ -1,6 +1,8 @@
 package symbols
 
 import (
+	"slices"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
@@ -226,7 +228,11 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 		// A named transition is a feature of the state that declares it (SysML v2
 		// §7.19.2: TransitionUsage specializes ActionUsage), and its effect
 		// behaviors are features of the transition, so `t.effectAction` resolves.
+		// An unnamed one is an anonymous feature whose body declares into its own scope.
 		if d.Name == "" {
+			if len(d.Effect) > 0 || len(d.Members) > 0 {
+				buildAnonymousNode(scope, d, SymbolActionUsage, append(slices.Clone(d.Effect), d.Members...), vis, trivia)
+			}
 			return true
 		}
 		id := ast.Identification{Name: d.Name, NameSpan: d.NameSpan}

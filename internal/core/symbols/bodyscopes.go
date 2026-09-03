@@ -252,8 +252,8 @@ func TriggerScope(parent *Scope, trans *ast.TransitionMember) *Scope {
 // into, so `accept setSpeed(value) if value > 0` resolves `value` and
 // `accept w : Warning do assign level := w` resolves `w`.
 func newTriggerScope(parent *Scope, trans *ast.TransitionMember) *Scope {
-	// A named transition already owns a scope holding its effect members
-	// (builder.buildDecl); an unnamed one owns none until its trigger needs it.
+	// A transition with an effect or a body already owns a scope holding them
+	// (builder.buildDecl); one with neither owns none until its trigger needs it.
 	scope := bodyScopeChild(parent, trans)
 	define := triggerParameterDefiner(trans.Trigger)
 	if define == nil {

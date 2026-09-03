@@ -242,3 +242,33 @@ func TestRenameLeavesTriggerParameterReferencesAlone(t *testing.T) {
 		t.Fatalf("the accept's parameter or a reference to it was rewritten:\n%s", got)
 	}
 }
+
+// An unnamed transition's trailing body declares its own features: renaming a
+// same-named feature of the machine leaves the body's declaration and its uses
+// alone, while renaming the constructed type's feature rewrites the label there.
+func TestRenameSeesUnnamedTransitionBodyDeclarations(t *testing.T) {
+	const src = "package App {\n\titem def Request { attribute id; }\n\tstate def Server {\n" +
+		"\t\tattribute retries;\n\t\tstate idle;\n\t\tstate busy;\n" +
+		"\t\ttransition first idle accept origin : Request then busy {\n" +
+		"\t\t\tattribute retries;\n\t\t\tsend new Request(id = retries) to origin;\n\t\t}\n\t}\n}\n"
+
+	got := renamed(t, "body.sysml", src, "App::Server::retries", "attempts")
+	for _, want := range []string{
+		"\t\tattribute attempts;\n",
+		"\t\t\tattribute retries;\n\t\t\tsend new Request(id = retries) to origin;\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q:\n%s", want, got)
+		}
+	}
+
+	got = renamed(t, "body.sysml", src, "App::Request::id", "key")
+	for _, want := range []string{
+		"item def Request { attribute key; }",
+		"send new Request(key = retries) to origin;",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q:\n%s", want, got)
+		}
+	}
+}
