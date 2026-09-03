@@ -599,8 +599,14 @@ func TestFeatureValuesStopAtRecursiveContainment(t *testing.T) {
 
 	got := run(t, s, "%features Node")
 	wants(t, got, "v = 1.0", "child : Node (not expanded: contains its own kind)")
-	if n := strings.Count(got, "\n"); n > 5 {
-		t.Errorf("expected a bounded listing, got %d lines:\n%s", n, got)
+	// The listing stops at the node itself: nothing is expanded under it.
+	if n := strings.Count(got, "child"); n != 1 {
+		t.Errorf("expected a bounded listing, got %d children:\n%s", n, got)
+	}
+	for _, line := range strings.Split(got, "\n")[2:] {
+		if strings.HasPrefix(line, "    ") {
+			t.Errorf("expected no nested expansion, got %q in:\n%s", line, got)
+		}
 	}
 }
 

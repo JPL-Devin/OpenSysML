@@ -1,0 +1,11 @@
+{
+  "type": "instance",
+  "instantiate": "test::carMassLimit",
+  "libraries": true,
+  "slots": {
+    "v": {"type": "Instance"},
+    "subj": {"type": "Instance"},
+    "limit": {"type": "Real", "value": 1500.0},
+    "actors": {"type": "Sequence", "elements": []}
+  }
+}
