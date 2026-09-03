@@ -518,6 +518,24 @@ func TestReleaseEndsAPausedBody(t *testing.T) {
 	}
 }
 
+// A released executor refuses to step whatever state its run ended in.
+func TestReleasedExecutorRefusesToStep(t *testing.T) {
+	exec := blockDebugExecutor(t)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("RunToCompletion: %v", err)
+	}
+	if exec.State() != StateCompleted {
+		t.Fatalf("State() = %v after the run, want StateCompleted", exec.State())
+	}
+	exec.Release()
+	if err := exec.Step(); !errors.Is(err, ErrExecutorReleased) {
+		t.Errorf("Step of a released, completed executor = %v, want ErrExecutorReleased", err)
+	}
+	if err := exec.RunToCompletion(); !errors.Is(err, ErrExecutorReleased) {
+		t.Errorf("RunToCompletion of a released, completed executor = %v, want ErrExecutorReleased", err)
+	}
+}
+
 // A step that fails ends the work another token had paused.
 func TestFailedStepEndsPausedBodies(t *testing.T) {
 	ctx, sym := loadAction(t, `package test {

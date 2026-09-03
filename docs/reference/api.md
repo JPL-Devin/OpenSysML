@@ -407,8 +407,9 @@ Execution runtime (Tiers 1-5: instances, expressions, behaviors).
     declares; `NodeNames()` lists every node a breakpoint may name
   - `ClearBreakpoints()` — Clear all breakpoints
   - `Release()` — End the run for good, ending the paused work of every token a breakpoint
-    left mid-body; a later `Step()` returns `ErrExecutorReleased`. Call it when abandoning
-    an executor that may be suspended
+    left mid-body; a later `Step()` or `RunToCompletion()` returns `ErrExecutorReleased`,
+    whether the run had completed or not. Call it when abandoning an executor that may be
+    suspended
   - `ActionSymbol() *symbols.Symbol` — Get action symbol
 
 - **`StateExecutor`** — Event-driven state machine execution

@@ -179,16 +179,16 @@ func (e *ActionExecutor) performanceFeatures() []lower.Attribute {
 func (e *ActionExecutor) Step() error {
 	defer e.ctx.beginExecutorRun(&e.runStarted)()
 
+	if e.released {
+		return fmt.Errorf("%w: its run ended when it was let go of", ErrExecutorReleased)
+	}
+
 	if e.state == StateCompleted {
 		return nil // Already completed
 	}
 
 	if e.state == StateReady {
 		return fmt.Errorf("executor not initialized (call initialize first)")
-	}
-
-	if e.released {
-		return fmt.Errorf("%w: its run ended when it was let go of", ErrExecutorReleased)
 	}
 
 	// Stepping resumes a run a breakpoint suspended.
@@ -353,6 +353,10 @@ func (e *ActionExecutor) deadlockError(perf *actionFrame) error {
 // budget spinning — the budget is only consumed by steps that move something.
 func (e *ActionExecutor) RunToCompletion() error {
 	defer e.ctx.beginExecutorRun(&e.runStarted)()
+
+	if e.released {
+		return fmt.Errorf("%w: its run ended when it was let go of", ErrExecutorReleased)
+	}
 
 	maxSteps := e.ctx.maxActionSteps
 	var steps int64
