@@ -380,6 +380,9 @@ func nestedFeature(sym *symbols.Symbol) bool {
 // readThrough reports whether inst is the object a value expression materialized
 // to read a declaration through, which is an occurrence of nothing.
 func (ctx *Context) readThrough(inst *Instance) bool {
+	if inst.explicit {
+		return false
+	}
 	id, ok := ctx.occurrences[inst.Type]
 	return ok && id == inst.ID
 }
