@@ -1,0 +1,27 @@
+{
+	"type": "calc",
+	"evaluate": "test::classify",
+	"libraries": true,
+	"result": {
+		"type": "Sequence",
+		"elements": [
+			{"type": "Boolean", "value": true},
+			{"type": "Boolean", "value": true},
+			{"type": "Boolean", "value": false},
+			{"type": "Boolean", "value": true},
+			{"type": "Boolean", "value": false},
+			{"type": "Boolean", "value": true},
+			{"type": "Boolean", "value": false},
+			{"type": "Boolean", "value": true},
+			{"type": "Boolean", "value": true},
+			{"type": "Boolean", "value": true},
+			{"type": "Boolean", "value": true},
+			{"type": "Boolean", "value": false},
+			{"type": "Boolean", "value": true},
+			{"type": "Boolean", "value": true},
+			{"type": "Boolean", "value": false},
+			{"type": "Boolean", "value": true},
+			{"type": "Boolean", "value": true}
+		]
+	}
+}
