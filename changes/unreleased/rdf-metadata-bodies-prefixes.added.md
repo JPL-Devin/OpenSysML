@@ -23,7 +23,10 @@
   `assume constraint c : C;` and `require constraint d [1] = true;` came back as
   `assume constraint { }` and `require constraint { }`. The name, specializations, multiplicity
   and value of the constraint usage the member owns are now carried as they are for any usage,
-  and a body-less member comes back with its `;` rather than an empty body.
+  and a body-less member comes back with its `;` rather than an empty body. The declaration
+  form states `sysx:declaredKeyword "constraint"`, which tells its `references C` from the
+  reference form `require C;` — `assume constraint c references C;` used to come back as
+  `assume C;`, and prefixed (`assume #Safety constraint c references C;`) it was refused.
 - **Prefix metadata is written back where the grammar puts it.** A prefixed assertion came back
   as `assert not #Safety constraint c;`, which no grammar production spells, so the notation
   did not parse; it is now written `#Safety assert not constraint c;` (AssertConstraintUsage

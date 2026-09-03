@@ -1005,7 +1005,11 @@ func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 		return "", err
 	}
 	var skip []ast.RelationshipKind
-	_, declared := d.stringOf(el, rdf.OpenSysML+xHasBody)
+	// The declaration form states its keyword; a graph written before it did
+	// is one only where nothing is referenced.
+	declaredKeyword, _ := d.stringOf(el, rdf.OpenSysML+xDeclaredKeyword)
+	_, hasBody := d.stringOf(el, rdf.OpenSysML+xHasBody)
+	declared := declaredKeyword == "constraint" || (hasBody && len(references) == 0)
 	switch condition, ok := d.stringOf(el, rdf.OpenSysML+xCondition); {
 	case ok:
 		if len(prefixes) > 0 {
@@ -1013,6 +1017,11 @@ func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 		}
 		words = append(words, condition)
 		return strings.Join(words, " "), nil
+	case declared:
+		// The nested-constraint form spells out the kind it declares, so the
+		// braces that follow are read as a constraint body rather than a name.
+		words = append(words, "constraint")
+		words = append(words, d.identWords(el)...)
 	case len(references) > 0:
 		if len(prefixes) > 0 {
 			return "", d.unprefixedCondition(el, "a constraint reference")
@@ -1024,11 +1033,6 @@ func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 			words = append(words, relationshipSyntax[ast.RelReferences], strings.Join(rest, ", "))
 		}
 		skip = append(skip, ast.RelReferences)
-	case declared:
-		// The nested-constraint form spells out the kind it declares, so the
-		// braces that follow are read as a constraint body rather than a name.
-		words = append(words, "constraint")
-		words = append(words, d.identWords(el)...)
 	default:
 		return "", d.missing(el, "sysx:"+xCondition, "a condition member states a condition")
 	}

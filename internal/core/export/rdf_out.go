@@ -975,6 +975,11 @@ func (e *encoder) requirementCondition(subject rdf.Term, fqn, owner string, n re
 	if n.name != "" {
 		e.graph.Add(subject, e.sysml(pDeclaredName), rdf.String(n.name))
 	}
+	// The declaration form is keyed by its keyword: its `references C` is a
+	// specialization, where the reference form's `require C` is the head.
+	if n.expression == nil && n.reference == nil {
+		e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String("constraint"))
+	}
 	if err := e.prefixes(subject, fqn, n.prefixes, n.body); err != nil {
 		return err
 	}

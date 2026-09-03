@@ -798,6 +798,7 @@ elmt:Prefixed__Braking___401
     sysml:owner elmt:Prefixed__Braking ;
     sysml:owningRelationship elmt:Prefixed__Braking___401_om ;
     sysml:owningMembership elmt:Prefixed__Braking___401_om ;
+    sysx:declaredKeyword "constraint" ;
     sysml:ownedMember elmt:Prefixed__Braking___401___401, elmt:Prefixed__Braking___401___400 ;
     sysml:ownedMembership elmt:Prefixed__Braking___401___401_om, elmt:Prefixed__Braking___401___400_om ;
     sysml:ownedRelationship elmt:Prefixed__Braking___401___401_om, elmt:Prefixed__Braking___401___400_om ;
@@ -876,6 +877,7 @@ elmt:Prefixed__Braking___402
     sysml:owner elmt:Prefixed__Braking ;
     sysml:owningRelationship elmt:Prefixed__Braking___402_om ;
     sysml:owningMembership elmt:Prefixed__Braking___402_om ;
+    sysx:declaredKeyword "constraint" ;
     sysml:ownedMember elmt:Prefixed__Braking___402___401, elmt:Prefixed__Braking___402___400 ;
     sysml:ownedMembership elmt:Prefixed__Braking___402___401_om, elmt:Prefixed__Braking___402___400_om ;
     sysml:ownedRelationship elmt:Prefixed__Braking___402___401_om, elmt:Prefixed__Braking___402___400_om ;
@@ -955,6 +957,7 @@ elmt:Prefixed__Braking__stopped
     sysml:owningRelationship elmt:Prefixed__Braking__stopped_om ;
     sysml:owningMembership elmt:Prefixed__Braking__stopped_om ;
     sysml:declaredName "stopped" ;
+    sysx:declaredKeyword "constraint" ;
     sysml:ownedMember elmt:Prefixed__Braking__stopped___400 ;
     sysml:ownedMembership elmt:Prefixed__Braking__stopped___400_om ;
     sysml:ownedRelationship elmt:Prefixed__Braking__stopped___400_om ;
@@ -1005,6 +1008,7 @@ elmt:Prefixed__Braking__braked
     sysml:owningRelationship elmt:Prefixed__Braking__braked_om ;
     sysml:owningMembership elmt:Prefixed__Braking__braked_om ;
     sysml:declaredName "braked" ;
+    sysx:declaredKeyword "constraint" ;
     sysml:ownedMember elmt:Prefixed__Braking__braked___400 ;
     sysml:ownedMembership elmt:Prefixed__Braking__braked___400_om ;
     sysml:ownedRelationship elmt:Prefixed__Braking__braked___400_om ;

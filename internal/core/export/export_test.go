@@ -350,6 +350,10 @@ func TestRequirementConditionDeclarationsSurviveRDF(t *testing.T) {
 		"assume constraint c : Light;",
 		"require #Goal constraint d[1] = true;",
 		"assume #Goal constraint f : Light subsets Light[0..1] {\n            true;\n        }",
+		"assume constraint c references Light;",
+		"assume #Goal constraint c references Light;",
+		"require #Goal constraint c references Light;",
+		"require constraint references Light;",
 		"require Light subsets Light[1];",
 		"require Light {\n        }",
 	} {
@@ -1038,15 +1042,18 @@ func TestPrefixOnAConditionWithoutADeclarationIsReported(t *testing.T) {
 		t.Fatalf("to turtle: %v", err)
 	}
 	structural := string(withoutTriples(t, turtle, "sysx:sourceText"))
-	for _, tc := range []struct{ triple, form string }{
-		{`sysx:condition "true" ;`, "an inline condition"},
+	// The reference form declares nothing: neither a name nor the `constraint`
+	// keyword, which is what tells a declaration's `references C` from it.
+	declaration := `sysml:declaredName "c" ;` + "\n    " + `sysx:declaredKeyword "constraint" ;`
+	if !strings.Contains(structural, declaration) {
+		t.Fatalf("the assume member's declaration was not found in the graph:\n%s", structural)
+	}
+	for _, tc := range []struct{ triples, form string }{
+		{declaration + "\n    " + `sysx:condition "true" ;`, "an inline condition"},
 		{`sysml:references elmt:P__C ;`, "a constraint reference"},
 	} {
 		t.Run(tc.form, func(t *testing.T) {
-			edited := strings.Replace(structural, `sysml:declaredName "c" ;`, `sysml:declaredName "c" ;`+"\n    "+tc.triple, 1)
-			if edited == structural {
-				t.Fatalf("the assume member was not found in the graph:\n%s", structural)
-			}
+			edited := strings.Replace(structural, declaration, tc.triples, 1)
 			_, err := export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML)
 			var unsupported *export.UnsupportedError
 			if !errors.As(err, &unsupported) {
