@@ -14,7 +14,39 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
+
+// exprScope is where an expression's names are read: the element that owns
+// the expression, the body-expression scope enclosing it if any, and whether
+// it is a filter condition, whose names its own namespace's filters do not
+// restrict.
+type exprScope struct {
+	owner     string
+	scope     *symbols.Scope
+	condition bool
+}
+
+// link resolves name as read in this scope.
+func (s exprScope) link(e *encoder, name *ast.QualifiedName) rdf.Term {
+	return s.linkReference(e, resolve.Reference{QN: name})
+}
+
+func (s exprScope) linkReference(e *encoder, ref resolve.Reference) rdf.Term {
+	ref.Scope = s.scope
+	ref.Condition = s.condition
+	return e.linkReference(s.owner, ref)
+}
+
+// inBody is the scope of body's parameters and members, in which its result is read.
+func (s exprScope) inBody(e *encoder, body *ast.BodyExpr) exprScope {
+	parent := s.scope
+	if parent == nil {
+		parent = e.scopeOf(s.owner)
+	}
+	s.scope = symbols.BodyExprScope(parent, body)
+	return s
+}
 
 // Metaclasses of the expression nodes, as SysML v2 8.4 names them.
 const (
@@ -66,18 +98,28 @@ const (
 // expression emits the graph of one expression-valued property. slot names the
 // position, so each expression of an element has a distinct identity.
 func (e *encoder) expression(subject, property rdf.Term, slot, owner string, node ast.Node) {
+	e.expressionIn(subject, property, slot, exprScope{owner: owner}, node)
+}
+
+// filterExpression is expression for a filter condition, whose names resolve
+// unrestricted by the filters of the namespace declaring it.
+func (e *encoder) filterExpression(subject, property rdf.Term, slot, owner string, node ast.Node) {
+	e.expressionIn(subject, property, slot, exprScope{owner: owner, condition: true}, node)
+}
+
+func (e *encoder) expressionIn(subject, property rdf.Term, slot string, in exprScope, node ast.Node) {
 	if node == nil {
 		return
 	}
 	e.graph.Prefixes[rdf.ExpressionPrefix] = rdf.Expression
 	target := rdf.ExpressionIRI(subject, slot)
 	e.graph.Add(subject, property, target)
-	e.expressionNode(target, owner, node)
+	e.expressionNode(target, in, node)
 }
 
 // expressionNode emits one expression node and, recursively, its operands.
 // Every node carries its notation, so the exact text always survives.
-func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) {
+func (e *encoder) expressionNode(subject rdf.Term, in exprScope, node ast.Node) {
 	e.graph.Add(subject, e.sysx(xSourceText), rdf.String(e.text(node)))
 	// The id an API reader addresses the node by, as on an element: a node has no
 	// qualified name, but its position in the model gives it a valid id.
@@ -108,30 +150,30 @@ func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) 
 	case *ast.QualifiedName:
 		// A position whose notation is a bare name holds the feature it names.
 		e.typed(subject, mFeatureReference)
-		e.graph.Add(subject, e.sysml(pReferent), e.link(owner, n))
+		e.graph.Add(subject, e.sysml(pReferent), in.link(e, n))
 
 	case *ast.FeatureReference:
 		e.typed(subject, mFeatureReference)
-		e.graph.Add(subject, e.sysml(pReferent), e.link(owner, n.Name))
+		e.graph.Add(subject, e.sysml(pReferent), in.link(e, n.Name))
 
 	case *ast.OperatorExpr:
 		e.typed(subject, mOperator)
 		e.graph.Add(subject, e.sysml(pOperator), rdf.String(n.Operator.String()))
-		e.arguments(subject, owner, n.Operands)
+		e.arguments(subject, in, n.Operands)
 		if n.TypeRef != nil {
-			e.graph.Add(subject, e.sysx(xTypeArgument), e.link(owner, n.TypeRef))
+			e.graph.Add(subject, e.sysx(xTypeArgument), in.link(e, n.TypeRef))
 		}
 
 	case *ast.CastExpr:
 		// `(as T)` is the classification operator with a type argument only.
 		e.typed(subject, mOperator)
 		e.graph.Add(subject, e.sysml(pOperator), rdf.String(ast.OpAs.String()))
-		e.graph.Add(subject, e.sysx(xTypeArgument), e.link(owner, n.TargetType))
+		e.graph.Add(subject, e.sysx(xTypeArgument), in.link(e, n.TargetType))
 
 	case *ast.FeatureChainExpr:
 		e.typed(subject, mFeatureChain)
-		e.arguments(subject, owner, []ast.Node{n.Operand})
-		e.graph.Add(subject, e.sysml(pTargetFeature), e.linkReference(owner, resolve.Reference{QN: n.Member, Chain: n}))
+		e.arguments(subject, in, []ast.Node{n.Operand})
+		e.graph.Add(subject, e.sysml(pTargetFeature), in.linkReference(e, resolve.Reference{QN: n.Member, Chain: n}))
 
 	case *ast.IndexExpr:
 		e.typed(subject, mOperator)
@@ -140,34 +182,34 @@ func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) 
 			operator = opIndex
 		}
 		e.graph.Add(subject, e.sysml(pOperator), rdf.String(operator))
-		e.arguments(subject, owner, []ast.Node{n.Operand, n.Index})
+		e.arguments(subject, in, []ast.Node{n.Operand, n.Index})
 
 	case *ast.InvocationExpr:
 		e.typed(subject, mInvocation)
-		e.invocation(subject, owner, n.Type, n.Operand, n.Args, n.NamedArgs)
+		e.invocation(subject, in, n.Type, n.Operand, n.Args, n.NamedArgs)
 
 	case *ast.ConstructorExpr:
 		// The 202407 rendering declares no ConstructorExpression, so `new` is a flag.
 		e.typed(subject, mInvocation)
 		e.graph.Add(subject, e.sysx(xIsConstructor), rdf.Bool(true))
-		e.invocation(subject, owner, n.Type, nil, n.Args, nil)
+		e.invocation(subject, in, n.Type, nil, n.Args, nil)
 
 	case *ast.CollectExpr:
 		e.typed(subject, mCollect)
-		e.arguments(subject, owner, []ast.Node{n.Operand, n.Body})
+		e.arguments(subject, in, []ast.Node{n.Operand, n.Body})
 
 	case *ast.SelectExpr:
 		e.typed(subject, mSelect)
-		e.arguments(subject, owner, []ast.Node{n.Operand, n.Body})
+		e.arguments(subject, in, []ast.Node{n.Operand, n.Body})
 
 	case *ast.SequenceExpr:
 		e.typed(subject, mOperator)
 		e.graph.Add(subject, e.sysml(pOperator), rdf.String(opSequence))
-		e.arguments(subject, owner, n.Elements)
+		e.arguments(subject, in, n.Elements)
 
 	case *ast.MetadataAccessExpr:
 		e.typed(subject, mMetadataAccess)
-		e.graph.Add(subject, e.sysml(pReferencedElement), e.link(owner, n.Ref))
+		e.graph.Add(subject, e.sysml(pReferencedElement), in.link(e, n.Ref))
 
 	case *ast.BodyExpr:
 		// A body declares its own parameters and a result expression.
@@ -180,7 +222,7 @@ func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) 
 		if n.Result != nil {
 			result := rdf.ExpressionIRI(subject, "result")
 			e.graph.Add(subject, e.sysx(xResultExpression), result)
-			e.expressionNode(result, owner, n.Result)
+			e.expressionNode(result, in.inBody(e, n), n.Result)
 		}
 
 	default:
@@ -195,37 +237,37 @@ func (e *encoder) typed(subject rdf.Term, metaclass string) {
 
 // arguments emits the operands of an expression, each carrying the position it
 // was written in: RDF states no order between the objects of one property.
-func (e *encoder) arguments(subject rdf.Term, owner string, args []ast.Node) {
+func (e *encoder) arguments(subject rdf.Term, in exprScope, args []ast.Node) {
 	for i, arg := range args {
 		if arg == nil {
 			continue
 		}
 		child := rdf.ExpressionIRI(subject, fmt.Sprintf("a%d", i))
 		e.graph.Add(subject, e.sysml(pArgument), child)
-		e.expressionNode(child, owner, arg)
+		e.expressionNode(child, in, arg)
 		e.graph.Add(child, e.sysx(xArgumentIndex), rdf.Int(i))
 	}
 }
 
 // invocation emits the parts an invocation and a constructor share: the function
 // invoked, the receiver of a `->` form, and the arguments.
-func (e *encoder) invocation(subject rdf.Term, owner string, function *ast.QualifiedName, operand ast.Node, args []ast.Node, named []ast.NamedArg) {
+func (e *encoder) invocation(subject rdf.Term, in exprScope, function *ast.QualifiedName, operand ast.Node, args []ast.Node, named []ast.NamedArg) {
 	if function != nil {
-		e.graph.Add(subject, e.sysml(pFunction), e.link(owner, function))
+		e.graph.Add(subject, e.sysml(pFunction), in.link(e, function))
 	}
 	if operand != nil {
 		receiver := rdf.ExpressionIRI(subject, "operand")
 		e.graph.Add(subject, e.sysml(pOperand), receiver)
-		e.expressionNode(receiver, owner, operand)
+		e.expressionNode(receiver, in, operand)
 	}
-	e.arguments(subject, owner, args)
+	e.arguments(subject, in, args)
 	for i, arg := range named {
 		if arg.Value == nil {
 			continue
 		}
 		child := rdf.ExpressionIRI(subject, fmt.Sprintf("n%d", i))
 		e.graph.Add(subject, e.sysml(pArgument), child)
-		e.expressionNode(child, owner, arg.Value)
+		e.expressionNode(child, in, arg.Value)
 		e.graph.Add(child, e.sysx(xArgumentIndex), rdf.Int(i))
 		e.graph.Add(child, e.sysx(xArgumentName), rdf.String(qualifiedText(arg.Name)))
 	}

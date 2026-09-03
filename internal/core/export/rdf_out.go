@@ -271,18 +271,17 @@ type encoder struct {
 }
 
 // collectScopes records the scope each declared member owns under the
-// qualified name collect gave that member; the document root is "".
+// qualified name collect gave that member; the document root is "". A scope
+// of no element — a body expression's — is reached from its expression instead.
 func (e *encoder) collectScopes(scope *symbols.Scope, owner string) {
 	if scope == nil {
 		return
 	}
 	e.scopes[owner] = scope
 	for _, child := range scope.Children() {
-		fqn, ok := e.fqn[child.Node()]
-		if !ok {
-			fqn = owner
+		if fqn, ok := e.fqn[child.Node()]; ok {
+			e.collectScopes(child, fqn)
 		}
-		e.collectScopes(child, fqn)
 	}
 }
 
@@ -610,7 +609,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 			{xRecursive, n.IsRecursive},
 			{xExpose, n.IsExpose},
 		})
-		e.expression(subject, e.sysx(xFilter), xFilter, owner, n.FilterExpr)
+		e.filterExpression(subject, e.sysx(xFilter), xFilter, owner, n.FilterExpr)
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Body, fqn, subject)
 
@@ -734,7 +733,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 
 	case *ast.FilterMember:
 		head(rdf.OpenSysMLTerm(mFilter))
-		e.expression(subject, e.sysx(xFilter), xFilter, owner, n.Condition)
+		e.filterExpression(subject, e.sysx(xFilter), xFilter, owner, n.Condition)
 		return nil
 
 	case *ast.ErrorNode:
@@ -1197,9 +1196,9 @@ func (e *encoder) linkReference(owner string, ref resolve.Reference) rdf.Term {
 	return e.reference(owner, qualifiedText(ref.QN))
 }
 
-// resolveIn resolves ref from the scope of owner, reporting the qualified name
-// of the declaration it reaches when that declaration is in this document.
-func (e *encoder) resolveIn(owner string, ref resolve.Reference) (string, bool) {
+// scopeOf is the scope of the element owner names, or of the nearest enclosing
+// element that owns one.
+func (e *encoder) scopeOf(owner string) *symbols.Scope {
 	scope := e.scopes[owner]
 	for scope == nil && owner != "" {
 		cut := strings.LastIndex(owner, "::")
@@ -1210,10 +1209,18 @@ func (e *encoder) resolveIn(owner string, ref resolve.Reference) (string, bool) 
 		}
 		scope = e.scopes[owner]
 	}
-	if scope == nil {
+	return scope
+}
+
+// resolveIn resolves ref from its scope, owner's unless set, reporting the
+// qualified name of the declaration it reaches when that is in this document.
+func (e *encoder) resolveIn(owner string, ref resolve.Reference) (string, bool) {
+	if ref.Scope == nil {
+		ref.Scope = e.scopeOf(owner)
+	}
+	if ref.Scope == nil {
 		return "", false
 	}
-	ref.Scope = scope
 	sym, ok := e.resolver.ResolveReference(ref)
 	if !ok || sym == nil {
 		return "", false

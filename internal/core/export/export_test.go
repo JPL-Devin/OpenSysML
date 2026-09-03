@@ -1722,7 +1722,8 @@ func TestWriteFileErrorNamesTheRequestedPath(t *testing.T) {
 // names, and that link alone — without the text it was written as — brings the
 // notation back and the same graph after it. The fixture pairs each linked
 // reference with a same-named declaration nearer the writer, so a link that
-// went to the wrong element would surface here.
+// went to the wrong element would surface here. A filter condition names the
+// metadata its own import filters by.
 func TestLinkedReferencesCarryTheRoundTripWithoutSourceText(t *testing.T) {
 	path := filepath.Join("testdata", "convert", "imported_references.sysml")
 	turtle := toTurtle(t, path)
@@ -1735,6 +1736,8 @@ func TestLinkedReferencesCarryTheRoundTripWithoutSourceText(t *testing.T) {
 		"sysml:redefines elmt:R90__G2__x ;",
 		"sysml:targetFeature elmt:R90__Done__done .",
 		`sysml:type "Elsewhere::Missing" ;`,
+		"sysx:typeArgument elmt:Meta__Safety .",
+		"sysml:type elmt:Meta__Tagged ;",
 	} {
 		if !strings.Contains(turtle, want) {
 			t.Errorf("the graph should carry %q\n%s", want, turtle)
@@ -1754,6 +1757,8 @@ func TestLinkedReferencesCarryTheRoundTripWithoutSourceText(t *testing.T) {
 		"part : OtherPkg::Inner::Wheel redefines w;",
 		"transition idle then Done::done;",
 		"part unresolved : Elsewhere::Missing;",
+		"public import Meta::* [(@ Meta::Safety)];",
+		"attribute other : Meta::Tagged;",
 	} {
 		if !strings.Contains(string(back), want) {
 			t.Errorf("the notation should read %q\n%s", want, back)
@@ -1776,6 +1781,26 @@ func TestLinkedReferencesCarryTheRoundTripWithoutSourceText(t *testing.T) {
 		if !first[triple] {
 			t.Errorf("the second hop added %s %s %s", triple.Subject.Value, triple.Predicate.Value, triple.Object.Value)
 		}
+	}
+}
+
+// A body expression's parameters are names of its body alone: a result naming
+// one is not linked to a same-named import, and a reference outside the body
+// still reaches that import — whichever body the element holds.
+func TestBodyParametersShadowOnlyInsideTheirBody(t *testing.T) {
+	turtle := toTurtle(t, filepath.Join("testdata", "convert", "body_scopes.sysml"))
+	for _, want := range []string{
+		`sysml:referent "limit" .`,
+		`sysml:referent "Gauge" .`,
+		"sysml:referent elmt:Lib__limit .",
+		"sysml:type elmt:Lib__Gauge ;",
+	} {
+		if !strings.Contains(turtle, want) {
+			t.Errorf("the graph should carry %q\n%s", want, turtle)
+		}
+	}
+	if strings.Contains(turtle, "elmt:Lib__Gauge .") {
+		t.Errorf("the body parameter Gauge must not link to Lib::Gauge\n%s", turtle)
 	}
 }
 

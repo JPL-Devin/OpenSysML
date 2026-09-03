@@ -48,3 +48,15 @@ package R90 {
         state done;
     }
 }
+package Meta {
+    metadata def Safety;
+    #Safety part def Tagged;
+    part def Plain;
+}
+package Filtered {
+    public import Meta::* [(@ Meta::Safety)];
+    part def C {
+        attribute other : Meta::Tagged;
+        filter (@ Meta::Safety);
+    }
+}
