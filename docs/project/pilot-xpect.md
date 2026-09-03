@@ -466,11 +466,12 @@ same line and severity as ours, and does the same for every other kind mismatch 
 part def; a KerML `feature` typed by a datatype and a class at once). The assessment's "two errors"
 was one error and this warning.
 
-The pilot's own suite declares the pair deliberately: at this pin, 68 `warnings` rows in 12 files
-(`ActionUsage_invalid`, `OccurrenceUsage_invalid`, `PartUsage_invalid`, `ItemUsage_invalid`,
-`PortUsage_Invalid`, `StateUsage_invalid`, `CaseUsage_Invalid`, `CalculationUsage_Invalid1`,
-`ConstraintUsage_Invalid`, `RequirementUsage_Invalid`, `FlowConnectionUsage_Invalid`,
-`AttributeUsage_invalid`) sit on an element whose typing error is declared beside them. Suppressing
+The pilot's own suite declares the pair deliberately: at this pin, 76 `Duplicate of inherited
+member name` `warnings` rows in 12 files (`ActionUsage_invalid`, `OccurrenceUsage_invalid`,
+`PartUsage_invalid`, `ItemUsage_invalid`, `PortUsage_Invalid`, `StateUsage_invalid`,
+`CaseUsage_Invalid`, `CalculationUsage_Invalid1`, `ConstraintUsage_Invalid`,
+`RequirementUsage_Invalid`, `FlowConnectionUsage_Invalid`, `AttributeUsage_invalid`) are anchored
+at, or inside, the anchor of a declared `… must be typed by …` error in the same file. Suppressing
 the warning per element would turn those rows silent. The rule is therefore kept as it is, and
 `TestW9CActionPartDiamondWarns`, `TestW11ASpecializationCycleKeepsImplicitBase` and
 `TestW10BReferenceSubsettingContributesABase` continue to assert the warning next to the error.
