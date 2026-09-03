@@ -244,7 +244,7 @@ func (s *Session) SetBudgets(budgets runtime.Budgets) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.budgets = budgets
-	s.rtCtx = nil
+	s.rtCtx, s.replaced = nil, nil
 	if n := s.heldObjects(); n > 0 {
 		s.lost = lossOnBudgets(n)
 	}

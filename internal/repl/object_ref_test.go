@@ -111,9 +111,18 @@ func TestBudgetsEndDebuggers(t *testing.T) {
 		s := loadFixture(t, "testdata/exhibited_machine.sysml")
 		first := objectIDIn(t, run(t, s, "%instantiate Obj::Monitor"))
 		wants(t, run(t, s, "%state Obj::Monitor"), "exhibited by object #"+first)
+		// Carried over a declaration, the debugger keeps the replaced context's ids
+		// alive; new bounds end it, so they restart.
+		s.Submit("package Other { part def Unrelated; }")
+		if s.replaced == nil {
+			t.Fatal("the carried debugger did not keep the replaced context's ids")
+		}
 		rebound(t, s)
 		if s.stateExec != nil {
 			t.Fatal("the state machine session outlived its runtime context")
+		}
+		if s.replaced != nil {
+			t.Fatal("the replaced context's ids outlived the debugger")
 		}
 		again := objectIDIn(t, run(t, s, "%instantiate Obj::Monitor"))
 		if again != first {
