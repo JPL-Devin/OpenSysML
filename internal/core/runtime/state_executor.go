@@ -859,7 +859,11 @@ func (e *StateExecutor) enclosesActiveRegion(state *ast.StateNode) bool {
 // was: the caller binds the trigger's arguments again before firing.
 func (e *StateExecutor) enabledTransition(state *ast.StateNode, event *Event) (*lower.Transition, error) {
 	for _, trans := range e.graph.Transitions[state] {
-		if !e.matchesEvent(trans, event) {
+		matches, err := e.matchesEvent(trans, event)
+		if err != nil {
+			return nil, err
+		}
+		if !matches {
 			continue
 		}
 		// A call trigger's arguments are bound before the guard runs: the guard is
@@ -962,37 +966,41 @@ func (e *StateExecutor) restoreData(names []ast.NameSegment) func() {
 	}
 }
 
-// matchesEvent checks if a transition matches the given event.
-func (e *StateExecutor) matchesEvent(trans *lower.Transition, event *Event) bool {
+// matchesEvent checks if a transition matches the given event. Resolving the
+// port a `via` names may materialize it, which can fail.
+func (e *StateExecutor) matchesEvent(trans *lower.Transition, event *Event) (bool, error) {
 	// Completion transition (nil trigger) doesn't match external events
 	if trans.Trigger == nil {
-		return false
+		return false, nil
 	}
 
 	switch event.Type {
 	case EventAccept, EventCall, EventChange:
 		if !e.triggerMatches(trans.Trigger, trans.Scope, event) {
-			return false
+			return false, nil
 		}
 		// `accept … via <port>` takes only an occurrence that arrived at that
 		// port; a trigger naming none takes it whatever route it came by.
 		if trans.Via == "" {
-			return true
+			return true, nil
 		}
 		msg, ok := event.Payload.(Message)
-		return ok && e.ctx.messageReaches(msg, e.stateMachine.Name, trans.Via, e.self)
+		if !ok {
+			return false, nil
+		}
+		return e.ctx.messageReaches(msg, e.stateMachine.Name, trans.Via, e.self)
 
 	case EventTime:
 		// Time events carry the specific transition in Payload
 		// If matchesEvent is called for time events (shouldn't normally happen),
 		// match if this transition is the one in the payload
 		if transPayload, ok := event.Payload.(*lower.Transition); ok {
-			return trans == transPayload
+			return trans == transPayload, nil
 		}
-		return false
+		return false, nil
 
 	default:
-		return false
+		return false, nil
 	}
 }
 
@@ -1957,14 +1965,19 @@ func (e *StateExecutor) acceptsSignal(msg Message) bool {
 }
 
 // acceptsSignalFrom reports whether a transition out of one state is triggered
-// by this message's signal.
+// by this message's signal. A port that fails to resolve counts as accepting:
+// the step this provokes surfaces the failure from enabledTransition.
 func (e *StateExecutor) acceptsSignalFrom(state *ast.StateNode, msg Message) bool {
 	for _, trans := range e.graph.Transitions[state] {
 		accept, ok := trans.Trigger.(*ast.AcceptEvent)
 		if !ok {
 			continue
 		}
-		if !e.ctx.messageReaches(msg, e.stateMachine.Name, trans.Via, e.self) {
+		reaches, err := e.ctx.messageReaches(msg, e.stateMachine.Name, trans.Via, e.self)
+		if err != nil {
+			return true
+		}
+		if !reaches {
 			continue
 		}
 		if typed := ast.AsQualifiedName(accept.SignalType); typed != nil && len(typed.Parts) > 0 {

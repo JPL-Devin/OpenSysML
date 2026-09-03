@@ -153,42 +153,53 @@ func objectID(inst *Instance) int64 {
 // performed by self, may take message m: by the destination as written, or by
 // the identity of the port object it reached — a port a binding connector
 // joins to another is that other port, whichever object's feature names it.
-func (ctx *Context) messageReaches(m Message, name, port string, self *Instance) bool {
+// Resolving the consumer's port may materialize it, which can fail.
+func (ctx *Context) messageReaches(m Message, name, port string, self *Instance) (bool, error) {
 	if m.reaches(name, port, objectID(self)) {
-		return true
+		return true, nil
 	}
-	if m.PortID == 0 || port == "" || m.PortID != ctx.portInstanceID(self, port) {
-		return false
+	if m.PortID == 0 || port == "" {
+		return false, nil
+	}
+	portID, err := ctx.portInstanceID(self, port)
+	if err != nil {
+		return false, err
+	}
+	if m.PortID != portID {
+		return false, nil
 	}
 	switch m.Delivery {
 	case DeliverPort:
-		return true
+		return true, nil
 	case DeliverPortReceiver:
-		return m.Target == name
+		return m.Target == name, nil
 	}
-	return false
+	return false, nil
 }
 
 // portInstanceID is the identity of the port object a dotted port path of
-// holder names, 0 where the path reaches no port object this run.
-func (ctx *Context) portInstanceID(holder *Instance, port string) int64 {
+// holder names, materializing it; 0 where the path names no port object.
+func (ctx *Context) portInstanceID(holder *Instance, port string) (int64, error) {
 	if holder == nil || port == "" {
-		return 0
+		return 0, nil
 	}
 	current := holder
 	segments := strings.Split(port, ".")
 	for i, segment := range segments {
 		fv, held := current.FeatureValues[segment]
 		if !held || (i == len(segments)-1 && !isPortFeature(fv.Feature)) {
-			return 0
+			return 0, nil
 		}
 		next, ok, err := ctx.fvObject(current, segment)
-		if err != nil || !ok {
-			return 0
+		if err != nil {
+			return 0, err
+		}
+		if !ok {
+			return 0, nil
 		}
 		current = next
 	}
-	return current.ID
+	return current.ID, nil
 }
 
 // postVia routes a message out of a sending port: every port joined to it that
@@ -237,18 +248,30 @@ func (ctx *Context) postVia(conns []lower.Connection, msg Message, send lower.Se
 		return &UnroutableSendError{Port: send.Target, Outbound: outbound}
 	}
 	// A connection joins two objects, so each copy is held to the identity of the
-	// object whose port the end resolved to rather than to the sender's.
+	// object whose port the end resolved to rather than to the sender's. Two
+	// destinations naming one port object (through a binding) get one copy.
 	posted := map[ownerDelivery]bool{}
+	postedPorts := map[int64]bool{}
 	for _, delivery := range append(receiving, crossing...) {
 		if posted[delivery] {
 			continue
 		}
 		posted[delivery] = true
+		portID, err := ctx.portInstanceID(ctx.instances[delivery.object], delivery.port)
+		if err != nil {
+			return err
+		}
+		if portID != 0 {
+			if postedPorts[portID] {
+				continue
+			}
+			postedPorts[portID] = true
+		}
 		routed := msg
 		routed.Target = receiver
 		routed.Port = delivery.port
 		routed.Object = delivery.object
-		routed.PortID = ctx.portInstanceID(ctx.instances[delivery.object], delivery.port)
+		routed.PortID = portID
 		routed.Delivery = DeliverPort
 		if receiver != "" {
 			routed.Delivery = DeliverPortReceiver
@@ -384,7 +407,10 @@ func (ctx *Context) postTo(msg Message, send lower.Send, self *Instance) error {
 		copied.Target, copied.Port, copied.Object = addr.Name, addr.Port, addr.Object
 		copied.Delivery = addr.Delivery
 		if addr.Delivery == DeliverPort {
-			copied.PortID = ctx.portInstanceID(ctx.instances[addr.Object], addr.Port)
+			copied.PortID, err = ctx.portInstanceID(ctx.instances[addr.Object], addr.Port)
+			if err != nil {
+				return err
+			}
 		}
 		ctx.PostMessage(copied)
 	}

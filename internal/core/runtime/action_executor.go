@@ -344,9 +344,11 @@ func (e *ActionExecutor) HasPendingSignal() bool {
 		if !isAccept || accept.Trigger != nil {
 			continue
 		}
-		matches := e.acceptMatch(accept, usage)
+		matches, failed := e.acceptMatch(accept, usage)
 		for _, msg := range e.ctx.PendingMessages() {
-			if matches(msg) {
+			// A port that fails to resolve counts as pending: the step this
+			// provokes surfaces the failure.
+			if matches(msg) || *failed != nil {
 				return true
 			}
 		}
@@ -356,17 +358,27 @@ func (e *ActionExecutor) HasPendingSignal() bool {
 
 // acceptMatch is the predicate an accept node holds a message to: it reaches
 // the node, and conforms to the type the accept names or carries the event it
-// subsets.
-func (e *ActionExecutor) acceptMatch(accept lower.Accept, usage *ast.Usage) func(Message) bool {
+// subsets. Resolving the `via` port may fail; the predicate then matches
+// nothing and the failure is left in the returned error slot.
+func (e *ActionExecutor) acceptMatch(accept lower.Accept, usage *ast.Usage) (func(Message) bool, *error) {
+	var failed error
 	return func(m Message) bool {
-		if !e.ctx.messageReaches(m, ActionNodeName(usage), accept.ViaPort, e.self) {
+		if failed != nil {
+			return false
+		}
+		reaches, err := e.ctx.messageReaches(m, ActionNodeName(usage), accept.ViaPort, e.self)
+		if err != nil {
+			failed = err
+			return false
+		}
+		if !reaches {
 			return false
 		}
 		if accept.SignalType != nil {
 			return e.ctx.messageMatches(m, accept.SignalType, accept.Scope)
 		}
 		return m.carriesSignal(accept.SubsetsEvent)
-	}
+	}, &failed
 }
 
 // breakpointHit returns the name of a breakpoint node a token sits on and has
@@ -1165,7 +1177,11 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 		if want == "" {
 			want = accept.SubsetsEvent
 		}
-		msg, taken := e.ctx.TakeMessage(e.acceptMatch(accept, usage))
+		matches, failed := e.acceptMatch(accept, usage)
+		msg, taken := e.ctx.TakeMessage(matches)
+		if *failed != nil {
+			return *failed
+		}
 		if !taken {
 			if token.Wait == nil {
 				token.Wait = &AcceptWait{
