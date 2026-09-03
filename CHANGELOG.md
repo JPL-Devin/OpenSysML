@@ -183,7 +183,8 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 - **An optional composite feature fills to its lower bound.** `part spare : Wheel[0..1]` used
   to materialize an object, where `part wheels : Wheel[0..*]` materialized none; both now hold
   only the objects the features subsetting them hold, so an optional part reads as the empty
-  sequence and an abstract one holds only what subsets it. A required feature holding nothing
+  sequence and an abstract one holds only what subsets it — a required abstract feature nothing
+  subsets is a multiplicity violation, not an empty value. A required feature holding nothing
   is still uninitialized when read. What made this visible is the library: `Item::shape` and
   `Item::voids` are optional, and an anonymous object for each would have said the box had a
   void it does not have.

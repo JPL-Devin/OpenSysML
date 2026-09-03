@@ -48,6 +48,54 @@ func TestOptionalScalarFeatureHoldsOnlyContributions(t *testing.T) {
 	}
 }
 
+// A required abstract feature holds only what subsets it, so one nothing subsets
+// violates its lower bound rather than holding an empty value; enough
+// contributions satisfy it, scalar or collection alike.
+func TestRequiredAbstractFeatureDemandsContributions(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		part def Wheel;
+		part def Bare {
+			abstract part axle : Wheel[1];
+			abstract part wheels : Wheel[2..*];
+		}
+		part def Fitted {
+			abstract part axle : Wheel[1];
+			part front : Wheel[1] :> axle;
+			abstract part wheels : Wheel[2..*];
+			part left : Wheel[1] :> wheels;
+			part right : Wheel[1] :> wheels;
+		}
+	}`))
+	bare, err := ctx.Instantiate(oneSymbol(t, idx, "test::Bare"))
+	if err != nil {
+		t.Fatalf("instantiate Bare: %v", err)
+	}
+	for _, name := range []string{"axle", "wheels"} {
+		fv, err := bare.GetFeatureValue(ctx, name)
+		if !errors.Is(err, ErrMultiplicityViolation) {
+			t.Errorf("bare.%s = %v, %v; want %v", name, fv, err, ErrMultiplicityViolation)
+		}
+	}
+	fitted, err := ctx.Instantiate(oneSymbol(t, idx, "test::Fitted"))
+	if err != nil {
+		t.Fatalf("instantiate Fitted: %v", err)
+	}
+	axle, err := fitted.GetFeatureValue(ctx, "axle")
+	if err != nil {
+		t.Fatalf("fitted.axle: %v", err)
+	}
+	if held, front := axle.HeldValue(), objectAt(t, ctx, fitted, "front"); held.Kind != ValInstance || held.Instance != front.ID {
+		t.Errorf("fitted.axle = %s, want the front wheel (%d)", FormatValue(held), front.ID)
+	}
+	wheels, err := fitted.GetFeatureValue(ctx, "wheels")
+	if err != nil {
+		t.Fatalf("fitted.wheels: %v", err)
+	}
+	if held := wheels.HeldValue(); elementCount(&held) != 2 {
+		t.Errorf("fitted.wheels = %s, want the two wheels subsetting it", FormatValue(held))
+	}
+}
+
 // A valueless optional declaration evaluates to the empty sequence whether it is
 // named bare or qualified; a required one keeps its no-value error both ways.
 func TestValuelessOptionalDeclarationEvaluatesEmptyHoweverSpelled(t *testing.T) {

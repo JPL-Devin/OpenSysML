@@ -573,11 +573,10 @@ func (inst *Instance) holdContributions(ctx *Context, fv *FeatureValue, name str
 	if err != nil {
 		return nil, err
 	}
+	if why := fv.Feature.Multiplicity.CountViolation(int64(len(contributed))); why != "" {
+		return nil, fmt.Errorf("feature value %s.%s: %w: %s", inst.Type.Name, name, ErrMultiplicityViolation, why)
+	}
 	if fv.Feature.Scalar() {
-		if len(contributed) > 1 {
-			return nil, fmt.Errorf("feature value %s.%s: %w: %s", inst.Type.Name, name, ErrMultiplicityViolation,
-				fv.Feature.Multiplicity.CountViolation(int64(len(contributed))))
-		}
 		if len(contributed) == 1 {
 			fv.Value = contributed[0]
 		}
