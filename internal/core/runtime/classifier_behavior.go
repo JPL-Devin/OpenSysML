@@ -118,6 +118,23 @@ func (inst *Instance) ExhibitedStatesOf(sym *symbols.Symbol) []*ObjectBehavior {
 	return bodies
 }
 
+// ExhibitsState reports whether member is an exhibit declaration whose objects
+// run sym's machine: member itself, or the body it names. Declarations are compared.
+func (ctx *Context) ExhibitsState(member, sym *symbols.Symbol) bool {
+	if member == nil || member.Decl == nil || sym == nil || sym.Decl == nil {
+		return false
+	}
+	behavior, ok := lower.ClassifierBehaviorOf(member.Decl)
+	if !ok || behavior.Kind != lower.ExhibitedState {
+		return false
+	}
+	if member.Decl == sym.Decl {
+		return true
+	}
+	body, err := ctx.classifierBehaviorSymbol(classifierBehaviorDecl{behavior: behavior, member: member})
+	return err == nil && body != nil && body.Decl == sym.Decl
+}
+
 // Member is the declaration binding the behavior to the object's type: the
 // exhibiting or performing usage, which is what addresses this behavior
 // when several run the same body.

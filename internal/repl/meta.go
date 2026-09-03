@@ -13,7 +13,6 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
-	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
@@ -2264,8 +2263,8 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 	if len(performer) == 0 {
 		switch exhibitors := s.exhibitorsOf(ctx, sym); len(exhibitors) {
 		case 0:
-			if _, bound := lower.ClassifierBehaviorOf(sym.Decl); bound {
-				return nil, s.exhibitorsError(name, sym, nil)
+			if types := s.exhibitingTypes(ctx, sym); len(types) > 0 {
+				return nil, s.exhibitorsError(name, types, nil)
 			}
 		case 1:
 			ex := exhibitors[0]
@@ -2274,7 +2273,7 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 			}
 			return s.attachExhibitedMachine(ctx, name, heldName(ex.inst, ex.name), ex.inst, ex.machines[0])
 		default:
-			return nil, s.exhibitorsError(name, sym, exhibitors)
+			return nil, s.exhibitorsError(name, nil, exhibitors)
 		}
 	}
 

@@ -70,14 +70,18 @@ func (e *AmbiguousMachineError) Error() string {
 // no held object exhibits it, or several do, so no one running performance is meant.
 type ExhibitorsError struct {
 	Machine string      // the machine asked for, as the prompt prints names
-	Type    string      // the type exhibiting it, as the prompt prints names
+	Types   []string    // the types declaring an exhibit of it, in declaration order, as the prompt prints names
 	Objects []ObjectRef // the held objects exhibiting it, in walk order; none when no object does
 }
 
 func (e *ExhibitorsError) Error() string {
 	if len(e.Objects) == 0 {
-		return fmt.Sprintf("no object of this session exhibits %q, which runs only on an object of %q: use %%instantiate to create one, then %%state <object> or %%state %s <object>",
-			e.Machine, e.Type, e.Machine)
+		types := make([]string, len(e.Types))
+		for i, t := range e.Types {
+			types[i] = fmt.Sprintf("%q", t)
+		}
+		return fmt.Sprintf("no object of this session exhibits %q, which runs only on an object of %s: use %%instantiate to create one, then %%state <object> or %%state %s <object>",
+			e.Machine, strings.Join(types, " or "), e.Machine)
 	}
 	labels := make([]string, len(e.Objects))
 	for i, o := range e.Objects {
@@ -445,14 +449,37 @@ func (s *Session) exhibitorsOf(ctx *runtime.Context, sym *symbols.Symbol) []exhi
 	return found
 }
 
-// exhibitorsError reports sym's machine as one `%state <machine>` alone cannot
-// attach to, naming the objects exhibiting it.
-func (s *Session) exhibitorsError(name string, sym *symbols.Symbol, exhibitors []exhibitor) error {
-	e := &ExhibitorsError{Machine: name}
-	if sym.OwnerScope != nil {
-		if declaring := sym.OwnerScope.Owner(); declaring != nil {
-			e.Type = notationName(s.fqnOf(declaring))
+// exhibitingTypes finds the types of the session's documents declaring an exhibit
+// of sym's machine (the usage itself, or one typed by or naming it), in declaration order.
+func (s *Session) exhibitingTypes(ctx *runtime.Context, sym *symbols.Symbol) []*symbols.Symbol {
+	var types []*symbols.Symbol
+	var collect func(scope *symbols.Scope)
+	collect = func(scope *symbols.Scope) {
+		if scope == nil {
+			return
 		}
+		for _, member := range scope.Members() {
+			if owner := scope.Owner(); owner != nil && ctx.ExhibitsState(member, sym) {
+				types = append(types, owner)
+				break
+			}
+		}
+		for _, child := range scope.Children() {
+			collect(child)
+		}
+	}
+	for _, scope := range s.docScopes() {
+		collect(scope)
+	}
+	return types
+}
+
+// exhibitorsError reports sym's machine as one `%state <machine>` alone cannot
+// attach to, naming the types declaring an exhibit of it and the objects exhibiting it.
+func (s *Session) exhibitorsError(name string, types []*symbols.Symbol, exhibitors []exhibitor) error {
+	e := &ExhibitorsError{Machine: name}
+	for _, typ := range types {
+		e.Types = append(e.Types, notationName(s.fqnOf(typ)))
 	}
 	for _, ex := range exhibitors {
 		ref := ObjectRef{ID: ex.inst.ID}

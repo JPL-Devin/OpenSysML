@@ -620,7 +620,7 @@ func TestStateOverAMachineNoObjectExhibitsRefuses(t *testing.T) {
 	if !errors.As(err, &eerr) {
 		t.Fatalf("got %v, want an ExhibitorsError", err)
 	}
-	if eerr.Machine != "lp" || eerr.Type != "TA::Sys" || len(eerr.Objects) != 0 {
+	if eerr.Machine != "lp" || strings.Join(eerr.Types, ",") != "TA::Sys" || len(eerr.Objects) != 0 {
 		t.Errorf("got %+v, want lp of TA::Sys exhibited by no object", eerr)
 	}
 	if s.stateExec != nil {
@@ -667,15 +667,30 @@ func TestStateOverAMachineSeveralObjectsExhibitRefuses(t *testing.T) {
 	wants(t, run(t, s, "%state #"+rover), `exhibited by object #`+rover+` of "Fleet::rover"`)
 }
 
-// A definition one held object exhibits as two usages is as ambiguous named alone
-// as it is with the object named; a definition no type exhibits still runs
-// detached, since no object's performance of it exists to attach to.
+// A definition a type exhibits through usages typed by it is refused named alone
+// before any object is held, naming that type rather than running detached; once
+// one held object exhibits it as two usages, it is as ambiguous named alone as it
+// is with the object named.
 func TestStateOverASharedDefinitionNamedAlone(t *testing.T) {
 	s := loadFixture(t, "testdata/shared_machine.sysml")
-	wants(t, run(t, s, "%state Shared::Blink"), "Started state machine executor")
+
+	_, err := s.startStateMachine("Shared::Blink", nil)
+	var eerr *ExhibitorsError
+	if !errors.As(err, &eerr) {
+		t.Fatalf("got %v, want an ExhibitorsError", err)
+	}
+	if eerr.Machine != "Shared::Blink" || strings.Join(eerr.Types, ",") != "Shared::Lamp" || len(eerr.Objects) != 0 {
+		t.Errorf("got %+v, want Shared::Blink of Shared::Lamp exhibited by no object", eerr)
+	}
+	if s.stateExec != nil {
+		t.Errorf("a detached performance was started: %q", s.stateExec.fqn)
+	}
+	got := run(t, s, "%state Shared::Blink")
+	wants(t, got, "error:", `no object of this session exhibits "Shared::Blink"`, `object of "Shared::Lamp"`, "%state Shared::Blink <object>")
+	rejects(t, got, "Started state machine executor")
 
 	run(t, s, "%instantiate Shared::lamp")
-	_, err := s.startStateMachine("Shared::Blink", nil)
+	_, err = s.startStateMachine("Shared::Blink", nil)
 	var aerr *AmbiguousMachineError
 	if !errors.As(err, &aerr) {
 		t.Fatalf("got %v, want an AmbiguousMachineError", err)
@@ -688,6 +703,14 @@ func TestStateOverASharedDefinitionNamedAlone(t *testing.T) {
 	wants(t, run(t, s, "%state Shared::Lamp::rear"), `Debugging state machine "rear" exhibited by object #`, "Current state: dark")
 	wants(t, run(t, s, "%advance 2"), "Current state: lit")
 	wants(t, run(t, s, "%features Shared::lamp"), "front", "dark", "rear", "lit")
+}
+
+// A definition no type exhibits still runs detached when named alone, since no
+// object's performance of it exists to attach to.
+func TestStateOverAnUnexhibitedDefinitionRunsDetached(t *testing.T) {
+	s := loadFixture(t, "testdata/performed_machine.sysml")
+	wants(t, run(t, s, "%state Two::Check"), "Started state machine executor", "Current state: checking")
+	wants(t, run(t, s, "%advance 5"), "Current state: checked")
 }
 
 // atoi reads an object identity a report printed.

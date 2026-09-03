@@ -172,10 +172,12 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   `%instances` and `%features #1` show — so the two forms agree. When no held object exhibits
   the machine, or several do, `%state` refuses with a typed error (`ExhibitorsError`) naming
   the objects and both forms that address one (`%state <object>`, `%state <machine>
-  <object>`), rather than guessing or performing the machine detached; a definition one object
-  exhibits as several usages refuses as it does with the object named. A machine no type
-  exhibits (`state def Blink` alone) still starts as before, since no object's performance of
-  it exists to attach to.
+  <object>`), rather than guessing or performing the machine detached; with no object yet
+  held, it names the types whose objects run the machine, whether they exhibit it inline or
+  through usages typed by a shared definition (`exhibit state front : Blink`). A definition
+  one object exhibits as several usages refuses as it does with the object named. A machine
+  no type exhibits (`state def Blink` alone) still starts as before, since no object's
+  performance of it exists to attach to.
 
 - **A qualified name through an import evaluates as the checker resolves it.** The evaluator
   used to resolve only the first segment of `Bq::x` through the resolver and walk the rest as
