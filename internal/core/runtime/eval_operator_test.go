@@ -148,13 +148,14 @@ func evalStringExpr(t *testing.T, expr string) (Value, error) {
 	t.Helper()
 	src := `
 package test {
+	private import SequenceFunctions::*;
 	attribute s = "abc";
 	attribute empty = "";
 	attribute accented = "héllo";
 	attribute three = 3;
 	attribute result = ` + expr + `;
 }`
-	model, resolver, root := parseAndBuildModel(t, src)
+	model, resolver, root := parseAndBuildLibraryModel(t, src)
 	pkg, ok := root.LookupLocal("test")
 	if !ok || pkg == nil || pkg.Scope == nil {
 		t.Fatal("package test has no scope")

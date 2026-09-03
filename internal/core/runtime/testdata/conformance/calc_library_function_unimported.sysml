@@ -1,13 +1,10 @@
-// A Kernel Function Library function called by its bare name without an import
-// of its package is in force; an OpenSysML extension function is not.
+// A library function is denoted by its bare name only where the model imports
+// its package, as the checker resolves it: with no import of SequenceFunctions,
+// wheels->size() is an unresolved reference at runtime too, naming the packages
+// that would provide it.
 package test {
-	private import ScalarValues::*;
-
-	part def Probe {
-		attribute root = sqrt(16.0);
-		attribute magnitude = abs(-2);
-		attribute count = size(root);
-		attribute text = ToString("four");
-		attribute growth = exp(1.0);
+	calc wheelCount {
+		attribute wheels : ScalarValues::Integer[*] = (1, 2, 3, 4);
+		return : ScalarValues::Integer = wheels->size();
 	}
 }

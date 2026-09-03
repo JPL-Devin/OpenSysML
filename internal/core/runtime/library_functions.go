@@ -20,10 +20,6 @@ import (
 // so a model is told which declaration it is rather than answered wrongly.
 var ErrUnevaluableLibraryFunction = errors.New("library function is not evaluable")
 
-// ErrUnimportedExtensionFunction is returned for an unqualified call to a
-// OpenSysML extension function the model imports no declaration of.
-var ErrUnimportedExtensionFunction = errors.New("function is not in scope")
-
 // ErrAmbiguousInvocation is returned for a call whose name denotes several
 // declarations the arguments fit equally well, none more specific than the rest.
 var ErrAmbiguousInvocation = errors.New("ambiguous invocation")
@@ -49,6 +45,9 @@ type libraryFunction struct {
 	// rest are declared [0..1] and bind null where a call omits them.
 	required int
 	apply    libraryApply
+	// unevaluable marks a declaration registered only to report why a call to
+	// it cannot be computed.
+	unevaluable bool
 	// scalar marks a function whose result is a scalar whenever its arguments
 	// are, which the compiled calc tier may call with unboxed arguments.
 	scalar bool
@@ -60,15 +59,10 @@ type libraryFunction struct {
 type libraryApply func(name string, ctx *Context, args []Value) (Value, error)
 
 // libraryFunctions maps a function's fully-qualified name to its
-// implementation. Dispatch is by qualified name, so a user-declared calc of the
-// same local name resolves to itself and is never routed here.
+// implementation. Dispatch is by the declaration a call resolves to, so a
+// user-declared calc of the same local name resolves to itself and is never
+// routed here.
 var libraryFunctions = map[string]*libraryFunction{}
-
-// libraryFunctionsByLocalName maps an unqualified name to the implementation a
-// call denotes when the name resolves to no declaration in the model — the OMG
-// function libraries are always in force, even in a model that imports no part
-// of them. It is derived from libnames, the table the checker reads too.
-var libraryFunctionsByLocalName = map[string]*libraryFunction{}
 
 func init() {
 	// RealFunctions (Kernel Function Library). `abs`, `max` and `min` take Real
@@ -244,6 +238,7 @@ func registerUnevaluable(name string, params []string, required int, reason stri
 	registerValueFunction(name, params, required, func(called string, _ *Context, _ []Value) (Value, error) {
 		return Value{}, fmt.Errorf("%w: %s: %s", ErrUnevaluableLibraryFunction, called, reason)
 	})
+	libraryFunctions[name].unevaluable = true
 }
 
 // numericScalars adapts an implementation over scalar numeric values: every
@@ -274,30 +269,6 @@ func numericScalars(params []string, apply func([]semantics.Value) (semantics.Va
 func libraryFunctionByName(fqn string) (*libraryFunction, bool) {
 	fn, ok := libraryFunctions[fqn]
 	return fn, ok
-}
-
-// unresolvedLibraryFunction returns the library function a call denotes when its
-// name resolves to no declaration: the library's own qualified name, or an
-// unqualified name of an OMG library function. written is the name as the model
-// wrote it. An unqualified name only an OpenSysML extension declares gives a
-// typed error naming the import that makes the call legal.
-func unresolvedLibraryFunction(qn *ast.QualifiedName, written string) (*libraryFunction, error) {
-	if fn, ok := libraryFunctions[written]; ok {
-		return fn, nil
-	}
-	if qn == nil || qn.Global || len(qn.Parts) != 1 {
-		return nil, nil
-	}
-	if fn, ok := libraryFunctionsByLocalName[written]; ok {
-		return fn, nil
-	}
-	if pkg, ok := libnames.ExtensionPackage(written); ok {
-		return nil, fmt.Errorf(
-			"%w: %s is declared by %s, an OpenSysML extension no OMG library declares: write `import %s::*;` to call it",
-			ErrUnimportedExtensionFunction, written, pkg, pkg,
-		)
-	}
-	return nil, nil
 }
 
 // libraryFunctionFor returns the built-in implementation of sym when sym is a

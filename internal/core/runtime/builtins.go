@@ -10,19 +10,9 @@ import (
 // collections, or whose arguments are bodies rather than values, which the
 // scalar library registry (library_functions.go) cannot express: it applies to
 // semantics.Values, while these need runtime values and an evaluation context to
-// call a body with.
+// call a body with. Dispatch is by the declaration a call resolves to, never by
+// its bare name: `seq->size()` is SequenceFunctions::size only where imported.
 var builtins map[string]func(*EvalContext, []Value) (Value, error)
-
-// builtinsByLocalName maps an unqualified name to the declaration a bare or
-// arrow-form call denotes — `(1,2,3)->size()` and `size((1,2,3))` are
-// `SequenceFunctions::size`. It is derived from libnames and dispatch reaches
-// it only for a name the model itself declares nothing for, so a user-declared
-// calc of the same name still resolves to itself.
-var builtinsByLocalName map[string]func(*EvalContext, []Value) (Value, error)
-
-// builtinQualifiedNames maps an unqualified name to the qualified declaration
-// builtinsByLocalName dispatches it as.
-var builtinQualifiedNames map[string]string
 
 func init() {
 	builtins = map[string]func(*EvalContext, []Value) (Value, error){
