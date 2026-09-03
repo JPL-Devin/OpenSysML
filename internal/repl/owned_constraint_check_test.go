@@ -32,6 +32,18 @@ const ownedConstraintFixture = `package Power {
         require constraint :>> tooLittle { }
         require constraint :>> typed { doc /* still the shortfall rule */ }
     }
+    requirement def Nested :> Margin {
+        require constraint :>> tooLittle { assert constraint { } }
+        require constraint :>> typed { assert constraint { doc /* no condition */ } }
+        require constraint :>> enough { assert constraint { 600.0 >= 650.0 } }
+    }
+    requirement def Pair {
+        require constraint low { 300.0 >= 450.0 }
+        require constraint bare;
+    }
+    requirement def Joint :> Pair {
+        require constraint :>> low, bare;
+    }
 }
 `
 
@@ -77,6 +89,36 @@ func TestCheckRedefinedNamedOwnedConstraint(t *testing.T) {
 	wantVerdict(t, s.CheckConstraint("Power::Braced::typed"), VerdictFails,
 		"✗ Constraint Power::Braced::typed failed",
 		"Assertion evaluated to false: 300.0 >= 450.0")
+}
+
+// TestCheckNestedConstraintKeepsRedefinedResult checks that a redefinition whose
+// body only nests a constraint — empty, doc-only or stating a condition — owns no
+// result expression, so the redefined one is still checked alongside it.
+func TestCheckNestedConstraintKeepsRedefinedResult(t *testing.T) {
+	s := loadSource(t, ownedConstraintFixture)
+
+	wantVerdict(t, s.CheckConstraint("Power::Nested::tooLittle"), VerdictFails,
+		"✗ Constraint Power::Nested::tooLittle failed",
+		"Assertion evaluated to false: 300.0 >= 450.0")
+	wantVerdict(t, s.CheckConstraint("Power::Nested::typed"), VerdictFails,
+		"✗ Constraint Power::Nested::typed failed",
+		"Assertion evaluated to false: 300.0 >= 450.0")
+	wantVerdict(t, s.CheckConstraint("Power::Nested::enough"), VerdictFails,
+		"✗ Constraint Power::Nested::enough failed",
+		"Assertion evaluated to false: 600.0 >= 650.0")
+	wantVerdict(t, s.CheckRequirement("Power::Nested"), VerdictFails,
+		"✗ Requirement Power::Nested failed",
+		"Required condition evaluated to false: 300.0 >= 450.0")
+}
+
+// TestCheckAnonymousRedefinitionOfTwoConstraints checks that a constraint no
+// name names, redefining two, is checked as what it redefines.
+func TestCheckAnonymousRedefinitionOfTwoConstraints(t *testing.T) {
+	s := loadSource(t, ownedConstraintFixture)
+
+	wantVerdict(t, s.CheckRequirement("Power::Joint"), VerdictFails,
+		"✗ Requirement Power::Joint failed",
+		"Required condition evaluated to false: 300.0 >= 450.0")
 }
 
 // TestCheckRequirementWithNamedOwnedConstraints checks that a requirement

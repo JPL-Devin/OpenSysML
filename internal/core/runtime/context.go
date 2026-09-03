@@ -623,17 +623,21 @@ type scopedMember struct {
 // first, followed by sym's own. A usage that takes its conditions from a
 // definition (constraint limit : MassLimit) carries no members itself. A library
 // supertype states the metamodel frame every element specializes rather than the
-// model's own objectives, conditions or parameters, so it contributes none.
+// model's own objectives, conditions or parameters, so it contributes none. A
+// supertype whose result expression a redefinition replaces keeps its other members.
 func (ctx *Context) chainMembers(sym *symbols.Symbol, scope *symbols.Scope) []scopedMember {
 	var out []scopedMember
 	supers := ctx.model.AllSupertypes(sym)
-	replaced := ctx.replacedConstraintBodies(sym, supers)
+	replaced := ctx.replacedResultExpressions(sym, supers)
 	for i := len(supers) - 1; i >= 0; i-- {
 		link := supers[i]
-		if link == nil || ctx.libraryDeclared(link) || replaced[link] {
+		if link == nil || ctx.libraryDeclared(link) {
 			continue
 		}
 		for _, node := range declMembers(link.Decl) {
+			if replaced[link] && isResultExpression(node) {
+				continue
+			}
 			out = append(out, scopedMember{node: node, scope: bodyScope(link, link.OwnerScope)})
 		}
 	}
@@ -643,17 +647,18 @@ func (ctx *Context) chainMembers(sym *symbols.Symbol, scope *symbols.Scope) []sc
 	return out
 }
 
-// replacedConstraintBodies returns the supertypes a constraint's chain leaves out:
-// those a redefinition stating a condition of its own replaces, and what only they
-// reach. A body stating none — `;`, `{ }`, docs only — inherits the redefined
-// condition, as the pilot's getResultExpressionOf falls back to the inherited one.
-func (ctx *Context) replacedConstraintBodies(sym *symbols.Symbol, supers []*symbols.Symbol) map[*symbols.Symbol]bool {
+// replacedResultExpressions returns the supertypes whose result expression a
+// constraint's chain leaves out: those a redefinition owning a result expression
+// replaces, and what only they reach. A body owning none — `;`, `{ }`, docs or
+// nested constraints only — inherits the redefined one, as the pilot's
+// getResultExpressionOf falls back to the inherited result expression.
+func (ctx *Context) replacedResultExpressions(sym *symbols.Symbol, supers []*symbols.Symbol) map[*symbols.Symbol]bool {
 	if !isConstraintSymbol(sym) {
 		return nil
 	}
 	replaced := map[*symbols.Symbol]bool{}
 	for _, link := range append([]*symbols.Symbol{sym}, supers...) {
-		if link == nil || !isConstraintSymbol(link) || !statesCondition(declMembers(link.Decl)) {
+		if link == nil || !isConstraintSymbol(link) || !ownsResultExpression(declMembers(link.Decl)) {
 			continue
 		}
 		for _, redefined := range ctx.model.AllRedefinedFeatures(link) {
@@ -684,16 +689,23 @@ func (ctx *Context) replacedConstraintBodies(sym *symbols.Symbol, supers []*symb
 	return skipped
 }
 
-// statesCondition reports whether any of the members states a condition: the
-// body owns a result expression, whatever else it declares.
-func statesCondition(members []ast.Node) bool {
+// ownsResultExpression reports whether one of a body's members is its result
+// expression.
+func ownsResultExpression(members []ast.Node) bool {
 	for _, member := range members {
-		switch member.(type) {
-		case *ast.ConstraintMember, *ast.RequireMember, *ast.AssumeMember:
+		if isResultExpression(member) {
 			return true
 		}
 	}
 	return false
+}
+
+// isResultExpression reports whether node is a bare condition (`x > 0`), the
+// result expression of the body stating it. A nested `assert constraint { … }`,
+// a reference (`assert c;`) or a require/assume member is a feature instead.
+func isResultExpression(node ast.Node) bool {
+	c, ok := node.(*ast.ConstraintMember)
+	return ok && c.Keyword == "" && c.Expression != nil
 }
 
 // bodyScope is the scope a member of sym's body was written in: sym's own body,
