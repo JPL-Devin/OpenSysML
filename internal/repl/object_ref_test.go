@@ -641,6 +641,44 @@ func TestCompleteIndexesSubsettingContributions(t *testing.T) {
 	}
 }
 
+// A redefinition gives a collection a second name, and a feature subsetting
+// either name contributes to it; completion counts that contribution for a
+// nested object known only by type, and offers the same indexes once it exists.
+func TestCompleteIndexesThroughRedefinedCollection(t *testing.T) {
+	s := submitted(t, `package Fleet {
+	part def Wheel { attribute radius = 0.3; }
+	part def Axle { part wheels : Wheel[0..4]; }
+	part def FrontAxle :> Axle {
+		part front :>> wheels;
+		part spare : Wheel subsets wheels;
+	}
+	part def Car { part axle : FrontAxle; }
+	part car : Car;
+}`)
+	run(t, s, "%instantiate car")
+	ids := fmt.Sprint(s.rtCtx.InstanceIDs())
+	want := []string{"car.axle.front[1]", "car.axle.spare", "car.axle.wheels[1]"}
+	got := s.Complete("%features car.axle.", len("%features car.axle.")).Candidates
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("completion before materialization offered %v, want %v", got, want)
+	}
+	if now := fmt.Sprint(s.rtCtx.InstanceIDs()); now != ids {
+		t.Fatalf("completion materialized objects: ids %s, were %s", now, ids)
+	}
+	for _, c := range want {
+		if _, _, err := s.resolveObject(c); err != nil {
+			t.Errorf("completion %q does not resolve: %v", c, err)
+		}
+	}
+	got = s.Complete("%features car.axle.", len("%features car.axle.")).Candidates
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("completion after materialization offered %v, want %v", got, want)
+	}
+	wants(t, run(t, s, "%features car.axle.wheels[1]"), "Instance: Fleet::car.axle.wheels[1] (ID: 3)")
+	wants(t, run(t, s, "%features car.axle.front[1]"), "Instance: Fleet::car.axle.front[1] (ID: 3)")
+	wants(t, run(t, s, "%features car.axle.spare"), "Instance: Fleet::car.axle.spare (ID: 3)")
+}
+
 // A path follows every feature the runtime holds an object for — a structured
 // attribute (an `attribute def` with attributes of its own) as much as a part —
 // and completion offers exactly those, before and after they are materialized;

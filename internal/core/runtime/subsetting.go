@@ -92,7 +92,7 @@ func (ctx *Context) aliasRedefinedFeatureValues(inst *Instance) error {
 		byName[features[i].Name] = &features[i]
 	}
 
-	for _, names := range ctx.redefinitionGroups(inst, features) {
+	for _, names := range ctx.redefinitionGroups(inst.Type, features) {
 		chosen, err := ctx.sharedRedefinitionName(inst, byName, names)
 		if err != nil {
 			return err
@@ -105,11 +105,15 @@ func (ctx *Context) aliasRedefinedFeatureValues(inst *Instance) error {
 	return nil
 }
 
-// redefinitionGroups groups the instance's feature names by the feature they name,
+// redefinitionGroups groups the names of typ's features by the feature they name,
 // in feature order, keeping only names that share a feature with another. Each
 // group's names are ordered from the most specific declaration to the least,
 // which is the order the features are computed in.
-func (ctx *Context) redefinitionGroups(inst *Instance, features []EffectiveFeature) [][]string {
+func (ctx *Context) redefinitionGroups(typ *symbols.Symbol, features []EffectiveFeature) [][]string {
+	declared := make(map[string]bool, len(features))
+	for _, feat := range features {
+		declared[feat.Name] = true
+	}
 	leader := map[string]string{}
 	var find func(string) string
 	find = func(name string) string {
@@ -123,14 +127,11 @@ func (ctx *Context) redefinitionGroups(inst *Instance, features []EffectiveFeatu
 		return root
 	}
 	for _, feat := range features {
-		if _, ok := inst.FeatureValues[feat.Name]; !ok || feat.Symbol == nil {
+		if feat.Symbol == nil {
 			continue
 		}
-		for _, redefined := range ctx.redefinedNames(feat.Symbol, inst.Type) {
-			if redefined == feat.Name {
-				continue
-			}
-			if _, ok := inst.FeatureValues[redefined]; !ok {
+		for _, redefined := range ctx.redefinedNames(feat.Symbol, typ) {
+			if redefined == feat.Name || !declared[redefined] {
 				continue
 			}
 			if a, b := find(feat.Name), find(redefined); a != b {
@@ -154,6 +155,24 @@ func (ctx *Context) redefinitionGroups(inst *Instance, features []EffectiveFeatu
 		groups = append(groups, []string{feat.Name})
 	}
 	return groups
+}
+
+// redefinitionAliases returns the names under which typ's features read the
+// feature called name: name itself and every name redefinition makes one with it.
+func (ctx *Context) redefinitionAliases(typ *symbols.Symbol, name string) map[string]bool {
+	aliases := map[string]bool{name: true}
+	for _, names := range ctx.redefinitionGroups(typ, ctx.FeaturesOf(typ)) {
+		for _, n := range names {
+			if n != name {
+				continue
+			}
+			for _, alias := range names {
+				aliases[alias] = true
+			}
+			return aliases
+		}
+	}
+	return aliases
 }
 
 // sharedRedefinitionName returns the name in a group of names of one feature
@@ -209,36 +228,26 @@ func (ctx *Context) redefinedNames(sym, owner *symbols.Symbol) []string {
 	return names
 }
 
-// SubsettingFeatures returns the features of typ whose values the named feature
-// holds by subsetting it, in declaration order, reading nothing. On inst, a name
-// a redefinition makes read the target's feature value is the target too; inst
-// is nil for an object not yet materialized, known only by type.
+// SubsettingFeatures returns the features of typ subsetting the named feature under any
+// of its redefinition names, in declaration order, reading nothing; inst is nil for a type alone.
 func (ctx *Context) SubsettingFeatures(inst *Instance, typ *symbols.Symbol, name string) []EffectiveFeature {
-	var target *FeatureValue
-	if inst != nil {
-		target = inst.FeatureValues[name]
-	}
+	aliases := ctx.redefinitionAliases(typ, name)
 	var subsetting []EffectiveFeature
 	for _, feat := range ctx.FeaturesOf(typ) {
-		if feat.Name == name || feat.Symbol == nil {
-			continue
-		}
-		subsets := false
-		for _, subsetted := range ctx.relatedFeatureNames(feat.Symbol, typ, ast.RelSubsets) {
-			if subsetted == name || (target != nil && inst.FeatureValues[subsetted] == target) {
-				subsets = true
-				break
-			}
-		}
-		if !subsets {
+		if aliases[feat.Name] || feat.Symbol == nil {
 			continue
 		}
 		if inst != nil {
-			if fv, ok := inst.FeatureValues[feat.Name]; !ok || fv == target {
+			if _, ok := inst.FeatureValues[feat.Name]; !ok {
 				continue
 			}
 		}
-		subsetting = append(subsetting, feat)
+		for _, subsetted := range ctx.relatedFeatureNames(feat.Symbol, typ, ast.RelSubsets) {
+			if aliases[subsetted] {
+				subsetting = append(subsetting, feat)
+				break
+			}
+		}
 	}
 	return subsetting
 }
