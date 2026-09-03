@@ -137,6 +137,25 @@ func TestFeatureValueOverridingSubject(t *testing.T) {
 	overridingDiags(t, src, "= v1", "= v1", "default = v1")
 }
 
+// An anonymous subject may carry any value operator; each overrides a binding
+// like `=` does, and none overrides a default.
+func TestFeatureValueOverridingAnonymousSubjectOperators(t *testing.T) {
+	const src = `package P {
+		part def V;
+		part v0 : V;
+		part v1 : V;
+		requirement def R { subject v : V = v0; }
+		requirement r1 : R { subject := v1; }
+		requirement r2 : R { subject default v1; }
+		requirement r3 : R { subject default = v1; }
+		requirement r4 : R { subject default := v1; }
+		requirement def RD { subject v : V default = v0; }
+		requirement r5 : RD { subject := v1; }
+		requirement r6 : RD { subject default = v1; }
+	}`
+	overridingDiags(t, src, ":= v1", "default v1", "default = v1", "default := v1")
+}
+
 // A subject redefines the subject of every general requirement by position, so
 // naming one general's subject explicitly does not exempt another's binding.
 func TestFeatureValueOverridingSubjectOfEveryGeneral(t *testing.T) {

@@ -2063,7 +2063,8 @@ func usageIsSubstantive(u *ast.Usage) bool {
 		len(u.ConnectorEnds) > 0 || u.FlowEnds != nil
 }
 
-// parseSubjectMember parses: subject <name> : <Type>; OR subject = <expr>; OR subject <name> = <expr>;
+// parseSubjectMember parses a subject parameter: `subject [name] [: Type] [mult]
+// [specializations] [value] (; | body)`, the value written with any value operator.
 func (p *Parser) parseSubjectMember(start int) ast.Node {
 	// 'subject' already consumed
 
@@ -2077,27 +2078,6 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 		}
 	}
 
-	// Check for binding pattern: subject = <expr>; OR subject <name> = <expr>;
-	if p.at(lexer.Eq) {
-		// Anonymous binding: subject = <expr>;
-		op := p.advance() // consume '='
-
-		// Parse value expression
-		value := p.ParseExpression()
-
-		// Expect semicolon
-		p.expect(lexer.Semicolon, "expected ';' after subject binding")
-
-		node := &ast.SubjectMember{
-			Prefixes:          prefixes,
-			Name:              "", // Empty name means binding inherited subject
-			BindingExpr:       value,
-			ValueOperatorSpan: op.Span,
-		}
-		node.NodeSpan = p.spanFrom(start)
-		return node
-	}
-
 	// A bare `subject;` declares the subject parameter without naming or typing
 	// it, as the OMG viewpoint examples write it.
 	if p.at(lexer.Semicolon) {
@@ -2108,26 +2088,11 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 	}
 
 	// A subject parameter is a full usage (SysML v2 8.2.2.16): an optional name,
-	// an optional specialization part, a multiplicity, a value and a body.
+	// an optional specialization part, a multiplicity, a value and a body. An
+	// anonymous one with just a value (`subject = p;`) binds the inherited subject.
 	var name string
 	if seg, ok := p.parseNameSegment(); ok {
 		name = seg.Text
-
-		// Named binding: subject <name> = <expr>;
-		if p.at(lexer.Eq) {
-			op := p.advance()
-			value := p.ParseExpression()
-			p.expect(lexer.Semicolon, "expected ';' after subject binding")
-
-			node := &ast.SubjectMember{
-				Prefixes:          prefixes,
-				Name:              name,
-				BindingExpr:       value,
-				ValueOperatorSpan: op.Span,
-			}
-			node.NodeSpan = p.spanFrom(start)
-			return node
-		}
 	}
 
 	var typeRef *ast.QualifiedName
@@ -2144,9 +2109,11 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 	// A subject may redefine the one it inherits: subject subj : View[1] :>> RequirementCheck::subj;
 	rels := p.parseRelationships(true)
 
-	if name == "" && typeRef == nil && len(rels) == 0 {
-		p.error(p.peek().Span, "expected a name, ':' or a specialization after 'subject'")
-		en := &ast.ErrorNode{Message: "expected a name, ':' or a specialization after 'subject'"}
+	// Value part: `= expr`, `:= expr` or `default [=] expr`.
+	valueOp, hasValue := p.acceptValueOperator()
+	if name == "" && typeRef == nil && len(rels) == 0 && !hasValue {
+		p.error(p.peek().Span, "expected a name, ':', a specialization or a value after 'subject'")
+		en := &ast.ErrorNode{Message: "expected a name, ':', a specialization or a value after 'subject'"}
 		if !p.atEOF() && !p.at(lexer.RBrace) {
 			p.advance()
 		}
@@ -2154,9 +2121,7 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 		return en
 	}
 
-	// Value part: `= expr`, `:= expr` or `default [=] expr`.
 	var value ast.Node
-	valueOp, hasValue := p.acceptValueOperator()
 	if hasValue {
 		value = p.ParseExpression()
 	}

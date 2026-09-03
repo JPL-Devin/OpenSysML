@@ -508,7 +508,7 @@ func (ctx *Context) CheckConstraintOn(sym *symbols.Symbol, scope *symbols.Scope,
 	}
 
 	// Evaluate every condition the constraint states, inherited ones included.
-	conds := ctx.conditionsOf(ctx.chainMembers(sym, scope))
+	conds := ctx.conditionsOf(sym, ctx.chainMembers(sym, scope))
 	holds, err := ctx.evaluateConditions(conditionCheck{
 		sym:     sym,
 		kind:    "constraint",
@@ -627,9 +627,10 @@ type scopedMember struct {
 func (ctx *Context) chainMembers(sym *symbols.Symbol, scope *symbols.Scope) []scopedMember {
 	var out []scopedMember
 	supers := ctx.model.AllSupertypes(sym)
+	replaced := ctx.replacedConstraintBodies(sym, supers)
 	for i := len(supers) - 1; i >= 0; i-- {
 		link := supers[i]
-		if link == nil || ctx.libraryDeclared(link) {
+		if link == nil || ctx.libraryDeclared(link) || replaced[link] {
 			continue
 		}
 		for _, node := range declMembers(link.Decl) {
@@ -640,6 +641,56 @@ func (ctx *Context) chainMembers(sym *symbols.Symbol, scope *symbols.Scope) []sc
 		out = append(out, scopedMember{node: node, scope: bodyScope(sym, scope)})
 	}
 	return out
+}
+
+// replacedConstraintBodies returns the supertypes a constraint's chain leaves out:
+// those a redefinition stating its own body replaces, and what only they reach.
+func (ctx *Context) replacedConstraintBodies(sym *symbols.Symbol, supers []*symbols.Symbol) map[*symbols.Symbol]bool {
+	if !isConstraintSymbol(sym) {
+		return nil
+	}
+	replaced := map[*symbols.Symbol]bool{}
+	for _, link := range append([]*symbols.Symbol{sym}, supers...) {
+		if link == nil || !isConstraintSymbol(link) || !statesCondition(declMembers(link.Decl)) {
+			continue
+		}
+		for _, redefined := range ctx.model.AllRedefinedFeatures(link) {
+			replaced[redefined] = true
+		}
+	}
+	if len(replaced) == 0 {
+		return nil
+	}
+	kept := map[*symbols.Symbol]bool{}
+	var keep func(*symbols.Symbol)
+	keep = func(s *symbols.Symbol) {
+		for _, direct := range ctx.model.DirectSupertypes(s) {
+			if direct == nil || direct == sym || replaced[direct] || kept[direct] {
+				continue
+			}
+			kept[direct] = true
+			keep(direct)
+		}
+	}
+	keep(sym)
+	skipped := map[*symbols.Symbol]bool{}
+	for _, link := range supers {
+		if link != nil && !kept[link] {
+			skipped[link] = true
+		}
+	}
+	return skipped
+}
+
+// statesCondition reports whether any of the members states a condition.
+func statesCondition(members []ast.Node) bool {
+	for _, member := range members {
+		switch member.(type) {
+		case *ast.ConstraintMember, *ast.RequireMember, *ast.AssumeMember:
+			return true
+		}
+	}
+	return false
 }
 
 // bodyScope is the scope a member of sym's body was written in: sym's own body,
@@ -694,7 +745,7 @@ func (ctx *Context) CheckRequirementOn(sym *symbols.Symbol, scope *symbols.Scope
 	}
 
 	// Second pass: evaluate the assumed and required conditions.
-	conds := ctx.conditionsOf(members)
+	conds := ctx.conditionsOf(sym, members)
 	holds, err := ctx.evaluateConditions(conditionCheck{
 		sym:      sym,
 		kind:     "requirement",

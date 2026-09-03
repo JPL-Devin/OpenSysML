@@ -231,7 +231,7 @@ func (ctx *Context) CheckSatisfactionOn(a *SatisfyAssertion, subject *Instance) 
 		return ctx.satisfactionResult(false, subject, reached), err
 	}
 
-	conds := ctx.conditionsOf(members)
+	conds := ctx.conditionsOf(target, members)
 	holds, err := ctx.evaluateConditions(conditionCheck{
 		sym:  target,
 		kind: "satisfaction",

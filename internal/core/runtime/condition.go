@@ -65,7 +65,7 @@ func (ctx *Context) ConditionsOf(sym *symbols.Symbol, scope *symbols.Scope) []Co
 	if scope == nil {
 		scope = sym.OwnerScope
 	}
-	return ctx.conditionsOf(ctx.chainMembers(sym, scope))
+	return ctx.conditionsOf(sym, ctx.chainMembers(sym, scope))
 }
 
 // scopedExpr is an expression with the scope its names resolve in.
@@ -74,15 +74,53 @@ type scopedExpr struct {
 	scope *symbols.Scope
 }
 
-// conditionsOf returns the conditions the members state, inherited ones first.
+// conditionsOf returns the conditions sym's members state, inherited ones first.
 // A member states its condition either directly (`require x < y;`, `assert x < y;`)
 // or through the body of an anonymous nested constraint (`require constraint { x < y }`).
-func (ctx *Context) conditionsOf(members []scopedMember) []Condition {
-	var out []Condition
+func (ctx *Context) conditionsOf(sym *symbols.Symbol, members []scopedMember) []Condition {
+	return ctx.appendMemberConditions(nil, sym, members, true, nil)
+}
+
+// appendMemberConditions appends the conditions sym's members state, leaving out
+// an inherited named constraint a closer one shadows or redefines (KerML 7.3.4.5).
+func (ctx *Context) appendMemberConditions(out []Condition, sym *symbols.Symbol, members []scopedMember,
+	required bool, seen map[*symbols.Symbol]bool) []Condition {
+	var effective map[*symbols.Symbol]bool
 	for _, member := range members {
-		out = ctx.appendConditions(out, member.node, member.scope, true, false, nil)
+		if owner := ctx.namedConstraintOf(member); owner != nil && owner != sym {
+			if effective == nil {
+				effective = ctx.effectiveMembers(sym)
+			}
+			if !effective[owner] {
+				continue
+			}
+		}
+		out = ctx.appendConditions(out, member.node, member.scope, required, false, seen)
 	}
 	return out
+}
+
+// namedConstraintOf returns the symbol a named require/assume constraint member
+// declares, nil for any other member.
+func (ctx *Context) namedConstraintOf(member scopedMember) *symbols.Symbol {
+	if _, ok := ast.OwnedConstraintOf(member.node); !ok {
+		return nil
+	}
+	body := symbols.ConstraintBodyScope(member.scope, member.node)
+	if body == nil || body.Owner() == nil || body.Owner().Decl != member.node {
+		return nil
+	}
+	return body.Owner()
+}
+
+// effectiveMembers is the set of members sym has: MembersOf as a set.
+func (ctx *Context) effectiveMembers(sym *symbols.Symbol) map[*symbols.Symbol]bool {
+	members := ctx.model.MembersOf(sym)
+	set := make(map[*symbols.Symbol]bool, len(members))
+	for _, member := range members {
+		set[member] = true
+	}
+	return set
 }
 
 // appendConditions appends the conditions node states. required says whether the
@@ -143,14 +181,10 @@ func (ctx *Context) appendConditions(out []Condition, node ast.Node, scope *symb
 // a named one its whole chain, an anonymous body its own conditions.
 func (ctx *Context) appendOwnedConditions(out []Condition, member ast.Node, body []ast.Node, scope *symbols.Scope,
 	required bool, seen map[*symbols.Symbol]bool) []Condition {
-	bodyScope := symbols.ConstraintBodyScope(scope, member)
-	if bodyScope != nil && bodyScope != scope && bodyScope.Owner() != nil && bodyScope.Owner().Decl == member {
-		owner := bodyScope.Owner()
-		for _, m := range ctx.chainMembers(owner, scope) {
-			out = ctx.appendConditions(out, m.node, m.scope, required, false, seen)
-		}
-		return out
+	if owner := ctx.namedConstraintOf(scopedMember{node: member, scope: scope}); owner != nil {
+		return ctx.appendMemberConditions(out, owner, ctx.chainMembers(owner, scope), required, seen)
 	}
+	bodyScope := symbols.ConstraintBodyScope(scope, member)
 	for _, nested := range body {
 		out = ctx.appendConditions(out, nested, bodyScope, required, false, seen)
 	}
@@ -178,10 +212,7 @@ func (ctx *Context) appendReferencedConditions(out []Condition, ref *ast.Qualifi
 	}
 	seen[sym] = true
 	defer delete(seen, sym)
-	var conds []Condition
-	for _, member := range ctx.chainMembers(sym, nil) {
-		conds = ctx.appendConditions(conds, member.node, member.scope, true, false, seen)
-	}
+	conds := ctx.appendMemberConditions(nil, sym, ctx.chainMembers(sym, nil), true, seen)
 	for i := range conds {
 		conds[i].Required = required
 	}
