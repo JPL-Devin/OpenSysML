@@ -347,11 +347,48 @@ func TestStateOnASecondMachineFollowsItOverARestart(t *testing.T) {
 	wants(t, run(t, s, "%current"), "Current state: still")
 	wants(t, run(t, s, "%send spin"), `Accepted by state machine "Fan" in state still`)
 	wants(t, run(t, s, "%advance 1"), "Current state: spinning")
-	wants(t, run(t, s, "%send heat"), `accepts no signal heat now: state machine "Fan" in state spinning`)
+	// A signal only the object's other machine accepts goes to it, and a step of
+	// the fan is not what dispatches it.
+	out := run(t, s, "%send heat")
+	wants(t, out, `Accepted by state machine "Heater" in state cold`)
+	rejects(t, out, "Use %step")
 
 	// The heater was restarted beside it, and is found by its definition.
 	run(t, s, "%stop")
 	wants(t, run(t, s, "%state Twins::Heater Twins::unit"), `Debugging state machine "heater"`, "Attached to the machine already running", "Current state: cold")
+}
+
+// TestSendReachesTheMachineWhoseGuardLetsItThrough: of two machines on one
+// object accepting the same signal, the first — whose guard refuses it — leaves
+// it in flight for the second, whether it is stepped first or the signal is
+// sent to the object while the second is being debugged.
+func TestSendReachesTheMachineWhoseGuardLetsItThrough(t *testing.T) {
+	s := loadFixture(t, "testdata/shared_signal.sysml")
+	run(t, s, "%instantiate Shared::unit")
+	wants(t, run(t, s, "%state Shared::Unit::heater Shared::unit"), `✓ Debugging state machine "heater"`, "Current state: cold")
+
+	out := run(t, s, "%send tap")
+	wants(t, out,
+		`✓ Sent tap to object #1 of "Shared::unit"`,
+		`Accepted by state machine "fan" in state still: transition`,
+		`state machine "heater" in state cold would fire nothing on it, so a step of it leaves it to the machine above`)
+	rejects(t, out, "Use %step")
+	wants(t, run(t, s, "%events"), "Signals in flight: 1", "  tap")
+
+	// A step of the heater neither takes nor drops it.
+	wants(t, run(t, s, "%step"), "State machine Suspended (cold)")
+	wants(t, run(t, s, "%current"), "Current state: cold")
+	wants(t, run(t, s, "%events"), "Signals in flight: 1", "  tap")
+
+	run(t, s, "%stop")
+	wants(t, run(t, s, "%state Shared::Unit::fan Shared::unit"), "Attached to the machine already running", "Current state: still")
+	wants(t, run(t, s, "%step"), "Event dispatched")
+	wants(t, run(t, s, "%current"), "Current state: spinning")
+	wants(t, run(t, s, "%events"), "Event queue empty")
+
+	// With the fan gone from still, nothing lets tap through, so it is refused.
+	wants(t, run(t, s, "%send tap to Shared::unit"),
+		`would fire no transition on tap now, so it was not sent: state machine "heater" in state cold, and the guard of every transition tap triggers is false`)
 }
 
 // TestStateOnAnObjectStartsWhatItDoesNotRun: an object exhibiting no machine of

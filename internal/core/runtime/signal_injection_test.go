@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -597,6 +598,203 @@ func TestPortRoutedMessageTheActiveStateDefersIsHeld(t *testing.T) {
 	}
 	if got := activeLeaf(exec); got != "finished" {
 		t.Fatalf("state after the recalled Ping = %s, want finished", got)
+	}
+}
+
+// A guard reading a variation of the performer that nothing has read yet
+// materializes its selection: the variant chosen for that owner, the object it
+// stands for, and the feature value holding it. Decide leaves none of that on
+// the performer, whether the guard lets the transition fire or refuses it, and
+// the dispatch that follows selects the variant for real.
+func TestDecideLeavesNoVariationSelectionAGuardMaterializes(t *testing.T) {
+	src := `
+		private import ScalarValues::*;
+		attribute def Poke;
+		part def Engine { attribute power : Real; }
+		part def Car {
+			variation part engine : Engine {
+				variant part electric : Engine { attribute :>> power = 150.0; }
+				variant part petrol : Engine { attribute :>> power = 120.0; }
+			}
+			exhibit state gate {
+				entry; then shut;
+				state shut;
+				transition first shut accept Poke if engine.power > 130.0 then open;
+				state open;
+			}
+		}
+		part car : Car { part :>> engine = engine::%s; }
+	`
+	for variant, fires := range map[string]bool{"electric": true, "petrol": false} {
+		t.Run(variant, func(t *testing.T) {
+			idx, _, ctx := buildRuntimeWithLibraries(t, "car.sysml", parseAndBuild(t, fmt.Sprintf(src, variant)))
+			root := idx.DocumentRoot("car.sysml")
+			car, err := ctx.occurrenceOf(resolveSymbol(t, root, "car"))
+			if err != nil {
+				t.Fatalf("occurrenceOf(car): %v", err)
+			}
+			gate, _ := car.ExhibitedState()
+			poke, err := ctx.SignalMessage(resolveSymbol(t, root, "Poke"), nil, car)
+			if err != nil {
+				t.Fatalf("SignalMessage(Poke): %v", err)
+			}
+			engine := car.FeatureValues["engine"]
+			if engine == nil || engine.Materialized {
+				t.Fatalf("engine = %+v; want an unmaterialized feature value before anything reads it", engine)
+			}
+			instances, selections, variants := len(ctx.instances), len(ctx.selectedVariants), len(ctx.variantObjects)
+
+			d, err := gate.State.Decide(poke)
+			if err != nil || (len(d.Fires) == 1) != fires {
+				t.Fatalf("Decide(Poke) = %+v, %v; want firing=%v", d, err, fires)
+			}
+			if engine.Materialized || engine.Value.Kind != ValInvalid {
+				t.Errorf("engine = %+v after Decide; want it unmaterialized as before", engine)
+			}
+			if len(ctx.instances) != instances || len(ctx.selectedVariants) != selections || len(ctx.variantObjects) != variants {
+				t.Errorf("after Decide: %d objects, %d selections, %d variant objects; want %d, %d, %d as before",
+					len(ctx.instances), len(ctx.selectedVariants), len(ctx.variantObjects), instances, selections, variants)
+			}
+			for key, id := range ctx.variantObjects {
+				if _, live := ctx.instances[id]; !live {
+					t.Errorf("variant %s of %s names object #%d, which is gone", key.variant.Name, key.variation.Name, id)
+				}
+			}
+			if got := activeLeaf(gate.State); got != "shut" {
+				t.Fatalf("state after Decide = %s, want shut", got)
+			}
+
+			ctx.PostMessage(poke)
+			if err := gate.State.ProcessNextEvent(); err != nil {
+				t.Fatalf("ProcessNextEvent(Poke): %v", err)
+			}
+			want := "shut"
+			if fires {
+				want = "open"
+			}
+			if got := activeLeaf(gate.State); got != want {
+				t.Fatalf("state after Poke = %s, want %s", got, want)
+			}
+			if !engine.Materialized || engine.Value.Kind != ValVariant || engine.Value.Variant().Name != variant {
+				t.Fatalf("engine = %+v after dispatch; want the %s variant selected", engine, variant)
+			}
+			if _, live := ctx.instances[engine.Value.Instance]; !live {
+				t.Errorf("the selected variant's object #%d is not held by the session", engine.Value.Instance)
+			}
+		})
+	}
+}
+
+// Two machines of one object both accept Ping. The message goes to the first, in
+// the order the object exhibits them, that would fire on it: one whose guard
+// refuses it leaves it in flight for a sibling that would, and only takes and
+// drops it when no sibling would either.
+func TestSignalGoesToTheSiblingMachineThatFiresOnIt(t *testing.T) {
+	src := `
+		private import ScalarValues::*;
+		attribute def Ping;
+		part def Twin {
+			attribute leftArmed : Boolean = %v;
+			attribute rightArmed : Boolean = %v;
+			exhibit state left {
+				entry; then idle;
+				state idle;
+				transition first idle accept Ping if leftArmed then done;
+				state done;
+			}
+			exhibit state right {
+				entry; then idle;
+				state idle;
+				transition first idle accept Ping if rightArmed then done;
+				state done;
+			}
+		}
+		part twin : Twin;
+	`
+	cases := []struct {
+		name                     string
+		leftArmed, rightArmed    bool
+		wantLeft, wantRight      string
+		leftStepLeavesItInFlight bool
+	}{
+		{"only_the_second_fires", false, true, "idle", "done", true},
+		{"both_fire", true, true, "done", "idle", false},
+		{"neither_fires", false, false, "idle", "idle", false},
+	}
+	// twinWithPing builds the object, its two machines and a Ping addressed to it.
+	twinWithPing := func(t *testing.T, tc struct {
+		leftArmed, rightArmed bool
+	}) (*Context, *StateExecutor, *StateExecutor, Message) {
+		t.Helper()
+		idx, _, ctx := buildRuntimeWithLibraries(t, "twin.sysml", parseAndBuild(t, fmt.Sprintf(src, tc.leftArmed, tc.rightArmed)))
+		root := idx.DocumentRoot("twin.sysml")
+		twin, err := ctx.occurrenceOf(resolveSymbol(t, root, "twin"))
+		if err != nil {
+			t.Fatalf("occurrenceOf(twin): %v", err)
+		}
+		var left, right *StateExecutor
+		for _, b := range twin.Behaviors() {
+			switch b.Name {
+			case "left":
+				left = b.State
+			case "right":
+				right = b.State
+			}
+		}
+		if left == nil || right == nil {
+			t.Fatalf("twin runs %d behaviors; want left and right", len(twin.Behaviors()))
+		}
+		ping, err := ctx.SignalMessage(resolveSymbol(t, root, "Ping"), nil, twin)
+		if err != nil {
+			t.Fatalf("SignalMessage(Ping): %v", err)
+		}
+		return ctx, left, right, ping
+	}
+	for _, tc := range cases {
+		armed := struct{ leftArmed, rightArmed bool }{tc.leftArmed, tc.rightArmed}
+		want := tc.wantLeft + "/" + tc.wantRight
+		t.Run(tc.name+"/stepped", func(t *testing.T) {
+			// Stepped on its own, the left machine takes the message only when it
+			// is the one that should.
+			ctx, left, right, ping := twinWithPing(t, armed)
+			ctx.PostMessage(ping)
+			if left.HasPendingSignal() == tc.leftStepLeavesItInFlight {
+				t.Fatalf("left.HasPendingSignal() = %v; want the opposite", !tc.leftStepLeavesItInFlight)
+			}
+			if left.HasPendingSignal() {
+				if err := left.ProcessNextEvent(); err != nil {
+					t.Fatalf("left.ProcessNextEvent: %v", err)
+				}
+			}
+			if inFlight := len(ctx.PendingMessages()) == 1; inFlight != tc.leftStepLeavesItInFlight {
+				t.Fatalf("after stepping left: %d messages in flight, want left to leave it = %v", len(ctx.PendingMessages()), tc.leftStepLeavesItInFlight)
+			}
+			if tc.leftStepLeavesItInFlight {
+				if err := right.ProcessNextEvent(); err != nil {
+					t.Fatalf("right.ProcessNextEvent: %v", err)
+				}
+			}
+			if got := activeLeaf(left) + "/" + activeLeaf(right); got != want {
+				t.Fatalf("after stepping: left/right = %s, want %s", got, want)
+			}
+			if len(ctx.PendingMessages()) != 0 {
+				t.Fatalf("%d messages left in flight after both machines stepped", len(ctx.PendingMessages()))
+			}
+		})
+		t.Run(tc.name+"/drained", func(t *testing.T) {
+			// Run collectively, the same message reaches the same machine.
+			ctx, left, right, ping := twinWithPing(t, armed)
+			ctx.PostMessage(ping)
+			if err := ctx.drainObjectBehaviors(); err != nil {
+				t.Fatalf("drainObjectBehaviors: %v", err)
+			}
+			if got := activeLeaf(left) + "/" + activeLeaf(right); got != want {
+				t.Fatalf("after the drain: left/right = %s, want %s", got, want)
+			}
+			if len(ctx.PendingMessages()) != 0 {
+				t.Fatalf("%d messages left in flight after the drain", len(ctx.PendingMessages()))
+			}
+		})
 	}
 }
 

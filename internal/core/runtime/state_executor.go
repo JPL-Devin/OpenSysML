@@ -1923,12 +1923,57 @@ func (e *StateExecutor) enqueueSignal(msg Message) {
 // A message no active transition accepts stays on the bus for another consumer:
 // this machine must not swallow a message addressed to a different behavior.
 func (e *StateExecutor) deliverPendingSignal() bool {
-	msg, ok := e.ctx.TakeMessage(e.acceptableMessage)
+	msg, ok := e.ctx.TakeMessage(e.takesMessage)
 	if !ok {
 		return false
 	}
 	e.enqueueSignal(msg)
 	return true
+}
+
+// takesMessage reports whether this machine is the one to take a message in
+// flight: one it can react to, unless its guards would drop it while a sibling
+// machine of the same object would fire on or defer it.
+func (e *StateExecutor) takesMessage(m Message) bool {
+	return e.acceptableMessage(m) && !e.yieldsTo(m)
+}
+
+// yieldsTo reports whether a machine the performer also exhibits, one that
+// would fire on or defer the message where this one would only drop it, should
+// take it instead. A guard error is left for dispatch to report.
+func (e *StateExecutor) yieldsTo(m Message) bool {
+	siblings := e.siblingsAccepting(m)
+	if len(siblings) == 0 {
+		return false
+	}
+	if own, err := e.Decide(m); err != nil || own.Enabled() {
+		return false
+	}
+	for _, sibling := range siblings {
+		if theirs, err := sibling.Decide(m); err == nil && theirs.Enabled() {
+			return true
+		}
+	}
+	return false
+}
+
+// siblingsAccepting lists the other machines the performer exhibits whose active
+// configuration accepts the message, in the order they were attached.
+func (e *StateExecutor) siblingsAccepting(m Message) []*StateExecutor {
+	if e.self == nil {
+		return nil
+	}
+	var siblings []*StateExecutor
+	for _, behavior := range e.ctx.objectBehaviors {
+		sibling := behavior.State
+		if sibling == nil || sibling == e || behavior.Object != e.self {
+			continue
+		}
+		if sibling.acceptableMessage(m) {
+			siblings = append(siblings, sibling)
+		}
+	}
+	return siblings
 }
 
 // acceptableMessage reports whether a message in flight is one this machine can
@@ -2024,7 +2069,7 @@ func (e *StateExecutor) Performer() *Instance {
 // the next step, without consuming it.
 func (e *StateExecutor) hasPendingSignal() bool {
 	for _, msg := range e.ctx.PendingMessages() {
-		if e.acceptableMessage(msg) {
+		if e.takesMessage(msg) {
 			return true
 		}
 	}

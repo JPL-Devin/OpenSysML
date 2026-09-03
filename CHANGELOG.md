@@ -97,6 +97,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   flight is due now, so a single step dispatches it ahead of a timer set
   for later, as a run holding time where it is would; a step that dispatches a signal no transition
   fires on, because the state or the data its guards read changed since it was sent, says so.
+  When an object runs several machines, `%send` decides the signal with each of them and reports
+  which would fire on it, and a machine whose guards would drop it leaves it in flight for a
+  sibling that fires on or defers it — at the prompt and in a run alike — so the machine `%send`
+  named as accepting a signal is the one that gets it.
 - **`%state <machine> <object>` attaches to the machine the object already runs.** Naming a
   state definition and an object that exhibits a running machine of that kind now debugs that
   machine and says so, instead of quietly starting a second machine of the same kind on the same

@@ -99,10 +99,11 @@ func deliveryOf(msg Message) DeliveryKind {
 
 // TakeMessage removes and returns the oldest message satisfying match. Messages
 // that do not match keep their place in the queue, so a consumer looking for
-// one type does not consume or reorder another's.
+// one type does not consume or reorder another's. A match probing the machines
+// may post and drop messages behind the one it examines; those are visited too.
 func (ctx *Context) TakeMessage(match func(Message) bool) (Message, bool) {
-	for i, msg := range ctx.messages {
-		if match(msg) {
+	for i := 0; i < len(ctx.messages); i++ {
+		if msg := ctx.messages[i]; match(msg) {
 			ctx.messages = append(ctx.messages[:i], ctx.messages[i+1:]...)
 			return msg, true
 		}

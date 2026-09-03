@@ -177,10 +177,24 @@ func (s *Session) sendSignal(text string) ([]string, error) {
 	for _, d := range decisions {
 		out = append(out, "  "+d.text())
 	}
-	if s.stateExec != nil && s.stateExec.executor.AcceptsMessage(msg) {
-		out = append(out, "", "Use %step or %advance <time> to dispatch it")
+	if s.stateExec != nil {
+		out = append(out, s.dispatchHint(msg, decisions)...)
 	}
 	return out, nil
+}
+
+// dispatchHint says how the debugged machine relates to the signal just sent:
+// that a step of it dispatches it, or that the machine leaves it to a sibling
+// because its own guards would drop it.
+func (s *Session) dispatchHint(msg runtime.Message, decisions []machineDecision) []string {
+	exec := s.stateExec.executor
+	if slices.ContainsFunc(decisions, func(d machineDecision) bool { return d.machine == exec }) {
+		return []string{"", "Use %step or %advance <time> to dispatch it"}
+	}
+	if exec.AcceptsMessage(msg) {
+		return []string{fmt.Sprintf("  %s would fire nothing on it, so a step of it leaves it to the machine above", machineStates([]*runtime.StateExecutor{exec}))}
+	}
+	return nil
 }
 
 // machineDecision is what one machine decided for a message: what its dispatch
@@ -229,11 +243,13 @@ func (s *Session) signalTarget(name string) (signalTarget, error) {
 			return signalTarget{}, fmt.Errorf("%w, so there is no object to send to: name one with `to <object>`", s.noStateSessionErr())
 		}
 		exec := s.stateExec.executor
-		label := fmt.Sprintf("state machine %q", s.stateExec.name)
-		if self := exec.Performer(); self != nil {
-			label = fmt.Sprintf("object #%d of %q", self.ID, notationName(s.stateExec.selfFQN))
+		self := exec.Performer()
+		if self == nil {
+			label := fmt.Sprintf("state machine %q", s.stateExec.name)
+			return signalTarget{machines: []*runtime.StateExecutor{exec}, label: label}, nil
 		}
-		return signalTarget{object: exec.Performer(), machines: []*runtime.StateExecutor{exec}, label: label}, nil
+		label := fmt.Sprintf("object #%d of %q", self.ID, notationName(s.stateExec.selfFQN))
+		return signalTarget{object: self, machines: s.machinesOf(self), label: label}, nil
 	}
 
 	inst, fqn := s.objectNamed(name)

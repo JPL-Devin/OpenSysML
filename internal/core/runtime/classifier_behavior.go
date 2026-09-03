@@ -200,8 +200,27 @@ func (ctx *Context) abandonInstancesSince(mark int) {
 			delete(ctx.occurrences, sym)
 		}
 	}
+	ctx.forgetVariantsNaming(abandoned)
 	ctx.forgetValuesNaming(abandoned)
 	ctx.forgetMessagesTo(abandoned)
+}
+
+// forgetVariantsNaming unselects every variant whose object is abandoned, so the
+// selection is made again, and its object built again, when next read.
+func (ctx *Context) forgetVariantsNaming(abandoned map[int64]bool) {
+	for key, id := range ctx.variantObjects {
+		if !abandoned[id] {
+			continue
+		}
+		delete(ctx.variantObjects, key)
+		if key.variation == nil {
+			continue
+		}
+		selection := variantSelection{owner: key.owner, variation: key.variation.Name}
+		if ctx.selectedVariants[selection] == key.variant.Name {
+			delete(ctx.selectedVariants, selection)
+		}
+	}
 }
 
 // forgetValuesNaming unmaterializes every feature value of a surviving object
@@ -219,15 +238,26 @@ func (ctx *Context) forgetValuesNaming(abandoned map[int64]bool) {
 	}
 }
 
-// namesAbandoned reports whether a feature value holds an object that is gone.
+// namesAbandoned reports whether a feature value holds an object that is gone,
+// directly or as the object a selected variant stands for.
 func namesAbandoned(fv *FeatureValue, abandoned map[int64]bool) bool {
-	if fv.Value.Kind == ValInstance && abandoned[fv.Value.Instance] {
+	if namesAbandonedObject(fv.Value, abandoned) {
 		return true
 	}
 	for _, val := range elementsOf(fv.Values) {
-		if val.Kind == ValInstance && abandoned[val.Instance] {
+		if namesAbandonedObject(val, abandoned) {
 			return true
 		}
+	}
+	return false
+}
+
+// namesAbandonedObject reports whether a value is, or a variant standing for, an
+// object that is gone.
+func namesAbandonedObject(val Value, abandoned map[int64]bool) bool {
+	switch val.Kind {
+	case ValInstance, ValVariant:
+		return abandoned[val.Instance]
 	}
 	return false
 }
