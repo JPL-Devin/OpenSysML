@@ -10,11 +10,14 @@ elmt:SendNew
     sysml:qualifiedName "SendNew" ;
     sysml:elementId "SendNew" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "SendNew" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:SendNew__Telemetry, elmt:SendNew__Command, elmt:SendNew__Radio, elmt:SendNew__Station, elmt:SendNew__Downlink ;
     sysml:ownedMembership elmt:SendNew__Telemetry_om, elmt:SendNew__Command_om, elmt:SendNew__Radio_om, elmt:SendNew__Station_om, elmt:SendNew__Downlink_om ;
-    sysml:ownedRelationship elmt:SendNew__Telemetry_om, elmt:SendNew__Command_om, elmt:SendNew__Radio_om, elmt:SendNew__Station_om, elmt:SendNew__Downlink_om .
+    sysml:ownedRelationship elmt:SendNew__Telemetry_om, elmt:SendNew__Command_om, elmt:SendNew__Radio_om, elmt:SendNew__Station_om, elmt:SendNew__Downlink_om ;
+    sysx:sourceText "package SendNew {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:SendNew__Telemetry
     a sysml:ItemDefinition ;
@@ -31,7 +34,9 @@ elmt:SendNew__Telemetry
     sysml:ownedMembership elmt:SendNew__Telemetry__frames_om ;
     sysml:ownedRelationship elmt:SendNew__Telemetry__frames_om ;
     sysml:ownedFeature elmt:SendNew__Telemetry__frames ;
-    sysml:ownedFeatureMembership elmt:SendNew__Telemetry__frames_om .
+    sysml:ownedFeatureMembership elmt:SendNew__Telemetry__frames_om ;
+    sysx:sourceText "    item def Telemetry {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:SendNew__Telemetry_om
     a sysml:OwningMembership ;
@@ -53,7 +58,8 @@ elmt:SendNew__Telemetry__frames
     sysml:owningRelationship elmt:SendNew__Telemetry__frames_om ;
     sysml:owningMembership elmt:SendNew__Telemetry__frames_om ;
     sysml:declaredName "frames" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute frames;\n" .
 
 elmt:SendNew__Telemetry__frames_om
     a sysml:FeatureMembership ;
@@ -77,7 +83,8 @@ elmt:SendNew__Command
     sysml:owningRelationship elmt:SendNew__Command_om ;
     sysml:owningMembership elmt:SendNew__Command_om ;
     sysml:declaredName "Command" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    item def Command;\n" .
 
 elmt:SendNew__Command_om
     a sysml:OwningMembership ;
@@ -99,7 +106,8 @@ elmt:SendNew__Radio
     sysml:owningRelationship elmt:SendNew__Radio_om ;
     sysml:owningMembership elmt:SendNew__Radio_om ;
     sysml:declaredName "Radio" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    port def Radio;\n" .
 
 elmt:SendNew__Radio_om
     a sysml:OwningMembership ;
@@ -121,7 +129,8 @@ elmt:SendNew__Station
     sysml:owningRelationship elmt:SendNew__Station_om ;
     sysml:owningMembership elmt:SendNew__Station_om ;
     sysml:declaredName "Station" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    part def Station;\n" .
 
 elmt:SendNew__Station_om
     a sysml:OwningMembership ;
@@ -148,7 +157,9 @@ elmt:SendNew__Downlink
     sysml:ownedMembership elmt:SendNew__Downlink__antenna_om, elmt:SendNew__Downlink__ground_om, elmt:SendNew__Downlink___402_om, elmt:SendNew__Downlink___403_om ;
     sysml:ownedRelationship elmt:SendNew__Downlink__antenna_om, elmt:SendNew__Downlink__ground_om, elmt:SendNew__Downlink___402_om, elmt:SendNew__Downlink___403_om ;
     sysml:ownedFeature elmt:SendNew__Downlink__antenna, elmt:SendNew__Downlink__ground, elmt:SendNew__Downlink___402, elmt:SendNew__Downlink___403 ;
-    sysml:ownedFeatureMembership elmt:SendNew__Downlink__antenna_om, elmt:SendNew__Downlink__ground_om, elmt:SendNew__Downlink___402_om, elmt:SendNew__Downlink___403_om .
+    sysml:ownedFeatureMembership elmt:SendNew__Downlink__antenna_om, elmt:SendNew__Downlink__ground_om, elmt:SendNew__Downlink___402_om, elmt:SendNew__Downlink___403_om ;
+    sysx:sourceText "    action def Downlink {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:SendNew__Downlink_om
     a sysml:OwningMembership ;
@@ -171,7 +182,8 @@ elmt:SendNew__Downlink__antenna
     sysml:owningMembership elmt:SendNew__Downlink__antenna_om ;
     sysml:declaredName "antenna" ;
     sysml:type elmt:SendNew__Radio ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        port antenna : Radio;\n" .
 
 elmt:SendNew__Downlink__antenna_om
     a sysml:FeatureMembership ;
@@ -196,7 +208,8 @@ elmt:SendNew__Downlink__ground
     sysml:owningMembership elmt:SendNew__Downlink__ground_om ;
     sysml:declaredName "ground" ;
     sysml:type elmt:SendNew__Station ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part ground : Station;\n" .
 
 elmt:SendNew__Downlink__ground_om
     a sysml:FeatureMembership ;
@@ -221,7 +234,8 @@ elmt:SendNew__Downlink___402
     sysml:owningMembership elmt:SendNew__Downlink___402_om ;
     sysx:payload expr:SendNew__Downlink___402_ppayload ;
     sysx:receiver expr:SendNew__Downlink___402_preceiver ;
-    sysx:isVia "true"^^xsd:boolean .
+    sysx:isVia "true"^^xsd:boolean ;
+    sysx:sourceText "        send new Telemetry(frames = 3) via antenna;\n" .
 
 elmt:SendNew__Downlink___402_om
     a sysml:FeatureMembership ;
@@ -267,7 +281,8 @@ elmt:SendNew__Downlink___403
     sysml:owningRelationship elmt:SendNew__Downlink___403_om ;
     sysml:owningMembership elmt:SendNew__Downlink___403_om ;
     sysx:payload expr:SendNew__Downlink___403_ppayload ;
-    sysx:receiver expr:SendNew__Downlink___403_preceiver .
+    sysx:receiver expr:SendNew__Downlink___403_preceiver ;
+    sysx:sourceText "        send new Command(7) to ground;\n" .
 
 elmt:SendNew__Downlink___403_om
     a sysml:FeatureMembership ;

@@ -380,6 +380,9 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 		if v.IsEnd {
 			b.WriteString(` end=true`)
 		}
+		if v.IsChain {
+			b.WriteString(` chain=true`)
+		}
 		if v.IsIndividual {
 			b.WriteString(` individual=true`)
 		}

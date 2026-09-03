@@ -10,11 +10,14 @@ elmt:ActionNodes
     sysml:qualifiedName "ActionNodes" ;
     sysml:elementId "ActionNodes" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "ActionNodes" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:ActionNodes__Command, elmt:ActionNodes__Radio, elmt:ActionNodes__Brake, elmt:ActionNodes__Drive ;
     sysml:ownedMembership elmt:ActionNodes__Command_om, elmt:ActionNodes__Radio_om, elmt:ActionNodes__Brake_om, elmt:ActionNodes__Drive_om ;
-    sysml:ownedRelationship elmt:ActionNodes__Command_om, elmt:ActionNodes__Radio_om, elmt:ActionNodes__Brake_om, elmt:ActionNodes__Drive_om .
+    sysml:ownedRelationship elmt:ActionNodes__Command_om, elmt:ActionNodes__Radio_om, elmt:ActionNodes__Brake_om, elmt:ActionNodes__Drive_om ;
+    sysx:sourceText "package ActionNodes {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:ActionNodes__Command
     a sysml:AttributeDefinition ;
@@ -26,7 +29,8 @@ elmt:ActionNodes__Command
     sysml:owningRelationship elmt:ActionNodes__Command_om ;
     sysml:owningMembership elmt:ActionNodes__Command_om ;
     sysml:declaredName "Command" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    attribute def Command;\n" .
 
 elmt:ActionNodes__Command_om
     a sysml:OwningMembership ;
@@ -48,7 +52,8 @@ elmt:ActionNodes__Radio
     sysml:owningRelationship elmt:ActionNodes__Radio_om ;
     sysml:owningMembership elmt:ActionNodes__Radio_om ;
     sysml:declaredName "Radio" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    port def Radio;\n" .
 
 elmt:ActionNodes__Radio_om
     a sysml:OwningMembership ;
@@ -70,7 +75,8 @@ elmt:ActionNodes__Brake
     sysml:owningRelationship elmt:ActionNodes__Brake_om ;
     sysml:owningMembership elmt:ActionNodes__Brake_om ;
     sysml:declaredName "Brake" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    action def Brake;\n" .
 
 elmt:ActionNodes__Brake_om
     a sysml:OwningMembership ;
@@ -97,7 +103,9 @@ elmt:ActionNodes__Drive
     sysml:ownedMembership elmt:ActionNodes__Drive__speed_om, elmt:ActionNodes__Drive__log_om, elmt:ActionNodes__Drive__antenna_om, elmt:ActionNodes__Drive__Stop_om, elmt:ActionNodes__Drive___404_om, elmt:ActionNodes__Drive__brake_om, elmt:ActionNodes__Drive__split_om, elmt:ActionNodes__Drive__sync_om, elmt:ActionNodes__Drive__gather_om, elmt:ActionNodes__Drive__pick_om, elmt:ActionNodes__Drive___4010_om, elmt:ActionNodes__Drive__Brake_om, elmt:ActionNodes__Drive___4012_om, elmt:ActionNodes__Drive___4013_om, elmt:ActionNodes__Drive___4014_om, elmt:ActionNodes__Drive___4015_om, elmt:ActionNodes__Drive___4016_om, elmt:ActionNodes__Drive___4017_om, elmt:ActionNodes__Drive___4018_om, elmt:ActionNodes__Drive___4019_om, elmt:ActionNodes__Drive___4020_om ;
     sysml:ownedRelationship elmt:ActionNodes__Drive__speed_om, elmt:ActionNodes__Drive__log_om, elmt:ActionNodes__Drive__antenna_om, elmt:ActionNodes__Drive__Stop_om, elmt:ActionNodes__Drive___404_om, elmt:ActionNodes__Drive__brake_om, elmt:ActionNodes__Drive__split_om, elmt:ActionNodes__Drive__sync_om, elmt:ActionNodes__Drive__gather_om, elmt:ActionNodes__Drive__pick_om, elmt:ActionNodes__Drive___4010_om, elmt:ActionNodes__Drive__Brake_om, elmt:ActionNodes__Drive___4012_om, elmt:ActionNodes__Drive___4013_om, elmt:ActionNodes__Drive___4014_om, elmt:ActionNodes__Drive___4015_om, elmt:ActionNodes__Drive___4016_om, elmt:ActionNodes__Drive___4017_om, elmt:ActionNodes__Drive___4018_om, elmt:ActionNodes__Drive___4019_om, elmt:ActionNodes__Drive___4020_om ;
     sysml:ownedFeature elmt:ActionNodes__Drive__speed, elmt:ActionNodes__Drive__log, elmt:ActionNodes__Drive__antenna, elmt:ActionNodes__Drive__brake, elmt:ActionNodes__Drive__split, elmt:ActionNodes__Drive__sync, elmt:ActionNodes__Drive__gather, elmt:ActionNodes__Drive__pick, elmt:ActionNodes__Drive___4010, elmt:ActionNodes__Drive__Brake, elmt:ActionNodes__Drive___4012, elmt:ActionNodes__Drive___4013, elmt:ActionNodes__Drive___4014, elmt:ActionNodes__Drive___4015, elmt:ActionNodes__Drive___4019, elmt:ActionNodes__Drive___4020 ;
-    sysml:ownedFeatureMembership elmt:ActionNodes__Drive__speed_om, elmt:ActionNodes__Drive__log_om, elmt:ActionNodes__Drive__antenna_om, elmt:ActionNodes__Drive__brake_om, elmt:ActionNodes__Drive__split_om, elmt:ActionNodes__Drive__sync_om, elmt:ActionNodes__Drive__gather_om, elmt:ActionNodes__Drive__pick_om, elmt:ActionNodes__Drive___4010_om, elmt:ActionNodes__Drive__Brake_om, elmt:ActionNodes__Drive___4012_om, elmt:ActionNodes__Drive___4013_om, elmt:ActionNodes__Drive___4014_om, elmt:ActionNodes__Drive___4015_om, elmt:ActionNodes__Drive___4019_om, elmt:ActionNodes__Drive___4020_om .
+    sysml:ownedFeatureMembership elmt:ActionNodes__Drive__speed_om, elmt:ActionNodes__Drive__log_om, elmt:ActionNodes__Drive__antenna_om, elmt:ActionNodes__Drive__brake_om, elmt:ActionNodes__Drive__split_om, elmt:ActionNodes__Drive__sync_om, elmt:ActionNodes__Drive__gather_om, elmt:ActionNodes__Drive__pick_om, elmt:ActionNodes__Drive___4010_om, elmt:ActionNodes__Drive__Brake_om, elmt:ActionNodes__Drive___4012_om, elmt:ActionNodes__Drive___4013_om, elmt:ActionNodes__Drive___4014_om, elmt:ActionNodes__Drive___4015_om, elmt:ActionNodes__Drive___4019_om, elmt:ActionNodes__Drive___4020_om ;
+    sysx:sourceText "    action def Drive {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:ActionNodes__Drive_om
     a sysml:OwningMembership ;
@@ -120,7 +128,8 @@ elmt:ActionNodes__Drive__speed
     sysml:owningMembership elmt:ActionNodes__Drive__speed_om ;
     sysml:declaredName "speed" ;
     sysml:direction "in" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        in attribute speed;\n" .
 
 elmt:ActionNodes__Drive__speed_om
     a sysml:FeatureMembership ;
@@ -144,7 +153,8 @@ elmt:ActionNodes__Drive__log
     sysml:owningRelationship elmt:ActionNodes__Drive__log_om ;
     sysml:owningMembership elmt:ActionNodes__Drive__log_om ;
     sysml:declaredName "log" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute log;\n" .
 
 elmt:ActionNodes__Drive__log_om
     a sysml:FeatureMembership ;
@@ -169,7 +179,8 @@ elmt:ActionNodes__Drive__antenna
     sysml:owningMembership elmt:ActionNodes__Drive__antenna_om ;
     sysml:declaredName "antenna" ;
     sysml:type elmt:ActionNodes__Radio ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        port antenna : Radio;\n" .
 
 elmt:ActionNodes__Drive__antenna_om
     a sysml:FeatureMembership ;
@@ -193,7 +204,8 @@ elmt:ActionNodes__Drive__Stop
     sysml:owningRelationship elmt:ActionNodes__Drive__Stop_om ;
     sysml:owningMembership elmt:ActionNodes__Drive__Stop_om ;
     sysml:declaredName "Stop" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action def Stop;\n" .
 
 elmt:ActionNodes__Drive__Stop_om
     a sysml:OwningMembership ;
@@ -214,7 +226,8 @@ elmt:ActionNodes__Drive___404
     sysml:owner elmt:ActionNodes__Drive ;
     sysml:owningRelationship elmt:ActionNodes__Drive___404_om ;
     sysml:owningMembership elmt:ActionNodes__Drive___404_om ;
-    sysml:sourceFeature "start" .
+    sysml:sourceFeature "start" ;
+    sysx:sourceText "        first start;\n" .
 
 elmt:ActionNodes__Drive___404_om
     a sysml:OwningMembership ;
@@ -237,7 +250,8 @@ elmt:ActionNodes__Drive__brake
     sysml:owningMembership elmt:ActionNodes__Drive__brake_om ;
     sysml:declaredName "brake" ;
     sysml:type elmt:ActionNodes__Drive__Brake ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action brake : Brake;\n" .
 
 elmt:ActionNodes__Drive__brake_om
     a sysml:FeatureMembership ;
@@ -260,7 +274,8 @@ elmt:ActionNodes__Drive__split
     sysml:owner elmt:ActionNodes__Drive ;
     sysml:owningRelationship elmt:ActionNodes__Drive__split_om ;
     sysml:owningMembership elmt:ActionNodes__Drive__split_om ;
-    sysml:declaredName "split" .
+    sysml:declaredName "split" ;
+    sysx:sourceText "        fork split;\n" .
 
 elmt:ActionNodes__Drive__split_om
     a sysml:FeatureMembership ;
@@ -283,7 +298,8 @@ elmt:ActionNodes__Drive__sync
     sysml:owner elmt:ActionNodes__Drive ;
     sysml:owningRelationship elmt:ActionNodes__Drive__sync_om ;
     sysml:owningMembership elmt:ActionNodes__Drive__sync_om ;
-    sysml:declaredName "sync" .
+    sysml:declaredName "sync" ;
+    sysx:sourceText "        join sync;\n" .
 
 elmt:ActionNodes__Drive__sync_om
     a sysml:FeatureMembership ;
@@ -306,7 +322,8 @@ elmt:ActionNodes__Drive__gather
     sysml:owner elmt:ActionNodes__Drive ;
     sysml:owningRelationship elmt:ActionNodes__Drive__gather_om ;
     sysml:owningMembership elmt:ActionNodes__Drive__gather_om ;
-    sysml:declaredName "gather" .
+    sysml:declaredName "gather" ;
+    sysx:sourceText "        merge gather;\n" .
 
 elmt:ActionNodes__Drive__gather_om
     a sysml:FeatureMembership ;
@@ -329,7 +346,8 @@ elmt:ActionNodes__Drive__pick
     sysml:owner elmt:ActionNodes__Drive ;
     sysml:owningRelationship elmt:ActionNodes__Drive__pick_om ;
     sysml:owningMembership elmt:ActionNodes__Drive__pick_om ;
-    sysml:declaredName "pick" .
+    sysml:declaredName "pick" ;
+    sysx:sourceText "        decide pick;\n" .
 
 elmt:ActionNodes__Drive__pick_om
     a sysml:FeatureMembership ;
@@ -354,7 +372,8 @@ elmt:ActionNodes__Drive___4010
     sysml:owningMembership elmt:ActionNodes__Drive___4010_om ;
     sysx:declaredKeyword "perform" ;
     sysml:references elmt:ActionNodes__Drive__brake ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        perform brake;\n" .
 
 elmt:ActionNodes__Drive___4010_om
     a sysml:FeatureMembership ;
@@ -378,7 +397,8 @@ elmt:ActionNodes__Drive__Brake
     sysml:owningRelationship elmt:ActionNodes__Drive__Brake_om ;
     sysml:owningMembership elmt:ActionNodes__Drive__Brake_om ;
     sysml:declaredName "Brake" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action Brake;\n" .
 
 elmt:ActionNodes__Drive__Brake_om
     a sysml:FeatureMembership ;
@@ -403,7 +423,8 @@ elmt:ActionNodes__Drive___4012
     sysml:owningMembership elmt:ActionNodes__Drive___4012_om ;
     sysx:declaredKeyword "assign" ;
     sysx:target expr:ActionNodes__Drive___4012_ptarget ;
-    sysml:value expr:ActionNodes__Drive___4012_pvalue .
+    sysml:value expr:ActionNodes__Drive___4012_pvalue ;
+    sysx:sourceText "        assign log := speed;\n" .
 
 elmt:ActionNodes__Drive___4012_om
     a sysml:FeatureMembership ;
@@ -439,7 +460,8 @@ elmt:ActionNodes__Drive___4013
     sysml:owningRelationship elmt:ActionNodes__Drive___4013_om ;
     sysml:owningMembership elmt:ActionNodes__Drive___4013_om ;
     sysx:payload expr:ActionNodes__Drive___4013_ppayload ;
-    sysx:receiver expr:ActionNodes__Drive___4013_preceiver .
+    sysx:receiver expr:ActionNodes__Drive___4013_preceiver ;
+    sysx:sourceText "        send new Command() to antenna;\n" .
 
 elmt:ActionNodes__Drive___4013_om
     a sysml:FeatureMembership ;
@@ -477,7 +499,8 @@ elmt:ActionNodes__Drive___4014
     sysml:owningMembership elmt:ActionNodes__Drive___4014_om ;
     sysx:payload expr:ActionNodes__Drive___4014_ppayload ;
     sysx:receiver expr:ActionNodes__Drive___4014_preceiver ;
-    sysx:isVia "true"^^xsd:boolean .
+    sysx:isVia "true"^^xsd:boolean ;
+    sysx:sourceText "        send new Command() via antenna;\n" .
 
 elmt:ActionNodes__Drive___4014_om
     a sysml:FeatureMembership ;
@@ -519,7 +542,8 @@ elmt:ActionNodes__Drive___4015
     sysml:ownedMembership elmt:ActionNodes__Drive___4015___400_om ;
     sysml:ownedRelationship elmt:ActionNodes__Drive___4015___400_om ;
     sysml:ownedFeature elmt:ActionNodes__Drive___4015___400 ;
-    sysml:ownedFeatureMembership elmt:ActionNodes__Drive___4015___400_om .
+    sysml:ownedFeatureMembership elmt:ActionNodes__Drive___4015___400_om ;
+    sysx:sourceText "        accept when speed > 0;\n" .
 
 elmt:ActionNodes__Drive___4015_om
     a sysml:FeatureMembership ;
@@ -574,7 +598,8 @@ elmt:ActionNodes__Drive___4016
     sysml:owningNamespace elmt:ActionNodes__Drive ;
     sysml:owner elmt:ActionNodes__Drive ;
     sysml:owningRelationship elmt:ActionNodes__Drive___4016_om ;
-    sysml:owningMembership elmt:ActionNodes__Drive___4016_om .
+    sysml:owningMembership elmt:ActionNodes__Drive___4016_om ;
+    sysx:sourceText "        terminate;\n" .
 
 elmt:ActionNodes__Drive___4016_om
     a sysml:OwningMembership ;
@@ -595,7 +620,8 @@ elmt:ActionNodes__Drive___4017
     sysml:owner elmt:ActionNodes__Drive ;
     sysml:owningRelationship elmt:ActionNodes__Drive___4017_om ;
     sysml:owningMembership elmt:ActionNodes__Drive___4017_om ;
-    sysx:expression expr:ActionNodes__Drive___4017_pexpression .
+    sysx:expression expr:ActionNodes__Drive___4017_pexpression ;
+    sysx:sourceText "        terminate brake;\n" .
 
 elmt:ActionNodes__Drive___4017_om
     a sysml:OwningMembership ;
@@ -621,7 +647,8 @@ elmt:ActionNodes__Drive___4018
     sysml:owningNamespace elmt:ActionNodes__Drive ;
     sysml:owner elmt:ActionNodes__Drive ;
     sysml:owningRelationship elmt:ActionNodes__Drive___4018_om ;
-    sysml:owningMembership elmt:ActionNodes__Drive___4018_om .
+    sysml:owningMembership elmt:ActionNodes__Drive___4018_om ;
+    sysx:sourceText "        done;\n" .
 
 elmt:ActionNodes__Drive___4018_om
     a sysml:OwningMembership ;
@@ -642,10 +669,10 @@ elmt:ActionNodes__Drive___4019
     sysml:owner elmt:ActionNodes__Drive ;
     sysml:owningRelationship elmt:ActionNodes__Drive___4019_om ;
     sysml:owningMembership elmt:ActionNodes__Drive___4019_om ;
-    sysx:sourceText "succession first start then brake;" ;
     sysx:relatedFeature expr:ActionNodes__Drive___4019_pend0, expr:ActionNodes__Drive___4019_pend1 ;
     sysx:endForm "firstThen" ;
-    sysx:endVerb "first" .
+    sysx:endVerb "first" ;
+    sysx:sourceText "        succession first start then brake;\n" .
 
 elmt:ActionNodes__Drive___4019_om
     a sysml:FeatureMembership ;
@@ -682,10 +709,10 @@ elmt:ActionNodes__Drive___4020
     sysml:owner elmt:ActionNodes__Drive ;
     sysml:owningRelationship elmt:ActionNodes__Drive___4020_om ;
     sysml:owningMembership elmt:ActionNodes__Drive___4020_om ;
-    sysx:sourceText "succession first brake then done;" ;
     sysx:relatedFeature expr:ActionNodes__Drive___4020_pend0, expr:ActionNodes__Drive___4020_pend1 ;
     sysx:endForm "firstThen" ;
-    sysx:endVerb "first" .
+    sysx:endVerb "first" ;
+    sysx:sourceText "        succession first brake then done;\n" .
 
 elmt:ActionNodes__Drive___4020_om
     a sysml:FeatureMembership ;
