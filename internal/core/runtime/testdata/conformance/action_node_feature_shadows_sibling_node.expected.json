@@ -1,0 +1,8 @@
+{
+	"type": "instance",
+	"instantiate": "test::Host",
+	"slots": {
+		"total": {"type": "Integer", "value": 5},
+		"fromNode": {"type": "Integer", "value": 100}
+	}
+}

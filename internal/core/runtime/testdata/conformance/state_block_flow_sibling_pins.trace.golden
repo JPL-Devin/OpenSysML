@@ -1,0 +1,87 @@
+exit: init
+enter: summing (entry action)
+stmt action body
+  stmt while
+    iteration 1
+        eval feature i -> 0
+        eval literal 3 -> 3
+      eval operator < -> true
+      stmt node p
+        stmt assign v
+            eval feature i -> 0
+            eval literal 1 -> 1
+          eval operator + -> 1
+      stmt node q
+        stmt assign v
+            eval chain v -> 1
+            eval literal 10 -> 10
+          eval operator * -> 10
+      stmt node fin
+        stmt assign total
+              eval feature total -> 0
+              eval chain v -> 1
+            eval operator + -> 1
+            eval chain v -> 10
+          eval operator + -> 11
+      stmt assign i
+          eval feature i -> 0
+          eval literal 1 -> 1
+        eval operator + -> 1
+    iteration 2
+        eval feature i -> 1
+        eval literal 3 -> 3
+      eval operator < -> true
+      stmt node p
+        stmt assign v
+            eval feature i -> 1
+            eval literal 1 -> 1
+          eval operator + -> 2
+      stmt node q
+        stmt assign v
+            eval chain v -> 2
+            eval literal 10 -> 10
+          eval operator * -> 20
+      stmt node fin
+        stmt assign total
+              eval feature total -> 11
+              eval chain v -> 2
+            eval operator + -> 13
+            eval chain v -> 20
+          eval operator + -> 33
+      stmt assign i
+          eval feature i -> 1
+          eval literal 1 -> 1
+        eval operator + -> 2
+    iteration 3
+        eval feature i -> 2
+        eval literal 3 -> 3
+      eval operator < -> true
+      stmt node p
+        stmt assign v
+            eval feature i -> 2
+            eval literal 1 -> 1
+          eval operator + -> 3
+      stmt node q
+        stmt assign v
+            eval chain v -> 3
+            eval literal 10 -> 10
+          eval operator * -> 30
+      stmt node fin
+        stmt assign total
+              eval feature total -> 33
+              eval chain v -> 3
+            eval operator + -> 36
+            eval chain v -> 30
+          eval operator + -> 66
+      stmt assign i
+          eval feature i -> 2
+          eval literal 1 -> 1
+        eval operator + -> 3
+    iteration 4
+        eval feature i -> 3
+        eval literal 3 -> 3
+      eval operator < -> false
+transition: init -> summing
+exit: summing
+enter: done
+transition: summing -> done

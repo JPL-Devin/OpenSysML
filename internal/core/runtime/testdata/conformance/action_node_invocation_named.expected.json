@@ -1,0 +1,10 @@
+{
+	"type": "action",
+	"evaluate": "test::outer",
+	"outputs": {
+		"difference": {"type": "Integer", "value": 6},
+		"diff.minuend": {"type": "Integer", "value": 10},
+		"diff.subtrahend": {"type": "Integer", "value": 4},
+		"diff.result": {"type": "Integer", "value": 6}
+	}
+}

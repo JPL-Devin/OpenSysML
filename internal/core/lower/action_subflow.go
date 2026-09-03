@@ -37,6 +37,7 @@ func statesOwnFlow(members []ast.Node) bool {
 // members state, or — where they state none — the statements and accept of a
 // leaf. scope is the node's own namespace.
 func lowerActionNode(graph *ActionGraph, node *ast.Usage, scope *symbols.Scope) {
+	lowerFeatures(graph, node, scope)
 	if !statesOwnFlow(node.Members) {
 		lowerBody(graph, node, scope)
 		return

@@ -1,0 +1,10 @@
+{
+	"type": "action",
+	"evaluate": "test::outer",
+	"trace": true,
+	"outputs": {
+		"seen": {"type": "Integer", "value": 8},
+		"total": {"type": "Integer", "value": 15},
+		"leg.inner.v": {"type": "Integer", "value": 7}
+	}
+}

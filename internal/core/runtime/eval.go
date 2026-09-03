@@ -133,6 +133,57 @@ func (ec *EvalContext) pushFrame(f frame) {
 	ec.frames = append(ec.frames, f)
 }
 
+// lookupSubaction finds the node named name in the flow of an action performance
+// on the stack, innermost first, and returns its latest performance. Where the
+// name resolves in the reading scope, it is that declaration's node — or no node
+// at all when the declaration is a feature, which shadows a same-named node.
+func (ec *EvalContext) lookupSubaction(name string) (perf *actionFrame, declared bool, err error) {
+	var decl ast.Node
+	if ec.ctx.resolver != nil {
+		if sym, ok := ec.ctx.resolver.LookupName(ec.scope, name); ok && sym != nil {
+			if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Kind != ast.UsageAction {
+				return nil, false, nil
+			}
+			decl = sym.Decl
+		}
+	}
+	for i := len(ec.frames) - 1; i >= 0; i-- {
+		f := ec.frames[i].perf
+		if f == nil {
+			continue
+		}
+		if perf, declared, err = f.subaction(name, decl); declared {
+			return perf, true, err
+		}
+	}
+	return nil, false, nil
+}
+
+// evalSubactionPath reads `node.pin` or `node.inner.pin` through the performances
+// of the nodes the path names; the rest of the path past a pin (`node.pin.member`)
+// is chained through the pin's value, and a path ending at a node reads its result.
+func (ec *EvalContext) evalSubactionPath(perf *actionFrame, parts []ast.NameSegment) (Value, error) {
+	for i, part := range parts {
+		if inner, declared, err := perf.subaction(part.Text, nil); declared {
+			if err != nil {
+				return Value{}, err
+			}
+			perf = inner
+			continue
+		}
+		if i != len(parts)-1 && !perf.declares(part.Text) {
+			return Value{}, fmt.Errorf("%w: %s declares no node or pin %s to read %s through",
+				ErrNodePin, perf.describe(), part.Text, parts[len(parts)-1].Text)
+		}
+		value, err := perf.pin(part.Text)
+		if err != nil {
+			return Value{}, err
+		}
+		return ec.chainMemberValue(value, parts[i+1:], perf.path()+"."+part.Text)
+	}
+	return perf.resultValue()
+}
+
 // Pop removes the top frame from the stack (on return, lambda exit).
 func (ec *EvalContext) Pop() {
 	if len(ec.frames) > 0 {
@@ -361,6 +412,13 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 		if val, ok := ec.Lookup(name); ok {
 			return val, nil
 		}
+		// Then a node of an action performance in the frame stack, read as a value.
+		if perf, declared, err := ec.lookupSubaction(name); declared {
+			if err != nil {
+				return Value{}, err
+			}
+			return perf.resultValue()
+		}
 		// Then another output feature of the calc whose output is being computed:
 		// an `out` binding may be written in terms of the calc's other outputs,
 		// which are evaluated from the same run of its body.
@@ -468,6 +526,15 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 	// is read in this evaluation's scope, since one expression may be evaluated
 	// in several.
 	reading := ec.ctx.resolver.ReadQualified(ec.scope, qn)
+
+	// A path starting at a node of an action performance on the stack reads
+	// through that node's performance: `p.v`, `leg.inner.v`.
+	if perf, declared, err := ec.lookupSubaction(qn.Parts[0].Text); declared && !qn.Global {
+		if err != nil {
+			return Value{}, err
+		}
+		return ec.evalSubactionPath(perf, qn.Parts[1:])
+	}
 
 	// A calc usage's output features are computed rather than declared values,
 	// so a name qualified by one reads the rest from an evaluation of the usage.
@@ -695,6 +762,17 @@ func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) 
 		return Value{}, fmt.Errorf("empty member chain")
 	}
 	base, parts := chainBase(n)
+
+	// A node of an action performance on the stack carries its pins in its own
+	// performance, which `p.v` reads.
+	if name := simpleEndName(base); name != "" {
+		if perf, declared, err := ec.lookupSubaction(name); declared {
+			if err != nil {
+				return Value{}, err
+			}
+			return ec.evalSubactionPath(perf, parts)
+		}
+	}
 
 	// A calc usage carries no value of its own: its output features are computed
 	// by evaluating it, so `c.a` runs the usage — once — and reads the output
