@@ -572,10 +572,10 @@ func (p *Parser) parseInitialNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 	var name string
 
-	if p.at(lexer.Identifier) || p.atNameOrKeyword() {
-		nameToken := p.peek()
-		name = p.src.Text(nameToken.Span)
-		p.advance()
+	// The name refers to a member, so it is kept as the name itself: an
+	// unrestricted name without its quotes, as a qualified name segment is.
+	if seg, ok := p.parseNameSegmentRelaxed(); ok {
+		name = seg.Text
 	}
 
 	// Check for succession edge continuation: first X [if <expr>] then Y;
@@ -1484,7 +1484,8 @@ func continuesCondition(tok lexer.Token) bool {
 
 // atReturnedUsage reports whether `return` is followed by a usage declaration
 // rather than an expression (`'return' UsageElement`, SysML.xtext:1961): a
-// specialization begins one, as does a name a specialization follows.
+// specialization begins one, as does a name a specialization or a
+// multiplicity follows (`return y[*] subsets A;`).
 func (p *Parser) atReturnedUsage() bool {
 	if p.atFeatureSpecialization() {
 		return true
@@ -1494,10 +1495,10 @@ func (p *Parser) atReturnedUsage() bool {
 	}
 	cp := p.checkpoint()
 	p.parseIdentification()
-	specialized := p.atFeatureSpecialization()
+	declared := p.atFeatureSpecialization() || p.at(lexer.LBracket)
 	p.restore(cp)
 	p.release()
-	return specialized
+	return declared
 }
 
 // parseResultMember parses a `return` member: the declaration of a result
@@ -1648,11 +1649,11 @@ func (p *Parser) parseResultMember() ast.Node {
 		return u
 	}
 
-	// Check for Pattern 5: return [kind] [modifiers] name [mult] [body/semicolon] (no type, no value)
+	// Check for Pattern 5: return [kind] [modifiers] name [body/semicolon] (no type, no value)
 	// `return` introduces a return parameter, so a lone name after it declares
 	// that parameter (`calc acc : Acceleration { return a; }`) rather than
 	// referencing one.
-	if p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.LBracket) {
+	if p.atName() && p.peekN(1).Kind == lexer.Semicolon {
 		u := &ast.Usage{
 			Kind:        usageKind,
 			Direction:   ast.DirOut,
@@ -1668,14 +1669,6 @@ func (p *Parser) parseResultMember() ast.Node {
 			IsNonunique: mods.isNonunique,
 		}
 		u.Ident = p.parseIdentification()
-
-		// Parse optional multiplicity '[n..m]'
-		if p.at(lexer.LBracket) {
-			u.Multiplicity = p.parseMultiplicity()
-		}
-
-		// A value operator here makes this Pattern 4 (value), not Pattern 5 (no value)
-		p.parseUsageValue(u)
 
 		// Check for body or semicolon
 		if p.at(lexer.LBrace) {
