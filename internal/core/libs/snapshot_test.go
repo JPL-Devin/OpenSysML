@@ -47,7 +47,7 @@ func TestSnapshotIndexMatchesFreshLoad(t *testing.T) {
 	// The whole object graph, less the lookup caches an index fills lazily and
 	// the inline storage a multi-part name leaves behind (see symbols' tests).
 	if err := graphcmp.Equal(fresh, decoded, graphcmp.SkipFields(
-		"Index.directChildrenGeneration", "Index.directChildrenCache", "QualifiedName.part0",
+		"Index.directChildrenGeneration", "libraryIdentityMemo.gen", "Index.directChildrenCache", "QualifiedName.part0",
 	)); err != nil {
 		t.Errorf("decoded index differs from a fresh load: %v", err)
 	}
@@ -74,7 +74,8 @@ func TestDecodeSnapshotRefusesOtherFiles(t *testing.T) {
 	if _, err := DecodeSnapshot(stdlibSnapshot, "0000"); !errors.Is(err, ErrSnapshotStale) {
 		t.Errorf("digest mismatch: got %v, want ErrSnapshotStale", err)
 	}
-	other := []byte(snapshotMagic + "\x02\x04abcd")
+	other := append([]byte(snapshotMagic), byte(snapshotFormatVersion+1))
+	other = append(other, "\x04abcd"...)
 	if _, err := DecodeSnapshot(other, "abcd"); !errors.Is(err, ErrSnapshotStale) {
 		t.Errorf("format mismatch: got %v, want ErrSnapshotStale", err)
 	}
