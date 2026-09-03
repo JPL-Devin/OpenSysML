@@ -879,7 +879,7 @@ func TestConnectorAnsweredByAFailingBehaviorIsKept(t *testing.T) {
 				entry; then poke;
 				state poke { entry action bump { assign good.heard := good.heard + 10; } }
 				transition first poke then ping;
-				state ping { entry send Ping() to good; }
+				state ping { entry send new Ping() to good; }
 			}
 		}
 		part def Sys { part a : A; part b : B; connection fine : Fine connect a.p to b.q; }

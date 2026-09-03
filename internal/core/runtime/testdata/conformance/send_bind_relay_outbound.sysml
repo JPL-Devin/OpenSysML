@@ -34,7 +34,7 @@ package BindRelayOutbound {
 			entry; then S1;
 
 			state S1 {
-				entry send Ping() via i;
+				entry send new Ping() via i;
 			}
 		}
 	}
