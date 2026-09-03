@@ -43,8 +43,9 @@ func (s *Session) lookupSymbol(name string) (*symbols.Symbol, string, error) {
 func (s *Session) lookupSymbolOfKinds(name string, want ...symbols.SymbolKind) (*symbols.Symbol, string, error) {
 	// A name the notation reads is resolved by the text it names; anything else is
 	// looked up as typed, so the failure reported is about what was typed.
-	if plain, ok := s.plainName(name); ok {
-		name = plain
+	qualified := strings.Contains(name, "::")
+	if p := s.parseName(name); p.ok {
+		name, qualified = p.name, p.qualified
 	}
 	docScopes := s.docScopes()
 	// The library is searched even from an empty session, so a qualified
@@ -54,7 +55,7 @@ func (s *Session) lookupSymbolOfKinds(name string, want ...symbols.SymbolKind) (
 		return nil, "", fmt.Errorf("no declarations loaded")
 	}
 
-	if strings.Contains(name, "::") {
+	if qualified {
 		matches := idx.LookupQualified(name)
 		switch len(matches) {
 		case 0:
@@ -131,7 +132,7 @@ func (s *Session) objectNamed(fqn string) (*runtime.Instance, string) {
 		if !ok {
 			continue
 		}
-		return s.walkFeatureValues(inst, notationName(key), segments[i:])
+		return s.walkFeatureValues(inst, s.declaredName(key), segments[i:])
 	}
 	return nil, ""
 }
@@ -282,7 +283,7 @@ func (s *Session) rootCarriers() []carrier {
 	roots := make([]carrier, 0, s.heldObjects())
 	for name, inst := range s.instances {
 		if inst != nil {
-			roots = append(roots, carrier{name: notationName(name), inst: inst})
+			roots = append(roots, carrier{name: s.declaredName(name), inst: inst})
 		}
 	}
 	for _, u := range s.unnamed {
@@ -650,7 +651,7 @@ func (e *NotInstantiatedError) Error() string {
 // sym, and — when objects of the definition the name is typed by, or typed by
 // the definition it names, exist — what to instantiate instead.
 func (s *Session) notInstantiated(sym *symbols.Symbol, fqn string) error {
-	e := &NotInstantiatedError{Name: notationName(fqn)}
+	e := &NotInstantiatedError{Name: s.declaredName(fqn)}
 	if sym == nil || sym.Decl == nil || s.heldObjects() == 0 {
 		return e
 	}
@@ -675,7 +676,7 @@ func (s *Session) notInstantiated(sym *symbols.Symbol, fqn string) error {
 	if definition == nil || definition.Decl == nil {
 		return e
 	}
-	e.Definition = notationName(symbols.FQNOf(definition))
+	e.Definition = declarationNotation(definition)
 	// An error names what exists; it materializes nothing to find it.
 	s.walkHeldObjects(ctx, func(cur carrier) bool {
 		if carriesDeclaration(model, cur.inst.Type, definition.Decl) {
@@ -916,7 +917,7 @@ func (s *Session) resolveNamedObject(ref objectRef) (*runtime.Instance, string, 
 	if err != nil {
 		return nil, "", err
 	}
-	return s.walkObjectPath(ctx, inst, notationName(fqn), rest)
+	return s.walkObjectPath(ctx, inst, s.declaredName(fqn), rest)
 }
 
 // namedRoot finds the object a name-rooted reference starts from: the object,
@@ -953,8 +954,8 @@ func (s *Session) namedRoot(ref objectRef) (*runtime.Instance, string, []objectS
 			return inst, fqn, ref.segments[i:], nil
 		}
 		if i == head && head < len(ref.segments) && isNamespaceSymbol(sym) {
-			member := fqn + "::" + ref.segments[head].text
-			return nil, "", nil, &ObjectRefError{Ref: ref.text, Detail: fmt.Sprintf("%s is a %s, not an object: its member is written %s", notationName(fqn), namespaceKind(sym), member)}
+			shown := declarationNotation(sym)
+			return nil, "", nil, &ObjectRefError{Ref: ref.text, Detail: fmt.Sprintf("%s is a %s, not an object: its member is written %s::%s", shown, namespaceKind(sym), shown, ref.segments[head].text)}
 		}
 		if noInstance == "" {
 			noInstance, noInstanceSym = fqn, sym
@@ -1134,7 +1135,7 @@ func ambiguousError(name string, matches []*symbols.Symbol, idx *symbols.Index) 
 	fqns := make([]string, 0, len(matches))
 	seen := make(map[string]bool, len(matches))
 	for _, sym := range matches {
-		fqn := notationName(idx.GetFQN(sym))
+		fqn := declarationNotation(sym)
 		if !seen[fqn] {
 			seen[fqn] = true
 			fqns = append(fqns, fqn)

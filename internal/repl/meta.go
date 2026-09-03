@@ -630,12 +630,12 @@ func (s *Session) evalIn(name, expr string) ([]string, error) {
 			return nil, evalError(expr, err, len(exprPrefix))
 		}
 		return []string{
-			fmt.Sprintf("✓ %s (in %s)", expr, notationName(fqn)),
+			fmt.Sprintf("✓ %s (in %s)", expr, declarationNotation(sym)),
 			fmt.Sprintf("  = %s", runtime.UnsetText),
 		}, nil
 	}
 	return []string{
-		fmt.Sprintf("✓ %s (in %s)", expr, notationName(fqn)),
+		fmt.Sprintf("✓ %s (in %s)", expr, declarationNotation(sym)),
 		fmt.Sprintf("  = %s", formatValue(ctx, val)),
 	}, nil
 }
@@ -1500,7 +1500,7 @@ func (s *Session) doInstances() ([]string, bool, error) {
 	slices.Sort(names)
 	lines := []string{"Instances:"}
 	for _, name := range names {
-		lines = append(lines, fmt.Sprintf("  %s (ID: %d)", notationName(name), s.instances[name].ID))
+		lines = append(lines, fmt.Sprintf("  %s (ID: %d)", s.declaredName(name), s.instances[name].ID))
 	}
 	// An object a later %instantiate unnamed is still held, and is listed as
 	// the id that reaches it.
@@ -1511,7 +1511,7 @@ func (s *Session) doInstances() ([]string, bool, error) {
 		if held, ok := s.rtCtx.Instance(u.obj.ID); !ok || held != u.obj {
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("  #%d (ID: %d, displaced from %s)", u.obj.ID, u.obj.ID, notationName(u.fqn)))
+		lines = append(lines, fmt.Sprintf("  #%d (ID: %d, displaced from %s)", u.obj.ID, u.obj.ID, s.declaredName(u.fqn)))
 	}
 	// Some of what the session materialized may be gone even though the rest
 	// survived, which the list would otherwise not say.
@@ -2034,7 +2034,7 @@ func (s *Session) subjectInstance(a *runtime.SatisfyAssertion) (*runtime.Instanc
 		return nil, ""
 	}
 	if inst, ok := s.instances[name]; ok {
-		return inst, notationName(name)
+		return inst, s.declaredName(name)
 	}
 	return nil, ""
 }
@@ -2048,7 +2048,7 @@ func (s *Session) keepSubject(a *runtime.SatisfyAssertion, inst *runtime.Instanc
 	name := s.subjectName(a)
 	if a.SubjectChain == nil {
 		s.instances[name] = inst
-		return notationName(name)
+		return s.declaredName(name)
 	}
 	root := inst
 	for {
@@ -2064,7 +2064,7 @@ func (s *Session) keepSubject(a *runtime.SatisfyAssertion, inst *runtime.Instanc
 	if held, label := s.objectNamed(name); held == inst {
 		return label
 	}
-	return notationName(name)
+	return s.declaredName(name)
 }
 
 // subjectName is the name an assertion's subject is known by: its
@@ -2625,7 +2625,7 @@ func (s *Session) exhibitingTypes(ctx *runtime.Context, sym *symbols.Symbol) []*
 func (s *Session) exhibitorsError(name string, types []*symbols.Symbol, exhibitors []exhibitor) error {
 	e := &ExhibitorsError{Machine: name}
 	for _, typ := range types {
-		e.Types = append(e.Types, notationName(symbols.FQNOf(typ)))
+		e.Types = append(e.Types, declarationNotation(typ))
 	}
 	for _, ex := range exhibitors {
 		ref := RelatedObject{ID: ex.inst.ID}
@@ -2666,7 +2666,7 @@ func ambiguousMachine(machine string, inst *runtime.Instance, label string, exhi
 	for _, b := range exhibited {
 		usage := ""
 		if member := b.Member(); member != nil && member.Name != "" {
-			usage = notationName(symbols.FQNOf(member))
+			usage = declarationNotation(member)
 		}
 		e.Usages = append(e.Usages, usage)
 	}

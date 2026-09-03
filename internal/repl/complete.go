@@ -587,7 +587,7 @@ func (s *Session) nameCompletions(word string) []string {
 	}
 	if idx := s.browseIndex(); idx != nil {
 		for _, fqn := range idx.FQNs() {
-			text := lexer.QualifiedNameText(fqn)
+			text := s.declaredName(fqn)
 			if !strings.HasPrefix(text, word) {
 				continue
 			}

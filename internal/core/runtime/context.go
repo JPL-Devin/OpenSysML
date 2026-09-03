@@ -151,13 +151,16 @@ type Context struct {
 
 	// probes is the number of probes under way; see beginProbe.
 	probes int
-	// probeWrites are the feature values the probes under way changed, with what
-	// each held before, restored as each probe ends.
-	probeWrites []probeWrite
-	// probeUndos restore what else the probes under way changed on an object — the
-	// identities it keeps for connectors not yet materialized — run in reverse as
-	// each probe ends; see noteProbeUndo.
-	probeUndos []func()
+	// journals is the number of probes and transactions under way: while one is,
+	// every change is journaled for it to undo; see beginJournal.
+	journals int
+	// journalWrites are the feature values the journals under way changed, with
+	// what each held before, restored as each is undone.
+	journalWrites []journalWrite
+	// journalUndos restore what else the journals under way changed on an object —
+	// the identities it keeps for connectors not yet materialized — run in reverse
+	// as each is undone; see noteProbeUndo.
+	journalUndos []func()
 	// probeBehaviors and probePending are where in objectBehaviors and in
 	// pendingBehaviors those the probes under way attached begin: the only ones a
 	// drain under a probe may run.
@@ -393,30 +396,50 @@ func (ctx *Context) beginExecutorRun(started *bool) func() {
 // Behaviors the probe starts are the only ones it runs (see nextRunnableBehavior).
 func (ctx *Context) beginProbe() func() {
 	steps, elements, trace := ctx.steps, ctx.elements, ctx.trace
-	mark, undoMark := len(ctx.probeWrites), len(ctx.probeUndos)
-	messages := cloneMessages(ctx.messages)
 	selected := maps.Clone(ctx.selectedVariants)
 	if ctx.probes == 0 {
 		ctx.probeBehaviors, ctx.probePending = len(ctx.objectBehaviors), len(ctx.pendingBehaviors)
 	}
+	_, rollback := ctx.beginJournal()
 	ctx.trace = nil
 	ctx.runDepth++
 	ctx.probes++
 	return func() {
-		for i := len(ctx.probeWrites) - 1; i >= mark; i-- {
-			*ctx.probeWrites[i].fv = ctx.probeWrites[i].prior
-		}
-		ctx.probeWrites = ctx.probeWrites[:mark]
-		for i := len(ctx.probeUndos) - 1; i >= undoMark; i-- {
-			ctx.probeUndos[i]()
-		}
-		ctx.probeUndos = ctx.probeUndos[:undoMark]
-		ctx.messages = messages
+		rollback()
 		ctx.selectedVariants = selected
 		ctx.probes--
 		ctx.runDepth--
 		ctx.steps, ctx.elements, ctx.trace = steps, elements, trace
 	}
+}
+
+// beginJournal brackets a change to be kept whole or not at all: the feature
+// values written (see noteProbeWrite), the other changes noted (see
+// noteProbeUndo) and the bus are journaled until commit keeps them or rollback
+// restores them. A commit inside an enclosing journal leaves the entries to it.
+func (ctx *Context) beginJournal() (commit, rollback func()) {
+	mark, undoMark := len(ctx.journalWrites), len(ctx.journalUndos)
+	messages := cloneMessages(ctx.messages)
+	ctx.journals++
+	commit = func() {
+		ctx.journals--
+		if ctx.journals == 0 {
+			ctx.journalWrites, ctx.journalUndos = ctx.journalWrites[:mark], ctx.journalUndos[:undoMark]
+		}
+	}
+	rollback = func() {
+		ctx.journals--
+		for i := len(ctx.journalWrites) - 1; i >= mark; i-- {
+			*ctx.journalWrites[i].fv = ctx.journalWrites[i].prior
+		}
+		ctx.journalWrites = ctx.journalWrites[:mark]
+		for i := len(ctx.journalUndos) - 1; i >= undoMark; i-- {
+			ctx.journalUndos[i]()
+		}
+		ctx.journalUndos = ctx.journalUndos[:undoMark]
+		ctx.messages = messages
+	}
+	return commit, rollback
 }
 
 // cloneMessages copies messages in flight, payloads included: what a probe caches
@@ -429,28 +452,29 @@ func cloneMessages(messages []Message) []Message {
 	return cloned
 }
 
-// probeWrite is a feature value a probe changed and what it held before.
-type probeWrite struct {
+// journalWrite is a feature value a journal changed and what it held before.
+type journalWrite struct {
 	fv    *FeatureValue
 	prior FeatureValue
 }
 
-// noteProbeWrite records a feature value about to change, for the probe under
-// way to restore; outside a probe it records nothing.
+// noteProbeWrite records a feature value about to change, for the probe or
+// transaction under way to restore; outside one it records nothing.
 func (ctx *Context) noteProbeWrite(fv *FeatureValue) {
-	if ctx.probes == 0 {
+	if ctx.journals == 0 {
 		return
 	}
-	ctx.probeWrites = append(ctx.probeWrites, probeWrite{fv: fv, prior: *fv})
+	ctx.journalWrites = append(ctx.journalWrites, journalWrite{fv: fv, prior: *fv})
 }
 
 // noteProbeUndo records how to restore state no feature value holds that is about
-// to change, for the probe under way to run; outside a probe it records nothing.
+// to change, for the probe or transaction under way to run; outside one it
+// records nothing.
 func (ctx *Context) noteProbeUndo(undo func()) {
-	if ctx.probes == 0 {
+	if ctx.journals == 0 {
 		return
 	}
-	ctx.probeUndos = append(ctx.probeUndos, undo)
+	ctx.journalUndos = append(ctx.journalUndos, undo)
 }
 
 // newActivation begins one activation: the identity of a single execution of a

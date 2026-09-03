@@ -127,22 +127,29 @@ func (ctx *Context) materializeConnectorAs(owner *Instance, connSym, base *symbo
 	ctx.materializingConnectors[key] = true
 	defer delete(ctx.materializingConnectors, key)
 
-	// Behaviors start only once every end is attached, so a connector that cannot
-	// attach touches no other object and leaves its identity free for a retry.
-	// Attaching an end may materialize objects whose behaviors start at once; a
-	// failure takes those with it too.
+	// A connector attaches whole or not at all: a failure abandons what attaching
+	// created, undoes what that wrote or posted and keeps the identity for a retry.
+	// Behaviors — its own and those of the objects attaching an end materializes —
+	// only attach until every end is attached, then run as one start.
 	mark, attached := len(ctx.created), len(ctx.objectBehaviors)
+	commit, rollback := ctx.beginJournal()
+	abandon := func() {
+		rollback()
+		ctx.abandonCreationSince(mark, attached)
+	}
 	inst, err := ctx.materializeOwnedBy(base, id, nil, "")
 	if err != nil {
-		ctx.abandonCreationSince(mark, attached)
+		abandon()
 		return nil, err
 	}
 
 	var unnamed []Value
+	ctx.behaviorRunDepth++
 	for _, end := range ends {
 		val, err := ctx.attachConnectorEnd(owner, connSym, end)
 		if err != nil {
-			ctx.abandonCreationSince(mark, attached)
+			ctx.behaviorRunDepth--
+			abandon()
 			return nil, err
 		}
 		inst.Ends = append(inst.Ends, ConnectorEnd{Name: end.Name, Value: val})
@@ -152,9 +159,11 @@ func (ctx *Context) materializeConnectorAs(owner *Instance, connSym, base *symbo
 		}
 		ctx.bindEndFeatureValue(inst, end, val)
 	}
+	ctx.behaviorRunDepth--
 	if len(unnamed) > 0 {
 		ctx.bindParticipants(inst, inst.Ends)
 	}
+	commit()
 	if err := ctx.startClassifierBehaviors(inst, mark); err != nil {
 		ctx.abandonCreationSince(mark, attached)
 		return nil, err

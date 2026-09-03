@@ -2,6 +2,7 @@ package repl
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -1075,6 +1076,111 @@ func TestReservedLookingNamesStayNames(t *testing.T) {
 		}
 		wants(t, run(t, s, "%current"), "checking")
 		wants(t, run(t, s, "%advance 5"), "Current state: checked")
+	})
+}
+
+// A name holding `::` inside its quotes is one segment, and stays one in every
+// label the REPL prints: a flat spelling (Demo::left::right) would read back as
+// two names and reach a different declaration, or none.
+func TestQuotedNamesHoldingSeparatorsStayOneSegment(t *testing.T) {
+	const model = `package Demo {
+	part def Hub {
+		attribute bolts : ScalarValues::Integer = 5;
+		constraint tight { bolts > 4 }
+	}
+	part def Wheel { part 'in::ner' : Hub; }
+	state def Check {
+		entry; then checking;
+		state checking {
+			accept after 5 then checked;
+		}
+		state checked;
+	}
+	part 'left::right' : Wheel;
+	part left : Wheel;
+}`
+	// readsBack asserts a printed label resolves to the object with id and is
+	// reported under the same spelling.
+	readsBack := func(t *testing.T, s *Session, label, id string) {
+		t.Helper()
+		inst, reported, err := s.resolveObject(label)
+		if err != nil {
+			t.Fatalf("label %s does not read back: %v", label, err)
+		}
+		if fmt.Sprint(inst.ID) != id || reported != label {
+			t.Fatalf("label %s reads back as %s (#%d), want #%s", label, reported, inst.ID, id)
+		}
+	}
+
+	t.Run("root, nested feature and carriers", func(t *testing.T) {
+		s := submitted(t, model)
+		out := run(t, s, "%instantiate Demo::'left::right'")
+		wants(t, out, "Created instance of Demo::'left::right'")
+		rejects(t, out, "Demo::left::right")
+		root := objectIDIn(t, out)
+		wants(t, run(t, s, "%instances"), "Demo::'left::right' (ID: "+root+")")
+		readsBack(t, s, "Demo::'left::right'", root)
+		wants(t, run(t, s, "%features 'left::right'"), "Instance: Demo::'left::right' (ID: "+root+")")
+		wants(t, run(t, s, "%eval in 'left::right' : 'in::ner'.bolts"), "= 5", "(on Demo::'left::right' ID: "+root+")")
+
+		nested, label, err := s.resolveObject("'left::right'.'in::ner'")
+		if err != nil {
+			t.Fatalf("'left::right'.'in::ner': %v", err)
+		}
+		if label != "Demo::'left::right'.'in::ner'" {
+			t.Fatalf("nested label = %s", label)
+		}
+		nestedID := fmt.Sprint(nested.ID)
+		readsBack(t, s, label, nestedID)
+		wants(t, run(t, s, "%features Demo::'left::right'::'in::ner'"), "Instance: "+label+" (ID: "+nestedID+")")
+		wants(t, run(t, s, "%constraint Demo::Hub::tight"), "passed (on "+label+" ID: "+nestedID+")")
+
+		// The declaration the flat spelling's first segment names is untouched.
+		wants(t, run(t, s, "%features Demo::left"), `error: no instance of the usage "Demo::left"`, "name Demo::'left::right' to address it")
+
+		for _, c := range []struct{ line, want string }{
+			{"%features Demo::'le", "Demo::'left::right'"},
+			{"%features 'left::right'.", "'left::right'.'in::ner'"},
+			{"%features Demo::'left::right'::", "Demo::'left::right'::'in::ner'"},
+		} {
+			got := s.Complete(c.line, len(c.line)).Candidates
+			if !slices.Contains(got, c.want) {
+				t.Errorf("completing %q offered %v, want %s", c.line, got, c.want)
+			}
+		}
+	})
+
+	t.Run("debugger across carry-over and displacement", func(t *testing.T) {
+		s := submitted(t, model)
+		first := objectIDIn(t, run(t, s, "%instantiate Demo::'left::right'"))
+		wants(t, run(t, s, "%state Demo::Check 'left::right'.'in::ner'"), "Started state machine executor", `of "Demo::'left::right'.'in::ner'"`)
+		if res := s.Submit("package Other { part def Unrelated; }"); len(res.Notices) > 0 {
+			t.Fatalf("unrelated declaration reported %v", res.Notices)
+		}
+		if got, want := s.stateExec.selfFQN, "Demo::'left::right'.'in::ner'"; got != want {
+			t.Fatalf("debugger label after carry-over = %q, want %s", got, want)
+		}
+		wants(t, run(t, s, "%current"), "checking")
+
+		again := run(t, s, "%instantiate Demo::'left::right'")
+		wants(t, again, "note: Demo::'left::right' now denotes this object", "stays reachable as #"+first,
+			"keeps running over the object Demo::'left::right'.'in::ner' named, now #"+first+".'in::ner'")
+		if got, want := s.stateExec.selfFQN, "#"+first+".'in::ner'"; got != want {
+			t.Fatalf("debugger label after displacement = %q, want %s", got, want)
+		}
+		wants(t, run(t, s, "%instances"), "#"+first+" (ID: "+first+", displaced from Demo::'left::right')")
+		wants(t, run(t, s, "%advance 5"), "Current state: checked")
+		inner, _ := s.unnamed[0].obj.FeatureValues["in::ner"].Value.Object()
+		readsBack(t, s, "#"+first+".'in::ner'", fmt.Sprint(inner))
+	})
+
+	// The index registers declarations by their flat name, so two spelled the
+	// same flat are told apart only in the report of their clash.
+	t.Run("clashing flat spellings", func(t *testing.T) {
+		s := submitted(t, "package Demo { part def Wheel; part 'a::b' : Wheel; part a : Wheel { part b : Wheel; } }")
+		for _, ref := range []string{"Demo::'a::b'", "Demo::a::b"} {
+			wants(t, run(t, s, "%instantiate "+ref), "error:", "is ambiguous: Demo::'a::b', Demo::a::b")
+		}
 	})
 }
 

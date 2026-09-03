@@ -315,7 +315,7 @@ func (s *Session) instanceName(inst *runtime.Instance) string {
 		}
 	}
 	if name != "" {
-		return notationName(name)
+		return s.declaredName(name)
 	}
 	for _, u := range s.unnamed {
 		if u.obj == inst {
@@ -413,7 +413,7 @@ func (s *Session) instantiateNamed(name string) ([]string, error) {
 	s.instances[fqn] = inst
 	s.lost = instanceLoss{}
 	out := []string{
-		fmt.Sprintf("✓ Created instance of %s", notationName(fqn)),
+		fmt.Sprintf("✓ Created instance of %s", s.declaredName(fqn)),
 		fmt.Sprintf("  ID: %d", inst.ID),
 	}
 	// A second instantiation is a second object, so say which one the name now
@@ -421,7 +421,7 @@ func (s *Session) instantiateNamed(name string) ([]string, error) {
 	if displaced {
 		s.unnamed = append(s.unnamed, unnamedObject{fqn: fqn, obj: previous})
 		out = append(out, fmt.Sprintf("  note: %s now denotes this object; object #%d is displaced from that name%s and stays reachable as #%d",
-			notationName(fqn), previous.ID, behaviorsOf(previous), previous.ID))
+			s.declaredName(fqn), previous.ID, behaviorsOf(previous), previous.ID))
 		for _, notice := range relabelled {
 			out = append(out, "  "+notice)
 		}

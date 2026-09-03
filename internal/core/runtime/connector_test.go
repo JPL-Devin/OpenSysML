@@ -493,6 +493,69 @@ func testUnattachableConnectorTouchesNoOtherObject(t *testing.T) {
 	}
 }
 
+// testUnattachableConnectorEndsRunNothingEarly: the behaviors of an object an
+// end materializes run only once every end is attached, so a later end's failure
+// leaves the objects that survive it exactly as they were.
+func testUnattachableConnectorEndsRunNothingEarly(t *testing.T) {
+	model, resolver, root := parseAndBuildModel(t, `
+		package test {
+			item def Ping;
+			port def P;
+			part def Listener {
+				attribute heard : Integer = 0;
+				exhibit state listening {
+					entry; then waiting;
+					state waiting { accept Ping then noted; }
+					state noted { entry action note { assign heard := heard + 1; } }
+				}
+			}
+			part good : Listener;
+			part def Pinger {
+				port p : P;
+				exhibit state life { entry; then up; state up { entry send Ping() to good; } }
+			}
+			part def Sys {
+				part a : Pinger[0..1];
+				connection link connect a.p to a.missing;
+				connection ok connect a.p to a.p;
+			}
+		}
+	`)
+	pkg := resolveSymbol(t, root, "test")
+	ctx := NewContext(model, resolver, 10000)
+	good, err := ctx.occurrenceOf(resolveSymbol(t, pkg.Scope, "good"))
+	if err != nil {
+		t.Fatalf("occurrenceOf good: %v", err)
+	}
+	inst, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "Sys"))
+	if err != nil {
+		t.Fatalf("Instantiate Sys: %v", err)
+	}
+	if fv := inst.FeatureValues["a"]; fv == nil || fv.Materialized {
+		t.Fatalf("a was materialized with Sys: %+v", fv)
+	}
+	if _, err := inst.GetFeatureValue(ctx, "link"); !errors.Is(err, ErrConnectorEnd) {
+		t.Fatalf("expected ErrConnectorEnd, got: %v", err)
+	}
+	assertCurrentState(t, machineOf(t, good, "listening").State, "waiting")
+	if got := featureInt(t, ctx, good, "heard"); got != 0 {
+		t.Errorf("heard = %d after the connector that could not be attached, want 0: the part its first end materialized never ran", got)
+	}
+	if got := len(ctx.messages); got != 0 {
+		t.Errorf("%d message(s) left on the bus by the part the connector's first end materialized", got)
+	}
+	if got := len(ctx.objectBehaviors) + len(ctx.pendingBehaviors); got != 1 {
+		t.Errorf("%d behavior(s) attached or pending besides good's machine", got-1)
+	}
+
+	fvInstance(t, ctx, inst, "ok")
+	assertCurrentState(t, machineOf(t, fvInstance(t, ctx, inst, "a"), "life").State, "up")
+	assertCurrentState(t, machineOf(t, good, "listening").State, "noted")
+	if got := featureInt(t, ctx, good, "heard"); got != 1 {
+		t.Errorf("heard = %d once the connector that attached ran the part it materialized, want 1", got)
+	}
+}
+
 // testMultiplicityOnAConnector: a connector usage holding more than one
 // connector is not one connection, so there is no set of ends to attach — that
 // is reported rather than filled with objects of the connector's type.

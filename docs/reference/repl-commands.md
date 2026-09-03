@@ -86,7 +86,9 @@ with every name spelled as the notation writes it, so what is printed can be typ
 the same object: walked features are written after `.`, which is only ever a feature, even where the
 `::` spelling would name a declaration an object was created under. A declared name that only looks
 like an id or an index is quoted (`Demo::'#3'`, `car.'hub[2]'`), where a generated id or index is not;
-`#3` is always an id and `[2]` always an index.
+`#3` is always an id and `[2]` always an index. A name holding `::` inside its quotes stays one
+quoted segment (`Demo::'left::right'`, `#1.'in::ner'`) rather than flattening into a qualification
+that would read back as two names.
 
 Every command reports a bad reference in the same words:
 

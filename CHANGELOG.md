@@ -164,7 +164,8 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   Names that need quoting are completed as the notation writes them, `'the ra` to `'the rack'` and
   `Q::'the ra` to `Q::'the rack'`, the closing quote typed or not, and every object a command
   reports is spelled that way too, so a name that merely looks like an id or an index (`Demo::'#3'`,
-  `car::'hub[2]'`) reads back as the name it is.
+  `car::'hub[2]'`) reads back as the name it is, and one holding `::` inside its quotes
+  (`Demo::'left::right'`) stays one segment rather than reading back as two names.
 
 ### Performance
 
