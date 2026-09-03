@@ -69,6 +69,8 @@ type Context struct {
 	// occurrences holds the object each usage carrying no value of its own
 	// denotes, so a feature chain through a part reads one occurrence of it.
 	occurrences map[*symbols.Symbol]int64
+	// behaving memoizes runsBehaviors per type; the model is fixed for the context's life.
+	behaving map[*symbols.Symbol]bool
 
 	// variantObjects holds the object a variant stands for per owner that
 	// selected it, so repeated reads of one selection read the same object.
@@ -235,6 +237,7 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		maxCalcDepth:   DefaultMaxCalcDepth,
 
 		occurrences:      make(map[*symbols.Symbol]int64),
+		behaving:         make(map[*symbols.Symbol]bool),
 		variantObjects:   make(map[variantObject]int64),
 		selectedVariants: make(map[variantSelection]string),
 
