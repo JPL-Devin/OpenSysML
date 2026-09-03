@@ -201,7 +201,7 @@ The project is under active development, with the core infrastructure operationa
 | Semantic layer (operators, builtins, validation) | ✅ Complete |
 | Feature chain resolution (member access) | ✅ Complete |
 | Validation passes (typing conformance, redefinition) | ✅ Complete |
-| Native document generation | ✅ Document queries (`%run-query`, `-run-query`), document definitions with sections, paragraphs, inline runs, tables (including grouped, with computed columns), lists and embedded diagrams, rendered to Markdown (`-render-document`, `%render-document`), a linked multi-document set (`-render-documents`) with cross-document references, or PDF (`-doc-form pdf`) — see [the document generation manual](docs/manual/README.md) |
+| Native document generation | ✅ Document queries (`%run-query`, `-run-query`), document definitions with sections, paragraphs, inline runs, tables (including grouped, with computed columns), lists and embedded diagrams, rendered to Markdown (`-render-document`, `%render-document`), semantic HTML with an overridable stylesheet (`-doc-form html`), a linked multi-document set (`-render-documents`) with cross-document references, or PDF (`-doc-form pdf`) — see [the document generation manual](docs/manual/README.md) |
 | Expression evaluator & instance model (runtime Tiers 1-3) | ✅ Complete |
 | Runtime operators (equality, logical, negation) | ✅ Complete |
 | Workspace/reindex/file watching | ✅ Complete |
@@ -236,7 +236,7 @@ The project is under active development, with the core infrastructure operationa
 
 What these numbers cannot show: the OMG corpora are demonstrations rather than an official conformance suite; the differential is one-directional, comparing the diagnostics the two implementations report on the same files; the Xpect suites are the pilot authors' test intent rather than a certification oracle; and none of these is a percentage of the specification — no global compliance figure is claimed anywhere.
 
-**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each of the 816 tracked rules stays in [spec compliance](docs/project/spec-compliance.md) as a census of our own row list. It moves when rows are rewritten and does not move when an oracle does, so it is not the progress measure.
+**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each of the 823 tracked rules stays in [spec compliance](docs/project/spec-compliance.md) as a census of our own row list. It moves when rows are rewritten and does not move when an oracle does, so it is not the progress measure.
 <!-- doc-counts:end refereed-figures -->
 
 **Current commit:** All tests pass (`go test -race ./...`), builds clean (`go build ./...`).
