@@ -1801,10 +1801,7 @@ func (s *Session) satisfyVerdict(ctx *runtime.Context, a *runtime.SatisfyAsserti
 		// No object of the subject exists yet, so the verdict is about a fresh
 		// one, created here rather than inside the evaluation so it can be named.
 		if inst, serr := ctx.SatisfySubject(a); serr == nil {
-			subject, owner = inst, s.subjectName(a)
-			// Kept like %instantiate would, so a repeated %satisfy is about the
-			// same object rather than another copy of it.
-			s.instances[owner] = inst
+			subject, owner = inst, s.keepSubject(a, inst)
 		}
 	}
 	result, err := ctx.CheckSatisfactionOn(a, subject)
@@ -1824,24 +1821,76 @@ func (s *Session) satisfyVerdict(ctx *runtime.Context, a *runtime.SatisfyAsserti
 }
 
 // subjectInstance returns the object the session has already created for an
-// assertion's subject, with the name it was created under, or nil for none.
+// assertion's subject, with the name it was created under, or nil for none. A
+// chained subject is the object reached from the one created for the feature
+// the chain starts from.
 func (s *Session) subjectInstance(a *runtime.SatisfyAssertion) (*runtime.Instance, string) {
 	name := s.subjectName(a)
+	if a.SubjectChain != nil {
+		if inst, held, err := s.objectAt(name); err == nil && inst != nil {
+			return inst, held
+		}
+		return nil, ""
+	}
 	if inst, ok := s.instances[name]; ok {
 		return inst, name
 	}
 	return nil, ""
 }
 
+// keepSubject holds the object created for an assertion's subject like
+// %instantiate would, so a repeated %satisfy is about the same object rather
+// than another copy of it, and returns the name it is reached by. For a chained
+// subject the object held is the one the chain starts from, which owns the rest.
+func (s *Session) keepSubject(a *runtime.SatisfyAssertion, inst *runtime.Instance) string {
+	if a.SubjectChain == nil {
+		name := s.subjectName(a)
+		s.instances[name] = inst
+		return name
+	}
+	root := inst
+	for {
+		owner, _ := root.Owner()
+		if owner == nil {
+			break
+		}
+		root = owner
+	}
+	if name := s.rootName(a); name != "" && s.instanceName(root) == "" {
+		s.instances[name] = root
+	}
+	if name := s.nameOf(inst); name != "" {
+		return name
+	}
+	return s.subjectName(a)
+}
+
 // subjectName is the name an assertion's subject is known by: its
 // fully-qualified name, or the reference as written when it resolves to nothing.
+// A chained subject is known by the name of the feature the chain starts from
+// and the features walked from it, as objectAt reaches it.
 func (s *Session) subjectName(a *runtime.SatisfyAssertion) string {
+	if a.SubjectChain != nil {
+		if root := s.rootName(a); root != "" {
+			return strings.Join(append([]string{root}, a.SubjectPath...), "::")
+		}
+		return a.SubjectRef
+	}
 	if idx := s.symbolIndex(); idx != nil && a.Subject != nil {
 		if fqn := idx.GetFQN(a.Subject); fqn != "" {
 			return fqn
 		}
 	}
 	return a.SubjectRef
+}
+
+// rootName is the fully-qualified name of the feature a chained subject starts
+// from, "" when it resolves to nothing.
+func (s *Session) rootName(a *runtime.SatisfyAssertion) string {
+	if idx := s.symbolIndex(); idx != nil && a.SubjectRoot != nil {
+		return idx.GetFQN(a.SubjectRoot)
+	}
+	return ""
 }
 
 // performingObject resolves the object a debugging session's behavior is
