@@ -127,11 +127,13 @@ func (ctx *Context) materializeConnectorAs(owner *Instance, connSym, base *symbo
 	ctx.materializingConnectors[key] = true
 	defer delete(ctx.materializingConnectors, key)
 
-	// A connector an end of which cannot attach leaves nothing behind, itself and
-	// its behaviors included, so its identity stays free for another attempt.
-	mark, attached := len(ctx.created), len(ctx.objectBehaviors)
-	inst, err := ctx.instantiateAs(base, id)
+	// The behaviors start once every end is attached: a connector an end of which
+	// cannot attach leaves nothing behind and touches no other object, so its
+	// identity stays free for another attempt.
+	mark := len(ctx.created)
+	inst, err := ctx.materializeOwnedBy(base, id, nil, "")
 	if err != nil {
+		ctx.abandonInstancesSince(mark)
 		return nil, err
 	}
 
@@ -139,7 +141,7 @@ func (ctx *Context) materializeConnectorAs(owner *Instance, connSym, base *symbo
 	for _, end := range ends {
 		val, err := ctx.attachConnectorEnd(owner, connSym, end)
 		if err != nil {
-			ctx.abandonCreationSince(mark, attached)
+			ctx.abandonInstancesSince(mark)
 			return nil, err
 		}
 		inst.Ends = append(inst.Ends, ConnectorEnd{Name: end.Name, Value: val})
@@ -151,6 +153,9 @@ func (ctx *Context) materializeConnectorAs(owner *Instance, connSym, base *symbo
 	}
 	if len(unnamed) > 0 {
 		ctx.bindParticipants(inst, inst.Ends)
+	}
+	if err := ctx.startClassifierBehaviors(inst, mark); err != nil {
+		return nil, err
 	}
 	return inst, nil
 }

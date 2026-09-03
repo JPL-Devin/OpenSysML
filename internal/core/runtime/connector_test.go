@@ -397,6 +397,62 @@ func testUnattachableConnectorLeavesNoBehavior(t *testing.T) {
 	}
 }
 
+// testUnattachableConnectorTouchesNoOtherObject: a connector's behaviors start
+// only once every end is attached, so one that cannot be attached has sent no
+// message and written nothing on the objects that survive it.
+func testUnattachableConnectorTouchesNoOtherObject(t *testing.T) {
+	model, resolver, root := parseAndBuildModel(t, `
+		package test {
+			item def Ping;
+			port def P;
+			part def A { port p : P; }
+			part def Listener {
+				attribute heard : Integer = 0;
+				exhibit state listening {
+					entry; then waiting;
+					state waiting { accept Ping then noted; }
+					state noted { entry action note { assign heard := heard + 1; } }
+				}
+			}
+			part good : Listener;
+			connection def Link {
+				exhibit state life { entry; then up; state up { entry send Ping() to good; } }
+			}
+			part def Sys {
+				part a : A;
+				connection link : Link connect a.p to a.missing;
+				connection ok : Link connect a.p to a.p;
+			}
+		}
+	`)
+	pkg := resolveSymbol(t, root, "test")
+	ctx := NewContext(model, resolver, 10000)
+	good, err := ctx.occurrenceOf(resolveSymbol(t, pkg.Scope, "good"))
+	if err != nil {
+		t.Fatalf("occurrenceOf good: %v", err)
+	}
+	inst, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "Sys"))
+	if err != nil {
+		t.Fatalf("Instantiate Sys: %v", err)
+	}
+	if _, err := inst.GetFeatureValue(ctx, "link"); !errors.Is(err, ErrConnectorEnd) {
+		t.Fatalf("expected ErrConnectorEnd, got: %v", err)
+	}
+	assertCurrentState(t, machineOf(t, good, "listening").State, "waiting")
+	if got := featureInt(t, ctx, good, "heard"); got != 0 {
+		t.Errorf("heard = %d after the connector that could not be attached, want 0: its behavior never ran", got)
+	}
+	if got := len(ctx.messages); got != 0 {
+		t.Errorf("%d message(s) left on the bus by the connector that could not be attached", got)
+	}
+
+	fvInstance(t, ctx, inst, "ok")
+	assertCurrentState(t, machineOf(t, good, "listening").State, "noted")
+	if got := featureInt(t, ctx, good, "heard"); got != 1 {
+		t.Errorf("heard = %d once the connector that attached ran, want 1", got)
+	}
+}
+
 // testMultiplicityOnAConnector: a connector usage holding more than one
 // connector is not one connection, so there is no set of ends to attach — that
 // is reported rather than filled with objects of the connector's type.
