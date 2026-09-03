@@ -2,36 +2,25 @@ package export
 
 import (
 	"bytes"
-	"fmt"
 	"sort"
+	"strings"
 
-	"github.com/Open-MBEE/OpenSysML/internal/core/format"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
-// formattedSource maps spans of a parsed document onto the formatter's output
-// for it, which is the notation the graph carries as sysx:sourceText.
-type formattedSource struct {
-	text []byte
-	// The significant tokens of the parsed source and of text, in step: the
-	// formatter keeps every lexeme and rewrites only the whitespace between.
-	kinds      []lexer.Kind
-	orig, fmtd []source.Span
+// authoredSource is the parsed document's bytes as written, which is the
+// notation the graph carries as sysx:sourceText, with its significant tokens.
+type authoredSource struct {
+	text  []byte
+	kinds []lexer.Kind
+	spans []source.Span
 }
 
-func newFormattedSource(file *source.SourceFile) (*formattedSource, error) {
-	text, err := format.Source(file.Name(), file.Bytes(), format.DefaultOptions)
-	if err != nil {
-		return nil, fmt.Errorf("formatting %s: %w", file.Name(), err)
-	}
-	s := &formattedSource{text: text}
-	s.kinds, s.orig = significantTokens(file)
-	_, s.fmtd = significantTokens(source.NewWithKind(file.Name(), text, file.Kind()))
-	if len(s.orig) != len(s.fmtd) {
-		return nil, fmt.Errorf("formatting %s: %w", file.Name(), format.ErrNotIdempotent)
-	}
-	return s, nil
+func newAuthoredSource(file *source.SourceFile) *authoredSource {
+	s := &authoredSource{text: file.Bytes()}
+	s.kinds, s.spans = significantTokens(file)
+	return s
 }
 
 func significantTokens(file *source.SourceFile) ([]lexer.Kind, []source.Span) {
@@ -50,42 +39,61 @@ func significantTokens(file *source.SourceFile) ([]lexer.Kind, []source.Span) {
 	}
 }
 
-// index returns the position of the token holding an offset of the parsed
-// source, or of the token before that offset when it falls between two.
-func (s *formattedSource) index(offset int) int {
-	return sort.Search(len(s.orig), func(i int) bool { return s.orig[i].Offset > offset }) - 1
+// index returns the position of the token holding an offset, or of the token
+// before that offset when it falls between two.
+func (s *authoredSource) index(offset int) int {
+	return sort.Search(len(s.spans), func(i int) bool { return s.spans[i].Offset > offset }) - 1
 }
 
-// at maps an offset of the parsed source into text. An offset inside a token
-// keeps its place in that token; one between tokens lands where the next starts.
-func (s *formattedSource) at(offset int) int {
-	k := s.index(offset)
-	if k >= 0 && offset <= s.orig[k].End() {
-		if offset == s.orig[k].End() {
-			return s.fmtd[k].End()
+// slice returns the text of a span as written.
+func (s *authoredSource) slice(span source.Span) string {
+	return string(s.text[span.Offset:span.End()])
+}
+
+// code returns the text of a span up to its last code token: a node's span runs
+// on over the notes and comments after it, which are not part of what it says.
+func (s *authoredSource) code(span source.Span) string {
+	last := s.index(span.End() - 1)
+	for last >= 0 && s.spans[last].Offset >= span.Offset && isComment(s.kinds[last]) {
+		last--
+	}
+	if last < 0 || s.spans[last].Offset < span.Offset {
+		return ""
+	}
+	return string(s.text[span.Offset:min(span.End(), s.spans[last].End())])
+}
+
+func isComment(kind lexer.Kind) bool {
+	return kind == lexer.SLNote || kind == lexer.MLNote || kind == lexer.RegularComment
+}
+
+// sameSpelling reports whether two texts read as the same tokens: layout and
+// comments aside, which is what the graph does not state.
+func sameSpelling(a, b string) bool {
+	return strings.Join(words(a), " ") == strings.Join(words(b), " ")
+}
+
+// words is the text's code tokens in order, without whitespace or comments.
+func words(text string) []string {
+	var out []string
+	lx := lexer.New(source.New("head.sysml", []byte(text)))
+	for tok := lx.Next(); tok.Kind != lexer.EOF; tok = lx.Next() {
+		if tok.Kind != lexer.Whitespace && !isComment(tok.Kind) {
+			out = append(out, text[tok.Span.Offset:tok.Span.End()])
 		}
-		return min(s.fmtd[k].Offset+offset-s.orig[k].Offset, s.fmtd[k].End())
 	}
-	if k+1 < len(s.fmtd) {
-		return s.fmtd[k+1].Offset
-	}
-	return len(s.text)
+	return out
 }
 
-// slice returns the formatted text of a span of the parsed source.
-func (s *formattedSource) slice(span source.Span) string {
-	return string(s.text[s.at(span.Offset):s.at(span.End())])
-}
-
-// region is a range of the formatted text, from start up to end.
+// region is a range of the text, from start up to end.
 type region struct{ start, end int }
 
 // tile returns the contiguous lines of each member of one body: from the end
 // of the one before (the first, from the trivia ahead of it) to its last line.
-func (s *formattedSource) tile(spans []source.Span) []region {
+func (s *authoredSource) tile(spans []source.Span) []region {
 	out := make([]region, len(spans))
 	for i, span := range spans {
-		first := sort.Search(len(s.orig), func(k int) bool { return s.orig[k].Offset >= span.Offset })
+		first := sort.Search(len(s.spans), func(k int) bool { return s.spans[k].Offset >= span.Offset })
 		// A member's span runs on over the trivia after it, up to the next token.
 		last := s.index(span.End() - 1)
 		for last > first && s.trivia(last) {
@@ -97,7 +105,7 @@ func (s *formattedSource) tile(spans []source.Span) []region {
 		}
 		end := len(s.text)
 		if next < len(s.kinds) {
-			end = s.lineStart(s.fmtd[next].Offset)
+			end = s.lineStart(s.spans[next].Offset)
 		}
 		// Blank lines ahead of the next member are its own, so they outlive this one.
 		for {
@@ -114,7 +122,7 @@ func (s *formattedSource) tile(spans []source.Span) []region {
 			for first > 0 && s.trivia(first-1) && s.newlineBefore(first-1) {
 				first--
 			}
-			start = s.lineStart(s.fmtd[first].Offset)
+			start = s.lineStart(s.spans[first].Offset)
 		}
 		out[i] = region{start, max(start, end)}
 	}
@@ -123,7 +131,7 @@ func (s *formattedSource) tile(spans []source.Span) []region {
 
 // wholeLines reports whether every region starts and ends on a line boundary,
 // so each can be written or replaced on its own.
-func (s *formattedSource) wholeLines(regions []region) bool {
+func (s *authoredSource) wholeLines(regions []region) bool {
 	for _, r := range regions {
 		if r.start > 0 && s.text[r.start-1] != '\n' {
 			return false
@@ -137,24 +145,24 @@ func (s *formattedSource) wholeLines(regions []region) bool {
 
 // split returns the text of an element apart from its members: the lines up to
 // the first member, and those after the last.
-func (s *formattedSource) split(own, members region) (head, tail string) {
+func (s *authoredSource) split(own, members region) (head, tail string) {
 	return string(s.text[own.start:members.start]), string(s.text[members.end:own.end])
 }
 
-func (s *formattedSource) region(r region) string { return string(s.text[r.start:r.end]) }
+func (s *authoredSource) region(r region) string { return string(s.text[r.start:r.end]) }
 
 // newlineBefore reports whether token k starts on a later line than token k-1.
-func (s *formattedSource) newlineBefore(k int) bool {
+func (s *authoredSource) newlineBefore(k int) bool {
 	if k == 0 {
 		return true
 	}
-	prev := s.fmtd[k-1]
-	return s.kinds[k-1] == lexer.SLNote || bytes.IndexByte(s.text[prev.End():s.fmtd[k].Offset], '\n') >= 0
+	prev := s.spans[k-1]
+	return s.kinds[k-1] == lexer.SLNote || bytes.IndexByte(s.text[prev.End():s.spans[k].Offset], '\n') >= 0
 }
 
 // blankLineBefore returns where the line ending at end starts, if that line is
 // empty: a newline, LF or CRLF, right after another.
-func (s *formattedSource) blankLineBefore(end int) (int, bool) {
+func (s *authoredSource) blankLineBefore(end int) (int, bool) {
 	if end == 0 || s.text[end-1] != '\n' {
 		return 0, false
 	}
@@ -170,7 +178,7 @@ func (s *formattedSource) blankLineBefore(end int) (int, bool) {
 
 // lineStart returns the offset of the indentation before pos on its line, or
 // pos itself when something other than blanks precedes it there.
-func (s *formattedSource) lineStart(pos int) int {
+func (s *authoredSource) lineStart(pos int) int {
 	for pos > 0 && (s.text[pos-1] == ' ' || s.text[pos-1] == '\t') {
 		pos--
 	}
@@ -179,7 +187,7 @@ func (s *formattedSource) lineStart(pos int) int {
 
 // trivia reports whether token k is one the parser skips: a note, or a `/* */`
 // comment not following a declaration head, which would make it its body.
-func (s *formattedSource) trivia(k int) bool {
+func (s *authoredSource) trivia(k int) bool {
 	switch s.kinds[k] {
 	case lexer.SLNote, lexer.MLNote:
 		return true

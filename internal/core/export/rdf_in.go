@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
-	"github.com/Open-MBEE/OpenSysML/internal/core/format"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf/ontology"
@@ -55,8 +54,8 @@ type element struct {
 }
 
 // ToSysML converts an RDF graph back into SysML v2 source text. An element
-// comes back as its sysx:sourceText while that still states what the graph
-// states, and in canonical notation otherwise; the result is formatted.
+// comes back as its sysx:sourceText, byte for byte, while that still states
+// what the graph states, and in canonical notation otherwise.
 //
 // A subject whose metaclass this mapping does not know, or which lacks the
 // properties needed to rebuild its declaration, is reported as an
@@ -80,6 +79,7 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 		demotedExpr:      map[string]bool{},
 		folded:           map[*element]*element{},
 	}
+	d.nl = d.newline()
 	roots, err := d.build()
 	if err != nil {
 		return nil, err
@@ -88,13 +88,7 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	out, err := format.Source("<converted>", []byte(notation), format.DefaultOptions)
-	if err != nil {
-		// The formatter only fails on input it cannot lex; return the
-		// unformatted text with the reason so the user can see what was built.
-		return nil, fmt.Errorf("converted source is not valid SysML: %w", err)
-	}
-	return out, nil
+	return []byte(notation), nil
 }
 
 // checkExtensionNamespace refuses a graph written with the pre-rename extension
@@ -155,6 +149,26 @@ type decoder struct {
 	// written records where each element landed in this pass's notation, the
 	// members of one ahead of it.
 	written []writing
+	// nl is the line ending rebuilt notation is written with.
+	nl string
+}
+
+// newline is the line ending the stored source text is written with: CRLF only
+// when it outnumbers bare LF, as the formatter decides it.
+func (d *decoder) newline() string {
+	crlf, lf := 0, 0
+	for _, subject := range d.graph.Subjects() {
+		for _, property := range []string{xSourceText, xSourceTail} {
+			if text, ok := d.graph.Lexical(subject, rdf.OpenSysML+property); ok {
+				crlf += strings.Count(text, "\r\n")
+				lf += strings.Count(text, "\n")
+			}
+		}
+	}
+	if crlf > lf-crlf {
+		return "\r\n"
+	}
+	return "\n"
 }
 
 // writing is the range of the notation one element was written over.
@@ -447,7 +461,7 @@ func (d *decoder) printElement(b *strings.Builder, el *element, depth int) error
 	if annotationMetaclasses[el.metaclass] {
 		// A comment, doc or rep declaration ends with its comment body, and
 		// takes no terminator.
-		b.WriteString("\n")
+		b.WriteString(d.nl)
 		return nil
 	}
 	children, err := d.bodyMembers(el)
@@ -462,22 +476,22 @@ func (d *decoder) printElement(b *strings.Builder, el *element, depth int) error
 		if parallel {
 			return d.missing(el, "sysx:"+xHasBody, "a parallel state states its regions in a body")
 		}
-		b.WriteString(";\n")
+		b.WriteString(";" + d.nl)
 		return nil
 	}
 	if parallel {
 		b.WriteString(" parallel")
 	}
-	b.WriteString(" {\n")
+	b.WriteString(" {" + d.nl)
 	for _, annotation := range annotations {
-		b.WriteString(indent + "    " + annotation + "\n")
+		b.WriteString(indent + "    " + annotation + d.nl)
 	}
 	for _, child := range children {
 		if err := d.print(b, child, depth+1); err != nil {
 			return err
 		}
 	}
-	b.WriteString(indent + "}\n")
+	b.WriteString(indent + "}" + d.nl)
 	return nil
 }
 

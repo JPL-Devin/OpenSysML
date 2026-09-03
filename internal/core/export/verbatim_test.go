@@ -7,8 +7,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 )
 
-// A model the formatter leaves alone, so what the graph carries as source text
-// is the notation itself: comments, notes, blank lines and synonyms included.
+// A model whose graph carries the notation itself as source text: comments,
+// notes, blank lines and synonyms included.
 const commented = `// The rover, as modelled.
 package Rover {
     /* Definitions come first. */
@@ -27,13 +27,9 @@ package Rover {
 }
 `
 
-// commentedTurtle converts commented to Turtle, with the notation it formats to
-// (which is commented itself) for comparison.
+// commentedTurtle converts commented to Turtle.
 func commentedTurtle(t *testing.T) []byte {
 	t.Helper()
-	if got := formatted(t, commented); got != commented {
-		t.Fatalf("the fixture is not fixed under the formatter:\n%s", got)
-	}
 	return idTurtle(t, commented)
 }
 
@@ -51,11 +47,22 @@ func TestSourceTextComesBackByteForByte(t *testing.T) {
 	if back := toNotation(t, turtle); back != commented {
 		t.Errorf("round trip changed the notation:\n--- want ---\n%s--- got ---\n%s", commented, back)
 	}
-	// Unformatted notation comes back as the formatter writes it, since that
-	// is the text the graph carries.
+	// Unformatted notation comes back as written too: the graph carries the
+	// author's bytes, not the formatter's.
 	loose := strings.ReplaceAll(commented, "    ", "\t")
-	if back, want := toNotation(t, idTurtle(t, loose)), formatted(t, loose); back != want {
-		t.Errorf("round trip changed the formatted notation:\n--- want ---\n%s--- got ---\n%s", want, back)
+	if back := toNotation(t, idTurtle(t, loose)); back != loose {
+		t.Errorf("round trip changed the unformatted notation:\n--- want ---\n%s--- got ---\n%s", loose, back)
+	}
+}
+
+// What follows the last root — notes, comments, blank lines, or no final
+// newline — is the last root's tail, since the document itself has no subject.
+func TestTrailingTriviaComesBack(t *testing.T) {
+	for _, tail := range []string{"\n\n// the end\n\n/* really */\n\n\n", "\n\n", ""} {
+		src := strings.TrimSuffix(commented, "\n") + tail
+		if back := toNotation(t, idTurtle(t, src)); back != src {
+			t.Errorf("tail %q: round trip changed the notation:\n--- want ---\n%s--- got ---\n%s", tail, src, back)
+		}
 	}
 }
 

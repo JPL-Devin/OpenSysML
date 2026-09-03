@@ -10,12 +10,15 @@ elmt:IrregularLayout
     sysml:qualifiedName "IrregularLayout" ;
     sysml:elementId "IrregularLayout" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "IrregularLayout" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedRelationship elmt:IrregularLayout___400, elmt:IrregularLayout___401_om, elmt:IrregularLayout__Speed_om, elmt:IrregularLayout__Wheel_om, elmt:IrregularLayout__Axle_om, elmt:IrregularLayout__Rover_om, elmt:IrregularLayout__Drive_om, elmt:IrregularLayout__Ops_om ;
     sysml:ownedImport elmt:IrregularLayout___400 ;
     sysml:ownedMember elmt:IrregularLayout___401, elmt:IrregularLayout__Speed, elmt:IrregularLayout__Wheel, elmt:IrregularLayout__Axle, elmt:IrregularLayout__Rover, elmt:IrregularLayout__Drive, elmt:IrregularLayout__Ops ;
-    sysml:ownedMembership elmt:IrregularLayout___401_om, elmt:IrregularLayout__Speed_om, elmt:IrregularLayout__Wheel_om, elmt:IrregularLayout__Axle_om, elmt:IrregularLayout__Rover_om, elmt:IrregularLayout__Drive_om, elmt:IrregularLayout__Ops_om .
+    sysml:ownedMembership elmt:IrregularLayout___401_om, elmt:IrregularLayout__Speed_om, elmt:IrregularLayout__Wheel_om, elmt:IrregularLayout__Axle_om, elmt:IrregularLayout__Rover_om, elmt:IrregularLayout__Drive_om, elmt:IrregularLayout__Ops_om ;
+    sysx:sourceText "package IrregularLayout {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:IrregularLayout___400
     a sysml:Import ;
@@ -29,7 +32,8 @@ elmt:IrregularLayout___400
     sysml:visibility "private" ;
     sysml:importedNamespace "ScalarValues" ;
     sysx:isNamespaceImport "true"^^xsd:boolean ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    private import ScalarValues::*;\n" .
 
 elmt:IrregularLayout___401
     a sysml:Documentation ;
@@ -40,11 +44,8 @@ elmt:IrregularLayout___401
     sysml:owner elmt:IrregularLayout ;
     sysml:owningRelationship elmt:IrregularLayout___401_om ;
     sysml:owningMembership elmt:IrregularLayout___401_om ;
-    sysml:body """ A model whose author laid the heads out
-       *   over several lines,
-	 *	with tabs,
-
-       * blank lines and odd indentation. """ .
+    sysml:body " A model whose author laid the heads out\n       *   over several lines,\n\t *\twith tabs,\n\n       * blank lines and odd indentation. " ;
+    sysx:sourceText "    doc /* A model whose author laid the heads out\n       *   over several lines,\n\t *\twith tabs,\n\n       * blank lines and odd indentation. */\n" .
 
 elmt:IrregularLayout___401_om
     a sysml:OwningMembership ;
@@ -71,7 +72,8 @@ elmt:IrregularLayout__Speed
     sysml:ownedMembership elmt:IrregularLayout__Speed__m_om, elmt:IrregularLayout__Speed___401_om ;
     sysml:ownedRelationship elmt:IrregularLayout__Speed__m_om, elmt:IrregularLayout__Speed___401_om ;
     sysml:ownedFeature elmt:IrregularLayout__Speed__m, elmt:IrregularLayout__Speed___401 ;
-    sysml:ownedFeatureMembership elmt:IrregularLayout__Speed__m_om, elmt:IrregularLayout__Speed___401_om .
+    sysml:ownedFeatureMembership elmt:IrregularLayout__Speed__m_om, elmt:IrregularLayout__Speed___401_om ;
+    sysx:sourceText "    calc def Speed { in m : Real; return : Real; }\n" .
 
 elmt:IrregularLayout__Speed_om
     a sysml:OwningMembership ;
@@ -147,7 +149,8 @@ elmt:IrregularLayout__Wheel
     sysml:owningRelationship elmt:IrregularLayout__Wheel_om ;
     sysml:owningMembership elmt:IrregularLayout__Wheel_om ;
     sysml:declaredName "Wheel" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    part def Wheel;\n" .
 
 elmt:IrregularLayout__Wheel_om
     a sysml:OwningMembership ;
@@ -169,7 +172,8 @@ elmt:IrregularLayout__Axle
     sysml:owningRelationship elmt:IrregularLayout__Axle_om ;
     sysml:owningMembership elmt:IrregularLayout__Axle_om ;
     sysml:declaredName "Axle" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    part def Axle;\n" .
 
 elmt:IrregularLayout__Axle_om
     a sysml:OwningMembership ;
@@ -196,7 +200,9 @@ elmt:IrregularLayout__Rover
     sysml:ownedMembership elmt:IrregularLayout__Rover___400_om, elmt:IrregularLayout__Rover__mass_om, elmt:IrregularLayout__Rover__limit_om, elmt:IrregularLayout__Rover__label_om, elmt:IrregularLayout__Rover__tabbed_om, elmt:IrregularLayout__Rover__wheels_om, elmt:IrregularLayout__Rover__axle_om, elmt:IrregularLayout__Rover___407_om, elmt:IrregularLayout__Rover__bounds_om, elmt:IrregularLayout__Rover___409_om, elmt:IrregularLayout__Rover__speed_om, elmt:IrregularLayout__Rover___4011_om ;
     sysml:ownedRelationship elmt:IrregularLayout__Rover___400_om, elmt:IrregularLayout__Rover__mass_om, elmt:IrregularLayout__Rover__limit_om, elmt:IrregularLayout__Rover__label_om, elmt:IrregularLayout__Rover__tabbed_om, elmt:IrregularLayout__Rover__wheels_om, elmt:IrregularLayout__Rover__axle_om, elmt:IrregularLayout__Rover___407_om, elmt:IrregularLayout__Rover__bounds_om, elmt:IrregularLayout__Rover___409_om, elmt:IrregularLayout__Rover__speed_om, elmt:IrregularLayout__Rover___4011_om ;
     sysml:ownedFeature elmt:IrregularLayout__Rover__mass, elmt:IrregularLayout__Rover__limit, elmt:IrregularLayout__Rover__label, elmt:IrregularLayout__Rover__tabbed, elmt:IrregularLayout__Rover__wheels, elmt:IrregularLayout__Rover__axle, elmt:IrregularLayout__Rover___407, elmt:IrregularLayout__Rover__bounds, elmt:IrregularLayout__Rover___409, elmt:IrregularLayout__Rover__speed ;
-    sysml:ownedFeatureMembership elmt:IrregularLayout__Rover__mass_om, elmt:IrregularLayout__Rover__limit_om, elmt:IrregularLayout__Rover__label_om, elmt:IrregularLayout__Rover__tabbed_om, elmt:IrregularLayout__Rover__wheels_om, elmt:IrregularLayout__Rover__axle_om, elmt:IrregularLayout__Rover___407_om, elmt:IrregularLayout__Rover__bounds_om, elmt:IrregularLayout__Rover___409_om, elmt:IrregularLayout__Rover__speed_om .
+    sysml:ownedFeatureMembership elmt:IrregularLayout__Rover__mass_om, elmt:IrregularLayout__Rover__limit_om, elmt:IrregularLayout__Rover__label_om, elmt:IrregularLayout__Rover__tabbed_om, elmt:IrregularLayout__Rover__wheels_om, elmt:IrregularLayout__Rover__axle_om, elmt:IrregularLayout__Rover___407_om, elmt:IrregularLayout__Rover__bounds_om, elmt:IrregularLayout__Rover___409_om, elmt:IrregularLayout__Rover__speed_om ;
+    sysx:sourceText "    part def Rover {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:IrregularLayout__Rover_om
     a sysml:OwningMembership ;
@@ -217,9 +223,8 @@ elmt:IrregularLayout__Rover___400
     sysml:owner elmt:IrregularLayout__Rover ;
     sysml:owningRelationship elmt:IrregularLayout__Rover___400_om ;
     sysml:owningMembership elmt:IrregularLayout__Rover___400_om ;
-    sysml:body """ the rover:
-             its doc spans
-                lines too """ .
+    sysml:body " the rover:\n             its doc spans\n                lines too " ;
+    sysx:sourceText "        doc /* the rover:\n             its doc spans\n                lines too */\n" .
 
 elmt:IrregularLayout__Rover___400_om
     a sysml:OwningMembership ;
@@ -243,7 +248,8 @@ elmt:IrregularLayout__Rover__mass
     sysml:declaredName "mass" ;
     sysml:type "Real" ;
     sysml:value expr:IrregularLayout__Rover__mass_pvalue ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute mass : Real = 80;\n" .
 
 elmt:IrregularLayout__Rover__mass_om
     a sysml:FeatureMembership ;
@@ -275,7 +281,8 @@ elmt:IrregularLayout__Rover__limit
     sysml:declaredName "limit" ;
     sysml:type "Real" ;
     sysml:value expr:IrregularLayout__Rover__limit_pvalue ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute limit : Real =\n                100\n              + 20;\n" .
 
 elmt:IrregularLayout__Rover__limit_om
     a sysml:FeatureMembership ;
@@ -291,8 +298,7 @@ elmt:IrregularLayout__Rover__limit_om
 
 expr:IrregularLayout__Rover__limit_pvalue
     a sysml:OperatorExpression ;
-    sysx:sourceText """100
-              + 20""" ;
+    sysx:sourceText "100\n              + 20" ;
     sysml:elementId "IrregularLayout__Rover__limit_pvalue" ;
     sysml:operator "+" ;
     sysml:argument expr:IrregularLayout__Rover__limit_pvalue_pa0, expr:IrregularLayout__Rover__limit_pvalue_pa1 .
@@ -322,7 +328,8 @@ elmt:IrregularLayout__Rover__label
     sysml:owningMembership elmt:IrregularLayout__Rover__label_om ;
     sysml:declaredName "label" ;
     sysml:value expr:IrregularLayout__Rover__label_pvalue ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute label =\n            \"two\\nlines\";\n" .
 
 elmt:IrregularLayout__Rover__label_om
     a sysml:FeatureMembership ;
@@ -340,8 +347,7 @@ expr:IrregularLayout__Rover__label_pvalue
     a sysml:LiteralString ;
     sysx:sourceText "\"two\\nlines\"" ;
     sysml:elementId "IrregularLayout__Rover__label_pvalue" ;
-    sysml:value """two
-lines""" .
+    sysml:value "two\nlines" .
 
 elmt:IrregularLayout__Rover__tabbed
     a sysml:AttributeUsage ;
@@ -355,7 +361,8 @@ elmt:IrregularLayout__Rover__tabbed
     sysml:declaredName "tabbed" ;
     sysml:type "Real" ;
     sysml:value expr:IrregularLayout__Rover__tabbed_pvalue ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute\ttabbed\t:\tReal\t=\t1;\n" .
 
 elmt:IrregularLayout__Rover__tabbed_om
     a sysml:FeatureMembership ;
@@ -387,7 +394,8 @@ elmt:IrregularLayout__Rover__wheels
     sysml:declaredName "wheels" ;
     sysml:type elmt:IrregularLayout__Wheel ;
     sysml:upperBound expr:IrregularLayout__Rover__wheels_pupperBound ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part\n            wheels\n                : Wheel[4];\n" .
 
 elmt:IrregularLayout__Rover__wheels_om
     a sysml:FeatureMembership ;
@@ -418,7 +426,8 @@ elmt:IrregularLayout__Rover__axle
     sysml:owningMembership elmt:IrregularLayout__Rover__axle_om ;
     sysml:declaredName "axle" ;
     sysml:type elmt:IrregularLayout__Axle ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part axle :\n            Axle;\n" .
 
 elmt:IrregularLayout__Rover__axle_om
     a sysml:FeatureMembership ;
@@ -441,11 +450,10 @@ elmt:IrregularLayout__Rover___407
     sysml:owner elmt:IrregularLayout__Rover ;
     sysml:owningRelationship elmt:IrregularLayout__Rover___407_om ;
     sysml:owningMembership elmt:IrregularLayout__Rover___407_om ;
-    sysx:declaredKeyword "connect" ;
-    sysx:sourceText """connect wheels
-            to axle;""" ;
     sysx:relatedFeature expr:IrregularLayout__Rover___407_pend0, expr:IrregularLayout__Rover___407_pend1 ;
-    sysx:endForm "to" .
+    sysx:endForm "to" ;
+    sysx:declaredKeyword "connect" ;
+    sysx:sourceText "        connect wheels\n            to axle;\n" .
 
 elmt:IrregularLayout__Rover___407_om
     a sysml:FeatureMembership ;
@@ -486,7 +494,9 @@ elmt:IrregularLayout__Rover__bounds
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:IrregularLayout__Rover__bounds___400 ;
     sysml:ownedMembership elmt:IrregularLayout__Rover__bounds___400_om ;
-    sysml:ownedRelationship elmt:IrregularLayout__Rover__bounds___400_om .
+    sysml:ownedRelationship elmt:IrregularLayout__Rover__bounds___400_om ;
+    sysx:sourceText "        constraint bounds {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:IrregularLayout__Rover__bounds_om
     a sysml:FeatureMembership ;
@@ -509,7 +519,8 @@ elmt:IrregularLayout__Rover__bounds___400
     sysml:owner elmt:IrregularLayout__Rover__bounds ;
     sysml:owningRelationship elmt:IrregularLayout__Rover__bounds___400_om ;
     sysml:owningMembership elmt:IrregularLayout__Rover__bounds___400_om ;
-    sysx:condition expr:IrregularLayout__Rover__bounds___400_pcondition .
+    sysx:condition expr:IrregularLayout__Rover__bounds___400_pcondition ;
+    sysx:sourceText "            mass > 0\n                and\n              mass < limit\n" .
 
 elmt:IrregularLayout__Rover__bounds___400_om
     a sysml:OwningMembership ;
@@ -523,9 +534,7 @@ elmt:IrregularLayout__Rover__bounds___400_om
 
 expr:IrregularLayout__Rover__bounds___400_pcondition
     a sysml:OperatorExpression ;
-    sysx:sourceText """mass > 0
-                and
-              mass < limit""" ;
+    sysx:sourceText "mass > 0\n                and\n              mass < limit" ;
     sysml:elementId "IrregularLayout__Rover__bounds___400_pcondition" ;
     sysml:operator "and" ;
     sysml:argument expr:IrregularLayout__Rover__bounds___400_pcondition_pa0, expr:IrregularLayout__Rover__bounds___400_pcondition_pa1 .
@@ -587,7 +596,9 @@ elmt:IrregularLayout__Rover___409
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:IrregularLayout__Rover___409___400 ;
     sysml:ownedMembership elmt:IrregularLayout__Rover___409___400_om ;
-    sysml:ownedRelationship elmt:IrregularLayout__Rover___409___400_om .
+    sysml:ownedRelationship elmt:IrregularLayout__Rover___409___400_om ;
+    sysx:sourceText "        assert constraint {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:IrregularLayout__Rover___409_om
     a sysml:FeatureMembership ;
@@ -610,7 +621,8 @@ elmt:IrregularLayout__Rover___409___400
     sysml:owner elmt:IrregularLayout__Rover___409 ;
     sysml:owningRelationship elmt:IrregularLayout__Rover___409___400_om ;
     sysml:owningMembership elmt:IrregularLayout__Rover___409___400_om ;
-    sysx:condition expr:IrregularLayout__Rover___409___400_pcondition .
+    sysx:condition expr:IrregularLayout__Rover___409___400_pcondition ;
+    sysx:sourceText "                mass\n                    >\n                0\n" .
 
 elmt:IrregularLayout__Rover___409___400_om
     a sysml:OwningMembership ;
@@ -624,9 +636,7 @@ elmt:IrregularLayout__Rover___409___400_om
 
 expr:IrregularLayout__Rover___409___400_pcondition
     a sysml:OperatorExpression ;
-    sysx:sourceText """mass
-                    >
-                0""" ;
+    sysx:sourceText "mass\n                    >\n                0" ;
     sysml:elementId "IrregularLayout__Rover___409___400_pcondition" ;
     sysml:operator ">" ;
     sysml:argument expr:IrregularLayout__Rover___409___400_pcondition_pa0, expr:IrregularLayout__Rover___409___400_pcondition_pa1 .
@@ -661,7 +671,9 @@ elmt:IrregularLayout__Rover__speed
     sysml:ownedMembership elmt:IrregularLayout__Rover__speed__m_om ;
     sysml:ownedRelationship elmt:IrregularLayout__Rover__speed__m_om ;
     sysml:ownedFeature elmt:IrregularLayout__Rover__speed__m ;
-    sysml:ownedFeatureMembership elmt:IrregularLayout__Rover__speed__m_om .
+    sysml:ownedFeatureMembership elmt:IrregularLayout__Rover__speed__m_om ;
+    sysx:sourceText "        calc speed : Speed {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:IrregularLayout__Rover__speed_om
     a sysml:FeatureMembership ;
@@ -688,7 +700,8 @@ elmt:IrregularLayout__Rover__speed__m
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:value expr:IrregularLayout__Rover__speed__m_pvalue ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            in m =\n                mass * 2\n                    - 1;\n" .
 
 elmt:IrregularLayout__Rover__speed__m_om
     a sysml:FeatureMembership ;
@@ -704,8 +717,7 @@ elmt:IrregularLayout__Rover__speed__m_om
 
 expr:IrregularLayout__Rover__speed__m_pvalue
     a sysml:OperatorExpression ;
-    sysx:sourceText """mass * 2
-                    - 1""" ;
+    sysx:sourceText "mass * 2\n                    - 1" ;
     sysml:elementId "IrregularLayout__Rover__speed__m_pvalue" ;
     sysml:operator "-" ;
     sysml:argument expr:IrregularLayout__Rover__speed__m_pvalue_pa0, expr:IrregularLayout__Rover__speed__m_pvalue_pa1 .
@@ -749,9 +761,8 @@ elmt:IrregularLayout__Rover___4011
     sysml:owningRelationship elmt:IrregularLayout__Rover___4011_om ;
     sysml:owningMembership elmt:IrregularLayout__Rover___4011_om ;
     sysml:annotatedElement elmt:IrregularLayout__Rover ;
-    sysml:body """ a comment
-   that wanders back
-			  and forth """ .
+    sysml:body " a comment\n   that wanders back\n\t\t\t  and forth " ;
+    sysx:sourceText "        comment about Rover /* a comment\n   that wanders back\n\t\t\t  and forth */\n" .
 
 elmt:IrregularLayout__Rover___4011_om
     a sysml:OwningMembership ;
@@ -778,7 +789,9 @@ elmt:IrregularLayout__Drive
     sysml:ownedMembership elmt:IrregularLayout__Drive__count_om, elmt:IrregularLayout__Drive__total_om, elmt:IrregularLayout__Drive__tick_om, elmt:IrregularLayout__Drive___403_om, elmt:IrregularLayout__Drive___404_om ;
     sysml:ownedRelationship elmt:IrregularLayout__Drive__count_om, elmt:IrregularLayout__Drive__total_om, elmt:IrregularLayout__Drive__tick_om, elmt:IrregularLayout__Drive___403_om, elmt:IrregularLayout__Drive___404_om ;
     sysml:ownedFeature elmt:IrregularLayout__Drive__count, elmt:IrregularLayout__Drive__total, elmt:IrregularLayout__Drive__tick, elmt:IrregularLayout__Drive___403, elmt:IrregularLayout__Drive___404 ;
-    sysml:ownedFeatureMembership elmt:IrregularLayout__Drive__count_om, elmt:IrregularLayout__Drive__total_om, elmt:IrregularLayout__Drive__tick_om, elmt:IrregularLayout__Drive___403_om, elmt:IrregularLayout__Drive___404_om .
+    sysml:ownedFeatureMembership elmt:IrregularLayout__Drive__count_om, elmt:IrregularLayout__Drive__total_om, elmt:IrregularLayout__Drive__tick_om, elmt:IrregularLayout__Drive___403_om, elmt:IrregularLayout__Drive___404_om ;
+    sysx:sourceText "    action def Drive {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:IrregularLayout__Drive_om
     a sysml:OwningMembership ;
@@ -801,7 +814,8 @@ elmt:IrregularLayout__Drive__count
     sysml:owningMembership elmt:IrregularLayout__Drive__count_om ;
     sysml:declaredName "count" ;
     sysml:direction "in" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        in attribute count;\n" .
 
 elmt:IrregularLayout__Drive__count_om
     a sysml:FeatureMembership ;
@@ -825,7 +839,8 @@ elmt:IrregularLayout__Drive__total
     sysml:owningRelationship elmt:IrregularLayout__Drive__total_om ;
     sysml:owningMembership elmt:IrregularLayout__Drive__total_om ;
     sysml:declaredName "total" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute total;\n" .
 
 elmt:IrregularLayout__Drive__total_om
     a sysml:FeatureMembership ;
@@ -849,7 +864,8 @@ elmt:IrregularLayout__Drive__tick
     sysml:owningRelationship elmt:IrregularLayout__Drive__tick_om ;
     sysml:owningMembership elmt:IrregularLayout__Drive__tick_om ;
     sysml:declaredName "tick" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action tick;\n" .
 
 elmt:IrregularLayout__Drive__tick_om
     a sysml:FeatureMembership ;
@@ -875,7 +891,8 @@ elmt:IrregularLayout__Drive___403
     sysx:condition expr:IrregularLayout__Drive___403_pcondition ;
     sysml:ownedMember elmt:IrregularLayout__Drive___403___400 ;
     sysml:ownedMembership elmt:IrregularLayout__Drive___403___400_om ;
-    sysml:ownedRelationship elmt:IrregularLayout__Drive___403___400_om .
+    sysml:ownedRelationship elmt:IrregularLayout__Drive___403___400_om ;
+    sysx:sourceText "        if count > 0\n              and total > 0 {\n            perform tick;\n        }\n" .
 
 elmt:IrregularLayout__Drive___403_om
     a sysml:FeatureMembership ;
@@ -891,8 +908,7 @@ elmt:IrregularLayout__Drive___403_om
 
 expr:IrregularLayout__Drive___403_pcondition
     a sysml:OperatorExpression ;
-    sysx:sourceText """count > 0
-              and total > 0""" ;
+    sysx:sourceText "count > 0\n              and total > 0" ;
     sysml:elementId "IrregularLayout__Drive___403_pcondition" ;
     sysml:operator "and" ;
     sysml:argument expr:IrregularLayout__Drive___403_pcondition_pa0, expr:IrregularLayout__Drive___403_pcondition_pa1 .
@@ -977,7 +993,8 @@ elmt:IrregularLayout__Drive___403___400___400
     sysml:owningMembership elmt:IrregularLayout__Drive___403___400___400_om ;
     sysx:declaredKeyword "perform" ;
     sysml:references elmt:IrregularLayout__Drive__tick ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            perform tick;\n" .
 
 elmt:IrregularLayout__Drive___403___400___400_om
     a sysml:OwningMembership ;
@@ -1004,7 +1021,9 @@ elmt:IrregularLayout__Drive___404
     sysml:ownedMembership elmt:IrregularLayout__Drive___404___400_om ;
     sysml:ownedRelationship elmt:IrregularLayout__Drive___404___400_om ;
     sysml:ownedFeature elmt:IrregularLayout__Drive___404___400 ;
-    sysml:ownedFeatureMembership elmt:IrregularLayout__Drive___404___400_om .
+    sysml:ownedFeatureMembership elmt:IrregularLayout__Drive___404___400_om ;
+    sysx:sourceText "        while count\n                > 0 {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:IrregularLayout__Drive___404_om
     a sysml:FeatureMembership ;
@@ -1020,8 +1039,7 @@ elmt:IrregularLayout__Drive___404_om
 
 expr:IrregularLayout__Drive___404_pwhileCondition
     a sysml:OperatorExpression ;
-    sysx:sourceText """count
-                > 0""" ;
+    sysx:sourceText "count\n                > 0" ;
     sysml:elementId "IrregularLayout__Drive___404_pwhileCondition" ;
     sysml:operator ">" ;
     sysml:argument expr:IrregularLayout__Drive___404_pwhileCondition_pa0, expr:IrregularLayout__Drive___404_pwhileCondition_pa1 .
@@ -1051,7 +1069,8 @@ elmt:IrregularLayout__Drive___404___400
     sysml:owningMembership elmt:IrregularLayout__Drive___404___400_om ;
     sysx:declaredKeyword "perform" ;
     sysml:references elmt:IrregularLayout__Drive__tick ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            perform tick;\n" .
 
 elmt:IrregularLayout__Drive___404___400_om
     a sysml:FeatureMembership ;
@@ -1080,7 +1099,8 @@ elmt:IrregularLayout__Ops
     sysml:ownedMember elmt:IrregularLayout__Ops___401, elmt:IrregularLayout__Ops__off, elmt:IrregularLayout__Ops__on, elmt:IrregularLayout__Ops___404 ;
     sysml:ownedMembership elmt:IrregularLayout__Ops___401_om, elmt:IrregularLayout__Ops__off_om, elmt:IrregularLayout__Ops__on_om, elmt:IrregularLayout__Ops___404_om ;
     sysml:ownedFeature elmt:IrregularLayout__Ops___401, elmt:IrregularLayout__Ops__off, elmt:IrregularLayout__Ops__on, elmt:IrregularLayout__Ops___404 ;
-    sysml:ownedFeatureMembership elmt:IrregularLayout__Ops___401_om, elmt:IrregularLayout__Ops__off_om, elmt:IrregularLayout__Ops__on_om, elmt:IrregularLayout__Ops___404_om .
+    sysml:ownedFeatureMembership elmt:IrregularLayout__Ops___401_om, elmt:IrregularLayout__Ops__off_om, elmt:IrregularLayout__Ops__on_om, elmt:IrregularLayout__Ops___404_om ;
+    sysx:sourceText "    state def Ops {\n        entry; then off;\n        state off;\n        state on;\n        transition first off\n            if 1 > 0\n            then on;\n    }\n" .
 
 elmt:IrregularLayout__Ops_om
     a sysml:OwningMembership ;

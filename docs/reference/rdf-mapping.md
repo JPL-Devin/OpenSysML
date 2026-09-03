@@ -247,14 +247,21 @@ text: a succession added to or removed from the graph rebuilds that target.
 Expression nodes carry `sysx:sourceText` too, as described under
 [Expressions](#expressions).
 
-The text is the notation **as the formatter writes it**: the encoder formats the
-file before slicing it, and the decoder formats what it writes back, so a
-formatted file — what `sysml -fmt` and a save to `.sysml` produce — converts to
-RDF and back **byte for byte**, and an unformatted one comes back formatted, as
-it would from a save. Tokens are never rewritten by either step, so a synonym
-(`:>` for `specializes`, `datatype` for `attribute def`), an unusual member
-order, or a reference written relative to another scope all come back as
-written.
+The text is the notation **as the author wrote it**: the encoder slices the
+file's own bytes, never a formatted copy, and the decoder writes them back
+untouched, so any file converts to RDF and back **byte for byte** — tabs,
+irregular indentation, blank lines inside a head, CRLF line endings, a string
+literal or `doc` body spanning lines, all included. What follows the last root
+(notes, blank lines, a missing final newline) is that root's tail, since the
+document itself has no subject. Tokens are never rewritten by either step, so a
+synonym (`:>` for `specializes`, `datatype` for `attribute def`), an unusual
+member order, or a reference written relative to another scope all come back
+as written. Layout is never what the graph states: where the mapping records
+how a head was written (`sysx:endForm`, `sysx:declaredKeyword`, a `then`) it
+compares the head's tokens, so a head laid out over several lines or with a
+comment inside it is recorded like one written on a line; and where the graph
+carries a node's text as a structural value (a relationship target, a trigger),
+the notes and comments its span runs on over are left out.
 
 **The graph is authoritative.** The text is a rendering of the structural
 triples, not a second copy of the model, and the decoder checks it before
@@ -621,10 +628,12 @@ that verb is `sysx:endVerb` (`connection c connect a to b`). Where the keyword
 is a synonym for the kind (`verify` for a satisfy, `allocate` for an
 allocation) it is carried as `sysx:declaredKeyword`, as elsewhere.
 
-**The form is only recorded when rebuilding from it reproduces the head as written.**
+**The form is only recorded when rebuilding from it reproduces the head's tokens.**
 The encoder writes the ends back from `sysx:endForm` and compares them with the
-source before recording it, so a head this mapping cannot rebuild exactly
-carries no form and stays readable as text alone. Those are the heads that say
+source, whitespace and comments aside, before recording it — a head written over
+several lines, or with a note inside it, records its form like any other
+(`export_test.go:TestEndFormsSurviveIrregularLayout`) — so a head this mapping
+cannot rebuild carries no form and stays readable as text alone. Those are the heads that say
 more than their ends: an end with a multiplicity or a `references` clause, an
 inline payload declaration (`flow of x : P from a to b`), a satisfy that
 declares a name of its own (`satisfy s : R by v`), or any head with a body.
