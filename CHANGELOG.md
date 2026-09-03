@@ -8,6 +8,32 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Added
 
+- **An object carries the features the Systems and Domain libraries declare for it.** A
+  `part box : ShapeItems::Box` used to expose only the `length`, `width` and `height` the model
+  wrote: every library-declared member was left out of an object's shape so that the Kernel
+  Semantic Library frame (`self`, `portions`, `timeSlices`, `snapshots`, `startShot`, …) would not
+  bloat every instance, and `box.isSolid`, `box.voids` and `box.shape` were `member not found`.
+  The loader now records which *tier* of the library each document belongs to — Kernel Semantic,
+  Kernel Data Type, Kernel Function, Systems, Domain or OpenSysML — kept through the symbol cache
+  and queryable on any library symbol, and the runtime leaves out only the Kernel frame. So an
+  item or part carries `Items::Item`'s `voids`, `isSolid = isEmpty(voids)`, `shape`, `subitems`
+  and `subparts`, a `Parts::Part` its `ownedPorts`, `ownedActions` and `ownedStates`, a
+  requirement its `subj`, `actors`, `stakeholders`, `assumptions` and `constraints`, and a
+  `Box` its Geometry faces — each with the default, derived expression and multiplicity the
+  library wrote, masked by a model's own `:>>` as any inherited feature is. `%features box`
+  lists them, `%eval box.isSolid` answers `true`, `box.voids` is `[]`, and the gRPC
+  `Instantiate` response carries them as feature values. A `%features` listing always shows
+  every feature of the object asked about; nested expansions share the lines that remain. The
+  Kernel frame stays out; a model that inherits nothing from these libraries keeps its shape
+  digest, which names a library type by the library's identity — a digest of every bundled
+  document — rather than expanding it, so an object is carried across a re-analysis over the
+  same library and refused by one over a library whose declarations differ; and a value the
+  runtime cannot evaluate — the Geometry library's edge bindings among
+  them — is the typed error it already was, not a silent null. A requirement's
+  `subject vehicle : Part = box;` now binds the subject on the object — it was left unset, as the
+  binding was only read while checking the requirement — and the inherited `subj` reads the same
+  object.
+
 - **The Connect + JSON wire contract is written down for clients with no library.** A
   MATLAB, R, Julia, C or shell program that posts JSON to `sysml-grpc` by hand had only the
   proto file and two rules on the transports page to decode answers with, and the questions
@@ -360,6 +386,20 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   reported under one name, `oslc.select` naming the same property twice — as
   `sysml:name,sysml:name`, or as two prefixes bound to the SysML namespace — is now refused
   rather than reported twice under whichever name came last.
+
+- **An optional composite feature fills to its lower bound.** `part spare : Wheel[0..1]` used
+  to materialize an object, where `part wheels : Wheel[0..*]` materialized none; both now hold
+  only the objects the features subsetting them hold, so an optional part reads as the empty
+  sequence and an abstract one holds only what subsets it — a required abstract feature nothing
+  subsets is a multiplicity violation, not an empty value — and an abstract feature that states
+  no multiplicity is bound by what it subsets, so a part's inherited `Action::decisions`,
+  `forks` and `joins` (`:> controls[0..*]`) hold nothing rather than demanding one control each.
+  A required feature holding nothing is still uninitialized when read. The same governs a connector: `connection c : Link[0..1]
+  connect a to b` links nothing of its own until a connector subsetting it does, while a
+  required connector still links its ends. What made this visible is the library: `Item::shape` and
+  `Item::voids` are optional, and an anonymous object for each would have said the box had a
+  void it does not have.
+
 - **The documentation site's landing page describes the four oracles instead of quoting their
   totals.** The band below the hero used to state the differential's agreeing-file count, the Xpect
   suites' declared-diagnostic and scope tallies, the rejection corpus's size and the pilot pin, all
