@@ -106,41 +106,6 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   the apply against the real stack — an initial load, a revision with a retained-id rename and
   gated deletes, a conflict staged behind the sync's back — and records what read back at the
   recorded commit ([the report](internal/interop/flexo/testdata/identity_apply_expected.txt)).
-- **The Quantities and Units domain library's calculations compute over quantities.** Every
-  `QuantityCalculations` declaration dispatches to the runtime's unit-aware arithmetic:
-  `sqrt(9 [m**2])` is `3.0 [m]`, while `sqrt(9 [m])` and `sqrt(9 [rad])` — an angle is
-  dimension one, but a named unit all the same — are a typed error (`unit has no root`)
-  rather than a magnitude in a fractional unit; `abs`, `floor` and `round` keep the unit;
-  `max`/`min` convert to compare and answer the winning operand as written; `sum`/`product`
-  fold in the first element's unit; the operator, comparison, predicate and conversion forms
-  delegate to the code the operators already use. `import QuantityCalculations::*;` — which the
-  ISQ examples do — no longer breaks `(1 [m], 2 [m])->sum()`, which computes `3 [m]` with the
-  import and without it (where `sum` is the `NumericalFunctions::sum` the model imports). The
-  `TrigFunctions` take an angle quantity (`sin(90 ['°'])`, `cos(0 [rad])`) through its declared
-  scale, and only an angle: a bit, a byte, a steradian or `one` is dimension one but no angle,
-  and is a type mismatch. `VectorCalculations` over a numeric vector
-  compute as the Kernel `VectorFunctions` do; the quantity-scaled vector forms, `outer`, and
-  every `MeasurementRefCalculations` and `TensorCalculations` declaration report themselves by
-  name with the reason instead of `no result expression`. A parameter these libraries declare
-  as `in : Type` binds by the name of the general's parameter it implicitly redefines
-  (`VectorCalculations::angle(v = a, w = b)`), and where there is no general it is anonymous:
-  it binds by position only, a named call is `ErrUnknownParameter` listing it as `#1`, and the
-  registry publishes no name for it. A gate asserts every declaration of the four packages is
-  either computed or named, parameters by effective name in declared order.
-- **Composed units render in one canonical form.** A unit an operation composes is a sorted
-  product of powers of the units the operands were written in — `3 [m] * 3 [m]`,
-  `(3 [m]) ** 2` and `(3 [m] * 3 [m]) / 3 [m]` print `9 [m**2]`, `9 [m**2]` and `3.0 [m]` rather
-  than `9.0 [m*m]`, `9 [(m)**2]` and `3.0 [(m*m)/m]`, and `(m/s) * (kg/s)` prints
-  `kg*m/s**2` — while a named derived unit stays as written (`2 [N*m]`, `18.0 [km/h**2]`). A
-  product of quantities keeps the magnitude kind bare arithmetic gives, so `l1 * l1` and
-  `l1 ** 2` agree. The REPL, the trace and the gRPC `unit` field all render the one text, and
-  a quantity sent over gRPC composes as one written locally does: `SI::m/SI::s` times `SI::s`
-  is `SI::m`. A unit text the model cannot read as a whole is read name by name, so the units
-  it does declare stay factors of their own: `SI::s` composed into `metres per second` is
-  `'metres per second'*SI::s`, and dividing by `SI::s` after a round trip gives the opaque unit
-  back; text that is no unit name is quoted so the product reads back as itself. Only the
-  trigonometric functions take a dimension-one quantity for a number;
-  `IntegerFunctions::abs(1 [rad])` is a type mismatch, as its declaration says.
 - **Action and state execution has a referee outside the executor.** Six conformance cases —
   a join fed by branches of unequal length, a join fed twice over one succession, a node two
   successions reach, two fork branches writing one feature, the specification's `ChargeBattery`
