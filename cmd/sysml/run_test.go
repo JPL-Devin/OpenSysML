@@ -262,29 +262,29 @@ func TestStateNamingTheMachineAloneDrivesItsExhibitor(t *testing.T) {
 }
 
 // TestStateAddressesANestedPart checks that -state reaches a part nested in a
-// top-level object by a feature path, by its qualified name and by the identity
-// the report prints, and that a path reaching no object names the segment.
+// top-level object by a feature path, by its qualified name and by the id the
+// report prints, and that a path reaching no object names the segment.
 func TestStateAddressesANestedPart(t *testing.T) {
 	binary := buildCLI(t)
 
 	byPath := check(t, binary, fleetModel, "-instantiate", "Fleet::driver", "-state", "Fleet::driver.r", "-advance", "5")
-	wantReport(t, byPath, 0, `exhibited by object #`, `of "Fleet::driver::r"`, "Current state: moving")
+	wantReport(t, byPath, 0, `exhibited by object #`, `of "Fleet::driver.r"`, "Current state: moving")
 	id := byPath.stdout[strings.Index(byPath.stdout, "object #")+len("object #"):]
 	id = id[:strings.IndexAny(id, " \n")]
 
 	wantReport(t, check(t, binary, fleetModel, "-instantiate", "Fleet::driver", "-state", "#"+id),
-		0, `exhibited by object #`+id+` of "Fleet::driver::r"`, "Current state: waiting")
+		0, `exhibited by object #`+id+"\n", "Current state: waiting")
 	wantReport(t, check(t, binary, fleetModel, "-instantiate", "Fleet::driver", "-state", "Fleet::driver::r"),
-		0, `exhibited by object #`+id+` of "Fleet::driver::r"`)
+		0, `exhibited by object #`+id+` of "Fleet::driver.r"`)
 	wantReport(t, check(t, binary, fleetModel, "-instantiate", "Fleet::driver", "-state", "Fleet::Rover::modes Fleet::driver.r"),
-		0, `exhibited by object #`+id+` of "Fleet::driver::r"`, "attaches to that running machine", "`%state Fleet::driver.r`")
+		0, `exhibited by object #`+id+` of "Fleet::driver.r"`, "attaches to that running machine", "`%state Fleet::driver.r`")
 
 	wantReport(t, check(t, binary, fleetModel, "-instantiate", "Fleet::driver", "-state", "Fleet::driver.x"),
-		2, `Fleet::driver.x reaches no object at "x"`, `has no feature "x"`)
+		2, `Fleet::driver has no feature "x" (its features are r, and 13 more the library declares)`)
 	wantReport(t, check(t, binary, fleetModel, "-instantiate", "Fleet::driver", "-state", "Fleet::driver.r.level"),
-		2, `Fleet::driver.r.level reaches no object at "level"`, "holds 10, which is not an object")
+		2, "level of Fleet::driver.r holds a value (10), not an object")
 	wantReport(t, check(t, binary, fleetModel, "-instantiate", "Fleet::driver", "-state", "#99"),
-		2, "no object #99 in this session")
+		2, "no object #99 in this session: nothing materialized has that identity (the objects are #1, #2")
 }
 
 // TestStateQualifiedPathDenotesTheUsageTyped checks that with both a definition and
@@ -295,10 +295,10 @@ func TestStateQualifiedPathDenotesTheUsageTyped(t *testing.T) {
 	both := []string{"-instantiate", "Fleet::Driver", "-instantiate", "Fleet::driver"}
 
 	usage := check(t, binary, fleetModel, append(both, "-state", "Fleet::driver::r")...)
-	wantReport(t, usage, 0, `exhibited by object #`, `of "Fleet::driver::r"`)
+	wantReport(t, usage, 0, `exhibited by object #`, `of "Fleet::driver.r"`)
 	definition := check(t, binary, fleetModel, append(both, "-state", "Fleet::Driver::r")...)
-	wantReport(t, definition, 0, `exhibited by object #`, `of "Fleet::Driver::r"`)
-	if strings.Contains(usage.stdout, `of "Fleet::Driver::r"`) {
+	wantReport(t, definition, 0, `exhibited by object #`, `of "Fleet::Driver.r"`)
+	if strings.Contains(usage.stdout, `of "Fleet::Driver.r"`) {
 		t.Errorf("the usage's path reached the definition's part:\n%s", usage.output())
 	}
 }
@@ -363,7 +363,7 @@ func TestStateOverASharedDefinitionNamesTheUsages(t *testing.T) {
 		0, `Debugging state machine "rear"`, "Current state: lit")
 
 	got = check(t, binary, unmaterializablePartModel, "-instantiate", "Shared::lamp", "-state", "Shared::lamp.spare")
-	wantReport(t, got, 2, `Shared::lamp.spare reaches no object at "spare"`, "could not be materialized", "multiplicity violation")
+	wantReport(t, got, 2, "spare of Shared::lamp could not be materialized", "multiplicity violation")
 	if strings.Contains(got.output(), `has no feature "spare"`) {
 		t.Errorf("a feature that failed to materialize was reported missing:\n%s", got.output())
 	}

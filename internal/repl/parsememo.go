@@ -30,12 +30,6 @@ type parsedArgs struct {
 	err   error
 }
 
-// parsedName is what plainName reads from a command's name text.
-type parsedName struct {
-	name string
-	ok   bool
-}
-
 // argExprs is parseExprList for the session: the parse is reused across calls,
 // each of which evaluates the expressions afresh against the current state.
 func (s *Session) argExprs(text string) ([]argExpr, error) {
@@ -46,11 +40,7 @@ func (s *Session) argExprs(text string) ([]argExpr, error) {
 	return p.exprs, p.err
 }
 
-// plainName is plainName for the session, reused across calls.
-func (s *Session) plainName(text string) (string, bool) {
-	p := s.nameMemo.get(text, func(text string) parsedName {
-		name, ok := plainName(text)
-		return parsedName{name: name, ok: ok}
-	})
-	return p.name, p.ok
+// parseName is parseName for the session, reused across calls.
+func (s *Session) parseName(text string) parsedName {
+	return s.nameMemo.get(text, parseName)
 }

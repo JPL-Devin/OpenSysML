@@ -95,6 +95,16 @@ jobs:
           name: Check quoted oracle figures name the round they measured
           command: python3 scripts/check-doc-figures.py
 
+      # Changelog entries live in changes/unreleased/ until a release folds them in.
+      - run:
+          name: Check changelog fragments
+          command: python3 scripts/changelog-test.py && python3 scripts/changelog.py check
+
+      # The compliance census is counted when the site is built, never committed.
+      - run:
+          name: Check the compliance census hook
+          command: python3 scripts/mkdocs_census-test.py
+
       # Each client verifies a download against the copy of the pinned digests it
       # ships, so a copy that drifts from the table pins something else.
       - run:
