@@ -1,7 +1,9 @@
 package semantics
 
 import (
+	"errors"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -35,6 +37,55 @@ func TestEvalIntLiteralsAndArithmetic(t *testing.T) {
 		v, ok := evalExpr(t, src)
 		if !ok || v.Kind != ValInt || v.Int != want {
 			t.Fatalf("%q = %+v ok=%v, want int %d", src, v, ok, want)
+		}
+	}
+}
+
+// ParseReal reads every representable decimal notation, a zero however
+// written and keeping its sign, and reports a magnitude float64 cannot hold
+// instead of rounding it to 0 or Inf.
+func TestParseReal(t *testing.T) {
+	for text, want := range map[string]float64{
+		"1.5":      1.5,
+		"7":        7,
+		"+7":       7,
+		"7.":       7,
+		".5":       0.5,
+		"-2e3":     -2000,
+		"2E+3":     2000,
+		"1e-3":     0.001,
+		"0.0":      0,
+		"-0.000":   math.Copysign(0, -1),
+		"0e-400":   0,
+		"4.9e-324": math.SmallestNonzeroFloat64,
+		"1e-320":   1e-320,
+		"1e308":    1e308,
+	} {
+		got, err := ParseReal(text)
+		if err != nil || got != want || math.Signbit(got) != math.Signbit(want) {
+			t.Errorf("ParseReal(%q) = (%v, %v), want %v", text, got, err, want)
+		}
+	}
+	for _, text := range []string{"1e400", "-1e400", "1e-400", "-2e-324", "0." + strings.Repeat("0", 330) + "1"} {
+		if got, err := ParseReal(text); !errors.Is(err, ErrArithmeticOverflow) {
+			t.Errorf("ParseReal(%q) = (%v, %v), want %v", text, got, err, ErrArithmeticOverflow)
+		}
+	}
+	if v, ok := evalExpr(t, "1e-400"); ok {
+		t.Errorf("1e-400 folded to %+v, want not evaluable", v)
+	}
+}
+
+// ParseReal reads decimal notation only: what strconv.ParseFloat admits beyond
+// it (NaN, infinities, hexadecimal floats, underscores, blanks) is not a Real.
+func TestParseRealRejectsNonDecimalNotation(t *testing.T) {
+	for _, text := range []string{
+		"NaN", "nan", "Inf", "-Inf", "+Infinity", "infinity",
+		"0x1p-2", "0X1.8P3", "-0x10", "0x1p99999",
+		"1_000.5", " 1.5", "1.5 ", "", "+", "-", ".", "e5", "1e", "1e+", "1.5e2.0", "1,5", "abc", "1.5f",
+	} {
+		if got, err := ParseReal(text); !errors.Is(err, ErrRealNotation) {
+			t.Errorf("ParseReal(%q) = (%v, %v), want %v", text, got, err, ErrRealNotation)
 		}
 	}
 }

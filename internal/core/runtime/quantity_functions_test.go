@@ -46,9 +46,9 @@ func TestQuantityCalculationsAreAllDispatchable(t *testing.T) {
 					}
 					continue
 				}
-				params := effectiveInputNames(model, sym)
+				params := effectiveInputs(t, ctx, sym)
 				if !slices.Equal(params, fn.params) {
-					t.Errorf("%s declares %q, implementation takes %q", fqn, params, fn.params)
+					t.Errorf("%s declares %+v, implementation takes %+v", fqn, params, fn.params)
 				}
 			}
 			if declared == 0 {
@@ -58,15 +58,23 @@ func TestQuantityCalculationsAreAllDispatchable(t *testing.T) {
 	}
 }
 
-// effectiveInputNames lists a calc's input parameters in declared order by
-// effective name, an anonymous one as "".
-func effectiveInputNames(model *semantics.Model, sym *symbols.Symbol) []string {
-	var params []string
-	for _, param := range model.BehaviorParametersOf(sym) {
+// effectiveInputs lists a calc's input parameters in declared order by
+// effective name, an anonymous one as "", with the optionality each declares.
+func effectiveInputs(t *testing.T, ctx *Context, sym *symbols.Symbol) []declaredParam {
+	t.Helper()
+	var params []declaredParam
+	for _, param := range ctx.model.BehaviorParametersOf(sym) {
 		if param.IsResult || (param.Direction != ast.DirIn && param.Direction != ast.DirInOut) {
 			continue
 		}
-		params = append(params, model.EffectiveNameOf(param.Symbol))
+		usage, ok := param.Symbol.Decl.(*ast.Usage)
+		if !ok {
+			t.Fatalf("%s: parameter %s is declared by a %T, not a usage", ctx.qualifiedSymbolName(sym), param.Symbol.Name, param.Symbol.Decl)
+		}
+		params = append(params, declaredParam{
+			name:     ctx.model.EffectiveNameOf(param.Symbol),
+			optional: usage.Value != nil || ctx.model.IsOptionalParameter(usage),
+		})
 	}
 	return params
 }
@@ -272,12 +280,12 @@ func TestQuantityCalculationsReport(t *testing.T) {
 		{"max(1 [m], 1 [s])", ErrIncommensurableUnits, "function QuantityCalculations::max"},
 		{"QuantityCalculations::min(1 [kg], 1 [m])", ErrIncommensurableUnits, "function QuantityCalculations::min"},
 		{"(1 [m], 1 [s])->sum()", ErrIncommensurableUnits, ""},
-		{"QuantityCalculations::'+'(1 [m], 1 [s])", ErrIncommensurableUnits, "function QuantityCalculations::+"},
-		{"QuantityCalculations::'+'(1 [m], 1)", ErrIncommensurableUnits, "function QuantityCalculations::+"},
-		{"QuantityCalculations::'<'(1 [m], 1)", ErrIncommensurableUnits, "function QuantityCalculations::<"},
+		{"QuantityCalculations::'+'(1 [m], 1 [s])", ErrIncommensurableUnits, "function QuantityCalculations::'+'"},
+		{"QuantityCalculations::'+'(1 [m], 1)", ErrIncommensurableUnits, "function QuantityCalculations::'+'"},
+		{"QuantityCalculations::'<'(1 [m], 1)", ErrIncommensurableUnits, "function QuantityCalculations::'<'"},
 		{"max(1 [m], 1)", ErrIncommensurableUnits, "function QuantityCalculations::max"},
-		{"QuantityCalculations::'<'(1 [m], 1 [s])", ErrIncommensurableUnits, "function QuantityCalculations::<"},
-		{"QuantityCalculations::'/'(1 [m], 0 [s])", ErrDivisionByZero, "function QuantityCalculations::/"},
+		{"QuantityCalculations::'<'(1 [m], 1 [s])", ErrIncommensurableUnits, "function QuantityCalculations::'<'"},
+		{"QuantityCalculations::'/'(1 [m], 0 [s])", ErrDivisionByZero, "function QuantityCalculations::'/'"},
 		{"ToInteger(2.5 [m])", ErrTypeMismatch, "function QuantityCalculations::ToInteger requires a whole magnitude, 2.5 [m] has none"},
 		{"sin(90 [m])", ErrTypeMismatch, `function TrigFunctions::sin parameter "theta" requires a number of radians or an angle quantity, got a quantity in m`},
 		{"arcsin(1 [rad])", ErrTypeMismatch, `function TrigFunctions::arcsin parameter "x" requires a numeric value, got a quantity in rad`},
@@ -286,16 +294,16 @@ func TestQuantityCalculationsReport(t *testing.T) {
 		{"NaturalFunctions::max(1 [rad], 2)", ErrTypeMismatch, `function NaturalFunctions::max parameter "x" requires a numeric value`},
 		{"OpenSysMLMathFunctions::exp(1 [rad])", ErrTypeMismatch, `function OpenSysMLMathFunctions::exp parameter "x" requires a numeric value`},
 		{"ConvertQuantity(1 [m], 2 [cm])", ErrUnevaluableLibraryFunction, "QuantityCalculations::ConvertQuantity: a measurement reference is a library declaration"},
-		{"QuantityCalculations::'['(1, 2)", ErrUnevaluableLibraryFunction, "QuantityCalculations::[: a measurement reference"},
-		{"MeasurementRefCalculations::'*'(1, 2)", ErrUnevaluableLibraryFunction, "MeasurementRefCalculations::*: a measurement reference"},
+		{"QuantityCalculations::'['(1, 2)", ErrUnevaluableLibraryFunction, "QuantityCalculations::'[': a measurement reference"},
+		{"MeasurementRefCalculations::'*'(1, 2)", ErrUnevaluableLibraryFunction, "MeasurementRefCalculations::'*': a measurement reference"},
 		{"MeasurementRefCalculations::ToString(1)", ErrUnevaluableLibraryFunction, "MeasurementRefCalculations::ToString"},
 		{"VectorCalculations::outer((1.0, 2.0), (3.0, 4.0))", ErrUnevaluableLibraryFunction, "VectorCalculations::outer: a tensor quantity has no representation"},
 		{"VectorCalculations::scalarQuantityVectorMult(2 [m], (1.0, 2.0))", ErrUnevaluableLibraryFunction, "VectorCalculations::scalarQuantityVectorMult: a vector quantity has no representation"},
 		{"VectorCalculations::transform(1, (1.0, 2.0))", ErrUnevaluableLibraryFunction, "VectorCalculations::transform: a coordinate transformation has no representation"},
-		{"VectorCalculations::'+'((1 [m], 2 [m]), (3 [m], 4 [m]))", ErrTypeMismatch, `function VectorCalculations::+ parameter "v" requires a vector of numeric values, element 1 is a quantity in m`},
+		{"VectorCalculations::'+'((1 [m], 2 [m]), (3 [m], 4 [m]))", ErrTypeMismatch, `function VectorCalculations::'+' parameter "v" requires a vector of numeric values, element 1 is a quantity in m`},
 		{"VectorCalculations::norm((3 [m], 4 [m]))", ErrTypeMismatch, `function VectorCalculations::norm parameter "v" requires a vector of numeric values, element 1 is a quantity in m`},
 		{"VectorCalculations::vectorScalarMult((1.0, 2.0), 2 [m])", ErrTypeMismatch, `function VectorCalculations::vectorScalarMult parameter "x" requires a numeric value`},
-		{"TensorCalculations::'+'(1, 2)", ErrUnevaluableLibraryFunction, "TensorCalculations::+: a tensor quantity has no representation"},
+		{"TensorCalculations::'+'(1, 2)", ErrUnevaluableLibraryFunction, "TensorCalculations::'+': a tensor quantity has no representation"},
 		{"TensorCalculations::tensorTensorMult(1, 2)", ErrUnevaluableLibraryFunction, "TensorCalculations::tensorTensorMult"},
 	}
 	for _, tc := range cases {
