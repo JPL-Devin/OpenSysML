@@ -1196,6 +1196,22 @@ func (e *encoder) linkReference(owner string, ref resolve.Reference) rdf.Term {
 	return e.reference(owner, qualifiedText(ref.QN))
 }
 
+// linkEndpoint is link for a transition or succession end, which in a state
+// machine may name a vertex across a region or inside a nested state.
+func (e *encoder) linkEndpoint(owner string, name *ast.QualifiedName) rdf.Term {
+	if name == nil || len(name.Parts) == 0 {
+		return rdf.String("")
+	}
+	if scope := e.scopeOf(owner); scope != nil {
+		if decl, ok := e.resolver.Endpoint(scope, name); ok {
+			if fqn, ok := e.declaredFQN(decl); ok {
+				return e.ids.subjectFor(fqn)
+			}
+		}
+	}
+	return e.reference(owner, qualifiedText(name))
+}
+
 // scopeOf is the scope of the element owner names, or of the nearest enclosing
 // element that owns one.
 func (e *encoder) scopeOf(owner string) *symbols.Scope {
@@ -1225,12 +1241,17 @@ func (e *encoder) resolveIn(owner string, ref resolve.Reference) (string, bool) 
 	if !ok || sym == nil {
 		return "", false
 	}
-	// A start node or a loop variable is reached by a name its element does not
-	// declare; such an element has no name in the graph to be written back as.
-	if name, _ := declaredNameAndMembers(sym.Decl); name == "" {
+	return e.declaredFQN(sym.Decl)
+}
+
+// declaredFQN is the qualified name decl is declared under in this document.
+// A start node or a loop variable is reached by a name its element does not
+// declare; such an element has no name in the graph to be written back as.
+func (e *encoder) declaredFQN(decl ast.Node) (string, bool) {
+	if name, _ := declaredNameAndMembers(decl); name == "" {
 		return "", false
 	}
-	fqn, ok := e.fqn[sym.Decl]
+	fqn, ok := e.fqn[decl]
 	return fqn, ok && e.declared[fqn]
 }
 

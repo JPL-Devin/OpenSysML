@@ -86,7 +86,7 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 		}
 		e.expression(subject, e.sysx(xGuard), xGuard, owner, n.Guard)
 		if qualifiedText(n.Successor) != "" {
-			e.graph.Add(subject, e.sysml(pTargetFeature), e.link(owner, n.Successor))
+			e.graph.Add(subject, e.sysml(pTargetFeature), e.linkEndpoint(owner, n.Successor))
 		} else if n.Guard != nil {
 			return true, &UnsupportedError{
 				What: fmt.Sprintf("the guarded initial node at %s", e.where(n)),
@@ -265,6 +265,8 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 // encodeLoop emits a loop of an action body. Which conditions it carries is what
 // tells the three forms apart: a `while` states its condition before the body, a
 // `loop` only in an `until` clause after it, and a `for` iterates a collection.
+// A condition is read in the loop's own scope, whose body declares the actions
+// it tests; the collection is evaluated before the loop is entered.
 func (e *encoder) encodeLoop(n *ast.WhileLoopActionNode, head func(rdf.Term), subject rdf.Term, fqn, owner string) error {
 	if n.Kind == ast.LoopFor {
 		head(rdf.SysMLTerm(mForLoop))
@@ -280,12 +282,12 @@ func (e *encoder) encodeLoop(n *ast.WhileLoopActionNode, head func(rdf.Term), su
 		head(rdf.SysMLTerm(mWhileLoop))
 		switch n.Kind {
 		case ast.LoopWhile:
-			e.expression(subject, e.sysx(xWhileCondition), xWhileCondition, owner, n.Condition)
-			e.expression(subject, e.sysx(xUntilCondition), xUntilCondition, owner, n.Until)
+			e.expression(subject, e.sysx(xWhileCondition), xWhileCondition, fqn, n.Condition)
+			e.expression(subject, e.sysx(xUntilCondition), xUntilCondition, fqn, n.Until)
 		default:
 			// A `loop` tests its condition after each iteration, which is what an
 			// `until` clause states; without one it has no condition at all.
-			e.expression(subject, e.sysx(xUntilCondition), xUntilCondition, owner, n.Condition)
+			e.expression(subject, e.sysx(xUntilCondition), xUntilCondition, fqn, n.Condition)
 		}
 	}
 	e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(e.bracedBody(n, n.Body)))
@@ -315,7 +317,7 @@ func (e *encoder) encodeTransition(n *ast.TransitionMember, head func(rdf.Term),
 	e.name(subject, n.Name)
 	e.graph.Add(subject, e.sysx(xTransitionSyntax), rdf.String(e.transitionSyntax(n)))
 	if qualifiedText(n.Source) != "" {
-		e.graph.Add(subject, e.sysml(pSourceFeature), e.link(owner, n.Source))
+		e.graph.Add(subject, e.sysml(pSourceFeature), e.linkEndpoint(owner, n.Source))
 	}
 	if qualifiedText(n.Target) == "" {
 		return &UnsupportedError{
@@ -323,7 +325,7 @@ func (e *encoder) encodeTransition(n *ast.TransitionMember, head func(rdf.Term),
 			Note: "it names no target state, so the edge it declares cannot be written back",
 		}
 	}
-	e.graph.Add(subject, e.sysml(pTargetFeature), e.link(owner, n.Target))
+	e.graph.Add(subject, e.sysml(pTargetFeature), e.linkEndpoint(owner, n.Target))
 	if n.Trigger != nil {
 		e.graph.Add(subject, e.sysx(xTrigger), rdf.String(e.text(n.Trigger)))
 		e.graph.Add(subject, e.sysx(xTriggerKeyword), rdf.String(e.introducer(n, n.Trigger)))
@@ -423,7 +425,7 @@ func (e *encoder) edgeEnds(subject rdf.Term, node ast.Node, owner string, src, t
 			e.graph.Add(subject, e.sysx(end.member), e.ids.subjectForNode(end.end.member, fqn))
 			continue
 		}
-		e.graph.Add(subject, e.sysml(end.feature), e.link(owner, end.end.name))
+		e.graph.Add(subject, e.sysml(end.feature), e.linkEndpoint(owner, end.end.name))
 	}
 	return nil
 }

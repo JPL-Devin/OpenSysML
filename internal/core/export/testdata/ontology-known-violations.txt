@@ -88,3 +88,4 @@ unknown-property ReferenceUsage isResult                     # notation flag for
 unknown-property OccurrenceUsage isSnapshot                  # notation flag for the `snapshot` keyword, no metamodel property
 unknown-property OccurrenceUsage isTimeslice                 # notation flag for the `timeslice` keyword, no metamodel property
 unknown-property PartUsage isChain                           # notation flag for a feature chain, no metamodel property
+literal-for-object-property FeatureChainExpression targetFeature                   # FeatureChainExpression_targetFeature: a library feature such as an action's done resolves outside the graph and is written as a name (D7)

@@ -194,9 +194,12 @@ never by parsing the id — a declared id may legitimately end in `_om` or embed
   expression rather than a name (a feature chain, say) is carried as the text it
   was written as, typed `sysx:Expression` to tell the two apart. A feature
   chain's `sysml:targetFeature` links the member the chain reaches in its
-  operand's type, a redefinition the general's feature; written back, the
-  former is spelled by its own name and the latter by its own name where that
-  reaches one feature among the owner's generals, else qualified.
+  operand's type, a redefinition the general's feature; written back, each is
+  spelled by its own name where that reaches one feature among the operand's
+  or the owner's generals, else qualified. A transition or `then` end in a
+  state machine links the vertex it names anywhere in the machine, in a nested
+  state or a sibling region; a loop's `while` or `until` condition links the
+  actions the loop body declares.
 - `sysml:lowerBound`, `sysml:upperBound` — multiplicity, as expression nodes
   ([Expressions](#expressions))
 - `sysml:value` — a feature's value, as an expression node

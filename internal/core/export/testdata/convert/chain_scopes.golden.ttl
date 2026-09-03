@@ -1,0 +1,366 @@
+@prefix elmt: <urn:sysmlv2:element:> .
+@prefix expr: <urn:opensysml:expr:> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix sysx: <urn:opensysml:sysml:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+elmt:Gen
+    a sysml:Package ;
+    sysml:qualifiedName "Gen" ;
+    sysml:elementId "Gen" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
+    sysml:declaredName "Gen" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Gen__G1, elmt:Gen__G2 ;
+    sysml:ownedMembership elmt:Gen__G1_om, elmt:Gen__G2_om ;
+    sysml:ownedRelationship elmt:Gen__G1_om, elmt:Gen__G2_om ;
+    sysx:sourceText "package Gen {\n" ;
+    sysx:sourceTail "}\n" .
+
+elmt:Gen__G1
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "Gen::G1" ;
+    sysml:elementId "Gen__G1" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Gen ;
+    sysml:owner elmt:Gen ;
+    sysml:owningRelationship elmt:Gen__G1_om ;
+    sysml:owningMembership elmt:Gen__G1_om ;
+    sysml:declaredName "G1" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Gen__G1__x, elmt:Gen__G1__y ;
+    sysml:ownedMembership elmt:Gen__G1__x_om, elmt:Gen__G1__y_om ;
+    sysml:ownedRelationship elmt:Gen__G1__x_om, elmt:Gen__G1__y_om ;
+    sysml:ownedFeature elmt:Gen__G1__x, elmt:Gen__G1__y ;
+    sysml:ownedFeatureMembership elmt:Gen__G1__x_om, elmt:Gen__G1__y_om ;
+    sysx:sourceText "    part def G1 {\n" ;
+    sysx:sourceTail "    }\n" .
+
+elmt:Gen__G1_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Gen__G1_om" ;
+    sysml:owner elmt:Gen ;
+    sysml:memberElement elmt:Gen__G1 ;
+    sysml:ownedMemberElement elmt:Gen__G1 ;
+    sysml:ownedRelatedElement elmt:Gen__G1 ;
+    sysml:owningRelatedElement elmt:Gen ;
+    sysml:membershipOwningNamespace elmt:Gen .
+
+elmt:Gen__G1__x
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "Gen::G1::x" ;
+    sysml:elementId "Gen__G1__x" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Gen__G1 ;
+    sysml:owner elmt:Gen__G1 ;
+    sysml:owningRelationship elmt:Gen__G1__x_om ;
+    sysml:owningMembership elmt:Gen__G1__x_om ;
+    sysml:declaredName "x" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute x;\n" .
+
+elmt:Gen__G1__x_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Gen__G1__x_om" ;
+    sysml:owner elmt:Gen__G1 ;
+    sysml:memberElement elmt:Gen__G1__x ;
+    sysml:ownedMemberElement elmt:Gen__G1__x ;
+    sysml:ownedRelatedElement elmt:Gen__G1__x ;
+    sysml:owningRelatedElement elmt:Gen__G1 ;
+    sysml:membershipOwningNamespace elmt:Gen__G1 ;
+    sysml:ownedMemberFeature elmt:Gen__G1__x ;
+    sysml:owningType elmt:Gen__G1 .
+
+elmt:Gen__G1__y
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "Gen::G1::y" ;
+    sysml:elementId "Gen__G1__y" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Gen__G1 ;
+    sysml:owner elmt:Gen__G1 ;
+    sysml:owningRelationship elmt:Gen__G1__y_om ;
+    sysml:owningMembership elmt:Gen__G1__y_om ;
+    sysml:declaredName "y" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute y;\n" .
+
+elmt:Gen__G1__y_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Gen__G1__y_om" ;
+    sysml:owner elmt:Gen__G1 ;
+    sysml:memberElement elmt:Gen__G1__y ;
+    sysml:ownedMemberElement elmt:Gen__G1__y ;
+    sysml:ownedRelatedElement elmt:Gen__G1__y ;
+    sysml:owningRelatedElement elmt:Gen__G1 ;
+    sysml:membershipOwningNamespace elmt:Gen__G1 ;
+    sysml:ownedMemberFeature elmt:Gen__G1__y ;
+    sysml:owningType elmt:Gen__G1 .
+
+elmt:Gen__G2
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "Gen::G2" ;
+    sysml:elementId "Gen__G2" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Gen ;
+    sysml:owner elmt:Gen ;
+    sysml:owningRelationship elmt:Gen__G2_om ;
+    sysml:owningMembership elmt:Gen__G2_om ;
+    sysml:declaredName "G2" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Gen__G2__x ;
+    sysml:ownedMembership elmt:Gen__G2__x_om ;
+    sysml:ownedRelationship elmt:Gen__G2__x_om ;
+    sysml:ownedFeature elmt:Gen__G2__x ;
+    sysml:ownedFeatureMembership elmt:Gen__G2__x_om ;
+    sysx:sourceText "    part def G2 {\n" ;
+    sysx:sourceTail "    }\n" .
+
+elmt:Gen__G2_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Gen__G2_om" ;
+    sysml:owner elmt:Gen ;
+    sysml:memberElement elmt:Gen__G2 ;
+    sysml:ownedMemberElement elmt:Gen__G2 ;
+    sysml:ownedRelatedElement elmt:Gen__G2 ;
+    sysml:owningRelatedElement elmt:Gen ;
+    sysml:membershipOwningNamespace elmt:Gen .
+
+elmt:Gen__G2__x
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "Gen::G2::x" ;
+    sysml:elementId "Gen__G2__x" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Gen__G2 ;
+    sysml:owner elmt:Gen__G2 ;
+    sysml:owningRelationship elmt:Gen__G2__x_om ;
+    sysml:owningMembership elmt:Gen__G2__x_om ;
+    sysml:declaredName "x" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute x;\n" .
+
+elmt:Gen__G2__x_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Gen__G2__x_om" ;
+    sysml:owner elmt:Gen__G2 ;
+    sysml:memberElement elmt:Gen__G2__x ;
+    sysml:ownedMemberElement elmt:Gen__G2__x ;
+    sysml:ownedRelatedElement elmt:Gen__G2__x ;
+    sysml:owningRelatedElement elmt:Gen__G2 ;
+    sysml:membershipOwningNamespace elmt:Gen__G2 ;
+    sysml:ownedMemberFeature elmt:Gen__G2__x ;
+    sysml:owningType elmt:Gen__G2 .
+
+elmt:Chains
+    a sysml:Package ;
+    sysml:qualifiedName "Chains" ;
+    sysml:elementId "Chains" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
+    sysml:declaredName "Chains" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Chains__Wheel, elmt:Chains__Car ;
+    sysml:ownedMembership elmt:Chains__Wheel_om, elmt:Chains__Car_om ;
+    sysml:ownedRelationship elmt:Chains__Wheel_om, elmt:Chains__Car_om ;
+    sysx:sourceText "package Chains {\n" ;
+    sysx:sourceTail "}\n" .
+
+elmt:Chains__Wheel
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "Chains::Wheel" ;
+    sysml:elementId "Chains__Wheel" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Chains ;
+    sysml:owner elmt:Chains ;
+    sysml:owningRelationship elmt:Chains__Wheel_om ;
+    sysml:owningMembership elmt:Chains__Wheel_om ;
+    sysml:declaredName "Wheel" ;
+    sysml:specializes elmt:Gen__G1, elmt:Gen__G2 ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    part def Wheel :> Gen::G1, Gen::G2;\n" .
+
+elmt:Chains__Wheel_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Chains__Wheel_om" ;
+    sysml:owner elmt:Chains ;
+    sysml:memberElement elmt:Chains__Wheel ;
+    sysml:ownedMemberElement elmt:Chains__Wheel ;
+    sysml:ownedRelatedElement elmt:Chains__Wheel ;
+    sysml:owningRelatedElement elmt:Chains ;
+    sysml:membershipOwningNamespace elmt:Chains .
+
+elmt:Chains__Car
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "Chains::Car" ;
+    sysml:elementId "Chains__Car" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Chains ;
+    sysml:owner elmt:Chains ;
+    sysml:owningRelationship elmt:Chains__Car_om ;
+    sysml:owningMembership elmt:Chains__Car_om ;
+    sysml:declaredName "Car" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Chains__Car__w, elmt:Chains__Car__a, elmt:Chains__Car__b, elmt:Chains__Car__c ;
+    sysml:ownedMembership elmt:Chains__Car__w_om, elmt:Chains__Car__a_om, elmt:Chains__Car__b_om, elmt:Chains__Car__c_om ;
+    sysml:ownedRelationship elmt:Chains__Car__w_om, elmt:Chains__Car__a_om, elmt:Chains__Car__b_om, elmt:Chains__Car__c_om ;
+    sysml:ownedFeature elmt:Chains__Car__w, elmt:Chains__Car__a, elmt:Chains__Car__b, elmt:Chains__Car__c ;
+    sysml:ownedFeatureMembership elmt:Chains__Car__w_om, elmt:Chains__Car__a_om, elmt:Chains__Car__b_om, elmt:Chains__Car__c_om ;
+    sysx:sourceText "    part def Car {\n" ;
+    sysx:sourceTail "    }\n" .
+
+elmt:Chains__Car_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Chains__Car_om" ;
+    sysml:owner elmt:Chains ;
+    sysml:memberElement elmt:Chains__Car ;
+    sysml:ownedMemberElement elmt:Chains__Car ;
+    sysml:ownedRelatedElement elmt:Chains__Car ;
+    sysml:owningRelatedElement elmt:Chains ;
+    sysml:membershipOwningNamespace elmt:Chains .
+
+elmt:Chains__Car__w
+    a sysml:PartUsage ;
+    sysml:qualifiedName "Chains::Car::w" ;
+    sysml:elementId "Chains__Car__w" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Chains__Car ;
+    sysml:owner elmt:Chains__Car ;
+    sysml:owningRelationship elmt:Chains__Car__w_om ;
+    sysml:owningMembership elmt:Chains__Car__w_om ;
+    sysml:declaredName "w" ;
+    sysml:type elmt:Chains__Wheel ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part w : Wheel;\n" .
+
+elmt:Chains__Car__w_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Chains__Car__w_om" ;
+    sysml:owner elmt:Chains__Car ;
+    sysml:memberElement elmt:Chains__Car__w ;
+    sysml:ownedMemberElement elmt:Chains__Car__w ;
+    sysml:ownedRelatedElement elmt:Chains__Car__w ;
+    sysml:owningRelatedElement elmt:Chains__Car ;
+    sysml:membershipOwningNamespace elmt:Chains__Car ;
+    sysml:ownedMemberFeature elmt:Chains__Car__w ;
+    sysml:owningType elmt:Chains__Car .
+
+elmt:Chains__Car__a
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "Chains::Car::a" ;
+    sysml:elementId "Chains__Car__a" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Chains__Car ;
+    sysml:owner elmt:Chains__Car ;
+    sysml:owningRelationship elmt:Chains__Car__a_om ;
+    sysml:owningMembership elmt:Chains__Car__a_om ;
+    sysml:declaredName "a" ;
+    sysml:value expr:Chains__Car__a_pvalue ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute a = w.Gen::G1::x;\n" .
+
+elmt:Chains__Car__a_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Chains__Car__a_om" ;
+    sysml:owner elmt:Chains__Car ;
+    sysml:memberElement elmt:Chains__Car__a ;
+    sysml:ownedMemberElement elmt:Chains__Car__a ;
+    sysml:ownedRelatedElement elmt:Chains__Car__a ;
+    sysml:owningRelatedElement elmt:Chains__Car ;
+    sysml:membershipOwningNamespace elmt:Chains__Car ;
+    sysml:ownedMemberFeature elmt:Chains__Car__a ;
+    sysml:owningType elmt:Chains__Car .
+
+expr:Chains__Car__a_pvalue
+    a sysml:FeatureChainExpression ;
+    sysx:sourceText "w.Gen::G1::x" ;
+    sysml:elementId "Chains__Car__a_pvalue" ;
+    sysml:argument expr:Chains__Car__a_pvalue_pa0 ;
+    sysml:targetFeature elmt:Gen__G1__x .
+
+expr:Chains__Car__a_pvalue_pa0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "w" ;
+    sysml:elementId "Chains__Car__a_pvalue_pa0" ;
+    sysml:referent elmt:Chains__Car__w ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+elmt:Chains__Car__b
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "Chains::Car::b" ;
+    sysml:elementId "Chains__Car__b" ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:Chains__Car ;
+    sysml:owner elmt:Chains__Car ;
+    sysml:owningRelationship elmt:Chains__Car__b_om ;
+    sysml:owningMembership elmt:Chains__Car__b_om ;
+    sysml:declaredName "b" ;
+    sysml:value expr:Chains__Car__b_pvalue ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute b = w.Gen::G2::x;\n" .
+
+elmt:Chains__Car__b_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Chains__Car__b_om" ;
+    sysml:owner elmt:Chains__Car ;
+    sysml:memberElement elmt:Chains__Car__b ;
+    sysml:ownedMemberElement elmt:Chains__Car__b ;
+    sysml:ownedRelatedElement elmt:Chains__Car__b ;
+    sysml:owningRelatedElement elmt:Chains__Car ;
+    sysml:membershipOwningNamespace elmt:Chains__Car ;
+    sysml:ownedMemberFeature elmt:Chains__Car__b ;
+    sysml:owningType elmt:Chains__Car .
+
+expr:Chains__Car__b_pvalue
+    a sysml:FeatureChainExpression ;
+    sysx:sourceText "w.Gen::G2::x" ;
+    sysml:elementId "Chains__Car__b_pvalue" ;
+    sysml:argument expr:Chains__Car__b_pvalue_pa0 ;
+    sysml:targetFeature elmt:Gen__G2__x .
+
+expr:Chains__Car__b_pvalue_pa0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "w" ;
+    sysml:elementId "Chains__Car__b_pvalue_pa0" ;
+    sysml:referent elmt:Chains__Car__w ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+elmt:Chains__Car__c
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "Chains::Car::c" ;
+    sysml:elementId "Chains__Car__c" ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:owningNamespace elmt:Chains__Car ;
+    sysml:owner elmt:Chains__Car ;
+    sysml:owningRelationship elmt:Chains__Car__c_om ;
+    sysml:owningMembership elmt:Chains__Car__c_om ;
+    sysml:declaredName "c" ;
+    sysml:value expr:Chains__Car__c_pvalue ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute c = w.y;\n" .
+
+elmt:Chains__Car__c_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Chains__Car__c_om" ;
+    sysml:owner elmt:Chains__Car ;
+    sysml:memberElement elmt:Chains__Car__c ;
+    sysml:ownedMemberElement elmt:Chains__Car__c ;
+    sysml:ownedRelatedElement elmt:Chains__Car__c ;
+    sysml:owningRelatedElement elmt:Chains__Car ;
+    sysml:membershipOwningNamespace elmt:Chains__Car ;
+    sysml:ownedMemberFeature elmt:Chains__Car__c ;
+    sysml:owningType elmt:Chains__Car .
+
+expr:Chains__Car__c_pvalue
+    a sysml:FeatureChainExpression ;
+    sysx:sourceText "w.y" ;
+    sysml:elementId "Chains__Car__c_pvalue" ;
+    sysml:argument expr:Chains__Car__c_pvalue_pa0 ;
+    sysml:targetFeature elmt:Gen__G1__y .
+
+expr:Chains__Car__c_pvalue_pa0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "w" ;
+    sysml:elementId "Chains__Car__c_pvalue_pa0" ;
+    sysml:referent elmt:Chains__Car__w ;
+    sysx:argumentIndex "0"^^xsd:integer .

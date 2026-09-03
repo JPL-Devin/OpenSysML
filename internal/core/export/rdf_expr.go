@@ -307,7 +307,7 @@ func (d *decoder) resolveExpressions() error {
 			// The subject is an expression node; its parts are written with it.
 			continue
 		}
-		text, err := d.expressionNodeText(triple.Object, el.scope)
+		text, err := d.expressionNodeText(triple.Object, expressionScope(el, triple.Predicate.Value))
 		if err != nil {
 			return err
 		}
@@ -317,6 +317,16 @@ func (d *decoder) resolveExpressions() error {
 		el.expressions[triple.Predicate.Value] = text
 	}
 	return nil
+}
+
+// expressionScope is what a reference in el's property is written relative to:
+// a loop's conditions are read in the loop's own scope, whose body they test.
+func expressionScope(el *element, property string) string {
+	switch property {
+	case rdf.OpenSysML + xWhileCondition, rdf.OpenSysML + xUntilCondition:
+		return el.qname
+	}
+	return el.scope
 }
 
 // expressionNodeText writes an expression node back as notation: the notation it
@@ -496,8 +506,9 @@ func (d *decoder) expressionArguments(node rdf.Term, scope string) ([]string, er
 	return out, nil
 }
 
-// chainMember names the feature a chain reaches: a linked one by its own name,
-// since a chain's member is looked up in its operand, not in the scope.
+// chainMember names the feature a chain reaches. A linked one is written by its
+// own name, which the operand looks up among its members, unless the operand
+// reaches another feature so named too; then the qualified spelling keeps it.
 func (d *decoder) chainMember(node rdf.Term, scope string) (string, error) {
 	object, ok := d.graph.Object(node, rdf.SysML+pTargetFeature)
 	if !ok {
@@ -513,10 +524,55 @@ func (d *decoder) chainMember(node rdf.Term, scope string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if name, ok := d.stringOf(target, rdf.SysML+pDeclaredName); ok {
-		return qualifiedNameText(name), nil
+	name, ok := d.stringOf(target, rdf.SysML+pDeclaredName)
+	if !ok {
+		return d.referenceName(object, scope)
 	}
-	return d.referenceName(object, scope)
+	if operand, ok := d.chainOperand(node); ok {
+		if named := d.operandMembersNamed(operand, name); len(named) > 0 && (len(named) > 1 || named[0] != target) {
+			return d.referenceName(object, scope)
+		}
+	}
+	return qualifiedNameText(name), nil
+}
+
+// chainOperand is the element a chain's operand refers to, when it is a feature
+// reference linked to one of this document's elements.
+func (d *decoder) chainOperand(node rdf.Term) (*element, bool) {
+	arg, ok := d.graph.Object(node, rdf.SysML+pArgument)
+	if !ok {
+		return nil, false
+	}
+	referent, ok := d.graph.Object(arg, rdf.SysML+pReferent)
+	if !ok || referent.IsLiteral() {
+		return nil, false
+	}
+	el, ok := d.byIRI[referent.Value]
+	return el, ok
+}
+
+// operandMembersNamed collects the features named name a chain operand reaches:
+// its own member of that name, or else those its types declare or inherit.
+func (d *decoder) operandMembersNamed(operand *element, name string) []*element {
+	if own := d.memberNamed(operand, name); own != nil {
+		return []*element{own}
+	}
+	var found []*element
+	for _, term := range d.graph.Objects(rdf.IRI(operand.iri), rdf.SysML+relationshipProperty[ast.RelTyping]) {
+		if term.IsLiteral() {
+			continue
+		}
+		typ, ok := d.byIRI[term.Value]
+		if !ok {
+			continue
+		}
+		if own := d.memberNamed(typ, name); own != nil {
+			found = append(found, own)
+			continue
+		}
+		found = append(found, d.inheritedNamed(typ, name)...)
+	}
+	return found
 }
 
 // expressionReference names the element an expression property points at.
