@@ -2619,7 +2619,8 @@ func testSendViaConnectorIntoAnEmptyPart(t *testing.T) {
 // the assembly's boundary port, but nothing in the context joins that boundary
 // port, so the send reaches no receiving port. It is reported where the inner
 // machine sent it, the same as an unconnected port of the sender's own, rather
-// than dropped silently.
+// than dropped silently — and, as the inner part runs with the context it is
+// created under, the context's creation is what reports it.
 func testSendViaBoundBoundaryPortJoinedToNothing(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {`+directedPorts+`
 		part def Inner {
@@ -2640,16 +2641,15 @@ func testSendViaBoundBoundaryPortJoinedToNothing(t *testing.T) {
 			part env : Env;
 		}
 	}`))
-	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::ctx"))
-	if err != nil {
-		t.Fatalf("instantiate ctx: %v", err)
-	}
-	_, err = featureValueAtPath(t, ctx, inst, "asm.child")
+	_, err := ctx.Instantiate(oneSymbol(t, idx, "P::ctx"))
 	if !errors.Is(err, ErrUnroutableSend) {
-		t.Fatalf("materialize asm.child: err = %v, want %v", err, ErrUnroutableSend)
+		t.Fatalf("instantiate ctx: err = %v, want %v", err, ErrUnroutableSend)
 	}
 	if pending := ctx.PendingMessages(); len(pending) != 0 {
 		t.Errorf("pending messages = %+v, want none", pending)
+	}
+	if got := len(ctx.instances); got != 0 {
+		t.Errorf("%d object(s) survive the failed creation, want none", got)
 	}
 }
 

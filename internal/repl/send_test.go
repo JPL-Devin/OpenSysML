@@ -279,12 +279,13 @@ func TestSendRefusesWhatCannotBeDelivered(t *testing.T) {
 }
 
 // TestSendToAMachineNoObjectPerforms targets the executor a %state started for
-// a definition alone.
+// a definition no type exhibits; one a type exhibits is refused without an object.
 func TestSendToAMachineNoObjectPerforms(t *testing.T) {
 	s := loadFixture(t, "testdata/lamp_signals.sysml")
-	wants(t, run(t, s, "%state Lamp"), `✓ Started state machine executor for "Lamp"`, "Current state: off")
-	rejects(t, run(t, s, "%state Lamp"), "Performed by")
-	wants(t, run(t, s, "%send go"), `✓ Sent go to state machine "Lamp"`, `Accepted by state machine "Lamp" in state off`)
+	wants(t, run(t, s, "%state Lamp"), `error: no object of this session exhibits "Lamp"`, "%state Lamp <object>")
+	wants(t, run(t, s, "%state Loose"), `✓ Started state machine executor for "Loose"`, "Current state: off")
+	rejects(t, run(t, s, "%state Loose"), "Performed by")
+	wants(t, run(t, s, "%send go"), `✓ Sent go to state machine "Loose"`, `Accepted by state machine "Loose" in state off`)
 	wants(t, run(t, s, "%advance 1"), "Current state: on")
 }
 
