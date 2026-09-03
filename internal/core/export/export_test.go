@@ -35,7 +35,7 @@ func TestGoldenConversions(t *testing.T) {
 			if err != nil {
 				t.Fatalf("back to notation: %v\n%s", err, turtle)
 			}
-			if want := formatted(t, string(src)); string(back) != want {
+			if want := string(src); string(back) != want {
 				t.Errorf("the model did not come back as written:\n--- want ---\n%s--- got ---\n%s", want, back)
 			}
 			canonical, err := export.Convert(name+".ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
@@ -445,7 +445,7 @@ func TestCommentInHeadDoesNotChangeKeyword(t *testing.T) {
 				t.Errorf("the declaration came back as a %sdeclaration:\n%s", keyword, back)
 			}
 		}
-		if back, want := toNotation(t, turtle), formatted(t, src); back != want {
+		if back, want := toNotation(t, turtle), src; back != want {
 			t.Errorf("the comment did not come back as written:\n--- want ---\n%s--- got ---\n%s", want, back)
 		}
 	}
@@ -852,7 +852,7 @@ func TestEndBindingHeadsComeBackFromTheGraphAlone(t *testing.T) {
 	}
 	for _, head := range heads {
 		t.Run(head, func(t *testing.T) {
-			src := "package P {\n\tport def Bus;\n\trequirement def R;\n\tpart v;\n\tpart def Car {\n\t\tport left : Bus;\n\t\tport right : Bus;\n\t\tattribute a : Integer;\n\t\tattribute b : Integer;\n\t\t" + head + "\n\t}\n}"
+			src := "package P {\n    port def Bus;\n    requirement def R;\n    part v;\n    part def Car {\n        port left : Bus;\n        port right : Bus;\n        attribute a : Integer;\n        attribute b : Integer;\n        " + head + "\n    }\n}\n"
 			turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
 			if err != nil {
 				t.Fatalf("to turtle: %v", err)
@@ -879,13 +879,13 @@ func TestEndBindingHeadsComeBackFromTheGraphAlone(t *testing.T) {
 // inside the bodies that allow them.
 func TestBehavioralHeadsComeBackFromTheGraphAlone(t *testing.T) {
 	bodies := map[string]string{
-		"transition": "state def M {\n\t\tstate s1;\n\t\tstate s2;\n\t\ttransition first s1 accept e then s2;\n\t}",
-		"accept":     "action def A {\n\t\taccept x : Bus;\n\t}",
-		"send":       "action def A {\n\t\tsend x to y;\n\t}",
+		"transition": "state def M {\n        state s1;\n        state s2;\n        transition first s1 accept e then s2;\n    }",
+		"accept":     "action def A {\n        accept x : Bus;\n    }",
+		"send":       "action def A {\n        send x to y;\n    }",
 	}
 	for name, body := range bodies {
 		t.Run(name, func(t *testing.T) {
-			src := "package P {\n\tport def Bus;\n\tpart x;\n\tpart y;\n\t" + body + "\n}"
+			src := "package P {\n    port def Bus;\n    part x;\n    part y;\n    " + body + "\n}\n"
 			turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
 			if err != nil {
 				t.Fatalf("to turtle: %v", err)
@@ -941,6 +941,39 @@ func TestUnnamedSuccessionEndComesBackFromTheGraph(t *testing.T) {
 	}
 	if !strings.Contains(string(fromGraph), "then s1;") {
 		t.Errorf("the mapping alone should say which member the `then` follows:\n%s", fromGraph)
+	}
+}
+
+// A head's form is what its tokens say, not how they are laid out: line breaks,
+// tabs and comments inside the head do not stop the graph from stating it.
+func TestEndFormsSurviveIrregularLayout(t *testing.T) {
+	heads := map[string]struct{ written, rebuilt string }{
+		"connect": {"connect left\n\t\t\t/* to the */ to\n\t\t\tright;", "connect left to right;"},
+		"bind":    {"bind\tleft\t=\tright;", "bind left = right;"},
+		"satisfy": {"satisfy R // by the car\n\t\t\tby left;", "satisfy R by left;"},
+		// The notes after a head are not part of it.
+		"connect then note":   {"connect left to right; // and done", "connect left to right;"},
+		"bind then note line": {"bind left = right;\n\t\t/* on to the next */", "bind left = right;"},
+		"satisfy then note":   {"satisfy R by left; /* checked */", "satisfy R by left;"},
+	}
+	for name, head := range heads {
+		t.Run(name, func(t *testing.T) {
+			src := "package P {\n\trequirement def R;\n\tpart def Car {\n\t\tpart left;\n\t\tpart right;\n\t\t" + head.written + "\n\t}\n}\n"
+			turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle: %v", err)
+			}
+			if !strings.Contains(string(turtle), "sysx:endForm") {
+				t.Fatalf("the head's form should be stated:\n%s", turtle)
+			}
+			back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation from the mapping alone: %v", err)
+			}
+			if !strings.Contains(string(back), head.rebuilt) {
+				t.Errorf("the head should be rebuilt as %q:\n%s", head.rebuilt, back)
+			}
+		})
 	}
 }
 
