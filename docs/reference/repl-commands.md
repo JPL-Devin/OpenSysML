@@ -27,7 +27,7 @@ quoted segment containing a space and a quoted segment in the middle of a chain:
 | `%render <name> [form]` | Render a view's exposed set in the kind its `render` member states: a containment tree with nested views as subtrees, an interconnection diagram of the exposed parts and the connections between them, a state machine's states and transitions, an action's nodes and successions, or a table of the exposed elements and what they declare. A view with no `render` member renders as a tree. Output is indented text by default, or the machine-readable form of the kind: a [Mermaid](#rendering-a-view) diagram with `mermaid`, a Markdown table with `markdown`. Asking for a form the kind cannot be written in tells you which form it uses. Read-only: it creates no object and leaves a `%action`/`%state` debugging session running. A view that exposes nothing renders empty and says so; a rendering kind this build does not produce is reported by kind and view rather than rendered as something else; an element the rendering cannot represent is reported, not dropped |
 | **Instantiation & Inspection** | |
 | `%instantiate <name>` | Create an object of a part definition and start the behaviors its type exhibits or performs. Each object runs its own machine, initialized after its feature values are built and run until it is quiescent. A second `%instantiate` of the same name creates a new object, and the name then refers to that one. A later submission keeps the object's identity but restarts its behaviors from their initial states, and says so |
-| `%features <name>` | Show what an object holds for each feature of its type |
+| `%features <name> [all\|depth <n>] [json]` | Show what an object holds for each feature of its type. Reading a feature value builds the objects it holds, so the listing is bounded by default — 200 lines, nesting 8 deep — and a listing cut short says which form shows the rest. `all` lifts both bounds and reads the whole tree out; `depth <n>` bounds nesting at `n` levels and lifts the size bound, naming what it did not expand (`machine : Machine (not expanded: depth 1)`). `json` writes the object and everything reachable from it as one document in the shape the API's `Instantiate` returns (`instance`, `instances`, `diagnostics`), bounded by default at 1000 objects, with a graph cut short reported as a `warning` diagnostic. `all`/`depth` and `json` combine (`%features ctx all json`); `all` and `depth` together, a missing or negative depth, and an unknown word are errors naming the usage |
 | `%instances` | List all created objects |
 | `%eval <expr>` | Evaluate expression, in the last namespace the session declared; a library function is reached by its bare name only where that namespace imports its package, as the checker resolves it, and by its qualified name anywhere |
 | `%eval in <name> : <expr>` | Evaluate expression in the named element's own namespace, or, when an object has been instantiated under that name, on that object, so that a feature reads its value. The separator is the first `:` outside a quoted name that is not part of a `::`, so `%eval in Demo : Vehicle::mass` works |
@@ -83,6 +83,12 @@ why: `Fleet::driver.x reaches no object at "x": object #1 of "Fleet::driver" has
 segment whose feature value the runtime could not materialize keeps the runtime's reason: `… at
 "spare": feature "spare" of object #1 could not be materialized: … multiplicity violation …`. An
 id the session holds no object under is `no object #99 in this session`.
+
+An id denotes only an object the session holds: one it named, or one a materialized feature of
+such an object holds. Instantiating a name a second time makes a new object and leaves the
+earlier one unnamed (`object #1 is no longer named`), so `#1` then reaches nothing: `no object
+#1 in this session: it was superseded, and nothing the session names reaches it`. A debugging
+session over the superseded object ends with that `%instantiate`, with a `note:` saying so.
 
 A name nothing was instantiated under says what to instantiate. A usage whose definition alone
 has an object (`%instantiate Fleet::Rover` when `%state … Fleet::rover` wanted the usage) is

@@ -269,6 +269,15 @@ func libraryFunctionByName(fqn string) (*libraryFunction, bool) {
 	return fn, ok
 }
 
+// LibraryFunctionParams is the declared parameter names of the library function fqn.
+func LibraryFunctionParams(fqn string) (params []string, ok bool) {
+	fn, ok := libraryFunctions[fqn]
+	if !ok {
+		return nil, false
+	}
+	return slices.Clone(fn.params), true
+}
+
 // libraryFunctionFor returns the built-in implementation of sym when sym is a
 // function library declaration this runtime implements.
 func (ctx *Context) libraryFunctionFor(sym *symbols.Symbol) (*libraryFunction, bool) {
