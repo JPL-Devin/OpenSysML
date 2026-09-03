@@ -1,6 +1,7 @@
 package resolve
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -63,6 +64,35 @@ func TestUnqualifiedInvocationCandidatesAcrossDocuments(t *testing.T) {
 	aPick, _ := aRoot.LookupLocal("pick")
 	if own := r.InvocationCandidates(scopeOf(t, aRoot, "App"), qn(false, "pick")); len(own) != 1 || own[0] != aPick {
 		t.Errorf("pick from App has candidates %v, want a.sysml's own only", fqnsOf(idx, own))
+	}
+}
+
+// A root namespace has no owner for a visibility to hide its members from, so every
+// root-level declaration is a member of the global namespace whatever its keyword
+// (KerML 8.2.3.5; the pilot resolves them alike): a private or protected root
+// overload in another document is a candidate exactly as a public one is.
+func TestRootLevelVisibilityDoesNotGateInvocationCandidates(t *testing.T) {
+	idx := indexOf(t, map[string]string{
+		"a.sysml": "calc def pick { in x : ScalarValues::Integer; }",
+		"b.sysml": "private calc def pick { in x : ScalarValues::String; }",
+		"c.sysml": "protected calc def pick { in x : ScalarValues::Boolean; }",
+		"d.sysml": "package Caller { attribute v = 1; }",
+	})
+	r := New(idx)
+
+	caller := scopeOf(t, idx.DocumentRoot("d.sysml"), "Caller")
+	cands := r.InvocationCandidates(caller, qn(false, "pick"))
+	if len(cands) != 3 {
+		t.Fatalf("pick from Caller has %d candidates, want the three root-level calcs: %v", len(cands), fqnsOf(idx, cands))
+	}
+	for _, doc := range []string{"a.sysml", "b.sysml", "c.sysml"} {
+		own, _ := idx.DocumentRoot(doc).LookupLocal("pick")
+		if !slices.Contains(cands, own) {
+			t.Errorf("%s's root pick is not a candidate from Caller", doc)
+		}
+	}
+	if sym, ok := r.ResolveQualified(caller, qn(false, "pick")); !ok || sym != cands[0] {
+		t.Errorf("the name alone resolves to %v, want the first candidate", sym)
 	}
 }
 
