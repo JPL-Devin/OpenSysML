@@ -7,6 +7,10 @@ package test {
 		out sum = IntegerFunctions::'+'(1, 2);
 		out negated = IntegerFunctions::'-'(5);
 		out difference = RealFunctions::'-'(1.5, 2);
+		out realSum = RealFunctions::'+'(1, 2);
+		out realNegated = RealFunctions::'-'(5);
+		out realProduct = RealFunctions::'*'(1099511627776, 1099511627776);
+		out rationalSum = RationalFunctions::'+'(1, 2);
 		out product = NumericalFunctions::'*'(3, 4);
 		out quotient = IntegerFunctions::'/'(1, 4);
 		out naturalQuotient = NaturalFunctions::'/'(6, 3);

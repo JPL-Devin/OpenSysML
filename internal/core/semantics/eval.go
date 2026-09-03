@@ -19,18 +19,63 @@ var (
 	// ErrArithmeticOverflow reports a result outside the range of the kind it
 	// would have: an Integer that does not fit int64, or a non-finite Real.
 	ErrArithmeticOverflow = errors.New("arithmetic overflow")
+
+	// ErrRealNotation reports text that is not decimal Real notation, such as
+	// NaN, an infinity or a hexadecimal float.
+	ErrRealNotation = errors.New("not decimal Real notation")
 )
 
-// ParseReal reads decimal Real notation as a binary64 Real. A magnitude that
-// overflows to an infinity, or a nonzero one that underflows to zero, is
-// ErrArithmeticOverflow rather than a silently rounded value.
+// ParseReal reads decimal Real notation as a finite binary64 Real. Any other
+// notation is ErrRealNotation; a magnitude that overflows to an infinity, or
+// a nonzero one that underflows to zero, is ErrArithmeticOverflow.
 func ParseReal(text string) (float64, error) {
+	if !isRealNotation(text) {
+		return 0, ErrRealNotation
+	}
 	x, err := strconv.ParseFloat(text, 64)
 	if err != nil || (x == 0 && !isZeroNotation(text)) {
 		return 0, ErrArithmeticOverflow
 	}
 	return x, nil
 }
+
+// isRealNotation reports whether text is decimal Real notation: an optional
+// sign, digits with an optional fraction, and an optional decimal exponent.
+func isRealNotation(text string) bool {
+	i := 0
+	if i < len(text) && (text[i] == '+' || text[i] == '-') {
+		i++
+	}
+	digits := 0
+	for i < len(text) && isDigit(text[i]) {
+		i, digits = i+1, digits+1
+	}
+	if i < len(text) && text[i] == '.' {
+		i++
+		for i < len(text) && isDigit(text[i]) {
+			i, digits = i+1, digits+1
+		}
+	}
+	if digits == 0 {
+		return false
+	}
+	if i < len(text) && (text[i] == 'e' || text[i] == 'E') {
+		i++
+		if i < len(text) && (text[i] == '+' || text[i] == '-') {
+			i++
+		}
+		exponent := 0
+		for i < len(text) && isDigit(text[i]) {
+			i, exponent = i+1, exponent+1
+		}
+		if exponent == 0 {
+			return false
+		}
+	}
+	return i == len(text)
+}
+
+func isDigit(c byte) bool { return '0' <= c && c <= '9' }
 
 // isZeroNotation reports whether decimal notation denotes zero: no significand digit is nonzero.
 func isZeroNotation(text string) bool {
