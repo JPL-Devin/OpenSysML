@@ -658,7 +658,7 @@ func (m *Model) reflectiveFeatureValue(sym *symbols.Symbol, feature string) (sym
 		case "isConstant":
 			return boolValue(d.IsConstant), true
 		case "isVariation":
-			return boolValue(d.IsVariation), true
+			return boolValue(IsVariation(sym)), true
 		case "isIndividual":
 			return boolValue(d.IsIndividual), true
 		case "isParallel":
@@ -687,9 +687,9 @@ func (m *Model) reflectiveFeatureValue(sym *symbols.Symbol, feature string) (sym
 		case "isPortion":
 			return boolValue(d.Portion != ast.PortionNone), true
 		case "isVariation":
-			return boolValue(d.IsVariation), true
+			return boolValue(IsVariation(sym)), true
 		case "isVariant":
-			return boolValue(d.IsVariant), true
+			return boolValue(IsVariant(sym)), true
 		case "isReference":
 			return boolValue(!d.IsComposite && usageIsReferential(d)), true
 		case "isIndividual":

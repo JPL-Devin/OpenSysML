@@ -80,6 +80,46 @@ func TestIsVariationIncludesEnumerationDefinitions(t *testing.T) {
 	if EnumerationDefinitionOwning(color) != nil {
 		t.Error("Color's owner is not an enumeration definition")
 	}
+	red := member(t, m, color, "red")
+	if !IsVariant(red) || DeclaresVariant(red) {
+		t.Error("an enumerated value is a variant without declaring `variant`")
+	}
+	if IsVariant(sym(t, root, "c")) || IsVariant(nil) {
+		t.Error("an enumeration-typed attribute, or nothing, is no variant")
+	}
+}
+
+// The metaclass features read by element filters and queries report the derived
+// value, so an enumeration definition is a variation and its values variants.
+func TestReflectiveVariationFeaturesOfEnumerations(t *testing.T) {
+	m, root := buildModel(t, `
+		enum def Color { red; green; }
+		attribute def Plain;
+		variation attribute def Cut { variant attribute ideal; attribute cost; }
+	`)
+	color := sym(t, root, "Color")
+	cut := sym(t, root, "Cut")
+	want := []struct {
+		sym     *symbols.Symbol
+		feature string
+		value   bool
+	}{
+		{color, "isVariation", true},
+		{sym(t, root, "Plain"), "isVariation", false},
+		{cut, "isVariation", true},
+		{member(t, m, color, "red"), "isVariant", true},
+		{member(t, m, cut, "ideal"), "isVariant", true},
+		{member(t, m, cut, "cost"), "isVariant", false},
+	}
+	for _, tc := range want {
+		got, ok := m.ReflectiveFeatureValue(tc.sym, tc.feature)
+		if !ok {
+			t.Fatalf("%s::%s is not derived", tc.sym.Name, tc.feature)
+		}
+		if got.Kind != symbols.FilterValueBool || got.Bool != tc.value {
+			t.Errorf("%s::%s = %+v, want %v", tc.sym.Name, tc.feature, got, tc.value)
+		}
+	}
 }
 
 // A variation point is the feature declaring the modifier and any feature
