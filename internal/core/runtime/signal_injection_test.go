@@ -1342,6 +1342,103 @@ func TestPreviewsDiscardThePortTheyMaterialize(t *testing.T) {
 	}
 }
 
+const adoptLinkedSrc = `package Demo {
+	private import ScalarValues::*;
+	attribute def Go;
+	port def P { attribute rate : Real = 3.0; }
+	part def A { port p : P; }
+	part def B { port q : P; }
+	connection def Link { end source : P; end target : P; }
+	part def Sys {
+		part a : A;
+		part b : B;
+		connection link : Link connect a.p to b.q;
+		connect a.p to b.q;
+		exhibit state life {
+			entry; then off;
+			state off;
+			transition off_on first off accept Go if link.source.rate > 1.0 then on;
+			state on;
+		}
+	}
+}`
+
+// A carried object keeps the identities of its connectors for the ones
+// materialized again against the new declarations. A preview that materializes
+// one on the way discards the object, so it leaves the identity kept: dispatch
+// materializes the same connector, not a new one.
+func TestPreviewsLeaveACarriedObjectsConnectorIdentitiesKept(t *testing.T) {
+	prev := contextOver(t, adoptLinkedSrc)
+	obj, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::Sys"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	linkID := fvInstance(t, prev, obj, "link").ID
+	conns, err := obj.OwnedConnectors(prev)
+	if err != nil || len(conns) != 1 {
+		t.Fatalf("OwnedConnectors = %v, %v; want the one anonymous connector", conns, err)
+	}
+	anonymousID := conns[0].ID
+	shapes := prev.ShapesOf(obj)
+
+	ctx := contextOver(t, adoptLinkedSrc+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, shapes, obj); err != nil {
+		t.Fatalf("Adopt: %v", err)
+	}
+	link := obj.FeatureValues["link"]
+	if link.Materialized || obj.keptConnectors[link] != linkID {
+		t.Fatalf("after the carry-over: link %+v keeping identity %d; want it unmaterialized keeping %d", link, obj.keptConnectors[link], linkID)
+	}
+	life, ok := obj.ExhibitedState()
+	if !ok {
+		t.Fatal("the carried object runs no machine")
+	}
+	go_, err := ctx.SignalMessage(lookupOne(t, ctx.resolver.Index(), "Demo::Go"), nil, obj)
+	if err != nil {
+		t.Fatalf("SignalMessage(Go): %v", err)
+	}
+	instances := len(ctx.instances)
+
+	// The guard reads through the named connector, materializing it under the probe.
+	if d, err := life.State.Decide(go_); err != nil || len(d.Fires) != 1 || d.Fires[0] != "transition off_on" {
+		t.Errorf("Decide(Go) = %+v, %v; want off_on firing on the rate read through link", d, err)
+	}
+	if link.Materialized || len(ctx.instances) != instances {
+		t.Errorf("after Decide: link %+v, %d objects; want it unmaterialized and %d objects as before", link, len(ctx.instances), instances)
+	}
+	if got := obj.keptConnectors[link]; got != linkID {
+		t.Errorf("after Decide, link keeps identity %d; want %d as before", got, linkID)
+	}
+	// The anonymous connectors are materialized under a probe the same way.
+	end := ctx.beginProbe()
+	mark := len(ctx.created)
+	if conns, err := obj.OwnedConnectors(ctx); err != nil || len(conns) != 1 || conns[0].ID != anonymousID {
+		t.Errorf("OwnedConnectors under the probe = %v, %v; want the connector under identity %d", conns, err, anonymousID)
+	}
+	ctx.abandonInstancesSince(mark)
+	end()
+	if obj.anonymous != nil || len(obj.keptAnonymous) != 1 || obj.keptAnonymous[0] != anonymousID {
+		t.Errorf("after the probe: anonymous %v keeping %v; want none materialized keeping %d", obj.anonymous, obj.keptAnonymous, anonymousID)
+	}
+
+	ctx.PostMessage(go_)
+	if err := life.State.ProcessNextEvent(); err != nil {
+		t.Fatalf("ProcessNextEvent(Go): %v", err)
+	}
+	if got := activeLeaf(life.State); got != "on" {
+		t.Fatalf("state after Go = %s, want on", got)
+	}
+	if !link.Materialized || !holdsObject(link.Value, linkID) {
+		t.Errorf("after dispatch, link = %+v; want the connector materialized under identity %d", link, linkID)
+	}
+	if _, live := ctx.Instance(linkID); !live {
+		t.Errorf("the context does not hold connector %d", linkID)
+	}
+	if conns, err := obj.OwnedConnectors(ctx); err != nil || len(conns) != 1 || conns[0].ID != anonymousID {
+		t.Errorf("OwnedConnectors after the probe = %v, %v; want the connector under identity %d", conns, err, anonymousID)
+	}
+}
+
 // ExhibitedStatesOf finds the machine an object runs by its definition or its
 // usage, and none on an object exhibiting no such machine.
 func TestExhibitedStatesOf(t *testing.T) {

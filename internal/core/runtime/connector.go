@@ -40,11 +40,16 @@ func (ctx *Context) materializeConnectorFeatureValue(owner *Instance, fv *Featur
 			Err:       errors.New("a connector of more than one object has no set of ends to attach"),
 		}
 	}
-	conn, err := ctx.materializeConnectorAs(owner, fv.Feature.Symbol, ctx.connectorBaseOf(fv.Feature), owner.keptConnectors[fv])
+	kept, held := owner.keptConnectors[fv]
+	conn, err := ctx.materializeConnectorAs(owner, fv.Feature.Symbol, ctx.connectorBaseOf(fv.Feature), kept)
 	if err != nil {
 		return err
 	}
-	delete(owner.keptConnectors, fv)
+	if held {
+		// A probe discards the object, so the identity is kept for the one materialized after it.
+		ctx.noteProbeUndo(func() { owner.keepConnector(fv, kept) })
+		delete(owner.keptConnectors, fv)
+	}
 	fv.Value = Value{Kind: ValInstance, Instance: conn.ID}
 	fv.Materialized = true
 	return nil
@@ -241,6 +246,9 @@ func (inst *Instance) OwnedConnectors(ctx *Context) ([]*Instance, error) {
 	if inst.anonymous != nil {
 		return inst.anonymousConnectors(ctx)
 	}
+	// A probe discards the objects, so the identities are kept for those materialized after it.
+	kept := inst.keptAnonymous
+	ctx.noteProbeUndo(func() { inst.anonymous, inst.keptAnonymous = nil, kept })
 	inst.anonymous = []int64{}
 	for i, member := range ctx.anonymousConnectors(inst.Type) {
 		conn, err := ctx.materializeConnectorAs(inst, member, member, inst.keptIdentity(i))

@@ -152,6 +152,10 @@ type Context struct {
 	// probeWrites are the feature values the probes under way changed, with what
 	// each held before, restored as each probe ends.
 	probeWrites []probeWrite
+	// probeUndos restore what else the probes under way changed on an object — the
+	// identities it keeps for connectors not yet materialized — run in reverse as
+	// each probe ends; see noteProbeUndo.
+	probeUndos []func()
 	// probeBehaviors is where in objectBehaviors those the probes under way
 	// attached begin: the only ones a drain under a probe may run.
 	probeBehaviors int
@@ -380,12 +384,12 @@ func (ctx *Context) beginExecutorRun(started *bool) func() {
 }
 
 // beginProbe brackets an evaluation previewing what a run would do, restoring the
-// budget, trace, bus, variant selections and every feature value written (see
-// noteProbeWrite) after. Behaviors the probe starts are the only ones it runs
-// (see nextRunnableBehavior).
+// budget, trace, bus, variant selections, every feature value written (see
+// noteProbeWrite) and every other change noted (see noteProbeUndo) after.
+// Behaviors the probe starts are the only ones it runs (see nextRunnableBehavior).
 func (ctx *Context) beginProbe() func() {
 	steps, elements, trace := ctx.steps, ctx.elements, ctx.trace
-	mark := len(ctx.probeWrites)
+	mark, undoMark := len(ctx.probeWrites), len(ctx.probeUndos)
 	messages := cloneMessages(ctx.messages)
 	selected := maps.Clone(ctx.selectedVariants)
 	if ctx.probes == 0 {
@@ -399,6 +403,10 @@ func (ctx *Context) beginProbe() func() {
 			*ctx.probeWrites[i].fv = ctx.probeWrites[i].prior
 		}
 		ctx.probeWrites = ctx.probeWrites[:mark]
+		for i := len(ctx.probeUndos) - 1; i >= undoMark; i-- {
+			ctx.probeUndos[i]()
+		}
+		ctx.probeUndos = ctx.probeUndos[:undoMark]
 		ctx.messages = messages
 		ctx.selectedVariants = selected
 		ctx.probes--
@@ -430,6 +438,15 @@ func (ctx *Context) noteProbeWrite(fv *FeatureValue) {
 		return
 	}
 	ctx.probeWrites = append(ctx.probeWrites, probeWrite{fv: fv, prior: *fv})
+}
+
+// noteProbeUndo records how to restore state no feature value holds that is about
+// to change, for the probe under way to run; outside a probe it records nothing.
+func (ctx *Context) noteProbeUndo(undo func()) {
+	if ctx.probes == 0 {
+		return
+	}
+	ctx.probeUndos = append(ctx.probeUndos, undo)
 }
 
 // newActivation begins one activation: the identity of a single execution of a
