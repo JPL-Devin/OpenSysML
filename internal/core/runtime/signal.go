@@ -1184,8 +1184,8 @@ func (e *EvalContext) buildTypedMessage(scope *symbols.Scope, typeRef *ast.Quali
 	return Message{SignalType: signalType, Signal: signal, Target: target, Payload: payload}, nil
 }
 
-// constructorLabel returns the shape name of the feature of signal a constructor
-// label names (resolved as the checker does); a foreign or rebound feature is an error.
+// constructorLabel returns the shape name of the member of signal a constructor
+// label names (resolved as the checker does); a foreign, masked or rebound feature is an error.
 func (e *EvalContext) constructorLabel(scope *symbols.Scope, signal *symbols.Symbol, typeRef, qn *ast.QualifiedName, bound map[*symbols.Symbol]string) (string, error) {
 	label := ast.QualifiedText(qn)
 	if signal == nil || e.ctx == nil || e.ctx.resolver == nil || e.ctx.model == nil {
@@ -1195,7 +1195,7 @@ func (e *EvalContext) constructorLabel(scope *symbols.Scope, signal *symbols.Sym
 		return qn.Parts[0].Text, nil
 	}
 	feature, ok := e.ctx.resolver.ResolveReference(resolve.Reference{Scope: scope, QN: qn, Constructed: typeRef})
-	if !ok || feature == nil {
+	if !ok || feature == nil || !slices.Contains(e.ctx.model.MembersOf(signal), feature) {
 		return "", fmt.Errorf("%s is not a feature of %s", label, signal.Name)
 	}
 	shape := e.ctx.model.ShapeFeatures(signal)

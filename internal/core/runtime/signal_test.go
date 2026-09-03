@@ -55,13 +55,13 @@ func TestMaterializeAcceptedBindsRedefinedFeatureOnce(t *testing.T) {
 }
 
 // A constructor that labels one feature twice fails at the send, whichever
-// spelling names it: the same label, its qualified form, or the name it
-// redefines. Nothing is validated first; the runtime alone rejects it.
+// spelling names it: the same label or its qualified form; the name a
+// redefinition masks is no member. Nothing is validated first; the runtime alone rejects it.
 func TestSendNewRejectsDuplicateLabelsAtSend(t *testing.T) {
 	for _, tc := range []struct{ args, want string }{
 		{"b = 1, b = 2", "b is bound twice"},
 		{"b = 1, Sub::b = 2", "b is bound twice"},
-		{"a = 1, b = 2", "a and b are one feature, bound twice"},
+		{"a = 1, b = 2", "a is not a feature of Sub"},
 	} {
 		t.Run(tc.args, func(t *testing.T) {
 			idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
@@ -117,7 +117,7 @@ func TestSendNewResolvesQualifiedLabelsAtSend(t *testing.T) {
 		want int64
 	}{
 		{"Sub::b = 4, Sub::k = 6", 46},
-		{"Base::a = 4, Base::k = 6", 46},
+		{"b = 4, Base::k = 6", 46},
 		{"P::Sub::b = 4, k = 6", 46},
 	} {
 		t.Run(tc.args, func(t *testing.T) {
@@ -136,7 +136,8 @@ func TestSendNewResolvesQualifiedLabelsAtSend(t *testing.T) {
 	for _, tc := range []struct{ args, want string }{
 		{"Other::b = 4, k = 6", "Other::b is not a feature of Sub"},
 		{"b = 4, Other::k = 6", "Other::k is not a feature of Sub"},
-		{"Sub::b = 4, Base::a = 6", "b and a are one feature, bound twice"},
+		{"Base::a = 4, Base::k = 6", "Base::a is not a feature of Sub"},
+		{"Sub::b = 4, Base::a = 6", "Base::a is not a feature of Sub"},
 	} {
 		t.Run(tc.args, func(t *testing.T) {
 			idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, fmt.Sprintf(model, tc.args)))
