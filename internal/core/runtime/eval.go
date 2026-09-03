@@ -1751,7 +1751,6 @@ type invocationKey struct {
 // context; at most one implementation is set, in the order they are tried.
 type invocationTarget struct {
 	qualName    string
-	builtin     func(*EvalContext, []Value) (Value, error) // the written name is a builtin's
 	calc        *symbols.Symbol                            // the declaration the written name resolves to, nil for none
 	calcBuiltin func(*EvalContext, []Value) (Value, error) // calc is a collection function declaration
 	library     *libraryFunction                           // calc is a function library declaration
@@ -1760,15 +1759,15 @@ type invocationTarget struct {
 
 // invocationTarget resolves what n denotes in this context's scope, memoized
 // per context: resolution reads only the model, which is fixed for its life.
+// The name resolves as the validator resolves it, so a library function is
+// callable only where the model imports it or writes it qualified.
 func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget {
 	key := invocationKey{node: n, scope: ec.scope}
 	if target, ok := ec.ctx.invocationTargets[key]; ok {
 		return target
 	}
 	target := &invocationTarget{qualName: qualifiedNameToString(n.Type)}
-	if fn, ok := builtins[target.qualName]; ok {
-		target.builtin = fn
-	} else if sym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, n.Type); ok && sym != nil {
+	if sym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, n.Type); ok && sym != nil {
 		target.calc = sym
 		if fn, ok := ec.ctx.builtinFor(sym); ok {
 			target.calcBuiltin = fn
@@ -1780,6 +1779,15 @@ func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget
 	}
 	ec.ctx.invocationTargets[key] = target
 	return target
+}
+
+// unresolvedInvocation reports a call to a name that denotes nothing, with the
+// same "did you mean" hint the validator gives an unqualified reference.
+func (ec *EvalContext) unresolvedInvocation(qn *ast.QualifiedName, written string) error {
+	if qn != nil && len(qn.Parts) == 1 && !qn.Global && ec.ctx.resolver != nil {
+		return fmt.Errorf("%w: %s", ErrUnresolvedReference, ec.ctx.resolver.UnresolvedName(ec.scope, written))
+	}
+	return fmt.Errorf("%w: %s", ErrUnresolvedReference, written)
 }
 
 // evalInvocation evaluates a function/calc invocation.
@@ -1833,39 +1841,11 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 		named[arg.Name.Parts[len(arg.Name.Parts)-1].Text] = val
 	}
 
-	// Check builtin registry
-	if target.builtin != nil {
-		if len(named) > 0 {
-			return Value{}, fmt.Errorf("%w: builtin %s takes positional arguments only", ErrUnknownParameter, qualName)
-		}
-		return target.builtin(ec, args)
-	}
-
-	// User-defined calc: the target symbol resolved from the evaluation context scope.
+	// A name that resolves to nothing denotes nothing, not the library function
+	// of that name: the validator reports the same expression unresolved.
 	calcSym := target.calc
-	if calcSym == nil {
-		// A KerML function library function is evaluable even where the model
-		// imports no part of the library, so a name that denotes no declaration
-		// still denotes the library function of that name. A name only a
-		// OpenSysML extension declares is in scope under its import alone.
-		fn, libErr := unresolvedLibraryFunction(n.Type, qualName)
-		if libErr != nil {
-			return Value{}, libErr
-		}
-		if fn != nil {
-			return fn.invoke(ec.ctx, calcArgs{positional: args, named: named})
-		}
-		// The same holds of the collection functions: `seq->size()` and `size(seq)`
-		// denote SequenceFunctions::size, whose implementation the qualified name
-		// reaches above. Only an unqualified name the model declares nothing for
-		// gets here, so a model's own `size` calc still denotes itself.
-		if fn, isBuiltin := builtinsByLocalName[qualName]; isBuiltin {
-			if len(named) > 0 {
-				return Value{}, fmt.Errorf("%w: builtin %s takes positional arguments only", ErrUnknownParameter, qualName)
-			}
-			return fn(ec, args)
-		}
-		return Value{}, fmt.Errorf("%w: calc %s", ErrUnresolvedReference, qualName)
+	if calcSym == nil && target.library == nil {
+		return Value{}, ec.unresolvedInvocation(n.Type, qualName)
 	}
 
 	// A name that resolves to one of the collection function declarations is
