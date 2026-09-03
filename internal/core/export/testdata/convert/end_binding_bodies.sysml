@@ -35,5 +35,12 @@ package Bodies {
             then a3 { }
             then a4 /* { */;
         }
+        state def Machine {
+            state off;
+            state on;
+            transition t1 first off then on { attribute w : Prio; }
+            transition first on do assign x.a := 1 then off { }
+            transition first off do { assign x.a := 2; } then on { attribute w : Prio; }
+        }
     }
 }

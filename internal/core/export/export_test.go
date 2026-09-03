@@ -913,8 +913,17 @@ func TestEndBindingBodiesComeBackFromTheGraphAlone(t *testing.T) {
 	if string(back) != string(withText) {
 		t.Errorf("the notation should not depend on the source text\n--- from the graph alone ---\n%s\n--- with source text ---\n%s", back, withText)
 	}
-	if strings.Count(string(back), "attribute w : Prio;") != 9 || !strings.Contains(string(back), "interface seam connect w.outp to r.inp {\n            attribute coupling : SeamCoupling = SeamCoupling::learnFromData;\n        }") {
+	if strings.Count(string(back), "attribute w : Prio;") != 11 || !strings.Contains(string(back), "interface seam connect w.outp to r.inp {\n            attribute coupling : SeamCoupling = SeamCoupling::learnFromData;\n        }") {
 		t.Errorf("every body should come back with its members:\n%s", back)
+	}
+	for _, transition := range []string{
+		"transition t1 first off then on {\n                attribute w : Prio;\n            }",
+		"transition first on do assign x.a := 1 then off {\n            }",
+		"transition first off do {\n                assign x.a := 2;\n            } then on {\n                attribute w : Prio;\n            }",
+	} {
+		if !strings.Contains(string(back), transition) {
+			t.Errorf("a transition should keep its effect apart from its body:\nmissing %q in\n%s", transition, back)
+		}
 	}
 	again, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle)
 	if err != nil {

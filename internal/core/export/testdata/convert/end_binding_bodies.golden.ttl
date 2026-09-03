@@ -690,9 +690,9 @@ elmt:Bodies__Ctx
     sysml:owningMembership elmt:Bodies__Ctx_om ;
     sysml:declaredName "Ctx" ;
     sysx:hasBody "true"^^xsd:boolean ;
-    sysml:ownedMember elmt:Bodies__Ctx__x, elmt:Bodies__Ctx__y, elmt:Bodies__Ctx__c, elmt:Bodies__Ctx___403, elmt:Bodies__Ctx__f, elmt:Bodies__Ctx__bd, elmt:Bodies__Ctx___406, elmt:Bodies__Ctx__al, elmt:Bodies__Ctx__s, elmt:Bodies__Ctx__Act ;
-    sysml:ownedMembership elmt:Bodies__Ctx__x_om, elmt:Bodies__Ctx__y_om, elmt:Bodies__Ctx__c_om, elmt:Bodies__Ctx___403_om, elmt:Bodies__Ctx__f_om, elmt:Bodies__Ctx__bd_om, elmt:Bodies__Ctx___406_om, elmt:Bodies__Ctx__al_om, elmt:Bodies__Ctx__s_om, elmt:Bodies__Ctx__Act_om ;
-    sysml:ownedRelationship elmt:Bodies__Ctx__x_om, elmt:Bodies__Ctx__y_om, elmt:Bodies__Ctx__c_om, elmt:Bodies__Ctx___403_om, elmt:Bodies__Ctx__f_om, elmt:Bodies__Ctx__bd_om, elmt:Bodies__Ctx___406_om, elmt:Bodies__Ctx__al_om, elmt:Bodies__Ctx__s_om, elmt:Bodies__Ctx__Act_om ;
+    sysml:ownedMember elmt:Bodies__Ctx__x, elmt:Bodies__Ctx__y, elmt:Bodies__Ctx__c, elmt:Bodies__Ctx___403, elmt:Bodies__Ctx__f, elmt:Bodies__Ctx__bd, elmt:Bodies__Ctx___406, elmt:Bodies__Ctx__al, elmt:Bodies__Ctx__s, elmt:Bodies__Ctx__Act, elmt:Bodies__Ctx__Machine ;
+    sysml:ownedMembership elmt:Bodies__Ctx__x_om, elmt:Bodies__Ctx__y_om, elmt:Bodies__Ctx__c_om, elmt:Bodies__Ctx___403_om, elmt:Bodies__Ctx__f_om, elmt:Bodies__Ctx__bd_om, elmt:Bodies__Ctx___406_om, elmt:Bodies__Ctx__al_om, elmt:Bodies__Ctx__s_om, elmt:Bodies__Ctx__Act_om, elmt:Bodies__Ctx__Machine_om ;
+    sysml:ownedRelationship elmt:Bodies__Ctx__x_om, elmt:Bodies__Ctx__y_om, elmt:Bodies__Ctx__c_om, elmt:Bodies__Ctx___403_om, elmt:Bodies__Ctx__f_om, elmt:Bodies__Ctx__bd_om, elmt:Bodies__Ctx___406_om, elmt:Bodies__Ctx__al_om, elmt:Bodies__Ctx__s_om, elmt:Bodies__Ctx__Act_om, elmt:Bodies__Ctx__Machine_om ;
     sysml:ownedFeature elmt:Bodies__Ctx__x, elmt:Bodies__Ctx__y, elmt:Bodies__Ctx__c, elmt:Bodies__Ctx___403, elmt:Bodies__Ctx__bd, elmt:Bodies__Ctx___406, elmt:Bodies__Ctx__al, elmt:Bodies__Ctx__s ;
     sysml:ownedFeatureMembership elmt:Bodies__Ctx__x_om, elmt:Bodies__Ctx__y_om, elmt:Bodies__Ctx__c_om, elmt:Bodies__Ctx___403_om, elmt:Bodies__Ctx__bd_om, elmt:Bodies__Ctx___406_om, elmt:Bodies__Ctx__al_om, elmt:Bodies__Ctx__s_om .
 
@@ -1619,3 +1619,316 @@ elmt:Bodies__Ctx__Act___408_om
     sysml:membershipOwningNamespace elmt:Bodies__Ctx__Act ;
     sysml:ownedMemberFeature elmt:Bodies__Ctx__Act___408 ;
     sysml:owningType elmt:Bodies__Ctx__Act .
+
+elmt:Bodies__Ctx__Machine
+    a sysml:StateDefinition ;
+    sysml:qualifiedName "Bodies::Ctx::Machine" ;
+    sysml:elementId "Bodies__Ctx__Machine" ;
+    sysx:memberIndex "10"^^xsd:integer ;
+    sysml:owningNamespace elmt:Bodies__Ctx ;
+    sysml:owner elmt:Bodies__Ctx ;
+    sysml:owningRelationship elmt:Bodies__Ctx__Machine_om ;
+    sysml:owningMembership elmt:Bodies__Ctx__Machine_om ;
+    sysml:declaredName "Machine" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Bodies__Ctx__Machine__off, elmt:Bodies__Ctx__Machine__on, elmt:Bodies__Ctx__Machine__t1, elmt:Bodies__Ctx__Machine___403, elmt:Bodies__Ctx__Machine___404 ;
+    sysml:ownedMembership elmt:Bodies__Ctx__Machine__off_om, elmt:Bodies__Ctx__Machine__on_om, elmt:Bodies__Ctx__Machine__t1_om, elmt:Bodies__Ctx__Machine___403_om, elmt:Bodies__Ctx__Machine___404_om ;
+    sysml:ownedRelationship elmt:Bodies__Ctx__Machine__off_om, elmt:Bodies__Ctx__Machine__on_om, elmt:Bodies__Ctx__Machine__t1_om, elmt:Bodies__Ctx__Machine___403_om, elmt:Bodies__Ctx__Machine___404_om ;
+    sysml:ownedFeature elmt:Bodies__Ctx__Machine__off, elmt:Bodies__Ctx__Machine__on, elmt:Bodies__Ctx__Machine__t1, elmt:Bodies__Ctx__Machine___403, elmt:Bodies__Ctx__Machine___404 ;
+    sysml:ownedFeatureMembership elmt:Bodies__Ctx__Machine__off_om, elmt:Bodies__Ctx__Machine__on_om, elmt:Bodies__Ctx__Machine__t1_om, elmt:Bodies__Ctx__Machine___403_om, elmt:Bodies__Ctx__Machine___404_om .
+
+elmt:Bodies__Ctx__Machine_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Bodies__Ctx__Machine_om" ;
+    sysml:owner elmt:Bodies__Ctx ;
+    sysml:memberElement elmt:Bodies__Ctx__Machine ;
+    sysml:ownedMemberElement elmt:Bodies__Ctx__Machine ;
+    sysml:ownedRelatedElement elmt:Bodies__Ctx__Machine ;
+    sysml:owningRelatedElement elmt:Bodies__Ctx ;
+    sysml:membershipOwningNamespace elmt:Bodies__Ctx .
+
+elmt:Bodies__Ctx__Machine__off
+    a sysml:StateUsage ;
+    sysml:qualifiedName "Bodies::Ctx::Machine::off" ;
+    sysml:elementId "Bodies__Ctx__Machine__off" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Bodies__Ctx__Machine ;
+    sysml:owner elmt:Bodies__Ctx__Machine ;
+    sysml:owningRelationship elmt:Bodies__Ctx__Machine__off_om ;
+    sysml:owningMembership elmt:Bodies__Ctx__Machine__off_om ;
+    sysml:declaredName "off" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Bodies__Ctx__Machine__off_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Bodies__Ctx__Machine__off_om" ;
+    sysml:owner elmt:Bodies__Ctx__Machine ;
+    sysml:memberElement elmt:Bodies__Ctx__Machine__off ;
+    sysml:ownedMemberElement elmt:Bodies__Ctx__Machine__off ;
+    sysml:ownedRelatedElement elmt:Bodies__Ctx__Machine__off ;
+    sysml:owningRelatedElement elmt:Bodies__Ctx__Machine ;
+    sysml:membershipOwningNamespace elmt:Bodies__Ctx__Machine ;
+    sysml:ownedMemberFeature elmt:Bodies__Ctx__Machine__off ;
+    sysml:owningType elmt:Bodies__Ctx__Machine .
+
+elmt:Bodies__Ctx__Machine__on
+    a sysml:StateUsage ;
+    sysml:qualifiedName "Bodies::Ctx::Machine::on" ;
+    sysml:elementId "Bodies__Ctx__Machine__on" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Bodies__Ctx__Machine ;
+    sysml:owner elmt:Bodies__Ctx__Machine ;
+    sysml:owningRelationship elmt:Bodies__Ctx__Machine__on_om ;
+    sysml:owningMembership elmt:Bodies__Ctx__Machine__on_om ;
+    sysml:declaredName "on" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Bodies__Ctx__Machine__on_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Bodies__Ctx__Machine__on_om" ;
+    sysml:owner elmt:Bodies__Ctx__Machine ;
+    sysml:memberElement elmt:Bodies__Ctx__Machine__on ;
+    sysml:ownedMemberElement elmt:Bodies__Ctx__Machine__on ;
+    sysml:ownedRelatedElement elmt:Bodies__Ctx__Machine__on ;
+    sysml:owningRelatedElement elmt:Bodies__Ctx__Machine ;
+    sysml:membershipOwningNamespace elmt:Bodies__Ctx__Machine ;
+    sysml:ownedMemberFeature elmt:Bodies__Ctx__Machine__on ;
+    sysml:owningType elmt:Bodies__Ctx__Machine .
+
+elmt:Bodies__Ctx__Machine__t1
+    a sysml:TransitionUsage ;
+    sysml:qualifiedName "Bodies::Ctx::Machine::t1" ;
+    sysml:elementId "Bodies__Ctx__Machine__t1" ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:Bodies__Ctx__Machine ;
+    sysml:owner elmt:Bodies__Ctx__Machine ;
+    sysml:owningRelationship elmt:Bodies__Ctx__Machine__t1_om ;
+    sysml:owningMembership elmt:Bodies__Ctx__Machine__t1_om ;
+    sysml:declaredName "t1" ;
+    sysx:transitionSyntax "first" ;
+    sysml:sourceFeature elmt:Bodies__Ctx__Machine__off ;
+    sysml:targetFeature elmt:Bodies__Ctx__Machine__on ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Bodies__Ctx__Machine__t1__w ;
+    sysml:ownedMembership elmt:Bodies__Ctx__Machine__t1__w_om ;
+    sysml:ownedRelationship elmt:Bodies__Ctx__Machine__t1__w_om ;
+    sysml:ownedFeature elmt:Bodies__Ctx__Machine__t1__w ;
+    sysml:ownedFeatureMembership elmt:Bodies__Ctx__Machine__t1__w_om .
+
+elmt:Bodies__Ctx__Machine__t1_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Bodies__Ctx__Machine__t1_om" ;
+    sysml:owner elmt:Bodies__Ctx__Machine ;
+    sysml:memberElement elmt:Bodies__Ctx__Machine__t1 ;
+    sysml:ownedMemberElement elmt:Bodies__Ctx__Machine__t1 ;
+    sysml:ownedRelatedElement elmt:Bodies__Ctx__Machine__t1 ;
+    sysml:owningRelatedElement elmt:Bodies__Ctx__Machine ;
+    sysml:membershipOwningNamespace elmt:Bodies__Ctx__Machine ;
+    sysml:ownedMemberFeature elmt:Bodies__Ctx__Machine__t1 ;
+    sysml:owningType elmt:Bodies__Ctx__Machine .
+
+elmt:Bodies__Ctx__Machine__t1__w
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "Bodies::Ctx::Machine::t1::w" ;
+    sysml:elementId "Bodies__Ctx__Machine__t1__w" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Bodies__Ctx__Machine__t1 ;
+    sysml:owner elmt:Bodies__Ctx__Machine__t1 ;
+    sysml:owningRelationship elmt:Bodies__Ctx__Machine__t1__w_om ;
+    sysml:owningMembership elmt:Bodies__Ctx__Machine__t1__w_om ;
+    sysml:declaredName "w" ;
+    sysml:type elmt:Bodies__Prio ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Bodies__Ctx__Machine__t1__w_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Bodies__Ctx__Machine__t1__w_om" ;
+    sysml:owner elmt:Bodies__Ctx__Machine__t1 ;
+    sysml:memberElement elmt:Bodies__Ctx__Machine__t1__w ;
+    sysml:ownedMemberElement elmt:Bodies__Ctx__Machine__t1__w ;
+    sysml:ownedRelatedElement elmt:Bodies__Ctx__Machine__t1__w ;
+    sysml:owningRelatedElement elmt:Bodies__Ctx__Machine__t1 ;
+    sysml:membershipOwningNamespace elmt:Bodies__Ctx__Machine__t1 ;
+    sysml:ownedMemberFeature elmt:Bodies__Ctx__Machine__t1__w ;
+    sysml:owningType elmt:Bodies__Ctx__Machine__t1 .
+
+elmt:Bodies__Ctx__Machine___403
+    a sysml:TransitionUsage ;
+    sysml:qualifiedName "Bodies::Ctx::Machine::@3" ;
+    sysml:elementId "Bodies__Ctx__Machine___403" ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:owningNamespace elmt:Bodies__Ctx__Machine ;
+    sysml:owner elmt:Bodies__Ctx__Machine ;
+    sysml:owningRelationship elmt:Bodies__Ctx__Machine___403_om ;
+    sysml:owningMembership elmt:Bodies__Ctx__Machine___403_om ;
+    sysx:transitionSyntax "first" ;
+    sysml:sourceFeature elmt:Bodies__Ctx__Machine__on ;
+    sysml:targetFeature elmt:Bodies__Ctx__Machine__off ;
+    sysx:bracedEffect "false"^^xsd:boolean ;
+    sysx:effectMember elmt:Bodies__Ctx__Machine___403___400 ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Bodies__Ctx__Machine___403___400 ;
+    sysml:ownedMembership elmt:Bodies__Ctx__Machine___403___400_om ;
+    sysml:ownedRelationship elmt:Bodies__Ctx__Machine___403___400_om ;
+    sysml:ownedFeature elmt:Bodies__Ctx__Machine___403___400 ;
+    sysml:ownedFeatureMembership elmt:Bodies__Ctx__Machine___403___400_om .
+
+elmt:Bodies__Ctx__Machine___403_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Bodies__Ctx__Machine___403_om" ;
+    sysml:owner elmt:Bodies__Ctx__Machine ;
+    sysml:memberElement elmt:Bodies__Ctx__Machine___403 ;
+    sysml:ownedMemberElement elmt:Bodies__Ctx__Machine___403 ;
+    sysml:ownedRelatedElement elmt:Bodies__Ctx__Machine___403 ;
+    sysml:owningRelatedElement elmt:Bodies__Ctx__Machine ;
+    sysml:membershipOwningNamespace elmt:Bodies__Ctx__Machine ;
+    sysml:ownedMemberFeature elmt:Bodies__Ctx__Machine___403 ;
+    sysml:owningType elmt:Bodies__Ctx__Machine .
+
+elmt:Bodies__Ctx__Machine___403___400
+    a sysml:AssignmentActionUsage ;
+    sysml:qualifiedName "Bodies::Ctx::Machine::@3::@0" ;
+    sysml:elementId "Bodies__Ctx__Machine___403___400" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Bodies__Ctx__Machine___403 ;
+    sysml:owner elmt:Bodies__Ctx__Machine___403 ;
+    sysml:owningRelationship elmt:Bodies__Ctx__Machine___403___400_om ;
+    sysml:owningMembership elmt:Bodies__Ctx__Machine___403___400_om ;
+    sysx:declaredKeyword "assign" ;
+    sysx:target expr:Bodies__Ctx__Machine___403___400_ptarget ;
+    sysml:value expr:Bodies__Ctx__Machine___403___400_pvalue .
+
+elmt:Bodies__Ctx__Machine___403___400_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Bodies__Ctx__Machine___403___400_om" ;
+    sysml:owner elmt:Bodies__Ctx__Machine___403 ;
+    sysml:memberElement elmt:Bodies__Ctx__Machine___403___400 ;
+    sysml:ownedMemberElement elmt:Bodies__Ctx__Machine___403___400 ;
+    sysml:ownedRelatedElement elmt:Bodies__Ctx__Machine___403___400 ;
+    sysml:owningRelatedElement elmt:Bodies__Ctx__Machine___403 ;
+    sysml:membershipOwningNamespace elmt:Bodies__Ctx__Machine___403 ;
+    sysml:ownedMemberFeature elmt:Bodies__Ctx__Machine___403___400 ;
+    sysml:owningType elmt:Bodies__Ctx__Machine___403 .
+
+expr:Bodies__Ctx__Machine___403___400_ptarget
+    a sysml:FeatureChainExpression ;
+    sysx:sourceText "x.a" ;
+    sysml:elementId "Bodies__Ctx__Machine___403___400_ptarget" ;
+    sysml:argument expr:Bodies__Ctx__Machine___403___400_ptarget_pa0 ;
+    sysml:targetFeature "a" .
+
+expr:Bodies__Ctx__Machine___403___400_ptarget_pa0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "x" ;
+    sysml:elementId "Bodies__Ctx__Machine___403___400_ptarget_pa0" ;
+    sysml:referent elmt:Bodies__Ctx__x ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+expr:Bodies__Ctx__Machine___403___400_pvalue
+    a sysml:LiteralInteger ;
+    sysx:sourceText "1" ;
+    sysml:elementId "Bodies__Ctx__Machine___403___400_pvalue" ;
+    sysml:value "1"^^xsd:integer .
+
+elmt:Bodies__Ctx__Machine___404
+    a sysml:TransitionUsage ;
+    sysml:qualifiedName "Bodies::Ctx::Machine::@4" ;
+    sysml:elementId "Bodies__Ctx__Machine___404" ;
+    sysx:memberIndex "4"^^xsd:integer ;
+    sysml:owningNamespace elmt:Bodies__Ctx__Machine ;
+    sysml:owner elmt:Bodies__Ctx__Machine ;
+    sysml:owningRelationship elmt:Bodies__Ctx__Machine___404_om ;
+    sysml:owningMembership elmt:Bodies__Ctx__Machine___404_om ;
+    sysx:transitionSyntax "first" ;
+    sysml:sourceFeature elmt:Bodies__Ctx__Machine__off ;
+    sysml:targetFeature elmt:Bodies__Ctx__Machine__on ;
+    sysx:bracedEffect "true"^^xsd:boolean ;
+    sysx:effectMember elmt:Bodies__Ctx__Machine___404___400 ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Bodies__Ctx__Machine___404___400, elmt:Bodies__Ctx__Machine___404__w ;
+    sysml:ownedMembership elmt:Bodies__Ctx__Machine___404___400_om, elmt:Bodies__Ctx__Machine___404__w_om ;
+    sysml:ownedRelationship elmt:Bodies__Ctx__Machine___404___400_om, elmt:Bodies__Ctx__Machine___404__w_om ;
+    sysml:ownedFeature elmt:Bodies__Ctx__Machine___404___400, elmt:Bodies__Ctx__Machine___404__w ;
+    sysml:ownedFeatureMembership elmt:Bodies__Ctx__Machine___404___400_om, elmt:Bodies__Ctx__Machine___404__w_om .
+
+elmt:Bodies__Ctx__Machine___404_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Bodies__Ctx__Machine___404_om" ;
+    sysml:owner elmt:Bodies__Ctx__Machine ;
+    sysml:memberElement elmt:Bodies__Ctx__Machine___404 ;
+    sysml:ownedMemberElement elmt:Bodies__Ctx__Machine___404 ;
+    sysml:ownedRelatedElement elmt:Bodies__Ctx__Machine___404 ;
+    sysml:owningRelatedElement elmt:Bodies__Ctx__Machine ;
+    sysml:membershipOwningNamespace elmt:Bodies__Ctx__Machine ;
+    sysml:ownedMemberFeature elmt:Bodies__Ctx__Machine___404 ;
+    sysml:owningType elmt:Bodies__Ctx__Machine .
+
+elmt:Bodies__Ctx__Machine___404___400
+    a sysml:AssignmentActionUsage ;
+    sysml:qualifiedName "Bodies::Ctx::Machine::@4::@0" ;
+    sysml:elementId "Bodies__Ctx__Machine___404___400" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Bodies__Ctx__Machine___404 ;
+    sysml:owner elmt:Bodies__Ctx__Machine___404 ;
+    sysml:owningRelationship elmt:Bodies__Ctx__Machine___404___400_om ;
+    sysml:owningMembership elmt:Bodies__Ctx__Machine___404___400_om ;
+    sysx:declaredKeyword "assign" ;
+    sysx:target expr:Bodies__Ctx__Machine___404___400_ptarget ;
+    sysml:value expr:Bodies__Ctx__Machine___404___400_pvalue .
+
+elmt:Bodies__Ctx__Machine___404___400_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Bodies__Ctx__Machine___404___400_om" ;
+    sysml:owner elmt:Bodies__Ctx__Machine___404 ;
+    sysml:memberElement elmt:Bodies__Ctx__Machine___404___400 ;
+    sysml:ownedMemberElement elmt:Bodies__Ctx__Machine___404___400 ;
+    sysml:ownedRelatedElement elmt:Bodies__Ctx__Machine___404___400 ;
+    sysml:owningRelatedElement elmt:Bodies__Ctx__Machine___404 ;
+    sysml:membershipOwningNamespace elmt:Bodies__Ctx__Machine___404 ;
+    sysml:ownedMemberFeature elmt:Bodies__Ctx__Machine___404___400 ;
+    sysml:owningType elmt:Bodies__Ctx__Machine___404 .
+
+expr:Bodies__Ctx__Machine___404___400_ptarget
+    a sysml:FeatureChainExpression ;
+    sysx:sourceText "x.a" ;
+    sysml:elementId "Bodies__Ctx__Machine___404___400_ptarget" ;
+    sysml:argument expr:Bodies__Ctx__Machine___404___400_ptarget_pa0 ;
+    sysml:targetFeature "a" .
+
+expr:Bodies__Ctx__Machine___404___400_ptarget_pa0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "x" ;
+    sysml:elementId "Bodies__Ctx__Machine___404___400_ptarget_pa0" ;
+    sysml:referent elmt:Bodies__Ctx__x ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+expr:Bodies__Ctx__Machine___404___400_pvalue
+    a sysml:LiteralInteger ;
+    sysx:sourceText "2" ;
+    sysml:elementId "Bodies__Ctx__Machine___404___400_pvalue" ;
+    sysml:value "2"^^xsd:integer .
+
+elmt:Bodies__Ctx__Machine___404__w
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "Bodies::Ctx::Machine::@4::w" ;
+    sysml:elementId "Bodies__Ctx__Machine___404__w" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Bodies__Ctx__Machine___404 ;
+    sysml:owner elmt:Bodies__Ctx__Machine___404 ;
+    sysml:owningRelationship elmt:Bodies__Ctx__Machine___404__w_om ;
+    sysml:owningMembership elmt:Bodies__Ctx__Machine___404__w_om ;
+    sysml:declaredName "w" ;
+    sysml:type elmt:Bodies__Prio ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Bodies__Ctx__Machine___404__w_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Bodies__Ctx__Machine___404__w_om" ;
+    sysml:owner elmt:Bodies__Ctx__Machine___404 ;
+    sysml:memberElement elmt:Bodies__Ctx__Machine___404__w ;
+    sysml:ownedMemberElement elmt:Bodies__Ctx__Machine___404__w ;
+    sysml:ownedRelatedElement elmt:Bodies__Ctx__Machine___404__w ;
+    sysml:owningRelatedElement elmt:Bodies__Ctx__Machine___404 ;
+    sysml:membershipOwningNamespace elmt:Bodies__Ctx__Machine___404 ;
+    sysml:ownedMemberFeature elmt:Bodies__Ctx__Machine___404__w ;
+    sysml:owningType elmt:Bodies__Ctx__Machine___404 .
