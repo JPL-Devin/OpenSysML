@@ -16,7 +16,7 @@ report:
   pilot corpora) convert to Turtle; the other 70 are refused. Of the 275, a second
   conversion of the written-back notation reproduces the graph for 263 (185
   byte-for-byte, 78 up to the whitespace inside `sysx:sourceText`), differs for
-  7, and 6 cannot be written back or re-read at all. These figures are the
+  6, and 6 cannot be written back or re-read at all. These figures are the
   per-file ratchet in `internal/core/export/corpus_roundtrip_test.go`, described
   in [rdf-corpus-roundtrip.md](../project/rdf-corpus-roundtrip.md). See
   [Behavior](#behavior) and [Limitations](#limitations).
