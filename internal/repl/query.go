@@ -291,18 +291,19 @@ func (s *Session) reportedSubject(result runtime.CheckResult, inst *runtime.Inst
 	return result.Subject, root + "::" + result.SubjectPath
 }
 
-// instanceName is the name the session holds inst under, empty for an object it
-// did not create.
+// instanceName is the name the session holds inst under — the first in name
+// order when several do — empty for an object it did not create.
 func (s *Session) instanceName(inst *runtime.Instance) string {
 	if inst == nil {
 		return ""
 	}
-	for name, held := range s.instances {
-		if held == inst {
-			return name
+	name := ""
+	for held, obj := range s.instances {
+		if obj == inst && (name == "" || held < name) {
+			name = held
 		}
 	}
-	return ""
+	return name
 }
 
 // resolveCheckTarget resolves the element a constraint/requirement check names.
