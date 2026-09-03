@@ -211,13 +211,13 @@ func (ctx *Context) EvalWithScope(node ast.Node, scope *symbols.Scope) (Value, e
 // EvalDeclaredValue evaluates the value a usage declaration binds, as a read of
 // the declaration does: in its own scope, and answering to its declared type.
 func (ctx *Context) EvalDeclaredValue(sym *symbols.Symbol) (Value, error) {
-	usage, ok := sym.Decl.(*ast.Usage)
-	if !ok || usage.Value == nil {
+	value := ctx.extractDefaultValue(sym)
+	if value == nil {
 		return Value{}, fmt.Errorf("%w: %s", ErrNoValue, ctx.qualifiedSymbolName(sym))
 	}
 	defer ctx.beginRun()()
 
-	return NewEvalContext(ctx, sym.OwnerScope).declaredValue(sym, usage)
+	return NewEvalContext(ctx, sym.OwnerScope).declaredValue(sym, value)
 }
 
 // EvalWithScopeOn evaluates an expression against a concrete instance, so a
@@ -325,12 +325,12 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 					if ec.resolving[name] {
 						return Value{}, fmt.Errorf("%w: %s", ErrCyclicFeatureValue, name)
 					}
-					if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
+					if value := ec.ctx.extractDefaultValue(sym); value != nil {
 						if ec.resolving == nil {
 							ec.resolving = map[string]bool{}
 						}
 						ec.resolving[name] = true
-						val, err := ec.declaredValue(sym, usage)
+						val, err := ec.declaredValue(sym, value)
 						delete(ec.resolving, name)
 						return val, err
 					}
@@ -414,12 +414,12 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 				if val, ok := ec.emptyDeclaredFeature(sym); ok {
 					return val, nil
 				}
-				if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
+				if value := ec.ctx.extractDefaultValue(sym); value != nil {
 					if ec.resolving == nil {
 						ec.resolving = map[string]bool{}
 					}
 					ec.resolving[name] = true
-					val, err := ec.declaredValue(sym, usage)
+					val, err := ec.declaredValue(sym, value)
 					delete(ec.resolving, name)
 					return val, err
 				}
@@ -485,7 +485,7 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 			return ec.enumLiteralValue(currentSym)
 		}
 		if decl.Value != nil {
-			return ec.declaredValue(currentSym, decl)
+			return ec.declaredValue(currentSym, decl.Value)
 		}
 		if ec.ctx.model.IsVariationFeature(currentSym) {
 			return Value{}, fmt.Errorf("%w: %s", ErrVariationUnselected, qualifiedNameToString(qn))
@@ -508,6 +508,15 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 			return val, nil
 		}
 		return Value{}, fmt.Errorf("usage %s has no value", qualifiedNameToString(qn))
+	case *ast.SubjectMember:
+		// A subject is bound or, admitting nothing, empty; otherwise it awaits a binding.
+		if decl.BindingExpr != nil {
+			return ec.declaredValue(currentSym, decl.BindingExpr)
+		}
+		if val, ok := ec.emptyDeclaredFeature(currentSym); ok {
+			return val, nil
+		}
+		return Value{}, fmt.Errorf("subject %s has no value", qualifiedNameToString(qn))
 	case *ast.Definition:
 		// Definitions are types, not values
 		return Value{}, fmt.Errorf("cannot evaluate definition %s", qualifiedNameToString(qn))
@@ -548,8 +557,8 @@ func (ec *EvalContext) unresolvedQualifiedName(qn *ast.QualifiedName, reading re
 
 // declaredValue evaluates the value a declaration binds in the scope it was written
 // in (its units and imports answer its names); the value answers to the declared type.
-func (ec *EvalContext) declaredValue(sym *symbols.Symbol, usage *ast.Usage) (Value, error) {
-	val, err := ec.evalIn(sym.OwnerScope).Eval(usage.Value)
+func (ec *EvalContext) declaredValue(sym *symbols.Symbol, value ast.Node) (Value, error) {
+	val, err := ec.evalIn(sym.OwnerScope).Eval(value)
 	if err != nil {
 		return Value{}, err
 	}

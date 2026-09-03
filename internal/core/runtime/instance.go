@@ -328,11 +328,15 @@ func (ctx *Context) occursOnce(sym *symbols.Symbol) bool {
 	return !mult.Upper.Infinite && mult.Upper.Value <= 1
 }
 
-// optionalValueless reports whether a usage declares no value and a lower bound
-// of zero: it holds only what is contributed to it, so of itself it is empty.
+// optionalValueless reports whether a usage or subject declares no value and a
+// lower bound of zero: it holds only what is contributed to it, so of itself it is empty.
 func (ctx *Context) optionalValueless(sym *symbols.Symbol) bool {
-	usage, ok := sym.Decl.(*ast.Usage)
-	if !ok || usage.Value != nil {
+	switch sym.Decl.(type) {
+	case *ast.Usage, *ast.SubjectMember:
+	default:
+		return false
+	}
+	if ctx.extractDefaultValue(sym) != nil {
 		return false
 	}
 	lower := ctx.featureMultiplicity(sym, ctx.findOwnerType(sym)).Lower

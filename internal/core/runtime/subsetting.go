@@ -23,15 +23,21 @@ import (
 
 // relatedFeatures returns the features of owner that sym's relationships of the
 // given kind name. An unqualified name the declaring scope cannot see, or one
-// owner carries under another declaration masking the resolved target, is
+// owner inherits but carries under a declaration of its own masking it, is
 // looked up among owner's members (`part a : Sub :> subsystem`); a target
 // resolving outside owner names no feature of it (`:> ISQ::mass`).
 func (ctx *Context) relatedFeatures(sym, owner *symbols.Symbol, kind ast.RelationshipKind) []*symbols.Symbol {
 	var features []*symbols.Symbol
 	for _, qn := range relationshipTargets(sym, kind) {
-		if resolved, ok := ctx.resolver.ResolveQualified(sym.OwnerScope, qn); ok && resolved != nil && resolved != sym && ctx.isFeatureOf(owner, resolved, sym) {
-			features = append(features, resolved)
-			continue
+		resolved, ok := ctx.resolver.ResolveQualified(sym.OwnerScope, qn)
+		if ok && resolved != nil && resolved != sym {
+			if ctx.isFeatureOf(owner, resolved, sym) {
+				features = append(features, resolved)
+				continue
+			}
+			if !ctx.inheritsDeclaration(owner, resolved) {
+				continue
+			}
 		}
 		if len(qn.Parts) != 1 {
 			continue
@@ -41,6 +47,20 @@ func (ctx *Context) relatedFeatures(sym, owner *symbols.Symbol, kind ast.Relatio
 		}
 	}
 	return features
+}
+
+// inheritsDeclaration reports whether owner takes its members from the type
+// declaring feature, so a declaration of owner's under that name masks it.
+func (ctx *Context) inheritsDeclaration(owner, feature *symbols.Symbol) bool {
+	if feature.OwnerScope == nil {
+		return false
+	}
+	for _, src := range ctx.model.MemberSources(owner) {
+		if src.Scope == feature.OwnerScope {
+			return true
+		}
+	}
+	return false
 }
 
 // relationshipTargets returns the names sym's relationships of the given kind name.

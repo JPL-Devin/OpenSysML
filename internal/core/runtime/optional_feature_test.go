@@ -271,6 +271,74 @@ func TestSubjectDeclaresItsMultiplicity(t *testing.T) {
 	}
 }
 
+// A subsetting that resolves to a feature outside the object names no feature of
+// it, even when a derived type declares an unrelated feature under that name;
+// only a declaration masking the inherited target is named in its place.
+func TestSubsettingOutsideTheObjectNamesNoSameNamedMember(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		part def Thing;
+		package Ext { abstract part pool : Thing[0..*]; }
+		part def Base {
+			private import Ext::*;
+			part picked : Thing :> pool;
+			abstract part tags : Thing[0..*];
+			part tagged : Thing :> tags;
+		}
+		part def Derived :> Base {
+			abstract part pool : Thing[0..*];
+			abstract part :>> tags;
+		}
+	}`))
+	derived, err := ctx.Instantiate(oneSymbol(t, idx, "test::Derived"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	pool, err := derived.GetFeatureValue(ctx, "pool")
+	if err != nil {
+		t.Fatalf("derived.pool: %v", err)
+	}
+	if held := pool.HeldValue(); elementCount(&held) != 0 {
+		t.Errorf("derived.pool = %s, want nothing: picked subsets Ext::pool, not this pool", FormatValue(held))
+	}
+	tags, err := derived.GetFeatureValue(ctx, "tags")
+	if err != nil {
+		t.Fatalf("derived.tags: %v", err)
+	}
+	if held := tags.HeldValue(); elementCount(&held) != 1 {
+		t.Errorf("derived.tags = %s, want the one tagged part through the masking redefinition", FormatValue(held))
+	}
+}
+
+// An unbound optional subject evaluated by name, bare or qualified, reads as
+// empty like any valueless declaration with lower bound zero; a required or a
+// bound subject keeps its behaviour.
+func TestOptionalSubjectDeclarationEvaluatesEmpty(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package test {
+		item def Item;
+		item a : Item;
+		requirement def Unbound { subject items : Item[0..*]; }
+		requirement def Required { subject it : Item; }
+		requirement def Bound { subject it : Item = a; }
+	}`))
+	pkg := oneSymbol(t, idx, "test").Scope
+	for _, src := range []string{"items", "Unbound::items", "test::Unbound::items"} {
+		scope := pkg
+		if src == "items" {
+			scope = oneSymbol(t, idx, "test::Unbound").Scope
+		}
+		val, err := evalIn(t, ctx, scope, src)
+		if err != nil || elementCount(&val) != 0 {
+			t.Errorf("eval %s = %s, %v; want the empty sequence", src, FormatValue(val), err)
+		}
+	}
+	if val, err := evalIn(t, ctx, pkg, "Required::it"); err == nil {
+		t.Errorf("eval Required::it = %s, want an error for an unbound required subject", FormatValue(val))
+	}
+	if val, err := evalIn(t, ctx, pkg, "Bound::it"); err != nil || val.Kind != ValInstance {
+		t.Errorf("eval Bound::it = %s, %v; want the bound item", FormatValue(val), err)
+	}
+}
+
 // A feature whose lower bound is infinite admits no count, so holding nothing
 // does not read as empty.
 func TestInfiniteLowerBoundDoesNotReadAsEmpty(t *testing.T) {
