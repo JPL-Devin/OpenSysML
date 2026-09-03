@@ -8,6 +8,21 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Added
 
+- **A control node's successions are validated statically.** The nine SysML v2 constraints on
+  `ControlNode`, `ForkNode`, `JoinNode`, `MergeNode` and `DecisionNode` (§8.3.17) are now
+  errors at validation time rather than a runtime failure or silence: a fork or decision with
+  two incoming successions, a join or merge with two outgoing, a succession end whose written
+  multiplicity is not the `1..1` every control node requires (`0..1` into a merge or out of a
+  decision), and a control node declared outside an action definition or usage. Successions
+  are counted however they are written — `first a then b;`, a member-attached `then b;`, a
+  `succession s first a then b;`, a guarded or default branch out of a decision — and include
+  those an action inherits from the definition it specializes, with a redefinition replacing
+  the succession it redefines; a `connect`, `bind` or `flow` is not a succession and does not
+  count. Each diagnostic names the node and the count or multiplicity it found and says what
+  the rule requires; the runtime keeps its own structural checks and their timing. The pinned
+  pilot implements only the owning-type rule, so the other eight are refereed against the
+  specification and recorded as pilot gaps.
+
 - **The bundled standard library opens in the editor.** Go-to-definition, find-references
   and the diagram panel used to report a standard library declaration at a path no editor
   could open, so a click on `ScalarValues::Integer` went nowhere. `sysml-lsp` now reports

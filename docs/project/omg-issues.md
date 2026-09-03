@@ -107,6 +107,7 @@ and not from a disagreement alone.
 |---|---|---|---|---|
 | `org.omg.sysml` — `Type::ownedDisjoining` setting delegate | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | every `disjoint from` clause in a type declaration draws EMF's `The opposite features 'owningType' … and 'ownedDisjoining' … do not refer to each other` | [one cause for all six corpus diagnostics](pilot-differential.md#k6-diagnostic-by-diagnostic-f33), reproduced in three lines and probed through the pilot's API | filed upstream as [Systems-Modeling/SysML-v2-Pilot-Implementation#790](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/790) **pending adjudication**, body below |
 | `org.omg.sysml` — the `queryx/failing` Xpect fixtures | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | `QPE-Qualifier`, `QPE-Traversal` and `QPE-Wildcard` declare `XPECT noErrors`, yet the pinned validator rejects all three with `no viable alternative at input '/'`, `For input string: "."` and `no viable alternative at input '@'` | [wave12d-decisions.md](wave12d-decisions.md) — established by running the pinned pilot's own SysML validator on the three fixtures, not from a disagreement | **not filed** — question drafted below, awaiting maintainer authorisation |
+| `org.omg.sysml.xtext` — `SysMLValidator.checkControlNode`, `checkDecisionNode`, `checkForkNode`, `checkJoinNode`, `checkMergeNode` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a fork or decision node with two incoming successions, a join or merge node with two outgoing, and a succession end whose written multiplicity is not the one SysML v2 §7.17.3 requires all validate clean; only `validateControlNodeOwningType` is reported | established from the pilot's source: eight of the nine constraints are `// TODO: Check validate… (?)` comments in the check methods (`SysMLValidator.xtend:857–888` at `c7fc737`); the reproducers are `cmd/pilot-reject/testdata/negative/semantic/cn01`–`cn04`, `cn06`–`cn09`, run through the pinned batch validator | **not filed** — drafted below, awaiting maintainer authorisation |
 
 ### `Type::ownedDisjoining` does not contain a `Disjoining` whose `owningType` is that `Type` (pilot `2026-05`)
 
@@ -252,6 +253,78 @@ and extends `KerMLXtextTests`.
 A second implementation reading the corpus cannot tell from the fixtures alone
 whether the declared silence is an obligation or an aspiration, which is the
 reason for asking rather than implementing.
+````
+
+---
+
+### Eight control-node succession constraints are unimplemented `TODO`s (pilot `2026-07`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream. The rules are implemented on our side by
+`internal/core/passes/control_node.go` and refereed against the specification
+text; the adjudication is in
+[pilot-differential.md](pilot-differential.md#control-node-successions-the-pilot-does-not-validate).
+
+````markdown
+### `SysMLValidator` does not check the succession constraints on control nodes
+
+**Version:** `2026-07` (`jupyter-sysml-kernel` 0.61.0, `validate-sysml-batch` over the
+shipped standard library).
+
+SysML v2 8.3.17 (`ControlNode`, `DecisionNode`, `ForkNode`, `JoinNode`, `MergeNode`)
+declares nine validation constraints. `SysMLValidator.xtend` (`:857–888`) declares an
+error code for each, but implements only `validateControlNodeOwningType`; the other
+eight are `// TODO: Check validate… (?)` comments in otherwise empty `@Check` methods:
+`validateControlNodeIncomingSuccessions`, `validateControlNodeOutgoingSuccessions`,
+`validateDecisionNodeIncomingSuccessions`, `validateDecisionNodeOutgoingSuccessions`,
+`validateForkNodeIncomingSuccessions`, `validateJoinNodeOutgoingSuccessions`,
+`validateMergeNodeIncomingSuccessions`, `validateMergeNodeOutgoingSuccessions`.
+
+#### Minimal reproduction
+
+```sysml
+package ForkTwoIncoming {
+    action def A {
+        action a;
+        action b;
+        action c;
+        fork f;
+        first a then f;
+        first b then f;
+        first f then c;
+    }
+}
+```
+
+`f` has two incoming successions; `validateForkNodeIncomingSuccessions`
+(`targetConnector->selectByKind(Succession)->size() <= 1`, SysML v2 8.3.17 `ForkNode`) is
+violated.
+
+#### Expected
+
+An error on `fork f`.
+
+#### Actual
+
+No diagnostics. The same holds for a join or merge node with two outgoing successions, a
+decision node with two incoming ones, and for the end multiplicities — `succession s first
+[0..1] a then [1] m;` into a merge is accepted where `validateMergeNodeIncomingSuccessions`
+requires source multiplicity `0..1`, and `succession s first a then [0..1] f;` into a fork
+is accepted where `validateControlNodeIncomingSuccessions` requires target multiplicity
+`1..1`.
+
+#### Note
+
+The grammar admits every one of these models, and the specification says the rules "shall
+be enforced in the abstract syntax, even if not shown explicitly in the concrete syntax
+notation for a model" (7.17.3), so a validator is the only place they can be caught. One
+reading question may be behind the `(?)` on the `TODO` lines: `multiplicityHasBounds`
+requires `mult <> null`, and a connector end written without a multiplicity (`first a then
+f;`) is given none by the pilot's `SuccessionAdapter`/`ConnectorAdapter`, so a literal evaluation of the four
+multiplicity constraints would reject the specification's own examples. Treating an
+unwritten end multiplicity as the required one, and checking only written ones, is what a
+second implementation has to assume; a note in the release on the intended reading would
+help.
 ````
 
 ---
