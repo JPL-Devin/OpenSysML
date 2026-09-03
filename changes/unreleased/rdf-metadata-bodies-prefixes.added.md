@@ -30,3 +30,6 @@
   `OccurrenceUsagePrefix 'assert'`), and the parser no longer accepts the prefix after `assert`.
   KerML's `var #Safety feature x;` (FeaturePrefix) now parses, so a variable feature's prefix
   survives the round trip too.
+- A graph that puts a prefix annotation on an `assume`/`require` member stating an inline
+  condition or a constraint reference (`assume #Safety x > 0`) is refused as unsupported, since
+  the grammar gives such a member no prefix position; the notation writer used to emit it unparseable.

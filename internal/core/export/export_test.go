@@ -1028,6 +1028,39 @@ func TestPrefixOnAnUnprefixableHeadIsReported(t *testing.T) {
 	}
 }
 
+// A prefix annotation on a condition member that states an inline condition or
+// a constraint reference has no position in the notation (`assume #M x > 0`
+// does not parse), so such a graph is refused rather than written unparseable.
+func TestPrefixOnAConditionWithoutADeclarationIsReported(t *testing.T) {
+	src := "package P {\n\tmetadata def Safety;\n\tconstraint def C;\n\trequirement def R {\n\t\tassume #Safety constraint c;\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structural := string(withoutTriples(t, turtle, "sysx:sourceText"))
+	for _, tc := range []struct{ triple, form string }{
+		{`sysx:condition "true" ;`, "an inline condition"},
+		{`sysml:references elmt:P__C ;`, "a constraint reference"},
+	} {
+		t.Run(tc.form, func(t *testing.T) {
+			edited := strings.Replace(structural, `sysml:declaredName "c" ;`, `sysml:declaredName "c" ;`+"\n    "+tc.triple, 1)
+			if edited == structural {
+				t.Fatalf("the assume member was not found in the graph:\n%s", structural)
+			}
+			_, err := export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML)
+			var unsupported *export.UnsupportedError
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("expected an unsupported error, got %v", err)
+			}
+			for _, want := range []string{"the condition member <", "this member states " + tc.form} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("expected %q in error:\n%s", want, err.Error())
+				}
+			}
+		})
+	}
+}
+
 // A head kept as source text writes its prefix annotations in that text; when
 // the text and the graph disagree, the text is stale and the head is rebuilt
 // from the graph rather than the annotation lost.

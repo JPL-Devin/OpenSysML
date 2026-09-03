@@ -990,8 +990,9 @@ func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 	if d.boolOf(el, rdf.SysML+"isNegated") {
 		words = append(words, "not")
 	}
-	// Prefix metadata follows the member keyword: `assume #goal constraint c`
-	// (SysML.xtext AssertConstraintUsage `'assert' 'not'? UsageExtensionKeyword*`).
+	// Prefix metadata follows the member keyword and introduces a constraint
+	// declaration: `assume #goal constraint c` (SysML.xtext
+	// RequirementConstraintUsage `UsageExtensionKeyword* ConstraintUsageKeyword`).
 	prefixes, err := d.prefixWords(el)
 	if err != nil {
 		return "", err
@@ -1008,9 +1009,15 @@ func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 	_, declared := d.stringOf(el, rdf.OpenSysML+xHasBody)
 	switch condition, ok := d.stringOf(el, rdf.OpenSysML+xCondition); {
 	case ok:
+		if len(prefixes) > 0 {
+			return "", d.unprefixedCondition(el, "an inline condition")
+		}
 		words = append(words, condition)
 		return strings.Join(words, " "), nil
 	case len(references) > 0:
+		if len(prefixes) > 0 {
+			return "", d.unprefixedCondition(el, "a constraint reference")
+		}
 		// The constraint the member states comes first; any further `::>` it
 		// declares follows with the other specializations.
 		words = append(words, references[0])
@@ -1038,6 +1045,15 @@ func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 		head += " = " + value
 	}
 	return head, nil
+}
+
+// unprefixedCondition reports a prefix annotation on a condition member whose
+// form has no prefix position; only a constraint declaration takes one.
+func (d *decoder) unprefixedCondition(el *element, form string) error {
+	return &UnsupportedError{
+		What: fmt.Sprintf("the condition member <%s>", el.iri),
+		Note: fmt.Sprintf("a prefix annotation qualifies a constraint declaration (`assume #M constraint c`), and this member states %s, which has no position for one", form),
+	}
 }
 
 // acceptParam returns the synthetic parameter of an accept shorthand, whose
