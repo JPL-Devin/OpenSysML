@@ -78,7 +78,7 @@ package Results {
     }
     part rover : Vehicle {
         calc twice : Double {
-            in x = mass;
+            in x = Vehicle::mass;
             (x + x)
         }
     }

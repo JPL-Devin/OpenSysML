@@ -183,6 +183,14 @@ func (a *actionSession) selfOf() string {
 	return a.selfFQN
 }
 
+// release lets go of the session's run, ending any work a breakpoint left
+// paused; a nil session has none.
+func (a *actionSession) release() {
+	if a != nil {
+		a.executor.Release()
+	}
+}
+
 // stateSession holds an active state machine executor debugging session.
 type stateSession struct {
 	name string
@@ -265,6 +273,7 @@ func (s *Session) SetBudgets(budgets runtime.Budgets) error {
 func (s *Session) endDebugSessions(cause string) {
 	if s.actionExec != nil {
 		s.endedAction = &endedSession{kind: "action", name: s.actionExec.name, outside: cause}
+		s.actionExec.release()
 		s.actionExec = nil
 	}
 	if s.stateExec != nil {
@@ -968,6 +977,7 @@ func (s *Session) dropStaleDebugSessions(gone []string, over carryover) []string
 			objectGone: objectGone,
 			version:    s.version,
 		}
+		s.actionExec.release()
 		s.actionExec = nil
 	}
 	if by, objectGone, ok := s.staleDebugState(gone, s.stateExec.fqnOf(), s.stateExec.selfOf(), over.state); ok {

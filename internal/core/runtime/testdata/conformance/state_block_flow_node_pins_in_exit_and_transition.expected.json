@@ -1,0 +1,12 @@
+{
+	"type": "state",
+	"libraries": true,
+	"finalState": "done",
+	"stateVisits": ["init", "active", "done"],
+	"outputs": {
+		"seen": {"type": "Integer", "value": 5},
+		"total": {"type": "Integer", "value": 12},
+		"exited": {"type": "Integer", "value": 24},
+		"moved": {"type": "Integer", "value": 25}
+	}
+}

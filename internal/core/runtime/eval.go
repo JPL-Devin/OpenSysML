@@ -9,6 +9,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
@@ -131,6 +132,57 @@ func (ec *EvalContext) Push(bindings map[string]Value) {
 // pushFrame adds a frame to the stack.
 func (ec *EvalContext) pushFrame(f frame) {
 	ec.frames = append(ec.frames, f)
+}
+
+// lookupSubaction finds the node named name in the flow of an action performance
+// on the stack, innermost first, and returns its latest performance. Where the
+// name resolves in the reading scope, it is that declaration's node — or no node
+// at all when the declaration is a feature, which shadows a same-named node.
+func (ec *EvalContext) lookupSubaction(name string) (perf *actionFrame, declared bool, err error) {
+	var decl ast.Node
+	if ec.ctx.resolver != nil {
+		if sym, ok := ec.ctx.resolver.LookupName(ec.scope, name); ok && sym != nil {
+			if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Kind != ast.UsageAction {
+				return nil, false, nil
+			}
+			decl = sym.Decl
+		}
+	}
+	for i := len(ec.frames) - 1; i >= 0; i-- {
+		f := ec.frames[i].perf
+		if f == nil {
+			continue
+		}
+		if perf, declared, err = f.subaction(name, decl); declared {
+			return perf, true, err
+		}
+	}
+	return nil, false, nil
+}
+
+// evalSubactionPath reads `node.pin` or `node.inner.pin` through the performances
+// of the nodes the path names; the rest of the path past a pin (`node.pin.member`)
+// is chained through the pin's value, and a path ending at a node reads its result.
+func (ec *EvalContext) evalSubactionPath(perf *actionFrame, parts []ast.NameSegment) (Value, error) {
+	for i, part := range parts {
+		if inner, declared, err := perf.subaction(part.Text, nil); declared {
+			if err != nil {
+				return Value{}, err
+			}
+			perf = inner
+			continue
+		}
+		if i != len(parts)-1 && !perf.declares(part.Text) {
+			return Value{}, fmt.Errorf("%w: %s declares no node or pin %s to read %s through",
+				ErrNodePin, perf.describe(), part.Text, parts[len(parts)-1].Text)
+		}
+		value, err := perf.pin(part.Text)
+		if err != nil {
+			return Value{}, err
+		}
+		return ec.chainMemberValue(value, parts[i+1:], perf.path()+"."+part.Text)
+	}
+	return perf.resultValue()
 }
 
 // Pop removes the top frame from the stack (on return, lambda exit).
@@ -361,6 +413,13 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 		if val, ok := ec.Lookup(name); ok {
 			return val, nil
 		}
+		// Then a node of an action performance in the frame stack, read as a value.
+		if perf, declared, err := ec.lookupSubaction(name); declared {
+			if err != nil {
+				return Value{}, err
+			}
+			return perf.resultValue()
+		}
 		// Then another output feature of the calc whose output is being computed:
 		// an `out` binding may be written in terms of the calc's other outputs,
 		// which are evaluated from the same run of its body.
@@ -468,6 +527,15 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 	// is read in this evaluation's scope, since one expression may be evaluated
 	// in several.
 	reading := ec.ctx.resolver.ReadQualified(ec.scope, qn)
+
+	// A path starting at a node of an action performance on the stack reads
+	// through that node's performance: `p.v`, `leg.inner.v`.
+	if perf, declared, err := ec.lookupSubaction(qn.Parts[0].Text); declared && !qn.Global {
+		if err != nil {
+			return Value{}, err
+		}
+		return ec.evalSubactionPath(perf, qn.Parts[1:])
+	}
 
 	// A calc usage's output features are computed rather than declared values,
 	// so a name qualified by one reads the rest from an evaluation of the usage.
@@ -695,6 +763,17 @@ func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) 
 		return Value{}, fmt.Errorf("empty member chain")
 	}
 	base, parts := chainBase(n)
+
+	// A node of an action performance on the stack carries its pins in its own
+	// performance, which `p.v` reads.
+	if name := simpleEndName(base); name != "" {
+		if perf, declared, err := ec.lookupSubaction(name); declared {
+			if err != nil {
+				return Value{}, err
+			}
+			return ec.evalSubactionPath(perf, parts)
+		}
+	}
 
 	// A calc usage carries no value of its own: its output features are computed
 	// by evaluating it, so `c.a` runs the usage — once — and reads the output
@@ -1851,18 +1930,19 @@ type invocationKey struct {
 // context; at most one implementation is set, in the order they are tried.
 type invocationTarget struct {
 	qualName    string
-	calc        *symbols.Symbol  // the declaration the written name resolves to, nil for none
-	builtin     builtinFunc      // the built-in the name denotes: the library declaration calc is
-	builtinName string           // the built-in's registered name, keying its declared signature
-	library     *libraryFunction // the library function the name denotes: the library declaration calc is
-	shape       *calcShape       // calc's invocation interface, nil when it has none
+	ambiguous   []*symbols.Symbol // the equally specific declarations the written name denotes
+	calc        *symbols.Symbol   // the declaration the written name resolves to, nil for none
+	builtin     builtinFunc       // the built-in the name denotes: the library declaration calc is
+	builtinName string            // the built-in's registered name, keying its declared signature
+	library     *libraryFunction  // the library function the name denotes: the library declaration calc is
+	shape       *calcShape        // calc's invocation interface, nil when it has none
 }
 
 // invocationTarget resolves what n denotes in this context's scope, memoized
 // per context: resolution reads only the model, which is fixed for its life.
-// The name resolves as the validator resolves it, so a library function is
-// callable only where the model imports it or writes it qualified, and a
-// declaration of the model's own is invoked as written even under a name a
+// The declaration is the one the checker selects for the call, so the two agree: a
+// library function is callable only where the model imports it or writes it qualified,
+// and a declaration of the model's own is invoked as written even under a name a
 // library built-in is registered by.
 func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget {
 	key := invocationKey{node: n, scope: ec.scope}
@@ -1870,7 +1950,9 @@ func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget
 		return target
 	}
 	target := &invocationTarget{qualName: qualifiedNameToString(n.Type)}
-	if sym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, n.Type); ok && sym != nil {
+	if sel := passes.SelectInvocation(ec.ctx.resolver, ec.ctx.model, ec.scope, n, semantics.PerformsBehavior); sel.Ambiguous {
+		target.ambiguous = sel.Tied
+	} else if sym := sel.Called(); sym != nil {
 		target.calc = sym
 		if fn, ok := ec.ctx.builtinFor(sym); ok {
 			target.builtin, target.builtinName = fn, ec.ctx.qualifiedSymbolName(sym)
@@ -1882,6 +1964,16 @@ func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget
 	}
 	ec.ctx.invocationTargets[key] = target
 	return target
+}
+
+// ambiguousInvocationError names the equally specific declarations a call of
+// qualName denotes.
+func ambiguousInvocationError(qualName string, candidates []*symbols.Symbol) error {
+	names := make([]string, len(candidates))
+	for i, sym := range candidates {
+		names[i] = symbols.FQNOf(sym)
+	}
+	return fmt.Errorf("%w: %s denotes %s", ErrAmbiguousInvocation, qualName, strings.Join(names, ", "))
 }
 
 // unresolvedInvocation reports a call to a name that denotes nothing, with the
@@ -1897,6 +1989,9 @@ func (ec *EvalContext) unresolvedInvocation(qn *ast.QualifiedName, written strin
 func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 	target := ec.invocationTarget(n)
 	qualName := target.qualName
+	if len(target.ambiguous) > 0 {
+		return Value{}, ambiguousInvocationError(qualName, target.ambiguous)
+	}
 
 	// A receiver binds by position, so it has no meaning beside arguments that
 	// bind by name: reported rather than evaluated and dropped.

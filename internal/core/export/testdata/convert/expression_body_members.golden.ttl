@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -17,7 +18,10 @@ elmt:Bodies
     sysml:ownedMembership elmt:Bodies__Real_om, elmt:Bodies__Scaled_om ;
     sysml:ownedRelationship elmt:Bodies__Real_om, elmt:Bodies__Scaled_om ;
     sysx:sourceText "package Bodies {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Bodies__Real\"},{\"@id\":\"Bodies__Scaled\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Bodies__Real_om\"},{\"@id\":\"Bodies__Scaled_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Bodies__Real_om\"},{\"@id\":\"Bodies__Scaled_om\"}]" .
 
 elmt:Bodies__Real
     a sysml:AttributeDefinition ;
@@ -59,7 +63,10 @@ elmt:Bodies__Scaled
     sysml:ownedFeature elmt:Bodies__Scaled__x ;
     sysml:ownedFeatureMembership elmt:Bodies__Scaled__x_om ;
     sysx:sourceText "    calc def Scaled {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Bodies__Scaled__x\"},{\"@id\":\"Bodies__Scaled___401\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Bodies__Scaled__x_om\"},{\"@id\":\"Bodies__Scaled___401_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Bodies__Scaled__x_om\"},{\"@id\":\"Bodies__Scaled___401_om\"}]" .
 
 elmt:Bodies__Scaled_om
     a sysml:OwningMembership ;
@@ -149,7 +156,8 @@ expr:Bodies__Scaled___401_presultExpression_presult
     sysx:sourceText "y * k + x" ;
     sysml:elementId "Bodies__Scaled___401_presultExpression_presult" ;
     sysml:operator "+" ;
-    sysml:argument expr:Bodies__Scaled___401_presultExpression_presult_pa0, expr:Bodies__Scaled___401_presultExpression_presult_pa1 .
+    sysml:argument expr:Bodies__Scaled___401_presultExpression_presult_pa0, expr:Bodies__Scaled___401_presultExpression_presult_pa1 ;
+    json:argument "[{\"@id\":\"Bodies__Scaled___401_presultExpression_presult_pa0\"},{\"@id\":\"Bodies__Scaled___401_presultExpression_presult_pa1\"}]" .
 
 expr:Bodies__Scaled___401_presultExpression_presult_pa0
     a sysml:OperatorExpression ;
@@ -157,7 +165,8 @@ expr:Bodies__Scaled___401_presultExpression_presult_pa0
     sysml:elementId "Bodies__Scaled___401_presultExpression_presult_pa0" ;
     sysml:operator "*" ;
     sysml:argument expr:Bodies__Scaled___401_presultExpression_presult_pa0_pa0, expr:Bodies__Scaled___401_presultExpression_presult_pa0_pa1 ;
-    sysx:argumentIndex "0"^^xsd:integer .
+    sysx:argumentIndex "0"^^xsd:integer ;
+    json:argument "[{\"@id\":\"Bodies__Scaled___401_presultExpression_presult_pa0_pa0\"},{\"@id\":\"Bodies__Scaled___401_presultExpression_presult_pa0_pa1\"}]" .
 
 expr:Bodies__Scaled___401_presultExpression_presult_pa0_pa0
     a sysml:FeatureReferenceExpression ;

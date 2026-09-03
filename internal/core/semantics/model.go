@@ -10,6 +10,8 @@
 package semantics
 
 import (
+	"strings"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -34,6 +36,8 @@ type Model struct {
 	primTypes       map[*symbols.Symbol]PrimType
 	scalars         map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
 	params          map[*symbols.Symbol]behaviorParameters
+	invocations     map[invocationKey]*InvocationSelection
+	arguments       ArgumentTyper // the checker's argument typing, nil when no checker runs
 	unioning        map[*symbols.Symbol][]*symbols.Symbol
 	ends            map[*symbols.Symbol][]*symbols.Symbol
 
@@ -96,6 +100,7 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		memberSources:     make(map[*symbols.Symbol][]*symbols.Symbol),
 		primTypes:         make(map[*symbols.Symbol]PrimType),
 		params:            make(map[*symbols.Symbol]behaviorParameters),
+		invocations:       make(map[invocationKey]*InvocationSelection),
 		unioning:          make(map[*symbols.Symbol][]*symbols.Symbol),
 		ends:              make(map[*symbols.Symbol][]*symbols.Symbol),
 
@@ -518,20 +523,43 @@ func (m *Model) AllSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 }
 
 // Conforms reports whether a conforms to b: a == b, b is a (transitive)
-// supertype of a, or a is the union of types that all conform to b.
+// supertype of a, or a is the union of types that all conform to b. Symbols
+// are compared as elements, so one declaration reached through two scope
+// trees (a document's and the index's) conforms to itself.
 func (m *Model) Conforms(a, b *symbols.Symbol) bool {
 	return m.conforms(a, b, nil)
+}
+
+// IsDataType reports whether sym is Base::DataValue or conforms to it, so its
+// values are data (scalars, enumerations, attribute values) and never elements.
+func (m *Model) IsDataType(sym *symbols.Symbol) bool {
+	if m == nil || sym == nil || m.resolver == nil || m.resolver.Index() == nil {
+		return false
+	}
+	for _, dataValue := range m.resolver.Index().LookupQualified(dataValueFQN) {
+		if dataValue != nil && m.Conforms(sym, dataValue) {
+			return true
+		}
+	}
+	return false
+}
+
+// LiteralConforms reports whether sym is an enumeration literal whose
+// enumeration conforms to expected: a literal is a value of its enumeration.
+func (m *Model) LiteralConforms(sym, expected *symbols.Symbol) bool {
+	enum := EnumerationOwning(sym)
+	return enum != nil && m.Conforms(enum, expected)
 }
 
 func (m *Model) conforms(a, b *symbols.Symbol, unioning map[*symbols.Symbol]bool) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	if a == b || isAnything(b) {
+	if symbols.SameElement(a, b) || isAnything(b) {
 		return true
 	}
 	for _, s := range m.AllSupertypes(a) {
-		if s == b {
+		if symbols.SameElement(s, b) {
 			return true
 		}
 	}
@@ -605,6 +633,18 @@ func (m *Model) UnioningTypes(sym *symbols.Symbol) []*symbols.Symbol {
 
 	m.unioning[sym] = out
 	return out
+}
+
+// IsCollection reports whether sym is a Kernel Data Type Library collection shape, which the
+// runtime reads as its elements; a type elsewhere specializing one (a quantity value) is its own kind.
+func IsCollection(sym *symbols.Symbol) bool {
+	return sym != nil && strings.HasPrefix(symbols.FQNOf(sym), "Collections::")
+}
+
+// IsElementType reports whether sym is KerML::Root::Element, the metaclass every model
+// element is an instance of, so a parameter it types takes the element any argument names.
+func IsElementType(sym *symbols.Symbol) bool {
+	return sym != nil && symbols.FQNOf(sym) == "KerML::Root::Element"
 }
 
 // isAnything reports whether sym is Base::Anything, the classifier every type

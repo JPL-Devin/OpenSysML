@@ -122,6 +122,22 @@ func TestMarkdownGoldenStructure(t *testing.T) {
 	}
 }
 
+// TestMarkdownDefaultedQueryParameters renders content that omits defaulted
+// query parameters: element, inherited, and redefining defaults all apply.
+func TestMarkdownDefaultedQueryParameters(t *testing.T) {
+	got := renderFixtureDocument(t,
+		filepath.Join("testdata", "defaulted_queries.sysml"),
+		"Observatory::DefaultedReport")
+	want := "# Defaulted Queries\n\n" +
+		"<!-- caption -->\n*Heavy subsystems by default*\n\n" +
+		"| name | mass |\n| --- | --- |\n| mount | 15 |\n| segmentControl | 20 |\n\n" +
+		"- mount 15\n- optics 8.5\n- segmentControl 20\n\n" +
+		"- spectrograph 4\n"
+	if got != want {
+		t.Errorf("rendered Markdown = \n%s\nwant:\n%s", got, want)
+	}
+}
+
 // TestMarkdownEscaping checks the escaping contract on raw content: table
 // cells and prose with every metacharacter class render without opening
 // Markdown or HTML structure.

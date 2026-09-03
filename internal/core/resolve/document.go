@@ -1099,7 +1099,7 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 	case *ast.InvocationExpr:
 		r.resolveExpr(scope, v.Operand)
 		if v.Type != nil {
-			r.ResolveQualified(scope, v.Type)
+			r.ResolveInvocationName(scope, v.Type)
 		}
 		for _, a := range v.Args {
 			r.resolveExpr(scope, a)

@@ -13,7 +13,40 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
+
+// exprScope is where an expression's names are read: the element that owns
+// the expression, the body-expression scope enclosing it if any, and whether
+// it is a filter condition, whose names its own namespace's filters do not
+// restrict.
+type exprScope struct {
+	owner     string
+	scope     *symbols.Scope
+	condition bool
+}
+
+// link resolves name as read in this scope.
+func (s exprScope) link(e *encoder, name *ast.QualifiedName) rdf.Term {
+	return s.linkReference(e, resolve.Reference{QN: name})
+}
+
+func (s exprScope) linkReference(e *encoder, ref resolve.Reference) rdf.Term {
+	ref.Scope = s.scope
+	ref.Condition = s.condition
+	return e.linkReference(s.owner, ref)
+}
+
+// inBody is the scope of body's parameters and members, in which its result is read.
+func (s exprScope) inBody(e *encoder, body *ast.BodyExpr) exprScope {
+	parent := s.scope
+	if parent == nil {
+		parent = e.scopeOf(s.owner)
+	}
+	s.scope = symbols.BodyExprScope(parent, body)
+	return s
+}
 
 // Metaclasses of the expression nodes, as SysML v2 8.4 names them.
 const (
@@ -69,18 +102,28 @@ const (
 // expression emits the graph of one expression-valued property. slot names the
 // position, so each expression of an element has a distinct identity.
 func (e *encoder) expression(subject, property rdf.Term, slot, owner string, node ast.Node) {
+	e.expressionIn(subject, property, slot, exprScope{owner: owner}, node)
+}
+
+// filterExpression is expression for a filter condition, whose names resolve
+// unrestricted by the filters of the namespace declaring it.
+func (e *encoder) filterExpression(subject, property rdf.Term, slot, owner string, node ast.Node) {
+	e.expressionIn(subject, property, slot, exprScope{owner: owner, condition: true}, node)
+}
+
+func (e *encoder) expressionIn(subject, property rdf.Term, slot string, in exprScope, node ast.Node) {
 	if node == nil {
 		return
 	}
 	e.graph.Prefixes[rdf.ExpressionPrefix] = rdf.Expression
 	target := rdf.ExpressionIRI(subject, slot)
 	e.graph.Add(subject, property, target)
-	e.expressionNode(target, owner, node)
+	e.expressionNode(target, in, node)
 }
 
 // expressionNode emits one expression node and, recursively, its operands.
 // Every node carries its notation, so the exact text always survives.
-func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) {
+func (e *encoder) expressionNode(subject rdf.Term, in exprScope, node ast.Node) {
 	e.graph.Add(subject, e.sysx(xSourceText), rdf.String(e.text(node)))
 	// The id an API reader addresses the node by, as on an element: a node has no
 	// qualified name, but its position in the model gives it a valid id.
@@ -111,18 +154,18 @@ func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) 
 	case *ast.QualifiedName:
 		// A position whose notation is a bare name holds the feature it names.
 		e.typed(subject, mFeatureReference)
-		e.graph.Add(subject, e.sysml(pReferent), e.reference(owner, qualifiedText(n)))
+		e.graph.Add(subject, e.sysml(pReferent), in.link(e, n))
 
 	case *ast.FeatureReference:
 		e.typed(subject, mFeatureReference)
-		e.graph.Add(subject, e.sysml(pReferent), e.reference(owner, qualifiedText(n.Name)))
+		e.graph.Add(subject, e.sysml(pReferent), in.link(e, n.Name))
 
 	case *ast.OperatorExpr:
 		e.typed(subject, mOperator)
 		e.graph.Add(subject, e.sysml(pOperator), rdf.String(n.Operator.String()))
-		e.arguments(subject, owner, n.Operands)
+		e.arguments(subject, in, n.Operands)
 		if n.TypeRef != nil {
-			e.graph.Add(subject, e.sysx(xTypeArgument), e.reference(owner, qualifiedText(n.TypeRef)))
+			e.graph.Add(subject, e.sysx(xTypeArgument), in.link(e, n.TypeRef))
 		}
 
 	case *ast.CastExpr:
@@ -130,13 +173,13 @@ func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) 
 		// its multiplicity written as bounds the way a usage's is.
 		e.typed(subject, mOperator)
 		e.graph.Add(subject, e.sysml(pOperator), rdf.String(ast.OpAs.String()))
-		e.graph.Add(subject, e.sysx(xTypeArgument), e.reference(owner, qualifiedText(n.TargetType)))
-		e.multiplicity(subject, owner, n.Multiplicity)
+		e.graph.Add(subject, e.sysx(xTypeArgument), in.link(e, n.TargetType))
+		e.multiplicityIn(subject, in, n.Multiplicity)
 
 	case *ast.FeatureChainExpr:
 		e.typed(subject, mFeatureChain)
-		e.arguments(subject, owner, []ast.Node{n.Operand})
-		e.graph.Add(subject, e.sysml(pTargetFeature), e.reference(owner, qualifiedText(n.Member)))
+		e.arguments(subject, in, []ast.Node{n.Operand})
+		e.graph.Add(subject, e.sysml(pTargetFeature), in.linkReference(e, resolve.Reference{QN: n.Member, Chain: n}))
 
 	case *ast.IndexExpr:
 		e.typed(subject, mOperator)
@@ -145,43 +188,44 @@ func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) 
 			operator = opIndex
 		}
 		e.graph.Add(subject, e.sysml(pOperator), rdf.String(operator))
-		e.arguments(subject, owner, []ast.Node{n.Operand, n.Index})
+		e.arguments(subject, in, []ast.Node{n.Operand, n.Index})
 
 	case *ast.InvocationExpr:
 		e.typed(subject, mInvocation)
-		e.invocation(subject, owner, n.Type, n.Operand, n.Args, n.NamedArgs)
+		e.invocation(subject, in, n.Type, n.Operand, n.Args, n.NamedArgs)
 
 	case *ast.ConstructorExpr:
 		// The 202407 rendering declares no ConstructorExpression, so `new` is a flag.
 		e.typed(subject, mInvocation)
 		e.graph.Add(subject, e.sysx(xIsConstructor), rdf.Bool(true))
-		e.invocation(subject, owner, n.Type, nil, n.Args, nil)
+		e.invocation(subject, in, n.Type, nil, n.Args, nil)
 
 	case *ast.CollectExpr:
 		e.typed(subject, mCollect)
-		e.arguments(subject, owner, []ast.Node{n.Operand, n.Body})
+		e.arguments(subject, in, []ast.Node{n.Operand, n.Body})
 
 	case *ast.SelectExpr:
 		e.typed(subject, mSelect)
-		e.arguments(subject, owner, []ast.Node{n.Operand, n.Body})
+		e.arguments(subject, in, []ast.Node{n.Operand, n.Body})
 
 	case *ast.SequenceExpr:
 		e.typed(subject, mOperator)
 		e.graph.Add(subject, e.sysml(pOperator), rdf.String(opSequence))
-		e.arguments(subject, owner, n.Elements)
+		e.arguments(subject, in, n.Elements)
 
 	case *ast.MetadataAccessExpr:
 		e.typed(subject, mMetadataAccess)
-		e.graph.Add(subject, e.sysml(pReferencedElement), e.reference(owner, qualifiedText(n.Ref)))
+		e.graph.Add(subject, e.sysml(pReferencedElement), in.link(e, n.Ref))
 
 	case *ast.BodyExpr:
 		// A body declares its own parameters and members, then a result expression.
 		e.typed(subject, mExpression)
-		e.bodyDeclarations(subject, owner, n.Params, n.Members)
+		body := in.inBody(e, n)
+		e.bodyDeclarations(subject, body, n.Params, n.Members)
 		if n.Result != nil {
 			result := rdf.ExpressionIRI(subject, "result")
 			e.graph.Add(subject, e.sysx(xResultExpression), result)
-			e.expressionNode(result, owner, n.Result)
+			e.expressionNode(result, body, n.Result)
 		}
 
 	default:
@@ -210,7 +254,7 @@ func isExpressionMember(node ast.Node) bool {
 
 // bodyDeclarations emits what an expression body declares ahead of its result,
 // parameters and members alike, indexed in the one order they were written.
-func (e *encoder) bodyDeclarations(subject rdf.Term, owner string, params []ast.BodyParam, members []ast.Node) {
+func (e *encoder) bodyDeclarations(subject rdf.Term, in exprScope, params []ast.BodyParam, members []ast.Node) {
 	type declaration struct {
 		offset int
 		param  *ast.BodyParam
@@ -228,7 +272,7 @@ func (e *encoder) bodyDeclarations(subject rdf.Term, owner string, params []ast.
 	})
 	for i, decl := range declarations {
 		if decl.param != nil {
-			e.bodyParameter(subject, owner, i, *decl.param)
+			e.bodyParameter(subject, in, i, *decl.param)
 		} else {
 			e.bodyMember(subject, i, decl.member)
 		}
@@ -237,7 +281,7 @@ func (e *encoder) bodyDeclarations(subject rdf.Term, owner string, params []ast.
 
 // bodyParameter emits one parameter of an expression body as a node of its
 // own, so its type, value and bounds are structure, not text.
-func (e *encoder) bodyParameter(subject rdf.Term, owner string, index int, param ast.BodyParam) {
+func (e *encoder) bodyParameter(subject rdf.Term, in exprScope, index int, param ast.BodyParam) {
 	node := rdf.ExpressionIRI(subject, fmt.Sprintf("in%d", index))
 	e.graph.Add(subject, e.sysx(xBodyParameter), node)
 	e.graph.Add(node, rdf.IRI(rdf.RDFType), rdf.SysMLTerm(keywordMetaclass["ref"]))
@@ -247,12 +291,12 @@ func (e *encoder) bodyParameter(subject rdf.Term, owner string, index int, param
 	e.name(node, param.Name)
 	e.flags(node, []boolProperty{{"isReference", param.IsReference}})
 	if param.Type != nil {
-		e.graph.Add(node, e.sysml(relationshipProperty[ast.RelTyping]), e.reference(owner, qualifiedText(param.Type)))
+		e.graph.Add(node, e.sysml(relationshipProperty[ast.RelTyping]), in.link(e, param.Type))
 	}
-	e.relationships(node, owner, param.Relationships)
-	e.multiplicity(node, owner, param.Multiplicity)
-	e.expression(node, e.sysml(pValue), pValue, owner, param.Value)
-	e.bodyDeclarations(node, owner, nil, param.Members)
+	e.relationshipsIn(node, nil, in, param.Relationships)
+	e.multiplicityIn(node, in, param.Multiplicity)
+	e.expressionIn(node, e.sysml(pValue), pValue, in, param.Value)
+	e.bodyDeclarations(node, in, nil, param.Members)
 }
 
 // bodyMember carries one declaration of an expression body, or of one of its
@@ -273,37 +317,37 @@ func (e *encoder) bodyMember(subject rdf.Term, index int, member ast.Node) {
 
 // arguments emits the operands of an expression, each carrying the position it
 // was written in: RDF states no order between the objects of one property.
-func (e *encoder) arguments(subject rdf.Term, owner string, args []ast.Node) {
+func (e *encoder) arguments(subject rdf.Term, in exprScope, args []ast.Node) {
 	for i, arg := range args {
 		if arg == nil {
 			continue
 		}
 		child := rdf.ExpressionIRI(subject, fmt.Sprintf("a%d", i))
 		e.graph.Add(subject, e.sysml(pArgument), child)
-		e.expressionNode(child, owner, arg)
+		e.expressionNode(child, in, arg)
 		e.graph.Add(child, e.sysx(xArgumentIndex), rdf.Int(i))
 	}
 }
 
 // invocation emits the parts an invocation and a constructor share: the function
 // invoked, the receiver of a `->` form, and the arguments.
-func (e *encoder) invocation(subject rdf.Term, owner string, function *ast.QualifiedName, operand ast.Node, args []ast.Node, named []ast.NamedArg) {
+func (e *encoder) invocation(subject rdf.Term, in exprScope, function *ast.QualifiedName, operand ast.Node, args []ast.Node, named []ast.NamedArg) {
 	if function != nil {
-		e.graph.Add(subject, e.sysml(pFunction), e.reference(owner, qualifiedText(function)))
+		e.graph.Add(subject, e.sysml(pFunction), in.link(e, function))
 	}
 	if operand != nil {
 		receiver := rdf.ExpressionIRI(subject, "operand")
 		e.graph.Add(subject, e.sysml(pOperand), receiver)
-		e.expressionNode(receiver, owner, operand)
+		e.expressionNode(receiver, in, operand)
 	}
-	e.arguments(subject, owner, args)
+	e.arguments(subject, in, args)
 	for i, arg := range named {
 		if arg.Value == nil {
 			continue
 		}
 		child := rdf.ExpressionIRI(subject, fmt.Sprintf("n%d", i))
 		e.graph.Add(subject, e.sysml(pArgument), child)
-		e.expressionNode(child, owner, arg.Value)
+		e.expressionNode(child, in, arg.Value)
 		e.graph.Add(child, e.sysx(xArgumentIndex), rdf.Int(i))
 		e.graph.Add(child, e.sysx(xArgumentName), rdf.String(qualifiedText(arg.Name)))
 	}
@@ -345,7 +389,7 @@ func (d *decoder) resolveExpressions() error {
 			// The subject is an expression node; its parts are written with it.
 			continue
 		}
-		text, err := d.expressionNodeText(triple.Object, el.scope)
+		text, err := d.expressionNodeText(triple.Object, expressionScope(el, triple.Predicate.Value))
 		if err != nil {
 			return err
 		}
@@ -355,6 +399,20 @@ func (d *decoder) resolveExpressions() error {
 		el.expressions[triple.Predicate.Value] = text
 	}
 	return nil
+}
+
+// expressionScope is what a reference in el's property is written relative to:
+// a loop's conditions are read in the loop's own scope, whose body they test.
+func expressionScope(el *element, property string) string {
+	switch property {
+	case rdf.OpenSysML + xWhileCondition, rdf.OpenSysML + xUntilCondition:
+		return el.qname
+	case rdf.OpenSysML + xGuard:
+		if el.metaclass == mTransition {
+			return el.qname
+		}
+	}
+	return el.scope
 }
 
 // expressionNodeText writes an expression node back as notation: the notation it
@@ -402,8 +460,7 @@ func (d *decoder) expressionNodeText(node rdf.Term, scope string) (string, error
 		if err != nil {
 			return "", err
 		}
-		member, err := d.expressionReference(node, rdf.SysML+pTargetFeature, scope,
-			"a feature chain names the feature it reaches")
+		member, err := d.chainMember(node, scope)
 		if err != nil {
 			return "", err
 		}
@@ -663,6 +720,84 @@ func (d *decoder) expressionArguments(node rdf.Term, scope string) ([]string, er
 		out = append(out, arg.text)
 	}
 	return out, nil
+}
+
+// chainMember names the feature a chain reaches. A linked one is written by its
+// own name, which the operand looks up among its members, unless the operand
+// reaches another feature so named too; then the qualified spelling keeps it.
+func (d *decoder) chainMember(node rdf.Term, scope string) (string, error) {
+	object, ok := d.graph.Object(node, rdf.SysML+pTargetFeature)
+	if !ok {
+		return "", &UnsupportedError{
+			What: fmt.Sprintf("the expression <%s>", node.Value),
+			Note: "a feature chain names the feature it reaches",
+		}
+	}
+	if object.IsLiteral() {
+		return d.referenceName(object, scope)
+	}
+	target, err := d.referencedElement(object.Value)
+	if err != nil {
+		return "", err
+	}
+	name, ok := d.stringOf(target, rdf.SysML+pDeclaredName)
+	if !ok {
+		return d.referenceName(object, scope)
+	}
+	operand, ok := d.chainOperand(node)
+	if !ok {
+		return d.referenceName(object, scope)
+	}
+	if named := d.operandMembersNamed(operand, name); len(named) != 1 || named[0] != target {
+		return d.referenceName(object, scope)
+	}
+	return qualifiedNameText(name), nil
+}
+
+// chainOperand is the element a chain's operand refers to: the feature a
+// reference links, or the one an inner chain reaches; another shape is unknown.
+func (d *decoder) chainOperand(node rdf.Term) (*element, bool) {
+	arg, ok := d.graph.Object(node, rdf.SysML+pArgument)
+	if !ok {
+		return nil, false
+	}
+	var linked rdf.Term
+	ok = false
+	switch rdf.LocalName(d.graph.Type(arg)) {
+	case mFeatureReference:
+		linked, ok = d.graph.Object(arg, rdf.SysML+pReferent)
+	case mFeatureChain:
+		linked, ok = d.graph.Object(arg, rdf.SysML+pTargetFeature)
+	}
+	if !ok || linked.IsLiteral() {
+		return nil, false
+	}
+	el, ok := d.byIRI[linked.Value]
+	return el, ok
+}
+
+// operandMembersNamed collects the features named name a chain operand reaches:
+// its own member of that name, or else those its types declare or inherit.
+func (d *decoder) operandMembersNamed(operand *element, name string) []*element {
+	if own := d.memberNamed(operand, name); own != nil {
+		return []*element{own}
+	}
+	var found []*element
+	for _, term := range d.graph.Objects(rdf.IRI(operand.iri), rdf.SysML+relationshipProperty[ast.RelTyping]) {
+		if term.IsLiteral() {
+			continue
+		}
+		typ, ok := d.byIRI[term.Value]
+		if !ok {
+			continue
+		}
+		if own := d.memberNamed(typ, name); own != nil {
+			found = append(found, own)
+			continue
+		}
+		found = append(found, d.inheritedNamed(typ, name)...)
+	}
+	return found
 }
 
 // expressionReference names the element an expression property points at.

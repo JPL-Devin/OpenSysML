@@ -137,6 +137,8 @@ func prefixOf(iri string) string {
 		return "sysml"
 	case strings.HasPrefix(iri, rdf.OpenSysML):
 		return "sysx"
+	case rdf.IsAnnotationJSON(iri):
+		return "json"
 	default:
 		return "other"
 	}
@@ -164,6 +166,10 @@ func writtenFromGraph(graph *rdf.Graph) map[string]*writtenElement {
 		}
 		if triple.Predicate.Value == rdf.RDFType {
 			element.metaclass = rdf.LocalName(triple.Object.Value)
+			continue
+		}
+		if rdf.IsAnnotationJSON(triple.Predicate.Value) {
+			// The array spelling of a sysml: collection, not a property of its own.
 			continue
 		}
 		kind := "literal"

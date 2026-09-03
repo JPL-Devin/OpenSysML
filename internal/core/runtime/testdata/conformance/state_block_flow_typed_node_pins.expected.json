@@ -1,0 +1,11 @@
+{
+	"type": "state",
+	"libraries": true,
+	"finalState": "done",
+	"stateVisits": ["init", "active", "done"],
+	"outputs": {
+		"y": {"type": "Integer", "value": 21},
+		"factor": {"type": "Integer", "value": 1},
+		"seen": {"type": "Integer", "value": 7051}
+	}
+}

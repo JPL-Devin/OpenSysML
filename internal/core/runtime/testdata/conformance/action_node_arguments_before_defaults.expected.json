@@ -1,0 +1,11 @@
+{
+	"type": "action",
+	"evaluate": "test::outer",
+	"outputs": {
+		"seven": {"type": "Integer", "value": 7},
+		"result": {"type": "Integer", "value": 490},
+		"scaled.a": {"type": "Integer", "value": 7},
+		"scaled.b": {"type": "Integer", "value": 70},
+		"scaled.product": {"type": "Integer", "value": 490}
+	}
+}
