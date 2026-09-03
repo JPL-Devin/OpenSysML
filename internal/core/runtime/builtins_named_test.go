@@ -158,10 +158,8 @@ func TestAggregationsWithIdentityErrors(t *testing.T) {
 	}
 }
 
-// QuantityCalculations::sum and product hand NumericalFunctions::sum0 and
-// product1 a quantity identity, whose isZero/isUnit is that of its magnitude
-// (`NumericalFunctions::isZero(x.num)`), so a quantity identity is judged by its
-// magnitude and answers the empty aggregation in its own unit.
+// A quantity identity is judged by its magnitude, as QuantityCalculations::isZero
+// is NumericalFunctions::isZero(x.num), and answers the empty fold in its unit.
 func TestAggregationsWithQuantityIdentity(t *testing.T) {
 	eval := func(t *testing.T, expr string) (Value, error) {
 		t.Helper()
