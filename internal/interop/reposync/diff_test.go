@@ -1,6 +1,7 @@
 package reposync_test
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -32,6 +33,16 @@ const vehicle = `	part def Vehicle {
 		@IdentityMetadata::ElementId { id = "8f3a41d0"; }
 	}
 `
+
+// writeBack is reposync.WriteBack, failing the test rather than returning an error.
+func writeBack(t *testing.T, g *rdf.Graph, mints map[string]string) *rdf.Graph {
+	t.Helper()
+	out, err := reposync.WriteBack(g, mints)
+	if err != nil {
+		t.Fatalf("write back: %v", err)
+	}
+	return out
+}
 
 // byKind indexes a change set's entries by kind.
 func byKind(set *reposync.ChangeSet, kind reposync.Kind) []reposync.Change {
@@ -388,7 +399,7 @@ func TestWriteBackLeavesPrefixSharingNeighborsAlone(t *testing.T) {
 	membership := rdf.OwningMembershipIRIOf(minted)
 	g.Add(membership, rdf.IRI(rdf.RDFType), rdf.IRI(rdf.SysML+"OwningMembership"))
 
-	out := reposync.WriteBack(g, map[string]string{"P__A": "11111111-2222-4333-8444-555555555555"})
+	out := writeBack(t, g, map[string]string{"P__A": "11111111-2222-4333-8444-555555555555"})
 	for _, neighbor := range []string{"P__A_omg", "P__A_persist"} {
 		if _, ok := out.Object(rdf.ElementIRIForID(neighbor), rdf.RDFType); !ok {
 			t.Errorf("write-back moved the unrelated element %s", neighbor)
@@ -450,7 +461,7 @@ func TestMintingIsExplicit(t *testing.T) {
 func TestWriteBackDeclaresMintedIDs(t *testing.T) {
 	local := graphOf(t, scoped(vehicle+`	part def Wheel;
 `))
-	rewritten := reposync.WriteBack(local, map[string]string{"P__Wheel": "11111111-2222-4333-8444-555555555555"})
+	rewritten := writeBack(t, local, map[string]string{"P__Wheel": "11111111-2222-4333-8444-555555555555"})
 	turtle := rdf.WriteTurtle(rewritten)
 	back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
 	if err != nil {
@@ -463,6 +474,71 @@ func TestWriteBackDeclaresMintedIDs(t *testing.T) {
 	again := graphOf(t, string(back))
 	if _, ok := again.Object(rdf.IRI(rdf.Element+"11111111-2222-4333-8444-555555555555"), rdf.RDFType); !ok {
 		t.Errorf("the annotated notation does not carry the minted id:\n%s", back)
+	}
+}
+
+// The collection annotations follow their typed triples onto the minted ids, the
+// owning membership's derived id included, so the two spellings still agree.
+func TestWriteBackMovesCollectionAnnotations(t *testing.T) {
+	local := graphOf(t, scoped(vehicle+`	part def Wheel;
+`))
+	minted := "11111111-2222-4333-8444-555555555555"
+	out := writeBack(t, local, map[string]string{"P__Wheel": minted})
+	for key, want := range map[string]string{
+		"ownedMember":       `{"@id":"` + minted + `"}`,
+		"ownedMembership":   `{"@id":"` + minted + `_om"}`,
+		"ownedRelationship": `{"@id":"` + minted + `_om"}`,
+	} {
+		object, ok := out.Object(rdf.ElementIRIForID("P"), rdf.AnnotationJSON+key)
+		if !ok || !strings.Contains(object.Value, want) || strings.Contains(object.Value, "P__Wheel") {
+			t.Errorf("json:%s = %s, want a member %s and no P__Wheel", key, object.Value, want)
+		}
+	}
+}
+
+// A declared element id that extends a minted id with `_p` text is not that
+// element's expression node: the annotation follows the typed triple, which keeps
+// it, so the written-back graph still reads and diffs clean.
+func TestWriteBackKeepsDeclaredSiblingsInAnnotations(t *testing.T) {
+	local := graphOf(t, scoped(`	part def A;
+	part def B {
+		@IdentityMetadata::ElementId { id = "P__A_pchild"; }
+	}
+`))
+	minted := "11111111-2222-4333-8444-555555555555"
+	out := writeBack(t, local, map[string]string{"P__A": minted})
+	object, ok := out.Object(rdf.ElementIRIForID("P"), rdf.AnnotationJSON+"ownedMember")
+	if want := `[{"@id":"` + minted + `"},{"@id":"P__A_pchild"}]`; !ok || object.Value != want {
+		t.Errorf("json:ownedMember = %s, want %s", object.Value, want)
+	}
+	if _, err := rdf.ReconcileCollections(out); err != nil {
+		t.Errorf("the written-back graph does not reconcile: %v", err)
+	}
+	turtle := rdf.WriteTurtle(out)
+	back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("read the rewritten graph back: %v\n%s", err, turtle)
+	}
+	if !strings.Contains(string(back), `id = "P__A_pchild"`) || !strings.Contains(string(back), `id = "`+minted+`"`) {
+		t.Errorf("the notation lost a declared or minted id:\n%s", back)
+	}
+}
+
+// A collection stated by the annotation alone is written back with the typed
+// triples it stands for, both on the minted ids.
+func TestWriteBackMintsAnnotationOnlyCollections(t *testing.T) {
+	local := withoutTypedCollections(graphOf(t, scoped(vehicle+`	part def Wheel;
+`)))
+	minted := "11111111-2222-4333-8444-555555555555"
+	out := writeBack(t, local, map[string]string{"P__Wheel": minted})
+	packageIRI := rdf.ElementIRIForID("P")
+	members := out.Objects(packageIRI, rdf.SysML+"ownedMember")
+	if len(members) != 2 || members[1] != rdf.ElementIRIForID(minted) {
+		t.Errorf("sysml:ownedMember = %v, want the vehicle then %s", members, minted)
+	}
+	object, _ := out.Object(packageIRI, rdf.AnnotationJSON+"ownedMember")
+	if !strings.Contains(object.Value, `{"@id":"`+minted+`"}`) || strings.Contains(object.Value, "P__Wheel") {
+		t.Errorf("json:ownedMember = %s, want the minted id and no P__Wheel", object.Value)
 	}
 }
 
@@ -512,6 +588,56 @@ func TestUnchangedModelIsEmptyDiff(t *testing.T) {
 	}
 	if len(set.Changes) != 0 {
 		t.Errorf("identical graphs produced %d change(s):\n%s", len(set.Changes), set.Text())
+	}
+}
+
+// withoutTypedCollections drops the typed triples of every annotated collection,
+// leaving the graph a reader of the annotation alone would produce.
+func withoutTypedCollections(g *rdf.Graph) *rdf.Graph {
+	out := rdf.NewGraph()
+	for _, triple := range g.Triples() {
+		key, isSysML := strings.CutPrefix(triple.Predicate.Value, rdf.SysML)
+		if isSysML && g.HasProperty(triple.Subject, rdf.AnnotationJSON+key) {
+			continue
+		}
+		out.AddTriple(triple)
+	}
+	return out
+}
+
+func TestAnnotationOnlyCollectionsCompareEqual(t *testing.T) {
+	local := graphOf(t, scoped(vehicle+`	part def Wheel;
+`))
+	repository := withoutTypedCollections(local)
+	if repository.Len() == local.Len() {
+		t.Fatal("the fixture states no collection")
+	}
+	set, err := reposync.Diff(local, repository, reposync.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(set.Changes) != 0 || len(set.Uncarried) != 0 {
+		t.Errorf("a collection stated by annotation alone differs from one stated by both:\n%s", set.Text())
+	}
+}
+
+func TestConflictingCollectionAnnotationIsAnError(t *testing.T) {
+	local := graphOf(t, scoped(vehicle+`	part def Wheel;
+`))
+	broken := rdf.NewGraph()
+	for _, triple := range local.Triples() {
+		if triple.Predicate.Value == rdf.AnnotationJSON+"ownedMember" {
+			triple.Object = rdf.String(`[{"@id":"P__Wheel"}]`)
+		}
+		broken.AddTriple(triple)
+	}
+	_, err := reposync.Diff(broken, local, reposync.Options{})
+	var conflict *rdf.CollectionConflictError
+	if !errors.As(err, &conflict) {
+		t.Fatalf("want a CollectionConflictError, got %v", err)
+	}
+	if conflict.Key != "ownedMember" || !strings.HasSuffix(conflict.Subject, ":P") {
+		t.Errorf("the error names <%s> sysml:%s, want <…:P> sysml:ownedMember", conflict.Subject, conflict.Key)
 	}
 }
 

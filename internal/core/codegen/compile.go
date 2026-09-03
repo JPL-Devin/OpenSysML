@@ -8,6 +8,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -579,7 +580,7 @@ func (fc *funcCompiler) compileExpr(n ast.Node) (Expr, error) {
 		}
 		return IntLit{Value: v}, nil
 	case *ast.LiteralReal:
-		v, err := strconv.ParseFloat(n.Value, 64)
+		v, err := semantics.ParseReal(n.Value)
 		if err != nil {
 			return nil, fc.unsupported(fmt.Sprintf("literal %s is outside the Real range", n.Value))
 		}
@@ -741,7 +742,7 @@ func (fc *funcCompiler) compileOperator(n *ast.OperatorExpr) (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		if x, err = fc.scalarOperandWith(x, fmt.Sprintf("unary '%s' requires numeric operand, got %%s", n.Operator), true, fmt.Sprintf("'%s'", n.Operator)); err != nil {
+		if x, err = fc.scalarOperandWith(x, fmt.Sprintf("type mismatch: unary '%s' requires numeric operand, got %%s", n.Operator), true, fmt.Sprintf("'%s'", n.Operator)); err != nil {
 			return nil, err
 		}
 		if x.Type() == TypeBool {
@@ -752,7 +753,7 @@ func (fc *funcCompiler) compileOperator(n *ast.OperatorExpr) (Expr, error) {
 		if len(n.Operands) != 1 {
 			return nil, fc.unsupported("a unary operator with two operands")
 		}
-		x, err := fc.compileBool(n.Operands[0], "operand of not", "logical not requires bool operand, got %s")
+		x, err := fc.compileBool(n.Operands[0], "operand of not", "type mismatch: logical not requires bool operand, got %s")
 		if err != nil {
 			return nil, err
 		}
@@ -859,8 +860,18 @@ func (fc *funcCompiler) compileCall(n *ast.InvocationExpr) (Expr, error) {
 	if n.Type == nil {
 		return nil, fc.unsupported("an invocation naming no calc")
 	}
-	sym, ok := fc.c.resolver.ResolveQualified(fc.scope, n.Type)
-	if !ok {
+	// The declaration the checker and interpreter select by the arguments' types.
+	sel := passes.SelectInvocation(fc.c.resolver, fc.c.model, fc.scope, n, semantics.PerformsBehavior)
+	if sel.Ambiguous {
+		names := make([]string, len(sel.Tied))
+		for i, tied := range sel.Tied {
+			names[i] = fc.c.name(tied)
+		}
+		return nil, fc.unsupported(fmt.Sprintf("invocation of %s, which is ambiguous between %s",
+			qnText(n.Type), strings.Join(names, ", ")))
+	}
+	sym := sel.Called()
+	if sym == nil {
 		// As the interpreter: a name that denotes nothing is not the library
 		// function of that name.
 		written := qnText(n.Type)
@@ -953,6 +964,9 @@ func (fc *funcCompiler) bindArgs(n *ast.InvocationExpr, callee string, params []
 			i := paramIndex(params, na.Name)
 			if i < 0 {
 				return nil, fc.unsupported(fmt.Sprintf("%s has no parameter %s", callee, qnText(na.Name)))
+			}
+			if bound[i] {
+				return nil, fc.unsupported(fmt.Sprintf("%s binds parameter %s twice", callee, params[i]))
 			}
 			v, err := fc.compileExpr(na.Value)
 			if err != nil {

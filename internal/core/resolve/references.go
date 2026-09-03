@@ -173,6 +173,8 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		// An accept node keeps its trigger in the usage's value.
 		if d.IsAccept {
 			c.trigger(scope, d.Value)
+		} else if inv := d.PerformedInvocation(); inv != nil {
+			c.invocation(scope, inv, true)
 		} else {
 			c.expr(scope, d.Value)
 		}
@@ -324,7 +326,11 @@ func (c *refCollector) behaviorDecl(scope *symbols.Scope, decl ast.Node) bool {
 		c.expr(scope, d.Expression)
 		return true
 	case *ast.PerformActionNode:
-		c.expr(scope, d.ActionRef)
+		if inv := d.PerformedInvocation(); inv != nil {
+			c.invocation(scope, inv, true)
+		} else {
+			c.expr(scope, d.ActionRef)
+		}
 		return true
 	case *ast.WhileLoopActionNode:
 		// A loop owns the scope its body declares into (see symbols.buildDecl).
@@ -462,6 +468,22 @@ func (c *refCollector) metadataPrefix(scope *symbols.Scope, p *ast.PrefixMetadat
 	}
 }
 
+// invocation collects a call's receiver, name and arguments; performed marks the
+// call an action usage runs as its value.
+func (c *refCollector) invocation(scope *symbols.Scope, v *ast.InvocationExpr, performed bool) {
+	c.expr(scope, v.Operand)
+	if v.Type != nil {
+		c.push(Reference{Scope: scope, QN: v.Type, Invocation: v, Performed: performed})
+	}
+	for _, a := range v.Args {
+		c.expr(scope, a)
+	}
+	for _, na := range v.NamedArgs {
+		c.add(scope, na.Name)
+		c.expr(scope, na.Value)
+	}
+}
+
 func (c *refCollector) expr(scope *symbols.Scope, e ast.Node) {
 	switch v := e.(type) {
 	case nil:
@@ -480,15 +502,7 @@ func (c *refCollector) expr(scope *symbols.Scope, e ast.Node) {
 		c.expr(scope, v.Operand)
 		c.expr(scope, v.Index)
 	case *ast.InvocationExpr:
-		c.expr(scope, v.Operand)
-		c.add(scope, v.Type)
-		for _, a := range v.Args {
-			c.expr(scope, a)
-		}
-		for _, na := range v.NamedArgs {
-			c.add(scope, na.Name)
-			c.expr(scope, na.Value)
-		}
+		c.invocation(scope, v, false)
 	case *ast.CollectExpr:
 		c.expr(scope, v.Operand)
 		c.expr(scope, v.Body)

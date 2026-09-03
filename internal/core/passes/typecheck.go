@@ -135,6 +135,8 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 		// assignment walk, which reaches every body an `assign` may stand in.
 	case *ast.ActionExecutionNode:
 		tc.expr.infer(scope, m.Expression)
+	case *ast.PerformActionNode:
+		tc.expr.checkPerform(scope, m)
 	case *ast.SubjectMember:
 		tc.checkSubjectMember(scope, m)
 	default:

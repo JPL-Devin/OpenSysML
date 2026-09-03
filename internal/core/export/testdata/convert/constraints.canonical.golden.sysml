@@ -46,7 +46,7 @@ package Constraints {
             }
         }
         requirement refined : lightEnough {
-            subject r : Rover[1] redefines lightEnough::r {
+            subject r : Rover[1] redefines r {
             }
         }
     }

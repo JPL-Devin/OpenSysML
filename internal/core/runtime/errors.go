@@ -127,6 +127,9 @@ var (
 	// ErrActionDeadlock is returned when action tokens cannot make progress.
 	ErrActionDeadlock = errors.New("action deadlock")
 
+	// ErrExecutorReleased is returned when a released executor is stepped.
+	ErrExecutorReleased = errors.New("executor released")
+
 	// ErrInvalidActionFlow is returned for a structurally invalid action graph.
 	ErrInvalidActionFlow = errors.New("invalid action flow")
 
@@ -163,6 +166,22 @@ var (
 	// ErrDoStepLimitExceeded is returned when a state do behavior exceeds its
 	// action-step budget.
 	ErrDoStepLimitExceeded = errors.New("state do-step limit exceeded")
+
+	// ErrActionArity is returned when an action invocation passes more
+	// positional arguments than the action declares input parameters.
+	ErrActionArity = errors.New("action argument count mismatch")
+
+	// ErrDuplicateArgument is returned when an action invocation binds one input
+	// parameter twice: by two named arguments, or by a positional and a named one.
+	ErrDuplicateArgument = errors.New("argument bound more than once")
+
+	// ErrNodeNotPerformed is returned when a pin of an action node is read before
+	// any performance of the node has started.
+	ErrNodeNotPerformed = errors.New("action node read before it is performed")
+
+	// ErrNodePin is returned when a pin read, flow, or binding names a feature the
+	// action node does not declare, or the node's result where it has none.
+	ErrNodePin = errors.New("action node pin not declared")
 
 	// ErrViolated is returned when an asserted constraint or a required
 	// condition evaluates to false. It is a verdict about the model, not a
@@ -204,6 +223,10 @@ var (
 	// whose units measure different things, or whose conversion is not derivable
 	// from the library. It is never answered by comparing magnitudes.
 	ErrIncommensurableUnits = errors.New("incommensurable units")
+
+	// ErrUnitRoot is returned when the root of a quantity is taken whose unit
+	// has none: `sqrt(9 [m])`, since no unit squares to a metre.
+	ErrUnitRoot = errors.New("unit has no root")
 
 	// ErrNotASatisfaction is returned when a satisfaction assertion is asked of
 	// an element that states none.

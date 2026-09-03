@@ -1,6 +1,7 @@
 package export
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -66,6 +67,14 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 		return nil, &UnsupportedError{What: "an empty graph", Note: "nothing to convert"}
 	}
 	if err := checkExtensionNamespace(graph); err != nil {
+		return nil, err
+	}
+	graph, err := rdf.ReconcileCollections(graph)
+	if err != nil {
+		var malformed *rdf.AnnotationError
+		if errors.As(err, &malformed) {
+			return nil, &UnsupportedError{What: fmt.Sprintf("the annotation json:%s of <%s>", malformed.Key, malformed.Subject), Note: malformed.Note}
+		}
 		return nil, err
 	}
 	d := &decoder{
@@ -461,9 +470,9 @@ func (d *decoder) printElement(b *strings.Builder, el *element, depth int) error
 		return err
 	}
 	b.WriteString(lead + head)
-	if annotationMetaclasses[el.metaclass] {
-		// A comment, doc or rep declaration ends with its comment body, and
-		// takes no terminator.
+	if annotationMetaclasses[el.metaclass] || el.metaclass == mResultExpression {
+		// A comment, doc or rep declaration ends with its comment body, and a
+		// result expression is bare: neither takes a terminator.
 		b.WriteString(d.nl)
 		return nil
 	}
@@ -573,6 +582,8 @@ func (d *decoder) head(el *element) (string, error) {
 		return d.conditionHead(el, "assume")
 	case mRequire:
 		return d.conditionHead(el, "require")
+	case mResultExpression:
+		return d.resultExpressionHead(el)
 	}
 	// A succession carrying its ends as references is the one the parser builds
 	// for a succession, written back as `succession first <source> then <target>;`.
@@ -905,6 +916,21 @@ func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 	return strings.Join(words, " "), nil
 }
 
+// resultExpressionHead writes a result expression member back as the bare
+// expression it states, read from the member or, as the abstract syntax
+// spells it, from the sysml:ownedResultExpression of its membership.
+func (d *decoder) resultExpressionHead(el *element) (string, error) {
+	if text, ok := d.stringOf(el, rdf.OpenSysML+xResultExpression); ok {
+		return text, nil
+	}
+	if m, owned := d.owningMembership[el.iri]; owned {
+		if node, ok := d.graph.Object(rdf.IRI(m.iri), rdf.SysML+pOwnedResultExpression); ok {
+			return d.expressionNodeText(node, el.scope)
+		}
+	}
+	return "", d.missing(el, "sysx:"+xResultExpression, "a result expression member is the expression it states")
+}
+
 // acceptParam returns the synthetic parameter of an accept shorthand, whose
 // notation belongs in its parent's declaration head.
 func (d *decoder) acceptParam(el *element) *element {
@@ -1235,7 +1261,13 @@ func (d *decoder) relationshipWords(el *element, multPart string, skip ...ast.Re
 		if slices.Contains(skip, kind) {
 			continue
 		}
-		targets, err := d.referenceList(el, rdf.SysML+relationshipProperty[kind])
+		var targets []string
+		var err error
+		if kind == ast.RelRedefines {
+			targets, err = d.redefinedList(el)
+		} else {
+			targets, err = d.referenceList(el, rdf.SysML+relationshipProperty[kind])
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -1292,6 +1324,71 @@ func (d *decoder) referenceList(el *element, property string) ([]string, error) 
 		out = append(out, name)
 	}
 	return out, nil
+}
+
+// redefinedList renders the redefinition targets of el. A linked target is
+// written by its own name when that is the one feature so named among the
+// owner's generals; otherwise the qualified spelling keeps the linked one.
+func (d *decoder) redefinedList(el *element) ([]string, error) {
+	var out []string
+	for _, term := range d.graph.Objects(rdf.IRI(el.iri), rdf.SysML+relationshipProperty[ast.RelRedefines]) {
+		if !term.IsLiteral() {
+			target, err := d.referencedElement(term.Value)
+			if err != nil {
+				return nil, err
+			}
+			if name, ok := d.stringOf(target, rdf.SysML+pDeclaredName); ok && el.owner != nil {
+				if named := d.inheritedNamed(el.owner, name); len(named) == 1 && named[0] == target {
+					out = append(out, qualifiedNameText(name))
+					continue
+				}
+			}
+		}
+		name, err := d.referenceName(term, el.scope)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, name)
+	}
+	return out, nil
+}
+
+// inheritedNamed collects the members named name that el's generals declare,
+// followed transitively, each general's own member masking its generals'.
+func (d *decoder) inheritedNamed(el *element, name string) []*element {
+	seen := map[string]bool{el.iri: true}
+	var found []*element
+	var walk func(el *element)
+	walk = func(el *element) {
+		for _, kind := range []ast.RelationshipKind{ast.RelSpecializes, ast.RelTyping, ast.RelSubsets, ast.RelRedefines} {
+			for _, term := range d.graph.Objects(rdf.IRI(el.iri), rdf.SysML+relationshipProperty[kind]) {
+				if term.IsLiteral() {
+					continue
+				}
+				general, err := d.referencedElement(term.Value)
+				if err != nil || seen[general.iri] {
+					continue
+				}
+				seen[general.iri] = true
+				if member := d.memberNamed(general, name); member != nil {
+					found = append(found, member)
+					continue
+				}
+				walk(general)
+			}
+		}
+	}
+	walk(el)
+	return found
+}
+
+func (d *decoder) memberNamed(el *element, name string) *element {
+	for _, child := range el.children {
+		if declared, ok := d.stringOf(child, rdf.SysML+pDeclaredName); ok && declared == name {
+			return child
+		}
+	}
+	return nil
 }
 
 // referenceName renders a reference term as the name to write in source: a

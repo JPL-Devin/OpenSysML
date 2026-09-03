@@ -310,6 +310,21 @@ func newCalcRun(shape *calcShape, scope *symbols.Scope, self *Instance, env fram
 	}
 }
 
+// detached is this evaluation over storage of its own, for a body that outlives
+// the invocation whose frame it ran in; its outputs stay memoized in common.
+func (run *calcRun) detached() *calcRun {
+	if run == nil {
+		return nil
+	}
+	out := *run
+	out.env = run.env.snapshot()
+	if run.outer != nil {
+		out.outer = run.outer.closure()
+	}
+	out.onStack = false
+	return &out
+}
+
 // CalcOutputValue is the value one output feature of a calc usage took, in the
 // order the calc declares its outputs.
 type CalcOutputValue struct {

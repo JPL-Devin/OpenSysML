@@ -10,7 +10,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -18,6 +20,10 @@ import (
 // this runtime has no representation for the values of. It names the function,
 // so a model is told which declaration it is rather than answered wrongly.
 var ErrUnevaluableLibraryFunction = errors.New("library function is not evaluable")
+
+// ErrAmbiguousInvocation is returned for a call whose name denotes several
+// declarations the arguments fit equally well, none more specific than the rest.
+var ErrAmbiguousInvocation = errors.New("ambiguous invocation")
 
 // noVectorCollection is why the aggregations over a collection of vectors are
 // not evaluable: a sequence of them flattens, losing the grouping the
@@ -34,17 +40,16 @@ const libraryPi = math.Pi
 // declaration. Its name is the fully-qualified name dispatch matches, and its
 // parameters carry the names and order the declared signature gives.
 type libraryFunction struct {
-	name   string
-	params []string
-	// required is how many leading parameters the signature declares [1]; the
-	// rest are declared [0..1] and bind null where a call omits them.
-	required int
-	apply    libraryApply
+	name string
+	// params are the declared parameters in declared order: one declared [0..1]
+	// binds null where a call omits it; an anonymous one is "" and binds by position only.
+	params []declaredParam
+	apply  libraryApply
 	// unevaluable marks a declaration registered only to report why a call to
 	// it cannot be computed.
 	unevaluable bool
-	// scalar marks a function over numeric scalars alone, which the compiled
-	// calc tier may call with unboxed arguments.
+	// scalar marks a function whose result is a scalar whenever its arguments
+	// are, which the compiled calc tier may call with unboxed arguments.
 	scalar bool
 }
 
@@ -52,6 +57,18 @@ type libraryFunction struct {
 // dispatched under, so an implementation shared by several declarations reports
 // the one the model called.
 type libraryApply func(name string, ctx *Context, args []Value) (Value, error)
+
+// writtenName is fqn as a model writes it: a segment that is no basic name, an
+// operator or a keyword, in the quotes of an unrestricted name.
+func writtenName(fqn string) string {
+	parts := strings.Split(fqn, "::")
+	for i, part := range parts {
+		if !lexer.IsIdentifier(part) || lexer.IsKeywordIn(part, source.KindKerML) {
+			parts[i] = "'" + part + "'"
+		}
+	}
+	return strings.Join(parts, "::")
+}
 
 // libraryFunctions maps a function's fully-qualified name to its
 // implementation. Dispatch is by the declaration a call resolves to, so a
@@ -94,10 +111,10 @@ func init() {
 	// TrigFunctions. The library names the angle `theta` and the inverse
 	// functions `arcsin`/`arccos`/`arctan` over a `x` parameter; `tan` and `cot`
 	// carry bodies there (sin/cos and cos/sin), which these compute directly.
-	registerLibraryFunction("TrigFunctions::sin", []string{"theta"}, realUnary(math.Sin))
-	registerLibraryFunction("TrigFunctions::cos", []string{"theta"}, realUnary(math.Cos))
-	registerLibraryFunction("TrigFunctions::tan", []string{"theta"}, realUnary(tanReal))
-	registerLibraryFunction("TrigFunctions::cot", []string{"theta"}, realUnary(cotReal))
+	registerAngleFunction("TrigFunctions::sin", []string{"theta"}, realUnary(math.Sin))
+	registerAngleFunction("TrigFunctions::cos", []string{"theta"}, realUnary(math.Cos))
+	registerAngleFunction("TrigFunctions::tan", []string{"theta"}, realUnary(tanReal))
+	registerAngleFunction("TrigFunctions::cot", []string{"theta"}, realUnary(cotReal))
 	registerLibraryFunction("TrigFunctions::arcsin", []string{"x"}, realUnary(math.Asin))
 	registerLibraryFunction("TrigFunctions::arccos", []string{"x"}, realUnary(math.Acos))
 	registerLibraryFunction("TrigFunctions::arctan", []string{"x"}, realUnary(math.Atan))
@@ -111,6 +128,10 @@ func init() {
 	registerVectorFunctions()
 	registerComplexFunctions()
 	registerStringFunctions()
+	registerConversionFunctions()
+	registerGenericExtrema()
+	registerOperatorFunctions()
+	registerUnevaluableDeclarations()
 
 	// OpenSysMLMathFunctions is the non-normative OpenSysML extension library
 	// (internal/core/libs/stdlib/OpenSysML Libraries/OpenSysMLMathFunctions.kerml),
@@ -135,7 +156,7 @@ func registerVectorFunctions() {
 	registerValueFunction("VectorFunctions::-", []string{"v", "w"}, 1, vectorSubtract)
 	registerValueFunction("VectorFunctions::cartesian-", []string{"v", "w"}, 1, vectorSubtract)
 	registerValueFunction("VectorFunctions::VectorOf", []string{"components"}, 1, vectorOf)
-	registerValueFunction("VectorFunctions::CartesianVectorOf", []string{"components"}, 1, cartesianVectorOf)
+	registerValueFunction("VectorFunctions::CartesianVectorOf", []string{"components"}, 0, cartesianVectorOf)
 	registerValueFunction("VectorFunctions::CartesianThreeVectorOf", []string{"components"}, 1, cartesianThreeVectorOf)
 	registerValueFunction("VectorFunctions::inner", []string{"v", "w"}, 2, vectorInner)
 	registerValueFunction("VectorFunctions::cartesianInner", []string{"v", "w"}, 2, vectorInner)
@@ -153,8 +174,8 @@ func registerVectorFunctions() {
 	registerValueFunction("VectorFunctions::cartesianVectorScalarMult", []string{"v", "x"}, 2, vectorScalarMult)
 	registerValueFunction("VectorFunctions::vectorScalarDiv", []string{"v", "x"}, 2, vectorScalarDiv)
 
-	registerUnevaluable("VectorFunctions::sum0", []string{"coll", "zero"}, 2, noVectorCollection)
-	registerUnevaluable("VectorFunctions::sum", []string{"coll"}, 1, noVectorCollection)
+	registerUnevaluable("VectorFunctions::sum0", []declaredParam{optionalParam("coll"), param("zero")}, noVectorCollection)
+	registerUnevaluable("VectorFunctions::sum", []declaredParam{optionalParam("coll")}, noVectorCollection)
 }
 
 // registerComplexFunctions registers ComplexFunctions (Kernel Function Library).
@@ -164,12 +185,12 @@ func registerVectorFunctions() {
 func registerComplexFunctions() {
 	registerValueFunction("ComplexFunctions::rect", []string{"re", "im"}, 2, complexRect)
 	registerValueFunction("ComplexFunctions::polar", []string{"abs", "arg"}, 2, complexPolar)
-	registerValueFunction("ComplexFunctions::re", []string{"x"}, 1, complexRealPart)
-	registerValueFunction("ComplexFunctions::im", []string{"x"}, 1, complexImagPart)
-	registerValueFunction("ComplexFunctions::isZero", []string{"x"}, 1, complexIsZero)
-	registerValueFunction("ComplexFunctions::isUnit", []string{"x"}, 1, complexIsUnit)
-	registerValueFunction("ComplexFunctions::abs", []string{"x"}, 1, complexModulus)
-	registerValueFunction("ComplexFunctions::arg", []string{"x"}, 1, complexArgument)
+	registerScalarResultFunction("ComplexFunctions::re", []string{"x"}, complexRealPart)
+	registerScalarResultFunction("ComplexFunctions::im", []string{"x"}, complexImagPart)
+	registerScalarResultFunction("ComplexFunctions::isZero", []string{"x"}, complexIsZero)
+	registerScalarResultFunction("ComplexFunctions::isUnit", []string{"x"}, complexIsUnit)
+	registerScalarResultFunction("ComplexFunctions::abs", []string{"x"}, complexModulus)
+	registerScalarResultFunction("ComplexFunctions::arg", []string{"x"}, complexArgument)
 	registerValueFunction("ComplexFunctions::+", []string{"x", "y"}, 1, complexAdd)
 	registerValueFunction("ComplexFunctions::-", []string{"x", "y"}, 1, complexSubtract)
 	registerValueFunction("ComplexFunctions::*", []string{"x", "y"}, 2, complexMultiply)
@@ -178,15 +199,15 @@ func registerComplexFunctions() {
 	registerValueFunction("ComplexFunctions::^", []string{"x", "y"}, 2, complexPower)
 	registerValueFunction("ComplexFunctions::==", []string{"x", "y"}, 0, complexEquals)
 
-	registerValueFunction("ComplexFunctions::sum", []string{"collection"}, 1, complexSum)
-	registerValueFunction("ComplexFunctions::product", []string{"collection"}, 1, complexProduct)
+	registerValueFunction("ComplexFunctions::sum", []string{"collection"}, 0, complexSum)
+	registerValueFunction("ComplexFunctions::product", []string{"collection"}, 0, complexProduct)
 
 	// The two string conversions of a Complex: the library defines no notation
 	// for one, and inventing a rendering would make ToComplex(ToString(x)) a
 	// value nothing else in the library agrees on.
-	registerUnevaluable("ComplexFunctions::ToString", []string{"x"}, 1,
+	registerUnevaluable("ComplexFunctions::ToString", []declaredParam{param("x")},
 		"no string notation for a Complex value is defined")
-	registerUnevaluable("ComplexFunctions::ToComplex", []string{"x"}, 1,
+	registerUnevaluable("ComplexFunctions::ToComplex", []declaredParam{param("x")},
 		"no string notation for a Complex value is defined")
 }
 
@@ -211,34 +232,52 @@ func registerLibraryFunction(name string, params []string, apply func([]semantic
 	libraryFunctions[name].scalar = true
 }
 
+// registerScalarResultFunction adds an implementation whose result is always a scalar
+// (Real or Boolean), so the compiled tier may call it where a scalar argument selects it.
+func registerScalarResultFunction(name string, params []string, apply libraryApply) {
+	registerValueFunction(name, params, len(params), apply)
+	libraryFunctions[name].scalar = true
+}
+
 // registerValueFunction adds one implementation over runtime values, for the
 // declarations whose parameters or results are not scalars: a vector, a Complex,
-// or a parameter the signature declares [0..1].
+// or a parameter the signature declares [0..1]. The first required parameters
+// are declared [1]; the rest [0..1].
 func registerValueFunction(name string, params []string, required int, apply libraryApply) {
-	libraryFunctions[name] = &libraryFunction{name: name, params: params, required: required, apply: apply}
+	declared := make([]declaredParam, len(params))
+	for i, p := range params {
+		declared[i] = declaredParam{name: p, optional: i >= required}
+	}
+	registerDeclaredFunction(name, declared, apply)
+}
+
+// registerDeclaredFunction adds one implementation under the signature the
+// library declares, parameter by parameter.
+func registerDeclaredFunction(name string, params []declaredParam, apply libraryApply) {
+	libraryFunctions[name] = &libraryFunction{name: name, params: params, apply: apply}
 }
 
 // registerUnevaluable registers a declaration this runtime cannot evaluate, so
 // that a call to it is reported by name with the reason rather than resolving to
 // a library body that computes something else or to no declaration at all.
-func registerUnevaluable(name string, params []string, required int, reason string) {
-	registerValueFunction(name, params, required, func(called string, _ *Context, _ []Value) (Value, error) {
+func registerUnevaluable(name string, params []declaredParam, reason string) {
+	registerDeclaredFunction(name, params, func(called string, _ *Context, _ []Value) (Value, error) {
 		return Value{}, fmt.Errorf("%w: %s: %s", ErrUnevaluableLibraryFunction, called, reason)
 	})
 	libraryFunctions[name].unevaluable = true
 }
 
 // numericScalars adapts an implementation over scalar numeric values: every
-// parameter of such a declaration is one number, so a collection, a string or an
-// instance does not conform to it.
+// parameter of such a declaration is one number, so a collection, a string, an
+// instance or a quantity does not conform to it.
 func numericScalars(params []string, apply func([]semantics.Value) (semantics.Value, error)) libraryApply {
 	return func(name string, _ *Context, args []Value) (Value, error) {
 		values := make([]semantics.Value, len(args))
 		for i, arg := range args {
 			if arg.Kind != ValConst || !arg.Const.IsNumeric() {
 				return Value{}, fmt.Errorf(
-					"%w: function %s parameter %q requires a numeric value",
-					ErrTypeMismatch, name, params[i],
+					"%w: function %s parameter %s requires a numeric value, got %s",
+					ErrTypeMismatch, name, parameterLabel(params, i), describeValue(arg),
 				)
 			}
 			values[i] = arg.Const
@@ -258,39 +297,49 @@ func libraryFunctionByName(fqn string) (*libraryFunction, bool) {
 	return fn, ok
 }
 
-// LibraryFunctionParams is the declared parameter names of the library function fqn.
+// LibraryFunctionParams is the declared parameter names of the library function
+// fqn in declared order, an anonymous parameter as "".
 func LibraryFunctionParams(fqn string) (params []string, ok bool) {
 	fn, ok := libraryFunctions[fqn]
 	if !ok {
 		return nil, false
 	}
-	return slices.Clone(fn.params), true
+	return fn.paramNames(), true
 }
 
-// libraryFunctionFor returns the built-in implementation of sym when sym is a
-// function library declaration this runtime implements.
+// paramNames lists the declared parameter names in declared order.
+func (fn *libraryFunction) paramNames() []string {
+	names := make([]string, len(fn.params))
+	for i, p := range fn.params {
+		names[i] = p.name
+	}
+	return names
+}
+
+// hasOptional reports whether any parameter may be omitted.
+func (fn *libraryFunction) hasOptional() bool {
+	return slices.ContainsFunc(fn.params, func(p declaredParam) bool { return p.optional })
+}
+
+// leastPositional is the fewest positional arguments that bind every required
+// parameter: one past the last of them.
+func (fn *libraryFunction) leastPositional() int {
+	for i := len(fn.params) - 1; i >= 0; i-- {
+		if !fn.params[i].optional {
+			return i + 1
+		}
+	}
+	return 0
+}
+
+// libraryFunctionFor answers the implementation of a library-declared scalar
+// function; a calc the model declares under the same name is never answered here.
 func (ctx *Context) libraryFunctionFor(sym *symbols.Symbol) (*libraryFunction, bool) {
-	// A declaration that is not a function is not one of these, whatever it is
-	// named.
-	if sym == nil || !isCalcSymbol(sym) {
+	if sym == nil || !isCalcSymbol(sym) || !ctx.libraryDeclared(sym) {
 		return nil, false
 	}
 	fn, ok := libraryFunctions[ctx.qualifiedSymbolName(sym)]
-	if !ok {
-		return nil, false
-	}
-	// A library declaration is answered by its built-in even where it carries a
-	// body: the built-in is the implementation of that normative function, and the
-	// body it is declared with is a specification of it rather than one.
-	if ctx.libraryDeclared(sym) {
-		return fn, true
-	}
-	// Outside the libraries the name is the model's own: a calc that carries a
-	// body is evaluated from that body and never routed here.
-	if ctx.hasCalcBody(sym) {
-		return nil, false
-	}
-	return fn, true
+	return fn, ok
 }
 
 // libraryDeclared reports whether sym was declared by one of the library
@@ -302,6 +351,23 @@ func (ctx *Context) libraryDeclared(sym *symbols.Symbol) bool {
 	idx := ctx.resolver.Index()
 	return idx != nil && idx.Library(sym)
 }
+
+// librarySymbol is the declaration the bundled library makes under fqn, nil
+// where it is not loaded.
+func (ctx *Context) librarySymbol(fqn string) *symbols.Symbol {
+	if ctx == nil || ctx.resolver == nil || ctx.resolver.Index() == nil {
+		return nil
+	}
+	for _, sym := range ctx.resolver.Index().LookupQualified(fqn) {
+		if ctx.libraryDeclared(sym) {
+			return sym
+		}
+	}
+	return nil
+}
+
+// written is the function's name as a model writes it, which it reports itself by.
+func (fn *libraryFunction) written() string { return writtenName(fn.name) }
 
 // invoke binds args to the declared parameters and applies the function,
 // recording the trace events a calc invocation records so a built-in function
@@ -324,21 +390,21 @@ func (fn *libraryFunction) invoke(ctx *Context, args calcArgs) (Value, error) {
 // bindAndApply resolves each declared parameter to an argument and applies the
 // function. A parameter the signature declares [1] must be given an argument; a
 // parameter it declares [0..1] binds null where the call omits it, which is how
-// the library's own one-argument `'+'` and `'-'` are called.
+// the library's own one-argument `'+'` and `'-'` are called. Positional
+// arguments fill the parameters in order, so they must reach the last required one.
 func (fn *libraryFunction) bindAndApply(ctx *Context, args calcArgs) (Value, error) {
 	if len(args.positional) > 0 && len(args.named) > 0 {
-		return Value{}, fmt.Errorf("%w: function %s takes either positional or named arguments", ErrCalcArity, fn.name)
+		return Value{}, fmt.Errorf("%w: function %s takes either positional or named arguments", ErrCalcArity, fn.written())
 	}
-	given := len(args.positional) + len(args.named)
-	if given < fn.required || given > len(fn.params) {
+	if len(args.named) > 0 {
+		if err := fn.checkNamedArguments(args); err != nil {
+			return Value{}, err
+		}
+	} else if given := len(args.positional); given < fn.leastPositional() || given > len(fn.params) {
 		return Value{}, fmt.Errorf(
 			"%w: function %s takes %s argument(s), got %d",
-			ErrCalcArity, fn.name, fn.arity(), given,
+			ErrCalcArity, fn.written(), fn.arity(), given,
 		)
-	}
-
-	if err := fn.checkNamedArguments(args); err != nil {
-		return Value{}, err
 	}
 
 	values := make([]Value, len(fn.params))
@@ -349,10 +415,14 @@ func (fn *libraryFunction) bindAndApply(ctx *Context, args calcArgs) (Value, err
 		}
 		values[i] = arg
 		if ctx.trace != nil {
-			ctx.trace.RecordCalcBind(param, arg, "argument")
+			label := param.name
+			if label == "" {
+				label = fn.parameterLabel(i)
+			}
+			ctx.trace.RecordCalcBind(label, arg, "argument")
 		}
 	}
-	return fn.apply(fn.name, ctx, values)
+	return fn.apply(fn.written(), ctx, values)
 }
 
 // checkNamedArguments rejects an argument named for a parameter the signature
@@ -360,7 +430,7 @@ func (fn *libraryFunction) bindAndApply(ctx *Context, args calcArgs) (Value, err
 func (fn *libraryFunction) checkNamedArguments(args calcArgs) error {
 	unknown := make([]string, 0, len(args.named))
 	for name := range args.named {
-		if !slices.Contains(fn.params, name) {
+		if name == "" || !slices.Contains(fn.paramNames(), name) {
 			unknown = append(unknown, name)
 		}
 	}
@@ -370,31 +440,57 @@ func (fn *libraryFunction) checkNamedArguments(args calcArgs) error {
 	slices.Sort(unknown)
 	return fmt.Errorf(
 		"%w: function %s has no input parameter %q (expected %s)",
-		ErrUnknownParameter, fn.name, unknown[0], fn.parameterList(),
+		ErrUnknownParameter, fn.written(), unknown[0], fn.parameterList(),
 	)
 }
 
-// parameterList renders the declared parameter names for an error message.
+// parameterList renders the declared parameters for an error message.
 func (fn *libraryFunction) parameterList() string {
-	quoted := make([]string, len(fn.params))
-	for i, param := range fn.params {
-		quoted[i] = fmt.Sprintf("%q", param)
+	labels := make([]string, len(fn.params))
+	for i := range fn.params {
+		labels[i] = fn.parameterLabel(i)
 	}
-	return strings.Join(quoted, ", ")
+	return strings.Join(labels, ", ")
+}
+
+// parameterLabel names the i-th parameter in a diagnostic: its declared name
+// quoted, or its position (`#2`) when it is anonymous.
+func (fn *libraryFunction) parameterLabel(i int) string {
+	return parameterLabel(fn.paramNames(), i)
+}
+
+// parameterLabel is libraryFunction.parameterLabel over a list of parameter names.
+func parameterLabel(params []string, i int) string {
+	if params[i] == "" {
+		return positionLabel(i)
+	}
+	return fmt.Sprintf("%q", params[i])
+}
+
+// positionLabel names the anonymous parameter at 0-based index i by its position.
+func positionLabel(i int) string {
+	return fmt.Sprintf("#%d", i+1)
 }
 
 // argumentFor returns the argument bound to the i-th declared parameter: the
 // positional argument in that place, the named argument the library's own
-// parameter name matches, or null for an omitted [0..1] parameter.
-func (fn *libraryFunction) argumentFor(i int, param string, args calcArgs) (Value, error) {
+// parameter name matches, or null for an omitted [0..1] parameter. An anonymous
+// parameter has no name to match, so a named call cannot bind it.
+func (fn *libraryFunction) argumentFor(i int, param declaredParam, args calcArgs) (Value, error) {
 	if len(args.named) > 0 {
-		if bound, ok := args.named[param]; ok {
+		if bound, ok := args.named[param.name]; ok && param.name != "" {
 			return bound, nil
 		}
-		if i < fn.required {
+		if !param.optional {
+			if param.name == "" {
+				return Value{}, fmt.Errorf(
+					"%w: function %s parameter %s is anonymous and binds only by position",
+					ErrUnknownParameter, fn.name, fn.parameterLabel(i),
+				)
+			}
 			return Value{}, fmt.Errorf(
-				"%w: function %s has no input parameter matching the arguments given (expected %q)",
-				ErrUnknownParameter, fn.name, param,
+				"%w: function %s is called without an argument for parameter %q",
+				ErrCalcArity, fn.written(), param.name,
 			)
 		}
 		return nullValue(), nil
@@ -405,13 +501,14 @@ func (fn *libraryFunction) argumentFor(i int, param string, args calcArgs) (Valu
 	return nullValue(), nil
 }
 
-// arity reports the argument count the signature accepts, as one number or as
-// the range an optional parameter opens.
+// arity reports the positional argument count the signature accepts, as one
+// number or as the range a trailing optional parameter opens.
 func (fn *libraryFunction) arity() string {
-	if fn.required == len(fn.params) {
-		return fmt.Sprintf("%d", fn.required)
+	least := fn.leastPositional()
+	if least == len(fn.params) {
+		return fmt.Sprintf("%d", least)
 	}
-	return fmt.Sprintf("%d..%d", fn.required, len(fn.params))
+	return fmt.Sprintf("%d..%d", least, len(fn.params))
 }
 
 // realUnary adapts a one-argument function over the reals: the argument widens
@@ -733,13 +830,19 @@ func radiansFromDegrees(args []semantics.Value) (semantics.Value, error) {
 // is what VectorValues declares a NumericalVectorValue to be: a sequence is that
 // vector, one number the one-dimensional vector of it, and null the empty vector.
 func vectorElements(name, param string, val Value) ([]semantics.Value, error) {
+	return labelledVectorElements(name, fmt.Sprintf("%q", param), val)
+}
+
+// labelledVectorElements is vectorElements reporting the parameter by a
+// rendered label, which names an anonymous parameter by position.
+func labelledVectorElements(name, label string, val Value) ([]semantics.Value, error) {
 	elements := elementsOf(val)
 	out := make([]semantics.Value, len(elements))
 	for i, elem := range elements {
 		if elem.Kind != ValConst || !elem.Const.IsNumeric() {
 			return nil, fmt.Errorf(
-				"%w: function %s parameter %q requires a vector of numeric values, element %d is %s",
-				ErrTypeMismatch, name, param, i+1, describeValue(elem),
+				"%w: function %s parameter %s requires a vector of numeric values, element %d is %s",
+				ErrTypeMismatch, name, label, i+1, describeValue(elem),
 			)
 		}
 		out[i] = elem.Const
@@ -1365,14 +1468,18 @@ func complexProduct(name string, _ *Context, args []Value) (Value, error) {
 	return aggregateComplex(name, args[0], ast.OpMul)
 }
 
-// aggregateComplex folds a collection's elements as complex numbers under the
-// sum or product, from its identity; an element that is no number is reported.
+// aggregateComplex folds a collection under sum or product from its identity; like the
+// library's `reduce '+'`, only a collection holding a Complex (or none) folds to a Complex.
 func aggregateComplex(name string, collection Value, operator ast.OperatorKind) (Value, error) {
+	elements := elementsOf(collection)
+	if len(elements) > 0 && !holdsComplex(elements) {
+		return aggregate(name, []Value{collection}, operator, false)
+	}
 	acc := complex(0, 0)
 	if operator == ast.OpMul {
 		acc = 1
 	}
-	for _, elem := range elementsOf(collection) {
+	for _, elem := range elements {
 		z, err := asComplex(name, "collection", elem)
 		if err != nil {
 			return Value{}, err

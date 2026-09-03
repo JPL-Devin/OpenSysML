@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -17,7 +18,10 @@ elmt:Constraints
     sysml:ownedMembership elmt:Constraints__Mass_om, elmt:Constraints__MassLimit_om, elmt:Constraints__Margin_om, elmt:Constraints__Rover_om ;
     sysml:ownedRelationship elmt:Constraints__Mass_om, elmt:Constraints__MassLimit_om, elmt:Constraints__Margin_om, elmt:Constraints__Rover_om ;
     sysx:sourceText "package Constraints {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Constraints__Mass\"},{\"@id\":\"Constraints__MassLimit\"},{\"@id\":\"Constraints__Margin\"},{\"@id\":\"Constraints__Rover\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Constraints__Mass_om\"},{\"@id\":\"Constraints__MassLimit_om\"},{\"@id\":\"Constraints__Margin_om\"},{\"@id\":\"Constraints__Rover_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Constraints__Mass_om\"},{\"@id\":\"Constraints__MassLimit_om\"},{\"@id\":\"Constraints__Margin_om\"},{\"@id\":\"Constraints__Rover_om\"}]" .
 
 elmt:Constraints__Mass
     a sysml:AttributeDefinition ;
@@ -59,7 +63,12 @@ elmt:Constraints__MassLimit
     sysml:ownedFeature elmt:Constraints__MassLimit__m, elmt:Constraints__MassLimit__limit ;
     sysml:ownedFeatureMembership elmt:Constraints__MassLimit__m_om, elmt:Constraints__MassLimit__limit_om ;
     sysx:sourceText "    constraint def MassLimit {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Constraints__MassLimit__m\"},{\"@id\":\"Constraints__MassLimit__limit\"},{\"@id\":\"Constraints__MassLimit___402\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Constraints__MassLimit__m_om\"},{\"@id\":\"Constraints__MassLimit__limit_om\"},{\"@id\":\"Constraints__MassLimit___402_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Constraints__MassLimit__m_om\"},{\"@id\":\"Constraints__MassLimit__limit_om\"},{\"@id\":\"Constraints__MassLimit___402_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Constraints__MassLimit__m\"},{\"@id\":\"Constraints__MassLimit__limit\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Constraints__MassLimit__m_om\"},{\"@id\":\"Constraints__MassLimit__limit_om\"}]" .
 
 elmt:Constraints__MassLimit_om
     a sysml:OwningMembership ;
@@ -154,7 +163,8 @@ expr:Constraints__MassLimit___402_pcondition
     sysx:sourceText "m < limit" ;
     sysml:elementId "Constraints__MassLimit___402_pcondition" ;
     sysml:operator "<" ;
-    sysml:argument expr:Constraints__MassLimit___402_pcondition_pa0, expr:Constraints__MassLimit___402_pcondition_pa1 .
+    sysml:argument expr:Constraints__MassLimit___402_pcondition_pa0, expr:Constraints__MassLimit___402_pcondition_pa1 ;
+    json:argument "[{\"@id\":\"Constraints__MassLimit___402_pcondition_pa0\"},{\"@id\":\"Constraints__MassLimit___402_pcondition_pa1\"}]" .
 
 expr:Constraints__MassLimit___402_pcondition_pa0
     a sysml:FeatureReferenceExpression ;
@@ -187,7 +197,12 @@ elmt:Constraints__Margin
     sysml:ownedFeature elmt:Constraints__Margin__m, elmt:Constraints__Margin___401 ;
     sysml:ownedFeatureMembership elmt:Constraints__Margin__m_om, elmt:Constraints__Margin___401_om ;
     sysx:sourceText "    calc def Margin {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Constraints__Margin__m\"},{\"@id\":\"Constraints__Margin___401\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Constraints__Margin__m_om\"},{\"@id\":\"Constraints__Margin___401_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Constraints__Margin__m_om\"},{\"@id\":\"Constraints__Margin___401_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Constraints__Margin__m\"},{\"@id\":\"Constraints__Margin___401\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Constraints__Margin__m_om\"},{\"@id\":\"Constraints__Margin___401_om\"}]" .
 
 elmt:Constraints__Margin_om
     a sysml:OwningMembership ;
@@ -261,7 +276,8 @@ expr:Constraints__Margin___401_pvalue
     sysx:sourceText "100 - m" ;
     sysml:elementId "Constraints__Margin___401_pvalue" ;
     sysml:operator "-" ;
-    sysml:argument expr:Constraints__Margin___401_pvalue_pa0, expr:Constraints__Margin___401_pvalue_pa1 .
+    sysml:argument expr:Constraints__Margin___401_pvalue_pa0, expr:Constraints__Margin___401_pvalue_pa1 ;
+    json:argument "[{\"@id\":\"Constraints__Margin___401_pvalue_pa0\"},{\"@id\":\"Constraints__Margin___401_pvalue_pa1\"}]" .
 
 expr:Constraints__Margin___401_pvalue_pa0
     a sysml:LiteralInteger ;
@@ -294,7 +310,12 @@ elmt:Constraints__Rover
     sysml:ownedFeature elmt:Constraints__Rover__mass, elmt:Constraints__Rover__limit, elmt:Constraints__Rover__massOK, elmt:Constraints__Rover__massBad, elmt:Constraints__Rover___404, elmt:Constraints__Rover__bounds, elmt:Constraints__Rover__lightEnough, elmt:Constraints__Rover__refined ;
     sysml:ownedFeatureMembership elmt:Constraints__Rover__mass_om, elmt:Constraints__Rover__limit_om, elmt:Constraints__Rover__massOK_om, elmt:Constraints__Rover__massBad_om, elmt:Constraints__Rover___404_om, elmt:Constraints__Rover__bounds_om, elmt:Constraints__Rover__lightEnough_om, elmt:Constraints__Rover__refined_om ;
     sysx:sourceText "    part def Rover {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Constraints__Rover__mass\"},{\"@id\":\"Constraints__Rover__limit\"},{\"@id\":\"Constraints__Rover__massOK\"},{\"@id\":\"Constraints__Rover__massBad\"},{\"@id\":\"Constraints__Rover___404\"},{\"@id\":\"Constraints__Rover__bounds\"},{\"@id\":\"Constraints__Rover__lightEnough\"},{\"@id\":\"Constraints__Rover__refined\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Constraints__Rover__mass_om\"},{\"@id\":\"Constraints__Rover__limit_om\"},{\"@id\":\"Constraints__Rover__massOK_om\"},{\"@id\":\"Constraints__Rover__massBad_om\"},{\"@id\":\"Constraints__Rover___404_om\"},{\"@id\":\"Constraints__Rover__bounds_om\"},{\"@id\":\"Constraints__Rover__lightEnough_om\"},{\"@id\":\"Constraints__Rover__refined_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Constraints__Rover__mass_om\"},{\"@id\":\"Constraints__Rover__limit_om\"},{\"@id\":\"Constraints__Rover__massOK_om\"},{\"@id\":\"Constraints__Rover__massBad_om\"},{\"@id\":\"Constraints__Rover___404_om\"},{\"@id\":\"Constraints__Rover__bounds_om\"},{\"@id\":\"Constraints__Rover__lightEnough_om\"},{\"@id\":\"Constraints__Rover__refined_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Constraints__Rover__mass\"},{\"@id\":\"Constraints__Rover__limit\"},{\"@id\":\"Constraints__Rover__massOK\"},{\"@id\":\"Constraints__Rover__massBad\"},{\"@id\":\"Constraints__Rover___404\"},{\"@id\":\"Constraints__Rover__bounds\"},{\"@id\":\"Constraints__Rover__lightEnough\"},{\"@id\":\"Constraints__Rover__refined\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Constraints__Rover__mass_om\"},{\"@id\":\"Constraints__Rover__limit_om\"},{\"@id\":\"Constraints__Rover__massOK_om\"},{\"@id\":\"Constraints__Rover__massBad_om\"},{\"@id\":\"Constraints__Rover___404_om\"},{\"@id\":\"Constraints__Rover__bounds_om\"},{\"@id\":\"Constraints__Rover__lightEnough_om\"},{\"@id\":\"Constraints__Rover__refined_om\"}]" .
 
 elmt:Constraints__Rover_om
     a sysml:OwningMembership ;
@@ -357,7 +378,12 @@ elmt:Constraints__Rover__limit
     sysml:ownedFeature elmt:Constraints__Rover__limit__m, elmt:Constraints__Rover__limit__limit ;
     sysml:ownedFeatureMembership elmt:Constraints__Rover__limit__m_om, elmt:Constraints__Rover__limit__limit_om ;
     sysx:sourceText "        constraint limit : MassLimit {\n" ;
-    sysx:sourceTail "        }\n" .
+    sysx:sourceTail "        }\n" ;
+    json:ownedMember "[{\"@id\":\"Constraints__Rover__limit__m\"},{\"@id\":\"Constraints__Rover__limit__limit\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Constraints__Rover__limit__m_om\"},{\"@id\":\"Constraints__Rover__limit__limit_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Constraints__Rover__limit__m_om\"},{\"@id\":\"Constraints__Rover__limit__limit_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Constraints__Rover__limit__m\"},{\"@id\":\"Constraints__Rover__limit__limit\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Constraints__Rover__limit__m_om\"},{\"@id\":\"Constraints__Rover__limit__limit_om\"}]" .
 
 elmt:Constraints__Rover__limit_om
     a sysml:FeatureMembership ;
@@ -550,7 +576,8 @@ expr:Constraints__Rover___404___400_pcondition
     sysx:sourceText "mass > 0" ;
     sysml:elementId "Constraints__Rover___404___400_pcondition" ;
     sysml:operator ">" ;
-    sysml:argument expr:Constraints__Rover___404___400_pcondition_pa0, expr:Constraints__Rover___404___400_pcondition_pa1 .
+    sysml:argument expr:Constraints__Rover___404___400_pcondition_pa0, expr:Constraints__Rover___404___400_pcondition_pa1 ;
+    json:argument "[{\"@id\":\"Constraints__Rover___404___400_pcondition_pa0\"},{\"@id\":\"Constraints__Rover___404___400_pcondition_pa1\"}]" .
 
 expr:Constraints__Rover___404___400_pcondition_pa0
     a sysml:FeatureReferenceExpression ;
@@ -581,7 +608,10 @@ elmt:Constraints__Rover__bounds
     sysml:ownedMembership elmt:Constraints__Rover__bounds___400_om, elmt:Constraints__Rover__bounds___401_om, elmt:Constraints__Rover__bounds___402_om, elmt:Constraints__Rover__bounds__inner_om ;
     sysml:ownedRelationship elmt:Constraints__Rover__bounds___400_om, elmt:Constraints__Rover__bounds___401_om, elmt:Constraints__Rover__bounds___402_om, elmt:Constraints__Rover__bounds__inner_om ;
     sysx:sourceText "        constraint bounds {\n" ;
-    sysx:sourceTail "        }\n" .
+    sysx:sourceTail "        }\n" ;
+    json:ownedMember "[{\"@id\":\"Constraints__Rover__bounds___400\"},{\"@id\":\"Constraints__Rover__bounds___401\"},{\"@id\":\"Constraints__Rover__bounds___402\"},{\"@id\":\"Constraints__Rover__bounds__inner\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Constraints__Rover__bounds___400_om\"},{\"@id\":\"Constraints__Rover__bounds___401_om\"},{\"@id\":\"Constraints__Rover__bounds___402_om\"},{\"@id\":\"Constraints__Rover__bounds__inner_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Constraints__Rover__bounds___400_om\"},{\"@id\":\"Constraints__Rover__bounds___401_om\"},{\"@id\":\"Constraints__Rover__bounds___402_om\"},{\"@id\":\"Constraints__Rover__bounds__inner_om\"}]" .
 
 elmt:Constraints__Rover__bounds_om
     a sysml:FeatureMembership ;
@@ -622,7 +652,8 @@ expr:Constraints__Rover__bounds___400_pcondition
     sysx:sourceText "mass > 0" ;
     sysml:elementId "Constraints__Rover__bounds___400_pcondition" ;
     sysml:operator ">" ;
-    sysml:argument expr:Constraints__Rover__bounds___400_pcondition_pa0, expr:Constraints__Rover__bounds___400_pcondition_pa1 .
+    sysml:argument expr:Constraints__Rover__bounds___400_pcondition_pa0, expr:Constraints__Rover__bounds___400_pcondition_pa1 ;
+    json:argument "[{\"@id\":\"Constraints__Rover__bounds___400_pcondition_pa0\"},{\"@id\":\"Constraints__Rover__bounds___400_pcondition_pa1\"}]" .
 
 expr:Constraints__Rover__bounds___400_pcondition_pa0
     a sysml:FeatureReferenceExpression ;
@@ -665,7 +696,8 @@ expr:Constraints__Rover__bounds___401_pcondition
     sysx:sourceText "mass != 0" ;
     sysml:elementId "Constraints__Rover__bounds___401_pcondition" ;
     sysml:operator "!=" ;
-    sysml:argument expr:Constraints__Rover__bounds___401_pcondition_pa0, expr:Constraints__Rover__bounds___401_pcondition_pa1 .
+    sysml:argument expr:Constraints__Rover__bounds___401_pcondition_pa0, expr:Constraints__Rover__bounds___401_pcondition_pa1 ;
+    json:argument "[{\"@id\":\"Constraints__Rover__bounds___401_pcondition_pa0\"},{\"@id\":\"Constraints__Rover__bounds___401_pcondition_pa1\"}]" .
 
 expr:Constraints__Rover__bounds___401_pcondition_pa0
     a sysml:FeatureReferenceExpression ;
@@ -716,7 +748,8 @@ expr:Constraints__Rover__bounds___402_pcondition_pa0
     sysml:elementId "Constraints__Rover__bounds___402_pcondition_pa0" ;
     sysml:operator ">" ;
     sysml:argument expr:Constraints__Rover__bounds___402_pcondition_pa0_pa0, expr:Constraints__Rover__bounds___402_pcondition_pa0_pa1 ;
-    sysx:argumentIndex "0"^^xsd:integer .
+    sysx:argumentIndex "0"^^xsd:integer ;
+    json:argument "[{\"@id\":\"Constraints__Rover__bounds___402_pcondition_pa0_pa0\"},{\"@id\":\"Constraints__Rover__bounds___402_pcondition_pa0_pa1\"}]" .
 
 expr:Constraints__Rover__bounds___402_pcondition_pa0_pa0
     a sysml:FeatureReferenceExpression ;
@@ -787,7 +820,8 @@ expr:Constraints__Rover__bounds__inner___400_pcondition
     sysx:sourceText "mass < 1000" ;
     sysml:elementId "Constraints__Rover__bounds__inner___400_pcondition" ;
     sysml:operator "<" ;
-    sysml:argument expr:Constraints__Rover__bounds__inner___400_pcondition_pa0, expr:Constraints__Rover__bounds__inner___400_pcondition_pa1 .
+    sysml:argument expr:Constraints__Rover__bounds__inner___400_pcondition_pa0, expr:Constraints__Rover__bounds__inner___400_pcondition_pa1 ;
+    json:argument "[{\"@id\":\"Constraints__Rover__bounds__inner___400_pcondition_pa0\"},{\"@id\":\"Constraints__Rover__bounds__inner___400_pcondition_pa1\"}]" .
 
 expr:Constraints__Rover__bounds__inner___400_pcondition_pa0
     a sysml:FeatureReferenceExpression ;
@@ -818,7 +852,10 @@ elmt:Constraints__Rover__lightEnough
     sysml:ownedMember elmt:Constraints__Rover__lightEnough___401, elmt:Constraints__Rover__lightEnough___402, elmt:Constraints__Rover__lightEnough___403, elmt:Constraints__Rover__lightEnough___404, elmt:Constraints__Rover__lightEnough___405 ;
     sysml:ownedMembership elmt:Constraints__Rover__lightEnough___401_om, elmt:Constraints__Rover__lightEnough___402_om, elmt:Constraints__Rover__lightEnough___403_om, elmt:Constraints__Rover__lightEnough___404_om, elmt:Constraints__Rover__lightEnough___405_om ;
     sysx:sourceText "        requirement lightEnough {\n" ;
-    sysx:sourceTail "        }\n" .
+    sysx:sourceTail "        }\n" ;
+    json:ownedRelationship "[{\"@id\":\"Constraints__Rover__lightEnough__r\"},{\"@id\":\"Constraints__Rover__lightEnough___401_om\"},{\"@id\":\"Constraints__Rover__lightEnough___402_om\"},{\"@id\":\"Constraints__Rover__lightEnough___403_om\"},{\"@id\":\"Constraints__Rover__lightEnough___404_om\"},{\"@id\":\"Constraints__Rover__lightEnough___405_om\"}]" ;
+    json:ownedMember "[{\"@id\":\"Constraints__Rover__lightEnough___401\"},{\"@id\":\"Constraints__Rover__lightEnough___402\"},{\"@id\":\"Constraints__Rover__lightEnough___403\"},{\"@id\":\"Constraints__Rover__lightEnough___404\"},{\"@id\":\"Constraints__Rover__lightEnough___405\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Constraints__Rover__lightEnough___401_om\"},{\"@id\":\"Constraints__Rover__lightEnough___402_om\"},{\"@id\":\"Constraints__Rover__lightEnough___403_om\"},{\"@id\":\"Constraints__Rover__lightEnough___404_om\"},{\"@id\":\"Constraints__Rover__lightEnough___405_om\"}]" .
 
 elmt:Constraints__Rover__lightEnough_om
     a sysml:FeatureMembership ;
@@ -898,7 +935,8 @@ expr:Constraints__Rover__lightEnough___401___400_pcondition
     sysx:sourceText "r.mass > 0" ;
     sysml:elementId "Constraints__Rover__lightEnough___401___400_pcondition" ;
     sysml:operator ">" ;
-    sysml:argument expr:Constraints__Rover__lightEnough___401___400_pcondition_pa0, expr:Constraints__Rover__lightEnough___401___400_pcondition_pa1 .
+    sysml:argument expr:Constraints__Rover__lightEnough___401___400_pcondition_pa0, expr:Constraints__Rover__lightEnough___401___400_pcondition_pa1 ;
+    json:argument "[{\"@id\":\"Constraints__Rover__lightEnough___401___400_pcondition_pa0\"},{\"@id\":\"Constraints__Rover__lightEnough___401___400_pcondition_pa1\"}]" .
 
 expr:Constraints__Rover__lightEnough___401___400_pcondition_pa0
     a sysml:FeatureChainExpression ;
@@ -975,7 +1013,8 @@ expr:Constraints__Rover__lightEnough___402___400_pcondition
     sysx:sourceText "r.mass < 100" ;
     sysml:elementId "Constraints__Rover__lightEnough___402___400_pcondition" ;
     sysml:operator "<" ;
-    sysml:argument expr:Constraints__Rover__lightEnough___402___400_pcondition_pa0, expr:Constraints__Rover__lightEnough___402___400_pcondition_pa1 .
+    sysml:argument expr:Constraints__Rover__lightEnough___402___400_pcondition_pa0, expr:Constraints__Rover__lightEnough___402___400_pcondition_pa1 ;
+    json:argument "[{\"@id\":\"Constraints__Rover__lightEnough___402___400_pcondition_pa0\"},{\"@id\":\"Constraints__Rover__lightEnough___402___400_pcondition_pa1\"}]" .
 
 expr:Constraints__Rover__lightEnough___402___400_pcondition_pa0
     a sysml:FeatureChainExpression ;
@@ -1052,7 +1091,8 @@ expr:Constraints__Rover__lightEnough___403___400_pcondition
     sysx:sourceText "r.mass < 200" ;
     sysml:elementId "Constraints__Rover__lightEnough___403___400_pcondition" ;
     sysml:operator "<" ;
-    sysml:argument expr:Constraints__Rover__lightEnough___403___400_pcondition_pa0, expr:Constraints__Rover__lightEnough___403___400_pcondition_pa1 .
+    sysml:argument expr:Constraints__Rover__lightEnough___403___400_pcondition_pa0, expr:Constraints__Rover__lightEnough___403___400_pcondition_pa1 ;
+    json:argument "[{\"@id\":\"Constraints__Rover__lightEnough___403___400_pcondition_pa0\"},{\"@id\":\"Constraints__Rover__lightEnough___403___400_pcondition_pa1\"}]" .
 
 expr:Constraints__Rover__lightEnough___403___400_pcondition_pa0
     a sysml:FeatureChainExpression ;
@@ -1119,7 +1159,10 @@ elmt:Constraints__Rover__lightEnough___405
     sysml:ownedMembership elmt:Constraints__Rover__lightEnough___405__m_om, elmt:Constraints__Rover__lightEnough___405__limit_om ;
     sysml:ownedRelationship elmt:Constraints__Rover__lightEnough___405__m_om, elmt:Constraints__Rover__lightEnough___405__limit_om ;
     sysx:sourceText "            assume MassLimit {\n" ;
-    sysx:sourceTail "            }\n" .
+    sysx:sourceTail "            }\n" ;
+    json:ownedMember "[{\"@id\":\"Constraints__Rover__lightEnough___405__m\"},{\"@id\":\"Constraints__Rover__lightEnough___405__limit\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Constraints__Rover__lightEnough___405__m_om\"},{\"@id\":\"Constraints__Rover__lightEnough___405__limit_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Constraints__Rover__lightEnough___405__m_om\"},{\"@id\":\"Constraints__Rover__lightEnough___405__limit_om\"}]" .
 
 elmt:Constraints__Rover__lightEnough___405_om
     a sysml:OwningMembership ;

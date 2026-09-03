@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -17,7 +18,10 @@ elmt:Vehicles
     sysml:ownedMembership elmt:Vehicles__Vehicle_om, elmt:Vehicles__Engine_om ;
     sysml:ownedRelationship elmt:Vehicles__Vehicle_om, elmt:Vehicles__Engine_om ;
     sysx:sourceText "package Vehicles {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Vehicles__Vehicle\"},{\"@id\":\"Vehicles__Engine\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Vehicles__Vehicle_om\"},{\"@id\":\"Vehicles__Engine_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Vehicles__Vehicle_om\"},{\"@id\":\"Vehicles__Engine_om\"}]" .
 
 elmt:Vehicles__Vehicle
     a sysml:PartDefinition ;
@@ -36,7 +40,12 @@ elmt:Vehicles__Vehicle
     sysml:ownedFeature elmt:Vehicles__Vehicle__mass, elmt:Vehicles__Vehicle__engine ;
     sysml:ownedFeatureMembership elmt:Vehicles__Vehicle__mass_om, elmt:Vehicles__Vehicle__engine_om ;
     sysx:sourceText "    part def Vehicle {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Vehicles__Vehicle__mass\"},{\"@id\":\"Vehicles__Vehicle__engine\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Vehicles__Vehicle__mass_om\"},{\"@id\":\"Vehicles__Vehicle__engine_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Vehicles__Vehicle__mass_om\"},{\"@id\":\"Vehicles__Vehicle__engine_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Vehicles__Vehicle__mass\"},{\"@id\":\"Vehicles__Vehicle__engine\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Vehicles__Vehicle__mass_om\"},{\"@id\":\"Vehicles__Vehicle__engine_om\"}]" .
 
 elmt:Vehicles__Vehicle_om
     a sysml:OwningMembership ;

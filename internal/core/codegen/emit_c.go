@@ -15,6 +15,7 @@ import (
 // finite-only binary64, and the interpreter's once-rounded Integer quotient.
 const cPrelude = `#include <errno.h>
 #include <inttypes.h>
+#include <locale.h>
 #include <stdarg.h>
 #include <math.h>
 #include <setjmp.h>
@@ -216,12 +217,54 @@ static sysml_real sysml_rpow(sysml_real base, sysml_real exp) {
 	return sysml_finite(pow(base, exp));
 }
 
+/* The decimal point snprintf writes and strtod reads under the active locale. */
+static const char *sysml_locale_point(void) {
+	const char *dp = localeconv()->decimal_point;
+	return (dp == NULL || *dp == 0) ? "." : dp;
+}
+
+/* Rewrites the locale's decimal point in buf, if present, as '.'. */
+static void sysml_dot_point(char *buf) {
+	const char *dp = sysml_locale_point();
+	if (strcmp(dp, ".") == 0) return;
+	char *at = strstr(buf, dp);
+	if (at == NULL) return;
+	*at = '.';
+	memmove(at + 1, at + strlen(dp), strlen(at + strlen(dp)) + 1);
+}
+
+/* strtod over decimal notation s ('.' point), whatever the active locale's point is;
+ * errno is ERANGE after an overflow or underflow. */
+static double sysml_strtod_decimal(const char *s) {
+	const char *dp = sysml_locale_point();
+	const char *dot = strchr(s, '.');
+	errno = 0;
+	if (dot == NULL || strcmp(dp, ".") == 0) return strtod(s, NULL);
+	size_t head = (size_t)(dot - s), n = strlen(s) + strlen(dp);
+	char small[64];
+	char *buf = n <= sizeof small ? small : malloc(n);
+	if (buf == NULL) {
+		fputs("out of memory\n", stderr);
+		exit(1);
+	}
+	memcpy(buf, s, head);
+	strcpy(buf + head, dp);
+	strcat(buf + head, dot + 1);
+	errno = 0;
+	double v = strtod(buf, NULL);
+	int saved = errno;
+	if (buf != small) free(buf);
+	errno = saved;
+	return v;
+}
+
 /* Writes r to buf as [-]d[.ddd]e[+-]xx with the fewest digits that read back as r,
  * trying the nearest p-digit decimal then its upper neighbour (wider above powers of two). */
 static void sysml_shortest(sysml_real r, char *buf, size_t size) {
 	for (int prec = 1; prec <= 17; prec++) {
 		snprintf(buf, size, "%.*e", prec - 1, r);
-		if (strtod(buf, NULL) == r) return;
+		sysml_dot_point(buf);
+		if (sysml_strtod_decimal(buf) == r) return;
 		char up[40];
 		snprintf(up, sizeof up, "%s", buf);
 		char *first = up + (up[0] == '-');
@@ -232,7 +275,7 @@ static void sysml_shortest(sysml_real r, char *buf, size_t size) {
 		}
 		if (d < first) continue; /* carried out: a shorter spelling already failed */
 		(*d)++;
-		if (strtod(up, NULL) == r) {
+		if (sysml_strtod_decimal(up) == r) {
 			snprintf(buf, size, "%s", up);
 			return;
 		}
@@ -289,12 +332,43 @@ static sysml_int sysml_parse_int(const char *s, const char *name) {
 	return v;
 }
 
+/* Whether s is decimal Real notation: optional sign, digits with an optional fraction, optional decimal exponent. */
+static bool sysml_real_notation(const char *s) {
+	if (*s == '+' || *s == '-') s++;
+	int digits = 0;
+	for (; *s >= '0' && *s <= '9'; s++) digits++;
+	if (*s == '.') {
+		s++;
+		for (; *s >= '0' && *s <= '9'; s++) digits++;
+	}
+	if (digits == 0) return false;
+	if (*s == 'e' || *s == 'E') {
+		s++;
+		if (*s == '+' || *s == '-') s++;
+		int exponent = 0;
+		for (; *s >= '0' && *s <= '9'; s++) exponent++;
+		if (exponent == 0) return false;
+	}
+	return *s == 0;
+}
+
+/* Whether the significand of decimal notation s has a nonzero digit, so a zero it parsed to is an underflow. */
+static bool sysml_nonzero_notation(const char *s) {
+	for (; *s && *s != 'e' && *s != 'E'; s++) {
+		if (*s >= '1' && *s <= '9') return true;
+	}
+	return false;
+}
+
 static sysml_real sysml_parse_real(const char *s, const char *name) {
-	char *end;
-	double v = strtod(s, &end);
-	if (*s == 0 || *end != 0 || !isfinite(v)) {
-		fprintf(stderr, "argument %s: %s is not a finite Real\n", name, s);
+	if (!sysml_real_notation(s)) {
+		fprintf(stderr, "argument %s: %s is not a finite Real in decimal notation\n", name, s);
 		exit(2);
+	}
+	double v = sysml_strtod_decimal(s);
+	if ((isinf(v) && errno == ERANGE) || (v == 0 && sysml_nonzero_notation(s))) {
+		fprintf(stderr, "argument %s: arithmetic overflow: %s is outside the Real range\n", name, s);
+		exit(1);
 	}
 	return v;
 }

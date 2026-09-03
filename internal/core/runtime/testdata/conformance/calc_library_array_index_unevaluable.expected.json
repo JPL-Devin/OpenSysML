@@ -1,0 +1,5 @@
+{
+  "libraries": true,
+  "type": "calc",
+  "error": "library function is not evaluable: CollectionFunctions::'array#': the runtime has no Array value kind"
+}

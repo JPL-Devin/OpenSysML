@@ -23,6 +23,8 @@ domain-mismatch ReferenceUsage lowerBound        # MultiplicityRange_lowerBound:
 domain-mismatch ReferenceUsage upperBound        # MultiplicityRange_upperBound: same collapse on a kindless usage
 domain-mismatch AttributeUsage upperBound        # MultiplicityRange_upperBound: same collapse on an attribute (a KerML `feature`)
 domain-mismatch SubjectMembership upperBound     # MultiplicityRange_upperBound: same collapse on a subject membership
+domain-mismatch OperatorExpression lowerBound    # MultiplicityRange_lowerBound: a cast's `(as T[m])` multiplicity is written on the operator expression
+domain-mismatch OperatorExpression upperBound    # MultiplicityRange_upperBound: same collapse on a cast's multiplicity
 domain-mismatch ConstraintUsage isNegated        # Invariant_isNegated: a negated constraint is not materialized as an Invariant
 domain-mismatch TransitionUsage sourceFeature    # Connector_sourceFeature: a transition's ends are written on the transition, not on a Connector
 domain-mismatch TransitionUsage targetFeature    # Connector_targetFeature: a transition's ends are written on the transition, not on a Connector
@@ -37,7 +39,7 @@ literal-for-object-property PartUsage type                                      
 literal-for-object-property urn:opensysml:sysml:InitialNode sourceFeature        # Connector_sourceFeature: a succession end is written as a name (D2)
 literal-for-object-property SuccessionAsUsage sourceFeature                       # Connector_sourceFeature: a `then` after `first start` sequences from the name start, which is no element of the graph (D2)
 literal-for-object-property FeatureReferenceExpression referent                   # FeatureReferenceExpression_referent: a name resolving outside the graph is written as a name, as every reference this tool cannot link is (D7)
-literal-for-object-property FeatureChainExpression targetFeature                  # FeatureChainExpression_targetFeature: a chained feature is written as a name, since the member reached through the chain is not an element of this graph (D7)
+literal-for-object-property InvocationExpression function                         # Expression_function: a library function such as collect resolves outside the graph and is written as a name (D7)
 
 # 3. Metaclass names this tool writes into the SysML namespace that the 202407
 # rendering does not declare at all.
@@ -60,6 +62,8 @@ unknown-class urn:opensysml:sysml:FinalNode -                # an action's final
 unknown-class urn:opensysml:sysml:IfBranch -                 # an if/else branch, standardly an IfActionUsage's then/else parameter
 unknown-class urn:opensysml:sysml:MultiplicityDeclaration -  # a named multiplicity, standardly a MultiplicityRange
 unknown-class urn:opensysml:sysml:Pseudostate -              # a state machine pseudostate, standardly a StateUsage or TransitionUsage shape
+unknown-class urn:opensysml:sysml:ResultExpressionMember -   # a body's result expression, standardly the Expression a ResultExpressionMembership owns
+unknown-class urn:opensysml:sysml:BodyMember -               # a declaration inside an expression body, standardly a Feature the Expression owns
 
 # 5. Properties written in the SysML namespace that no metaclass declares. Every
 # one of these is either a relationship the metamodel reifies as an element
@@ -88,3 +92,4 @@ unknown-property ReferenceUsage isResult                     # notation flag for
 unknown-property OccurrenceUsage isSnapshot                  # notation flag for the `snapshot` keyword, no metamodel property
 unknown-property OccurrenceUsage isTimeslice                 # notation flag for the `timeslice` keyword, no metamodel property
 unknown-property PartUsage isChain                           # notation flag for a feature chain, no metamodel property
+literal-for-object-property FeatureChainExpression targetFeature                   # FeatureChainExpression_targetFeature: a library feature such as an action's done resolves outside the graph and is written as a name (D7)

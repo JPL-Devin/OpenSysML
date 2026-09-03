@@ -1,4 +1,5 @@
 @prefix elmt: <urn:sysmlv2:element:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -16,7 +17,10 @@ elmt:Deps
     sysml:ownedMembership elmt:Deps__A_om, elmt:Deps__B_om ;
     sysml:ownedRelationship elmt:Deps__A_om, elmt:Deps__B_om, elmt:Deps___402, elmt:Deps__named ;
     sysx:sourceText "package Deps {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Deps__A\"},{\"@id\":\"Deps__B\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Deps__A_om\"},{\"@id\":\"Deps__B_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Deps__A_om\"},{\"@id\":\"Deps__B_om\"},{\"@id\":\"Deps___402\"},{\"@id\":\"Deps__named\"}]" .
 
 elmt:Deps__A
     a sysml:PartDefinition ;

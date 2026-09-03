@@ -1716,3 +1716,228 @@ func TestWriteFileErrorNamesTheRequestedPath(t *testing.T) {
 		t.Errorf("error leaks the temporary file: %v", err)
 	}
 }
+
+// A reference reached through an import, an alias, a nested package path, a
+// feature chain or a redefinition across two generals links to the element it
+// names, and that link alone — without the text it was written as — brings the
+// notation back and the same graph after it. The fixture pairs each linked
+// reference with a same-named declaration nearer the writer, so a link that
+// went to the wrong element would surface here. A filter condition names the
+// metadata its own import filters by.
+func TestLinkedReferencesCarryTheRoundTripWithoutSourceText(t *testing.T) {
+	path := filepath.Join("testdata", "convert", "imported_references.sysml")
+	turtle := toTurtle(t, path)
+	for _, want := range []string{
+		"sysml:type elmt:OtherPkg__BudgetLedger ;",
+		"sysml:type elmt:OtherPkg__Tempo ;",
+		"sysml:referent elmt:OtherPkg__Tempo__operative .",
+		"sysml:references elmt:OtherPkg__spare ;",
+		"sysml:targetFeature elmt:OtherPkg__Inner__Wheel__size .",
+		"sysml:redefines elmt:R90__G2__x ;",
+		"sysml:targetFeature elmt:R90__Done__done .",
+		`sysml:type "Elsewhere::Missing" ;`,
+		"sysx:typeArgument elmt:Meta__Safety .",
+		"sysml:type elmt:Meta__Tagged ;",
+	} {
+		if !strings.Contains(turtle, want) {
+			t.Errorf("the graph should carry %q\n%s", want, turtle)
+		}
+	}
+	back := backFromTheGraphAlone(t, turtle)
+	for _, want := range []string{
+		"item b2 : OtherPkg::BudgetLedger;",
+		"attribute t : OtherPkg::Tempo = OtherPkg::Tempo::operative;",
+		"ref spare references OtherPkg::spare;",
+		"attribute s = w.size;",
+		"part redefines G2::x;",
+		"part : OtherPkg::Inner::Wheel redefines w;",
+		"transition idle then Done::done;",
+		"part unresolved : Elsewhere::Missing;",
+		"public import Meta::* [(@ Meta::Safety)];",
+		"attribute other : Meta::Tagged;",
+	} {
+		if !strings.Contains(back, want) {
+			t.Errorf("the notation should read %q\n%s", want, back)
+		}
+	}
+}
+
+// backFromTheGraphAlone writes turtle back to notation without its source text,
+// and checks that notation yields the same structural graph again. The notation
+// is canonical spelling, so the graphs are compared as sets of triples.
+func backFromTheGraphAlone(t *testing.T, turtle string) string {
+	t.Helper()
+	stripped := withoutTriples(t, withoutTriples(t, []byte(turtle), "sysx:sourceText"), "sysx:sourceTail")
+	back, err := export.Convert("m.ttl", stripped, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from the mapping alone: %v", err)
+	}
+	again, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle again: %v", err)
+	}
+	first := structuralTriples(t, []byte(turtle))
+	second := structuralTriples(t, again)
+	for triple := range first {
+		if !second[triple] {
+			t.Errorf("the second hop lost %s %s %s", triple.Subject.Value, triple.Predicate.Value, triple.Object.Value)
+		}
+	}
+	for triple := range second {
+		if !first[triple] {
+			t.Errorf("the second hop added %s %s %s", triple.Subject.Value, triple.Predicate.Value, triple.Object.Value)
+		}
+	}
+	return string(back)
+}
+
+// A loop's condition is read in the loop's own scope, so it links the actions
+// its body declares; a `while` condition reaches the enclosing body's members too.
+func TestLoopConditionsLinkTheLoopBodysActions(t *testing.T) {
+	turtle := toTurtle(t, filepath.Join("testdata", "convert", "loop_scopes.sysml"))
+	for _, want := range []string{
+		"sysml:referent elmt:Loops__Charge___401__charging ;",
+		"sysml:referent elmt:Loops__Charge__prep ;",
+		"sysml:referent elmt:Loops__Charge___402__pace ;",
+	} {
+		if !strings.Contains(turtle, want) {
+			t.Errorf("the graph should carry %q\n%s", want, turtle)
+		}
+	}
+	back := backFromTheGraphAlone(t, turtle)
+	for _, want := range []string{"} until charging.done;", "while prep.done {", "} until pace.done;"} {
+		if !strings.Contains(back, want) {
+			t.Errorf("the notation should read %q\n%s", want, back)
+		}
+	}
+}
+
+// A transition or initial `then` names a vertex of the whole machine: one in a
+// nested state, or in a sibling region, links to that vertex and comes back in
+// a spelling that reaches it again.
+func TestMachineEndpointsLinkAcrossRegionsAndNesting(t *testing.T) {
+	turtle := toTurtle(t, filepath.Join("testdata", "convert", "endpoint_scopes.sysml"))
+	for _, want := range []string{
+		"sysml:targetFeature elmt:Machines__Lamp__on__heat__warm .",
+		"sysml:targetFeature elmt:Machines__Lamp__on__light__bright .",
+		"sysml:targetFeature elmt:Machines__Lamp__on__heat__hot .",
+		"sysml:sourceFeature elmt:Machines__Lamp__on__heat__hot ;",
+	} {
+		if !strings.Contains(turtle, want) {
+			t.Errorf("the graph should carry %q\n%s", want, turtle)
+		}
+	}
+	if strings.Contains(turtle, `sysml:sourceFeature "`) || strings.Contains(turtle, `sysml:targetFeature "`) {
+		t.Errorf("every endpoint names a vertex of the machine, so none should stay a literal\n%s", turtle)
+	}
+	backFromTheGraphAlone(t, turtle)
+}
+
+// A body expression's parameters are names of its body alone: a result naming
+// one is not linked to a same-named import, and a reference outside the body
+// still reaches that import — whichever body the element holds.
+func TestBodyParametersShadowOnlyInsideTheirBody(t *testing.T) {
+	turtle := toTurtle(t, filepath.Join("testdata", "convert", "body_scopes.sysml"))
+	for _, want := range []string{
+		`sysml:referent "limit" .`,
+		`sysml:referent "Gauge" .`,
+		"sysml:referent elmt:Lib__limit .",
+		"sysml:type elmt:Lib__Gauge ;",
+	} {
+		if !strings.Contains(turtle, want) {
+			t.Errorf("the graph should carry %q\n%s", want, turtle)
+		}
+	}
+	if strings.Contains(turtle, "elmt:Lib__Gauge .") {
+		t.Errorf("the body parameter Gauge must not link to Lib::Gauge\n%s", turtle)
+	}
+}
+
+// structuralTriples is the set of a graph's triples without the source text.
+func structuralTriples(t *testing.T, turtle []byte) map[rdf.Triple]bool {
+	t.Helper()
+	g, err := rdf.ParseTurtle(turtle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := map[rdf.Triple]bool{}
+	for _, triple := range g.Triples() {
+		if triple.Predicate == rdf.OpenSysMLTerm("sourceText") || triple.Predicate == rdf.OpenSysMLTerm("sourceTail") {
+			continue
+		}
+		out[triple] = true
+	}
+	return out
+}
+
+// A body parameter, a loop variable or a trigger parameter that shadows an
+// outer feature of the same name is no element of the graph, so the reference
+// stays a name rather than linking the feature it hides.
+func TestShadowingParametersStayNames(t *testing.T) {
+	// A body declaring its parameter is written from its notation alone, so
+	// that fixture is checked in the graph only.
+	body := toTurtle(t, filepath.Join("testdata", "convert", "shadowing_body.sysml"))
+	if want := "sysml:referent elmt:ShadowBody__Sensor__readings ."; !strings.Contains(body, want) {
+		t.Errorf("the graph should carry %q\n%s", want, body)
+	}
+	if wrong := "sysml:referent elmt:ShadowBody__Sensor__value"; strings.Contains(body, wrong) {
+		t.Errorf("the graph should not link %q\n%s", wrong, body)
+	}
+	if want := `sysml:referent "value" ;`; !strings.Contains(body, want) {
+		t.Errorf("the graph should carry %q\n%s", want, body)
+	}
+
+	turtle := toTurtle(t, filepath.Join("testdata", "convert", "shadowing_parameters.sysml"))
+	for _, want := range []string{
+		`sysml:referent "value" ;`,
+		`sysml:referent "value" .`,
+		`sysml:referent "w" ;`,
+		"sysml:referent elmt:Shadows__Sweep__items .",
+	} {
+		if !strings.Contains(turtle, want) {
+			t.Errorf("the graph should carry %q\n%s", want, turtle)
+		}
+	}
+	for _, wrong := range []string{
+		"sysml:referent elmt:Shadows__Sweep__value",
+		"sysml:referent elmt:Shadows__Governor__value",
+		"sysml:referent elmt:Shadows__Governor__w",
+	} {
+		if strings.Contains(turtle, wrong) {
+			t.Errorf("the graph should not link %q\n%s", wrong, turtle)
+		}
+	}
+	back := backFromTheGraphAlone(t, turtle)
+	for _, want := range []string{
+		"accept setSpeed(value) if (value > 0) then fast;",
+		"accept w : Speed if (w > 0) then idle;",
+		"attribute cur = value;",
+	} {
+		if !strings.Contains(back, want) {
+			t.Errorf("the notation should read %q\n%s", want, back)
+		}
+	}
+}
+
+// A chain member inherited by the operand's type from two generals under one
+// name comes back qualified, so the spelling reaches the linked one — behind a
+// nested chain too; a member reached under its name alone comes back as that name.
+// One the operand's own members and types do not reach keeps its qualification too.
+func TestChainMembersKeepTheirQualificationWhenAmbiguous(t *testing.T) {
+	turtle := toTurtle(t, filepath.Join("testdata", "convert", "chain_scopes.sysml"))
+	for _, want := range []string{
+		"sysml:targetFeature elmt:Gen__G1__x .",
+		"sysml:targetFeature elmt:Gen__G2__x .",
+		"sysml:targetFeature elmt:Gen__G1__y .",
+	} {
+		if !strings.Contains(turtle, want) {
+			t.Errorf("the graph should carry %q\n%s", want, turtle)
+		}
+	}
+	back := backFromTheGraphAlone(t, turtle)
+	for _, want := range []string{"attribute a = w.Gen::G1::x;", "attribute b = w.Gen::G2::x;", "attribute c = w.y;", "attribute d = axle.hub.Gen::G2::x;", "attribute e = axle.hub.y;", "attribute f = spare.Gen::G1::y;"} {
+		if !strings.Contains(back, want) {
+			t.Errorf("the notation should read %q\n%s", want, back)
+		}
+	}
+}

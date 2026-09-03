@@ -1,4 +1,5 @@
 @prefix elmt: <urn:sysmlv2:element:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -15,7 +16,9 @@ elmt:Importer
     sysml:ownedRelationship elmt:Importer___400, elmt:Importer___401, elmt:Importer___402 ;
     sysml:ownedImport elmt:Importer___400, elmt:Importer___401, elmt:Importer___402 ;
     sysx:sourceText "package Importer {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedRelationship "[{\"@id\":\"Importer___400\"},{\"@id\":\"Importer___401\"},{\"@id\":\"Importer___402\"}]" ;
+    json:ownedImport "[{\"@id\":\"Importer___400\"},{\"@id\":\"Importer___401\"},{\"@id\":\"Importer___402\"}]" .
 
 elmt:Importer___400
     a sysml:Import ;
