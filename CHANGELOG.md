@@ -74,8 +74,9 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   functions bind named arguments (`sum0(zero = 0, collection = xs)`), bind null to every
   `[0..1]` parameter a call leaves out, trailing ones included (`size()` is `0`, `'if'(false)`
   null, `subsequence(seq, 2)` runs to the end), and a model's own calc
-  named like a library function is no longer shadowed by the built-in of that name, with or
-  without a body of its own. A body
+  named like a library function — a collection built-in, a conversion, an operator form or
+  `sqrt` alike — is no longer answered by the implementation of that name, with or without a
+  body of its own. A body
   passed on through an `expr` parameter (`Keep(xs, { in x; x > threshold })` with `Keep`
   doing `xs->select pred`) is applied in the scope it was written in, so it reads its writer's
   `threshold`, and one a control function selects is applied rather than answered as a body;

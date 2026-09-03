@@ -632,22 +632,6 @@ func (ctx *Context) calcScope(declarer, invoked *symbols.Symbol, callerScope *sy
 	return callerScope
 }
 
-// hasCalcBody reports whether sym's calc chain states a computation of its own:
-// a result expression, or a body assigning an output it declares. A library
-// function declared without one — or a symbol loaded from the library index,
-// which carries no declaration at all — has no body.
-func (ctx *Context) hasCalcBody(sym *symbols.Symbol) bool {
-	if sym == nil || sym.Decl == nil || !isCalcDecl(sym.Decl) {
-		return false
-	}
-	chain := ctx.calcChain(sym)
-	body, _ := calcBody(chain)
-	if lower.Returns(body) {
-		return true
-	}
-	return len(assignedOutputs(calcSteps(body), ctx.calcOutputs(chain))) > 0
-}
-
 // isCalcDecl reports whether a declaration is a calc definition or calc usage.
 func isCalcDecl(decl ast.Node) bool {
 	switch d := decl.(type) {

@@ -276,30 +276,14 @@ func libraryFunctionByName(fqn string) (*libraryFunction, bool) {
 	return fn, ok
 }
 
-// libraryFunctionFor returns the built-in implementation of sym when sym is a
-// function library declaration this runtime implements.
+// libraryFunctionFor answers the implementation of a library-declared scalar
+// function; a calc the model declares under the same name is never answered here.
 func (ctx *Context) libraryFunctionFor(sym *symbols.Symbol) (*libraryFunction, bool) {
-	// A declaration that is not a function is not one of these, whatever it is
-	// named.
-	if sym == nil || !isCalcSymbol(sym) {
+	if sym == nil || !isCalcSymbol(sym) || !ctx.libraryDeclared(sym) {
 		return nil, false
 	}
 	fn, ok := libraryFunctions[ctx.qualifiedSymbolName(sym)]
-	if !ok {
-		return nil, false
-	}
-	// A library declaration is answered by its built-in even where it carries a
-	// body: the built-in is the implementation of that normative function, and the
-	// body it is declared with is a specification of it rather than one.
-	if ctx.libraryDeclared(sym) {
-		return fn, true
-	}
-	// Outside the libraries the name is the model's own: a calc that carries a
-	// body is evaluated from that body and never routed here.
-	if ctx.hasCalcBody(sym) {
-		return nil, false
-	}
-	return fn, true
+	return fn, ok
 }
 
 // libraryDeclared reports whether sym was declared by one of the library

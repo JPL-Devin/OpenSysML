@@ -213,6 +213,7 @@ func TestOpenSysMLMathFunctionsMatchTheShippedDeclarations(t *testing.T) {
 
 	idx := symbols.NewIndex()
 	idx.AddDocument(path, file)
+	idx.MarkLibrary(path)
 	resolver := resolve.New(idx)
 	ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
 
@@ -315,13 +316,10 @@ func TestLibraryFunctionQualifiedCallNeedsNoImport(t *testing.T) {
 	}
 }
 
-// A call written with a qualified name that resolves to the library declaration
-// is applied by the built-in implementation, because the library gives that
-// declaration no body.
+// A call that resolves to the library's declaration is applied by the built-in
+// implementation, because the library gives that declaration no body.
 func TestLibraryFunctionDispatchByResolvedSymbol(t *testing.T) {
-	ctx, idx := contextForSource(t, `package RealFunctions {
-	function sqrt { in x : Real[1]; return : Real[1]; }
-}`)
+	ctx, idx := libraryModelContext(t, `package test {}`)
 	sym := lookupOne(t, idx, "RealFunctions::sqrt")
 
 	if _, ok := ctx.libraryFunctionFor(sym); !ok {
@@ -330,6 +328,35 @@ func TestLibraryFunctionDispatchByResolvedSymbol(t *testing.T) {
 	got, err := ctx.InvokeCalc(sym, []Value{constReal(25)}, nil)
 	if err != nil || got.Const.Real != 5 {
 		t.Fatalf("InvokeCalc(sqrt, 25.0) = %+v, %v", got, err)
+	}
+}
+
+// A declaration the model makes under a library function's qualified name is
+// the model's own, so it is never answered by the built-in: without a body it
+// has no result, whether the library is loaded beside it or not.
+func TestLibraryFunctionNeverAnswersAModelDeclaration(t *testing.T) {
+	const src = `package RealFunctions {
+	function sqrt { in x : Real[1]; return : Real[1]; }
+}`
+	for name, build := range map[string]func(*testing.T, string) (*Context, *symbols.Index){
+		"alone": contextForSource, "beside the library": libraryModelContext,
+	} {
+		ctx, idx := build(t, src)
+		var sym *symbols.Symbol
+		for _, s := range idx.LookupQualified("RealFunctions::sqrt") {
+			if !ctx.libraryDeclared(s) {
+				sym = s
+			}
+		}
+		if sym == nil {
+			t.Fatalf("%s: the model's RealFunctions::sqrt was not indexed", name)
+		}
+		if _, ok := ctx.libraryFunctionFor(sym); ok {
+			t.Errorf("%s: the model's RealFunctions::sqrt dispatched to the built-in", name)
+		}
+		if _, err := ctx.InvokeCalc(sym, []Value{constReal(25)}, nil); !errors.Is(err, ErrNoResultExpression) {
+			t.Errorf("%s: InvokeCalc(model sqrt, 25.0) = %v, want %v", name, err, ErrNoResultExpression)
+		}
 	}
 }
 

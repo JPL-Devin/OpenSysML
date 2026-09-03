@@ -1368,22 +1368,30 @@ func testBuiltinNamedArgumentThatBindsNothing(t *testing.T) {
 }
 
 // testBodilessModelCalcNamedAsABuiltin: a model's own calc declared under a
-// built-in's qualified name is the model's, so without a body it computes
-// nothing rather than what the library's declaration of that name computes.
+// library function's qualified name — a collection built-in, a conversion, an
+// operator form — is the model's, so without a body it computes nothing rather
+// than what the library's declaration of that name computes.
 func testBodilessModelCalcNamedAsABuiltin(t *testing.T) {
 	src := `
 		package NumericalFunctions {
 			private import ScalarValues::*;
 			calc def sum0 { in collection : Integer[*]; in zero : Integer; return : Integer; }
 		}
+		package RealFunctions {
+			private import ScalarValues::*;
+			calc def ToReal { in x : String; return : Real; }
+			calc def '+' { in x : Real; in y : Real; return : Real; }
+		}
 		package test {
 			private import ScalarValues::*;
 			calc def Total { return : Integer = NumericalFunctions::sum0((1, 2, 3), 0); }
 			calc def size { in seq : Integer[*]; return : Integer; }
 			calc def Size { return : Integer = size((1, 2, 3)); }
+			calc def Parsed { return : Real = RealFunctions::ToReal("1.5"); }
+			calc def Added { return : Real = RealFunctions::'+'(1.0, 2.0); }
 		}
 	`
-	for _, calc := range []string{"Total", "Size"} {
+	for _, calc := range []string{"Total", "Size", "Parsed", "Added"} {
 		err := calcErrorWithLibraries(t, src, calc, nil, 10000)
 		if !errors.Is(err, ErrNoResultExpression) {
 			t.Errorf("%s = %v, want %v", calc, err, ErrNoResultExpression)
