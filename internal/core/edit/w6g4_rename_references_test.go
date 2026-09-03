@@ -187,3 +187,20 @@ func TestRenameReportsEveryRewrittenSpan(t *testing.T) {
 	}
 	assertOnlySpanChanged(t, m, res)
 }
+
+// A transition's guard and effect see the parameter its accept declares, so
+// renaming a same-named feature of the machine leaves them alone.
+func TestRenameLeavesTriggerParameterReferencesAlone(t *testing.T) {
+	const src = "package App {\n\titem def Request;\n\tstate def Server {\n" +
+		"\t\tpart origin : Request;\n\t\tstate idle;\n\t\tstate busy;\n" +
+		"\t\ttransition first idle accept origin : Request if origin != null" +
+		" do send new Request() to origin then busy;\n\t}\n}\n"
+	got := renamed(t, "trigger.sysml", src, "App::Server::origin", "peer")
+
+	if !strings.Contains(got, "part peer : Request;") {
+		t.Fatalf("the declaration was not renamed:\n%s", got)
+	}
+	if !strings.Contains(got, "accept origin : Request if origin != null do send new Request() to origin then busy;") {
+		t.Fatalf("the accept's parameter or a reference to it was rewritten:\n%s", got)
+	}
+}

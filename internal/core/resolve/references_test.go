@@ -214,6 +214,69 @@ func TestSendReceiverIsAReferenceAndConstructorLabelsAreNot(t *testing.T) {
 	}
 }
 
+// A transition's guard and effect are collected in the scope holding the
+// parameter its trigger declares, as the document walk resolves them, so a send
+// whose receiver is that parameter reaches it rather than a same-named feature
+// of the machine — also on a fresh resolver, as rename uses, with nothing memoized
+// from a document walk.
+func TestTransitionEffectReferencesResolveInTriggerScope(t *testing.T) {
+	const src = `package App {
+	item def Request;
+	state def Server {
+		part origin : Request;
+		state idle;
+		state busy;
+		transition first idle accept origin : Request if origin != null do send new Request() to origin then busy;
+	}
+}`
+	walk, root, rootScope := resolvedDoc(t, src)
+	if len(walk.Diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", walk.Diagnostics)
+	}
+	cold := resolve.New(walk.Index())
+	cold.SetModel(semantics.NewModel(cold))
+	pkg := unwrapMember(root.Members[0])
+	part, ok := rootScope.ChildFor(pkg).ChildFor(memberOf(pkg, 1)).LookupLocal("origin")
+	if !ok || part == nil {
+		t.Fatal("the machine's `part origin` was not indexed")
+	}
+	uses := 0
+	for _, ref := range resolve.References(root, rootScope) {
+		if nameText(ref.QN) != "origin" {
+			continue
+		}
+		uses++
+		sym, ok := cold.ResolveReference(ref)
+		if !ok {
+			t.Fatalf("`origin` at %v did not resolve", ref.QN.Span())
+		}
+		if sym == part {
+			t.Errorf("`origin` at %v reached the machine's part, want the accept's parameter", ref.QN.Span())
+		}
+	}
+	if uses != 2 {
+		t.Errorf("collected %d `origin` reference(s) (guard and receiver), want 2", uses)
+	}
+}
+
+// memberOf returns the i-th member declaration of a package or definition node.
+func memberOf(n ast.Node, i int) ast.Node {
+	switch v := n.(type) {
+	case *ast.Package:
+		return unwrapMember(v.Members[i])
+	case *ast.Definition:
+		return unwrapMember(v.Members[i])
+	}
+	return nil
+}
+
+func unwrapMember(n ast.Node) ast.Node {
+	if m, ok := n.(*ast.Membership); ok {
+		return m.Member
+	}
+	return n
+}
+
 // resolvedDoc parses and resolves src the way the workspace does, with the model
 // attached before the walk.
 func resolvedDoc(t *testing.T, src string) (*resolve.Resolver, *ast.RootNamespace, *symbols.Scope) {
