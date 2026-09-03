@@ -109,6 +109,12 @@ func TestTriggerAfterRejectsNonDuration(t *testing.T) {
 		{"after 5 [m] / 2 [s]", "a value of dimension L·T^-1"},
 		{"after Len()", "LengthValue"},
 		{"after IsOk()", "Boolean"},
+		{"after 5 % 2", "NumericalValue"},
+		{"after x % 2", "NumericalValue"},
+		{"after (if flag ? 5 else 6)", "Natural"},
+		{"after (if flag ? 5 else 5.5)", "Natural or Rational"},
+		{"after (if flag ? x else len)", "Integer or LengthValue"},
+		{"after x ?? 5", "Integer or Natural"},
 	} {
 		body := "transition first a accept " + tc.trigger + " then b;"
 		wantTriggerDiag(t, body, "trigger-after-duration",
@@ -131,6 +137,26 @@ func TestTriggerAfterAcceptsDurations(t *testing.T) {
 		"after t2 - t",
 		"after Twice(d)",
 		"after 10 [m] / 2 [m/s]",
+		"after (if flag ? 5 [s] else 6 [s])",
+		"after (if flag ? d else d2)",
+		"after d ?? 5 [s]",
+	} {
+		wantTriggerSilent(t, "transition first a accept "+trigger+" then b;")
+	}
+}
+
+// Arithmetic over durations and time instants is judged by its dimension, as
+// the pilot's isDuration/isTime admit it, so a sum of instants or of an instant
+// and a duration passes either trigger; a conditional whose branches disagree
+// is left to evaluation.
+func TestTriggerTimeArithmeticIsJudgedByDimension(t *testing.T) {
+	for _, trigger := range []string{
+		"after d + d",
+		"after t + d",
+		"at d + d",
+		"at t - t",
+		"after (if flag ? d else 5)",
+		"at (if flag ? t else 5)",
 	} {
 		wantTriggerSilent(t, "transition first a accept "+trigger+" then b;")
 	}
@@ -148,6 +174,9 @@ func TestTriggerAtRejectsNonTimeInstant(t *testing.T) {
 		{"at flag", "Boolean"},
 		{"at Twice(d)", "DurationValue"},
 		{"at d * d", "a value of dimension T^2"},
+		{"at x % 2", "NumericalValue"},
+		{"at (if flag ? 5 else 6)", "Natural"},
+		{"at (if flag ? d else 5 [s])", "DurationValue or a quantity in second (a DurationUnit)"},
 	} {
 		body := "transition first a accept " + tc.trigger + " then b;"
 		wantTriggerDiag(t, body, "trigger-at-time-instant",
@@ -164,6 +193,9 @@ func TestTriggerAtAcceptsTimeInstants(t *testing.T) {
 		"at TimeOf(a)",
 		"at t + d",
 		"at t2 - d",
+		"at (if flag ? t else t2)",
+		"at (if flag ? t else h.instant)",
+		"at t ?? TimeOf(a)",
 	} {
 		wantTriggerSilent(t, "transition first a accept "+trigger+" then b;")
 	}
