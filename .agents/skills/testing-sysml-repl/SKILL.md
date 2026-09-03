@@ -5507,3 +5507,38 @@ tells you which one ran without any debug flag.
 - The blueprint's venv is `~/pv` (see the maintenance block), but it can exist without the editable
   `opensysml` install; `~/pv/bin/pip install -e clients/python` (or a fresh `python3 -m venv`) takes
   under a minute and the non-tty one-shot `python script.py` with auto-start worked (35 ms connect).
+
+## `%state <machine>` alone: exhibitor lookup and its two traps (PR #845 class)
+
+Since PR #845 the one-argument `%state <machine>` form walks the *held* objects for exhibitors of
+the machine and attaches to the one found (`Debugging state machine "lp" exhibited by object #1
+of "TA::Sys"`), refusing with a typed `ExhibitorsError` for zero or several. The load-bearing
+probe is `internal/repl/testdata/exhibited_timer.sysml`: `%instantiate TA::Sys`, `%state lp`,
+`%advance 2.5 [s]`, `%features #1` → `x = 0.6000000000000001`, `n = 3`; a detached run (the
+pre-#845 behaviour, or any regression to it) leaves `x = 0.2`, `n = 1` while still printing
+`Advanced to 2.5 (2 event(s) processed)`, so assert on `%features`, not on the advance line.
+`%state #1` is the oracle: both forms must agree.
+
+Two things that look like the several-exhibitor path but are not:
+- `%instantiate TA::Sys` twice does **not** hold two objects — the second *supersedes* the first
+  (`note: TA::Sys now denotes this object; object #1 is no longer named`), so `%state lp` attaches
+  to the new one. Use two differently named usages (e.g. `nested_machine.sysml`'s `Fleet::rover` and
+  `Fleet::driver`, whose `driver.r` is a second `Rover`).
+- Nested parts count only once **materialized**. `%instantiate Fleet::rover` + `%instantiate
+  Fleet::driver` then `%state Fleet::Rover::modes` attaches to `#1 of "Fleet::rover"` with no
+  error, because `driver.r` has not been reached yet; run `%features Fleet::driver` first and the
+  same `%state` refuses with `2 objects of this session exhibit … (#1 of "Fleet::rover", #4 of
+  "Fleet::driver::r")`. The walk deliberately materializes nothing, so the answer follows what
+  the session has reached; materialize first when a nested exhibitor is meant to count.
+
+Zero exhibitors is type-aware: a `state def` bound through typed usages (`shared_machine.sysml`:
+`exhibit state front : Blink`) refuses before any `%instantiate`, naming `"Shared::Lamp"`, and so
+does any usage on the way to the body (`named_usage_machine.sysml`: `state spare : Blink; exhibit
+state active ::> spare;` — `%state Relay::Beacon::spare` and `%state Relay::Blink` both refuse, then
+attach to `active`). Only a `state def` no type exhibits (`performed_machine.sysml`: `Two::Check`)
+still prints `Started state machine executor`. The CLI mirrors the REPL: `-state lp` without
+`-instantiate` exits 2 with the same message prefixed `sysml:`.
+
+Branch-moved trap: the lead may push a follow-up commit mid-run. Compare `./bin/sysml --version`
+with `git rev-parse --short HEAD` before every batch and rebuild when they differ; the version
+string is the only thing that tells a stale binary from a fresh one.
