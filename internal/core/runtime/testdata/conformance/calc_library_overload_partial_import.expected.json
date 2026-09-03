@@ -4,7 +4,7 @@
   "instantiate": "test::Probe",
   "slots": {
     "absInteger": {"type": "Integer", "value": 2},
-    "absComplex": {"type": "Real", "value": 5.0},
-    "zeroComplex": {"type": "Boolean", "value": true}
+    "absComplex": {"error": "type mismatch: function IntegerFunctions::abs parameter \"x\" requires a numeric value"},
+    "absQualified": {"type": "Real", "value": 5.0}
   }
 }

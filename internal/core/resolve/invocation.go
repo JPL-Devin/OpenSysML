@@ -2,14 +2,12 @@ package resolve
 
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
-	"github.com/Open-MBEE/OpenSysML/internal/core/libnames"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // ResolveInvocationName resolves the name an invocation calls as ResolveQualified
-// does, except that a bare name the model declares nothing for denotes the
-// Kernel Function Library declaration of that name, which is in force unimported,
-// and several declarations under a qualified name denote the first of them.
+// does, except that several declarations under a qualified name denote the first
+// of them: which one the call runs is for overload selection to decide.
 func (r *Resolver) ResolveInvocationName(scope *symbols.Scope, qn *ast.QualifiedName) (*symbols.Symbol, bool) {
 	if qn == nil {
 		return nil, false
@@ -18,41 +16,12 @@ func (r *Resolver) ResolveInvocationName(scope *symbols.Scope, qn *ast.Qualified
 	return r.resolveQualified(scope, qn, nil)
 }
 
-// libraryFunctionFallback is the most general library declaration of name, the
-// one a bare invocation reaches when the model declares nothing for it.
-func (r *Resolver) libraryFunctionFallback(name string) (*symbols.Symbol, bool) {
-	fns := r.LibraryFunctions(name)
-	if len(fns) == 0 {
-		return nil, false
-	}
-	return fns[0], true
-}
-
-// LibraryFunctions returns the library declarations a bare call to name may
-// denote, most general first; only those the index holds exactly once. Memoized.
-func (r *Resolver) LibraryFunctions(name string) []*symbols.Symbol {
-	if cached, ok := r.libraryFunctions[name]; ok {
-		return cached
-	}
-	var out []*symbols.Symbol
-	if r.idx != nil {
-		for _, fqn := range libnames.Declarations(name) {
-			if matches := r.idx.LookupQualified(fqn); len(matches) == 1 {
-				out = append(out, matches[0])
-			}
-		}
-	}
-	r.libraryFunctions[name] = out
-	return out
-}
-
 // InvocationCandidates returns every declaration an invocation's name may denote
 // from scope, in lookup order: the first is what ResolveInvocationName reaches.
 // A bare name is bound by the first scope step that finds it, every import of
-// that scope contributing, or by the library when the model declares nothing.
-// Imported library declarations do not hide the rest of the in-force library set
-// of that name; a declaration of the model's own does. A qualified name denotes
-// every member its last segment names in the namespace the rest resolves to.
+// that scope contributing; a library function is a candidate only where the
+// model imports it, as for any other name. A qualified name denotes every
+// member its last segment names in the namespace the rest resolves to.
 func (r *Resolver) InvocationCandidates(scope *symbols.Scope, qn *ast.QualifiedName) []*symbols.Symbol {
 	if qn == nil || len(qn.Parts) == 0 {
 		return nil
@@ -62,17 +31,8 @@ func (r *Resolver) InvocationCandidates(scope *symbols.Scope, qn *ast.QualifiedN
 		r.aside(func() { out = r.qualifiedCandidates(scope, qn) })
 		return out
 	}
-	name := qn.Parts[0].Text
 	var out []*symbols.Symbol
-	r.aside(func() { out = r.unqualifiedCandidates(scope, name) })
-	if len(out) == 0 {
-		return r.LibraryFunctions(name)
-	}
-	if r.allLibrary(out) {
-		for _, sym := range r.LibraryFunctions(name) {
-			out = appendSymbol(out, sym)
-		}
-	}
+	r.aside(func() { out = r.unqualifiedCandidates(scope, qn.Parts[0].Text) })
 	return out
 }
 
@@ -100,19 +60,6 @@ func (r *Resolver) qualifiedCandidates(scope *symbols.Scope, qn *ast.QualifiedNa
 		}
 	}
 	return out
-}
-
-// allLibrary reports whether every symbol is declared by bundled library content.
-func (r *Resolver) allLibrary(syms []*symbols.Symbol) bool {
-	if r.idx == nil {
-		return false
-	}
-	for _, sym := range syms {
-		if !r.idx.Library(sym) {
-			return false
-		}
-	}
-	return true
 }
 
 // unqualifiedCandidates walks the scopes as walkUnqualifiedHiding does, stopping

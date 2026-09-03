@@ -11,10 +11,18 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/repl"
 )
 
-// unimportedLibraryCallSrc calls a Kernel Function Library function without
-// importing its package, and an extension function the same way.
+// unimportedLibraryCallSrc calls Kernel Function Library functions without
+// importing their package; importedLibraryCallSrc is the same model with the import.
 const unimportedLibraryCallSrc = `package P {
 	private import ScalarValues::*;
+	attribute r : Real = sqrt(4.0);
+	attribute i : Integer = abs(-2);
+}
+`
+
+const importedLibraryCallSrc = `package P {
+	private import ScalarValues::*;
+	private import RealFunctions::*;
 	attribute r : Real = sqrt(4.0);
 	attribute i : Integer = abs(-2);
 }
@@ -82,13 +90,31 @@ func evalInModel(t *testing.T, src string, exprs ...string) []string {
 	return out
 }
 
-// An unqualified call the runtime answers from the Kernel Function Library is
-// not squiggled, and the same source evaluates.
-func TestPublishDiagnosticsAgreesWithRuntimeOnUnimportedLibraryCall(t *testing.T) {
-	if diags := publishedDiagnostics(t, "lib.sysml", unimportedLibraryCallSrc); len(diags) != 0 {
+// The editor and the runtime agree on a bare library call: unimported, both
+// report it unresolved; under the import, it checks clean and evaluates.
+func TestPublishDiagnosticsAgreesWithRuntimeOnLibraryCall(t *testing.T) {
+	diags := publishedDiagnostics(t, "lib.sysml", unimportedLibraryCallSrc)
+	if len(diags) != 2 || !strings.Contains(diags[0], "unresolved reference: sqrt") || !strings.Contains(diags[1], "unresolved reference: abs") {
+		t.Fatalf("diagnostics = %v, want both calls unresolved", diags)
+	}
+	path := filepath.Join(t.TempDir(), "model.sysml")
+	if err := os.WriteFile(path, []byte(unimportedLibraryCallSrc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sess := repl.NewSession()
+	if _, err := sess.LoadFile(path); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if lines, err := sess.EvalExpr("P::r"); err == nil {
+		t.Fatalf("P::r evaluated to %v, want the import to be required", lines)
+	} else if !strings.Contains(err.Error(), "unresolved reference: sqrt") {
+		t.Fatalf("error %q does not report the unresolved call", err)
+	}
+
+	if diags := publishedDiagnostics(t, "lib_imported.sysml", importedLibraryCallSrc); len(diags) != 0 {
 		t.Fatalf("diagnostics = %v, want none", diags)
 	}
-	got := evalInModel(t, unimportedLibraryCallSrc, "P::r", "P::i")
+	got := evalInModel(t, importedLibraryCallSrc, "P::r", "P::i")
 	for i, want := range []string{"2.0", "2"} {
 		if !strings.Contains(got[i], want) {
 			t.Errorf("value %d = %q, want %q", i, got[i], want)

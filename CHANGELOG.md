@@ -10,7 +10,7 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 - **A call selects the overload its arguments fit, and the checker and the runtime select the
   same one.** A name visible as several function or calc declarations — owned, inherited,
-  imported, re-exported, or the Kernel Function Library packages that are always in force — no
+  imported or re-exported, a library function among them only where its package is imported — no
   longer resolves to whichever declaration is found first: the candidates are filtered by arity,
   by positional or named binding, and by argument-type conformance (the `ScalarValues` lattice,
   strings, booleans, collections, quantities and declared types), and the most specific fit is
@@ -227,13 +227,6 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Fixed
 
-- **An unqualified library call the runtime answers is no longer reported `unresolved`.** The
-  checker and the runtime consult one local-name → qualified-declaration table
-  (`internal/core/libnames`), so `sqrt(4.0)` with no `import RealFunctions::*;` draws no
-  diagnostic in the LSP or `-validate` and answers `2.0`, as it always evaluated. A name neither
-  the model nor the libraries declare is still `unresolved`, and the OpenSysML extension
-  functions (`exp`, `ln`, `log`, `atan2`) still require `import OpenSysMLMathFunctions::*;` both
-  statically and at runtime.
 - **`%state <machine> <object>` attaches to the machine the object exhibits instead of performing
   it again.** Naming an object's own exhibited machine (`%state Rover::modes rover`, or `-state
   "Rover::modes rover"`) used to start a second performance of it on the same object, so its

@@ -148,10 +148,9 @@ type Resolver struct {
 	// valuesInProgress are the usages whose value expression is being read for
 	// the type it names, so a value naming its own feature ends the walk.
 	valuesInProgress map[*ast.Usage]bool
-	// invocationNames are the bare names invocations call, which the library
-	// answers when the model does not: see ResolveInvocationName.
-	invocationNames  map[*ast.QualifiedName]bool
-	libraryFunctions map[string][]*symbols.Symbol
+	// invocationNames are the names invocations call, whose last segment may
+	// denote several declarations: see ResolveInvocationName.
+	invocationNames map[*ast.QualifiedName]bool
 }
 
 // New creates a resolver over the given index.
@@ -185,7 +184,6 @@ func New(idx *symbols.Index) *Resolver {
 		resolvingAlias:    map[*symbols.Symbol]bool{},
 		reportedQualified: map[*ast.QualifiedName]bool{},
 		invocationNames:   map[*ast.QualifiedName]bool{},
-		libraryFunctions:  map[string][]*symbols.Symbol{},
 	}
 }
 

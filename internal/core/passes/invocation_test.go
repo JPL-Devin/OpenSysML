@@ -70,17 +70,16 @@ func TestInvocationOverloadSelectsByArgumentType(t *testing.T) {
 	}`)
 }
 
-// Importing part of the library does not hide the rest of it: with only the
-// numeric packages imported, a Complex argument still selects ComplexFunctions::abs.
-func TestInvocationOverloadImportedLibraryJoinsInForceLibrary(t *testing.T) {
-	wantLibraryClean(t, `package P {
+// Only the imported packages contribute candidates: with StringFunctions left
+// out, a String argument fits none of the visible ToString declarations, and the
+// diagnostic names the candidates considered rather than a hidden one.
+func TestInvocationOverloadOnlyImportedPackagesContribute(t *testing.T) {
+	wantLibraryDiag(t, `package P {
 		private import ScalarValues::*;
 		private import IntegerFunctions::*;
 		private import RealFunctions::*;
-		private import RationalFunctions::*;
-		attribute c : Real = abs(rect(3.0, 4.0));
-		attribute z : Boolean = isZero(rect(0.0, 0.0));
-	}`)
+		attribute s = ToString("x");
+	}`, "type.expr", "argument 1 of ToString expects Integer, found String (candidates: IntegerFunctions::ToString, RealFunctions::ToString)")
 }
 
 // Among the applicable candidates, the most specific parameter types win: the
@@ -198,17 +197,15 @@ func TestInvocationOverloadModelShadowsLibrary(t *testing.T) {
 	}`)
 }
 
-// A Kernel Function Library function called by its bare name resolves without
-// an import of its package, as the runtime evaluates it; an OpenSysML extension
-// function and a name no library declares stay unresolved.
+// The function libraries are not implicitly imported: a bare call to a Kernel
+// Function Library function, to an OpenSysML extension function or to a name no
+// library declares is unresolved until the model imports the package, and the
+// diagnostic for a library name offers the imports that would resolve it.
 func TestInvocationUnimportedLibraryFunction(t *testing.T) {
-	wantLibraryClean(t, `package P {
+	wantLibraryDiag(t, `package P {
 		private import ScalarValues::*;
 		attribute r = sqrt(4.0);
-		attribute a = abs(-2);
-		attribute n = size(r);
-		attribute s = ToString("x");
-	}`)
+	}`, "unresolved", "unresolved reference: sqrt — did you mean RealFunctions::sqrt")
 	wantLibraryDiag(t, `package P {
 		private import ScalarValues::*;
 		attribute e = exp(1.0);
@@ -217,24 +214,21 @@ func TestInvocationUnimportedLibraryFunction(t *testing.T) {
 		private import ScalarValues::*;
 		attribute e = nosuchfunction(1.0);
 	}`, "unresolved", "unresolved reference: nosuchfunction")
+	wantLibraryClean(t, `package P {
+		private import ScalarValues::*;
+		private import RealFunctions::*;
+		attribute r = sqrt(4.0);
+		attribute q = RealFunctions::sqrt(4.0);
+	}`)
 }
 
-// A library name reached without an import is still type-checked against the
-// declaration it denotes.
-func TestInvocationUnimportedLibraryFunctionArgumentsChecked(t *testing.T) {
+// A qualified library name resolves whatever the model imports, and its
+// arguments are type-checked against the declaration it denotes.
+func TestInvocationQualifiedLibraryFunctionArgumentsChecked(t *testing.T) {
 	wantLibraryDiag(t, `package P {
 		private import ScalarValues::*;
-		attribute r = sqrt("four");
+		attribute r = RealFunctions::sqrt("four");
 	}`, "type.expr", "argument 1 of sqrt expects Real, found String")
-}
-
-// A bare library name outside a call is not in force: only an invocation
-// reaches the Kernel Function Library unimported.
-func TestUnimportedLibraryNameOutsideInvocationUnresolved(t *testing.T) {
-	wantLibraryDiag(t, `package P {
-		private import ScalarValues::*;
-		attribute f = sqrt;
-	}`, "unresolved", "unresolved reference: sqrt")
 }
 
 // A named argument binds by the parameter's effective name, which is what

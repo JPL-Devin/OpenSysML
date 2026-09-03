@@ -209,8 +209,8 @@ type Reference struct {
 	// Condition is set when QN is a name inside an element-filter condition, which
 	// its own namespace's filters do not restrict (see InCondition).
 	Condition bool
-	// Invocation is set when QN is the name an invocation calls, which the
-	// in-force library answers unimported (see ResolveInvocationName).
+	// Invocation is set when QN is the name an invocation calls, which overload
+	// selection may resolve to one of several declarations (see ResolveInvocationName).
 	Invocation *ast.InvocationExpr
 }
 

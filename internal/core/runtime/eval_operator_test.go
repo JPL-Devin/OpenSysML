@@ -226,7 +226,6 @@ func TestStringOperators(t *testing.T) {
 		{`StringFunctions::'>='(s, "abc")`, boolValue(true)},
 		{`StringFunctions::'=='(s, "abc")`, boolValue(true)},
 		{`StringFunctions::ToString(s)`, strValue("abc")},
-		{`ToString(s)`, strValue("abc")},
 	}
 	for _, tt := range tests {
 		got, err := evalStringExpr(t, tt.expr)

@@ -111,15 +111,21 @@ func TestReferencesDistinguishOverloads(t *testing.T) {
 	}
 }
 
-// Go-to-definition on an unimported Kernel Function Library call opens the
-// bundled declaration the checker and runtime bind it to.
-func TestDefinitionReachesUnimportedLibraryFunction(t *testing.T) {
+// Go-to-definition on an imported Kernel Function Library call opens the
+// bundled declaration the checker and runtime bind it to; unimported, the
+// call resolves to nothing and there is nowhere to go.
+func TestDefinitionReachesImportedLibraryFunction(t *testing.T) {
 	ws := model.NewWorkspace()
 	s := NewServer(ws)
 	name := uri.File("/tmp/unimported_nav.sysml").Filename()
 	ws.Open(name, []byte(unimportedLibraryCallSrc), 1)
+	if locs := definitionOf(t, s, name, unimportedLibraryCallSrc, "sqrt(4.0)"); len(locs) != 0 {
+		t.Fatalf("unimported call: locations = %v, want none", locs)
+	}
 
-	locs := definitionOf(t, s, name, unimportedLibraryCallSrc, "sqrt(4.0)")
+	name = uri.File("/tmp/imported_nav.sysml").Filename()
+	ws.Open(name, []byte(importedLibraryCallSrc), 1)
+	locs := definitionOf(t, s, name, importedLibraryCallSrc, "sqrt(4.0)")
 	if len(locs) != 1 {
 		t.Fatalf("locations = %d, want 1", len(locs))
 	}
