@@ -59,26 +59,28 @@ Recorded against the corpus above, reproduced byte-identically on a second run:
 
 | Verdict | Files |
 |---|---|
-| `stable` | 290 |
+| `stable` | 303 |
 | `whitespace-only` | 0 |
 | `graph-diff` | 0 |
-| `unwritable` | 1 |
+| `unwritable` | 0 |
 | `unparseable` | 0 |
-| `refused` | 54 |
+| `refused` | 42 |
 | **total** | **345** |
 
-So 291 of 345 files convert to Turtle, and of those 290 come back as the same Turtle byte for
+So 303 of 345 files convert to Turtle, and every one of them comes back as the same Turtle byte for
 byte. That is the source text at work: the decoder writes each file back from the `sysx:sourceText`
 it carries (see [What the gate does not do](#what-the-gate-does-not-do)), so the files that came
 back up to whitespace, as a different graph, or that could not be written back or re-read from
-canonical notation all moved to `stable` when it landed. The one `unwritable` file has an element
-whose owner is not in the graph, which no text can repair.
-The refusals by class: 21 `feature-declaration`,
-10 `event-declaration`, 6 `operator-expr`, 3 each of `duplicate-declaration`,
-`snapshot-declaration`, `invocation-expr` and `assert-declaration`, 2 `feature-chain-expr`, and
-1 each of `timeslice-declaration`, `feature-reference` and `constructor-expr`.
+canonical notation all moved to `stable` when it landed. The refusals by class: 22
+`feature-declaration`, 10 `event-declaration`, 3 each of `duplicate-declaration`,
+`snapshot-declaration` and `assert-declaration`, and 1 `timeslice-declaration`. No file
+is refused for an expression any longer: a body's result expression is mapped
+([rdf-mapping.md § Result expressions](../reference/rdf-mapping.md#result-expressions)), which
+took the 13 files refused for one from `refused` to `stable` (12) or to the standing refusal of an
+anonymous `feature` declaration (`Simple Tests/Expressions.kerml`), and the one `unwritable` file
+(`ExtendedOccurrences.kerml`) with it.
 
-Before metadata annotations were carried structurally, 273 files converted and 72 were refused,
+Before metadata annotations were carried structurally, 285 files converted and 60 were refused,
 19 of them `prefix-metadata`; of those 19, 17 now convert and 2 fall to the `feature-declaration`
 and `event-declaration` refusals the metadata refusal had hidden. A 20th file, refused as a
 `duplicate-declaration` because the parser had read `metadata M about x;` as a usage *named* `M`,

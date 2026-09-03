@@ -9,21 +9,23 @@ import (
 
 // TestUnsupportedConversionMessages pins the text of a conversion refusal: the
 // position of the construct, its SysML name rather than a Go type, and the
-// remedy docs/reference/rdf-mapping.md documents.
+// reason it has no place in the graph.
 func TestUnsupportedConversionMessages(t *testing.T) {
-	const remedy = "save to .sysml or .kerml instead, which writes the source exactly; " +
-		"see docs/reference/rdf-mapping.md § Limitations"
-
 	cases := []struct {
 		name string
 		src  string
 		want []string
 	}{{
-		// A calc body's result expression is a member of its own, which the graph
-		// has no place for yet.
-		name: "result_expression",
-		src:  "package P {\n\tcalc def C {\n\t\tin x : Real;\n\t\tx + 1\n\t}\n}",
-		want: []string{"cannot convert the operator expr at m.sysml:4:3", remedy},
+		// `event e;` refers to e rather than declaring an element of its own.
+		name: "event_reference",
+		src:  "package P {\n\tpart def A {\n\t\tevent e;\n\t}\n}",
+		want: []string{"cannot convert the `event` declaration at m.sysml:3:3",
+			"would come back as `occurrence`, a different declaration"},
+	}, {
+		name: "duplicate_declaration",
+		src:  "package P {\n\tpart def A {\n\t\tattribute x : Real;\n\t\tattribute x : Real;\n\t}\n}",
+		want: []string{"cannot convert the duplicate declaration of \"x\" at m.sysml:4:3",
+			"two members of one namespace cannot share it"},
 	}}
 
 	for _, tc := range cases {
