@@ -87,17 +87,33 @@ func registerOperatorForm(fqn, op string, domain operandDomain) {
 	}
 }
 
-// checkOperands binds each argument given through the package's domain.
+// checkOperands binds each argument given, declared `[1]`, through the
+// package's domain: the one value it holds, a sole element standing for itself.
 func checkOperands(ctx *Context, name string, domain operandDomain, args []Value) ([]Value, error) {
 	bound := make([]Value, len(args))
 	for i, param := range []string{"x", "y"}[:len(args)] {
-		val, err := domain(ctx, name, param, args[i])
+		val, err := soleValue(name, param, args[i])
+		if err != nil {
+			return nil, err
+		}
+		val, err = domain(ctx, name, param, val)
 		if err != nil {
 			return nil, err
 		}
 		bound[i] = val
 	}
 	return bound, nil
+}
+
+// soleValue is the one value an operand declared `[1]` holds: a sole element
+// stands for itself, and no element or several violate the multiplicity.
+func soleValue(name, param string, val Value) (Value, error) {
+	elements := elementsOf(val)
+	if len(elements) != 1 {
+		return Value{}, fmt.Errorf("%w: function %s parameter %q holds %d values, exactly 1 required",
+			ErrMultiplicityViolation, name, param, len(elements))
+	}
+	return elements[0], nil
 }
 
 // singleOperands binds `x` and `y`, each declared `[0..1]`: an omitted one is
@@ -153,7 +169,8 @@ func arithmeticForm(op ast.OperatorKind, domain operandDomain) libraryApply {
 // exact quotient when y divides x, and no value otherwise, since truncating
 // would compute something the declaration does not promise.
 func naturalDivision(name string, ctx *Context, args []Value) (Value, error) {
-	if _, err := checkOperands(ctx, name, naturalOperand, args); err != nil {
+	args, err := checkOperands(ctx, name, naturalOperand, args)
+	if err != nil {
 		return Value{}, err
 	}
 	x, y := args[0].Const.Int, args[1].Const.Int
@@ -185,7 +202,8 @@ func comparisonForm(op ast.OperatorKind, domain operandDomain) libraryApply {
 // given, so nothing is short-circuited.
 func booleanForm(op ast.OperatorKind, domain operandDomain) libraryApply {
 	return func(name string, ctx *Context, args []Value) (Value, error) {
-		if _, err := checkOperands(ctx, name, domain, args); err != nil {
+		args, err := checkOperands(ctx, name, domain, args)
+		if err != nil {
 			return Value{}, err
 		}
 		l, err := boolOperand(fmt.Sprintf("function %s parameter %q", name, "x"), args[0])
@@ -253,6 +271,10 @@ func registerGenericExtrema() {
 func genericExtremum(larger bool) libraryApply {
 	extremum := numericScalars([]string{"x", "y"}, numericExtremum(larger))
 	return func(name string, ctx *Context, args []Value) (Value, error) {
+		args, err := checkOperands(ctx, name, anyOperand, args)
+		if err != nil {
+			return Value{}, err
+		}
 		x, y := args[0], args[1]
 		switch {
 		case x.Kind == ValConst && x.Const.IsNumeric() && y.Kind == ValConst && y.Const.IsNumeric():

@@ -111,6 +111,79 @@ func TestOperatorFunctionValues(t *testing.T) {
 	}
 }
 
+// Operator functions declare their operands `[1]`: one element stands for itself;
+// none or several is a multiplicity violation, judged before the operand domain.
+func TestOperatorFunctionOperandMultiplicity(t *testing.T) {
+	one := vec(constInt(3))
+	oneSet := NewSetValue(NewSet())
+	oneSet.Set().Add(constInt(3))
+	none := emptySequence()
+	several := vec(constInt(1), constInt(2))
+
+	values := []struct {
+		fn   string
+		args []Value
+		want Value
+	}{
+		{"IntegerFunctions::+", []Value{one, constInt(2)}, constInt(5)},
+		{"IntegerFunctions::+", []Value{constInt(2), oneSet}, constInt(5)},
+		{"IntegerFunctions::-", []Value{one}, constInt(-3)},
+		{"IntegerFunctions::-", []Value{one, none}, constInt(-3)},
+		{"IntegerFunctions::<", []Value{one, vec(constInt(4))}, constBool(true)},
+		{"NaturalFunctions::/", []Value{vec(constInt(6)), one}, constInt(2)},
+		{"RealFunctions::*", []Value{one, vec(constReal(0.5))}, constReal(1.5)},
+		{"BooleanFunctions::not", []Value{vec(constBool(true))}, constBool(false)},
+		{"BooleanFunctions::xor", []Value{vec(constBool(true)), constBool(false)}, constBool(true)},
+		{"BooleanFunctions::&", []Value{vec(constBool(true)), vec(constBool(true))}, constBool(true)},
+		{"DataFunctions::max", []Value{one, vec(constInt(7))}, constInt(7)},
+		{"ScalarFunctions::min", []Value{vec(NewStringValue("b")), NewStringValue("a")}, NewStringValue("a")},
+	}
+	for _, tc := range values {
+		t.Run(tc.fn+"/"+FormatValue(tc.args[0]), func(t *testing.T) {
+			got, err := applyLibrary(t, tc.fn, tc.args...)
+			if err != nil {
+				t.Fatalf("%s = error %v", tc.fn, err)
+			}
+			if !valueIdentical(got, tc.want) {
+				t.Fatalf("%s = %s, want %s", tc.fn, FormatValue(got), FormatValue(tc.want))
+			}
+		})
+	}
+
+	faults := []struct {
+		fn    string
+		args  []Value
+		param string
+	}{
+		{"IntegerFunctions::+", []Value{none, constInt(2)}, "x"},
+		{"IntegerFunctions::+", []Value{constInt(2), several}, "y"},
+		{"IntegerFunctions::+", []Value{several, NewStringValue("a")}, "x"},
+		{"IntegerFunctions::-", []Value{none}, "x"},
+		{"IntegerFunctions::-", []Value{several}, "x"},
+		{"IntegerFunctions::<", []Value{constInt(1), none}, "y"},
+		{"RealFunctions::<=", []Value{several, constReal(2)}, "x"},
+		{"NaturalFunctions::/", []Value{several, constInt(2)}, "x"},
+		{"NaturalFunctions::/", []Value{constInt(6), none}, "y"},
+		{"BooleanFunctions::not", []Value{none}, "x"},
+		{"BooleanFunctions::not", []Value{vec(constBool(true), constBool(false))}, "x"},
+		{"BooleanFunctions::xor", []Value{constBool(true), none}, "y"},
+		{"BooleanFunctions::|", []Value{several, constBool(true)}, "x"},
+		{"DataFunctions::max", []Value{none, constInt(1)}, "x"},
+		{"ScalarFunctions::min", []Value{constInt(1), several}, "y"},
+	}
+	for _, tc := range faults {
+		t.Run(tc.fn+"/"+FormatValue(tc.args[0]), func(t *testing.T) {
+			_, err := applyLibrary(t, tc.fn, tc.args...)
+			if !errors.Is(err, ErrMultiplicityViolation) {
+				t.Fatalf("%s error = %v, want %v", tc.fn, err, ErrMultiplicityViolation)
+			}
+			if !strings.Contains(err.Error(), writtenName(tc.fn)) || !strings.Contains(err.Error(), `"`+tc.param+`"`) {
+				t.Fatalf("%s error %q does not name the function and parameter %q", tc.fn, err, tc.param)
+			}
+		})
+	}
+}
+
 // DataFunctions declares its operands DataValue: an attribute definition's
 // object is one, a part's is not, however the operator itself would compare
 // them. BaseFunctions, declared over Anything, still admits either.
@@ -214,7 +287,6 @@ func TestOperatorFunctionErrors(t *testing.T) {
 		{"DataFunctions::not", []Value{NewStringValue("true")}, ErrTypeMismatch},
 		{"DataFunctions::max", []Value{constBool(true), constBool(false)}, ErrTypeMismatch},
 		{"DataFunctions::max", []Value{constInt(1), NewStringValue("1")}, ErrTypeMismatch},
-		{"ScalarFunctions::min", []Value{NewSequenceValue(NewSequence()), constInt(1)}, ErrTypeMismatch},
 		{"IntegerFunctions::+", []Value{constInt(1), constInt(2), constInt(3)}, ErrCalcArity},
 		{"IntegerFunctions::*", []Value{constInt(1)}, ErrCalcArity},
 	}
