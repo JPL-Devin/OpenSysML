@@ -381,11 +381,7 @@ func (d *decoder) noteSegments(parents map[string][]rdf.Term) error {
 		}
 		operand := d.operandElement(node)
 		for _, in := range owners {
-			key := segmentKey{member: in.qname, operand: operand, name: name}
-			if d.wanted.segments[key] == nil {
-				d.wanted.segments[key] = map[string]bool{}
-			}
-			d.wanted.segments[key][target.qname] = true
+			d.wanted.segments[segmentKey{member: in.qname, operand: operand, name: name, target: target.qname}] = true
 		}
 	}
 	return nil
@@ -398,12 +394,12 @@ func (d *decoder) segmentName(chain, term rdf.Term, in *element) (string, error)
 	if term.IsLiteral() {
 		return qualifiedNameText(term.Value), nil
 	}
-	_, name, err := d.namedMember(term)
+	target, name, err := d.namedMember(term)
 	if err != nil {
 		return "", err
 	}
 	if d.names != nil {
-		key := segmentKey{member: in.qname, operand: d.operandElement(chain), name: name}
+		key := segmentKey{member: in.qname, operand: d.operandElement(chain), name: name, target: target.qname}
 		if spelling, ok := d.names.segments[key]; ok {
 			return qualifiedNameText(spelling), nil
 		}

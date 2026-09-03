@@ -470,10 +470,18 @@ func TestChainSegmentIsSpelledToReachTheGraphsTarget(t *testing.T) {
 	refusedAsUnsupported(t, "chain-package", relinked(t, structural, value, strings.Replace(value, "P__A__x", "P", 1)),
 		"no spelling of the segment reads as the element the graph names from the operand")
 	// The sum repeats `a.x`: the occurrence still reaching A::x must not vouch
-	// for the one relinked to B::x.
+	// for the one relinked to B::x, which is spelled to reach its own element.
 	second := "    sysml:argument expr:P__w_pvalue_pa1_pa0 ;\n    sysml:targetFeature elmt:P__A__x ;"
-	refusedAsUnsupported(t, "chain-repeated", relinked(t, structural, second, strings.Replace(second, "A__x", "B__x", 1)),
-		"name different elements in the graph")
+	repeated := relinked(t, structural, second, strings.Replace(second, "A__x", "B__x", 1))
+	if back := backFromTheGraphAlone(t, string(repeated)); !strings.Contains(back, "attribute w = (a.x + a.B::x);") {
+		t.Errorf("each repeated chain should be spelled for its own element\n%s", back)
+	}
+	// Both relinked, neither occurrence reads as A::x any more.
+	first := "    sysml:argument expr:P__w_pvalue_pa0_pa0 ;\n    sysml:targetFeature elmt:P__A__x ;"
+	both := relinked(t, repeated, first, strings.Replace(first, "A__x", "B__x", 1))
+	if back := backFromTheGraphAlone(t, string(both)); !strings.Contains(back, "attribute w = (a.B::x + a.B::x);") {
+		t.Errorf("both relinked chains should be spelled qualified\n%s", back)
+	}
 }
 
 // TestSharedChainIsCheckedInEveryDeclaration covers one FeatureChainExpression

@@ -25,9 +25,16 @@ type nameChoices struct {
 }
 
 // segmentKey identifies the chain segments of one name written in one
-// declaration after one operand (the element it reaches, "" for none).
+// declaration after one operand (the element it reaches, "" for none) to
+// name one element.
 type segmentKey struct {
-	member, operand, name string
+	member, operand, name, target string
+}
+
+// written is the key of the segments spelled as name in the same place,
+// whatever they name: what a rendering's read-back can tell apart.
+func (k segmentKey) written(name string) segmentKey {
+	return segmentKey{member: k.member, operand: k.operand, name: name}
 }
 
 // wanted is what one rendering notes for chooseNames: the references to spell
@@ -36,8 +43,8 @@ type wanted struct {
 	// references holds, per reference, its fully qualified spelling and the
 	// spelling the rendering wrote.
 	references map[nameKey]wantedReference
-	// segments holds the elements the graph names by each chain segment.
-	segments map[segmentKey]map[string]bool
+	// segments holds the chain segments written, each naming its element.
+	segments map[segmentKey]bool
 	// starts holds the member each `first` names, keyed by the initial node.
 	starts map[string]string
 }
@@ -51,7 +58,7 @@ type wantedReference struct {
 func newWanted() *wanted {
 	return &wanted{
 		references: map[nameKey]wantedReference{},
-		segments:   map[segmentKey]map[string]bool{},
+		segments:   map[segmentKey]bool{},
 		starts:     map[string]string{},
 	}
 }
@@ -156,12 +163,28 @@ func chooseNames(name string, text []byte, want *wanted, previous *nameChoices) 
 	// A chain reads from its root, so its segments are spelled once the root is:
 	// what a segment reaches depends on the operand before it.
 	writtenAs := writtenSegments(want.segments, previous)
+	segments := map[segmentKey][]resolve.Reference{}
 	for _, ref := range chains {
-		segmentChanged, err := e.chooseSegment(ref, want.segments, writtenAs, previous, chosen, names.segments)
-		if err != nil {
-			return nil, false, err
+		read := ref
+		read.Chain = respelled(ref.Chain, chosen)
+		read.QN = read.Chain.Member
+		as := segmentKey{member: e.fqn[ref.Member], name: qualifiedText(ref.QN)}
+		for _, operand := range e.operandKeys(read) {
+			as.operand = operand
+			if _, ok := writtenAs[as]; ok {
+				segments[as] = append(segments[as], read)
+				break
+			}
 		}
-		changed = changed || segmentChanged
+	}
+	for as, refs := range segments {
+		for _, key := range writtenAs[as] {
+			segmentChanged, err := e.chooseSegment(key, as.name, refs, previous, names.segments)
+			if err != nil {
+				return nil, false, err
+			}
+			changed = changed || segmentChanged
+		}
 	}
 	return names, changed, nil
 }
@@ -186,73 +209,62 @@ func writtenKeys(references map[nameKey]wantedReference) map[nameKey]nameKey {
 }
 
 // writtenSegments indexes the wanted segments by the spelling the rendering
-// wrote for each: what previous chose, else the segment's own name.
-func writtenSegments(segments map[segmentKey]map[string]bool, previous *nameChoices) map[segmentKey]segmentKey {
-	written := make(map[segmentKey]segmentKey, len(segments))
+// wrote for each: what previous chose, else the segment's own name. Segments
+// written alike in one place share an entry, whatever each names.
+func writtenSegments(segments map[segmentKey]bool, previous *nameChoices) map[segmentKey][]segmentKey {
+	written := make(map[segmentKey][]segmentKey, len(segments))
 	for key := range segments {
-		as := key
+		name := key.name
 		if previous != nil {
 			if spelling, ok := previous.segments[key]; ok {
-				as.name = spelling
+				name = spelling
 			}
 		}
-		written[as] = key
+		as := key.written(name)
+		written[as] = append(written[as], key)
 	}
 	return written
 }
 
-// chooseSegment spells a chain segment so it reads, from the operand it is
-// written after, as the one element the graph names by it there: its own name
-// when that reaches the element, else the shortest qualification that does.
-// The chain is read with its root spelled as chosen; a spelling previous chose
-// is kept while it reads so and lengthened otherwise; a segment no spelling
-// reaches is refused.
-func (e *encoder) chooseSegment(ref resolve.Reference, segments map[segmentKey]map[string]bool, written map[segmentKey]segmentKey, previous *nameChoices, chosen map[*ast.QualifiedName]string, spelled map[segmentKey]string) (bool, error) {
-	read := ref
-	read.Chain = respelled(ref.Chain, chosen)
-	read.QN = read.Chain.Member
-	as := segmentKey{member: e.fqn[ref.Member], name: qualifiedText(ref.QN)}
-	var key segmentKey
-	var ok bool
-	for _, operand := range e.operandKeys(read) {
-		as.operand = operand
-		if key, ok = written[as]; ok {
-			break
-		}
-	}
-	if !ok {
-		return false, nil
-	}
-	targets := segments[key]
-	if len(targets) > 1 {
-		return false, &UnsupportedError{
-			What: fmt.Sprintf("the feature chains in %s reaching %s", key.member, key.name),
-			Note: "written after the same operand, the segments name different elements in the graph, which one spelling cannot state",
-		}
-	}
-	var target string
-	for t := range targets {
-		target = t
-	}
-	spellings := segmentSpellings(key.name, target)
+// chooseSegment spells the chain segments of key so each reads, from the
+// operand it is written after, as the element the graph names by it: its own
+// name when that reaches the element, else the shortest qualification that
+// does. refs are the occurrences read back as written — those of any element
+// spelled alike in the same place included, since the place decides what a
+// spelling reads as, and the spellings that reach different elements differ.
+// A spelling previous chose is kept while it reads so and lengthened otherwise;
+// a segment no spelling reaches is refused.
+func (e *encoder) chooseSegment(key segmentKey, written string, refs []resolve.Reference, previous *nameChoices, spelled map[segmentKey]string) (bool, error) {
+	spellings := segmentSpellings(key.name, key.target)
 	if previous != nil {
-		spellings = fromWritten(spellings, as.name)
+		spellings = fromWritten(spellings, written)
 	}
 	for _, spelling := range spellings {
-		trial := read
-		trial.QN = spelledName(spelling)
-		trial.Chain = &ast.FeatureChainExpr{Operand: read.Chain.Operand, Member: trial.QN}
-		if _, reached, ok := e.reads(trial); ok && reached == target {
+		if e.segmentReads(refs, spelling, key.target) {
 			if spelling != key.name {
 				spelled[key] = spelling
 			}
-			return spelling != as.name, nil
+			return spelling != written, nil
 		}
 	}
 	return false, &UnsupportedError{
-		What: fmt.Sprintf("the feature chain in %s reaching %s", key.member, key.name),
+		What: fmt.Sprintf("the feature chain in %s reaching %s", key.member, key.target),
 		Note: "no spelling of the segment reads as the element the graph names from the operand it is written after, so the notation cannot state it",
 	}
+}
+
+// segmentReads reports whether spelling, written as the segment of every one
+// of refs after its operand, reads as target.
+func (e *encoder) segmentReads(refs []resolve.Reference, spelling, target string) bool {
+	for _, ref := range refs {
+		trial := ref
+		trial.QN = spelledName(spelling)
+		trial.Chain = &ast.FeatureChainExpr{Operand: ref.Chain.Operand, Member: trial.QN}
+		if _, reached, ok := e.reads(trial); !ok || reached != target {
+			return false
+		}
+	}
+	return true
 }
 
 // referenceSpellings are the spellings tried for a reference written fully
