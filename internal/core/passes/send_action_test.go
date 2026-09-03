@@ -162,6 +162,39 @@ func TestSendArgumentNotAnOccurrenceWarns(t *testing.T) {
 			part def V { attribute sig : Sig; action s {
 				send Ping() to sig;
 			} } }`},
+		"integer literal receiver": {code: CodeSendReceiverNotOccurrence, at: "42", want: "Natural", src: `package P {` + sendPrelude + `
+			part def V { action s {
+				send Ping() to 42;
+			} } }`},
+		"string literal receiver": {code: CodeSendReceiverNotOccurrence, at: `"console"`, want: "String", src: `package P {` + sendPrelude + `
+			part def V { action s {
+				send Ping() to "console";
+			} } }`},
+		"arithmetic receiver": {code: CodeSendReceiverNotOccurrence, at: "1 + 2", want: "Natural", src: `package P {` + sendPrelude + `
+			part def V { action s {
+				send Ping() to 1 + 2;
+			} } }`},
+		"comparison receiver": {code: CodeSendReceiverNotOccurrence, at: "a > 1", want: "Boolean", src: `package P {` + sendPrelude + `
+			part def V { attribute a : ScalarValues::Real; action s {
+				send Ping() to a > 1;
+			} } }`},
+		"constructed attribute receiver": {code: CodeSendReceiverNotOccurrence, at: "new Sig()", want: "Sig", src: `package P {` + sendPrelude + `
+			part def V { action s {
+				send Ping() to new Sig();
+			} } }`},
+		"scalar calculation result receiver": {code: CodeSendReceiverNotOccurrence, at: "mass()", want: "Real", src: `package P {` + sendPrelude + `
+			calc def mass { return : ScalarValues::Real; }
+			part def V { action s {
+				send Ping() to mass();
+			} } }`},
+		"literal sender": {code: CodeSendSenderNotOccurrence, at: "true", want: "Boolean", src: `package P {` + sendPrelude + `
+			part def V { part r : Receiver; action s {
+				send Ping() via true to r;
+			} } }`},
+		"constructed attribute sender": {code: CodeSendSenderNotOccurrence, at: "new Sig()", want: "Sig", src: `package P {` + sendPrelude + `
+			part def V { part r : Receiver; action s {
+				send Ping() via new Sig() to r;
+			} } }`},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -288,6 +321,20 @@ func TestSendWellFormedShapesAreSilent(t *testing.T) {
 			part def V { action target : Ping; action a { send Ping() to target; } } }`,
 		"to a definition is the feature-reference rule's": `package P {` + sendPrelude + `
 			part def V { action a { send Ping() to Sig; } } }`,
+		"to a constructed item": `package P {` + sendPrelude + `
+			part def V { action a { send Ping() to new Msg(); } } }`,
+		"to a constructed part": `package P {` + sendPrelude + `
+			part def V { action a { send Ping() to new Receiver(); } } }`,
+		"via a constructed port": `package P {` + sendPrelude + `
+			part def V { part r : Receiver; action a { send Ping() via new PD() to r; } } }`,
+		"to an occurrence-valued calculation": `package P {` + sendPrelude + `
+			calc def pick { return : Receiver; }
+			part def V { action a { send Ping() to pick(); } } }`,
+		"to a conditional the checker cannot type": `package P {` + sendPrelude + `
+			part def V { part r : Receiver; part s : Receiver; attribute hot : ScalarValues::Boolean;
+				action a { send Ping() to if hot ? r else s; } } }`,
+		"to self": `package P {` + sendPrelude + `
+			part def V { action a { send Ping() to self; } } }`,
 	}
 	for name, src := range cases {
 		t.Run(name, func(t *testing.T) {

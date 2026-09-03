@@ -232,6 +232,16 @@ func (ec *exprChecker) invocationResultTypeSymbol(scope *symbols.Scope, value as
 	return ec.declaredTypeSymbol(result.OwnerScope, u.Relationships)
 }
 
+// constructedTypeSymbol returns the type a constructor `new T(…)` instantiates,
+// which is the type of the instance it produces, or nil for any other value.
+func (ec *exprChecker) constructedTypeSymbol(scope *symbols.Scope, value ast.Node) *symbols.Symbol {
+	ctor, ok := value.(*ast.ConstructorExpr)
+	if !ok || ctor.Type == nil {
+		return nil
+	}
+	return ec.resolveTarget(scope, ctor.Type)
+}
+
 // owningEnumeration returns the enumeration definition a literal belongs to, or
 // nil when the literal is not owned by one.
 func (ec *exprChecker) owningEnumeration(sym *symbols.Symbol) *symbols.Symbol {

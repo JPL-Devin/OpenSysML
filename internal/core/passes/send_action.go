@@ -6,6 +6,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -158,10 +159,8 @@ func (c *sendActionChecker) checkPayload(send *ast.SendStatement) {
 
 // check types the arguments of one send and checks its sender and receiver.
 func (c *sendActionChecker) check(scope *symbols.Scope, send *ast.SendStatement) {
-	for _, arg := range []ast.Node{send.Message, send.Target, send.Receiver} {
-		if arg != nil && !c.ctx.DownstreamOfFailure(arg) {
-			c.expr.infer(scope, arg)
-		}
+	if send.Message != nil && !c.ctx.DownstreamOfFailure(send.Message) {
+		c.expr.infer(scope, send.Message)
 	}
 	receiver := send.Target
 	if send.IsVia {
@@ -176,29 +175,64 @@ func (c *sendActionChecker) check(scope *symbols.Scope, send *ast.SendStatement)
 	c.walk(body, send.Members)
 }
 
-// argumentFeature resolves the feature a send argument names, or nil when it
-// names none: a non-feature referent is the feature-reference rule's to report.
-func (c *sendActionChecker) argumentFeature(scope *symbols.Scope, arg ast.Node) *symbols.Symbol {
+// sendArgument is a send argument as classified: the feature it names, or else
+// the type of the non-occurrence value it computes (scalar, result, instance).
+type sendArgument struct {
+	feature   *symbols.Symbol
+	valueType string
+}
+
+// argument types and classifies a send argument; an untypable value and a
+// non-feature referent (the feature-reference rule's to report) stay unclassified.
+func (c *sendActionChecker) argument(scope *symbols.Scope, arg ast.Node) (sendArgument, bool) {
 	if arg == nil || c.ctx.DownstreamOfFailure(arg) {
-		return nil
+		return sendArgument{}, false
 	}
+	prim := c.expr.infer(scope, arg)
 	sym, ok := c.ctx.Resolver().ResolveTarget(scope, arg)
 	if ok {
 		sym, ok = c.ctx.Resolver().ResolveAliasTarget(sym)
 	}
-	if !ok || sym == nil || !isUsageKind(sym.Kind) {
-		return nil
+	if ok && sym != nil {
+		if isUsageKind(sym.Kind) {
+			return sendArgument{feature: sym}, true
+		}
+		return sendArgument{}, false
 	}
-	return sym
+	if prim != semantics.PrimUnknown {
+		return sendArgument{valueType: prim.String()}, true
+	}
+	typ := c.expr.constructedTypeSymbol(scope, arg)
+	if typ == nil {
+		typ = c.expr.invocationResultTypeSymbol(scope, arg)
+	}
+	model := c.bindings.model
+	if typ == nil || c.occurrence == nil || model == nil ||
+		w9cTypesConform(model, []*symbols.Symbol{typ}, []*symbols.Symbol{c.occurrence}) {
+		return sendArgument{}, false
+	}
+	return sendArgument{valueType: typ.Name}, true
 }
 
 // checkReceiver checks the `to` argument, which binds SendPerformance::receiver
 // (an Occurrence): a port is addressed with `via`, and a non-occurrence cannot receive.
 func (c *sendActionChecker) checkReceiver(scope *symbols.Scope, receiver ast.Node) {
-	sym := c.argumentFeature(scope, receiver)
-	if sym == nil {
+	arg, ok := c.argument(scope, receiver)
+	if !ok {
 		return
 	}
+	if arg.valueType != "" {
+		c.diags = append(c.diags, Diagnostic{
+			Severity: SeverityWarning,
+			Span:     receiver.Span(),
+			Message: fmt.Sprintf("the receiver of a send must be an occurrence: this expression yields a %s, which is not one; "+
+				"name a part, item or other occurrence after 'to'", arg.valueType),
+			Code:   CodeSendReceiverNotOccurrence,
+			Source: "send-action",
+		})
+		return
+	}
+	sym := arg.feature
 	if sym.Kind == symbols.SymbolPortUsage {
 		c.diags = append(c.diags, Diagnostic{
 			Severity: SeverityWarning,
@@ -224,16 +258,27 @@ func (c *sendActionChecker) checkReceiver(scope *symbols.Scope, receiver ast.Nod
 
 // checkSender checks the `via` argument, which binds SendPerformance::sender (an Occurrence).
 func (c *sendActionChecker) checkSender(scope *symbols.Scope, sender ast.Node) {
-	sym := c.argumentFeature(scope, sender)
-	if sym == nil {
+	arg, ok := c.argument(scope, sender)
+	if !ok {
 		return
 	}
-	if types, ok := c.nonOccurrenceTypes(sym); ok {
+	if arg.valueType != "" {
+		c.diags = append(c.diags, Diagnostic{
+			Severity: SeverityWarning,
+			Span:     sender.Span(),
+			Message: fmt.Sprintf("a send is routed through an occurrence of the sender: this expression yields a %s, which is not one; "+
+				"name a port after 'via'", arg.valueType),
+			Code:   CodeSendSenderNotOccurrence,
+			Source: "send-action",
+		})
+		return
+	}
+	if types, ok := c.nonOccurrenceTypes(arg.feature); ok {
 		c.diags = append(c.diags, Diagnostic{
 			Severity: SeverityWarning,
 			Span:     sender.Span(),
 			Message: fmt.Sprintf("a send is routed through an occurrence of the sender: %s is typed by %s, which is not one; "+
-				"name a port after 'via'", sym.Name, types),
+				"name a port after 'via'", arg.feature.Name, types),
 			Code:   CodeSendSenderNotOccurrence,
 			Source: "send-action",
 		})
