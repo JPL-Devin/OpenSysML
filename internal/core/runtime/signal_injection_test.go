@@ -1188,6 +1188,160 @@ func TestDecideStartsTheBehaviorsOfAnObjectAGuardMaterializes(t *testing.T) {
 	}
 }
 
+// A message in flight is left as Decide found it, payload included: the machine
+// of an object a guard materializes may take it under the probe and cache the
+// occurrence it binds on the payload, an object the probe discards. Dispatch
+// then binds a live occurrence.
+func TestDecideLeavesNoOccurrenceCachedOnAMessageInFlight(t *testing.T) {
+	src := `
+		private import ScalarValues::*;
+		attribute def Go;
+		attribute def Kick { attribute n : Integer; }
+		part def Sensor {
+			attribute level : Integer = 1;
+			exhibit state calibrate {
+				entry; then ready;
+				state ready { entry assign level := 10; }
+				transition first ready accept k : Kick then kicked;
+				state kicked;
+			}
+		}
+		part def Controller {
+			part sensor : Sensor;
+			exhibit state life {
+				entry; then off;
+				state off;
+				transition off_on first off accept Go if sensor.level > 5 then on;
+				state on;
+			}
+		}
+		part ctl : Controller;
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "ctl.sysml", parseAndBuild(t, src))
+	root := idx.DocumentRoot("ctl.sysml")
+	ctl, err := ctx.occurrenceOf(resolveSymbol(t, root, "ctl"))
+	if err != nil {
+		t.Fatalf("occurrenceOf(ctl): %v", err)
+	}
+	life, ok := ctl.ExhibitedState()
+	if !ok {
+		t.Fatal("the controller exhibits no machine")
+	}
+	kick, err := ctx.SignalMessage(resolveSymbol(t, root, "Kick"), map[string]Value{"n": integerValue(3)}, nil)
+	if err != nil {
+		t.Fatalf("SignalMessage(Kick): %v", err)
+	}
+	ctx.PostMessage(kick)
+	go_, err := ctx.SignalMessage(resolveSymbol(t, root, "Go"), nil, ctl)
+	if err != nil {
+		t.Fatalf("SignalMessage(Go): %v", err)
+	}
+
+	if d, err := life.State.Decide(go_); err != nil || len(d.Fires) != 1 || d.Fires[0] != "transition off_on" {
+		t.Errorf("Decide(Go) = %+v, %v; want off_on firing on the level the sensor's machine set", d, err)
+	}
+	pending := ctx.PendingMessages()
+	if len(pending) != 1 || pending[0].SignalType != "Kick" {
+		t.Fatalf("after Decide, on the bus: %+v; want the Kick still in flight", pending)
+	}
+	if _, cached := pending[0].Payload["value"]; cached || len(pending[0].Payload) != 1 {
+		t.Errorf("Kick payload after Decide = %v; want the argument alone, no occurrence cached under the probe", pending[0].Payload)
+	}
+
+	ctx.PostMessage(go_)
+	if err := life.State.ProcessNextEvent(); err != nil {
+		t.Fatalf("ProcessNextEvent(Go): %v", err)
+	}
+	sensor := ctl.FeatureValues["sensor"]
+	if got := activeLeaf(life.State); got != "on" || !sensor.Materialized || sensor.Value.Kind != ValInstance {
+		t.Fatalf("after Go: state %s, sensor %+v; want on with the sensor built", got, sensor)
+	}
+	calibrate, ok := ctx.instances[sensor.Value.Instance].ExhibitedState()
+	if !ok || activeLeaf(calibrate.State) != "kicked" {
+		t.Fatalf("the built sensor's machine is not at kicked: ok=%v", ok)
+	}
+	k := calibrate.State.StateData()["k"]
+	if k.Kind != ValInstance {
+		t.Fatalf("k = %+v after Kick, want the occurrence it binds", k)
+	}
+	if _, live := ctx.instances[k.Instance]; !live {
+		t.Errorf("k names object #%d, which the session does not hold: the probe's occurrence was bound", k.Instance)
+	}
+}
+
+// Whether a message routed to a port by identity reaches the machine is told by
+// materializing the port the accept names; a preview builds it and lets it go,
+// as it does everything else, so the object is as it was found. Dispatch
+// materializes the port for real.
+func TestPreviewsDiscardThePortTheyMaterialize(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;`+directedPorts+`
+		part def Listener {
+			port in : ~Chan;
+			exhibit state sm {
+				entry; then Idle;
+				state Idle { accept v : Integer via in then Got; }
+				state Got;
+			}
+		}
+		part listener : Listener;
+	}`))
+	listener, err := ctx.Instantiate(oneSymbol(t, idx, "P::listener"))
+	if err != nil {
+		t.Fatalf("instantiate listener: %v", err)
+	}
+	exec, err := ctx.CreateStateExecutorFor(oneSymbol(t, idx, "P::Listener::sm"), listener)
+	if err != nil {
+		t.Fatalf("create state executor: %v", err)
+	}
+	in := listener.FeatureValues["in"]
+	if in == nil || in.Materialized {
+		t.Fatalf("in = %+v; want an unmaterialized port before anything reads it", in)
+	}
+	instances, behaviors := len(ctx.instances), len(ctx.objectBehaviors)
+	// Delivered to a port object by identity, under a name the accept does not
+	// use, so only materializing `in` can tell whether it is the same port.
+	elsewhere := Message{SignalType: "Integer", Port: "other", Object: listener.ID, PortID: -1,
+		Delivery: DeliverPort, Payload: map[string]Value{"value": integerValue(4)}}
+	if accepted, err := exec.AcceptsMessage(elsewhere); err != nil || accepted {
+		t.Errorf("AcceptsMessage(Integer at another port) = %v, %v; want it left", accepted, err)
+	}
+	if in.Materialized || len(ctx.instances) != instances || len(ctx.objectBehaviors) != behaviors {
+		t.Errorf("after AcceptsMessage: in %+v, %d objects, %d behaviors; want the port unmaterialized, %d, %d as before",
+			in, len(ctx.instances), len(ctx.objectBehaviors), instances, behaviors)
+	}
+	if d, err := exec.Decide(elsewhere); err != nil || d.Enabled() {
+		t.Errorf("Decide(Integer at another port) = %+v, %v; want nothing enabled", d, err)
+	}
+	if in.Materialized || len(ctx.instances) != instances || len(ctx.objectBehaviors) != behaviors {
+		t.Errorf("after Decide: in %+v, %d objects, %d behaviors; want the port unmaterialized, %d, %d as before",
+			in, len(ctx.instances), len(ctx.objectBehaviors), instances, behaviors)
+	}
+
+	ctx.PostMessage(elsewhere)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run with a message for another port in flight: %v", err)
+	}
+	if !in.Materialized || in.Value.Kind != ValInstance || len(ctx.instances) != instances+1 {
+		t.Fatalf("after the run: in %+v, %d objects; want the port built to tell the message is not for it", in, len(ctx.instances))
+	}
+	if got := activeLeaf(exec); got != "Idle" || len(ctx.PendingMessages()) != 1 {
+		t.Fatalf("after the run: state %s, %d in flight; want Idle with the message left", got, len(ctx.PendingMessages()))
+	}
+	atIn := elsewhere
+	atIn.PortID = in.Value.Instance
+	if d, err := exec.Decide(atIn); err != nil || len(d.Fires) != 1 {
+		t.Errorf("Decide(Integer at in's object) = %+v, %v; want the accept via in firing", d, err)
+	}
+	ctx.PostMessage(atIn)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run with the message at in: %v", err)
+	}
+	if got := activeLeaf(exec); got != "Got" {
+		t.Errorf("state after the message at in = %s, want Got", got)
+	}
+}
+
 // ExhibitedStatesOf finds the machine an object runs by its definition or its
 // usage, and none on an object exhibiting no such machine.
 func TestExhibitedStatesOf(t *testing.T) {

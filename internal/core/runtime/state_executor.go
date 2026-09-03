@@ -2069,9 +2069,23 @@ func (e *StateExecutor) HasPendingSignal() bool {
 // AcceptsMessage reports whether the active configuration would take a message in
 // flight: it reaches this machine and triggers a transition out of an active
 // state, or is deferred by one. Whether a transition fires is decided by its
-// guard; see Decide. Resolving the port a trigger accepts `via` may fail.
-func (e *StateExecutor) AcceptsMessage(m Message) (bool, error) {
-	return e.acceptableMessage(m)
+// guard; see Decide. Resolving the port a trigger accepts `via` may fail; a port
+// it materializes on the way is discarded, as everything the preview builds.
+func (e *StateExecutor) AcceptsMessage(m Message) (accepted bool, err error) {
+	e.preview(func() { accepted, err = e.acceptableMessage(m) })
+	return accepted, err
+}
+
+// preview runs fn as a probe of the context, discarding the objects it
+// materializes and the behaviors they start along with what beginProbe restores.
+func (e *StateExecutor) preview(fn func()) {
+	defer e.ctx.beginProbe()()
+	mark, attached := len(e.ctx.created), len(e.ctx.objectBehaviors)
+	defer func() {
+		e.ctx.forgetBehaviorsFrom(attached)
+		e.ctx.abandonInstancesSince(mark)
+	}()
+	fn()
 }
 
 // Decision is what dispatching a message now would do: the transitions that
@@ -2093,17 +2107,18 @@ func (d Decision) Enabled() bool {
 // object materialized on the way — to bind the payload, or by a guard reaching an
 // occurrence not yet built — starts its behaviors as under dispatch, so the guard
 // reads what they make of it, then is discarded along with them and anything they
-// sent. A payload or guard error is returned.
-func (e *StateExecutor) Decide(m Message) (Decision, error) {
+// sent. So is a port materialized to tell whether the message reaches the machine
+// at all. A payload or guard error is returned.
+func (e *StateExecutor) Decide(m Message) (decision Decision, err error) {
+	e.preview(func() { decision, err = e.decide(m) })
+	return decision, err
+}
+
+// decide is Decide under the preview that discards what it builds.
+func (e *StateExecutor) decide(m Message) (Decision, error) {
 	if accepted, err := e.acceptableMessage(m); err != nil || !accepted {
 		return Decision{}, err
 	}
-	defer e.ctx.beginProbe()()
-	mark, attached := len(e.ctx.created), len(e.ctx.objectBehaviors)
-	defer func() {
-		e.ctx.forgetBehaviorsFrom(attached)
-		e.ctx.abandonInstancesSince(mark)
-	}()
 	probe := m
 	probe.Payload = make(map[string]Value, len(m.Payload))
 	for name, value := range m.Payload {

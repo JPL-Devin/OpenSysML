@@ -386,7 +386,7 @@ func (ctx *Context) beginExecutorRun(started *bool) func() {
 func (ctx *Context) beginProbe() func() {
 	steps, elements, trace := ctx.steps, ctx.elements, ctx.trace
 	mark := len(ctx.probeWrites)
-	messages := slices.Clone(ctx.messages)
+	messages := cloneMessages(ctx.messages)
 	selected := maps.Clone(ctx.selectedVariants)
 	if ctx.probes == 0 {
 		ctx.probeBehaviors = len(ctx.objectBehaviors)
@@ -405,6 +405,16 @@ func (ctx *Context) beginProbe() func() {
 		ctx.runDepth--
 		ctx.steps, ctx.elements, ctx.trace = steps, elements, trace
 	}
+}
+
+// cloneMessages copies messages in flight, payloads included: what a probe caches
+// on a payload (see acceptedValue) names objects the probe discards.
+func cloneMessages(messages []Message) []Message {
+	cloned := slices.Clone(messages)
+	for i := range cloned {
+		cloned[i].Payload = maps.Clone(cloned[i].Payload)
+	}
+	return cloned
 }
 
 // probeWrite is a feature value a probe changed and what it held before.
