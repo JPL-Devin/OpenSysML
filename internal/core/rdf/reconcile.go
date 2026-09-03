@@ -122,7 +122,7 @@ func reconcileCollection(graph *Graph, ids map[string][]Term, subject Term, key 
 	bare := graph.Objects(subject, SysML+key)
 	if len(bare) == 0 {
 		for _, member := range members {
-			c.members = append(c.members, materialize(member, ids))
+			c.members = append(c.members, materialize(member, subject, ids))
 		}
 		return c, nil
 	}
@@ -178,14 +178,36 @@ func subjectsByID(graph *Graph) map[string][]Term {
 	return ids
 }
 
-// materialize turns an annotation member into the term a typed triple would hold;
-// an id no subject carries keeps the element spelling and dangles as usual.
-func materialize(member CollectionMember, ids map[string][]Term) Term {
+// materialize turns an annotation member into the term a typed triple would hold:
+// the subject in the referrer's scope, else the only one; an unknown id dangles as usual.
+func materialize(member CollectionMember, referrer Term, ids map[string][]Term) Term {
 	if member.ID == "" {
 		return member.Literal
+	}
+	scope := scopeOf(referrer.Value)
+	var inScope []Term
+	for _, subject := range ids[member.ID] {
+		if scopeOf(subject.Value) == scope {
+			inScope = append(inScope, subject)
+		}
+	}
+	if len(inScope) == 1 {
+		return inScope[0]
 	}
 	if subjects := ids[member.ID]; len(subjects) == 1 {
 		return subjects[0]
 	}
+	if scope != "" {
+		return ScopedElementIRIForID(scope, member.ID)
+	}
 	return ElementIRIForID(member.ID)
+}
+
+// scopeOf is the project qualifier of an element or expression IRI, empty when unscoped.
+func scopeOf(iri string) string {
+	qualifier, _, scoped := strings.Cut(ownerID(iri), ":")
+	if !scoped {
+		return ""
+	}
+	return qualifier
 }

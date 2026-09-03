@@ -452,8 +452,10 @@ another property twice gets the annotation on that property too.
 **Reading a graph back** accepts either spelling or both. A collection stated by
 the annotation alone — what that service writes back for a graph it holds —
 is materialized as typed triples in the annotation's order before decoding, a
-`{"@id": …}` member resolving to the subject with that id or, absent one,
-standing as an element IRI that dangles as any other unresolved reference does.
+`{"@id": …}` member resolving to the subject with that id — in a graph of several
+project scopes whose ids repeat, the one in the referring subject's scope — or,
+absent one, standing as an element IRI that dangles as any other unresolved
+reference does.
 A string member reads as a plain literal, since the annotation carries no
 datatype: a head target written as an expression comes back from the annotation
 alone as a name, where the typed triple would have carried `sysx:Expression`.

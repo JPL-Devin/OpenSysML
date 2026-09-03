@@ -124,6 +124,37 @@ func TestMalformedCollectionAnnotationsAreRefused(t *testing.T) {
 	}
 }
 
+// An annotation names members by id alone; in a graph of two project scopes that
+// reuse an id, the reference resolves to the member in the referrer's own scope.
+func TestAnnotatedReferencesResolveWithinScope(t *testing.T) {
+	turtle := structural(t, idTurtle(t, `package P {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; org = "acme"; }
+	part def A {
+		@IdentityMetadata::ElementId { id = "shared"; }
+	}
+	part a : A;
+}
+package Q {
+	@IdentityMetadata::ProjectRef { projectId = "proj-2"; org = "acme"; }
+	part def B {
+		@IdentityMetadata::ElementId { id = "shared"; }
+	}
+	part b : B;
+}
+`))
+	if !strings.Contains(turtle, `json:ownedMember "[{\"@id\":\"shared\"},`) {
+		t.Fatalf("the fixture does not annotate a collection holding a reused id:\n%s", turtle)
+	}
+	annotationOnly := []byte(turtle)
+	for _, key := range []string{"sysml:ownedMember", "sysml:ownedMembership", "sysml:ownedRelationship"} {
+		annotationOnly = withoutTriples(t, annotationOnly, key)
+	}
+	want := toNotation(t, []byte(turtle))
+	if back := toNotation(t, annotationOnly); back != want {
+		t.Errorf("the annotation-only graph reads differently:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+}
+
 // A reference the annotation alone states to an element the graph does not
 // describe is refused as a dangling reference, as a typed triple's would be.
 func TestAnnotatedReferenceToAnAbsentElementIsRefused(t *testing.T) {
