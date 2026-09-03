@@ -13,7 +13,7 @@ import (
 
 // implicitStateSrc references `done`, which an untyped state usage inherits from
 // its implicit standard library base States::StateAction.
-const implicitStateSrc = "package P {\n\tstate machine {\n\t\tstate normal;\n\t\tconstraint { Time::TimeOf(normal.done) > 0 }\n\t}\n}\n"
+const implicitStateSrc = "package P {\n\tstate machine {\n\t\tstate normal;\n\t\tconstraint { Time::TimeOf(normal.done) > 0 [SI::s] }\n\t}\n}\n"
 
 // TestPublishDiagnosticsAcceptsImplicitlyInheritedMember covers the editor view
 // of implicit usage typing: a member reached through the implicit base must not

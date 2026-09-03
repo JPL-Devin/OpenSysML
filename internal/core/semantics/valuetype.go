@@ -17,6 +17,7 @@ const (
 	fqnString                     = "ScalarValues::String"
 	fqnNatural                    = "ScalarValues::Natural"
 	fqnRational                   = "ScalarValues::Rational"
+	fqnReal                       = "ScalarValues::Real"
 	fqnNumericalValue             = "ScalarValues::NumericalValue"
 	fqnAnything                   = "Base::Anything"
 	fqnTensorMeasurementReference = "MeasurementReferences::TensorMeasurementReference"
@@ -298,8 +299,8 @@ func (m *Model) measurementReference(scope *symbols.Scope, unit ast.Node) *symbo
 // operatorConformance judges an operator's value by the result of the library
 // function its operands select: comparisons are Boolean, a conditional the
 // Anything its function returns, `%` a number; arithmetic is a quantity when
-// every operand is one (QuantityCalculations), else a number, and `+` over
-// strings a String.
+// every operand is one (QuantityCalculations; a power when its base is and its
+// exponent a Real), else a number, and `+` over strings a String.
 func (m *Model) operatorConformance(scope *symbols.Scope, e *ast.OperatorExpr, want *symbols.Symbol, byUnit bool) Conformance {
 	switch e.Operator {
 	case ast.OpConditional, ast.OpNullCoalesce:
@@ -318,7 +319,7 @@ func (m *Model) operatorConformance(scope *symbols.Scope, e *ast.OperatorExpr, w
 		ast.OpLt, ast.OpGt, ast.OpLe, ast.OpGe, ast.OpIsType, ast.OpHasType, ast.OpAt, ast.OpMetaAt:
 		return m.typeConformance(m.libSymbol(FQNBoolean), want)
 	case ast.OpNeg, ast.OpPos, ast.OpAdd, ast.OpSub, ast.OpMul, ast.OpDiv, ast.OpPow:
-		if m.operandsConformTo(scope, e, m.libSymbol(fqnScalarQuantityValue)) {
+		if m.quantityArithmetic(scope, e) {
 			if byUnit {
 				return m.dimensionConformance(scope, e, want)
 			}
@@ -334,18 +335,37 @@ func (m *Model) operatorConformance(scope *symbols.Scope, e *ast.OperatorExpr, w
 	return conformanceUnknown()
 }
 
+// quantityArithmetic reports whether e selects a QuantityCalculations function:
+// every operand is a quantity, or for a power the base is and the exponent a Real.
+func (m *Model) quantityArithmetic(scope *symbols.Scope, e *ast.OperatorExpr) bool {
+	quantity := m.libSymbol(fqnScalarQuantityValue)
+	if e.Operator != ast.OpPow || len(e.Operands) != 2 {
+		return m.operandsConformTo(scope, e, quantity)
+	}
+	return m.operandConformsTo(scope, e.Operands[0], quantity) && m.operandConformsTo(scope, e.Operands[1], m.libSymbol(fqnReal))
+}
+
 // operandsConformTo reports whether every operand is known to be a value of
 // typ, so the expression is the result the function over typ declares.
 func (m *Model) operandsConformTo(scope *symbols.Scope, e *ast.OperatorExpr, typ *symbols.Symbol) bool {
-	if typ == nil || len(e.Operands) == 0 {
+	if len(e.Operands) == 0 {
 		return false
 	}
 	for _, operand := range e.Operands {
-		if c := m.exprConformance(scope, operand, typ, false); !c.Known || !c.Holds {
+		if !m.operandConformsTo(scope, operand, typ) {
 			return false
 		}
 	}
 	return true
+}
+
+// operandConformsTo reports whether operand is known to be a value of typ.
+func (m *Model) operandConformsTo(scope *symbols.Scope, operand ast.Node, typ *symbols.Symbol) bool {
+	if typ == nil {
+		return false
+	}
+	c := m.exprConformance(scope, operand, typ, false)
+	return c.Known && c.Holds
 }
 
 // dimensionConformance judges an expression whose value is a quantity of a
@@ -378,21 +398,24 @@ func (m *Model) dimensionConformance(scope *symbols.Scope, node ast.Node, want *
 }
 
 // invocationConformance judges an invocation's value by the declared type of the
-// result parameter of what it invokes.
+// result parameter of the overload it calls.
 func (m *Model) invocationConformance(scope *symbols.Scope, e *ast.InvocationExpr, want *symbols.Symbol) Conformance {
-	if e.Type == nil {
-		return conformanceUnknown()
-	}
-	sym, ok := m.resolver.ResolveQualified(scope, e.Type)
-	if !ok || sym == nil {
-		return conformanceUnknown()
-	}
-	if alias, ok := m.resolver.ResolveAliasTarget(sym); ok {
-		sym = alias
-	}
-	result := m.ResultParameterOf(sym)
+	result := m.invocationResult(scope, e)
 	if result == nil {
 		return conformanceUnknown()
 	}
 	return m.featureConformance(result, want)
+}
+
+// invocationResult is the result parameter of the declaration e calls, as the
+// checker selects it; nil when the call is unresolved, ambiguous or fits none.
+func (m *Model) invocationResult(scope *symbols.Scope, e *ast.InvocationExpr) *symbols.Symbol {
+	if e.Type == nil || m.resolver == nil {
+		return nil
+	}
+	sym, ok := m.calledFunction(scope, e)
+	if !ok || sym == nil {
+		return nil
+	}
+	return m.ResultParameterOf(sym)
 }

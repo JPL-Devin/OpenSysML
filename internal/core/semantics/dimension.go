@@ -71,8 +71,8 @@ type dimensionResult struct {
 
 // DimensionOfExpr reports the dimension of an expression's value when the
 // declarations it names determine it statically. A dimension that only
-// evaluation determines — an untyped feature or parameter, a calculation result,
-// an unresolved reference, an unbound redefinition — is reported as unknown
+// evaluation determines — an untyped feature, parameter or result, an
+// unresolved reference, an unbound redefinition — is reported as unknown
 // rather than guessed.
 func (m *Model) DimensionOfExpr(scope *symbols.Scope, node ast.Node) (Dimension, bool) {
 	if m == nil || node == nil {
@@ -99,6 +99,9 @@ func (m *Model) DimensionOfExpr(scope *symbols.Scope, node ast.Node) (Dimension,
 		return m.dimensionOfFeature(sym)
 	case *ast.OperatorExpr:
 		return m.dimensionOfOperator(scope, n)
+	case *ast.InvocationExpr:
+		// A call is measured as the result its selected overload declares.
+		return m.dimensionOfFeature(m.invocationResult(scope, n))
 	}
 	return Dimension{}, false
 }

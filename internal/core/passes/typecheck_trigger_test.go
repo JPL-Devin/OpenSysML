@@ -17,6 +17,17 @@ const triggerFixture = `package P {
 	private import MeasurementReferences::*;
 	private import Time::*;
 	private import ScalarValues::*;
+	private import Overloads::Durations::*;
+	private import Overloads::Instants::*;
+	private import Overloads::Flags::*;
+	private import Overloads::Lengths::*;
+
+	package Overloads {
+		package Durations { calc def Pick { in d : DurationValue; return : DurationValue = d; } }
+		package Instants { calc def Pick { in t : TimeInstantValue; return : TimeInstantValue = t; } }
+		package Flags { calc def Pick { in b : Boolean; return : Boolean = b; } }
+		package Lengths { calc def Pick { in l : LengthValue; return : LengthValue = l; } }
+	}
 
 	attribute <ms> millisecond : DurationUnit {
 		:>> unitConversion : ConversionByPrefix { :>> prefix = milli; :>> referenceUnit = s; }
@@ -114,6 +125,8 @@ func TestTriggerAfterRejectsNonDuration(t *testing.T) {
 		{"after 5 [m]", "a quantity in metre (a LengthUnit)"},
 		{"after 5 [kg]", "a quantity in kilogram (a MassUnit)"},
 		{"after d * d", "a value of dimension T^2"},
+		{"after d ** 2", "a value of dimension T^2"},
+		{"after 2 ** d", "NumericalValue"},
 		{"after 5 [m] / 2 [s]", "a value of dimension L·T^-1"},
 		{"after Len()", "LengthValue"},
 		{"after IsOk()", "Boolean"},
@@ -154,8 +167,61 @@ func TestTriggerAfterAcceptsDurations(t *testing.T) {
 		"after t2 - t",
 		"after Twice(d)",
 		"after 10 [m] / 2 [m/s]",
+		"after (d ** 2) / d",
+		"after (d ^ 2.0) / d",
 	} {
 		wantTriggerSilent(t, "transition first a accept "+trigger+" then b;")
+	}
+}
+
+// A call is typed by the result of the overload its arguments select, not the
+// first declaration its name denotes.
+func TestTriggerInvocationUsesSelectedOverload(t *testing.T) {
+	for _, trigger := range []string{"after Pick(d2)", "at Pick(t2)", "when Pick(flag)"} {
+		wantTriggerSilent(t, "transition first a accept "+trigger+" then b;")
+	}
+	for _, tc := range []struct{ trigger, code, found string }{
+		{"after Pick(t2)", "trigger-after-duration", "TimeInstantValue"},
+		{"after Pick(flag)", "trigger-after-duration", "Boolean"},
+		{"after Pick(len)", "trigger-after-duration", "LengthValue"},
+		{"at Pick(d2)", "trigger-at-time-instant", "DurationValue"},
+		{"at Pick(len)", "trigger-at-time-instant", "LengthValue"},
+		{"when Pick(d2)", "trigger-when-boolean", "DurationValue"},
+		{"when Pick(t2)", "trigger-when-boolean", "TimeInstantValue"},
+	} {
+		wantTriggerDiag(t, "transition first a accept "+tc.trigger+" then b;", tc.code, "found "+tc.found)
+	}
+}
+
+// Arithmetic over calls is measured through the selected result's quantity type,
+// so a computed delay of the wrong dimension is refused like a written one.
+func TestTriggerInvocationArithmeticIsJudgedByDimension(t *testing.T) {
+	for _, trigger := range []string{
+		"after Twice(d) + 5 [s]",
+		"after Twice(d) - Pick(d2)",
+		"after Len() / 2 [m/s]",
+		"after Twice(d) * 2 [one]",
+		"after (Twice(d) ** 2) / Pick(d2)",
+		"after Pick(len) / Len() * d",
+		"at Later(t) + Twice(d)",
+		"at Pick(t2) - Pick(d2)",
+	} {
+		wantTriggerSilent(t, "transition first a accept "+trigger+" then b;")
+	}
+	for _, tc := range []struct{ trigger, code, found string }{
+		{"after Len() * Len()", "trigger-after-duration", "a value of dimension L^2"},
+		{"after Len() ** 2", "trigger-after-duration", "a value of dimension L^2"},
+		{"after Len() + 5 [m]", "trigger-after-duration", "a value of dimension L"},
+		{"after Pick(len) - Len()", "trigger-after-duration", "a value of dimension L"},
+		{"after Len() / Twice(d)", "trigger-after-duration", "a value of dimension L·T^-1"},
+		{"after Twice(d) * Pick(d2)", "trigger-after-duration", "a value of dimension T^2"},
+		{"after Len() / 2 [m]", "trigger-after-duration", "a dimensionless value"},
+		{"at Len() * 2 [one]", "trigger-at-time-instant", "a value of dimension L"},
+		{"at Twice(d) * Pick(d2)", "trigger-at-time-instant", "a value of dimension T^2"},
+		{"at Len() / Later(t)", "trigger-at-time-instant", "a value of dimension L·T^-1"},
+		{"when Len() * Len()", "trigger-when-boolean", "a value of dimension L^2"},
+	} {
+		wantTriggerDiag(t, "transition first a accept "+tc.trigger+" then b;", tc.code, "found "+tc.found)
 	}
 }
 
