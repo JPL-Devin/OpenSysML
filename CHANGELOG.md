@@ -8,6 +8,44 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Added
 
+- **An object carries the features the Systems and Domain libraries declare for it.** A
+  `part box : ShapeItems::Box` used to expose only the `length`, `width` and `height` the model
+  wrote: every library-declared member was left out of an object's shape so that the Kernel
+  Semantic Library frame (`self`, `portions`, `timeSlices`, `snapshots`, `startShot`, …) would not
+  bloat every instance, and `box.isSolid`, `box.voids` and `box.shape` were `member not found`.
+  The loader now records which *tier* of the library each document belongs to — Kernel Semantic,
+  Kernel Data Type, Kernel Function, Systems, Domain or OpenSysML — kept through the symbol cache
+  and queryable on any library symbol, and the runtime leaves out only the Kernel frame. So an
+  item or part carries `Items::Item`'s `voids`, `isSolid = isEmpty(voids)`, `shape`, `subitems`
+  and `subparts`, a `Parts::Part` its `ownedPorts`, `ownedActions` and `ownedStates`, a
+  requirement its `subj`, `actors`, `stakeholders`, `assumptions` and `constraints`, and a
+  `Box` its Geometry faces — each with the default, derived expression and multiplicity the
+  library wrote, masked by a model's own `:>>` as any inherited feature is. `%features box`
+  lists them, `%eval box.isSolid` answers `true`, `box.voids` is `[]`, and the gRPC
+  `Instantiate` response carries them as feature values. A `%features` listing always shows
+  every feature of the object asked about; nested expansions share the lines that remain. The
+  Kernel frame stays out; a model that inherits nothing from these libraries keeps its shape
+  digest, which names a library type by the library's identity — a digest of every bundled
+  document — rather than expanding it, so an object is carried across a re-analysis over the
+  same library and refused by one over a library whose declarations differ; and a value the
+  runtime cannot evaluate — the Geometry library's edge bindings among
+  them — is the typed error it already was, not a silent null. A requirement's
+  `subject vehicle : Part = box;` now binds the subject on the object — it was left unset, as the
+  binding was only read while checking the requirement — and the inherited `subj` reads the same
+  object.
+
+- **The Connect + JSON wire contract is written down for clients with no library.** A
+  MATLAB, R, Julia, C or shell program that posts JSON to `sysml-grpc` by hand had only the
+  proto file and two rules on the transports page to decode answers with, and the questions
+  that page leaves open — how long a `modelHash` lives and what a stale one answers, how the
+  eleven arms of `Value` are told apart and which of `unset`, `null` and an absent `result`
+  means what, how a parse diagnostic differs from an in-body `error` and both from a Connect
+  `{"code","message"}`, and what `Instantiate`, the behavior calls, `Verify*`, `Query` and
+  `RunDocumentQuery` answer — are now on
+  [docs/reference/wire-contract.md](docs/reference/wire-contract.md), each with a request and
+  the response captured verbatim from the service, and with a short illustrative decoder in
+  each of the four languages that is explicitly not a shipped client.
+
 - **`%features` reads out a whole object tree, as text or as JSON.** A large run could not
   be read out: the listing stopped at 200 lines with `… (listing truncated)`, so the
   counters two levels under a context of twelve parts were simply absent, and there was no
@@ -95,6 +133,68 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   classed by the construct it names. The mapping's reference now states that measurement in place
   of the claim that a second conversion yields the same graph, which held for the fixtures alone
   ([docs/project/rdf-corpus-roundtrip.md](docs/project/rdf-corpus-roundtrip.md)).
+- **The REPL sends a signal into a running machine.** `%send go` and
+  `%send Dim(level=3+4) to bulb` put the signal on the runtime's message bus exactly as a
+  `send` from an action body would, so a `transition ... accept go then on` is driven from the
+  prompt without writing an action just to fire it: `%events` lists the signal in flight, and
+  `%step` or `%advance` dispatches it. Without `to`, the signal goes to the object whose machine
+  the `%state` session is debugging, and with no session the command says so rather than
+  guessing. Arguments are written `<parameter>=<expression>` as for `%invoke` and are checked
+  against the signal's declaration — the feature it names, and the type and multiplicity that
+  feature admits — before anything is sent; an unresolved signal name gets the usual unresolved-reference
+  report, an object that runs no machine is reported as such, and a signal nothing in the
+  machine's current state accepts is refused up front with the state named, never queued to be
+  dropped in silence — and so is one whose every triggered transition is held back by its guard,
+  decided as the dispatch would decide it with the payload bound; a guard that cannot be evaluated
+  is an error. A signal the current state defers rather than accepts is sent and said to be
+  deferred: the step dispatching it holds it, `%events` lists it as held, and it is recalled to
+  fire once the machine reaches a state that accepts it — as a machine now holds any message
+  addressed to it that its active state defers, instead of leaving it on the bus. A signal in
+  flight is due now, so a single step dispatches it ahead of a timer set
+  for later, as a run holding time where it is would; a step that dispatches a signal no transition
+  fires on, because the state or the data its guards read changed since it was sent, says so.
+  When an object runs several machines, `%send` decides the signal with each of them and reports
+  which would fire on it, and a machine whose guards would drop it leaves it in flight for a
+  sibling that fires on or defers it — at the prompt and in a run alike — so the machine `%send`
+  named as accepting a signal is the one that gets it.
+
+- **The REPL addresses an object by id and by path, not only by name.** Every command that takes
+  an object — `%features`, `%invoke`, `%eval in`, the object `%action` and `%state` work on, and
+  the one `%send … to` delivers to — reads the same reference: the name the object was
+  instantiated under, the id `%instantiate` printed (`%features #3`), or either followed by a path
+  into the objects it holds (`car.fl.hub`, `#3.fl`) — parts, ports, connectors and structured
+  attributes alike, every feature the runtime holds an object for — one element of a multi-valued
+  feature picked by an index counted from 1 (`car.wheels[2]`). In a path `.` and `::` mean the same thing, except that what follows a `.` is
+  always a feature of the object before it, never a declaration. The id is the object's identity
+  for the session: it survives the carry-over an unrelated declaration triggers, and a second
+  `%instantiate` of the same name, which re-points the name and now says how the first object is
+  still reached; `%instances` lists such an object as `#3 (ID: 3, displaced from Demo::car)`, and a
+  `%state` or `%action` session started on it stays with it under that id; a connector `%features`
+  has shown, anonymous or named, keeps answering to its id across that carry-over though its ends
+  are only attached again when it is next read — and a connector attached whole is kept, its
+  writes with it, when an older object's behavior then fails answering it, that failure reported
+  as the older object's; changing the run bounds,
+  which drops every object as a reset does, ends such a session too, and the next `%step` or
+  `%advance` says so. The old object still counts: a `%constraint`, `%requirement` or `%eval` that
+  names no object and whose condition both carry says so and names both (`Demo::car, #3`) rather
+  than answering about the new one — the elements of a multi-valued part among the carriers, each
+  by its index (`car.wheels[2]`) — and `%state #3` debugs a state machine the session holds by id
+  or path as it does by name. A nested object is reported with its features after `.`
+  (`Demo::car.fl`, `#3.wheels[2]`), which typed back reaches that object even when the `::`
+  spelling names a declaration of its own. A bad reference is reported in the same words by every
+  command: an unknown id lists the ids there are, a segment that is no feature names the object
+  and its features, an attribute at the end of a path says it holds a value, and a multi-valued
+  part with no index says how many objects it holds and how to pick one. <kbd>Tab</kbd> completes
+  references where a command takes one: `#` offers the ids, `car.` the objects `car` holds — a
+  variation among them once a command has read which variant it selected, and of a part nothing
+  has read yet the elements it will hold, the parts subsetting it counted before its lower bound,
+  so an optional or abstract part is offered only once something subsets it
+  ([reference](docs/reference/repl-commands.md#object-references)).
+  Names that need quoting are completed as the notation writes them, `'the ra` to `'the rack'` and
+  `Q::'the ra` to `Q::'the rack'`, the closing quote typed or not, and every object a command
+  reports is spelled that way too, so a name that merely looks like an id or an index (`Demo::'#3'`,
+  `car::'hub[2]'`) reads back as the name it is, and one holding `::` inside its quotes
+  (`Demo::'left::right'`) stays one segment rather than reading back as two names.
 
 ### Performance
 
@@ -160,8 +260,79 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   differential test now also compares Reals bit for bit over ±0.0, ±Inf and NaN, and focused
   fixtures under `internal/core/runtime/testdata/compiled/` run each construct through both tiers.
 
+### Fixed
+
+- **`%state <machine>` drives the object that exhibits the machine.** Naming an exhibited
+  machine alone (`%state lp` after `%instantiate TA::Sys`, or `-state lp` on the command line)
+  used to start a detached performance of it, one with no performing object: `%advance` reported
+  the timer events it dispatched, but the `do`, `entry` and `effect` writes of that run went to
+  the detached run's own frame, so `%features #1` still showed the values `%instantiate` had
+  left (`n = 1` for `n = 3`), while `%state #1` over the same object was right. The form now
+  attaches to the running machine of the one held object exhibiting it — the same object
+  `%instances` and `%features #1` show — so the two forms agree. When no held object exhibits
+  the machine, or several do, `%state` refuses with a typed error (`ExhibitorsError`) naming
+  the objects and both forms that address one (`%state <object>`, `%state <machine>
+  <object>`), rather than guessing or performing the machine detached; with no object yet
+  held, it names the types whose objects run the machine, whether they exhibit it inline,
+  through usages typed by a shared definition (`exhibit state front : Blink`), or through a
+  usage referencing another (`state spare : Blink; exhibit state active ::> spare;`): every
+  binding on the way to the body addresses the machine, with the object named or alone. A
+  definition one object exhibits as several usages refuses as it does with the object named.
+  Held objects are the ones the session has built: a nested part counts once it has been
+  reached, by `%features` or a machine that wrote it. A machine no type exhibits (`state def
+  Blink` alone) still starts as before, since no object's performance of it exists to attach to.
+
+- **A qualified name through an import evaluates as the checker resolves it.** The evaluator
+  used to resolve only the first segment of `Bq::x` through the resolver and walk the rest as
+  owned and inherited members, so a segment a `public import` re-exports failed with
+  `member x not found in Bq` even though the checker accepted the reference — and the library's
+  own façades are built that way, so `ISQ::speed` and `SI::speed` failed with
+  `member speed not found`. The whole name now goes through the same `ResolveQualified` the
+  checker uses: a wildcard, single-member or recursive import, a façade of a façade, a short
+  name and an `alias` (which used to fail with `cannot evaluate element type *ast.Alias`) all
+  reach the element the checker reaches, a `private import` stays reachable only from inside
+  the importing namespace, and a name the checker rejects fails with the checker's own
+  `unresolved reference: Priv::x` or, when several members answer to it, its own
+  `ambiguous reference: Twice::t (2 candidates)`. The evaluator reads the name through a new
+  `Resolver.ReadQualified`, whose answer (element, segments, ambiguity) is memoized by scope and
+  node rather than by node alone, so one parsed expression evaluated in two scopes that each
+  hold their own `A::x` answers with each scope's value. A calc usage's outputs, and the "not a
+  variant" / "not a literal" reports, are unchanged.
+
 ### Changed
 
+- **A conversion from RDF returns the notation as written.** Every element written to `.ttl`
+  carries its lines as `sysx:sourceText` — comments, blank lines and keyword synonyms included —
+  and an element with members carries the lines closing its body as `sysx:sourceTail`; the text
+  is the file's own bytes — tabs, irregular indentation, blank lines inside a head, CRLF line
+  endings and the notes after the last root included, never a formatted copy — and the two
+  properties are one-line literals with newlines escaped. `sysml model.ttl -convert sysml` now
+  writes that text back untouched, so a `.sysml → .ttl → .sysml` round trip is byte for byte for
+  any file, where before it came back canonical with its `//` and `/* */` comments dropped. A head
+  laid out over several lines or with a comment inside it is recorded in the mapping
+  (`sysx:endForm`, `sysx:declaredKeyword`) like one written on a line, since the graph states
+  tokens, not layout. The graph stays
+  authoritative: the candidate notation is converted back to RDF and compared with the graph, and
+  each element whose text no longer states its triples — a flag set, a value changed, a member
+  removed or an identity annotation dropped after the export — is written canonically instead,
+  with `@IdentityMetadata::ElementId` and `ProjectRef` materialized exactly as for a graph without
+  text; text that no longer parses demotes the whole file. A member written on its owner's lines,
+  such as an accept's payload, carries no text of its own, so an edit to it rebuilds the owner
+  whole rather than splicing a line into it. Each root records the grammar its file was written in
+  as `sysx:sourceLanguage`, so KerML text is checked as KerML rather than as the SysML it may also
+  read as; a buffer with no extension records none and is checked as such a buffer again. With the
+  notation written from its text, the corpus round-trip ratchet moves 101 files to `stable` — every
+  `whitespace-only`, `graph-diff` and `unparseable` verdict and all but one `unwritable` — which says
+  the text survives, not that the structural predicates alone would (that remains the stripping
+  tests' job). A `LiteralString` node's `sysml:value` is now the value
+  the notation's escapes read to rather than the text between the quotes, and a value edited in the
+  graph is written back as a literal that reads to it, whatever characters it holds. A graph without `sysx:sourceText` — from
+  another tool, or stripped — converts as before, and the round-trip tests keep stripping it to
+  prove the structural predicates carry the model; each fixture under
+  `internal/core/export/testdata/convert` now locks both notations. The
+  [saving guide](docs/guide/07-saving-and-rdf.md), the
+  [RDF mapping](docs/reference/rdf-mapping.md#source-text) and the round-trip testing skill
+  describe the precedence.
 - **A calc whose `return` declares a result parameter it never binds says so.** In the notation
   `return` introduces a result *parameter* (SysML.xtext ReturnParameterMember), so `return h;`
   after `attribute h : Real = …;` declares a second member named `h` — the pilot flags the
@@ -201,6 +372,20 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   reported under one name, `oslc.select` naming the same property twice — as
   `sysml:name,sysml:name`, or as two prefixes bound to the SysML namespace — is now refused
   rather than reported twice under whichever name came last.
+
+- **An optional composite feature fills to its lower bound.** `part spare : Wheel[0..1]` used
+  to materialize an object, where `part wheels : Wheel[0..*]` materialized none; both now hold
+  only the objects the features subsetting them hold, so an optional part reads as the empty
+  sequence and an abstract one holds only what subsets it — a required abstract feature nothing
+  subsets is a multiplicity violation, not an empty value — and an abstract feature that states
+  no multiplicity is bound by what it subsets, so a part's inherited `Action::decisions`,
+  `forks` and `joins` (`:> controls[0..*]`) hold nothing rather than demanding one control each.
+  A required feature holding nothing is still uninitialized when read. The same governs a connector: `connection c : Link[0..1]
+  connect a to b` links nothing of its own until a connector subsetting it does, while a
+  required connector still links its ends. What made this visible is the library: `Item::shape` and
+  `Item::voids` are optional, and an anonymous object for each would have said the box had a
+  void it does not have.
+
 - **The documentation site's landing page describes the four oracles instead of quoting their
   totals.** The band below the hero used to state the differential's agreeing-file count, the Xpect
   suites' declared-diagnostic and scope tallies, the rejection corpus's size and the pilot pin, all
@@ -234,8 +419,67 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   compiles calcs until that variable says otherwise, and — invoking the model's own `StepBudget`
   through both tiers — that they agree and that a traced run takes the evaluator. The architecture
   document gains a paragraph and diagram on invoking a calc.
+- **`%features` lists an object's behaviors under their own heading instead of as `<unknown>`
+  values.** A state or action a type declares holds no value, and the listing used to render each
+  as a feature row reading `<unknown>` — `off = <unknown>`, nested state by nested state — while the
+  running state was only visible through `%current`. The values are now followed by a `Behaviors:`
+  section that says what the object is doing with each: the current active state of a machine it
+  exhibits (`modes: exhibited state machine, current state off`, the very state `%current`
+  reports, before and after the debugger drives it), the execution state of an action it performs
+  (`tick: performed action, completed`), and `not running` for a state or action the type declares
+  but the object neither exhibits nor performs. A named transition is listed as the step it
+  declares (`toggle: transition, modes.closed → modes.opened`), not as an idle action. The values
+  a running behavior owns — the attributes of the machine's own occurrence, an action's parameters
+  and outputs — are listed under its row, apart from the performer's own values of the same name.
+  A nested object's behaviors are listed under its own row. Nothing is invented: a machine that
+  has not started reads `not started`, one that reached its end reads `completed`.
 
 ### Fixed
+
+- **`%eval in <part> : <feature>` reads a valueless feature as `<unset>` rather than calling it
+  unresolved.** Before an object exists, `%eval in car : wheels` for a multi-valued
+  `part wheels : Wheel[4]` — and `wheels.radius`, an attribute with no default, or a multi-valued
+  `String[3]` attribute — reported `unresolved reference`, though the name resolved perfectly well
+  and its single-valued neighbours evaluated. A feature the declarations give no value to now reads
+  `= <unset>`, as it does on an object; `unresolved reference` is reserved for a name nothing
+  declares. Only a bare read of the feature is unset: an expression over one (`unsetMass + 1`) or a
+  feature whose value depends on one still fails, naming the feature that has no value. The same
+  distinction holds throughout the evaluator: a declared name with no value is a typed no-value
+  error carrying the name, never an unresolved reference, so a qualified `car::wheels` reports that
+  it has no value to evaluate.
+
+### Fixed
+
+- **An expression evaluated after `-instantiate` reads the object that was created and run.**
+  `sysml model.sysml -instantiate P::ctx -e "ctx.recv.got"`, the bare line `ctx.recv.got` after
+  `%instantiate P::ctx`, and even `%eval in P::ctx : recv.got` — which printed
+  `(on P::ctx ID: 1)` — answered `0` while `%features #1` showed `got = 1` for that same object:
+  a name in the expression materialized a fresh object of the usage instead of the one
+  `%instantiate` created, and a nested part whose machine sends or accepts a signal ran only
+  once something read it, so what a read saw depended on the order the parts were first
+  inspected in. An instantiated usage now denotes the object created under it, and creating an
+  object materializes and runs the nested parts whose types exhibit or perform behaviors with
+  it, so the whole runs to quiescence once and every later read — a CLI `-e`, a piped
+  expression line, `%eval`, `%eval in` and `%features` — reports the same values.
+  `%eval in` also takes an object the way `%features` and `%state` do: by id (`%eval in #1 :
+  recv.got`) or by a path under a named object (`%eval in ctx.recv : got`), and its usage line
+  lists the forms. (Open-MBEE/OpenSysML#91)
+
+- **Messages cross a binding connector at an assembly's boundary port, in both directions**
+  (Open-MBEE/OpenSysML#92). An assembly that binds its boundary port to a port of a part it
+  holds (`part def Assembly { port bi : ~PP; part child : Inner; bind bi = child.i; }`) used
+  to swallow messages at the boundary: a `send Ping() via o` over a context-level
+  `connect env.o to asm.bi` arrived at `asm.bi` and stayed there, so the inner part's
+  `accept Ping via i` never fired and its counters stayed at 0, with no diagnostic; and a send
+  by the inner part through its own port was reported as reaching no receiving port, although
+  the boundary port it is bound to was connected. A binding connector now makes the two ports
+  one port for message delivery: an accept on either takes a message that reached the other,
+  and a send through either leaves over the connectors joined to the other, through any depth
+  of nested assemblies. Bindings chained through several assemblies also keep every bound port
+  the same object whichever end is read first — a chain used to split when the outer boundary
+  port was materialized before the inner assembly's. A send whose bound boundary port is
+  joined to nothing still reports `send reaches no receiving port` where it was written.
+  Delivery does not depend on the order connectors, bindings and parts are declared.
 
 - **`satisfy … by config.child` is evaluated on the nested object it names.** A satisfaction
   assertion whose `by` operand is a feature chain used to be read as its last name alone:
@@ -267,19 +511,16 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 - **`%state`, `%invoke` and `-state` reach a nested part by path and by id.** The object argument
   accepted only the name of a top-level object, so the machine of a part reached through
   composition could be watched with `%features` but neither debugged nor invoked on. The
-  argument now takes a feature path from a top-level object (`driver.r`, `driver.r.motor`,
-  `Fleet::driver::r`) and the id the prompt prints (`#3`), resolved by the same walk `%features`
-  uses. A path that stops short of an object is a typed error naming the segment
-  that reached none and why (`Fleet::driver.x reaches no object at "x": object #1 of
-  "Fleet::driver" has no feature "x"`; `… at "level": feature "level" of object #2 holds 10,
-  which is not an object`), and an id nothing is held under is `no object #99 in this session`.
-  A segment whose feature value the runtime could not materialize keeps the runtime's reason
-  (`… at "spare": feature "spare" of object #1 could not be materialized: … multiplicity
-  violation …`) rather than being reported as a missing feature, and reaches the session status
-  as a failed `%features` would. A qualified path is read as typed — `Fleet::driver::r` is the
-  usage's part even with `Fleet::Driver`, where `r` is declared, instantiated too — and a member
-  of a multi-valued part, which no path reaches, is named by its id alone, so a session attached
-  to it by id survives an unrelated declaration.
+  argument now takes the same reference every other command reads — a feature path from a
+  top-level object (`driver.r`, `driver.r.motor`, `Fleet::driver::r`), the id the prompt prints
+  (`#3`), or an element of a multi-valued part by index (`garage.bays[2]`) — and the CLI's
+  `-state "<machine> <object>"` reads it the same way. A segment whose feature value the runtime
+  could not materialize keeps the runtime's reason (`spare of Shared::lamp could not be
+  materialized: … multiplicity violation …`) rather than being reported as a missing feature, and
+  reaches the session status as a failed `%features` would. A qualified path is read as typed —
+  `Fleet::driver::r` is the usage's part, reported as `Fleet::driver.r`, even with `Fleet::Driver`,
+  where `r` is declared, instantiated too — and an object addressed by id is reported by that id
+  alone, so a session attached to it survives an unrelated declaration.
 - **An object of the wrong kind is named when a usage is not instantiated.** `-state
   "Rover::modes rover"` after `-instantiate Rover` (the definition, not the usage) reported only
   `no instance of "rover" (use %instantiate first)`. The REPL and the CLI now say that an object
@@ -287,16 +528,20 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   of the usage "Fleet::rover": object #1 of "Fleet::Rover" is of its definition "Fleet::Rover",
   not of the usage — use %instantiate Fleet::rover to create the usage's object, or name
   Fleet::Rover to address it`. Asking for a definition when only usages typed by it have
-  objects names those usages the same way; with no related object the plain hint stands.
-- **An object a second `%instantiate` superseded is no longer addressable by id.** After
-  `%instantiate Fleet::rover` twice, the prompt said `object #1 is no longer named`, yet
-  `%features #1`, `%invoke #1 bump` and `%state #1` still reached it, since the runtime keeps the
-  object until the next rebuild. An id now denotes only an object the session holds: one it
-  named, or one a materialized feature of such an object holds, members of a multi-valued part
-  included — checked without materializing anything. The superseded object is `no object #1 in
-  this session: it was superseded, and nothing the session names reaches it`. A debugging
-  session over that object ends with the `%instantiate` that superseded it, with a `note:` saying
-  so, and the next `%step` or `%advance` repeats why; a session over an object another name
+  objects names those objects the same way — a nested one by its path (`Fleet::driver.r`), an
+  element of a multi-valued part by its index (`Depot::garage.bays[2]`) — and a usage reaches its
+  definition through the usages it subsets; with no related object the plain hint stands. The
+  hint names only objects the session holds and materializes none to find them.
+- **An id reaches an object the session holds, and looking it up builds nothing.** `%features #4`
+  used to materialize the features of every named object on the way to finding object #4; an id
+  now denotes an object the session holds — one it named, one a materialized feature of such an
+  object holds, members of a multi-valued part included however many there are, or one a second
+  `%instantiate` of its name displaced — and is found without materializing anything. An id the
+  runtime never issued is `no object #9 in this session: nothing materialized has that identity
+  (the objects are #1, #2)`. The second `%instantiate` says how the first object goes on being
+  reached — `Fleet::rover now denotes this object; object #1 is displaced from that name and stays
+  reachable as #1` — and a `%state` or `%action` session over the displaced object keeps running,
+  the same notice saying it now follows the object as `#1`; a session over an object another name
   denotes is untouched.
 
 - **A `then` written after a flow, a binding or a standalone succession comes back from Turtle.**

@@ -1,0 +1,5 @@
+{
+  "libraries": true,
+  "type": "calc",
+  "error": "string is not a valid notation: function RealFunctions::ToReal: \"1.5 meters\" is not a Real"
+}

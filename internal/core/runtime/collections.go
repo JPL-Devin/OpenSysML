@@ -170,31 +170,86 @@ func (ec *EvalContext) evalSequenceIndex(n *ast.IndexExpr) (Value, error) {
 	return elementAt("sequence index", elementsOf(operand), index)
 }
 
-// bodyOf reads the body expression a collection operation takes as its
-// function-valued parameter (`select`'s selector, `collect`'s mapper), checking
-// that it declares the parameters the operation calls it with. A body is
-// evaluated to a ValExpr rather than to a result, which is what makes it a
-// function rather than a value.
-func bodyOf(op string, val Value, arity int) (*ast.BodyExpr, error) {
+// bodyOf reads the body a collection operation takes as its function-valued
+// parameter, checking it declares the parameters the operation calls it with.
+// An argument that is not itself a body is evaluated to the body it denotes.
+func (ec *EvalContext) bodyOf(op string, val Value, arity int) (Value, error) {
+	val, err := ec.denotedBody(val)
+	if err != nil {
+		return Value{}, err
+	}
+	return checkBody(op, val, arity)
+}
+
+// bodyOver is bodyOf for an operation over elements whose body parameter is
+// `[0..*]`: empty over no elements, there is nothing to call it with and
+// applied reports false. A body literal is checked as bodyOf checks it; a
+// deferred argument that is not one is evaluated only where an element needs it.
+func (ec *EvalContext) bodyOver(op string, val Value, arity int, elements []Value) (body Value, applied bool, err error) {
+	if len(elements) == 0 && isDeferredNonBody(val) {
+		return Value{}, false, nil
+	}
+	val, err = ec.denotedBody(val)
+	if err != nil {
+		return Value{}, false, err
+	}
+	if len(elements) == 0 && isEmptyValue(val) {
+		return Value{}, false, nil
+	}
+	body, err = checkBody(op, val, arity)
+	return body, err == nil, err
+}
+
+// isDeferredNonBody reports a deferred argument that denotes a body rather
+// than being one, so reading it means evaluating it.
+func isDeferredNonBody(val Value) bool {
 	if val.Kind != ValExpr {
-		return nil, fmt.Errorf("%w: %s requires a body expression, got %s", ErrTypeMismatch, op, describeValue(val))
+		return false
+	}
+	_, isBody := val.Expr().(*ast.BodyExpr)
+	return !isBody
+}
+
+// denotedBody evaluates a deferred argument that is not itself a body to the
+// value it denotes; a body or an evaluated value is returned as is.
+func (ec *EvalContext) denotedBody(val Value) (Value, error) {
+	if val.Kind == ValExpr {
+		if _, ok := val.Expr().(*ast.BodyExpr); !ok {
+			return ec.evalClosure(val)
+		}
+	}
+	return val, nil
+}
+
+// checkBody verifies a denoted value is a body declaring arity parameters.
+func checkBody(op string, val Value, arity int) (Value, error) {
+	if val.Kind != ValExpr {
+		return Value{}, fmt.Errorf("%w: %s requires a body expression, got %s", ErrTypeMismatch, op, describeValue(val))
 	}
 	body, ok := val.Expr().(*ast.BodyExpr)
 	if !ok {
-		return nil, fmt.Errorf("%w: %s requires a body expression, got %T", ErrTypeMismatch, op, val.Expr())
+		return Value{}, fmt.Errorf("%w: %s requires a body expression, got %T", ErrTypeMismatch, op, val.Expr())
 	}
 	if len(body.Params) != arity {
-		return nil, fmt.Errorf("%w: %s calls its body with %d argument(s), but it declares %d parameter(s)",
+		return Value{}, fmt.Errorf("%w: %s calls its body with %d argument(s), but it declares %d parameter(s)",
 			ErrBodyArity, op, arity, len(body.Params))
 	}
-	return body, nil
+	return val, nil
 }
 
-// applyBody evaluates a body expression with its parameters bound to args. The
-// bindings are a frame of their own, so the body sees the names of the scope it
-// was written in as well as its own parameters, and a nested body's parameters
-// shadow rather than replace the enclosing ones.
-func (ec *EvalContext) applyBody(body *ast.BodyExpr, args ...Value) (Value, error) {
+// evalClosure evaluates a deferred expression in the environment it closes over.
+func (ec *EvalContext) evalClosure(val Value) (Value, error) {
+	return val.exprEnv(ec).Eval(val.Expr())
+}
+
+// applyBody evaluates a body with its parameters bound to args, as a frame of
+// its own over the environment the body closes over.
+func (ec *EvalContext) applyBody(val Value, args ...Value) (Value, error) {
+	body, ok := val.Expr().(*ast.BodyExpr)
+	if !ok {
+		return Value{}, fmt.Errorf("%w: a body expression is required, got %s", ErrTypeMismatch, describeValue(val))
+	}
+	ec = val.exprEnv(ec)
 	if body.Result == nil {
 		return Value{}, fmt.Errorf("%w: body expression states no result", ErrNoResultExpression)
 	}
@@ -238,7 +293,7 @@ func (ec *EvalContext) applyBody(body *ast.BodyExpr, args ...Value) (Value, erro
 // `Boolean[1]` — a selector, a rejector, a test — and reports a result that is
 // not a Boolean rather than reading it as false, which would silently drop the
 // element it was asked about.
-func (ec *EvalContext) applyPredicate(op string, body *ast.BodyExpr, arg Value) (bool, error) {
+func (ec *EvalContext) applyPredicate(op string, body Value, arg Value) (bool, error) {
 	val, err := ec.applyBody(body, arg)
 	if err != nil {
 		return false, err
@@ -251,14 +306,43 @@ func (ec *EvalContext) applyPredicate(op string, body *ast.BodyExpr, arg Value) 
 
 // builtinSequenceIndex is SequenceFunctions::'#' called as a function.
 func builtinSequenceIndex(ec *EvalContext, args []Value) (Value, error) {
-	if err := checkArity("SequenceFunctions::'#'", args, 2); err != nil {
+	return sequenceIndex("SequenceFunctions::'#'", args)
+}
+
+// builtinCollectionIndex is CollectionFunctions::'#', the index over a
+// collection's elements.
+func builtinCollectionIndex(ec *EvalContext, args []Value) (Value, error) {
+	return sequenceIndex("CollectionFunctions::'#'", args)
+}
+
+// sequenceIndex is a scalar-index `'#'` form: the element at one Positive index.
+func sequenceIndex(op string, args []Value) (Value, error) {
+	if err := checkArity(op, args, 2); err != nil {
 		return Value{}, err
 	}
-	index, err := indexOf("SequenceFunctions::'#'", args[1])
+	index, err := indexOf(op, args[1])
 	if err != nil {
 		return Value{}, err
 	}
-	return elementAt("SequenceFunctions::'#' index", elementsOf(args[0]), index)
+	return elementAt(op+" index", elementsOf(args[0]), index)
+}
+
+// builtinBaseIndex is BaseFunctions::'#', whose `Positive[1..*]` index selects
+// from a sequence when single and addresses an Array's dimensions when several.
+func builtinBaseIndex(ec *EvalContext, args []Value) (Value, error) {
+	const op = "BaseFunctions::'#'"
+	if err := checkArity(op, args, 2); err != nil {
+		return Value{}, err
+	}
+	indexes := elementsOf(args[1])
+	switch {
+	case len(indexes) == 0:
+		return Value{}, fmt.Errorf("%w: %s requires at least one index, got none", ErrMultiplicityViolation, op)
+	case len(indexes) > 1:
+		return Value{}, fmt.Errorf("%w: %s: %d indexes address an Array, and the runtime has no Array value kind",
+			ErrUnevaluableLibraryFunction, op, len(indexes))
+	}
+	return sequenceIndex(op, []Value{args[0], indexes[0]})
 }
 
 // builtinSequenceSize is SequenceFunctions::size.
@@ -366,7 +450,13 @@ func builtinSequenceUnion(ec *EvalContext, args []Value) (Value, error) {
 	if err := checkArity("SequenceFunctions::union", args, 2); err != nil {
 		return Value{}, err
 	}
-	seq1, seq2 := elementsOf(args[0]), elementsOf(args[1])
+	return ec.concatSequences(args[0], args[1])
+}
+
+// concatSequences is `(seq1, seq2)`: the elements of the first followed by the
+// elements of the second.
+func (ec *EvalContext) concatSequences(first, second Value) (Value, error) {
+	seq1, seq2 := elementsOf(first), elementsOf(second)
 	joined := make([]Value, 0, len(seq1)+len(seq2))
 	joined = append(joined, seq1...)
 	joined = append(joined, seq2...)
@@ -447,9 +537,8 @@ func builtinSequenceIncludingAt(ec *EvalContext, args []Value) (Value, error) {
 // own `tail` is `subsequence(seq, 2)` for a one-element sequence — but an index
 // beyond the sequence is reported rather than silently clamped.
 func builtinSequenceSubsequence(ec *EvalContext, args []Value) (Value, error) {
-	if len(args) != 2 && len(args) != 3 {
-		return Value{}, fmt.Errorf("%w: SequenceFunctions::subsequence takes 2 or 3 arguments, got %d",
-			ErrCalcArity, len(args))
+	if err := checkArity("SequenceFunctions::subsequence", args, 3); err != nil {
+		return Value{}, err
 	}
 	elements := elementsOf(args[0])
 	start, err := indexOf("SequenceFunctions::subsequence", args[1])
@@ -457,7 +546,7 @@ func builtinSequenceSubsequence(ec *EvalContext, args []Value) (Value, error) {
 		return Value{}, err
 	}
 	end := int64(len(elements))
-	if len(args) == 3 {
+	if args[2].Kind != ValNull {
 		if end, err = indexOf("SequenceFunctions::subsequence", args[2]); err != nil {
 			return Value{}, err
 		}
@@ -483,8 +572,8 @@ func builtinSequenceSubsequence(ec *EvalContext, args []Value) (Value, error) {
 // removes one element.
 func builtinSequenceExcludingAt(ec *EvalContext, args []Value) (Value, error) {
 	const op = "SequenceFunctions::excludingAt"
-	if len(args) != 2 && len(args) != 3 {
-		return Value{}, fmt.Errorf("%w: %s takes 2 or 3 arguments, got %d", ErrCalcArity, op, len(args))
+	if err := checkArity(op, args, 3); err != nil {
+		return Value{}, err
 	}
 	elements := elementsOf(args[0])
 	start, err := indexOf(op, args[1])
@@ -492,7 +581,7 @@ func builtinSequenceExcludingAt(ec *EvalContext, args []Value) (Value, error) {
 		return Value{}, err
 	}
 	end := start
-	if len(args) == 3 {
+	if args[2].Kind != ValNull {
 		if end, err = indexOf(op, args[2]); err != nil {
 			return Value{}, err
 		}
@@ -580,12 +669,16 @@ func (ec *EvalContext) filter(op string, args []Value, keep bool) (Value, error)
 	if err := checkArity(op, args, 2); err != nil {
 		return Value{}, err
 	}
-	body, err := bodyOf(op, args[1], 1)
+	elements := elementsOf(args[0])
+	body, applied, err := ec.bodyOver(op, args[1], 1, elements)
 	if err != nil {
 		return Value{}, err
 	}
+	if !applied {
+		return ec.newSequence(nil)
+	}
 	var kept []Value
-	for _, elem := range elementsOf(args[0]) {
+	for _, elem := range elements {
 		holds, err := ec.applyPredicate(op, body, elem)
 		if err != nil {
 			return Value{}, err
@@ -615,15 +708,19 @@ func builtinControlCollect(ec *EvalContext, args []Value) (Value, error) {
 	if err := checkArity(op, args, 2); err != nil {
 		return Value{}, err
 	}
-	body, err := bodyOf(op, args[1], 1)
+	elements := elementsOf(args[0])
+	body, applied, err := ec.bodyOver(op, args[1], 1, elements)
 	if err != nil {
 		return Value{}, err
 	}
 	// The mapper returns `Anything[0..*]`, so a mapper answering several values
 	// contributes them all: the collected sequence is flat, as every KerML
 	// sequence is.
+	if !applied {
+		return sequenceOf(nil), nil
+	}
 	var mapped []Value
-	for _, elem := range elementsOf(args[0]) {
+	for _, elem := range elements {
 		val, err := ec.applyBody(body, elem)
 		if err != nil {
 			return Value{}, err
@@ -648,12 +745,12 @@ func builtinControlReduce(ec *EvalContext, args []Value) (Value, error) {
 	if err := checkArity(op, args, 2); err != nil {
 		return Value{}, err
 	}
-	body, err := bodyOf(op, args[1], 2)
+	elements := elementsOf(args[0])
+	body, applied, err := ec.bodyOver(op, args[1], 2, elements)
 	if err != nil {
 		return Value{}, err
 	}
-	elements := elementsOf(args[0])
-	if len(elements) == 0 {
+	if !applied || len(elements) == 0 {
 		return nullValue(), nil
 	}
 	acc := elements[0]
@@ -684,14 +781,14 @@ func (ec *EvalContext) extremum(op string, args []Value, least bool) (Value, err
 	if err := checkArity(op, args, 2); err != nil {
 		return Value{}, err
 	}
-	body, err := bodyOf(op, args[1], 1)
-	if err != nil {
-		return Value{}, err
-	}
 	elements := elementsOf(args[0])
 	if len(elements) == 0 {
 		return Value{}, fmt.Errorf("%w: %s requires a collection of at least one element",
 			ErrMultiplicityViolation, op)
+	}
+	body, err := ec.bodyOf(op, args[1], 1)
+	if err != nil {
+		return Value{}, err
 	}
 	var best Value
 	for i, elem := range elements {
@@ -734,11 +831,15 @@ func (ec *EvalContext) quantify(op string, args []Value, universal bool) (Value,
 	if err := checkArity(op, args, 2); err != nil {
 		return Value{}, err
 	}
-	body, err := bodyOf(op, args[1], 1)
+	elements := elementsOf(args[0])
+	body, applied, err := ec.bodyOver(op, args[1], 1, elements)
 	if err != nil {
 		return Value{}, err
 	}
-	for _, elem := range elementsOf(args[0]) {
+	if !applied {
+		return boolValue(universal), nil
+	}
+	for _, elem := range elements {
 		holds, err := ec.applyPredicate(op, body, elem)
 		if err != nil {
 			return Value{}, err

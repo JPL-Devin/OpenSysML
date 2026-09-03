@@ -162,9 +162,22 @@ func RelationshipsOf(sym *symbols.Symbol) []*ast.Relationship {
 		// A body parameter is not a node of its own, so its symbol declares the
 		// body and names the parameter its typing is written on.
 		return bodyParamRelationships(d, sym.Name)
+	case *ast.SubjectMember:
+		return subjectRelationships(d)
 	default:
 		return nil
 	}
+}
+
+// subjectRelationships returns a subject parameter's relationships, the typing
+// it writes as `subject s : T` first.
+func subjectRelationships(subj *ast.SubjectMember) []*ast.Relationship {
+	if subj.TypeRef == nil {
+		return subj.Relationships
+	}
+	out := make([]*ast.Relationship, 0, len(subj.Relationships)+1)
+	out = append(out, &ast.Relationship{Kind: ast.RelTyping, Target: subj.TypeRef})
+	return append(out, subj.Relationships...)
 }
 
 // bodyParamRelationships returns the relationships of the body parameter named
@@ -255,24 +268,6 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		}
 		seen[target] = true
 		out = append(out, target)
-	}
-
-	// SubjectMember has TypeRef instead of Relationships - handle separately
-	if subj, ok := sym.Decl.(*ast.SubjectMember); ok && subj.TypeRef != nil {
-		target, ok := m.resolver.ResolveQualified(sym.OwnerScope, subj.TypeRef)
-		if ok && target != nil {
-			if resolved, aliasOK := m.resolver.ResolveAliasTarget(target); aliasOK {
-				target = resolved
-			} else {
-				target = nil
-			}
-		}
-		if target != nil {
-			if !seen[target] {
-				seen[target] = true
-				out = append(out, target)
-			}
-		}
 	}
 
 	// Flow usages (message/flow keywords) need implicit typing from stdlib Message/Flow

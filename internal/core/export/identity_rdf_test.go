@@ -28,24 +28,13 @@ func toNotation(t *testing.T, turtle []byte) string {
 	return string(out)
 }
 
-// formatted is the notation as the formatter writes it, which is what a round
-// trip through RDF is compared against.
-func formatted(t *testing.T, src string) string {
-	t.Helper()
-	out, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatSysML)
-	if err != nil {
-		t.Fatalf("format: %v", err)
-	}
-	return string(out)
-}
-
-// roundTripsExactly asserts notation -> RDF -> notation reproduces the
-// formatted source byte for byte, and that the second hop is idempotent.
+// roundTripsExactly asserts notation -> RDF -> notation reproduces the source
+// byte for byte, and that the second hop is idempotent.
 func roundTripsExactly(t *testing.T, src string) []byte {
 	t.Helper()
 	turtle := idTurtle(t, src)
 	back := toNotation(t, turtle)
-	if want := formatted(t, src); back != want {
+	if want := src; back != want {
 		t.Errorf("round trip changed the notation:\n--- want ---\n%s--- got ---\n%s", want, back)
 	}
 	second, err := export.Convert("m.sysml", []byte(back), export.FormatSysML, export.FormatTurtle)
@@ -164,8 +153,8 @@ func TestAdversarialIDsClassifyByType(t *testing.T) {
 // graph from before it must read exactly as it did.
 func TestOldGraphStillReads(t *testing.T) {
 	src := `package P {
-	part def Vehicle;
-	part v : Vehicle;
+    part def Vehicle;
+    part v : Vehicle;
 }
 `
 	turtle := idTurtle(t, src)
@@ -174,7 +163,7 @@ func TestOldGraphStillReads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("old graph did not read: %v\n%s", err, old)
 	}
-	if want := formatted(t, src); string(back) != want {
+	if want := src; string(back) != want {
 		t.Errorf("old graph read differently:\n--- want ---\n%s--- got ---\n%s", want, back)
 	}
 }
@@ -426,14 +415,16 @@ func TestAnnotatedUnnamedSuccessionEndRoundTrips(t *testing.T) {
 
 // TestAboutFormElementIDRoundTrips checks an `about`-form ElementId is
 // consumed into identity like an inline one: the target's subject carries the
-// declared id, and the notation comes back with the annotation inline.
+// declared id, and the notation built from the graph alone has the annotation
+// inline, while the source text keeps the form it was written in.
 func TestAboutFormElementIDRoundTrips(t *testing.T) {
-	turtle := idTurtle(t, `package P {
-	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
-	part def A;
-	metadata : IdentityMetadata::ElementId about A { id = "stable-a"; }
+	src := `package P {
+    @IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+    part def A;
+    metadata : IdentityMetadata::ElementId about A { id = "stable-a"; }
 }
-`)
+`
+	turtle := idTurtle(t, src)
 	graph, err := rdf.ParseTurtle(turtle)
 	if err != nil {
 		t.Fatal(err)
@@ -442,7 +433,10 @@ func TestAboutFormElementIDRoundTrips(t *testing.T) {
 	if got := rdf.LocalName(graph.Type(subject)); got != "PartDefinition" {
 		t.Fatalf("subject stable-a typed %q, want PartDefinition", got)
 	}
-	back := toNotation(t, turtle)
+	if back := toNotation(t, turtle); back != src {
+		t.Errorf("the about-form annotation did not come back as written:\n%s", back)
+	}
+	back := toNotation(t, withoutTriples(t, turtle, "sysx:sourceText"))
 	if !strings.Contains(back, `@IdentityMetadata::ElementId { id = "stable-a"; }`) {
 		t.Errorf("about-form id was not re-materialized:\n%s", back)
 	}

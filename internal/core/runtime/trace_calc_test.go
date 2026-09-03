@@ -180,3 +180,88 @@ func TestCalcTraceRecordsFailure(t *testing.T) {
 		t.Errorf("trace is missing the failure entry:\n%s", got)
 	}
 }
+
+// TestReturnedBodyIsTracedAsApplied: a body a calc returns closes over that
+// calc's bindings, not over its tracing state. Made before tracing starts, its
+// application under a trace is recorded; made under a trace, its application
+// after tracing stops is not.
+func TestReturnedBodyIsTracedAsApplied(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			private import ControlFunctions::*;
+			calc def AboveThreshold { in threshold : Integer; return : expr = { in x; x > threshold }; }
+			calc def Keep { in xs : Integer[*]; in expr pred; return : Integer[*] = xs->select pred; }
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	ctx.SetCalcCompile(false)
+	rootScope := idx.DocumentRoot("<test>")
+	above := findSymbolByName(rootScope, "AboveThreshold", ast.DefCalc)
+	keep := findSymbolByName(rootScope, "Keep", ast.DefCalc)
+	if above == nil || keep == nil {
+		t.Fatal("calcs not found")
+	}
+	intValue := func(n int64) Value {
+		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: n}}
+	}
+	makeBody := func(threshold int64) Value {
+		t.Helper()
+		body, err := ctx.InvokeCalc(above, []Value{intValue(threshold)}, rootScope)
+		if err != nil {
+			t.Fatalf("AboveThreshold(%d): %v", threshold, err)
+		}
+		if body.Kind != ValExpr {
+			t.Fatalf("AboveThreshold(%d) = %s, want a body", threshold, FormatTraceValue(body))
+		}
+		return body
+	}
+	applyBody := func(body Value, want string) {
+		t.Helper()
+		xs := NewSequence()
+		for _, n := range []int64{1, 2, 3, 4} {
+			xs.Append(intValue(n))
+		}
+		kept, err := ctx.InvokeCalc(keep, []Value{NewSequenceValue(xs), body}, rootScope)
+		if err != nil {
+			t.Fatalf("Keep: %v", err)
+		}
+		if got := FormatTraceValue(kept); got != want {
+			t.Fatalf("Keep = %s, want %s", got, want)
+		}
+	}
+	const applied = "eval operator > ->"
+
+	// Made untraced, applied traced: the body's evaluation is recorded.
+	body := makeBody(2)
+	trace := NewTraceRecorder()
+	ctx.SetTrace(trace)
+	applyBody(body, "(3, 4)")
+	if got := trace.String(); !strings.Contains(got, applied) {
+		t.Errorf("trace does not record the body applied after tracing started:\n%s", got)
+	}
+
+	// Made traced, applied untraced: nothing more is recorded.
+	body = makeBody(3)
+	ctx.SetTrace(nil)
+	before := len(trace.Entries())
+	applyBody(body, "(4)")
+	if got := trace.Entries()[before:]; len(got) != 0 {
+		t.Errorf("trace records %d entries after tracing stopped:\n%s", len(got), strings.Join(got, "\n"))
+	}
+
+	// A body made under one recorder and applied under another is recorded by
+	// the latter alone.
+	ctx.SetTrace(trace)
+	body = makeBody(0)
+	later := NewTraceRecorder()
+	ctx.SetTrace(later)
+	before = len(trace.Entries())
+	applyBody(body, "(1, 2, 3, 4)")
+	if got := trace.Entries()[before:]; len(got) != 0 {
+		t.Errorf("the recorder the body was made under records %d entries of its application:\n%s", len(got), strings.Join(got, "\n"))
+	}
+	if got := later.String(); !strings.Contains(got, applied) {
+		t.Errorf("the applying recorder does not record the body:\n%s", got)
+	}
+}

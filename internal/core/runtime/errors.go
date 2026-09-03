@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
@@ -18,6 +19,9 @@ var (
 
 	// ErrUnresolvedReference is returned when a feature reference cannot be resolved.
 	ErrUnresolvedReference = errors.New("unresolved reference")
+
+	// ErrAmbiguousReference is returned when a qualified name names several elements.
+	ErrAmbiguousReference = errors.New("ambiguous reference")
 
 	// ErrTypeMismatch is returned when an operation receives a value of unexpected type.
 	ErrTypeMismatch = errors.New("type mismatch")
@@ -223,6 +227,14 @@ var (
 	// element that states no behavior to run.
 	ErrNotABehavior = errors.New("not a behavior")
 
+	// ErrNotASignal is returned when a message injected from outside the model
+	// names an element that is no definition, so no accept could be typed by it.
+	ErrNotASignal = errors.New("not a signal definition")
+
+	// ErrSignalArgument is returned when a message injected from outside the
+	// model carries an argument its signal definition has no feature for.
+	ErrSignalArgument = errors.New("signal argument")
+
 	// ErrBehaviorBudget is returned when the behaviors of materialized objects
 	// never reach quiescence within the event budget.
 	ErrBehaviorBudget = errors.New("object behaviors exceeded their budget")
@@ -350,6 +362,9 @@ func budgetExceeded(sentinel error, message string, causes ...error) error {
 // naming the feature so a caller can tell which one is uninitialized.
 type NoValueError struct {
 	Feature string
+	// Ref is the written name whose read found no value, so a caller can tell a
+	// read of its own expression from one made while evaluating a default.
+	Ref *ast.QualifiedName
 }
 
 func (e *NoValueError) Error() string {
