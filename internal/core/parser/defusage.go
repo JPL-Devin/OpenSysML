@@ -581,11 +581,8 @@ func (p *Parser) atKindlessFeatureTyping() bool {
 	return beginsDeclarationTail(next, p.peekN(2))
 }
 
-// atEnumeratedValueDeclaration reports whether an enumeration body member is
-// an enumerated value the body loop reads itself (SysML.xtext EnumeratedValue:
-// `#M`* `enum`? Usage behind an optional visibility): one with prefix metadata
-// or no `enum` keyword that is anonymous, opens with a short name, or states a
-// specialization or multiplicity.
+// atEnumeratedValueDeclaration reports whether the enum-body member ahead is an
+// EnumeratedValue the body loop reads itself: prefixed, anonymous or keywordless.
 func (p *Parser) atEnumeratedValueDeclaration() bool {
 	off := 0
 	if t := p.peek(); t.Kind == lexer.Keyword {
