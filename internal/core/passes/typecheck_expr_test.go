@@ -496,6 +496,37 @@ func TestExprInvocationNamedArgumentsChecked(t *testing.T) {
 		"Scale requires an argument for parameter x")
 }
 
+// The parameters a node declares in its body redefine the invoked ones by
+// position, so one the body binds a value to is not required of the call —
+// wherever the node is written, a state action's body included.
+func TestExprNodeBodyParameterSuppliesArgument(t *testing.T) {
+	const model = `package P {
+		action def Scale { in a : ScalarValues::Integer; in b : ScalarValues::Integer; }
+		action outer {
+			attribute seven : ScalarValues::Integer = 7;
+			%s
+		}
+	}`
+	wantNoDiags(t, fmt.Sprintf(model, `action scaled = Scale(a = seven) { in a = 1; in b = a * 10; }`))
+	wantNoDiags(t, fmt.Sprintf(model, `action scaled = Scale(seven) { in a = 1; in b = a * 10; }`))
+	wantNoDiags(t, fmt.Sprintf(model, `action scaled = Scale(a = seven) { in a; in b = 10; }`))
+	wantNoDiags(t, fmt.Sprintf(model, `action scaled = Scale(a = seven) { in x = 1; in y redefines b = 10; }`))
+	wantNoDiags(t, fmt.Sprintf(model, `action inner { action scaled = Scale(a = seven) { in a; in b = 10; } }`))
+	wantNoDiags(t, `package P {
+		action def Scale { in a : ScalarValues::Integer; in b : ScalarValues::Integer; }
+		state def M {
+			attribute seven : ScalarValues::Integer = 7;
+			state s { entry action { action scaled = Scale(a = seven) { in a; in b = 10; } } }
+		}
+	}`)
+	wantOneDiag(t, fmt.Sprintf(model, `action scaled = Scale(a = seven) { in a; in b; }`),
+		"Scale requires an argument for parameter b")
+	wantOneDiag(t, fmt.Sprintf(model, `action scaled = Scale(a = seven) { in a = 1; }`),
+		"Scale requires an argument for parameter b")
+	wantOneDiag(t, fmt.Sprintf(model, `action scaled = Scale(a = seven) { in b = "x"; }`),
+		`Scale has no parameter named "a"`)
+}
+
 func TestExprLiteralConformsToNatural(t *testing.T) {
 	wantNoDiags(t, `package P {
 		attribute n : ScalarValues::Natural = 3;

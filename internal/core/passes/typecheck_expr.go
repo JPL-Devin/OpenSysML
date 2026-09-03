@@ -55,19 +55,31 @@ func (ec *exprChecker) checkUsageValue(scope *symbols.Scope, u *ast.Usage) {
 	if u.Value == nil {
 		return
 	}
-	ec.checkBoundValue(scope, scope, u, u.Value)
+	// The node's own body folds over the parameters of an invocation written as
+	// its value (`action n = B(a = 1) { in b = 2; }`).
+	var node *symbols.Symbol
+	if body := scope.ChildFor(u); body != nil {
+		node = body.Owner()
+	}
+	ec.checkBoundValue(scope, scope, u, u.Value, node)
 }
 
 // checkBoundValue checks a value against the type and multiplicity of the
 // feature it is bound to. The value's names resolve in valueScope and the
 // feature's declaration in declScope, which differ when the value is written by
-// an assignment rather than declared on the feature.
-func (ec *exprChecker) checkBoundValue(valueScope, declScope *symbols.Scope, u *ast.Usage, value ast.Node) {
+// an assignment rather than declared on the feature. node is the feature's own
+// symbol when the value is declared on it, or nil.
+func (ec *exprChecker) checkBoundValue(valueScope, declScope *symbols.Scope, u *ast.Usage, value ast.Node, node *symbols.Symbol) {
 	want := ec.declaredPrimType(declScope, u.Relationships)
 	// A collection literal binds elementwise, so each element is checked
 	// against the feature's type rather than the sequence as a whole.
 	for _, element := range valueElements(value) {
-		got := ec.infer(valueScope, element)
+		var got semantics.PrimType
+		if inv, ok := element.(*ast.InvocationExpr); ok && node != nil {
+			got = ec.inferNodeInvocation(valueScope, inv, node)
+		} else {
+			got = ec.infer(valueScope, element)
+		}
 		if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
 			continue
 		}
@@ -626,6 +638,12 @@ func (ec *exprChecker) operands(scope *symbols.Scope, e *ast.OperatorExpr) (sema
 // the invoked behavior's `in` parameters. In the arrow form `x->f(a)` the
 // receiver binds to the first parameter, so it is prepended to the arguments.
 func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationExpr) semantics.PrimType {
+	return ec.inferNodeInvocation(scope, e, nil)
+}
+
+// inferNodeInvocation is inferInvocation for an invocation performed by node,
+// whose body parameters redefine the invoked ones; node is nil for a bare call.
+func (ec *exprChecker) inferNodeInvocation(scope *symbols.Scope, e *ast.InvocationExpr, node *symbols.Symbol) semantics.PrimType {
 	args := e.Args
 	if e.Operand != nil {
 		args = append([]ast.Node{e.Operand}, args...)
@@ -666,7 +684,7 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 	if isInvocationBehaviorKind(sym.Kind) && !isBehaviorKind(sym.Kind) {
 		return semantics.PrimUnknown
 	}
-	params, ok := ec.effectiveInParameters(sym)
+	params, ok := ec.effectiveInParameters(sym, node)
 	if !ok {
 		return semantics.PrimUnknown
 	}
@@ -814,7 +832,8 @@ func (ec *exprChecker) inferConstructor(scope *symbols.Scope, e *ast.Constructor
 		// A redefinition and its target are one feature: they share one binding.
 		slot := ec.model.ConstructibleFeatureFor(typ, feature)
 		if slot == nil {
-			slot = feature
+			ec.errorf(na.Name.Span(), "%s", notConstructible(feature, typ))
+			continue
 		}
 		if bound[slot] {
 			ec.errorf(na.Name.Span(), "%s of %s is already bound by an earlier argument", feature.Name, typ.Name)
@@ -839,6 +858,24 @@ func (ec *exprChecker) checkFeatureBinding(arg ast.Node, got semantics.PrimType,
 	if !bindable(arg, got, want) {
 		ec.errorf(arg.Span(), "%s of %s expects %s, found %s", feature.Name, typ.Name, want, got)
 	}
+}
+
+// notConstructible words the rejection of a label for a member no constructor of
+// typ binds: a feature every object of its kind has from a more general library.
+func notConstructible(feature, typ *symbols.Symbol) string {
+	msg := fmt.Sprintf("%s is not a feature a constructor of %s binds", feature.Name, typ.Name)
+	if owner := ownerOf(feature); owner != nil && owner != typ {
+		msg += fmt.Sprintf(": %s declares it for every %s; redefine it in %s to bind it", owner.Name, owner.Name, typ.Name)
+	}
+	return msg
+}
+
+// ownerOf returns the type declaring feature, or nil.
+func ownerOf(feature *symbols.Symbol) *symbols.Symbol {
+	if feature.OwnerScope == nil {
+		return nil
+	}
+	return feature.OwnerScope.Owner()
 }
 
 // memberOf reports whether feature is a member typ declares or inherits.
@@ -999,14 +1036,19 @@ func (p parameter) scope() *symbols.Scope {
 // with, in inherited declaration order. A behavior inherits the signature of the
 // types it specializes or is typed by; a parameter it declares itself replaces
 // the inherited one it redefines and is appended otherwise, so a specialization
-// refining only a subset of them keeps the full signature. ok is false when no
-// signature can be determined, in which case the invocation is left unchecked.
-func (ec *exprChecker) effectiveInParameters(sym *symbols.Symbol) ([]parameter, bool) {
+// refining only a subset of them keeps the full signature. The parameters a
+// performing node declares in its body fold in the same way, so one it binds a
+// value to is not required of the call. ok is false when no signature can be
+// determined, in which case the invocation is left unchecked.
+func (ec *exprChecker) effectiveInParameters(sym, node *symbols.Symbol) ([]parameter, bool) {
 	// Merging runs over every parameter, because redefinition is positional
 	// over the whole parameter list (KerML 7.4.7.2), as
 	// semantics.Model.parametersOf computes it; only the invocation signature
 	// is restricted to the inputs.
 	all := ec.mergedParameters(sym, map[*symbols.Symbol]bool{})
+	if node != nil {
+		all = mergeParameters(all, node)
+	}
 	var params []parameter
 	for _, p := range all {
 		if p.usage.Direction == ast.DirIn || p.usage.Direction == ast.DirInOut {

@@ -28,7 +28,7 @@ func (ec *exprChecker) checkAssignmentValue(scope *symbols.Scope, n *ast.Assignm
 	}
 	// The written value's names are the statement's; the declaration read is
 	// the target feature's own, which a chained target reaches elsewhere.
-	ec.checkBoundValue(scope, target.OwnerScope, u, n.Value)
+	ec.checkBoundValue(scope, target.OwnerScope, u, n.Value, nil)
 }
 
 // resolveAssignmentTarget resolves the feature an assignment writes, following
