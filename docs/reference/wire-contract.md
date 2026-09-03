@@ -458,19 +458,19 @@ actually produces and for what:
 | `code` | HTTP | This service answers it for | Client class (Python name) |
 |---|---|---|---|
 | `invalid_argument` | 400 | Body is not valid JSON for the request type; `documents` empty or with duplicate names; `query` and `oslcQuery` both present; unknown query property; a document query given no binding for a required parameter, or a `queryId` that is not a document query | `InvalidRequestError` — fix the request |
-| `failed_precondition` | 400 | The request is well-formed but the model is not in the state the operation needs (an edit on a multi-document model that must name its document) | `InvalidRequestError` |
+| `failed_precondition` | 400 | The request is well-formed but the model is not in the state the operation needs: an edit on a multi-document model that must name its document; a document query or document whose own definition is faulty when planned or run | `InvalidRequestError` |
 | `out_of_range` | 400 | Not currently produced; reserved by the protocol for a value outside its valid range | `InvalidRequestError` |
 | `not_found` | 404 | `model not found: <hash>` (or `model <hash> is no longer cached: …` on `ApplyEdits`/`Convert`) — stale or unknown model hash, on every method that takes one; `symbol not found: <id>` on `RunDocumentQuery` and `RenderDocument`; `file not found: …` for a `filePath` the service could not read | `ModelNotFoundError` / `SymbolNotFoundError` / `ModelFileNotFoundError`, by message prefix — re-parse, fix the name, fix the path |
 | `unimplemented` | 501 | A capability the running service was started without (`capability "query" is unavailable`) or a method it does not have | `UnsupportedOperationError` — do not retry |
 | `unavailable` | 503 | Not produced by the service itself; a proxy or a shutting-down process answers it | `ConnectionError` — retry with backoff |
 | `deadline_exceeded` | 504 | The client's deadline passed | `ServiceTimeoutError` |
 | `canceled` | 499 | The client cancelled | `ServiceTimeoutError` |
-| `resource_exhausted` | 429 | Not currently produced | `ServiceError` |
+| `resource_exhausted` | 429 | A document query (`RunDocumentQuery`, or one a `RenderDocument` runs) exhausted its visit, invocation or invocation-depth budget | `ServiceError` — the query, not the request, is at fault |
 | `already_exists` | 409 | Not currently produced | `ServiceError` |
 | `aborted` | 409 | Not currently produced | `ServiceError` |
 | `permission_denied` | 403 | Not currently produced (the service has no authentication) | `ServiceError` |
 | `unauthenticated` | 401 | Not currently produced | `ServiceError` |
-| `internal` | 500 | A bug in the service: something that should not have failed did | `ServiceError` — report it |
+| `internal` | 500 | A bug in the service: something that should not have failed did (an edit that could not be applied, a document-query library that could not be loaded) | `ServiceError` — report it |
 | `unknown` | 500 | An error the service could not classify | `ServiceError` |
 | `data_loss` | 500 | Not currently produced | `ServiceError` |
 
@@ -790,7 +790,9 @@ Two query surfaces exist and answer differently shaped tables. Their semantics �
 selected, filtered and bound — are on the Go API page and are not repeated here:
 [SysML v2 API & Services `Query`](api.md#sysml-v2-api--services-query) and
 [Native document queries and rendering over gRPC](api.md#native-document-queries-and-rendering-over-grpc).
-Both need the `query` capability.
+Each is its own capability: `Query` needs `query` (and `oslc_query` when the request uses
+`oslcQuery`); `RunDocumentQuery` needs `document_query`; `RenderDocument` needs
+`render_document`.
 
 ### `Query`
 
