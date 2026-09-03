@@ -156,6 +156,29 @@ func TestInvocationOverloadAmbiguous(t *testing.T) {
 	}`, "invocation-ambiguous", "call of pick is ambiguous between P::A::pick, P::B::pick")
 }
 
+// An ambiguity names only the candidates none is more specific than: a broader
+// overload the arguments also fit is beaten, so it is not among the tied ones.
+func TestInvocationOverloadAmbiguityNamesOnlyTheTiedBest(t *testing.T) {
+	diags := libraryDiags(t, `package P {
+		private import ScalarValues::*;
+		attribute def Mass :> Real;
+		package A { calc def pick { in x : P::Mass; return : Integer = 1; } }
+		package B { calc def pick { in x : P::Mass; return : Integer = 2; } }
+		package C { calc def pick { in x : Real; return : Integer = 3; } }
+		package D {
+			private import A::*;
+			private import B::*;
+			private import C::*;
+			attribute m : Mass;
+			attribute tied = pick(m);
+		}
+	}`)
+	want := "call of pick is ambiguous between P::A::pick, P::B::pick"
+	if len(diags) != 1 || diags[0].Code != "invocation-ambiguous" || diags[0].Message != want {
+		t.Fatalf("expected one invocation-ambiguous diagnostic %q, got %v", want, diags)
+	}
+}
+
 // With no applicable candidate the first is checked as before, and the report
 // names every candidate considered.
 func TestInvocationOverloadNoneApplicable(t *testing.T) {

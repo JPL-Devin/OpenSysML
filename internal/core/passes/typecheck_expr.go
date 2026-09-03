@@ -640,7 +640,7 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 			Severity: SeverityError,
 			Span:     e.Type.Span(),
 			Message: fmt.Sprintf("call of %s is ambiguous between %s",
-				e.Type.Parts[len(e.Type.Parts)-1].Text, candidateNames(sel.Applicable)),
+				e.Type.Parts[len(e.Type.Parts)-1].Text, candidateNames(sel.Tied)),
 			Code:   "invocation-ambiguous",
 			Source: "type",
 		})

@@ -138,7 +138,7 @@ func resolveActionSymbol(
 	case inv.expr != nil:
 		sel := passes.SelectInvocation(ctx.resolver, ctx.model, scope, inv.expr)
 		if sel.Ambiguous {
-			return nil, ambiguousInvocationError(name, sel.Applicable)
+			return nil, ambiguousInvocationError(name, sel.Tied)
 		}
 		sym = selectedDeclaration(sel)
 		ok = sym != nil

@@ -26,6 +26,7 @@ type InvocationSelection struct {
 	Applicable []*symbols.Symbol // the candidates the arguments bind to
 	Selected   *symbols.Symbol   // the one called; nil when none applies or they tie
 	Ambiguous  bool              // several applicable candidates are equally specific
+	Tied       []*symbols.Symbol // the applicable candidates none is more specific than, when Ambiguous
 }
 
 // Resolved reports whether the name denotes at least one declaration.
@@ -129,6 +130,9 @@ func (m *Model) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, ar
 		return sel
 	}
 	sel.Ambiguous = true
+	for _, k := range m.unbeaten(decisiveSigs, args) {
+		sel.Tied = append(sel.Tied, applicable[decisive[k]])
+	}
 	return sel
 }
 
@@ -365,6 +369,30 @@ func (m *Model) mostSpecific(sigs []invocationSignature, args []Argument) int {
 		best = i
 	}
 	return best
+}
+
+// unbeaten returns the indices of the signatures no other is strictly more specific
+// than at the bound parameters; every index when each is beaten by another.
+func (m *Model) unbeaten(sigs []invocationSignature, args []Argument) []int {
+	var out []int
+	for i := range sigs {
+		beaten := false
+		for j := range sigs {
+			if i != j && m.atLeastAsSpecific(sigs[j], sigs[i], args) && !m.atLeastAsSpecific(sigs[i], sigs[j], args) {
+				beaten = true
+				break
+			}
+		}
+		if !beaten {
+			out = append(out, i)
+		}
+	}
+	if len(out) == 0 {
+		for i := range sigs {
+			out = append(out, i)
+		}
+	}
+	return out
 }
 
 // atLeastAsSpecific reports whether a's parameter types conform to b's at every
