@@ -117,9 +117,10 @@ def _split_sections(body: str) -> tuple[str, list[tuple[str, str]]]:
 
 
 def _already_folded(body: str, section: str, entry: str) -> bool:
-    """True if `entry` is a whole item under `section` (a previous render wrote it)."""
+    """True if `entry` sits whole, on item boundaries, under `section` (a previous render wrote it)."""
+    at_boundaries = re.compile(rf"(?:\A|\n\n){re.escape(entry)}(?:\Z|\n\n)")
     for name, content in _split_sections(body)[1]:
-        if name == section and entry in content.strip("\n").split("\n\n"):
+        if name == section and at_boundaries.search(content.strip("\n")):
             return True
     return False
 
