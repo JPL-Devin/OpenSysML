@@ -859,7 +859,11 @@ func (e *StateExecutor) enclosesActiveRegion(state *ast.StateNode) bool {
 // was: the caller binds the trigger's arguments again before firing.
 func (e *StateExecutor) enabledTransition(state *ast.StateNode, event *Event) (*lower.Transition, error) {
 	for _, trans := range e.graph.Transitions[state] {
-		if !e.matchesEvent(trans, event) {
+		matches, err := e.matchesEvent(trans, event)
+		if err != nil {
+			return nil, err
+		}
+		if !matches {
 			continue
 		}
 		// A call trigger's arguments are bound before the guard runs: the guard is
@@ -962,37 +966,41 @@ func (e *StateExecutor) restoreData(names []ast.NameSegment) func() {
 	}
 }
 
-// matchesEvent checks if a transition matches the given event.
-func (e *StateExecutor) matchesEvent(trans *lower.Transition, event *Event) bool {
+// matchesEvent checks if a transition matches the given event. Resolving the
+// port a `via` names may materialize it, which can fail.
+func (e *StateExecutor) matchesEvent(trans *lower.Transition, event *Event) (bool, error) {
 	// Completion transition (nil trigger) doesn't match external events
 	if trans.Trigger == nil {
-		return false
+		return false, nil
 	}
 
 	switch event.Type {
 	case EventAccept, EventCall, EventChange:
 		if !e.triggerMatches(trans.Trigger, trans.Scope, event) {
-			return false
+			return false, nil
 		}
 		// `accept … via <port>` takes only an occurrence that arrived at that
 		// port; a trigger naming none takes it whatever route it came by.
 		if trans.Via == "" {
-			return true
+			return true, nil
 		}
 		msg, ok := event.Payload.(Message)
-		return ok && msg.reaches(e.stateMachine.Name, trans.Via, objectID(e.self))
+		if !ok {
+			return false, nil
+		}
+		return e.ctx.messageReaches(msg, e.stateMachine.Name, trans.Via, e.self)
 
 	case EventTime:
 		// Time events carry the specific transition in Payload
 		// If matchesEvent is called for time events (shouldn't normally happen),
 		// match if this transition is the one in the payload
 		if transPayload, ok := event.Payload.(*lower.Transition); ok {
-			return trans == transPayload
+			return trans == transPayload, nil
 		}
-		return false
+		return false, nil
 
 	default:
-		return false
+		return false, nil
 	}
 }
 
@@ -1739,7 +1747,11 @@ func (e *StateExecutor) run(atCurrentTime bool) error {
 			events++
 			continue
 		}
-		if !e.hasDueEvent(atCurrentTime) && !e.deliverPendingSignal() {
+		delivered, err := e.deliverPendingSignal(atCurrentTime)
+		if err != nil {
+			return err
+		}
+		if !delivered {
 			if ran > 0 {
 				continue // do behaviors are still running; they may yet queue events
 			}
@@ -1901,28 +1913,43 @@ func (e *StateExecutor) enqueueSignal(msg Message) {
 	e.nextEventID++
 }
 
-// deliverPendingSignal takes a message off the context bus that the active
-// configuration can react to and queues it, reporting whether it found one.
-// A message no active transition accepts stays on the bus for another consumer:
-// this machine must not swallow a message addressed to a different behavior.
-func (e *StateExecutor) deliverPendingSignal() bool {
-	msg, ok := e.ctx.TakeMessage(e.acceptableMessage)
+// deliverPendingSignal reports whether an event is due, queueing an accepted bus
+// message if none is. Unaccepted messages, and one whose port fails, stay in flight.
+func (e *StateExecutor) deliverPendingSignal(atCurrentTime bool) (bool, error) {
+	if e.hasDueEvent(atCurrentTime) {
+		return true, nil
+	}
+	var failed error
+	msg, ok := e.ctx.TakeMessage(func(m Message) bool {
+		if failed != nil {
+			return false
+		}
+		accepted, err := e.acceptableMessage(m)
+		if err != nil {
+			failed = err
+			return false
+		}
+		return accepted
+	})
+	if failed != nil {
+		return false, failed
+	}
 	if !ok {
-		return false
+		return false, nil
 	}
 	e.enqueueSignal(msg)
-	return true
+	return true, nil
 }
 
 // acceptableMessage reports whether a message in flight is one this machine can
 // react to now. A message routed to a port is for this machine only if a
 // transition out of the active configuration accepts it `via` that port; one
 // routed to no port must also be addressed to the machine.
-func (e *StateExecutor) acceptableMessage(m Message) bool {
-	if m.Port != "" {
-		return e.acceptsSignal(m)
+func (e *StateExecutor) acceptableMessage(m Message) (bool, error) {
+	if m.Port == "" && !m.reaches(e.stateMachine.Name, "", objectID(e.self)) {
+		return false, nil
 	}
-	return m.reaches(e.stateMachine.Name, "", objectID(e.self)) && e.acceptsSignal(m)
+	return e.acceptsSignal(m)
 }
 
 // HasPendingSignal reports whether a signal this machine accepts is in flight.
@@ -1932,11 +1959,12 @@ func (e *StateExecutor) HasPendingSignal() bool {
 	return e.hasPendingSignal()
 }
 
-// hasPendingSignal reports whether a message in flight would be delivered by
-// the next step, without consuming it.
+// hasPendingSignal reports whether the next step would act on a message in
+// flight, without consuming it: deliver one, or report an accept port that
+// fails to resolve.
 func (e *StateExecutor) hasPendingSignal() bool {
 	for _, msg := range e.ctx.PendingMessages() {
-		if e.acceptableMessage(msg) {
+		if accepted, err := e.acceptableMessage(msg); err != nil || accepted {
 			return true
 		}
 	}
@@ -1945,39 +1973,42 @@ func (e *StateExecutor) hasPendingSignal() bool {
 
 // acceptsSignal reports whether any transition out of the active configuration,
 // or out of a composite state enclosing it, is triggered by this signal.
-func (e *StateExecutor) acceptsSignal(msg Message) bool {
+func (e *StateExecutor) acceptsSignal(msg Message) (bool, error) {
 	for _, leaf := range e.activeStates() {
 		for _, state := range e.getParentChain(leaf) {
-			if e.acceptsSignalFrom(state, msg) {
-				return true
+			if accepted, err := e.acceptsSignalFrom(state, msg); err != nil || accepted {
+				return accepted, err
 			}
 		}
 	}
-	return false
+	return false, nil
 }
 
 // acceptsSignalFrom reports whether a transition out of one state is triggered
-// by this message's signal.
-func (e *StateExecutor) acceptsSignalFrom(state *ast.StateNode, msg Message) bool {
+// by this message's signal. Only a message of the right signal resolves the
+// transition's `via` port; a failure to do so is returned.
+func (e *StateExecutor) acceptsSignalFrom(state *ast.StateNode, msg Message) (bool, error) {
 	for _, trans := range e.graph.Transitions[state] {
 		accept, ok := trans.Trigger.(*ast.AcceptEvent)
-		if !ok {
+		if !ok || !e.triggerSignalMatches(accept, trans.Scope, msg) {
 			continue
 		}
-		if !msg.reaches(e.stateMachine.Name, trans.Via, objectID(e.self)) {
-			continue
-		}
-		if typed := ast.AsQualifiedName(accept.SignalType); typed != nil && len(typed.Parts) > 0 {
-			if e.ctx.messageMatches(msg, typed, trans.Scope) {
-				return true
-			}
-			continue
-		}
-		if signal := lower.FeaturePath(accept.Subsets); signal != "" && e.ctx.carriesEvent(msg, signal, trans.Scope) {
-			return true
+		reaches, err := e.ctx.messageReaches(msg, e.stateMachine.Name, trans.Via, e.self)
+		if err != nil || reaches {
+			return reaches, err
 		}
 	}
-	return false
+	return false, nil
+}
+
+// triggerSignalMatches reports whether the message carries the signal an
+// accept trigger names, by type or by the event it subsets.
+func (e *StateExecutor) triggerSignalMatches(accept *ast.AcceptEvent, scope *symbols.Scope, msg Message) bool {
+	if typed := ast.AsQualifiedName(accept.SignalType); typed != nil && len(typed.Parts) > 0 {
+		return e.ctx.messageMatches(msg, typed, scope)
+	}
+	signal := lower.FeaturePath(accept.Subsets)
+	return signal != "" && e.ctx.carriesEvent(msg, signal, scope)
 }
 
 // activeStates returns the states currently active, in region declaration
@@ -2481,7 +2512,11 @@ func (e *StateExecutor) ProcessNextEvent() error {
 	}
 	// A signal sent by a behavior sharing this context is dispatched by the same
 	// step RunToCompletion takes, so stepping and running agree.
-	if e.eventQueue.Len() == 0 && !e.deliverPendingSignal() && ran > 0 {
+	delivered, err := e.deliverPendingSignal(false)
+	if err != nil {
+		return err
+	}
+	if !delivered && ran > 0 {
 		return nil
 	}
 	return e.processNextEvent()
