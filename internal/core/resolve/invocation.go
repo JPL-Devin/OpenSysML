@@ -89,37 +89,38 @@ func (r *Resolver) globalCandidates(scope *symbols.Scope, name string) []*symbol
 	return r.admittedUnder(r.documentOf(scope), r.ReferringNamespaceFQN(scope), name, r.idx.LookupQualified(name))
 }
 
-// surfacedMembers returns every member name reaches in cur through its imports and
-// generals, of which qualifiedSegment reaches the first; none when cur owns one.
+// surfacedMembers returns every member name reaches in cur in the category
+// qualifiedSegment binds it in — its generals, else its imports — and none when cur owns one.
 func (r *Resolver) surfacedMembers(cur *symbols.Symbol, from *symbols.Scope, name string) []*symbols.Symbol {
 	if cur == nil {
 		return nil
 	}
-	var out []*symbols.Symbol
-	if cur.Scope != nil {
-		if len(r.namedThroughNamespaces(symbols.PreferDeclared(cur.Scope.LookupLocalAll(name)))) > 0 {
-			return nil
-		}
-		for _, imp := range r.importsOf(cur.Scope.Node()) {
-			if r.importStack[imp] || r.resolvingImports[imp] ||
-				!r.importPrefixAvailable(cur.Scope, imp, name) || !r.importVisibleFrom(cur, from, imp) {
-				continue
-			}
-			r.importStack[imp] = true
-			for _, found := range r.importMatchesAll(cur.Scope, imp, name) {
-				if r.namedThroughNamespace(found) {
-					out = appendSymbol(out, found)
-				}
-			}
-			delete(r.importStack, imp)
-		}
+	if cur.Scope != nil && len(r.namedThroughNamespaces(symbols.PreferDeclared(cur.Scope.LookupLocalAll(name)))) > 0 {
+		return nil
 	}
+	var out []*symbols.Symbol
 	if all, ok := r.model.(contributedMembersLookup); ok {
 		for _, found := range all.LookupContributedMembers(cur, name) {
 			if visibleAsInheritedMember(cur, found) && r.namedThroughNamespace(found) {
 				out = appendSymbol(out, found)
 			}
 		}
+	}
+	if len(out) > 0 || cur.Scope == nil {
+		return out
+	}
+	for _, imp := range r.importsOf(cur.Scope.Node()) {
+		if r.importStack[imp] || r.resolvingImports[imp] ||
+			!r.importPrefixAvailable(cur.Scope, imp, name) || !r.importVisibleFrom(cur, from, imp) {
+			continue
+		}
+		r.importStack[imp] = true
+		for _, found := range r.importMatchesAll(cur.Scope, imp, name) {
+			if r.namedThroughNamespace(found) {
+				out = appendSymbol(out, found)
+			}
+		}
+		delete(r.importStack, imp)
 	}
 	return out
 }

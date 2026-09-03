@@ -922,10 +922,13 @@ func testCalcCallSelectsAmongOwnedInheritedAndRecursiveImport(t *testing.T) {
 				public import B::*;
 			}
 			calc def Derived :> Inherited::ByNumber, Inherited::ByText;
+			calc def Importing :> Inherited::ByText { public import A::*; }
 			calc reexportedInt { in v : Integer; Both::pick(v) }
 			calc reexportedStr { in v : String; Both::pick(v) }
 			calc inheritedInt { in v : Integer; Derived::pick(v) }
 			calc inheritedStr { in v : String; Derived::pick(v) }
+			calc inheritedHidesImportStr { in v : String; Importing::pick(v) }
+			calc inheritedHidesImportInt { in v : Integer; Importing::pick(v) }
 		}
 	`
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
@@ -950,6 +953,7 @@ func testCalcCallSelectsAmongOwnedInheritedAndRecursiveImport(t *testing.T) {
 		{"Qualified::reexportedStr", NewStringValue("s"), 2},
 		{"Qualified::inheritedInt", intArg, 1},
 		{"Qualified::inheritedStr", NewStringValue("s"), 2},
+		{"Qualified::inheritedHidesImportStr", NewStringValue("s"), 2},
 	}
 	for _, tc := range cases {
 		matches := idx.LookupQualified(tc.qual)
@@ -963,6 +967,14 @@ func testCalcCallSelectsAmongOwnedInheritedAndRecursiveImport(t *testing.T) {
 		if result.Kind != ValConst || result.Const.Int != tc.want {
 			t.Fatalf("%s = %+v, want %d", tc.qual, result, tc.want)
 		}
+	}
+	hidden := idx.LookupQualified("Qualified::inheritedHidesImportInt")
+	if len(hidden) != 1 {
+		t.Fatalf("inheritedHidesImportInt: %d symbols, want 1", len(hidden))
+	}
+	if _, err := ctx.InvokeCalc(hidden[0], []Value{intArg}, rootScope); err == nil ||
+		!strings.Contains(err.Error(), "typed by String") {
+		t.Fatalf("Importing::pick(3) ran the import the inherited pick hides: err = %v", err)
 	}
 }
 

@@ -584,6 +584,21 @@ func TestInvocationOverloadQualifiedReexportedAndInheritedCandidates(t *testing.
 	}`, "type.expr", "argument 1 of pick expects String, found Natural")
 }
 
+// A member the qualifier inherits hides the same name its own public import surfaces,
+// so the imported overload is not a candidate even when only it fits the argument.
+func TestInvocationOverloadQualifiedInheritedHidesImported(t *testing.T) {
+	const src = `package P {
+		private import ScalarValues::*;
+		package Lib { calc def pick { in x : Integer; return : Integer = 1; } }
+		part def Base { calc def pick { in x : String; return : Integer = 2; } }
+		part def T :> Base { public import Lib::pick; }
+		attribute %s
+	}`
+	wantLibraryClean(t, fmt.Sprintf(src, `s : Integer = T::pick("s");`))
+	wantLibraryDiag(t, fmt.Sprintf(src, `i : Integer = T::pick(3);`),
+		"type.expr", "argument 1 of pick expects String, found Natural")
+}
+
 // A general type's protected and public imports each contribute their overloads to
 // the bodies specializing it, not only the first import's.
 func TestInvocationOverloadCandidatesThroughInheritedImports(t *testing.T) {
