@@ -106,31 +106,6 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   the apply against the real stack — an initial load, a revision with a retained-id rename and
   gated deletes, a conflict staged behind the sync's back — and records what read back at the
   recorded commit ([the report](internal/interop/flexo/testdata/identity_apply_expected.txt)).
-- **A send's arguments are validated.** The payload, `via` and `to` arguments of a send were
-  never typed, so `send Sig() to target` with `attribute def Sig` — an invocation of something
-  that is not a behavior, which the pinned OMG pilot rejects with `Must invoke a behavior or a
-  behavioral feature` — passed silently. A new type-tier pass infers every send argument, in
-  action bodies, state entry/do/exit actions, transition effects and nested forms alike, and
-  reports the SysML v2 `SendActionUsage` constraints on them: a state subaction or transition
-  effect that sends no payload is an error (`send-payload-missing`), sending `to` a port warns
-  that `via` is the routing form (`send-to-port`), and a `via` or `to` argument whose types are
-  disjoint from `Occurrence` warns at the argument (`send-sender-not-occurrence`,
-  `send-receiver-not-occurrence`). The pass is in the shared registry, so the LSP reports the
-  same diagnostics. Two refereed cases join the rejection corpus under
-  `cmd/pilot-reject/testdata/negative/semantic/`.
-- **`send new Def(args)` constructs the message it sends.** The notation's constructor keeps its
-  named arguments (`send new Telemetry(frames = 3.0) via antenna;`) through the AST, the RDF
-  export and the runtime, which builds the message from the constructed definition and its
-  positional or named arguments exactly as the invocation form used to. An accept subsetting a
-  declared event (`accept :> shutDown`) now takes a message sent from that event feature
-  (`send shutDown to interrupt`), not only one of its type.
-- **A constructor's arguments are checked against the type it instantiates.** `new T(…)` binds
-  the type's features — its own first, then the inherited ones — by position or by label, and the
-  type tier now reports a positional argument beyond them, a label bound twice, a qualified label
-  naming another type's feature, and an argument whose scalar type cannot bind its feature, each at
-  the offending argument. A simple label resolves as a feature of the constructed type rather than
-  of the surrounding scope, so an unknown one is reported where it is written and renaming the
-  feature rewrites its labels.
 - **Action and state execution has a referee outside the executor.** Six conformance cases —
   a join fed by branches of unequal length, a join fed twice over one succession, a node two
   successions reach, two fork branches writing one feature, the specification's `ChargeBattery`
@@ -288,13 +263,6 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Changed
 
-- **`send Def(args)` on an item or attribute definition is an error, as the specification and
-  the pinned pilot say.** The runtime used to read that invocation as "send an instance of
-  `Def`", the shape the conformance fixtures and the relay-probe demo were written in; KerML's
-  `validateInvocationExpressionInstantiatedType` allows an invocation only of a behavior or a
-  behavioral feature. Write the constructor instead: `send new Def(args)`. The fixtures, the
-  demo and the examples are migrated; invoking a behavioral feature (`send shutDown() to self`
-  over an action) is unchanged.
 - **A conversion from RDF returns the notation as written.** Every element written to `.ttl`
   carries its lines as `sysx:sourceText` — comments, blank lines and keyword synonyms included —
   and an element with members carries the lines closing its body as `sysx:sourceTail`; the writer
