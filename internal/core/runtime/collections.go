@@ -203,6 +203,9 @@ func (ec *EvalContext) applyBody(body *ast.BodyExpr, args ...Value) (Value, erro
 		if membership, ok := member.(*ast.Membership); ok {
 			decl = membership.Member
 		}
+		if _, ok := decl.(*ast.Documentation); ok {
+			continue
+		}
 		if _, ok := decl.(*ast.Usage); !ok {
 			if decl == nil {
 				return Value{}, fmt.Errorf("%w: nil body member", ErrUnsupportedBodyDeclaration)
@@ -783,19 +786,32 @@ func truthOf(op string, args []Value, universal bool) (Value, error) {
 // kind: Integer elements sum to an Integer (IntegerFunctions::sum returns
 // `Integer[1]`), a Real anywhere makes the sum a Real.
 func builtinNumericalSum(ec *EvalContext, args []Value) (Value, error) {
-	return aggregate("NumericalFunctions::sum", args, ast.OpAdd)
+	return aggregate("NumericalFunctions::sum", args, ast.OpAdd, false)
 }
 
 // builtinNumericalProduct is NumericalFunctions::product, with the
 // multiplicative identity for an empty collection (`product1(collection, 1)`).
 func builtinNumericalProduct(ec *EvalContext, args []Value) (Value, error) {
-	return aggregate("NumericalFunctions::product", args, ast.OpMul)
+	return aggregate("NumericalFunctions::product", args, ast.OpMul, false)
+}
+
+// builtinRealSum is RealFunctions::sum and RationalFunctions::sum, whose
+// identity the library declares Real (`sum0(collection, 0.0)`): an empty
+// collection sums to 0.0, not 0.
+func builtinRealSum(ec *EvalContext, args []Value) (Value, error) {
+	return aggregate("RealFunctions::sum", args, ast.OpAdd, true)
+}
+
+// builtinRealProduct is RealFunctions::product and RationalFunctions::product
+// (`product1(collection, 1.0)`).
+func builtinRealProduct(ec *EvalContext, args []Value) (Value, error) {
+	return aggregate("RealFunctions::product", args, ast.OpMul, true)
 }
 
 // aggregate folds the collection's numeric elements with op, starting from its
-// identity element: 0 for a sum, 1 for a product. A non-numeric element is
-// reported rather than skipped or coerced.
-func aggregate(op string, args []Value, operator ast.OperatorKind) (Value, error) {
+// identity element: 0 for a sum, 1 for a product, a Real where real says so.
+// A non-numeric element is reported rather than skipped or coerced.
+func aggregate(op string, args []Value, operator ast.OperatorKind, real bool) (Value, error) {
 	if err := checkArity(op, args, 1); err != nil {
 		return Value{}, err
 	}
@@ -818,6 +834,9 @@ func aggregate(op string, args []Value, operator ast.OperatorKind) (Value, error
 		identity = 1
 	}
 	acc := semantics.Value{Kind: semantics.ValInt, Int: identity}
+	if real {
+		acc = semantics.Value{Kind: semantics.ValReal, Real: float64(identity)}
+	}
 	for _, elem := range elements {
 		if elem.Kind != ValConst || !elem.Const.IsNumeric() {
 			return Value{}, fmt.Errorf("%w: %s requires numeric elements, got %s", ErrTypeMismatch, op, describeValue(elem))
