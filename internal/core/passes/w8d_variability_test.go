@@ -136,7 +136,7 @@ func TestW8DLegalEnumerationStaysSilent(t *testing.T) {
 	const src = `package P {
 		private import ScalarValues::*;
 		enum def E { a; b; }
-		enum def K :> Real { A = 4.0; B = 3.0; }
+		enum def K :> Real { A = 4.0; B = 3.0; C := 2.0; D default = 1.0; }
 		enum def L { enum m; = 1; doc /* the levels */ }
 		attribute def AD { attribute q : Integer; }
 		enum def M :> AD { x; y; <s1> z : M; <s2>; : M; [1]; private <s3> w; }

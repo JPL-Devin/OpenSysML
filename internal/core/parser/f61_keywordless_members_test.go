@@ -128,6 +128,24 @@ func TestF61KeywordlessMembers(t *testing.T) {
 		}
 	})
 
+	t.Run("named_enum_values_with_default_or_initial_values", func(t *testing.T) {
+		src := "package B { enum def S { a := 1; b default = 2; c default := 3; d default 4; enum e default = 5; } }"
+		pkg := parsePkg(t, src)
+		def := pkg.Members[0].(*ast.Membership).Member.(*ast.Definition)
+		if len(def.Members) != 5 {
+			t.Fatalf("members = %d, want 5", len(def.Members))
+		}
+		for i, want := range []struct{ name, op string }{
+			{"a", ":="}, {"b", "default ="}, {"c", "default :="}, {"d", "default"}, {"e", "default ="},
+		} {
+			u := usageAt(t, def.Members, i)
+			op := src[u.ValueOperatorSpan.Offset:u.ValueOperatorSpan.End()]
+			if u.Kind != ast.UsageEnumeration || u.Ident.Name != want.name || u.Value == nil || op != want.op {
+				t.Errorf("member %d = kind %v %q op %q value %v, want enumerated value %q with %q", i, u.Kind, u.Ident.Name, op, u.Value != nil, want.name, want.op)
+			}
+		}
+	})
+
 	t.Run("short_named_and_nameless_enum_values", func(t *testing.T) {
 		pkg := parsePkg(t, "package B { attribute def D { attribute n; } enum def S :> D { <s1> a : S; <s2>; <s3> = 1; : S; :>> n = 3; [1]; public <s4> c; private : S; } }")
 		def := pkg.Members[1].(*ast.Membership).Member.(*ast.Definition)

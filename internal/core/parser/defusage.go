@@ -608,7 +608,7 @@ func (p *Parser) atEnumeratedValueDeclaration() bool {
 		return prefixed
 	case lexer.Identifier, lexer.UnrestrictedName:
 		off++
-		if prefixed && endsEnumeratedValueName(p.peekN(off)) {
+		if endsEnumeratedValueName(p.peekN(off)) {
 			return true
 		}
 	}
