@@ -251,17 +251,19 @@ The text is the notation **as the author wrote it**: the encoder slices the
 file's own bytes, never a formatted copy, and the decoder writes them back
 untouched, so any file converts to RDF and back **byte for byte** — tabs,
 irregular indentation, blank lines inside a head, CRLF line endings, a string
-literal or `doc` body spanning lines, all included. What follows the last root
-(notes, blank lines, a missing final newline) is that root's tail, since the
-document itself has no subject. Tokens are never rewritten by either step, so a
-synonym (`:>` for `specializes`, `datatype` for `attribute def`), an unusual
-member order, or a reference written relative to another scope all come back
-as written. Layout is never what the graph states: where the mapping records
-how a head was written (`sysx:endForm`, `sysx:declaredKeyword`, a `then`) it
-compares the head's tokens, so a head laid out over several lines or with a
-comment inside it is recorded like one written on a line; and where the graph
-carries a node's text as a structural value (a relationship target, a trigger),
-the notes and comments its span runs on over are left out.
+literal or `doc` body spanning lines, all included. Roots written on one line
+(`package A; /* note */ package B;`) each carry their slice of it, from their
+first token up to the next root's, and what follows the last root (notes, blank
+lines, a missing final newline) is that root's tail, since the document itself
+has no subject. Tokens are never rewritten by either step, so a synonym (`:>`
+for `specializes`, `datatype` for `attribute def`), an unusual member order, or
+a reference written relative to another scope all come back as written. Layout
+is never what the graph states: where the mapping records how a head was
+written (`sysx:endForm`, `sysx:declaredKeyword`, a `then`) it compares the
+head's tokens, so a head laid out over several lines, with a comment inside it
+or a note after its `;` is recorded like one written on a line; and where the
+graph carries a node's text as a structural value (a relationship target, a
+trigger), the notes and comments its span runs on over are left out.
 
 **The graph is authoritative.** The text is a rendering of the structural
 triples, not a second copy of the model, and the decoder checks it before
@@ -300,9 +302,11 @@ package Rover {
 Here `sysml:isAbstract` was added to `Hub` after the export: its line — and the
 note that was written above it — is rebuilt from the graph, and every other
 line is kept, the blank line after it included, since that belongs to
-`Vehicle`. Text that no longer parses, or whose disagreement cannot be placed on
-one element, demotes every element to canonical notation rather than writing
-an invalid or contradictory file; one that lands on notation already rebuilt is
+`Vehicle`. Rebuilt lines end the way most of the elements' text does, CRLF or
+LF; an expression's text lies inside its element's and is not counted again.
+Text that no longer parses, or whose disagreement cannot be placed on one
+element, demotes every element to canonical notation rather than writing an
+invalid or contradictory file; one that lands on notation already rebuilt is
 the graph's own (a `declaredName` edited without its `qualifiedName`) and
 demotes nothing further. Identity annotations follow the same rule:
 text that still carries its `@IdentityMetadata::ElementId` or `ProjectRef` is

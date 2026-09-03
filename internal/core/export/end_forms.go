@@ -268,7 +268,7 @@ func (e *encoder) headTail(n *ast.Usage, from int) (string, bool) {
 	if from < n.Span().Offset || from >= end {
 		return "", false
 	}
-	text := strings.TrimSpace(e.src.slice(source.Span{Offset: from, Len: end - from}))
+	text := strings.TrimSpace(e.src.code(source.Span{Offset: from, Len: end - from}))
 	if strings.ContainsAny(text, "{}") {
 		return "", false
 	}

@@ -349,13 +349,16 @@ func (e *encoder) encode(members []ast.Node, owner string, ownerTerm rdf.Term) e
 		spans[i] = member.Span()
 	}
 	regions := e.src.tile(spans)
-	if ownerTerm.Value == "" && len(regions) > 0 {
-		// The document has no subject, so what follows its last root is that root's.
-		regions[len(regions)-1].end = len(e.src.text)
-	}
 	// Members written on their owner's own lines, such as an accept's payload,
 	// are part of its text: the owner is written whole or rebuilt whole.
 	inline := !e.src.wholeLines(regions)
+	if ownerTerm.Value == "" && len(regions) > 0 {
+		// The document has no subject: roots sharing a line each keep their
+		// slice of it, and what follows the last root is that root's.
+		inline = false
+		e.src.shareLines(regions, spans)
+		regions[len(regions)-1].end = len(e.src.text)
+	}
 	if !inline && len(regions) > 0 && ownerTerm.Value != "" {
 		body := region{regions[0].start, regions[len(regions)-1].end}
 		if prior, ok := e.bodies[ownerTerm]; ok {

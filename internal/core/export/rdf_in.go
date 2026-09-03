@@ -153,11 +153,14 @@ type decoder struct {
 	nl string
 }
 
-// newline is the line ending the stored source text is written with: CRLF only
-// when it outnumbers bare LF, as the formatter decides it.
+// newline is the line ending most of the stored element text uses, as the
+// formatter decides it; an expression's text lies inside its element's.
 func (d *decoder) newline() string {
 	crlf, lf := 0, 0
 	for _, subject := range d.graph.Subjects() {
+		if d.isExpressionNode(subject) {
+			continue
+		}
 		for _, property := range []string{xSourceText, xSourceTail} {
 			if text, ok := d.graph.Lexical(subject, rdf.OpenSysML+property); ok {
 				crlf += strings.Count(text, "\r\n")

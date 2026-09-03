@@ -66,6 +66,38 @@ func TestTrailingTriviaComesBack(t *testing.T) {
 	}
 }
 
+// Roots have no owner to be written whole with, so roots sharing a line each
+// carry their slice of it, trivia between them included.
+func TestRootsSharingALineComeBack(t *testing.T) {
+	src := "package A; /* between */ package B; // after\n\npackage C {\n\tpart p; } package D;"
+	turtle := idTurtle(t, src)
+	if back := toNotation(t, turtle); back != src {
+		t.Errorf("round trip changed the notation:\n--- want ---\n%s--- got ---\n%s", src, back)
+	}
+	// An edited root is rebuilt where it stood, its trailing note with it; its
+	// neighbours stay as written.
+	edited := editTurtle(t, turtle,
+		"    sysml:declaredName \"B\" ;\n",
+		"    sysml:declaredName \"B\" ;\n    sysx:isLibraryPackage \"true\"^^xsd:boolean ;\n")
+	back := toNotation(t, edited)
+	want := "package A; /* between */ library package B;\n\npackage C {\n\tpart p; } package D;"
+	if back != want {
+		t.Errorf("the edited root was not rebuilt in place:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+	if got, want := structural(t, idTurtle(t, back)), structural(t, edited); got != want {
+		t.Errorf("the notation does not state the edited graph:\n--- want ---\n%s--- got ---\n%s", want, got)
+	}
+	// The trivia after a root is its own, so a root rebuilt ahead of another
+	// leaves that one at the start of its line.
+	edited = editTurtle(t, turtle,
+		"    sysml:declaredName \"A\" ;\n",
+		"    sysml:declaredName \"A\" ;\n    sysx:isLibraryPackage \"true\"^^xsd:boolean ;\n")
+	want = "library package A;\npackage B; // after\n\npackage C {\n\tpart p; } package D;"
+	if back := toNotation(t, edited); back != want {
+		t.Errorf("the first root was not rebuilt in place:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+}
+
 // Without source text the graph converts to canonical notation as before: the
 // structural triples alone carry the model, and the trivia is gone.
 func TestStrippedGraphPrintsCanonically(t *testing.T) {
@@ -212,6 +244,31 @@ func TestBlankLinesStayWithTheMemberAfterThem(t *testing.T) {
 				t.Errorf("removing a member took the blank line after it:\n--- want ---\n%s--- got ---\n%s", want, back)
 			}
 		})
+	}
+}
+
+// The line ending rebuilt notation is written with is the one most of the file
+// uses. An expression's text lies inside its member's, so however deeply it
+// nests, the lines it spans count once.
+func TestNestedExpressionTextDoesNotOutvoteTheFileNewline(t *testing.T) {
+	notation := "package P {\n" +
+		"    part def A;\n" +
+		"    attribute x = (1 +\r\n" +
+		"        (2 *\r\n" +
+		"        (3 +\r\n" +
+		"        4)));\n" +
+		"    part def B;\n" +
+		"}\n"
+	turtle := idTurtle(t, notation)
+	if back := toNotation(t, turtle); back != notation {
+		t.Errorf("the notation changed:\n--- want ---\n%q--- got ---\n%q", notation, back)
+	}
+	edited := editTurtle(t, turtle,
+		"    sysml:declaredName \"A\" ;\n",
+		"    sysml:declaredName \"A\" ;\n    sysml:isAbstract \"true\"^^xsd:boolean ;\n")
+	want := strings.Replace(notation, "    part def A;", "    abstract part def A;", 1)
+	if back := toNotation(t, edited); back != want {
+		t.Errorf("the rebuilt member took the expression's line ending:\n--- want ---\n%q--- got ---\n%q", want, back)
 	}
 }
 

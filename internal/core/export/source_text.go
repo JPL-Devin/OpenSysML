@@ -129,6 +129,18 @@ func (s *authoredSource) tile(spans []source.Span) []region {
 	return out
 }
 
+// shareLines moves a boundary two regions share a line at up to the second
+// member's first token, so a member rebuilt there follows the trivia before it.
+func (s *authoredSource) shareLines(regions []region, spans []source.Span) {
+	for i := 1; i < len(regions); i++ {
+		at := regions[i].start
+		if at > 0 && s.text[at-1] != '\n' && spans[i].Offset >= at {
+			regions[i-1].end = spans[i].Offset
+			regions[i].start = spans[i].Offset
+		}
+	}
+}
+
 // wholeLines reports whether every region starts and ends on a line boundary,
 // so each can be written or replaced on its own.
 func (s *authoredSource) wholeLines(regions []region) bool {

@@ -951,6 +951,10 @@ func TestEndFormsSurviveIrregularLayout(t *testing.T) {
 		"connect": {"connect left\n\t\t\t/* to the */ to\n\t\t\tright;", "connect left to right;"},
 		"bind":    {"bind\tleft\t=\tright;", "bind left = right;"},
 		"satisfy": {"satisfy R // by the car\n\t\t\tby left;", "satisfy R by left;"},
+		// The notes after a head are not part of it.
+		"connect then note":   {"connect left to right; // and done", "connect left to right;"},
+		"bind then note line": {"bind left = right;\n\t\t/* on to the next */", "bind left = right;"},
+		"satisfy then note":   {"satisfy R by left; /* checked */", "satisfy R by left;"},
 	}
 	for name, head := range heads {
 		t.Run(name, func(t *testing.T) {
