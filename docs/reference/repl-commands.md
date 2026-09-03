@@ -84,6 +84,12 @@ segment whose feature value the runtime could not materialize keeps the runtime'
 "spare": feature "spare" of object #1 could not be materialized: … multiplicity violation …`. An
 id the session holds no object under is `no object #99 in this session`.
 
+An id denotes only an object the session holds: one it named, or one a materialized feature of
+such an object holds. Instantiating a name a second time makes a new object and leaves the
+earlier one unnamed (`object #1 is no longer named`), so `#1` then reaches nothing: `no object
+#1 in this session: it was superseded, and nothing the session names reaches it`. A debugging
+session over the superseded object ends with that `%instantiate`, with a `note:` saying so.
+
 A name nothing was instantiated under says what to instantiate. A usage whose definition alone
 has an object (`%instantiate Fleet::Rover` when `%state … Fleet::rover` wanted the usage) is
 reported as `no instance of the usage "Fleet::rover": object #1 of "Fleet::Rover" is of its
