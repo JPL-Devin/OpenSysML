@@ -128,6 +128,9 @@ var (
 	htmlFragment  bool
 	strictMode    bool
 	modelChecks   checks
+	compileCalc   string
+	compileTarget string
+	compileSource bool
 
 	syncDiffWith       string
 	syncApplyTo        string
@@ -235,6 +238,13 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, "\nThe input format is taken from the file extension (.sysml, .kerml, .ttl) unless\n")
 	fmt.Fprintf(w, "-from names it. Converting to the format it is already in rewrites the input:\n")
 	fmt.Fprintf(w, "notation is reformatted, Turtle is normalized.\n")
+	fmt.Fprintf(w, "\nNative compilation:\n")
+	fmt.Fprintf(w, "  sysml model.sysml -compile Pkg::Fib -o fib           # Compile a calc def to a C executable\n")
+	fmt.Fprintf(w, "  sysml model.sysml -compile Pkg::Fib -target go -o fib # ... via Go\n")
+	fmt.Fprintf(w, "  sysml model.sysml -compile Pkg::Fib -source -o fib.c # Write the generated source only\n")
+	fmt.Fprintf(w, "\nThe executable takes the calc's parameters as arguments and prints its result;\n")
+	fmt.Fprintf(w, "it computes what `sysml -calc` computes, or fails with the same error. Only the\n")
+	fmt.Fprintf(w, "scalar subset compiles (Integer, Real, Boolean; see docs/project/native-compilation.md).\n")
 	// The notice is printed, not restated, so the help cannot drift from what a
 	// conversion reports.
 	fmt.Fprintf(w, "\n%s\n", wrapped(export.ExperimentalNotice, 78))
@@ -359,6 +369,9 @@ func runCLI() int {
 	flag.Var(&modelChecks.states, "state", "Run this state machine, as -state \"Mission rover1\" to run it on an object (repeatable)")
 	flag.Var(&modelChecks.advance, "advance", "Simulated time units to run each -state machine for (default: only its initial transition)")
 	flag.BoolVar(&modelChecks.jsonOut, "json", false, "Report checks as one JSON document rather than as lines")
+	flag.StringVar(&compileCalc, "compile", "", "Compile this calc def to a native executable named by -o, as -compile Pkg::Fib")
+	flag.StringVar(&compileTarget, "target", "c", "Backend -compile generates code for: c (default) or go")
+	flag.BoolVar(&compileSource, "source", false, "With -compile, write the generated source to -o instead of building it")
 	flag.StringVar(&cpuProfilePath, "cpuprofile", "", "Write a CPU profile of the run to this file, for go tool pprof")
 	flag.StringVar(&memProfilePath, "memprofile", "", "Write a heap profile of the run to this file, for go tool pprof")
 	flag.BoolVar(&memStats, "memstats", false, "Report on stderr what the run cost: wall time, memory allocated, memory taken from the OS")
@@ -452,6 +465,35 @@ func runCLI() int {
 		fmt.Fprintln(os.Stderr, "sysml: -sync-apply is empty; name the SysML v2 API endpoint to apply to")
 		return 2
 	}
+	if flagGiven("compile") && compileCalc == "" {
+		fmt.Fprintln(os.Stderr, "sysml: -compile is empty; name the calc def to compile, as -compile Pkg::Fib")
+		return 2
+	}
+	if compileCalc == "" && (flagGiven("target") || compileSource) {
+		fmt.Fprintln(os.Stderr, "sysml: -target and -source apply to -compile; name the calc def to compile")
+		return 2
+	}
+	if compileCalc != "" {
+		switch {
+		case convertFormat != "" || renderView != "" || renderAllDir != "" || renderDoc != "" || renderDocsDir != "" || queryText != "" || len(evalExprs) > 0 || fromFormat != "" || syncDiffWith != "" || syncApplyTo != "":
+			fmt.Fprintln(os.Stderr, "sysml: -compile builds an executable; it cannot be combined with -convert, -render, -render-all, -render-document, -render-documents, -query, -eval, -from, -sync-diff or -sync-apply")
+			return 2
+		case syncBase != "" || syncState != "" || syncConfirmDeletes || syncMintIDs || syncAnnotate != "":
+			fmt.Fprintln(os.Stderr, "sysml: -sync-base, -sync-state, -sync-confirm-deletes, -sync-mint-ids and -sync-annotate apply to -sync-diff or -sync-apply, not to -compile")
+			return 2
+		case modelChecks.requested():
+			return refuse(modelChecks,
+				"-compile builds an executable and decides nothing about the model; check it in its own run")
+		case outputPath == "":
+			fmt.Fprintln(os.Stderr, "sysml: -compile needs -o to name the executable (or the source file, with -source)")
+			return 2
+		}
+		if err := runCompile(args); err != nil {
+			return fail(err)
+		}
+		return exitHolds
+	}
+
 	if syncDiffWith != "" && syncApplyTo != "" {
 		fmt.Fprintln(os.Stderr, "sysml: -sync-diff shows a change set without writing and -sync-apply writes one; ask for one per run")
 		return 2
