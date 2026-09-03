@@ -1,0 +1,12 @@
+{
+  "type": "instance",
+  "libraries": true,
+  "instantiate": "test::site",
+  "objects": [
+    {
+      "path": "station",
+      "finalState": "logged",
+      "slots": {"tool": {"type": "String", "value": "solver"}}
+    }
+  ]
+}

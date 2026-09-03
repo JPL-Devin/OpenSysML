@@ -76,41 +76,15 @@ func (ctx *Context) FeaturesOf(typeSym *symbols.Symbol) []EffectiveFeature {
 	return features
 }
 
-// buildFeatures constructs the effective-feature list by walking the type hierarchy.
+// buildFeatures constructs the effective-feature list from the semantic shape.
 func (ctx *Context) buildFeatures(typeSym *symbols.Symbol) []EffectiveFeature {
 	// Redefined features stay in the shape: a redefinition shares its target's
 	// feature value, which both names read (see subsetting_test.go).
-	allMembers := ctx.model.MembersOfIncludingRedefined(typeSym)
-
-	// Track which features to keep (deduplication by name: last declarator wins per masking/redefinition)
-	featureMap := make(map[string]EffectiveFeature)
-	seen := make(map[*symbols.Symbol]bool)
-
-	// Process members in order (local first, then inherited)
-	for _, memberSym := range allMembers {
-		// Dedupe by pointer (short+primary names alias the same symbol)
-		if seen[memberSym] {
-			continue
-		}
-		seen[memberSym] = true
-
-		// Only include features (attributes, parts, etc.)
-		if !isFeature(memberSym) {
-			continue
-		}
-		// The metamodel frame every element specializes is not a feature of the
-		// object the model asked for (see frameFeature).
-		if ctx.frameFeature(memberSym) {
-			continue
-		}
-		// A variant is a choice offered for its variation, not a feature of the
-		// object declaring it: it materializes no feature value of its own. A `variant`
-		// outside a variation offers no choice, so it stays an ordinary feature.
-		if ctx.model.VariationPointOwning(memberSym) != nil {
-			continue
-		}
-
-		name := memberSym.Name
+	shape := ctx.model.ShapeFeatures(typeSym)
+	result := make([]EffectiveFeature, 0, len(shape))
+	seenNames := make(map[string]bool, len(shape))
+	for _, f := range shape {
+		memberSym := f.Symbol
 		typ := ctx.extractType(memberSym)
 		mult := ctx.featureMultiplicity(memberSym, typeSym)
 		defaultVal := ctx.extractDefaultValue(memberSym)
@@ -118,54 +92,18 @@ func (ctx *Context) buildFeatures(typeSym *symbols.Symbol) []EffectiveFeature {
 		if defaultVal == nil {
 			defaultVal, defaultDecl = ctx.redefinedDefault(memberSym, typeSym)
 		}
-
-		// Determine owner type (walk up to find the declaration scope's owner)
-		ownerType := ctx.findOwnerType(memberSym)
-
-		// Store feature; last one wins (redefinition/masking)
-		featureMap[name] = EffectiveFeature{
-			Name:         name,
+		seenNames[f.Name] = true
+		result = append(result, EffectiveFeature{
+			Name:         f.Name,
 			Symbol:       memberSym,
-			OwnerType:    ownerType,
+			OwnerType:    ctx.findOwnerType(memberSym),
 			Type:         typ,
 			Multiplicity: mult,
 			DefaultValue: defaultVal,
 			DefaultDecl:  defaultDecl,
-		}
+		})
 	}
-
-	// Convert map to ordered list (stable order: iterate over allMembers and pick from map)
-	result := make([]EffectiveFeature, 0, len(featureMap))
-	seenNames := make(map[string]bool)
-	for _, memberSym := range allMembers {
-		name := memberSym.Name
-		if seenNames[name] {
-			continue
-		}
-		if feat, ok := featureMap[name]; ok {
-			result = append(result, feat)
-			seenNames[name] = true
-		}
-	}
-
 	return append(result, ctx.connectorEndFeatures(typeSym, seenNames)...)
-}
-
-// isFeature returns true if the symbol represents a structural feature (attribute, part, etc.).
-func isFeature(sym *symbols.Symbol) bool {
-	switch sym.Kind {
-	case symbols.SymbolAttributeUsage, symbols.SymbolPartUsage, symbols.SymbolItemUsage,
-		symbols.SymbolPortUsage, symbols.SymbolConnectionUsage, symbols.SymbolActionUsage,
-		symbols.SymbolStateUsage, symbols.SymbolConstraintUsage, symbols.SymbolRequirementUsage,
-		symbols.SymbolOccurrenceUsage, symbols.SymbolIndividualUsage,
-		symbols.SymbolInterfaceUsage, symbols.SymbolFlowUsage,
-		// An allocation usage is a connection usage of the allocation library
-		// (SysML v2 §8.3.19), so an object carries it as a feature.
-		symbols.SymbolAllocationUsage:
-		return true
-	default:
-		return false
-	}
 }
 
 // extractType resolves the type of a feature: the one it declares, or the one

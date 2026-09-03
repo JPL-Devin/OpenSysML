@@ -1032,17 +1032,17 @@ func (ctx *Context) materializeAccepted(msg Message) (Value, error) {
 		ctx.abandonInstancesSince(mark)
 		return Value{}, fmt.Errorf("materialize accepted %s: %w", msg.SignalType, err)
 	}
-	features := ctx.FeaturesOf(msg.Signal)
+	positional := ctx.model.ConstructibleFeatures(msg.Signal)
 	for name, value := range msg.Payload {
 		target := name
 		if _, held := inst.FeatureValues[name]; !held {
 			n := positionalArg(name)
-			if n == 0 || n > len(features) {
+			if n == 0 || n > len(positional) {
 				ctx.abandonInstancesSince(mark)
 				return Value{}, fmt.Errorf("accepted %s: %q names no feature it carries",
 					msg.SignalType, name)
 			}
-			target = features[n-1].Name
+			target = positional[n-1].Name
 		}
 		if err := inst.SetFeatureValue(ctx, target, value); err != nil {
 			ctx.abandonInstancesSince(mark)

@@ -111,8 +111,8 @@ func TestFrameFeatureClassifiesLibraryMembers(t *testing.T) {
 		"ShapeItems::RectangularCuboid::length":            false,
 		"test::P":                                          false,
 	} {
-		if got := ctx.frameFeature(oneSymbol(t, idx, fqn)); got != want {
-			t.Errorf("frameFeature(%s) = %v, want %v", fqn, got, want)
+		if got := ctx.model.FrameFeature(oneSymbol(t, idx, fqn)); got != want {
+			t.Errorf("FrameFeature(%s) = %v, want %v", fqn, got, want)
 		}
 	}
 }

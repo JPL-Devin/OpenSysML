@@ -151,11 +151,44 @@ func TestConstructorUnknownLabelIsReportedOnce(t *testing.T) {
 	}
 }
 
-// A constructed library type is left to the runtime; its features are the
-// library's, which the checker does not bind.
-func TestConstructorOfLibraryTypeIsSilent(t *testing.T) {
-	src := constructorModel(`private import Items::*; item i : Item = new Item();`)
-	if got := constructorDiags(t, src); len(got) != 0 {
+// Positional arguments bind the features an object of the type carries, in the
+// order the runtime holds them: a calc written between two attributes holds no
+// value and takes no position.
+func TestConstructorPositionsSkipCalcUsages(t *testing.T) {
+	frame := `item def Frame { attribute x : Integer; calc doubled { x * 2 } attribute y : String; } `
+	if got := constructorDiags(t, constructorModel(frame+`send new Frame(1, "hi") to ground;`)); len(got) != 0 {
 		t.Errorf("unexpected diagnostics: %+v", got)
+	}
+	src := constructorModel(frame + `send new Frame(1, 2) to ground;`)
+	assertOneConstructorDiag(t, src, constructorDiags(t, src), "2", "y of Frame expects String, found Natural")
+	src = constructorModel(frame + `send new Frame(1, "hi", 3) to ground;`)
+	assertOneConstructorDiag(t, src, constructorDiags(t, src), "3", "new Frame takes 2 argument(s), found 3")
+}
+
+// A constructed library type is checked like any other: the features its own
+// library declares for it bind by position or label, the kind's descriptors not.
+func TestConstructorOfLibraryTypeIsChecked(t *testing.T) {
+	silent := map[string]string{
+		"no arguments":     `private import Items::*; item i : Item = new Item();`,
+		"labelled feature": `private import AnalysisTooling::*; send new ToolExecution(toolName = "solver") to ground;`,
+		"value type":       `private import MeasurementReferences::*; attribute r = new Rotation(isIntrinsic = true);`,
+	}
+	for name, send := range silent {
+		t.Run(name, func(t *testing.T) {
+			if got := constructorDiags(t, constructorModel(send)); len(got) != 0 {
+				t.Errorf("unexpected diagnostics: %+v", got)
+			}
+		})
+	}
+	reported := map[string]struct{ send, at, want string }{
+		"positional":   {send: `private import AnalysisTooling::*; send new ToolExecution("solver", "file:///solver", "extra") to ground;`, at: `"extra"`, want: "new ToolExecution takes 2 argument(s), found 3"},
+		"incompatible": {send: `private import AnalysisTooling::*; send new ToolExecution(toolName = 3) to ground;`, at: "3", want: "toolName of ToolExecution expects String, found Natural"},
+		"value type":   {send: `private import MeasurementReferences::*; attribute r = new Rotation(isIntrinsic = "yes");`, at: `"yes"`, want: "isIntrinsic of Rotation expects Boolean, found String"},
+	}
+	for name, c := range reported {
+		t.Run(name, func(t *testing.T) {
+			src := constructorModel(c.send)
+			assertOneConstructorDiag(t, src, constructorDiags(t, src), c.at, c.want)
+		})
 	}
 }

@@ -742,11 +742,11 @@ func (ec *exprChecker) inferConstructor(scope *symbols.Scope, e *ast.Constructor
 	if e.Type == nil {
 		return semantics.PrimUnknown
 	}
-	typ, idx := ec.resolveTarget(scope, e.Type), ec.resolver.Index()
-	if typ == nil || idx == nil || idx.Library(typ) {
+	typ := ec.resolveTarget(scope, e.Type)
+	if typ == nil {
 		return semantics.PrimUnknown
 	}
-	features := ec.constructedFeatures(typ, idx)
+	features := ec.model.ConstructibleFeatures(typ)
 	bound := make(map[*symbols.Symbol]bool, len(features))
 	for i, arg := range e.Args {
 		if i >= len(features) {
@@ -803,31 +803,6 @@ func (ec *exprChecker) memberOf(typ, feature *symbols.Symbol) bool {
 		}
 	}
 	return false
-}
-
-// constructedFeatures returns the features a constructor's positional
-// arguments bind, in the order the runtime shape lists them: the type's own
-// features first, then the inherited ones, without those the library declares
-// for every element.
-func (ec *exprChecker) constructedFeatures(typ *symbols.Symbol, idx *symbols.Index) []*symbols.Symbol {
-	var features []*symbols.Symbol
-	seen := map[*symbols.Symbol]bool{}
-	names := map[string]bool{}
-	for _, m := range ec.model.MembersOf(typ) {
-		if seen[m] || names[m.Name] {
-			continue
-		}
-		seen[m] = true
-		if _, isUsage := m.Decl.(*ast.Usage); !isUsage || idx.Library(m) {
-			continue
-		}
-		if ec.model.VariationPointOwning(m) != nil {
-			continue
-		}
-		names[m.Name] = true
-		features = append(features, m)
-	}
-	return features
 }
 
 // isBehaviorKind reports the behavior kinds whose parameter lists are checked.

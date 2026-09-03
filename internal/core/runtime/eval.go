@@ -534,7 +534,7 @@ func (ec *EvalContext) resolvedWithoutValue(sym *symbols.Symbol, qn *ast.Qualifi
 		)
 	}
 	// A usage of any kind — a subject or a state included — is a feature.
-	if _, usage := sym.Decl.(*ast.Usage); usage || isFeature(sym) {
+	if _, usage := sym.Decl.(*ast.Usage); usage || semantics.IsShapeFeature(sym) {
 		return &NoValueError{Feature: spelled, Ref: qn}
 	}
 	return fmt.Errorf("cannot evaluate %s %s", sym.Kind, spelled)
