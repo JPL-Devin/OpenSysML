@@ -2,6 +2,7 @@ package queryplan
 
 import (
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -47,13 +48,23 @@ const (
 	stateDone
 )
 
+// compiledSignature memoizes one query's inputs, result, and the queries its
+// defaults invoke.
+type compiledSignature struct {
+	params       []Parameter
+	result       Parameter
+	dependencies []string
+}
+
 type compiler struct {
-	index       *symbols.Index
-	model       *semantics.Model
-	resolver    *resolve.Resolver
-	state       map[*symbols.Symbol]compileState
-	stack       []*symbols.Symbol
-	definitions []Definition
+	index          *symbols.Index
+	model          *semantics.Model
+	resolver       *resolve.Resolver
+	state          map[*symbols.Symbol]compileState
+	signatureState map[*symbols.Symbol]compileState
+	signatures     map[*symbols.Symbol]compiledSignature
+	stack          []*symbols.Symbol
+	definitions    []Definition
 }
 
 // IsQueryDefinition reports whether sym specializes DocumentQueries::Query.
@@ -77,10 +88,12 @@ func Compile(index *symbols.Index, model *semantics.Model, resolver *resolve.Res
 		return nil, &Error{Kind: ErrorNotQueryDefinition, Query: name, Origin: provenance.Symbol(entry)}
 	}
 	c := &compiler{
-		index:    index,
-		model:    model,
-		resolver: resolver,
-		state:    make(map[*symbols.Symbol]compileState),
+		index:          index,
+		model:          model,
+		resolver:       resolver,
+		state:          make(map[*symbols.Symbol]compileState),
+		signatureState: make(map[*symbols.Symbol]compileState),
+		signatures:     make(map[*symbols.Symbol]compiledSignature),
 	}
 	if err := c.compileDefinition(entry); err != nil {
 		return nil, err
@@ -107,7 +120,6 @@ func (c *compiler) compileDefinition(sym *symbols.Symbol) error {
 		return c.cycleError(sym)
 	}
 	c.state[sym] = stateVisiting
-	c.stack = append(c.stack, sym)
 
 	dependencies := make([]string, 0)
 	seenDependencies := make(map[string]bool)
@@ -121,6 +133,7 @@ func (c *compiler) compileDefinition(sym *symbols.Symbol) error {
 	if err != nil {
 		return err
 	}
+	c.stack = append(c.stack, sym)
 	if result.Name == "" {
 		return &Error{
 			Kind:   ErrorMissingResultParameter,
@@ -150,10 +163,45 @@ func (c *compiler) compileDefinition(sym *symbols.Symbol) error {
 	return nil
 }
 
-// signature compiles sym's effective inputs and result. Input defaults are
-// compiled in the scope that declared them; dependency records the queries
-// those defaults invoke.
+// signature compiles sym's inputs and result once, recording the queries its
+// defaults invoke; re-entering it through a default is a composition cycle.
 func (c *compiler) signature(sym *symbols.Symbol, dependency func(string)) ([]Parameter, Parameter, error) {
+	switch c.signatureState[sym] {
+	case stateDone:
+		cached := c.signatures[sym]
+		for _, name := range cached.dependencies {
+			dependency(name)
+		}
+		return cloneParameters(cached.params), cached.result, nil
+	case stateVisiting:
+		return nil, Parameter{}, c.cycleError(sym)
+	}
+	c.signatureState[sym] = stateVisiting
+	c.stack = append(c.stack, sym)
+
+	var dependencies []string
+	record := func(name string) {
+		if !slices.Contains(dependencies, name) {
+			dependencies = append(dependencies, name)
+		}
+		dependency(name)
+	}
+	params, result, err := c.compileSignature(sym, record)
+	if err != nil {
+		return nil, Parameter{}, err
+	}
+
+	c.stack = c.stack[:len(c.stack)-1]
+	c.signatureState[sym] = stateDone
+	c.signatures[sym] = compiledSignature{
+		params:       cloneParameters(params),
+		result:       result,
+		dependencies: dependencies,
+	}
+	return params, result, nil
+}
+
+func (c *compiler) compileSignature(sym *symbols.Symbol, dependency func(string)) ([]Parameter, Parameter, error) {
 	effective := c.model.BehaviorParametersOf(sym)
 	params := make([]Parameter, 0, len(effective))
 	inputs := make([]*symbols.Symbol, 0, len(effective))
@@ -677,9 +725,11 @@ func (c *compiler) compileInvocation(
 		}
 	}
 
+	call := provenance.Node(owner.DocName, expression)
+	closesCycle := c.signatureState[target] == stateVisiting
 	targetParams, targetResult, err := c.signature(target, ignoreDependency)
 	if err != nil {
-		return typedExpression{}, err
+		return typedExpression{}, closeCycle(err, closesCycle, call)
 	}
 	args, err := c.compileNamedArguments(
 		query,
@@ -694,12 +744,9 @@ func (c *compiler) compileInvocation(
 		return typedExpression{}, err
 	}
 	dependency(targetName)
-	closesCycle := c.state[target] == stateVisiting
+	closesCycle = c.state[target] == stateVisiting
 	if err := c.compileDefinition(target); err != nil {
-		if planning, ok := err.(*Error); ok && planning.Kind == ErrorCompositionCycle && closesCycle {
-			planning.Origin = provenance.Node(owner.DocName, expression)
-		}
-		return typedExpression{}, err
+		return typedExpression{}, closeCycle(err, closesCycle, call)
 	}
 	return typedExpression{
 		expression: Expression{
@@ -858,6 +905,14 @@ func (c *compiler) compileNamedArguments(
 		args = append(args, Argument{Name: param.Name, Named: true, Value: value.expression})
 	}
 	return args, nil
+}
+
+// closeCycle relocates a composition cycle to the invocation that closed it.
+func closeCycle(err error, closes bool, call provenance.Origin) error {
+	if planning, ok := err.(*Error); ok && planning.Kind == ErrorCompositionCycle && closes {
+		planning.Origin = call
+	}
+	return err
 }
 
 func (c *compiler) cycleError(target *symbols.Symbol) error {

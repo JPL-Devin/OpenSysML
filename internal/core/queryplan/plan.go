@@ -131,8 +131,12 @@ func (d Definition) Name() string { return d.name }
 
 // Parameters returns the definition's ordered effective inputs.
 func (d Definition) Parameters() []Parameter {
-	out := make([]Parameter, len(d.parameters))
-	for i, parameter := range d.parameters {
+	return cloneParameters(d.parameters)
+}
+
+func cloneParameters(parameters []Parameter) []Parameter {
+	out := make([]Parameter, len(parameters))
+	for i, parameter := range parameters {
 		out[i] = parameter.clone()
 	}
 	return out

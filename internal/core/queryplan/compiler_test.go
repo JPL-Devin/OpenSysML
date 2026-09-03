@@ -444,6 +444,45 @@ calc def CycleC :> Query { in subsystem : Element; CycleA(subsystem = subsystem)
 			path: []string{"Fixture::CycleA", "Fixture::CycleB", "Fixture::CycleC", "Fixture::CycleA"},
 			call: "CycleA(subsystem = subsystem)",
 		},
+		{
+			name: "default invokes its own query",
+			body: `
+calc def SelfDefault :> Query {
+	in candidates : Element[0..*] = SelfDefault();
+	OwnedElements(source = candidates)
+}`,
+			root: "SelfDefault",
+			path: []string{"Fixture::SelfDefault", "Fixture::SelfDefault"},
+			call: "SelfDefault()",
+		},
+		{
+			name: "default invokes the query being compiled",
+			body: `
+calc def Outer :> Query { in subsystem : Element; Inner(subsystem = subsystem) }
+calc def Inner :> Query {
+	in subsystem : Element;
+	in candidates : Element[0..*] = Outer(subsystem = subsystem);
+	OwnedElements(source = candidates)
+}`,
+			root: "Outer",
+			path: []string{"Fixture::Outer", "Fixture::Inner", "Fixture::Outer"},
+			call: "Outer(subsystem = subsystem)",
+		},
+		{
+			name: "defaults invoke each other",
+			body: `
+calc def DefaultA :> Query {
+	in candidates : Element[0..*] = DefaultB();
+	OwnedElements(source = candidates)
+}
+calc def DefaultB :> Query {
+	in candidates : Element[0..*] = DefaultA();
+	OwnedElements(source = candidates)
+}`,
+			root: "DefaultA",
+			path: []string{"Fixture::DefaultA", "Fixture::DefaultB", "Fixture::DefaultA"},
+			call: "DefaultA()",
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
