@@ -116,19 +116,11 @@ func (s *Session) owningInstance(fqn string) (*runtime.Instance, string) {
 // segments walked through that instance's feature values, since a nested part is an
 // object of its own. The second result is the found object's FQN, for reporting.
 func (s *Session) objectNamed(fqn string) (*runtime.Instance, string) {
-	if fqn == "" {
+	inst, name, err := s.objectAt(fqn)
+	if err != nil || inst == nil {
 		return nil, ""
 	}
-	segments := strings.Split(fqn, "::")
-	for i := len(segments); i > 0; i-- {
-		key := strings.Join(segments[:i], "::")
-		inst, ok := s.instances[key]
-		if !ok {
-			continue
-		}
-		return s.walkFeatureValues(inst, key, segments[i:])
-	}
-	return nil, ""
+	return inst, name
 }
 
 // featureChainSymbol resolves a qualified name whose later segments are members
@@ -218,6 +210,22 @@ func (s *Session) carrierInstances(sym *symbols.Symbol) []string {
 	}
 	model := ctx.Model()
 	var names []string
+	// A feature is read from the outermost object carrying it; its own nested
+	// objects are of other types and are not searched again.
+	s.walkObjects(nestedObjectsIn(ctx), func(cur carrier) bool {
+		if !carriesDeclaration(model, cur.inst.Type, declaring.Decl) {
+			return true
+		}
+		names = append(names, cur.name)
+		return false
+	})
+	sort.Strings(names)
+	return names
+}
+
+// walkObjects visits the session's objects and, while visit reports true, the
+// objects nested yields for them, breadth-first in name order and within carrierLimit.
+func (s *Session) walkObjects(nested func(carrier) []carrier, visit func(carrier) bool) {
 	seen := make(map[int64]bool, len(s.instances))
 	queue := make([]carrier, 0, len(s.instances))
 	for name, inst := range s.instances {
@@ -233,16 +241,10 @@ func (s *Session) carrierInstances(sym *symbols.Symbol) []string {
 			continue
 		}
 		seen[cur.inst.ID] = true
-		if carriesDeclaration(model, cur.inst.Type, declaring.Decl) {
-			names = append(names, cur.name)
-			// A feature is read from the outermost object carrying it; its own
-			// nested objects are of other types and are not searched again.
-			continue
+		if visit(cur) {
+			queue = append(queue, nested(cur)...)
 		}
-		queue = append(queue, nestedObjects(ctx, cur)...)
 	}
-	sort.Strings(names)
-	return names
 }
 
 // carrier is an object reachable from the session's objects, under the
@@ -252,32 +254,103 @@ type carrier struct {
 	inst *runtime.Instance
 }
 
-// nestedObjects returns the objects held in an object's feature values, in feature-value-name
-// order, each under the name it is reached by.
-func nestedObjects(ctx *runtime.Context, of carrier) []carrier {
+// nestedObjectsIn yields the objects held in an object's feature values, in
+// feature-value-name order, each under the name it is reached by. A part feature
+// value holds its object only once it is asked for, so asking materializes it.
+func nestedObjectsIn(ctx *runtime.Context) func(carrier) []carrier {
+	return func(of carrier) []carrier {
+		return nestedObjects(ctx, of, func(name string) (*runtime.FeatureValue, bool) {
+			fv, err := of.inst.GetFeatureValue(ctx, name)
+			return fv, err == nil && fv != nil
+		})
+	}
+}
+
+// materializedObjectsIn yields only the objects an object's feature values already
+// hold, so a walk over them leaves the runtime as it found it.
+func materializedObjectsIn(ctx *runtime.Context) func(carrier) []carrier {
+	return func(of carrier) []carrier {
+		return nestedObjects(ctx, of, func(name string) (*runtime.FeatureValue, bool) {
+			fv := of.inst.FeatureValues[name]
+			return fv, fv != nil && fv.Materialized
+		})
+	}
+}
+
+// nestedObjects returns the objects held in the feature values read yields, each once, in
+// feature-value-name order, under the first path holding it alone, else its `#<n>` identity.
+func nestedObjects(ctx *runtime.Context, of carrier, read func(string) (*runtime.FeatureValue, bool)) []carrier {
 	fvs := make([]string, 0, len(of.inst.FeatureValues))
 	for name := range of.inst.FeatureValues {
 		fvs = append(fvs, name)
 	}
 	sort.Strings(fvs)
-	out := make([]carrier, 0, len(fvs))
+	_, byIdentity := objectID(of.name)
+	type held struct {
+		child *runtime.Instance
+		alone string
+	}
+	var order []int64
+	reached := make(map[int64]*held)
+	reach := func(child *runtime.Instance, alone string) {
+		h := reached[child.ID]
+		if h == nil {
+			h = &held{child: child}
+			reached[child.ID] = h
+			order = append(order, child.ID)
+		}
+		if h.alone == "" {
+			h.alone = alone
+		}
+	}
 	for _, name := range fvs {
-		// A part feature value holds its object only once it is asked for.
-		fv, err := of.inst.GetFeatureValue(ctx, name)
-		if err != nil || fv == nil {
+		fv, ok := read(name)
+		if !ok {
 			continue
 		}
-		id, isObject := fv.Value.Object()
-		if !isObject {
+		if fv.Values.Kind == runtime.ValInvalid {
+			if child, ok := heldInstance(ctx, fv.Value); ok {
+				reach(child, name)
+			}
 			continue
 		}
-		child, ok := ctx.Instance(id)
-		if !ok || child == nil {
-			continue
+		for _, member := range collectionElements(fv.Values) {
+			if child, ok := heldInstance(ctx, member); ok {
+				reach(child, "")
+			}
 		}
-		out = append(out, carrier{name: of.name + "::" + name, inst: child})
+	}
+	out := make([]carrier, 0, len(order))
+	for _, id := range order {
+		h := reached[id]
+		name := fmt.Sprintf("#%d", id)
+		if h.alone != "" && !byIdentity {
+			name = of.name + "::" + h.alone
+		}
+		out = append(out, carrier{name: name, inst: h.child})
 	}
 	return out
+}
+
+// heldInstance is the session object a value denotes, if it denotes one.
+func heldInstance(ctx *runtime.Context, v runtime.Value) (*runtime.Instance, bool) {
+	id, isObject := v.Object()
+	if !isObject {
+		return nil, false
+	}
+	child, ok := ctx.Instance(id)
+	return child, ok && child != nil
+}
+
+// collectionElements are the members of a sequence or set value, in its order.
+func collectionElements(v runtime.Value) []runtime.Value {
+	if seq := v.Sequence(); seq != nil {
+		return seq.Elements()
+	}
+	if set := v.Set(); set != nil {
+		return set.Elements()
+	}
+	return nil
 }
 
 // AmbiguousSubjectError reports a feature or condition several of the session's
@@ -306,43 +379,14 @@ func (s *Session) subjectFor(name, fqn string, sym *symbols.Symbol) (*runtime.In
 		return nil, "", nil
 	case 1:
 		// A carrier may be nested, so it is reached the way any object name is.
-		inst, owner := s.objectNamed(carriers[0])
-		if inst == nil {
+		inst, ok := s.heldObject(carriers[0])
+		if !ok || inst == nil {
 			return nil, "", nil
 		}
-		return inst, owner, nil
+		return inst, carriers[0], nil
 	default:
 		return nil, "", &AmbiguousSubjectError{Name: name, Carriers: carriers}
 	}
-}
-
-// walkFeatureValues follows a chain of part feature values from inst. An unwalkable segment
-// yields no object, since binding to an ancestor would answer about the wrong one.
-func (s *Session) walkFeatureValues(inst *runtime.Instance, name string, segments []string) (*runtime.Instance, string) {
-	if len(segments) == 0 {
-		return inst, name
-	}
-	ctx, err := s.getOrCreateRuntime()
-	if err != nil {
-		return nil, ""
-	}
-	for _, seg := range segments {
-		fv, serr := inst.GetFeatureValue(ctx, seg)
-		if serr != nil || fv == nil {
-			return nil, ""
-		}
-		// A variation feature value holds the object of the variant it selected.
-		id, isObject := fv.Value.Object()
-		if !isObject {
-			return nil, ""
-		}
-		child, ok := ctx.Instance(id)
-		if !ok {
-			return nil, ""
-		}
-		inst, name = child, name+"::"+seg
-	}
-	return inst, name
 }
 
 // unresolvedError reports a name nothing declares, in the wording every surface
