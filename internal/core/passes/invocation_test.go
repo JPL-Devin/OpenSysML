@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
@@ -13,7 +14,10 @@ import (
 // the name-resolution and type diagnostics, which is what a call reports.
 func libraryDiags(t *testing.T, src string) []Diagnostic {
 	t.Helper()
-	root := parser.New(source.New("<t>", []byte(src))).ParseFile()
+	return libraryDiagsOf(parser.New(source.New("<t>", []byte(src))).ParseFile())
+}
+
+func libraryDiagsOf(root *ast.RootNamespace) []Diagnostic {
 	idx := newTestIndex()
 	idx.AddDocument("<t>", root)
 	idx.ExpandWildcardImports()
@@ -336,6 +340,39 @@ func TestInvocationPerformedActionSelectsAmongActions(t *testing.T) {
 	`
 	wantLibraryClean(t, fmt.Sprintf(actions, "Real"))
 	wantLibraryDiag(t, fmt.Sprintf(actions, "String"), "type.expr", "argument 1 of tag expects String, found Natural")
+}
+
+// An action usage's value that names only calcs, one or several, performs no
+// action: the checker refuses it as the runtime does, and a call that names no
+// behavior at all keeps its own diagnostic.
+func TestInvocationPerformedActionMustNameAnAction(t *testing.T) {
+	const calcs = `
+		package A {
+			private import ScalarValues::*;
+			calc def tag { in x : Integer; return : Integer = x + 1; }
+		}
+		package B {
+			private import ScalarValues::*;
+			calc def tag { in x : String; return : Integer = 2; }
+		}
+		package test {
+			private import ScalarValues::*;
+			private import A::*;
+			%s
+			part def Wheel;
+			action def Outer {
+				first start;
+				action call = %s;
+				done;
+				succession first start then call;
+				succession first call then done;
+			}
+		}
+	`
+	for _, imports := range []string{``, `private import B::*;`} {
+		wantLibraryDiag(t, fmt.Sprintf(calcs, imports, `tag(3)`), "usage-reference-kind", "Must reference an action.")
+	}
+	wantLibraryDiag(t, fmt.Sprintf(calcs, ``, `Wheel()`), "invocation-not-behavior", "Must invoke a behavior or a behavioral feature")
 }
 
 // Function libraries are not implicitly imported: a bare call to any library function

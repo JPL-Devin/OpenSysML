@@ -122,13 +122,11 @@ func (h *stateStmtHost) effect(s lower.Effect) error {
 func performedInvocation(node ast.Node) (actionInvocation, bool) {
 	switch n := node.(type) {
 	case *ast.PerformActionNode:
-		switch ref := n.ActionRef.(type) {
-		case *ast.QualifiedName:
-			return actionInvocation{target: ref}, true
-		case *ast.InvocationExpr:
-			if ref.Type != nil {
-				return expressionInvocation(ref), true
-			}
+		if inv := n.PerformedInvocation(); inv != nil {
+			return expressionInvocation(inv), true
+		}
+		if qn, ok := n.ActionRef.(*ast.QualifiedName); ok {
+			return actionInvocation{target: qn}, true
 		}
 	case *ast.Usage:
 		return nestedInvocation(n)

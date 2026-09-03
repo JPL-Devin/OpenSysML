@@ -58,13 +58,25 @@ func (ec *exprChecker) checkUsageValue(scope *symbols.Scope, u *ast.Usage) {
 	if u.Value == nil {
 		return
 	}
-	if inv := u.PerformedInvocation(); inv != nil {
-		if ec.performed == nil {
-			ec.performed = map[*ast.InvocationExpr]bool{}
-		}
-		ec.performed[inv] = true
-	}
+	ec.markPerformed(u.PerformedInvocation())
 	ec.checkBoundValue(scope, scope, u, u.Value)
+}
+
+// checkPerform types the action a `perform` statement runs.
+func (ec *exprChecker) checkPerform(scope *symbols.Scope, n *ast.PerformActionNode) {
+	ec.markPerformed(n.PerformedInvocation())
+	ec.infer(scope, n.ActionRef)
+}
+
+// markPerformed records inv, when not nil, as a call that runs an action.
+func (ec *exprChecker) markPerformed(inv *ast.InvocationExpr) {
+	if inv == nil {
+		return
+	}
+	if ec.performed == nil {
+		ec.performed = map[*ast.InvocationExpr]bool{}
+	}
+	ec.performed[inv] = true
 }
 
 // checkBoundValue checks a value against the type and multiplicity of the
@@ -640,7 +652,8 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 		}
 		return semantics.PrimUnknown
 	}
-	sel := ec.selectInvocation(scope, e, argTypes, ec.performs(e))
+	performs := ec.performs(e)
+	sel := ec.selectInvocation(scope, e, argTypes, performs)
 	if !sel.Resolved() {
 		return semantics.PrimUnknown
 	}
@@ -672,6 +685,18 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 				Source:   "type",
 			})
 		}
+		return semantics.PrimUnknown
+	}
+	// A performed call runs its behavior, so it must name an action (SysML v2
+	// §8.3.16.7 validatePerformActionUsage), as the runtime requires.
+	if performs == semantics.PerformsAction && !performs.Performable(sym) {
+		ec.diags = append(ec.diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     e.Type.Span(),
+			Message:  msgReferenceAction,
+			Code:     "usage-reference-kind",
+			Source:   "type",
+		})
 		return semantics.PrimUnknown
 	}
 	if isInvocationBehaviorKind(sym.Kind) && !isBehaviorKind(sym.Kind) {
