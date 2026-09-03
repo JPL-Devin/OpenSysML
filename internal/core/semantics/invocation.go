@@ -30,12 +30,41 @@ func (m *Model) SetArgumentTyper(t ArgumentTyper) {
 	m.arguments = t
 }
 
+// SelectCall selects what e calls, its arguments typed as the checker types them; with no
+// checker's typing installed the arguments are unknown, so arity and names alone decide.
+func (m *Model) SelectCall(scope *symbols.Scope, e *ast.InvocationExpr, performs Performs) *InvocationSelection {
+	if m == nil || e == nil {
+		return &InvocationSelection{}
+	}
+	if m.arguments != nil {
+		return m.SelectInvocation(scope, e, m.arguments.InvocationArguments(scope, e), performs)
+	}
+	return m.SelectInvocation(scope, e, untypedArguments(e), performs)
+}
+
+// untypedArguments lists e's arguments, the receiver first, with nothing known of their types.
+func untypedArguments(e *ast.InvocationExpr) []Argument {
+	args := make([]Argument, 0, len(e.Args)+len(e.NamedArgs)+1)
+	if e.Operand != nil {
+		args = append(args, Argument{})
+	}
+	for range e.Args {
+		args = append(args, Argument{})
+	}
+	for _, arg := range e.NamedArgs {
+		if arg.Name != nil && len(arg.Name.Parts) == 1 {
+			args = append(args, Argument{Name: arg.Name.Parts[0].Text})
+		}
+	}
+	return args
+}
+
 // Performs is what a call site does with the declaration it names, which
 // decides the kinds of declaration it may select.
 type Performs int
 
 const (
-	// PerformsBehavior evaluates an expression: any behavior answers.
+	// PerformsBehavior evaluates an expression: any behavior answers, a calc preferred.
 	PerformsBehavior Performs = iota
 	// PerformsAction runs an action, as `action a = tag(x);` does: only actions answer.
 	PerformsAction
@@ -47,15 +76,37 @@ func (m *Model) Performable(p Performs, sym *symbols.Symbol) bool {
 	if p == PerformsAction {
 		return sym.Kind == symbols.SymbolActionDef || sym.Kind == symbols.SymbolActionUsage
 	}
+	return m.performs(sym, behaviorLike)
+}
+
+// evaluates reports whether calling sym yields a result: it is a calc (a KerML
+// function), or a feature typed by one, which is what an expression evaluates.
+func (m *Model) evaluates(sym *symbols.Symbol) bool {
+	return m.performs(sym, calcLike)
+}
+
+// performs reports whether sym, or a behavior it is typed by, satisfies is.
+func (m *Model) performs(sym *symbols.Symbol, is func(*symbols.Symbol) bool) bool {
 	visited := map[*symbols.Symbol]bool{}
 	for sym != nil && !visited[sym] {
-		if behaviorLike(sym) {
+		if is(sym) {
 			return true
 		}
 		visited[sym] = true
 		sym = m.featureType(sym)
 	}
 	return false
+}
+
+// calcLike reports whether sym declares a calc (a KerML function).
+func calcLike(sym *symbols.Symbol) bool {
+	switch d := sym.Decl.(type) {
+	case *ast.Definition:
+		return d.Kind == ast.DefCalc
+	case *ast.Usage:
+		return d.Kind == ast.UsageCalc
+	}
+	return sym.Kind == symbols.SymbolCalcDef || sym.Kind == symbols.SymbolCalcUsage
 }
 
 // InvocationSelection is which declaration an invocation calls, out of every
@@ -144,6 +195,11 @@ func (m *Model) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, ar
 		return sel
 	}
 	sel.callable = behaviors[0]
+	if performs == PerformsBehavior {
+		if calcs := filterSymbols(behaviors, m.evaluates); len(calcs) > 0 {
+			sel.callable = calcs[0]
+		}
+	}
 
 	signatures := make([]invocationSignature, len(behaviors))
 	for i, c := range behaviors {
@@ -155,6 +211,9 @@ func (m *Model) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, ar
 	strict := len(applicable) > 0
 	if !strict {
 		applicable, sigs, fits = m.filterApplicable(behaviors, signatures, args, bindLoose)
+	}
+	if performs == PerformsBehavior {
+		applicable, sigs, fits = m.preferCalcs(applicable, sigs, fits)
 	}
 	sel.Applicable = applicable
 	switch len(applicable) {
@@ -223,6 +282,25 @@ func (m *Model) filterApplicable(cands []*symbols.Symbol, sigs []invocationSigna
 			outSigs = append(outSigs, sig)
 			outFits = append(outFits, fit)
 		}
+	}
+	return outCands, outSigs, outFits
+}
+
+// preferCalcs keeps only the calcs among applicable candidates, when there is one: an
+// expression evaluates to a calc's result, which an action or other behavior has none of.
+func (m *Model) preferCalcs(cands []*symbols.Symbol, sigs []invocationSignature, fits []bindFit) ([]*symbols.Symbol, []invocationSignature, []bindFit) {
+	var outCands []*symbols.Symbol
+	var outSigs []invocationSignature
+	var outFits []bindFit
+	for i, c := range cands {
+		if m.evaluates(c) {
+			outCands = append(outCands, c)
+			outSigs = append(outSigs, sigs[i])
+			outFits = append(outFits, fits[i])
+		}
+	}
+	if len(outCands) == 0 {
+		return cands, sigs, fits
 	}
 	return outCands, outSigs, outFits
 }
@@ -538,4 +616,14 @@ func containsSymbol(syms []*symbols.Symbol, sym *symbols.Symbol) bool {
 		}
 	}
 	return false
+}
+
+func filterSymbols(syms []*symbols.Symbol, keep func(*symbols.Symbol) bool) []*symbols.Symbol {
+	var out []*symbols.Symbol
+	for _, s := range syms {
+		if keep(s) {
+			out = append(out, s)
+		}
+	}
+	return out
 }

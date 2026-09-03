@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -1557,6 +1558,45 @@ func TestActionSendCallsFunctionImportedByNestedAction(t *testing.T) {
 	assertIntOutput(t, outputs, "got", 3)
 	if pending := ctx.PendingMessages(); len(pending) != 0 {
 		t.Errorf("expected no message left in flight, got %v", pending)
+	}
+}
+
+// A send naming both a signal and a calc calls the calc, whichever import
+// brought it into view first: the value it computes is what travels.
+func TestActionSendCallsACalcSharingASignalsName(t *testing.T) {
+	const src = `
+		package A { item def Count; }
+		package B { private import ScalarValues::*; calc def Count { in xs : Integer[0..*]; return : Integer = 3; } }
+		package P {
+			private import ScalarValues::*;
+			%s
+			action pipeline {
+				attribute got : Integer = 0;
+				first start;
+				action sender { send Count((1, 2, 3)) to reader; }
+				action reader accept n : Integer;
+				action recorder { assign got := n; }
+				done;
+				succession first start then sender;
+				succession first sender then reader;
+				succession first reader then recorder;
+				succession first recorder then done;
+			}
+		}`
+	for _, imports := range []string{
+		"private import A::*; private import B::*;",
+		"private import B::*; private import A::*;",
+	} {
+		idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, fmt.Sprintf(src, imports)))
+		sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+		if sym == nil {
+			t.Fatal("action pipeline not found")
+		}
+		outputs, err := ctx.ExecuteAction(sym)
+		if err != nil {
+			t.Fatalf("%s: execute action: %v", imports, err)
+		}
+		assertIntOutput(t, outputs, "got", 3)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -967,8 +968,8 @@ func positionalArg(name string) int {
 	return n
 }
 
-// invokesCalc reports whether an invocation calls a calculation — a calc
-// declaration or a library function — rather than naming a signal to send.
+// invokesCalc reports whether an invocation calls a calculation — the declaration
+// evaluating it would select — rather than naming a signal to send.
 func (e *EvalContext) invokesCalc(scope *symbols.Scope, invocation *ast.InvocationExpr) bool {
 	if invocation.Type == nil {
 		return false
@@ -976,11 +977,11 @@ func (e *EvalContext) invokesCalc(scope *symbols.Scope, invocation *ast.Invocati
 	if e.ctx == nil || e.ctx.resolver == nil || scope == nil {
 		return false
 	}
-	sym, ok := e.ctx.resolver.ResolveQualified(scope, invocation.Type)
-	if !ok {
-		return false
+	sel := passes.SelectInvocation(e.ctx.resolver, e.ctx.model, scope, invocation, semantics.PerformsBehavior)
+	if sel.Ambiguous {
+		return true
 	}
-	return isCalcSymbol(sym)
+	return isCalcSymbol(sel.Called())
 }
 
 // buildInvokedMessage builds the message of a send written as an invocation.

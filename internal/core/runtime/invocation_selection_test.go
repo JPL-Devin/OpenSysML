@@ -22,6 +22,7 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("calc_call_fits_no_visible_candidate_behind_a_non_callable", testCalcCallFitsNoVisibleCandidateBehindANonCallable)
 	t.Run("calc_call_selects_by_argument_type", testCalcCallSelectsByArgumentType)
 	t.Run("calc_call_selects_a_feature_typed_by_a_calc", testCalcCallSelectsAFeatureTypedByACalc)
+	t.Run("calc_call_selects_a_calc_over_a_more_specific_action", testCalcCallSelectsACalcOverAMoreSpecificAction)
 	t.Run("global_root_call_selects_by_argument_type", testGlobalRootCallSelectsByArgumentType)
 	t.Run("bare_call_selects_among_other_documents_root_declarations", testBareCallSelectsAmongOtherDocumentsRootDeclarations)
 	t.Run("bare_call_reaches_private_root_declarations_of_other_documents", testBareCallReachesPrivateRootDeclarationsOfOtherDocuments)
@@ -655,6 +656,48 @@ func testCalcCallSelectsAFeatureTypedByACalc(t *testing.T) {
 		}
 		if result.Kind != ValConst || result.Const.Int != tc.want {
 			t.Fatalf("%s = %+v, want %d", tc.calc, result, tc.want)
+		}
+	}
+}
+
+// An evaluated call runs a calc: a same-named action whose input fits the argument
+// more closely is not a candidate, whichever import names it first; a name only
+// actions declare is still refused as not a calc.
+func testCalcCallSelectsACalcOverAMoreSpecificAction(t *testing.T) {
+	const src = `
+		package A { private import ScalarValues::*; action def pick { in x : Integer; out r : Integer; } }
+		package B { private import ScalarValues::*; calc def pick { in x : Real; return : Integer = 2; } }
+		package test {
+			private import ScalarValues::*;
+			%s
+			calc choose { in v : Integer; pick(v) }
+			calc chooseAction { in v : Integer; A::pick(v) }
+		}
+	`
+	three := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}
+	for _, imports := range []string{
+		"private import A::*; private import B::*;",
+		"private import B::*; private import A::*;",
+	} {
+		idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, fmt.Sprintf(src, imports)))
+		rootScope := idx.DocumentRoot("<test>")
+		choose := findSymbolByName(rootScope, "choose", ast.DefCalc)
+		if choose == nil {
+			t.Fatal("choose calc not found")
+		}
+		result, err := ctx.InvokeCalc(choose, []Value{three}, rootScope)
+		if err != nil {
+			t.Fatalf("%s: pick(3): %v", imports, err)
+		}
+		if result.Kind != ValConst || result.Const.Int != 2 {
+			t.Fatalf("%s: pick(3) = %+v, want 2 from B::pick", imports, result)
+		}
+		chooseAction := findSymbolByName(rootScope, "chooseAction", ast.DefCalc)
+		if chooseAction == nil {
+			t.Fatal("chooseAction calc not found")
+		}
+		if _, err := ctx.InvokeCalc(chooseAction, []Value{three}, rootScope); !errors.Is(err, ErrNotACalc) {
+			t.Fatalf("%s: A::pick(3) error = %v, want ErrNotACalc", imports, err)
 		}
 	}
 }
