@@ -178,8 +178,8 @@ func checkDocument(root, content string, base *Baseline) error {
 	seen := make(map[string]int, len(rows))
 	var problems []string
 	for _, r := range rows {
-		name := strings.Trim(r.Cells[0], "`")
-		if name == r.Cells[0] || name == "" {
+		name, ok := backticked(r.Cells[0])
+		if !ok {
 			problems = append(problems, fmt.Sprintf("line %d: the constraint cell %q is not a backticked name", r.Line, r.Cells[0]))
 			continue
 		}
@@ -216,6 +216,15 @@ func checkDocument(root, content string, base *Baseline) error {
 	return fmt.Errorf("%s does not match %s:\n  %s", censusDocPath, baselinePath, strings.Join(problems, "\n  "))
 }
 
+// backticked returns the text of a cell that is exactly one backticked code span.
+func backticked(cell string) (string, bool) {
+	text := strings.TrimSuffix(strings.TrimPrefix(cell, "`"), "`")
+	if text == "" || strings.ContainsRune(text, '`') || cell != "`"+text+"`" {
+		return "", false
+	}
+	return text, true
+}
+
 // checkNegativeCase verifies that a row's negative-case cell is `none` or names
 // model files of the rejection corpus that exist.
 func checkNegativeCase(root string, r row, name string) []string {
@@ -226,8 +235,8 @@ func checkNegativeCase(root string, r row, name string) []string {
 	var problems []string
 	for _, ref := range strings.Split(cell, ",") {
 		ref = strings.TrimSpace(ref)
-		path := strings.Trim(ref, "`")
-		if path == ref || path == "" {
+		path, ok := backticked(ref)
+		if !ok {
 			problems = append(problems, fmt.Sprintf("line %d: %s negative case %q is neither `none` nor a backticked corpus path", r.Line, name, ref))
 			continue
 		}

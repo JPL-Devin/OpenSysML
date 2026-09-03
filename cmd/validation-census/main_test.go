@@ -389,6 +389,22 @@ func TestCheckDocumentRejectsDrift(t *testing.T) {
 			mutate: func(s string) string { return strings.Replace(s, "`kerml/a.kerml`", "`kerml`", 1) },
 			want:   "is not a .sysml or .kerml file",
 		},
+		"constraint cell doubles a backtick": {
+			mutate: func(s string) string { return strings.Replace(s, "| `validateA` |", "| ``validateA` |", 1) },
+			want:   "is not a backticked name",
+		},
+		"constraint cell is not backticked": {
+			mutate: func(s string) string { return strings.Replace(s, "| `validateA` |", "| validateA |", 1) },
+			want:   "is not a backticked name",
+		},
+		"constraint cell has a trailing backtick": {
+			mutate: func(s string) string { return strings.Replace(s, "| `validateA` |", "| `validateA`` |", 1) },
+			want:   "is not a backticked name",
+		},
+		"negative case doubles a backtick": {
+			mutate: func(s string) string { return strings.Replace(s, "`kerml/a.kerml`", "``kerml/a.kerml`", 1) },
+			want:   "neither `none` nor a backticked corpus path",
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

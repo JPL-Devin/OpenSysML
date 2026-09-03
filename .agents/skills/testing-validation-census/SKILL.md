@@ -47,6 +47,8 @@ afterwards (`git checkout -- <file>` on a clean tree, or keep a copy).
   on the `**Pilot:**`/`**Jar:**` lines: "a derived line is stale".
 - Change a row's status marker or language, or append anything to a status cell (`✅ faithfulish`):
   the row is reported as disagreeing with the baseline.
+- Drop or double a backtick around a constraint name or a negative-case path (`` ``validateX` ``):
+  the cell is rejected as not a backticked name/path, not read as the normalized name.
 - Blank or misspell the baseline's `recorded` date, or change its `jar.name` away from the pinned
   artifact's filename: the baseline is rejected before any jar is read.
 - Point a row's *Negative case* at a file that is not under `cmd/pilot-reject/testdata/negative/`.
