@@ -65,3 +65,11 @@ func TestOneEndedFirstInSuccessionBodyIsAnExtension(t *testing.T) {
 		})
 	}
 }
+
+// A one-ended `first` ends in a RelationshipBody, which admits annotations
+// only, so a one-ended `first` nested in it is an extension as well.
+func TestOneEndedFirstInAnInitialNodeBodyIsAnExtension(t *testing.T) {
+	wantNotation(t, "a.sysml", "action def A { action a; action b; first a { first b; } }",
+		CodeNonstandardNotation, "one-ended `first <node>;` outside an action body")
+	wantSilent(t, "a.sysml", "action def A { action a; first a { doc /* starts here */ } }")
+}
