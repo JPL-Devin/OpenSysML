@@ -1037,10 +1037,11 @@ func (c *compiler) argumentTypesConform(actual []*symbols.Symbol, expected *symb
 }
 
 // elementConforms mirrors the executor's check of an element value against a
-// parameter type: an element is never a data value, and every element is an Element.
+// parameter type: only an enumeration literal is a data value, and every
+// element is an Element.
 func (c *compiler) elementConforms(element, expected *symbols.Symbol) bool {
 	if c.model.IsDataType(expected) {
-		return false
+		return c.model.LiteralConforms(element, expected)
 	}
 	if symbols.SameElement(element, expected) || c.model.Conforms(element, expected) {
 		return true

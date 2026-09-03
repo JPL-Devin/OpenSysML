@@ -244,7 +244,7 @@ func (e *executor) valueConforms(value Value, expected string) bool {
 		targets := e.context.Index.LookupQualified(expected)
 		for _, target := range targets {
 			if e.context.Model.IsDataType(target) {
-				return false
+				return e.context.Model.LiteralConforms(sym, target)
 			}
 			if symbols.SameElement(sym, target) || e.context.Model.Conforms(sym, target) {
 				return true

@@ -537,6 +537,13 @@ func (m *Model) IsDataType(sym *symbols.Symbol) bool {
 	return false
 }
 
+// LiteralConforms reports whether sym is an enumeration literal whose
+// enumeration conforms to expected: a literal is a value of its enumeration.
+func (m *Model) LiteralConforms(sym, expected *symbols.Symbol) bool {
+	enum := EnumerationOwning(sym)
+	return enum != nil && m.Conforms(enum, expected)
+}
+
 func (m *Model) conforms(a, b *symbols.Symbol, unioning map[*symbols.Symbol]bool) bool {
 	if a == nil || b == nil {
 		return false

@@ -22,5 +22,6 @@
   it as an unknown parameter. The element is checked against the receiving parameter's type
   and multiplicity when the query is planned — an element is never a data value, so an
   attribute named where a `String`, a `ScalarValue` or any `attribute def` is due is refused
-  rather than passed by name — with the same typed `argument-type` and
+  rather than passed by name, while an enumeration literal (`Color::red`) is a value of its
+  enumeration and binds an `enum def`-typed parameter — with the same typed `argument-type` and
   `argument-multiplicity` failures a mismatched parameter reference gets.

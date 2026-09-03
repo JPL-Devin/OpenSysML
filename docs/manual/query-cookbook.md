@@ -138,7 +138,11 @@ calc def LightSubsystems :> HeavySubsystems {
   The nearest default along the redefinition chain wins.
 - The value a default produces is checked against the parameter's type and
   multiplicity exactly like an explicit binding, and an explicit binding always
-  overrides the default.
+  overrides the default. A named element is never a data value — `= label` is
+  refused for a `String` parameter even when `label` is a `String` attribute —
+  except an enumeration literal, which is a value of its enumeration: `in hue :
+  Color = Color::red;` binds the literal, and a literal of another enumeration
+  is refused.
 - A default the plan cannot represent (a form the query expression language has
   no operation for) is a planning error naming the parameter, reported with the
   other `document-query-*` diagnostics rather than at execution time.

@@ -655,6 +655,79 @@ calc def BadDirection :> Query {
 	}
 }
 
+func TestExecuteBindsEnumerationLiterals(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root {
+	part mount;
+}
+enum def Color { red; green; }
+enum def Size { small; large; }
+attribute paint : Color = red;
+calc def Tinted :> Query {
+	in source : Element;
+	in hue : Color;
+	OwnedElements(source = source)
+}
+calc def TintedByDefault :> Query {
+	in source : Element;
+	in hue : Color = Color::green;
+	OwnedElements(source = source)
+}
+calc def TintedThroughInvocation :> Query {
+	in source : Element;
+	Tinted(source = source, hue = Color::red)
+}
+calc def TintedByAttribute :> Query {
+	in source : Element;
+	in hue : Color = paint;
+	OwnedElements(source = source)
+}
+`)
+	source := Bindings{"source": {ElementValue(fixture.symbol(t, "root"))}}
+	for _, test := range []struct {
+		name     string
+		query    string
+		bindings Bindings
+	}{
+		{"explicit literal", "Tinted", Bindings{
+			"source": source["source"],
+			"hue":    {ElementValue(fixture.symbol(t, "Color::red"))},
+		}},
+		{"default literal", "TintedByDefault", source},
+		{"literal through a named query", "TintedThroughInvocation", source},
+	} {
+		result, err := fixture.execute(t, test.query, test.bindings, Options{})
+		if err != nil {
+			t.Fatalf("%s: %v", test.name, err)
+		}
+		if got := elementNames(result); !slices.Equal(got, []string{"mount"}) {
+			t.Fatalf("%s rows = %v, want [mount]", test.name, got)
+		}
+	}
+	var executionError *Error
+	for _, test := range []struct {
+		name     string
+		query    string
+		bindings Bindings
+	}{
+		{"another enumeration's literal", "Tinted", Bindings{
+			"source": source["source"],
+			"hue":    {ElementValue(fixture.symbol(t, "Size::small"))},
+		}},
+		{"an attribute typed by the enumeration", "Tinted", Bindings{
+			"source": source["source"],
+			"hue":    {ElementValue(fixture.symbol(t, "paint"))},
+		}},
+		{"an attribute default", "TintedByAttribute", source},
+	} {
+		_, err := fixture.execute(t, test.query, test.bindings, Options{})
+		if !errors.As(err, &executionError) || executionError.Kind != ErrorBindingType ||
+			executionError.Parameter != "hue" || executionError.Actual != string(ValueElement) {
+			t.Fatalf("%s: error = %v", test.name, err)
+		}
+	}
+}
+
 func TestExecuteEvaluatesParameterDefaults(t *testing.T) {
 	fixture := loadExecutionFixture(t, `
 part root {

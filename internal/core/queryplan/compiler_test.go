@@ -387,6 +387,53 @@ calc def NamesParameterType :> Query {
 	}
 }
 
+func TestCompileBindsEnumerationLiterals(t *testing.T) {
+	fixture := loadQueryFixture(t, `
+part telescope;
+enum def Color { red; green; }
+enum def Warm :> Color;
+calc def TakesColor :> Query {
+	in hue : Color;
+	OwnedElements(source = telescope)
+}
+calc def LiteralArgument :> Query {
+	TakesColor(hue = Color::green)
+}
+calc def SpecializedLiteralArgument :> Query {
+	TakesColor(hue = Warm::red)
+}
+calc def LiteralDefault :> Query {
+	in hue : Color = Color::red;
+	TakesColor(hue = hue)
+}
+calc def LiteralListDefault :> Query {
+	in hues : Color[0..*] = (Color::red, Color::green);
+	OwnedElements(source = telescope)
+}
+`)
+	definitions := fixture.compile(t, "LiteralArgument").Definitions()
+	call := definitions[len(definitions)-1].Expression()
+	if element, ok := call.Arguments()[0].Value.Element(); !ok || element != fixture.symbol(t, "Color::green") {
+		t.Fatalf("call argument = %+v, want Color::green bound", call.Arguments()[0].Value)
+	}
+
+	fixture.compile(t, "SpecializedLiteralArgument")
+
+	definitions = fixture.compile(t, "LiteralDefault").Definitions()
+	hue := definitions[len(definitions)-1].Parameters()[0]
+	if element, ok := hue.Default.Element(); !hue.HasDefault || !ok || element != fixture.symbol(t, "Color::red") {
+		t.Fatalf("hue = %+v, want Color::red as its default", hue)
+	}
+
+	hues := fixture.compile(t, "LiteralListDefault").Definitions()[0].Parameters()[0]
+	if hues.Default.Operation() != OperationSequence || len(hues.Default.Arguments()) != 2 {
+		t.Fatalf("hues default = %+v", hues.Default)
+	}
+	if element, ok := hues.Default.Arguments()[1].Value.Element(); !ok || element != fixture.symbol(t, "Color::green") {
+		t.Fatalf("hues default member 1 = %+v", hues.Default.Arguments()[1].Value)
+	}
+}
+
 func TestCompileValidatesElementsNamedInArguments(t *testing.T) {
 	fixture := loadQueryFixture(t, `
 part def Telescope;
@@ -395,6 +442,9 @@ part groundStation;
 attribute label : String = "scope";
 attribute def Tag;
 attribute tag : Tag;
+enum def Color { red; green; }
+enum def Size { small; large; }
+attribute paint : Color = red;
 calc def Pointed :> Query {
 	in scope : Telescope;
 	OwnedElements(source = telescope)
@@ -405,6 +455,10 @@ calc def TakesScalar :> Query {
 }
 calc def TakesTag :> Query {
 	in marker : Tag;
+	OwnedElements(source = telescope)
+}
+calc def TakesColor :> Query {
+	in hue : Color;
 	OwnedElements(source = telescope)
 }
 calc def NeedsMany :> Query {
@@ -425,6 +479,15 @@ calc def AttributeAsScalarValue :> Query {
 }
 calc def AttributeAsTag :> Query {
 	TakesTag(marker = tag)
+}
+calc def AttributeAsColor :> Query {
+	TakesColor(hue = paint)
+}
+calc def OtherEnumerationAsColor :> Query {
+	TakesColor(hue = Size::small)
+}
+calc def LiteralAsString :> Query {
+	WhereName(source = OwnedElements(source = telescope), operator = "startsWith", value = Color::red)
 }
 calc def OneElementForMany :> Query {
 	NeedsMany(sources = telescope)
@@ -449,6 +512,9 @@ calc def ResultAsValue :> Query {
 		{"StringAttributeAsString", ErrorArgumentType, "value", "ScalarValues::String", "Fixture::label", "label"},
 		{"AttributeAsScalarValue", ErrorArgumentType, "amount", "ScalarValues::ScalarValue", "Fixture::label", "label"},
 		{"AttributeAsTag", ErrorArgumentType, "marker", "Fixture::Tag", "Fixture::tag", "tag"},
+		{"AttributeAsColor", ErrorArgumentType, "hue", "Fixture::Color", "Fixture::paint", "paint"},
+		{"OtherEnumerationAsColor", ErrorArgumentType, "hue", "Fixture::Color", "Fixture::Size::small", "Size::small"},
+		{"LiteralAsString", ErrorArgumentType, "value", "ScalarValues::String", "Fixture::Color::red", "Color::red"},
 		{"OneElementForMany", ErrorArgumentMultiplicity, "sources", "[2..*]", "[1..1]", "telescope"},
 		{"Unresolved", ErrorUnknownParameter, "missing", "", "", "missing"},
 		{"ResultAsValue", ErrorUnknownParameter, "result", "", "", "result"},
