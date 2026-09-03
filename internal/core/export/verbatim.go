@@ -130,19 +130,19 @@ func (d *decoder) textStatesElementIn(el *element, text string, kind source.Kind
 // exactly the structure the graph carries for it: the text is parsed and mapped
 // with the same encoder, and the two graphs must make the same statements about
 // the node. A node the graph keeps as text alone is contradicted by no text,
-// though the text must still lex clean.
+// though the text must still lex clean and parse whole as one value expression.
 func (d *decoder) textStatesGraph(node rdf.Term, text, scope string) bool {
 	if !lexesClean(text) {
 		return false
 	}
-	if d.textOnly(node) {
-		return true
-	}
 	sf := source.New("<expression>", []byte(text))
 	p := parser.New(sf)
-	expr := p.ParseExpression()
+	expr := p.ParseValueExpression()
 	if expr == nil || len(p.Diagnostics) > 0 || p.Offset() != len(text) {
 		return false
+	}
+	if d.textOnly(node) {
+		return true
 	}
 	stated := &encoder{
 		file:     sf,
@@ -158,11 +158,11 @@ func (d *decoder) textStatesGraph(node rdf.Term, text, scope string) bool {
 // textOnly reports whether the graph states nothing about an expression node
 // beyond that it is an expression: no operator, operands, referent or value.
 func (d *decoder) textOnly(node rdf.Term) bool {
+	if d.graph.Type(node) != rdf.SysMLTerm(mExpression).Value {
+		return false
+	}
 	for _, predicate := range d.graph.Predicates(node) {
-		if layoutPredicate(predicate, true) {
-			continue
-		}
-		if predicate != rdf.RDFType || d.graph.Type(node) != rdf.SysMLTerm(mExpression).Value {
+		if !layoutPredicate(predicate, true) && predicate != rdf.RDFType {
 			return false
 		}
 	}

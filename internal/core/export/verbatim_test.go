@@ -333,8 +333,9 @@ func TestStoredDeclarationGivesWayToEditedGraph(t *testing.T) {
 	}
 }
 
-// An expression the graph keeps as text alone is still held to lexing clean:
-// one leaving a comment open is refused as stating nothing, not written.
+// An expression the graph keeps as text alone is still held to lexing clean and
+// parsing whole: one leaving a comment open, or one cut short (`x >`), is
+// refused as stating nothing, not written.
 func TestTextOnlyExpressionThatDoesNotLexCleanIsRefused(t *testing.T) {
 	src := `package P {
     part def R {
@@ -353,13 +354,39 @@ func TestTextOnlyExpressionThatDoesNotLexCleanIsRefused(t *testing.T) {
 	if !strings.Contains(toNotation(t, []byte(textOnly)), "{in v; v > 0}") {
 		t.Fatal("text-only body expression was not written from its text")
 	}
-	open := restated(t, textOnly, `"{in v; v > 0}"`, `"{in v; v > 0} /* rest"`)
-	back, err := export.Convert("m.ttl", []byte(open), export.FormatTurtle, export.FormatSysML)
-	if err == nil {
-		t.Fatalf("open comment in a text-only expression was written\n%s", back)
+	for name, stale := range map[string]string{
+		"open comment": `"{in v; v > 0} /* rest"`,
+		"cut short":    `"{in v; v > }"`,
+		"trailing":     `"{in v; v > 0} x"`,
+	} {
+		edited := restated(t, textOnly, `"{in v; v > 0}"`, stale)
+		back, err := export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML)
+		if err == nil {
+			t.Fatalf("%s in a text-only expression was written\n%s", name, back)
+		}
+		if !strings.Contains(err.Error(), "states no notation and no structure") {
+			t.Errorf("%s: error does not report the expression as stating nothing: %v", name, err)
+		}
 	}
-	if !strings.Contains(err.Error(), "states no notation and no structure") {
-		t.Errorf("error does not report the expression as stating nothing: %v", err)
+	// Text alone is not a node: with its type deleted the graph states nothing to write.
+	untyped := strings.Replace(textOnly, "\n    a sysml:Expression ;\n    sysx:sourceText \"{in v; v > 0}\"", "\n    sysx:sourceText \"{in v; v > 0}\"", 1)
+	if untyped == textOnly {
+		t.Fatalf("body expression node not found to untype\n%s", textOnly)
+	}
+	if back, err := export.Convert("m.ttl", []byte(untyped), export.FormatTurtle, export.FormatSysML); err == nil {
+		t.Fatalf("untyped text-only expression was written from stale text\n%s", back)
+	}
+	// A trigger the mapping keeps as text alone parses as a value, not an expression.
+	trigger := graphOf(t, "package P {\n    action def A {\n        action a accept when  x > 0;\n    }\n}\n")
+	if !strings.Contains(trigger, `sysx:sourceText "when  x > 0"`) {
+		t.Fatalf("trigger is not stored as text\n%s", trigger)
+	}
+	if back := toNotation(t, []byte(trigger)); !strings.Contains(back, "accept when  x > 0;") {
+		t.Errorf("stored trigger was not written as stored\n%s", back)
+	}
+	cut := restated(t, trigger, `"when  x > 0"`, `"when  x >"`)
+	if back, err := export.Convert("m.ttl", []byte(cut), export.FormatTurtle, export.FormatSysML); err == nil {
+		t.Fatalf("cut-short trigger was written\n%s", back)
 	}
 }
 

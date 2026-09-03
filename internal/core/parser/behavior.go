@@ -2805,6 +2805,15 @@ func (p *Parser) parseTriggerExpression() ast.Node {
 	return evt
 }
 
+// ParseValueExpression parses the notation a value position holds: an expression,
+// or the trigger expression (`when …`, `at …`, `after …`) an accept payload takes.
+func (p *Parser) ParseValueExpression() ast.Node {
+	if p.atTriggerKeyword() {
+		return p.parseTriggerExpression()
+	}
+	return p.ParseExpression()
+}
+
 // parseTriggerEvent parses the event of a transition trigger, the part after
 // `accept`: a time event (`at <instant>` / `after <duration>`), a change event
 // (`when <condition>`), a call event (`<operation>(<params>)`), a payload
