@@ -61,7 +61,8 @@ func nestedInvocation(usage *ast.Usage) (actionInvocation, bool) {
 }
 
 // invokeAction runs the action named by inv to completion as a sub-execution of
-// the caller, and returns the values its output parameters ended with. The
+// the caller, and returns the values its features ended with — the pins of the
+// node performing it — and, among them, those of its output parameters. The
 // performed action runs as self, the object performing the caller, so what it
 // accepts and sends carries that object's identity.
 //
@@ -78,14 +79,14 @@ func invokeAction(
 	pins map[string]Value,
 	data map[string]Value,
 	self *Instance,
-) (map[string]Value, error) {
+) (features, outputs map[string]Value, err error) {
 	sym, err := resolveActionSymbol(ctx, scope, inv)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if ctx.actionDepth >= maxActionNestingDepth {
-		return nil, fmt.Errorf(
+		return nil, nil, fmt.Errorf(
 			"action invocation nested more than %d deep at %s (recursive action?)",
 			maxActionNestingDepth, qualifiedNameText(inv.target),
 		)
@@ -106,7 +107,7 @@ func invokeAction(
 		ec.Push(data)
 		defer ec.beginStep()()
 		if err := bindArgumentList(ec, inv, in, inputs); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	} else {
 		// A bare `perform`/typed usage reads the caller's values of the parameters'
@@ -121,21 +122,22 @@ func invokeAction(
 		}
 	}
 	if err := checkInputsBound(inv, params, inputs); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	results, err := ctx.ExecuteActionPerformedBy(sym, self, inputs)
+	callee, err := ctx.performAction(sym, self, inputs)
 	if err != nil {
-		return nil, fmt.Errorf("invoke action %s: %w", qualifiedNameText(inv.target), err)
+		return nil, nil, fmt.Errorf("invoke action %s: %w", qualifiedNameText(inv.target), err)
 	}
 
-	outputs := make(map[string]Value, len(out))
+	features = callee.root.data
+	outputs = make(map[string]Value, len(out))
 	for _, name := range out {
-		if value, ok := results[name]; ok {
+		if value, ok := features[name]; ok {
 			outputs[name] = value
 		}
 	}
-	return outputs, nil
+	return features, outputs, nil
 }
 
 func resolveActionSymbol(

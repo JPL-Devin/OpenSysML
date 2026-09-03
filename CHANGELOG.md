@@ -112,8 +112,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   of the action it performed, so `call.inner.v` reads a pin inside the callee through it and
   `Results()` reports it under `call.inner.v`. A typed action node in a branch or loop of a
   state's entry/do/exit body performs the action it names with the `in` values and arguments
-  it states, its `out` values come back to the node and its own body then runs — before, the
-  node's `in x = i` and body statements were skipped and the callee saw only state data. A
+  it states, holds every pin of the callee as it ended (an argument overriding the node's own
+  default included) for its body to read, and returns its `out` values to a same-named block
+  local, state attribute or state datum that exists — before, the node's `in x = i` and body
+  statements were skipped and the callee saw only state data. A
   `perform` in statement form and a
   state's entry/do/exit action now refuse an `in` without a default that nothing binds
   (`ErrUnboundParameter`) instead of failing later inside the callee. A

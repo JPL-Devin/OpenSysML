@@ -404,8 +404,9 @@ func (e *stmtEngine) blockNode(graph *lower.ActionGraph, node ast.Node) (stmtFlo
 
 // nodeInBlock runs a nested action of a block's flow for a host keeping no
 // performances: its features are declared in a frame of the body its body runs in,
-// and perform, when given, performs the action the node names with those pins,
-// its outputs joining the frame before the body runs.
+// and perform, when given, performs the action the node names with those pins and
+// returns the features the performance ended with, which join the frame before
+// the body runs.
 func (e *stmtEngine) nodeInBlock(
 	graph *lower.ActionGraph,
 	node *ast.Usage,
@@ -431,11 +432,11 @@ func (e *stmtEngine) nodeInBlock(
 		pins[feature.Name] = value
 	}
 	if perform != nil {
-		outputs, err := perform(pins)
+		features, err := perform(pins)
 		if err != nil {
 			return flowNext, err
 		}
-		for name, value := range outputs {
+		for name, value := range features {
 			e.env.declare(name, value)
 		}
 	}

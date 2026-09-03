@@ -120,8 +120,10 @@ func (h *stateStmtHost) effect(s lower.Effect) error {
 }
 
 // performNode runs a nested action declared in a block of the body in a frame of
-// the body. One naming an action performs it with the pins it declares: outputs
-// the node declares are its own, any other writes state data as a `perform` does.
+// the body. One naming an action performs it with the pins it declares; the
+// callee's final features become the node's, and its outputs come back to the
+// same-named block local, state attribute or state datum that exists, as they
+// do to an enclosing action's features.
 func (h *stateStmtHost) performNode(engine *stmtEngine, graph *lower.ActionGraph, node *ast.Usage) (stmtFlow, error) {
 	inv, performs := nestedInvocation(node)
 	if !performs {
@@ -129,32 +131,35 @@ func (h *stateStmtHost) performNode(engine *stmtEngine, graph *lower.ActionGraph
 	}
 	caller := engine.env.values()
 	return engine.nodeInBlock(graph, node, func(pins map[string]Value) (map[string]Value, error) {
-		outputs, err := invokeAction(h.exec.ctx, graph.Scope, inv, pins, caller, h.exec.self)
+		features, outputs, err := invokeAction(h.exec.ctx, graph.Scope, inv, pins, caller, h.exec.self)
 		if err != nil {
 			return nil, err
 		}
-		own := make(map[string]Value, len(outputs))
 		for _, name := range slices.Sorted(maps.Keys(outputs)) {
-			if declaresFeature(graph, node, name) {
-				own[name] = outputs[name]
-				continue
-			}
-			if err := h.exec.writeStateValue(name, outputs[name]); err != nil {
+			if err := h.returnOutput(engine.env, name, outputs[name]); err != nil {
 				return nil, err
 			}
 		}
-		return own, nil
+		return features, nil
 	})
 }
 
-// declaresFeature reports whether node declares a parameter or attribute named name.
-func declaresFeature(graph *lower.ActionGraph, node ast.Node, name string) bool {
-	for _, feature := range graph.Features[node] {
-		if feature.Name == name {
-			return true
-		}
+// returnOutput writes an output a node's performance produced to the innermost
+// binding around the node that holds its name, if one does.
+func (h *stateStmtHost) returnOutput(env *stmtEnv, name string, value Value) error {
+	if env.assignLocal(name, value) {
+		return nil
 	}
-	return false
+	if written, err := h.assignStateAttribute(name, value); written || err != nil {
+		return err
+	}
+	if h.exec.declaresAttribute(name) {
+		return h.exec.assignAttribute(name, value)
+	}
+	if env.data.has(name) {
+		env.data.set(name, value)
+	}
+	return nil
 }
 
 // performedInvocation reports the action a `perform` statement names, in either
