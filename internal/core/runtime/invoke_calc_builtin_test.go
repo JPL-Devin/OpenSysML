@@ -125,6 +125,40 @@ func TestInvokeCalcDefersBodyArguments(t *testing.T) {
 	}
 }
 
+// A direct invocation may omit a `[0..*]` body over an empty collection, which
+// answers the operation's empty result; over any element the body is required.
+func TestInvokeCalcOmittedBodyOverEmptyCollection(t *testing.T) {
+	ctx, idx := libraryModelContext(t, directBuiltinModel)
+	empty, one := NewSequenceValue(NewSequence()), constInt(1)
+	for _, tc := range []struct {
+		fqn  string
+		want string
+	}{
+		{"ControlFunctions::select", "[]"},
+		{"ControlFunctions::reject", "[]"},
+		{"ControlFunctions::collect", "[]"},
+		{"ControlFunctions::reduce", "null"},
+		{"ControlFunctions::selectOne", "null"},
+		{"ControlFunctions::forAll", "true"},
+		{"ControlFunctions::exists", "false"},
+	} {
+		sym := lookupOne(t, idx, tc.fqn)
+		for _, args := range [][]Value{nil, {empty}, {empty, nullValue()}} {
+			got, err := ctx.InvokeCalc(sym, args, nil)
+			if err != nil || FormatValue(got) != tc.want {
+				t.Errorf("InvokeCalc(%s, %d args) = %s, %v; want %s", tc.fqn, len(args), FormatValue(got), err, tc.want)
+			}
+		}
+		got, err := ctx.InvokeCalcNamed(sym, map[string]Value{"collection": empty}, nil)
+		if err != nil || FormatValue(got) != tc.want {
+			t.Errorf("InvokeCalcNamed(%s, collection = ()) = %s, %v; want %s", tc.fqn, FormatValue(got), err, tc.want)
+		}
+		if _, err := ctx.InvokeCalc(sym, []Value{one}, nil); !errors.Is(err, ErrTypeMismatch) {
+			t.Errorf("InvokeCalc(%s, 1) = %v, want %v", tc.fqn, err, ErrTypeMismatch)
+		}
+	}
+}
+
 // A model's own declaration under a built-in's qualified name is the model's,
 // so a direct invocation evaluates it rather than the library implementation.
 func TestInvokeCalcNeverAnswersAModelDeclarationWithABuiltin(t *testing.T) {

@@ -198,6 +198,17 @@ func (ec *EvalContext) bodyOf(op string, val Value, arity int) (Value, error) {
 	return val, nil
 }
 
+// bodyOver is bodyOf for an operation over elements whose body parameter is
+// `[0..*]`: left unbound over no elements, there is nothing to call it with and
+// applied reports false. Any given body is checked as bodyOf checks it.
+func (ec *EvalContext) bodyOver(op string, val Value, arity int, elements []Value) (body Value, applied bool, err error) {
+	if val.Kind == ValNull && len(elements) == 0 {
+		return Value{}, false, nil
+	}
+	body, err = ec.bodyOf(op, val, arity)
+	return body, err == nil, err
+}
+
 // evalClosure evaluates a deferred expression in the environment it closes over.
 func (ec *EvalContext) evalClosure(val Value) (Value, error) {
 	return val.exprEnv(ec).Eval(val.Expr())
@@ -630,12 +641,16 @@ func (ec *EvalContext) filter(op string, args []Value, keep bool) (Value, error)
 	if err := checkArity(op, args, 2); err != nil {
 		return Value{}, err
 	}
-	body, err := ec.bodyOf(op, args[1], 1)
+	elements := elementsOf(args[0])
+	body, applied, err := ec.bodyOver(op, args[1], 1, elements)
 	if err != nil {
 		return Value{}, err
 	}
+	if !applied {
+		return ec.newSequence(nil)
+	}
 	var kept []Value
-	for _, elem := range elementsOf(args[0]) {
+	for _, elem := range elements {
 		holds, err := ec.applyPredicate(op, body, elem)
 		if err != nil {
 			return Value{}, err
@@ -665,15 +680,19 @@ func builtinControlCollect(ec *EvalContext, args []Value) (Value, error) {
 	if err := checkArity(op, args, 2); err != nil {
 		return Value{}, err
 	}
-	body, err := ec.bodyOf(op, args[1], 1)
+	elements := elementsOf(args[0])
+	body, applied, err := ec.bodyOver(op, args[1], 1, elements)
 	if err != nil {
 		return Value{}, err
 	}
 	// The mapper returns `Anything[0..*]`, so a mapper answering several values
 	// contributes them all: the collected sequence is flat, as every KerML
 	// sequence is.
+	if !applied {
+		return sequenceOf(nil), nil
+	}
 	var mapped []Value
-	for _, elem := range elementsOf(args[0]) {
+	for _, elem := range elements {
 		val, err := ec.applyBody(body, elem)
 		if err != nil {
 			return Value{}, err
@@ -698,12 +717,12 @@ func builtinControlReduce(ec *EvalContext, args []Value) (Value, error) {
 	if err := checkArity(op, args, 2); err != nil {
 		return Value{}, err
 	}
-	body, err := ec.bodyOf(op, args[1], 2)
+	elements := elementsOf(args[0])
+	body, applied, err := ec.bodyOver(op, args[1], 2, elements)
 	if err != nil {
 		return Value{}, err
 	}
-	elements := elementsOf(args[0])
-	if len(elements) == 0 {
+	if !applied || len(elements) == 0 {
 		return nullValue(), nil
 	}
 	acc := elements[0]
@@ -734,14 +753,14 @@ func (ec *EvalContext) extremum(op string, args []Value, least bool) (Value, err
 	if err := checkArity(op, args, 2); err != nil {
 		return Value{}, err
 	}
-	body, err := ec.bodyOf(op, args[1], 1)
-	if err != nil {
-		return Value{}, err
-	}
 	elements := elementsOf(args[0])
 	if len(elements) == 0 {
 		return Value{}, fmt.Errorf("%w: %s requires a collection of at least one element",
 			ErrMultiplicityViolation, op)
+	}
+	body, err := ec.bodyOf(op, args[1], 1)
+	if err != nil {
+		return Value{}, err
 	}
 	var best Value
 	for i, elem := range elements {
@@ -784,11 +803,15 @@ func (ec *EvalContext) quantify(op string, args []Value, universal bool) (Value,
 	if err := checkArity(op, args, 2); err != nil {
 		return Value{}, err
 	}
-	body, err := ec.bodyOf(op, args[1], 1)
+	elements := elementsOf(args[0])
+	body, applied, err := ec.bodyOver(op, args[1], 1, elements)
 	if err != nil {
 		return Value{}, err
 	}
-	for _, elem := range elementsOf(args[0]) {
+	if !applied {
+		return boolValue(universal), nil
+	}
+	for _, elem := range elements {
 		holds, err := ec.applyPredicate(op, body, elem)
 		if err != nil {
 			return Value{}, err

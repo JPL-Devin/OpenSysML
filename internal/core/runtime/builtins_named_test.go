@@ -206,6 +206,59 @@ func TestAggregationsWithQuantityIdentity(t *testing.T) {
 	}
 }
 
+// A `[0..*]` body may be omitted over an empty collection, which answers the
+// operation's empty result; over any element the body is required.
+func TestCollectionOperationsWithOmittedBody(t *testing.T) {
+	for _, tc := range []struct {
+		expr string
+		want string
+	}{
+		{"ControlFunctions::select()", "[]"},
+		{"ControlFunctions::select(())", "[]"},
+		{"ControlFunctions::select(collection = ())", "[]"},
+		{"ControlFunctions::reject(())", "[]"},
+		{"ControlFunctions::collect(())", "[]"},
+		{"ControlFunctions::reduce(())", "null"},
+		{"ControlFunctions::selectOne(())", "null"},
+		{"ControlFunctions::forAll(())", "true"},
+		{"ControlFunctions::exists(())", "false"},
+		{"ControlFunctions::select(test::xs->select {in x; x > 3})", "[]"},
+	} {
+		t.Run(tc.expr, func(t *testing.T) {
+			got, err := evalLibraryCall(t, tc.expr)
+			if err != nil {
+				t.Fatalf("%s = error %v", tc.expr, err)
+			}
+			if FormatValue(got) != tc.want {
+				t.Fatalf("%s = %s, want %s", tc.expr, FormatValue(got), tc.want)
+			}
+		})
+	}
+	for _, tc := range []struct {
+		expr string
+		want error
+	}{
+		{"ControlFunctions::select(test::xs)", ErrTypeMismatch},
+		{"ControlFunctions::reject(collection = (1))", ErrTypeMismatch},
+		{"ControlFunctions::collect(test::xs)", ErrTypeMismatch},
+		{"ControlFunctions::reduce(test::xs)", ErrTypeMismatch},
+		{"ControlFunctions::selectOne(test::xs)", ErrTypeMismatch},
+		{"ControlFunctions::forAll(test::xs)", ErrTypeMismatch},
+		{"ControlFunctions::exists(test::xs)", ErrTypeMismatch},
+		{"ControlFunctions::select((), 5)", ErrTypeMismatch},
+		{"ControlFunctions::reduce((), {in a; a})", ErrBodyArity},
+		{"ControlFunctions::minimize(())", ErrMultiplicityViolation},
+		{"ControlFunctions::maximize(test::xs)", ErrTypeMismatch},
+	} {
+		t.Run(tc.expr, func(t *testing.T) {
+			_, err := evalLibraryCall(t, tc.expr)
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("%s error = %v, want %v", tc.expr, err, tc.want)
+			}
+		})
+	}
+}
+
 // The sequence and range operators called by name answer as the notation does.
 func TestSequenceOperatorCallForms(t *testing.T) {
 	cases := []struct {

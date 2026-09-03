@@ -27,6 +27,13 @@
     "withoutOneByName": {"type": "Sequence", "elements": [
       {"type": "Integer", "value": 1},
       {"type": "Integer", "value": 3}
-    ]}
+    ]},
+    "selectsNothing": {"type": "Sequence", "elements": []},
+    "rejectsNothing": {"type": "Sequence", "elements": []},
+    "collectsNothing": {"type": "Sequence", "elements": []},
+    "reducesNothing": {"type": "Null"},
+    "selectsNoOne": {"type": "Null"},
+    "allOfNothing": {"type": "Boolean", "value": true},
+    "anyOfNothing": {"type": "Boolean", "value": false}
   }
 }
