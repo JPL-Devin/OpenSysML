@@ -231,11 +231,12 @@ docs-counts: ## Regenerate and verify all derived documentation counts
 	go test -count=1 ./cmd/pilot-diff ./cmd/pilot-reject ./cmd/doc-counts
 	@echo "✓ Documentation counts and refereed figures are current"
 
-docs-check: ## Verify documentation links, that reader-facing pages cite no internal label, that quoted oracle figures name their round, and that changelog fragments are well-formed
+docs-check: ## Verify documentation links, internal-label hygiene, quoted oracle figures, changelog fragments and the build-time compliance census
 	$(PYTHON) scripts/check-doc-links.py
 	$(PYTHON) scripts/check-doc-ids.py
 	$(PYTHON) scripts/check-doc-figures.py
 	$(PYTHON) scripts/changelog.py check
+	$(PYTHON) scripts/mkdocs_census-test.py
 
 changelog-check: ## Verify every changelog fragment under changes/unreleased/ and the folding script
 	$(PYTHON) scripts/changelog-test.py

@@ -298,15 +298,14 @@ When a change needs documenting:
   [docs/project/roadmap.md](docs/project/roadmap.md) and
   [docs/project/training-examples.md](docs/project/training-examples.md). Recount all four
   together, in one commit.
-- **The compliance-row counts are generated, never typed.** After changing a `✅`/`⚠️`/`❌`/`⛔`
-  row in [docs/project/spec-compliance.md](docs/project/spec-compliance.md), run
-  `make docs-counts`: it restates that file's map header and the `**Row bookkeeping:**` lines in
-  `README.md` and [docs/internals/architecture.md](docs/internals/architecture.md) from the
-  markers themselves, touching nothing else. Do not edit those three lines by hand — two
-  branches that both add rows then produce identical bytes and cannot conflict on them. The
-  guard (`go test ./cmd/pilot-diff`) still fails on a stale line rather than fixing it, so run
-  the target before committing. It does not touch the externally refereed oracle numbers, which
-  come from the baseline JSONs.
+- **The compliance-row census is counted at build time, never committed.** Adding or changing a
+  `✅`/`⚠️`/`❌`/`⛔` row in [docs/project/spec-compliance.md](docs/project/spec-compliance.md) is the
+  whole change: no header, `README.md` line or `docs/internals/architecture.md` line restates the
+  count, so two branches that both add rows cannot conflict on one. The site build
+  (`scripts/mkdocs_census.py`, run by `make docs`) counts the rows into the
+  `<!-- doc-counts:begin census -->` block and refuses a `🚧` row, as do `make docs-counts` and
+  `go test ./cmd/pilot-diff`. `make docs-counts` still restates the externally refereed oracle
+  numbers from the baseline JSONs; run it only when a baseline moved.
 - **Changelog entries are fragments, not edits to `CHANGELOG.md`.** A change that a user
   should read about adds one file, `changes/unreleased/<slug>.<section>.md`, holding the list
   item(s) for that section (`added`, `changed`, `fixed`, …); see the README there. Two branches
