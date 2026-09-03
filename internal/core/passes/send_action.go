@@ -130,10 +130,10 @@ func (c *sendActionChecker) walkSubactions(scope *symbols.Scope, actions []ast.N
 	}
 }
 
-// subactionSend returns the send an action node is, when its body is that one
-// statement.
+// subactionSend returns the send an action node is written as (`action s send …`);
+// a send inside a braced body is the body's own member, not the subaction.
 func subactionSend(usage *ast.Usage) *ast.SendStatement {
-	if usage.Kind != ast.UsageAction || len(usage.Members) != 1 {
+	if usage.Kind != ast.UsageAction || !usage.IsActionNode || len(usage.Members) != 1 {
 		return nil
 	}
 	send, _ := unwrapMembership(usage.Members[0]).(*ast.SendStatement)

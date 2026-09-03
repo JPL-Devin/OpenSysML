@@ -257,6 +257,12 @@ func TestSendWellFormedShapesAreSilent(t *testing.T) {
 		"transition effect action with several statements": `package P {` + sendPrelude + `
 			state def M { part r : Receiver; state a; state b;
 				transition first a do action g { send to r; send to r; } then b; } }`,
+		"braced subaction with one payload-less send": `package P {` + sendPrelude + `
+			state def M { part r : Receiver; state a; state b;
+				entry action e { send to r; }
+				do action d { send to r; }
+				exit action x { send to r; }
+				transition first a do action g { send to r; } then b; } }`,
 		"payload-less send in an action def": `package P {` + sendPrelude + `
 			action def A { part r : Receiver; action s send to r; } }`,
 		"action parameter as payload": `package P {` + sendPrelude + `
