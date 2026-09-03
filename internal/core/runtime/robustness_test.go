@@ -50,6 +50,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("node_binding_to_a_non_parameter", testNodeBindingToANonParameter)
 	t.Run("node_undirected_binding_carried_to_a_non_parameter", testNodeUndirectedBindingCarriedToANonParameter)
 	t.Run("node_pin_bound_to_unequal_values", testNodePinBoundToUnequalValues)
+	t.Run("node_output_bound_to_a_nested_node_that_never_runs", testNodeOutputBoundToANestedNodeThatNeverRuns)
 	t.Run("block_node_binding_to_a_non_parameter", testBlockNodeBindingToANonParameter)
 	t.Run("block_node_binding_names_a_node_without_a_pin", testBlockNodeBindingNamesANodeWithoutAPin)
 	t.Run("block_node_pin_bound_where_nodes_are_not_performed", testBlockNodePinBoundWhereNodesAreNotPerformed)
@@ -8169,6 +8170,37 @@ func testNodePinOfANodeNotYetPerformed(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "late") {
 		t.Errorf("error %q does not name the node", err)
+	}
+}
+
+// testNodeOutputBoundToANestedNodeThatNeverRuns: a node's output bound to a pin of one
+// of its own nested nodes takes its value as that node ends, so where the nested node
+// never runs the output is unvalued when its node ends, and reported so.
+func testNodeOutputBoundToANestedNodeThatNeverRuns(t *testing.T) {
+	src := `
+		package test {
+			action outer {
+				out attribute legV : Integer;
+				bind leg.inner.v = leg.v;
+				first start;
+				then action leg {
+					out v : Integer;
+					action inner { out v : Integer; assign v := 1; }
+					first start;
+					then action own { assign legV := 0; }
+					then done;
+				}
+				then action fin { assign legV := leg.v; }
+				then done;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if !errors.Is(err, ErrBindingEnd) {
+		t.Fatalf("error = %v, want ErrBindingEnd", err)
+	}
+	if !strings.Contains(err.Error(), "leg.inner.v") {
+		t.Errorf("error %q does not name the other end", err)
 	}
 }
 

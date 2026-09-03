@@ -87,8 +87,13 @@
   fix it was recomputed on every read, so a body that reassigned `x` saw `z = x * 2` change with
   it, and the inherited feature never appeared in `Results()`. A `bind` at a pin two levels
   down, `bind leg.inner.w = x;`, is lowered with the whole path it names, so it seeds `inner`'s
-  `w` and not a `w` of `leg`; before, the path collapsed to `leg.w`. A debugger breakpoint on a
-  node an `if` branch or a loop body declares now pauses the run before the node performs, once
+  `w` and not a `w` of `leg`; before, the path collapsed to `leg.w`. A binding between a nested
+  pin and a pin of the node around it or of another node under it, `bind leg.inner.v = leg.v` or
+  `bind leg.inner.v = leg.rest.n`, holds within the one performance of `leg` the nested node
+  runs in: `leg.v` takes `inner`'s value as `inner` ends, and two tokens performing `leg` at
+  once each hand their own `inner`'s value to their own `rest` — before, the value went to the
+  latest performance of `leg`, or was queued for one yet to come, so `leg.v` ended unvalued and
+  concurrent performances swapped values. A debugger breakpoint on a node an `if` branch or a loop body declares now pauses the run before the node performs, once
   per performance, and `%step`/`Step` resumes it; `NodeNames()` lists such nodes, so `%break add`
   on a loop body's node is accepted — before, the name was refused and the node never paused.
   Such a pause ends the step at once: a token forked alongside the paused one takes no step of

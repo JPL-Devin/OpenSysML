@@ -701,7 +701,10 @@ func (e *performances) bindInputPins(perf *actionFrame, activation int64) error 
 		if _, held := perf.data[end.Pin]; held && !alreadyBound {
 			continue
 		}
-		value, err := e.bindingOtherValue(end, activation)
+		if holder, node, _ := otherEnd(perf, end); node != nil && holder == perf {
+			continue // a node of perf's own flow reads this pin once it runs
+		}
+		value, err := e.bindingOtherValue(perf, end, activation)
 		if err != nil {
 			if dir == ast.DirNone && e.unheldEnd(end, err) {
 				continue
@@ -747,14 +750,17 @@ func (e *performances) bindOutputPins(perf *actionFrame) error {
 			if !ok {
 				continue
 			}
-			if other, held := e.otherEndHeld(end); held && valueEqual(other, value) {
+			if other, held := e.otherEndHeld(perf, end); held && valueEqual(other, value) {
 				continue
 			}
 		default:
 			continue
 		}
 		if end.OtherNode != nil {
-			if err := e.deliver(end.at.parent, end.at.flow, end.OtherNode, end.OtherPath, end.OtherPin, value); err != nil {
+			if holder, node, _ := otherEnd(perf, end); node != nil && holder == perf {
+				continue // a node of perf's own flow carried its value here as it ended
+			}
+			if err := e.writeOtherEnd(perf, end, value); err != nil {
 				return err
 			}
 			continue
@@ -812,12 +818,48 @@ func (e *performances) boundPin(perf *actionFrame, end boundEnd) (ast.FeatureDir
 	return dir, nil
 }
 
-// otherPerformance returns the latest performance of the node the other end of a binding
-// addresses, reached from the flow the binding was written in; performed is false where
-// that node, or one on the way to it, has not run.
-func (e *performances) otherPerformance(end boundEnd) (other *actionFrame, performed bool) {
-	other, performed = end.at.parent.subactions[end.OtherNode]
-	for _, node := range end.OtherPath {
+// otherEnd locates the other end of a binding at perf's pin: the performance it is in reach
+// of, and the node under that one it names with the path on to it, none when it is that
+// performance's own pin. The end runs down through the performances between end.at and
+// perf as far as it names their nodes, so it keeps to perf's own run of each, not the latest.
+func otherEnd(perf *actionFrame, end boundEnd) (holder *actionFrame, node ast.Node, path []ast.Node) {
+	if end.OtherNode != end.at.node {
+		return end.at.parent, end.OtherNode, end.OtherPath
+	}
+	holder, path = end.at, end.OtherPath
+	for len(path) > 0 {
+		next := childToward(holder, perf)
+		if next == nil || next.node != path[0] {
+			break
+		}
+		holder, path = next, path[1:]
+	}
+	if len(path) == 0 {
+		return holder, nil, nil
+	}
+	return holder, path[0], path[1:]
+}
+
+// childToward returns the performance under holder on the way to perf, nil at perf itself.
+func childToward(holder, perf *actionFrame) *actionFrame {
+	for f := perf; f != nil && f.parent != nil; f = f.parent {
+		if f.parent == holder {
+			return f
+		}
+	}
+	return nil
+}
+
+// otherPerformance returns the performance holding the other end of a binding at perf's
+// pin: one of those around perf, or the latest of the node it names under one; performed
+// is false where that node, or one on the way to it, has not run.
+func (e *performances) otherPerformance(perf *actionFrame, end boundEnd) (other *actionFrame, performed bool) {
+	holder, node, path := otherEnd(perf, end)
+	if node == nil {
+		return holder, true
+	}
+	other, performed = holder.subactions[node]
+	for _, node := range path {
 		if !performed {
 			return nil, false
 		}
@@ -826,11 +868,31 @@ func (e *performances) otherPerformance(end boundEnd) (other *actionFrame, perfo
 	return other, performed
 }
 
+// writeOtherEnd carries value to the node pin at the other end of a binding at perf's pin:
+// into the performance around perf holding it, else delivered ahead of the node it names.
+func (e *performances) writeOtherEnd(perf *actionFrame, end boundEnd, value Value) error {
+	holder, node, path := otherEnd(perf, end)
+	if node == nil {
+		if !holder.declares(end.OtherPin) {
+			return fmt.Errorf("%w: %s declares no %s", ErrNodePin, holder.describe(), end.OtherPin)
+		}
+		return e.setFrameFeature(holder, end.OtherPin, value)
+	}
+	flow := end.at.flow
+	if holder != end.at.parent {
+		flow = lower.NestedFlow(holder.flow, holder.node, node)
+		if flow == nil {
+			return fmt.Errorf("%w: %s holds no nested action %s", ErrNodePin, holder.describe(), ActionNodeName(node))
+		}
+	}
+	return e.deliver(holder, flow, node, path, end.OtherPin, value)
+}
+
 // bindingOtherValue reads the value the other end of a binding at a performance's pin
 // holds: another node's pin, or an expression over the enclosing performances.
-func (e *performances) bindingOtherValue(end boundEnd, activation int64) (Value, error) {
+func (e *performances) bindingOtherValue(perf *actionFrame, end boundEnd, activation int64) (Value, error) {
 	if end.OtherNode != nil {
-		other, performed := e.otherPerformance(end)
+		other, performed := e.otherPerformance(perf, end)
 		if !performed {
 			return Value{}, fmt.Errorf("%w: %s is bound to %s, which is read before it runs",
 				ErrNodeNotPerformed, end.pinText(), bindingEndText(end.Other))
@@ -853,9 +915,9 @@ func (e *performances) bindingOtherValue(end boundEnd, activation int64) (Value,
 
 // otherEndHeld reads what the other end of a binding holds now: a performed node's
 // pin, an enclosing feature named outright, or the feature a chain reaches.
-func (e *performances) otherEndHeld(end boundEnd) (Value, bool) {
+func (e *performances) otherEndHeld(perf *actionFrame, end boundEnd) (Value, bool) {
 	if end.OtherNode != nil {
-		other, performed := e.otherPerformance(end)
+		other, performed := e.otherPerformance(perf, end)
 		if !performed {
 			return Value{}, false
 		}
