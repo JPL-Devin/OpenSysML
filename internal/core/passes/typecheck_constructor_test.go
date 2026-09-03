@@ -67,6 +67,8 @@ func TestConstructorWellFormedArgumentsAreSilent(t *testing.T) {
 		"labelled with a calc":                      `send new Telemetry(frames = frames + 1) to ground;`,
 		"untyped feature":                           `item def Note { attribute text; } send new Note("hi") to ground;`,
 		"bound to an attribute":                     `item t : Telemetry = new Telemetry(frames = 3);`,
+		"inherited types through a redefinition":    `item def Sub :> Base { attribute b redefines a; } send new Sub(b = 3) to ground;`,
+		"inherited types through a subsetting":      `item def Sup :> Base { attribute c subsets a; } send new Sup(3, 4) to ground;`,
 	}
 	for name, send := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -110,14 +112,19 @@ func TestConstructorDuplicateBindingIsReported(t *testing.T) {
 
 // An argument whose scalar type cannot bind its feature is reported at the
 // argument, whether it binds by position or by label, and the feature's type is
-// read where the feature is declared.
+// the one it declares or, declaring none, inherits through what it redefines or subsets.
 func TestConstructorArgumentTypeMismatchIsReported(t *testing.T) {
+	const sub = `item def Sub :> Base { attribute b redefines a; } item def Sup :> Base { attribute c subsets a; } `
 	cases := map[string]struct{ send, at, want string }{
-		"positional":      {send: `send new Telemetry("hi") to ground;`, at: `"hi"`, want: "frames of Telemetry expects Integer, found String"},
-		"labelled":        {send: `send new Telemetry(label = 3) to ground;`, at: "3", want: "label of Telemetry expects String, found"},
-		"inherited":       {send: `send new Telemetry(a = "hi") to ground;`, at: `"hi"`, want: "a of Telemetry expects Integer, found String"},
-		"outside a send":  {send: `item t : Telemetry = new Telemetry(frames = "hi");`, at: `"hi"`, want: "frames of Telemetry expects Integer, found String"},
-		"in a transition": {send: `state def S { part g : Station; state s; transition first s do send new Telemetry("hi") to g then s; }`, at: `"hi"`, want: "frames of Telemetry expects Integer"},
+		"positional":              {send: `send new Telemetry("hi") to ground;`, at: `"hi"`, want: "frames of Telemetry expects Integer, found String"},
+		"labelled":                {send: `send new Telemetry(label = 3) to ground;`, at: "3", want: "label of Telemetry expects String, found"},
+		"inherited":               {send: `send new Telemetry(a = "hi") to ground;`, at: `"hi"`, want: "a of Telemetry expects Integer, found String"},
+		"outside a send":          {send: `item t : Telemetry = new Telemetry(frames = "hi");`, at: `"hi"`, want: "frames of Telemetry expects Integer, found String"},
+		"in a transition":         {send: `state def S { part g : Station; state s; transition first s do send new Telemetry("hi") to g then s; }`, at: `"hi"`, want: "frames of Telemetry expects Integer"},
+		"labelled redefinition":   {send: sub + `send new Sub(b = "hi") to ground;`, at: `"hi"`, want: "b of Sub expects Integer, found String"},
+		"positional redefinition": {send: sub + `send new Sub("hi") to ground;`, at: `"hi"`, want: "b of Sub expects Integer, found String"},
+		"labelled subsetting":     {send: sub + `send new Sup(c = "hi") to ground;`, at: `"hi"`, want: "c of Sup expects Integer, found String"},
+		"positional subsetting":   {send: sub + `send new Sup("hi") to ground;`, at: `"hi"`, want: "c of Sup expects Integer, found String"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {

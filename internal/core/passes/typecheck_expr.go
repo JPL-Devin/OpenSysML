@@ -785,13 +785,12 @@ func (ec *exprChecker) inferConstructor(scope *symbols.Scope, e *ast.Constructor
 }
 
 // checkFeatureBinding reports a constructor argument whose scalar type cannot
-// bind the feature it is written for.
+// bind the feature it is written for, typed as it declares or inherits.
 func (ec *exprChecker) checkFeatureBinding(arg ast.Node, got semantics.PrimType, feature, typ *symbols.Symbol) {
-	u, ok := feature.Decl.(*ast.Usage)
-	if !ok {
+	if _, ok := feature.Decl.(*ast.Usage); !ok {
 		return
 	}
-	want := ec.declaredPrimType(feature.OwnerScope, u.Relationships)
+	want := ec.model.PrimTypeOf(feature)
 	if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
 		return
 	}
