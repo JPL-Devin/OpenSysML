@@ -3,6 +3,9 @@ package passes
 import (
 	"strings"
 	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // triggerFixture declares the durations, time instants, quantities and
@@ -296,8 +299,8 @@ func TestTriggerOnAcceptActions(t *testing.T) {
 }
 
 // The body an action target succession carries (`then starting { ... }`) is a
-// behavior body like any other: its triggers and assignments are checked in
-// the enclosing scope, the one its members are declared in.
+// behavior body like any other: its triggers and assignments see the enclosing
+// scope and the declarations the body itself makes.
 func TestTriggerInSuccessionBody(t *testing.T) {
 	const succession = `do action body {
 		action prep;
@@ -313,6 +316,39 @@ func TestTriggerInSuccessionBody(t *testing.T) {
 	diags := triggerDiags(t, body(`assign x := "s";`))
 	if len(diags) != 1 || !strings.Contains(diags[0].Message, "cannot bind String value to a feature typed by Integer") {
 		t.Fatalf("want one assignment diagnostic, got %v", diags)
+	}
+
+	const local = "attribute wait : DurationValue; attribute instant : TimeInstantValue; attribute ok : Boolean; attribute n : Integer; "
+	wantTriggerSilent(t, body(local+"accept after wait; accept at instant; accept when ok; accept when n > 3; assign n := 1;"))
+	wantTriggerDiag(t, body(local+"accept after n;"), "trigger-after-duration", "found Integer")
+	wantTriggerDiag(t, body(local+"accept at wait;"), "trigger-at-time-instant", "found DurationValue")
+	wantTriggerDiag(t, body(local+"accept when n;"), "trigger-when-boolean", "found Integer")
+	diags = triggerDiags(t, body(local+`assign n := "s";`))
+	if len(diags) != 1 || !strings.Contains(diags[0].Message, "cannot bind String value to a feature typed by Integer") {
+		t.Fatalf("want one assignment diagnostic, got %v", diags)
+	}
+}
+
+// A name a succession body declares resolves inside that body and nowhere
+// else: the body is a namespace of its own, not part of the enclosing action.
+func TestSuccessionBodyDeclarationScope(t *testing.T) {
+	const src = `package P {
+		private import ScalarValues::*;
+		action def A {
+			action prep;
+			action starting;
+			first prep;
+			then starting { attribute n : Integer; attribute inner : Integer = n; }
+			attribute outer : Integer = n;
+		}
+	}`
+	idx := newTestIndex()
+	root := parser.New(source.New("<t>", []byte(src))).ParseFile()
+	idx.AddDocument("<t>", root)
+	idx.ExpandWildcardImports()
+	diags := Analyze("<t>", root, nil, idx)
+	if len(diags) != 1 || diags[0].Code != "unresolved" || diags[0].Span.Offset != strings.LastIndex(src, "n;") {
+		t.Fatalf("want one unresolved reference, the outer `= n`, got %v", diags)
 	}
 }
 

@@ -130,6 +130,8 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 		tc.expr.checkBoolean(body, m.Condition, "condition of '"+m.Kind.String()+"'")
 		tc.expr.checkBoolean(body, m.Until, "condition of 'until'")
 		tc.walk(body, m.Body)
+	case *ast.SuccessionEdge:
+		tc.walk(childScopeOr(scope, m), m.Members)
 	case *ast.TransitionMember, *ast.AssignmentActionNode:
 		// Triggers and assignments are checked by the body walk, which reaches
 		// every body they may stand in.

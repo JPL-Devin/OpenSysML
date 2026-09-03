@@ -243,6 +243,11 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		return true
 	case *ast.SuccessionEdge:
 		r.resolveSuccessionEdge(scope, d)
+		body := scope
+		if child := r.childScope(scope, d); child != nil {
+			body = child
+		}
+		r.walkMembers(body, d.Members)
 		return true
 	case *ast.ControlFlowEdge:
 		r.resolveControlFlowEdge(scope, d)

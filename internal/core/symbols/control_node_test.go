@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
@@ -65,5 +66,39 @@ func TestUnnamedControlNodesRegisterNothing(t *testing.T) {
 }`
 	if names := actionBodyScope(t, src).MemberNames(); len(names) != 0 {
 		t.Errorf("unnamed control nodes registered %v", names)
+	}
+}
+
+// TestSuccessionBodyScope covers the body an action target succession carries:
+// its declarations are members of a body-local scope, not of the action.
+func TestSuccessionBodyScope(t *testing.T) {
+	scope := actionBodyScope(t, `package P {
+	action def F {
+		action prep;
+		action starting;
+		first prep;
+		then starting;
+		then starting { attribute wait; }
+	}
+}`)
+	if _, ok := scope.LookupLocal("wait"); ok {
+		t.Error("wait is a member of the action body, want a member of the succession body only")
+	}
+	var bodies []*Scope
+	for _, child := range scope.Children() {
+		if _, ok := child.Node().(*ast.SuccessionEdge); ok {
+			bodies = append(bodies, child)
+		}
+	}
+	if len(bodies) != 1 {
+		t.Fatalf("succession body scopes = %d, want 1 (a bodiless succession owns none)", len(bodies))
+	}
+	body := bodies[0]
+	if !body.BodyLocal() {
+		t.Error("succession body scope is not body-local")
+	}
+	sym, ok := body.LookupLocal("wait")
+	if !ok || sym.OwnerScope != body || sym.Kind != SymbolAttributeUsage {
+		t.Errorf("wait in succession body = %v, %v; want an attribute usage owned by the body", sym, ok)
 	}
 }

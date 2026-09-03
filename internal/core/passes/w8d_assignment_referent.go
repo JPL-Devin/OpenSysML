@@ -110,6 +110,8 @@ func (c *assignmentReferentChecker) walkNode(scope *symbols.Scope, node ast.Node
 		c.walk(body, n.Members)
 	case *ast.SendStatement:
 		c.walk(childScopeOr(scope, n), n.Members)
+	case *ast.SuccessionEdge:
+		c.walk(childScopeOr(scope, n), n.Members)
 	case *ast.WhileLoopActionNode:
 		c.walk(childScopeOr(scope, n), n.Body)
 	case *ast.IfActionNode:

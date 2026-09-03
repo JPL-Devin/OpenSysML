@@ -303,6 +303,16 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 		scope.AddChild(child)
 		buildMembers(child, d.Body)
 		return true
+	case *ast.SuccessionEdge:
+		// An action target succession ends in a UsageBody it owns (SysML.xtext:1698):
+		// `then b { attribute t; }` declares t as a member of the succession.
+		if len(d.Members) > 0 {
+			child := NewScope(scope, d)
+			child.markBodyLocal()
+			scope.AddChild(child)
+			buildMembers(child, d.Members)
+		}
+		return true
 	case *ast.ForkNode:
 		// A control node is an action usage (Actions::ForkAction et al.), so a
 		// named one is a member a succession may name as source or target.
