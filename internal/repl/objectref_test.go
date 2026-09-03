@@ -213,22 +213,17 @@ func TestNotInstantiatedNamesWhatToInstantiate(t *testing.T) {
 		t.Errorf("got %v (%+v), want a NotInstantiatedError naming Fleet::Rover's object", err, nerr)
 	}
 
-	// A nested object of the definition counts once it exists, under the path
-	// reaching it. The error does not create it: the part stays unread, and its
-	// machine's entry action unrun, until something asks for it.
+	// A nested object of the definition counts under the path reaching it. A part
+	// whose type exhibits a machine is created, and its machine run, with the
+	// object holding it, so the error names it as soon as that object exists.
 	run(t, s, "%instantiate Fleet::driver")
-	got = run(t, s, "%state Fleet::Rover::modes Fleet::rover")
-	wants(t, got, `object #`+defOnly+` of "Fleet::Rover"`, "or name Fleet::Rover to address it")
-	if strings.Contains(got, "Fleet::driver::r") {
-		t.Errorf("the error names a part nothing has read:\n%s", got)
+	if fv := s.instances["Fleet::driver"].FeatureValues["r"]; !fv.Materialized {
+		t.Errorf("instantiating Fleet::driver left its machine-exhibiting part unread: %+v", fv)
 	}
 	wants(t, run(t, s, "%invoke Fleet::rover bump"), `no instance of the usage "Fleet::rover"`)
-	if fv := s.instances["Fleet::driver"].FeatureValues["r"]; fv.Materialized || fv.Written {
-		t.Errorf("the failed lookup materialized Fleet::driver.r: %+v", fv)
-	}
-
 	wants(t, run(t, s, "%features Fleet::driver.r"), `log = "W"`)
-	wants(t, run(t, s, "%state Fleet::Rover::modes Fleet::rover"), `of "Fleet::driver::r"`, "or name Fleet::Rover or Fleet::driver::r to address one of them")
+	wants(t, run(t, s, "%state Fleet::Rover::modes Fleet::rover"), `objects #`+defOnly+` of "Fleet::Rover"`,
+		`of "Fleet::driver::r"`, "or name Fleet::Rover or Fleet::driver::r to address one of them")
 
 	// Asking for the definition when only a usage's object exists names the usage.
 	fresh := loadFixture(t, "testdata/nested_machine.sysml")
@@ -369,14 +364,13 @@ func TestObjectPathErrorKeepsTheMaterializationFailure(t *testing.T) {
 }
 
 // Members of a multi-valued part are among the objects a not-instantiated error
-// names once they exist, by identity since no path reaches one, and a feature they
-// all carry is a question between them. Unread, the error does not create them.
+// names, by identity since no path reaches one, and a feature they all carry is a
+// question between them. Members exhibiting a machine exist with their holder.
 func TestNotInstantiatedNamesCollectionMembersByIdentity(t *testing.T) {
 	s := loadFixture(t, "testdata/collection_machine.sysml")
 	run(t, s, "%instantiate Depot::garage")
-	wants(t, run(t, s, "%state Depot::Rover::modes Depot::Rover"), `error: no instance of "Depot::Rover" (use %instantiate first)`)
-	if fv := s.instances["Depot::garage"].FeatureValues["bays"]; fv.Materialized {
-		t.Fatalf("the failed lookup materialized Depot::garage.bays: %+v", fv)
+	if fv := s.instances["Depot::garage"].FeatureValues["bays"]; !fv.Materialized {
+		t.Fatalf("instantiating Depot::garage left its machine-exhibiting members unread: %+v", fv)
 	}
 
 	listing := run(t, s, "%features Depot::garage")
@@ -473,17 +467,26 @@ func TestSupersededObjectIsNotAddressableById(t *testing.T) {
 // identity, members of a multi-valued part included; the check reads no feature
 // that has not been materialized already.
 func TestHeldObjectsStayAddressableById(t *testing.T) {
+	lazy := loadFixture(t, "testdata/nested_part.sysml")
+	run(t, lazy, "%instantiate Nested::Car")
+	car := lazy.instances["Nested::Car"]
+	if fv := car.FeatureValues["engine"]; fv != nil && fv.Materialized {
+		t.Fatal("engine was materialized by %instantiate alone")
+	}
+	if _, _, err := lazy.objectRef("#99"); err == nil {
+		t.Error("#99 reached an object")
+	}
+	if fv := car.FeatureValues["engine"]; fv != nil && fv.Materialized {
+		t.Error("looking up an identity materialized engine")
+	}
+
 	s := loadFixture(t, "testdata/nested_machine.sysml")
 	run(t, s, "%instantiate Fleet::driver")
-	driver := s.instances["Fleet::driver"]
-	if fv := driver.FeatureValues["r"]; fv != nil && fv.Materialized {
-		t.Fatal("r was materialized by %instantiate alone")
+	if fv := s.instances["Fleet::driver"].FeatureValues["r"]; !fv.Materialized {
+		t.Fatalf("instantiating Fleet::driver left its machine-exhibiting part unread: %+v", fv)
 	}
 	if _, _, err := s.objectRef("#99"); err == nil {
 		t.Error("#99 reached an object")
-	}
-	if fv := driver.FeatureValues["r"]; fv != nil && fv.Materialized {
-		t.Error("looking up an identity materialized r")
 	}
 
 	nested := objectIDIn(t, run(t, s, "%state Fleet::driver.r"))

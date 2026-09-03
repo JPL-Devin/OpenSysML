@@ -290,9 +290,80 @@ func (ctx *Context) startBehaviorsOfAll(objects []*Instance) error {
 			ctx.behaviorRunDepth--
 			return err
 		}
+		if err := ctx.materializeBehavingParts(inst); err != nil {
+			ctx.behaviorRunDepth--
+			return err
+		}
 	}
 	ctx.behaviorRunDepth--
 	return ctx.runAttachedBehaviors()
+}
+
+// materializeBehavingParts materializes the required composite parts of an
+// object whose type runs behaviors, so the object runs to quiescence as a whole
+// when it is created rather than part by part in the order its parts are first
+// read. An optional part (lower bound 0) is required to hold nothing, so it is
+// left unread. A part that fails to materialize or start fails its holder.
+func (ctx *Context) materializeBehavingParts(inst *Instance) error {
+	for _, feat := range ctx.FeaturesOf(inst.Type) {
+		fv, ok := inst.FeatureValues[feat.Name]
+		if !ok || fv.Materialized || ctx.model.IsConnectorUsage(feat.Symbol) {
+			continue
+		}
+		composite := ctx.requiredPartType(fv.Feature)
+		if composite == nil || !ctx.runsBehaviors(composite, make(map[*symbols.Symbol]bool)) {
+			continue
+		}
+		if _, err := inst.GetFeatureValue(ctx, feat.Name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// requiredPartType is the type of the objects a composite feature is required to
+// hold, or nil when it may hold none: an optional part (finite lower bound 0) or
+// one whose lower bound is unknown.
+func (ctx *Context) requiredPartType(feat *EffectiveFeature) *symbols.Symbol {
+	composite := ctx.CompositeTypeOf(feat)
+	mult := feat.Multiplicity
+	if composite == nil || !mult.Lower.Known {
+		return nil
+	}
+	if !mult.Lower.Infinite && mult.Lower.Value == 0 {
+		return nil
+	}
+	return composite
+}
+
+// runsBehaviors reports whether objects of a type run behaviors, of their own or
+// of a part they are required to hold; an optional part is left absent, so what
+// it would run does not count. A type on the path being decided answers false: a
+// composition cycle has no finite object, so nothing is lost by cutting it.
+func (ctx *Context) runsBehaviors(typeSym *symbols.Symbol, visiting map[*symbols.Symbol]bool) bool {
+	if known, ok := ctx.behaving[typeSym]; ok {
+		return known
+	}
+	if visiting[typeSym] {
+		return false
+	}
+	visiting[typeSym] = true
+	defer delete(visiting, typeSym)
+	runs := len(ctx.classifierBehaviorsOf(typeSym)) > 0
+	features := ctx.FeaturesOf(typeSym)
+	for i := range features {
+		if runs {
+			break
+		}
+		if ctx.model.IsConnectorUsage(features[i].Symbol) {
+			continue
+		}
+		if composite := ctx.requiredPartType(&features[i]); composite != nil && ctx.runsBehaviors(composite, visiting) {
+			runs = true
+		}
+	}
+	ctx.behaving[typeSym] = runs
+	return runs
 }
 
 // startBehaviorsOf attaches the object's behaviors and, at the outermost start,
