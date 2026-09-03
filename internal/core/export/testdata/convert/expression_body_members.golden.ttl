@@ -102,6 +102,7 @@ elmt:Bodies__Scaled___401
     sysml:owningRelationship elmt:Bodies__Scaled___401_om ;
     sysml:owningMembership elmt:Bodies__Scaled___401_om ;
     sysx:sourceText "{ in y : Real; private attribute k : Real = 2; y * k + x }" ;
+    sysx:hasBody "true"^^xsd:boolean ;
     sysx:bodyParameter expr:Bodies__Scaled___401_pin0 ;
     sysx:bodyMember expr:Bodies__Scaled___401_pm1 ;
     sysx:resultExpression expr:Bodies__Scaled___401_presult .

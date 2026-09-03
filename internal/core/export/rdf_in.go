@@ -133,7 +133,7 @@ func checkLiterals(graph *rdf.Graph) error {
 		if object.Lang != "" {
 			return literalError(triple, "a language-tagged literal is an rdf:langString, and no property this mapping reads takes one")
 		}
-		allowed := literalDatatypes(triple.Predicate.Value)
+		allowed := literalDatatypes(rdf.LocalName(graph.Type(triple.Subject)), triple.Predicate.Value)
 		if !slices.Contains(allowed, object.Datatype) {
 			return literalError(triple, fmt.Sprintf("%s takes %s", curie(triple.Predicate.Value), datatypeList(allowed)))
 		}
@@ -159,28 +159,80 @@ func mappingPredicate(iri string) bool {
 	return strings.HasPrefix(iri, rdf.SysML) || strings.HasPrefix(iri, rdf.OpenSysML)
 }
 
-// literalDatatypes lists the datatypes a literal of the property may carry: a
-// string ("" is plain, sysx:Expression is notation text), plus what it counts.
-func literalDatatypes(predicate string) []string {
-	text := []string{"", rdf.XSD + "string", rdf.OpenSysML + dtExpression}
+// The datatypes a literal may carry, by what its property holds: "" is a plain
+// literal, notation a name or expression text standing in for an element.
+var (
+	stringLiterals   = []string{"", rdf.XSD + "string"}
+	notationLiterals = []string{"", rdf.XSD + "string", rdf.OpenSysML + dtExpression}
+	booleanLiterals  = []string{rdf.XSD + "boolean"}
+	integerLiterals  = []string{rdf.XSD + "integer", rdf.XSD + "int"}
+	realLiterals     = []string{rdf.XSD + "decimal", rdf.OWL + "real", rdf.XSD + "double", rdf.XSD + "float"}
+)
+
+// literalDatatypes lists the datatypes a literal of the property may carry on a
+// subject of the metaclass: the ontology's range, else this tool's vocabulary.
+func literalDatatypes(metaclass, predicate string) []string {
 	name := rdf.LocalName(predicate)
-	switch {
-	case name == xMemberIndex, name == xArgumentIndex, name == xEndIndex,
-		name == pLowerBound, name == pUpperBound:
-		return append(text, rdf.XSD+"integer")
-	case strings.HasPrefix(name, "is"), name == xHasBody, name == xDeclaredID:
-		return append(text, rdf.XSD+"boolean")
-	case name == pValue:
-		return append(text, rdf.XSD+"integer", rdf.XSD+"decimal", rdf.XSD+"boolean")
+	if strings.HasPrefix(predicate, rdf.SysML) {
+		if declared := declaredLiteralDatatypes(metaclass, name); declared != nil {
+			return declared
+		}
 	}
-	return text
+	switch {
+	case name == xMemberIndex, name == xArgumentIndex, name == xEndIndex:
+		return integerLiterals
+	case strings.HasPrefix(name, "is"), name == xHasBody, name == xDeclaredID:
+		return booleanLiterals
+	case strings.HasPrefix(predicate, rdf.SysML):
+		return notationLiterals
+	}
+	return stringLiterals
 }
 
-// datatypeList words the datatypes literalDatatypes lists: the strings as one.
+// declaredLiteralDatatypes reads the ontology's range for a property on the
+// metaclass, or on every metaclass declaring it when the subject's is unknown.
+func declaredLiteralDatatypes(metaclass, name string) []string {
+	var allowed []string
+	for _, property := range ontology.LookupProperty(name) {
+		if metaclass != "" && !ontology.IsAncestorOrSelf(metaclass, property.DefiningClass) {
+			continue
+		}
+		allowed = append(allowed, rangeLiterals(property)...)
+	}
+	if allowed == nil && metaclass != "" {
+		return declaredLiteralDatatypes("", name)
+	}
+	// A bound is an Expression the notation also states as a bare number.
+	if name == pLowerBound || name == pUpperBound {
+		allowed = append(allowed, integerLiterals...)
+	}
+	return slices.Compact(slices.Sorted(slices.Values(allowed)))
+}
+
+func rangeLiterals(property ontology.Property) []string {
+	if property.Kind == ontology.ObjectProperty {
+		return notationLiterals
+	}
+	switch property.Range {
+	case rdf.XSD + "boolean":
+		return booleanLiterals
+	case rdf.XSD + "int":
+		return integerLiterals
+	case rdf.OWL + "real":
+		return realLiterals
+	}
+	return stringLiterals
+}
+
+// datatypeList words the datatypes literalDatatypes lists: a plain literal and
+// xsd:string as one.
 func datatypeList(datatypes []string) string {
-	names := []string{"a string"}
+	var names []string
+	if slices.Contains(datatypes, "") {
+		names = append(names, "a string")
+	}
 	for _, datatype := range datatypes {
-		if strings.HasPrefix(datatype, rdf.XSD) && datatype != rdf.XSD+"string" {
+		if datatype != "" && datatype != rdf.XSD+"string" {
 			names = append(names, curie(datatype))
 		}
 	}
@@ -190,7 +242,7 @@ func datatypeList(datatypes []string) string {
 // curie abbreviates an IRI with the prefix the mapping writes it under.
 func curie(iri string) string {
 	for _, ns := range [...]struct{ prefix, iri string }{
-		{"sysml", rdf.SysML}, {"sysx", rdf.OpenSysML}, {"xsd", rdf.XSD},
+		{"sysml", rdf.SysML}, {"sysx", rdf.OpenSysML}, {"xsd", rdf.XSD}, {"owl", rdf.OWL},
 	} {
 		if strings.HasPrefix(iri, ns.iri) {
 			return ns.prefix + ":" + strings.TrimPrefix(iri, ns.iri)

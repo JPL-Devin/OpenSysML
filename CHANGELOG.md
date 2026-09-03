@@ -165,8 +165,14 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   stated as `"x"@en` came back as the name `3` or `x`. Every metamodel property the mapping
   reads as text is a `String`; a language-tagged literal, or one whose datatype its property does
   not take, is now refused before anything is read, naming the literal and the subject that
-  states it. Plain and `xsd:string` literals read as before, and the counting properties keep
-  their `xsd:integer`, `xsd:decimal` and `xsd:boolean` forms.
+  states it. Plain and `xsd:string` literals read as before, and each property takes the
+  datatypes the ontology gives it: `xsd:boolean` for a flag, `xsd:integer` or `xsd:int` for an
+  index or a `LiteralInteger`, `xsd:decimal` or `owl:real` for a `LiteralRational`.
+- **A result expression rebuilt from its graph is spelled as the grammar requires.** A
+  `sysml:LiteralString` whose value holds a quote, a backslash or a line break is written back
+  as the escaped string token, an empty expression body `{}` states `sysx:hasBody` so it comes
+  back without its `sysx:sourceText`, and a named invocation argument whose name is not a basic
+  name (`f('the value' = x)`) keeps its quotes.
 
 ### Changed
 

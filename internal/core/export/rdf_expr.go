@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 )
 
@@ -91,7 +92,7 @@ func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) 
 		e.graph.Add(subject, e.sysml(pValue), rdf.Bool(n.Value))
 
 	case *ast.LiteralString:
-		e.graph.Add(subject, e.sysml(pValue), rdf.String(unquote(n.Value)))
+		e.graph.Add(subject, e.sysml(pValue), rdf.String(lexer.StringValue(n.Value)))
 
 	case *ast.LiteralInteger:
 		e.graph.Add(subject, e.sysml(pValue), rdf.TypedLiteral(n.Value, rdf.XSD+"integer"))
@@ -154,7 +155,9 @@ func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) 
 		e.graph.Add(subject, e.sysml(pReferencedElement), e.reference(owner, qualifiedText(n.Ref)))
 
 	case *ast.BodyExpr:
-		// A body declares its own parameters and members, then a result expression.
+		// A body declares its own parameters and members, then a result expression;
+		// sysx:hasBody marks it as one even when it declares nothing.
+		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(true))
 		e.bodyDeclarations(subject, owner, n.Params, n.Members)
 		if n.Result != nil {
 			result := rdf.ExpressionIRI(subject, "result")
@@ -394,7 +397,7 @@ func (d *decoder) expressionNodeText(node rdf.Term, scope string) (string, error
 		if !ok {
 			return "", unsupported("a literal expression states the value it evaluates to")
 		}
-		return `"` + value + `"`, nil
+		return lexer.StringText(value), nil
 	case mLiteralInfinity:
 		return "*", nil
 	case mNullExpression:
@@ -441,7 +444,8 @@ func (d *decoder) expressionNodeText(node rdf.Term, scope string) (string, error
 	case mInvocation:
 		return d.invocationText(node, scope)
 	case mExpression:
-		if d.graph.HasProperty(node, rdf.OpenSysML+xResultExpression) ||
+		if d.graph.BoolValue(node, rdf.OpenSysML+xHasBody) ||
+			d.graph.HasProperty(node, rdf.OpenSysML+xResultExpression) ||
 			d.graph.HasProperty(node, rdf.OpenSysML+xBodyParameter) ||
 			d.graph.HasProperty(node, rdf.OpenSysML+xBodyMember) {
 			return d.expressionBodyText(node, scope)
@@ -463,6 +467,9 @@ func (d *decoder) expressionBodyText(node rdf.Term, scope string) (string, error
 			return "", err
 		}
 		parts = append(parts, text)
+	}
+	if len(parts) == 0 {
+		return "{}", nil
 	}
 	return "{ " + strings.Join(parts, " ") + " }", nil
 }
@@ -661,7 +668,7 @@ func (d *decoder) expressionArguments(node rdf.Term, scope string) ([]string, er
 			}
 		}
 		if name, ok := d.graph.Lexical(object, rdf.OpenSysML+xArgumentName); ok {
-			arg.name = name
+			arg.name = qualifiedNameText(name)
 		}
 		args = append(args, arg)
 	}

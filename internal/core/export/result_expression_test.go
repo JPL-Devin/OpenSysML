@@ -95,6 +95,9 @@ func TestResultExpressionsComeBackFromTheGraphAlone(t *testing.T) {
 		"if (x > 0) ? x else (- x)",
 		"(as Real[2])",
 		"(as Real[1..*])",
+		`"say \"hi\"\n\\ \t done"`,
+		"in x : Real;\n        {}",
+		"Double('the value' = x)",
 	} {
 		if !strings.Contains(string(fromGraph), want) {
 			t.Errorf("the notation rebuilt from the graph lacks %q:\n%s", want, fromGraph)
@@ -214,6 +217,32 @@ ex:r_b a sysml:LiteralInteger ; sysml:value "2"^^xsd:integer .
 	}
 }
 
+// The datatypes the SysML ontology declares — xsd:int for a LiteralInteger,
+// owl:real for a LiteralRational, xsd:string for a name — are the ones a
+// conforming tool writes, and are read alongside this tool's own.
+func TestOntologyDatatypesAreRead(t *testing.T) {
+	const turtle = `@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix ex: <urn:example:> .
+
+ex:P a sysml:Package ; sysml:qualifiedName "P" ; sysml:declaredName "P"^^xsd:string .
+ex:C a sysml:CalculationDefinition ; sysml:qualifiedName "P::C" ; sysml:declaredName "C" ; sysml:owningMembership ex:C_m ; sysml:isAbstract "true"^^xsd:boolean .
+ex:C_m a sysml:OwningMembership ; sysml:membershipOwningNamespace ex:P ; sysml:memberElement ex:C .
+ex:r a sysml:OperatorExpression ; sysml:operator "+" ; sysml:argument ex:r_a, ex:r_b .
+ex:r_m a sysml:ResultExpressionMembership ; sysml:membershipOwningNamespace ex:C ; sysml:ownedMemberFeature ex:r ; sysml:ownedResultExpression ex:r .
+ex:r_a a sysml:LiteralInteger ; sysml:value "2"^^xsd:int .
+ex:r_b a sysml:LiteralRational ; sysml:value "0.5"^^owl:real .
+`
+	back, err := export.Convert("m.ttl", []byte(turtle), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from a standard graph: %v", err)
+	}
+	if want := "abstract calc def C {\n        (2 + 0.5)\n    }"; !strings.Contains(string(back), want) {
+		t.Errorf("the notation lacks %q:\n%s", want, back)
+	}
+}
+
 // A declaration inside an expression body is carried as its notation; a graph
 // that states such a member without its text is refused, naming the member.
 func TestExpressionBodyDeclarationNeedsItsText(t *testing.T) {
@@ -324,15 +353,23 @@ func TestNonStringLiteralsAreRefused(t *testing.T) {
 	}
 }
 
-// The check is decoder-wide: a typed literal where the metamodel has a String
-// is refused whichever property states it.
-func TestTypedLiteralNamesAreRefusedEverywhere(t *testing.T) {
-	turtle := string(convertFixture(t, "result_expressions"))
-	for _, tc := range []struct{ from, to, want string }{
-		{`sysml:declaredName "Quoted" ;`, `sysml:declaredName "42"^^xsd:integer ;`, "sysml:declaredName takes a string"},
-		{`sysml:operator "+" ;`, `sysml:operator "+"@en ;`, "a language-tagged literal is an rdf:langString"},
-		{`sysx:memberIndex "0"^^xsd:integer ;`, `sysx:memberIndex "0"^^xsd:decimal ;`, "sysx:memberIndex takes a string or xsd:integer"},
+// The check is decoder-wide and per property: a literal is refused where its
+// datatype is not the one the property holds, a string on a flag or an index
+// and expression text on a name included.
+func TestMistypedLiteralsAreRefusedEverywhere(t *testing.T) {
+	for _, tc := range []struct{ fixture, from, to, want string }{
+		{"result_expressions", `sysml:declaredName "Quoted" ;`, `sysml:declaredName "42"^^xsd:integer ;`, "sysml:declaredName takes a string"},
+		{"result_expressions", `sysml:declaredName "Quoted" ;`, `sysml:declaredName "Quoted"^^sysx:Expression ;`, "sysml:declaredName takes a string"},
+		{"result_expressions", `sysml:operator "+" ;`, `sysml:operator "+"@en ;`, "a language-tagged literal is an rdf:langString"},
+		{"result_expressions", `sysx:memberIndex "0"^^xsd:integer ;`, `sysx:memberIndex "0"^^xsd:decimal ;`, "sysx:memberIndex takes xsd:integer or xsd:int"},
+		{"result_expressions", `sysx:memberIndex "0"^^xsd:integer ;`, `sysx:memberIndex "0" ;`, "sysx:memberIndex takes xsd:integer or xsd:int"},
+		{"result_expressions", `sysx:hasBody "true"^^xsd:boolean ;`, `sysx:hasBody "true" ;`, "sysx:hasBody takes xsd:boolean"},
+		{"bounds", `sysml:isReference "true"^^xsd:boolean ;`, `sysml:isReference "true"^^xsd:string ;`, "sysml:isReference takes xsd:boolean"},
+		{"result_expressions", `sysml:value "2"^^xsd:integer ;`, `sysml:value "2" ;`, "sysml:value takes xsd:int or xsd:integer"},
+		{"result_expressions", `sysml:value "2"^^xsd:integer ;`, `sysml:value "2"^^xsd:decimal ;`, "sysml:value takes xsd:int or xsd:integer"},
+		{"result_expressions", `sysml:value "true"^^xsd:boolean .`, `sysml:value "true" .`, "sysml:value takes xsd:boolean"},
 	} {
+		turtle := string(convertFixture(t, tc.fixture))
 		if !strings.Contains(turtle, tc.from) {
 			t.Fatalf("expected %q in the graph:\n%s", tc.from, turtle)
 		}

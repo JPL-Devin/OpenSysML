@@ -102,6 +102,7 @@ elmt:Ordered__Mixed___401
     sysml:owningRelationship elmt:Ordered__Mixed___401_om ;
     sysml:owningMembership elmt:Ordered__Mixed___401_om ;
     sysx:sourceText "{ in a : Real; private attribute k : Real = 1; in b : Real; a + b + k * x }" ;
+    sysx:hasBody "true"^^xsd:boolean ;
     sysx:bodyParameter expr:Ordered__Mixed___401_pin0, expr:Ordered__Mixed___401_pin2 ;
     sysx:bodyMember expr:Ordered__Mixed___401_pm1 ;
     sysx:resultExpression expr:Ordered__Mixed___401_presult .
@@ -229,6 +230,7 @@ elmt:Ordered__Declares___400
     sysml:owningRelationship elmt:Ordered__Declares___400_om ;
     sysml:owningMembership elmt:Ordered__Declares___400_om ;
     sysx:sourceText "{ private attribute k : Real = 1; }" ;
+    sysx:hasBody "true"^^xsd:boolean ;
     sysx:bodyMember expr:Ordered__Declares___400_pm0 .
 
 elmt:Ordered__Declares___400_om

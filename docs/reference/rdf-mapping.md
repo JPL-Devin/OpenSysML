@@ -203,7 +203,7 @@ The `sysx:` properties:
 | Property | Why it exists |
 |----------|---------------|
 | `sysx:memberIndex` | Declaration order. The notation is sensitive to the order of members; an RDF graph is an unordered set, so the index is what lets a conversion back to notation reproduce the original sequence. |
-| `sysx:hasBody` | Distinguishes `part def A;` from `part def A { }`, which are different source and would otherwise convert back identically. |
+| `sysx:hasBody` | Distinguishes `part def A;` from `part def A { }`, which are different source and would otherwise convert back identically. Also marks an expression body node, so `{}` rebuilds from structure. |
 | `sysx:sourceText` | The verbatim source of the constructs described under *Limitations*. |
 | `sysx:declaredKeyword` | The kind keyword as written, when it is one of the synonyms several keywords share (`datatype` and `attribute`, `function` and `calc`, `snapshot` and `occurrence`). The AST records one kind for all of them, so without this the notation would come back rewritten. Also the keyword a constraint body's condition is stated with (`assert`, `assume`, or absent for a bare condition, which asserts implicitly). |
 | `sysx:declaredPrefix` | The keyword qualifying the kind keyword after it — the `assert` of `assert constraint c : C`. It says what the declaration is for, and the AST kind alone does not carry it. |
@@ -380,7 +380,9 @@ The rules the tree follows:
   `sysx:resultExpression` is the tree of the expression after them, so a nested
   body (`{ in y : Real; f(x = { in z : Real; z + y }) }`) and an `in expr`
   parameter's body (`in expr keep : Boolean { in v : Real; v > x }`) rebuild from
-  the graph alone. Documentation opening a body (`{ doc /* … */ in y : Real; y }`)
+  the graph alone. The node states `sysx:hasBody`, so an empty body (`{}`) is
+  told apart from an expression with no structure at all and comes back as `{}`.
+  Documentation opening a body (`{ doc /* … */ in y : Real; y }`)
   is a `sysml:Documentation` node with its `sysml:body`. Any other declaration a
   body makes ahead of its result (`{ in y : Real; private attribute k : Real = 2; y * k }`)
   is a `sysx:BodyMember` carrying its notation; a graph that states one without its
@@ -709,10 +711,15 @@ would be refused as a duplicate.
   Every metamodel property the mapping reads as text is a `String`, so a name
   is a plain or `xsd:string` literal; `"3"^^xsd:integer` or `"x"@en` stated as
   one is a different term, not the name `3` or `x`, and is reported naming the
-  literal and the subject that states it. The counting properties take their
-  `xsd:` type as well: `xsd:integer` for the `sysx:` indexes and the bounds,
-  `xsd:boolean` for the flags, and `xsd:integer`, `xsd:decimal` or
-  `xsd:boolean` for the `sysml:value` of a literal expression
+  literal and the subject that states it. The other properties take the
+  datatypes the ontology gives them, so a plain string is refused there too:
+  `xsd:boolean` for the flags and `sysx:hasBody`; `xsd:integer` or `xsd:int`
+  for the `sysx:` indexes and the bounds; and for the `sysml:value` of a
+  literal expression, by its class, `xsd:integer` or `xsd:int`
+  (`LiteralInteger`), `xsd:decimal`, `owl:real`, `xsd:double` or `xsd:float`
+  (`LiteralRational`), `xsd:boolean` (`LiteralBoolean`) or a string
+  (`LiteralString`). A `sysx:Expression` literal is taken only where the
+  mapping writes notation — a relationship target — never as a name
 
 A graph that uses none of OpenSysML's `sysx:` properties (one produced by
 another tool) converts as far as the mapping allows and errors on the first

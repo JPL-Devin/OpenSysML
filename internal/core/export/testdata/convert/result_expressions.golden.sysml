@@ -34,6 +34,17 @@ package Results {
         in ok : Boolean;
         ok
     }
+    calc def Says {
+        "say \"hi\"\n\\ \t done"
+    }
+    calc def Empty {
+        in x : Real;
+        {}
+    }
+    calc def Named {
+        in x : Real;
+        Double('the value' = x)
+    }
     calc def Predicate {
         in x : Real;
         in expr keep : Boolean {

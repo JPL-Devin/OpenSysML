@@ -11,6 +11,9 @@ const (
 	RDFNS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 	// XSD is the XML Schema datatype namespace.
 	XSD = "http://www.w3.org/2001/XMLSchema#"
+	// OWL is the Web Ontology Language namespace; the SysML ontology types a
+	// LiteralRational's value owl:real.
+	OWL = "http://www.w3.org/2002/07/owl#"
 	// SysML is the OMG SysML vocabulary namespace, used for metaclasses and
 	// metamodel properties.
 	SysML = "https://www.omg.org/spec/SysML#"
