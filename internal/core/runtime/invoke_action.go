@@ -219,6 +219,9 @@ func bindArguments(
 				qualifiedNameText(inv.target), name,
 			)
 		}
+		if _, dup := inputs[name]; dup {
+			return nil, fmt.Errorf("%w: %s binds parameter %q twice", ErrCalcArity, qualifiedNameText(inv.target), name)
+		}
 		value, err := ec.Eval(named.Value)
 		if err != nil {
 			return nil, fmt.Errorf("eval argument %q of %s: %w", name, qualifiedNameText(inv.target), err)
