@@ -487,6 +487,7 @@ func TestPrefixMetadataComesBackFromTheGraphAlone(t *testing.T) {
 		"#Safety part def Car;",
 		"abstract #Safety #Reviewed part def Truck;",
 		"#Safety part car : Car;",
+		"#$::P::Safety part car : Car;",
 		"#safe part named : Car;",
 		"private ref #Safety part spare : Car;",
 		"variant #Reviewed part option : Car;",
@@ -525,12 +526,83 @@ func TestPrefixMetadataComesBackFromTheGraphAlone(t *testing.T) {
 	}
 }
 
+// A prefix annotation is identified by its position after the body members,
+// so a body member named as that position is refused rather than merged with
+// it; a member named as another position is no collision.
+func TestPrefixCollidingWithAPositionNamedMemberIsReported(t *testing.T) {
+	src := "package P {\n\tmetadata def Safety;\n\t#Safety part def Car {\n\t\tpart '@1';\n\t}\n}"
+	_, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	var unsupported *export.UnsupportedError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("expected an unsupported error, got %v", err)
+	}
+	for _, want := range []string{"the prefix annotation at m.sysml:3:2", "identified by its position as P::Car::@1, which a body member is named"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("expected %q in error:\n%s", want, err.Error())
+		}
+	}
+
+	src = "package P {\n\tmetadata def Safety;\n\t#Safety part def Car {\n\t\tpart '@0';\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	if !strings.Contains(string(back), "#Safety part def Car {\n        part '@0';\n    }") {
+		t.Errorf("the prefix and the member should both come back:\n%s", back)
+	}
+}
+
+// A metadata usage is owned through an OwningMembership even when a
+// relationship owns it, so a client reaches it the way it reaches any member.
+func TestMetadataOnARelationshipIsOwnedThroughAMembership(t *testing.T) {
+	src := "package P {\n\tmetadata def Safety;\n\tpart def Car;\n\t#Safety dependency from P to Car;\n\trequirement def R {\n\t\tsubject #Safety s : Car;\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	for _, owner := range []string{"P___402", "P__R__s"} {
+		member, membership := "elmt:"+owner+"___400", "elmt:"+owner+"___400_om"
+		for _, want := range []string{
+			membership + "\n    a sysml:OwningMembership ;",
+			"sysml:memberElement " + member,
+			"sysml:ownedMemberElement " + member,
+			"sysml:owningRelatedElement elmt:" + owner,
+			"sysml:owningMembership " + membership,
+			"sysml:ownedRelationship " + membership,
+		} {
+			if !strings.Contains(string(turtle), want) {
+				t.Errorf("the graph does not state %q:\n%s", want, turtle)
+			}
+		}
+		for _, reject := range []string{"sysml:memberElement " + member + " ;\n    sysml:ownedMemberFeature", "sysml:membershipOwningNamespace elmt:" + owner} {
+			if strings.Contains(string(turtle), reject) {
+				t.Errorf("a relationship is no namespace, yet the graph states %q:\n%s", reject, turtle)
+			}
+		}
+	}
+	back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	for _, head := range []string{"#Safety dependency from P to Car;", "subject #Safety s : Car;"} {
+		if !strings.Contains(string(back), head) {
+			t.Errorf("the head should come back as written:\n%s", back)
+		}
+	}
+}
+
 // A metadata usage member carries its body's feature values, its name, the
 // elements it is about and the `@` it was written with, so every member form
 // comes back from the mapping alone and converts to the same graph again.
 func TestMetadataMembersComeBackFromTheGraphAlone(t *testing.T) {
 	members := []string{
 		"@Safety;",
+		"private @Safety;",
+		"protected @ checked : Safety about Car;",
 		"@Safety {\n            level = 2;\n        }",
 		"@Safety {\n            redefines level = 3;\n            reviewer = \"ops\";\n            audit {\n                year = 2026;\n            }\n        }",
 		"@ checked : Safety;",

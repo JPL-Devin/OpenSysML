@@ -59,6 +59,54 @@ func TestMetadataUsageMember(t *testing.T) {
 	}
 }
 
+// A prefix names its definition by any qualified name, the global `$::` form
+// included, wherever a member may be written (SysML.xtext PrefixMetadataUsage).
+func TestGloballyQualifiedPrefixMetadata(t *testing.T) {
+	sources := map[string]string{
+		"package member":   "package P { metadata def M; #$::P::M part x; #$::P::M part def D; }",
+		"root declaration": "metadata def M; #$::M part x; #$::M part def D;",
+		"nested member":    "package P { metadata def M; part def D { #$::P::M part x; } }",
+		"root package":     "metadata def M; #$::M package Q;",
+	}
+	for name, src := range sources {
+		t.Run(name, func(t *testing.T) {
+			p := New(source.New("test.sysml", []byte(src)))
+			root := p.ParseFile()
+			if len(p.Diagnostics) > 0 {
+				t.Fatalf("expected no diagnostics, got %v", p.Diagnostics)
+			}
+			var prefixes []*ast.PrefixMetadata
+			var walk func(nodes []ast.Node)
+			walk = func(nodes []ast.Node) {
+				for _, node := range nodes {
+					if membership, ok := node.(*ast.Membership); ok {
+						node = membership.Member
+					}
+					switch n := node.(type) {
+					case *ast.Package:
+						prefixes = append(prefixes, n.Prefixes...)
+						walk(n.Members)
+					case *ast.Definition:
+						prefixes = append(prefixes, n.Prefixes...)
+						walk(n.Members)
+					case *ast.Usage:
+						prefixes = append(prefixes, n.Prefixes...)
+					}
+				}
+			}
+			walk(root.Members)
+			if len(prefixes) != strings.Count(src, "#") {
+				t.Fatalf("expected %d prefixes, got %d", strings.Count(src, "#"), len(prefixes))
+			}
+			for _, prefix := range prefixes {
+				if prefix.Type == nil || !prefix.Type.Global || ast.SimpleName(prefix.Type) != "M" {
+					t.Errorf("expected the global name $::…::M, got %v", prefix.Type)
+				}
+			}
+		})
+	}
+}
+
 // An unterminated metadata usage is reported rather than read as a prefix of the
 // declaration after it; `#Type` is the prefix spelling.
 func TestMetadataUsageRequiresTerminator(t *testing.T) {

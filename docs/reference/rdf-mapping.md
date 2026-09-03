@@ -202,8 +202,10 @@ never by parsing the id — a declared id may legitimately end in `_om` or embed
   Safety about a, b;` or the prefix `#Safety part def P;` — is a
   `sysml:MetadataUsage` owned by the element it is written in or ahead of,
   through an `OwningMembership` (never a `FeatureMembership`: the annotation is
-  not a feature of what it annotates). It carries `sysml:type` for its metadata
-  definition, one `sysml:annotatedElement` per `about` target, `sysx:hasBody`,
+  not a feature of what it annotates), even when that element is itself a
+  relationship such as a `dependency` or a `subject` membership. It carries
+  `sysml:type` for its metadata definition, one `sysml:annotatedElement` per
+  `about` target, `sysx:hasBody`,
   and `sysx:declaredKeyword` `"@"` or `"#"` for the sigil it was written with
   (`metadata` is the absence of both). The body's members are its owned members
   like any other body's: a value binding (`level = 2;`) is a `sysml:ReferenceUsage`

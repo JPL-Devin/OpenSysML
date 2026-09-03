@@ -1411,6 +1411,9 @@ func (d *decoder) metadataHead(el *element) (string, error) {
 	if ident := d.identWords(el); len(ident) > 0 {
 		head = "@ " + strings.Join(ident, " ") + " : " + typed[0]
 	}
+	if keyword := d.visibility(el); keyword != "" {
+		head = keyword + " " + head
+	}
 	about, err := d.referenceList(el, rdf.SysML+pAnnotatedElement)
 	if err != nil {
 		return "", err

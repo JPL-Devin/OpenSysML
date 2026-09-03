@@ -669,8 +669,11 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 // from a root with nothing to follow.
 func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string) rdf.Term {
 	ownerClass, memberClass := e.metaclassOf(owner), e.metaclassOf(member)
+	// A metadata usage annotates its owner through an OwningMembership whatever
+	// the owner is, a relationship included (SysML.xtext PrefixMetadataMember).
+	metadata := memberClass == "MetadataUsage"
 	switch {
-	case isRelationship(ownerClass):
+	case isRelationship(ownerClass) && !metadata:
 		// A relationship owns its related element itself, as a state's entry
 		// membership owns the action it states.
 		e.relationshipOwnership(member, owner, ownerClass, memberClass)
@@ -688,11 +691,9 @@ func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string) rdf
 		return rdf.Term{}
 	}
 	// A type owns a feature through a FeatureMembership, which is the membership
-	// the API's payloads carry for it; anything else through an OwningMembership.
-	// A metadata usage annotates its owner rather than being a feature of it
-	// (SysML.xtext AnnotatingMember, PrefixMetadataMember).
-	feature := ontology.IsAncestorOrSelf(memberClass, "Feature") && ontology.IsAncestorOrSelf(ownerClass, "Type") &&
-		memberClass != "MetadataUsage"
+	// the API's payloads carry for it; anything else, a metadata usage included,
+	// through an OwningMembership.
+	feature := ontology.IsAncestorOrSelf(memberClass, "Feature") && ontology.IsAncestorOrSelf(ownerClass, "Type") && !metadata
 	membership := rdf.OwningMembershipIRIOf(member)
 	// The membership shares the element namespace, so its IRI is reserved too.
 	if prior, taken := e.claim(membership.Value, memberFQN+"'s owning membership"); taken && e.idErr == nil {
@@ -717,10 +718,12 @@ func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string) rdf
 	e.graph.Add(membership, e.sysml(pOwnedMemberElement), member)
 	e.graph.Add(membership, e.sysml(pOwnedRelatedElement), member)
 	e.graph.Add(membership, e.sysml(pOwningRelatedElement), owner)
-	e.graph.Add(membership, e.sysml(pMembershipOwningNamespace), owner)
-
-	e.graph.Add(owner, e.sysml(pOwnedMember), member)
-	e.graph.Add(owner, e.sysml(pOwnedMembership), membership)
+	// Only a namespace has members; a relationship owner just owns the membership.
+	if !isRelationship(ownerClass) {
+		e.graph.Add(membership, e.sysml(pMembershipOwningNamespace), owner)
+		e.graph.Add(owner, e.sysml(pOwnedMember), member)
+		e.graph.Add(owner, e.sysml(pOwnedMembership), membership)
+	}
 	e.graph.Add(owner, e.sysml(pOwnedRelationship), membership)
 	if feature {
 		e.graph.Add(membership, e.sysml(pOwnedMemberFeature), member)
@@ -916,6 +919,13 @@ func (e *encoder) prefixes(subject rdf.Term, fqn string, prefixes []*ast.PrefixM
 			continue
 		}
 		prefixFQN := qualify(fqn, "", index)
+		// A body member may be named `'@N'`, the position name the prefix takes.
+		if e.declared[prefixFQN] {
+			return &UnsupportedError{
+				What: fmt.Sprintf("the prefix annotation at %s", e.where(prefix)),
+				Note: fmt.Sprintf("it is identified by its position as %s, which a body member is named, and merging two elements into one subject would be a different model", prefixFQN),
+			}
+		}
 		prefixSubject, err := e.mint(prefix, prefixFQN)
 		if err != nil {
 			return err

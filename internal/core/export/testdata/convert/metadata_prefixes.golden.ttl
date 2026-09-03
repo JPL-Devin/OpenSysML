@@ -439,7 +439,7 @@ elmt:Prefixed___409
     sysml:owningRelatedElement elmt:Prefixed ;
     sysml:client elmt:Prefixed__Car ;
     sysml:supplier elmt:Prefixed__Vehicle ;
-    sysml:ownedRelatedElement elmt:Prefixed___409___400 ;
+    sysml:ownedRelationship elmt:Prefixed___409___400_om ;
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:Prefixed___409___400
@@ -449,10 +449,20 @@ elmt:Prefixed___409___400
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:owningNamespace elmt:Prefixed___409 ;
     sysml:owner elmt:Prefixed___409 ;
-    sysml:owningRelationship elmt:Prefixed___409 ;
+    sysml:owningRelationship elmt:Prefixed___409___400_om ;
+    sysml:owningMembership elmt:Prefixed___409___400_om ;
     sysx:declaredKeyword "#" ;
     sysml:type elmt:Prefixed__Safety ;
     sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Prefixed___409___400_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Prefixed___409___400_om" ;
+    sysml:owner elmt:Prefixed___409 ;
+    sysml:memberElement elmt:Prefixed___409___400 ;
+    sysml:ownedMemberElement elmt:Prefixed___409___400 ;
+    sysml:ownedRelatedElement elmt:Prefixed___409___400 ;
+    sysml:owningRelatedElement elmt:Prefixed___409 .
 
 elmt:Prefixed__Stopped
     a sysml:ConstraintDefinition ;
@@ -511,10 +521,7 @@ elmt:Prefixed__Braking__brakes
     sysml:owningRelatedElement elmt:Prefixed__Braking ;
     sysml:declaredName "brakes" ;
     sysml:type elmt:Prefixed__Car ;
-    sysml:ownedRelatedElement elmt:Prefixed__Braking__brakes___400 ;
-    sysml:memberElement elmt:Prefixed__Braking__brakes___400 ;
-    sysml:ownedMemberElement elmt:Prefixed__Braking__brakes___400 ;
-    sysml:ownedMemberFeature elmt:Prefixed__Braking__brakes___400 ;
+    sysml:ownedRelationship elmt:Prefixed__Braking__brakes___400_om ;
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:Prefixed__Braking__brakes___400
@@ -524,11 +531,20 @@ elmt:Prefixed__Braking__brakes___400
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:owningNamespace elmt:Prefixed__Braking__brakes ;
     sysml:owner elmt:Prefixed__Braking__brakes ;
-    sysml:owningRelationship elmt:Prefixed__Braking__brakes ;
-    sysml:owningMembership elmt:Prefixed__Braking__brakes ;
+    sysml:owningRelationship elmt:Prefixed__Braking__brakes___400_om ;
+    sysml:owningMembership elmt:Prefixed__Braking__brakes___400_om ;
     sysx:declaredKeyword "#" ;
     sysml:type elmt:Prefixed__Safety ;
     sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Prefixed__Braking__brakes___400_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Prefixed__Braking__brakes___400_om" ;
+    sysml:owner elmt:Prefixed__Braking__brakes ;
+    sysml:memberElement elmt:Prefixed__Braking__brakes___400 ;
+    sysml:ownedMemberElement elmt:Prefixed__Braking__brakes___400 ;
+    sysml:ownedRelatedElement elmt:Prefixed__Braking__brakes___400 ;
+    sysml:owningRelatedElement elmt:Prefixed__Braking__brakes .
 
 elmt:Prefixed__Braking___401
     a sysx:AssumeMember ;
