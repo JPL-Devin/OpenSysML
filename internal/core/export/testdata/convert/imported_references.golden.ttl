@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -17,7 +18,10 @@ elmt:OtherPkg
     sysml:ownedMembership elmt:OtherPkg__BudgetLedger_om, elmt:OtherPkg__Tempo_om, elmt:OtherPkg__Inner_om, elmt:OtherPkg__spare_om ;
     sysml:ownedRelationship elmt:OtherPkg__BudgetLedger_om, elmt:OtherPkg__Tempo_om, elmt:OtherPkg__Inner_om, elmt:OtherPkg__spare_om ;
     sysx:sourceText "package OtherPkg {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"OtherPkg__BudgetLedger\"},{\"@id\":\"OtherPkg__Tempo\"},{\"@id\":\"OtherPkg__Inner\"},{\"@id\":\"OtherPkg__spare\"}]" ;
+    json:ownedMembership "[{\"@id\":\"OtherPkg__BudgetLedger_om\"},{\"@id\":\"OtherPkg__Tempo_om\"},{\"@id\":\"OtherPkg__Inner_om\"},{\"@id\":\"OtherPkg__spare_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"OtherPkg__BudgetLedger_om\"},{\"@id\":\"OtherPkg__Tempo_om\"},{\"@id\":\"OtherPkg__Inner_om\"},{\"@id\":\"OtherPkg__spare_om\"}]" .
 
 elmt:OtherPkg__BudgetLedger
     a sysml:ItemDefinition ;
@@ -59,7 +63,12 @@ elmt:OtherPkg__Tempo
     sysml:ownedFeature elmt:OtherPkg__Tempo__operative, elmt:OtherPkg__Tempo__planning ;
     sysml:ownedFeatureMembership elmt:OtherPkg__Tempo__operative_om, elmt:OtherPkg__Tempo__planning_om ;
     sysx:sourceText "    enum def Tempo {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"OtherPkg__Tempo__operative\"},{\"@id\":\"OtherPkg__Tempo__planning\"}]" ;
+    json:ownedMembership "[{\"@id\":\"OtherPkg__Tempo__operative_om\"},{\"@id\":\"OtherPkg__Tempo__planning_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"OtherPkg__Tempo__operative_om\"},{\"@id\":\"OtherPkg__Tempo__planning_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"OtherPkg__Tempo__operative\"},{\"@id\":\"OtherPkg__Tempo__planning\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"OtherPkg__Tempo__operative_om\"},{\"@id\":\"OtherPkg__Tempo__planning_om\"}]" .
 
 elmt:OtherPkg__Tempo_om
     a sysml:OwningMembership ;
@@ -138,7 +147,10 @@ elmt:OtherPkg__Inner
     sysml:ownedMembership elmt:OtherPkg__Inner__Wheel_om, elmt:OtherPkg__Inner__wheels_om ;
     sysml:ownedRelationship elmt:OtherPkg__Inner__Wheel_om, elmt:OtherPkg__Inner__wheels_om ;
     sysx:sourceText "    package Inner {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"OtherPkg__Inner__Wheel\"},{\"@id\":\"OtherPkg__Inner__wheels\"}]" ;
+    json:ownedMembership "[{\"@id\":\"OtherPkg__Inner__Wheel_om\"},{\"@id\":\"OtherPkg__Inner__wheels_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"OtherPkg__Inner__Wheel_om\"},{\"@id\":\"OtherPkg__Inner__wheels_om\"}]" .
 
 elmt:OtherPkg__Inner_om
     a sysml:OwningMembership ;
@@ -265,7 +277,10 @@ elmt:R90
     sysml:ownedMember elmt:R90__Ledger, elmt:R90__A, elmt:R90__B, elmt:R90__G1, elmt:R90__G2, elmt:R90__H, elmt:R90__Run, elmt:R90__Done ;
     sysml:ownedMembership elmt:R90__Ledger_om, elmt:R90__A_om, elmt:R90__B_om, elmt:R90__G1_om, elmt:R90__G2_om, elmt:R90__H_om, elmt:R90__Run_om, elmt:R90__Done_om ;
     sysx:sourceText "package R90 {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedRelationship "[{\"@id\":\"R90___400\"},{\"@id\":\"R90__Ledger_om\"},{\"@id\":\"R90__A_om\"},{\"@id\":\"R90__B_om\"},{\"@id\":\"R90__G1_om\"},{\"@id\":\"R90__G2_om\"},{\"@id\":\"R90__H_om\"},{\"@id\":\"R90__Run_om\"},{\"@id\":\"R90__Done_om\"}]" ;
+    json:ownedMember "[{\"@id\":\"R90__Ledger\"},{\"@id\":\"R90__A\"},{\"@id\":\"R90__B\"},{\"@id\":\"R90__G1\"},{\"@id\":\"R90__G2\"},{\"@id\":\"R90__H\"},{\"@id\":\"R90__Run\"},{\"@id\":\"R90__Done\"}]" ;
+    json:ownedMembership "[{\"@id\":\"R90__Ledger_om\"},{\"@id\":\"R90__A_om\"},{\"@id\":\"R90__B_om\"},{\"@id\":\"R90__G1_om\"},{\"@id\":\"R90__G2_om\"},{\"@id\":\"R90__H_om\"},{\"@id\":\"R90__Run_om\"},{\"@id\":\"R90__Done_om\"}]" .
 
 elmt:R90___400
     a sysml:Import ;
@@ -323,7 +338,12 @@ elmt:R90__A
     sysml:ownedFeature elmt:R90__A__custodyBudget, elmt:R90__A__t, elmt:R90__A__b2, elmt:R90__A__b3, elmt:R90__A__w, elmt:R90__A__spare, elmt:R90__A__size, elmt:R90__A__s, elmt:R90__A__unresolved ;
     sysml:ownedFeatureMembership elmt:R90__A__custodyBudget_om, elmt:R90__A__t_om, elmt:R90__A__b2_om, elmt:R90__A__b3_om, elmt:R90__A__w_om, elmt:R90__A__spare_om, elmt:R90__A__size_om, elmt:R90__A__s_om, elmt:R90__A__unresolved_om ;
     sysx:sourceText "    part def A {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"R90__A__custodyBudget\"},{\"@id\":\"R90__A__t\"},{\"@id\":\"R90__A__b2\"},{\"@id\":\"R90__A__b3\"},{\"@id\":\"R90__A__w\"},{\"@id\":\"R90__A__spare\"},{\"@id\":\"R90__A__size\"},{\"@id\":\"R90__A__s\"},{\"@id\":\"R90__A__unresolved\"}]" ;
+    json:ownedMembership "[{\"@id\":\"R90__A__custodyBudget_om\"},{\"@id\":\"R90__A__t_om\"},{\"@id\":\"R90__A__b2_om\"},{\"@id\":\"R90__A__b3_om\"},{\"@id\":\"R90__A__w_om\"},{\"@id\":\"R90__A__spare_om\"},{\"@id\":\"R90__A__size_om\"},{\"@id\":\"R90__A__s_om\"},{\"@id\":\"R90__A__unresolved_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"R90__A__custodyBudget_om\"},{\"@id\":\"R90__A__t_om\"},{\"@id\":\"R90__A__b2_om\"},{\"@id\":\"R90__A__b3_om\"},{\"@id\":\"R90__A__w_om\"},{\"@id\":\"R90__A__spare_om\"},{\"@id\":\"R90__A__size_om\"},{\"@id\":\"R90__A__s_om\"},{\"@id\":\"R90__A__unresolved_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"R90__A__custodyBudget\"},{\"@id\":\"R90__A__t\"},{\"@id\":\"R90__A__b2\"},{\"@id\":\"R90__A__b3\"},{\"@id\":\"R90__A__w\"},{\"@id\":\"R90__A__spare\"},{\"@id\":\"R90__A__size\"},{\"@id\":\"R90__A__s\"},{\"@id\":\"R90__A__unresolved\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"R90__A__custodyBudget_om\"},{\"@id\":\"R90__A__t_om\"},{\"@id\":\"R90__A__b2_om\"},{\"@id\":\"R90__A__b3_om\"},{\"@id\":\"R90__A__w_om\"},{\"@id\":\"R90__A__spare_om\"},{\"@id\":\"R90__A__size_om\"},{\"@id\":\"R90__A__s_om\"},{\"@id\":\"R90__A__unresolved_om\"}]" .
 
 elmt:R90__A_om
     a sysml:OwningMembership ;
@@ -774,7 +794,8 @@ elmt:R90__H
     sysml:ownedFeature elmt:R90__H___400 ;
     sysml:ownedFeatureMembership elmt:R90__H___400_om ;
     sysx:sourceText "    part def H :> G1, G2 {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:specializes "[{\"@id\":\"R90__G1\"},{\"@id\":\"R90__G2\"}]" .
 
 elmt:R90__H_om
     a sysml:OwningMembership ;
@@ -827,7 +848,12 @@ elmt:R90__Run
     sysml:ownedMembership elmt:R90__Run___401_om, elmt:R90__Run__idle_om, elmt:R90__Run___403_om ;
     sysml:ownedFeature elmt:R90__Run___401, elmt:R90__Run__idle, elmt:R90__Run___403 ;
     sysml:ownedFeatureMembership elmt:R90__Run___401_om, elmt:R90__Run__idle_om, elmt:R90__Run___403_om ;
-    sysx:sourceText "    state def Run {\n        entry; then idle;\n        state idle;\n        transition idle then Done::done;\n    }\n" .
+    sysx:sourceText "    state def Run {\n        entry; then idle;\n        state idle;\n        transition idle then Done::done;\n    }\n" ;
+    json:ownedRelationship "[{\"@id\":\"R90__Run___400\"},{\"@id\":\"R90__Run___401_om\"},{\"@id\":\"R90__Run__idle_om\"},{\"@id\":\"R90__Run___403_om\"}]" ;
+    json:ownedMember "[{\"@id\":\"R90__Run___401\"},{\"@id\":\"R90__Run__idle\"},{\"@id\":\"R90__Run___403\"}]" ;
+    json:ownedMembership "[{\"@id\":\"R90__Run___401_om\"},{\"@id\":\"R90__Run__idle_om\"},{\"@id\":\"R90__Run___403_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"R90__Run___401\"},{\"@id\":\"R90__Run__idle\"},{\"@id\":\"R90__Run___403\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"R90__Run___401_om\"},{\"@id\":\"R90__Run__idle_om\"},{\"@id\":\"R90__Run___403_om\"}]" .
 
 elmt:R90__Run_om
     a sysml:OwningMembership ;
@@ -989,7 +1015,10 @@ elmt:Meta
     sysml:ownedMembership elmt:Meta__Safety_om, elmt:Meta__Tagged_om, elmt:Meta__Plain_om ;
     sysml:ownedRelationship elmt:Meta__Safety_om, elmt:Meta__Tagged_om, elmt:Meta__Plain_om ;
     sysx:sourceText "package Meta {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Meta__Safety\"},{\"@id\":\"Meta__Tagged\"},{\"@id\":\"Meta__Plain\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Meta__Safety_om\"},{\"@id\":\"Meta__Tagged_om\"},{\"@id\":\"Meta__Plain_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Meta__Safety_om\"},{\"@id\":\"Meta__Tagged_om\"},{\"@id\":\"Meta__Plain_om\"}]" .
 
 elmt:Meta__Safety
     a sysml:MetadataDefinition ;
@@ -1074,7 +1103,8 @@ elmt:Filtered
     sysml:ownedMember elmt:Filtered__C ;
     sysml:ownedMembership elmt:Filtered__C_om ;
     sysx:sourceText "package Filtered {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedRelationship "[{\"@id\":\"Filtered___400\"},{\"@id\":\"Filtered__C_om\"}]" .
 
 elmt:Filtered___400
     a sysml:Import ;
@@ -1116,7 +1146,10 @@ elmt:Filtered__C
     sysml:ownedFeature elmt:Filtered__C__other ;
     sysml:ownedFeatureMembership elmt:Filtered__C__other_om ;
     sysx:sourceText "    part def C {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Filtered__C__other\"},{\"@id\":\"Filtered__C___401\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Filtered__C__other_om\"},{\"@id\":\"Filtered__C___401_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Filtered__C__other_om\"},{\"@id\":\"Filtered__C___401_om\"}]" .
 
 elmt:Filtered__C_om
     a sysml:OwningMembership ;

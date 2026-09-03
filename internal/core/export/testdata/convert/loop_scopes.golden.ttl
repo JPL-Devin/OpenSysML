@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -36,7 +37,12 @@ elmt:Loops__Charge
     sysml:ownedFeature elmt:Loops__Charge__prep, elmt:Loops__Charge___401, elmt:Loops__Charge___402 ;
     sysml:ownedFeatureMembership elmt:Loops__Charge__prep_om, elmt:Loops__Charge___401_om, elmt:Loops__Charge___402_om ;
     sysx:sourceText "    action def Charge {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Loops__Charge__prep\"},{\"@id\":\"Loops__Charge___401\"},{\"@id\":\"Loops__Charge___402\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Loops__Charge__prep_om\"},{\"@id\":\"Loops__Charge___401_om\"},{\"@id\":\"Loops__Charge___402_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Loops__Charge__prep_om\"},{\"@id\":\"Loops__Charge___401_om\"},{\"@id\":\"Loops__Charge___402_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Loops__Charge__prep\"},{\"@id\":\"Loops__Charge___401\"},{\"@id\":\"Loops__Charge___402\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Loops__Charge__prep_om\"},{\"@id\":\"Loops__Charge___401_om\"},{\"@id\":\"Loops__Charge___402_om\"}]" .
 
 elmt:Loops__Charge_om
     a sysml:OwningMembership ;

@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -17,7 +18,10 @@ elmt:Shadows
     sysml:ownedMembership elmt:Shadows__Speed_om, elmt:Shadows__Sweep_om, elmt:Shadows__Governor_om ;
     sysml:ownedRelationship elmt:Shadows__Speed_om, elmt:Shadows__Sweep_om, elmt:Shadows__Governor_om ;
     sysx:sourceText "package Shadows {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Shadows__Speed\"},{\"@id\":\"Shadows__Sweep\"},{\"@id\":\"Shadows__Governor\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Shadows__Speed_om\"},{\"@id\":\"Shadows__Sweep_om\"},{\"@id\":\"Shadows__Governor_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Shadows__Speed_om\"},{\"@id\":\"Shadows__Sweep_om\"},{\"@id\":\"Shadows__Governor_om\"}]" .
 
 elmt:Shadows__Speed
     a sysml:AttributeDefinition ;
@@ -59,7 +63,12 @@ elmt:Shadows__Sweep
     sysml:ownedFeature elmt:Shadows__Sweep__items, elmt:Shadows__Sweep__value, elmt:Shadows__Sweep___402 ;
     sysml:ownedFeatureMembership elmt:Shadows__Sweep__items_om, elmt:Shadows__Sweep__value_om, elmt:Shadows__Sweep___402_om ;
     sysx:sourceText "    action def Sweep {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Shadows__Sweep__items\"},{\"@id\":\"Shadows__Sweep__value\"},{\"@id\":\"Shadows__Sweep___402\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Shadows__Sweep__items_om\"},{\"@id\":\"Shadows__Sweep__value_om\"},{\"@id\":\"Shadows__Sweep___402_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Shadows__Sweep__items_om\"},{\"@id\":\"Shadows__Sweep__value_om\"},{\"@id\":\"Shadows__Sweep___402_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Shadows__Sweep__items\"},{\"@id\":\"Shadows__Sweep__value\"},{\"@id\":\"Shadows__Sweep___402\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Shadows__Sweep__items_om\"},{\"@id\":\"Shadows__Sweep__value_om\"},{\"@id\":\"Shadows__Sweep___402_om\"}]" .
 
 elmt:Shadows__Sweep_om
     a sysml:OwningMembership ;
@@ -218,7 +227,12 @@ elmt:Shadows__Governor
     sysml:ownedFeature elmt:Shadows__Governor__value, elmt:Shadows__Governor__w, elmt:Shadows__Governor__idle, elmt:Shadows__Governor__fast, elmt:Shadows__Governor___404, elmt:Shadows__Governor___405 ;
     sysml:ownedFeatureMembership elmt:Shadows__Governor__value_om, elmt:Shadows__Governor__w_om, elmt:Shadows__Governor__idle_om, elmt:Shadows__Governor__fast_om, elmt:Shadows__Governor___404_om, elmt:Shadows__Governor___405_om ;
     sysx:sourceText "    state def Governor {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Shadows__Governor__value\"},{\"@id\":\"Shadows__Governor__w\"},{\"@id\":\"Shadows__Governor__idle\"},{\"@id\":\"Shadows__Governor__fast\"},{\"@id\":\"Shadows__Governor___404\"},{\"@id\":\"Shadows__Governor___405\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Shadows__Governor__value_om\"},{\"@id\":\"Shadows__Governor__w_om\"},{\"@id\":\"Shadows__Governor__idle_om\"},{\"@id\":\"Shadows__Governor__fast_om\"},{\"@id\":\"Shadows__Governor___404_om\"},{\"@id\":\"Shadows__Governor___405_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Shadows__Governor__value_om\"},{\"@id\":\"Shadows__Governor__w_om\"},{\"@id\":\"Shadows__Governor__idle_om\"},{\"@id\":\"Shadows__Governor__fast_om\"},{\"@id\":\"Shadows__Governor___404_om\"},{\"@id\":\"Shadows__Governor___405_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Shadows__Governor__value\"},{\"@id\":\"Shadows__Governor__w\"},{\"@id\":\"Shadows__Governor__idle\"},{\"@id\":\"Shadows__Governor__fast\"},{\"@id\":\"Shadows__Governor___404\"},{\"@id\":\"Shadows__Governor___405\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Shadows__Governor__value_om\"},{\"@id\":\"Shadows__Governor__w_om\"},{\"@id\":\"Shadows__Governor__idle_om\"},{\"@id\":\"Shadows__Governor__fast_om\"},{\"@id\":\"Shadows__Governor___404_om\"},{\"@id\":\"Shadows__Governor___405_om\"}]" .
 
 elmt:Shadows__Governor_om
     a sysml:OwningMembership ;
@@ -366,7 +380,8 @@ expr:Shadows__Governor___404_pguard
     sysx:sourceText "value > 0" ;
     sysml:elementId "Shadows__Governor___404_pguard" ;
     sysml:operator ">" ;
-    sysml:argument expr:Shadows__Governor___404_pguard_pa0, expr:Shadows__Governor___404_pguard_pa1 .
+    sysml:argument expr:Shadows__Governor___404_pguard_pa0, expr:Shadows__Governor___404_pguard_pa1 ;
+    json:argument "[{\"@id\":\"Shadows__Governor___404_pguard_pa0\"},{\"@id\":\"Shadows__Governor___404_pguard_pa1\"}]" .
 
 expr:Shadows__Governor___404_pguard_pa0
     a sysml:FeatureReferenceExpression ;
@@ -416,7 +431,8 @@ expr:Shadows__Governor___405_pguard
     sysx:sourceText "w > 0" ;
     sysml:elementId "Shadows__Governor___405_pguard" ;
     sysml:operator ">" ;
-    sysml:argument expr:Shadows__Governor___405_pguard_pa0, expr:Shadows__Governor___405_pguard_pa1 .
+    sysml:argument expr:Shadows__Governor___405_pguard_pa0, expr:Shadows__Governor___405_pguard_pa1 ;
+    json:argument "[{\"@id\":\"Shadows__Governor___405_pguard_pa0\"},{\"@id\":\"Shadows__Governor___405_pguard_pa1\"}]" .
 
 expr:Shadows__Governor___405_pguard_pa0
     a sysml:FeatureReferenceExpression ;

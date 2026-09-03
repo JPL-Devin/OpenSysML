@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -17,7 +18,10 @@ elmt:Gen
     sysml:ownedMembership elmt:Gen__G1_om, elmt:Gen__G2_om ;
     sysml:ownedRelationship elmt:Gen__G1_om, elmt:Gen__G2_om ;
     sysx:sourceText "package Gen {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Gen__G1\"},{\"@id\":\"Gen__G2\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Gen__G1_om\"},{\"@id\":\"Gen__G2_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Gen__G1_om\"},{\"@id\":\"Gen__G2_om\"}]" .
 
 elmt:Gen__G1
     a sysml:PartDefinition ;
@@ -36,7 +40,12 @@ elmt:Gen__G1
     sysml:ownedFeature elmt:Gen__G1__x, elmt:Gen__G1__y ;
     sysml:ownedFeatureMembership elmt:Gen__G1__x_om, elmt:Gen__G1__y_om ;
     sysx:sourceText "    part def G1 {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Gen__G1__x\"},{\"@id\":\"Gen__G1__y\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Gen__G1__x_om\"},{\"@id\":\"Gen__G1__y_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Gen__G1__x_om\"},{\"@id\":\"Gen__G1__y_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Gen__G1__x\"},{\"@id\":\"Gen__G1__y\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Gen__G1__x_om\"},{\"@id\":\"Gen__G1__y_om\"}]" .
 
 elmt:Gen__G1_om
     a sysml:OwningMembership ;
@@ -164,7 +173,10 @@ elmt:Chains
     sysml:ownedMembership elmt:Chains__Wheel_om, elmt:Chains__Axle_om, elmt:Chains__Car_om ;
     sysml:ownedRelationship elmt:Chains__Wheel_om, elmt:Chains__Axle_om, elmt:Chains__Car_om ;
     sysx:sourceText "package Chains {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Chains__Wheel\"},{\"@id\":\"Chains__Axle\"},{\"@id\":\"Chains__Car\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Chains__Wheel_om\"},{\"@id\":\"Chains__Axle_om\"},{\"@id\":\"Chains__Car_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Chains__Wheel_om\"},{\"@id\":\"Chains__Axle_om\"},{\"@id\":\"Chains__Car_om\"}]" .
 
 elmt:Chains__Wheel
     a sysml:PartDefinition ;
@@ -178,7 +190,8 @@ elmt:Chains__Wheel
     sysml:declaredName "Wheel" ;
     sysml:specializes elmt:Gen__G1, elmt:Gen__G2 ;
     sysx:hasBody "false"^^xsd:boolean ;
-    sysx:sourceText "    part def Wheel :> Gen::G1, Gen::G2;\n" .
+    sysx:sourceText "    part def Wheel :> Gen::G1, Gen::G2;\n" ;
+    json:specializes "[{\"@id\":\"Gen__G1\"},{\"@id\":\"Gen__G2\"}]" .
 
 elmt:Chains__Wheel_om
     a sysml:OwningMembership ;
@@ -262,7 +275,12 @@ elmt:Chains__Car
     sysml:ownedFeature elmt:Chains__Car__w, elmt:Chains__Car__axle, elmt:Chains__Car__a, elmt:Chains__Car__b, elmt:Chains__Car__c, elmt:Chains__Car__d, elmt:Chains__Car__e, elmt:Chains__Car__spare, elmt:Chains__Car__f ;
     sysml:ownedFeatureMembership elmt:Chains__Car__w_om, elmt:Chains__Car__axle_om, elmt:Chains__Car__a_om, elmt:Chains__Car__b_om, elmt:Chains__Car__c_om, elmt:Chains__Car__d_om, elmt:Chains__Car__e_om, elmt:Chains__Car__spare_om, elmt:Chains__Car__f_om ;
     sysx:sourceText "    part def Car {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Chains__Car__w\"},{\"@id\":\"Chains__Car__axle\"},{\"@id\":\"Chains__Car__a\"},{\"@id\":\"Chains__Car__b\"},{\"@id\":\"Chains__Car__c\"},{\"@id\":\"Chains__Car__d\"},{\"@id\":\"Chains__Car__e\"},{\"@id\":\"Chains__Car__spare\"},{\"@id\":\"Chains__Car__f\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Chains__Car__w_om\"},{\"@id\":\"Chains__Car__axle_om\"},{\"@id\":\"Chains__Car__a_om\"},{\"@id\":\"Chains__Car__b_om\"},{\"@id\":\"Chains__Car__c_om\"},{\"@id\":\"Chains__Car__d_om\"},{\"@id\":\"Chains__Car__e_om\"},{\"@id\":\"Chains__Car__spare_om\"},{\"@id\":\"Chains__Car__f_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Chains__Car__w_om\"},{\"@id\":\"Chains__Car__axle_om\"},{\"@id\":\"Chains__Car__a_om\"},{\"@id\":\"Chains__Car__b_om\"},{\"@id\":\"Chains__Car__c_om\"},{\"@id\":\"Chains__Car__d_om\"},{\"@id\":\"Chains__Car__e_om\"},{\"@id\":\"Chains__Car__spare_om\"},{\"@id\":\"Chains__Car__f_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Chains__Car__w\"},{\"@id\":\"Chains__Car__axle\"},{\"@id\":\"Chains__Car__a\"},{\"@id\":\"Chains__Car__b\"},{\"@id\":\"Chains__Car__c\"},{\"@id\":\"Chains__Car__d\"},{\"@id\":\"Chains__Car__e\"},{\"@id\":\"Chains__Car__spare\"},{\"@id\":\"Chains__Car__f\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Chains__Car__w_om\"},{\"@id\":\"Chains__Car__axle_om\"},{\"@id\":\"Chains__Car__a_om\"},{\"@id\":\"Chains__Car__b_om\"},{\"@id\":\"Chains__Car__c_om\"},{\"@id\":\"Chains__Car__d_om\"},{\"@id\":\"Chains__Car__e_om\"},{\"@id\":\"Chains__Car__spare_om\"},{\"@id\":\"Chains__Car__f_om\"}]" .
 
 elmt:Chains__Car_om
     a sysml:OwningMembership ;

@@ -1827,7 +1827,7 @@ func TestMachineEndpointsLinkAcrossRegionsAndNesting(t *testing.T) {
 			t.Errorf("the graph should carry %q\n%s", want, turtle)
 		}
 	}
-	if strings.Contains(turtle, `Feature "`) {
+	if strings.Contains(turtle, `sysml:sourceFeature "`) || strings.Contains(turtle, `sysml:targetFeature "`) {
 		t.Errorf("every endpoint names a vertex of the machine, so none should stay a literal\n%s", turtle)
 	}
 	backFromTheGraphAlone(t, turtle)

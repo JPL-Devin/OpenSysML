@@ -1,4 +1,5 @@
 @prefix elmt: <urn:sysmlv2:element:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -34,7 +35,12 @@ elmt:Machines__Lamp
     sysml:ownedMembership elmt:Machines__Lamp___401_om, elmt:Machines__Lamp__off_om, elmt:Machines__Lamp__on_om, elmt:Machines__Lamp___404_om, elmt:Machines__Lamp___405_om, elmt:Machines__Lamp___406_om ;
     sysml:ownedFeature elmt:Machines__Lamp___401, elmt:Machines__Lamp__off, elmt:Machines__Lamp__on, elmt:Machines__Lamp___404, elmt:Machines__Lamp___405, elmt:Machines__Lamp___406 ;
     sysml:ownedFeatureMembership elmt:Machines__Lamp___401_om, elmt:Machines__Lamp__off_om, elmt:Machines__Lamp__on_om, elmt:Machines__Lamp___404_om, elmt:Machines__Lamp___405_om, elmt:Machines__Lamp___406_om ;
-    sysx:sourceText "    state def Lamp {\n        entry; then off;\n        state off;\n        state on parallel {\n            state heat {\n                entry; then warm;\n                state warm;\n                state hot;\n                transition warm then hot;\n            }\n            state light {\n                entry; then dim;\n                state dim;\n                state bright;\n                transition dim then bright;\n                transition bright then hot;\n            }\n        }\n        transition off then on;\n        transition on then bright;\n        transition hot then off;\n    }\n" .
+    sysx:sourceText "    state def Lamp {\n        entry; then off;\n        state off;\n        state on parallel {\n            state heat {\n                entry; then warm;\n                state warm;\n                state hot;\n                transition warm then hot;\n            }\n            state light {\n                entry; then dim;\n                state dim;\n                state bright;\n                transition dim then bright;\n                transition bright then hot;\n            }\n        }\n        transition off then on;\n        transition on then bright;\n        transition hot then off;\n    }\n" ;
+    json:ownedRelationship "[{\"@id\":\"Machines__Lamp___400\"},{\"@id\":\"Machines__Lamp___401_om\"},{\"@id\":\"Machines__Lamp__off_om\"},{\"@id\":\"Machines__Lamp__on_om\"},{\"@id\":\"Machines__Lamp___404_om\"},{\"@id\":\"Machines__Lamp___405_om\"},{\"@id\":\"Machines__Lamp___406_om\"}]" ;
+    json:ownedMember "[{\"@id\":\"Machines__Lamp___401\"},{\"@id\":\"Machines__Lamp__off\"},{\"@id\":\"Machines__Lamp__on\"},{\"@id\":\"Machines__Lamp___404\"},{\"@id\":\"Machines__Lamp___405\"},{\"@id\":\"Machines__Lamp___406\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Machines__Lamp___401_om\"},{\"@id\":\"Machines__Lamp__off_om\"},{\"@id\":\"Machines__Lamp__on_om\"},{\"@id\":\"Machines__Lamp___404_om\"},{\"@id\":\"Machines__Lamp___405_om\"},{\"@id\":\"Machines__Lamp___406_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Machines__Lamp___401\"},{\"@id\":\"Machines__Lamp__off\"},{\"@id\":\"Machines__Lamp__on\"},{\"@id\":\"Machines__Lamp___404\"},{\"@id\":\"Machines__Lamp___405\"},{\"@id\":\"Machines__Lamp___406\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Machines__Lamp___401_om\"},{\"@id\":\"Machines__Lamp__off_om\"},{\"@id\":\"Machines__Lamp__on_om\"},{\"@id\":\"Machines__Lamp___404_om\"},{\"@id\":\"Machines__Lamp___405_om\"},{\"@id\":\"Machines__Lamp___406_om\"}]" .
 
 elmt:Machines__Lamp_om
     a sysml:OwningMembership ;
@@ -121,7 +127,12 @@ elmt:Machines__Lamp__on
     sysml:ownedMembership elmt:Machines__Lamp__on__heat_om, elmt:Machines__Lamp__on__light_om ;
     sysml:ownedRelationship elmt:Machines__Lamp__on__heat_om, elmt:Machines__Lamp__on__light_om ;
     sysml:ownedFeature elmt:Machines__Lamp__on__heat, elmt:Machines__Lamp__on__light ;
-    sysml:ownedFeatureMembership elmt:Machines__Lamp__on__heat_om, elmt:Machines__Lamp__on__light_om .
+    sysml:ownedFeatureMembership elmt:Machines__Lamp__on__heat_om, elmt:Machines__Lamp__on__light_om ;
+    json:ownedMember "[{\"@id\":\"Machines__Lamp__on__heat\"},{\"@id\":\"Machines__Lamp__on__light\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Machines__Lamp__on__heat_om\"},{\"@id\":\"Machines__Lamp__on__light_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Machines__Lamp__on__heat_om\"},{\"@id\":\"Machines__Lamp__on__light_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Machines__Lamp__on__heat\"},{\"@id\":\"Machines__Lamp__on__light\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Machines__Lamp__on__heat_om\"},{\"@id\":\"Machines__Lamp__on__light_om\"}]" .
 
 elmt:Machines__Lamp__on_om
     a sysml:FeatureMembership ;
@@ -151,7 +162,12 @@ elmt:Machines__Lamp__on__heat
     sysml:ownedMembership elmt:Machines__Lamp__on__heat___401_om, elmt:Machines__Lamp__on__heat__warm_om, elmt:Machines__Lamp__on__heat__hot_om, elmt:Machines__Lamp__on__heat___404_om ;
     sysml:ownedFeature elmt:Machines__Lamp__on__heat___401, elmt:Machines__Lamp__on__heat__warm, elmt:Machines__Lamp__on__heat__hot, elmt:Machines__Lamp__on__heat___404 ;
     sysml:ownedFeatureMembership elmt:Machines__Lamp__on__heat___401_om, elmt:Machines__Lamp__on__heat__warm_om, elmt:Machines__Lamp__on__heat__hot_om, elmt:Machines__Lamp__on__heat___404_om ;
-    sysx:sourceText "            state heat {\n                entry; then warm;\n                state warm;\n                state hot;\n                transition warm then hot;\n            }\n" .
+    sysx:sourceText "            state heat {\n                entry; then warm;\n                state warm;\n                state hot;\n                transition warm then hot;\n            }\n" ;
+    json:ownedRelationship "[{\"@id\":\"Machines__Lamp__on__heat___400\"},{\"@id\":\"Machines__Lamp__on__heat___401_om\"},{\"@id\":\"Machines__Lamp__on__heat__warm_om\"},{\"@id\":\"Machines__Lamp__on__heat__hot_om\"},{\"@id\":\"Machines__Lamp__on__heat___404_om\"}]" ;
+    json:ownedMember "[{\"@id\":\"Machines__Lamp__on__heat___401\"},{\"@id\":\"Machines__Lamp__on__heat__warm\"},{\"@id\":\"Machines__Lamp__on__heat__hot\"},{\"@id\":\"Machines__Lamp__on__heat___404\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Machines__Lamp__on__heat___401_om\"},{\"@id\":\"Machines__Lamp__on__heat__warm_om\"},{\"@id\":\"Machines__Lamp__on__heat__hot_om\"},{\"@id\":\"Machines__Lamp__on__heat___404_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Machines__Lamp__on__heat___401\"},{\"@id\":\"Machines__Lamp__on__heat__warm\"},{\"@id\":\"Machines__Lamp__on__heat__hot\"},{\"@id\":\"Machines__Lamp__on__heat___404\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Machines__Lamp__on__heat___401_om\"},{\"@id\":\"Machines__Lamp__on__heat__warm_om\"},{\"@id\":\"Machines__Lamp__on__heat__hot_om\"},{\"@id\":\"Machines__Lamp__on__heat___404_om\"}]" .
 
 elmt:Machines__Lamp__on__heat_om
     a sysml:FeatureMembership ;
@@ -289,7 +305,12 @@ elmt:Machines__Lamp__on__light
     sysml:ownedMembership elmt:Machines__Lamp__on__light___401_om, elmt:Machines__Lamp__on__light__dim_om, elmt:Machines__Lamp__on__light__bright_om, elmt:Machines__Lamp__on__light___404_om, elmt:Machines__Lamp__on__light___405_om ;
     sysml:ownedFeature elmt:Machines__Lamp__on__light___401, elmt:Machines__Lamp__on__light__dim, elmt:Machines__Lamp__on__light__bright, elmt:Machines__Lamp__on__light___404, elmt:Machines__Lamp__on__light___405 ;
     sysml:ownedFeatureMembership elmt:Machines__Lamp__on__light___401_om, elmt:Machines__Lamp__on__light__dim_om, elmt:Machines__Lamp__on__light__bright_om, elmt:Machines__Lamp__on__light___404_om, elmt:Machines__Lamp__on__light___405_om ;
-    sysx:sourceText "            state light {\n                entry; then dim;\n                state dim;\n                state bright;\n                transition dim then bright;\n                transition bright then hot;\n            }\n" .
+    sysx:sourceText "            state light {\n                entry; then dim;\n                state dim;\n                state bright;\n                transition dim then bright;\n                transition bright then hot;\n            }\n" ;
+    json:ownedRelationship "[{\"@id\":\"Machines__Lamp__on__light___400\"},{\"@id\":\"Machines__Lamp__on__light___401_om\"},{\"@id\":\"Machines__Lamp__on__light__dim_om\"},{\"@id\":\"Machines__Lamp__on__light__bright_om\"},{\"@id\":\"Machines__Lamp__on__light___404_om\"},{\"@id\":\"Machines__Lamp__on__light___405_om\"}]" ;
+    json:ownedMember "[{\"@id\":\"Machines__Lamp__on__light___401\"},{\"@id\":\"Machines__Lamp__on__light__dim\"},{\"@id\":\"Machines__Lamp__on__light__bright\"},{\"@id\":\"Machines__Lamp__on__light___404\"},{\"@id\":\"Machines__Lamp__on__light___405\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Machines__Lamp__on__light___401_om\"},{\"@id\":\"Machines__Lamp__on__light__dim_om\"},{\"@id\":\"Machines__Lamp__on__light__bright_om\"},{\"@id\":\"Machines__Lamp__on__light___404_om\"},{\"@id\":\"Machines__Lamp__on__light___405_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Machines__Lamp__on__light___401\"},{\"@id\":\"Machines__Lamp__on__light__dim\"},{\"@id\":\"Machines__Lamp__on__light__bright\"},{\"@id\":\"Machines__Lamp__on__light___404\"},{\"@id\":\"Machines__Lamp__on__light___405\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Machines__Lamp__on__light___401_om\"},{\"@id\":\"Machines__Lamp__on__light__dim_om\"},{\"@id\":\"Machines__Lamp__on__light__bright_om\"},{\"@id\":\"Machines__Lamp__on__light___404_om\"},{\"@id\":\"Machines__Lamp__on__light___405_om\"}]" .
 
 elmt:Machines__Lamp__on__light_om
     a sysml:FeatureMembership ;

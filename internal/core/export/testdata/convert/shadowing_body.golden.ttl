@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -18,7 +19,10 @@ elmt:ShadowBody
     sysml:ownedMember elmt:ShadowBody__Speed, elmt:ShadowBody__Sensor ;
     sysml:ownedMembership elmt:ShadowBody__Speed_om, elmt:ShadowBody__Sensor_om ;
     sysx:sourceText "package ShadowBody {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedRelationship "[{\"@id\":\"ShadowBody___400\"},{\"@id\":\"ShadowBody__Speed_om\"},{\"@id\":\"ShadowBody__Sensor_om\"}]" ;
+    json:ownedMember "[{\"@id\":\"ShadowBody__Speed\"},{\"@id\":\"ShadowBody__Sensor\"}]" ;
+    json:ownedMembership "[{\"@id\":\"ShadowBody__Speed_om\"},{\"@id\":\"ShadowBody__Sensor_om\"}]" .
 
 elmt:ShadowBody___400
     a sysml:Import ;
@@ -75,7 +79,12 @@ elmt:ShadowBody__Sensor
     sysml:ownedFeature elmt:ShadowBody__Sensor__value, elmt:ShadowBody__Sensor__readings, elmt:ShadowBody__Sensor__highs ;
     sysml:ownedFeatureMembership elmt:ShadowBody__Sensor__value_om, elmt:ShadowBody__Sensor__readings_om, elmt:ShadowBody__Sensor__highs_om ;
     sysx:sourceText "    part def Sensor {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"ShadowBody__Sensor__value\"},{\"@id\":\"ShadowBody__Sensor__readings\"},{\"@id\":\"ShadowBody__Sensor__highs\"}]" ;
+    json:ownedMembership "[{\"@id\":\"ShadowBody__Sensor__value_om\"},{\"@id\":\"ShadowBody__Sensor__readings_om\"},{\"@id\":\"ShadowBody__Sensor__highs_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"ShadowBody__Sensor__value_om\"},{\"@id\":\"ShadowBody__Sensor__readings_om\"},{\"@id\":\"ShadowBody__Sensor__highs_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"ShadowBody__Sensor__value\"},{\"@id\":\"ShadowBody__Sensor__readings\"},{\"@id\":\"ShadowBody__Sensor__highs\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"ShadowBody__Sensor__value_om\"},{\"@id\":\"ShadowBody__Sensor__readings_om\"},{\"@id\":\"ShadowBody__Sensor__highs_om\"}]" .
 
 elmt:ShadowBody__Sensor_om
     a sysml:OwningMembership ;
@@ -198,7 +207,8 @@ expr:ShadowBody__Sensor__highs_pvalue_pa0_presult
     sysx:sourceText "value > 5" ;
     sysml:elementId "ShadowBody__Sensor__highs_pvalue_pa0_presult" ;
     sysml:operator ">" ;
-    sysml:argument expr:ShadowBody__Sensor__highs_pvalue_pa0_presult_pa0, expr:ShadowBody__Sensor__highs_pvalue_pa0_presult_pa1 .
+    sysml:argument expr:ShadowBody__Sensor__highs_pvalue_pa0_presult_pa0, expr:ShadowBody__Sensor__highs_pvalue_pa0_presult_pa1 ;
+    json:argument "[{\"@id\":\"ShadowBody__Sensor__highs_pvalue_pa0_presult_pa0\"},{\"@id\":\"ShadowBody__Sensor__highs_pvalue_pa0_presult_pa1\"}]" .
 
 expr:ShadowBody__Sensor__highs_pvalue_pa0_presult_pa0
     a sysml:FeatureReferenceExpression ;

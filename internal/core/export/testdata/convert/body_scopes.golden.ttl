@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -17,7 +18,10 @@ elmt:Lib
     sysml:ownedMembership elmt:Lib__Gauge_om, elmt:Lib__limit_om ;
     sysml:ownedRelationship elmt:Lib__Gauge_om, elmt:Lib__limit_om ;
     sysx:sourceText "package Lib {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Lib__Gauge\"},{\"@id\":\"Lib__limit\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Lib__Gauge_om\"},{\"@id\":\"Lib__limit_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Lib__Gauge_om\"},{\"@id\":\"Lib__limit_om\"}]" .
 
 elmt:Lib__Gauge
     a sysml:AttributeDefinition ;
@@ -79,7 +83,8 @@ elmt:Scopes
     sysml:ownedMember elmt:Scopes__D ;
     sysml:ownedMembership elmt:Scopes__D_om ;
     sysx:sourceText "package Scopes {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedRelationship "[{\"@id\":\"Scopes___400\"},{\"@id\":\"Scopes__D_om\"}]" .
 
 elmt:Scopes___400
     a sysml:Import ;
@@ -113,7 +118,12 @@ elmt:Scopes__D
     sysml:ownedFeature elmt:Scopes__D__xs, elmt:Scopes__D__one, elmt:Scopes__D__two, elmt:Scopes__D__outside, elmt:Scopes__D__g ;
     sysml:ownedFeatureMembership elmt:Scopes__D__xs_om, elmt:Scopes__D__one_om, elmt:Scopes__D__two_om, elmt:Scopes__D__outside_om, elmt:Scopes__D__g_om ;
     sysx:sourceText "    part def D {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Scopes__D__xs\"},{\"@id\":\"Scopes__D__one\"},{\"@id\":\"Scopes__D__two\"},{\"@id\":\"Scopes__D__outside\"},{\"@id\":\"Scopes__D__g\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Scopes__D__xs_om\"},{\"@id\":\"Scopes__D__one_om\"},{\"@id\":\"Scopes__D__two_om\"},{\"@id\":\"Scopes__D__outside_om\"},{\"@id\":\"Scopes__D__g_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Scopes__D__xs_om\"},{\"@id\":\"Scopes__D__one_om\"},{\"@id\":\"Scopes__D__two_om\"},{\"@id\":\"Scopes__D__outside_om\"},{\"@id\":\"Scopes__D__g_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Scopes__D__xs\"},{\"@id\":\"Scopes__D__one\"},{\"@id\":\"Scopes__D__two\"},{\"@id\":\"Scopes__D__outside\"},{\"@id\":\"Scopes__D__g\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Scopes__D__xs_om\"},{\"@id\":\"Scopes__D__one_om\"},{\"@id\":\"Scopes__D__two_om\"},{\"@id\":\"Scopes__D__outside_om\"},{\"@id\":\"Scopes__D__g_om\"}]" .
 
 elmt:Scopes__D_om
     a sysml:OwningMembership ;
