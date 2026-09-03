@@ -159,31 +159,34 @@ func checkLiterals(graph *rdf.Graph) error {
 	return nil
 }
 
-// singleValuedProperties are the sysx: properties a subject states at most
-// once: the decoder reads one value, so a second would be dropped unread.
-var singleValuedProperties = []string{
-	xArgumentIndex, xArgumentName, xAssignOperator, xBranch, xBranchKind, xCollection,
-	xCondition, xDeclaredKeyword, xDeclaredPrefix, xEndForm, xEndIndex, xEndRole, xEndVerb,
-	xExpression, xFilter, xGuard, xHasBody, xIsConstructor, xLoopVariable, xMemberIndex,
-	xOrg, xPayload, xProjectID, xPseudostateKind, xReceiver, xResultExpression, xSourceMember,
-	xSourceText, xSubactionKind, xTarget, xTargetMember, xTransitionSyntax, xTrigger,
-	xTriggerKeyword, xTypeArgument, xUntilCondition, xWhileCondition,
+// multiValuedProperties are the sysx: properties the decoder reads every value
+// of. Every other sysx: property is read once, so a second value is dropped.
+var multiValuedProperties = map[string]bool{
+	xBodyMember:     true,
+	xBodyParameter:  true,
+	xDeferredEvent:  true,
+	xPrefixMetadata: true,
+	xRelatedFeature: true,
 }
 
 // checkCardinality refuses a subject stating a single-valued property twice
 // with different objects, since only one of them could be written.
 func checkCardinality(graph *rdf.Graph) error {
-	for _, subject := range graph.Subjects() {
-		for _, name := range singleValuedProperties {
-			objects := graph.Objects(subject, rdf.OpenSysML+name)
-			for _, object := range objects[min(1, len(objects)):] {
-				if object != objects[0] {
-					return &UnsupportedError{
-						What: fmt.Sprintf("the subject <%s>", subject.Value),
-						Note: fmt.Sprintf("it states sysx:%s twice, as %s and %s, and the property holds one value, so one of them would be dropped",
-							name, termText(objects[0]), termText(object)),
-					}
-				}
+	type statement struct{ subject, predicate rdf.Term }
+	first := map[statement]rdf.Term{}
+	for _, triple := range graph.Triples() {
+		predicate := triple.Predicate.Value
+		if !strings.HasPrefix(predicate, rdf.OpenSysML) || multiValuedProperties[rdf.LocalName(predicate)] {
+			continue
+		}
+		key := statement{triple.Subject, triple.Predicate}
+		if seen, ok := first[key]; !ok {
+			first[key] = triple.Object
+		} else if seen != triple.Object {
+			return &UnsupportedError{
+				What: fmt.Sprintf("the subject <%s>", triple.Subject.Value),
+				Note: fmt.Sprintf("it states %s twice, as %s and %s, and the property holds one value, so one of them would be dropped",
+					curie(predicate), termText(seen), termText(triple.Object)),
 			}
 		}
 	}

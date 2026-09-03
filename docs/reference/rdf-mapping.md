@@ -757,8 +757,11 @@ would be refused as a duplicate.
   move the member to the front
 - a subject stating a single-valued `sysx:` property twice with different
   objects — a body with two `sysx:resultExpression`s, an element with two
-  `sysx:memberIndex`es: only one could be written, so the graph is refused
-  naming both rather than the first being kept
+  `sysx:memberIndex`es or two `sysx:isNamespaceImport` flags: only one could
+  be written, so the graph is refused naming both rather than the first being
+  kept. Every `sysx:` property is single-valued but the members and
+  parameters of a body, `sysx:relatedFeature`, `sysx:deferredEvent` and
+  `sysx:prefixMetadata`
 
 A graph that uses none of OpenSysML's `sysx:` properties (one produced by
 another tool) converts as far as the mapping allows and errors on the first

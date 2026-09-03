@@ -388,27 +388,36 @@ func TestIndexesOutsideIntAreRefused(t *testing.T) {
 	}
 }
 
-// A body has one result and a subject one index, so a graph stating a second
-// is refused by name rather than the first being kept and the rest dropped.
+// A body has one result, a subject one index and an import one kind, so a
+// graph stating a second is refused by name rather than one being dropped.
 func TestRepeatedSingleValuedPropertiesAreRefused(t *testing.T) {
-	for _, tc := range []struct{ from, to, want string }{
+	for _, tc := range []struct{ fixture, from, to, want string }{
 		{
+			"result_expressions",
 			`sysx:resultExpression expr:Results__Body___401_presult .`,
 			`sysx:resultExpression expr:Results__Body___401_presult , expr:Results__Quoted___401_presult .`,
 			"it states sysx:resultExpression twice, as <urn:opensysml:expr:Results__Body___401_presult> and <urn:opensysml:expr:Results__Quoted___401_presult>",
 		},
 		{
+			"result_expressions",
 			`sysx:memberIndex "0"^^xsd:integer ;`,
 			`sysx:memberIndex "0"^^xsd:integer , "1"^^xsd:integer ;`,
 			`it states sysx:memberIndex twice, as "0"^^xsd:integer and "1"^^xsd:integer`,
 		},
 		{
+			"result_expressions",
 			`sysx:hasBody "true"^^xsd:boolean ;`,
 			`sysx:hasBody "true"^^xsd:boolean , "false"^^xsd:boolean ;`,
 			`it states sysx:hasBody twice, as "true"^^xsd:boolean and "false"^^xsd:boolean`,
 		},
+		{
+			"imports",
+			`sysx:isNamespaceImport "true"^^xsd:boolean ;`,
+			`sysx:isNamespaceImport "true"^^xsd:boolean , "false"^^xsd:boolean ;`,
+			`it states sysx:isNamespaceImport twice, as "true"^^xsd:boolean and "false"^^xsd:boolean`,
+		},
 	} {
-		turtle := string(convertFixture(t, "result_expressions"))
+		turtle := string(convertFixture(t, tc.fixture))
 		if !strings.Contains(turtle, tc.from) {
 			t.Fatalf("expected %q in the graph:\n%s", tc.from, turtle)
 		}
