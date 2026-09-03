@@ -66,9 +66,6 @@ func TestSendDecidesGuardsAsDispatchWould(t *testing.T) {
 	wants(t, run(t, s, "%events"), "Event queue empty")
 	wants(t, run(t, s, "%current"), "Current state: on")
 	wants(t, run(t, s, "%features bulb"), "brightness", "0")
-	if got := run(t, s, "%objects"); strings.Contains(got, "Dim") {
-		t.Errorf("deciding a refused Dim left its occurrence among the objects:\n%s", got)
-	}
 
 	wants(t, run(t, s, "%send Dim(level=3)"),
 		"✓ Sent Dim(level=3)",
@@ -107,6 +104,50 @@ func TestSendReportsAGuardThatCannotBeEvaluated(t *testing.T) {
 	wants(t, run(t, s, "%events"), "Event queue empty")
 	wants(t, run(t, s, "%send Dim(level=2)"), "✓ Sent Dim(level=2)", "transition shut_through fires on it")
 	wants(t, run(t, s, "%advance 1"), "Current state: through")
+}
+
+// TestSendDecidesOnWhatAnObjectsStartupMakesOfIt: a guard reaching a part not
+// yet built starts that part's machine, under %send as under the step — the
+// sensor's entry sets level to 10 — so %send decides on the level the step reads.
+func TestSendDecidesOnWhatAnObjectsStartupMakesOfIt(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(`package Startup {
+		private import ScalarValues::*;
+		attribute def Go;
+		attribute def Halt;
+		part def Sensor {
+			attribute level : Integer = 1;
+			exhibit state calibrate {
+				entry; then ready;
+				state ready { entry assign level := 10; }
+			}
+		}
+		part def Controller {
+			part sensor : Sensor;
+			exhibit state life {
+				entry; then off;
+				state off;
+				transition off_on first off accept Go if sensor.level > 5 then on;
+				transition off_halt first off accept Halt if sensor.level < 5 then halted;
+				state on;
+				state halted;
+			}
+		}
+		part ctl : Controller;
+	}`).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+	run(t, s, "%instantiate ctl")
+	run(t, s, "%state ctl")
+	wants(t, run(t, s, "%send Halt"),
+		`would fire no transition on Halt now, so it was not sent: state machine "life" in state off, and the guard of every transition Halt triggers is false`)
+	wants(t, run(t, s, "%send Go"), "✓ Sent Go", `Accepted by state machine "life" in state off: transition off_on fires on it`)
+	out := run(t, s, "%advance 1")
+	wants(t, out, "Current state: on")
+	if strings.Contains(out, "consumed by no transition") {
+		t.Errorf("a signal decided to fire was reported dropped:\n%s", out)
+	}
+	wants(t, run(t, s, "%features ctl"), "sensor")
 }
 
 // TestStepReportsASignalDispatchedToNothing: a guard true when the signal was

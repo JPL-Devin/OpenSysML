@@ -157,12 +157,8 @@ func (ctx *Context) classifierBehaviorsOf(typeSym *symbols.Symbol) []classifierB
 // type exhibits or performs, and runs those executions to quiescence: no due
 // event, no runnable do action, no deliverable message. A start reached from
 // inside a running behavior only attaches, leaving the run to the outermost
-// start, so materializing objects that exhibit each other terminates. A probe
-// starts nothing: what a behavior does to objects outliving it cannot be undone.
+// start, so materializing objects that exhibit each other terminates.
 func (ctx *Context) startClassifierBehaviors(inst *Instance, mark int) error {
-	if ctx.probes > 0 {
-		return nil
-	}
 	return ctx.startClassifierBehaviorsOf([]*Instance{inst}, mark)
 }
 
@@ -388,14 +384,20 @@ func (ctx *Context) drainObjectBehaviors() error {
 }
 
 // nextRunnableBehavior returns the next behavior with work to do: one not yet
-// started, else one holding an event delivered while it was suspended.
+// started, else one holding an event delivered while it was suspended. Under a
+// probe only a behavior the probe attached is run: what one outliving the probe
+// does cannot be undone.
 func (ctx *Context) nextRunnableBehavior() (*ObjectBehavior, bool) {
 	if len(ctx.pendingBehaviors) > 0 {
 		behavior := ctx.pendingBehaviors[0]
 		ctx.pendingBehaviors = ctx.pendingBehaviors[1:]
 		return behavior, true
 	}
-	for _, behavior := range ctx.objectBehaviors {
+	runnable := ctx.objectBehaviors
+	if ctx.probes > 0 {
+		runnable = runnable[ctx.probeBehaviors:]
+	}
+	for _, behavior := range runnable {
 		if behavior.hasPendingWork() {
 			return behavior, true
 		}

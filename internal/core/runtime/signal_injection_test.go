@@ -990,6 +990,93 @@ func TestDecideLeavesNoValueAGuardMaterializes(t *testing.T) {
 	}
 }
 
+// An object a guard materializes starts its behaviors under Decide as under
+// dispatch (its entry sets level to 10), and is gone with them after the decision.
+func TestDecideStartsTheBehaviorsOfAnObjectAGuardMaterializes(t *testing.T) {
+	src := `
+		private import ScalarValues::*;
+		attribute def Go;
+		attribute def Halt;
+		part def Sensor {
+			attribute level : Integer = 1;
+			exhibit state calibrate {
+				entry; then ready;
+				state ready { entry assign level := 10; }
+			}
+		}
+		part def Controller {
+			part sensor : Sensor;
+			exhibit state life {
+				entry; then off;
+				state off;
+				transition off_on first off accept Go if sensor.level > 5 then on;
+				transition off_halt first off accept Halt if sensor.level < 5 then halted;
+				state on;
+				state halted;
+			}
+		}
+		part ctl : Controller;
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "ctl.sysml", parseAndBuild(t, src))
+	root := idx.DocumentRoot("ctl.sysml")
+	ctl, err := ctx.occurrenceOf(resolveSymbol(t, root, "ctl"))
+	if err != nil {
+		t.Fatalf("occurrenceOf(ctl): %v", err)
+	}
+	life, ok := ctl.ExhibitedState()
+	if !ok {
+		t.Fatal("the controller exhibits no machine")
+	}
+	go_, err := ctx.SignalMessage(resolveSymbol(t, root, "Go"), nil, ctl)
+	if err != nil {
+		t.Fatalf("SignalMessage(Go): %v", err)
+	}
+	halt, err := ctx.SignalMessage(resolveSymbol(t, root, "Halt"), nil, ctl)
+	if err != nil {
+		t.Fatalf("SignalMessage(Halt): %v", err)
+	}
+	sensor := ctl.FeatureValues["sensor"]
+	if sensor == nil || sensor.Materialized {
+		t.Fatalf("sensor = %+v; want an unmaterialized feature value before anything reads it", sensor)
+	}
+	instances, behaviors, messages := len(ctx.instances), len(ctx.objectBehaviors), len(ctx.messages)
+
+	if d, err := life.State.Decide(go_); err != nil || len(d.Fires) != 1 || d.Fires[0] != "transition off_on" {
+		t.Errorf("Decide(Go) = %+v, %v; want off_on firing on the level the sensor's machine set", d, err)
+	}
+	if d, err := life.State.Decide(halt); err != nil || d.Enabled() {
+		t.Errorf("Decide(Halt) = %+v, %v; want nothing enabled on the level the sensor's machine set", d, err)
+	}
+	if sensor.Materialized || sensor.Value.Kind != ValInvalid {
+		t.Errorf("sensor = %+v after Decide; want it unmaterialized as before", sensor)
+	}
+	if len(ctx.instances) != instances || len(ctx.objectBehaviors) != behaviors || len(ctx.messages) != messages {
+		t.Errorf("after Decide: %d objects, %d behaviors, %d messages; want %d, %d, %d as before",
+			len(ctx.instances), len(ctx.objectBehaviors), len(ctx.messages), instances, behaviors, messages)
+	}
+	if got := activeLeaf(life.State); got != "off" {
+		t.Fatalf("state after Decide = %s, want off", got)
+	}
+
+	ctx.PostMessage(go_)
+	if err := life.State.ProcessNextEvent(); err != nil {
+		t.Fatalf("ProcessNextEvent(Go): %v", err)
+	}
+	if got := activeLeaf(life.State); got != "on" {
+		t.Fatalf("state after Go = %s, want on", got)
+	}
+	if !sensor.Materialized || sensor.Value.Kind != ValInstance {
+		t.Fatalf("sensor = %+v after dispatch; want the object the guard built", sensor)
+	}
+	built := ctx.instances[sensor.Value.Instance]
+	if got := FormatValue(built.FeatureValues["level"].HeldValue()); got != "10" {
+		t.Errorf("sensor.level = %s after dispatch, want 10 set by its machine", got)
+	}
+	if calibrate, ok := built.ExhibitedState(); !ok || activeLeaf(calibrate.State) != "ready" {
+		t.Errorf("the built sensor runs no calibrate machine at ready: ok=%v", ok)
+	}
+}
+
 // ExhibitedMachineOf finds the machine an object runs by its definition or its
 // usage, and none on an object exhibiting no such machine.
 func TestExhibitedMachineOf(t *testing.T) {

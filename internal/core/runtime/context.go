@@ -3,6 +3,7 @@ package runtime
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
@@ -150,6 +151,9 @@ type Context struct {
 	// probeWrites are the feature values the probes under way changed, with what
 	// each held before, restored as each probe ends.
 	probeWrites []probeWrite
+	// probeBehaviors is where in objectBehaviors those the probes under way
+	// attached begin: the only ones a drain under a probe may run.
+	probeBehaviors int
 	// runDepth is the number of runs currently under way, so the step counter is
 	// reset per run rather than accumulated over the context's whole life.
 	runDepth int
@@ -374,15 +378,17 @@ func (ctx *Context) beginExecutorRun(started *bool) func() {
 	return func() { ctx.runDepth-- }
 }
 
-// beginProbe brackets an evaluation previewing what a run would do: it spends the
-// run's budget while it lasts, so a runaway stays bounded, and refunds it after.
-// A probe starts no behavior (see startClassifierBehaviors), so an object it
-// materializes reads as declared and is discarded with it; a feature value it
-// materializes or writes on an object that outlives it (see noteProbeWrite) is
-// restored, so a value derived under the probe is derived again when next read.
+// beginProbe brackets an evaluation previewing what a run would do, restoring the
+// budget, trace, bus and every feature value written (see noteProbeWrite) after.
+// Behaviors the probe starts are the only ones it runs (see nextRunnableBehavior).
 func (ctx *Context) beginProbe() func() {
-	steps, elements := ctx.steps, ctx.elements
+	steps, elements, trace := ctx.steps, ctx.elements, ctx.trace
 	mark := len(ctx.probeWrites)
+	messages := slices.Clone(ctx.messages)
+	if ctx.probes == 0 {
+		ctx.probeBehaviors = len(ctx.objectBehaviors)
+	}
+	ctx.trace = nil
 	ctx.runDepth++
 	ctx.probes++
 	return func() {
@@ -390,9 +396,10 @@ func (ctx *Context) beginProbe() func() {
 			*ctx.probeWrites[i].fv = ctx.probeWrites[i].prior
 		}
 		ctx.probeWrites = ctx.probeWrites[:mark]
+		ctx.messages = messages
 		ctx.probes--
 		ctx.runDepth--
-		ctx.steps, ctx.elements = steps, elements
+		ctx.steps, ctx.elements, ctx.trace = steps, elements, trace
 	}
 }
 
