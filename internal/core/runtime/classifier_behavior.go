@@ -81,6 +81,34 @@ func (inst *Instance) Behavior(name string) (*ObjectBehavior, bool) {
 	return nil, false
 }
 
+// BehaviorNamed returns the behavior the object runs under the given name or
+// under another name of the same feature: a redefinition renames the behavior
+// it redefines (KerML 1.0 §7.3.4.5), so both names denote one execution.
+func (ctx *Context) BehaviorNamed(inst *Instance, name string) (*ObjectBehavior, bool) {
+	if b, ok := inst.Behavior(name); ok {
+		return b, true
+	}
+	if name == "" {
+		return nil, false
+	}
+	for _, b := range inst.behaviors {
+		if b.member != nil && slices.Contains(ctx.redefinedNames(b.member, inst.Type), name) {
+			return b, true
+		}
+	}
+	for _, feat := range ctx.FeaturesOf(inst.Type) {
+		if feat.Name != name || feat.Symbol == nil {
+			continue
+		}
+		for _, redefined := range ctx.redefinedNames(feat.Symbol, inst.Type) {
+			if b, ok := inst.Behavior(redefined); ok {
+				return b, true
+			}
+		}
+	}
+	return nil, false
+}
+
 // runsBound reports whether the object already runs the behavior a declaration
 // binds, so a start reached twice attaches it once.
 func (inst *Instance) runsBound(member *symbols.Symbol) bool {

@@ -5394,7 +5394,8 @@ func testAcceptPayloadWithoutAValue(t *testing.T) {
 
 // testAcceptPayloadReadBeforeItIsBound: the payload is a declaration of the body
 // wherever the body resolves, so a node running before the accept binds it
-// resolves the name and finds no value — reported, not read as an empty value.
+// resolves the name and finds no value — reported as a feature without a value,
+// not read as an empty value and not as a name that fails to resolve.
 func testAcceptPayloadReadBeforeItIsBound(t *testing.T) {
 	_, err := executeActionSource(t, "pipeline", `package P {
 		action pipeline {
@@ -5408,8 +5409,11 @@ func testAcceptPayloadReadBeforeItIsBound(t *testing.T) {
 			succession first waiter then done;
 		}
 	}`)
-	if !errors.Is(err, ErrUnresolvedReference) {
-		t.Fatalf("err = %v; want ErrUnresolvedReference", err)
+	if !errors.Is(err, ErrNoValue) {
+		t.Fatalf("err = %v; want ErrNoValue", err)
+	}
+	if errors.Is(err, ErrUnresolvedReference) {
+		t.Errorf("a declared payload was reported as unresolved: %v", err)
 	}
 	if !strings.Contains(err.Error(), "msg") {
 		t.Errorf("error does not name the payload: %v", err)
