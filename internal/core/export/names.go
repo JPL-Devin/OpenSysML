@@ -25,14 +25,13 @@ type nameChoices struct {
 }
 
 // segmentKey identifies the chain segments of one name written in one
-// declaration after one operand (the element it reaches, "" for none) to
-// name one element.
+// declaration after one operand ("" for none) to name one element.
 type segmentKey struct {
 	member, operand, name, target string
 }
 
 // written is the key of the segments spelled as name in the same place,
-// whatever they name: what a rendering's read-back can tell apart.
+// whatever they name.
 func (k segmentKey) written(name string) segmentKey {
 	return segmentKey{member: k.member, operand: k.operand, name: name}
 }
@@ -209,8 +208,7 @@ func writtenKeys(references map[nameKey]wantedReference) map[nameKey]nameKey {
 }
 
 // writtenSegments indexes the wanted segments by the spelling the rendering
-// wrote for each: what previous chose, else the segment's own name. Segments
-// written alike in one place share an entry, whatever each names.
+// wrote for each: what previous chose, else the segment's own name.
 func writtenSegments(segments map[segmentKey]bool, previous *nameChoices) map[segmentKey][]segmentKey {
 	written := make(map[segmentKey][]segmentKey, len(segments))
 	for key := range segments {
@@ -226,14 +224,8 @@ func writtenSegments(segments map[segmentKey]bool, previous *nameChoices) map[se
 	return written
 }
 
-// chooseSegment spells the chain segments of key so each reads, from the
-// operand it is written after, as the element the graph names by it: its own
-// name when that reaches the element, else the shortest qualification that
-// does. refs are the occurrences read back as written — those of any element
-// spelled alike in the same place included, since the place decides what a
-// spelling reads as, and the spellings that reach different elements differ.
-// A spelling previous chose is kept while it reads so and lengthened otherwise;
-// a segment no spelling reaches is refused.
+// chooseSegment spells the segments of key the shortest way that reads as their
+// element from every occurrence written alike there (refs); none is a refusal.
 func (e *encoder) chooseSegment(key segmentKey, written string, refs []resolve.Reference, previous *nameChoices, spelled map[segmentKey]string) (bool, error) {
 	spellings := segmentSpellings(key.name, key.target)
 	if previous != nil {
