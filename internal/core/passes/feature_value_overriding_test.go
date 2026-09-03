@@ -220,3 +220,27 @@ func TestFeatureValueOverridingOwnedConstraintIsTransitive(t *testing.T) {
 	}`
 	overridingDiags(t, src, "= c1")
 }
+
+// An owned constraint no name and no lone naming feature names — one redefining
+// two features — is still a feature, so its value is checked against every
+// binding it redefines.
+func TestFeatureValueOverridingAnonymousOwnedConstraint(t *testing.T) {
+	const src = `package P {
+		constraint def C;
+		constraint k0 : C;
+		constraint k1 : C;
+		requirement def R {
+			require constraint c1 : C default = k0;
+			require constraint c2 : C = k0;
+		}
+		requirement def S :> R { require constraint :>> c1, c2 = k1; }
+		requirement def T :> R { require constraint :>> c1, c2 default = k1; }
+		requirement def U :> R { assume constraint :>> c1 = k1; }
+	}`
+	diags := overridingDiags(t, src, "= k1", "default = k1")
+	for _, d := range diags {
+		if !strings.Contains(d.Message, "P::R::c2") {
+			t.Errorf("message %q does not name P::R::c2", d.Message)
+		}
+	}
+}

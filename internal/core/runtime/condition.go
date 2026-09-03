@@ -45,10 +45,10 @@ func (c Condition) Label() string { return conditionLabel(c) }
 // Owner is the element declaring the condition, which is the supertype it was
 // inherited from for an inherited one, or nil when the scope has no owner.
 func (c Condition) Owner() *symbols.Symbol {
-	// A body-local scope owns no symbol, so the declaring element is the
-	// nearest enclosing scope that does.
+	// A body-local scope owns no symbol and an anonymous constraint has no name
+	// to report, so the declaring element is the nearest enclosing named one.
 	for s := c.Scope; s != nil; s = s.Parent() {
-		if owner := s.Owner(); owner != nil {
+		if owner := s.Owner(); owner != nil && owner.Name != "" {
 			return owner
 		}
 	}
@@ -82,12 +82,13 @@ func (ctx *Context) conditionsOf(sym *symbols.Symbol, members []scopedMember) []
 }
 
 // appendMemberConditions appends the conditions sym's members state, leaving out
-// an inherited named constraint a closer one shadows or redefines (KerML 7.3.4.5).
+// an inherited named constraint a closer one shadows or redefines (KerML 7.3.4.5);
+// an anonymous one, which no name can redefine, is always inherited.
 func (ctx *Context) appendMemberConditions(out []Condition, sym *symbols.Symbol, members []scopedMember,
 	required bool, seen map[*symbols.Symbol]bool) []Condition {
 	var effective map[*symbols.Symbol]bool
 	for _, member := range members {
-		if owner := ctx.namedConstraintOf(member); owner != nil && owner != sym {
+		if owner := ctx.namedConstraintOf(member); owner != nil && owner != sym && owner.Name != "" {
 			if effective == nil {
 				effective = ctx.effectiveMembers(sym)
 			}
@@ -100,8 +101,8 @@ func (ctx *Context) appendMemberConditions(out []Condition, sym *symbols.Symbol,
 	return out
 }
 
-// namedConstraintOf returns the symbol a named require/assume constraint member
-// declares, nil for any other member.
+// namedConstraintOf returns the constraint usage a require/assume constraint
+// member declares, named or anonymous; nil for any other member.
 func (ctx *Context) namedConstraintOf(member scopedMember) *symbols.Symbol {
 	if _, ok := ast.OwnedConstraintOf(member.node); !ok {
 		return nil

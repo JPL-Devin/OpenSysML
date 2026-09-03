@@ -74,9 +74,11 @@ func TestBuildOwnedConstraintBorrowsRedefinedName(t *testing.T) {
 	}
 }
 
-// An unnamed `require constraint { ... }` and a `require r { ... }` referencing a
-// requirement declare no member: their bodies stay local to them.
-func TestBuildUnnamedConstraintBodiesStayLocal(t *testing.T) {
+// An unnamed `require constraint { ... }` declares an anonymous constraint usage
+// the requirement owns, one that redefines two features too (no lone naming
+// feature names it); a `require r { ... }` referencing a requirement declares no
+// member and its body stays local to it.
+func TestBuildUnnamedOwnedConstraintsAreAnonymousMembers(t *testing.T) {
 	scope := buildScope(t, `package P {
 		constraint def C;
 		requirement def Q;
@@ -87,23 +89,50 @@ func TestBuildUnnamedConstraintBodiesStayLocal(t *testing.T) {
 			require q { attribute bodyB; }
 			assume constraint : C { x > 0 }
 		}
+		requirement def S :> R {
+			require constraint c1 : C;
+			require constraint c2 : C;
+			require constraint :>> c1, c2;
+		}
 	}`)
-	r := scope.LookupLocalAll("P")[0].Scope.LookupLocalAll("R")[0]
+	pkg := scope.LookupLocalAll("P")[0].Scope
+	r := pkg.LookupLocalAll("R")[0]
 	if got := len(r.Scope.LookupLocalAll("x")); got != 1 {
 		t.Fatalf("R declares %d symbols named x, want 1", got)
 	}
 	if len(r.Scope.LookupLocalAll("bodyB")) != 0 {
 		t.Error("bodyB leaked into R")
 	}
-	var anonymous int
-	r.Scope.ForEachMember(func(sym *Symbol) bool {
-		if sym.Kind == SymbolConstraintUsage {
-			anonymous++
+	anonymousConstraints := func(owner *Symbol) []*Symbol {
+		var out []*Symbol
+		for _, sym := range owner.Scope.AnonymousMembers() {
+			if sym.Kind == SymbolConstraintUsage {
+				out = append(out, sym)
+			}
 		}
-		return true
-	})
-	if anonymous != 0 {
-		t.Errorf("R has %d constraint-usage members, want none", anonymous)
+		return out
+	}
+	anon := anonymousConstraints(r)
+	if len(anon) != 2 {
+		t.Fatalf("R has %d anonymous constraint usages, want 2", len(anon))
+	}
+	for _, sym := range anon {
+		if sym.Name != "" || sym.EffectiveName || sym.OwnerScope != r.Scope || sym.Scope == nil || sym.Scope.Owner() != sym {
+			t.Errorf("%T: not an anonymous constraint usage R owns with a scope of its own", sym.Decl)
+		}
+		if ConstraintBodyScope(r.Scope, sym.Decl) != sym.Scope {
+			t.Errorf("%T: body resolves outside its own scope", sym.Decl)
+		}
+	}
+	if _, ok := anon[0].Decl.(*ast.RequireMember); !ok {
+		t.Errorf("first anonymous constraint declared by %T, want *ast.RequireMember", anon[0].Decl)
+	}
+	if _, ok := anon[1].Decl.(*ast.AssumeMember); !ok {
+		t.Errorf("second anonymous constraint declared by %T, want *ast.AssumeMember", anon[1].Decl)
+	}
+	s := pkg.LookupLocalAll("S")[0]
+	if anon := anonymousConstraints(s); len(anon) != 1 || anon[0].NamingTarget != nil {
+		t.Errorf("S has %d anonymous constraint usages, want the one redefining c1 and c2", len(anon))
 	}
 	for _, child := range r.Scope.Children() {
 		if child.Owner() == nil && !child.BodyLocal() {
