@@ -225,6 +225,23 @@ func (s *Session) carrierInstances(sym *symbols.Symbol) []string {
 	}
 	model := ctx.Model()
 	var names []string
+	// A feature is read from the outermost object carrying it; its own nested
+	// objects are of other types and are not searched again.
+	s.walkObjects(nestedObjectsIn(ctx), func(cur carrier) bool {
+		if !carriesDeclaration(model, cur.inst.Type, declaring.Decl) {
+			return true
+		}
+		names = append(names, cur.name)
+		return false
+	})
+	sort.SliceStable(names, func(i, j int) bool { return carrierLess(names[i], names[j]) })
+	return names
+}
+
+// walkObjects visits the session's objects and, while visit reports true, the
+// objects nested yields for them, breadth-first in carrierLess order and within
+// carrierLimit.
+func (s *Session) walkObjects(nested func(carrier) []carrier, visit func(carrier) bool) {
 	seen := make(map[int64]bool, s.heldObjects())
 	queue := s.rootCarriers()
 	for visited := 0; len(queue) > 0 && visited < carrierLimit; visited++ {
@@ -234,16 +251,10 @@ func (s *Session) carrierInstances(sym *symbols.Symbol) []string {
 			continue
 		}
 		seen[cur.inst.ID] = true
-		if carriesDeclaration(model, cur.inst.Type, declaring.Decl) {
-			names = append(names, cur.name)
-			// A feature is read from the outermost object carrying it; its own
-			// nested objects are of other types and are not searched again.
-			continue
+		if visit(cur) {
+			queue = append(queue, nested(cur)...)
 		}
-		queue = append(queue, nestedObjects(ctx, cur)...)
 	}
-	sort.SliceStable(names, func(i, j int) bool { return carrierLess(names[i], names[j]) })
-	return names
 }
 
 // carrier is an object reachable from the session's objects, under the label
@@ -315,36 +326,81 @@ func (s *Session) carrierObject(label string) (*runtime.Instance, string) {
 	return inst, owner
 }
 
-// nestedObjects returns the objects held in an object's feature values, in feature-value-name
-// order, each under the label it is reached by; the elements of a multi-valued
-// feature are reached by their 1-based index, `.wheels[2]`.
-func nestedObjects(ctx *runtime.Context, of carrier) []carrier {
+// nestedObjectsIn yields the objects held in an object's feature values. A part
+// feature value holds its object only once it is asked for, so asking
+// materializes it.
+func nestedObjectsIn(ctx *runtime.Context) func(carrier) []carrier {
+	return func(of carrier) []carrier {
+		return nestedObjects(ctx, of, func(name string) (*runtime.FeatureValue, bool) {
+			fv, err := of.inst.GetFeatureValue(ctx, name)
+			return fv, err == nil && fv != nil
+		})
+	}
+}
+
+// materializedObjectsIn yields only the objects an object's feature values
+// already hold, so a walk over them leaves the runtime as it found it.
+func materializedObjectsIn(ctx *runtime.Context) func(carrier) []carrier {
+	return func(of carrier) []carrier {
+		return nestedObjects(ctx, of, func(name string) (*runtime.FeatureValue, bool) {
+			fv := of.inst.FeatureValues[name]
+			return fv, fv != nil && fv.Materialized
+		})
+	}
+}
+
+// nestedObjects returns the objects held in the feature values read yields, each
+// once, in feature-value-name order, under the label it is reached by: the first
+// single-valued feature holding it, else its 1-based place in a multi-valued
+// one, `.wheels[2]`.
+func nestedObjects(ctx *runtime.Context, of carrier, read func(string) (*runtime.FeatureValue, bool)) []carrier {
 	fvs := make([]string, 0, len(of.inst.FeatureValues))
 	for name := range of.inst.FeatureValues {
 		fvs = append(fvs, name)
 	}
 	sort.Strings(fvs)
-	out := make([]carrier, 0, len(fvs))
-	add := func(segment string, val runtime.Value) {
-		if id, isObject := val.Object(); isObject {
-			if child, ok := ctx.Instance(id); ok && child != nil {
-				out = append(out, carrier{name: of.name + "." + segment, inst: child})
-			}
+	type held struct {
+		child   *runtime.Instance
+		segment string
+		indexed bool
+	}
+	var order []int64
+	reached := make(map[int64]*held)
+	reach := func(val runtime.Value, segment string, indexed bool) {
+		id, isObject := val.Object()
+		if !isObject {
+			return
+		}
+		child, ok := ctx.Instance(id)
+		if !ok || child == nil {
+			return
+		}
+		h := reached[id]
+		if h == nil {
+			h = &held{child: child, segment: segment, indexed: indexed}
+			reached[id] = h
+			order = append(order, id)
+		} else if h.indexed && !indexed {
+			h.segment, h.indexed = segment, false
 		}
 	}
 	for _, name := range fvs {
-		// A part feature value holds its object only once it is asked for.
-		fv, err := of.inst.GetFeatureValue(ctx, name)
-		if err != nil || fv == nil {
+		fv, ok := read(name)
+		if !ok {
 			continue
 		}
 		if fv.Values.Kind == runtime.ValInvalid {
-			add(lexer.NameText(name), fv.Value)
+			reach(fv.Value, lexer.NameText(name), false)
 			continue
 		}
 		for i, val := range collectionElements(fv.Values) {
-			add(fmt.Sprintf("%s[%d]", lexer.NameText(name), i+1), val)
+			reach(val, fmt.Sprintf("%s[%d]", lexer.NameText(name), i+1), true)
 		}
+	}
+	out := make([]carrier, 0, len(order))
+	for _, id := range order {
+		h := reached[id]
+		out = append(out, carrier{name: of.name + "." + h.segment, inst: h.child})
 	}
 	return out
 }
@@ -478,13 +534,96 @@ func (e *UnknownObjectIDError) Error() string {
 	return fmt.Sprintf("no object has id #%d (the objects are %s%s)", e.ID, strings.Join(ids, ", "), more)
 }
 
-// NoInstanceError reports a declared name no object has been created under.
-type NoInstanceError struct {
-	Name string
+// NotInstantiatedError reports a declared name no object has been created
+// under. When objects of the definition that name is typed by (or, for a
+// definition, objects of usages typed by it) exist, it says so and names what
+// to instantiate.
+type NotInstantiatedError struct {
+	Name string // the name asked for, as the prompt prints names
+	// Definition is the definition the objects in Objects are of, "" when none.
+	Definition string
+	// Objects are the related objects, in carrier order.
+	Objects []RelatedObject
+	// UsageAsked reports that Name is a usage, so Objects are of its definition
+	// rather than of the usage; otherwise Name is a definition Objects are typed by.
+	UsageAsked bool
 }
 
-func (e *NoInstanceError) Error() string {
-	return fmt.Sprintf("no instance of %q (use %%instantiate first)", notationName(e.Name))
+// RelatedObject names an object the session holds, by id and by the label it is
+// reached under — "" for one only its id reaches.
+type RelatedObject struct {
+	ID    int64
+	Label string
+}
+
+func (e *NotInstantiatedError) Error() string {
+	if len(e.Objects) == 0 {
+		return fmt.Sprintf("no instance of %q (use %%instantiate first)", e.Name)
+	}
+	mentions := make([]string, len(e.Objects))
+	labels := make([]string, len(e.Objects))
+	for i, o := range e.Objects {
+		mentions[i] = fmt.Sprintf("#%d", o.ID)
+		labels[i] = mentions[i]
+		if o.Label != "" {
+			mentions[i] = fmt.Sprintf("#%d of %q", o.ID, o.Label)
+			labels[i] = o.Label
+		}
+	}
+	objects, is := "object "+mentions[0]+" is", "it"
+	if len(mentions) > 1 {
+		objects, is = "objects "+strings.Join(mentions, ", ")+" are", "one of them"
+	}
+	if e.UsageAsked {
+		return fmt.Sprintf("no instance of the usage %q: %s of its definition %q, not of the usage — use %%instantiate %s to create the usage's object, or name %s to address %s",
+			e.Name, objects, e.Definition, e.Name, strings.Join(labels, " or "), is)
+	}
+	return fmt.Sprintf("no instance of the definition %q itself: %s typed by it — name %s to address %s, or use %%instantiate %s to create an object of the definition",
+		e.Name, objects, strings.Join(labels, " or "), is, e.Name)
+}
+
+// notInstantiated reports that nothing is materialized under fqn, declared by
+// sym, and — when objects of the definition the name is typed by, or typed by
+// the definition it names, exist — what to instantiate instead.
+func (s *Session) notInstantiated(sym *symbols.Symbol, fqn string) error {
+	e := &NotInstantiatedError{Name: notationName(fqn)}
+	if sym == nil || sym.Decl == nil || s.heldObjects() == 0 {
+		return e
+	}
+	ctx, err := s.getOrCreateRuntime()
+	if err != nil {
+		return e
+	}
+	model := ctx.Model()
+	var definition *symbols.Symbol
+	switch sym.Decl.(type) {
+	case *ast.Usage:
+		e.UsageAsked = true
+		for _, sup := range model.AllSupertypes(sym) {
+			if _, isDef := sup.Decl.(*ast.Definition); isDef {
+				definition = sup
+				break
+			}
+		}
+	case *ast.Definition:
+		definition = sym
+	}
+	if definition == nil || definition.Decl == nil {
+		return e
+	}
+	e.Definition = notationName(symbols.FQNOf(definition))
+	// An error names what exists; it materializes nothing to find it.
+	s.walkObjects(materializedObjectsIn(ctx), func(cur carrier) bool {
+		if carriesDeclaration(model, cur.inst.Type, definition.Decl) {
+			related := RelatedObject{ID: cur.inst.ID}
+			if !isObjectID(cur.name) {
+				related.Label = cur.name
+			}
+			e.Objects = append(e.Objects, related)
+		}
+		return true
+	})
+	return e
 }
 
 // ObjectPathError reports a segment of an object reference that names no object
@@ -494,11 +633,16 @@ type ObjectPathError struct {
 	Object  string
 	Segment string
 	Detail  string
+	// Err is what kept the segment's feature value from materializing, nil when
+	// the segment reached a value that is no object or no feature at all.
+	Err error
 }
 
 func (e *ObjectPathError) Error() string {
 	return e.Detail
 }
+
+func (e *ObjectPathError) Unwrap() error { return e.Err }
 
 // pathError builds an ObjectPathError about seg read from the object labelled object.
 func pathError(object string, seg objectSegment, format string, args ...any) *ObjectPathError {
@@ -717,8 +861,9 @@ func (s *Session) namedRoot(ref objectRef) (*runtime.Instance, string, []objectS
 		}
 	}
 	var (
-		noInstance string
-		unresolved error
+		noInstance    string
+		noInstanceSym *symbols.Symbol
+		unresolved    error
 	)
 	for i := head; i > 0; i-- {
 		name := joinTyped(ref.segments[:i])
@@ -741,11 +886,11 @@ func (s *Session) namedRoot(ref objectRef) (*runtime.Instance, string, []objectS
 			return nil, "", nil, &ObjectRefError{Ref: ref.text, Detail: fmt.Sprintf("%s is a %s, not an object: its member is written %s", notationName(fqn), namespaceKind(sym), member)}
 		}
 		if noInstance == "" {
-			noInstance = fqn
+			noInstance, noInstanceSym = fqn, sym
 		}
 	}
 	if noInstance != "" {
-		return nil, "", nil, &NoInstanceError{Name: noInstance}
+		return nil, "", nil, s.notInstantiated(noInstanceSym, noInstance)
 	}
 	if unresolved == nil {
 		_, _, unresolved = s.lookupSymbol(joinTyped(ref.segments[:head]))
@@ -814,7 +959,9 @@ func (s *Session) walkObjectPath(ctx *runtime.Context, inst *runtime.Instance, l
 			if _, has := inst.FeatureValues[seg.name]; !has {
 				return nil, "", pathError(label, seg, "%s has no feature %q%s", label, seg.name, featureListHint(inst))
 			}
-			return nil, "", pathError(label, seg, "%s of %s could not be materialized: %v", lexer.NameText(seg.name), label, err)
+			perr := pathError(label, seg, "%s of %s could not be materialized: %v", lexer.NameText(seg.name), label, err)
+			perr.Err = err
+			return nil, "", perr
 		}
 		var val runtime.Value
 		next := label + "." + lexer.NameText(seg.name)

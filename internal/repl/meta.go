@@ -152,7 +152,7 @@ var metaCommandTable = []metaCommand{
 	{group: groupRuntime, name: "%eval", args: "[in <name> :] <expr>", desc: "evaluate an expression, in the named element or object when one is named"},
 	{group: groupRuntime, name: "%features", args: argName, desc: "show an object's features and their values; an object is named, #<id>, or a path such as car.fl or #1.wheels[2]"},
 	{group: groupRuntime, name: "%instances", desc: "list all instantiated objects"},
-	{group: groupRuntime, name: "%invoke", args: "<object> <op> [<p>=<expr>]", desc: "invoke an operation of an object's type, performed by that object"},
+	{group: groupRuntime, name: "%invoke", args: "<object> <op> [<p>=<expr>]", desc: "invoke an operation of an object's type, performed by that object; an object is named, #<id>, or a path such as car.fl"},
 
 	{group: groupBehavioral, name: "%calc", args: "<name> <args>", desc: "invoke a calculation with arguments"},
 	{group: groupBehavioral, name: cmdRunQuery, args: "<name> [<p>=<expr>...]", desc: "execute a document query and print its rows, with each binding written as <parameter>=<expression>"},
@@ -173,7 +173,7 @@ var metaCommandTable = []metaCommand{
 	{group: groupAction, name: "%break", args: "<node>", desc: "set breakpoint at node"},
 	{group: groupAction, name: "%stop", desc: "stop current debugging session"},
 
-	{group: groupState, name: "%state", args: "<name> [<object>]", desc: "debug the machine an object exhibits, or a state machine performed by an object"},
+	{group: groupState, name: "%state", args: "<name> [<object>]", desc: "debug the machine an object exhibits (naming that machine attaches too), or a state machine performed by an object; an object is named, #<id>, or a path such as car.fl"},
 	{group: groupState, name: "%events", desc: "show event queue"},
 	{group: groupState, name: "%current", desc: "show current state and configuration"},
 	{group: groupState, name: "%advance", args: "<time>", desc: "advance simulation time by <time> units, processing every event due"},
@@ -570,7 +570,7 @@ func contextSeparator(tail string) int {
 // `%instantiate`, or else the named element's own namespace.
 func (s *Session) evalIn(name, expr string) ([]string, error) {
 	inst, label, rerr := s.resolveObject(name)
-	var noInstance *NoInstanceError
+	var noInstance *NotInstantiatedError
 	if rerr != nil && (looksLikeObjectPath(name) || !errors.As(rerr, &noInstance)) {
 		return nil, rerr
 	}
@@ -1846,8 +1846,8 @@ func (s *Session) subjectName(a *runtime.SatisfyAssertion) string {
 // performingObject resolves the object a debugging session's behavior is
 // performed by: its connections route what the behavior sends. No argument
 // performs the behavior outside any object.
-// It also returns the name that object is held under, so a submission that drops
-// it can end the session.
+// It also returns the name that object is held under — its id when no name
+// reaches it — so a submission that drops it can end the session.
 func (s *Session) performingObject(args []string) (*runtime.Instance, string, error) {
 	if len(args) == 0 {
 		return nil, "", nil
@@ -2126,6 +2126,7 @@ func (s *Session) doStateMachine(name string, performer []string) ([]string, boo
 		if errors.Is(err, errRuntimeInit) {
 			return nil, false, err
 		}
+		s.noteIfMaterializationFailure(err)
 		return []string{errPrefix + err.Error()}, false, nil
 	}
 	lines = append(lines, "", "Use %events to see queue, %current for state, %advance <time> to step")
@@ -2172,6 +2173,21 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 	self, selfFQN, perr := s.performingObject(performer)
 	if perr != nil {
 		return nil, perr
+	}
+
+	// The machine the object exhibits is already running on it: a second
+	// performance would run entry and do behaviors against the same slots again.
+	if self != nil {
+		switch exhibited := self.ExhibitedStatesOf(sym); len(exhibited) {
+		case 0:
+		case 1:
+			lines := s.attachExhibitedMachine(ctx, name, selfFQN, self, exhibited[0])
+			notice := fmt.Sprintf("note: %s already exhibits %q, so this session attaches to that running machine rather than starting a second performance of it (as `%%state %s` would)",
+				objectMention(self, selfFQN), name, performer[0])
+			return append([]string{lines[0], notice}, lines[1:]...), nil
+		default:
+			return nil, ambiguousMachine(name, self, selfFQN, exhibited)
+		}
 	}
 
 	// Create executor
@@ -2223,16 +2239,29 @@ func (s *Session) debugExhibitedMachine(
 	if !ok {
 		return nil, fmt.Errorf("object %q exhibits no state machine", label)
 	}
+	return s.attachExhibitedMachine(ctx, name, label, inst, behavior), nil
+}
+
+// attachExhibitedMachine binds the session to a machine an object exhibits. The
+// session is keyed by the object's label, so a restart of the machine rebinds it.
+func (s *Session) attachExhibitedMachine(
+	ctx *runtime.Context,
+	name, label string,
+	inst *runtime.Instance,
+	behavior *runtime.ObjectBehavior,
+) []string {
 	behavior.State.SetTrace(s.trace)
 
 	s.stateExec = &stateSession{
-		name:     name,
-		fqn:      label,
-		selfFQN:  label,
-		symbol:   behavior.Symbol,
-		executor: behavior.State,
-		rtCtx:    ctx,
-		now:      behavior.State.CurrentTime(),
+		name:      name,
+		fqn:       label,
+		selfFQN:   label,
+		symbol:    behavior.Symbol,
+		executor:  behavior.State,
+		machine:   behavior.Name,
+		machineAt: exhibitedPosition(behavior),
+		rtCtx:     ctx,
+		now:       behavior.State.CurrentTime(),
 	}
 	s.endedState = nil
 
@@ -2241,7 +2270,43 @@ func (s *Session) debugExhibitedMachine(
 		fmt.Sprintf("  Current state: %s", currentStateName(behavior.State)),
 		timeLabel + runtime.FormatReal(behavior.State.CurrentTime()),
 		fmt.Sprintf("  Events: %d", behavior.State.EventQueue().Len()),
-	}, nil
+	}
+}
+
+// AmbiguousMachineError reports a state definition an object exhibits as the
+// body of several usages, so naming the definition names no one machine.
+type AmbiguousMachineError struct {
+	Object  string // the object, as objectMention prints it
+	Machine string // the definition asked for, as typed
+	// Usages are the exhibited usages running it, in declaration order, as the
+	// prompt prints names; "" for one without a name.
+	Usages []string
+}
+
+func (e *AmbiguousMachineError) Error() string {
+	names := make([]string, len(e.Usages))
+	for i, u := range e.Usages {
+		names[i] = u
+		if u == "" {
+			names[i] = "an unnamed one"
+		}
+	}
+	return fmt.Sprintf("%s exhibits %q as %d machines, so naming the definition attaches to none of them: name the exhibited usage instead — %s",
+		e.Object, e.Machine, len(e.Usages), strings.Join(names, " or "))
+}
+
+// ambiguousMachine reports a definition inst exhibits as the body of several
+// machines, naming the usages that would address one.
+func ambiguousMachine(machine string, inst *runtime.Instance, label string, exhibited []*runtime.ObjectBehavior) error {
+	e := &AmbiguousMachineError{Object: objectMention(inst, label), Machine: machine}
+	for _, b := range exhibited {
+		usage := ""
+		if member := b.Member(); member != nil && member.Name != "" {
+			usage = notationName(symbols.FQNOf(member))
+		}
+		e.Usages = append(e.Usages, usage)
+	}
+	return e
 }
 
 // stepState takes the machine's next step: a change condition that has become
@@ -2307,6 +2372,7 @@ func (s *Session) doInvoke(name, operation string, args []string) ([]string, boo
 		if errors.Is(err, errRuntimeInit) {
 			return nil, false, err
 		}
+		s.noteIfMaterializationFailure(err)
 		return []string{errPrefix + err.Error()}, false, nil
 	}
 	return lines, false, nil

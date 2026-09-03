@@ -42,7 +42,7 @@ into the parts it holds (`car.fl.hub`, `#3.fl`, `car.wheels[2]`).
 | `%run-query <name> [<p>=<expr>...]` | Execute a document query (a `calc def` specializing `DocumentQueries::Query`) and print its rows and projected cells. A projection lists declared property names and may add computed columns: `Column(name = "<column>", expression = <expr>)` entries evaluated once per row over the row element's features, with arithmetic (`+`, `-`, `*`, `/`), string concatenation and `??` defaults for absent values. A column expression that fails (including a reference that resolves to no value and has no `??` default) fails the query with a typed error rather than producing an empty cell. Each binding is written as `<parameter>=<expression>`; a name binds the element it refers to, anything else is evaluated as an expression. Named query invocation and relationship traversal (`RelatedElements` over specialization, subsetting, redefinition, typing, connection, allocation, satisfaction and verification edges, outgoing or incoming) are supported; a parameter default written as an expression is reported as an error, since the engine does not evaluate those yet. See the [query cookbook](../manual/query-cookbook.md) |
 | `%render-document <name>` | Compile a document definition (a `part def` specializing `DocumentQueries::Document`), run its queries against the model and print the rendered Markdown. A document binds its queries' parameters in the model, so the name is the whole invocation. The output is deterministic CommonMark: the title and sections as ATX headings; paragraphs from text runs (`Span` runs with a `plain`/`emphasis`/`strong`/`code` style, `Link` runs to a URL, `Ref` runs linking to another content block's anchor, and query-produced values styled through nested `SpanColumn`/`LinkColumn` column runs); GitHub-flavored pipe tables with the projected column names (one subtable per group value when the table has a `groupBy` column); bullet and numbered lists; diagram blocks as fenced ` ```mermaid ` blocks rendered through the view engine (a table-kind view as a pipe table), with an optional caption and `TB`/`LR`/`RL`/`BT` flow direction. Markdown metacharacters in content are escaped. Markdown is the only form the REPL writes; the CLI's `-doc-form html` renders the same document tree as semantic HTML ([Rendering a document as HTML](cli.md#rendering-a-document-as-html)) and `-doc-form pdf` converts the Markdown to PDF ([Rendering a document as PDF](cli.md#rendering-a-document-as-pdf)). See the [document generation manual](../manual/README.md) |
 | `%constraint <name>` | Evaluate constraint (assert/assume) |
-| `%invoke <object> <op> [<p>=<expr>]` | Invoke an operation of an object's type (an action it owns), performed by that object (`%invoke car start`, `%invoke #3 start`, `%invoke car.engine start`), with each argument written as `<parameter>=<expression>`. Assignments in the body write that object's feature values; declared outputs are reported. Not yet supported: an operation given as a `calc` or `constraint`, and positional arguments |
+| `%invoke <object> <op> [<p>=<expr>]` | Invoke an operation of an object's type (an action it owns), performed by that object, given as an [object reference](#object-references) (`%invoke car start`, `%invoke #3 start`, `%invoke car.engine start`), with each argument written as `<parameter>=<expression>`. Assignments in the body write that object's feature values; declared outputs are reported. Not yet supported: an operation given as a `calc` or `constraint`, and positional arguments |
 | `%requirement <name>` | Evaluate requirement (subject/assume/require/actor) |
 | `%satisfy [name]` | Evaluate satisfaction assertions of the model, or of one element |
 | `%check <name>` | **Experimental.** Ask an external SMT solver whether a constraint, requirement or satisfaction assertion *can* be satisfied, and on `sat` print an assignment. Reports `sat`, `unsat` or `unknown`, kept distinct. Needs `z3` or `cvc5` on `PATH` (or `OPENSYSML_SMT`; see [installing a solver](../guide/01-install.md#installing-a-solver-optional)) and reports an error rather than a verdict when none is installed. Satisfiability is not evaluation: use `%constraint`/`%satisfy` to find out what holds for an object |
@@ -58,7 +58,7 @@ into the parts it holds (`car.fl.hub`, `#3.fl`, `car.wheels[2]`).
 | `%break <node>` | Set a breakpoint at a node |
 | `%stop` | Stop the current debugging session |
 | **State machine debugging** ([guide chapter 6](../guide/06-behavior.md)) | |
-| `%state <name> [<object>]` | Debug the machine an object exhibits (`%state <object>` after `%instantiate` attaches to that object's own running machine, whether the object is named, `#3`, or `car.controller`), or start a state machine — named, or the object of one the session holds (`%state #2`, `%state monitor.modes`), which exhibits none and so runs afresh — optionally performed by an instantiated object. `%step`, `%advance`, `%current` and `%events` then drive that object's machine, and `%features` shows what it wrote |
+| `%state <name> [<object>]` | Debug the machine an object exhibits (`%state <object>` after `%instantiate` attaches to that object's own running machine, whether the object is named, `#3`, or `car.controller`), or start a state machine — named, or the object of one the session holds (`%state #2`, `%state monitor.modes`), which exhibits none and so runs afresh — optionally performed by an instantiated object, given as an [object reference](#object-references). Naming the machine the object exhibits (`%state Rover::modes rover`) attaches to that running machine too, with a note saying so, rather than performing it a second time against the same feature values; only a machine the object does not exhibit is started as a detached performance. A definition the object exhibits as the body of several usages names no one machine, so `%state` refuses and names the exhibited usages to name instead. `%step`, `%advance`, `%current` and `%events` then drive that object's machine, and `%features` shows what it wrote |
 | `%events` | Show the event queue |
 | `%current` | Show the current state and configuration |
 | `%advance <time>` | Advance simulation time by `<time>` units, processing every event due |
@@ -102,7 +102,24 @@ sysml> %features car.wheels[5]
 error: wheels of Demo::car holds 4 objects, so wheels[5] names none (indexes run from 1 to 4)
 sysml> %features Wheel
 error: no instance of "Demo::Wheel" (use %instantiate first)
+sysml> %features car.spare
+error: spare of Demo::car could not be materialized: multiplicity violation …
 ```
+
+The last two are typed errors: a name nothing was instantiated under, and a segment whose feature
+value the runtime could not materialize, which keeps the runtime's reason as its cause and is
+recorded among the session's materialization failures like any other command's.
+
+A name nothing was instantiated under says what to instantiate when related objects exist. A usage
+whose definition alone has an object (`%instantiate Rover` when `%state … rover` wanted the usage) is
+reported as `no instance of the usage "Demo::rover": object #1 of "Demo::Rover" is of its definition
+"Demo::Rover", not of the usage — use %instantiate Demo::rover to create the usage's object, or name
+Demo::Rover to address it`; a definition whose only objects are of usages typed by it names those
+objects the same way (`no instance of the definition "Demo::Rover" itself: objects #2 of
+"Demo::garage.bays[1]", #3 of "Demo::garage.bays[2]" are typed by it — name Demo::garage.bays[1] or
+Demo::garage.bays[2] to address one of them, or use %instantiate Demo::Rover to create an object of
+the definition`). A usage reaches its definition through the usages it subsets. Only objects the
+session already holds are named: the error materializes nothing to find them.
 
 ## Rendering a view
 

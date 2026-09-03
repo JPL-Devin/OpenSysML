@@ -194,7 +194,7 @@ func TestDotWalksFeaturesNotDeclarations(t *testing.T) {
 
 	wants(t, run(t, s, "%features Garage.car"), `error: "Garage.car" is not an object reference: Garage is a package, not an object: its member is written Garage::car`)
 	wants(t, run(t, s, "%features Garage.car.fl"), `error: "Garage.car.fl" is not an object reference: Garage is a package, not an object: its member is written Garage::car`)
-	wants(t, run(t, s, "%features Car.fl"), `error: no instance of "Garage::Car" (use %instantiate first)`)
+	wants(t, run(t, s, "%features Car.fl"), `error: no instance of the definition "Garage::Car" itself: object #2 of "Garage::car" is typed by it — name Garage::car to address it, or use %instantiate Garage::Car to create an object of the definition`)
 	wants(t, run(t, s, "%features Nope.fl"), "error: unresolved reference: Nope")
 }
 
