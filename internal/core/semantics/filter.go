@@ -411,7 +411,7 @@ func (m *Model) compileReference(scope *symbols.Scope, qn *ast.QualifiedName, sp
 	if !ok || sym == nil {
 		return unresolvedReference(span, fmt.Sprintf("%s does not resolve", qnText(qn)))
 	}
-	if owner := m.ownerOf(sym); owner != nil && isMetadataType(owner) {
+	if owner := m.ownerOf(sym); owner != nil && IsMetadataType(owner) {
 		ownerFQN := m.fqnOf(owner)
 		if ownerFQN == "" {
 			return unsupported(span, fmt.Sprintf("the metadata type of %s has no qualified name", qnText(qn)))
@@ -466,7 +466,7 @@ func (m *Model) referenceNotEvaluable(sym *symbols.Symbol) (string, bool) {
 		sym = resolved
 	}
 	owner := m.ownerOf(sym)
-	if isMetadataType(owner) {
+	if IsMetadataType(owner) {
 		return "", false
 	}
 	if isFeaturingType(owner) {
@@ -1280,9 +1280,9 @@ func (m *Model) ownerOf(sym *symbols.Symbol) *symbols.Symbol {
 	return nil
 }
 
-// isMetadataType reports whether a symbol is a metadata definition or a KerML
+// IsMetadataType reports whether a symbol is a metadata definition or a KerML
 // metaclass — the types an annotation can have.
-func isMetadataType(sym *symbols.Symbol) bool {
+func IsMetadataType(sym *symbols.Symbol) bool {
 	if sym == nil {
 		return false
 	}

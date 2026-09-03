@@ -114,14 +114,17 @@ exclude_docs: |
   project/performance-census-2026-09.md
   project/execution-performance-2026-09.md
   project/performance-profile-2026-09.md
+  project/native-compilation.md
   project/releasing.md
   project/macos-distribution.md
   project/demo.md
   project/training-examples.md
   project/pilot-corpora.md
+  project/rdf-corpus-roundtrip.md
   project/pilot-xpect.md
   project/pilot-rejection.md
   project/pilot-execution-referee.md
+  project/behavior-semantic-oracle.md
   project/grammar-coverage.md
   project/element-identity-annotations.md
   project/html-document-backend.md

@@ -64,6 +64,12 @@ expectation file holds no per-file counts and `-update-training` refuses to reco
 the other three are a **per-file ratchet** whose every movement must be adjudicated. Do not
 turn the assertion into a ratchet.
 
+The RDF mapping has a per-file ratchet of its own over every model under `examples/`, the
+downloaded corpora included: `TestCorpusRoundTrip` in `internal/core/export` converts each file
+notation → Turtle → notation → Turtle and pins the verdict. Run it with both require variables
+set after any change to `internal/core/export`, adjudicate every movement, then regenerate with
+`-update-corpus-roundtrip`. See `docs/project/rdf-corpus-roundtrip.md`.
+
 ---
 
 ## 3. Repository Map

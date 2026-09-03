@@ -12,8 +12,14 @@ of the following is a deliberate property of the mapping rather than a defect to
 report:
 
 - **What is not mapped is refused, not partly converted**, and the refusal names
-  the construct. 260 of the 334 models under `examples/` convert to Turtle; the
-  other 74 are refused. See [Behavior](#behavior) and [Limitations](#limitations).
+  the construct. 268 of the 345 models under `examples/` (committed, training and
+  pilot corpora) convert to Turtle; the other 77 are refused. Of the 268, a second
+  conversion of the written-back notation reproduces the graph for 249 (177
+  byte-for-byte, 72 up to the whitespace inside `sysx:sourceText`), differs for
+  14, and 5 cannot be written back or re-read at all. These figures are the
+  per-file ratchet in `internal/core/export/corpus_roundtrip_test.go`, described
+  in [rdf-corpus-roundtrip.md](../project/rdf-corpus-roundtrip.md). See
+  [Behavior](#behavior) and [Limitations](#limitations).
 - **The vocabulary may change without a compatibility path.** A graph written by
   one release may not read back into the next, and no migration is provided.
   Treat a `.ttl` as an interchange artifact you can regenerate, not as the copy
@@ -493,7 +499,7 @@ expr:P__Car___402.end0
 | `fromTo` | `[of <payload>] from <end0> to <end1>` | `flow of P from a to b` |
 | `flowTo` | `[of <payload>] <end0> to <end1>` | `flow a to b` |
 | `satisfy` | `<requirement>` (the `sysml:subsets` end, written bare) | `satisfy R by v`, `verify R` |
-| `then` | the source end is the member written before it | `then b;`, `then part b;` |
+| `then` | the source end is the nearest member written before it that is not itself an edge | `then b;`, `then part b;` |
 
 A head whose own keyword is the noun form writes a verb ahead of its ends, and
 that verb is `sysx:endVerb` (`connection c connect a to b`). Where the keyword
@@ -539,18 +545,37 @@ the notation leaves unnamed (`then send Show(x) to screen;`, a state's
 (`unnamed-succession-end`) and the encoder used to refuse. Both ends are
 positions in one body, so writing them back is exact: the source end is the
 member before the succession, and a target that *is* that preceding member is
-the declaration the `then` was written ahead of. A graph describing a position the
-notation cannot express (sequencing from a member elsewhere in the body) is
-reported rather than written back somewhere else
+the declaration the `then` was written ahead of.
+
+The member a `then` sequences from is the one the parser gives it: the nearest
+member before it that is not itself an edge. A `flow`, `bind`, `connect`,
+`succession` or `transition` relates other members rather than declaring one,
+so a `then` written after it is read past it, while an `attribute`, a `doc` or
+any other declaration is the source. The writer folds a succession back into
+`then` by the same rule, shared with the parser as `ast.UsageKind.IsEdge`, so
+`action a; flow from a.x to b.x; then action b;` comes back as written. The
+source end is compared as the name the member answers to, which is what the
+parser records: a `first a then b;` sequences from `a`, and a `perform walk;`
+or `action redefines walk;` that declares no name of its own answers to `walk`
+(KerML 7.3.4.5). A graph describing a position the notation cannot express —
+sequencing from an earlier member, or from the flow the `then` is read past —
+is reported rather than written back somewhere else
 (`export_test.go:TestUnnamedSuccessionEndComesBackFromTheGraph`,
-`TestHalfNamedSuccessionInAGraphIsReported`).
+`TestHalfNamedSuccessionInAGraphIsReported`,
+`behavior_test.go:TestThenComesBackPastTheMembersTheParserSkips`,
+`TestThenIsRefusedWhenTheGraphSequencesFromAnotherMember`).
 
 Every body that can carry a succession (definition, usage, action, state,
 including a parallel state's regions, calculation and requirement) reads these
-forms back as the same node, so a second conversion yields the same graph
-(`export_test.go:TestSuccessionRoundTripsInEveryBody`). The explicit two-ended
-form reads only basic names, so a succession naming an end that needs quotes is
-reported rather than written as notation the parser would reject.
+forms back as the same node, and on the fixtures a second conversion writes the
+same Turtle byte for byte (`export_test.go:TestSuccessionRoundTripsInEveryBody`).
+That is a statement about the fixtures, not the mapping: over the example corpus
+the second hop reproduces the graph exactly for 177 of the 268 files that
+convert, up to `sysx:sourceText` whitespace for 72 more, and differs for the
+rest ([rdf-corpus-roundtrip.md](../project/rdf-corpus-roundtrip.md)). The
+explicit two-ended form reads only basic names, so a succession naming an end
+that needs quotes is reported rather than written as notation the parser would
+reject.
 
 **A reference end is written back in a spelling the parser reads
 differently.** `end [*] ref cause : Situation;` is carried faithfully (the
@@ -628,6 +653,7 @@ element it cannot place, rather than emitting a model with elements missing.
 |---------|------|
 | `internal/core/rdf` | Triple/graph model, Turtle writer, Turtle parser |
 | `internal/core/export` | `ToRDF` (AST → graph), `ToSysML` (graph → notation), and the `Convert` entry point |
+| `internal/core/export/corpus_roundtrip_test.go` | The per-file round-trip ratchet over every model under `examples/`, with its baseline in `testdata/corpus_roundtrip_expected.txt` ([rdf-corpus-roundtrip.md](../project/rdf-corpus-roundtrip.md)) |
 | `internal/repl` | `%save` |
 | `cmd/sysml` | `-convert`, `-from`, `-o` |
 

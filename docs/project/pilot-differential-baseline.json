@@ -61,7 +61,7 @@
         "dir": "examples",
         "origin": "ours",
         "files": 32,
-        "digest": "sha256:b82af7f522c8b06ce6c4d619253dc025e75a8d8660f47b4c80f5f7a2454da34b"
+        "digest": "sha256:3d441910f351e067ec2915a73b439c8fef24a89525574b6d652e5165f19523e6"
       },
       {
         "name": "probes",
@@ -71,7 +71,7 @@
         "digest": "sha256:b0153c55bbfcdacabab911725dc44e0e7f4d3a501a281b1f3f2a13cda19737c6"
       }
     ],
-    "recorded": "2026-09-03"
+    "recorded": "2026-09-02"
   },
   "totals": {
     "files": 366,
@@ -889,6 +889,12 @@
               "line": 47,
               "severity": "error",
               "category": "unmapped",
+              "count": 1
+            },
+            {
+              "line": 133,
+              "severity": "error",
+              "category": "kind-mismatch",
               "count": 1
             }
           ]
@@ -2332,13 +2338,13 @@
               "count": 1
             },
             {
-              "line": 198,
+              "line": 199,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 203,
+              "line": 204,
               "severity": "error",
               "category": "unmapped",
               "count": 1
@@ -2350,31 +2356,25 @@
               "count": 1
             },
             {
-              "line": 212,
+              "line": 220,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 224,
+              "line": 226,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 230,
+              "line": 339,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 343,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 352,
+              "line": 348,
               "severity": "error",
               "category": "unmapped",
               "count": 1
@@ -2574,7 +2574,7 @@
     {
       "side": "pilot",
       "message": "Cannot override a binding feature value",
-      "count": 30
+      "count": 29
     },
     {
       "side": "pilot",

@@ -119,6 +119,11 @@ var gcPause sync.Mutex
 // file, a LibraryPathEnvVar override with other content — and the caller
 // loads the files instead.
 func SnapshotIndex() (*symbols.Index, error) {
-	digest := NewLoader(DefaultSource(), nil).setDigest()
+	return snapshotIndexOf(DefaultSource())
+}
+
+// snapshotIndexOf is SnapshotIndex over the given source.
+func snapshotIndexOf(src Source) (*symbols.Index, error) {
+	digest := NewLoader(src, nil).setDigest()
 	return DecodeSnapshot(stdlibSnapshot, digest)
 }

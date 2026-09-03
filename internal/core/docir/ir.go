@@ -96,12 +96,16 @@ func cloneGroups(groups []TableGroup) []TableGroup {
 
 // ListItem is one evaluated list item, produced from one query row.
 type ListItem struct {
-	runs   []TextRun
-	origin provenance.Origin
+	runs    []TextRun
+	element queryexec.Value
+	origin  provenance.Origin
 }
 
 // Runs returns the item's text runs in column order.
 func (i ListItem) Runs() []TextRun { return append([]TextRun(nil), i.runs...) }
+
+// Element returns the model element the item's query row selected.
+func (i ListItem) Element() queryexec.Value { return i.element }
 
 // Origin returns the query row behind the item.
 func (i ListItem) Origin() provenance.Origin { return i.origin }
@@ -169,7 +173,7 @@ func (c Content) Rows() []queryexec.Row { return append([]queryexec.Row(nil), c.
 func (c Content) Items() []ListItem {
 	out := make([]ListItem, len(c.items))
 	for i, item := range c.items {
-		out[i] = ListItem{runs: append([]TextRun(nil), item.runs...), origin: item.origin}
+		out[i] = ListItem{runs: append([]TextRun(nil), item.runs...), element: item.element, origin: item.origin}
 	}
 	return out
 }

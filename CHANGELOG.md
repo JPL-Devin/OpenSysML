@@ -8,6 +8,20 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Added
 
+- **The bundled standard library opens in the editor.** Go-to-definition, find-references
+  and the diagram panel used to report a standard library declaration at a path no editor
+  could open, so a click on `ScalarValues::Integer` went nowhere. `sysml-lsp` now reports
+  such a location under the `sysml-stdlib:` scheme — the file's path within the library —
+  with its line and column computed from the bundled text, and serves that text through the
+  `opensysml/stdlibContent` request, announced as `openSysmlStdlibContent` in the
+  `initialize` result. The VS Code extension registers a provider for the scheme, so
+  <kbd>Ctrl</kbd>+click on a library name opens the bundled file in a read-only editor on the
+  declaring line; hover, go-to-definition, the outline and semantic highlighting work inside
+  it, so navigation continues from one library file into the next. Opening or closing such a
+  document changes nothing, and an edit to one is refused with an error rather than applied:
+  the library is what every diagnostic is judged against. Other LSP clients get the same by
+  registering a content provider for the scheme that calls the request.
+
 - **A model's change set applies to a live repository, keyed by identity.**
   `sysml model.sysml -sync-apply http://localhost:8083` diffs the model against its project
   branch on a running SysML v2 API (Flexo MMS) and writes the change set as one commit through
@@ -54,6 +68,33 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   positional or named arguments exactly as the invocation form used to. An accept subsetting a
   declared event (`accept :> shutDown`) now takes a message sent from that event feature
   (`send shutDown to interrupt`), not only one of its type.
+- **Action and state execution has a referee outside the executor.** Six conformance cases —
+  a join fed by branches of unequal length, a join fed twice over one succession, a node two
+  successions reach, two fork branches writing one feature, the specification's `ChargeBattery`
+  merge loop, and a transition's guard, exit, effect and entry made observable through values —
+  carry expected outcomes and traces derived by hand from the Kernel Semantic Library
+  (`Occurrences.kerml` `HappensBefore`, `Performances.kerml`, `ControlPerformances.kerml`,
+  `StatePerformances.kerml`, `TransitionPerformances.kerml`) and the Systems Library
+  (`Actions.sysml`), not recorded from the executor. The derivation, sentence by sentence, and
+  the orderings the library leaves open are in
+  [the semantic oracle record](docs/project/behavior-semantic-oracle.md). Three cases state what
+  the executor does not do yet and are listed as known failures rather than recorded as goldens:
+  a join fires on the count of parked tokens instead of one per incoming succession and then
+  deadlocks, a node reached over two successions is performed twice, and a merge admits one
+  traversal per run so a loop is left after its first pass. The executor is unchanged; the
+  compliance rows for the join, the merge and concurrent same-feature writes cite the cases and
+  stay approximate.
+- **The RDF round trip is measured over every example, and pinned per file.** `TestCorpusRoundTrip`
+  converts each of the 345 models under `examples/` — the committed models, the OMG training
+  corpus and the three pilot corpora — notation → Turtle → notation → Turtle and compares the two
+  graphs as triple sets, so a writer or encoder change that moves any file's verdict in either
+  direction fails the suite and is adjudicated, as the pilot corpora gate already does for
+  diagnostics. The baseline records 166 files stable, 71 stable up to the whitespace inside
+  `sysx:sourceText`, 14 that come back as a different graph, 15 that cannot be written back,
+  2 whose written notation no longer converts and 77 refused on the first hop, each refusal
+  classed by the construct it names. The mapping's reference now states that measurement in place
+  of the claim that a second conversion yields the same graph, which held for the fixtures alone
+  ([docs/project/rdf-corpus-roundtrip.md](docs/project/rdf-corpus-roundtrip.md)).
 
 ### Performance
 
@@ -99,6 +140,26 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   parameters) stays on the evaluator, as does every traced, named-argument or non-scalar
   invocation. `OPENSYSML_CALC_COMPILE=0` turns the tier off for bisecting.
 
+- **The compiled calc tier takes the bodies analysis models write.** Four constructs join the
+  compiled subset, each reproducing the reference evaluator's values, error text and step counts
+  exactly: statement bodies of body-local scalar declarations, `return` and `if`/`else`, compiled
+  from the lowered statements into further slots of the scalar frame with the evaluator's
+  declaration-order and shadowing rules (a local read before its declaration, a local without a
+  value, a body that may run off its end, `out` features, loops and assignments stay on the
+  evaluator); parameters redefined along the specialization chain (`in :>> x = 3.0;`,
+  `in x :>> Base::x : Integer;`), laid out as the effective parameter list the evaluator binds; the
+  standard library's scalar functions and constants (`sqrt`, `ln`, `exp`, `abs`, `floor`, `round`,
+  `min`, `max`, the trigonometric functions, `deg`, `rad`, `TrigFunctions::pi`, …), dispatched
+  through the resolved symbol to the Go implementation the evaluator uses — so an alias or an
+  import reaches it and a model's own `sqrt` does not — and `sum`/`product` over a lone scalar;
+  and named arguments (`Fib(k = n - 1)`), bound to slots at compile time with the evaluator's
+  arity and unknown-name checks ahead of dispatch. Over the repository's fixtures, examples and
+  the OMG corpora the tier now compiles 127 of 343 calc definitions (37%) instead of 42 of 263
+  (16%); a recursive tree of three-local bodies calling `sqrt` runs 12.6× faster (10.4 ms instead
+  of 132 for 131 071 invocations) and `Fib(25)` is unchanged at 21–23 ns per invocation. The
+  differential test now also compares Reals bit for bit over ±0.0, ±Inf and NaN, and focused
+  fixtures under `internal/core/runtime/testdata/compiled/` run each construct through both tiers.
+
 ### Changed
 
 - **`send Def(args)` on an item or attribute definition is an error, as the specification and
@@ -108,6 +169,19 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   behavioral feature. Write the constructor instead: `send new Def(args)`. The fixtures, the
   demo and the examples are migrated; invoking a behavioral feature (`send shutDown() to self`
   over an action) is unchanged.
+- **An OSLC query reports a selected property under the name it was asked for.** `sysml
+  -query 'oslc.where=rdf:type="PartUsage"&oslc.select=rdf:type'` and the REPL's `%query`
+  used to report the property as `@type=PartUsage`, a Go API name that the query text
+  refuses, so a reported row could not be written back into a query; the rows now read
+  `rdf:type=PartUsage`, `sysml:name=battery`, `sysml:owner=Robot::Platform`, and a prefix
+  rebound by `oslc.prefix` renames the property in the answer as well. The gRPC response
+  still keys properties by the query property names the structured `query` field uses.
+  A reported value is a bare name, which the grammar wants quoted, so refusing one now
+  names the form to write: `sysml:name=battery` answers with `write a name as a quoted
+  literal "battery"` instead of only `invalid OSLC value "battery"`. Since a property is
+  reported under one name, `oslc.select` naming the same property twice — as
+  `sysml:name,sysml:name`, or as two prefixes bound to the SysML namespace — is now refused
+  rather than reported twice under whichever name came last.
 - **The documentation site's landing page describes the four oracles instead of quoting their
   totals.** The band below the hero used to state the differential's agreeing-file count, the Xpect
   suites' declared-diagnostic and scope tallies, the rejection corpus's size and the pilot pin, all
@@ -141,6 +215,60 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   compiles calcs until that variable says otherwise, and — invoking the model's own `StepBudget`
   through both tiers — that they agree and that a traced run takes the evaluator. The architecture
   document gains a paragraph and diagram on invoking a calc.
+
+### Fixed
+
+- **`%state <machine> <object>` attaches to the machine the object exhibits instead of performing
+  it again.** Naming an object's own exhibited machine (`%state Rover::modes rover`, or `-state
+  "Rover::modes rover"`) used to start a second performance of it on the same object, so its
+  `entry` and `do` actions ran twice against the same feature values — a `log` written once as
+  `"W"` read `"WW"`, a `level` raised by 10 read 20. The two-argument form now recognizes that
+  machine by its declaration and attaches to the running performance, saying so in a `note:` line
+  that names the one-argument form; a machine the object merely performs is still started as a
+  detached performance. The attached session follows the object over an unrelated declaration,
+  as the one-argument form's does, and stays on the machine it was attached to when the object
+  exhibits several. A definition the object exhibits as the body of several usages (`exhibit
+  state front : Blink; exhibit state rear : Blink;`) names no one running machine, so `%state
+  Blink lamp` refuses and names the usages that would: `object #1 of "lamp" exhibits "Blink" as
+  2 machines, so naming the definition attaches to none of them: name the exhibited usage
+  instead — Lamp::front or Lamp::rear`.
+- **`%state`, `%invoke` and `-state` reach a nested part by path and by id.** The object argument
+  accepted only the name of a top-level object, so the machine of a part reached through
+  composition could be watched with `%features` but neither debugged nor invoked on. The
+  argument now takes a feature path from a top-level object (`driver.r`, `driver.r.motor`,
+  `Fleet::driver::r`) and the id the prompt prints (`#3`), resolved by the same walk `%features`
+  uses. A path that stops short of an object is a typed error naming the segment
+  that reached none and why (`Fleet::driver.x reaches no object at "x": object #1 of
+  "Fleet::driver" has no feature "x"`; `… at "level": feature "level" of object #2 holds 10,
+  which is not an object`), and an id nothing is held under is `no object #99 in this session`.
+  A segment whose feature value the runtime could not materialize keeps the runtime's reason
+  (`… at "spare": feature "spare" of object #1 could not be materialized: … multiplicity
+  violation …`) rather than being reported as a missing feature, and reaches the session status
+  as a failed `%features` would. A qualified path is read as typed — `Fleet::driver::r` is the
+  usage's part even with `Fleet::Driver`, where `r` is declared, instantiated too — and a member
+  of a multi-valued part, which no path reaches, is named by its id alone, so a session attached
+  to it by id survives an unrelated declaration.
+- **An object of the wrong kind is named when a usage is not instantiated.** `-state
+  "Rover::modes rover"` after `-instantiate Rover` (the definition, not the usage) reported only
+  `no instance of "rover" (use %instantiate first)`. The REPL and the CLI now say that an object
+  of the definition exists, not of the usage, and name what to instantiate instead: `no instance
+  of the usage "Fleet::rover": object #1 of "Fleet::Rover" is of its definition "Fleet::Rover",
+  not of the usage — use %instantiate Fleet::rover to create the usage's object, or name
+  Fleet::Rover to address it`. Asking for a definition when only usages typed by it have
+  objects names those usages the same way; with no related object the plain hint stands.
+
+- **A `then` written after a flow, a binding or a standalone succession comes back from Turtle.**
+  The parser sequences a positional `then` from the nearest preceding member that is not itself
+  an edge — flows, bindings, connectors, successions and transitions are skipped, attributes and
+  docs are not — but the Turtle writer took the member written immediately before it, found the
+  flow there and refused the whole file as inconsistent. Both sides now share one rule,
+  `ast.UsageKind.IsEdge`, and the writer compares the graph's source end against the name the
+  skipped-to member answers to (an unnamed `perform x` or `action redefines x` answers to `x`, as
+  in the parser), so `first start; then a;` and `then perform run;` fold back too. A graph whose
+  `sysx:sourceMember` or `sysml:sourceFeature` names some other member is still refused. Over the
+  345-file example corpus the files the writer refused for this reason go from 14 to 0, and their
+  round trips reproduce the same graph; the training examples for action shorthand, control
+  structures, decisions, merges, terminate actions, messaging and message payloads are among them.
 
 ## 0.4.3 — 2026-09-01
 
@@ -202,6 +330,26 @@ No model that validated under 0.4.2 stops validating and no import path moves.
   The Go and Python clients check the capability before sending one, so an older service is a
   capability error rather than an input silently read as null. The Python generator emits
   `complex` for a `Complex` feature (emission schema `4`).
+
+- **Documents render as semantic, styleable HTML.** `-doc-form html` writes a document from the
+  compiled document tree itself rather than by converting the Markdown, so the model facts Markdown
+  cannot carry reach the markup: `<article>`, nested `<section>` whose heading levels follow the
+  nesting, `<table>` with `<caption>`/`<thead>`/`<th scope="col">`, `<figure>`/`<figcaption>`,
+  `<nav>` contents and semantic inline runs, hooked by a small `sysml-` class vocabulary and
+  `data-` attributes for the content kind and name, the query behind a table or list, the group-by
+  column, each row's or item's selected element and element kind, each cell's projected column and
+  value kind, and a diagram's view, kind and direction. Identifiers are the Markdown anchors, so a
+  `Ref` resolves within a page and, under `-render-documents -doc-form html`, across a linked set
+  whose pages share one `sysml-document.css`. The default stylesheet sits in an `@layer opensysml`
+  cascade layer and draws every value from `--sysml-*` custom properties, so unlayered reader CSS
+  overrides it without `!important` or specificity fights, and no `style` attribute is ever
+  emitted; `-html-default-css`, `-html-css` (repeatable; a file is inlined, a URL linked),
+  `-html-no-default-css` and `-html-fragment` shape that. Output loads nothing over the network,
+  runs no JavaScript of its own — a diagram's Mermaid source sits in `<pre class="mermaid">` — and
+  is byte-identical between runs. The title page, contents and numbering options are now
+  `-doc-title-page`, `-doc-toc` and `-doc-number-sections`, shared by HTML and PDF, with the
+  `-pdf-*` spellings kept as aliases. Markdown is unchanged, and the PDF engines still read their
+  own HTML for now.
 
 - **An element declares its repository identity in the notation.** `@ElementId { id = "…"; }`
   annotates the element it is written about, and `@ProjectRef { projectId = "…"; }` on a root
@@ -345,6 +493,17 @@ No model that validated under 0.4.2 stops validating and no import path moves.
   alone, and a directory without a stamp is left alone with a warning.
 
 ### Fixed
+
+- **An OSLC query's unknown-property diagnostic names properties the query can be written with.**
+  `sysml:id="x"` answered with the Go API's own property names (`@id, @type, declaredName, …`), so a
+  caller who wrote one back got a second, different error: `@type` and `@id` are not OSLC query text.
+  The list is now the OSLC predicates (`rdf:type, sysml:declaredName, …`), derived from the mapping
+  the parser reads, and `@type`/`@id` name their OSLC spelling instead — `rdf:type`, and identity,
+  which every result reports rather than asks for. The list follows the query's own `oslc.prefix`
+  bindings, since a rebound `sysml` or `rdf` changes what the parser accepts. An `oslc.prefix`
+  binding whose prefix no prefixed name can be written with (`!s=<…>`) is refused where it is
+  bound rather than accepted and never usable, and a prefix of letters outside ASCII
+  (`sÿsml=<…>`) now scans as one name in a query instead of ending mid-letter.
 
 - **An anonymous `doc` or `comment` before a kind keyword is kept.** `doc /* … */` followed by
   `attribute a;` in a definition or usage body parsed as an attribute prefixed by `doc`, so the

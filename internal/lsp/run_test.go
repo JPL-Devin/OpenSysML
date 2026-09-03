@@ -30,11 +30,21 @@ func writeMessage(conn net.Conn, obj any) error {
 // readMessage reads one framed LSP message from r, failing on unframed output.
 func readMessage(t *testing.T, r *bufio.Reader) map[string]any {
 	t.Helper()
+	msg, err := readFramedMessage(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return msg
+}
+
+// readFramedMessage reads one framed LSP message from r; it is usable off the
+// test goroutine, where a failing test cannot be reported directly.
+func readFramedMessage(r *bufio.Reader) (map[string]any, error) {
 	length := -1
 	for {
 		line, err := r.ReadString('\n')
 		if err != nil {
-			t.Fatalf("read header: %v", err)
+			return nil, fmt.Errorf("read header: %w", err)
 		}
 		line = strings.TrimRight(line, "\r\n")
 		if line == "" {
@@ -42,31 +52,31 @@ func readMessage(t *testing.T, r *bufio.Reader) map[string]any {
 		}
 		name, value, ok := strings.Cut(line, ":")
 		if !ok {
-			t.Fatalf("unframed server output: %q", line)
+			return nil, fmt.Errorf("unframed server output: %q", line)
 		}
 		if strings.EqualFold(strings.TrimSpace(name), "Content-Length") {
 			length, err = strconv.Atoi(strings.TrimSpace(value))
 			if err != nil {
-				t.Fatalf("bad Content-Length %q: %v", value, err)
+				return nil, fmt.Errorf("bad Content-Length %q: %w", value, err)
 			}
 		}
 	}
 	if length < 0 {
-		t.Fatal("message without Content-Length header")
+		return nil, fmt.Errorf("message without Content-Length header")
 	}
 	body := make([]byte, length)
 	for read := 0; read < length; {
 		n, err := r.Read(body[read:])
 		if err != nil {
-			t.Fatalf("read body: %v", err)
+			return nil, fmt.Errorf("read body: %w", err)
 		}
 		read += n
 	}
 	var msg map[string]any
 	if err := json.Unmarshal(body, &msg); err != nil {
-		t.Fatalf("unmarshal %q: %v", body, err)
+		return nil, fmt.Errorf("unmarshal %q: %w", body, err)
 	}
-	return msg
+	return msg, nil
 }
 
 // A served session must handle $/cancelRequest: an unwrapped handler answers it
