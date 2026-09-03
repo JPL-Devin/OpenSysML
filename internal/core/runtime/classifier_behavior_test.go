@@ -700,8 +700,9 @@ func TestExhibitedMachineNamingNoBodyIsReported(t *testing.T) {
 }
 
 // A type exhibits a machine through the declaration stating it inline, one typed
-// by a definition, or one naming a state usage declared beside it; a machine it
-// merely performs, and a definition no declaration names, it does not exhibit.
+// by a definition, or one naming a state usage declared beside it, and every
+// binding on the way to the body addresses it; a machine it merely performs, and
+// a definition no declaration names, it does not exhibit.
 func TestExhibitsStateResolvesTheBodyABindingRuns(t *testing.T) {
 	src := `
 		state def Blink { entry; then dark; state dark; }
@@ -709,8 +710,10 @@ func TestExhibitsStateResolvesTheBodyABindingRuns(t *testing.T) {
 		part def Lamp {
 			exhibit state front : Blink;
 			exhibit state own { entry; then idle; state idle; }
-			state spare { entry; then idle; state idle; }
+			state spare : Blink;
 			exhibit spare;
+			state standby : Check;
+			exhibit state night ::> standby;
 			perform action watch { first start; then done; }
 		}
 	`
@@ -736,6 +739,10 @@ func TestExhibitsStateResolvesTheBodyABindingRuns(t *testing.T) {
 		{"front", "front", member("front"), member("front"), true},
 		{"own", "own", member("own"), member("own"), true},
 		{"exhibit spare", "spare", exhibitSpare, member("spare"), true},
+		{"exhibit spare", "Blink", exhibitSpare, resolveSymbol(t, root, "Blink"), true},
+		{"night", "standby", member("night"), member("standby"), true},
+		{"night", "Check", member("night"), resolveSymbol(t, root, "Check"), true},
+		{"night", "Blink", member("night"), resolveSymbol(t, root, "Blink"), false},
 		{"front", "Check", member("front"), resolveSymbol(t, root, "Check"), false},
 		{"watch", "watch", member("watch"), member("watch"), false},
 		{"spare", "spare", member("spare"), member("spare"), false},
@@ -746,6 +753,24 @@ func TestExhibitsStateResolvesTheBodyABindingRuns(t *testing.T) {
 	}
 	if ctx.ExhibitsState(nil, lamp) || ctx.ExhibitsState(lamp, nil) {
 		t.Error("ExhibitsState over a nil symbol reported an exhibit")
+	}
+
+	// An object of the type addresses its machines the same way.
+	inst, err := ctx.Instantiate(lamp)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if got := inst.ExhibitedStatesOf(member("spare")); len(got) != 1 || got[0].Member() != exhibitSpare {
+		t.Errorf("ExhibitedStatesOf(spare) = %v, want the machine `exhibit spare` binds", got)
+	}
+	if got := inst.ExhibitedStatesOf(resolveSymbol(t, root, "Blink")); len(got) != 2 {
+		t.Errorf("ExhibitedStatesOf(Blink) = %v, want front and spare", got)
+	}
+	if got := inst.ExhibitedStatesOf(member("standby")); len(got) != 1 || got[0].Member() != member("night") {
+		t.Errorf("ExhibitedStatesOf(standby) = %v, want night", got)
+	}
+	if got := inst.ExhibitedStatesOf(member("watch")); len(got) != 0 {
+		t.Errorf("ExhibitedStatesOf(watch) = %v, want none", got)
 	}
 }
 

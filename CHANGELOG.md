@@ -173,11 +173,14 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   the machine, or several do, `%state` refuses with a typed error (`ExhibitorsError`) naming
   the objects and both forms that address one (`%state <object>`, `%state <machine>
   <object>`), rather than guessing or performing the machine detached; with no object yet
-  held, it names the types whose objects run the machine, whether they exhibit it inline or
-  through usages typed by a shared definition (`exhibit state front : Blink`). A definition
-  one object exhibits as several usages refuses as it does with the object named. A machine
-  no type exhibits (`state def Blink` alone) still starts as before, since no object's
-  performance of it exists to attach to.
+  held, it names the types whose objects run the machine, whether they exhibit it inline,
+  through usages typed by a shared definition (`exhibit state front : Blink`), or through a
+  usage referencing another (`state spare : Blink; exhibit state active ::> spare;`): every
+  binding on the way to the body addresses the machine, with the object named or alone. A
+  definition one object exhibits as several usages refuses as it does with the object named.
+  Held objects are the ones the session has built: a nested part counts once it has been
+  reached, by `%features` or a machine that wrote it. A machine no type exhibits (`state def
+  Blink` alone) still starts as before, since no object's performance of it exists to attach to.
 
 - **A qualified name through an import evaluates as the checker resolves it.** The evaluator
   used to resolve only the first segment of `Bq::x` through the resolver and walk the rest as

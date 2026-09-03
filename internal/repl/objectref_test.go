@@ -713,6 +713,42 @@ func TestStateOverAnUnexhibitedDefinitionRunsDetached(t *testing.T) {
 	wants(t, run(t, s, "%advance 5"), "Current state: checked")
 }
 
+// Every binding on the way to a machine's body addresses it: the state usage an
+// exhibited usage references, and the definition typing that. Named alone, each
+// refuses before an object exists and attaches to that object's running machine
+// afterwards, never running detached.
+func TestStateOverAMachineReachedThroughABindingChain(t *testing.T) {
+	s := loadFixture(t, "testdata/named_usage_machine.sysml")
+
+	for _, name := range []string{"Relay::Beacon::spare", "Relay::Blink"} {
+		_, err := s.startStateMachine(name, nil)
+		var eerr *ExhibitorsError
+		if !errors.As(err, &eerr) {
+			t.Fatalf("%s: got %v, want an ExhibitorsError", name, err)
+		}
+		if eerr.Machine != name || strings.Join(eerr.Types, ",") != "Relay::Beacon" || len(eerr.Objects) != 0 {
+			t.Errorf("got %+v, want %s of Relay::Beacon exhibited by no object", eerr, name)
+		}
+		if s.stateExec != nil {
+			t.Fatalf("%s: a detached performance was started: %q", name, s.stateExec.fqn)
+		}
+		got := run(t, s, "%state "+name)
+		wants(t, got, "error:", `object of "Relay::Beacon"`, "%state "+name+" <object>")
+		rejects(t, got, "Started state machine executor")
+	}
+
+	run(t, s, "%instantiate Relay::beacon")
+	wants(t, run(t, s, "%features Relay::beacon"), "ticks = 1")
+	for _, name := range []string{"Relay::Beacon::spare", "Relay::Blink", "Relay::Beacon::spare Relay::beacon"} {
+		got := run(t, s, "%state "+name)
+		wants(t, got, `Debugging state machine "active" exhibited by object #`, "Current state: dark")
+		rejects(t, got, "Started state machine executor")
+		wants(t, run(t, s, "%features Relay::beacon"), "ticks = 1")
+	}
+	wants(t, run(t, s, "%advance 4"), "Current state: dark")
+	wants(t, run(t, s, "%features Relay::beacon"), "ticks = 2")
+}
+
 // atoi reads an object identity a report printed.
 func atoi(t *testing.T, digits string) int64 {
 	t.Helper()

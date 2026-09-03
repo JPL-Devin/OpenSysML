@@ -28,6 +28,9 @@ type ObjectBehavior struct {
 	// member is the declaration binding the behavior to the object's type, which
 	// tells two behaviors apart even when neither is named.
 	member *symbols.Symbol
+	// bindings is the chain from member to Symbol: each element names the next,
+	// so a machine addressed by any of them is this one.
+	bindings []*symbols.Symbol
 	// State is the machine the object exhibits, nil for a performed action.
 	State *StateExecutor
 	// Action is the action the object performs, nil for an exhibited machine.
@@ -97,8 +100,9 @@ func (inst *Instance) ExhibitedState() (*ObjectBehavior, bool) {
 }
 
 // ExhibitedStatesOf returns the machines the object exhibits under sym's declaration:
-// the one sym itself binds, or else every one running sym's body, since one
-// definition can be the body of several exhibited usages. Declarations are compared.
+// the one sym itself binds, or else every one reaching sym through its bindings
+// (the usage it names, or the definition holding its body), since one definition
+// can be the body of several exhibited usages. Declarations are compared.
 func (inst *Instance) ExhibitedStatesOf(sym *symbols.Symbol) []*ObjectBehavior {
 	if sym == nil || sym.Decl == nil {
 		return nil
@@ -111,7 +115,7 @@ func (inst *Instance) ExhibitedStatesOf(sym *symbols.Symbol) []*ObjectBehavior {
 		if b.member != nil && b.member.Decl == sym.Decl {
 			return []*ObjectBehavior{b}
 		}
-		if b.Symbol != nil && b.Symbol.Decl == sym.Decl {
+		if len(b.bindings) > 1 && declaresAny(b.bindings[1:], sym) {
 			bodies = append(bodies, b)
 		}
 	}
@@ -119,7 +123,7 @@ func (inst *Instance) ExhibitedStatesOf(sym *symbols.Symbol) []*ObjectBehavior {
 }
 
 // ExhibitsState reports whether member is an exhibit declaration whose objects
-// run sym's machine: member itself, or the body it names. Declarations are compared.
+// run sym's machine: member itself, or anything its bindings reach. Declarations are compared.
 func (ctx *Context) ExhibitsState(member, sym *symbols.Symbol) bool {
 	if member == nil || member.Decl == nil || sym == nil || sym.Decl == nil {
 		return false
@@ -128,11 +132,18 @@ func (ctx *Context) ExhibitsState(member, sym *symbols.Symbol) bool {
 	if !ok || behavior.Kind != lower.ExhibitedState {
 		return false
 	}
-	if member.Decl == sym.Decl {
-		return true
+	chain, err := ctx.classifierBehaviorChain(classifierBehaviorDecl{behavior: behavior, member: member})
+	return err == nil && declaresAny(chain, sym)
+}
+
+// declaresAny reports whether one of syms declares what sym declares.
+func declaresAny(syms []*symbols.Symbol, sym *symbols.Symbol) bool {
+	for _, s := range syms {
+		if s != nil && s.Decl == sym.Decl {
+			return true
+		}
 	}
-	body, err := ctx.classifierBehaviorSymbol(classifierBehaviorDecl{behavior: behavior, member: member})
-	return err == nil && body != nil && body.Decl == sym.Decl
+	return false
 }
 
 // Member is the declaration binding the behavior to the object's type: the
@@ -399,10 +410,11 @@ func (b *ObjectBehavior) hasPendingWork() bool {
 // type binds, seeded with the values the binding declaration supplies, and
 // initializes it so its start is reported where every other behavior's is.
 func (ctx *Context) attachClassifierBehavior(inst *Instance, decl classifierBehaviorDecl) (*ObjectBehavior, error) {
-	sym, err := ctx.classifierBehaviorSymbol(decl)
+	chain, err := ctx.classifierBehaviorChain(decl)
 	if err != nil {
 		return nil, err
 	}
+	sym := chain[len(chain)-1]
 
 	arguments, err := ctx.classifierBehaviorArguments(inst, decl)
 	if err != nil {
@@ -410,11 +422,12 @@ func (ctx *Context) attachClassifierBehavior(inst *Instance, decl classifierBeha
 	}
 
 	behavior := &ObjectBehavior{
-		Name:   decl.behavior.Name,
-		Kind:   decl.behavior.Kind,
-		Symbol: sym,
-		Object: inst,
-		member: decl.member,
+		Name:     decl.behavior.Name,
+		Kind:     decl.behavior.Kind,
+		Symbol:   sym,
+		Object:   inst,
+		member:   decl.member,
+		bindings: chain,
 	}
 
 	switch decl.behavior.Kind {
@@ -534,26 +547,39 @@ func (b *ObjectBehavior) run() error {
 // declaration runs: the declaration itself when it states one, otherwise what it
 // names — the feature it refers to or the definition it is typed by.
 func (ctx *Context) classifierBehaviorSymbol(decl classifierBehaviorDecl) (*symbols.Symbol, error) {
+	chain, err := ctx.classifierBehaviorChain(decl)
+	if err != nil {
+		return nil, err
+	}
+	return chain[len(chain)-1], nil
+}
+
+// classifierBehaviorChain resolves the bindings from a binding declaration to the
+// element holding the body it runs: the declaration first, then what each names in
+// turn, ending at the one stating a body.
+func (ctx *Context) classifierBehaviorChain(decl classifierBehaviorDecl) ([]*symbols.Symbol, error) {
 	sym := decl.member
+	chain := []*symbols.Symbol{sym}
 	for depth := 0; depth < maxBehaviorBindingDepth; depth++ {
 		stated := sym == decl.member && decl.behavior.StatesBody
 		if !stated && sym != decl.member {
 			stated = statesBehaviorBody(sym)
 		}
 		if stated {
-			return sym, nil
+			return chain, nil
 		}
 		next := ctx.namedBehavior(sym)
 		if next == nil || next == sym {
 			// A declaration naming nothing that holds a body is not executable:
 			// the type binds a behavior no element states.
 			if sym != decl.member {
-				return sym, nil
+				return chain, nil
 			}
 			return nil, fmt.Errorf("%w: %s %s of %s names no behavior body",
 				ErrUnresolvedClassifierBehavior, decl.behavior.Kind, decl.behavior.Name, symbolText(decl.member))
 		}
 		sym = next
+		chain = append(chain, sym)
 	}
 	return nil, fmt.Errorf("%w: %s %s of %s names itself through %d bindings",
 		ErrUnresolvedClassifierBehavior, decl.behavior.Kind, decl.behavior.Name, symbolText(decl.member), maxBehaviorBindingDepth)

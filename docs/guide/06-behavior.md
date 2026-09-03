@@ -183,8 +183,9 @@ Naming the machine alone attaches the same way when one held object exhibits it:
 (or `%state Monitor::modes`) after `%instantiate Monitor` drives that object's running machine,
 so what its `do` and `entry` actions write shows up in `%features Monitor`. It never performs
 the machine detached from its object: with no object exhibiting it (`%state modes` before any
-`%instantiate`), or several (two `Monitor` objects), `%state` refuses and names the objects, and
-you name one with `%state <object>` or `%state <machine> <object>`. Only a `state def` no type
+`%instantiate`), or several (a second `Monitor` held as a part of another object), `%state`
+refuses and names the objects — or, before any exists, the type exhibiting the machine — and you
+name one with `%state <object>` or `%state <machine> <object>`. Only a `state def` no type
 exhibits is started as a detached performance by that form.
 
 The object can also be a part reached through composition, or an id. With `part def Driver {
