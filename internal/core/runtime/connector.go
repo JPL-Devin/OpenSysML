@@ -127,9 +127,8 @@ func (ctx *Context) materializeConnectorAs(owner *Instance, connSym, base *symbo
 	ctx.materializingConnectors[key] = true
 	defer delete(ctx.materializingConnectors, key)
 
-	// The behaviors start once every end is attached: a connector an end of which
-	// cannot attach leaves nothing behind and touches no other object, so its
-	// identity stays free for another attempt.
+	// Behaviors start only once every end is attached, so a connector that cannot
+	// attach touches no other object and leaves its identity free for a retry.
 	mark := len(ctx.created)
 	inst, err := ctx.materializeOwnedBy(base, id, nil, "")
 	if err != nil {

@@ -397,9 +397,8 @@ func testUnattachableConnectorLeavesNoBehavior(t *testing.T) {
 	}
 }
 
-// testUnattachableConnectorTouchesNoOtherObject: a connector's behaviors start
-// only once every end is attached, so one that cannot be attached has sent no
-// message and written nothing on the objects that survive it.
+// testUnattachableConnectorTouchesNoOtherObject: a connector that cannot attach
+// has sent no message and written nothing on the objects that survive it.
 func testUnattachableConnectorTouchesNoOtherObject(t *testing.T) {
 	model, resolver, root := parseAndBuildModel(t, `
 		package test {
