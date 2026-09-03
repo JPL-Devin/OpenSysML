@@ -194,6 +194,21 @@ func TestInvocationOverloadNoneApplicable(t *testing.T) {
 	}`, "type.expr", `argument 1 of pick expects Integer, found String (candidates: P::A::pick, P::B::pick)`)
 }
 
+// A non-callable declaration found before the callable one does not take the
+// report: the call is checked against the callable and its argument mismatch shown.
+func TestInvocationOverloadNoneApplicableReportsAgainstTheCallable(t *testing.T) {
+	wantLibraryDiag(t, `package P {
+		private import ScalarValues::*;
+		package A { attribute def pick; }
+		package B { calc def pick { in x : Integer; return : Integer = x; } }
+		package C {
+			private import A::*;
+			private import B::*;
+			attribute none = pick("a");
+		}
+	}`, "type.expr", `argument 1 of pick expects Integer, found String (candidates: P::A::pick, P::B::pick)`)
+}
+
 // An argument of unknown type binds to any parameter, so the first candidate
 // in lookup order is kept and nothing new is reported.
 func TestInvocationOverloadUnknownArgumentType(t *testing.T) {
