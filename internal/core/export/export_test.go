@@ -17,8 +17,8 @@ import (
 
 var update = flag.Bool("update", false, "rewrite the .golden.ttl and .golden.sysml files")
 
-// TestGoldenConversions locks the exact Turtle written for each model in
-// testdata/convert, and the exact notation that Turtle converts back to.
+// TestGoldenConversions locks each model's Turtle and the notation it converts
+// back to: as written with its source text, `.canonical.golden.sysml` without.
 func TestGoldenConversions(t *testing.T) {
 	for _, path := range modelFiles(t) {
 		name, ext := fixtureName(path)
@@ -35,9 +35,17 @@ func TestGoldenConversions(t *testing.T) {
 			if err != nil {
 				t.Fatalf("back to notation: %v\n%s", err, turtle)
 			}
+			if want := formatted(t, string(src)); string(back) != want {
+				t.Errorf("the model did not come back as written:\n--- want ---\n%s--- got ---\n%s", want, back)
+			}
+			canonical, err := export.Convert(name+".ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				canonical = []byte("sysml: " + err.Error() + "\n")
+			}
 			stem := strings.TrimSuffix(path, ext)
 			checkGolden(t, stem+".golden.ttl", turtle)
 			checkGolden(t, stem+".golden"+ext, back)
+			checkGolden(t, stem+".canonical.golden"+ext, canonical)
 		})
 	}
 }
@@ -101,11 +109,8 @@ func TestRoundTripIsLossless(t *testing.T) {
 	}
 }
 
-// TestFixturesComeBackFromTheGraphAlone is TestRoundTripIsLossless without the
-// crutch: sysx:sourceText is stripped before the notation is written back, so
-// the structural predicates alone must carry the head, and re-encoding what the
-// writer wrote must give the first graph. These fixtures hold the heads the
-// writer used to re-spell in a form the encoder read differently.
+// TestFixturesComeBackFromTheGraphAlone strips sysx:sourceText before writing back,
+// so the structural triples alone must carry each head and survive a second hop.
 func TestFixturesComeBackFromTheGraphAlone(t *testing.T) {
 	fixtures := []string{
 		"ref_subsets.sysml",
@@ -134,7 +139,13 @@ func TestFixturesComeBackFromTheGraphAlone(t *testing.T) {
 			if err != nil {
 				t.Fatalf("to turtle again: %v", err)
 			}
-			if lost, gained := tripleSetDiff(t, first, second); len(lost)+len(gained) > 0 {
+			structural := func(turtle []byte) []byte {
+				for _, property := range []string{"sysx:sourceText", "sysx:sourceTail", "sysx:sourceLanguage"} {
+					turtle = withoutTriples(t, turtle, property)
+				}
+				return turtle
+			}
+			if lost, gained := tripleSetDiff(t, structural(first), structural(second)); len(lost)+len(gained) > 0 {
 				t.Errorf("the second hop changed the graph\n--- notation ---\n%s\n--- lost ---\n%s\n--- gained ---\n%s",
 					back, strings.Join(lost, "\n"), strings.Join(gained, "\n"))
 			}
@@ -454,20 +465,23 @@ func TestCommentInHeadDoesNotChangeKeyword(t *testing.T) {
 		if strings.Contains(string(turtle), "declaredKeyword") {
 			t.Errorf("a comment word was recorded as the kind keyword:\n%s", turtle)
 		}
-		back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
-		if err != nil {
-			t.Fatalf("back to notation: %v", err)
-		}
+		// The comment itself comes back with the source text; the keyword the
+		// printer chooses shows without it.
+		back := toNotation(t, withoutTriples(t, turtle, "sysx:sourceText"))
 		for _, keyword := range []string{"flow ", "state "} {
-			if strings.Contains(string(back), keyword) {
+			if strings.Contains(back, keyword) {
 				t.Errorf("the declaration came back as a %sdeclaration:\n%s", keyword, back)
 			}
+		}
+		if back, want := toNotation(t, turtle), formatted(t, src); back != want {
+			t.Errorf("the comment did not come back as written:\n--- want ---\n%s--- got ---\n%s", want, back)
 		}
 	}
 }
 
 // A directed usage records no keyword, so whether it wrote its kind out is read
 // from the source — where a comment naming a kind must not count as one written.
+// The printer's choice shows on the graph without source text.
 func TestCommentedKindKeywordIsNotWrittenBack(t *testing.T) {
 	// One case per comment shape the lexer distinguishes, plus a keyword the
 	// declaration really does write.
@@ -483,11 +497,8 @@ func TestCommentedKindKeywordIsNotWrittenBack(t *testing.T) {
 			if err != nil {
 				t.Fatalf("to turtle: %v", err)
 			}
-			back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
-			if err != nil {
-				t.Fatalf("back to notation: %v", err)
-			}
-			if !strings.Contains(string(back), tt.want) {
+			back := toNotation(t, withoutTriples(t, turtle, "sysx:sourceText"))
+			if !strings.Contains(back, tt.want) {
 				t.Errorf("wanted %q written back from %q:\n%s", tt.want, tt.src, back)
 			}
 		})
@@ -859,7 +870,8 @@ func TestPrefixOnAnUnprefixableHeadIsReported(t *testing.T) {
 }
 
 // A head kept as source text writes its prefix annotations in that text; when
-// the text and the graph disagree, the annotation is refused rather than lost.
+// the text and the graph disagree, the text is stale and the head is rebuilt
+// from the graph rather than the annotation lost.
 func TestPrefixOnAVerbatimHeadIsWrittenOrReported(t *testing.T) {
 	// The text may space or qualify a prefix in ways the graph's rendering does
 	// not; a `#` in the body or in a sequence index is not a prefix.
@@ -899,26 +911,23 @@ func TestPrefixOnAVerbatimHeadIsWrittenOrReported(t *testing.T) {
 	if !strings.Contains(string(back), "#Safety connect x to y;") {
 		t.Errorf("the prefixed head should come back from the graph alone:\n%s", back)
 	}
-	cases := []struct{ text, what, note string }{
-		{`"connect x to y;"`, "the prefix annotation #Safety on <urn:sysmlv2:element:P__a__", "that text does not write the annotation"},
-		{`"#Audit connect x to y;"`, "the prefix annotation #Safety on <urn:sysmlv2:element:P__a__", "that text does not write the annotation"},
-		{`"#Q::Safety connect x to y;"`, "the prefix annotation #Safety on <urn:sysmlv2:element:P__a__", "that text does not write the annotation"},
-		{`"#Safety #Safety connect x to y;"`, "the prefix annotation #Safety on <urn:sysmlv2:element:P__a__", "writes an annotation the graph does not state"},
-	}
-	for _, tc := range cases {
-		edited := strings.Replace(string(turtle), `sysx:sourceText "#Safety connect x to y;"`, `sysx:sourceText `+tc.text, 1)
+	written := `sysx:sourceText "        #Safety connect x to y;\n"`
+	for _, stale := range []string{
+		`"        connect x to y;\n"`,
+		`"        #Audit connect x to y;\n"`,
+		`"        #Q::Safety connect x to y;\n"`,
+		`"        #Safety #Safety connect x to y;\n"`,
+	} {
+		edited := strings.Replace(string(turtle), written, `sysx:sourceText `+stale, 1)
 		if edited == string(turtle) {
 			t.Fatalf("the verbatim head was not found in the graph:\n%s", turtle)
 		}
-		_, err = export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML)
-		var unsupported *export.UnsupportedError
-		if !errors.As(err, &unsupported) {
-			t.Fatalf("%s: expected an unsupported error, got %v", tc.text, err)
+		back, err := export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML)
+		if err != nil {
+			t.Fatalf("%s: back to notation: %v", stale, err)
 		}
-		for _, want := range []string{tc.what, tc.note} {
-			if !strings.Contains(err.Error(), want) {
-				t.Errorf("%s: expected %q in error:\n%s", tc.text, want, err.Error())
-			}
+		if strings.Count(string(back), "#Safety connect x to y;") != 1 || strings.Contains(string(back), "#Audit") || strings.Contains(string(back), "#Q::") {
+			t.Errorf("%s: the stale head should be rebuilt with the graph's annotation:\n%s", stale, back)
 		}
 	}
 	// The verbatim head prints no members, so an annotation whose keyword is
@@ -1136,8 +1145,8 @@ elmt:B a sysml:Package ; sysml:declaredName "B" ; sysml:qualifiedName "B" ;
 	}
 }
 
-// A round trip through RDF drops lexical trivia, which no element owns, but
-// keeps `doc` and `comment` because those are declarations.
+// A round trip through RDF keeps `doc` and `comment` because those are
+// declarations, and lexical trivia because the source text carries it.
 func TestCommentsThroughRDF(t *testing.T) {
 	src := `package Demo {
 	// a lexical line comment
@@ -1162,8 +1171,17 @@ func TestCommentsThroughRDF(t *testing.T) {
 			t.Errorf("round trip dropped the declaration %q:\n%s", want, got)
 		}
 	}
-	if strings.Contains(got, "a lexical line comment") {
-		t.Errorf("trivia unexpectedly survived; update the documented limitation:\n%s", got)
+	if !strings.Contains(got, "// a lexical line comment") {
+		t.Errorf("the source text did not carry the note through:\n%s", got)
+	}
+	// Only the source text carries trivia: the structural triples alone
+	// convert to canonical notation, in which it has no place.
+	stripped := toNotation(t, withoutTriples(t, ttl, "sysx:sourceText"))
+	if strings.Contains(stripped, "a lexical line comment") {
+		t.Errorf("trivia survived without source text:\n%s", stripped)
+	}
+	if !strings.Contains(stripped, "comment about Wheel /* a note on wheels */") {
+		t.Errorf("the stripped graph dropped a comment declaration:\n%s", stripped)
 	}
 }
 

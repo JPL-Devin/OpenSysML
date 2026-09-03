@@ -10,11 +10,14 @@ elmt:Annotated
     sysml:qualifiedName "Annotated" ;
     sysml:elementId "Annotated" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Annotated" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Annotated__Safety, elmt:Annotated__Car, elmt:Annotated__car, elmt:Annotated___403, elmt:Annotated__tagged, elmt:Annotated___405, elmt:Annotated___406 ;
     sysml:ownedMembership elmt:Annotated__Safety_om, elmt:Annotated__Car_om, elmt:Annotated__car_om, elmt:Annotated___403_om, elmt:Annotated__tagged_om, elmt:Annotated___405_om, elmt:Annotated___406_om ;
-    sysml:ownedRelationship elmt:Annotated__Safety_om, elmt:Annotated__Car_om, elmt:Annotated__car_om, elmt:Annotated___403_om, elmt:Annotated__tagged_om, elmt:Annotated___405_om, elmt:Annotated___406_om .
+    sysml:ownedRelationship elmt:Annotated__Safety_om, elmt:Annotated__Car_om, elmt:Annotated__car_om, elmt:Annotated___403_om, elmt:Annotated__tagged_om, elmt:Annotated___405_om, elmt:Annotated___406_om ;
+    sysx:sourceText "package Annotated {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:Annotated__Safety
     a sysml:MetadataDefinition ;
@@ -31,7 +34,9 @@ elmt:Annotated__Safety
     sysml:ownedMembership elmt:Annotated__Safety__level_om, elmt:Annotated__Safety__reviewer_om, elmt:Annotated__Safety__isSet_om, elmt:Annotated__Safety__audit_om ;
     sysml:ownedRelationship elmt:Annotated__Safety__level_om, elmt:Annotated__Safety__reviewer_om, elmt:Annotated__Safety__isSet_om, elmt:Annotated__Safety__audit_om ;
     sysml:ownedFeature elmt:Annotated__Safety__level, elmt:Annotated__Safety__reviewer, elmt:Annotated__Safety__isSet, elmt:Annotated__Safety__audit ;
-    sysml:ownedFeatureMembership elmt:Annotated__Safety__level_om, elmt:Annotated__Safety__reviewer_om, elmt:Annotated__Safety__isSet_om, elmt:Annotated__Safety__audit_om .
+    sysml:ownedFeatureMembership elmt:Annotated__Safety__level_om, elmt:Annotated__Safety__reviewer_om, elmt:Annotated__Safety__isSet_om, elmt:Annotated__Safety__audit_om ;
+    sysx:sourceText "    metadata def Safety {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Annotated__Safety_om
     a sysml:OwningMembership ;
@@ -54,7 +59,8 @@ elmt:Annotated__Safety__level
     sysml:owningMembership elmt:Annotated__Safety__level_om ;
     sysml:declaredName "level" ;
     sysml:type "Integer" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute level : Integer;\n" .
 
 elmt:Annotated__Safety__level_om
     a sysml:FeatureMembership ;
@@ -79,7 +85,8 @@ elmt:Annotated__Safety__reviewer
     sysml:owningMembership elmt:Annotated__Safety__reviewer_om ;
     sysml:declaredName "reviewer" ;
     sysml:type "String" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute reviewer : String;\n" .
 
 elmt:Annotated__Safety__reviewer_om
     a sysml:FeatureMembership ;
@@ -104,7 +111,8 @@ elmt:Annotated__Safety__isSet
     sysml:owningMembership elmt:Annotated__Safety__isSet_om ;
     sysml:declaredName "isSet" ;
     sysml:type "Boolean" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute isSet : Boolean;\n" .
 
 elmt:Annotated__Safety__isSet_om
     a sysml:FeatureMembership ;
@@ -133,7 +141,9 @@ elmt:Annotated__Safety__audit
     sysml:ownedMembership elmt:Annotated__Safety__audit__year_om ;
     sysml:ownedRelationship elmt:Annotated__Safety__audit__year_om ;
     sysml:ownedFeature elmt:Annotated__Safety__audit__year ;
-    sysml:ownedFeatureMembership elmt:Annotated__Safety__audit__year_om .
+    sysml:ownedFeatureMembership elmt:Annotated__Safety__audit__year_om ;
+    sysx:sourceText "        item audit {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:Annotated__Safety__audit_om
     a sysml:FeatureMembership ;
@@ -158,7 +168,8 @@ elmt:Annotated__Safety__audit__year
     sysml:owningMembership elmt:Annotated__Safety__audit__year_om ;
     sysml:declaredName "year" ;
     sysml:type "Integer" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            attribute year : Integer;\n" .
 
 elmt:Annotated__Safety__audit__year_om
     a sysml:FeatureMembership ;
@@ -187,7 +198,9 @@ elmt:Annotated__Car
     sysml:ownedMembership elmt:Annotated__Car__mass_om ;
     sysml:ownedRelationship elmt:Annotated__Car__mass_om ;
     sysml:ownedFeature elmt:Annotated__Car__mass ;
-    sysml:ownedFeatureMembership elmt:Annotated__Car__mass_om .
+    sysml:ownedFeatureMembership elmt:Annotated__Car__mass_om ;
+    sysx:sourceText "    part def Car {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Annotated__Car_om
     a sysml:OwningMembership ;
@@ -210,7 +223,8 @@ elmt:Annotated__Car__mass
     sysml:owningMembership elmt:Annotated__Car__mass_om ;
     sysml:declaredName "mass" ;
     sysml:type "Real" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute mass : Real;\n" .
 
 elmt:Annotated__Car__mass_om
     a sysml:FeatureMembership ;
@@ -240,7 +254,9 @@ elmt:Annotated__car
     sysml:ownedMembership elmt:Annotated__car__range_om, elmt:Annotated__car___401_om, elmt:Annotated__car___402_om, elmt:Annotated__car__checked_om, elmt:Annotated__car___404_om ;
     sysml:ownedRelationship elmt:Annotated__car__range_om, elmt:Annotated__car___401_om, elmt:Annotated__car___402_om, elmt:Annotated__car__checked_om, elmt:Annotated__car___404_om ;
     sysml:ownedFeature elmt:Annotated__car__range ;
-    sysml:ownedFeatureMembership elmt:Annotated__car__range_om .
+    sysml:ownedFeatureMembership elmt:Annotated__car__range_om ;
+    sysx:sourceText "    part car : Car {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Annotated__car_om
     a sysml:OwningMembership ;
@@ -264,7 +280,8 @@ elmt:Annotated__car__range
     sysml:declaredName "range" ;
     sysml:type "Real" ;
     sysml:value expr:Annotated__car__range_pvalue ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute range : Real = 500.0;\n" .
 
 elmt:Annotated__car__range_om
     a sysml:FeatureMembership ;
@@ -300,7 +317,8 @@ elmt:Annotated__car___401
     sysml:ownedMembership elmt:Annotated__car___401__level_om ;
     sysml:ownedRelationship elmt:Annotated__car___401__level_om ;
     sysml:ownedFeature elmt:Annotated__car___401__level ;
-    sysml:ownedFeatureMembership elmt:Annotated__car___401__level_om .
+    sysml:ownedFeatureMembership elmt:Annotated__car___401__level_om ;
+    sysx:sourceText "        @Safety { level = 2; }\n" .
 
 elmt:Annotated__car___401_om
     a sysml:OwningMembership ;
@@ -360,7 +378,9 @@ elmt:Annotated__car___402
     sysml:ownedMembership elmt:Annotated__car___402___400_om, elmt:Annotated__car___402__reviewer_om, elmt:Annotated__car___402__isSet_om, elmt:Annotated__car___402__audit_om ;
     sysml:ownedRelationship elmt:Annotated__car___402___400_om, elmt:Annotated__car___402__reviewer_om, elmt:Annotated__car___402__isSet_om, elmt:Annotated__car___402__audit_om ;
     sysml:ownedFeature elmt:Annotated__car___402___400, elmt:Annotated__car___402__reviewer, elmt:Annotated__car___402__isSet, elmt:Annotated__car___402__audit ;
-    sysml:ownedFeatureMembership elmt:Annotated__car___402___400_om, elmt:Annotated__car___402__reviewer_om, elmt:Annotated__car___402__isSet_om, elmt:Annotated__car___402__audit_om .
+    sysml:ownedFeatureMembership elmt:Annotated__car___402___400_om, elmt:Annotated__car___402__reviewer_om, elmt:Annotated__car___402__isSet_om, elmt:Annotated__car___402__audit_om ;
+    sysx:sourceText "        @Safety {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:Annotated__car___402_om
     a sysml:OwningMembership ;
@@ -384,7 +404,8 @@ elmt:Annotated__car___402___400
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:redefines "level" ;
     sysml:value expr:Annotated__car___402___400_pvalue ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "                :>> level = 3;\n" .
 
 elmt:Annotated__car___402___400_om
     a sysml:FeatureMembership ;
@@ -416,7 +437,8 @@ elmt:Annotated__car___402__reviewer
     sysml:declaredName "reviewer" ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:value expr:Annotated__car___402__reviewer_pvalue ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            reviewer = \"ops\";\n" .
 
 elmt:Annotated__car___402__reviewer_om
     a sysml:FeatureMembership ;
@@ -448,7 +470,8 @@ elmt:Annotated__car___402__isSet
     sysml:declaredName "isSet" ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:value expr:Annotated__car___402__isSet_pvalue ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            isSet = true;\n" .
 
 elmt:Annotated__car___402__isSet_om
     a sysml:FeatureMembership ;
@@ -484,7 +507,8 @@ elmt:Annotated__car___402__audit
     sysml:ownedMembership elmt:Annotated__car___402__audit__year_om ;
     sysml:ownedRelationship elmt:Annotated__car___402__audit__year_om ;
     sysml:ownedFeature elmt:Annotated__car___402__audit__year ;
-    sysml:ownedFeatureMembership elmt:Annotated__car___402__audit__year_om .
+    sysml:ownedFeatureMembership elmt:Annotated__car___402__audit__year_om ;
+    sysx:sourceText "            audit { year = 2026; }\n" .
 
 elmt:Annotated__car___402__audit_om
     a sysml:FeatureMembership ;
@@ -542,7 +566,8 @@ elmt:Annotated__car__checked
     sysml:declaredName "checked" ;
     sysx:declaredKeyword "@" ;
     sysml:type elmt:Annotated__Safety ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        @ checked : Safety;\n" .
 
 elmt:Annotated__car__checked_om
     a sysml:OwningMembership ;
@@ -565,7 +590,8 @@ elmt:Annotated__car___404
     sysml:owningMembership elmt:Annotated__car___404_om ;
     sysx:declaredKeyword "@" ;
     sysml:type elmt:Annotated__Safety ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        @Safety;\n" .
 
 elmt:Annotated__car___404_om
     a sysml:OwningMembership ;
@@ -594,7 +620,9 @@ elmt:Annotated___403
     sysml:ownedMembership elmt:Annotated___403__level_om, elmt:Annotated___403__reviewer_om ;
     sysml:ownedRelationship elmt:Annotated___403__level_om, elmt:Annotated___403__reviewer_om ;
     sysml:ownedFeature elmt:Annotated___403__level, elmt:Annotated___403__reviewer ;
-    sysml:ownedFeatureMembership elmt:Annotated___403__level_om, elmt:Annotated___403__reviewer_om .
+    sysml:ownedFeatureMembership elmt:Annotated___403__level_om, elmt:Annotated___403__reviewer_om ;
+    sysx:sourceText "    @Safety about Car, car {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Annotated___403_om
     a sysml:OwningMembership ;
@@ -618,7 +646,8 @@ elmt:Annotated___403__level
     sysml:declaredName "level" ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:value expr:Annotated___403__level_pvalue ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        level = car.range;\n" .
 
 elmt:Annotated___403__level_om
     a sysml:FeatureMembership ;
@@ -658,7 +687,8 @@ elmt:Annotated___403__reviewer
     sysml:declaredName "reviewer" ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:value expr:Annotated___403__reviewer_pvalue ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        reviewer = Car::mass;\n" .
 
 elmt:Annotated___403__reviewer_om
     a sysml:FeatureMembership ;
@@ -690,7 +720,8 @@ elmt:Annotated__tagged
     sysml:declaredName "tagged" ;
     sysml:type elmt:Annotated__Safety ;
     sysml:annotatedElement elmt:Annotated__Car ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    metadata tagged : Safety about Car;\n" .
 
 elmt:Annotated__tagged_om
     a sysml:OwningMembership ;
@@ -713,7 +744,8 @@ elmt:Annotated___405
     sysml:owningMembership elmt:Annotated___405_om ;
     sysml:type elmt:Annotated__Safety ;
     sysml:annotatedElement elmt:Annotated__car ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    metadata Safety about car;\n" .
 
 elmt:Annotated___405_om
     a sysml:OwningMembership ;
@@ -741,7 +773,9 @@ elmt:Annotated___406
     sysml:ownedMembership elmt:Annotated___406__level_om ;
     sysml:ownedRelationship elmt:Annotated___406__level_om ;
     sysml:ownedFeature elmt:Annotated___406__level ;
-    sysml:ownedFeatureMembership elmt:Annotated___406__level_om .
+    sysml:ownedFeatureMembership elmt:Annotated___406__level_om ;
+    sysx:sourceText "    metadata $::Annotated::Safety about Car {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Annotated___406_om
     a sysml:OwningMembership ;
@@ -765,7 +799,8 @@ elmt:Annotated___406__level
     sysml:declaredName "level" ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:value expr:Annotated___406__level_pvalue ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        level = 4;\n" .
 
 elmt:Annotated___406__level_om
     a sysml:FeatureMembership ;

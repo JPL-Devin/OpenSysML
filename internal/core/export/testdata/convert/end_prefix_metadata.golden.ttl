@@ -10,11 +10,14 @@ elmt:EndPrefixMetadata
     sysml:qualifiedName "EndPrefixMetadata" ;
     sysml:elementId "EndPrefixMetadata" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "EndPrefixMetadata" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:EndPrefixMetadata__original, elmt:EndPrefixMetadata__derive, elmt:EndPrefixMetadata__Req1, elmt:EndPrefixMetadata__Req1_5f1, elmt:EndPrefixMetadata__Derivation, elmt:EndPrefixMetadata__context ;
     sysml:ownedMembership elmt:EndPrefixMetadata__original_om, elmt:EndPrefixMetadata__derive_om, elmt:EndPrefixMetadata__Req1_om, elmt:EndPrefixMetadata__Req1_5f1_om, elmt:EndPrefixMetadata__Derivation_om, elmt:EndPrefixMetadata__context_om ;
-    sysml:ownedRelationship elmt:EndPrefixMetadata__original_om, elmt:EndPrefixMetadata__derive_om, elmt:EndPrefixMetadata__Req1_om, elmt:EndPrefixMetadata__Req1_5f1_om, elmt:EndPrefixMetadata__Derivation_om, elmt:EndPrefixMetadata__context_om .
+    sysml:ownedRelationship elmt:EndPrefixMetadata__original_om, elmt:EndPrefixMetadata__derive_om, elmt:EndPrefixMetadata__Req1_om, elmt:EndPrefixMetadata__Req1_5f1_om, elmt:EndPrefixMetadata__Derivation_om, elmt:EndPrefixMetadata__context_om ;
+    sysx:sourceText "package EndPrefixMetadata {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:EndPrefixMetadata__original
     a sysml:MetadataDefinition ;
@@ -26,7 +29,8 @@ elmt:EndPrefixMetadata__original
     sysml:owningRelationship elmt:EndPrefixMetadata__original_om ;
     sysml:owningMembership elmt:EndPrefixMetadata__original_om ;
     sysml:declaredName "original" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    metadata def original;\n" .
 
 elmt:EndPrefixMetadata__original_om
     a sysml:OwningMembership ;
@@ -48,7 +52,8 @@ elmt:EndPrefixMetadata__derive
     sysml:owningRelationship elmt:EndPrefixMetadata__derive_om ;
     sysml:owningMembership elmt:EndPrefixMetadata__derive_om ;
     sysml:declaredName "derive" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    metadata def derive;\n" .
 
 elmt:EndPrefixMetadata__derive_om
     a sysml:OwningMembership ;
@@ -70,7 +75,8 @@ elmt:EndPrefixMetadata__Req1
     sysml:owningRelationship elmt:EndPrefixMetadata__Req1_om ;
     sysml:owningMembership elmt:EndPrefixMetadata__Req1_om ;
     sysml:declaredName "Req1" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    requirement def Req1;\n" .
 
 elmt:EndPrefixMetadata__Req1_om
     a sysml:OwningMembership ;
@@ -92,7 +98,8 @@ elmt:EndPrefixMetadata__Req1_5f1
     sysml:owningRelationship elmt:EndPrefixMetadata__Req1_5f1_om ;
     sysml:owningMembership elmt:EndPrefixMetadata__Req1_5f1_om ;
     sysml:declaredName "Req1_1" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    requirement def Req1_1;\n" .
 
 elmt:EndPrefixMetadata__Req1_5f1_om
     a sysml:OwningMembership ;
@@ -119,7 +126,9 @@ elmt:EndPrefixMetadata__Derivation
     sysml:ownedRelationship elmt:EndPrefixMetadata__Derivation___405_om, elmt:EndPrefixMetadata__Derivation__r1_om, elmt:EndPrefixMetadata__Derivation__r1_5f1_om, elmt:EndPrefixMetadata__Derivation__r1_5f2_om, elmt:EndPrefixMetadata__Derivation__cause_om, elmt:EndPrefixMetadata__Derivation__effect_om ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedFeature elmt:EndPrefixMetadata__Derivation__r1, elmt:EndPrefixMetadata__Derivation__r1_5f1, elmt:EndPrefixMetadata__Derivation__r1_5f2, elmt:EndPrefixMetadata__Derivation__cause, elmt:EndPrefixMetadata__Derivation__effect ;
-    sysml:ownedFeatureMembership elmt:EndPrefixMetadata__Derivation__r1_om, elmt:EndPrefixMetadata__Derivation__r1_5f1_om, elmt:EndPrefixMetadata__Derivation__r1_5f2_om, elmt:EndPrefixMetadata__Derivation__cause_om, elmt:EndPrefixMetadata__Derivation__effect_om .
+    sysml:ownedFeatureMembership elmt:EndPrefixMetadata__Derivation__r1_om, elmt:EndPrefixMetadata__Derivation__r1_5f1_om, elmt:EndPrefixMetadata__Derivation__r1_5f2_om, elmt:EndPrefixMetadata__Derivation__cause_om, elmt:EndPrefixMetadata__Derivation__effect_om ;
+    sysx:sourceText "    #derive connection def Derivation {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:EndPrefixMetadata__Derivation_om
     a sysml:OwningMembership ;
@@ -170,7 +179,8 @@ elmt:EndPrefixMetadata__Derivation__r1
     sysml:ownedMembership elmt:EndPrefixMetadata__Derivation__r1___400_om ;
     sysml:ownedRelationship elmt:EndPrefixMetadata__Derivation__r1___400_om ;
     sysml:type elmt:EndPrefixMetadata__Req1 ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        end #original r1 : Req1;\n" .
 
 elmt:EndPrefixMetadata__Derivation__r1_om
     a sysml:FeatureMembership ;
@@ -223,7 +233,8 @@ elmt:EndPrefixMetadata__Derivation__r1_5f1
     sysml:ownedMembership elmt:EndPrefixMetadata__Derivation__r1_5f1___400_om ;
     sysml:ownedRelationship elmt:EndPrefixMetadata__Derivation__r1_5f1___400_om ;
     sysml:type elmt:EndPrefixMetadata__Req1_5f1 ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        end #derive r1_1 : Req1_1;\n" .
 
 elmt:EndPrefixMetadata__Derivation__r1_5f1_om
     a sysml:FeatureMembership ;
@@ -276,7 +287,8 @@ elmt:EndPrefixMetadata__Derivation__r1_5f2
     sysml:ownedMembership elmt:EndPrefixMetadata__Derivation__r1_5f2___400_om ;
     sysml:ownedRelationship elmt:EndPrefixMetadata__Derivation__r1_5f2___400_om ;
     sysml:type elmt:EndPrefixMetadata__Req1_5f1 ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        #derive end r1_2 : Req1_1;\n" .
 
 elmt:EndPrefixMetadata__Derivation__r1_5f2_om
     a sysml:FeatureMembership ;
@@ -328,7 +340,8 @@ elmt:EndPrefixMetadata__Derivation__cause
     sysml:isEnd "true"^^xsd:boolean ;
     sysml:type elmt:EndPrefixMetadata__Req1 ;
     sysml:upperBound expr:EndPrefixMetadata__Derivation__cause_pupperBound ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        end [*] ref cause : Req1;\n" .
 
 elmt:EndPrefixMetadata__Derivation__cause_om
     a sysml:FeatureMembership ;
@@ -361,7 +374,8 @@ elmt:EndPrefixMetadata__Derivation__effect
     sysml:isEnd "true"^^xsd:boolean ;
     sysml:type elmt:EndPrefixMetadata__Req1_5f1 ;
     sysml:upperBound expr:EndPrefixMetadata__Derivation__effect_pupperBound ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        end ref attribute effect : Req1_1[*];\n" .
 
 elmt:EndPrefixMetadata__Derivation__effect_om
     a sysml:FeatureMembership ;
@@ -395,7 +409,9 @@ elmt:EndPrefixMetadata__context
     sysml:ownedMembership elmt:EndPrefixMetadata__context__req1_om, elmt:EndPrefixMetadata__context__req1_5f1_om, elmt:EndPrefixMetadata__context___402_om ;
     sysml:ownedRelationship elmt:EndPrefixMetadata__context__req1_om, elmt:EndPrefixMetadata__context__req1_5f1_om, elmt:EndPrefixMetadata__context___402_om ;
     sysml:ownedFeature elmt:EndPrefixMetadata__context__req1, elmt:EndPrefixMetadata__context__req1_5f1, elmt:EndPrefixMetadata__context___402 ;
-    sysml:ownedFeatureMembership elmt:EndPrefixMetadata__context__req1_om, elmt:EndPrefixMetadata__context__req1_5f1_om, elmt:EndPrefixMetadata__context___402_om .
+    sysml:ownedFeatureMembership elmt:EndPrefixMetadata__context__req1_om, elmt:EndPrefixMetadata__context__req1_5f1_om, elmt:EndPrefixMetadata__context___402_om ;
+    sysx:sourceText "    part context {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:EndPrefixMetadata__context_om
     a sysml:OwningMembership ;
@@ -418,7 +434,8 @@ elmt:EndPrefixMetadata__context__req1
     sysml:owningMembership elmt:EndPrefixMetadata__context__req1_om ;
     sysml:declaredName "req1" ;
     sysml:type elmt:EndPrefixMetadata__Req1 ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        requirement req1 : Req1;\n" .
 
 elmt:EndPrefixMetadata__context__req1_om
     a sysml:FeatureMembership ;
@@ -443,7 +460,8 @@ elmt:EndPrefixMetadata__context__req1_5f1
     sysml:owningMembership elmt:EndPrefixMetadata__context__req1_5f1_om ;
     sysml:declaredName "req1_1" ;
     sysml:type elmt:EndPrefixMetadata__Req1_5f1 ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        requirement req1_1 : Req1_1;\n" .
 
 elmt:EndPrefixMetadata__context__req1_5f1_om
     a sysml:FeatureMembership ;
@@ -472,7 +490,9 @@ elmt:EndPrefixMetadata__context___402
     sysml:type elmt:EndPrefixMetadata__Derivation ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedFeature elmt:EndPrefixMetadata__context___402__r1, elmt:EndPrefixMetadata__context___402__r1_5f1 ;
-    sysml:ownedFeatureMembership elmt:EndPrefixMetadata__context___402__r1_om, elmt:EndPrefixMetadata__context___402__r1_5f1_om .
+    sysml:ownedFeatureMembership elmt:EndPrefixMetadata__context___402__r1_om, elmt:EndPrefixMetadata__context___402__r1_5f1_om ;
+    sysx:sourceText "        #derive connection : Derivation {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:EndPrefixMetadata__context___402_om
     a sysml:FeatureMembership ;
@@ -522,7 +542,8 @@ elmt:EndPrefixMetadata__context___402__r1
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:isEnd "true"^^xsd:boolean ;
     sysml:references elmt:EndPrefixMetadata__context__req1 ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            end r1 ::> req1;\n" .
 
 elmt:EndPrefixMetadata__context___402__r1_om
     a sysml:FeatureMembership ;
@@ -549,7 +570,8 @@ elmt:EndPrefixMetadata__context___402__r1_5f1
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:isEnd "true"^^xsd:boolean ;
     sysml:references elmt:EndPrefixMetadata__context__req1_5f1 ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            end r1_1 references req1_1;\n" .
 
 elmt:EndPrefixMetadata__context___402__r1_5f1_om
     a sysml:FeatureMembership ;

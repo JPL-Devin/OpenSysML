@@ -12,16 +12,12 @@ package Annotated {
     }
     part car : Car {
         attribute range : Real = 500.0;
+        @Safety { level = 2; }
         @Safety {
-            level = 2;
-        }
-        @Safety {
-            redefines level = 3;
+                :>> level = 3;
             reviewer = "ops";
             isSet = true;
-            audit {
-                year = 2026;
-            }
+            audit { year = 2026; }
         }
         @ checked : Safety;
         @Safety;

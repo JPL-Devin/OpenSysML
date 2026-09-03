@@ -12,12 +12,8 @@ package Prefixed {
     constraint def Stopped;
     requirement def Braking {
         subject #Safety brakes : Car;
-        assume #Reviewed constraint {
-            true;
-        }
-        require #Safety constraint {
-            true;
-        }
+        assume #Reviewed constraint { true }
+        require #Safety constraint { true }
         assume #Reviewed constraint stopped : Stopped;
         require #Safety constraint braked[1] = true;
     }

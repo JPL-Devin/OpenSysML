@@ -1,0 +1,79 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="P" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Link"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="chain" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="next" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (OperatorExpr operator="+"
+                (FeatureReference name="chain")
+                (LiteralInteger value="1"))))))
+      (Membership visibility="default"
+        (Usage kind="part" name="named" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="chain" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (LiteralInteger value="1")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="pt" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (OperatorExpr operator="+"
+                (FeatureReference name="chain")
+                (LiteralInteger value="1"))))))
+      (Membership visibility="default"
+        (Usage kind="part" name="bare" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="chain" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="chain" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="subsets" target=pt
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInfinity))))))
+      (Membership visibility="default"
+        (Usage kind="part" name="keywordTail" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="chain" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (LiteralInteger value="1")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="chain" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="chain" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="subsets" target=pt
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="chain" ref=false direction="none" composite=false derived=false ordered=true nonunique=true
+              (Relationship kind="subsets" target=pt
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="metadata" abstract=false variation=false name="Tag"))
+      (Membership visibility="default"
+        (Usage kind="metadata" name="chain" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Tag
+            (*ast.QualifiedName))
+          (Relationship kind="about" target=named
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="metadata" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=chain
+            (*ast.QualifiedName))
+          (Relationship kind="about" target=bare
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="modifier" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false chain=true
+              (Relationship kind="typing" target=Link
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="y" ref=true direction="none" composite=false derived=false ordered=false nonunique=false chain=true
+              (Relationship kind="typing" target=Link
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="quoted name" ref=true direction="none" composite=false derived=false ordered=false nonunique=false chain=true
+              (Relationship kind="typing" target=Link
+                (*ast.QualifiedName)))))))))

@@ -20,15 +20,18 @@ Every RDF run prints an "RDF conversion is experimental" note on **stderr**; tha
 
 ## The pitfall that makes a naive round-trip test vacuous
 
-The encoder writes `sysx:sourceText "<the head as written>"` for most elements. With that triple
-present the decoder can rebuild the notation from the text alone, so a plain
-`.sysml → .ttl → .sysml` round trip **passes even if every structural predicate is broken**.
+The encoder writes `sysx:sourceText "<the element's lines as written>"` (and `sysx:sourceTail`
+for the lines closing a body) for every element, and the decoder writes that text back wherever it
+still agrees with the graph — that is what makes comments survive the hop. But it also means a
+plain `.sysml → .ttl → .sysml` round trip **passes even if a structural predicate is broken**, as
+long as the broken predicate is missing from both graphs alike.
 
-To make the test load-bearing, strip `sysx:sourceText` from the intermediate `.ttl` first (the same
-thing the `withoutTriples` test helper in `internal/core/export/export_test.go` does in-process) and
-only then convert back. A small Python filter is enough — drop any line containing
-`sysx:sourceText `, and when the dropped line ended the triple block with ` .`, turn the previous
-line's trailing `;` into ` .`:
+To make the test load-bearing, strip `sysx:sourceText` and `sysx:sourceTail` from the intermediate
+`.ttl` first (the same thing the `withoutTriples` test helper in
+`internal/core/export/export_test.go` does in-process) and only then convert back. Every literal is
+written on one line, newlines escaped, so a small Python filter is enough — drop any line containing
+the predicate, and when the dropped line ended the triple block with ` .`, turn the previous line's
+trailing `;` into ` .`:
 
 ```python
 def strip(src, preds, dst):
@@ -49,34 +52,16 @@ def strip(src, preds, dst):
     open(dst, 'w').write('\n'.join(out))
 ```
 
-The multi-line branch matters for **corpus** files: any head whose source spans lines (`connector x from\n  a to b;`,
-`flow a.x\n  to b.y { /* doc */ }`) is written as a `"""..."""` literal, and a single-line filter leaves
-its tail behind — the writer then fails with `turtle: line N: unrecognized term`, which looks like a
-product bug but is the harness.
+Pass fully-prefixed predicate names —
+`strip("hop1.ttl", ["sysx:sourceText", "sysx:sourceTail"], "stripped.ttl")` — since not every
+load-bearing predicate lives in the `sysx:` namespace (the `sysml:isVariant` / `sysml:includes`
+controls below use the `sysml:` prefix).
 
-Pass fully-prefixed predicate names — `strip("hop1.ttl", ["sysx:sourceText"], "stripped.ttl")` —
-since not every load-bearing predicate lives in the `sysx:` namespace (the `sysml:isVariant` /
-`sysml:includes` controls below use the `sysml:` prefix).
-
-**Multi-line literals break the line filter.** A `sysx:sourceText` whose text spans lines (a
-multi-line string-concatenation expression in a metadata body, e.g. the pilot
-`IssueMetadataExample.sysml`) is written as a `"""..."""` literal over several lines. Dropping only
-the first line leaves the tail behind and the decoder reports `turtle: line N: unrecognized term` —
-that is a broken *test harness*, not a mapping defect. When the dropped line contains a single
-`"""`, keep skipping until the line that closes it (and apply the same `;` → ` .` fix-up there).
-
-**Compare triple sets, not bytes, for the corpus files.** Two hops can be byte-different yet
-equal as graphs (the writer may reorder a `sysml:subsets` line, as `Metadata Example-1.sysml`
-showed). `pip install rdflib` (into the active venv; `--user` is refused there) and compare
-`set(Graph().parse(a)) == set(Graph().parse(b))`; print the symmetric difference so a residual
-`sysx:sourceText`-only difference (expression re-spacing/parenthesization: `(test,demo)` →
-`(test, demo)`, `@Safety or @Security` → `(@ Safety) or (@ Security)`, `x meta T` →
-`(x meta T)`) is visibly distinct from a structural one. Those expression-text drifts are what the
-ratchet records as `whitespace-only`, and they are also the only reason a source-text-free
-back-conversion differs from the source-text-backed one on the corpus files.
-
-Pass criterion: the source-text-free back-conversion is **byte-identical** to the source-text-backed
-one, and re-encoding it gives a `.ttl` byte-identical to `hop1.ttl`.
+Pass criterion: the source-text-free back-conversion is the canonical notation of the model —
+identical to the source-text-backed one up to trivia and keyword synonyms — and re-encoding it gives
+a `.ttl` byte-identical to `hop1.ttl` once both are stripped of the source text the same way. The
+source-text-backed conversion has its own criterion: it must be **byte-identical to the formatted
+input** (`sysml -fmt` it first), which `TestSourceTextComesBackByteForByte` locks in-process.
 
 For corpus files compare `hop1.ttl` and `hop2.ttl` as **triple sets**, not bytes (`pip install rdflib`,
 parse both with `rdflib.Graph().parse(p, format='turtle')`, diff the sets), and report
@@ -114,9 +99,9 @@ grep -o "sysx:[a-zA-Z]*" hop1.ttl | sort | uniq -c | sort -rn
 
 | Stripped | Observed behaviour (working mapping) |
 |---|---|
-| `sourceText` only | identical notation comes back — the structural predicates carried it |
-| `sourceText` + `endForm`/`endVerb`/`sourceMember`/`targetMember` | refusal: `cannot convert the element <urn:sysmlv2:element:…>: it has no sysx:endForm, and the ends it relates are written in the form the head states, so no valid declaration can be written for it` — **no file is written** |
-| `sourceText` + `endVerb` only | the noun-keyword heads degrade visibly: `connection c connect left to right;` → `connection c left to right;`, `binding bb of a = b;` → `binding bb a = b;`, `succession s first p then q;` → `succession s p then q;` |
+| `sourceText` + `sourceTail` only | canonical notation comes back — the structural predicates carried it; only comments and synonyms differ from the input |
+| `sourceText` + `sourceTail` + `endForm`/`endVerb`/`sourceMember`/`targetMember` | refusal: `cannot convert the element <urn:sysmlv2:element:…>: it has no sysx:endForm, and the ends it relates are written in the form the head states, so no valid declaration can be written for it` — **no file is written** |
+| `sourceText` + `sourceTail` + `endVerb` only | the noun-keyword heads degrade visibly: `connection c connect left to right;` → `connection c left to right;`, `binding bb of a = b;` → `binding bb a = b;`, `succession s first p then q;` → `succession s p then q;` |
 
 The `endVerb` degradation is the cheapest single proof that a predicate is not decorative. Note the
 degraded output still validates clean, so judge it by the *text*, not by the exit code.
