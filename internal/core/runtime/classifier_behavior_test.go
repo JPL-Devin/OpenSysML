@@ -7,6 +7,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // intArgument is an integer argument of an invocation.
@@ -695,6 +696,81 @@ func TestExhibitedMachineNamingNoBodyIsReported(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "modes") {
 		t.Errorf("error %q does not name the behavior", err)
+	}
+}
+
+// A type exhibits a machine through the declaration stating it inline, one typed
+// by a definition, or one naming a state usage declared beside it, and every
+// binding on the way to the body addresses it; a machine it merely performs, and
+// a definition no declaration names, it does not exhibit.
+func TestExhibitsStateResolvesTheBodyABindingRuns(t *testing.T) {
+	src := `
+		state def Blink { entry; then dark; state dark; }
+		state def Check { entry; then checking; state checking; }
+		part def Lamp {
+			exhibit state front : Blink;
+			exhibit state own { entry; then idle; state idle; }
+			state spare : Blink;
+			exhibit spare;
+			state standby : Check;
+			exhibit state night ::> standby;
+			perform action watch { first start; then done; }
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 10000)
+	lamp := resolveSymbol(t, root, "Lamp")
+	member := func(name string) *symbols.Symbol {
+		sym, ok := lamp.Scope.LookupLocal(name)
+		if !ok {
+			t.Fatalf("Lamp declares no %s", name)
+		}
+		return sym
+	}
+	exhibitSpare := lamp.Scope.LookupLocalAll("spare")[1]
+
+	for _, tc := range []struct {
+		member, machine string
+		memberSym       *symbols.Symbol
+		machineSym      *symbols.Symbol
+		want            bool
+	}{
+		{"front", "Blink", member("front"), resolveSymbol(t, root, "Blink"), true},
+		{"front", "front", member("front"), member("front"), true},
+		{"own", "own", member("own"), member("own"), true},
+		{"exhibit spare", "spare", exhibitSpare, member("spare"), true},
+		{"exhibit spare", "Blink", exhibitSpare, resolveSymbol(t, root, "Blink"), true},
+		{"night", "standby", member("night"), member("standby"), true},
+		{"night", "Check", member("night"), resolveSymbol(t, root, "Check"), true},
+		{"night", "Blink", member("night"), resolveSymbol(t, root, "Blink"), false},
+		{"front", "Check", member("front"), resolveSymbol(t, root, "Check"), false},
+		{"watch", "watch", member("watch"), member("watch"), false},
+		{"spare", "spare", member("spare"), member("spare"), false},
+	} {
+		if got := ctx.ExhibitsState(tc.memberSym, tc.machineSym); got != tc.want {
+			t.Errorf("ExhibitsState(%s, %s) = %v, want %v", tc.member, tc.machine, got, tc.want)
+		}
+	}
+	if ctx.ExhibitsState(nil, lamp) || ctx.ExhibitsState(lamp, nil) {
+		t.Error("ExhibitsState over a nil symbol reported an exhibit")
+	}
+
+	// An object of the type addresses its machines the same way.
+	inst, err := ctx.Instantiate(lamp)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if got := inst.ExhibitedStatesOf(member("spare")); len(got) != 1 || got[0].Member() != exhibitSpare {
+		t.Errorf("ExhibitedStatesOf(spare) = %v, want the machine `exhibit spare` binds", got)
+	}
+	if got := inst.ExhibitedStatesOf(resolveSymbol(t, root, "Blink")); len(got) != 2 {
+		t.Errorf("ExhibitedStatesOf(Blink) = %v, want front and spare", got)
+	}
+	if got := inst.ExhibitedStatesOf(member("standby")); len(got) != 1 || got[0].Member() != member("night") {
+		t.Errorf("ExhibitedStatesOf(standby) = %v, want night", got)
+	}
+	if got := inst.ExhibitedStatesOf(member("watch")); len(got) != 0 {
+		t.Errorf("ExhibitedStatesOf(watch) = %v, want none", got)
 	}
 }
 

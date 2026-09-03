@@ -575,6 +575,193 @@ func TestEveryHeldObjectIsAddressableById(t *testing.T) {
 	wants(t, run(t, s, "%features #"+last), "count = 2")
 }
 
+// %state <machine>, for a machine one held object exhibits, drives that object's
+// running performance: the do action its timer re-runs writes the object's own
+// slots, the ones %features shows under the identity %instances lists.
+func TestStateOverAMachineNamedAloneDrivesItsOneExhibitor(t *testing.T) {
+	s := loadFixture(t, "testdata/exhibited_timer.sysml")
+	id := objectIDIn(t, run(t, s, "%instantiate TA::Sys"))
+
+	got := run(t, s, "%state lp")
+	wants(t, got, `Debugging state machine "lp" exhibited by object #`+id+` of "TA::Sys"`, "Current state: run")
+	rejects(t, got, "Started state machine executor")
+
+	wants(t, run(t, s, "%advance 2.5 [s]"), "Advanced to 2.5 (2 event(s) processed)")
+	wants(t, run(t, s, "%instances"), "TA::Sys (ID: "+id+")")
+	wants(t, run(t, s, "%features #"+id), "x = 0.6000000000000001", "n = 3")
+
+	// The qualified name of the machine attaches the same way.
+	wants(t, run(t, s, "%state TA::Sys::lp"), `exhibited by object #`+id+` of "TA::Sys"`)
+}
+
+// %state <machine> <object>, for the machine the object exhibits, attaches to the
+// running performance: its do action is not started a second time on the object,
+// and the events the session dispatches write the object's slots.
+func TestStateOverTheExhibitedMachineAndObjectDoesNotDoubleRun(t *testing.T) {
+	s := loadFixture(t, "testdata/exhibited_timer.sysml")
+	id := objectIDIn(t, run(t, s, "%instantiate TA::Sys"))
+	wants(t, run(t, s, "%features #"+id), "x = 0.2", "n = 1")
+
+	got := run(t, s, "%state lp #"+id)
+	wants(t, got, `exhibited by object #`+id, "note:", "attaches to that running machine")
+	rejects(t, got, "Started state machine executor")
+	wants(t, run(t, s, "%features #"+id), "x = 0.2", "n = 1")
+	wants(t, run(t, s, "%events"), "1 events")
+
+	wants(t, run(t, s, "%advance 2.5 [s]"), "2 event(s) processed")
+	wants(t, run(t, s, "%features #"+id), "x = 0.6000000000000001", "n = 3")
+}
+
+// A machine a type exhibits that no held object runs is refused rather than
+// performed detached from any object, and the refusal names both forms that
+// address an object.
+func TestStateOverAMachineNoObjectExhibitsRefuses(t *testing.T) {
+	s := loadFixture(t, "testdata/exhibited_timer.sysml")
+
+	_, err := s.startStateMachine("lp", nil)
+	var eerr *ExhibitorsError
+	if !errors.As(err, &eerr) {
+		t.Fatalf("got %v, want an ExhibitorsError", err)
+	}
+	if eerr.Machine != "lp" || strings.Join(eerr.Types, ",") != "TA::Sys" || len(eerr.Objects) != 0 {
+		t.Errorf("got %+v, want lp of TA::Sys exhibited by no object", eerr)
+	}
+	if s.stateExec != nil {
+		t.Errorf("a detached performance was started: %q", s.stateExec.fqn)
+	}
+
+	got := run(t, s, "%state TA::Sys::lp")
+	wants(t, got, "error:", `no object of this session exhibits "TA::Sys::lp"`, `object of "TA::Sys"`,
+		"%instantiate", "%state <object>", "%state TA::Sys::lp <object>")
+	rejects(t, got, "Started state machine executor", "Debugging state machine")
+
+	// Once an object exhibits it, the same command attaches.
+	id := objectIDIn(t, run(t, s, "%instantiate TA::Sys"))
+	wants(t, run(t, s, "%state TA::Sys::lp"), `exhibited by object #`+id)
+}
+
+// A machine several held objects exhibit is refused, naming every one of them,
+// rather than attached to whichever was found first; naming an object attaches.
+func TestStateOverAMachineSeveralObjectsExhibitRefuses(t *testing.T) {
+	s := loadFixture(t, "testdata/nested_machine.sysml")
+	rover := objectIDIn(t, run(t, s, "%instantiate Fleet::rover"))
+	run(t, s, "%instantiate Fleet::driver")
+	nested := objectIDIn(t, run(t, s, "%features Fleet::driver.r"))
+
+	_, err := s.startStateMachine("Fleet::Rover::modes", nil)
+	var eerr *ExhibitorsError
+	if !errors.As(err, &eerr) {
+		t.Fatalf("got %v, want an ExhibitorsError", err)
+	}
+	want := []ObjectRef{{ID: atoi(t, rover), Name: "Fleet::rover"}, {ID: atoi(t, nested), Name: "Fleet::driver::r"}}
+	if len(eerr.Objects) != len(want) || eerr.Objects[0] != want[0] || eerr.Objects[1] != want[1] {
+		t.Errorf("got objects %+v, want %+v", eerr.Objects, want)
+	}
+	if s.stateExec != nil {
+		t.Errorf("a machine was attached to despite the ambiguity: %q", s.stateExec.selfFQN)
+	}
+
+	got := run(t, s, "%state Fleet::Rover::modes")
+	wants(t, got, "error:", `2 objects of this session exhibit "Fleet::Rover::modes"`,
+		`#`+nested+` of "Fleet::driver::r"`, `#`+rover+` of "Fleet::rover"`, "%state <object>", "%state Fleet::Rover::modes <object>")
+	rejects(t, got, "Started state machine executor", "Debugging state machine")
+
+	wants(t, run(t, s, "%state Fleet::Rover::modes Fleet::driver.r"), `exhibited by object #`+nested, "note:")
+	wants(t, run(t, s, "%state #"+rover), `exhibited by object #`+rover+` of "Fleet::rover"`)
+}
+
+// A definition a type exhibits through usages typed by it is refused named alone
+// before any object is held, naming that type rather than running detached; once
+// one held object exhibits it as two usages, it is as ambiguous named alone as it
+// is with the object named.
+func TestStateOverASharedDefinitionNamedAlone(t *testing.T) {
+	s := loadFixture(t, "testdata/shared_machine.sysml")
+
+	_, err := s.startStateMachine("Shared::Blink", nil)
+	var eerr *ExhibitorsError
+	if !errors.As(err, &eerr) {
+		t.Fatalf("got %v, want an ExhibitorsError", err)
+	}
+	if eerr.Machine != "Shared::Blink" || strings.Join(eerr.Types, ",") != "Shared::Lamp" || len(eerr.Objects) != 0 {
+		t.Errorf("got %+v, want Shared::Blink of Shared::Lamp exhibited by no object", eerr)
+	}
+	if s.stateExec != nil {
+		t.Errorf("a detached performance was started: %q", s.stateExec.fqn)
+	}
+	got := run(t, s, "%state Shared::Blink")
+	wants(t, got, "error:", `no object of this session exhibits "Shared::Blink"`, `object of "Shared::Lamp"`, "%state Shared::Blink <object>")
+	rejects(t, got, "Started state machine executor")
+
+	run(t, s, "%instantiate Shared::lamp")
+	_, err = s.startStateMachine("Shared::Blink", nil)
+	var aerr *AmbiguousMachineError
+	if !errors.As(err, &aerr) {
+		t.Fatalf("got %v, want an AmbiguousMachineError", err)
+	}
+	if strings.Join(aerr.Usages, ",") != "Shared::Lamp::front,Shared::Lamp::rear" {
+		t.Errorf("got %+v, want both exhibited usages of Shared::Blink", aerr)
+	}
+	wants(t, run(t, s, "%state Shared::Blink"), "error:", `exhibits "Shared::Blink" as 2 machines`, "Shared::Lamp::front or Shared::Lamp::rear")
+
+	wants(t, run(t, s, "%state Shared::Lamp::rear"), `Debugging state machine "rear" exhibited by object #`, "Current state: dark")
+	wants(t, run(t, s, "%advance 2"), "Current state: lit")
+	wants(t, run(t, s, "%features Shared::lamp"), "front", "dark", "rear", "lit")
+}
+
+// A definition no type exhibits still runs detached when named alone, since no
+// object's performance of it exists to attach to.
+func TestStateOverAnUnexhibitedDefinitionRunsDetached(t *testing.T) {
+	s := loadFixture(t, "testdata/performed_machine.sysml")
+	wants(t, run(t, s, "%state Two::Check"), "Started state machine executor", "Current state: checking")
+	wants(t, run(t, s, "%advance 5"), "Current state: checked")
+}
+
+// Every binding on the way to a machine's body addresses it: the state usage an
+// exhibited usage references, and the definition typing that. Named alone, each
+// refuses before an object exists and attaches to that object's running machine
+// afterwards, never running detached.
+func TestStateOverAMachineReachedThroughABindingChain(t *testing.T) {
+	s := loadFixture(t, "testdata/named_usage_machine.sysml")
+
+	for _, name := range []string{"Relay::Beacon::spare", "Relay::Blink"} {
+		_, err := s.startStateMachine(name, nil)
+		var eerr *ExhibitorsError
+		if !errors.As(err, &eerr) {
+			t.Fatalf("%s: got %v, want an ExhibitorsError", name, err)
+		}
+		if eerr.Machine != name || strings.Join(eerr.Types, ",") != "Relay::Beacon" || len(eerr.Objects) != 0 {
+			t.Errorf("got %+v, want %s of Relay::Beacon exhibited by no object", eerr, name)
+		}
+		if s.stateExec != nil {
+			t.Fatalf("%s: a detached performance was started: %q", name, s.stateExec.fqn)
+		}
+		got := run(t, s, "%state "+name)
+		wants(t, got, "error:", `object of "Relay::Beacon"`, "%state "+name+" <object>")
+		rejects(t, got, "Started state machine executor")
+	}
+
+	run(t, s, "%instantiate Relay::beacon")
+	wants(t, run(t, s, "%features Relay::beacon"), "ticks = 1")
+	for _, name := range []string{"Relay::Beacon::spare", "Relay::Blink", "Relay::Beacon::spare Relay::beacon"} {
+		got := run(t, s, "%state "+name)
+		wants(t, got, `Debugging state machine "active" exhibited by object #`, "Current state: dark")
+		rejects(t, got, "Started state machine executor")
+		wants(t, run(t, s, "%features Relay::beacon"), "ticks = 1")
+	}
+	wants(t, run(t, s, "%advance 4"), "Current state: dark")
+	wants(t, run(t, s, "%features Relay::beacon"), "ticks = 2")
+}
+
+// atoi reads an object identity a report printed.
+func atoi(t *testing.T, digits string) int64 {
+	t.Helper()
+	id, err := strconv.ParseInt(digits, 10, 64)
+	if err != nil {
+		t.Fatalf("%q is no object identity: %v", digits, err)
+	}
+	return id
+}
+
 // collectionIDs reads the identities a %features listing shows feature holding.
 func collectionIDs(t *testing.T, listing, feature string) []string {
 	t.Helper()
