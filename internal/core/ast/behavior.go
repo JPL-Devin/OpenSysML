@@ -464,6 +464,11 @@ type AssumeMember struct {
 	Relationships []*Relationship
 	Multiplicity  *Multiplicity
 	Value         Node
+	// ValueOperatorSpan covers the value operator; ValueIsDefault and
+	// ValueIsInitial are its `default` and `:=` (KerML FeatureValue).
+	ValueOperatorSpan source.Span
+	ValueIsDefault    bool
+	ValueIsInitial    bool
 	// HasBody records that the member was written with braces, which an empty
 	// body does not otherwise show.
 	HasBody bool
@@ -485,6 +490,11 @@ type RequireMember struct {
 	Relationships []*Relationship
 	Multiplicity  *Multiplicity
 	Value         Node
+	// ValueOperatorSpan covers the value operator; ValueIsDefault and
+	// ValueIsInitial are its `default` and `:=` (KerML FeatureValue).
+	ValueOperatorSpan source.Span
+	ValueIsDefault    bool
+	ValueIsInitial    bool
 	// HasBody records that the member was written with braces, which an empty
 	// body does not otherwise show.
 	HasBody bool

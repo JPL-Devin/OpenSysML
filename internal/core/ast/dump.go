@@ -392,12 +392,7 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 		if v.IsNegated {
 			b.WriteString(` negated=true`)
 		}
-		if v.ValueIsDefault {
-			b.WriteString(` default=true`)
-		}
-		if v.ValueIsInitial {
-			b.WriteString(` initial=true`)
-		}
+		writeValueOperator(b, v.ValueIsDefault, v.ValueIsInitial)
 		writeChildren(b, depth, usageChildren(v))
 		return true
 	case *FlowEnds:
@@ -492,12 +487,7 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 		return true
 	case *SubjectMember:
 		fmt.Fprintf(b, `(SubjectMember name=%q type=%q`, v.Name, qnString(v.TypeRef))
-		if v.ValueIsDefault {
-			b.WriteString(` default=true`)
-		}
-		if v.ValueIsInitial {
-			b.WriteString(` initial=true`)
-		}
+		writeValueOperator(b, v.ValueIsDefault, v.ValueIsInitial)
 		kids := make([]Node, 0)
 		for _, pm := range v.Prefixes {
 			kids = append(kids, pm)
@@ -522,6 +512,7 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 			if v.Name != "" {
 				fmt.Fprintf(b, ` constraint=%q`, v.Name)
 			}
+			writeValueOperator(b, v.ValueIsDefault, v.ValueIsInitial)
 			writeChildren(b, depth, prefixesAnd(v.Prefixes,
 				ownedConstraintChildren(v.Relationships, v.Multiplicity, v.Value, v.Body)))
 		} else {
@@ -541,6 +532,7 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 			if v.Name != "" {
 				fmt.Fprintf(b, ` constraint=%q`, v.Name)
 			}
+			writeValueOperator(b, v.ValueIsDefault, v.ValueIsInitial)
 			writeChildren(b, depth, prefixesAnd(v.Prefixes,
 				ownedConstraintChildren(v.Relationships, v.Multiplicity, v.Value, v.Body)))
 		} else {
@@ -844,6 +836,16 @@ func defusageChildren(prefixes []*PrefixMetadata, rels []*Relationship, mult *Mu
 
 // ownedConstraintChildren are the children of the constraint an assume/require
 // member declares, in written order.
+// writeValueOperator emits the `default` and `:=` of a value part.
+func writeValueOperator(b *strings.Builder, isDefault, isInitial bool) {
+	if isDefault {
+		b.WriteString(` default=true`)
+	}
+	if isInitial {
+		b.WriteString(` initial=true`)
+	}
+}
+
 func ownedConstraintChildren(rels []*Relationship, mult *Multiplicity, value Node, body []Node) []Node {
 	kids := make([]Node, 0, len(rels)+len(body)+2)
 	for _, r := range rels {

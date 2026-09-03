@@ -61,24 +61,22 @@ type valuePart struct {
 	isDefault, initial bool
 }
 
-// findValuePart returns the value part of the usage or subject named name.
+// findValuePart returns the value part of the usage, subject or owned
+// constraint named name.
 func findValuePart(node ast.Node, name string) (valuePart, bool) {
 	if usage := findUsageNamed(node, name); usage != nil {
 		return valuePart{usage.Value, usage.ValueOperatorSpan, usage.ValueIsDefault, usage.ValueIsInitial}, true
 	}
-	found := findSubjectNamed(node, name)
-	if found == nil {
-		return valuePart{}, false
-	}
-	return valuePart{found.BindingExpr, found.ValueOperatorSpan, found.ValueIsDefault, found.ValueIsInitial}, true
+	return findMemberValuePart(node, name)
 }
 
-// findSubjectNamed returns the subject member named name under node.
-func findSubjectNamed(node ast.Node, name string) *ast.SubjectMember {
+// findMemberValuePart returns the value part of the subject or owned constraint
+// named name under node.
+func findMemberValuePart(node ast.Node, name string) (valuePart, bool) {
 	var members []ast.Node
 	switch v := node.(type) {
 	case *ast.Membership:
-		return findSubjectNamed(v.Member, name)
+		return findMemberValuePart(v.Member, name)
 	case *ast.RootNamespace:
 		members = v.Members
 	case *ast.Package:
@@ -89,22 +87,33 @@ func findSubjectNamed(node ast.Node, name string) *ast.SubjectMember {
 		members = v.Members
 	case *ast.SubjectMember:
 		if v.Name == name {
-			return v
+			return valuePart{v.BindingExpr, v.ValueOperatorSpan, v.ValueIsDefault, v.ValueIsInitial}, true
 		}
-		return nil
+		return valuePart{}, false
+	case *ast.AssumeMember:
+		if v.Name == name {
+			return valuePart{v.Value, v.ValueOperatorSpan, v.ValueIsDefault, v.ValueIsInitial}, true
+		}
+		return valuePart{}, false
+	case *ast.RequireMember:
+		if v.Name == name {
+			return valuePart{v.Value, v.ValueOperatorSpan, v.ValueIsDefault, v.ValueIsInitial}, true
+		}
+		return valuePart{}, false
 	default:
-		return nil
+		return valuePart{}, false
 	}
 	for _, member := range members {
-		if found := findSubjectNamed(member, name); found != nil {
-			return found
+		if found, ok := findMemberValuePart(member, name); ok {
+			return found, true
 		}
 	}
-	return nil
+	return valuePart{}, false
 }
 
 // The same operators are read on the members whose value parts are parsed apart
-// from an ordinary usage: parameters, results and a requirement's subject.
+// from an ordinary usage: parameters, results, a requirement's subject and its
+// named assumed and required constraints.
 func TestFeatureValueOperatorsOnSpecialMembers(t *testing.T) {
 	cases := []struct {
 		name, src, param, op string
@@ -115,6 +124,10 @@ func TestFeatureValueOperatorsOnSpecialMembers(t *testing.T) {
 		{"subject default", "package P { part vehicle; requirement def R { subject target default = vehicle; } }", "target", "default =", true, false},
 		{"subject initial", "package P { part vehicle; requirement def R { subject target : Part := vehicle; } }", "target", ":=", false, true},
 		{"subject binding", "package P { part vehicle; requirement def R { subject target = vehicle; } }", "target", "=", false, false},
+		{"assume default", "package P { constraint c0; requirement def R { assume constraint c default = c0; } }", "c", "default =", true, false},
+		{"assume binding", "package P { constraint c0; requirement def R { assume constraint c = c0; } }", "c", "=", false, false},
+		{"require initial", "package P { constraint c0; requirement def R { require constraint c := c0; } }", "c", ":=", false, true},
+		{"require default initial", "package P { constraint c0; requirement def R { require constraint c default := c0; } }", "c", "default :=", true, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

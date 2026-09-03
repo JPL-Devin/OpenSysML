@@ -2194,14 +2194,17 @@ func (p *Parser) parseAssumeMember(start int) ast.Node {
 		p.acceptKeyword("constraint")
 		d := p.parseOwnedConstraintDecl("assume constraint")
 		node := &ast.AssumeMember{
-			Prefixes:      prefixes,
-			Name:          d.name,
-			NameSpan:      d.nameSpan,
-			Relationships: d.relationships,
-			Multiplicity:  d.multiplicity,
-			Value:         d.value,
-			HasBody:       d.hasBody,
-			Body:          d.body,
+			Prefixes:          prefixes,
+			Name:              d.name,
+			NameSpan:          d.nameSpan,
+			Relationships:     d.relationships,
+			Multiplicity:      d.multiplicity,
+			Value:             d.value,
+			ValueOperatorSpan: d.valueOp.span,
+			ValueIsDefault:    d.valueOp.isDefault,
+			ValueIsInitial:    d.valueOp.isInitial,
+			HasBody:           d.hasBody,
+			Body:              d.body,
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
@@ -2240,14 +2243,17 @@ func (p *Parser) parseRequireMember(start int) ast.Node {
 		p.acceptKeyword("constraint")
 		d := p.parseOwnedConstraintDecl("require constraint")
 		node := &ast.RequireMember{
-			Prefixes:      prefixes,
-			Name:          d.name,
-			NameSpan:      d.nameSpan,
-			Relationships: d.relationships,
-			Multiplicity:  d.multiplicity,
-			Value:         d.value,
-			HasBody:       d.hasBody,
-			Body:          d.body,
+			Prefixes:          prefixes,
+			Name:              d.name,
+			NameSpan:          d.nameSpan,
+			Relationships:     d.relationships,
+			Multiplicity:      d.multiplicity,
+			Value:             d.value,
+			ValueOperatorSpan: d.valueOp.span,
+			ValueIsDefault:    d.valueOp.isDefault,
+			ValueIsInitial:    d.valueOp.isInitial,
+			HasBody:           d.hasBody,
+			Body:              d.body,
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
@@ -2305,6 +2311,7 @@ type ownedConstraintDecl struct {
 	relationships []*ast.Relationship
 	multiplicity  *ast.Multiplicity
 	value         ast.Node
+	valueOp       valueOperator
 	body          []ast.Node
 	hasBody       bool
 }
@@ -2324,7 +2331,8 @@ func (p *Parser) parseOwnedConstraintDecl(what string) ownedConstraintDecl {
 	if p.at(lexer.LBracket) {
 		d.multiplicity = p.parseMultiplicity()
 	}
-	if _, ok := p.acceptValueOperator(); ok {
+	if op, ok := p.acceptValueOperator(); ok {
+		d.valueOp = op
 		d.value = p.ParseExpression()
 	}
 	if p.at(lexer.LBrace) {

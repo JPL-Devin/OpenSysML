@@ -684,6 +684,9 @@ func (e *Encoder) encodeFields(node ast.Node) {
 		e.rels(n.Relationships)
 		e.node(n.Multiplicity)
 		e.node(n.Value)
+		e.span(n.ValueOperatorSpan)
+		e.w.Bool(n.ValueIsDefault)
+		e.w.Bool(n.ValueIsInitial)
 		e.w.Bool(n.HasBody)
 	case *ast.BodyExpr:
 		e.base(&n.NodeBase)
@@ -977,6 +980,9 @@ func (e *Encoder) encodeFields(node ast.Node) {
 		e.rels(n.Relationships)
 		e.node(n.Multiplicity)
 		e.node(n.Value)
+		e.span(n.ValueOperatorSpan)
+		e.w.Bool(n.ValueIsDefault)
+		e.w.Bool(n.ValueIsInitial)
 		e.w.Bool(n.HasBody)
 	case *ast.RootNamespace:
 		e.base(&n.NodeBase)
@@ -1162,6 +1168,9 @@ func (d *Decoder) decodeFields(node ast.Node) {
 		n.Relationships = d.rels()
 		n.Multiplicity = typed[*ast.Multiplicity](d)
 		n.Value = d.node()
+		n.ValueOperatorSpan = d.span()
+		n.ValueIsDefault = d.r.Bool()
+		n.ValueIsInitial = d.r.Bool()
 		n.HasBody = d.r.Bool()
 	case *ast.BodyExpr:
 		d.base(&n.NodeBase)
@@ -1455,6 +1464,9 @@ func (d *Decoder) decodeFields(node ast.Node) {
 		n.Relationships = d.rels()
 		n.Multiplicity = typed[*ast.Multiplicity](d)
 		n.Value = d.node()
+		n.ValueOperatorSpan = d.span()
+		n.ValueIsDefault = d.r.Bool()
+		n.ValueIsInitial = d.r.Bool()
 		n.HasBody = d.r.Bool()
 	case *ast.RootNamespace:
 		d.base(&n.NodeBase)
