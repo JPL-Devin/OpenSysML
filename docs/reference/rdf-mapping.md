@@ -604,8 +604,10 @@ condition as `sysx:condition`: a constraint body's conditions (`assert`,
 `assume`, a bare condition, and the `not` of `assert not …` as
 `sysml:isNegated`), a nested `assert constraint [name] { … }`, a requirement's
 `assume`/`require` members in all three forms (an expression, the constraint
-they name, or a body), `subject s : X;` as the `sysml:SubjectMembership` it
-declares. The `assert` prefixing a named usage
+they name, or a body) together with the declaration of the constraint usage they
+own — `sysml:declaredName`, its specializations, `sysml:lowerBound`/`upperBound`
+and `sysml:value` (`require #Goal constraint braked [1] = true;`) — and
+`subject s : X;` as the `sysml:SubjectMembership` it declares. The `assert` prefixing a named usage
 (`assert constraint c : C`) is carried as `sysx:declaredPrefix`. The conditions
 themselves are notation, with the limits stated above.
 

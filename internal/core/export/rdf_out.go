@@ -600,21 +600,21 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 			e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String(n.Keyword))
 		}
 		e.flags(subject, []boolProperty{{"isNegated", n.IsNegated}})
-		return e.condition(subject, fqn, owner, n.Expression, nil, n.Body)
+		return e.condition(subject, fqn, owner, n.Expression, nil, true, n.Body)
 
 	case *ast.AssumeMember:
 		head(rdf.OpenSysMLTerm(mAssume))
-		if err := e.prefixes(subject, fqn, n.Prefixes, n.Body); err != nil {
-			return err
-		}
-		return e.condition(subject, fqn, owner, n.Expression, n.Reference, n.Body)
+		return e.requirementCondition(subject, fqn, owner, requirementConditionDecl{
+			prefixes: n.Prefixes, name: n.Name, relationships: n.Relationships, multiplicity: n.Multiplicity,
+			value: n.Value, expression: n.Expression, reference: n.Reference, hasBody: n.HasBody, body: n.Body,
+		})
 
 	case *ast.RequireMember:
 		head(rdf.OpenSysMLTerm(mRequire))
-		if err := e.prefixes(subject, fqn, n.Prefixes, n.Body); err != nil {
-			return err
-		}
-		return e.condition(subject, fqn, owner, n.Expression, n.Reference, n.Body)
+		return e.requirementCondition(subject, fqn, owner, requirementConditionDecl{
+			prefixes: n.Prefixes, name: n.Name, relationships: n.Relationships, multiplicity: n.Multiplicity,
+			value: n.Value, expression: n.Expression, reference: n.Reference, hasBody: n.HasBody, body: n.Body,
+		})
 
 	case *ast.PrefixMetadata:
 		// `@M { … }` written as a member annotates its owner, or what its
@@ -773,7 +773,7 @@ func isRelationship(metaclass string) bool {
 // condition emits the three forms a condition member is written in: an inline
 // expression, a reference to the constraint it states (`require R { … }`), or a
 // nested constraint stating its conditions in a body.
-func (e *encoder) condition(subject rdf.Term, fqn, owner string, expr ast.Node, ref *ast.QualifiedName, body []ast.Node) error {
+func (e *encoder) condition(subject rdf.Term, fqn, owner string, expr ast.Node, ref *ast.QualifiedName, hasBody bool, body []ast.Node) error {
 	if expr != nil {
 		e.expression(subject, e.sysx(xCondition), xCondition, owner, expr)
 		return nil
@@ -781,10 +781,37 @@ func (e *encoder) condition(subject rdf.Term, fqn, owner string, expr ast.Node, 
 	if ref != nil {
 		e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelReferences]), e.reference(owner, qualifiedText(ref)))
 	}
-	// Both remaining forms — a nested constraint and the constraint a member
-	// names — are written with a body, whether or not it has members.
-	e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(true))
+	e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(hasBody))
 	return e.encode(body, fqn, subject)
+}
+
+// requirementConditionDecl is the head an `assume`/`require` member declares
+// for the constraint usage it owns, besides the condition itself.
+type requirementConditionDecl struct {
+	prefixes      []*ast.PrefixMetadata
+	name          string
+	relationships []*ast.Relationship
+	multiplicity  *ast.Multiplicity
+	value         ast.Node
+	expression    ast.Node
+	reference     *ast.QualifiedName
+	hasBody       bool
+	body          []ast.Node
+}
+
+// requirementCondition emits an `assume`/`require` member together with its
+// constraint usage's declaration (`require #goal constraint c : C [1] = true`).
+func (e *encoder) requirementCondition(subject rdf.Term, fqn, owner string, n requirementConditionDecl) error {
+	if n.name != "" {
+		e.graph.Add(subject, e.sysml(pDeclaredName), rdf.String(n.name))
+	}
+	if err := e.prefixes(subject, fqn, n.prefixes, n.body); err != nil {
+		return err
+	}
+	e.relationships(subject, owner, n.relationships)
+	e.multiplicity(subject, owner, n.multiplicity)
+	e.expression(subject, e.sysml(pValue), pValue, owner, n.value)
+	return e.condition(subject, fqn, owner, n.expression, n.reference, n.hasBody, n.body)
 }
 
 // shorthandRelationship reports whether a usage's identification is the first
@@ -1174,9 +1201,9 @@ func declaredNameAndMembers(node ast.Node) (string, []ast.Node) {
 	case *ast.ConstraintMember:
 		return n.Name, n.Body
 	case *ast.AssumeMember:
-		return "", n.Body
+		return n.Name, n.Body
 	case *ast.RequireMember:
-		return "", n.Body
+		return n.Name, n.Body
 	case *ast.SubjectMember:
 		return n.Name, n.Body
 	case *ast.PrefixMetadata:

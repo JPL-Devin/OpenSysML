@@ -12,9 +12,9 @@ elmt:Prefixed
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "Prefixed" ;
     sysx:hasBody "true"^^xsd:boolean ;
-    sysml:ownedMember elmt:Prefixed__Safety, elmt:Prefixed__Reviewed, elmt:Prefixed__Car, elmt:Prefixed__Vehicle, elmt:Prefixed__car, elmt:Prefixed__spare, elmt:Prefixed__option, elmt:Prefixed__wheel, elmt:Prefixed__Notes, elmt:Prefixed__Braking ;
-    sysml:ownedMembership elmt:Prefixed__Safety_om, elmt:Prefixed__Reviewed_om, elmt:Prefixed__Car_om, elmt:Prefixed__Vehicle_om, elmt:Prefixed__car_om, elmt:Prefixed__spare_om, elmt:Prefixed__option_om, elmt:Prefixed__wheel_om, elmt:Prefixed__Notes_om, elmt:Prefixed__Braking_om ;
-    sysml:ownedRelationship elmt:Prefixed__Safety_om, elmt:Prefixed__Reviewed_om, elmt:Prefixed__Car_om, elmt:Prefixed__Vehicle_om, elmt:Prefixed__car_om, elmt:Prefixed__spare_om, elmt:Prefixed__option_om, elmt:Prefixed__wheel_om, elmt:Prefixed__Notes_om, elmt:Prefixed___409, elmt:Prefixed__Braking_om .
+    sysml:ownedMember elmt:Prefixed__Safety, elmt:Prefixed__Reviewed, elmt:Prefixed__Car, elmt:Prefixed__Vehicle, elmt:Prefixed__car, elmt:Prefixed__spare, elmt:Prefixed__option, elmt:Prefixed__wheel, elmt:Prefixed__Notes, elmt:Prefixed__Stopped, elmt:Prefixed__Braking ;
+    sysml:ownedMembership elmt:Prefixed__Safety_om, elmt:Prefixed__Reviewed_om, elmt:Prefixed__Car_om, elmt:Prefixed__Vehicle_om, elmt:Prefixed__car_om, elmt:Prefixed__spare_om, elmt:Prefixed__option_om, elmt:Prefixed__wheel_om, elmt:Prefixed__Notes_om, elmt:Prefixed__Stopped_om, elmt:Prefixed__Braking_om ;
+    sysml:ownedRelationship elmt:Prefixed__Safety_om, elmt:Prefixed__Reviewed_om, elmt:Prefixed__Car_om, elmt:Prefixed__Vehicle_om, elmt:Prefixed__car_om, elmt:Prefixed__spare_om, elmt:Prefixed__option_om, elmt:Prefixed__wheel_om, elmt:Prefixed__Notes_om, elmt:Prefixed___409, elmt:Prefixed__Stopped_om, elmt:Prefixed__Braking_om .
 
 elmt:Prefixed__Safety
     a sysml:MetadataDefinition ;
@@ -454,20 +454,42 @@ elmt:Prefixed___409___400
     sysml:type elmt:Prefixed__Safety ;
     sysx:hasBody "false"^^xsd:boolean .
 
+elmt:Prefixed__Stopped
+    a sysml:ConstraintDefinition ;
+    sysml:qualifiedName "Prefixed::Stopped" ;
+    sysml:elementId "Prefixed__Stopped" ;
+    sysx:memberIndex "10"^^xsd:integer ;
+    sysml:owningNamespace elmt:Prefixed ;
+    sysml:owner elmt:Prefixed ;
+    sysml:owningRelationship elmt:Prefixed__Stopped_om ;
+    sysml:owningMembership elmt:Prefixed__Stopped_om ;
+    sysml:declaredName "Stopped" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Prefixed__Stopped_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Prefixed__Stopped_om" ;
+    sysml:owner elmt:Prefixed ;
+    sysml:memberElement elmt:Prefixed__Stopped ;
+    sysml:ownedMemberElement elmt:Prefixed__Stopped ;
+    sysml:ownedRelatedElement elmt:Prefixed__Stopped ;
+    sysml:owningRelatedElement elmt:Prefixed ;
+    sysml:membershipOwningNamespace elmt:Prefixed .
+
 elmt:Prefixed__Braking
     a sysml:RequirementDefinition ;
     sysml:qualifiedName "Prefixed::Braking" ;
     sysml:elementId "Prefixed__Braking" ;
-    sysx:memberIndex "10"^^xsd:integer ;
+    sysx:memberIndex "11"^^xsd:integer ;
     sysml:owningNamespace elmt:Prefixed ;
     sysml:owner elmt:Prefixed ;
     sysml:owningRelationship elmt:Prefixed__Braking_om ;
     sysml:owningMembership elmt:Prefixed__Braking_om ;
     sysml:declaredName "Braking" ;
     sysx:hasBody "true"^^xsd:boolean ;
-    sysml:ownedRelationship elmt:Prefixed__Braking__brakes, elmt:Prefixed__Braking___401_om, elmt:Prefixed__Braking___402_om ;
-    sysml:ownedMember elmt:Prefixed__Braking___401, elmt:Prefixed__Braking___402 ;
-    sysml:ownedMembership elmt:Prefixed__Braking___401_om, elmt:Prefixed__Braking___402_om .
+    sysml:ownedRelationship elmt:Prefixed__Braking__brakes, elmt:Prefixed__Braking___401_om, elmt:Prefixed__Braking___402_om, elmt:Prefixed__Braking__stopped_om, elmt:Prefixed__Braking__braked_om ;
+    sysml:ownedMember elmt:Prefixed__Braking___401, elmt:Prefixed__Braking___402, elmt:Prefixed__Braking__stopped, elmt:Prefixed__Braking__braked ;
+    sysml:ownedMembership elmt:Prefixed__Braking___401_om, elmt:Prefixed__Braking___402_om, elmt:Prefixed__Braking__stopped_om, elmt:Prefixed__Braking__braked_om .
 
 elmt:Prefixed__Braking_om
     a sysml:OwningMembership ;
@@ -654,4 +676,115 @@ expr:Prefixed__Braking___402___400_pcondition
     a sysml:LiteralBoolean ;
     sysx:sourceText "true" ;
     sysml:elementId "Prefixed__Braking___402___400_pcondition" ;
+    sysml:value "true"^^xsd:boolean .
+
+elmt:Prefixed__Braking__stopped
+    a sysx:AssumeMember ;
+    sysml:qualifiedName "Prefixed::Braking::stopped" ;
+    sysml:elementId "Prefixed__Braking__stopped" ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:owningNamespace elmt:Prefixed__Braking ;
+    sysml:owner elmt:Prefixed__Braking ;
+    sysml:owningRelationship elmt:Prefixed__Braking__stopped_om ;
+    sysml:owningMembership elmt:Prefixed__Braking__stopped_om ;
+    sysml:declaredName "stopped" ;
+    sysml:ownedMember elmt:Prefixed__Braking__stopped___400 ;
+    sysml:ownedMembership elmt:Prefixed__Braking__stopped___400_om ;
+    sysml:ownedRelationship elmt:Prefixed__Braking__stopped___400_om ;
+    sysml:type elmt:Prefixed__Stopped ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Prefixed__Braking__stopped_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Prefixed__Braking__stopped_om" ;
+    sysml:owner elmt:Prefixed__Braking ;
+    sysml:memberElement elmt:Prefixed__Braking__stopped ;
+    sysml:ownedMemberElement elmt:Prefixed__Braking__stopped ;
+    sysml:ownedRelatedElement elmt:Prefixed__Braking__stopped ;
+    sysml:owningRelatedElement elmt:Prefixed__Braking ;
+    sysml:membershipOwningNamespace elmt:Prefixed__Braking .
+
+elmt:Prefixed__Braking__stopped___400
+    a sysml:MetadataUsage ;
+    sysml:qualifiedName "Prefixed::Braking::stopped::@0" ;
+    sysml:elementId "Prefixed__Braking__stopped___400" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Prefixed__Braking__stopped ;
+    sysml:owner elmt:Prefixed__Braking__stopped ;
+    sysml:owningRelationship elmt:Prefixed__Braking__stopped___400_om ;
+    sysml:owningMembership elmt:Prefixed__Braking__stopped___400_om ;
+    sysx:declaredKeyword "#" ;
+    sysml:type elmt:Prefixed__Reviewed ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Prefixed__Braking__stopped___400_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Prefixed__Braking__stopped___400_om" ;
+    sysml:owner elmt:Prefixed__Braking__stopped ;
+    sysml:memberElement elmt:Prefixed__Braking__stopped___400 ;
+    sysml:ownedMemberElement elmt:Prefixed__Braking__stopped___400 ;
+    sysml:ownedRelatedElement elmt:Prefixed__Braking__stopped___400 ;
+    sysml:owningRelatedElement elmt:Prefixed__Braking__stopped ;
+    sysml:membershipOwningNamespace elmt:Prefixed__Braking__stopped .
+
+elmt:Prefixed__Braking__braked
+    a sysx:RequireMember ;
+    sysml:qualifiedName "Prefixed::Braking::braked" ;
+    sysml:elementId "Prefixed__Braking__braked" ;
+    sysx:memberIndex "4"^^xsd:integer ;
+    sysml:owningNamespace elmt:Prefixed__Braking ;
+    sysml:owner elmt:Prefixed__Braking ;
+    sysml:owningRelationship elmt:Prefixed__Braking__braked_om ;
+    sysml:owningMembership elmt:Prefixed__Braking__braked_om ;
+    sysml:declaredName "braked" ;
+    sysml:ownedMember elmt:Prefixed__Braking__braked___400 ;
+    sysml:ownedMembership elmt:Prefixed__Braking__braked___400_om ;
+    sysml:ownedRelationship elmt:Prefixed__Braking__braked___400_om ;
+    sysml:upperBound expr:Prefixed__Braking__braked_pupperBound ;
+    sysml:value expr:Prefixed__Braking__braked_pvalue ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Prefixed__Braking__braked_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Prefixed__Braking__braked_om" ;
+    sysml:owner elmt:Prefixed__Braking ;
+    sysml:memberElement elmt:Prefixed__Braking__braked ;
+    sysml:ownedMemberElement elmt:Prefixed__Braking__braked ;
+    sysml:ownedRelatedElement elmt:Prefixed__Braking__braked ;
+    sysml:owningRelatedElement elmt:Prefixed__Braking ;
+    sysml:membershipOwningNamespace elmt:Prefixed__Braking .
+
+elmt:Prefixed__Braking__braked___400
+    a sysml:MetadataUsage ;
+    sysml:qualifiedName "Prefixed::Braking::braked::@0" ;
+    sysml:elementId "Prefixed__Braking__braked___400" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Prefixed__Braking__braked ;
+    sysml:owner elmt:Prefixed__Braking__braked ;
+    sysml:owningRelationship elmt:Prefixed__Braking__braked___400_om ;
+    sysml:owningMembership elmt:Prefixed__Braking__braked___400_om ;
+    sysx:declaredKeyword "#" ;
+    sysml:type elmt:Prefixed__Safety ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Prefixed__Braking__braked___400_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Prefixed__Braking__braked___400_om" ;
+    sysml:owner elmt:Prefixed__Braking__braked ;
+    sysml:memberElement elmt:Prefixed__Braking__braked___400 ;
+    sysml:ownedMemberElement elmt:Prefixed__Braking__braked___400 ;
+    sysml:ownedRelatedElement elmt:Prefixed__Braking__braked___400 ;
+    sysml:owningRelatedElement elmt:Prefixed__Braking__braked ;
+    sysml:membershipOwningNamespace elmt:Prefixed__Braking__braked .
+
+expr:Prefixed__Braking__braked_pupperBound
+    a sysml:LiteralInteger ;
+    sysx:sourceText "1" ;
+    sysml:elementId "Prefixed__Braking__braked_pupperBound" ;
+    sysml:value "1"^^xsd:integer .
+
+expr:Prefixed__Braking__braked_pvalue
+    a sysml:LiteralBoolean ;
+    sysx:sourceText "true" ;
+    sysml:elementId "Prefixed__Braking__braked_pvalue" ;
     sysml:value "true"^^xsd:boolean .

@@ -870,16 +870,25 @@ func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 		return "", d.missing(el, "sysx:"+xDeclaredKeyword, "a prefix annotation on a condition follows its keyword")
 	}
 	words = append(words, prefixes...)
-	reference, err := d.referenceText(el, rdf.SysML+relationshipProperty[ast.RelReferences])
+	references, err := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelReferences])
 	if err != nil {
 		return "", err
 	}
+	var skip []ast.RelationshipKind
+	_, declared := d.stringOf(el, rdf.OpenSysML+xHasBody)
 	switch condition, ok := d.stringOf(el, rdf.OpenSysML+xCondition); {
 	case ok:
 		words = append(words, condition)
-	case reference != "":
-		words = append(words, reference)
-	case d.boolOf(el, rdf.OpenSysML+xHasBody):
+		return strings.Join(words, " "), nil
+	case len(references) > 0:
+		// The constraint the member states comes first; any further `::>` it
+		// declares follows with the other specializations.
+		words = append(words, references[0])
+		if rest := references[1:]; len(rest) > 0 {
+			words = append(words, relationshipSyntax[ast.RelReferences], strings.Join(rest, ", "))
+		}
+		skip = append(skip, ast.RelReferences)
+	case declared:
 		// The nested-constraint form spells out the kind it declares, so the
 		// braces that follow are read as a constraint body rather than a name.
 		words = append(words, "constraint")
@@ -887,7 +896,18 @@ func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 	default:
 		return "", d.missing(el, "sysx:"+xCondition, "a condition member states a condition")
 	}
-	return strings.Join(words, " "), nil
+	// The constraint usage's own head — specializations, then `[1]`, then
+	// `= value` — in the order the requirement member parser reads it.
+	relationships, err := d.relationshipWords(el, "", skip...)
+	if err != nil {
+		return "", err
+	}
+	words = append(words, relationships...)
+	head := strings.Join(words, " ") + d.multiplicityText(el)
+	if value, ok := d.stringOf(el, rdf.SysML+pValue); ok {
+		head += " = " + value
+	}
+	return head, nil
 }
 
 // acceptParam returns the synthetic parameter of an accept shorthand, whose

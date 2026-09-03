@@ -95,6 +95,12 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   `MetadataUsageDeclaration` requires, rather than naming the usage `M` — which had made the
   training corpus's `Metadata Example-1.sysml` a duplicate declaration under conversion
   ([docs/reference/rdf-mapping.md](docs/reference/rdf-mapping.md)).
+- **An `assume`/`require` member's constraint declaration converts to RDF.** The encoder carried
+  only the condition of a requirement's `assume`/`require` members, so
+  `assume constraint c : C;` and `require constraint d [1] = true;` came back as
+  `assume constraint { }` and `require constraint { }`. The name, specializations, multiplicity
+  and value of the constraint usage the member owns are now carried as they are for any usage,
+  and a body-less member comes back with its `;` rather than an empty body.
 
 ### Performance
 

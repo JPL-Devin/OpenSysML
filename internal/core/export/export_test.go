@@ -261,6 +261,34 @@ func TestRequirementConditionsSurviveRDF(t *testing.T) {
 	}
 }
 
+// An `assume`/`require` member declares a constraint usage of its own — name,
+// typing, multiplicity, value, specializations — which the graph must carry
+// without the source text, prefixed or not.
+func TestRequirementConditionDeclarationsSurviveRDF(t *testing.T) {
+	for _, member := range []string{
+		"assume constraint c : Light;",
+		"require #Goal constraint d[1] = true;",
+		"assume #Goal constraint f : Light subsets Light[0..1] {\n            true;\n        }",
+		"require Light subsets Light[1];",
+		"require Light {\n        }",
+	} {
+		src := "package P {\n\tattribute mass;\n\tconstraint def Light;\n\tmetadata def Goal;\n\trequirement r {\n\t\t" + member + "\n\t}\n}"
+		turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+		if err != nil {
+			t.Fatalf("%s: to turtle: %v", member, err)
+		}
+		for _, graph := range [][]byte{turtle, withoutTriples(t, turtle, "sysx:sourceText")} {
+			back, err := export.Convert("m.ttl", graph, export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("%s: back to notation: %v", member, err)
+			}
+			if !strings.Contains(string(back), member) {
+				t.Errorf("the requirement member %q was rewritten:\n%s", member, back)
+			}
+		}
+	}
+}
+
 // `assert` before a kind keyword says what the declaration it qualifies is for,
 // so dropping it would come back as a plain constraint — a different model.
 func TestAssertedUsagePrefixSurvivesRDF(t *testing.T) {

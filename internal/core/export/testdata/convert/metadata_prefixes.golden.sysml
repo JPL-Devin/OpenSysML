@@ -9,6 +9,7 @@ package Prefixed {
     end #Safety part wheel : Car;
     #Reviewed package Notes;
     #Safety dependency from Car to Vehicle;
+    constraint def Stopped;
     requirement def Braking {
         subject #Safety brakes : Car;
         assume #Reviewed constraint {
@@ -17,5 +18,7 @@ package Prefixed {
         require #Safety constraint {
             true;
         }
+        assume #Reviewed constraint stopped : Stopped;
+        require #Safety constraint braked[1] = true;
     }
 }
