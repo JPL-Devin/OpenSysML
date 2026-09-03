@@ -42,18 +42,15 @@ func (ctx *Context) materializeConnectorFeatureValue(owner *Instance, fv *Featur
 		}
 	}
 	kept, held := owner.keptConnectors[fv]
-	conn, err := ctx.materializeConnectorAs(owner, fv.Feature.Symbol, ctx.connectorBaseOf(fv.Feature), kept)
-	if err != nil {
-		return err
-	}
-	if held {
-		// A probe discards the object, so the identity is kept for the one materialized after it.
-		ctx.noteProbeUndo(func() { owner.keepConnector(fv, kept) })
-		delete(owner.keptConnectors, fv)
-	}
-	fv.Value = Value{Kind: ValInstance, Instance: conn.ID}
-	fv.Materialized = true
-	return nil
+	return ctx.materializeConnectorAs(owner, fv.Feature.Symbol, ctx.connectorBaseOf(fv.Feature), kept, func(conn *Instance) {
+		if held {
+			// A probe discards the object, so the identity is kept for the one materialized after it.
+			ctx.noteProbeUndo(func() { owner.keepConnector(fv, kept) })
+			delete(owner.keptConnectors, fv)
+		}
+		fv.Value = Value{Kind: ValInstance, Instance: conn.ID}
+		fv.Materialized = true
+	})
 }
 
 // connectorBaseOf returns the type an object of a connector usage is
@@ -101,17 +98,20 @@ func (ctx *Context) connectorEndFeatures(typeSym *symbols.Symbol, declared map[s
 
 // materializeConnector builds the object the connector usage connSym denotes in
 // the context of owner, the instance whose features its ends name. base is the
-// type the object is materialized from.
-func (ctx *Context) materializeConnector(owner *Instance, connSym, base *symbols.Symbol) (*Instance, error) {
-	return ctx.materializeConnectorAs(owner, connSym, base, 0)
+// type the object is materialized from; keep receives the object once it is created whole.
+func (ctx *Context) materializeConnector(owner *Instance, connSym, base *symbols.Symbol, keep func(*Instance)) error {
+	return ctx.materializeConnectorAs(owner, connSym, base, 0, keep)
 }
 
 // materializeConnectorAs materializes a connector under the given identity, 0 for
-// the next one the context hands out.
-func (ctx *Context) materializeConnectorAs(owner *Instance, connSym, base *symbols.Symbol, id int64) (*Instance, error) {
+// the next one the context hands out. The connector is created whole or not at
+// all: a failure through the start of its behaviors undoes every write and
+// message, and keep never sees it. Once kept, the older behaviors it woke answer;
+// one of them failing is reported as its own, with the connector kept.
+func (ctx *Context) materializeConnectorAs(owner *Instance, connSym, base *symbols.Symbol, id int64, keep func(*Instance)) error {
 	ends := ctx.model.ConnectorEndAttachments(connSym)
 	if len(ends) == 0 {
-		return nil, fmt.Errorf("%w: %s declares no end to attach", ErrConnectorEnd, connectorName(connSym))
+		return fmt.Errorf("%w: %s declares no end to attach", ErrConnectorEnd, connectorName(connSym))
 	}
 
 	// An end may name the connector itself, or another connector that names this
@@ -122,13 +122,11 @@ func (ctx *Context) materializeConnectorAs(owner *Instance, connSym, base *symbo
 	}
 	key := connectorRef{owner: ownerID, connector: connSym}
 	if ctx.materializingConnectors[key] {
-		return nil, fmt.Errorf("%w: connector %s attaches to itself", ErrCyclicFeatureValue, connectorName(connSym))
+		return fmt.Errorf("%w: connector %s attaches to itself", ErrCyclicFeatureValue, connectorName(connSym))
 	}
 	ctx.materializingConnectors[key] = true
 	defer delete(ctx.materializingConnectors, key)
 
-	// Created whole or not at all: a failure through the start of its behaviors
-	// undoes every write and message; older behaviors answer once it is kept.
 	mark, attached := len(ctx.created), len(ctx.objectBehaviors)
 	commit, rollback := ctx.beginJournal()
 	endBoundary := ctx.beginRunBoundary()
@@ -140,7 +138,7 @@ func (ctx *Context) materializeConnectorAs(owner *Instance, connSym, base *symbo
 	inst, err := ctx.materializeOwnedBy(base, id, nil, "")
 	if err != nil {
 		abandon()
-		return nil, err
+		return err
 	}
 
 	var unnamed []Value
@@ -150,7 +148,7 @@ func (ctx *Context) materializeConnectorAs(owner *Instance, connSym, base *symbo
 		if err != nil {
 			ctx.behaviorRunDepth--
 			abandon()
-			return nil, err
+			return err
 		}
 		inst.Ends = append(inst.Ends, ConnectorEnd{Name: end.Name, Value: val})
 		if end.Name == "" {
@@ -165,15 +163,12 @@ func (ctx *Context) materializeConnectorAs(owner *Instance, connSym, base *symbo
 	}
 	if err := ctx.startClassifierBehaviors(inst, mark); err != nil {
 		abandon()
-		return nil, err
+		return err
 	}
 	endBoundary()
 	commit()
-	if err := ctx.runAttachedBehaviors(); err != nil {
-		ctx.abandonCreationSince(mark, attached)
-		return nil, err
-	}
-	return inst, nil
+	keep(inst)
+	return ctx.runAttachedBehaviors()
 }
 
 // attachConnectorEnd evaluates what one end attaches to against the instance
@@ -284,25 +279,26 @@ func (inst *Instance) OwnedConnectors(ctx *Context) ([]*Instance, error) {
 }
 
 // materializeAnonymousConnector materializes the instance's i-th anonymous
-// connector, member, under the identity a carry-over kept for its declaration, key, if any.
+// connector, member, under the identity a carry-over kept for its declaration, key,
+// if any. The connector is returned along with the failure of an older behavior answering it.
 func (inst *Instance) materializeAnonymousConnector(ctx *Context, i int, member *symbols.Symbol, key anonymousKey) (*Instance, error) {
 	kept := inst.keptIdentity(key)
-	conn, err := ctx.materializeConnectorAs(inst, member, member, kept)
-	if err != nil {
-		return nil, err
-	}
-	// A probe discards the object, so the identity is kept for the one materialized after it.
-	ctx.noteProbeUndo(func() {
-		if i < len(inst.anonymous) {
-			inst.anonymous[i] = 0
-		}
-		if kept != 0 {
-			inst.keepAnonymousIdentity(key, kept)
-		}
+	var conn *Instance
+	err := ctx.materializeConnectorAs(inst, member, member, kept, func(c *Instance) {
+		conn = c
+		// A probe discards the object, so the identity is kept for the one materialized after it.
+		ctx.noteProbeUndo(func() {
+			if i < len(inst.anonymous) {
+				inst.anonymous[i] = 0
+			}
+			if kept != 0 {
+				inst.keepAnonymousIdentity(key, kept)
+			}
+		})
+		inst.anonymous[i] = conn.ID
+		inst.dropKeptIdentity(key)
 	})
-	inst.anonymous[i] = conn.ID
-	inst.dropKeptIdentity(key)
-	return conn, nil
+	return conn, err
 }
 
 // anonymousKey identifies an anonymous connector declaration across re-analyses:
@@ -356,7 +352,8 @@ func (inst *Instance) KeptConnectorIDs() []int64 {
 }
 
 // RestoreConnector materializes again the connector a carry-over set aside under id,
-// which takes that identity back; nil when the instance kept no such identity.
+// which takes that identity back; nil when the instance kept no such identity. A
+// connector returned along with an error is kept: an older behavior failed answering it.
 func (inst *Instance) RestoreConnector(ctx *Context, id int64) (*Instance, error) {
 	if id == 0 {
 		return nil, nil
@@ -370,11 +367,9 @@ func (inst *Instance) RestoreConnector(ctx *Context, id int64) (*Instance, error
 		if inst.keptConnectors[fv] != id {
 			continue
 		}
-		if _, err := inst.GetFeatureValue(ctx, name); err != nil {
-			return nil, err
-		}
+		_, err := inst.GetFeatureValue(ctx, name)
 		conn, _ := ctx.Instance(id)
-		return conn, nil
+		return conn, err
 	}
 	return nil, nil
 }

@@ -890,8 +890,11 @@ func (s *Session) resolveObject(text string) (*runtime.Instance, string, error) 
 		inst, keeper := s.heldByID(ref.id)
 		if inst == nil && keeper != nil {
 			conn, err := keeper.RestoreConnector(s.rtCtx, ref.id)
-			if err != nil {
+			if err != nil && conn == nil {
 				return nil, "", &UnknownObjectIDError{ID: ref.id, Err: err}
+			}
+			if err != nil {
+				return nil, "", fmt.Errorf("#%d is materialized again, but an older object's behavior failed: %w", ref.id, err)
 			}
 			inst = conn
 		}

@@ -144,7 +144,10 @@ one alone, its sibling connectors waiting for their own turn. The id follows the
 declaration, however the owner's connectors are reordered or added to around it; the id of one whose
 declaration is gone is gone with it, never handed to another. An end that cannot be attached again is
 reported with the id, and the id stays reachable for another attempt: `no object #4 in this session:
-the connector that had that identity cannot be materialized again: …`.
+the connector that had that identity cannot be materialized again: …`. A connector attached whole is
+kept — its ends, its writes, its behaviors — even when an older object's behavior then fails
+answering it; that failure is reported as the older object's (`#4 is materialized again, but an older
+object's behavior failed: …`), and the next command finds `#4` held.
 
 ## Rendering a view
 

@@ -171,7 +171,9 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   still reached; `%instances` lists such an object as `#3 (ID: 3, displaced from Demo::car)`, and a
   `%state` or `%action` session started on it stays with it under that id; a connector `%features`
   has shown, anonymous or named, keeps answering to its id across that carry-over though its ends
-  are only attached again when it is next read; changing the run bounds,
+  are only attached again when it is next read — and a connector attached whole is kept, its
+  writes with it, when an older object's behavior then fails answering it, that failure reported
+  as the older object's; changing the run bounds,
   which drops every object as a reset does, ends such a session too, and the next `%step` or
   `%advance` says so. The old object still counts: a `%constraint`, `%requirement` or `%eval` that
   names no object and whose condition both carry says so and names both (`Demo::car, #3`) rather

@@ -819,6 +819,63 @@ func TestKeptConnectorIDsFollowTheirDeclarations(t *testing.T) {
 	}
 }
 
+// A connector attached whole is kept when an older object's behavior fails
+// answering it, at first and when a carry-over materializes it again: the
+// failure is reported as the older object's, and the connector — its write with
+// it — is there for the next command, materialized once.
+func TestConnectorAnsweredByAFailingBehaviorIsKept(t *testing.T) {
+	s := loadSource(t, `package Demo {
+		private import ScalarValues::*;
+		item def Ping;
+		port def P;
+		part def Listener {
+			attribute heard : Integer = 0;
+			exhibit state listening {
+				entry; then waiting;
+				state waiting;
+				transition first waiting accept Ping if 10 / (heard - heard) > 1 then noted;
+				state noted;
+			}
+		}
+		part good : Listener;
+		part def A { port p : P; }
+		part def B { port q : P; }
+		connection def Fine {
+			end : P; end : P;
+			exhibit state life {
+				entry; then poke;
+				state poke { entry action bump { assign good.heard := good.heard + 10; } }
+				transition first poke then ping;
+				state ping { entry send Ping() to good; }
+			}
+		}
+		part def Sys { part a : A; part b : B; connection fine : Fine connect a.p to b.q; }
+	}`)
+	const failure = "exhibited state machine listening of object #1: process event: state waiting: eval guard of transition waiting -> noted: division by zero"
+	wants(t, run(t, s, "%instantiate Demo::good"), "ID: 1")
+	wants(t, run(t, s, "%instantiate Demo::Sys"), "ID: 3")
+	wants(t, run(t, s, "%features Demo::Sys"), "fine: <error: "+failure+">")
+	listing := run(t, s, "%features Sys.fine")
+	wants(t, listing, "Instance: Demo::Sys.fine (ID: ", "source = Instance(ID: ", "life: exhibited state machine, current state ping")
+	conn := objectIDIn(t, listing)
+	wants(t, run(t, s, "%eval in good : heard"), "= 10")
+	wants(t, run(t, s, "%instances"), "Demo::Sys (ID: 3)", "Demo::good (ID: 1)")
+
+	if res := s.Submit("part def Widget;"); len(res.Notices) != 1 {
+		t.Fatalf("the declaration reported %v", res.Notices)
+	}
+	wants(t, run(t, s, "%eval in good : heard"), "= 0")
+	got := run(t, s, "%features #"+conn)
+	wants(t, got, "error: #"+conn+" is materialized again, but an older object's behavior failed: "+failure)
+	rejects(t, got, "no object #"+conn)
+	wants(t, run(t, s, "%eval in good : heard"), "= 10")
+	wants(t, run(t, s, "%features #"+conn), "Instance: #"+conn+" (ID: "+conn+")", "source = Instance(ID: ", "current state ping")
+	wants(t, run(t, s, "%eval in good : heard"), "= 10")
+	if got := objectIDIn(t, featureLine(t, run(t, s, "%features Demo::Sys"), "fine")); got != conn {
+		t.Errorf("the owner holds connector #%s, want the kept #%s", got, conn)
+	}
+}
+
 // connectorLines returns the lines of a %features listing that hold the object's
 // anonymous connectors, in the order listed.
 func connectorLines(t *testing.T, listing string) []string {
