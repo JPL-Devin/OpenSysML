@@ -317,7 +317,7 @@ func (s *Session) carrierObject(label string) (*runtime.Instance, string) {
 
 // nestedObjects returns the objects held in an object's feature values, in feature-value-name
 // order, each under the label it is reached by; the elements of a multi-valued
-// feature are reached by their 1-based index, `wheels[2]`.
+// feature are reached by their 1-based index, `.wheels[2]`.
 func nestedObjects(ctx *runtime.Context, of carrier) []carrier {
 	fvs := make([]string, 0, len(of.inst.FeatureValues))
 	for name := range of.inst.FeatureValues {
@@ -328,7 +328,7 @@ func nestedObjects(ctx *runtime.Context, of carrier) []carrier {
 	add := func(segment string, val runtime.Value) {
 		if id, isObject := val.Object(); isObject {
 			if child, ok := ctx.Instance(id); ok && child != nil {
-				out = append(out, carrier{name: of.name + "::" + segment, inst: child})
+				out = append(out, carrier{name: of.name + "." + segment, inst: child})
 			}
 		}
 	}
@@ -420,9 +420,10 @@ func (s *Session) walkFeatureValues(inst *runtime.Instance, label string, names 
 // features walked through that object's feature values.
 //
 // The REPL reports an object under a label: its declared name or id with the
-// walked features joined by `::`, every name spelled as the notation writes it.
-// A label is thus a reference that reads back to the object, and one a name
-// alone cannot forge — an object named '#3' or a feature named 'wheels[2]' is
+// walked features each after a `.`, every name spelled as the notation writes
+// it. A label is thus a reference that reads back to the object — a `.` segment
+// is only ever a feature, so no declaration can capture it — and one a name
+// alone cannot forge: an object named '#3' or a feature named 'wheels[2]' is
 // quoted, where a generated id or index is not.
 
 // objectSegment is one segment of an object reference.
@@ -783,8 +784,8 @@ func (s *Session) heldObject(label string) (*runtime.Instance, bool) {
 }
 
 // relabelByID respells a label rooted at the object fqn currently names with the
-// object's id, `Obj::Monitor::modes` → `#1::modes`, so the label still reaches
-// it once the name denotes another object. Other labels are returned unchanged.
+// object's id, `Obj::Monitor.modes` → `#1.modes`, so the label still reaches it
+// once the name denotes another object. Other labels are returned unchanged.
 func (s *Session) relabelByID(label, fqn string) string {
 	ref := parseLabel(label)
 	if ref.id > 0 {
@@ -796,7 +797,7 @@ func (s *Session) relabelByID(label, fqn string) string {
 	}
 	relabelled := fmt.Sprintf("#%d", inst.ID)
 	for _, seg := range rest {
-		relabelled += "::" + seg.text
+		relabelled += "." + seg.text
 	}
 	return relabelled
 }
@@ -804,7 +805,8 @@ func (s *Session) relabelByID(label, fqn string) string {
 // walkObjectPath follows segments through feature values from inst, labelled
 // label, to the object they reach. Each segment must name a feature of the
 // object before it that holds an object — one, or one picked by index from a
-// multi-valued feature — and the first that does not is reported.
+// multi-valued feature — and the first that does not is reported. The label
+// spells walked features after `.`, which only ever reads as a feature.
 func (s *Session) walkObjectPath(ctx *runtime.Context, inst *runtime.Instance, label string, segments []objectSegment) (*runtime.Instance, string, error) {
 	for _, seg := range segments {
 		fv, err := inst.GetFeatureValue(ctx, seg.name)
@@ -815,7 +817,7 @@ func (s *Session) walkObjectPath(ctx *runtime.Context, inst *runtime.Instance, l
 			return nil, "", pathError(label, seg, "%s of %s could not be materialized: %v", lexer.NameText(seg.name), label, err)
 		}
 		var val runtime.Value
-		next := label + "::" + lexer.NameText(seg.name)
+		next := label + "." + lexer.NameText(seg.name)
 		if fv.Values.Kind != runtime.ValInvalid {
 			elements := collectionElements(fv.Values)
 			switch {

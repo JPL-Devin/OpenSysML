@@ -93,8 +93,9 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   object still counts: a `%constraint`, `%requirement` or `%eval` that names no object and whose
   condition both carry says so and names both (`Demo::car, #3`) rather than answering about the
   new one — the elements of a multi-valued part among the carriers, each by its index
-  (`car::wheels[2]`) — and `%state #3` debugs a state machine the session holds by id or path as it does by
-  name. A bad
+  (`car.wheels[2]`) — and `%state #3` debugs a state machine the session holds by id or path as it does by
+  name. A nested object is reported with its features after `.` (`Demo::car.fl`, `#3.wheels[2]`), which
+  typed back reaches that object even when the `::` spelling names a declaration of its own. A bad
   reference is reported in the same words by every command: an unknown id lists the ids there
   are, a segment that is no feature names the object and its features, an attribute at the end
   of a path says it holds a value, and a multi-valued part with no index says how many objects it

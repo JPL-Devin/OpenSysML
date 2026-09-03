@@ -71,7 +71,7 @@ func TestInstantiateTwiceKeepsFirstObjectByID(t *testing.T) {
 
 	// Each object has its own nested parts, reached through its own root.
 	fl := run(t, s, "%features "+firstID+".fl")
-	wants(t, fl, "Instance: "+firstID+"::fl")
+	wants(t, fl, "Instance: "+firstID+".fl")
 	rejects(t, fl, "error")
 }
 
@@ -106,23 +106,23 @@ func TestDottedPathsReachNestedObjects(t *testing.T) {
 	id := fmt.Sprintf("#%d", car.ID)
 
 	byName := run(t, s, "%features car.fl")
-	wants(t, byName, "Instance: Garage::car::fl (ID:", "radius = 0.3")
-	wants(t, run(t, s, "%features Garage::car.fl"), "Instance: Garage::car::fl (ID:")
-	wants(t, run(t, s, "%features Garage::car::fl"), "Instance: Garage::car::fl (ID:")
-	wants(t, run(t, s, "%features car.fl.hub"), "Instance: Garage::car::fl::hub (ID:", "bolts = 5")
-	wants(t, run(t, s, "%features "+id+".fl.hub"), "Instance: "+id+"::fl::hub (ID:", "bolts = 5")
-	wants(t, run(t, s, "%features "+id+"::fl"), "Instance: "+id+"::fl (ID:")
+	wants(t, byName, "Instance: Garage::car.fl (ID:", "radius = 0.3")
+	wants(t, run(t, s, "%features Garage::car.fl"), "Instance: Garage::car.fl (ID:")
+	wants(t, run(t, s, "%features Garage::car::fl"), "Instance: Garage::car.fl (ID:")
+	wants(t, run(t, s, "%features car.fl.hub"), "Instance: Garage::car.fl.hub (ID:", "bolts = 5")
+	wants(t, run(t, s, "%features "+id+".fl.hub"), "Instance: "+id+".fl.hub (ID:", "bolts = 5")
+	wants(t, run(t, s, "%features "+id+"::fl"), "Instance: "+id+".fl (ID:")
 
 	// The nested object's own id reaches it too, and reads the same values.
 	flLine := strings.SplitN(byName, "\n", 2)[0]
 	var flID int64
-	if _, err := fmt.Sscanf(flLine, "Instance: Garage::car::fl (ID: %d)", &flID); err != nil {
+	if _, err := fmt.Sscanf(flLine, "Instance: Garage::car.fl (ID: %d)", &flID); err != nil {
 		t.Fatalf("no id in %q: %v", flLine, err)
 	}
 	wants(t, run(t, s, fmt.Sprintf("%%features #%d", flID)), "radius = 0.3")
 	wants(t, run(t, s, fmt.Sprintf("%%eval in #%d : radius", flID)), "0.3")
-	wants(t, run(t, s, "%eval in car.fl : radius * 2.0"), "0.6", "(on Garage::car::fl ID:")
-	wants(t, run(t, s, "%eval in "+id+".fl.hub : bolts"), "5", "(on "+id+"::fl::hub ID:")
+	wants(t, run(t, s, "%eval in car.fl : radius * 2.0"), "0.6", "(on Garage::car.fl ID:")
+	wants(t, run(t, s, "%eval in "+id+".fl.hub : bolts"), "5", "(on "+id+".fl.hub ID:")
 }
 
 // A segment after `.` is a feature of the object before it, even when the same
@@ -136,10 +136,10 @@ func TestDotWalksFeaturesNotDeclarations(t *testing.T) {
 	// Garage::car::fl resolves as the declaration Garage::Car::fl, so the `::`
 	// spelling reaches the object created under it; the `.` spelling walks car.
 	wants(t, run(t, s, "%features Garage::car::fl"), "Instance: Garage::Car::fl (ID: 1)")
-	wants(t, run(t, s, "%features Garage::car.fl"), "Instance: Garage::car::fl (ID: 4)")
-	wants(t, run(t, s, "%features car.fl"), "Instance: Garage::car::fl (ID: 4)")
-	wants(t, run(t, s, "%eval in Garage::car.fl : radius"), "(on Garage::car::fl ID: 4)")
-	wants(t, run(t, s, "%features #2.fl"), "Instance: #2::fl (ID: 4)")
+	wants(t, run(t, s, "%features Garage::car.fl"), "Instance: Garage::car.fl (ID: 4)")
+	wants(t, run(t, s, "%features car.fl"), "Instance: Garage::car.fl (ID: 4)")
+	wants(t, run(t, s, "%eval in Garage::car.fl : radius"), "(on Garage::car.fl ID: 4)")
+	wants(t, run(t, s, "%features #2.fl"), "Instance: #2.fl (ID: 4)")
 
 	wants(t, run(t, s, "%features Garage.car"), `error: "Garage.car" is not an object reference: Garage is a package, not an object: its member is written Garage::car`)
 	wants(t, run(t, s, "%features Garage.car.fl"), `error: "Garage.car.fl" is not an object reference: Garage is a package, not an object: its member is written Garage::car`)
@@ -154,9 +154,9 @@ func TestMultiValuedFeatureNeedsIndex(t *testing.T) {
 	run(t, s, "%instantiate car")
 
 	wants(t, run(t, s, "%features car.wheels"), "error:", "wheels of Garage::car holds 2 objects: pick one by index, wheels[1] to wheels[2]")
-	wants(t, run(t, s, "%features car.wheels[1]"), "Instance: Garage::car::wheels[1] (ID:", "radius = 0.3")
-	wants(t, run(t, s, "%features car.wheels[2].hub"), "Instance: Garage::car::wheels[2]::hub (ID:", "bolts = 5")
-	wants(t, run(t, s, "%features Garage::car::wheels[2]"), "Instance: Garage::car::wheels[2] (ID:")
+	wants(t, run(t, s, "%features car.wheels[1]"), "Instance: Garage::car.wheels[1] (ID:", "radius = 0.3")
+	wants(t, run(t, s, "%features car.wheels[2].hub"), "Instance: Garage::car.wheels[2].hub (ID:", "bolts = 5")
+	wants(t, run(t, s, "%features Garage::car::wheels[2]"), "Instance: Garage::car.wheels[2] (ID:")
 	wants(t, run(t, s, "%features car.wheels[3]"), "error:", "wheels of Garage::car holds 2 objects, so wheels[3] names none (indexes run from 1 to 2)")
 	wants(t, run(t, s, "%features car.wheels[0]"), "error:", "wheels[0] is not an index: elements are counted from 1")
 	wants(t, run(t, s, "%features car.fl[1]"), "error:", "fl of Garage::car holds one value and takes no index: write fl, not fl[1]")
@@ -183,7 +183,7 @@ func TestObjectReferenceErrors(t *testing.T) {
 	run(t, s, "%features car.fl")
 	wants(t, run(t, s, "%features #999"), fmt.Sprintf("error: no object has id #999 (the objects are #%d, #", car.ID))
 	wants(t, run(t, s, "%features car.nope"), "error: Garage::car has no feature \"nope\" (its features are fl, mass, wheels)")
-	wants(t, run(t, s, "%features car.fl.hub.bolts"), "error: bolts of Garage::car::fl::hub holds a value (5), not an object")
+	wants(t, run(t, s, "%features car.fl.hub.bolts"), "error: bolts of Garage::car.fl.hub holds a value (5), not an object")
 	wants(t, run(t, s, "%features car.mass"), "error: mass of Garage::car holds a value (1500.0), not an object")
 	wants(t, run(t, s, "%features #"), "error:", "an object id is written #<id>")
 	wants(t, run(t, s, "%features #0"), "error:", "#0 is not an object id (ids count up from 1)")
@@ -301,11 +301,47 @@ func TestDebuggerFollowsDisplacedObject(t *testing.T) {
 		rack := objectIDIn(t, run(t, s, "%instantiate Rack"))
 		wants(t, run(t, s, "%action tally Rack.holder"), "Started action executor")
 		run(t, s, "%instantiate Rack")
-		if got, want := s.actionExec.selfFQN, "#"+rack+"::holder"; got != want {
+		if got, want := s.actionExec.selfFQN, "#"+rack+".holder"; got != want {
 			t.Fatalf("performer label after displacement = %q, want %s", got, want)
 		}
 		s.Submit("package Other { part def Unrelated; }")
 		wants(t, run(t, s, "%step"), "State:")
+	})
+
+	// The nested object's label reads back as it, not as the object created under
+	// the declaration Rack::holder, so the debugger neither starts on that one nor
+	// switches to it when the rack's name is displaced.
+	t.Run("nested object beside its declaration's own object", func(t *testing.T) {
+		s := NewSession()
+		s.Submit("part def Holder { attribute size = 1.0; }\npart def Rack { part holder : Holder; }")
+		s.Submit("action tally {\n\tattribute total = 0;\n\tfirst start;\n\tthen done;\n}")
+		run(t, s, "%instantiate Rack::holder")
+		rack := objectIDIn(t, run(t, s, "%instantiate Rack"))
+		nested, _, err := s.resolveObject("#" + rack + ".holder")
+		if err != nil {
+			t.Fatal(err)
+		}
+		performer := func(when string) {
+			held, ok := s.heldObject(s.actionExec.selfFQN)
+			if !ok || held != nested {
+				t.Fatalf("%s, label %q does not reach the nested object #%d", when, s.actionExec.selfFQN, nested.ID)
+			}
+		}
+		wants(t, run(t, s, "%action tally Rack.holder"), "Started action executor")
+		if got, want := s.actionExec.selfFQN, "Rack.holder"; got != want {
+			t.Fatalf("performer label = %q, want %s", got, want)
+		}
+		performer("at start")
+		run(t, s, "%instantiate Rack")
+		if got, want := s.actionExec.selfFQN, "#"+rack+".holder"; got != want {
+			t.Fatalf("performer label after displacement = %q, want %s", got, want)
+		}
+		performer("after displacement")
+		s.Submit("package Other { part def Unrelated; }")
+		wants(t, run(t, s, "%step"), "State:")
+		performer("after carry-over")
+		s.Submit("part def Rack { part holder : Holder; attribute slots = 2; }")
+		wants(t, run(t, s, "%step"), "no active action session", "the object #"+rack+".holder performing it was dropped")
 	})
 }
 
@@ -537,11 +573,11 @@ func TestStructuredAttributesAreObjects(t *testing.T) {
 		}
 	}
 	check("before materialization")
-	wants(t, run(t, s, "%features wheel.center"), "Instance: Geo::wheel::center", "x = 1.0", "y = 2.0")
+	wants(t, run(t, s, "%features wheel.center"), "Instance: Geo::wheel.center", "x = 1.0", "y = 2.0")
 	wants(t, run(t, s, "%eval in wheel.center : x"), "= 1.0")
 	wants(t, run(t, s, "%eval in wheel::center : y"), "= 2.0")
 	wants(t, run(t, s, "%features wheel.radius"), "error:", "radius of Geo::wheel holds a value (0.3), not an object")
-	wants(t, run(t, s, "%features wheel.center.x"), "error:", "x of Geo::wheel::center holds a value (1.0), not an object")
+	wants(t, run(t, s, "%features wheel.center.x"), "error:", "x of Geo::wheel.center holds a value (1.0), not an object")
 	check("after materialization")
 	id := objectIDIn(t, run(t, s, "%features wheel.center"))
 	wants(t, run(t, s, "%features #"+id), "Instance: #"+id+" (ID: "+id+")", "x = 1.0")
@@ -710,7 +746,7 @@ func TestDisplacedObjectsCarryImplicitSubjects(t *testing.T) {
 		rack := objectIDIn(t, run(t, s, "%instantiate rack"))
 		run(t, s, "%instantiate rack")
 		wants(t, run(t, s, "%eval Lab::Sensor::reading"),
-			"carried by more than one object of this session (Lab::rack::gauge, #"+rack+"::gauge)")
+			"carried by more than one object of this session (Lab::rack.gauge, #"+rack+".gauge)")
 	})
 }
 
@@ -732,7 +768,7 @@ func TestCollectionElementsCarryImplicitSubjects(t *testing.T) {
 		s := submitted(t, garage)
 		cart := objectIDIn(t, run(t, s, "%instantiate cart"))
 		out := run(t, s, "%constraint Garage::Wheel::inflated")
-		wants(t, out, "passed (on Garage::cart::wheel[1] ID: ")
+		wants(t, out, "passed (on Garage::cart.wheel[1] ID: ")
 		rejects(t, out, "ID: "+cart+")")
 		wants(t, run(t, s, "%eval Garage::Wheel::psi"), "32.0")
 	})
@@ -740,7 +776,7 @@ func TestCollectionElementsCarryImplicitSubjects(t *testing.T) {
 	t.Run("several elements", func(t *testing.T) {
 		s := submitted(t, garage)
 		run(t, s, "%instantiate car")
-		both := "carried by more than one object of this session (Garage::car::wheels[1], Garage::car::wheels[2])"
+		both := "carried by more than one object of this session (Garage::car.wheels[1], Garage::car.wheels[2])"
 		wants(t, run(t, s, "%constraint Garage::Wheel::inflated"), "error:", both)
 		wants(t, run(t, s, "%eval Garage::Wheel::psi"), "error:", both)
 		wants(t, run(t, s, "%eval in car.wheels[2] : psi"), "32.0")
@@ -751,7 +787,7 @@ func TestCollectionElementsCarryImplicitSubjects(t *testing.T) {
 		car := objectIDIn(t, run(t, s, "%instantiate car"))
 		run(t, s, "%instantiate car")
 		wants(t, run(t, s, "%eval Garage::Wheel::psi"),
-			"carried by more than one object of this session (Garage::car::wheels[1], Garage::car::wheels[2], #"+car+"::wheels[1], #"+car+"::wheels[2])")
+			"carried by more than one object of this session (Garage::car.wheels[1], Garage::car.wheels[2], #"+car+".wheels[1], #"+car+".wheels[2])")
 	})
 }
 
@@ -817,8 +853,8 @@ func TestReservedLookingNamesStayNames(t *testing.T) {
 		wants(t, run(t, s, "%features '#3'"), "Instance: Odd::'#3' (ID: 1)")
 		wants(t, run(t, s, "%features #1"), "Instance: #1 (ID: 1)")
 		wants(t, run(t, s, "%features #3"), "Instance: #3 (ID: 3)")
-		wants(t, run(t, s, "%features '#3'.'#7'"), "Instance: Odd::'#3'::'#7' (ID: ", "bolts = 5")
-		wants(t, run(t, s, "%features '#3'::'hub[2]'"), "Instance: Odd::'#3'::'hub[2]' (ID: ", "bolts = 5")
+		wants(t, run(t, s, "%features '#3'.'#7'"), "Instance: Odd::'#3'.'#7' (ID: ", "bolts = 5")
+		wants(t, run(t, s, "%features '#3'::'hub[2]'"), "Instance: Odd::'#3'.'hub[2]' (ID: ", "bolts = 5")
 		wants(t, run(t, s, "%features '#3'.hub[2]"), "error:", `Odd::'#3' has no feature "hub"`)
 		if got := s.Complete("%features '#3'.", len("%features '#3'.")).Candidates; fmt.Sprint(got) != "['#3'.'#7' '#3'.'hub[2]']" {
 			t.Errorf("completion offered %v", got)
@@ -826,10 +862,10 @@ func TestReservedLookingNamesStayNames(t *testing.T) {
 		wants(t, run(t, s, "%instantiate 'car[2]'"), "Created instance of Odd::'car[2]'")
 		wants(t, run(t, s, "%features 'car[2]'"), "Instance: Odd::'car[2]' (ID: ")
 		wants(t, run(t, s, "%features car[2]"), "error:", "car[2] takes no index")
-		wants(t, run(t, s, "%eval in 'car[2]'.'hub[2]' : bolts"), "= 5", "(on Odd::'car[2]'::'hub[2]' ID: ")
+		wants(t, run(t, s, "%eval in 'car[2]'.'hub[2]' : bolts"), "= 5", "(on Odd::'car[2]'.'hub[2]' ID: ")
 
 		out := run(t, s, "%eval Odd::Hub::bolts")
-		wants(t, out, "error:", "carried by more than one object of this session (Odd::'#3'::'#7', Odd::'#3'::'hub[2]', Odd::'car[2]'::'#7', Odd::'car[2]'::'hub[2]')")
+		wants(t, out, "error:", "carried by more than one object of this session (Odd::'#3'.'#7', Odd::'#3'.'hub[2]', Odd::'car[2]'.'#7', Odd::'car[2]'.'hub[2]')")
 		eachResolves(t, s, carriersIn(t, out))
 	})
 
@@ -840,12 +876,12 @@ func TestReservedLookingNamesStayNames(t *testing.T) {
 		wants(t, run(t, s, "%features #1"), "Instance: #1 (ID: 1)")
 		rejects(t, run(t, s, "%features '#3'"), "(ID: 1)")
 		wants(t, run(t, s, "%instantiate cart"), "Created instance of Odd::cart")
-		wants(t, run(t, s, "%features cart.'wheel[2]'[1]"), "Instance: Odd::cart::'wheel[2]'[1] (ID: ")
+		wants(t, run(t, s, "%features cart.'wheel[2]'[1]"), "Instance: Odd::cart.'wheel[2]'[1] (ID: ")
 		wants(t, run(t, s, "%features cart.'wheel[2]'"), "error:", "'wheel[2]' of Odd::cart holds 1 object: pick one by index, 'wheel[2]'[1] to 'wheel[2]'[1]")
-		wants(t, run(t, s, "%features cart.'wheel[2]'[1].'#7'"), "Instance: Odd::cart::'wheel[2]'[1]::'#7' (ID: ")
+		wants(t, run(t, s, "%features cart.'wheel[2]'[1].'#7'"), "Instance: Odd::cart.'wheel[2]'[1].'#7' (ID: ")
 
 		out := run(t, s, "%constraint Odd::Hub::tight")
-		wants(t, out, "error:", "(Odd::'#3'::'#7', Odd::'#3'::'hub[2]', Odd::cart::'wheel[2]'[1]::'#7', Odd::cart::'wheel[2]'[1]::'hub[2]', #1::'#7', #1::'hub[2]')")
+		wants(t, out, "error:", "(Odd::'#3'.'#7', Odd::'#3'.'hub[2]', Odd::cart.'wheel[2]'[1].'#7', Odd::cart.'wheel[2]'[1].'hub[2]', #1.'#7', #1.'hub[2]')")
 		eachResolves(t, s, carriersIn(t, out))
 	})
 

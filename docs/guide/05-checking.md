@@ -5,7 +5,7 @@ A constraint declared on a definition is checked against the object that carries
 instantiate the definition first if you want a verdict about a concrete value rather than a
 default. When several objects the session holds carry it — two `%instantiate`s of one name leave
 the first object reachable as `#<id>`, and a multi-valued part holds one carrier per element — the
-check names them (`car::wheels[1]`, `car::wheels[2]`, `#1::wheels[1]`, …) and asks you to pick one,
+check names them (`car.wheels[1]`, `car.wheels[2]`, `#1.wheels[1]`, …) and asks you to pick one,
 with `%eval in car.wheels[2] : ...` or `%eval in #1 : ...`.
 
 ## Expressions
@@ -72,7 +72,7 @@ The nested engine is an object of its own. Reach it by a path from the object th
 by the id it was given, and read a value from it the same way:
 ```sysml
 sysml> %features Car.engine
-Instance: Car::engine (ID: 2)
+Instance: Car.engine (ID: 2)
 Features:
   power = 250.0
 

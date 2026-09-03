@@ -80,10 +80,12 @@ An object reference names one object the session holds. It is one of:
 
 Reading a path materializes the nested objects it passes through, exactly as `%features car` does.
 
-A command reports an object under the reference that reaches it — `Demo::car::fl`, `#3::wheels[2]` —
-with every name spelled as the notation writes it, so what is printed can be typed back. A declared
-name that only looks like an id or an index is quoted (`Demo::'#3'`, `car::'hub[2]'`), where a generated
-id or index is not; `#3` is always an id and `[2]` always an index.
+A command reports an object under the reference that reaches it — `Demo::car.fl`, `#3.wheels[2]` —
+with every name spelled as the notation writes it, so what is printed can be typed back and reaches
+the same object: walked features are written after `.`, which is only ever a feature, even where the
+`::` spelling would name a declaration an object was created under. A declared name that only looks
+like an id or an index is quoted (`Demo::'#3'`, `car.'hub[2]'`), where a generated id or index is not;
+`#3` is always an id and `[2]` always an index.
 
 Every command reports a bad reference in the same words:
 

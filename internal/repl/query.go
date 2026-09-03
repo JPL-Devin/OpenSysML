@@ -3,7 +3,9 @@ package repl
 import (
 	"errors"
 	"fmt"
+	"strings"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -288,7 +290,18 @@ func (s *Session) reportedSubject(result runtime.CheckResult, inst *runtime.Inst
 	if result.SubjectPath == "" {
 		return result.Subject, root
 	}
-	return result.Subject, root + "::" + notationName(result.SubjectPath)
+	return result.Subject, root + featurePath(result.SubjectPath)
+}
+
+// featurePath spells a `::`-joined run of walked feature names as a label's
+// tail, each after a `.`: `engine::mount` → `.engine.mount`.
+func featurePath(path string) string {
+	var out strings.Builder
+	for _, name := range strings.Split(path, "::") {
+		out.WriteString(".")
+		out.WriteString(lexer.NameText(name))
+	}
+	return out.String()
 }
 
 // instanceName is the label the session holds inst under — its name as the
