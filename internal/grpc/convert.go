@@ -976,11 +976,15 @@ func instanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.I
 		}
 
 		// Check multiplicity to determine single- vs multi-valued
-		mult := fv.Feature.Multiplicity
-		if !mult.Upper.Infinite && mult.Upper.Value <= 1 {
+		if fv.Feature.Scalar() {
 			// Single-valued. An unmaterialized one holds no value; marshalling it
-			// anyway would report the empty value as an unsupported null.
-			if fv.Materialized {
+			// anyway would report the empty value as an unsupported null. A
+			// materialized one holding nothing is unset, as every surface reads it.
+			switch {
+			case !fv.Materialized:
+			case fv.Value.Kind == runtime.ValInvalid:
+				pbValue.Value = &pb.Value{Kind: &pb.Value_Unset{Unset: true}}
+			default:
 				pbValue.Value = ValueToProtoIn(rt, fv.Value, idx)
 			}
 		} else {
