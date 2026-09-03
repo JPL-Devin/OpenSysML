@@ -1,0 +1,5 @@
+{
+  "libraries": true,
+  "type": "calc",
+  "error": "arithmetic domain error: function IntegerFunctions::ToNatural: no Natural equals -3"
+}

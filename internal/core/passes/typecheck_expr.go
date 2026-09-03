@@ -734,10 +734,11 @@ func (ec *exprChecker) checkArguments(
 		ec.checkNamedArguments(e, sym, argTypes.named, params, report)
 		return
 	}
+	// Arguments bind in order, so a call must reach the last required parameter.
 	required := 0
-	for _, p := range params {
-		if p.usage.Value == nil {
-			required++
+	for i, p := range params {
+		if p.required(ec.model) {
+			required = i + 1
 		}
 	}
 	switch {
@@ -769,6 +770,7 @@ func (ec *exprChecker) checkNamedArguments(
 	// reports the same call.
 	if e.Operand != nil {
 		report(e.Span(), "%s cannot be called with a receiver and named arguments", sym.Name)
+		return
 	}
 	byName := make(map[string]parameter, len(params))
 	for _, p := range params {
@@ -787,11 +789,11 @@ func (ec *exprChecker) checkNamedArguments(
 			unknown = true
 			continue
 		}
-		bound[name] = true
-		// A name written again later rebinds it; the evaluator keeps the last value.
-		if rebound(e.NamedArgs[i+1:], name) {
+		if bound[name] {
+			report(arg.Value.Span(), "%s binds parameter %q twice", sym.Name, name)
 			continue
 		}
+		bound[name] = true
 		if !ec.argumentFits(arg.Value, namedTypes[i], p) {
 			report(arg.Value.Span(), "argument %s of %s expects %s, found %s",
 				name, sym.Name, ec.parameterPrimType(p), namedTypes[i])
@@ -802,19 +804,10 @@ func (ec *exprChecker) checkNamedArguments(
 		return
 	}
 	for _, p := range params {
-		if p.usage.Value == nil && !bound[p.name()] {
-			report(e.Span(), "%s requires an argument for %s", sym.Name, p.name())
+		if !bound[p.name()] && p.required(ec.model) {
+			report(e.Span(), "%s requires an argument for parameter %s", sym.Name, p.name())
 		}
 	}
-}
-
-func rebound(later []ast.NamedArg, name string) bool {
-	for _, arg := range later {
-		if n, ok := namedArgumentName(arg); ok && n == name {
-			return true
-		}
-	}
-	return false
 }
 
 // parameterPrimType is the scalar type p is declared with, PrimUnknown when none is known.
@@ -939,6 +932,25 @@ func isRequirementDeclaration(decl ast.Node) bool {
 type parameter struct {
 	usage *ast.Usage
 	owner *symbols.Symbol
+	// redefined is the inherited parameter this declaration redefines, whose
+	// default and multiplicity it keeps where it states none (KerML 1.0 §7.3.4.5).
+	redefined *parameter
+}
+
+// required reports whether an invocation must supply the parameter: it has no
+// default, its own or inherited, and its multiplicity admits no omission.
+func (p parameter) required(m *semantics.Model) bool {
+	for q := &p; q != nil; q = q.redefined {
+		if q.usage.Value != nil {
+			return false
+		}
+	}
+	for q := &p; q != nil; q = q.redefined {
+		if q.usage.Multiplicity != nil {
+			return !m.IsOptionalParameter(q.usage)
+		}
+	}
+	return true
 }
 
 // name returns the name the parameter answers to, which a declaration written
@@ -1027,7 +1039,7 @@ func mergeParameters(inherited []parameter, sym *symbols.Symbol) []parameter {
 	merged := make([]parameter, 0, len(declared)+len(inherited))
 	claimed := make([]bool, len(inherited))
 	for position, u := range declared {
-		merged = append(merged, parameter{usage: u, owner: sym})
+		p := parameter{usage: u, owner: sym}
 		i := indexOfRedefined(inherited, u)
 		if i < 0 {
 			i = position
@@ -1036,7 +1048,9 @@ func mergeParameters(inherited []parameter, sym *symbols.Symbol) []parameter {
 		// inherited parameter there stays in the list.
 		if i < len(inherited) && inherited[i].usage.Direction == u.Direction {
 			claimed[i] = true
+			p.redefined = &inherited[i]
 		}
+		merged = append(merged, p)
 	}
 	for i, p := range inherited {
 		if !claimed[i] {

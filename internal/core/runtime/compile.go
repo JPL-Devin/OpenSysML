@@ -411,7 +411,7 @@ func (c *calcCompiler) compileNode(n ast.Node, scope *symbols.Scope, layout *fra
 		}
 		return constNode(intScalar(v)), nil
 	case *ast.LiteralReal:
-		v, err := strconv.ParseFloat(e.Value, 64)
+		v, err := semantics.ParseReal(e.Value)
 		if err != nil {
 			return nil, ineligible(fmt.Sprintf("real literal %s outside the range", e.Value))
 		}
@@ -612,7 +612,7 @@ func callArgumentsOf(n *ast.InvocationExpr) (callArguments, error) {
 }
 
 // slotsFor places the arguments in parameter slots by position or by name; a
-// name written twice binds twice, the later winning, as the evaluator's map does.
+// name written twice is left to the evaluator's report.
 func (a *callArguments) slotsFor(params []string) ([]int, paramSet, error) {
 	slots := make([]int, len(a.exprs))
 	var bound paramSet
@@ -628,6 +628,9 @@ func (a *callArguments) slotsFor(params []string) ([]int, paramSet, error) {
 			}
 			if slot < 0 {
 				return nil, 0, ineligible(fmt.Sprintf("no parameter %q to bind by name", a.names[i]))
+			}
+			if bound.has(slot) {
+				return nil, 0, ineligible(fmt.Sprintf("parameter %q bound by name twice", a.names[i]))
 			}
 		}
 		slots[i] = slot
@@ -673,12 +676,12 @@ func (c *calcCompiler) compileInvocation(n *ast.InvocationExpr, scope *symbols.S
 	switch {
 	case len(target.ambiguous) > 0:
 		return nil, ineligible(fmt.Sprintf("%s is ambiguous", target.qualName))
-	case target.calc == nil && target.library == nil:
-		return nil, ineligible(fmt.Sprintf("%s does not resolve to a calc", target.qualName))
-	case target.calcBuiltin != nil:
-		return c.compileAggregate(c.ctx.qualifiedSymbolName(target.calc), target.calcBuiltin, &args, scope, layout)
+	case target.builtin != nil:
+		return c.compileAggregate(target.builtinName, target.builtin, &args, scope, layout)
 	case target.library != nil:
 		return c.compileLibraryCall(target.library, &args, scope, layout)
+	case target.calc == nil:
+		return nil, ineligible(fmt.Sprintf("%s does not resolve to a calc", target.qualName))
 	case target.shape == nil:
 		return nil, ineligible(fmt.Sprintf("%s is not a calc with a shape", target.qualName))
 	}
@@ -720,13 +723,13 @@ func (c *calcCompiler) compileLibraryCall(fn *libraryFunction, args *callArgumen
 	if !fn.scalar {
 		return nil, ineligible(fmt.Sprintf("library function %s is not over scalars alone", fn.name))
 	}
-	if len(fn.params) > libraryArity || fn.required != len(fn.params) {
+	if len(fn.params) > libraryArity || fn.hasOptional() {
 		return nil, ineligible(fmt.Sprintf("library function %s has optional or many parameters", fn.name))
 	}
 	if len(args.exprs) != len(fn.params) {
 		return nil, ineligible(fmt.Sprintf("%s called with %d arguments for %d parameters", fn.name, len(args.exprs), len(fn.params)))
 	}
-	slots, bound, err := args.slotsFor(fn.params)
+	slots, bound, err := args.slotsFor(fn.paramNames())
 	if err != nil {
 		return nil, ineligible(fmt.Sprintf("%s: %v", fn.name, err))
 	}
@@ -742,7 +745,7 @@ func (c *calcCompiler) compileLibraryCall(fn *libraryFunction, args *callArgumen
 
 // compileAggregate compiles a sum or product of one scalar argument, which the
 // evaluator's built-in aggregates as a one-element collection.
-func (c *calcCompiler) compileAggregate(name string, fn func(*EvalContext, []Value) (Value, error), args *callArguments, scope *symbols.Scope, layout *frameLayout) (*cnode, error) {
+func (c *calcCompiler) compileAggregate(name string, fn builtinFunc, args *callArguments, scope *symbols.Scope, layout *frameLayout) (*cnode, error) {
 	if !scalarAggregates[name] {
 		return nil, ineligible(fmt.Sprintf("collection function %s", name))
 	}

@@ -580,7 +580,7 @@ func (fc *funcCompiler) compileExpr(n ast.Node) (Expr, error) {
 		}
 		return IntLit{Value: v}, nil
 	case *ast.LiteralReal:
-		v, err := strconv.ParseFloat(n.Value, 64)
+		v, err := semantics.ParseReal(n.Value)
 		if err != nil {
 			return nil, fc.unsupported(fmt.Sprintf("literal %s is outside the Real range", n.Value))
 		}
@@ -742,7 +742,7 @@ func (fc *funcCompiler) compileOperator(n *ast.OperatorExpr) (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		if x, err = fc.scalarOperandWith(x, fmt.Sprintf("unary '%s' requires numeric operand, got %%s", n.Operator), true, fmt.Sprintf("'%s'", n.Operator)); err != nil {
+		if x, err = fc.scalarOperandWith(x, fmt.Sprintf("type mismatch: unary '%s' requires numeric operand, got %%s", n.Operator), true, fmt.Sprintf("'%s'", n.Operator)); err != nil {
 			return nil, err
 		}
 		if x.Type() == TypeBool {
@@ -753,7 +753,7 @@ func (fc *funcCompiler) compileOperator(n *ast.OperatorExpr) (Expr, error) {
 		if len(n.Operands) != 1 {
 			return nil, fc.unsupported("a unary operator with two operands")
 		}
-		x, err := fc.compileBool(n.Operands[0], "operand of not", "logical not requires bool operand, got %s")
+		x, err := fc.compileBool(n.Operands[0], "operand of not", "type mismatch: logical not requires bool operand, got %s")
 		if err != nil {
 			return nil, err
 		}
@@ -964,6 +964,9 @@ func (fc *funcCompiler) bindArgs(n *ast.InvocationExpr, callee string, params []
 			i := paramIndex(params, na.Name)
 			if i < 0 {
 				return nil, fc.unsupported(fmt.Sprintf("%s has no parameter %s", callee, qnText(na.Name)))
+			}
+			if bound[i] {
+				return nil, fc.unsupported(fmt.Sprintf("%s binds parameter %s twice", callee, params[i]))
 			}
 			v, err := fc.compileExpr(na.Value)
 			if err != nil {

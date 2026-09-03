@@ -33,7 +33,4 @@ package test {
 		attribute r = Weighted(weight = w, value = v);
 		return : Real = r;
 	}
-
-	// A name bound twice binds the later value, as the evaluator's map of names does.
-	calc def Duplicate { in v : Real; return : Real = Weighted(value = v, value = 2.0); }
 }

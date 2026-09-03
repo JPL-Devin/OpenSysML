@@ -201,12 +201,6 @@ package Compiled {
 		return : Integer = Arith(b = b + b, a = a % a);
 	}
 
-	calc def NamedTwice {
-		in a : Integer;
-		in b : Integer;
-		return : Integer = Arith(a = a % a, b = 1, a = b + b, b = a);
-	}
-
 	calc def OrderArgs {
 		in a : Integer;
 		in b : Integer;

@@ -30,7 +30,7 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("calc_call_typed_parameter_beats_untyped", testCalcCallTypedParameterBeatsUntyped)
 	t.Run("calc_call_explicit_anything_ties_with_untyped", testCalcCallExplicitAnythingTiesWithUntyped)
 	t.Run("calc_call_crossed_specificity_is_ambiguous", testCalcCallCrossedSpecificityIsAmbiguous)
-	t.Run("calc_call_repeated_named_argument_binds_last", testCalcCallRepeatedNamedArgumentBindsLast)
+	t.Run("calc_call_repeated_named_argument_is_refused", testCalcCallRepeatedNamedArgumentIsRefused)
 	t.Run("calc_call_selects_among_owned_inherited_and_recursive_import", testCalcCallSelectsAmongOwnedInheritedAndRecursiveImport)
 	t.Run("calc_call_selects_among_inherited_imports", testCalcCallSelectsAmongInheritedImports)
 	t.Run("calc_call_selects_by_collection_literal_element_type", testCalcCallSelectsByCollectionLiteralElementType)
@@ -786,9 +786,9 @@ func testCalcCallCrossedSpecificityIsAmbiguous(t *testing.T) {
 	}
 }
 
-// A named argument written twice binds its last value, so the overload that
-// value fits is the one run.
-func testCalcCallRepeatedNamedArgumentBindsLast(t *testing.T) {
+// A named argument written twice is refused among several candidates as it is for
+// one, naming the parameter, rather than binding the later value.
+func testCalcCallRepeatedNamedArgumentIsRefused(t *testing.T) {
 	src := `
 		package A { private import ScalarValues::*; calc def pick { in x : Integer; return : Integer = 1; } }
 		package B { private import ScalarValues::*; calc def pick { in x : String; return : Integer = 2; } }
@@ -796,25 +796,19 @@ func testCalcCallRepeatedNamedArgumentBindsLast(t *testing.T) {
 			private import ScalarValues::*;
 			private import A::*;
 			private import B::*;
-			calc lastStr { in i : Integer; in s : String; pick(x = i, x = s) }
-			calc lastInt { in i : Integer; in s : String; pick(x = s, x = i) }
+			calc twice { in i : Integer; in s : String; pick(x = i, x = s) }
 		}
 	`
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
 	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "twice", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("twice calc not found")
+	}
 	intArg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}
-	for calc, want := range map[string]int64{"lastStr": 2, "lastInt": 1} {
-		sym := findSymbolByName(rootScope, calc, ast.DefCalc)
-		if sym == nil {
-			t.Fatalf("%s calc not found", calc)
-		}
-		result, err := ctx.InvokeCalc(sym, []Value{intArg, NewStringValue("s")}, rootScope)
-		if err != nil {
-			t.Fatalf("%s: %v", calc, err)
-		}
-		if result.Kind != ValConst || result.Const.Int != want {
-			t.Fatalf("%s = %+v, want %d", calc, result, want)
-		}
+	_, err := ctx.InvokeCalc(sym, []Value{intArg, NewStringValue("s")}, rootScope)
+	if !errors.Is(err, ErrCalcArity) || !strings.Contains(err.Error(), `binds parameter "x" twice`) {
+		t.Fatalf("twice = %v, want ErrCalcArity naming x", err)
 	}
 }
 
