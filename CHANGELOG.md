@@ -188,6 +188,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   index or a `LiteralInteger`, `xsd:decimal`, `owl:real`, `xsd:double` or `xsd:float` for a
   `LiteralRational`. The text is checked against the datatype's lexical space too, so
   `"false"^^xsd:int` or `"yes"^^xsd:boolean` is refused rather than read as the text it spells.
+  A `sysx:` index that is negative or too large for `int` is refused too, where it was read as 0
+  and moved its member to the front, and so is a subject stating a single-valued `sysx:`
+  property twice (a body with two `sysx:resultExpression`s), where the first was kept and the
+  rest dropped.
 - **A result expression rebuilt from its graph is spelled as the grammar requires.** A
   `sysml:LiteralString` whose value holds a quote, a backslash or a line break is written back
   as the escaped string token; a `LiteralRational` value is written as a real token (`"3"^^xsd:decimal`

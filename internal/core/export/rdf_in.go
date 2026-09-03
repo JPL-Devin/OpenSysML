@@ -2,6 +2,7 @@ package export
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"slices"
 	"sort"
@@ -70,6 +71,9 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 		return nil, err
 	}
 	if err := checkLiterals(graph); err != nil {
+		return nil, err
+	}
+	if err := checkCardinality(graph); err != nil {
 		return nil, err
 	}
 	d := &decoder{
@@ -146,8 +150,70 @@ func checkLiterals(graph *rdf.Graph) error {
 				return literalError(triple, fmt.Sprintf("%q is outside the value space of xsd:int, -2147483648 to 2147483647", object.Value))
 			}
 		}
+		if isIndexProperty(triple.Predicate.Value) {
+			if n, err := strconv.ParseInt(object.Value, 10, strconv.IntSize); err != nil || n < 0 {
+				return literalError(triple, fmt.Sprintf("an index is a position counted from 0 up to %d, and %s is not one this tool can order by", math.MaxInt, object.Value))
+			}
+		}
 	}
 	return nil
+}
+
+// singleValuedProperties are the sysx: properties a subject states at most
+// once: the decoder reads one value, so a second would be dropped unread.
+var singleValuedProperties = []string{
+	xArgumentIndex, xArgumentName, xAssignOperator, xBranch, xBranchKind, xCollection,
+	xCondition, xDeclaredKeyword, xDeclaredPrefix, xEndForm, xEndIndex, xEndRole, xEndVerb,
+	xExpression, xFilter, xGuard, xHasBody, xIsConstructor, xLoopVariable, xMemberIndex,
+	xOrg, xPayload, xProjectID, xPseudostateKind, xReceiver, xResultExpression, xSourceMember,
+	xSourceText, xSubactionKind, xTarget, xTargetMember, xTransitionSyntax, xTrigger,
+	xTriggerKeyword, xTypeArgument, xUntilCondition, xWhileCondition,
+}
+
+// checkCardinality refuses a subject stating a single-valued property twice
+// with different objects, since only one of them could be written.
+func checkCardinality(graph *rdf.Graph) error {
+	for _, subject := range graph.Subjects() {
+		for _, name := range singleValuedProperties {
+			objects := graph.Objects(subject, rdf.OpenSysML+name)
+			for _, object := range objects[min(1, len(objects)):] {
+				if object != objects[0] {
+					return &UnsupportedError{
+						What: fmt.Sprintf("the subject <%s>", subject.Value),
+						Note: fmt.Sprintf("it states sysx:%s twice, as %s and %s, and the property holds one value, so one of them would be dropped",
+							name, termText(objects[0]), termText(object)),
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func isIndexProperty(iri string) bool {
+	if !strings.HasPrefix(iri, rdf.OpenSysML) {
+		return false
+	}
+	switch rdf.LocalName(iri) {
+	case xMemberIndex, xArgumentIndex, xEndIndex:
+		return true
+	}
+	return false
+}
+
+// termText spells a term as Turtle does, for a diagnostic.
+func termText(term rdf.Term) string {
+	if term.IsIRI() {
+		return "<" + term.Value + ">"
+	}
+	literal := rdf.String(term.Value).String()
+	switch {
+	case term.Lang != "":
+		return literal + "@" + term.Lang
+	case term.Datatype != "":
+		return literal + "^^" + curie(term.Datatype)
+	}
+	return literal
 }
 
 // Lexical spaces per XML Schema Part 2 §3.3; owl:real, which defines none,
@@ -177,15 +243,8 @@ func inLexicalSpace(datatype, value string) bool {
 }
 
 func literalError(triple rdf.Triple, why string) error {
-	literal := rdf.String(triple.Object.Value).String()
-	switch {
-	case triple.Object.Lang != "":
-		literal += "@" + triple.Object.Lang
-	case triple.Object.Datatype != "":
-		literal += "^^" + curie(triple.Object.Datatype)
-	}
 	return &UnsupportedError{
-		What: fmt.Sprintf("the literal %s stated by <%s> %s", literal, triple.Subject.Value, curie(triple.Predicate.Value)),
+		What: fmt.Sprintf("the literal %s stated by <%s> %s", termText(triple.Object), triple.Subject.Value, curie(triple.Predicate.Value)),
 		Note: why,
 	}
 }
@@ -214,7 +273,7 @@ func literalDatatypes(metaclass, predicate string) []string {
 		}
 	}
 	switch {
-	case name == xMemberIndex, name == xArgumentIndex, name == xEndIndex:
+	case isIndexProperty(predicate):
 		return integerLiterals
 	case strings.HasPrefix(name, "is"), name == xHasBody, name == xDeclaredID:
 		return booleanLiterals

@@ -2,9 +2,11 @@ package export_test
 
 import (
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -350,6 +352,73 @@ func TestIntegerLiteralsAtTheBoundsAreRead(t *testing.T) {
 		}
 		if !strings.Contains(string(back), want) {
 			t.Errorf("for %s the notation lacks %q:\n%s", to, want, back)
+		}
+	}
+}
+
+// An index orders members, so a graph may state one as large as int holds and
+// the member sorts by it; one int cannot hold, or a negative one, is refused
+// rather than read as 0 and moved to the front.
+func TestIndexesOutsideIntAreRefused(t *testing.T) {
+	turtle := string(convertFixture(t, "result_expressions"))
+	const from = `sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Results ;
+    sysml:owner elmt:Results ;
+    sysml:owningRelationship elmt:Results__Real_om ;`
+	if !strings.Contains(turtle, from) {
+		t.Fatalf("expected %q in the graph:\n%s", from, turtle)
+	}
+	largest := strconv.Itoa(math.MaxInt)
+	back, err := export.Convert("m.ttl", []byte(strings.Replace(turtle, from, strings.Replace(from, `"0"`, `"`+largest+`"`, 1), 1)), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation with the largest index: %v", err)
+	}
+	if real, rover := strings.Index(string(back), "attribute def Real;"), strings.Index(string(back), "part rover"); real < rover {
+		t.Errorf("attribute def Real at index %s should be written after every other member:\n%s", largest, back)
+	}
+	for _, index := range []string{largest + "0", "-1"} {
+		_, err := export.Convert("m.ttl", []byte(strings.Replace(turtle, from, strings.Replace(from, `"0"`, `"`+index+`"`, 1), 1)), export.FormatTurtle, export.FormatSysML)
+		var unsupported *export.UnsupportedError
+		if !errors.As(err, &unsupported) {
+			t.Fatalf("want an UnsupportedError for the index %s, got %v", index, err)
+		}
+		if !strings.Contains(err.Error(), "sysx:memberIndex") || !strings.Contains(err.Error(), "an index is a position") {
+			t.Errorf("for the index %s:\n got %v", index, err)
+		}
+	}
+}
+
+// A body has one result and a subject one index, so a graph stating a second
+// is refused by name rather than the first being kept and the rest dropped.
+func TestRepeatedSingleValuedPropertiesAreRefused(t *testing.T) {
+	for _, tc := range []struct{ from, to, want string }{
+		{
+			`sysx:resultExpression expr:Results__Body___401_presult .`,
+			`sysx:resultExpression expr:Results__Body___401_presult , expr:Results__Quoted___401_presult .`,
+			"it states sysx:resultExpression twice, as <urn:opensysml:expr:Results__Body___401_presult> and <urn:opensysml:expr:Results__Quoted___401_presult>",
+		},
+		{
+			`sysx:memberIndex "0"^^xsd:integer ;`,
+			`sysx:memberIndex "0"^^xsd:integer , "1"^^xsd:integer ;`,
+			`it states sysx:memberIndex twice, as "0"^^xsd:integer and "1"^^xsd:integer`,
+		},
+		{
+			`sysx:hasBody "true"^^xsd:boolean ;`,
+			`sysx:hasBody "true"^^xsd:boolean , "false"^^xsd:boolean ;`,
+			`it states sysx:hasBody twice, as "true"^^xsd:boolean and "false"^^xsd:boolean`,
+		},
+	} {
+		turtle := string(convertFixture(t, "result_expressions"))
+		if !strings.Contains(turtle, tc.from) {
+			t.Fatalf("expected %q in the graph:\n%s", tc.from, turtle)
+		}
+		_, err := export.Convert("m.ttl", []byte(strings.Replace(turtle, tc.from, tc.to, 1)), export.FormatTurtle, export.FormatSysML)
+		var unsupported *export.UnsupportedError
+		if !errors.As(err, &unsupported) {
+			t.Fatalf("want an UnsupportedError for %s, got %v", tc.to, err)
+		}
+		if !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("for %s:\n got %v\nwant %s", tc.to, err, tc.want)
 		}
 	}
 }

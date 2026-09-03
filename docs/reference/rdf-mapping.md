@@ -751,6 +751,14 @@ would be refused as a duplicate.
   term of that datatype, so it is reported rather than read as the text it
   spells, as is an `xsd:int` outside its 32-bit value space. `owl:real`, which
   names no lexical forms of its own, takes a finite `xsd:double`'s
+- a `sysx:` index (`sysx:memberIndex`, `sysx:argumentIndex`, `sysx:endIndex`)
+  that is negative or too large for the platform's `int`: it is a position the
+  writer orders by, and one it cannot hold would otherwise be read as 0 and
+  move the member to the front
+- a subject stating a single-valued `sysx:` property twice with different
+  objects — a body with two `sysx:resultExpression`s, an element with two
+  `sysx:memberIndex`es: only one could be written, so the graph is refused
+  naming both rather than the first being kept
 
 A graph that uses none of OpenSysML's `sysx:` properties (one produced by
 another tool) converts as far as the mapping allows and errors on the first
