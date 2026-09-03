@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -18,7 +19,10 @@ elmt:IrregularLayout
     sysml:ownedMember elmt:IrregularLayout___401, elmt:IrregularLayout__Speed, elmt:IrregularLayout__Wheel, elmt:IrregularLayout__Axle, elmt:IrregularLayout__Rover, elmt:IrregularLayout__Drive, elmt:IrregularLayout__Ops ;
     sysml:ownedMembership elmt:IrregularLayout___401_om, elmt:IrregularLayout__Speed_om, elmt:IrregularLayout__Wheel_om, elmt:IrregularLayout__Axle_om, elmt:IrregularLayout__Rover_om, elmt:IrregularLayout__Drive_om, elmt:IrregularLayout__Ops_om ;
     sysx:sourceText "package IrregularLayout {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedRelationship "[{\"@id\":\"IrregularLayout___400\"},{\"@id\":\"IrregularLayout___401_om\"},{\"@id\":\"IrregularLayout__Speed_om\"},{\"@id\":\"IrregularLayout__Wheel_om\"},{\"@id\":\"IrregularLayout__Axle_om\"},{\"@id\":\"IrregularLayout__Rover_om\"},{\"@id\":\"IrregularLayout__Drive_om\"},{\"@id\":\"IrregularLayout__Ops_om\"}]" ;
+    json:ownedMember "[{\"@id\":\"IrregularLayout___401\"},{\"@id\":\"IrregularLayout__Speed\"},{\"@id\":\"IrregularLayout__Wheel\"},{\"@id\":\"IrregularLayout__Axle\"},{\"@id\":\"IrregularLayout__Rover\"},{\"@id\":\"IrregularLayout__Drive\"},{\"@id\":\"IrregularLayout__Ops\"}]" ;
+    json:ownedMembership "[{\"@id\":\"IrregularLayout___401_om\"},{\"@id\":\"IrregularLayout__Speed_om\"},{\"@id\":\"IrregularLayout__Wheel_om\"},{\"@id\":\"IrregularLayout__Axle_om\"},{\"@id\":\"IrregularLayout__Rover_om\"},{\"@id\":\"IrregularLayout__Drive_om\"},{\"@id\":\"IrregularLayout__Ops_om\"}]" .
 
 elmt:IrregularLayout___400
     a sysml:Import ;
@@ -73,7 +77,12 @@ elmt:IrregularLayout__Speed
     sysml:ownedRelationship elmt:IrregularLayout__Speed__m_om, elmt:IrregularLayout__Speed___401_om ;
     sysml:ownedFeature elmt:IrregularLayout__Speed__m, elmt:IrregularLayout__Speed___401 ;
     sysml:ownedFeatureMembership elmt:IrregularLayout__Speed__m_om, elmt:IrregularLayout__Speed___401_om ;
-    sysx:sourceText "    calc def Speed { in m : Real; return : Real; }\n" .
+    sysx:sourceText "    calc def Speed { in m : Real; return : Real; }\n" ;
+    json:ownedMember "[{\"@id\":\"IrregularLayout__Speed__m\"},{\"@id\":\"IrregularLayout__Speed___401\"}]" ;
+    json:ownedMembership "[{\"@id\":\"IrregularLayout__Speed__m_om\"},{\"@id\":\"IrregularLayout__Speed___401_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"IrregularLayout__Speed__m_om\"},{\"@id\":\"IrregularLayout__Speed___401_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"IrregularLayout__Speed__m\"},{\"@id\":\"IrregularLayout__Speed___401\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"IrregularLayout__Speed__m_om\"},{\"@id\":\"IrregularLayout__Speed___401_om\"}]" .
 
 elmt:IrregularLayout__Speed_om
     a sysml:OwningMembership ;
@@ -202,7 +211,12 @@ elmt:IrregularLayout__Rover
     sysml:ownedFeature elmt:IrregularLayout__Rover__mass, elmt:IrregularLayout__Rover__limit, elmt:IrregularLayout__Rover__label, elmt:IrregularLayout__Rover__tabbed, elmt:IrregularLayout__Rover__wheels, elmt:IrregularLayout__Rover__axle, elmt:IrregularLayout__Rover___407, elmt:IrregularLayout__Rover__bounds, elmt:IrregularLayout__Rover___409, elmt:IrregularLayout__Rover__speed ;
     sysml:ownedFeatureMembership elmt:IrregularLayout__Rover__mass_om, elmt:IrregularLayout__Rover__limit_om, elmt:IrregularLayout__Rover__label_om, elmt:IrregularLayout__Rover__tabbed_om, elmt:IrregularLayout__Rover__wheels_om, elmt:IrregularLayout__Rover__axle_om, elmt:IrregularLayout__Rover___407_om, elmt:IrregularLayout__Rover__bounds_om, elmt:IrregularLayout__Rover___409_om, elmt:IrregularLayout__Rover__speed_om ;
     sysx:sourceText "    part def Rover {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"IrregularLayout__Rover___400\"},{\"@id\":\"IrregularLayout__Rover__mass\"},{\"@id\":\"IrregularLayout__Rover__limit\"},{\"@id\":\"IrregularLayout__Rover__label\"},{\"@id\":\"IrregularLayout__Rover__tabbed\"},{\"@id\":\"IrregularLayout__Rover__wheels\"},{\"@id\":\"IrregularLayout__Rover__axle\"},{\"@id\":\"IrregularLayout__Rover___407\"},{\"@id\":\"IrregularLayout__Rover__bounds\"},{\"@id\":\"IrregularLayout__Rover___409\"},{\"@id\":\"IrregularLayout__Rover__speed\"},{\"@id\":\"IrregularLayout__Rover___4011\"}]" ;
+    json:ownedMembership "[{\"@id\":\"IrregularLayout__Rover___400_om\"},{\"@id\":\"IrregularLayout__Rover__mass_om\"},{\"@id\":\"IrregularLayout__Rover__limit_om\"},{\"@id\":\"IrregularLayout__Rover__label_om\"},{\"@id\":\"IrregularLayout__Rover__tabbed_om\"},{\"@id\":\"IrregularLayout__Rover__wheels_om\"},{\"@id\":\"IrregularLayout__Rover__axle_om\"},{\"@id\":\"IrregularLayout__Rover___407_om\"},{\"@id\":\"IrregularLayout__Rover__bounds_om\"},{\"@id\":\"IrregularLayout__Rover___409_om\"},{\"@id\":\"IrregularLayout__Rover__speed_om\"},{\"@id\":\"IrregularLayout__Rover___4011_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"IrregularLayout__Rover___400_om\"},{\"@id\":\"IrregularLayout__Rover__mass_om\"},{\"@id\":\"IrregularLayout__Rover__limit_om\"},{\"@id\":\"IrregularLayout__Rover__label_om\"},{\"@id\":\"IrregularLayout__Rover__tabbed_om\"},{\"@id\":\"IrregularLayout__Rover__wheels_om\"},{\"@id\":\"IrregularLayout__Rover__axle_om\"},{\"@id\":\"IrregularLayout__Rover___407_om\"},{\"@id\":\"IrregularLayout__Rover__bounds_om\"},{\"@id\":\"IrregularLayout__Rover___409_om\"},{\"@id\":\"IrregularLayout__Rover__speed_om\"},{\"@id\":\"IrregularLayout__Rover___4011_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"IrregularLayout__Rover__mass\"},{\"@id\":\"IrregularLayout__Rover__limit\"},{\"@id\":\"IrregularLayout__Rover__label\"},{\"@id\":\"IrregularLayout__Rover__tabbed\"},{\"@id\":\"IrregularLayout__Rover__wheels\"},{\"@id\":\"IrregularLayout__Rover__axle\"},{\"@id\":\"IrregularLayout__Rover___407\"},{\"@id\":\"IrregularLayout__Rover__bounds\"},{\"@id\":\"IrregularLayout__Rover___409\"},{\"@id\":\"IrregularLayout__Rover__speed\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"IrregularLayout__Rover__mass_om\"},{\"@id\":\"IrregularLayout__Rover__limit_om\"},{\"@id\":\"IrregularLayout__Rover__label_om\"},{\"@id\":\"IrregularLayout__Rover__tabbed_om\"},{\"@id\":\"IrregularLayout__Rover__wheels_om\"},{\"@id\":\"IrregularLayout__Rover__axle_om\"},{\"@id\":\"IrregularLayout__Rover___407_om\"},{\"@id\":\"IrregularLayout__Rover__bounds_om\"},{\"@id\":\"IrregularLayout__Rover___409_om\"},{\"@id\":\"IrregularLayout__Rover__speed_om\"}]" .
 
 elmt:IrregularLayout__Rover_om
     a sysml:OwningMembership ;
@@ -301,7 +315,8 @@ expr:IrregularLayout__Rover__limit_pvalue
     sysx:sourceText "100\n              + 20" ;
     sysml:elementId "IrregularLayout__Rover__limit_pvalue" ;
     sysml:operator "+" ;
-    sysml:argument expr:IrregularLayout__Rover__limit_pvalue_pa0, expr:IrregularLayout__Rover__limit_pvalue_pa1 .
+    sysml:argument expr:IrregularLayout__Rover__limit_pvalue_pa0, expr:IrregularLayout__Rover__limit_pvalue_pa1 ;
+    json:argument "[{\"@id\":\"IrregularLayout__Rover__limit_pvalue_pa0\"},{\"@id\":\"IrregularLayout__Rover__limit_pvalue_pa1\"}]" .
 
 expr:IrregularLayout__Rover__limit_pvalue_pa0
     a sysml:LiteralInteger ;
@@ -537,7 +552,8 @@ expr:IrregularLayout__Rover__bounds___400_pcondition
     sysx:sourceText "mass > 0\n                and\n              mass < limit" ;
     sysml:elementId "IrregularLayout__Rover__bounds___400_pcondition" ;
     sysml:operator "and" ;
-    sysml:argument expr:IrregularLayout__Rover__bounds___400_pcondition_pa0, expr:IrregularLayout__Rover__bounds___400_pcondition_pa1 .
+    sysml:argument expr:IrregularLayout__Rover__bounds___400_pcondition_pa0, expr:IrregularLayout__Rover__bounds___400_pcondition_pa1 ;
+    json:argument "[{\"@id\":\"IrregularLayout__Rover__bounds___400_pcondition_pa0\"},{\"@id\":\"IrregularLayout__Rover__bounds___400_pcondition_pa1\"}]" .
 
 expr:IrregularLayout__Rover__bounds___400_pcondition_pa0
     a sysml:OperatorExpression ;
@@ -545,7 +561,8 @@ expr:IrregularLayout__Rover__bounds___400_pcondition_pa0
     sysml:elementId "IrregularLayout__Rover__bounds___400_pcondition_pa0" ;
     sysml:operator ">" ;
     sysml:argument expr:IrregularLayout__Rover__bounds___400_pcondition_pa0_pa0, expr:IrregularLayout__Rover__bounds___400_pcondition_pa0_pa1 ;
-    sysx:argumentIndex "0"^^xsd:integer .
+    sysx:argumentIndex "0"^^xsd:integer ;
+    json:argument "[{\"@id\":\"IrregularLayout__Rover__bounds___400_pcondition_pa0_pa0\"},{\"@id\":\"IrregularLayout__Rover__bounds___400_pcondition_pa0_pa1\"}]" .
 
 expr:IrregularLayout__Rover__bounds___400_pcondition_pa0_pa0
     a sysml:FeatureReferenceExpression ;
@@ -567,7 +584,8 @@ expr:IrregularLayout__Rover__bounds___400_pcondition_pa1
     sysml:elementId "IrregularLayout__Rover__bounds___400_pcondition_pa1" ;
     sysml:operator "<" ;
     sysml:argument expr:IrregularLayout__Rover__bounds___400_pcondition_pa1_pa0, expr:IrregularLayout__Rover__bounds___400_pcondition_pa1_pa1 ;
-    sysx:argumentIndex "1"^^xsd:integer .
+    sysx:argumentIndex "1"^^xsd:integer ;
+    json:argument "[{\"@id\":\"IrregularLayout__Rover__bounds___400_pcondition_pa1_pa0\"},{\"@id\":\"IrregularLayout__Rover__bounds___400_pcondition_pa1_pa1\"}]" .
 
 expr:IrregularLayout__Rover__bounds___400_pcondition_pa1_pa0
     a sysml:FeatureReferenceExpression ;
@@ -639,7 +657,8 @@ expr:IrregularLayout__Rover___409___400_pcondition
     sysx:sourceText "mass\n                    >\n                0" ;
     sysml:elementId "IrregularLayout__Rover___409___400_pcondition" ;
     sysml:operator ">" ;
-    sysml:argument expr:IrregularLayout__Rover___409___400_pcondition_pa0, expr:IrregularLayout__Rover___409___400_pcondition_pa1 .
+    sysml:argument expr:IrregularLayout__Rover___409___400_pcondition_pa0, expr:IrregularLayout__Rover___409___400_pcondition_pa1 ;
+    json:argument "[{\"@id\":\"IrregularLayout__Rover___409___400_pcondition_pa0\"},{\"@id\":\"IrregularLayout__Rover___409___400_pcondition_pa1\"}]" .
 
 expr:IrregularLayout__Rover___409___400_pcondition_pa0
     a sysml:FeatureReferenceExpression ;
@@ -720,7 +739,8 @@ expr:IrregularLayout__Rover__speed__m_pvalue
     sysx:sourceText "mass * 2\n                    - 1" ;
     sysml:elementId "IrregularLayout__Rover__speed__m_pvalue" ;
     sysml:operator "-" ;
-    sysml:argument expr:IrregularLayout__Rover__speed__m_pvalue_pa0, expr:IrregularLayout__Rover__speed__m_pvalue_pa1 .
+    sysml:argument expr:IrregularLayout__Rover__speed__m_pvalue_pa0, expr:IrregularLayout__Rover__speed__m_pvalue_pa1 ;
+    json:argument "[{\"@id\":\"IrregularLayout__Rover__speed__m_pvalue_pa0\"},{\"@id\":\"IrregularLayout__Rover__speed__m_pvalue_pa1\"}]" .
 
 expr:IrregularLayout__Rover__speed__m_pvalue_pa0
     a sysml:OperatorExpression ;
@@ -728,7 +748,8 @@ expr:IrregularLayout__Rover__speed__m_pvalue_pa0
     sysml:elementId "IrregularLayout__Rover__speed__m_pvalue_pa0" ;
     sysml:operator "*" ;
     sysml:argument expr:IrregularLayout__Rover__speed__m_pvalue_pa0_pa0, expr:IrregularLayout__Rover__speed__m_pvalue_pa0_pa1 ;
-    sysx:argumentIndex "0"^^xsd:integer .
+    sysx:argumentIndex "0"^^xsd:integer ;
+    json:argument "[{\"@id\":\"IrregularLayout__Rover__speed__m_pvalue_pa0_pa0\"},{\"@id\":\"IrregularLayout__Rover__speed__m_pvalue_pa0_pa1\"}]" .
 
 expr:IrregularLayout__Rover__speed__m_pvalue_pa0_pa0
     a sysml:FeatureReferenceExpression ;
@@ -791,7 +812,12 @@ elmt:IrregularLayout__Drive
     sysml:ownedFeature elmt:IrregularLayout__Drive__count, elmt:IrregularLayout__Drive__total, elmt:IrregularLayout__Drive__tick, elmt:IrregularLayout__Drive___403, elmt:IrregularLayout__Drive___404 ;
     sysml:ownedFeatureMembership elmt:IrregularLayout__Drive__count_om, elmt:IrregularLayout__Drive__total_om, elmt:IrregularLayout__Drive__tick_om, elmt:IrregularLayout__Drive___403_om, elmt:IrregularLayout__Drive___404_om ;
     sysx:sourceText "    action def Drive {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"IrregularLayout__Drive__count\"},{\"@id\":\"IrregularLayout__Drive__total\"},{\"@id\":\"IrregularLayout__Drive__tick\"},{\"@id\":\"IrregularLayout__Drive___403\"},{\"@id\":\"IrregularLayout__Drive___404\"}]" ;
+    json:ownedMembership "[{\"@id\":\"IrregularLayout__Drive__count_om\"},{\"@id\":\"IrregularLayout__Drive__total_om\"},{\"@id\":\"IrregularLayout__Drive__tick_om\"},{\"@id\":\"IrregularLayout__Drive___403_om\"},{\"@id\":\"IrregularLayout__Drive___404_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"IrregularLayout__Drive__count_om\"},{\"@id\":\"IrregularLayout__Drive__total_om\"},{\"@id\":\"IrregularLayout__Drive__tick_om\"},{\"@id\":\"IrregularLayout__Drive___403_om\"},{\"@id\":\"IrregularLayout__Drive___404_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"IrregularLayout__Drive__count\"},{\"@id\":\"IrregularLayout__Drive__total\"},{\"@id\":\"IrregularLayout__Drive__tick\"},{\"@id\":\"IrregularLayout__Drive___403\"},{\"@id\":\"IrregularLayout__Drive___404\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"IrregularLayout__Drive__count_om\"},{\"@id\":\"IrregularLayout__Drive__total_om\"},{\"@id\":\"IrregularLayout__Drive__tick_om\"},{\"@id\":\"IrregularLayout__Drive___403_om\"},{\"@id\":\"IrregularLayout__Drive___404_om\"}]" .
 
 elmt:IrregularLayout__Drive_om
     a sysml:OwningMembership ;
@@ -911,7 +937,8 @@ expr:IrregularLayout__Drive___403_pcondition
     sysx:sourceText "count > 0\n              and total > 0" ;
     sysml:elementId "IrregularLayout__Drive___403_pcondition" ;
     sysml:operator "and" ;
-    sysml:argument expr:IrregularLayout__Drive___403_pcondition_pa0, expr:IrregularLayout__Drive___403_pcondition_pa1 .
+    sysml:argument expr:IrregularLayout__Drive___403_pcondition_pa0, expr:IrregularLayout__Drive___403_pcondition_pa1 ;
+    json:argument "[{\"@id\":\"IrregularLayout__Drive___403_pcondition_pa0\"},{\"@id\":\"IrregularLayout__Drive___403_pcondition_pa1\"}]" .
 
 expr:IrregularLayout__Drive___403_pcondition_pa0
     a sysml:OperatorExpression ;
@@ -919,7 +946,8 @@ expr:IrregularLayout__Drive___403_pcondition_pa0
     sysml:elementId "IrregularLayout__Drive___403_pcondition_pa0" ;
     sysml:operator ">" ;
     sysml:argument expr:IrregularLayout__Drive___403_pcondition_pa0_pa0, expr:IrregularLayout__Drive___403_pcondition_pa0_pa1 ;
-    sysx:argumentIndex "0"^^xsd:integer .
+    sysx:argumentIndex "0"^^xsd:integer ;
+    json:argument "[{\"@id\":\"IrregularLayout__Drive___403_pcondition_pa0_pa0\"},{\"@id\":\"IrregularLayout__Drive___403_pcondition_pa0_pa1\"}]" .
 
 expr:IrregularLayout__Drive___403_pcondition_pa0_pa0
     a sysml:FeatureReferenceExpression ;
@@ -941,7 +969,8 @@ expr:IrregularLayout__Drive___403_pcondition_pa1
     sysml:elementId "IrregularLayout__Drive___403_pcondition_pa1" ;
     sysml:operator ">" ;
     sysml:argument expr:IrregularLayout__Drive___403_pcondition_pa1_pa0, expr:IrregularLayout__Drive___403_pcondition_pa1_pa1 ;
-    sysx:argumentIndex "1"^^xsd:integer .
+    sysx:argumentIndex "1"^^xsd:integer ;
+    json:argument "[{\"@id\":\"IrregularLayout__Drive___403_pcondition_pa1_pa0\"},{\"@id\":\"IrregularLayout__Drive___403_pcondition_pa1_pa1\"}]" .
 
 expr:IrregularLayout__Drive___403_pcondition_pa1_pa0
     a sysml:FeatureReferenceExpression ;
@@ -1042,7 +1071,8 @@ expr:IrregularLayout__Drive___404_pwhileCondition
     sysx:sourceText "count\n                > 0" ;
     sysml:elementId "IrregularLayout__Drive___404_pwhileCondition" ;
     sysml:operator ">" ;
-    sysml:argument expr:IrregularLayout__Drive___404_pwhileCondition_pa0, expr:IrregularLayout__Drive___404_pwhileCondition_pa1 .
+    sysml:argument expr:IrregularLayout__Drive___404_pwhileCondition_pa0, expr:IrregularLayout__Drive___404_pwhileCondition_pa1 ;
+    json:argument "[{\"@id\":\"IrregularLayout__Drive___404_pwhileCondition_pa0\"},{\"@id\":\"IrregularLayout__Drive___404_pwhileCondition_pa1\"}]" .
 
 expr:IrregularLayout__Drive___404_pwhileCondition_pa0
     a sysml:FeatureReferenceExpression ;
@@ -1100,7 +1130,12 @@ elmt:IrregularLayout__Ops
     sysml:ownedMembership elmt:IrregularLayout__Ops___401_om, elmt:IrregularLayout__Ops__off_om, elmt:IrregularLayout__Ops__on_om, elmt:IrregularLayout__Ops___404_om ;
     sysml:ownedFeature elmt:IrregularLayout__Ops___401, elmt:IrregularLayout__Ops__off, elmt:IrregularLayout__Ops__on, elmt:IrregularLayout__Ops___404 ;
     sysml:ownedFeatureMembership elmt:IrregularLayout__Ops___401_om, elmt:IrregularLayout__Ops__off_om, elmt:IrregularLayout__Ops__on_om, elmt:IrregularLayout__Ops___404_om ;
-    sysx:sourceText "    state def Ops {\n        entry; then off;\n        state off;\n        state on;\n        transition first off\n            if 1 > 0\n            then on;\n    }\n" .
+    sysx:sourceText "    state def Ops {\n        entry; then off;\n        state off;\n        state on;\n        transition first off\n            if 1 > 0\n            then on;\n    }\n" ;
+    json:ownedRelationship "[{\"@id\":\"IrregularLayout__Ops___400\"},{\"@id\":\"IrregularLayout__Ops___401_om\"},{\"@id\":\"IrregularLayout__Ops__off_om\"},{\"@id\":\"IrregularLayout__Ops__on_om\"},{\"@id\":\"IrregularLayout__Ops___404_om\"}]" ;
+    json:ownedMember "[{\"@id\":\"IrregularLayout__Ops___401\"},{\"@id\":\"IrregularLayout__Ops__off\"},{\"@id\":\"IrregularLayout__Ops__on\"},{\"@id\":\"IrregularLayout__Ops___404\"}]" ;
+    json:ownedMembership "[{\"@id\":\"IrregularLayout__Ops___401_om\"},{\"@id\":\"IrregularLayout__Ops__off_om\"},{\"@id\":\"IrregularLayout__Ops__on_om\"},{\"@id\":\"IrregularLayout__Ops___404_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"IrregularLayout__Ops___401\"},{\"@id\":\"IrregularLayout__Ops__off\"},{\"@id\":\"IrregularLayout__Ops__on\"},{\"@id\":\"IrregularLayout__Ops___404\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"IrregularLayout__Ops___401_om\"},{\"@id\":\"IrregularLayout__Ops__off_om\"},{\"@id\":\"IrregularLayout__Ops__on_om\"},{\"@id\":\"IrregularLayout__Ops___404_om\"}]" .
 
 elmt:IrregularLayout__Ops_om
     a sysml:OwningMembership ;
@@ -1226,7 +1261,8 @@ expr:IrregularLayout__Ops___404_pguard
     sysx:sourceText "1 > 0" ;
     sysml:elementId "IrregularLayout__Ops___404_pguard" ;
     sysml:operator ">" ;
-    sysml:argument expr:IrregularLayout__Ops___404_pguard_pa0, expr:IrregularLayout__Ops___404_pguard_pa1 .
+    sysml:argument expr:IrregularLayout__Ops___404_pguard_pa0, expr:IrregularLayout__Ops___404_pguard_pa1 ;
+    json:argument "[{\"@id\":\"IrregularLayout__Ops___404_pguard_pa0\"},{\"@id\":\"IrregularLayout__Ops___404_pguard_pa1\"}]" .
 
 expr:IrregularLayout__Ops___404_pguard_pa0
     a sysml:LiteralInteger ;
