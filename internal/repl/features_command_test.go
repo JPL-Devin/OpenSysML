@@ -44,7 +44,7 @@ func TestInstantiateSuggestsFeatures(t *testing.T) {
 func TestFeaturesErrorPaths(t *testing.T) {
 	t.Run("no argument", func(t *testing.T) {
 		s := loadFixture(t, "testdata/vehicle_package.sysml")
-		wants(t, run(t, s, "%features"), "usage: %features <name>")
+		wants(t, run(t, s, "%features"), "usage: %features <object>")
 	})
 
 	t.Run("unresolved name", func(t *testing.T) {
@@ -80,7 +80,7 @@ func TestFeaturesErrorPaths(t *testing.T) {
 // Help and completion name the one spelling there is.
 func TestFeaturesInHelpAndCompletion(t *testing.T) {
 	help := strings.Join(helpText(), "\n")
-	wants(t, help, "%features <name>")
+	wants(t, help, "%features <object> [all|depth <n>] [json]")
 	rejects(t, help, "%slots")
 
 	got := NewSession().Complete("%fea", len("%fea"))

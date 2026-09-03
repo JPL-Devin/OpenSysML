@@ -268,7 +268,7 @@ func TestStateAddressesANestedPart(t *testing.T) {
 	wantReport(t, check(t, binary, fleetModel, "-instantiate", "Fleet::driver", "-state", "Fleet::driver.r.level"),
 		2, "level of Fleet::driver.r holds a value (10), not an object")
 	wantReport(t, check(t, binary, fleetModel, "-instantiate", "Fleet::driver", "-state", "#99"),
-		2, "no object has id #99 (the objects are #1, #2")
+		2, "no object #99 in this session: nothing materialized has that identity (the objects are #1, #2")
 }
 
 // TestStateQualifiedPathDenotesTheUsageTyped checks that with both a definition and

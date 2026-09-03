@@ -406,8 +406,9 @@ func (s *Session) instantiateNamed(name string) ([]string, error) {
 	// spelling of the name created it.
 	previous, again := s.instances[fqn]
 	displaced := again && previous != nil && previous.ID != inst.ID
+	var relabelled []string
 	if displaced {
-		s.releaseDebuggedName(fqn)
+		relabelled = s.releaseDebuggedName(fqn)
 	}
 	s.instances[fqn] = inst
 	s.lost = instanceLoss{}
@@ -419,8 +420,11 @@ func (s *Session) instantiateNamed(name string) ([]string, error) {
 	// denotes rather than let the earlier one look like it was reused.
 	if displaced {
 		s.unnamed = append(s.unnamed, unnamedObject{fqn: fqn, obj: previous})
-		out = append(out, fmt.Sprintf("  note: %s now denotes this object; object #%d is no longer named%s (address it as #%d)",
+		out = append(out, fmt.Sprintf("  note: %s now denotes this object; object #%d is displaced from that name%s and stays reachable as #%d",
 			notationName(fqn), previous.ID, behaviorsOf(previous), previous.ID))
+		for _, notice := range relabelled {
+			out = append(out, "  "+notice)
+		}
 	}
 	return append(out, fmt.Sprintf("  Use %%features %s to inspect", name)), nil
 }

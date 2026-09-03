@@ -915,21 +915,37 @@ func exhibitedPosition(behavior *runtime.ObjectBehavior) int {
 
 // releaseDebuggedName respells the debuggers' object labels rooted at the object
 // fqn names by its id, before the name is given to another object, so they keep
-// following the object they were started on.
-func (s *Session) releaseDebuggedName(fqn string) {
+// following the object they were started on. It reports each label it respelled.
+func (s *Session) releaseDebuggedName(fqn string) []string {
+	var notices []string
 	if a := s.actionExec; a != nil && a.selfFQN != "" {
+		was := a.selfFQN
 		a.selfFQN = s.relabelByID(a.selfFQN, fqn)
+		if a.selfFQN != was {
+			notices = append(notices, debugSessionRelabelled("action", a.name, was, a.selfFQN))
+		}
 	}
 	st := s.stateExec
 	if st == nil || st.selfFQN == "" {
-		return
+		return notices
 	}
 	// An exhibited machine is held under its object's label as both.
 	exhibited := st.fqn == st.selfFQN
+	was := st.selfFQN
 	st.selfFQN = s.relabelByID(st.selfFQN, fqn)
 	if exhibited {
 		st.fqn = st.selfFQN
 	}
+	if st.selfFQN != was {
+		notices = append(notices, debugSessionRelabelled("state", st.name, was, st.selfFQN))
+	}
+	return notices
+}
+
+// debugSessionRelabelled reports a debugging session that keeps running over the
+// object it was started on, now addressed by the label a displaced name left it.
+func debugSessionRelabelled(kind, name, was, now string) string {
+	return fmt.Sprintf("note: %s debugging session for %q keeps running over the object %s named, now %s", kind, name, was, now)
 }
 
 // dropStaleDebugSessions ends the debugging sessions this submission

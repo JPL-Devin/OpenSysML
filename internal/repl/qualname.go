@@ -24,17 +24,27 @@ func plainName(text string) (string, bool) {
 		return "", false
 	}
 	ref, ok := expr.(*ast.FeatureReference)
-	if !ok || ref.Name == nil || ref.Name.Global || len(ref.Name.Parts) == 0 {
+	if !ok || ref.Name == nil || ref.Name.Global {
 		return "", false
 	}
-	segments := make([]string, 0, len(ref.Name.Parts))
-	for _, part := range ref.Name.Parts {
+	name := qualifiedText(ref.Name)
+	return name, name != ""
+}
+
+// qualifiedText spells a qualified name as the index registers it, "" for one
+// with an empty segment.
+func qualifiedText(qn *ast.QualifiedName) string {
+	if qn == nil || len(qn.Parts) == 0 {
+		return ""
+	}
+	segments := make([]string, 0, len(qn.Parts))
+	for _, part := range qn.Parts {
 		if part.Text == "" {
-			return "", false
+			return ""
 		}
 		segments = append(segments, part.Text)
 	}
-	return strings.Join(segments, "::"), true
+	return strings.Join(segments, "::")
 }
 
 // notationName is a qualified name spelled as the notation writes it, so a name

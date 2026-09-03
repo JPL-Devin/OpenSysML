@@ -242,9 +242,21 @@ func (s *Session) carrierInstances(sym *symbols.Symbol) []string {
 // objects nested yields for them, breadth-first in carrierLess order and within
 // carrierLimit.
 func (s *Session) walkObjects(nested func(carrier) []carrier, visit func(carrier) bool) {
+	s.walk(nested, visit, carrierLimit)
+}
+
+// walkHeldObjects visits every object the session holds: its roots and, while
+// visit reports true, what their materialized feature values hold. Nothing is
+// materialized, so the walk ends with the objects that exist and needs no bound.
+func (s *Session) walkHeldObjects(ctx *runtime.Context, visit func(carrier) bool) {
+	s.walk(materializedObjectsIn(ctx), visit, 0)
+}
+
+// walk is walkObjects within limit objects visited, or unbounded for a limit of 0.
+func (s *Session) walk(nested func(carrier) []carrier, visit func(carrier) bool, limit int) {
 	seen := make(map[int64]bool, s.heldObjects())
 	queue := s.rootCarriers()
-	for visited := 0; len(queue) > 0 && visited < carrierLimit; visited++ {
+	for visited := 0; len(queue) > 0 && (limit == 0 || visited < limit); visited++ {
 		cur := queue[0]
 		queue = queue[1:]
 		if seen[cur.inst.ID] {
@@ -519,7 +531,7 @@ const unknownIDListed = 20
 
 func (e *UnknownObjectIDError) Error() string {
 	if len(e.Known) == 0 {
-		return fmt.Sprintf("no object has id #%d (no objects have been created)", e.ID)
+		return fmt.Sprintf("no object #%d in this session: nothing materialized has that identity (no objects have been created)", e.ID)
 	}
 	listed := e.Known
 	more := ""
@@ -531,7 +543,7 @@ func (e *UnknownObjectIDError) Error() string {
 	for i, id := range listed {
 		ids[i] = fmt.Sprintf("#%d", id)
 	}
-	return fmt.Sprintf("no object has id #%d (the objects are %s%s)", e.ID, strings.Join(ids, ", "), more)
+	return fmt.Sprintf("no object #%d in this session: nothing materialized has that identity (the objects are %s%s)", e.ID, strings.Join(ids, ", "), more)
 }
 
 // NotInstantiatedError reports a declared name no object has been created
@@ -556,13 +568,22 @@ type RelatedObject struct {
 	Label string
 }
 
+// relatedObjectsListed bounds the objects a NotInstantiatedError spells out.
+const relatedObjectsListed = 5
+
 func (e *NotInstantiatedError) Error() string {
 	if len(e.Objects) == 0 {
 		return fmt.Sprintf("no instance of %q (use %%instantiate first)", e.Name)
 	}
-	mentions := make([]string, len(e.Objects))
-	labels := make([]string, len(e.Objects))
-	for i, o := range e.Objects {
+	listed := e.Objects
+	more := ""
+	if len(listed) > relatedObjectsListed {
+		listed = listed[:relatedObjectsListed]
+		more = fmt.Sprintf(" … (%d in all)", len(e.Objects))
+	}
+	mentions := make([]string, len(listed))
+	labels := make([]string, len(listed))
+	for i, o := range listed {
 		mentions[i] = fmt.Sprintf("#%d", o.ID)
 		labels[i] = mentions[i]
 		if o.Label != "" {
@@ -571,8 +592,8 @@ func (e *NotInstantiatedError) Error() string {
 		}
 	}
 	objects, is := "object "+mentions[0]+" is", "it"
-	if len(mentions) > 1 {
-		objects, is = "objects "+strings.Join(mentions, ", ")+" are", "one of them"
+	if len(e.Objects) > 1 {
+		objects, is = "objects "+strings.Join(mentions, ", ")+more+" are", "one of them"
 	}
 	if e.UsageAsked {
 		return fmt.Sprintf("no instance of the usage %q: %s of its definition %q, not of the usage — use %%instantiate %s to create the usage's object, or name %s to address %s",
@@ -613,7 +634,7 @@ func (s *Session) notInstantiated(sym *symbols.Symbol, fqn string) error {
 	}
 	e.Definition = notationName(symbols.FQNOf(definition))
 	// An error names what exists; it materializes nothing to find it.
-	s.walkObjects(materializedObjectsIn(ctx), func(cur carrier) bool {
+	s.walkHeldObjects(ctx, func(cur carrier) bool {
 		if carriesDeclaration(model, cur.inst.Type, definition.Decl) {
 			related := RelatedObject{ID: cur.inst.ID}
 			if !isObjectID(cur.name) {

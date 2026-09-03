@@ -60,14 +60,14 @@ func TestInstantiateTwiceKeepsFirstObjectByID(t *testing.T) {
 	if first.ID == second.ID {
 		t.Fatalf("both instantiations report id %d", first.ID)
 	}
-	wants(t, again, fmt.Sprintf("object #%d is no longer named", first.ID), fmt.Sprintf("(address it as #%d)", first.ID))
+	wants(t, again, fmt.Sprintf("object #%d is displaced from that name", first.ID), fmt.Sprintf("stays reachable as #%d", first.ID))
 
 	firstID := fmt.Sprintf("#%d", first.ID)
 	wants(t, run(t, s, "%features "+firstID), fmt.Sprintf("Instance: %s (ID: %d)", firstID, first.ID))
 	wants(t, run(t, s, "%features car"), fmt.Sprintf("(ID: %d)", second.ID))
 	wants(t, run(t, s, "%instances"),
 		fmt.Sprintf("Garage::car (ID: %d)", second.ID),
-		fmt.Sprintf("%s (ID: %d, formerly Garage::car)", firstID, first.ID))
+		fmt.Sprintf("%s (ID: %d, displaced from Garage::car)", firstID, first.ID))
 
 	// Each object has its own nested parts, reached through its own root.
 	fl := run(t, s, "%features "+firstID+".fl")
@@ -225,14 +225,14 @@ func TestMultiValuedFeatureNeedsIndex(t *testing.T) {
 // name with no object says so.
 func TestObjectReferenceErrors(t *testing.T) {
 	s := garage(t)
-	wants(t, run(t, s, "%features #7"), "error: no object has id #7 (no objects have been created)")
+	wants(t, run(t, s, "%features #7"), "error: no object #7 in this session: nothing materialized has that identity (no objects have been created)")
 	run(t, s, "%instantiate car")
 	car := s.instances["Garage::car"]
 
 	// Nested parts are materialized when first read, so they join the listing.
-	wants(t, run(t, s, "%features #999"), fmt.Sprintf("error: no object has id #999 (the objects are #%d)", car.ID))
+	wants(t, run(t, s, "%features #999"), fmt.Sprintf("error: no object #999 in this session: nothing materialized has that identity (the objects are #%d)", car.ID))
 	run(t, s, "%features car.fl")
-	wants(t, run(t, s, "%features #999"), fmt.Sprintf("error: no object has id #999 (the objects are #%d, #", car.ID))
+	wants(t, run(t, s, "%features #999"), fmt.Sprintf("error: no object #999 in this session: nothing materialized has that identity (the objects are #%d, #", car.ID))
 	wants(t, run(t, s, "%features car.nope"), "error: Garage::car has no feature \"nope\" (its features are fl, mass, wheels)")
 	wants(t, run(t, s, "%features car.fl.hub.bolts"), "error: bolts of Garage::car.fl.hub holds a value (5), not an object")
 	wants(t, run(t, s, "%features car.mass"), "error: mass of Garage::car holds a value (1500.0), not an object")
@@ -250,7 +250,7 @@ func TestObjectReferenceErrors(t *testing.T) {
 		if err != nil {
 			msg = err.Error()
 		}
-		wants(t, msg, "no object has id #999 (the objects are")
+		wants(t, msg, "no object #999 in this session: nothing materialized has that identity (the objects are")
 	}
 	for _, cmd := range []string{"%eval in car.nope : mass", "%invoke car.nope go"} {
 		out, _, err := s.RunMeta(cmd)
@@ -288,7 +288,7 @@ func TestDebuggersAddressObjectsByID(t *testing.T) {
 		}
 		id := objectIDIn(t, run(t, s, "%instantiate Holder"))
 		wants(t, run(t, s, "%action tally #"+id), "Started action executor")
-		wants(t, run(t, s, "%action tally #99"), "error:", "no object has id #99 (the objects are #"+id+")")
+		wants(t, run(t, s, "%action tally #99"), "error:", "no object #99 in this session: nothing materialized has that identity (the objects are #"+id+")")
 		s.Submit("part def Holder { attribute size = 2.0; }")
 		wants(t, run(t, s, "%step"), "no active action session", "the object #"+id+" performing it was dropped")
 	})
@@ -432,7 +432,7 @@ func TestObjectIDsStableAcrossCarryover(t *testing.T) {
 	wants(t, run(t, s, "%features "+id), fmt.Sprintf("Instance: %s (ID: %d)", id, car.ID))
 	wants(t, run(t, s, "%instances"),
 		fmt.Sprintf("Garage::car (ID: %d)", second.ID),
-		fmt.Sprintf("%s (ID: %d, formerly Garage::car)", id, car.ID))
+		fmt.Sprintf("%s (ID: %d, displaced from Garage::car)", id, car.ID))
 }
 
 // Where a command takes an object, completion offers the ids the session holds

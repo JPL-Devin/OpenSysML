@@ -3,6 +3,7 @@ package repl
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -191,8 +192,8 @@ func TestObjectPathErrorsNameTheSegment(t *testing.T) {
 	if !errors.As(err, &nerr) || nerr.ID != 99 {
 		t.Errorf("#99: got %v, want an UnknownObjectIDError for 99", err)
 	}
-	wants(t, run(t, s, "%state #99"), "error: no object has id #99 (the objects are #1, #2")
-	wants(t, run(t, s, "%invoke #99 bump"), "error: no object has id #99 (the objects are #1, #2")
+	wants(t, run(t, s, "%state #99"), "error: no object #99 in this session: nothing materialized has that identity (the objects are #1, #2")
+	wants(t, run(t, s, "%invoke #99 bump"), "error: no object #99 in this session: nothing materialized has that identity (the objects are #1, #2")
 }
 
 // When only the definition a usage is typed by was materialized, the error says
@@ -437,4 +438,178 @@ func TestCollectionMemberHeldAloneElsewhereKeepsItsPath(t *testing.T) {
 	wants(t, run(t, s, "%state #"+front), `exhibited by object #`+front+"\n")
 	wants(t, run(t, s, "%features #"+front), "Instance: #"+front+" (ID: "+front+")")
 	wants(t, run(t, s, "%state #"+other), `exhibited by object #`+other+"\n")
+}
+
+// After a second %instantiate of a name, the object it displaced stays
+// addressable by identity on every command: the session still holds it, lists
+// it, and says so in the notice. The current object is addressed by the name.
+func TestSupersededObjectStaysAddressableById(t *testing.T) {
+	s := loadFixture(t, "testdata/nested_machine.sysml")
+	first := objectIDIn(t, run(t, s, "%instantiate Fleet::rover"))
+	wants(t, run(t, s, "%features #"+first), "Instance: #"+first+" (ID: "+first+")")
+
+	again := run(t, s, "%instantiate Fleet::rover")
+	second := objectIDIn(t, again)
+	if second == first {
+		t.Fatalf("the second %%instantiate reused object #%s", first)
+	}
+	wants(t, again, "note: Fleet::rover now denotes this object; object #"+first+
+		" is displaced from that name, with 1 behavior of its own and stays reachable as #"+first)
+	rejects(t, again, "debugging session")
+
+	inst, label, err := s.resolveObject("#" + first)
+	if err != nil || inst == nil || strconv.FormatInt(inst.ID, 10) != first || label != "#"+first {
+		t.Errorf("#%s: got %v, %q, %v; want the displaced object under its id", first, inst, label, err)
+	}
+	wants(t, run(t, s, "%instances"),
+		"Fleet::rover (ID: "+second+")",
+		"#"+first+" (ID: "+first+", displaced from Fleet::rover)")
+	wants(t, run(t, s, "%features #"+first), "Instance: #"+first+" (ID: "+first+")", "level = 10")
+	wants(t, run(t, s, "%invoke #"+first+" bump"), "✓ Invoked bump on object #"+first)
+	wants(t, run(t, s, "%features #"+first), "level = 11")
+	wants(t, run(t, s, "%state #"+first), `exhibited by object #`+first+"\n", "Current state: waiting")
+	wants(t, run(t, s, "%state Fleet::Rover::modes #"+first), `exhibited by object #`+first+"\n")
+
+	// An id the runtime never issued is still no object, and says so.
+	never := strconv.FormatInt(inst.ID+1000, 10)
+	wants(t, run(t, s, "%features #"+never), "error: no object #"+never+" in this session: nothing materialized has that identity (the objects are #"+first+", ")
+
+	wants(t, run(t, s, "%features #"+second), "Instance: #"+second+" (ID: "+second+")", "level = 10")
+	wants(t, run(t, s, "%invoke #"+second+" bump"), "✓")
+	wants(t, run(t, s, "%features Fleet::rover"), "level = 11")
+	wants(t, run(t, s, "%state #"+second), `exhibited by object #`+second+"\n")
+}
+
+// The objects a current root's materialized features hold stay addressable by
+// identity, members of a multi-valued part included; the check reads no feature
+// that has not been materialized already.
+func TestHeldObjectsStayAddressableById(t *testing.T) {
+	s := loadFixture(t, "testdata/nested_machine.sysml")
+	run(t, s, "%instantiate Fleet::driver")
+	driver := s.instances["Fleet::driver"]
+	if fv := driver.FeatureValues["r"]; fv != nil && fv.Materialized {
+		t.Fatal("r was materialized by %instantiate alone")
+	}
+	if _, _, err := s.resolveObject("#99"); err == nil {
+		t.Error("#99 reached an object")
+	}
+	if fv := driver.FeatureValues["r"]; fv != nil && fv.Materialized {
+		t.Error("looking up an identity materialized r")
+	}
+
+	nested := objectIDIn(t, run(t, s, "%state Fleet::driver.r"))
+	wants(t, run(t, s, "%features #"+nested), "Instance: #"+nested+" (ID: "+nested+")")
+
+	c := loadFixture(t, "testdata/collection_machine.sysml")
+	run(t, c, "%instantiate Depot::garage")
+	listing := run(t, c, "%features Depot::garage")
+	bays := listing[strings.Index(listing, "bays = [Instance(ID: "):]
+	bays = bays[:strings.Index(bays, "]")]
+	member := objectIDIn(t, bays[strings.LastIndex(bays, "Instance(ID: "):])
+	wants(t, run(t, c, "%features #"+member), "Instance: #"+member+" (ID: "+member+")")
+	wants(t, run(t, c, "%state #"+member), `exhibited by object #`+member, "Current state: waiting")
+}
+
+// A debugging session over the object a second %instantiate displaced keeps
+// running: the notice says it now follows the object by id, and the next
+// debugging command drives that object, not the one the name now denotes. One
+// over the object a different name denotes is untouched.
+func TestSupersededObjectKeepsItsDebuggingSession(t *testing.T) {
+	s := loadFixture(t, "testdata/nested_machine.sysml")
+	first := objectIDIn(t, run(t, s, "%instantiate Fleet::rover"))
+	wants(t, run(t, s, "%state Fleet::rover"), `Debugging state machine "modes"`, "Current state: waiting")
+
+	again := run(t, s, "%instantiate Fleet::rover")
+	second := objectIDIn(t, again)
+	wants(t, again, `note: state debugging session for "Fleet::rover" keeps running over the object Fleet::rover named, now #`+first)
+	rejects(t, again, "ended")
+	if s.stateExec == nil {
+		t.Fatal("the session over the displaced object ended")
+	}
+	if got := s.stateExec.selfFQN; got != "#"+first {
+		t.Fatalf("debugger label after displacement = %q, want #%s", got, first)
+	}
+	wants(t, run(t, s, "%advance 5"), "Current state: moving")
+	wants(t, run(t, s, "%features #"+first), `log = "WM"`)
+	wants(t, run(t, s, "%features #"+second), `log = "W"`)
+
+	// A debugger over a nested performing object follows it through its root's
+	// id when the root's name is given away; one over another name is untouched.
+	driver := objectIDIn(t, run(t, s, "%instantiate Fleet::driver"))
+	nested := objectIDIn(t, run(t, s, "%state Fleet::driver.r"))
+	wants(t, run(t, s, "%action Fleet::Rover::bump Fleet::driver.r"), "Started action executor")
+	kept := run(t, s, "%instantiate Fleet::rover")
+	rejects(t, kept, "debugging session")
+	if s.actionExec == nil || s.actionExec.selfFQN != "Fleet::driver.r" {
+		t.Fatal("instantiating an unrelated name touched the action session")
+	}
+	followed := run(t, s, "%instantiate Fleet::driver")
+	wants(t, followed,
+		`note: action debugging session for "Fleet::Rover::bump" keeps running over the object Fleet::driver.r named, now #`+driver+".r",
+		`note: state debugging session for "Fleet::driver.r" keeps running over the object Fleet::driver.r named, now #`+driver+".r")
+	if s.actionExec == nil || s.actionExec.selfFQN != "#"+driver+".r" {
+		t.Fatalf("action session after displacement = %+v, want one over #%s.r", s.actionExec, driver)
+	}
+	if inst, _, err := s.resolveObject("#" + driver + ".r"); err != nil || strconv.FormatInt(inst.ID, 10) != nested {
+		t.Fatalf("#%s.r resolves to %v, %v; want object #%s", driver, inst, err, nested)
+	}
+	wants(t, run(t, s, "%continue"), "✓ Action completed")
+	wants(t, run(t, s, "%features #"+nested), "level = 11")
+	wants(t, run(t, s, "%features Fleet::driver.r"), "level = 10")
+}
+
+// Every object the session holds is addressable by id, however many there are:
+// the bound on a subject search does not apply to what is already materialized.
+// A debugging session over a member beyond that bound survives an unrelated
+// second %instantiate.
+func TestEveryHeldObjectIsAddressableById(t *testing.T) {
+	s := loadFixture(t, "testdata/large_collection.sysml")
+	run(t, s, "%instantiate Farm::field")
+	rows := collectionIDs(t, run(t, s, "%features Farm::field"), "rows")
+	if len(rows) != 3 {
+		t.Fatalf("rows holds %d members, want 3", len(rows))
+	}
+	held := 2 + len(rows) // field, spare and the rows
+	var last string
+	for _, row := range rows {
+		cells := collectionIDs(t, run(t, s, "%features #"+row), "cells")
+		held += len(cells)
+		last = cells[len(cells)-1]
+	}
+	if held <= carrierLimit {
+		t.Fatalf("the session holds %d objects, want more than %d", held, carrierLimit)
+	}
+
+	wants(t, run(t, s, "%features #"+last), "Instance: #"+last+" (ID: "+last+")", "count = 0")
+	wants(t, run(t, s, "%features Farm::Cell"), `no instance of the definition "Farm::Cell" itself: objects #`,
+		fmt.Sprintf(" … (%d in all) are typed by it", 3*1000))
+	wants(t, run(t, s, "%invoke #"+last+" tick"), "✓ Invoked tick on object #"+last)
+	wants(t, run(t, s, "%features #"+last), "count = 1")
+
+	wants(t, run(t, s, "%action Farm::Cell::tick #"+last), "Started action executor")
+	run(t, s, "%instantiate Farm::spare")
+	again := run(t, s, "%instantiate Farm::spare")
+	wants(t, again, "is displaced from that name")
+	rejects(t, again, "debugging session")
+	if s.actionExec == nil {
+		t.Fatal("a second %instantiate of another name ended the session over a held member")
+	}
+	wants(t, run(t, s, "%continue"), "✓ Action completed")
+	wants(t, run(t, s, "%features #"+last), "count = 2")
+}
+
+// collectionIDs reads the identities a %features listing shows feature holding.
+func collectionIDs(t *testing.T, listing, feature string) []string {
+	t.Helper()
+	at := strings.Index(listing, feature+" = [")
+	if at < 0 {
+		t.Fatalf("%s holds no collection:\n%s", feature, listing)
+	}
+	members := listing[at+len(feature)+4:]
+	members = members[:strings.Index(members, "]")]
+	var ids []string
+	for _, m := range strings.Split(members, ",") {
+		ids = append(ids, objectIDIn(t, m))
+	}
+	return ids
 }

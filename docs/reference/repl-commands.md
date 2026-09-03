@@ -33,8 +33,8 @@ into the parts it holds (`car.fl.hub`, `#3.fl`, `car.wheels[2]`).
 | `%render <name> [form]` | Render a view's exposed set in the kind its `render` member states: a containment tree with nested views as subtrees, an interconnection diagram of the exposed parts and the connections between them, a state machine's states and transitions, an action's nodes and successions, or a table of the exposed elements and what they declare. A view with no `render` member renders as a tree. Output is indented text by default, or the machine-readable form of the kind: a [Mermaid](#rendering-a-view) diagram with `mermaid`, a Markdown table with `markdown`. Asking for a form the kind cannot be written in tells you which form it uses. Read-only: it creates no object and leaves a `%action`/`%state` debugging session running. A view that exposes nothing renders empty and says so; a rendering kind this build does not produce is reported by kind and view rather than rendered as something else; an element the rendering cannot represent is reported, not dropped |
 | **Instantiation & Inspection** | |
 | `%instantiate <name>` | Create an object of a part definition and start the behaviors its type exhibits or performs. Each object runs its own machine, initialized after its feature values are built and run until it is quiescent. A second `%instantiate` of the same name creates a new object, and the name then refers to that one. A later submission keeps the object's identity but restarts its behaviors from their initial states, and says so |
-| `%features <object>` | Show what an object holds for each feature of its type. The object is named, addressed by id, or reached by a path: `%features car`, `%features #3`, `%features car.fl.hub`, `%features car.wheels[2]` |
-| `%instances` | List all created objects: the named ones, and the ones a second `%instantiate` of their name left addressable only by id |
+| `%features <object> [all\|depth <n>] [json]` | Show what an object holds for each feature of its type. The object is named, addressed by id, or reached by a path: `%features car`, `%features #3`, `%features car.fl.hub`, `%features car.wheels[2]`. Reading a feature value builds the objects it holds, so the listing is bounded by default — 200 lines, nesting 8 deep — and a listing cut short says which form shows the rest. `all` lifts both bounds and reads the whole tree out; `depth <n>` bounds nesting at `n` levels and lifts the size bound, naming what it did not expand (`machine : Machine (not expanded: depth 1)`). `json` writes the object and everything reachable from it as one document in the shape the API's `Instantiate` returns (`instance`, `instances`, `diagnostics`), bounded by default at 1000 objects, with a graph cut short reported as a `warning` diagnostic. `all`/`depth` and `json` combine (`%features ctx all json`); `all` and `depth` together, a missing or negative depth, and an unknown word are errors naming the usage |
+| `%instances` | List all created objects: the named ones, and the ones a second `%instantiate` of their name displaced, which stay reachable by id (`#3 (ID: 3, displaced from Demo::car)`) |
 | `%eval <expr>` | Evaluate expression, in the last namespace the session declared; a library function is reached by its bare name only where that namespace imports its package, as the checker resolves it, and by its qualified name anywhere |
 | `%eval in <name> : <expr>` | Evaluate expression in the named element's own namespace, or, when the name is an [object reference](#object-references) (`car`, `#3`, `car.fl`), on that object, so that a feature reads its value. The separator is the first `:` outside a quoted name that is not part of a `::`, so `%eval in Demo : Vehicle::mass` works |
 | **Behavioral Execution** | |
@@ -74,7 +74,7 @@ An object reference names one object the session holds. It is one of:
 | Form | Denotes |
 |------|---------|
 | `car`, `Demo::car` | the object `%instantiate car` created, by the name it was created under (unqualified or qualified, quoted segments included) |
-| `#3` | the object whose id `%instantiate` printed as `ID: 3`. Ids count up from 1 and never change: an object keeps its id when a later submission carries it over, and when a second `%instantiate` of its name creates a new object — the name then denotes the new one, and `#3` is how the old one is reached (`%instances` lists it as `#3 (ID: 3, formerly Demo::car)`) |
+| `#3` | the object whose id `%instantiate` printed as `ID: 3`. Ids count up from 1 and never change: an object keeps its id when a later submission carries it over, and when a second `%instantiate` of its name creates a new object — the name then denotes the new one, and `#3` is how the old one is reached (`%instances` lists it as `#3 (ID: 3, displaced from Demo::car)`) |
 | `car.fl`, `#3.fl`, `car.fl.hub` | a path from a named object or an id through the features that hold objects, one nested object per segment: parts, ports, connectors, and structured attributes (an attribute typed by an `attribute def` with attributes of its own, which `%features` shows as `Instance(ID: n)`). An attribute holding a plain value ends a path with an error. `.` and `::` are interchangeable in a path, so `car::fl` and `car.fl` are the same object. They differ only in how the root is found: a segment after `.` is always a feature of the object before it, while `::` may also continue the declared name, so the longest `::`-run naming an object the session holds is the root (`Demo::car::fl` is the object `%instantiate Demo::Car::fl` created, if there is one; `Demo::car.fl` is always car's `fl`). A package before `.` is an error naming the `::` spelling to use |
 | `car.wheels[2]` | one element of a multi-valued feature (`part wheels : Wheel[4]`), counted from 1 in the order the feature holds them |
 
@@ -91,7 +91,7 @@ Every command reports a bad reference in the same words:
 
 ```
 sysml> %features #9
-error: no object has id #9 (the objects are #1, #2)
+error: no object #9 in this session: nothing materialized has that identity (the objects are #1, #2)
 sysml> %features car.nope
 error: Demo::car has no feature "nope" (its features are fl, mass, wheels)
 sysml> %features car.mass
@@ -119,7 +119,18 @@ objects the same way (`no instance of the definition "Demo::Rover" itself: objec
 "Demo::garage.bays[1]", #3 of "Demo::garage.bays[2]" are typed by it — name Demo::garage.bays[1] or
 Demo::garage.bays[2] to address one of them, or use %instantiate Demo::Rover to create an object of
 the definition`). A usage reaches its definition through the usages it subsets. Only objects the
-session already holds are named: the error materializes nothing to find them.
+session already holds are named, the first five of many (`… (3000 in all)`): the error
+materializes nothing to find them.
+
+An id denotes an object the session holds: one it named, one a materialized feature of such an object
+holds, or one a second `%instantiate` of its name displaced. Instantiating a name a second time makes
+a new object and says so — `Demo::car now denotes this object; object #1 is displaced from that name
+and stays reachable as #1` — and `#1` goes on reaching the first object on every command, listed by
+`%instances` as `#1 (ID: 1, displaced from Demo::car)`. A debugging session over the displaced object
+keeps running: the same `%instantiate` notes that it now follows the object as `#1` (or as a path
+from that id, `#1.r`, for a nested object), and `%step`, `%advance` and `%continue` go on driving it.
+Looking an id up materializes nothing: an id the runtime never issued is `no object #9 in this
+session: nothing materialized has that identity (the objects are #1, #2)`.
 
 ## Rendering a view
 
