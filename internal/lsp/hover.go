@@ -38,6 +38,9 @@ func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 				Range:    &rng,
 			}, nil
 		}
+		if hover := s.ambiguousCallHover(name, *ref, offset); hover != nil {
+			return hover, nil
+		}
 	}
 
 	sym := symbolAtOffset(doc.Scope, offset)
@@ -94,6 +97,32 @@ func (s *Server) hoveredSegment(doc string, ref resolve.Reference, offset int) (
 		return nil, source.Span{}, false
 	}
 	return segs[idx], parts[idx].Span, true
+}
+
+// ambiguousCallHover lists the overloads a call's arguments leave tied when the
+// cursor is on the name it calls; nil for any other position.
+func (s *Server) ambiguousCallHover(doc string, ref resolve.Reference, offset int) *protocol.Hover {
+	parts := ref.QN.Parts
+	if len(parts) == 0 {
+		return nil
+	}
+	last := parts[len(parts)-1]
+	if offset < last.Span.Offset || offset >= last.Span.End() {
+		return nil
+	}
+	overloads := s.ws.AmbiguousInvocationInDoc(doc, ref)
+	if len(overloads) == 0 {
+		return nil
+	}
+	lines := make([]string, len(overloads))
+	for i, sym := range overloads {
+		lines[i] = sym.Notation() + " " + s.ws.FQNOf(sym)
+	}
+	rng := spanToRange(s.document(doc).Content, last.Span)
+	return &protocol.Hover{
+		Contents: s.hoverContents(strings.Join(lines, "\n"), []string{"Ambiguous call: the arguments fit each of these overloads equally."}),
+		Range:    &rng,
+	}
 }
 
 // symbolDocComments returns the comment trivia preceding a symbol's

@@ -433,19 +433,47 @@ func (w *Workspace) ResolveReferenceInDoc(name string, ref resolve.Reference) (*
 	defer w.mu.RUnlock()
 	resolver, sem := w.newResolver()
 	sym, ok := resolver.ResolveReference(ref)
-	if selected := selectedInvocation(resolver, sem, ref); selected != nil {
-		return selected, true
+	if sel := invocationSelection(resolver, sem, ref); sel != nil {
+		sym = calledDeclaration(sel, sym)
+		ok = sym != nil
 	}
 	return sym, ok
 }
 
-// selectedInvocation is the overload an invocation's arguments select, when the
-// reference is the name it calls; nil leaves the name-only resolution standing.
-func selectedInvocation(resolver *resolve.Resolver, sem *semantics.Model, ref resolve.Reference) *symbols.Symbol {
+// AmbiguousInvocationInDoc returns the equally specific overloads an invocation's
+// arguments leave tied, when ref is the name it calls; nil for any other reference
+// and for a call that selects one declaration.
+func (w *Workspace) AmbiguousInvocationInDoc(name string, ref resolve.Reference) []*symbols.Symbol {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	resolver, sem := w.newResolver()
+	if sel := invocationSelection(resolver, sem, ref); sel != nil && sel.Ambiguous {
+		return sel.Applicable
+	}
+	return nil
+}
+
+// invocationSelection is the overload selection for the call whose name ref is,
+// nil for a reference that names no call.
+func invocationSelection(resolver *resolve.Resolver, sem *semantics.Model, ref resolve.Reference) *semantics.InvocationSelection {
 	if ref.Invocation == nil {
 		return nil
 	}
-	return passes.SelectInvocation(resolver, sem, ref.Scope, ref.Invocation).Selected
+	return passes.SelectInvocation(resolver, sem, ref.Scope, ref.Invocation)
+}
+
+// calledDeclaration is what a call's name denotes once its arguments are read: the
+// overload they select, nothing when several tie, else the name-only resolution.
+func calledDeclaration(sel *semantics.InvocationSelection, nameOnly *symbols.Symbol) *symbols.Symbol {
+	switch {
+	case sel == nil:
+		return nameOnly
+	case sel.Ambiguous:
+		return nil
+	case sel.Selected != nil:
+		return sel.Selected
+	}
+	return nameOnly
 }
 
 // ResolveQualifiedSegmentsInDoc resolves a qualified name and returns the symbol
@@ -472,9 +500,8 @@ func (w *Workspace) ResolveReferenceSegmentsInDoc(name string, ref resolve.Refer
 			out[i] = sym
 		}
 	}
-	if selected := selectedInvocation(r, sem, ref); selected != nil {
-		out[len(out)-1] = selected
-	}
+	last := len(out) - 1
+	out[last] = calledDeclaration(invocationSelection(r, sem, ref), out[last])
 	return out
 }
 
@@ -501,9 +528,7 @@ func (w *Workspace) ResolveReferenceNameSegmentsInDoc(name string, ref resolve.R
 	}
 	last := len(out) - 1
 	if _, aliased := r.PartAlias(ref.QN, last); !aliased {
-		if selected := selectedInvocation(r, sem, ref); selected != nil {
-			out[last] = selected
-		}
+		out[last] = calledDeclaration(invocationSelection(r, sem, ref), out[last])
 	}
 	return out
 }

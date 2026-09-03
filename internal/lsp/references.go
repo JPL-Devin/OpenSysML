@@ -63,12 +63,16 @@ func (s *Server) References(ctx context.Context, params *protocol.ReferenceParam
 }
 
 // referenceTarget returns the symbol named at pos: the one a reference under the
-// cursor resolves to, or the declaration the cursor sits in.
+// cursor resolves to, or the declaration the cursor sits in. A call tied between
+// overloads names no one declaration, so it has no references to list.
 func (s *Server) referenceTarget(name string, doc *model.Document, pos protocol.Position) *symbols.Symbol {
 	offset := positionToOffset(doc.Content, pos)
 	if ref := refAtOffset(collectRefs(doc.AST, doc.Scope), offset); ref != nil {
 		if sym, ok := s.ws.ResolveReferenceInDoc(name, *ref); ok {
 			return sym
+		}
+		if len(s.ws.AmbiguousInvocationInDoc(name, *ref)) > 0 {
+			return nil
 		}
 	}
 	return symbolAtOffset(doc.Scope, offset)

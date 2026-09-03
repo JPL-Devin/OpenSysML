@@ -38,6 +38,14 @@ func (s *Server) Definition(ctx context.Context, params *protocol.DefinitionPara
 		}
 		return nil, nil
 	}
+	// A call its arguments leave tied between overloads goes to every one of them.
+	if overloads := s.ws.AmbiguousInvocationInDoc(name, *ref); len(overloads) > 0 {
+		locs := make([]protocol.Location, len(overloads))
+		for i, sym := range overloads {
+			locs[i] = s.symbolLocation(name, sym)
+		}
+		return locs, nil
+	}
 	sym, ok := s.ws.ResolveReferenceInDoc(name, *ref)
 	if !ok || sym == nil {
 		return nil, nil

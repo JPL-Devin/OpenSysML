@@ -28,6 +28,15 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   `reduce '+'` does — on the real axis — so `sum((1.0, 2.0))` stays the Real `3.0` rather than
   becoming `3.0 + 0.0i`.
 
+- **Editor navigation on an ambiguous call names every tied overload, and never one of them.**
+  A call the checker reports `invocation-ambiguous` used to navigate to whichever declaration
+  name resolution found first. Go-to-definition now lists each overload the arguments leave
+  tied, hover names them all with their qualified names, find-references on any one of the
+  overloads leaves the ambiguous call out, and rename does too — the call is not rewritten to
+  a name it was never bound to, and starting a rename from the call itself is refused with
+  `the call is ambiguous between several overloads`. A call that selects one overload still
+  navigates, lists and renames as that overload.
+
 - **`%features` reads out a whole object tree, as text or as JSON.** A large run could not
   be read out: the listing stopped at 200 lines with `… (listing truncated)`, so the
   counters two levels under a context of twelve parts were simply absent, and there was no
