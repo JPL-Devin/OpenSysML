@@ -127,6 +127,7 @@ exclude_docs: |
   project/pilot-execution-referee.md
   project/behavior-semantic-oracle.md
   project/grammar-coverage.md
+  project/validation-constraints.md
   project/element-identity-annotations.md
   project/html-document-backend.md
   project/wave*.md
