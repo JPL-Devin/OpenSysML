@@ -145,7 +145,9 @@ func (c *refCollector) namespaceDecl(scope *symbols.Scope, decl ast.Node) bool {
 		}
 		return true
 	case *ast.Import:
-		c.add(scope, d.Imported)
+		if d.Imported != nil {
+			c.push(Reference{Scope: scope, QN: d.Imported, Import: d})
+		}
 		c.conditionExpr(scope, d.FilterExpr)
 		return true
 	case *ast.Alias:

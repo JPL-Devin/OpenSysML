@@ -156,7 +156,7 @@ elmt:NestedNamespaceImport__Pkg2___400
     sysml:owningRelatedElement elmt:NestedNamespaceImport__Pkg2 ;
     sysml:importOwningNamespace elmt:NestedNamespaceImport__Pkg2 ;
     sysml:visibility "private" ;
-    sysml:importedNamespace "Pkg1" ;
+    sysml:importedNamespace elmt:NestedNamespaceImport__Pkg1 ;
     sysx:isNamespaceImport "true"^^xsd:boolean ;
     sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        private import Pkg1::*;\n" .
@@ -171,7 +171,7 @@ elmt:NestedNamespaceImport__Pkg2___401
     sysml:owningRelatedElement elmt:NestedNamespaceImport__Pkg2 ;
     sysml:importOwningNamespace elmt:NestedNamespaceImport__Pkg2 ;
     sysml:visibility "public" ;
-    sysml:importedNamespace "Pkg1" ;
+    sysml:importedNamespace elmt:NestedNamespaceImport__Pkg1 ;
     sysx:isRecursive "true"^^xsd:boolean ;
     sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        public import Pkg1::**;\n" .
@@ -186,7 +186,7 @@ elmt:NestedNamespaceImport__Pkg2___402
     sysml:owningRelatedElement elmt:NestedNamespaceImport__Pkg2 ;
     sysml:importOwningNamespace elmt:NestedNamespaceImport__Pkg2 ;
     sysml:visibility "private" ;
-    sysml:importedNamespace "Pkg1" ;
+    sysml:importedNamespace elmt:NestedNamespaceImport__Pkg1 ;
     sysx:isNamespaceImport "true"^^xsd:boolean ;
     sysx:isRecursive "true"^^xsd:boolean ;
     sysx:hasBody "false"^^xsd:boolean ;

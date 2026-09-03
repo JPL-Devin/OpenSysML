@@ -231,6 +231,57 @@ func TestCastReferencesAreCollected(t *testing.T) {
 	}
 }
 
+// An import's target is collected as the import's reference, read with its rule:
+// a spelling only the import itself surfaces reaches nothing, while an `import
+// all` reaches a private member.
+func TestImportTargetsResolveWithoutTheImport(t *testing.T) {
+	const src = `package Lib {
+	part def Cell;
+	private part def Hidden;
+}
+package Consumer {
+	package Lib {
+		part def Cell;
+	}
+	private import Lib::Cell;
+}
+package Opener {
+	private import all Lib::Hidden;
+}`
+	r, root, rootScope := resolvedDoc(t, src)
+	var refs []resolve.Reference
+	for _, ref := range resolve.References(root, rootScope) {
+		if ref.Import != nil {
+			refs = append(refs, ref)
+		}
+	}
+	if len(refs) != 2 {
+		t.Fatalf("References tags %d import targets, want 2", len(refs))
+	}
+	cell, ok := r.ProbeReference(refs[0])
+	if !ok || nameText(refs[0].QN) != "Lib::Cell" {
+		t.Fatalf("`import Lib::Cell` = %v, %v; want the nested Lib's Cell", cell, ok)
+	}
+	if sym, ok := r.ProbeReference(refs[0].Spelled(spelling(false, "Cell"))); ok {
+		t.Errorf("`Cell` written as the import's own target reaches %s through the import itself", sym.Name)
+	}
+	if sym, ok := r.ProbeReference(refs[1]); !ok || sym.Name != "Hidden" {
+		t.Errorf("`import all Lib::Hidden` = %v, %v; want the private member", sym, ok)
+	}
+	if sym, ok := r.ProbeReference(refs[1].Spelled(spelling(true, "Lib", "Hidden"))); !ok || sym.Name != "Hidden" {
+		t.Errorf("`$::Lib::Hidden` read as an `import all` target = %v, %v; want the private member", sym, ok)
+	}
+}
+
+// spelling is a qualified name on a fresh node, as a trial spelling is.
+func spelling(global bool, parts ...string) *ast.QualifiedName {
+	qn := &ast.QualifiedName{Global: global}
+	for _, part := range parts {
+		qn.Parts = append(qn.Parts, ast.NameSegment{Text: part})
+	}
+	return qn
+}
+
 // `first x` may be written before `x` is declared in the same body, so the
 // initial node names that later declaration rather than its own label.
 func TestAnInitialReferenceReachesALaterDeclaration(t *testing.T) {

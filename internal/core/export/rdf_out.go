@@ -582,7 +582,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 
 	case *ast.Import:
 		head(rdf.SysMLTerm("Import"))
-		e.graph.Add(subject, e.sysml(pImportedNamespace), rdf.String(qualifiedText(n.Imported)))
+		e.graph.Add(subject, e.sysml(pImportedNamespace), e.reference(n.Imported))
 		e.flags(subject, []boolProperty{
 			{pIsImportAll, n.IsAll},
 			{xNamespaceImport, n.Kind == ast.ImportNamespace},

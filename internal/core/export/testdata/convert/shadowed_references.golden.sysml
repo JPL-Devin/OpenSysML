@@ -41,4 +41,19 @@ package Shadowing {
         ref part inner : Frame;
         part def Field;
     }
+    package Lib {
+        part def Cell;
+    }
+    package Consumer {
+        package Lib {
+            part def Cell;
+        }
+        private import Shadowing::Lib::Cell;
+        part cell : Cell;
+        part inner : Lib::Cell;
+    }
+    package Exposed {
+        package Lib;
+        private import Shadowing::Lib::*;
+    }
 }

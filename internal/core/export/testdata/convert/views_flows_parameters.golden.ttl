@@ -654,7 +654,7 @@ elmt:FlowsAndViews__vehicleView___400
     sysml:owningRelatedElement elmt:FlowsAndViews__vehicleView ;
     sysml:importOwningNamespace elmt:FlowsAndViews__vehicleView ;
     sysml:visibility "protected" ;
-    sysml:importedNamespace "vehicle" ;
+    sysml:importedNamespace elmt:FlowsAndViews__vehicle ;
     sysml:isImportAll "true"^^xsd:boolean ;
     sysx:isRecursive "true"^^xsd:boolean ;
     sysx:isExpose "true"^^xsd:boolean ;

@@ -150,17 +150,25 @@ func (r *Resolver) resolveImportTarget(scope *symbols.Scope, imp *ast.Import) (*
 	if imp == nil || imp.Imported == nil {
 		return nil, false
 	}
-	if !importAllowsPrivate(imp) {
-		// A plain import keeps the boundary even when it is consulted while an
-		// enclosing `import all` resolves its own target.
-		var sym *symbols.Symbol
-		var ok bool
-		r.outsideAllVisible(func() { sym, ok = r.ResolveQualified(scope, imp.Imported) })
-		return sym, ok
+	return r.resolveImportName(scope, imp.Imported, imp)
+}
+
+// resolveImportName resolves qn as the target of imp, written in scope. The
+// import does not surface members while its own target is looked up.
+func (r *Resolver) resolveImportName(scope *symbols.Scope, qn *ast.QualifiedName, imp *ast.Import) (*symbols.Symbol, bool) {
+	if !r.resolvingImports[imp] {
+		r.resolvingImports[imp] = true
+		defer delete(r.resolvingImports, imp)
 	}
 	var sym *symbols.Symbol
 	var ok bool
-	r.inAllVisible(func() { sym, ok = r.ResolveQualified(scope, imp.Imported) })
+	if !importAllowsPrivate(imp) {
+		// A plain import keeps the boundary even when it is consulted while an
+		// enclosing `import all` resolves its own target.
+		r.outsideAllVisible(func() { sym, ok = r.ResolveQualified(scope, qn) })
+		return sym, ok
+	}
+	r.inAllVisible(func() { sym, ok = r.ResolveQualified(scope, qn) })
 	return sym, ok
 }
 

@@ -13,9 +13,9 @@ elmt:Shadowing
     sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Shadowing" ;
     sysx:hasBody "true"^^xsd:boolean ;
-    sysml:ownedMember elmt:Shadowing__Field, elmt:Shadowing__packet_20data_20field, elmt:Shadowing__Packet, elmt:Shadowing__Thermal_20Packet, elmt:Shadowing__payload, elmt:Shadowing__Bus, elmt:Shadowing__Budget, elmt:Shadowing__budget, elmt:Shadowing___408, elmt:Shadowing__bus, elmt:Shadowing__Study, elmt:Shadowing__study, elmt:Shadowing__deeper, elmt:Shadowing__Frame ;
-    sysml:ownedMembership elmt:Shadowing__Field_om, elmt:Shadowing__packet_20data_20field_om, elmt:Shadowing__Packet_om, elmt:Shadowing__Thermal_20Packet_om, elmt:Shadowing__payload_om, elmt:Shadowing__Bus_om, elmt:Shadowing__Budget_om, elmt:Shadowing__budget_om, elmt:Shadowing___408_om, elmt:Shadowing__bus_om, elmt:Shadowing__Study_om, elmt:Shadowing__study_om, elmt:Shadowing__deeper_om, elmt:Shadowing__Frame_om ;
-    sysml:ownedRelationship elmt:Shadowing__Field_om, elmt:Shadowing__packet_20data_20field_om, elmt:Shadowing__Packet_om, elmt:Shadowing__Thermal_20Packet_om, elmt:Shadowing__payload_om, elmt:Shadowing__Bus_om, elmt:Shadowing__Budget_om, elmt:Shadowing__budget_om, elmt:Shadowing___408_om, elmt:Shadowing__bus_om, elmt:Shadowing__Study_om, elmt:Shadowing__study_om, elmt:Shadowing__deeper_om, elmt:Shadowing__Frame_om ;
+    sysml:ownedMember elmt:Shadowing__Field, elmt:Shadowing__packet_20data_20field, elmt:Shadowing__Packet, elmt:Shadowing__Thermal_20Packet, elmt:Shadowing__payload, elmt:Shadowing__Bus, elmt:Shadowing__Budget, elmt:Shadowing__budget, elmt:Shadowing___408, elmt:Shadowing__bus, elmt:Shadowing__Study, elmt:Shadowing__study, elmt:Shadowing__deeper, elmt:Shadowing__Frame, elmt:Shadowing__Lib, elmt:Shadowing__Consumer, elmt:Shadowing__Exposed ;
+    sysml:ownedMembership elmt:Shadowing__Field_om, elmt:Shadowing__packet_20data_20field_om, elmt:Shadowing__Packet_om, elmt:Shadowing__Thermal_20Packet_om, elmt:Shadowing__payload_om, elmt:Shadowing__Bus_om, elmt:Shadowing__Budget_om, elmt:Shadowing__budget_om, elmt:Shadowing___408_om, elmt:Shadowing__bus_om, elmt:Shadowing__Study_om, elmt:Shadowing__study_om, elmt:Shadowing__deeper_om, elmt:Shadowing__Frame_om, elmt:Shadowing__Lib_om, elmt:Shadowing__Consumer_om, elmt:Shadowing__Exposed_om ;
+    sysml:ownedRelationship elmt:Shadowing__Field_om, elmt:Shadowing__packet_20data_20field_om, elmt:Shadowing__Packet_om, elmt:Shadowing__Thermal_20Packet_om, elmt:Shadowing__payload_om, elmt:Shadowing__Bus_om, elmt:Shadowing__Budget_om, elmt:Shadowing__budget_om, elmt:Shadowing___408_om, elmt:Shadowing__bus_om, elmt:Shadowing__Study_om, elmt:Shadowing__study_om, elmt:Shadowing__deeper_om, elmt:Shadowing__Frame_om, elmt:Shadowing__Lib_om, elmt:Shadowing__Consumer_om, elmt:Shadowing__Exposed_om ;
     sysx:sourceText "package Shadowing {\n" ;
     sysx:sourceTail "}\n" .
 
@@ -962,3 +962,259 @@ elmt:Shadowing__Frame__Field_om
     sysml:ownedRelatedElement elmt:Shadowing__Frame__Field ;
     sysml:owningRelatedElement elmt:Shadowing__Frame ;
     sysml:membershipOwningNamespace elmt:Shadowing__Frame .
+
+elmt:Shadowing__Lib
+    a sysml:Package ;
+    sysml:qualifiedName "Shadowing::Lib" ;
+    sysml:elementId "Shadowing__Lib" ;
+    sysx:memberIndex "14"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing ;
+    sysml:owner elmt:Shadowing ;
+    sysml:owningRelationship elmt:Shadowing__Lib_om ;
+    sysml:owningMembership elmt:Shadowing__Lib_om ;
+    sysml:declaredName "Lib" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Shadowing__Lib__Cell ;
+    sysml:ownedMembership elmt:Shadowing__Lib__Cell_om ;
+    sysml:ownedRelationship elmt:Shadowing__Lib__Cell_om ;
+    sysx:sourceText "    package Lib {\n" ;
+    sysx:sourceTail "    }\n" .
+
+elmt:Shadowing__Lib_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Shadowing__Lib_om" ;
+    sysml:owner elmt:Shadowing ;
+    sysml:memberElement elmt:Shadowing__Lib ;
+    sysml:ownedMemberElement elmt:Shadowing__Lib ;
+    sysml:ownedRelatedElement elmt:Shadowing__Lib ;
+    sysml:owningRelatedElement elmt:Shadowing ;
+    sysml:membershipOwningNamespace elmt:Shadowing .
+
+elmt:Shadowing__Lib__Cell
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "Shadowing::Lib::Cell" ;
+    sysml:elementId "Shadowing__Lib__Cell" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Lib ;
+    sysml:owner elmt:Shadowing__Lib ;
+    sysml:owningRelationship elmt:Shadowing__Lib__Cell_om ;
+    sysml:owningMembership elmt:Shadowing__Lib__Cell_om ;
+    sysml:declaredName "Cell" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part def Cell;\n" .
+
+elmt:Shadowing__Lib__Cell_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Shadowing__Lib__Cell_om" ;
+    sysml:owner elmt:Shadowing__Lib ;
+    sysml:memberElement elmt:Shadowing__Lib__Cell ;
+    sysml:ownedMemberElement elmt:Shadowing__Lib__Cell ;
+    sysml:ownedRelatedElement elmt:Shadowing__Lib__Cell ;
+    sysml:owningRelatedElement elmt:Shadowing__Lib ;
+    sysml:membershipOwningNamespace elmt:Shadowing__Lib .
+
+elmt:Shadowing__Consumer
+    a sysml:Package ;
+    sysml:qualifiedName "Shadowing::Consumer" ;
+    sysml:elementId "Shadowing__Consumer" ;
+    sysx:memberIndex "15"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing ;
+    sysml:owner elmt:Shadowing ;
+    sysml:owningRelationship elmt:Shadowing__Consumer_om ;
+    sysml:owningMembership elmt:Shadowing__Consumer_om ;
+    sysml:declaredName "Consumer" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Shadowing__Consumer__Lib, elmt:Shadowing__Consumer__cell, elmt:Shadowing__Consumer__inner ;
+    sysml:ownedMembership elmt:Shadowing__Consumer__Lib_om, elmt:Shadowing__Consumer__cell_om, elmt:Shadowing__Consumer__inner_om ;
+    sysml:ownedRelationship elmt:Shadowing__Consumer__Lib_om, elmt:Shadowing__Consumer___401, elmt:Shadowing__Consumer__cell_om, elmt:Shadowing__Consumer__inner_om ;
+    sysml:ownedImport elmt:Shadowing__Consumer___401 ;
+    sysx:sourceText "    package Consumer {\n" ;
+    sysx:sourceTail "    }\n" .
+
+elmt:Shadowing__Consumer_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Shadowing__Consumer_om" ;
+    sysml:owner elmt:Shadowing ;
+    sysml:memberElement elmt:Shadowing__Consumer ;
+    sysml:ownedMemberElement elmt:Shadowing__Consumer ;
+    sysml:ownedRelatedElement elmt:Shadowing__Consumer ;
+    sysml:owningRelatedElement elmt:Shadowing ;
+    sysml:membershipOwningNamespace elmt:Shadowing .
+
+elmt:Shadowing__Consumer__Lib
+    a sysml:Package ;
+    sysml:qualifiedName "Shadowing::Consumer::Lib" ;
+    sysml:elementId "Shadowing__Consumer__Lib" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Consumer ;
+    sysml:owner elmt:Shadowing__Consumer ;
+    sysml:owningRelationship elmt:Shadowing__Consumer__Lib_om ;
+    sysml:owningMembership elmt:Shadowing__Consumer__Lib_om ;
+    sysml:declaredName "Lib" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Shadowing__Consumer__Lib__Cell ;
+    sysml:ownedMembership elmt:Shadowing__Consumer__Lib__Cell_om ;
+    sysml:ownedRelationship elmt:Shadowing__Consumer__Lib__Cell_om ;
+    sysx:sourceText "        package Lib {\n" ;
+    sysx:sourceTail "        }\n" .
+
+elmt:Shadowing__Consumer__Lib_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Shadowing__Consumer__Lib_om" ;
+    sysml:owner elmt:Shadowing__Consumer ;
+    sysml:memberElement elmt:Shadowing__Consumer__Lib ;
+    sysml:ownedMemberElement elmt:Shadowing__Consumer__Lib ;
+    sysml:ownedRelatedElement elmt:Shadowing__Consumer__Lib ;
+    sysml:owningRelatedElement elmt:Shadowing__Consumer ;
+    sysml:membershipOwningNamespace elmt:Shadowing__Consumer .
+
+elmt:Shadowing__Consumer__Lib__Cell
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "Shadowing::Consumer::Lib::Cell" ;
+    sysml:elementId "Shadowing__Consumer__Lib__Cell" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Consumer__Lib ;
+    sysml:owner elmt:Shadowing__Consumer__Lib ;
+    sysml:owningRelationship elmt:Shadowing__Consumer__Lib__Cell_om ;
+    sysml:owningMembership elmt:Shadowing__Consumer__Lib__Cell_om ;
+    sysml:declaredName "Cell" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            part def Cell;\n" .
+
+elmt:Shadowing__Consumer__Lib__Cell_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Shadowing__Consumer__Lib__Cell_om" ;
+    sysml:owner elmt:Shadowing__Consumer__Lib ;
+    sysml:memberElement elmt:Shadowing__Consumer__Lib__Cell ;
+    sysml:ownedMemberElement elmt:Shadowing__Consumer__Lib__Cell ;
+    sysml:ownedRelatedElement elmt:Shadowing__Consumer__Lib__Cell ;
+    sysml:owningRelatedElement elmt:Shadowing__Consumer__Lib ;
+    sysml:membershipOwningNamespace elmt:Shadowing__Consumer__Lib .
+
+elmt:Shadowing__Consumer___401
+    a sysml:Import ;
+    sysml:qualifiedName "Shadowing::Consumer::@1" ;
+    sysml:elementId "Shadowing__Consumer___401" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Consumer ;
+    sysml:owner elmt:Shadowing__Consumer ;
+    sysml:owningRelatedElement elmt:Shadowing__Consumer ;
+    sysml:importOwningNamespace elmt:Shadowing__Consumer ;
+    sysml:visibility "private" ;
+    sysml:importedNamespace elmt:Shadowing__Lib__Cell ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        private import Shadowing::Lib::Cell;\n" .
+
+elmt:Shadowing__Consumer__cell
+    a sysml:PartUsage ;
+    sysml:qualifiedName "Shadowing::Consumer::cell" ;
+    sysml:elementId "Shadowing__Consumer__cell" ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Consumer ;
+    sysml:owner elmt:Shadowing__Consumer ;
+    sysml:owningRelationship elmt:Shadowing__Consumer__cell_om ;
+    sysml:owningMembership elmt:Shadowing__Consumer__cell_om ;
+    sysml:declaredName "cell" ;
+    sysml:type elmt:Shadowing__Lib__Cell ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part cell : Cell;\n" .
+
+elmt:Shadowing__Consumer__cell_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Shadowing__Consumer__cell_om" ;
+    sysml:owner elmt:Shadowing__Consumer ;
+    sysml:memberElement elmt:Shadowing__Consumer__cell ;
+    sysml:ownedMemberElement elmt:Shadowing__Consumer__cell ;
+    sysml:ownedRelatedElement elmt:Shadowing__Consumer__cell ;
+    sysml:owningRelatedElement elmt:Shadowing__Consumer ;
+    sysml:membershipOwningNamespace elmt:Shadowing__Consumer .
+
+elmt:Shadowing__Consumer__inner
+    a sysml:PartUsage ;
+    sysml:qualifiedName "Shadowing::Consumer::inner" ;
+    sysml:elementId "Shadowing__Consumer__inner" ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Consumer ;
+    sysml:owner elmt:Shadowing__Consumer ;
+    sysml:owningRelationship elmt:Shadowing__Consumer__inner_om ;
+    sysml:owningMembership elmt:Shadowing__Consumer__inner_om ;
+    sysml:declaredName "inner" ;
+    sysml:type elmt:Shadowing__Consumer__Lib__Cell ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part inner : Lib::Cell;\n" .
+
+elmt:Shadowing__Consumer__inner_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Shadowing__Consumer__inner_om" ;
+    sysml:owner elmt:Shadowing__Consumer ;
+    sysml:memberElement elmt:Shadowing__Consumer__inner ;
+    sysml:ownedMemberElement elmt:Shadowing__Consumer__inner ;
+    sysml:ownedRelatedElement elmt:Shadowing__Consumer__inner ;
+    sysml:owningRelatedElement elmt:Shadowing__Consumer ;
+    sysml:membershipOwningNamespace elmt:Shadowing__Consumer .
+
+elmt:Shadowing__Exposed
+    a sysml:Package ;
+    sysml:qualifiedName "Shadowing::Exposed" ;
+    sysml:elementId "Shadowing__Exposed" ;
+    sysx:memberIndex "16"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing ;
+    sysml:owner elmt:Shadowing ;
+    sysml:owningRelationship elmt:Shadowing__Exposed_om ;
+    sysml:owningMembership elmt:Shadowing__Exposed_om ;
+    sysml:declaredName "Exposed" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:Shadowing__Exposed__Lib ;
+    sysml:ownedMembership elmt:Shadowing__Exposed__Lib_om ;
+    sysml:ownedRelationship elmt:Shadowing__Exposed__Lib_om, elmt:Shadowing__Exposed___401 ;
+    sysml:ownedImport elmt:Shadowing__Exposed___401 ;
+    sysx:sourceText "    package Exposed {\n" ;
+    sysx:sourceTail "    }\n" .
+
+elmt:Shadowing__Exposed_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Shadowing__Exposed_om" ;
+    sysml:owner elmt:Shadowing ;
+    sysml:memberElement elmt:Shadowing__Exposed ;
+    sysml:ownedMemberElement elmt:Shadowing__Exposed ;
+    sysml:ownedRelatedElement elmt:Shadowing__Exposed ;
+    sysml:owningRelatedElement elmt:Shadowing ;
+    sysml:membershipOwningNamespace elmt:Shadowing .
+
+elmt:Shadowing__Exposed__Lib
+    a sysml:Package ;
+    sysml:qualifiedName "Shadowing::Exposed::Lib" ;
+    sysml:elementId "Shadowing__Exposed__Lib" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Exposed ;
+    sysml:owner elmt:Shadowing__Exposed ;
+    sysml:owningRelationship elmt:Shadowing__Exposed__Lib_om ;
+    sysml:owningMembership elmt:Shadowing__Exposed__Lib_om ;
+    sysml:declaredName "Lib" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        package Lib;\n" .
+
+elmt:Shadowing__Exposed__Lib_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Shadowing__Exposed__Lib_om" ;
+    sysml:owner elmt:Shadowing__Exposed ;
+    sysml:memberElement elmt:Shadowing__Exposed__Lib ;
+    sysml:ownedMemberElement elmt:Shadowing__Exposed__Lib ;
+    sysml:ownedRelatedElement elmt:Shadowing__Exposed__Lib ;
+    sysml:owningRelatedElement elmt:Shadowing__Exposed ;
+    sysml:membershipOwningNamespace elmt:Shadowing__Exposed .
+
+elmt:Shadowing__Exposed___401
+    a sysml:Import ;
+    sysml:qualifiedName "Shadowing::Exposed::@1" ;
+    sysml:elementId "Shadowing__Exposed___401" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:Shadowing__Exposed ;
+    sysml:owner elmt:Shadowing__Exposed ;
+    sysml:owningRelatedElement elmt:Shadowing__Exposed ;
+    sysml:importOwningNamespace elmt:Shadowing__Exposed ;
+    sysml:visibility "private" ;
+    sysml:importedNamespace elmt:Shadowing__Lib ;
+    sysx:isNamespaceImport "true"^^xsd:boolean ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        private import Shadowing::Lib::*;\n" .

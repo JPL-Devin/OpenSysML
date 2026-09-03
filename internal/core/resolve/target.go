@@ -212,6 +212,9 @@ type Reference struct {
 	// Endpoint is set when QN is a transition end, which names a vertex of the
 	// enclosing machine ahead of anything else it reaches (see ResolveEndpoint).
 	Endpoint bool
+	// Import is the import QN is the target of, if any; an `import all` reaches
+	// private members the visibility rule would otherwise hide.
+	Import *ast.Import
 	// Subsetting is the declaration QN subsets, if any; its spelling decides
 	// whether it is read as a redefinition or as the declaration's own name.
 	Subsetting ast.Node
@@ -276,6 +279,9 @@ func (r *Resolver) ResolveReference(ref Reference) (*symbols.Symbol, bool) {
 	}
 	if ref.Endpoint {
 		return r.ResolveEndpoint(ref.Scope, ref.QN)
+	}
+	if ref.Import != nil {
+		return r.resolveImportName(ref.Scope, ref.QN, ref.Import)
 	}
 	return r.resolveQualified(ref.Scope, ref.QN, hide)
 }

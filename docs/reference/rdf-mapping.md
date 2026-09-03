@@ -187,16 +187,16 @@ never by parsing the id — a declared id may legitimately end in `_om` or embed
   inside the model and as plain literals where it does not: `sysml:type`
   (the `:` clause), `specializes`, `subsets`, `redefines`, `references`,
   `crosses`, `disjointFrom`, `intersects`, `inverseOf`, `unions`, `chains`,
-  `includes`, `via`, `annotates`, `subject`. A literal carries the name itself,
+  `includes`, `via`, `annotates`, `subject`, and the namespace or member an
+  import names, `importedNamespace`. A literal carries the name itself,
   without the quotes an unrestricted name is written with; a target that is an
   expression rather than a name (a feature chain, say) is carried as the text it
   was written as, typed `sysx:Expression` to tell the two apart.
 - `sysml:lowerBound`, `sysml:upperBound` — multiplicity, as expression nodes
   ([Expressions](#expressions))
 - `sysml:value` — a feature's value, as an expression node
-- `sysml:importedNamespace`, `sysml:aliasedElement`, `sysml:client`,
-  `sysml:supplier`, `sysml:body`, `sysml:language`, `sysml:locale`,
-  `sysml:annotatedElement`
+- `sysml:aliasedElement`, `sysml:client`, `sysml:supplier`, `sysml:body`,
+  `sysml:language`, `sysml:locale`, `sysml:annotatedElement`
 
 The `sysx:` properties:
 

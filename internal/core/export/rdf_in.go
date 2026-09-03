@@ -960,11 +960,13 @@ func (d *decoder) importHead(el *element) (string, error) {
 			words = append(words, "all")
 		}
 	}
-	imported, ok := d.stringOf(el, rdf.SysML+pImportedNamespace)
-	if !ok {
+	imported, err := d.referenceText(el, rdf.SysML+pImportedNamespace)
+	if err != nil {
+		return "", err
+	}
+	if imported == "" {
 		return "", d.missing(el, sysmlPrefix+pImportedNamespace, "an import names the namespace it imports")
 	}
-	imported = qualifiedNameText(imported)
 	// `P::*::**` imports the members of P recursively; `P::**` imports P itself
 	// and, recursively, its members. Both flags may hold at once.
 	if d.boolOf(el, rdf.OpenSysML+xNamespaceImport) {

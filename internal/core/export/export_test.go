@@ -177,6 +177,10 @@ func TestWrittenReferencesResolveWhereWritten(t *testing.T) {
 		"sysml:type elmt:Shadowing__Field",
 		"sysml:targetFeature elmt:Shadowing__Packet__payload",
 		"sysml:referent elmt:Shadowing__payload",
+		"sysml:importedNamespace elmt:Shadowing__Lib__Cell",
+		"sysml:importedNamespace elmt:Shadowing__Lib",
+		"sysml:type elmt:Shadowing__Lib__Cell",
+		"sysml:type elmt:Shadowing__Consumer__Lib__Cell",
 	} {
 		if !strings.Contains(string(graph), want) {
 			t.Errorf("graph does not record %q\n%s", want, graph)
@@ -203,6 +207,12 @@ func TestWrittenReferencesResolveWhereWritten(t *testing.T) {
 		// Nothing shadows Field inside Packet, so it stays short.
 		"attribute 'data field' : Field;",
 		"connection link connect wrapped.payload to Shadowing::payload;",
+		// A nested package captures the imported one's name; the import itself
+		// does not surface its target as a spelling of its target.
+		"private import Shadowing::Lib::Cell;",
+		"private import Shadowing::Lib::*;",
+		"part cell : Cell;",
+		"part inner : Lib::Cell;",
 	} {
 		if !strings.Contains(string(notation), want) {
 			t.Errorf("notation does not write %q\n%s", want, notation)
