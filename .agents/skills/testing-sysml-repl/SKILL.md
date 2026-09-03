@@ -5595,3 +5595,43 @@ still prints `Started state machine executor`. The CLI mirrors the REPL: `-state
 Branch-moved trap: the lead may push a follow-up commit mid-run. Compare `./bin/sysml --version`
 with `git rev-parse --short HEAD` before every batch and rebuild when they differ; the version
 string is the only thing that tells a stale binary from a fresh one.
+
+## `%state <Def> [<obj>]`: attach vs detached, and the typed-body exhibit form (PR #856 class)
+
+The load-bearing distinction for exhibited-machine addressing is the first line `%state` prints:
+
+- Attached to the object's *running* machine:
+  `✓ Debugging state machine "<usage>" exhibited by object #N of "<obj>"` followed (when a
+  definition was named) by `note: object #N ... already exhibits "<Def>", so this session attaches
+  to that running machine rather than starting a second performance of it (as `%state <obj>` would)`.
+- Detached second performance (correct for performed or unrelated machines, a bug for anything the
+  object exhibits): `✓ Started state machine executor for "<Def>"` / `Performed by object #N of
+  "<obj>", which exhibits no running machine of this kind`.
+- Ambiguous one-argument lookup: `error: 2 objects of this session exhibit "<Def>" (#3 of "...",
+  #1 of "..."), so naming the machine alone attaches to none of them: use %state <object> or %state
+  <Def> <object> to name one`.
+
+Cover all three shapes of exhibit, since they resolve through different paths: the definition
+bound by name (`exhibit state m : Mission;`), the body stated inline with no type (`exhibit state
+modes { ... }`, `nested_machine.sysml`), and the usage **typed by a definition while stating its own
+body** (`exhibit state m : Mission { state extra; }`, `typed_body_machine.sysml`). The last one is
+matched through the usage's type (`ObjectBehavior.kinds`), and also through the definitions that type
+specializes: with `state def Blink :> Base` and `exhibit state tuned : Blink { ... }`, `%state Base
+obj` attaches to `tuned`, while an unrelated def still starts detached.
+
+Proof of "no double entry": pick a fixture whose entry action writes a slot (`typed_body_machine.sysml`
+writes `tank.m.log`/`level`), read `%features <obj>.<usage>` before and after `%state`, and confirm
+the values did not accumulate (`"W"`/10, not `"WW"`/20). `%current` on the attached session prints
+the same `State data:` slots, tying the debugger to the object's instance.
+
+Two distinct exhibitors: do not instantiate the same usage twice (it supersedes). Use a model with two
+different parts typed by the same machine def so `%state <Def>` alone is refused naming both.
+
+Contrast binary: `git worktree add /tmp/wt-old $(git merge-base HEAD origin/main)`, `make build-sysml`
+there, copy `bin/sysml` to `/tmp/old-sysml`, then `git worktree remove --force /tmp/wt-old`. The CLI
+form `./bin/sysml -instantiate Fleet::tank -state "Fleet::Mission Fleet::tank" <file>` is the
+single-frame comparison: the attach note versus "Started ... exhibits no running machine of this kind".
+
+Konsole `clear` wipes the scrollback, so a `%state` result that scrolls off before the screenshot is
+gone; take the screenshot before the next long `%features`, or start the next REPL without `clear`
+and use <kbd>Shift</kbd>+<kbd>PageUp</kbd>.
