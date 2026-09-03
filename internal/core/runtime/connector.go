@@ -252,6 +252,16 @@ func (inst *Instance) OwnedConnectors(ctx *Context) ([]*Instance, error) {
 	return inst.anonymousConnectors(ctx)
 }
 
+// MaterializedConnectors returns the anonymous connectors the instance has
+// already materialized, none when they were never asked for; it materializes nothing.
+func (inst *Instance) MaterializedConnectors(ctx *Context) []*Instance {
+	if inst.anonymous == nil {
+		return nil
+	}
+	conns, _ := inst.anonymousConnectors(ctx)
+	return conns
+}
+
 // keptIdentity returns the identity the instance's i-th anonymous connector had
 // before a carry-over, 0 when it had none.
 func (inst *Instance) keptIdentity(i int) int64 {

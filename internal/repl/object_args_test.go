@@ -3,6 +3,7 @@ package repl
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -629,6 +630,34 @@ func TestEvaluationOnlyObjectsAreNotAddressable(t *testing.T) {
 	if got := s.Complete("%features #", len("%features #")); strings.Join(got.Candidates, ", ") != held {
 		t.Errorf("completion offered %v, want %s", got.Candidates, held)
 	}
+}
+
+// An anonymous connector is held by its owner though no feature names it: once
+// %features has materialized it, the id it printed reaches it and completes, and
+// asking after ids materializes none that were not shown.
+func TestMaterializedAnonymousConnectorIsAddressableByID(t *testing.T) {
+	s := loadSource(t, `package Demo {
+		port def P;
+		part def A { port p : P; }
+		part def B { port q : P; }
+		part def Sys { part a : A; part b : B; connect a.p to b.q; }
+	}`)
+	wants(t, run(t, s, "%instantiate Demo::Sys"), "ID: 1")
+	before := s.Complete("%features #", len("%features #")).Candidates
+	if len(s.rtCtx.InstanceIDs()) != len(before) {
+		t.Fatalf("completion offered %v of %v: the connector was materialized to be listed", before, s.rtCtx.InstanceIDs())
+	}
+
+	conn := objectIDIn(t, connectorLine(t, run(t, s, "%features Demo::Sys")))
+	if slices.Contains(before, "#"+conn) {
+		t.Fatalf("completion offered the connector %s before %%features materialized it", conn)
+	}
+	wants(t, run(t, s, "%features #"+conn), "Instance: #"+conn+" (ID: "+conn+")")
+	after := s.Complete("%features #", len("%features #")).Candidates
+	if !slices.Contains(after, "#"+conn) {
+		t.Errorf("completion offered %v, want the connector #%s among them", after, conn)
+	}
+	wants(t, run(t, s, "%features #99"), "the objects are "+strings.Join(after, ", ")+")")
 }
 
 // collectionIDs reads the identities a %features listing shows feature holding.

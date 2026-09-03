@@ -378,14 +378,19 @@ func (s *Session) heldIDs() []int64 {
 	return ids
 }
 
-// materializedObjectsIn yields only the objects an object's feature values
-// already hold, so a walk over them leaves the runtime as it found it.
+// materializedObjectsIn yields only the objects an object already holds — in its
+// materialized feature values, and its anonymous connectors once `%features` has
+// shown them, reachable by id alone — so a walk leaves the runtime as it found it.
 func materializedObjectsIn(ctx *runtime.Context) func(carrier) []carrier {
 	return func(of carrier) []carrier {
-		return nestedObjects(ctx, of, func(name string) (*runtime.FeatureValue, bool) {
+		out := nestedObjects(ctx, of, func(name string) (*runtime.FeatureValue, bool) {
 			fv := of.inst.FeatureValues[name]
 			return fv, fv != nil && fv.Materialized
 		})
+		for _, conn := range of.inst.MaterializedConnectors(ctx) {
+			out = append(out, carrier{name: fmt.Sprintf("#%d", conn.ID), inst: conn})
+		}
+		return out
 	}
 }
 

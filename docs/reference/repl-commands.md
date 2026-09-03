@@ -123,8 +123,9 @@ session already holds are named, the first five of many (`… (3000 in all)`): t
 materializes nothing to find them.
 
 An id denotes an object the session holds: one it named, one a materialized feature of such an object
-holds, or one a second `%instantiate` of its name displaced. Instantiating a name a second time makes
-a new object and says so — `Demo::car now denotes this object; object #1 is displaced from that name
+holds, an anonymous connector `%features` has shown (`(anonymous connector) = Instance(ID: 4)` — `#4`
+is the only way to name it), or one a second `%instantiate` of its name displaced. Instantiating a
+name a second time makes a new object and says so — `Demo::car now denotes this object; object #1 is displaced from that name
 and stays reachable as #1` — and `#1` goes on reaching the first object on every command, listed by
 `%instances` as `#1 (ID: 1, displaced from Demo::car)`. A debugging session over the displaced object
 keeps running: the same `%instantiate` notes that it now follows the object as `#1` (or as a path
