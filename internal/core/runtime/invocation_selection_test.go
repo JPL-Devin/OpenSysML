@@ -23,6 +23,7 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("calc_call_selects_by_argument_type", testCalcCallSelectsByArgumentType)
 	t.Run("global_root_call_selects_by_argument_type", testGlobalRootCallSelectsByArgumentType)
 	t.Run("bare_call_selects_among_other_documents_root_declarations", testBareCallSelectsAmongOtherDocumentsRootDeclarations)
+	t.Run("bare_call_reaches_private_root_declarations_of_other_documents", testBareCallReachesPrivateRootDeclarationsOfOtherDocuments)
 	t.Run("calc_call_selects_by_named_argument", testCalcCallSelectsByNamedArgument)
 	t.Run("calc_call_selects_by_sibling_scalar_type", testCalcCallSelectsBySiblingScalarType)
 	t.Run("calc_call_typed_parameter_beats_untyped", testCalcCallTypedParameterBeatsUntyped)
@@ -561,6 +562,50 @@ func testBareCallSelectsAmongOtherDocumentsRootDeclarations(t *testing.T) {
 	idx.AddDocument("bools.sysml", parseAndBuild(t, `
 		private import ScalarValues::*;
 		calc def pick { in x : Boolean; return : Integer = 3; }
+	`))
+	idx.AddDocument("<test>", parseAndBuild(t, `
+		package test {
+			private import ScalarValues::*;
+			calc byInt { pick(3) }
+			calc byString { pick("s") }
+			calc byBool { pick(true) }
+		}
+	`))
+	idx.ExpandWildcardImports()
+	resolver := resolve.New(idx)
+	ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
+	rootScope := idx.DocumentRoot("<test>")
+	for calc, want := range map[string]int64{"byInt": 1, "byString": 2, "byBool": 3} {
+		sym := findSymbolByName(rootScope, calc, ast.DefCalc)
+		if sym == nil {
+			t.Fatalf("%s calc not found", calc)
+		}
+		result, err := ctx.InvokeCalc(sym, nil, rootScope)
+		if err != nil {
+			t.Fatalf("%s: %v", calc, err)
+		}
+		if result.Kind != ValConst || result.Const.Int != want {
+			t.Fatalf("%s = %+v, want %d", calc, result, want)
+		}
+	}
+}
+
+// A root namespace has no owner to hide its members from (KerML 8.2.3.5; the pilot
+// resolves them alike), so a private or protected root overload in another
+// document is selected exactly as a public one is.
+func testBareCallReachesPrivateRootDeclarationsOfOtherDocuments(t *testing.T) {
+	idx := libs.NewModelIndex()
+	idx.AddDocument("ints.sysml", parseAndBuild(t, `
+		private import ScalarValues::*;
+		calc def pick { in x : Integer; return : Integer = 1; }
+	`))
+	idx.AddDocument("strings.sysml", parseAndBuild(t, `
+		private import ScalarValues::*;
+		private calc def pick { in x : String; return : Integer = 2; }
+	`))
+	idx.AddDocument("bools.sysml", parseAndBuild(t, `
+		private import ScalarValues::*;
+		protected calc def pick { in x : Boolean; return : Integer = 3; }
 	`))
 	idx.AddDocument("<test>", parseAndBuild(t, `
 		package test {
