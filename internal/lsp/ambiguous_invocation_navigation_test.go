@@ -11,8 +11,9 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/model"
 )
 
-// ambiguousNavigationSrc imports two equally specific `pick(Integer)` overloads,
-// so `pick(2)` is ambiguous while `pick("s")` selects the String one.
+// ambiguousNavigationSrc imports two equally specific `pick(Integer)` overloads and a
+// broader `pick(Real)`, so `pick(2)` is tied between the two while `pick("s")` selects
+// the String one.
 const ambiguousNavigationSrc = `package A {
 	private import ScalarValues::*;
 	calc def pick { in x : Integer; return : Integer = 1; }
@@ -22,10 +23,15 @@ package B {
 	calc def pick { in x : Integer; return : Integer = 2; }
 	calc def pick { in x : String; return : Integer = 3; }
 }
+package C {
+	private import ScalarValues::*;
+	calc def pick { in x : Real; return : Integer = 4; }
+}
 package P {
 	private import ScalarValues::*;
 	private import A::*;
 	private import B::*;
+	private import C::*;
 	attribute i : Integer = pick(2);
 	attribute s : Integer = pick("s");
 }
@@ -68,15 +74,16 @@ func referencesAt(t *testing.T, s *Server, name, src, needle string) []protocol.
 	return locs
 }
 
-// Go-to-definition on an ambiguous call lists every overload the arguments
-// leave tied, in declaration order; a call that selects one still goes to it.
+// Go-to-definition on an ambiguous call lists every overload the arguments leave
+// tied, in declaration order, and not the broader one they also fit; a call that
+// selects one still goes to it.
 func TestDefinitionListsAmbiguousOverloads(t *testing.T) {
 	_, s, name := openAmbiguousNavigation(t)
 	src := ambiguousNavigationSrc
 
 	locs := definitionOf(t, s, name, src, "pick(2)")
 	if len(locs) != 2 {
-		t.Fatalf("pick(2): locations = %d, want both Integer overloads: %v", len(locs), locs)
+		t.Fatalf("pick(2): locations = %d, want only the two Integer overloads: %v", len(locs), locs)
 	}
 	wantLines := []uint32{
 		lineOfSrc(t, src, "calc def pick { in x : Integer; return : Integer = 1;"),
@@ -113,6 +120,9 @@ func TestReferencesSkipAmbiguousCalls(t *testing.T) {
 		if locs := referencesAt(t, s, name, src, decl); len(locs) != 0 {
 			t.Errorf("%s: references = %v, want none (the only call is ambiguous)", decl, locs)
 		}
+	}
+	if locs := referencesAt(t, s, name, src, "pick { in x : Real"); len(locs) != 0 {
+		t.Errorf("Real overload: references = %v, want none (it is beaten, not tied)", locs)
 	}
 	locs := referencesAt(t, s, name, src, "pick { in x : String")
 	if len(locs) != 1 {
@@ -185,6 +195,9 @@ func TestHoverNamesAmbiguousOverloads(t *testing.T) {
 		if !strings.Contains(hov.Contents.Value, want) {
 			t.Errorf("hover %q lacks %q", hov.Contents.Value, want)
 		}
+	}
+	if strings.Contains(hov.Contents.Value, "C::pick") {
+		t.Errorf("hover %q names the beaten Real overload", hov.Contents.Value)
 	}
 	if strings.Contains(hov.Contents.Value, "attribute") {
 		t.Errorf("hover %q describes the enclosing attribute", hov.Contents.Value)

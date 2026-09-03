@@ -448,7 +448,7 @@ func (w *Workspace) AmbiguousInvocationInDoc(name string, ref resolve.Reference)
 	defer w.mu.RUnlock()
 	resolver, sem := w.newResolver()
 	if sel := invocationSelection(resolver, sem, ref); sel != nil && sel.Ambiguous {
-		return sel.Applicable
+		return sel.Tied
 	}
 	return nil
 }
