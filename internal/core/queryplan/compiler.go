@@ -37,8 +37,7 @@ var builtins = map[string]builtin{
 }
 
 // typedExpression pairs a compiled expression with what planning knows of its
-// value: the types it may take, the fixed model elements it names, and its
-// multiplicity.
+// value: possible types, the fixed model elements it names, and multiplicity.
 type typedExpression struct {
 	expression        Expression
 	types             []*symbols.Symbol
@@ -577,9 +576,8 @@ func (c *compiler) compileExpression(
 	}
 }
 
-// compileReference follows the %run-query binding rule: a name that denotes
-// one of the query's input parameters reads that parameter, and any other
-// name that denotes a model element binds that element.
+// compileReference applies the %run-query binding rule: a query input parameter
+// name reads that parameter; any other name binds the model element it denotes.
 func (c *compiler) compileReference(
 	query *symbols.Symbol,
 	owner *symbols.Symbol,
