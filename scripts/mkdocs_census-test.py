@@ -70,6 +70,8 @@ class CensusTest(unittest.TestCase):
             PAGE.replace(end, end + end),
             PAGE + begin + "again\n" + end,
             PAGE.replace(begin, "\0").replace(end, begin).replace("\0", end),
+            PAGE.replace(begin, "prose " + begin),
+            PAGE.replace(end, end.rstrip("\n") + " prose\n"),
         ):
             with self.assertRaises(ValueError):
                 census.census(page)

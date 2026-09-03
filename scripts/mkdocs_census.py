@@ -46,9 +46,12 @@ def count_rules(markdown: str) -> dict[str, int]:
 
 def census(markdown: str) -> str:
     """Return the page with its census block replaced by the counted sentence."""
-    if markdown.count(BEGIN) != 1 or markdown.count(END) != 1:
-        raise ValueError(f"{PAGE}: exactly one census begin and one end marker required")
-    start, end = markdown.index(BEGIN), markdown.index(END)
+    lines = markdown.splitlines(keepends=True)
+    begins = [i for i, line in enumerate(lines) if line == BEGIN]
+    ends = [i for i, line in enumerate(lines) if line == END]
+    if len(begins) != 1 or len(ends) != 1:
+        raise ValueError(f"{PAGE}: exactly one census begin and one end marker line required")
+    start, end = begins[0], ends[0]
     if end < start:
         raise ValueError(f"{PAGE}: census end marker precedes its begin marker")
     c = count_rules(markdown)
@@ -61,7 +64,7 @@ def census(markdown: str) -> str:
         f"{c['⚠']} ⚠️ approximate, {c['❌']} ❌ not implemented, {c['⛔']} ⛔ deliberate divergence**; "
         f"{c['self-assessed']} of them have no external referee.\n"
     )
-    return markdown[:start] + sentence + markdown[end + len(END) :]
+    return "".join(lines[:start]) + sentence + "".join(lines[end + 1 :])
 
 
 def on_page_markdown(markdown: str, page, **_kwargs) -> str:
