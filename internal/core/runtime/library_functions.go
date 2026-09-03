@@ -215,9 +215,8 @@ func registerLibraryFunction(name string, params []string, apply func([]semantic
 	libraryFunctions[name].scalar = true
 }
 
-// registerScalarResultFunction adds one implementation over runtime values whose
-// result is a scalar (a Real or a Boolean) for every argument, so the compiled
-// tier may call it where a scalar argument selects it.
+// registerScalarResultFunction adds an implementation whose result is always a scalar
+// (Real or Boolean), so the compiled tier may call it where a scalar argument selects it.
 func registerScalarResultFunction(name string, params []string, apply libraryApply) {
 	registerValueFunction(name, params, len(params), apply)
 	libraryFunctions[name].scalar = true
@@ -1368,10 +1367,8 @@ func complexProduct(name string, _ *Context, args []Value) (Value, error) {
 	return aggregateComplex(name, args[0], ast.OpMul)
 }
 
-// aggregateComplex folds a collection's elements as complex numbers under the
-// sum or product, from its identity; an element that is no number is reported.
-// The library's `reduce '+'` keeps Real elements on the real axis, so only a
-// collection holding a Complex, or none at all, folds to a Complex.
+// aggregateComplex folds a collection under sum or product from its identity; like the
+// library's `reduce '+'`, only a collection holding a Complex (or none) folds to a Complex.
 func aggregateComplex(name string, collection Value, operator ast.OperatorKind) (Value, error) {
 	elements := elementsOf(collection)
 	if len(elements) > 0 && !holdsComplex(elements) {

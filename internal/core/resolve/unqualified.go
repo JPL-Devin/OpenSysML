@@ -488,9 +488,8 @@ func (r *Resolver) importPrefixAvailable(scope *symbols.Scope, imp *ast.Import, 
 	return false
 }
 
-// eachSubtreeMatch calls yield with each element of the target namespace and
-// its visible descendants named name, memberships re-exported through nested
-// imports included, until yield returns false.
+// eachSubtreeMatch yields each element named name in the target namespace and its visible
+// descendants, nested re-exports included, until yield returns false.
 func (r *Resolver) eachSubtreeMatch(scope *symbols.Scope, target *symbols.Symbol, name string, imp *ast.Import, admit func(*symbols.Symbol) bool, yield func(*symbols.Symbol) bool) {
 	out := newElementList()
 	r.appendSubtree(out, scope, target, imp, admit, map[symbols.ElementKey]bool{})

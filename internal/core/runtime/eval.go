@@ -1723,9 +1723,8 @@ func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget
 	return target
 }
 
-// selectedDeclaration is the declaration a call runs: the one selected for it,
-// or the first its name denotes when no candidate fits the arguments, which
-// then reports the mismatch as it always has.
+// selectedDeclaration is the declaration a call runs: the one selected for it, or the
+// first its name denotes when no candidate fits, which then reports the mismatch.
 func selectedDeclaration(sel *semantics.InvocationSelection) *symbols.Symbol {
 	if sel.Selected != nil {
 		return sel.Selected

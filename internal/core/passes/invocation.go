@@ -9,9 +9,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// SelectInvocation is the declaration e calls in scope, chosen from every
-// declaration its name is visible as by the static types of its arguments. The
-// runtime dispatches on the same selection, so what the checker accepts is what runs.
+// SelectInvocation is the declaration e calls in scope, chosen among every visible
+// declaration of its name by its arguments' static types; the runtime dispatches on it too.
 func SelectInvocation(resolver *resolve.Resolver, model *semantics.Model, scope *symbols.Scope, e *ast.InvocationExpr) *semantics.InvocationSelection {
 	silent := exprChecker{resolver: resolver, model: model}
 	return silent.selectInvocation(scope, e, silent.argumentTypes(scope, e))

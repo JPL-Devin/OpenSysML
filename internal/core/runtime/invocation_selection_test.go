@@ -143,9 +143,8 @@ func testActionCallReceiverWithNamedArgumentsRefused(t *testing.T) {
 	}
 }
 
-// performedCallSrc has a part perform a behavior that calls an action with the
-// part's own feature, which the performing instance values differently from
-// the declared default. Both the receiver and the argument forms are exercised.
+// performedCallSrc has a part perform a behavior calling an action with the part's own
+// feature, whose instance value differs from the default; receiver and argument forms.
 const performedCallSrc = `
 	package P {
 		private import ScalarValues::*;
@@ -184,9 +183,8 @@ func performedCallRuntime(t *testing.T, actionCall, stateCall string) (*symbols.
 	return idx, ctx, self
 }
 
-// The arguments of a nested action call, receiver included, read the object
-// performing the caller: `speed->report()` passes the instance's speed, not
-// the declared default.
+// A nested action call's arguments, receiver included, read the performing object:
+// `speed->report()` passes the instance's speed, not the declared default.
 func testActionCallArgumentsReadThePerformingObject(t *testing.T) {
 	for _, call := range []string{"action call = speed->report();", "perform action call = report(speed);"} {
 		idx, ctx, self := performedCallRuntime(t, call, "")
@@ -428,9 +426,8 @@ func testCalcCallSelectsBySiblingScalarType(t *testing.T) {
 	}
 }
 
-// Overloads reached as owned members, bare or qualified, through two generals,
-// and through two descendants of one recursive import are all candidates, and
-// each call runs the one its argument fits.
+// Overloads reached as owned members, through two generals, and through two descendants
+// of one recursive import are all candidates; each call runs the one its argument fits.
 func testCalcCallSelectsAmongOwnedInheritedAndRecursiveImport(t *testing.T) {
 	src := `
 		package Owned {

@@ -55,9 +55,8 @@ const numericImports = `
 	private import ComplexFunctions::*;
 `
 
-// A local name several imported function packages declare is bound to the
-// declaration whose parameter types the arguments conform to, so every
-// acceptance probe checks clean where the first import alone would not.
+// A local name several imported function packages declare binds to the declaration
+// whose parameter types the arguments conform to, so every acceptance probe checks clean.
 func TestInvocationOverloadSelectsByArgumentType(t *testing.T) {
 	wantLibraryClean(t, `package P {`+numericImports+`
 		attribute s = ToInteger("7");
@@ -70,9 +69,8 @@ func TestInvocationOverloadSelectsByArgumentType(t *testing.T) {
 	}`)
 }
 
-// Only the imported packages contribute candidates: with StringFunctions left
-// out, a String argument fits none of the visible ToString declarations, and the
-// diagnostic names the candidates considered rather than a hidden one.
+// Only imported packages contribute candidates: without StringFunctions a String fits
+// no visible ToString, and the diagnostic names the candidates considered.
 func TestInvocationOverloadOnlyImportedPackagesContribute(t *testing.T) {
 	wantLibraryDiag(t, `package P {
 		private import ScalarValues::*;
@@ -197,10 +195,8 @@ func TestInvocationOverloadModelShadowsLibrary(t *testing.T) {
 	}`)
 }
 
-// The function libraries are not implicitly imported: a bare call to a Kernel
-// Function Library function, to an OpenSysML extension function or to a name no
-// library declares is unresolved until the model imports the package, and the
-// diagnostic for a library name offers the imports that would resolve it.
+// Function libraries are not implicitly imported: a bare call to any library function
+// is unresolved until its package is imported, and the diagnostic offers those imports.
 func TestInvocationUnimportedLibraryFunction(t *testing.T) {
 	wantLibraryDiag(t, `package P {
 		private import ScalarValues::*;
@@ -339,9 +335,8 @@ func TestInvocationNamedArgumentsAreTypeChecked(t *testing.T) {
 		"type.expr", `density requires an argument for v`)
 }
 
-// Candidates are gathered through a public import re-exporting them and from
-// the general type a definition inherits them from; an inherited member hides
-// what an import of the same name would bring in, as for any other name.
+// Candidates come through re-exporting public imports and from general types; an
+// inherited member hides a same-named import, as for any other name.
 func TestInvocationOverloadReexportedAndInheritedCandidates(t *testing.T) {
 	wantLibraryClean(t, `package P {
 		private import ScalarValues::*;
@@ -373,9 +368,8 @@ func TestInvocationOverloadReexportedAndInheritedCandidates(t *testing.T) {
 		"type.expr", "argument 1 of pick expects Integer, found String")
 }
 
-// Every general type, every owned member and every descendant of a recursive
-// import contributes its declaration; two sharing a name is a warning, not a
-// lost candidate.
+// Every general type, owned member and recursive-import descendant contributes its
+// declaration; two sharing a name is a warning, not a lost candidate.
 func TestInvocationOverloadCandidatesFromEveryGeneralAndRecursiveImport(t *testing.T) {
 	diags := libraryDiags(t, `package P {
 		private import ScalarValues::*;

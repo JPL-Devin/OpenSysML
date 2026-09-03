@@ -619,10 +619,8 @@ func (ec *exprChecker) operands(scope *symbols.Scope, e *ast.OperatorExpr) (sema
 	return ec.infer(scope, e.Operands[0]), ec.infer(scope, e.Operands[1]), true
 }
 
-// inferInvocation checks the argument list of a calc/action invocation against
-// the `in` parameters of the declaration selected for it (see SelectInvocation)
-// and types the call by that declaration's result. In the arrow form `x->f(a)`
-// the receiver binds to the first parameter, so it is prepended to the arguments.
+// inferInvocation checks a call's arguments against the `in` parameters of the declaration
+// SelectInvocation chose and types it by its result; a receiver `x->f(a)` is the first argument.
 func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationExpr) semantics.PrimType {
 	args := invocationArgs(e)
 	// Typed once and reused by checkArguments, so nested errors report once.
@@ -682,9 +680,8 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 	return ec.model.PrimTypeOf(ec.model.ResultParameterOf(sym))
 }
 
-// checkArguments reports the arguments of e that do not bind to sym's `in`
-// parameters; considered, when set, are the other declarations the call could
-// have named, listed on each report.
+// checkArguments reports the arguments of e that do not bind to sym's `in` parameters,
+// listing considered (the other declarations the call could name) on each report.
 func (ec *exprChecker) checkArguments(
 	e *ast.InvocationExpr,
 	sym *symbols.Symbol,
@@ -726,9 +723,8 @@ func (ec *exprChecker) checkArguments(
 	}
 }
 
-// checkNamedArguments reports the named arguments of e that name no `in`
-// parameter of sym or do not bind to the one they name, and the parameters
-// without a default that no argument names.
+// checkNamedArguments reports named arguments that name no `in` parameter of sym or do
+// not bind to it, and default-less parameters no argument names.
 func (ec *exprChecker) checkNamedArguments(
 	e *ast.InvocationExpr,
 	sym *symbols.Symbol,
@@ -736,9 +732,8 @@ func (ec *exprChecker) checkNamedArguments(
 	params []parameter,
 	report func(source.Span, string, ...any),
 ) {
-	// A receiver binds by position, so which parameter it binds to is
-	// unstated beside arguments that bind by name (runtime/eval.go reports
-	// the same call).
+	// A receiver binds by position, which named arguments leave unstated; runtime/eval.go
+	// reports the same call.
 	if e.Operand != nil {
 		report(e.Span(), "%s cannot be called with a receiver and named arguments", sym.Name)
 	}

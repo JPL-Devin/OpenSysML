@@ -111,9 +111,8 @@ func TestReferencesDistinguishOverloads(t *testing.T) {
 	}
 }
 
-// Go-to-definition on an imported Kernel Function Library call opens the
-// bundled declaration the checker and runtime bind it to; unimported, the
-// call resolves to nothing and there is nowhere to go.
+// Go-to-definition on an imported library call opens the bundled declaration the checker
+// and runtime bind it to; unimported, the call resolves to nothing.
 func TestDefinitionReachesImportedLibraryFunction(t *testing.T) {
 	ws := model.NewWorkspace()
 	s := NewServer(ws)

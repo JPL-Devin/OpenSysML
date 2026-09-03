@@ -39,9 +39,8 @@ type invocationKey struct {
 	scope *symbols.Scope
 }
 
-// SelectInvocation chooses the declaration e calls: the most specific visible
-// candidate the arguments fit, or the first in lookup order when an argument's
-// type is unknown. Memoized per invocation and scope.
+// SelectInvocation chooses the declaration e calls: the most specific candidate the arguments
+// fit, or the first in lookup order when an argument's type is unknown. Memoized per node/scope.
 func (m *Model) SelectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, args []Argument) *InvocationSelection {
 	if m == nil || e == nil || e.Type == nil {
 		return &InvocationSelection{}
@@ -111,10 +110,8 @@ func (m *Model) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, ar
 		sel.Selected = applicable[0]
 		return sel
 	}
-	// Specificity decides only among candidates the arguments are known to
-	// fit: those they match exactly, else those they widen to when no candidate
-	// takes them through a parameter of undetermined type. Otherwise the first
-	// in lookup order is called, as when nothing about the arguments is known.
+	// Specificity decides only among candidates the arguments surely fit: exact matches, else
+	// widenings when no candidate takes them through an undetermined type; else lookup order.
 	decisive := indicesWithFit(fits, fitExact)
 	if len(decisive) == 0 && !containsFit(fits, fitOpen) {
 		decisive = indicesWithFit(fits, fitWiden)
@@ -268,9 +265,8 @@ func (sig invocationSignature) index(name string) int {
 	return -1
 }
 
-// argumentBinds reports whether arg may be passed to parameter p, and how
-// surely. Strictly, two declared types decide by conformance alone; loosely, a
-// non-literal's type only bounds its values, so either direction fits.
+// argumentBinds reports whether and how surely arg may be passed to p: strictly by conformance
+// alone; loosely a non-literal's type only bounds its values, so either direction fits.
 func (m *Model) argumentBinds(arg Argument, p signatureParameter, mode bindMode) (bindFit, bool) {
 	if arg.Type != nil && p.typ != nil {
 		if m.Conforms(arg.Type, p.typ) {

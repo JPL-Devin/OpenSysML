@@ -5,9 +5,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// ResolveInvocationName resolves the name an invocation calls as ResolveQualified
-// does, except that several declarations under a qualified name denote the first
-// of them: which one the call runs is for overload selection to decide.
+// ResolveInvocationName resolves a called name as ResolveQualified does, except that several
+// declarations under a qualified name denote the first: overload selection picks the one run.
 func (r *Resolver) ResolveInvocationName(scope *symbols.Scope, qn *ast.QualifiedName) (*symbols.Symbol, bool) {
 	if qn == nil {
 		return nil, false
@@ -16,12 +15,8 @@ func (r *Resolver) ResolveInvocationName(scope *symbols.Scope, qn *ast.Qualified
 	return r.resolveQualified(scope, qn, nil)
 }
 
-// InvocationCandidates returns every declaration an invocation's name may denote
-// from scope, in lookup order: the first is what ResolveInvocationName reaches.
-// A bare name is bound by the first scope step that finds it, every import of
-// that scope contributing; a library function is a candidate only where the
-// model imports it, as for any other name. A qualified name denotes every
-// member its last segment names in the namespace the rest resolves to.
+// InvocationCandidates returns every declaration a called name may denote from scope, in
+// lookup order (ResolveInvocationName reaches the first); library functions need an import.
 func (r *Resolver) InvocationCandidates(scope *symbols.Scope, qn *ast.QualifiedName) []*symbols.Symbol {
 	if qn == nil || len(qn.Parts) == 0 {
 		return nil
@@ -62,9 +57,8 @@ func (r *Resolver) qualifiedCandidates(scope *symbols.Scope, qn *ast.QualifiedNa
 	return out
 }
 
-// unqualifiedCandidates walks the scopes as walkUnqualifiedHiding does, stopping
-// at the first step that binds name; the owned members and the imports of a
-// scope yield every match.
+// unqualifiedCandidates walks the scopes as walkUnqualifiedHiding does, stopping at the
+// first step that binds name, whose owned members and imports yield every match.
 func (r *Resolver) unqualifiedCandidates(scope *symbols.Scope, name string) []*symbols.Symbol {
 	one := func(sym *symbols.Symbol, ok bool) ([]*symbols.Symbol, bool) {
 		if !ok || sym == nil {
@@ -116,9 +110,8 @@ func (r *Resolver) unqualifiedCandidates(scope *symbols.Scope, name string) []*s
 	return nil
 }
 
-// localBindingCandidates is localBinding with every owned member of scope that
-// binds name contributing, the one localBinding returns first, and reports
-// whether that step binds name at all.
+// localBindingCandidates is localBinding over every owned member of scope binding name
+// (localBinding's first), and reports whether that step binds name at all.
 func (r *Resolver) localBindingCandidates(scope *symbols.Scope, name string) ([]*symbols.Symbol, bool) {
 	first, ok := r.localBinding(scope, name, nil)
 	if !ok {

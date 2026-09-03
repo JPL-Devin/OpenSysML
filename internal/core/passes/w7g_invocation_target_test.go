@@ -24,9 +24,8 @@ func TestW7GInvokingANonBehaviourIsReportedAsTheReferenceWordsIt(t *testing.T) {
 	}
 }
 
-// A name two imports both bring in is judged over every candidate: a call
-// selects the behavioral one where there is one, and is reported once when
-// there is none; a behavioral target is silent however it is declared.
+// A name two imports bring in is judged over every candidate: a call selects the
+// behavioral one, and is reported once when there is none.
 func TestW7GAmbiguousAndValidInvocationTargets(t *testing.T) {
 	const mixed = `package A1 { part def N; }
 	package A2 { action def N; }
