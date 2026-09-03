@@ -189,12 +189,28 @@ ex:r_m a sysml:ResultExpressionMembership ; sysml:membershipOwningNamespace ex:C
 ex:r_a a sysml:FeatureReferenceExpression ; sysml:referent ex:x .
 ex:r_b a sysml:LiteralInteger ; sysml:value "2"^^xsd:integer .
 `
+	const want = "x : Real;\n        (x * 2)\n    }"
 	back, err := export.Convert("m.ttl", []byte(turtle), export.FormatTurtle, export.FormatSysML)
 	if err != nil {
 		t.Fatalf("back to notation from a standard graph: %v", err)
 	}
-	if want := "x : Real;\n        (x * 2)\n    }"; !strings.Contains(string(back), want) {
+	if !strings.Contains(string(back), want) {
 		t.Errorf("the notation lacks %q:\n%s", want, back)
+	}
+
+	// Ownership stated from the membership alone, with no inverse on the
+	// Expression, still reaches the result: it is neither dropped nor an
+	// expression node of something else.
+	membershipOnly := strings.ReplaceAll(turtle, " ; sysml:owningMembership ex:r_m", "")
+	if membershipOnly == turtle {
+		t.Fatal("the result's owningMembership triple was not removed")
+	}
+	back, err = export.Convert("m.ttl", []byte(membershipOnly), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from the membership side alone: %v", err)
+	}
+	if !strings.Contains(string(back), want) {
+		t.Errorf("the result owned from the membership side alone is lost:\n%s", back)
 	}
 }
 

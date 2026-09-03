@@ -223,14 +223,23 @@ type decoder struct {
 }
 
 // build reads every subject into an element and links it to its owner,
-// returning the elements that have no owner in the graph.
+// returning the elements that have no owner in the graph. Memberships are read
+// first: they are what tells an owned Expression from an expression node, and
+// what owns an element whose graph states ownership from the membership alone.
 func (d *decoder) build() ([]*element, error) {
 	var (
 		order []*element
 		roots []*element
 	)
 	for _, subject := range d.graph.Subjects() {
-		if d.isExpressionNode(subject) {
+		if d.isMembership(subject) {
+			if err := d.readMembership(subject); err != nil {
+				return nil, err
+			}
+		}
+	}
+	for _, subject := range d.graph.Subjects() {
+		if d.isMembership(subject) || d.isExpressionNode(subject) {
 			// A node of an expression graph belongs to the declaration that holds
 			// the expression, not to an element of its own.
 			continue
@@ -241,15 +250,6 @@ func (d *decoder) build() ([]*element, error) {
 				What: fmt.Sprintf("the subject <%s>", subject.Value),
 				Note: "it has no rdf:type, so there is no way to tell what to write",
 			}
-		}
-		if ontology.IsAncestorOrSelf(metaclass, mOwningMembership) && !d.graph.HasProperty(subject, rdf.SysML+pQualifiedName) {
-			// A membership with no qualified name states ownership rather than a
-			// declaration of its own; one with a name, such as a state's entry
-			// membership, is written as the member it is.
-			if err := d.readMembership(subject); err != nil {
-				return nil, err
-			}
-			continue
 		}
 		el := &element{
 			iri:         subject.Value,
@@ -304,6 +304,15 @@ func (d *decoder) build() ([]*element, error) {
 	return roots, nil
 }
 
+// isMembership reports whether a subject states ownership rather than a
+// declaration of its own: an OwningMembership with no qualified name. One with
+// a name, such as a state's entry membership, is written as the member it is.
+func (d *decoder) isMembership(subject rdf.Term) bool {
+	metaclass := rdf.LocalName(d.graph.Type(subject))
+	return metaclass != "" && ontology.IsAncestorOrSelf(metaclass, mOwningMembership) &&
+		!d.graph.HasProperty(subject, rdf.SysML+pQualifiedName)
+}
+
 // readMembership records the ownership edge an OwningMembership stands for. Both
 // ends are stated twice in the abstract syntax — once under the membership's own
 // name for the property and once under the Relationship's — and either spelling
@@ -335,10 +344,13 @@ func (d *decoder) firstObject(subject rdf.Term, properties ...string) (rdf.Term,
 
 // ownerOf returns the element that owns el, or nil when it is a root. Ownership
 // is read through the element's OwningMembership, which is where the abstract
-// syntax puts it; a graph carrying only the compact sysml:owningNamespace shape
-// this tool wrote before memberships were materialized is still read.
+// syntax puts it — from the element's side, or from the membership's alone when
+// the graph states only that; a graph carrying only the compact
+// sysml:owningNamespace shape this tool wrote before memberships were
+// materialized is still read.
 func (d *decoder) ownerOf(el *element) (*element, error) {
 	ownerIRI := ""
+	m, owned := d.owningMembership[el.iri]
 	switch relationship, ok := d.firstObject(rdf.IRI(el.iri), pOwningMembership, pOwningRelationship); {
 	case ok:
 		// The owning relationship is either a membership standing between the
@@ -349,6 +361,8 @@ func (d *decoder) ownerOf(el *element) (*element, error) {
 		} else {
 			ownerIRI = relationship.Value
 		}
+	case owned:
+		ownerIRI = m.owner
 	default:
 		// A relationship a namespace declares — an import, a dependency, a
 		// membership — states the element that owns it rather than a membership.

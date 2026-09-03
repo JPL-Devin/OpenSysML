@@ -201,15 +201,57 @@ func TestOwnershipComesBackFromTheMembershipsAlone(t *testing.T) {
 	}
 }
 
-// The negative control for the test above: with every ownership property gone
-// the tree flattens, which is what makes those properties load-bearing.
-func TestWithoutAnyOwnershipPropertyTheTreeFlattens(t *testing.T) {
+// elementSideOwnership are the properties an element states its owner with; a
+// membership states the same edge from its own side.
+var elementSideOwnership = []string{"sysx:sourceText", "sysml:owningNamespace", "sysml:owner", "sysml:owningMembership", "sysml:owningRelationship"}
+
+// A graph built from the abstract syntax may state ownership from the membership
+// alone — sysml:membershipOwningNamespace and sysml:memberElement, with no
+// inverse on the member — and the tree comes back from that. An entry action is
+// owned by a membership that is an element in its own right, which no membership
+// edge states, so it alone floats to the root.
+func TestOwnershipComesBackFromTheMembershipSideAlone(t *testing.T) {
 	turtle, err := export.Convert("m.sysml", []byte(ownershipModel), export.FormatSysML, export.FormatTurtle)
 	if err != nil {
 		t.Fatalf("to turtle: %v", err)
 	}
 	stripped := turtle
-	for _, property := range []string{"sysx:sourceText", "sysml:owningNamespace", "sysml:owner", "sysml:owningMembership", "sysml:owningRelationship"} {
+	for _, property := range elementSideOwnership {
+		stripped = withoutTriples(t, stripped, property)
+	}
+	back, err := export.Convert("m.ttl", stripped, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from the membership side alone: %v", err)
+	}
+	const want = `package Outer {
+    package Inner {
+        part def Vehicle {
+            attribute mass;
+            private part wheel;
+        }
+        state def Modes {
+            entry;
+            state off;
+        }
+    }
+}
+action warm;
+`
+	if string(back) != want {
+		t.Errorf("the memberships did not carry the tree\n--- want ---\n%s\n--- got ---\n%s", want, back)
+	}
+}
+
+// The negative control for the tests above: with every ownership property gone
+// from the elements and the memberships gone with them, the tree flattens, which
+// is what makes those properties load-bearing.
+func TestWithoutAnyOwnershipPropertyTheTreeFlattens(t *testing.T) {
+	turtle, err := export.Convert("m.sysml", []byte(ownershipModel), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	stripped := withoutMemberships(turtle)
+	for _, property := range elementSideOwnership {
 		stripped = withoutTriples(t, stripped, property)
 	}
 	back, err := export.Convert("m.ttl", stripped, export.FormatTurtle, export.FormatSysML)
@@ -219,6 +261,19 @@ func TestWithoutAnyOwnershipPropertyTheTreeFlattens(t *testing.T) {
 	if !strings.HasPrefix(string(back), "package Outer {\n}\n") {
 		t.Errorf("the package should have lost its members, since nothing states them:\n%s", back)
 	}
+}
+
+// withoutMemberships drops the subjects that state ownership rather than a
+// declaration: the memberships this tool mints, whose IRIs end in _om.
+func withoutMemberships(turtle []byte) []byte {
+	var kept []string
+	for _, block := range strings.Split(string(turtle), "\n\n") {
+		if head, _, _ := strings.Cut(block, "\n"); strings.HasSuffix(head, "_om") {
+			continue
+		}
+		kept = append(kept, block)
+	}
+	return []byte(strings.Join(kept, "\n\n"))
 }
 
 // A graph in the compact shape this tool wrote before memberships were
