@@ -665,7 +665,8 @@ func UnitExprText(node ast.Node) string {
 }
 
 // unitOperandGrouped reports whether operand, under op, must be parenthesised
-// to read back as itself: a product or quotient under `**` or right of `/`.
+// to read back as itself: a product or quotient under `**` or right of `/`, and
+// a power left of `**`, which associates to the right.
 func unitOperandGrouped(op ast.OperatorKind, operand ast.Node, right bool) bool {
 	inner, ok := operand.(*ast.OperatorExpr)
 	if !ok || len(inner.Operands) != 2 {
@@ -674,6 +675,8 @@ func unitOperandGrouped(op ast.OperatorKind, operand ast.Node, right bool) bool 
 	switch inner.Operator {
 	case ast.OpMul, ast.OpDiv:
 		return op == ast.OpPow || (op == ast.OpDiv && right)
+	case ast.OpPow:
+		return op == ast.OpPow && !right
 	}
 	return false
 }

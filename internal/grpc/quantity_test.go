@@ -102,6 +102,7 @@ func TestQuantityCrossesTheWire(t *testing.T) {
 		// Grouping the notation needs survives, so the text reads back as the unit written.
 		{expr: "3.0 [SI::m/(SI::s*SI::kg)]", unit: "SI::m/(SI::s*SI::kg)", real: 3.0, reduction: "1/1000·SI::gram^-1·SI::metre·SI::second^-1", wantScaled: true},
 		{expr: "4.0 [(SI::m*SI::s)**2]", unit: "(SI::m*SI::s)**2", real: 4.0, reduction: "SI::metre^2·SI::second^2"},
+		{expr: "8.0 [(SI::m**2)**3]", unit: "(SI::m**2)**3", real: 8.0, reduction: "SI::metre^6"},
 	}
 
 	for _, tc := range tests {
@@ -143,6 +144,7 @@ func TestQuantityRoundTrip(t *testing.T) {
 		"(2.0 [SI::m])**2",
 		"3.0 [SI::m/(SI::s*SI::kg)]",
 		"4.0 [(SI::m*SI::s)**2]",
+		"8.0 [(SI::m**2)**3]",
 		"6.0 [SI::m/SI::s/SI::kg]",
 	} {
 		t.Run(expr, func(t *testing.T) {
