@@ -207,12 +207,15 @@ func encodeDocument(file *source.SourceFile, root *ast.RootNamespace) (*encoder,
 
 // languageName is the name a document's grammar is recorded under on its roots,
 // so the text is read back in the grammar it was written in. A file with no
-// model extension is read as SysML, as the parser reads it.
+// model extension is read as neither grammar exactly, so none is recorded.
 func languageName(kind source.Kind) string {
-	if kind == source.KindKerML {
+	switch kind {
+	case source.KindKerML:
 		return "kerml"
+	case source.KindSysML:
+		return "sysml"
 	}
-	return "sysml"
+	return ""
 }
 
 // sourceText gives every element its lines as written, comments included; one
@@ -411,8 +414,8 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		if !inline {
 			e.regions[subject] = lines
 		}
-		if ownerTerm.Value == "" {
-			e.graph.Add(subject, e.sysx(xSourceLanguage), rdf.String(languageName(e.file.Kind())))
+		if language := languageName(e.file.Kind()); ownerTerm.Value == "" && language != "" {
+			e.graph.Add(subject, e.sysx(xSourceLanguage), rdf.String(language))
 		}
 		if e.ids.declaredIDAt(node) {
 			e.graph.Add(subject, e.sysx(xDeclaredID), rdf.Bool(true))

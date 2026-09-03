@@ -482,6 +482,33 @@ func TestSourceTextIsReadInTheLanguageItWasWrittenIn(t *testing.T) {
 	}
 }
 
+// A buffer with no extension — standard input, a REPL session — is read as
+// SysML with KerML's `all` prefix, so `part all : T;` is an anonymous part
+// there and the part named `all` in a .sysml file. The graph records no
+// language for it, and the check reads the text as such a buffer again.
+func TestSourceTextOfAnExtensionlessBufferIsReadAsOne(t *testing.T) {
+	src := "package P {\n    part def T;\n    // every T\n    part all : T;\n}\n"
+	turtle, err := export.Convert("<stdin>", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	if strings.Contains(string(turtle), "sysx:sourceLanguage") {
+		t.Fatalf("an extensionless buffer records a language:\n%s", turtle)
+	}
+	if strings.Contains(string(turtle), `sysml:declaredName "all"`) {
+		t.Fatalf("`all` was read as a name:\n%s", turtle)
+	}
+	if back := toNotation(t, turtle); back != src {
+		t.Errorf("round trip changed the notation:\n--- want ---\n%s--- got ---\n%s", src, back)
+	}
+	// Read as SysML instead, the same text names the part `all`: a different
+	// model, so the text is not trusted.
+	sysml := editTurtle(t, turtle, `sysml:declaredName "P" ;`, `sysml:declaredName "P" ; sysx:sourceLanguage "sysml" ;`)
+	if back, want := toNotation(t, sysml), toNotation(t, withoutTriples(t, turtle, "sysx:sourceText")); back != want {
+		t.Errorf("text of another grammar was trusted:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+}
+
 // Roots recording different languages cannot be read as one document, so their
 // text is not trusted: the graph is written canonically.
 func TestRootsOfTwoLanguagesAreWrittenCanonically(t *testing.T) {

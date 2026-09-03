@@ -109,22 +109,23 @@ func (d *decoder) demoteStale(notation string, roots []*element) {
 }
 
 // candidateName names the candidate notation for the grammar the roots record
-// their text was written in; SysML when none does. Roots recording different
-// grammars cannot be read as one document, so their text cannot be checked.
+// their text was written in; a root with text recording none was read as a
+// buffer with no extension, and the candidate is named so it reads the same
+// way. Roots recording different grammars cannot be read as one document.
 func (d *decoder) candidateName(roots []*element) (string, bool) {
-	language := ""
+	language, seen := "", false
 	for _, root := range roots {
-		recorded, ok := d.stringOf(root, rdf.OpenSysML+xSourceLanguage)
-		switch {
-		case !ok:
-		case language == "":
-			language = recorded
-		case language != recorded:
+		if _, ok := d.graph.Lexical(rdf.IRI(root.iri), rdf.OpenSysML+xSourceText); !ok {
+			continue
+		}
+		recorded, _ := d.stringOf(root, rdf.OpenSysML+xSourceLanguage)
+		if seen && recorded != language {
 			return "", false
 		}
+		language, seen = recorded, true
 	}
 	if language == "" {
-		language = "sysml"
+		return "<converted>", true
 	}
 	return "<converted>." + language, true
 }

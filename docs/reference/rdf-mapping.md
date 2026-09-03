@@ -205,7 +205,7 @@ The `sysx:` properties:
 | `sysx:memberIndex` | Declaration order. The notation is sensitive to the order of members; an RDF graph is an unordered set, so the index is what lets a conversion back to notation reproduce the original sequence. |
 | `sysx:hasBody` | Distinguishes `part def A;` from `part def A { }`, which are different source and would otherwise convert back identically. |
 | `sysx:sourceText`, `sysx:sourceTail` | The element's lines as written, comments and blank lines included, which a conversion back to notation prefers while they still state what the graph states. An element with members carries the lines ahead of them as its text and those after them as its tail. See [Source text](#source-text). |
-| `sysx:sourceLanguage` | On each root element, the grammar the file was written in — `sysml` or `kerml` — so the text is read back under the grammar it was written under. See [Source text](#source-text). |
+| `sysx:sourceLanguage` | On each root element, the grammar the file was written in — `sysml` or `kerml` — so the text is read back under the grammar it was written under. Absent for a buffer with no model extension (standard input, a REPL session), which the parser reads as SysML with KerML's `all` prefix. See [Source text](#source-text). |
 | `sysx:declaredKeyword` | The kind keyword as written, when it is one of the synonyms several keywords share (`datatype` and `attribute`, `function` and `calc`, `snapshot` and `occurrence`). The AST records one kind for all of them, so without this the notation would come back rewritten. Also the keyword a constraint body's condition is stated with (`assert`, `assume`, or absent for a bare condition, which asserts implicitly). |
 | `sysx:declaredPrefix` | The keyword qualifying the kind keyword after it — the `assert` of `assert constraint c : C`. It says what the declaration is for, and the AST kind alone does not carry it. |
 | `sysx:endForm` | The notation an end-binding head writes its ends in — `to`, `nary`, `equals`, `firstThen`, `fromTo`, `flowTo`, `satisfy`, `then` — so the head is rebuilt from the graph rather than read back from its text. See [End-binding heads](#end-binding-heads). |
@@ -262,8 +262,10 @@ trusting it: the candidate notation is converted back to RDF and compared with
 the graph being read, source text aside. The candidate is read under the
 grammar the roots record as `sysx:sourceLanguage`, since KerML text can read
 clean as SysML and mean something else (`binding [1] a = b` names the binding
-`a` there); roots recording different languages are not read at all, and the
-graph is written canonically. `sysx:memberIndex` is set aside too:
+`a` there); a root recording no language was read as a buffer with no
+extension, and its text is read as one again, `all` as a prefix rather than a
+name. Roots recording different languages are not read at all, and the graph
+is written canonically. `sysx:memberIndex` is set aside too:
 the notation lists members in index order whatever the numbers, so a member
 removed from the middle of a body leaves those after it standing as written,
 their indices no longer running on from zero. Each triple the two disagree on is

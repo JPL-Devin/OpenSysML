@@ -27,7 +27,7 @@ func newFormattedSource(file *source.SourceFile) (*formattedSource, error) {
 	}
 	s := &formattedSource{text: text}
 	s.kinds, s.orig = significantTokens(file)
-	_, s.fmtd = significantTokens(source.New(file.Name(), text))
+	_, s.fmtd = significantTokens(source.NewWithKind(file.Name(), text, file.Kind()))
 	if len(s.orig) != len(s.fmtd) {
 		return nil, fmt.Errorf("formatting %s: %w", file.Name(), format.ErrNotIdempotent)
 	}
