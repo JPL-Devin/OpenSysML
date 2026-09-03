@@ -478,7 +478,7 @@ func unitProductOfText(text string, term semantics.UnitTerm, idx *symbols.Index,
 	if text == "" {
 		return unnamedUnitProduct(term), term, nil
 	}
-	opaque := semantics.NamedUnitProduct(nil, text, term.Dimensionless())
+	opaque := semantics.OpaqueUnitProduct(text, term)
 	if idx == nil || sem == nil {
 		return opaque, term, nil
 	}
@@ -537,7 +537,7 @@ func unitProductOfText(text string, term semantics.UnitTerm, idx *symbols.Index,
 			continue
 		}
 		// Two readings of one product, `m*m` as A::m·B::m and as B::m·A::m, are one reading.
-		if slices.ContainsFunc(matches, func(m shortUnitReading) bool { return sameProduct(m.product, product) }) {
+		if slices.ContainsFunc(matches, func(m shortUnitReading) bool { return m.product.Equal(product) }) {
 			continue
 		}
 		reading.product, reading.term = product, implied
@@ -565,6 +565,7 @@ func partialUnitProduct(
 	idx *symbols.Index,
 	sem *semantics.Model,
 ) semantics.UnitProduct {
+	unreadNames := map[string]int{}
 	product, err := sem.UnitProductOfExprBy(expr, func(qn *ast.QualifiedName) (*symbols.Symbol, bool) {
 		if sym, ok := unitAt(semantics.QualifiedNameText(qn)); ok {
 			return sym, true
@@ -574,10 +575,17 @@ func partialUnitProduct(
 				return units[0], true
 			}
 		}
+		unreadNames[semantics.QualifiedNameText(qn)]++
 		return nil, false
 	})
 	if err != nil {
 		return opaque
+	}
+	// One unread name written twice is two units the text cannot tell apart.
+	for _, n := range unreadNames {
+		if n > 1 {
+			return opaque
+		}
 	}
 	known := semantics.UnitTerm{Scale: semantics.UnitScale(1)}
 	var unread []int
@@ -597,7 +605,9 @@ func partialUnitProduct(
 	}
 	// A lone opaque factor is what term leaves once the units read are taken out.
 	if len(unread) == 1 {
-		product.Powers[unread[0]].DimensionOne = term.DividedBy(known).Dimensionless()
+		f := &product.Powers[unread[0]]
+		reduces := term.DividedBy(known).Pow(1 / f.Exponent)
+		f.DimensionOne, f.Reduces = reduces.Dimensionless(), &reduces
 	}
 	return product
 }
@@ -608,19 +618,6 @@ type shortUnitReading struct {
 	units   map[*ast.QualifiedName]*symbols.Symbol
 	product semantics.UnitProduct
 	term    semantics.UnitTerm
-}
-
-// sameProduct reports whether two normalized products have the same powers, in any order.
-func sameProduct(a, b semantics.UnitProduct) bool {
-	if len(a.Powers) != len(b.Powers) {
-		return false
-	}
-	for _, f := range a.Powers {
-		if !slices.Contains(b.Powers, f) {
-			return false
-		}
-	}
-	return true
 }
 
 // besideBaseUnits reports whether every unit read is declared beside a base unit of term.
@@ -723,7 +720,9 @@ func baseUnitNamespaces(term semantics.UnitTerm) []string {
 // at scale one, else the reduction as one opaque unit that names no dimension-one unit.
 func unnamedUnitProduct(term semantics.UnitTerm) semantics.UnitProduct {
 	if !sameScale(term.Scale, semantics.UnitScale(1)) {
-		return semantics.NamedUnitProduct(nil, term.String(), false)
+		product := semantics.OpaqueUnitProduct(term.String(), term)
+		product.Powers[0].DimensionOne = false
+		return product
 	}
 	product := semantics.UnitProduct{}
 	for _, f := range term.Factors {

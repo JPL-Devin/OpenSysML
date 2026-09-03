@@ -157,6 +157,11 @@ func (t UnitTerm) Commensurable(other UnitTerm) bool {
 	return true
 }
 
+// Same reports whether two terms are one reduction: commensurable at equal scale.
+func (t UnitTerm) Same(other UnitTerm) bool {
+	return t.Commensurable(other) && t.Scale.Num*other.Scale.Den == other.Scale.Num*t.Scale.Den
+}
+
 // DimensionKey identifies the base units the term is over, exponents included
 // but scale excluded: two terms share a key exactly when they are commensurable.
 func (t UnitTerm) DimensionKey() string {

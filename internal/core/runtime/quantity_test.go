@@ -272,6 +272,13 @@ func TestUnitProductRendering(t *testing.T) {
 	resolved := func(sym *symbols.Symbol, name string) semantics.UnitProduct {
 		return semantics.NamedUnitProduct(sym, name, false)
 	}
+	baseUnit := func(sym *symbols.Symbol) semantics.UnitTerm {
+		return semantics.UnitTerm{Scale: semantics.UnitScale(1), Factors: []semantics.UnitFactor{{Unit: sym, Exponent: 1}}}
+	}
+	second := &symbols.Symbol{Name: "second"}
+	opaque := func(name string, reduces semantics.UnitTerm) semantics.UnitProduct {
+		return semantics.OpaqueUnitProduct(name, reduces)
+	}
 	cases := []struct {
 		name string
 		unit semantics.UnitProduct
@@ -289,7 +296,9 @@ func TestUnitProductRendering(t *testing.T) {
 		{"quoted name is one unit", named("'A/m'").Pow(2), "'A/m'**2"},
 		{"quoted name qualified", named("SI::'A/m'").Times(named("m")), "SI::'A/m'*m"},
 		{"quoted name divided by", named("m").DividedBy(named("'A/m'")), "m/'A/m'"},
-		{"quoted name in a composed name grouped", named("'A/m'*m").Pow(2), "('A/m'*m)**2"},
+		{"quoted name in a composed name escaped", named("'A/m'*m").Pow(2), `'\'A/m\'*m'**2`},
+		{"name holding a quote escaped", named("it's").Times(named("m")), `'it\'s'*m`},
+		{"name holding a newline escaped", named("metres\nper second").Times(named("m")), `'metres\nper second'*m`},
 		{"reduction text quoted", named("1000/1·SI::metre").Pow(2), "'1000/1·SI::metre'**2"},
 		{"sorted by name", named("s").Times(named("m")).Times(named("s")), "m*s**2"},
 		{"operand order does not matter", named("m").Times(named("N")), "N*m"},
@@ -299,6 +308,10 @@ func TestUnitProductRendering(t *testing.T) {
 		{"one unit under two spellings, divided", resolved(metre, "SI::m").Pow(2).DividedBy(resolved(metre, "m")), "m"},
 		{"two units under one spelling", resolved(metre, "m").Times(resolved(otherMetre, "m")), "m*m"},
 		{"an unresolved unit is not the resolved one it is spelt like", resolved(metre, "m").DividedBy(named("m")), "m/m"},
+		{"two opaque units under one spelling reducing alike", opaque("foo", baseUnit(metre)).Times(opaque("foo", baseUnit(metre))), "foo**2"},
+		{"two opaque units under one spelling reducing apart", opaque("foo", baseUnit(metre)).Times(opaque("foo", baseUnit(second))), "foo*foo"},
+		{"two opaque units under one spelling reducing apart do not cancel", opaque("foo", baseUnit(metre)).DividedBy(opaque("foo", baseUnit(second))), "foo/foo"},
+		{"an opaque unit of unknown reduction is the one so spelt", opaque("foo", baseUnit(metre)).DividedBy(named("foo")), "1"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -1,9 +1,11 @@
 package semantics
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -94,19 +96,25 @@ func TestUnitExprTextReadsBack(t *testing.T) {
 }
 
 // TestNamedUnitProductSpellsOneName: a named unit stays one factor of a product —
-// text that is no name is quoted, one that cannot be quoted is grouped.
+// text that is no name is quoted, escaped where it holds what a quoted name cannot.
 func TestNamedUnitProductSpellsOneName(t *testing.T) {
 	tests := []struct{ name, want, timesM string }{
 		{"m", "m", "m**2"},
 		{"SI::m", "SI::m", "SI::m*m"},
 		{"'A/m'", "'A/m'", "'A/m'*m"},
 		{"SI::'A/m'", "SI::'A/m'", "SI::'A/m'*m"},
+		{`'it\'s'`, `'it\'s'`, `'it\'s'*m`},
+		{`SI::'a\\b'`, `SI::'a\\b'`, `SI::'a\\b'*m`},
 		{"metres per second", "'metres per second'", "'metres per second'*m"},
 		{"1000·metre", "'1000·metre'", "'1000·metre'*m"},
 		{"SI::km*km", "'SI::km*km'", "'SI::km*km'*m"},
 		{"'SI::km*km'", "'SI::km*km'", "'SI::km*km'*m"},
-		{"'A/m'*m", "('A/m'*m)", "('A/m'*m)*m"},
-		{"a'b*c", "(a'b*c)", "(a'b*c)*m"},
+		{"'A/m'*m", `'\'A/m\'*m'`, `'\'A/m\'*m'*m`},
+		{"a'b*c", `'a\'b*c'`, `'a\'b*c'*m`},
+		{`a\b`, `'a\\b'`, `'a\\b'*m`},
+		{"metres\nper second", `'metres\nper second'`, `'metres\nper second'*m`},
+		{"metres\r\nper second", `'metres\r\nper second'`, `'metres\r\nper second'*m`},
+		{"'", `'\''`, `'\''*m`},
 	}
 	m := NamedUnitProduct(nil, "m", false)
 	for _, tc := range tests {
@@ -116,6 +124,39 @@ func TestNamedUnitProductSpellsOneName(t *testing.T) {
 		}
 		if product := got.Times(m).String(); product != tc.timesM {
 			t.Errorf("NamedUnitProduct(%q) * m = %q, want %q", tc.name, product, tc.timesM)
+		}
+	}
+}
+
+// TestOpaqueUnitNamesReadBack: a product spelt from text the notation cannot read
+// as a name parses back to that text as one factor, whatever characters it holds.
+func TestOpaqueUnitNamesReadBack(t *testing.T) {
+	m := NamedUnitProduct(nil, "m", false)
+	for _, name := range []string{
+		"metres per second", "it's", `a\b`, "a\nb", "a\r\nb", "'", `\`, "'A/m'*m", "a'b*c", `x\'y`, "tab\there",
+	} {
+		spelt := NamedUnitProduct(nil, name, false).Times(m).Pow(2).String()
+		p := parser.New(source.New("<unit>", []byte(spelt)))
+		expr := p.ParseExpression()
+		if expr == nil || len(p.Diagnostics) > 0 || p.Offset() != len(spelt) {
+			t.Errorf("%q spelt %q does not parse: %v", name, spelt, p.Diagnostics)
+			continue
+		}
+		var names []string
+		var model Model
+		read, err := model.UnitProductOfExprBy(expr, func(qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+			names = append(names, lexer.StringValue(qn.Parts[0].Text))
+			return nil, false
+		})
+		if err != nil {
+			t.Errorf("%q spelt %q does not read as units: %v", name, spelt, err)
+			continue
+		}
+		if !slices.Contains(names, name) || len(names) != 2 {
+			t.Errorf("%q spelt %q names %q, want it and m", name, spelt, names)
+		}
+		if again := read.String(); again != spelt {
+			t.Errorf("%q spelt %q reads back as %q", name, spelt, again)
 		}
 	}
 }

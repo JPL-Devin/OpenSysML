@@ -17,7 +17,8 @@ type UnitPower struct {
 	Unit         *symbols.Symbol // the unit the name resolves to, nil where it resolves to none
 	Name         string          // the unit as the model wrote it, quoted where the notation must (`'A/m'`)
 	Exponent     float64
-	DimensionOne bool // the unit reduces to no base unit: an angle, a ratio, a count
+	DimensionOne bool      // the unit reduces to no base unit: an angle, a ratio, a count
+	Reduces      *UnitTerm // what a unit resolving to none reduces to, where known; nil otherwise
 }
 
 // UnitProduct is a unit as a sorted product of powers of the units the model named,
@@ -32,13 +33,21 @@ func NamedUnitProduct(unit *symbols.Symbol, name string, dimensionOne bool) Unit
 	return UnitProduct{Powers: []UnitPower{{Unit: unit, Name: unitNameSpelling(name), Exponent: 1, DimensionOne: dimensionOne}}}
 }
 
+// OpaqueUnitProduct is the product of one unit that resolves to no declaration,
+// known by its text and what it reduces to; the reduction tells two so spelt apart.
+func OpaqueUnitProduct(name string, reduces UnitTerm) UnitProduct {
+	p := NamedUnitProduct(nil, name, reduces.Dimensionless())
+	p.Powers[0].Reduces = &reduces
+	return p
+}
+
 // unitNameSpelling quotes a name the notation cannot read as one name (`metres per
-// second`, `1000·metre`); one it cannot quote either, holding a quote, stays as it is.
+// second`, `1000·metre`), escaping what a quoted name must (`'it\'s'`).
 func unitNameSpelling(name string) string {
-	if name == "" || atomicName(name) || strings.ContainsAny(name, "'\n\r") {
+	if name == "" || atomicName(name) {
 		return name
 	}
-	return "'" + name + "'"
+	return lexer.UnrestrictedNameText(name)
 }
 
 // IsEmpty reports whether the product names no unit, as a bare number does.
@@ -146,14 +155,18 @@ func atomicName(name string) bool {
 }
 
 // afterNameSegment strips one leading name segment, a basic name or a quoted
-// one (which may hold `::`), reporting false where name starts with neither.
+// one (which may hold `::` and escapes), reporting false where name starts with neither.
 func afterNameSegment(name string) (string, bool) {
 	if strings.HasPrefix(name, "'") {
-		end := strings.IndexByte(name[1:], '\'')
-		if end < 1 {
-			return "", false
+		for i := 1; i < len(name); i++ {
+			switch name[i] {
+			case '\\':
+				i++
+			case '\'':
+				return name[i+1:], i > 1
+			}
 		}
-		return name[end+2:], true
+		return "", false
 	}
 	segment, rest := name, ""
 	if at := strings.Index(name, "::"); at >= 0 {
@@ -174,8 +187,8 @@ func combineProducts(a, b UnitProduct, sign float64) UnitProduct {
 	return normalizeProduct(out)
 }
 
-// normalizeProduct merges repeated units (by symbol, or by name where both are
-// unresolved), drops cancelled powers and orders the rest by name.
+// normalizeProduct merges repeated units (by symbol, or by name and reduction
+// where both are unresolved), drops cancelled powers and orders the rest by name.
 func normalizeProduct(p UnitProduct) UnitProduct {
 	merged := make([]UnitPower, 0, len(p.Powers))
 	for _, f := range p.Powers {
@@ -186,6 +199,9 @@ func normalizeProduct(p UnitProduct) UnitProduct {
 		}
 		merged[at].Exponent += f.Exponent
 		merged[at].Name = shorterSpelling(merged[at].Name, f.Name)
+		if merged[at].Reduces == nil {
+			merged[at].Reduces = f.Reduces
+		}
 	}
 	kept := merged[:0]
 	for _, f := range merged {
@@ -216,12 +232,29 @@ func shorterSpelling(a, b string) string {
 }
 
 // sameUnit: two resolved powers are one unit by symbol; two unresolved ones by
-// text; a resolved and an unresolved power are never the same unit.
+// text, unless both are known to reduce differently; a resolved and an
+// unresolved power are never the same unit.
 func sameUnit(f, g UnitPower) bool {
 	if f.Unit != nil || g.Unit != nil {
 		return f.Unit == g.Unit
 	}
-	return f.Name == g.Name
+	if f.Name != g.Name {
+		return false
+	}
+	return f.Reduces == nil || g.Reduces == nil || f.Reduces.Same(*g.Reduces)
+}
+
+// Equal reports whether two products are the same units to the same exponents.
+func (p UnitProduct) Equal(q UnitProduct) bool {
+	if len(p.Powers) != len(q.Powers) {
+		return false
+	}
+	for _, f := range p.Powers {
+		if !slices.ContainsFunc(q.Powers, func(g UnitPower) bool { return sameUnit(f, g) && f.Exponent == g.Exponent }) {
+			return false
+		}
+	}
+	return true
 }
 
 // UnitLookup resolves a unit name written in a unit expression to its

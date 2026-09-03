@@ -3,10 +3,12 @@ package grpc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -734,6 +736,45 @@ package Imperial {
 			}
 		})
 	}
+
+	// Opaque text holding what a quoted name must escape is spelt as one name the
+	// notation reads back, so the declared factor beside it still cancels alone.
+	for _, text := range []string{"it's", `back\slash`, "metres\nper second", "metres\r\nper second", `'A/m'*m`} {
+		t.Run(fmt.Sprintf("opaque %q", text), func(t *testing.T) {
+			opaque := sent(text, speedTerm)
+			spelt := lexer.UnrestrictedNameText(text)
+			composed := evaluate("Q::Times", second, opaque)
+			if got := describeQuantity(composed); got != fmt.Sprintf("6 [%s*SI::s] = SI::metre", spelt) {
+				t.Fatalf("SI::s * %q = %s, want 6 [%s*SI::s] = SI::metre", text, got, spelt)
+			}
+			if got := describeQuantity(evaluate("Q::Per", composed, second)); got != fmt.Sprintf("6 [%s] = SI::metre·SI::second^-1", spelt) {
+				t.Errorf("(SI::s * %q) over the wire / SI::s = %s, want 6 [%s] = SI::metre·SI::second^-1", text, got, spelt)
+			}
+			if got := describeQuantity(evaluate("Q::Per", composed, opaque)); got != "1 [SI::s] = SI::second" {
+				t.Errorf("(SI::s * %q) over the wire / %q = %s, want 1 [SI::s] = SI::second", text, text, got)
+			}
+		})
+	}
+
+	// One text sent as two units, reducing to a metre and to a second, is two units:
+	// they neither merge nor cancel, and what they compose reads back as it was sent.
+	t.Run("one text, two reductions", func(t *testing.T) {
+		metres, seconds := sent("smoot", metre.GetUnitTerm()), sent("smoot", second.GetUnitTerm())
+		product := evaluate("Q::Times", metres, seconds)
+		if got := describeQuantity(product); got != "36 [smoot*smoot] = SI::metre·SI::second" {
+			t.Fatalf("smoot (m) * smoot (s) = %s, want 36 [smoot*smoot] = SI::metre·SI::second", got)
+		}
+		if got := describeQuantity(evaluate("Q::Per", product, second)); got != "36 ['smoot*smoot'/SI::s] = SI::metre" {
+			t.Errorf("(smoot*smoot) over the wire / SI::s = %s, want 36 ['smoot*smoot'/SI::s] = SI::metre", got)
+		}
+		quotient := evaluate("Q::Per", metres, seconds)
+		if got := describeQuantity(quotient); got != "1 [smoot/smoot] = SI::metre·SI::second^-1" {
+			t.Fatalf("smoot (m) / smoot (s) = %s, want 1 [smoot/smoot] = SI::metre·SI::second^-1", got)
+		}
+		if got := describeQuantity(evaluate("Q::Times", quotient, second)); got != "1 ['smoot/smoot'*SI::s] = SI::metre" {
+			t.Errorf("(smoot/smoot) over the wire * SI::s = %s, want 1 ['smoot/smoot'*SI::s] = SI::metre", got)
+		}
+	})
 
 	// A text every name of which reads as a unit, yet contradicting the reduction
 	// sent, has no factor to blame: it stays one opaque unit through the wire.
