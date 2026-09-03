@@ -154,8 +154,9 @@ func atomicName(name string) bool {
 	return false
 }
 
-// afterNameSegment strips one leading name segment, a basic name or a quoted
-// one (which may hold `::` and escapes), reporting false where name starts with neither.
+// afterNameSegment strips one leading name segment, a basic name that spells no
+// keyword or a quoted one (which may hold `::` and escapes), reporting false where
+// name starts with neither.
 func afterNameSegment(name string) (string, bool) {
 	if strings.HasPrefix(name, "'") {
 		for i := 1; i < len(name); i++ {
@@ -172,7 +173,7 @@ func afterNameSegment(name string) (string, bool) {
 	if at := strings.Index(name, "::"); at >= 0 {
 		segment, rest = name[:at], name[at:]
 	}
-	return rest, lexer.IsIdentifier(segment)
+	return rest, lexer.IsIdentifier(segment) && !lexer.IsKeyword(segment)
 }
 
 // combineProducts multiplies two products, with the exponents of the second

@@ -107,6 +107,9 @@ func TestNamedUnitProductSpellsOneName(t *testing.T) {
 		{`SI::'a\\b'`, `SI::'a\\b'`, `SI::'a\\b'*m`},
 		{"metres per second", "'metres per second'", "'metres per second'*m"},
 		{"1000·metre", "'1000·metre'", "'1000·metre'*m"},
+		{"in", "'in'", "'in'*m"},
+		{"SI::in", "'SI::in'", "'SI::in'*m"},
+		{"SI::'in'", "SI::'in'", "SI::'in'*m"},
 		{"SI::km*km", "'SI::km*km'", "'SI::km*km'*m"},
 		{"'SI::km*km'", "'SI::km*km'", "'SI::km*km'*m"},
 		{"'A/m'*m", `'\'A/m\'*m'`, `'\'A/m\'*m'*m`},
@@ -134,6 +137,7 @@ func TestOpaqueUnitNamesReadBack(t *testing.T) {
 	m := NamedUnitProduct(nil, "m", false)
 	for _, name := range []string{
 		"metres per second", "it's", `a\b`, "a\nb", "a\r\nb", "'", `\`, "'A/m'*m", "a'b*c", `x\'y`, "tab\there",
+		"in", "SI::in", "then", "in::m",
 	} {
 		spelt := NamedUnitProduct(nil, name, false).Times(m).Pow(2).String()
 		p := parser.New(source.New("<unit>", []byte(spelt)))

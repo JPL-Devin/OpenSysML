@@ -715,6 +715,27 @@ package Imperial {
 			"1 [Nautical::fathom] = 3.34450944/1.8288·SI::metre",
 		},
 		{
+			"a short name spelling a keyword",
+			sent("then", metre.GetUnitTerm()), metre,
+			"6 ['then'*SI::m] = SI::metre^2",
+			"6 ['then'] = SI::metre",
+			"1 [SI::m] = SI::metre",
+		},
+		{
+			"a qualified name whose segment spells a keyword",
+			sent("SI::then", metre.GetUnitTerm()), metre,
+			"6 [SI::'then'*SI::m] = SI::metre^2",
+			"6 [SI::'then'] = SI::metre",
+			"1 [SI::m] = SI::metre",
+		},
+		{
+			"a qualified name led by a keyword, which is no expression",
+			sent("in::m", metre.GetUnitTerm()), metre,
+			"6 ['in::m'*SI::m] = SI::metre^2",
+			"6 ['in::m'] = SI::metre",
+			"1 [SI::m] = SI::metre",
+		},
+		{
 			"a scaled reduction sent nameless",
 			sent("", kilometreTerm), metre,
 			"6 ['1000·metre'*SI::m] = 1000/1·SI::metre^2",
