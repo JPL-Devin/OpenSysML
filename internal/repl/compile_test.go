@@ -366,9 +366,8 @@ func TestCompiledBudgetChargesInputsAndWidening(t *testing.T) {
 	}
 }
 
-// A C loop that keeps materializing collections runs in memory bounded by what
-// it keeps live, not by how many passes it makes: a run whose dead temporaries
-// alone would total gigabytes completes under a 64 MB address-space limit.
+// A C loop's memory is bounded by what it keeps live, not by how many passes
+// it makes: gigabytes of dead temporaries complete under a 64 MB limit.
 func TestCompiledCLoopMemoryIsBounded(t *testing.T) {
 	if _, err := exec.LookPath("cc"); err != nil {
 		t.Skip("no C compiler on PATH")

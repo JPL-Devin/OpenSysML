@@ -479,9 +479,8 @@ func (e *cEmitter) arenaMark() string {
 	return mark
 }
 
-// compact releases the arena to mark, carrying over the collections a loop
-// pass stored into variables that outlive it, so a loop's memory is bounded
-// by what it keeps live rather than by how many times it ran.
+// compact releases the arena to mark, keeping the collections a loop pass
+// stored into variables that outlive it.
 func (e *cEmitter) compact(kept []Var, mark string) {
 	saved := make([]string, len(kept))
 	for i, v := range kept {
@@ -496,8 +495,7 @@ func (e *cEmitter) compact(kept []Var, mark string) {
 }
 
 // escapingSeqs lists the collection variables a statement stores into that
-// outlive it: its own declaration and every assignment to an enclosing
-// scope's variable, in first-store order.
+// outlive it: its own declaration and assignments to enclosing variables.
 func escapingSeqs(s Stmt) []Var {
 	var out []Var
 	seen := map[string]bool{}
