@@ -16,6 +16,7 @@
 domain-mismatch AttributeUsage value             # FeatureValue_value: the feature value is written on the usage instead of a FeatureValue membership
 domain-mismatch ReferenceUsage value             # FeatureValue_value: same collapse on a kindless usage's value
 domain-mismatch AssignmentActionUsage value      # FeatureValue_value: same collapse on an assignment's target value
+domain-mismatch BindingConnectorAsUsage value    # FeatureValue_value: same collapse on the end a `bind k = m` binds to
 domain-mismatch PartUsage lowerBound             # MultiplicityRange_lowerBound: the multiplicity is written on the usage instead of a MultiplicityRange
 domain-mismatch PartUsage upperBound             # MultiplicityRange_upperBound: the multiplicity is written on the usage instead of a MultiplicityRange
 domain-mismatch SubjectMembership upperBound     # MultiplicityRange_upperBound: same collapse on a subject membership
@@ -32,6 +33,7 @@ literal-for-object-property ReferenceUsage type                                 
 literal-for-object-property PartUsage type                                       # Feature_type: the type is written as its name, not as an element IRI
 literal-for-object-property MetadataUsage type                                   # Feature_type: a metadata definition named by its short name (`#safe`) is written as that name, since references resolve declared names only (D7)
 literal-for-object-property urn:opensysml:sysml:InitialNode sourceFeature        # Connector_sourceFeature: a succession end is written as a name (D2)
+literal-for-object-property SuccessionAsUsage sourceFeature                       # Connector_sourceFeature: a `then` after `first start` sequences from the name start, which is no element of the graph (D2)
 literal-for-object-property FeatureReferenceExpression referent                   # FeatureReferenceExpression_referent: a name resolving outside the graph is written as a name, as every reference this tool cannot link is (D7)
 literal-for-object-property FeatureChainExpression targetFeature                  # FeatureChainExpression_targetFeature: a chained feature is written as a name, since the member reached through the chain is not an element of this graph (D7)
 
@@ -68,6 +70,7 @@ unknown-property PartUsage redefines                         # redefinition is a
 unknown-property ReferenceUsage redefines                    # a metadata body's `redefines level = 3;`, written the same way as any other redefinition
 unknown-property SubjectMembership redefines                 # redefinition is a Redefinition element, not a property
 unknown-property ActionUsage references                      # a referenced element is a ReferenceUsage or Membership, not a property
+unknown-property BindingConnectorAsUsage references          # the feature a `bind` binds, referenced the same way
 unknown-property StateUsage references                       # the state an `exhibit` names, referenced the same way
 unknown-property ViewRenderingMembership references          # a referenced element is a ReferenceUsage or Membership, not a property
 unknown-property urn:opensysml:sysml:AssumeMember references # a referenced element is a ReferenceUsage or Membership, not a property

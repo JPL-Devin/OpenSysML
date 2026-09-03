@@ -512,7 +512,7 @@ expr:P__Car___402.end0
 | `fromTo` | `[of <payload>] from <end0> to <end1>` | `flow of P from a to b` |
 | `flowTo` | `[of <payload>] <end0> to <end1>` | `flow a to b` |
 | `satisfy` | `<requirement>` (the `sysml:subsets` end, written bare) | `satisfy R by v`, `verify R` |
-| `then` | the source end is the member written before it | `then b;`, `then part b;` |
+| `then` | the source end is the nearest member written before it that is not itself an edge | `then b;`, `then part b;` |
 
 A head whose own keyword is the noun form writes a verb ahead of its ends, and
 that verb is `sysx:endVerb` (`connection c connect a to b`). Where the keyword
@@ -558,11 +558,25 @@ the notation leaves unnamed (`then send Show(x) to screen;`, a state's
 (`unnamed-succession-end`) and the encoder used to refuse. Both ends are
 positions in one body, so writing them back is exact: the source end is the
 member before the succession, and a target that *is* that preceding member is
-the declaration the `then` was written ahead of. A graph describing a position the
-notation cannot express (sequencing from a member elsewhere in the body) is
-reported rather than written back somewhere else
+the declaration the `then` was written ahead of.
+
+The member a `then` sequences from is the one the parser gives it: the nearest
+member before it that is not itself an edge. A `flow`, `bind`, `connect`,
+`succession` or `transition` relates other members rather than declaring one,
+so a `then` written after it is read past it, while an `attribute`, a `doc` or
+any other declaration is the source. The writer folds a succession back into
+`then` by the same rule, shared with the parser as `ast.UsageKind.IsEdge`, so
+`action a; flow from a.x to b.x; then action b;` comes back as written. The
+source end is compared as the name the member answers to, which is what the
+parser records: a `first a then b;` sequences from `a`, and a `perform walk;`
+or `action redefines walk;` that declares no name of its own answers to `walk`
+(KerML 7.3.4.5). A graph describing a position the notation cannot express —
+sequencing from an earlier member, or from the flow the `then` is read past —
+is reported rather than written back somewhere else
 (`export_test.go:TestUnnamedSuccessionEndComesBackFromTheGraph`,
-`TestHalfNamedSuccessionInAGraphIsReported`).
+`TestHalfNamedSuccessionInAGraphIsReported`,
+`behavior_test.go:TestThenComesBackPastTheMembersTheParserSkips`,
+`TestThenIsRefusedWhenTheGraphSequencesFromAnotherMember`).
 
 Every body that can carry a succession (definition, usage, action, state,
 including a parallel state's regions, calculation and requirement) reads these
