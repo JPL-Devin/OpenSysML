@@ -95,9 +95,11 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   `a` the caller passed; likewise a `bind` at a node's input pin takes precedence over the value
   the node's own declaration states. An invocation's arguments are the enclosing action's
   expressions, so `Adder(a, 1)` reads the caller's `a` even when the node's own pin `a` already
-  holds a bound value. A performance's bindings and defaults are one evaluation of their own: a
-  calc usage two of them read answers once, and the next performance of the node evaluates it
-  anew. Two tokens performing one node at once each hold a frame of their own,
+  holds a bound value. A binding at an undirected attribute of a node is kept at both ends: the
+  node reads the other end's value as it begins, and what it changed is carried back as it ends,
+  to the enclosing attribute or on to a downstream node's pin. A performance's bindings and
+  defaults are one evaluation of their own: a calc usage two of them read answers once, and the
+  next performance of the node evaluates it anew. Two tokens performing one node at once each hold a frame of their own,
   take what flows delivered to its pins oldest first and send their own outputs on. A nested
   body still resolves a name it does not declare lexically to the enclosing action's feature and
   writes it in place, so a grandchild writing `legs` keeps working, and a perform usage on a

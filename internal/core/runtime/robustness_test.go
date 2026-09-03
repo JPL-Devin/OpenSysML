@@ -42,6 +42,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("state_entry_action_input_bound_by_nothing", testStateEntryActionInputBoundByNothing)
 	t.Run("state_block_typed_node_input_bound_by_nothing", testStateBlockTypedNodeInputBoundByNothing)
 	t.Run("node_binding_to_a_non_parameter", testNodeBindingToANonParameter)
+	t.Run("node_undirected_binding_carried_to_a_non_parameter", testNodeUndirectedBindingCarriedToANonParameter)
 	t.Run("node_pin_bound_to_unequal_values", testNodePinBoundToUnequalValues)
 	t.Run("block_node_binding_to_a_non_parameter", testBlockNodeBindingToANonParameter)
 	t.Run("block_node_binding_names_a_node_without_a_pin", testBlockNodeBindingNamesANodeWithoutAPin)
@@ -8543,6 +8544,30 @@ func testNodeBindingToANonParameter(t *testing.T) {
 	err := runOuterAction(t, src)
 	if !errors.Is(err, ErrBindingEnd) {
 		t.Fatalf("error = %v, want ErrBindingEnd", err)
+	}
+	if !strings.Contains(err.Error(), "nope") {
+		t.Errorf("error %q does not name the pin", err)
+	}
+}
+
+// testNodeUndirectedBindingCarriedToANonParameter: what a node's performance gave an
+// undirected attribute is carried to the other end when it ends, and a downstream
+// node holding no such pin is reported then rather than the value dropped.
+func testNodeUndirectedBindingCarriedToANonParameter(t *testing.T) {
+	src := `
+		package test {` + adderActionDef + `
+			action outer {
+				bind acc.total = add.nope;
+				first start;
+				then action acc { attribute total : Integer; assign total := 3; }
+				then action add : Adder { in a = 1; in b = 2; }
+				then done;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if !errors.Is(err, ErrNodePin) {
+		t.Fatalf("error = %v, want ErrNodePin", err)
 	}
 	if !strings.Contains(err.Error(), "nope") {
 		t.Errorf("error %q does not name the pin", err)

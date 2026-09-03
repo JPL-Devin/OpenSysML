@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -455,18 +456,32 @@ func (e *ActionExecutor) setFrameFeature(f *actionFrame, name string, value Valu
 // assignEnclosing writes name to the innermost block-local or performance feature
 // around perf that holds it, reporting whether one did.
 func (e *ActionExecutor) assignEnclosing(perf *actionFrame, name string, value Value) (bool, error) {
+	local, holder, ok := enclosingHolder(perf, name)
+	switch {
+	case !ok:
+		return false, nil
+	case local != nil:
+		local[name] = value
+		return true, nil
+	default:
+		return true, e.setFrameFeature(holder, name, value)
+	}
+}
+
+// enclosingHolder finds the innermost block-local or performance around perf that
+// holds name: the block's locals, else the performance.
+func enclosingHolder(perf *actionFrame, name string) (local map[string]Value, holder *actionFrame, ok bool) {
 	for f := perf; f != nil; f = f.parent {
 		for i := len(f.locals) - 1; i >= 0; i-- {
 			if _, ok := f.locals[i][name]; ok {
-				f.locals[i][name] = value
-				return true, nil
+				return f.locals[i], nil, true
 			}
 		}
 		if f.parent != nil && f.parent.holds(name) {
-			return true, e.setFrameFeature(f.parent, name, value)
+			return nil, f.parent, true
 		}
 	}
-	return false, nil
+	return nil, nil, false
 }
 
 // lookupEnclosing reads name from the innermost binding around perf that holds
@@ -546,7 +561,8 @@ func (f *actionFrame) collect(prefix string, into map[string]Value) {
 }
 
 // bindInputPins seeds the pins a performance reads from the bindings at them, where
-// nothing delivered ahead of it holds a value; bindings at one pin must agree.
+// nothing delivered ahead of it holds a value; bindings at one pin must agree. An
+// undirected pin whose other end holds no value yet is left for the performance to give one.
 func (e *ActionExecutor) bindInputPins(perf *actionFrame, activation int64) error {
 	bound := make(map[string]lower.PinBinding)
 	for _, binding := range e.bindingsAt(perf) {
@@ -563,6 +579,9 @@ func (e *ActionExecutor) bindInputPins(perf *actionFrame, activation int64) erro
 		}
 		value, err := e.bindingOtherValue(perf, binding, activation)
 		if err != nil {
+			if dir == ast.DirNone && e.unheldEnd(perf, binding, err) {
+				continue
+			}
 			return err
 		}
 		if alreadyBound {
@@ -585,21 +604,30 @@ func (e *ActionExecutor) bindInputPins(perf *actionFrame, activation int64) erro
 	return nil
 }
 
-// bindOutputPins carries what a performance's output pins hold to the other
-// ends of the bindings at them.
+// bindOutputPins carries what a performance's output pins hold to the other ends of the
+// bindings at them, and what an undirected pin holds where its other end differs from it.
 func (e *ActionExecutor) bindOutputPins(perf *actionFrame) error {
 	for _, binding := range e.bindingsAt(perf) {
 		dir, err := e.boundPin(perf, binding)
 		if err != nil {
 			return err
 		}
-		if dir != ast.DirOut && dir != ast.DirInOut {
-			continue
-		}
 		value, ok := perf.data[binding.Pin]
-		if !ok {
-			return fmt.Errorf("%w: %s produced no value at %s to bind %s to",
-				ErrBindingEnd, perf.describe(), binding.Pin, bindingEndText(binding.Other))
+		switch dir {
+		case ast.DirOut, ast.DirInOut:
+			if !ok {
+				return fmt.Errorf("%w: %s produced no value at %s to bind %s to",
+					ErrBindingEnd, perf.describe(), binding.Pin, bindingEndText(binding.Other))
+			}
+		case ast.DirNone:
+			if !ok {
+				continue
+			}
+			if other, held := e.otherEndHeld(perf, binding); held && valueEqual(other, value) {
+				continue
+			}
+		default:
+			continue
 		}
 		if binding.OtherNode != nil {
 			if err := e.deliver(perf.parent, perf.flow, binding.OtherNode, binding.OtherPin, value); err != nil {
@@ -670,6 +698,40 @@ func (e *ActionExecutor) bindingOtherValue(perf *actionFrame, binding lower.PinB
 			ErrBindingEnd, ActionNodeName(perf.node), binding.Pin, bindingEndText(binding.Other), err)
 	}
 	return value, nil
+}
+
+// otherEndHeld reads what the other end of a binding at perf's pin holds now, without
+// evaluating it: a performed node's pin, or an enclosing feature named outright.
+func (e *ActionExecutor) otherEndHeld(perf *actionFrame, binding lower.PinBinding) (Value, bool) {
+	if binding.OtherNode != nil {
+		other, performed := perf.parent.subactions[binding.OtherNode]
+		if !performed {
+			return Value{}, false
+		}
+		value, held := other.data[binding.OtherPin]
+		return value, held
+	}
+	if name := simpleEndName(binding.Other); name != "" {
+		return e.evalContextAround(perf, binding.Scope).Lookup(name)
+	}
+	return Value{}, false
+}
+
+// unheldEnd reports whether err, from reading the other end of a binding at perf's pin,
+// says that end holds no value yet: a node's pin before it runs or gives it one, or
+// an enclosing feature named outright that holds none.
+func (e *ActionExecutor) unheldEnd(perf *actionFrame, binding lower.PinBinding, err error) bool {
+	var noValue *NoValueError
+	if errors.Is(err, ErrNodeNotPerformed) || errors.As(err, &noValue) {
+		return true
+	}
+	name := simpleEndName(binding.Other)
+	if binding.OtherNode != nil || name == "" {
+		return false
+	}
+	_, valued := e.evalContextAround(perf, binding.Scope).Lookup(name)
+	_, _, holds := enclosingHolder(perf, name)
+	return !valued && holds
 }
 
 // simpleEndName returns the name a binding end written as one name states, ""
