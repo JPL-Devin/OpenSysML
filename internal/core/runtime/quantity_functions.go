@@ -333,7 +333,8 @@ func quantityToString(name string, _ *Context, args []Value) (Value, error) {
 	return NewStringValue(FormatValue(val)), nil
 }
 
-// quantityToInteger is ToInteger: the magnitude, which must be a whole number.
+// quantityToInteger is ToInteger: the magnitude as an Integer, truncated toward
+// zero as RealFunctions::ToInteger is; the library declares floor and round beside it.
 func quantityToInteger(name string, _ *Context, args []Value) (Value, error) {
 	x, err := quantityArg(name, "x", args[0])
 	if err != nil {
@@ -342,11 +343,7 @@ func quantityToInteger(name string, _ *Context, args []Value) (Value, error) {
 	if x.Num.Kind == semantics.ValInt {
 		return Value{Kind: ValConst, Const: x.Num}, nil
 	}
-	if x.Num.Real != math.Trunc(x.Num.Real) {
-		return Value{}, fmt.Errorf("%w: function %s requires a whole magnitude, %s has none",
-			ErrTypeMismatch, name, x)
-	}
-	num, err := integerResult(x.Num.Real)
+	num, err := integerResult(math.Trunc(x.Num.Real))
 	if err != nil {
 		return Value{}, fmt.Errorf("function %s: %w", name, err)
 	}

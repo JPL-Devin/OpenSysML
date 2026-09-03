@@ -204,6 +204,34 @@ func TestQuantityExponentiationReports(t *testing.T) {
 	}
 }
 
+// TestBareNumberSum: a sum or difference answers in the left operand's unit, and a
+// bare number's unit is none, so it answers a bare number rather than `3 [1]`.
+func TestBareNumberSum(t *testing.T) {
+	ctx, scope := quantityContext(t)
+
+	cases := []struct {
+		src  string
+		want string
+	}{
+		{"1 [rad] + 2", "3 [rad]"},
+		{"2 + 1 [rad]", "3"},
+		{"2 - 1 [rad]", "1"},
+		{"2 + 1 [m/m]", "3"},
+		{"2.5 + 1 ['°']", "2.51745329"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.src, func(t *testing.T) {
+			got, err := evalIn(t, ctx, scope, tc.src)
+			if err != nil {
+				t.Fatalf("%s: %v", tc.src, err)
+			}
+			if FormatValue(got) != tc.want {
+				t.Errorf("%s = %s, want %s", tc.src, FormatValue(got), tc.want)
+			}
+		})
+	}
+}
+
 // TestComposedUnitCanonical: a composed unit displays canonically (`m*m`, `(m)**2`,
 // `(m*m)/m` read `m**2`, `m**2`, `m`) while a written unit (`N*m`, `km/h`) keeps its spelling.
 func TestComposedUnitCanonical(t *testing.T) {

@@ -163,7 +163,8 @@ func (q *Quantity) convertTo(unit Unit) (float64, error) {
 }
 
 // addQuantities evaluates a sum or difference of quantities, in the unit of the
-// left operand; Integer magnitudes in one unit stay Integer, a conversion makes a Real.
+// left operand (a bare number where that is one); Integer magnitudes in one unit
+// stay Integer, a conversion makes a Real.
 func addQuantities(op ast.OperatorKind, left, right *Quantity) (Value, error) {
 	converted, err := right.convertTo(left.Unit)
 	if err != nil {
@@ -177,7 +178,7 @@ func addQuantities(op ast.OperatorKind, left, right *Quantity) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	return NewQuantityValue(&Quantity{Num: num, Unit: left.Unit}), nil
+	return inUnit(num, left.Unit)
 }
 
 // scaleQuantities evaluates a product or quotient of quantities, whose unit is
