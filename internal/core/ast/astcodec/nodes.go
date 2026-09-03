@@ -1043,6 +1043,7 @@ func (e *Encoder) encodeFields(node ast.Node) {
 		e.w.Bool(n.SourceImplied)
 		e.w.Bool(n.TargetImplied)
 		e.nodes(n.Members)
+		e.w.Bool(n.HasBody)
 	case *ast.TerminateStatement:
 		e.base(&n.NodeBase)
 		e.node(n.Target)
@@ -1072,6 +1073,7 @@ func (e *Encoder) encodeFields(node ast.Node) {
 		e.span(n.TriggerSpan)
 		e.node(n.Guard)
 		e.nodes(n.Effect)
+		e.w.Bool(n.HasEffect)
 		e.node(n.Via)
 		e.nodes(n.Members)
 		e.w.Bool(n.HasBody)
@@ -1529,6 +1531,7 @@ func (d *Decoder) decodeFields(node ast.Node) {
 		n.SourceImplied = d.r.Bool()
 		n.TargetImplied = d.r.Bool()
 		n.Members = d.nodes()
+		n.HasBody = d.r.Bool()
 	case *ast.TerminateStatement:
 		d.base(&n.NodeBase)
 		n.Target = d.node()
@@ -1558,6 +1561,7 @@ func (d *Decoder) decodeFields(node ast.Node) {
 		n.TriggerSpan = d.span()
 		n.Guard = d.node()
 		n.Effect = d.nodes()
+		n.HasEffect = d.r.Bool()
 		n.Via = typed[*ast.QualifiedName](d)
 		n.Members = d.nodes()
 		n.HasBody = d.r.Bool()

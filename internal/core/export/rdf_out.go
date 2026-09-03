@@ -175,13 +175,9 @@ func encodeDocument(file *source.SourceFile, root *ast.RootNamespace) (*encoder,
 	if err != nil {
 		return nil, err
 	}
-	formatted, err := newFormattedSource(file)
-	if err != nil {
-		return nil, err
-	}
 	e := &encoder{
 		file:     file,
-		src:      formatted,
+		src:      newAuthoredSource(file),
 		graph:    rdf.NewGraph(),
 		declared: map[string]bool{},
 		fqn:      map[ast.Node]string{},
@@ -241,8 +237,8 @@ func (e *encoder) sourceText() {
 
 type encoder struct {
 	file *source.SourceFile
-	// src is the formatted text of file, which is what sysx:sourceText carries.
-	src      *formattedSource
+	// src is the text of file as written, which is what sysx:sourceText carries.
+	src      *authoredSource
 	graph    *rdf.Graph
 	declared map[string]bool
 	// fqn is the qualified name of each member node, which is how a succession
@@ -358,6 +354,13 @@ func (e *encoder) encode(members []ast.Node, owner string, ownerTerm rdf.Term) e
 	// Members written on their owner's own lines, such as an accept's payload,
 	// are part of its text: the owner is written whole or rebuilt whole.
 	inline := !e.src.wholeLines(regions)
+	if ownerTerm.Value == "" && len(regions) > 0 {
+		// The document has no subject: roots sharing a line each keep their
+		// slice of it, and what follows the last root is that root's.
+		inline = false
+		e.src.shareLines(regions, spans)
+		regions[len(regions)-1].end = len(e.src.text)
+	}
 	if !inline && len(regions) > 0 && ownerTerm.Value != "" {
 		body := region{regions[0].start, regions[len(regions)-1].end}
 		if prior, ok := e.bodies[ownerTerm]; ok {
@@ -365,6 +368,17 @@ func (e *encoder) encode(members []ast.Node, owner string, ownerTerm rdf.Term) e
 		}
 		e.bodies[ownerTerm] = body
 	}
+	return e.encodeMembers(kept, regions, inline, owner, ownerTerm)
+}
+
+// encodeInline walks members whose lines interleave with their owner's own
+// notation, so the owner is written whole or rebuilt whole.
+func (e *encoder) encodeInline(members []ast.Node, owner string, ownerTerm rdf.Term) error {
+	kept := e.kept(members)
+	return e.encodeMembers(kept, make([]region, len(kept)), true, owner, ownerTerm)
+}
+
+func (e *encoder) encodeMembers(kept []ast.Node, regions []region, inline bool, owner string, ownerTerm rdf.Term) error {
 	for i, member := range kept {
 		node, visibility := unwrapMember(member)
 		if node == nil {
@@ -556,10 +570,9 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		if verbatimUsage(n) {
 			e.bindingEnds(subject, owner, n)
 			e.endForm(subject, n)
-			return nil
 		}
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
-		return e.encode(n.Members, fqn, subject)
+		return e.encode(bodyMembers(n), fqn, subject)
 
 	case *ast.Import:
 		head(rdf.SysMLTerm("Import"))
@@ -876,6 +889,21 @@ func shorthandRelationship(n *ast.Usage) bool {
 	return n.Kind == ast.UsageBinding && n.Keyword == "bind"
 }
 
+// bodyMembers returns the members written in a usage's body: a payload declared
+// inline by `of name : Type` is parsed as a member but belongs to the head.
+func bodyMembers(n *ast.Usage) []ast.Node {
+	if n.FlowEnds == nil || n.FlowEnds.PayloadDecl == nil {
+		return n.Members
+	}
+	members := make([]ast.Node, 0, len(n.Members))
+	for _, m := range n.Members {
+		if m != ast.Node(n.FlowEnds.PayloadDecl) {
+			members = append(members, m)
+		}
+	}
+	return members
+}
+
 // verbatimUsage reports whether a usage's declaration head has to be carried as
 // source text rather than rebuilt from properties.
 //
@@ -1165,12 +1193,80 @@ func (e *encoder) reference(owner, name string) rdf.Term {
 	return rdf.String(name)
 }
 
-// text is the formatted notation of a node, as the graph carries it.
+// text is the notation of a node as written, without the trivia its span runs
+// on over.
 func (e *encoder) text(node ast.Node) string {
 	if node == nil {
 		return ""
 	}
-	return strings.TrimSpace(e.src.slice(node.Span()))
+	return strings.TrimSpace(e.src.code(node.Span()))
+}
+
+// headEnd is the offset of the `{` or `;` ending a usage's head, found after
+// stepping over the head's own nodes so a value's braces are not mistaken for it.
+func (e *encoder) headEnd(n *ast.Usage) int {
+	span := n.Span()
+	from := span.Offset
+	for _, node := range headNodes(n) {
+		if end := node.Span().End(); end > from && end <= span.End() {
+			from = end
+		}
+	}
+	tail := e.file.Text(source.Span{Offset: from, Len: span.End() - from})
+	lx := lexer.New(source.New("head.sysml", []byte(tail)))
+	for tok := lx.Next(); tok.Kind != lexer.EOF; tok = lx.Next() {
+		if tok.Kind == lexer.LBrace || tok.Kind == lexer.Semicolon {
+			return from + tok.Span.Offset
+		}
+	}
+	return span.End()
+}
+
+// headNodes lists the non-nil nodes a usage's head is written from.
+func headNodes(n *ast.Usage) []ast.Node {
+	var nodes []ast.Node
+	add := func(candidates ...ast.Node) {
+		for _, node := range candidates {
+			if node != nil {
+				nodes = append(nodes, node)
+			}
+		}
+	}
+	add(n.Value)
+	if n.Multiplicity != nil {
+		add(n.Multiplicity)
+	}
+	if n.CrossFeature != nil {
+		add(n.CrossFeature)
+	}
+	for _, prefix := range n.Prefixes {
+		if prefix != nil && prefix.Type != nil {
+			add(prefix.Type)
+		}
+	}
+	for _, rel := range n.Relationships {
+		if rel != nil {
+			add(rel, rel.Target)
+		}
+	}
+	for _, end := range n.ConnectorEnds {
+		if end != nil {
+			add(end, end.Target, end.Reference)
+			if end.Multiplicity != nil {
+				add(end.Multiplicity)
+			}
+		}
+	}
+	if flow := n.FlowEnds; flow != nil {
+		add(flow, flow.From, flow.To, flow.Payload)
+		if flow.PayloadDecl != nil {
+			add(flow.PayloadDecl)
+		}
+		if flow.PayloadMultiplicity != nil {
+			add(flow.PayloadMultiplicity)
+		}
+	}
+	return nodes
 }
 
 // rdfLimitationsNote is the remedy for a construct the RDF mapping does not
@@ -1260,13 +1356,10 @@ func declaredNameAndMembers(node ast.Node) (string, []ast.Node) {
 	case *ast.Definition:
 		return n.Ident.Name, n.Members
 	case *ast.Usage:
-		if verbatimUsage(n) {
-			if shorthandRelationship(n) {
-				return "", nil
-			}
-			return n.Ident.Name, nil
+		if shorthandRelationship(n) {
+			return "", bodyMembers(n)
 		}
-		return n.Ident.Name, n.Members
+		return n.Ident.Name, bodyMembers(n)
 	case *ast.Import:
 		return "", n.Body
 	case *ast.Alias:
