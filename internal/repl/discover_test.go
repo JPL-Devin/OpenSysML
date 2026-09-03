@@ -94,26 +94,32 @@ func TestSearchCommand(t *testing.T) {
 }
 
 // TestBuiltinsCommand checks %builtins reports the functions the runtime
-// implements, in the form each is called in.
+// implements, in the form each is called in, each with the import a call by its
+// unqualified name needs.
 func TestBuiltinsCommand(t *testing.T) {
 	out := run(t, NewSession(), "%builtins")
 	wants(t, out,
-		"sqrt(x)  RealFunctions::sqrt",
-		"abs(x)  ",
-		"max(x, y)  ",
-		"floor(x)  ",
-		"x->isEmpty()  SequenceFunctions::isEmpty",
-		"x->sum()  NumericalFunctions::sum",
+		"only where the model imports",
+		"sqrt(x)  RealFunctions::sqrt  (import RealFunctions::*;)",
+		"abs(x)  RealFunctions::abs  (import RealFunctions::*;)",
+		"abs(x)  IntegerFunctions::abs  (import IntegerFunctions::*;)",
+		"max(x, y)  NumericalFunctions::max  (import NumericalFunctions::*;)",
+		"floor(x)  RealFunctions::floor  (import RealFunctions::*;)",
+		"x->isEmpty()  SequenceFunctions::isEmpty  (import SequenceFunctions::*;)",
+		"x->size()  SequenceFunctions::size  (import SequenceFunctions::*;)",
+		"x->size()  CollectionFunctions::size  (import CollectionFunctions::*;)",
+		"x->sum()  NumericalFunctions::sum  (import NumericalFunctions::*;)",
 	)
+	rejects(t, out, "callable whatever", "without an import")
 }
 
-// An extension function is implemented, so it is listed — marked with the import
-// its unqualified name needs rather than left out as if unsupported.
+// An extension function is implemented, so it is listed with its import like
+// every other rather than left out as if unsupported.
 func TestBuiltinsListsAnExtensionFunctionWithItsImport(t *testing.T) {
 	out := run(t, NewSession(), "%builtins")
 	wants(t, out,
-		"exp(x)  OpenSysMLMathFunctions::exp  (needs `import OpenSysMLMathFunctions::*;`)",
-		"atan2(y, x)  OpenSysMLMathFunctions::atan2  (needs `import OpenSysMLMathFunctions::*;`)",
+		"exp(x)  OpenSysMLMathFunctions::exp  (import OpenSysMLMathFunctions::*;)",
+		"atan2(y, x)  OpenSysMLMathFunctions::atan2  (import OpenSysMLMathFunctions::*;)",
 	)
 }
 

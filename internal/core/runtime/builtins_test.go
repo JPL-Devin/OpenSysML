@@ -36,7 +36,7 @@ func TestSequenceFunctions_Includes(t *testing.T) {
 		{`attribute result = SequenceFunctions::includes((), 1);`, false},
 	}
 	for _, tt := range tests {
-		model, resolver, root := parseAndBuildModel(t, tt.src)
+		model, resolver, root := parseAndBuildLibraryModel(t, tt.src)
 		ctx := NewContext(model, resolver, 1000)
 		sym := resolveSymbol(t, root, "result")
 		decl := sym.Decl.(*ast.Usage)
@@ -77,7 +77,7 @@ func TestBuiltin_ControlSelect(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		model, resolver, root := parseAndBuildModel(t, tt.src)
+		model, resolver, root := parseAndBuildLibraryModel(t, tt.src)
 		ctx := NewContext(model, resolver, 1000)
 		sym := resolveSymbol(t, root, "result")
 		decl := sym.Decl.(*ast.Usage)
@@ -124,7 +124,7 @@ func TestBuiltin_ControlCollect(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		model, resolver, root := parseAndBuildModel(t, tt.src)
+		model, resolver, root := parseAndBuildLibraryModel(t, tt.src)
 		ctx := NewContext(model, resolver, 1000)
 		sym := resolveSymbol(t, root, "result")
 		decl := sym.Decl.(*ast.Usage)
@@ -153,7 +153,7 @@ func TestBuiltin_ControlCollect(t *testing.T) {
 
 func TestBuiltin_ControlSelect_NonBooleanPredicate(t *testing.T) {
 	src := `attribute result = ControlFunctions::select((1, 2, 3), { in x; x * 2 });`
-	model, resolver, root := parseAndBuildModel(t, src)
+	model, resolver, root := parseAndBuildLibraryModel(t, src)
 	ctx := NewContext(model, resolver, 1000)
 	sym := resolveSymbol(t, root, "result")
 	decl := sym.Decl.(*ast.Usage)
@@ -200,7 +200,7 @@ func TestBuiltin_Track2Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			model, resolver, root := parseAndBuildModel(t, tt.src)
+			model, resolver, root := parseAndBuildLibraryModel(t, tt.src)
 			ctx := NewContext(model, resolver, 1000)
 
 			testSym := resolveSymbol(t, root, "test")
