@@ -139,6 +139,8 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 		// every body they may stand in.
 	case *ast.ActionExecutionNode:
 		tc.expr.infer(scope, m.Expression)
+	case *ast.PerformActionNode:
+		tc.expr.checkPerform(scope, m)
 	case *ast.SubjectMember:
 		tc.checkSubjectMember(scope, m)
 	default:

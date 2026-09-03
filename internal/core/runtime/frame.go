@@ -5,6 +5,9 @@ package runtime
 type frame struct {
 	slots *slotFrame
 	vars  map[string]Value
+	// perf is the action performance vars belongs to, if any, whose flow's nodes
+	// the frame also answers for (action_frame.go).
+	perf *actionFrame
 }
 
 // mapFrame is a frame holding vars alone.

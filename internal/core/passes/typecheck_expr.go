@@ -27,6 +27,9 @@ type exprChecker struct {
 	// being checked twice when its type is inferred more than once.
 	walkMembers   func(*symbols.Scope, []ast.Node)
 	bodiesChecked map[*ast.BodyExpr]bool
+	// performed are the calls that are the values of action usages, which run
+	// an action rather than evaluate a behavior (see performs).
+	performed map[*ast.InvocationExpr]bool
 }
 
 func (ec *exprChecker) errorf(span source.Span, format string, args ...any) {
@@ -60,7 +63,25 @@ func (ec *exprChecker) checkUsageValue(scope *symbols.Scope, u *ast.Usage) {
 	if u.Value == nil {
 		return
 	}
+	ec.markPerformed(u.PerformedInvocation())
 	ec.checkBoundValue(scope, scope, u, u.Value)
+}
+
+// checkPerform types the action a `perform` statement runs.
+func (ec *exprChecker) checkPerform(scope *symbols.Scope, n *ast.PerformActionNode) {
+	ec.markPerformed(n.PerformedInvocation())
+	ec.infer(scope, n.ActionRef)
+}
+
+// markPerformed records inv, when not nil, as a call that runs an action.
+func (ec *exprChecker) markPerformed(inv *ast.InvocationExpr) {
+	if inv == nil {
+		return
+	}
+	if ec.performed == nil {
+		ec.performed = map[*ast.InvocationExpr]bool{}
+	}
+	ec.performed[inv] = true
 }
 
 // checkBoundValue checks a value against the type and multiplicity of the
@@ -640,35 +661,41 @@ func (ec *exprChecker) operands(scope *symbols.Scope, e *ast.OperatorExpr) (sema
 	return ec.infer(scope, e.Operands[0]), ec.infer(scope, e.Operands[1]), true
 }
 
-// inferInvocation checks the argument list of a calc/action invocation against
-// the invoked behavior's `in` parameters. In the arrow form `x->f(a)` the
-// receiver binds to the first parameter, so it is prepended to the arguments.
+// inferInvocation checks a call's arguments against the `in` parameters of the declaration
+// SelectInvocation chose and types it by its result; a receiver `x->f(a)` is the first argument.
 func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationExpr) semantics.PrimType {
-	args := e.Args
-	if e.Operand != nil {
-		args = append([]ast.Node{e.Operand}, args...)
-	}
+	args := invocationArgs(e)
 	// Typed once and reused by checkArguments, so nested errors report once.
-	argTypes := make([]semantics.PrimType, len(args))
-	for i, arg := range args {
-		argTypes[i] = ec.infer(scope, arg)
-	}
-	namedTypes := make([]semantics.PrimType, len(e.NamedArgs))
-	for i, arg := range e.NamedArgs {
-		namedTypes[i] = ec.infer(scope, arg.Value)
-	}
+	argTypes := ec.argumentTypes(scope, e)
 	if e.Type == nil {
+		for _, arg := range e.NamedArgs {
+			ec.infer(scope, arg.Value)
+		}
 		return semantics.PrimUnknown
 	}
-	sym, ok := ec.resolver.ResolveQualified(scope, e.Type)
-	if !ok || sym == nil {
+	performs := ec.performs(e)
+	sel := ec.selectInvocation(scope, e, argTypes, performs)
+	if !sel.Resolved() {
 		return semantics.PrimUnknown
 	}
-	resolved, aliasOK := ec.resolver.ResolveAliasTarget(sym)
-	if !aliasOK {
+	if sel.Ambiguous {
+		ec.diags = append(ec.diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     e.Type.Span(),
+			Message: fmt.Sprintf("call of %s is ambiguous between %s",
+				e.Type.Parts[len(e.Type.Parts)-1].Text, candidateNames(sel.Tied)),
+			Code:   "invocation-ambiguous",
+			Source: "type",
+		})
 		return semantics.PrimUnknown
 	}
-	sym = resolved
+	// With no candidate the arguments fit, the first is checked as before and
+	// the diagnostic names the rest.
+	var considered []*symbols.Symbol
+	sym := sel.Called()
+	if sel.Selected == nil {
+		considered = sel.Candidates
+	}
 	if !ec.isInvocationBehavior(sym, map[*symbols.Symbol]bool{}) {
 		if ec.isDefinitelyNonBehavior(sym) {
 			ec.diags = append(ec.diags, Diagnostic{
@@ -681,6 +708,18 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 		}
 		return semantics.PrimUnknown
 	}
+	// A performed call runs its behavior, so it must name an action (SysML v2
+	// §8.3.16.7 validatePerformActionUsage), as the runtime requires.
+	if performs == semantics.PerformsAction && !ec.model.Performable(performs, sym) {
+		ec.diags = append(ec.diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     e.Type.Span(),
+			Message:  msgReferenceAction,
+			Code:     "usage-reference-kind",
+			Source:   "type",
+		})
+		return semantics.PrimUnknown
+	}
 	if isInvocationBehaviorKind(sym.Kind) && !isBehaviorKind(sym.Kind) {
 		return semantics.PrimUnknown
 	}
@@ -688,78 +727,34 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 	if !ok {
 		return semantics.PrimUnknown
 	}
-	if len(e.NamedArgs) > 0 {
-		ec.checkNamedArguments(e, sym, namedTypes, params)
-	} else {
-		ec.checkArguments(e, sym, args, argTypes, params)
+	ec.checkArguments(e, sym, args, argTypes, params, considered)
+	if considered != nil {
+		return semantics.PrimUnknown
 	}
-	return semantics.PrimUnknown
+	return ec.model.PrimTypeOf(ec.model.ResultParameterOf(sym))
 }
 
-// checkNamedArguments checks a call whose arguments bind by name: each names a
-// parameter once, binds a value of its type, and no required parameter is left.
-func (ec *exprChecker) checkNamedArguments(
-	e *ast.InvocationExpr,
-	sym *symbols.Symbol,
-	namedTypes []semantics.PrimType,
-	params []parameter,
-) {
-	// A receiver binds by position, so which parameter it binds to is
-	// unstated beside arguments that bind by name (runtime/eval.go reports
-	// the same call).
-	if e.Operand != nil {
-		ec.errorf(e.Span(), "%s cannot be called with a receiver and named arguments", sym.Name)
-		return
-	}
-	byName := make(map[string]int, len(params))
-	for i, p := range params {
-		byName[p.name()] = i
-	}
-	bound := make([]bool, len(params))
-	unknown := false
-	for i, arg := range e.NamedArgs {
-		if arg.Name == nil || len(arg.Name.Parts) != 1 {
-			continue
-		}
-		name := arg.Name.Parts[0].Text
-		p, ok := byName[name]
-		if !ok {
-			ec.errorf(e.Span(), "%s has no parameter named %q", sym.Name, name)
-			unknown = true
-			continue
-		}
-		if bound[p] {
-			ec.errorf(arg.Value.Span(), "%s binds parameter %q twice", sym.Name, name)
-			continue
-		}
-		bound[p] = true
-		want := ec.declaredPrimType(params[p].scope(), params[p].usage.Relationships)
-		got := namedTypes[i]
-		if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
-			continue
-		}
-		if !bindable(arg.Value, got, want) {
-			ec.errorf(arg.Value.Span(), "argument %s of %s expects %s, found %s", name, sym.Name, want, got)
-		}
-	}
-	// An unknown name is most likely a misspelt parameter, reported once as such.
-	if unknown {
-		return
-	}
-	for i, p := range params {
-		if !bound[i] && p.required(ec.model) {
-			ec.errorf(e.Span(), "%s requires an argument for parameter %s", sym.Name, p.name())
-		}
-	}
-}
-
+// checkArguments reports the arguments of e that do not bind to sym's `in` parameters,
+// listing considered (the other declarations the call could name) on each report.
 func (ec *exprChecker) checkArguments(
 	e *ast.InvocationExpr,
 	sym *symbols.Symbol,
 	args []ast.Node,
-	argTypes []semantics.PrimType,
+	argTypes argumentTypes,
 	params []parameter,
+	considered []*symbols.Symbol,
 ) {
+	report := ec.errorf
+	if len(considered) > 1 {
+		suffix := " (candidates: " + candidateNames(considered) + ")"
+		report = func(span source.Span, format string, args ...any) {
+			ec.errorf(span, "%s"+suffix, fmt.Sprintf(format, args...))
+		}
+	}
+	if len(e.NamedArgs) > 0 {
+		ec.checkNamedArguments(e, sym, argTypes.named, params, report)
+		return
+	}
 	// Arguments bind in order, so a call must reach the last required parameter.
 	required := 0
 	for i, p := range params {
@@ -769,22 +764,92 @@ func (ec *exprChecker) checkArguments(
 	}
 	switch {
 	case len(args) > len(params):
-		ec.errorf(e.Span(), "%s takes %d argument(s), found %d", sym.Name, len(params), len(args))
+		report(e.Span(), "%s takes %d argument(s), found %d", sym.Name, len(params), len(args))
 		return
 	case len(args) < required:
-		ec.errorf(e.Span(), "%s requires %d argument(s), found %d", sym.Name, required, len(args))
+		report(e.Span(), "%s requires %d argument(s), found %d", sym.Name, required, len(args))
 		return
 	}
 	for i, arg := range args {
-		want := ec.declaredPrimType(params[i].scope(), params[i].usage.Relationships)
-		got := argTypes[i]
-		if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
-			continue
-		}
-		if !bindable(arg, got, want) {
-			ec.errorf(arg.Span(), "argument %d of %s expects %s, found %s", i+1, sym.Name, want, got)
+		if mismatch := ec.argumentMismatch(arg, argTypes.positional[i], params[i]); mismatch != "" {
+			report(arg.Span(), "argument %d of %s %s", i+1, sym.Name, mismatch)
 		}
 	}
+}
+
+// checkNamedArguments reports named arguments that name no `in` parameter of sym or do
+// not bind to it, and default-less parameters no argument names.
+func (ec *exprChecker) checkNamedArguments(
+	e *ast.InvocationExpr,
+	sym *symbols.Symbol,
+	namedTypes []semantics.Argument,
+	params []parameter,
+	report func(source.Span, string, ...any),
+) {
+	// A receiver binds by position, which named arguments leave unstated; runtime/eval.go
+	// reports the same call.
+	if e.Operand != nil {
+		report(e.Span(), "%s cannot be called with a receiver and named arguments", sym.Name)
+		return
+	}
+	byName := make(map[string]parameter, len(params))
+	for _, p := range params {
+		byName[p.name()] = p
+	}
+	bound := make(map[string]bool, len(e.NamedArgs))
+	unknown := false
+	for i, arg := range e.NamedArgs {
+		name, ok := namedArgumentName(arg)
+		if !ok {
+			continue
+		}
+		p, declared := byName[name]
+		if !declared {
+			report(e.Span(), "%s has no parameter named %q", sym.Name, name)
+			unknown = true
+			continue
+		}
+		if bound[name] {
+			report(arg.Value.Span(), "%s binds parameter %q twice", sym.Name, name)
+			continue
+		}
+		bound[name] = true
+		if mismatch := ec.argumentMismatch(arg.Value, namedTypes[i], p); mismatch != "" {
+			report(arg.Value.Span(), "argument %s of %s %s", name, sym.Name, mismatch)
+		}
+	}
+	// A misspelt name is the likelier cause of a parameter left unbound.
+	if unknown {
+		return
+	}
+	for _, p := range params {
+		if !bound[p.name()] && p.required(ec.model) {
+			report(e.Span(), "%s requires an argument for parameter %s", sym.Name, p.name())
+		}
+	}
+}
+
+// parameterPrimType is the scalar type p is declared with, PrimUnknown when none is known.
+func (ec *exprChecker) parameterPrimType(p parameter) semantics.PrimType {
+	return ec.declaredPrimType(p.scope(), p.usage.Relationships)
+}
+
+// argumentMismatch says why value, typed got, does not bind to p ("" when it does or a type is
+// unknown): a scalar parameter is judged by the lattice, any other by declared type, a Collection
+// taking any sequence and Element the element any argument names.
+func (ec *exprChecker) argumentMismatch(value ast.Node, got semantics.Argument, p parameter) string {
+	if want := ec.parameterPrimType(p); want != semantics.PrimUnknown {
+		if got.Prim == semantics.PrimUnknown || bindable(value, got.Prim, want) {
+			return ""
+		}
+		return fmt.Sprintf("expects %s, found %s", want, got.Prim)
+	}
+	want := ec.declaredTypeSymbol(p.scope(), p.usage.Relationships)
+	if want == nil || got.Type == nil || semantics.IsCollection(want) || semantics.IsElementType(want) ||
+		ec.model.Conforms(got.Type, want) || ec.model.Conforms(want, got.Type) {
+		return ""
+	}
+	return fmt.Sprintf("expects %s, found %s", want.Name, got.Type.Name)
 }
 
 // isBehaviorKind reports the behavior kinds whose parameter lists are checked.
