@@ -49,6 +49,10 @@ type Context struct {
 	// defaults, result expression) per calc symbol.
 	calcShapes map[*symbols.Symbol]*calcShape
 
+	// libraryPerformances memoizes, per model calc, the inherited library function a
+	// call of it applies; nil for a calc that computes on its own.
+	libraryPerformances map[*symbols.Symbol]*libraryPerformance
+
 	// invocationTargets memoizes what each invocation expression denotes in the
 	// scope it is evaluated in; the model does not change under one context.
 	invocationTargets map[invocationKey]*invocationTarget
@@ -227,14 +231,15 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		model.SetArgumentTyper(passes.NewArgumentTyper(resolver, model))
 	}
 	return &Context{
-		model:      model,
-		resolver:   resolver,
-		ids:        &idSequence{next: 1}, // IDs start at 1 (0 = invalid)
-		steps:      0,
-		maxSteps:   maxSteps,
-		instances:  make(map[int64]*Instance),
-		features:   make(map[*symbols.Symbol][]EffectiveFeature),
-		calcShapes: make(map[*symbols.Symbol]*calcShape),
+		model:               model,
+		resolver:            resolver,
+		ids:                 &idSequence{next: 1}, // IDs start at 1 (0 = invalid)
+		steps:               0,
+		maxSteps:            maxSteps,
+		instances:           make(map[int64]*Instance),
+		features:            make(map[*symbols.Symbol][]EffectiveFeature),
+		calcShapes:          make(map[*symbols.Symbol]*calcShape),
+		libraryPerformances: make(map[*symbols.Symbol]*libraryPerformance),
 
 		invocationTargets: make(map[invocationKey]*invocationTarget),
 		integerLiterals:   make(map[*ast.LiteralInteger]int64),
