@@ -1,6 +1,7 @@
 // The operations inside a calc body's `while`: the loop walks the sequence by
 // index, and its condition is a collection operation of its own.
 package test {
+	private import SequenceFunctions::*;
 	calc runningTotal {
 		attribute xs : Integer[*] = (5, 7, 9);
 		attribute i : Integer = 1;
