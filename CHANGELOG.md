@@ -8,6 +8,18 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Added
 
+- **The Connect + JSON wire contract is written down for clients with no library.** A
+  MATLAB, R, Julia, C or shell program that posts JSON to `sysml-grpc` by hand had only the
+  proto file and two rules on the transports page to decode answers with, and the questions
+  that page leaves open — how long a `modelHash` lives and what a stale one answers, how the
+  eleven arms of `Value` are told apart and which of `unset`, `null` and an absent `result`
+  means what, how a parse diagnostic differs from an in-body `error` and both from a Connect
+  `{"code","message"}`, and what `Instantiate`, the behavior calls, `Verify*`, `Query` and
+  `RunDocumentQuery` answer — are now on
+  [docs/reference/wire-contract.md](docs/reference/wire-contract.md), each with a request and
+  the response captured verbatim from the service, and with a short illustrative decoder in
+  each of the four languages that is explicitly not a shipped client.
+
 - **`%features` reads out a whole object tree, as text or as JSON.** A large run could not
   be read out: the listing stopped at 200 lines with `… (listing truncated)`, so the
   counters two levels under a context of twelve parts were simply absent, and there was no
@@ -339,6 +351,22 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   document gains a paragraph and diagram on invoking a calc.
 
 ### Fixed
+
+- **Messages cross a binding connector at an assembly's boundary port, in both directions**
+  (Open-MBEE/OpenSysML#92). An assembly that binds its boundary port to a port of a part it
+  holds (`part def Assembly { port bi : ~PP; part child : Inner; bind bi = child.i; }`) used
+  to swallow messages at the boundary: a `send Ping() via o` over a context-level
+  `connect env.o to asm.bi` arrived at `asm.bi` and stayed there, so the inner part's
+  `accept Ping via i` never fired and its counters stayed at 0, with no diagnostic; and a send
+  by the inner part through its own port was reported as reaching no receiving port, although
+  the boundary port it is bound to was connected. A binding connector now makes the two ports
+  one port for message delivery: an accept on either takes a message that reached the other,
+  and a send through either leaves over the connectors joined to the other, through any depth
+  of nested assemblies. Bindings chained through several assemblies also keep every bound port
+  the same object whichever end is read first — a chain used to split when the outer boundary
+  port was materialized before the inner assembly's. A send whose bound boundary port is
+  joined to nothing still reports `send reaches no receiving port` where it was written.
+  Delivery does not depend on the order connectors, bindings and parts are declared.
 
 - **`satisfy … by config.child` is evaluated on the nested object it names.** A satisfaction
   assertion whose `by` operand is a feature chain used to be read as its last name alone:
