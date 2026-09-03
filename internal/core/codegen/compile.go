@@ -861,15 +861,13 @@ func (fc *funcCompiler) compileCall(n *ast.InvocationExpr) (Expr, error) {
 	}
 	sym, ok := fc.c.resolver.ResolveQualified(fc.scope, n.Type)
 	if !ok {
+		// As the interpreter: a name that denotes nothing is not the library
+		// function of that name.
 		written := qnText(n.Type)
-		fqn, err := runtime.UnresolvedLibraryFunction(n.Type, written)
-		if err != nil {
-			return nil, fc.unsupported(err.Error())
+		if len(n.Type.Parts) == 1 && !n.Type.Global {
+			written = fc.c.resolver.UnresolvedName(fc.scope, written)
 		}
-		if fqn == "" {
-			return nil, fc.unsupported(fmt.Sprintf("invocation of %s, which does not resolve", written))
-		}
-		return fc.compileLibCall(n, fqn)
+		return nil, fc.unsupported(fmt.Sprintf("invocation of %s, which does not resolve", written))
 	}
 	if !isCalc(sym.Decl) {
 		return nil, fc.unsupported(fmt.Sprintf("invocation of %s, which is not a calc", fc.c.name(sym)))

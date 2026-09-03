@@ -48,13 +48,17 @@ func collectionExprContext(t *testing.T, expr string, maxSteps int64) (*EvalCont
 	t.Helper()
 	src := `
 package test {
+	private import SequenceFunctions::*;
+	private import CollectionFunctions::*;
+	private import ControlFunctions::*;
+	private import NumericalFunctions::*;
 	attribute xs = (1, 2, 3);
 	attribute ys = (2, 4);
 	attribute factor = 10;
 	attribute flags = (true, false);
 	attribute result = ` + expr + `;
 }`
-	model, resolver, root := parseAndBuildModel(t, src)
+	model, resolver, root := parseAndBuildLibraryModel(t, src)
 	pkg, ok := root.LookupLocal("test")
 	if !ok || pkg == nil {
 		t.Fatal("package test not found")
