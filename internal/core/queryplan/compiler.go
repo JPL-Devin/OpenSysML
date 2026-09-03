@@ -705,8 +705,18 @@ func (c *compiler) compileInvocation(
 			Origin: provenance.Node(owner.DocName, expression),
 		}
 	}
-	target, ok := c.resolver.ResolveQualified(owner.Scope, expression.Type)
-	if !ok {
+	selection := c.model.SelectCall(owner.Scope, expression, semantics.PerformsBehavior)
+	if selection.Ambiguous {
+		return typedExpression{}, &Error{
+			Kind:   ErrorAmbiguousInvocation,
+			Query:  symbols.FQNOf(query),
+			Target: name,
+			Path:   qualifiedNames(selection.Tied),
+			Origin: provenance.Node(owner.DocName, expression),
+		}
+	}
+	target := selection.Called()
+	if target == nil {
 		return typedExpression{}, &Error{
 			Kind:   ErrorUnknownInvocation,
 			Query:  symbols.FQNOf(query),
@@ -1176,4 +1186,12 @@ func qualifiedName(name *ast.QualifiedName) string {
 		out += part.Text
 	}
 	return out
+}
+
+func qualifiedNames(syms []*symbols.Symbol) []string {
+	names := make([]string, len(syms))
+	for i, sym := range syms {
+		names[i] = symbols.FQNOf(sym)
+	}
+	return names
 }

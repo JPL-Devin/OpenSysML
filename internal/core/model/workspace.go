@@ -340,10 +340,12 @@ func (w *Workspace) memberSymbolsLocked(resolver *resolve.Resolver, sem *semanti
 // newResolver is a resolver over the index with a semantic model attached: an
 // inherited member and the element filters gating an import are both answered by
 // the model, so a read path without one resolves differently to a checked one.
+// Calls are selected under the checker's argument typing, as a checked document's are.
 func (w *Workspace) newResolver() (*resolve.Resolver, *semantics.Model) {
 	resolver := resolve.New(w.index)
 	sem := semantics.NewModel(resolver)
 	resolver.SetModel(sem)
+	sem.SetArgumentTyper(passes.NewArgumentTyper(resolver, sem))
 	return resolver, sem
 }
 

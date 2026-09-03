@@ -19,6 +19,12 @@ project; the numbering is chronological and carries no external meaning. `F<n>` 
 follow-up table in [pilot-differential.md](pilot-differential.md), and `K<n>`/`S<n>` its KerML and
 SysML diagnostic classes. A reader who only wants the verdicts can ignore all of them.
 
+The corpus is organised by the rule each case violates, not by the pilot's constraint names, so
+it does not say which of the pilot's named validation constraints have a case and which do not.
+The [validation-constraint census](validation-constraints.md) does: one row per name the pinned
+jar declares, with the case here that exercises it (`none` where the corpus has none yet) beside
+the pass that implements it and its census status.
+
 ## Pinned reference
 
 The same pin as the differential: OMG SysML v2 Pilot Implementation `2026-07`

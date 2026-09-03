@@ -1953,17 +1953,30 @@ func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget
 	if sel := passes.SelectInvocation(ec.ctx.resolver, ec.ctx.model, ec.scope, n, semantics.PerformsBehavior); sel.Ambiguous {
 		target.ambiguous = sel.Tied
 	} else if sym := sel.Called(); sym != nil {
-		target.calc = sym
-		if fn, ok := ec.ctx.builtinFor(sym); ok {
-			target.builtin, target.builtinName = fn, ec.ctx.qualifiedSymbolName(sym)
-		} else if fn, ok := ec.ctx.libraryFunctionFor(sym); ok {
-			target.library = fn
-		} else if shape, err := ec.ctx.calcShapeOf(sym); err == nil {
-			target.shape = shape
-		}
+		ec.ctx.implementInvocation(target, sym)
 	}
 	ec.ctx.invocationTargets[key] = target
 	return target
+}
+
+// implementInvocation records how a call of the selected sym is applied: by a
+// library implementation, by its calc shape, or — when a model calc binds the
+// arguments through parameters of its own — by invokeCalcWithSelf.
+func (ctx *Context) implementInvocation(target *invocationTarget, sym *symbols.Symbol) {
+	target.calc = sym
+	if perf := ctx.libraryCalcPerformed(sym); perf != nil {
+		if perf.signature != nil {
+			return
+		}
+		sym = perf.lib
+	}
+	if fn, ok := ctx.builtinFor(sym); ok {
+		target.builtin, target.builtinName = fn, ctx.qualifiedSymbolName(sym)
+	} else if fn, ok := ctx.libraryFunctionFor(sym); ok {
+		target.library = fn
+	} else if shape, err := ctx.calcShapeOf(sym); err == nil {
+		target.shape = shape
+	}
 }
 
 // ambiguousInvocationError names the equally specific declarations a call of

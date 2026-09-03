@@ -22,6 +22,9 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("calc_call_fits_no_visible_candidate_behind_a_non_callable", testCalcCallFitsNoVisibleCandidateBehindANonCallable)
 	t.Run("calc_call_selects_by_argument_type", testCalcCallSelectsByArgumentType)
 	t.Run("calc_call_selects_a_feature_typed_by_a_calc", testCalcCallSelectsAFeatureTypedByACalc)
+	t.Run("calc_call_applies_the_library_function_a_feature_is_typed_by", testCalcCallAppliesTheLibraryFunctionAFeatureIsTypedBy)
+	t.Run("calc_call_binds_a_library_function_through_redeclared_inputs", testCalcCallBindsALibraryFunctionThroughRedeclaredInputs)
+	t.Run("calc_call_selects_a_calc_over_a_more_specific_action", testCalcCallSelectsACalcOverAMoreSpecificAction)
 	t.Run("global_root_call_selects_by_argument_type", testGlobalRootCallSelectsByArgumentType)
 	t.Run("bare_call_selects_among_other_documents_root_declarations", testBareCallSelectsAmongOtherDocumentsRootDeclarations)
 	t.Run("bare_call_reaches_private_root_declarations_of_other_documents", testBareCallReachesPrivateRootDeclarationsOfOtherDocuments)
@@ -656,6 +659,249 @@ func testCalcCallSelectsAFeatureTypedByACalc(t *testing.T) {
 		if result.Kind != ValConst || result.Const.Int != tc.want {
 			t.Fatalf("%s = %+v, want %d", tc.calc, result, tc.want)
 		}
+	}
+}
+
+// A feature typed by a library function — directly, or through bodiless model calcs
+// specializing it — performs that function's implementation, by position or by
+// parameter name, as does a bodiless calc def specializing it. A model calc stating
+// its own body keeps it.
+func testCalcCallAppliesTheLibraryFunctionAFeatureIsTypedBy(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			private import RealFunctions::sqrt;
+			private import SequenceFunctions::size;
+			ref root : sqrt;
+			calc rootCalc : sqrt;
+			ref count : size;
+			calc def halfRoot :> sqrt { in x : Real; return : Real = sqrt(x) / 2.0; }
+			ref half : halfRoot;
+			calc def Root :> sqrt;
+			calc def Root2 :> Root;
+			ref viaDefs : Root2;
+			calc positional { root(16.0) }
+			calc named { root(x = 16.0) }
+			calc viaCalcUsage { rootCalc(16.0) }
+			calc collection { count((1, 2, 3)) }
+			calc ownBody { half(16.0) }
+			calc aliasDef { Root(16.0) }
+			calc aliasDefNamed { Root2(x = 16.0) }
+			calc viaAliasDefs { viaDefs(16.0) }
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	cases := []struct {
+		calc string
+		want Value
+	}{
+		{"positional", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 4}}},
+		{"named", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 4}}},
+		{"viaCalcUsage", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 4}}},
+		{"collection", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}},
+		{"ownBody", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 2}}},
+		{"aliasDef", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 4}}},
+		{"aliasDefNamed", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 4}}},
+		{"viaAliasDefs", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 4}}},
+	}
+	for _, tc := range cases {
+		sym := findSymbolByName(rootScope, tc.calc, ast.DefCalc)
+		if sym == nil {
+			t.Fatalf("%s calc not found", tc.calc)
+		}
+		result, err := ctx.InvokeCalc(sym, nil, rootScope)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.calc, err)
+		}
+		if !valueEqual(result, tc.want) {
+			t.Fatalf("%s = %+v, want %+v", tc.calc, result, tc.want)
+		}
+	}
+}
+
+// A bodiless calc def specializing a library function binds a call's arguments
+// through its own effective inputs — renamed, defaulted, re-multiplied or added by
+// position — and hands them to the library implementation in its parameter order;
+// so does a feature typed by it, and a direct invocation of either.
+func testCalcCallBindsALibraryFunctionThroughRedeclaredInputs(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			private import RealFunctions::sqrt;
+			private import RealFunctions::max;
+			private import SequenceFunctions::isEmpty;
+			calc def Renamed :> sqrt { in y :>> x; }
+			calc def Defaulted :> sqrt { in x :>> x = 16.0; }
+			calc def ByPosition :> sqrt { in q : Real; }
+			calc def Floor :> max { in floor :>> y = 0.0; }
+			calc def Empty :> isEmpty { in items :>> seq; }
+			calc def Required :> isEmpty { in seq :>> seq [1]; }
+			calc def Narrowed :> sqrt { in n : Integer :>> x; }
+			calc def AtLeastNext :> max { in x :>> x; in y :>> y = x + 1.0; }
+			calc def OwnBody :> sqrt { in y :>> x; return : Real = y; }
+			ref renamed : Renamed;
+			ref defaulted : Defaulted;
+			calc renamedNamed { Renamed(y = 16.0) }
+			calc renamedPositional { Renamed(16.0) }
+			calc renamedOldName { Renamed(x = 16.0) }
+			calc renamedUnbound { Renamed() }
+			calc defaulted0 { Defaulted() }
+			calc defaultedGiven { Defaulted(x = 25.0) }
+			calc byPosition { ByPosition(4.0) }
+			calc floorApplies { Floor(x = -3.0) }
+			calc floorGiven { Floor(x = 5.0, floor = 7.0) }
+			calc floorUnbound { Floor(2.0) }
+			calc emptyOmitted { Empty() }
+			calc emptyGiven { Empty(items = 3) }
+			calc requiredOmitted { Required() }
+			calc requiredNull { Required(null) }
+			calc narrowedFits { Narrowed(4) }
+			calc narrowedReal { Narrowed(2.5) }
+			calc nextDefault { AtLeastNext(2.0) }
+			calc nextGiven { AtLeastNext(2.0, 1.0) }
+			calc ownBody { OwnBody(16.0) }
+			calc featureNamed { renamed(y = 16.0) }
+			calc featureDefault { defaulted() }
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	real := func(f float64) Value {
+		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: f}}
+	}
+	boolean := func(b bool) Value {
+		return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: b}}
+	}
+	for _, tc := range []struct {
+		calc string
+		want Value
+	}{
+		{"renamedNamed", real(4)},
+		{"renamedPositional", real(4)},
+		{"defaulted0", real(4)},
+		{"defaultedGiven", real(5)},
+		{"byPosition", real(2)},
+		{"floorApplies", real(0)},
+		{"floorGiven", real(7)},
+		{"emptyOmitted", boolean(true)},
+		{"emptyGiven", boolean(false)},
+		{"narrowedFits", real(2)},
+		{"nextDefault", real(3)},
+		{"nextGiven", real(2)},
+		{"ownBody", real(16)},
+		{"featureNamed", real(4)},
+		{"featureDefault", real(4)},
+	} {
+		sym := findSymbolByName(rootScope, tc.calc, ast.DefCalc)
+		if sym == nil {
+			t.Fatalf("%s calc not found", tc.calc)
+		}
+		result, err := ctx.InvokeCalc(sym, nil, rootScope)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.calc, err)
+		}
+		if !valueEqual(result, tc.want) {
+			t.Fatalf("%s = %+v, want %+v", tc.calc, result, tc.want)
+		}
+	}
+	for _, tc := range []struct {
+		calc string
+		want error
+	}{
+		{"renamedOldName", ErrUnknownParameter},
+		{"renamedUnbound", ErrUnboundParameter},
+		{"floorUnbound", ErrUnboundParameter},
+		{"requiredOmitted", ErrUnboundParameter},
+		{"requiredNull", ErrMultiplicityViolation},
+		{"narrowedReal", ErrTypeMismatch},
+	} {
+		sym := findSymbolByName(rootScope, tc.calc, ast.DefCalc)
+		if sym == nil {
+			t.Fatalf("%s calc not found", tc.calc)
+		}
+		if _, err := ctx.InvokeCalc(sym, nil, rootScope); !errors.Is(err, tc.want) {
+			t.Fatalf("%s error = %v, want %v", tc.calc, err, tc.want)
+		}
+	}
+
+	renamed := findSymbolByName(rootScope, "Renamed", ast.DefCalc)
+	if result, err := ctx.InvokeCalcNamed(renamed, map[string]Value{"y": real(9)}, rootScope); err != nil || !valueEqual(result, real(3)) {
+		t.Fatalf("InvokeCalcNamed(Renamed, y = 9) = %+v, %v; want 3", result, err)
+	}
+	if result, err := ctx.InvokeCalc(renamed, []Value{real(9)}, rootScope); err != nil || !valueEqual(result, real(3)) {
+		t.Fatalf("InvokeCalc(Renamed, 9) = %+v, %v; want 3", result, err)
+	}
+	if _, err := ctx.InvokeCalcNamed(renamed, map[string]Value{"x": real(9)}, rootScope); !errors.Is(err, ErrUnknownParameter) {
+		t.Fatalf("InvokeCalcNamed(Renamed, x = 9) error = %v, want ErrUnknownParameter", err)
+	}
+	defaulted := findSymbolByName(rootScope, "Defaulted", ast.DefCalc)
+	if result, err := ctx.InvokeCalc(defaulted, nil, rootScope); err != nil || !valueEqual(result, real(4)) {
+		t.Fatalf("InvokeCalc(Defaulted) = %+v, %v; want 4", result, err)
+	}
+	floor := findSymbolByName(rootScope, "Floor", ast.DefCalc)
+	if result, err := ctx.InvokeCalcNamed(floor, map[string]Value{"x": real(-3)}, rootScope); err != nil || !valueEqual(result, real(0)) {
+		t.Fatalf("InvokeCalcNamed(Floor, x = -3) = %+v, %v; want 0", result, err)
+	}
+	narrowed := findSymbolByName(rootScope, "Narrowed", ast.DefCalc)
+	if _, err := ctx.InvokeCalc(narrowed, []Value{real(2.5)}, rootScope); !errors.Is(err, ErrTypeMismatch) || !strings.Contains(err.Error(), "calc test::Narrowed") {
+		t.Fatalf("InvokeCalc(Narrowed, 2.5) error = %v, want ErrTypeMismatch from test::Narrowed", err)
+	}
+	next := findSymbolByName(rootScope, "AtLeastNext", ast.DefCalc)
+	if result, err := ctx.InvokeCalcNamed(next, map[string]Value{"x": real(2)}, rootScope); err != nil || !valueEqual(result, real(3)) {
+		t.Fatalf("InvokeCalcNamed(AtLeastNext, x = 2) = %+v, %v; want 3", result, err)
+	}
+}
+
+// An evaluated call runs a calc: a same-named action whose input fits the argument
+// more closely is not a candidate, whichever import names it first; a name only
+// actions declare is still refused as not a calc.
+func testCalcCallSelectsACalcOverAMoreSpecificAction(t *testing.T) {
+	const src = `
+		package A { private import ScalarValues::*; action def pick { in x : Integer; out r : Integer; } }
+		package B { private import ScalarValues::*; calc def pick { in x : Real; return : Integer = 2; } }
+		package test {
+			private import ScalarValues::*;
+			%s
+			calc choose { in v : Integer; pick(v) }
+			calc chooseAction { in v : Integer; A::pick(v) }
+		}
+	`
+	three := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}
+	for _, imports := range []string{
+		"private import A::*; private import B::*;",
+		"private import B::*; private import A::*;",
+	} {
+		idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, fmt.Sprintf(src, imports)))
+		rootScope := idx.DocumentRoot("<test>")
+		choose := findSymbolByName(rootScope, "choose", ast.DefCalc)
+		if choose == nil {
+			t.Fatal("choose calc not found")
+		}
+		result, err := ctx.InvokeCalc(choose, []Value{three}, rootScope)
+		if err != nil {
+			t.Fatalf("%s: pick(3): %v", imports, err)
+		}
+		if result.Kind != ValConst || result.Const.Int != 2 {
+			t.Fatalf("%s: pick(3) = %+v, want 2 from B::pick", imports, result)
+		}
+		chooseAction := findSymbolByName(rootScope, "chooseAction", ast.DefCalc)
+		if chooseAction == nil {
+			t.Fatal("chooseAction calc not found")
+		}
+		if _, err := ctx.InvokeCalc(chooseAction, []Value{three}, rootScope); !errors.Is(err, ErrNotACalc) {
+			t.Fatalf("%s: A::pick(3) error = %v, want ErrNotACalc", imports, err)
+		}
+	}
+	// With only the action fitting the argument, the calc is still the one called, and
+	// the argument is refused against it as the checker reports it.
+	onlyAction := strings.Replace(src, "in x : Real; return : Integer = 2;", "in x : String; return : Integer = 2;", 1)
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, fmt.Sprintf(onlyAction, "private import A::*; private import B::*;")))
+	rootScope := idx.DocumentRoot("<test>")
+	choose := findSymbolByName(rootScope, "choose", ast.DefCalc)
+	_, err := ctx.InvokeCalc(choose, []Value{three}, rootScope)
+	if !errors.Is(err, ErrTypeMismatch) || !strings.Contains(err.Error(), "calc B::pick") {
+		t.Fatalf("pick(3) fitting only A::pick: error = %v, want ErrTypeMismatch from B::pick", err)
 	}
 }
 

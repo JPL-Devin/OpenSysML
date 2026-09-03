@@ -198,6 +198,7 @@ expr:ShadowBody__Sensor__highs_pvalue_pa0
     a sysml:Expression ;
     sysx:sourceText "{ in value; value > 5 }" ;
     sysml:elementId "ShadowBody__Sensor__highs_pvalue_pa0" ;
+    sysx:hasBody "true"^^xsd:boolean ;
     sysx:bodyParameter expr:ShadowBody__Sensor__highs_pvalue_pa0_pin0 ;
     sysx:resultExpression expr:ShadowBody__Sensor__highs_pvalue_pa0_presult ;
     sysx:argumentIndex "0"^^xsd:integer .

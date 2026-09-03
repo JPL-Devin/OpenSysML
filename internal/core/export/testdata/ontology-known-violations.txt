@@ -62,7 +62,6 @@ unknown-class urn:opensysml:sysml:FinalNode -                # an action's final
 unknown-class urn:opensysml:sysml:IfBranch -                 # an if/else branch, standardly an IfActionUsage's then/else parameter
 unknown-class urn:opensysml:sysml:MultiplicityDeclaration -  # a named multiplicity, standardly a MultiplicityRange
 unknown-class urn:opensysml:sysml:Pseudostate -              # a state machine pseudostate, standardly a StateUsage or TransitionUsage shape
-unknown-class urn:opensysml:sysml:ResultExpressionMember -   # a body's result expression, standardly the Expression a ResultExpressionMembership owns
 unknown-class urn:opensysml:sysml:BodyMember -               # a declaration inside an expression body, standardly a Feature the Expression owns
 
 # 5. Properties written in the SysML namespace that no metaclass declares. Every
@@ -74,17 +73,23 @@ unknown-property PartDefinition specializes                  # specialization is
 unknown-property ClassUsage specializes                      # specialization is a Specialization element, not a property
 unknown-property PartUsage subsets                           # subsetting is a Subsetting element, not a property
 unknown-property ReferenceUsage subsets                      # subsetting is a Subsetting element, not a property
+unknown-property SatisfyRequirementUsage subsets             # subsetting is a Subsetting element, not a property
+unknown-property SubjectMembership subsets                   # subsetting is a Subsetting element, not a property
+unknown-property AnalysisCaseUsage subsets                   # subsetting is a Subsetting element, not a property
 unknown-property urn:opensysml:sysml:MultiplicityDeclaration subsets # a MultiplicitySubset's bounds, written the same way as any other subsetting
 unknown-property PartUsage redefines                         # redefinition is a Redefinition element, not a property
+unknown-property AttributeUsage redefines                    # redefinition is a Redefinition element, not a property
 unknown-property ReferenceUsage redefines                    # redefinition is a Redefinition element, not a property
 unknown-property SubjectMembership redefines                 # redefinition is a Redefinition element, not a property
 unknown-property ActionUsage references                      # a referenced element is a ReferenceUsage or Membership, not a property
 unknown-property BindingConnectorAsUsage references          # the feature a `bind` binds, referenced the same way
+unknown-property PartUsage references                        # a reference subsetting is a ReferenceSubsetting element, not a property
 unknown-property StateUsage references                       # the state an `exhibit` names, referenced the same way
 unknown-property ReferenceUsage references                   # a connector end referencing its feature, written the same way
 unknown-property ViewRenderingMembership references          # a referenced element is a ReferenceUsage or Membership, not a property
 unknown-property urn:opensysml:sysml:AssumeMember references # a referenced element is a ReferenceUsage or Membership, not a property
 unknown-property urn:opensysml:sysml:Alias aliasedElement    # an alias target is a Membership's memberElement, not a property
+unknown-property SatisfyRequirementUsage subject             # the feature `by` names, standardly the satisfyingFeature through a SubjectMembership
 unknown-property ActionUsage via                             # the port an accept trigger listens on, which the metamodel reaches through the accept action's parameters
 unknown-property TransitionUsage via                         # the port a transition's trigger listens on, reached the same way
 unknown-property ReferenceUsage isAccept                     # notation flag for an accept parameter, no metamodel property

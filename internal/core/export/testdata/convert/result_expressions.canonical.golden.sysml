@@ -34,6 +34,21 @@ package Results {
         in ok : Boolean;
         ok
     }
+    calc def Says {
+        "say \"hi\"\n\\ \t done"
+    }
+    calc def Empty {
+        in x : Real;
+        {}
+    }
+    calc def Named {
+        in x : Real;
+        Double('the value' = x)
+    }
+    calc def Scaled {
+        in x : Real;
+        (x * 1.5E3)
+    }
     calc def Predicate {
         in x : Real;
         in expr keep : Boolean {
@@ -78,7 +93,7 @@ package Results {
     }
     part rover : Vehicle {
         calc twice : Double {
-            in x = Vehicle::mass;
+            in x = mass;
             (x + x)
         }
     }
