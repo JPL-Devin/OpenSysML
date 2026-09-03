@@ -1806,7 +1806,7 @@ func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget
 		return target
 	}
 	target := &invocationTarget{qualName: qualifiedNameToString(n.Type)}
-	if sel := passes.SelectInvocation(ec.ctx.resolver, ec.ctx.model, ec.scope, n); sel.Ambiguous {
+	if sel := passes.SelectInvocation(ec.ctx.resolver, ec.ctx.model, ec.scope, n, semantics.PerformsBehavior); sel.Ambiguous {
 		target.ambiguous = sel.Tied
 	} else if sym := sel.Called(); sym != nil {
 		target.calc = sym

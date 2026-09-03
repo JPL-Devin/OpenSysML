@@ -308,6 +308,36 @@ func TestInvocationOverloadModelShadowsLibrary(t *testing.T) {
 	}`)
 }
 
+// An action performed as a usage's value selects among actions only: a same-named
+// calc that fits the argument better is not what the action usage runs, so the call
+// is checked against the action it does run.
+func TestInvocationPerformedActionSelectsAmongActions(t *testing.T) {
+	const actions = `
+		package A {
+			private import ScalarValues::*;
+			calc def tag { in x : Integer; return : Integer = x + 1; }
+		}
+		package B {
+			private import ScalarValues::*;
+			action def tag { in x : %s; out code : Integer; }
+		}
+		package test {
+			private import ScalarValues::*;
+			private import A::*;
+			private import B::*;
+			action def Outer {
+				first start;
+				action call = tag(3);
+				done;
+				succession first start then call;
+				succession first call then done;
+			}
+		}
+	`
+	wantLibraryClean(t, fmt.Sprintf(actions, "Real"))
+	wantLibraryDiag(t, fmt.Sprintf(actions, "String"), "type.expr", "argument 1 of tag expects String, found Natural")
+}
+
 // Function libraries are not implicitly imported: a bare call to any library function
 // is unresolved until its package is imported, and the diagnostic offers those imports.
 func TestInvocationUnimportedLibraryFunction(t *testing.T) {

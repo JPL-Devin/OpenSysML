@@ -212,6 +212,9 @@ type Reference struct {
 	// Invocation is set when QN is the name an invocation calls, which overload
 	// selection may resolve to one of several declarations (see ResolveInvocationName).
 	Invocation *ast.InvocationExpr
+	// Performed is set when Invocation is the value of an action usage, which
+	// runs the action it names rather than evaluating a calc of that name.
+	Performed bool
 }
 
 // ResolveReference resolves a single name occurrence, honoring both the

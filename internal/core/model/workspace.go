@@ -445,7 +445,16 @@ func selectedInvocation(resolver *resolve.Resolver, sem *semantics.Model, ref re
 	if ref.Invocation == nil {
 		return nil
 	}
-	return passes.SelectInvocation(resolver, sem, ref.Scope, ref.Invocation).Selected
+	return passes.SelectInvocation(resolver, sem, ref.Scope, ref.Invocation, performs(ref)).Selected
+}
+
+// performs is the kind of call site a reference is: an action performance when
+// the call is an action usage's value, else an expression.
+func performs(ref resolve.Reference) semantics.Performs {
+	if ref.Performed {
+		return semantics.PerformsAction
+	}
+	return semantics.PerformsBehavior
 }
 
 // ResolveQualifiedSegmentsInDoc resolves a qualified name and returns the symbol

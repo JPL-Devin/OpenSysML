@@ -6,6 +6,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -38,7 +39,7 @@ type actionInvocation struct {
 // Only typing and reference-subsetting edges name a performed action: the port
 // of `accept msg : T via p` is a via edge, not a reference subsetting.
 func nestedInvocation(usage *ast.Usage) (actionInvocation, bool) {
-	if invocation, ok := usage.Value.(*ast.InvocationExpr); ok && invocation.Type != nil {
+	if invocation := usage.PerformedInvocation(); invocation != nil {
 		return expressionInvocation(invocation), true
 	}
 	for _, rel := range usage.Relationships {
@@ -136,7 +137,7 @@ func resolveActionSymbol(
 	case inv.referrer != nil:
 		sym, ok = ctx.resolver.ResolveReferenceTarget(scope, inv.referrer, target)
 	case inv.expr != nil:
-		sel := passes.SelectInvocation(ctx.resolver, ctx.model, scope, inv.expr)
+		sel := passes.SelectInvocation(ctx.resolver, ctx.model, scope, inv.expr, semantics.PerformsAction)
 		if sel.Ambiguous {
 			return nil, ambiguousInvocationError(name, sel.Tied)
 		}

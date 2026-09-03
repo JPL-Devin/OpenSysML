@@ -30,6 +30,25 @@ func (m *Model) SetArgumentTyper(t ArgumentTyper) {
 	m.arguments = t
 }
 
+// Performs is what a call site does with the declaration it names, which
+// decides the kinds of declaration it may select.
+type Performs int
+
+const (
+	// PerformsBehavior evaluates an expression: any behavior answers.
+	PerformsBehavior Performs = iota
+	// PerformsAction runs an action, as `action a = tag(x);` does: only actions answer.
+	PerformsAction
+)
+
+// performable reports whether a call site of kind p can run sym.
+func (p Performs) performable(sym *symbols.Symbol) bool {
+	if p == PerformsAction {
+		return sym.Kind == symbols.SymbolActionDef || sym.Kind == symbols.SymbolActionUsage
+	}
+	return behaviorLike(sym)
+}
+
 // InvocationSelection is which declaration an invocation calls, out of every
 // declaration its written name is visible as.
 type InvocationSelection struct {
@@ -38,7 +57,7 @@ type InvocationSelection struct {
 	Selected   *symbols.Symbol   // the one called; nil when none applies or they tie
 	Ambiguous  bool              // several applicable candidates are equally specific
 	Tied       []*symbols.Symbol // the applicable candidates none is more specific than, when Ambiguous
-	callable   *symbols.Symbol   // the first candidate that is a behavior, when any is
+	callable   *symbols.Symbol   // the first candidate the call site can run, when any is
 }
 
 // Resolved reports whether the name denotes at least one declaration.
@@ -62,28 +81,30 @@ func (s *InvocationSelection) Called() *symbols.Symbol {
 	return nil
 }
 
-// invocationKey identifies an invocation expression in the scope it is read in.
+// invocationKey identifies an invocation expression in the scope and the kind of
+// call site it is read in.
 type invocationKey struct {
-	node  *ast.InvocationExpr
-	scope *symbols.Scope
+	node     *ast.InvocationExpr
+	scope    *symbols.Scope
+	performs Performs
 }
 
 // SelectInvocation chooses the declaration e calls: the most specific candidate the arguments
 // fit, or the first in lookup order when an argument's type is unknown. Memoized per node/scope.
-func (m *Model) SelectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, args []Argument) *InvocationSelection {
+func (m *Model) SelectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, args []Argument, performs Performs) *InvocationSelection {
 	if m == nil || e == nil || e.Type == nil {
 		return &InvocationSelection{}
 	}
-	key := invocationKey{node: e, scope: scope}
+	key := invocationKey{node: e, scope: scope, performs: performs}
 	if sel, ok := m.invocations[key]; ok {
 		return sel
 	}
-	sel := m.selectInvocation(scope, e, args)
+	sel := m.selectInvocation(scope, e, args, performs)
 	m.invocations[key] = sel
 	return sel
 }
 
-func (m *Model) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, args []Argument) *InvocationSelection {
+func (m *Model) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, args []Argument, performs Performs) *InvocationSelection {
 	args = lastNamedWins(args)
 	sel := &InvocationSelection{}
 	for _, sym := range m.resolver.InvocationCandidates(scope, e.Type) {
@@ -106,7 +127,7 @@ func (m *Model) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, ar
 
 	behaviors := make([]*symbols.Symbol, 0, len(sel.Candidates))
 	for _, c := range sel.Candidates {
-		if behaviorLike(c) {
+		if performs.performable(c) {
 			behaviors = append(behaviors, c)
 		}
 	}

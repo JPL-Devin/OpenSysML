@@ -211,7 +211,7 @@ func (ec *exprChecker) invocationResultTypeSymbol(scope *symbols.Scope, value as
 	if !ok || inv.Type == nil {
 		return nil
 	}
-	sym := SelectInvocation(ec.resolver, ec.model, scope, inv).Selected
+	sym := SelectInvocation(ec.resolver, ec.model, scope, inv, ec.performs(inv)).Selected
 	if sym == nil || !ec.isInvocationBehavior(sym, map[*symbols.Symbol]bool{}) {
 		return nil
 	}
