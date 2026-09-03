@@ -44,6 +44,7 @@ type element struct {
 	// scope is the qualified name of the namespace this element is declared
 	// in, which is what a reference written inside it is relative to.
 	scope    string
+	owner    *element
 	children []*element
 	// prefix is written ahead of the declaration, for a member a succession
 	// attached itself to (`then send Show(x) to screen;`).
@@ -53,9 +54,9 @@ type element struct {
 	expressions map[string]string
 }
 
-// ToSysML converts an RDF graph back into SysML v2 source text. The result is
-// run through the source formatter, so the output is indented the same way as a
-// formatted file rather than in whatever order the graph happened to be in.
+// ToSysML converts an RDF graph back into SysML v2 source text. An element
+// comes back as its sysx:sourceText while that still states what the graph
+// states, and in canonical notation otherwise; the result is formatted.
 //
 // A subject whose metaclass this mapping does not know, or which lacks the
 // properties needed to rebuild its declaration, is reported as an
@@ -75,18 +76,19 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 		dupID:            map[string]bool{},
 		memberships:      map[string]membership{},
 		owningMembership: map[string]membership{},
+		demoted:          map[*element]bool{},
+		demotedExpr:      map[string]bool{},
+		folded:           map[*element]*element{},
 	}
 	roots, err := d.build()
 	if err != nil {
 		return nil, err
 	}
-	var b strings.Builder
-	for _, root := range roots {
-		if err := d.print(&b, root, 0); err != nil {
-			return nil, err
-		}
+	notation, err := d.render(roots)
+	if err != nil {
+		return nil, err
 	}
-	out, err := format.Source("<converted>", []byte(b.String()), format.DefaultOptions)
+	out, err := format.Source("<converted>", []byte(notation), format.DefaultOptions)
 	if err != nil {
 		// The formatter only fails on input it cannot lex; return the
 		// unformatted text with the reason so the user can see what was built.
@@ -140,6 +142,25 @@ type decoder struct {
 	// the member each one owns.
 	memberships      map[string]membership
 	owningMembership map[string]membership
+	// printed and usedExpr are written as source text in this pass and rebuilt
+	// canonically; demoted and demotedExpr had their text proved stale earlier.
+	printed     map[*element]bool
+	rebuilt     map[*element]bool
+	demoted     map[*element]bool
+	usedExpr    map[string]bool
+	demotedExpr map[string]bool
+	// folded maps a succession written as the `then` ahead of its target to
+	// that target, whose notation states it.
+	folded map[*element]*element
+	// written records where each element landed in this pass's notation, the
+	// members of one ahead of it.
+	written []writing
+}
+
+// writing is the range of the notation one element was written over.
+type writing struct {
+	el    *element
+	where region
 }
 
 // build reads every subject into an element and links it to its owner,
@@ -174,7 +195,7 @@ func (d *decoder) build() ([]*element, error) {
 		el := &element{
 			iri:         subject.Value,
 			metaclass:   metaclass,
-			memberIndex: d.intOf(subject, rdf.OpenSysML+xMemberIndex),
+			memberIndex: intOf(d.graph, subject, rdf.OpenSysML+xMemberIndex),
 		}
 		el.qname, _ = d.stringOf(el, rdf.SysML+pQualifiedName)
 		// The identity key. An old graph without sysml:elementId is keyed on
@@ -206,12 +227,10 @@ func (d *decoder) build() ([]*element, error) {
 			continue
 		}
 		el.scope = parent.qname
+		el.owner = parent
 		parent.children = append(parent.children, el)
 	}
 	if err := d.checkReferences(); err != nil {
-		return nil, err
-	}
-	if err := d.resolveExpressions(); err != nil {
 		return nil, err
 	}
 	sortByIndex(roots)
@@ -385,15 +404,38 @@ func sortByIndex(elements []*element) {
 	})
 }
 
-// print writes one element and, recursively, its members.
+// print writes one element and, recursively, its members, recording where in
+// the notation it was written.
 func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
+	start := b.Len()
+	err := d.printElement(b, el, depth)
+	d.written = append(d.written, writing{el, region{start, b.Len()}})
+	return err
+}
+
+func (d *decoder) printElement(b *strings.Builder, el *element, depth int) error {
 	indent := strings.Repeat("    ", depth)
 	lead := indent + el.prefix
-	if text, ok := d.stringOf(el, rdf.OpenSysML+xSourceText); ok {
-		// A declaration whose head this mapping keeps verbatim.
-		b.WriteString(lead + strings.TrimSpace(text) + "\n")
+	if text, ok := d.verbatim(el); ok {
+		// The member's lines as written, members, notes and prefix included.
+		b.WriteString(text)
+		d.printed[el] = true
+		// The members carry their own text; the tail closes the body after them.
+		if tail, ok := d.graph.Lexical(rdf.IRI(el.iri), rdf.OpenSysML+xSourceTail); ok {
+			children, err := d.bodyMembers(el)
+			if err != nil {
+				return err
+			}
+			for _, child := range children {
+				if err := d.print(b, child, depth+1); err != nil {
+					return err
+				}
+			}
+			b.WriteString(tail)
+		}
 		return nil
 	}
+	d.rebuilt[el] = true
 	if handled, err := d.printBehavior(b, el, lead, depth); handled {
 		return err
 	}
@@ -408,17 +450,7 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 		b.WriteString("\n")
 		return nil
 	}
-	// An accept parameter is written into its parent's head, not its body.
-	children := el.children
-	if accept := d.acceptParam(el); accept != nil {
-		children = nil
-		for _, child := range el.children {
-			if child != accept {
-				children = append(children, child)
-			}
-		}
-	}
-	children, err = d.positionalSuccessions(children)
+	children, err := d.bodyMembers(el)
 	if err != nil {
 		return err
 	}
@@ -449,6 +481,22 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 	return nil
 }
 
+// bodyMembers lists the members written in an element's body, in order: an
+// accept parameter is written into its parent's head, and a succession stating
+// no source of its own folds into the member it introduces as `then`.
+func (d *decoder) bodyMembers(el *element) ([]*element, error) {
+	children := el.children
+	if accept := d.acceptParam(el); accept != nil {
+		children = nil
+		for _, child := range el.children {
+			if child != accept {
+				children = append(children, child)
+			}
+		}
+	}
+	return d.positionalSuccessions(children)
+}
+
 // identityAnnotations re-materializes the identity the graph states as the
 // annotations the notation declares it with: a ProjectRef on a scope root,
 // and an ElementId wherever the id is explicit or differs from the encoding
@@ -461,13 +509,13 @@ func identityAnnotations(el *element) []string {
 			{"projectId", el.projectID}, {"branch", el.branch}, {"org", el.org},
 		} {
 			if f.value != "" {
-				fields = append(fields, fmt.Sprintf("%s = %s;", f.name, strconv.Quote(f.value)))
+				fields = append(fields, fmt.Sprintf("%s = %s;", f.name, lexer.StringText(f.value)))
 			}
 		}
 		out = append(out, "@IdentityMetadata::ProjectRef { "+strings.Join(fields, " ")+" }")
 	}
 	if el.declaredID || (el.elementID != "" && el.elementID != rdf.EncodeElementID(el.qname)) {
-		out = append(out, fmt.Sprintf("@IdentityMetadata::ElementId { id = %s; }", strconv.Quote(el.elementID)))
+		out = append(out, fmt.Sprintf("@IdentityMetadata::ElementId { id = %s; }", lexer.StringText(el.elementID)))
 	}
 	return out
 }
@@ -1031,7 +1079,7 @@ func (d *decoder) representationHead(el *element) (string, error) {
 		return "", d.missing(el, sysmlPrefix+pLanguage, "a textual representation states the language it is written in")
 	}
 	body, _ := d.stringOf(el, rdf.SysML+pBody)
-	words = append(words, "language", strconv.Quote(language))
+	words = append(words, "language", lexer.StringText(language))
 	return strings.Join(words, " ") + " /*" + body + "*/", nil
 }
 
@@ -1059,7 +1107,7 @@ func (d *decoder) localeWords(el *element) []string {
 	if !ok {
 		return nil
 	}
-	return []string{"locale", strconv.Quote(locale)}
+	return []string{"locale", lexer.StringText(locale)}
 }
 
 // keywordOr returns the kind keyword the author wrote, falling back to the
@@ -1274,8 +1322,8 @@ func (d *decoder) boolOf(el *element, property string) bool {
 	return d.graph.BoolValue(rdf.IRI(el.iri), property)
 }
 
-func (d *decoder) intOf(subject rdf.Term, property string) int {
-	value, ok := d.graph.Lexical(subject, property)
+func intOf(g *rdf.Graph, subject rdf.Term, property string) int {
+	value, ok := g.Lexical(subject, property)
 	if !ok {
 		return 0
 	}
