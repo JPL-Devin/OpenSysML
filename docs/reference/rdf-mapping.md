@@ -741,8 +741,11 @@ was written with.
 each element carries](#what-each-element-carries): its type, its `about`
 targets, the sigil it was written with and its body's members as owned members
 with their `sysml:value` expression trees, so `@Safety { level = 2; }` and
-`#Safety part def Car;` come back from the graph alone. Three shapes are reported
-rather than written, and only a graph from another tool can state them: a `#`
+`#Safety part def Car;` come back from the graph alone. Four shapes are reported
+rather than written, and only a graph from another tool can state them: a
+metadata usage whose one `sysml:type` is a subject of another metaclass (a
+`sysml:PartDefinition`, say — a literal type names an element the graph does not
+define, so it is written as it is), a `#`
 prefix carrying a name, an `about` clause or a body (the grammar's
 `PrefixMetadataUsage` is the type alone, so the parser never produces one), a
 `#` prefix owned by an element whose head has no prefix position (a state's

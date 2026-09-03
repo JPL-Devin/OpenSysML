@@ -1447,11 +1447,26 @@ func (d *decoder) metadataHead(el *element) (string, error) {
 }
 
 // metadataDefinition is the one metadata definition a metadata usage applies;
-// a usage typed by none or by several has no notation and is refused.
+// a usage typed by none, by several, or by an element of another metaclass has
+// no notation and is refused. A literal type is a name the graph does not
+// define, so its metaclass cannot be checked.
 func (d *decoder) metadataDefinition(el *element) (rdf.Term, error) {
 	types := d.graph.Objects(rdf.IRI(el.iri), rdf.SysML+relationshipProperty[ast.RelTyping])
 	switch len(types) {
 	case 1:
+		if types[0].IsLiteral() {
+			return types[0], nil
+		}
+		target, err := d.referencedElement(types[0].Value)
+		if err != nil {
+			return rdf.Term{}, err
+		}
+		if target.metaclass != definitionMetaclass[ast.DefMetadata] && target.metaclass != definitionMetaclass[ast.DefMetaclass] {
+			return rdf.Term{}, &UnsupportedError{
+				What: fmt.Sprintf("the element <%s>", el.iri),
+				Note: fmt.Sprintf("its %s <%s> is a sysml:%s, and a metadata usage names the one metadata definition it applies", sysmlPrefix+relationshipProperty[ast.RelTyping], target.iri, target.metaclass),
+			}
+		}
 		return types[0], nil
 	case 0:
 		return rdf.Term{}, d.missing(el, sysmlPrefix+relationshipProperty[ast.RelTyping], "a metadata usage names the one metadata definition it applies")

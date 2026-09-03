@@ -798,6 +798,50 @@ func TestMetadataUsageWithoutOneDefinitionIsReported(t *testing.T) {
 	}
 }
 
+// A metadata usage is typed by a metadata definition (or a KerML metaclass);
+// a graph typing one by a part or attribute definition is refused rather than
+// written as an `@Car` annotation, in each of the three forms.
+func TestMetadataUsageTypedByANonMetadataDefinitionIsReported(t *testing.T) {
+	src := "package P {\n\tmetadata def M;\n\tpart def Car;\n\tattribute def Mass;\n\tmetadata m : M about Car;\n\t@M;\n\t#M part def Truck;\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structural := string(withoutTriples(t, turtle, "sysx:sourceText"))
+	const typing = "    sysml:type elmt:P__M ;\n"
+	typings := strings.Split(structural, typing)
+	if len(typings) != 4 {
+		t.Fatalf("expected three metadata usages typed by M in the graph:\n%s", structural)
+	}
+	if _, err := export.Convert("m.ttl", []byte(structural), export.FormatTurtle, export.FormatSysML); err != nil {
+		t.Fatalf("control: the graph typed by M does not convert: %v", err)
+	}
+	for _, other := range []struct{ id, metaclass string }{{"P__Car", "PartDefinition"}, {"P__Mass", "AttributeDefinition"}} {
+		// Retype the metadata usages one at a time: the named member, the
+		// `@` member and the `#` prefix.
+		for i := 0; i < 3; i++ {
+			graph := typings[0]
+			for n, rest := range typings[1:] {
+				if n == i {
+					graph += "    sysml:type elmt:" + other.id + " ;\n" + rest
+				} else {
+					graph += typing + rest
+				}
+			}
+			_, err := export.Convert("m.ttl", []byte(graph), export.FormatTurtle, export.FormatSysML)
+			var unsupported *export.UnsupportedError
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("usage %d typed by %s: expected an unsupported error, got %v", i, other.id, err)
+			}
+			for _, want := range []string{"sysml:type <urn:sysmlv2:element:" + other.id + ">", "is a sysml:" + other.metaclass, "names the one metadata definition it applies"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("usage %d typed by %s: expected %q in error:\n%s", i, other.id, want, err.Error())
+				}
+			}
+		}
+	}
+}
+
 // A metadata usage's keyword is `metadata`, `@` or `#`; a graph stating any
 // other is refused rather than written as a declaration of that other kind,
 // and a `#` prefix owned by no declaration has nothing to prefix.
