@@ -5507,3 +5507,56 @@ tells you which one ran without any debug flag.
 - The blueprint's venv is `~/pv` (see the maintenance block), but it can exist without the editable
   `opensysml` install; `~/pv/bin/pip install -e clients/python` (or a fresh `python3 -m venv`) takes
   under a minute and the non-tty one-shot `python script.py` with auto-start worked (35 ms connect).
+
+## Library feature tiers on `%features`/`%eval` (PR #830) and headless screenshot fallback
+
+`buildFeatures` now skips only the Kernel *frame* (`self`, `portions`, `timeSlices`, `snapshots`,
+`startShot`, `endShot`, `incomingTransfers`, `outgoingTransfers`) and materializes Systems/Domain
+library features (`Parts::Part` → `subitems`, `subparts`, `checkedConstraints`, `ownedPorts` …;
+`ShapeItems::Box` → `shape`, `voids`, `isSolid = true`, `faces`, `edges` …). Things that only bite
+when you try to prove this from the binary:
+
+- **The differential is `%eval box.isSolid`**: merge-base prints
+  `error: evaluation failed: member isSolid not found in instance`, the branch prints `= true`.
+  Build the old binary in a `git worktree add /tmp/wt-old $(git merge-base HEAD origin/main)`;
+  `make build-sysml` there and **copy `bin/sysml` out** before removing the worktree.
+- **Every `part def` now lists ~13 inherited lines** (`ownedPorts = []` … `checkedConstraints = []`),
+  so a "plain model shows only `x`" expectation is false by design. Assert `x = 1` is present and the
+  frame names are absent (`grep -cwE 'self|portions|timeSlices|snapshots|startShot|endShot'` → 0)
+  rather than asserting line counts. The robot demo's `%features Robot::fielded` grew from 87 to
+  ~430 lines with 14 `… (listing truncated)` markers; still < 0.1 s.
+- **`%eval box.shape` prints `[]` while `%features` prints `shape = <unset>`** for the same
+  `[0..1]` feature (the evaluator returns an empty sequence; the listing renders the scalar). gRPC
+  `Instance.features["shape"] is opensysml.UNSET`, `model.eval("Demo::box.shape") == []`. Accept
+  either but note the split if the spec you're given says one word.
+- **`subject veh : V = v;` binds since 60b8118f**: `%features` shows `veh = Instance(ID: n)` and
+  `subj = Instance(ID: n)` (merge-base showed `veh = <unknown>`; before that commit `<unset>`, with
+  only the `:>> veh = v;` spelling binding). `%eval r.veh` with a bare requirement name still fails
+  (`unresolved reference: r`) — read it from `%features`.
+- **Qualified valueless optional (9bbb2dcb)**: `%eval Q::names` is intercepted by the REPL
+  (`error: "Q::names" has no value to evaluate`) on every build, so the evaluator fix is invisible
+  there. Use an expression: `%eval Q::names->size()` → `= 0` on the fix, `usage Q::names has no
+  value` before; required `Q::weight->size()` must keep the error on both.
+- `%eval usage.x` with a bare usage name resolves only when the file has a single package;
+  `examples/disposal-robot-demo/robot.sysml` needs `%eval Robot::fielded.mass`. Requirement usages
+  are never resolvable bare (`unresolved reference: massLimit`) — spell them `Demo::massLimit.limit`,
+  which then reports `usage Demo::massLimit has no value` (pre-existing).
+- **`XDG_CACHE_HOME` cold/warm is a no-op on the default path**: the embedded snapshot serves the
+  library and the dir stays empty. To exercise the on-disk cache, point `OPENSYSML_LIBRARY_PATH` at
+  a copy of `internal/core/libs/stdlib` with a comment appended to a `.kerml`; the cold run then
+  writes 97 `*.idx` files under `$XDG_CACHE_HOME/sysml-ls/libs` and the warm run must diff empty
+  against both cold and the default-path transcript.
+- `printf "$CMDS"` with `%load` in the variable is a format-string bug (`0ad …` on line 1): use a
+  heredoc file and `./bin/sysml < cmds.txt`, or `printf '%%load …'`.
+- `pip install -e clients/python/` into `~/pv` took ~1 min; `sysml-grpc -port 50123 -health-port 0`
+  then `opensysml.connect(port=50123, auto_start=False)`. `Model.load` needs an **absolute** path
+  (the service resolves relative paths against *its* cwd). `pkill -x sysml-grpc`, never `-f`.
+
+### When the computer-use tool is unavailable (`enigo init failed`)
+The recording tool needs the desktop; without it, still get PR-comment screenshots by rendering a
+Konsole under Xvfb: `Xvfb :7 -screen 0 1600x1000x24 &`, `DISPLAY=:7 konsole --geometry 1600x1000+0+0
+-p Font="DejaVu Sans Mono,11" -e /tmp/demo.sh &` (the script ends in `sleep 600`), then
+`import -display :7 -window root shot.png`. Verify text landed with
+`convert shot.png -threshold 50% -format '%[fx:mean]' info:` (≈0.02–0.06, not 0). Do **not** clean
+up with `pkill -f demo.sh` from the same one-shot shell — it matches its own command line and kills
+the shell before `import` runs; use `pkill -x konsole` and a separate call.
