@@ -181,6 +181,39 @@ func TestInvocationOverloadDisjointDeclaredTypes(t *testing.T) {
 	}`)
 }
 
+// An Element parameter takes the element any argument names, and sits between a
+// declared type and Anything in specificity; the result type tells which overload won.
+func TestInvocationOverloadElementParameter(t *testing.T) {
+	const model = `package P {
+		private import ScalarValues::*;
+		private import KerML::Root::Element;
+		private import Base::Anything;
+		part def Telescope;
+		part def GroundStation :> Telescope;
+		part def Antenna;
+		part telescope : Telescope;
+		part station : GroundStation;
+		part antenna : Antenna;
+		package A { calc def pick { in e : Element; return : Integer = 1; } }
+		package B { calc def pick { in t : Telescope; return : String = "t"; } }
+		package C { calc def pick { in a : Anything; return : Boolean = true; } }
+		package E { calc def single { in e : Element; return : Integer = 5; } }
+		package Use {
+			private import A::*;
+			private import B::*;
+			private import C::*;
+			private import E::*;
+			attribute %s
+		}
+	}`
+	wantLibraryClean(t, fmt.Sprintf(model, `v : Integer = single(telescope);`))
+	wantLibraryClean(t, fmt.Sprintf(model, `v : Integer = single(e = station);`))
+	wantLibraryClean(t, fmt.Sprintf(model, `v : String = pick(station);`))
+	wantLibraryClean(t, fmt.Sprintf(model, `v : Integer = pick(antenna);`))
+	wantLibraryDiag(t, fmt.Sprintf(model, `v : Boolean = pick(antenna);`), "type.expr",
+		"Boolean")
+}
+
 // Two candidates the arguments fit equally, neither more specific than the
 // other, are an ambiguity the checker reports by name rather than resolving.
 func TestInvocationOverloadAmbiguous(t *testing.T) {

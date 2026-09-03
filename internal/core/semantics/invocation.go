@@ -395,12 +395,14 @@ func (sig invocationSignature) index(name string) int {
 
 // argumentBinds reports whether and how surely arg may be passed to p: strictly by conformance
 // alone; loosely a non-literal's type only bounds its values, so either direction fits, but
-// unrelated declared types never bind, except to a Collection.
+// unrelated declared types never bind, except to a Collection or to Element, which every element is.
 func (m *Model) argumentBinds(arg Argument, p signatureParameter, mode bindMode) (bindFit, bool) {
 	if arg.Type != nil && p.typ != nil {
 		switch {
 		case m.Conforms(arg.Type, p.typ):
 			return fitExact, true
+		case IsElementType(p.typ):
+			return fitWiden, true
 		case mode == bindLoose && (!arg.Exact && m.Conforms(p.typ, arg.Type) || IsCollection(p.typ)):
 			return fitOpen, true
 		}
@@ -516,6 +518,9 @@ func (m *Model) parameterConforms(a, b signatureParameter) bool {
 	}
 	if a.untyped {
 		return false
+	}
+	if IsElementType(b.typ) {
+		return true
 	}
 	if a.typ != nil && b.typ != nil {
 		return m.Conforms(a.typ, b.typ)

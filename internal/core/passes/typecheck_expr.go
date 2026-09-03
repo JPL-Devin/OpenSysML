@@ -814,7 +814,8 @@ func (ec *exprChecker) parameterPrimType(p parameter) semantics.PrimType {
 }
 
 // argumentMismatch says why value, typed got, does not bind to p ("" when it does or a type is
-// unknown): a scalar parameter is judged by the lattice, any other by declared type, a Collection taking any sequence.
+// unknown): a scalar parameter is judged by the lattice, any other by declared type, a Collection
+// taking any sequence and Element the element any argument names.
 func (ec *exprChecker) argumentMismatch(value ast.Node, got semantics.Argument, p parameter) string {
 	if want := ec.parameterPrimType(p); want != semantics.PrimUnknown {
 		if got.Prim == semantics.PrimUnknown || bindable(value, got.Prim, want) {
@@ -823,7 +824,7 @@ func (ec *exprChecker) argumentMismatch(value ast.Node, got semantics.Argument, 
 		return fmt.Sprintf("expects %s, found %s", want, got.Prim)
 	}
 	want := ec.declaredTypeSymbol(p.scope(), p.usage.Relationships)
-	if want == nil || got.Type == nil || semantics.IsCollection(want) ||
+	if want == nil || got.Type == nil || semantics.IsCollection(want) || semantics.IsElementType(want) ||
 		ec.model.Conforms(got.Type, want) || ec.model.Conforms(want, got.Type) {
 		return ""
 	}

@@ -1,6 +1,8 @@
 package queryplan
 
 import (
+	"errors"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -12,7 +14,10 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-const queryBaseFQN = "DocumentQueries::Query"
+const (
+	queryBaseFQN = "DocumentQueries::Query"
+	elementFQN   = "KerML::Root::Element"
+)
 
 type builtin struct {
 	operation Operation
@@ -31,9 +36,12 @@ var builtins = map[string]builtin{
 	"DocumentQueries::Project":         {OperationProject},
 }
 
+// typedExpression pairs a compiled expression with what planning knows of its
+// value: possible types, the fixed model elements it names, and multiplicity.
 type typedExpression struct {
 	expression        Expression
 	types             []*symbols.Symbol
+	elements          []*symbols.Symbol
 	multiplicity      Multiplicity
 	nonconformingType string
 }
@@ -46,13 +54,23 @@ const (
 	stateDone
 )
 
+// compiledSignature memoizes one query's inputs, result, and the queries its
+// defaults invoke.
+type compiledSignature struct {
+	params       []Parameter
+	result       Parameter
+	dependencies []string
+}
+
 type compiler struct {
-	index       *symbols.Index
-	model       *semantics.Model
-	resolver    *resolve.Resolver
-	state       map[*symbols.Symbol]compileState
-	stack       []*symbols.Symbol
-	definitions []Definition
+	index          *symbols.Index
+	model          *semantics.Model
+	resolver       *resolve.Resolver
+	state          map[*symbols.Symbol]compileState
+	signatureState map[*symbols.Symbol]compileState
+	signatures     map[*symbols.Symbol]compiledSignature
+	stack          []*symbols.Symbol
+	definitions    []Definition
 }
 
 // IsQueryDefinition reports whether sym specializes DocumentQueries::Query.
@@ -76,10 +94,12 @@ func Compile(index *symbols.Index, model *semantics.Model, resolver *resolve.Res
 		return nil, &Error{Kind: ErrorNotQueryDefinition, Query: name, Origin: provenance.Symbol(entry)}
 	}
 	c := &compiler{
-		index:    index,
-		model:    model,
-		resolver: resolver,
-		state:    make(map[*symbols.Symbol]compileState),
+		index:          index,
+		model:          model,
+		resolver:       resolver,
+		state:          make(map[*symbols.Symbol]compileState),
+		signatureState: make(map[*symbols.Symbol]compileState),
+		signatures:     make(map[*symbols.Symbol]compiledSignature),
 	}
 	if err := c.compileDefinition(entry); err != nil {
 		return nil, err
@@ -106,12 +126,20 @@ func (c *compiler) compileDefinition(sym *symbols.Symbol) error {
 		return c.cycleError(sym)
 	}
 	c.state[sym] = stateVisiting
-	c.stack = append(c.stack, sym)
 
-	params, result, err := c.signature(sym)
+	dependencies := make([]string, 0)
+	seenDependencies := make(map[string]bool)
+	dependency := func(name string) {
+		if !seenDependencies[name] {
+			seenDependencies[name] = true
+			dependencies = append(dependencies, name)
+		}
+	}
+	params, result, err := c.signature(sym, dependency)
 	if err != nil {
 		return err
 	}
+	c.stack = append(c.stack, sym)
 	if result.Name == "" {
 		return &Error{
 			Kind:   ErrorMissingResultParameter,
@@ -123,14 +151,7 @@ func (c *compiler) compileDefinition(sym *symbols.Symbol) error {
 	if err != nil {
 		return err
 	}
-	dependencies := make([]string, 0)
-	seenDependencies := make(map[string]bool)
-	expression, err := c.compileExpression(sym, resultExpression.owner, params, resultExpression.node, func(name string) {
-		if !seenDependencies[name] {
-			seenDependencies[name] = true
-			dependencies = append(dependencies, name)
-		}
-	})
+	expression, err := c.compileExpression(sym, resultExpression.owner, params, resultExpression.node, dependency)
 	if err != nil {
 		return err
 	}
@@ -148,9 +169,48 @@ func (c *compiler) compileDefinition(sym *symbols.Symbol) error {
 	return nil
 }
 
-func (c *compiler) signature(sym *symbols.Symbol) ([]Parameter, Parameter, error) {
+// signature compiles sym's inputs and result once, recording the queries its
+// defaults invoke; re-entering it through a default is a composition cycle.
+func (c *compiler) signature(sym *symbols.Symbol, dependency func(string)) ([]Parameter, Parameter, error) {
+	switch c.signatureState[sym] {
+	case stateDone:
+		cached := c.signatures[sym]
+		for _, name := range cached.dependencies {
+			dependency(name)
+		}
+		return cloneParameters(cached.params), cached.result, nil
+	case stateVisiting:
+		return nil, Parameter{}, c.cycleError(sym)
+	}
+	c.signatureState[sym] = stateVisiting
+	c.stack = append(c.stack, sym)
+
+	var dependencies []string
+	record := func(name string) {
+		if !slices.Contains(dependencies, name) {
+			dependencies = append(dependencies, name)
+		}
+		dependency(name)
+	}
+	params, result, err := c.compileSignature(sym, record)
+	if err != nil {
+		return nil, Parameter{}, err
+	}
+
+	c.stack = c.stack[:len(c.stack)-1]
+	c.signatureState[sym] = stateDone
+	c.signatures[sym] = compiledSignature{
+		params:       cloneParameters(params),
+		result:       result,
+		dependencies: dependencies,
+	}
+	return params, result, nil
+}
+
+func (c *compiler) compileSignature(sym *symbols.Symbol, dependency func(string)) ([]Parameter, Parameter, error) {
 	effective := c.model.BehaviorParametersOf(sym)
 	params := make([]Parameter, 0, len(effective))
+	inputs := make([]*symbols.Symbol, 0, len(effective))
 	var result Parameter
 	for _, item := range effective {
 		param := c.parameter(item.Symbol)
@@ -167,24 +227,130 @@ func (c *compiler) signature(sym *symbols.Symbol) ([]Parameter, Parameter, error
 			}
 		}
 		params = append(params, param)
+		inputs = append(inputs, item.Symbol)
+	}
+	for i := range params {
+		if err := c.compileDefault(sym, inputs[i], params, &params[i], dependency); err != nil {
+			return nil, Parameter{}, err
+		}
 	}
 	return params, result, nil
 }
 
 func (c *compiler) parameter(sym *symbols.Symbol) Parameter {
-	param := Parameter{
+	return Parameter{
 		Name:         sym.Name,
 		Type:         c.parameterType(sym),
 		Multiplicity: c.parameterMultiplicity(sym),
 		Origin:       provenance.Symbol(sym),
 	}
+}
+
+// compileDefault retains the nearest default along the parameter's lineage, so
+// a redefining parameter's default wins over an inherited one. A default that
+// names an element binds that element; any other form is compiled as an
+// expression in the declaring query's scope.
+func (c *compiler) compileDefault(
+	query *symbols.Symbol,
+	sym *symbols.Symbol,
+	params []Parameter,
+	param *Parameter,
+	dependency func(string),
+) error {
 	for _, candidate := range c.parameterLineage(sym) {
-		if usage, ok := candidate.Decl.(*ast.Usage); ok && usage.Value != nil {
-			param.HasDefault = true
-			break
+		usage, ok := candidate.Decl.(*ast.Usage)
+		if !ok || usage.Value == nil {
+			continue
+		}
+		owner := declaringQuery(candidate)
+		if owner == nil {
+			return &Error{
+				Kind:      ErrorUnsupportedDefault,
+				Query:     symbols.FQNOf(query),
+				Parameter: param.Name,
+				Origin:    provenance.Symbol(candidate),
+			}
+		}
+		value, err := c.compileDefaultExpression(query, owner, param.Name, params, usage.Value, dependency)
+		if err != nil {
+			return err
+		}
+		if err := c.validateDefault(query, *param, value, provenance.Node(owner.DocName, usage.Value)); err != nil {
+			return err
+		}
+		param.HasDefault = true
+		param.Default = value.expression
+		param.DefaultQuery = symbols.FQNOf(owner)
+		return nil
+	}
+	return nil
+}
+
+// validateDefault applies the planning checks of an explicit argument to a
+// parameter's default; what is only known at execution stays for bindValues.
+func (c *compiler) validateDefault(
+	query *symbols.Symbol,
+	param Parameter,
+	value typedExpression,
+	origin provenance.Origin,
+) error {
+	if actual, ok := c.valueTypeConforms(param, value); !ok {
+		return &Error{
+			Kind:      ErrorDefaultType,
+			Query:     symbols.FQNOf(query),
+			Parameter: param.Name,
+			Expected:  param.Type,
+			Actual:    actual,
+			Origin:    origin,
 		}
 	}
-	return param
+	if !multiplicityConforms(value.multiplicity, param.Multiplicity) {
+		return &Error{
+			Kind:      ErrorDefaultMultiplicity,
+			Query:     symbols.FQNOf(query),
+			Parameter: param.Name,
+			Expected:  multiplicityString(param.Multiplicity),
+			Actual:    multiplicityString(value.multiplicity),
+			Origin:    origin,
+		}
+	}
+	return nil
+}
+
+// ignoreDependency discards the dependencies of an invoked query's defaults;
+// that query's own compilation records them.
+func ignoreDependency(string) {}
+
+// declaringQuery is the calculation whose body declares a parameter usage.
+func declaringQuery(param *symbols.Symbol) *symbols.Symbol {
+	if param.OwnerScope == nil {
+		return nil
+	}
+	return param.OwnerScope.Owner()
+}
+
+func (c *compiler) compileDefaultExpression(
+	query *symbols.Symbol,
+	owner *symbols.Symbol,
+	parameter string,
+	params []Parameter,
+	node ast.Node,
+	dependency func(string),
+) (typedExpression, error) {
+	value, err := c.compileExpression(query, owner, params, node, dependency)
+	if err != nil {
+		var planning *Error
+		if errors.As(err, &planning) && planning.Kind == ErrorUnsupportedExpression {
+			return typedExpression{}, &Error{
+				Kind:      ErrorUnsupportedDefault,
+				Query:     symbols.FQNOf(query),
+				Parameter: parameter,
+				Origin:    planning.Origin,
+			}
+		}
+		return typedExpression{}, err
+	}
+	return value, nil
 }
 
 func (c *compiler) parameterType(sym *symbols.Symbol) string {
@@ -193,26 +359,35 @@ func (c *compiler) parameterType(sym *symbols.Symbol) string {
 
 func (c *compiler) parameterTypeSymbol(sym *symbols.Symbol) *symbols.Symbol {
 	for _, candidate := range c.parameterLineage(sym) {
-		for _, relationship := range semantics.RelationshipsOf(candidate) {
-			if relationship == nil || relationship.Kind != ast.RelTyping || relationship.Target == nil {
-				continue
-			}
-			target := relationship.Target
-			if reference, ok := target.(*ast.FeatureReference); ok {
-				target = reference.Name
-			}
-			name, ok := target.(*ast.QualifiedName)
-			if !ok {
-				continue
-			}
-			if resolved, ok := c.resolver.ResolveQualified(candidate.OwnerScope, name); ok {
-				if canonical, ok := c.resolver.ResolveAliasTarget(resolved); ok {
-					return canonical
-				}
-			}
+		if types := c.declaredTypes(candidate); len(types) > 0 {
+			return types[0]
 		}
 	}
 	return nil
+}
+
+// declaredTypes resolves the targets of sym's explicit typing clauses.
+func (c *compiler) declaredTypes(sym *symbols.Symbol) []*symbols.Symbol {
+	var types []*symbols.Symbol
+	for _, relationship := range semantics.RelationshipsOf(sym) {
+		if relationship == nil || relationship.Kind != ast.RelTyping || relationship.Target == nil {
+			continue
+		}
+		target := relationship.Target
+		if reference, ok := target.(*ast.FeatureReference); ok {
+			target = reference.Name
+		}
+		name, ok := target.(*ast.QualifiedName)
+		if !ok {
+			continue
+		}
+		if resolved, ok := c.resolver.ResolveQualified(sym.OwnerScope, name); ok {
+			if canonical, ok := c.resolver.ResolveAliasTarget(resolved); ok {
+				types = append(types, canonical)
+			}
+		}
+	}
+	return types
 }
 
 func (c *compiler) parameterMultiplicity(sym *symbols.Symbol) Multiplicity {
@@ -231,11 +406,23 @@ func (c *compiler) parameterMultiplicity(sym *symbols.Symbol) Multiplicity {
 	}
 }
 
+// parameterLineage lists sym and the parameters it redefines or subsets,
+// nearest first, following only parameter-to-parameter edges (never typing).
 func (c *compiler) parameterLineage(sym *symbols.Symbol) []*symbols.Symbol {
 	lineage := []*symbols.Symbol{sym}
-	for _, candidate := range c.model.AllSupertypes(sym) {
-		usage, ok := candidate.Decl.(*ast.Usage)
-		if ok && usage.Direction != ast.DirNone {
+	seen := map[*symbols.Symbol]bool{sym: true}
+	for next := 0; next < len(lineage); next++ {
+		current := lineage[next]
+		typed := make(map[*symbols.Symbol]bool)
+		for _, typ := range c.declaredTypes(current) {
+			typed[typ] = true
+		}
+		for _, candidate := range c.model.DirectSupertypes(current) {
+			usage, ok := candidate.Decl.(*ast.Usage)
+			if !ok || usage.Direction == ast.DirNone || typed[candidate] || seen[candidate] {
+				continue
+			}
+			seen[candidate] = true
 			lineage = append(lineage, candidate)
 		}
 	}
@@ -381,12 +568,12 @@ func (c *compiler) compileExpression(
 ) (typedExpression, error) {
 	switch expression := node.(type) {
 	case *ast.FeatureReference:
-		return c.compileParameterReference(query, owner, expression)
+		return c.compileReference(query, owner, expression)
 	case *ast.InvocationExpr:
 		return c.compileInvocation(query, owner, params, expression, dependency)
 	case *ast.SequenceExpr:
 		args := make([]Argument, 0, len(expression.Elements))
-		var types []*symbols.Symbol
+		var types, elements []*symbols.Symbol
 		multiplicity := Multiplicity{Known: true}
 		nonconformingType := ""
 		for _, element := range expression.Elements {
@@ -396,6 +583,7 @@ func (c *compiler) compileExpression(
 			}
 			args = append(args, Argument{Value: value.expression})
 			types = append(types, value.types...)
+			elements = append(elements, value.elements...)
 			multiplicity = sumMultiplicity(multiplicity, value.multiplicity)
 			if nonconformingType == "" {
 				nonconformingType = value.nonconformingType
@@ -408,6 +596,7 @@ func (c *compiler) compileExpression(
 				origin:    provenance.Node(owner.DocName, node),
 			},
 			types:             types,
+			elements:          elements,
 			multiplicity:      multiplicity,
 			nonconformingType: nonconformingType,
 		}, nil
@@ -442,42 +631,58 @@ func (c *compiler) compileExpression(
 	}
 }
 
-func (c *compiler) compileParameterReference(
+// compileReference applies the %run-query binding rule: a query input parameter
+// name reads that parameter; any other name binds the model element it denotes.
+func (c *compiler) compileReference(
 	query *symbols.Symbol,
 	owner *symbols.Symbol,
 	expression *ast.FeatureReference,
 ) (typedExpression, error) {
-	target, ok := c.resolver.ResolveQualified(owner.Scope, expression.Name)
-	if ok {
-		for _, param := range c.model.BehaviorParametersOf(query) {
-			if !param.IsResult && c.parameterIncludes(param.Symbol, target) {
-				return typedExpression{
-					expression: Expression{
-						operation: OperationParameter,
-						target:    param.Symbol.Name,
-						origin:    provenance.Node(owner.DocName, expression),
-					},
-					types:        symbolSlice(c.parameterTypeSymbol(param.Symbol)),
-					multiplicity: c.parameterMultiplicity(param.Symbol),
-				}, nil
-			}
-		}
-	}
-	name := qualifiedName(expression.Name)
-	return typedExpression{}, &Error{
+	unknown := &Error{
 		Kind:      ErrorUnknownParameter,
 		Query:     symbols.FQNOf(query),
-		Parameter: name,
+		Parameter: qualifiedName(expression.Name),
 		Origin:    provenance.Node(owner.DocName, expression),
 	}
+	target, ok := c.resolver.ResolveQualified(owner.Scope, expression.Name)
+	if !ok || target == nil {
+		return typedExpression{}, unknown
+	}
+	for _, param := range c.model.BehaviorParametersOf(query) {
+		if !c.parameterIncludes(param.Symbol, target) {
+			continue
+		}
+		if param.IsResult {
+			return typedExpression{}, unknown
+		}
+		return typedExpression{
+			expression: Expression{
+				operation: OperationParameter,
+				target:    param.Symbol.Name,
+				origin:    provenance.Node(owner.DocName, expression),
+			},
+			types:        symbolSlice(c.parameterTypeSymbol(param.Symbol)),
+			multiplicity: c.parameterMultiplicity(param.Symbol),
+		}, nil
+	}
+	if canonical, ok := c.resolver.ResolveAliasTarget(target); ok {
+		target = canonical
+	}
+	return typedExpression{
+		expression: Expression{
+			operation: OperationElement,
+			target:    symbols.FQNOf(target),
+			element:   target,
+			origin:    provenance.Node(owner.DocName, expression),
+		},
+		elements:     []*symbols.Symbol{target},
+		multiplicity: Multiplicity{Lower: 1, Upper: 1, Known: true},
+	}, nil
 }
 
 func (c *compiler) parameterIncludes(param, target *symbols.Symbol) bool {
-	if param == target {
-		return true
-	}
-	for _, inherited := range c.model.AllSupertypes(param) {
-		if inherited == target {
+	for _, candidate := range c.parameterLineage(param) {
+		if candidate == target {
 			return true
 		}
 	}
@@ -518,7 +723,7 @@ func (c *compiler) compileInvocation(
 		}
 	}
 	if operation, ok := builtins[targetName]; ok {
-		targetParams, targetResult, err := c.signature(target)
+		targetParams, targetResult, err := c.signature(target, ignoreDependency)
 		if err != nil {
 			return typedExpression{}, err
 		}
@@ -567,9 +772,11 @@ func (c *compiler) compileInvocation(
 		}
 	}
 
-	targetParams, targetResult, err := c.signature(target)
+	call := provenance.Node(owner.DocName, expression)
+	closesCycle := c.signatureState[target] == stateVisiting
+	targetParams, targetResult, err := c.signature(target, ignoreDependency)
 	if err != nil {
-		return typedExpression{}, err
+		return typedExpression{}, closeCycle(err, closesCycle, call)
 	}
 	args, err := c.compileNamedArguments(
 		query,
@@ -584,12 +791,9 @@ func (c *compiler) compileInvocation(
 		return typedExpression{}, err
 	}
 	dependency(targetName)
-	closesCycle := c.state[target] == stateVisiting
+	closesCycle = c.state[target] == stateVisiting
 	if err := c.compileDefinition(target); err != nil {
-		if planning, ok := err.(*Error); ok && planning.Kind == ErrorCompositionCycle && closesCycle {
-			planning.Origin = provenance.Node(owner.DocName, expression)
-		}
-		return typedExpression{}, err
+		return typedExpression{}, closeCycle(err, closesCycle, call)
 	}
 	return typedExpression{
 		expression: Expression{
@@ -750,6 +954,14 @@ func (c *compiler) compileNamedArguments(
 	return args, nil
 }
 
+// closeCycle relocates a composition cycle to the invocation that closed it.
+func closeCycle(err error, closes bool, call provenance.Origin) error {
+	if planning, ok := err.(*Error); ok && planning.Kind == ErrorCompositionCycle && closes {
+		planning.Origin = call
+	}
+	return err
+}
+
 func (c *compiler) cycleError(target *symbols.Symbol) error {
 	start := 0
 	for i, sym := range c.stack {
@@ -797,23 +1009,15 @@ func (c *compiler) validateArgument(
 	value typedExpression,
 	origin provenance.Origin,
 ) error {
-	if want := c.typeSymbol(param.Type); want != nil {
-		actual := typeNames(value.types)
-		conforms := c.argumentTypesConform(value.types, want)
-		if value.nonconformingType != "" {
-			actual = value.nonconformingType
-			conforms = false
-		}
-		if !conforms {
-			return &Error{
-				Kind:      ErrorArgumentType,
-				Query:     symbols.FQNOf(query),
-				Target:    target,
-				Parameter: param.Name,
-				Expected:  param.Type,
-				Actual:    actual,
-				Origin:    origin,
-			}
+	if actual, ok := c.valueTypeConforms(param, value); !ok {
+		return &Error{
+			Kind:      ErrorArgumentType,
+			Query:     symbols.FQNOf(query),
+			Target:    target,
+			Parameter: param.Name,
+			Expected:  param.Type,
+			Actual:    actual,
+			Origin:    origin,
 		}
 	}
 	if !multiplicityConforms(value.multiplicity, param.Multiplicity) {
@@ -828,6 +1032,27 @@ func (c *compiler) validateArgument(
 		}
 	}
 	return nil
+}
+
+// valueTypeConforms reports whether value's statically known types, fixed
+// elements and literals fit param's type, naming the offender when not.
+func (c *compiler) valueTypeConforms(param Parameter, value typedExpression) (string, bool) {
+	want := c.typeSymbol(param.Type)
+	if want == nil {
+		return "", true
+	}
+	if value.nonconformingType != "" {
+		return value.nonconformingType, false
+	}
+	for _, element := range value.elements {
+		if !c.elementConforms(element, want) {
+			return symbols.FQNOf(element), false
+		}
+	}
+	if !c.argumentTypesConform(value.types, want) {
+		return typeNames(value.types), false
+	}
+	return "", true
 }
 
 func (c *compiler) argumentTypesConform(actual []*symbols.Symbol, expected *symbols.Symbol) bool {
@@ -849,6 +1074,19 @@ func (c *compiler) argumentTypesConform(actual []*symbols.Symbol, expected *symb
 		return false
 	}
 	return true
+}
+
+// elementConforms mirrors the executor's check of an element value against a
+// parameter type: only an enumeration literal is a data value, and every
+// element is an Element.
+func (c *compiler) elementConforms(element, expected *symbols.Symbol) bool {
+	if c.model.IsDataType(expected) {
+		return c.model.LiteralConforms(element, expected)
+	}
+	if symbols.SameElement(element, expected) || c.model.Conforms(element, expected) {
+		return true
+	}
+	return symbols.FQNOf(expected) == elementFQN
 }
 
 func (c *compiler) typeSymbol(name string) *symbols.Symbol {
