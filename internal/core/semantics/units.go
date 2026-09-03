@@ -633,7 +633,7 @@ func (m *Model) unitTermOfOperator(scope *symbols.Scope, n *ast.OperatorExpr) (U
 
 // UnitExprText renders an expression in unit position as written, so a
 // diagnostic, a printed value or an exported type fact names the unit the model
-// used rather than its reduction.
+// used rather than its reduction. Grouping the text needs to read back is kept.
 func UnitExprText(node ast.Node) string {
 	switch n := node.(type) {
 	case *ast.FeatureReference:
@@ -643,7 +643,14 @@ func UnitExprText(node ast.Node) string {
 	case *ast.OperatorExpr:
 		switch {
 		case len(n.Operands) == 2:
-			return UnitExprText(n.Operands[0]) + n.Operator.String() + UnitExprText(n.Operands[1])
+			left, right := UnitExprText(n.Operands[0]), UnitExprText(n.Operands[1])
+			if unitOperandGrouped(n.Operator, n.Operands[0], false) {
+				left = "(" + left + ")"
+			}
+			if unitOperandGrouped(n.Operator, n.Operands[1], true) {
+				right = "(" + right + ")"
+			}
+			return left + n.Operator.String() + right
 		case len(n.Operands) == 1:
 			return n.Operator.String() + UnitExprText(n.Operands[0])
 		}
@@ -653,6 +660,20 @@ func UnitExprText(node ast.Node) string {
 		return n.Value
 	}
 	return ""
+}
+
+// unitOperandGrouped reports whether operand, under op, must be parenthesised
+// to read back as itself: a product or quotient under `**` or right of `/`.
+func unitOperandGrouped(op ast.OperatorKind, operand ast.Node, right bool) bool {
+	inner, ok := operand.(*ast.OperatorExpr)
+	if !ok || len(inner.Operands) != 2 {
+		return false
+	}
+	switch inner.Operator {
+	case ast.OpMul, ast.OpDiv:
+		return op == ast.OpPow || (op == ast.OpDiv && right)
+	}
+	return false
 }
 
 // libSymbol resolves a library element by qualified name, uniquely or not at

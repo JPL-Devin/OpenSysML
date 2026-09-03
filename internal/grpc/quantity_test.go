@@ -99,6 +99,9 @@ func TestQuantityCrossesTheWire(t *testing.T) {
 		{expr: "3 [SI::m]", unit: "SI::m", intVal: 3, isInt: true, reduction: "SI::metre"},
 		{expr: "10.0 [SI::m] / 2.0 [SI::s]", unit: "SI::m/SI::s", real: 5.0, reduction: "SI::metre·SI::second^-1"},
 		{expr: "5.4 [SI::km/SI::h]", unit: "SI::km/SI::h", real: 5.4, reduction: "5/18·SI::metre·SI::second^-1", wantScaled: true},
+		// Grouping the notation needs survives, so the text reads back as the unit written.
+		{expr: "3.0 [SI::m/(SI::s*SI::kg)]", unit: "SI::m/(SI::s*SI::kg)", real: 3.0, reduction: "1/1000·SI::gram^-1·SI::metre·SI::second^-1", wantScaled: true},
+		{expr: "4.0 [(SI::m*SI::s)**2]", unit: "(SI::m*SI::s)**2", real: 4.0, reduction: "SI::metre^2·SI::second^2"},
 	}
 
 	for _, tc := range tests {
@@ -138,6 +141,9 @@ func TestQuantityRoundTrip(t *testing.T) {
 		"10.0 [SI::m] / 2.0 [SI::s]",
 		"5.4 [SI::km/SI::h]",
 		"(2.0 [SI::m])**2",
+		"3.0 [SI::m/(SI::s*SI::kg)]",
+		"4.0 [(SI::m*SI::s)**2]",
+		"6.0 [SI::m/SI::s/SI::kg]",
 	} {
 		t.Run(expr, func(t *testing.T) {
 			sent := mustEvaluateQuantity(t, srv, modelHash, expr)
@@ -369,6 +375,22 @@ func TestQuantityFromWireComposesAsWritten(t *testing.T) {
 	calc def Metre { 2.0 [m] }
 	calc def Kilometre { 3.0 [km] }
 }
+package Nautical {
+	private import MeasurementReferences::*;
+	private import ISQ::*;
+	private import SI::*;
+	attribute <fathom> 'fathom' : LengthUnit { :>> unitConversion: ConversionByConvention { :>> referenceUnit = m; :>> conversionFactor = 1.8288; } }
+	attribute <cable> 'cable' : LengthUnit { :>> unitConversion: ConversionByConvention { :>> referenceUnit = m; :>> conversionFactor = 182.88; } }
+	calc def Fathom { 2.0 [fathom] }
+	calc def Cable { 1.0 [cable] }
+}
+package Imperial {
+	private import MeasurementReferences::*;
+	private import ISQ::*;
+	private import SI::*;
+	attribute <fathom> 'fathom' : LengthUnit { :>> unitConversion: ConversionByConvention { :>> referenceUnit = m; :>> conversionFactor = 1.8288; } }
+	attribute <cable> 'cable' : LengthUnit { :>> unitConversion: ConversionByConvention { :>> referenceUnit = m; :>> conversionFactor = 185.3184; } }
+}
 `
 	hash := mustVerifyModel(t, srv, source, "quantity-composes-as-written")
 	evaluate := func(calc string, args ...*pb.Quantity) *pb.Quantity {
@@ -422,9 +444,9 @@ func TestQuantityFromWireComposesAsWritten(t *testing.T) {
 		t.Errorf("opaque unit over the wire = %s, want 5 [SI::s*metres per second] = SI::metre", got)
 	}
 
-	// A unit written short, as an import let the sender write it, is read in the
-	// namespace of the base units it reduces to: `m` is SI::m, and cancels or
-	// merges with SI::m written in full.
+	// A unit written short, as an import let the sender write it, is the unit of
+	// that name reducing as sent: `m` is SI::m, and cancels or merges with SI::m
+	// written in full.
 	unqualified := &pb.Quantity{
 		Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 5},
 		Unit:      "m/s",
@@ -443,7 +465,7 @@ func TestQuantityFromWireComposesAsWritten(t *testing.T) {
 		t.Errorf("m * SI::m over the wire = %s, want 6 [m**2] = SI::metre^2", got)
 	}
 
-	// A short name those namespaces do not declare, or declare as a unit the
+	// A short name the model does not declare, or declares as a unit the
 	// reduction contradicts, is opaque: it was not certainly that unit.
 	for _, tc := range []struct{ unit, want string }{
 		{"ft", "6 [SI::m*ft] = SI::metre^2"},
@@ -469,6 +491,35 @@ func TestQuantityFromWireComposesAsWritten(t *testing.T) {
 	got = describeQuantity(evaluate("Q::Area", opaqueKm, evaluate("Q::Kilometre")))
 	if got != "6 [km*km] = 1000/1·SI::metre^2" {
 		t.Errorf("opaque km over a metre reduction * km = %s, want 6 [km*km] = 1000/1·SI::metre^2", got)
+	}
+
+	// A derived unit the model declares outside its base unit's namespace keeps
+	// its identity when written short: `cable` is Nautical::cable, the one unit of
+	// that name whose reduction is the one sent, so it merges with itself.
+	fathom := evaluate("Nautical::Fathom")
+	if fathom.GetUnit() != "fathom" {
+		t.Fatalf("a custom unit written under its package crosses the wire in %q, want fathom", fathom.GetUnit())
+	}
+	inFull := func(unit string, term *pb.UnitTerm) *pb.Quantity {
+		return &pb.Quantity{
+			Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 2},
+			Unit:      unit,
+			UnitTerm:  term,
+		}
+	}
+	cable := evaluate("Nautical::Cable")
+	if cable.GetUnit() != "cable" {
+		t.Fatalf("a custom unit written under its package crosses the wire in %q, want cable", cable.GetUnit())
+	}
+	got = describeQuantity(evaluate("Q::Area", cable, inFull("Nautical::cable", cable.GetUnitTerm())))
+	if got != "2 [cable**2] = 33445.0944/1·SI::metre^2" {
+		t.Errorf("cable * Nautical::cable over the wire = %s, want 2 [cable**2] = 33445.0944/1·SI::metre^2", got)
+	}
+	// Two packages declaring one short name for the same unit is an ambiguity the
+	// reduction cannot settle: the text stays opaque rather than picked at random.
+	got = describeQuantity(evaluate("Q::Area", fathom, inFull("Nautical::fathom", fathom.GetUnitTerm())))
+	if got != "4 [Nautical::fathom*fathom] = 3.34450944/1·SI::metre^2" {
+		t.Errorf("ambiguous fathom * Nautical::fathom over the wire = %s, want 4 [Nautical::fathom*fathom] = 3.34450944/1·SI::metre^2", got)
 	}
 }
 

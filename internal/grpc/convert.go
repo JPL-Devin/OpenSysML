@@ -465,11 +465,9 @@ func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index, sem *semantics.Model) 
 }
 
 // unitProductOfText reads a unit as written (`SI::m/SI::s`) as the product of
-// the named units it composes, once every name resolves to a unit the model
-// declares and the product reduces to term. A name written short (`m`, as an
-// import let the sender write it) is looked for in the namespaces of term's base
-// units, and kept only if the product then reduces to term. Text the model
-// cannot read that way is one opaque unit, which no operation cancels against another.
+// the model's units it names, kept only if it reduces to term. A short name
+// (`m`) is whichever unit so named makes it reduce so, if exactly one does.
+// Text not readable that way is one opaque unit, which cancels against nothing.
 func unitProductOfText(text string, term semantics.UnitTerm, idx *symbols.Index, sem *semantics.Model) (semantics.UnitProduct, error) {
 	if text == "" {
 		return semantics.UnitProduct{}, nil
@@ -490,45 +488,146 @@ func unitProductOfText(text string, term semantics.UnitTerm, idx *symbols.Index,
 		}
 		return matches[0], true
 	}
-	guessed := false
+	var short []string
 	product, err := sem.UnitProductOfExprBy(expr, func(qn *ast.QualifiedName) (*symbols.Symbol, bool) {
 		name := semantics.QualifiedNameText(qn)
 		if sym, ok := unitAt(name); ok {
 			return sym, true
 		}
-		if len(qn.Parts) != 1 {
-			return nil, false
-		}
-		for _, ns := range baseUnitNamespaces(term) {
-			if sym, ok := unitAt(ns + "::" + name); ok {
-				guessed = true
-				return sym, true
-			}
+		if len(qn.Parts) == 1 && !slices.Contains(short, name) {
+			short = append(short, name)
 		}
 		return nil, false
 	})
 	if err != nil {
 		return opaque, nil
 	}
+	if len(short) == 0 {
+		implied, ok := impliedTerm(product, sem)
+		if !ok {
+			return opaque, nil
+		}
+		if !reducesTo(implied, term) {
+			return semantics.UnitProduct{}, fmt.Errorf("%w: %s reduces to %s, unit_term is %s",
+				ErrUnitTextMismatch, text, implied, term)
+		}
+		return product, nil
+	}
+
+	readings := shortUnitReadings(short, idx, sem)
+	var matches []shortUnitReading
+	for _, reading := range readings {
+		product, err := sem.UnitProductOfExprBy(expr, func(qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+			if sym, ok := unitAt(semantics.QualifiedNameText(qn)); ok {
+				return sym, true
+			}
+			sym, ok := reading.units[semantics.QualifiedNameText(qn)]
+			return sym, ok
+		})
+		if err != nil {
+			continue
+		}
+		if implied, ok := impliedTerm(product, sem); ok && reducesTo(implied, term) {
+			reading.product = product
+			matches = append(matches, reading)
+		}
+	}
+	if len(matches) > 1 {
+		matches = slices.DeleteFunc(matches, func(r shortUnitReading) bool {
+			return !r.besideBaseUnits(term)
+		})
+	}
+	if len(matches) != 1 {
+		return opaque, nil
+	}
+	return matches[0].product, nil
+}
+
+// shortUnitReading is one assignment of a unit text's short names to units.
+type shortUnitReading struct {
+	units   map[string]*symbols.Symbol
+	product semantics.UnitProduct
+}
+
+// besideBaseUnits reports whether every unit read is declared beside a base unit of term.
+func (r shortUnitReading) besideBaseUnits(term semantics.UnitTerm) bool {
+	namespaces := baseUnitNamespaces(term)
+	for _, sym := range r.units {
+		if !slices.Contains(namespaces, namespaceOf(sym)) {
+			return false
+		}
+	}
+	return true
+}
+
+// maxShortUnitReadings bounds the readings tried for one unit text.
+const maxShortUnitReadings = 1024
+
+// shortUnitReadings enumerates, in a fixed order, every assignment of the short
+// names to units so named; none if a name has no unit or there are too many.
+func shortUnitReadings(names []string, idx *symbols.Index, sem *semantics.Model) []shortUnitReading {
+	candidates := make([][]*symbols.Symbol, len(names))
+	total := 1
+	for i, name := range names {
+		candidates[i] = unitsNamed(name, idx, sem)
+		total *= len(candidates[i])
+		if total == 0 || total > maxShortUnitReadings {
+			return nil
+		}
+	}
+	readings := make([]shortUnitReading, 0, total)
+	for k := range total {
+		units := make(map[string]*symbols.Symbol, len(names))
+		rem := k
+		for i, name := range names {
+			units[name] = candidates[i][rem%len(candidates[i])]
+			rem /= len(candidates[i])
+		}
+		readings = append(readings, shortUnitReading{units: units})
+	}
+	return readings
+}
+
+// unitsNamed lists, once each in qualified-name order, the units under a short name.
+func unitsNamed(name string, idx *symbols.Index, sem *semantics.Model) []*symbols.Symbol {
+	var units []*symbols.Symbol
+	for _, fqn := range idx.FQNsEndingIn(name, math.MaxInt) {
+		for _, sym := range idx.LookupQualified(fqn) {
+			if sem.IsMeasurementUnit(sym) && !slices.Contains(units, sym) {
+				units = append(units, sym)
+			}
+		}
+	}
+	return units
+}
+
+// impliedTerm reduces a product of resolved units; false if one is unresolved or unreducible.
+func impliedTerm(product semantics.UnitProduct, sem *semantics.Model) (semantics.UnitTerm, bool) {
 	implied := semantics.UnitTerm{Scale: semantics.UnitScale(1)}
 	for _, f := range product.Powers {
 		if f.Unit == nil {
-			return opaque, nil
+			return semantics.UnitTerm{}, false
 		}
 		factor, err := sem.UnitTermOf(f.Unit)
 		if err != nil {
-			return opaque, nil
+			return semantics.UnitTerm{}, false
 		}
 		implied = implied.Times(factor.Pow(f.Exponent))
 	}
-	if !implied.Commensurable(term) || !sameScale(implied.Scale, term.Scale) {
-		if guessed {
-			return opaque, nil
-		}
-		return semantics.UnitProduct{}, fmt.Errorf("%w: %s reduces to %s, unit_term is %s",
-			ErrUnitTextMismatch, text, implied, term)
+	return implied, true
+}
+
+// reducesTo reports whether two reductions are one unit: commensurable at one scale.
+func reducesTo(implied, term semantics.UnitTerm) bool {
+	return implied.Commensurable(term) && sameScale(implied.Scale, term.Scale)
+}
+
+// namespaceOf is the qualified name of the namespace declaring sym, or "" for a root.
+func namespaceOf(sym *symbols.Symbol) string {
+	if sym.OwnerScope == nil || sym.OwnerScope.Owner() == nil {
+		return ""
 	}
-	return product, nil
+	return symbols.FQNOf(sym.OwnerScope.Owner())
 }
 
 // baseUnitNamespaces lists, in factor order and once each, the namespaces
@@ -536,11 +635,10 @@ func unitProductOfText(text string, term semantics.UnitTerm, idx *symbols.Index,
 func baseUnitNamespaces(term semantics.UnitTerm) []string {
 	var out []string
 	for _, f := range term.Factors {
-		if f.Unit == nil || f.Unit.OwnerScope == nil || f.Unit.OwnerScope.Owner() == nil {
+		if f.Unit == nil {
 			continue
 		}
-		ns := symbols.FQNOf(f.Unit.OwnerScope.Owner())
-		if !slices.Contains(out, ns) {
+		if ns := namespaceOf(f.Unit); ns != "" && !slices.Contains(out, ns) {
 			out = append(out, ns)
 		}
 	}

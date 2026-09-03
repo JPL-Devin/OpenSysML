@@ -3,6 +3,9 @@ package semantics
 import (
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -42,6 +45,42 @@ func TestScaleReduces(t *testing.T) {
 	}
 	if got := UnitScale(1).DividedBy(UnitScale(-2)); got != (Scale{Num: -1, Den: 2}) {
 		t.Errorf("1/-2 = %v, want -1/2", got)
+	}
+}
+
+// TestUnitExprTextReadsBack: the text of a unit expression, reparsed, is the
+// same expression — grouping the notation needs is kept, redundant grouping dropped.
+func TestUnitExprTextReadsBack(t *testing.T) {
+	tests := []struct{ src, want string }{
+		{"m", "m"},
+		{"SI::km/SI::h", "SI::km/SI::h"},
+		{"m*s**2", "m*s**2"},
+		{"(m)**2", "m**2"},
+		{"(m*s)**2", "(m*s)**2"},
+		{"(m/s)**2", "(m/s)**2"},
+		{"m/(s*kg)", "m/(s*kg)"},
+		{"m/(s/kg)", "m/(s/kg)"},
+		{"m/s/kg", "m/s/kg"},
+		{"(m/s)*kg", "m/s*kg"},
+		{"m*(s*kg)", "m*s*kg"},
+		{"m**-1", "m**-1"},
+	}
+	parse := func(src string) ast.Node {
+		p := parser.New(source.New("<unit>", []byte(src)))
+		expr := p.ParseExpression()
+		if expr == nil || len(p.Diagnostics) > 0 {
+			t.Fatalf("parse %q: %v", src, p.Diagnostics)
+		}
+		return expr
+	}
+	for _, tc := range tests {
+		got := UnitExprText(parse(tc.src))
+		if got != tc.want {
+			t.Errorf("UnitExprText(%q) = %q, want %q", tc.src, got, tc.want)
+		}
+		if again := UnitExprText(parse(got)); again != got {
+			t.Errorf("UnitExprText(%q) reparsed = %q, does not read back", got, again)
+		}
 	}
 }
 

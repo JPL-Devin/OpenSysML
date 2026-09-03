@@ -138,6 +138,7 @@ func normalizeProduct(p UnitProduct) UnitProduct {
 			continue
 		}
 		merged[at].Exponent += f.Exponent
+		merged[at].Name = shorterSpelling(merged[at].Name, f.Name)
 	}
 	kept := merged[:0]
 	for _, f := range merged {
@@ -147,6 +148,24 @@ func normalizeProduct(p UnitProduct) UnitProduct {
 	}
 	slices.SortStableFunc(kept, func(a, b UnitPower) int { return strings.Compare(a.Name, b.Name) })
 	return UnitProduct{Powers: kept}
+}
+
+// shorterSpelling picks, of two spellings of one unit, the one with fewer
+// qualifiers, then fewer characters, then the lesser text: `m` over `SI::m`.
+func shorterSpelling(a, b string) string {
+	if na, nb := strings.Count(a, "::"), strings.Count(b, "::"); na != nb {
+		if na < nb {
+			return a
+		}
+		return b
+	}
+	if len(a) != len(b) {
+		if len(a) < len(b) {
+			return a
+		}
+		return b
+	}
+	return min(a, b)
 }
 
 // sameUnit: two resolved powers are one unit by symbol; two unresolved ones by
