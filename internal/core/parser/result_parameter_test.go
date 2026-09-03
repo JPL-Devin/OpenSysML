@@ -49,6 +49,52 @@ func TestResultParameterIsMarked(t *testing.T) {
 	}
 }
 
+// TestResultParameterMultiplicityBeforeSpecialization covers a result parameter
+// whose multiplicity is written ahead of its specialization part, the order the
+// RDF writer spells (`return y[*] subsets A = ();`): the specialization, the
+// value and the body are all read, with the multiplicity on the parameter.
+func TestResultParameterMultiplicityBeforeSpecialization(t *testing.T) {
+	cases := []struct {
+		name    string
+		body    string
+		rels    int
+		value   bool
+		hasBody bool
+	}{
+		{"subsets with value", "return y[*] subsets A = ();", 1, true, false},
+		{"symbolic with value", "return attribute y[*] :> A = ();", 1, true, false},
+		{"redefines", "return y[0..1] redefines A;", 1, false, false},
+		{"multiplicity only", "return y[*];", 0, false, false},
+		{"multiplicity with body", "return ref y[0..*] { attribute z; }", 0, false, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			src := "package P { attribute A; calc def C { " + tc.body + " } }"
+			p := New(source.New("t.sysml", []byte(src)))
+			root := p.ParseFile()
+			if len(p.Diagnostics) != 0 {
+				t.Fatalf("parse diagnostics: %v", p.Diagnostics)
+			}
+			y := findUsageNamed(root, "y")
+			if y == nil {
+				t.Fatal("result parameter y not found")
+			}
+			if !y.IsResult || y.Multiplicity == nil {
+				t.Fatalf("y: IsResult=%v Multiplicity=%v, want the result with its multiplicity", y.IsResult, y.Multiplicity)
+			}
+			if len(y.Relationships) != tc.rels {
+				t.Fatalf("y has %d relationships, want %d", len(y.Relationships), tc.rels)
+			}
+			if (y.Value != nil) != tc.value {
+				t.Fatalf("y has value %v, want %v", y.Value != nil, tc.value)
+			}
+			if y.HasBody != tc.hasBody {
+				t.Fatalf("y.HasBody = %v, want %v", y.HasBody, tc.hasBody)
+			}
+		})
+	}
+}
+
 // findUsageNamed returns the first usage named name in the namespace members of
 // the tree rooted at node.
 func findUsageNamed(node ast.Node, name string) *ast.Usage {
