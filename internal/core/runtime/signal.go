@@ -981,7 +981,8 @@ func (e *EvalContext) invokesCalc(scope *symbols.Scope, invocation *ast.Invocati
 	if sel.Ambiguous {
 		return true
 	}
-	return isCalcSymbol(sel.Called())
+	called := sel.Called()
+	return isCalcSymbol(called) || (called != nil && e.ctx.calcTypedFeature(called))
 }
 
 // buildInvokedMessage builds the message of a send written as an invocation.

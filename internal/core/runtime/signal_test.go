@@ -1600,6 +1600,40 @@ func TestActionSendCallsACalcSharingASignalsName(t *testing.T) {
 	}
 }
 
+// A send invoking a feature typed by a calc performs that calc, as an expression
+// does: the value it computes travels, not a message named after the feature.
+func TestActionSendCallsAFeatureTypedByACalc(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		calc def Twice { in x : Integer; return : Integer = 2 * x; }
+		ref count : Twice;
+		action pipeline {
+			attribute got : Integer = 0;
+			first start;
+			action sender { send count(4) to reader; }
+			action reader accept n : Integer;
+			action recorder { assign got := n; }
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then recorder;
+			succession first recorder then done;
+		}
+	}`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action pipeline not found")
+	}
+	outputs, err := ctx.ExecuteAction(sym)
+	if err != nil {
+		t.Fatalf("execute action: %v", err)
+	}
+	assertIntOutput(t, outputs, "got", 8)
+	if pending := ctx.PendingMessages(); len(pending) != 0 {
+		t.Errorf("expected no message left in flight, got %v", pending)
+	}
+}
+
 // The same holds for a state's entry: a function imported by the state alone is
 // called and its value sent, so the transition on the value's type fires.
 func TestStateSendCallsFunctionImportedByNestedBlock(t *testing.T) {
