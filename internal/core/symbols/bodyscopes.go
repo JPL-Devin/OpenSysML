@@ -187,7 +187,7 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		body := TriggerScope(scope, d)
 		bodyScopesInExpr(body, d.Guard)
 		buildBodyScopes(body, d.Effect)
-		buildBodyScopes(body, d.Members)
+		buildBodyScopes(nodeBodyScope(scope, d), d.Members)
 	case *ast.SendStatement:
 		bodyScopesInExpr(scope, d.Message)
 		bodyScopesInExpr(scope, d.Target)

@@ -246,6 +246,9 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 			r.ResolveQualified(scope, d.Successor)
 		}
 		r.resolveExpr(scope, d.Guard)
+		if child := r.childScope(scope, d); child != nil {
+			r.walkMembers(child, d.Members)
+		}
 		return true
 	case *ast.SuccessionEdge:
 		r.resolveSuccessionEdge(scope, d)
@@ -342,6 +345,13 @@ func (r *Resolver) resolveBehaviorDecl(scope *symbols.Scope, decl ast.Node) bool
 		body := symbols.TriggerScope(scope, d)
 		r.resolveExpr(body, d.Guard)
 		r.walkMembers(body, d.Effect)
+		// The body's members are the transition's own, outside the trigger's
+		// parameters (see symbols.buildBehaviorDecl).
+		members := scope
+		if child := r.childScope(scope, d); child != nil {
+			members = child
+		}
+		r.walkMembers(members, d.Members)
 		return true
 	case *ast.SendStatement:
 		r.resolveExpr(scope, d.Message)

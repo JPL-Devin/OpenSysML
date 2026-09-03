@@ -60,6 +60,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_unbound_keyword_named_parameter", testCalcUnboundKeywordNamedParameter)
 	t.Run("calc_too_many_arguments", testCalcTooManyArguments)
 	t.Run("calc_unknown_named_argument", testCalcUnknownNamedArgument)
+	t.Run("calc_parameter_named_twice", testCalcParameterNamedTwice)
 	t.Run("calc_without_result", testCalcWithoutResult)
 	t.Run("calc_symbol_is_not_a_calc", testCalcSymbolIsNotACalc)
 	t.Run("calc_direct_recursion", testCalcDirectRecursion)
@@ -222,6 +223,13 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("sequence_index_names_no_position", testSequenceIndexNamesNoPosition)
 	t.Run("collection_operand_of_the_wrong_kind", testCollectionOperandOfTheWrongKind)
 	t.Run("numeric_library_call_that_has_no_value", testNumericLibraryCallThatHasNoValue)
+	t.Run("named_library_call_that_has_no_value", testNamedLibraryCallThatHasNoValue)
+	t.Run("builtin_named_argument_that_binds_nothing", testBuiltinNamedArgumentThatBindsNothing)
+	t.Run("body_by_reference_that_cannot_be_applied", testBodyByReferenceThatCannotBeApplied)
+	t.Run("bodiless_model_calc_named_as_a_builtin", testBodilessModelCalcNamedAsABuiltin)
+	t.Run("data_equality_over_a_part", testDataEqualityOverAPart)
+	t.Run("base_index_with_several_indexes", testBaseIndexWithSeveralIndexes)
+	t.Run("real_literal_that_underflows", testRealLiteralThatUnderflows)
 	t.Run("string_operand_of_the_wrong_kind", testStringOperandOfTheWrongKind)
 	t.Run("collection_body_of_the_wrong_arity", testCollectionBodyOfTheWrongArity)
 	t.Run("select_predicate_is_not_a_condition", testSelectPredicateIsNotACondition)
@@ -231,6 +239,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("variation_bound_to_two_variants", testVariationBoundToTwoVariants)
 	t.Run("variation_read_through_its_declaration", testVariationReadThroughItsDeclaration)
 	t.Run("chain_through_an_unselected_variation_part", testChainThroughAnUnselectedVariationPart)
+	t.Run("classify_an_unselected_optional_variation", testClassifyAnUnselectedOptionalVariation)
 	t.Run("repeated_reads_of_a_variant_object", testRepeatedReadsOfAVariantObject)
 	t.Run("two_owners_selecting_one_variant", testTwoOwnersSelectingOneVariant)
 	t.Run("two_ownerless_selections_of_one_variant", testTwoOwnerlessSelectionsOfOneVariant)
@@ -248,6 +257,12 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("feature_chain_spends_the_element_budget", testFeatureChainSpendsTheElementBudget)
 	t.Run("mutually_subsetting_features", testMutuallySubsettingFeatures)
 	t.Run("unattachable_connector_end", testUnattachableConnectorEnd)
+	t.Run("unattachable_connector_leaves_no_behavior", testUnattachableConnectorLeavesNoBehavior)
+	t.Run("unattachable_connector_abandons_what_its_ends_materialized", testUnattachableConnectorAbandonsWhatItsEndsMaterialized)
+	t.Run("unattachable_connector_touches_no_other_object", testUnattachableConnectorTouchesNoOtherObject)
+	t.Run("unattachable_connector_ends_run_nothing_early", testUnattachableConnectorEndsRunNothingEarly)
+	t.Run("connector_whose_start_fails_leaves_no_trace", testConnectorWhoseStartFailsLeavesNoTrace)
+	t.Run("connector_answered_by_a_failing_behavior_is_kept", testConnectorAnsweredByAFailingBehaviorIsKept)
 	t.Run("multiplicity_on_a_connector", testMultiplicityOnAConnector)
 	t.Run("connector_attached_to_itself", testConnectorAttachedToItself)
 	t.Run("mutually_attached_connectors", testMutuallyAttachedConnectors)
@@ -1269,6 +1284,276 @@ func testNumericLibraryCallThatHasNoValue(t *testing.T) {
 		if !errors.Is(err, tt.want) {
 			t.Errorf("%s = (%v, %v), want %v", tt.expr, got, err, tt.want)
 		}
+	}
+}
+
+// testNamedLibraryCallThatHasNoValue: a conversion, operator-call form, control
+// function, aggregation or unevaluable declaration called by name reports itself
+// by a typed error — no panic, no zero, no answer of another kind.
+func testNamedLibraryCallThatHasNoValue(t *testing.T) {
+	for _, tt := range []struct {
+		expr string
+		want error
+	}{
+		{`RealFunctions::ToReal("1.5 meters")`, ErrInvalidNotation},
+		{`RealFunctions::ToReal("NaN")`, ErrInvalidNotation},
+		{`RealFunctions::ToReal(" 1.5 ")`, ErrInvalidNotation},
+		{`IntegerFunctions::ToInteger(" 7")`, ErrInvalidNotation},
+		{`RationalFunctions::ToRational("1/3")`, ErrInvalidNotation},
+		{`IntegerFunctions::ToInteger("2.0")`, ErrInvalidNotation},
+		{`IntegerFunctions::ToInteger("99999999999999999999")`, semantics.ErrArithmeticOverflow},
+		{`RealFunctions::ToInteger(1.0e300)`, semantics.ErrArithmeticOverflow},
+		{`BooleanFunctions::ToBoolean("yes")`, ErrInvalidNotation},
+		{`IntegerFunctions::ToNatural(-1)`, semantics.ErrArithmeticDomain},
+		{`NaturalFunctions::ToNatural("-1")`, semantics.ErrArithmeticDomain},
+		{`RealFunctions::ToReal(xs)`, ErrTypeMismatch},
+		{`RationalFunctions::gcd(1.5, 2)`, semantics.ErrArithmeticDomain},
+		{`RationalFunctions::gcd("1", 2)`, ErrTypeMismatch},
+		{`RationalFunctions::gcd(1.0e19, 1.0e19)`, semantics.ErrArithmeticOverflow},
+		{`RationalFunctions::rat(1, 3)`, ErrUnevaluableLibraryFunction},
+		{`RationalFunctions::numer(0.5)`, ErrUnevaluableLibraryFunction},
+		{`CollectionFunctions::'array#'(xs, (1, 1))`, ErrUnevaluableLibraryFunction},
+		{`OccurrenceFunctions::isDuring(xs)`, ErrUnevaluableLibraryFunction},
+		{`OccurrenceFunctions::addNew(xs)`, ErrCalcArity},
+		{`OccurrenceFunctions::addNew(occ = xs)`, ErrUnevaluableLibraryFunction},
+		{`OccurrenceFunctions::addNewAt(xs, xs)`, ErrCalcArity},
+		{`OccurrenceFunctions::addNewAt(occ = xs, index = 1)`, ErrUnevaluableLibraryFunction},
+		{`IntegerFunctions::'+'("a", 1)`, ErrTypeMismatch},
+		{`IntegerFunctions::'/'(1, 0)`, ErrDivisionByZero},
+		{`NaturalFunctions::'/'(7, 2)`, semantics.ErrArithmeticDomain},
+		{`NaturalFunctions::'/'(6, 0)`, ErrDivisionByZero},
+		{`NaturalFunctions::'/'(6, -3)`, ErrTypeMismatch},
+		{`IntegerFunctions::'=='(2, 2.0)`, ErrTypeMismatch},
+		{`BooleanFunctions::'=='(true, 1)`, ErrTypeMismatch},
+		{`BaseFunctions::ToString(xs)`, ErrMultiplicityViolation},
+		{`IntegerFunctions::'%'(1, 0)`, ErrDivisionByZero},
+		{`IntegerFunctions::'*'(9223372036854775807, 2)`, semantics.ErrArithmeticOverflow},
+		{`RealFunctions::'**'(-8.0, 0.5)`, semantics.ErrArithmeticDomain},
+		{`ScalarFunctions::'<'("a", 1)`, ErrTypeMismatch},
+		{`BooleanFunctions::'xor'(true, 1)`, ErrTypeMismatch},
+		{`DataFunctions::max(true, false)`, ErrTypeMismatch},
+		{`ScalarFunctions::min(xs, ys)`, ErrMultiplicityViolation},
+		{`IntegerFunctions::'+'(xs, 1)`, ErrMultiplicityViolation},
+		{`IntegerFunctions::'+'(1, xs)`, ErrMultiplicityViolation},
+		{`IntegerFunctions::'+'((), 1)`, ErrMultiplicityViolation},
+		{`IntegerFunctions::'-'(xs)`, ErrMultiplicityViolation},
+		{`RealFunctions::'<'(xs, 2.0)`, ErrMultiplicityViolation},
+		{`BooleanFunctions::'xor'(flags, true)`, ErrMultiplicityViolation},
+		{`BooleanFunctions::'not'(flags)`, ErrMultiplicityViolation},
+		{`BooleanFunctions::'not'(())`, ErrMultiplicityViolation},
+		{`NaturalFunctions::'/'(xs, 2)`, ErrMultiplicityViolation},
+		{`ScalarFunctions::'..'(1.5, 3)`, ErrTypeMismatch},
+		{`BaseFunctions::'#'(xs, 0)`, ErrIndexOutOfRange},
+		{`ControlFunctions::'if'(1, 2, 3)`, ErrTypeMismatch},
+		{`ControlFunctions::'if'(true, {in x; x}, 3)`, ErrBodyArity},
+		{`ControlFunctions::'and'(true, 1)`, ErrTypeMismatch},
+		{`ControlFunctions::'and'(1, true)`, ErrTypeMismatch},
+		{`ControlFunctions::'and'(true)`, ErrMultiplicityViolation},
+		{`ControlFunctions::'or'(false)`, ErrMultiplicityViolation},
+		{`ControlFunctions::'implies'(true)`, ErrMultiplicityViolation},
+		{`ControlFunctions::'implies'(true, xs)`, ErrTypeMismatch},
+		{`NumericalFunctions::sum0(xs, 1)`, ErrTypeMismatch},
+		{`NumericalFunctions::product1(xs, 0)`, ErrTypeMismatch},
+		{`NumericalFunctions::sum0(flags, 0)`, ErrTypeMismatch},
+		{`NumericalFunctions::sum0((9223372036854775807, 1), 0)`, semantics.ErrArithmeticOverflow},
+		{`NumericalFunctions::sum0(xs)`, ErrCalcArity},
+	} {
+		got, err := evalCollectionExpr(t, tt.expr)
+		if !errors.Is(err, tt.want) {
+			t.Errorf("%s = (%v, %v), want %v", tt.expr, got, err, tt.want)
+		}
+	}
+}
+
+// testBuiltinNamedArgumentThatBindsNothing: a named argument to a built-in that
+// names no parameter, names one twice, sits beside a positional argument, or
+// leaves a required parameter unbound is reported rather than bound by position;
+// a body passed by reference that denotes no body is reported too.
+func testBuiltinNamedArgumentThatBindsNothing(t *testing.T) {
+	for _, tt := range []struct {
+		expr string
+		want error
+	}{
+		{`NumericalFunctions::sum0(zero = 0, elements = xs)`, ErrUnknownParameter},
+		{`NumericalFunctions::sum0(zero = 0, zero = 1)`, ErrCalcArity},
+		{`NumericalFunctions::sum0(collection = xs)`, ErrCalcArity},
+		{`ControlFunctions::'if'(thenValue = 1, elseValue = 2)`, ErrCalcArity},
+		{`ControlFunctions::'if'(test = true, thenValue = {in x; x})`, ErrBodyArity},
+		{`ControlFunctions::'and'(secondValue = true)`, ErrCalcArity},
+		{`ControlFunctions::'if'()`, ErrCalcArity},
+		{`ControlFunctions::'and'()`, ErrCalcArity},
+		{`SequenceFunctions::subsequence(xs)`, ErrCalcArity},
+		{`SequenceFunctions::subsequence(seq = xs)`, ErrCalcArity},
+		{`SequenceFunctions::size(xs, 1)`, ErrCalcArity},
+		{`SequenceFunctions::'#'(xs, 1, 2)`, ErrCalcArity},
+		{`SequenceFunctions::'#'(seq = xs, index = 0)`, ErrIndexOutOfRange},
+		{`ControlFunctions::select(collection = xs, selector = factor)`, ErrTypeMismatch},
+		{`xs->select factor`, ErrTypeMismatch},
+	} {
+		got, err := evalCollectionExpr(t, tt.expr)
+		if !errors.Is(err, tt.want) {
+			t.Errorf("%s = (%v, %v), want %v", tt.expr, got, err, tt.want)
+		}
+	}
+}
+
+// testBodilessModelCalcNamedAsABuiltin: a model's own calc declared under a
+// library function's qualified name — a collection built-in, a conversion, an
+// operator form — is the model's, so without a body it computes nothing rather
+// than what the library's declaration of that name computes.
+func testBodilessModelCalcNamedAsABuiltin(t *testing.T) {
+	src := `
+		package NumericalFunctions {
+			private import ScalarValues::*;
+			calc def sum0 { in collection : Integer[*]; in zero : Integer; return : Integer; }
+		}
+		package RealFunctions {
+			private import ScalarValues::*;
+			calc def ToReal { in x : String; return : Real; }
+			calc def '+' { in x : Real; in y : Real; return : Real; }
+		}
+		package test {
+			private import ScalarValues::*;
+			calc def Total { return : Integer = NumericalFunctions::sum0((1, 2, 3), 0); }
+			calc def size { in seq : Integer[*]; return : Integer; }
+			calc def Size { return : Integer = size((1, 2, 3)); }
+			calc def Parsed { return : Real = RealFunctions::ToReal("1.5"); }
+			calc def Added { return : Real = RealFunctions::'+'(1.0, 2.0); }
+		}
+	`
+	for _, calc := range []string{"Total", "Size", "Parsed", "Added"} {
+		err := calcErrorWithLibraries(t, src, calc, nil, 10000)
+		if !errors.Is(err, ErrNoResultExpression) {
+			t.Errorf("%s = %v, want %v", calc, err, ErrNoResultExpression)
+		}
+	}
+}
+
+// testDataEqualityOverAPart: DataFunctions' `'=='` and `'==='` are declared over
+// DataValue, so a part given to either is refused rather than compared.
+func testDataEqualityOverAPart(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			part def Widget;
+			attribute def Point { attribute x : Integer; }
+			calc def SameData { in a : Point; in b : Point; return : Boolean = DataFunctions::'=='(a, b); }
+			calc def SamePart { in a : Widget; in b : Widget; return : Boolean = DataFunctions::'=='(a, b); }
+			calc def IdenticalPart { in a : Widget; in b : Widget; return : Boolean = DataFunctions::'==='(a, b); }
+			calc def SameAnything { in a : Widget; in b : Widget; return : Boolean = BaseFunctions::'=='(a, b); }
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	object := func(name string) Value {
+		matches := idx.LookupQualified("test::" + name)
+		if len(matches) != 1 {
+			t.Fatalf("test::%s: %d matching symbols, want 1", name, len(matches))
+		}
+		inst, err := ctx.Instantiate(matches[0])
+		if err != nil {
+			t.Fatalf("Instantiate(%s): %v", name, err)
+		}
+		return Value{Kind: ValInstance, Instance: inst.ID}
+	}
+	point, widget := object("Point"), object("Widget")
+	invoke := func(calc string, args ...Value) (Value, error) {
+		sym, scope := calcByName(t, idx.DocumentRoot("<test>"), "test", calc)
+		return ctx.InvokeCalc(sym, args, scope)
+	}
+	for _, calc := range []string{"SamePart", "IdenticalPart"} {
+		_, err := invoke(calc, widget, widget)
+		if !errors.Is(err, ErrTypeMismatch) || !strings.Contains(err.Error(), "a DataValue") {
+			t.Errorf("%s = %v, want %v naming DataValue", calc, err, ErrTypeMismatch)
+		}
+	}
+	for calc, args := range map[string][]Value{"SameData": {point, point}, "SameAnything": {widget, widget}} {
+		got, err := invoke(calc, args...)
+		if err != nil || !valueIdentical(got, constBool(true)) {
+			t.Errorf("%s = %s, %v; want true", calc, FormatValue(got), err)
+		}
+	}
+}
+
+// testBaseIndexWithSeveralIndexes: BaseFunctions::'#' declares `Positive[1..*]`
+// indexes; several address an Array the runtime cannot represent, and none is a
+// multiplicity violation, so each is reported rather than indexed anyhow.
+func testBaseIndexWithSeveralIndexes(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			calc def Cell { return : Integer = BaseFunctions::'#'((1, 2, 3, 4), (2, 2)); }
+			calc def NoIndex { return : Integer = BaseFunctions::'#'((1, 2, 3, 4), ()); }
+		}
+	`
+	for calc, want := range map[string]error{"Cell": ErrUnevaluableLibraryFunction, "NoIndex": ErrMultiplicityViolation} {
+		err := calcErrorWithLibraries(t, src, calc, nil, 10000)
+		if !errors.Is(err, want) || !strings.Contains(err.Error(), "BaseFunctions::'#'") {
+			t.Errorf("%s = %v, want %v naming BaseFunctions::'#'", calc, err, want)
+		}
+	}
+}
+
+// testBodyByReferenceThatCannotBeApplied: a body reaching a built-in through an
+// `expr` parameter is applied in the scope it was written in, and one selected
+// by a control function that declares parameters is reported.
+func testBodyByReferenceThatCannotBeApplied(t *testing.T) {
+	src := `
+		package test {
+			private import ControlFunctions::*;
+			calc def Pick { in expr chosen; return : Integer = ControlFunctions::'if'(true, chosen, 0); }
+			calc def Keep { in xs : Integer[*]; in expr pred; return : Integer[*] = xs->select pred; }
+			calc def PicksUnary { return : Integer = Pick({ in x; x }); }
+			calc def KeepsUnbound { in xs : Integer[*]; return : Integer[*] = Keep(xs, { in x; x > bound }); }
+			calc def KeepsPriorFrame {
+				in xs : Integer[*];
+				in pred : Integer;
+				return : Integer[*] = Keep(xs, { in x; x > pred });
+			}
+		}
+	`
+	for _, tt := range []struct {
+		calc string
+		args []Value
+		want error
+	}{
+		{"PicksUnary", nil, ErrBodyArity},
+		{"KeepsUnbound", []Value{constSequence(1, 2)}, ErrUnresolvedReference},
+	} {
+		err := calcErrorWithLibraries(t, src, tt.calc, tt.args, 10000)
+		if !errors.Is(err, tt.want) {
+			t.Errorf("%s = %v, want %v", tt.calc, err, tt.want)
+		}
+	}
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	sym, scope := calcByName(t, idx.DocumentRoot("<test>"), "test", "KeepsPriorFrame")
+	got, err := ctx.InvokeCalc(sym, []Value{constSequence(1, 2, 3), constInt(1)}, scope)
+	if err != nil {
+		t.Fatalf("KeepsPriorFrame = %v", err)
+	}
+	if want := constSequence(2, 3); !valueIdentical(got, want) {
+		t.Errorf("KeepsPriorFrame = %s, want %s: the body's pred is its caller's Integer, not Keep's body", FormatValue(got), FormatValue(want))
+	}
+}
+
+// testRealLiteralThatUnderflows: a nonzero Real literal too small for a Real is
+// reported rather than read as zero.
+func testRealLiteralThatUnderflows(t *testing.T) {
+	for _, tt := range []struct {
+		expr string
+		want error
+	}{
+		{`1.0e-400`, semantics.ErrArithmeticOverflow},
+		{`1.0e400`, semantics.ErrArithmeticOverflow},
+		{`RealFunctions::ToReal("1e-400")`, semantics.ErrArithmeticOverflow},
+	} {
+		got, err := evalCollectionExpr(t, tt.expr)
+		if !errors.Is(err, tt.want) {
+			t.Errorf("%s = (%v, %v), want %v", tt.expr, got, err, tt.want)
+		}
+	}
+	got, err := evalCollectionExpr(t, `0.0e-400`)
+	if err != nil || got.Kind != ValConst || got.Const.Kind != semantics.ValReal || got.Const.Real != 0 {
+		t.Errorf("0.0e-400 = (%v, %v), want the Real 0", got, err)
 	}
 }
 
@@ -2510,7 +2795,7 @@ func testHistoryOutsideCompositeState(t *testing.T) {
 	}
 	fire(t, exec, "init", "away")
 
-	err := exec.fireTransition(transitionBetween(t, exec, "away", "H"))
+	_, err := exec.fireTransition(transitionBetween(t, exec, "away", "H"))
 	if err == nil {
 		t.Fatal("expected an error for a history outside any composite state")
 	}
@@ -2545,7 +2830,7 @@ func testHistoryWithoutRecordOrDefault(t *testing.T) {
 	}
 	fire(t, exec, "init", "away")
 
-	err := exec.fireTransition(transitionBetween(t, exec, "away", "H"))
+	_, err := exec.fireTransition(transitionBetween(t, exec, "away", "H"))
 	if err == nil {
 		t.Fatal("expected an error: nothing recorded and no default history transition")
 	}
@@ -2618,7 +2903,8 @@ func testSendViaConnectorIntoAnEmptyPart(t *testing.T) {
 // the assembly's boundary port, but nothing in the context joins that boundary
 // port, so the send reaches no receiving port. It is reported where the inner
 // machine sent it, the same as an unconnected port of the sender's own, rather
-// than dropped silently.
+// than dropped silently — and, as the inner part runs with the context it is
+// created under, the context's creation is what reports it.
 func testSendViaBoundBoundaryPortJoinedToNothing(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {`+directedPorts+`
 		part def Inner {
@@ -2639,16 +2925,15 @@ func testSendViaBoundBoundaryPortJoinedToNothing(t *testing.T) {
 			part env : Env;
 		}
 	}`))
-	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::ctx"))
-	if err != nil {
-		t.Fatalf("instantiate ctx: %v", err)
-	}
-	_, err = featureValueAtPath(t, ctx, inst, "asm.child")
+	_, err := ctx.Instantiate(oneSymbol(t, idx, "P::ctx"))
 	if !errors.Is(err, ErrUnroutableSend) {
-		t.Fatalf("materialize asm.child: err = %v, want %v", err, ErrUnroutableSend)
+		t.Fatalf("instantiate ctx: err = %v, want %v", err, ErrUnroutableSend)
 	}
 	if pending := ctx.PendingMessages(); len(pending) != 0 {
 		t.Errorf("pending messages = %+v, want none", pending)
+	}
+	if got := len(ctx.instances); got != 0 {
+		t.Errorf("%d object(s) survive the failed creation, want none", got)
 	}
 }
 
@@ -4279,6 +4564,27 @@ func testCalcUnknownNamedArgument(t *testing.T) {
 	}
 }
 
+// testCalcParameterNamedTwice: an invocation naming one parameter twice is
+// reported rather than binding the later value.
+func testCalcParameterNamedTwice(t *testing.T) {
+	src := `
+		package test {
+			calc def Scale { in x : Integer; in factor : Integer = 2; return : Integer = x * factor; }
+			calc twice { Scale(x = 1, x = 3, factor = 4) }
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "twice", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("twice calc not found")
+	}
+	_, err := ctx.InvokeCalc(sym, nil, rootScope)
+	if !errors.Is(err, ErrCalcArity) || !strings.Contains(err.Error(), `binds parameter "x" twice`) {
+		t.Errorf("expected ErrCalcArity naming x, got: %v", err)
+	}
+}
+
 // testCalcWithoutResult: a calc body with no return expression has no value to
 // produce, own or inherited.
 func testCalcWithoutResult(t *testing.T) {
@@ -5393,7 +5699,8 @@ func testAcceptPayloadWithoutAValue(t *testing.T) {
 
 // testAcceptPayloadReadBeforeItIsBound: the payload is a declaration of the body
 // wherever the body resolves, so a node running before the accept binds it
-// resolves the name and finds no value — reported, not read as an empty value.
+// resolves the name and finds no value — reported as a feature without a value,
+// not read as an empty value and not as a name that fails to resolve.
 func testAcceptPayloadReadBeforeItIsBound(t *testing.T) {
 	_, err := executeActionSource(t, "pipeline", `package P {
 		action pipeline {
@@ -5407,8 +5714,11 @@ func testAcceptPayloadReadBeforeItIsBound(t *testing.T) {
 			succession first waiter then done;
 		}
 	}`)
-	if !errors.Is(err, ErrUnresolvedReference) {
-		t.Fatalf("err = %v; want ErrUnresolvedReference", err)
+	if !errors.Is(err, ErrNoValue) {
+		t.Fatalf("err = %v; want ErrNoValue", err)
+	}
+	if errors.Is(err, ErrUnresolvedReference) {
+		t.Errorf("a declared payload was reported as unresolved: %v", err)
 	}
 	if !strings.Contains(err.Error(), "msg") {
 		t.Errorf("error does not name the payload: %v", err)
@@ -6709,6 +7019,30 @@ func testChainThroughAnUnselectedVariationPart(t *testing.T) {
 	got, err := variationFeatureValueInSource(t, src, "test::probe", "p")
 	if !errors.Is(err, ErrVariationUnselected) {
 		t.Errorf("p = (%v, %v), want ErrVariationUnselected", got, err)
+	}
+}
+
+// testClassifyAnUnselectedOptionalVariation: an optional variation nothing selects
+// a variant for is a choice, not an empty collection, so `istype` reports that
+// rather than vacuously matching every type.
+func testClassifyAnUnselectedOptionalVariation(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		part def Engine;
+		part def Motor :> Engine;
+		variation part engine : Engine[0..1] {
+			variant part electric : Motor;
+			variant part diesel : Engine;
+		}
+		attribute isMotor : Boolean = engine istype Motor;
+		attribute hasMotor : Boolean = engine hastype Motor;
+	}`
+	for _, probe := range []string{"test::isMotor", "test::hasMotor"} {
+		got, err := variationReadFromDeclaration(t, src, probe)
+		if !errors.Is(err, ErrVariationUnselected) {
+			t.Errorf("%s = (%v, %v), want ErrVariationUnselected", probe, got, err)
+		}
 	}
 }
 

@@ -16,7 +16,7 @@ import (
 
 // featuresUsage is how %features is written: an object, how far to expand what it
 // holds, and whether to write the listing as text or as JSON.
-const featuresUsage = "usage: %features <name> [all|depth <n>] [json]"
+const featuresUsage = "usage: %features <object> [all|depth <n>] [json]"
 
 // maxFeatureGraphInstances bounds a JSON listing as maxFeatureValueLines bounds a
 // text one, at the count the API serializes for one object.

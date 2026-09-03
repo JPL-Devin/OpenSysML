@@ -191,6 +191,7 @@ elmt:ThenAfterMembers__AfterFlow___401
     sysml:owningMembership elmt:ThenAfterMembers__AfterFlow___401_om ;
     sysx:relatedFeature expr:ThenAfterMembers__AfterFlow___401_pflowSource, expr:ThenAfterMembers__AfterFlow___401_pflowTarget ;
     sysx:endForm "fromTo" ;
+    sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        flow from a.y to b.x;\n" .
 
 elmt:ThenAfterMembers__AfterFlow___401_om
@@ -407,6 +408,7 @@ elmt:ThenAfterMembers__AfterBind___403
     sysml:value expr:ThenAfterMembers__AfterBind___403_pvalue ;
     sysx:endForm "equals" ;
     sysx:declaredKeyword "bind" ;
+    sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        bind k = m;\n" .
 
 elmt:ThenAfterMembers__AfterBind___403_om
@@ -833,6 +835,7 @@ elmt:ThenAfterMembers__AfterSuccession___402
     sysx:relatedFeature expr:ThenAfterMembers__AfterSuccession___402_pend0, expr:ThenAfterMembers__AfterSuccession___402_pend1 ;
     sysx:endForm "firstThen" ;
     sysx:endVerb "first" ;
+    sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        succession first a then c;\n" .
 
 elmt:ThenAfterMembers__AfterSuccession___402_om
@@ -1309,6 +1312,7 @@ elmt:ThenAfterMembers__AfterPerform___401
     sysml:owningMembership elmt:ThenAfterMembers__AfterPerform___401_om ;
     sysx:relatedFeature expr:ThenAfterMembers__AfterPerform___401_pflowSource, expr:ThenAfterMembers__AfterPerform___401_pflowTarget ;
     sysx:endForm "fromTo" ;
+    sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        flow from stride.y to b.x;\n" .
 
 elmt:ThenAfterMembers__AfterPerform___401_om
@@ -1471,6 +1475,7 @@ elmt:ThenAfterMembers__ThenAlone___401
     sysml:owningMembership elmt:ThenAfterMembers__ThenAlone___401_om ;
     sysx:relatedFeature expr:ThenAfterMembers__ThenAlone___401_pflowSource, expr:ThenAfterMembers__ThenAlone___401_pflowTarget ;
     sysx:endForm "fromTo" ;
+    sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        flow from a.y to b.x;\n" .
 
 elmt:ThenAfterMembers__ThenAlone___401_om

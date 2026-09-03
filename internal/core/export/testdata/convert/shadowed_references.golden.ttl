@@ -479,6 +479,7 @@ elmt:Shadowing__Bus__link
     sysx:relatedFeature expr:Shadowing__Bus__link_pend0, expr:Shadowing__Bus__link_pend1 ;
     sysx:endForm "to" ;
     sysx:endVerb "connect" ;
+    sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        connection link connect wrapped.payload to Shadowing::payload;\n" .
 
 elmt:Shadowing__Bus__link_om
@@ -551,6 +552,7 @@ elmt:Shadowing__Bus__budgeted
     sysx:declaredPrefix "assert" ;
     sysml:type elmt:Shadowing__Budget ;
     sysml:subject elmt:Shadowing__Bus__payload ;
+    sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        assert satisfy requirement budgeted : Shadowing::Budget by payload;\n" .
 
 elmt:Shadowing__Bus__budgeted_om
@@ -624,6 +626,7 @@ elmt:Shadowing___408
     sysml:subsets elmt:Shadowing__budget ;
     sysml:subject elmt:Shadowing__payload ;
     sysx:endForm "satisfy" ;
+    sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "    satisfy budget by payload;\n" .
 
 elmt:Shadowing___408_om

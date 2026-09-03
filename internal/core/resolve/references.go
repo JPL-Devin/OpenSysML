@@ -260,6 +260,9 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		// The node's own name is a label, not a reference.
 		c.add(scope, d.Successor)
 		c.expr(scope, d.Guard)
+		if child := c.childScope(scope, d); child != nil {
+			c.walkMembers(child, d.Members)
+		}
 		return true
 	case *ast.ConstraintMember:
 		c.expr(scope, d.Expression)
@@ -335,10 +338,18 @@ func (c *refCollector) behaviorDecl(scope *symbols.Scope, decl ast.Node) bool {
 		body := symbols.TriggerScope(scope, d)
 		c.expr(body, d.Guard)
 		c.walkMembers(body, d.Effect)
+		members := scope
+		if child := c.childScope(scope, d); child != nil {
+			members = child
+		}
+		c.walkMembers(members, d.Members)
 		return true
 	case *ast.InitialNode:
 		c.add(scope, d.Successor)
 		c.expr(scope, d.Guard)
+		if child := c.childScope(scope, d); child != nil {
+			c.walkMembers(child, d.Members)
+		}
 		return true
 	case *ast.SuccessionEdge:
 		c.edgeEnd(scope, d.Source, d.SourceMember, d.SourceImplied)

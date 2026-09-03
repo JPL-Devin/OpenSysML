@@ -182,16 +182,22 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 		}
 		return true
 	case *ast.InitialNode:
-		// Register initial node by name so transitions can reference it
-		if d.Name != "" {
+		// Register initial node by name so transitions can reference it; an
+		// unnamed one with a body owns a body-local scope for its members.
+		if d.Name == "" && len(d.Members) == 0 {
+			return true
+		}
+		child := NewScope(scope, d)
+		if d.Name == "" {
+			child.markBodyLocal()
+		} else {
 			id := ast.Identification{Name: d.Name}
-			child := NewScope(scope, d)
 			// Use attribute usage kind (control flow nodes are structural members)
 			sym := newSymbol(id, SymbolAttributeUsage, d, vis, child, scope, trivia)
 			defineIdent(scope, id, sym)
-			scope.AddChild(child)
-			buildMembers(child, d.Members)
 		}
+		scope.AddChild(child)
+		buildMembers(child, d.Members)
 		return true
 	case *ast.SendStatement:
 		// A send's body declares the node's own parameters, and the node is the
@@ -219,9 +225,10 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 		// A named transition is a feature of the state that declares it (SysML v2
 		// §7.19.2: TransitionUsage specializes ActionUsage), and its effect
 		// behaviors are features of the transition, so `t.effectAction` resolves.
-		// An unnamed transition owns a body-local scope for its effect instead.
+		// An unnamed transition owns a body-local scope for its effect and body
+		// members instead.
 		defineParams := triggerParameterDefiner(d.Trigger)
-		if d.Name == "" && len(d.Effect) == 0 && defineParams == nil {
+		if d.Name == "" && len(d.Effect) == 0 && len(d.Members) == 0 && defineParams == nil {
 			return true
 		}
 		child := NewScope(scope, d)
@@ -250,6 +257,9 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 			ownEffectMembers(child, body.AllMembers()[params:])
 		}
 		defineTransitionEffect(child, body, d)
+		// The body's members are features of the transition, outside the
+		// trigger's parameters.
+		buildMembers(child, d.Members)
 		return true
 	case *ast.StateRegion:
 		// A region is a namespace of its own: sibling regions routinely reuse

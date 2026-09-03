@@ -105,6 +105,61 @@ func TestWritingAConnectedPortIsReadThroughTheEnd(t *testing.T) {
 	}
 }
 
+// An optional or abstract connector links nothing of its own — it holds what a
+// connector subsetting it holds — while a required one still links its ends.
+func TestOptionalConnectorLinksNothingOfItsOwn(t *testing.T) {
+	inst, ctx := instantiatePart(t, "Sys", `
+		package test {
+			port def P;
+			part def A { port p : P; }
+			part def B { port q : P; }
+			connection def Link { end source : P; end target : P; }
+			part def Sys {
+				part a : A;
+				part b : B;
+				connection hitch : Link[0..1] connect a.p to b.q;
+				interface spare[0..1] connect a.p to b.q;
+				abstract connection links : Link[0..*];
+				connection fitted : Link[0..1] connect a.p to b.q;
+				connection tow : Link :> fitted connect a.p to b.q;
+				connection link : Link connect a.p to b.q;
+			}
+		}`)
+	before := len(ctx.instances)
+	for _, name := range []string{"hitch", "spare"} {
+		fv, err := inst.GetFeatureValue(ctx, name)
+		if err != nil {
+			t.Fatalf("sys.%s: %v", name, err)
+		}
+		if held := fv.HeldValue(); held.Kind != ValInvalid {
+			t.Errorf("sys.%s = %s, want no link", name, FormatValue(held))
+		}
+		if read, err := fv.ReadValue(name); err != nil || elementCount(&read) != 0 {
+			t.Errorf("sys.%s reads %s, %v; want the empty sequence", name, FormatValue(read), err)
+		}
+	}
+	links, err := inst.GetFeatureValue(ctx, "links")
+	if err != nil {
+		t.Fatalf("sys.links: %v", err)
+	}
+	if held := links.HeldValue(); held.Kind != ValSequence || elementCount(&held) != 0 {
+		t.Errorf("sys.links = %s, want an empty collection", FormatValue(held))
+	}
+	if n := len(ctx.instances); n != before {
+		t.Errorf("reading the optional connectors made %d object(s), want none", n-before)
+	}
+	tow := fvInstance(t, ctx, inst, "tow")
+	if got := fvInstance(t, ctx, inst, "fitted"); got.ID != tow.ID {
+		t.Errorf("sys.fitted is object %d, want the tow that subsets it (%d)", got.ID, tow.ID)
+	}
+	port := fvInstance(t, ctx, inst, "a", "p")
+	for _, name := range []string{"tow", "link"} {
+		if got := fvInstance(t, ctx, fvInstance(t, ctx, inst, name), "source"); got.ID != port.ID {
+			t.Errorf("%s.source is object %d, want a.p (%d)", name, got.ID, port.ID)
+		}
+	}
+}
+
 // An untyped connector usage names no definition, so its type is implicit
 // (SysML v2 §8.3.13): it materializes all the same, with the connected features
 // at its ends, rather than reading as an unknown value.
@@ -348,6 +403,420 @@ func testUnattachableConnectorEnd(t *testing.T) {
 	}
 	if !strings.Contains(endErr.Location, "<test>") {
 		t.Errorf("error is located at %q, want the file the end was written in", endErr.Location)
+	}
+	for _, id := range ctx.InstanceIDs() {
+		if obj, _ := ctx.Instance(id); obj.Ends != nil || obj.Type.Name == "link" {
+			t.Errorf("the connector that could not be attached was left behind as object %d", id)
+		}
+	}
+}
+
+// testUnattachableConnectorLeavesNoBehavior: a connector that cannot be attached
+// runs nothing either — the behaviors its type binds, started when the connector
+// was created, go with it, so a later run drains only surviving objects' work.
+func testUnattachableConnectorLeavesNoBehavior(t *testing.T) {
+	inst, ctx := instantiatePart(t, "Sys", `
+		package test {
+			port def P;
+			part def A { port p : P; }
+			connection def Link {
+				attribute n : Integer = 0;
+				exhibit state life { entry; then up; state up { entry action bump { assign n := 1; } } }
+			}
+			part def Sys {
+				part a : A;
+				connection link : Link connect a.p to a.missing;
+				connection ok : Link connect a.p to a.p;
+			}
+		}
+	`)
+	if _, err := inst.GetFeatureValue(ctx, "link"); !errors.Is(err, ErrConnectorEnd) {
+		t.Fatalf("expected ErrConnectorEnd, got: %v", err)
+	}
+	if got := len(ctx.objectBehaviors); got != 0 {
+		t.Errorf("%d behavior(s) left attached by the connector that could not be attached", got)
+	}
+	if got := len(ctx.pendingBehaviors); got != 0 {
+		t.Errorf("%d behavior(s) left queued by the connector that could not be attached", got)
+	}
+
+	ok := fvInstance(t, ctx, inst, "ok")
+	if got := len(ctx.objectBehaviors); got != 1 {
+		t.Errorf("%d behavior(s) attached, want the attached connector's alone", got)
+	}
+	if _, running := ok.ExhibitedState(); !running {
+		t.Error("the connector that attached exhibits no machine")
+	}
+	if got := featureInt(t, ctx, ok, "n"); got != 1 {
+		t.Errorf("n = %d, want 1 once the connector's machine entered up", got)
+	}
+}
+
+// testUnattachableConnectorAbandonsWhatItsEndsMaterialized: an object an earlier
+// end materialized goes with the connector a later end fails, its behaviors too.
+// The part is a package-level occurrence, materialized when an end first names it.
+func testUnattachableConnectorAbandonsWhatItsEndsMaterialized(t *testing.T) {
+	model, resolver, root := parseAndBuildModel(t, `
+		package test {
+			port def P;
+			part def Ticking {
+				port p : P;
+				exhibit state life { entry; then on; state on; }
+			}
+			part ticker : Ticking;
+			part def Sys {
+				connection link connect ticker.p to ticker.missing;
+			}
+		}
+	`)
+	pkg := resolveSymbol(t, root, "test")
+	ctx := NewContext(model, resolver, 10000)
+	inst, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "Sys"))
+	if err != nil {
+		t.Fatalf("Instantiate Sys: %v", err)
+	}
+	before := len(ctx.InstanceIDs())
+	if _, held := ctx.occurrences[resolveSymbol(t, pkg.Scope, "ticker")]; held {
+		t.Fatal("ticker was materialized with Sys: the end naming it materializes it")
+	}
+	if _, err := inst.GetFeatureValue(ctx, "link"); !errors.Is(err, ErrConnectorEnd) {
+		t.Fatalf("expected ErrConnectorEnd, got: %v", err)
+	}
+	if got := len(ctx.InstanceIDs()); got != before {
+		t.Errorf("%d object(s) held, want %d: the part the first end materialized is gone with the connector", got, before)
+	}
+	if got := len(ctx.objectBehaviors); got != 0 {
+		t.Errorf("%d behavior(s) left attached by the part the connector's first end materialized", got)
+	}
+	if got := len(ctx.pendingBehaviors); got != 0 {
+		t.Errorf("%d behavior(s) left queued by the part the connector's first end materialized", got)
+	}
+
+	ticker, err := ctx.occurrenceOf(resolveSymbol(t, pkg.Scope, "ticker"))
+	if err != nil {
+		t.Fatalf("occurrenceOf ticker: %v", err)
+	}
+	assertCurrentState(t, machineOf(t, ticker, "life").State, "on")
+	if got := len(ctx.objectBehaviors); got != 1 {
+		t.Errorf("%d behavior(s) attached once ticker is read on its own, want its machine alone", got)
+	}
+}
+
+// testUnattachableConnectorTouchesNoOtherObject: a connector that cannot attach
+// has sent no message and written nothing on the objects that survive it.
+func testUnattachableConnectorTouchesNoOtherObject(t *testing.T) {
+	model, resolver, root := parseAndBuildModel(t, `
+		package test {
+			item def Ping;
+			port def P;
+			part def A { port p : P; }
+			part def Listener {
+				attribute heard : Integer = 0;
+				exhibit state listening {
+					entry; then waiting;
+					state waiting { accept Ping then noted; }
+					state noted { entry action note { assign heard := heard + 1; } }
+				}
+			}
+			part good : Listener;
+			connection def Link {
+				exhibit state life { entry; then up; state up { entry send Ping() to good; } }
+			}
+			part def Sys {
+				part a : A;
+				connection link : Link connect a.p to a.missing;
+				connection ok : Link connect a.p to a.p;
+			}
+		}
+	`)
+	pkg := resolveSymbol(t, root, "test")
+	ctx := NewContext(model, resolver, 10000)
+	good, err := ctx.occurrenceOf(resolveSymbol(t, pkg.Scope, "good"))
+	if err != nil {
+		t.Fatalf("occurrenceOf good: %v", err)
+	}
+	inst, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "Sys"))
+	if err != nil {
+		t.Fatalf("Instantiate Sys: %v", err)
+	}
+	if _, err := inst.GetFeatureValue(ctx, "link"); !errors.Is(err, ErrConnectorEnd) {
+		t.Fatalf("expected ErrConnectorEnd, got: %v", err)
+	}
+	assertCurrentState(t, machineOf(t, good, "listening").State, "waiting")
+	if got := featureInt(t, ctx, good, "heard"); got != 0 {
+		t.Errorf("heard = %d after the connector that could not be attached, want 0: its behavior never ran", got)
+	}
+	if got := len(ctx.messages); got != 0 {
+		t.Errorf("%d message(s) left on the bus by the connector that could not be attached", got)
+	}
+
+	fvInstance(t, ctx, inst, "ok")
+	assertCurrentState(t, machineOf(t, good, "listening").State, "noted")
+	if got := featureInt(t, ctx, good, "heard"); got != 1 {
+		t.Errorf("heard = %d once the connector that attached ran, want 1", got)
+	}
+}
+
+// testConnectorWhoseStartFailsLeavesNoTrace: a connector whose own behavior
+// writes to and signals an older object before failing is undone whole — the
+// write, the signal and what the older object would have done on it — and a
+// connector whose start succeeds is answered by the older object once kept.
+func testConnectorWhoseStartFailsLeavesNoTrace(t *testing.T) {
+	model, resolver, root := parseAndBuildModel(t, `
+		package test {
+			item def Ping;
+			port def P;
+			part def Listener {
+				attribute heard : Integer = 0;
+				exhibit state listening {
+					entry; then waiting;
+					state waiting { accept Ping then noted; }
+					state noted { entry action note { assign heard := heard + 1; } }
+				}
+			}
+			part good : Listener;
+			part def A { port p : P; }
+			connection def Faulty {
+				exhibit state life {
+					entry; then poke;
+					state poke { entry action bump { assign good.heard := good.heard + 10; } }
+					transition first poke then ping;
+					state ping { entry send Ping() to good; }
+					transition first ping then fail;
+					state fail { entry action bad { assign good.nosuch := 1; } }
+				}
+			}
+			connection def Fine {
+				exhibit state life {
+					entry; then poke;
+					state poke { entry action bump { assign good.heard := good.heard + 10; } }
+					transition first poke then ping;
+					state ping { entry send Ping() to good; }
+				}
+			}
+			part def Sys {
+				part a : A;
+				connection faulty : Faulty connect a.p to a.p;
+				connection fine : Fine connect a.p to a.p;
+			}
+		}
+	`)
+	pkg := resolveSymbol(t, root, "test")
+	ctx := NewContext(model, resolver, 10000)
+	good, err := ctx.occurrenceOf(resolveSymbol(t, pkg.Scope, "good"))
+	if err != nil {
+		t.Fatalf("occurrenceOf good: %v", err)
+	}
+	inst, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "Sys"))
+	if err != nil {
+		t.Fatalf("Instantiate Sys: %v", err)
+	}
+	if _, err := inst.GetFeatureValue(ctx, "faulty"); !errors.Is(err, ErrNoSuchFeature) {
+		t.Fatalf("expected ErrNoSuchFeature from the connector's behavior, got: %v", err)
+	}
+	if fv := inst.FeatureValues["faulty"]; fv != nil && fv.Materialized {
+		t.Errorf("the connector whose start failed is held: %+v", fv)
+	}
+	assertCurrentState(t, machineOf(t, good, "listening").State, "waiting")
+	if got := featureInt(t, ctx, good, "heard"); got != 0 {
+		t.Errorf("heard = %d after the connector whose start failed, want 0: its write was undone", got)
+	}
+	if got := len(ctx.messages); got != 0 {
+		t.Errorf("%d message(s) left on the bus by the connector whose start failed", got)
+	}
+	if got := len(ctx.objectBehaviors) + len(ctx.pendingBehaviors); got != 1 {
+		t.Errorf("%d behavior(s) attached or pending besides good's machine", got-1)
+	}
+
+	fine := fvInstance(t, ctx, inst, "fine")
+	assertCurrentState(t, machineOf(t, fine, "life").State, "ping")
+	assertCurrentState(t, machineOf(t, good, "listening").State, "noted")
+	if got := featureInt(t, ctx, good, "heard"); got != 11 {
+		t.Errorf("heard = %d once a connector's start succeeded, want 11: its write kept and its signal answered", got)
+	}
+	if got := len(ctx.messages); got != 0 {
+		t.Errorf("%d message(s) left on the bus once the connector was kept and answered", got)
+	}
+}
+
+// testConnectorAnsweredByAFailingBehaviorIsKept: a connector created whole is
+// kept when an older object's behavior fails answering it — its write kept, its
+// object held under its feature, its behavior attached — and the failure is that
+// behavior's, reported once: reading the connector again neither fails nor reruns it.
+func testConnectorAnsweredByAFailingBehaviorIsKept(t *testing.T) {
+	model, resolver, root := parseAndBuildModel(t, `
+		package test {
+			item def Ping;
+			port def P;
+			part def Listener {
+				attribute heard : Integer = 0;
+				exhibit state listening {
+					entry; then waiting;
+					state waiting { accept Ping then noted; }
+					state noted { entry action note { assign heard := heard + nosuch; } }
+				}
+			}
+			part good : Listener;
+			part other : Listener;
+			part def A { port p : P; }
+			connection def Fine {
+				attribute pokes : Integer = 0;
+				exhibit state life {
+					entry; then poke;
+					state poke { entry action bump { assign good.heard := good.heard + 10; assign pokes := pokes + 1; } }
+					transition first poke then ping;
+					state ping { entry send Ping() to good; }
+				}
+			}
+			connection def Other {
+				exhibit state life { entry; then ping; state ping { entry send Ping() to other; } }
+			}
+			part def Sys {
+				part a : A;
+				connection fine : Fine connect a.p to a.p;
+				connection : Other connect a.p to a.p;
+			}
+		}
+	`)
+	pkg := resolveSymbol(t, root, "test")
+	ctx := NewContext(model, resolver, 10000)
+	good, err := ctx.occurrenceOf(resolveSymbol(t, pkg.Scope, "good"))
+	if err != nil {
+		t.Fatalf("occurrenceOf good: %v", err)
+	}
+	inst, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "Sys"))
+	if err != nil {
+		t.Fatalf("Instantiate Sys: %v", err)
+	}
+	if _, err := inst.GetFeatureValue(ctx, "fine"); !errors.Is(err, ErrUnresolvedReference) {
+		t.Fatalf("expected the listener's behavior to fail on its unresolved reference, got: %v", err)
+	}
+	fv := inst.FeatureValues["fine"]
+	if fv == nil || !fv.Materialized || fv.Value.Kind != ValInstance {
+		t.Fatalf("the connector the listener failed answering is not held: %+v", fv)
+	}
+	fine, live := ctx.Instance(fv.Value.Instance)
+	if !live {
+		t.Fatalf("the context does not hold connector %d", fv.Value.Instance)
+	}
+	if len(fine.Ends) != 2 {
+		t.Fatalf("the kept connector has %d end(s), want 2", len(fine.Ends))
+	}
+	for _, end := range fine.Ends {
+		if _, held := ctx.Instance(end.Value.Instance); end.Value.Kind != ValInstance || !held {
+			t.Errorf("end %q of the kept connector is not attached to a held object: %+v", end.Name, end.Value)
+		}
+	}
+	assertCurrentState(t, machineOf(t, fine, "life").State, "ping")
+	if got := featureInt(t, ctx, good, "heard"); got != 10 {
+		t.Errorf("heard = %d, want 10: the kept connector's write stays with the connector", got)
+	}
+	if got := featureInt(t, ctx, fine, "pokes"); got != 1 {
+		t.Errorf("pokes = %d, want 1: the connector's own write is kept", got)
+	}
+	if got := len(ctx.messages); got != 0 {
+		t.Errorf("%d message(s) left on the bus: the listener took the signal before failing", got)
+	}
+
+	again, err := inst.GetFeatureValue(ctx, "fine")
+	if err != nil {
+		t.Fatalf("reading the kept connector again: %v", err)
+	}
+	if again.Value.Instance != fine.ID {
+		t.Errorf("reading again holds connector %d, want %d: the kept one", again.Value.Instance, fine.ID)
+	}
+	if got := featureInt(t, ctx, fine, "pokes"); got != 1 {
+		t.Errorf("pokes = %d after reading again, want 1: the kept connector does not run again", got)
+	}
+
+	// An anonymous connector is kept the same way, in its slot.
+	if _, err := ctx.occurrenceOf(resolveSymbol(t, pkg.Scope, "other")); err != nil {
+		t.Fatalf("occurrenceOf other: %v", err)
+	}
+	if _, err := inst.OwnedConnectors(ctx); !errors.Is(err, ErrUnresolvedReference) {
+		t.Fatalf("expected the other listener's behavior to fail on its unresolved reference, got: %v", err)
+	}
+	if got := len(ctx.messages); got != 0 {
+		t.Errorf("%d message(s) left on the bus: the other listener took the signal before failing", got)
+	}
+	conns := inst.MaterializedConnectors(ctx)
+	if len(conns) != 1 {
+		t.Fatalf("the object holds %d anonymous connectors, want 1: the one the other listener failed answering", len(conns))
+	}
+	assertCurrentState(t, machineOf(t, conns[0], "life").State, "ping")
+	if again, err := inst.OwnedConnectors(ctx); err != nil || len(again) != 1 || again[0].ID != conns[0].ID {
+		t.Errorf("OwnedConnectors again = %v, %v; want the kept connector %d and no error", again, err, conns[0].ID)
+	}
+}
+
+// testUnattachableConnectorEndsRunNothingEarly: the behaviors of an object an
+// end materializes run only once every end is attached, so a later end's failure
+// leaves the objects that survive it exactly as they were.
+func testUnattachableConnectorEndsRunNothingEarly(t *testing.T) {
+	model, resolver, root := parseAndBuildModel(t, `
+		package test {
+			item def Ping;
+			port def P;
+			part def Listener {
+				attribute heard : Integer = 0;
+				exhibit state listening {
+					entry; then waiting;
+					state waiting { accept Ping then noted; }
+					state noted { entry action note { assign heard := heard + 1; } }
+				}
+			}
+			part good : Listener;
+			part def Pinger {
+				port p : P;
+				exhibit state life { entry; then up; state up { entry send Ping() to good; } }
+			}
+			part pinger : Pinger;
+			part def Sys {
+				connection link connect pinger.p to pinger.missing;
+				connection ok connect pinger.p to pinger.p;
+			}
+		}
+	`)
+	pkg := resolveSymbol(t, root, "test")
+	ctx := NewContext(model, resolver, 10000)
+	good, err := ctx.occurrenceOf(resolveSymbol(t, pkg.Scope, "good"))
+	if err != nil {
+		t.Fatalf("occurrenceOf good: %v", err)
+	}
+	inst, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "Sys"))
+	if err != nil {
+		t.Fatalf("Instantiate Sys: %v", err)
+	}
+	before := len(ctx.InstanceIDs())
+	if _, held := ctx.occurrences[resolveSymbol(t, pkg.Scope, "pinger")]; held {
+		t.Fatal("pinger was materialized with Sys: the end naming it materializes it")
+	}
+	if _, err := inst.GetFeatureValue(ctx, "link"); !errors.Is(err, ErrConnectorEnd) {
+		t.Fatalf("expected ErrConnectorEnd, got: %v", err)
+	}
+	if got := len(ctx.InstanceIDs()); got != before {
+		t.Errorf("%d object(s) held, want %d: the part the first end materialized is gone with the connector", got, before)
+	}
+	assertCurrentState(t, machineOf(t, good, "listening").State, "waiting")
+	if got := featureInt(t, ctx, good, "heard"); got != 0 {
+		t.Errorf("heard = %d after the connector that could not be attached, want 0: the part its first end materialized never ran", got)
+	}
+	if got := len(ctx.messages); got != 0 {
+		t.Errorf("%d message(s) left on the bus by the part the connector's first end materialized", got)
+	}
+	if got := len(ctx.objectBehaviors) + len(ctx.pendingBehaviors); got != 1 {
+		t.Errorf("%d behavior(s) attached or pending besides good's machine", got-1)
+	}
+
+	fvInstance(t, ctx, inst, "ok")
+	pinger, err := ctx.occurrenceOf(resolveSymbol(t, pkg.Scope, "pinger"))
+	if err != nil {
+		t.Fatalf("occurrenceOf pinger: %v", err)
+	}
+	assertCurrentState(t, machineOf(t, pinger, "life").State, "up")
+	assertCurrentState(t, machineOf(t, good, "listening").State, "noted")
+	if got := featureInt(t, ctx, good, "heard"); got != 1 {
+		t.Errorf("heard = %d once the connector that attached ran the part it materialized, want 1", got)
 	}
 }
 

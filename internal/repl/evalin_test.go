@@ -109,7 +109,7 @@ func TestEvalInFailuresAreTypedNotPanics(t *testing.T) {
 
 // %help documents the form, which is how a user finds it.
 func TestHelpDocumentsPinnedEval(t *testing.T) {
-	wants(t, joinLines(helpText()), "%eval", "in <name> :")
+	wants(t, joinLines(helpText()), "%eval", "in <name>|<path>|#<id> :")
 }
 
 // A pinned evaluation is one run, so the step budget bounds it as it bounds an
@@ -132,4 +132,193 @@ func TestEvalInInstanceIsBoundedByTheStepBudget(t *testing.T) {
 	wants(t, run(t, s, "%eval in Demo::Vehicle : "+expr), "step limit exceeded")
 	// The budget bounds one run, not the session.
 	wants(t, run(t, s, "%eval in Demo::Vehicle : mass + 1.0"), "= 1501")
+}
+
+// multiValuedModel declares features nothing gives a value to, single- and
+// multi-valued, beside ones that hold a value or name one object.
+const multiValuedModel = `private import ScalarValues::*;
+part def Wheel { attribute radius : Real = 0.3; }
+part def Car {
+	attribute mass : Real = 1500.0;
+	attribute unsetMass : Real;
+	attribute doubled : Real = unsetMass * 2.0;
+	attribute tags : String[3];
+	part w2 : Wheel;
+	part wheels : Wheel[4];
+}
+part car : Car;`
+
+// Before an object exists, a feature the declarations give no value to reads as
+// unset in its declaration scope, however many values it may hold: it resolves,
+// so it is never reported as an unresolved name.
+func TestEvalInDeclarationScopeReadsValuelessFeaturesAsUnset(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(multiValuedModel).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+	// What a value or one object answers is unchanged.
+	wants(t, run(t, s, "%eval in car : mass"), "mass (in car)", "= 1500.0")
+	wants(t, run(t, s, "%eval in car : w2.radius"), "= 0.3")
+
+	for _, expr := range []string{"wheels", "wheels.radius", "tags", "unsetMass"} {
+		got := run(t, s, "%eval in car : "+expr)
+		wants(t, got, "✓ "+expr+" (in car)", "= "+runtime.UnsetText)
+		rejects(t, got, "unresolved reference", "error")
+	}
+	// The type's own scope answers the same way as the usage's.
+	wants(t, run(t, s, "%eval in Car : wheels"), "= "+runtime.UnsetText)
+	// A name nothing declares is still the unresolved name it is.
+	wants(t, run(t, s, "%eval in car : nonexistent"), "unresolved reference: nonexistent")
+}
+
+// Only a bare read of a valueless feature is unset. An operation over one has no
+// result, and a feature whose value depends on one cannot be computed: both are
+// the evaluation failures they are, naming the feature that has no value.
+func TestEvalInDeclarationScopeDoesNotReadCompoundFailuresAsUnset(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(multiValuedModel).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+	for _, expr := range []string{"unsetMass + 1.0", "mass + unsetMass", "wheels.radius * 2.0", "doubled", "-unsetMass"} {
+		got := run(t, s, "%eval in car : "+expr)
+		wants(t, got, "error", "no value for feature")
+		rejects(t, got, "✓", "= "+runtime.UnsetText, "unresolved reference")
+	}
+	for _, expr := range []string{"car::unsetMass + 1.0", "car::doubled"} {
+		got := run(t, s, "%eval "+expr)
+		rejects(t, got, "✓", "= "+runtime.UnsetText, "has no value to evaluate")
+	}
+}
+
+// A feature whose own default fails is that failure, and a chain through it to a
+// member it does not have is unresolved, even when the feature the default could
+// not read happens to share the link's name: neither is unset.
+func TestEvalInDeclarationScopeChainIsNotUnsetForALinkOfAnotherName(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(`private import ScalarValues::*;
+package Defaults {
+    attribute b : Real;
+    attribute pick : Real = b + 1.0;
+}
+part def Car { attribute a : Real = Defaults::pick; }
+part car : Car;`).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+	got := run(t, s, "%eval in car : a")
+	wants(t, got, "error", "no value for feature b")
+	rejects(t, got, "✓", "= "+runtime.UnsetText)
+	got = run(t, s, "%eval in car : a.b")
+	wants(t, got, "error", "unresolved reference: a has no member b")
+	rejects(t, got, "✓", "= "+runtime.UnsetText)
+	rejects(t, run(t, s, "%eval car::a.b"), "✓", "= "+runtime.UnsetText, "has no value to evaluate")
+}
+
+// A chain from a valueless operand is unset only when every link names a member
+// of what precedes it: a member nothing declares, or a member of a scalar, is
+// the unresolved reference it is, whether or not the operand has a value.
+func TestEvalInDeclarationScopeChainOverValuelessOperandStillResolvesItsMembers(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(multiValuedModel).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+	for _, c := range []struct{ expr, member string }{
+		{"wheels.nonexistent", "wheels has no member nonexistent"},
+		{"wheels.radius.nonexistent", "radius has no member nonexistent"},
+		{"unsetMass.foo", "unsetMass has no member foo"},
+		{"tags.length", "tags has no member length"},
+	} {
+		got := run(t, s, "%eval in car : "+c.expr)
+		wants(t, got, "error", "unresolved reference: "+c.member)
+		rejects(t, got, "✓", "= "+runtime.UnsetText)
+		got = run(t, s, "%eval car::"+c.expr)
+		wants(t, got, "unresolved reference: "+c.member)
+		rejects(t, got, "✓", "= "+runtime.UnsetText, "has no value to evaluate")
+	}
+	// The valid chain over the same operand is still unset, not unresolved.
+	wants(t, run(t, s, "%eval in car : wheels.radius"), "✓ wheels.radius (in car)", "= "+runtime.UnsetText)
+}
+
+// A KerML type declaration — a class, struct, behavior, datatype or function —
+// is a type, not a feature: reading one in declaration scope is the error a
+// definition gets, never unset.
+func TestEvalInDeclarationScopeDoesNotReadTypeDeclarationsAsUnset(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(`private import ScalarValues::*;
+package K {
+    class Vehicle;
+    struct Frame;
+    behavior Drive;
+    datatype Mass;
+    function Twice { in x : Real; return r : Real = x * 2.0; }
+    part def Car { attribute unsetMass : Real; }
+    part car : Car;
+}`).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+	for _, name := range []string{"Vehicle", "Frame", "Drive", "Mass", "Twice", "Car"} {
+		got := run(t, s, "%eval in K::car : "+name)
+		wants(t, got, "error", "cannot evaluate definition "+name)
+		rejects(t, got, "✓", "= "+runtime.UnsetText, "unresolved reference", "no value")
+	}
+	wants(t, run(t, s, "%eval in K::car : unsetMass"), "✓ unsetMass (in K::car)", "= "+runtime.UnsetText)
+}
+
+// Once the object exists, the same features read the values it holds.
+func TestEvalInObjectReadsMultiValuedFeatures(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(multiValuedModel).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+	run(t, s, "%instantiate car")
+	wants(t, run(t, s, "%eval in car : wheels"), "(on car ID: ", "= [Instance(ID: ")
+	wants(t, run(t, s, "%eval in car : tags"), "= [<unset>, <unset>, <unset>]")
+	wants(t, run(t, s, "%eval in car : unsetMass"), "✓ unsetMass (on car ID: ", "= "+runtime.UnsetText)
+	wants(t, run(t, s, "%eval in car : wheels.radius"), "= [0.3, 0.3, 0.3, 0.3]")
+	rejects(t, run(t, s, "%eval in car : unsetMass + 1.0"), "✓", "= "+runtime.UnsetText)
+}
+
+// A qualified name the prompt reaches through a usage resolves whether or not
+// the feature holds a value, so a valueless one is reported as such.
+func TestEvalQualifiedValuelessFeatureIsNotUnresolved(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(multiValuedModel).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+	wants(t, run(t, s, "%eval car::mass"), "= 1500.0")
+	for _, expr := range []string{"car::wheels", "car::unsetMass"} {
+		got := run(t, s, "%eval "+expr)
+		wants(t, got, "has no value to evaluate")
+		rejects(t, got, "unresolved reference")
+	}
+	wants(t, run(t, s, "%eval car::nonexistent"), "unresolved reference")
+}
+
+// After %instantiate, every way of reading a feature of the object — a bare
+// expression, %eval pinned to the name, to the object's id and to a path under it
+// — reads the object that was created and run, not a fresh materialization.
+func TestReadsAfterInstantiateSeeTheRunObject(t *testing.T) {
+	s := loadFixture(t, "testdata/ping_counter.sysml")
+	wants(t, run(t, s, "%instantiate P::ctx"), "ID: 1")
+
+	bare, err := s.EvalBare("ctx.recv.got")
+	if err != nil {
+		t.Fatalf("ctx.recv.got: %v", err)
+	}
+	wants(t, joinLines(bare), "= 1")
+	wants(t, run(t, s, "%eval ctx.recv.got"), "= 1")
+	wants(t, run(t, s, "%eval in P::ctx : recv.got"), "recv.got (on P::ctx ID: 1)", "= 1")
+	wants(t, run(t, s, "%eval in #1 : recv.got"), "recv.got (on #1 ID: 1)", "= 1")
+	wants(t, run(t, s, "%eval in ctx.recv : got"), "got (on P::ctx.recv ID: ", "= 1")
+	wants(t, run(t, s, "%eval in P::ctx.recv : got + 1"), "= 2")
+	wants(t, run(t, s, "%features #1"), "got = 1")
+}
+
+// %eval in rejects an object form that names nothing the session holds the way
+// the other object-taking commands do, and its usage lists the accepted forms.
+func TestEvalInObjectFormErrors(t *testing.T) {
+	s := loadFixture(t, "testdata/ping_counter.sysml")
+	wants(t, run(t, s, "%eval in #1 : recv.got"), "error:", "#1")
+	run(t, s, "%instantiate P::ctx")
+	wants(t, run(t, s, "%eval in ctx.nowhere : got"), "error:", "nowhere")
+	wants(t, run(t, s, "%eval in"), "usage: %eval [in <qualified-name> | <object-path> | #<id> :] <expression>")
 }

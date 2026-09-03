@@ -90,6 +90,15 @@ func TestBehaviorBodyReferencesAreResolved(t *testing.T) {
 				transition first a do { assign v := zzz; } then b;
 			}
 		}`},
+		{"transition body member", `package P {
+			state S { entry; then i; state i; state a; state b; succession first i then a; transition t first a then b { attribute w : zzz; } }
+		}`},
+		{"unnamed transition body member", `package P {
+			state S { entry; then i; state i; state a; state b; succession first i then a; transition first a then b { attribute w : zzz; } }
+		}`},
+		{"initial succession body member", `package P {
+			action A { action a1; action a2; first a1 then a2 { attribute w : zzz; } }
+		}`},
 		{"action accept change trigger", `package P {
 			action A { first start; action wait accept when zzz > 1; done; succession first start then wait; succession first wait then done; }
 		}`},

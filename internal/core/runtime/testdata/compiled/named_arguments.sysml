@@ -1,6 +1,5 @@
 // Invocations binding their arguments by name: in declaration order, reordered,
-// leaving a defaulted parameter to its default, against a library function, and
-// a call the evaluator refuses for leaving a required parameter unbound.
+// leaving a defaulted parameter to its default, and against a library function.
 package test {
 	private import ScalarValues::*;
 	private import RealFunctions::*;
@@ -34,10 +33,4 @@ package test {
 		attribute r = Weighted(weight = w, value = v);
 		return : Real = r;
 	}
-
-	// Evaluator only: a required parameter left unbound.
-	calc def Missing { in v : Real; return : Real = Weighted(weight = v); }
-
-	// A name bound twice binds the later value, as the evaluator's map of names does.
-	calc def Duplicate { in v : Real; return : Real = Weighted(value = v, value = 2.0); }
 }

@@ -56,6 +56,14 @@ func (f frame) each(fn func(name string, value Value)) {
 	}
 }
 
+// snapshot copies the frame's bindings into storage of its own, unchanged by
+// whatever later reuses the frame's.
+func (f frame) snapshot() frame {
+	vars := make(map[string]Value, f.width())
+	f.each(func(name string, value Value) { vars[name] = value })
+	return mapFrame(vars)
+}
+
 // width is the number of names the frame binds.
 func (f frame) width() int {
 	n := len(f.vars)

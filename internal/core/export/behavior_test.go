@@ -388,7 +388,7 @@ func TestSubactionDoSurvivesWithoutASpace(t *testing.T) {
 		}
 		// With its source text the graph comes back as written; without, as the
 		// printer writes the keyword the graph recorded.
-		if back, want := toNotation(t, turtle), formatted(t, src); back != want {
+		if back, want := toNotation(t, turtle), src; back != want {
 			t.Fatalf("%q did not come back as written:\n--- want ---\n%s--- got ---\n%s", subaction, want, back)
 		}
 		back := toNotation(t, withoutTriples(t, turtle, "sysx:sourceText"))

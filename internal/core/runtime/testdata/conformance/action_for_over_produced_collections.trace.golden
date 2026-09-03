@@ -19,17 +19,21 @@ stmt for i
         eval feature i -> 3
       eval operator + -> 6
 stmt for x
-    eval feature xs -> (1, 2, 3)
-    eval body -> expr(body)
-      eval feature y -> 1
-      eval literal 1 -> 1
-    eval operator > -> false
-      eval feature y -> 2
-      eval literal 1 -> 1
-    eval operator > -> true
-      eval feature y -> 3
-      eval literal 1 -> 1
-    eval operator > -> true
+    enter calc ControlFunctions::select
+      eval feature xs -> (1, 2, 3)
+      eval body -> expr(body)
+      bind collection = (1, 2, 3) [argument]
+      bind selector = expr(body) [argument]
+        eval feature y -> 1
+        eval literal 1 -> 1
+      eval operator > -> false
+        eval feature y -> 2
+        eval literal 1 -> 1
+      eval operator > -> true
+        eval feature y -> 3
+        eval literal 1 -> 1
+      eval operator > -> true
+    exit calc ControlFunctions::select -> (2, 3)
   eval invoke select -> (2, 3)
   iteration 1
     stmt assign filtered
@@ -46,19 +50,23 @@ stmt for c
     enter calc test::Above
       bind n = 3 [argument]
       stmt return
-            eval literal 1 -> 1
-            eval feature n -> 3
-          eval operator .. -> (1, 2, 3)
-          eval body -> expr(body)
-            eval feature i -> 1
-            eval literal 1 -> 1
-          eval operator > -> false
-            eval feature i -> 2
-            eval literal 1 -> 1
-          eval operator > -> true
-            eval feature i -> 3
-            eval literal 1 -> 1
-          eval operator > -> true
+          enter calc ControlFunctions::select
+              eval literal 1 -> 1
+              eval feature n -> 3
+            eval operator .. -> (1, 2, 3)
+            eval body -> expr(body)
+            bind collection = (1, 2, 3) [argument]
+            bind selector = expr(body) [argument]
+              eval feature i -> 1
+              eval literal 1 -> 1
+            eval operator > -> false
+              eval feature i -> 2
+              eval literal 1 -> 1
+            eval operator > -> true
+              eval feature i -> 3
+              eval literal 1 -> 1
+            eval operator > -> true
+          exit calc ControlFunctions::select -> (2, 3)
         eval invoke select -> (2, 3)
     exit calc test::Above -> (2, 3)
   eval invoke Above -> (2, 3)
