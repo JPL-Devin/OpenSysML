@@ -1922,6 +1922,7 @@ func TestShadowingParametersStayNames(t *testing.T) {
 // A chain member inherited by the operand's type from two generals under one
 // name comes back qualified, so the spelling reaches the linked one — behind a
 // nested chain too; a member reached under its name alone comes back as that name.
+// One the operand's own members and types do not reach keeps its qualification too.
 func TestChainMembersKeepTheirQualificationWhenAmbiguous(t *testing.T) {
 	turtle := toTurtle(t, filepath.Join("testdata", "convert", "chain_scopes.sysml"))
 	for _, want := range []string{
@@ -1934,7 +1935,7 @@ func TestChainMembersKeepTheirQualificationWhenAmbiguous(t *testing.T) {
 		}
 	}
 	back := backFromTheGraphAlone(t, turtle)
-	for _, want := range []string{"attribute a = w.Gen::G1::x;", "attribute b = w.Gen::G2::x;", "attribute c = w.y;", "attribute d = axle.hub.Gen::G2::x;", "attribute e = axle.hub.y;"} {
+	for _, want := range []string{"attribute a = w.Gen::G1::x;", "attribute b = w.Gen::G2::x;", "attribute c = w.y;", "attribute d = axle.hub.Gen::G2::x;", "attribute e = axle.hub.y;", "attribute f = spare.Gen::G1::y;"} {
 		if !strings.Contains(back, want) {
 			t.Errorf("the notation should read %q\n%s", want, back)
 		}

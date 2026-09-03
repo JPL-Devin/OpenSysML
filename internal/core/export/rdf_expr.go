@@ -536,7 +536,7 @@ func (d *decoder) chainMember(node rdf.Term, scope string) (string, error) {
 	if !ok {
 		return d.referenceName(object, scope)
 	}
-	if named := d.operandMembersNamed(operand, name); len(named) > 0 && (len(named) > 1 || named[0] != target) {
+	if named := d.operandMembersNamed(operand, name); len(named) != 1 || named[0] != target {
 		return d.referenceName(object, scope)
 	}
 	return qualifiedNameText(name), nil

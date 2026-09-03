@@ -20,5 +20,7 @@ package Chains {
         attribute c = w.y;
         attribute d = axle.hub.Gen::G2::x;
         attribute e = axle.hub.y;
+        part spare :> w;
+        attribute f = spare.y;
     }
 }

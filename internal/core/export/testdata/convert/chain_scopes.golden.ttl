@@ -256,11 +256,11 @@ elmt:Chains__Car
     sysml:owningMembership elmt:Chains__Car_om ;
     sysml:declaredName "Car" ;
     sysx:hasBody "true"^^xsd:boolean ;
-    sysml:ownedMember elmt:Chains__Car__w, elmt:Chains__Car__axle, elmt:Chains__Car__a, elmt:Chains__Car__b, elmt:Chains__Car__c, elmt:Chains__Car__d, elmt:Chains__Car__e ;
-    sysml:ownedMembership elmt:Chains__Car__w_om, elmt:Chains__Car__axle_om, elmt:Chains__Car__a_om, elmt:Chains__Car__b_om, elmt:Chains__Car__c_om, elmt:Chains__Car__d_om, elmt:Chains__Car__e_om ;
-    sysml:ownedRelationship elmt:Chains__Car__w_om, elmt:Chains__Car__axle_om, elmt:Chains__Car__a_om, elmt:Chains__Car__b_om, elmt:Chains__Car__c_om, elmt:Chains__Car__d_om, elmt:Chains__Car__e_om ;
-    sysml:ownedFeature elmt:Chains__Car__w, elmt:Chains__Car__axle, elmt:Chains__Car__a, elmt:Chains__Car__b, elmt:Chains__Car__c, elmt:Chains__Car__d, elmt:Chains__Car__e ;
-    sysml:ownedFeatureMembership elmt:Chains__Car__w_om, elmt:Chains__Car__axle_om, elmt:Chains__Car__a_om, elmt:Chains__Car__b_om, elmt:Chains__Car__c_om, elmt:Chains__Car__d_om, elmt:Chains__Car__e_om ;
+    sysml:ownedMember elmt:Chains__Car__w, elmt:Chains__Car__axle, elmt:Chains__Car__a, elmt:Chains__Car__b, elmt:Chains__Car__c, elmt:Chains__Car__d, elmt:Chains__Car__e, elmt:Chains__Car__spare, elmt:Chains__Car__f ;
+    sysml:ownedMembership elmt:Chains__Car__w_om, elmt:Chains__Car__axle_om, elmt:Chains__Car__a_om, elmt:Chains__Car__b_om, elmt:Chains__Car__c_om, elmt:Chains__Car__d_om, elmt:Chains__Car__e_om, elmt:Chains__Car__spare_om, elmt:Chains__Car__f_om ;
+    sysml:ownedRelationship elmt:Chains__Car__w_om, elmt:Chains__Car__axle_om, elmt:Chains__Car__a_om, elmt:Chains__Car__b_om, elmt:Chains__Car__c_om, elmt:Chains__Car__d_om, elmt:Chains__Car__e_om, elmt:Chains__Car__spare_om, elmt:Chains__Car__f_om ;
+    sysml:ownedFeature elmt:Chains__Car__w, elmt:Chains__Car__axle, elmt:Chains__Car__a, elmt:Chains__Car__b, elmt:Chains__Car__c, elmt:Chains__Car__d, elmt:Chains__Car__e, elmt:Chains__Car__spare, elmt:Chains__Car__f ;
+    sysml:ownedFeatureMembership elmt:Chains__Car__w_om, elmt:Chains__Car__axle_om, elmt:Chains__Car__a_om, elmt:Chains__Car__b_om, elmt:Chains__Car__c_om, elmt:Chains__Car__d_om, elmt:Chains__Car__e_om, elmt:Chains__Car__spare_om, elmt:Chains__Car__f_om ;
     sysx:sourceText "    part def Car {\n" ;
     sysx:sourceTail "    }\n" .
 
@@ -540,4 +540,70 @@ expr:Chains__Car__e_pvalue_pa0_pa0
     sysx:sourceText "axle" ;
     sysml:elementId "Chains__Car__e_pvalue_pa0_pa0" ;
     sysml:referent elmt:Chains__Car__axle ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+elmt:Chains__Car__spare
+    a sysml:PartUsage ;
+    sysml:qualifiedName "Chains::Car::spare" ;
+    sysml:elementId "Chains__Car__spare" ;
+    sysx:memberIndex "7"^^xsd:integer ;
+    sysml:owningNamespace elmt:Chains__Car ;
+    sysml:owner elmt:Chains__Car ;
+    sysml:owningRelationship elmt:Chains__Car__spare_om ;
+    sysml:owningMembership elmt:Chains__Car__spare_om ;
+    sysml:declaredName "spare" ;
+    sysml:subsets elmt:Chains__Car__w ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part spare :> w;\n" .
+
+elmt:Chains__Car__spare_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Chains__Car__spare_om" ;
+    sysml:owner elmt:Chains__Car ;
+    sysml:memberElement elmt:Chains__Car__spare ;
+    sysml:ownedMemberElement elmt:Chains__Car__spare ;
+    sysml:ownedRelatedElement elmt:Chains__Car__spare ;
+    sysml:owningRelatedElement elmt:Chains__Car ;
+    sysml:membershipOwningNamespace elmt:Chains__Car ;
+    sysml:ownedMemberFeature elmt:Chains__Car__spare ;
+    sysml:owningType elmt:Chains__Car .
+
+elmt:Chains__Car__f
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "Chains::Car::f" ;
+    sysml:elementId "Chains__Car__f" ;
+    sysx:memberIndex "8"^^xsd:integer ;
+    sysml:owningNamespace elmt:Chains__Car ;
+    sysml:owner elmt:Chains__Car ;
+    sysml:owningRelationship elmt:Chains__Car__f_om ;
+    sysml:owningMembership elmt:Chains__Car__f_om ;
+    sysml:declaredName "f" ;
+    sysml:value expr:Chains__Car__f_pvalue ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute f = spare.y;\n" .
+
+elmt:Chains__Car__f_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "Chains__Car__f_om" ;
+    sysml:owner elmt:Chains__Car ;
+    sysml:memberElement elmt:Chains__Car__f ;
+    sysml:ownedMemberElement elmt:Chains__Car__f ;
+    sysml:ownedRelatedElement elmt:Chains__Car__f ;
+    sysml:owningRelatedElement elmt:Chains__Car ;
+    sysml:membershipOwningNamespace elmt:Chains__Car ;
+    sysml:ownedMemberFeature elmt:Chains__Car__f ;
+    sysml:owningType elmt:Chains__Car .
+
+expr:Chains__Car__f_pvalue
+    a sysml:FeatureChainExpression ;
+    sysx:sourceText "spare.y" ;
+    sysml:elementId "Chains__Car__f_pvalue" ;
+    sysml:argument expr:Chains__Car__f_pvalue_pa0 ;
+    sysml:targetFeature elmt:Gen__G1__y .
+
+expr:Chains__Car__f_pvalue_pa0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "spare" ;
+    sysml:elementId "Chains__Car__f_pvalue_pa0" ;
+    sysml:referent elmt:Chains__Car__spare ;
     sysx:argumentIndex "0"^^xsd:integer .
