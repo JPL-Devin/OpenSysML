@@ -405,6 +405,10 @@ func (e *stmtEngine) blockNode(graph *lower.ActionGraph, node ast.Node) (stmtFlo
 // nodeInBlock runs a nested action of a block's flow for a host keeping no
 // performances: its features are declared in a frame of the body its body runs in.
 func (e *stmtEngine) nodeInBlock(graph *lower.ActionGraph, node *ast.Usage) (stmtFlow, error) {
+	if connectsPins(graph, node) {
+		return flowNext, fmt.Errorf("%s: a binding or flow at a pin of %s in a body is not executable",
+			e.host.describe(), nodeDescription(node))
+	}
 	e.env.enter()
 	defer e.env.leave()
 	defer e.enterActivation()()
@@ -419,6 +423,26 @@ func (e *stmtEngine) nodeInBlock(graph *lower.ActionGraph, node *ast.Usage) (stm
 		e.env.declare(feature.Name, value)
 	}
 	return e.run(graph.Bodies[node])
+}
+
+// connectsPins reports whether graph states a binding or flow at a pin of node.
+func connectsPins(graph *lower.ActionGraph, node ast.Node) bool {
+	for _, binding := range graph.Bindings {
+		if binding.Node == node {
+			return true
+		}
+	}
+	if len(graph.DataFlows[node]) > 0 {
+		return true
+	}
+	for _, flows := range graph.DataFlows {
+		for _, flow := range flows {
+			if flow.Target == node {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // enterActivation runs what follows in a new activation and returns the

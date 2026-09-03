@@ -1,6 +1,7 @@
 package lower
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -230,6 +231,64 @@ func TestNestedActionParametersAreLowered(t *testing.T) {
 		if got.Name != want.name || got.Direction != want.direction || (got.Value != nil) != want.valued {
 			t.Errorf("feature %d lowered to %#v, want %s %s valued=%v", i, got, want.direction, want.name, want.valued)
 		}
+	}
+}
+
+func TestBlockBindingsAndFlowsAtItsNodesPinsAreLoweredIntoItsFlow(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action test {
+			attribute total : Integer = 0;
+			first start;
+			action accumulate {
+				for i in 1..3 {
+					bind dbl.a = i;
+					action dbl { in a : Integer; out sum : Integer; assign sum := a + a; }
+					flow dbl.sum to acc.n;
+					action acc { in n : Integer; assign total := total + n; }
+					bind acc = total;
+				}
+			}
+			done;
+			succession first start then accumulate;
+			succession first accumulate then done;
+		}
+	`)
+
+	block := loopBodyOf(t, graph, "accumulate")
+	if block.Graph == nil {
+		t.Fatalf("loop body lowered to statements, want a flow of its own: %#v", block)
+	}
+	flow := block.Graph
+	var actions []ast.Node
+	for _, node := range flow.Nodes {
+		if !flow.StatementRuns[node] {
+			actions = append(actions, node)
+		}
+	}
+	if len(actions) != 2 {
+		t.Fatalf("block flow holds %d action nodes, want dbl and acc: %#v", len(actions), actions)
+	}
+	dbl, acc := actions[0], actions[1]
+	if len(flow.Bindings) != 1 || flow.Bindings[0].Node != dbl || flow.Bindings[0].Pin != "a" {
+		t.Errorf("block flow lowered bindings %#v, want the one at dbl.a", flow.Bindings)
+	}
+	flows := flow.DataFlows[dbl]
+	if len(flows) != 1 || flows[0].SourcePin != "sum" || flows[0].Target != acc || flows[0].TargetPin != "n" {
+		t.Errorf("block flow lowered object flows %#v, want dbl.sum to acc.n", flows)
+	}
+	var unsupported []Unsupported
+	for _, node := range flow.Nodes {
+		if !flow.StatementRuns[node] {
+			continue
+		}
+		for _, stmt := range flow.Bodies[node] {
+			if u, ok := stmt.(Unsupported); ok {
+				unsupported = append(unsupported, u)
+			}
+		}
+	}
+	if len(unsupported) != 1 || !strings.Contains(unsupported[0].Description, "names an action node but no pin of it") {
+		t.Errorf("block flow reports %#v, want the binding at acc itself as unsupported", unsupported)
 	}
 }
 

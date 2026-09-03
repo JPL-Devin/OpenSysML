@@ -1,0 +1,11 @@
+{
+	"type": "action",
+	"evaluate": "test::outer",
+	"outputs": {
+		"total": {"type": "Integer", "value": 12},
+		"iterate.dbl.a": {"type": "Integer", "value": 3},
+		"iterate.dbl.b": {"type": "Integer", "value": 3},
+		"iterate.dbl.sum": {"type": "Integer", "value": 6},
+		"iterate.acc.n": {"type": "Integer", "value": 6}
+	}
+}

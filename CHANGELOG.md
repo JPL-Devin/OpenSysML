@@ -86,7 +86,12 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   invocation; read `n` itself, or type the usage. An action declared in an `if` branch or a
   loop body is a performance of its own like any other node, with the block's locals (a loop
   variable) in reach, so a sibling in the branch reads its pins as `p.v` and `Results()`
-  reports them under its path (`iterate.square.s`), the latest iteration's standing for it. A
+  reports them under its path (`iterate.square.s`), the latest iteration's standing for it; a
+  `bind` or `flow` written in the branch or body at such a node's pin is applied per
+  performance (`bind dbl.a = i` seeds each iteration's node from its loop variable) where
+  before it failed as a statement a body cannot run. A `perform` in statement form and a
+  state's entry/do/exit action now refuse an `in` without a default that nothing binds
+  (`ErrUnboundParameter`) instead of failing later inside the callee. A
   default an action inherits from a generalization (`action def Derived :> Base` with Base's
   `in x : Integer = 3;`) is seeded when the performance starts, as an owned default is, evaluated
   where it was declared and reading a parameter the action redefines as redefined — before the

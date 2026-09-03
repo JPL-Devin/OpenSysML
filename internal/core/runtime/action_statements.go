@@ -146,7 +146,10 @@ func (h *actionStmtHost) performNode(engine *stmtEngine, graph *lower.ActionGrap
 	if err := h.exec.executeBody(perf, graph, node); err != nil {
 		return flowNext, err
 	}
-	return flowNext, h.exec.endPerformance(perf)
+	if err := h.exec.endPerformance(perf); err != nil {
+		return flowNext, err
+	}
+	return flowNext, h.exec.applyDataFlows(h.perf, graph, node, perf.data)
 }
 
 // declaredOutput reports no output features: an action node's parameters live

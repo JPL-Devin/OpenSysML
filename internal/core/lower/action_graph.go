@@ -499,7 +499,7 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 			})
 		case *ast.Usage:
 			if n.Kind == ast.UsageBinding {
-				bindings, err := lowerPinBindings(graph, n, scope)
+				bindings, err := lowerPinBindings(graph.Nodes, n, scope)
 				if err != nil {
 					return nil, err
 				}
@@ -583,15 +583,15 @@ func resolveFirstNode(graph *ActionGraph) (map[*ast.InitialNode]ast.Node, error)
 }
 
 // lowerPinBindings lowers a binding to one PinBinding per end that addresses a
-// pin of a node of this graph; a binding addressing no node lowers to nothing.
-func lowerPinBindings(graph *ActionGraph, u *ast.Usage, scope *symbols.Scope) ([]PinBinding, error) {
+// pin of one of nodes; a binding addressing no node lowers to nothing.
+func lowerPinBindings(nodes []ast.Node, u *ast.Usage, scope *symbols.Scope) ([]PinBinding, error) {
 	binding, ok := lowerBinding(u, scope)
 	if !ok {
 		return nil, nil
 	}
 	var out []PinBinding
 	for i, end := range binding.Ends {
-		node, pin := flowEnd(graph.Nodes, end.Expr)
+		node, pin := flowEnd(nodes, end.Expr)
 		if node == nil {
 			continue
 		}
@@ -599,7 +599,7 @@ func lowerPinBindings(graph *ActionGraph, u *ast.Usage, scope *symbols.Scope) ([
 			return nil, fmt.Errorf("binding end %s names an action node but no pin of it", flowEndText(end.Expr))
 		}
 		other := binding.Ends[1-i].Expr
-		otherNode, otherPin := flowEnd(graph.Nodes, other)
+		otherNode, otherPin := flowEnd(nodes, other)
 		out = append(out, PinBinding{
 			Node:      node,
 			Pin:       pin,

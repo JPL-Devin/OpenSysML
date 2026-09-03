@@ -1,6 +1,8 @@
 package lower
 
 import (
+	"fmt"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -88,6 +90,10 @@ func lowerBlockFlow(members []ast.Node, scope *symbols.Scope, nodeBody bool) *Ac
 		StatementRuns: make(map[ast.Node]bool),
 	}
 
+	// The action nodes are known up front so that a connector written before the
+	// node it addresses (`bind add.a = x;` above `action add`) still finds it.
+	nodes := flowNodesAmong(members)
+
 	// run is the node the statements written between two action nodes belong to:
 	// they are one step of the flow, sharing the frame the block gives it.
 	var run ast.Node
@@ -102,7 +108,7 @@ func lowerBlockFlow(members []ast.Node, scope *symbols.Scope, nodeBody bool) *Ac
 			lowerFlowNode(graph, actual, scope)
 			continue
 		}
-		stmt, states := blockMemberStatement(actual, scope, nodeBody)
+		stmt, states := blockStep(graph, nodes, actual, scope, nodeBody)
 		if !states {
 			continue
 		}
@@ -114,8 +120,6 @@ func lowerBlockFlow(members []ast.Node, scope *symbols.Scope, nodeBody bool) *Ac
 		graph.Bodies[run] = append(graph.Bodies[run], stmt)
 	}
 
-	// A block states no connections of its own: a connector written among its
-	// members stays a statement, reported when reached.
 	if len(graph.Nodes) > 0 {
 		graph.Initial = graph.Nodes[0]
 	}
@@ -230,6 +234,69 @@ func lowerNestedNode(graph *ActionGraph, node *ast.Usage, scope *symbols.Scope) 
 		if stmt, states := blockMemberStatement(actual, scope, true); states {
 			graph.Bodies[node] = append(graph.Bodies[node], stmt)
 		}
+	}
+}
+
+// flowNodesAmong returns the members of a block that are nodes of its flow, in
+// declaration order.
+func flowNodesAmong(members []ast.Node) []ast.Node {
+	var nodes []ast.Node
+	for _, member := range members {
+		if actual := unwrapMembership(member); actual != nil && isFlowNode(actual) {
+			nodes = append(nodes, actual)
+		}
+	}
+	return nodes
+}
+
+// blockStep lowers a member of a block's flow that is not a node of it, and reports
+// whether it states a step: a connector at a node's pin is part of the flow, not a step.
+func blockStep(graph *ActionGraph, nodes []ast.Node, member ast.Node, scope *symbols.Scope, nodeBody bool) (Statement, bool) {
+	if usage, ok := member.(*ast.Usage); ok {
+		if stmt, connects := lowerBlockConnector(graph, nodes, usage, scope); connects {
+			return stmt, stmt != nil
+		}
+	}
+	return blockMemberStatement(member, scope, nodeBody)
+}
+
+// lowerBlockConnector lowers a binding or flow at a pin of one of the block's nodes into
+// graph and reports whether u is one; one that cannot be lowered becomes an Unsupported step.
+func lowerBlockConnector(graph *ActionGraph, nodes []ast.Node, u *ast.Usage, scope *symbols.Scope) (Statement, bool) {
+	switch {
+	case u.Kind == ast.UsageBinding:
+		bindings, err := lowerPinBindings(nodes, u, scope)
+		if err != nil {
+			return unsupportedConnector(u, scope, err), true
+		}
+		if len(bindings) == 0 {
+			return nil, false
+		}
+		graph.Bindings = append(graph.Bindings, bindings...)
+		return nil, true
+	case u.Kind == ast.UsageFlow && u.FlowEnds != nil:
+		from, _ := flowEnd(nodes, u.FlowEnds.From)
+		to, _ := flowEnd(nodes, u.FlowEnds.To)
+		if from == nil && to == nil {
+			return nil, false
+		}
+		source, flow, err := lowerFlow(nodes, u)
+		if err != nil {
+			return unsupportedConnector(u, scope, err), true
+		}
+		graph.DataFlows[source] = append(graph.DataFlows[source], flow)
+		return nil, true
+	}
+	return nil, false
+}
+
+// unsupportedConnector is the step a connector that could not be lowered becomes,
+// so that reaching it reports why.
+func unsupportedConnector(u *ast.Usage, scope *symbols.Scope, err error) Statement {
+	return Unsupported{
+		Description: fmt.Sprintf("%s (%v)", usageDescription(u), err),
+		Node:        u,
+		Scope:       scope,
 	}
 }
 

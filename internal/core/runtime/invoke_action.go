@@ -91,7 +91,8 @@ func invokeAction(
 	ctx.actionDepth++
 	defer func() { ctx.actionDepth-- }()
 
-	in, out := parameterNames(ctx.actionParametersOf(sym))
+	params := ctx.actionParametersOf(sym)
+	in, out := parameterNames(params)
 	inputs := make(map[string]Value, len(in))
 	if inv.invoked {
 		ec := NewEvalContext(ctx, scope)
@@ -108,6 +109,9 @@ func invokeAction(
 				inputs[name] = value
 			}
 		}
+	}
+	if err := checkInputsBound(inv, params, inputs); err != nil {
+		return nil, err
 	}
 
 	results, err := ctx.ExecuteActionPerformedBy(sym, self, inputs)

@@ -427,6 +427,21 @@ func (e *ActionExecutor) evalContextFor(perf *actionFrame, scope *symbols.Scope)
 	return ec
 }
 
+// evalContextAround returns a context evaluating in scope what is written at perf's
+// node: the enclosing performances and the block-locals around the node, not perf's own.
+func (e *ActionExecutor) evalContextAround(perf *actionFrame, scope *symbols.Scope) *EvalContext {
+	ec := NewEvalContextIn(e.ctx, scope, e.self)
+	if perf.parent != nil {
+		for _, f := range perf.parent.lexicalFrames() {
+			ec.pushFrame(f)
+		}
+	}
+	for _, local := range perf.locals {
+		ec.pushFrame(mapFrame(local))
+	}
+	return ec
+}
+
 // lexicalValues merges the values a performance and the frames around it hold,
 // the innermost winning, for a caller reading them as one map.
 func lexicalValues(perf *actionFrame) map[string]Value {
@@ -571,7 +586,7 @@ func (e *ActionExecutor) bindingOtherValue(perf *actionFrame, binding lower.PinB
 		}
 		return value, nil
 	}
-	ec := e.evalContextFor(perf.parent, binding.Scope)
+	ec := e.evalContextAround(perf, binding.Scope)
 	ec.activation = activation
 	value, err := ec.Eval(binding.Other)
 	if err != nil {
@@ -634,7 +649,7 @@ func (e *ActionExecutor) performInvocation(perf *actionFrame, inv actionInvocati
 		}
 	}
 	if inv.invoked {
-		ec := e.evalContextFor(perf.parent, scope)
+		ec := e.evalContextAround(perf, scope)
 		defer ec.beginStep()()
 		if err := bindArgumentList(ec, inv, in, inputs); err != nil {
 			return err

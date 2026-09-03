@@ -34,8 +34,13 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("node_invocation_too_many_arguments", testNodeInvocationTooManyArguments)
 	t.Run("node_invocation_too_few_arguments", testNodeInvocationTooFewArguments)
 	t.Run("node_invocation_unknown_named_argument", testNodeInvocationUnknownNamedArgument)
+	t.Run("performed_action_input_bound_by_nothing", testPerformedActionInputBoundByNothing)
+	t.Run("state_entry_action_input_bound_by_nothing", testStateEntryActionInputBoundByNothing)
 	t.Run("node_binding_to_a_non_parameter", testNodeBindingToANonParameter)
 	t.Run("node_pin_bound_to_unequal_values", testNodePinBoundToUnequalValues)
+	t.Run("block_node_binding_to_a_non_parameter", testBlockNodeBindingToANonParameter)
+	t.Run("block_node_binding_names_a_node_without_a_pin", testBlockNodeBindingNamesANodeWithoutAPin)
+	t.Run("block_node_pin_bound_where_nodes_are_not_performed", testBlockNodePinBoundWhereNodesAreNotPerformed)
 	t.Run("node_inherited_default_that_cannot_be_evaluated", testNodeInheritedDefaultThatCannotBeEvaluated)
 	t.Run("node_binding_output_to_an_unknown_feature", testNodeBindingOutputToAnUnknownFeature)
 	t.Run("node_flow_into_a_pin_the_target_does_not_declare", testNodeFlowIntoAPinTheTargetDoesNotDeclare)
@@ -8107,6 +8112,67 @@ func testNodeInvocationUnknownNamedArgument(t *testing.T) {
 	}
 }
 
+// testPerformedActionInputBoundByNothing: a `perform` in statement form must bind
+// every input without a default, by argument or by a caller value of its name.
+func testPerformedActionInputBoundByNothing(t *testing.T) {
+	src := `
+		package test {` + adderActionDef + `
+			action def Defaulted {
+				in a : Integer = 1;
+				out doubled : Integer;
+				first step;
+				action step { assign doubled := a * 2; }
+			}
+			action adder : Adder;
+			action defaulted : Defaulted;
+			action outer {
+				attribute a : Integer = 1;
+				attribute doubled : Integer = 0;
+				first start;
+				then action run {
+					if a > 0 {
+						perform defaulted;
+						perform adder;
+					}
+				}
+				then done;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if !errors.Is(err, ErrUnboundParameter) {
+		t.Fatalf("error = %v, want ErrUnboundParameter", err)
+	}
+	if !strings.Contains(err.Error(), "adder") || !strings.Contains(err.Error(), "b") {
+		t.Errorf("error %q does not name the action and its unbound parameter", err)
+	}
+}
+
+// testStateEntryActionInputBoundByNothing: a state's entry action is an
+// invocation too, so an input it leaves unbound is reported before it runs.
+func testStateEntryActionInputBoundByNothing(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {`+adderActionDef+`
+		action adder : Adder;
+		state Machine {
+			attribute a : Integer = 1;
+			entry; then init;
+			state init;
+			state active {
+				entry adder;
+			}
+			succession first init then active;
+			succession first active then done;
+		}
+	}`)
+	err := exec.RunToCompletion()
+	if !errors.Is(err, ErrUnboundParameter) {
+		t.Fatalf("error = %v, want ErrUnboundParameter", err)
+	}
+	if !strings.Contains(err.Error(), "b") {
+		t.Errorf("error %q does not name the unbound parameter", err)
+	}
+}
+
 // testNodeBindingToANonParameter: a binding end at a node's pin must name a
 // parameter or attribute the node's performance holds.
 func testNodeBindingToANonParameter(t *testing.T) {
@@ -8127,6 +8193,83 @@ func testNodeBindingToANonParameter(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "nope") {
 		t.Errorf("error %q does not name the pin", err)
+	}
+}
+
+// testBlockNodeBindingToANonParameter: a binding in a branch at a pin of the
+// branch's node is checked against that node's performance like any other.
+func testBlockNodeBindingToANonParameter(t *testing.T) {
+	src := `
+		package test {` + adderActionDef + `
+			action outer {
+				attribute x : Integer = 1;
+				first start;
+				then action choose {
+					if x > 0 {
+						bind add.nope = x;
+						action add : Adder { in a = 1; in b = 2; }
+					}
+				}
+				then done;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if !errors.Is(err, ErrBindingEnd) {
+		t.Fatalf("error = %v, want ErrBindingEnd", err)
+	}
+	if !strings.Contains(err.Error(), "nope") {
+		t.Errorf("error %q does not name the pin", err)
+	}
+}
+
+// testBlockNodeBindingNamesANodeWithoutAPin: a binding end in a branch that names
+// one of the branch's nodes but no pin of it is reported, not run as a statement.
+func testBlockNodeBindingNamesANodeWithoutAPin(t *testing.T) {
+	src := `
+		package test {` + adderActionDef + `
+			action outer {
+				attribute x : Integer = 1;
+				first start;
+				then action choose {
+					if x > 0 {
+						bind add = x;
+						action add : Adder { in a = 1; in b = 2; }
+					}
+				}
+				then done;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if err == nil {
+		t.Fatal("expected the binding at the node itself to be reported")
+	}
+	if !strings.Contains(err.Error(), "names an action node but no pin of it") {
+		t.Errorf("error %q does not explain the binding end", err)
+	}
+}
+
+// testBlockNodePinBoundWhereNodesAreNotPerformed: a calc body keeps no
+// performances of its nested actions, so a binding at one of their pins is reported.
+func testBlockNodePinBoundWhereNodesAreNotPerformed(t *testing.T) {
+	src := `
+		package test {
+			calc c {
+				attribute x : Integer = 3;
+				attribute seen : Integer = 0;
+				if x > 0 {
+					action p { out v : Integer; assign v := x * 2; }
+					bind p.v = x;
+					seen = 1;
+				}
+				return : Integer = seen;
+			}
+		}
+	`
+	err := calcUsageOutputInSource(t, src, "c", "result", 10000)
+	if err == nil || !strings.Contains(err.Error(), "a binding or flow at a pin of node p in a body is not executable") {
+		t.Errorf("expected the binding at p's pin to be reported, got: %v", err)
 	}
 }
 

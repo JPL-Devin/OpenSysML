@@ -1132,7 +1132,7 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 	}
 
 	// Apply data flows: transfer data from this node's output pins to target input pins
-	if err := e.applyDataFlows(frame, node, frame.data); err != nil {
+	if err := e.applyDataFlows(frame, frame.graph, node, frame.data); err != nil {
 		return err
 	}
 
@@ -1257,7 +1257,7 @@ func (e *ActionExecutor) completeNode(tokenIdx int, perf *actionFrame) error {
 
 	// The flows out of this node carry what this performance produced to the
 	// pins the nodes downstream read.
-	if err := e.applyDataFlows(frame, node, perf.data); err != nil {
+	if err := e.applyDataFlows(frame, frame.graph, node, perf.data); err != nil {
 		return err
 	}
 
@@ -1345,10 +1345,10 @@ func statementNodeKeyword(node ast.Node) string {
 	}
 }
 
-// applyDataFlows moves what the completed performance produced along the flows out of
-// sourceNode to the target pins; a source pin holding nothing is an error, not a no-op.
-func (e *ActionExecutor) applyDataFlows(frame *actionFrame, sourceNode ast.Node, produced map[string]Value) error {
-	for _, flow := range frame.graph.DataFlows[sourceNode] {
+// applyDataFlows moves what the completed performance produced along graph's flows out
+// of sourceNode to the target pins; a source pin holding nothing is an error, not a no-op.
+func (e *ActionExecutor) applyDataFlows(frame *actionFrame, graph *lower.ActionGraph, sourceNode ast.Node, produced map[string]Value) error {
+	for _, flow := range graph.DataFlows[sourceNode] {
 		sourceData, ok := produced[flow.SourcePin]
 		if !ok {
 			return fmt.Errorf(
@@ -1356,7 +1356,7 @@ func (e *ActionExecutor) applyDataFlows(frame *actionFrame, sourceNode ast.Node,
 				flowDescription(flow), nodeDescription(sourceNode), orAnyPin(flow.SourcePin),
 			)
 		}
-		if err := e.deliverFlow(frame, flow, sourceData); err != nil {
+		if err := e.deliverFlow(frame, graph, flow, sourceData); err != nil {
 			return err
 		}
 	}
@@ -1365,9 +1365,9 @@ func (e *ActionExecutor) applyDataFlows(frame *actionFrame, sourceNode ast.Node,
 
 // deliverFlow puts a flow's payload where its target reads it: at the pin of a
 // target performing in a frame of its own, else in the flow's own features.
-func (e *ActionExecutor) deliverFlow(frame *actionFrame, flow lower.ObjectFlow, value Value) error {
+func (e *ActionExecutor) deliverFlow(frame *actionFrame, graph *lower.ActionGraph, flow lower.ObjectFlow, value Value) error {
 	if _, performs := flow.Target.(*ast.Usage); performs {
-		if err := e.deliver(frame, frame.graph, flow.Target, flow.TargetPin, value); err != nil {
+		if err := e.deliver(frame, graph, flow.Target, flow.TargetPin, value); err != nil {
 			return fmt.Errorf("%s: %w", flowDescription(flow), err)
 		}
 		return nil
