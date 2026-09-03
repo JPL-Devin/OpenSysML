@@ -226,6 +226,50 @@ func TestProcessNextEventTakesAPendingSignalBeforeALaterTimer(t *testing.T) {
 	}
 }
 
+// A run to completion advances time to a queued timer only once nothing due now
+// is left, and a signal in flight is due now: it is dispatched before the timer,
+// not once the run has advanced to it.
+func TestRunToCompletionTakesAPendingSignalBeforeALaterTimer(t *testing.T) {
+	model, resolver, root := parseAndBuildModel(t, `
+		state def Waiter {
+			entry; then idle;
+			state idle;
+			transition first idle accept after 10 then late;
+			transition first idle accept Kick then kicked;
+			state late;
+			state kicked;
+			transition first kicked accept after 5 then done;
+			state done;
+		}
+		attribute def Kick;
+	`)
+	ctx := NewContext(model, resolver, 10000)
+	exec, err := ctx.CreateStateExecutorFor(resolveSymbol(t, root, "Waiter"), nil)
+	if err != nil {
+		t.Fatalf("CreateStateExecutorFor: %v", err)
+	}
+	if exec.EventQueue().Len() != 1 {
+		t.Fatalf("queue holds %d events, want the timer", exec.EventQueue().Len())
+	}
+	msg, err := ctx.SignalMessage(resolveSymbol(t, root, "Kick"), nil, nil)
+	if err != nil {
+		t.Fatalf("SignalMessage: %v", err)
+	}
+	ctx.PostMessage(msg)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("RunToCompletion: %v", err)
+	}
+	if got := activeLeaf(exec); got != "done" {
+		t.Errorf("state = %s, want done: the signal is due before the timer, then kicked's own timer runs", got)
+	}
+	if exec.CurrentTime() != 5 {
+		t.Errorf("time = %v, want 5: idle's timer was abandoned with idle, kicked's was run", exec.CurrentTime())
+	}
+	if n := len(ctx.PendingMessages()); n != 0 {
+		t.Errorf("%d messages in flight after the run, want the signal taken", n)
+	}
+}
+
 // Deciding spends the run's budget only while it lasts: the guard it evaluates
 // costs the run nothing afterwards, so a dispatch the budget allows on its own
 // is not failed by the preflight before it — while a guard the budget cannot

@@ -1787,7 +1787,9 @@ func (e *StateExecutor) run(atCurrentTime bool) error {
 			events++
 			continue
 		}
-		if !e.hasDueEvent(atCurrentTime) && !e.deliverPendingSignal() {
+		// A signal in flight is due now, so it is queued ahead of a timer set
+		// for later rather than dispatched once the run has advanced to it.
+		if !e.deliverPendingSignal() && !e.hasDueEvent(atCurrentTime) {
 			if ran > 0 {
 				continue // do behaviors are still running; they may yet queue events
 			}
