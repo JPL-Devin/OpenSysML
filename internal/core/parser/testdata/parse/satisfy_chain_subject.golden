@@ -1,0 +1,62 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="SatisfyChainSubject" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Part"))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Config"
+          (Membership visibility="default"
+            (Usage kind="part" name="child" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Part
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Assembly"
+          (Membership visibility="default"
+            (Usage kind="part" name="config" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Config
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="part" name="config" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Config
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="assembly" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Assembly
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="requirement" name="r" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="satisfy" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="subsets" target=r
+            (*ast.QualifiedName))
+          (Relationship kind="by" target=(expr)
+            (FeatureChainExpr member="child"
+              (FeatureReference name="config")))))
+      (Membership visibility="default"
+        (Usage kind="satisfy" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="subsets" target=r
+            (*ast.QualifiedName))
+          (Relationship kind="by" target=(expr)
+            (FeatureChainExpr member="child"
+              (FeatureChainExpr member="config"
+                (FeatureReference name="assembly"))))))
+      (Membership visibility="default"
+        (Usage kind="satisfy" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="assert"
+          (Relationship kind="subsets" target=r
+            (*ast.QualifiedName))
+          (Relationship kind="by" target=(expr)
+            (FeatureChainExpr member="child"
+              (FeatureReference name="config")))))
+      (Membership visibility="default"
+        (Usage kind="satisfy" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="assert" negated=true
+          (Relationship kind="subsets" target=r
+            (*ast.QualifiedName))
+          (Relationship kind="by" target=(expr)
+            (FeatureChainExpr member="child"
+              (FeatureChainExpr member="config"
+                (FeatureReference name="assembly"))))))
+      (Membership visibility="default"
+        (Usage kind="satisfy" name="conformance" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="by" target=(expr)
+            (FeatureChainExpr member="child"
+              (FeatureReference name="config"))))))))

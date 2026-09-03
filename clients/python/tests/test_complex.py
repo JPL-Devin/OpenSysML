@@ -237,7 +237,7 @@ class TestComplexAgainstTheService:
         assert signal.zs == [1 + 2j, 3 + 4j]
 
     def test_an_evaluated_complex_expression_reads_as_a_complex(self):
-        assert self.conn.eval("rect(1.0, -1.0)", self.model.hash) == 1 - 1j
+        assert self.conn.eval("ComplexFunctions::rect(1.0, -1.0)", self.model.hash) == 1 - 1j
 
     def test_a_complex_sent_as_a_calc_argument_round_trips(self):
         echoed = self.conn.calc("C::echo", self.model.hash, arguments=[1.5 - 2j]).value

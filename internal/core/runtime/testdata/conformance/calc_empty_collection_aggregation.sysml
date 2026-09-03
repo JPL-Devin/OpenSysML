@@ -3,6 +3,8 @@
 // product. head of an empty sequence is empty — the `Anything[0..1]` it is
 // declared to return — and its size is 0.
 package test {
+	private import SequenceFunctions::*;
+	private import NumericalFunctions::*;
 	calc empties {
 		attribute none : Integer[*] = ();
 		return : Integer =
