@@ -7,6 +7,7 @@ package test {
 		attribute root = sqrt(16.0);
 		attribute magnitude = abs(-2);
 		attribute count = size(root);
+		attribute text = ToString("four");
 		attribute growth = exp(1.0);
 	}
 }

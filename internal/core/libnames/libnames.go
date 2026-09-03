@@ -53,9 +53,11 @@ var functions = map[string][]string{
 	"im":                     {"ComplexFunctions::im"},
 	"arg":                    {"ComplexFunctions::arg"},
 
-	// StringFunctions: the two names no other function library declares.
+	// StringFunctions. ToString is also declared by the numeric and Boolean
+	// libraries, whose overloads join the table as the runtime implements them.
 	"Length":    {"StringFunctions::Length"},
 	"Substring": {"StringFunctions::Substring"},
+	"ToString":  {"StringFunctions::ToString"},
 
 	// SequenceFunctions, CollectionFunctions and ControlFunctions: the
 	// operations over sequences and bodies, also written `x->name()`.

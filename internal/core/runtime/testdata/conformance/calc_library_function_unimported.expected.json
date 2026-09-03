@@ -6,6 +6,7 @@
     "root": {"type": "Real", "value": 4.0},
     "magnitude": {"type": "Integer", "value": 2},
     "count": {"type": "Integer", "value": 1},
+    "text": {"type": "String", "value": "four"},
     "growth": {"error": "function is not in scope: exp is declared by OpenSysMLMathFunctions"}
   }
 }
