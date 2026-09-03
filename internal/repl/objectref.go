@@ -247,7 +247,7 @@ func (s *Session) objectByID(id int64) (*runtime.Instance, string, error) {
 // second %instantiate took its name is not among them.
 func (s *Session) heldByID(ctx *runtime.Context, id int64) *runtime.Instance {
 	var found *runtime.Instance
-	s.walkObjects(materializedObjectsIn(ctx), func(cur carrier) bool {
+	s.walkHeldObjects(ctx, func(cur carrier) bool {
 		if cur.inst.ID == id {
 			found = cur.inst
 		}
@@ -388,7 +388,7 @@ func (s *Session) notInstantiated(sym *symbols.Symbol, fqn string) error {
 	}
 	e.Definition = notationName(s.fqnOf(definition))
 	// An error names what exists; it materializes nothing to find it.
-	s.walkObjects(materializedObjectsIn(ctx), func(cur carrier) bool {
+	s.walkHeldObjects(ctx, func(cur carrier) bool {
 		if carriesDeclaration(model, cur.inst.Type, definition.Decl) {
 			ref := ObjectRef{ID: cur.inst.ID}
 			if _, byIdentity := objectID(cur.name); !byIdentity {

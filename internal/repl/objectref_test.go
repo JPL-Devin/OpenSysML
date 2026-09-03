@@ -533,3 +533,57 @@ func TestSupersededObjectEndsItsDebuggingSession(t *testing.T) {
 	wants(t, run(t, s, "%step"), "error:", "no active action session",
 		"ended when a second %instantiate Fleet::driver superseded the object #")
 }
+
+// Every object the session holds is addressable by id, however many there are:
+// the bound on a subject search does not apply to what is already materialized.
+// A debugging session over a member beyond that bound survives an unrelated
+// second %instantiate.
+func TestEveryHeldObjectIsAddressableById(t *testing.T) {
+	s := loadFixture(t, "testdata/large_collection.sysml")
+	run(t, s, "%instantiate Farm::field")
+	rows := collectionIDs(t, run(t, s, "%features Farm::field"), "rows")
+	if len(rows) != 3 {
+		t.Fatalf("rows holds %d members, want 3", len(rows))
+	}
+	held := 2 + len(rows) // field, spare and the rows
+	var last string
+	for _, row := range rows {
+		cells := collectionIDs(t, run(t, s, "%features #"+row), "cells")
+		held += len(cells)
+		last = cells[len(cells)-1]
+	}
+	if held <= carrierLimit {
+		t.Fatalf("the session holds %d objects, want more than %d", held, carrierLimit)
+	}
+
+	wants(t, run(t, s, "%features #"+last), "Instance: #"+last+" (ID: "+last+")", "count = 0")
+	wants(t, run(t, s, "%invoke #"+last+" tick"), "✓ Invoked tick on object #"+last)
+	wants(t, run(t, s, "%features #"+last), "count = 1")
+
+	wants(t, run(t, s, "%action Farm::Cell::tick #"+last), "Started action executor")
+	run(t, s, "%instantiate Farm::spare")
+	again := run(t, s, "%instantiate Farm::spare")
+	wants(t, again, "is no longer named")
+	rejects(t, again, "debugging session")
+	if s.actionExec == nil {
+		t.Fatal("a second %instantiate of another name ended the session over a held member")
+	}
+	wants(t, run(t, s, "%continue"), "✓ Action completed")
+	wants(t, run(t, s, "%features #"+last), "count = 2")
+}
+
+// collectionIDs reads the identities a %features listing shows feature holding.
+func collectionIDs(t *testing.T, listing, feature string) []string {
+	t.Helper()
+	at := strings.Index(listing, feature+" = [")
+	if at < 0 {
+		t.Fatalf("%s holds no collection:\n%s", feature, listing)
+	}
+	members := listing[at+len(feature)+4:]
+	members = members[:strings.Index(members, "]")]
+	var ids []string
+	for _, m := range strings.Split(members, ",") {
+		ids = append(ids, objectIDIn(t, m))
+	}
+	return ids
+}
