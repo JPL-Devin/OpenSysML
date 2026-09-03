@@ -152,6 +152,13 @@ func (ctx *Context) appendConditions(out []Condition, node ast.Node, scope *symb
 	case *ast.AssignmentActionNode, *ast.IfActionNode, *ast.WhileLoopActionNode, *ast.SendStatement,
 		*ast.TerminateStatement, *ast.PerformActionNode:
 		out = append(out, Condition{Statement: m, Scope: scope, Required: required})
+	case *ast.Membership:
+		out = ctx.appendConditions(out, m.Member, scope, required, negated, seen)
+	case *ast.Usage:
+		// A performed action is a step of the body too (`perform a;`).
+		if m.IsPerformedAction() {
+			out = append(out, Condition{Statement: m, Scope: scope, Required: required})
+		}
 	}
 	return out
 }

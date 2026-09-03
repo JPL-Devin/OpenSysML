@@ -570,3 +570,33 @@ func TestBodyStatementRefuses(t *testing.T) {
 		t.Errorf("refused condition is %q, want the assign statement", refused.Condition)
 	}
 }
+
+// TestPerformedActionRefuses: a performed action is a usage rather than a
+// statement node, and translation refuses it the same way, nested or not.
+func TestPerformedActionRefuses(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			action def Bump;
+			constraint def C {
+				attribute y : Integer = 1;
+				perform action bump : Bump;
+				y > 5
+			}
+			part def Rig {
+				attribute z : Integer = 1;
+				action bump : Bump;
+				constraint nested { assert constraint { perform bump; z > 5 } }
+			}
+		}
+	`
+	for _, name := range []string{"test::C", "test::Rig::nested"} {
+		refused := refusal(t, src, name)
+		if refused.Construct != "body statement" {
+			t.Errorf("%s: refused construct is %q, want the body statement", name, refused.Construct)
+		}
+		if refused.Condition != "`perform` statement" {
+			t.Errorf("%s: refused condition is %q, want the perform statement", name, refused.Condition)
+		}
+	}
+}

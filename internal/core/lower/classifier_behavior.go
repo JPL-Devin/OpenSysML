@@ -88,7 +88,7 @@ func classifierBehaviorKind(usage *ast.Usage) (ClassifierBehaviorKind, bool) {
 	switch {
 	case usage.Kind == ast.UsageState && (usage.Keyword == "exhibit" || usage.Keyword == "exhibit state"):
 		return ExhibitedState, true
-	case usage.Kind == ast.UsageAction && (usage.Keyword == "perform" || usage.PrefixKeyword == "perform"):
+	case usage.IsPerformedAction():
 		return PerformedAction, true
 	default:
 		return 0, false

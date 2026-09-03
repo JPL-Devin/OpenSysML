@@ -316,3 +316,71 @@ func TestConstraintBodyStatementIsNotAVerdict(t *testing.T) {
 		}
 	}
 }
+
+func TestConstraintBodyPerformIsNotAVerdict(t *testing.T) {
+	// A performed action is a usage, not a statement node, and it is one more
+	// thing the body does that a verdict would have to account for.
+	src := `
+		package test {
+			action def Bump { inout n; assign n := n + 10; }
+			constraint def Performed {
+				attribute y = 1;
+				perform action bump : Bump { inout n = y; }
+				y > 5
+			}
+			part def Rig {
+				attribute z = 1;
+				action bump : Bump { inout n = z; }
+				constraint shorthand { perform bump; z > 5 }
+				constraint nested { assert constraint { perform bump; z > 5 } }
+				requirement required { require constraint { perform bump; z > 5 } }
+			}
+		}
+	`
+	file := parser.New(source.New("test.sysml", []byte(src))).ParseFile()
+	idx := symbols.NewIndex()
+	idx.AddDocument("test.sysml", file)
+	resolver := resolve.New(idx)
+	ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
+
+	testPkg := idx.DocumentRoot("test.sysml").Children()[0]
+	performed, ok := testPkg.LookupLocal("Performed")
+	if !ok {
+		t.Fatal("Performed not found")
+	}
+	satisfied, err := ctx.EvaluateConstraint(performed, testPkg)
+	if !errors.Is(err, ErrStatementNotExecuted) {
+		t.Fatalf("err = %v, want ErrStatementNotExecuted", err)
+	}
+	if want := "`perform` statement"; err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err = %v, want it to name the %s", err, want)
+	}
+	if satisfied {
+		t.Error("a constraint whose performed action was skipped reported as satisfied")
+	}
+
+	rig, ok := testPkg.LookupLocal("Rig")
+	if !ok {
+		t.Fatal("Rig not found")
+	}
+	for _, name := range []string{"shorthand", "nested", "required"} {
+		feat := featureNamed(ctx, rig, name)
+		if feat == nil || feat.Symbol == nil {
+			t.Fatalf("%s not found", name)
+		}
+		evaluate := ctx.EvaluateConstraintOn
+		if name == "required" {
+			evaluate = ctx.EvaluateRequirementOn
+		}
+		satisfied, err := evaluate(feat.Symbol, feat.DeclScope(), nil)
+		if !errors.Is(err, ErrStatementNotExecuted) {
+			t.Errorf("%s: err = %v, want ErrStatementNotExecuted", name, err)
+		}
+		if want := "`perform` statement"; err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v, want it to name the %s", name, err, want)
+		}
+		if satisfied {
+			t.Errorf("%s: reported as satisfied with its performed action skipped", name)
+		}
+	}
+}

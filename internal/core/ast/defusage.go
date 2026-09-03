@@ -467,6 +467,12 @@ func (u *Usage) IsSuccessionFlow() bool {
 	return u.Kind == UsageFlow && u.PrefixKeyword == "succession"
 }
 
+// IsPerformedAction reports whether the usage is a `perform action a : A;` or a
+// `perform a;`: an action the owner performs (SysML v2 PerformActionUsage).
+func (u *Usage) IsPerformedAction() bool {
+	return u.Kind == UsageAction && (u.Keyword == "perform" || u.PrefixKeyword == "perform")
+}
+
 // HasConjugatedTyping reports whether the usage declares a `: ~P` typing.
 func (u *Usage) HasConjugatedTyping() bool {
 	_, ok := u.ConjugatedTyping()
