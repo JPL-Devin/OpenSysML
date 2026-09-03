@@ -365,7 +365,7 @@ func (e *ActionExecutor) acceptMatch(accept lower.Accept, usage *ast.Usage) func
 		if accept.SignalType != nil {
 			return e.ctx.messageMatches(m, accept.SignalType, accept.Scope)
 		}
-		return m.carriesSignal(accept.SubsetsEvent)
+		return e.ctx.carriesEvent(m, accept.SubsetsEvent, accept.Scope)
 	}
 }
 

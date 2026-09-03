@@ -1015,11 +1015,11 @@ func (e *StateExecutor) triggerMatches(trigger ast.Node, scope *symbols.Scope, e
 		if typed := ast.AsQualifiedName(acceptEvent.SignalType); typed != nil && len(typed.Parts) > 0 {
 			return e.ctx.messageMatches(msg, typed, scope)
 		}
-		subsets := ast.SimpleName(acceptEvent.Subsets)
+		subsets := lower.FeaturePath(acceptEvent.Subsets)
 		if subsets == "" {
 			return false
 		}
-		return msg.carriesSignal(subsets)
+		return e.ctx.carriesEvent(msg, subsets, scope)
 
 	case EventCall:
 		callEvent, ok := trigger.(*ast.CallEvent)
@@ -1973,7 +1973,7 @@ func (e *StateExecutor) acceptsSignalFrom(state *ast.StateNode, msg Message) boo
 			}
 			continue
 		}
-		if signal := ast.SimpleName(accept.Subsets); signal != "" && msg.carriesSignal(signal) {
+		if signal := lower.FeaturePath(accept.Subsets); signal != "" && e.ctx.carriesEvent(msg, signal, trans.Scope) {
 			return true
 		}
 	}

@@ -324,8 +324,7 @@ func (Unsupported) statement() { /* marker: closed Statement set */ }
 // port it arrived at, so the two forms do not consume each other's messages.
 //
 // SubsetsEvent is the event feature the payload subsets (`accept :> shutDown`),
-// empty when it subsets none. Such an accept waits for an occurrence of that
-// one event rather than for any occurrence of a type.
+// as the path written, empty for none: the accept waits for that one event.
 //
 // Trigger is the time or change event of `accept at t` / `accept after d` /
 // `accept when c`, nil when the accept waits for a message instead.
@@ -759,9 +758,8 @@ func acceptPort(node *ast.Usage) string {
 	return ""
 }
 
-// subsettingTarget returns the name a usage subsets (`:> e`, `:>> e`), or ""
-// when it subsets nothing. For an accept payload that name is the event it
-// waits for.
+// subsettingTarget is the feature a usage subsets (`:> e`, `:>> a.e`) as the
+// path written, or "" for none.
 func subsettingTarget(usage *ast.Usage) string {
 	for _, rel := range usage.Relationships {
 		if rel == nil {
@@ -772,7 +770,7 @@ func subsettingTarget(usage *ast.Usage) string {
 		default:
 			continue
 		}
-		if name := ast.SimpleName(rel.Target); name != "" {
+		if name := FeaturePath(rel.Target); name != "" {
 			return name
 		}
 	}
