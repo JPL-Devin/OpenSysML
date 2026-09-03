@@ -300,7 +300,9 @@ elmt:Demo__Vehicle
   is one whose spellings of an end (`sysml:memberElement`,
   `sysml:ownedMemberElement`, `sysml:ownedMemberFeature`,
   `sysml:ownedResultExpression`, `sysml:ownedRelatedElement`) name different
-  elements, rather than keeping one and dropping the rest.
+  elements, one whose end is a literal rather than an element, and a second
+  membership owning an element another already owns — rather than keeping one
+  edge and dropping the rest.
 
 Tests: `ownership_graph_test.go` (element ids, roots, membership wiring, the
 tree coming back from the memberships with `sysx:sourceText` and

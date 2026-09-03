@@ -153,9 +153,10 @@ func TestResultExpressionComesBackFromItsMembershipAlone(t *testing.T) {
 	}
 }
 
-// A membership whose spellings of one end name different elements would drop
-// one of them; it is refused, naming the membership and both elements.
-func TestMembershipNamingTwoMembersIsRefused(t *testing.T) {
+// A membership whose spellings of one end name different elements, whose end
+// is a literal, or whose member another membership also owns would drop an
+// edge; each is refused, naming the membership.
+func TestMalformedMembershipEndsAreRefused(t *testing.T) {
 	turtle := string(withoutTriples(t, convertFixture(t, "result_expressions"), "sysx:sourceText"))
 	for _, tc := range []struct{ from, to, want string }{
 		{
@@ -172,6 +173,21 @@ func TestMembershipNamingTwoMembersIsRefused(t *testing.T) {
 			"    sysml:owningRelatedElement elmt:Results__Only ;\n    sysml:membershipOwningNamespace elmt:Results__Only ;",
 			"    sysml:owningRelatedElement elmt:Results ;\n    sysml:membershipOwningNamespace elmt:Results__Only ;",
 			"the membership <urn:sysmlv2:element:Results__Only___400_om>: it states both <urn:sysmlv2:element:Results__Only> and <urn:sysmlv2:element:Results> as its owning namespace",
+		},
+		{
+			"    sysml:ownedResultExpression elmt:Results__AfterMembers___403 .",
+			`    sysml:ownedResultExpression "Results__AfterMembers___403" .`,
+			`the membership <urn:sysmlv2:element:Results__AfterMembers___403_om>: its sysml:ownedResultExpression is the literal "Results__AfterMembers___403"`,
+		},
+		{
+			"    sysml:owningRelatedElement elmt:Results__Only ;\n    sysml:membershipOwningNamespace elmt:Results__Only ;",
+			"    sysml:owningRelatedElement elmt:Results__Only ;\n    sysml:membershipOwningNamespace \"Results::Only\" ;",
+			`the membership <urn:sysmlv2:element:Results__Only___400_om>: its sysml:membershipOwningNamespace is the literal "Results::Only"`,
+		},
+		{
+			"    sysml:ownedResultExpression elmt:Results__Only___400 .",
+			"    sysml:ownedResultExpression elmt:Results__Only___400 .\n\nelmt:Results__Only___400_om2 a sysml:ResultExpressionMembership ;\n    sysml:membershipOwningNamespace elmt:Results__Double ;\n    sysml:memberElement elmt:Results__Only___400 .",
+			"both own <urn:sysmlv2:element:Results__Only___400>",
 		},
 	} {
 		if !strings.Contains(turtle, tc.from) {

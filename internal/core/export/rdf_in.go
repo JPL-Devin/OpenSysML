@@ -404,7 +404,8 @@ func (d *decoder) isMembership(subject rdf.Term) bool {
 // ends are stated twice in the abstract syntax — once under the membership's own
 // name for the property and once under the Relationship's — and either spelling
 // is accepted, since a graph from another tool may carry only one; spellings
-// that disagree are refused, since one of them would be dropped.
+// that disagree, a literal end, or a second membership claiming the member are
+// refused, since each would drop an edge.
 func (d *decoder) readMembership(subject rdf.Term) error {
 	owner, hasOwner, err := d.agreedObject(subject, pMembershipOwningNamespace, pOwningRelatedElement)
 	if err != nil {
@@ -421,6 +422,12 @@ func (d *decoder) readMembership(subject rdf.Term) error {
 		}
 	}
 	m := membership{iri: subject.Value, owner: owner.Value, member: member.Value}
+	if other, claimed := d.owningMembership[m.member]; claimed && other.iri != m.iri {
+		return &UnsupportedError{
+			What: fmt.Sprintf("the membership <%s>", subject.Value),
+			Note: fmt.Sprintf("it and <%s> both own <%s>, and an element has one owning membership, so one of them would be dropped", other.iri, m.member),
+		}
+	}
 	d.memberships[m.iri] = m
 	d.owningMembership[m.member] = m
 	return nil
@@ -434,6 +441,11 @@ func (d *decoder) agreedObject(subject rdf.Term, properties ...string) (rdf.Term
 	for _, property := range properties {
 		for _, object := range d.graph.Objects(subject, rdf.SysML+property) {
 			switch {
+			case !object.IsIRI():
+				return rdf.Term{}, false, &UnsupportedError{
+					What: fmt.Sprintf("the membership <%s>", subject.Value),
+					Note: fmt.Sprintf("its %s is the literal %s, and an end of a membership is an element in the graph", curie(rdf.SysML+property), rdf.String(object.Value).String()),
+				}
 			case !found:
 				agreed, found = object, true
 			case object != agreed:
