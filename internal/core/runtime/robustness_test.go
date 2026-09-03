@@ -2743,6 +2743,9 @@ func testAcceptViaAPortThatFailsToMaterialize(t *testing.T) {
 	if visits := exec.GetStateVisits(); len(visits) != 1 || visits[0] != "Idle" {
 		t.Errorf("state visits = %v, want [Idle]", visits)
 	}
+	if pending := ctx.PendingMessages(); len(pending) != 2 || pending[0].SignalType != "String" || pending[1].SignalType != "Integer" {
+		t.Errorf("pending messages = %+v, want the String then the Integer still in flight", pending)
+	}
 }
 
 // testActionAcceptViaAPortThatFailsToMaterialize: the action-node counterpart
@@ -2801,6 +2804,9 @@ func testActionAcceptViaAPortThatFailsToMaterialize(t *testing.T) {
 	err = exec.RunToCompletion()
 	if !errors.Is(err, ErrDivisionByZero) {
 		t.Fatalf("run with an Integer in flight: err = %v, want the port's %v", err, ErrDivisionByZero)
+	}
+	if pending := ctx.PendingMessages(); len(pending) != 2 || pending[0].SignalType != "String" || pending[1].SignalType != "Integer" {
+		t.Errorf("pending messages = %+v, want the String then the Integer still in flight", pending)
 	}
 }
 
