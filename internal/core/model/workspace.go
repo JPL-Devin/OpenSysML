@@ -526,12 +526,25 @@ func (w *Workspace) ResolveReferenceNameSegmentsInDoc(name string, ref resolve.R
 			out[i] = sym
 		}
 	}
-	// A written alias stays the name, unless the call it makes is tied: then no
-	// one alias is what it names.
+	// A written alias stays the name — the alias naming the overload the call selects,
+	// when same-named aliases name several — unless the call is tied: then none is.
 	last := len(out) - 1
 	sel := invocationSelection(r, sem, ref)
 	if _, aliased := r.PartAlias(ref.QN, last); !aliased || (sel != nil && sel.Ambiguous) {
 		out[last] = calledDeclaration(sel, out[last])
+	} else if element, _ := r.PartSymbol(ref.QN, last); sel != nil && sel.Selected != nil && element != sel.Selected {
+		out[last] = selectedName(r, ref, sel.Selected)
 	}
 	return out
+}
+
+// selectedName is the name a call's written last segment is once selected names
+// the overload it runs: the first candidate alias for selected, else selected itself.
+func selectedName(r *resolve.Resolver, ref resolve.Reference, selected *symbols.Symbol) *symbols.Symbol {
+	for _, c := range r.InvocationCandidates(ref.Scope, ref.QN) {
+		if target, ok := r.ResolveAliasTarget(c); ok && target == selected {
+			return c
+		}
+	}
+	return selected
 }

@@ -342,6 +342,77 @@ func TestRenameSkipsAliasedAmbiguousCall(t *testing.T) {
 	}
 }
 
+// selectingAliasesSrc has two aliases named `conv`, one for an Integer overload and one
+// for a String overload, so each call selects one alias's target — and is a use of
+// that alias only.
+const selectingAliasesSrc = `package A {
+	private import ScalarValues::*;
+	calc def toText { in x : Integer; return : String = "i"; }
+}
+package B {
+	private import ScalarValues::*;
+	calc def toText { in x : String; return : String = x; }
+}
+package AL { alias conv for A::toText; }
+package BL { alias conv for B::toText; }
+package Names {
+	public import AL::*;
+	public import BL::*;
+}
+package Q {
+	private import ScalarValues::*;
+	private import AL::*;
+	private import BL::*;
+	attribute i : String = conv(2);
+	attribute s : String = conv("s");
+	attribute qi : String = Names::conv(3);
+	attribute qs : String = Names::conv("t");
+}
+`
+
+// A call through one of two same-named aliases is a use of the alias whose target
+// its arguments select, not of whichever alias is found first: references list it
+// under that alias only, and renaming the other alias leaves it as written.
+func TestReferencesAndRenameFollowSelectedAlias(t *testing.T) {
+	src := selectingAliasesSrc
+	ws := model.NewWorkspace()
+	name := uri.File("/tmp/selecting_aliases.sysml").Filename()
+	ws.Open(name, []byte(src), 1)
+	s := NewServer(ws)
+
+	for alias, calls := range map[string][]string{
+		"conv for A::toText": {"conv(2)", "Names::conv(3)"},
+		"conv for B::toText": {`conv("s")`, `Names::conv("t")`},
+	} {
+		want := make([]uint32, 0, len(calls))
+		for _, call := range calls {
+			want = append(want, lineOfSrc(t, src, call))
+		}
+		if locs := referencesAt(t, s, name, src, alias); !equalLines(startLines(locs), want) {
+			t.Errorf("alias %q: reference lines = %v, want the calls selecting its target %v", alias, startLines(locs), want)
+		}
+	}
+
+	out, err := applyRename(t, ws, name, "conv for B::toText", "text")
+	if err != nil {
+		t.Fatalf("rename the String alias: err = %v", err)
+	}
+	got := out[name]
+	for _, want := range []string{
+		"alias conv for A::toText", "alias text for B::toText",
+		"= conv(2);", `= text("s");`, "= Names::conv(3);", `= Names::text("t");`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("renamed source lacks %q:\n%s", want, got)
+		}
+	}
+
+	locs := definitionOf(t, s, name, src, `conv("s")`)
+	if want := []uint32{lineOfSrc(t, src, "in x : String")}; !equalLines(startLines(locs), want) {
+		t.Errorf(`definition of conv("s"): lines = %v, want the String overload %v`, startLines(locs), want)
+	}
+}
+
 func equalLines(got, want []uint32) bool {
 	if len(got) != len(want) {
 		return false

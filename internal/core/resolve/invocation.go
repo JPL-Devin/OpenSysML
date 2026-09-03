@@ -16,7 +16,8 @@ func (r *Resolver) ResolveInvocationName(scope *symbols.Scope, qn *ast.Qualified
 }
 
 // InvocationCandidates returns every declaration a called name may denote from scope, in
-// lookup order (ResolveInvocationName reaches the first); library functions need an import.
+// lookup order (ResolveInvocationName reaches the first), an alias standing for its target;
+// library functions need an import.
 func (r *Resolver) InvocationCandidates(scope *symbols.Scope, qn *ast.QualifiedName) []*symbols.Symbol {
 	if qn == nil || len(qn.Parts) == 0 {
 		return nil
@@ -52,7 +53,7 @@ func (r *Resolver) qualifiedCandidates(scope *symbols.Scope, qn *ast.QualifiedNa
 	out := []*symbols.Symbol{sym}
 	for _, found := range append(all, r.surfacedMembers(qualifier, scope, qn.Parts[last].Text)...) {
 		if !r.AliasNamesNothing(found) {
-			out = appendSymbol(out, r.AliasedElement(found))
+			out = appendSymbol(out, found)
 		}
 	}
 	return out
