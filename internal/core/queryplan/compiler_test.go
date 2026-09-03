@@ -393,8 +393,18 @@ part def Telescope;
 part telescope : Telescope;
 part groundStation;
 attribute label : String = "scope";
+attribute def Tag;
+attribute tag : Tag;
 calc def Pointed :> Query {
 	in scope : Telescope;
+	OwnedElements(source = telescope)
+}
+calc def TakesScalar :> Query {
+	in amount : ScalarValue;
+	OwnedElements(source = telescope)
+}
+calc def TakesTag :> Query {
+	in marker : Tag;
 	OwnedElements(source = telescope)
 }
 calc def NeedsMany :> Query {
@@ -409,6 +419,12 @@ calc def ElementAsString :> Query {
 }
 calc def StringAttributeAsString :> Query {
 	WhereName(source = OwnedElements(source = telescope), operator = "startsWith", value = label)
+}
+calc def AttributeAsScalarValue :> Query {
+	TakesScalar(amount = label)
+}
+calc def AttributeAsTag :> Query {
+	TakesTag(marker = tag)
 }
 calc def OneElementForMany :> Query {
 	NeedsMany(sources = telescope)
@@ -431,6 +447,8 @@ calc def ResultAsValue :> Query {
 		{"WrongElementType", ErrorArgumentType, "scope", "Fixture::Telescope", "Fixture::groundStation", "groundStation"},
 		{"ElementAsString", ErrorArgumentType, "value", "ScalarValues::String", "Fixture::telescope", "telescope"},
 		{"StringAttributeAsString", ErrorArgumentType, "value", "ScalarValues::String", "Fixture::label", "label"},
+		{"AttributeAsScalarValue", ErrorArgumentType, "amount", "ScalarValues::ScalarValue", "Fixture::label", "label"},
+		{"AttributeAsTag", ErrorArgumentType, "marker", "Fixture::Tag", "Fixture::tag", "tag"},
 		{"OneElementForMany", ErrorArgumentMultiplicity, "sources", "[2..*]", "[1..1]", "telescope"},
 		{"Unresolved", ErrorUnknownParameter, "missing", "", "", "missing"},
 		{"ResultAsValue", ErrorUnknownParameter, "result", "", "", "result"},

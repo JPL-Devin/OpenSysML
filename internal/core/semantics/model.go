@@ -523,6 +523,20 @@ func (m *Model) Conforms(a, b *symbols.Symbol) bool {
 	return m.conforms(a, b, nil)
 }
 
+// IsDataType reports whether sym is Base::DataValue or conforms to it, so its
+// values are data (scalars, enumerations, attribute values) and never elements.
+func (m *Model) IsDataType(sym *symbols.Symbol) bool {
+	if m == nil || sym == nil || m.resolver == nil || m.resolver.Index() == nil {
+		return false
+	}
+	for _, dataValue := range m.resolver.Index().LookupQualified(dataValueFQN) {
+		if dataValue != nil && m.Conforms(sym, dataValue) {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *Model) conforms(a, b *symbols.Symbol, unioning map[*symbols.Symbol]bool) bool {
 	if a == nil || b == nil {
 		return false

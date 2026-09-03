@@ -666,6 +666,8 @@ part other {
 	part motor;
 }
 attribute label : String = "m";
+attribute def Tag;
+attribute tag : Tag;
 calc def Defaulted :> Query {
 	in source : Element = root;
 	in pattern : String default "m";
@@ -685,6 +687,16 @@ calc def AttributeAsStringDefault :> Query {
 	in source : Element;
 	in pattern : String = label;
 	WhereName(source = OwnedElements(source = source), operator = "startsWith", value = pattern)
+}
+calc def AttributeAsScalarValueDefault :> Query {
+	in source : Element;
+	in amount : ScalarValue = label;
+	OwnedElements(source = source)
+}
+calc def AttributeAsTagDefault :> Query {
+	in source : Element;
+	in marker : Tag = tag;
+	OwnedElements(source = source)
 }
 calc def OverfullDefault :> Query {
 	in pool : Element;
@@ -775,6 +787,18 @@ calc def NestedElementDefault :> Query {
 	if !errors.As(err, &executionError) || executionError.Kind != ErrorBindingType ||
 		executionError.Parameter != "pattern" || executionError.Actual != string(ValueElement) {
 		t.Fatalf("attribute-as-string binding error = %v", err)
+	}
+	for _, test := range []struct{ query, parameter string }{
+		{"AttributeAsScalarValueDefault", "amount"},
+		{"AttributeAsTagDefault", "marker"},
+	} {
+		_, err = fixture.execute(t, test.query, Bindings{
+			"source": {ElementValue(fixture.symbol(t, "root"))},
+		}, Options{})
+		if !errors.As(err, &executionError) || executionError.Kind != ErrorBindingType ||
+			executionError.Parameter != test.parameter || executionError.Actual != string(ValueElement) {
+			t.Fatalf("%s default error = %v", test.query, err)
+		}
 	}
 	_, err = fixture.execute(t, "OverfullDefault", Bindings{
 		"pool": {ElementValue(fixture.symbol(t, "root"))},
