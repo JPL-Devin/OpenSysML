@@ -661,7 +661,7 @@ func (d *decoder) behaviorHead(el *element) (string, bool, error) {
 			if err != nil {
 				return "", true, err
 			}
-			if target != nil && d.names == nil {
+			if target != nil {
 				d.wanted.starts[el.qname] = target.qname
 			}
 			words = append(words, start)

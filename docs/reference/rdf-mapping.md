@@ -703,7 +703,11 @@ since `payload` inside the definition would be the subsetting part itself; and a
 `: Shadowing::Packet` when the outer one is meant. A name shadowed at every
 level falls back to the global form (`$::Shadowing::Packet`), and an element
 that no spelling reaches from where it is written is reported rather than
-written as a different element. The fixture
+written as a different element. What a spelling reaches can depend on how the
+references beside it are spelled — an import's short name may read through a
+sibling import only while that sibling is written qualified — so the chosen
+spellings are checked again in the notation that actually writes them, and
+lengthened until every one reads as the graph states. The fixture
 `testdata/convert/shadowed_references.sysml` covers the three shadowings, and
 `TestRoundTripIsLossless` writes every fixture back from the graph with its
 `sysx:sourceText` removed and requires the graph the notation produces to be the

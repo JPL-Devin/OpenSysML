@@ -275,10 +275,7 @@ func (d *decoder) resolveExpressions() error {
 		}
 		el.expressions[triple.Predicate.Value] = text
 	}
-	if d.names == nil {
-		return d.noteSegments(parents)
-	}
-	return nil
+	return d.noteSegments(parents)
 }
 
 // noteSegments records in wanted the element every feature chain reaches, kept

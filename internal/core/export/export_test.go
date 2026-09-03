@@ -366,6 +366,64 @@ func refusedAsUnsupported(t *testing.T, name string, graph []byte, why string) {
 	}
 }
 
+// TestChainReachingAUsageNamedByAChainWritesItsEffectiveName covers a chain
+// segment the graph links to an unnamed usage whose name comes from the chain
+// it performs: the segment is written as that chain's last member, which is the
+// name the usage answers to (KerML 7.3.4.5), not the chain text.
+func TestChainReachingAUsageNamedByAChainWritesItsEffectiveName(t *testing.T) {
+	src := `package P {
+    action provide { action generate; }
+    part generator { perform provide.generate; }
+    part train { part engine { perform provide.generate; } }
+    allocate generator.generate to train.engine.generate;
+}`
+	graph, err := export.Convert("performed.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	for _, want := range []string{"sysml:targetFeature elmt:P__generator___400", "sysml:targetFeature elmt:P__train__engine___400"} {
+		if !strings.Contains(string(graph), want) {
+			t.Errorf("graph does not link %q\n%s", want, graph)
+		}
+	}
+	notation := structuralRoundTrip(t, "performed", graph)
+	if want := "allocate generator.generate to train.engine.generate;"; !strings.Contains(string(notation), want) {
+		t.Errorf("notation does not write %q\n%s", want, notation)
+	}
+}
+
+// TestSpellingsAreCheckedBesideEachOther covers an import target whose short
+// name reaches its element only while the sibling imports it reads through are
+// fully qualified: `P211` reaches through `Pkg211::*::**` beside
+// `Pkg2::Pkg21::*` only when the resolver can bind their prefixes, so the
+// spelling chosen must reach its element in the notation actually written.
+func TestSpellingsAreCheckedBesideEachOther(t *testing.T) {
+	src := `package ImportTest {
+    package Pkg1 {
+        private import Pkg2::Pkg21::Pkg211::P211;
+        private import Pkg2::Pkg21::*;
+        private import Pkg211::*::**;
+        part p11 : Pkg211::P211;
+        part def P12;
+    }
+    package Pkg2 {
+        private import Pkg1::*;
+        package Pkg21 { package Pkg211 { part def P211 :> P12; } }
+    }
+}`
+	graph, err := export.Convert("imports.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	if want := "sysml:importedNamespace elmt:ImportTest__Pkg2__Pkg21__Pkg211__P211"; !strings.Contains(string(graph), want) {
+		t.Fatalf("graph does not link %q\n%s", want, graph)
+	}
+	notation := structuralRoundTrip(t, "imports", graph)
+	if want := "private import Pkg211::P211;"; !strings.Contains(string(notation), want) {
+		t.Errorf("notation does not write %q\n%s", want, notation)
+	}
+}
+
 // TestChainSegmentIsSpelledToReachTheGraphsTarget covers a chain whose target
 // the graph links to a same-named feature of another type than its operand's:
 // the segment is written qualified, since its name alone would read as the

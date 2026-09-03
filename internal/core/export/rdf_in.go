@@ -10,8 +10,10 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf/ontology"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // sysmlPrefix qualifies a SysML vocabulary property as a diagnostic names it.
@@ -77,8 +79,9 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 		}
 		return nil, err
 	}
-	// The first rendering writes every reference fully qualified; the second
-	// uses the spellings chosen by reading that text as the graph's language.
+	// The first rendering writes every reference fully qualified; reading it
+	// chooses each the shortest spelling that reaches its element. Later
+	// renderings are re-read the same way until every spelling still does.
 	first := newDecoder(graph, nil)
 	text, roots, err := first.notation()
 	if err != nil {
@@ -88,14 +91,24 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 	if !ok {
 		name = "<converted>"
 	}
-	names, err := chooseNames(name, text, first.wanted)
+	names, _, err := chooseNames(name, text, first.wanted, nil)
 	if err != nil {
 		return nil, err
 	}
-	if text, _, err = newDecoder(graph, names).notation(); err != nil {
-		return nil, err
+	for {
+		d := newDecoder(graph, names)
+		if text, _, err = d.notation(); err != nil {
+			return nil, err
+		}
+		revised, changed, err := chooseNames(name, text, d.wanted, names)
+		if err != nil {
+			return nil, err
+		}
+		if !changed {
+			return text, nil
+		}
+		names = revised
 	}
-	return text, nil
 }
 
 func newDecoder(graph *rdf.Graph, names *nameChoices) *decoder {
@@ -175,7 +188,7 @@ type decoder struct {
 	memberships      map[string]membership
 	owningMembership map[string]membership
 	// names is the spelling chosen for each reference; while nil, references are
-	// written fully qualified and noted in wanted for chooseNames to read.
+	// written fully qualified. wanted notes what was written for chooseNames.
 	names  *nameChoices
 	wanted *wanted
 	// printed and usedExpr are written as source text in this pass and rebuilt
@@ -1357,14 +1370,15 @@ func (d *decoder) referenceName(term rdf.Term, el *element) (string, error) {
 	}
 	spelled := d.spelledName(target)
 	key := nameKey{member: el.qname, target: target.qname}
-	if d.names == nil {
-		d.wanted.references[key] = spelled
-		return qualifiedNameText(spelled), nil
+	written := spelled
+	if d.names != nil {
+		var ok bool
+		if written, ok = d.names.references[key]; !ok {
+			written = relativeName(spelled, el.scope)
+		}
 	}
-	if spelling, ok := d.names.references[key]; ok {
-		return qualifiedNameText(spelling), nil
-	}
-	return qualifiedNameText(relativeName(spelled, el.scope)), nil
+	d.wanted.references[key] = wantedReference{qualified: spelled, written: written}
+	return qualifiedNameText(written), nil
 }
 
 // memberName renders a chain segment or `first` start, looked up in its operand
@@ -1435,7 +1449,7 @@ func (d *decoder) effectiveName(el *element) (string, bool) {
 			return "", false
 		}
 		if naming.IsLiteral() {
-			return lastSegment(naming.Value), true
+			return literalTargetName(naming)
 		}
 		next, err := d.referencedElement(naming.Value)
 		if err != nil {
@@ -1479,6 +1493,16 @@ func relativeName(qname, scope string) string {
 		}
 		scope = scope[:cut]
 	}
+}
+
+// literalTargetName is the name a usage takes from a naming feature the graph
+// keeps as text: the last segment of a name, or of the member a chain reaches.
+func literalTargetName(term rdf.Term) (string, bool) {
+	if term.Datatype != rdf.OpenSysML+dtExpression {
+		return lastSegment(term.Value), true
+	}
+	name, _ := ast.TargetName(parser.New(source.New("<naming>", []byte(term.Value))).ParseExpression())
+	return name, name != ""
 }
 
 func lastSegment(qname string) string {
