@@ -162,6 +162,15 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Changed
 
+- **A calc whose `return` declares a result parameter it never binds says so.** In the notation
+  `return` introduces a result *parameter* (SysML.xtext ReturnParameterMember), so `return h;`
+  after `attribute h : Real = …;` declares a second member named `h` — the pilot flags the
+  duplicate name — and returns nothing; the evaluator's "no result expression" error used to
+  stop there. It now names the unbound result parameter and shows the two forms that state a
+  computed result: the body's trailing expression `h`, or `return : Real = h;` (the type and
+  expression are taken from a same-named member that binds a value, and names are spelled as
+  the notation writes them, so `'my result'` keeps its quotes). The grammar and the error's
+  type are unchanged.
 - **A library function is evaluated by its bare name only where the model imports its
   package, as the checker resolves it.** `wheels->size()` in a model that imports no
   `SequenceFunctions` was reported `unresolved reference: size` by the checker yet evaluated
