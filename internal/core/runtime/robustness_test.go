@@ -42,6 +42,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("performed_action_input_bound_by_nothing", testPerformedActionInputBoundByNothing)
 	t.Run("state_entry_action_input_bound_by_nothing", testStateEntryActionInputBoundByNothing)
 	t.Run("state_block_typed_node_input_bound_by_nothing", testStateBlockTypedNodeInputBoundByNothing)
+	t.Run("state_block_node_unvalued_pin_write_checked", testStateBlockNodeUnvaluedPinWriteChecked)
+	t.Run("calc_block_node_unvalued_pin_write_checked", testCalcBlockNodeUnvaluedPinWriteChecked)
 	t.Run("node_binding_to_a_non_parameter", testNodeBindingToANonParameter)
 	t.Run("node_undirected_binding_carried_to_a_non_parameter", testNodeUndirectedBindingCarriedToANonParameter)
 	t.Run("node_pin_bound_to_unequal_values", testNodePinBoundToUnequalValues)
@@ -8553,6 +8555,78 @@ func testStateBlockTypedNodeInputBoundByNothing(t *testing.T) {
 	}
 	if total := exec.StateData()["total"]; !valueEqual(total, integerValue(0)) {
 		t.Errorf("total = %v, want 0: the node's body must not run", total)
+	}
+}
+
+// testStateBlockNodeUnvaluedPinWriteChecked: a write to a pin a node in a state's
+// body declares without a value is checked against that pin's declaration, and the
+// machine's same-named attribute is left as it was.
+func testStateBlockNodeUnvaluedPinWriteChecked(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package test {
+		private import ScalarValues::*;
+		state Machine {
+			attribute v : Integer = 100;
+			entry; then init;
+			state init;
+			state active {
+				entry action {
+					if v == 100 {
+						action p {
+							out v : Integer;
+							assign v := "one";
+						}
+					}
+				}
+			}
+			succession first init then active;
+			succession first active then done;
+		}
+	}`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("state machine Machine not found")
+	}
+	exec, err := newStateExecutor(ctx, sym, nil)
+	if err != nil {
+		t.Fatalf("newStateExecutor: %v", err)
+	}
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	err = exec.RunToCompletion()
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
+	}
+	if !strings.Contains(err.Error(), "v") {
+		t.Errorf("error %q does not name the pin written", err)
+	}
+	if v := exec.StateData()["v"]; !valueEqual(v, integerValue(100)) {
+		t.Errorf("v = %v, want the machine's 100: the node's pin is not the machine's attribute", v)
+	}
+}
+
+// testCalcBlockNodeUnvaluedPinWriteChecked: a pin a node in a calc's loop body
+// declares without a value is the node's to write, so the write is judged against
+// the pin's declaration, not refused as a name the calc never declared.
+func testCalcBlockNodeUnvaluedPinWriteChecked(t *testing.T) {
+	err := calcErrorWithLibraries(t, `package test {
+		private import ScalarValues::*;
+		calc noted {
+			attribute v : Integer = 100;
+			for i in 1..1 {
+				action p {
+					out w : Integer;
+					assign w := "one";
+				}
+			}
+			return : Integer = v;
+		}
+	}`, "noted", nil, 1000)
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
+	}
+	if !strings.Contains(err.Error(), "w") {
+		t.Errorf("error %q does not name the pin written", err)
 	}
 }
 

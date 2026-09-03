@@ -129,7 +129,11 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   it states, holds every pin of the callee as it ended (an argument overriding the node's own
   default included) for its body to read, and returns its `out` values to a same-named block
   local, state attribute or state datum that exists — before, the node's `in x = i` and body
-  statements were skipped and the callee saw only state data. In an action body as in a state's,
+  statements were skipped and the callee saw only state data. A pin such a node in a state's or a
+  calc's body declares without a value (`out v : Integer;`) is the node's own too: its body's
+  `assign v := 1` writes that pin, not a same-named state attribute or calc local — before, the
+  write reached the attribute, or was refused in a calc as a name it never declared. In an action
+  body as in a state's,
   those `out` values return once the node's own body has run, so a body that rewrites an output
   returns what it wrote rather than what the callee produced. A typed or invoked node a derived
   action inherits resolves its callee where the node was declared, so one visible only to the

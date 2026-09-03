@@ -23,12 +23,16 @@ type stmtEnv struct {
 	// last: the attributes the states enclosing the behavior own.
 	outer  []map[string]Value
 	frames []map[string]Value
+	// unvalued names, per frame, the features a frame declares but holds no value
+	// for yet (`out v : Integer;`), which an assignment writes into that frame.
+	unvalued []map[string]bool
 }
 
 // enter pushes a frame for a block about to run and returns it.
 func (env *stmtEnv) enter() map[string]Value {
 	frame := make(map[string]Value)
 	env.frames = append(env.frames, frame)
+	env.unvalued = append(env.unvalued, nil)
 	return frame
 }
 
@@ -36,7 +40,28 @@ func (env *stmtEnv) enter() map[string]Value {
 func (env *stmtEnv) leave() {
 	if len(env.frames) > 0 {
 		env.frames = env.frames[:len(env.frames)-1]
+		env.unvalued = env.unvalued[:len(env.unvalued)-1]
 	}
+}
+
+// declareUnvalued marks a name the innermost entered block declares without a value.
+func (env *stmtEnv) declareUnvalued(name string) {
+	depth := len(env.frames)
+	if depth == 0 {
+		return
+	}
+	if env.unvalued[depth-1] == nil {
+		env.unvalued[depth-1] = make(map[string]bool)
+	}
+	env.unvalued[depth-1][name] = true
+}
+
+// frameDeclares reports whether the i-th entered block declares name, valued or not.
+func (env *stmtEnv) frameDeclares(i int, name string) bool {
+	if _, ok := env.frames[i][name]; ok {
+		return true
+	}
+	return env.unvalued[i][name]
 }
 
 // declare binds a name the innermost entered block declares, or a name of the
@@ -52,7 +77,7 @@ func (env *stmtEnv) declare(name string, value Value) {
 // holdsLocal reports whether an entered block declares name.
 func (env *stmtEnv) holdsLocal(name string) bool {
 	for i := len(env.frames) - 1; i >= 0; i-- {
-		if _, ok := env.frames[i][name]; ok {
+		if env.frameDeclares(i, name) {
 			return true
 		}
 	}
@@ -64,7 +89,7 @@ func (env *stmtEnv) holdsLocal(name string) bool {
 // behavior's own, including one of its output features.
 func (env *stmtEnv) assignLocal(name string, value Value) bool {
 	for i := len(env.frames) - 1; i >= 0; i-- {
-		if _, ok := env.frames[i][name]; ok {
+		if env.frameDeclares(i, name) {
 			env.frames[i][name] = value
 			return true
 		}
@@ -406,8 +431,9 @@ func (e *stmtEngine) blockNode(graph *lower.ActionGraph, node ast.Node) (stmtFlo
 // performances: its pins — the arguments it passes its callee, then the defaults it
 // declares — are declared in a frame of the body its body runs in, and perform, when
 // given, performs the action the node names with those pins and returns the features
-// the performance ended with, which join the frame before the body runs. It returns
-// the frame as the body left it.
+// the performance ended with, which join the frame before the body runs. A feature
+// the node declares without a value is the frame's too, unvalued until the body
+// assigns it. It returns the frame as the body left it.
 func (e *stmtEngine) nodeInBlock(
 	graph *lower.ActionGraph,
 	node *ast.Usage,
@@ -437,10 +463,11 @@ func (e *stmtEngine) nodeInBlock(
 		}
 	}
 	for _, feature := range graph.Features[node] {
-		if feature.Value == nil {
+		if _, held := pins[feature.Name]; held {
 			continue
 		}
-		if _, held := pins[feature.Name]; held {
+		if feature.Value == nil {
+			e.env.declareUnvalued(feature.Name)
 			continue
 		}
 		value, err := e.evalIn(feature.Scope).Eval(feature.Value)
