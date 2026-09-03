@@ -68,6 +68,41 @@ class FoldTest(unittest.TestCase):
         out = changelog.fold(text, {"Added": ["- a."]})
         self.assertEqual(out, "# Changelog\n\n## Unreleased\n\n### Added\n\n- a.\n\n")
 
+    def test_new_section_lands_after_its_canonical_predecessors(self):
+        # The real file's Unreleased section is not in canonical order; existing
+        # sections stay put and a new one goes after the last that precedes it.
+        text = "## Unreleased\n\n### Added\n\n- a.\n\n### Performance\n\n- p.\n\n### Fixed\n\n- f.\n\n### Changed\n\n- c.\n"
+        out = changelog.fold(text, {"Security": ["- s."], "Deprecated": ["- d."]})
+        order = [l for l in out.splitlines() if l.startswith("### ")]
+        self.assertEqual(
+            order, ["### Added", "### Performance", "### Fixed", "### Security", "### Changed", "### Deprecated"]
+        )
+
+
+class RenderTest(unittest.TestCase):
+    def setUp(self):
+        d = pathlib.Path(tempfile.mkdtemp())
+        self.saved = (changelog.CHANGELOG, changelog.FRAGMENTS)
+        changelog.CHANGELOG = d / "CHANGELOG.md"
+        changelog.FRAGMENTS = d / "changes" / "unreleased"
+        changelog.FRAGMENTS.mkdir(parents=True)
+        changelog.CHANGELOG.write_text(BASE, encoding="utf-8")
+
+    def tearDown(self):
+        changelog.CHANGELOG, changelog.FRAGMENTS = self.saved
+
+    def test_rerun_after_interrupted_render_does_not_duplicate(self):
+        (changelog.FRAGMENTS / "a.added.md").write_text("- **A.** a.\n", encoding="utf-8")
+        (changelog.FRAGMENTS / "b.fixed.md").write_text("- **B.** b.\n", encoding="utf-8")
+        self.assertEqual(changelog.render(), 0)
+        once = changelog.CHANGELOG.read_text(encoding="utf-8")
+        self.assertEqual(sorted(p.name for p in changelog.FRAGMENTS.iterdir()), [])
+        # Simulate a run that wrote the changelog but died before deleting a fragment.
+        (changelog.FRAGMENTS / "b.fixed.md").write_text("- **B.** b.\n", encoding="utf-8")
+        self.assertEqual(changelog.render(), 0)
+        self.assertEqual(changelog.CHANGELOG.read_text(encoding="utf-8"), once)
+        self.assertEqual(sorted(p.name for p in changelog.FRAGMENTS.iterdir()), [])
+
 
 class FragmentTest(unittest.TestCase):
     def _frag(self, name: str, body: str) -> pathlib.Path:

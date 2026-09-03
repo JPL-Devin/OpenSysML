@@ -128,12 +128,12 @@ def fold(text: str, entries: dict[str, list[str]]) -> str:
             content = sections[i][1].strip("\n")
             sections[i] = (section, (content + "\n\n" if content else "") + block)
         else:
+            # Insert after the last existing section that precedes it canonically.
             rank = SECTIONS.index(section)
-            at = len(sections)
+            at = 0
             for i, n in enumerate(names):
-                if n in SECTIONS and SECTIONS.index(n) > rank:
-                    at = i
-                    break
+                if n in SECTIONS and SECTIONS.index(n) < rank:
+                    at = i + 1
             sections.insert(at, (section, block))
 
     out = preamble.rstrip("\n") + "\n\n" if preamble.strip() else "\n"
@@ -147,12 +147,16 @@ def render(dry_run: bool = False) -> int:
     if not paths:
         print("no fragments under changes/unreleased/")
         return 0
+    text = CHANGELOG.read_text(encoding="utf-8")
+    start, end = _unreleased_bounds(text)
     entries: dict[str, list[str]] = {}
     for p in paths:
         section, body = parse_fragment(p)
+        # Already folded by an interrupted run: only the deletion is outstanding.
+        if body in text[start:end]:
+            continue
         entries.setdefault(section, []).append(body)
-    text = CHANGELOG.read_text(encoding="utf-8")
-    new = fold(text, entries)
+    new = fold(text, entries) if entries else text
     if dry_run:
         start, end = _unreleased_bounds(new)
         sys.stdout.write("## Unreleased\n" + new[start:end])
