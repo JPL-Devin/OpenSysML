@@ -148,16 +148,13 @@ func (e *executor) bind(bindings Bindings) error {
 			}
 		}
 	}
+	defaulted := make([]queryplan.Parameter, 0)
 	for _, parameter := range parameters {
 		values, present := bindings[parameter.Name]
 		if !present {
 			if parameter.HasDefault {
-				return &Error{
-					Kind:      ErrorDefaultUnavailable,
-					Query:     e.definition.Name(),
-					Parameter: parameter.Name,
-					Origin:    parameter.Origin,
-				}
+				defaulted = append(defaulted, parameter)
+				continue
 			}
 			if parameter.Multiplicity.Known && parameter.Multiplicity.Lower == 0 {
 				e.bindings[parameter.Name] = sequence{}
@@ -170,30 +167,49 @@ func (e *executor) bind(bindings Bindings) error {
 				Origin:    parameter.Origin,
 			}
 		}
-		if !withinMultiplicity(int64(len(values)), parameter.Multiplicity) {
+		if err := e.bindValues(parameter, values); err != nil {
+			return err
+		}
+	}
+	// Defaults are evaluated once per execution, in parameter order, after the explicit bindings.
+	for _, parameter := range defaulted {
+		value, err := e.evaluate(parameter.Default)
+		if err != nil {
+			return err
+		}
+		if err := e.bindValues(parameter, value.values); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// bindValues checks one parameter's values against its effective type and
+// multiplicity, whether they were supplied by the caller or by a default.
+func (e *executor) bindValues(parameter queryplan.Parameter, values []Value) error {
+	if !withinMultiplicity(int64(len(values)), parameter.Multiplicity) {
+		return &Error{
+			Kind:      ErrorBindingMultiplicity,
+			Query:     e.definition.Name(),
+			Parameter: parameter.Name,
+			Expected:  multiplicityString(parameter.Multiplicity),
+			Actual:    strconv.Itoa(len(values)),
+			Origin:    parameter.Origin,
+		}
+	}
+	for _, value := range values {
+		if !e.valueConforms(value, parameter.Type) {
 			return &Error{
-				Kind:      ErrorBindingMultiplicity,
+				Kind:      ErrorBindingType,
 				Query:     e.definition.Name(),
 				Parameter: parameter.Name,
-				Expected:  multiplicityString(parameter.Multiplicity),
-				Actual:    strconv.Itoa(len(values)),
+				Expected:  parameter.Type,
+				Actual:    string(value.Kind()),
 				Origin:    parameter.Origin,
 			}
 		}
-		for _, value := range values {
-			if !e.valueConforms(value, parameter.Type) {
-				return &Error{
-					Kind:      ErrorBindingType,
-					Query:     e.definition.Name(),
-					Parameter: parameter.Name,
-					Expected:  parameter.Type,
-					Actual:    string(value.Kind()),
-					Origin:    parameter.Origin,
-				}
-			}
-		}
-		e.bindings[parameter.Name] = sequence{values: append([]Value(nil), values...)}
 	}
+	e.bindings[parameter.Name] = sequence{values: append([]Value(nil), values...)}
 	return nil
 }
 
@@ -270,6 +286,8 @@ func (e *executor) evaluate(expression queryplan.Expression) (sequence, error) {
 			return sequence{}, e.errorAt(ErrorMissingBinding, expression)
 		}
 		return cloneSequence(value), nil
+	case queryplan.OperationElement:
+		return e.evaluateElement(expression)
 	case queryplan.OperationLiteral:
 		return e.evaluateLiteral(expression)
 	case queryplan.OperationSequence:
@@ -379,6 +397,14 @@ func (e *executor) evaluateInvoke(expression queryplan.Expression) (sequence, er
 		return sequence{}, err
 	}
 	return result, nil
+}
+
+func (e *executor) evaluateElement(expression queryplan.Expression) (sequence, error) {
+	element, ok := expression.Element()
+	if !ok {
+		return sequence{}, e.errorAt(ErrorMissingElement, expression)
+	}
+	return sequence{values: []Value{valueAt(ElementValue(element), expression.Origin())}}, nil
 }
 
 func (e *executor) evaluateLiteral(expression queryplan.Expression) (sequence, error) {

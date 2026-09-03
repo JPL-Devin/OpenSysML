@@ -185,6 +185,177 @@ calc def Caller :> Query {
 	}
 }
 
+func literalOf(t *testing.T, expression Expression, kind LiteralKind, value string) {
+	t.Helper()
+	gotKind, gotValue := expression.Literal()
+	if expression.Operation() != OperationLiteral || gotKind != kind || gotValue != value {
+		t.Fatalf("expression = %+v, want %s literal %q", expression, kind, value)
+	}
+}
+
+func TestCompileRetainsParameterDefaults(t *testing.T) {
+	fixture := loadQueryFixture(t, `
+part shared;
+calc def Helper :> Query {
+	in source : Element;
+	OwnedElements(source = source)
+}
+calc def Defaulted :> Query {
+	in source : Element = shared;
+	in pattern : String default "m";
+	in depth : Integer = 2;
+	in candidates : Element[0..*] = Helper(source = source);
+	in optional : Element[0..*] = null;
+	WhereName(source = candidates, operator = "startsWith", value = pattern)
+}
+`)
+	program := fixture.compile(t, "Defaulted")
+	definitions := program.Definitions()
+	if len(definitions) != 2 || definitions[0].Name() != "Fixture::Helper" {
+		t.Fatalf("definitions = %+v, want Helper compiled ahead of Defaulted", definitions)
+	}
+	definition := definitions[1]
+	if got := definition.Dependencies(); !slices.Equal(got, []string{"Fixture::Helper"}) {
+		t.Fatalf("dependencies = %v, want the default's invocation recorded", got)
+	}
+	params := make(map[string]Parameter)
+	for _, param := range definition.Parameters() {
+		if !param.HasDefault {
+			t.Fatalf("parameter %s must retain its default", param.Name)
+		}
+		if param.DefaultQuery != "Fixture::Defaulted" {
+			t.Fatalf("parameter %s declaring query = %q", param.Name, param.DefaultQuery)
+		}
+		if !param.Default.Origin().Located() {
+			t.Fatalf("parameter %s default must retain provenance", param.Name)
+		}
+		params[param.Name] = param
+	}
+	source := params["source"].Default
+	element, ok := source.Element()
+	if source.Operation() != OperationElement || !ok || element != fixture.symbol(t, "shared") ||
+		source.Target() != "Fixture::shared" {
+		t.Fatalf("source default = %+v, want the shared element bound", source)
+	}
+	literalOf(t, params["pattern"].Default, LiteralString, `"m"`)
+	literalOf(t, params["depth"].Default, LiteralInteger, "2")
+	candidates := params["candidates"].Default
+	if candidates.Operation() != OperationInvoke || candidates.Target() != "Fixture::Helper" {
+		t.Fatalf("candidates default = %+v", candidates)
+	}
+	if arguments := candidates.Arguments(); len(arguments) != 1 ||
+		arguments[0].Value.Operation() != OperationParameter || arguments[0].Value.Target() != "source" {
+		t.Fatalf("candidates default arguments = %+v", arguments)
+	}
+	literalOf(t, params["optional"].Default, LiteralNull, "null")
+
+	mutable := definition.Parameters()
+	mutable[3].Default.Arguments()[0] = Argument{}
+	mutable[3] = Parameter{}
+	fresh := definition.Parameters()[3]
+	if !fresh.HasDefault || fresh.Default.Arguments()[0].Name != "source" {
+		t.Fatal("mutating returned parameters changed the compiled default")
+	}
+}
+
+func TestCompileResolvesInheritedAndRedefinedDefaults(t *testing.T) {
+	fixture := loadQueryFixture(t, `
+package Library {
+	part fallback;
+	calc def Base :> Query {
+		in source : Element = fallback;
+		in pattern : String default "m";
+		WhereName(source = OwnedElements(source = source), operator = "startsWith", value = pattern)
+	}
+}
+part fallback;
+calc def Inherits :> Library::Base {
+	in redefines source;
+}
+calc def Redefines :> Library::Base {
+	in redefines pattern default "s";
+}
+calc def Restated :> Redefines {
+	in redefines pattern;
+}
+`)
+	inherited := fixture.compile(t, "Inherits").Definitions()[0].Parameters()
+	if len(inherited) != 2 {
+		t.Fatalf("Inherits parameters = %+v", inherited)
+	}
+	source := inherited[0]
+	element, ok := source.Default.Element()
+	if source.Name != "source" || !source.HasDefault || !ok ||
+		element != fixture.symbol(t, "Library::fallback") ||
+		source.DefaultQuery != "Fixture::Library::Base" {
+		t.Fatalf("inherited source default = %+v, want Library::fallback from Base", source)
+	}
+	if pattern := inherited[1]; pattern.Name != "pattern" || !pattern.HasDefault ||
+		pattern.DefaultQuery != "Fixture::Library::Base" {
+		t.Fatalf("inherited pattern default = %+v", pattern)
+	}
+	literalOf(t, inherited[1].Default, LiteralString, `"m"`)
+
+	for _, name := range []string{"Redefines", "Restated"} {
+		params := make(map[string]Parameter)
+		for _, param := range fixture.compile(t, name).Definitions()[0].Parameters() {
+			params[param.Name] = param
+		}
+		if len(params) != 2 {
+			t.Fatalf("%s parameters = %+v", name, params)
+		}
+		if pattern := params["pattern"]; !pattern.HasDefault || pattern.DefaultQuery != "Fixture::Redefines" {
+			t.Fatalf("%s pattern default = %+v, want the redefining default", name, pattern)
+		}
+		literalOf(t, params["pattern"].Default, LiteralString, `"s"`)
+		if source := params["source"]; !source.HasDefault || source.DefaultQuery != "Fixture::Library::Base" {
+			t.Fatalf("%s source default = %+v, want the inherited default", name, source)
+		}
+	}
+}
+
+func TestCompileRejectsUnrepresentableDefaults(t *testing.T) {
+	fixture := loadQueryFixture(t, `
+part root;
+calc def Chained :> Query {
+	in source : Element = root.name;
+	OwnedElements(source = source)
+}
+calc def Arithmetic :> Query {
+	in source : Element;
+	in depth : Integer = 1 + 1;
+	Descendants(source = source, maxDepth = depth)
+}
+calc def Inherited :> Arithmetic {
+	in redefines source;
+}
+calc def Caller :> Query {
+	in source : Element;
+	Chained(source = source)
+}
+`)
+	for _, test := range []struct {
+		name  string
+		param string
+	}{
+		{"Chained", "source"},
+		{"Arithmetic", "depth"},
+		{"Inherited", "depth"},
+		{"Caller", "source"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := Compile(fixture.index, fixture.model, fixture.resolver, fixture.symbol(t, test.name))
+			planning := planningError(t, err, ErrorUnsupportedDefault)
+			if planning.Parameter != test.param || !planning.Origin.Located() {
+				t.Fatalf("error = %+v, want parameter %s with provenance", planning, test.param)
+			}
+			if !strings.Contains(planning.Error(), test.param) {
+				t.Fatalf("message %q must name the parameter", planning.Error())
+			}
+		})
+	}
+}
+
 func TestCompileInheritsQueryResultExpression(t *testing.T) {
 	fixture := loadQueryFixture(t, `
 calc def Base :> Query {

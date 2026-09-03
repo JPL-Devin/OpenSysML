@@ -8,6 +8,23 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Added
 
+- **A document-query parameter default is used when the caller leaves it unbound.** A query
+  could declare `in root : Element = telescope;` or `in pattern : String default "m";`, but
+  the plan recorded only that a default existed and execution refused the unbound parameter
+  with `relies on a default not retained in the plan`. The plan now retains each default as a
+  compiled expression together with the query that declared it, under the rule `%run-query`
+  already applied to bindings: a default naming a model element binds that element, any other
+  default is evaluated — once per query execution, before any row is produced, in the scope
+  of the query that declared it, within the same visit and invocation budgets as the query
+  body. Inherited defaults apply, a redefining parameter's default replaces the inherited one,
+  the value passes the same type and multiplicity checks as an explicit binding, and an
+  explicit binding still overrides. `%run-query`, `-run-query`, `RunDocumentQuery`,
+  a document content block that leaves the parameter unbound, and a query invoked by another
+  query all take the default through the one executor. A default written in a form the query
+  expression language has no operation for is refused when the query is planned
+  (`document-query-unsupported-default`, naming the parameter) rather than at execution;
+  the `default-unavailable` execution failure no longer exists.
+
 - **`%features` reads out a whole object tree, as text or as JSON.** A large run could not
   be read out: the listing stopped at 200 lines with `… (listing truncated)`, so the
   counters two levels under a context of twelve parts were simply absent, and there was no

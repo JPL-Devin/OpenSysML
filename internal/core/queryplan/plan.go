@@ -1,13 +1,17 @@
 // Package queryplan compiles native SysML document queries into immutable plans.
 package queryplan
 
-import "github.com/Open-MBEE/OpenSysML/internal/core/provenance"
+import (
+	"github.com/Open-MBEE/OpenSysML/internal/core/provenance"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+)
 
 // Operation is one closed document-query planning operation.
 type Operation string
 
 const (
 	OperationParameter       Operation = "parameter"
+	OperationElement         Operation = "element"
 	OperationLiteral         Operation = "literal"
 	OperationSequence        Operation = "sequence"
 	OperationInvoke          Operation = "invoke"
@@ -46,13 +50,21 @@ type Multiplicity struct {
 	Known         bool
 }
 
-// Parameter is one typed query input or result.
+// Parameter is one typed query input or result. A defaulted input carries its
+// compiled default and the query whose declaration supplied it.
 type Parameter struct {
 	Name         string
 	Type         string
 	Multiplicity Multiplicity
 	HasDefault   bool
+	Default      Expression
+	DefaultQuery string
 	Origin       provenance.Origin
+}
+
+func (p Parameter) clone() Parameter {
+	p.Default = p.Default.clone()
+	return p
 }
 
 // Argument is one normalized invocation argument.
@@ -68,6 +80,7 @@ type Expression struct {
 	target    string
 	literal   LiteralKind
 	value     string
+	element   *symbols.Symbol
 	arguments []Argument
 	origin    provenance.Origin
 }
@@ -80,6 +93,11 @@ func (e Expression) Target() string { return e.target }
 
 // Literal returns the kind and source value of a literal expression.
 func (e Expression) Literal() (LiteralKind, string) { return e.literal, e.value }
+
+// Element returns the model element an element expression binds.
+func (e Expression) Element() (*symbols.Symbol, bool) {
+	return e.element, e.operation == OperationElement && e.element != nil
+}
 
 // Arguments returns an independent copy of the expression's arguments.
 func (e Expression) Arguments() []Argument {
@@ -113,7 +131,11 @@ func (d Definition) Name() string { return d.name }
 
 // Parameters returns the definition's ordered effective inputs.
 func (d Definition) Parameters() []Parameter {
-	return append([]Parameter(nil), d.parameters...)
+	out := make([]Parameter, len(d.parameters))
+	for i, parameter := range d.parameters {
+		out[i] = parameter.clone()
+	}
+	return out
 }
 
 // Result returns the definition's typed result parameter.

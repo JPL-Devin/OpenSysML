@@ -95,6 +95,46 @@ Results are ordered element sequences. Order is the model's declaration order
 until an `OrderBy` says otherwise, and elements are deduplicated by identity,
 so a query is deterministic by construction.
 
+## Parameter defaults
+
+An `in` parameter may declare a default, and a caller that leaves it unbound
+gets that default — from `%run-query`, `-run-query`, `RunDocumentQuery`, a
+document's content block, or another query's invocation alike:
+
+```sysml
+calc def HeavySubsystems :> Query {
+	in root : Element = telescope;         // a name binds the element it refers to
+	in threshold : String default "10";    // anything else is evaluated
+	WhereFeature(
+		source = Descendants(source = root, maxDepth = 3),
+		'feature' = "mass", operator = ">=", value = threshold
+	)
+}
+
+calc def LightSubsystems :> HeavySubsystems {
+	in redefines threshold default "5";    // a redefining default wins
+}
+```
+
+- A default follows the binding rule of `%run-query <p>=<expr>`: a default that
+  names a model element binds that element; any other default is an expression.
+- An expression default is evaluated once per query execution, before any row is
+  produced, in the scope of the query that declared it — it may name that
+  query's other parameters (`in candidates : Element[0..*] = OwnedElements(source = root);`)
+  or invoke another query, within the usual visit and invocation budgets.
+  Defaults are filled in parameter order after the explicit bindings, so a
+  default may read a parameter bound explicitly or defaulted before it; one that
+  reads a later, still unbound parameter fails as a missing binding.
+- Defaults are inherited: `LightSubsystems` keeps `root = telescope` from
+  `HeavySubsystems`, and its own `threshold` default replaces the inherited one.
+  The nearest default along the redefinition chain wins.
+- The value a default produces is checked against the parameter's type and
+  multiplicity exactly like an explicit binding, and an explicit binding always
+  overrides the default.
+- A default the plan cannot represent (a form the query expression language has
+  no operation for) is a planning error naming the parameter, reported with the
+  other `document-query-*` diagnostics rather than at execution time.
+
 ## Collection
 
 ### Direct children: `OwnedElements`

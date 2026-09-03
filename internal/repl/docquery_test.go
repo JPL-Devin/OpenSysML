@@ -7,8 +7,9 @@ import (
 )
 
 // docQueryModel declares document queries over a small part tree: a projecting
-// query, one relying on a default, one composing another by name, and one
-// traversing named relationships, plus one naming an unsupported kind.
+// query, one relying on a default, one redefining inherited defaults, one
+// composing another by name, and one traversing named relationships, plus one
+// naming an unsupported kind.
 const docQueryModel = `package Observatory {
 	private import DocumentQueries::*;
 	private import KerML::Root::Element;
@@ -61,6 +62,11 @@ const docQueryModel = `package Observatory {
 		in root : Element;
 		in pattern : String default "mo";
 		WhereName(source = OwnedElements(source = root), operator = "startsWith", value = pattern)
+	}
+
+	calc def DefaultedSubsystems :> NamedSubsystems {
+		in redefines root = telescope;
+		in redefines pattern default "seg";
 	}
 
 	calc def ComposedQuery :> Query {
@@ -153,9 +159,6 @@ func TestRunQuerySurfacesTypedExecutionFailures(t *testing.T) {
 		"error:", "unknown binding depth")
 	wants(t, run(t, s, "%run-query HeavySubsystems root=1"),
 		"error:", "binding root has type integer, expected")
-	// A default is intentionally unavailable at execution time, not evaluated.
-	wants(t, run(t, s, "%run-query NamedSubsystems root=telescope"),
-		"error:", "relies on a default not retained in the plan")
 	// An unsupported relationship kind is a typed execution failure.
 	wants(t, run(t, s, "%run-query UnknownRelatedQuery root=telescope"),
 		"error:", `does not support relationship kind "refinement"`)
@@ -178,6 +181,21 @@ func TestRunQueryExecutesComposedQueries(t *testing.T) {
 		"Columns: name, mass",
 		"Row 1: Observatory::telescope::mount",
 		"Row 2: Observatory::telescope::segmentControl")
+}
+
+func TestRunQueryUsesParameterDefaults(t *testing.T) {
+	s := docQuerySession(t)
+	// An omitted parameter takes its declared default; an explicit binding overrides it.
+	wants(t, run(t, s, "%run-query NamedSubsystems root=telescope"),
+		"✓ Query Observatory::NamedSubsystems returned 1 row",
+		"Row 1: Observatory::telescope::mount")
+	wants(t, run(t, s, `%run-query NamedSubsystems root=telescope pattern="op"`),
+		"✓ Query Observatory::NamedSubsystems returned 1 row",
+		"Row 1: Observatory::telescope::optics")
+	// An element-naming default binds that element, so every parameter may be omitted.
+	wants(t, run(t, s, "%run-query DefaultedSubsystems"),
+		"✓ Query Observatory::DefaultedSubsystems returned 1 row",
+		"Row 1: Observatory::telescope::segmentControl")
 }
 
 func TestRunQueryBindingExpressions(t *testing.T) {

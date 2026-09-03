@@ -27,7 +27,6 @@ const (
 	ErrorUnknownParameter      ErrorKind = "unknown-parameter"
 	ErrorDuplicateBinding      ErrorKind = "duplicate-binding"
 	ErrorMissingBinding        ErrorKind = "missing-binding"
-	ErrorDefaultUnavailable    ErrorKind = "default-unavailable"
 	ErrorUnsupportedBinding    ErrorKind = "unsupported-binding"
 	ErrorBindingType           ErrorKind = "binding-type"
 	ErrorBindingMultiplicity   ErrorKind = "binding-multiplicity"
@@ -117,14 +116,6 @@ func (e *Error) Error() string {
 		return fmt.Sprintf("document %s content %s binds parameter %s of %s more than once", e.Document, e.Content, e.Parameter, e.Query)
 	case ErrorMissingBinding:
 		return fmt.Sprintf("document %s content %s does not bind required parameter %s of %s", e.Document, e.Content, e.Parameter, e.Query)
-	case ErrorDefaultUnavailable:
-		return fmt.Sprintf(
-			"document %s content %s must bind parameter %s of %s: default expressions are not evaluated",
-			e.Document,
-			e.Content,
-			e.Parameter,
-			e.Query,
-		)
 	case ErrorUnsupportedBinding:
 		return fmt.Sprintf("document %s content %s binds parameter %s of %s with an unsupported expression", e.Document, e.Content, e.Parameter, e.Query)
 	case ErrorBindingType:

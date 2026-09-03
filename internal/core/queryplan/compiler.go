@@ -1,6 +1,7 @@
 package queryplan
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 
@@ -108,7 +109,15 @@ func (c *compiler) compileDefinition(sym *symbols.Symbol) error {
 	c.state[sym] = stateVisiting
 	c.stack = append(c.stack, sym)
 
-	params, result, err := c.signature(sym)
+	dependencies := make([]string, 0)
+	seenDependencies := make(map[string]bool)
+	dependency := func(name string) {
+		if !seenDependencies[name] {
+			seenDependencies[name] = true
+			dependencies = append(dependencies, name)
+		}
+	}
+	params, result, err := c.signature(sym, dependency)
 	if err != nil {
 		return err
 	}
@@ -123,14 +132,7 @@ func (c *compiler) compileDefinition(sym *symbols.Symbol) error {
 	if err != nil {
 		return err
 	}
-	dependencies := make([]string, 0)
-	seenDependencies := make(map[string]bool)
-	expression, err := c.compileExpression(sym, resultExpression.owner, params, resultExpression.node, func(name string) {
-		if !seenDependencies[name] {
-			seenDependencies[name] = true
-			dependencies = append(dependencies, name)
-		}
-	})
+	expression, err := c.compileExpression(sym, resultExpression.owner, params, resultExpression.node, dependency)
 	if err != nil {
 		return err
 	}
@@ -148,9 +150,13 @@ func (c *compiler) compileDefinition(sym *symbols.Symbol) error {
 	return nil
 }
 
-func (c *compiler) signature(sym *symbols.Symbol) ([]Parameter, Parameter, error) {
+// signature compiles sym's effective inputs and result. Input defaults are
+// compiled in the scope that declared them; dependency records the queries
+// those defaults invoke.
+func (c *compiler) signature(sym *symbols.Symbol, dependency func(string)) ([]Parameter, Parameter, error) {
 	effective := c.model.BehaviorParametersOf(sym)
 	params := make([]Parameter, 0, len(effective))
+	inputs := make([]*symbols.Symbol, 0, len(effective))
 	var result Parameter
 	for _, item := range effective {
 		param := c.parameter(item.Symbol)
@@ -167,24 +173,128 @@ func (c *compiler) signature(sym *symbols.Symbol) ([]Parameter, Parameter, error
 			}
 		}
 		params = append(params, param)
+		inputs = append(inputs, item.Symbol)
+	}
+	for i := range params {
+		if err := c.compileDefault(sym, inputs[i], params, &params[i], dependency); err != nil {
+			return nil, Parameter{}, err
+		}
 	}
 	return params, result, nil
 }
 
 func (c *compiler) parameter(sym *symbols.Symbol) Parameter {
-	param := Parameter{
+	return Parameter{
 		Name:         sym.Name,
 		Type:         c.parameterType(sym),
 		Multiplicity: c.parameterMultiplicity(sym),
 		Origin:       provenance.Symbol(sym),
 	}
+}
+
+// compileDefault retains the nearest default along the parameter's lineage, so
+// a redefining parameter's default wins over an inherited one. A default that
+// names an element binds that element; any other form is compiled as an
+// expression in the declaring query's scope.
+func (c *compiler) compileDefault(
+	query *symbols.Symbol,
+	sym *symbols.Symbol,
+	params []Parameter,
+	param *Parameter,
+	dependency func(string),
+) error {
 	for _, candidate := range c.parameterLineage(sym) {
-		if usage, ok := candidate.Decl.(*ast.Usage); ok && usage.Value != nil {
-			param.HasDefault = true
-			break
+		usage, ok := candidate.Decl.(*ast.Usage)
+		if !ok || usage.Value == nil {
+			continue
+		}
+		owner := declaringQuery(candidate)
+		if owner == nil {
+			return &Error{
+				Kind:      ErrorUnsupportedDefault,
+				Query:     symbols.FQNOf(query),
+				Parameter: param.Name,
+				Origin:    provenance.Symbol(candidate),
+			}
+		}
+		value, err := c.compileDefaultExpression(query, owner, param.Name, params, usage.Value, dependency)
+		if err != nil {
+			return err
+		}
+		param.HasDefault = true
+		param.Default = value
+		param.DefaultQuery = symbols.FQNOf(owner)
+		return nil
+	}
+	return nil
+}
+
+// ignoreDependency discards the dependencies of an invoked query's defaults;
+// that query's own compilation records them.
+func ignoreDependency(string) {}
+
+// declaringQuery is the calculation whose body declares a parameter usage.
+func declaringQuery(param *symbols.Symbol) *symbols.Symbol {
+	if param.OwnerScope == nil {
+		return nil
+	}
+	return param.OwnerScope.Owner()
+}
+
+func (c *compiler) compileDefaultExpression(
+	query *symbols.Symbol,
+	owner *symbols.Symbol,
+	parameter string,
+	params []Parameter,
+	node ast.Node,
+	dependency func(string),
+) (Expression, error) {
+	if reference, ok := node.(*ast.FeatureReference); ok {
+		if element, ok := c.namedElement(query, owner, reference); ok {
+			return Expression{
+				operation: OperationElement,
+				target:    symbols.FQNOf(element),
+				element:   element,
+				origin:    provenance.Node(owner.DocName, node),
+			}, nil
 		}
 	}
-	return param
+	value, err := c.compileExpression(query, owner, params, node, dependency)
+	if err != nil {
+		var planning *Error
+		if errors.As(err, &planning) && planning.Kind == ErrorUnsupportedExpression {
+			return Expression{}, &Error{
+				Kind:      ErrorUnsupportedDefault,
+				Query:     symbols.FQNOf(query),
+				Parameter: parameter,
+				Origin:    planning.Origin,
+			}
+		}
+		return Expression{}, err
+	}
+	return value.expression, nil
+}
+
+// namedElement resolves a default's name to a model element that is not one
+// of the query's own parameters.
+func (c *compiler) namedElement(
+	query *symbols.Symbol,
+	owner *symbols.Symbol,
+	reference *ast.FeatureReference,
+) (*symbols.Symbol, bool) {
+	target, ok := c.resolver.ResolveQualified(owner.Scope, reference.Name)
+	if !ok || target == nil {
+		return nil, false
+	}
+	for _, param := range c.model.BehaviorParametersOf(query) {
+		if c.parameterIncludes(param.Symbol, target) {
+			return nil, false
+		}
+	}
+	if canonical, ok := c.resolver.ResolveAliasTarget(target); ok {
+		target = canonical
+	}
+	return target, true
 }
 
 func (c *compiler) parameterType(sym *symbols.Symbol) string {
@@ -518,7 +628,7 @@ func (c *compiler) compileInvocation(
 		}
 	}
 	if operation, ok := builtins[targetName]; ok {
-		targetParams, targetResult, err := c.signature(target)
+		targetParams, targetResult, err := c.signature(target, ignoreDependency)
 		if err != nil {
 			return typedExpression{}, err
 		}
@@ -567,7 +677,7 @@ func (c *compiler) compileInvocation(
 		}
 	}
 
-	targetParams, targetResult, err := c.signature(target)
+	targetParams, targetResult, err := c.signature(target, ignoreDependency)
 	if err != nil {
 		return typedExpression{}, err
 	}

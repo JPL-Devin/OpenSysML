@@ -457,6 +457,39 @@ func TestCompileReportsMissingBinding(t *testing.T) {
 	}
 }
 
+func TestCompileLeavesDefaultedParametersToTheExecutor(t *testing.T) {
+	fixture := loadPlanningFixtureFile(t, "../docrender/testdata/defaulted_queries.sysml")
+	plan := fixture.mustCompile(t, "DefaultedReport")
+	content := plan.Content()
+	if len(content) != 3 {
+		t.Fatalf("content = %d nodes, want 3", len(content))
+	}
+	heavy := content[0].Query()
+	if heavy == nil || len(heavy.Bindings()) != 0 {
+		t.Fatalf("heavy query = %+v, want no explicit bindings", heavy)
+	}
+	params := map[string]queryplan.Parameter{}
+	for _, definition := range heavy.Program().Definitions() {
+		if definition.Name() != heavy.Entry() {
+			continue
+		}
+		for _, param := range definition.Parameters() {
+			params[param.Name] = param
+		}
+	}
+	if !params["root"].HasDefault || !params["threshold"].HasDefault {
+		t.Fatalf("parameters = %+v, want retained defaults", params)
+	}
+	light := content[1].Query()
+	if light == nil || len(light.Bindings()) != 0 {
+		t.Fatalf("light query = %+v, want no explicit bindings", light)
+	}
+	explicit := content[2].Query()
+	if explicit == nil || len(explicit.Bindings()) != 2 {
+		t.Fatalf("explicit query = %+v, want two explicit bindings", explicit)
+	}
+}
+
 func TestCompileReportsBindingTypeMismatch(t *testing.T) {
 	fixture := loadPlanningFixture(t, `
 		calc def Names :> Query {

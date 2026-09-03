@@ -595,10 +595,6 @@ calc def Children :> Query {
 	in source : Element;
 	OwnedElements(source = source)
 }
-calc def Defaulted :> Query {
-	in source : Element = root;
-	OwnedElements(source = source)
-}
 calc def UnknownKind :> Query {
 	in source : Element;
 	RelatedElements(
@@ -645,10 +641,6 @@ calc def BadDirection :> Query {
 	if !errors.As(err, &executionError) || executionError.Kind != ErrorUnknownBinding {
 		t.Fatalf("unknown binding error = %v", err)
 	}
-	_, err = fixture.execute(t, "Defaulted", Bindings{}, Options{})
-	if !errors.As(err, &executionError) || executionError.Kind != ErrorDefaultUnavailable {
-		t.Fatalf("default binding error = %v", err)
-	}
 	_, err = fixture.execute(t, "UnknownKind", Bindings{
 		"source": {ElementValue(fixture.symbol(t, "root"))},
 	}, Options{})
@@ -660,6 +652,197 @@ calc def BadDirection :> Query {
 	}, Options{})
 	if !errors.As(err, &executionError) || executionError.Kind != ErrorInvalidOperator {
 		t.Fatalf("invalid direction error = %v", err)
+	}
+}
+
+func TestExecuteEvaluatesParameterDefaults(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root {
+	part mount;
+	part optics;
+	part segmentControl;
+}
+part other {
+	part motor;
+}
+calc def Defaulted :> Query {
+	in source : Element = root;
+	in pattern : String default "m";
+	WhereName(source = OwnedElements(source = source), operator = "startsWith", value = pattern)
+}
+calc def DerivedDefault :> Query {
+	in source : Element;
+	in candidates : Element[0..*] = OwnedElements(source = source);
+	WhereName(source = candidates, operator = "startsWith", value = "m")
+}
+calc def MismatchedDefault :> Query {
+	in source : Element;
+	in pattern : String default 3;
+	WhereName(source = OwnedElements(source = source), operator = "startsWith", value = pattern)
+}
+calc def OverfullDefault :> Query {
+	in pool : Element;
+	in source : Element = OwnedElements(source = pool);
+	OwnedElements(source = source)
+}
+calc def ChainedDefaults :> Query {
+	in source : Element = root;
+	in candidates : Element[0..*] = OwnedElements(source = source);
+	WhereName(source = candidates, operator = "startsWith", value = "o")
+}
+calc def ForwardDefault :> Query {
+	in candidates : Element[0..*] = OwnedElements(source = source);
+	in source : Element = root;
+	WhereName(source = candidates, operator = "startsWith", value = "o")
+}
+`)
+	result, err := fixture.execute(t, "Defaulted", Bindings{}, Options{})
+	if err != nil {
+		t.Fatalf("execute with defaults: %v", err)
+	}
+	if got := elementNames(result); !slices.Equal(got, []string{"mount"}) {
+		t.Fatalf("defaulted rows = %v, want [mount]", got)
+	}
+	result, err = fixture.execute(t, "Defaulted", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "other"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute overriding element default: %v", err)
+	}
+	if got := elementNames(result); !slices.Equal(got, []string{"motor"}) {
+		t.Fatalf("overridden element rows = %v, want [motor]", got)
+	}
+	result, err = fixture.execute(t, "Defaulted", Bindings{
+		"pattern": {StringValue("o")},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute overriding scalar default: %v", err)
+	}
+	if got := elementNames(result); !slices.Equal(got, []string{"optics"}) {
+		t.Fatalf("overridden scalar rows = %v, want [optics]", got)
+	}
+	result, err = fixture.execute(t, "DerivedDefault", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "root"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute default referencing another parameter: %v", err)
+	}
+	if got := elementNames(result); !slices.Equal(got, []string{"mount"}) {
+		t.Fatalf("derived default rows = %v, want [mount]", got)
+	}
+	var executionError *Error
+	_, err = fixture.execute(t, "MismatchedDefault", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "root"))},
+	}, Options{})
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorBindingType ||
+		executionError.Parameter != "pattern" || executionError.Actual != string(ValueInteger) {
+		t.Fatalf("default type error = %v", err)
+	}
+	_, err = fixture.execute(t, "OverfullDefault", Bindings{
+		"pool": {ElementValue(fixture.symbol(t, "root"))},
+	}, Options{})
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorBindingMultiplicity ||
+		executionError.Parameter != "source" || executionError.Actual != "3" {
+		t.Fatalf("default multiplicity error = %v", err)
+	}
+	result, err = fixture.execute(t, "ChainedDefaults", Bindings{}, Options{})
+	if err != nil {
+		t.Fatalf("execute default chained through an earlier default: %v", err)
+	}
+	if got := elementNames(result); !slices.Equal(got, []string{"optics"}) {
+		t.Fatalf("chained default rows = %v, want [optics]", got)
+	}
+	// A default may only read parameters bound before it, in parameter order.
+	_, err = fixture.execute(t, "ForwardDefault", Bindings{}, Options{})
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorMissingBinding {
+		t.Fatalf("forward default error = %v", err)
+	}
+	result, err = fixture.execute(t, "ForwardDefault", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "root"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute forward default with the source bound: %v", err)
+	}
+	if got := elementNames(result); !slices.Equal(got, []string{"optics"}) {
+		t.Fatalf("forward default rows = %v, want [optics]", got)
+	}
+}
+
+func TestExecuteNamedQueryInvocationUsesCalleeDefaults(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root {
+	part mount;
+	part optics;
+}
+part other {
+	part motor;
+}
+calc def Named :> Query {
+	in source : Element = root;
+	in pattern : String default "m";
+	WhereName(source = OwnedElements(source = source), operator = "startsWith", value = pattern)
+}
+calc def Omitting :> Query {
+	Named()
+}
+calc def Overriding :> Query {
+	in source : Element;
+	Named(source = source, pattern = "o")
+}
+`)
+	result, err := fixture.execute(t, "Omitting", Bindings{}, Options{})
+	if err != nil {
+		t.Fatalf("execute omitting callee arguments: %v", err)
+	}
+	if got := elementNames(result); !slices.Equal(got, []string{"mount"}) {
+		t.Fatalf("callee default rows = %v, want [mount]", got)
+	}
+	result, err = fixture.execute(t, "Overriding", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "root"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute overriding callee defaults: %v", err)
+	}
+	if got := elementNames(result); !slices.Equal(got, []string{"optics"}) {
+		t.Fatalf("overridden callee rows = %v, want [optics]", got)
+	}
+}
+
+func TestExecuteDefaultsRespectBudgetsAndRunOncePerExecution(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root {
+	part alpha { part deep; }
+	part beta { part deep; }
+	part gamma { part deep; }
+}
+calc def Named :> Query {
+	in source : Element;
+	OwnedElements(source = source)
+}
+calc def Defaulted :> Query {
+	in source : Element = root;
+	in candidates : Element[0..*] = Named(source = source);
+	in shadow : Element[0..*] = Named(source = source);
+	WhereName(source = candidates, operator = "startsWith", value = "")
+}
+`)
+	// Two defaults invoke Named once each; three result rows would need more calls if
+	// defaults were re-evaluated per row.
+	result, err := fixture.execute(t, "Defaulted", Bindings{}, Options{InvocationBudget: 2})
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if got := elementNames(result); !slices.Equal(got, []string{"alpha", "beta", "gamma"}) {
+		t.Fatalf("rows = %v", got)
+	}
+	var executionError *Error
+	_, err = fixture.execute(t, "Defaulted", Bindings{}, Options{InvocationBudget: 1})
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorInvocationBudget {
+		t.Fatalf("invocation budget error = %v", err)
+	}
+	_, err = fixture.execute(t, "Defaulted", Bindings{}, Options{VisitBudget: 1})
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorVisitBudget {
+		t.Fatalf("visit budget error = %v", err)
 	}
 }
 
