@@ -147,6 +147,9 @@ type Context struct {
 
 	// probes is the number of probes under way; see beginProbe.
 	probes int
+	// probeWrites are the feature values the probes under way changed, with what
+	// each held before, restored as each probe ends.
+	probeWrites []probeWrite
 	// runDepth is the number of runs currently under way, so the step counter is
 	// reset per run rather than accumulated over the context's whole life.
 	runDepth int
@@ -374,16 +377,38 @@ func (ctx *Context) beginExecutorRun(started *bool) func() {
 // beginProbe brackets an evaluation previewing what a run would do: it spends the
 // run's budget while it lasts, so a runaway stays bounded, and refunds it after.
 // A probe starts no behavior (see startClassifierBehaviors), so an object it
-// materializes reads as declared and is discarded with it.
+// materializes reads as declared and is discarded with it; a feature value it
+// materializes or writes on an object that outlives it (see noteProbeWrite) is
+// restored, so a value derived under the probe is derived again when next read.
 func (ctx *Context) beginProbe() func() {
 	steps, elements := ctx.steps, ctx.elements
+	mark := len(ctx.probeWrites)
 	ctx.runDepth++
 	ctx.probes++
 	return func() {
+		for i := len(ctx.probeWrites) - 1; i >= mark; i-- {
+			*ctx.probeWrites[i].fv = ctx.probeWrites[i].prior
+		}
+		ctx.probeWrites = ctx.probeWrites[:mark]
 		ctx.probes--
 		ctx.runDepth--
 		ctx.steps, ctx.elements = steps, elements
 	}
+}
+
+// probeWrite is a feature value a probe changed and what it held before.
+type probeWrite struct {
+	fv    *FeatureValue
+	prior FeatureValue
+}
+
+// noteProbeWrite records a feature value about to change, for the probe under
+// way to restore; outside a probe it records nothing.
+func (ctx *Context) noteProbeWrite(fv *FeatureValue) {
+	if ctx.probes == 0 {
+		return
+	}
+	ctx.probeWrites = append(ctx.probeWrites, probeWrite{fv: fv, prior: *fv})
 }
 
 // newActivation begins one activation: the identity of a single execution of a

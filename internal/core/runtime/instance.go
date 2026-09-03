@@ -367,6 +367,7 @@ func (inst *Instance) SetFeatureValue(ctx *Context, name string, value Value) er
 	if err := ctx.checkDefault(inst, fv, name, value); err != nil {
 		return err
 	}
+	ctx.noteProbeWrite(fv)
 	if isScalarFeature(fv.Feature) {
 		fv.Value = value
 		fv.Values = Value{}
@@ -416,6 +417,7 @@ func (inst *Instance) materializeFeatureValue(ctx *Context, name string) (*Featu
 // binding connectors; binding resolution calls it to inspect an endpoint.
 func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string) (*FeatureValue, error) {
 	fv := inst.FeatureValues[name]
+	ctx.noteProbeWrite(fv)
 
 	// A variation holds the variant it was bound to, and nothing until it is
 	// bound: it classifies its variants abstractly, so it is no object of itself.

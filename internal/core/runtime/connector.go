@@ -186,6 +186,7 @@ func (ctx *Context) bindEndFeatureValue(inst *Instance, end semantics.ConnectorE
 		}}
 		inst.FeatureValues[end.Name] = fv
 	}
+	ctx.noteProbeWrite(fv)
 	fv.Value = val
 	fv.Values = Value{}
 	fv.Materialized = true
@@ -208,6 +209,7 @@ func (ctx *Context) bindParticipants(inst *Instance, ends []ConnectorEnd) {
 		}}
 		inst.FeatureValues[participantEndName] = fv
 	}
+	ctx.noteProbeWrite(fv)
 	fv.Value = Value{}
 	fv.Values = NewSequenceValue(seq)
 	fv.Materialized = true

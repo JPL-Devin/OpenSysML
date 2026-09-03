@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -118,10 +119,30 @@ func (ctx *Context) PendingMessages() []Message {
 	return out
 }
 
+// SignalDefinitionKinds are the definitions a signal is declared as: what an
+// accept may be typed by and a send may carry. A behavior definition is neither.
+var SignalDefinitionKinds = []symbols.SymbolKind{
+	symbols.SymbolAttributeDef,
+	symbols.SymbolItemDef,
+	symbols.SymbolOccurrenceDef,
+	symbols.SymbolPartDef,
+	symbols.SymbolIndividualDef,
+	symbols.SymbolEnumerationDef,
+	symbols.SymbolMetadataDef,
+}
+
+// IsSignalDefinition reports whether a symbol declares a definition a signal may
+// be typed by, one of SignalDefinitionKinds.
+func IsSignalDefinition(sym *symbols.Symbol) bool {
+	return isDefinitionSymbol(sym) && slices.Contains(SignalDefinitionKinds, sym.Kind)
+}
+
 // SignalMessage builds the message `send Signal(args) to <object>` posts, for PostMessage;
 // a nil object is one anyone may take, an argument no feature of the signal admits is refused.
+// An element that is no signal definition (see SignalDefinitionKinds) is refused with
+// ErrNotASignal.
 func (ctx *Context) SignalMessage(signal *symbols.Symbol, args map[string]Value, to *Instance) (Message, error) {
-	if !isDefinitionSymbol(signal) {
+	if !IsSignalDefinition(signal) {
 		return Message{}, fmt.Errorf("%w: %s", ErrNotASignal, symbolText(signal))
 	}
 	features := ctx.FeaturesOf(signal)

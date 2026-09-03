@@ -8,22 +8,9 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 const sendUsage = "usage: %send <signal>[(<parameter>=<expression>, ...)] [to <object>]"
-
-// signalKinds are the definitions a signal is declared as: what an accept may
-// be typed by and a send may carry. A behavior definition is neither.
-var signalKinds = []symbols.SymbolKind{
-	symbols.SymbolAttributeDef,
-	symbols.SymbolItemDef,
-	symbols.SymbolOccurrenceDef,
-	symbols.SymbolPartDef,
-	symbols.SymbolIndividualDef,
-	symbols.SymbolEnumerationDef,
-	symbols.SymbolMetadataDef,
-}
 
 // sendRequest is a %send line taken apart: the signal, its arguments as
 // written, and the object named after `to`, empty when none was.
@@ -291,7 +278,7 @@ func (s *Session) machinesOf(inst *runtime.Instance) []*runtime.StateExecutor {
 // signalMessage builds the message to post, typed by the definition the name
 // resolves to; a bare name no declaration types is matched by name, as `accept go` is.
 func (s *Session) signalMessage(ctx *runtime.Context, req sendRequest, target signalTarget) (runtime.Message, bool, error) {
-	sym, _, lerr := s.lookupSymbolOfKinds(req.signal, signalKinds...)
+	sym, _, lerr := s.lookupSymbolOfKinds(req.signal, runtime.SignalDefinitionKinds...)
 	if lerr != nil {
 		if !errors.Is(lerr, runtime.ErrUnresolvedReference) {
 			return runtime.Message{}, false, lerr
@@ -302,7 +289,7 @@ func (s *Session) signalMessage(ctx *runtime.Context, req sendRequest, target si
 		}
 		return named, false, nil
 	}
-	if !slices.Contains(signalKinds, sym.Kind) {
+	if !runtime.IsSignalDefinition(sym) {
 		return runtime.Message{}, false, fmt.Errorf("%s is a %s, not a signal definition", req.signal, sym.Notation())
 	}
 	if err := checkArgumentNames(req.args); err != nil {

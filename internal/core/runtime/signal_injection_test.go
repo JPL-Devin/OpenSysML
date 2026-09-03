@@ -154,6 +154,40 @@ func TestSignalMessageDrivesTheExhibitedMachine(t *testing.T) {
 	}
 }
 
+// A behavior definition types no signal: no accept is typed by a state, action
+// or calc definition, so a message named by one is refused as a usage is.
+func TestSignalMessageRefusesBehaviorDefinitions(t *testing.T) {
+	src := `
+		private import ScalarValues::*;
+		attribute def Go;
+		state def Life { entry; then idle; state idle; }
+		action def Kick;
+		calc def Twice { in x : Integer; return : Integer = x * 2; }
+		part def Lamp {
+			exhibit state life : Life;
+		}
+		part lamp : Lamp;
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "kinds.sysml", parseAndBuild(t, src))
+	root := idx.DocumentRoot("kinds.sysml")
+	lamp, err := ctx.occurrenceOf(resolveSymbol(t, root, "lamp"))
+	if err != nil {
+		t.Fatalf("occurrenceOf(lamp): %v", err)
+	}
+	if _, err := ctx.SignalMessage(resolveSymbol(t, root, "Go"), nil, lamp); err != nil {
+		t.Fatalf("SignalMessage(Go): %v", err)
+	}
+	for _, name := range []string{"Life", "Kick", "Twice"} {
+		sym := resolveSymbol(t, root, name)
+		if IsSignalDefinition(sym) {
+			t.Errorf("IsSignalDefinition(%s %s) = true, want false", sym.Notation(), name)
+		}
+		if _, err := ctx.SignalMessage(sym, nil, lamp); !errors.Is(err, ErrNotASignal) {
+			t.Errorf("SignalMessage(%s %s) = %v, want ErrNotASignal", sym.Notation(), name, err)
+		}
+	}
+}
+
 // A signal in flight is due at the current time, so stepping dispatches it
 // before a timer the queue holds for later.
 func TestProcessNextEventTakesAPendingSignalBeforeALaterTimer(t *testing.T) {
@@ -882,6 +916,78 @@ func TestSignalLeftForASiblingWhoseGuardFails(t *testing.T) {
 			t.Errorf("left/right = %s after the failed guard, want idle/idle", got)
 		}
 	})
+}
+
+// A derived value a guard materializes under Decide is dropped with the probe,
+// so dispatch after a message rewrote its dependency derives it afresh.
+func TestDecideLeavesNoValueAGuardMaterializes(t *testing.T) {
+	src := `
+		private import ScalarValues::*;
+		attribute def Bump;
+		attribute def Go;
+		part def Dimmer {
+			attribute base : Integer = 1;
+			attribute threshold : Integer = base * 2;
+			exhibit state life {
+				entry; then idle;
+				state idle;
+				transition first idle accept Bump do assign base := 5 then idle;
+				transition idle_on first idle accept Go if threshold > 5 then on;
+				state on;
+			}
+		}
+		part dimmer : Dimmer;
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "dimmer.sysml", parseAndBuild(t, src))
+	root := idx.DocumentRoot("dimmer.sysml")
+	dimmer, err := ctx.occurrenceOf(resolveSymbol(t, root, "dimmer"))
+	if err != nil {
+		t.Fatalf("occurrenceOf(dimmer): %v", err)
+	}
+	life, ok := dimmer.ExhibitedState()
+	if !ok {
+		t.Fatal("the dimmer exhibits no machine")
+	}
+	bump, err := ctx.SignalMessage(resolveSymbol(t, root, "Bump"), nil, dimmer)
+	if err != nil {
+		t.Fatalf("SignalMessage(Bump): %v", err)
+	}
+	go_, err := ctx.SignalMessage(resolveSymbol(t, root, "Go"), nil, dimmer)
+	if err != nil {
+		t.Fatalf("SignalMessage(Go): %v", err)
+	}
+	threshold := dimmer.FeatureValues["threshold"]
+	if threshold == nil || threshold.Materialized {
+		t.Fatalf("threshold = %+v; want an unmaterialized feature value before anything reads it", threshold)
+	}
+
+	ctx.PostMessage(bump)
+	if d, err := life.State.Decide(go_); err != nil || d.Enabled() {
+		t.Fatalf("Decide(Go) with base 1 = %+v, %v; want nothing enabled", d, err)
+	}
+	if threshold.Materialized || threshold.Value.Kind != ValInvalid {
+		t.Errorf("threshold = %+v after Decide; want it unmaterialized as before", threshold)
+	}
+	ctx.PostMessage(go_)
+
+	if err := life.State.ProcessNextEvent(); err != nil {
+		t.Fatalf("ProcessNextEvent(Bump): %v", err)
+	}
+	if got := FormatValue(dimmer.FeatureValues["base"].HeldValue()); got != "5" {
+		t.Fatalf("base = %s after Bump, want 5", got)
+	}
+	if d, err := life.State.Decide(go_); err != nil || len(d.Fires) != 1 || d.Fires[0] != "transition idle_on" {
+		t.Errorf("Decide(Go) with base 5 = %+v, %v; want idle_on firing", d, err)
+	}
+	if err := life.State.ProcessNextEvent(); err != nil {
+		t.Fatalf("ProcessNextEvent(Go): %v", err)
+	}
+	if got := activeLeaf(life.State); got != "on" {
+		t.Fatalf("state after Go = %s, want on: the guard read the threshold the probe derived from base 1", got)
+	}
+	if got := FormatValue(threshold.HeldValue()); got != "10" {
+		t.Errorf("threshold = %s after dispatch, want 10 derived from base 5", got)
+	}
 }
 
 // ExhibitedMachineOf finds the machine an object runs by its definition or its

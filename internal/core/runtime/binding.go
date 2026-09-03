@@ -123,6 +123,7 @@ func (ctx *Context) resolveBindingValue(inst *Instance, name string) (Value, boo
 		return Value{}, false, &BindingCycleError{Features: []string{bindingLocationText(bindingLocation{instance: inst, name: name})}}
 	}
 	if target.BindingDerived && ctx.CompositeTypeOf(target.Feature) == nil {
+		ctx.noteProbeWrite(target)
 		target.Value = Value{}
 		target.Values = Value{}
 		target.Materialized = false
@@ -463,6 +464,7 @@ func (ctx *Context) assignBindingValue(inst *Instance, fv *FeatureValue, name st
 	if err := ctx.checkDefault(inst, fv, name, val); err != nil {
 		return err
 	}
+	ctx.noteProbeWrite(fv)
 	if isScalarFeature(fv.Feature) {
 		fv.Value = val
 		fv.Values = Value{}

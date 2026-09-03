@@ -2057,7 +2057,8 @@ func (d Decision) Enabled() bool {
 
 // Decide decides a message as the step dispatching it would — the payload bound,
 // the guards evaluated against the data as it stands — without taking it. The
-// machine, its data, its budget and the message are left as they were found; an
+// machine, its data, its budget and the message are left as they were found: a
+// value a guard derives on the way is derived again when dispatch reads it, and an
 // object materialized on the way — to bind the payload, or by a guard reaching an
 // occurrence not yet built — runs no behavior and is discarded, along with any
 // message or behavior of its. A payload or guard error is returned.

@@ -520,6 +520,7 @@ func (ctx *Context) performanceOccurrence(
 			return nil, fmt.Errorf("%w: materialize %s of object #%d: %w",
 				sentinel, name, inst.ID, err)
 		}
+		ctx.noteProbeWrite(fv)
 		fv.Value = Value{Kind: ValInstance, Instance: occurrence.ID}
 		fv.Materialized = true
 		return occurrence, nil
