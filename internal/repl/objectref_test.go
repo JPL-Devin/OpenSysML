@@ -467,17 +467,26 @@ func TestSupersededObjectIsNotAddressableById(t *testing.T) {
 // identity, members of a multi-valued part included; the check reads no feature
 // that has not been materialized already.
 func TestHeldObjectsStayAddressableById(t *testing.T) {
+	lazy := loadFixture(t, "testdata/nested_part.sysml")
+	run(t, lazy, "%instantiate Nested::Car")
+	car := lazy.instances["Nested::Car"]
+	if fv := car.FeatureValues["engine"]; fv != nil && fv.Materialized {
+		t.Fatal("engine was materialized by %instantiate alone")
+	}
+	if _, _, err := lazy.objectRef("#99"); err == nil {
+		t.Error("#99 reached an object")
+	}
+	if fv := car.FeatureValues["engine"]; fv != nil && fv.Materialized {
+		t.Error("looking up an identity materialized engine")
+	}
+
 	s := loadFixture(t, "testdata/nested_machine.sysml")
 	run(t, s, "%instantiate Fleet::driver")
-	driver := s.instances["Fleet::driver"]
-	if fv := driver.FeatureValues["r"]; fv != nil && fv.Materialized {
-		t.Fatal("r was materialized by %instantiate alone")
+	if fv := s.instances["Fleet::driver"].FeatureValues["r"]; !fv.Materialized {
+		t.Fatalf("instantiating Fleet::driver left its machine-exhibiting part unread: %+v", fv)
 	}
 	if _, _, err := s.objectRef("#99"); err == nil {
 		t.Error("#99 reached an object")
-	}
-	if fv := driver.FeatureValues["r"]; fv != nil && fv.Materialized {
-		t.Error("looking up an identity materialized r")
 	}
 
 	nested := objectIDIn(t, run(t, s, "%state Fleet::driver.r"))
