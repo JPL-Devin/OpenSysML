@@ -268,7 +268,7 @@ func (e *encoder) headTail(n *ast.Usage, from int) (string, bool) {
 	if from < n.Span().Offset || from >= end {
 		return "", false
 	}
-	text := strings.TrimSpace(e.file.Text(source.Span{Offset: from, Len: end - from}))
+	text := strings.TrimSpace(e.src.slice(source.Span{Offset: from, Len: end - from}))
 	if strings.ContainsAny(text, "{}") {
 		return "", false
 	}
@@ -358,7 +358,7 @@ func (d *decoder) relatedEnds(el *element) (ends []string, payload string, err e
 			payload = text
 			continue
 		}
-		ordered = append(ordered, end{index: d.intOf(term, rdf.OpenSysML+xEndIndex), text: text})
+		ordered = append(ordered, end{index: intOf(d.graph, term, rdf.OpenSysML+xEndIndex), text: text})
 	}
 	slices.SortStableFunc(ordered, func(a, b end) int { return a.index - b.index })
 	for _, end := range ordered {
