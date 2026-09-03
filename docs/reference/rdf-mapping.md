@@ -160,7 +160,12 @@ qualified name, which is what its IRIs carry. The notation writer re-materialize
 the id differs from the encoding of the qualified name, and one `@ProjectRef`
 per root carrying provenance. Subjects are classified by their `rdf:type`,
 never by parsing the id — a declared id may legitimately end in `_om` or embed
-`_p` without being a membership or expression node.
+`_p` without being a membership or expression node. A subject stating several
+classes is read as the one that is a subclass of all the others in the SysML
+ontology (`sysml:OwningMembership, sysml:ResultExpressionMembership` is a
+`ResultExpressionMembership`; `sysml:ActionDefinition, sysml:Function,
+sysml:CalculationDefinition` a `CalculationDefinition`, in whichever order the
+triples come); a set of classes with no such member is refused, naming the subject.
 
 ### What each element carries
 
@@ -214,7 +219,7 @@ The `sysx:` properties:
 | Property | Why it exists |
 |----------|---------------|
 | `sysx:memberIndex` | Declaration order. The notation is sensitive to the order of members; an RDF graph is an unordered set, so the index is what lets a conversion back to notation reproduce the original sequence. |
-| `sysx:hasBody` | Distinguishes `part def A;` from `part def A { }`, which are different source and would otherwise convert back identically. |
+| `sysx:hasBody` | Distinguishes `part def A;` from `part def A { }`, which are different source and would otherwise convert back identically. Also marks an expression body node, so `{}` rebuilds from structure. |
 | `sysx:sourceText`, `sysx:sourceTail` | The element's lines as written, comments and blank lines included, which a conversion back to notation prefers while they still state what the graph states. An element with members carries the lines ahead of them as its text and those after them as its tail. See [Source text](#source-text). |
 | `sysx:sourceLanguage` | On each root element, the grammar the file was written in — `sysml` or `kerml` — so the text is read back under the grammar it was written under. Absent for a buffer with no model extension (standard input, a REPL session), which the parser reads as SysML with KerML's `all` prefix. See [Source text](#source-text). |
 | `sysx:declaredKeyword` | The kind keyword as written, when it is one of the synonyms several keywords share (`datatype` and `attribute`, `function` and `calc`, `snapshot` and `occurrence`). The AST records one kind for all of them, so without this the notation would come back rewritten. Also the keyword a constraint body's condition is stated with (`assert`, `assume`, or absent for a bare condition, which asserts implicitly). |
@@ -223,7 +228,7 @@ The `sysx:` properties:
 | `sysx:endVerb` | The verb a head writes ahead of its ends when its own keyword is the noun form (`connection c connect a to b`). Without it the verb would be missing or doubled. |
 | `sysx:sourceMember`, `sysx:targetMember` | The member a succession sequences from or to where the notation names no end (`then b;`, or a `then` beside an unnamed member), or where the name the notation supplies for an end links no element (a `then` after `action redefines walk;` whose `walk` is inherited). The end is the element itself rather than only a name, so a same-named member elsewhere cannot be mistaken for it. |
 | `sysx:condition` | The condition a condition member states, as its notation. |
-| `sysx:resultExpression` | The expression a body ends in: on a `sysx:ResultExpressionMember`, the bare expression a calculation or case body computes; on an expression body (`{ in y : Real; y + x }`), the expression after its parameters. See [Result expressions](#result-expressions). |
+| `sysx:resultExpression` | The expression an expression body (`{ in y : Real; y + x }`) ends in, after its parameters. The bare expression a calculation or case body computes is not an extension: it is the Expression its `sysml:ResultExpressionMembership` owns. See [Result expressions](#result-expressions). |
 | `sysx:bodyParameter`, `sysx:bodyMember` | The `in` parameters an expression body declares, each a node carrying its name, type, bounds and value, and the other declarations it makes ahead of its result: a `doc` as a `sysml:Documentation` node, anything else as notation. Both share one `sysx:memberIndex` sequence, the order they were written in. |
 | `sysx:prefixMetadata` | A metadata annotation as written (`#Safety`). It states what the element it prefixes is, and the AST records no span for it, so the notation is read from the source. |
 | `sysx:declaredId` | The element's id came from an explicit `@IdentityMetadata::ElementId` annotation, see [Element identity](#element-identity). |
@@ -235,7 +240,7 @@ Metaclass names with no counterpart in the OMG vocabulary are typed in the
 `sysx:` namespace rather than `sysml:`, so a consumer can tell them from the
 standard metaclasses: `sysx:Alias`, `sysx:FilterMember`,
 `sysx:MultiplicityDeclaration`, `sysx:ConstraintMember`, `sysx:AssumeMember`,
-`sysx:RequireMember`, `sysx:ResultExpressionMember`, `sysx:BodyMember`, and the
+`sysx:RequireMember`, `sysx:BodyMember`, and the
 behavioral ones listed under [Behavior](#behavior).
 
 Comments, documentation and textual representations convert as their own
@@ -405,7 +410,17 @@ elmt:Demo__Vehicle
 - **The compact shape still reads.** `sysml:owningNamespace` is still written,
   and a graph carrying only it — what earlier releases wrote — converts back
   unchanged. A membership that states neither of its ends is reported as
-  unsupported naming `sysml:memberElement`, rather than dropping the member.
+  unsupported naming `sysml:memberElement`, rather than dropping the member; so
+  is one whose spellings of an end (`sysml:memberElement`,
+  `sysml:ownedMemberElement`, `sysml:ownedMemberFeature`,
+  `sysml:ownedResultExpression`, `sysml:ownedRelatedElement`) name different
+  elements, one whose end is a literal rather than an element, and a second
+  membership owning an element another already owns — rather than keeping one
+  edge and dropping the rest. The element's side is held to the same rule: its
+  `sysml:owningMembership`/`sysml:owningRelationship` must agree with each other
+  and with the membership that claims it, and its `sysml:owner`,
+  `sysml:owningNamespace` and `sysml:owningRelatedElement` with the namespace
+  that membership puts it under.
 
 Tests: `ownership_graph_test.go` (element ids, roots, membership wiring, the
 tree coming back from the memberships with `sysx:sourceText` and
@@ -578,6 +593,15 @@ The rules the tree follows:
   `MetadataAccessExpression`, `Expression` for a body. `sysx:operator`,
   `sysx:argumentIndex` and `sysx:sourceText` are the properties the metamodel
   does not define.
+- **A literal's `sysml:value` is a typed literal** whose lexical form is the
+  token the notation spells it with: `"2"^^xsd:integer`, `"1.5"^^xsd:decimal`,
+  `"1.5E3"^^xsd:double` (an exponent is outside `xsd:decimal`'s lexical space),
+  `"true"^^xsd:boolean`, and a string with its escapes resolved. Read back, a
+  value is spelled as that token again: a rational with no fractional digits
+  (`"3"^^xsd:decimal`) gains them (`3.0`), a boolean is `true` or `false`, a
+  string is quoted and escaped; a value no token spells — a signed number, `INF`,
+  `NaN` — is reported as unsupported, naming the node, since the notation states
+  a sign as an operator applied to a literal.
 - **A `LiteralString` carries its value**, the escapes of the notation read: a
   `"say \"hi\""` in the file is `sysml:value "say \"hi\""` in Turtle, and a
   value edited in the graph is written back as the literal that reads to it.
@@ -604,7 +628,9 @@ The rules the tree follows:
   `sysx:resultExpression` is the tree of the expression after them, so a nested
   body (`{ in y : Real; f(x = { in z : Real; z + y }) }`) and an `in expr`
   parameter's body (`in expr keep : Boolean { in v : Real; v > x }`) rebuild from
-  the graph alone. Documentation opening a body (`{ doc /* … */ in y : Real; y }`)
+  the graph alone. The node states `sysx:hasBody`, so an empty body (`{}`) is
+  told apart from an expression with no structure at all and comes back as `{}`.
+  Documentation opening a body (`{ doc /* … */ in y : Real; y }`)
   is a `sysml:Documentation` node with its `sysml:body`. Any other declaration a
   body makes ahead of its result (`{ in y : Real; private attribute k : Real = 2; y * k }`)
   is a `sysx:BodyMember` carrying its notation; a graph that states one without its
@@ -624,41 +650,43 @@ legacy literals, foreign trees, unsupported shapes, round-trip exactness),
 
 A calculation, case, analysis or verification body may end in a bare expression,
 the result it computes (`calc def Double { in x : Real; x * 2 }`). The abstract
-syntax owns that expression through a `ResultExpressionMembership`, and so does
-the graph: the expression is a member of its own, typed
-`sysx:ResultExpressionMember`, placed by `sysx:memberIndex` like every other
+syntax owns that expression through a `ResultExpressionMembership` whose
+`ownedResultExpression` redefines `ownedMemberFeature` — the Expression *is* the
+member — and so does the graph: the expression is an element of its own, typed
+by its expression metaclass, placed by `sysx:memberIndex` like every other
 member so a body whose result follows other declarations comes back in the same
-order, and owned through a membership typed `sysml:ResultExpressionMembership`
-that states the expression as `sysml:ownedResultExpression`:
+order (a graph that states no index, as a standard one does, gets it last, where
+the grammar has it), and owned through a membership typed `sysml:ResultExpressionMembership`
+that states it as both `sysml:memberElement` and `sysml:ownedResultExpression`:
 
 ```turtle
 elmt:P__Double___401
-    a sysx:ResultExpressionMember ;
+    a sysml:OperatorExpression ;
     sysml:qualifiedName "P::Double::@1" ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysml:owningMembership elmt:P__Double___401_om ;
-    sysx:resultExpression expr:P__Double___401_presultExpression .
+    sysml:operator "*" ;
+    sysml:argument expr:P__Double___401_pa0, expr:P__Double___401_pa1 ;
+    sysx:sourceText "    x * 2\n" .
 
 elmt:P__Double___401_om
     a sysml:ResultExpressionMembership ;
     sysml:memberElement elmt:P__Double___401 ;
-    sysml:ownedResultExpression expr:P__Double___401_presultExpression .
-
-expr:P__Double___401_presultExpression
-    a sysml:OperatorExpression ;
-    sysx:sourceText "x * 2" ;
-    sysml:operator "*" ;
-    sysml:argument expr:P__Double___401_presultExpression_pa0, expr:P__Double___401_presultExpression_pa1 .
+    sysml:ownedMemberFeature elmt:P__Double___401 ;
+    sysml:ownedResultExpression elmt:P__Double___401 .
 ```
 
-The member has no name, so it is addressed by position, as the shorthand
-relationships under [Limitations](#limitations) are. The expression is the same
-tree a feature value is, so it converts back from the graph with no
-`sysx:sourceText` at all, whether it is an operator, a literal, an invocation, a
-feature chain, a conditional or an expression body; a graph another tool wrote
-that states the result only as the membership's `sysml:ownedResultExpression`
-reads too. A result member whose graph states no expression is reported, naming
-the member, rather than written as an empty line.
+The expression has no name, so it is addressed by position, as the shorthand
+relationships under [Limitations](#limitations) are. Being an element, its
+`sysx:sourceText` is its lines as written, as under [Source text](#source-text),
+rather than the bare notation an expression node carries. It is the same tree a
+feature value is, so it converts back from the graph with no `sysx:sourceText`
+at all, whether it is an operator, a literal, an invocation, a feature chain, a
+conditional or an expression body. Any Expression a `ResultExpressionMembership`
+owns is written back as its body's result, so a graph another tool wrote with no
+`sysx:` term on it reads too. A result whose graph states no expression
+structure is reported, naming the expression, rather than written as an empty
+line.
 
 Tests: `result_expression_test.go` (the membership, the place among other
 members, the round trip with `sysx:sourceText` stripped, the trip from the
@@ -942,7 +970,8 @@ would be refused as a duplicate.
 
 - blank nodes and `[ ... ]` — every element must have a stable IRI
 - RDF collections `( ... )` — order is carried by `sysx:memberIndex`
-- an element with no `rdf:type`, or a metaclass outside the mapping
+- an element with no `rdf:type`, or a metaclass outside the mapping, or several
+  `rdf:type`s none of which is a subclass of all the others
 - a reference whose IRI names no subject of the graph and whose id no subject
   carries as `sysml:elementId`; a dangling id is reported as such, never left
   as a silently unresolvable name
@@ -955,6 +984,35 @@ would be refused as a duplicate.
 - Turtle syntax errors, reported with a line number
 - literal shorthands (bare numbers and booleans); literals must be quoted,
   with an `xsd:` datatype where one applies
+- a literal whose datatype its property does not take, or with a language tag.
+  Every metamodel property the mapping reads as text is a `String`, so a name
+  is a plain or `xsd:string` literal; `"3"^^xsd:integer` or `"x"@en` stated as
+  one is a different term, not the name `3` or `x`, and is reported naming the
+  literal and the subject that states it. The other properties take the
+  datatypes the ontology gives them, so a plain string is refused there too:
+  `xsd:boolean` for the flags and `sysx:hasBody`; `xsd:integer` or `xsd:int`
+  for the `sysx:` indexes and the bounds; and for the `sysml:value` of a
+  literal expression, by its class, `xsd:integer` or `xsd:int`
+  (`LiteralInteger`), `xsd:decimal`, `owl:real`, `xsd:double` or `xsd:float`
+  (`LiteralRational`), `xsd:boolean` (`LiteralBoolean`) or a string
+  (`LiteralString`). A `sysx:Expression` literal is taken only where the
+  mapping writes notation — a relationship target — never as a name
+- a literal whose text is outside its datatype's lexical space
+  (`"false"^^xsd:int`, `"yes"^^xsd:boolean`, `"1e3"^^xsd:decimal`): it is no
+  term of that datatype, so it is reported rather than read as the text it
+  spells, as is an `xsd:int` outside its 32-bit value space. `owl:real`, which
+  names no lexical forms of its own, takes a finite `xsd:double`'s
+- a `sysx:` index (`sysx:memberIndex`, `sysx:argumentIndex`, `sysx:endIndex`)
+  that is negative or too large for the platform's `int`: it is a position the
+  writer orders by, and one it cannot hold would otherwise be read as 0 and
+  move the member to the front
+- a subject stating a single-valued `sysx:` property twice with different
+  objects — a body with two `sysx:resultExpression`s, an element with two
+  `sysx:memberIndex`es or two `sysx:isNamespaceImport` flags: only one could
+  be written, so the graph is refused naming both rather than the first being
+  kept. Every `sysx:` property is single-valued but the members and
+  parameters of a body, `sysx:relatedFeature`, `sysx:deferredEvent` and
+  `sysx:prefixMetadata`
 
 A graph that uses none of OpenSysML's `sysx:` properties (one produced by
 another tool) converts as far as the mapping allows and errors on the first
