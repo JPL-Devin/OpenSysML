@@ -175,7 +175,7 @@ the state or the data a guard reads changes between the send and the dispatch, t
 - `%step` — Advance all tokens one step
 - `%continue` — Run to completion, or to the first breakpoint hit
 - `%tokens` — Show active tokens with data
-- `%break <node>` — Set breakpoint on a named node; `%continue` stops when a token reaches it
+- `%break <node>` — Set breakpoint on a named node, one an `if` branch or a loop body declares included; `%continue` stops when a token reaches it, or before a body performs it
 - `%stop` — Stop debugging
 
 **State machine debugging commands:**

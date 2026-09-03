@@ -163,6 +163,79 @@ func blockNodesOf(stmts []Statement, into []ast.Node) []ast.Node {
 	return into
 }
 
+// BlockFlows returns the flows the blocks among stmts state, those of nested blocks
+// stating none of their own included.
+func BlockFlows(stmts []Statement) []*ActionGraph {
+	var flows []*ActionGraph
+	inBlock := func(block Block) {
+		if block.Graph != nil {
+			flows = append(flows, block.Graph)
+			return
+		}
+		flows = append(flows, BlockFlows(block.Statements)...)
+	}
+	for _, stmt := range stmts {
+		switch s := stmt.(type) {
+		case If:
+			inBlock(s.Then)
+			if s.Else != nil {
+				inBlock(*s.Else)
+			}
+		case Loop:
+			inBlock(s.Body)
+		case Block:
+			inBlock(s)
+		}
+	}
+	return flows
+}
+
+// NestedFlow returns the flow next is a node of among those a performance of node,
+// a node of in, holds as its own: the flow node owns, or a block flow of its body.
+// nil when next is no such node.
+func NestedFlow(in *ActionGraph, node, next ast.Node) *ActionGraph {
+	_, flow := nestedNode(in, node, func(candidate ast.Node) bool { return candidate == next })
+	return flow
+}
+
+// nestedNodeNamed returns the nested action named name a performance of node holds as
+// its own, with the flow it is a node of; nil when it holds none.
+func nestedNodeNamed(in *ActionGraph, node ast.Node, name string) (ast.Node, *ActionGraph) {
+	return nestedNode(in, node, func(candidate ast.Node) bool { return nodeAnswersTo(candidate, name) })
+}
+
+// nestedNode finds the first nested action of node, a node of in, that matches: among
+// the nodes of the flow node owns, then those the blocks of its body declare.
+func nestedNode(in *ActionGraph, node ast.Node, matches func(ast.Node) bool) (ast.Node, *ActionGraph) {
+	if sub, owns := in.Subflows[node]; owns && sub != nil && sub.Graph != nil {
+		for _, candidate := range sub.Graph.Nodes {
+			if matches(candidate) {
+				return candidate, sub.Graph
+			}
+		}
+	}
+	return blockNode(in.Bodies[node], matches)
+}
+
+// blockNode finds the first action node the blocks among stmts declare that matches,
+// with the block flow it is a node of; a statement run's own blocks are searched too.
+func blockNode(stmts []Statement, matches func(ast.Node) bool) (ast.Node, *ActionGraph) {
+	for _, flow := range BlockFlows(stmts) {
+		for _, node := range flow.Nodes {
+			if _, isUsage := node.(*ast.Usage); isUsage && !flow.StatementRuns[node] {
+				if matches(node) {
+					return node, flow
+				}
+				continue
+			}
+			if found, in := blockNode(flow.Bodies[node], matches); found != nil {
+				return found, in
+			}
+		}
+	}
+	return nil, nil
+}
+
 // blockNodesIn appends the action nodes one block declares: the action usages
 // among the nodes of its flow, and those the blocks in its statement runs declare.
 func blockNodesIn(block Block, into []ast.Node) []ast.Node {
@@ -270,7 +343,7 @@ func blockStep(graph *ActionGraph, nodes []ast.Node, member ast.Node, scope *sym
 func lowerBlockConnector(graph *ActionGraph, nodes []ast.Node, u *ast.Usage, scope *symbols.Scope) (Statement, bool) {
 	switch {
 	case u.Kind == ast.UsageBinding:
-		bindings, err := lowerPinBindings(nodes, u, scope)
+		bindings, err := lowerPinBindings(graph, nodes, u, scope)
 		if err != nil {
 			return unsupportedConnector(u, scope, err), true
 		}

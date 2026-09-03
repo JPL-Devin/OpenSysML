@@ -56,6 +56,36 @@ type actionFrame struct {
 	// pending queues what flows and bindings delivered to a node's pins ahead of
 	// its performances, each of which takes the oldest delivery at each pin.
 	pending map[ast.Node]map[string][]Value
+	// nested queues deliveries to pins of the nodes under a node (`leg.inner.v`) ahead
+	// of its next performance, which forwards them to its own nodes.
+	nested map[ast.Node][]nestedDelivery
+	// ended marks a performance that has completed, so a delivery to a node under it
+	// waits for the next performance rather than reaching one that is over.
+	ended bool
+}
+
+// nestedDelivery is a value bound for a pin of a node under another: path leads to the
+// node from the one the delivery waits at.
+type nestedDelivery struct {
+	path  []ast.Node
+	pin   string
+	value Value
+}
+
+// boundEnd is a binding with an end at a performance's pin, and the performance of the
+// node the binding was written at: perf's own for `p.v`, an enclosing one for `leg.inner.v`.
+type boundEnd struct {
+	lower.PinBinding
+	at *actionFrame
+}
+
+// pinText renders the bound end as written: the node path and the pin.
+func (b boundEnd) pinText() string {
+	text := ActionNodeName(b.Node)
+	for _, node := range b.Path {
+		text += "." + ActionNodeName(node)
+	}
+	return text + "." + b.Pin
 }
 
 // newRootFrame is the performance of the action itself.
@@ -130,7 +160,9 @@ func (e *ActionExecutor) beginPerformance(
 	}
 	perf.features = pins
 	perf.result = result
-	parent.takeDeliveries(node, perf)
+	if err := e.takeDeliveries(parent, node, perf); err != nil {
+		return nil, err
+	}
 	if parent.subactions == nil {
 		parent.subactions = make(map[ast.Node]*actionFrame)
 	}
@@ -207,6 +239,7 @@ func (e *ActionExecutor) seedDeclaredValues(perf *actionFrame, features []lower.
 // return to same-named enclosing features, and the bindings at its output pins
 // carry what it produced to their other ends.
 func (e *ActionExecutor) endPerformance(perf *actionFrame) error {
+	perf.ended = true
 	for _, name := range perf.outputs {
 		value, ok := perf.data[name]
 		if !ok {
@@ -400,9 +433,24 @@ func (f *actionFrame) resultValue() (Value, error) {
 	return Value{}, &NoValueError{Feature: f.path() + "." + f.result}
 }
 
-// deliver stores a value at a pin of node ahead of its next performance, which is
-// how a flow or binding reaches a node not yet running.
-func (e *ActionExecutor) deliver(f *actionFrame, flow *lower.ActionGraph, node ast.Node, pin string, value Value) error {
+// deliver stores a value at a pin of node, a node of flow in f, ahead of its next
+// performance, which is how a flow or binding reaches a node not yet running. A path
+// leads on to a node under it: the value goes into node's running performance, else
+// waits for its next one to forward it.
+func (e *ActionExecutor) deliver(f *actionFrame, flow *lower.ActionGraph, node ast.Node, path []ast.Node, pin string, value Value) error {
+	if len(path) > 0 {
+		if err := e.checkNestedDelivery(flow, node, path, pin, value); err != nil {
+			return err
+		}
+		if sub, performed := f.subactions[node]; performed && !sub.ended {
+			return e.deliver(sub, lower.NestedFlow(flow, node, path[0]), path[0], path[1:], pin, value)
+		}
+		if f.nested == nil {
+			f.nested = make(map[ast.Node][]nestedDelivery)
+		}
+		f.nested[node] = append(f.nested[node], nestedDelivery{path: path, pin: pin, value: value})
+		return nil
+	}
 	pins, _, err := e.nodePins(flow, node)
 	if err != nil {
 		return err
@@ -423,9 +471,30 @@ func (e *ActionExecutor) deliver(f *actionFrame, flow *lower.ActionGraph, node a
 	return nil
 }
 
-// takeDeliveries moves the oldest delivery at each pin of node into perf, so
-// that performances of one node begun in turn each start with their own inputs.
-func (f *actionFrame) takeDeliveries(node ast.Node, perf *actionFrame) {
+// checkNestedDelivery checks that path leads from node through the flows under it to a
+// node declaring pin, so a delivery waiting for a performance is known to have somewhere to go.
+func (e *ActionExecutor) checkNestedDelivery(flow *lower.ActionGraph, node ast.Node, path []ast.Node, pin string, value Value) error {
+	for _, next := range path {
+		flow = lower.NestedFlow(flow, node, next)
+		if flow == nil {
+			return fmt.Errorf("%w: %s holds no nested action %s", ErrNodePin, nodeDescription(node), ActionNodeName(next))
+		}
+		node = next
+	}
+	pins, _, err := e.nodePins(flow, node)
+	if err != nil {
+		return err
+	}
+	if _, declared := pins[pin]; !declared {
+		return fmt.Errorf("%w: %s declares no %s", ErrNodePin, nodeDescription(node), pin)
+	}
+	return e.ctx.checkNamedWrite(flow.Scopes[node], nodeDescription(node), pin, value)
+}
+
+// takeDeliveries moves the oldest delivery at each pin of node into perf, so that
+// performances of one node begun in turn each start with their own inputs, and
+// forwards what waits for the nodes under it.
+func (e *ActionExecutor) takeDeliveries(f *actionFrame, node ast.Node, perf *actionFrame) error {
 	queues := f.pending[node]
 	for pin, values := range queues {
 		perf.data[pin] = values[0]
@@ -438,6 +507,14 @@ func (f *actionFrame) takeDeliveries(node ast.Node, perf *actionFrame) {
 	if len(queues) == 0 {
 		delete(f.pending, node)
 	}
+	nested := f.nested[node]
+	delete(f.nested, node)
+	for _, d := range nested {
+		if err := e.deliver(perf, lower.NestedFlow(perf.flow, node, d.path[0]), d.path[0], d.path[1:], d.pin, d.value); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // setFrameFeature writes a feature the performance holds, through the action's
@@ -563,42 +640,42 @@ func (f *actionFrame) collect(prefix string, into map[string]Value) {
 // bindInputPins seeds the pins a performance reads from the bindings at them, where nothing
 // delivered ahead of it holds a value; bindings must agree, and an unvalued undirected end waits.
 func (e *ActionExecutor) bindInputPins(perf *actionFrame, activation int64) error {
-	bound := make(map[string]lower.PinBinding)
-	for _, binding := range e.bindingsAt(perf) {
-		dir, err := e.boundPin(perf, binding)
+	bound := make(map[string]boundEnd)
+	for _, end := range e.bindingsAt(perf) {
+		dir, err := e.boundPin(perf, end)
 		if err != nil {
 			return err
 		}
 		if dir == ast.DirOut {
 			continue
 		}
-		earlier, alreadyBound := bound[binding.Pin]
-		if _, held := perf.data[binding.Pin]; held && !alreadyBound {
+		earlier, alreadyBound := bound[end.Pin]
+		if _, held := perf.data[end.Pin]; held && !alreadyBound {
 			continue
 		}
-		value, err := e.bindingOtherValue(perf, binding, activation)
+		value, err := e.bindingOtherValue(end, activation)
 		if err != nil {
-			if dir == ast.DirNone && e.unheldEnd(perf, binding, err) {
+			if dir == ast.DirNone && e.unheldEnd(end, err) {
 				continue
 			}
 			return err
 		}
 		if alreadyBound {
-			if held := perf.data[binding.Pin]; !valueEqual(held, value) {
+			if held := perf.data[end.Pin]; !valueEqual(held, value) {
 				return &BindingConflictError{
-					Target:     ActionNodeName(perf.node) + "." + binding.Pin,
+					Target:     end.pinText(),
 					Left:       bindingEndText(earlier.Other),
-					Right:      bindingEndText(binding.Other),
+					Right:      bindingEndText(end.Other),
 					LeftValue:  held,
 					RightValue: value,
 				}
 			}
 			continue
 		}
-		if err := e.setFrameFeature(perf, binding.Pin, value); err != nil {
+		if err := e.setFrameFeature(perf, end.Pin, value); err != nil {
 			return err
 		}
-		bound[binding.Pin] = binding
+		bound[end.Pin] = end
 	}
 	return nil
 }
@@ -606,129 +683,148 @@ func (e *ActionExecutor) bindInputPins(perf *actionFrame, activation int64) erro
 // bindOutputPins carries what a performance's output pins hold to the other ends of the
 // bindings at them, and what an undirected pin holds where its other end differs from it.
 func (e *ActionExecutor) bindOutputPins(perf *actionFrame) error {
-	for _, binding := range e.bindingsAt(perf) {
-		dir, err := e.boundPin(perf, binding)
+	for _, end := range e.bindingsAt(perf) {
+		dir, err := e.boundPin(perf, end)
 		if err != nil {
 			return err
 		}
-		value, ok := perf.data[binding.Pin]
+		value, ok := perf.data[end.Pin]
 		switch dir {
 		case ast.DirOut, ast.DirInOut:
 			if !ok {
 				return fmt.Errorf("%w: %s produced no value at %s to bind %s to",
-					ErrBindingEnd, perf.describe(), binding.Pin, bindingEndText(binding.Other))
+					ErrBindingEnd, perf.describe(), end.Pin, bindingEndText(end.Other))
 			}
 		case ast.DirNone:
 			if !ok {
 				continue
 			}
-			if other, held := e.otherEndHeld(perf, binding); held && valueEqual(other, value) {
+			if other, held := e.otherEndHeld(end); held && valueEqual(other, value) {
 				continue
 			}
 		default:
 			continue
 		}
-		if binding.OtherNode != nil {
-			if err := e.deliver(perf.parent, perf.flow, binding.OtherNode, binding.OtherPin, value); err != nil {
+		if end.OtherNode != nil {
+			if err := e.deliver(end.at.parent, end.at.flow, end.OtherNode, end.OtherPath, end.OtherPin, value); err != nil {
 				return err
 			}
 			continue
 		}
-		name := simpleEndName(binding.Other)
+		name := simpleEndName(end.Other)
 		if name == "" {
-			return fmt.Errorf("%w: %s.%s is bound to %s, which names no feature to hold its value",
-				ErrBindingEnd, ActionNodeName(perf.node), binding.Pin, bindingEndText(binding.Other))
+			return fmt.Errorf("%w: %s is bound to %s, which names no feature to hold its value",
+				ErrBindingEnd, end.pinText(), bindingEndText(end.Other))
 		}
-		written, err := e.assignEnclosing(perf, name, value)
+		written, err := e.assignEnclosing(end.at, name, value)
 		if err != nil {
 			return err
 		}
 		if !written {
-			return fmt.Errorf("%w: %s.%s is bound to %s, which no enclosing action holds",
-				ErrBindingEnd, ActionNodeName(perf.node), binding.Pin, name)
+			return fmt.Errorf("%w: %s is bound to %s, which no enclosing action holds",
+				ErrBindingEnd, end.pinText(), name)
 		}
 	}
 	return nil
 }
 
-// bindingsAt returns the bindings of the flow perf's node is a node of with an
-// end at it.
-func (e *ActionExecutor) bindingsAt(perf *actionFrame) []lower.PinBinding {
-	var at []lower.PinBinding
-	for _, binding := range perf.flow.Bindings {
-		if binding.Node == perf.node {
-			at = append(at, binding)
+// bindingsAt returns the bindings with an end at perf's pins: those of the flow its node
+// is a node of written at it (`p.v`), and those an enclosing flow wrote reaching down to
+// it through the performances between (`leg.inner.v`).
+func (e *ActionExecutor) bindingsAt(perf *actionFrame) []boundEnd {
+	var at []boundEnd
+	var path []ast.Node
+	for anc := perf; anc.parent != nil; anc = anc.parent {
+		for _, binding := range anc.flow.Bindings {
+			if binding.Node == anc.node && slices.Equal(binding.Path, path) {
+				at = append(at, boundEnd{PinBinding: binding, at: anc})
+			}
 		}
+		path = append([]ast.Node{anc.node}, path...)
 	}
 	return at
 }
 
 // boundPin returns the direction of the pin a binding ends at, which must be a
 // feature the performance holds.
-func (e *ActionExecutor) boundPin(perf *actionFrame, binding lower.PinBinding) (ast.FeatureDirection, error) {
-	dir, declared := perf.features[binding.Pin]
+func (e *ActionExecutor) boundPin(perf *actionFrame, end boundEnd) (ast.FeatureDirection, error) {
+	dir, declared := perf.features[end.Pin]
 	if !declared {
-		return ast.DirNone, fmt.Errorf("%w: %s.%s names no parameter or attribute of %s",
-			ErrBindingEnd, ActionNodeName(perf.node), binding.Pin, perf.describe())
+		return ast.DirNone, fmt.Errorf("%w: %s names no parameter or attribute of %s",
+			ErrBindingEnd, end.pinText(), perf.describe())
 	}
 	return dir, nil
 }
 
-// bindingOtherValue reads the value the other end of a binding at perf's pin
-// holds: another node's pin, or an expression over the enclosing performances.
-func (e *ActionExecutor) bindingOtherValue(perf *actionFrame, binding lower.PinBinding, activation int64) (Value, error) {
-	if binding.OtherNode != nil {
-		other, performed := perf.parent.subactions[binding.OtherNode]
+// otherPerformance returns the latest performance of the node the other end of a binding
+// addresses, reached from the flow the binding was written in; performed is false where
+// that node, or one on the way to it, has not run.
+func (e *ActionExecutor) otherPerformance(end boundEnd) (other *actionFrame, performed bool) {
+	other, performed = end.at.parent.subactions[end.OtherNode]
+	for _, node := range end.OtherPath {
 		if !performed {
-			return Value{}, fmt.Errorf("%w: %s.%s is bound to %s, which is read before it runs",
-				ErrNodeNotPerformed, ActionNodeName(perf.node), binding.Pin, bindingEndText(binding.Other))
+			return nil, false
 		}
-		value, err := other.pin(binding.OtherPin)
+		other, performed = other.subactions[node]
+	}
+	return other, performed
+}
+
+// bindingOtherValue reads the value the other end of a binding at a performance's pin
+// holds: another node's pin, or an expression over the enclosing performances.
+func (e *ActionExecutor) bindingOtherValue(end boundEnd, activation int64) (Value, error) {
+	if end.OtherNode != nil {
+		other, performed := e.otherPerformance(end)
+		if !performed {
+			return Value{}, fmt.Errorf("%w: %s is bound to %s, which is read before it runs",
+				ErrNodeNotPerformed, end.pinText(), bindingEndText(end.Other))
+		}
+		value, err := other.pin(end.OtherPin)
 		if err != nil {
-			return Value{}, fmt.Errorf("%w: bound to %s.%s", err, ActionNodeName(perf.node), binding.Pin)
+			return Value{}, fmt.Errorf("%w: bound to %s", err, end.pinText())
 		}
 		return value, nil
 	}
-	ec := e.evalContextAround(perf, binding.Scope)
+	ec := e.evalContextAround(end.at, end.Scope)
 	ec.activation = activation
-	value, err := ec.Eval(binding.Other)
+	value, err := ec.Eval(end.Other)
 	if err != nil {
-		return Value{}, fmt.Errorf("%w: %s.%s is bound to %s: %v",
-			ErrBindingEnd, ActionNodeName(perf.node), binding.Pin, bindingEndText(binding.Other), err)
+		return Value{}, fmt.Errorf("%w: %s is bound to %s: %v",
+			ErrBindingEnd, end.pinText(), bindingEndText(end.Other), err)
 	}
 	return value, nil
 }
 
-// otherEndHeld reads what the other end of a binding at perf's pin holds now, without
-// evaluating it: a performed node's pin, or an enclosing feature named outright.
-func (e *ActionExecutor) otherEndHeld(perf *actionFrame, binding lower.PinBinding) (Value, bool) {
-	if binding.OtherNode != nil {
-		other, performed := perf.parent.subactions[binding.OtherNode]
+// otherEndHeld reads what the other end of a binding holds now, without evaluating
+// it: a performed node's pin, or an enclosing feature named outright.
+func (e *ActionExecutor) otherEndHeld(end boundEnd) (Value, bool) {
+	if end.OtherNode != nil {
+		other, performed := e.otherPerformance(end)
 		if !performed {
 			return Value{}, false
 		}
-		value, held := other.data[binding.OtherPin]
+		value, held := other.data[end.OtherPin]
 		return value, held
 	}
-	if name := simpleEndName(binding.Other); name != "" {
-		return e.evalContextAround(perf, binding.Scope).Lookup(name)
+	if name := simpleEndName(end.Other); name != "" {
+		return e.evalContextAround(end.at, end.Scope).Lookup(name)
 	}
 	return Value{}, false
 }
 
-// unheldEnd reports whether err, from reading the other end of a binding at perf's pin,
-// says that end holds no value yet: an unperformed node's pin or an unvalued enclosing feature.
-func (e *ActionExecutor) unheldEnd(perf *actionFrame, binding lower.PinBinding, err error) bool {
+// unheldEnd reports whether err, from reading the other end of a binding, says that end
+// holds no value yet: an unperformed node's pin or an unvalued enclosing feature.
+func (e *ActionExecutor) unheldEnd(end boundEnd, err error) bool {
 	var noValue *NoValueError
 	if errors.Is(err, ErrNodeNotPerformed) || errors.As(err, &noValue) {
 		return true
 	}
-	name := simpleEndName(binding.Other)
-	if binding.OtherNode != nil || name == "" {
+	name := simpleEndName(end.Other)
+	if end.OtherNode != nil || name == "" {
 		return false
 	}
-	_, valued := e.evalContextAround(perf, binding.Scope).Lookup(name)
-	_, _, holds := enclosingHolder(perf, name)
+	_, valued := e.evalContextAround(end.at, end.Scope).Lookup(name)
+	_, _, holds := enclosingHolder(end.at, name)
 	return !valued && holds
 }
 

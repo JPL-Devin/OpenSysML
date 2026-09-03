@@ -133,8 +133,12 @@ func (h *actionStmtHost) effect(s lower.Effect) error {
 
 // performNode performs a nested action a block of the body declares as a
 // subperformance of the body's, with the block-locals entered around it in reach;
-// a node owning a flow runs it to completion here.
+// a node owning a flow runs it to completion here. A breakpoint on the node
+// pauses the run before it performs.
 func (h *actionStmtHost) performNode(engine *stmtEngine, graph *lower.ActionGraph, node *ast.Usage) (stmtFlow, error) {
+	if err := h.exec.pauseAt(node); err != nil {
+		return flowNext, err
+	}
 	perf, err := h.exec.beginPerformance(h.perf, graph, node, slices.Clone(engine.env.frames))
 	if err != nil {
 		return flowNext, err

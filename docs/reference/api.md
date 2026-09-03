@@ -400,7 +400,9 @@ Execution runtime (Tiers 1-5: instances, expressions, behaviors).
   - `Data() map[string]Value` — The live feature space of the action's own performance,
     which every token in its flow shares. A nested action node performs in a frame of
     its own, so its pins are not here; read them from `Results()`
-  - `SetBreakpoint(nodeName string)` — Set breakpoint on node
+  - `SetBreakpoint(nodeName string)` — Set breakpoint on node: a run pauses when a token
+    reaches it, or before a body performs it when it is a node an `if` branch or a loop body
+    declares; `NodeNames()` lists every node a breakpoint may name
   - `ClearBreakpoints()` — Clear all breakpoints
   - `ActionSymbol() *symbols.Symbol` — Get action symbol
 

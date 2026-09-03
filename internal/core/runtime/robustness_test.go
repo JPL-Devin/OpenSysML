@@ -52,6 +52,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("inherited_binding_names_a_node_without_a_pin", testInheritedBindingNamesANodeWithoutAPin)
 	t.Run("node_inherited_default_that_cannot_be_evaluated", testNodeInheritedDefaultThatCannotBeEvaluated)
 	t.Run("node_binding_output_to_an_unknown_feature", testNodeBindingOutputToAnUnknownFeature)
+	t.Run("nested_pin_binding_into_a_node_performing_another_action", testNestedPinBindingIntoANodePerformingAnotherAction)
+	t.Run("nested_pin_binding_at_an_undeclared_pin", testNestedPinBindingAtAnUndeclaredPin)
+	t.Run("flow_reaching_into_a_nodes_own_flow", testFlowReachingIntoANodesOwnFlow)
 	t.Run("node_flow_into_a_pin_the_target_does_not_declare", testNodeFlowIntoAPinTheTargetDoesNotDeclare)
 	t.Run("fork_without_a_successor", testForkWithoutASuccessor)
 	t.Run("explicit_succession_missing_endpoint", testExplicitSuccessionMissingEndpoint)
@@ -8763,6 +8766,96 @@ func testNodePinBoundToUnequalValues(t *testing.T) {
 	}
 	if got, want := err.Error(), "binding conflict at add.a: x = 1, y = 2"; got != want {
 		t.Errorf("conflict error = %q, want %q", got, want)
+	}
+}
+
+// testNestedPinBindingIntoANodePerformingAnotherAction: a node typed by an action def
+// performs that action, whose nodes are its own, so a binding reaching into it is
+// reported when the flow is built rather than routed to the node's like-named pin.
+func testNestedPinBindingIntoANodePerformingAnotherAction(t *testing.T) {
+	src := `
+		package test {
+			action def Leg {
+				in w : Integer;
+				first start;
+				then action inner { in w : Integer; }
+				then done;
+			}
+			action outer {
+				attribute x : Integer = 5;
+				bind leg.inner.w = x;
+				first start;
+				then action leg : Leg;
+				then done;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "outer", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action outer not found")
+	}
+	_, err := ctx.CreateActionExecutor(sym)
+	want := `binding end "leg.inner.w" reaches into leg, which performs an action of its own rather than declaring inner; bind at a pin of leg itself`
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("error = %v, want %q", err, want)
+	}
+}
+
+// testNestedPinBindingAtAnUndeclaredPin: a binding reaching a nested node must name a
+// pin that node declares; the inner node reports it as it begins.
+func testNestedPinBindingAtAnUndeclaredPin(t *testing.T) {
+	src := `
+		package test {
+			action outer {
+				attribute x : Integer = 5;
+				bind leg.inner.nope = x;
+				first start;
+				then action leg {
+					first start;
+					then action inner { in w : Integer; }
+					then done;
+				}
+				then done;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if !errors.Is(err, ErrBindingEnd) {
+		t.Fatalf("error = %v, want ErrBindingEnd", err)
+	}
+	if !strings.Contains(err.Error(), "leg.inner.nope names no parameter or attribute of") {
+		t.Errorf("error %q does not name the nested pin path", err)
+	}
+}
+
+// testFlowReachingIntoANodesOwnFlow: a flow joins pins of the nodes of one flow, so an
+// end reaching into a node's own flow is reported when the flow is built.
+func testFlowReachingIntoANodesOwnFlow(t *testing.T) {
+	src := `
+		package test {
+			action outer {
+				first start;
+				then action leg {
+					first start;
+					then action inner { out v : Integer; assign v := 1; }
+					then done;
+				}
+				then action q { in n : Integer; }
+				then done;
+				flow leg.inner.v to q.n;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "outer", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action outer not found")
+	}
+	_, err := ctx.CreateActionExecutor(sym)
+	want := `end "leg.inner.v" reaches into a node's own flow`
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("error = %v, want %q", err, want)
 	}
 }
 

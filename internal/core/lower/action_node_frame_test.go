@@ -1,6 +1,8 @@
 package lower
 
 import (
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -116,5 +118,120 @@ func TestActionBindingAtANodeWithoutAPinIsReported(t *testing.T) {
 	`)
 	if err == nil {
 		t.Fatal("binding a node itself lowered without error")
+	}
+}
+
+// A binding end reaching into a node's own flow (`leg.inner.v`) keeps the whole path:
+// the node of this flow, the nodes reached through it, and the pin of the last.
+func TestActionBindingAtANestedNodePin(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action test {
+			attribute x : Integer = 5;
+			out attribute seen : Integer;
+			bind leg.inner.w = x;
+			bind seen = leg.inner.v;
+			bind leg.inner.v = leg.rest.n;
+			first start;
+			then action leg {
+				out v : Integer;
+				first start;
+				then action inner { in w : Integer; out v : Integer; }
+				then action rest { in n : Integer; }
+				then done;
+			}
+			then done;
+		}
+	`)
+
+	leg := nodeNamed(t, graph, "leg")
+	sub := graph.Subflows[leg]
+	if sub == nil || sub.Graph == nil {
+		t.Fatalf("leg owns no flow: %+v", sub)
+	}
+	inner := nodeNamed(t, sub.Graph, "inner")
+	rest := nodeNamed(t, sub.Graph, "rest")
+	if len(graph.Bindings) != 4 {
+		t.Fatalf("lowered %d pin bindings, want 4: %+v", len(graph.Bindings), graph.Bindings)
+	}
+	want := []struct {
+		path      []ast.Node
+		pin       string
+		other     string
+		otherPath []ast.Node
+		otherPin  string
+	}{
+		{[]ast.Node{inner}, "w", "x", nil, ""},
+		{[]ast.Node{inner}, "v", "seen", nil, ""},
+		{[]ast.Node{inner}, "v", "leg.rest.n", []ast.Node{rest}, "n"},
+		{[]ast.Node{rest}, "n", "leg.inner.v", []ast.Node{inner}, "v"},
+	}
+	for i, w := range want {
+		got := graph.Bindings[i]
+		if got.Node != leg || !slices.Equal(got.Path, w.path) || got.Pin != w.pin || FeaturePath(got.Other) != w.other {
+			t.Errorf("binding %d = %s.%v.%s = %s, want leg.%v.%s = %s",
+				i, getNodeName(got.Node), got.Path, got.Pin, FeaturePath(got.Other), w.path, w.pin, w.other)
+		}
+		if w.otherPath == nil {
+			if got.OtherNode != nil {
+				t.Errorf("binding %d other end addresses node %v, want none", i, got.OtherNode)
+			}
+			continue
+		}
+		if got.OtherNode != leg || !slices.Equal(got.OtherPath, w.otherPath) || got.OtherPin != w.otherPin {
+			t.Errorf("binding %d other end = %v.%v.%s, want leg.%v.%s", i, got.OtherNode, got.OtherPath, got.OtherPin, w.otherPath, w.otherPin)
+		}
+	}
+}
+
+// A binding end reaching through a node that declares no such nested action, or that
+// performs another action (whose nodes are that action's own), is reported when lowered.
+func TestActionBindingReachingIntoANodeWithoutTheNestedNodeIsReported(t *testing.T) {
+	cases := []struct {
+		name, src, want string
+	}{
+		{"undeclared", `
+			action test {
+				attribute x : Integer = 5;
+				bind leg.nope.w = x;
+				first start;
+				then action leg { first start; then action inner { in w : Integer; } then done; }
+				then done;
+			}
+		`, `binding end "leg.nope.w" reaches into leg, which declares no nested action nope; bind at a pin of leg itself`},
+		{"typed", `
+			action def Leg { first start; then action inner { in w : Integer; } then done; }
+			action test {
+				attribute x : Integer = 5;
+				bind leg.inner.w = x;
+				first start;
+				then action leg : Leg;
+				then done;
+			}
+		`, `binding end "leg.inner.w" reaches into leg, which performs an action of its own rather than declaring inner; bind at a pin of leg itself`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := actionGraphErr(t, tc.src)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// A flow joins pins of the nodes of one flow; an end reaching into a node's own flow is reported.
+func TestActionFlowReachingIntoANodesOwnFlowIsReported(t *testing.T) {
+	_, err := actionGraphErr(t, `
+		action test {
+			first start;
+			then action leg { first start; then action inner { out v : Integer; } then done; }
+			then action q { in n : Integer; }
+			then done;
+			flow leg.inner.v to q.n;
+		}
+	`)
+	want := `end "leg.inner.v" reaches into a node's own flow`
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("error = %v, want %q", err, want)
 	}
 }

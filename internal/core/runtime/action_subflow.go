@@ -45,8 +45,9 @@ func (e *ActionExecutor) enterSubflow(tokenIdx int, perf *actionFrame) error {
 
 // runSubflow performs the flow perf owns to completion where a body statement,
 // not a token of the enclosing flow, performs its node: the tokens of that flow
-// alone are stepped until its last one retires. Nothing outside can post a message
-// meanwhile, so a token parked at an accept is a deadlock, as under RunToCompletion.
+// alone are stepped until its last one retires, pausing where a breakpoint is
+// met as RunToCompletion does. Nothing outside can post a message meanwhile, so
+// a token parked at an accept is a deadlock, as under RunToCompletion.
 func (e *ActionExecutor) runSubflow(perf *actionFrame) error {
 	node := perf.node
 	if perf.graph == nil || perf.graph.Initial == nil {
@@ -60,6 +61,11 @@ func (e *ActionExecutor) runSubflow(perf *actionFrame) error {
 		tr.RecordActionNodeEnter(ActionNodeName(node))
 	}
 	for perf.live > 0 {
+		if name := e.breakpointHit(); name != "" {
+			if err := e.pauseRun(name); err != nil {
+				return err
+			}
+		}
 		if err := e.ctx.incrementStep(); err != nil {
 			return err
 		}
@@ -176,7 +182,7 @@ func (e *ActionExecutor) validateSubflows(graph *lower.ActionGraph) error {
 				return err
 			}
 		}
-		for _, block := range blockFlowsOf(graph.Bodies[node]) {
+		for _, block := range lower.BlockFlows(graph.Bodies[node]) {
 			if err := e.validateSubflows(block); err != nil {
 				return err
 			}
@@ -185,47 +191,33 @@ func (e *ActionExecutor) validateSubflows(graph *lower.ActionGraph) error {
 	return nil
 }
 
-// blockFlowsOf returns the flows the blocks among stmts state, the nested ones included.
-func blockFlowsOf(stmts []lower.Statement) []*lower.ActionGraph {
-	var flows []*lower.ActionGraph
-	inBlock := func(block lower.Block) {
-		if block.Graph != nil {
-			flows = append(flows, block.Graph)
-			return
-		}
-		flows = append(flows, blockFlowsOf(block.Statements)...)
-	}
-	for _, stmt := range stmts {
-		switch s := stmt.(type) {
-		case lower.If:
-			inBlock(s.Then)
-			if s.Else != nil {
-				inBlock(*s.Else)
-			}
-		case lower.Loop:
-			inBlock(s.Body)
-		case lower.Block:
-			inBlock(s)
-		}
-	}
-	return flows
-}
-
 // subflowNodeNames returns the names of the nodes of every flow nested under
-// graph, so a debugger can break on a step of a nested flow.
+// graph — the flows its nodes own and the block flows their bodies state — so
+// a debugger can break on a step of a nested flow.
 func (e *ActionExecutor) subflowNodeNames(graph *lower.ActionGraph) []string {
 	var names []string
 	for _, node := range graph.Nodes {
-		sub, owns := e.subflowOf(graph, node)
-		if !owns || sub.Graph == nil {
-			continue
+		if sub, owns := e.subflowOf(graph, node); owns && sub.Graph != nil {
+			names = append(names, e.flowNodeNames(sub.Graph)...)
 		}
-		for _, inner := range sub.Graph.Nodes {
-			names = append(names, ActionNodeNames(inner)...)
+		for _, block := range lower.BlockFlows(graph.Bodies[node]) {
+			names = append(names, e.flowNodeNames(block)...)
 		}
-		names = append(names, e.subflowNodeNames(sub.Graph)...)
 	}
 	return names
+}
+
+// flowNodeNames returns the names of graph's nodes, then of the flows nested under
+// it; a run of statements is a step of a block's flow but no node to break on.
+func (e *ActionExecutor) flowNodeNames(graph *lower.ActionGraph) []string {
+	var names []string
+	for _, node := range graph.Nodes {
+		if graph.StatementRuns[node] {
+			continue
+		}
+		names = append(names, ActionNodeNames(node)...)
+	}
+	return append(names, e.subflowNodeNames(graph)...)
 }
 
 // connectionsOf returns the connectors a send in a performance may route through:

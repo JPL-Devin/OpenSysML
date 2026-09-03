@@ -376,13 +376,17 @@ type Feature struct {
 	Scope     *symbols.Scope
 }
 
-// PinBinding is a binding connector with an end at Node's pin Pin. Other is the
-// other end as written; OtherNode/OtherPin name the node pin it addresses, if any.
+// PinBinding is a binding connector with an end at pin Pin of Node — or, where Path
+// is set, of the node Path reaches under it through the flows each owns (`leg.inner.v`:
+// Node leg, Path [inner], Pin v). Other is the other end as written; OtherNode,
+// OtherPath and OtherPin name the node pin it addresses, if any.
 type PinBinding struct {
 	Node      ast.Node
+	Path      []ast.Node
 	Pin       string
 	Other     ast.Node
 	OtherNode ast.Node
+	OtherPath []ast.Node
 	OtherPin  string
 	Scope     *symbols.Scope // the scope the binding was written in
 	Decl      *ast.Usage
@@ -490,6 +494,11 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 			if targetNode == nil {
 				return nil, fmt.Errorf("object flow edge references undefined target %v", n.Target)
 			}
+			for _, end := range []*ast.QualifiedName{n.Source, n.Target} {
+				if err := flowEndReaches(end); err != nil {
+					return nil, fmt.Errorf("object flow edge: %w", err)
+				}
+			}
 
 			graph.DataFlows[sourceNode] = append(graph.DataFlows[sourceNode], ObjectFlow{
 				SourcePin: sourcePin,
@@ -499,7 +508,7 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 			})
 		case *ast.Usage:
 			if n.Kind == ast.UsageBinding {
-				bindings, err := lowerPinBindings(graph.Nodes, n, scope)
+				bindings, err := lowerPinBindings(graph, graph.Nodes, n, scope)
 				if err != nil {
 					return nil, err
 				}
@@ -567,7 +576,7 @@ func lowerInheritedPinConnections(graph *ActionGraph, scope *symbols.Scope) erro
 			}
 			switch u.Kind {
 			case ast.UsageBinding:
-				bindings, err := lowerPinBindings(graph.Nodes, u, body)
+				bindings, err := lowerPinBindings(graph, graph.Nodes, u, body)
 				if err != nil {
 					return err
 				}
@@ -624,15 +633,18 @@ func resolveFirstNode(graph *ActionGraph) (map[*ast.InitialNode]ast.Node, error)
 }
 
 // lowerPinBindings lowers a binding to one PinBinding per end that addresses a
-// pin of one of nodes; a binding addressing no node lowers to nothing.
-func lowerPinBindings(nodes []ast.Node, u *ast.Usage, scope *symbols.Scope) ([]PinBinding, error) {
+// pin of one of nodes, which are nodes of graph; a binding addressing no node lowers to nothing.
+func lowerPinBindings(graph *ActionGraph, nodes []ast.Node, u *ast.Usage, scope *symbols.Scope) ([]PinBinding, error) {
 	binding, ok := lowerBinding(u, scope)
 	if !ok {
 		return nil, nil
 	}
 	var out []PinBinding
 	for i, end := range binding.Ends {
-		node, pin := flowEnd(nodes, end.Expr)
+		node, path, pin, err := pinPath(graph, nodes, end.Expr)
+		if err != nil {
+			return nil, err
+		}
 		if node == nil {
 			continue
 		}
@@ -640,18 +652,88 @@ func lowerPinBindings(nodes []ast.Node, u *ast.Usage, scope *symbols.Scope) ([]P
 			return nil, fmt.Errorf("binding end %s names an action node but no pin of it", flowEndText(end.Expr))
 		}
 		other := binding.Ends[1-i].Expr
-		otherNode, otherPin := flowEnd(nodes, other)
+		otherNode, otherPath, otherPin, err := pinPath(graph, nodes, other)
+		if err != nil {
+			return nil, err
+		}
 		out = append(out, PinBinding{
 			Node:      node,
+			Path:      path,
 			Pin:       pin,
 			Other:     other,
 			OtherNode: otherNode,
+			OtherPath: otherPath,
 			OtherPin:  otherPin,
 			Scope:     scope,
 			Decl:      u,
 		})
 	}
 	return out, nil
+}
+
+// pinPath resolves a binding end to the node among nodes it addresses, the nodes it
+// reaches through under that one, and the pin: `leg.inner.v` is leg, [inner], v. node
+// is nil for an end addressing none of nodes; a path reaching into a node that holds no
+// such nested action is an error.
+func pinPath(graph *ActionGraph, nodes []ast.Node, end ast.Node) (node ast.Node, path []ast.Node, pin string, err error) {
+	segments := endSegments(end)
+	if len(segments) == 0 {
+		return nil, nil, "", nil
+	}
+	node = nodeAnswering(nodes, segments[0])
+	if node == nil || len(segments) == 1 {
+		return node, nil, "", nil
+	}
+	current, in := node, graph
+	for _, name := range segments[1 : len(segments)-1] {
+		next, flow := nestedNodeNamed(in, current, name)
+		if next == nil {
+			return nil, nil, "", fmt.Errorf("binding end %s reaches into %s, which %s; bind at a pin of %s itself",
+				flowEndText(end), getNodeName(current), holdsNoNested(current, name), getNodeName(current))
+		}
+		path = append(path, next)
+		current, in = next, flow
+	}
+	return node, path, segments[len(segments)-1], nil
+}
+
+// holdsNoNested says why a node has no nested action of this name to reach into: it
+// performs another action, whose nodes are that action's own, or it declares none.
+func holdsNoNested(node ast.Node, name string) string {
+	if u, ok := node.(*ast.Usage); ok && (typingTarget(u) != nil || u.Value != nil) {
+		return "performs an action of its own rather than declaring " + name
+	}
+	return "declares no nested action " + name
+}
+
+// endSegments returns the names a connector end chains, outermost first:
+// `leg.inner.v` is [leg inner v]. Empty for an end that is not a name.
+func endSegments(end ast.Node) []string {
+	switch e := end.(type) {
+	case *ast.QualifiedName:
+		segments := make([]string, 0, len(e.Parts))
+		for _, part := range e.Parts {
+			segments = append(segments, part.Text)
+		}
+		return segments
+	case *ast.FeatureChainExpr:
+		if operand := endSegments(e.Operand); len(operand) > 0 {
+			return append(operand, ast.SimpleName(e.Member))
+		}
+	case *ast.FeatureReference:
+		return endSegments(e.Name)
+	}
+	return nil
+}
+
+// nodeAnswering returns the node among nodes that answers to name, if any.
+func nodeAnswering(nodes []ast.Node, name string) ast.Node {
+	for _, node := range nodes {
+		if nodeAnswersTo(node, name) {
+			return node
+		}
+	}
+	return nil
 }
 
 // lowerFeatures records the parameters and attributes a node declares itself.
@@ -1176,6 +1258,11 @@ func lowerFlow(nodes []ast.Node, flow *ast.Usage) (ast.Node, ObjectFlow, error) 
 			orAnonymous(name), flowEndText(flow.FlowEnds.To),
 		)
 	}
+	for _, end := range []ast.Node{flow.FlowEnds.From, flow.FlowEnds.To} {
+		if err := flowEndReaches(end); err != nil {
+			return nil, ObjectFlow{}, fmt.Errorf("flow %s: %w", orAnonymous(name), err)
+		}
+	}
 
 	// `flow of engineTorque from a to b` names the feature that flows rather
 	// than a pin of each end, so it names the pin at both ends.
@@ -1211,16 +1298,25 @@ func lowerFlow(nodes []ast.Node, flow *ast.Usage) (ast.Node, ObjectFlow, error) 
 // bare name (`generateTorque`) names the node alone, and the pin is whatever
 // the flow's payload names.
 func flowEnd(nodes []ast.Node, end ast.Node) (ast.Node, string) {
-	switch e := end.(type) {
-	case *ast.QualifiedName:
-		return parsePinReference(nodes, e)
-	case *ast.FeatureChainExpr:
-		node, _ := flowEnd(nodes, e.Operand)
-		return node, ast.SimpleName(e.Member)
-	case *ast.FeatureReference:
-		return flowEnd(nodes, e.Name)
+	segments := endSegments(end)
+	if len(segments) == 0 {
+		return nil, ""
 	}
-	return nil, ""
+	node := nodeAnswering(nodes, segments[0])
+	if len(segments) == 1 {
+		return node, ""
+	}
+	return node, segments[1]
+}
+
+// flowEndReaches reports a flow end reaching into a node's own flow (`leg.inner.v`):
+// a flow joins pins of nodes of the one flow it is declared in.
+func flowEndReaches(end ast.Node) error {
+	if len(endSegments(end)) > 2 {
+		return fmt.Errorf("end %s reaches into a node's own flow; a flow joins pins of the nodes of one flow, so declare it in that node or bind the pin instead",
+			flowEndText(end))
+	}
+	return nil
 }
 
 // orAnonymous names a declaration that may have been written without a name.
@@ -1250,23 +1346,10 @@ func flowEndText(end ast.Node) string {
 // parsePinReference extracts node and pin name from a qualified reference.
 // Format: "nodeName.pinName" or just "nodeName" (pin = "")
 func parsePinReference(nodes []ast.Node, qname *ast.QualifiedName) (ast.Node, string) {
-	if qname == nil || len(qname.Parts) == 0 {
+	if qname == nil {
 		return nil, ""
 	}
-
-	if len(qname.Parts) == 1 {
-		// Just node name
-		node := findNodeByName(nodes, qname)
-		return node, ""
-	}
-
-	// Node.pin format
-	nodeName := qname.Parts[0].Text
-	pinName := qname.Parts[1].Text
-
-	nodeQname := &ast.QualifiedName{Parts: []ast.NameSegment{{Text: nodeName}}}
-	node := findNodeByName(nodes, nodeQname)
-	return node, pinName
+	return flowEnd(nodes, qname)
 }
 
 // statementKeyword names a body statement for a diagnostic.

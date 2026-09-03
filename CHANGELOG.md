@@ -150,7 +150,12 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   `in x : Integer = 3;`) is seeded when the performance starts, as an owned default is, evaluated
   where it was declared and reading a parameter the action redefines as redefined — before the
   fix it was recomputed on every read, so a body that reassigned `x` saw `z = x * 2` change with
-  it, and the inherited feature never appeared in `Results()`.
+  it, and the inherited feature never appeared in `Results()`. A `bind` at a pin two levels
+  down, `bind leg.inner.w = x;`, is lowered with the whole path it names, so it seeds `inner`'s
+  `w` and not a `w` of `leg`; before, the path collapsed to `leg.w`. A debugger breakpoint on a
+  node an `if` branch or a loop body declares now pauses the run before the node performs, once
+  per performance, and `%step`/`Step` resumes it; `NodeNames()` lists such nodes, so `%break add`
+  on a loop body's node is accepted — before, the name was refused and the node never paused.
 
 - **Action and state execution has a referee outside the executor.** Six conformance cases —
   a join fed by branches of unequal length, a join fed twice over one succession, a node two

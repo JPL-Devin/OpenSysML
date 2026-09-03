@@ -457,6 +457,27 @@ func TestBreakpointOnInitialNodeStops(t *testing.T) {
 	wants(t, run(t, s, "%continue"), "✓ Action completed", "total = 5")
 }
 
+// %break names a node a loop body declares: the run pauses before each of its
+// performances, with the token at the node running the loop, and resumes once per pause.
+func TestBreakpointOnABlockNodePausesEachIteration(t *testing.T) {
+	s := loadFixture(t, "testdata/action_block_debug.sysml")
+	run(t, s, "%action count")
+
+	wants(t, run(t, s, "%break add"), `✓ Breakpoint set at node "add"`)
+
+	paused := run(t, s, "%continue")
+	wants(t, paused, `⏸ Paused at breakpoint "add"`, "Tokens: 1")
+	rejects(t, paused, "Action completed")
+	wants(t, run(t, s, "%tokens"), "Token 1 @ iterate", "total = 0")
+
+	wants(t, run(t, s, "%step"), "✓ Step complete", `⏸ Paused at breakpoint "add"`)
+	wants(t, run(t, s, "%tokens"), "Token 1 @ iterate", "total = 1")
+
+	wants(t, run(t, s, "%continue"), `⏸ Paused at breakpoint "add"`)
+	wants(t, run(t, s, "%tokens"), "total = 3")
+	wants(t, run(t, s, "%continue"), "✓ Action completed", "total = 6")
+}
+
 func TestBreakpointRejectsUnknownNode(t *testing.T) {
 	s := loadFixture(t, "testdata/action_debug.sysml")
 	run(t, s, "%action tally")

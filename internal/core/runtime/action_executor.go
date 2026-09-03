@@ -46,6 +46,9 @@ type ActionExecutor struct {
 	mergeVisited map[mergeVisit]bool
 	inputs       map[string]Value // Input parameter bindings, applied over attribute defaults
 	pausedAt     string           // Node name RunToCompletion stopped at, empty when it ran to the end
+	// pause is set while a token's work runs as a coroutine (action_body_run.go):
+	// called with a breakpoint's name, it pauses the run there until resumed.
+	pause func(string) bool
 
 	// runStarted marks this executor's run as begun, so the step budget is reset
 	// once however many calls the run is driven over.
@@ -162,6 +165,10 @@ func (e *ActionExecutor) performanceFeatures() []lower.Attribute {
 // the parked token. RunToCompletion has no such caller, so it turns a step
 // that leaves the executor waiting into ErrAcceptDeadlock.
 //
+// A step ends early, with the executor suspended, when a body a token runs is
+// about to perform a node a breakpoint is set on (see SetBreakpoint); the token
+// stays at its node with its work half done, and the next step resumes it.
+//
 // Returns an error if a deadlock unrelated to accepts is detected (no progress
 // made and nothing is waiting for a message).
 func (e *ActionExecutor) Step() error {
@@ -204,7 +211,7 @@ func (e *ActionExecutor) Step() error {
 	// (removing token at higher index doesn't affect lower indices)
 	for i := len(tokenIndices) - 1; i >= 0; i-- {
 		// Check if token still exists (may have been removed by join/final)
-		if i >= len(e.tokens) {
+		if i >= len(e.tokens) || e.tokens[i].drivenByBody() {
 			continue
 		}
 
@@ -214,8 +221,8 @@ func (e *ActionExecutor) Step() error {
 		}
 	}
 
-	// Deadlock detection: check if any progress was made
-	progressMade := false
+	// A token whose work a breakpoint paused has stayed put, yet the run went on.
+	progressMade := e.state == StateSuspended
 
 	// Progress indicators:
 	// 1. Token count changed (fork/join/final consumed/created tokens)
@@ -308,9 +315,10 @@ func (e *ActionExecutor) deadlockError(perf *actionFrame) error {
 // Includes infinite loop protection.
 //
 // A run stops as soon as a token sits on a node a breakpoint was set on
-// (see SetBreakpoint), leaving the tokens where they are so the run can be
-// resumed by calling RunToCompletion again or stepped with Step; PausedAt names
-// the node it stopped at. With no breakpoints set the run is unconditional.
+// (see SetBreakpoint), or a body a token runs is about to perform one, leaving
+// the tokens where they are so the run can be resumed by calling RunToCompletion
+// again or stepped with Step; PausedAt names the node it stopped at. With no
+// breakpoints set the run is unconditional.
 //
 // Nothing outside the action can post a message while this runs, so an action
 // whose every remaining token is parked at an accept can never be resumed: the
@@ -536,8 +544,9 @@ func ActionNodeNames(node ast.Node) []string {
 }
 
 // NodeNames returns the names of the action's graph nodes, in declaration
-// order. Anonymous nodes are omitted; a debugger uses it to check that a
-// breakpoint names a node that exists.
+// order, then those of the flows nested under it: the flows its nodes own and
+// the block flows their bodies state. Anonymous nodes are omitted; a debugger
+// uses it to check that a breakpoint names a node that exists.
 func (e *ActionExecutor) NodeNames() []string {
 	names := make([]string, 0, len(e.graph.Nodes))
 	for _, node := range e.graph.Nodes {
@@ -732,6 +741,9 @@ func (e *ActionExecutor) stepToken(tokenIdx int) error {
 	}
 
 	token := &e.tokens[tokenIdx]
+	if token.body != nil {
+		return e.resumeBody(tokenIdx)
+	}
 
 	switch node := token.Location.(type) {
 	case *ast.InitialNode:
@@ -1254,14 +1266,14 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 	}
 
 	// Execute the node's lowered statements in declaration order.
-	if err := e.executeBody(perf, graph, usage); err != nil {
-		return err
-	}
-	if err := e.endPerformance(perf); err != nil {
-		return err
-	}
-
-	return e.completeNode(tokenIdx, perf)
+	return e.runPausable(tokenIdx, func() error {
+		if err := e.executeBody(perf, graph, usage); err != nil {
+			return err
+		}
+		return e.endPerformance(perf)
+	}, func(tokenIdx int) error {
+		return e.completeNode(tokenIdx, perf)
+	})
 }
 
 // completeNode takes the succession out of a node whose performance perf is
@@ -1329,25 +1341,25 @@ func (e *ActionExecutor) stepStatementNode(tokenIdx int) error {
 	node := e.tokens[tokenIdx].Location
 	frame := e.tokens[tokenIdx].frame
 
-	if err := e.executeBody(frame, frame.graph, node); err != nil {
-		return err
-	}
+	return e.runPausable(tokenIdx, func() error {
+		return e.executeBody(frame, frame.graph, node)
+	}, func(tokenIdx int) error {
+		successors, err := e.enabledSuccessions(frame, node)
+		if err != nil {
+			return err
+		}
+		if len(successors) > 1 {
+			return fmt.Errorf("%s node has multiple successors", statementNodeKeyword(node))
+		}
 
-	successors, err := e.enabledSuccessions(frame, node)
-	if err != nil {
-		return err
-	}
-	if len(successors) > 1 {
-		return fmt.Errorf("%s node has multiple successors", statementNodeKeyword(node))
-	}
+		// As for a nested action, a node with nothing after it ends the flow.
+		if len(successors) == 0 {
+			return e.retireToken(tokenIdx)
+		}
 
-	// As for a nested action, a node with nothing after it ends the flow.
-	if len(successors) == 0 {
-		return e.retireToken(tokenIdx)
-	}
-
-	e.tokens[tokenIdx].Location = successors[0].Target
-	return nil
+		e.tokens[tokenIdx].Location = successors[0].Target
+		return nil
+	})
 }
 
 // statementNodeKeyword names a statement node for a message about it, since a
@@ -1391,7 +1403,7 @@ func (e *ActionExecutor) applyDataFlows(frame *actionFrame, graph *lower.ActionG
 // target performing in a frame of its own, else in the flow's own features.
 func (e *ActionExecutor) deliverFlow(frame *actionFrame, graph *lower.ActionGraph, flow lower.ObjectFlow, value Value) error {
 	if _, performs := flow.Target.(*ast.Usage); performs {
-		if err := e.deliver(frame, graph, flow.Target, flow.TargetPin, value); err != nil {
+		if err := e.deliver(frame, graph, flow.Target, nil, flow.TargetPin, value); err != nil {
 			return fmt.Errorf("%s: %w", flowDescription(flow), err)
 		}
 		return nil

@@ -204,6 +204,195 @@ func TestStepResumesFromBreakpoint(t *testing.T) {
 	}
 }
 
+// blockDebugSrc declares action nodes inside an `if` branch and a loop body.
+const blockDebugSrc = `package test {
+	private import ScalarValues::*;
+	action outer {
+		attribute total : Integer = 0;
+		first start;
+		then action choose {
+			if total == 0 {
+				action p { out v : Integer = 7; }
+				action q { in n : Integer = p.v; assign total := total + n; }
+			}
+		}
+		then action iterate {
+			for i in 1..3 {
+				action add { in n : Integer = i; assign total := total + n; }
+			}
+		}
+		then done;
+	}
+}`
+
+// blockDebugExecutor builds an initialized executor for the outer action.
+func blockDebugExecutor(t *testing.T) *ActionExecutor {
+	t.Helper()
+	ctx, sym := loadAction(t, blockDebugSrc, "outer")
+	exec, err := ctx.CreateActionExecutor(sym)
+	if err != nil {
+		t.Fatalf("CreateActionExecutor: %v", err)
+	}
+	return exec
+}
+
+// A node a block declares is one a breakpoint can name.
+func TestNodeNamesIncludeBlockFlowNodes(t *testing.T) {
+	names := strings.Join(blockDebugExecutor(t).NodeNames(), ",")
+	for _, want := range []string{"choose", "p", "q", "iterate", "add"} {
+		if !strings.Contains(","+names+",", ","+want+",") {
+			t.Errorf("NodeNames() = %s, want it to contain %q", names, want)
+		}
+	}
+}
+
+// A breakpoint on a node an `if` branch declares pauses the run before that node
+// performs, with the branch's token left at the node running the block.
+func TestBreakpointPausesBeforeABranchNode(t *testing.T) {
+	exec := blockDebugExecutor(t)
+	exec.SetBreakpoint("q")
+
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("RunToCompletion: %v", err)
+	}
+	if got := exec.PausedAt(); got != "q" {
+		t.Fatalf("PausedAt() = %q, want q", got)
+	}
+	if got := exec.State(); got != StateSuspended {
+		t.Errorf("State() = %v, want %v", got, StateSuspended)
+	}
+	if tokens := exec.Tokens(); len(tokens) != 1 || ActionNodeName(tokens[0].Location) != "choose" {
+		t.Fatalf("expected one token at choose, got %v", tokens)
+	}
+	results := exec.Results()
+	if v, ok := results["choose.p.v"]; !ok || v.Const.Int != 7 {
+		t.Errorf("results = %v, want choose.p.v 7 (p performed before the pause)", results)
+	}
+	if _, ok := results["choose.q.n"]; ok {
+		t.Errorf("results = %v, q must not have performed yet", results)
+	}
+
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("resume: %v", err)
+	}
+	if got := exec.State(); got != StateCompleted {
+		t.Errorf("State() = %v, want %v", got, StateCompleted)
+	}
+	if total := exec.Results()["total"]; total.Const.Int != 13 {
+		t.Errorf("total = %v, want 13", total)
+	}
+}
+
+// A breakpoint on a node a loop body declares pauses the run once per iteration,
+// resuming once per pause, as a breakpoint on a node of the action's own flow does.
+func TestBreakpointPausesOnEachLoopIteration(t *testing.T) {
+	exec := blockDebugExecutor(t)
+	exec.SetBreakpoint("add")
+
+	for iteration, wantTotal := range []int64{7, 8, 10} {
+		if err := exec.RunToCompletion(); err != nil {
+			t.Fatalf("iteration %d: RunToCompletion: %v", iteration, err)
+		}
+		if got := exec.PausedAt(); got != "add" {
+			t.Fatalf("iteration %d: PausedAt() = %q, want add", iteration, got)
+		}
+		if total := exec.Results()["total"]; total.Const.Int != wantTotal {
+			t.Errorf("iteration %d: total = %v, want %d", iteration, total, wantTotal)
+		}
+	}
+
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("final run: %v", err)
+	}
+	if got := exec.PausedAt(); got != "" {
+		t.Errorf("PausedAt() = %q after completing, want empty", got)
+	}
+	if total := exec.Results()["total"]; total.Const.Int != 13 {
+		t.Errorf("total = %v, want 13", total)
+	}
+}
+
+// A breakpoint on a step of the flow a block node owns pauses the run when a
+// token of that flow reaches it, with the tokens of both flows in view.
+func TestBreakpointPausesInsideABlockNodesOwnFlow(t *testing.T) {
+	ctx, sym := loadAction(t, `package test {
+		private import ScalarValues::*;
+		action outer {
+			out attribute total : Integer = 0;
+			first start;
+			then action choose {
+				if total == 0 {
+					action split {
+						out sum : Integer;
+						first start;
+						then action left { out a : Integer; assign a := 10; }
+						then action gather { assign sum := left.a + 1; }
+						then done;
+					}
+					action report { assign total := split.sum; }
+				}
+			}
+			then done;
+		}
+	}`, "outer")
+	exec, err := ctx.CreateActionExecutor(sym)
+	if err != nil {
+		t.Fatalf("CreateActionExecutor: %v", err)
+	}
+	exec.SetBreakpoint("gather")
+
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("RunToCompletion: %v", err)
+	}
+	if got := exec.PausedAt(); got != "gather" {
+		t.Fatalf("PausedAt() = %q, want gather", got)
+	}
+	var at []string
+	for _, token := range exec.Tokens() {
+		at = append(at, ActionNodeName(token.Location))
+	}
+	if got := strings.Join(at, ","); got != "choose,gather" {
+		t.Errorf("tokens at %s, want choose,gather", got)
+	}
+	if a, ok := exec.Results()["choose.split.left.a"]; !ok || a.Const.Int != 10 {
+		t.Errorf("results = %v, want choose.split.left.a 10", exec.Results())
+	}
+
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("resume: %v", err)
+	}
+	if total := exec.Results()["total"]; total.Const.Int != 11 {
+		t.Errorf("total = %v, want 11", total)
+	}
+}
+
+// Stepping resumes the paused block node and pauses again at the next one.
+func TestStepResumesAPausedBlockNode(t *testing.T) {
+	exec := blockDebugExecutor(t)
+	exec.SetBreakpoint("add")
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("RunToCompletion: %v", err)
+	}
+
+	if err := exec.Step(); err != nil {
+		t.Fatalf("Step: %v", err)
+	}
+	if got := exec.PausedAt(); got != "add" {
+		t.Errorf("PausedAt() = %q after a step, want the next iteration's add", got)
+	}
+	if total := exec.Results()["total"]; total.Const.Int != 8 {
+		t.Errorf("total = %v after a step, want 8", total)
+	}
+
+	exec.ClearBreakpoints()
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("resume: %v", err)
+	}
+	if got := exec.State(); got != StateCompleted {
+		t.Errorf("State() = %v, want %v", got, StateCompleted)
+	}
+}
+
 func TestStateExecutorDebugAccessors(t *testing.T) {
 	ctx, sym := loadState(t, debugStateSrc, "Cycle")
 	exec, err := ctx.CreateStateExecutor(sym)

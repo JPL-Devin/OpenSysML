@@ -2011,6 +2011,9 @@ func (s *Session) doStep() ([]string, bool, error) {
 		fmt.Sprintf("  State: %s", exec.State()),
 		fmt.Sprintf("  Tokens: %d", len(tokens)),
 	}
+	if node := exec.PausedAt(); node != "" {
+		out = append(out, fmt.Sprintf("  ⏸ Paused at breakpoint %q", node))
+	}
 
 	if exec.State() == runtime.StateCompleted {
 		out = append(out, "", "✓ Action completed")
