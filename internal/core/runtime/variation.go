@@ -151,7 +151,7 @@ func (ctx *Context) variantValue(variation, variant *symbols.Symbol, owner int64
 // any other kind is an ordinary object of itself.
 func (ctx *Context) variantInstance(variant *symbols.Symbol, owner int64) (*Instance, error) {
 	if !ctx.model.IsConnectorUsage(variant) {
-		return ctx.Instantiate(variant)
+		return ctx.instantiateAs(variant, 0)
 	}
 	ownerInst, ok := ctx.Instance(owner)
 	if !ok {
