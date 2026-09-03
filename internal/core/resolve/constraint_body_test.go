@@ -3,6 +3,8 @@ package resolve
 import (
 	"strings"
 	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 )
 
 // A typo nested two levels inside a require body is reported, at its own span.
@@ -102,6 +104,60 @@ func TestResolveRequireBodyNamesDoNotLeakOutward(t *testing.T) {
 	if want := strings.LastIndex(src, "bodyLocal"); d.Span.Offset != want {
 		t.Errorf("bodyLocal reported at offset %d, want %d", d.Span.Offset, want)
 	}
+}
+
+// A named constraint a requirement owns is a feature of it, so a specializing
+// requirement or a usage may redefine it by name, and may read it by name.
+func TestResolveOwnedConstraintRedefinedByName(t *testing.T) {
+	src := `package P {
+		constraint def C;
+		constraint c0 : C;
+		constraint c1 : C;
+		requirement def R {
+			require constraint c : C = c0;
+			assume constraint a : C default = c0;
+		}
+		requirement def S :> R {
+			require constraint :>> c = c1;
+			assume constraint :>> a = c1;
+		}
+		requirement r : R { require constraint :>> c = c1; }
+		requirement def T :> R { require constraint x :>> c = c1; }
+		requirement def U :> R { require constraint :>> nosuch = c1; }
+	}`
+	r := resolveDoc(t, "d.sysml", src)
+	if len(r.Diagnostics) != 1 || !strings.Contains(r.Diagnostics[0].Message, "nosuch") {
+		t.Fatalf("expected one diagnostic, for nosuch, got %v", r.Diagnostics)
+	}
+	want := strings.Index(src, "require constraint c : C = c0;")
+	for _, decl := range []string{
+		"require constraint :>> c = c1;\n\t\t\tassume",
+		"requirement r : R { require constraint :>> c",
+		"require constraint x :>> c",
+	} {
+		sym, ok := r.PartSymbol(redefinitionTarget(t, r, src, decl), 0)
+		if !ok || sym.Decl.Span().Offset != want {
+			t.Errorf("%q: `:>> c` resolves to %v, want R's c", decl, sym)
+		}
+	}
+}
+
+// redefinitionTarget finds the qualified name written after the `:>>` in decl,
+// among the names r resolved.
+func redefinitionTarget(t *testing.T, r *Resolver, src, decl string) *ast.QualifiedName {
+	t.Helper()
+	at := strings.Index(src, decl)
+	if at < 0 {
+		t.Fatalf("%q not in source", decl)
+	}
+	at += strings.Index(decl, ":>> ") + len(":>> ")
+	for qn := range r.parts {
+		if qn.Span().Offset == at {
+			return qn
+		}
+	}
+	t.Fatalf("no resolved qualified name at offset %d", at)
+	return nil
 }
 
 // assertUnresolvedAt asserts one unresolved diagnostic spanning name in src.

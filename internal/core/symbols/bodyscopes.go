@@ -148,9 +148,13 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		buildBodyScopes(scope, d.Body)
 	case *ast.AssumeMember:
 		bodyScopesInExpr(scope, d.Expression)
+		bodyScopesInMultiplicity(scope, d.Multiplicity)
+		bodyScopesInExpr(scope, d.Value)
 		buildBodyScopes(ConstraintBodyScope(scope, d), d.Body)
 	case *ast.RequireMember:
 		bodyScopesInExpr(scope, d.Expression)
+		bodyScopesInMultiplicity(scope, d.Multiplicity)
+		bodyScopesInExpr(scope, d.Value)
 		buildBodyScopes(ConstraintBodyScope(scope, d), d.Body)
 	case *ast.EntryMember:
 		buildBodyScopes(scope, d.Actions)

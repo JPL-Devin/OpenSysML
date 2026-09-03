@@ -682,11 +682,15 @@ func relationshipTargetsDecl(rel *ast.Relationship, decl ast.Node) bool {
 		return false
 	}
 	name := ""
-	switch d := decl.(type) {
-	case *ast.Definition:
-		name = d.Ident.Name
-	case *ast.Usage:
-		name, _ = ast.EffectiveName(d)
+	if oc, ok := ast.OwnedConstraintOf(decl); ok {
+		name, _ = oc.EffectiveName()
+	} else {
+		switch d := decl.(type) {
+		case *ast.Definition:
+			name = d.Ident.Name
+		case *ast.Usage:
+			name, _ = ast.EffectiveName(d)
+		}
 	}
 	return name != "" && qn.Parts[0].Text == name
 }
@@ -823,13 +827,17 @@ func declaredNameIn(sym *symbols.Symbol, decl ast.Node) string {
 // specialization, typing and featuring targets of its declaration.
 func (r *Resolver) generalsOf(sym *symbols.Symbol) []*symbols.Symbol {
 	var rels []*ast.Relationship
-	switch decl := sym.Decl.(type) {
-	case *ast.Definition:
-		rels = decl.Relationships
-	case *ast.Usage:
-		rels = decl.Relationships
-	default:
-		return nil
+	if oc, ok := ast.OwnedConstraintOf(sym.Decl); ok {
+		rels = oc.Relationships
+	} else {
+		switch decl := sym.Decl.(type) {
+		case *ast.Definition:
+			rels = decl.Relationships
+		case *ast.Usage:
+			rels = decl.Relationships
+		default:
+			return nil
+		}
 	}
 	scope := sym.OwnerScope
 	generals := r.findSpecializationTargets(scope, rels)

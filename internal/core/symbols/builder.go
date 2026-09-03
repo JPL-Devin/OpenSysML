@@ -240,10 +240,10 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 		buildMembers(regionScope, d.States)
 		return true
 	case *ast.AssumeMember:
-		buildConstraintBodyScope(scope, d, d.Body)
+		buildRequirementConstraint(scope, d, d.Body, vis, trivia)
 		return true
 	case *ast.RequireMember:
-		buildConstraintBodyScope(scope, d, d.Body)
+		buildRequirementConstraint(scope, d, d.Body, vis, trivia)
 		return true
 	case *ast.EntryMember:
 		// An entry/do/exit action is a feature of the state declaring it, so a
@@ -378,6 +378,35 @@ func buildControlNode(scope *Scope, decl ast.Node, name string, nameSpan source.
 	// A control node ends in ActionBody, so what its body declares are features
 	// of the node a flow may name (`flow F.b1 to B1.b`).
 	buildMembers(child, ast.NodeBodyMembers(decl))
+}
+
+// buildRequirementConstraint registers the constraint usage a named assume/require
+// member declares as a member of its requirement (SysML v2 §7.20.5).
+func buildRequirementConstraint(scope *Scope, decl ast.Node, body []ast.Node, vis ast.Visibility, trivia []ast.Trivia) {
+	oc, ok := ast.OwnedConstraintOf(decl)
+	if !ok {
+		buildConstraintBodyScope(scope, decl, body)
+		return
+	}
+	id := ast.Identification{Name: oc.Name, NameSpan: oc.NameSpan}
+	var namingTarget ast.Node
+	if rel := oc.NamingFeature(); rel != nil {
+		if name, span := ast.TargetName(rel.Target); name != "" {
+			id.Name, id.NameSpan = name, span
+			namingTarget = namingTargetNode(rel.Target)
+		}
+	}
+	if id.Name == "" {
+		buildConstraintBodyScope(scope, decl, body)
+		return
+	}
+	child := NewScope(scope, decl)
+	sym := newSymbol(id, SymbolConstraintUsage, decl, vis, child, scope, trivia)
+	sym.EffectiveName = namingTarget != nil
+	sym.NamingTarget = namingTarget
+	defineIdent(scope, id, sym)
+	scope.AddChild(child)
+	buildMembers(child, oc.Body)
 }
 
 // buildConstraintBodyScope links the scope a require/assume body declares into.

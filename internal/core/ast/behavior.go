@@ -500,6 +500,67 @@ type RequireMember struct {
 	HasBody bool
 }
 
+// OwnedConstraint is the constraint usage an assume or require member declares
+// with the `constraint` keyword (SysML.xtext RequirementConstraintUsage).
+type OwnedConstraint struct {
+	Name              string
+	NameSpan          source.Span
+	Relationships     []*Relationship
+	Multiplicity      *Multiplicity
+	Value             Node
+	ValueOperatorSpan source.Span
+	ValueIsDefault    bool
+	ValueIsInitial    bool
+	Body              []Node
+}
+
+// OwnedConstraintOf returns the constraint an assume or require member declares,
+// or false for one that references a requirement or states a condition instead.
+func OwnedConstraintOf(n Node) (OwnedConstraint, bool) {
+	switch m := n.(type) {
+	case *AssumeMember:
+		if m.Reference != nil || m.Expression != nil {
+			return OwnedConstraint{}, false
+		}
+		return OwnedConstraint{
+			Name: m.Name, NameSpan: m.NameSpan, Relationships: m.Relationships, Multiplicity: m.Multiplicity,
+			Value: m.Value, ValueOperatorSpan: m.ValueOperatorSpan, ValueIsDefault: m.ValueIsDefault,
+			ValueIsInitial: m.ValueIsInitial, Body: m.Body,
+		}, true
+	case *RequireMember:
+		if m.Reference != nil || m.Expression != nil {
+			return OwnedConstraint{}, false
+		}
+		return OwnedConstraint{
+			Name: m.Name, NameSpan: m.NameSpan, Relationships: m.Relationships, Multiplicity: m.Multiplicity,
+			Value: m.Value, ValueOperatorSpan: m.ValueOperatorSpan, ValueIsDefault: m.ValueIsDefault,
+			ValueIsInitial: m.ValueIsInitial, Body: m.Body,
+		}, true
+	}
+	return OwnedConstraint{}, false
+}
+
+// NamingFeature returns the relationship naming a constraint declared without a
+// name, as NamingFeature does for a usage.
+func (c OwnedConstraint) NamingFeature() *Relationship {
+	if c.Name != "" {
+		return nil
+	}
+	return namingRelationship(c.Relationships, true)
+}
+
+// EffectiveName returns the name the constraint answers to: its declared name,
+// else the name its naming feature supplies.
+func (c OwnedConstraint) EffectiveName() (string, source.Span) {
+	if c.Name != "" {
+		return c.Name, c.NameSpan
+	}
+	if rel := c.NamingFeature(); rel != nil {
+		return TargetName(rel.Target)
+	}
+	return "", source.Span{}
+}
+
 // Phase C4: State Body Members
 
 // EntryMember represents entry behavior in a state body.

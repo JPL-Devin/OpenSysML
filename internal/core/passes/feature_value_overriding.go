@@ -18,6 +18,12 @@ type featureValue struct {
 
 // featureValueOf returns the value part declared on sym, if any.
 func featureValueOf(sym *symbols.Symbol) (featureValue, bool) {
+	if oc, ok := ast.OwnedConstraintOf(sym.Decl); ok {
+		if oc.Value == nil {
+			return featureValue{}, false
+		}
+		return featureValue{span: valuePartSpan(oc.ValueOperatorSpan, oc.Value), isDefault: oc.ValueIsDefault}, true
+	}
 	switch d := sym.Decl.(type) {
 	case *ast.Usage:
 		if d.Value == nil {

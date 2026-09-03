@@ -155,3 +155,49 @@ func TestFeatureValueOverridingSubjectOfEveryGeneral(t *testing.T) {
 		t.Errorf("message %q does not name P::B::s", diags[0].Message)
 	}
 }
+
+// A named constraint a requirement owns through `require`/`assume constraint` is
+// a feature of the requirement, so rebinding it in a specialization or a usage
+// overrides its binding, whether the redefinition is named or borrows the name;
+// a `default` binding may be rebound.
+func TestFeatureValueOverridingOwnedConstraint(t *testing.T) {
+	const src = `package P {
+		constraint def C;
+		constraint c0 : C;
+		constraint c1 : C;
+		requirement def R {
+			require constraint c : C = c0;
+			assume constraint a : C default = c0;
+		}
+		requirement def S :> R {
+			require constraint :>> c = c1;
+			assume constraint :>> a = c1;
+		}
+		requirement r : R { require constraint :>> c = c1; }
+		requirement def T :> R { require constraint x :>> c = c1; }
+		requirement def U :> R { require constraint :>> c default = c1; }
+	}`
+	diags := overridingDiags(t, src, "= c1", "= c1", "= c1", "default = c1")
+	for _, d := range diags {
+		if !strings.Contains(d.Message, "P::R::c") {
+			t.Errorf("message %q does not name P::R::c", d.Message)
+		}
+	}
+}
+
+// The binding of an owned constraint is found past a specialization that
+// restates the constraint without a value.
+func TestFeatureValueOverridingOwnedConstraintIsTransitive(t *testing.T) {
+	const src = `package P {
+		constraint def C;
+		constraint c0 : C;
+		constraint c1 : C;
+		requirement def R { require constraint c : C = c0; }
+		requirement def S :> R { require constraint :>> c; }
+		requirement def T :> S { require constraint :>> c = c1; }
+		requirement def RD { assume constraint a : C default = c0; }
+		requirement def SD :> RD { assume constraint :>> a; }
+		requirement def TD :> SD { assume constraint :>> a = c1; }
+	}`
+	overridingDiags(t, src, "= c1")
+}

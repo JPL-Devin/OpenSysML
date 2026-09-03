@@ -148,6 +148,9 @@ func GeneralizationKind(k ast.RelationshipKind) bool {
 // declaration, or nil for symbols that are not def/usage. A subject's typing
 // is its TypeRef, not a relationship, so it is not among them.
 func RelationshipsOf(sym *symbols.Symbol) []*ast.Relationship {
+	if oc, ok := ast.OwnedConstraintOf(sym.Decl); ok {
+		return oc.Relationships
+	}
 	switch d := sym.Decl.(type) {
 	case *ast.Definition:
 		return d.Relationships
