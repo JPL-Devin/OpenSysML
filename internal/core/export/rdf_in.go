@@ -141,10 +141,11 @@ func legacyNamespaceError(iri string) error {
 // subject. An rdf:type that is no term of the SysML vocabulary or of this
 // mapping's extension is refused: a class of another vocabulary names no
 // metaclass, whatever its local name. A subject stating several classes is
-// the most specific of them, provided the others are its superclasses; rdf:type
-// statements are unordered, so the first one written settles nothing.
+// the one of them that is a subclass of every other; rdf:type statements are
+// unordered, so the classes are gathered before any is judged.
 func checkTypes(graph *rdf.Graph) (map[rdf.Term]string, error) {
-	metaclasses := map[rdf.Term]string{}
+	stated := map[rdf.Term][]string{}
+	var subjects []rdf.Term
 	for _, triple := range graph.Triples() {
 		if triple.Predicate.Value != rdf.RDFType {
 			continue
@@ -156,18 +157,41 @@ func checkTypes(graph *rdf.Graph) (map[rdf.Term]string, error) {
 				Note: fmt.Sprintf("its rdf:type %s is not a class of the SysML vocabulary (%s) or of this mapping's extension (%s), so it names no metaclass to write", class.String(), rdf.SysML, rdf.OpenSysML),
 			}
 		}
-		settled, ok := metaclasses[triple.Subject]
-		switch {
-		case !ok || subclassOf(class.Value, settled):
-			metaclasses[triple.Subject] = class.Value
-		case !subclassOf(settled, class.Value):
+		if _, seen := stated[triple.Subject]; !seen {
+			subjects = append(subjects, triple.Subject)
+		}
+		stated[triple.Subject] = append(stated[triple.Subject], class.Value)
+	}
+	metaclasses := make(map[rdf.Term]string, len(stated))
+	for _, subject := range subjects {
+		class, ok := mostSpecific(stated[subject])
+		if !ok {
 			return nil, &UnsupportedError{
-				What: fmt.Sprintf("the subject <%s>", triple.Subject.Value),
-				Note: fmt.Sprintf("its rdf:types %s and %s are not one class and a superclass of it, so they name no single metaclass to write", curie(settled), curie(class.Value)),
+				What: fmt.Sprintf("the subject <%s>", subject.Value),
+				Note: fmt.Sprintf("its rdf:types %s include none that is a subclass of all the others, so they name no single metaclass to write", classList(stated[subject])),
 			}
 		}
+		metaclasses[subject] = class
 	}
 	return metaclasses, nil
+}
+
+// mostSpecific picks the class among those stated that every other is a
+// superclass of, reporting false when there is none.
+func mostSpecific(classes []string) (string, bool) {
+	for _, class := range classes {
+		specific := true
+		for _, other := range classes {
+			if !subclassOf(class, other) {
+				specific = false
+				break
+			}
+		}
+		if specific {
+			return class, true
+		}
+	}
+	return "", false
 }
 
 // subclassOf reports whether the class iri is ancestor or a subclass of it in
@@ -328,10 +352,12 @@ var (
 	booleanLiterals  = []string{rdf.XSD + "boolean"}
 	integerLiterals  = []string{rdf.XSD + "integer", rdf.XSD + "int"}
 	realLiterals     = []string{rdf.XSD + "decimal", rdf.OWL + "real", rdf.XSD + "double", rdf.XSD + "float"}
+	boundLiterals    = append(append([]string{}, notationLiterals...), integerLiterals...)
 )
 
 // literalDatatypes lists the datatypes a literal of the property may carry on a
-// subject of the metaclass: the ontology's range, else this tool's vocabulary.
+// subject of the metaclass: the ontology's range where the metaclass declares
+// the property, else what this mapping writes there.
 func literalDatatypes(metaclass, predicate string) []string {
 	name := rdf.LocalName(predicate)
 	if strings.HasPrefix(predicate, rdf.SysML) {
@@ -344,6 +370,9 @@ func literalDatatypes(metaclass, predicate string) []string {
 		return integerLiterals
 	case strings.HasPrefix(name, "is"), name == xHasBody, name == xDeclaredID, name == xBracedEffect:
 		return booleanLiterals
+	case strings.HasPrefix(predicate, rdf.SysML) && (name == pLowerBound || name == pUpperBound):
+		// A feature's bound is an Expression the notation also states as a bare number.
+		return boundLiterals
 	case strings.HasPrefix(predicate, rdf.SysML):
 		return notationLiterals
 	}
@@ -351,21 +380,17 @@ func literalDatatypes(metaclass, predicate string) []string {
 }
 
 // declaredLiteralDatatypes reads the ontology's range for a property on the
-// metaclass, or on every metaclass declaring it when the subject's is unknown.
+// metaclass, or on every metaclass declaring it when the subject's class is
+// none the ontology knows. A known class that does not declare the property
+// carries it as this mapping writes it, so nil is returned for the caller's default.
 func declaredLiteralDatatypes(metaclass, name string) []string {
+	_, known := ontology.LookupClass(metaclass)
 	var allowed []string
 	for _, property := range ontology.LookupProperty(name) {
-		if metaclass != "" && !ontology.IsAncestorOrSelf(metaclass, property.DefiningClass) {
+		if known && !ontology.IsAncestorOrSelf(metaclass, property.DefiningClass) {
 			continue
 		}
 		allowed = append(allowed, rangeLiterals(property)...)
-	}
-	if allowed == nil && metaclass != "" {
-		return declaredLiteralDatatypes("", name)
-	}
-	// A bound is an Expression the notation also states as a bare number.
-	if name == pLowerBound || name == pUpperBound {
-		allowed = append(allowed, integerLiterals...)
 	}
 	return slices.Compact(slices.Sorted(slices.Values(allowed)))
 }
@@ -637,6 +662,14 @@ func curieList(properties []string) string {
 	curies := make([]string, len(properties))
 	for i, property := range properties {
 		curies[i] = curie(rdf.SysML + property)
+	}
+	return strings.Join(curies, ", ")
+}
+
+func classList(iris []string) string {
+	curies := make([]string, len(iris))
+	for i, iri := range iris {
+		curies[i] = curie(iri)
 	}
 	return strings.Join(curies, ", ")
 }

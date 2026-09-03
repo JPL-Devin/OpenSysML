@@ -630,6 +630,9 @@ func TestMistypedLiteralsAreRefusedEverywhere(t *testing.T) {
 		{"result_expressions", `sysx:memberIndex "0"^^xsd:integer ;`, `sysx:memberIndex "first"^^xsd:integer ;`, `"first" is not in the lexical space of xsd:integer`},
 		{"result_expressions", `sysml:value "2"^^xsd:integer ;`, `sysml:value "2147483648"^^xsd:int ;`, `"2147483648" is outside the value space of xsd:int`},
 		{"result_expressions", `sysml:value "2"^^xsd:integer ;`, `sysml:value "-2147483649"^^xsd:int ;`, `"-2147483649" is outside the value space of xsd:int`},
+		// A feature's value is an Expression; only a LiteralInteger's is an integer.
+		{"result_expressions", `sysml:value expr:Results__AfterMembers__y_pvalue ;`, `sysml:value "2"^^xsd:integer ;`, "sysml:value takes a string or sysx:Expression"},
+		{"result_expressions", `sysml:value expr:Results__AfterMembers__y_pvalue ;`, `sysml:value "true"^^xsd:boolean ;`, "sysml:value takes a string or sysx:Expression"},
 	} {
 		turtle := string(convertFixture(t, tc.fixture))
 		if !strings.Contains(turtle, tc.from) {
@@ -758,8 +761,9 @@ func TestSuperclassesStatedFirstStillClassify(t *testing.T) {
 			"elmt:Results__AfterMembers___403\n    a sysml:Feature, sysml:Expression, sysml:OperatorExpression ;",
 		},
 		{
+			// Two superclasses neither of which is the other's, ahead of their common subclass.
 			"elmt:Results__AfterMembers\n    a sysml:CalculationDefinition ;",
-			"elmt:Results__AfterMembers\n    a sysml:Namespace, sysml:CalculationDefinition, sysml:Behavior ;",
+			"elmt:Results__AfterMembers\n    a sysml:ActionDefinition, sysml:Function, sysml:CalculationDefinition, sysml:Behavior ;",
 		},
 		{
 			"expr:Results__AfterMembers__y_pvalue\n    a sysml:OperatorExpression ;",
@@ -796,17 +800,23 @@ func TestUnrelatedClassesAreRefused(t *testing.T) {
 		{
 			"elmt:Results__AfterMembers___403_om\n    a sysml:ResultExpressionMembership ;",
 			"elmt:Results__AfterMembers___403_om\n    a sysml:ResultExpressionMembership, sysml:ReturnParameterMembership ;",
-			"the subject <urn:sysmlv2:element:Results__AfterMembers___403_om>: its rdf:types sysml:ResultExpressionMembership and sysml:ReturnParameterMembership are not one class and a superclass of it",
+			"the subject <urn:sysmlv2:element:Results__AfterMembers___403_om>: its rdf:types sysml:ResultExpressionMembership, sysml:ReturnParameterMembership include none that is a subclass of all the others",
 		},
 		{
 			"elmt:Results__AfterMembers___403\n    a sysml:OperatorExpression ;",
 			"elmt:Results__AfterMembers___403\n    a sysml:PartUsage, sysml:OperatorExpression ;",
-			"the subject <urn:sysmlv2:element:Results__AfterMembers___403>: its rdf:types sysml:PartUsage and sysml:OperatorExpression are not one class and a superclass of it",
+			"the subject <urn:sysmlv2:element:Results__AfterMembers___403>: its rdf:types sysml:PartUsage, sysml:OperatorExpression include none that is a subclass of all the others",
+		},
+		{
+			// Two superclasses of CalculationDefinition, which is not stated.
+			"elmt:Results__AfterMembers\n    a sysml:CalculationDefinition ;",
+			"elmt:Results__AfterMembers\n    a sysml:ActionDefinition, sysml:Function ;",
+			"the subject <urn:sysmlv2:element:Results__AfterMembers>: its rdf:types sysml:ActionDefinition, sysml:Function include none that is a subclass of all the others",
 		},
 		{
 			"elmt:Results__AfterMembers___403\n    a sysml:OperatorExpression ;",
 			"elmt:Results__AfterMembers___403\n    a sysml:OperatorExpression, sysx:BodyMember ;",
-			"the subject <urn:sysmlv2:element:Results__AfterMembers___403>: its rdf:types sysml:OperatorExpression and sysx:BodyMember are not one class and a superclass of it",
+			"the subject <urn:sysmlv2:element:Results__AfterMembers___403>: its rdf:types sysml:OperatorExpression, sysx:BodyMember include none that is a subclass of all the others",
 		},
 	} {
 		if !strings.Contains(turtle, tc.from) {
@@ -819,6 +829,29 @@ func TestUnrelatedClassesAreRefused(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("for %q:\n got %v\nwant %s", tc.to, err, tc.want)
+		}
+	}
+}
+
+// A feature's value the graph states as text, the form earlier releases wrote,
+// still reads in the datatypes that stand for notation.
+func TestFeatureValueTextStillDecodes(t *testing.T) {
+	turtle := string(withoutSourceText(t, convertFixture(t, "result_expressions")))
+	const from = "    sysml:value expr:Results__AfterMembers__y_pvalue ;"
+	if !strings.Contains(turtle, from) {
+		t.Fatalf("expected %q in the graph:\n%s", from, turtle)
+	}
+	for _, to := range []string{
+		`    sysml:value "x + 1" ;`,
+		`    sysml:value "x + 1"^^xsd:string ;`,
+		`    sysml:value "x + 1"^^sysx:Expression ;`,
+	} {
+		got, err := export.Convert("m.ttl", []byte(strings.Replace(turtle, from, to, 1)), export.FormatTurtle, export.FormatSysML)
+		if err != nil {
+			t.Fatalf("%s: %v", to, err)
+		}
+		if !strings.Contains(string(got), "attribute y : Real = x + 1;") {
+			t.Errorf("%s: the value did not come back:\n%s", to, got)
 		}
 	}
 }
