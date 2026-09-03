@@ -328,12 +328,10 @@ func (ctx *Context) SatisfySubject(a *SatisfyAssertion) (*Instance, error) {
 	return inst, nil
 }
 
-// chainSubject evaluates a chained `by` operand in the assertion's scope and
-// returns the one object it denotes.
+// chainSubject evaluates a chained `by` operand in the assertion's scope, as
+// one run bounded by the step budget, and returns the one object it denotes.
 func (ctx *Context) chainSubject(a *SatisfyAssertion) (*Instance, error) {
-	ec := NewEvalContext(ctx, a.Symbol.OwnerScope)
-	defer ec.beginStep()()
-	value, err := ec.Eval(a.SubjectChain)
+	value, err := ctx.EvalWithScope(a.SubjectChain, a.Symbol.OwnerScope)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w: %w", a.Text(), ErrNoSubject, err)
 	}
