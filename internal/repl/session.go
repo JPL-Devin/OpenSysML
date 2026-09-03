@@ -139,7 +139,9 @@ type actionSession struct {
 	fqn string
 	// selfFQN names the object performing the behavior, empty when it performs
 	// outside any object. Losing that object ends the session with it.
-	selfFQN  string
+	selfFQN string
+	// self is that object, nil when there is none.
+	self     *runtime.Instance
 	symbol   *symbols.Symbol
 	executor *runtime.ActionExecutor
 	// rtCtx is the context the executor runs in. A submission rebuilds the
@@ -171,13 +173,23 @@ func (a *actionSession) selfOf() string {
 	return a.selfFQN
 }
 
+// performer is the object performing the debugged action, nil for none.
+func (a *actionSession) performer() *runtime.Instance {
+	if a == nil {
+		return nil
+	}
+	return a.self
+}
+
 // stateSession holds an active state machine executor debugging session.
 type stateSession struct {
 	name string
 	// fqn is the debugged state machine's qualified name; see actionSession.fqn.
 	fqn string
 	// selfFQN names the performing object; see actionSession.selfFQN.
-	selfFQN  string
+	selfFQN string
+	// self is that object; see actionSession.self.
+	self     *runtime.Instance
 	symbol   *symbols.Symbol
 	executor *runtime.StateExecutor
 	// machine names the exhibited machine the session is attached to, and
@@ -215,6 +227,14 @@ func (s *stateSession) selfOf() string {
 		return ""
 	}
 	return s.selfFQN
+}
+
+// performer is the object performing the debugged machine, nil for none.
+func (s *stateSession) performer() *runtime.Instance {
+	if s == nil {
+		return nil
+	}
+	return s.self
 }
 
 // NewSession returns a session over a fresh workspace.
@@ -898,7 +918,7 @@ func (s *Session) dropStaleDebugSessions(gone []string, over carryover) []string
 		return nil
 	}
 	var notices []string
-	if by, objectGone, ok := s.staleDebugState(gone, s.actionExec.fqnOf(), s.actionExec.selfOf(), over.action); ok {
+	if by, objectGone, ok := s.staleDebugState(gone, s.actionExec.fqnOf(), s.actionExec.selfOf(), s.actionExec.performer(), over.action); ok {
 		notices = append(notices, debugSessionEnded("action", s.actionExec.name, by, objectGone))
 		s.endedAction = &endedSession{
 			kind:       "action",
@@ -909,7 +929,7 @@ func (s *Session) dropStaleDebugSessions(gone []string, over carryover) []string
 		}
 		s.actionExec = nil
 	}
-	if by, objectGone, ok := s.staleDebugState(gone, s.stateExec.fqnOf(), s.stateExec.selfOf(), over.state); ok {
+	if by, objectGone, ok := s.staleDebugState(gone, s.stateExec.fqnOf(), s.stateExec.selfOf(), s.stateExec.performer(), over.state); ok {
 		notices = append(notices, debugSessionEnded("state", s.stateExec.name, by, objectGone))
 		s.endedState = &endedSession{
 			kind:       "state machine",
@@ -929,7 +949,7 @@ func (s *Session) dropStaleDebugSessions(gone []string, over carryover) []string
 // behavior that this submission dropped.
 // It reports separately that what went was the performing object, which reads as
 // a different loss from a redeclaration.
-func (s *Session) staleDebugState(gone []string, fqn, selfFQN string, shapes *runtime.Shapes) (string, bool, bool) {
+func (s *Session) staleDebugState(gone []string, fqn, selfFQN string, self *runtime.Instance, shapes *runtime.Shapes) (string, bool, bool) {
 	if fqn == "" {
 		return "", false, false
 	}
@@ -938,10 +958,8 @@ func (s *Session) staleDebugState(gone []string, fqn, selfFQN string, shapes *ru
 	}
 	// The behavior is performed by an object this submission dropped, so what it
 	// runs against is no longer part of the session.
-	if selfFQN != "" {
-		if _, kept := s.heldObject(selfFQN); !kept {
-			return selfFQN, true, true
-		}
+	if self != nil && !s.holdsObject(self) {
+		return selfFQN, true, true
 	}
 	if shapes == nil {
 		return "", false, false
@@ -952,6 +970,48 @@ func (s *Session) staleDebugState(gone []string, fqn, selfFQN string, shapes *ru
 	}
 	by, changed := ctx.Changed(shapes)
 	return by, false, changed
+}
+
+// holdsObject reports whether a name of the session still reaches the object.
+func (s *Session) holdsObject(inst *runtime.Instance) bool {
+	ctx, err := s.getOrCreateRuntime()
+	return err == nil && s.heldByID(ctx, inst.ID) == inst
+}
+
+// dropSupersededDebugSessions ends the debugging sessions whose performing
+// object a second %instantiate of name left unreachable, and reports each one.
+func (s *Session) dropSupersededDebugSessions(name string) []string {
+	var notices []string
+	if self := s.actionExec.performer(); self != nil && !s.holdsObject(self) {
+		notices = append(notices, debugSessionSuperseded("action", s.actionExec.name, self.ID, name))
+		s.endedAction = &endedSession{
+			kind:       "action",
+			name:       s.actionExec.name,
+			rootName:   name,
+			objectID:   self.ID,
+			superseded: true,
+		}
+		s.actionExec = nil
+	}
+	if self := s.stateExec.performer(); self != nil && !s.holdsObject(self) {
+		notices = append(notices, debugSessionSuperseded("state", s.stateExec.name, self.ID, name))
+		s.endedState = &endedSession{
+			kind:       "state machine",
+			name:       s.stateExec.name,
+			rootName:   name,
+			objectID:   self.ID,
+			superseded: true,
+		}
+		s.stateExec = nil
+	}
+	return notices
+}
+
+// debugSessionSuperseded reports a debugging session ended because a second
+// %instantiate of name left the object performing its behavior unreachable.
+func debugSessionSuperseded(kind, name string, objectID int64, by string) string {
+	return fmt.Sprintf("note: %s debugging session for %q ended (object #%d performing it was superseded by this instance of %s)",
+		kind, name, objectID, notationName(by))
 }
 
 // debugSessionResetEnded reports a debugging session a reset ended, which no

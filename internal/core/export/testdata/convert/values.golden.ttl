@@ -10,11 +10,14 @@ elmt:Values
     sysml:qualifiedName "Values" ;
     sysml:elementId "Values" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Values" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Values__Total, elmt:Values__Sized ;
     sysml:ownedMembership elmt:Values__Total_om, elmt:Values__Sized_om ;
-    sysml:ownedRelationship elmt:Values__Total_om, elmt:Values__Sized_om .
+    sysml:ownedRelationship elmt:Values__Total_om, elmt:Values__Sized_om ;
+    sysx:sourceText "package Values {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:Values__Total
     a sysml:CalculationDefinition ;
@@ -31,7 +34,9 @@ elmt:Values__Total
     sysml:ownedMembership elmt:Values__Total__x_om, elmt:Values__Total__y_om, elmt:Values__Total__result_om ;
     sysml:ownedRelationship elmt:Values__Total__x_om, elmt:Values__Total__y_om, elmt:Values__Total__result_om ;
     sysml:ownedFeature elmt:Values__Total__x, elmt:Values__Total__y, elmt:Values__Total__result ;
-    sysml:ownedFeatureMembership elmt:Values__Total__x_om, elmt:Values__Total__y_om, elmt:Values__Total__result_om .
+    sysml:ownedFeatureMembership elmt:Values__Total__x_om, elmt:Values__Total__y_om, elmt:Values__Total__result_om ;
+    sysx:sourceText "    calc def Total {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Values__Total_om
     a sysml:OwningMembership ;
@@ -56,7 +61,8 @@ elmt:Values__Total__x
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:type "Real" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        in x : Real;\n" .
 
 elmt:Values__Total__x_om
     a sysml:FeatureMembership ;
@@ -83,7 +89,8 @@ elmt:Values__Total__y
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:type "Real" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        in y : Real;\n" .
 
 elmt:Values__Total__y_om
     a sysml:FeatureMembership ;
@@ -111,7 +118,8 @@ elmt:Values__Total__result
     sysml:isResult "true"^^xsd:boolean ;
     sysml:direction "out" ;
     sysml:type "Real" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        return result : Real;\n" .
 
 elmt:Values__Total__result_om
     a sysml:FeatureMembership ;
@@ -140,7 +148,9 @@ elmt:Values__Sized
     sysml:ownedMembership elmt:Values__Sized__size_om, elmt:Values__Sized__label_om, elmt:Values__Sized__total_om ;
     sysml:ownedRelationship elmt:Values__Sized__size_om, elmt:Values__Sized__label_om, elmt:Values__Sized__total_om ;
     sysml:ownedFeature elmt:Values__Sized__size, elmt:Values__Sized__label, elmt:Values__Sized__total ;
-    sysml:ownedFeatureMembership elmt:Values__Sized__size_om, elmt:Values__Sized__label_om, elmt:Values__Sized__total_om .
+    sysml:ownedFeatureMembership elmt:Values__Sized__size_om, elmt:Values__Sized__label_om, elmt:Values__Sized__total_om ;
+    sysx:sourceText "    part def Sized {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Values__Sized_om
     a sysml:OwningMembership ;
@@ -164,7 +174,8 @@ elmt:Values__Sized__size
     sysml:declaredName "size" ;
     sysml:type "Real" ;
     sysml:value expr:Values__Sized__size_pvalue ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute size : Real = 4.5;\n" .
 
 elmt:Values__Sized__size_om
     a sysml:FeatureMembership ;
@@ -196,7 +207,8 @@ elmt:Values__Sized__label
     sysml:declaredName "label" ;
     sysml:type "String" ;
     sysml:value expr:Values__Sized__label_pvalue ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute label : String = \"front\";\n" .
 
 elmt:Values__Sized__label_om
     a sysml:FeatureMembership ;
@@ -228,7 +240,8 @@ elmt:Values__Sized__total
     sysml:declaredName "total" ;
     sysml:type "Real" ;
     sysml:value expr:Values__Sized__total_pvalue ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute total : Real = 1.0 + 2.0;\n" .
 
 elmt:Values__Sized__total_om
     a sysml:FeatureMembership ;
