@@ -44,14 +44,50 @@ func (r *Resolver) qualifiedCandidates(scope *symbols.Scope, qn *ast.QualifiedNa
 	if last == 0 || len(parts) <= last || parts[last-1] == nil {
 		return []*symbols.Symbol{sym}
 	}
-	all, ok := r.qualifiedSegment(scope, qn, parts[last-1], last)
+	qualifier := parts[last-1]
+	all, ok := r.qualifiedSegment(scope, qn, qualifier, last)
 	if !ok {
 		return []*symbols.Symbol{sym}
 	}
 	out := []*symbols.Symbol{sym}
-	for _, found := range all {
+	for _, found := range append(all, r.surfacedMembers(qualifier, scope, qn.Parts[last].Text)...) {
 		if !r.AliasNamesNothing(found) {
 			out = appendSymbol(out, r.AliasedElement(found))
+		}
+	}
+	return out
+}
+
+// surfacedMembers returns every member name reaches in cur through its imports and
+// generals, of which qualifiedSegment reaches the first; none when cur owns one.
+func (r *Resolver) surfacedMembers(cur *symbols.Symbol, from *symbols.Scope, name string) []*symbols.Symbol {
+	if cur == nil {
+		return nil
+	}
+	var out []*symbols.Symbol
+	if cur.Scope != nil {
+		if len(r.namedThroughNamespaces(symbols.PreferDeclared(cur.Scope.LookupLocalAll(name)))) > 0 {
+			return nil
+		}
+		for _, imp := range r.importsOf(cur.Scope.Node()) {
+			if r.importStack[imp] || r.resolvingImports[imp] ||
+				!r.importPrefixAvailable(cur.Scope, imp, name) || !r.importVisibleFrom(cur, from, imp) {
+				continue
+			}
+			r.importStack[imp] = true
+			for _, found := range r.importMatchesAll(cur.Scope, imp, name) {
+				if r.namedThroughNamespace(found) {
+					out = appendSymbol(out, found)
+				}
+			}
+			delete(r.importStack, imp)
+		}
+	}
+	if all, ok := r.model.(contributedMembersLookup); ok {
+		for _, found := range all.LookupContributedMembers(cur, name) {
+			if visibleAsInheritedMember(cur, found) && r.namedThroughNamespace(found) {
+				out = appendSymbol(out, found)
+			}
 		}
 	}
 	return out
