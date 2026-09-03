@@ -895,6 +895,10 @@ func (ctx *Context) invokeLibraryPerformance(perf *libraryPerformance, args calc
 	if err := sig.checkArgs(args); err != nil {
 		return Value{}, err
 	}
+	if err := ctx.enterCalc(sig.Name); err != nil {
+		return Value{}, err
+	}
+	defer ctx.leaveCalc()
 	if ctx.trace != nil {
 		ctx.trace.RecordCalcEnter(sig.Name)
 	}
