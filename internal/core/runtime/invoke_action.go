@@ -98,7 +98,7 @@ func invokeAction(
 	defer func() { ctx.actionDepth-- }()
 
 	in, out := actionParameters(sym.Decl)
-	inputs, err := bindArguments(ctx, scope, inv, in, data)
+	inputs, err := bindArguments(ctx, scope, inv, in, data, self)
 	if err != nil {
 		return nil, err
 	}
@@ -160,13 +160,15 @@ func resolveActionSymbol(
 // bindArguments computes the callee's input bindings. An invocation with an
 // argument list binds those arguments; a bare `perform`/typed usage instead
 // passes the caller's values of the parameters' own names, which is how data
-// reaches an action performed inside a flow.
+// reaches an action performed inside a flow. Arguments are evaluated as the
+// caller's body is: over its values, performed by self.
 func bindArguments(
 	ctx *Context,
 	scope *symbols.Scope,
 	inv actionInvocation,
 	in []string,
 	data map[string]Value,
+	self *Instance,
 ) (map[string]Value, error) {
 	inputs := make(map[string]Value, len(in))
 
@@ -185,7 +187,7 @@ func bindArguments(
 		return inputs, nil
 	}
 
-	ec := NewEvalContext(ctx, scope)
+	ec := NewEvalContextIn(ctx, scope, self)
 	ec.Push(data)
 	defer ec.beginStep()()
 

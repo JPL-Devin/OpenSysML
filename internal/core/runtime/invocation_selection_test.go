@@ -8,6 +8,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // Failure modes of overload selection: each returns a typed error naming the
@@ -24,6 +25,8 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("action_call_ambiguous_between_two_imports", testActionCallAmbiguousBetweenTwoImports)
 	t.Run("action_call_receiver_binds_first_input", testActionCallReceiverBindsFirstInput)
 	t.Run("action_call_receiver_with_named_arguments_refused", testActionCallReceiverWithNamedArgumentsRefused)
+	t.Run("action_call_arguments_read_the_performing_object", testActionCallArgumentsReadThePerformingObject)
+	t.Run("state_behavior_call_arguments_read_the_performing_object", testStateBehaviorCallArgumentsReadThePerformingObject)
 }
 
 // overloadedActionsSrc declares two imported same-named actions, told apart
@@ -136,6 +139,77 @@ func testActionCallReceiverWithNamedArgumentsRefused(t *testing.T) {
 	}
 	if !errors.Is(err, ErrReceiverWithNamedArgs) {
 		t.Fatalf("expected ErrReceiverWithNamedArgs, got: %v", err)
+	}
+}
+
+// performedCallSrc has a part perform a behavior that calls an action with the
+// part's own feature, which the performing instance values differently from
+// the declared default. Both the receiver and the argument forms are exercised.
+const performedCallSrc = `
+	package P {
+		private import ScalarValues::*;
+		action def report { in x : Integer; out code : Integer; first start; action set { assign code := x + 10; } done; succession first start then set; succession first set then done; }
+		part def Rover {
+			attribute speed : Integer = 7;
+			action def drive {
+				attribute code : Integer = 0;
+				first start;
+				%s
+				done;
+				succession first start then call;
+				succession first call then done;
+			}
+			state def Drive {
+				attribute code : Integer = 0;
+				entry; then run;
+				state run { %s }
+				transition first run then done;
+			}
+		}
+		part rover1 : Rover { attribute redefines speed = 9; }
+	}
+`
+
+// performedCallRuntime builds the model with the given action and state calls
+// and instantiates the performing part.
+func performedCallRuntime(t *testing.T, actionCall, stateCall string) (*symbols.Index, *Context, *Instance) {
+	t.Helper()
+	src := fmt.Sprintf(performedCallSrc, actionCall, stateCall)
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	self, err := ctx.Instantiate(oneSymbol(t, idx, "P::rover1"))
+	if err != nil {
+		t.Fatalf("instantiate rover1: %v", err)
+	}
+	return idx, ctx, self
+}
+
+// The arguments of a nested action call, receiver included, read the object
+// performing the caller: `speed->report()` passes the instance's speed, not
+// the declared default.
+func testActionCallArgumentsReadThePerformingObject(t *testing.T) {
+	for _, call := range []string{"action call = speed->report();", "perform action call = report(speed);"} {
+		idx, ctx, self := performedCallRuntime(t, call, "")
+		outputs, err := ctx.ExecuteActionPerformedBy(oneSymbol(t, idx, "P::Rover::drive"), self, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", call, err)
+		}
+		if got := intOutput(t, outputs, "code"); got != 19 {
+			t.Errorf("%s code = %d, want 19 (rover1's speed 9 + 10)", call, got)
+		}
+	}
+}
+
+// A state behavior's action call reads the performing object the same way.
+func testStateBehaviorCallArgumentsReadThePerformingObject(t *testing.T) {
+	for _, call := range []string{"entry perform action w = speed->report();", "exit perform action w = report(speed);"} {
+		idx, ctx, self := performedCallRuntime(t, "", call)
+		data, _, err := ctx.ExecuteStatePerformedBy(oneSymbol(t, idx, "P::Rover::Drive"), self, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", call, err)
+		}
+		if got := intOutput(t, data, "code"); got != 19 {
+			t.Errorf("%s code = %d, want 19 (rover1's speed 9 + 10)", call, got)
+		}
 	}
 }
 
