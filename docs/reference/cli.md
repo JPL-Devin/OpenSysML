@@ -372,7 +372,7 @@ these tools.
 ```bash
 sysml model.sysml -render-document Reports::MassReport -doc-form pdf -o report.pdf
 sysml model.sysml -render-document Reports::MassReport -doc-form pdf \
-    -pdf-engine pandoc -pdf-title-page -pdf-toc -pdf-number-sections -o report.pdf
+    -pdf-engine pandoc -doc-title-page -doc-toc -doc-number-sections -o report.pdf
 ```
 
 The engines. Each is found on `PATH` by its default name unless an environment variable points
