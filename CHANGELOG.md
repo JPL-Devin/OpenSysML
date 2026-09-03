@@ -58,9 +58,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   `max`/`min` convert to compare and answer the winning operand as written; `sum`/`product`
   fold in the first element's unit; the operator, comparison, predicate and conversion forms
   delegate to the code the operators already use. `import QuantityCalculations::*;` — which the
-  ISQ examples do — no longer breaks `(1 [m], 2 [m])->sum()`, which computes `3 [m]` with and
-  without the import. The trigonometric functions take an angle quantity (`sin(90 ['°'])`,
-  `cos(0 [rad])`) through its declared scale. `VectorCalculations` over a numeric vector
+  ISQ examples do — no longer breaks `(1 [m], 2 [m])->sum()`, which computes `3 [m]` with the
+  import and without it (where `sum` is the `NumericalFunctions::sum` the model imports). The
+  `TrigFunctions` take an angle quantity (`sin(90 ['°'])`, `cos(0 [rad])`) through its declared
+  scale. `VectorCalculations` over a numeric vector
   compute as the Kernel `VectorFunctions` do; the quantity-scaled vector forms, `outer`, and
   every `MeasurementRefCalculations` and `TensorCalculations` declaration report themselves by
   name with the reason instead of `no result expression`. A gate asserts every declaration of

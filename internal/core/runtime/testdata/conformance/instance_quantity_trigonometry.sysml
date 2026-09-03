@@ -1,11 +1,13 @@
 // Trigonometric functions over angle quantities: a degree argument is converted
 // to radians before the function applies, and a radian argument passes through.
 // The SI degree carries the library's inexact factor 1.745329E-02, so results
-// of degree arguments are pinned to a tolerance.
+// of degree arguments are pinned to a tolerance. TrigFunctions::* is imported
+// because a bare `sin` resolves only where the model imports it.
 package test {
 	public import ISQ::*;
 	public import SI::*;
 	public import QuantityCalculations::*;
+	public import TrigFunctions::*;
 
 	part def Turn {
 		attribute right : AngularMeasureValue = 90 ['°'];

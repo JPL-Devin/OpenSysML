@@ -96,6 +96,7 @@ func quantityCalculationsContext(t *testing.T) (*Context, *symbols.Scope) {
 			public import ISQ::*;
 			public import SI::*;
 			public import QuantityCalculations::*;
+			public import TrigFunctions::*;
 			attribute side : LengthValue = 3 [m];
 			attribute area : AreaValue = side * side;
 			attribute none : LengthValue[0..*] = ();
@@ -318,7 +319,7 @@ func TestVectorCalculations(t *testing.T) {
 func TestQuantitySumWithAndWithoutImport(t *testing.T) {
 	for _, imported := range []bool{false, true} {
 		name := "without import"
-		importLine := ""
+		importLine := "public import NumericalFunctions::*;"
 		if imported {
 			name = "with import"
 			importLine = "public import QuantityCalculations::*;"

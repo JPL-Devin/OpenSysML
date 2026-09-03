@@ -3,6 +3,7 @@
 package test {
 	public import ISQ::*;
 	public import SI::*;
+	private import NumericalFunctions::*;
 
 	calc def Total {
 		return : LengthValue = (1 [m], 2 [m])->sum();
