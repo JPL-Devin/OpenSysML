@@ -67,20 +67,25 @@ func (r *Resolver) appendNamed(out, found []*symbols.Symbol) []*symbols.Symbol {
 }
 
 // rootCandidates returns every top-level declaration name denotes from scope: the
-// document root's own, then those of the global index (lookupGlobalTop's first).
+// document root's own, then those of the global index.
 func (r *Resolver) rootCandidates(scope *symbols.Scope, name string) []*symbols.Symbol {
 	var out []*symbols.Symbol
 	if root := rootOf(scope); root != nil {
 		out, _ = r.localBindingCandidates(root, name)
 	}
-	if r.idx == nil {
-		return out
-	}
-	global := r.admittedUnder(r.documentOf(scope), r.ReferringNamespaceFQN(scope), name, r.idx.LookupQualified(name))
-	for _, sym := range global {
+	for _, sym := range r.globalCandidates(scope, name) {
 		out = appendSymbol(out, sym)
 	}
 	return out
+}
+
+// globalCandidates returns every top-level declaration of name the global index
+// admits from scope, in index order (lookupGlobalTop's first).
+func (r *Resolver) globalCandidates(scope *symbols.Scope, name string) []*symbols.Symbol {
+	if r.idx == nil {
+		return nil
+	}
+	return r.admittedUnder(r.documentOf(scope), r.ReferringNamespaceFQN(scope), name, r.idx.LookupQualified(name))
 }
 
 // surfacedMembers returns every member name reaches in cur through its imports and
@@ -163,12 +168,7 @@ func (r *Resolver) unqualifiedCandidates(scope *symbols.Scope, name string) []*s
 	if out, ok := one(r.nestedInRedefined(scope, name, nil)); ok {
 		return out
 	}
-	if sym := r.lookupGlobalTop(scope, name); sym != nil {
-		if out, ok := one(sym, true); ok {
-			return out
-		}
-	}
-	return nil
+	return r.namingSomething(r.globalCandidates(scope, name))
 }
 
 // localBindingCandidates is localBinding over every owned member of scope binding name

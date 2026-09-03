@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -20,6 +22,7 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("calc_call_fits_no_visible_candidate_behind_a_non_callable", testCalcCallFitsNoVisibleCandidateBehindANonCallable)
 	t.Run("calc_call_selects_by_argument_type", testCalcCallSelectsByArgumentType)
 	t.Run("global_root_call_selects_by_argument_type", testGlobalRootCallSelectsByArgumentType)
+	t.Run("bare_call_selects_among_other_documents_root_declarations", testBareCallSelectsAmongOtherDocumentsRootDeclarations)
 	t.Run("calc_call_selects_by_named_argument", testCalcCallSelectsByNamedArgument)
 	t.Run("calc_call_selects_by_sibling_scalar_type", testCalcCallSelectsBySiblingScalarType)
 	t.Run("calc_call_typed_parameter_beats_untyped", testCalcCallTypedParameterBeatsUntyped)
@@ -542,6 +545,46 @@ func testGlobalRootCallSelectsByArgumentType(t *testing.T) {
 		val, err := ctx.EvalWithScope(call(tc.arg), pkg.Scope)
 		if err != nil || FormatValue(val) != tc.want {
 			t.Errorf("$::pick(%s) = (%v, %v), want %s", tc.name, val, err, tc.want)
+		}
+	}
+}
+
+// A bare `pick(v)` that only other documents' root declarations answer selects
+// among all of them, not only the first indexed.
+func testBareCallSelectsAmongOtherDocumentsRootDeclarations(t *testing.T) {
+	idx := libs.NewModelIndex()
+	idx.AddDocument("ints.sysml", parseAndBuild(t, `
+		private import ScalarValues::*;
+		calc def pick { in x : Integer; return : Integer = 1; }
+		calc def pick { in x : String; return : Integer = 2; }
+	`))
+	idx.AddDocument("bools.sysml", parseAndBuild(t, `
+		private import ScalarValues::*;
+		calc def pick { in x : Boolean; return : Integer = 3; }
+	`))
+	idx.AddDocument("<test>", parseAndBuild(t, `
+		package test {
+			private import ScalarValues::*;
+			calc byInt { pick(3) }
+			calc byString { pick("s") }
+			calc byBool { pick(true) }
+		}
+	`))
+	idx.ExpandWildcardImports()
+	resolver := resolve.New(idx)
+	ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
+	rootScope := idx.DocumentRoot("<test>")
+	for calc, want := range map[string]int64{"byInt": 1, "byString": 2, "byBool": 3} {
+		sym := findSymbolByName(rootScope, calc, ast.DefCalc)
+		if sym == nil {
+			t.Fatalf("%s calc not found", calc)
+		}
+		result, err := ctx.InvokeCalc(sym, nil, rootScope)
+		if err != nil {
+			t.Fatalf("%s: %v", calc, err)
+		}
+		if result.Kind != ValConst || result.Const.Int != want {
+			t.Fatalf("%s = %+v, want %d", calc, result, want)
 		}
 	}
 }
