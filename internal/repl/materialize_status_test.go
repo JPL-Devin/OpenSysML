@@ -53,6 +53,25 @@ func TestFeatureValuesCarriesMaterializationFailureIntoStatus(t *testing.T) {
 	}
 }
 
+// The JSON listing reads the same feature values, so a failure it serializes as the
+// API's `error` field reaches the status as the text listing's does.
+func TestFeatureValuesJSONCarriesMaterializationFailureIntoStatus(t *testing.T) {
+	s := submitted(t, unmaterializableModel)
+	run(t, s, "%instantiate Demo::R")
+	wants(t, run(t, s, "%features Demo::R json"), `"error":`, "multiplicity violation")
+
+	if !s.HasErrors() {
+		t.Error("a serialized materialization failure did not reach the session status")
+	}
+	failures := s.MaterializationFailures()
+	if len(failures) != 1 {
+		t.Fatalf("materialization failures = %v, want one", failures)
+	}
+	if !errors.Is(failures[0], runtime.ErrMultiplicityViolation) {
+		t.Errorf("failure %v is not the multiplicity violation the runtime reported", failures[0])
+	}
+}
+
 // %eval reads a feature value too, so a value it could not materialize is the same finding.
 func TestEvalCarriesMaterializationFailureIntoStatus(t *testing.T) {
 	s := submitted(t, unmaterializableModel)

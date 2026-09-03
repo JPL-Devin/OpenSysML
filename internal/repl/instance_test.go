@@ -618,7 +618,7 @@ func TestFeatureValuesTruncateWideNesting(t *testing.T) {
 	run(t, s, "%instantiate Top")
 
 	got := run(t, s, "%features Top")
-	wants(t, got, "… (listing truncated)")
+	wants(t, got, "… (listing truncated; %features Top all shows it whole, %features Top depth <n> to a depth)")
 	if n := strings.Count(got, "\n"); n > maxFeatureValueLines+10 {
 		t.Errorf("listing ran to %d lines, want it bounded near %d:\n%.400s", n, maxFeatureValueLines, got)
 	}

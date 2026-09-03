@@ -216,6 +216,7 @@ func calcMultiplicityContext(t *testing.T) (*Context, *symbols.Index, *symbols.S
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
 		package test {
 			private import ScalarValues::*;
+			private import SequenceFunctions::*;
 
 			calc def One { in x : Integer; return : Integer = x; }
 			calc def Untyped { in x; return : Integer = x; }
