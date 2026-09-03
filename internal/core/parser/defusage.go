@@ -697,9 +697,10 @@ func (p *Parser) atChainWord() bool {
 }
 
 // atChainModifier reports whether the cursor is at the `chain` modifier of a
-// declaration rather than at a feature named `chain`: what follows must be able
-// to name a usage of kind, as parseUsageIdentification reads it.
-func (p *Parser) atChainModifier(kind ast.UsageKind) bool {
+// declaration rather than at a feature named `chain`: what follows must spell a
+// name (atName), so a word this grammar reserves — `ordered`, `specializes`,
+// `default`, `about`, … — leaves `chain` as the name.
+func (p *Parser) atChainModifier() bool {
 	if !p.atChainWord() {
 		return false
 	}
@@ -708,7 +709,7 @@ func (p *Parser) atChainModifier(kind ast.UsageKind) bool {
 	case lexer.Identifier, lexer.UnrestrictedName, lexer.ColonColon, lexer.Lt:
 		return true
 	case lexer.Keyword:
-		return keywordNamesUsage(kind, next.KeywordID) && !p.featureSpecializationAt(1)
+		return !p.reservedWord(next.KeywordID)
 	}
 	return false
 }
@@ -718,8 +719,7 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 	for {
 		t := p.peek()
 		if p.atChainWord() {
-			kind, _ := modifierImpliedKind(m)
-			if p.atChainModifier(kind) {
+			if p.atChainModifier() {
 				m.isChain = true
 				p.advance()
 				continue
@@ -1299,7 +1299,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	// Parse 'all' modifier if present (appears after keyword, before name)
 	isAll := p.acceptSufficientAll()
 
-	if p.atChainModifier(p.usageKindOf(kw)) {
+	if p.atChainModifier() {
 		mods.isChain = true
 		p.advance()
 	}
@@ -1525,20 +1525,8 @@ const stepNameKeyword = "do"
 // MetadataUsage), so an unnamed `metadata : M about x;` is not named "about".
 const metadataStopKeyword = "about"
 
-// keywordNamesUsage reports whether keyword kw, where a usage of kind states its
-// name, is read as that name rather than as the rest of the declaration.
-func keywordNamesUsage(kind ast.UsageKind, kw string) bool {
-	switch {
-	case kind == ast.UsageStep && kw == stepNameKeyword:
-		return true
-	case kind == ast.UsageMetadata && kw == metadataStopKeyword:
-		return false
-	}
-	return !declarationTailKeywords[kw]
-}
-
-// parseUsageIdentification parses the identification of a usage of kind, reading
-// a keyword as its name when keywordNamesUsage says so.
+// parseUsageIdentification parses the identification of a usage of kind: `do`
+// names a step and nothing else, `about` names nothing in a metadata usage.
 func (p *Parser) parseUsageIdentification(kind ast.UsageKind) ast.Identification {
 	if kind == ast.UsageStep && p.atKeyword(stepNameKeyword) {
 		tok := p.advance()

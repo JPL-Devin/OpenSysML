@@ -44,6 +44,10 @@
           (Membership visibility="default"
             (Usage kind="attribute" name="chain" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (Relationship kind="subsets" target=pt
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="chain" ref=false direction="none" composite=false derived=false ordered=true nonunique=true
+              (Relationship kind="subsets" target=pt
                 (*ast.QualifiedName))))))
       (Membership visibility="default"
         (Definition kind="metadata" abstract=false variation=false name="Tag"))
