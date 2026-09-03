@@ -241,18 +241,60 @@ func TestEvalReportsTheAnswerOfALiteralExpressionThatFails(t *testing.T) {
 	wants(t, run(t, empty, "%eval mass + 1"), "no declarations loaded")
 }
 
-// A collection operation is answered from literals alone, but a name the
-// session declares is that declaration's: the library implementation cannot
-// answer for a calc the session wrote under the same name.
-func TestEvalPrefersASessionDeclarationOverALibraryOperation(t *testing.T) {
+// A library operation is answered by its unqualified name only where the
+// session imports its package, as the checker resolves it; the qualified name is
+// answered anywhere. A calc the session wrote under the same name is that
+// declaration's, never the library's.
+func TestEvalResolvesALibraryOperationAsTheCheckerDoes(t *testing.T) {
 	empty := NewSession()
-	wants(t, run(t, empty, "%eval size((1, 2, 3))"), "= 3")
-	wants(t, run(t, empty, "%eval sum((1, 2, 3))"), "= 6")
+	wants(t, run(t, empty, "%eval SequenceFunctions::size((1, 2, 3))"), "= 3")
+	wants(t, run(t, empty, "%eval RealFunctions::sqrt(16.0)"), "= 4.0")
+	wants(t, run(t, empty, "%eval size((1, 2, 3))"),
+		"error: no declarations loaded",
+		"unresolved reference: size — did you mean SequenceFunctions::size or CollectionFunctions::size?")
+	wants(t, run(t, empty, "%eval sqrt(16.0)"),
+		"unresolved reference: sqrt — did you mean RealFunctions::sqrt or QuantityCalculations::sqrt?")
+
+	imported := NewSession()
+	imported.Submit("private import SequenceFunctions::*;")
+	imported.Submit("private import NumericalFunctions::*;")
+	wants(t, run(t, imported, "%eval size((1, 2, 3))"), "= 3")
+	wants(t, run(t, imported, "%eval (1, 2, 3)->size()"), "= 3")
+	wants(t, run(t, imported, "%eval sum((1, 2, 3))"), "= 6")
+	wants(t, run(t, imported, "%eval sqrt(16.0)"),
+		"unresolved reference: sqrt — did you mean RealFunctions::sqrt or QuantityCalculations::sqrt?")
+	rejects(t, run(t, imported, "%eval sqrt(16.0)"), "no declarations loaded")
 
 	own := NewSession()
+	own.Submit("private import NumericalFunctions::*;")
 	own.Submit("calc sum { in a; in b; return : Integer = a + b; }")
 	wants(t, run(t, own, "%eval sum(1, 2)"), "= 3")
 	wants(t, run(t, own, "%eval sum((1, 2, 3))"), "error:")
+}
+
+// A model's own calc that calls a library function by its unqualified name is
+// answered only once the model imports the package, whether it is read through
+// a feature it computes or invoked with %calc.
+func TestEvalAndCalcOfAnUnimportedLibraryFunction(t *testing.T) {
+	const wheels = `
+		package Demo {
+			part def Car {
+				attribute wheels : ScalarValues::Integer[*] = (1, 2, 3, 4);
+				attribute wheelCount = wheels->size();
+			}
+			calc def Count { in xs : ScalarValues::Integer[*]; return : ScalarValues::Integer = xs->size(); }
+		}`
+	unimported := NewSession()
+	unimported.Submit(wheels)
+	wants(t, run(t, unimported, "%eval Demo::Car::wheelCount"),
+		"error:", "unresolved reference: size — did you mean SequenceFunctions::size or CollectionFunctions::size?")
+	wants(t, run(t, unimported, "%calc Demo::Count((1, 2, 3))"),
+		"unresolved reference: size — did you mean SequenceFunctions::size or CollectionFunctions::size?")
+
+	imported := NewSession()
+	imported.Submit(strings.Replace(wheels, "package Demo {", "package Demo {\n\t\t\tprivate import SequenceFunctions::*;", 1))
+	wants(t, run(t, imported, "%eval Demo::Car::wheelCount"), "= 4")
+	wants(t, run(t, imported, "%calc Demo::Count((1, 2, 3))"), "= 3")
 }
 
 func TestCalcWithPositionalArgs(t *testing.T) {
