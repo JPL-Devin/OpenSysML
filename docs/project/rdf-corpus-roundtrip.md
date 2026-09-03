@@ -59,17 +59,17 @@ Recorded against the corpus above, reproduced byte-identically on a second run:
 
 | Verdict | Files |
 |---|---|
-| `stable` | 177 |
-| `whitespace-only` | 72 |
-| `graph-diff` | 14 |
+| `stable` | 184 |
+| `whitespace-only` | 78 |
+| `graph-diff` | 7 |
 | `unwritable` | 2 |
-| `unparseable` | 3 |
-| `refused` | 77 |
+| `unparseable` | 4 |
+| `refused` | 70 |
 | **total** | **345** |
 
-So 268 of 345 files convert to Turtle, and of those 249 come back as the same graph (177 exactly,
-72 up to `sysx:sourceText` whitespace). The refusals by class: 19 `feature-declaration`,
-18 `prefix-metadata`, 9 `event-declaration`, 7 `succession`, 6 `operator-expr`,
+So 275 of 345 files convert to Turtle, and of those 262 come back as the same graph (184 exactly,
+78 up to `sysx:sourceText` whitespace). The refusals by class: 19 `feature-declaration`,
+18 `prefix-metadata`, 9 `event-declaration`, 6 `operator-expr`,
 4 `duplicate-declaration`, 3 each of `snapshot-declaration`, `invocation-expr` and
 `assert-declaration`, 2 `feature-chain-expr`, and 1 each of `timeslice-declaration`,
 `feature-reference` and `constructor-expr`.
