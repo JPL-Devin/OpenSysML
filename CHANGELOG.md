@@ -84,7 +84,8 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   printed (`%features #3`), or either followed by a path into the objects it holds (`car.fl.hub`,
   `#3.fl`) — parts, ports, connectors and structured attributes alike, every feature the runtime
   holds an object for — one element of a multi-valued feature picked by an index counted from 1
-  (`car.wheels[2]`). In a path `.` and `::` mean the same thing. The id is the object's identity
+  (`car.wheels[2]`). In a path `.` and `::` mean the same thing, except that what follows a `.` is
+  always a feature of the object before it, never a declaration. The id is the object's identity
   for the session: it survives the carry-over an unrelated declaration triggers, and a second
   `%instantiate` of the same name, which re-points the name and now says how the first object is
   still reached; `%instances` lists such an object as `#3 (ID: 3, formerly Demo::car)`. The old

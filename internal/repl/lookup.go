@@ -706,15 +706,13 @@ func (s *Session) resolveNamedObject(ref objectRef) (*runtime.Instance, string, 
 // namedRoot finds the object a name-rooted reference starts from: the object,
 // its qualified name and the segments left to walk from it.
 func (s *Session) namedRoot(ref objectRef) (*runtime.Instance, string, []objectSegment, error) {
-	// Only the declared name's segments are unindexed and, past the first, `::`-joined
-	// as a qualified name is; the first `.` or index is where features start.
-	head, qualified := len(ref.segments), len(ref.segments)
+	// The declared name is the `::`-joined run before the first `.` or index; a
+	// segment after `.` is a feature of the object before it, never a declaration.
+	head := len(ref.segments)
 	for i, seg := range ref.segments {
-		if seg.index > 0 && i < head {
+		if seg.index > 0 || seg.dotted {
 			head = i
-		}
-		if seg.dotted && i < qualified {
-			qualified = i
+			break
 		}
 	}
 	var (
@@ -723,13 +721,13 @@ func (s *Session) namedRoot(ref objectRef) (*runtime.Instance, string, []objectS
 	)
 	for i := head; i > 0; i-- {
 		name := joinTyped(ref.segments[:i])
-		_, fqn, err := s.lookupSymbol(name)
+		sym, fqn, err := s.lookupSymbol(name)
 		if err != nil {
 			var ambiguous *AmbiguousNameError
 			if errors.As(err, &ambiguous) {
 				return nil, "", nil, err
 			}
-			if i == qualified {
+			if i == head {
 				unresolved = err
 			}
 			continue
@@ -737,9 +735,11 @@ func (s *Session) namedRoot(ref objectRef) (*runtime.Instance, string, []objectS
 		if inst, ok := s.instances[fqn]; ok {
 			return inst, fqn, ref.segments[i:], nil
 		}
-		// A `.`-walked feature that happens to resolve as a declaration is not what
-		// was asked for, so the name reported is the declared one.
-		if noInstance == "" && i <= qualified {
+		if i == head && head < len(ref.segments) && isNamespaceSymbol(sym) {
+			member := fqn + "::" + ref.segments[head].text
+			return nil, "", nil, &ObjectRefError{Ref: ref.text, Detail: fmt.Sprintf("%s is a %s, not an object: its member is written %s", notationName(fqn), namespaceKind(sym), member)}
+		}
+		if noInstance == "" {
 			noInstance = fqn
 		}
 	}
@@ -747,9 +747,23 @@ func (s *Session) namedRoot(ref objectRef) (*runtime.Instance, string, []objectS
 		return nil, "", nil, &NoInstanceError{Name: noInstance}
 	}
 	if unresolved == nil {
-		_, _, unresolved = s.lookupSymbol(joinTyped(ref.segments[:min(qualified, head)]))
+		_, _, unresolved = s.lookupSymbol(joinTyped(ref.segments[:head]))
 	}
 	return nil, "", nil, unresolved
+}
+
+// isNamespaceSymbol reports whether sym is a package or namespace, which holds
+// members but is never an object.
+func isNamespaceSymbol(sym *symbols.Symbol) bool {
+	return sym != nil && (sym.Kind == symbols.SymbolPackage || sym.Kind == symbols.SymbolNamespace)
+}
+
+// namespaceKind names what a namespace symbol is for a message.
+func namespaceKind(sym *symbols.Symbol) string {
+	if sym.Kind == symbols.SymbolPackage {
+		return "package"
+	}
+	return "namespace"
 }
 
 // joinTyped spells segments as the qualified name they were typed as.

@@ -314,7 +314,9 @@ object and re-points the name — the first object is still there as `#1`, and `
 as such. A path walks the features that hold objects — parts, ports, connectors, and structured
 attributes, the ones `%features` shows as `Instance(ID: n)`; an attribute holding a plain value at
 the end of one is not an object, and the error says so. In a path `.` and `::` mean the same
-thing, so `Demo::Vehicle::engine` and `Demo::Vehicle.engine` are the same object. The forms and
+thing, so `Demo::Vehicle::engine` and `Demo::Vehicle.engine` are the same object — with one
+difference: what follows a `.` is always a feature of the object before it, whereas `::` may still be
+spelling the declared name, which wins when an object was created under it. The forms and
 every error a bad reference produces are
 listed in the [reference](../reference/repl-commands.md#object-references). <kbd>Tab</kbd>
 completes them: `#` offers the ids there are, `car.` the objects `car` holds.

@@ -125,6 +125,28 @@ func TestDottedPathsReachNestedObjects(t *testing.T) {
 	wants(t, run(t, s, "%eval in "+id+".fl.hub : bolts"), "5", "(on "+id+"::fl::hub ID:")
 }
 
+// A segment after `.` is a feature of the object before it, even when the same
+// spelling with `::` names a declaration the session holds an object under; a
+// package before `.` is reported as one, with the `::` spelling to use.
+func TestDotWalksFeaturesNotDeclarations(t *testing.T) {
+	s := garage(t)
+	wants(t, run(t, s, "%instantiate Garage::Car::fl"), "✓ Created instance of Garage::Car::fl", "ID: 1")
+	wants(t, run(t, s, "%instantiate car"), "ID: 2")
+	wants(t, run(t, s, "%features Garage::Car::fl"), "Instance: Garage::Car::fl (ID: 1)", "hub = Instance(ID: 3)")
+	// Garage::car::fl resolves as the declaration Garage::Car::fl, so the `::`
+	// spelling reaches the object created under it; the `.` spelling walks car.
+	wants(t, run(t, s, "%features Garage::car::fl"), "Instance: Garage::Car::fl (ID: 1)")
+	wants(t, run(t, s, "%features Garage::car.fl"), "Instance: Garage::car::fl (ID: 4)")
+	wants(t, run(t, s, "%features car.fl"), "Instance: Garage::car::fl (ID: 4)")
+	wants(t, run(t, s, "%eval in Garage::car.fl : radius"), "(on Garage::car::fl ID: 4)")
+	wants(t, run(t, s, "%features #2.fl"), "Instance: #2::fl (ID: 4)")
+
+	wants(t, run(t, s, "%features Garage.car"), `error: "Garage.car" is not an object reference: Garage is a package, not an object: its member is written Garage::car`)
+	wants(t, run(t, s, "%features Garage.car.fl"), `error: "Garage.car.fl" is not an object reference: Garage is a package, not an object: its member is written Garage::car`)
+	wants(t, run(t, s, "%features Car.fl"), `error: no instance of "Garage::Car" (use %instantiate first)`)
+	wants(t, run(t, s, "%features Nope.fl"), "error: unresolved reference: Nope")
+}
+
 // A multi-valued feature is walked by a 1-based index; leaving the index out, or
 // giving one that names no element, says how many there are.
 func TestMultiValuedFeatureNeedsIndex(t *testing.T) {
