@@ -557,6 +557,38 @@ func TestReleaseEndsAPausedBody(t *testing.T) {
 	}
 }
 
+// A run that fails its token-flow budget while a body is paused ends the paused
+// work as a failing step does, so nothing of the run stays suspended.
+func TestBudgetFailureEndsAPausedBody(t *testing.T) {
+	exec := blockDebugExecutor(t)
+	exec.SetBreakpoint("add")
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("RunToCompletion: %v", err)
+	}
+	var run *bodyRun
+	for _, token := range exec.tokens {
+		if token.body != nil {
+			run = token.body
+		}
+	}
+	if run == nil {
+		t.Fatal("no token holds paused work while paused at add")
+	}
+
+	exec.ctx.maxActionSteps = 0
+	if err := exec.RunToCompletion(); !errors.Is(err, ErrActionStepLimitExceeded) {
+		t.Fatalf("resume = %v, want ErrActionStepLimitExceeded", err)
+	}
+	if _, paused := run.next(); paused {
+		t.Error("the paused work still yields after the budget failure")
+	}
+	for _, token := range exec.tokens {
+		if token.body != nil {
+			t.Errorf("token %d still holds paused work after the budget failure", token.ID)
+		}
+	}
+}
+
 // A released executor refuses to step whatever state its run ended in.
 func TestReleasedExecutorRefusesToStep(t *testing.T) {
 	exec := blockDebugExecutor(t)

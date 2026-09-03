@@ -398,6 +398,7 @@ func (e *ActionExecutor) RunToCompletion() error {
 		}
 
 		if err := e.chargeActionStep(); err != nil {
+			e.endPausedBodies()
 			return err
 		}
 
@@ -405,6 +406,7 @@ func (e *ActionExecutor) RunToCompletion() error {
 			return err
 		}
 		if e.state == StateWaiting {
+			e.endPausedBodies()
 			return e.deadlockError(nil)
 		}
 	}
