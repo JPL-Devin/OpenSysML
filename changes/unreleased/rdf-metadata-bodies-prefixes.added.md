@@ -9,11 +9,11 @@
   written back from the graph alone, without `sysx:sourceText`. `sysx:prefixMetadata` and
   `sysml:annotates` are gone; a `.ttl` file written by 0.4.3 that states either is refused naming
   the property rather than read without the annotation — re-export it from its notation source.
-  Of the 18 files refused for this reason, 16 now convert and 13 of those come back as an equal
-  graph without `sysx:sourceText`; the other three run into older gaps the refusal had hidden
+  Of the 19 files refused for this reason, 17 now convert and 13 of those come back as an equal
+  graph without `sysx:sourceText`; the other four run into older gaps the refusal had hidden
   (an `isEnd` and an `isNamespaceImport` flag the writer drops, an invocation expression it
-  refuses), and the remaining two fall to an older refusal, an unnamed `feature` or `event`
-  declaration. The parser now reads
+  refuses, an n-ary `connect (…)` head with no `sysx:endForm`), and the remaining two fall to
+  an older refusal, an unnamed `feature` or `event` declaration. The parser now reads
   `metadata M about x;` as typed by `M` and unnamed, as the grammar's
   `MetadataUsageDeclaration` requires, rather than naming the usage `M` — which had made the
   training corpus's `Metadata Example-1.sysml` a duplicate declaration under conversion

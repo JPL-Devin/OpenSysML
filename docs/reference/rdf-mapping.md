@@ -517,7 +517,7 @@ the node, that name is used; the rest are `sysx:` terms, marked below.
 
 | written | metaclass | carries |
 |---|---|---|
-| `first x;` | `sysx:InitialNode` | `sysml:sourceFeature` (the member the body starts at — a reference, not a name it declares), `sysml:targetFeature`, `sysx:guard` |
+| `first x;`, `first x then y { … }` | `sysx:InitialNode` | `sysml:sourceFeature` (the member the body starts at — a reference, not a name it declares), `sysml:targetFeature`, `sysx:guard`, `sysx:hasBody` and the members of its body |
 | `done;` | `sysx:FinalNode` | — |
 | `action a;`, `action a { x + 1 }` | `sysx:ActionExecutionNode` | `sysml:references` or `sysx:expression` |
 | `perform a;` | `sysml:PerformActionUsage` | `sysx:expression` (the action performed) |
@@ -534,7 +534,7 @@ the node, that name is used; the rest are `sysx:` terms, marked below.
 | `entry`/`do`/`exit`, `entry do { … }` (whatever separates the `do` from the body) | `sysml:StateSubactionMembership` | `sysx:subactionKind`, `sysx:declaredKeyword`, its actions |
 | `defer sig, other;` | `sysx:DeferMember` | `sysx:deferredEvent` per event |
 | `choice`, `junction`, `fork`, `join`, `entry point`, `exit point`, `shallow`/`deep history` | `sysx:Pseudostate` | `sysx:pseudostateKind`, `sysx:declaredKeyword` |
-| `transition [n] [first] s [accept t] [if g] [do e] then t;` | `sysml:TransitionUsage` | `sysml:sourceFeature`, `sysml:targetFeature`, `sysx:trigger`, `sysx:triggerKeyword`, `sysx:guard`, `sysx:transitionSyntax`, its effect |
+| `transition [n] [first] s [accept t] [if g] [do e] then t;`, `… then t { … }` | `sysml:TransitionUsage` | `sysml:sourceFeature`, `sysml:targetFeature`, `sysx:trigger`, `sysx:triggerKeyword`, `sysx:guard`, `sysx:transitionSyntax`, its effect and body as members, linked by `sysx:effectMember` and `sysx:bodyMember`, with `sysx:bracedEffect` on every transition written with `do` (true for its braces, so an empty `do { }` survives) and `sysx:hasBody` for a trailing body; a graph with members linked by neither owns an effect alone, `sysx:hasBody` its braces |
 
 A state's members are held in the AST in one bucket per kind (entry, do, exit,
 defer, substates); they are written back in the order they were
@@ -663,17 +663,28 @@ several lines, or with a note inside it, records its form like any other
 (`export_test.go:TestEndFormsSurviveIrregularLayout`) — so a head this mapping
 cannot rebuild carries no form and stays readable as text alone. Those are the heads that say
 more than their ends: an end with a multiplicity or a `references` clause, an
-inline payload declaration (`flow of x : P from a to b`), a satisfy that
-declares a name of its own (`satisfy s : R by v`), or any head with a body.
+inline payload declaration (`flow of x : P from a to b`), or a satisfy that
+declares a name of its own (`satisfy s : R by v`).
 Converting such an element from a graph that carries no `sysx:sourceText` is
 reported, not guessed. A graph that relates ends but gives no form at all is
 reported the same way (`export_test.go:TestEndsWithoutTheirFormAreReported`).
 
-Tests: `export_test.go:TestEndBindingHeadsComeBackFromTheGraphAlone` and
+**The body of such a head is mapped like any other body.** `sysx:sourceText`
+carries the head's own lines and `sysx:sourceTail` the closing ones, as for any
+member with a body (see [Source text](#source-text)), and the members written in the
+body (`interface seam connect w.outp to r.inp { attribute coupling : C = C::x; }`)
+are elements of their own, owned through `sysml:ownedMember`,
+`sysml:ownedFeature` and their membership with a `sysx:memberIndex`, with
+`sysx:hasBody` stating that a body was written. The same holds for the body an
+action's `first a then b { … }` or `then b { … }` carries. The decoder writes
+the body from those members whether or not the graph carries the head's text.
+
+Tests: `export_test.go:TestEndBindingHeadsComeBackFromTheGraphAlone`,
+`TestEndBindingBodiesComeBackFromTheGraphAlone` and
 `TestBehavioralHeadsComeBackFromTheGraphAlone` strip `sysx:sourceText` from the
 graph, write the notation back from the mapping alone, and convert it again.
-The second graph must equal the first, which is what proves the second hop loses
-nothing. `TestBindingEndsAreStatedAsStructure` covers the ends themselves.
+The second graph must equal the first up to the text triples, which is what
+proves the second hop loses nothing. `TestBindingEndsAreStatedAsStructure` covers the ends themselves.
 
 **A succession carries its two ends.** Every succession is one node naming
 the members it sequences, whether it was written as its own member

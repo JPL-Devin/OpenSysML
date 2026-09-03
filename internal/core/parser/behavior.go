@@ -934,7 +934,9 @@ func (p *Parser) parseSuccessionEdge(tok lexer.Token, allowBody bool) ast.Node {
 
 	// An action target succession ends in a UsageBody (SysML.xtext:1698).
 	var members []ast.Node
+	hasBody := false
 	if allowBody && p.accept2(lexer.LBrace) {
+		hasBody = true
 		members = p.parseActionBodyMixed()
 	} else {
 		p.expect(lexer.Semicolon, "expected ';' after succession edge")
@@ -945,6 +947,7 @@ func (p *Parser) parseSuccessionEdge(tok lexer.Token, allowBody bool) ast.Node {
 		Source:   source,
 		Target:   target,
 		Members:  members,
+		HasBody:  hasBody,
 	}
 	return node
 }
@@ -3176,6 +3179,7 @@ func (p *Parser) parseTransitionTail(start int, name ast.NameSegment, source *as
 				return err
 			}
 			node.Effect = effect
+			node.HasEffect = true
 			continue
 		case p.atKeyword("then"):
 			p.advance() // consume 'then'

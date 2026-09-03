@@ -64,7 +64,7 @@ stable	pilot-corpora/kerml-examples/Simple Tests/Classifications.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Classifiers.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Comments.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Conjugation.kerml
-stable	pilot-corpora/kerml-examples/Simple Tests/Connectors.kerml
+refused:feature-declaration	pilot-corpora/kerml-examples/Simple Tests/Connectors.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Dependencies.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Expansion.kerml
 refused:operator-expr	pilot-corpora/kerml-examples/Simple Tests/Expressions.kerml
