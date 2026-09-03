@@ -279,9 +279,8 @@ func (inst *Instance) KeptConnectorIDs() []int64 {
 	return ids
 }
 
-// RestoreConnector materializes again the connector a carry-over set aside under
-// id, which takes the identity back so no other object is created; nil when the
-// instance kept no such identity.
+// RestoreConnector materializes again the connector a carry-over set aside under id,
+// which takes that identity back; nil when the instance kept no such identity.
 func (inst *Instance) RestoreConnector(ctx *Context, id int64) (*Instance, error) {
 	if id == 0 {
 		return nil, nil
