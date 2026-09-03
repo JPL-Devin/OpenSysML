@@ -425,7 +425,10 @@ type Usage struct {
 	// IsBodyParameter marks the `action [<name>] { … }` a loop or branch body is
 	// written as (SysML.xtext ActionBodyParameter), not a nested action node.
 	IsBodyParameter bool
-	IsResult        bool // declared with 'return': the result parameter of a calculation/expression
+	// IsActionNode marks an action written as one node with its statement
+	// (`action s send x to r;`, SysML.xtext SendNode): Members hold that statement, not a body.
+	IsActionNode bool
+	IsResult     bool // declared with 'return': the result parameter of a calculation/expression
 	// IsNegated is the `not` of `assert not constraint { … }` and
 	// `assert not satisfy … by …`: the conditions are asserted to be false
 	// (Invariant::isNegated, SysML v2 §8.3.21.10).

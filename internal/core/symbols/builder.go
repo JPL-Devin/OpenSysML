@@ -192,7 +192,7 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 	case *ast.SendStatement:
 		// The send is the action usage it was written on (`action a send x { in x; }`),
 		// whose body declares the parameters; anywhere else it is a node of its own.
-		if usage, ok := scope.Node().(*ast.Usage); ok && usage.Kind == ast.UsageAction {
+		if usage, ok := scope.Node().(*ast.Usage); ok && usage.IsActionNode {
 			buildMembers(scope, d.Members)
 			return true
 		}

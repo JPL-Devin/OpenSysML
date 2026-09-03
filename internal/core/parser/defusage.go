@@ -2038,6 +2038,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			}
 			p.effectStmtStart = savedEffectStmtStart
 			hasBody = true
+			u.IsActionNode = true
 		} else {
 			// Expected ';' or '{' or behavioral keyword
 			p.error(p.peek().Span, "expected '{' or ';' after action declaration")

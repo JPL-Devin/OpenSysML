@@ -45,7 +45,7 @@
                   (Relationship kind="typing" target=Pt
                     (*ast.QualifiedName))))))
           (Membership visibility="default"
-            (Usage kind="action" name="turnOn" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="action" name="turnOn" ref=false direction="none" composite=false derived=false ordered=false nonunique=false node=true
               (SendStatement via=true
                 (FeatureReference name="ignitionCmd")
                 (*ast.QualifiedName)

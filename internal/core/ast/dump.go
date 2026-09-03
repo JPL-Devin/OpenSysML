@@ -392,6 +392,9 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 		if v.IsNegated {
 			b.WriteString(` negated=true`)
 		}
+		if v.IsActionNode {
+			b.WriteString(` node=true`)
+		}
 		writeChildren(b, depth, usageChildren(v))
 		return true
 	case *FlowEnds:
