@@ -78,11 +78,8 @@ func lexesClean(text string) bool {
 	}
 }
 
-// keepsText reports whether an element kept as source text is written as that
-// text: it lexes clean, and the head rebuilt from the form the graph states is
-// the same spelling as the text — or, where the graph states no form, the text
-// read back as a declaration states the graph. A form the graph states but
-// cannot rebuild is reported from the graph, not papered over by the text.
+// keepsText reports whether an element's stored text is written as is: it lexes
+// clean and spells the head the graph rebuilds, or states the graph where there is no form.
 func (d *decoder) keepsText(el *element, text string) bool {
 	if !lexesClean(text) {
 		return false
@@ -97,12 +94,8 @@ func (d *decoder) keepsText(el *element, text string) bool {
 	return sameSpelling(text, head+";")
 }
 
-// textStatesElement reports whether a declaration kept as text alone states
-// exactly what the graph carries for its element: the text is parsed as the one
-// member it is, mapped with the same encoder in the element's scope, and the
-// two graphs must make the same statements about it. Where the element sits
-// is the graph's to state, not the text's (see placementPredicate). The graph
-// does not record which notation the text was read in, so both are tried.
+// textStatesElement reports whether a declaration kept as text alone, re-encoded
+// in its scope, states what the graph does; the graph records no dialect, so both are tried.
 func (d *decoder) textStatesElement(el *element, text string) bool {
 	return d.textStatesElementIn(el, text, source.KindSysML) || d.textStatesElementIn(el, text, source.KindKerML)
 }
@@ -189,9 +182,8 @@ func layoutPredicate(predicate string, root bool) bool {
 	return false
 }
 
-// placementPredicate reports whether a predicate states where a declaration
-// sits rather than what it declares: its owner, its position, its declared id
-// and the visibility its membership carries, which the printer places itself.
+// placementPredicate reports whether a predicate states where a declaration sits
+// (owner, position, id, visibility), which the printer places itself.
 func placementPredicate(predicate string) bool {
 	switch predicate {
 	case rdf.SysML + pOwningNamespace, rdf.SysML + pOwner, rdf.SysML + pOwningRelationship,
