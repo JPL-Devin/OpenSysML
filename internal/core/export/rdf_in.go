@@ -473,6 +473,9 @@ func (d *decoder) build() ([]*element, error) {
 		}
 		order = append(order, el)
 	}
+	if err := d.checkMembershipEnds(); err != nil {
+		return nil, err
+	}
 	for _, el := range order {
 		parent, err := d.ownerOf(el)
 		if err != nil {
@@ -694,6 +697,26 @@ func (d *decoder) referencedElement(iri string) (*element, error) {
 		}
 	}
 	return target, nil
+}
+
+// checkMembershipEnds refuses a membership whose end is no element of the graph:
+// the member would be left out of the output and the edge lost with it.
+func (d *decoder) checkMembershipEnds() error {
+	for _, subject := range d.graph.Subjects() {
+		m, ok := d.memberships[subject.Value]
+		if !ok {
+			continue
+		}
+		for _, end := range []struct{ name, iri string }{{"owning namespace", m.owner}, {"member", m.member}} {
+			if _, known := d.byIRI[end.iri]; !known {
+				return &UnsupportedError{
+					What: fmt.Sprintf("the membership <%s>", m.iri),
+					Note: fmt.Sprintf("its %s <%s> is not an element of the graph, so the membership would be dropped", end.name, end.iri),
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // checkReachable reports an element that no root owns, which happens when

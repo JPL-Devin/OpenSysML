@@ -13,6 +13,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
+	"github.com/Open-MBEE/OpenSysML/internal/core/rdf/ontology"
 )
 
 // Metaclasses of the expression nodes, as SysML v2 8.4 names them.
@@ -535,10 +536,25 @@ func (d *decoder) bodyParameterText(param rdf.Term, scope string) (string, error
 		return "in " + nameText(param.Value) + ";", nil
 	}
 	el := &element{iri: param.Value, scope: scope, expressions: map[string]string{}}
+	what := fmt.Sprintf("the body parameter <%s>", param.Value)
+	// A body parameter is written `in name`, so the node must be a Feature whose
+	// direction, when stated, is in; any other shape would be rewritten, not kept.
+	if metaclass := rdf.LocalName(d.graph.Type(param)); !ontology.IsAncestorOrSelf(metaclass, "Feature") {
+		return "", &UnsupportedError{
+			What: what,
+			Note: fmt.Sprintf("a parameter of an expression body is a Feature, and this one is %s", typeDescription(metaclass)),
+		}
+	}
+	if direction, ok := d.stringOf(el, rdf.SysML+pDirection); ok && direction != directionKeyword(ast.DirIn) {
+		return "", &UnsupportedError{
+			What: what,
+			Note: fmt.Sprintf("a parameter of an expression body is written `in`, and its sysml:direction is %q", direction),
+		}
+	}
 	name, ok := d.stringOf(el, rdf.SysML+pDeclaredName)
 	if !ok {
 		return "", &UnsupportedError{
-			What: fmt.Sprintf("the body parameter <%s>", param.Value),
+			What: what,
 			Note: "a parameter of an expression body is named, and this one states no sysml:declaredName",
 		}
 	}
@@ -577,6 +593,13 @@ func (d *decoder) bodyParameterText(param rdf.Term, scope string) (string, error
 		return head + ";", nil
 	}
 	return head + " { " + strings.Join(members, " ") + " }", nil
+}
+
+func typeDescription(metaclass string) string {
+	if metaclass == "" {
+		return "of no rdf:type"
+	}
+	return "a " + curie(rdf.SysML+metaclass)
 }
 
 // bodyDeclarationsText writes what an expression body declares, parameters and

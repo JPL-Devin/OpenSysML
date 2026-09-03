@@ -1,6 +1,7 @@
 package export_test
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -337,5 +338,42 @@ elmt:Outer__Vehicle_om
 	}
 	if !strings.Contains(err.Error(), "sysml:memberElement") {
 		t.Errorf("the report should name the property it needs: %v", err)
+	}
+}
+
+// A membership whose end names no element of the graph is reported rather than
+// dropped: the owner would be written without the member it owns.
+func TestMembershipWithAnAbsentEndIsReported(t *testing.T) {
+	const graph = `@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ex: <urn:example:> .
+
+ex:P a sysml:Package ; sysml:qualifiedName "P" ; sysml:declaredName "P" .
+ex:C a sysml:CalculationDefinition ; sysml:qualifiedName "P::C" ; sysml:declaredName "C" ; sysml:owningMembership ex:C_m .
+ex:C_m a sysml:OwningMembership ; sysml:membershipOwningNamespace ex:P ; sysml:memberElement ex:C .
+ex:r_m a sysml:ResultExpressionMembership ; sysml:membershipOwningNamespace ex:C ; sysml:ownedMemberFeature ex:r ; sysml:ownedResultExpression ex:r .
+ex:r a sysml:OperatorExpression ; sysml:operator "+" ; sysml:argument ex:r_a, ex:r_b .
+ex:r_a a sysml:LiteralInteger ; sysml:value "2"^^xsd:integer .
+ex:r_b a sysml:LiteralInteger ; sysml:value "3"^^xsd:integer .
+`
+	if _, err := export.Convert("m.ttl", []byte(graph), export.FormatTurtle, export.FormatSysML); err != nil {
+		t.Fatalf("the intact graph should convert: %v", err)
+	}
+	for _, tc := range []struct{ end, from, to, want string }{
+		{"member", "sysml:ownedMemberFeature ex:r ; sysml:ownedResultExpression ex:r .", "sysml:ownedMemberFeature ex:gone ; sysml:ownedResultExpression ex:gone .", "its member <urn:example:gone> is not an element of the graph"},
+		{"owning namespace", "sysml:membershipOwningNamespace ex:C ; sysml:ownedMemberFeature", "sysml:membershipOwningNamespace ex:nowhere ; sysml:ownedMemberFeature", "its owning namespace <urn:example:nowhere> is not an element of the graph"},
+	} {
+		broken := strings.Replace(graph, tc.from, tc.to, 1)
+		if broken == graph {
+			t.Fatalf("the %s was not rewritten", tc.end)
+		}
+		_, err := export.Convert("m.ttl", []byte(broken), export.FormatTurtle, export.FormatSysML)
+		var unsupported *export.UnsupportedError
+		if !errors.As(err, &unsupported) {
+			t.Fatalf("a membership with an absent %s should be an UnsupportedError, got %v", tc.end, err)
+		}
+		if !strings.Contains(err.Error(), "the membership <urn:example:r_m>") || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("for an absent %s:\n got %v\nwant %s", tc.end, err, tc.want)
+		}
 	}
 }

@@ -663,3 +663,50 @@ func TestExpressionBodyParameterNeedsItsName(t *testing.T) {
 		t.Errorf("the refusal should name the parameter: %v", err)
 	}
 }
+
+// A body parameter is written `in name`, so a node of another direction or of a
+// metaclass that is no Feature is refused by name rather than rewritten as one.
+func TestExpressionBodyParameterOfAnotherShapeIsRefused(t *testing.T) {
+	turtle := string(withoutTriples(t, convertFixture(t, "result_expressions"), "sysx:sourceText"))
+	const node = "expr:Results__Quoted___401_pin0\n    a sysml:ReferenceUsage ;"
+	start := strings.Index(turtle, node)
+	if start < 0 {
+		t.Fatalf("expected the parameter node of the Quoted body in the graph:\n%s", turtle)
+	}
+	end := start + strings.Index(turtle[start:], "\n\n")
+	block := turtle[start:end]
+	cases := []struct {
+		name, from, to, want string
+	}{
+		{"out direction", `sysml:direction "in" ;`, `sysml:direction "out" ;`, "the body parameter <urn:opensysml:expr:Results__Quoted___401_pin0>: a parameter of an expression body is written `in`, and its sysml:direction is \"out\""},
+		{"no direction", "    sysml:direction \"in\" ;\n", "", ""},
+		{"non-feature", "a sysml:ReferenceUsage ;", "a sysml:Package ;", "the body parameter <urn:opensysml:expr:Results__Quoted___401_pin0>: a parameter of an expression body is a Feature, and this one is a sysml:Package"},
+		{"untyped", "a sysml:ReferenceUsage ;", `sysml:isReference "false"^^xsd:boolean ;`, "the body parameter <urn:opensysml:expr:Results__Quoted___401_pin0>: a parameter of an expression body is a Feature, and this one is of no rdf:type"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rewritten := strings.Replace(block, tc.from, tc.to, 1)
+			if rewritten == block {
+				t.Fatalf("the parameter node was not rewritten:\n%s", block)
+			}
+			graph := turtle[:start] + rewritten + turtle[end:]
+			back, err := export.Convert("m.ttl", []byte(graph), export.FormatTurtle, export.FormatSysML)
+			if tc.want == "" {
+				if err != nil {
+					t.Fatalf("a parameter stating no direction is an `in` parameter: %v", err)
+				}
+				if want := "{ in 'the input' : Real; ('the input' + x) }"; !strings.Contains(string(back), want) {
+					t.Errorf("the notation rebuilt from the graph lacks %q:\n%s", want, back)
+				}
+				return
+			}
+			var unsupported *export.UnsupportedError
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("want an UnsupportedError, got %v", err)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("got %v\nwant %s", err, tc.want)
+			}
+		})
+	}
+}
