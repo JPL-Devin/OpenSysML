@@ -375,6 +375,7 @@ func TestQuantityFromWireComposesAsWritten(t *testing.T) {
 	private import SI::*;
 	calc def Dist { in v; in dt; v * dt }
 	calc def Area { in a; in b; a * b }
+	calc def Per { in a; in b; a / b }
 	calc def Metre { 2.0 [m] }
 	calc def Kilometre { 3.0 [km] }
 }
@@ -393,6 +394,7 @@ package Imperial {
 	private import SI::*;
 	attribute <fathom> 'fathom' : LengthUnit { :>> unitConversion: ConversionByConvention { :>> referenceUnit = m; :>> conversionFactor = 1.8288; } }
 	attribute <cable> 'cable' : LengthUnit { :>> unitConversion: ConversionByConvention { :>> referenceUnit = m; :>> conversionFactor = 185.3184; } }
+	calc def Cable { 1.0 [cable] }
 }
 `
 	hash := mustVerifyModel(t, srv, source, "quantity-composes-as-written")
@@ -558,6 +560,27 @@ package Imperial {
 	if got != "4 [Nautical::fathom*fathom] = 3.34450944/1·SI::metre^2" {
 		t.Errorf("ambiguous fathom * Nautical::fathom over the wire = %s, want 4 [Nautical::fathom*fathom] = 3.34450944/1·SI::metre^2", got)
 	}
+	// One short name written twice may name two units, each read where the
+	// reduction puts it: `cable*cable` over both cables is Nautical::cable times
+	// Imperial::cable, and each cancels against its own unit written in full.
+	imperialCable := evaluate("Imperial::Cable")
+	cables := evaluate("Q::Area", cable, imperialCable)
+	if cables.GetUnit() != "cable*cable" {
+		t.Fatalf("two cables cross the wire in %q, want cable*cable", cables.GetUnit())
+	}
+	for _, tc := range []struct {
+		by   string
+		term *pb.UnitTerm
+		want string
+	}{
+		{"Nautical::cable", cable.GetUnitTerm(), "0.5 [cable] = 33891.028992/182.88·SI::metre"},
+		{"Imperial::cable", imperialCable.GetUnitTerm(), "0.5 [cable] = 33891.028992/185.3184·SI::metre"},
+	} {
+		got = describeQuantity(evaluate("Q::Per", cables, inFull(tc.by, tc.term)))
+		if got != tc.want {
+			t.Errorf("cable*cable over the wire / %s = %s, want %s", tc.by, got, tc.want)
+		}
+	}
 
 	// A quantity sent under no unit text is its base units, composing with the named
 	// units they are; under a scale it is the reduction itself, opaque.
@@ -615,6 +638,7 @@ func TestQuantityFromWireRejectsUnitTextItsReductionContradicts(t *testing.T) {
 		{"another dimension", "SI::m", seconds},
 		{"a composed unit over another dimension", "SI::m/SI::s", kilograms},
 		{"another scale of the same dimension", "SI::km", metres},
+		{"a scale off by more than rounding", "SI::m", &pb.UnitTerm{ScaleNum: 1 + 1e-10, ScaleDen: 1, Factors: metres.GetFactors()}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			pq := &pb.Quantity{
@@ -640,6 +664,22 @@ func TestQuantityFromWireRejectsUnitTextItsReductionContradicts(t *testing.T) {
 	}
 	if _, err := ProtoToQuantity(agreeing, idx, sem); err != nil {
 		t.Errorf("ProtoToQuantity(SI::m/SI::s over metre·second^-1): %v", err)
+	}
+
+	// A scale off by the rounding of composing it another way is the same scale,
+	// and the quantity read carries the model's own reduction, not the noisy one.
+	kilometres := mustEvaluateQuantity(t, srv, hash, "1.0 [SI::km]").GetUnitTerm()
+	noisy := &pb.Quantity{
+		Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 1},
+		Unit:      "SI::km",
+		UnitTerm:  &pb.UnitTerm{ScaleNum: 1000 * (1 + 0x1p-52), ScaleDen: 1, Factors: kilometres.GetFactors()},
+	}
+	val, err := ProtoToQuantity(noisy, idx, sem)
+	if err != nil {
+		t.Fatalf("ProtoToQuantity(SI::km over a scale one ulp off): %v", err)
+	}
+	if got := val.Quantity().Unit.Term.Scale; got != semantics.UnitScale(1000) {
+		t.Errorf("SI::km read over a scale one ulp off keeps scale %v, want the model's 1000", got)
 	}
 }
 

@@ -457,7 +457,7 @@ func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index, sem *semantics.Model) 
 		return runtime.Value{}, fmt.Errorf("quantity in %q carries no magnitude", pq.GetUnit())
 	}
 
-	product, err := unitProductOfText(pq.GetUnit(), term, idx, sem)
+	product, term, err := unitProductOfText(pq.GetUnit(), term, idx, sem)
 	if err != nil {
 		return runtime.Value{}, err
 	}
@@ -471,18 +471,19 @@ func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index, sem *semantics.Model) 
 
 // unitProductOfText reads unit text as a product of the model's units that reduces
 // to term; a short name is the one unit so named that fits. Otherwise the text is opaque.
-func unitProductOfText(text string, term semantics.UnitTerm, idx *symbols.Index, sem *semantics.Model) (semantics.UnitProduct, error) {
+// The reduction returned is the model's where the text is read, else term as sent.
+func unitProductOfText(text string, term semantics.UnitTerm, idx *symbols.Index, sem *semantics.Model) (semantics.UnitProduct, semantics.UnitTerm, error) {
 	if text == "" {
-		return unnamedUnitProduct(term), nil
+		return unnamedUnitProduct(term), term, nil
 	}
 	opaque := semantics.NamedUnitProduct(nil, text, term.Dimensionless())
 	if idx == nil || sem == nil {
-		return opaque, nil
+		return opaque, term, nil
 	}
 	p := parser.New(source.New("<unit>", []byte(text)))
 	expr := p.ParseExpression()
 	if expr == nil || len(p.Diagnostics) > 0 || p.Offset() != len(text) {
-		return opaque, nil
+		return opaque, term, nil
 	}
 	unitAt := func(fqn string) (*symbols.Symbol, bool) {
 		matches := idx.LookupQualified(fqn)
@@ -491,30 +492,29 @@ func unitProductOfText(text string, term semantics.UnitTerm, idx *symbols.Index,
 		}
 		return sem.MeasurementUnitOf(matches[0])
 	}
-	var short []string
+	var short []*ast.QualifiedName
 	product, err := sem.UnitProductOfExprBy(expr, func(qn *ast.QualifiedName) (*symbols.Symbol, bool) {
-		name := semantics.QualifiedNameText(qn)
-		if sym, ok := unitAt(name); ok {
+		if sym, ok := unitAt(semantics.QualifiedNameText(qn)); ok {
 			return sym, true
 		}
-		if len(qn.Parts) == 1 && !slices.Contains(short, name) {
-			short = append(short, name)
+		if len(qn.Parts) == 1 && !slices.Contains(short, qn) {
+			short = append(short, qn)
 		}
 		return nil, false
 	})
 	if err != nil {
-		return opaque, nil
+		return opaque, term, nil
 	}
 	if len(short) == 0 {
 		implied, ok := impliedTerm(product, sem)
 		if !ok {
-			return opaque, nil
+			return opaque, term, nil
 		}
 		if !reducesTo(implied, term) {
-			return semantics.UnitProduct{}, fmt.Errorf("%w: %s reduces to %s, unit_term is %s",
+			return semantics.UnitProduct{}, semantics.UnitTerm{}, fmt.Errorf("%w: %s reduces to %s, unit_term is %s",
 				ErrUnitTextMismatch, text, implied, term)
 		}
-		return product, nil
+		return product, implied, nil
 	}
 
 	readings := shortUnitReadings(short, idx, sem)
@@ -524,16 +524,22 @@ func unitProductOfText(text string, term semantics.UnitTerm, idx *symbols.Index,
 			if sym, ok := unitAt(semantics.QualifiedNameText(qn)); ok {
 				return sym, true
 			}
-			sym, ok := reading.units[semantics.QualifiedNameText(qn)]
+			sym, ok := reading.units[qn]
 			return sym, ok
 		})
 		if err != nil {
 			continue
 		}
-		if implied, ok := impliedTerm(product, sem); ok && reducesTo(implied, term) {
-			reading.product = product
-			matches = append(matches, reading)
+		implied, ok := impliedTerm(product, sem)
+		if !ok || !reducesTo(implied, term) {
+			continue
 		}
+		// Two readings of one product, `m*m` as A::m·B::m and as B::m·A::m, are one reading.
+		if slices.ContainsFunc(matches, func(m shortUnitReading) bool { return sameProduct(m.product, product) }) {
+			continue
+		}
+		reading.product, reading.term = product, implied
+		matches = append(matches, reading)
 	}
 	if len(matches) > 1 {
 		matches = slices.DeleteFunc(matches, func(r shortUnitReading) bool {
@@ -541,15 +547,30 @@ func unitProductOfText(text string, term semantics.UnitTerm, idx *symbols.Index,
 		})
 	}
 	if len(matches) != 1 {
-		return opaque, nil
+		return opaque, term, nil
 	}
-	return matches[0].product, nil
+	return matches[0].product, matches[0].term, nil
 }
 
-// shortUnitReading is one assignment of a unit text's short names to units.
+// shortUnitReading is one assignment of a unit text's short names, occurrence by
+// occurrence, to units: `m*m` may name two units both written m.
 type shortUnitReading struct {
-	units   map[string]*symbols.Symbol
+	units   map[*ast.QualifiedName]*symbols.Symbol
 	product semantics.UnitProduct
+	term    semantics.UnitTerm
+}
+
+// sameProduct reports whether two normalized products have the same powers, in any order.
+func sameProduct(a, b semantics.UnitProduct) bool {
+	if len(a.Powers) != len(b.Powers) {
+		return false
+	}
+	for _, f := range a.Powers {
+		if !slices.Contains(b.Powers, f) {
+			return false
+		}
+	}
+	return true
 }
 
 // besideBaseUnits reports whether every unit read is declared beside a base unit of term.
@@ -567,12 +588,12 @@ func (r shortUnitReading) besideBaseUnits(term semantics.UnitTerm) bool {
 const maxShortUnitReadings = 1024
 
 // shortUnitReadings enumerates, in a fixed order, every assignment of the short
-// names to units so named; none if a name has no unit or there are too many.
-func shortUnitReadings(names []string, idx *symbols.Index, sem *semantics.Model) []shortUnitReading {
+// name occurrences to units so named; none if a name has no unit or there are too many.
+func shortUnitReadings(names []*ast.QualifiedName, idx *symbols.Index, sem *semantics.Model) []shortUnitReading {
 	candidates := make([][]*symbols.Symbol, len(names))
 	total := 1
-	for i, name := range names {
-		candidates[i] = unitsNamed(name, idx, sem)
+	for i, qn := range names {
+		candidates[i] = unitsNamed(semantics.QualifiedNameText(qn), idx, sem)
 		total *= len(candidates[i])
 		if total == 0 || total > maxShortUnitReadings {
 			return nil
@@ -580,10 +601,10 @@ func shortUnitReadings(names []string, idx *symbols.Index, sem *semantics.Model)
 	}
 	readings := make([]shortUnitReading, 0, total)
 	for k := range total {
-		units := make(map[string]*symbols.Symbol, len(names))
+		units := make(map[*ast.QualifiedName]*symbols.Symbol, len(names))
 		rem := k
-		for i, name := range names {
-			units[name] = candidates[i][rem%len(candidates[i])]
+		for i, qn := range names {
+			units[qn] = candidates[i][rem%len(candidates[i])]
 			rem /= len(candidates[i])
 		}
 		readings = append(readings, shortUnitReading{units: units})
@@ -662,10 +683,14 @@ func unnamedUnitProduct(term semantics.UnitTerm) semantics.UnitProduct {
 	return product
 }
 
-// sameScale reports whether two scale ratios agree to within floating-point
-// rounding, which composing the same factors in another order can introduce.
+// scaleTolerance is the relative difference two orders of composing one scale's
+// factors can round to: a fraction of an ulp per multiplication, over at most dozens.
+const scaleTolerance = 64 * 0x1p-52
+
+// sameScale reports whether two scale ratios agree to within the rounding of
+// composing them; a ratio further off is another scale, not noise.
 func sameScale(a, b semantics.Scale) bool {
-	return math.Abs(semantics.ConvertMagnitude(1, a, b)-1) < 1e-9
+	return math.Abs(semantics.ConvertMagnitude(1, a, b)-1) <= scaleTolerance
 }
 
 // protoToUnitTerm rebuilds a unit's reduction, normalized so a term sent in any
