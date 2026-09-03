@@ -338,7 +338,7 @@ func TestApplyWritesMintedIDs(t *testing.T) {
 		t.Error("the minted element is not in the repository")
 	}
 	// The annotated model, which now declares the minted id, has nothing left to sync.
-	assertEmptyDiff(t, reposync.WriteBack(local, set.Mints()), repo)
+	assertEmptyDiff(t, writeBack(t, local, set.Mints()), repo)
 }
 
 func TestApplyRefusesContentlessChange(t *testing.T) {

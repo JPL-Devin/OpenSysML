@@ -31,11 +31,30 @@ const (
 // id: subjects and references move to the minted IRI, satellites re-derive,
 // and the declaredId marker is set so converting the graph back to notation
 // re-materializes the @ElementId annotation. It never runs implicitly: the
-// caller asked to write annotations back into the model.
-func WriteBack(g *rdf.Graph, mints map[string]string) *rdf.Graph {
+// caller asked to write annotations back into the model. Each collection
+// annotation is restated from its minted typed triples, so the two agree.
+func WriteBack(g *rdf.Graph, mints map[string]string) (*rdf.Graph, error) {
+	g, err := rdf.ReconcileCollections(g)
+	if err != nil {
+		return nil, err
+	}
+	typed := rdf.NewGraph()
+	for _, triple := range g.Triples() {
+		if !rdf.IsAnnotationJSON(triple.Predicate.Value) {
+			typed.AddTriple(mintTriple(triple, mints))
+		}
+	}
 	out := rdf.NewGraph()
 	for _, triple := range g.Triples() {
-		out.AddTriple(mintTriple(triple, mints))
+		minted := mintTriple(triple, mints)
+		if key, ok := strings.CutPrefix(triple.Predicate.Value, rdf.AnnotationJSON); ok {
+			text, err := rdf.CollectionJSON(minted.Subject, typed.Objects(minted.Subject, rdf.SysML+key))
+			if err != nil {
+				return nil, fmt.Errorf("write back json:%s of %s: %w", key, minted.Subject, err)
+			}
+			minted.Object = rdf.String(text)
+		}
+		out.AddTriple(minted)
 	}
 	for old, minted := range mints {
 		subject := rdf.IRI(rdf.Element + minted)
@@ -43,47 +62,18 @@ func WriteBack(g *rdf.Graph, mints map[string]string) *rdf.Graph {
 			out.Add(subject, rdf.IRI(rdf.OpenSysML+"declaredId"), rdf.Bool(true))
 		}
 	}
-	return out
+	return out, nil
 }
 
-// mintTriple moves one triple onto minted spellings, its subject and object alike,
-// keeping a moved subject's elementId literal and its collection annotations in step.
+// mintTriple moves one triple onto minted spellings, its subject and object
+// alike, keeping a moved subject's elementId literal in step with its IRI.
 func mintTriple(triple rdf.Triple, mints map[string]string) rdf.Triple {
 	subject := mintedTerm(triple.Subject, mints)
 	object := mintedTerm(triple.Object, mints)
-	switch {
-	case triple.Predicate.Value == rdf.SysML+"elementId" && subject != triple.Subject:
+	if triple.Predicate.Value == rdf.SysML+"elementId" && subject != triple.Subject {
 		object = rdf.String(rdf.LocalName(subject.Value))
-	case rdf.IsAnnotationJSON(triple.Predicate.Value) && object.IsLiteral():
-		if text, ok := mintedAnnotation(subject, object.Value, mints); ok {
-			object = rdf.String(text)
-		}
 	}
 	return rdf.Triple{Subject: subject, Predicate: triple.Predicate, Object: object}
-}
-
-// mintedAnnotation rewrites the references of subject's collection annotation onto
-// their minted ids. A literal that is not a collection stays as it is, for the reader to refuse.
-func mintedAnnotation(subject rdf.Term, text string, mints map[string]string) (string, bool) {
-	members, err := rdf.ParseCollectionJSON(text)
-	if err != nil {
-		return "", false
-	}
-	values := make([]rdf.Term, 0, len(members))
-	for _, member := range members {
-		if member.ID == "" {
-			values = append(values, member.Literal)
-			continue
-		}
-		element := rdf.ReferenceIRI(subject, member.ID)
-		term := mintedTerm(element, mints)
-		if term == element {
-			term = mintedTerm(rdf.IRI(rdf.Expression+strings.TrimPrefix(element.Value, rdf.Element)), mints)
-		}
-		values = append(values, term)
-	}
-	minted, err := rdf.CollectionJSON(subject, values)
-	return minted, err == nil
 }
 
 // mintedTerm maps an IRI onto its minted spelling: the element itself exactly,

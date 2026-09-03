@@ -488,12 +488,15 @@ multisets, typed triples carrying no order, and the annotation's order is the
 one the decoder takes; two spellings that disagree are refused with an
 `rdf.CollectionConflictError` naming the subject and the key, rather than one of
 them being picked. An annotation that is not one literal, or not a JSON array
-of references and primitives, is refused naming the subject and the key.
+of references and primitives, is refused naming the subject and the key; so is
+an array that repeats a member, since a graph holds each triple once and could
+not give the repetition back.
 
 The sync (`-sync-diff`) compares the typed triples and treats the annotation as
 their restatement, reconciling it first; the service's commit path regenerates
-it from the array the sync posts. Minting ids into a model rewrites the
-references inside the annotation together with the typed ones.
+it from the array the sync posts. Minting ids into a model rewrites the typed
+triples and restates each annotation from them, so the two cannot drift: a
+declared id that merely resembles a minted element's derived ids stays as it is.
 
 Code: `rdf.AnnotateCollections` (encoder pass), `rdf.ReconcileCollections`
 (decoder pass), `rdf.CollectionJSON`/`rdf.ParseCollectionJSON` (the shape).

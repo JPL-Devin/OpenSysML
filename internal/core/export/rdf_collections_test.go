@@ -210,7 +210,7 @@ package Q {
 	if back != want || !strings.Contains(back, "part def D specializes Q::B, A;") {
 		t.Errorf("the annotation-only graph reads differently:\n--- want ---\n%s--- got ---\n%s", want, back)
 	}
-	bare := editTurtle(t, []byte(turtle), annotation, `json:specializes "[{\"@id\":\"shared\"},{\"@id\":\"shared\"}]"`)
+	bare := editTurtle(t, []byte(turtle), annotation, `json:specializes "[{\"@id\":\"shared\"},{\"@id\":\"acme.proj-1:shared\"}]"`)
 	var conflict *rdf.CollectionConflictError
 	if _, err := export.Convert("m.ttl", bare, export.FormatTurtle, export.FormatSysML); !errors.As(err, &conflict) || conflict.Key != "specializes" {
 		t.Errorf("a bare id for a cross-scope reference was not refused as a conflict: %v", err)

@@ -21,7 +21,8 @@ func (e *CollectionConflictError) Error() string {
 }
 
 // AnnotationError is a collection annotation the reader cannot take as a
-// collection: not exactly one literal, or not the JSON array the service stores.
+// collection: not exactly one literal, not the JSON array the service stores,
+// or an array that repeats a member, which no set of triples can hold.
 type AnnotationError struct {
 	Subject string // subject IRI
 	Key     string // property key: the annotation predicate's local name
@@ -114,10 +115,15 @@ func reconcileCollection(graph *Graph, ids map[string][]Term, subject Term, key 
 		return refuse(err.Error())
 	}
 	annotation := make([]string, len(members))
+	seen := map[string]int{}
 	for i, member := range members {
 		if annotation[i], err = member.JSON(); err != nil {
 			return refuse(err.Error())
 		}
+		if first, dup := seen[annotation[i]]; dup {
+			return refuse(fmt.Sprintf("the member %s appears at index %d and again at %d; a graph holds each triple once, so a repeated member cannot be kept", annotation[i], first, i))
+		}
+		seen[annotation[i]] = i
 	}
 	bare := graph.Objects(subject, SysML+key)
 	if len(bare) == 0 {

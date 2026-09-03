@@ -106,6 +106,41 @@ func TestMaterializedReferencesFollowTheReferrersNamespace(t *testing.T) {
 	}
 }
 
+// A graph holds each triple once, so an annotation that repeats a member cannot
+// round-trip; it is refused, whether the member is a reference or a primitive.
+func TestRepeatedAnnotationMembersAreRefused(t *testing.T) {
+	subject, wheel := IRI(Element+"P"), IRI(Element+"P__Wheel")
+	for key, literal := range map[string]string{
+		"ownedMember": `[{"@id":"P__Wheel"},{"@id":"P__Wheel"}]`,
+		"aliasIds":    `["a","b","a"]`,
+		"value":       `[1,2,1]`,
+	} {
+		g := NewGraph()
+		g.Add(subject, IRI(RDFType), SysMLTerm("Package"))
+		g.Add(wheel, IRI(RDFType), SysMLTerm("PartDefinition"))
+		g.Add(subject, AnnotationJSONTerm(key), String(literal))
+		_, err := ReconcileCollections(g)
+		var refused *AnnotationError
+		if !errors.As(err, &refused) || refused.Subject != subject.Value || refused.Key != key {
+			t.Fatalf("json:%s %s was not refused as an AnnotationError: %v", key, literal, err)
+		}
+		if !strings.Contains(err.Error(), "appears at index") || !strings.Contains(err.Error(), "again at") {
+			t.Errorf("the refusal of json:%s does not point at the repeated member: %v", key, err)
+		}
+	}
+	// The same members once each are taken, whichever their order.
+	g := NewGraph()
+	g.Add(subject, IRI(RDFType), SysMLTerm("Package"))
+	g.Add(subject, AnnotationJSONTerm("aliasIds"), String(`["b","a"]`))
+	out, err := ReconcileCollections(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := out.Objects(subject, SysML+"aliasIds"); len(got) != 2 || got[0] != String("b") || got[1] != String("a") {
+		t.Errorf("distinct members were not all kept in annotation order: %v", got)
+	}
+}
+
 // Literal members are spelled as the JSON value of their datatype: booleans and
 // numbers bare, everything else as a string.
 func TestCollectionJSONLiterals(t *testing.T) {
