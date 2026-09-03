@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -385,16 +386,16 @@ func (ctx *Context) drainObjectBehaviors() error {
 // probe only a behavior the probe attached is run: what one outliving the probe
 // does cannot be undone.
 func (ctx *Context) nextRunnableBehavior() (*ObjectBehavior, bool) {
-	if len(ctx.pendingBehaviors) > 0 {
-		behavior := ctx.pendingBehaviors[0]
-		ctx.pendingBehaviors = ctx.pendingBehaviors[1:]
+	first, attached := 0, 0
+	if ctx.probes > 0 {
+		first, attached = min(ctx.probePending, len(ctx.pendingBehaviors)), ctx.probeBehaviors
+	}
+	if first < len(ctx.pendingBehaviors) {
+		behavior := ctx.pendingBehaviors[first]
+		ctx.pendingBehaviors = slices.Delete(ctx.pendingBehaviors, first, first+1)
 		return behavior, true
 	}
-	runnable := ctx.objectBehaviors
-	if ctx.probes > 0 {
-		runnable = runnable[ctx.probeBehaviors:]
-	}
-	for _, behavior := range runnable {
+	for _, behavior := range ctx.objectBehaviors[attached:] {
 		if behavior.hasPendingWork() {
 			return behavior, true
 		}

@@ -156,9 +156,10 @@ type Context struct {
 	// identities it keeps for connectors not yet materialized — run in reverse as
 	// each probe ends; see noteProbeUndo.
 	probeUndos []func()
-	// probeBehaviors is where in objectBehaviors those the probes under way
-	// attached begin: the only ones a drain under a probe may run.
-	probeBehaviors int
+	// probeBehaviors and probePending are where in objectBehaviors and in
+	// pendingBehaviors those the probes under way attached begin: the only ones a
+	// drain under a probe may run.
+	probeBehaviors, probePending int
 	// runDepth is the number of runs currently under way, so the step counter is
 	// reset per run rather than accumulated over the context's whole life.
 	runDepth int
@@ -393,7 +394,7 @@ func (ctx *Context) beginProbe() func() {
 	messages := cloneMessages(ctx.messages)
 	selected := maps.Clone(ctx.selectedVariants)
 	if ctx.probes == 0 {
-		ctx.probeBehaviors = len(ctx.objectBehaviors)
+		ctx.probeBehaviors, ctx.probePending = len(ctx.objectBehaviors), len(ctx.pendingBehaviors)
 	}
 	ctx.trace = nil
 	ctx.runDepth++

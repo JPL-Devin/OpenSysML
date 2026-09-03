@@ -1188,6 +1188,112 @@ func TestDecideStartsTheBehaviorsOfAnObjectAGuardMaterializes(t *testing.T) {
 	}
 }
 
+// A drain under a probe runs only the behaviors the probe attached: a startup run
+// still pending from the collective start under way — a sibling machine's, another
+// object's action — is left to that start, in place, neither advanced nor dropped.
+func TestProbeDrainLeavesThePendingStartupRunsOfTheStartUnderWay(t *testing.T) {
+	src := `
+		private import ScalarValues::*;
+		attribute def Ping;
+		part def Sensor {
+			attribute level : Integer = 1;
+			exhibit state calibrate {
+				entry; then ready;
+				state ready { entry assign level := 10; }
+			}
+		}
+		part def Twin {
+			part sensor : Sensor;
+			exhibit state left {
+				entry; then idle;
+				state idle;
+				transition left_go first idle accept Ping if sensor.level > 5 then done;
+				state done;
+			}
+			exhibit state right {
+				entry; then idle;
+				state idle;
+				transition first idle accept Ping then done;
+				state done;
+			}
+		}
+		part def Pump {
+			attribute primed : Boolean = false;
+			perform action prime {
+				action step { assign primed := true; }
+				first step;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "twin.sysml", parseAndBuild(t, src))
+	root := idx.DocumentRoot("twin.sysml")
+	twin, err := ctx.materialize(resolveSymbol(t, root, "Twin"), 0)
+	if err != nil {
+		t.Fatalf("materialize(Twin): %v", err)
+	}
+	pump, err := ctx.materialize(resolveSymbol(t, root, "Pump"), 0)
+	if err != nil {
+		t.Fatalf("materialize(Pump): %v", err)
+	}
+	// The attach phase of a collective start of both objects, before its run.
+	ctx.behaviorRunDepth++
+	for _, obj := range []*Instance{twin, pump} {
+		if err := ctx.startBehaviorsOf(obj); err != nil {
+			t.Fatalf("startBehaviorsOf(%s): %v", symbolText(obj.Type), err)
+		}
+	}
+	ctx.behaviorRunDepth--
+	pending := append([]*ObjectBehavior(nil), ctx.pendingBehaviors...)
+	if len(pending) != 3 {
+		t.Fatalf("%d startup runs pending, want left, right and prime", len(pending))
+	}
+	left, right, prime := pending[0], pending[1], pending[2]
+	if left.Name != "left" || right.Name != "right" || prime.Name != "prime" {
+		t.Fatalf("pending %s, %s, %s; want left, right, prime", left.Name, right.Name, prime.Name)
+	}
+	ping, err := ctx.SignalMessage(resolveSymbol(t, root, "Ping"), nil, twin)
+	if err != nil {
+		t.Fatalf("SignalMessage(Ping): %v", err)
+	}
+	sensor := twin.FeatureValues["sensor"]
+	if sensor == nil || sensor.Materialized {
+		t.Fatalf("sensor = %+v; want an unmaterialized feature value before the guard reads it", sensor)
+	}
+
+	// The left machine's preflight of Ping, as its dispatch of a message in flight
+	// or %send makes: the guard materializes the sensor, whose start drains.
+	if d, err := left.State.Decide(ping); err != nil || len(d.Fires) != 1 || d.Fires[0] != "transition left_go" {
+		t.Errorf("Decide(Ping) = %+v, %v; want left_go firing on the level the sensor's machine set", d, err)
+	}
+	if got := ctx.pendingBehaviors; len(got) != 3 || got[0] != left || got[1] != right || got[2] != prime {
+		t.Errorf("after Decide, %d startup runs pending; want left, right and prime as before", len(got))
+	}
+	if got := activeLeaf(right.State); got != "idle" {
+		t.Errorf("the right machine is at %s after the left one's Decide, want idle", got)
+	}
+	if prime.Action.State() == StateCompleted {
+		t.Error("the pump's prime ran under the left machine's Decide")
+	}
+	if sensor.Materialized || len(twin.Behaviors()) != 2 || len(pump.Behaviors()) != 1 {
+		t.Errorf("after Decide: sensor %+v, twin runs %d behaviors, pump %d; want it unmaterialized, 2 and 1",
+			sensor, len(twin.Behaviors()), len(pump.Behaviors()))
+	}
+
+	// The start's own run then takes every pending startup run in order.
+	if err := ctx.runAttachedBehaviors(); err != nil {
+		t.Fatalf("runAttachedBehaviors: %v", err)
+	}
+	if len(ctx.pendingBehaviors) != 0 {
+		t.Errorf("%d startup runs still pending after the start ran", len(ctx.pendingBehaviors))
+	}
+	if got := activeLeaf(left.State) + "/" + activeLeaf(right.State); got != "idle/idle" {
+		t.Errorf("left/right = %s after the start ran, want idle/idle", got)
+	}
+	if got := FormatValue(pump.FeatureValues["primed"].HeldValue()); got != "true" || prime.Action.State() != StateCompleted {
+		t.Errorf("primed = %s with prime %s after the start ran; want true and the action completed", got, prime.Action.State())
+	}
+}
+
 // A message in flight is left as Decide found it, payload included: the machine
 // of an object a guard materializes may take it under the probe and cache the
 // occurrence it binds on the payload, an object the probe discards. Dispatch
