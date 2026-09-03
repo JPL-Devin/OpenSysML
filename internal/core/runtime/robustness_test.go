@@ -222,6 +222,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("builtin_named_argument_that_binds_nothing", testBuiltinNamedArgumentThatBindsNothing)
 	t.Run("body_by_reference_that_cannot_be_applied", testBodyByReferenceThatCannotBeApplied)
 	t.Run("bodiless_model_calc_named_as_a_builtin", testBodilessModelCalcNamedAsABuiltin)
+	t.Run("data_equality_over_a_part", testDataEqualityOverAPart)
 	t.Run("real_literal_that_underflows", testRealLiteralThatUnderflows)
 	t.Run("string_operand_of_the_wrong_kind", testStringOperandOfTheWrongKind)
 	t.Run("collection_body_of_the_wrong_arity", testCollectionBodyOfTheWrongArity)
@@ -1395,6 +1396,51 @@ func testBodilessModelCalcNamedAsABuiltin(t *testing.T) {
 		err := calcErrorWithLibraries(t, src, calc, nil, 10000)
 		if !errors.Is(err, ErrNoResultExpression) {
 			t.Errorf("%s = %v, want %v", calc, err, ErrNoResultExpression)
+		}
+	}
+}
+
+// testDataEqualityOverAPart: DataFunctions' `'=='` and `'==='` are declared over
+// DataValue, so a part given to either is refused rather than compared.
+func testDataEqualityOverAPart(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			part def Widget;
+			attribute def Point { attribute x : Integer; }
+			calc def SameData { in a : Point; in b : Point; return : Boolean = DataFunctions::'=='(a, b); }
+			calc def SamePart { in a : Widget; in b : Widget; return : Boolean = DataFunctions::'=='(a, b); }
+			calc def IdenticalPart { in a : Widget; in b : Widget; return : Boolean = DataFunctions::'==='(a, b); }
+			calc def SameAnything { in a : Widget; in b : Widget; return : Boolean = BaseFunctions::'=='(a, b); }
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	object := func(name string) Value {
+		matches := idx.LookupQualified("test::" + name)
+		if len(matches) != 1 {
+			t.Fatalf("test::%s: %d matching symbols, want 1", name, len(matches))
+		}
+		inst, err := ctx.Instantiate(matches[0])
+		if err != nil {
+			t.Fatalf("Instantiate(%s): %v", name, err)
+		}
+		return Value{Kind: ValInstance, Instance: inst.ID}
+	}
+	point, widget := object("Point"), object("Widget")
+	invoke := func(calc string, args ...Value) (Value, error) {
+		sym, scope := calcByName(t, idx.DocumentRoot("<test>"), "test", calc)
+		return ctx.InvokeCalc(sym, args, scope)
+	}
+	for _, calc := range []string{"SamePart", "IdenticalPart"} {
+		_, err := invoke(calc, widget, widget)
+		if !errors.Is(err, ErrTypeMismatch) || !strings.Contains(err.Error(), "a DataValue") {
+			t.Errorf("%s = %v, want %v naming DataValue", calc, err, ErrTypeMismatch)
+		}
+	}
+	for calc, args := range map[string][]Value{"SameData": {point, point}, "SameAnything": {widget, widget}} {
+		got, err := invoke(calc, args...)
+		if err != nil || !valueIdentical(got, constBool(true)) {
+			t.Errorf("%s = %s, %v; want true", calc, FormatValue(got), err)
 		}
 	}
 }

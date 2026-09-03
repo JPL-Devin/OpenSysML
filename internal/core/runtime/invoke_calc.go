@@ -269,7 +269,9 @@ type calcArgs struct {
 // returns its result. Arguments bind to the calc's input parameters in
 // declaration order; a parameter with no argument falls back to its declared
 // default. The body is evaluated in the calc's own scope, so scope is used only
-// as a fallback for a symbol that owns no scope.
+// as a fallback for a symbol that owns no scope. A library function's `expr`
+// parameter takes a body or expression value, applied only when selected, or
+// the operand's value itself.
 func (ctx *Context) InvokeCalc(sym *symbols.Symbol, args []Value, scope *symbols.Scope) (Value, error) {
 	defer ctx.beginRun()()
 
@@ -296,6 +298,9 @@ func (ctx *Context) invokeCalc(sym *symbols.Symbol, args calcArgs, scope *symbol
 }
 
 func (ctx *Context) invokeCalcWithSelf(sym *symbols.Symbol, args calcArgs, scope *symbols.Scope, self *Instance) (Value, error) {
+	if fn, ok := ctx.builtinFor(sym); ok {
+		return ctx.invokeBuiltinValues(sym, fn, args, scope, self)
+	}
 	if fn, ok := ctx.libraryFunctionFor(sym); ok {
 		return fn.invoke(ctx, args)
 	}
@@ -305,6 +310,16 @@ func (ctx *Context) invokeCalcWithSelf(sym *symbols.Symbol, args calcArgs, scope
 		return Value{}, err
 	}
 	return ctx.invokeCalcShape(shape, args, scope, self)
+}
+
+// invokeBuiltinValues applies a built-in to arguments a direct invocation has
+// already evaluated, bound to its declared parameters as a call would bind them.
+func (ctx *Context) invokeBuiltinValues(sym *symbols.Symbol, fn builtinFunc, args calcArgs, callerScope *symbols.Scope, self *Instance) (Value, error) {
+	bound, err := bindBuiltinValues(ctx.qualifiedSymbolName(sym), args)
+	if err != nil {
+		return Value{}, err
+	}
+	return fn(NewEvalContextIn(ctx, ctx.calcScope(sym, nil, callerScope), self), bound)
 }
 
 // invocationFrame is the storage one calc invocation runs in, held off the

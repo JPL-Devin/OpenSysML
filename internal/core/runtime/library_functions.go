@@ -296,6 +296,20 @@ func (ctx *Context) libraryDeclared(sym *symbols.Symbol) bool {
 	return idx != nil && idx.Library(sym)
 }
 
+// librarySymbol is the declaration the bundled library makes under fqn, nil
+// where it is not loaded.
+func (ctx *Context) librarySymbol(fqn string) *symbols.Symbol {
+	if ctx == nil || ctx.resolver == nil || ctx.resolver.Index() == nil {
+		return nil
+	}
+	for _, sym := range ctx.resolver.Index().LookupQualified(fqn) {
+		if ctx.libraryDeclared(sym) {
+			return sym
+		}
+	}
+	return nil
+}
+
 // written is the function's name as a model writes it, which it reports itself by.
 func (fn *libraryFunction) written() string { return writtenName(fn.name) }
 

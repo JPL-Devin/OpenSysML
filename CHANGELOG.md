@@ -82,7 +82,11 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   `threshold`, and one a control function selects is applied rather than answered as a body;
   a body a calc returns keeps the parameter it closes over after that calc has returned.
   A nonzero Real notation too small for a Real (`1e-400`, as a literal or through `ToReal`)
-  is an overflow error rather than `0.0`.
+  is an overflow error rather than `0.0`. A direct invocation of a built-in through the
+  runtime API (`InvokeCalc`, `InvokeCalcNamed`) binds and computes as the written call does,
+  a body value handed to an `expr` parameter applied only when selected.
+  `DataFunctions::'=='`/`'==='` take DataValues only: a part or other occurrence is a type
+  mismatch, where `BaseFunctions::'=='` compares anything.
   `RationalFunctions::rat`/`numer`/`denom` (a Rational is a float64 here),
   `CollectionFunctions::'array#'` and `BaseFunctions::'['` (no Array value kind),
   `BaseFunctions::all`/`as`/`meta`/`istype`/`hastype`/`'@'`/`'@@'` and `ControlFunctions::'.'`

@@ -113,33 +113,60 @@ func (ec *EvalContext) invokeBuiltin(name string, fn builtinFunc, exprs []ast.No
 // argument is bound unevaluated either way.
 func (ec *EvalContext) bindBuiltinArgs(name string, exprs []ast.Node, named []ast.NamedArg) ([]Value, error) {
 	params := builtinSignatures[name]
-	written := writtenName(name)
-	args := make([]Value, len(params))
-	bound := make([]bool, len(params))
-	if len(named) == 0 {
-		for i, arg := range exprs {
-			val, err := ec.evalArgument(params, i, arg)
-			if err != nil {
-				return nil, err
-			}
-			if i < len(params) {
-				args[i], bound[i] = val, true
-			}
+	names := make([]string, len(named))
+	for i, arg := range named {
+		if arg.Name == nil || len(arg.Name.Parts) == 0 {
+			return nil, fmt.Errorf("unnamed argument in invocation of %s", writtenName(name))
 		}
-		if len(exprs) > len(params) {
-			return nil, fmt.Errorf("%w: function %s takes %d argument(s), got %d",
-				ErrCalcArity, written, len(params), len(exprs))
-		}
-		return fillUnbound(written, params, args, bound)
+		names[i] = arg.Name.Parts[len(arg.Name.Parts)-1].Text
 	}
-	if len(exprs) > 0 {
+	return bindBuiltin(name, len(exprs), names, func(param, arg int) (Value, error) {
+		if len(names) > 0 {
+			return ec.evalArgument(params, param, named[arg].Value)
+		}
+		return ec.evalArgument(params, param, exprs[arg])
+	})
+}
+
+// bindBuiltinValues binds arguments a direct invocation already evaluated. An
+// `expr` parameter takes a body or expression value to apply when selected,
+// or the operand's value itself.
+func bindBuiltinValues(name string, args calcArgs) ([]Value, error) {
+	names := make([]string, 0, len(args.named))
+	for argName := range args.named {
+		names = append(names, argName)
+	}
+	slices.Sort(names)
+	return bindBuiltin(name, len(args.positional), names, func(_, arg int) (Value, error) {
+		if len(names) > 0 {
+			return args.named[names[arg]], nil
+		}
+		return args.positional[arg], nil
+	})
+}
+
+// bindBuiltin assigns a call's positional arguments, or its named ones, to the
+// built-in's declared parameters, materializing each through bind(param, arg).
+func bindBuiltin(name string, positional int, named []string, bind func(param, arg int) (Value, error)) ([]Value, error) {
+	params := builtinSignatures[name]
+	written := writtenName(name)
+	if positional > 0 && len(named) > 0 {
 		return nil, fmt.Errorf("%w: function %s takes either positional or named arguments", ErrCalcArity, written)
 	}
-	for _, arg := range named {
-		if arg.Name == nil || len(arg.Name.Parts) == 0 {
-			return nil, fmt.Errorf("unnamed argument in invocation of %s", written)
+	if positional > len(params) {
+		return nil, fmt.Errorf("%w: function %s takes %d argument(s), got %d",
+			ErrCalcArity, written, len(params), positional)
+	}
+	args := make([]Value, len(params))
+	bound := make([]bool, len(params))
+	for i := 0; i < positional; i++ {
+		val, err := bind(i, i)
+		if err != nil {
+			return nil, err
 		}
-		argName := arg.Name.Parts[len(arg.Name.Parts)-1].Text
+		args[i], bound[i] = val, true
+	}
+	for j, argName := range named {
 		i := slices.IndexFunc(params, func(p builtinParam) bool { return p.name == argName })
 		if i < 0 {
 			return nil, fmt.Errorf("%w: function %s has no input parameter %q (expected %s)",
@@ -148,7 +175,7 @@ func (ec *EvalContext) bindBuiltinArgs(name string, exprs []ast.Node, named []as
 		if bound[i] {
 			return nil, fmt.Errorf("%w: function %s binds parameter %q twice", ErrCalcArity, written, argName)
 		}
-		val, err := ec.evalArgument(params, i, arg.Value)
+		val, err := bind(i, j)
 		if err != nil {
 			return nil, err
 		}

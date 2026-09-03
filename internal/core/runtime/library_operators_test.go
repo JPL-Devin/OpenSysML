@@ -89,6 +89,61 @@ func TestOperatorFunctionValues(t *testing.T) {
 	}
 }
 
+// DataFunctions declares its operands DataValue: an attribute definition's
+// object is one, a part's is not, however the operator itself would compare
+// them. BaseFunctions, declared over Anything, still admits either.
+func TestDataOperatorFunctionsRequireDataValues(t *testing.T) {
+	ctx, idx := libraryModelContext(t, `package test {
+		private import ScalarValues::*;
+		attribute def Point { attribute x : Integer; }
+		part def Widget;
+	}`)
+	object := func(name string) Value {
+		inst, err := ctx.Instantiate(lookupOne(t, idx, "test::"+name))
+		if err != nil {
+			t.Fatalf("Instantiate(%s): %v", name, err)
+		}
+		return Value{Kind: ValInstance, Instance: inst.ID}
+	}
+	point, widget := object("Point"), object("Widget")
+	mixed := NewSequence()
+	mixed.Append(point)
+	mixed.Append(widget)
+	apply := func(fn string, args ...Value) (Value, error) {
+		lib, ok := libraryFunctionByName(fn)
+		if !ok {
+			t.Fatalf("no library function %s registered", fn)
+		}
+		return lib.invoke(ctx, calcArgs{positional: args})
+	}
+
+	for _, fn := range []string{"DataFunctions::==", "DataFunctions::===", "BaseFunctions::==", "BaseFunctions::==="} {
+		got, err := apply(fn, point, point)
+		if err != nil || !valueIdentical(got, constBool(true)) {
+			t.Errorf("%s(point, point) = %s, %v; want true", fn, FormatValue(got), err)
+		}
+		if got, err := apply(fn, constInt(2), constInt(2)); err != nil || !valueIdentical(got, constBool(true)) {
+			t.Errorf("%s(2, 2) = %s, %v; want true", fn, FormatValue(got), err)
+		}
+	}
+	for _, fn := range []string{"DataFunctions::==", "DataFunctions::==="} {
+		for _, args := range [][]Value{{widget, widget}, {widget, nullValue()}, {point, widget}, {NewSequenceValue(mixed), nullValue()}} {
+			_, err := apply(fn, args...)
+			if !errors.Is(err, ErrTypeMismatch) || !strings.Contains(err.Error(), "a DataValue") {
+				t.Errorf("%s over a part = %v, want %v naming DataValue", fn, err, ErrTypeMismatch)
+			}
+		}
+	}
+	if _, err := apply("DataFunctions::+", widget, constInt(1)); !errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("DataFunctions::+ over a part = %v, want %v", err, ErrTypeMismatch)
+	}
+	for _, fn := range []string{"BaseFunctions::==", "BaseFunctions::==="} {
+		if got, err := apply(fn, widget, widget); err != nil || !valueIdentical(got, constBool(true)) {
+			t.Errorf("%s(widget, widget) = %s, %v; want true", fn, FormatValue(got), err)
+		}
+	}
+}
+
 // An operator function refuses an argument its package's parameter type does
 // not admit, and reports the operator's own errors, all typed and named.
 func TestOperatorFunctionErrors(t *testing.T) {
