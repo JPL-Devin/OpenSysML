@@ -569,10 +569,10 @@ func (p *Parser) parseInitialNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 	var name string
 
-	if p.at(lexer.Identifier) || p.atNameOrKeyword() {
-		nameToken := p.peek()
-		name = p.src.Text(nameToken.Span)
-		p.advance()
+	// The name refers to a member, so it is kept as the name itself: an
+	// unrestricted name without its quotes, as a qualified name segment is.
+	if seg, ok := p.parseNameSegmentRelaxed(); ok {
+		name = seg.Text
 	}
 
 	// Check for succession edge continuation: first X [if <expr>] then Y;
@@ -934,7 +934,9 @@ func (p *Parser) parseSuccessionEdge(tok lexer.Token, allowBody bool) ast.Node {
 
 	// An action target succession ends in a UsageBody (SysML.xtext:1698).
 	var members []ast.Node
+	hasBody := false
 	if allowBody && p.accept2(lexer.LBrace) {
+		hasBody = true
 		members = p.parseActionBodyMixed()
 	} else {
 		p.expect(lexer.Semicolon, "expected ';' after succession edge")
@@ -945,6 +947,7 @@ func (p *Parser) parseSuccessionEdge(tok lexer.Token, allowBody bool) ast.Node {
 		Source:   source,
 		Target:   target,
 		Members:  members,
+		HasBody:  hasBody,
 	}
 	return node
 }
@@ -1481,7 +1484,8 @@ func continuesCondition(tok lexer.Token) bool {
 
 // atReturnedUsage reports whether `return` is followed by a usage declaration
 // rather than an expression (`'return' UsageElement`, SysML.xtext:1961): a
-// specialization begins one, as does a name a specialization follows.
+// specialization begins one, as does a name a specialization or a
+// multiplicity follows (`return y[*] subsets A;`).
 func (p *Parser) atReturnedUsage() bool {
 	if p.atFeatureSpecialization() {
 		return true
@@ -1491,9 +1495,10 @@ func (p *Parser) atReturnedUsage() bool {
 	}
 	cp := p.checkpoint()
 	p.parseIdentification()
-	specialized := p.atFeatureSpecialization()
+	declared := p.atFeatureSpecialization() || p.at(lexer.LBracket)
 	p.restore(cp)
-	return specialized
+	p.release()
+	return declared
 }
 
 // parseResultMember parses a `return` member: the declaration of a result
@@ -1644,11 +1649,11 @@ func (p *Parser) parseResultMember() ast.Node {
 		return u
 	}
 
-	// Check for Pattern 5: return [kind] [modifiers] name [mult] [body/semicolon] (no type, no value)
+	// Check for Pattern 5: return [kind] [modifiers] name [body/semicolon] (no type, no value)
 	// `return` introduces a return parameter, so a lone name after it declares
 	// that parameter (`calc acc : Acceleration { return a; }`) rather than
 	// referencing one.
-	if p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.LBracket) {
+	if p.atName() && p.peekN(1).Kind == lexer.Semicolon {
 		u := &ast.Usage{
 			Kind:        usageKind,
 			Direction:   ast.DirOut,
@@ -1664,14 +1669,6 @@ func (p *Parser) parseResultMember() ast.Node {
 			IsNonunique: mods.isNonunique,
 		}
 		u.Ident = p.parseIdentification()
-
-		// Parse optional multiplicity '[n..m]'
-		if p.at(lexer.LBracket) {
-			u.Multiplicity = p.parseMultiplicity()
-		}
-
-		// A value operator here makes this Pattern 4 (value), not Pattern 5 (no value)
-		p.parseUsageValue(u)
 
 		// Check for body or semicolon
 		if p.at(lexer.LBrace) {
@@ -1755,11 +1752,9 @@ func (p *Parser) parseConstraintBody() []ast.Node {
 			// Parse return member (for constraint defs that return result)
 			// Example: return result = expr { doc }
 			members = append(members, p.parseBodyMember())
-		} else if p.atDefUsageStart() || p.atRelationshipKeyword() || p.atKindlessFeatureTyping() {
-			// A declaration, or a member that states a relationship where its
-			// name would go (`redefines partMasses = expr;`, `:>> x = value;`):
-			// both spellings reach parseBodyMember, which reads them as one form
-			// and diagnoses the relationships that are not member forms.
+		} else if p.atDefUsageStart() || p.atRelationshipKeyword() || p.atKindlessFeatureTyping() || p.atMetadataMember() {
+			// A declaration, a relationship where a name would go (`:>> x = v;`),
+			// or a metadata usage (`@M { … }`).
 			members = append(members, p.parseBodyMember())
 		} else {
 			// Default: parse as constraint expression (bare expression)
@@ -1774,6 +1769,55 @@ func (p *Parser) parseConstraintBody() []ast.Node {
 
 	p.expect(lexer.RBrace, "expected '}' after constraint body")
 	return members
+}
+
+// atMetadataMember tells a metadata usage (`@M;`, `@M { … }`, `@ m : M about x;`)
+// from a classification condition of the implicit subject (`@M`, `@M < x`).
+func (p *Parser) atMetadataMember() bool {
+	if !p.at(lexer.At) {
+		return false
+	}
+	n := 1
+	// An identification (`<sn>`? name?) is only one where a typing keyword follows.
+	m := n
+	if p.peekN(m).Kind == lexer.Lt {
+		if !isNameToken(p.peekN(m+1).Kind) || p.peekN(m+2).Kind != lexer.Gt {
+			return false
+		}
+		m += 3
+	}
+	if isNameToken(p.peekN(m).Kind) {
+		m++
+	}
+	if t := p.peekN(m); t.Kind == lexer.Colon {
+		n = m + 1
+	} else if t.Kind == lexer.Keyword && (t.KeywordID == "defined" || t.KeywordID == "typed") {
+		if by := p.peekN(m + 1); by.Kind != lexer.Keyword || by.KeywordID != "by" {
+			return false
+		}
+		n = m + 2
+	}
+	// The metaclass, a qualified name.
+	if !isNameToken(p.peekN(n).Kind) {
+		return false
+	}
+	for n++; p.peekN(n).Kind == lexer.ColonColon; n += 2 {
+		if !isNameToken(p.peekN(n + 1).Kind) {
+			return false
+		}
+	}
+	switch t := p.peekN(n); t.Kind {
+	case lexer.LBrace, lexer.Semicolon:
+		return true
+	case lexer.Keyword:
+		return t.KeywordID == "about"
+	}
+	return false
+}
+
+// isNameToken reports whether k spells a name segment.
+func isNameToken(k lexer.Kind) bool {
+	return k == lexer.Identifier || k == lexer.UnrestrictedName
 }
 
 // atConstraintCondition reports whether an `assert`/`assume` condition follows,
@@ -2297,6 +2341,7 @@ func (p *Parser) tryParseConstraintReference() (constraintReference, bool) {
 		return constraintReference{}, false
 	}
 	cp := p.checkpoint()
+	defer p.release()
 	ref := p.parseQualifiedName()
 	if ref == nil || len(ref.Parts) == 0 {
 		p.restore(cp)
@@ -2333,6 +2378,7 @@ func (p *Parser) tryParseNestedConstraint(start int, isAssert, isNegated bool, k
 		return nil
 	}
 	cp := p.checkpoint()
+	defer p.release()
 	p.advance() // consume 'constraint'
 	var name string
 	if p.at(lexer.Identifier) {
@@ -3139,6 +3185,7 @@ func (p *Parser) parseTransitionTail(start int, name ast.NameSegment, source *as
 				return err
 			}
 			node.Effect = effect
+			node.HasEffect = true
 			continue
 		case p.atKeyword("then"):
 			p.advance() // consume 'then'

@@ -122,8 +122,23 @@ var (
 	pdfTitlePage  bool
 	pdfTOC        bool
 	pdfNumbering  bool
+	htmlCSS       stringSlice
+	htmlNoCSS     bool
+	htmlShowCSS   bool
+	htmlFragment  bool
 	strictMode    bool
 	modelChecks   checks
+	compileCalc   string
+	compileTarget string
+	compileSource bool
+
+	syncDiffWith       string
+	syncApplyTo        string
+	syncBase           string
+	syncState          string
+	syncConfirmDeletes bool
+	syncMintIDs        bool
+	syncAnnotate       string
 )
 
 // budgets holds the run bounds the environment resolves to, read once at startup.
@@ -230,13 +245,112 @@ func runCLI() int {
 		return 2
 	}
 
-	if renderDoc == "" && (docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering) {
-		fmt.Fprintln(os.Stderr, "sysml: -doc-form, -pdf-engine, -pdf-title-page, -pdf-toc and -pdf-number-sections apply to -render-document; name the document to render")
+	// The default stylesheet is asked for on its own; it needs no model, and
+	// writing it is the whole run, so it cannot stand in for another.
+	if htmlShowCSS {
+		switch {
+		case len(args) > 0:
+			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet, which no model shapes; ask for it without model files")
+			return 2
+		case renderDoc != "" || renderDocsDir != "" || renderView != "" || renderAllDir != "" ||
+			convertFormat != "" || flagGiven("sync-diff") || flagGiven("sync-apply") ||
+			queryText != "" || len(evalExprs) > 0 || modelChecks.requested():
+			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet and nothing else; ask for it in its own run")
+			return 2
+		case docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering ||
+			len(htmlCSS) > 0 || htmlNoCSS || htmlFragment:
+			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet itself; the document and stylesheet options shape a rendered document, not the sheet")
+			return 2
+		case fromFormat != "" || strictMode || syncBase != "" || syncState != "" ||
+			syncConfirmDeletes || syncMintIDs || syncAnnotate != "":
+			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet, which reads no input; the input and repository options do not apply")
+			return 2
+		}
+		if err := runDefaultStylesheet(); err != nil {
+			return fail(err)
+		}
+		return exitHolds
+	}
+
+	if renderDoc == "" && renderDocsDir == "" &&
+		(docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering ||
+			len(htmlCSS) > 0 || htmlNoCSS || htmlFragment) {
+		fmt.Fprintln(os.Stderr, "sysml: -doc-form, the document options and the stylesheet options apply to -render-document and -render-documents; name the document to render")
+		return 2
+	}
+
+	if flagGiven("sync-diff") && syncDiffWith == "" {
+		fmt.Fprintln(os.Stderr, "sysml: -sync-diff is empty; name the repository graph or endpoint to diff against")
+		return 2
+	}
+	if flagGiven("sync-apply") && syncApplyTo == "" {
+		fmt.Fprintln(os.Stderr, "sysml: -sync-apply is empty; name the SysML v2 API endpoint to apply to")
+		return 2
+	}
+	if flagGiven("compile") && compileCalc == "" {
+		fmt.Fprintln(os.Stderr, "sysml: -compile is empty; name the calc def to compile, as -compile Pkg::Fib")
+		return 2
+	}
+	if compileCalc == "" && (flagGiven("target") || compileSource) {
+		fmt.Fprintln(os.Stderr, "sysml: -target and -source apply to -compile; name the calc def to compile")
+		return 2
+	}
+	if compileCalc != "" {
+		switch {
+		case convertFormat != "" || renderView != "" || renderAllDir != "" || renderDoc != "" || renderDocsDir != "" || queryText != "" || len(evalExprs) > 0 || fromFormat != "" || syncDiffWith != "" || syncApplyTo != "":
+			fmt.Fprintln(os.Stderr, "sysml: -compile builds an executable; it cannot be combined with -convert, -render, -render-all, -render-document, -render-documents, -query, -eval, -from, -sync-diff or -sync-apply")
+			return 2
+		case syncBase != "" || syncState != "" || syncConfirmDeletes || syncMintIDs || syncAnnotate != "":
+			fmt.Fprintln(os.Stderr, "sysml: -sync-base, -sync-state, -sync-confirm-deletes, -sync-mint-ids and -sync-annotate apply to -sync-diff or -sync-apply, not to -compile")
+			return 2
+		case modelChecks.requested():
+			return refuse(modelChecks,
+				"-compile builds an executable and decides nothing about the model; check it in its own run")
+		case outputPath == "":
+			fmt.Fprintln(os.Stderr, "sysml: -compile needs -o to name the executable (or the source file, with -source)")
+			return 2
+		}
+		if err := runCompile(args); err != nil {
+			return fail(err)
+		}
+		return exitHolds
+	}
+
+	if syncDiffWith != "" && syncApplyTo != "" {
+		fmt.Fprintln(os.Stderr, "sysml: -sync-diff shows a change set without writing and -sync-apply writes one; ask for one per run")
+		return 2
+	}
+	if syncDiffWith != "" || syncApplyTo != "" {
+		mode := "-sync-diff"
+		if syncApplyTo != "" {
+			mode = "-sync-apply"
+		}
+		switch {
+		case convertFormat != "" || renderView != "" || renderDoc != "" || renderAllDir != "" || renderDocsDir != "" || queryText != "" || len(evalExprs) > 0:
+			fmt.Fprintf(os.Stderr, "sysml: %s syncs a change set; it cannot be combined with -convert, -render, -render-all, -render-document, -render-documents, -query or -eval\n", mode)
+			return 2
+		case outputPath != "" || fromFormat != "" || renderForm != "" || docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering:
+			fmt.Fprintf(os.Stderr, "sysml: %s reads SysML or Turtle inputs and reports the change set; -output, -from and the render options do not apply\n", mode)
+			return 2
+		case modelChecks.requested():
+			return refuse(modelChecks,
+				mode+" syncs a change set and decides nothing else about the model; check it in its own run")
+		}
+		if syncApplyTo != "" {
+			return runSyncApply(args)
+		}
+		return runSyncDiff(args)
+	}
+	if syncBase != "" || syncState != "" || syncConfirmDeletes || syncMintIDs || syncAnnotate != "" {
+		fmt.Fprintln(os.Stderr, "sysml: -sync-base, -sync-state, -sync-confirm-deletes, -sync-mint-ids and -sync-annotate apply to -sync-diff or -sync-apply; name the repository to sync against")
 		return 2
 	}
 
 	if renderDocsDir != "" {
 		switch {
+		case htmlFragment:
+			fmt.Fprintln(os.Stderr, "sysml: -render-documents writes whole pages linking to one another; -html-fragment writes one document element to embed, so it applies to -render-document")
+			return 2
 		case renderDoc != "":
 			fmt.Fprintln(os.Stderr, "sysml: -render-documents renders every document; -render-document renders one; ask for one per run")
 			return 2
@@ -327,10 +441,7 @@ func runCLI() int {
 
 	if renderDoc != "" {
 		switch {
-		case modelChecks.checksOnly():
-			return refuse(modelChecks,
-				"-render-document writes a document out and decides nothing about the model; check it in its own run")
-		case modelChecks.jsonOut:
+		case modelChecks.jsonOut && !modelChecks.checksOnly():
 			fmt.Fprintln(os.Stderr, "sysml: -render-document writes a document, not JSON; -json reports checks")
 			return 2
 		case modelChecks.requested():

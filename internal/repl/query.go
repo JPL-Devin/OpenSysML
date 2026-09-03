@@ -3,7 +3,9 @@ package repl
 import (
 	"errors"
 	"fmt"
+	"strings"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -109,6 +111,8 @@ func (s *Session) withTrace(v Verdict) Verdict {
 // CheckConstraint evaluates a constraint definition, against the object that
 // carries it when one has been created, so the verdict is about concrete values.
 func (s *Session) CheckConstraint(name string) Verdict {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.withTrace(s.checkConstraint(name))
 }
 
@@ -146,6 +150,8 @@ func (s *Session) checkConstraint(name string) Verdict {
 // CheckRequirement evaluates a requirement definition, against the object that
 // carries it when one has been created.
 func (s *Session) CheckRequirement(name string) Verdict {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.withTrace(s.checkRequirement(name))
 }
 
@@ -186,6 +192,13 @@ func (s *Session) checkRequirement(name string) Verdict {
 // `assert satisfy r by p;` is anonymous, so the element stating it is how a
 // caller reaches it.
 func (s *Session) CheckSatisfy(name string) []Verdict {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.satisfyVerdicts(name)
+}
+
+// satisfyVerdicts is CheckSatisfy with the session already held.
+func (s *Session) satisfyVerdicts(name string) []Verdict {
 	verdicts := s.checkSatisfy(name)
 	if len(verdicts) > 0 {
 		// The trace of every assertion belongs to the report as a whole, which is
@@ -274,21 +287,39 @@ func (s *Session) reportedSubject(result runtime.CheckResult, inst *runtime.Inst
 		// rather than reported under the wrong one.
 		return inst, owner
 	}
-	if result.SubjectPath == "" {
-		return result.Subject, root
-	}
-	return result.Subject, root + "::" + result.SubjectPath
+	return result.Subject, root + featurePath(result.SubjectPath)
 }
 
-// instanceName is the name the session holds inst under, empty for an object it
-// did not create.
+// featurePath spells walked feature names as a label's tail, each after a `.`
+// and quoted where its spelling needs it: `engine`, `mount` → `.engine.mount`.
+func featurePath(names []string) string {
+	var out strings.Builder
+	for _, name := range names {
+		out.WriteString(".")
+		out.WriteString(lexer.NameText(name))
+	}
+	return out.String()
+}
+
+// instanceName is the label the session holds inst under — its name as the
+// notation writes it, the first in name order when several do, `#<id>` for one
+// displaced from its name — and empty for an object it did not create.
 func (s *Session) instanceName(inst *runtime.Instance) string {
 	if inst == nil {
 		return ""
 	}
-	for name, held := range s.instances {
-		if held == inst {
-			return name
+	name := ""
+	for held, obj := range s.instances {
+		if obj == inst && (name == "" || held < name) {
+			name = held
+		}
+	}
+	if name != "" {
+		return s.declaredName(name)
+	}
+	for _, u := range s.unnamed {
+		if u.obj == inst {
+			return fmt.Sprintf("#%d", inst.ID)
 		}
 	}
 	return ""
@@ -330,6 +361,13 @@ func (s *Session) resolveCheckTarget(name string) (checkTarget, *Verdict) {
 // `%instantiate` prints, and an error for a name the session cannot resolve or
 // an instantiation the runtime rejected.
 func (s *Session) InstantiateNamed(name string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.instantiateLines(name)
+}
+
+// instantiateLines is InstantiateNamed with the session already held.
+func (s *Session) instantiateLines(name string) ([]string, error) {
 	lines, err := s.instantiateNamed(name)
 	if err != nil {
 		return nil, err
@@ -337,9 +375,9 @@ func (s *Session) InstantiateNamed(name string) ([]string, error) {
 	return append(s.drainTrace(), lines...), nil
 }
 
-// behaviorsDropped names what the object being unnamed was running, so a machine
-// left behind by a second instantiation is not lost quietly.
-func behaviorsDropped(inst *runtime.Instance) string {
+// behaviorsOf names what the object being unnamed is running, so a machine only
+// its id now reaches is not overlooked.
+func behaviorsOf(inst *runtime.Instance) string {
 	if n := len(inst.Behaviors()); n > 0 {
 		return fmt.Sprintf(", with %s", countOf(n, "behavior of its own", "behaviors of its own"))
 	}
@@ -367,17 +405,26 @@ func (s *Session) instantiateNamed(name string) ([]string, error) {
 	// Keyed by the resolved name, so %features finds the instance whichever
 	// spelling of the name created it.
 	previous, again := s.instances[fqn]
+	displaced := again && previous != nil && previous.ID != inst.ID
+	var relabelled []string
+	if displaced {
+		relabelled = s.releaseDebuggedName(fqn)
+	}
 	s.instances[fqn] = inst
 	s.lost = instanceLoss{}
 	out := []string{
-		fmt.Sprintf("✓ Created instance of %s", notationName(fqn)),
+		fmt.Sprintf("✓ Created instance of %s", s.declaredName(fqn)),
 		fmt.Sprintf("  ID: %d", inst.ID),
 	}
 	// A second instantiation is a second object, so say which one the name now
 	// denotes rather than let the earlier one look like it was reused.
-	if again && previous != nil && previous.ID != inst.ID {
-		out = append(out, fmt.Sprintf("  note: %s now denotes this object; object #%d is no longer named%s",
-			notationName(fqn), previous.ID, behaviorsDropped(previous)))
+	if displaced {
+		s.unnamed = append(s.unnamed, unnamedObject{fqn: fqn, obj: previous})
+		out = append(out, fmt.Sprintf("  note: %s now denotes this object; object #%d is displaced from that name%s and stays reachable as #%d",
+			s.declaredName(fqn), previous.ID, behaviorsOf(previous), previous.ID))
+		for _, notice := range relabelled {
+			out = append(out, "  "+notice)
+		}
 	}
 	return append(out, fmt.Sprintf("  Use %%features %s to inspect", name)), nil
 }

@@ -23,6 +23,7 @@ export type {
 } from "./model.js";
 export {
   CAPABILITY_APPLY_EDITS,
+  CAPABILITY_COMPLEX_VALUES,
   CAPABILITY_CONVERT,
   CAPABILITY_ENUM_VALUES,
   CAPABILITY_EVALUATE_SUBJECT,
@@ -44,18 +45,26 @@ export {
   ClosedConnectionError,
   DownloadError,
   EvaluationError,
+  InvalidRequestError,
   ManifestSignatureError,
+  ModelFileNotFoundError,
+  ModelNotFoundError,
   OpenSysMLError,
   ParseError,
   ServiceError,
   ServiceStartError,
+  ServiceTimeoutError,
   SymbolNotFoundError,
   UnpinnedReleaseError,
   UnsignedReleaseError,
+  UnsupportedOperationError,
 } from "./errors.js";
 export type { FailureCause, ModelDiagnostic } from "./errors.js";
+export { fromHandshakeError, fromRpcError, statusName } from "./status.js";
+export type { NotFoundSubject } from "./status.js";
 export { decodeValue, decodeVerdict, formatValue } from "./values.js";
 export type {
+  ComplexValue,
   EnumValue,
   Magnitude,
   SysMLValue,

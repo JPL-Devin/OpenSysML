@@ -15,7 +15,7 @@ import (
 // data, plus one frame per body-local block entered. A frame is discarded when
 // its block exits, so a name it declares never leaks outward.
 type stmtEnv struct {
-	data map[string]Value
+	data frame
 	// outer are value maps the body reads but does not declare into, innermost
 	// last: the attributes the states enclosing the behavior own.
 	outer  []map[string]Value
@@ -43,7 +43,7 @@ func (env *stmtEnv) declare(name string, value Value) {
 		env.frames[depth-1][name] = value
 		return
 	}
-	env.data[name] = value
+	env.data.set(name, value)
 }
 
 // holdsLocal reports whether an entered block declares name.
@@ -72,8 +72,8 @@ func (env *stmtEnv) assignLocal(name string, value Value) bool {
 // values is the values a statement reads: the behavior's own, overridden by
 // those of the blocks entered around it, innermost last.
 func (env *stmtEnv) values() map[string]Value {
-	merged := make(map[string]Value, len(env.data))
-	maps.Copy(merged, env.data)
+	merged := make(map[string]Value, env.data.width())
+	env.data.each(func(name string, value Value) { merged[name] = value })
 	for _, frame := range env.frames {
 		maps.Copy(merged, frame)
 	}
@@ -87,8 +87,8 @@ func (env *stmtEnv) assign(name string, value Value) bool {
 	if env.assignLocal(name, value) {
 		return true
 	}
-	if _, ok := env.data[name]; ok {
-		env.data[name] = value
+	if env.data.has(name) {
+		env.data.set(name, value)
 		return true
 	}
 	return false
@@ -142,12 +142,17 @@ type stmtEngine struct {
 	// activation is the execution the statements now running belong to: the
 	// behavior's own, and a fresh one per block entry and per loop iteration.
 	activation int64
+	// scratch is the context evalIn answers with: statements run one after another
+	// and none keeps it past its own evaluation, so one serves them all.
+	scratch EvalContext
+	// frameBuf is the frame stack scratch reads, rebuilt by every evalIn.
+	frameBuf []frame
 }
 
 // newStmtEngine returns an engine running statements against data — the
 // behavior's own values, which its statements read and write.
 func newStmtEngine(ctx *Context, host stmtHost, data map[string]Value) *stmtEngine {
-	return &stmtEngine{ctx: ctx, host: host, env: &stmtEnv{data: data}, activation: ctx.newActivation()}
+	return &stmtEngine{ctx: ctx, host: host, env: &stmtEnv{data: mapFrame(data)}, activation: ctx.newActivation()}
 }
 
 // newStmtEngineOver returns an engine whose statements also read outer value
@@ -168,15 +173,23 @@ func (e *stmtEngine) finish() {
 // statement was written in, reading the behavior's data and the frames entered,
 // innermost last so a block-local name shadows an outer one.
 func (e *stmtEngine) evalIn(scope *symbols.Scope) *EvalContext {
-	ec := NewEvalContextIn(e.ctx, scope, e.host.performer())
-	ec.inBehaviorBody = true
-	ec.activation = e.activation
-	ec.Push(e.env.data)
-	for _, frame := range e.env.outer {
-		ec.Push(frame)
+	frames := append(e.frameBuf[:0], e.env.data)
+	for _, outer := range e.env.outer {
+		frames = append(frames, mapFrame(outer))
 	}
-	for _, frame := range e.env.frames {
-		ec.Push(frame)
+	for _, local := range e.env.frames {
+		frames = append(frames, mapFrame(local))
+	}
+	e.frameBuf = frames
+	ec := &e.scratch
+	*ec = EvalContext{
+		ctx:            e.ctx,
+		scope:          scope,
+		self:           e.host.performer(),
+		frames:         frames,
+		trace:          e.ctx.trace,
+		inBehaviorBody: true,
+		activation:     e.activation,
 	}
 	return ec
 }
@@ -233,7 +246,7 @@ func (e *stmtEngine) execute(stmt lower.Statement) (stmtFlow, error) {
 			return flowNext, nil
 		}
 		if !e.host.declaredOutput(s.Target) {
-			if _, held := e.env.data[s.Target]; held {
+			if e.env.data.has(s.Target) {
 				return flowNext, e.host.assignData(e.env, s.Target, value, s)
 			}
 		}
@@ -542,15 +555,15 @@ func stmtLabel(stmt lower.Statement) string {
 func forElements(value Value) ([]Value, error) {
 	switch value.Kind {
 	case ValSequence:
-		if value.Sequence == nil {
+		if value.Sequence() == nil {
 			return nil, nil
 		}
-		return value.Sequence.Elements(), nil
+		return value.Sequence().Elements(), nil
 	case ValSet:
-		if value.Set == nil {
+		if value.Set() == nil {
 			return nil, nil
 		}
-		elements := value.Set.Elements()
+		elements := value.Set().Elements()
 		sort.Slice(elements, func(i, j int) bool {
 			return FormatTraceValue(elements[i]) < FormatTraceValue(elements[j])
 		})

@@ -145,6 +145,67 @@ func TestLoadFileSummaryDefersNotationErrors(t *testing.T) {
 	}
 }
 
+// A load of several files at once prints, file by file, what loading each on
+// its own would have: its syntax errors, the notices accepting it raised and its
+// summary. The analysis then reports the same findings against the same files.
+// The KerML file and the file opening with a comment sit where a document's last
+// member runs on past its file, which must not credit it to the next one.
+func TestLoadFilesSummaryMatchesLoadingEachFile(t *testing.T) {
+	dir := t.TempDir()
+	paths := []string{
+		writeFile(t, filepath.Join(dir, "k.kerml"), "package K { class A; }\n"),
+		writeFile(t, filepath.Join(dir, "a.sysml"), "package A { part def X; }\npackage Shared { part def S; }\n"),
+		writeFile(t, filepath.Join(dir, "bad.sysml"), "package Broken {\n    part def A\n"),
+		writeFile(t, filepath.Join(dir, "b.sysml"), "// b\npackage B { part x : Missing; part y : A::X; }\n"),
+		writeFile(t, filepath.Join(dir, "c.sysml"), "package Shared { part def T; }\n"),
+	}
+
+	one := NewSession()
+	var want []string
+	for _, path := range paths {
+		out, err := one.LoadFileSummary(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want = append(want, out...)
+	}
+
+	all := NewSession()
+	got, err := all.LoadFilesSummary(paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("loading the files at once printed:\n%s\nwant, as loading each did:\n%s",
+			strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+	if !strings.Contains(strings.Join(got, "\n"), "error:") {
+		t.Errorf("the file that does not parse was not reported with the load:\n%s", strings.Join(got, "\n"))
+	}
+	var summaries []string
+	for _, line := range got {
+		if strings.HasPrefix(line, "✓ ") {
+			summaries = append(summaries, line)
+		}
+	}
+	wantSummaries := []string{"✓ package K", "✓ package A", "✓ package Shared", "✓ package B", "✓ package Shared"}
+	if strings.Join(summaries, "\n") != strings.Join(wantSummaries, "\n") {
+		t.Errorf("each file's summary should name its own declarations once, got:\n%s", strings.Join(summaries, "\n"))
+	}
+	if g, w := strings.Join(all.DiagnosticLines(), "\n"), strings.Join(one.DiagnosticLines(), "\n"); g != w {
+		t.Errorf("analysis after loading at once reported:\n%s\nwant:\n%s", g, w)
+	}
+	located := all.LocatedDiagnostics()
+	if len(located) == 0 {
+		t.Fatal("located diagnostics are empty")
+	}
+	for _, d := range located {
+		if filepath.Dir(d.File) != dir || d.Line == 0 {
+			t.Errorf("diagnostic is not placed in a loaded file: %+v", d)
+		}
+	}
+}
+
 // A file that parses but whose analysis fails is a different case: it is accepted
 // and reported by the deeper tiers, and the load still counts as an error.
 func TestLoadReportsUnresolvedReference(t *testing.T) {

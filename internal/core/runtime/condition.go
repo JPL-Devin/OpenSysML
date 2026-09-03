@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -340,6 +341,9 @@ func nestedFeature(sym *symbols.Symbol) bool {
 // readThrough reports whether inst is the object a value expression materialized
 // to read a declaration through, which is an occurrence of nothing.
 func (ctx *Context) readThrough(inst *Instance) bool {
+	if inst.explicit {
+		return false
+	}
 	id, ok := ctx.occurrences[inst.Type]
 	return ok && id == inst.ID
 }
@@ -397,8 +401,8 @@ func (ctx *Context) carriersUnder(roots []*Instance, owner *symbols.Symbol) []ca
 	seen := make(map[int64]bool, len(roots))
 	declared := make(map[carrierOccurrence]bool)
 	path := make(map[*symbols.Symbol]bool)
-	var descend func(root, inst *Instance, through, features string)
-	descend = func(root, inst *Instance, through, features string) {
+	var descend func(root, inst *Instance, through string, features []string)
+	descend = func(root, inst *Instance, through string, features []string) {
 		if inst == nil || seen[inst.ID] {
 			return
 		}
@@ -416,15 +420,12 @@ func (ctx *Context) carriersUnder(roots []*Instance, owner *symbols.Symbol) []ca
 			defer delete(path, inst.Type)
 		}
 		for _, child := range ctx.nestedObjects(inst) {
-			nested := child.feature
-			if features != "" {
-				nested = features + "::" + child.feature
-			}
-			descend(root, child.instance, through+"::"+child.feature, nested)
+			nested := append(features[:len(features):len(features)], child.feature)
+			descend(root, child.instance, through+"/"+strconv.Quote(child.feature), nested)
 		}
 	}
 	for _, root := range roots {
-		descend(root, root, strconv.FormatInt(root.ID, 10), "")
+		descend(root, root, strconv.FormatInt(root.ID, 10), nil)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].instance.ID < out[j].instance.ID })
 	return out
@@ -435,13 +436,14 @@ func (ctx *Context) carriersUnder(roots []*Instance, owner *symbols.Symbol) []ca
 type carrier struct {
 	instance *Instance
 	root     *Instance
-	features string
+	features []string
 }
 
 // carrierOccurrence identifies the declaration an object occurs as: the features
-// walked through to reach it and the declaration it materializes. Objects a
-// multiplicity repeated share both, while ones a collection gathers from
-// different declarations — the features subsetting it — do not.
+// walked through to reach it, each quoted so any name is one segment, and the
+// declaration it materializes. Objects a multiplicity repeated share both, while
+// ones a collection gathers from different declarations — the features
+// subsetting it — do not.
 type carrierOccurrence struct {
 	through string
 	decl    *symbols.Symbol
@@ -503,10 +505,10 @@ func heldObjects(val Value) []int64 {
 	}
 	var elements []Value
 	switch {
-	case val.Kind == ValSequence && val.Sequence != nil:
-		elements = val.Sequence.Elements()
-	case val.Kind == ValSet && val.Set != nil:
-		elements = val.Set.Elements()
+	case val.Kind == ValSequence && val.Sequence() != nil:
+		elements = val.Sequence().Elements()
+	case val.Kind == ValSet && val.Set() != nil:
+		elements = val.Set().Elements()
 	}
 	var out []int64
 	for _, element := range elements {
@@ -528,37 +530,50 @@ func (ctx *Context) carrierLabels(carriers []carrier) []string {
 			name = def.Name
 		}
 		label := fmt.Sprintf("%s #%d", name, inst.ID)
-		if path := carrierPath(c, name); path != "" {
-			label += " (" + path + ")"
+		if path := carrierPath(c, name); len(path) != 0 {
+			label += " (" + qualifiedText(path) + ")"
 		}
 		out = append(out, label)
 	}
 	return out
 }
 
+// qualifiedText spells walked feature names as a `::`-joined path in the
+// notation, each quoted where its spelling needs it.
+func qualifiedText(names []string) string {
+	parts := make([]string, len(names))
+	for i, name := range names {
+		parts[i] = lexer.NameText(name)
+	}
+	return strings.Join(parts, "::")
+}
+
 // carrierPath names a carrier apart from its siblings: the features walked to
 // it, ending in the declaration it materializes — which differs from the feature
 // holding it when a collection gathers objects of several declarations.
-func carrierPath(c carrier, definition string) string {
+func carrierPath(c carrier, definition string) []string {
 	decl := ""
 	if c.instance.Type != nil && c.instance.Type.Name != definition {
 		decl = c.instance.Type.Name
 	}
-	if c.features == "" {
-		return decl
+	if len(c.features) == 0 {
+		if decl == "" {
+			return nil
+		}
+		return []string{decl}
 	}
-	walked := strings.Split(c.features, "::")
+	walked := append([]string(nil), c.features...)
 	if decl != "" && walked[len(walked)-1] != decl {
 		walked[len(walked)-1] = decl
 	}
-	return strings.Join(walked, "::")
+	return walked
 }
 
-// carrierFeatures is the feature path to a nested carrier as a caller can quote
-// it, corrected the way carrierLabels names an ambiguity's carriers.
-func (ctx *Context) carrierFeatures(c carrier) string {
-	if c.features == "" || c.instance == nil {
-		return ""
+// carrierFeatures is the feature path to a nested carrier, one name a segment,
+// corrected the way carrierLabels names an ambiguity's carriers.
+func (ctx *Context) carrierFeatures(c carrier) []string {
+	if len(c.features) == 0 || c.instance == nil {
+		return nil
 	}
 	name := "object"
 	if def := ctx.definitionOf(c.instance.Type); def != nil && def.Name != "" {

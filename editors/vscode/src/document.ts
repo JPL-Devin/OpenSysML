@@ -109,8 +109,7 @@ function supportsRenderDocument(client: LanguageClient): boolean {
 }
 
 function basename(uri: string): string {
-  const parts = uri.split("/");
-  return parts[parts.length - 1] || uri;
+  return uri.split("/").at(-1) || uri;
 }
 
 function errorMessage(err: unknown): string {

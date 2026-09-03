@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,6 +58,38 @@ func TestIsMeta(t *testing.T) {
 	}
 }
 
+func TestQueryReportsPropertiesTheQueryCanAskFor(t *testing.T) {
+	s := NewSession()
+	if result := s.Submit("package Demo { part def Wheel; part wheel : Wheel; }"); len(result.Diagnostics) != 0 {
+		t.Fatalf("Submit diagnostics = %v", result.Diagnostics)
+	}
+	// A reported property must be one the next query can be written with, so it
+	// is reported under the name it was asked for.
+	for _, selected := range []string{"rdf:type", "sysml:name", "sysml:qualifiedName"} {
+		lines, err := s.Query(`oslc.where=rdf:type="PartUsage"&oslc.select=` + url.QueryEscape(selected))
+		if err != nil {
+			t.Fatalf("%s: %v", selected, err)
+		}
+		if len(lines) != 1 {
+			t.Fatalf("%s reported %v, want one element", selected, lines)
+		}
+		field, _, ok := strings.Cut(strings.TrimPrefix(lines[0], "Demo::wheel  PartUsage  "), "=")
+		if !ok || field != selected {
+			t.Fatalf("%s reported %q, want it to name %q", selected, lines[0], selected)
+		}
+	}
+
+	// An oslc.prefix binding renames the property in the answer too.
+	lines, err := s.Query(`oslc.prefix=` + url.QueryEscape("s=<https://www.omg.org/spec/SysML#>") +
+		`&oslc.where=rdf:type%3D%22PartUsage%22&oslc.select=s:name`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) != 1 || lines[0] != "Demo::wheel  PartUsage  s:name=wheel" {
+		t.Fatalf("aliased select = %v", lines)
+	}
+}
+
 func TestQueryAndMetaQuery(t *testing.T) {
 	fresh := NewSession()
 	if _, err := fresh.Query(`oslc.where=rdf:type="PartUsage"`); err == nil {
@@ -85,7 +118,7 @@ func TestQueryAndMetaQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(lines) != 1 || lines[0] != "Demo::wheel  PartUsage  name=wheel" {
+	if len(lines) != 1 || lines[0] != "Demo::wheel  PartUsage  sysml:name=wheel" {
 		t.Fatalf("Session.Query = %v", lines)
 	}
 	lines, err = s.Query(`oslc.where=sysml:name="spare"`)
@@ -99,14 +132,14 @@ func TestQueryAndMetaQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(lines) != 1 || lines[0] != "Demo::wheel  PartUsage  name=wheel" {
+	if len(lines) != 1 || lines[0] != "Demo::wheel  PartUsage  sysml:name=wheel" {
 		t.Fatalf("%%query = %v", lines)
 	}
 	lines, _, err = s.runMeta(`  %query oslc.where=rdf:type="PartUsage"&oslc.select=sysml:name`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(lines) != 1 || lines[0] != "Demo::wheel  PartUsage  name=wheel" {
+	if len(lines) != 1 || lines[0] != "Demo::wheel  PartUsage  sysml:name=wheel" {
 		t.Fatalf("indented %%query = %v", lines)
 	}
 	lines, _, err = s.runMeta(`%query oslc.where=rdf:type=`)
@@ -147,11 +180,11 @@ func TestLookupInScopeTreeSkipsBodyLocalNames(t *testing.T) {
 		t.Fatal("package P not in the document scope")
 	}
 	for _, name := range []string{"bodyParam", "charging", "thenLocal", "elseLocal"} {
-		if syms := collectInScopeTree(doc.Scope, name); len(syms) > 0 {
+		if syms := s.nameTable().lookup(name); len(syms) > 0 {
 			t.Errorf("%s is body-local and must not be found in the scope tree", name)
 		}
 	}
-	if syms := collectInScopeTree(doc.Scope, "samples"); len(syms) == 0 {
+	if syms := s.nameTable().lookup("samples"); len(syms) == 0 {
 		t.Error("samples is a member of Sample and must still be found")
 	}
 }

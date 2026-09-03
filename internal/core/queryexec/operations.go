@@ -610,6 +610,12 @@ func filterValue(value symbols.FilterValue, sym *symbols.Symbol) (Value, bool) {
 	return valueAt(result, ElementValue(sym).Origin()), true
 }
 
+// The hyphenated spellings of the text operators, accepted beside the camelCase ones.
+const (
+	opStartsWith = "starts-with"
+	opEndsWith   = "ends-with"
+)
+
 func compareText(actual, operator, expected string) (bool, error) {
 	switch operator {
 	case "=", "==":
@@ -618,9 +624,9 @@ func compareText(actual, operator, expected string) (bool, error) {
 		return actual != expected, nil
 	case "contains":
 		return strings.Contains(actual, expected), nil
-	case "startsWith", "starts-with":
+	case "startsWith", opStartsWith:
 		return strings.HasPrefix(actual, expected), nil
-	case "endsWith", "ends-with":
+	case "endsWith", opEndsWith:
 		return strings.HasSuffix(actual, expected), nil
 	case "matches":
 		expression, err := regexp.Compile(expected)
@@ -635,7 +641,7 @@ func compareText(actual, operator, expected string) (bool, error) {
 
 func validateTextComparison(operator, expected string) error {
 	switch operator {
-	case "=", "==", "!=", "<>", "contains", "startsWith", "starts-with", "endsWith", "ends-with":
+	case "=", "==", "!=", "<>", "contains", "startsWith", opStartsWith, "endsWith", opEndsWith:
 		return nil
 	case "matches":
 		_, err := regexp.Compile(expected)
@@ -647,7 +653,7 @@ func validateTextComparison(operator, expected string) error {
 
 func validateFeatureComparison(operator, expected string) error {
 	switch operator {
-	case "=", "==", "!=", "<>", "contains", "startsWith", "starts-with", "endsWith", "ends-with":
+	case "=", "==", "!=", "<>", "contains", "startsWith", opStartsWith, "endsWith", opEndsWith:
 		return nil
 	case "matches":
 		_, err := regexp.Compile(expected)

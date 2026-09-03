@@ -2,10 +2,13 @@ package runtime
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -165,16 +168,17 @@ func constSequence(values ...int64) Value {
 	for _, v := range values {
 		sequence.Append(Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: v}})
 	}
-	return Value{Kind: ValSequence, Sequence: sequence}
+	return NewSequenceValue(sequence)
 }
 
 // TestCalcForLoopOverParameterSequence requires a `for` loop to iterate the
-// sequence a parameter carries, in the order the sequence states.
+// sequence a parameter declared to hold one carries, in the order the sequence
+// states.
 func TestCalcForLoopOverParameterSequence(t *testing.T) {
 	const src = `
 package test {
 	calc def total {
-		in xs;
+		in xs[*];
 		attribute sum = 0;
 		for x in xs {
 			sum = sum + x;
@@ -318,6 +322,122 @@ package test {
 	}
 }
 `
+
+const unboundResultModel = `
+package test {
+	private import ScalarValues::*;
+
+	calc def Named {
+		in a : Real;
+		attribute h : Real = a * 2.0;
+		return h;
+	}
+
+	calc def UntypedSibling {
+		in a : Real;
+		attribute h = a * 2.0;
+		return h;
+	}
+
+	calc def Anonymous {
+		in a : Real;
+		return : Real;
+	}
+
+	calc def Fresh {
+		in a : Real;
+		return selected :> a;
+	}
+
+	calc def Plain {
+		in a : Real;
+	}
+
+	attribute def 'Wide Real' :> Real;
+
+	calc def Unrestricted {
+		in a : Real;
+		attribute 'my result' : 'Wide Real' = a;
+		return 'my result';
+	}
+
+	calc def Keyword {
+		in a : Real;
+		attribute 'action' = a;
+		return 'action' : $::ScalarValues::'Real';
+	}
+
+	calc def Uninitialized {
+		in a : Real;
+		attribute h : Real;
+		return h;
+	}
+}
+`
+
+// TestUnboundResultParameterHint requires a body whose 'return' declares a
+// result parameter without binding it to say so, with the two forms that state
+// a computed result, and a body with no result parameter at all to say nothing more.
+func TestUnboundResultParameterHint(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, unboundResultModel))
+	root := idx.DocumentRoot("<test>")
+
+	cases := []struct{ calc, want string }{
+		{"Named", "no result expression: calc test::Named has no return expression: result parameter h binds no value; " +
+			"write the result as the trailing expression `h`, or bind it with `return : Real = h;`"},
+		{"UntypedSibling", "no result expression: calc test::UntypedSibling has no return expression: result parameter h binds no value; " +
+			"write the result as the trailing expression `h`, or bind it with `return : <type> = h;`"},
+		{"Anonymous", "no result expression: calc test::Anonymous has no return expression: the result parameter binds no value; " +
+			"write the result as the trailing expression of the body, or bind it with `return : Real = <expr>;`"},
+		{"Fresh", "no result expression: calc test::Fresh has no return expression: result parameter selected binds no value; " +
+			"write the result as the trailing expression of the body, or bind it with `return : <type> = <expr>;`"},
+		{"Plain", "no result expression: calc test::Plain has no return expression"},
+		{"Unrestricted", "no result expression: calc test::Unrestricted has no return expression: result parameter 'my result' binds no value; " +
+			"write the result as the trailing expression `'my result'`, or bind it with `return : 'Wide Real' = 'my result';`"},
+		{"Keyword", "no result expression: calc test::Keyword has no return expression: result parameter 'action' binds no value; " +
+			"write the result as the trailing expression `'action'`, or bind it with `return : $::ScalarValues::Real = 'action';`"},
+		{"Uninitialized", "no result expression: calc test::Uninitialized has no return expression: result parameter h binds no value; " +
+			"write the result as the trailing expression of the body, or bind it with `return : <type> = <expr>;`"},
+	}
+	for _, tc := range cases {
+		calc, scope := calcByName(t, root, "test", tc.calc)
+		_, err := ctx.InvokeCalc(calc, []Value{constReal(1)}, scope)
+		if err == nil {
+			t.Fatalf("InvokeCalc(%s) succeeded, want %q", tc.calc, tc.want)
+		}
+		if !errors.Is(err, ErrNoResultExpression) {
+			t.Errorf("InvokeCalc(%s) = %v, want ErrNoResultExpression", tc.calc, err)
+		}
+		if err.Error() != tc.want {
+			t.Errorf("InvokeCalc(%s) = %q, want %q", tc.calc, err, tc.want)
+		}
+		for _, form := range suggestedForms(err.Error()) {
+			if diags := parseDiagnostics("calc def C { in a : Real; " + form + " }"); len(diags) > 0 {
+				t.Errorf("InvokeCalc(%s) suggests %q, which does not parse: %v", tc.calc, form, diags)
+			}
+		}
+	}
+}
+
+// suggestedForms returns the notation a diagnostic proposes in backticks,
+// skipping a form that leaves a `<placeholder>` to fill.
+func suggestedForms(msg string) []string {
+	parts := strings.Split(msg, "`")
+	var forms []string
+	for i := 1; i < len(parts); i += 2 {
+		if !strings.Contains(parts[i], "<") {
+			forms = append(forms, parts[i])
+		}
+	}
+	return forms
+}
+
+// parseDiagnostics parses src and returns the parser's error diagnostics.
+func parseDiagnostics(src string) []parser.Diagnostic {
+	p := parser.New(source.New("<suggested>", []byte(src)))
+	p.ParseFile()
+	return p.Diagnostics
+}
 
 // TestUnevaluableResultIsNotReportedAsMissing requires a body stating a result
 // the evaluator cannot compute to report that, not that there is no result.

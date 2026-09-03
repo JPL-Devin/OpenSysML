@@ -1,6 +1,6 @@
 # Testing Strategy
 
-OpenSysML uses a **multi-layer test contract** to ensure correctness and prevent regressions across parsing, semantic analysis, and execution.
+OpenSysML uses a **multi-layer test contract** to keep parsing, semantic analysis, and execution correct and to catch regressions in each.
 
 ## Test Organization
 
@@ -30,7 +30,7 @@ New grammar features require a **four-layer test contract**:
 **Purpose:** Ensure standard library continues to parse cleanly
 
 - **Test:** `TestStdlibConformance` (internal/core/libs/)
-- **Coverage:** 96/96 bundled library files — the 94 official SysML v2 standard library files and two non-normative OpenSysML extensions
+- **Coverage:** 97/97 bundled library files — the 94 official SysML v2 standard library files and three non-normative OpenSysML extensions
 - **Acceptance:** All stdlib files parse without errors
 - **Allowlist:** `testdata/stdlib_known_failures.txt` (currently empty)
 

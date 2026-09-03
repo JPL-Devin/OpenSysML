@@ -35,6 +35,25 @@ func TestExplainReportsTheConflictingConditions(t *testing.T) {
 	}
 }
 
+// An exact-real conflict over conditions the evaluator rounds is no evaluator
+// conflict: %explain reports it undecided rather than rendering the core.
+func TestExplainLeavesRoundedUnsatUndecided(t *testing.T) {
+	requireSolver(t)
+	s := checkSession(t, `
+		package Explain {
+			private import ScalarValues::Integer;
+			constraint def HalfUlp {
+				in a : Integer;
+				assert constraint { a == 9007199254740993 }
+				assert constraint { a / 2 == 4503599627370496.0 }
+			}
+		}`)
+	got := run(t, s, "%explain HalfUlp")
+	wants(t, got, "? Constraint HalfUlp is undecided, so there is nothing to explain",
+		"rounds these conditions in floating point")
+	rejects(t, got, "unsatisfiable")
+}
+
 // A conflict a condition only has with the domain its parameter was declared
 // with names that domain rather than dropping it for not being a condition.
 func TestExplainReportsADomainConflict(t *testing.T) {

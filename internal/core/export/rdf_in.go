@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
-	"github.com/Open-MBEE/OpenSysML/internal/core/format"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf/ontology"
@@ -30,12 +29,21 @@ type element struct {
 	iri         string
 	metaclass   string
 	memberIndex int
-	// qname is the element's sysml:qualifiedName, the only place its identity
-	// is read from — never the IRI, whose id is an opaque encoding.
+	// qname is the element's sysml:qualifiedName: the mutable label a
+	// reference is written back as. Identity is the element id, not the name.
 	qname string
+	// elementID is the element's sysml:elementId — its identity, which an
+	// ElementId annotation may have declared independently of the name.
+	elementID string
+	// declaredID marks an id that came from an explicit ElementId annotation,
+	// which the notation must state again: it may equal the derived id.
+	declaredID bool
+	// ProjectRef provenance of a scope root, written back as an annotation.
+	projectID, branch, org string
 	// scope is the qualified name of the namespace this element is declared
 	// in, which is what a reference written inside it is relative to.
 	scope    string
+	owner    *element
 	children []*element
 	// prefix is written ahead of the declaration, for a member a succession
 	// attached itself to (`then send Show(x) to screen;`).
@@ -45,9 +53,9 @@ type element struct {
 	expressions map[string]string
 }
 
-// ToSysML converts an RDF graph back into SysML v2 source text. The result is
-// run through the source formatter, so the output is indented the same way as a
-// formatted file rather than in whatever order the graph happened to be in.
+// ToSysML converts an RDF graph back into SysML v2 source text. An element
+// comes back as its sysx:sourceText, byte for byte, while that still states
+// what the graph states, and in canonical notation otherwise.
 //
 // A subject whose metaclass this mapping does not know, or which lacks the
 // properties needed to rebuild its declaration, is reported as an
@@ -63,26 +71,24 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 	d := &decoder{
 		graph:            graph,
 		byIRI:            map[string]*element{},
+		byID:             map[string]*element{},
+		dupID:            map[string]bool{},
 		memberships:      map[string]membership{},
 		owningMembership: map[string]membership{},
+		demoted:          map[*element]bool{},
+		demotedExpr:      map[string]bool{},
+		folded:           map[*element]*element{},
 	}
+	d.nl = d.newline()
 	roots, err := d.build()
 	if err != nil {
 		return nil, err
 	}
-	var b strings.Builder
-	for _, root := range roots {
-		if err := d.print(&b, root, 0); err != nil {
-			return nil, err
-		}
-	}
-	out, err := format.Source("<converted>", []byte(b.String()), format.DefaultOptions)
+	notation, err := d.render(roots)
 	if err != nil {
-		// The formatter only fails on input it cannot lex; return the
-		// unformatted text with the reason so the user can see what was built.
-		return nil, fmt.Errorf("converted source is not valid SysML: %w", err)
+		return nil, err
 	}
-	return out, nil
+	return []byte(notation), nil
 }
 
 // checkExtensionNamespace refuses a graph written with the pre-rename extension
@@ -122,10 +128,56 @@ type membership struct {
 type decoder struct {
 	graph *rdf.Graph
 	byIRI map[string]*element
+	// byID keys the subjects on their element id, which is their identity; a
+	// scoped graph may repeat an id across scopes, and dupID marks those.
+	byID  map[string]*element
+	dupID map[string]bool
 	// memberships is keyed by membership IRI, and owningMembership by the IRI of
 	// the member each one owns.
 	memberships      map[string]membership
 	owningMembership map[string]membership
+	// printed and usedExpr are written as source text in this pass and rebuilt
+	// canonically; demoted and demotedExpr had their text proved stale earlier.
+	printed     map[*element]bool
+	rebuilt     map[*element]bool
+	demoted     map[*element]bool
+	usedExpr    map[string]bool
+	demotedExpr map[string]bool
+	// folded maps a succession written as the `then` ahead of its target to
+	// that target, whose notation states it.
+	folded map[*element]*element
+	// written records where each element landed in this pass's notation, the
+	// members of one ahead of it.
+	written []writing
+	// nl is the line ending rebuilt notation is written with.
+	nl string
+}
+
+// newline is the line ending most of the stored element text uses, as the
+// formatter decides it; an expression's text lies inside its element's.
+func (d *decoder) newline() string {
+	crlf, lf := 0, 0
+	for _, subject := range d.graph.Subjects() {
+		if d.isExpressionNode(subject) {
+			continue
+		}
+		for _, property := range []string{xSourceText, xSourceTail} {
+			if text, ok := d.graph.Lexical(subject, rdf.OpenSysML+property); ok {
+				crlf += strings.Count(text, "\r\n")
+				lf += strings.Count(text, "\n")
+			}
+		}
+	}
+	if crlf > lf-crlf {
+		return "\r\n"
+	}
+	return "\n"
+}
+
+// writing is the range of the notation one element was written over.
+type writing struct {
+	el    *element
+	where region
 }
 
 // build reads every subject into an element and links it to its owner,
@@ -160,10 +212,26 @@ func (d *decoder) build() ([]*element, error) {
 		el := &element{
 			iri:         subject.Value,
 			metaclass:   metaclass,
-			memberIndex: d.intOf(subject, rdf.OpenSysML+xMemberIndex),
+			memberIndex: intOf(d.graph, subject, rdf.OpenSysML+xMemberIndex),
 		}
 		el.qname, _ = d.stringOf(el, rdf.SysML+pQualifiedName)
+		// The identity key. An old graph without sysml:elementId is keyed on
+		// the encoding of its name, which is what its IRIs carry.
+		if id, ok := d.stringOf(el, rdf.SysML+pElementID); ok {
+			el.elementID = id
+		} else {
+			el.elementID = rdf.EncodeElementID(el.qname)
+		}
+		el.declaredID = d.boolOf(el, rdf.OpenSysML+xDeclaredID)
+		el.projectID, _ = d.stringOf(el, rdf.OpenSysML+xProjectID)
+		el.branch, _ = d.stringOf(el, rdf.OpenSysML+xBranch)
+		el.org, _ = d.stringOf(el, rdf.OpenSysML+xOrg)
 		d.byIRI[el.iri] = el
+		if prior, seen := d.byID[el.elementID]; seen && prior != el {
+			d.dupID[el.elementID] = true
+		} else {
+			d.byID[el.elementID] = el
+		}
 		order = append(order, el)
 	}
 	for _, el := range order {
@@ -176,12 +244,10 @@ func (d *decoder) build() ([]*element, error) {
 			continue
 		}
 		el.scope = parent.qname
+		el.owner = parent
 		parent.children = append(parent.children, el)
 	}
 	if err := d.checkReferences(); err != nil {
-		return nil, err
-	}
-	if err := d.resolveExpressions(); err != nil {
 		return nil, err
 	}
 	sortByIndex(roots)
@@ -297,13 +363,18 @@ func (d *decoder) checkReferences() error {
 }
 
 // referencedElement resolves a referenced IRI to the graph subject whose
-// sysml:qualifiedName names it, reporting a reference no property can name.
+// sysml:qualifiedName names it: by IRI first, then by the element id the IRI
+// ends in. An id the graph does not define is a dangling reference.
 func (d *decoder) referencedElement(iri string) (*element, error) {
 	target, ok := d.byIRI[iri]
 	if !ok {
-		return nil, &UnsupportedError{
-			What: fmt.Sprintf("the reference <%s>", iri),
-			Note: "it is not a subject of the graph, so there is no sysml:qualifiedName to write its name back from",
+		id := rdf.LocalName(iri)
+		target, ok = d.byID[id]
+		if !ok || d.dupID[id] {
+			return nil, &UnsupportedError{
+				What: fmt.Sprintf("the reference <%s>", iri),
+				Note: fmt.Sprintf("the graph defines no element with id %q, so there is no sysml:qualifiedName to write its name back from", id),
+			}
 		}
 	}
 	if target.qname == "" {
@@ -350,15 +421,38 @@ func sortByIndex(elements []*element) {
 	})
 }
 
-// print writes one element and, recursively, its members.
+// print writes one element and, recursively, its members, recording where in
+// the notation it was written.
 func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
+	start := b.Len()
+	err := d.printElement(b, el, depth)
+	d.written = append(d.written, writing{el, region{start, b.Len()}})
+	return err
+}
+
+func (d *decoder) printElement(b *strings.Builder, el *element, depth int) error {
 	indent := strings.Repeat("    ", depth)
 	lead := indent + el.prefix
-	if text, ok := d.stringOf(el, rdf.OpenSysML+xSourceText); ok {
-		// A declaration whose head this mapping keeps verbatim.
-		b.WriteString(lead + strings.TrimSpace(text) + "\n")
+	if text, ok := d.verbatim(el); ok {
+		// The member's lines as written, members, notes and prefix included.
+		b.WriteString(text)
+		d.printed[el] = true
+		// The members carry their own text; the tail closes the body after them.
+		if tail, ok := d.graph.Lexical(rdf.IRI(el.iri), rdf.OpenSysML+xSourceTail); ok {
+			children, err := d.bodyMembers(el)
+			if err != nil {
+				return err
+			}
+			for _, child := range children {
+				if err := d.print(b, child, depth+1); err != nil {
+					return err
+				}
+			}
+			b.WriteString(tail)
+		}
 		return nil
 	}
+	d.rebuilt[el] = true
 	if handled, err := d.printBehavior(b, el, lead, depth); handled {
 		return err
 	}
@@ -370,10 +464,44 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 	if annotationMetaclasses[el.metaclass] {
 		// A comment, doc or rep declaration ends with its comment body, and
 		// takes no terminator.
-		b.WriteString("\n")
+		b.WriteString(d.nl)
 		return nil
 	}
-	// An accept parameter is written into its parent's head, not its body.
+	children, err := d.bodyMembers(el)
+	if err != nil {
+		return err
+	}
+	// `parallel` marks a state's substates orthogonal, and only a body may
+	// follow it, so a parallel state with none has no notation.
+	parallel := d.boolOf(el, rdf.SysML+"isParallel")
+	annotations := identityAnnotations(el)
+	if len(children) == 0 && len(annotations) == 0 && !d.boolOf(el, rdf.OpenSysML+xHasBody) {
+		if parallel {
+			return d.missing(el, "sysx:"+xHasBody, "a parallel state states its regions in a body")
+		}
+		b.WriteString(";" + d.nl)
+		return nil
+	}
+	if parallel {
+		b.WriteString(" parallel")
+	}
+	b.WriteString(" {" + d.nl)
+	for _, annotation := range annotations {
+		b.WriteString(indent + "    " + annotation + d.nl)
+	}
+	for _, child := range children {
+		if err := d.print(b, child, depth+1); err != nil {
+			return err
+		}
+	}
+	b.WriteString(indent + "}" + d.nl)
+	return nil
+}
+
+// bodyMembers lists the members written in an element's body, in order: an
+// accept parameter is written into its parent's head, and a succession stating
+// no source of its own folds into the member it introduces as `then`.
+func (d *decoder) bodyMembers(el *element) ([]*element, error) {
 	children := el.children
 	if accept := d.acceptParam(el); accept != nil {
 		children = nil
@@ -383,31 +511,30 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 			}
 		}
 	}
-	children, err = d.positionalSuccessions(children)
-	if err != nil {
-		return err
-	}
-	// `parallel` marks a state's substates orthogonal, and only a body may
-	// follow it, so a parallel state with none has no notation.
-	parallel := d.boolOf(el, rdf.SysML+"isParallel")
-	if len(children) == 0 && !d.boolOf(el, rdf.OpenSysML+xHasBody) {
-		if parallel {
-			return d.missing(el, "sysx:"+xHasBody, "a parallel state states its regions in a body")
+	return d.positionalSuccessions(children)
+}
+
+// identityAnnotations re-materializes the identity the graph states as the
+// annotations the notation declares it with: a ProjectRef on a scope root,
+// and an ElementId wherever the id is explicit or differs from the encoding
+// of the qualified name — a rename must not turn into a new element.
+func identityAnnotations(el *element) []string {
+	var out []string
+	if el.projectID != "" || el.branch != "" || el.org != "" {
+		var fields []string
+		for _, f := range []struct{ name, value string }{
+			{"projectId", el.projectID}, {"branch", el.branch}, {"org", el.org},
+		} {
+			if f.value != "" {
+				fields = append(fields, fmt.Sprintf("%s = %s;", f.name, lexer.StringText(f.value)))
+			}
 		}
-		b.WriteString(";\n")
-		return nil
+		out = append(out, "@IdentityMetadata::ProjectRef { "+strings.Join(fields, " ")+" }")
 	}
-	if parallel {
-		b.WriteString(" parallel")
+	if el.declaredID || (el.elementID != "" && el.elementID != rdf.EncodeElementID(el.qname)) {
+		out = append(out, fmt.Sprintf("@IdentityMetadata::ElementId { id = %s; }", lexer.StringText(el.elementID)))
 	}
-	b.WriteString(" {\n")
-	for _, child := range children {
-		if err := d.print(b, child, depth+1); err != nil {
-			return err
-		}
-	}
-	b.WriteString(indent + "}\n")
-	return nil
+	return out
 }
 
 // head builds the declaration text up to the body or terminator.
@@ -544,7 +671,7 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		return "", d.missing(el, "sysx:"+xEndForm,
 			"the ends it relates are written in the form the head states")
 	}
-	words := d.prefixWords(el)
+	var words []string
 	if keyword := d.visibility(el); keyword != "" {
 		words = append(words, keyword)
 	}
@@ -590,6 +717,9 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 			words = append(words, flag.keyword)
 		}
 	}
+	// Prefix metadata closes the usage prefix, after the modifiers and ahead
+	// of the kind keyword (SysML.xtext UsagePrefix): `end #derive r : R`.
+	words = append(words, d.prefixWords(el)...)
 	// A prefix qualifies the kind keyword after it, and the `not` of
 	// `assert not constraint c` negates the declaration that prefix introduces.
 	// Negation on its own has no notation, so it is reported rather than dropped.
@@ -681,6 +811,29 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 			skip = append(skip, ast.RelReferences)
 		}
 	}
+	// The multiplicity part (`[1] ordered nonunique`) qualifies the type it
+	// follows, so it goes with the typing clause and ahead of any further
+	// specialization; with no type it follows the name (`x[2] redefines y`),
+	// and with neither it closes the head (`:>> y[2]`).
+	multPart := d.multiplicityText(el)
+	if d.boolOf(el, rdf.SysML+"isOrdered") {
+		multPart += " ordered"
+	}
+	if d.boolOf(el, rdf.SysML+"isNonunique") {
+		multPart += " nonunique"
+	}
+	typed, err := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelTyping])
+	if err != nil {
+		return "", err
+	}
+	typedPart := ""
+	switch {
+	case len(typed) > 0:
+		typedPart, multPart = multPart, ""
+	case len(identWords) > 0 && multPart != "":
+		identWords[len(identWords)-1] += multPart
+		multPart = ""
+	}
 	words = append(words, identWords...)
 	// The accept shorthand writes its parameter into the head, ahead of the
 	// `via` clause the parent's relationships supply.
@@ -697,24 +850,6 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		if trigger, ok := d.stringOf(accept, rdf.SysML+pValue); ok {
 			words = append(words, trigger)
 		}
-	}
-	// The multiplicity part (`[1] ordered nonunique`) qualifies the type it
-	// follows, so it goes with the typing clause and ahead of any further
-	// specialization; with no type it follows the name.
-	multPart := d.multiplicityText(el)
-	if d.boolOf(el, rdf.SysML+"isOrdered") {
-		multPart += " ordered"
-	}
-	if d.boolOf(el, rdf.SysML+"isNonunique") {
-		multPart += " nonunique"
-	}
-	typed, err := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelTyping])
-	if err != nil {
-		return "", err
-	}
-	typedPart := ""
-	if len(typed) > 0 {
-		typedPart, multPart = multPart, ""
 	}
 	relationships, err := d.relationshipWords(el, typedPart, skip...)
 	if err != nil {
@@ -811,11 +946,13 @@ func (d *decoder) importHead(el *element) (string, error) {
 		return "", d.missing(el, sysmlPrefix+pImportedNamespace, "an import names the namespace it imports")
 	}
 	imported = qualifiedNameText(imported)
-	switch {
-	case d.boolOf(el, rdf.OpenSysML+xRecursive):
-		imported += "::**"
-	case d.boolOf(el, rdf.OpenSysML+xNamespaceImport):
+	// `P::*::**` imports the members of P recursively; `P::**` imports P itself
+	// and, recursively, its members. Both flags may hold at once.
+	if d.boolOf(el, rdf.OpenSysML+xNamespaceImport) {
 		imported += "::*"
+	}
+	if d.boolOf(el, rdf.OpenSysML+xRecursive) {
+		imported += "::**"
 	}
 	words = append(words, imported)
 	if filter, ok := d.stringOf(el, rdf.OpenSysML+xFilter); ok {
@@ -959,7 +1096,7 @@ func (d *decoder) representationHead(el *element) (string, error) {
 		return "", d.missing(el, sysmlPrefix+pLanguage, "a textual representation states the language it is written in")
 	}
 	body, _ := d.stringOf(el, rdf.SysML+pBody)
-	words = append(words, "language", strconv.Quote(language))
+	words = append(words, "language", lexer.StringText(language))
 	return strings.Join(words, " ") + " /*" + body + "*/", nil
 }
 
@@ -987,7 +1124,7 @@ func (d *decoder) localeWords(el *element) []string {
 	if !ok {
 		return nil
 	}
-	return []string{"locale", strconv.Quote(locale)}
+	return []string{"locale", lexer.StringText(locale)}
 }
 
 // keywordOr returns the kind keyword the author wrote, falling back to the
@@ -1202,8 +1339,8 @@ func (d *decoder) boolOf(el *element, property string) bool {
 	return d.graph.BoolValue(rdf.IRI(el.iri), property)
 }
 
-func (d *decoder) intOf(subject rdf.Term, property string) int {
-	value, ok := d.graph.Lexical(subject, property)
+func intOf(g *rdf.Graph, subject rdf.Term, property string) int {
+	value, ok := g.Lexical(subject, property)
 	if !ok {
 		return 0
 	}

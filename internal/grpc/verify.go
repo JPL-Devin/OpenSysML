@@ -97,6 +97,21 @@ func (v *verifyContext) subject(symbolID string) (*runtime.Instance, error) {
 	return inst, nil
 }
 
+// namedFQN is the symbol's qualified name, or "" where it or one of its owners
+// is anonymous: such an element has no name a caller can look up.
+func namedFQN(idx *symbols.Index, sym *symbols.Symbol) string {
+	for s := sym; s != nil; {
+		if s.Name == "" {
+			return ""
+		}
+		if s.OwnerScope == nil {
+			break
+		}
+		s = s.OwnerScope.Owner()
+	}
+	return idx.GetFQN(sym)
+}
+
 // verdict builds the answer to one verification. A condition that evaluated to
 // false is the model's answer, reported as holds=false with the condition named;
 // any other error is a failure to evaluate, reported in Verdict.error.
@@ -107,14 +122,14 @@ func (v *verifyContext) verdict(kind string, sym *symbols.Symbol, element string
 		Holds:   holds && err == nil,
 	}
 	if sym != nil {
-		out.ElementId = v.cached.Index.GetFQN(sym)
+		out.ElementId = namedFQN(v.cached.Index, sym)
 		if out.Element == "" {
 			out.Element = out.ElementId
 		}
 	}
 	if inst != nil {
 		out.InstanceId = inst.ID
-		out.InstanceTypeId = v.cached.Index.GetFQN(inst.Type)
+		out.InstanceTypeId = namedFQN(v.cached.Index, inst.Type)
 	}
 
 	var violation *runtime.ViolationError
@@ -318,6 +333,9 @@ func (s *Service) EvaluateCalc(ctx context.Context, req *pb.EvaluateCalcRequest)
 	// units it is commensurable with instead of arriving as an unusable value.
 	args := make([]runtime.Value, 0, len(req.Arguments))
 	for _, arg := range req.Arguments {
+		if err := s.requireValueCapabilities(arg); err != nil {
+			return nil, err
+		}
 		val, cerr := ProtoToValueIn(arg, v.cached.Index, v.sem)
 		if cerr != nil {
 			return &pb.EvaluateCalcResponse{

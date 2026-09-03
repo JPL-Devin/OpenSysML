@@ -14,7 +14,7 @@ import (
 
 // behavioralModels are the models whose whole point is behavior: every action
 // node, loop, conditional, state and transition the mapping covers.
-var behavioralModels = []string{"action_nodes", "loops_conditionals", "state_machine"}
+var behavioralModels = []string{"action_nodes", "loops_conditionals", "state_machine", "then_after_members"}
 
 // The fidelity contract for behavior: a model that states behavior comes back
 // from RDF as the same bytes it was written as, not merely as a graph that says
@@ -229,6 +229,94 @@ func TestUnsupportedBehavioralShapesAreReported(t *testing.T) {
 	}
 }
 
+// A `then` sequences from the member before it that is not an edge — past a
+// flow, a bind, a succession, and past the members that declare no action at
+// all — the way the parser reads it. The graph alone, without the text each
+// member was written as, has to bring every such `then` back where it stood.
+func TestThenComesBackPastTheMembersTheParserSkips(t *testing.T) {
+	path := filepath.Join("testdata", "convert", "then_after_members.sysml")
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	turtle := toTurtle(t, path)
+	back, err := export.Convert("m.ttl", withoutTriples(t, []byte(turtle), "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from the mapping alone: %v", err)
+	}
+	if string(back) != string(src) {
+		t.Fatalf("the notation changed\n--- want ---\n%s\n--- got ---\n%s", src, back)
+	}
+	again, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle again: %v", err)
+	}
+	if string(again) != turtle {
+		t.Errorf("the second hop changed the graph\n--- first ---\n%s\n--- second ---\n%s", turtle, again)
+	}
+}
+
+// A usage that declares no name answers to the feature that names it, so a
+// `then` after `perform walk;` or `action redefines walk;` sequences from walk.
+func TestThenSequencesFromTheNameAnUnnamedUsageAnswersTo(t *testing.T) {
+	for name, body := range map[string]string{
+		"perform":    "    action walk : Step;\n    action def A {\n        perform walk;\n        then action b : Step;\n    }\n",
+		"redefines":  "    action def Base {\n        action walk : Step;\n    }\n    action def A specializes Base {\n        action redefines walk;\n        then action b : Step;\n    }\n",
+		"named":      "    action def A {\n        action walk : Step;\n        then action b : Step;\n    }\n",
+		"introduced": "    action walk : Step;\n    action run : Step;\n    action def A {\n        perform walk;\n        then perform run;\n        then action b : Step;\n    }\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			src := "package P {\n    action def Step;\n" + body + "}\n"
+			turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle: %v", err)
+			}
+			back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation from the mapping alone: %v\n%s", err, turtle)
+			}
+			if string(back) != src {
+				t.Fatalf("the notation changed\n--- want ---\n%s\n--- got ---\n%s", src, back)
+			}
+		})
+	}
+}
+
+// A `then` folded into the member it introduces sequences from one member only,
+// so a graph whose source end is any other member — an earlier action, or the
+// flow the `then` is read past — cannot be written in that form and is refused.
+func TestThenIsRefusedWhenTheGraphSequencesFromAnotherMember(t *testing.T) {
+	src := "package P {\n    item def Signal;\n    action def Step {\n        in item x : Signal;\n        out item y : Signal;\n    }\n" +
+		"    action def A {\n        action x : Step;\n        action a : Step;\n        flow from a.y to b.x;\n        then action b : Step;\n    }\n}\n"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	const stated = "sysml:sourceFeature elmt:P__A__a"
+	if strings.Count(string(turtle), stated) != 1 {
+		t.Fatalf("the succession should state its source once as %s:\n%s", stated, turtle)
+	}
+	for name, source := range map[string]string{
+		"an earlier action":       "elmt:P__A__x",
+		"the flow written before": "elmt:P__A___402",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if !strings.Contains(string(turtle), "\n"+source+"\n") {
+				t.Fatalf("%s is not an element of the graph:\n%s", source, turtle)
+			}
+			moved := strings.Replace(string(turtle), stated, "sysml:sourceFeature "+source, 1)
+			_, err := export.Convert("m.ttl", []byte(moved), export.FormatTurtle, export.FormatSysML)
+			var unsupported *export.UnsupportedError
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("want an UnsupportedError, got %v", err)
+			}
+			if !strings.Contains(err.Error(), "sequences from the member written before the member it introduces") {
+				t.Errorf("the refusal should say which order the graph states: %v", err)
+			}
+		})
+	}
+}
+
 // The `else` branch is marked with a term the SysML metamodel does not define,
 // so it belongs to the OpenSysML namespace and is read from there on its own —
 // without the branch's keyword having to say `else` as well.
@@ -276,16 +364,18 @@ func TestSubactionDoSurvivesWithoutASpace(t *testing.T) {
 		if !strings.Contains(string(turtle), "sysx:declaredKeyword \"entry do\"") {
 			t.Fatalf("the `do` of %q was not recorded:\n%s", subaction, turtle)
 		}
-		back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
-		if err != nil {
-			t.Fatalf("back to notation: %v", err)
+		// With its source text the graph comes back as written; without, as the
+		// printer writes the keyword the graph recorded.
+		if back, want := toNotation(t, turtle), src; back != want {
+			t.Fatalf("%q did not come back as written:\n--- want ---\n%s--- got ---\n%s", subaction, want, back)
 		}
-		if !strings.Contains(string(back), "entry do {") {
+		back := toNotation(t, withoutTriples(t, turtle, "sysx:sourceText"))
+		if !strings.Contains(back, "entry do {") {
 			t.Fatalf("%q lost its `do`:\n%s", subaction, back)
 		}
 		// The notation it comes back as is what the printer writes, so converting
 		// that again must change nothing at all.
-		checkRoundTrip(t, string(back))
+		checkRoundTrip(t, back)
 	}
 }
 

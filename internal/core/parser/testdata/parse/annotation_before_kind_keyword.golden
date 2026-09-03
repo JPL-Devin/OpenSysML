@@ -1,0 +1,41 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="test" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="C"
+          (Membership visibility="default"
+            (Documentation locale=""))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Comment about="" locale=""))
+          (Membership visibility="default"
+            (Usage kind="port" name="p" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=PW
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Comment about="" locale="\"en_US\""))
+          (Membership visibility="default"
+            (Usage kind="part" name="sub" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=C
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (TextualRepresentation language="\"text\""))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
+      (Membership visibility="default"
+        (Definition kind="port" abstract=false variation=false name="PW"
+          (Membership visibility="default"
+            (Documentation locale=""))
+          (Membership visibility="default"
+            (Usage kind="item" name="stuff" ref=false direction="out" composite=false derived=false ordered=false nonunique=false))))
+      (Membership visibility="default"
+        (Usage kind="part" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=C
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Documentation locale=""))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))))))

@@ -498,3 +498,143 @@ func TestRenderDocumentsFlagConflicts(t *testing.T) {
 	wantReport(t, check(t, binary, linkedModel, "-render-documents", "rendered", "-constraint", "C"),
 		2, "check it in its own run")
 }
+
+// TestRenderDocumentsHTML checks -doc-form html writes the set as linked HTML
+// pages sharing one stylesheet file, so a reader edits the styling in one
+// place.
+func TestRenderDocumentsHTML(t *testing.T) {
+	binary := buildCLI(t)
+	dir := filepath.Join(t.TempDir(), "site")
+
+	got := check(t, binary, linkedModel, "-render-documents", dir, "-doc-form", "html")
+	wantReport(t, got, 0, "sysml-document.css (css,", "Reports-MainReport.html (html,")
+	report, err := os.ReadFile(filepath.Join(dir, "Reports-MainReport.html"))
+	if err != nil {
+		t.Fatalf("read report: %v", err)
+	}
+	for _, want := range []string{
+		`<link rel="stylesheet" href="sysml-document.css">`,
+		`href="Reports-Appendix.html#tables"`,
+	} {
+		if !strings.Contains(string(report), want) {
+			t.Errorf("report lacks %q:\n%s", want, report)
+		}
+	}
+	if strings.Contains(string(report), "@layer opensysml") {
+		t.Errorf("a set links the shared sheet rather than inlining it:\n%s", report)
+	}
+	appendix, err := os.ReadFile(filepath.Join(dir, "Reports-Appendix.html"))
+	if err != nil {
+		t.Fatalf("read appendix: %v", err)
+	}
+	if !strings.Contains(string(appendix), `id="tables"`) {
+		t.Errorf("appendix lacks the referenced identifier:\n%s", appendix)
+	}
+	stylesheet, err := os.ReadFile(filepath.Join(dir, "sysml-document.css"))
+	if err != nil {
+		t.Fatalf("read stylesheet: %v", err)
+	}
+	if !strings.Contains(string(stylesheet), "@layer opensysml;") {
+		t.Errorf("shared stylesheet is not the default sheet:\n%s", stylesheet)
+	}
+	// The Markdown set is untouched by the HTML form.
+	if _, err := os.Stat(filepath.Join(dir, "Reports-MainReport.md")); err == nil {
+		t.Error("the HTML set wrote Markdown files too")
+	}
+}
+
+// TestRenderDocumentsHTMLStylesheets checks a custom sheet of an HTML set is
+// a file beside the pages that every page links, rather than bytes repeated
+// in each page, and that a URL stays a link in the order it was given.
+func TestRenderDocumentsHTMLStylesheets(t *testing.T) {
+	binary := buildCLI(t)
+	work := t.TempDir()
+	dir := filepath.Join(work, "site")
+	theme := filepath.Join(work, "theme.css")
+	if err := os.WriteFile(theme, []byte(".sysml-document { --sysml-text: rebeccapurple; }\n"), 0o600); err != nil {
+		t.Fatalf("write theme: %v", err)
+	}
+
+	got := check(t, binary, linkedModel, "-render-documents", dir, "-doc-form", "html",
+		"-html-css", theme, "-html-css", "https://example.test/site.css")
+	wantReport(t, got, 0, "theme.css (css,")
+	links := []string{
+		`<link rel="stylesheet" href="sysml-document.css">`,
+		`<link rel="stylesheet" href="theme.css">`,
+		`<link rel="stylesheet" href="https://example.test/site.css">`,
+	}
+	for _, name := range []string{"Reports-MainReport.html", "Reports-Appendix.html"} {
+		page, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		at := -1
+		for _, link := range links {
+			next := strings.Index(string(page), link)
+			if next < 0 {
+				t.Fatalf("%s lacks %q:\n%s", name, link, page)
+			}
+			if next < at {
+				t.Errorf("%s links the stylesheets out of order:\n%s", name, page)
+			}
+			at = next
+		}
+		if strings.Contains(string(page), "rebeccapurple") {
+			t.Errorf("%s inlines the custom sheet rather than linking it:\n%s", name, page)
+		}
+	}
+	written, err := os.ReadFile(filepath.Join(dir, "theme.css"))
+	if err != nil {
+		t.Fatalf("read written theme: %v", err)
+	}
+	if !strings.Contains(string(written), "rebeccapurple") {
+		t.Errorf("the set's theme.css is not the sheet asked for:\n%s", written)
+	}
+}
+
+// TestRenderDocumentsHTMLStylesheetNames checks a stylesheet whose name holds
+// URL delimiters or spaces is written and linked under one escaped name, so
+// the link a page carries names the file beside it.
+func TestRenderDocumentsHTMLStylesheetNames(t *testing.T) {
+	binary := buildCLI(t)
+	work := t.TempDir()
+	dir := filepath.Join(work, "site")
+	awkward := filepath.Join(work, "my theme#1?v=2%.css")
+	if err := os.WriteFile(awkward, []byte(".sysml-document { --sysml-text: rebeccapurple; }\n"), 0o600); err != nil {
+		t.Fatalf("write theme: %v", err)
+	}
+
+	wantReport(t, check(t, binary, linkedModel, "-render-documents", dir, "-doc-form", "html",
+		"-html-css", awkward), 0)
+	name := "my.20theme.231.3Fv.3D2.25.css"
+	page, err := os.ReadFile(filepath.Join(dir, "Reports-MainReport.html"))
+	if err != nil {
+		t.Fatalf("read report: %v", err)
+	}
+	if want := `<link rel="stylesheet" href="` + name + `">`; !strings.Contains(string(page), want) {
+		t.Errorf("report lacks %q:\n%s", want, page)
+	}
+	written, err := os.ReadFile(filepath.Join(dir, name))
+	if err != nil {
+		t.Fatalf("read written theme: %v", err)
+	}
+	if !strings.Contains(string(written), "rebeccapurple") {
+		t.Errorf("the set's %s is not the sheet asked for:\n%s", name, written)
+	}
+}
+
+// TestRenderDocumentsHTMLFlagConflicts checks the set refuses forms and
+// options it cannot write.
+func TestRenderDocumentsHTMLFlagConflicts(t *testing.T) {
+	binary := buildCLI(t)
+	dir := filepath.Join(t.TempDir(), "site")
+
+	wantReport(t, check(t, binary, linkedModel, "-render-documents", dir, "-doc-form", "pdf"),
+		2, "render one document at a time with -render-document -doc-form pdf")
+	wantReport(t, check(t, binary, linkedModel, "-render-documents", dir, "-html-fragment", "-doc-form", "html"),
+		2, "-html-fragment writes one document element to embed")
+	wantReport(t, check(t, binary, linkedModel, "-render-documents", dir, "-html-css", "theme.css"),
+		2, "ask for it with -doc-form html")
+	wantReport(t, check(t, binary, linkedModel, "-render-documents", dir, "-doc-form", "latex"),
+		2, "unknown document form")
+}

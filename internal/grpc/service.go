@@ -90,6 +90,10 @@ const CapabilityFeatureValues = "feature_values"
 // documents as one model so a name one declares resolves in another.
 const CapabilityParseSources = "parse_sources"
 
+// CapabilityComplexValues names the capability of carrying a complex number as
+// Value.complex, rather than reporting it as an unsupported null.
+const CapabilityComplexValues = "complex_values"
+
 // capabilities is what this build supports, in report order. A capability is
 // only ever added: renaming or dropping one breaks clients that require it.
 var capabilities = []string{
@@ -98,7 +102,7 @@ var capabilities = []string{
 	CapabilitySymbolAttributes, CapabilityUnsetValue, CapabilityFeatureValues,
 	CapabilityApplyEdits, CapabilityAuthoring, CapabilityInlineLanguage,
 	CapabilityStrictConformance, CapabilityDocumentQuery, CapabilityRenderDocument,
-	CapabilityParseSources,
+	CapabilityParseSources, CapabilityComplexValues,
 }
 
 type capabilityAvailability struct {
@@ -233,6 +237,15 @@ func (s *Service) requireCapability(capability string) error {
 		return nil
 	}
 	return statusErrorf(connect.CodeUnimplemented, "capability %q is unavailable", capability)
+}
+
+// requireValueCapabilities refuses a supplied value of a kind whose capability
+// is unavailable, rather than reading it as something else.
+func (s *Service) requireValueCapabilities(pv *pb.Value) error {
+	if ValueCarriesComplex(pv) {
+		return s.requireCapability(CapabilityComplexValues)
+	}
+	return nil
 }
 
 // newRuntime returns a runtime context under the service's budgets.
@@ -526,6 +539,15 @@ func (s *Service) Evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.Ev
 		}, nil
 	}
 
+	// The request states one expression, so text the parser leaves unread is
+	// reported rather than evaluating the prefix it did read (`1 = 1` answering 1).
+	if p.Offset() < len(strings.TrimRight(req.Expression, " \t\r\n")) {
+		return &pb.EvaluateResponse{
+			Error: fmt.Sprintf("expression parse failed: unexpected %q after the expression",
+				strings.TrimSpace(req.Expression[p.Offset():])),
+		}, nil
+	}
+
 	// A subject is both what the expression is evaluated against and, unless a
 	// context is named, the namespace its features are named in — the way the
 	// prompt evaluates in the context it pinned.
@@ -668,6 +690,9 @@ func (s *Service) ExecuteAction(ctx context.Context, req *pb.ExecuteActionReques
 	if len(req.Inputs) > 0 {
 		inputs = make(map[string]runtime.Value, len(req.Inputs))
 		for name, pv := range req.Inputs {
+			if err := s.requireValueCapabilities(pv); err != nil {
+				return nil, err
+			}
 			val, cerr := ProtoToValueIn(pv, cached.Index, semModel)
 			if cerr != nil {
 				return &pb.ExecuteActionResponse{

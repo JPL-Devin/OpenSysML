@@ -1,0 +1,5 @@
+{
+  "type": "satisfy",
+  "libraries": true,
+  "error": "satisfy r by config.nope: no subject to satisfy the requirement: config.nope"
+}

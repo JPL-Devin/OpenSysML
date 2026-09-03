@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
@@ -18,6 +19,9 @@ var (
 
 	// ErrUnresolvedReference is returned when a feature reference cannot be resolved.
 	ErrUnresolvedReference = errors.New("unresolved reference")
+
+	// ErrAmbiguousReference is returned when a qualified name names several elements.
+	ErrAmbiguousReference = errors.New("ambiguous reference")
 
 	// ErrTypeMismatch is returned when an operation receives a value of unexpected type.
 	ErrTypeMismatch = errors.New("type mismatch")
@@ -71,6 +75,14 @@ var (
 	// ErrUnknownParameter is returned when a named argument does not name any
 	// input parameter of the invoked calc.
 	ErrUnknownParameter = errors.New("unknown parameter")
+
+	// ErrUnknownActionInput is returned when a supplied input names no parameter
+	// or attribute of the action performed.
+	ErrUnknownActionInput = errors.New("unknown action input")
+
+	// ErrOutputActionInput is returned when a supplied input names a parameter
+	// the action only writes back (`out`), which a caller does not seed.
+	ErrOutputActionInput = errors.New("output action parameter given as input")
 
 	// ErrNoResultExpression is returned when a calc body declares no return
 	// expression, directly or by inheritance.
@@ -165,6 +177,10 @@ var (
 	// condition to evaluate: reporting a verdict would claim a check that never ran.
 	ErrNoConditions = errors.New("no condition to evaluate")
 
+	// ErrUnboundSubject is returned when a condition reads a subject nothing
+	// supplied: the check is about no object, so it reaches no verdict.
+	ErrUnboundSubject = errors.New("subject is unbound")
+
 	// ErrCyclicFeatureValue is returned when a feature value's default value depends, directly or
 	// through other feature values, on the one being computed.
 	ErrCyclicFeatureValue = errors.New("cyclic feature value dependency")
@@ -210,6 +226,14 @@ var (
 	// ErrNotABehavior is returned when a name invoked on an object resolves to an
 	// element that states no behavior to run.
 	ErrNotABehavior = errors.New("not a behavior")
+
+	// ErrNotASignal is returned when a message injected from outside the model
+	// names an element that is no definition, so no accept could be typed by it.
+	ErrNotASignal = errors.New("not a signal definition")
+
+	// ErrSignalArgument is returned when a message injected from outside the
+	// model carries an argument its signal definition has no feature for.
+	ErrSignalArgument = errors.New("signal argument")
 
 	// ErrBehaviorBudget is returned when the behaviors of materialized objects
 	// never reach quiescence within the event budget.
@@ -333,6 +357,36 @@ func budgetExceeded(sentinel error, message string, causes ...error) error {
 	errs = append(errs, causes...)
 	return &budgetExceededError{message: message, errs: errs}
 }
+
+// NoValueError reports a feature a condition names that carries no value,
+// naming the feature so a caller can tell which one is uninitialized.
+type NoValueError struct {
+	Feature string
+	// Ref is the written name whose read found no value, so a caller can tell a
+	// read of its own expression from one made while evaluating a default.
+	Ref *ast.QualifiedName
+}
+
+func (e *NoValueError) Error() string {
+	return fmt.Sprintf("%v for feature %s", ErrNoValue, e.Feature)
+}
+
+func (e *NoValueError) Unwrap() error { return ErrNoValue }
+
+// UnboundSubjectError reports a check whose subject nothing supplied, naming
+// the subject and how a caller supplies one.
+type UnboundSubjectError struct {
+	Kind    string // "constraint" or "requirement"
+	Element string // name of the element declaring the subject
+	Subject string // name of the subject parameter
+}
+
+func (e *UnboundSubjectError) Error() string {
+	return fmt.Sprintf("%s %s: %s %v: bind it (`subject %s = <element>`), check it on an object, or assert `satisfy %s by <element>`",
+		e.Kind, e.Element, e.Subject, ErrUnboundSubject, e.Subject, e.Element)
+}
+
+func (e *UnboundSubjectError) Unwrap() error { return ErrUnboundSubject }
 
 // ViolationError reports a condition that evaluated to false, naming the
 // condition so a verdict says which one failed. It unwraps to ErrViolated,

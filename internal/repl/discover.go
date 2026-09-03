@@ -93,29 +93,31 @@ func (s *Session) doSearch(substr string) ([]string, bool, error) {
 	return out, false, nil
 }
 
-// doBuiltins lists the library functions this build implements directly, the
-// OMG ones callable whatever the model imports and an extension one marked with
-// the import its unqualified name needs.
+// doBuiltins lists the library functions this build implements directly, each
+// beside the declaration it is and the import its unqualified name needs.
 func (s *Session) doBuiltins() ([]string, bool, error) {
 	all := runtime.Builtins()
 	scalar := make([]string, 0, len(all))
 	collection := make([]string, 0, len(all))
 	for _, b := range all {
 		if b.Collection {
-			collection = append(collection, fmt.Sprintf("x->%s()  %s", b.Name, b.FQN))
+			collection = append(collection, fmt.Sprintf("x->%s()  %s  (import %s::*;)", b.Name, b.FQN, b.Package))
 			continue
 		}
-		line := fmt.Sprintf("%s(%s)  %s", b.Name, strings.Join(b.Params, ", "), b.FQN)
-		if b.RequiresImport != "" {
-			line += fmt.Sprintf("  (needs `import %s::*;`)", b.RequiresImport)
-		}
-		scalar = append(scalar, line)
+		scalar = append(scalar, fmt.Sprintf("%s(%s)  %s  (import %s::*;)", b.Name, strings.Join(b.Params, ", "), b.FQN, b.Package))
 	}
-	out := []string{"Scalar functions:"}
+	out := []string{
+		"Each function is called by its unqualified name only where the model imports",
+		"its package, as the checker resolves it; the qualified name works anywhere,",
+		"e.g. RealFunctions::sqrt(2.0). Where several packages declare the name, each",
+		"import makes its own declaration the one a bare call denotes.",
+		"",
+		"Scalar functions:",
+	}
 	out = append(out, scalar...)
 	out = append(out, "", "Collection and control functions (also callable as name(x, ...)):")
 	out = append(out, collection...)
-	return append(out, "", "Every one is also callable by its qualified name, e.g. RealFunctions::sqrt(2.0)."), false, nil
+	return out, false, nil
 }
 
 // suggestCommand offers the meta commands closest to an unknown one.
@@ -146,32 +148,7 @@ func (s *Session) suggestSymbol(name string) []string {
 // declaredSymbolNames returns the names the session documents declare, at every
 // nesting level, sorted.
 func (s *Session) declaredSymbolNames() []string {
-	docScopes := s.docScopes()
-	if len(docScopes) == 0 {
-		return nil
-	}
-	seen := map[string]bool{}
-	var collect func(scope *symbols.Scope)
-	collect = func(scope *symbols.Scope) {
-		if scope == nil || scope.BodyLocal() {
-			return
-		}
-		for _, n := range scope.MemberNames() {
-			seen[n] = true
-		}
-		for _, child := range scope.Children() {
-			collect(child)
-		}
-	}
-	for _, scope := range docScopes {
-		collect(scope)
-	}
-	out := make([]string, 0, len(seen))
-	for n := range seen {
-		out = append(out, n)
-	}
-	sort.Strings(out)
-	return out
+	return s.nameTable().sorted()
 }
 
 // notFoundError reports a name no declaration answers to, offering the
@@ -264,9 +241,7 @@ func (s *Session) candidateHasKind(name string, want []symbols.SymbolKind) bool 
 		matches = idx.LookupQualified(name)
 	}
 	if len(matches) == 0 {
-		for _, scope := range s.docScopes() {
-			matches = append(matches, collectInScopeTree(scope, name)...)
-		}
+		matches = s.nameTable().lookup(name)
 	}
 	for _, sym := range matches {
 		if slices.Contains(want, sym.Kind) {

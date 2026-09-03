@@ -17,11 +17,11 @@ import (
 
 var update = flag.Bool("update", false, "rewrite the .golden.ttl and .golden.sysml files")
 
-// TestGoldenConversions locks the exact Turtle written for each model in
-// testdata/convert, and the exact notation that Turtle converts back to.
+// TestGoldenConversions locks each model's Turtle and the notation it converts
+// back to: as written with its source text, `.canonical.golden.sysml` without.
 func TestGoldenConversions(t *testing.T) {
 	for _, path := range modelFiles(t) {
-		name := strings.TrimSuffix(filepath.Base(path), ".sysml")
+		name, ext := fixtureName(path)
 		t.Run(name, func(t *testing.T) {
 			src, err := os.ReadFile(path)
 			if err != nil {
@@ -35,8 +35,17 @@ func TestGoldenConversions(t *testing.T) {
 			if err != nil {
 				t.Fatalf("back to notation: %v\n%s", err, turtle)
 			}
-			checkGolden(t, strings.TrimSuffix(path, ".sysml")+".golden.ttl", turtle)
-			checkGolden(t, strings.TrimSuffix(path, ".sysml")+".golden.sysml", back)
+			if want := string(src); string(back) != want {
+				t.Errorf("the model did not come back as written:\n--- want ---\n%s--- got ---\n%s", want, back)
+			}
+			canonical, err := export.Convert(name+".ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				canonical = []byte("sysml: " + err.Error() + "\n")
+			}
+			stem := strings.TrimSuffix(path, ext)
+			checkGolden(t, stem+".golden.ttl", turtle)
+			checkGolden(t, stem+".golden"+ext, back)
+			checkGolden(t, stem+".canonical.golden"+ext, canonical)
 		})
 	}
 }
@@ -45,7 +54,7 @@ func TestGoldenConversions(t *testing.T) {
 // valid SysML: it must parse without a single syntax error.
 func TestConvertedNotationParses(t *testing.T) {
 	for _, path := range modelFiles(t) {
-		name := strings.TrimSuffix(filepath.Base(path), ".sysml")
+		name, ext := fixtureName(path)
 		t.Run(name, func(t *testing.T) {
 			src, err := os.ReadFile(path)
 			if err != nil {
@@ -59,7 +68,7 @@ func TestConvertedNotationParses(t *testing.T) {
 			if err != nil {
 				t.Fatalf("back to notation: %v", err)
 			}
-			p := parser.New(source.New(name+".converted.sysml", back))
+			p := parser.New(source.New(name+".converted"+ext, back))
 			p.ParseFile()
 			if len(p.Diagnostics) > 0 {
 				t.Errorf("converted notation does not parse: %v\n%s", p.Diagnostics, back)
@@ -75,7 +84,7 @@ func TestConvertedNotationParses(t *testing.T) {
 // relative to its scope, a keyword written in place of its symbol).
 func TestRoundTripIsLossless(t *testing.T) {
 	for _, path := range modelFiles(t) {
-		name := strings.TrimSuffix(filepath.Base(path), ".sysml")
+		name, ext := fixtureName(path)
 		t.Run(name, func(t *testing.T) {
 			src, err := os.ReadFile(path)
 			if err != nil {
@@ -89,7 +98,7 @@ func TestRoundTripIsLossless(t *testing.T) {
 			if err != nil {
 				t.Fatalf("back to notation: %v", err)
 			}
-			second, err := export.Convert(name+".sysml", back, export.FormatSysML, export.FormatTurtle)
+			second, err := export.Convert(name+ext, back, export.FormatSysML, export.FormatTurtle)
 			if err != nil {
 				t.Fatalf("to turtle again: %v", err)
 			}
@@ -98,6 +107,78 @@ func TestRoundTripIsLossless(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestFixturesComeBackFromTheGraphAlone strips sysx:sourceText before writing back,
+// so the structural triples alone must carry each head and survive a second hop.
+func TestFixturesComeBackFromTheGraphAlone(t *testing.T) {
+	fixtures := []string{
+		"ref_subsets.sysml",
+		"composite_multiplicity.kerml",
+		"end_prefix_metadata.sysml",
+		"nested_namespace_import.sysml",
+		"quoted_succession_ends.sysml",
+	}
+	for _, fixture := range fixtures {
+		path := filepath.Join("testdata", "convert", fixture)
+		name, ext := fixtureName(path)
+		t.Run(name, func(t *testing.T) {
+			src, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			first, err := export.Convert(path, src, export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle: %v", err)
+			}
+			back, err := export.Convert(name+".ttl", withoutTriples(t, first, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation: %v", err)
+			}
+			second, err := export.Convert(name+ext, back, export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle again: %v", err)
+			}
+			structural := func(turtle []byte) []byte {
+				for _, property := range []string{"sysx:sourceText", "sysx:sourceTail", "sysx:sourceLanguage"} {
+					turtle = withoutTriples(t, turtle, property)
+				}
+				return turtle
+			}
+			if lost, gained := tripleSetDiff(t, structural(first), structural(second)); len(lost)+len(gained) > 0 {
+				t.Errorf("the second hop changed the graph\n--- notation ---\n%s\n--- lost ---\n%s\n--- gained ---\n%s",
+					back, strings.Join(lost, "\n"), strings.Join(gained, "\n"))
+			}
+		})
+	}
+}
+
+// tripleSetDiff parses two Turtle documents and returns the triples only the
+// first holds, then the triples only the second holds, each in document order.
+func tripleSetDiff(t *testing.T, first, second []byte) (lost, gained []string) {
+	t.Helper()
+	parse := func(data []byte) []rdf.Triple {
+		graph, err := rdf.ParseTurtle(data)
+		if err != nil {
+			t.Fatalf("parse turtle: %v", err)
+		}
+		return graph.Triples()
+	}
+	only := func(triples, others []rdf.Triple) []string {
+		seen := make(map[rdf.Triple]bool, len(others))
+		for _, triple := range others {
+			seen[triple] = true
+		}
+		var out []string
+		for _, triple := range triples {
+			if !seen[triple] {
+				out = append(out, triple.Subject.String()+" "+triple.Predicate.String()+" "+triple.Object.String())
+			}
+		}
+		return out
+	}
+	a, b := parse(first), parse(second)
+	return only(a, b), only(b, a)
 }
 
 // TestSaveKeepsComments covers the notation-to-notation path a save uses: every
@@ -356,20 +437,23 @@ func TestCommentInHeadDoesNotChangeKeyword(t *testing.T) {
 		if strings.Contains(string(turtle), "declaredKeyword") {
 			t.Errorf("a comment word was recorded as the kind keyword:\n%s", turtle)
 		}
-		back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
-		if err != nil {
-			t.Fatalf("back to notation: %v", err)
-		}
+		// The comment itself comes back with the source text; the keyword the
+		// printer chooses shows without it.
+		back := toNotation(t, withoutTriples(t, turtle, "sysx:sourceText"))
 		for _, keyword := range []string{"flow ", "state "} {
-			if strings.Contains(string(back), keyword) {
+			if strings.Contains(back, keyword) {
 				t.Errorf("the declaration came back as a %sdeclaration:\n%s", keyword, back)
 			}
+		}
+		if back, want := toNotation(t, turtle), src; back != want {
+			t.Errorf("the comment did not come back as written:\n--- want ---\n%s--- got ---\n%s", want, back)
 		}
 	}
 }
 
 // A directed usage records no keyword, so whether it wrote its kind out is read
 // from the source — where a comment naming a kind must not count as one written.
+// The printer's choice shows on the graph without source text.
 func TestCommentedKindKeywordIsNotWrittenBack(t *testing.T) {
 	// One case per comment shape the lexer distinguishes, plus a keyword the
 	// declaration really does write.
@@ -385,11 +469,8 @@ func TestCommentedKindKeywordIsNotWrittenBack(t *testing.T) {
 			if err != nil {
 				t.Fatalf("to turtle: %v", err)
 			}
-			back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
-			if err != nil {
-				t.Fatalf("back to notation: %v", err)
-			}
-			if !strings.Contains(string(back), tt.want) {
+			back := toNotation(t, withoutTriples(t, turtle, "sysx:sourceText"))
+			if !strings.Contains(back, tt.want) {
 				t.Errorf("wanted %q written back from %q:\n%s", tt.want, tt.src, back)
 			}
 		})
@@ -659,8 +740,8 @@ elmt:B a sysml:Package ; sysml:declaredName "B" ; sysml:qualifiedName "B" ;
 	}
 }
 
-// A round trip through RDF drops lexical trivia, which no element owns, but
-// keeps `doc` and `comment` because those are declarations.
+// A round trip through RDF keeps `doc` and `comment` because those are
+// declarations, and lexical trivia because the source text carries it.
 func TestCommentsThroughRDF(t *testing.T) {
 	src := `package Demo {
 	// a lexical line comment
@@ -685,8 +766,17 @@ func TestCommentsThroughRDF(t *testing.T) {
 			t.Errorf("round trip dropped the declaration %q:\n%s", want, got)
 		}
 	}
-	if strings.Contains(got, "a lexical line comment") {
-		t.Errorf("trivia unexpectedly survived; update the documented limitation:\n%s", got)
+	if !strings.Contains(got, "// a lexical line comment") {
+		t.Errorf("the source text did not carry the note through:\n%s", got)
+	}
+	// Only the source text carries trivia: the structural triples alone
+	// convert to canonical notation, in which it has no place.
+	stripped := toNotation(t, withoutTriples(t, ttl, "sysx:sourceText"))
+	if strings.Contains(stripped, "a lexical line comment") {
+		t.Errorf("trivia survived without source text:\n%s", stripped)
+	}
+	if !strings.Contains(stripped, "comment about Wheel /* a note on wheels */") {
+		t.Errorf("the stripped graph dropped a comment declaration:\n%s", stripped)
 	}
 }
 
@@ -762,7 +852,7 @@ func TestEndBindingHeadsComeBackFromTheGraphAlone(t *testing.T) {
 	}
 	for _, head := range heads {
 		t.Run(head, func(t *testing.T) {
-			src := "package P {\n\tport def Bus;\n\trequirement def R;\n\tpart v;\n\tpart def Car {\n\t\tport left : Bus;\n\t\tport right : Bus;\n\t\tattribute a : Integer;\n\t\tattribute b : Integer;\n\t\t" + head + "\n\t}\n}"
+			src := "package P {\n    port def Bus;\n    requirement def R;\n    part v;\n    part def Car {\n        port left : Bus;\n        port right : Bus;\n        attribute a : Integer;\n        attribute b : Integer;\n        " + head + "\n    }\n}\n"
 			turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
 			if err != nil {
 				t.Fatalf("to turtle: %v", err)
@@ -785,17 +875,191 @@ func TestEndBindingHeadsComeBackFromTheGraphAlone(t *testing.T) {
 	}
 }
 
+// An end-binding usage's body members are elements of their own and come back
+// from the structure alone (Open-MBEE/OpenSysML#89).
+func TestEndBindingBodiesComeBackFromTheGraphAlone(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("testdata", "convert", "end_binding_bodies.sysml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	turtle, err := export.Convert("m.sysml", src, export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	graph := string(turtle)
+	for _, triple := range []string{
+		"elmt:R89__Ctx__seam__coupling\n    a sysml:AttributeUsage ;",
+		"sysml:declaredName \"coupling\" ;",
+		"sysx:memberIndex \"0\"^^xsd:integer ;\n    sysml:owningNamespace elmt:R89__Ctx__seam ;",
+		"sysml:ownedMember elmt:R89__Ctx__seam__coupling ;",
+		"sysml:ownedFeature elmt:R89__Ctx__seam__coupling ;",
+		"sysml:ownedMembership elmt:R89__Ctx__seam__coupling_om ;",
+		"elmt:R89__Ctx__seam__coupling_om\n    a sysml:FeatureMembership ;",
+		"sysx:sourceText \"        interface seam connect w.outp to r.inp {\\n\" ;",
+	} {
+		if !strings.Contains(graph, triple) {
+			t.Errorf("the graph should carry the body of the interface usage:\nmissing %q in\n%s", triple, graph)
+		}
+	}
+	if !strings.Contains(graph, "elmt:R89__Ctx__seam__coupling\n") || !strings.Contains(graph, "sysml:type elmt:R89__SeamCoupling") || !strings.Contains(graph, "SeamCoupling::learnFromData") {
+		t.Errorf("the attribute should keep its type and value:\n%s", graph)
+	}
+	// The text of a usage stops at its body; the members are text of their own.
+	if strings.Count(graph, "attribute w : Prio;") != 11 || strings.Contains(graph, "to r.inp {\\n            attribute coupling") {
+		t.Errorf("the body should not be carried as its owner's text:\n%s", graph)
+	}
+	// Without the text, the notation is rebuilt from the mapping alone; it may
+	// differ in layout from the notation the text writes, never in what it says.
+	structural := withoutTriples(t, withoutTriples(t, turtle, "sysx:sourceText"), "sysx:sourceTail")
+	back, err := export.Convert("m.ttl", structural, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation without source text: %v", err)
+	}
+	withText, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	if string(withText) != string(src) {
+		t.Errorf("the text should write the model as written\n--- written ---\n%s\n--- got ---\n%s", src, withText)
+	}
+	if strings.Count(string(back), "attribute w : Prio;") != 11 || !strings.Contains(string(back), "interface seam connect w.outp to r.inp {\n            attribute coupling : SeamCoupling = SeamCoupling::learnFromData;\n        }") {
+		t.Errorf("every body should come back with its members:\n%s", back)
+	}
+	for _, transition := range []string{
+		"transition t1 first off then on {\n                attribute w : Prio;\n            }",
+		"transition first on do assign x.a := 1 then off {\n            }",
+		"transition first off do {\n                assign x.a := 2;\n            } then on {\n                attribute w : Prio;\n            }",
+	} {
+		if !strings.Contains(string(back), transition) {
+			t.Errorf("a transition should keep its effect apart from its body:\nmissing %q in\n%s", transition, back)
+		}
+	}
+	again, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle again: %v", err)
+	}
+	if got := withoutTriples(t, withoutTriples(t, again, "sysx:sourceText"), "sysx:sourceTail"); string(got) != string(structural) {
+		t.Errorf("the second hop changed the graph\n--- first ---\n%s\n--- second ---\n%s", structural, got)
+	}
+}
+
+// An empty `do { }` and an empty trailing body are transition blocks with no
+// members to link, so the graph states each one's presence outright.
+func TestEmptyTransitionBlocksComeBackFromTheGraphAlone(t *testing.T) {
+	// Each transition with the canonical notation it is written back as.
+	transitions := map[string]string{
+		"transition first s1 do { } then s2;":    "transition first s1 do {\n        } then s2;",
+		"transition first s1 then s2 { }":        "transition first s1 then s2 {\n        }",
+		"transition first s1 do { } then s2 { }": "transition first s1 do {\n        } then s2 {\n        }",
+	}
+	for transition, want := range transitions {
+		t.Run(transition, func(t *testing.T) {
+			src := "package P {\n\tstate def M {\n\t\tstate s1;\n\t\tstate s2;\n\t\t" + transition + "\n\t}\n}"
+			turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle: %v", err)
+			}
+			stripped := withoutTriples(t, withoutTriples(t, turtle, "sysx:sourceText"), "sysx:sourceTail")
+			back, err := export.Convert("m.ttl", stripped, export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation: %v", err)
+			}
+			if !strings.Contains(string(back), want) {
+				t.Errorf("expected %q in:\n%s", want, back)
+			}
+		})
+	}
+}
+
+// A transition graph written before members were linked as effect or body
+// owns the effect alone, with sysx:hasBody recording its braces. Such a graph
+// still reads as the effect it was, braced or not.
+func TestLegacyTransitionEffectsStayEffects(t *testing.T) {
+	// Each effect with the canonical notation it is written back as.
+	effects := map[string][2]string{
+		"unbraced": {"do action stop : Warm", "transition first s1 do action stop : Warm then s2;"},
+		"braced":   {"do { action stop : Warm; }", "transition first s1 do {\n            action stop : Warm;\n        } then s2;"},
+	}
+	for name, effect := range effects {
+		effect, want := effect[0], effect[1]
+		t.Run(name, func(t *testing.T) {
+			src := "package P {\n\taction def Warm;\n\tstate def M {\n\t\tstate s1;\n\t\tstate s2;\n\t\ttransition first s1 " + effect + " then s2;\n\t}\n}"
+			turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle: %v", err)
+			}
+			for _, property := range []string{"sysx:sourceText", "sysx:sourceTail", "sysx:effectMember", "sysx:bodyMember"} {
+				turtle = withoutTriples(t, turtle, property)
+			}
+			legacy := strings.ReplaceAll(string(turtle), "sysx:bracedEffect ", "sysx:hasBody ")
+			if !strings.Contains(legacy, "sysx:hasBody") {
+				t.Fatalf("the legacy shape needs sysx:hasBody for the effect's braces:\n%s", legacy)
+			}
+			back, err := export.Convert("m.ttl", []byte(legacy), export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation: %v", err)
+			}
+			if !strings.Contains(string(back), want) {
+				t.Errorf("the effect did not come back as one:\n%s", back)
+			}
+			if strings.Contains(string(back), "then s2 {") {
+				t.Errorf("the effect became a body:\n%s", back)
+			}
+		})
+	}
+}
+
+// The effect and body links of a transition must partition its members: a graph
+// whose links are missing, doubled or dangling is refused rather than have an
+// action silently moved after the target.
+func TestInconsistentTransitionLinksAreRefused(t *testing.T) {
+	src := "package P {\n\taction def Warm;\n\tstate def M {\n\t\tstate s1;\n\t\tstate s2;\n\t\ttransition first s1 do { action stop : Warm; } then s2 { action tidy : Warm; }\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	const effect, body = "sysx:effectMember elmt:P__M___402__stop", "sysx:bodyMember elmt:P__M___402__tidy"
+	if !strings.Contains(string(turtle), effect) || !strings.Contains(string(turtle), body) {
+		t.Fatalf("the links are not the ones the test rewrites:\n%s", turtle)
+	}
+	faults := map[string]func(string) string{
+		"missing effect link": func(g string) string { return string(withoutTriples(t, []byte(g), "sysx:effectMember")) },
+		"missing body link":   func(g string) string { return string(withoutTriples(t, []byte(g), "sysx:bodyMember")) },
+		"overlapping links": func(g string) string {
+			return strings.Replace(g, body, "sysx:bodyMember elmt:P__M___402__stop", 1)
+		},
+		"dangling effect link": func(g string) string {
+			return strings.Replace(g, effect, "sysx:effectMember elmt:P__M___402__gone", 1)
+		},
+		"dangling body link": func(g string) string {
+			return strings.Replace(g, body, "sysx:bodyMember elmt:P__M___402__gone", 1)
+		},
+	}
+	for name, fault := range faults {
+		t.Run(name, func(t *testing.T) {
+			var unsupported *export.UnsupportedError
+			_, err := export.Convert("m.ttl", []byte(fault(string(turtle))), export.FormatTurtle, export.FormatSysML)
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("got %v, want an UnsupportedError", err)
+			}
+			if !strings.Contains(err.Error(), "P__M___402") {
+				t.Errorf("the error does not name the transition: %v", err)
+			}
+		})
+	}
+}
+
 // A transition and an accept state their trigger and payload in the head too,
 // inside the bodies that allow them.
 func TestBehavioralHeadsComeBackFromTheGraphAlone(t *testing.T) {
 	bodies := map[string]string{
-		"transition": "state def M {\n\t\tstate s1;\n\t\tstate s2;\n\t\ttransition first s1 accept e then s2;\n\t}",
-		"accept":     "action def A {\n\t\taccept x : Bus;\n\t}",
-		"send":       "action def A {\n\t\tsend x to y;\n\t}",
+		"transition": "state def M {\n        state s1;\n        state s2;\n        transition first s1 accept e then s2;\n    }",
+		"accept":     "action def A {\n        accept x : Bus;\n    }",
+		"send":       "action def A {\n        send x to y;\n    }",
 	}
 	for name, body := range bodies {
 		t.Run(name, func(t *testing.T) {
-			src := "package P {\n\tport def Bus;\n\tpart x;\n\tpart y;\n\t" + body + "\n}"
+			src := "package P {\n    port def Bus;\n    part x;\n    part y;\n    " + body + "\n}\n"
 			turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
 			if err != nil {
 				t.Fatalf("to turtle: %v", err)
@@ -851,6 +1115,39 @@ func TestUnnamedSuccessionEndComesBackFromTheGraph(t *testing.T) {
 	}
 	if !strings.Contains(string(fromGraph), "then s1;") {
 		t.Errorf("the mapping alone should say which member the `then` follows:\n%s", fromGraph)
+	}
+}
+
+// A head's form is what its tokens say, not how they are laid out: line breaks,
+// tabs and comments inside the head do not stop the graph from stating it.
+func TestEndFormsSurviveIrregularLayout(t *testing.T) {
+	heads := map[string]struct{ written, rebuilt string }{
+		"connect": {"connect left\n\t\t\t/* to the */ to\n\t\t\tright;", "connect left to right;"},
+		"bind":    {"bind\tleft\t=\tright;", "bind left = right;"},
+		"satisfy": {"satisfy R // by the car\n\t\t\tby left;", "satisfy R by left;"},
+		// The notes after a head are not part of it.
+		"connect then note":   {"connect left to right; // and done", "connect left to right;"},
+		"bind then note line": {"bind left = right;\n\t\t/* on to the next */", "bind left = right;"},
+		"satisfy then note":   {"satisfy R by left; /* checked */", "satisfy R by left;"},
+	}
+	for name, head := range heads {
+		t.Run(name, func(t *testing.T) {
+			src := "package P {\n\trequirement def R;\n\tpart def Car {\n\t\tpart left;\n\t\tpart right;\n\t\t" + head.written + "\n\t}\n}\n"
+			turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle: %v", err)
+			}
+			if !strings.Contains(string(turtle), "sysx:endForm") {
+				t.Fatalf("the head's form should be stated:\n%s", turtle)
+			}
+			back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation from the mapping alone: %v", err)
+			}
+			if !strings.Contains(string(back), head.rebuilt) {
+				t.Errorf("the head should be rebuilt as %q:\n%s", head.rebuilt, back)
+			}
+		})
 	}
 }
 
@@ -1173,23 +1470,33 @@ func TestLegacyExtensionNamespaceIsRefused(t *testing.T) {
 	}
 }
 
+// modelFiles lists the notation fixtures in testdata/convert, `.sysml` and
+// `.kerml` alike; the goldens beside them are not models.
 func modelFiles(t *testing.T) []string {
 	t.Helper()
-	paths, err := filepath.Glob(filepath.Join("testdata", "convert", "*.sysml"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	var out []string
-	for _, path := range paths {
-		if strings.HasSuffix(path, ".golden.sysml") {
-			continue
+	for _, pattern := range []string{"*.sysml", "*.kerml"} {
+		paths, err := filepath.Glob(filepath.Join("testdata", "convert", pattern))
+		if err != nil {
+			t.Fatal(err)
 		}
-		out = append(out, path)
+		for _, path := range paths {
+			if strings.Contains(path, ".golden.") {
+				continue
+			}
+			out = append(out, path)
+		}
 	}
 	if len(out) == 0 {
 		t.Fatal("no models in testdata/convert")
 	}
 	return out
+}
+
+// fixtureName is a fixture's stem, and its extension: the notation it is written in.
+func fixtureName(path string) (name, ext string) {
+	ext = filepath.Ext(path)
+	return strings.TrimSuffix(filepath.Base(path), ext), ext
 }
 
 func checkGolden(t *testing.T, path string, got []byte) {

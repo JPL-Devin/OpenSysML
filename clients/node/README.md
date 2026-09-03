@@ -52,6 +52,7 @@ than a generated message with optional fields:
 switch (value.kind) {
   case "int":      value.value;                      // bigint, never lossy
   case "real":     value.value;                       // number
+  case "complex":  value.value.real; value.value.imaginary;  // 1.5 - 2.0i, one value
   case "boolean":  value.value;
   case "string":   value.value;
   case "quantity": value.magnitude; value.unit;       // 1500.0 [kg]
@@ -182,6 +183,32 @@ get one that has it. A direct capability-gated request to a service without the
 capability is refused with `UNIMPLEMENTED`; response-population capabilities
 instead omit the fields they name.
 
+## Failures are typed
+
+Every failure is an `OpenSysMLError`. A call the service refused is a
+`ServiceError` whose `code` is the RPC status it came back with (`"NOT_FOUND"`,
+`"INVALID_ARGUMENT"`, …), and the statuses worth catching by themselves have a
+subclass: `ModelNotFoundError` (the service no longer holds that hash),
+`ModelFileNotFoundError`, `InvalidRequestError`, `ServiceTimeoutError`,
+`UnsupportedOperationError`. A name the model has not got is a
+`SymbolNotFoundError`, which carries the `symbolName` it looked for and the
+`suggestions` closest to it:
+
+```ts
+try {
+  await model.symbol("Wheeel");
+} catch (error) {
+  if (error instanceof SymbolNotFoundError) {
+    console.error(`no ${error.symbolName}; did you mean ${error.suggestions[0]}?`);
+  }
+}
+```
+
+Source that does not parse is not a failure: `load`/`loads` return a model whose
+`hasErrors` is true and whose `diagnostics` say where. Options that cannot work
+(an encoding that is not one, a timeout that cannot elapse, `grpc` with `json`)
+are refused before a connection is opened or a service started.
+
 ## The service binary
 
 The binary comes from an **optional per-platform npm package**, selected by npm
@@ -304,6 +331,26 @@ above. Deliberately **not** in v1, rather than half-implemented:
 
 `connection.rpc` is the escape hatch: it is the generated Connect client, so any
 RPC not covered here can still be called, without the ergonomic layer.
+
+## Examples
+
+`examples/` is six programs against one model, a rover, in `examples/model.ts`.
+They are written to be read in order, they assert what they print, and the test
+suite runs every one of them, so they cannot drift from the API.
+
+```bash
+npm run examples          # all of them, in order
+npm run example 03        # one, by number or name
+```
+
+| example | what it shows |
+| --- | --- |
+| `01-tour` | connect, parse, look up, evaluate, instantiate |
+| `02-values` | every value kind, and what it decodes to in JavaScript |
+| `03-symbols` | walking, lookup by name and id, type facts, adoption by hash |
+| `04-instances` | instance trees, single and repeated features, unset and absent |
+| `05-diagnostics` | syntax errors, the error each failure raises, refused options |
+| `06-connections` | ownership, an external service, both protocols, calls at once |
 
 ## Conformance
 

@@ -140,7 +140,7 @@ func TestTypeClassificationFollowsSelectedVariant(t *testing.T) {
 }
 
 // strValue is a String runtime value, the representation of a string literal.
-func strValue(s string) Value { return Value{Kind: ValString, Str: s} }
+func strValue(s string) Value { return NewStringValue(s) }
 
 // evalStringExpr evaluates expr against string-valued attributes, on its own
 // goroutine so an evaluation that neither answers nor fails fails the test.
@@ -148,13 +148,14 @@ func evalStringExpr(t *testing.T, expr string) (Value, error) {
 	t.Helper()
 	src := `
 package test {
+	private import SequenceFunctions::*;
 	attribute s = "abc";
 	attribute empty = "";
 	attribute accented = "héllo";
 	attribute three = 3;
 	attribute result = ` + expr + `;
 }`
-	model, resolver, root := parseAndBuildModel(t, src)
+	model, resolver, root := parseAndBuildLibraryModel(t, src)
 	pkg, ok := root.LookupLocal("test")
 	if !ok || pkg == nil || pkg.Scope == nil {
 		t.Fatal("package test has no scope")

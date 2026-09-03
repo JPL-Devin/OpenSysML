@@ -18,6 +18,12 @@ import (
 // is synthesised. Experimental: SysML v2 defines no solving, and the runtime
 // evaluator remains normative. Read-only: no object is created.
 func (s *Session) SolveValues(name string) []SolveReport {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.solveValues(name)
+}
+
+func (s *Session) solveValues(name string) []SolveReport {
 	queries, unfixed, bad := s.solveQueriesWith(name, s.declaredPins(name))
 	if bad != nil {
 		return []SolveReport{*bad}
@@ -95,6 +101,9 @@ func (s *Session) synthesise(name string, solver *solve.Solver, q *solve.Query, 
 		lines = append(lines, "  One witness: a solver may answer with any of the assignments that satisfy it.")
 		return SolveReport{Subject: name, Status: SolveSat, Solver: result.Solver, Lines: lines}
 	case solve.StatusUnsat:
+		if report, rounded := roundedNoValuesReport(name, subject, result, q); rounded {
+			return report
+		}
 		return SolveReport{Subject: name, Status: SolveUnsat, Solver: result.Solver,
 			Lines: s.noValuesLines(subject, solver, q, result, unfixed)}
 	default:
@@ -105,6 +114,20 @@ func (s *Session) synthesise(name string, solver *solve.Solver, q *solve.Query, 
 		lines = append(lines, fixedLines(q)...)
 		return SolveReport{Subject: name, Status: SolveUnknown, Solver: result.Solver, Lines: lines}
 	}
+}
+
+// roundedNoValuesReport downgrades a no-values verdict about conditions the
+// evaluator rounds: exact-real unsatisfiability does not decide its arithmetic.
+func roundedNoValuesReport(name, subject string, result *solve.Result, q *solve.Query) (SolveReport, bool) {
+	if !q.Rounded() {
+		return SolveReport{}, false
+	}
+	lines := []string{
+		fmt.Sprintf("? %s has no values decided either way (%s)", subject, solveDetail(result)),
+		"  " + roundedUnsat,
+	}
+	lines = append(lines, fixedLines(q)...)
+	return SolveReport{Subject: name, Status: SolveUnknown, Solver: result.Solver, Lines: lines}, true
 }
 
 // noValuesLines reports that no values satisfy the element, distinguishing values
@@ -243,6 +266,12 @@ func plural(n int, one, many string) string {
 // consistent selections up to the bound (limit, when a count follows `all`).
 // Experimental, and read-only: no object is created and no variant is bound.
 func (s *Session) ConfigureVariants(name string, args []string) []SolveReport {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.configureVariants(name, args)
+}
+
+func (s *Session) configureVariants(name string, args []string) []SolveReport {
 	request, err := parseConfigure(args)
 	if err != nil {
 		return []SolveReport{unavailableReport(name, err.Error())}
@@ -446,6 +475,12 @@ func (s *Session) checkSelection(name string, solver *solve.Solver, q *solve.Que
 		return SolveReport{Subject: name, Status: SolveSat, Solver: result.Solver,
 			Lines: append(lines, synthesisedLines(q, result)...)}
 	case solve.StatusUnsat:
+		if q.Rounded() {
+			lines := []string{fmt.Sprintf("? whether the chosen variants are consistent with %s is undecided (%s)",
+				subject, solveDetail(result)), "  " + roundedUnsat}
+			return SolveReport{Subject: name, Status: SolveUnknown, Solver: result.Solver,
+				Lines: append(lines, fixedLines(q)...)}
+		}
 		lines := []string{fmt.Sprintf("✗ the chosen variants are not consistent with %s (%s)", subject, solveDetail(result))}
 		lines = append(lines, fixedLines(q)...)
 		return SolveReport{Subject: name, Status: SolveUnsat, Solver: result.Solver,
@@ -479,6 +514,12 @@ func (s *Session) synthesiseConfiguration(
 		lines = append(lines, fmt.Sprintf("  One witness: use %%configure %s all for every consistent selection.", name))
 		return SolveReport{Subject: name, Status: SolveSat, Solver: result.Solver, Lines: lines}
 	case solve.StatusUnsat:
+		if q.Rounded() {
+			return SolveReport{Subject: name, Status: SolveUnknown, Solver: result.Solver, Lines: []string{
+				fmt.Sprintf("? whether %s permits a selection of variants is undecided (%s)", subject, solveDetail(result)),
+				"  " + roundedUnsat,
+			}}
+		}
 		return SolveReport{Subject: name, Status: SolveUnsat, Solver: result.Solver, Lines: []string{
 			fmt.Sprintf("✗ %s permits no selection of variants (%s)", subject, solveDetail(result)),
 		}}
@@ -496,6 +537,14 @@ func (s *Session) synthesiseConfiguration(
 // the bound, saying when it stopped at the bound rather than having shown there
 // is no other.
 func (s *Session) enumerateConfigurations(name string, solver *solve.Solver, q *solve.Query, limit int) SolveReport {
+	// Enumerating "all" selections over conditions the evaluator rounds would
+	// claim exact-real completeness the evaluator's arithmetic may not share.
+	if q.Rounded() {
+		return SolveReport{Subject: name, Status: SolveUnknown, Lines: []string{
+			fmt.Sprintf("? which variants %s permits is undecided", solveSubject(q)),
+			"  " + roundedClaim,
+		}}
+	}
 	result, err := solver.Configurations(context.Background(), q, limit)
 	if err != nil {
 		return unavailableReport(name, err.Error())
@@ -565,7 +614,7 @@ func selectionLines(selection []solve.Assignment) []string {
 // doSolve carries out %solve.
 func (s *Session) doSolve(name string) ([]string, bool, error) {
 	var out []string
-	for _, r := range s.SolveValues(name) {
+	for _, r := range s.solveValues(name) {
 		out = append(out, r.Lines...)
 	}
 	return out, false, nil
@@ -574,7 +623,7 @@ func (s *Session) doSolve(name string) ([]string, bool, error) {
 // doConfigure carries out %configure.
 func (s *Session) doConfigure(name string, args []string) ([]string, bool, error) {
 	var out []string
-	for _, r := range s.ConfigureVariants(name, args) {
+	for _, r := range s.configureVariants(name, args) {
 		out = append(out, r.Lines...)
 	}
 	return out, false, nil

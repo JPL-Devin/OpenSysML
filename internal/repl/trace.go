@@ -7,12 +7,22 @@ import "github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 const tracePrefix = "[trace] "
 
 // Tracing reports whether execution steps are being recorded.
-func (s *Session) Tracing() bool { return s.trace != nil }
+func (s *Session) Tracing() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.trace != nil
+}
 
 // SetTracing turns recording of execution steps on or off. It takes effect at
 // once, on the session's runtime context and on a debugging session already
 // under way as well as on everything created afterwards.
 func (s *Session) SetTracing(on bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.setTracing(on)
+}
+
+func (s *Session) setTracing(on bool) {
 	switch {
 	case on && s.trace == nil:
 		s.trace = runtime.NewTraceRecorder()

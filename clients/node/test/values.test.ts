@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { create } from "@bufbuild/protobuf";
 import {
+  ComplexSchema,
   EnumLiteralSchema,
   FailureReason,
   QuantitySchema,
@@ -33,6 +34,39 @@ test("integers keep their width and reals stay numbers", () => {
     kind: "real",
     value: 0.5,
   });
+});
+
+test("a complex number is one value with both parts, never two reals", () => {
+  const complex = (real: number, imaginary: number) =>
+    create(ValueSchema, { kind: { case: "complex", value: create(ComplexSchema, { real, imaginary }) } });
+  assert.deepEqual(decodeValue(complex(1.5, -2)), {
+    kind: "complex",
+    value: { real: 1.5, imaginary: -2 },
+  });
+  assert.equal(formatValue(decodeValue(complex(1.5, -2))), "1.5 - 2.0i");
+  assert.equal(formatValue(decodeValue(complex(1, 2))), "1.0 + 2.0i");
+  assert.equal(formatValue(decodeValue(complex(0, 0))), "0.0 + 0.0i");
+  assert.equal(formatValue(decodeValue(complex(-0.25, 1e300))), "-0.25 + 1e+300i");
+  // An empty message is zero, as every proto3 default is.
+  assert.deepEqual(decodeValue(create(ValueSchema, { kind: { case: "complex", value: create(ComplexSchema, {}) } })), {
+    kind: "complex",
+    value: { real: 0, imaginary: 0 },
+  });
+
+  const nested = create(ValueSchema, {
+    kind: {
+      case: "sequence",
+      value: create(ValueSequenceSchema, { elements: [complex(1, 2), complex(3, -4)] }),
+    },
+  });
+  assert.deepEqual(decodeValue(nested), {
+    kind: "sequence",
+    elements: [
+      { kind: "complex", value: { real: 1, imaginary: 2 } },
+      { kind: "complex", value: { real: 3, imaginary: -4 } },
+    ],
+  });
+  assert.equal(formatValue(decodeValue(nested)), "(1.0 + 2.0i, 3.0 - 4.0i)");
 });
 
 test("a sequence decodes its elements", () => {

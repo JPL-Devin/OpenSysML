@@ -7,6 +7,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // intArgument is an integer argument of an invocation.
@@ -174,6 +175,54 @@ func TestExhibitedMachineWritesItsOwnOccurrence(t *testing.T) {
 	}
 }
 
+// A redefinition renames the behavior it redefines, so the object runs one
+// behavior that answers to both names; a name of no behavior answers to none.
+func TestBehaviorNamedFollowsRedefinition(t *testing.T) {
+	src := `
+		state def Modes {
+			entry; then off;
+			state off;
+		}
+		part def Lamp {
+			exhibit state modes : Modes;
+			perform action tick { action step; }
+			action blink;
+		}
+		part def FancyLamp :> Lamp {
+			exhibit state fancyModes :>> modes;
+			perform action fancyTick :>> tick { action step; }
+			action fancyBlink :>> blink;
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 10000)
+
+	inst, err := ctx.Instantiate(resolveSymbol(t, root, "FancyLamp"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	for _, names := range [][2]string{{"fancyModes", "modes"}, {"fancyTick", "tick"}} {
+		renamed, ok := inst.Behavior(names[0])
+		if !ok {
+			t.Fatalf("object runs no %s behavior: %v", names[0], inst.Behaviors())
+		}
+		if _, ok := inst.Behavior(names[1]); ok {
+			t.Errorf("Behavior(%q) matched by name alone", names[1])
+		}
+		for _, name := range names {
+			got, ok := ctx.BehaviorNamed(inst, name)
+			if !ok || got != renamed {
+				t.Errorf("BehaviorNamed(%q) = %v, %v; want the %s behavior", name, got, ok, names[0])
+			}
+		}
+	}
+	for _, name := range []string{"blink", "fancyBlink", "nothing", ""} {
+		if got, ok := ctx.BehaviorNamed(inst, name); ok {
+			t.Errorf("BehaviorNamed(%q) = %v; want none", name, got)
+		}
+	}
+}
+
 // An action-declared feature is written on the action performance occurrence,
 // while a like-named feature of the performer remains distinct. The results the
 // run reports mirror the occurrence, which is authoritative.
@@ -302,7 +351,7 @@ func assertSingleStringCollection(t *testing.T, name string, value Value, want s
 		t.Fatalf("%s holds %v, want a collection", name, value.Kind)
 	}
 	elements := elementsOf(value)
-	if len(elements) != 1 || elements[0].Str != want {
+	if len(elements) != 1 || elements[0].Str() != want {
 		t.Errorf("%s = %v, want one element %q", name, elements, want)
 	}
 }
@@ -671,7 +720,7 @@ func TestWritingOneValueToAManyValuedFeatureHoldsACollection(t *testing.T) {
 	if held.Kind != ValSequence && held.Kind != ValSet {
 		t.Fatalf("entries holds %v, want a collection", held.Kind)
 	}
-	if got := elementsOf(held); len(got) != 1 || got[0].Str != "first" {
+	if got := elementsOf(held); len(got) != 1 || got[0].Str() != "first" {
 		t.Errorf("entries = %v, want one element \"first\"", got)
 	}
 }
@@ -695,6 +744,81 @@ func TestExhibitedMachineNamingNoBodyIsReported(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "modes") {
 		t.Errorf("error %q does not name the behavior", err)
+	}
+}
+
+// A type exhibits a machine through the declaration stating it inline, one typed
+// by a definition, or one naming a state usage declared beside it, and every
+// binding on the way to the body addresses it; a machine it merely performs, and
+// a definition no declaration names, it does not exhibit.
+func TestExhibitsStateResolvesTheBodyABindingRuns(t *testing.T) {
+	src := `
+		state def Blink { entry; then dark; state dark; }
+		state def Check { entry; then checking; state checking; }
+		part def Lamp {
+			exhibit state front : Blink;
+			exhibit state own { entry; then idle; state idle; }
+			state spare : Blink;
+			exhibit spare;
+			state standby : Check;
+			exhibit state night ::> standby;
+			perform action watch { first start; then done; }
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 10000)
+	lamp := resolveSymbol(t, root, "Lamp")
+	member := func(name string) *symbols.Symbol {
+		sym, ok := lamp.Scope.LookupLocal(name)
+		if !ok {
+			t.Fatalf("Lamp declares no %s", name)
+		}
+		return sym
+	}
+	exhibitSpare := lamp.Scope.LookupLocalAll("spare")[1]
+
+	for _, tc := range []struct {
+		member, machine string
+		memberSym       *symbols.Symbol
+		machineSym      *symbols.Symbol
+		want            bool
+	}{
+		{"front", "Blink", member("front"), resolveSymbol(t, root, "Blink"), true},
+		{"front", "front", member("front"), member("front"), true},
+		{"own", "own", member("own"), member("own"), true},
+		{"exhibit spare", "spare", exhibitSpare, member("spare"), true},
+		{"exhibit spare", "Blink", exhibitSpare, resolveSymbol(t, root, "Blink"), true},
+		{"night", "standby", member("night"), member("standby"), true},
+		{"night", "Check", member("night"), resolveSymbol(t, root, "Check"), true},
+		{"night", "Blink", member("night"), resolveSymbol(t, root, "Blink"), false},
+		{"front", "Check", member("front"), resolveSymbol(t, root, "Check"), false},
+		{"watch", "watch", member("watch"), member("watch"), false},
+		{"spare", "spare", member("spare"), member("spare"), false},
+	} {
+		if got := ctx.ExhibitsState(tc.memberSym, tc.machineSym); got != tc.want {
+			t.Errorf("ExhibitsState(%s, %s) = %v, want %v", tc.member, tc.machine, got, tc.want)
+		}
+	}
+	if ctx.ExhibitsState(nil, lamp) || ctx.ExhibitsState(lamp, nil) {
+		t.Error("ExhibitsState over a nil symbol reported an exhibit")
+	}
+
+	// An object of the type addresses its machines the same way.
+	inst, err := ctx.Instantiate(lamp)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if got := inst.ExhibitedStatesOf(member("spare")); len(got) != 1 || got[0].Member() != exhibitSpare {
+		t.Errorf("ExhibitedStatesOf(spare) = %v, want the machine `exhibit spare` binds", got)
+	}
+	if got := inst.ExhibitedStatesOf(resolveSymbol(t, root, "Blink")); len(got) != 2 {
+		t.Errorf("ExhibitedStatesOf(Blink) = %v, want front and spare", got)
+	}
+	if got := inst.ExhibitedStatesOf(member("standby")); len(got) != 1 || got[0].Member() != member("night") {
+		t.Errorf("ExhibitedStatesOf(standby) = %v, want night", got)
+	}
+	if got := inst.ExhibitedStatesOf(member("watch")); len(got) != 0 {
+		t.Errorf("ExhibitedStatesOf(watch) = %v, want none", got)
 	}
 }
 
@@ -952,9 +1076,10 @@ func machineOf(t *testing.T, inst *Instance, name string) *ObjectBehavior {
 	return behavior
 }
 
-// A failed creation leaves no object holding a neighbour it removed: the feature
-// that reached the removed object is read again against the objects that remain.
-func TestFailedMaterializationLeavesNoDanglingHolder(t *testing.T) {
+// A holder's creation fails with the creation of a part it runs, and leaves
+// nothing behind: neither the holder, nor the neighbour the failed part reached,
+// nor any behavior of theirs.
+func TestFailedNestedStartFailsTheHolder(t *testing.T) {
 	src := `
 		package test {
 			item def Ping;
@@ -979,28 +1104,153 @@ func TestFailedMaterializationLeavesNoDanglingHolder(t *testing.T) {
 				part good : Listener;
 				part bad : Broken;
 			}
+			part group : Group;
 		}
 	`
 	model, resolver, root := parseAndBuildModel(t, src)
 	pkg := resolveSymbol(t, root, "test")
 	ctx := NewContext(model, resolver, 10000)
 
-	group, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "Group"))
-	if err != nil {
-		t.Fatalf("Instantiate Group: %v", err)
+	sym := resolveSymbol(t, pkg.Scope, "group")
+	if _, err := ctx.Instantiate(sym); err == nil {
+		t.Fatal("expected the part whose machine has no initial state to fail its holder's creation")
 	}
-	if _, err := group.GetFeatureValue(ctx, "bad"); err == nil {
-		t.Fatal("expected the machine with no initial state to fail materialization")
+	if got := len(ctx.instances); got != 0 {
+		t.Errorf("%d object(s) left alive after a failed creation, want none", got)
+	}
+	if got := len(ctx.objectBehaviors); got != 0 {
+		t.Errorf("%d behavior(s) left attached after a failed creation", got)
+	}
+	if _, named := ctx.occurrences[sym]; named {
+		t.Error("the failed creation is still what the usage denotes")
+	}
+}
+
+// An optional part whose type runs a machine is not created with its holder:
+// nothing is required to hold it, so nothing runs until something reads it.
+func TestOptionalBehavingPartIsNotCreatedWithItsHolder(t *testing.T) {
+	src := `
+		package test {
+			part def Ticker {
+				attribute n : ScalarValues::Integer = 0;
+				exhibit state ticking {
+					entry; then on;
+					state on { entry assign n := n + 1; }
+				}
+			}
+			part def Bay { part maybe : Ticker [0..1]; }
+			part def Holder {
+				part maybe : Ticker [0..1];
+				part bay : Bay;
+				part must : Ticker;
+			}
+			part holder : Holder;
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	pkg := resolveSymbol(t, root, "test")
+	ctx := NewContext(model, resolver, 10000)
+
+	inst, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "holder"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fv := inst.FeatureValues["maybe"]; fv.Materialized {
+		t.Errorf("the optional part was created with its holder: %+v", fv)
+	}
+	// A required part that runs nothing itself, and whose only behaving part is
+	// optional, is as lazy as any other part without behaviors.
+	if fv := inst.FeatureValues["bay"]; fv.Materialized {
+		t.Errorf("the part holding only an optional behaving part was created with its holder: %+v", fv)
+	}
+	if fv := inst.FeatureValues["must"]; !fv.Materialized {
+		t.Errorf("the required part was not created with its holder: %+v", fv)
+	}
+	// The holder, the required part, and the required part's state performance.
+	if got := len(ctx.instances); got != 3 {
+		t.Errorf("%d object(s) after creating the holder, want 3", got)
 	}
 
-	// The neighbour the failed creation materialized is gone, so reading it again
-	// materializes an object the session holds.
-	good := instanceAtPath(t, ctx, group, "good")
-	if _, held := ctx.Instance(good.ID); !held {
-		t.Errorf("good names object %d, which the context does not hold", good.ID)
+	// A part required in unbounded number is not optional: it fails its holder
+	// as reading it would.
+	src = `
+		package test {
+			part def Ticker {
+				exhibit state ticking { entry; then on; state on; }
+			}
+			part def Holder { part all : Ticker [*..*]; }
+			part holder : Holder;
+		}
+	`
+	model, resolver, root = parseAndBuildModel(t, src)
+	pkg = resolveSymbol(t, root, "test")
+	ctx = NewContext(model, resolver, 10000)
+	if _, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "holder")); !errors.Is(err, ErrMultiplicityViolation) {
+		t.Errorf("creating a holder of an unbounded required part: got %v, want ErrMultiplicityViolation", err)
 	}
-	if _, ok := good.ExhibitedState(); !ok {
-		t.Error("the object materialized again exhibits no machine")
+
+	// A required part whose upper bound cannot be determined is not optional
+	// either: it fails its holder as reading it would.
+	src = `
+		package test {
+			part def Ticker {
+				exhibit state ticking { entry; then on; state on; }
+			}
+			part def Holder { part some : Ticker [1..n]; }
+			part holder : Holder;
+		}
+	`
+	model, resolver, root = parseAndBuildModel(t, src)
+	pkg = resolveSymbol(t, root, "test")
+	ctx = NewContext(model, resolver, 10000)
+	if _, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "holder")); err == nil || !strings.Contains(err.Error(), "unknown multiplicity") {
+		t.Errorf("creating a holder of a required part of unknown upper bound: got %v, want an unknown-multiplicity error", err)
+	}
+}
+
+// A behavior started by a creation that names its own usage reaches the object
+// being created, and a second creation of the usage is what it denotes from then
+// on; a failed second creation leaves the first as what the usage denotes.
+func TestStartupNamingItsOwnUsageReachesTheObjectCreated(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			part def Counter {
+				attribute n : Integer = 0;
+				attribute seen : Integer = 0;
+				exhibit state sm {
+					entry; then s1;
+					state s1 { entry assign seen := counter.n + 1; }
+				}
+			}
+			part counter : Counter;
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	pkg := resolveSymbol(t, root, "test")
+	ctx := NewContext(model, resolver, 10000)
+	sym := resolveSymbol(t, pkg.Scope, "counter")
+
+	first, err := ctx.Instantiate(sym)
+	if err != nil {
+		t.Fatalf("Instantiate counter: %v", err)
+	}
+	if got := len(ctx.instances); got != 2 {
+		t.Errorf("%d objects materialized, want the counter and its state performance", got)
+	}
+	if id := ctx.occurrences[sym]; id != first.ID {
+		t.Errorf("counter denotes object %d, want the one created, %d", id, first.ID)
+	}
+
+	second, err := ctx.Instantiate(sym)
+	if err != nil {
+		t.Fatalf("Instantiate counter again: %v", err)
+	}
+	if id := ctx.occurrences[sym]; id != second.ID {
+		t.Errorf("counter denotes object %d after a second creation, want %d", id, second.ID)
+	}
+	if _, held := ctx.Instance(first.ID); !held {
+		t.Error("the first object is gone after a second creation")
 	}
 }
 

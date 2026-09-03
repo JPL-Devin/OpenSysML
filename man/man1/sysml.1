@@ -25,6 +25,10 @@ initial transition)
 Invoke this calculation and report what it computed, as \-calc "Fall(3, 4)"
 (repeatable)
 .TP
+.BI \-compile " string"
+Compile this calc def to a native executable named by \-o, as \-compile
+Pkg::Fib
+.TP
 .BI \-constraint " value"
 Evaluate this constraint and exit (repeatable)
 .TP
@@ -40,8 +44,17 @@ Report every diagnostic over the whole session buffer, with the pass that
 produced it
 .TP
 .BI \-doc\-form " string"
-Form \-render\-document writes: markdown (default) or pdf, which drives an
-external converter
+Form \-render\-document and \-render\-documents write: markdown (default),
+html or pdf, which drives an external converter
+.TP
+.B \-doc\-number\-sections
+Number the section headings hierarchically (\-doc\-form html or pdf)
+.TP
+.B \-doc\-title\-page
+Put the document title on a page of its own (\-doc\-form html or pdf)
+.TP
+.B \-doc\-toc
+Write a table of contents ahead of the content (\-doc\-form html or pdf)
 .TP
 .BI \-e " value"
 Evaluate expression and exit (shorthand)
@@ -58,6 +71,22 @@ Show this help (shorthand)
 .TP
 .B \-help
 Show this help and exit
+.TP
+.BI \-html\-css " value"
+Style the HTML with this stylesheet: a file is inlined, a URL is linked
+(repeatable, applied in order after the default sheet)
+.TP
+.B \-html\-default\-css
+Write the default document stylesheet and exit, as a starting point for your
+own
+.TP
+.B \-html\-fragment
+Write the document element alone, without the page shell or a stylesheet, to
+embed in a page of your own
+.TP
+.B \-html\-no\-default\-css
+Leave the default stylesheet out, so only \-html\-css sheets style the
+document
 .TP
 .BI \-instantiate " value"
 Create an object of this definition before the checks, so a verdict is about
@@ -130,6 +159,9 @@ Execute this document query and report its rows, as \-run\-query
 Evaluate every satisfaction assertion, or with \-satisfy=<name> those the
 named element states (repeatable). The default is [].
 .TP
+.B \-source
+With \-compile, write the generated source to \-o instead of building it
+.TP
 .BI \-state " value"
 Run this state machine, as \-state "Mission rover1" to run it on an object
 (repeatable)
@@ -137,6 +169,39 @@ Run this state machine, as \-state "Mission rover1" to run it on an object
 .B \-strict
 Judge the model as conforming SysML v2: notation no pinned production admits
 is an error, not a warning
+.TP
+.BI \-sync\-annotate " string"
+Write the model to this file with each minted id declared as an @ElementId
+annotation (needs \-sync\-mint\-ids)
+.TP
+.BI \-sync\-apply " string"
+Apply the change set to the model's project branch at this SysML v2 API
+endpoint URL, then record the commit in the sync state (token from
+FLEXO_INTEROP_TOKEN)
+.TP
+.BI \-sync\-base " string"
+Repository graph at the last\-seen commit; with it, repository changes since
+then surface as conflicts
+.TP
+.B \-sync\-confirm\-deletes
+Confirm repository\-side deletes; without it the diff reports them but
+applying is refused
+.TP
+.BI \-sync\-diff " string"
+Show the change set between the model and this repository \(em a graph file
+(.ttl) or a SysML v2 API endpoint URL \(em keyed by effective element id,
+instead of running it; never writes
+.TP
+.B \-sync\-mint\-ids
+Mint a UUID for each unannotated element being created, so the repository can
+address it stably
+.TP
+.BI \-sync\-state " string"
+Sync state file recording project, branch and last\-seen commit (default:
+<model>.sync.json beside the model)
+.TP
+.BI \-target " string"
+Backend \-compile generates code for: c (default) or go. The default is c.
 .TP
 .BI \-to " value"
 Replaced by \-convert, which names the output format
@@ -220,6 +285,51 @@ docs/reference/rdf\-mapping.md \(sc Status
 .PP
 Every run that converts RDF says so on stderr. Saving to .sysml or .kerml is
 stable.
+.SH NATIVE COMPILATION
+.RS 2
+.nf
+# Compile a calc def to a C executable
+sysml model.sysml \-compile Pkg::Fib \-o fib
+# \&...via Go
+sysml model.sysml \-compile Pkg::Fib \-target go \-o fib
+# Write the generated source only
+sysml model.sysml \-compile Pkg::Fib \-source \-o fib.c
+.fi
+.RE
+.PP
+The executable takes the calc's parameters as arguments and prints its result;
+it computes what sysml \-calc computes, or fails with the same error. Only the
+scalar subset compiles (Integer, Real, Boolean; see
+docs/project/native\-compilation.md).
+.SH SYNCING AGAINST A REPOSITORY
+A dry run unless \-sync\-apply:
+.PP
+.RS 2
+.nf
+# Show the change set and exit
+sysml model.sysml \-sync\-diff repo.ttl
+sysml model.sysml \-sync\-diff repo.ttl \-sync\-base last\-seen.ttl
+sysml model.sysml \-sync\-diff repo.ttl \-sync\-confirm\-deletes
+sysml model.sysml \-sync\-diff repo.ttl \-sync\-mint\-ids \-sync\-annotate \e
+    out.sysml
+# Against the live API; no writes
+sysml model.sysml \-sync\-diff http://localhost:8083
+# Write the change set as a commit
+sysml model.sysml \-sync\-apply http://localhost:8083
+.fi
+.RE
+.PP
+The diff correlates elements by their effective id \(em an @ElementId
+annotation, or the encoded qualified name \(em so a rename, move or retype is
+an update, never a delete plus a create. Repository\-only elements are
+reported as deletes but applying them needs \-sync\-confirm\-deletes;
+conflicts \(em a declared id the branch no longer has, or a repository change
+since the last\-seen commit \(em exit 1 and are never resolved silently.
+.PP
+The last\-seen commit is tool state in <model>.sync.json (or \-sync\-state),
+never written into the notation. \-sync\-apply refuses a change set the dry
+run would have flagged, sends each update under its retained id, and records
+the resulting commit; the token comes from FLEXO_INTEROP_TOKEN.
 .SH RENDERING A VIEW
 .RS 2
 .nf
@@ -243,11 +353,17 @@ sysml model.sysml \-render\-document Reports::MassReport
 sysml model.sysml \-render\-document Reports::MassReport \-o report.md
 sysml model.sysml \-render\-document Reports::MassReport \-doc\-form pdf \e
     \-o report.pdf
+sysml model.sysml \-render\-document Reports::MassReport \-doc\-form html \e
+    \-o report.html
 # every document, linked
 sysml model.sysml \-render\-documents rendered
+sysml model.sysml \-render\-documents site \-doc\-form html \-html\-css \e
+    theme.css
 sysml model.sysml \-render\-document Reports::MassReport \-doc\-form pdf \e
-    \-pdf\-engine pandoc \-pdf\-title\-page \-pdf\-toc \-pdf\-number\-sections \e
+    \-pdf\-engine pandoc \-doc\-title\-page \-doc\-toc \-doc\-number\-sections \e
     \-o report.pdf
+# the default stylesheet
+sysml \-html\-default\-css \-o sysml\-document.css
 .fi
 .RE
 .PP
@@ -255,11 +371,20 @@ A document is a part def specializing DocumentQueries::Document. Its queries
 are bound in the model and run against it, and the result is written as
 CommonMark\-compatible Markdown.
 .PP
+\-doc\-form html writes semantic HTML instead, carrying each element's
+identity and kind, styled by a stylesheet in a cascade layer your own CSS
+overrides without !important.
+.PP
 \-doc\-form pdf converts that Markdown with an external converter named by
 \-pdf\-engine \(em weasyprint (default), pandoc or prince \(em run as a
 subprocess, never linked in; diagrams are pre\-rendered to SVG with
 mermaid\-cli (mmdc). None of these tools is needed until PDF output is asked
 for; scripts/download\-doc\-pdf\-toolchain.sh provisions pinned copies.
+.PP
+HTML output needs nothing external and loads nothing: \-html\-css adds your
+own stylesheets, \-html\-no\-default\-css drops the default one,
+\-html\-fragment writes the document element alone to embed in a page of
+yours, and \-html\-default\-css writes the default sheet out to start from.
 .SH FLAG ORDER
 Flags may be written before or after the model they apply to. A file named
 like a flag is read as a file after \-\-, which ends the flags: sysml \-trace

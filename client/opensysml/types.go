@@ -28,6 +28,7 @@ const (
 	CapabilityInlineLanguage    = sysmlgrpc.CapabilityInlineLanguage
 	CapabilityStrictConformance = sysmlgrpc.CapabilityStrictConformance
 	CapabilityParseSources      = sysmlgrpc.CapabilityParseSources
+	CapabilityComplexValues     = sysmlgrpc.CapabilityComplexValues
 )
 
 // ServerInfo describes the implementation answering a Client's calls.

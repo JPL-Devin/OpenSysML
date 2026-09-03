@@ -48,13 +48,17 @@ func collectionExprContext(t *testing.T, expr string, maxSteps int64) (*EvalCont
 	t.Helper()
 	src := `
 package test {
+	private import SequenceFunctions::*;
+	private import CollectionFunctions::*;
+	private import ControlFunctions::*;
+	private import NumericalFunctions::*;
 	attribute xs = (1, 2, 3);
 	attribute ys = (2, 4);
 	attribute factor = 10;
 	attribute flags = (true, false);
 	attribute result = ` + expr + `;
 }`
-	model, resolver, root := parseAndBuildModel(t, src)
+	model, resolver, root := parseAndBuildLibraryModel(t, src)
 	pkg, ok := root.LookupLocal("test")
 	if !ok || pkg == nil {
 		t.Fatal("package test not found")
@@ -262,6 +266,8 @@ func TestCollectionScalarResults(t *testing.T) {
 		// collection, as the library's own sum0/product1 compute it.
 		{"sum(())", integerValue(0)},
 		{"product(())", integerValue(1)},
+		{"RealFunctions::sum(())", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 0}}},
+		{"RealFunctions::product(xs)", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 6}}},
 		{"sum((1, 2.5))", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 3.5}}},
 		{"xs.{in x; x * 2}->sum()", integerValue(12)},
 		{"xs->forAll {in x; x > 0}", boolValue(true)},
@@ -440,7 +446,7 @@ func TestCollectionOperationsOverSets(t *testing.T) {
 	for _, n := range []int64{3, 1, 2, 3} {
 		set.Add(integerValue(n))
 	}
-	setVal := Value{Kind: ValSet, Set: set}
+	setVal := NewSetValue(set)
 
 	if got := intsOf(t, sequenceOf(elementsOf(setVal))); !equalInts(got, []int64{3, 1, 2}) {
 		t.Fatalf("set elements = %v, want the distinct elements in insertion order", got)
@@ -489,7 +495,7 @@ func TestAggregateQuantities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sum of metres: %v", err)
 	}
-	if got.Kind != ValQuantity || got.Quantity.String() != "6.0 [m]" {
+	if got.Kind != ValQuantity || got.Quantity().String() != "6.0 [m]" {
 		t.Errorf("sum of metres = %v (%s), want 6.0 [m]", got, got.Kind)
 	}
 
@@ -498,7 +504,7 @@ func TestAggregateQuantities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sum of mixed length units: %v", err)
 	}
-	if got.Kind != ValQuantity || got.Quantity.String() != "1.5 [m]" {
+	if got.Kind != ValQuantity || got.Quantity().String() != "1.5 [m]" {
 		t.Errorf("sum of mixed length units = %v, want 1.5 [m]", got)
 	}
 

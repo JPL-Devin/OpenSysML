@@ -1,8 +1,8 @@
 # 3. From the command line
 
-Every check the REPL performs is also available as a command-line flag, so a model can be
-checked from a script, a Makefile or a continuous integration job without a prompt. This
-chapter explains the workflow; every flag and exit status is tabulated in
+Every check the REPL performs is also available as a command-line flag, so you can check a model
+from a script, a Makefile or a continuous integration job without a prompt. This
+chapter explains the workflow; every flag and exit status is listed in
 [reference/cli.md](../reference/cli.md).
 
 The examples below use the following model, `checks.sysml`:
@@ -64,8 +64,11 @@ package MyModel {
 }
 ```
 
-Each flag may be repeated. `-instantiate` always runs first, regardless of the order in which
-the flags are written, so the verdicts that follow apply to the created object:
+Each flag may be repeated. `-instantiate` always runs first, whatever order the flags are
+written in, so the verdicts that follow apply to the object it created. The object is created
+whole — the parts nested in it whose types exhibit or perform behaviors are created and run
+with it — so an `-e` expression naming the usage or a feature under it (`-e "ctx.recv.got"`)
+reads what that object holds after its behaviors ran, as `%features` shows it:
 
 ```bash
 $ sysml -instantiate MyModel::cold -constraint MyModel::cold::inRange checks.sysml
@@ -83,21 +86,20 @@ $ sysml -satisfy checks.sysml
 ```
 
 Every check flag is listed in
-[reference/cli.md § Command Reference](../reference/cli.md#command-reference):
+[reference/cli.md § Command Reference](../reference/cli.md#command-reference). You can check
 one constraint or requirement by name, every satisfaction assertion the model
-states, a calculation, an action, a state machine, and `-json` for a machine-readable
+states, a calculation, an action, or a state machine, and add `-json` for a machine-readable
 report.
 
-Build steps gate on the exit status, which is identical for every non-interactive run — an
-evaluation, a conversion or a plain load, not only a check: `0` when the requested operation
-succeeded, `1` when the model answered false, and `2` when nothing was decided. The full
-contract is documented in
-[reference/cli.md § Exit status](../reference/cli.md#exit-status).
+Build steps can gate on the exit status. It follows the same rules for every non-interactive
+run, whether that is a check, an evaluation, a conversion or a plain load: `0` when the requested
+operation succeeded, `1` when the model answered false, and `2` when nothing was decided. The full
+contract is in [reference/cli.md § Exit status](../reference/cli.md#exit-status).
 
-Status 2 is distinguished from status 1 because an undecided check is not evidence against the
-model and should be treated as a broken check rather than a failing one. A condition that
+Status 2 is kept separate from status 1 because an undecided check is not evidence against the
+model: treat it as a broken check rather than a failing one. A condition that
 evaluates to false is the model's own answer; an unresolved name, or a condition over a feature
-with no value, is not:
+that has no value, is not:
 
 ```bash
 $ sysml -constraint MyModel::hot::inRange -instantiate MyModel::hot checks.sysml; echo "exit=$?"
@@ -117,25 +119,25 @@ exit=2
 $ sysml -requirement MyModel::healthy checks.sysml; echo "exit=$?"
 ✓ package MyModel
 ? Requirement MyModel::healthy could not be evaluated
-  Error: requirement healthy: require condition evaluation failed: no value for feature sensor
+  Error: requirement healthy: sensor subject is unbound: bind it (`subject sensor = <element>`), check it on an object, or assert `satisfy healthy by <element>`
 exit=2
 ```
 
-The last case above shows a requirement that declares a `subject`: nothing binds the subject,
+The last case shows a requirement that declares a `subject` that nothing binds,
 so the requirement has no object to evaluate against. Declare the intended pairing in the model
 as `assert satisfy healthy by hot;` and check it with `-satisfy`, which creates the subject
-itself. `-requirement` decides a requirement whose conditions stand on their own, or one
+itself. `-requirement` is for a requirement whose conditions stand on their own, or one
 carried by a part that `-instantiate` created.
 
-Verdicts are written to standard output, while undecided checks and all other findings,
-including diagnostics and warnings, are written to standard error. Consequently,
-`sysml -satisfy checks.sysml > verdicts.txt` records the results and leaves any problems
-visible on the terminal.
+Verdicts go to standard output. Undecided checks and everything else, including diagnostics
+and warnings, go to standard error. So
+`sysml -satisfy checks.sysml > verdicts.txt` records the results in the file and leaves any
+problems visible on the terminal.
 
 ## Checking as a gate
 
-`-validate` evaluates none of the model's conditions. It loads the model and reports the
-findings of analysis, and should be run as a lint step before any verdict is relied upon.
+`-validate` does not evaluate any of the model's conditions. It loads the model and reports
+what analysis found. Run it as a lint step before relying on any verdict.
 
 ```bash
 $ sysml -validate checks.sysml; echo "exit=$?"
@@ -151,10 +153,10 @@ sysml: bad.sysml did not analyse cleanly; no check was made
 exit=2
 ```
 
-A single `-` denotes standard input wherever a file name is accepted, so a model can be piped
+A single `-` stands for standard input wherever a file name is accepted, so you can pipe a model
 in; its diagnostics are reported against `<stdin>`. To read a file that is actually named `-`,
-specify `./-`. `-convert` requires `-from` for piped input, because the stream carries no file
-extension from which to infer the format.
+write `./-`. `-convert` needs `-from` for piped input, because a stream has no file
+extension to infer the format from.
 
 ```bash
 $ cat checks.sysml | sysml -validate -
@@ -164,9 +166,9 @@ $ cat checks.sysml | sysml -validate -
 $ cat checks.sysml | sysml - -convert ttl -from sysml > model.ttl
 ```
 
-Every check mode is gated in the same way, so a model containing an error never reports a
-verdict about itself: a condition read from a model that the tool could not fully parse would
-describe a different model than the one that was written. Name as many files as the model
+Every check mode is gated the same way, so a model containing an error never reports a
+verdict about itself: a condition read from a model the tool could not fully parse would
+describe a different model from the one you wrote. Name as many files as the model
 spans, in any order. The gate applies to the model as a whole, so a reference from one file to
 a declaration in another resolves correctly.
 
@@ -174,10 +176,10 @@ a declaration in another resolves correctly.
 
 OpenSysML accepts several notations of its own that no SysML v2 production admits: `defer`, and
 the `choice`, `junction`, `history` and `entry`/`exit point` pseudostates. These are reported as
-warnings, so a model that uses them still analyses cleanly. `-strict` instead determines whether
-a file is conforming SysML v2, by promoting those warnings to errors.
+warnings, so a model that uses them still analyses cleanly. `-strict` promotes those warnings
+to errors, which turns the run into a test of whether the file is conforming SysML v2.
 
-The state machine below uses the `defer` extension so that the difference is visible:
+The state machine below uses the `defer` extension so the difference is visible:
 
 ```sysml
 package M {
@@ -212,22 +214,22 @@ sysml: monitor.sysml did not analyse cleanly; no check was made
 exit=2
 ```
 
-There is no standard notation for a deferred event, so a portable model states the machine's
-completion with `then done;`, as `warming` does above, and omits the `defer`. `-strict` does not
+There is no standard notation for a deferred event, so a portable model marks the machine's
+completion with `then done;`, as `warming` does above, and leaves out the `defer`. `-strict` does not
 change what parses: the same file produces the same tree and the same findings in the same
-places. Only their severity changes, and with it the exit status and the tier gate. Because it
-is a portability check, enable it when a model must be read by another SysML v2 tool and leave
-it disabled otherwise. Each finding names the standard notation to use instead, and
-[the conformance audit](../reference/grammar/conformance-audit.md) cites the production against
-which each extension is measured. The same setting is available as `%strict` at the prompt
+places. Only their severity changes, and with it the exit status and the tier gate. It is a
+portability check, so turn it on when another SysML v2 tool has to read the model and leave
+it off otherwise. Each finding names the standard notation to use instead, and
+[the conformance audit](../reference/grammar/conformance-audit.md) cites the grammar production
+each extension is measured against. The same setting is available as `%strict` at the prompt
 ([4. The REPL](04-repl.md)), as the `sysml.strictConformance` editor setting
 ([8. Editors](08-editors.md)) and as `strict_conformance=True` from Python
-([9. Python](09-python.md)).
+([9. From your own program](09-python.md#from-python)).
 
 ## Running behavior
 
 The debuggers have non-interactive forms that run to completion and report the values they
-produce. `-calc` takes the invocation, while `-action` and `-state` take the name of the
+produce. `-calc` takes a call expression, while `-action` and `-state` take the name of the
 behavior, optionally followed by the object performing it:
 
 ```bash
@@ -258,17 +260,30 @@ $ sysml -state MyModel::Monitor -advance 15 checks.sysml
   Remaining events: 0
 ```
 
-A state machine takes only its initial transition unless `-advance` specifies how much simulated
-time to run for. `-advance 0` runs the machine to the present, dispatching whatever is already
-due, and `-advance` without a corresponding `-state` is reported as a misuse rather than
-silently ignored. An action that stops short of completing, whether through deadlock or by
-reaching the step budget, is reported as an undecided check (status 2), because it produced no
+A state machine takes only its initial transition unless `-advance` says how much simulated
+time to run for. `-advance 0` runs the machine up to the present, dispatching whatever is already
+due. `-advance` without a matching `-state` is reported as a mistake rather than
+silently ignored. An action that stops before completing, whether through deadlock or by
+hitting the step budget, is reported as an undecided check (status 2), because it produced no
 outputs to evaluate.
+
+The object after the name is one `-instantiate` created, written as `%state` takes it: the
+usage's name, a feature path to a part it holds (`-state "Fleet::driver.r"`, or
+`-state "Fleet::Rover::modes Fleet::driver.r"`), or the id the report prints (`-state "#2"`).
+Naming the machine the object exhibits attaches to its running machine, with a note saying so,
+rather than performing it a second time; a definition the object exhibits as several usages is
+refused with the usages to name instead. The object must be the *usage*: `-instantiate
+Fleet::rover` gives `-state "Fleet::Rover::modes Fleet::rover"` its object, while `-instantiate
+Fleet::Rover` creates an object of the definition, which the flag reports as such — `no instance
+of the usage "Fleet::rover": object #1 of "Fleet::Rover" is of its definition "Fleet::Rover",
+not of the usage — use %instantiate Fleet::rover to create the usage's object, or name
+Fleet::Rover to address it` (the prompt's `%instantiate` is the flag's `-instantiate`). A path
+that stops short of an object names the segment that failed.
 
 ## Machine-readable results
 
-`-json` reports the same run as a single document, allowing a build step to read structured
-data rather than parse `✓` and `✗` markers. It reports the checks rather than the model; use
+`-json` reports the same run as a single JSON document, so a build step can read structured
+data instead of parsing `✓` and `✗` markers. It reports the checks, not the model; use
 `-convert` to serialize the model itself.
 
 ```bash
@@ -304,16 +319,16 @@ $ sysml -satisfy -json checks.sysml; echo "exit=$?"
 exit=1
 ```
 
-`status` is the worst verdict reached, and `exit` is the status with which the process exits.
-The values produced by a calculation or a state machine appear as `values` entries. The findings
-of analysis appear as `diagnostics`, covering both the warnings of a model that analyses cleanly
-and the errors of one that does not, each with the `file` in which it occurs and its `line` and
-`column`. Anything that prevented a check from being made appears as `errors`. The entire
-document is written to standard output, so nothing needs to be read from standard error.
+`status` is the worst verdict reached, and `exit` is the code the process exits with.
+Values produced by a calculation or a state machine appear under `values`. What analysis
+found appears under `diagnostics`, covering both the warnings of a model that analyses cleanly
+and the errors of one that does not, each with the `file`, `line` and `column` where it
+occurs. Anything that prevented a check from being made appears under `errors`. The whole
+document goes to standard output, so nothing needs to be read from standard error.
 
 ## Running from a script
 
-`-e` evaluates an expression without entering the prompt, so a model can be queried from a
+`-e` evaluates an expression without entering the prompt, so you can query a model from a
 shell:
 
 ```bash
@@ -323,16 +338,16 @@ $ sysml -e "RdfInteropDemo::Rover::mass" examples/rdf-interop-demo.sysml
   = 899.0
 ```
 
-Two properties are important before a pipeline depends on this behavior:
+Two things are worth knowing before a pipeline depends on this:
 
-- **Requested output is written to standard output and problems to standard error.** Evaluated
+- **Results go to standard output and problems go to standard error.** Evaluated
   values, conversion output and verdict lines are results. A model's diagnostics and warnings,
-  a failed evaluation, a file that could not be read, and the `wrote <file> …` note of a
-  successful `-convert -o` are not, so that standard output carries the conversion alone.
-- **The exit status reports whether the model answered the question asked**: `0` if it did, `1`
+  a failed evaluation, a file that could not be read, and even the `wrote <file> …` note of a
+  successful `-convert -o` are not, so standard output carries the conversion alone.
+- **The exit status says whether the model answered the question**: `0` if it did, `1`
   if it answered false, and `2` if it answered nothing. A warning leaves the status at `0`. The
   status codes are documented in
-  [reference/cli.md § Exit status](../reference/cli.md#exit-status), together with a continuous
+  [reference/cli.md § Exit status](../reference/cli.md#exit-status), along with a continuous
   integration recipe that gates on them.
 
 ---

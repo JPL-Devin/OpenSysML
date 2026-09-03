@@ -2,6 +2,9 @@ package opensysml
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"slices"
 	"sync"
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
@@ -57,7 +60,8 @@ type Client interface {
 	Instantiate(ctx context.Context, model *Model, symbolID string) (*Instantiation, error)
 
 	// ExecuteAction executes the named action with the inputs given, bound by
-	// parameter name, and reports the outputs it produced.
+	// parameter name, and reports the outputs it produced. A Complex input
+	// requires the complex_values capability, checked before anything is sent.
 	ExecuteAction(ctx context.Context, model *Model, actionSymbolID string, inputs map[string]Value) (*ActionRun, error)
 
 	// ExecuteState runs the named state machine, feeding it the events in
@@ -79,7 +83,8 @@ type Client interface {
 
 	// EvaluateCalc invokes the named calculation with positional arguments, or,
 	// given none, evaluates a calc usage from its own members. Requires the
-	// verification capability.
+	// verification capability, and the complex_values capability for a Complex
+	// argument, checked before anything is sent.
 	EvaluateCalc(ctx context.Context, model *Model, symbolID string, arguments ...Value) (*Calculation, error)
 
 	// Query selects the model's elements the query matches, in declaration
@@ -227,6 +232,9 @@ type client struct {
 
 	mu     sync.Mutex
 	closed bool
+	// info is the service's answer to ServerInfo, kept once a preflight asks
+	// for it: a service does not change build while a client is open to it.
+	info *ServerInfo
 }
 
 func (c *client) sealed() { /* marker: Client is closed to outside implementations */ }
@@ -479,4 +487,58 @@ func (c *client) call(model *Model) (string, error) {
 		return "", err
 	}
 	return modelHash(model)
+}
+
+// requireComplexValues refuses to send a Complex to a service without the
+// complex_values capability, which would read it as null rather than refuse it.
+func (c *client) requireComplexValues(ctx context.Context, values ...Value) error {
+	if !slices.ContainsFunc(values, carriesComplex) {
+		return nil
+	}
+	info, err := c.serverInfo(ctx)
+	if err != nil {
+		return err
+	}
+	if !info.Has(CapabilityComplexValues) {
+		return &StatusError{
+			Code:    CodeUnimplemented,
+			Message: fmt.Sprintf("capability %q is unavailable", CapabilityComplexValues),
+		}
+	}
+	return nil
+}
+
+// serverInfo is ServerInfo asked at most once per client. A service that
+// predates the RPC answers UNIMPLEMENTED, which is an empty capability list.
+func (c *client) serverInfo(ctx context.Context) (*ServerInfo, error) {
+	c.mu.Lock()
+	info := c.info
+	c.mu.Unlock()
+	if info != nil {
+		return info, nil
+	}
+	info, err := c.ServerInfo(ctx)
+	var status *StatusError
+	if errors.As(err, &status) && status.Code == CodeUnimplemented {
+		info, err = &ServerInfo{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	c.mu.Lock()
+	c.info = info
+	c.mu.Unlock()
+	return info, nil
+}
+
+// carriesComplex reports whether a value, or any element of a sequence, is a
+// Complex.
+func carriesComplex(value Value) bool {
+	switch v := value.(type) {
+	case Complex:
+		return true
+	case Sequence:
+		return slices.ContainsFunc(v, carriesComplex)
+	}
+	return false
 }

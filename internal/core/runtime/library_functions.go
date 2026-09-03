@@ -19,19 +19,11 @@ import (
 // so a model is told which declaration it is rather than answered wrongly.
 var ErrUnevaluableLibraryFunction = errors.New("library function is not evaluable")
 
-// ErrUnimportedExtensionFunction is returned for an unqualified call to a
-// OpenSysML extension function the model imports no declaration of.
-var ErrUnimportedExtensionFunction = errors.New("function is not in scope")
-
-// noVectorCollection and noComplexCollection are why the aggregations over a
-// collection of vectors or of Complex values are not evaluable: a sequence of
-// them flattens, losing the grouping the aggregation sums over.
-const (
-	noVectorCollection = "a collection of vectors has no representation: " +
-		"a sequence of vectors flattens into one sequence of elements"
-	noComplexCollection = "a collection of Complex values cannot be told from one Complex value: " +
-		"both are a sequence of Reals"
-)
+// noVectorCollection is why the aggregations over a collection of vectors are
+// not evaluable: a sequence of them flattens, losing the grouping the
+// aggregation sums over.
+const noVectorCollection = "a collection of vectors has no representation: " +
+	"a sequence of vectors flattens into one sequence of elements"
 
 // libraryPi is the value of TrigFunctions::pi. The library fixes it by an
 // invariant rather than a value (round(pi * 1E20) == 314159265358979323846.0),
@@ -48,6 +40,12 @@ type libraryFunction struct {
 	// rest are declared [0..1] and bind null where a call omits them.
 	required int
 	apply    libraryApply
+	// unevaluable marks a declaration registered only to report why a call to
+	// it cannot be computed.
+	unevaluable bool
+	// scalar marks a function over numeric scalars alone, which the compiled
+	// calc tier may call with unboxed arguments.
+	scalar bool
 }
 
 // libraryApply computes one library function. It is passed the name it was
@@ -56,26 +54,10 @@ type libraryFunction struct {
 type libraryApply func(name string, ctx *Context, args []Value) (Value, error)
 
 // libraryFunctions maps a function's fully-qualified name to its
-// implementation. Dispatch is by qualified name, so a user-declared calc of the
-// same local name resolves to itself and is never routed here.
+// implementation. Dispatch is by the declaration a call resolves to, so a
+// user-declared calc of the same local name resolves to itself and is never
+// routed here.
 var libraryFunctions = map[string]*libraryFunction{}
-
-// libraryFunctionsByLocalName maps an unqualified name to the implementation a
-// call denotes when the name resolves to no declaration in the model — the OMG
-// function libraries are always in force, even in a model that imports no part
-// of them. A name only appears here when every library declaration of it
-// means the same operation.
-var libraryFunctionsByLocalName = map[string]*libraryFunction{}
-
-// extensionLocalNames maps the unqualified name of an OpenSysML extension
-// function to the package an import must name for such a call to be legal. No
-// OMG library declares these names, so nothing puts them in scope on its own.
-var extensionLocalNames = map[string]string{
-	"exp":   "OpenSysMLMathFunctions",
-	"ln":    "OpenSysMLMathFunctions",
-	"log":   "OpenSysMLMathFunctions",
-	"atan2": "OpenSysMLMathFunctions",
-}
 
 func init() {
 	// RealFunctions (Kernel Function Library). `abs`, `max` and `min` take Real
@@ -138,54 +120,6 @@ func init() {
 	registerLibraryFunction("OpenSysMLMathFunctions::ln", []string{"x"}, naturalLog)
 	registerLibraryFunction("OpenSysMLMathFunctions::log", []string{"x", "base"}, logToBase)
 	registerLibraryFunction("OpenSysMLMathFunctions::atan2", []string{"y", "x"}, atan2Real)
-
-	// The unqualified names, each mapped to the declaration a bare call denotes.
-	// `abs`, `max` and `min` map to the kind-preserving NumericalFunctions
-	// declaration the Real, Rational and Integer ones all specialize.
-	registerLocalNames(map[string]string{
-		"sqrt":   "RealFunctions::sqrt",
-		"floor":  "RealFunctions::floor",
-		"round":  "RealFunctions::round",
-		"abs":    "NumericalFunctions::abs",
-		"max":    "NumericalFunctions::max",
-		"min":    "NumericalFunctions::min",
-		"isZero": "NumericalFunctions::isZero",
-		"isUnit": "NumericalFunctions::isUnit",
-		"sin":    "TrigFunctions::sin",
-		"cos":    "TrigFunctions::cos",
-		"tan":    "TrigFunctions::tan",
-		"cot":    "TrigFunctions::cot",
-		"arcsin": "TrigFunctions::arcsin",
-		"arccos": "TrigFunctions::arccos",
-		"arctan": "TrigFunctions::arctan",
-
-		"deg": "TrigFunctions::deg",
-		"rad": "TrigFunctions::rad",
-
-		// VectorFunctions and ComplexFunctions: the names only one of the two
-		// packages declares, each mapped to the declaration that computes it for
-		// every vector or Complex this runtime represents.
-		"VectorOf":               "VectorFunctions::VectorOf",
-		"CartesianVectorOf":      "VectorFunctions::CartesianVectorOf",
-		"CartesianThreeVectorOf": "VectorFunctions::CartesianThreeVectorOf",
-		"isZeroVector":           "VectorFunctions::isZeroVector",
-		"isCartesianZeroVector":  "VectorFunctions::isCartesianZeroVector",
-		"scalarVectorMult":       "VectorFunctions::scalarVectorMult",
-		"vectorScalarMult":       "VectorFunctions::vectorScalarMult",
-		"vectorScalarDiv":        "VectorFunctions::vectorScalarDiv",
-		"inner":                  "VectorFunctions::inner",
-		"norm":                   "VectorFunctions::norm",
-		"angle":                  "VectorFunctions::angle",
-		"rect":                   "ComplexFunctions::rect",
-		"polar":                  "ComplexFunctions::polar",
-		"re":                     "ComplexFunctions::re",
-		"im":                     "ComplexFunctions::im",
-		"arg":                    "ComplexFunctions::arg",
-
-		// StringFunctions: the two names no other function library declares.
-		"Length":    "StringFunctions::Length",
-		"Substring": "StringFunctions::Substring",
-	})
 }
 
 // registerVectorFunctions registers VectorFunctions (Kernel Function Library).
@@ -224,9 +158,9 @@ func registerVectorFunctions() {
 }
 
 // registerComplexFunctions registers ComplexFunctions (Kernel Function Library).
-// A Complex is the (re, im) pair `rect` constructs, and a Real is a Complex with
-// a zero imaginary part (ScalarValues declares Real :> Complex), so both bind to
-// a Complex parameter.
+// A Complex is one ValComplex value, and a Real is a Complex with a zero
+// imaginary part (ScalarValues declares Real :> Complex), so both bind to a
+// Complex parameter.
 func registerComplexFunctions() {
 	registerValueFunction("ComplexFunctions::rect", []string{"re", "im"}, 2, complexRect)
 	registerValueFunction("ComplexFunctions::polar", []string{"abs", "arg"}, 2, complexPolar)
@@ -244,12 +178,12 @@ func registerComplexFunctions() {
 	registerValueFunction("ComplexFunctions::^", []string{"x", "y"}, 2, complexPower)
 	registerValueFunction("ComplexFunctions::==", []string{"x", "y"}, 0, complexEquals)
 
-	registerUnevaluable("ComplexFunctions::sum", []string{"collection"}, 1, noComplexCollection)
-	registerUnevaluable("ComplexFunctions::product", []string{"collection"}, 1, noComplexCollection)
+	registerValueFunction("ComplexFunctions::sum", []string{"collection"}, 1, complexSum)
+	registerValueFunction("ComplexFunctions::product", []string{"collection"}, 1, complexProduct)
 
-	// The two string conversions of a Complex: this runtime has no notation for
-	// one, and inventing a rendering would make ToComplex(ToString(x)) a value
-	// nothing else in the library agrees on.
+	// The two string conversions of a Complex: the library defines no notation
+	// for one, and inventing a rendering would make ToComplex(ToString(x)) a
+	// value nothing else in the library agrees on.
 	registerUnevaluable("ComplexFunctions::ToString", []string{"x"}, 1,
 		"no string notation for a Complex value is defined")
 	registerUnevaluable("ComplexFunctions::ToComplex", []string{"x"}, 1,
@@ -274,6 +208,7 @@ func registerStringFunctions() {
 // arguments, which is what most of the numeric library declares.
 func registerLibraryFunction(name string, params []string, apply func([]semantics.Value) (semantics.Value, error)) {
 	registerValueFunction(name, params, len(params), numericScalars(params, apply))
+	libraryFunctions[name].scalar = true
 }
 
 // registerValueFunction adds one implementation over runtime values, for the
@@ -290,6 +225,7 @@ func registerUnevaluable(name string, params []string, required int, reason stri
 	registerValueFunction(name, params, required, func(called string, _ *Context, _ []Value) (Value, error) {
 		return Value{}, fmt.Errorf("%w: %s: %s", ErrUnevaluableLibraryFunction, called, reason)
 	})
+	libraryFunctions[name].unevaluable = true
 }
 
 // numericScalars adapts an implementation over scalar numeric values: every
@@ -315,17 +251,6 @@ func numericScalars(params []string, apply func([]semantics.Value) (semantics.Va
 	}
 }
 
-// registerLocalNames records which declaration each unqualified name denotes.
-func registerLocalNames(names map[string]string) {
-	for local, fqn := range names {
-		fn, ok := libraryFunctions[fqn]
-		if !ok {
-			panic("runtime: unqualified name " + local + " maps to unregistered library function " + fqn)
-		}
-		libraryFunctionsByLocalName[local] = fn
-	}
-}
-
 // libraryFunctionByName returns the implementation of the function with that
 // fully-qualified name.
 func libraryFunctionByName(fqn string) (*libraryFunction, bool) {
@@ -333,28 +258,13 @@ func libraryFunctionByName(fqn string) (*libraryFunction, bool) {
 	return fn, ok
 }
 
-// unresolvedLibraryFunction returns the library function a call denotes when its
-// name resolves to no declaration: the library's own qualified name, or an
-// unqualified name of an OMG library function. written is the name as the model
-// wrote it. An unqualified name only an OpenSysML extension declares gives a
-// typed error naming the import that makes the call legal.
-func unresolvedLibraryFunction(qn *ast.QualifiedName, written string) (*libraryFunction, error) {
-	if fn, ok := libraryFunctions[written]; ok {
-		return fn, nil
+// LibraryFunctionParams is the declared parameter names of the library function fqn.
+func LibraryFunctionParams(fqn string) (params []string, ok bool) {
+	fn, ok := libraryFunctions[fqn]
+	if !ok {
+		return nil, false
 	}
-	if qn == nil || qn.Global || len(qn.Parts) != 1 {
-		return nil, nil
-	}
-	if fn, ok := libraryFunctionsByLocalName[written]; ok {
-		return fn, nil
-	}
-	if pkg, ok := extensionLocalNames[written]; ok {
-		return nil, fmt.Errorf(
-			"%w: %s is declared by %s, an OpenSysML extension no OMG library declares: write `import %s::*;` to call it",
-			ErrUnimportedExtensionFunction, written, pkg, pkg,
-		)
-	}
-	return nil, nil
+	return slices.Clone(fn.params), true
 }
 
 // libraryFunctionFor returns the built-in implementation of sym when sym is a
@@ -755,8 +665,8 @@ func init() {
 	})
 
 	// ComplexFunctions::i = rect(0.0, 1.0), the imaginary unit.
-	registerLibraryFeature("ComplexFunctions::i", func(ctx *Context) (Value, error) {
-		return ctx.complexValue(complex(0, 1))
+	registerLibraryFeature("ComplexFunctions::i", func(*Context) (Value, error) {
+		return NewComplex(complex(0, 1)), nil
 	})
 
 	// cartesian3DZeroVector = cartesianZeroVector#(3). cartesianZeroVector itself
@@ -897,11 +807,16 @@ func checkedNumeric(v semantics.Value) (semantics.Value, error) {
 	return realResult(v.Real)
 }
 
+// isNumeric reports whether a value is an Integer or a Real.
+func isNumeric(v semantics.Value) bool {
+	return v.Kind == semantics.ValInt || v.Kind == semantics.ValReal
+}
+
 // elementArith applies an arithmetic operator to two numeric elements, reporting
 // a result outside the range of its kind rather than wrapping or infinite.
 func elementArith(name string, op ast.OperatorKind, a, b semantics.Value) (semantics.Value, error) {
 	if a.Kind == semantics.ValInt && b.Kind == semantics.ValInt {
-		result, ok := intArith(op, a.Int, b.Int)
+		result, ok := semantics.IntArith(op, a.Int, b.Int)
 		if !ok {
 			return semantics.Value{}, fmt.Errorf(
 				"%w: function %s has a result outside the Integer range",
@@ -910,33 +825,33 @@ func elementArith(name string, op ast.OperatorKind, a, b semantics.Value) (seman
 		}
 		return semantics.Value{Kind: semantics.ValInt, Int: result}, nil
 	}
+	if a.IsNumeric() && b.IsNumeric() {
+		res, ok := semantics.RealArith(op, toReal(a), toReal(b))
+		if !ok {
+			return semantics.Value{}, fmt.Errorf(
+				"%w: function %s cannot combine its arguments", ErrTypeMismatch, name,
+			)
+		}
+		return realResult(res)
+	}
 	res, ok := semantics.EvalBinary(op, a, b)
 	if !ok {
+		// A sum, difference or product of two numbers is declined only for leaving
+		// the Real range; anything else is an operator the arguments do not define.
+		switch op {
+		case ast.OpAdd, ast.OpSub, ast.OpMul:
+			if isNumeric(a) && isNumeric(b) {
+				return semantics.Value{}, fmt.Errorf(
+					"%w: function %s has a result outside the Real range",
+					semantics.ErrArithmeticOverflow, name,
+				)
+			}
+		}
 		return semantics.Value{}, fmt.Errorf(
 			"%w: function %s cannot combine its arguments", ErrTypeMismatch, name,
 		)
 	}
 	return checkedNumeric(res)
-}
-
-// intArith is Integer addition, subtraction and multiplication, reporting a
-// result the int64 arithmetic would wrap.
-func intArith(op ast.OperatorKind, a, b int64) (int64, bool) {
-	switch op {
-	case ast.OpAdd:
-		result := a + b
-		return result, (b <= 0 || result > a) && (b >= 0 || result < a)
-	case ast.OpSub:
-		result := a - b
-		return result, (b >= 0 || result > a) && (b <= 0 || result < a)
-	case ast.OpMul:
-		result := a * b
-		if a == 0 {
-			return 0, true
-		}
-		return result, result/a == b && !(a == -1 && b == math.MinInt64)
-	}
-	return 0, false
 }
 
 // realVector builds a vector of Reals, reporting an element that is not a finite
@@ -1262,38 +1177,22 @@ func vectorAngle(name string, _ *Context, args []Value) (Value, error) {
 // ComplexFunctions.
 // ---------------------------------------------------------------------------
 
-// asComplex reads a Complex argument: the (re, im) pair rect constructs, or a
-// Real, which ScalarValues declares a Complex (Real :> Complex) with a zero
-// imaginary part.
+// asComplex reads a Complex argument: a Complex value, or a Real, which
+// ScalarValues declares a Complex (Real :> Complex) with a zero imaginary part.
 func asComplex(name, param string, val Value) (complex128, error) {
-	elements := elementsOf(val)
-	if len(elements) == 0 || len(elements) > 2 {
+	z, ok := complexOf(val)
+	if !ok {
 		return 0, fmt.Errorf(
-			"%w: function %s parameter %q requires a Complex value: a Real, or the (re, im) pair rect returns, got %d elements",
-			ErrTypeMismatch, name, param, len(elements),
+			"%w: function %s parameter %q requires a Complex value, got %s",
+			ErrTypeMismatch, name, param, describeValue(val),
 		)
 	}
-	var parts [2]float64
-	for i, elem := range elements {
-		if elem.Kind != ValConst || !elem.Const.IsNumeric() {
-			return 0, fmt.Errorf(
-				"%w: function %s parameter %q requires a Complex value, element %d is %s",
-				ErrTypeMismatch, name, param, i+1, describeValue(elem),
-			)
-		}
-		parts[i] = asReal(elem.Const)
-	}
-	return complex(parts[0], parts[1]), nil
-}
-
-// complexValue is the (re, im) pair a Complex result carries.
-func (ctx *Context) complexValue(z complex128) (Value, error) {
-	return ctx.realVector([]float64{real(z), imag(z)})
+	return z, nil
 }
 
 // complexRect is ComplexFunctions::rect, the Complex with the given real and
 // imaginary parts.
-func complexRect(name string, ctx *Context, args []Value) (Value, error) {
+func complexRect(name string, _ *Context, args []Value) (Value, error) {
 	re, err := scalarArg(name, "re", args[0])
 	if err != nil {
 		return Value{}, err
@@ -1302,12 +1201,12 @@ func complexRect(name string, ctx *Context, args []Value) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	return ctx.complexValue(complex(asReal(re), asReal(im)))
+	return complexResult(complex(asReal(re), asReal(im)))
 }
 
 // complexPolar is ComplexFunctions::polar, the Complex with the given modulus
 // and argument.
-func complexPolar(name string, ctx *Context, args []Value) (Value, error) {
+func complexPolar(name string, _ *Context, args []Value) (Value, error) {
 	abs, err := scalarArg(name, "abs", args[0])
 	if err != nil {
 		return Value{}, err
@@ -1316,7 +1215,7 @@ func complexPolar(name string, ctx *Context, args []Value) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	return ctx.complexValue(cmplx.Rect(asReal(abs), asReal(arg)))
+	return complexResult(cmplx.Rect(asReal(abs), asReal(arg)))
 }
 
 // complexRealPart is ComplexFunctions::re.
@@ -1373,8 +1272,8 @@ func complexArgument(name string, _ *Context, args []Value) (Value, error) {
 	}
 	if z == 0 {
 		return Value{}, fmt.Errorf(
-			"%w: function %s has no argument for 0.0 + 0.0i",
-			semantics.ErrArithmeticDomain, name,
+			"%w: function %s has no argument for %s",
+			semantics.ErrArithmeticDomain, name, FormatComplex(z),
 		)
 	}
 	return checkedReal(cmplx.Phase(z))
@@ -1382,64 +1281,62 @@ func complexArgument(name string, _ *Context, args []Value) (Value, error) {
 
 // complexAdd is ComplexFunctions::'+', whose second operand the library declares
 // [0..1]: given one argument it is that value.
-func complexAdd(name string, ctx *Context, args []Value) (Value, error) {
-	x, y, given, err := complexOperands(name, args)
+func complexAdd(name string, _ *Context, args []Value) (Value, error) {
+	x, y, given, err := complexOptionalOperands(name, args)
 	if err != nil {
 		return Value{}, err
 	}
 	if !given {
-		return ctx.complexValue(x)
+		return complexResult(x)
 	}
-	return ctx.complexValue(x + y)
+	return complexResult(x + y)
 }
 
 // complexSubtract is ComplexFunctions::'-': given one argument, the value that
 // added to it gives zero.
-func complexSubtract(name string, ctx *Context, args []Value) (Value, error) {
-	x, y, given, err := complexOperands(name, args)
+func complexSubtract(name string, _ *Context, args []Value) (Value, error) {
+	x, y, given, err := complexOptionalOperands(name, args)
 	if err != nil {
 		return Value{}, err
 	}
 	if !given {
-		return ctx.complexValue(-x)
+		return complexResult(-x)
 	}
-	return ctx.complexValue(x - y)
+	return complexResult(x - y)
 }
 
 // complexMultiply is ComplexFunctions::'*'.
-func complexMultiply(name string, ctx *Context, args []Value) (Value, error) {
-	x, y, err := complexPair(name, args)
+func complexMultiply(name string, _ *Context, args []Value) (Value, error) {
+	x, y, err := complexBinaryOperands(name, args)
 	if err != nil {
 		return Value{}, err
 	}
-	return ctx.complexValue(x * y)
+	return complexResult(x * y)
 }
 
 // complexDivide is ComplexFunctions::'/'.
-func complexDivide(name string, ctx *Context, args []Value) (Value, error) {
-	x, y, err := complexPair(name, args)
+func complexDivide(name string, _ *Context, args []Value) (Value, error) {
+	x, y, err := complexBinaryOperands(name, args)
 	if err != nil {
 		return Value{}, err
 	}
 	if y == 0 {
 		return Value{}, fmt.Errorf("%w: function %s divides by zero", ErrDivisionByZero, name)
 	}
-	return ctx.complexValue(x / y)
+	return complexResult(x / y)
 }
 
 // complexPower is ComplexFunctions::'**' and its '^' synonym.
-func complexPower(name string, ctx *Context, args []Value) (Value, error) {
-	x, y, err := complexPair(name, args)
+func complexPower(name string, _ *Context, args []Value) (Value, error) {
+	x, y, err := complexBinaryOperands(name, args)
 	if err != nil {
 		return Value{}, err
 	}
-	if x == 0 && real(y) <= 0 {
-		return Value{}, fmt.Errorf(
-			"%w: function %s has no value for 0.0 to the power %v",
-			semantics.ErrArithmeticDomain, name, y,
-		)
+	res, err := complexPow(x, y)
+	if err != nil {
+		return Value{}, fmt.Errorf("function %s: %w", name, err)
 	}
-	return ctx.complexValue(cmplx.Pow(x, y))
+	return res, nil
 }
 
 // complexEquals is ComplexFunctions::'==', which declares both operands [0..1]:
@@ -1449,20 +1346,49 @@ func complexEquals(name string, _ *Context, args []Value) (Value, error) {
 	if !xGiven || !yGiven {
 		return boolValue(xGiven == yGiven), nil
 	}
-	x, err := asComplex(name, "x", args[0])
-	if err != nil {
-		return Value{}, err
-	}
-	y, err := asComplex(name, "y", args[1])
+	x, y, err := complexBinaryOperands(name, args)
 	if err != nil {
 		return Value{}, err
 	}
 	return boolValue(x == y), nil
 }
 
-// complexPair reads the two operands of a Complex arithmetic function that
-// declares both [1].
-func complexPair(name string, args []Value) (x, y complex128, err error) {
+// complexSum is ComplexFunctions::sum: the sum of the collection's elements, and
+// `rect(0.0, 0.0)` for an empty collection, as the library's `sum0` computes.
+func complexSum(name string, _ *Context, args []Value) (Value, error) {
+	return aggregateComplex(name, args[0], ast.OpAdd)
+}
+
+// complexProduct is ComplexFunctions::product, with `rect(1.0, 0.0)` for an
+// empty collection, as the library's `product1` computes.
+func complexProduct(name string, _ *Context, args []Value) (Value, error) {
+	return aggregateComplex(name, args[0], ast.OpMul)
+}
+
+// aggregateComplex folds a collection's elements as complex numbers under the
+// sum or product, from its identity; an element that is no number is reported.
+func aggregateComplex(name string, collection Value, operator ast.OperatorKind) (Value, error) {
+	acc := complex(0, 0)
+	if operator == ast.OpMul {
+		acc = 1
+	}
+	for _, elem := range elementsOf(collection) {
+		z, err := asComplex(name, "collection", elem)
+		if err != nil {
+			return Value{}, err
+		}
+		if operator == ast.OpMul {
+			acc *= z
+		} else {
+			acc += z
+		}
+	}
+	return complexResult(acc)
+}
+
+// complexBinaryOperands reads the two operands of a Complex function that
+// declares both as one value each.
+func complexBinaryOperands(name string, args []Value) (x, y complex128, err error) {
 	if x, err = asComplex(name, "x", args[0]); err != nil {
 		return 0, 0, err
 	}
@@ -1472,9 +1398,9 @@ func complexPair(name string, args []Value) (x, y complex128, err error) {
 	return x, y, nil
 }
 
-// complexOperands reads the operands of '+' and '-', whose second operand the
-// library declares [0..1], reporting whether it was given.
-func complexOperands(name string, args []Value) (x, y complex128, given bool, err error) {
+// complexOptionalOperands reads the operands of '+' and '-', whose second operand
+// the library declares [0..1], reporting whether it was given.
+func complexOptionalOperands(name string, args []Value) (x, y complex128, given bool, err error) {
 	x, err = asComplex(name, "x", args[0])
 	if err != nil {
 		return 0, 0, false, err
@@ -1491,7 +1417,7 @@ func complexOperands(name string, args []Value) (x, y complex128, given bool, er
 
 // concatStrings is StringFunctions::'+': the characters of x then those of y.
 func concatStrings(x, y string) Value {
-	return Value{Kind: ValString, Str: x + y}
+	return NewStringValue(x + y)
 }
 
 // compareStrings applies one of StringFunctions' comparisons. UTF-8 orders bytes
@@ -1519,7 +1445,7 @@ func stringArg(name, param string, val Value) (string, error) {
 			ErrTypeMismatch, name, param, describeOperand(val),
 		)
 	}
-	return val.Str, nil
+	return val.Str(), nil
 }
 
 // stringPositionArg reads an Integer position argument of Substring.
@@ -1580,7 +1506,7 @@ func stringSubstring(name string, _ *Context, args []Value) (Value, error) {
 		return Value{}, fmt.Errorf("%w: function %s upper character %d is outside 1..%d",
 			ErrIndexOutOfRange, name, upper, len(chars))
 	}
-	return Value{Kind: ValString, Str: string(chars[lower-1 : upper])}, nil
+	return NewStringValue(string(chars[lower-1 : upper])), nil
 }
 
 // stringOrdering is one of StringFunctions' comparisons over two String[1].
@@ -1618,7 +1544,7 @@ func stringToString(name string, _ *Context, args []Value) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	return Value{Kind: ValString, Str: x}, nil
+	return NewStringValue(x), nil
 }
 
 // stringPair reads the two String operands x and y.

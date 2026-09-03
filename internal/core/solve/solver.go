@@ -234,7 +234,20 @@ func (s *Solver) Solve(ctx context.Context, q *Query) (*Result, error) {
 	if err := s.require(ctx, q, "solving", modelCapabilities(q)...); err != nil {
 		return nil, err
 	}
-	return s.solve(ctx, q, func(sess *session) (*Result, error) { return sess.run(q) })
+	result, err := s.solve(ctx, q, func(sess *session) (*Result, error) { return sess.run(q) })
+	if err != nil {
+		return nil, err
+	}
+	// A witness only stands where the evaluator, the normative arithmetic,
+	// confirms it; one it rejects — rounding differently, holding no such
+	// value — leaves the question undecided rather than answered.
+	if result.Status == StatusSat {
+		if ok, reason := replayWitness(q, result.Model); !ok {
+			result.Status = StatusUnknown
+			result.Reason = reason
+		}
+	}
+	return result, nil
 }
 
 // modelCapabilities are what reading an assignment back needs, which is nothing

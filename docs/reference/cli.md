@@ -2,10 +2,10 @@
 
 ## OSLC element queries
 
-`-query <oslc-query>` loads the positional model and evaluates OSLC Query text,
-printing one matched element per line as qualified name and metamodel type,
-followed by any selected properties. It is a model-query mode alongside
-`-convert`.
+`-query <oslc-query>` loads the model given on the command line and evaluates OSLC Query text
+against it, printing one matched element per line as qualified name and metamodel type,
+followed by any selected properties. Like `-convert`, it is a mode that inspects the model
+instead of running it.
 
 ```bash
 sysml -query 'oslc.where=sysml:name="wheel"' model.sysml
@@ -104,8 +104,8 @@ done
 
 ### 5. CI/CD Integration
 
-A pipeline gates on the exit status: an expression that could not be evaluated
-exits `2`, and only a value on stdout is left to compare (see
+A pipeline can gate on the exit status: an expression that could not be evaluated
+exits `2`, so anything left on stdout is a value you can compare (see
 [Exit status](#exit-status)):
 
 ```bash
@@ -138,6 +138,20 @@ echo "%load model.sysml
 %eval speedLimit" | sysml
 ```
 
+A whole run is read out the same way. `%features <name>` is bounded, since reading a
+feature value builds the objects it holds; `all` lifts the bound and `json` writes the
+graph in the shape the API's `Instantiate` returns, so a piped session is how a script
+gets the complete state of a large object tree:
+
+```bash
+printf '%%instantiate Plant::Context\n%%features Plant::Context all\n' | sysml model.sysml
+printf '%%instantiate Plant::Context\n%%features Plant::Context all json\n' | sysml model.sysml \
+  | sed -n '/^{/,$p' | jq '.instances | length'
+```
+
+The JSON document is written on the listing's own lines, after whatever the load
+reported, so a script that reads it takes the output from the first `{`.
+
 ## Command Reference
 
 | Flag | Shorthand | Description |
@@ -152,24 +166,31 @@ echo "%load model.sysml
 | `--render <view>` | | Render this view of the model instead of running it, in the form its `render` member states (see [Rendering a view](#rendering-a-view)) |
 | `--render-all <dir>` | | Render every declared view into the directory, one artifact per view |
 | `--render-form <form>` | | Form `--render` or `--render-all` writes: `text`, `mermaid` or `markdown` (default: destination-dependent for `--render`, each kind's machine-readable form for `--render-all`) |
-| `--render-document <name>` | | Compile a document definition — a `part def` specializing `DocumentQueries::Document` — run its queries against the model, render its diagram blocks through the view engine and write the rendered CommonMark Markdown, as `%render-document` does. Paragraphs compose statically-authored inline runs (`Span` with a `plain`/`emphasis`/`strong`/`code` style, `Link` to a URL, `Ref` linking to another content block's anchor), a query-backed paragraph or list styles its projected values through nested `SpanColumn`/`LinkColumn` column runs, and a table with a `groupBy` column writes one subtable per group value; table columns are the query's projected properties and computed `Column` names. A `Diagram` content block embeds a declared view, or an element with a stated rendering kind, as a fenced ` ```mermaid ` block (a table-kind view as a pipe table), with an optional caption and `TB`/`LR`/`RL`/`BT` flow direction. Markdown is the default document form, `-doc-form pdf` converts it (see [Rendering a document as PDF](#rendering-a-document-as-pdf)), and `-json` does not apply |
-| `--doc-form <form>` | | Form `--render-document` writes: `markdown` (default) or `pdf`, which drives an external converter |
-| `--render-documents <dir>` | | Render every document definition the model declares as a linked Markdown set into the directory, one file per document, so cross-document references resolve on disk |
+| `--render-document <name>` | | Compile a document definition (a `part def` specializing `DocumentQueries::Document`), run its queries against the model, render its diagram blocks through the view engine and write the result as CommonMark Markdown, as `%render-document` does. Paragraphs may hold inline runs (`Span` with a `plain`/`emphasis`/`strong`/`code` style, `Link` to a URL, `Ref` linking to another content block's anchor); a query-backed paragraph or list styles its projected values through nested `SpanColumn`/`LinkColumn` column runs; a table with a `groupBy` column writes one subtable per group value, with the query's projected properties and computed `Column` names as its columns. A `Diagram` block embeds a declared view, or an element with a stated rendering kind, as a fenced ` ```mermaid ` block (a table-kind view as a pipe table), with an optional caption and `TB`/`LR`/`RL`/`BT` flow direction. Markdown is the default form; `-doc-form html` renders the same document tree as semantic HTML (see [Rendering a document as HTML](#rendering-a-document-as-html)) and `-doc-form pdf` converts the Markdown (see [Rendering a document as PDF](#rendering-a-document-as-pdf)). `-json` does not apply. See the [document generation manual](../manual/README.md) |
+| `--doc-form <form>` | | Form `--render-document` writes: `markdown` (default), `html`, rendered from the document tree itself (see [Rendering a document as HTML](#rendering-a-document-as-html)), or `pdf`, which drives an external converter |
+| `--render-documents <dir>` | | Render every document definition the model declares as a linked set into the directory, one file per document, so cross-document references resolve on disk. `--doc-form html` writes the set as HTML pages linking shared stylesheet files written beside them |
+| `--doc-title-page` | | Put the document title on a page of its own (`--doc-form html` or `pdf`) |
+| `--doc-toc` | | Write a table of contents ahead of the content (`--doc-form html` or `pdf`) |
+| `--doc-number-sections` | | Number the section headings hierarchically (`--doc-form html` or `pdf`) |
+| `--html-css <file\|url>` | | Style the HTML with this stylesheet: a file is inlined in a single page and written beside a set's pages, a URL is linked. Repeatable, applied in order after the default sheet (`--doc-form html`) |
+| `--html-no-default-css` | | Leave the default stylesheet out, so only `--html-css` sheets style the document |
+| `--html-default-css` | | Write the default document stylesheet and exit, as a starting point for your own |
+| `--html-fragment` | | Write the document element alone, without the page shell or a stylesheet, to embed in a page of your own |
 | `--pdf-engine <engine>` | | Converter `--doc-form pdf` drives: `weasyprint` (default), `pandoc` or `prince` |
-| `--pdf-title-page` | | Put the document title on a page of its own (`--doc-form pdf`) |
-| `--pdf-toc` | | Write a table of contents ahead of the content (`--doc-form pdf`) |
-| `--pdf-number-sections` | | Number the section headings hierarchically (`--doc-form pdf`) |
+| `--pdf-title-page` | | Alias of `--doc-title-page` |
+| `--pdf-toc` | | Alias of `--doc-toc` |
+| `--pdf-number-sections` | | Alias of `--doc-number-sections` |
 | `--output <file>` | `-o` | Write the conversion, the rendering or the rendered document to a file instead of stdout |
 | `--version` | `-v` | Show version information |
 | `--help` | `-h` | Show usage information |
 | `--man` | | Write this command's manual page, in roff, to stdout (see [Installing](../guide/01-install.md)) |
 
-Check flags, each repeatable. `-instantiate` runs first whatever order they are
-written in, so the verdicts after it are about that object:
+Check flags, each repeatable. `-instantiate` runs first whatever order the flags are
+written in, so the verdicts are about that object:
 
 | Flag | Checks |
 |------|--------|
-| `-validate` | Nothing about the model's conditions: only that it analyses cleanly, and that the objects `-instantiate` asked for materialized |
+| `-validate` | Only that the model analyses cleanly and that the objects `-instantiate` asked for could be built; it says nothing about the model's constraints |
 | `-constraint <name>` | One constraint, as `%constraint` does |
 | `-requirement <name>` | One requirement, as `%requirement` does |
 | `-satisfy` | Every satisfaction assertion the model states |
@@ -178,7 +199,7 @@ written in, so the verdicts after it are about that object:
 | `-calc "<name>(<args>)"` | Invokes a calculation and reports what it computed |
 | `-run-query "<name> [<p>=<expr>...]"` | Executes a document query and reports its rows, as `%run-query` does — including any computed `Column(name = "<column>", expression = <expr>)` projections evaluated per row. Each binding is written as `<parameter>=<expression>` |
 | `-action "<name> [object]"` | Runs an action to completion and reports its outputs |
-| `-state "<name> [object]"` | Runs a state machine and reports where it settled |
+| `-state "<name> [object]"` | Runs a state machine and reports where it settled. The object is one `-instantiate` created, named as `%state` names it: a usage's name, a feature path to a part it holds (`Fleet::driver.r`), or the id the report prints (`#2`). Naming the machine the object exhibits attaches to its running machine rather than performing it again (a definition exhibited as several usages is refused with the usages to name instead); naming a usage whose definition alone was instantiated says which usage to `-instantiate` |
 | `-advance <time>` | Simulated time units each `-state` machine is run for |
 | `-json` | Reports the checks as one JSON document rather than as lines |
 
@@ -190,8 +211,8 @@ written in, so the verdicts after it are about that object:
 sysml [options] [file...]
 ```
 
-Flags may be written before or after the files. A file named like a flag is read
-as a file after `--`, which ends the flags: `sysml -trace -- -m.sysml`.
+Flags may be written before or after the files. `--` ends the flags, so a file whose
+name looks like a flag can be given after it: `sysml -trace -- -m.sysml`.
 
 ## Examples
 
@@ -217,13 +238,13 @@ sysml -e "result" file1.sysml file2.sysml
 
 ## Rendering a view
 
-`-render <view>` renders one view of the model and exits. The rendering is the one the view's
-`render` member states, and a containment tree where it states none; the kinds this build produces
-are a tree, an interconnection diagram, a state machine, an action flow, a sequence diagram and a
-table. A geometry view is recognized but not drawn. A pseudo-view renders without a declaration:
-`#tree` renders the one model file accepted by `-render` (or every document loaded in the REPL),
+`-render <view>` renders one view of the model and exits. The rendering kind comes from the view's
+`render` member, or is a containment tree if the view does not state one. This build can produce a
+tree, an interconnection diagram, a state machine, an action flow, a sequence diagram and a table.
+A geometry view is recognized but not drawn. Pseudo-views let you render without declaring a view:
+`#tree` renders the one model file `-render` accepts (or every document loaded in the REPL),
 while `#tree:<name>`, `#interconnection:<name>`, `#state:<name>`, `#action:<name>`,
-`#sequence:<name>` and `#table:<name>` render the named element directly. Only kinds this build
+`#sequence:<name>` and `#table:<name>` render the named element directly. Only the kinds this build
 produces are offered; newly supported kinds become pseudo-views automatically.
 
 ```bash
@@ -244,18 +265,19 @@ sysml model.sysml -render '#state:Vehicle::controller'
 sysml model.sysml -render '#tree'
 ```
 
-Where `-render-form` names no form, the form follows the destination: the text form at a terminal,
-where a person reads it, and the machine-readable form of the kind into a file or a pipe, where a
-tool does. The text form is ASCII and its table is written to fit the terminal, wrapping a cell
-wider than its column rather than truncating it; into a file or a pipe every column is as wide as
-its widest cell, so a saved artifact does not depend on the window it was written from.
+When `-render-form` is not given, the form depends on the destination: the text form when stdout is
+a terminal, where a person reads it, and the machine-readable form of the kind when stdout is a file
+or a pipe, where a tool does. The text form is ASCII, and its table is laid out to fit the terminal,
+wrapping a cell wider than its column rather than truncating it. Into a file or a pipe, every column
+is as wide as its widest cell, so a saved artifact does not depend on the window it was written from.
 
-The artifact is the run's result, so it goes on stdout alone — what was loaded, what the model
-analysed to, an empty rendering, and any element the rendering cannot represent all go on stderr,
-and `-o` writes the artifact only. A view exposing nothing renders an empty artifact and says so; a
-name that is no view, a rendering kind this build does not produce, a form the kind is not written
-in, and a model that did not analyse cleanly each stop the run with status 2. Rendering decides
-nothing about the model, so it is not asked for together with a check flag or with `-convert`.
+The rendering is the run's result, so it is the only thing on stdout. Load reports, analysis
+diagnostics, a note that the rendering is empty, and any element the rendering cannot represent all
+go to stderr, and `-o` writes the rendering only. A view that exposes nothing renders an empty
+artifact and says so. A name that is not a view, a rendering kind this build does not produce, a
+form the kind cannot be written in, and a model that did not analyse cleanly each stop the run with
+status 2. Rendering decides nothing about the model, so it cannot be combined with a check flag or
+with `-convert`.
 
 `-render-all <dir>` writes every declared view of all loaded files, in document and declaration
 order. Each qualified view name becomes a file name with `::` replaced by `.`. With no
@@ -267,52 +289,108 @@ sysml types.sysml model.sysml -render-all rendered
 sysml model.sysml -render-all rendered-text -render-form text
 ```
 
-The directory is created when necessary. Written paths, load reports, and notices prefixed by
-their view go to stderr; stdout stays empty. An unsupported rendering kind, or a forced form the
-kind cannot write, is reported and skipped without failing the run. No declared views or an
-analysis error stops the run with status 2. `-render-all` cannot be combined with `-render`, `-o`,
-`-convert`, or a check flag.
+The directory is created if needed. Written paths, load reports, and notices (prefixed by the view
+they concern) go to stderr; stdout stays empty. An unsupported rendering kind, or a forced form the
+kind cannot be written in, is reported and skipped without failing the run. A model with no declared
+views, or an analysis error, stops the run with status 2. `-render-all` cannot be combined with
+`-render`, `-o`, `-convert`, or a check flag.
 
 The rendering is **tool-defined output**: SysML v2 §10.2 specifies the notation a view is written
-in, not how a tool draws it. Mermaid is the machine-readable form of the graph-shaped kinds because
+in, not how a tool draws it. Mermaid is the machine-readable form for the graph-shaped kinds because
 it renders as-is in Markdown, documentation sites and editors without a separate rendering tool, and
-has dedicated state diagram and sequence diagram grammars; a table is written as a Markdown table,
-which Mermaid has no grammar for, so `-render-form mermaid` of a table names Markdown rather than
-drawing a diagram of rows.
+has dedicated state diagram and sequence diagram grammars. A table is written as a Markdown table,
+since Mermaid has no grammar for tables, so `-render-form mermaid` on a table produces Markdown
+rather than a diagram of rows.
 
 `-render-documents <dir>` renders every document definition the loaded model declares into the
 directory, one Markdown file per document, in fully-qualified-name order. Each file name is the
-document's fully qualified name with `::` replaced by `-` and any byte outside ASCII letters,
-digits and `_` escaped as `.XX` (uppercase hex), plus `.md` — deterministic, so cross-document
-references (see [the authoring chapter](../manual/authoring.md)) resolve as relative links between
-the written files. Repeated runs write identical bytes.
+document's fully qualified name with `::` replaced by `-`, any byte outside ASCII letters,
+digits and `_` escaped as `.XX` (uppercase hex), plus `.md`. The names are deterministic, so
+cross-document references (see [the authoring chapter](../manual/authoring.md)) resolve as relative
+links between the written files, and repeated runs write identical bytes.
 
 ```bash
 sysml model.sysml -render-documents rendered
 ```
 
-The directory is created when necessary; written paths go to stderr and stdout stays empty. A
-model that declares no documents, more than one document with the same name, or does not analyse
+The directory is created if needed; written paths go to stderr and stdout stays empty. A
+model that declares no documents, declares two documents with the same name, or does not analyse
 cleanly stops the run with status 2. `-render-documents` cannot be combined with
 `-render-document`, `-render`, `-render-all`, `-o`, `-convert`, a query flag, or a check flag.
-A single `-render-document` of a document with cross-document references still succeeds: the links
-point at the targets' expected file names and dangle until those documents are rendered into the
-same directory.
+Rendering a single document with `-render-document` still succeeds when it has cross-document
+references: the links point at the targets' expected file names and dangle until those documents
+are rendered into the same directory.
+
+`-render-document` takes as many model files as the document needs, loaded as one model, so a
+document can query elements declared in sibling files:
+
+```bash
+sysml model/*.sysml -render-document Reports::MassReport -o report.md
+```
+
+## Rendering a document as HTML
+
+`-render-document <name> -doc-form html` writes the document as HTML rendered from the compiled
+document tree itself, not by converting the Markdown: the model facts Markdown cannot carry survive
+into the markup, so a stylesheet, a static-site generator, an accessibility tool or a downstream
+processor can address them.
+
+```bash
+sysml model.sysml -render-document Reports::MassReport -doc-form html -o report.html
+sysml model.sysml -render-documents site -doc-form html
+sysml model.sysml -render-document Reports::MassReport -doc-form html \
+    -doc-title-page -doc-toc -doc-number-sections -html-css theme.css -o report.html
+```
+
+The structure is ordinary semantic HTML — `<article>`, nested `<section>` whose heading levels
+follow the nesting, `<p>`, `<table>` with `<caption>`, `<thead>` and `<th scope="col">`,
+`<ul>`/`<ol>`, `<figure>` with `<figcaption>`, `<nav>` for the contents, and `<em>`, `<strong>`,
+`<code>`, `<a>` inline. Styling hooks are a small `sysml-` class vocabulary (`sysml-document`,
+`sysml-section`, `sysml-table`, `sysml-row`, `sysml-cell`, `sysml-value`, `sysml-list`,
+`sysml-item`, `sysml-diagram`, `sysml-caption`, `sysml-link`, `sysml-ref` and their kin), and the
+model facts ride alongside on `data-` attributes: the content kind and name, the query behind a
+table or list, the group-by column, each row's or item's selected element and its element kind
+(`partUsage`, `requirementDef`, …), each cell's projected column and value kind, and a diagram's
+view, kind and flow direction. Identifiers are anchors only, matching the Markdown anchors, so a
+`Ref` resolves within a page and across a rendered set.
+
+Diagram blocks embed their Mermaid source in `<pre class="mermaid">`, which a page that loads
+Mermaid renders as a diagram and any other page shows as source. The output loads nothing over the
+network, runs no JavaScript of its own, and is byte-identical between runs.
+
+### Styling the HTML
+
+The default stylesheet is inlined in a standalone page and declared in a cascade layer:
+
+```css
+@layer opensysml;
+@layer opensysml { /* the defaults */ }
+```
+
+Your own CSS is unlayered, so it wins on cascade origin rather than specificity — overriding a
+default needs neither `!important` nor a matching selector. Every default value comes from a
+`--sysml-*` custom property on `.sysml-document`, so retheming can be a handful of properties, and
+the renderer emits no `style` attributes to compete with. `-html-default-css` writes that sheet to
+copy from, `-html-css` adds sheets after it (a file is inlined in a single page and written beside a set's pages, a URL is linked), and
+`-html-no-default-css` drops it entirely. A `-render-documents` set writes one shared
+`sysml-document.css` that every page links, so the styling is edited in one place, and
+`-html-fragment` writes the `<article>` alone, with no page shell and no stylesheet, for embedding
+in a page that brings its own.
 
 ## Rendering a document as PDF
 
 `-render-document <name> -doc-form pdf -o report.pdf` converts the rendered Markdown to PDF. The
 conversion never runs inside the `sysml` binary: it drives an external converter as a subprocess,
-selected with `-pdf-engine`, so the binary links no PDF renderer and Markdown output needs none of
+chosen with `-pdf-engine`, so the binary links no PDF renderer and Markdown output needs none of
 these tools.
 
 ```bash
 sysml model.sysml -render-document Reports::MassReport -doc-form pdf -o report.pdf
 sysml model.sysml -render-document Reports::MassReport -doc-form pdf \
-    -pdf-engine pandoc -pdf-title-page -pdf-toc -pdf-number-sections -o report.pdf
+    -pdf-engine pandoc -doc-title-page -doc-toc -doc-number-sections -o report.pdf
 ```
 
-The engines, each discovered on `PATH` by its default name unless an environment variable points
+The engines. Each is found on `PATH` by its default name unless an environment variable points
 at a specific executable:
 
 | Engine | Tools it drives | Override |
@@ -321,27 +399,27 @@ at a specific executable:
 | `pandoc` | `pandoc` reading the Markdown itself, with WeasyPrint as its PDF engine | `OPENSYSML_PANDOC` (and `OPENSYSML_WEASYPRINT`) |
 | `prince` | `prince`, a commercial HTML-to-PDF engine | `OPENSYSML_PRINCE` |
 
-The title page, table of contents and section numbering are choices of this output step alone —
-they are flags of the run, never attributes of the document model, so the same document renders to
+The title page, table of contents and section numbering belong to this output step alone. They
+are flags of the run, never attributes of the document model, so the same document renders to
 Markdown unchanged.
 
 Diagram blocks are pre-rendered to SVG with [mermaid-cli](https://github.com/mermaid-js/mermaid-cli)
-(`mmdc`, override `OPENSYSML_MMDC`; `OPENSYSML_MMDC_PUPPETEER` names a puppeteer configuration file
-for a browser that needs launch flags, such as `--no-sandbox` in a container). A document without
-diagrams needs no diagram tool.
+(`mmdc`; override with `OPENSYSML_MMDC`. `OPENSYSML_MMDC_PUPPETEER` names a puppeteer configuration
+file for a browser that needs launch flags, such as `--no-sandbox` in a container). A document
+without diagrams needs no diagram tool.
 
-Inline runs render semantically in PDF: emphasis, strong and code styling, links, and `Ref`
-cross-references as clickable internal links to their targets' invisible anchors, in every engine —
-`weasyprint` and `prince` through the prepared HTML, `pandoc` through the Markdown itself. A grouped
-table's group key renders in strong type above each subtable.
+Inline runs keep their meaning in PDF: emphasis, strong and code styling, links, and `Ref`
+cross-references as clickable internal links to their targets' invisible anchors, in every engine
+(`weasyprint` and `prince` through the prepared HTML, `pandoc` through the Markdown itself). A
+grouped table's group key renders in bold above each subtable.
 
 A PDF is a binary artifact, so `-doc-form pdf` requires `-o`. A missing tool stops the run with
-status 2 and a report naming the tool, its override variable and the other engines; a converter
-that fails reports its own words. `scripts/download-doc-pdf-toolchain.sh` provisions pinned copies
+status 2 and a message naming the tool, its override variable and the other engines; a converter
+that fails reports its own output. `scripts/download-doc-pdf-toolchain.sh` installs pinned copies
 of WeasyPrint, pandoc and mermaid-cli under `build/doc-pdf/` and prints the variables to export
-(Prince is commercial and installed separately). Every tool is run with `SOURCE_DATE_EPOCH=0`, so
-an engine that embeds a creation date embeds the same one every run and the artifact is
-reproducible against one toolchain.
+(Prince is commercial and installed separately). Every tool runs with `SOURCE_DATE_EPOCH=0`, so
+an engine that embeds a creation date embeds the same one every run, and the artifact is
+reproducible for a given toolchain.
 
 ## Output Format
 
@@ -367,12 +445,12 @@ sysml>
 
 ## Error Handling
 
-**On every run that is not a prompt, what was asked for goes to stdout and what
-went wrong goes to stderr.** Evaluated values, conversion output, verdict lines
-and the `✓` echoes of what a load declared are results; model diagnostics —
-errors and warnings alike — and anything that stopped the run are findings, and
-so is the `wrote <file> …` note a `-convert -o` prints when it succeeds, which is
-kept off stdout so a conversion can be piped.
+**On every non-interactive run, results go to stdout and findings go to stderr.**
+Evaluated values, conversion output, verdict lines and the `✓` echoes of what a
+load declared are results. Model diagnostics (errors and warnings alike) and
+anything that stopped the run are findings, and so is the `wrote <file> …` note a
+successful `-convert -o` prints, which stays off stdout so a conversion can be
+piped.
 
 A file that cannot be read ends the run:
 
@@ -384,7 +462,7 @@ $ echo $?
 ```
 
 A model that does not analyse cleanly answers nothing, so its diagnostics end the
-run rather than an evaluation being reported against a model nobody could read:
+run rather than reporting an evaluation against a model nobody could read:
 
 ```bash
 $ sysml -e "1+1" bad.sysml 2>/dev/null
@@ -408,16 +486,15 @@ $ echo $?
 2
 ```
 
-So `2> errors.log` collects everything a script would otherwise have to read the
-results for, plus the `wrote …` note of a successful `-convert -o` and any
-warning the model raised — neither of which changes the status, so a non-empty
-log is not by itself a failure. The status is.
+So `2> errors.log` collects everything a script would otherwise have to pick out
+of the results, plus the `wrote …` note of a successful `-convert -o` and any
+warning the model raised. Neither of those changes the status, so a non-empty
+log is not by itself a failure; the exit status is what to check.
 
 ## Exit status
 
-The whole contract, which is the same whatever the run was asked to do. This is
-the one place it is written down; [the guide](../guide/)
-links here.
+The exit status contract is the same whatever the run was asked to do. This is
+the one place it is written down; [the guide](../guide/) links here.
 
 | Status | Means |
 |--------|-------|
@@ -452,17 +529,17 @@ wrote /tmp/state-machine.ttl (ttl, 2078 bytes)
 0
 ```
 
-Materializing an object is part of the run, so what it finds is a diagnostic
-about the model: `-instantiate` reports every feature value it could not materialize —
-a default whose value count does not conform to the multiplicity governing its
-feature, which is the assumed `1..1` for a feature that declares none — and
-`-validate` reports `no errors` only for a run that found none. The prompt surface
-follows the same rule: a command that rendered a feature value it could not materialize —
-a `%features` listing carrying `<error: …>`, or an `%eval` of such a value, pinned to
-a context (`%eval in <name> : <expr>`) or not — answered nothing about it, so a
-session driven from a pipe exits `2` rather than reporting success, whatever
-analysis found. A name that is no feature of the object is a request the command got
-wrong, not a feature value that failed to materialize, and does not change the status.
+Instantiating an object is part of the run, so what it finds is a diagnostic
+about the model. `-instantiate` reports every feature value it could not build, such
+as a default whose number of values does not fit the feature's multiplicity (which is
+`1..1` for a feature that declares none), and `-validate` reports `no errors` only
+when the run found none. The REPL follows the same rule: a command that showed a
+feature value it could not build (a `%features` listing containing `<error: …>`, or an
+`%eval` of such a value, with or without a context via `%eval in <name> : <expr>`)
+has answered nothing about it, so a session driven from a pipe exits `2` rather than
+reporting success, whatever analysis found. Asking for a name that is not a feature of
+the object is a mistake in the request, not a feature value that failed to build, and
+does not change the status.
 
 ```bash
 $ cat > model.sysml <<'EOF'
@@ -497,19 +574,19 @@ Features:
 2
 ```
 
-Nesting multiplies, and reading a feature value materializes the objects it holds, so the
-check is bounded, as the `%features` listing is: a model wide enough to spend that
-budget, deeper than the walk descends, or one whose part holds its own kind is
-reported as checked in part (`warning: … materialization is bounded; not every
-feature value was checked`, and `no errors in the feature values checked`) rather than read to the
-end. Being no model error, that leaves the status `0`.
+Nesting multiplies, and reading a feature value builds the objects it holds, so the
+check is bounded, just as the `%features` listing is. A model wide enough to use up that
+budget, deeper than the walk descends, or with a part that contains its own kind is
+reported as partly checked (`warning: … materialization is bounded; not every
+feature value was checked`, and `no errors in the feature values checked`) rather than
+read to the end. That is not a model error, so the status stays `0`.
 
-The prompt is the exception: a line it could not carry out is reported and the
-session goes on, and `%quit` or Ctrl-D exits `0`. `sysml model.sysml` at a
+The interactive prompt is the exception: a line it could not carry out is reported
+and the session goes on, and `%quit` or Ctrl-D exits `0`. `sysml model.sysml` at a
 terminal loads the model, reports what analysis found, and opens the prompt with
-status `0` — the prompt is where the model gets fixed. The same command with its
-lines coming from a pipe or a file gates: it exits `2` for a model that did not
-analyse cleanly, and for one whose feature values a command could not materialize.
+status `0`, because the prompt is where the model gets fixed. The same command with
+its lines coming from a pipe or a file does gate: it exits `2` for a model that did
+not analyse cleanly, and for one whose feature values a command could not build.
 
 ## Use Cases
 
@@ -525,10 +602,10 @@ analyse cleanly, and for one whose feature values a command could not materializ
 - Use `%help` in REPL to see all meta commands
 - Combine multiple `-e` flags to evaluate related expressions
 - Load common definitions before custom models
-- Read [Exit status](#exit-status) before gating a pipeline on one: `0` means the
+- Read [Exit status](#exit-status) before gating a pipeline on it: `0` means the
   model answered what was asked, `1` that it answered false, `2` that it answered
   nothing
-- Results are on **stdout** and findings — diagnostics, warnings, whatever
-  stopped the run — on **stderr**, so `> model.ttl` and `2> errors.log` separate
+- Results go to **stdout** and findings (diagnostics, warnings, whatever
+  stopped the run) to **stderr**, so `> model.ttl` and `2> errors.log` separate
   them
 - Use shell pipes for REPL automation: `echo "%load file.sysml" | sysml`

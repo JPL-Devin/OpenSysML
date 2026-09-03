@@ -76,6 +76,8 @@ have **no** `file` key (5 of them at `04afba74`).
 | `-baseline /nonexistent-dir/b.json` / `-baseline /tmp` | exit 1, `open …: no such file or directory` / `open /tmp: is a directory` |
 | truncated grammar (`head -c 4000 KerML.xtext`) | exit 1, `KerML.xtext: production NamespaceBodyElement: line 143: expected ";", found ""` — a parse error, never a panic and never still 176 productions |
 | `PILOT_TAG=9999-99 ./scripts/download-pilot-grammars.sh` | exit 1, `error: could not clone <repo> at 9999-99, the tag scripts/pilot-pin.sh pins` after git's own `fatal:` lines; nothing is provisioned, which is the property that matters |
+| `PILOT_COMMIT=<other sha> ./scripts/download-pilot-grammars.sh` | exit 1, `error: <repo> tag 2026-07 resolves to c7fc737d…, scripts/pilot-pin.sh pins <other sha>` — the shared `pilot_clone` refuses a tag that no longer resolves to the pinned commit; nothing is provisioned |
+| second run | `Grammars already present at build/pilot-grammars (pin 2026-07 c7fc737d…)`, exit 0; a directory with a different or missing `.pilot-pin` stamp is re-downloaded whole |
 
 `mv build/pilot-grammars` aside instead of deleting it if you want the original bytes back — and
 beware moving it onto an existing backup path, which nests it (`build/pilot-grammars/pilot-grammars`).

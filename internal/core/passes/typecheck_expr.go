@@ -71,13 +71,32 @@ func (ec *exprChecker) checkBoundValue(valueScope, declScope *symbols.Scope, u *
 		if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
 			continue
 		}
-		if !semantics.PrimConforms(got, want) {
+		if !bindable(element, got, want) {
 			ec.errorf(element.Span(), "cannot bind %s value to a feature typed by %s", got, want)
 		}
 	}
 	ec.checkValueConformance(valueScope, declScope, u, value)
 	ec.checkValueDimension(valueScope, declScope, u, value)
 	ec.checkValueCount(declScope, u, value)
+}
+
+// bindable reports whether a got-typed value may bind to a want-typed feature: a literal's
+// type is exact, an expression's only bounds its values (7 / 2 is Rational, 4 / 2 whole).
+func bindable(value ast.Node, got, want semantics.PrimType) bool {
+	if semantics.PrimConforms(got, want) {
+		return true
+	}
+	return !spellsOneValue(value) && semantics.PrimConforms(want, got)
+}
+
+// spellsOneValue reports whether an expression writes its value out: a literal, or a signed one.
+func spellsOneValue(n ast.Node) bool {
+	if isLiteral(n) {
+		return true
+	}
+	op, ok := n.(*ast.OperatorExpr)
+	return ok && (op.Operator == ast.OpNeg || op.Operator == ast.OpPos) &&
+		len(op.Operands) == 1 && isLiteral(op.Operands[0])
 }
 
 // declaredPrimType returns the scalar type a usage is typed by, or PrimUnknown.
@@ -259,7 +278,12 @@ func writtenLength(seq *ast.SequenceExpr) (int64, bool) {
 // one value whatever the model holds — a literal is, a name or a call may be a
 // collection.
 func isSingleValued(el ast.Node) bool {
-	switch el.(type) {
+	return isLiteral(el)
+}
+
+// isLiteral reports whether an expression is a scalar literal, whose exact type is written out.
+func isLiteral(n ast.Node) bool {
+	switch n.(type) {
 	case *ast.LiteralInteger, *ast.LiteralReal, *ast.LiteralString, *ast.LiteralBool:
 		return true
 	default:
@@ -507,13 +531,11 @@ func (ec *exprChecker) checkAddition(scope *symbols.Scope, e *ast.OperatorExpr) 
 	return semantics.PrimUnknown
 }
 
-// divisionResult follows the kernel function library: Natural/Natural stays
-// Natural, Integer/Integer is Rational, wider types divide within themselves.
+// divisionResult types a whole-number quotient as Rational, as the reference
+// evaluates it (see docs/project/omg-issues.md); wider types divide within themselves.
 func divisionResult(lhs, rhs semantics.PrimType) semantics.PrimType {
 	switch widened := semantics.PrimWiden(lhs, rhs); widened {
-	case semantics.PrimNatural:
-		return semantics.PrimNatural
-	case semantics.PrimInteger:
+	case semantics.PrimNatural, semantics.PrimInteger:
 		return semantics.PrimRational
 	default:
 		return widened
@@ -696,7 +718,7 @@ func (ec *exprChecker) checkArguments(
 		if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
 			continue
 		}
-		if !semantics.PrimConforms(got, want) {
+		if !bindable(arg, got, want) {
 			ec.errorf(arg.Span(), "argument %d of %s expects %s, found %s", i+1, sym.Name, want, got)
 		}
 	}

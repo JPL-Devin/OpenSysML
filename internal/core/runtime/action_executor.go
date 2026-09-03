@@ -344,9 +344,11 @@ func (e *ActionExecutor) HasPendingSignal() bool {
 		if !isAccept || accept.Trigger != nil {
 			continue
 		}
-		matches := e.acceptMatch(accept, usage)
+		matches, failed := e.acceptMatch(accept, usage)
 		for _, msg := range e.ctx.PendingMessages() {
-			if matches(msg) {
+			// A port that fails to resolve counts as pending: the step this
+			// provokes surfaces the failure.
+			if matches(msg) || *failed != nil {
 				return true
 			}
 		}
@@ -356,17 +358,28 @@ func (e *ActionExecutor) HasPendingSignal() bool {
 
 // acceptMatch is the predicate an accept node holds a message to: it reaches
 // the node, and conforms to the type the accept names or carries the event it
-// subsets.
-func (e *ActionExecutor) acceptMatch(accept lower.Accept, usage *ast.Usage) func(Message) bool {
+// subsets. The signal is tested first, so only a message of the accept's own
+// signal resolves the `via` port; if that fails the predicate matches nothing
+// and the failure is left in the returned error slot.
+func (e *ActionExecutor) acceptMatch(accept lower.Accept, usage *ast.Usage) (func(Message) bool, *error) {
+	var failed error
 	return func(m Message) bool {
-		if !m.reaches(ActionNodeName(usage), accept.ViaPort, objectID(e.self)) {
+		if failed != nil {
 			return false
 		}
 		if accept.SignalType != nil {
-			return e.ctx.messageMatches(m, accept.SignalType, accept.Scope)
+			if !e.ctx.messageMatches(m, accept.SignalType, accept.Scope) {
+				return false
+			}
+		} else if !m.carriesSignal(accept.SubsetsEvent) {
+			return false
 		}
-		return m.carriesSignal(accept.SubsetsEvent)
-	}
+		reaches, err := e.ctx.messageReaches(m, ActionNodeName(usage), accept.ViaPort, e.self)
+		if err != nil {
+			failed = err
+		}
+		return err == nil && reaches
+	}, &failed
 }
 
 // breakpointHit returns the name of a breakpoint node a token sits on and has
@@ -600,6 +613,47 @@ func (e *ActionExecutor) declaresParameter(name string) bool {
 	return false
 }
 
+// parameterDirection reports the direction of the parameter of this name, and
+// whether the action declares one.
+func (e *ActionExecutor) parameterDirection(name string) (ast.FeatureDirection, bool) {
+	if e.action == nil || e.action.Decl == nil {
+		return ast.DirNone, false
+	}
+	for _, param := range actionParameterDecls(e.action.Decl) {
+		if param.Name == name {
+			return param.Direction, true
+		}
+	}
+	return ast.DirNone, false
+}
+
+// checkInputNames reports a supplied input the caller cannot write: one naming
+// no feature of the action, or a parameter the action only writes back (`out`).
+func (e *ActionExecutor) checkInputNames() error {
+	var unknown, outputs []string
+	for name := range e.inputs {
+		dir, declared := e.parameterDirection(name)
+		switch {
+		case declared && (dir == ast.DirIn || dir == ast.DirInOut):
+		case dir == ast.DirOut:
+			outputs = append(outputs, name)
+		case !e.declaresAttribute(name):
+			unknown = append(unknown, name)
+		}
+	}
+	if len(outputs) > 0 {
+		sort.Strings(outputs)
+		return fmt.Errorf("%w: action %s writes %s back rather than reading it",
+			ErrOutputActionInput, symbolText(e.action), strings.Join(outputs, ", "))
+	}
+	if len(unknown) == 0 {
+		return nil
+	}
+	sort.Strings(unknown)
+	return fmt.Errorf("%w: action %s declares no %s",
+		ErrUnknownActionInput, symbolText(e.action), strings.Join(unknown, ", "))
+}
+
 // initialize spawns initial token at InitialNode.
 func (e *ActionExecutor) initialize() error {
 	defer e.ctx.beginExecutorRun(&e.runStarted)()
@@ -624,6 +678,9 @@ func (e *ActionExecutor) initialize() error {
 	}
 
 	// Apply input parameter bindings, overriding any defaults with the same name.
+	if err := e.checkInputNames(); err != nil {
+		return err
+	}
 	if err := e.setFeatures(e.inputs); err != nil {
 		return err
 	}
@@ -1121,7 +1178,11 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 		if want == "" {
 			want = accept.SubsetsEvent
 		}
-		msg, taken := e.ctx.TakeMessage(e.acceptMatch(accept, usage))
+		matches, failed := e.acceptMatch(accept, usage)
+		msg, taken := e.ctx.TakeMessage(matches)
+		if *failed != nil {
+			return *failed
+		}
 		if !taken {
 			if token.Wait == nil {
 				token.Wait = &AcceptWait{

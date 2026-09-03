@@ -18,11 +18,27 @@ import (
 var updateExpectation = flag.Bool("update-flexo", false,
 	"record the measured Flexo interop report as the new expectation")
 
-const (
-	expectationPath = "testdata/interop_expected.txt"
-	fixturePath     = "testdata/model.sysml"
-	referencePath   = "testdata/reference_changes.json"
-)
+// Each fixture is measured on its own: the original model, and the
+// identity-carrying variant whose annotated UUIDs are the element ids.
+var fixtures = []struct {
+	name            string
+	fixturePath     string
+	referencePath   string
+	expectationPath string
+}{
+	{
+		name:            "model",
+		fixturePath:     "testdata/model.sysml",
+		referencePath:   "testdata/reference_changes.json",
+		expectationPath: "testdata/interop_expected.txt",
+	},
+	{
+		name:            "identity",
+		fixturePath:     "testdata/identity_model.sysml",
+		referencePath:   "testdata/identity_reference_changes.json",
+		expectationPath: "testdata/identity_interop_expected.txt",
+	},
+}
 
 const expectationHeader = `# What a real Flexo MMS stack does with this project's RDF, measured by
 # TestFlexoInterop. This is a ratchet: every line is adjudicated, and a change to
@@ -38,7 +54,32 @@ const expectationHeader = `# What a real Flexo MMS stack does with this project'
 # Server-generated commit ids, timestamps and durations are not recorded.
 `
 
-func TestFlexoInterop(t *testing.T) {
+// The apply gate's fixture pair and expectation.
+const (
+	applyFixturePath     = "testdata/identity_model.sysml"
+	applyRevisionPath    = "testdata/identity_model_revised.sysml"
+	applyExpectationPath = "testdata/identity_apply_expected.txt"
+)
+
+const applyExpectationHeader = `# What a real Flexo MMS stack does when the identity-keyed sync applies to it,
+# measured by TestFlexoInteropApply. This is a ratchet: every line is
+# adjudicated, and a change to one is a change in interoperability, not a change
+# in the harness.
+#
+# Regenerate against a running stack (see .agents/skills/flexo-interop):
+#   FLEXO_INTEROP=1 FLEXO_INTEROP_TOKEN=<jwt> \
+#     go test -count=1 ./internal/interop/flexo -run TestFlexoInterop -update-flexo
+#
+# initial applies the fixture to an empty branch; revision applies its revised
+# sibling on top, refusing first without confirmed deletes; repository-changed
+# diffs the revision again after a commit made behind the sync's back. Each
+# round is read back at the commit the sync state recorded. Server-generated
+# commit ids, timestamps and durations are not recorded.
+`
+
+// liveClient is the client of the stack the gate asked for, or the skip.
+func liveClient(t *testing.T) (*Client, context.Context) {
+	t.Helper()
 	if os.Getenv(EnvGate) == "" {
 		announceSkip(t, "the live Flexo interop gate is opt-in")
 	}
@@ -50,46 +91,84 @@ func TestFlexoInterop(t *testing.T) {
 	client := New(cfg)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
+	t.Cleanup(cancel)
 	if err := client.Reachable(ctx); err != nil {
 		t.Fatalf("%s=%s but the stack does not answer: %v", EnvGate, os.Getenv(EnvGate), err)
 	}
+	return client, ctx
+}
 
-	model, err := os.ReadFile(fixturePath)
-	if err != nil {
-		t.Fatalf("read %s: %v", fixturePath, err)
-	}
-	reference, err := os.ReadFile(referencePath)
-	if err != nil {
-		t.Fatalf("read %s: %v", referencePath, err)
-	}
-
-	report, err := Measure(ctx, client, fixturePath, model, reference)
-	if err != nil {
-		t.Fatalf("measure the round trip: %v", err)
-	}
-	got := report.Text(expectationHeader)
-	for _, finding := range report.Findings {
-		t.Log(finding)
-	}
-
+// checkExpectation compares a measured report with its recorded one, or
+// re-records it under -update-flexo.
+func checkExpectation(t *testing.T, path, got string) {
+	t.Helper()
 	if *updateExpectation {
-		if err := os.WriteFile(expectationPath, []byte(got), 0o644); err != nil {
-			t.Fatalf("write %s: %v", expectationPath, err)
+		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
+			t.Fatalf("write %s: %v", path, err)
 		}
-		t.Logf("recorded %s; review the diff", expectationPath)
+		t.Logf("recorded %s; review the diff", path)
 		return
 	}
 
-	want, err := os.ReadFile(expectationPath)
+	want, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("read %s: %v", expectationPath, err)
+		t.Fatalf("read %s: %v", path, err)
 	}
 	if string(want) != got {
-		t.Errorf("the round trip no longer measures what %s records.\n"+
+		t.Errorf("the stack no longer measures what %s records.\n"+
 			"Review the difference, then re-record it with -update-flexo:\n%s",
-			expectationPath, firstDifference(string(want), got))
+			path, firstDifference(string(want), got))
 	}
+}
+
+func TestFlexoInterop(t *testing.T) {
+	client, ctx := liveClient(t)
+
+	for _, fixture := range fixtures {
+		t.Run(fixture.name, func(t *testing.T) {
+			model, err := os.ReadFile(fixture.fixturePath)
+			if err != nil {
+				t.Fatalf("read %s: %v", fixture.fixturePath, err)
+			}
+			reference, err := os.ReadFile(fixture.referencePath)
+			if err != nil {
+				t.Fatalf("read %s: %v", fixture.referencePath, err)
+			}
+
+			report, err := Measure(ctx, client, fixture.fixturePath, model, reference)
+			if err != nil {
+				t.Fatalf("measure the round trip: %v", err)
+			}
+			for _, finding := range report.Findings {
+				t.Log(finding)
+			}
+			checkExpectation(t, fixture.expectationPath, report.Text(expectationHeader))
+		})
+	}
+}
+
+// TestFlexoInteropApply measures the sync's apply against the live stack: load,
+// revision with a retained-id rename and gated deletes, then a refused conflict.
+func TestFlexoInteropApply(t *testing.T) {
+	client, ctx := liveClient(t)
+
+	model, err := os.ReadFile(applyFixturePath)
+	if err != nil {
+		t.Fatalf("read %s: %v", applyFixturePath, err)
+	}
+	revised, err := os.ReadFile(applyRevisionPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", applyRevisionPath, err)
+	}
+
+	report, err := MeasureApply(ctx, client, applyFixturePath, model, revised)
+	if err != nil {
+		t.Fatalf("measure the apply: %v", err)
+	}
+	for _, finding := range report.Findings {
+		t.Log(finding)
+	}
+	checkExpectation(t, applyExpectationPath, report.Text(applyExpectationHeader))
 }
 
 // firstDifference reports the first line the recorded and measured reports

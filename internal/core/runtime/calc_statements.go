@@ -15,9 +15,13 @@ type calcStmtHost struct {
 	result Value // the value its `return` yielded
 }
 
-// describe names the body in a diagnostic; the invocation adds the calc's name.
+// calcBodyDescription names a calculation body in a diagnostic; the invocation
+// adds the calc's name.
+const calcBodyDescription = "calculation body"
+
+// describe names the body in a diagnostic.
 func (h *calcStmtHost) describe() string {
-	return "calculation body"
+	return calcBodyDescription
 }
 
 func (h *calcStmtHost) send(*EvalContext, lower.Send) error {
@@ -63,7 +67,14 @@ func (h *calcStmtHost) assignChain(_ *EvalContext, s lower.Assign, _ Value) erro
 	return fmt.Errorf("%w: %s writes a feature of another object", ErrCalcExternalAssignment, s.Chain.Text)
 }
 
+// acceptReturn takes the value a `return` yields, which the result parameter
+// then holds, so it answers to that parameter's declaration.
 func (h *calcStmtHost) acceptReturn(value Value, _ lower.Return) error {
+	if out := h.shape.resultOutput(); out != nil {
+		if err := out.Decl.check(h.ctx, &value, func() string { return "result" }); err != nil {
+			return err
+		}
+	}
 	h.result = value
 	return nil
 }

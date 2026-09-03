@@ -35,17 +35,6 @@ func (p *Parser) reservedWord(w string) bool {
 	return lexer.IsKeywordIn(w, kind)
 }
 
-// nameToken reports whether a consumed token spells a declaration's name.
-func (p *Parser) nameToken(t lexer.Token) bool {
-	switch t.Kind {
-	case lexer.Identifier, lexer.UnrestrictedName:
-		return true
-	case lexer.Keyword:
-		return !p.reservedWord(t.KeywordID)
-	}
-	return false
-}
-
 // atNameOrKeyword reports whether the current token can begin a name segment,
 // including keywords used as identifiers (relaxed parsing for identification).
 func (p *Parser) atNameOrKeyword() bool {
@@ -355,6 +344,7 @@ func (p *Parser) tryParseDeclaration() ast.Node {
 
 	start := p.peek().Span.Offset
 	cp := p.checkpoint()
+	defer p.release()
 
 	node := p.parseDeclaration(start)
 

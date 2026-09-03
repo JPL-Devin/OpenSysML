@@ -36,6 +36,7 @@ func provenance(repo, release string) (baseline.Record, error) {
 	}
 	record := baseline.Record{
 		PilotTag:      pin.Tag,
+		PilotCommit:   pin.Commit,
 		PilotArtifact: pin.Artifact,
 		Errata:        baseline.ErrataDigest(overlay.Entries()),
 		Tools:         tools,

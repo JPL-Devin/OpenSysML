@@ -4,6 +4,881 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+## Unreleased
+
+### Added
+
+- **An object carries the features the Systems and Domain libraries declare for it.** A
+  `part box : ShapeItems::Box` used to expose only the `length`, `width` and `height` the model
+  wrote: every library-declared member was left out of an object's shape so that the Kernel
+  Semantic Library frame (`self`, `portions`, `timeSlices`, `snapshots`, `startShot`, …) would not
+  bloat every instance, and `box.isSolid`, `box.voids` and `box.shape` were `member not found`.
+  The loader now records which *tier* of the library each document belongs to — Kernel Semantic,
+  Kernel Data Type, Kernel Function, Systems, Domain or OpenSysML — kept through the symbol cache
+  and queryable on any library symbol, and the runtime leaves out only the Kernel frame. So an
+  item or part carries `Items::Item`'s `voids`, `isSolid = isEmpty(voids)`, `shape`, `subitems`
+  and `subparts`, a `Parts::Part` its `ownedPorts`, `ownedActions` and `ownedStates`, a
+  requirement its `subj`, `actors`, `stakeholders`, `assumptions` and `constraints`, and a
+  `Box` its Geometry faces — each with the default, derived expression and multiplicity the
+  library wrote, masked by a model's own `:>>` as any inherited feature is. `%features box`
+  lists them, `%eval box.isSolid` answers `true`, `box.voids` is `[]`, and the gRPC
+  `Instantiate` response carries them as feature values. A `%features` listing always shows
+  every feature of the object asked about; nested expansions share the lines that remain. The
+  Kernel frame stays out; a model that inherits nothing from these libraries keeps its shape
+  digest, which names a library type by the library's identity — a digest of every bundled
+  document — rather than expanding it, so an object is carried across a re-analysis over the
+  same library and refused by one over a library whose declarations differ; and a value the
+  runtime cannot evaluate — the Geometry library's edge bindings among
+  them — is the typed error it already was, not a silent null. A requirement's
+  `subject vehicle : Part = box;` now binds the subject on the object — it was left unset, as the
+  binding was only read while checking the requirement — and the inherited `subj` reads the same
+  object.
+
+- **The Connect + JSON wire contract is written down for clients with no library.** A
+  MATLAB, R, Julia, C or shell program that posts JSON to `sysml-grpc` by hand had only the
+  proto file and two rules on the transports page to decode answers with, and the questions
+  that page leaves open — how long a `modelHash` lives and what a stale one answers, how the
+  eleven arms of `Value` are told apart and which of `unset`, `null` and an absent `result`
+  means what, how a parse diagnostic differs from an in-body `error` and both from a Connect
+  `{"code","message"}`, and what `Instantiate`, the behavior calls, `Verify*`, `Query` and
+  `RunDocumentQuery` answer — are now on
+  [docs/reference/wire-contract.md](docs/reference/wire-contract.md), each with a request and
+  the response captured verbatim from the service, and with a short illustrative decoder in
+  each of the four languages that is explicitly not a shipped client.
+
+- **`%features` reads out a whole object tree, as text or as JSON.** A large run could not
+  be read out: the listing stopped at 200 lines with `… (listing truncated)`, so the
+  counters two levels under a context of twelve parts were simply absent, and there was no
+  flag to see them and no machine-readable form. `%features <name> all` now lifts both the
+  size and the nesting bound and lists the tree in full; `%features <name> depth <n>`
+  expands nesting `n` levels and names what it left alone (`machine : Machine (not
+  expanded: depth 1)`); and `%features <name> json` writes the object and everything
+  reachable from it as one document in the shape the API's `Instantiate` returns
+  (`instance`, `instances`, `diagnostics`), so a client reads the same shape whether it
+  asked the service or the prompt. The default stays bounded — reading a feature value
+  builds the objects it holds, so an unbounded listing costs objects, not just output — but
+  a listing that is cut short now says how to see the rest (`… (listing truncated;
+  %features ctx all shows it whole, %features ctx depth <n> to a depth)`), and a JSON graph
+  cut short at 1000 objects carries the same advice as a `warning` diagnostic. The options
+  work in a piped session (`printf '%%instantiate ctx\n%%features ctx all json\n' | sysml
+  model.sysml`), which is how a script gets the complete state of a run
+  (Open-MBEE/OpenSysML#93).
+
+- **The bundled standard library opens in the editor.** Go-to-definition, find-references
+  and the diagram panel used to report a standard library declaration at a path no editor
+  could open, so a click on `ScalarValues::Integer` went nowhere. `sysml-lsp` now reports
+  such a location under the `sysml-stdlib:` scheme — the file's path within the library —
+  with its line and column computed from the bundled text, and serves that text through the
+  `opensysml/stdlibContent` request, announced as `openSysmlStdlibContent` in the
+  `initialize` result. The VS Code extension registers a provider for the scheme, so
+  <kbd>Ctrl</kbd>+click on a library name opens the bundled file in a read-only editor on the
+  declaring line; hover, go-to-definition, the outline and semantic highlighting work inside
+  it, so navigation continues from one library file into the next. Opening or closing such a
+  document changes nothing, and an edit to one is refused with an error rather than applied:
+  the library is what every diagnostic is judged against. Other LSP clients get the same by
+  registering a content provider for the scheme that calls the request.
+
+- **A model's change set applies to a live repository, keyed by identity.**
+  `sysml model.sysml -sync-apply http://localhost:8083` diffs the model against its project
+  branch on a running SysML v2 API (Flexo MMS) and writes the change set as one commit through
+  the service's own commit path: a rename, move or retype under a retained id is an update of
+  that element — never a delete plus a create — a new id is a create, and a delete goes only
+  when the run confirmed deletes with `-sync-confirm-deletes`. A change set holding a conflict
+  or an unconfirmed delete is refused, as a typed error, before any write; nothing is resolved
+  silently. On success the commit the service names becomes the last-seen commit in
+  `<model>.sync.json`, never in the notation, and it is the baseline of the next run, so
+  repository changes made behind the sync's back surface as conflicts and a second apply finds
+  nothing to change. An apply that finds nothing to change still records the branch head it
+  compared against, so a model first pushed by other means gets its baseline from the first
+  run. The change set is computed at one head commit, and the commit is refused if the branch
+  has moved since — someone else's edit between the read and the write is a stale-head error
+  to diff again after, not a silent overwrite. `-sync-diff` takes the same endpoint URL and
+  stays a dry run; with neither flag nothing is written. A bearer token never goes over
+  plaintext `http://` to a host other than this machine: the compose stack on `localhost` works
+  as documented, anything else needs `https://` or an explicit `FLEXO_ALLOW_PLAIN_HTTP=1`. An
+  apply that mints ids writes the `-sync-annotate` model only after the commit holding them
+  lands, and is refused when a minted element has no name to annotate — an id the notation
+  cannot keep would be minted again on the next run. The exit status keeps its contract: 0
+  applied or nothing to do, 1 a refusal or a repository failure — a read the stack would not
+  answer included, reported with each change's fate — 2 an unusable run. Both sides of the
+  diff are compared under what the service can store, so the properties it has no place for
+  are reported as not compared rather than diffed forever. The opt-in Flexo harness measures
+  the apply against the real stack — an initial load, a revision with a retained-id rename and
+  gated deletes, a conflict staged behind the sync's back — and records what read back at the
+  recorded commit ([the report](internal/interop/flexo/testdata/identity_apply_expected.txt)).
+- **Action and state execution has a referee outside the executor.** Six conformance cases —
+  a join fed by branches of unequal length, a join fed twice over one succession, a node two
+  successions reach, two fork branches writing one feature, the specification's `ChargeBattery`
+  merge loop, and a transition's guard, exit, effect and entry made observable through values —
+  carry expected outcomes and traces derived by hand from the Kernel Semantic Library
+  (`Occurrences.kerml` `HappensBefore`, `Performances.kerml`, `ControlPerformances.kerml`,
+  `StatePerformances.kerml`, `TransitionPerformances.kerml`) and the Systems Library
+  (`Actions.sysml`), not recorded from the executor. The derivation, sentence by sentence, and
+  the orderings the library leaves open are in
+  [the semantic oracle record](docs/project/behavior-semantic-oracle.md). Three cases state what
+  the executor does not do yet and are listed as known failures rather than recorded as goldens:
+  a join fires on the count of parked tokens instead of one per incoming succession and then
+  deadlocks, a node reached over two successions is performed twice, and a merge admits one
+  traversal per run so a loop is left after its first pass. The executor is unchanged; the
+  compliance rows for the join, the merge and concurrent same-feature writes cite the cases and
+  stay approximate.
+- **The RDF round trip is measured over every example, and pinned per file.** `TestCorpusRoundTrip`
+  converts each of the 345 models under `examples/` — the committed models, the OMG training
+  corpus and the three pilot corpora — notation → Turtle → notation → Turtle and compares the two
+  graphs as triple sets, so a writer or encoder change that moves any file's verdict in either
+  direction fails the suite and is adjudicated, as the pilot corpora gate already does for
+  diagnostics. The baseline records 166 files stable, 71 stable up to the whitespace inside
+  `sysx:sourceText`, 14 that come back as a different graph, 15 that cannot be written back,
+  2 whose written notation no longer converts and 77 refused on the first hop, each refusal
+  classed by the construct it names. The mapping's reference now states that measurement in place
+  of the claim that a second conversion yields the same graph, which held for the fixtures alone
+  ([docs/project/rdf-corpus-roundtrip.md](docs/project/rdf-corpus-roundtrip.md)).
+- **The REPL sends a signal into a running machine.** `%send go` and
+  `%send Dim(level=3+4) to bulb` put the signal on the runtime's message bus exactly as a
+  `send` from an action body would, so a `transition ... accept go then on` is driven from the
+  prompt without writing an action just to fire it: `%events` lists the signal in flight, and
+  `%step` or `%advance` dispatches it. Without `to`, the signal goes to the object whose machine
+  the `%state` session is debugging, and with no session the command says so rather than
+  guessing. Arguments are written `<parameter>=<expression>` as for `%invoke` and are checked
+  against the signal's declaration — the feature it names, and the type and multiplicity that
+  feature admits — before anything is sent; an unresolved signal name gets the usual unresolved-reference
+  report, an object that runs no machine is reported as such, and a signal nothing in the
+  machine's current state accepts is refused up front with the state named, never queued to be
+  dropped in silence — and so is one whose every triggered transition is held back by its guard,
+  decided as the dispatch would decide it with the payload bound; a guard that cannot be evaluated
+  is an error. A signal the current state defers rather than accepts is sent and said to be
+  deferred: the step dispatching it holds it, `%events` lists it as held, and it is recalled to
+  fire once the machine reaches a state that accepts it — as a machine now holds any message
+  addressed to it that its active state defers, instead of leaving it on the bus. A signal in
+  flight is due now, so a single step dispatches it ahead of a timer set
+  for later, as a run holding time where it is would; a step that dispatches a signal no transition
+  fires on, because the state or the data its guards read changed since it was sent, says so.
+  When an object runs several machines, `%send` decides the signal with each of them and reports
+  which would fire on it, and a machine whose guards would drop it leaves it in flight for a
+  sibling that fires on or defers it — at the prompt and in a run alike — so the machine `%send`
+  named as accepting a signal is the one that gets it.
+
+- **The REPL addresses an object by id and by path, not only by name.** Every command that takes
+  an object — `%features`, `%invoke`, `%eval in`, the object `%action` and `%state` work on, and
+  the one `%send … to` delivers to — reads the same reference: the name the object was
+  instantiated under, the id `%instantiate` printed (`%features #3`), or either followed by a path
+  into the objects it holds (`car.fl.hub`, `#3.fl`) — parts, ports, connectors and structured
+  attributes alike, every feature the runtime holds an object for — one element of a multi-valued
+  feature picked by an index counted from 1 (`car.wheels[2]`). In a path `.` and `::` mean the same thing, except that what follows a `.` is
+  always a feature of the object before it, never a declaration. The id is the object's identity
+  for the session: it survives the carry-over an unrelated declaration triggers, and a second
+  `%instantiate` of the same name, which re-points the name and now says how the first object is
+  still reached; `%instances` lists such an object as `#3 (ID: 3, displaced from Demo::car)`, and a
+  `%state` or `%action` session started on it stays with it under that id; a connector `%features`
+  has shown, anonymous or named, keeps answering to its id across that carry-over though its ends
+  are only attached again when it is next read — and a connector attached whole is kept, its
+  writes with it, when an older object's behavior then fails answering it, that failure reported
+  as the older object's; changing the run bounds,
+  which drops every object as a reset does, ends such a session too, and the next `%step` or
+  `%advance` says so. The old object still counts: a `%constraint`, `%requirement` or `%eval` that
+  names no object and whose condition both carry says so and names both (`Demo::car, #3`) rather
+  than answering about the new one — the elements of a multi-valued part among the carriers, each
+  by its index (`car.wheels[2]`) — and `%state #3` debugs a state machine the session holds by id
+  or path as it does by name. A nested object is reported with its features after `.`
+  (`Demo::car.fl`, `#3.wheels[2]`), which typed back reaches that object even when the `::`
+  spelling names a declaration of its own. A bad reference is reported in the same words by every
+  command: an unknown id lists the ids there are, a segment that is no feature names the object
+  and its features, an attribute at the end of a path says it holds a value, and a multi-valued
+  part with no index says how many objects it holds and how to pick one. <kbd>Tab</kbd> completes
+  references where a command takes one: `#` offers the ids, `car.` the objects `car` holds — a
+  variation among them once a command has read which variant it selected, and of a part nothing
+  has read yet the elements it will hold, the parts subsetting it counted before its lower bound,
+  so an optional or abstract part is offered only once something subsets it
+  ([reference](docs/reference/repl-commands.md#object-references)).
+  Names that need quoting are completed as the notation writes them, `'the ra` to `'the rack'` and
+  `Q::'the ra` to `Q::'the rack'`, the closing quote typed or not, and every object a command
+  reports is spelled that way too, so a name that merely looks like an id or an index (`Demo::'#3'`,
+  `car::'hub[2]'`) reads back as the name it is, and one holding `::` inside its quotes
+  (`Demo::'left::right'`) stays one segment rather than reading back as two names.
+
+### Performance
+
+- **A process starts in under 20 ms instead of 100.** Every `sysml`, `sysml-lsp` and `sysml-grpc`
+  start, and every test that builds a model, first parsed the 97 bundled OMG library files, indexed
+  them and expanded their wildcard imports — about 100 ms and 467k allocations before the model was
+  looked at. The library's frozen index is now serialized once, at `go generate` time, into
+  `internal/core/libs/stdlib.snapshot` — a hand-rolled binary format (varints over a string table,
+  a node table per syntax-node type, index references in place of pointers; no `encoding/gob`, no
+  reflection) that is embedded in the binary and decoded at start-up, reproducing the object graph a
+  fresh load builds. `bin/sysml -memstats -e "2+3"` over a one-part model goes from 95–102 ms,
+  53.3 MiB and 466.9k allocations to 17–23 ms, 32.4 MiB and 67.1k; the `sysml` binary grows from
+  16.9 to 20.5 MB. The OMG files stay the source of truth: the snapshot records their digest and a
+  format version, and a process whose bundled files, `OPENSYSML_LIBRARY_PATH` override or snapshot
+  format do not match parses the files as before. `make stdlib-snapshot` regenerates it; a test and
+  a CI check fail when the committed snapshot lags the files or the indexing code. The parse path
+  itself is also faster — the files are hashed and parsed concurrently and added to the index in
+  the same order as before, and wildcard expansion no longer re-sorts namespace children out of a
+  map on every enumeration (33 ms → 31 ms over the library).
+
+- **The calc evaluator does less work per invocation.** `runtime.Value` is 64 bytes instead of
+  120, so a value returned through the evaluator's nested frames copies half as much; parsed
+  literals and resolved invocation targets are memoized per evaluation context, keyed by the
+  syntax node an edit replaces; a calc's parameters bind into slot-indexed frames resolved once
+  per calc, with a bare name answered from the frames before the general resolution chain; and an
+  invocation's arguments and frame stack are borrowed from per-context storage. A recursive
+  `Fib(25)` costs 0.65 µs per calc invocation instead of 1.01 µs and allocates about 160 objects
+  per evaluation instead of 971 000. Results, errors, traces and step counts are unchanged; the
+  measurements are recorded in the
+  [execution-performance record](docs/project/execution-performance-2026-09.md).
+
+- **Pure calc bodies compile to a closure fast path.** A calc whose body is one scalar expression
+  — Integer, Real and Boolean literals, its own `in` parameters, the arithmetic, comparison,
+  equality, identity, logical and conditional operators, and invocations of other such calcs,
+  recursion and cycles included — is compiled on its first invocation into a tree of Go closures
+  over an unboxed scalar frame: parameters are slot indexes, callees are resolved once, and values
+  are boxed only at the invocation boundary. A recursive `Fib(25)` costs 21–22 ns per calc
+  invocation instead of 519–532 (CPython 3.12 takes 27 ns for the same function on the same
+  machine). Values, errors, error timing and step counts are identical to the reference evaluator's
+  — a differential test invokes every eligible calc in the fixture and example trees through both
+  tiers on generated edge arguments — and anything outside the subset (calc usages, `out` features,
+  feature chains, collections, quantities, strings, locals, non-literal defaults, redeclared
+  parameters) stays on the evaluator, as does every traced, named-argument or non-scalar
+  invocation. `OPENSYSML_CALC_COMPILE=0` turns the tier off for bisecting.
+
+- **The compiled calc tier takes the bodies analysis models write.** Four constructs join the
+  compiled subset, each reproducing the reference evaluator's values, error text and step counts
+  exactly: statement bodies of body-local scalar declarations, `return` and `if`/`else`, compiled
+  from the lowered statements into further slots of the scalar frame with the evaluator's
+  declaration-order and shadowing rules (a local read before its declaration, a local without a
+  value, a body that may run off its end, `out` features, loops and assignments stay on the
+  evaluator); parameters redefined along the specialization chain (`in :>> x = 3.0;`,
+  `in x :>> Base::x : Integer;`), laid out as the effective parameter list the evaluator binds; the
+  standard library's scalar functions and constants (`sqrt`, `ln`, `exp`, `abs`, `floor`, `round`,
+  `min`, `max`, the trigonometric functions, `deg`, `rad`, `TrigFunctions::pi`, …), dispatched
+  through the resolved symbol to the Go implementation the evaluator uses — so an alias or an
+  import reaches it and a model's own `sqrt` does not — and `sum`/`product` over a lone scalar;
+  and named arguments (`Fib(k = n - 1)`), bound to slots at compile time with the evaluator's
+  arity and unknown-name checks ahead of dispatch. Over the repository's fixtures, examples and
+  the OMG corpora the tier now compiles 127 of 343 calc definitions (37%) instead of 42 of 263
+  (16%); a recursive tree of three-local bodies calling `sqrt` runs 12.6× faster (10.4 ms instead
+  of 132 for 131 071 invocations) and `Fib(25)` is unchanged at 21–23 ns per invocation. The
+  differential test now also compares Reals bit for bit over ±0.0, ±Inf and NaN, and focused
+  fixtures under `internal/core/runtime/testdata/compiled/` run each construct through both tiers.
+
+### Fixed
+
+- **`%state <machine>` drives the object that exhibits the machine.** Naming an exhibited
+  machine alone (`%state lp` after `%instantiate TA::Sys`, or `-state lp` on the command line)
+  used to start a detached performance of it, one with no performing object: `%advance` reported
+  the timer events it dispatched, but the `do`, `entry` and `effect` writes of that run went to
+  the detached run's own frame, so `%features #1` still showed the values `%instantiate` had
+  left (`n = 1` for `n = 3`), while `%state #1` over the same object was right. The form now
+  attaches to the running machine of the one held object exhibiting it — the same object
+  `%instances` and `%features #1` show — so the two forms agree. When no held object exhibits
+  the machine, or several do, `%state` refuses with a typed error (`ExhibitorsError`) naming
+  the objects and both forms that address one (`%state <object>`, `%state <machine>
+  <object>`), rather than guessing or performing the machine detached; with no object yet
+  held, it names the types whose objects run the machine, whether they exhibit it inline,
+  through usages typed by a shared definition (`exhibit state front : Blink`), or through a
+  usage referencing another (`state spare : Blink; exhibit state active ::> spare;`): every
+  binding on the way to the body addresses the machine, with the object named or alone. A
+  definition one object exhibits as several usages refuses as it does with the object named.
+  Held objects are the ones the session has built: a nested part counts once it has been
+  reached, by `%features` or a machine that wrote it. A machine no type exhibits (`state def
+  Blink` alone) still starts as before, since no object's performance of it exists to attach to.
+
+- **A qualified name through an import evaluates as the checker resolves it.** The evaluator
+  used to resolve only the first segment of `Bq::x` through the resolver and walk the rest as
+  owned and inherited members, so a segment a `public import` re-exports failed with
+  `member x not found in Bq` even though the checker accepted the reference — and the library's
+  own façades are built that way, so `ISQ::speed` and `SI::speed` failed with
+  `member speed not found`. The whole name now goes through the same `ResolveQualified` the
+  checker uses: a wildcard, single-member or recursive import, a façade of a façade, a short
+  name and an `alias` (which used to fail with `cannot evaluate element type *ast.Alias`) all
+  reach the element the checker reaches, a `private import` stays reachable only from inside
+  the importing namespace, and a name the checker rejects fails with the checker's own
+  `unresolved reference: Priv::x` or, when several members answer to it, its own
+  `ambiguous reference: Twice::t (2 candidates)`. The evaluator reads the name through a new
+  `Resolver.ReadQualified`, whose answer (element, segments, ambiguity) is memoized by scope and
+  node rather than by node alone, so one parsed expression evaluated in two scopes that each
+  hold their own `A::x` answers with each scope's value. A calc usage's outputs, and the "not a
+  variant" / "not a literal" reports, are unchanged.
+
+### Changed
+
+- **A conversion from RDF returns the notation as written.** Every element written to `.ttl`
+  carries its lines as `sysx:sourceText` — comments, blank lines and keyword synonyms included —
+  and an element with members carries the lines closing its body as `sysx:sourceTail`; the text
+  is the file's own bytes — tabs, irregular indentation, blank lines inside a head, CRLF line
+  endings and the notes after the last root included, never a formatted copy — and the two
+  properties are one-line literals with newlines escaped. `sysml model.ttl -convert sysml` now
+  writes that text back untouched, so a `.sysml → .ttl → .sysml` round trip is byte for byte for
+  any file, where before it came back canonical with its `//` and `/* */` comments dropped. A head
+  laid out over several lines or with a comment inside it is recorded in the mapping
+  (`sysx:endForm`, `sysx:declaredKeyword`) like one written on a line, since the graph states
+  tokens, not layout. The graph stays
+  authoritative: the candidate notation is converted back to RDF and compared with the graph, and
+  each element whose text no longer states its triples — a flag set, a value changed, a member
+  removed or an identity annotation dropped after the export — is written canonically instead,
+  with `@IdentityMetadata::ElementId` and `ProjectRef` materialized exactly as for a graph without
+  text; text that no longer parses demotes the whole file. A member written on its owner's lines,
+  such as an accept's payload, carries no text of its own, so an edit to it rebuilds the owner
+  whole rather than splicing a line into it. Each root records the grammar its file was written in
+  as `sysx:sourceLanguage`, so KerML text is checked as KerML rather than as the SysML it may also
+  read as; a buffer with no extension records none and is checked as such a buffer again. With the
+  notation written from its text, the corpus round-trip ratchet moves 101 files to `stable` — every
+  `whitespace-only`, `graph-diff` and `unparseable` verdict and all but one `unwritable` — which says
+  the text survives, not that the structural predicates alone would (that remains the stripping
+  tests' job). A `LiteralString` node's `sysml:value` is now the value
+  the notation's escapes read to rather than the text between the quotes, and a value edited in the
+  graph is written back as a literal that reads to it, whatever characters it holds. A graph without `sysx:sourceText` — from
+  another tool, or stripped — converts as before, and the round-trip tests keep stripping it to
+  prove the structural predicates carry the model; each fixture under
+  `internal/core/export/testdata/convert` now locks both notations. The
+  [saving guide](docs/guide/07-saving-and-rdf.md), the
+  [RDF mapping](docs/reference/rdf-mapping.md#source-text) and the round-trip testing skill
+  describe the precedence.
+- **A calc whose `return` declares a result parameter it never binds says so.** In the notation
+  `return` introduces a result *parameter* (SysML.xtext ReturnParameterMember), so `return h;`
+  after `attribute h : Real = …;` declares a second member named `h` — the pilot flags the
+  duplicate name — and returns nothing; the evaluator's "no result expression" error used to
+  stop there. It now names the unbound result parameter and shows the two forms that state a
+  computed result: the body's trailing expression `h`, or `return : Real = h;` (the type and
+  expression are taken from a same-named member that binds a value, and names are spelled as
+  the notation writes them, so `'my result'` keeps its quotes). The grammar and the error's
+  type are unchanged.
+- **A library function is evaluated by its bare name only where the model imports its
+  package, as the checker resolves it.** `wheels->size()` in a model that imports no
+  `SequenceFunctions` was reported `unresolved reference: size` by the checker yet evaluated
+  to `4` at the prompt, because the runtime answered a bare call from every implementation it
+  knew by local name. The runtime now resolves a call where it is written, exactly as the
+  checker does, so an expression the checker reports unresolved fails to evaluate with the same
+  error and hint — `unresolved reference: size — did you mean SequenceFunctions::size or
+  CollectionFunctions::size?` — and importing one of the named packages
+  (`private import SequenceFunctions::*;`) makes it both resolve and evaluate. Expressions that
+  evaluated before without an import fail until that import is added; the qualified name
+  (`SequenceFunctions::size(wheels)`) resolves anywhere, as it always did, and a model's own
+  `calc def size` is what a call denotes when the library is imported too. The same rule
+  already governed the `OpenSysMLMathFunctions` extension, whose bare `exp(x)` now fails with the
+  same unresolved-reference error rather than a separate one. `%builtins` lists each function
+  with the package an import must name for its bare name to resolve, and an empty session's
+  `%eval` answers a qualified library call rather than refusing every non-literal expression.
+  The examples and fixtures that relied on the old fallback now import the packages they call.
+- **An OSLC query reports a selected property under the name it was asked for.** `sysml
+  -query 'oslc.where=rdf:type="PartUsage"&oslc.select=rdf:type'` and the REPL's `%query`
+  used to report the property as `@type=PartUsage`, a Go API name that the query text
+  refuses, so a reported row could not be written back into a query; the rows now read
+  `rdf:type=PartUsage`, `sysml:name=battery`, `sysml:owner=Robot::Platform`, and a prefix
+  rebound by `oslc.prefix` renames the property in the answer as well. The gRPC response
+  still keys properties by the query property names the structured `query` field uses.
+  A reported value is a bare name, which the grammar wants quoted, so refusing one now
+  names the form to write: `sysml:name=battery` answers with `write a name as a quoted
+  literal "battery"` instead of only `invalid OSLC value "battery"`. Since a property is
+  reported under one name, `oslc.select` naming the same property twice — as
+  `sysml:name,sysml:name`, or as two prefixes bound to the SysML namespace — is now refused
+  rather than reported twice under whichever name came last.
+
+- **An optional composite feature fills to its lower bound.** `part spare : Wheel[0..1]` used
+  to materialize an object, where `part wheels : Wheel[0..*]` materialized none; both now hold
+  only the objects the features subsetting them hold, so an optional part reads as the empty
+  sequence and an abstract one holds only what subsets it — a required abstract feature nothing
+  subsets is a multiplicity violation, not an empty value — and an abstract feature that states
+  no multiplicity is bound by what it subsets, so a part's inherited `Action::decisions`,
+  `forks` and `joins` (`:> controls[0..*]`) hold nothing rather than demanding one control each.
+  A required feature holding nothing is still uninitialized when read. The same governs a connector: `connection c : Link[0..1]
+  connect a to b` links nothing of its own until a connector subsetting it does, while a
+  required connector still links its ends. What made this visible is the library: `Item::shape` and
+  `Item::voids` are optional, and an anonymous object for each would have said the box had a
+  void it does not have.
+
+- **The documentation site's landing page describes the four oracles instead of quoting their
+  totals.** The band below the hero used to state the differential's agreeing-file count, the Xpect
+  suites' declared-diagnostic and scope tallies, the rejection corpus's size and the pilot pin, all
+  regenerated by `make docs-counts`. Those figures are a census of the corpora we happen to run,
+  not a measure a first-time reader can weigh, so the band now says what each comparison measures
+  and links to the record that reports it; the numbers stay in `README.md`,
+  `docs/internals/architecture.md` and the conformance records, where `doc-counts` still generates
+  and gates them. `overrides/home.html` is no longer a `doc-counts` consumer.
+- **The architecture self-model describes the library snapshot.** The standard library stage in
+  [`examples/self-model`](examples/self-model/README.md) now carries the embedded snapshot its
+  index is decoded from, the `internal/core/pack` and `internal/core/ast/astcodec` units that
+  encode it and the generator that writes it; `LoadLibrary` models the load as an action whose two
+  decisions — the digest and format match, then the checksum — choose between decoding the snapshot
+  and parsing the files; `stdlib-snapshot-check` is an eighth, gating conformance oracle; and a
+  ninth invariant, `snapshotIsDerived`, states that the snapshot is checked against the files and
+  never the only way to load them. The evaluator now declares itself memoized, since it keeps its
+  per-node caches in side tables beside the tree. The self-model test compares each new claim with
+  the implementation: the override variable, whether the embedded snapshot decodes for the bundled
+  files, the Make targets and the CI step, and the side tables `runtime.Context` keys by syntax
+  node. The architecture document gains a section and diagram on loading the library, and the
+  pilot differential baseline is re-recorded for the larger model: the eleven new rows are all the
+  reference's, of shapes the self-model already drew.
+- **The architecture self-model describes the compiled calc tier.** The evaluator now carries a
+  `CalcCompiler` part — memoized, switched off by `OPENSYSML_CALC_COMPILE`, falling back to the
+  evaluator — and `InvokeCalc` models one invocation as an action whose three decisions (a traced
+  run, a pure body, positional scalar arguments) send it to the compiled tier or to the evaluator
+  whole. A tenth invariant, `evaluatorIsReference`, states that the compiled tier is an optimization
+  of the evaluator and never a second semantics; `CalcDifferential` names the parity and
+  differential tests that verify it. The self-model test checks the variable's name against
+  `runtime.CalcCompileEnvVar` and the environment reference, that a fresh `runtime.Context`
+  compiles calcs until that variable says otherwise, and — invoking the model's own `StepBudget`
+  through both tiers — that they agree and that a traced run takes the evaluator. The architecture
+  document gains a paragraph and diagram on invoking a calc.
+- **`%features` lists an object's behaviors under their own heading instead of as `<unknown>`
+  values.** A state or action a type declares holds no value, and the listing used to render each
+  as a feature row reading `<unknown>` — `off = <unknown>`, nested state by nested state — while the
+  running state was only visible through `%current`. The values are now followed by a `Behaviors:`
+  section that says what the object is doing with each: the current active state of a machine it
+  exhibits (`modes: exhibited state machine, current state off`, the very state `%current`
+  reports, before and after the debugger drives it), the execution state of an action it performs
+  (`tick: performed action, completed`), and `not running` for a state or action the type declares
+  but the object neither exhibits nor performs. A named transition is listed as the step it
+  declares (`toggle: transition, modes.closed → modes.opened`), not as an idle action. The values
+  a running behavior owns — the attributes of the machine's own occurrence, an action's parameters
+  and outputs — are listed under its row, apart from the performer's own values of the same name.
+  A nested object's behaviors are listed under its own row. Nothing is invented: a machine that
+  has not started reads `not started`, one that reached its end reads `completed`.
+
+### Fixed
+
+- **`%eval in <part> : <feature>` reads a valueless feature as `<unset>` rather than calling it
+  unresolved.** Before an object exists, `%eval in car : wheels` for a multi-valued
+  `part wheels : Wheel[4]` — and `wheels.radius`, an attribute with no default, or a multi-valued
+  `String[3]` attribute — reported `unresolved reference`, though the name resolved perfectly well
+  and its single-valued neighbours evaluated. A feature the declarations give no value to now reads
+  `= <unset>`, as it does on an object; `unresolved reference` is reserved for a name nothing
+  declares. Only a bare read of the feature is unset: an expression over one (`unsetMass + 1`) or a
+  feature whose value depends on one still fails, naming the feature that has no value. The same
+  distinction holds throughout the evaluator: a declared name with no value is a typed no-value
+  error carrying the name, never an unresolved reference, so a qualified `car::wheels` reports that
+  it has no value to evaluate.
+
+### Fixed
+
+- **An expression evaluated after `-instantiate` reads the object that was created and run.**
+  `sysml model.sysml -instantiate P::ctx -e "ctx.recv.got"`, the bare line `ctx.recv.got` after
+  `%instantiate P::ctx`, and even `%eval in P::ctx : recv.got` — which printed
+  `(on P::ctx ID: 1)` — answered `0` while `%features #1` showed `got = 1` for that same object:
+  a name in the expression materialized a fresh object of the usage instead of the one
+  `%instantiate` created, and a nested part whose machine sends or accepts a signal ran only
+  once something read it, so what a read saw depended on the order the parts were first
+  inspected in. An instantiated usage now denotes the object created under it, and creating an
+  object materializes and runs the nested parts whose types exhibit or perform behaviors with
+  it, so the whole runs to quiescence once and every later read — a CLI `-e`, a piped
+  expression line, `%eval`, `%eval in` and `%features` — reports the same values.
+  `%eval in` also takes an object the way `%features` and `%state` do: by id (`%eval in #1 :
+  recv.got`) or by a path under a named object (`%eval in ctx.recv : got`), and its usage line
+  lists the forms. (Open-MBEE/OpenSysML#91)
+
+- **Messages cross a binding connector at an assembly's boundary port, in both directions**
+  (Open-MBEE/OpenSysML#92). An assembly that binds its boundary port to a port of a part it
+  holds (`part def Assembly { port bi : ~PP; part child : Inner; bind bi = child.i; }`) used
+  to swallow messages at the boundary: a `send Ping() via o` over a context-level
+  `connect env.o to asm.bi` arrived at `asm.bi` and stayed there, so the inner part's
+  `accept Ping via i` never fired and its counters stayed at 0, with no diagnostic; and a send
+  by the inner part through its own port was reported as reaching no receiving port, although
+  the boundary port it is bound to was connected. A binding connector now makes the two ports
+  one port for message delivery: an accept on either takes a message that reached the other,
+  and a send through either leaves over the connectors joined to the other, through any depth
+  of nested assemblies. Bindings chained through several assemblies also keep every bound port
+  the same object whichever end is read first — a chain used to split when the outer boundary
+  port was materialized before the inner assembly's. A send whose bound boundary port is
+  joined to nothing still reports `send reaches no receiving port` where it was written.
+  Delivery does not depend on the order connectors, bindings and parts are declared.
+
+- **`satisfy … by config.child` is evaluated on the nested object it names.** A satisfaction
+  assertion whose `by` operand is a feature chain used to be read as its last name alone:
+  `%satisfy` and `-satisfy` reported `? satisfy r2 by child could not be evaluated — no subject
+  to satisfy the requirement: child`, and only the reporter's workaround of binding the
+  requirement's `subject` to the chain reached a verdict. The chain is now resolved through
+  each feature in turn — the object of `config` is materialized and the one its `child` holds
+  is the subject — so the assertion holds or fails on that nested object, at any depth and
+  through parts typed by definitions with nested parts of their own. The verdict and every
+  diagnostic spell the chain as written (`satisfy r2 by config.child`), and a chain whose
+  segment resolves to nothing says so under its full name (`no subject to satisfy the
+  requirement: config.nope`). A repeated `%satisfy` is about the same nested object, which
+  `%features S::config::child` can then inspect. (Open-MBEE/OpenSysML#94)
+
+- **`%state <machine> <object>` attaches to the machine the object exhibits instead of performing
+  it again.** Naming an object's own exhibited machine (`%state Rover::modes rover`, or `-state
+  "Rover::modes rover"`) used to start a second performance of it on the same object, so its
+  `entry` and `do` actions ran twice against the same feature values — a `log` written once as
+  `"W"` read `"WW"`, a `level` raised by 10 read 20. The two-argument form now recognizes that
+  machine by its declaration and attaches to the running performance, saying so in a `note:` line
+  that names the one-argument form; a machine the object merely performs is still started as a
+  detached performance. The attached session follows the object over an unrelated declaration,
+  as the one-argument form's does, and stays on the machine it was attached to when the object
+  exhibits several. A definition the object exhibits as the body of several usages (`exhibit
+  state front : Blink; exhibit state rear : Blink;`) names no one running machine, so `%state
+  Blink lamp` refuses and names the usages that would: `object #1 of "lamp" exhibits "Blink" as
+  2 machines, so naming the definition attaches to none of them: name the exhibited usage
+  instead — Lamp::front or Lamp::rear`.
+- **`%state`, `%invoke` and `-state` reach a nested part by path and by id.** The object argument
+  accepted only the name of a top-level object, so the machine of a part reached through
+  composition could be watched with `%features` but neither debugged nor invoked on. The
+  argument now takes the same reference every other command reads — a feature path from a
+  top-level object (`driver.r`, `driver.r.motor`, `Fleet::driver::r`), the id the prompt prints
+  (`#3`), or an element of a multi-valued part by index (`garage.bays[2]`) — and the CLI's
+  `-state "<machine> <object>"` reads it the same way. A segment whose feature value the runtime
+  could not materialize keeps the runtime's reason (`spare of Shared::lamp could not be
+  materialized: … multiplicity violation …`) rather than being reported as a missing feature, and
+  reaches the session status as a failed `%features` would. A qualified path is read as typed —
+  `Fleet::driver::r` is the usage's part, reported as `Fleet::driver.r`, even with `Fleet::Driver`,
+  where `r` is declared, instantiated too — and an object addressed by id is reported by that id
+  alone, so a session attached to it survives an unrelated declaration.
+- **An object of the wrong kind is named when a usage is not instantiated.** `-state
+  "Rover::modes rover"` after `-instantiate Rover` (the definition, not the usage) reported only
+  `no instance of "rover" (use %instantiate first)`. The REPL and the CLI now say that an object
+  of the definition exists, not of the usage, and name what to instantiate instead: `no instance
+  of the usage "Fleet::rover": object #1 of "Fleet::Rover" is of its definition "Fleet::Rover",
+  not of the usage — use %instantiate Fleet::rover to create the usage's object, or name
+  Fleet::Rover to address it`. Asking for a definition when only usages typed by it have
+  objects names those objects the same way — a nested one by its path (`Fleet::driver.r`), an
+  element of a multi-valued part by its index (`Depot::garage.bays[2]`) — and a usage reaches its
+  definition through the usages it subsets; with no related object the plain hint stands. The
+  hint names only objects the session holds and materializes none to find them.
+- **An id reaches an object the session holds, and looking it up builds nothing.** `%features #4`
+  used to materialize the features of every named object on the way to finding object #4; an id
+  now denotes an object the session holds — one it named, one a materialized feature of such an
+  object holds, members of a multi-valued part included however many there are, or one a second
+  `%instantiate` of its name displaced — and is found without materializing anything. An id the
+  runtime never issued is `no object #9 in this session: nothing materialized has that identity
+  (the objects are #1, #2)`. The second `%instantiate` says how the first object goes on being
+  reached — `Fleet::rover now denotes this object; object #1 is displaced from that name and stays
+  reachable as #1` — and a `%state` or `%action` session over the displaced object keeps running,
+  the same notice saying it now follows the object as `#1`; a session over an object another name
+  denotes is untouched.
+
+- **A `then` written after a flow, a binding or a standalone succession comes back from Turtle.**
+  The parser sequences a positional `then` from the nearest preceding member that is not itself
+  an edge — flows, bindings, connectors, successions and transitions are skipped, attributes and
+  docs are not — but the Turtle writer took the member written immediately before it, found the
+  flow there and refused the whole file as inconsistent. Both sides now share one rule,
+  `ast.UsageKind.IsEdge`, and the writer compares the graph's source end against the name the
+  skipped-to member answers to (an unnamed `perform x` or `action redefines x` answers to `x`, as
+  in the parser), so `first start; then a;` and `then perform run;` fold back too. A graph whose
+  `sysx:sourceMember` or `sysml:sourceFeature` names some other member is still refused. Over the
+  345-file example corpus the files the writer refused for this reason go from 14 to 0, and their
+  round trips reproduce the same graph; the training examples for action shorthand, control
+  structures, decisions, merges, terminate actions, messaging and message payloads are among them.
+
+- **The notation the RDF writer spells is read back to the same graph.** Converting a model to
+  Turtle, back to notation and to Turtle again lost flags the first graph carried, because the
+  writer re-spelled a head in a form the parser read differently: `ref x subsets y;` and
+  `composite frontWheel redefines w[2];` lost `ref` and `composite` (the parser only continued a
+  modifier-led declaration into a symbolic `:>`, not the keyword spellings), `#derive end r : R;`
+  lost `end` and `end ref attribute e : S;` lost `ref` (the `end … kind` path applied only the
+  end flag), a nested `private import Pkg1::*;` came back as `Pkg1::**` (the two import suffixes
+  were written as exclusive), and a succession end whose name needs quotes was carried as text
+  and refused when written. The parser now reads every modifier ahead of the kind keyword, the
+  writer spells the modifiers in the grammar's order with the multiplicity beside the clause it
+  qualifies, an import writes `::*` and `::**` independently, and a quoted succession end is a
+  reference to the element like an unquoted one. Five fixtures under
+  `internal/core/export/testdata/convert/` lock this in by re-encoding the notation written
+  from the graph alone and comparing the two graphs as triple sets; a relationship's symbolic or
+  keyword spelling and a doc body's line endings are documented as normalised. On the corpus
+  ratchet, six files move from a differing graph to the same one and six refused for a quoted
+  succession end now round-trip; the seventh is written back, but its guarded succession
+  (`succession S first A1 if x == 0 then A2;`) is spelled as a `transition` the parser does not
+  read, which is a separate writer defect.
+
+## 0.4.3 — 2026-09-01
+
+Release 0.4.3 is where an element gets an identity the notation can carry. The SysML v2 textual
+notation deliberately records no element identity, so a model saved as `.sysml` and re-parsed had
+fresh ids everywhere and a rename was a delete plus a create. An element may now declare the
+repository element it *is* — standard user-defined metadata (`@ElementId`, with a `ProjectRef`
+binding a document to its repository once, at the root namespace), shipped as an `IdentityMetadata`
+library extension that any conforming tool already parses and preserves. Identity is validated
+(id shape, scope binding, uniqueness), survives `notation → RDF → notation`, and
+`sysml -sync-diff` computes the change set between a model and a repository graph keyed by that
+identity, so a rename or a retype is an update to the same element. The design is
+[a project record](docs/project/element-identity-annotations.md), and the notation has been
+submitted to OMG for standardization
+([the issue text and its status](docs/project/omg-issues.md)).
+
+A solver verdict is now the evaluator's verdict. The SMT translation reasons over exact rationals
+while the evaluator computes in IEEE 754 binary64, and the difference is reachable: the exact
+encoding holds `0.1 + 0.2 == 0.3` sat, which the evaluator rejects. Every `sat` witness is now
+replayed through the evaluator's own arithmetic before it is reported, a query whose conditions the
+evaluator rounds is marked and its exact-real `unsat` reported undecided rather than as an
+evaluator verdict, and a whole-number quotient divides as an exact ratio rounded once — `5 / 2` is
+`2.5`, as the reference evaluates it. The remaining alternative, an exact-rational evaluator value
+representation, was adjudicated against the pinned pilot and the specification text and
+[declined](docs/project/exact-rational-evaluation.md).
+
+The four non-Go clients and the public Go API were each exercised by worked examples over a fully
+capable model — quantities, enumerations, multiplicity, nesting, unvalued features — run by the
+test suites so they cannot drift, and the defects that tour surfaced are the client and runtime
+fixes below. Each client now has a reference page of its own, the Java client's package moves to
+`org.openmbee.opensysml` (the client is unpublished, so no released consumer moves with it), and
+the Python client 0.4.0 was published to PyPI. The conformance suite and the pilot differential
+now also render their runs as JUnit XML — and the differential as SARIF — so CI shows them as test
+results rather than artifacts to download.
+
+A profiling pass across the toolchain removed the costs a September census found rather than the
+costs assumed: a multi-file `-validate` batch is indexed once instead of once per file — 6.8 s to
+0.30 s over the 100-file training corpus, the quadratic term gone — a calc invocation reuses a
+pooled frame instead of allocating ~1.7 KiB per call, a run target resolves from a per-document
+name table instead of an O(model) scope walk, the parser's token buffer became a bounded window
+(a load allocates 30% fewer objects and holds 16% less live heap), and the `about`-metadata index
+is cached when the library index freezes, restoring the empty-session floor the census flagged.
+The census and an execution-performance measurement are recorded as project records
+([performance census](docs/project/performance-census-2026-09.md),
+[execution performance](docs/project/execution-performance-2026-09.md)).
+
+No model that validated under 0.4.2 stops validating and no import path moves.
+
+### Added
+
+- **A complex number crosses the wire as one value.** `Value` gains a `complex` arm carrying the
+  real and imaginary parts as two doubles, so a `Complex` feature value, evaluation result, action
+  output or calc result arrives as one number rather than the `unsupported` null it was reported
+  as, and a complex action input or calc argument is accepted. Every shipped client maps it to one
+  native value — Go `opensysml.Complex`, Python `complex`, TypeScript `ComplexValue`, Java
+  `Value.ComplexValue`, Rust `Value::Complex` — and prints it in rectangular form. The service
+  advertises the `complex_values` capability; without it, a complex in a response is the
+  unsupported null as before, and a complex sent in a request is refused with `UNIMPLEMENTED`.
+  The Go and Python clients check the capability before sending one, so an older service is a
+  capability error rather than an input silently read as null. The Python generator emits
+  `complex` for a `Complex` feature (emission schema `4`).
+
+- **Documents render as semantic, styleable HTML.** `-doc-form html` writes a document from the
+  compiled document tree itself rather than by converting the Markdown, so the model facts Markdown
+  cannot carry reach the markup: `<article>`, nested `<section>` whose heading levels follow the
+  nesting, `<table>` with `<caption>`/`<thead>`/`<th scope="col">`, `<figure>`/`<figcaption>`,
+  `<nav>` contents and semantic inline runs, hooked by a small `sysml-` class vocabulary and
+  `data-` attributes for the content kind and name, the query behind a table or list, the group-by
+  column, each row's or item's selected element and element kind, each cell's projected column and
+  value kind, and a diagram's view, kind and direction. Identifiers are the Markdown anchors, so a
+  `Ref` resolves within a page and, under `-render-documents -doc-form html`, across a linked set
+  whose pages share one `sysml-document.css`. The default stylesheet sits in an `@layer opensysml`
+  cascade layer and draws every value from `--sysml-*` custom properties, so unlayered reader CSS
+  overrides it without `!important` or specificity fights, and no `style` attribute is ever
+  emitted; `-html-default-css`, `-html-css` (repeatable; a file is inlined, a URL linked),
+  `-html-no-default-css` and `-html-fragment` shape that. Output loads nothing over the network,
+  runs no JavaScript of its own — a diagram's Mermaid source sits in `<pre class="mermaid">` — and
+  is byte-identical between runs. The title page, contents and numbering options are now
+  `-doc-title-page`, `-doc-toc` and `-doc-number-sections`, shared by HTML and PDF, with the
+  `-pdf-*` spellings kept as aliases. Markdown is unchanged, and the PDF engines still read their
+  own HTML for now.
+
+- **An element declares its repository identity in the notation.** `@ElementId { id = "…"; }`
+  annotates the element it is written about, and `@ProjectRef { projectId = "…"; }` on a root
+  namespace binds the document to its repository, so element-level ids inherit their scope.
+  Identity is opt-in per element: an element without an annotation keeps today's derived,
+  latest-wins identity. The two metadata definitions ship as a non-normative library extension
+  (`IdentityMetadata`, entering the same gates as the vendored files — the bundled-library check
+  now reports 97/97 clean), and a constraint-tier pass validates id shape, scope binding and
+  uniqueness across the workspace, including anonymous about-form usages, annotations declared in
+  libraries, and targets outside the built roots.
+
+- **Identity survives the RDF round trip.** The writer mints subject IRIs from the effective id —
+  the declared one where an annotation exists, the encoded qualified name where none does — marks
+  declared ids, writes `ProjectRef` bindings as provenance triples, and refuses colliding ids
+  across a mixed-scope workspace rather than silently merging two elements. The reader keys
+  subjects on the element id (with the name-encoding fallback for old graphs), reports a dangling
+  id as its own error, and re-materializes the annotations on the way back to notation, so
+  `notation → RDF → notation` preserves which repository element each declaration is.
+
+- **A model diffs against a repository, keyed by identity.** `sysml model.sysml -sync-diff repo.ttl`
+  reports the change set — creates, updates, deletes, and renames seen as updates to the same
+  element — and never writes: applying is a separate step. `-sync-base` names the graph at the
+  last-seen commit, so repository changes since then surface as conflicts rather than silent
+  overwrites; deletes are reported always and confirmed with `-sync-confirm-deletes`;
+  `-sync-mint-ids` mints a UUID for each unannotated element being created and `-sync-annotate`
+  writes the model back out with each minted id declared, preserving the source text and quoting
+  names as the notation requires. The last-seen commit is tool state beside the model
+  (`<model>.sync.json`), never written into the notation.
+
+- **The editor mints an element id on request.** `sysml-lsp` offers the `refactor.rewrite` code
+  action "Annotate … with a minted element id" on the header of a declaration that carries no
+  `ElementId`. Invoking it mints a UUID v4 and writes the annotation as a text edit that leaves
+  every other byte of the file alone: inline at the head of a body, standalone about-form at the
+  end of the file for a bodiless declaration, names quoted as the notation requires. Where the
+  root carries no `ProjectRef`, the same edit binds it with a placeholder `projectId` to fill in,
+  and a "Bind … to a project" action does that alone. Nothing mints during analysis, and no
+  diagnostic asks for an annotation. A metadata usage in a constraint body (`@Tag { … }`) now
+  parses as the member it is, distinct from a classification condition (`@Tag`).
+
+- **The conformance suite and the pilot differential render as CI test results.** The conformance
+  runner emits JUnit XML (stored even when the gate fails), and `pilot-diff` writes JUnit XML with
+  one suite per corpus root alongside SARIF 2.1.0 with one result per disagreeing diagnostic
+  group, located on the compared model file — the same run, in the renderings CI dashboards and
+  code-scanning consoles read.
+
+- **Worked examples for every client, run by the tests.** Runnable examples drive the Node, Java,
+  Rust and Go clients over one capable model — parsing, diagnostics, symbol navigation, evaluation
+  and instantiation — and each client gains a reference page
+  ([Java](docs/reference/java-api.md), [Node](docs/reference/node-api.md),
+  [Rust](docs/reference/rust-api.md)). The examples were written to find defects and did; the
+  fixes are below.
+
+- **The implementation models itself.** [`examples/self-model`](examples/self-model/README.md) is
+  the analysis pipeline, surfaces, invariants and views of this implementation written as a SysML
+  v2 model across five files whose packages import each other, with a make target rendering its
+  diagrams and documents and a test evaluating its invariants and checking its figures against the
+  implementation they describe.
+
+- **`-render-document` takes a model of several files.** A document may query elements its sibling
+  files declare: `sysml model/*.sysml -render-document Reports::MassReport -o report.md` loads the
+  named files as one model.
+
+- **Two design records.** [Exact-rational evaluation](docs/project/exact-rational-evaluation.md)
+  adjudicates and declines a `big.Rat`-backed evaluator, with the pinned pilot's verbatim binary64
+  answers as evidence and a census showing no marked-rounded query is recoverable by per-term
+  narrowing; [the HTML document backend](docs/project/html-document-backend.md) records the agreed
+  design for rendering documents as semantic, styleable HTML straight from the document IR —
+  proposed, not implemented.
+
+### Performance
+
+- **A multi-file `-validate` batch is indexed once.** Validation loaded each file through a path
+  that reopened the session document, reindexed it and re-expanded every wildcard import, so a
+  batch of N files paid N full indexes over a growing buffer. The batch is now a single
+  submission (`Session.LoadFilesSummary`), with each file's own syntax errors, load notices and
+  summary still printed in file order. Over the training corpus: 0.26 s → 0.12 s at 25 files,
+  0.59 s → 0.13 s at 50, 6.8 s → 0.30 s at 100 — a fixed floor plus a term that scales with the
+  input, no quadratic term. The shared symbol walk also stops rebuilding a visited map that its
+  cached, deduplicated symbol list already guarantees.
+
+- **A calc invocation reuses a pooled frame.** Each invocation allocated a fresh parameter map,
+  evaluation context, statement host and engine — ~1.7 KiB per call, and GC took half the CPU of
+  recursion-heavy evaluations. Returned frames go on a free list and the next invocation runs in
+  one; a frame is only ever held by one active invocation, so recursion never aliases. Default
+  bindings now run in the invocation's own activation, so a value read while binding is memoized
+  per invocation rather than leaking to the next one.
+
+- **A run target resolves from a per-document name table.** `RunCalc`, `RunStateMachine` and
+  `InstantiateNamed` re-walked the whole document scope tree per run, so a run cost O(model). The
+  session now tabulates its documents' simple names once per scope tree and answers lookups from
+  the table, rebuilt when a submission or reset replaces a document. At 4,000 elements a
+  state-machine start goes 204 µs → 6.4 µs, a calc 222 µs → 4.5 µs, an instantiation
+  217 µs → 3.3 µs, and the figures no longer scale with model size.
+
+- **The parser's token buffer is a bounded window.** The parser buffered every non-trivia token of
+  a file up front — ~48 bytes per token before reading any of them; consumed tokens are now
+  dropped once no checkpoint can rewind to them, so backtracking still sees what it needs while
+  the buffer stays bounded by the lookahead. With the REPL parsing each submitted file once
+  rather than twice, a load allocates 30% fewer objects and holds 16% less live heap.
+
+- **The `about`-metadata index is cached at index freeze time.** Building it walked the scope tree
+  of every document — the bundled standard library included — once per session. A frozen index is
+  immutable, so its `about`-usage symbols are recorded once at freeze and only workspace documents
+  are walked per session; the empty-session floor returns to ~0.19 ms and 117 KiB allocated,
+  −80% wall and −83% allocation, with the annotations found and their order identical.
+
+- **A repeated REPL command does not re-parse its text.** The session keeps what an argument list
+  and a command's name text parsed to, keyed by the exact text, so a repeated
+  `%calc`/`%action`/`%state`/`%instantiate` does not rebuild a source, lexer and parser per call.
+  Evaluation still runs on every call against the current session state.
+
+- **Two measurement records.** The [September 2026 performance census](docs/project/performance-census-2026-09.md)
+  measures week-over-week benchmark movement and whole-binary scaling, and flagged the regressions
+  fixed above; the [execution-performance record](docs/project/execution-performance-2026-09.md)
+  measures evaluation throughput — ~1.5 µs per calc invocation — and names the optimization gaps
+  the profiles show.
+
+### Changed
+
+- **A `sat` is a witness the evaluator confirms; an `unsat` is claimed only where the arithmetics
+  coincide.** Every satisfying assignment is replayed through the evaluator's float64 arithmetic
+  and reported `unknown` with the reason when the replay rejects it; a query whose conditions the
+  evaluator rounds is marked, `%check` and `%solve` report its exact-real `unsat` as undecided,
+  and `%configure all` and `%optimize` decline the completeness claim outright. Narrower, and
+  sound — what is given up is completeness on rounded queries, and the census over the
+  repository's solver-facing corpora found none of them recoverable.
+
+- **A whole-number quotient is a Rational.** `5 / 2` answers `2.5` for `Natural` and `Integer`
+  operands alike, which is what the reference evaluator answers; the quotient is computed as an
+  exact ratio rounded once to float64, so it agrees with the exact SMT encoding even beyond 2^53,
+  where rounding each operand first moves the answer. The library's declared `Natural` return is
+  recorded as a question for OMG in [omg-issues.md](docs/project/omg-issues.md).
+
+- **The Java client's package is `org.openmbee.opensysml`**, the DNS-verified namespace every
+  future Java artifact belongs under, rather than `io.opensysml`. The client has never been
+  published, so no released consumer moves with it.
+
+- **A pilot corpus records the pin it was fetched at.** Each corpus directory carries a stamp
+  naming the repository and tag it came from: a stale stamp triggers a re-download when the script
+  next runs (keeping the old copy until its replacement has been fetched), a current one is left
+  alone, and a directory without a stamp is left alone with a warning.
+
+### Fixed
+
+- **An OSLC query's unknown-property diagnostic names properties the query can be written with.**
+  `sysml:id="x"` answered with the Go API's own property names (`@id, @type, declaredName, …`), so a
+  caller who wrote one back got a second, different error: `@type` and `@id` are not OSLC query text.
+  The list is now the OSLC predicates (`rdf:type, sysml:declaredName, …`), derived from the mapping
+  the parser reads, and `@type`/`@id` name their OSLC spelling instead — `rdf:type`, and identity,
+  which every result reports rather than asks for. The list follows the query's own `oslc.prefix`
+  bindings, since a rebound `sysml` or `rdf` changes what the parser accepts. An `oslc.prefix`
+  binding whose prefix no prefixed name can be written with (`!s=<…>`) is refused where it is
+  bound rather than accepted and never usable, and a prefix of letters outside ASCII
+  (`sÿsml=<…>`) now scans as one name in a query instead of ending mid-letter.
+
+- **An anonymous `doc` or `comment` before a kind keyword is kept.** `doc /* … */` followed by
+  `attribute a;` in a definition or usage body parsed as an attribute prefixed by `doc`, so the
+  documentation vanished silently from the model — absent from validation, printing, the LSP and
+  RDF conversion (Open-MBEE/OpenSysML#85). A `doc`, `comment`, `rep` or `locale` annotation ends
+  with its comment body and never qualifies the member after it; the bundled standard library
+  gains the documentation this had been dropping.
+
+- **A wider-typed expression binds to a narrower feature.** `return : Integer = 7 / 2;` was
+  refused statically because the quotient's type is `Rational`, yet an expression's static type
+  only bounds its values — `4 / 2` is whole. A binding, argument or index is now refused
+  statically only when the two types are disjoint or the value is a literal, whose type is exact;
+  everything else is deferred to evaluation, where the value it actually turns out to be is still
+  checked. This matches the pinned pilot, which accepts the declaration and evaluates it.
+
+- **Every exported `Session` method holds the session lock.** The run, check/solve, view, document
+  and diagnostics entry points did not take it, so a Tab completion racing one of them touched the
+  lazily built index, name table and runtime context unsynchronized — 144 races under `-race`,
+  now none, with a test running every entry point concurrently.
+
+- **Node client:** restarting the service waits for the previous process to exit before
+  reconnecting, and does not wait on one that already exited.
+
+- **Arithmetic outside a type's range is reported, not returned.** A wrapped Integer sum, the
+  least Integer's negation and its remainder, an infinite Real from an out-of-range literal, a
+  folded infinity, and a quantity magnitude outside the Real range each answered as if computed;
+  every one is now a typed error naming the range. An ordinary negated literal evaluates rather
+  than being mistaken for a fold, seeded outputs are reported for what they are, and an escaped
+  attribute default is decoded before use.
+
+- **An unbound requirement subject is reported as unbound.** A requirement checked with nothing
+  supplying its subject read as a modelling mistake in the condition (`no value for feature
+  sensor`); the diagnostic now names the subject and the three ways to supply one — bind it, check
+  it on an object, or assert satisfaction by an element.
+
+- **A debounced call a later trigger superseded does not run.** A timer firing as the next trigger
+  arrived ran the work its successor now owned and deleted the successor's entry; a callback now
+  confirms it is still the timer its key waits on.
+
+- **Node client:** a short name is looked up on a model adopted by hash; a missing symbol's error
+  names what was looked for rather than repeating the service's text; an RPC failure surfaces as a
+  typed client error rather than a raw transport error; an impossible encoding or timeout is
+  refused at construction rather than carried into a connection; and a failed handshake carries
+  the status it failed with.
+
+- **Java client:** a call that outlives its request timeout is reported as the timeout it is, not
+  as the service being unavailable, and a value kind the client cannot read is a refusal rather
+  than a value silently dropped from the sequence holding it.
+
+- **Rust client:** an empty `$OPENSYSML_SERVICE` no longer selects an unnamed binary, a response
+  above the transport's 10 MB default is read, a qualified value is read outside its declaring
+  scope, string escapes decode, Integer overflow and non-finite Real folding are reported, and an
+  instance graph iterates in declaration order rather than map order.
+
+- **The toolchain download paths close their quality-gate findings.** The stall watchdog owns a
+  thread rather than an executor, the pandoc fetch refuses a plaintext redirect, and the mermaid
+  install runs no dependency's lifecycle script and finishes before calling itself present.
+
+- **The pilot reference is pinned to a commit, and a stale copy of it is replaced.** The corpora,
+  training examples, Xpect suites and grammars were fetched by release tag alone — a name the
+  upstream repository can re-point — and a corpus directory fetched at an earlier release was kept
+  with only a warning, so a checkout re-pinned from `2026-05` to `2026-07` still measured the old
+  material (98 example files where the baselines record 99) and every provenance test failed at an
+  unchanged pin. `scripts/pilot-pin.sh` now names the commit the tag must resolve to and every
+  fetch refuses a tag that resolves elsewhere; each fetched directory is stamped with the tag,
+  commit and repository, and a copy stamped with another pin or not stamped at all is re-fetched;
+  and the committed baselines record the commit they measured next to the tag.
+
 ## 0.4.2 — 2026-08-31
 
 Release 0.4.2 is where document generation from a model becomes a working pipeline. 0.4.1 shipped the

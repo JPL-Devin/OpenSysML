@@ -181,7 +181,7 @@ test(semantics): add conformance checking test cases
 
 - [ ] All tests pass
 - [ ] Documentation updated
-- [ ] CHANGELOG updated (if maintained)
+- [ ] Changelog fragments folded in (`python3 scripts/changelog.py release X.Y.Z`)
 - [ ] Version tag follows semver (`vX.Y.Z`)
 - [ ] Release notes prepared
 
@@ -219,6 +219,10 @@ All commits and tags trigger CI:
 - Build for Linux/macOS/Windows
 - Run full test suite
 - Run race detector
+
+The conformance job stores its JSON report as an artifact and its JUnit XML
+(`bin/conformance-report.xml`) as test results, so a failing scenario is named in the Tests tab
+rather than only in the log.
 
 **On tags (`v*`):**
 - Build release binaries (all platforms)
@@ -294,15 +298,19 @@ When a change needs documenting:
   [docs/project/roadmap.md](docs/project/roadmap.md) and
   [docs/project/training-examples.md](docs/project/training-examples.md). Recount all four
   together, in one commit.
-- **The compliance-row counts are generated, never typed.** After changing a `✅`/`⚠️`/`❌`/`⛔`
-  row in [docs/project/spec-compliance.md](docs/project/spec-compliance.md), run
-  `make docs-counts`: it restates that file's map header and the `**Row bookkeeping:**` lines in
-  `README.md` and [docs/internals/architecture.md](docs/internals/architecture.md) from the
-  markers themselves, touching nothing else. Do not edit those three lines by hand — two
-  branches that both add rows then produce identical bytes and cannot conflict on them. The
-  guard (`go test ./cmd/pilot-diff`) still fails on a stale line rather than fixing it, so run
-  the target before committing. It does not touch the externally refereed oracle numbers, which
-  come from the baseline JSONs.
+- **The compliance-row census is counted at build time, never committed.** Adding or changing a
+  `✅`/`⚠️`/`❌`/`⛔` row in [docs/project/spec-compliance.md](docs/project/spec-compliance.md) is the
+  whole change: no header, `README.md` line or `docs/internals/architecture.md` line restates the
+  count, so two branches that both add rows cannot conflict on one. The site build
+  (`scripts/mkdocs_census.py`, run by `make docs`) counts the rows into the
+  `<!-- doc-counts:begin census -->` block and refuses a `🚧` row, as do `make docs-counts` and
+  `go test ./cmd/pilot-diff`. `make docs-counts` still restates the externally refereed oracle
+  numbers from the baseline JSONs; run it only when a baseline moved.
+- **Changelog entries are fragments, not edits to `CHANGELOG.md`.** A change that a user
+  should read about adds one file, `changes/unreleased/<slug>.<section>.md`, holding the list
+  item(s) for that section (`added`, `changed`, `fixed`, …); see the README there. Two branches
+  then never touch the same changelog lines. `python3 scripts/changelog.py check` validates the
+  fragments and runs in CI; the release procedure folds them into `CHANGELOG.md`.
 - **Internal work-item labels stay out of what a reader reads.** Waves and slices (`wave 12A`,
   `W8G`), follow-up rows (`F4`), adjudication probes (`P1`) and diagnostic classes (`K5`, `S10`)
   have no public referent, so `CHANGELOG.md`, `README.md`, the guide, the reference, the internals

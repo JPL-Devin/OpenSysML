@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -410,7 +411,7 @@ func (m *Model) compileReference(scope *symbols.Scope, qn *ast.QualifiedName, sp
 	if !ok || sym == nil {
 		return unresolvedReference(span, fmt.Sprintf("%s does not resolve", qnText(qn)))
 	}
-	if owner := m.ownerOf(sym); owner != nil && isMetadataType(owner) {
+	if owner := m.ownerOf(sym); owner != nil && IsMetadataType(owner) {
 		ownerFQN := m.fqnOf(owner)
 		if ownerFQN == "" {
 			return unsupported(span, fmt.Sprintf("the metadata type of %s has no qualified name", qnText(qn)))
@@ -465,7 +466,7 @@ func (m *Model) referenceNotEvaluable(sym *symbols.Symbol) (string, bool) {
 		sym = resolved
 	}
 	owner := m.ownerOf(sym)
-	if isMetadataType(owner) {
+	if IsMetadataType(owner) {
 		return "", false
 	}
 	if isFeaturingType(owner) {
@@ -1279,19 +1280,17 @@ func (m *Model) ownerOf(sym *symbols.Symbol) *symbols.Symbol {
 	return nil
 }
 
-// isMetadataType reports whether a symbol is a metadata definition or a KerML
+// IsMetadataType reports whether a symbol is a metadata definition or a KerML
 // metaclass — the types an annotation can have.
-func isMetadataType(sym *symbols.Symbol) bool {
+func IsMetadataType(sym *symbols.Symbol) bool {
 	if sym == nil {
 		return false
 	}
 	return sym.Kind == symbols.SymbolMetadataDef || sym.Kind == symbols.SymbolMetaclass
 }
 
-// unquote strips the quotes from a string literal's text.
+// unquote reads the text a string literal spells, so a filter constant matches
+// the same string the runtime evaluates the literal to.
 func unquote(s string) string {
-	if len(s) >= 2 && (s[0] == '"' || s[0] == '\'') && s[len(s)-1] == s[0] {
-		return s[1 : len(s)-1]
-	}
-	return s
+	return lexer.StringValue(s)
 }

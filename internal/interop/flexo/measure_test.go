@@ -62,9 +62,9 @@ func TestReportTextIsDeterministic(t *testing.T) {
 // shapes the measurement is about: an extension property and a multi-valued
 // standard property. Every id it writes must be one the service accepts.
 func TestFixtureGraphCoversTheGaps(t *testing.T) {
-	model, err := os.ReadFile(fixturePath)
+	model, err := os.ReadFile(fixtures[0].fixturePath)
 	if err != nil {
-		t.Fatalf("read %s: %v", fixturePath, err)
+		t.Fatalf("read %s: %v", fixtures[0].fixturePath, err)
 	}
 	graph, err := export.SysMLToRDF("model.sysml", model)
 	if err != nil {
@@ -108,6 +108,12 @@ func TestFixtureGraphCoversTheGaps(t *testing.T) {
 // The reference fixture is the ground truth, so it must be a commit request the
 // service accepts: every change carries an @id and a @type.
 func TestReferenceFixtureIsAPostableCommit(t *testing.T) {
+	for _, f := range fixtures {
+		t.Run(f.name, func(t *testing.T) { checkPostableCommit(t, f.referencePath) })
+	}
+}
+
+func checkPostableCommit(t *testing.T, referencePath string) {
 	fixture, err := os.ReadFile(referencePath)
 	if err != nil {
 		t.Fatalf("read %s: %v", referencePath, err)
@@ -177,9 +183,9 @@ func TestJSONPropertyCountsArrayMembers(t *testing.T) {
 		}
 	}
 
-	fixture, err := os.ReadFile(referencePath)
+	fixture, err := os.ReadFile(fixtures[0].referencePath)
 	if err != nil {
-		t.Fatalf("read %s: %v", referencePath, err)
+		t.Fatalf("read %s: %v", fixtures[0].referencePath, err)
 	}
 	_, written, err := referencePayload(fixture)
 	if err != nil {

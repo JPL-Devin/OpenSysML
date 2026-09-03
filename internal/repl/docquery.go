@@ -21,6 +21,8 @@ const runQueryUsage = "usage: %run-query <name> [<parameter>=<expression> ...]"
 // parameters and executes it. invocation is what `%run-query` takes: a name
 // followed by `<parameter>=<expression>` bindings.
 func (s *Session) RunDocumentQuery(invocation string) Verdict {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	fields := splitQueryArgs(strings.TrimSpace(invocation))
 	if len(fields) == 0 {
 		return s.withTrace(unresolvedVerdict(invocation, "a document query to run must be named"))
@@ -245,21 +247,21 @@ func queryValues(value runtime.Value) ([]queryexec.Value, error) {
 		}
 		return nil, fmt.Errorf("%s cannot be bound to a query parameter", runtime.FormatValue(value))
 	case runtime.ValString:
-		return []queryexec.Value{queryexec.StringValue(value.Str)}, nil
+		return []queryexec.Value{queryexec.StringValue(value.Str())}, nil
 	case runtime.ValNull:
 		return nil, nil
 	case runtime.ValEnumLiteral:
-		return []queryexec.Value{queryexec.ElementValue(value.Literal)}, nil
+		return []queryexec.Value{queryexec.ElementValue(value.Literal())}, nil
 	case runtime.ValSequence:
-		if value.Sequence == nil {
+		if value.Sequence() == nil {
 			return nil, nil
 		}
-		return queryValueList(value.Sequence.Elements())
+		return queryValueList(value.Sequence().Elements())
 	case runtime.ValSet:
-		if value.Set == nil {
+		if value.Set() == nil {
 			return nil, nil
 		}
-		return queryValueList(value.Set.Elements())
+		return queryValueList(value.Set().Elements())
 	default:
 		return nil, fmt.Errorf("a %s cannot be bound to a query parameter", value.Kind)
 	}

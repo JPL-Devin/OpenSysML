@@ -2,27 +2,42 @@ package lsp
 
 import (
 	"context"
+	"strings"
 
 	"go.lsp.dev/protocol"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/model"
 	"github.com/Open-MBEE/OpenSysML/internal/core/quickfix"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
-// CodeAction answers the quick fixes for the diagnostics in a range: the fixes
-// the pass that reported a diagnostic attached to it, as workspace edits.
+// CodeAction answers the code actions for a range: the quick fixes attached to
+// its diagnostics and the opt-in identity rewrites of the declaration under it.
 func (s *Server) CodeAction(ctx context.Context, params *protocol.CodeActionParams) ([]protocol.CodeAction, error) {
 	name := uriToName(params.TextDocument.URI)
 	doc := s.ws.Document(name)
 	if doc == nil {
 		return nil, nil
 	}
-	if !wantsQuickFix(params.Context.Only) {
-		return nil, nil
-	}
 	want := rangeToSpan(doc.Content, params.Range)
-	uri := nameToURI(name)
 	out := []protocol.CodeAction{}
+	if wantsKind(params.Context.Only, protocol.QuickFix) {
+		out = append(out, s.quickFixes(name, doc, want)...)
+	}
+	if wantsKind(params.Context.Only, identityActionKind) {
+		actions, err := s.identityActions(name, doc, want)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, actions...)
+	}
+	return out, nil
+}
+
+// quickFixes returns the fixes attached to the diagnostics overlapping want.
+func (s *Server) quickFixes(name string, doc *model.Document, want source.Span) []protocol.CodeAction {
+	uri := nameToURI(name)
+	var out []protocol.CodeAction
 	for _, diag := range s.ws.Diagnostics(name) {
 		if len(diag.Fixes) == 0 || !overlaps(diag.Span, want) {
 			continue
@@ -44,17 +59,17 @@ func (s *Server) CodeAction(ctx context.Context, params *protocol.CodeActionPara
 			})
 		}
 	}
-	return out, nil
+	return out
 }
 
-// wantsQuickFix reports whether a client filtering by kind asks for quick fixes;
-// an unfiltered request asks for everything.
-func wantsQuickFix(only []protocol.CodeActionKind) bool {
+// wantsKind reports whether a kind filter asks for kind, prefixes included
+// (`refactor` asks for `refactor.rewrite`); no filter asks for everything.
+func wantsKind(only []protocol.CodeActionKind, kind protocol.CodeActionKind) bool {
 	if len(only) == 0 {
 		return true
 	}
-	for _, kind := range only {
-		if kind == protocol.QuickFix || kind == "" {
+	for _, want := range only {
+		if want == "" || want == kind || strings.HasPrefix(string(kind), string(want)+".") {
 			return true
 		}
 	}

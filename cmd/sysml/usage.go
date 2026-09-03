@@ -4,6 +4,7 @@ import (
 	"flag"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/export"
+	"github.com/Open-MBEE/OpenSysML/internal/interop/flexo"
 	"github.com/Open-MBEE/OpenSysML/internal/usage"
 )
 
@@ -70,6 +71,44 @@ func doc() usage.Doc {
 					".kerml is stable.",
 			},
 		}, {
+			Title: "Native compilation",
+			Examples: []usage.Example{
+				usage.Ex("sysml model.sysml -compile Pkg::Fib -o fib", "Compile a calc def to a C executable"),
+				usage.Ex("sysml model.sysml -compile Pkg::Fib -target go -o fib", "...via Go"),
+				usage.Ex("sysml model.sysml -compile Pkg::Fib -source -o fib.c", "Write the generated source only"),
+			},
+			Paragraphs: []string{
+				"The executable takes the calc's parameters as arguments and prints " +
+					"its result; it computes what sysml -calc computes, or fails with " +
+					"the same error. Only the scalar subset compiles (Integer, Real, " +
+					"Boolean; see docs/project/native-compilation.md).",
+			},
+		}, {
+			Title: "Syncing against a repository",
+			Lead:  []string{"A dry run unless -sync-apply:"},
+			Examples: []usage.Example{
+				usage.Ex("sysml model.sysml -sync-diff repo.ttl", "Show the change set and exit"),
+				usage.Ex("sysml model.sysml -sync-diff repo.ttl -sync-base last-seen.ttl", ""),
+				usage.Ex("sysml model.sysml -sync-diff repo.ttl -sync-confirm-deletes", ""),
+				usage.Ex("sysml model.sysml -sync-diff repo.ttl -sync-mint-ids -sync-annotate out.sysml", ""),
+				usage.Ex("sysml model.sysml -sync-diff http://localhost:8083", "Against the live API; no writes"),
+				usage.Ex("sysml model.sysml -sync-apply http://localhost:8083", "Write the change set as a commit"),
+			},
+			Paragraphs: []string{
+				"The diff correlates elements by their effective id — an @ElementId " +
+					"annotation, or the encoded qualified name — so a rename, move or " +
+					"retype is an update, never a delete plus a create. " +
+					"Repository-only elements are reported as deletes but applying " +
+					"them needs -sync-confirm-deletes; conflicts — a declared id the " +
+					"branch no longer has, or a repository change since the last-seen " +
+					"commit — exit 1 and are never resolved silently.",
+				"The last-seen commit is tool state in <model>.sync.json (or " +
+					"-sync-state), never written into the notation. -sync-apply " +
+					"refuses a change set the dry run would have flagged, sends each " +
+					"update under its retained id, and records the resulting commit; " +
+					"the token comes from " + flexo.EnvToken + ".",
+			},
+		}, {
 			Title: "Rendering a view",
 			Examples: []usage.Example{
 				usage.Ex("sysml model.sysml -render Views::vehicleView", "ASCII text at a terminal"),
@@ -90,20 +129,31 @@ func doc() usage.Doc {
 				usage.Ex("sysml model.sysml -render-document Reports::MassReport", "Markdown on stdout"),
 				usage.Ex("sysml model.sysml -render-document Reports::MassReport -o report.md", ""),
 				usage.Ex("sysml model.sysml -render-document Reports::MassReport -doc-form pdf -o report.pdf", ""),
+				usage.Ex("sysml model.sysml -render-document Reports::MassReport -doc-form html -o report.html", ""),
 				usage.Ex("sysml model.sysml -render-documents rendered", "every document, linked"),
+				usage.Ex("sysml model.sysml -render-documents site -doc-form html -html-css theme.css", ""),
 				usage.Ex("sysml model.sysml -render-document Reports::MassReport -doc-form pdf "+
-					"-pdf-engine pandoc -pdf-title-page -pdf-toc -pdf-number-sections -o report.pdf", ""),
+					"-pdf-engine pandoc -doc-title-page -doc-toc -doc-number-sections -o report.pdf", ""),
+				usage.Ex("sysml -html-default-css -o sysml-document.css", "the default stylesheet"),
 			},
 			Paragraphs: []string{
 				"A document is a part def specializing DocumentQueries::Document. Its " +
 					"queries are bound in the model and run against it, and the " +
 					"result is written as CommonMark-compatible Markdown.",
+				"-doc-form html writes semantic HTML instead, carrying each element's " +
+					"identity and kind, styled by a stylesheet in a cascade layer your " +
+					"own CSS overrides without !important.",
 				"-doc-form pdf converts that Markdown with an external converter named " +
 					"by -pdf-engine — weasyprint (default), pandoc or prince — run as " +
 					"a subprocess, never linked in; diagrams are pre-rendered to SVG " +
 					"with mermaid-cli (mmdc). None of these tools is needed until PDF " +
 					"output is asked for; scripts/download-doc-pdf-toolchain.sh " +
 					"provisions pinned copies.",
+				"HTML output needs nothing external and loads nothing: -html-css adds " +
+					"your own stylesheets, -html-no-default-css drops the default one, " +
+					"-html-fragment writes the document element alone to embed in a " +
+					"page of yours, and -html-default-css writes the default sheet out " +
+					"to start from.",
 			},
 		}, {
 			Title: "Flag order",
@@ -204,11 +254,25 @@ func registerFlags(fs *flag.FlagSet) {
 	fs.StringVar(&renderDoc, "render-document", "", "Compile this document definition, run its queries and write the rendered Markdown")
 	fs.StringVar(&renderDocsDir, "render-documents", "", "Render every document definition as linked Markdown into this directory")
 	fs.StringVar(&renderForm, "render-form", "", "Form -render or -render-all writes: text, mermaid or markdown (default: destination-dependent for -render, each kind's machine form for -render-all)")
-	fs.StringVar(&docForm, "doc-form", "", "Form -render-document writes: markdown (default) or pdf, which drives an external converter")
+	fs.StringVar(&docForm, "doc-form", "", "Form -render-document and -render-documents write: markdown (default), html or pdf, which drives an external converter")
 	fs.StringVar(&pdfEngine, "pdf-engine", "", "Converter -doc-form pdf drives: weasyprint (default), pandoc or prince")
 	fs.BoolVar(&pdfTitlePage, "pdf-title-page", false, "Put the document title on a page of its own (-doc-form pdf)")
 	fs.BoolVar(&pdfTOC, "pdf-toc", false, "Write a table of contents ahead of the content (-doc-form pdf)")
 	fs.BoolVar(&pdfNumbering, "pdf-number-sections", false, "Number the section headings hierarchically (-doc-form pdf)")
+	fs.BoolVar(&pdfTitlePage, "doc-title-page", false, "Put the document title on a page of its own (-doc-form html or pdf)")
+	fs.BoolVar(&pdfTOC, "doc-toc", false, "Write a table of contents ahead of the content (-doc-form html or pdf)")
+	fs.BoolVar(&pdfNumbering, "doc-number-sections", false, "Number the section headings hierarchically (-doc-form html or pdf)")
+	fs.Var(&htmlCSS, "html-css", "Style the HTML with this stylesheet: a file is inlined, a URL is linked (repeatable, applied in order after the default sheet)")
+	fs.BoolVar(&htmlNoCSS, "html-no-default-css", false, "Leave the default stylesheet out, so only -html-css sheets style the document")
+	fs.BoolVar(&htmlShowCSS, "html-default-css", false, "Write the default document stylesheet and exit, as a starting point for your own")
+	fs.BoolVar(&htmlFragment, "html-fragment", false, "Write the document element alone, without the page shell or a stylesheet, to embed in a page of your own")
+	fs.StringVar(&syncDiffWith, "sync-diff", "", "Show the change set between the model and this repository — a graph file (.ttl) or a SysML v2 API endpoint URL — keyed by effective element id, instead of running it; never writes")
+	fs.StringVar(&syncApplyTo, "sync-apply", "", "Apply the change set to the model's project branch at this SysML v2 API endpoint URL, then record the commit in the sync state (token from "+flexo.EnvToken+")")
+	fs.StringVar(&syncBase, "sync-base", "", "Repository graph at the last-seen commit; with it, repository changes since then surface as conflicts")
+	fs.StringVar(&syncState, "sync-state", "", "Sync state file recording project, branch and last-seen commit (default: <model>.sync.json beside the model)")
+	fs.BoolVar(&syncConfirmDeletes, "sync-confirm-deletes", false, "Confirm repository-side deletes; without it the diff reports them but applying is refused")
+	fs.BoolVar(&syncMintIDs, "sync-mint-ids", false, "Mint a UUID for each unannotated element being created, so the repository can address it stably")
+	fs.StringVar(&syncAnnotate, "sync-annotate", "", "Write the model to this file with each minted id declared as an @ElementId annotation (needs -sync-mint-ids)")
 	fs.Var(&deprecatedFlag{instead: "-to has been replaced by -convert, as `sysml model.sysml -convert ttl`"}, "to", "Replaced by -convert, which names the output format")
 	fs.Var(&modelChecks.instantiate, "instantiate", "Create an object of this definition before the checks, so a verdict is about it (repeatable)")
 	fs.Var(&modelChecks.constraints, "constraint", "Evaluate this constraint and exit (repeatable)")
@@ -221,6 +285,9 @@ func registerFlags(fs *flag.FlagSet) {
 	fs.Var(&modelChecks.states, "state", "Run this state machine, as -state \"Mission rover1\" to run it on an object (repeatable)")
 	fs.Var(&modelChecks.advance, "advance", "Simulated time units to run each -state machine for (default: only its initial transition)")
 	fs.BoolVar(&modelChecks.jsonOut, "json", false, "Report checks as one JSON document rather than as lines")
+	fs.StringVar(&compileCalc, "compile", "", "Compile this calc def to a native executable named by -o, as -compile Pkg::Fib")
+	fs.StringVar(&compileTarget, "target", "c", "Backend -compile generates code for: c (default) or go")
+	fs.BoolVar(&compileSource, "source", false, "With -compile, write the generated source to -o instead of building it")
 	fs.StringVar(&cpuProfilePath, "cpuprofile", "", "Write a CPU profile of the run to this file, for go tool pprof")
 	fs.StringVar(&memProfilePath, "memprofile", "", "Write a heap profile of the run to this file, for go tool pprof")
 	fs.BoolVar(&memStats, "memstats", false, "Report on stderr what the run cost: wall time, memory allocated, memory taken from the OS")

@@ -26,19 +26,40 @@ import (
 func elementsOf(val Value) []Value {
 	switch val.Kind {
 	case ValSequence:
-		if val.Sequence == nil {
+		if val.Sequence() == nil {
 			return nil
 		}
-		return val.Sequence.Elements()
+		return val.Sequence().Elements()
 	case ValSet:
-		if val.Set == nil {
+		if val.Set() == nil {
 			return nil
 		}
-		return val.Set.Elements()
+		return val.Set().Elements()
 	case ValNull, ValInvalid:
 		return nil
 	default:
 		return []Value{val}
+	}
+}
+
+// elementCount is len(elementsOf(val)) without materializing a scalar's
+// one-element sequence.
+func elementCount(val *Value) int64 {
+	switch val.Kind {
+	case ValSequence:
+		if seq := val.Sequence(); seq != nil {
+			return int64(seq.Size())
+		}
+		return 0
+	case ValSet:
+		if set := val.Set(); set != nil {
+			return int64(set.Size())
+		}
+		return 0
+	case ValNull, ValInvalid:
+		return 0
+	default:
+		return 1
 	}
 }
 
@@ -48,7 +69,7 @@ func sequenceOf(elements []Value) Value {
 	for _, elem := range elements {
 		seq.Append(elem)
 	}
-	return Value{Kind: ValSequence, Sequence: seq}
+	return NewSequenceValue(seq)
 }
 
 // newSequence builds a sequence value from elements, charging them against the
@@ -71,20 +92,23 @@ func integerValue(n int64) Value {
 // head, last and `#` of a sequence that has no such element.
 func nullValue() Value { return Value{Kind: ValNull} }
 
-// indexOf reads a sequence index: SequenceFunctions::'#' declares
-// `in index: Positive[1]`, so the index is one whole number, counting from 1. A
-// Real, a Boolean, a string or a collection is not an index and is reported
-// rather than truncated or read as a position.
+// indexOf reads a sequence index (`in index: Positive[1]`): one whole number, counting
+// from 1, so 4 / 2 indexes while a fractional Real is reported rather than truncated.
 func indexOf(op string, val Value) (int64, error) {
-	if val.Kind != ValConst || val.Const.Kind != semantics.ValInt {
-		return 0, fmt.Errorf("%w: %s requires an Integer index, got %s", ErrTypeMismatch, op, describeValue(val))
+	if val.Kind == ValConst {
+		if index, ok := val.Const.WholeNumber(); ok {
+			return index, nil
+		}
 	}
-	return val.Const.Int, nil
+	return 0, fmt.Errorf("%w: %s requires an Integer index, got %s", ErrTypeMismatch, op, describeValue(val))
 }
 
 // describeValue names a value's kind for a diagnostic, distinguishing the
 // numeric constants a single kind covers.
 func describeValue(val Value) string {
+	if val.Kind == ValComplex {
+		return "a Complex"
+	}
 	if val.Kind != ValConst {
 		return val.Kind.String()
 	}
@@ -155,9 +179,9 @@ func bodyOf(op string, val Value, arity int) (*ast.BodyExpr, error) {
 	if val.Kind != ValExpr {
 		return nil, fmt.Errorf("%w: %s requires a body expression, got %s", ErrTypeMismatch, op, describeValue(val))
 	}
-	body, ok := val.Expr.(*ast.BodyExpr)
+	body, ok := val.Expr().(*ast.BodyExpr)
 	if !ok {
-		return nil, fmt.Errorf("%w: %s requires a body expression, got %T", ErrTypeMismatch, op, val.Expr)
+		return nil, fmt.Errorf("%w: %s requires a body expression, got %T", ErrTypeMismatch, op, val.Expr())
 	}
 	if len(body.Params) != arity {
 		return nil, fmt.Errorf("%w: %s calls its body with %d argument(s), but it declares %d parameter(s)",
@@ -759,19 +783,32 @@ func truthOf(op string, args []Value, universal bool) (Value, error) {
 // kind: Integer elements sum to an Integer (IntegerFunctions::sum returns
 // `Integer[1]`), a Real anywhere makes the sum a Real.
 func builtinNumericalSum(ec *EvalContext, args []Value) (Value, error) {
-	return aggregate("NumericalFunctions::sum", args, ast.OpAdd)
+	return aggregate("NumericalFunctions::sum", args, ast.OpAdd, false)
 }
 
 // builtinNumericalProduct is NumericalFunctions::product, with the
 // multiplicative identity for an empty collection (`product1(collection, 1)`).
 func builtinNumericalProduct(ec *EvalContext, args []Value) (Value, error) {
-	return aggregate("NumericalFunctions::product", args, ast.OpMul)
+	return aggregate("NumericalFunctions::product", args, ast.OpMul, false)
+}
+
+// builtinRealSum is RealFunctions::sum and RationalFunctions::sum, whose
+// identity the library declares Real (`sum0(collection, 0.0)`): an empty
+// collection sums to 0.0, not 0.
+func builtinRealSum(ec *EvalContext, args []Value) (Value, error) {
+	return aggregate("RealFunctions::sum", args, ast.OpAdd, true)
+}
+
+// builtinRealProduct is RealFunctions::product and RationalFunctions::product
+// (`product1(collection, 1.0)`).
+func builtinRealProduct(ec *EvalContext, args []Value) (Value, error) {
+	return aggregate("RealFunctions::product", args, ast.OpMul, true)
 }
 
 // aggregate folds the collection's numeric elements with op, starting from its
-// identity element: 0 for a sum, 1 for a product. A non-numeric element is
-// reported rather than skipped or coerced.
-func aggregate(op string, args []Value, operator ast.OperatorKind) (Value, error) {
+// identity element: 0 for a sum, 1 for a product, a Real where real says so.
+// A non-numeric element is reported rather than skipped or coerced.
+func aggregate(op string, args []Value, operator ast.OperatorKind, real bool) (Value, error) {
 	if err := checkArity(op, args, 1); err != nil {
 		return Value{}, err
 	}
@@ -783,11 +820,20 @@ func aggregate(op string, args []Value, operator ast.OperatorKind) (Value, error
 			return aggregateQuantities(op, elements, operator)
 		}
 	}
+	// A Complex is a Number, so a collection holding one folds as ComplexFunctions'.
+	for _, elem := range elements {
+		if elem.Kind == ValComplex {
+			return aggregateComplex(op, args[0], operator)
+		}
+	}
 	identity := int64(0)
 	if operator == ast.OpMul {
 		identity = 1
 	}
 	acc := semantics.Value{Kind: semantics.ValInt, Int: identity}
+	if real {
+		acc = semantics.Value{Kind: semantics.ValReal, Real: float64(identity)}
+	}
 	for _, elem := range elements {
 		if elem.Kind != ValConst || !elem.Const.IsNumeric() {
 			return Value{}, fmt.Errorf("%w: %s requires numeric elements, got %s", ErrTypeMismatch, op, describeValue(elem))
@@ -812,7 +858,7 @@ func aggregateQuantities(op string, elements []Value, operator ast.OperatorKind)
 			return Value{}, fmt.Errorf("%w: %s requires numeric elements, got %s", ErrTypeMismatch, op, describeValue(elem))
 		}
 		if i == 0 {
-			acc = Value{Kind: ValQuantity, Quantity: q}
+			acc = NewQuantityValue(q)
 			continue
 		}
 		accQ, _ := asQuantity(acc)

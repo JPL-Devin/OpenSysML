@@ -1,0 +1,7 @@
+{
+  "type": "instance",
+  "instantiate": "P::ctx",
+  "slots": {
+    "received": {"type": "Integer", "value": 1}
+  }
+}

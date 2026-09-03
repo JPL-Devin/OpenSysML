@@ -45,9 +45,31 @@ export function interceptors(options: TransportOptions): Interceptor[] {
   return built;
 }
 
+const ENCODINGS: ReadonlySet<string> = new Set<Encoding>(["protobuf", "json"]);
+
 /** Protobuf unless the caller asked for JSON. */
 export function encodingOf(options: TransportOptions): Encoding {
-  return options.encoding ?? "protobuf";
+  const encoding = options.encoding ?? "protobuf";
+  if (!ENCODINGS.has(encoding)) {
+    throw new OpenSysMLError(
+      `${JSON.stringify(encoding)} is not a body encoding; a connection carries "protobuf" or "json"`,
+    );
+  }
+  return encoding;
+}
+
+/** The deadline every call carries, checked: one that cannot elapse is a mistake. */
+export function timeoutOf(options: TransportOptions): number | undefined {
+  const timeoutMs = options.timeoutMs;
+  if (timeoutMs === undefined) {
+    return undefined;
+  }
+  if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new OpenSysMLError(
+      `timeoutMs is a deadline in milliseconds and must be positive, not ${JSON.stringify(timeoutMs)}`,
+    );
+  }
+  return timeoutMs;
 }
 
 function responseTap(tap: ResponseTap): Interceptor {

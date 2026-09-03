@@ -7,7 +7,7 @@ import type { ConnectionBackend, TransportOptions } from "../core/connection.js"
 import { OpenSysMLError } from "../core/errors.js";
 import { Model } from "../core/model.js";
 import type { ParseOptions } from "../core/model.js";
-import { baseUrl, encodingOf, interceptors } from "../core/transport.js";
+import { baseUrl, encodingOf, interceptors, timeoutOf } from "../core/transport.js";
 import { acquirePrivateService } from "./service.js";
 
 export * from "../core/index.js";
@@ -104,6 +104,9 @@ export async function loads(source: string, options: ConnectOptions & ParseOptio
 }
 
 async function connectPrivate(options: ConnectOptions): Promise<Connection> {
+  // Checked before a child is started, so a bad option costs no process.
+  const encoding = encodingOf(options);
+  const timeoutMs = timeoutOf(options);
   const service = await acquirePrivateService();
   const backend: ConnectionBackend = {
     origin: `${service.binary.path}, started by this client`,
@@ -112,9 +115,9 @@ async function connectPrivate(options: ConnectOptions): Promise<Connection> {
   try {
     return await Connection.open({
       transport: transportFor(baseUrl(service.address), options),
-      encoding: encodingOf(options),
+      encoding,
       backend,
-      timeoutMs: options.timeoutMs,
+      timeoutMs,
     });
   } catch (error) {
     await service.release();
@@ -124,6 +127,7 @@ async function connectPrivate(options: ConnectOptions): Promise<Connection> {
 
 async function connectExternal(address: string, options: ConnectOptions): Promise<Connection> {
   const url = baseUrl(address);
+  const timeoutMs = timeoutOf(options);
   return Connection.open({
     transport: transportFor(url, options),
     encoding: encodingOf(options),
@@ -132,7 +136,7 @@ async function connectExternal(address: string, options: ConnectOptions): Promis
       // A service this client did not start is never stopped by it.
       release: () => Promise.resolve(),
     },
-    timeoutMs: options.timeoutMs,
+    timeoutMs,
   });
 }
 

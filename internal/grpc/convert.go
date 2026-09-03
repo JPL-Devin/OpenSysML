@@ -3,7 +3,9 @@ package grpc
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math"
+	"slices"
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -251,7 +253,7 @@ func ValueToProtoIn(rt *runtime.Context, val runtime.Value, idx *symbols.Index) 
 			return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported const kind"}}
 		}
 	case runtime.ValString:
-		return &pb.Value{Kind: &pb.Value_StringValue{StringValue: val.Str}}
+		return &pb.Value{Kind: &pb.Value_StringValue{StringValue: val.Str()}}
 	case runtime.ValNull:
 		return &pb.Value{Kind: &pb.Value_Null{Null: ""}}
 	case runtime.ValInstance:
@@ -259,8 +261,8 @@ func ValueToProtoIn(rt *runtime.Context, val runtime.Value, idx *symbols.Index) 
 	case runtime.ValSequence:
 		// Recursively convert sequence elements
 		var pbElements []*pb.Value
-		if val.Sequence != nil {
-			for _, elem := range val.Sequence.Elements() {
+		if val.Sequence() != nil {
+			for _, elem := range val.Sequence().Elements() {
 				pbElements = append(pbElements, ValueToProtoIn(rt, elem, idx))
 			}
 		}
@@ -273,7 +275,7 @@ func ValueToProtoIn(rt *runtime.Context, val runtime.Value, idx *symbols.Index) 
 		}
 		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: variant selection"}}
 	case runtime.ValQuantity:
-		pq := QuantityToProto(val.Quantity)
+		pq := QuantityToProto(val.Quantity())
 		if pq == nil {
 			return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: quantity with a non-numeric magnitude"}}
 		}
@@ -284,6 +286,8 @@ func ValueToProtoIn(rt *runtime.Context, val runtime.Value, idx *symbols.Index) 
 			return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: unresolved enumeration literal"}}
 		}
 		return &pb.Value{Kind: &pb.Value_EnumLiteral{EnumLiteral: lit}}
+	case runtime.ValComplex:
+		return &pb.Value{Kind: &pb.Value_Complex{Complex: ComplexToProto(val.Complex())}}
 	default:
 		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported"}}
 	}
@@ -292,17 +296,28 @@ func ValueToProtoIn(rt *runtime.Context, val runtime.Value, idx *symbols.Index) 
 // enumLiteralToProto names a literal by the declaration it is, which is its
 // identity, and by the enumeration declaring it. Nil for an unresolved literal.
 func enumLiteralToProto(val runtime.Value, idx *symbols.Index) *pb.EnumLiteral {
-	if val.Literal == nil {
+	if val.Literal() == nil {
 		return nil
 	}
 	lit := &pb.EnumLiteral{
-		LiteralId: idx.GetFQN(val.Literal),
+		LiteralId: idx.GetFQN(val.Literal()),
 		Name:      val.LiteralText(),
 	}
-	if enum := semantics.EnumerationOwning(val.Literal); enum != nil {
+	if enum := semantics.EnumerationOwning(val.Literal()); enum != nil {
 		lit.EnumerationId = idx.GetFQN(enum)
 	}
 	return lit
+}
+
+// ComplexToProto marshals a complex number as its rectangular parts.
+func ComplexToProto(z complex128) *pb.Complex {
+	return &pb.Complex{Real: real(z), Imaginary: imag(z)}
+}
+
+// ProtoToComplex is the complex number a Complex message carries; an empty
+// message is zero, as every proto3 default is.
+func ProtoToComplex(pc *pb.Complex) complex128 {
+	return complex(pc.GetReal(), pc.GetImaginary())
 }
 
 // QuantityToProto marshals a quantity: the magnitude in the unit written, plus
@@ -361,6 +376,22 @@ var (
 	ErrUnsetNotAccepted = errors.New("unset is not a value a caller can supply")
 )
 
+// ValueCarriesComplex reports whether a value, or any element of a sequence,
+// is a Complex: the kind the complex_values capability governs.
+func ValueCarriesComplex(pv *pb.Value) bool {
+	switch k := pv.GetKind().(type) {
+	case *pb.Value_Complex:
+		return true
+	case *pb.Value_Sequence:
+		for _, elem := range k.Sequence.GetElements() {
+			if ValueCarriesComplex(elem) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // ProtoToValueIn converts a protobuf Value to a runtime.Value in the model idx
 // and sem describe, resolving a quantity's base units against them. Inverse of
 // ValueToProto.
@@ -386,7 +417,7 @@ func ProtoToValueIn(pv *pb.Value, idx *symbols.Index, sem *semantics.Model) (run
 				seq.Append(val)
 			}
 		}
-		return runtime.Value{Kind: runtime.ValSequence, Sequence: seq}, nil
+		return runtime.NewSequenceValue(seq), nil
 	default:
 		return protoToScalar(pv), nil
 	}
@@ -420,7 +451,7 @@ func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index, sem *semantics.Model) 
 	}
 
 	quantity := &runtime.Quantity{Num: num, Unit: runtime.Unit{Text: pq.GetUnit(), Term: term}}
-	return runtime.Value{Kind: runtime.ValQuantity, Quantity: quantity}, nil
+	return runtime.NewQuantityValue(quantity), nil
 }
 
 // protoToUnitTerm rebuilds a unit's reduction, normalized so a term sent in any
@@ -486,11 +517,13 @@ func protoToScalar(pv *pb.Value) runtime.Value {
 	case *pb.Value_BoolValue:
 		return runtime.Value{Kind: runtime.ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: k.BoolValue}}
 	case *pb.Value_StringValue:
-		return runtime.Value{Kind: runtime.ValString, Str: k.StringValue}
+		return runtime.NewStringValue(k.StringValue)
 	case *pb.Value_InstanceId:
 		return runtime.Value{Kind: runtime.ValInstance, Instance: k.InstanceId}
 	case *pb.Value_Null:
 		return runtime.Value{Kind: runtime.ValNull}
+	case *pb.Value_Complex:
+		return runtime.NewComplex(ProtoToComplex(k.Complex))
 	default:
 		return runtime.Value{Kind: runtime.ValNull}
 	}
@@ -503,6 +536,28 @@ const (
 	maxGraphInstances = 1000
 )
 
+// GraphBounds is how far InstanceGraphToProtoWithin expands an object graph:
+// nested objects to Depth, and Instances objects in all.
+type GraphBounds struct {
+	Depth     int
+	Instances int
+}
+
+// DefaultGraphBounds are the bounds the service serializes an instance graph under.
+func DefaultGraphBounds() GraphBounds {
+	return GraphBounds{Depth: maxGraphDepth, Instances: maxGraphInstances}
+}
+
+// InstanceGraph is an object graph serialized by InstanceGraphToProtoWithin.
+type InstanceGraph struct {
+	Root *pb.Instance
+	All  []*pb.Instance // the root first
+	// Truncated reports that the instance bound cut the graph short.
+	Truncated bool
+	// Errors are the typed failures behind every FeatureValue.Error in All.
+	Errors []error
+}
+
 // InstanceGraphToProto converts inst and every instance reachable from it. The
 // root is returned first; runtime instances live only for the duration of a
 // request, so the whole reachable graph is serialized while the context is alive.
@@ -512,13 +567,24 @@ const (
 // holds, so a self-referential part would otherwise instantiate forever. An
 // unexpanded child stays a bare instance id.
 func InstanceGraphToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.Index) (*pb.Instance, []*pb.Instance) {
-	var all []*pb.Instance
+	g := InstanceGraphToProtoWithin(rt, inst, idx, DefaultGraphBounds())
+	return g.Root, g.All
+}
+
+// InstanceGraphToProtoWithin is InstanceGraphToProto under the given bounds; the
+// type cycle guard applies whatever the bounds.
+func InstanceGraphToProtoWithin(rt *runtime.Context, inst *runtime.Instance, idx *symbols.Index, bounds GraphBounds) InstanceGraph {
+	var g InstanceGraph
 	seen := make(map[int64]bool)
 	onPath := make(map[*symbols.Symbol]bool)
 
 	var walk func(*runtime.Instance, int) *pb.Instance
 	walk = func(cur *runtime.Instance, depth int) *pb.Instance {
-		if seen[cur.ID] || len(all) >= maxGraphInstances {
+		if seen[cur.ID] {
+			return nil
+		}
+		if len(g.All) >= bounds.Instances {
+			g.Truncated = true
 			return nil
 		}
 		seen[cur.ID] = true
@@ -527,15 +593,16 @@ func InstanceGraphToProto(rt *runtime.Context, inst *runtime.Instance, idx *symb
 
 		// InstanceToProto reads every feature value through GetFeatureValue, which is what
 		// lazily materializes the children the ids below resolve to.
-		pbInst := InstanceToProto(rt, cur, idx)
-		all = append(all, pbInst)
+		pbInst := instanceToProto(rt, cur, idx, func(err error) { g.Errors = append(g.Errors, err) })
+		g.All = append(g.All, pbInst)
 
-		if depth >= maxGraphDepth {
+		if depth >= bounds.Depth {
 			return pbInst
 		}
 
-		for _, fv := range pbInst.FeatureValues {
-			for _, id := range instanceRefs(fv) {
+		// In name order, so the graph is serialized in the same order every run.
+		for _, name := range slices.Sorted(maps.Keys(pbInst.FeatureValues)) {
+			for _, id := range instanceRefs(pbInst.FeatureValues[name]) {
 				child, ok := rt.Instance(id)
 				if !ok || onPath[child.Type] {
 					continue
@@ -546,8 +613,8 @@ func InstanceGraphToProto(rt *runtime.Context, inst *runtime.Instance, idx *symb
 		return pbInst
 	}
 
-	root := walk(inst, 0)
-	return root, all
+	g.Root = walk(inst, 0)
+	return g
 }
 
 // instanceRefs collects the instance IDs a feature value references, scalar or not.
@@ -578,12 +645,12 @@ func instanceRefs(fv *pb.FeatureValue) []int64 {
 func collectionElements(val runtime.Value) []runtime.Value {
 	switch val.Kind {
 	case runtime.ValSequence:
-		if val.Sequence != nil {
-			return val.Sequence.Elements()
+		if val.Sequence() != nil {
+			return val.Sequence().Elements()
 		}
 	case runtime.ValSet:
-		if val.Set != nil {
-			return val.Set.Elements()
+		if val.Set() != nil {
+			return val.Set().Elements()
 		}
 	}
 	return nil
@@ -592,12 +659,21 @@ func collectionElements(val runtime.Value) []runtime.Value {
 // InstanceToProto converts runtime.Instance to protobuf Instance. Feature values
 // are read through Instance.GetFeatureValue, so a derived default is evaluated against
 // the instance rather than reported as unmaterialized.
+// Features are read in name order, because reading one materializes the object it
+// holds, so map order would decide the ids those objects are given.
 func InstanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.Index) *pb.Instance {
+	return instanceToProto(rt, inst, idx, func(error) {})
+}
+
+// instanceToProto is InstanceToProto, handing each feature value it could not
+// read to failed as the runtime's typed error before reporting its text.
+func instanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.Index, failed func(error)) *pb.Instance {
 	pbValues := make(map[string]*pb.FeatureValue)
 
-	for name := range inst.FeatureValues {
+	for _, name := range slices.Sorted(maps.Keys(inst.FeatureValues)) {
 		fv, err := inst.GetFeatureValue(rt, name)
 		if err != nil {
+			failed(err)
 			pbValues[name] = &pb.FeatureValue{
 				FeatureName: name,
 				Error:       err.Error(),
@@ -611,11 +687,15 @@ func InstanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.I
 		}
 
 		// Check multiplicity to determine single- vs multi-valued
-		mult := fv.Feature.Multiplicity
-		if !mult.Upper.Infinite && mult.Upper.Value <= 1 {
+		if fv.Feature.Scalar() {
 			// Single-valued. An unmaterialized one holds no value; marshalling it
-			// anyway would report the empty value as an unsupported null.
-			if fv.Materialized {
+			// anyway would report the empty value as an unsupported null. A
+			// materialized one holding nothing is unset, as every surface reads it.
+			switch {
+			case !fv.Materialized:
+			case fv.Value.Kind == runtime.ValInvalid:
+				pbValue.Value = &pb.Value{Kind: &pb.Value_Unset{Unset: true}}
+			default:
 				pbValue.Value = ValueToProtoIn(rt, fv.Value, idx)
 			}
 		} else {

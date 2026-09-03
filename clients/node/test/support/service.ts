@@ -1,7 +1,7 @@
 // Builds the service the integration tests run against, once per test process.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { BINARY_ENV } from "../../src/node/index.js";
@@ -25,7 +25,11 @@ export function serviceBinary(): string {
   const path = join(dir, process.platform === "win32" ? "sysml-grpc.exe" : "sysml-grpc");
   if (!existsSync(path)) {
     mkdirSync(dir, { recursive: true });
-    execFileSync("go", ["build", "-o", path, "./cmd/sysml-grpc"], { cwd: repoRoot, stdio: "inherit" });
+    // Build aside and move into place: test files run in parallel processes, and
+    // one spawning the binary another is still writing fails with ETXTBSY.
+    const staged = `${path}.${String(process.pid)}`;
+    execFileSync("go", ["build", "-o", staged, "./cmd/sysml-grpc"], { cwd: repoRoot, stdio: "inherit" });
+    renameSync(staged, path);
   }
   return path;
 }

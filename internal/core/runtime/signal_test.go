@@ -529,7 +529,11 @@ func TestCallEventMatchesOperationName(t *testing.T) {
 		{"undeclared arguments ignored", callTrigger("open"), callEvent("open", "angle"), true},
 	}
 	for _, tc := range tests {
-		if got := exec.matchesEvent(tc.trans, tc.event); got != tc.matches {
+		got, err := exec.matchesEvent(tc.trans, tc.event)
+		if err != nil {
+			t.Fatalf("%s: matchesEvent: %v", tc.name, err)
+		}
+		if got != tc.matches {
 			t.Errorf("%s: matchesEvent = %v, want %v", tc.name, got, tc.matches)
 		}
 	}
@@ -653,7 +657,7 @@ func TestParkedAcceptTakesOnlyItsOwnMessage(t *testing.T) {
 
 	// A String arrives first and must be left in flight; the Integer resumes it.
 	ctx.PostMessage(Message{SignalType: "String", Target: "reader", Payload: map[string]Value{
-		"value": {Kind: ValString, Str: "not for you"},
+		"value": NewStringValue("not for you"),
 	}})
 	ctx.PostMessage(Message{SignalType: "Integer", Target: "reader", Payload: map[string]Value{
 		"value": {Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 4}},
@@ -1480,4 +1484,105 @@ func TestAcceptedSignalMaterializesOneOccurrencePerMessage(t *testing.T) {
 	if count != 1 {
 		t.Errorf("expected one Ping occurrence for one message, got %d", count)
 	}
+}
+
+// A send's invocation names a message unless the name resolves to a
+// calculation, and a library function is one only where the model resolves it:
+// under an import or by its qualified name, never by a bare name the model
+// does not import.
+func TestSendInvocationIsACallOnlyWhereItResolvesToACalc(t *testing.T) {
+	ctx, idx := libraryModelContext(t, `package test {
+	private import ScalarValues::*;
+	item def Ping;
+	calc def double { in x : Integer; return : Integer = x * 2; }
+	attribute qualified = SequenceFunctions::size((1, 2));
+	attribute bare = size((1, 2));
+	attribute own = double(2);
+	attribute ping = Ping();
+	package imported {
+		private import SequenceFunctions::*;
+		attribute bare = size((1, 2));
+	}
+}`)
+	ec := NewEvalContext(ctx, nil)
+	cases := map[string]bool{
+		"test::qualified":      true,
+		"test::bare":           false,
+		"test::own":            true,
+		"test::ping":           false,
+		"test::imported::bare": true,
+	}
+	for fqn, want := range cases {
+		sym := lookupOne(t, idx, fqn)
+		inv, ok := sym.Decl.(*ast.Usage).Value.(*ast.InvocationExpr)
+		if !ok {
+			t.Fatalf("%s: value is %T, want an invocation", fqn, sym.Decl.(*ast.Usage).Value)
+		}
+		if got := ec.invokesCalc(sym.Scope, inv); got != want {
+			t.Errorf("%s: invokesCalc = %v, want %v", fqn, got, want)
+		}
+	}
+}
+
+// A send classifies its invocation in the scope it is declared in: a library
+// function imported only by the nested action that sends is a call there, so
+// the value it computes is what travels, not a message named after it.
+func TestActionSendCallsFunctionImportedByNestedAction(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		action pipeline {
+			attribute got : Integer = 0;
+			first start;
+			action sender {
+				private import SequenceFunctions::*;
+				send size((1, 2, 3)) to reader;
+			}
+			action reader accept n : Integer;
+			action recorder { assign got := n; }
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then recorder;
+			succession first recorder then done;
+		}
+	}`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action pipeline not found")
+	}
+	outputs, err := ctx.ExecuteAction(sym)
+	if err != nil {
+		t.Fatalf("execute action: %v", err)
+	}
+	assertIntOutput(t, outputs, "got", 3)
+	if pending := ctx.PendingMessages(); len(pending) != 0 {
+		t.Errorf("expected no message left in flight, got %v", pending)
+	}
+}
+
+// The same holds for a state's entry: a function imported by the state alone is
+// called and its value sent, so the transition on the value's type fires.
+func TestStateSendCallsFunctionImportedByNestedBlock(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		state Driver {
+			entry; then start;
+			state start;
+			state waiting {
+				private import SequenceFunctions::*;
+				entry send size((1, 2, 3)) to Driver;
+			}
+			succession first start then waiting;
+			transition first waiting accept n : Integer then done;
+		}
+	}`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Driver", ast.DefState)
+	if sym == nil {
+		t.Fatal("state Driver not found")
+	}
+	_, visits, err := ctx.ExecuteStateWithEvents(sym, nil)
+	if err != nil {
+		t.Fatalf("execute state machine: %v", err)
+	}
+	assertVisits(t, visits, "start", "waiting", "done")
 }

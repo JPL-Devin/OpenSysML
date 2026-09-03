@@ -121,6 +121,54 @@
       }
     },
     {
+      "id": "instantiate/a_complex_typed_feature_holds_one_complex_number",
+      "description": "A Complex feature holds one value with both parts, and a Complex[2] feature holds two of them.",
+      "rpc": "Instantiate",
+      "requires_capabilities": [
+        "complex_values",
+        "feature_values"
+      ],
+      "model": {
+        "fixture": "complex.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "symbol_id": "C::Signal"
+      },
+      "expect": {
+        "response": {
+          "instance": {
+            "feature_values": {
+              "z": {
+                "value": {
+                  "complex": {
+                    "real": 1.5,
+                    "imaginary": -2.0
+                  }
+                }
+              },
+              "zs": {
+                "values": [
+                  {
+                    "complex": {
+                      "real": 1.0,
+                      "imaginary": 2.0
+                    }
+                  },
+                  {
+                    "complex": {
+                      "real": 3.0,
+                      "imaginary": 4.0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "id": "instantiate/an_enumeration_typed_feature_holds_the_literal",
       "rpc": "Instantiate",
       "requires_capabilities": [

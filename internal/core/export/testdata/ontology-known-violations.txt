@@ -16,8 +16,12 @@
 domain-mismatch AttributeUsage value             # FeatureValue_value: the feature value is written on the usage instead of a FeatureValue membership
 domain-mismatch ReferenceUsage value             # FeatureValue_value: same collapse on a kindless usage's value
 domain-mismatch AssignmentActionUsage value      # FeatureValue_value: same collapse on an assignment's target value
+domain-mismatch BindingConnectorAsUsage value    # FeatureValue_value: same collapse on the end a `bind k = m` binds to
 domain-mismatch PartUsage lowerBound             # MultiplicityRange_lowerBound: the multiplicity is written on the usage instead of a MultiplicityRange
 domain-mismatch PartUsage upperBound             # MultiplicityRange_upperBound: the multiplicity is written on the usage instead of a MultiplicityRange
+domain-mismatch ReferenceUsage lowerBound        # MultiplicityRange_lowerBound: same collapse on a kindless usage
+domain-mismatch ReferenceUsage upperBound        # MultiplicityRange_upperBound: same collapse on a kindless usage
+domain-mismatch AttributeUsage upperBound        # MultiplicityRange_upperBound: same collapse on an attribute (a KerML `feature`)
 domain-mismatch SubjectMembership upperBound     # MultiplicityRange_upperBound: same collapse on a subject membership
 domain-mismatch ConstraintUsage isNegated        # Invariant_isNegated: a negated constraint is not materialized as an Invariant
 domain-mismatch TransitionUsage sourceFeature    # Connector_sourceFeature: a transition's ends are written on the transition, not on a Connector
@@ -31,6 +35,7 @@ literal-for-object-property AttributeUsage type                                 
 literal-for-object-property ReferenceUsage type                                  # Feature_type: the type is written as its name, not as an element IRI
 literal-for-object-property PartUsage type                                       # Feature_type: the type is written as its name, not as an element IRI
 literal-for-object-property urn:opensysml:sysml:InitialNode sourceFeature        # Connector_sourceFeature: a succession end is written as a name (D2)
+literal-for-object-property SuccessionAsUsage sourceFeature                       # Connector_sourceFeature: a `then` after `first start` sequences from the name start, which is no element of the graph (D2)
 literal-for-object-property FeatureReferenceExpression referent                   # FeatureReferenceExpression_referent: a name resolving outside the graph is written as a name, as every reference this tool cannot link is (D7)
 literal-for-object-property FeatureChainExpression targetFeature                  # FeatureChainExpression_targetFeature: a chained feature is written as a name, since the member reached through the chain is not an element of this graph (D7)
 
@@ -38,6 +43,7 @@ literal-for-object-property FeatureChainExpression targetFeature                
 # rendering does not declare at all.
 unknown-class FlowUsage -                        # 202407 names this metaclass FlowConnectionUsage; SysML.owl declares no FlowUsage
 unknown-class TerminateActionUsage -             # SysML.owl declares no TerminateActionUsage at all (no Terminate* class exists in it)
+unknown-class ClassUsage -                       # a KerML `class` written as a usage; SysML.owl declares Class, a classifier, and no ClassUsage
 
 # 4. Metaclasses of this tool's own extension namespace, for constructs it has no
 # standard metaclass for. Deliberately outside the standard vocabulary, so the
@@ -61,12 +67,17 @@ unknown-class urn:opensysml:sysml:Pseudostate -              # a state machine p
 # with no metamodel property, so they belong in this tool's own namespace until
 # the elements are materialized (D3.3).
 unknown-property PartDefinition specializes                  # specialization is a Specialization element, not a property
+unknown-property ClassUsage specializes                      # specialization is a Specialization element, not a property
 unknown-property PartUsage subsets                           # subsetting is a Subsetting element, not a property
+unknown-property ReferenceUsage subsets                      # subsetting is a Subsetting element, not a property
 unknown-property urn:opensysml:sysml:MultiplicityDeclaration subsets # a MultiplicitySubset's bounds, written the same way as any other subsetting
 unknown-property PartUsage redefines                         # redefinition is a Redefinition element, not a property
+unknown-property ReferenceUsage redefines                    # redefinition is a Redefinition element, not a property
 unknown-property SubjectMembership redefines                 # redefinition is a Redefinition element, not a property
 unknown-property ActionUsage references                      # a referenced element is a ReferenceUsage or Membership, not a property
+unknown-property BindingConnectorAsUsage references          # the feature a `bind` binds, referenced the same way
 unknown-property StateUsage references                       # the state an `exhibit` names, referenced the same way
+unknown-property ReferenceUsage references                   # a connector end referencing its feature, written the same way
 unknown-property ViewRenderingMembership references          # a referenced element is a ReferenceUsage or Membership, not a property
 unknown-property urn:opensysml:sysml:AssumeMember references # a referenced element is a ReferenceUsage or Membership, not a property
 unknown-property urn:opensysml:sysml:Alias aliasedElement    # an alias target is a Membership's memberElement, not a property

@@ -129,7 +129,7 @@ func TestCheckExitStatus(t *testing.T) {
 	// so the report says so rather than contradicting the status a script reads.
 	undecided := check(t, binary, checkModel, "-requirement", "Rover::touchdown")
 	wantReport(t, undecided, 2,
-		"? Requirement Rover::touchdown could not be evaluated", "no value for feature lander")
+		"? Requirement Rover::touchdown could not be evaluated", "lander subject is unbound")
 	rejectReport(t, undecided, "✗ Requirement Rover::touchdown failed")
 }
 

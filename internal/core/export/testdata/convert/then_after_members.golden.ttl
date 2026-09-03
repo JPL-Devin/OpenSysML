@@ -1,0 +1,1869 @@
+@prefix elmt: <urn:sysmlv2:element:> .
+@prefix expr: <urn:opensysml:expr:> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix sysx: <urn:opensysml:sysml:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+elmt:ThenAfterMembers
+    a sysml:Package ;
+    sysml:qualifiedName "ThenAfterMembers" ;
+    sysml:elementId "ThenAfterMembers" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
+    sysml:declaredName "ThenAfterMembers" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:ThenAfterMembers__Signal, elmt:ThenAfterMembers__Step, elmt:ThenAfterMembers__AfterFlow, elmt:ThenAfterMembers__AfterBind, elmt:ThenAfterMembers__AfterAttribute, elmt:ThenAfterMembers__AfterDoc, elmt:ThenAfterMembers__AfterSuccession, elmt:ThenAfterMembers__AfterFirstThen, elmt:ThenAfterMembers__AfterFirstStart, elmt:ThenAfterMembers__stride, elmt:ThenAfterMembers__AfterPerform, elmt:ThenAfterMembers__ThenAlone, elmt:ThenAfterMembers__Lamp, elmt:ThenAfterMembers__Switch ;
+    sysml:ownedMembership elmt:ThenAfterMembers__Signal_om, elmt:ThenAfterMembers__Step_om, elmt:ThenAfterMembers__AfterFlow_om, elmt:ThenAfterMembers__AfterBind_om, elmt:ThenAfterMembers__AfterAttribute_om, elmt:ThenAfterMembers__AfterDoc_om, elmt:ThenAfterMembers__AfterSuccession_om, elmt:ThenAfterMembers__AfterFirstThen_om, elmt:ThenAfterMembers__AfterFirstStart_om, elmt:ThenAfterMembers__stride_om, elmt:ThenAfterMembers__AfterPerform_om, elmt:ThenAfterMembers__ThenAlone_om, elmt:ThenAfterMembers__Lamp_om, elmt:ThenAfterMembers__Switch_om ;
+    sysml:ownedRelationship elmt:ThenAfterMembers__Signal_om, elmt:ThenAfterMembers__Step_om, elmt:ThenAfterMembers__AfterFlow_om, elmt:ThenAfterMembers__AfterBind_om, elmt:ThenAfterMembers__AfterAttribute_om, elmt:ThenAfterMembers__AfterDoc_om, elmt:ThenAfterMembers__AfterSuccession_om, elmt:ThenAfterMembers__AfterFirstThen_om, elmt:ThenAfterMembers__AfterFirstStart_om, elmt:ThenAfterMembers__stride_om, elmt:ThenAfterMembers__AfterPerform_om, elmt:ThenAfterMembers__ThenAlone_om, elmt:ThenAfterMembers__Lamp_om, elmt:ThenAfterMembers__Switch_om ;
+    sysx:sourceText "package ThenAfterMembers {\n" ;
+    sysx:sourceTail "}\n" .
+
+elmt:ThenAfterMembers__Signal
+    a sysml:ItemDefinition ;
+    sysml:qualifiedName "ThenAfterMembers::Signal" ;
+    sysml:elementId "ThenAfterMembers__Signal" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:owningRelationship elmt:ThenAfterMembers__Signal_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__Signal_om ;
+    sysml:declaredName "Signal" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    item def Signal;\n" .
+
+elmt:ThenAfterMembers__Signal_om
+    a sysml:OwningMembership ;
+    sysml:elementId "ThenAfterMembers__Signal_om" ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:memberElement elmt:ThenAfterMembers__Signal ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__Signal ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__Signal ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers .
+
+elmt:ThenAfterMembers__Step
+    a sysml:ActionDefinition ;
+    sysml:qualifiedName "ThenAfterMembers::Step" ;
+    sysml:elementId "ThenAfterMembers__Step" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:owningRelationship elmt:ThenAfterMembers__Step_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__Step_om ;
+    sysml:declaredName "Step" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:ThenAfterMembers__Step__x, elmt:ThenAfterMembers__Step__y ;
+    sysml:ownedMembership elmt:ThenAfterMembers__Step__x_om, elmt:ThenAfterMembers__Step__y_om ;
+    sysml:ownedRelationship elmt:ThenAfterMembers__Step__x_om, elmt:ThenAfterMembers__Step__y_om ;
+    sysml:ownedFeature elmt:ThenAfterMembers__Step__x, elmt:ThenAfterMembers__Step__y ;
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__Step__x_om, elmt:ThenAfterMembers__Step__y_om ;
+    sysx:sourceText "    action def Step {\n" ;
+    sysx:sourceTail "    }\n" .
+
+elmt:ThenAfterMembers__Step_om
+    a sysml:OwningMembership ;
+    sysml:elementId "ThenAfterMembers__Step_om" ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:memberElement elmt:ThenAfterMembers__Step ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__Step ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__Step ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers .
+
+elmt:ThenAfterMembers__Step__x
+    a sysml:ItemUsage ;
+    sysml:qualifiedName "ThenAfterMembers::Step::x" ;
+    sysml:elementId "ThenAfterMembers__Step__x" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__Step ;
+    sysml:owner elmt:ThenAfterMembers__Step ;
+    sysml:owningRelationship elmt:ThenAfterMembers__Step__x_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__Step__x_om ;
+    sysml:declaredName "x" ;
+    sysml:direction "in" ;
+    sysml:type elmt:ThenAfterMembers__Signal ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        in item x : Signal;\n" .
+
+elmt:ThenAfterMembers__Step__x_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__Step__x_om" ;
+    sysml:owner elmt:ThenAfterMembers__Step ;
+    sysml:memberElement elmt:ThenAfterMembers__Step__x ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__Step__x ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__Step__x ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__Step ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__Step ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__Step__x ;
+    sysml:owningType elmt:ThenAfterMembers__Step .
+
+elmt:ThenAfterMembers__Step__y
+    a sysml:ItemUsage ;
+    sysml:qualifiedName "ThenAfterMembers::Step::y" ;
+    sysml:elementId "ThenAfterMembers__Step__y" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__Step ;
+    sysml:owner elmt:ThenAfterMembers__Step ;
+    sysml:owningRelationship elmt:ThenAfterMembers__Step__y_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__Step__y_om ;
+    sysml:declaredName "y" ;
+    sysml:direction "out" ;
+    sysml:type elmt:ThenAfterMembers__Signal ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        out item y : Signal;\n" .
+
+elmt:ThenAfterMembers__Step__y_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__Step__y_om" ;
+    sysml:owner elmt:ThenAfterMembers__Step ;
+    sysml:memberElement elmt:ThenAfterMembers__Step__y ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__Step__y ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__Step__y ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__Step ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__Step ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__Step__y ;
+    sysml:owningType elmt:ThenAfterMembers__Step .
+
+elmt:ThenAfterMembers__AfterFlow
+    a sysml:ActionDefinition ;
+    sysml:qualifiedName "ThenAfterMembers::AfterFlow" ;
+    sysml:elementId "ThenAfterMembers__AfterFlow" ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterFlow_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterFlow_om ;
+    sysml:declaredName "AfterFlow" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:ThenAfterMembers__AfterFlow__a, elmt:ThenAfterMembers__AfterFlow___401, elmt:ThenAfterMembers__AfterFlow__b, elmt:ThenAfterMembers__AfterFlow___403 ;
+    sysml:ownedMembership elmt:ThenAfterMembers__AfterFlow__a_om, elmt:ThenAfterMembers__AfterFlow___401_om, elmt:ThenAfterMembers__AfterFlow__b_om, elmt:ThenAfterMembers__AfterFlow___403_om ;
+    sysml:ownedRelationship elmt:ThenAfterMembers__AfterFlow__a_om, elmt:ThenAfterMembers__AfterFlow___401_om, elmt:ThenAfterMembers__AfterFlow__b_om, elmt:ThenAfterMembers__AfterFlow___403_om ;
+    sysml:ownedFeature elmt:ThenAfterMembers__AfterFlow__a, elmt:ThenAfterMembers__AfterFlow__b, elmt:ThenAfterMembers__AfterFlow___403 ;
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterFlow__a_om, elmt:ThenAfterMembers__AfterFlow__b_om, elmt:ThenAfterMembers__AfterFlow___403_om ;
+    sysx:sourceText "    action def AfterFlow {\n" ;
+    sysx:sourceTail "    }\n" .
+
+elmt:ThenAfterMembers__AfterFlow_om
+    a sysml:OwningMembership ;
+    sysml:elementId "ThenAfterMembers__AfterFlow_om" ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterFlow ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterFlow ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterFlow ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers .
+
+elmt:ThenAfterMembers__AfterFlow__a
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterFlow::a" ;
+    sysml:elementId "ThenAfterMembers__AfterFlow__a" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterFlow ;
+    sysml:owner elmt:ThenAfterMembers__AfterFlow ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterFlow__a_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterFlow__a_om ;
+    sysml:declaredName "a" ;
+    sysml:type elmt:ThenAfterMembers__Step ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action a : Step;\n" .
+
+elmt:ThenAfterMembers__AfterFlow__a_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterFlow__a_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterFlow ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterFlow__a ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterFlow__a ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterFlow__a ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterFlow ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterFlow ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterFlow__a ;
+    sysml:owningType elmt:ThenAfterMembers__AfterFlow .
+
+elmt:ThenAfterMembers__AfterFlow___401
+    a sysml:FlowUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterFlow::@1" ;
+    sysml:elementId "ThenAfterMembers__AfterFlow___401" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterFlow ;
+    sysml:owner elmt:ThenAfterMembers__AfterFlow ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterFlow___401_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterFlow___401_om ;
+    sysx:relatedFeature expr:ThenAfterMembers__AfterFlow___401_pflowSource, expr:ThenAfterMembers__AfterFlow___401_pflowTarget ;
+    sysx:endForm "fromTo" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        flow from a.y to b.x;\n" .
+
+elmt:ThenAfterMembers__AfterFlow___401_om
+    a sysml:OwningMembership ;
+    sysml:elementId "ThenAfterMembers__AfterFlow___401_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterFlow ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterFlow___401 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterFlow___401 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterFlow___401 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterFlow ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterFlow .
+
+expr:ThenAfterMembers__AfterFlow___401_pflowSource
+    a sysml:FeatureChainExpression ;
+    sysx:sourceText "a.y" ;
+    sysml:elementId "ThenAfterMembers__AfterFlow___401_pflowSource" ;
+    sysml:argument expr:ThenAfterMembers__AfterFlow___401_pflowSource_pa0 ;
+    sysml:targetFeature "y" ;
+    sysx:endIndex "0"^^xsd:integer ;
+    sysx:endRole "source" .
+
+expr:ThenAfterMembers__AfterFlow___401_pflowSource_pa0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "a" ;
+    sysml:elementId "ThenAfterMembers__AfterFlow___401_pflowSource_pa0" ;
+    sysml:referent elmt:ThenAfterMembers__AfterFlow__a ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+expr:ThenAfterMembers__AfterFlow___401_pflowTarget
+    a sysml:FeatureChainExpression ;
+    sysx:sourceText "b.x" ;
+    sysml:elementId "ThenAfterMembers__AfterFlow___401_pflowTarget" ;
+    sysml:argument expr:ThenAfterMembers__AfterFlow___401_pflowTarget_pa0 ;
+    sysml:targetFeature "x" ;
+    sysx:endIndex "1"^^xsd:integer ;
+    sysx:endRole "target" .
+
+expr:ThenAfterMembers__AfterFlow___401_pflowTarget_pa0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "b" ;
+    sysml:elementId "ThenAfterMembers__AfterFlow___401_pflowTarget_pa0" ;
+    sysml:referent elmt:ThenAfterMembers__AfterFlow__b ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+elmt:ThenAfterMembers__AfterFlow__b
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterFlow::b" ;
+    sysml:elementId "ThenAfterMembers__AfterFlow__b" ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterFlow ;
+    sysml:owner elmt:ThenAfterMembers__AfterFlow ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterFlow__b_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterFlow__b_om ;
+    sysml:declaredName "b" ;
+    sysml:type elmt:ThenAfterMembers__Step ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        then action b : Step;\n" .
+
+elmt:ThenAfterMembers__AfterFlow__b_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterFlow__b_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterFlow ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterFlow__b ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterFlow__b ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterFlow__b ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterFlow ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterFlow ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterFlow__b ;
+    sysml:owningType elmt:ThenAfterMembers__AfterFlow .
+
+elmt:ThenAfterMembers__AfterFlow___403
+    a sysml:SuccessionAsUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterFlow::@3" ;
+    sysml:elementId "ThenAfterMembers__AfterFlow___403" ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterFlow ;
+    sysml:owner elmt:ThenAfterMembers__AfterFlow ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterFlow___403_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterFlow___403_om ;
+    sysx:endForm "then" ;
+    sysml:sourceFeature elmt:ThenAfterMembers__AfterFlow__a ;
+    sysml:targetFeature elmt:ThenAfterMembers__AfterFlow__b ;
+    sysx:sourceText "" .
+
+elmt:ThenAfterMembers__AfterFlow___403_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterFlow___403_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterFlow ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterFlow___403 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterFlow___403 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterFlow___403 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterFlow ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterFlow ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterFlow___403 ;
+    sysml:owningType elmt:ThenAfterMembers__AfterFlow .
+
+elmt:ThenAfterMembers__AfterBind
+    a sysml:ActionDefinition ;
+    sysml:qualifiedName "ThenAfterMembers::AfterBind" ;
+    sysml:elementId "ThenAfterMembers__AfterBind" ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterBind_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterBind_om ;
+    sysml:declaredName "AfterBind" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:ThenAfterMembers__AfterBind__k, elmt:ThenAfterMembers__AfterBind__m, elmt:ThenAfterMembers__AfterBind__a, elmt:ThenAfterMembers__AfterBind___403, elmt:ThenAfterMembers__AfterBind__b, elmt:ThenAfterMembers__AfterBind___405 ;
+    sysml:ownedMembership elmt:ThenAfterMembers__AfterBind__k_om, elmt:ThenAfterMembers__AfterBind__m_om, elmt:ThenAfterMembers__AfterBind__a_om, elmt:ThenAfterMembers__AfterBind___403_om, elmt:ThenAfterMembers__AfterBind__b_om, elmt:ThenAfterMembers__AfterBind___405_om ;
+    sysml:ownedRelationship elmt:ThenAfterMembers__AfterBind__k_om, elmt:ThenAfterMembers__AfterBind__m_om, elmt:ThenAfterMembers__AfterBind__a_om, elmt:ThenAfterMembers__AfterBind___403_om, elmt:ThenAfterMembers__AfterBind__b_om, elmt:ThenAfterMembers__AfterBind___405_om ;
+    sysml:ownedFeature elmt:ThenAfterMembers__AfterBind__k, elmt:ThenAfterMembers__AfterBind__m, elmt:ThenAfterMembers__AfterBind__a, elmt:ThenAfterMembers__AfterBind___403, elmt:ThenAfterMembers__AfterBind__b, elmt:ThenAfterMembers__AfterBind___405 ;
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterBind__k_om, elmt:ThenAfterMembers__AfterBind__m_om, elmt:ThenAfterMembers__AfterBind__a_om, elmt:ThenAfterMembers__AfterBind___403_om, elmt:ThenAfterMembers__AfterBind__b_om, elmt:ThenAfterMembers__AfterBind___405_om ;
+    sysx:sourceText "    action def AfterBind {\n" ;
+    sysx:sourceTail "    }\n" .
+
+elmt:ThenAfterMembers__AfterBind_om
+    a sysml:OwningMembership ;
+    sysml:elementId "ThenAfterMembers__AfterBind_om" ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterBind ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterBind ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterBind ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers .
+
+elmt:ThenAfterMembers__AfterBind__k
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterBind::k" ;
+    sysml:elementId "ThenAfterMembers__AfterBind__k" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterBind ;
+    sysml:owner elmt:ThenAfterMembers__AfterBind ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterBind__k_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterBind__k_om ;
+    sysml:declaredName "k" ;
+    sysml:type "ScalarValues::Integer" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute k : ScalarValues::Integer;\n" .
+
+elmt:ThenAfterMembers__AfterBind__k_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterBind__k_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterBind ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterBind__k ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterBind__k ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterBind__k ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterBind ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterBind ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterBind__k ;
+    sysml:owningType elmt:ThenAfterMembers__AfterBind .
+
+elmt:ThenAfterMembers__AfterBind__m
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterBind::m" ;
+    sysml:elementId "ThenAfterMembers__AfterBind__m" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterBind ;
+    sysml:owner elmt:ThenAfterMembers__AfterBind ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterBind__m_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterBind__m_om ;
+    sysml:declaredName "m" ;
+    sysml:type "ScalarValues::Integer" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute m : ScalarValues::Integer;\n" .
+
+elmt:ThenAfterMembers__AfterBind__m_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterBind__m_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterBind ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterBind__m ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterBind__m ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterBind__m ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterBind ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterBind ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterBind__m ;
+    sysml:owningType elmt:ThenAfterMembers__AfterBind .
+
+elmt:ThenAfterMembers__AfterBind__a
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterBind::a" ;
+    sysml:elementId "ThenAfterMembers__AfterBind__a" ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterBind ;
+    sysml:owner elmt:ThenAfterMembers__AfterBind ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterBind__a_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterBind__a_om ;
+    sysml:declaredName "a" ;
+    sysml:type elmt:ThenAfterMembers__Step ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action a : Step;\n" .
+
+elmt:ThenAfterMembers__AfterBind__a_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterBind__a_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterBind ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterBind__a ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterBind__a ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterBind__a ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterBind ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterBind ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterBind__a ;
+    sysml:owningType elmt:ThenAfterMembers__AfterBind .
+
+elmt:ThenAfterMembers__AfterBind___403
+    a sysml:BindingConnectorAsUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterBind::@3" ;
+    sysml:elementId "ThenAfterMembers__AfterBind___403" ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterBind ;
+    sysml:owner elmt:ThenAfterMembers__AfterBind ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterBind___403_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterBind___403_om ;
+    sysml:references elmt:ThenAfterMembers__AfterBind__k ;
+    sysml:value expr:ThenAfterMembers__AfterBind___403_pvalue ;
+    sysx:endForm "equals" ;
+    sysx:declaredKeyword "bind" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        bind k = m;\n" .
+
+elmt:ThenAfterMembers__AfterBind___403_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterBind___403_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterBind ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterBind___403 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterBind___403 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterBind___403 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterBind ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterBind ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterBind___403 ;
+    sysml:owningType elmt:ThenAfterMembers__AfterBind .
+
+expr:ThenAfterMembers__AfterBind___403_pvalue
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "m" ;
+    sysml:elementId "ThenAfterMembers__AfterBind___403_pvalue" ;
+    sysml:referent elmt:ThenAfterMembers__AfterBind__m .
+
+elmt:ThenAfterMembers__AfterBind__b
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterBind::b" ;
+    sysml:elementId "ThenAfterMembers__AfterBind__b" ;
+    sysx:memberIndex "4"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterBind ;
+    sysml:owner elmt:ThenAfterMembers__AfterBind ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterBind__b_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterBind__b_om ;
+    sysml:declaredName "b" ;
+    sysml:type elmt:ThenAfterMembers__Step ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        then action b : Step;\n" .
+
+elmt:ThenAfterMembers__AfterBind__b_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterBind__b_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterBind ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterBind__b ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterBind__b ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterBind__b ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterBind ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterBind ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterBind__b ;
+    sysml:owningType elmt:ThenAfterMembers__AfterBind .
+
+elmt:ThenAfterMembers__AfterBind___405
+    a sysml:SuccessionAsUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterBind::@5" ;
+    sysml:elementId "ThenAfterMembers__AfterBind___405" ;
+    sysx:memberIndex "5"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterBind ;
+    sysml:owner elmt:ThenAfterMembers__AfterBind ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterBind___405_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterBind___405_om ;
+    sysx:endForm "then" ;
+    sysml:sourceFeature elmt:ThenAfterMembers__AfterBind__a ;
+    sysml:targetFeature elmt:ThenAfterMembers__AfterBind__b ;
+    sysx:sourceText "" .
+
+elmt:ThenAfterMembers__AfterBind___405_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterBind___405_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterBind ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterBind___405 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterBind___405 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterBind___405 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterBind ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterBind ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterBind___405 ;
+    sysml:owningType elmt:ThenAfterMembers__AfterBind .
+
+elmt:ThenAfterMembers__AfterAttribute
+    a sysml:ActionDefinition ;
+    sysml:qualifiedName "ThenAfterMembers::AfterAttribute" ;
+    sysml:elementId "ThenAfterMembers__AfterAttribute" ;
+    sysx:memberIndex "4"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterAttribute_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterAttribute_om ;
+    sysml:declaredName "AfterAttribute" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:ThenAfterMembers__AfterAttribute__a, elmt:ThenAfterMembers__AfterAttribute__k, elmt:ThenAfterMembers__AfterAttribute__b, elmt:ThenAfterMembers__AfterAttribute___403 ;
+    sysml:ownedMembership elmt:ThenAfterMembers__AfterAttribute__a_om, elmt:ThenAfterMembers__AfterAttribute__k_om, elmt:ThenAfterMembers__AfterAttribute__b_om, elmt:ThenAfterMembers__AfterAttribute___403_om ;
+    sysml:ownedRelationship elmt:ThenAfterMembers__AfterAttribute__a_om, elmt:ThenAfterMembers__AfterAttribute__k_om, elmt:ThenAfterMembers__AfterAttribute__b_om, elmt:ThenAfterMembers__AfterAttribute___403_om ;
+    sysml:ownedFeature elmt:ThenAfterMembers__AfterAttribute__a, elmt:ThenAfterMembers__AfterAttribute__k, elmt:ThenAfterMembers__AfterAttribute__b, elmt:ThenAfterMembers__AfterAttribute___403 ;
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterAttribute__a_om, elmt:ThenAfterMembers__AfterAttribute__k_om, elmt:ThenAfterMembers__AfterAttribute__b_om, elmt:ThenAfterMembers__AfterAttribute___403_om ;
+    sysx:sourceText "    action def AfterAttribute {\n" ;
+    sysx:sourceTail "    }\n" .
+
+elmt:ThenAfterMembers__AfterAttribute_om
+    a sysml:OwningMembership ;
+    sysml:elementId "ThenAfterMembers__AfterAttribute_om" ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterAttribute ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterAttribute ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterAttribute ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers .
+
+elmt:ThenAfterMembers__AfterAttribute__a
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterAttribute::a" ;
+    sysml:elementId "ThenAfterMembers__AfterAttribute__a" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterAttribute ;
+    sysml:owner elmt:ThenAfterMembers__AfterAttribute ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterAttribute__a_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterAttribute__a_om ;
+    sysml:declaredName "a" ;
+    sysml:type elmt:ThenAfterMembers__Step ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action a : Step;\n" .
+
+elmt:ThenAfterMembers__AfterAttribute__a_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterAttribute__a_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterAttribute ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterAttribute__a ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterAttribute__a ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterAttribute__a ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterAttribute ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterAttribute ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterAttribute__a ;
+    sysml:owningType elmt:ThenAfterMembers__AfterAttribute .
+
+elmt:ThenAfterMembers__AfterAttribute__k
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterAttribute::k" ;
+    sysml:elementId "ThenAfterMembers__AfterAttribute__k" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterAttribute ;
+    sysml:owner elmt:ThenAfterMembers__AfterAttribute ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterAttribute__k_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterAttribute__k_om ;
+    sysml:declaredName "k" ;
+    sysml:type "ScalarValues::Integer" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute k : ScalarValues::Integer;\n" .
+
+elmt:ThenAfterMembers__AfterAttribute__k_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterAttribute__k_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterAttribute ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterAttribute__k ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterAttribute__k ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterAttribute__k ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterAttribute ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterAttribute ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterAttribute__k ;
+    sysml:owningType elmt:ThenAfterMembers__AfterAttribute .
+
+elmt:ThenAfterMembers__AfterAttribute__b
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterAttribute::b" ;
+    sysml:elementId "ThenAfterMembers__AfterAttribute__b" ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterAttribute ;
+    sysml:owner elmt:ThenAfterMembers__AfterAttribute ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterAttribute__b_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterAttribute__b_om ;
+    sysml:declaredName "b" ;
+    sysml:type elmt:ThenAfterMembers__Step ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        then action b : Step;\n" .
+
+elmt:ThenAfterMembers__AfterAttribute__b_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterAttribute__b_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterAttribute ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterAttribute__b ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterAttribute__b ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterAttribute__b ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterAttribute ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterAttribute ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterAttribute__b ;
+    sysml:owningType elmt:ThenAfterMembers__AfterAttribute .
+
+elmt:ThenAfterMembers__AfterAttribute___403
+    a sysml:SuccessionAsUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterAttribute::@3" ;
+    sysml:elementId "ThenAfterMembers__AfterAttribute___403" ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterAttribute ;
+    sysml:owner elmt:ThenAfterMembers__AfterAttribute ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterAttribute___403_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterAttribute___403_om ;
+    sysx:endForm "then" ;
+    sysml:sourceFeature elmt:ThenAfterMembers__AfterAttribute__k ;
+    sysml:targetFeature elmt:ThenAfterMembers__AfterAttribute__b ;
+    sysx:sourceText "" .
+
+elmt:ThenAfterMembers__AfterAttribute___403_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterAttribute___403_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterAttribute ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterAttribute___403 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterAttribute___403 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterAttribute___403 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterAttribute ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterAttribute ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterAttribute___403 ;
+    sysml:owningType elmt:ThenAfterMembers__AfterAttribute .
+
+elmt:ThenAfterMembers__AfterDoc
+    a sysml:ActionDefinition ;
+    sysml:qualifiedName "ThenAfterMembers::AfterDoc" ;
+    sysml:elementId "ThenAfterMembers__AfterDoc" ;
+    sysx:memberIndex "5"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterDoc_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterDoc_om ;
+    sysml:declaredName "AfterDoc" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:ThenAfterMembers__AfterDoc__a, elmt:ThenAfterMembers__AfterDoc___401, elmt:ThenAfterMembers__AfterDoc__b, elmt:ThenAfterMembers__AfterDoc___403 ;
+    sysml:ownedMembership elmt:ThenAfterMembers__AfterDoc__a_om, elmt:ThenAfterMembers__AfterDoc___401_om, elmt:ThenAfterMembers__AfterDoc__b_om, elmt:ThenAfterMembers__AfterDoc___403_om ;
+    sysml:ownedRelationship elmt:ThenAfterMembers__AfterDoc__a_om, elmt:ThenAfterMembers__AfterDoc___401_om, elmt:ThenAfterMembers__AfterDoc__b_om, elmt:ThenAfterMembers__AfterDoc___403_om ;
+    sysml:ownedFeature elmt:ThenAfterMembers__AfterDoc__a, elmt:ThenAfterMembers__AfterDoc__b, elmt:ThenAfterMembers__AfterDoc___403 ;
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterDoc__a_om, elmt:ThenAfterMembers__AfterDoc__b_om, elmt:ThenAfterMembers__AfterDoc___403_om ;
+    sysx:sourceText "    action def AfterDoc {\n" ;
+    sysx:sourceTail "    }\n" .
+
+elmt:ThenAfterMembers__AfterDoc_om
+    a sysml:OwningMembership ;
+    sysml:elementId "ThenAfterMembers__AfterDoc_om" ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterDoc ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterDoc ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterDoc ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers .
+
+elmt:ThenAfterMembers__AfterDoc__a
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterDoc::a" ;
+    sysml:elementId "ThenAfterMembers__AfterDoc__a" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterDoc ;
+    sysml:owner elmt:ThenAfterMembers__AfterDoc ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterDoc__a_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterDoc__a_om ;
+    sysml:declaredName "a" ;
+    sysml:type elmt:ThenAfterMembers__Step ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action a : Step;\n" .
+
+elmt:ThenAfterMembers__AfterDoc__a_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterDoc__a_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterDoc ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterDoc__a ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterDoc__a ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterDoc__a ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterDoc ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterDoc ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterDoc__a ;
+    sysml:owningType elmt:ThenAfterMembers__AfterDoc .
+
+elmt:ThenAfterMembers__AfterDoc___401
+    a sysml:Documentation ;
+    sysml:qualifiedName "ThenAfterMembers::AfterDoc::@1" ;
+    sysml:elementId "ThenAfterMembers__AfterDoc___401" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterDoc ;
+    sysml:owner elmt:ThenAfterMembers__AfterDoc ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterDoc___401_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterDoc___401_om ;
+    sysml:body " a is followed by b " ;
+    sysx:sourceText "        doc /* a is followed by b */\n" .
+
+elmt:ThenAfterMembers__AfterDoc___401_om
+    a sysml:OwningMembership ;
+    sysml:elementId "ThenAfterMembers__AfterDoc___401_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterDoc ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterDoc___401 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterDoc___401 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterDoc___401 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterDoc ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterDoc .
+
+elmt:ThenAfterMembers__AfterDoc__b
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterDoc::b" ;
+    sysml:elementId "ThenAfterMembers__AfterDoc__b" ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterDoc ;
+    sysml:owner elmt:ThenAfterMembers__AfterDoc ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterDoc__b_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterDoc__b_om ;
+    sysml:declaredName "b" ;
+    sysml:type elmt:ThenAfterMembers__Step ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        then action b : Step;\n" .
+
+elmt:ThenAfterMembers__AfterDoc__b_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterDoc__b_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterDoc ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterDoc__b ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterDoc__b ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterDoc__b ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterDoc ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterDoc ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterDoc__b ;
+    sysml:owningType elmt:ThenAfterMembers__AfterDoc .
+
+elmt:ThenAfterMembers__AfterDoc___403
+    a sysml:SuccessionAsUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterDoc::@3" ;
+    sysml:elementId "ThenAfterMembers__AfterDoc___403" ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterDoc ;
+    sysml:owner elmt:ThenAfterMembers__AfterDoc ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterDoc___403_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterDoc___403_om ;
+    sysx:sourceMember elmt:ThenAfterMembers__AfterDoc___401 ;
+    sysml:targetFeature elmt:ThenAfterMembers__AfterDoc__b ;
+    sysx:sourceText "" .
+
+elmt:ThenAfterMembers__AfterDoc___403_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterDoc___403_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterDoc ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterDoc___403 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterDoc___403 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterDoc___403 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterDoc ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterDoc ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterDoc___403 ;
+    sysml:owningType elmt:ThenAfterMembers__AfterDoc .
+
+elmt:ThenAfterMembers__AfterSuccession
+    a sysml:ActionDefinition ;
+    sysml:qualifiedName "ThenAfterMembers::AfterSuccession" ;
+    sysml:elementId "ThenAfterMembers__AfterSuccession" ;
+    sysx:memberIndex "6"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterSuccession_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterSuccession_om ;
+    sysml:declaredName "AfterSuccession" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:ThenAfterMembers__AfterSuccession__a, elmt:ThenAfterMembers__AfterSuccession__c, elmt:ThenAfterMembers__AfterSuccession___402, elmt:ThenAfterMembers__AfterSuccession__b, elmt:ThenAfterMembers__AfterSuccession___404 ;
+    sysml:ownedMembership elmt:ThenAfterMembers__AfterSuccession__a_om, elmt:ThenAfterMembers__AfterSuccession__c_om, elmt:ThenAfterMembers__AfterSuccession___402_om, elmt:ThenAfterMembers__AfterSuccession__b_om, elmt:ThenAfterMembers__AfterSuccession___404_om ;
+    sysml:ownedRelationship elmt:ThenAfterMembers__AfterSuccession__a_om, elmt:ThenAfterMembers__AfterSuccession__c_om, elmt:ThenAfterMembers__AfterSuccession___402_om, elmt:ThenAfterMembers__AfterSuccession__b_om, elmt:ThenAfterMembers__AfterSuccession___404_om ;
+    sysml:ownedFeature elmt:ThenAfterMembers__AfterSuccession__a, elmt:ThenAfterMembers__AfterSuccession__c, elmt:ThenAfterMembers__AfterSuccession___402, elmt:ThenAfterMembers__AfterSuccession__b, elmt:ThenAfterMembers__AfterSuccession___404 ;
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterSuccession__a_om, elmt:ThenAfterMembers__AfterSuccession__c_om, elmt:ThenAfterMembers__AfterSuccession___402_om, elmt:ThenAfterMembers__AfterSuccession__b_om, elmt:ThenAfterMembers__AfterSuccession___404_om ;
+    sysx:sourceText "    action def AfterSuccession {\n" ;
+    sysx:sourceTail "    }\n" .
+
+elmt:ThenAfterMembers__AfterSuccession_om
+    a sysml:OwningMembership ;
+    sysml:elementId "ThenAfterMembers__AfterSuccession_om" ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers .
+
+elmt:ThenAfterMembers__AfterSuccession__a
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterSuccession::a" ;
+    sysml:elementId "ThenAfterMembers__AfterSuccession__a" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:owner elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterSuccession__a_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterSuccession__a_om ;
+    sysml:declaredName "a" ;
+    sysml:type elmt:ThenAfterMembers__Step ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action a : Step;\n" .
+
+elmt:ThenAfterMembers__AfterSuccession__a_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterSuccession__a_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterSuccession__a ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterSuccession__a ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterSuccession__a ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterSuccession__a ;
+    sysml:owningType elmt:ThenAfterMembers__AfterSuccession .
+
+elmt:ThenAfterMembers__AfterSuccession__c
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterSuccession::c" ;
+    sysml:elementId "ThenAfterMembers__AfterSuccession__c" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:owner elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterSuccession__c_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterSuccession__c_om ;
+    sysml:declaredName "c" ;
+    sysml:type elmt:ThenAfterMembers__Step ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action c : Step;\n" .
+
+elmt:ThenAfterMembers__AfterSuccession__c_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterSuccession__c_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterSuccession__c ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterSuccession__c ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterSuccession__c ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterSuccession__c ;
+    sysml:owningType elmt:ThenAfterMembers__AfterSuccession .
+
+elmt:ThenAfterMembers__AfterSuccession___402
+    a sysml:SuccessionAsUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterSuccession::@2" ;
+    sysml:elementId "ThenAfterMembers__AfterSuccession___402" ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:owner elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterSuccession___402_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterSuccession___402_om ;
+    sysx:relatedFeature expr:ThenAfterMembers__AfterSuccession___402_pend0, expr:ThenAfterMembers__AfterSuccession___402_pend1 ;
+    sysx:endForm "firstThen" ;
+    sysx:endVerb "first" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        succession first a then c;\n" .
+
+elmt:ThenAfterMembers__AfterSuccession___402_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterSuccession___402_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterSuccession___402 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterSuccession___402 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterSuccession___402 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterSuccession___402 ;
+    sysml:owningType elmt:ThenAfterMembers__AfterSuccession .
+
+expr:ThenAfterMembers__AfterSuccession___402_pend0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "a" ;
+    sysml:elementId "ThenAfterMembers__AfterSuccession___402_pend0" ;
+    sysml:referent elmt:ThenAfterMembers__AfterSuccession__a ;
+    sysx:endIndex "0"^^xsd:integer .
+
+expr:ThenAfterMembers__AfterSuccession___402_pend1
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "c" ;
+    sysml:elementId "ThenAfterMembers__AfterSuccession___402_pend1" ;
+    sysml:referent elmt:ThenAfterMembers__AfterSuccession__c ;
+    sysx:endIndex "1"^^xsd:integer .
+
+elmt:ThenAfterMembers__AfterSuccession__b
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterSuccession::b" ;
+    sysml:elementId "ThenAfterMembers__AfterSuccession__b" ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:owner elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterSuccession__b_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterSuccession__b_om ;
+    sysml:declaredName "b" ;
+    sysml:type elmt:ThenAfterMembers__Step ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        then action b : Step;\n" .
+
+elmt:ThenAfterMembers__AfterSuccession__b_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterSuccession__b_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterSuccession__b ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterSuccession__b ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterSuccession__b ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterSuccession__b ;
+    sysml:owningType elmt:ThenAfterMembers__AfterSuccession .
+
+elmt:ThenAfterMembers__AfterSuccession___404
+    a sysml:SuccessionAsUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterSuccession::@4" ;
+    sysml:elementId "ThenAfterMembers__AfterSuccession___404" ;
+    sysx:memberIndex "4"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:owner elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterSuccession___404_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterSuccession___404_om ;
+    sysx:endForm "then" ;
+    sysml:sourceFeature elmt:ThenAfterMembers__AfterSuccession__c ;
+    sysml:targetFeature elmt:ThenAfterMembers__AfterSuccession__b ;
+    sysx:sourceText "" .
+
+elmt:ThenAfterMembers__AfterSuccession___404_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterSuccession___404_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterSuccession___404 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterSuccession___404 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterSuccession___404 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterSuccession ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterSuccession___404 ;
+    sysml:owningType elmt:ThenAfterMembers__AfterSuccession .
+
+elmt:ThenAfterMembers__AfterFirstThen
+    a sysml:ActionDefinition ;
+    sysml:qualifiedName "ThenAfterMembers::AfterFirstThen" ;
+    sysml:elementId "ThenAfterMembers__AfterFirstThen" ;
+    sysx:memberIndex "7"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterFirstThen_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterFirstThen_om ;
+    sysml:declaredName "AfterFirstThen" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:ThenAfterMembers__AfterFirstThen__a, elmt:ThenAfterMembers__AfterFirstThen___401, elmt:ThenAfterMembers__AfterFirstThen__b, elmt:ThenAfterMembers__AfterFirstThen___403, elmt:ThenAfterMembers__AfterFirstThen__c ;
+    sysml:ownedMembership elmt:ThenAfterMembers__AfterFirstThen__a_om, elmt:ThenAfterMembers__AfterFirstThen___401_om, elmt:ThenAfterMembers__AfterFirstThen__b_om, elmt:ThenAfterMembers__AfterFirstThen___403_om, elmt:ThenAfterMembers__AfterFirstThen__c_om ;
+    sysml:ownedRelationship elmt:ThenAfterMembers__AfterFirstThen__a_om, elmt:ThenAfterMembers__AfterFirstThen___401_om, elmt:ThenAfterMembers__AfterFirstThen__b_om, elmt:ThenAfterMembers__AfterFirstThen___403_om, elmt:ThenAfterMembers__AfterFirstThen__c_om ;
+    sysml:ownedFeature elmt:ThenAfterMembers__AfterFirstThen__a, elmt:ThenAfterMembers__AfterFirstThen__b, elmt:ThenAfterMembers__AfterFirstThen___403, elmt:ThenAfterMembers__AfterFirstThen__c ;
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterFirstThen__a_om, elmt:ThenAfterMembers__AfterFirstThen__b_om, elmt:ThenAfterMembers__AfterFirstThen___403_om, elmt:ThenAfterMembers__AfterFirstThen__c_om ;
+    sysx:sourceText "    action def AfterFirstThen {\n" ;
+    sysx:sourceTail "    }\n" .
+
+elmt:ThenAfterMembers__AfterFirstThen_om
+    a sysml:OwningMembership ;
+    sysml:elementId "ThenAfterMembers__AfterFirstThen_om" ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers .
+
+elmt:ThenAfterMembers__AfterFirstThen__a
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterFirstThen::a" ;
+    sysml:elementId "ThenAfterMembers__AfterFirstThen__a" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:owner elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterFirstThen__a_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterFirstThen__a_om ;
+    sysml:declaredName "a" ;
+    sysml:type elmt:ThenAfterMembers__Step ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action a : Step;\n" .
+
+elmt:ThenAfterMembers__AfterFirstThen__a_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterFirstThen__a_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterFirstThen__a ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterFirstThen__a ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterFirstThen__a ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterFirstThen__a ;
+    sysml:owningType elmt:ThenAfterMembers__AfterFirstThen .
+
+elmt:ThenAfterMembers__AfterFirstThen___401
+    a sysx:InitialNode ;
+    sysml:qualifiedName "ThenAfterMembers::AfterFirstThen::@1" ;
+    sysml:elementId "ThenAfterMembers__AfterFirstThen___401" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:owner elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterFirstThen___401_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterFirstThen___401_om ;
+    sysml:sourceFeature elmt:ThenAfterMembers__AfterFirstThen__a ;
+    sysml:targetFeature elmt:ThenAfterMembers__AfterFirstThen__c ;
+    sysx:sourceText "        first a then c;\n" .
+
+elmt:ThenAfterMembers__AfterFirstThen___401_om
+    a sysml:OwningMembership ;
+    sysml:elementId "ThenAfterMembers__AfterFirstThen___401_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterFirstThen___401 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterFirstThen___401 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterFirstThen___401 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterFirstThen .
+
+elmt:ThenAfterMembers__AfterFirstThen__b
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterFirstThen::b" ;
+    sysml:elementId "ThenAfterMembers__AfterFirstThen__b" ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:owner elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterFirstThen__b_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterFirstThen__b_om ;
+    sysml:declaredName "b" ;
+    sysml:type elmt:ThenAfterMembers__Step ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        then action b : Step;\n" .
+
+elmt:ThenAfterMembers__AfterFirstThen__b_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterFirstThen__b_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterFirstThen__b ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterFirstThen__b ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterFirstThen__b ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterFirstThen__b ;
+    sysml:owningType elmt:ThenAfterMembers__AfterFirstThen .
+
+elmt:ThenAfterMembers__AfterFirstThen___403
+    a sysml:SuccessionAsUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterFirstThen::@3" ;
+    sysml:elementId "ThenAfterMembers__AfterFirstThen___403" ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:owner elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterFirstThen___403_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterFirstThen___403_om ;
+    sysx:endForm "then" ;
+    sysml:sourceFeature elmt:ThenAfterMembers__AfterFirstThen__a ;
+    sysml:targetFeature elmt:ThenAfterMembers__AfterFirstThen__b ;
+    sysx:sourceText "" .
+
+elmt:ThenAfterMembers__AfterFirstThen___403_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterFirstThen___403_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterFirstThen___403 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterFirstThen___403 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterFirstThen___403 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterFirstThen___403 ;
+    sysml:owningType elmt:ThenAfterMembers__AfterFirstThen .
+
+elmt:ThenAfterMembers__AfterFirstThen__c
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterFirstThen::c" ;
+    sysml:elementId "ThenAfterMembers__AfterFirstThen__c" ;
+    sysx:memberIndex "4"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:owner elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterFirstThen__c_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterFirstThen__c_om ;
+    sysml:declaredName "c" ;
+    sysml:type elmt:ThenAfterMembers__Step ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action c : Step;\n" .
+
+elmt:ThenAfterMembers__AfterFirstThen__c_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterFirstThen__c_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterFirstThen__c ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterFirstThen__c ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterFirstThen__c ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterFirstThen ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterFirstThen__c ;
+    sysml:owningType elmt:ThenAfterMembers__AfterFirstThen .
+
+elmt:ThenAfterMembers__AfterFirstStart
+    a sysml:ActionDefinition ;
+    sysml:qualifiedName "ThenAfterMembers::AfterFirstStart" ;
+    sysml:elementId "ThenAfterMembers__AfterFirstStart" ;
+    sysx:memberIndex "8"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterFirstStart_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterFirstStart_om ;
+    sysml:declaredName "AfterFirstStart" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:ThenAfterMembers__AfterFirstStart___400, elmt:ThenAfterMembers__AfterFirstStart__a, elmt:ThenAfterMembers__AfterFirstStart___402, elmt:ThenAfterMembers__AfterFirstStart___403, elmt:ThenAfterMembers__AfterFirstStart___404 ;
+    sysml:ownedMembership elmt:ThenAfterMembers__AfterFirstStart___400_om, elmt:ThenAfterMembers__AfterFirstStart__a_om, elmt:ThenAfterMembers__AfterFirstStart___402_om, elmt:ThenAfterMembers__AfterFirstStart___403_om, elmt:ThenAfterMembers__AfterFirstStart___404_om ;
+    sysml:ownedRelationship elmt:ThenAfterMembers__AfterFirstStart___400_om, elmt:ThenAfterMembers__AfterFirstStart__a_om, elmt:ThenAfterMembers__AfterFirstStart___402_om, elmt:ThenAfterMembers__AfterFirstStart___403_om, elmt:ThenAfterMembers__AfterFirstStart___404_om ;
+    sysml:ownedFeature elmt:ThenAfterMembers__AfterFirstStart__a, elmt:ThenAfterMembers__AfterFirstStart___402, elmt:ThenAfterMembers__AfterFirstStart___404 ;
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterFirstStart__a_om, elmt:ThenAfterMembers__AfterFirstStart___402_om, elmt:ThenAfterMembers__AfterFirstStart___404_om ;
+    sysx:sourceText "    action def AfterFirstStart {\n" ;
+    sysx:sourceTail "    }\n" .
+
+elmt:ThenAfterMembers__AfterFirstStart_om
+    a sysml:OwningMembership ;
+    sysml:elementId "ThenAfterMembers__AfterFirstStart_om" ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers .
+
+elmt:ThenAfterMembers__AfterFirstStart___400
+    a sysx:InitialNode ;
+    sysml:qualifiedName "ThenAfterMembers::AfterFirstStart::@0" ;
+    sysml:elementId "ThenAfterMembers__AfterFirstStart___400" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:owner elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterFirstStart___400_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterFirstStart___400_om ;
+    sysml:sourceFeature "start" ;
+    sysx:sourceText "        first start;\n" .
+
+elmt:ThenAfterMembers__AfterFirstStart___400_om
+    a sysml:OwningMembership ;
+    sysml:elementId "ThenAfterMembers__AfterFirstStart___400_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterFirstStart___400 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterFirstStart___400 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterFirstStart___400 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterFirstStart .
+
+elmt:ThenAfterMembers__AfterFirstStart__a
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterFirstStart::a" ;
+    sysml:elementId "ThenAfterMembers__AfterFirstStart__a" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:owner elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterFirstStart__a_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterFirstStart__a_om ;
+    sysml:declaredName "a" ;
+    sysml:type elmt:ThenAfterMembers__Step ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        then action a : Step;\n" .
+
+elmt:ThenAfterMembers__AfterFirstStart__a_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterFirstStart__a_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterFirstStart__a ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterFirstStart__a ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterFirstStart__a ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterFirstStart__a ;
+    sysml:owningType elmt:ThenAfterMembers__AfterFirstStart .
+
+elmt:ThenAfterMembers__AfterFirstStart___402
+    a sysml:SuccessionAsUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterFirstStart::@2" ;
+    sysml:elementId "ThenAfterMembers__AfterFirstStart___402" ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:owner elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterFirstStart___402_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterFirstStart___402_om ;
+    sysx:endForm "then" ;
+    sysml:sourceFeature "start" ;
+    sysml:targetFeature elmt:ThenAfterMembers__AfterFirstStart__a ;
+    sysx:sourceText "" .
+
+elmt:ThenAfterMembers__AfterFirstStart___402_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterFirstStart___402_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterFirstStart___402 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterFirstStart___402 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterFirstStart___402 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterFirstStart___402 ;
+    sysml:owningType elmt:ThenAfterMembers__AfterFirstStart .
+
+elmt:ThenAfterMembers__AfterFirstStart___403
+    a sysx:FinalNode ;
+    sysml:qualifiedName "ThenAfterMembers::AfterFirstStart::@3" ;
+    sysml:elementId "ThenAfterMembers__AfterFirstStart___403" ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:owner elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterFirstStart___403_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterFirstStart___403_om ;
+    sysx:sourceText "        then done;\n" .
+
+elmt:ThenAfterMembers__AfterFirstStart___403_om
+    a sysml:OwningMembership ;
+    sysml:elementId "ThenAfterMembers__AfterFirstStart___403_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterFirstStart___403 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterFirstStart___403 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterFirstStart___403 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterFirstStart .
+
+elmt:ThenAfterMembers__AfterFirstStart___404
+    a sysml:SuccessionAsUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterFirstStart::@4" ;
+    sysml:elementId "ThenAfterMembers__AfterFirstStart___404" ;
+    sysx:memberIndex "4"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:owner elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterFirstStart___404_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterFirstStart___404_om ;
+    sysx:endForm "then" ;
+    sysml:sourceFeature elmt:ThenAfterMembers__AfterFirstStart__a ;
+    sysx:targetMember elmt:ThenAfterMembers__AfterFirstStart___403 ;
+    sysx:sourceText "" .
+
+elmt:ThenAfterMembers__AfterFirstStart___404_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterFirstStart___404_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterFirstStart___404 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterFirstStart___404 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterFirstStart___404 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterFirstStart ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterFirstStart___404 ;
+    sysml:owningType elmt:ThenAfterMembers__AfterFirstStart .
+
+elmt:ThenAfterMembers__stride
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ThenAfterMembers::stride" ;
+    sysml:elementId "ThenAfterMembers__stride" ;
+    sysx:memberIndex "9"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:owningRelationship elmt:ThenAfterMembers__stride_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__stride_om ;
+    sysml:declaredName "stride" ;
+    sysml:type elmt:ThenAfterMembers__Step ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    action stride : Step;\n" .
+
+elmt:ThenAfterMembers__stride_om
+    a sysml:OwningMembership ;
+    sysml:elementId "ThenAfterMembers__stride_om" ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:memberElement elmt:ThenAfterMembers__stride ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__stride ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__stride ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers .
+
+elmt:ThenAfterMembers__AfterPerform
+    a sysml:ActionDefinition ;
+    sysml:qualifiedName "ThenAfterMembers::AfterPerform" ;
+    sysml:elementId "ThenAfterMembers__AfterPerform" ;
+    sysx:memberIndex "10"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterPerform_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterPerform_om ;
+    sysml:declaredName "AfterPerform" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:ThenAfterMembers__AfterPerform___400, elmt:ThenAfterMembers__AfterPerform___401, elmt:ThenAfterMembers__AfterPerform__b, elmt:ThenAfterMembers__AfterPerform___403 ;
+    sysml:ownedMembership elmt:ThenAfterMembers__AfterPerform___400_om, elmt:ThenAfterMembers__AfterPerform___401_om, elmt:ThenAfterMembers__AfterPerform__b_om, elmt:ThenAfterMembers__AfterPerform___403_om ;
+    sysml:ownedRelationship elmt:ThenAfterMembers__AfterPerform___400_om, elmt:ThenAfterMembers__AfterPerform___401_om, elmt:ThenAfterMembers__AfterPerform__b_om, elmt:ThenAfterMembers__AfterPerform___403_om ;
+    sysml:ownedFeature elmt:ThenAfterMembers__AfterPerform___400, elmt:ThenAfterMembers__AfterPerform__b, elmt:ThenAfterMembers__AfterPerform___403 ;
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__AfterPerform___400_om, elmt:ThenAfterMembers__AfterPerform__b_om, elmt:ThenAfterMembers__AfterPerform___403_om ;
+    sysx:sourceText "    action def AfterPerform {\n" ;
+    sysx:sourceTail "    }\n" .
+
+elmt:ThenAfterMembers__AfterPerform_om
+    a sysml:OwningMembership ;
+    sysml:elementId "ThenAfterMembers__AfterPerform_om" ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterPerform ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterPerform ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterPerform ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers .
+
+elmt:ThenAfterMembers__AfterPerform___400
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterPerform::@0" ;
+    sysml:elementId "ThenAfterMembers__AfterPerform___400" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterPerform ;
+    sysml:owner elmt:ThenAfterMembers__AfterPerform ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterPerform___400_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterPerform___400_om ;
+    sysx:declaredKeyword "perform" ;
+    sysml:references elmt:ThenAfterMembers__stride ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        perform stride;\n" .
+
+elmt:ThenAfterMembers__AfterPerform___400_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterPerform___400_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterPerform ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterPerform___400 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterPerform___400 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterPerform___400 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterPerform ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterPerform ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterPerform___400 ;
+    sysml:owningType elmt:ThenAfterMembers__AfterPerform .
+
+elmt:ThenAfterMembers__AfterPerform___401
+    a sysml:FlowUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterPerform::@1" ;
+    sysml:elementId "ThenAfterMembers__AfterPerform___401" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterPerform ;
+    sysml:owner elmt:ThenAfterMembers__AfterPerform ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterPerform___401_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterPerform___401_om ;
+    sysx:relatedFeature expr:ThenAfterMembers__AfterPerform___401_pflowSource, expr:ThenAfterMembers__AfterPerform___401_pflowTarget ;
+    sysx:endForm "fromTo" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        flow from stride.y to b.x;\n" .
+
+elmt:ThenAfterMembers__AfterPerform___401_om
+    a sysml:OwningMembership ;
+    sysml:elementId "ThenAfterMembers__AfterPerform___401_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterPerform ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterPerform___401 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterPerform___401 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterPerform___401 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterPerform ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterPerform .
+
+expr:ThenAfterMembers__AfterPerform___401_pflowSource
+    a sysml:FeatureChainExpression ;
+    sysx:sourceText "stride.y" ;
+    sysml:elementId "ThenAfterMembers__AfterPerform___401_pflowSource" ;
+    sysml:argument expr:ThenAfterMembers__AfterPerform___401_pflowSource_pa0 ;
+    sysml:targetFeature "y" ;
+    sysx:endIndex "0"^^xsd:integer ;
+    sysx:endRole "source" .
+
+expr:ThenAfterMembers__AfterPerform___401_pflowSource_pa0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "stride" ;
+    sysml:elementId "ThenAfterMembers__AfterPerform___401_pflowSource_pa0" ;
+    sysml:referent elmt:ThenAfterMembers__stride ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+expr:ThenAfterMembers__AfterPerform___401_pflowTarget
+    a sysml:FeatureChainExpression ;
+    sysx:sourceText "b.x" ;
+    sysml:elementId "ThenAfterMembers__AfterPerform___401_pflowTarget" ;
+    sysml:argument expr:ThenAfterMembers__AfterPerform___401_pflowTarget_pa0 ;
+    sysml:targetFeature "x" ;
+    sysx:endIndex "1"^^xsd:integer ;
+    sysx:endRole "target" .
+
+expr:ThenAfterMembers__AfterPerform___401_pflowTarget_pa0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "b" ;
+    sysml:elementId "ThenAfterMembers__AfterPerform___401_pflowTarget_pa0" ;
+    sysml:referent elmt:ThenAfterMembers__AfterPerform__b ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+elmt:ThenAfterMembers__AfterPerform__b
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterPerform::b" ;
+    sysml:elementId "ThenAfterMembers__AfterPerform__b" ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterPerform ;
+    sysml:owner elmt:ThenAfterMembers__AfterPerform ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterPerform__b_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterPerform__b_om ;
+    sysml:declaredName "b" ;
+    sysml:type elmt:ThenAfterMembers__Step ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        then action b : Step;\n" .
+
+elmt:ThenAfterMembers__AfterPerform__b_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterPerform__b_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterPerform ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterPerform__b ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterPerform__b ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterPerform__b ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterPerform ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterPerform ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterPerform__b ;
+    sysml:owningType elmt:ThenAfterMembers__AfterPerform .
+
+elmt:ThenAfterMembers__AfterPerform___403
+    a sysml:SuccessionAsUsage ;
+    sysml:qualifiedName "ThenAfterMembers::AfterPerform::@3" ;
+    sysml:elementId "ThenAfterMembers__AfterPerform___403" ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__AfterPerform ;
+    sysml:owner elmt:ThenAfterMembers__AfterPerform ;
+    sysml:owningRelationship elmt:ThenAfterMembers__AfterPerform___403_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__AfterPerform___403_om ;
+    sysx:endForm "then" ;
+    sysml:sourceFeature elmt:ThenAfterMembers__stride ;
+    sysml:targetFeature elmt:ThenAfterMembers__AfterPerform__b ;
+    sysx:sourceText "" .
+
+elmt:ThenAfterMembers__AfterPerform___403_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__AfterPerform___403_om" ;
+    sysml:owner elmt:ThenAfterMembers__AfterPerform ;
+    sysml:memberElement elmt:ThenAfterMembers__AfterPerform___403 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__AfterPerform___403 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__AfterPerform___403 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__AfterPerform ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__AfterPerform ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__AfterPerform___403 ;
+    sysml:owningType elmt:ThenAfterMembers__AfterPerform .
+
+elmt:ThenAfterMembers__ThenAlone
+    a sysml:ActionDefinition ;
+    sysml:qualifiedName "ThenAfterMembers::ThenAlone" ;
+    sysml:elementId "ThenAfterMembers__ThenAlone" ;
+    sysx:memberIndex "11"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:owningRelationship elmt:ThenAfterMembers__ThenAlone_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__ThenAlone_om ;
+    sysml:declaredName "ThenAlone" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:ThenAfterMembers__ThenAlone__a, elmt:ThenAfterMembers__ThenAlone___401, elmt:ThenAfterMembers__ThenAlone___402, elmt:ThenAfterMembers__ThenAlone__b ;
+    sysml:ownedMembership elmt:ThenAfterMembers__ThenAlone__a_om, elmt:ThenAfterMembers__ThenAlone___401_om, elmt:ThenAfterMembers__ThenAlone___402_om, elmt:ThenAfterMembers__ThenAlone__b_om ;
+    sysml:ownedRelationship elmt:ThenAfterMembers__ThenAlone__a_om, elmt:ThenAfterMembers__ThenAlone___401_om, elmt:ThenAfterMembers__ThenAlone___402_om, elmt:ThenAfterMembers__ThenAlone__b_om ;
+    sysml:ownedFeature elmt:ThenAfterMembers__ThenAlone__a, elmt:ThenAfterMembers__ThenAlone___402, elmt:ThenAfterMembers__ThenAlone__b ;
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__ThenAlone__a_om, elmt:ThenAfterMembers__ThenAlone___402_om, elmt:ThenAfterMembers__ThenAlone__b_om ;
+    sysx:sourceText "    action def ThenAlone {\n" ;
+    sysx:sourceTail "    }\n" .
+
+elmt:ThenAfterMembers__ThenAlone_om
+    a sysml:OwningMembership ;
+    sysml:elementId "ThenAfterMembers__ThenAlone_om" ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:memberElement elmt:ThenAfterMembers__ThenAlone ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__ThenAlone ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__ThenAlone ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers .
+
+elmt:ThenAfterMembers__ThenAlone__a
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ThenAfterMembers::ThenAlone::a" ;
+    sysml:elementId "ThenAfterMembers__ThenAlone__a" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__ThenAlone ;
+    sysml:owner elmt:ThenAfterMembers__ThenAlone ;
+    sysml:owningRelationship elmt:ThenAfterMembers__ThenAlone__a_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__ThenAlone__a_om ;
+    sysml:declaredName "a" ;
+    sysml:type elmt:ThenAfterMembers__Step ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action a : Step;\n" .
+
+elmt:ThenAfterMembers__ThenAlone__a_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__ThenAlone__a_om" ;
+    sysml:owner elmt:ThenAfterMembers__ThenAlone ;
+    sysml:memberElement elmt:ThenAfterMembers__ThenAlone__a ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__ThenAlone__a ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__ThenAlone__a ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__ThenAlone ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__ThenAlone ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__ThenAlone__a ;
+    sysml:owningType elmt:ThenAfterMembers__ThenAlone .
+
+elmt:ThenAfterMembers__ThenAlone___401
+    a sysml:FlowUsage ;
+    sysml:qualifiedName "ThenAfterMembers::ThenAlone::@1" ;
+    sysml:elementId "ThenAfterMembers__ThenAlone___401" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__ThenAlone ;
+    sysml:owner elmt:ThenAfterMembers__ThenAlone ;
+    sysml:owningRelationship elmt:ThenAfterMembers__ThenAlone___401_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__ThenAlone___401_om ;
+    sysx:relatedFeature expr:ThenAfterMembers__ThenAlone___401_pflowSource, expr:ThenAfterMembers__ThenAlone___401_pflowTarget ;
+    sysx:endForm "fromTo" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        flow from a.y to b.x;\n" .
+
+elmt:ThenAfterMembers__ThenAlone___401_om
+    a sysml:OwningMembership ;
+    sysml:elementId "ThenAfterMembers__ThenAlone___401_om" ;
+    sysml:owner elmt:ThenAfterMembers__ThenAlone ;
+    sysml:memberElement elmt:ThenAfterMembers__ThenAlone___401 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__ThenAlone___401 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__ThenAlone___401 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__ThenAlone ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__ThenAlone .
+
+expr:ThenAfterMembers__ThenAlone___401_pflowSource
+    a sysml:FeatureChainExpression ;
+    sysx:sourceText "a.y" ;
+    sysml:elementId "ThenAfterMembers__ThenAlone___401_pflowSource" ;
+    sysml:argument expr:ThenAfterMembers__ThenAlone___401_pflowSource_pa0 ;
+    sysml:targetFeature "y" ;
+    sysx:endIndex "0"^^xsd:integer ;
+    sysx:endRole "source" .
+
+expr:ThenAfterMembers__ThenAlone___401_pflowSource_pa0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "a" ;
+    sysml:elementId "ThenAfterMembers__ThenAlone___401_pflowSource_pa0" ;
+    sysml:referent elmt:ThenAfterMembers__ThenAlone__a ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+expr:ThenAfterMembers__ThenAlone___401_pflowTarget
+    a sysml:FeatureChainExpression ;
+    sysx:sourceText "b.x" ;
+    sysml:elementId "ThenAfterMembers__ThenAlone___401_pflowTarget" ;
+    sysml:argument expr:ThenAfterMembers__ThenAlone___401_pflowTarget_pa0 ;
+    sysml:targetFeature "x" ;
+    sysx:endIndex "1"^^xsd:integer ;
+    sysx:endRole "target" .
+
+expr:ThenAfterMembers__ThenAlone___401_pflowTarget_pa0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "b" ;
+    sysml:elementId "ThenAfterMembers__ThenAlone___401_pflowTarget_pa0" ;
+    sysml:referent elmt:ThenAfterMembers__ThenAlone__b ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+elmt:ThenAfterMembers__ThenAlone___402
+    a sysml:SuccessionAsUsage ;
+    sysml:qualifiedName "ThenAfterMembers::ThenAlone::@2" ;
+    sysml:elementId "ThenAfterMembers__ThenAlone___402" ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__ThenAlone ;
+    sysml:owner elmt:ThenAfterMembers__ThenAlone ;
+    sysml:owningRelationship elmt:ThenAfterMembers__ThenAlone___402_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__ThenAlone___402_om ;
+    sysx:endForm "then" ;
+    sysml:sourceFeature elmt:ThenAfterMembers__ThenAlone__a ;
+    sysml:targetFeature elmt:ThenAfterMembers__ThenAlone__b ;
+    sysx:sourceText "        then b;\n" .
+
+elmt:ThenAfterMembers__ThenAlone___402_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__ThenAlone___402_om" ;
+    sysml:owner elmt:ThenAfterMembers__ThenAlone ;
+    sysml:memberElement elmt:ThenAfterMembers__ThenAlone___402 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__ThenAlone___402 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__ThenAlone___402 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__ThenAlone ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__ThenAlone ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__ThenAlone___402 ;
+    sysml:owningType elmt:ThenAfterMembers__ThenAlone .
+
+elmt:ThenAfterMembers__ThenAlone__b
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ThenAfterMembers::ThenAlone::b" ;
+    sysml:elementId "ThenAfterMembers__ThenAlone__b" ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__ThenAlone ;
+    sysml:owner elmt:ThenAfterMembers__ThenAlone ;
+    sysml:owningRelationship elmt:ThenAfterMembers__ThenAlone__b_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__ThenAlone__b_om ;
+    sysml:declaredName "b" ;
+    sysml:type elmt:ThenAfterMembers__Step ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        action b : Step;\n" .
+
+elmt:ThenAfterMembers__ThenAlone__b_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__ThenAlone__b_om" ;
+    sysml:owner elmt:ThenAfterMembers__ThenAlone ;
+    sysml:memberElement elmt:ThenAfterMembers__ThenAlone__b ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__ThenAlone__b ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__ThenAlone__b ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__ThenAlone ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__ThenAlone ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__ThenAlone__b ;
+    sysml:owningType elmt:ThenAfterMembers__ThenAlone .
+
+elmt:ThenAfterMembers__Lamp
+    a sysml:StateDefinition ;
+    sysml:qualifiedName "ThenAfterMembers::Lamp" ;
+    sysml:elementId "ThenAfterMembers__Lamp" ;
+    sysx:memberIndex "12"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:owningRelationship elmt:ThenAfterMembers__Lamp_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__Lamp_om ;
+    sysml:declaredName "Lamp" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:ThenAfterMembers__Lamp__level, elmt:ThenAfterMembers__Lamp__on, elmt:ThenAfterMembers__Lamp___402, elmt:ThenAfterMembers__Lamp___403, elmt:ThenAfterMembers__Lamp__off, elmt:ThenAfterMembers__Lamp___405 ;
+    sysml:ownedMembership elmt:ThenAfterMembers__Lamp__level_om, elmt:ThenAfterMembers__Lamp__on_om, elmt:ThenAfterMembers__Lamp___402_om, elmt:ThenAfterMembers__Lamp___403_om, elmt:ThenAfterMembers__Lamp__off_om, elmt:ThenAfterMembers__Lamp___405_om ;
+    sysml:ownedRelationship elmt:ThenAfterMembers__Lamp__level_om, elmt:ThenAfterMembers__Lamp__on_om, elmt:ThenAfterMembers__Lamp___402_om, elmt:ThenAfterMembers__Lamp___403_om, elmt:ThenAfterMembers__Lamp__off_om, elmt:ThenAfterMembers__Lamp___405_om ;
+    sysml:ownedFeature elmt:ThenAfterMembers__Lamp__level, elmt:ThenAfterMembers__Lamp__on, elmt:ThenAfterMembers__Lamp___403, elmt:ThenAfterMembers__Lamp__off, elmt:ThenAfterMembers__Lamp___405 ;
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__Lamp__level_om, elmt:ThenAfterMembers__Lamp__on_om, elmt:ThenAfterMembers__Lamp___403_om, elmt:ThenAfterMembers__Lamp__off_om, elmt:ThenAfterMembers__Lamp___405_om ;
+    sysx:sourceText "    state def Lamp {\n" ;
+    sysx:sourceTail "    }\n" .
+
+elmt:ThenAfterMembers__Lamp_om
+    a sysml:OwningMembership ;
+    sysml:elementId "ThenAfterMembers__Lamp_om" ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:memberElement elmt:ThenAfterMembers__Lamp ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__Lamp ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__Lamp ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers .
+
+elmt:ThenAfterMembers__Lamp__level
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "ThenAfterMembers::Lamp::level" ;
+    sysml:elementId "ThenAfterMembers__Lamp__level" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__Lamp ;
+    sysml:owner elmt:ThenAfterMembers__Lamp ;
+    sysml:owningRelationship elmt:ThenAfterMembers__Lamp__level_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__Lamp__level_om ;
+    sysml:declaredName "level" ;
+    sysml:type "ScalarValues::Integer" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute level : ScalarValues::Integer;\n" .
+
+elmt:ThenAfterMembers__Lamp__level_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__Lamp__level_om" ;
+    sysml:owner elmt:ThenAfterMembers__Lamp ;
+    sysml:memberElement elmt:ThenAfterMembers__Lamp__level ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__Lamp__level ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__Lamp__level ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__Lamp ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__Lamp ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__Lamp__level ;
+    sysml:owningType elmt:ThenAfterMembers__Lamp .
+
+elmt:ThenAfterMembers__Lamp__on
+    a sysml:StateUsage ;
+    sysml:qualifiedName "ThenAfterMembers::Lamp::on" ;
+    sysml:elementId "ThenAfterMembers__Lamp__on" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__Lamp ;
+    sysml:owner elmt:ThenAfterMembers__Lamp ;
+    sysml:owningRelationship elmt:ThenAfterMembers__Lamp__on_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__Lamp__on_om ;
+    sysml:declaredName "on" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        state on;\n" .
+
+elmt:ThenAfterMembers__Lamp__on_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__Lamp__on_om" ;
+    sysml:owner elmt:ThenAfterMembers__Lamp ;
+    sysml:memberElement elmt:ThenAfterMembers__Lamp__on ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__Lamp__on ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__Lamp__on ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__Lamp ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__Lamp ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__Lamp__on ;
+    sysml:owningType elmt:ThenAfterMembers__Lamp .
+
+elmt:ThenAfterMembers__Lamp___402
+    a sysml:Documentation ;
+    sysml:qualifiedName "ThenAfterMembers::Lamp::@2" ;
+    sysml:elementId "ThenAfterMembers__Lamp___402" ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__Lamp ;
+    sysml:owner elmt:ThenAfterMembers__Lamp ;
+    sysml:owningRelationship elmt:ThenAfterMembers__Lamp___402_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__Lamp___402_om ;
+    sysml:body " on precedes off " ;
+    sysx:sourceText "        doc /* on precedes off */\n" .
+
+elmt:ThenAfterMembers__Lamp___402_om
+    a sysml:OwningMembership ;
+    sysml:elementId "ThenAfterMembers__Lamp___402_om" ;
+    sysml:owner elmt:ThenAfterMembers__Lamp ;
+    sysml:memberElement elmt:ThenAfterMembers__Lamp___402 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__Lamp___402 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__Lamp___402 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__Lamp ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__Lamp .
+
+elmt:ThenAfterMembers__Lamp___403
+    a sysml:TransitionUsage ;
+    sysml:qualifiedName "ThenAfterMembers::Lamp::@3" ;
+    sysml:elementId "ThenAfterMembers__Lamp___403" ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__Lamp ;
+    sysml:owner elmt:ThenAfterMembers__Lamp ;
+    sysml:owningRelationship elmt:ThenAfterMembers__Lamp___403_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__Lamp___403_om ;
+    sysx:transitionSyntax "first" ;
+    sysml:sourceFeature elmt:ThenAfterMembers__Lamp__on ;
+    sysml:targetFeature elmt:ThenAfterMembers__Lamp__off ;
+    sysx:sourceText "        transition first on then off;\n" .
+
+elmt:ThenAfterMembers__Lamp___403_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__Lamp___403_om" ;
+    sysml:owner elmt:ThenAfterMembers__Lamp ;
+    sysml:memberElement elmt:ThenAfterMembers__Lamp___403 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__Lamp___403 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__Lamp___403 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__Lamp ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__Lamp ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__Lamp___403 ;
+    sysml:owningType elmt:ThenAfterMembers__Lamp .
+
+elmt:ThenAfterMembers__Lamp__off
+    a sysml:StateUsage ;
+    sysml:qualifiedName "ThenAfterMembers::Lamp::off" ;
+    sysml:elementId "ThenAfterMembers__Lamp__off" ;
+    sysx:memberIndex "4"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__Lamp ;
+    sysml:owner elmt:ThenAfterMembers__Lamp ;
+    sysml:owningRelationship elmt:ThenAfterMembers__Lamp__off_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__Lamp__off_om ;
+    sysml:declaredName "off" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        then state off;\n" .
+
+elmt:ThenAfterMembers__Lamp__off_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__Lamp__off_om" ;
+    sysml:owner elmt:ThenAfterMembers__Lamp ;
+    sysml:memberElement elmt:ThenAfterMembers__Lamp__off ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__Lamp__off ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__Lamp__off ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__Lamp ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__Lamp ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__Lamp__off ;
+    sysml:owningType elmt:ThenAfterMembers__Lamp .
+
+elmt:ThenAfterMembers__Lamp___405
+    a sysml:SuccessionAsUsage ;
+    sysml:qualifiedName "ThenAfterMembers::Lamp::@5" ;
+    sysml:elementId "ThenAfterMembers__Lamp___405" ;
+    sysx:memberIndex "5"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__Lamp ;
+    sysml:owner elmt:ThenAfterMembers__Lamp ;
+    sysml:owningRelationship elmt:ThenAfterMembers__Lamp___405_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__Lamp___405_om ;
+    sysx:sourceMember elmt:ThenAfterMembers__Lamp___402 ;
+    sysml:targetFeature elmt:ThenAfterMembers__Lamp__off ;
+    sysx:sourceText "" .
+
+elmt:ThenAfterMembers__Lamp___405_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__Lamp___405_om" ;
+    sysml:owner elmt:ThenAfterMembers__Lamp ;
+    sysml:memberElement elmt:ThenAfterMembers__Lamp___405 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__Lamp___405 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__Lamp___405 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__Lamp ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__Lamp ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__Lamp___405 ;
+    sysml:owningType elmt:ThenAfterMembers__Lamp .
+
+elmt:ThenAfterMembers__Switch
+    a sysml:StateDefinition ;
+    sysml:qualifiedName "ThenAfterMembers::Switch" ;
+    sysml:elementId "ThenAfterMembers__Switch" ;
+    sysx:memberIndex "13"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:owningRelationship elmt:ThenAfterMembers__Switch_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__Switch_om ;
+    sysml:declaredName "Switch" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedRelationship elmt:ThenAfterMembers__Switch___400, elmt:ThenAfterMembers__Switch__pressed_om, elmt:ThenAfterMembers__Switch___402_om, elmt:ThenAfterMembers__Switch__idle_om ;
+    sysml:ownedMember elmt:ThenAfterMembers__Switch__pressed, elmt:ThenAfterMembers__Switch___402, elmt:ThenAfterMembers__Switch__idle ;
+    sysml:ownedMembership elmt:ThenAfterMembers__Switch__pressed_om, elmt:ThenAfterMembers__Switch___402_om, elmt:ThenAfterMembers__Switch__idle_om ;
+    sysml:ownedFeature elmt:ThenAfterMembers__Switch__pressed, elmt:ThenAfterMembers__Switch___402, elmt:ThenAfterMembers__Switch__idle ;
+    sysml:ownedFeatureMembership elmt:ThenAfterMembers__Switch__pressed_om, elmt:ThenAfterMembers__Switch___402_om, elmt:ThenAfterMembers__Switch__idle_om ;
+    sysx:sourceText "    state def Switch {\n" ;
+    sysx:sourceTail "    }\n" .
+
+elmt:ThenAfterMembers__Switch_om
+    a sysml:OwningMembership ;
+    sysml:elementId "ThenAfterMembers__Switch_om" ;
+    sysml:owner elmt:ThenAfterMembers ;
+    sysml:memberElement elmt:ThenAfterMembers__Switch ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__Switch ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__Switch ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers .
+
+elmt:ThenAfterMembers__Switch___400
+    a sysml:StateSubactionMembership ;
+    sysml:qualifiedName "ThenAfterMembers::Switch::@0" ;
+    sysml:elementId "ThenAfterMembers__Switch___400" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__Switch ;
+    sysml:owner elmt:ThenAfterMembers__Switch ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__Switch ;
+    sysx:subactionKind "entry" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        entry;\n" .
+
+elmt:ThenAfterMembers__Switch__pressed
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "ThenAfterMembers::Switch::pressed" ;
+    sysml:elementId "ThenAfterMembers__Switch__pressed" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__Switch ;
+    sysml:owner elmt:ThenAfterMembers__Switch ;
+    sysml:owningRelationship elmt:ThenAfterMembers__Switch__pressed_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__Switch__pressed_om ;
+    sysml:declaredName "pressed" ;
+    sysml:type "ScalarValues::Boolean" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute pressed : ScalarValues::Boolean;\n" .
+
+elmt:ThenAfterMembers__Switch__pressed_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__Switch__pressed_om" ;
+    sysml:owner elmt:ThenAfterMembers__Switch ;
+    sysml:memberElement elmt:ThenAfterMembers__Switch__pressed ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__Switch__pressed ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__Switch__pressed ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__Switch ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__Switch ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__Switch__pressed ;
+    sysml:owningType elmt:ThenAfterMembers__Switch .
+
+elmt:ThenAfterMembers__Switch___402
+    a sysml:SuccessionAsUsage ;
+    sysml:qualifiedName "ThenAfterMembers::Switch::@2" ;
+    sysml:elementId "ThenAfterMembers__Switch___402" ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__Switch ;
+    sysml:owner elmt:ThenAfterMembers__Switch ;
+    sysml:owningRelationship elmt:ThenAfterMembers__Switch___402_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__Switch___402_om ;
+    sysx:endForm "then" ;
+    sysml:sourceFeature elmt:ThenAfterMembers__Switch__pressed ;
+    sysml:targetFeature elmt:ThenAfterMembers__Switch__idle ;
+    sysx:sourceText "        then idle;\n" .
+
+elmt:ThenAfterMembers__Switch___402_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__Switch___402_om" ;
+    sysml:owner elmt:ThenAfterMembers__Switch ;
+    sysml:memberElement elmt:ThenAfterMembers__Switch___402 ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__Switch___402 ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__Switch___402 ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__Switch ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__Switch ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__Switch___402 ;
+    sysml:owningType elmt:ThenAfterMembers__Switch .
+
+elmt:ThenAfterMembers__Switch__idle
+    a sysml:StateUsage ;
+    sysml:qualifiedName "ThenAfterMembers::Switch::idle" ;
+    sysml:elementId "ThenAfterMembers__Switch__idle" ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:owningNamespace elmt:ThenAfterMembers__Switch ;
+    sysml:owner elmt:ThenAfterMembers__Switch ;
+    sysml:owningRelationship elmt:ThenAfterMembers__Switch__idle_om ;
+    sysml:owningMembership elmt:ThenAfterMembers__Switch__idle_om ;
+    sysml:declaredName "idle" ;
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        state idle;\n" .
+
+elmt:ThenAfterMembers__Switch__idle_om
+    a sysml:FeatureMembership ;
+    sysml:elementId "ThenAfterMembers__Switch__idle_om" ;
+    sysml:owner elmt:ThenAfterMembers__Switch ;
+    sysml:memberElement elmt:ThenAfterMembers__Switch__idle ;
+    sysml:ownedMemberElement elmt:ThenAfterMembers__Switch__idle ;
+    sysml:ownedRelatedElement elmt:ThenAfterMembers__Switch__idle ;
+    sysml:owningRelatedElement elmt:ThenAfterMembers__Switch ;
+    sysml:membershipOwningNamespace elmt:ThenAfterMembers__Switch ;
+    sysml:ownedMemberFeature elmt:ThenAfterMembers__Switch__idle ;
+    sysml:owningType elmt:ThenAfterMembers__Switch .

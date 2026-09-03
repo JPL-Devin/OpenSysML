@@ -1,6 +1,7 @@
 package semantics
 
 import (
+	"math"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -42,6 +43,15 @@ func TestEvalRealArithmetic(t *testing.T) {
 	v, ok := evalExpr(t, "10 / 4")
 	if !ok || v.Kind != ValReal || v.Real != 2.5 {
 		t.Fatalf("10/4 = %+v ok=%v, want real 2.5", v, ok)
+	}
+}
+
+// A quotient of operands beyond 2^53 folds as the exact ratio rounded once,
+// the same answer the runtime computes.
+func TestEvalFoldsExactQuotientBeyondFloatRange(t *testing.T) {
+	v, ok := evalExpr(t, "9007199254740993 / 3")
+	if !ok || v.Kind != ValReal || v.Real != 3002399751580331 {
+		t.Fatalf("9007199254740993/3 = %+v ok=%v, want real 3002399751580331", v, ok)
 	}
 }
 
@@ -89,5 +99,45 @@ func TestEvalNonEvaluableReference(t *testing.T) {
 func TestEvalDivByZeroNotEvaluable(t *testing.T) {
 	if _, ok := evalExpr(t, "1 / 0"); ok {
 		t.Fatalf("division by zero should be non-evaluable")
+	}
+}
+
+// A constant is a value of the narrowest scalar type that holds it, whatever kind
+// computed it: 4 / 2 is a Natural, 7 / 2 a Rational, -2.0 an Integer.
+func TestPrimTypeOfValueClassifiesByTheValue(t *testing.T) {
+	for _, tc := range []struct {
+		v    Value
+		want PrimType
+	}{
+		{Value{Kind: ValInt, Int: 3}, PrimNatural},
+		{Value{Kind: ValInt, Int: -3}, PrimInteger},
+		{Value{Kind: ValReal, Real: 2.0}, PrimNatural},
+		{Value{Kind: ValReal, Real: -2.0}, PrimInteger},
+		{Value{Kind: ValReal, Real: 3.5}, PrimRational},
+		{Value{Kind: ValReal, Real: math.Inf(1)}, PrimReal},
+		{Value{Kind: ValReal, Real: math.NaN()}, PrimUnknown},
+		{Value{Kind: ValReal, Real: 1e300}, PrimRational},
+		{Value{Kind: ValReal, Real: -9223372036854775808.0}, PrimInteger},
+		{Value{Kind: ValReal, Real: 9223372036854775808.0}, PrimRational},
+		{Value{Kind: ValBool, Bool: true}, PrimBoolean},
+	} {
+		if got := PrimTypeOfValue(tc.v); got != tc.want {
+			t.Errorf("PrimTypeOfValue(%v) = %s, want %s", tc.v, got, tc.want)
+		}
+	}
+}
+
+// WholeNumber converts a whole-valued finite real exactly and refuses the rest.
+func TestWholeNumberRefusesFractionsAndNonFinite(t *testing.T) {
+	if n, ok := (Value{Kind: ValReal, Real: 2.0}).WholeNumber(); !ok || n != 2 {
+		t.Errorf("2.0 = %d, %v; want 2, true", n, ok)
+	}
+	for _, r := range []float64{1.5, math.NaN(), math.Inf(1), math.Inf(-1), 1e19, -1e19} {
+		if n, ok := (Value{Kind: ValReal, Real: r}).WholeNumber(); ok {
+			t.Errorf("%v: WholeNumber = %d, true; want false", r, n)
+		}
+	}
+	if _, ok := (Value{Kind: ValBool, Bool: true}).WholeNumber(); ok {
+		t.Error("a Boolean is no whole number")
 	}
 }

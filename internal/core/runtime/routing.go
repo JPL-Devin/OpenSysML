@@ -109,25 +109,26 @@ func (ctx *Context) ownerDeliveries(
 	var out []ownerDelivery
 	mismatch := false
 	seen := map[ownerDelivery]bool{}
-	path := ""
+	// A port is known by its path from each owner and by every path a
+	// binding connector of that owner joins it to (SysML v2 §7.16).
+	sendingPaths := []string{send.Target}
+	targetSyms := []*symbols.Symbol{send.TargetSym}
 	for child := ctx.viaPortHolder(self, send); child != nil && child.owner != nil; child = child.owner {
 		if child.ownerFeature == "" {
 			break
 		}
-		if path == "" {
-			path = child.ownerFeature
-		} else {
-			path = child.ownerFeature + "." + path
-		}
 		owner := child.owner
-		sending := path + "." + send.Target
+		for i := range sendingPaths {
+			sendingPaths[i] = child.ownerFeature + "." + sendingPaths[i]
+		}
+		sendingPaths, targetSyms = ctx.boundPortPaths(owner, sendingPaths, targetSyms)
 		conns := ctx.realizedConnections(ctx.objectConnections(owner.Type), owner)
 		for _, conn := range conns {
-			if !ctx.joinsTarget(conn, sending, send.TargetSym) {
+			if !ctx.joinsAnyTarget(conn, sendingPaths, targetSyms) {
 				continue
 			}
 			for _, end := range conn.Ends {
-				if end == sending {
+				if joins(sendingPaths, end) {
 					continue
 				}
 				accepts := true
@@ -160,6 +161,41 @@ func (ctx *Context) ownerDeliveries(
 		}
 	}
 	return out, mismatch, nil
+}
+
+// joinsAnyTarget reports whether a connection has an end naming one of the
+// paths a sending port is known by, each resolved against its own symbol.
+func (ctx *Context) joinsAnyTarget(conn lower.Connection, paths []string, targets []*symbols.Symbol) bool {
+	for i, path := range paths {
+		if ctx.joinsTarget(conn, path, targets[i]) {
+			return true
+		}
+	}
+	return false
+}
+
+// boundPortPaths extends the paths a port is known by from owner with every
+// path a binding connector of owner's type joins to one of them, transitively.
+func (ctx *Context) boundPortPaths(owner *Instance, paths []string, targets []*symbols.Symbol) ([]string, []*symbols.Symbol) {
+	for i := 0; i < len(paths); i++ {
+		for _, binding := range ctx.bindingsForFeature(owner.Type, paths[i]) {
+			end := bindingEndForPath(binding, paths[i])
+			if end < 0 {
+				continue
+			}
+			other := binding.Ends[1-end].Path
+			if other == "" || joins(paths, other) {
+				continue
+			}
+			sym, ok := ctx.pathSymbol(binding.Scope, strings.Split(other, "."))
+			if !ok || sym == nil || sym.Kind != symbols.SymbolPortUsage {
+				continue
+			}
+			paths = append(paths, other)
+			targets = append(targets, sym)
+		}
+	}
+	return paths, targets
 }
 
 // viaPortHolder is the object whose feature a via send's resolved port is: the
@@ -405,10 +441,10 @@ func (ctx *Context) heldVariant(inst *Instance, variation string) string {
 	if err != nil || fv == nil {
 		return ""
 	}
-	if fv.Value.Kind != ValVariant || fv.Value.Variant == nil {
+	if fv.Value.Kind != ValVariant || fv.Value.Variant() == nil {
 		return ""
 	}
-	return fv.Value.Variant.Name
+	return fv.Value.Variant().Name
 }
 
 // receivingEnds sorts the ends joined to sendingPort into the ones a message can
@@ -530,7 +566,7 @@ func (ctx *Context) endReceivesMessage(scope *symbols.Scope, end string, msg Mes
 			continue
 		}
 		typed = true
-		if ctx.model.Conforms(typeSym, messageSym) || ctx.model.Conforms(messageSym, typeSym) {
+		if ctx.conforms(typeSym, messageSym) || ctx.conforms(messageSym, typeSym) {
 			return true, false
 		}
 	}
