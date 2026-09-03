@@ -358,6 +358,8 @@ func TestInvocationOverloadCandidatesFromEveryGeneralAndRecursiveImport(t *testi
 		calc def pick { in x : String; return : String = x; }
 		attribute i : Integer = pick(2);
 		attribute s : String = pick("s");
+		attribute qi : Integer = P::pick(2);
+		attribute qs : String = P::pick("s");
 	}`)
 	if len(diags) != 2 {
 		t.Fatalf("expected only the two owned name-conflict warnings, got %v", diags)

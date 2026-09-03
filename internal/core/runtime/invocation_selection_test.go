@@ -155,9 +155,9 @@ func testCalcCallSelectsBySiblingScalarType(t *testing.T) {
 	}
 }
 
-// Overloads reached as owned members, through two generals, and through two
-// descendants of one recursive import are all candidates, and each call runs
-// the one its argument fits.
+// Overloads reached as owned members, bare or qualified, through two generals,
+// and through two descendants of one recursive import are all candidates, and
+// each call runs the one its argument fits.
 func testCalcCallSelectsAmongOwnedInheritedAndRecursiveImport(t *testing.T) {
 	src := `
 		package Owned {
@@ -166,6 +166,8 @@ func testCalcCallSelectsAmongOwnedInheritedAndRecursiveImport(t *testing.T) {
 			calc def pick { in x : String; return : Integer = 2; }
 			calc byInt { in v : Integer; pick(v) }
 			calc byStr { in v : String; pick(v) }
+			calc qualifiedInt { in v : Integer; Owned::pick(v) }
+			calc qualifiedStr { in v : String; Owned::pick(v) }
 		}
 		package Inherited {
 			private import ScalarValues::*;
@@ -198,6 +200,8 @@ func testCalcCallSelectsAmongOwnedInheritedAndRecursiveImport(t *testing.T) {
 	}{
 		{"Owned::byInt", intArg, 1},
 		{"Owned::byStr", NewStringValue("s"), 2},
+		{"Owned::qualifiedInt", intArg, 1},
+		{"Owned::qualifiedStr", NewStringValue("s"), 2},
 		{"Inherited::byInt", intArg, 1},
 		{"Inherited::byStr", NewStringValue("s"), 2},
 		{"Recursive::C::byInt", intArg, 1},

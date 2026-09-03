@@ -65,77 +65,16 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 	return r.walkQualifiedTail(scope, qn, cur, 1)
 }
 
-// walkQualifiedTail resolves qn's segments from start beneath cur.
+// walkQualifiedTail resolves qn's segments from start beneath cur. Several
+// members under the last segment are ambiguous unless an invocation calls them.
 func (r *Resolver) walkQualifiedTail(scope *symbols.Scope, qn *ast.QualifiedName, cur *symbols.Symbol, start int) resolution {
-	from := r.ReferringNamespaceFQN(scope)
-	curFQN := r.registeredFQN(cur)
-	for i := start; i < len(qn.Parts); i++ {
-		seg := qn.Parts[i]
-		var all []*symbols.Symbol
-
-		// Try local scope lookup first if available. A segment names a member of
-		// the namespace the walk has reached, so it reaches only the visible ones.
-		if cur.Scope != nil {
-			all = r.namedThroughNamespaces(symbols.PreferDeclared(cur.Scope.LookupLocalAll(seg.Text)))
-		}
-
-		if len(all) == 0 && cur.Scope != nil {
-			if sym, ok := r.lookupImportedMember(cur, cur.Scope, scope, seg.Text); ok &&
-				r.namedThroughNamespace(sym) {
-				all = []*symbols.Symbol{sym}
-			}
-		}
-
-		// If local lookup fails (or no scope), look the segment up under the FQN
-		// walked so far. This handles cases like ScalarValues::Real where
-		// ScalarValues is a package from stdlib that was indexed with full FQNs
-		// but doesn't have a populated Scope, at any nesting depth.
-		memberFQN := curFQN + "::" + seg.Text
-		if len(all) == 0 && r.idx != nil {
-			found := r.idx.LookupQualifiedFrom(memberFQN, from)
-			if !qn.Global {
-				found = notConflatedWith(cur, found)
-			}
-			candidates := r.namedThroughNamespaces(
-				r.admittedUnder(r.documentOf(scope), from, memberFQN, found))
-			switch {
-			case len(candidates) == 1:
-				all = candidates
-			case len(candidates) > 1:
-				r.ambiguous(qn, len(candidates))
-				return resolution{nil, false}
-			case len(found) > 0:
-				// Every candidate the name reaches is filtered out, so it is not a
-				// member of the namespace it appears under (KerML 8.2.4) and no
-				// other route may recover it.
-				r.unresolved(scope, qn)
-				return resolution{nil, false}
-			}
-		}
-
-		// The name exists under cur but only because a private import surfaced it
-		// there: it is invisible from here (KerML 8.2.3.3), and the member search
-		// below reaches cached symbols by a route that does not know that.
-		if len(all) == 0 && r.idx != nil && r.idx.HiddenFrom(memberFQN, from) {
-			r.unresolved(scope, qn)
+	last := len(qn.Parts) - 1
+	for i := start; i <= last; i++ {
+		all, ok := r.qualifiedSegment(scope, qn, cur, i)
+		if !ok {
 			return resolution{nil, false}
 		}
-
-		// A segment may name a member the current symbol inherits rather than
-		// declares: `engine::'4cylEngine'` reaches the variants of the type
-		// `engine` is typed by.
-		if len(all) == 0 {
-			if sym, ok := r.lookupMember(cur, seg.Text); ok &&
-				r.namedThroughNamespace(sym) {
-				all = []*symbols.Symbol{sym}
-			}
-		}
-
-		if len(all) == 0 {
-			r.unresolved(scope, qn)
-			return resolution{nil, false}
-		}
-		if len(all) > 1 {
+		if len(all) > 1 && !(i == last && r.invocationNames[qn]) {
 			r.ambiguous(qn, len(all))
 			return resolution{nil, false}
 		}
@@ -144,9 +83,77 @@ func (r *Resolver) walkQualifiedTail(scope *symbols.Scope, qn *ast.QualifiedName
 			r.unresolved(scope, qn)
 			return resolution{nil, false}
 		}
-		curFQN = r.registeredFQN(cur)
 	}
 	return resolution{cur, true}
+}
+
+// qualifiedSegment returns the members of cur that qn's segment i names, in
+// lookup order, or reports the name unresolved when the segment reaches none.
+func (r *Resolver) qualifiedSegment(scope *symbols.Scope, qn *ast.QualifiedName, cur *symbols.Symbol, i int) ([]*symbols.Symbol, bool) {
+	from := r.ReferringNamespaceFQN(scope)
+	seg := qn.Parts[i]
+	var all []*symbols.Symbol
+
+	// Try local scope lookup first if available. A segment names a member of
+	// the namespace the walk has reached, so it reaches only the visible ones.
+	if cur.Scope != nil {
+		all = r.namedThroughNamespaces(symbols.PreferDeclared(cur.Scope.LookupLocalAll(seg.Text)))
+	}
+
+	if len(all) == 0 && cur.Scope != nil {
+		if sym, ok := r.lookupImportedMember(cur, cur.Scope, scope, seg.Text); ok &&
+			r.namedThroughNamespace(sym) {
+			all = []*symbols.Symbol{sym}
+		}
+	}
+
+	// If local lookup fails (or no scope), look the segment up under the FQN
+	// walked so far. This handles cases like ScalarValues::Real where
+	// ScalarValues is a package from stdlib that was indexed with full FQNs
+	// but doesn't have a populated Scope, at any nesting depth.
+	memberFQN := r.registeredFQN(cur) + "::" + seg.Text
+	if len(all) == 0 && r.idx != nil {
+		found := r.idx.LookupQualifiedFrom(memberFQN, from)
+		if !qn.Global {
+			found = notConflatedWith(cur, found)
+		}
+		candidates := r.namedThroughNamespaces(
+			r.admittedUnder(r.documentOf(scope), from, memberFQN, found))
+		switch {
+		case len(candidates) > 0:
+			return candidates, true
+		case len(found) > 0:
+			// Every candidate the name reaches is filtered out, so it is not a
+			// member of the namespace it appears under (KerML 8.2.4) and no
+			// other route may recover it.
+			r.unresolved(scope, qn)
+			return nil, false
+		}
+	}
+
+	// The name exists under cur but only because a private import surfaced it
+	// there: it is invisible from here (KerML 8.2.3.3), and the member search
+	// below reaches cached symbols by a route that does not know that.
+	if len(all) == 0 && r.idx != nil && r.idx.HiddenFrom(memberFQN, from) {
+		r.unresolved(scope, qn)
+		return nil, false
+	}
+
+	// A segment may name a member the current symbol inherits rather than
+	// declares: `engine::'4cylEngine'` reaches the variants of the type
+	// `engine` is typed by.
+	if len(all) == 0 {
+		if sym, ok := r.lookupMember(cur, seg.Text); ok &&
+			r.namedThroughNamespace(sym) {
+			all = []*symbols.Symbol{sym}
+		}
+	}
+
+	if len(all) == 0 {
+		r.unresolved(scope, qn)
+		return nil, false
+	}
+	return all, true
 }
 
 // notConflatedWith drops candidates owned by another namespace that merely

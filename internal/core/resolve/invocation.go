@@ -8,14 +8,13 @@ import (
 
 // ResolveInvocationName resolves the name an invocation calls as ResolveQualified
 // does, except that a bare name the model declares nothing for denotes the
-// Kernel Function Library declaration of that name, which is in force unimported.
+// Kernel Function Library declaration of that name, which is in force unimported,
+// and several declarations under a qualified name denote the first of them.
 func (r *Resolver) ResolveInvocationName(scope *symbols.Scope, qn *ast.QualifiedName) (*symbols.Symbol, bool) {
 	if qn == nil {
 		return nil, false
 	}
-	if len(qn.Parts) == 1 && !qn.Global {
-		r.invocationNames[qn] = true
-	}
+	r.invocationNames[qn] = true
 	return r.resolveQualified(scope, qn, nil)
 }
 
@@ -52,19 +51,16 @@ func (r *Resolver) LibraryFunctions(name string) []*symbols.Symbol {
 // A bare name is bound by the first scope step that finds it, every import of
 // that scope contributing, or by the library when the model declares nothing.
 // Imported library declarations do not hide the rest of the in-force library set
-// of that name; a declaration of the model's own does.
+// of that name; a declaration of the model's own does. A qualified name denotes
+// every member its last segment names in the namespace the rest resolves to.
 func (r *Resolver) InvocationCandidates(scope *symbols.Scope, qn *ast.QualifiedName) []*symbols.Symbol {
 	if qn == nil || len(qn.Parts) == 0 {
 		return nil
 	}
 	if len(qn.Parts) != 1 || qn.Global || scope == nil {
-		var sym *symbols.Symbol
-		var ok bool
-		r.aside(func() { sym, ok = r.resolveQualified(scope, qn, nil) })
-		if !ok || sym == nil {
-			return nil
-		}
-		return []*symbols.Symbol{sym}
+		var out []*symbols.Symbol
+		r.aside(func() { out = r.qualifiedCandidates(scope, qn) })
+		return out
 	}
 	name := qn.Parts[0].Text
 	var out []*symbols.Symbol
@@ -75,6 +71,32 @@ func (r *Resolver) InvocationCandidates(scope *symbols.Scope, qn *ast.QualifiedN
 	if r.allLibrary(out) {
 		for _, sym := range r.LibraryFunctions(name) {
 			out = appendSymbol(out, sym)
+		}
+	}
+	return out
+}
+
+// qualifiedCandidates resolves qn as an invocation name and, when it has a
+// qualifier, widens the last segment to every member it names there.
+func (r *Resolver) qualifiedCandidates(scope *symbols.Scope, qn *ast.QualifiedName) []*symbols.Symbol {
+	r.invocationNames[qn] = true
+	sym, ok := r.resolveQualified(scope, qn, nil)
+	if !ok || sym == nil {
+		return nil
+	}
+	last := len(qn.Parts) - 1
+	parts := r.parts[qn]
+	if last == 0 || len(parts) <= last || parts[last-1] == nil {
+		return []*symbols.Symbol{sym}
+	}
+	all, ok := r.qualifiedSegment(scope, qn, parts[last-1], last)
+	if !ok {
+		return []*symbols.Symbol{sym}
+	}
+	out := []*symbols.Symbol{sym}
+	for _, found := range all {
+		if !r.AliasNamesNothing(found) {
+			out = appendSymbol(out, r.AliasedElement(found))
 		}
 	}
 	return out
