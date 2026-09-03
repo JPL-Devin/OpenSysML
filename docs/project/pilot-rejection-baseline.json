@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 122,
-        "digest": "sha256:29ae96f57cc1205322bc84084817a32ebda094b394b97d9176b39bcf932e7380"
+        "files": 123,
+        "digest": "sha256:58d33855c66e2120b36b42ccb8819aa6ed57b1aa9e2da5c0395510603161c773"
       }
     ],
     "recorded": "2026-09-03"
   },
   "totals": {
-    "cases": 122,
-    "bothReject": 122,
+    "cases": 123,
+    "bothReject": 123,
     "pilotOnlyRejects": 0,
     "oursOnlyRejects": 0,
     "bothAccept": 0
@@ -63,8 +63,8 @@
     },
     {
       "source": "semantic",
-      "cases": 2,
-      "bothReject": 2,
+      "cases": 3,
+      "bothReject": 3,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 0,
       "bothAccept": 0
@@ -866,6 +866,15 @@
       "pilotErrors": 4
     },
     {
+      "path": "semantic/send-constructor-non-type.sysml",
+      "source": "semantic",
+      "rule": "a constructor must instantiate a type, not a package (KerML 8.3.4.8 InstantiationExpression validateInstantiationExpressionInstantiatedType; pilot validateInstantiationExpressionInstantiatedType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
       "path": "semantic/send-payload-non-behavior.sysml",
       "source": "semantic",
       "rule": "a send payload that is an invocation must invoke a behavior or a behavioral feature (KerML 8.3.4.8 InvocationExpression validateInvocationExpressionInstantiatedType; pilot validateInvocationExpressionInstantiatedType).",
@@ -1222,8 +1231,8 @@
       }
     ],
     "totals": {
-      "cases": 122,
-      "bothReject": 122,
+      "cases": 123,
+      "bothReject": 123,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 0,
       "bothAccept": 0

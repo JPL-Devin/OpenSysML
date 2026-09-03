@@ -796,6 +796,17 @@ func (ec *exprChecker) inferConstructor(scope *symbols.Scope, e *ast.Constructor
 	if typ == nil {
 		return semantics.PrimUnknown
 	}
+	// Only a Type is instantiated (KerML §8.3.4.8 validateInstantiationExpressionInstantiatedType).
+	if !isTypeKind(typ.Kind) {
+		ec.diags = append(ec.diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     e.Type.Span(),
+			Message:  fmt.Sprintf("Must have an invoked/instantiated type: %s is a %s, not a type", typ.Name, typ.Kind),
+			Code:     "instantiation-not-type",
+			Source:   "type",
+		})
+		return semantics.PrimUnknown
+	}
 	features := ec.model.ConstructibleFeatures(typ)
 	bound := make(map[*symbols.Symbol]bool, len(features))
 	for i, arg := range e.Args {

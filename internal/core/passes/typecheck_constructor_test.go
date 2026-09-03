@@ -79,6 +79,20 @@ func TestConstructorWellFormedArgumentsAreSilent(t *testing.T) {
 	}
 }
 
+// A constructor instantiates a type; a name that resolves to a package is
+// reported at the name, as the reference reports it. A usage is a type and is silent.
+func TestConstructorNonTypeTargetIsReported(t *testing.T) {
+	src := constructorModel(`package Signals { item def Sig; } send new Signals() to ground;`)
+	got := constructorDiags(t, src)
+	assertOneConstructorDiag(t, src, got, "Signals", "Must have an invoked/instantiated type: Signals is a package, not a type")
+	if got[0].Code != "instantiation-not-type" {
+		t.Errorf("code %q, want instantiation-not-type", got[0].Code)
+	}
+	if got := constructorDiags(t, constructorModel(`item t : Telemetry; send new t(frames = 3) to ground;`)); len(got) != 0 {
+		t.Errorf("new usage(...): unexpected diagnostics: %+v", got)
+	}
+}
+
 // A positional argument beyond the constructed type's features binds nothing,
 // which the first such argument reports.
 func TestConstructorTooManyPositionalArgumentsIsReported(t *testing.T) {

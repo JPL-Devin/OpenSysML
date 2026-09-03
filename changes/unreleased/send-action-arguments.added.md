@@ -24,4 +24,6 @@
   naming another type's feature, and an argument whose scalar type cannot bind its feature, each at
   the offending argument. A simple label resolves as a feature of the constructed type rather than
   of the surrounding scope, so an unknown one is reported where it is written and renaming the
-  feature rewrites its labels.
+  feature rewrites its labels. The constructed name must be a type: `new Signals()` on a package
+  is `Must have an invoked/instantiated type` at the name, and the runtime refuses an unresolved
+  or non-type `new` target at the send instead of posting a message that names nothing.

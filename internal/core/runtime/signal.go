@@ -1125,20 +1125,41 @@ func (e *EvalContext) buildInvokedMessage(scope *symbols.Scope, invocation *ast.
 // features, so an accept binds a Telemetry whose first feature is 3, never the 3.
 // A positional argument beyond those features is rejected at the send.
 func (e *EvalContext) buildConstructedMessage(scope *symbols.Scope, constructor *ast.ConstructorExpr, target string) (Message, error) {
-	signalType, signal, err := e.messageType(scope, constructor.Type)
+	signal, err := e.constructedType(scope, constructor.Type)
 	if err != nil {
 		return Message{}, err
 	}
-	if signal != nil && e.ctx != nil && e.ctx.model != nil {
+	if e.ctx != nil && e.ctx.model != nil {
 		if n := len(e.ctx.model.ConstructibleFeatures(signal)); len(constructor.Args) > n {
-			return Message{}, fmt.Errorf("send %s: new %s takes %d argument(s), found %d", signalType, signalType, n, len(constructor.Args))
+			return Message{}, fmt.Errorf("send %s: new %s takes %d argument(s), found %d", signal.Name, signal.Name, n, len(constructor.Args))
 		}
 	}
-	return e.buildTypedMessage(scope, constructor.Type, signalType, signal, constructor.Args, constructor.NamedArgs, target)
+	return e.buildTypedMessage(scope, constructor.Type, signal.Name, signal, constructor.Args, constructor.NamedArgs, target)
 }
 
-// messageType names the type of a message and resolves it to the definition it
-// reaches, nil when it reaches none.
+// constructedType resolves the type `new T(…)` instantiates: a definition, or a
+// usage, which is a type too. A name that resolves to nothing or to no type is an error.
+func (e *EvalContext) constructedType(scope *symbols.Scope, typeRef *ast.QualifiedName) (*symbols.Symbol, error) {
+	name := ast.QualifiedText(typeRef)
+	if name == "" {
+		return nil, fmt.Errorf("send: the constructor names no type")
+	}
+	if scope == nil || e.ctx == nil || e.ctx.resolver == nil {
+		return nil, fmt.Errorf("send new %s: no scope resolves the type", name)
+	}
+	sym, ok := e.ctx.resolver.ResolveQualified(scope, typeRef)
+	if !ok || sym == nil {
+		return nil, fmt.Errorf("send new %s: unresolved reference: %s", name, name)
+	}
+	switch sym.Decl.(type) {
+	case *ast.Definition, *ast.Usage:
+		return sym, nil
+	}
+	return nil, fmt.Errorf("send new %s: %s is a %s, not a type", name, name, sym.Kind)
+}
+
+// messageType names the type of an invoked message and resolves it to the
+// definition it reaches, nil when it reaches none.
 func (e *EvalContext) messageType(scope *symbols.Scope, typeRef *ast.QualifiedName) (string, *symbols.Symbol, error) {
 	signalType := ast.SimpleName(typeRef)
 	if signalType == "" {

@@ -67,15 +67,16 @@ systematically from four sources, one subdirectory each:
    `Feature_invalid_noType.kerml.xt`) only error in a library-less resource set — with the
    standard library loaded, `feature f;` gets an implicit type and is legal — so only
    library-independent expectations became cases.
-4. **`semantic/` — validation rules probed against the pinned validators** (2 cases). Each case is
+4. **`semantic/` — validation rules probed against the pinned validators** (3 cases). Each case is
    one semantic constraint the pinned pilot rejects, written as the minimal model our validator
    was found permissive on and re-checked after the rule was implemented; the header cites the
    specification clause and the pilot's `validate...` constraint name. The send-action family
-   contributes the two cases here: a payload that invokes a non-behavior
-   (`send-payload-non-behavior`) and a state subaction or transition effect send with no payload
-   (`send-subaction-no-payload`, which the pilot's grammar rejects before its validator would).
+   contributes the three cases here: a payload that invokes a non-behavior
+   (`send-payload-non-behavior`), a state subaction or transition effect send with no payload
+   (`send-subaction-no-payload`, which the pilot's grammar rejects before its validator would), and
+   a constructed payload whose `new` names a package rather than a type (`send-constructor-non-type`).
 
-What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 122
+What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 123
 cases ourselves**, so the denominator measures our coverage of the rejection surface, not our
 conformance: it is a **sample, not a proof** — a clean bucket here does not mean OpenSysML rejects
 everything the reference rejects, and no official conformance suite exists to make that claim
@@ -121,7 +122,7 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-122 case(s): 122 both reject, 0 only the pilot rejects, 0 only we reject, 0 both accept
+123 case(s): 123 both reject, 0 only the pilot rejects, 0 only we reject, 0 both accept
   of which 2 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -129,12 +130,13 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 7 | 7 | 0 | 0 | 0 |
 | grammar | 79 | 79 | 0 | 0 | 0 |
-| semantic | 2 | 2 | 0 | 0 | 0 |
+| semantic | 3 | 3 | 0 | 0 | 0 |
 | xpect | 34 | 34 | 0 | 0 | 0 |
 
 The corpus grew from 79 cases to 119 in wave 10G, to 120 with `g60` (an `alias` named by a
-keyword), and to 122 with the first two `semantic/` cases (the send-action payload rules), and
-the default-mode gap count is now 2 of 122: only the intended `extensions/`
+keyword), to 122 with the first two `semantic/` cases (the send-action payload rules), and to 123
+with the third (a constructor naming no type), and
+the default-mode gap count is now 2 of 123: only the intended `extensions/`
 notation. Wave 11 closed two `xpect/` gaps: `p11`
 (11D's and 11G's model-level evaluability predicate on metadata body values) and `p15` (11F's
 attribute-usage typing rule), and wave 12C closed the last one, `p24`: a library metaclass now carries its
@@ -151,8 +153,8 @@ extensions that the default mode accepts on purpose and strict mode reports as e
 initial state marker), `x04` (`region r { … }`) and `x07` (`transition <src> to <tgt>`) left that
 list when that notation was removed: each is now a parse error in either mode, so both
 implementations reject it by default. Judged in
-the default mode the same corpus gives 120 agreements and 2 gaps, which is what `-conformance
-default` prints. `-conformance strict` gives 122 and 0. Reserved keywords recovered as declared
+the default mode the same corpus gives 121 agreements and 2 gaps, which is what `-conformance
+default` prints. `-conformance strict` gives 123 and 0. Reserved keywords recovered as declared
 names and SysML declaration keywords recovered in KerML are now errors in either mode; the parser
 still preserves their trees for editors and later analysis. Of the 14 gaps this document carried before wave 8, six were closed by the
 validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`

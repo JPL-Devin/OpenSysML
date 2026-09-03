@@ -243,6 +243,74 @@ func TestSendNewLabelMustNameConstructibleFeature(t *testing.T) {
 	}
 }
 
+// A constructor names a type: an unresolved name or a package is rejected at
+// the send rather than posted as a message of that name. Nothing is validated first.
+func TestSendNewRejectsNonTypeTargetsAtSend(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		package Q { item def Sig { attribute a : Integer; } }
+		action missing {
+			first start;
+			action sender { send new Missing(a = 1) to nobody; }
+			done;
+			succession first start then sender;
+			succession first sender then done;
+		}
+		action pkg {
+			first start;
+			action sender { send new Q() to nobody; }
+			done;
+			succession first start then sender;
+			succession first sender then done;
+		}
+	}`))
+	for _, tc := range []struct{ action, want string }{
+		{"missing", "send new Missing: unresolved reference: Missing"},
+		{"pkg", "send new Q: Q is a package, not a type"},
+	} {
+		sym := findSymbolByName(idx.DocumentRoot("<test>"), tc.action, ast.DefAction)
+		if sym == nil {
+			t.Fatalf("action %s not found", tc.action)
+		}
+		_, err := ctx.ExecuteAction(sym)
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: error %v, want %q", tc.action, err, tc.want)
+		}
+		if errors.Is(err, ErrAcceptDeadlock) {
+			t.Errorf("%s: reported as a deadlock, want the send itself rejected", tc.action)
+		}
+	}
+}
+
+// A usage is a type too: `new sig(a = 4)` with `item sig : Sig` constructs an
+// occurrence an `accept : Sig` binds, carrying the argument.
+func TestSendNewConstructsAUsage(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		item def Sig { attribute a : Integer; }
+		item sig : Sig;
+		action pipeline {
+			attribute got : Integer = 0;
+			first start;
+			action sender { send new sig(a = 4) to reader; }
+			action reader accept msg : Sig { assign got := msg.a * 10; }
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
+		}
+	}`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action pipeline not found")
+	}
+	outputs, err := ctx.ExecuteAction(sym)
+	if err != nil {
+		t.Fatalf("send new sig(a = 4): %v", err)
+	}
+	assertIntOutput(t, outputs, "got", 40)
+}
+
 // executeActionSource executes the named action declared in src.
 func executeActionSource(t *testing.T, name, src string) (map[string]Value, error) {
 	t.Helper()
