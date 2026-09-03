@@ -2,6 +2,7 @@
 // unqualified name, and the receiver form `col->op(…)` — and all three name one
 // implementation, so they answer alike.
 package test {
+	private import SequenceFunctions::*;
 	calc agree {
 		attribute xs : Integer[*] = (1, 2, 3);
 		attribute qualified : Integer = SequenceFunctions::size(xs);

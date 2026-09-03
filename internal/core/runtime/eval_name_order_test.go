@@ -12,6 +12,7 @@ import (
 const nameOrderModel = `
 package test {
 	private import ScalarValues::*;
+	private import ControlFunctions::*;
 	attribute k : Integer = 100;
 	calc def Local {
 		in k : Integer;
@@ -37,7 +38,7 @@ func wantNamedInt(t *testing.T, what string, got Value, err error, want int64) {
 // that declares it — a body-local declaration over a bound parameter, the
 // parameter over the calc's lexical scope — however the frames are stored.
 func TestSimpleNameShadowingOrder(t *testing.T) {
-	model, resolver, root := parseAndBuildModel(t, nameOrderModel)
+	model, resolver, root := parseAndBuildLibraryModel(t, nameOrderModel)
 	ctx := NewContext(model, resolver, 10000)
 	pkg, _ := root.LookupLocal("test")
 	scope := pkg.Scope
@@ -61,7 +62,7 @@ func TestSimpleNameShadowingOrder(t *testing.T) {
 // masks an output of the calc run being computed, which masks the evaluated
 // element's own features, which mask the scope's member.
 func TestSimpleNameFallbackOrder(t *testing.T) {
-	model, resolver, root := parseAndBuildModel(t, nameOrderModel)
+	model, resolver, root := parseAndBuildLibraryModel(t, nameOrderModel)
 	ctx := NewContext(model, resolver, 10000)
 	pkg, _ := root.LookupLocal("test")
 	scope := pkg.Scope

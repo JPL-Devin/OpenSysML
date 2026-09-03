@@ -3,6 +3,7 @@
 // the calc applying it declares a parameter of the same name.
 package test {
 	private import ScalarValues::*;
+	private import ControlFunctions::*;
 
 	calc def Keep { in xs : Integer[*]; in expr pred; return : Integer[*] = xs->select pred; }
 	calc def KeepShadowing {

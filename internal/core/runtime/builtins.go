@@ -10,56 +10,9 @@ import (
 // collections, or whose arguments are bodies rather than values, which the
 // scalar library registry (library_functions.go) cannot express: it applies to
 // semantics.Values, while these need runtime values and an evaluation context to
-// call a body with.
+// call a body with. Dispatch is by the declaration a call resolves to, never by
+// its bare name: `seq->size()` is SequenceFunctions::size only where imported.
 var builtins map[string]builtinFunc
-
-// builtinsByLocalName maps an unqualified name to the declaration a bare or
-// arrow-form call denotes — `(1,2,3)->size()` and `size((1,2,3))` are
-// `SequenceFunctions::size`. A name appears here only where every library
-// declaration of it means the same operation, and dispatch reaches it only for
-// a name the model itself declares nothing for, so a user-declared calc of the
-// same name still resolves to itself.
-var builtinsByLocalName map[string]builtinFunc
-
-// builtinLocalNames records which library declaration each unqualified name
-// denotes, so the mapping can be listed as well as dispatched on.
-var builtinLocalNames = map[string]string{
-	"size":         "SequenceFunctions::size",
-	"isEmpty":      "SequenceFunctions::isEmpty",
-	"notEmpty":     "SequenceFunctions::notEmpty",
-	"includes":     "SequenceFunctions::includes",
-	"includesOnly": "SequenceFunctions::includesOnly",
-	"excludes":     "SequenceFunctions::excludes",
-	"equals":       "SequenceFunctions::equals",
-	"same":         "SequenceFunctions::same",
-	"union":        "SequenceFunctions::union",
-	"intersection": "SequenceFunctions::intersection",
-	"including":    "SequenceFunctions::including",
-	"includingAt":  "SequenceFunctions::includingAt",
-	"excluding":    "SequenceFunctions::excluding",
-	"subsequence":  "SequenceFunctions::subsequence",
-	"excludingAt":  "SequenceFunctions::excludingAt",
-	"head":         "SequenceFunctions::head",
-	"tail":         "SequenceFunctions::tail",
-	"last":         "SequenceFunctions::last",
-	"contains":     "CollectionFunctions::contains",
-	"containsAll":  "CollectionFunctions::containsAll",
-	"select":       "ControlFunctions::select",
-	"selectOne":    "ControlFunctions::selectOne",
-	"reject":       "ControlFunctions::reject",
-	"collect":      "ControlFunctions::collect",
-	"forAll":       "ControlFunctions::forAll",
-	"exists":       "ControlFunctions::exists",
-	"allTrue":      "ControlFunctions::allTrue",
-	"anyTrue":      "ControlFunctions::anyTrue",
-	"reduce":       "ControlFunctions::reduce",
-	"minimize":     "ControlFunctions::minimize",
-	"maximize":     "ControlFunctions::maximize",
-	"sum":          "NumericalFunctions::sum",
-	"product":      "NumericalFunctions::product",
-	"sum0":         "NumericalFunctions::sum0",
-	"product1":     "NumericalFunctions::product1",
-}
 
 func init() {
 	builtins = map[string]builtinFunc{
@@ -133,34 +86,16 @@ func init() {
 		"RealFunctions::product":     builtinNumericalProduct,
 	}
 	registerNamedOperatorBuiltins()
-
-	builtinsByLocalName = map[string]builtinFunc{}
-	for local, fqn := range builtinLocalNames {
-		fn, ok := builtins[fqn]
-		if !ok {
-			panic("runtime: unqualified name " + local + " maps to unregistered built-in " + fqn)
-		}
-		builtinsByLocalName[local] = fn
-	}
 }
 
-// builtinFor returns the implementation of the library declaration sym is,
-// where it is one of the collection functions. Unlike the scalar library
-// functions, these declarations do carry bodies — SequenceFunctions::size is
-// defined recursively as `if isEmpty(seq)? 0 else size(tail(seq)) + 1` — but
-// the body is the specification of the operation, not the way to compute it, so
-// a name that denotes the library declaration is computed by the implementation
-// of that operation. A calc the model declares under the same qualified name
-// is the model's own where it carries a body, as libraryFunctionFor decides.
+// builtinFor answers the implementation of a library-declared collection
+// function; a calc the model declares under the same name is never answered here.
 func (ctx *Context) builtinFor(sym *symbols.Symbol) (builtinFunc, bool) {
-	if sym == nil {
+	if sym == nil || !ctx.libraryDeclared(sym) {
 		return nil, false
 	}
 	fn, ok := builtins[ctx.qualifiedSymbolName(sym)]
-	if !ok || (!ctx.libraryDeclared(sym) && ctx.hasCalcBody(sym)) {
-		return nil, false
-	}
-	return fn, true
+	return fn, ok
 }
 
 // boolValue wraps a Boolean result.

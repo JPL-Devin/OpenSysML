@@ -50,18 +50,6 @@ func registerConversionFunctions() {
 	registerUnevaluable("RationalFunctions::rat", []string{"numer", "denum"}, 2, exactRational)
 	registerUnevaluable("RationalFunctions::numer", []string{"rat"}, 1, exactRational)
 	registerUnevaluable("RationalFunctions::denom", []string{"rat"}, 1, exactRational)
-
-	// ToInteger, ToNatural and ToRational each name a String and a numeric
-	// overload, which an unqualified call cannot pick between here.
-	registerLocalNames(map[string]string{
-		"ToString":  "BaseFunctions::ToString",
-		"ToBoolean": "BooleanFunctions::ToBoolean",
-		"ToReal":    "RealFunctions::ToReal",
-		"gcd":       "RationalFunctions::gcd",
-		"rat":       "RationalFunctions::rat",
-		"numer":     "RationalFunctions::numer",
-		"denom":     "RationalFunctions::denom",
-	})
 }
 
 // anythingToString is BaseFunctions::ToString, the notation x is written with in

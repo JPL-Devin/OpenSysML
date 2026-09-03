@@ -56,6 +56,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
 	t.Run("calc_calls_an_unimported_extension_function", testCalcCallsAnUnimportedExtensionFunction)
+	t.Run("calc_calls_an_unimported_library_function", testCalcCallsAnUnimportedLibraryFunction)
 	t.Run("calc_unbound_keyword_named_parameter", testCalcUnboundKeywordNamedParameter)
 	t.Run("calc_too_many_arguments", testCalcTooManyArguments)
 	t.Run("calc_unknown_named_argument", testCalcUnknownNamedArgument)
@@ -220,6 +221,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("named_library_call_that_has_no_value", testNamedLibraryCallThatHasNoValue)
 	t.Run("builtin_named_argument_that_binds_nothing", testBuiltinNamedArgumentThatBindsNothing)
 	t.Run("body_by_reference_that_cannot_be_applied", testBodyByReferenceThatCannotBeApplied)
+	t.Run("bodiless_model_calc_named_as_a_builtin", testBodilessModelCalcNamedAsABuiltin)
 	t.Run("real_literal_that_underflows", testRealLiteralThatUnderflows)
 	t.Run("string_operand_of_the_wrong_kind", testStringOperandOfTheWrongKind)
 	t.Run("collection_body_of_the_wrong_arity", testCollectionBodyOfTheWrongArity)
@@ -1251,10 +1253,10 @@ func testNumericLibraryCallThatHasNoValue(t *testing.T) {
 		{"VectorFunctions::vectorScalarDiv(xs, 0)", ErrDivisionByZero},
 		{"VectorFunctions::cartesianInner(xs)", ErrCalcArity},
 		{"VectorFunctions::sum(xs)", ErrUnevaluableLibraryFunction},
-		{"ComplexFunctions::'/'(rect(0.0, 1.0), rect(0.0, 0.0))", ErrDivisionByZero},
+		{"ComplexFunctions::'/'(ComplexFunctions::rect(0.0, 1.0), ComplexFunctions::rect(0.0, 0.0))", ErrDivisionByZero},
 		{"ComplexFunctions::re(xs)", ErrTypeMismatch},
 		{"ComplexFunctions::re(ys)", ErrTypeMismatch},
-		{"ComplexFunctions::ToString(rect(0.0, 1.0))", ErrUnevaluableLibraryFunction},
+		{"ComplexFunctions::ToString(ComplexFunctions::rect(0.0, 1.0))", ErrUnevaluableLibraryFunction},
 		// includingAt inserts before a position of 1..size+1, so an index past the
 		// end of the sequence names no insertion point and is reported rather than
 		// appending or dropping the values.
@@ -1365,12 +1367,37 @@ func testBuiltinNamedArgumentThatBindsNothing(t *testing.T) {
 	}
 }
 
+// testBodilessModelCalcNamedAsABuiltin: a model's own calc declared under a
+// built-in's qualified name is the model's, so without a body it computes
+// nothing rather than what the library's declaration of that name computes.
+func testBodilessModelCalcNamedAsABuiltin(t *testing.T) {
+	src := `
+		package NumericalFunctions {
+			private import ScalarValues::*;
+			calc def sum0 { in collection : Integer[*]; in zero : Integer; return : Integer; }
+		}
+		package test {
+			private import ScalarValues::*;
+			calc def Total { return : Integer = NumericalFunctions::sum0((1, 2, 3), 0); }
+			calc def size { in seq : Integer[*]; return : Integer; }
+			calc def Size { return : Integer = size((1, 2, 3)); }
+		}
+	`
+	for _, calc := range []string{"Total", "Size"} {
+		err := calcErrorWithLibraries(t, src, calc, nil, 10000)
+		if !errors.Is(err, ErrNoResultExpression) {
+			t.Errorf("%s = %v, want %v", calc, err, ErrNoResultExpression)
+		}
+	}
+}
+
 // testBodyByReferenceThatCannotBeApplied: a body reaching a built-in through an
 // `expr` parameter is applied in the scope it was written in, and one selected
 // by a control function that declares parameters is reported.
 func testBodyByReferenceThatCannotBeApplied(t *testing.T) {
 	src := `
 		package test {
+			private import ControlFunctions::*;
 			calc def Pick { in expr chosen; return : Integer = ControlFunctions::'if'(true, chosen, 0); }
 			calc def Keep { in xs : Integer[*]; in expr pred; return : Integer[*] = xs->select pred; }
 			calc def PicksUnary { return : Integer = Pick({ in x; x }); }
@@ -4075,7 +4102,8 @@ func testCalcUnboundParameter(t *testing.T) {
 
 // testCalcCallsAnUnimportedExtensionFunction: `exp(x)` with no import of the
 // OpenSysML extension library is reported unresolved by name resolution, so the
-// call fails with a typed error naming the import rather than being answered.
+// call fails with a typed error naming the declaration whose package an import
+// would make visible, rather than being answered.
 func testCalcCallsAnUnimportedExtensionFunction(t *testing.T) {
 	src := `
 		package test {
@@ -4085,7 +4113,7 @@ func testCalcCallsAnUnimportedExtensionFunction(t *testing.T) {
 			}
 		}
 	`
-	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
 	rootScope := idx.DocumentRoot("<test>")
 	sym := findSymbolByName(rootScope, "grow", ast.DefCalc)
 	if sym == nil {
@@ -4095,13 +4123,61 @@ func testCalcCallsAnUnimportedExtensionFunction(t *testing.T) {
 	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 1}}
 	result, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
 	if err == nil {
-		t.Fatalf("expected an out-of-scope error, calc returned %+v", result)
+		t.Fatalf("expected an unresolved-reference error, calc returned %+v", result)
 	}
-	if !errors.Is(err, ErrUnimportedExtensionFunction) {
-		t.Fatalf("expected ErrUnimportedExtensionFunction, got: %v", err)
+	if !errors.Is(err, ErrUnresolvedReference) {
+		t.Fatalf("expected ErrUnresolvedReference, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "import OpenSysMLMathFunctions::*;") {
-		t.Errorf("error %q does not name the import that makes the call legal", err)
+	if want := ": unresolved reference: exp — did you mean OpenSysMLMathFunctions::exp?"; !strings.HasSuffix(err.Error(), want) {
+		t.Errorf("error %q does not end in %q", err, want)
+	}
+}
+
+// testCalcCallsAnUnimportedLibraryFunction: `wheels->size()` in a model that
+// imports no part of SequenceFunctions is reported unresolved by name
+// resolution, so the call fails with a typed error carrying the validator's own
+// hint — the library declarations of that name, whose package an import would
+// make visible — rather than being answered by dispatch on the bare name. The
+// same body evaluates once the import is written.
+func testCalcCallsAnUnimportedLibraryFunction(t *testing.T) {
+	model := func(imports string) string {
+		return `
+		package test {
+			` + imports + `
+			attribute wheels : Integer[*] = (1, 2, 3, 4);
+			calc count {
+				wheels->size()
+			}
+		}
+	`
+	}
+
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, model("")))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "count", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("count calc not found")
+	}
+	result, err := ctx.InvokeCalc(sym, nil, rootScope)
+	if err == nil {
+		t.Fatalf("expected an unresolved-reference error, calc returned %+v", result)
+	}
+	if !errors.Is(err, ErrUnresolvedReference) {
+		t.Fatalf("expected ErrUnresolvedReference, got: %v", err)
+	}
+	if want := ": unresolved reference: size — did you mean SequenceFunctions::size or CollectionFunctions::size?"; !strings.HasSuffix(err.Error(), want) {
+		t.Errorf("error %q does not end in %q", err, want)
+	}
+
+	idx, _, ctx = buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, model("private import SequenceFunctions::*;")))
+	rootScope = idx.DocumentRoot("<test>")
+	sym = findSymbolByName(rootScope, "count", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("count calc not found")
+	}
+	result, err = ctx.InvokeCalc(sym, nil, rootScope)
+	if err != nil || result.Kind != ValConst || result.Const.Int != 4 {
+		t.Fatalf("wheels->size() under import SequenceFunctions::* = %+v, %v; want 4", result, err)
 	}
 }
 
@@ -5526,13 +5602,14 @@ func parseAndBuild(t *testing.T, src string) *ast.RootNamespace {
 func testLibraryFunctionOutsideItsDomain(t *testing.T) {
 	src := `
 		package test {
+			private import RealFunctions::*;
 			calc root {
 				in x : Real;
 				return : Real = sqrt(x);
 			}
 		}
 	`
-	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
 	rootScope := idx.DocumentRoot("<test>")
 	sym := findSymbolByName(rootScope, "root", ast.DefCalc)
 	if sym == nil {

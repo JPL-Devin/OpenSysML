@@ -2,6 +2,7 @@
 // holding a body denotes that body, whether written with the arrow or by name.
 package test {
 	private import ScalarValues::*;
+	private import ControlFunctions::*;
 
 	calc def ByArrow { in xs : Integer[*]; in expr pred; return : Integer[*] = xs->select pred; }
 	calc def ByName { in xs : Integer[*]; in expr pred; return : Integer[*] = ControlFunctions::select(xs, pred); }

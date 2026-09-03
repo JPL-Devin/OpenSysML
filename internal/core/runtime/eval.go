@@ -96,17 +96,26 @@ func (ec *EvalContext) evalIn(scope *symbols.Scope) *EvalContext {
 func (ec *EvalContext) nestedEnv(scope *symbols.Scope) *EvalContext {
 	frames := make([]frame, len(ec.frames))
 	copy(frames, ec.frames)
+	return ec.over(scope, frames)
+}
+
+// closure snapshots the environment for an expression evaluated later; bindings
+// are copied since an invocation's frame storage is reused once it returns.
+func (ec *EvalContext) closure() *EvalContext {
+	frames := make([]frame, len(ec.frames))
+	for i, f := range ec.frames {
+		frames[i] = f.snapshot()
+	}
+	return ec.over(ec.scope, frames)
+}
+
+// over is this environment resolving names in scope over frames of its own.
+func (ec *EvalContext) over(scope *symbols.Scope, frames []frame) *EvalContext {
 	return &EvalContext{
 		ctx: ec.ctx, scope: scope, self: ec.self, frames: frames, trace: ec.trace,
 		features: ec.features, resolving: ec.resolving, calcRun: ec.calcRun,
 		activation: ec.activation, inBehaviorBody: ec.inBehaviorBody,
 	}
-}
-
-// closure snapshots this environment for an expression evaluated later, so it
-// reads the bindings in force where it was written, not where it is applied.
-func (ec *EvalContext) closure() *EvalContext {
-	return ec.nestedEnv(ec.scope)
 }
 
 // Push adds a new frame to the stack (on calc invocation, lambda entry).
@@ -1726,19 +1735,18 @@ type invocationKey struct {
 type invocationTarget struct {
 	qualName    string
 	calc        *symbols.Symbol  // the declaration the written name resolves to, nil for none
-	builtin     builtinFunc      // the built-in the name denotes: calc's, or the library's for an unresolved name
+	builtin     builtinFunc      // the built-in the name denotes: the library declaration calc is
 	builtinName string           // the built-in's registered name, keying its declared signature
-	library     *libraryFunction // the library function the name denotes: calc's, or one an unresolved name still means
+	library     *libraryFunction // the library function the name denotes: the library declaration calc is
 	shape       *calcShape       // calc's invocation interface, nil when it has none
-	err         error            // the name denotes nothing the model may call as written
 }
 
 // invocationTarget resolves what n denotes in this context's scope, memoized
 // per context: resolution reads only the model, which is fixed for its life.
-// The model is consulted first, so a declaration of the model's own is invoked
-// as written even under a name a library built-in is registered by. A name that
-// resolves to nothing still denotes the library function of that name: the OMG
-// libraries are in force whether or not the model imports them.
+// The name resolves as the validator resolves it, so a library function is
+// callable only where the model imports it or writes it qualified, and a
+// declaration of the model's own is invoked as written even under a name a
+// library built-in is registered by.
 func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget {
 	key := invocationKey{node: n, scope: ec.scope}
 	if target, ok := ec.ctx.invocationTargets[key]; ok {
@@ -1754,19 +1762,18 @@ func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget
 		} else if shape, err := ec.ctx.calcShapeOf(sym); err == nil {
 			target.shape = shape
 		}
-	} else if fn, ok := builtins[target.qualName]; ok {
-		target.builtin, target.builtinName = fn, target.qualName
-	} else if fn, err := unresolvedLibraryFunction(n.Type, target.qualName); err != nil {
-		target.err = err
-	} else if fn != nil {
-		target.library = fn
-	} else if fn, ok := builtinsByLocalName[target.qualName]; ok {
-		// `size(seq)` denotes SequenceFunctions::size like `seq->size()` does;
-		// a model's own `size` calc resolved above and denotes itself.
-		target.builtin, target.builtinName = fn, builtinLocalNames[target.qualName]
 	}
 	ec.ctx.invocationTargets[key] = target
 	return target
+}
+
+// unresolvedInvocation reports a call to a name that denotes nothing, with the
+// same "did you mean" hint the validator gives an unqualified reference.
+func (ec *EvalContext) unresolvedInvocation(qn *ast.QualifiedName, written string) error {
+	if qn != nil && len(qn.Parts) == 1 && !qn.Global && ec.ctx.resolver != nil {
+		return fmt.Errorf("%w: %s", ErrUnresolvedReference, ec.ctx.resolver.UnresolvedName(ec.scope, written))
+	}
+	return fmt.Errorf("%w: %s", ErrUnresolvedReference, written)
 }
 
 // evalInvocation evaluates a function/calc invocation.
@@ -1796,8 +1803,7 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 	if target.shape != nil && len(n.NamedArgs) == 0 {
 		return ec.invokeCalcShapeStacked(target.shape, exprs)
 	}
-	// A built-in binds its arguments by its declared signature, whether the
-	// written name resolved to the library declaration or to nothing at all.
+	// A built-in binds its arguments by its declared signature.
 	if target.builtin != nil {
 		return ec.invokeBuiltin(target.builtinName, target.builtin, exprs, n.NamedArgs)
 	}
@@ -1826,9 +1832,11 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 		named[arg.Name.Parts[len(arg.Name.Parts)-1].Text] = val
 	}
 
-	// An argument that fails is reported before the target is judged.
-	if target.err != nil {
-		return Value{}, target.err
+	// An argument that fails is reported before the target is judged. A name
+	// that resolves to nothing denotes nothing, not the library function of
+	// that name: the validator reports the same expression unresolved.
+	if target.calc == nil && target.library == nil {
+		return Value{}, ec.unresolvedInvocation(n.Type, qualName)
 	}
 	// Every invocation goes through the one calc path, so an expression and a
 	// direct InvokeCalc bind parameters and trace identically. The notation keeps
@@ -1839,9 +1847,6 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 	}
 	if target.library != nil {
 		return target.library.invoke(ec.ctx, callArgs)
-	}
-	if target.calc == nil {
-		return Value{}, fmt.Errorf("%w: calc %s", ErrUnresolvedReference, qualName)
 	}
 	if target.shape == nil {
 		return ec.ctx.invokeCalcWithSelf(target.calc, callArgs, ec.scope, ec.self)

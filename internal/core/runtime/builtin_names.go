@@ -1,6 +1,10 @@
 package runtime
 
-import "sort"
+import (
+	"sort"
+	"strings"
+	"unicode"
+)
 
 // Builtin is one library function this runtime implements directly, described
 // for a caller that lists them: the unqualified name a call may use, the
@@ -13,36 +17,35 @@ type Builtin struct {
 	// Collection is true for the operations over sequences, collections and
 	// bodies, which are the ones written in the postfix `x->name()` form.
 	Collection bool
-	// RequiresImport names the package a model must import for a call by this
-	// unqualified name to be legal, and is empty for the OMG libraries, which
-	// are in force whatever a model imports.
-	RequiresImport string
+	// Package is the library package that declares the function, which a model
+	// imports for a call by the unqualified name to be legal: the name resolves
+	// as any other does, so `import RealFunctions::*;` is what makes a bare
+	// `sqrt(x)` denote RealFunctions::sqrt.
+	Package string
 }
 
-// Builtins returns every library function this build implements, in name order,
-// each with the unqualified name a call writes and the import that name needs,
-// if any. It is the registry behind the REPL's %builtins listing, so what the
-// REPL advertises is what this build implements.
+// Builtins returns every library function this build implements that a model
+// calls by name, in name order, each with the package a call by that name needs
+// imported. It is the registry behind the REPL's %builtins listing, so what the
+// REPL advertises is what this build implements. A declaration registered only
+// to report itself as not evaluable is left out, as is one named as an operator,
+// which a model writes as that operator rather than as a call.
 func Builtins() []Builtin {
-	out := make([]Builtin, 0,
-		len(libraryFunctionsByLocalName)+len(builtinLocalNames)+len(extensionLocalNames))
-	for name, fn := range libraryFunctionsByLocalName {
-		out = append(out, Builtin{Name: name, FQN: fn.name, Params: fn.params})
-	}
-	// An extension function is implemented like any other; only dispatch by its
-	// unqualified name waits on the import that declares it.
-	for name, pkg := range extensionLocalNames {
-		fqn := pkg + "::" + name
-		fn, ok := libraryFunctions[fqn]
-		if !ok {
+	out := make([]Builtin, 0, len(libraryFunctions)+len(builtins))
+	for fqn, fn := range libraryFunctions {
+		if fn.unevaluable {
 			continue
 		}
-		out = append(out, Builtin{
-			Name: name, FQN: fqn, Params: fn.params, RequiresImport: pkg,
-		})
+		if b, ok := builtinNamed(fqn); ok {
+			b.Params = fn.params
+			out = append(out, b)
+		}
 	}
-	for name, fqn := range builtinLocalNames {
-		out = append(out, Builtin{Name: name, FQN: fqn, Collection: true})
+	for fqn := range builtins {
+		if b, ok := builtinNamed(fqn); ok {
+			b.Collection = true
+			out = append(out, b)
+		}
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Name != out[j].Name {
@@ -51,4 +54,20 @@ func Builtins() []Builtin {
 		return out[i].FQN < out[j].FQN
 	})
 	return out
+}
+
+// builtinNamed splits fqn into the package that declares it and the name a call
+// writes, reporting false for a declaration named as an operator.
+func builtinNamed(fqn string) (Builtin, bool) {
+	cut := strings.LastIndex(fqn, "::")
+	if cut < 0 {
+		return Builtin{}, false
+	}
+	name := fqn[cut+len("::"):]
+	for _, r := range name {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' {
+			return Builtin{}, false
+		}
+	}
+	return Builtin{Name: name, FQN: fqn, Package: fqn[:cut]}, true
 }

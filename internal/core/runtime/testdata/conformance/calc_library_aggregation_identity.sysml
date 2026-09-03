@@ -2,6 +2,7 @@
 // for an empty one, in the kind of the elements or of that identity.
 package test {
 	private import ScalarValues::*;
+	private import NumericalFunctions::*;
 
 	calc def Aggregations {
 		out total = NumericalFunctions::sum0((1, 2, 3), 0);

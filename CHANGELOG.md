@@ -74,10 +74,12 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   functions bind named arguments (`sum0(zero = 0, collection = xs)`), bind null to every
   `[0..1]` parameter a call leaves out, trailing ones included (`size()` is `0`, `'if'(false)`
   null, `subsequence(seq, 2)` runs to the end), and a model's own calc
-  named like a library function is no longer shadowed by the built-in of that name. A body
+  named like a library function is no longer shadowed by the built-in of that name, with or
+  without a body of its own. A body
   passed on through an `expr` parameter (`Keep(xs, { in x; x > threshold })` with `Keep`
   doing `xs->select pred`) is applied in the scope it was written in, so it reads its writer's
-  `threshold`, and one a control function selects is applied rather than answered as a body.
+  `threshold`, and one a control function selects is applied rather than answered as a body;
+  a body a calc returns keeps the parameter it closes over after that calc has returned.
   A nonzero Real notation too small for a Real (`1e-400`, as a literal or through `ToReal`)
   is an overflow error rather than `0.0`.
   `RationalFunctions::rat`/`numer`/`denom` (a Rational is a float64 here),
@@ -180,6 +182,23 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Changed
 
+- **A library function is evaluated by its bare name only where the model imports its
+  package, as the checker resolves it.** `wheels->size()` in a model that imports no
+  `SequenceFunctions` was reported `unresolved reference: size` by the checker yet evaluated
+  to `4` at the prompt, because the runtime answered a bare call from every implementation it
+  knew by local name. The runtime now resolves a call where it is written, exactly as the
+  checker does, so an expression the checker reports unresolved fails to evaluate with the same
+  error and hint — `unresolved reference: size — did you mean SequenceFunctions::size or
+  CollectionFunctions::size?` — and importing one of the named packages
+  (`private import SequenceFunctions::*;`) makes it both resolve and evaluate. Expressions that
+  evaluated before without an import fail until that import is added; the qualified name
+  (`SequenceFunctions::size(wheels)`) resolves anywhere, as it always did, and a model's own
+  `calc def size` is what a call denotes when the library is imported too. The same rule
+  already governed the `OpenSysMLMathFunctions` extension, whose bare `exp(x)` now fails with the
+  same unresolved-reference error rather than a separate one. `%builtins` lists each function
+  with the package an import must name for its bare name to resolve, and an empty session's
+  `%eval` answers a qualified library call rather than refusing every non-literal expression.
+  The examples and fixtures that relied on the old fallback now import the packages they call.
 - **An OSLC query reports a selected property under the name it was asked for.** `sysml
   -query 'oslc.where=rdf:type="PartUsage"&oslc.select=rdf:type'` and the REPL's `%query`
   used to report the property as `@type=PartUsage`, a Go API name that the query text

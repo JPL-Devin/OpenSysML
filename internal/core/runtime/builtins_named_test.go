@@ -13,6 +13,7 @@ import (
 func evalLibraryCall(t *testing.T, expr string) (Value, error) {
 	t.Helper()
 	return evalNamedAttribute(t, `package test {
+	private import NumericalFunctions::*;
 	attribute xs = (1, 2, 3);
 	attribute result = `+expr+`;
 }`, "result")

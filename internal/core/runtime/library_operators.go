@@ -66,12 +66,6 @@ func registerOperatorFunctions() {
 	registerValueFunction("BaseFunctions::===", []string{"x", "y"}, 0, identityForm(false))
 	registerValueFunction("DataFunctions::===", []string{"x", "y"}, 0, identityForm(false))
 	registerValueFunction("BaseFunctions::!==", []string{"x", "y"}, 0, identityForm(true))
-
-	// Every declaration of these names applies the same Boolean operation.
-	registerLocalNames(map[string]string{
-		"not": "DataFunctions::not",
-		"xor": "DataFunctions::xor",
-	})
 }
 
 // registerOperatorForm registers one operator function. `+` and `-` declare
