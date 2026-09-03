@@ -711,6 +711,14 @@ func (e *ActionExecutor) bindOutputPins(perf *actionFrame) error {
 			}
 			continue
 		}
+		if end.OtherChain != nil {
+			ec := e.evalContextAround(end.at, end.Scope)
+			if err := writeThroughChain(ec, end.OtherChain, end.OtherFeature, value); err != nil {
+				return fmt.Errorf("%w: %s is bound to %s: %w",
+					ErrBindingEnd, end.pinText(), bindingEndText(end.Other), err)
+			}
+			continue
+		}
 		name := simpleEndName(end.Other)
 		if name == "" {
 			return fmt.Errorf("%w: %s is bound to %s, which names no feature to hold its value",
@@ -789,14 +797,14 @@ func (e *ActionExecutor) bindingOtherValue(end boundEnd, activation int64) (Valu
 	ec.activation = activation
 	value, err := ec.Eval(end.Other)
 	if err != nil {
-		return Value{}, fmt.Errorf("%w: %s is bound to %s: %v",
+		return Value{}, fmt.Errorf("%w: %s is bound to %s: %w",
 			ErrBindingEnd, end.pinText(), bindingEndText(end.Other), err)
 	}
 	return value, nil
 }
 
-// otherEndHeld reads what the other end of a binding holds now, without evaluating
-// it: a performed node's pin, or an enclosing feature named outright.
+// otherEndHeld reads what the other end of a binding holds now: a performed node's
+// pin, an enclosing feature named outright, or the feature a chain reaches.
 func (e *ActionExecutor) otherEndHeld(end boundEnd) (Value, bool) {
 	if end.OtherNode != nil {
 		other, performed := e.otherPerformance(end)
@@ -808,6 +816,10 @@ func (e *ActionExecutor) otherEndHeld(end boundEnd) (Value, bool) {
 	}
 	if name := simpleEndName(end.Other); name != "" {
 		return e.evalContextAround(end.at, end.Scope).Lookup(name)
+	}
+	if end.OtherChain != nil {
+		value, err := e.evalContextAround(end.at, end.Scope).Eval(end.Other)
+		return value, err == nil
 	}
 	return Value{}, false
 }

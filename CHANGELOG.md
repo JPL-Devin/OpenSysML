@@ -123,7 +123,9 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   expressions, so `Adder(a, 1)` reads the caller's `a` even when the node's own pin `a` already
   holds a bound value. A binding at an undirected attribute of a node is kept at both ends: the
   node reads the other end's value as it begins, and what it changed is carried back as it ends,
-  to the enclosing attribute or on to a downstream node's pin. A performance's bindings and
+  to the enclosing attribute or on to a downstream node's pin. A binding end that chains through
+  an object, `bind add.sum = holder.inner.mark`, writes the feature of the object the chain
+  reaches, typed as an assignment through it is. A performance's bindings and
   defaults are one evaluation of their own: a calc usage two of them read answers once, and the
   next performance of the node evaluates it anew. Two tokens performing one node at once each hold a frame of their own,
   take what flows delivered to its pins oldest first and send their own outputs on. A nested

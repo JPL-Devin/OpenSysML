@@ -105,6 +105,61 @@ func TestActionBindingAtANodePin(t *testing.T) {
 	}
 }
 
+// A binding end that chains through an object (`holder.inner.mark`) carries the chain
+// walked and the feature written, so the runtime writes the object it reaches; a plain
+// name or a node's pin carries none.
+func TestActionBindingAtANodePinThroughAChain(t *testing.T) {
+	graph := actionGraphFor(t, `
+		part def Cell { attribute mark : Integer; }
+		part def Holder { attribute value : Integer; part inner : Cell; }
+		action test {
+			part holder : Holder;
+			attribute x : Integer = 5;
+			bind add.sum = holder.value;
+			bind add.a = holder.inner.mark;
+			bind add.sum = twice.n;
+			bind add.a = x;
+			first start;
+			then action add { in a : Integer; out sum : Integer; }
+			then action twice { in n : Integer; }
+			then done;
+		}
+	`)
+
+	if len(graph.Bindings) != 5 {
+		t.Fatalf("lowered %d pin bindings, want 5: %+v", len(graph.Bindings), graph.Bindings)
+	}
+	want := []struct {
+		pin     string
+		base    string
+		steps   []string
+		feature string
+	}{
+		{"sum", "holder", nil, "value"},
+		{"a", "holder", []string{"inner"}, "mark"},
+		{"sum", "", nil, ""},
+		{"n", "", nil, ""},
+		{"a", "", nil, ""},
+	}
+	for i, w := range want {
+		got := graph.Bindings[i]
+		if got.Pin != w.pin {
+			t.Errorf("binding %d is at pin %s, want %s", i, got.Pin, w.pin)
+		}
+		if w.base == "" {
+			if got.OtherChain != nil || got.OtherFeature != "" {
+				t.Errorf("binding %d = %s carries chain %+v.%s, want none", i, FeaturePath(got.Other), got.OtherChain, got.OtherFeature)
+			}
+			continue
+		}
+		if got.OtherChain == nil || FeaturePath(got.OtherChain.Base) != w.base ||
+			!slices.Equal(got.OtherChain.Steps, w.steps) || got.OtherFeature != w.feature {
+			t.Errorf("binding %d = %s carries chain %+v.%s, want %s.%v.%s",
+				i, FeaturePath(got.Other), got.OtherChain, got.OtherFeature, w.base, w.steps, w.feature)
+		}
+	}
+}
+
 // A binding end naming a node without a pin identifies no feature to bind.
 func TestActionBindingAtANodeWithoutAPinIsReported(t *testing.T) {
 	_, err := actionGraphErr(t, `

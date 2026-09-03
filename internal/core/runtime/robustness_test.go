@@ -56,6 +56,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("inherited_binding_names_a_node_without_a_pin", testInheritedBindingNamesANodeWithoutAPin)
 	t.Run("node_inherited_default_that_cannot_be_evaluated", testNodeInheritedDefaultThatCannotBeEvaluated)
 	t.Run("node_binding_output_to_an_unknown_feature", testNodeBindingOutputToAnUnknownFeature)
+	t.Run("node_binding_output_through_a_scalar_chain", testNodeBindingOutputThroughAScalarChain)
+	t.Run("node_binding_output_through_a_chain_violates_target_type", testNodeBindingOutputThroughAChainViolatesTargetType)
 	t.Run("nested_pin_binding_into_a_node_performing_another_action", testNestedPinBindingIntoANodePerformingAnotherAction)
 	t.Run("nested_pin_binding_at_an_undeclared_pin", testNestedPinBindingAtAnUndeclaredPin)
 	t.Run("flow_reaching_into_a_nodes_own_flow", testFlowReachingIntoANodesOwnFlow)
@@ -9044,6 +9046,60 @@ func testNodeBindingOutputToAnUnknownFeature(t *testing.T) {
 	err := runOuterAction(t, src)
 	if !errors.Is(err, ErrBindingEnd) {
 		t.Fatalf("error = %v, want ErrBindingEnd", err)
+	}
+}
+
+// testNodeBindingOutputThroughAScalarChain: a chained other end must reach an
+// object whose feature the output can be written to.
+func testNodeBindingOutputThroughAScalarChain(t *testing.T) {
+	src := `
+		package test {` + adderActionDef + `
+			action outer {
+				attribute x : Integer = 1;
+				bind add.sum = x.value;
+				first start;
+				then action add : Adder { in a = 1; in b = 2; }
+				then done;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if !errors.Is(err, ErrBindingEnd) || !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrBindingEnd wrapping ErrTypeMismatch", err)
+	}
+	if !strings.Contains(err.Error(), "x.value") {
+		t.Errorf("error %q does not name the chained end x.value", err)
+	}
+}
+
+// testNodeBindingOutputThroughAChainViolatesTargetType: an output written through a
+// chain answers to the reached feature's declared type as a direct write does.
+func testNodeBindingOutputThroughAChainViolatesTargetType(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			part def Holder { attribute label : String = "none"; }
+			action outer {
+				part holder : Holder;
+				bind num.v = holder.label;
+				first start;
+				then action num { out v : Integer; assign v := 3; }
+				then done;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "outer", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action outer not found")
+	}
+	exec, err := ctx.CreateActionExecutor(sym)
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+	err = exec.RunToCompletion()
+	if !errors.Is(err, ErrBindingEnd) || !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrBindingEnd wrapping ErrTypeMismatch", err)
 	}
 }
 

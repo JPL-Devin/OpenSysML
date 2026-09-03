@@ -388,8 +388,12 @@ type PinBinding struct {
 	OtherNode ast.Node
 	OtherPath []ast.Node
 	OtherPin  string
-	Scope     *symbols.Scope // the scope the binding was written in
-	Decl      *ast.Usage
+	// OtherChain is the chain the other end walks to the object whose feature
+	// OtherFeature it names (`holder.inner.mark`); nil for a node's pin or a plain name.
+	OtherChain   *AssignTarget
+	OtherFeature string
+	Scope        *symbols.Scope // the scope the binding was written in
+	Decl         *ast.Usage
 }
 
 // ObjectFlow represents a data flow edge between pins.
@@ -656,7 +660,7 @@ func lowerPinBindings(graph *ActionGraph, nodes []ast.Node, u *ast.Usage, scope 
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, PinBinding{
+		binding := PinBinding{
 			Node:      node,
 			Path:      path,
 			Pin:       pin,
@@ -666,7 +670,13 @@ func lowerPinBindings(graph *ActionGraph, nodes []ast.Node, u *ast.Usage, scope 
 			OtherPin:  otherPin,
 			Scope:     scope,
 			Decl:      u,
-		})
+		}
+		if otherNode == nil {
+			if chain, feature, ok := assignTarget(other); ok {
+				binding.OtherChain, binding.OtherFeature = chain, feature
+			}
+		}
+		out = append(out, binding)
 	}
 	return out, nil
 }
