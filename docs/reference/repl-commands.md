@@ -130,7 +130,9 @@ and stays reachable as #1` — and `#1` goes on reaching the first object on eve
 keeps running: the same `%instantiate` notes that it now follows the object as `#1` (or as a path
 from that id, `#1.r`, for a nested object), and `%step`, `%advance` and `%continue` go on driving it.
 Looking an id up materializes nothing: an id the runtime never issued is `no object #9 in this
-session: nothing materialized has that identity (the objects are #1, #2)`.
+session: nothing materialized has that identity (the objects are #1, #2)`, and so is one of an object
+made in passing — by `%eval in` on a usage nothing was instantiated under, say — which `%instances`
+does not list and `#<id>` completion does not offer.
 
 ## Rendering a view
 

@@ -598,6 +598,39 @@ func TestEveryHeldObjectIsAddressableById(t *testing.T) {
 	wants(t, run(t, s, "%features #"+last), "count = 2")
 }
 
+// An object evaluation created in passing — %eval in a usage nothing was
+// instantiated under — is no id the REPL answers to: it is absent from
+// %instances, so it is absent from lookups, the ids an error lists and completion.
+func TestEvaluationOnlyObjectsAreNotAddressable(t *testing.T) {
+	s := loadFixture(t, "testdata/nested_part.sysml")
+	wants(t, run(t, s, "%eval in Nested::Car : engine.power"), "= 300.0")
+	scratch := s.rtCtx.InstanceIDs()
+	if len(scratch) == 0 {
+		t.Fatal("the evaluation created no object to keep out of reach")
+	}
+	wants(t, run(t, s, "%instances"), "(no instances created)")
+	for _, id := range scratch {
+		wants(t, run(t, s, fmt.Sprintf("%%features #%d", id)),
+			fmt.Sprintf("error: no object #%d in this session: nothing materialized has that identity (no objects have been created)", id))
+	}
+	if got := s.Complete("%features #", len("%features #")); len(got.Candidates) != 0 {
+		t.Errorf("completion offered %v, want no ids", got.Candidates)
+	}
+
+	created := objectIDIn(t, run(t, s, "%instantiate Nested::Car"))
+	listing := run(t, s, "%features #"+created)
+	wants(t, listing, "Instance: #"+created+" (ID: "+created+")")
+	engine := objectIDIn(t, listing[strings.Index(listing, "engine = "):])
+	held := "#" + created + ", #" + engine
+	for _, id := range scratch {
+		wants(t, run(t, s, fmt.Sprintf("%%features #%d", id)),
+			fmt.Sprintf("error: no object #%d in this session: nothing materialized has that identity (the objects are %s)", id, held))
+	}
+	if got := s.Complete("%features #", len("%features #")); strings.Join(got.Candidates, ", ") != held {
+		t.Errorf("completion offered %v, want %s", got.Candidates, held)
+	}
+}
+
 // collectionIDs reads the identities a %features listing shows feature holding.
 func collectionIDs(t *testing.T, listing, feature string) []string {
 	t.Helper()

@@ -340,7 +340,7 @@ func (s *Session) objectIDs() []string {
 	if s.rtCtx == nil {
 		return nil
 	}
-	ids := s.rtCtx.InstanceIDs()
+	ids := s.heldIDs()
 	out := make([]string, 0, len(ids))
 	for _, id := range ids {
 		out = append(out, fmt.Sprintf("#%d", id))
@@ -371,7 +371,7 @@ func (s *Session) peekObject(text string) (objectShape, bool) {
 		ok   bool
 	)
 	if ref.id > 0 {
-		root, ok = s.rtCtx.Instance(ref.id)
+		root, ok = s.heldByID(ref.id)
 		rest = ref.segments
 	} else {
 		var rerr error

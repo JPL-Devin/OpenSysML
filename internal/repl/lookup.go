@@ -350,6 +350,34 @@ func nestedObjectsIn(ctx *runtime.Context) func(carrier) []carrier {
 	}
 }
 
+// heldByID finds the object with id among those the session holds — named,
+// displaced, or held by a materialized feature of one — so an object evaluation
+// created in passing is not an id the REPL answers to. It materializes nothing.
+func (s *Session) heldByID(id int64) (*runtime.Instance, bool) {
+	var found *runtime.Instance
+	s.walkHeldObjects(s.rtCtx, func(cur carrier) bool {
+		if found != nil {
+			return false
+		}
+		if cur.inst.ID == id {
+			found = cur.inst
+		}
+		return found == nil
+	})
+	return found, found != nil
+}
+
+// heldIDs lists the ids of the objects the session holds, ascending.
+func (s *Session) heldIDs() []int64 {
+	var ids []int64
+	s.walkHeldObjects(s.rtCtx, func(cur carrier) bool {
+		ids = append(ids, cur.inst.ID)
+		return true
+	})
+	slices.Sort(ids)
+	return ids
+}
+
 // materializedObjectsIn yields only the objects an object's feature values
 // already hold, so a walk over them leaves the runtime as it found it.
 func materializedObjectsIn(ctx *runtime.Context) func(carrier) []carrier {
@@ -843,9 +871,9 @@ func (s *Session) resolveObject(text string) (*runtime.Instance, string, error) 
 		if s.rtCtx == nil {
 			return nil, "", &UnknownObjectIDError{ID: ref.id}
 		}
-		inst, ok := s.rtCtx.Instance(ref.id)
+		inst, ok := s.heldByID(ref.id)
 		if !ok {
-			return nil, "", &UnknownObjectIDError{ID: ref.id, Known: s.rtCtx.InstanceIDs()}
+			return nil, "", &UnknownObjectIDError{ID: ref.id, Known: s.heldIDs()}
 		}
 		return s.walkObjectPath(s.rtCtx, inst, fmt.Sprintf("#%d", ref.id), ref.segments)
 	}
