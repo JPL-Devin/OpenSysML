@@ -160,8 +160,9 @@ error: object #1 of "Lamps::bulb" accepts no signal go now: state machine "Lamp"
 
 Without `to <object>`, the signal goes to the object whose machine the `%state` session is
 debugging (`%send go to bulb` names it explicitly, and is the form to use when no session is
-active). Payload features are written `<parameter>=<expression>` as for `%invoke`, and are checked
-against the signal's declaration: `%send Dim(lvl=1)` is refused because `Dim` carries no `lvl`. A
+active; the object is any object reference, `to #1` or `to rack.lamp` included). Payload features
+are written `<parameter>=<expression>` as for `%invoke`, and are checked against the signal's
+declaration: `%send Dim(lvl=1)` is refused because `Dim` carries no `lvl`. A
 signal nothing in the machine's current state accepts is refused up front, with the state named,
 rather than queued to be silently dropped — and so is one whose every triggered transition is
 held back by its guard, decided as the dispatch would decide it, with the payload bound: with
@@ -235,18 +236,18 @@ sysml> %features Monitor
 Instance: Monitor (ID: 1)
 Features:
   count = 11
-  modes = Instance(ID: 2)
-    idle = <unknown>
-    awake = <unknown>
-  bumpBy = Instance(ID: 3)
-    n = <unknown>
-    apply = <unknown>
+Behaviors:
+  modes: exhibited state machine, current state awake
+  bumpBy: action, not running
 ```
 
 `%instantiate` started the machine, and `%state Monitor` attached the debugger to *that object's*
 machine rather than to a detached run of the usage. `%step`, `%advance`, `%current` and `%events`
 therefore drive that machine, and `%features` shows the values its entry actions wrote: `1` from
-`idle`, then `10` more from `awake` once the timer fired.
+`idle`, then `10` more from `awake` once the timer fired. The machine and the operation are not
+values the object holds, so they are listed under `Behaviors:` with what the object is doing with
+each: the exhibited machine's current state is the one `%current` reports, and `bumpBy`, which the
+type declares but does not perform, is not running.
 
 The two-argument form does the same when the machine it names is the one the object exhibits:
 `%state Monitor::modes Monitor` attaches to the running machine and says so in a `note:` line,
@@ -257,14 +258,24 @@ the object exhibits one definition as several usages (`exhibit state front : Bli
 state rear : Blink;`), naming the definition names no one machine, so `%state Blink lamp` refuses
 and names `Lamp::front` and `Lamp::rear` to name instead.
 
+Naming the machine alone attaches the same way when one held object exhibits it: `%state modes`
+(or `%state Monitor::modes`) after `%instantiate Monitor` drives that object's running machine,
+so what its `do` and `entry` actions write shows up in `%features Monitor`. It never performs
+the machine detached from its object: with no object exhibiting it (`%state modes` before any
+`%instantiate`), or several (a second `Monitor` held as a part of another object), `%state`
+refuses and names the objects — or, before any exists, the type exhibiting the machine — and you
+name one with `%state <object>` or `%state <machine> <object>`. Only a `state def` no type
+exhibits is started as a detached performance by that form.
+
 The object can also be a part reached through composition, or an id. With `part def Driver {
 part r : Monitor; }`, `part driver : Driver;` and `%instantiate driver`, `%state driver.r` debugs the nested part's own
-machine, and `%state #2` the same by the identity `%features driver` prints for it (`r =
-Instance(ID: 2)`). A path that stops short of an object says which segment failed:
+machine, and `%state #2` the same by the id `%features driver` prints for it (`r =
+Instance(ID: 2)`). A path that stops short of an object says which segment failed, in the words
+every command uses for an [object reference](../reference/repl-commands.md#object-references):
 
 ```sysml
 sysml> %state driver.x
-error: driver.x reaches no object at "x": object #1 of "driver" has no feature "x"
+error: driver has no feature "x" (its features are r, and 13 more the library declares)
 ```
 
 Naming a usage whose *definition* alone was instantiated is reported as such, with what to
@@ -285,7 +296,13 @@ another are run together until they all settle, within the event and do-step bud
 [reference/environment.md](../reference/environment.md); an exchange that never settles reports a
 budget error rather than hanging. Instantiating the same name twice creates a second object with
 its own identity and its own machines: `%instantiate` reports the new object, and the name then
-refers to it. An exhibited machine with no initial state is reported as such. A performed action
+refers to it, while the first object keeps running and is still addressed by its id
+(`%state #1`, `%invoke #1 bumpBy n=4`, `%features #1`; see
+[addressing an object](04-repl.md#addressing-an-object)). A `%state` or `%action` session
+started on the first object stays with it — it now knows the object as `#1` — and it ends only if
+that object is later dropped. A machine a nested part exhibits is
+debugged by naming that part through its owner, `%state Monitor.sensor` or `%state #1.sensor`.
+An exhibited machine with no initial state is reported as such. A performed action
 that declares no flow has nothing to step, but the object is still created. A performed action
 waiting at an `accept` is also quiescent, and a message sent later by a sibling object
 wakes it up.
@@ -313,12 +330,9 @@ sysml> %features Monitor
 Instance: Monitor (ID: 1)
 Features:
   count = 15
-  modes = Instance(ID: 2)
-    idle = <unknown>
-    awake = <unknown>
-  bumpBy = Instance(ID: 3)
-    n = <unknown>
-    apply = <unknown>
+Behaviors:
+  modes: exhibited state machine, current state awake
+  bumpBy: action, not running
 ```
 
 Each argument is written as `<parameter>=<expression>`. An unbound parameter, an argument that

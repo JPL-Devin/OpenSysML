@@ -120,8 +120,12 @@ func sysmlNonNegativeSeq(s sysmlSeq[int64], typ string) sysmlSeq[int64] {
 	return s
 }
 
-// sysmlEq is the '==' of collections: same shape, same elements in order.
+// sysmlEq is the '==' of collections: same shape, same elements in order;
+// every empty collection is null, whatever its shape.
 func sysmlEq[T sysmlElem](a, b sysmlSeq[T]) bool {
+	if len(a.data) == 0 || len(b.data) == 0 {
+		return len(a.data) == 0 && len(b.data) == 0
+	}
 	return a.shape == b.shape && sysmlEquals(a, b)
 }
 
@@ -452,7 +456,7 @@ func (e *goEmitter) seqExpr(x Expr) (string, bool) {
 	case Checked:
 		return e.checked(x), true
 	case Coalesce:
-		return fmt.Sprintf("func() %s { l := %s; if l.shape != sysmlNull { return l }; return %s }()", goSeqType(x.T), e.expr(x.L), e.expr(x.R)), true
+		return fmt.Sprintf("func() %s { l := %s; if len(l.data) != 0 { return l }; return %s }()", goSeqType(x.T), e.expr(x.L), e.expr(x.R)), true
 	case SeqEq:
 		eq := fmt.Sprintf("sysmlEq(%s, %s)", e.expr(x.L), e.expr(x.R))
 		if x.Neq {

@@ -73,8 +73,8 @@ func TestReportedFeaturesEndInTheDeclaration(t *testing.T) {
 	if result.Holds {
 		t.Error("ok on assembly: holds = true, want the subsetting object's 99 to violate it")
 	}
-	if result.SubjectPath != "small" {
-		t.Errorf("subject path = %q, want the declaration %q rather than the collection it subsets", result.SubjectPath, "small")
+	if len(result.SubjectPath) != 1 || result.SubjectPath[0] != "small" {
+		t.Errorf("subject path = %q, want the declaration %q rather than the collection it subsets", result.SubjectPath, []string{"small"})
 	}
 }
 

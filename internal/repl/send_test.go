@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -227,6 +228,53 @@ func TestSendToNamedObjectNeedsNoSession(t *testing.T) {
 	wants(t, run(t, s, "%advance 1"), "Current state: on")
 }
 
+// TestSendAddressesObjectsLikeEveryCommand names the destination the way every
+// object-taking command does: by id, by path, with the shared errors.
+func TestSendAddressesObjectsLikeEveryCommand(t *testing.T) {
+	s := lampSession(t)
+	wants(t, run(t, s, "%send go to #1"), "✓ Sent go to object #1", `Accepted by state machine "Lamp" in state off`)
+	wants(t, run(t, s, "%send go to #9"), "error: no object #9 in this session", "the objects are #1")
+	wants(t, run(t, s, "%send go to bulb.nosuch"), "error:", `"nosuch"`)
+	wants(t, run(t, s, "%send go to #1."), "error:", "is not an object reference")
+
+	// The object a second %instantiate displaces is still reached by id: its
+	// machine, driven to on by a step of its own, takes no second go.
+	m := regexp.MustCompile(`ID: (\d+)`).FindStringSubmatch(run(t, s, "%instantiate bulb"))
+	if m == nil {
+		t.Fatal("%instantiate bulb printed no id")
+	}
+	newID := "#" + m[1]
+	wants(t, run(t, s, "%state #1"), "Current state: off")
+	wants(t, run(t, s, "%advance 1"), "Current state: on")
+	wants(t, run(t, s, "%send go to #1"), "error: object #1 accepts no signal go now", `state machine "Lamp" in state on`)
+	got := run(t, s, "%send go to bulb")
+	wants(t, got, "✓ Sent go to object "+newID+` of "Lamps::bulb"`, `Accepted by state machine "Lamp" in state off`)
+
+	for _, tc := range []struct {
+		line    string
+		wants   []string
+		rejects []string
+	}{
+		{line: "%send go to ", wants: []string{"#1", newID, "bulb"}},
+		{line: "%send go to #", wants: []string{"#1", newID}, rejects: []string{"bulb"}},
+		{line: "%send Dim(level=1) to bu", wants: []string{"bulb"}},
+		{line: "%send go ", rejects: []string{"#1"}},
+		{line: "%send ", rejects: []string{"#1"}},
+	} {
+		got := s.Complete(tc.line, len(tc.line)).Candidates
+		for _, want := range tc.wants {
+			if !contains(got, want) {
+				t.Errorf("%q: want %q in %v", tc.line, want, got)
+			}
+		}
+		for _, bad := range tc.rejects {
+			if contains(got, bad) {
+				t.Errorf("%q: did not want %q in %v", tc.line, bad, got)
+			}
+		}
+	}
+}
+
 // TestSendResolvesQualifiedSignals accepts the signal's qualified name.
 func TestSendResolvesQualifiedSignals(t *testing.T) {
 	s := lampSession(t)
@@ -279,12 +327,13 @@ func TestSendRefusesWhatCannotBeDelivered(t *testing.T) {
 }
 
 // TestSendToAMachineNoObjectPerforms targets the executor a %state started for
-// a definition alone.
+// a definition no type exhibits; one a type exhibits is refused without an object.
 func TestSendToAMachineNoObjectPerforms(t *testing.T) {
 	s := loadFixture(t, "testdata/lamp_signals.sysml")
-	wants(t, run(t, s, "%state Lamp"), `✓ Started state machine executor for "Lamp"`, "Current state: off")
-	rejects(t, run(t, s, "%state Lamp"), "Performed by")
-	wants(t, run(t, s, "%send go"), `✓ Sent go to state machine "Lamp"`, `Accepted by state machine "Lamp" in state off`)
+	wants(t, run(t, s, "%state Lamp"), `error: no object of this session exhibits "Lamp"`, "%state Lamp <object>")
+	wants(t, run(t, s, "%state Loose"), `✓ Started state machine executor for "Loose"`, "Current state: off")
+	rejects(t, run(t, s, "%state Loose"), "Performed by")
+	wants(t, run(t, s, "%send go"), `✓ Sent go to state machine "Loose"`, `Accepted by state machine "Loose" in state off`)
 	wants(t, run(t, s, "%advance 1"), "Current state: on")
 }
 
