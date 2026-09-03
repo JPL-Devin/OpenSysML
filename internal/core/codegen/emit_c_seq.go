@@ -310,7 +310,9 @@ static sysml_seq_int sysml_range(sysml_int lo, sysml_int hi) {
 	return r;
 }
 
+/* The Real copy of an Integer collection, charged like any other materialized collection. */
 static sysml_seq_real sysml_widen(sysml_seq_int s) {
+	sysml_charge(s.len);
 	sysml_seq_real r = {s.shape, s.len, s.len ? sysml_alloc((size_t)s.len * sizeof(sysml_real)) : NULL};
 	for (sysml_int i = 0; i < s.len; i++) r.data[i] = (sysml_real)s.data[i];
 	return r;
@@ -573,9 +575,6 @@ func (e *cEmitter) fold(x Fold) string {
 		var s strings.Builder
 		for i, p := range x.Body.Params {
 			fmt.Fprintf(&s, "%s %s = %s; ", cType(p.Type), cLocal(p.Name), args[i])
-		}
-		for _, d := range x.Body.Locals {
-			fmt.Fprintf(&s, "%s %s = %s; ", cType(d.T), cLocal(d.Name), e.declInit(d))
 		}
 		return s.String()
 	}

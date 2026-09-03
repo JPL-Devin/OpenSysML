@@ -119,6 +119,14 @@ var compiledCases = []compiledCase{
 	{"Seq::Tern", []string{"true", "(1,2)"}}, {"Seq::Tern", []string{"false", "(1,2)"}}, {"Seq::Tern", []string{"true", "null"}},
 	{"Seq::Big", []string{"1000"}}, {"Seq::Big", []string{"1000000"}}, // the second exceeds the element budget
 	{"Seq::Big2", []string{"1000000"}},
+	{"Seq::LazyAnd", []string{"(1,2)", "9"}}, {"Seq::LazyAnd", []string{"(1,2,3,4,5,6)", "9"}}, {"Seq::LazyAnd", []string{"(1,2,3,4,5,6)", "2"}},
+	{"Seq::LazyOr", []string{"()", "9"}}, {"Seq::LazyOr", []string{"(1,2)", "9"}}, {"Seq::LazyOr", []string{"(1,-2)", "2"}},
+	{"Seq::LazyImp", []string{"()", "9"}}, {"Seq::LazyImp", []string{"(1,2)", "9"}}, {"Seq::LazyImp", []string{"(1,2)", "1"}},
+	{"Seq::LazyBig", []string{"()", "1000000"}}, {"Seq::LazyBig", []string{"(1)", "1000000"}}, {"Seq::LazyBig", []string{"(1)", "3"}},
+	{"Seq::BodyLoc", []string{"(1,2,3)"}}, {"Seq::BodyLoc", []string{"null"}}, {"Seq::BodyLoc", []string{"4"}},
+	{"Seq::BodySel", []string{"(1,2,3)"}}, {"Seq::BodySel", []string{"()"}},
+	{"Seq::BodyUnread", []string{"(1,2,3)"}}, // the local is never read, so its failing initializer never runs
+	{"Seq::BodyCond", []string{"(1,2)"}}, {"Seq::BodyCond", []string{"(1,2,3)"}},
 	{"Seq::Cnt", []string{"(1,2,3)"}}, {"Seq::Cnt", []string{"null"}}, {"Seq::Cnt", []string{"(1,3)"}},
 	{"Seq::IncAt", []string{"(1,2)", "1"}}, {"Seq::IncAt", []string{"(1,2)", "3"}}, {"Seq::IncAt", []string{"(1,2)", "4"}}, {"Seq::IncAt", []string{"null", "1"}}, {"Seq::IncAt", []string{"null", "2"}},
 	{"Seq::Sub3", []string{"(1,2,3)", "1", "2"}}, {"Seq::Sub3", []string{"(1,2,3)", "2", "1"}}, {"Seq::Sub3", []string{"(1,2,3)", "0", "2"}}, {"Seq::Sub3", []string{"(1,2,3)", "1", "4"}}, {"Seq::Sub3", []string{"null", "1", "1"}},
@@ -153,7 +161,7 @@ func withinUlps(a, b string, n uint64) bool {
 // class of a scalar fault, else the whole message once the interpreter's
 // context labels and the program's calc name are stripped.
 func failureClass(calc, msg string) string {
-	for _, class := range []string{"arithmetic overflow", "arithmetic domain", "division by zero", "calc recursion limit exceeded", "typed by Natural", "typed by Positive", "requires Natural"} {
+	for _, class := range []string{"arithmetic overflow", "arithmetic domain", "division by zero", "calc recursion limit exceeded", "typed by Natural", "typed by Positive", "requires Natural", "collection element limit exceeded"} {
 		if strings.Contains(msg, class) {
 			return class
 		}
@@ -268,6 +276,88 @@ func TestCompiledCalcsAgreeWithInterpreter(t *testing.T) {
 			}
 			if out, err := exec.Command(exes["Fib"], "--repeat", "3", "10").Output(); err != nil || strings.TrimSpace(string(out)) != "55" {
 				t.Errorf("--repeat 3: got %q, %v", out, err)
+			}
+		})
+	}
+}
+
+// The element budget charges the arguments a run holds, as the interpreter's
+// charges the literals it evaluates them from; a lowered OPENSYSML_MAX_ELEMENTS
+// makes that visible with small inputs. The Real copy an Integer collection
+// widens to is charged too: the interpreter keeps Integers in Real slots and
+// holds no copy, so at the limit the program fails where the interpreter runs,
+// never the reverse.
+func TestCompiledBudgetChargesInputsAndWidening(t *testing.T) {
+	const limit = 10
+	cases := []compiledCase{
+		{"Seq::BigIn", []string{"(1,2,3,4,5,6,7,8,9,10)"}}, {"Seq::BigIn", []string{"(1,2,3,4,5,6,7,8,9,10,11)"}},
+		{"Seq::LazyBig", []string{"()", "100"}}, {"Seq::LazyBig", []string{"(1)", "100"}},
+	}
+	// 5 Integers and their 5 Reals fit the budget of 10; 6 and 6 do not.
+	widened := []struct{ n, sum, want, failure string }{{"5", "15.0", "15.0", ""}, {"6", "21.0", "", "collection element limit exceeded"}}
+	for _, target := range codegen.Targets() {
+		t.Run(string(target), func(t *testing.T) {
+			if target == codegen.TargetC {
+				if _, err := exec.LookPath("cc"); err != nil {
+					t.Skip("no C compiler on PATH")
+				}
+			}
+			s := loadCompileFixture(t)
+			budgets := runtime.DefaultBudgets()
+			budgets.MaxSteps = 1 << 40
+			budgets.MaxElements = limit
+			if err := s.SetBudgets(budgets); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv(runtime.MaxElementsEnvVar, strconv.Itoa(limit))
+			dir := t.TempDir()
+			exes := map[string]string{}
+			for _, c := range cases {
+				exe, built := exes[c.calc]
+				if !built {
+					program, err := s.CompileCalc("Compiled::" + c.calc)
+					if err != nil {
+						t.Fatalf("compile %s: %v", c.calc, err)
+					}
+					exe = filepath.Join(dir, c.calc)
+					if err := codegen.Build(program, target, exe); err != nil {
+						t.Fatalf("build %s: %v", c.calc, err)
+					}
+					exes[c.calc] = exe
+				}
+				wantValue, wantFailure := interpreted(t, s, c)
+				gotValue, gotFailure := compiledRun(t, exe, c)
+				if gotValue != wantValue || gotFailure != wantFailure {
+					t.Errorf("%s(%s): compiled = (%q, %q), interpreted = (%q, %q)",
+						c.calc, strings.Join(c.args, ", "), gotValue, gotFailure, wantValue, wantFailure)
+				}
+			}
+			// The arguments stay charged across repeats: the second run must not find
+			// room the first did not have.
+			out, err := exec.Command(exes["Seq::BigIn"], "--repeat", "3", "(1,2,3,4,5,6,7,8,9,10,11)").CombinedOutput()
+			var exit *exec.ExitError
+			if !errors.As(err, &exit) || exit.ExitCode() != 1 || !strings.Contains(string(out), "element limit exceeded") {
+				t.Errorf("--repeat over budget: got %v %q, want the element limit failure", err, out)
+			}
+			if out, err := exec.Command(exes["Seq::BigIn"], "--repeat", "3", "(1,2,3,4,5,6,7,8,9,10)").Output(); err != nil || strings.TrimSpace(string(out)) != "10" {
+				t.Errorf("--repeat within budget: got %q, %v", out, err)
+			}
+			program, err := s.CompileCalc("Compiled::Seq::BigW")
+			if err != nil {
+				t.Fatal(err)
+			}
+			exe := filepath.Join(dir, "BigW")
+			if err := codegen.Build(program, target, exe); err != nil {
+				t.Fatal(err)
+			}
+			for _, w := range widened {
+				c := compiledCase{"Seq::BigW", []string{w.n}}
+				if v, f := compiledRun(t, exe, c); v != w.want || f != w.failure {
+					t.Errorf("BigW(%s): compiled = (%q, %q), want (%q, %q)", w.n, v, f, w.want, w.failure)
+				}
+				if v, f := interpreted(t, s, c); v != w.sum || f != "" {
+					t.Errorf("BigW(%s): interpreted = (%q, %q), want (%q, \"\"): it holds no widened copy", w.n, v, f, w.sum)
+				}
 			}
 		})
 	}

@@ -63,10 +63,12 @@ type env struct {
 
 // binding is the declared type of a variable, the range its elements are
 // narrowed to and, for a collection, the multiplicity a write must satisfy.
+// A body-expression local is read on demand, so inline names its initializer.
 type binding struct {
-	t Type
-	r Range
-	m Mult
+	t      Type
+	r      Range
+	m      Mult
+	inline Expr
 }
 
 func (e *env) push()                    { e.frames = append(e.frames, map[string]binding{}) }
@@ -624,6 +626,9 @@ func unwrap(n ast.Node) ast.Node {
 func (fc *funcCompiler) compileName(qn *ast.QualifiedName) (Expr, error) {
 	if qn != nil && len(qn.Parts) == 1 {
 		if b, ok := fc.env.lookup(qn.Parts[0].Text); ok {
+			if b.inline != nil {
+				return b.inline, nil
+			}
 			return Var{Name: qn.Parts[0].Text, T: b.t}, nil
 		}
 	}
@@ -706,14 +711,22 @@ func (fc *funcCompiler) compileOperator(n *ast.OperatorExpr) (Expr, error) {
 	case ast.OpEq, ast.OpNeq, ast.OpEqEqEq, ast.OpNeqEqEq:
 		return fc.compileEquality(n)
 	case ast.OpAnd, ast.OpConditionalAnd, ast.OpOr, ast.OpConditionalOr, ast.OpXor, ast.OpImplies:
-		l, r, wrap, err := fc.binaryOperands(n)
+		// The right operand is checked only after the left has been read and,
+		// for the lazy operators, evaluated only if the left does not decide.
+		l, r, err := fc.rawOperands(n)
 		if err != nil {
+			return nil, err
+		}
+		if l, err = fc.scalarOperand(l, r, n.Operator, true); err != nil {
+			return nil, err
+		}
+		if r, err = fc.scalarOperand(r, l, n.Operator, false); err != nil {
 			return nil, err
 		}
 		if l.Type() != TypeBool || r.Type() != TypeBool {
 			return nil, fc.unsupported(fmt.Sprintf("'%s' over non-Boolean operands", n.Operator))
 		}
-		return wrap(Binary{Op: n.Operator, L: l, R: r, T: TypeBool}), nil
+		return Binary{Op: n.Operator, L: l, R: r, T: TypeBool}, nil
 	case ast.OpNeg, ast.OpPos:
 		if len(n.Operands) != 1 {
 			return nil, fc.unsupported("a unary operator with two operands")
@@ -748,10 +761,11 @@ func (fc *funcCompiler) compileOperator(n *ast.OperatorExpr) (Expr, error) {
 	return nil, fc.unsupported(fmt.Sprintf("operator '%s'", n.Operator))
 }
 
-// binaryOperands compiles both operands of n as scalars: a collection operand
-// is taken as the one value it holds, failing as the interpreter's operator
-// does. Two collection operands are evaluated once each into temporaries the
-// returned wrap binds around the operation, so a failure can describe both.
+// binaryOperands compiles both operands of a strict operator n as scalars: a
+// collection operand is taken as the one value it holds, failing as the
+// interpreter's operator does. Two collection operands are evaluated once each
+// into temporaries the returned wrap binds around the operation, so a failure
+// can describe both.
 func (fc *funcCompiler) binaryOperands(n *ast.OperatorExpr) (Expr, Expr, func(Expr) Expr, error) {
 	l, r, err := fc.rawOperands(n)
 	if err != nil {

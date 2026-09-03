@@ -716,6 +716,11 @@ func (e *cEmitter) entry(fn *Func, withMain bool) {
 	args := make([]string, len(fn.Params))
 	for i, p := range fn.Params {
 		args[i] = cLocal(p.Name)
+		if p.Type.Many() {
+			// The run holds its collection arguments throughout, as the interpreter
+			// holds the literals it evaluated them from.
+			e.linef("sysml_charge(%s.len);", args[i])
+		}
 	}
 	e.linef("*result = %s(%s);", fn.Ident, strings.Join(args, ", "))
 	e.linef("return 0;")

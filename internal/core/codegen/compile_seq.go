@@ -463,7 +463,9 @@ func (fc *funcCompiler) compileBodyOp(op SeqOp, operand ast.Node, body ast.Node)
 }
 
 // compileLambda compiles a body `{in a; in b; …; result}` whose parameters
-// take the given types, in a frame over the enclosing environment.
+// take the given types, in a frame over the enclosing environment. A local the
+// body declares is read on demand, as the interpreter reads it, so its
+// initializer is inlined where the result names it.
 func (fc *funcCompiler) compileLambda(op SeqOp, b *ast.BodyExpr, paramTypes []Type) (Lambda, error) {
 	if len(b.Params) != len(paramTypes) {
 		return Lambda{}, fc.unsupported(fmt.Sprintf("%s with a body of %d parameters, not %d", op.Name(), len(b.Params), len(paramTypes)))
@@ -492,12 +494,18 @@ func (fc *funcCompiler) compileLambda(op SeqOp, b *ast.BodyExpr, paramTypes []Ty
 	}
 	var result ast.Node
 	for _, member := range b.Members {
-		if u, ok := member.(*ast.Usage); ok {
+		if u, ok := unwrap(member).(*ast.Usage); ok {
 			decl, err := fc.compileDeclare(lower.Declare{Name: usageName(u), Value: u.Value, Node: u, Scope: fc.scope})
 			if err != nil {
 				return Lambda{}, err
 			}
-			lambda.Locals = append(lambda.Locals, decl.(Declare))
+			d := decl.(Declare)
+			local, _ := fc.env.lookup(d.Name)
+			local.inline = d.Init
+			if local.inline == nil {
+				local.inline = NullLit{T: d.T}
+			}
+			fc.env.bind(d.Name, local)
 			continue
 		}
 		if result != nil {

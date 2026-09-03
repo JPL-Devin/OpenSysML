@@ -604,7 +604,14 @@ func (e *goEmitter) main(fn *Func) {
 	e.linef("var result %s", goType(fn.Result))
 	reset := ""
 	if e.collections {
+		// A run holds its collection arguments throughout, as the interpreter
+		// holds the literals it evaluated them from.
 		reset = "sysmlElements = 0; "
+		for i, p := range fn.Params {
+			if p.Type.Many() {
+				reset += fmt.Sprintf("sysmlCharge(int64(len(%s.data))); ", args[i])
+			}
+		}
 	}
 	e.linef("for i := 0; i < repeat; i++ {")
 	e.linef("\tif err := sysmlRun(func() { %sresult = %s(%s) }); err != nil {", reset, fn.Ident, strings.Join(args, ", "))

@@ -323,6 +323,16 @@ package Compiled {
 		calc def Tern { in b : Boolean; in x : Integer[0..*]; return : Integer[0..*] = if b ? x else 7; }
 		calc def Big { in n : Integer; return : Integer = size((1..n)->collect {in v; (v, v)}); }
 		calc def Big2 { in n : Integer; attribute s : Integer[0..*] = 1..n; attribute t : Integer[0..*] = 1..n; return : Integer = size(s) + size(t); }
+		calc def BigIn { in x : Integer[0..*]; return : Integer = size(x); }
+		calc def BigW { in n : Integer; return : Real = RealFunctions::sum(1..n); }
+		calc def LazyAnd { in x : Integer[0..*]; in n : Integer; return : Boolean = size(x) > 5 and x#(n) > 0; }
+		calc def LazyOr { in x : Integer[0..*]; in n : Integer; return : Boolean = isEmpty(x) or x#(n) > 0; }
+		calc def LazyImp { in x : Integer[0..*]; in n : Integer; return : Boolean = notEmpty(x) implies x#(n) > 0; }
+		calc def LazyBig { in x : Integer[0..*]; in n : Integer; return : Boolean = isEmpty(x) or size((1..n)->collect {in v; (v, v)}) > 0; }
+		calc def BodyLoc { in x : Integer[0..*]; return : Integer[0..*] = x->collect {in v : Integer; attribute d : Integer = v * 2; d + 1}; }
+		calc def BodySel { in x : Integer[0..*]; return : Integer[0..*] = x->select {in v : Integer; attribute big : Boolean = v > 1; big}; }
+		calc def BodyUnread { in x : Integer[0..*]; return : Integer[0..*] = x->collect {in v : Integer; attribute d : Integer = x#(9); v + 1}; }
+		calc def BodyCond { in x : Integer[0..*]; return : Integer[0..*] = x->collect {in v : Integer; attribute d : Integer = x#(9); if v > 2 ? d else v}; }
 		calc def Cnt { in x : Integer[0..*]; return : Boolean = contains(x, 2); }
 		calc def IncAt { in x : Integer[0..*]; in i : Integer; return : Integer[0..*] = includingAt(x, 9, i); }
 		calc def Sub3 { in x : Integer[0..*]; in i : Integer; in j : Integer; return : Integer[0..*] = subsequence(x, i, j); }

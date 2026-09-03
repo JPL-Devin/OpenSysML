@@ -259,11 +259,10 @@ type SeqCall struct {
 }
 
 // Lambda is a body expression `{in x; …}`: Params are bound to the
-// operation's per-element arguments in order, Locals are declared, then
-// Body is evaluated.
+// operation's per-element arguments in order, then Body is evaluated; locals
+// the body declares are inlined into Body where it names them.
 type Lambda struct {
 	Params []Param
-	Locals []Declare
 	Body   Expr
 }
 

@@ -109,8 +109,10 @@ arithmetic rather than the host language's:
   sequence literals flatten and null contributes no element; `lo..hi` is inclusive and empty when
   descending; `reduce` of an empty sequence is null and `minimize`/`maximize` of one is an error;
   `==` compares elementwise while `===` also distinguishes shape and Integer from Real. Every
-  sequence a program builds counts against the interpreter's element budget
-  (`OPENSYSML_MAX_ELEMENTS`, default 1,000,000), reset per run under `--repeat`. On the command
+  sequence a program builds or is given counts against the interpreter's element budget
+  (`OPENSYSML_MAX_ELEMENTS`, default 1,000,000), reset per run under `--repeat` with the
+  arguments still charged. A local a `{in v; …}` body declares is read on demand, as the
+  interpreter reads it, so an initializer the result never names never runs. On the command
   line a sequence argument is written as the interpreter would read it: `null`, `4`, `(4)`,
   `(1, 2)`, `()`.
 
@@ -129,6 +131,10 @@ pins the refusals.
   a `while` that never terminates runs forever, and a long loop the interpreter would cut short
   runs to completion. The differential test lifts the interpreter's budget for this reason. This
   is the one bound the interpreter has that compiled code lacks; a compiled program is a program.
+- **Widened copies are charged.** An Integer collection bound to a Real slot is copied into
+  Reals and the copy is charged to the element budget; the interpreter keeps the Integers and
+  holds no copy. At the limit the program can therefore fail where the interpreter runs, never
+  the reverse. `TestCompiledBudgetChargesInputsAndWidening` pins both sides.
 - **Transcendental last bits.** `sin`, `cos`, `tan`, `exp`, `ln`, `log`, `atan2` and the inverse
   trigonometric functions come from glibc's `libm` in C and Go's `math` in Go and the interpreter;
   the two libraries agree to within an ulp but not bit-for-bit (Go's own `Exp` differs between

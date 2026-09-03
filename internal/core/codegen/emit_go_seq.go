@@ -283,7 +283,10 @@ func sysmlRange(lo, hi int64) sysmlSeq[int64] {
 	return r
 }
 
+// sysmlWiden is the Real copy of an Integer collection, charged like any
+// other materialized collection.
 func sysmlWiden(s sysmlSeq[int64]) sysmlSeq[float64] {
+	sysmlCharge(int64(len(s.data)))
 	r := sysmlSeq[float64]{s.shape, make([]float64, len(s.data))}
 	for i, v := range s.data {
 		r.data[i] = float64(v)
@@ -572,9 +575,6 @@ func (e *goEmitter) fold(x Fold) string {
 		}
 		for i, p := range x.Body.Params {
 			fmt.Fprintf(&s, "%s := %s; _ = %s; ", goLocal(p.Name), args[i], goLocal(p.Name))
-		}
-		for _, d := range x.Body.Locals {
-			fmt.Fprintf(&s, "%s := %s; _ = %s; ", goLocal(d.Name), e.declInit(d), goLocal(d.Name))
 		}
 		return s.String()
 	}
