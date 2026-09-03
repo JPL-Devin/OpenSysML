@@ -9,6 +9,7 @@ elmt:Documented
     sysml:qualifiedName "Documented" ;
     sysml:elementId "Documented" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Documented" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Documented__Wheel, elmt:Documented__Hub, elmt:Documented__wheel ;

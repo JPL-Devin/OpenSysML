@@ -9,6 +9,7 @@ elmt:Deps
     sysml:qualifiedName "Deps" ;
     sysml:elementId "Deps" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Deps" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Deps__A, elmt:Deps__B ;

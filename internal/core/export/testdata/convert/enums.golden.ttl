@@ -9,6 +9,7 @@ elmt:Colors
     sysml:qualifiedName "Colors" ;
     sysml:elementId "Colors" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Colors" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Colors__Color ;

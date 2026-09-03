@@ -10,6 +10,7 @@ elmt:LoopsAndConditionals
     sysml:qualifiedName "LoopsAndConditionals" ;
     sysml:elementId "LoopsAndConditionals" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "LoopsAndConditionals" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:LoopsAndConditionals__Tick, elmt:LoopsAndConditionals__Control ;

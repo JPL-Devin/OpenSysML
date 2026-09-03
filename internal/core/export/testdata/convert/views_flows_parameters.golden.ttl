@@ -10,6 +10,7 @@ elmt:FlowsAndViews
     sysml:qualifiedName "FlowsAndViews" ;
     sysml:elementId "FlowsAndViews" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "FlowsAndViews" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:FlowsAndViews__FuelPort, elmt:FlowsAndViews__Tank, elmt:FlowsAndViews__Engine, elmt:FlowsAndViews__FuelInterface, elmt:FlowsAndViews__tanks, elmt:FlowsAndViews__vehicle, elmt:FlowsAndViews__Measure, elmt:FlowsAndViews__StructureView, elmt:FlowsAndViews__vehicleView ;

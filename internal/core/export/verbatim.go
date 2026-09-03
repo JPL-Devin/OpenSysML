@@ -18,6 +18,7 @@ func (d *decoder) render(roots []*element) (string, error) {
 		d.printed = map[*element]bool{}
 		d.rebuilt = map[*element]bool{}
 		d.usedExpr = map[string]bool{}
+		d.written = nil
 		if err := d.resolveExpressions(); err != nil {
 			return "", err
 		}
@@ -31,7 +32,7 @@ func (d *decoder) render(roots []*element) (string, error) {
 			return b.String(), nil
 		}
 		before := len(d.demoted) + len(d.demotedExpr)
-		d.demoteStale(b.String())
+		d.demoteStale(b.String(), roots)
 		if len(d.demoted)+len(d.demotedExpr) == before {
 			return b.String(), nil
 		}
@@ -44,7 +45,7 @@ func (d *decoder) verbatim(el *element) (string, bool) {
 	if d.demoted[el] {
 		return "", false
 	}
-	return d.stringOf(el, rdf.OpenSysML+xSourceText)
+	return d.graph.Lexical(rdf.IRI(el.iri), rdf.OpenSysML+xSourceText)
 }
 
 // expressionText returns the source text an expression node is written as, if
@@ -62,25 +63,30 @@ func (d *decoder) expressionText(node rdf.Term) (string, bool) {
 
 // demoteStale demotes whatever verbatim text contradicts the graph; notation
 // that does not convert, or whose disagreement cannot be placed, demotes all.
-func (d *decoder) demoteStale(notation string) {
-	file := source.New("<converted>.sysml", []byte(notation))
+func (d *decoder) demoteStale(notation string, roots []*element) {
+	name, ok := d.candidateName(roots)
+	if !ok {
+		d.demoteAll()
+		return
+	}
+	file := source.New(name, []byte(notation))
 	p := parser.New(file)
 	root := p.ParseFile()
 	if len(p.Diagnostics) > 0 {
 		d.demoteAll()
 		return
 	}
-	check, err := ToRDF(file, root)
+	check, err := encodeDocument(file, root)
 	if err != nil {
 		d.demoteAll()
 		return
 	}
-	for _, t := range disagreeingTriples(d.graph, check) {
+	for _, t := range disagreeingTriples(d.graph, check.graph) {
 		// A reference to an element only one graph has disagrees about that
 		// element's identity, not about the element referring to it.
 		var el *element
 		var expr string
-		if t.Object.IsIRI() && d.graph.HasProperty(t.Object, rdf.RDFType) != check.HasProperty(t.Object, rdf.RDFType) {
+		if t.Object.IsIRI() && d.graph.HasProperty(t.Object, rdf.RDFType) != check.graph.HasProperty(t.Object, rdf.RDFType) {
 			el, expr = d.blame(t.Object.Value, check)
 		}
 		if el == nil && expr == "" {
@@ -102,6 +108,28 @@ func (d *decoder) demoteStale(notation string) {
 	}
 }
 
+// candidateName names the candidate notation for the grammar the roots record
+// their text was written in; SysML when none does. Roots recording different
+// grammars cannot be read as one document, so their text cannot be checked.
+func (d *decoder) candidateName(roots []*element) (string, bool) {
+	language := ""
+	for _, root := range roots {
+		recorded, ok := d.stringOf(root, rdf.OpenSysML+xSourceLanguage)
+		switch {
+		case !ok:
+		case language == "":
+			language = recorded
+		case language != recorded:
+			return "", false
+		}
+	}
+	if language == "" {
+		language = "sysml"
+	}
+	return "<converted>." + language, true
+}
+
+// demoteAll demotes every verbatim text and expression printed in this pass.
 func (d *decoder) demoteAll() {
 	for el := range d.printed {
 		d.demoted[el] = true
@@ -118,7 +146,8 @@ func disagreeingTriples(graph, check *rdf.Graph) []rdf.Triple {
 	var out []rdf.Triple
 	structural := func(t rdf.Triple) bool {
 		switch t.Predicate.Value {
-		case rdf.OpenSysML + xSourceText, rdf.OpenSysML + xSourceTail, rdf.OpenSysML + xMemberIndex:
+		case rdf.OpenSysML + xSourceText, rdf.OpenSysML + xSourceTail, rdf.OpenSysML + xSourceLanguage,
+			rdf.OpenSysML + xMemberIndex:
 			return false
 		}
 		return true
@@ -136,9 +165,10 @@ func disagreeingTriples(graph, check *rdf.Graph) []rdf.Triple {
 	return out
 }
 
-// blame returns the nearest verbatim element a disagreement over iri falls
-// under, or else the outermost expression node written from its text.
-func (d *decoder) blame(iri string, check *rdf.Graph) (*element, string) {
+// blame returns the verbatim element a disagreement over iri falls in, or else
+// the outermost expression node written from its text. A subject only the
+// candidate has is traced to the element written over where it was parsed.
+func (d *decoder) blame(iri string, check *encoder) (*element, string) {
 	var expr string
 	visited := map[string]bool{}
 	for iri != "" && !visited[iri] {
@@ -149,12 +179,12 @@ func (d *decoder) blame(iri string, check *rdf.Graph) (*element, string) {
 		if d.usedExpr[iri] {
 			expr = iri
 		}
+		if offset, ok := check.offsets[iri]; ok {
+			return d.writerAt(offset), ""
+		}
 		holder := holderOf(d.graph, iri)
 		if holder == "" {
-			holder = holderOf(check, iri)
-			if owner, ok := d.byIRI[holder]; ok && check.HasProperty(rdf.IRI(iri), rdf.SysML+pQualifiedName) {
-				return d.verbatimMemberAt(owner, memberRank(check, holder, iri)), ""
-			}
+			holder = holderOf(check.graph, iri)
 		}
 		iri = holder
 	}
@@ -173,30 +203,23 @@ func (d *decoder) nearestVerbatim(el *element) *element {
 	return nil
 }
 
-// verbatimMemberAt returns the member written at rank among owner's, which is
-// the one whose notation the candidate's member of that rank came from, or
-// else the nearest verbatim owner.
-func (d *decoder) verbatimMemberAt(owner *element, rank int) *element {
-	if rank >= 0 && rank < len(owner.children) {
-		if child := owner.children[rank]; d.printed[child] || d.rebuilt[child] {
-			return child
+// writerAt returns the innermost element written over an offset of the
+// candidate notation: the one whose text the notation parsed there came from.
+func (d *decoder) writerAt(offset int) *element {
+	var best *writing
+	for i := range d.written {
+		w := &d.written[i]
+		if offset < w.where.start || offset >= w.where.end {
+			continue
+		}
+		if best == nil || w.where.end-w.where.start < best.where.end-best.where.start {
+			best = w
 		}
 	}
-	return d.nearestVerbatim(owner)
-}
-
-// memberRank returns the place of iri among the members of owner in g, in
-// index order; the numbers themselves need not run on from zero.
-func memberRank(g *rdf.Graph, owner, iri string) int {
-	index := intOf(g, rdf.IRI(iri), rdf.OpenSysML+xMemberIndex)
-	rank := 0
-	for _, t := range g.Triples() {
-		if t.Predicate.Value == rdf.SysML+pOwningNamespace && t.Object.Value == owner && t.Subject.Value != iri &&
-			intOf(g, t.Subject, rdf.OpenSysML+xMemberIndex) < index {
-			rank++
-		}
+	if best == nil {
+		return nil
 	}
-	return rank
+	return best.el
 }
 
 // holderOf returns the subject a node hangs off: the namespace owning an

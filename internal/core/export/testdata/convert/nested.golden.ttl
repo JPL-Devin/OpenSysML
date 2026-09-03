@@ -9,6 +9,7 @@ elmt:Outer
     sysml:qualifiedName "Outer" ;
     sysml:elementId "Outer" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Outer" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Outer__Inner ;

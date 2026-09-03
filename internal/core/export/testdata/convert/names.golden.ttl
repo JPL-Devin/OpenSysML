@@ -9,6 +9,7 @@ elmt:Named
     sysml:qualifiedName "Named" ;
     sysml:elementId "Named" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Named" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Named__Vehicle, elmt:Named__Car, elmt:Named__Mass ;

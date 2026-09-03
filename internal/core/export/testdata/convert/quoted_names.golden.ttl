@@ -10,6 +10,7 @@ elmt:Quoted_20Names
     sysml:qualifiedName "Quoted Names" ;
     sysml:elementId "Quoted_20Names" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Quoted Names" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Quoted_20Names__Mass_20_28kg_29, elmt:Quoted_20Names__Rover_20Model, elmt:Quoted_20Names__the_20rover, elmt:Quoted_20Names__my_20rover, elmt:Quoted_20Names__off_20model, elmt:Quoted_20Names__state, elmt:Quoted_20Names__a_20state ;
@@ -321,6 +322,7 @@ elmt:Consumer
     sysml:qualifiedName "Consumer" ;
     sysml:elementId "Consumer" ;
     sysx:memberIndex "1"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Consumer" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedRelationship elmt:Consumer___400, elmt:Consumer__r_om, elmt:Consumer___402 ;

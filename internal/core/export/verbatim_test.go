@@ -3,6 +3,8 @@ package export_test
 import (
 	"strings"
 	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 )
 
 // A model the formatter leaves alone, so what the graph carries as source text
@@ -412,5 +414,46 @@ func TestUnparsableSourceTextIsIgnored(t *testing.T) {
 	}
 	if strings.Contains(back, "part def Hub\n") || !strings.Contains(back, "part def Hub;") {
 		t.Errorf("the notation is not valid:\n%s", back)
+	}
+}
+
+// A KerML document that also reads clean as SysML, with a different meaning:
+// `binding [1] a = b` names the binding `a` there. The graph records the
+// grammar its text was written in, so the check reads it as the file was.
+const kermlBindings = `package Bindings {
+    feature target[1];
+    feature a[1];
+    // an anonymous binding with a multiplicity
+    binding [1] a = target;
+}
+`
+
+func TestSourceTextIsReadInTheLanguageItWasWrittenIn(t *testing.T) {
+	turtle, err := export.Convert("m.kerml", []byte(kermlBindings), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	if !strings.Contains(string(turtle), `sysx:sourceLanguage "kerml"`) {
+		t.Fatalf("the graph does not record the language:\n%s", turtle)
+	}
+	if back := toNotation(t, turtle); back != kermlBindings {
+		t.Errorf("round trip changed the notation:\n--- want ---\n%s--- got ---\n%s", kermlBindings, back)
+	}
+	if !strings.Contains(string(idTurtle(t, commented)), `sysx:sourceLanguage "sysml"`) {
+		t.Errorf("a SysML file does not record its language")
+	}
+}
+
+// Roots recording different languages cannot be read as one document, so their
+// text is not trusted: the graph is written canonically.
+func TestRootsOfTwoLanguagesAreWrittenCanonically(t *testing.T) {
+	two := "// two\npackage A { part def P; }\npackage B { part def Q; }\n"
+	turtle := idTurtle(t, two)
+	if back := toNotation(t, turtle); back != two {
+		t.Fatalf("round trip changed the notation:\n--- want ---\n%s--- got ---\n%s", two, back)
+	}
+	mixed := editTurtle(t, turtle, `sysx:sourceLanguage "sysml"`, `sysx:sourceLanguage "kerml"`)
+	if back, want := toNotation(t, mixed), toNotation(t, withoutTriples(t, turtle, "sysx:sourceText")); back != want {
+		t.Errorf("text of two languages was trusted:\n--- want ---\n%s--- got ---\n%s", want, back)
 	}
 }

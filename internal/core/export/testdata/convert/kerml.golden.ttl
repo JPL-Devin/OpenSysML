@@ -9,6 +9,7 @@ elmt:Structural
     sysml:qualifiedName "Structural" ;
     sysml:elementId "Structural" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Structural" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Structural__Frame, elmt:Structural__Move, elmt:Structural__Thing, elmt:Structural__Link ;

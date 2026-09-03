@@ -10,6 +10,7 @@ elmt:Constraints
     sysml:qualifiedName "Constraints" ;
     sysml:elementId "Constraints" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Constraints" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Constraints__Mass, elmt:Constraints__MassLimit, elmt:Constraints__Margin, elmt:Constraints__Rover ;

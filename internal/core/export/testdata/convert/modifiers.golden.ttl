@@ -9,6 +9,7 @@ elmt:Modifiers
     sysml:qualifiedName "Modifiers" ;
     sysml:elementId "Modifiers" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Modifiers" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Modifiers__Hidden, elmt:Modifiers__Shown, elmt:Modifiers__Base, elmt:Modifiers__Derived, elmt:Modifiers__Choice ;

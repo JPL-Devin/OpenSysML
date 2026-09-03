@@ -65,6 +65,7 @@ const (
 	xHasBody         = "hasBody"
 	xSourceText      = "sourceText"
 	xSourceTail      = "sourceTail"
+	xSourceLanguage  = "sourceLanguage"
 	xPrefixMetadata  = "prefixMetadata"
 	xFilter          = "filter"
 	xNamespaceImport = "isNamespaceImport"
@@ -155,6 +156,16 @@ func (e *UnsupportedError) Error() string {
 // it was written as alongside its structural triples, so the conversion needs
 // the bytes as well as the tree.
 func ToRDF(file *source.SourceFile, root *ast.RootNamespace) (*rdf.Graph, error) {
+	e, err := encodeDocument(file, root)
+	if err != nil {
+		return nil, err
+	}
+	return e.graph, nil
+}
+
+// encodeDocument converts a parsed document, returning the encoder that holds
+// the graph and where in file each element was written.
+func encodeDocument(file *source.SourceFile, root *ast.RootNamespace) (*encoder, error) {
 	if file == nil || root == nil {
 		return nil, &UnsupportedError{What: "an empty document", Note: "nothing to convert"}
 	}
@@ -176,6 +187,7 @@ func ToRDF(file *source.SourceFile, root *ast.RootNamespace) (*rdf.Graph, error)
 		subjects: map[string]string{},
 		regions:  map[rdf.Term]region{},
 		bodies:   map[rdf.Term]region{},
+		offsets:  map[string]int{},
 	}
 	// The first pass records which qualified names this document declares, so
 	// the second can decide whether a relationship target is a link to an
@@ -190,7 +202,17 @@ func ToRDF(file *source.SourceFile, root *ast.RootNamespace) (*rdf.Graph, error)
 		return nil, e.idErr
 	}
 	e.sourceText()
-	return e.graph, nil
+	return e, nil
+}
+
+// languageName is the name a document's grammar is recorded under on its roots,
+// so the text is read back in the grammar it was written in. A file with no
+// model extension is read as SysML, as the parser reads it.
+func languageName(kind source.Kind) string {
+	if kind == source.KindKerML {
+		return "kerml"
+	}
+	return "sysml"
 }
 
 // sourceText gives every element its lines as written, comments included; one
@@ -232,6 +254,8 @@ type encoder struct {
 	// regions holds each element's lines, bodies the lines its members tile.
 	regions map[rdf.Term]region
 	bodies  map[rdf.Term]region
+	// offsets holds where in file each element's declaration starts.
+	offsets map[string]int
 }
 
 // claim reserves an IRI for what it stands for, returning the holder it
@@ -383,8 +407,12 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		// IRI ends in, so the two cannot disagree.
 		e.graph.Add(subject, e.sysml(pElementID), rdf.String(rdf.LocalName(subject.Value)))
 		e.graph.Add(subject, e.sysx(xMemberIndex), rdf.Int(index))
+		e.offsets[subject.Value] = node.Span().Offset
 		if !inline {
 			e.regions[subject] = lines
+		}
+		if ownerTerm.Value == "" {
+			e.graph.Add(subject, e.sysx(xSourceLanguage), rdf.String(languageName(e.file.Kind())))
 		}
 		if e.ids.declaredIDAt(node) {
 			e.graph.Add(subject, e.sysx(xDeclaredID), rdf.Bool(true))

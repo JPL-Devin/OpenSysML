@@ -10,6 +10,7 @@ elmt:ActionNodes
     sysml:qualifiedName "ActionNodes" ;
     sysml:elementId "ActionNodes" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "ActionNodes" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:ActionNodes__Command, elmt:ActionNodes__Radio, elmt:ActionNodes__Brake, elmt:ActionNodes__Drive ;

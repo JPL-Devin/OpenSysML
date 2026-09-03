@@ -10,6 +10,7 @@ elmt:Synonyms
     sysml:qualifiedName "Synonyms" ;
     sysml:elementId "Synonyms" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Synonyms" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Synonyms__Temperature, elmt:Synonyms__reading, elmt:Synonyms__Average, elmt:Synonyms__base, elmt:Synonyms__atStart, elmt:Synonyms__during, elmt:Synonyms__note, elmt:Synonyms___407, elmt:Synonyms__Drive, elmt:Synonyms__Safe, elmt:Synonyms__Idle, elmt:Synonyms__Vehicle, elmt:Synonyms__AsTree, elmt:Synonyms__Dashboard ;

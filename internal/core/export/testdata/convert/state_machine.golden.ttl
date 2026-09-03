@@ -10,6 +10,7 @@ elmt:StateMachine
     sysml:qualifiedName "StateMachine" ;
     sysml:elementId "StateMachine" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "StateMachine" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:StateMachine__Signal, elmt:StateMachine__Warm, elmt:StateMachine__Bus, elmt:StateMachine__VehicleStates, elmt:StateMachine__Nested, elmt:StateMachine__Composite ;

@@ -9,6 +9,7 @@ elmt:Conjugation
     sysml:qualifiedName "Conjugation" ;
     sysml:elementId "Conjugation" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Conjugation" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Conjugation__CommunicationPort, elmt:Conjugation__Ground, elmt:Conjugation__Link ;

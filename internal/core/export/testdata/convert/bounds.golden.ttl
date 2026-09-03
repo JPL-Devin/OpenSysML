@@ -10,6 +10,7 @@ elmt:Bounds
     sysml:qualifiedName "Bounds" ;
     sysml:elementId "Bounds" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Bounds" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Bounds__Vehicle, elmt:Bounds__Fleet ;

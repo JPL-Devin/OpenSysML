@@ -9,6 +9,7 @@ elmt:Chains
     sysml:qualifiedName "Chains" ;
     sysml:elementId "Chains" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Chains" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Chains___400, elmt:Chains__V, elmt:Chains__v, elmt:Chains__c, elmt:Chains__Named ;

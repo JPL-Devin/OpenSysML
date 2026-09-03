@@ -10,6 +10,7 @@ elmt:Values
     sysml:qualifiedName "Values" ;
     sysml:elementId "Values" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Values" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Values__Total, elmt:Values__Sized ;

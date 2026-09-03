@@ -148,6 +148,15 @@ type decoder struct {
 	demoted     map[*element]bool
 	usedExpr    map[string]bool
 	demotedExpr map[string]bool
+	// written records where each element landed in this pass's notation, the
+	// members of one ahead of it.
+	written []writing
+}
+
+// writing is the range of the notation one element was written over.
+type writing struct {
+	el    *element
+	where region
 }
 
 // build reads every subject into an element and links it to its owner,
@@ -391,8 +400,16 @@ func sortByIndex(elements []*element) {
 	})
 }
 
-// print writes one element and, recursively, its members.
+// print writes one element and, recursively, its members, recording where in
+// the notation it was written.
 func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
+	start := b.Len()
+	err := d.printElement(b, el, depth)
+	d.written = append(d.written, writing{el, region{start, b.Len()}})
+	return err
+}
+
+func (d *decoder) printElement(b *strings.Builder, el *element, depth int) error {
 	indent := strings.Repeat("    ", depth)
 	lead := indent + el.prefix
 	if text, ok := d.verbatim(el); ok {
@@ -401,7 +418,11 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 		d.printed[el] = true
 		// The members carry their own text; the tail closes the body after them.
 		if tail, ok := d.graph.Lexical(rdf.IRI(el.iri), rdf.OpenSysML+xSourceTail); ok {
-			for _, child := range el.children {
+			children, err := d.bodyMembers(el)
+			if err != nil {
+				return err
+			}
+			for _, child := range children {
 				if err := d.print(b, child, depth+1); err != nil {
 					return err
 				}
@@ -425,17 +446,7 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 		b.WriteString("\n")
 		return nil
 	}
-	// An accept parameter is written into its parent's head, not its body.
-	children := el.children
-	if accept := d.acceptParam(el); accept != nil {
-		children = nil
-		for _, child := range el.children {
-			if child != accept {
-				children = append(children, child)
-			}
-		}
-	}
-	children, err = d.positionalSuccessions(children)
+	children, err := d.bodyMembers(el)
 	if err != nil {
 		return err
 	}
@@ -464,6 +475,22 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 	}
 	b.WriteString(indent + "}\n")
 	return nil
+}
+
+// bodyMembers lists the members written in an element's body, in order: an
+// accept parameter is written into its parent's head, and a succession stating
+// no source of its own folds into the member it introduces as `then`.
+func (d *decoder) bodyMembers(el *element) ([]*element, error) {
+	children := el.children
+	if accept := d.acceptParam(el); accept != nil {
+		children = nil
+		for _, child := range el.children {
+			if child != accept {
+				children = append(children, child)
+			}
+		}
+	}
+	return d.positionalSuccessions(children)
 }
 
 // identityAnnotations re-materializes the identity the graph states as the

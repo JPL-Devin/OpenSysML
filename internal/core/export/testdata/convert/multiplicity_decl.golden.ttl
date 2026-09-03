@@ -10,6 +10,7 @@ elmt:Mult
     sysml:qualifiedName "Mult" ;
     sysml:elementId "Mult" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Mult" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Mult__exactlyOne, elmt:Mult__optional, elmt:Mult__single ;

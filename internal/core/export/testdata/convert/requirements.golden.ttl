@@ -9,6 +9,7 @@ elmt:Reqs
     sysml:qualifiedName "Reqs" ;
     sysml:elementId "Reqs" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Reqs" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Reqs__Safe, elmt:Reqs__Positive, elmt:Reqs__System ;

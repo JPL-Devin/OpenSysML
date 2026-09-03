@@ -9,6 +9,7 @@ elmt:Relations
     sysml:qualifiedName "Relations" ;
     sysml:elementId "Relations" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Relations" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Relations__Base, elmt:Relations__Sub, elmt:Relations__Other ;

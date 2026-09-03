@@ -9,6 +9,7 @@ elmt:Importer
     sysml:qualifiedName "Importer" ;
     sysml:elementId "Importer" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Importer" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedRelationship elmt:Importer___400, elmt:Importer___401, elmt:Importer___402 ;

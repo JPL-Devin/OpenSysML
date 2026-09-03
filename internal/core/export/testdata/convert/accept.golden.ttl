@@ -9,6 +9,7 @@ elmt:Accepts
     sysml:qualifiedName "Accepts" ;
     sysml:elementId "Accepts" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Accepts" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Accepts__Scene, elmt:Accepts__Camera, elmt:Accepts__Observe, elmt:Accepts__Watch ;

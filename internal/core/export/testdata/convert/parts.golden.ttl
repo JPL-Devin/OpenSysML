@@ -10,6 +10,7 @@ elmt:Vehicles
     sysml:qualifiedName "Vehicles" ;
     sysml:elementId "Vehicles" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Vehicles" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Vehicles__Vehicle, elmt:Vehicles__Engine ;
