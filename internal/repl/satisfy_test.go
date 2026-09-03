@@ -80,3 +80,26 @@ func TestSatisfyQuotesInnerNames(t *testing.T) {
 		}
 	}
 }
+
+// TestSatisfyChainedSubject checks that a `by` operand written as a feature
+// chain is evaluated on the nested object reached through its owner, is
+// reported under the chain as written, and keeps that object so a repeated
+// command is about the same one.
+func TestSatisfyChainedSubject(t *testing.T) {
+	s := loadFixture(t, "testdata/satisfy_chain.sysml")
+	out := run(t, s, "%satisfy")
+	wants(t, out,
+		"✓ satisfy r1 by direct holds (on S::direct ID: 1)",
+		"✓ satisfy r2 by config.child holds (on S::config::child ID: 4)",
+	)
+	rejects(t, out, "by child")
+	wants(t, run(t, s, "%satisfy"), "✓ satisfy r2 by config.child holds (on S::config::child ID: 4)")
+	wants(t, run(t, s, "%features S::config::child"), "mass")
+
+	// A chain whose segment resolves to nothing is reported as written.
+	s.Submit("package N { private import S::*; requirement r3 : MassReq; satisfy r3 by config.nope; }")
+	wants(t, run(t, s, "%satisfy N"),
+		"? satisfy r3 by config.nope could not be evaluated",
+		"satisfy r3 by config.nope: no subject to satisfy the requirement: config.nope",
+	)
+}

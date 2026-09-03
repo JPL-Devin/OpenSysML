@@ -210,6 +210,19 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Fixed
 
+- **`satisfy … by config.child` is evaluated on the nested object it names.** A satisfaction
+  assertion whose `by` operand is a feature chain used to be read as its last name alone:
+  `%satisfy` and `-satisfy` reported `? satisfy r2 by child could not be evaluated — no subject
+  to satisfy the requirement: child`, and only the reporter's workaround of binding the
+  requirement's `subject` to the chain reached a verdict. The chain is now resolved through
+  each feature in turn — the object of `config` is materialized and the one its `child` holds
+  is the subject — so the assertion holds or fails on that nested object, at any depth and
+  through parts typed by definitions with nested parts of their own. The verdict and every
+  diagnostic spell the chain as written (`satisfy r2 by config.child`), and a chain whose
+  segment resolves to nothing says so under its full name (`no subject to satisfy the
+  requirement: config.nope`). A repeated `%satisfy` is about the same nested object, which
+  `%features S::config::child` can then inspect. (Open-MBEE/OpenSysML#94)
+
 - **`%state <machine> <object>` attaches to the machine the object exhibits instead of performing
   it again.** Naming an object's own exhibited machine (`%state Rover::modes rover`, or `-state
   "Rover::modes rover"`) used to start a second performance of it on the same object, so its

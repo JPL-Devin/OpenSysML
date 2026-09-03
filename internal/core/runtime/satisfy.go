@@ -35,11 +35,23 @@ type SatisfyAssertion struct {
 
 	// Subject is the feature named by `by`, whose values the requirement is
 	// evaluated against. It is nil when the assertion names no subject, and
-	// when the name resolves to nothing.
+	// when the name resolves to nothing. For a feature chain (`config.child`)
+	// it is the chain's last feature.
 	Subject *symbols.Symbol
 
-	// SubjectRef is the `by` operand as written.
+	// SubjectRef is the `by` operand as written, a chain with its dots.
 	SubjectRef string
+
+	// SubjectChain is the `by` operand when it is a feature chain, whose object
+	// is reached through the objects of the features before its last; nil for a
+	// plain name.
+	SubjectChain *ast.FeatureChainExpr
+
+	// SubjectRoot is the feature a chained `by` operand starts from (`config`),
+	// and SubjectPath the features walked from its object to the subject's
+	// (`child`). Both are empty for a plain name.
+	SubjectRoot *symbols.Symbol
+	SubjectPath []string
 
 	// Negated is `assert not satisfy ...`: the assertion holds when the
 	// requirement is not satisfied.
@@ -135,24 +147,61 @@ func (ctx *Context) satisfyAssertionOf(sym *symbols.Symbol) *SatisfyAssertion {
 			a.RequirementRef, a.Requirement = ctx.resolveRelationship(sym, rel)
 		case ast.RelSubject:
 			a.SubjectRef, a.Subject = ctx.resolveRelationship(sym, rel)
+			if chain, ok := rel.Target.(*ast.FeatureChainExpr); ok {
+				a.SubjectChain = chain
+				a.SubjectRoot, a.SubjectPath = ctx.chainRoot(sym, chain)
+			}
 		}
 	}
 	return a
 }
 
 // resolveRelationship resolves a relationship target of sym, returning the name
-// as written and the symbol it denotes, which is nil when it denotes none.
+// as written and the symbol it denotes, which is nil when it denotes none. A
+// feature chain denotes its last feature, resolved through the ones before it.
 func (ctx *Context) resolveRelationship(sym *symbols.Symbol, rel *ast.Relationship) (string, *symbols.Symbol) {
-	qn := ast.AsQualifiedName(rel.Target)
-	if qn == nil {
-		name, _ := ast.TargetName(rel.Target)
-		return name, nil
+	text := targetText(rel.Target)
+	if text == "" {
+		return "", nil
 	}
-	target, ok := ctx.resolver.ResolveQualified(sym.OwnerScope, qn)
+	target, ok := ctx.resolver.ResolveTarget(sym.OwnerScope, rel.Target)
 	if !ok {
 		target = nil
 	}
-	return qualifiedNameToString(qn), target
+	return text, target
+}
+
+// chainRoot resolves the feature a chain starts from in sym's scope, nil when
+// it resolves to nothing, with the names of the members walked after it.
+func (ctx *Context) chainRoot(sym *symbols.Symbol, chain *ast.FeatureChainExpr) (*symbols.Symbol, []string) {
+	if chain.Member == nil {
+		return nil, nil
+	}
+	base, parts := chainBase(chain)
+	path := make([]string, 0, len(parts))
+	for _, part := range parts {
+		path = append(path, part.Text)
+	}
+	root, ok := ctx.resolver.ResolveTarget(sym.OwnerScope, base)
+	if !ok {
+		root = nil
+	}
+	return root, path
+}
+
+// targetText renders a relationship target as written: a qualified name with
+// its `::`, a feature chain with its dots; "" for a node naming nothing.
+func targetText(node ast.Node) string {
+	chain, ok := node.(*ast.FeatureChainExpr)
+	if !ok {
+		return qualifiedNameToString(ast.AsQualifiedName(node))
+	}
+	operand := targetText(chain.Operand)
+	member := qualifiedNameToString(chain.Member)
+	if operand == "" || member == "" {
+		return ""
+	}
+	return operand + "." + member
 }
 
 // EvaluateSatisfaction evaluates a satisfaction assertion against a fresh
@@ -259,7 +308,9 @@ func (ctx *Context) satisfactionResult(holds bool, subject *Instance, reached ca
 
 // SatisfySubject returns an object of the feature a satisfaction assertion names
 // with `by`: the object its requirement is evaluated against when the caller
-// supplies none.
+// supplies none. A plain name is instantiated afresh; a feature chain is read
+// as the expression it is, so `config.child` materializes the occurrence
+// `config` and answers the object its `child` holds.
 func (ctx *Context) SatisfySubject(a *SatisfyAssertion) (*Instance, error) {
 	if a == nil || a.Symbol == nil {
 		return nil, ErrNotASatisfaction
@@ -267,9 +318,32 @@ func (ctx *Context) SatisfySubject(a *SatisfyAssertion) (*Instance, error) {
 	if a.Subject == nil {
 		return nil, fmt.Errorf("%s: %w: %s", a.Text(), ErrNoSubject, a.SubjectRef)
 	}
+	if a.SubjectChain != nil {
+		return ctx.chainSubject(a)
+	}
 	inst, err := ctx.Instantiate(a.Subject)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w: %w", a.Text(), ErrNoSubject, err)
+	}
+	return inst, nil
+}
+
+// chainSubject evaluates a chained `by` operand in the assertion's scope and
+// returns the one object it denotes.
+func (ctx *Context) chainSubject(a *SatisfyAssertion) (*Instance, error) {
+	ec := NewEvalContext(ctx, a.Symbol.OwnerScope)
+	defer ec.beginStep()()
+	value, err := ec.Eval(a.SubjectChain)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w: %w", a.Text(), ErrNoSubject, err)
+	}
+	id, ok := value.Object()
+	if !ok {
+		return nil, fmt.Errorf("%s: %w: %s does not denote one object", a.Text(), ErrNoSubject, a.SubjectRef)
+	}
+	inst, ok := ctx.Instance(id)
+	if !ok {
+		return nil, fmt.Errorf("%s: %w: %s denotes object #%d, which no longer exists", a.Text(), ErrNoSubject, a.SubjectRef, id)
 	}
 	return inst, nil
 }

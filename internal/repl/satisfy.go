@@ -27,7 +27,21 @@ func satisfyText(a *runtime.SatisfyAssertion) string {
 	}
 	if a.SubjectRef != "" {
 		b.WriteString(" by ")
-		b.WriteString(notationName(a.SubjectRef))
+		if a.SubjectChain != nil {
+			b.WriteString(chainNotation(a.SubjectRef))
+		} else {
+			b.WriteString(notationName(a.SubjectRef))
+		}
 	}
 	return b.String()
+}
+
+// chainNotation spells a chained `by` operand as the notation writes it: each
+// feature quoted on its own, joined by the dots as written.
+func chainNotation(ref string) string {
+	segments := strings.Split(ref, ".")
+	for i, seg := range segments {
+		segments[i] = notationName(seg)
+	}
+	return strings.Join(segments, ".")
 }
