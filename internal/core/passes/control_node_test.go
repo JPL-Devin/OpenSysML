@@ -261,6 +261,105 @@ func TestControlNodeGuardedSuccessionsCount(t *testing.T) {
 }`)
 }
 
+// A `succession flow` is a Succession as well as a Flow, so it counts into and
+// out of every control-node kind; a plain `flow` beside it does not.
+func TestControlNodeSuccessionFlowsCount(t *testing.T) {
+	wantControlNodeErrors(t, `package P {
+	action def A {
+		action x { out item v; } action y { out item v; } action z { in item v; }
+		fork f { in item v; out item w; }
+		succession flow from x.v to f.v;
+		succession flow from y.v to f.v;
+		succession flow from f.w to z.v;
+		flow from x.v to z.v;
+	}
+	action def B {
+		action x { out item v; } action y { in item v; } action z { in item v; }
+		join j { in item v; out item w; }
+		succession flow from x.v to j.v;
+		succession flow s1 from j.w to y.v;
+		succession flow j.w to z.v;
+	}
+	action def C {
+		action x { out item v; } action y { in item v; }
+		merge m { in item v; out item w; }
+		succession flow from x.v to m.v;
+		succession flow from m.w to y.v;
+		succession flow from m.w to y.v;
+	}
+	action def D {
+		action x { out item v; } action y { out item v; } action z { in item v; }
+		decide d { in item v; out item w; }
+		succession flow from x.v to d.v;
+		succession flow from y.v to d.v;
+		succession flow from d.w to z.v;
+		flow from y.v to d.v;
+	}
+}`,
+		controlNodeWant{CodeForkIncomingSuccessions, 4, "fork f has 2 incoming successions"},
+		controlNodeWant{CodeJoinOutgoingSuccessions, 12, "join j has 2 outgoing successions"},
+		controlNodeWant{CodeMergeOutgoingSuccessions, 19, "merge m has 2 outgoing successions"},
+		controlNodeWant{CodeDecisionIncomingSuccessions, 26, "decide d has 2 incoming successions"})
+	wantControlNodesClean(t, `package P {
+	action def A {
+		action x { out item v; } action y { out item v; in item u; } action z { in item v; }
+		fork f { in item v; out item w; }
+		succession flow from x.v to f.v;
+		succession flow from f.w to y.u;
+		succession flow from f.w to z.v;
+		join j { in item v; out item w; }
+		succession flow from y.v to j.v;
+		succession flow from x.v to j.v;
+		succession flow from j.w to z.v;
+		merge m { in item v; out item w; }
+		succession flow from y.v to m.v;
+		succession flow from x.v to m.v;
+		succession flow from m.w to z.v;
+		decide d { in item v; out item w; }
+		succession flow from z.v to d.v;
+		succession flow from d.w to x.v;
+		succession flow from d.w to y.u;
+	}
+}`)
+}
+
+// A succession flow's ends relate what their dot notation names ahead of the
+// payload feature; an end written without one relates nothing (the flow-end
+// rule reports it), and a flow inherited from a general action counts.
+func TestControlNodeSuccessionFlowEnds(t *testing.T) {
+	wantControlNodesClean(t, `package P {
+	action def A {
+		action x; action y { out item v; } action z { in item v; }
+		fork f { in item v; }
+		succession flow from x to f;
+		succession flow from y.v to f.v;
+		first f then z;
+	}
+}`)
+	wantControlNodeErrors(t, `package P {
+	action def G {
+		action x { out item v; } action z { in item v; }
+		fork f { in item v; out item w; }
+		succession flow from x.v to f.v;
+		succession flow from f.w to z.v;
+	}
+	action def A :> G {
+		action y { out item v; }
+		succession flow from y.v to f.v;
+	}
+	action def B {
+		action x { out item v; } action z { in item v; }
+		part p { action w { in item v; } }
+		join j { in item v; out item w; }
+		succession flow from x.v to j.v;
+		succession flow from j.w to z.v;
+		succession flow from j.w to p.w.v;
+	}
+}`,
+		controlNodeWant{CodeForkIncomingSuccessions, 10, "fork f has 2 incoming successions"},
+		controlNodeWant{CodeJoinOutgoingSuccessions, 15, "join j has 2 outgoing successions"})
+}
+
 // The bounded side is the only one bounded: three successions out of a fork or
 // decision, or into a join or merge, are legal.
 func TestControlNodeUnboundedSideIsSilent(t *testing.T) {

@@ -461,6 +461,12 @@ type Usage struct {
 	FlowEnds      *FlowEnds       // flow usage ends
 }
 
+// IsSuccessionFlow reports whether the usage is a `succession flow`: a flow that
+// also orders its ends (SysML v2 SuccessionFlowUsage).
+func (u *Usage) IsSuccessionFlow() bool {
+	return u.Kind == UsageFlow && u.PrefixKeyword == "succession"
+}
+
 // HasConjugatedTyping reports whether the usage declares a `: ~P` typing.
 func (u *Usage) HasConjugatedTyping() bool {
 	_, ok := u.ConjugatedTyping()

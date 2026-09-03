@@ -630,10 +630,10 @@ at the source pin is moved to the target pin when the source node completes
 target reads it when its own token arrives. SysML v2 §7.16 draws the distinction the runtime does
 not: "the input and output parameters are streaming unless designated as succession flows" — a
 streaming `flow` "can be ongoing while both the source and target action are being performed",
-while a `succession flow` "cannot begin until the source completes". The parser accepts
-`succession flow` and drops the distinction (`parser/defusage.go`: the keyword is consumed and the
-usage is parsed as a plain `flow`), `ast.FlowEnds`/`lower.ObjectFlow` carry no kind, and no
-position refuses anything — both spellings run, both as the succession reading. That is a wrong
+while a `succession flow` "cannot begin until the source completes". The parser keeps the
+distinction (`ast.Usage.IsSuccessionFlow`, used by the control-node succession rule), but
+`lower.ObjectFlow` carries no kind and no position refuses anything — both spellings run, both as
+the succession reading. That is a wrong
 result only for a model whose target reads before its source completes, and no conformance
 fixture writes one.
 
@@ -643,7 +643,7 @@ Library/Flows.sysml`, `Kernel Semantic Library/Transfers.kerml`): a streaming fl
 value the source parameter takes while both performances are ongoing; a succession flow transfers
 after the source completes. What runs today is the second, applied to both.
 
-**Work.** Carry the kind from the parser (`succession flow` as an AST flag) through
+**Work.** Carry the kind from the AST (`ast.Usage.IsSuccessionFlow`) through
 `lower.ObjectFlow` to the executor; keep the succession behavior for the `succession flow`
 spelling; for a plain `flow`, deliver on each write to the source parameter while the target is
 ongoing, which needs a node to be readable while it still holds a token — the same notion of an

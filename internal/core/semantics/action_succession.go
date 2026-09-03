@@ -9,9 +9,9 @@ import (
 // ActionSuccession is one Succession an action's body declares or inherits,
 // with each end resolved to the member it attaches to. It is the KerML view a
 // Feature's sourceConnector/targetConnector give of the successions written as
-// `succession s first a then b`, `first a then b`, `then b`, or a guarded
+// `succession s first a then b`, `first a then b`, `then b`, a guarded
 // `if`/`else` edge or `succession s first a if g then b` (a transition owning a
-// succession).
+// succession), or `succession flow from a.x to b.y` (a flow that is a succession).
 type ActionSuccession struct {
 	// Decl is the syntax declaring the succession.
 	Decl ast.Node
@@ -100,15 +100,22 @@ func (m *Model) DeclaredSuccessions(scope *symbols.Scope, owner *symbols.Symbol,
 		}
 		switch n := member.(type) {
 		case *ast.Usage:
-			if n.Kind != ast.UsageSuccession || len(n.ConnectorEnds) != 2 {
-				continue
+			switch {
+			case n.Kind == ast.UsageSuccession && len(n.ConnectorEnds) == 2:
+				out = append(out, ActionSuccession{
+					Decl:   n,
+					Owner:  owner,
+					Source: m.connectorEndOf(scope, owner, n.ConnectorEnds[0]),
+					Target: m.connectorEndOf(scope, owner, n.ConnectorEnds[1]),
+				})
+			case n.IsSuccessionFlow() && n.FlowEnds != nil:
+				out = append(out, ActionSuccession{
+					Decl:   n,
+					Owner:  owner,
+					Source: m.flowEndOf(scope, owner, n.FlowEnds.From),
+					Target: m.flowEndOf(scope, owner, n.FlowEnds.To),
+				})
 			}
-			out = append(out, ActionSuccession{
-				Decl:   n,
-				Owner:  owner,
-				Source: m.connectorEndOf(scope, owner, n.ConnectorEnds[0]),
-				Target: m.connectorEndOf(scope, owner, n.ConnectorEnds[1]),
-			})
 		case *ast.InitialNode:
 			if n.Successor == nil {
 				continue
@@ -161,6 +168,17 @@ func (m *Model) connectorEndOf(scope *symbols.Scope, owner *symbols.Symbol, end 
 	e := m.referenceEnd(scope, owner, end.AttachedTarget())
 	e.Multiplicity = end.Multiplicity
 	return e
+}
+
+// flowEndOf is the participant a flow end relates: what its dot notation names
+// ahead of the payload feature (`a.x` relates a). An end written without one
+// subsets no feature and so relates none (KerML Connector::relatedFeature).
+func (m *Model) flowEndOf(scope *symbols.Scope, owner *symbols.Symbol, target ast.Node) ActionSuccessionEnd {
+	chain, ok := target.(*ast.FeatureChainExpr)
+	if !ok {
+		return ActionSuccessionEnd{}
+	}
+	return m.referenceEnd(scope, owner, chain.Operand)
 }
 
 // edgeEnd is an end of an edge member: bound to a neighbouring member by

@@ -1076,19 +1076,12 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			return applyPrefixes(p.parseTransitionMember(start))
 		}
 
-		// Special case: succession flow from X to Y
-		// If succession is followed by flow keyword, parse as flow usage with succession typing
+		// `succession flow from X to Y` is a flow that is also a succession
+		// (SysML.xtext:1278 SuccessionFlowUsage); the prefix keeps it apart.
 		if kw == "succession" && p.atKeyword("flow") {
-			p.advance() // consume 'flow'
-			u := p.parseUsage(start, ast.UsageFlow, "flow", mods, isAll)
-			// Add implicit succession typing - succession concept applies to this flow
-			// Use typing relationship to indicate this flow has succession semantics
-			if u != nil {
-				// Add succession as typing (could also use specialization)
-				// For now, treat as semantic annotation - flow inherits succession characteristics
-				// Implementation note: May need dedicated AST flag or relationship for this hybrid
-			}
-			return applyPrefixes(u)
+			p.advance()
+			mods.prefixKeyword = kw
+			return applyPrefixes(p.parseUsage(start, ast.UsageFlow, "flow", mods, isAll))
 		}
 
 		// `event m.start;` names an existing occurrence rather than declaring
