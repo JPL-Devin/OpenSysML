@@ -223,13 +223,13 @@ elmt:B a sysml:PartDefinition , sysml:Thing ;
 }
 
 func TestParseTurtleEscapes(t *testing.T) {
-	src := `<urn:x> <urn:p> "quote \" backslash \\ tab \t newline \n unicode \u00e9" .`
+	src := `<urn:x> <urn:p> "quote \" backslash \\ tab \t newline \n backspace \b feed \f unicode \u00e9" .`
 	g, err := ParseTurtle([]byte(src))
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
 	got, _ := g.Lexical(IRI("urn:x"), "urn:p")
-	want := "quote \" backslash \\ tab \t newline \n unicode é"
+	want := "quote \" backslash \\ tab \t newline \n backspace \b feed \f unicode é"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -354,6 +354,26 @@ func TestMultilineLiteralsSurviveRoundTripOnOneLine(t *testing.T) {
 		if !ok || got != value {
 			t.Errorf("value %q came back as %q (ok=%v)", value, got, ok)
 		}
+	}
+}
+
+// A short Turtle literal may not carry a raw control character; each one is
+// written as its ECHAR or as a \u escape and must read back unchanged.
+func TestControlCharactersAreEscaped(t *testing.T) {
+	const value = "bs\b ff\f nul\x00 esc\x1b del\x7f tab\t"
+	const lexical = `"bs\b ff\f nul\u0000 esc\u001B del\u007F tab\t"`
+	g := NewGraph()
+	g.Add(ElementIRI("A"), IRI(SysML+"value"), String(value))
+	turtle := WriteTurtle(g)
+	if !strings.Contains(string(turtle), lexical) {
+		t.Fatalf("want the literal %s in:\n%s", lexical, turtle)
+	}
+	parsed, err := ParseTurtle(turtle)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if got, ok := parsed.Lexical(ElementIRI("A"), SysML+"value"); !ok || got != value {
+		t.Errorf("value %q came back as %q (ok=%v)", value, got, ok)
 	}
 }
 

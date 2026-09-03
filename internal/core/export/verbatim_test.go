@@ -393,7 +393,7 @@ func TestEditedStringValueIsWrittenAsALiteral(t *testing.T) {
 
 // quoteLiteral writes a value as the Turtle literal the writer emits.
 func quoteLiteral(value string) string {
-	r := strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`, "\r", `\r`, "\t", `\t`)
+	r := strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`, "\r", `\r`, "\t", `\t`, "\b", `\b`, "\f", `\f`)
 	return `"` + r.Replace(value) + `"`
 }
 

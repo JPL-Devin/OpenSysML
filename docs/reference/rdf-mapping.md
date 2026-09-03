@@ -447,6 +447,8 @@ The rules the tree follows:
 - **A `LiteralString` carries its value**, the escapes of the notation read: a
   `"say \"hi\""` in the file is `sysml:value "say \"hi\""` in Turtle, and a
   value edited in the graph is written back as the literal that reads to it.
+  Control characters are written with Turtle's own escapes (`\b`, `\f`, `\uXXXX`),
+  so every triple stays a single line of valid Turtle.
 - **A feature reference links to the element** it names (`sysml:referent`) when
   that element is in the graph, and carries its name as a literal when it
   resolves outside it, the same rule the declaration-head relationships follow.

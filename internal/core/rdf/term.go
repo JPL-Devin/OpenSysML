@@ -255,6 +255,7 @@ func quoteLiteral(value string) string {
 	return `"` + escapeShort(value) + `"`
 }
 
+// escapeShort uses Turtle's ECHAR forms and writes any other control as \uXXXX.
 func escapeShort(value string) string {
 	var b strings.Builder
 	for _, r := range value {
@@ -269,7 +270,15 @@ func escapeShort(value string) string {
 			b.WriteString(`\r`)
 		case '\t':
 			b.WriteString(`\t`)
+		case '\b':
+			b.WriteString(`\b`)
+		case '\f':
+			b.WriteString(`\f`)
 		default:
+			if r < 0x20 || r == 0x7f {
+				fmt.Fprintf(&b, `\u%04X`, r)
+				continue
+			}
 			b.WriteRune(r)
 		}
 	}
