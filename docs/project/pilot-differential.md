@@ -398,6 +398,30 @@ agreement, severity-only and every pilot column unmoved:
 | overall: fully agreeing | 330 | **329** |
 | overall: our diagnostics | 71 | **72** |
 
+### Send-argument round
+
+Typing a send's payload, `via` and `to` arguments moves two rows in `examples` and leaves every
+total unchanged, including only-pilot at **332**: one pilot-only row is retired and one is added.
+No OMG root moves — the training corpus and the three pilot corpora write their sends in the
+shapes the rule accepts (an invocation of a behavioral feature, an item or occurrence reference,
+`new Def(args)`), so the reference's `Must invoke a behavior or a behavioral feature` never fires
+there and neither does ours.
+
+| Row | Before | Now | Why |
+|---|---|---|---|
+| `relay-probe-demo/mission.sysml`:133, pilot-only `kind-mismatch` | 1 | **0** | The demo sent `Telemetry(frames = 3.0)`, an invocation of an item definition, which the reference rejects and we accepted. We now report the same error at the same span — the case is the refereed `semantic/send-payload-non-behavior.sysml` of the rejection corpus — so the demo is rewritten to the constructor form the specification means, `send new Telemetry(frames = 3.0) via antenna`, which both tools accept. The row is retired, not agreed, because a valid demo should draw nothing from either side. |
+| `self-model/pipeline.sysml`:198, pilot-only `unmapped` | 0 | **1** | The self-model's pass registry gains the send-argument pass and marks it element-scoped, and the reference reports `Cannot override a binding feature value` on that redefinition as it does on the other eighteen. |
+
+Where the two tools differ on this family, the difference is in reach, not in rule. The
+reference's `validateSendActionUsageReceiver` warns when `to` names a port (we report
+`send-to-port` on the same argument) and its `validateSendActionUsagePayloadArgument` requires a
+payload on a state subaction or transition effect, but its grammar rejects a payload-less
+`send to x` before that rule can run, so `semantic/send-subaction-no-payload.sysml` reaches the
+both-reject bucket by its parser and by our type-tier rule. A `via` or `to` argument whose types are
+disjoint from `Occurrence` draws the reference's generic `Bound features should have conforming
+types` at the argument; we report `send-sender-not-occurrence` / `send-receiver-not-occurrence`
+at the same span. Neither shape occurs in the seven roots, so none of this moves a row.
+
 ### Phase C initial-state round
 
 Giving each state machine in `examples/phase-c-behavioral-bodies.sysml` a transition out of its
@@ -551,16 +575,18 @@ Per category, the only-ours totals are: `pilot-examples` 4 `unmapped`, 2
 `units`, 1 `kind-mismatch`; `kerml-examples` 3 `unmapped`; `examples` 1 syntax; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 12 `kind-mismatch`, 3 `unmapped`, 3 syntax, 2 `unresolved-reference`;
-`examples` 10 syntax, 44 `unmapped`, 71 `kind-mismatch`, 181 `unresolved-reference` — of which
-`relay-probe-demo/mission.sysml` carries three: two `unmapped` where the pilot rejects a snapshot
-redefining the mass its individual binds (`Cannot override a binding feature value`) and one
-`kind-mismatch` on its send of a `Telemetry` instantiation, the same two rules it already flags on
-`solver-demo.sysml` and the send-statement demos — all of them
+`examples` 10 syntax, 45 `unmapped`, 70 `kind-mismatch`, 181 `unresolved-reference` — of which
+`relay-probe-demo/mission.sysml` carries two `unmapped` where the pilot rejects a snapshot
+redefining the mass its individual binds (`Cannot override a binding feature value`), the rule it
+already flags on `solver-demo.sysml`. It carried a third, a `kind-mismatch` on its send of a
+`Telemetry` invocation, until the send-argument round above: the demo now writes the
+constructor, `send new Telemetry(…) via antenna`, which both implementations accept,
+and the row is retired rather than agreed — all of them
 `.sysml`, none `.kerml`, which is the F96 fixture round below;
 `kerml-examples` 6 `unmapped` (K6).
 
-The architecture self-model under `examples/self-model` adds twenty of the shapes this root
-already carries: eighteen `unmapped` where `pipeline.sysml`, `surfaces.sysml` and `identity.sysml`
+The architecture self-model under `examples/self-model` adds twenty-one of the shapes this root
+already carries: nineteen `unmapped` where `pipeline.sysml`, `surfaces.sysml` and `identity.sysml`
 redefine an inherited attribute's default (`Cannot override a binding feature value`, the rule
 `solver-demo.sysml` and `relay-probe-demo/mission.sysml` already draw — the self-model draws it once
 per validation pass it marks element-scoped, per rendering kind it marks unsupported, per budget
@@ -568,8 +594,9 @@ default it restates, per unit it marks memoized and per oracle it marks gating) 
 where `views.sysml` frames a concern, which the reference rejects on `views-demo.sysml` the same
 way. The accuracy round that modelled the pass registry, the six runtime budgets and the rendering
 kinds took the `unmapped` count from five to fifteen without adding a shape; modelling the library
-snapshot, its gating check and the evaluator's memoization took it to seventeen the same way, and
-the compiled calc tier, memoized like the evaluator it sits beside, to eighteen.
+snapshot, its gating check and the evaluator's memoization took it to seventeen the same way, the
+compiled calc tier, memoized like the evaluator it sits beside, to eighteen, and the send-argument
+pass, element-scoped like the other type-tier passes, to nineteen.
 
 **`self-model/document.sysml` carries 259 pilot-only rows on its own, and every one of them has a
 single cause: the reference has no `DocumentQueries` library.** The file is the architecture

@@ -38,8 +38,9 @@ func TestW8GNodeBodiesAnalyseClean(t *testing.T) {
 	action def Send {
 		port p : P;
 		part receiver : Vehicle;
+		item msg : Msg;
 		action a {
-			send SendM() via p to receiver {
+			send SendM(msg) via p to receiver {
 				doc /* a send body */
 			}
 		}

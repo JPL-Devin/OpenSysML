@@ -36,6 +36,24 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   the apply against the real stack — an initial load, a revision with a retained-id rename and
   gated deletes, a conflict staged behind the sync's back — and records what read back at the
   recorded commit ([the report](internal/interop/flexo/testdata/identity_apply_expected.txt)).
+- **A send's arguments are validated.** The payload, `via` and `to` arguments of a send were
+  never typed, so `send Sig() to target` with `attribute def Sig` — an invocation of something
+  that is not a behavior, which the pinned OMG pilot rejects with `Must invoke a behavior or a
+  behavioral feature` — passed silently. A new type-tier pass infers every send argument, in
+  action bodies, state entry/do/exit actions, transition effects and nested forms alike, and
+  reports the SysML v2 `SendActionUsage` constraints on them: a state subaction or transition
+  effect that sends no payload is an error (`send-payload-missing`), sending `to` a port warns
+  that `via` is the routing form (`send-to-port`), and a `via` or `to` argument whose types are
+  disjoint from `Occurrence` warns at the argument (`send-sender-not-occurrence`,
+  `send-receiver-not-occurrence`). The pass is in the shared registry, so the LSP reports the
+  same diagnostics. Two refereed cases join the rejection corpus under
+  `cmd/pilot-reject/testdata/negative/semantic/`.
+- **`send new Def(args)` constructs the message it sends.** The notation's constructor keeps its
+  named arguments (`send new Telemetry(frames = 3.0) via antenna;`) through the AST, the RDF
+  export and the runtime, which builds the message from the constructed definition and its
+  positional or named arguments exactly as the invocation form used to. An accept subsetting a
+  declared event (`accept :> shutDown`) now takes a message sent from that event feature
+  (`send shutDown to interrupt`), not only one of its type.
 
 ### Performance
 
@@ -83,6 +101,13 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Changed
 
+- **`send Def(args)` on an item or attribute definition is an error, as the specification and
+  the pinned pilot say.** The runtime used to read that invocation as "send an instance of
+  `Def`", the shape the conformance fixtures and the relay-probe demo were written in; KerML's
+  `validateInvocationExpressionInstantiatedType` allows an invocation only of a behavior or a
+  behavioral feature. Write the constructor instead: `send new Def(args)`. The fixtures, the
+  demo and the examples are migrated; invoking a behavioral feature (`send shutDown() to self`
+  over an action) is unchanged.
 - **The documentation site's landing page describes the four oracles instead of quoting their
   totals.** The band below the hero used to state the differential's agreeing-file count, the Xpect
   suites' declared-diagnostic and scope tallies, the rejection corpus's size and the pilot pin, all

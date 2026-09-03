@@ -22,7 +22,7 @@ var (
 	rejectionHeadlinePattern = regexp.MustCompile(`(\d+) case\(s\): (\d+) both reject, (\d+) only the pilot rejects, (\d+) only we reject, (\d+) both accept`)
 	rejectionReadmePattern   = regexp.MustCompile(`(\d+) hand-written invalid models validated by both implementations, (\d+) rejected by both, (\d+) the pinned pilot rejects and we accept`)
 	rejectionSkillPattern    = regexp.MustCompile(`\((\d+) hand-written invalid models`)
-	rejectionSourceRow       = regexp.MustCompile(`^\| (extensions|grammar|xpect) \| (\d+) \| (\d+) \| (\d+) \| (\d+) \| (\d+) \|$`)
+	rejectionSourceRow       = regexp.MustCompile(`^\| (extensions|grammar|semantic|xpect) \| (\d+) \| (\d+) \| (\d+) \| (\d+) \| (\d+) \|$`)
 	rejectionGapRow          = regexp.MustCompile("^\\| `([^`]+)` \\| accepts \\|")
 	rejectionGapCount        = regexp.MustCompile(`All (\d+) gaps`)
 )

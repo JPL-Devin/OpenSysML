@@ -20,6 +20,7 @@ func DefaultRegistry() *Registry {
 	reg.Register(ActionEndpointPass{})
 	reg.Register(TypeCheckPass{})
 	reg.Register(TransitionGuardPass{})
+	reg.Register(SendActionPass{})
 	reg.Register(KerMLSubsettingMetaclassPass{})
 	reg.Register(RedefinitionDirectionPass{})
 	reg.Register(ElementFilterPass{})

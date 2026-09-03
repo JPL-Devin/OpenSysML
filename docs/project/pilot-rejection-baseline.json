@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 120,
-        "digest": "sha256:1807bc173996cee5a9776a987e3bec4409245d16bdbb0d71e6b4d362b60cd81f"
+        "files": 122,
+        "digest": "sha256:29ae96f57cc1205322bc84084817a32ebda094b394b97d9176b39bcf932e7380"
       }
     ],
-    "recorded": "2026-09-02"
+    "recorded": "2026-09-03"
   },
   "totals": {
-    "cases": 120,
-    "bothReject": 120,
+    "cases": 122,
+    "bothReject": 122,
     "pilotOnlyRejects": 0,
     "oursOnlyRejects": 0,
     "bothAccept": 0
@@ -57,6 +57,14 @@
       "source": "grammar",
       "cases": 79,
       "bothReject": 79,
+      "pilotOnlyRejects": 0,
+      "oursOnlyRejects": 0,
+      "bothAccept": 0
+    },
+    {
+      "source": "semantic",
+      "cases": 2,
+      "bothReject": 2,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 0,
       "bothAccept": 0
@@ -858,6 +866,24 @@
       "pilotErrors": 4
     },
     {
+      "path": "semantic/send-payload-non-behavior.sysml",
+      "source": "semantic",
+      "rule": "a send payload that is an invocation must invoke a behavior or a behavioral feature (KerML 8.3.4.8 InvocationExpression validateInvocationExpressionInstantiatedType; pilot validateInvocationExpressionInstantiatedType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/send-subaction-no-payload.sysml",
+      "source": "semantic",
+      "rule": "a send that is a state subaction or a transition effect must have a payload (SysML v2 8.3.16 SendActionUsage validateSendActionUsagePayloadArgument; pilot validateSendActionUsagePayloadArgument, which its grammar enforces first: SysML.xtext:1511 SendNodeDeclaration requires the payload).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 6
+    },
+    {
       "path": "xpect/p01-public-root-import.kerml",
       "source": "xpect",
       "rule": "a root-namespace import must be private (KerML 8.2.3.5.2 validateImportTopLevelVisibility; pilot Import_RootNamspace_invalid.kerml.xt).",
@@ -1196,8 +1222,8 @@
       }
     ],
     "totals": {
-      "cases": 120,
-      "bothReject": 120,
+      "cases": 122,
+      "bothReject": 122,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 0,
       "bothAccept": 0

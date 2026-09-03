@@ -1,0 +1,272 @@
+package passes
+
+import (
+	"strings"
+	"testing"
+)
+
+// sendDiags is every diagnostic the full registry reports for src, filtered to
+// the codes the send-action rule and the invocation rule it activates report.
+func sendDiags(t *testing.T, src string) []Diagnostic {
+	t.Helper()
+	var out []Diagnostic
+	for _, d := range analyzeAll(t, "send.sysml", src) {
+		switch d.Code {
+		case CodeSendPayloadMissing, CodeSendToPort, CodeSendReceiverNotOccurrence,
+			CodeSendSenderNotOccurrence, "invocation-not-behavior":
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// sendPrelude declares the payload types, ports and receivers the fixtures
+// below send between.
+const sendPrelude = `
+	attribute def Sig;
+	item def Msg;
+	action def Ping;
+	port def PD;
+	part def Receiver { port p : PD; part inner : Receiver; }
+`
+
+// assertOneSendDiag checks that got is the one diagnostic code at severity,
+// whose span reads at, and whose message mentions every want.
+func assertOneSendDiag(t *testing.T, src string, got []Diagnostic, code string, severity Severity, at string, wants ...string) {
+	t.Helper()
+	if len(got) != 1 {
+		t.Fatalf("expected one %s diagnostic, got %+v", code, got)
+	}
+	d := got[0]
+	if d.Code != code || d.Severity != severity {
+		t.Errorf("got code %q severity %v, want %s at severity %v", d.Code, d.Severity, code, severity)
+	}
+	if spanned := strings.TrimSpace(src[d.Span.Offset:d.Span.End()]); spanned != at {
+		t.Errorf("reported at %q, want %q: %q", spanned, at, d.Message)
+	}
+	for _, want := range wants {
+		if !strings.Contains(d.Message, want) {
+			t.Errorf("message %q does not mention %q", d.Message, want)
+		}
+	}
+}
+
+// The payload of a send is an expression the type checker sees: instantiating
+// a definition that is not a behavior is reported where the reference does.
+func TestSendPayloadInvokingNonBehaviorIsReported(t *testing.T) {
+	cases := map[string]struct{ src, at string }{
+		"attribute def": {at: "Sig", src: `package P {` + sendPrelude + `
+			action def A { part r : Receiver;
+				action s send Sig() to r;
+			} }`},
+		"item def": {at: "Msg", src: `package P {` + sendPrelude + `
+			action def A { part r : Receiver;
+				action s send Msg() via r.p;
+			} }`},
+		"bare send in an action usage": {at: "Sig", src: `package P {` + sendPrelude + `
+			part def V { part r : Receiver; action a {
+				send Sig() to r;
+			} } }`},
+		"state entry action": {at: "Sig", src: `package P {` + sendPrelude + `
+			state def M { part r : Receiver;
+				entry send Sig() to r;
+			} }`},
+		"transition effect": {at: "Sig", src: `package P {` + sendPrelude + `
+			state def M { part r : Receiver; state a; state b;
+				transition first a do send Sig() to r then b;
+			} }`},
+		"body payload binding": {at: "Sig", src: `package P {` + sendPrelude + `
+			action def A { part r : Receiver;
+				action s send to r { in :>> payload = Sig(); }
+			} }`},
+		"nested action body": {at: "Sig", src: `package P {` + sendPrelude + `
+			action def A { part r : Receiver; action outer { action inner {
+				send Sig() to r;
+			} } } }`},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			assertOneSendDiag(t, tc.src, sendDiags(t, tc.src), "invocation-not-behavior", SeverityError, tc.at, "Must invoke a behavior")
+		})
+	}
+}
+
+// Sending `to` a port is reported as a warning naming the port, whether the
+// port is referenced directly, through a feature chain, or after a `via` port.
+func TestSendToPortWarns(t *testing.T) {
+	cases := map[string]struct{ src, at string }{
+		"own port": {at: "q", src: `package P {` + sendPrelude + `
+			part def V { port q : PD; action a {
+				send Ping() to q;
+			} } }`},
+		"chained port": {at: "r.p", src: `package P {` + sendPrelude + `
+			part def V { part r : Receiver; action a {
+				send Ping() to r.p;
+			} } }`},
+		"deeply chained port": {at: "r.inner.p", src: `package P {` + sendPrelude + `
+			part def V { part r : Receiver; action a {
+				send Ping() to r.inner.p;
+			} } }`},
+		"via then to a port": {at: "r.p", src: `package P {` + sendPrelude + `
+			part def V { port q : PD; part r : Receiver; action a {
+				send Ping() via q to r.p;
+			} } }`},
+		"transition effect": {at: "q", src: `package P {` + sendPrelude + `
+			state def M { port q : PD; state a; state b;
+				transition first a do send Ping() to q then b;
+			} }`},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			assertOneSendDiag(t, tc.src, sendDiags(t, tc.src), CodeSendToPort, SeverityWarning, tc.at, "'via'", "'to'")
+		})
+	}
+}
+
+// A `to` or `via` argument binds an Occurrence parameter of the send, so a
+// feature whose types are disjoint from Occurrence is reported, as the
+// reference does for the implicit binding, at the argument.
+func TestSendArgumentNotAnOccurrenceWarns(t *testing.T) {
+	cases := map[string]struct{ src, code, at, want string }{
+		"attribute receiver": {code: CodeSendReceiverNotOccurrence, at: "a", want: "Real", src: `package P {` + sendPrelude + `
+			part def V { attribute a : ScalarValues::Real; action s {
+				send Ping() to a;
+			} } }`},
+		"chained attribute receiver": {code: CodeSendReceiverNotOccurrence, at: "r.mass", want: "Real", src: `package P {` + sendPrelude + `
+			part def Weighed { attribute mass : ScalarValues::Real; }
+			part def V { part r : Weighed; action s {
+				send Ping() to r.mass;
+			} } }`},
+		"attribute sender": {code: CodeSendSenderNotOccurrence, at: "a", want: "Real", src: `package P {` + sendPrelude + `
+			part def V { attribute a : ScalarValues::Real; part r : Receiver; action s {
+				send Ping() via a to r;
+			} } }`},
+		"inherited attribute receiver": {code: CodeSendReceiverNotOccurrence, at: "a", want: "Real", src: `package P {` + sendPrelude + `
+			part def Base { attribute a : ScalarValues::Real; }
+			part def V :> Base { action s {
+				send Ping() to a;
+			} } }`},
+		"user attribute def receiver": {code: CodeSendReceiverNotOccurrence, at: "sig", want: "Sig", src: `package P {` + sendPrelude + `
+			part def V { attribute sig : Sig; action s {
+				send Ping() to sig;
+			} } }`},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			assertOneSendDiag(t, tc.src, sendDiags(t, tc.src), tc.code, SeverityWarning, tc.at, "occurrence", tc.want)
+		})
+	}
+}
+
+// A send that is a state subaction or a transition effect must carry a
+// payload, whether written bare or as the one statement of an action node.
+func TestSendSubactionWithoutPayloadIsReported(t *testing.T) {
+	cases := map[string]struct{ src, at string }{
+		"entry": {at: "send to r;", src: `package P {` + sendPrelude + `
+			state def M { part r : Receiver;
+				entry send to r;
+			} }`},
+		"do action node": {at: "send to r;", src: `package P {` + sendPrelude + `
+			state def M { part r : Receiver;
+				do action f send to r;
+			} }`},
+		"exit with a body": {at: "send to r { doc /* nothing bound */ }", src: `package P {` + sendPrelude + `
+			state def M { part r : Receiver;
+				exit send to r { doc /* nothing bound */ }
+			} }`},
+		"transition effect": {at: "send to r", src: `package P {` + sendPrelude + `
+			state def M { part r : Receiver; state a; state b;
+				transition first a do send to r then b;
+			} }`},
+		"transition effect action node": {at: "send to r", src: `package P {` + sendPrelude + `
+			state def M { part r : Receiver; state a; state b;
+				transition first a do action g send to r then b;
+			} }`},
+		"nested state entry": {at: "send to r;", src: `package P {` + sendPrelude + `
+			state def M { part r : Receiver; state outer { state inner {
+				entry send to r;
+			} } } }`},
+		"exhibited state": {at: "send to r;", src: `package P {` + sendPrelude + `
+			part def V { part r : Receiver; exhibit state m {
+				entry send to r;
+			} } }`},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			assertOneSendDiag(t, tc.src, sendDiags(t, tc.src), CodeSendPayloadMissing, SeverityError, tc.at, "payload", "send new Msg() to receiver")
+		})
+	}
+}
+
+// Every well-formed send shape stays silent: behaviors and constructors as the
+// payload, `via` a port, `to` an occurrence directly or through a chain, a
+// payload bound in the body, and a payload-less send outside a state.
+func TestSendWellFormedShapesAreSilent(t *testing.T) {
+	cases := map[string]string{
+		"behavior via port": `package P {` + sendPrelude + `
+			part def V { port q : PD; action a { send Ping() via q; } } }`,
+		"constructor via port": `package P {` + sendPrelude + `
+			part def V { port q : PD; action a { send new Sig() via q; } } }`,
+		"constructor with named arguments": `package P {` + sendPrelude + `
+			item def Frame { attribute count : ScalarValues::Integer; }
+			part def V { port q : PD; action a { send new Frame(count = 3) via q; } } }`,
+		"item to part": `package P {` + sendPrelude + `
+			part def V { part r : Receiver; item m : Msg; action a { send m to r; } } }`,
+		"to a chained occurrence": `package P {` + sendPrelude + `
+			part def V { part r : Receiver; action a { send Ping() to r.inner; } } }`,
+		"via port to part": `package P {` + sendPrelude + `
+			part def V { port q : PD; part r : Receiver; action a { send Ping() via q to r; } } }`,
+		"body binds the payload": `package P {` + sendPrelude + `
+			part def V { part r : Receiver; action a { send to r { in :>> payload = new Sig(); } } } }`,
+		"state entry with payload": `package P {` + sendPrelude + `
+			state def M { part r : Receiver; entry send Ping() to r; } }`,
+		"transition effect with a bound payload": `package P {` + sendPrelude + `
+			state def M { part r : Receiver; state a; state b;
+				transition first a do send to r { in :>> payload = new Sig(); } then b; } }`,
+		"transition effect action with several statements": `package P {` + sendPrelude + `
+			state def M { part r : Receiver; state a; state b;
+				transition first a do action g { send to r; send to r; } then b; } }`,
+		"payload-less send in an action def": `package P {` + sendPrelude + `
+			action def A { part r : Receiver; action s send to r; } }`,
+		"action parameter as payload": `package P {` + sendPrelude + `
+			action def A { in item m : Msg; part r : Receiver; action s send m to r; } }`,
+		"to an item": `package P {` + sendPrelude + `
+			part def V { item box : Msg; action a { send Ping() to box; } } }`,
+		"to an untyped part": `package P {` + sendPrelude + `
+			part def V { part r; action a { send Ping() to r; } } }`,
+		"to an untyped reference": `package P {` + sendPrelude + `
+			part def V { ref r; action a { send Ping() to r; } } }`,
+		"to an inherited part": `package P {` + sendPrelude + `
+			part def Base { part r : Receiver; }
+			part def V :> Base { action a { send Ping() to r; } } }`,
+		"to a redefined part": `package P {` + sendPrelude + `
+			part def Base { part r; }
+			part def V :> Base { part :>> r : Receiver; action a { send Ping() to r; } } }`,
+		"via an inherited port": `package P {` + sendPrelude + `
+			part def Base { port q : PD; }
+			part def V :> Base { action a { send Ping() via q; } } }`,
+		"via a chained port": `package P {` + sendPrelude + `
+			part def V { part r : Receiver; action a { send Ping() via r.inner.p; } } }`,
+		"to an action": `package P {` + sendPrelude + `
+			part def V { action target : Ping; action a { send Ping() to target; } } }`,
+		"to a definition is the feature-reference rule's": `package P {` + sendPrelude + `
+			part def V { action a { send Ping() to Sig; } } }`,
+	}
+	for name, src := range cases {
+		t.Run(name, func(t *testing.T) {
+			if got := sendDiags(t, src); len(got) != 0 {
+				t.Errorf("expected no send diagnostics, got %+v", got)
+			}
+		})
+	}
+}
+
+// A send whose arguments fail to resolve is left to the name-resolution tier:
+// the rule does not pile a second diagnostic on an unresolved receiver.
+func TestSendGatesOnUnresolvedArguments(t *testing.T) {
+	got := sendDiags(t, `package P {`+sendPrelude+`
+		action def A { action s send Ping() to nowhere; } }`)
+	if len(got) != 0 {
+		t.Errorf("expected the send rule to stay silent on an unresolved receiver, got %+v", got)
+	}
+}

@@ -1,0 +1,257 @@
+package passes
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+)
+
+// Diagnostic codes of the send-action rules.
+const (
+	CodeSendPayloadMissing        = "send-payload-missing"
+	CodeSendToPort                = "send-to-port"
+	CodeSendReceiverNotOccurrence = "send-receiver-not-occurrence"
+	CodeSendSenderNotOccurrence   = "send-sender-not-occurrence"
+)
+
+// SendActionPass types the payload, `via` and `to` arguments of every send and
+// checks the SysML v2 SendActionUsage constraints on them.
+type SendActionPass struct{}
+
+// Level reports that this pass consumes name-resolution results.
+func (SendActionPass) Level() PassLevel { return LevelType }
+
+// ElementScoped lets each send argument gate independently on lower failures.
+func (SendActionPass) ElementScoped() { /* marker: per-element gating */ }
+
+// Run checks every send in the document.
+func (SendActionPass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
+	if ctx == nil || ctx.Index == nil || root == nil {
+		return nil
+	}
+	rootScope := ctx.Index.DocumentRoot(name)
+	if rootScope == nil {
+		return nil
+	}
+	c := &sendActionChecker{
+		ctx:        ctx,
+		expr:       &exprChecker{resolver: ctx.Resolver(), model: ctx.Model()},
+		bindings:   &w9cBindingChecker{model: ctx.Model(), resolver: ctx.Resolver(), idx: ctx.Index},
+		occurrence: w8cLibraryType(ctx, "Occurrences::Occurrence"),
+	}
+	c.walk(rootScope, root.Members)
+	return append(c.diags, c.expr.diags...)
+}
+
+type sendActionChecker struct {
+	ctx        *Context
+	expr       *exprChecker
+	bindings   *w9cBindingChecker
+	occurrence *symbols.Symbol
+	diags      []Diagnostic
+}
+
+func (c *sendActionChecker) walk(scope *symbols.Scope, members []ast.Node) {
+	for _, member := range members {
+		c.walkNode(scope, unwrapMembership(member))
+	}
+}
+
+// walkNode descends through every body shape a send may be written in.
+func (c *sendActionChecker) walkNode(scope *symbols.Scope, node ast.Node) {
+	switch n := node.(type) {
+	case *ast.Package:
+		c.walk(childScopeOr(scope, n), n.Members)
+	case *ast.Namespace:
+		c.walk(childScopeOr(scope, n), n.Members)
+	case *ast.Definition:
+		c.walk(childScopeOr(scope, n), n.Members)
+	case *ast.Usage:
+		c.walk(childScopeOr(scope, n), n.Members)
+	case *ast.SubjectMember:
+		c.walk(childScopeOr(scope, n), n.Body)
+	case *ast.EntryMember:
+		c.walkSubactions(scope, n.Actions)
+	case *ast.DoMember:
+		c.walkSubactions(scope, n.Actions)
+	case *ast.ExitMember:
+		c.walkSubactions(scope, n.Actions)
+	case *ast.InitialNode, *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
+		c.walk(childScopeOr(scope, n), ast.NodeBodyMembers(n))
+	case *ast.StateNode:
+		body := childScopeOr(scope, n)
+		c.walkSubactions(body, n.Entry)
+		c.walkSubactions(body, n.Do)
+		c.walkSubactions(body, n.Exit)
+		c.walk(body, n.Substates)
+		for _, region := range n.Regions {
+			c.walkNode(body, region)
+		}
+	case *ast.StateRegion:
+		c.walk(childScopeOr(scope, n), n.States)
+	case *ast.TransitionMember:
+		body := symbols.TriggerScope(scope, n)
+		c.walkSubactions(body, n.Effect)
+		c.walk(body, n.Members)
+	case *ast.SendStatement:
+		c.check(scope, n)
+	case *ast.WhileLoopActionNode:
+		c.walk(childScopeOr(scope, n), n.Body)
+	case *ast.IfActionNode:
+		for _, branch := range n.Branches() {
+			c.walkNode(scope, branch)
+		}
+	case *ast.IfBranchNode:
+		c.walk(childScopeOr(scope, n), n.Body)
+	}
+}
+
+// walkSubactions walks state subactions or transition effects; a send written as
+// one, bare or as an action node's one statement, must carry a payload.
+func (c *sendActionChecker) walkSubactions(scope *symbols.Scope, actions []ast.Node) {
+	for _, action := range actions {
+		switch n := unwrapMembership(action).(type) {
+		case *ast.SendStatement:
+			c.checkPayload(n)
+			c.check(scope, n)
+		case *ast.Usage:
+			if send := subactionSend(n); send != nil {
+				c.checkPayload(send)
+			}
+			c.walkNode(scope, n)
+		default:
+			c.walkNode(scope, n)
+		}
+	}
+}
+
+// subactionSend returns the send an action node is, when its body is that one
+// statement.
+func subactionSend(usage *ast.Usage) *ast.SendStatement {
+	if usage.Kind != ast.UsageAction || len(usage.Members) != 1 {
+		return nil
+	}
+	send, _ := unwrapMembership(usage.Members[0]).(*ast.SendStatement)
+	return send
+}
+
+// checkPayload reports a state subaction or transition effect send that names
+// no payload, in its argument or in its body.
+func (c *sendActionChecker) checkPayload(send *ast.SendStatement) {
+	if send.Message != nil || lower.SendPayload(send) != nil {
+		return
+	}
+	c.diags = append(c.diags, Diagnostic{
+		Severity: SeverityError,
+		Span:     send.Span(),
+		Message: "a send action written as a state subaction or a transition effect must have a payload: " +
+			"name the message it sends, as in `send new Msg() to receiver`",
+		Code:   CodeSendPayloadMissing,
+		Source: "send-action",
+	})
+}
+
+// check types the arguments of one send and checks its sender and receiver.
+func (c *sendActionChecker) check(scope *symbols.Scope, send *ast.SendStatement) {
+	for _, arg := range []ast.Node{send.Message, send.Target, send.Receiver} {
+		if arg != nil && !c.ctx.DownstreamOfFailure(arg) {
+			c.expr.infer(scope, arg)
+		}
+	}
+	receiver := send.Target
+	if send.IsVia {
+		receiver = send.Receiver
+		c.checkSender(scope, send.Target)
+	}
+	c.checkReceiver(scope, receiver)
+	body := childScopeOr(scope, send)
+	if payload := lower.SendPayload(send); payload != nil && !c.ctx.DownstreamOfFailure(payload) {
+		c.expr.infer(body, payload)
+	}
+	c.walk(body, send.Members)
+}
+
+// argumentFeature resolves the feature a send argument names, or nil when it
+// names none: a non-feature referent is the feature-reference rule's to report.
+func (c *sendActionChecker) argumentFeature(scope *symbols.Scope, arg ast.Node) *symbols.Symbol {
+	if arg == nil || c.ctx.DownstreamOfFailure(arg) {
+		return nil
+	}
+	sym, ok := c.ctx.Resolver().ResolveTarget(scope, arg)
+	if ok {
+		sym, ok = c.ctx.Resolver().ResolveAliasTarget(sym)
+	}
+	if !ok || sym == nil || !isUsageKind(sym.Kind) {
+		return nil
+	}
+	return sym
+}
+
+// checkReceiver checks the `to` argument, which binds SendPerformance::receiver
+// (an Occurrence): a port is addressed with `via`, and a non-occurrence cannot receive.
+func (c *sendActionChecker) checkReceiver(scope *symbols.Scope, receiver ast.Node) {
+	sym := c.argumentFeature(scope, receiver)
+	if sym == nil {
+		return
+	}
+	if sym.Kind == symbols.SymbolPortUsage {
+		c.diags = append(c.diags, Diagnostic{
+			Severity: SeverityWarning,
+			Span:     receiver.Span(),
+			Message: fmt.Sprintf("sending to the port %s should use 'via' rather than 'to': "+
+				"'via' routes the message through a port of the sender, while 'to' names the receiver", sym.Name),
+			Code:   CodeSendToPort,
+			Source: "send-action",
+		})
+		return
+	}
+	if types, ok := c.nonOccurrenceTypes(sym); ok {
+		c.diags = append(c.diags, Diagnostic{
+			Severity: SeverityWarning,
+			Span:     receiver.Span(),
+			Message: fmt.Sprintf("the receiver of a send must be an occurrence: %s is typed by %s, which is not one; "+
+				"name a part, item or other occurrence after 'to'", sym.Name, types),
+			Code:   CodeSendReceiverNotOccurrence,
+			Source: "send-action",
+		})
+	}
+}
+
+// checkSender checks the `via` argument, which binds SendPerformance::sender (an Occurrence).
+func (c *sendActionChecker) checkSender(scope *symbols.Scope, sender ast.Node) {
+	sym := c.argumentFeature(scope, sender)
+	if sym == nil {
+		return
+	}
+	if types, ok := c.nonOccurrenceTypes(sym); ok {
+		c.diags = append(c.diags, Diagnostic{
+			Severity: SeverityWarning,
+			Span:     sender.Span(),
+			Message: fmt.Sprintf("a send is routed through an occurrence of the sender: %s is typed by %s, which is not one; "+
+				"name a port after 'via'", sym.Name, types),
+			Code:   CodeSendSenderNotOccurrence,
+			Source: "send-action",
+		})
+	}
+}
+
+// nonOccurrenceTypes names a feature's declared types when none of them
+// conforms to Occurrence in either direction, as a binding to one requires.
+func (c *sendActionChecker) nonOccurrenceTypes(sym *symbols.Symbol) (string, bool) {
+	model := c.bindings.model
+	if c.occurrence == nil || model == nil || model.Conforms(sym, c.occurrence) {
+		return "", false
+	}
+	types := c.bindings.endTypes(sym)
+	if len(types) == 0 || w9cTypesConform(model, types, []*symbols.Symbol{c.occurrence}) {
+		return "", false
+	}
+	names := make([]string, len(types))
+	for i, t := range types {
+		names[i] = t.Name
+	}
+	return strings.Join(names, ", "), true
+}

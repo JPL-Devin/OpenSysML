@@ -170,7 +170,7 @@ package OpenSysMLPipeline {
     #SemanticEngine part def PassRegistry :> Stage {
         attribute :>> goPackage = "internal/core/passes";
         attribute tierCount : Integer = 4;
-        attribute passCount : Integer = 47;
+        attribute passCount : Integer = 48;
         attribute sortsByLevel : Boolean = true;
         attribute skipsDocumentScopedAboveFailure : Boolean = true;
 
@@ -187,6 +187,10 @@ package OpenSysMLPipeline {
         part typeCheck : TypeCheck { attribute :>> goType = "TypeCheckPass"; }
         part transitionGuards : TypeCheck {
             attribute :>> goType = "TransitionGuardPass";
+            attribute :>> elementScoped = true;
+        }
+        part sendActions : TypeCheck {
+            attribute :>> goType = "SendActionPass";
             attribute :>> elementScoped = true;
         }
         part kermlSubsettingMetaclass : TypeCheck {

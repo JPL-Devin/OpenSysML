@@ -192,6 +192,15 @@ func (ec *exprChecker) infer(scope *symbols.Scope, n ast.Node) semantics.PrimTyp
 		return ec.inferOperator(scope, e)
 	case *ast.InvocationExpr:
 		return ec.inferInvocation(scope, e)
+	case *ast.ConstructorExpr:
+		// An instance has no scalar type; the arguments are checked in place.
+		for _, a := range e.Args {
+			ec.infer(scope, a)
+		}
+		for _, na := range e.NamedArgs {
+			ec.infer(scope, na.Value)
+		}
+		return semantics.PrimUnknown
 	case *ast.SequenceExpr:
 		// A sequence has no scalar type of its own; walking the elements keeps
 		// errors inside them reported.

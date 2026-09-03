@@ -597,7 +597,7 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 		}
 		message := m.Message
 		if message == nil {
-			message = sendPayload(m)
+			message = SendPayload(m)
 		}
 		if message == nil {
 			return Unsupported{
@@ -684,9 +684,9 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 	}
 }
 
-// sendPayload returns the message a send with no argument carries: the value
+// SendPayload returns the message a send with no argument carries: the value
 // its body binds the payload parameter to (`send { in :>> payload = s; }`).
-func sendPayload(m *ast.SendStatement) ast.Node {
+func SendPayload(m *ast.SendStatement) ast.Node {
 	for _, member := range m.Members {
 		if u, ok := unwrapMembership(member).(*ast.Usage); ok && u.Direction == ast.DirIn && u.Value != nil {
 			return u.Value
