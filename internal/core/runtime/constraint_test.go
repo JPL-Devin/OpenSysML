@@ -250,6 +250,9 @@ func TestConstraintBodyStatementIsNotAVerdict(t *testing.T) {
 			part def Rig {
 				attribute z = 1;
 				constraint branched { if true { assign z := 10; } z > 5 }
+				constraint failedFirst { z > 100; assign z := 200; z > 5 }
+				assert not constraint denied { z > 100; assign z := 200; z > 5 }
+				assert constraint grouped { z > 100; assert not constraint { assign z := 200; z > 5 } }
 			}
 		}
 	`
@@ -292,5 +295,24 @@ func TestConstraintBodyStatementIsNotAVerdict(t *testing.T) {
 	}
 	if satisfied {
 		t.Error("a constraint whose body statement was skipped reported as satisfied")
+	}
+
+	// A condition failing before the statement is no verdict either, not even
+	// for a negated constraint; the group case nests the statement.
+	for _, name := range []string{"failedFirst", "denied", "grouped"} {
+		feat := featureNamed(ctx, rig, name)
+		if feat == nil || feat.Symbol == nil {
+			t.Fatalf("constraint %s not found", name)
+		}
+		satisfied, err := ctx.EvaluateConstraintOn(feat.Symbol, feat.DeclScope(), nil)
+		if !errors.Is(err, ErrStatementNotExecuted) {
+			t.Errorf("%s: err = %v, want ErrStatementNotExecuted", name, err)
+		}
+		if want := "`assign` statement"; err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v, want it to name the %s", name, err, want)
+		}
+		if satisfied {
+			t.Errorf("%s: reported as satisfied with its body statement skipped", name)
+		}
 	}
 }

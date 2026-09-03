@@ -155,6 +155,20 @@ func (ctx *Context) appendConditions(out []Condition, node ast.Node, scope *symb
 	return out
 }
 
+// unexecutedStatement returns the first statement conds state, groups included,
+// or nil when they state none.
+func unexecutedStatement(conds []Condition) ast.Node {
+	for _, cond := range conds {
+		if cond.Statement != nil {
+			return cond.Statement
+		}
+		if stmt := unexecutedStatement(cond.Group); stmt != nil {
+			return stmt
+		}
+	}
+	return nil
+}
+
 // statementKeyword names the keyword an action statement was written with.
 func statementKeyword(node ast.Node) string {
 	switch node.(type) {
@@ -261,6 +275,12 @@ func (c conditionCheck) name() string {
 func (ctx *Context) evaluateConditions(check conditionCheck, conds []Condition) (bool, error) {
 	if len(conds) == 0 {
 		return false, fmt.Errorf("%s %s: %w", check.kind, check.name(), ErrNoConditions)
+	}
+	// A statement anywhere in the body could change what the conditions read, so
+	// no verdict is reached, not even from a condition stated before it.
+	if stmt := unexecutedStatement(conds); stmt != nil {
+		return false, fmt.Errorf("%s %s: %s evaluation failed: `%s` %w; bind the value as a feature value or compute it in a calc the condition reads",
+			check.kind, check.name(), check.what, statementKeyword(stmt), ErrStatementNotExecuted)
 	}
 	features := ctx.conditionFeatures(check.sym)
 	self := check.self
@@ -615,10 +635,6 @@ func (ctx *Context) definitionOf(sym *symbols.Symbol) *symbols.Symbol {
 // conditionHolds evaluates one condition: an expression, or a group that holds
 // when all of its conditions hold. Its negation, if any, is applied last.
 func (ctx *Context) conditionHolds(activation int64, cond Condition, features map[string]scopedExpr, self *Instance, bindings map[string]Value) (bool, error) {
-	if cond.Statement != nil {
-		return false, fmt.Errorf("`%s` %w; bind the value as a feature value or compute it in a calc the condition reads",
-			statementKeyword(cond.Statement), ErrStatementNotExecuted)
-	}
 	holds := true
 	if cond.Group != nil {
 		for _, sub := range cond.Group {
