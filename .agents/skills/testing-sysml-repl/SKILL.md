@@ -5627,10 +5627,13 @@ the same `State data:` slots, tying the debugger to the object's instance.
 Two distinct exhibitors: do not instantiate the same usage twice (it supersedes). Use a model with two
 different parts typed by the same machine def so `%state <Def>` alone is refused naming both.
 
-Contrast binary: `git worktree add /tmp/wt-old $(git merge-base HEAD origin/main)`, `make build-sysml`
-there, copy `bin/sysml` to `/tmp/old-sysml`, then `git worktree remove --force /tmp/wt-old`. The CLI
-form `./bin/sysml -instantiate Fleet::tank -state "Fleet::Mission Fleet::tank" <file>` is the
-single-frame comparison: the attach note versus "Started ... exhibits no running machine of this kind".
+Contrast binary: build one from the last commit *before* the change under test — the PR's merge base
+while the PR is open, but once the fix is on `main` that is `<fix-commit>^` (for the typed-body fix,
+`a21b6d77^`), since a merge base against current `main` already contains it and both binaries attach.
+`git worktree add /tmp/wt-old <sha>`, `make build-sysml` there, copy `bin/sysml` to `/tmp/old-sysml`,
+then `git worktree remove --force /tmp/wt-old`. The CLI form `./bin/sysml -instantiate Fleet::tank
+-state "Fleet::Mission Fleet::tank" <file>` is the single-frame comparison: the attach note versus
+"Started ... exhibits no running machine of this kind".
 
 Konsole `clear` wipes the scrollback, so a `%state` result that scrolls off before the screenshot is
 gone; take the screenshot before the next long `%features`, or start the next REPL without `clear`
