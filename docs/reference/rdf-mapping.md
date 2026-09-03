@@ -78,6 +78,14 @@ OpenSysML's own additions live in a separate `sysx:` namespace so a consumer can
 tell them apart from the standard vocabulary and ignore them if it wants only
 standard SysML.
 
+A graph an earlier release wrote with terms this one no longer reads is refused
+rather than read without what those terms said: the pre-rename namespace
+`urn:systemica:sysml:`, and the metadata properties `sysx:prefixMetadata` and
+`sysml:annotates` that release 0.4.3 wrote for a `#` prefix and an `about`
+target (now a `sysml:MetadataUsage` and `sysml:annotatedElement`, see
+[What each element carries](#what-each-element-carries)). The error names the
+term; re-export the model from its notation source.
+
 ### Element IRIs
 
 An element's IRI is its qualified name, encoded as an id, appended to `elmt:`:

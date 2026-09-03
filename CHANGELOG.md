@@ -85,7 +85,9 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   ahead of, carrying its type, one `sysml:annotatedElement` per target, `sysx:hasBody`, the sigil
   it was written with as `sysx:declaredKeyword` (`@`, `#`, or none for `metadata`) and its
   body's members as owned members with their `sysml:value` expression trees, so the notation is
-  written back from the graph alone, without `sysx:sourceText`. `sysx:prefixMetadata` is gone.
+  written back from the graph alone, without `sysx:sourceText`. `sysx:prefixMetadata` and
+  `sysml:annotates` are gone; a `.ttl` file written by 0.4.3 that states either is refused naming
+  the property rather than read without the annotation — re-export it from its notation source.
   Of the 18 files refused for this reason, 16 now convert and 13 of those come back as an equal
   graph without `sysx:sourceText`; the other three run into older gaps the refusal had hidden
   (an `isEnd` and an `isNamespaceImport` flag the writer drops, an invocation expression it

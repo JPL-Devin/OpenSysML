@@ -1,0 +1,107 @@
+@prefix elmt: <urn:sysmlv2:element:> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix sysx: <urn:opensysml:sysml:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+elmt:P
+    a sysml:Package ;
+    sysml:qualifiedName "P" ;
+    sysml:elementId "P" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "P" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysml:ownedMember elmt:P__Safety, elmt:P__Car, elmt:P__Truck, elmt:P__s ;
+    sysml:ownedMembership elmt:P__Safety_om, elmt:P__Car_om, elmt:P__Truck_om, elmt:P__s_om ;
+    sysml:ownedRelationship elmt:P__Safety_om, elmt:P__Car_om, elmt:P__Truck_om, elmt:P__s_om .
+
+elmt:P__Safety
+    a sysml:MetadataDefinition ;
+    sysml:qualifiedName "P::Safety" ;
+    sysml:elementId "P__Safety" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:P ;
+    sysml:owner elmt:P ;
+    sysml:owningRelationship elmt:P__Safety_om ;
+    sysml:owningMembership elmt:P__Safety_om ;
+    sysml:declaredName "Safety" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:P__Safety_om
+    a sysml:OwningMembership ;
+    sysml:elementId "P__Safety_om" ;
+    sysml:owner elmt:P ;
+    sysml:memberElement elmt:P__Safety ;
+    sysml:ownedMemberElement elmt:P__Safety ;
+    sysml:ownedRelatedElement elmt:P__Safety ;
+    sysml:owningRelatedElement elmt:P ;
+    sysml:membershipOwningNamespace elmt:P .
+
+elmt:P__Car
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "P::Car" ;
+    sysml:elementId "P__Car" ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:owningNamespace elmt:P ;
+    sysml:owner elmt:P ;
+    sysml:owningRelationship elmt:P__Car_om ;
+    sysml:owningMembership elmt:P__Car_om ;
+    sysml:declaredName "Car" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:P__Car_om
+    a sysml:OwningMembership ;
+    sysml:elementId "P__Car_om" ;
+    sysml:owner elmt:P ;
+    sysml:memberElement elmt:P__Car ;
+    sysml:ownedMemberElement elmt:P__Car ;
+    sysml:ownedRelatedElement elmt:P__Car ;
+    sysml:owningRelatedElement elmt:P ;
+    sysml:membershipOwningNamespace elmt:P .
+
+elmt:P__Truck
+    a sysml:PartDefinition ;
+    sysml:qualifiedName "P::Truck" ;
+    sysml:elementId "P__Truck" ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:owningNamespace elmt:P ;
+    sysml:owner elmt:P ;
+    sysml:owningRelationship elmt:P__Truck_om ;
+    sysml:owningMembership elmt:P__Truck_om ;
+    sysml:declaredName "Truck" ;
+    sysx:prefixMetadata "#Safety" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:P__Truck_om
+    a sysml:OwningMembership ;
+    sysml:elementId "P__Truck_om" ;
+    sysml:owner elmt:P ;
+    sysml:memberElement elmt:P__Truck ;
+    sysml:ownedMemberElement elmt:P__Truck ;
+    sysml:ownedRelatedElement elmt:P__Truck ;
+    sysml:owningRelatedElement elmt:P ;
+    sysml:membershipOwningNamespace elmt:P .
+
+elmt:P__s
+    a sysml:MetadataUsage ;
+    sysml:qualifiedName "P::s" ;
+    sysml:elementId "P__s" ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:owningNamespace elmt:P ;
+    sysml:owner elmt:P ;
+    sysml:owningRelationship elmt:P__s_om ;
+    sysml:owningMembership elmt:P__s_om ;
+    sysml:declaredName "s" ;
+    sysml:type elmt:P__Safety ;
+    sysml:annotates elmt:P__Car ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:P__s_om
+    a sysml:OwningMembership ;
+    sysml:elementId "P__s_om" ;
+    sysml:owner elmt:P ;
+    sysml:memberElement elmt:P__s ;
+    sysml:ownedMemberElement elmt:P__s ;
+    sysml:ownedRelatedElement elmt:P__s ;
+    sysml:owningRelatedElement elmt:P ;
+    sysml:membershipOwningNamespace elmt:P .

@@ -69,6 +69,9 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 	if err := checkExtensionNamespace(graph); err != nil {
 		return nil, err
 	}
+	if err := checkSupersededPredicates(graph); err != nil {
+		return nil, err
+	}
 	d := &decoder{
 		graph:            graph,
 		byIRI:            map[string]*element{},
@@ -119,6 +122,29 @@ func legacyNamespaceError(iri string) error {
 		What: fmt.Sprintf("the term <%s>", iri),
 		Note: fmt.Sprintf("it is in the pre-rename extension namespace %s, which this version does not read; convert the model from source again to write %s", rdf.LegacyExtension, rdf.OpenSysML),
 	}
+}
+
+// supersededPredicates are properties an earlier version wrote for metadata
+// annotations, each with the term that carries the same fact now.
+var supersededPredicates = map[string]string{
+	rdf.OpenSysML + "prefixMetadata": "an owned sysml:MetadataUsage with sysx:declaredKeyword \"#\"",
+	rdf.SysML + "annotates":          "sysml:" + pAnnotatedElement,
+}
+
+// checkSupersededPredicates refuses a graph stating a metadata annotation with
+// a predicate this version no longer reads, which would otherwise be dropped.
+func checkSupersededPredicates(graph *rdf.Graph) error {
+	for _, triple := range graph.Triples() {
+		now, superseded := supersededPredicates[triple.Predicate.Value]
+		if !superseded || triple.Predicate.Kind != rdf.TermIRI {
+			continue
+		}
+		return &UnsupportedError{
+			What: fmt.Sprintf("the property <%s> of <%s>", triple.Predicate.Value, triple.Subject.Value),
+			Note: fmt.Sprintf("an earlier version wrote a metadata annotation this way; it is now %s, which this version reads, so convert the model from source again", now),
+		}
+	}
+	return nil
 }
 
 // membership is one materialized membership of the graph: the namespace it

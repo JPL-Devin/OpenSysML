@@ -1472,6 +1472,45 @@ func TestLegacyExtensionNamespaceIsRefused(t *testing.T) {
 	}
 }
 
+// Release 0.4.3 wrote a `#` prefix as `sysx:prefixMetadata "#Safety"` and an
+// `about` target as `sysml:annotates`. This version does not read either, so a
+// graph stating them is refused naming the property rather than written back
+// without the annotation. The fixture is that release's own output.
+func TestSupersededMetadataPredicatesAreRefused(t *testing.T) {
+	turtle, err := os.ReadFile(filepath.Join("testdata", "superseded", "metadata_0_4_3.ttl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	refused := func(turtle []byte, property string) {
+		t.Helper()
+		_, err := export.Convert("old.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+		var unsupported *export.UnsupportedError
+		if !errors.As(err, &unsupported) {
+			t.Fatalf("expected the graph to be refused for %s, got %v", property, err)
+		}
+		for _, want := range []string{"the property <" + property + ">", "an earlier version wrote a metadata annotation this way", "convert the model from source again"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("expected %q in error:\n%s", want, err.Error())
+			}
+		}
+	}
+	refused(turtle, rdf.OpenSysML+"prefixMetadata")
+	withoutPrefix := withoutTriples(t, turtle, "sysx:prefixMetadata")
+	refused(withoutPrefix, rdf.SysML+"annotates")
+
+	// Without the superseded properties the graph converts, so the refusal is
+	// the only thing standing between the graph and a silently dropped annotation.
+	back, err := export.Convert("old.ttl", withoutTriples(t, withoutPrefix, "sysml:annotates"), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	for _, unwanted := range []string{"#Safety", "about"} {
+		if strings.Contains(string(back), unwanted) {
+			t.Errorf("%q should not come from a graph that no longer states it:\n%s", unwanted, back)
+		}
+	}
+}
+
 func modelFiles(t *testing.T) []string {
 	t.Helper()
 	paths, err := filepath.Glob(filepath.Join("testdata", "convert", "*.sysml"))
