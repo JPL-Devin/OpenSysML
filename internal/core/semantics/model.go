@@ -10,6 +10,8 @@
 package semantics
 
 import (
+	"strings"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -608,6 +610,12 @@ func (m *Model) UnioningTypes(sym *symbols.Symbol) []*symbols.Symbol {
 
 	m.unioning[sym] = out
 	return out
+}
+
+// IsCollection reports whether sym is a Kernel Data Type Library collection shape, which the
+// runtime reads as its elements; a type elsewhere specializing one (a quantity value) is its own kind.
+func IsCollection(sym *symbols.Symbol) bool {
+	return sym != nil && strings.HasPrefix(symbols.FQNOf(sym), "Collections::")
 }
 
 // isAnything reports whether sym is Base::Anything, the classifier every type

@@ -145,6 +145,42 @@ func TestInvocationOverloadQuantities(t *testing.T) {
 		"type.expr", "cannot bind Boolean value to a feature typed by String")
 }
 
+// Declared types neither of which conforms to the other never bind (a mass fits no volume
+// overload), a broader quantity binds either way, and a Collection parameter takes any sequence.
+func TestInvocationOverloadDisjointDeclaredTypes(t *testing.T) {
+	const model = `package P {
+		private import ScalarValues::*;
+		private import ISQ::*;
+		private import SI::*;
+		package A { calc def weigh { in x : VolumeValue; return : Boolean = true; } }
+		package B { calc def weigh { in x : LengthValue; return : String = "long"; } }
+		package D { calc def single { in x : VolumeValue; return : Boolean = true; } }
+		package C {
+			private import A::*;
+			private import B::*;
+			private import D::*;
+			attribute m : MassValue = 2 [kg];
+			attribute q : Quantities::ScalarQuantityValue = 3 [m];
+			attribute %s
+		}
+	}`
+	wantLibraryDiag(t, fmt.Sprintf(model, `w = weigh(m);`), "type.expr",
+		"argument 1 of weigh expects VolumeValue, found MassValue (candidates: P::A::weigh, P::B::weigh)")
+	wantLibraryDiag(t, fmt.Sprintf(model, `w = weigh(x = m);`), "type.expr",
+		"argument x of weigh expects VolumeValue, found MassValue (candidates: P::A::weigh, P::B::weigh)")
+	wantLibraryDiag(t, fmt.Sprintf(model, `w = single(m);`), "type.expr",
+		"argument 1 of single expects VolumeValue, found MassValue")
+	wantLibraryClean(t, fmt.Sprintf(model, `w = weigh(q);`))
+	wantLibraryClean(t, fmt.Sprintf(model, `w = single(q);`))
+	wantLibraryClean(t, `package P {
+		private import ScalarValues::*;
+		private import CollectionFunctions::*;
+		calc def Cnt { in x : Integer[0..*]; return : Boolean = contains(x, 2); }
+		calc def Has { in c : Collections::Collection; return : Boolean = true; }
+		calc def Use { in x : Integer[0..*]; return : Boolean = Has(x); }
+	}`)
+}
+
 // Two candidates the arguments fit equally, neither more specific than the
 // other, are an ambiguity the checker reports by name rather than resolving.
 func TestInvocationOverloadAmbiguous(t *testing.T) {
