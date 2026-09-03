@@ -1,7 +1,10 @@
 package query
 
 import (
+	"slices"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -53,6 +56,10 @@ var kermlUsageTypeNames = map[ast.UsageKind]string{
 	ast.UsageInteraction: "Interaction",
 }
 
+// refinedTypeNames are the metamodel type names MetamodelTypeNameOf reports for
+// a symbol kind that spans several metaclasses, beyond the kind's own name.
+var refinedTypeNames = []string{"MultiplicityRange"}
+
 // MetamodelTypeNameOf returns the metamodel type name an element reports as
 // @type, refining symbol kinds that span several metaclasses.
 func MetamodelTypeNameOf(sym *symbols.Symbol) string {
@@ -60,6 +67,8 @@ func MetamodelTypeNameOf(sym *symbols.Symbol) string {
 		return ""
 	}
 	switch sym.Kind {
+	case symbols.SymbolMultiplicity:
+		return semantics.MultiplicityMetaclassName(sym)
 	case symbols.SymbolConnectorEnd:
 		if sym.OwnerScope != nil {
 			if usage, ok := sym.OwnerScope.Node().(*ast.Usage); ok && usage.Kind == ast.UsageInterface {
@@ -101,5 +110,5 @@ func IsMetamodelTypeName(name string) bool {
 			return true
 		}
 	}
-	return false
+	return slices.Contains(refinedTypeNames, name)
 }

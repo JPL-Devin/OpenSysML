@@ -1497,10 +1497,15 @@ part root {
 	part child;
 }
 attribute def Multiplicity;
+attribute def MultiplicityRange;
 attribute def Class;
 calc def Multiplicities :> Query {
 	in source : Element;
 	WhereType(source = OwnedElements(source = source), type = "Multiplicity")
+}
+calc def Ranges :> Query {
+	in source : Element;
+	WhereType(source = OwnedElements(source = source), type = "MultiplicityRange")
 }
 calc def Classes :> Query {
 	in source : Element;
@@ -1512,7 +1517,7 @@ calc def Misspelt :> Query {
 }
 `)
 	bindings := Bindings{"source": {ElementValue(fixture.symbol(t, "root"))}}
-	for _, name := range []string{"Multiplicities", "Classes"} {
+	for _, name := range []string{"Multiplicities", "Ranges", "Classes"} {
 		rows, err := fixture.execute(t, name, bindings, Options{})
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
@@ -1525,6 +1530,58 @@ calc def Misspelt :> Query {
 	var executionError *Error
 	if !errors.As(err, &executionError) || executionError.Kind != ErrorUnknownClassification {
 		t.Fatalf("Misspelt error = %v, want %s", err, ErrorUnknownClassification)
+	}
+}
+
+// TestExecuteTypesMultiplicityRangeApartFromSubset checks that a named
+// multiplicity reports a range as MultiplicityRange and a subset as
+// Multiplicity, both as @type and under a type filter, and that an empty
+// MultiplicityRange filter is not a misspelt classification.
+func TestExecuteTypesMultiplicityRangeApartFromSubset(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root {
+	multiplicity one [1];
+	multiplicity some subsets one;
+	part child;
+}
+part empty;
+calc def Types :> Query {
+	in source : Element;
+	Project(source = OwnedElements(source = source), properties = ("name", "@type"))
+}
+calc def Ranges :> Query {
+	in source : Element;
+	WhereType(source = OwnedElements(source = source), type = "MultiplicityRange")
+}
+`)
+	root := Bindings{"source": {ElementValue(fixture.symbol(t, "root"))}}
+	rows, err := fixture.execute(t, "Types", root, Options{})
+	if err != nil {
+		t.Fatalf("Types: %v", err)
+	}
+	var types []string
+	for _, row := range rows.Rows() {
+		cells := row.Cells()
+		name, _ := cells[0].Values()[0].String()
+		typeName, _ := cells[1].Values()[0].String()
+		types = append(types, name+":"+typeName)
+	}
+	if want := []string{"one:MultiplicityRange", "some:Multiplicity", "child:PartUsage"}; !slices.Equal(types, want) {
+		t.Fatalf("types = %v, want %v", types, want)
+	}
+	rows, err = fixture.execute(t, "Ranges", root, Options{})
+	if err != nil {
+		t.Fatalf("Ranges: %v", err)
+	}
+	if got := elementNames(rows); !slices.Equal(got, []string{"one"}) {
+		t.Fatalf("Ranges rows = %v, want [one]", got)
+	}
+	rows, err = fixture.execute(t, "Ranges", Bindings{"source": {ElementValue(fixture.symbol(t, "empty"))}}, Options{})
+	if err != nil {
+		t.Fatalf("Ranges over empty: %v", err)
+	}
+	if len(rows.Rows()) != 0 {
+		t.Fatalf("Ranges over empty rows = %v, want none", elementNames(rows))
 	}
 }
 
