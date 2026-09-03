@@ -9,11 +9,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 )
 
-// actionStmtHost runs an action node's body statements: a send posts through
-// the action graph's connections, and an assignment to a name the body does not
-// declare reaches the features of the performance running it or of one
-// enclosing it, which is how a loop body updates an attribute of the action it
-// runs in.
+// actionStmtHost runs an action node's body statements: a send posts through the graph's
+// connections, and an assignment to an undeclared name reaches the enclosing performances.
 type actionStmtHost struct {
 	exec *ActionExecutor
 	node ast.Node // the action node whose body is running, for diagnostics
@@ -59,11 +56,8 @@ func (h *actionStmtHost) send(ec *EvalContext, s lower.Send) error {
 	return h.exec.ctx.post(h.exec.connectionsOf(h.perf), msg, s, h.exec.self)
 }
 
-// assignOuter writes a name the body's blocks do not declare: to the feature the
-// performance running the body declares, else to the innermost enclosing
-// performance holding the name, else to the feature of the object performing
-// the action, and as a value the body holds when none has it. A feature the
-// action declares is its own, so it is never redirected to the object.
+// assignOuter writes a name the body's blocks do not declare: to the running performance,
+// else the innermost enclosing one holding it, else the performing object, else the body.
 func (h *actionStmtHost) assignOuter(env *stmtEnv, name string, value Value, s lower.Assign) error {
 	if h.perf.declares(name) {
 		return h.exec.setFrameFeature(h.perf, name, value)

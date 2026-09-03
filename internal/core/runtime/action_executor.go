@@ -38,9 +38,8 @@ type ActionExecutor struct {
 	breakpoints map[string]bool
 	// firedBreakpoints records the token visits a breakpoint already stopped on.
 	firedBreakpoints map[breakpointVisit]bool
-	// root is the action's own performance, holding the values of its features;
-	// every token in its flow reads and writes it, so branches out of a fork see
-	// each other's effects. A nested node performs in a frame of its own.
+	// root is the action's own performance, shared by every token in its flow;
+	// a nested node performs in a frame of its own.
 	root *actionFrame
 	// mergeVisited tracks merge node visits, per activation of the flow the merge
 	// belongs to: a nested flow entered again merges again.
@@ -123,10 +122,8 @@ func newActionExecutorForOccurrence(
 	return exec, nil
 }
 
-// performanceFeatures lists the graph's attributes, then the attributes and
-// parameters inherited from the model's generalizations that none redefines,
-// each default carrying the scope it was declared in. What the library base
-// types contribute is read through the feature seam, not held.
+// performanceFeatures lists the graph's attributes, then the inherited ones none
+// redefines with their declaring scope; library-contributed features stay behind the seam.
 func (e *ActionExecutor) performanceFeatures() []lower.Attribute {
 	features := slices.Clone(e.graph.Attributes)
 	declared := make(map[string]bool, len(features))
@@ -530,11 +527,8 @@ func (e *ActionExecutor) NodeNames() []string {
 	return append(names, e.subflowNodeNames(e.graph)...)
 }
 
-// initializeAttributes fills the features no supplied input holds yet: from the
-// performance occurrence, whose materialized slots carry a usage-level default or
-// redefinition, or from the declared defaults, evaluated in order over the values
-// already held so a default may read an input bound before it. An inherited
-// default is evaluated in the scope it was declared in.
+// initializeAttributes fills the features no supplied input holds: from the occurrence's
+// slots, else the declared defaults in order, each evaluated where it was declared.
 func (e *ActionExecutor) initializeAttributes() error {
 	if e.occurrence != nil {
 		for _, attr := range e.features {
@@ -1351,12 +1345,8 @@ func statementNodeKeyword(node ast.Node) string {
 	}
 }
 
-// applyDataFlows transfers data along the object flows out of sourceNode: the
-// value at each flow's source pin among what the completed performance produced
-// becomes the value at its target pin, which is what the target node's next
-// performance starts with. A flow whose source pin holds nothing moves nothing
-// and is reported, since a declared flow that silently carries no payload is a
-// wrong result rather than a no-op.
+// applyDataFlows moves what the completed performance produced along the flows out of
+// sourceNode to the target pins; a source pin holding nothing is an error, not a no-op.
 func (e *ActionExecutor) applyDataFlows(frame *actionFrame, sourceNode ast.Node, produced map[string]Value) error {
 	for _, flow := range frame.graph.DataFlows[sourceNode] {
 		sourceData, ok := produced[flow.SourcePin]
@@ -1428,19 +1418,16 @@ func (e *ActionExecutor) State() ExecutionState {
 	return e.state
 }
 
-// Results returns the values the action's features currently hold, and under
-// `node.pin` those the latest performance of each nested node holds. For a
-// performed usage the action's own mirror the performance occurrence, which
-// every write goes through.
+// Results returns the values the action's features hold, and under `node.pin` those
+// of each nested node's latest performance; a performed usage's mirror its occurrence.
 func (e *ActionExecutor) Results() map[string]Value {
 	results := make(map[string]Value, len(e.root.data))
 	e.root.collect("", results)
 	return results
 }
 
-// Data returns the live feature space of the action's own performance, which
-// every token in its flow reads and writes. A nested node's features live in
-// that node's performance instead and are reported by Results.
+// Data returns the live feature space of the action's own performance; a nested
+// node's features live in its own performance and are reported by Results.
 func (e *ActionExecutor) Data() map[string]Value {
 	return e.root.data
 }

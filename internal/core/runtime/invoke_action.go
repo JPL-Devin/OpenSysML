@@ -156,9 +156,8 @@ func resolveActionSymbol(
 	return sym, nil
 }
 
-// bindArgumentList binds an invocation's arguments into inputs: positional ones
-// by the callee's input parameter order, named ones by the callee's parameter
-// names. Arguments are evaluated in ec, the caller's context.
+// bindArgumentList binds an invocation's arguments into inputs by the callee's parameter
+// order (positional) or names (named); arguments are evaluated in ec, the caller's context.
 func bindArgumentList(ec *EvalContext, inv actionInvocation, in []string, inputs map[string]Value) error {
 	if len(inv.args) > len(in) {
 		return fmt.Errorf(
@@ -207,9 +206,8 @@ type actionParameter struct {
 	IsResult bool
 }
 
-// actionParametersOf returns the parameters an action is invoked with, in
-// invocation order: those it declares, then the inherited ones none of them
-// redefines (KerML 7.4.7.2), the signature the type checker validates against.
+// actionParametersOf returns an action's parameters in invocation order: its own, then
+// the inherited ones none redefines (KerML 7.4.7.2) — the signature the type checker uses.
 func (ctx *Context) actionParametersOf(sym *symbols.Symbol) []actionParameter {
 	var params []actionParameter
 	for _, param := range ctx.model.BehaviorParametersOf(sym) {

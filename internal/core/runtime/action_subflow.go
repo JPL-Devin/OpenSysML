@@ -7,12 +7,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 )
 
-// An action node owning a flow runs that flow as its subperformances
-// (`Actions::Action::subactions :> actions, subperformances`), which are
-// suboccurrences of it and so end no later than it does. A token entering such a
-// node moves into the node's performance and runs the node's own graph; the node
-// completes, and its succession fires, only when the performance's last token
-// retires (action_frame.go holds the performance itself).
+// An action node owning a flow runs it as subperformances (`subactions :> subperformances`):
+// a token moves into the node's performance, and the node completes when its last token retires.
 
 // graphOf returns the flow a performance runs.
 func (e *ActionExecutor) graphOf(frame *actionFrame) *lower.ActionGraph {
@@ -30,9 +26,8 @@ func (e *ActionExecutor) subflowOf(graph *lower.ActionGraph, node ast.Node) (*lo
 	return sub, owns && sub != nil
 }
 
-// enterSubflow moves a token into the flow its node owns, run by the node's
-// performance. The flow was validated at initialize(), so an unbuildable one
-// here is reported rather than skipped.
+// enterSubflow moves a token into the flow its node owns, run by the node's performance;
+// the flow was validated at initialize(), so an unbuildable one is an error here.
 func (e *ActionExecutor) enterSubflow(tokenIdx int, perf *actionFrame) error {
 	token := &e.tokens[tokenIdx]
 	node := token.Location
@@ -105,10 +100,8 @@ func (e *ActionExecutor) subflowNodeNames(graph *lower.ActionGraph) []string {
 	return names
 }
 
-// connectionsOf returns the connectors a send running in a performance may route
-// through: the action's own for the root flow, and every enclosing flow's for a
-// nested one, so a send deep in the nesting still reaches a connector declared
-// around it.
+// connectionsOf returns the connectors a send in a performance may route through:
+// the action's own, plus every enclosing flow's for a nested one.
 func (e *ActionExecutor) connectionsOf(frame *actionFrame) []lower.Connection {
 	return frame.connections
 }

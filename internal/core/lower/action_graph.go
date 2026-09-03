@@ -70,9 +70,8 @@ type ActionGraph struct {
 	// keyed by the first statement of the run, whose name names no step.
 	StatementRuns map[ast.Node]bool
 
-	// BlockNodes lists, per node, the action nodes the blocks in its body declare
-	// (an `if` branch, a loop body) in declaration order: subperformances of the
-	// performance running that body, reached by name from it (block_graph.go).
+	// BlockNodes lists, per node, the action nodes its body's blocks (an `if` branch,
+	// a loop body) declare, in declaration order: subperformances reached by name from it.
 	BlockNodes map[ast.Node][]ast.Node
 }
 

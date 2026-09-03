@@ -72,9 +72,8 @@ func (env *stmtEnv) assignLocal(name string, value Value) bool {
 	return false
 }
 
-// values is the values a statement reads: those of the frames enclosing the
-// behavior, overridden by its own, overridden by those of the blocks entered
-// around it, innermost last.
+// values is the values a statement reads: the enclosing frames, overridden by the
+// behavior's own, overridden by the blocks entered around it, innermost last.
 func (env *stmtEnv) values() map[string]Value {
 	merged := make(map[string]Value, env.data.width())
 	for _, f := range env.enclosing {

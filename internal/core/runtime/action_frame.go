@@ -9,11 +9,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// A nested action usage is a subperformance of the action performing it
-// (`Actions::Action::subactions :> subperformances`). Each time a token reaches
-// the node it is performed anew, in a frame of its own holding the parameters and
-// attributes the node declares; the enclosing performances stay in lexical reach,
-// so a body still reads and writes the features of the action around it.
+// A nested action usage is a subperformance (`Actions::Action::subactions :> subperformances`):
+// each token performs it anew in a frame of its own, with the enclosing performances in lexical reach.
 
 // actionFrame is one performance: the action's own (node nil) or a nested node's.
 type actionFrame struct {
@@ -89,10 +86,8 @@ func (e *ActionExecutor) addFeatureDirections(features map[string]ast.FeatureDir
 	}
 }
 
-// beginPerformance starts a performance of node, a node of flow: parent's own,
-// or that of a block in a body parent runs, entered with locals bound. It holds
-// what was delivered to its pins ahead of it, then what the bindings at its
-// input pins give, and last the values its own declarations default to.
+// beginPerformance starts a performance of node (of parent's flow, or a block's with locals bound),
+// seeding its pins from deliveries, then input bindings, then its own declared defaults.
 func (e *ActionExecutor) beginPerformance(
 	parent *actionFrame, flow *lower.ActionGraph, node ast.Node, locals []map[string]Value,
 ) (*actionFrame, error) {
@@ -170,10 +165,8 @@ func (e *ActionExecutor) endPerformance(perf *actionFrame) error {
 	return e.bindOutputPins(perf)
 }
 
-// nodePins returns the pins a performance of node holds: the parameters and
-// attributes it declares itself, and those of the action it performs, along
-// with the name of the pin read when the node is read as a value: its `return`
-// parameter, or failing one, an output pin named `result`.
+// nodePins returns the pins a performance of node holds (its own and its action's),
+// and the pin read when the node is read as a value: `return`, else `out result`.
 func (e *ActionExecutor) nodePins(graph *lower.ActionGraph, node ast.Node) (map[string]ast.FeatureDirection, string, error) {
 	pins := make(map[string]ast.FeatureDirection)
 	usage, ok := node.(*ast.Usage)
@@ -243,9 +236,8 @@ func (f *actionFrame) holds(name string) bool {
 	return ok
 }
 
-// lexicalFrames returns the frames a body of f reads, outermost first: those of
-// the performances around it, each followed by the block-locals around the node
-// it performs, and last f's own.
+// lexicalFrames returns the frames a body of f reads, outermost first: each enclosing
+// performance followed by the block-locals around its node, and last f's own.
 func (f *actionFrame) lexicalFrames() []frame {
 	var frames []frame
 	if f.parent != nil {
@@ -257,9 +249,8 @@ func (f *actionFrame) lexicalFrames() []frame {
 	return append(frames, performanceFrame(f))
 }
 
-// nodeNamed returns the node answering to name among the subactions of the
-// performance: the nodes of its flow, and those the blocks in the bodies it
-// runs declare.
+// nodeNamed returns the node named among the performance's subactions: its flow's
+// nodes and those its bodies' blocks declare.
 func (f *actionFrame) nodeNamed(name string) (ast.Node, bool) {
 	answers := func(node ast.Node) bool {
 		if _, isUsage := node.(*ast.Usage); !isUsage {
@@ -298,9 +289,8 @@ func (f *actionFrame) nodeNamed(name string) (ast.Node, bool) {
 	return nil, false
 }
 
-// subaction returns the latest performance of the node of f's flow named name.
-// declared reports whether the flow has such a node; a node not yet performed
-// is reported as ErrNodeNotPerformed.
+// subaction returns the latest performance of f's node named name; declared reports
+// whether the flow has such a node, one not yet performed is ErrNodeNotPerformed.
 func (f *actionFrame) subaction(name string) (perf *actionFrame, declared bool, err error) {
 	node, ok := f.nodeNamed(name)
 	if !ok {
@@ -339,9 +329,8 @@ func (f *actionFrame) resultValue() (Value, error) {
 	return Value{}, &NoValueError{Feature: f.path() + "." + f.result}
 }
 
-// deliver stores a value at a pin of node, a node of flow performed by f, ahead
-// of its next performance, which is how a flow or binding reaches a node not yet
-// running.
+// deliver stores a value at a pin of node ahead of its next performance, which is
+// how a flow or binding reaches a node not yet running.
 func (e *ActionExecutor) deliver(f *actionFrame, flow *lower.ActionGraph, node ast.Node, pin string, value Value) error {
 	pins, _, err := e.nodePins(flow, node)
 	if err != nil {
@@ -393,9 +382,8 @@ func (e *ActionExecutor) setFrameFeature(f *actionFrame, name string, value Valu
 	return nil
 }
 
-// assignEnclosing writes name to the innermost binding around perf that holds
-// it — a block-local entered around a node, or a performance's feature —
-// reporting whether one did.
+// assignEnclosing writes name to the innermost block-local or performance feature
+// around perf that holds it, reporting whether one did.
 func (e *ActionExecutor) assignEnclosing(perf *actionFrame, name string, value Value) (bool, error) {
 	for f := perf; f != nil; f = f.parent {
 		for i := len(f.locals) - 1; i >= 0; i-- {
@@ -605,13 +593,8 @@ func bindingEndText(end ast.Node) string {
 	return fmt.Sprintf("%T", end)
 }
 
-// performInvocation performs the action a node names, as a subperformance held
-// by perf. Arguments, expressions of the enclosing performance, bind the callee's
-// inputs by its own parameter order and names, and `Callee()` passes none; a
-// bare usage reads what the node's pins and the enclosing performances hold
-// under those names. Every value the callee
-// ends with becomes the node's, and its outputs are also returned to the
-// same-named features around it.
+// performInvocation performs the action a node names as a subperformance of perf: caller-side
+// arguments bind the callee's inputs by its order/names, its final values become the node's.
 func (e *ActionExecutor) performInvocation(perf *actionFrame, inv actionInvocation) error {
 	scope := perf.flow.Scope
 	sym, err := resolveActionSymbol(e.ctx, scope, inv)

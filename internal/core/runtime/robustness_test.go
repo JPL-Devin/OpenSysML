@@ -7965,9 +7965,8 @@ func testNodeReadAsAValueWithoutAResult(t *testing.T) {
 	}
 }
 
-// testNodeInheritedDefaultThatCannotBeEvaluated: a default a node's action
-// inherits is seeded when the node starts, so one that fails is reported there,
-// naming the parameter, rather than when the body reads it.
+// testNodeInheritedDefaultThatCannotBeEvaluated: an inherited default is seeded
+// when the node starts, so its failure is reported there, naming the parameter.
 func testNodeInheritedDefaultThatCannotBeEvaluated(t *testing.T) {
 	src := `
 		package test {
