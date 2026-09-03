@@ -139,7 +139,9 @@ merges into the package already in the session.
 
 `%search` looks for a substring across the declared and library symbols and reports the kind of
 each match. `%builtins` lists the library functions the current build can evaluate directly,
-which tells you whether an expression will evaluate before you write a model around it.
+which tells you whether an expression will evaluate before you write a model around it, and the
+package each must be imported from for its bare name to resolve (`x->size()` needs
+`import SequenceFunctions::*;`; `SequenceFunctions::size(x)` resolves anywhere).
 
 ```
 sysml> %search Vehicle

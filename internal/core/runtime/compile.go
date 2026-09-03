@@ -658,8 +658,9 @@ var scalarAggregates = map[string]bool{
 	"RealFunctions::sum": true, "RealFunctions::product": true,
 }
 
-// compileInvocation compiles a call dispatched as the evaluator dispatches it: a
-// built-in, what the name resolves to, or the library function of an unbound name.
+// compileInvocation compiles a call dispatched as the evaluator dispatches it:
+// what the name resolves to in scope. A name that resolves to nothing is left
+// to the evaluator, which reports it unresolved.
 func (c *calcCompiler) compileInvocation(n *ast.InvocationExpr, scope *symbols.Scope, layout *frameLayout) (*cnode, error) {
 	if scope == nil {
 		return nil, ineligible("invocation without a scope")
@@ -670,19 +671,7 @@ func (c *calcCompiler) compileInvocation(n *ast.InvocationExpr, scope *symbols.S
 	}
 	target := (&EvalContext{ctx: c.ctx, scope: scope}).invocationTarget(n)
 	switch {
-	case target.builtin != nil:
-		return c.compileAggregate(target.qualName, target.builtin, &args, scope, layout)
-	case target.calc == nil:
-		fn, libErr := unresolvedLibraryFunction(n.Type, target.qualName)
-		if libErr != nil {
-			return nil, ineligible(fmt.Sprintf("%s: %v", target.qualName, libErr))
-		}
-		if fn != nil {
-			return c.compileLibraryCall(fn, &args, scope, layout)
-		}
-		if builtin, ok := builtinsByLocalName[target.qualName]; ok {
-			return c.compileAggregate(builtinLocalNames[target.qualName], builtin, &args, scope, layout)
-		}
+	case target.calc == nil && target.library == nil:
 		return nil, ineligible(fmt.Sprintf("%s does not resolve to a calc", target.qualName))
 	case target.calcBuiltin != nil:
 		return c.compileAggregate(c.ctx.qualifiedSymbolName(target.calc), target.calcBuiltin, &args, scope, layout)

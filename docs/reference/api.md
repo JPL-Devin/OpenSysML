@@ -581,7 +581,7 @@ type LineReader interface {
 **Meta Commands:**
 - `%help`, `%list`, `%clear`, `%load <file>`
 - `%search <substring>` — List the declared and library symbols whose qualified name contains the substring, with the kind of each
-- `%builtins` — List the library functions the runtime implements directly
+- `%builtins` — List the library functions the runtime implements directly, each with the package an import must name for its bare name to resolve
 - `%instantiate <name>`, `%features <name>`, `%instances`
 - `%eval <expr>`
 - `%calc <name> [args...]` — Invoke calculation with arguments
