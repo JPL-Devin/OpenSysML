@@ -139,6 +139,8 @@ var compiledCases = []compiledCase{
 	{"Seq::ForB", []string{"4"}}, {"Seq::ForB", []string{"0"}},
 	{"Seq::RS", []string{"(1,2,3)"}}, {"Seq::RS", []string{"null"}}, {"Seq::RS", []string{"4"}},
 	{"Seq::MaxS", []string{"(1.5,2.5)"}}, {"Seq::MaxS", []string{"null"}},
+	{"Overloads::PickInt", []string{"7"}}, {"Overloads::PickReal", []string{"7.0"}}, {"Overloads::PickFlag", []string{"true"}},
+	{"Overloads::PickQualified", []string{"7"}}, {"Overloads::PickQualified", []string{"-7"}},
 }
 
 // transcendental calcs call libm functions whose last bit is the library's, so the
@@ -429,6 +431,29 @@ func TestCompileRefusesWhatItCannotCompile(t *testing.T) {
 	}
 	if _, err := s.CompileCalc("Compiled::Nowhere"); err == nil {
 		t.Error("an unknown calc compiled")
+	}
+}
+
+// A call several visible declarations fit equally is refused, naming them,
+// as the checker and the interpreter report it.
+func TestCompileRefusesAmbiguousCall(t *testing.T) {
+	s := NewSession()
+	s.Submit(`package Amb {
+		private import ScalarValues::*;
+		package A { calc def pick { in x : Integer; return : Integer = 1; } }
+		package B { calc def pick { in x : Integer; return : Integer = 2; } }
+		private import A::*;
+		private import B::*;
+		calc def Pick { in n : Integer; return : Integer = pick(n); }
+	}`)
+	_, err := s.CompileCalc("Amb::Pick")
+	if !errors.Is(err, codegen.ErrUnsupported) {
+		t.Fatalf("got %v, want an ErrUnsupported refusal", err)
+	}
+	for _, want := range []string{"ambiguous", "Amb::A::pick", "Amb::B::pick"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("%v does not mention %q", err, want)
+		}
 	}
 }
 

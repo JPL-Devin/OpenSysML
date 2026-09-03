@@ -649,9 +649,8 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 	// With no candidate the arguments fit, the first is checked as before and
 	// the diagnostic names the rest.
 	var considered []*symbols.Symbol
-	sym := sel.Selected
-	if sym == nil {
-		sym = sel.Candidates[0]
+	sym := sel.Called()
+	if sel.Selected == nil {
 		considered = sel.Candidates
 	}
 	if !ec.isInvocationBehavior(sym, map[*symbols.Symbol]bool{}) {
