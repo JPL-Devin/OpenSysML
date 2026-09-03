@@ -226,6 +226,19 @@ func (s *Session) carrierInstances(sym *symbols.Symbol) []string {
 // walkObjects visits the session's objects and, while visit reports true, the
 // objects nested yields for them, breadth-first in name order and within carrierLimit.
 func (s *Session) walkObjects(nested func(carrier) []carrier, visit func(carrier) bool) {
+	s.walk(nested, visit, carrierLimit)
+}
+
+// walkHeldObjects visits every object the session holds: its named objects and,
+// while visit reports true, what their materialized feature values hold. Nothing
+// is materialized, so the walk ends with the objects that already exist and
+// needs no bound.
+func (s *Session) walkHeldObjects(ctx *runtime.Context, visit func(carrier) bool) {
+	s.walk(materializedObjectsIn(ctx), visit, 0)
+}
+
+// walk is walkObjects within limit objects visited, or unbounded for a limit of 0.
+func (s *Session) walk(nested func(carrier) []carrier, visit func(carrier) bool, limit int) {
 	seen := make(map[int64]bool, len(s.instances))
 	queue := make([]carrier, 0, len(s.instances))
 	for name, inst := range s.instances {
@@ -234,7 +247,7 @@ func (s *Session) walkObjects(nested func(carrier) []carrier, visit func(carrier
 		}
 	}
 	sort.Slice(queue, func(i, j int) bool { return queue[i].name < queue[j].name })
-	for visited := 0; len(queue) > 0 && visited < carrierLimit; visited++ {
+	for visited := 0; len(queue) > 0 && (limit == 0 || visited < limit); visited++ {
 		cur := queue[0]
 		queue = queue[1:]
 		if seen[cur.inst.ID] {
