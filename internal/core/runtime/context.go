@@ -8,6 +8,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
@@ -219,6 +220,11 @@ type connectorRef struct {
 func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int64) *Context {
 	if maxSteps <= 0 {
 		panic(fmt.Sprintf("runtime: maxSteps must be > 0, got %d", maxSteps))
+	}
+	if model != nil {
+		// Calls the model selects on its own (document queries, signal payloads) then
+		// pick the overload the checker's argument typing picks.
+		model.SetArgumentTyper(passes.NewArgumentTyper(resolver, model))
 	}
 	return &Context{
 		model:      model,

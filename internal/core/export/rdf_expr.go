@@ -13,6 +13,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
+	"github.com/Open-MBEE/OpenSysML/internal/core/rdf/ontology"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -128,40 +129,34 @@ func (e *encoder) expressionNode(subject rdf.Term, in exprScope, node ast.Node) 
 	// The id an API reader addresses the node by, as on an element: a node has no
 	// qualified name, but its position in the model gives it a valid id.
 	e.graph.Add(subject, e.sysml(pElementID), rdf.String(rdf.LocalName(subject.Value)))
+	e.expressionStructure(subject, in, node)
+}
+
+// expressionStructure emits an expression's type and operands; an Expression
+// element states its text as an element does, so it takes none here.
+func (e *encoder) expressionStructure(subject rdf.Term, in exprScope, node ast.Node) {
+	e.typed(subject, expressionMetaclass(node))
 	switch n := node.(type) {
 	case *ast.LiteralBool:
-		e.typed(subject, mLiteralBoolean)
 		e.graph.Add(subject, e.sysml(pValue), rdf.Bool(n.Value))
 
 	case *ast.LiteralString:
-		e.typed(subject, mLiteralString)
 		e.graph.Add(subject, e.sysml(pValue), rdf.String(lexer.StringValue(n.Value)))
 
 	case *ast.LiteralInteger:
-		e.typed(subject, mLiteralInteger)
 		e.graph.Add(subject, e.sysml(pValue), rdf.TypedLiteral(n.Value, rdf.XSD+"integer"))
 
 	case *ast.LiteralReal:
-		e.typed(subject, mLiteralRational)
-		e.graph.Add(subject, e.sysml(pValue), rdf.TypedLiteral(n.Value, rdf.XSD+"decimal"))
-
-	case *ast.LiteralInfinity:
-		e.typed(subject, mLiteralInfinity)
-
-	case *ast.NullExpr:
-		e.typed(subject, mNullExpression)
+		e.graph.Add(subject, e.sysml(pValue), rdf.TypedLiteral(n.Value, realDatatype(n.Value)))
 
 	case *ast.QualifiedName:
 		// A position whose notation is a bare name holds the feature it names.
-		e.typed(subject, mFeatureReference)
 		e.graph.Add(subject, e.sysml(pReferent), in.link(e, n))
 
 	case *ast.FeatureReference:
-		e.typed(subject, mFeatureReference)
 		e.graph.Add(subject, e.sysml(pReferent), in.link(e, n.Name))
 
 	case *ast.OperatorExpr:
-		e.typed(subject, mOperator)
 		e.graph.Add(subject, e.sysml(pOperator), rdf.String(n.Operator.String()))
 		e.arguments(subject, in, n.Operands)
 		if n.TypeRef != nil {
@@ -171,18 +166,15 @@ func (e *encoder) expressionNode(subject rdf.Term, in exprScope, node ast.Node) 
 	case *ast.CastExpr:
 		// `(as T[m])` is the classification operator with a type argument only,
 		// its multiplicity written as bounds the way a usage's is.
-		e.typed(subject, mOperator)
 		e.graph.Add(subject, e.sysml(pOperator), rdf.String(ast.OpAs.String()))
 		e.graph.Add(subject, e.sysx(xTypeArgument), in.link(e, n.TargetType))
 		e.multiplicityIn(subject, in, n.Multiplicity)
 
 	case *ast.FeatureChainExpr:
-		e.typed(subject, mFeatureChain)
 		e.arguments(subject, in, []ast.Node{n.Operand})
 		e.graph.Add(subject, e.sysml(pTargetFeature), in.linkReference(e, resolve.Reference{QN: n.Member, Chain: n}))
 
 	case *ast.IndexExpr:
-		e.typed(subject, mOperator)
 		operator := opAt
 		if n.Bracket {
 			operator = opIndex
@@ -191,51 +183,85 @@ func (e *encoder) expressionNode(subject rdf.Term, in exprScope, node ast.Node) 
 		e.arguments(subject, in, []ast.Node{n.Operand, n.Index})
 
 	case *ast.InvocationExpr:
-		e.typed(subject, mInvocation)
 		e.invocation(subject, in, n.Type, n.Operand, n.Args, n.NamedArgs)
 
 	case *ast.ConstructorExpr:
 		// The 202407 rendering declares no ConstructorExpression, so `new` is a flag.
-		e.typed(subject, mInvocation)
 		e.graph.Add(subject, e.sysx(xIsConstructor), rdf.Bool(true))
 		e.invocation(subject, in, n.Type, nil, n.Args, nil)
 
 	case *ast.CollectExpr:
-		e.typed(subject, mCollect)
 		e.arguments(subject, in, []ast.Node{n.Operand, n.Body})
 
 	case *ast.SelectExpr:
-		e.typed(subject, mSelect)
 		e.arguments(subject, in, []ast.Node{n.Operand, n.Body})
 
 	case *ast.SequenceExpr:
-		e.typed(subject, mOperator)
 		e.graph.Add(subject, e.sysml(pOperator), rdf.String(opSequence))
 		e.arguments(subject, in, n.Elements)
 
 	case *ast.MetadataAccessExpr:
-		e.typed(subject, mMetadataAccess)
 		e.graph.Add(subject, e.sysml(pReferencedElement), in.link(e, n.Ref))
 
 	case *ast.BodyExpr:
-		// A body declares its own parameters and members, then a result expression.
-		// The parameters' annotations are read outside the body, the result inside.
-		e.typed(subject, mExpression)
+		// A body declares its own parameters and members, then a result expression;
+		// sysx:hasBody marks it as one even when it declares nothing. The
+		// parameters' annotations are read outside the body, the result inside.
+		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(true))
 		e.bodyDeclarations(subject, in, n.Params, n.Members)
 		if n.Result != nil {
 			result := rdf.ExpressionIRI(subject, "result")
 			e.graph.Add(subject, e.sysx(xResultExpression), result)
 			e.expressionNode(result, in.inBody(e, n), n.Result)
 		}
-
-	default:
-		// A shape this mapping does not decompose still states it is an expression.
-		e.typed(subject, mExpression)
 	}
+}
+
+// realDatatype is the datatype whose lexical space holds a REAL_VALUE token:
+// xsd:decimal, or xsd:double when the token has an exponent.
+func realDatatype(value string) string {
+	if strings.ContainsAny(value, "eE") {
+		return rdf.XSD + "double"
+	}
+	return rdf.XSD + "decimal"
 }
 
 func (e *encoder) typed(subject rdf.Term, metaclass string) {
 	e.graph.Add(subject, rdf.IRI(rdf.RDFType), rdf.SysMLTerm(metaclass))
+}
+
+// expressionMetaclass is the metaclass an expression node is typed with. A shape
+// this mapping does not decompose still states it is an expression.
+func expressionMetaclass(node ast.Node) string {
+	switch node.(type) {
+	case *ast.LiteralBool:
+		return mLiteralBoolean
+	case *ast.LiteralString:
+		return mLiteralString
+	case *ast.LiteralInteger:
+		return mLiteralInteger
+	case *ast.LiteralReal:
+		return mLiteralRational
+	case *ast.LiteralInfinity:
+		return mLiteralInfinity
+	case *ast.NullExpr:
+		return mNullExpression
+	case *ast.QualifiedName, *ast.FeatureReference:
+		return mFeatureReference
+	case *ast.OperatorExpr, *ast.CastExpr, *ast.IndexExpr, *ast.SequenceExpr:
+		return mOperator
+	case *ast.FeatureChainExpr:
+		return mFeatureChain
+	case *ast.InvocationExpr, *ast.ConstructorExpr:
+		return mInvocation
+	case *ast.CollectExpr:
+		return mCollect
+	case *ast.SelectExpr:
+		return mSelect
+	case *ast.MetadataAccessExpr:
+		return mMetadataAccess
+	}
+	return mExpression
 }
 
 // isExpressionMember reports whether a body member is a bare expression: the
@@ -364,18 +390,17 @@ var expressionMetaclasses = map[string]bool{
 	mMetadataAccess: true,
 }
 
-// isExpressionNode reports whether a subject is an expression node rather than
-// an element: it is in the expression namespace, or its metaclass is one and it
-// has no qualified name (an `expr` usage is typed sysml:Expression too).
+// isExpressionNode reports whether a subject is an expression node rather than an
+// element: unowned, and in the expression namespace or an unnamed expression class.
 func (d *decoder) isExpressionNode(subject rdf.Term) bool {
 	if !subject.IsIRI() {
 		return false
 	}
-	if strings.HasPrefix(subject.Value, rdf.Expression) {
-		return true
+	if _, owned := d.owningMembership[subject.Value]; owned || d.graph.HasProperty(subject, rdf.SysML+pOwningMembership) {
+		return false
 	}
-	return expressionMetaclasses[rdf.LocalName(d.graph.Type(subject))] &&
-		!d.graph.HasProperty(subject, rdf.SysML+pQualifiedName)
+	return strings.HasPrefix(subject.Value, rdf.Expression) ||
+		expressionMetaclasses[d.metaclass(subject)] && !d.graph.HasProperty(subject, rdf.SysML+pQualifiedName)
 }
 
 // resolveExpressions renders every element's expression-valued properties as
@@ -386,7 +411,7 @@ func (d *decoder) resolveExpressions() error {
 			continue
 		}
 		el, ok := d.byIRI[triple.Subject.Value]
-		if !ok {
+		if !ok || d.isResultExpression(el) {
 			// The subject is an expression node; its parts are written with it.
 			continue
 		}
@@ -400,6 +425,28 @@ func (d *decoder) resolveExpressions() error {
 		el.expressions[triple.Predicate.Value] = text
 	}
 	return nil
+}
+
+// realValueText spells a number as a REAL_VALUE token (`3` becomes `3.0`);
+// a signed or non-finite form has no such token.
+func realValueText(lexical string) (string, bool) {
+	if lexer.IsRealValue(lexical) {
+		return lexical, true
+	}
+	mantissa, exponent := lexical, ""
+	if i := strings.IndexAny(lexical, "eE"); i >= 0 {
+		mantissa, exponent = lexical[:i], lexical[i:]
+	}
+	switch {
+	case lexer.IsDecimalValue(mantissa):
+		mantissa += ".0"
+	case lexer.IsDecimalValue(strings.TrimSuffix(mantissa, ".")):
+		mantissa += "0"
+	default:
+		return "", false
+	}
+	text := mantissa + exponent
+	return text, lexer.IsRealValue(text)
 }
 
 // expressionScope is what a reference in el's property is written relative to:
@@ -422,7 +469,7 @@ func (d *decoder) expressionNodeText(node rdf.Term, scope string) (string, error
 	if text, ok := d.expressionText(node); ok {
 		return text, nil
 	}
-	metaclass := rdf.LocalName(d.graph.Type(node))
+	metaclass := d.metaclass(node)
 	unsupported := func(note string) error {
 		return &UnsupportedError{
 			What: fmt.Sprintf("the expression <%s>", node.Value),
@@ -430,12 +477,30 @@ func (d *decoder) expressionNodeText(node rdf.Term, scope string) (string, error
 		}
 	}
 	switch metaclass {
-	case mLiteralBoolean, mLiteralInteger, mLiteralRational:
+	case mLiteralBoolean:
+		if !d.graph.HasProperty(node, rdf.SysML+pValue) {
+			return "", unsupported("a literal expression states the value it evaluates to")
+		}
+		return strconv.FormatBool(d.graph.BoolValue(node, rdf.SysML+pValue)), nil
+	case mLiteralInteger:
 		value, ok := d.graph.Lexical(node, rdf.SysML+pValue)
 		if !ok {
 			return "", unsupported("a literal expression states the value it evaluates to")
 		}
+		if !lexer.IsDecimalValue(value) {
+			return "", unsupported(fmt.Sprintf("the notation spells an integer literal as digits alone, not %q; a sign is an OperatorExpression applied to it", value))
+		}
 		return value, nil
+	case mLiteralRational:
+		value, ok := d.graph.Lexical(node, rdf.SysML+pValue)
+		if !ok {
+			return "", unsupported("a literal expression states the value it evaluates to")
+		}
+		text, ok := realValueText(value)
+		if !ok {
+			return "", unsupported(fmt.Sprintf("the notation spells a rational literal as an unsigned finite number, not %q; a sign is an OperatorExpression applied to it", value))
+		}
+		return text, nil
 	case mLiteralString:
 		value, ok := d.graph.Lexical(node, rdf.SysML+pValue)
 		if !ok {
@@ -487,7 +552,8 @@ func (d *decoder) expressionNodeText(node rdf.Term, scope string) (string, error
 	case mInvocation:
 		return d.invocationText(node, scope)
 	case mExpression:
-		if d.graph.HasProperty(node, rdf.OpenSysML+xResultExpression) ||
+		if d.graph.BoolValue(node, rdf.OpenSysML+xHasBody) ||
+			d.graph.HasProperty(node, rdf.OpenSysML+xResultExpression) ||
 			d.graph.HasProperty(node, rdf.OpenSysML+xBodyParameter) ||
 			d.graph.HasProperty(node, rdf.OpenSysML+xBodyMember) {
 			return d.expressionBodyText(node, scope)
@@ -510,6 +576,9 @@ func (d *decoder) expressionBodyText(node rdf.Term, scope string) (string, error
 		}
 		parts = append(parts, text)
 	}
+	if len(parts) == 0 {
+		return "{}", nil
+	}
 	return "{ " + strings.Join(parts, " ") + " }", nil
 }
 
@@ -520,10 +589,25 @@ func (d *decoder) bodyParameterText(param rdf.Term, scope string) (string, error
 		return "in " + nameText(param.Value) + ";", nil
 	}
 	el := &element{iri: param.Value, scope: scope, expressions: map[string]string{}}
+	what := fmt.Sprintf("the body parameter <%s>", param.Value)
+	// A body parameter is written `in name`, so the node must be a Feature whose
+	// direction, when stated, is in; any other shape would be rewritten, not kept.
+	if metaclass := d.metaclass(param); !ontology.IsAncestorOrSelf(metaclass, "Feature") {
+		return "", &UnsupportedError{
+			What: what,
+			Note: fmt.Sprintf("a parameter of an expression body is a Feature, and this one is %s", typeDescription(metaclass)),
+		}
+	}
+	if direction, ok := d.stringOf(el, rdf.SysML+pDirection); ok && direction != directionKeyword(ast.DirIn) {
+		return "", &UnsupportedError{
+			What: what,
+			Note: fmt.Sprintf("a parameter of an expression body is written `in`, and its sysml:direction is %q", direction),
+		}
+	}
 	name, ok := d.stringOf(el, rdf.SysML+pDeclaredName)
 	if !ok {
 		return "", &UnsupportedError{
-			What: fmt.Sprintf("the body parameter <%s>", param.Value),
+			What: what,
 			Note: "a parameter of an expression body is named, and this one states no sysml:declaredName",
 		}
 	}
@@ -562,6 +646,13 @@ func (d *decoder) bodyParameterText(param rdf.Term, scope string) (string, error
 		return head + ";", nil
 	}
 	return head + " { " + strings.Join(members, " ") + " }", nil
+}
+
+func typeDescription(metaclass string) string {
+	if metaclass == "" {
+		return "of no rdf:type"
+	}
+	return "a " + curie(rdf.SysML+metaclass)
 }
 
 // bodyDeclarationsText writes what an expression body declares, parameters and
@@ -603,7 +694,7 @@ func (d *decoder) bodyDeclarationsText(node rdf.Term, scope string) ([]string, e
 // bodyMemberText writes one declaration of an expression body: documentation
 // from its structure, anything else from its notation, or reports it by name.
 func (d *decoder) bodyMemberText(member rdf.Term, scope string) (string, error) {
-	if rdf.LocalName(d.graph.Type(member)) == mDocumentation {
+	if d.metaclass(member) == mDocumentation {
 		return d.documentationHead(&element{iri: member.Value, scope: scope, expressions: map[string]string{}}), nil
 	}
 	text, ok := d.graph.Lexical(member, rdf.OpenSysML+xSourceText)
@@ -707,7 +798,7 @@ func (d *decoder) expressionArguments(node rdf.Term, scope string) ([]string, er
 			}
 		}
 		if name, ok := d.graph.Lexical(object, rdf.OpenSysML+xArgumentName); ok {
-			arg.name = name
+			arg.name = qualifiedNameText(name)
 		}
 		args = append(args, arg)
 	}
@@ -764,7 +855,7 @@ func (d *decoder) chainOperand(node rdf.Term) (*element, bool) {
 	}
 	var linked rdf.Term
 	ok = false
-	switch rdf.LocalName(d.graph.Type(arg)) {
+	switch d.metaclass(arg) {
 	case mFeatureReference:
 		linked, ok = d.graph.Object(arg, rdf.SysML+pReferent)
 	case mFeatureChain:

@@ -945,10 +945,27 @@ func TestMetadataUsageTypedByANonNameLiteralIsReported(t *testing.T) {
 			t.Errorf("usage %d typed by a plain name: expected %q in:\n%s", i, want, back)
 		}
 	}
+	// A literal of a datatype no name has is refused by the graph-wide literal
+	// gate; a string that spells no name by the metadata usage's own check.
 	for _, literal := range []struct{ object, why string }{
-		{`"42"^^xsd:integer`, "not a string"},
-		{`"true"^^xsd:boolean`, "not a string"},
-		{`"M"@en`, "tagged @en"},
+		{`"42"^^xsd:integer`, "sysml:type takes a string or sysx:Expression"},
+		{`"true"^^xsd:boolean`, "sysml:type takes a string or sysx:Expression"},
+		{`"M"@en`, "a language-tagged literal is an rdf:langString"},
+	} {
+		for i := 0; i < 3; i++ {
+			_, err := export.Convert("m.ttl", []byte(retyped(i, literal.object)), export.FormatTurtle, export.FormatSysML)
+			var unsupported *export.UnsupportedError
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("usage %d typed by %s: expected an unsupported error, got %v", i, literal.object, err)
+			}
+			for _, want := range []string{"the literal " + literal.object + " stated by <urn:sysmlv2:element:P__", "sysml:type", literal.why} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("usage %d typed by %s: expected %q in error:\n%s", i, literal.object, want, err.Error())
+				}
+			}
+		}
+	}
+	for _, literal := range []struct{ object, why string }{
 		{`"1 + 2"^^sysx:Expression`, "an expression, not a name"},
 		{`""`, "is empty"},
 		{`"P::"`, "an empty name segment"},
@@ -1002,11 +1019,12 @@ func TestMetadataUsageWithAnUnsupportedKeywordIsReported(t *testing.T) {
 		graph := strings.Replace(structural, `sysml:declaredName "m" ;`, `sysml:declaredName "m" ;`+"\n"+`    sysx:declaredKeyword "`+keyword+`" ;`, 1)
 		refused(keyword, graph, "the element <urn:sysmlv2:element:P__m>", "sysx:declaredKeyword", `"`+keyword+`"`, "is not a metadata form")
 	}
-	// A repeated keyword is refused whichever value comes first, rather than
-	// read as the first one and written as a prefix or a member.
+	// A repeated keyword is refused by the graph-wide cardinality gate whichever
+	// value comes first, rather than read as the first one and written as a
+	// prefix or a member.
 	for _, keywords := range []string{`"@", "#"`, `"#", "@"`, `"@", "metadata"`} {
 		graph := strings.Replace(structural, `sysml:declaredName "m" ;`, `sysml:declaredName "m" ;`+"\n"+`    sysx:declaredKeyword `+keywords+` ;`, 1)
-		refused(keywords, graph, "the element <urn:sysmlv2:element:P__m>", "sysx:declaredKeyword 2 times", "written with one keyword")
+		refused(keywords, graph, "the subject <urn:sysmlv2:element:P__m>", "states sysx:declaredKeyword twice", "one of them would be dropped")
 	}
 
 	root := "metadata def M;\n@M;\n"
@@ -1167,10 +1185,11 @@ func TestPrefixOnAVerbatimHeadIsWrittenOrReported(t *testing.T) {
 		}
 	}
 	// The verbatim head prints no members, so an annotation whose keyword is
-	// not a metadata form is refused there rather than dropped with the body.
-	for _, tc := range []struct{ keywords, note string }{
-		{`"#", "@"`, "sysx:declaredKeyword 2 times"},
-		{`"part"`, `sysx:declaredKeyword "part" is not a metadata form`},
+	// not a metadata form is refused there rather than dropped with the body;
+	// a repeated keyword is refused by the graph-wide cardinality gate.
+	for _, tc := range []struct{ keywords, subject, note string }{
+		{`"#", "@"`, "the subject <urn:sysmlv2:element:P__a__", "states sysx:declaredKeyword twice"},
+		{`"part"`, "the element <urn:sysmlv2:element:P__a__", `sysx:declaredKeyword "part" is not a metadata form`},
 	} {
 		edited := strings.Replace(string(turtle), `sysx:declaredKeyword "#"`, `sysx:declaredKeyword `+tc.keywords, 1)
 		if edited == string(turtle) {
@@ -1181,7 +1200,7 @@ func TestPrefixOnAVerbatimHeadIsWrittenOrReported(t *testing.T) {
 		if !errors.As(err, &unsupported) {
 			t.Fatalf("%s: expected an unsupported error, got %v", tc.keywords, err)
 		}
-		for _, want := range []string{"the element <urn:sysmlv2:element:P__a__", tc.note} {
+		for _, want := range []string{tc.subject, tc.note} {
 			if !strings.Contains(err.Error(), want) {
 				t.Errorf("%s: expected %q in error:\n%s", tc.keywords, want, err.Error())
 			}

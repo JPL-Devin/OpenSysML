@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -1555,6 +1556,125 @@ func TestActionSendCallsFunctionImportedByNestedAction(t *testing.T) {
 		t.Fatalf("execute action: %v", err)
 	}
 	assertIntOutput(t, outputs, "got", 3)
+	if pending := ctx.PendingMessages(); len(pending) != 0 {
+		t.Errorf("expected no message left in flight, got %v", pending)
+	}
+}
+
+// A send naming both a signal and a calc calls the calc, whichever import
+// brought it into view first: the value it computes is what travels.
+func TestActionSendCallsACalcSharingASignalsName(t *testing.T) {
+	const src = `
+		package A { item def Count; }
+		package B { private import ScalarValues::*; calc def Count { in xs : Integer[0..*]; return : Integer = 3; } }
+		package P {
+			private import ScalarValues::*;
+			%s
+			action pipeline {
+				attribute got : Integer = 0;
+				first start;
+				action sender { send Count((1, 2, 3)) to reader; }
+				action reader accept n : Integer;
+				action recorder { assign got := n; }
+				done;
+				succession first start then sender;
+				succession first sender then reader;
+				succession first reader then recorder;
+				succession first recorder then done;
+			}
+		}`
+	for _, imports := range []string{
+		"private import A::*; private import B::*;",
+		"private import B::*; private import A::*;",
+	} {
+		idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, fmt.Sprintf(src, imports)))
+		sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+		if sym == nil {
+			t.Fatal("action pipeline not found")
+		}
+		outputs, err := ctx.ExecuteAction(sym)
+		if err != nil {
+			t.Fatalf("%s: execute action: %v", imports, err)
+		}
+		assertIntOutput(t, outputs, "got", 3)
+	}
+}
+
+// A send invoking a feature typed by a calc performs that calc, as an expression
+// does: the value it computes travels, not a message named after the feature.
+func TestActionSendCallsAFeatureTypedByACalc(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		calc def Twice { in x : Integer; return : Integer = 2 * x; }
+		ref count : Twice;
+		action pipeline {
+			attribute got : Integer = 0;
+			first start;
+			action sender { send count(4) to reader; }
+			action reader accept n : Integer;
+			action recorder { assign got := n; }
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then recorder;
+			succession first recorder then done;
+		}
+	}`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action pipeline not found")
+	}
+	outputs, err := ctx.ExecuteAction(sym)
+	if err != nil {
+		t.Fatalf("execute action: %v", err)
+	}
+	assertIntOutput(t, outputs, "got", 8)
+	if pending := ctx.PendingMessages(); len(pending) != 0 {
+		t.Errorf("expected no message left in flight, got %v", pending)
+	}
+}
+
+// A feature typed by a library function — directly, or through a bodiless model calc
+// specializing it — is a calc to send as well: the function's result travels, not a
+// message named after the feature.
+func TestActionSendCallsAFeatureTypedByALibraryFunction(t *testing.T) {
+	for _, decls := range []string{
+		"ref root : sqrt;",
+		"calc def Root :> sqrt; ref root : Root;",
+	} {
+		t.Run(decls, func(t *testing.T) { testActionSendCallsLibraryTypedFeature(t, decls) })
+	}
+}
+
+func testActionSendCallsLibraryTypedFeature(t *testing.T, decls string) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		private import RealFunctions::sqrt;
+		`+decls+`
+		action pipeline {
+			attribute got : Real = 0.0;
+			first start;
+			action sender { send root(16.0) to reader; }
+			action reader accept n : Real;
+			action recorder { assign got := n; }
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then recorder;
+			succession first recorder then done;
+		}
+	}`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action pipeline not found")
+	}
+	outputs, err := ctx.ExecuteAction(sym)
+	if err != nil {
+		t.Fatalf("execute action: %v", err)
+	}
+	if got := outputs["got"]; got.Const.Kind != semantics.ValReal || got.Const.Real != 4 {
+		t.Errorf("got = %+v, want 4.0", got)
+	}
 	if pending := ctx.PendingMessages(); len(pending) != 0 {
 		t.Errorf("expected no message left in flight, got %v", pending)
 	}

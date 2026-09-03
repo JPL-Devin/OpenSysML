@@ -27,6 +27,7 @@ func TestErrorMessages(t *testing.T) {
 		{ErrorConflictingResult, "query Q inherits conflicting result expressions"},
 		{ErrorUnsupportedResult, "query Q result must be one query expression"},
 		{ErrorUnknownInvocation, "query Q invokes unknown operation T"},
+		{ErrorAmbiguousInvocation, "query Q invokes T, ambiguous between A, B, A"},
 		{ErrorPositionalQueryArgs, "query Q must invoke query T with named arguments"},
 		{ErrorDuplicateArgument, "query Q binds parameter p more than once"},
 		{ErrorUnknownArgument, "query Q binds unknown parameter p of T"},

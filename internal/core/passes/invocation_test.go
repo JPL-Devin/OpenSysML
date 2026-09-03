@@ -432,6 +432,37 @@ func TestInvocationPerformedActionSelectsAmongActions(t *testing.T) {
 	wantLibraryDiag(t, fmt.Sprintf(actions, "String"), "type.expr", "argument 1 of tag expects String, found Natural")
 }
 
+// An evaluated call prefers a calc it fits over a same-named action whose input fits
+// the argument more closely: the expression's result is the calc's, so its type is
+// checked against that calc, whichever import names it first; a call only an action
+// fits still invokes the action.
+func TestInvocationEvaluatedCallPrefersACalc(t *testing.T) {
+	const src = `
+		package A {
+			private import ScalarValues::*;
+			action def pick { in x : Integer; out r : Integer; }
+		}
+		package B {
+			private import ScalarValues::*;
+			calc def pick { in x : %s; return : String = "s"; }
+		}
+		package test {
+			private import ScalarValues::*;
+			%s
+			attribute v : Integer = 3;
+			attribute %s
+		}
+	`
+	for _, imports := range []string{
+		"private import A::*; private import B::*;",
+		"private import B::*; private import A::*;",
+	} {
+		wantLibraryClean(t, fmt.Sprintf(src, "Real", imports, `s : String = pick(v);`))
+		wantLibraryDiag(t, fmt.Sprintf(src, "Real", imports, `i : Integer = pick(v);`), "type.expr", "String")
+		wantLibraryClean(t, fmt.Sprintf(src, "Boolean", imports, `i : Integer = pick(v);`))
+	}
+}
+
 // An action usage's value that names only calcs, one or several, performs no
 // action: the checker refuses it as the runtime does, and a call that names no
 // behavior at all keeps its own diagnostic.

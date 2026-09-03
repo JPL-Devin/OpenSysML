@@ -50,9 +50,10 @@ func (d *decoder) verbatim(el *element) (string, bool) {
 }
 
 // expressionText returns the source text an expression node is written as, if
-// it carries one it has not been demoted from.
+// it carries one it has not been demoted from; an Expression element's text is
+// its lines, which verbatim prints, so its structure is rebuilt here.
 func (d *decoder) expressionText(node rdf.Term) (string, bool) {
-	if d.demotedExpr[node.Value] {
+	if _, isElement := d.byIRI[node.Value]; isElement || d.demotedExpr[node.Value] {
 		return "", false
 	}
 	text, ok := d.graph.Lexical(node, rdf.OpenSysML+xSourceText)

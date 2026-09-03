@@ -20,6 +20,7 @@ const (
 	ErrorConflictingResult      ErrorKind = "conflicting-result"
 	ErrorUnsupportedResult      ErrorKind = "unsupported-result"
 	ErrorUnknownInvocation      ErrorKind = "unknown-invocation"
+	ErrorAmbiguousInvocation    ErrorKind = "ambiguous-invocation"
 	ErrorPositionalQueryArgs    ErrorKind = "positional-query-arguments"
 	ErrorDuplicateArgument      ErrorKind = "duplicate-argument"
 	ErrorUnknownArgument        ErrorKind = "unknown-argument"
@@ -74,6 +75,8 @@ func (e *Error) Error() string {
 		return fmt.Sprintf("query %s result must be one query expression", e.Query)
 	case ErrorUnknownInvocation:
 		return fmt.Sprintf("query %s invokes unknown operation %s", e.Query, e.Target)
+	case ErrorAmbiguousInvocation:
+		return fmt.Sprintf("query %s invokes %s, ambiguous between %s", e.Query, e.Target, strings.Join(e.Path, ", "))
 	case ErrorPositionalQueryArgs:
 		return fmt.Sprintf("query %s must invoke query %s with named arguments", e.Query, e.Target)
 	case ErrorDuplicateArgument:
