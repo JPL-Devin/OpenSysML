@@ -149,7 +149,7 @@ var metaCommandTable = []metaCommand{
 	{group: groupLibrary, name: "%render", args: "<name> [form]", desc: "render a view as the rendering it states — as text, or as a Mermaid diagram or a Markdown table"},
 
 	{group: groupRuntime, name: "%instantiate", args: argName, desc: "create an instance of a part def"},
-	{group: groupRuntime, name: "%eval", args: "[in <name> :] <expr>", desc: "evaluate an expression, in the named element or object when one is named"},
+	{group: groupRuntime, name: "%eval", args: "[in <name>|<path>|#<id> :] <expr>", desc: "evaluate an expression, in the named element or object when one is named"},
 	{group: groupRuntime, name: "%features", args: "<name> [all|depth <n>] [json]", desc: "show an object's features and their values, bounded unless all or a depth is asked for; json writes the object graph as the API does"},
 	{group: groupRuntime, name: "%instances", desc: "list all instantiated objects"},
 	{group: groupRuntime, name: "%invoke", args: "<object> <op> [<p>=<expr>]", desc: "invoke an operation of an object's type, performed by that object (a name, a path such as driver.r, or an id such as #3)"},
@@ -173,8 +173,9 @@ var metaCommandTable = []metaCommand{
 	{group: groupAction, name: "%break", args: "<node>", desc: "set breakpoint at node"},
 	{group: groupAction, name: "%stop", desc: "stop current debugging session"},
 
-	{group: groupState, name: "%state", args: "<name> [<object>]", desc: "debug the machine an object exhibits (naming that machine attaches too), or a state machine performed by an object; an object is a name, a path such as driver.r, or an id such as #3"},
-	{group: groupState, name: "%events", desc: "show event queue"},
+	{group: groupState, name: "%state", args: "<name> [<object>]", desc: "debug the machine an object exhibits (naming that machine alone attaches to the one object exhibiting it; with none or several, name the object), or a state machine performed by an object; an object is a name, a path such as driver.r, or an id such as #3"},
+	{group: groupState, name: "%send", args: "<signal>[(<p>=<expr>, ...)] [to <object>]", desc: "send a signal to an object's machine, by default the one being debugged"},
+	{group: groupState, name: "%events", desc: "show event queue and signals in flight"},
 	{group: groupState, name: "%current", desc: "show current state and configuration"},
 	{group: groupState, name: "%advance", args: "<time>", desc: "advance simulation time by <time> units, processing every event due"},
 }
@@ -469,6 +470,8 @@ func (s *Session) metaDebugCommand(fields []string, line string) (metaResult, bo
 			return metaOut([]string{"no elements matched"}, false, nil), true
 		}
 		return metaOut(lines, false, nil), true
+	case "%send":
+		return metaOut(s.doSend(strings.TrimPrefix(strings.TrimSpace(line), "%send"))), true
 	case "%events":
 		return metaOut(s.doEvents()), true
 	case "%current":
@@ -499,7 +502,7 @@ func (s *Session) doInstantiate(name string) ([]string, bool, error) {
 
 // evalUsage is what %eval accepts: an expression, optionally pinned to the
 // context it is evaluated in.
-const evalUsage = "usage: %eval [in <qualified-name> :] <expression>"
+const evalUsage = "usage: %eval [in <qualified-name> | <object-path> | #<id> :] <expression>"
 
 // doEvalLine carries out %eval, in the context the line pins when it names one.
 func (s *Session) doEvalLine(tail string) ([]string, bool, error) {
@@ -569,14 +572,11 @@ func contextSeparator(tail string) int {
 	return -1
 }
 
-// evalIn evaluates an expression in the context the command pinned: the object
-// materialized under that name, whose feature values it then reads as `%eval` does after
+// evalIn evaluates an expression in the context the command pinned: an object
+// the session holds — by id (#3), by feature path (ctx.recv) or by the name it is
+// materialized under — whose feature values it then reads as `%eval` does after
 // `%instantiate`, or else the named element's own namespace.
 func (s *Session) evalIn(name, expr string) ([]string, error) {
-	sym, fqn, lerr := s.lookupSymbol(name)
-	if lerr != nil {
-		return nil, lerr
-	}
 	ctx, err := s.getOrCreateRuntime()
 	if err != nil {
 		return nil, err
@@ -587,6 +587,28 @@ func (s *Session) evalIn(name, expr string) ([]string, error) {
 	}
 	if node == nil {
 		return nil, errors.New("could not parse expression")
+	}
+	if _, isID := objectID(name); isID || isObjectPath(name) {
+		inst, held, oerr := s.objectRef(name)
+		if oerr != nil {
+			return nil, oerr
+		}
+		scope := s.contextScope(inst.Type)
+		if scope == nil {
+			return nil, fmt.Errorf("object #%d names no namespace to evaluate in", inst.ID)
+		}
+		val, err := ctx.EvalWithScopeOn(node, scope, inst)
+		if err != nil {
+			return nil, evalError(expr, err, len(exprPrefix))
+		}
+		return []string{
+			fmt.Sprintf("✓ %s%s", expr, onInstance(inst, held)),
+			fmt.Sprintf("  = %s", formatValue(ctx, val)),
+		}, nil
+	}
+	sym, fqn, lerr := s.lookupSymbol(name)
+	if lerr != nil {
+		return nil, lerr
 	}
 	scope := s.contextScope(sym)
 	if scope == nil {
@@ -610,6 +632,13 @@ func (s *Session) evalIn(name, expr string) ([]string, error) {
 		fmt.Sprintf("✓ %s (in %s)", expr, notationName(fqn)),
 		fmt.Sprintf("  = %s", formatValue(ctx, val)),
 	}, nil
+}
+
+// isObjectPath reports whether text spells a feature path from a name (ctx.recv),
+// which addresses an object rather than a namespace.
+func isObjectPath(text string) bool {
+	_, segments, ok := objectPath(text)
+	return ok && len(segments) > 0
 }
 
 // contextScope is the namespace a pinned context evaluates in: the element's own
@@ -1574,7 +1603,7 @@ func splitTopLevel(text string) [][]string {
 	var groups [][]string
 	var frags []string
 	var frag strings.Builder
-	depth, quoted, named := 0, false, false
+	depth, q := 0, quoteTracker{}
 
 	flushFrag := func() {
 		if frag.Len() > 0 {
@@ -1584,19 +1613,8 @@ func splitTopLevel(text string) [][]string {
 	}
 	for _, r := range text {
 		switch {
-		case quoted:
-			if r == '"' {
-				quoted = false
-			}
-		case named:
-			// A quoted name is one fragment, space and comma included.
-			if r == '\'' {
-				named = false
-			}
-		case r == '"':
-			quoted = true
-		case r == '\'':
-			named = true
+		case q.inside(r):
+			// A string or quoted name is one fragment, space and comma included.
 		case r == '(' || r == '[':
 			depth++
 		case r == ')' || r == ']':
@@ -1621,21 +1639,10 @@ func splitTopLevel(text string) [][]string {
 // binding is the argument's own: an `=` nested in a call, in a bracket or in a
 // string belongs to that expression.
 func isNamedArgument(text string) bool {
-	depth, quoted, named := 0, false, false
+	depth, q := 0, quoteTracker{}
 	for i, r := range text {
 		switch {
-		case quoted:
-			if r == '"' {
-				quoted = false
-			}
-		case named:
-			if r == '\'' {
-				named = false
-			}
-		case r == '"':
-			quoted = true
-		case r == '\'':
-			named = true
+		case q.inside(r):
 		case r == '(' || r == '[':
 			depth++
 		case r == ')' || r == ']':
@@ -2258,6 +2265,25 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 		return nil, fmt.Errorf("%q is not a state machine", name)
 	}
 
+	// A machine named alone runs on the one held object exhibiting it. Zero or
+	// several exhibitors is refused: a detached run would write to no object.
+	if len(performer) == 0 {
+		switch exhibitors := s.exhibitorsOf(ctx, sym); len(exhibitors) {
+		case 0:
+			if types := s.exhibitingTypes(ctx, sym); len(types) > 0 {
+				return nil, s.exhibitorsError(name, types, nil)
+			}
+		case 1:
+			ex := exhibitors[0]
+			if len(ex.machines) > 1 {
+				return nil, s.ambiguousMachine(name, ex.inst, ex.name, ex.machines)
+			}
+			return s.attachExhibitedMachine(ctx, name, heldName(ex.inst, ex.name), ex.inst, ex.machines[0])
+		default:
+			return nil, s.exhibitorsError(name, nil, exhibitors)
+		}
+	}
+
 	self, selfFQN, perr := s.performingObject(performer)
 	if perr != nil {
 		return nil, perr
@@ -2301,12 +2327,15 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 	}
 	s.endedState = nil
 
-	return []string{
-		fmt.Sprintf("✓ Started state machine executor for %q", name),
+	lines := []string{fmt.Sprintf("✓ Started state machine executor for %q", name)}
+	if self != nil {
+		lines = append(lines, fmt.Sprintf("  Performed by object #%d of %q, which exhibits no running machine of this kind", self.ID, notationName(selfFQN)))
+	}
+	return append(lines,
 		fmt.Sprintf("  Current state: %s", currentStateName(exec)),
-		timeLabel + runtime.FormatReal(exec.CurrentTime()),
+		timeLabel+runtime.FormatReal(exec.CurrentTime()),
 		fmt.Sprintf("  Events: %d", exec.EventQueue().Len()),
-	}, nil
+	), nil
 }
 
 // debugExhibitedMachine binds the debugging session to the machine an object
@@ -2409,6 +2438,9 @@ func (s *Session) stateStep(exec *runtime.StateExecutor) (string, error) {
 			return "", fmt.Errorf("event processing failed: %w", err)
 		}
 		s.stateExec.now = math.Max(s.stateExec.now, exec.CurrentTime())
+		if note := droppedSignalNote(exec); note != "" {
+			return "Event dispatched, but " + note, nil
+		}
 		return "Event dispatched", nil
 	}
 	if exec.HasPendingDoWork() {
@@ -2506,16 +2538,50 @@ func (s *Session) doEvents() ([]string, bool, error) {
 
 	exec := s.stateExec.executor
 	queue := exec.EventQueue()
+	signals, err := s.signalsInFlight(exec)
+	if err != nil {
+		return nil, false, err
+	}
+	deferred := exec.DeferredEvents()
 
-	if queue.Len() == 0 {
+	if queue.Len() == 0 && len(signals) == 0 && len(deferred) == 0 {
 		return []string{"Event queue empty"}, false, nil
 	}
 
 	// Note: EventQueue doesn't expose events directly, so just show count
-	return []string{
-		fmt.Sprintf("Event queue: %d events", queue.Len()),
-		"Use %advance <time> to process next event",
-	}, false, nil
+	var out []string
+	if queue.Len() > 0 {
+		out = append(out, fmt.Sprintf("Event queue: %d events", queue.Len()))
+	}
+	if len(signals) > 0 {
+		out = append(out, fmt.Sprintf("Signals in flight: %d", len(signals)))
+		for _, msg := range signals {
+			out = append(out, "  "+signalText(msg))
+		}
+	}
+	if len(deferred) > 0 {
+		out = append(out, fmt.Sprintf("Deferred by the active state, held until it leaves: %d", len(deferred)))
+		for _, event := range deferred {
+			out = append(out, "  "+eventText(event))
+		}
+	}
+	return append(out, "Use %advance <time> to process next event"), false, nil
+}
+
+// signalsInFlight lists the messages on the bus the debugged machine would
+// deliver on its next step.
+func (s *Session) signalsInFlight(exec *runtime.StateExecutor) ([]runtime.Message, error) {
+	var out []runtime.Message
+	for _, msg := range s.stateExec.rtCtx.PendingMessages() {
+		accepted, err := exec.AcceptsMessage(msg)
+		if err != nil {
+			return nil, fmt.Errorf("state machine %q cannot accept %s: %w", s.stateExec.name, signalText(msg), err)
+		}
+		if accepted {
+			out = append(out, msg)
+		}
+	}
+	return out, nil
 }
 
 // doCurrent shows current state and configuration.
@@ -2627,6 +2693,7 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 	maxEvents, maxDoActions := s.budgets.MaxStateEvents, s.budgets.MaxDoSteps
 	startTime := exec.CurrentTime()
 	var processed, doActions int64
+	var dropped []string
 	for exec.State() == runtime.StateRunning &&
 		processed < maxEvents && doActions < maxDoActions {
 		// The poll comes first, and runs once more at quiescence, so a condition
@@ -2642,11 +2709,12 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 		}
 		// A signal in flight is due now, whatever the deadline: dispatching it is
 		// the step RunToCompletion would take here.
-		if exec.EventQueue().Len() == 0 && exec.HasPendingSignal() {
+		if exec.HasPendingSignal() {
 			if err := exec.ProcessNextEvent(); err != nil {
 				return nil, fmt.Errorf("event processing failed: %w", err)
 			}
 			processed++
+			dropped = appendNote(dropped, droppedSignalNote(exec))
 			continue
 		}
 		if queue := exec.EventQueue(); queue.Len() == 0 || queue.Peek().Timestamp > deadline {
@@ -2669,6 +2737,7 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 			return nil, fmt.Errorf("event processing failed: %w", err)
 		}
 		processed++
+		dropped = appendNote(dropped, droppedSignalNote(exec))
 	}
 	s.stateExec.now = math.Max(deadline, exec.CurrentTime())
 
@@ -2691,6 +2760,9 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 
 	if doActions > 0 {
 		out = append(out, fmt.Sprintf("  Do behavior actions run: %d", doActions))
+	}
+	for _, note := range dropped {
+		out = append(out, "  "+note)
 	}
 
 	// A drain the bound cut short has work left, so say so rather than let it

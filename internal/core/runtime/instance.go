@@ -51,6 +51,10 @@ type Instance struct {
 	// through it.
 	owner        *Instance
 	ownerFeature string
+
+	// explicit marks an object a caller asked for by name, which stands on its
+	// own even where its usage is a feature of a type.
+	explicit bool
 }
 
 // Owner answers the object holding this one and the feature of it that does, or
@@ -125,9 +129,29 @@ func isValueTypeSymbol(sym *symbols.Symbol) bool {
 // performs and runs them to quiescence. Returns the instance or an error.
 //
 // Each call materializes a distinct object with an identity and behaviors of its
-// own; occurrenceOf is the path that reads one object of a usage twice.
+// own. The object becomes what the usage denotes from then on, so an expression
+// naming the usage or a feature path under it reads this object as it was run.
 func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
-	return ctx.instantiateAs(sym, 0)
+	mark := len(ctx.created)
+	inst, err := ctx.materializeOwnedBy(sym, 0, nil, "")
+	if err != nil {
+		ctx.abandonInstancesSince(mark)
+		return nil, err
+	}
+	// Registered before its behaviors start, so one of them naming the usage
+	// reaches this object; a failed start abandons the occurrence with it.
+	inst.explicit = true
+	prior, hadPrior := ctx.occurrences[sym]
+	if ctx.namesOneObject(sym) {
+		ctx.occurrences[sym] = inst.ID
+	}
+	if err := ctx.startClassifierBehaviors(inst, mark); err != nil {
+		if hadPrior {
+			ctx.occurrences[sym] = prior
+		}
+		return nil, err
+	}
+	return inst, nil
 }
 
 // instantiateAs materializes an object under the given identity, falling back to
@@ -324,11 +348,16 @@ func isScalarFeature(feat *EffectiveFeature) bool {
 // checkDefault reports a value the feature does not admit: a count outside its
 // multiplicity (1..1 when none is declared) or an element outside its type.
 func (ctx *Context) checkDefault(inst *Instance, fv *FeatureValue, name string, val Value) error {
-	what := fmt.Sprintf("feature value %s.%s", inst.Type.Name, name)
-	if msg := fv.Feature.Multiplicity.CountViolation(elementCount(&val)); msg != "" {
+	return ctx.checkAdmits(fv.Feature, fmt.Sprintf("feature value %s.%s", inst.Type.Name, name), val)
+}
+
+// checkAdmits reports a value the feature does not admit, by count or by type,
+// naming the value as what.
+func (ctx *Context) checkAdmits(feat *EffectiveFeature, what string, val Value) error {
+	if msg := feat.Multiplicity.CountViolation(elementCount(&val)); msg != "" {
 		return fmt.Errorf("%s: %w: %s", what, ErrMultiplicityViolation, msg)
 	}
-	return ctx.checkWriteType(fv.Feature.DeclScope(), what, fv.Feature.Type, val)
+	return ctx.checkWriteType(feat.DeclScope(), what, feat.Type, val)
 }
 
 // GetFeatureValue retrieves the feature value for the named feature, materializing it lazily
@@ -362,6 +391,7 @@ func (inst *Instance) SetFeatureValue(ctx *Context, name string, value Value) er
 	if err := ctx.checkDefault(inst, fv, name, value); err != nil {
 		return err
 	}
+	ctx.noteProbeWrite(fv)
 	if isScalarFeature(fv.Feature) {
 		fv.Value = value
 		fv.Values = Value{}
@@ -411,6 +441,7 @@ func (inst *Instance) materializeFeatureValue(ctx *Context, name string) (*Featu
 // binding connectors; binding resolution calls it to inspect an endpoint.
 func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string) (*FeatureValue, error) {
 	fv := inst.FeatureValues[name]
+	ctx.noteProbeWrite(fv)
 
 	// A variation holds the variant it was bound to, and nothing until it is
 	// bound: it classifies its variants abstractly, so it is no object of itself.

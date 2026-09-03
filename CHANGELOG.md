@@ -124,6 +124,30 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   classed by the construct it names. The mapping's reference now states that measurement in place
   of the claim that a second conversion yields the same graph, which held for the fixtures alone
   ([docs/project/rdf-corpus-roundtrip.md](docs/project/rdf-corpus-roundtrip.md)).
+- **The REPL sends a signal into a running machine.** `%send go` and
+  `%send Dim(level=3+4) to bulb` put the signal on the runtime's message bus exactly as a
+  `send` from an action body would, so a `transition ... accept go then on` is driven from the
+  prompt without writing an action just to fire it: `%events` lists the signal in flight, and
+  `%step` or `%advance` dispatches it. Without `to`, the signal goes to the object whose machine
+  the `%state` session is debugging, and with no session the command says so rather than
+  guessing. Arguments are written `<parameter>=<expression>` as for `%invoke` and are checked
+  against the signal's declaration — the feature it names, and the type and multiplicity that
+  feature admits — before anything is sent; an unresolved signal name gets the usual unresolved-reference
+  report, an object that runs no machine is reported as such, and a signal nothing in the
+  machine's current state accepts is refused up front with the state named, never queued to be
+  dropped in silence — and so is one whose every triggered transition is held back by its guard,
+  decided as the dispatch would decide it with the payload bound; a guard that cannot be evaluated
+  is an error. A signal the current state defers rather than accepts is sent and said to be
+  deferred: the step dispatching it holds it, `%events` lists it as held, and it is recalled to
+  fire once the machine reaches a state that accepts it — as a machine now holds any message
+  addressed to it that its active state defers, instead of leaving it on the bus. A signal in
+  flight is due now, so a single step dispatches it ahead of a timer set
+  for later, as a run holding time where it is would; a step that dispatches a signal no transition
+  fires on, because the state or the data its guards read changed since it was sent, says so.
+  When an object runs several machines, `%send` decides the signal with each of them and reports
+  which would fire on it, and a machine whose guards would drop it leaves it in flight for a
+  sibling that fires on or defers it — at the prompt and in a run alike — so the machine `%send`
+  named as accepting a signal is the one that gets it.
 
 ### Performance
 
@@ -190,6 +214,26 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   fixtures under `internal/core/runtime/testdata/compiled/` run each construct through both tiers.
 
 ### Fixed
+
+- **`%state <machine>` drives the object that exhibits the machine.** Naming an exhibited
+  machine alone (`%state lp` after `%instantiate TA::Sys`, or `-state lp` on the command line)
+  used to start a detached performance of it, one with no performing object: `%advance` reported
+  the timer events it dispatched, but the `do`, `entry` and `effect` writes of that run went to
+  the detached run's own frame, so `%features #1` still showed the values `%instantiate` had
+  left (`n = 1` for `n = 3`), while `%state #1` over the same object was right. The form now
+  attaches to the running machine of the one held object exhibiting it — the same object
+  `%instances` and `%features #1` show — so the two forms agree. When no held object exhibits
+  the machine, or several do, `%state` refuses with a typed error (`ExhibitorsError`) naming
+  the objects and both forms that address one (`%state <object>`, `%state <machine>
+  <object>`), rather than guessing or performing the machine detached; with no object yet
+  held, it names the types whose objects run the machine, whether they exhibit it inline,
+  through usages typed by a shared definition (`exhibit state front : Blink`), or through a
+  usage referencing another (`state spare : Blink; exhibit state active ::> spare;`): every
+  binding on the way to the body addresses the machine, with the object named or alone. A
+  definition one object exhibits as several usages refuses as it does with the object named.
+  Held objects are the ones the session has built: a nested part counts once it has been
+  reached, by `%features` or a machine that wrote it. A machine no type exhibits (`state def
+  Blink` alone) still starts as before, since no object's performance of it exists to attach to.
 
 - **A qualified name through an import evaluates as the checker resolves it.** The evaluator
   used to resolve only the first segment of `Bq::x` through the resolver and walk the rest as
@@ -312,6 +356,21 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   document gains a paragraph and diagram on invoking a calc.
 
 ### Fixed
+
+- **An expression evaluated after `-instantiate` reads the object that was created and run.**
+  `sysml model.sysml -instantiate P::ctx -e "ctx.recv.got"`, the bare line `ctx.recv.got` after
+  `%instantiate P::ctx`, and even `%eval in P::ctx : recv.got` — which printed
+  `(on P::ctx ID: 1)` — answered `0` while `%features #1` showed `got = 1` for that same object:
+  a name in the expression materialized a fresh object of the usage instead of the one
+  `%instantiate` created, and a nested part whose machine sends or accepts a signal ran only
+  once something read it, so what a read saw depended on the order the parts were first
+  inspected in. An instantiated usage now denotes the object created under it, and creating an
+  object materializes and runs the nested parts whose types exhibit or perform behaviors with
+  it, so the whole runs to quiescence once and every later read — a CLI `-e`, a piped
+  expression line, `%eval`, `%eval in` and `%features` — reports the same values.
+  `%eval in` also takes an object the way `%features` and `%state` do: by id (`%eval in #1 :
+  recv.got`) or by a path under a named object (`%eval in ctx.recv : got`), and its usage line
+  lists the forms. (Open-MBEE/OpenSysML#91)
 
 - **Messages cross a binding connector at an assembly's boundary port, in both directions**
   (Open-MBEE/OpenSysML#92). An assembly that binds its boundary port to a port of a part it

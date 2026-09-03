@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -28,6 +29,12 @@ type ObjectBehavior struct {
 	// member is the declaration binding the behavior to the object's type, which
 	// tells two behaviors apart even when neither is named.
 	member *symbols.Symbol
+	// bindings is the chain from member to Symbol: each element names the next,
+	// so a machine addressed by any of them is this one.
+	bindings []*symbols.Symbol
+	// binding is member's position among the type's behavior bindings, which
+	// outlives the symbols and so tells the behavior a restart puts in its place.
+	binding int
 	// State is the machine the object exhibits, nil for a performed action.
 	State *StateExecutor
 	// Action is the action the object performs, nil for an exhibited machine.
@@ -97,8 +104,9 @@ func (inst *Instance) ExhibitedState() (*ObjectBehavior, bool) {
 }
 
 // ExhibitedStatesOf returns the machines the object exhibits under sym's declaration:
-// the one sym itself binds, or else every one running sym's body, since one
-// definition can be the body of several exhibited usages. Declarations are compared.
+// the one sym itself binds, or else every one reaching sym through its bindings
+// (the usage it names, or the definition holding its body), since one definition
+// can be the body of several exhibited usages. Declarations are compared.
 func (inst *Instance) ExhibitedStatesOf(sym *symbols.Symbol) []*ObjectBehavior {
 	if sym == nil || sym.Decl == nil {
 		return nil
@@ -111,11 +119,35 @@ func (inst *Instance) ExhibitedStatesOf(sym *symbols.Symbol) []*ObjectBehavior {
 		if b.member != nil && b.member.Decl == sym.Decl {
 			return []*ObjectBehavior{b}
 		}
-		if b.Symbol != nil && b.Symbol.Decl == sym.Decl {
+		if len(b.bindings) > 1 && declaresAny(b.bindings[1:], sym) {
 			bodies = append(bodies, b)
 		}
 	}
 	return bodies
+}
+
+// ExhibitsState reports whether member is an exhibit declaration whose objects
+// run sym's machine: member itself, or anything its bindings reach. Declarations are compared.
+func (ctx *Context) ExhibitsState(member, sym *symbols.Symbol) bool {
+	if member == nil || member.Decl == nil || sym == nil || sym.Decl == nil {
+		return false
+	}
+	behavior, ok := lower.ClassifierBehaviorOf(member.Decl)
+	if !ok || behavior.Kind != lower.ExhibitedState {
+		return false
+	}
+	chain, err := ctx.classifierBehaviorChain(classifierBehaviorDecl{behavior: behavior, member: member})
+	return err == nil && declaresAny(chain, sym)
+}
+
+// declaresAny reports whether one of syms declares what sym declares.
+func declaresAny(syms []*symbols.Symbol, sym *symbols.Symbol) bool {
+	for _, s := range syms {
+		if s != nil && s.Decl == sym.Decl {
+			return true
+		}
+	}
+	return false
 }
 
 // Member is the declaration binding the behavior to the object's type: the
@@ -190,8 +222,27 @@ func (ctx *Context) abandonInstancesSince(mark int) {
 			delete(ctx.occurrences, sym)
 		}
 	}
+	ctx.forgetVariantsNaming(abandoned)
 	ctx.forgetValuesNaming(abandoned)
 	ctx.forgetMessagesTo(abandoned)
+}
+
+// forgetVariantsNaming unselects every variant whose object is abandoned, so the
+// selection is made again, and its object built again, when next read.
+func (ctx *Context) forgetVariantsNaming(abandoned map[int64]bool) {
+	for key, id := range ctx.variantObjects {
+		if !abandoned[id] {
+			continue
+		}
+		delete(ctx.variantObjects, key)
+		if key.variation == nil {
+			continue
+		}
+		selection := variantSelection{owner: key.owner, variation: key.variation.Name}
+		if ctx.selectedVariants[selection] == key.variant.Name {
+			delete(ctx.selectedVariants, selection)
+		}
+	}
 }
 
 // forgetValuesNaming unmaterializes every feature value of a surviving object
@@ -209,15 +260,26 @@ func (ctx *Context) forgetValuesNaming(abandoned map[int64]bool) {
 	}
 }
 
-// namesAbandoned reports whether a feature value holds an object that is gone.
+// namesAbandoned reports whether a feature value holds an object that is gone,
+// directly or as the object a selected variant stands for.
 func namesAbandoned(fv *FeatureValue, abandoned map[int64]bool) bool {
-	if fv.Value.Kind == ValInstance && abandoned[fv.Value.Instance] {
+	if namesAbandonedObject(fv.Value, abandoned) {
 		return true
 	}
 	for _, val := range elementsOf(fv.Values) {
-		if val.Kind == ValInstance && abandoned[val.Instance] {
+		if namesAbandonedObject(val, abandoned) {
 			return true
 		}
+	}
+	return false
+}
+
+// namesAbandonedObject reports whether a value is, or a variant standing for, an
+// object that is gone.
+func namesAbandonedObject(val Value, abandoned map[int64]bool) bool {
+	switch val.Kind {
+	case ValInstance, ValVariant:
+		return abandoned[val.Instance]
 	}
 	return false
 }
@@ -256,15 +318,86 @@ func (ctx *Context) startBehaviorsOfAll(objects []*Instance) error {
 			ctx.behaviorRunDepth--
 			return err
 		}
+		if err := ctx.materializeBehavingParts(inst); err != nil {
+			ctx.behaviorRunDepth--
+			return err
+		}
 	}
 	ctx.behaviorRunDepth--
 	return ctx.runAttachedBehaviors()
 }
 
+// materializeBehavingParts materializes the required composite parts of an
+// object whose type runs behaviors, so the object runs to quiescence as a whole
+// when it is created rather than part by part in the order its parts are first
+// read. An optional part (lower bound 0) is required to hold nothing, so it is
+// left unread. A part that fails to materialize or start fails its holder.
+func (ctx *Context) materializeBehavingParts(inst *Instance) error {
+	for _, feat := range ctx.FeaturesOf(inst.Type) {
+		fv, ok := inst.FeatureValues[feat.Name]
+		if !ok || fv.Materialized || ctx.model.IsConnectorUsage(feat.Symbol) {
+			continue
+		}
+		composite := ctx.requiredPartType(fv.Feature)
+		if composite == nil || !ctx.runsBehaviors(composite, make(map[*symbols.Symbol]bool)) {
+			continue
+		}
+		if _, err := inst.GetFeatureValue(ctx, feat.Name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// requiredPartType is the type of the objects a composite feature is required to
+// hold, or nil when it may hold none: an optional part (finite lower bound 0) or
+// one whose lower bound is unknown.
+func (ctx *Context) requiredPartType(feat *EffectiveFeature) *symbols.Symbol {
+	composite := ctx.CompositeTypeOf(feat)
+	mult := feat.Multiplicity
+	if composite == nil || !mult.Lower.Known {
+		return nil
+	}
+	if !mult.Lower.Infinite && mult.Lower.Value == 0 {
+		return nil
+	}
+	return composite
+}
+
+// runsBehaviors reports whether objects of a type run behaviors, of their own or
+// of a part they are required to hold; an optional part is left absent, so what
+// it would run does not count. A type on the path being decided answers false: a
+// composition cycle has no finite object, so nothing is lost by cutting it.
+func (ctx *Context) runsBehaviors(typeSym *symbols.Symbol, visiting map[*symbols.Symbol]bool) bool {
+	if known, ok := ctx.behaving[typeSym]; ok {
+		return known
+	}
+	if visiting[typeSym] {
+		return false
+	}
+	visiting[typeSym] = true
+	defer delete(visiting, typeSym)
+	runs := len(ctx.classifierBehaviorsOf(typeSym)) > 0
+	features := ctx.FeaturesOf(typeSym)
+	for i := range features {
+		if runs {
+			break
+		}
+		if ctx.model.IsConnectorUsage(features[i].Symbol) {
+			continue
+		}
+		if composite := ctx.requiredPartType(&features[i]); composite != nil && ctx.runsBehaviors(composite, visiting) {
+			runs = true
+		}
+	}
+	ctx.behaving[typeSym] = runs
+	return runs
+}
+
 // startBehaviorsOf attaches the object's behaviors and, at the outermost start,
 // runs everything attached.
 func (ctx *Context) startBehaviorsOf(inst *Instance) error {
-	for _, decl := range ctx.classifierBehaviorsOf(inst.Type) {
+	for i, decl := range ctx.classifierBehaviorsOf(inst.Type) {
 		if inst.runsBound(decl.member) {
 			continue
 		}
@@ -275,6 +408,7 @@ func (ctx *Context) startBehaviorsOf(inst *Instance) error {
 		if err != nil {
 			return err
 		}
+		behavior.binding = i
 		inst.behaviors = append(inst.behaviors, behavior)
 		ctx.pendingBehaviors = append(ctx.pendingBehaviors, behavior)
 		ctx.objectBehaviors = append(ctx.objectBehaviors, behavior)
@@ -347,14 +481,20 @@ func (ctx *Context) drainObjectBehaviors() error {
 }
 
 // nextRunnableBehavior returns the next behavior with work to do: one not yet
-// started, else one holding an event delivered while it was suspended.
+// started, else one holding an event delivered while it was suspended. Under a
+// probe only a behavior the probe attached is run: what one outliving the probe
+// does cannot be undone.
 func (ctx *Context) nextRunnableBehavior() (*ObjectBehavior, bool) {
-	if len(ctx.pendingBehaviors) > 0 {
-		behavior := ctx.pendingBehaviors[0]
-		ctx.pendingBehaviors = ctx.pendingBehaviors[1:]
+	first, attached := 0, 0
+	if ctx.probes > 0 {
+		first, attached = min(ctx.probePending, len(ctx.pendingBehaviors)), ctx.probeBehaviors
+	}
+	if first < len(ctx.pendingBehaviors) {
+		behavior := ctx.pendingBehaviors[first]
+		ctx.pendingBehaviors = slices.Delete(ctx.pendingBehaviors, first, first+1)
 		return behavior, true
 	}
-	for _, behavior := range ctx.objectBehaviors {
+	for _, behavior := range ctx.objectBehaviors[attached:] {
 		if behavior.hasPendingWork() {
 			return behavior, true
 		}
@@ -382,10 +522,11 @@ func (b *ObjectBehavior) hasPendingWork() bool {
 // type binds, seeded with the values the binding declaration supplies, and
 // initializes it so its start is reported where every other behavior's is.
 func (ctx *Context) attachClassifierBehavior(inst *Instance, decl classifierBehaviorDecl) (*ObjectBehavior, error) {
-	sym, err := ctx.classifierBehaviorSymbol(decl)
+	chain, err := ctx.classifierBehaviorChain(decl)
 	if err != nil {
 		return nil, err
 	}
+	sym := chain[len(chain)-1]
 
 	arguments, err := ctx.classifierBehaviorArguments(inst, decl)
 	if err != nil {
@@ -393,11 +534,12 @@ func (ctx *Context) attachClassifierBehavior(inst *Instance, decl classifierBeha
 	}
 
 	behavior := &ObjectBehavior{
-		Name:   decl.behavior.Name,
-		Kind:   decl.behavior.Kind,
-		Symbol: sym,
-		Object: inst,
-		member: decl.member,
+		Name:     decl.behavior.Name,
+		Kind:     decl.behavior.Kind,
+		Symbol:   sym,
+		Object:   inst,
+		member:   decl.member,
+		bindings: chain,
 	}
 
 	switch decl.behavior.Kind {
@@ -479,6 +621,7 @@ func (ctx *Context) performanceOccurrence(
 			return nil, fmt.Errorf("%w: materialize %s of object #%d: %w",
 				sentinel, name, inst.ID, err)
 		}
+		ctx.noteProbeWrite(fv)
 		fv.Value = Value{Kind: ValInstance, Instance: occurrence.ID}
 		fv.Materialized = true
 		return occurrence, nil
@@ -517,26 +660,39 @@ func (b *ObjectBehavior) run() error {
 // declaration runs: the declaration itself when it states one, otherwise what it
 // names — the feature it refers to or the definition it is typed by.
 func (ctx *Context) classifierBehaviorSymbol(decl classifierBehaviorDecl) (*symbols.Symbol, error) {
+	chain, err := ctx.classifierBehaviorChain(decl)
+	if err != nil {
+		return nil, err
+	}
+	return chain[len(chain)-1], nil
+}
+
+// classifierBehaviorChain resolves the bindings from a binding declaration to the
+// element holding the body it runs: the declaration first, then what each names in
+// turn, ending at the one stating a body.
+func (ctx *Context) classifierBehaviorChain(decl classifierBehaviorDecl) ([]*symbols.Symbol, error) {
 	sym := decl.member
+	chain := []*symbols.Symbol{sym}
 	for depth := 0; depth < maxBehaviorBindingDepth; depth++ {
 		stated := sym == decl.member && decl.behavior.StatesBody
 		if !stated && sym != decl.member {
 			stated = statesBehaviorBody(sym)
 		}
 		if stated {
-			return sym, nil
+			return chain, nil
 		}
 		next := ctx.namedBehavior(sym)
 		if next == nil || next == sym {
 			// A declaration naming nothing that holds a body is not executable:
 			// the type binds a behavior no element states.
 			if sym != decl.member {
-				return sym, nil
+				return chain, nil
 			}
 			return nil, fmt.Errorf("%w: %s %s of %s names no behavior body",
 				ErrUnresolvedClassifierBehavior, decl.behavior.Kind, decl.behavior.Name, symbolText(decl.member))
 		}
 		sym = next
+		chain = append(chain, sym)
 	}
 	return nil, fmt.Errorf("%w: %s %s of %s names itself through %d bindings",
 		ErrUnresolvedClassifierBehavior, decl.behavior.Kind, decl.behavior.Name, symbolText(decl.member), maxBehaviorBindingDepth)
