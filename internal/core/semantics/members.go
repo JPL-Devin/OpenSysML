@@ -49,8 +49,10 @@ func (m *Model) membersOf(sym *symbols.Symbol, view memberView, declaring *symbo
 	if sym == nil {
 		return nil
 	}
-	if target, ok := m.resolver.ResolveAliasTarget(sym); ok {
-		sym = target
+	if m.resolver != nil {
+		if target, ok := m.resolver.ResolveAliasTarget(sym); ok {
+			sym = target
+		}
 	}
 	var out []*symbols.Symbol
 	seenName := make(map[string]bool)

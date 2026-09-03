@@ -1,7 +1,10 @@
 package lower
 
 import (
+	"strings"
 	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 )
 
 // A block declaring an action node is lowered to a flow of its own: the runs of
@@ -63,23 +66,31 @@ func TestBlockDeclaringAnActionNodeIsLoweredToAFlow(t *testing.T) {
 		t.Errorf("the first node runs %d statements, want the 2 written together", got)
 	}
 
-	// The nested action declaration is a block of its own, holding its statements
-	// in the namespace it declares.
-	nested, ok := flow.Bodies[flow.Nodes[1]][0].(Block)
-	if !ok {
-		t.Fatalf("nested action lowered to %#v, want a block of its own", flow.Bodies[flow.Nodes[1]][0])
-	}
-	if len(nested.Statements) != 1 {
-		t.Errorf("nested action holds %d statements, want 1", len(nested.Statements))
+	// The nested action declaration is a node performed in a frame of its own,
+	// whose body holds its statements.
+	if body := flow.Bodies[flow.Nodes[1]]; len(body) != 1 {
+		t.Errorf("nested action holds %d statements, want 1: %#v", len(body), body)
+	} else if _, ok := body[0].(Assign); !ok {
+		t.Errorf("nested action's statement lowered to %#v, want its assignment", body[0])
 	}
 	if flow.StatementRuns[flow.Nodes[1]] {
 		t.Errorf("the nested action node is recorded as a run of statements")
 	}
 
-	// The `perform` is a node of the flow, performed when the token reaches it.
-	effect, ok := flow.Bodies[flow.Nodes[2]][0].(Effect)
-	if !ok || effect.Kind != EffectPerform {
-		t.Errorf("perform lowered to %#v, want a perform effect", flow.Bodies[flow.Nodes[2]][0])
+	// The `perform` is a node of the flow too, performed when the token reaches
+	// it: a usage with no body of its own, naming the action it performs.
+	if performed, ok := flow.Nodes[2].(*ast.Usage); !ok || performed.Keyword != "perform" {
+		t.Errorf("perform lowered to %#v, want the perform usage as a node", flow.Nodes[2])
+	}
+	if body := flow.Bodies[flow.Nodes[2]]; len(body) != 0 {
+		t.Errorf("perform holds %d statements, want none: %#v", len(body), body)
+	}
+
+	// The action nodes the loop body declares are recorded as those of the node
+	// running the loop, so a read of `bump.x` finds the node by name.
+	declared := graph.BlockNodes[nodeNamed(t, graph, "accumulate")]
+	if len(declared) != 2 || declared[0] != flow.Nodes[1] || declared[1] != flow.Nodes[2] {
+		t.Errorf("accumulate declares block nodes %#v, want the nested action and the perform", declared)
 	}
 }
 
@@ -110,9 +121,10 @@ func TestBlockFlowNestsTwoLevels(t *testing.T) {
 	if block.Graph == nil {
 		t.Fatalf("loop body lowered to statements, want a flow of its own: %#v", block)
 	}
-	outer, ok := block.Graph.Bodies[block.Graph.Nodes[0]][0].(Block)
+	outerNode := block.Graph.Nodes[0]
+	outer, ok := block.Graph.Bodies[outerNode][0].(Block)
 	if !ok {
-		t.Fatalf("outer action lowered to %#v, want a block", block.Graph.Bodies[block.Graph.Nodes[0]][0])
+		t.Fatalf("outer action lowered to %#v, want a block", block.Graph.Bodies[outerNode][0])
 	}
 	if outer.Graph == nil {
 		t.Fatalf("outer action lowered to statements, want a flow of its own: %#v", outer)
@@ -120,12 +132,20 @@ func TestBlockFlowNestsTwoLevels(t *testing.T) {
 	if len(outer.Graph.Nodes) != 2 {
 		t.Fatalf("outer flow has %d nodes, want the assignment and the nested action", len(outer.Graph.Nodes))
 	}
-	inner, ok := outer.Graph.Bodies[outer.Graph.Nodes[1]][0].(Block)
-	if !ok {
-		t.Fatalf("inner action lowered to %#v, want a block", outer.Graph.Bodies[outer.Graph.Nodes[1]][0])
+	innerNode := outer.Graph.Nodes[1]
+	if body := outer.Graph.Bodies[innerNode]; len(body) != 1 {
+		t.Errorf("inner action holds %d statements, want 1: %#v", len(body), body)
+	} else if _, ok := body[0].(Assign); !ok {
+		t.Errorf("inner action's statement lowered to %#v, want its assignment", body[0])
 	}
-	if len(inner.Statements) != 1 {
-		t.Errorf("inner action holds %d statements, want 1", len(inner.Statements))
+
+	// Each level records the nodes its blocks declare: the loop's body declares
+	// outer, and outer's own flow declares inner.
+	if declared := graph.BlockNodes[nodeNamed(t, graph, "accumulate")]; len(declared) != 1 || declared[0] != outerNode {
+		t.Errorf("accumulate declares block nodes %#v, want outer alone", declared)
+	}
+	if declared := block.Graph.BlockNodes[outerNode]; len(declared) != 1 || declared[0] != innerNode {
+		t.Errorf("outer declares block nodes %#v, want inner alone", declared)
 	}
 }
 
@@ -163,8 +183,8 @@ func TestBlockStatingItsOwnEdgeKeepsItsStatements(t *testing.T) {
 	}
 }
 
-// A block's parameters are lowered where the block's flow reaches them: an input
-// carrying a value declares it, an output carrying one binds it outward.
+// A nested action's parameters are features of its performance, recorded with
+// the values their declarations give them, and no statement of its body.
 func TestNestedActionParametersAreLowered(t *testing.T) {
 	graph := actionGraphFor(t, `
 		action test {
@@ -190,20 +210,147 @@ func TestNestedActionParametersAreLowered(t *testing.T) {
 	if block.Graph == nil {
 		t.Fatalf("loop body lowered to statements, want a flow of its own: %#v", block)
 	}
-	nested, ok := block.Graph.Bodies[block.Graph.Nodes[0]][0].(Block)
-	if !ok {
-		t.Fatalf("nested action lowered to %#v, want a block", block.Graph.Bodies[block.Graph.Nodes[0]][0])
+	nested := block.Graph.Nodes[0]
+	body := block.Graph.Bodies[nested]
+	if len(body) != 1 {
+		t.Fatalf("nested action holds %d statements, want its one assignment: %#v", len(body), body)
 	}
-	if len(nested.Statements) != 3 {
-		t.Fatalf("nested action holds %d statements, want 3: %#v", len(nested.Statements), nested.Statements)
+	if assigned, ok := body[0].(Assign); !ok || assigned.Target != "total" {
+		t.Errorf("nested action's statement lowered to %#v, want the assignment to total", body[0])
 	}
-	declared, ok := nested.Statements[0].(Declare)
-	if !ok || declared.Name != "stride" {
-		t.Errorf("input parameter lowered to %#v, want a declaration of stride", nested.Statements[0])
+	features := block.Graph.Features[nested]
+	if len(features) != 3 {
+		t.Fatalf("nested action declares %d features, want stride, reached and result: %#v", len(features), features)
 	}
-	bound, ok := nested.Statements[2].(Assign)
-	if !ok || bound.Target != "result" {
-		t.Errorf("output parameter lowered to %#v, want an assignment to result", nested.Statements[2])
+	for i, want := range []struct {
+		name      string
+		direction ast.FeatureDirection
+		valued    bool
+	}{{"stride", ast.DirIn, true}, {"reached", ast.DirOut, false}, {"result", ast.DirOut, true}} {
+		got := features[i]
+		if got.Name != want.name || got.Direction != want.direction || (got.Value != nil) != want.valued {
+			t.Errorf("feature %d lowered to %#v, want %s %s valued=%v", i, got, want.direction, want.name, want.valued)
+		}
+	}
+}
+
+func TestBlockBindingsAndFlowsAtItsNodesPinsAreLoweredIntoItsFlow(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action test {
+			attribute total : Integer = 0;
+			first start;
+			action accumulate {
+				for i in 1..3 {
+					bind dbl.a = i;
+					action dbl { in a : Integer; out sum : Integer; assign sum := a + a; }
+					flow dbl.sum to acc.n;
+					action acc { in n : Integer; assign total := total + n; }
+					bind acc = total;
+				}
+			}
+			done;
+			succession first start then accumulate;
+			succession first accumulate then done;
+		}
+	`)
+
+	block := loopBodyOf(t, graph, "accumulate")
+	if block.Graph == nil {
+		t.Fatalf("loop body lowered to statements, want a flow of its own: %#v", block)
+	}
+	flow := block.Graph
+	var actions []ast.Node
+	for _, node := range flow.Nodes {
+		if !flow.StatementRuns[node] {
+			actions = append(actions, node)
+		}
+	}
+	if len(actions) != 2 {
+		t.Fatalf("block flow holds %d action nodes, want dbl and acc: %#v", len(actions), actions)
+	}
+	dbl, acc := actions[0], actions[1]
+	if len(flow.Bindings) != 1 || flow.Bindings[0].Node != dbl || flow.Bindings[0].Pin != "a" {
+		t.Errorf("block flow lowered bindings %#v, want the one at dbl.a", flow.Bindings)
+	}
+	flows := flow.DataFlows[dbl]
+	if len(flows) != 1 || flows[0].SourcePin != "sum" || flows[0].Target != acc || flows[0].TargetPin != "n" {
+		t.Errorf("block flow lowered object flows %#v, want dbl.sum to acc.n", flows)
+	}
+	var unsupported []Unsupported
+	for _, node := range flow.Nodes {
+		if !flow.StatementRuns[node] {
+			continue
+		}
+		for _, stmt := range flow.Bodies[node] {
+			if u, ok := stmt.(Unsupported); ok {
+				unsupported = append(unsupported, u)
+			}
+		}
+	}
+	if len(unsupported) != 1 || !strings.Contains(unsupported[0].Description, "names an action node but no pin of it") {
+		t.Errorf("block flow reports %#v, want the binding at acc itself as unsupported", unsupported)
+	}
+}
+
+// A block-declared action stating a flow of its own (`first`, a succession) owns
+// that flow as a subflow of the block's graph, as a node of the action's flow
+// would, rather than lowering its flow constructs to unsupported statements.
+func TestBlockNodeStatingItsOwnFlowOwnsASubflow(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action test {
+			attribute total : Integer = 0;
+			first start;
+			action accumulate {
+				for i in 1..3 {
+					action step {
+						out v : Integer;
+						first start;
+						then action one { out w : Integer; assign w := i; }
+						succession one then two;
+						action two { assign v := one.w + 1; }
+						then done;
+					}
+					assign total := total + step.v;
+				}
+			}
+			done;
+			succession first start then accumulate;
+			succession first accumulate then done;
+		}
+	`)
+
+	flow := loopBodyOf(t, graph, "accumulate").Graph
+	if flow == nil {
+		t.Fatal("loop body lowered to statements, want a flow of its own")
+	}
+	step := nodeNamed(t, flow, "step")
+	sub, owns := flow.Subflows[step]
+	if !owns || sub == nil {
+		t.Fatalf("step owns no subflow: %#v", flow.Subflows)
+	}
+	if sub.Err != nil {
+		t.Fatalf("step's own flow failed to lower: %v", sub.Err)
+	}
+	if len(flow.Bodies[step]) != 0 {
+		t.Errorf("step lowered statements %#v beside its own flow", flow.Bodies[step])
+	}
+	if len(flow.Features[step]) != 1 || flow.Features[step][0].Name != "v" {
+		t.Errorf("step declares features %#v, want its pin v", flow.Features[step])
+	}
+	if sub.Graph.Initial == nil {
+		t.Fatal("step's own flow has no initial node")
+	}
+	one, two := nodeNamed(t, sub.Graph, "one"), nodeNamed(t, sub.Graph, "two")
+	if next := sub.Graph.Edges[one]; len(next) != 1 || next[0].Target != two {
+		t.Errorf("one succeeds to %v, want two", next)
+	}
+	if len(sub.Graph.Features[one]) != 1 || sub.Graph.Features[one][0].Name != "w" {
+		t.Errorf("one declares features %#v, want its pin w", sub.Graph.Features[one])
+	}
+	if next := sub.Graph.Edges[two]; len(next) != 1 {
+		t.Errorf("two succeeds to %v, want done", next)
+	} else if _, done := next[0].Target.(*ast.FinalNode); !done {
+		t.Errorf("two succeeds to %T, want the final node", next[0].Target)
 	}
 }
 

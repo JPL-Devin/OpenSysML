@@ -19,6 +19,9 @@ type StateBehavior struct {
 	// body is one block, since it is a namespace of its own; every other form
 	// lowers to the one statement it states.
 	Body []Statement
+	// Nodes are the action nodes the blocks of Body declare, in declaration order,
+	// each of which performs as a subperformance of the behavior's.
+	Nodes []ast.Node
 	// Scope is the scope the behavior was declared in, which its own statements
 	// and the action name it performs resolve in.
 	Scope *symbols.Scope
@@ -78,6 +81,7 @@ func lowerStateBehavior(action ast.Node, scope *symbols.Scope) StateBehavior {
 	default:
 		behavior.Body = []Statement{lowerStatement(action, scope)}
 	}
+	behavior.Nodes = blockNodesOf(behavior.Body, nil)
 	return behavior
 }
 

@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -17,7 +18,10 @@ elmt:Prefixed
     sysml:ownedMembership elmt:Prefixed__Safety_om, elmt:Prefixed__Reviewed_om, elmt:Prefixed__Car_om, elmt:Prefixed__Vehicle_om, elmt:Prefixed__car_om, elmt:Prefixed__spare_om, elmt:Prefixed__option_om, elmt:Prefixed__wheel_om, elmt:Prefixed__Notes_om, elmt:Prefixed__Stopped_om, elmt:Prefixed__Braking_om ;
     sysml:ownedRelationship elmt:Prefixed__Safety_om, elmt:Prefixed__Reviewed_om, elmt:Prefixed__Car_om, elmt:Prefixed__Vehicle_om, elmt:Prefixed__car_om, elmt:Prefixed__spare_om, elmt:Prefixed__option_om, elmt:Prefixed__wheel_om, elmt:Prefixed__Notes_om, elmt:Prefixed___409, elmt:Prefixed__Stopped_om, elmt:Prefixed__Braking_om ;
     sysx:sourceText "package Prefixed {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Prefixed__Safety\"},{\"@id\":\"Prefixed__Reviewed\"},{\"@id\":\"Prefixed__Car\"},{\"@id\":\"Prefixed__Vehicle\"},{\"@id\":\"Prefixed__car\"},{\"@id\":\"Prefixed__spare\"},{\"@id\":\"Prefixed__option\"},{\"@id\":\"Prefixed__wheel\"},{\"@id\":\"Prefixed__Notes\"},{\"@id\":\"Prefixed__Stopped\"},{\"@id\":\"Prefixed__Braking\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Prefixed__Safety_om\"},{\"@id\":\"Prefixed__Reviewed_om\"},{\"@id\":\"Prefixed__Car_om\"},{\"@id\":\"Prefixed__Vehicle_om\"},{\"@id\":\"Prefixed__car_om\"},{\"@id\":\"Prefixed__spare_om\"},{\"@id\":\"Prefixed__option_om\"},{\"@id\":\"Prefixed__wheel_om\"},{\"@id\":\"Prefixed__Notes_om\"},{\"@id\":\"Prefixed__Stopped_om\"},{\"@id\":\"Prefixed__Braking_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Prefixed__Safety_om\"},{\"@id\":\"Prefixed__Reviewed_om\"},{\"@id\":\"Prefixed__Car_om\"},{\"@id\":\"Prefixed__Vehicle_om\"},{\"@id\":\"Prefixed__car_om\"},{\"@id\":\"Prefixed__spare_om\"},{\"@id\":\"Prefixed__option_om\"},{\"@id\":\"Prefixed__wheel_om\"},{\"@id\":\"Prefixed__Notes_om\"},{\"@id\":\"Prefixed___409\"},{\"@id\":\"Prefixed__Stopped_om\"},{\"@id\":\"Prefixed__Braking_om\"}]" .
 
 elmt:Prefixed__Safety
     a sysml:MetadataDefinition ;
@@ -130,7 +134,10 @@ elmt:Prefixed__Vehicle
     sysml:ownedMembership elmt:Prefixed__Vehicle___400_om, elmt:Prefixed__Vehicle___401_om ;
     sysml:ownedRelationship elmt:Prefixed__Vehicle___400_om, elmt:Prefixed__Vehicle___401_om ;
     sysx:hasBody "false"^^xsd:boolean ;
-    sysx:sourceText "    abstract #Reviewed #Safety part def Vehicle;\n" .
+    sysx:sourceText "    abstract #Reviewed #Safety part def Vehicle;\n" ;
+    json:ownedMember "[{\"@id\":\"Prefixed__Vehicle___400\"},{\"@id\":\"Prefixed__Vehicle___401\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Prefixed__Vehicle___400_om\"},{\"@id\":\"Prefixed__Vehicle___401_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Prefixed__Vehicle___400_om\"},{\"@id\":\"Prefixed__Vehicle___401_om\"}]" .
 
 elmt:Prefixed__Vehicle_om
     a sysml:OwningMembership ;
@@ -514,7 +521,10 @@ elmt:Prefixed__Braking
     sysml:ownedMember elmt:Prefixed__Braking___401, elmt:Prefixed__Braking___402, elmt:Prefixed__Braking__stopped, elmt:Prefixed__Braking__braked ;
     sysml:ownedMembership elmt:Prefixed__Braking___401_om, elmt:Prefixed__Braking___402_om, elmt:Prefixed__Braking__stopped_om, elmt:Prefixed__Braking__braked_om ;
     sysx:sourceText "    requirement def Braking {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedRelationship "[{\"@id\":\"Prefixed__Braking__brakes\"},{\"@id\":\"Prefixed__Braking___401_om\"},{\"@id\":\"Prefixed__Braking___402_om\"},{\"@id\":\"Prefixed__Braking__stopped_om\"},{\"@id\":\"Prefixed__Braking__braked_om\"}]" ;
+    json:ownedMember "[{\"@id\":\"Prefixed__Braking___401\"},{\"@id\":\"Prefixed__Braking___402\"},{\"@id\":\"Prefixed__Braking__stopped\"},{\"@id\":\"Prefixed__Braking__braked\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Prefixed__Braking___401_om\"},{\"@id\":\"Prefixed__Braking___402_om\"},{\"@id\":\"Prefixed__Braking__stopped_om\"},{\"@id\":\"Prefixed__Braking__braked_om\"}]" .
 
 elmt:Prefixed__Braking_om
     a sysml:OwningMembership ;
@@ -574,7 +584,10 @@ elmt:Prefixed__Braking___401
     sysml:ownedMembership elmt:Prefixed__Braking___401___401_om, elmt:Prefixed__Braking___401___400_om ;
     sysml:ownedRelationship elmt:Prefixed__Braking___401___401_om, elmt:Prefixed__Braking___401___400_om ;
     sysx:hasBody "true"^^xsd:boolean ;
-    sysx:sourceText "        assume #Reviewed constraint { true }\n" .
+    sysx:sourceText "        assume #Reviewed constraint { true }\n" ;
+    json:ownedMember "[{\"@id\":\"Prefixed__Braking___401___401\"},{\"@id\":\"Prefixed__Braking___401___400\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Prefixed__Braking___401___401_om\"},{\"@id\":\"Prefixed__Braking___401___400_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Prefixed__Braking___401___401_om\"},{\"@id\":\"Prefixed__Braking___401___400_om\"}]" .
 
 elmt:Prefixed__Braking___401_om
     a sysml:OwningMembership ;
@@ -649,7 +662,10 @@ elmt:Prefixed__Braking___402
     sysml:ownedMembership elmt:Prefixed__Braking___402___401_om, elmt:Prefixed__Braking___402___400_om ;
     sysml:ownedRelationship elmt:Prefixed__Braking___402___401_om, elmt:Prefixed__Braking___402___400_om ;
     sysx:hasBody "true"^^xsd:boolean ;
-    sysx:sourceText "        require #Safety constraint { true }\n" .
+    sysx:sourceText "        require #Safety constraint { true }\n" ;
+    json:ownedMember "[{\"@id\":\"Prefixed__Braking___402___401\"},{\"@id\":\"Prefixed__Braking___402___400\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Prefixed__Braking___402___401_om\"},{\"@id\":\"Prefixed__Braking___402___400_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Prefixed__Braking___402___401_om\"},{\"@id\":\"Prefixed__Braking___402___400_om\"}]" .
 
 elmt:Prefixed__Braking___402_om
     a sysml:OwningMembership ;

@@ -22,8 +22,11 @@ const maxActionNestingDepth = 32
 //	action call = Callee(1);   // named usage, invocation expression value
 type actionInvocation struct {
 	target *ast.QualifiedName
-	args   []ast.Node
-	named  []ast.NamedArg
+	// invoked reports the `Callee(...)` form: the argument list, even an empty
+	// one, states every input the caller passes.
+	invoked bool
+	args    []ast.Node
+	named   []ast.NamedArg
 	// referrer is the usage owning a reference subsetting, whose own effective
 	// name is the one the target names (see resolve.ResolveReferenceTarget).
 	referrer ast.Node
@@ -36,9 +39,10 @@ type actionInvocation struct {
 func nestedInvocation(usage *ast.Usage) (actionInvocation, bool) {
 	if invocation, ok := usage.Value.(*ast.InvocationExpr); ok && invocation.Type != nil {
 		return actionInvocation{
-			target: invocation.Type,
-			args:   invocation.Args,
-			named:  invocation.NamedArgs,
+			target:  invocation.Type,
+			invoked: true,
+			args:    invocation.Args,
+			named:   invocation.NamedArgs,
 		}, true
 	}
 	for _, rel := range usage.Relationships {
@@ -56,30 +60,70 @@ func nestedInvocation(usage *ast.Usage) (actionInvocation, bool) {
 	return actionInvocation{}, false
 }
 
+// invocationArguments evaluates the arguments of a `Callee(...)` invocation in ec, the
+// caller's context, keyed by the callee's input parameter they bind; nil for the other forms.
+func invocationArguments(
+	ctx *Context, scope *symbols.Scope, inv actionInvocation, ec *EvalContext,
+) (map[string]Value, error) {
+	if !inv.invoked {
+		return nil, nil
+	}
+	sym, err := resolveActionSymbol(ctx, scope, inv)
+	if err != nil {
+		return nil, err
+	}
+	in, _ := parameterNames(ctx.actionParametersOf(sym))
+	arguments := make(map[string]Value, len(inv.args)+len(inv.named))
+	if err := bindArgumentList(ec, inv, in, arguments); err != nil {
+		return nil, err
+	}
+	return arguments, nil
+}
+
 // invokeAction runs the action named by inv to completion as a sub-execution of
-// the caller, and returns the values its output parameters ended with. The
-// performed action runs as self, the object performing the caller, so what it
-// accepts and sends carries that object's identity.
+// the caller, performed by self, and returns the values its features ended with
+// and, among them, those of its output parameters.
 //
 // The callee gets a fresh executor with its own tokens, so values cross the
-// boundary only through parameters: arguments (or, for an argument-less
-// invocation, caller values of the same name) seed the callee's `in` and `inout`
-// parameters, and its `out` and `inout` parameters come back to the caller. An
-// action with no parameters therefore reads and writes nothing in its caller.
+// boundary only through parameters: arguments, evaluated in the caller's data (or,
+// for an argument-less invocation, caller values of the same name) seed the
+// callee's `in` and `inout` parameters, and its `out` and `inout` parameters come
+// back to the caller. An action with no parameters therefore reads and writes
+// nothing in its caller.
 func invokeAction(
 	ctx *Context,
 	scope *symbols.Scope,
 	inv actionInvocation,
 	data map[string]Value,
 	self *Instance,
-) (map[string]Value, error) {
+) (features, outputs map[string]Value, err error) {
+	ec := NewEvalContext(ctx, scope)
+	ec.Push(data)
+	defer ec.beginStep()()
+	arguments, err := invocationArguments(ctx, scope, inv, ec)
+	if err != nil {
+		return nil, nil, err
+	}
+	return invokeBoundAction(ctx, scope, inv, arguments, data, self)
+}
+
+// invokeBoundAction is invokeAction with the callee's inputs already bound in pins (the
+// performing node's, arguments included); a bare `perform`/typed usage still reads data.
+func invokeBoundAction(
+	ctx *Context,
+	scope *symbols.Scope,
+	inv actionInvocation,
+	pins map[string]Value,
+	data map[string]Value,
+	self *Instance,
+) (features, outputs map[string]Value, err error) {
 	sym, err := resolveActionSymbol(ctx, scope, inv)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if ctx.actionDepth >= maxActionNestingDepth {
-		return nil, fmt.Errorf(
+		return nil, nil, fmt.Errorf(
 			"action invocation nested more than %d deep at %s (recursive action?)",
 			maxActionNestingDepth, qualifiedNameText(inv.target),
 		)
@@ -87,24 +131,43 @@ func invokeAction(
 	ctx.actionDepth++
 	defer func() { ctx.actionDepth-- }()
 
-	in, out := actionParameters(sym.Decl)
-	inputs, err := bindArguments(ctx, scope, inv, in, data)
-	if err != nil {
-		return nil, err
+	params := ctx.actionParametersOf(sym)
+	in, out := parameterNames(params)
+	inputs := make(map[string]Value, len(in))
+	for _, name := range in {
+		if value, ok := pins[name]; ok {
+			inputs[name] = value
+		}
+	}
+	if !inv.invoked {
+		// A bare `perform`/typed usage reads the caller's values of the parameters'
+		// own names, which is how data reaches an action performed inside a flow.
+		for _, name := range in {
+			if _, bound := inputs[name]; bound {
+				continue
+			}
+			if value, ok := data[name]; ok {
+				inputs[name] = value
+			}
+		}
+	}
+	if err := checkInputsBound(inv, params, inputs); err != nil {
+		return nil, nil, err
 	}
 
-	results, err := ctx.ExecuteActionPerformedBy(sym, self, inputs)
+	callee, err := ctx.performAction(sym, self, inputs)
 	if err != nil {
-		return nil, fmt.Errorf("invoke action %s: %w", qualifiedNameText(inv.target), err)
+		return nil, nil, fmt.Errorf("invoke action %s: %w", qualifiedNameText(inv.target), err)
 	}
 
-	outputs := make(map[string]Value, len(out))
+	features = callee.root.data
+	outputs = make(map[string]Value, len(out))
 	for _, name := range out {
-		if value, ok := results[name]; ok {
+		if value, ok := features[name]; ok {
 			outputs[name] = value
 		}
 	}
-	return outputs, nil
+	return features, outputs, nil
 }
 
 func resolveActionSymbol(
@@ -139,64 +202,51 @@ func resolveActionSymbol(
 	return sym, nil
 }
 
-// bindArguments computes the callee's input bindings. An invocation with an
-// argument list binds those arguments; a bare `perform`/typed usage instead
-// passes the caller's values of the parameters' own names, which is how data
-// reaches an action performed inside a flow.
-func bindArguments(
-	ctx *Context,
-	scope *symbols.Scope,
-	inv actionInvocation,
-	in []string,
-	data map[string]Value,
-) (map[string]Value, error) {
-	inputs := make(map[string]Value, len(in))
-
-	if len(inv.args) == 0 && len(inv.named) == 0 {
-		for _, name := range in {
-			if value, ok := data[name]; ok {
-				inputs[name] = value
-			}
-		}
-		return inputs, nil
-	}
-
-	ec := NewEvalContext(ctx, scope)
-	ec.Push(data)
-	defer ec.beginStep()()
-
+// bindArgumentList binds an invocation's arguments into inputs by the callee's parameter
+// order (positional) or names (named); arguments are evaluated in ec, the caller's context.
+// A parameter two arguments would bind is rejected rather than taking the later one.
+func bindArgumentList(ec *EvalContext, inv actionInvocation, in []string, inputs map[string]Value) error {
 	if len(inv.args) > len(in) {
-		return nil, fmt.Errorf(
-			"action %s takes %d input parameter(s), got %d argument(s)",
-			qualifiedNameText(inv.target), len(in), len(inv.args),
+		return fmt.Errorf(
+			"%w: action %s takes %d input parameter(s), got %d argument(s)",
+			ErrActionArity, qualifiedNameText(inv.target), len(in), len(inv.args),
 		)
 	}
+	bound := make(map[string]bool, len(inv.args)+len(inv.named))
 	for i, arg := range inv.args {
 		value, err := ec.Eval(arg)
 		if err != nil {
-			return nil, fmt.Errorf("eval argument %d of %s: %w", i+1, qualifiedNameText(inv.target), err)
+			return fmt.Errorf("eval argument %d of %s: %w", i+1, qualifiedNameText(inv.target), err)
 		}
 		inputs[in[i]] = value
+		bound[in[i]] = true
 	}
 
 	for _, named := range inv.named {
 		if named.Name == nil || len(named.Name.Parts) == 0 {
-			return nil, fmt.Errorf("unnamed argument in invocation of %s", qualifiedNameText(inv.target))
+			return fmt.Errorf("unnamed argument in invocation of %s", qualifiedNameText(inv.target))
 		}
 		name := named.Name.Parts[len(named.Name.Parts)-1].Text
 		if !contains(in, name) {
-			return nil, fmt.Errorf(
-				"action %s has no input parameter %q",
-				qualifiedNameText(inv.target), name,
+			return fmt.Errorf(
+				"%w: action %s has no input parameter %q",
+				ErrUnknownParameter, qualifiedNameText(inv.target), name,
 			)
 		}
+		if bound[name] {
+			return fmt.Errorf(
+				"%w: input parameter %q of %s is given more than one argument",
+				ErrDuplicateArgument, name, qualifiedNameText(inv.target),
+			)
+		}
+		bound[name] = true
 		value, err := ec.Eval(named.Value)
 		if err != nil {
-			return nil, fmt.Errorf("eval argument %q of %s: %w", name, qualifiedNameText(inv.target), err)
+			return fmt.Errorf("eval argument %q of %s: %w", name, qualifiedNameText(inv.target), err)
 		}
 		inputs[name] = value
 	}
-	return inputs, nil
+	return nil
 }
 
 // actionParameter is one parameter an action declares.
@@ -208,52 +258,32 @@ type actionParameter struct {
 	// HasDefault reports whether the declaration gives the parameter a value, so
 	// an invocation binding no argument to it still binds a value.
 	HasDefault bool
+	// IsResult marks the `return` parameter, what the action's value read yields.
+	IsResult bool
 }
 
-// actionParameterDecls returns the parameters an action declares, in declaration
-// order.
-func actionParameterDecls(decl ast.Node) []actionParameter {
-	var members []ast.Node
-	switch d := decl.(type) {
-	case *ast.Usage:
-		members = d.Members
-	case *ast.Definition:
-		members = d.Members
-	default:
-		return nil
-	}
-
+// actionParametersOf returns an action's parameters in invocation order: its own, then
+// the inherited ones none redefines (KerML 7.4.7.2) — the signature the type checker uses.
+func (ctx *Context) actionParametersOf(sym *symbols.Symbol) []actionParameter {
 	var params []actionParameter
-	for _, member := range members {
-		if membership, ok := member.(*ast.Membership); ok {
-			member = membership.Member
-		}
-		usage, ok := member.(*ast.Usage)
-		if !ok {
+	for _, param := range ctx.model.BehaviorParametersOf(sym) {
+		if param.Symbol == nil || param.Symbol.Name == "" {
 			continue
 		}
-		if usage.Direction == ast.DirNone {
-			continue
-		}
-		// A parameter may be written as a redefinition of the one it overrides
-		// (`in redefines ifTest;`), naming it by that redefinition.
-		name, _ := ast.EffectiveName(usage)
-		if name == "" {
-			continue
-		}
+		usage, _ := param.Symbol.Decl.(*ast.Usage)
 		params = append(params, actionParameter{
-			Name:       name,
-			Direction:  usage.Direction,
-			HasDefault: usage.Value != nil,
+			Name:       param.Symbol.Name,
+			Direction:  param.Direction,
+			HasDefault: usage != nil && usage.Value != nil,
+			IsResult:   param.IsResult,
 		})
 	}
 	return params
 }
 
-// actionParameters returns the names of an action's parameters that the caller
-// writes (`in`, `inout`) and that it reads back (`out`, `inout`).
-func actionParameters(decl ast.Node) (in, out []string) {
-	for _, param := range actionParameterDecls(decl) {
+// parameterNames splits parameters into those the caller writes and reads back.
+func parameterNames(params []actionParameter) (in, out []string) {
+	for _, param := range params {
 		switch param.Direction {
 		case ast.DirIn:
 			in = append(in, param.Name)

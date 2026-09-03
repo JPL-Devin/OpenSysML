@@ -173,8 +173,9 @@ static inline sysml_seq_SFX sysml_check_SFX(sysml_seq_SFX s, sysml_int lo, sysml
 	return s;
 }
 
-/* Same shape, same elements in order: the '==' of collections. */
+/* Same shape, same elements in order: the '==' of collections; every empty one is null. */
 static sysml_bool sysml_eq_SFX(sysml_seq_SFX a, sysml_seq_SFX b) {
+	if (a.len == 0 || b.len == 0) return a.len == 0 && b.len == 0;
 	if (a.shape != b.shape || a.len != b.len) return false;
 	for (sysml_int i = 0; i < a.len; i++) if (a.data[i] != b.data[i]) return false;
 	return true;
@@ -472,7 +473,7 @@ func (e *cEmitter) seqExpr(x Expr) (string, bool) {
 	case Coalesce:
 		e.temps++
 		l := fmt.Sprintf("sysml_t%d", e.temps)
-		return fmt.Sprintf("({ %s %s = %s; %s.shape ? %s : %s; })", cType(x.T), l, e.expr(x.L), l, l, e.expr(x.R)), true
+		return fmt.Sprintf("({ %s %s = %s; %s.len ? %s : %s; })", cType(x.T), l, e.expr(x.L), l, l, e.expr(x.R)), true
 	case SeqEq:
 		return e.sequenced([]Expr{x.L, x.R}, func(v []string) string {
 			eq := fmt.Sprintf("sysml_eq_%s(%s, %s)", cSeqSuffix(x.L.Type()), v[0], v[1])

@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -17,7 +18,10 @@ elmt:Mult
     sysml:ownedMembership elmt:Mult__exactlyOne_om, elmt:Mult__optional_om, elmt:Mult__single_om ;
     sysml:ownedRelationship elmt:Mult__exactlyOne_om, elmt:Mult__optional_om, elmt:Mult__single_om ;
     sysx:sourceText "package Mult {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Mult__exactlyOne\"},{\"@id\":\"Mult__optional\"},{\"@id\":\"Mult__single\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Mult__exactlyOne_om\"},{\"@id\":\"Mult__optional_om\"},{\"@id\":\"Mult__single_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Mult__exactlyOne_om\"},{\"@id\":\"Mult__optional_om\"},{\"@id\":\"Mult__single_om\"}]" .
 
 elmt:Mult__exactlyOne
     a sysx:MultiplicityDeclaration ;

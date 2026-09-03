@@ -1,6 +1,7 @@
 package export
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -69,6 +70,14 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 		return nil, err
 	}
 	if err := checkSupersededPredicates(graph); err != nil {
+		return nil, err
+	}
+	graph, err := rdf.ReconcileCollections(graph)
+	if err != nil {
+		var malformed *rdf.AnnotationError
+		if errors.As(err, &malformed) {
+			return nil, &UnsupportedError{What: fmt.Sprintf("the annotation json:%s of <%s>", malformed.Key, malformed.Subject), Note: malformed.Note}
+		}
 		return nil, err
 	}
 	d := &decoder{

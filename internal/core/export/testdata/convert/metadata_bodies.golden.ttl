@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -17,7 +18,10 @@ elmt:Annotated
     sysml:ownedMembership elmt:Annotated__Safety_om, elmt:Annotated__Car_om, elmt:Annotated__car_om, elmt:Annotated___403_om, elmt:Annotated__tagged_om, elmt:Annotated___405_om, elmt:Annotated___406_om ;
     sysml:ownedRelationship elmt:Annotated__Safety_om, elmt:Annotated__Car_om, elmt:Annotated__car_om, elmt:Annotated___403_om, elmt:Annotated__tagged_om, elmt:Annotated___405_om, elmt:Annotated___406_om ;
     sysx:sourceText "package Annotated {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Annotated__Safety\"},{\"@id\":\"Annotated__Car\"},{\"@id\":\"Annotated__car\"},{\"@id\":\"Annotated___403\"},{\"@id\":\"Annotated__tagged\"},{\"@id\":\"Annotated___405\"},{\"@id\":\"Annotated___406\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Annotated__Safety_om\"},{\"@id\":\"Annotated__Car_om\"},{\"@id\":\"Annotated__car_om\"},{\"@id\":\"Annotated___403_om\"},{\"@id\":\"Annotated__tagged_om\"},{\"@id\":\"Annotated___405_om\"},{\"@id\":\"Annotated___406_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Annotated__Safety_om\"},{\"@id\":\"Annotated__Car_om\"},{\"@id\":\"Annotated__car_om\"},{\"@id\":\"Annotated___403_om\"},{\"@id\":\"Annotated__tagged_om\"},{\"@id\":\"Annotated___405_om\"},{\"@id\":\"Annotated___406_om\"}]" .
 
 elmt:Annotated__Safety
     a sysml:MetadataDefinition ;
@@ -36,7 +40,12 @@ elmt:Annotated__Safety
     sysml:ownedFeature elmt:Annotated__Safety__level, elmt:Annotated__Safety__reviewer, elmt:Annotated__Safety__isSet, elmt:Annotated__Safety__audit ;
     sysml:ownedFeatureMembership elmt:Annotated__Safety__level_om, elmt:Annotated__Safety__reviewer_om, elmt:Annotated__Safety__isSet_om, elmt:Annotated__Safety__audit_om ;
     sysx:sourceText "    metadata def Safety {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Annotated__Safety__level\"},{\"@id\":\"Annotated__Safety__reviewer\"},{\"@id\":\"Annotated__Safety__isSet\"},{\"@id\":\"Annotated__Safety__audit\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Annotated__Safety__level_om\"},{\"@id\":\"Annotated__Safety__reviewer_om\"},{\"@id\":\"Annotated__Safety__isSet_om\"},{\"@id\":\"Annotated__Safety__audit_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Annotated__Safety__level_om\"},{\"@id\":\"Annotated__Safety__reviewer_om\"},{\"@id\":\"Annotated__Safety__isSet_om\"},{\"@id\":\"Annotated__Safety__audit_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Annotated__Safety__level\"},{\"@id\":\"Annotated__Safety__reviewer\"},{\"@id\":\"Annotated__Safety__isSet\"},{\"@id\":\"Annotated__Safety__audit\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Annotated__Safety__level_om\"},{\"@id\":\"Annotated__Safety__reviewer_om\"},{\"@id\":\"Annotated__Safety__isSet_om\"},{\"@id\":\"Annotated__Safety__audit_om\"}]" .
 
 elmt:Annotated__Safety_om
     a sysml:OwningMembership ;
@@ -256,7 +265,10 @@ elmt:Annotated__car
     sysml:ownedFeature elmt:Annotated__car__range ;
     sysml:ownedFeatureMembership elmt:Annotated__car__range_om ;
     sysx:sourceText "    part car : Car {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Annotated__car__range\"},{\"@id\":\"Annotated__car___401\"},{\"@id\":\"Annotated__car___402\"},{\"@id\":\"Annotated__car__checked\"},{\"@id\":\"Annotated__car___404\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Annotated__car__range_om\"},{\"@id\":\"Annotated__car___401_om\"},{\"@id\":\"Annotated__car___402_om\"},{\"@id\":\"Annotated__car__checked_om\"},{\"@id\":\"Annotated__car___404_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Annotated__car__range_om\"},{\"@id\":\"Annotated__car___401_om\"},{\"@id\":\"Annotated__car___402_om\"},{\"@id\":\"Annotated__car__checked_om\"},{\"@id\":\"Annotated__car___404_om\"}]" .
 
 elmt:Annotated__car_om
     a sysml:OwningMembership ;
@@ -380,7 +392,12 @@ elmt:Annotated__car___402
     sysml:ownedFeature elmt:Annotated__car___402___400, elmt:Annotated__car___402__reviewer, elmt:Annotated__car___402__isSet, elmt:Annotated__car___402__audit ;
     sysml:ownedFeatureMembership elmt:Annotated__car___402___400_om, elmt:Annotated__car___402__reviewer_om, elmt:Annotated__car___402__isSet_om, elmt:Annotated__car___402__audit_om ;
     sysx:sourceText "        @Safety {\n" ;
-    sysx:sourceTail "        }\n" .
+    sysx:sourceTail "        }\n" ;
+    json:ownedMember "[{\"@id\":\"Annotated__car___402___400\"},{\"@id\":\"Annotated__car___402__reviewer\"},{\"@id\":\"Annotated__car___402__isSet\"},{\"@id\":\"Annotated__car___402__audit\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Annotated__car___402___400_om\"},{\"@id\":\"Annotated__car___402__reviewer_om\"},{\"@id\":\"Annotated__car___402__isSet_om\"},{\"@id\":\"Annotated__car___402__audit_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Annotated__car___402___400_om\"},{\"@id\":\"Annotated__car___402__reviewer_om\"},{\"@id\":\"Annotated__car___402__isSet_om\"},{\"@id\":\"Annotated__car___402__audit_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Annotated__car___402___400\"},{\"@id\":\"Annotated__car___402__reviewer\"},{\"@id\":\"Annotated__car___402__isSet\"},{\"@id\":\"Annotated__car___402__audit\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Annotated__car___402___400_om\"},{\"@id\":\"Annotated__car___402__reviewer_om\"},{\"@id\":\"Annotated__car___402__isSet_om\"},{\"@id\":\"Annotated__car___402__audit_om\"}]" .
 
 elmt:Annotated__car___402_om
     a sysml:OwningMembership ;
@@ -622,7 +639,13 @@ elmt:Annotated___403
     sysml:ownedFeature elmt:Annotated___403__level, elmt:Annotated___403__reviewer ;
     sysml:ownedFeatureMembership elmt:Annotated___403__level_om, elmt:Annotated___403__reviewer_om ;
     sysx:sourceText "    @Safety about Car, car {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:annotatedElement "[{\"@id\":\"Annotated__Car\"},{\"@id\":\"Annotated__car\"}]" ;
+    json:ownedMember "[{\"@id\":\"Annotated___403__level\"},{\"@id\":\"Annotated___403__reviewer\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Annotated___403__level_om\"},{\"@id\":\"Annotated___403__reviewer_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Annotated___403__level_om\"},{\"@id\":\"Annotated___403__reviewer_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Annotated___403__level\"},{\"@id\":\"Annotated___403__reviewer\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Annotated___403__level_om\"},{\"@id\":\"Annotated___403__reviewer_om\"}]" .
 
 elmt:Annotated___403_om
     a sysml:OwningMembership ;

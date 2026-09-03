@@ -81,6 +81,47 @@ func TestSetOperationsUseExactValueEquality(t *testing.T) {
 	}
 }
 
+func TestSetTreatsEveryEmptyValueAsOneMember(t *testing.T) {
+	empties := []Value{
+		{Kind: ValNull},
+		NewSequenceValue(NewSequence()),
+		NewSetValue(NewSet()),
+	}
+	for _, a := range empties {
+		for _, b := range empties {
+			if !valueEqual(a, b) || valueKeyFunc(a) != valueKeyFunc(b) {
+				t.Fatalf("%v and %v: valueEqual %v, same key %v; want both true", a, b, valueEqual(a, b), valueKeyFunc(a) == valueKeyFunc(b))
+			}
+		}
+	}
+	for i, first := range empties {
+		set := NewSet()
+		set.Add(first)
+		for _, other := range empties {
+			set.Add(other)
+			if !set.Contains(other) {
+				t.Fatalf("set seeded with empties[%d] does not contain %v", i, other)
+			}
+		}
+		if set.Size() != 1 {
+			t.Fatalf("set seeded with empties[%d] holds %d empty members, want 1", i, set.Size())
+		}
+	}
+
+	wrap := func(v Value) Value {
+		seq := NewSequence()
+		seq.Append(v)
+		return NewSequenceValue(seq)
+	}
+	set := NewSet()
+	for _, e := range empties {
+		set.Add(wrap(e))
+	}
+	if set.Size() != 1 || !set.Contains(wrap(Value{Kind: ValNull})) {
+		t.Fatalf("sequences holding an empty value: %d members, want 1 found by lookup", set.Size())
+	}
+}
+
 func TestSetConstructionUsesBucketedLinearWork(t *testing.T) {
 	const count = 2000
 	set := NewSet()
@@ -186,7 +227,7 @@ func TestValuePayloadAccessorsAreKindSpecific(t *testing.T) {
 	values := []Value{
 		{}, {Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 7}},
 		{Kind: ValNull}, {Kind: ValInstance, Instance: 9},
-		NewStringValue("s"), NewSequenceValue(seq), NewSetValue(set), NewExprValue(body),
+		NewStringValue("s"), NewSequenceValue(seq), NewSetValue(set), NewExprValue(body, nil),
 		NewQuantityValue(q), NewVariantValue(variant, 4), NewEnumLiteral(literal),
 	}
 	// A payload whose Kind was rewritten afterwards answers only to the new kind.
@@ -226,7 +267,7 @@ func TestValuePayloadAccessorsAreKindSpecific(t *testing.T) {
 		t.Errorf("Str() = %q, want \"s\"", got)
 	}
 	if NewSequenceValue(seq).Sequence() != seq || NewSetValue(set).Set() != set ||
-		NewExprValue(body).Expr() != body || NewQuantityValue(q).Quantity() != q ||
+		NewExprValue(body, nil).Expr() != body || NewQuantityValue(q).Quantity() != q ||
 		NewVariantValue(variant, 4).Variant() != variant || NewEnumLiteral(literal).Literal() != literal {
 		t.Error("an accessor did not return the payload its constructor was given")
 	}
