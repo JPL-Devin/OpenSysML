@@ -1472,10 +1472,8 @@ func TestLegacyExtensionNamespaceIsRefused(t *testing.T) {
 	}
 }
 
-// Release 0.4.3 wrote a `#` prefix as `sysx:prefixMetadata "#Safety"` and an
-// `about` target as `sysml:annotates`. This version does not read either, so a
-// graph stating them is refused naming the property rather than written back
-// without the annotation. The fixture is that release's own output.
+// The fixture is 0.4.3's own output: `sysx:prefixMetadata` for a `#` prefix and
+// `sysml:annotates` for an `about` target, neither of which this version reads.
 func TestSupersededMetadataPredicatesAreRefused(t *testing.T) {
 	turtle, err := os.ReadFile(filepath.Join("testdata", "superseded", "metadata_0_4_3.ttl"))
 	if err != nil {
