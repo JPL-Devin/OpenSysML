@@ -181,6 +181,30 @@ func TestInvocationOverloadUnknownArgumentType(t *testing.T) {
 	}`)
 }
 
+// A parameter declared without a type is typed Anything, the least specific type: a
+// candidate typing that parameter wins over it, and a parameter whose type did not
+// resolve is undetermined, so lookup order keeps deciding.
+func TestInvocationOverloadUntypedParameterIsLeastSpecific(t *testing.T) {
+	const model = `package P {
+		private import ScalarValues::*;
+		package A { calc def pick { in x : Real; in y%s; return : String = "loose"; } }
+		package B { calc def pick { in x : Real; in y : Integer; return : Integer = 2; } }
+		package C {
+			private import A::*;
+			private import B::*;
+			attribute %s
+		}
+	}`
+	wantLibraryClean(t, fmt.Sprintf(model, ``, `typed : Integer = pick(1, 2);`))
+	wantLibraryDiag(t, fmt.Sprintf(model, ``, `wrong : String = pick(1, 2);`),
+		"type.expr", "cannot bind Integer value to a feature typed by String")
+	wantLibraryClean(t, fmt.Sprintf(model, ``, `loose : String = pick(1, "b");`))
+	diags := libraryDiags(t, fmt.Sprintf(model, ` : Missing`, `first : String = pick(1, 2);`))
+	if len(diags) != 1 || diags[0].Code != "unresolved" || !strings.Contains(diags[0].Message, "Missing") {
+		t.Fatalf("expected only the unresolved parameter type, got %v", diags)
+	}
+}
+
 // A calc the model declares under a library function's name shadows every
 // library declaration, imported or not, however its arguments are typed.
 func TestInvocationOverloadModelShadowsLibrary(t *testing.T) {

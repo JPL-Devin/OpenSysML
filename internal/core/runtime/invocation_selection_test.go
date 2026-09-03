@@ -19,6 +19,7 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("calc_call_selects_by_argument_type", testCalcCallSelectsByArgumentType)
 	t.Run("calc_call_selects_by_named_argument", testCalcCallSelectsByNamedArgument)
 	t.Run("calc_call_selects_by_sibling_scalar_type", testCalcCallSelectsBySiblingScalarType)
+	t.Run("calc_call_typed_parameter_beats_untyped", testCalcCallTypedParameterBeatsUntyped)
 	t.Run("calc_call_repeated_named_argument_binds_last", testCalcCallRepeatedNamedArgumentBindsLast)
 	t.Run("calc_call_selects_among_owned_inherited_and_recursive_import", testCalcCallSelectsAmongOwnedInheritedAndRecursiveImport)
 	t.Run("action_call_selects_by_argument_type", testActionCallSelectsByArgumentType)
@@ -356,6 +357,38 @@ func testCalcCallSelectsByArgumentType(t *testing.T) {
 		}
 		if result.Kind != ValConst || result.Const.Int != tc.want {
 			t.Fatalf("%s = %+v, want %d", tc.calc, result, tc.want)
+		}
+	}
+}
+
+// An untyped parameter takes anything, so the candidate typing it runs for the
+// arguments it fits, whichever import lists first.
+func testCalcCallTypedParameterBeatsUntyped(t *testing.T) {
+	src := `
+		package A { private import ScalarValues::*; calc def pick { in x : Real; in y; return : Integer = 1; } }
+		package B { private import ScalarValues::*; calc def pick { in x : Real; in y : Integer; return : Integer = 2; } }
+		package test {
+			private import ScalarValues::*;
+			private import A::*;
+			private import B::*;
+			calc typed { in v : Integer; pick(1, v) }
+			calc loose { in v : Integer; pick(1, "b") }
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	for calc, want := range map[string]int64{"typed": 2, "loose": 1} {
+		sym := findSymbolByName(rootScope, calc, ast.DefCalc)
+		if sym == nil {
+			t.Fatalf("%s calc not found", calc)
+		}
+		arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}
+		result, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
+		if err != nil {
+			t.Fatalf("%s: %v", calc, err)
+		}
+		if result.Kind != ValConst || result.Const.Int != want {
+			t.Fatalf("%s = %+v, want %d", calc, result, want)
 		}
 	}
 }

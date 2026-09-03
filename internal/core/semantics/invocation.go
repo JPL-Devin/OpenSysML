@@ -146,8 +146,8 @@ type bindFit int
 
 const (
 	fitExact bindFit = iota // declared types conform, or the same scalar type
-	fitWiden                // a scalar argument widens to a wider scalar parameter
-	fitOpen                 // a type the checker cannot compare, so anything fits
+	fitWiden                // the argument widens to a wider parameter type, Anything included
+	fitOpen                 // a type the checker cannot determine, so anything may fit
 )
 
 // filterApplicable keeps the candidates whose signature args bind to, with how
@@ -190,6 +190,7 @@ type signatureParameter struct {
 	name     string
 	typ      *symbols.Symbol // the declared type, nil when untyped or unresolved
 	prim     PrimType
+	untyped  bool // declares no type at all, so it is typed Anything
 	optional bool // declares a default value
 }
 
@@ -207,16 +208,29 @@ func (m *Model) signatureOf(sym *symbols.Symbol) invocationSignature {
 				name = effective
 			}
 		}
-		sig.params = append(sig.params, signatureParameter{
+		param := signatureParameter{
 			name:     name,
 			typ:      m.featureType(p.Symbol),
 			prim:     m.PrimTypeOf(p.Symbol),
 			optional: isUsage && u.Value != nil,
-		})
+		}
+		param.untyped = param.typ == nil && param.prim == PrimUnknown && !m.declaresType(p.Symbol)
+		sig.params = append(sig.params, param)
 	}
 	// A parameterless declaration with supertypes may inherit an unseen signature.
 	sig.known = len(sig.params) > 0 || (sym.Decl != nil && len(m.DirectSupertypes(sym)) == 0)
 	return sig
+}
+
+// declaresType reports whether sym writes a type or generalization, or implicitly
+// redefines a parameter it may take one from.
+func (m *Model) declaresType(sym *symbols.Symbol) bool {
+	for _, rel := range RelationshipsOf(sym) {
+		if rel != nil && GeneralizationKind(rel.Kind) {
+			return true
+		}
+	}
+	return len(m.implicitParameterRedefinitions(sym)) > 0
 }
 
 // applicable reports whether args bind to sig by count, name and type, and
@@ -275,6 +289,9 @@ func (m *Model) argumentBinds(arg Argument, p signatureParameter, mode bindMode)
 		if mode == bindStrict {
 			return fitOpen, false
 		}
+	}
+	if p.untyped {
+		return fitWiden, true
 	}
 	if PrimConforms(arg.Prim, p.prim) {
 		switch {
