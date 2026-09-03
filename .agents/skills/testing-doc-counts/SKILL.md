@@ -5,15 +5,21 @@ description: How to end-to-end test the generated documentation figures (cmd/doc
 
 # Testing the generated documentation figures (`cmd/doc-counts`)
 
-`cmd/doc-counts` regenerates three kinds of derived documentation from committed sources:
+`cmd/doc-counts` regenerates two kinds of derived documentation from the committed baselines:
 
-1. the census header line in `docs/project/spec-compliance.md` (from that file's own status markers);
-2. single-copy baseline lines in `README.md` (`**Reference differential:**`, `**Rejection oracle:**`);
-3. the HTML-comment-delimited named block `<!-- doc-counts:begin refereed-figures -->` …
+1. single-copy baseline lines in `README.md` (`**Reference differential:**`, `**Rejection oracle:**`);
+2. the HTML-comment-delimited named block `<!-- doc-counts:begin refereed-figures -->` …
    `<!-- doc-counts:end refereed-figures -->`, rendered from **one** template in
    `internal/doccounts/doccounts.go` into **two** consumers (`README.md` and
    `docs/internals/architecture.md`), differing only by `Block.LinkPrefix`
    (`docs/project/` vs `../project/`).
+
+The compliance map's own row census (`The map below tracks N semantic rules: …`) is **not** committed
+anywhere: `scripts/mkdocs_census.py` counts it from the rows and fills the
+`<!-- doc-counts:begin census -->` block in `docs/project/spec-compliance.md` while the site builds
+(`make docs`). `doc-counts` and the `cmd/pilot-diff` guard only refuse a `🚧` row. Test the hook with
+`python3 scripts/mkdocs_census-test.py`, and prove it live by grepping the built
+`site/project/spec-compliance/index.html` for `semantic rules:` after adding a row.
 
 The documentation site's landing band (`overrides/home.html`) is **not** a consumer: it names the
 four oracles and links to their records without quoting a figure, so it is hand-written markup that
@@ -35,8 +41,9 @@ to a possibly-unpublished record must use. `scripts/check-doc-links.py` only wal
 so it never sees `overrides/*.html`; the hook is the only guard, and both of its warnings
 (`which no page publishes`, `which does not exist`) fail `--strict`.
 
-Inputs are `docs/project/spec-compliance.md` and the three committed baselines
-`docs/project/pilot-{differential,xpect,rejection}-baseline.json` (`doccounts.ReadRefereedCounts`).
+Inputs are the three committed baselines
+`docs/project/pilot-{differential,xpect,rejection}-baseline.json` (`doccounts.ReadRefereedCounts`);
+`docs/project/spec-compliance.md` is read only to refuse a `🚧` row.
 
 `make docs-counts` = generate → `go run ./cmd/doc-counts -check` → `go test -count=1 ./cmd/pilot-diff
 ./cmd/pilot-reject ./cmd/doc-counts`.
