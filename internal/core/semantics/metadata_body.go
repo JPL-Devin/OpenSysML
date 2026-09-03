@@ -38,8 +38,20 @@ func (m *Model) MetadataBodyInevaluableValues(scope *symbols.Scope, prefix *ast.
 		return nil
 	}
 	var out []ast.Node
-	m.collectInevaluableValues(scope, prefix.Body, &out)
+	m.collectInevaluableValues(valueScope(scope, prefix), prefix.Body, &out)
 	return out
+}
+
+// valueScope is the scope a body's values resolve in: the one built for it, which
+// sees the metadata type's members before the annotated element's, else scope.
+func valueScope(scope *symbols.Scope, node ast.Node) *symbols.Scope {
+	if scope == nil {
+		return nil
+	}
+	if child := scope.ChildFor(node); child != nil {
+		return child
+	}
+	return scope
 }
 
 // collectInevaluableValues walks a metadata annotation body, collecting the
@@ -56,7 +68,7 @@ func (m *Model) collectInevaluableValues(scope *symbols.Scope, body []ast.Node, 
 		if usage.Value != nil && !m.ModelLevelEvaluable(scope, usage.Value) {
 			*out = append(*out, usage.Value)
 		}
-		m.collectInevaluableValues(scope, usage.Members, out)
+		m.collectInevaluableValues(valueScope(scope, usage), usage.Members, out)
 	}
 }
 

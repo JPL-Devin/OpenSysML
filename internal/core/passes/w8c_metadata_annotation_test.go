@@ -162,6 +162,39 @@ func TestMetadataBodyValueSelectsTheOverloadItCalls(t *testing.T) {
 	}
 }
 
+// A body value is judged in the body's own scope, where the metadata type's
+// members shadow what the annotated element sees: the call and the read below
+// name A's own function and feature, not the imported one and the evaluable one.
+func TestMetadataBodyValueIsJudgedInTheBodyScope(t *testing.T) {
+	src := `package P {
+	private import ScalarValues::*;
+	private import ControlFunctions::*;
+	feature k = 2;
+	metadata def A {
+		feature x;
+		feature y;
+		feature k;
+		function 'if' { in test : Boolean; in t : Integer; in f : Integer; return : Integer; }
+	}
+	feature a {
+		@A {
+			x = 'if'(true, 1, 2);
+			y = k;
+		}
+	}
+}`
+	found := findingsWithCode(metadataDiags(t, src), "metadata-value-not-evaluable")
+	want := []string{"= 'if'(true, 1, 2)", "= k"}
+	if len(found) != len(want) {
+		t.Fatalf("findings %v, want %v", found, want)
+	}
+	for i, f := range found {
+		if f.Text != want[i] {
+			t.Errorf("finding %d is %q, want %q", i, f.Text, want[i])
+		}
+	}
+}
+
 // A body with no fault draws nothing: a value the model folds and a feature that
 // restates one of the metadata type are both legal.
 func TestMetadataBodyWithoutFaultsIsSilent(t *testing.T) {
