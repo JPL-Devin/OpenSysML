@@ -149,8 +149,8 @@ var metaCommandTable = []metaCommand{
 	{group: groupLibrary, name: "%render", args: "<name> [form]", desc: "render a view as the rendering it states — as text, or as a Mermaid diagram or a Markdown table"},
 
 	{group: groupRuntime, name: "%instantiate", args: argName, desc: "create an instance of a part def"},
-	{group: groupRuntime, name: "%eval", args: "[in <name> :] <expr>", desc: "evaluate an expression, in the named element or object when one is named"},
-	{group: groupRuntime, name: "%features", args: "<name> [all|depth <n>] [json]", desc: "show an object's features and their values, bounded unless all or a depth is asked for; json writes the object graph as the API does"},
+	{group: groupRuntime, name: "%eval", args: "[in <name>|<path>|#<id> :] <expr>", desc: "evaluate an expression, in the named element or object when one is named"},
+	{group: groupRuntime, name: "%features", args: "<name> [all|depth <n>] [json]", desc: "show an object's feature values and what its behaviors are doing, bounded unless all or a depth is asked for; json writes the object graph as the API does"},
 	{group: groupRuntime, name: "%instances", desc: "list all instantiated objects"},
 	{group: groupRuntime, name: "%invoke", args: "<object> <op> [<p>=<expr>]", desc: "invoke an operation of an object's type, performed by that object (a name, a path such as driver.r, or an id such as #3)"},
 
@@ -173,7 +173,7 @@ var metaCommandTable = []metaCommand{
 	{group: groupAction, name: "%break", args: "<node>", desc: "set breakpoint at node"},
 	{group: groupAction, name: "%stop", desc: "stop current debugging session"},
 
-	{group: groupState, name: "%state", args: "<name> [<object>]", desc: "debug the machine an object exhibits (naming that machine attaches too), or a state machine performed by an object; an object is a name, a path such as driver.r, or an id such as #3"},
+	{group: groupState, name: "%state", args: "<name> [<object>]", desc: "debug the machine an object exhibits (naming that machine alone attaches to the one object exhibiting it; with none or several, name the object), or a state machine performed by an object; an object is a name, a path such as driver.r, or an id such as #3"},
 	{group: groupState, name: "%send", args: "<signal>[(<p>=<expr>, ...)] [to <object>]", desc: "send a signal to an object's machine, by default the one being debugged"},
 	{group: groupState, name: "%events", desc: "show event queue and signals in flight"},
 	{group: groupState, name: "%current", desc: "show current state and configuration"},
@@ -502,7 +502,7 @@ func (s *Session) doInstantiate(name string) ([]string, bool, error) {
 
 // evalUsage is what %eval accepts: an expression, optionally pinned to the
 // context it is evaluated in.
-const evalUsage = "usage: %eval [in <qualified-name> :] <expression>"
+const evalUsage = "usage: %eval [in <qualified-name> | <object-path> | #<id> :] <expression>"
 
 // doEvalLine carries out %eval, in the context the line pins when it names one.
 func (s *Session) doEvalLine(tail string) ([]string, bool, error) {
@@ -572,14 +572,11 @@ func contextSeparator(tail string) int {
 	return -1
 }
 
-// evalIn evaluates an expression in the context the command pinned: the object
-// materialized under that name, whose feature values it then reads as `%eval` does after
+// evalIn evaluates an expression in the context the command pinned: an object
+// the session holds — by id (#3), by feature path (ctx.recv) or by the name it is
+// materialized under — whose feature values it then reads as `%eval` does after
 // `%instantiate`, or else the named element's own namespace.
 func (s *Session) evalIn(name, expr string) ([]string, error) {
-	sym, fqn, lerr := s.lookupSymbol(name)
-	if lerr != nil {
-		return nil, lerr
-	}
 	ctx, err := s.getOrCreateRuntime()
 	if err != nil {
 		return nil, err
@@ -590,6 +587,28 @@ func (s *Session) evalIn(name, expr string) ([]string, error) {
 	}
 	if node == nil {
 		return nil, errors.New("could not parse expression")
+	}
+	if _, isID := objectID(name); isID || isObjectPath(name) {
+		inst, held, oerr := s.objectRef(name)
+		if oerr != nil {
+			return nil, oerr
+		}
+		scope := s.contextScope(inst.Type)
+		if scope == nil {
+			return nil, fmt.Errorf("object #%d names no namespace to evaluate in", inst.ID)
+		}
+		val, err := ctx.EvalWithScopeOn(node, scope, inst)
+		if err != nil {
+			return nil, evalError(expr, err, len(exprPrefix))
+		}
+		return []string{
+			fmt.Sprintf("✓ %s%s", expr, onInstance(inst, held)),
+			fmt.Sprintf("  = %s", formatValue(ctx, val)),
+		}, nil
+	}
+	sym, fqn, lerr := s.lookupSymbol(name)
+	if lerr != nil {
+		return nil, lerr
 	}
 	scope := s.contextScope(sym)
 	if scope == nil {
@@ -607,12 +626,29 @@ func (s *Session) evalIn(name, expr string) ([]string, error) {
 	}
 	val, err := ctx.EvalWithScope(node, scope)
 	if err != nil {
-		return nil, evalError(expr, err, len(exprPrefix))
+		// A feature the declarations give no value to reads as unset, as it does
+		// on an object; an operation over one fails, and a name nothing declares
+		// is an error.
+		var noValue *runtime.NoValueError
+		if !errors.As(err, &noValue) || !readsFeature(node, noValue.Ref) {
+			return nil, evalError(expr, err, len(exprPrefix))
+		}
+		return []string{
+			fmt.Sprintf("✓ %s (in %s)", expr, notationName(fqn)),
+			fmt.Sprintf("  = %s", runtime.UnsetText),
+		}, nil
 	}
 	return []string{
 		fmt.Sprintf("✓ %s (in %s)", expr, notationName(fqn)),
 		fmt.Sprintf("  = %s", formatValue(ctx, val)),
 	}, nil
+}
+
+// isObjectPath reports whether text spells a feature path from a name (ctx.recv),
+// which addresses an object rather than a namespace.
+func isObjectPath(text string) bool {
+	_, segments, ok := objectPath(text)
+	return ok && len(segments) > 0
 }
 
 // contextScope is the namespace a pinned context evaluates in: the element's own
@@ -795,7 +831,13 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 	// features and the units its imports bring in.
 	val, err := ctx.EvalWithScope(evalUsage.Value, s.promptScope())
 	if err != nil {
+		// A name the lookup missed but the expression reached resolved after
+		// all; finding no value there is not the unresolved name the lookup saw.
+		var noValue *runtime.NoValueError
 		if lookupErr != nil {
+			if errors.As(err, &noValue) && readsFeature(evalUsage.Value, noValue.Ref) {
+				return nil, fmt.Errorf("%q has no value to evaluate", expr)
+			}
 			return nil, lookupErr
 		}
 		return nil, evalError(expr, err, len(tempSrc)-len(expr)-1)
@@ -805,6 +847,22 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 		fmt.Sprintf("✓ %s", expr),
 		fmt.Sprintf("  = %s", formatValue(ctx, val)),
 	}, nil
+}
+
+// readsFeature reports whether an expression is a bare read (a name or a chain
+// of names) with ref as one of its own links, not a name read inside a default.
+func readsFeature(node ast.Node, ref *ast.QualifiedName) bool {
+	if ref == nil {
+		return false
+	}
+	switch n := node.(type) {
+	case *ast.FeatureReference:
+		return n.Name == ref
+	case *ast.FeatureChainExpr:
+		return n.Member == ref || readsFeature(n.Operand, ref)
+	default:
+		return false
+	}
 }
 
 // exprPrefix wraps an expression as a declaration of its own, so parsing it
@@ -1097,9 +1155,15 @@ type featureValueWalk struct {
 }
 
 func (w *featureValueWalk) lines(inst *runtime.Instance, indent string, depth int) []string {
+	return w.rows(inst, indent, depth, true)
+}
+
+// rows lists an object's values and, when asked, its behaviors; a behavior's
+// occurrence is listed without its own, since its row already reports what runs.
+func (w *featureValueWalk) rows(inst *runtime.Instance, indent string, depth int, withBehaviors bool) []string {
 	features := w.ctx.FeaturesOf(inst.Type)
 	connectors := w.connectors(inst, indent)
-	if len(features) == 0 && len(connectors) == 0 {
+	if len(features) == 0 && len(connectors) == 0 && withBehaviors {
 		return w.emit(nil, indent+"(no features)")
 	}
 
@@ -1110,11 +1174,20 @@ func (w *featureValueWalk) lines(inst *runtime.Instance, indent string, depth in
 	}
 
 	var lines []string
+	var behaviors []*runtime.EffectiveFeature
 	for i := range features {
 		if w.budget <= 0 {
 			return truncated(lines, "")
 		}
 		feat := &features[i]
+		// A state or action holds no value either; what it has is a run, or none,
+		// which is listed under its own heading after the values.
+		if isBehaviorFeature(feat) {
+			if withBehaviors {
+				behaviors = append(behaviors, feat)
+			}
+			continue
+		}
 		// A constraint or requirement the part carries has no value; what it has
 		// is a verdict about this instance, which is the useful thing to show.
 		if verdict, ok := featureVerdict(w.ctx, feat, inst); ok {
@@ -1132,16 +1205,164 @@ func (w *featureValueWalk) lines(inst *runtime.Instance, indent string, depth in
 			continue
 		}
 		lines = w.emit(lines, fmt.Sprintf("%s%s = %s", indent, feat.Name, formatFeatureValue(w.ctx, fv)))
+		// The object's remaining features keep a line each; a nested expansion
+		// spends only what is left beyond them.
+		reserved := len(features) - i - 1
 		for _, nested := range nestedInstances(w.ctx, fv) {
-			if w.budget <= 0 {
-				return truncated(lines, "  ")
+			if w.budget <= reserved {
+				lines = w.truncate(lines, indent+"  ")
+				break
 			}
+			w.budget -= reserved
 			w.onPath[nested.Type] = true
 			lines = append(lines, w.lines(nested, indent+"  ", depth+1)...)
 			delete(w.onPath, nested.Type)
+			w.budget += reserved
 		}
 	}
-	return append(lines, connectors...)
+	if w.budget <= 0 && len(behaviors) > 0 {
+		return truncated(lines, "")
+	}
+	return append(append(lines, w.behaviorLines(inst, behaviors, indent, depth)...), connectors...)
+}
+
+// isBehaviorFeature reports whether a feature is a state or action usage — a
+// named transition among them — a behavior of the object rather than a value it holds.
+func isBehaviorFeature(feat *runtime.EffectiveFeature) bool {
+	// An abstract one (Part::performedActions) is a collection held, not a run.
+	if feat.Symbol == nil || symbols.IsAbstract(feat.Symbol) {
+		return false
+	}
+	switch feat.Symbol.Kind {
+	case symbols.SymbolStateUsage, symbols.SymbolActionUsage:
+		return true
+	default:
+		return false
+	}
+}
+
+// behaviorLines lists an object's behaviors under their own heading with what each
+// is doing, and the values a running one's occurrence holds beneath its row.
+func (w *featureValueWalk) behaviorLines(inst *runtime.Instance, behaviors []*runtime.EffectiveFeature, indent string, depth int) []string {
+	if len(behaviors) == 0 {
+		return nil
+	}
+	heading, rowIndent := indent+"Behaviors:", indent+"  "
+	if depth == 0 {
+		heading, rowIndent = "Behaviors:", indent
+	}
+	lines := w.emit(nil, heading)
+	for _, feat := range behaviors {
+		if w.budget <= 0 {
+			return w.truncate(lines, rowIndent)
+		}
+		row := fmt.Sprintf("%s%s: %s", rowIndent, feat.Name, behaviorStatus(w.ctx, inst, feat))
+		if _, runs := w.ctx.BehaviorNamed(inst, feat.Name); !runs {
+			lines = w.emit(lines, row)
+			continue
+		}
+		if _, elided := w.elided(feat, depth); elided {
+			lines = w.emit(lines, fmt.Sprintf("%s (not expanded: %s)", row, w.elisionReason(depth)))
+			continue
+		}
+		lines = w.emit(lines, row)
+		fv, err := inst.GetFeatureValue(w.ctx, feat.Name)
+		if err != nil {
+			w.errs = append(w.errs, err)
+			lines = w.emit(lines, fmt.Sprintf("%s  <error: %v>", rowIndent, err))
+			continue
+		}
+		for _, occurrence := range nestedInstances(w.ctx, fv) {
+			if w.budget <= 0 {
+				return w.truncate(lines, rowIndent+"  ")
+			}
+			w.onPath[occurrence.Type] = true
+			lines = append(lines, w.rows(occurrence, rowIndent+"  ", depth+1, false)...)
+			delete(w.onPath, occurrence.Type)
+		}
+	}
+	return lines
+}
+
+// behaviorStatus describes what an object is doing with a behavior its type
+// declares. An exhibited machine's active state is rendered as %current renders
+// it, so the two agree; a transition is the step between states it declares. A
+// behavior a redefinition renamed reports the one execution under both names.
+func behaviorStatus(ctx *runtime.Context, inst *runtime.Instance, feat *runtime.EffectiveFeature) string {
+	if trans, ok := feat.Symbol.Decl.(*ast.TransitionMember); ok {
+		return transitionStatus(trans)
+	}
+	kind := "state"
+	if feat.Symbol.Kind == symbols.SymbolActionUsage {
+		kind = "action"
+	}
+	behavior, ok := ctx.BehaviorNamed(inst, feat.Name)
+	if !ok {
+		return kind + ", not running"
+	}
+	switch {
+	case behavior.State != nil:
+		return fmt.Sprintf("%s, %s", behavior.Kind, machineStatus(behavior.State))
+	case behavior.Action != nil:
+		return fmt.Sprintf("%s, %s", behavior.Kind, executionStatus(behavior.Action.State()))
+	default:
+		return kind + ", not running"
+	}
+}
+
+// transitionStatus renders a transition as the step it declares, `first source
+// then target`; a target transition written inside its source state has no
+// source of its own to name.
+func transitionStatus(trans *ast.TransitionMember) string {
+	if trans.Source == nil {
+		return "transition, then " + stateNameAsWritten(trans.Target)
+	}
+	return fmt.Sprintf("transition, %s → %s", stateNameAsWritten(trans.Source), stateNameAsWritten(trans.Target))
+}
+
+// stateNameAsWritten renders a transition end as the model spells it: `modes.closed`
+// reaches through the exhibited machine, `Modes::closed` into its namespace, and a
+// name that is not a basic one keeps its quotes, so the row can be typed back.
+func stateNameAsWritten(qn *ast.QualifiedName) string {
+	if qn == nil {
+		return "<?>"
+	}
+	var sb strings.Builder
+	if qn.Global {
+		sb.WriteString("$::")
+	}
+	for i, p := range qn.Parts {
+		switch {
+		case i == 0:
+		case p.Chained:
+			sb.WriteString(".")
+		default:
+			sb.WriteString("::")
+		}
+		sb.WriteString(lexer.NameText(p.Text))
+	}
+	return sb.String()
+}
+
+// machineStatus is where a state machine run stands: not started, completed, or
+// the configuration it is in.
+func machineStatus(exec *runtime.StateExecutor) string {
+	switch exec.State() {
+	case runtime.StateReady:
+		return "not started"
+	case runtime.StateCompleted:
+		return "completed"
+	default:
+		return "current state " + currentStateName(exec)
+	}
+}
+
+// executionStatus spells an execution state as a listing reads it.
+func executionStatus(state runtime.ExecutionState) string {
+	if state == runtime.StateReady {
+		return "not started"
+	}
+	return strings.ToLower(state.String())
 }
 
 // connectors lists the connectors the object owns that no feature names: an
@@ -1254,9 +1475,10 @@ func nestedInstances(ctx *runtime.Context, fv *runtime.FeatureValue) []*runtime.
 
 // featureVerdict evaluates a constraint or requirement feature against the
 // instance that carries it and renders the outcome for a feature value listing.
-// Reports false for a feature that holds a value rather than a verdict.
+// Reports false for a feature that holds a value rather than a verdict, which a
+// multi-valued one does: it collects checks rather than being one.
 func featureVerdict(ctx *runtime.Context, feat *runtime.EffectiveFeature, inst *runtime.Instance) (string, bool) {
-	if feat.Symbol == nil {
+	if feat.Symbol == nil || !feat.Scalar() {
 		return "", false
 	}
 	var (
@@ -1311,10 +1533,13 @@ func (s *Session) doInstances() ([]string, bool, error) {
 }
 
 // formatFeatureValue renders what a feature value holds: a multi-valued feature keeps its
-// contents in Values, leaving the scalar Value unset.
+// contents in Values, leaving the scalar Value unset; a scalar holding nothing reads as unset.
 func formatFeatureValue(ctx *runtime.Context, fv *runtime.FeatureValue) string {
 	if fv.Values.Kind != runtime.ValInvalid {
 		return formatValue(ctx, fv.Values)
+	}
+	if fv.Value.Kind == runtime.ValInvalid {
+		return runtime.UnsetText
 	}
 	return formatValue(ctx, fv.Value)
 }
@@ -2237,6 +2462,25 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 
 	if !isMachine {
 		return nil, fmt.Errorf("%q is not a state machine", name)
+	}
+
+	// A machine named alone runs on the one held object exhibiting it. Zero or
+	// several exhibitors is refused: a detached run would write to no object.
+	if len(performer) == 0 {
+		switch exhibitors := s.exhibitorsOf(ctx, sym); len(exhibitors) {
+		case 0:
+			if types := s.exhibitingTypes(ctx, sym); len(types) > 0 {
+				return nil, s.exhibitorsError(name, types, nil)
+			}
+		case 1:
+			ex := exhibitors[0]
+			if len(ex.machines) > 1 {
+				return nil, s.ambiguousMachine(name, ex.inst, ex.name, ex.machines)
+			}
+			return s.attachExhibitedMachine(ctx, name, heldName(ex.inst, ex.name), ex.inst, ex.machines[0])
+		default:
+			return nil, s.exhibitorsError(name, nil, exhibitors)
+		}
 	}
 
 	self, selfFQN, perr := s.performingObject(performer)

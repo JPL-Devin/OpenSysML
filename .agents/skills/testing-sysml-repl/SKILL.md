@@ -5507,3 +5507,91 @@ tells you which one ran without any debug flag.
 - The blueprint's venv is `~/pv` (see the maintenance block), but it can exist without the editable
   `opensysml` install; `~/pv/bin/pip install -e clients/python` (or a fresh `python3 -m venv`) takes
   under a minute and the non-tty one-shot `python script.py` with auto-start worked (35 ms connect).
+
+## Library feature tiers on `%features`/`%eval` (PR #830) and headless screenshot fallback
+
+`buildFeatures` now skips only the Kernel *frame* (`self`, `portions`, `timeSlices`, `snapshots`,
+`startShot`, `endShot`, `incomingTransfers`, `outgoingTransfers`) and materializes Systems/Domain
+library features (`Parts::Part` → `subitems`, `subparts`, `checkedConstraints`, `ownedPorts` …;
+`ShapeItems::Box` → `shape`, `voids`, `isSolid = true`, `faces`, `edges` …). Things that only bite
+when you try to prove this from the binary:
+
+- **The differential is `%eval box.isSolid`**: merge-base prints
+  `error: evaluation failed: member isSolid not found in instance`, the branch prints `= true`.
+  Build the old binary in a `git worktree add /tmp/wt-old $(git merge-base HEAD origin/main)`;
+  `make build-sysml` there and **copy `bin/sysml` out** before removing the worktree.
+- **Every `part def` now lists ~13 inherited lines** (`ownedPorts = []` … `checkedConstraints = []`),
+  so a "plain model shows only `x`" expectation is false by design. Assert `x = 1` is present and the
+  frame names are absent (`grep -cwE 'self|portions|timeSlices|snapshots|startShot|endShot'` → 0)
+  rather than asserting line counts. The robot demo's `%features Robot::fielded` grew from 87 to
+  ~430 lines with 14 `… (listing truncated)` markers; still < 0.1 s.
+- **`%eval box.shape` prints `[]` while `%features` prints `shape = <unset>`** for the same
+  `[0..1]` feature (the evaluator returns an empty sequence; the listing renders the scalar). gRPC
+  `Instance.features["shape"] is opensysml.UNSET`, `model.eval("Demo::box.shape") == []`. Accept
+  either but note the split if the spec you're given says one word.
+- **`subject veh : V = v;` binds since 60b8118f**: `%features` shows `veh = Instance(ID: n)` and
+  `subj = Instance(ID: n)` (merge-base showed `veh = <unknown>`; before that commit `<unset>`, with
+  only the `:>> veh = v;` spelling binding). `%eval r.veh` with a bare requirement name still fails
+  (`unresolved reference: r`) — read it from `%features`.
+- **Qualified valueless optional (9bbb2dcb)**: `%eval Q::names` is intercepted by the REPL
+  (`error: "Q::names" has no value to evaluate`) on every build, so the evaluator fix is invisible
+  there. Use an expression: `%eval Q::names->size()` → `= 0` on the fix, `usage Q::names has no
+  value` before; required `Q::weight->size()` must keep the error on both.
+- `%eval usage.x` with a bare usage name resolves only when the file has a single package;
+  `examples/disposal-robot-demo/robot.sysml` needs `%eval Robot::fielded.mass`. Requirement usages
+  are never resolvable bare (`unresolved reference: massLimit`) — spell them `Demo::massLimit.limit`,
+  which then reports `usage Demo::massLimit has no value` (pre-existing).
+- **`XDG_CACHE_HOME` cold/warm is a no-op on the default path**: the embedded snapshot serves the
+  library and the dir stays empty. To exercise the on-disk cache, point `OPENSYSML_LIBRARY_PATH` at
+  a copy of `internal/core/libs/stdlib` with a comment appended to a `.kerml`; the cold run then
+  writes 97 `*.idx` files under `$XDG_CACHE_HOME/sysml-ls/libs` and the warm run must diff empty
+  against both cold and the default-path transcript.
+- `printf "$CMDS"` with `%load` in the variable is a format-string bug (`0ad …` on line 1): use a
+  heredoc file and `./bin/sysml < cmds.txt`, or `printf '%%load …'`.
+- `pip install -e clients/python/` into `~/pv` took ~1 min; `sysml-grpc -port 50123 -health-port 0`
+  then `opensysml.connect(port=50123, auto_start=False)`. `Model.load` needs an **absolute** path
+  (the service resolves relative paths against *its* cwd). `pkill -x sysml-grpc`, never `-f`.
+
+### When the computer-use tool is unavailable (`enigo init failed`)
+The recording tool needs the desktop; without it, still get PR-comment screenshots by rendering a
+Konsole under Xvfb: `Xvfb :7 -screen 0 1600x1000x24 &`, `DISPLAY=:7 konsole --geometry 1600x1000+0+0
+-p Font="DejaVu Sans Mono,11" -e /tmp/demo.sh &` (the script ends in `sleep 600`), then
+`import -display :7 -window root shot.png`. Verify text landed with
+`convert shot.png -threshold 50% -format '%[fx:mean]' info:` (≈0.02–0.06, not 0). Do **not** clean
+up with `pkill -f demo.sh` from the same one-shot shell — it matches its own command line and kills
+the shell before `import` runs; use `pkill -x konsole` and a separate call.
+
+## `%state <machine>` alone: exhibitor lookup and its two traps (PR #845 class)
+
+Since PR #845 the one-argument `%state <machine>` form walks the *held* objects for exhibitors of
+the machine and attaches to the one found (`Debugging state machine "lp" exhibited by object #1
+of "TA::Sys"`), refusing with a typed `ExhibitorsError` for zero or several. The load-bearing
+probe is `internal/repl/testdata/exhibited_timer.sysml`: `%instantiate TA::Sys`, `%state lp`,
+`%advance 2.5 [s]`, `%features #1` → `x = 0.6000000000000001`, `n = 3`; a detached run (the
+pre-#845 behaviour, or any regression to it) leaves `x = 0.2`, `n = 1` while still printing
+`Advanced to 2.5 (2 event(s) processed)`, so assert on `%features`, not on the advance line.
+`%state #1` is the oracle: both forms must agree.
+
+Two things that look like the several-exhibitor path but are not:
+- `%instantiate TA::Sys` twice does **not** hold two objects — the second *supersedes* the first
+  (`note: TA::Sys now denotes this object; object #1 is no longer named`), so `%state lp` attaches
+  to the new one. Use two differently named usages (e.g. `nested_machine.sysml`'s `Fleet::rover` and
+  `Fleet::driver`, whose `driver.r` is a second `Rover`).
+- Nested parts count only once **materialized**. `%instantiate Fleet::rover` + `%instantiate
+  Fleet::driver` then `%state Fleet::Rover::modes` attaches to `#1 of "Fleet::rover"` with no
+  error, because `driver.r` has not been reached yet; run `%features Fleet::driver` first and the
+  same `%state` refuses with `2 objects of this session exhibit … (#1 of "Fleet::rover", #4 of
+  "Fleet::driver::r")`. The walk deliberately materializes nothing, so the answer follows what
+  the session has reached; materialize first when a nested exhibitor is meant to count.
+
+Zero exhibitors is type-aware: a `state def` bound through typed usages (`shared_machine.sysml`:
+`exhibit state front : Blink`) refuses before any `%instantiate`, naming `"Shared::Lamp"`, and so
+does any usage on the way to the body (`named_usage_machine.sysml`: `state spare : Blink; exhibit
+state active ::> spare;` — `%state Relay::Beacon::spare` and `%state Relay::Blink` both refuse, then
+attach to `active`). Only a `state def` no type exhibits (`performed_machine.sysml`: `Two::Check`)
+still prints `Started state machine executor`. The CLI mirrors the REPL: `-state lp` without
+`-instantiate` exits 2 with the same message prefixed `sysml:`.
+
+Branch-moved trap: the lead may push a follow-up commit mid-run. Compare `./bin/sysml --version`
+with `git rev-parse --short HEAD` before every batch and rebuild when they differ; the version
+string is the only thing that tells a stale binary from a fresh one.

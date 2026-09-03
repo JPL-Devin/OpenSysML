@@ -21,26 +21,23 @@ import (
 // the two names read one feature value rather than two — `part subsystems :>> Subsystems`
 // makes `Subsystems.mass` read the values held under `subsystems`.
 
-// relatedFeatures returns the features of owner that sym's relationships of the
-// given kind name. An unqualified name the declaring scope cannot see is looked
-// up among owner's members (`part a : Sub :> subsystem`); a target resolving
-// outside owner names no feature of it (`:> ISQ::mass`).
+// relatedFeatures returns the features of owner that sym's relationships of the given kind name:
+// the resolved target, or owner's own same-named declaration masking it; an unresolved name is looked up on owner.
 func (ctx *Context) relatedFeatures(sym, owner *symbols.Symbol, kind ast.RelationshipKind) []*symbols.Symbol {
 	var features []*symbols.Symbol
-	for _, rel := range semantics.RelationshipsOf(sym) {
-		if rel == nil || rel.Kind != kind || rel.Target == nil {
-			continue
-		}
-		target := rel.Target
-		if fr, ok := target.(*ast.FeatureReference); ok {
-			target = fr.Name
-		}
-		qn, ok := target.(*ast.QualifiedName)
-		if !ok || len(qn.Parts) == 0 {
-			continue
-		}
-		if resolved, ok := ctx.resolver.ResolveQualified(sym.OwnerScope, qn); ok && resolved != nil && resolved != sym {
+	for _, qn := range relationshipTargets(sym, kind) {
+		resolved, ok := ctx.resolver.ResolveQualified(sym.OwnerScope, qn)
+		if ok && resolved != nil && resolved != sym {
 			if ctx.isFeatureOf(owner, resolved, sym) {
+				features = append(features, resolved)
+				continue
+			}
+			if !ctx.inheritsDeclaration(owner, resolved) {
+				continue
+			}
+			if own, declared := ctx.ownDeclarationNamed(owner, sym, qn.Parts[len(qn.Parts)-1].Text, resolved.Name, resolved.ShortName); declared {
+				features = append(features, own)
+			} else {
 				features = append(features, resolved)
 			}
 			continue
@@ -53,6 +50,56 @@ func (ctx *Context) relatedFeatures(sym, owner *symbols.Symbol, kind ast.Relatio
 		}
 	}
 	return features
+}
+
+// inheritsDeclaration reports whether owner takes its members from the type declaring feature.
+func (ctx *Context) inheritsDeclaration(owner, feature *symbols.Symbol) bool {
+	if feature.OwnerScope == nil {
+		return false
+	}
+	for _, src := range ctx.model.MemberSources(owner) {
+		if src.Scope == feature.OwnerScope {
+			return true
+		}
+	}
+	return false
+}
+
+// ownDeclarationNamed returns the first member other than sym that owner itself
+// declares under one of names (a feature's written, primary or short name), not one it inherits.
+func (ctx *Context) ownDeclarationNamed(owner, sym *symbols.Symbol, names ...string) (*symbols.Symbol, bool) {
+	for _, name := range names {
+		if name == "" {
+			continue
+		}
+		member, found := ctx.model.LookupMember(owner, name)
+		if !found || member == nil || member == sym {
+			continue
+		}
+		if contributed, ok := ctx.model.LookupContributedMember(owner, name); ok && contributed == member {
+			continue
+		}
+		return member, true
+	}
+	return nil, false
+}
+
+// relationshipTargets returns the names sym's relationships of the given kind name.
+func relationshipTargets(sym *symbols.Symbol, kind ast.RelationshipKind) []*ast.QualifiedName {
+	var names []*ast.QualifiedName
+	for _, rel := range semantics.RelationshipsOf(sym) {
+		if rel == nil || rel.Kind != kind || rel.Target == nil {
+			continue
+		}
+		target := rel.Target
+		if fr, ok := target.(*ast.FeatureReference); ok {
+			target = fr.Name
+		}
+		if qn, ok := target.(*ast.QualifiedName); ok && len(qn.Parts) > 0 {
+			names = append(names, qn)
+		}
+	}
+	return names
 }
 
 // isFeatureOf reports whether owner carries feature under its name, as its own
@@ -193,10 +240,12 @@ func (ctx *Context) redefinedNames(sym, owner *symbols.Symbol) []string {
 		cur := queue[0]
 		queue = queue[1:]
 		// An end of a connector redefines the end at its position of each
-		// connector its owner specializes without naming it, so the two names read
-		// one feature value as an explicit redefinition's do.
+		// connector its owner specializes, and a subject or objective redefines
+		// the one its owner inherits, without naming it: the two names read one
+		// feature value as an explicit redefinition's do.
 		redefines := append(ctx.relatedFeatures(cur, owner, ast.RelRedefines),
 			ctx.model.ImplicitEndRedefinitions(cur)...)
+		redefines = append(redefines, ctx.model.ImplicitRoleRedefinitions(cur)...)
 		for _, redefined := range redefines {
 			if seen[redefined] {
 				continue

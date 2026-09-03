@@ -69,6 +69,8 @@ type Context struct {
 	// occurrences holds the object each usage carrying no value of its own
 	// denotes, so a feature chain through a part reads one occurrence of it.
 	occurrences map[*symbols.Symbol]int64
+	// behaving memoizes runsBehaviors per type; the model is fixed for the context's life.
+	behaving map[*symbols.Symbol]bool
 
 	// variantObjects holds the object a variant stands for per owner that
 	// selected it, so repeated reads of one selection read the same object.
@@ -108,6 +110,10 @@ type Context struct {
 
 	// behaviorRunDepth is the number of classifier-behavior starts under way.
 	behaviorRunDepth int
+
+	// heldBehaviors are the behaviors already holding work when the outermost
+	// start under way began: a driver put it in flight, and dispatches it.
+	heldBehaviors map[*ObjectBehavior]bool
 
 	// objectBehaviors are every behavior an object of this context runs, so a
 	// drain to quiescence can re-run one a sibling's send woke.
@@ -235,6 +241,7 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		maxCalcDepth:   DefaultMaxCalcDepth,
 
 		occurrences:      make(map[*symbols.Symbol]int64),
+		behaving:         make(map[*symbols.Symbol]bool),
 		variantObjects:   make(map[variantObject]int64),
 		selectedVariants: make(map[variantSelection]string),
 

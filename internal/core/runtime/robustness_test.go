@@ -231,6 +231,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("variation_bound_to_two_variants", testVariationBoundToTwoVariants)
 	t.Run("variation_read_through_its_declaration", testVariationReadThroughItsDeclaration)
 	t.Run("chain_through_an_unselected_variation_part", testChainThroughAnUnselectedVariationPart)
+	t.Run("classify_an_unselected_optional_variation", testClassifyAnUnselectedOptionalVariation)
 	t.Run("repeated_reads_of_a_variant_object", testRepeatedReadsOfAVariantObject)
 	t.Run("two_owners_selecting_one_variant", testTwoOwnersSelectingOneVariant)
 	t.Run("two_ownerless_selections_of_one_variant", testTwoOwnerlessSelectionsOfOneVariant)
@@ -2618,7 +2619,8 @@ func testSendViaConnectorIntoAnEmptyPart(t *testing.T) {
 // the assembly's boundary port, but nothing in the context joins that boundary
 // port, so the send reaches no receiving port. It is reported where the inner
 // machine sent it, the same as an unconnected port of the sender's own, rather
-// than dropped silently.
+// than dropped silently — and, as the inner part runs with the context it is
+// created under, the context's creation is what reports it.
 func testSendViaBoundBoundaryPortJoinedToNothing(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {`+directedPorts+`
 		part def Inner {
@@ -2639,16 +2641,15 @@ func testSendViaBoundBoundaryPortJoinedToNothing(t *testing.T) {
 			part env : Env;
 		}
 	}`))
-	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::ctx"))
-	if err != nil {
-		t.Fatalf("instantiate ctx: %v", err)
-	}
-	_, err = featureValueAtPath(t, ctx, inst, "asm.child")
+	_, err := ctx.Instantiate(oneSymbol(t, idx, "P::ctx"))
 	if !errors.Is(err, ErrUnroutableSend) {
-		t.Fatalf("materialize asm.child: err = %v, want %v", err, ErrUnroutableSend)
+		t.Fatalf("instantiate ctx: err = %v, want %v", err, ErrUnroutableSend)
 	}
 	if pending := ctx.PendingMessages(); len(pending) != 0 {
 		t.Errorf("pending messages = %+v, want none", pending)
+	}
+	if got := len(ctx.instances); got != 0 {
+		t.Errorf("%d object(s) survive the failed creation, want none", got)
 	}
 }
 
@@ -5393,7 +5394,8 @@ func testAcceptPayloadWithoutAValue(t *testing.T) {
 
 // testAcceptPayloadReadBeforeItIsBound: the payload is a declaration of the body
 // wherever the body resolves, so a node running before the accept binds it
-// resolves the name and finds no value — reported, not read as an empty value.
+// resolves the name and finds no value — reported as a feature without a value,
+// not read as an empty value and not as a name that fails to resolve.
 func testAcceptPayloadReadBeforeItIsBound(t *testing.T) {
 	_, err := executeActionSource(t, "pipeline", `package P {
 		action pipeline {
@@ -5407,8 +5409,11 @@ func testAcceptPayloadReadBeforeItIsBound(t *testing.T) {
 			succession first waiter then done;
 		}
 	}`)
-	if !errors.Is(err, ErrUnresolvedReference) {
-		t.Fatalf("err = %v; want ErrUnresolvedReference", err)
+	if !errors.Is(err, ErrNoValue) {
+		t.Fatalf("err = %v; want ErrNoValue", err)
+	}
+	if errors.Is(err, ErrUnresolvedReference) {
+		t.Errorf("a declared payload was reported as unresolved: %v", err)
 	}
 	if !strings.Contains(err.Error(), "msg") {
 		t.Errorf("error does not name the payload: %v", err)
@@ -6709,6 +6714,30 @@ func testChainThroughAnUnselectedVariationPart(t *testing.T) {
 	got, err := variationFeatureValueInSource(t, src, "test::probe", "p")
 	if !errors.Is(err, ErrVariationUnselected) {
 		t.Errorf("p = (%v, %v), want ErrVariationUnselected", got, err)
+	}
+}
+
+// testClassifyAnUnselectedOptionalVariation: an optional variation nothing selects
+// a variant for is a choice, not an empty collection, so `istype` reports that
+// rather than vacuously matching every type.
+func testClassifyAnUnselectedOptionalVariation(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		part def Engine;
+		part def Motor :> Engine;
+		variation part engine : Engine[0..1] {
+			variant part electric : Motor;
+			variant part diesel : Engine;
+		}
+		attribute isMotor : Boolean = engine istype Motor;
+		attribute hasMotor : Boolean = engine hastype Motor;
+	}`
+	for _, probe := range []string{"test::isMotor", "test::hasMotor"} {
+		got, err := variationReadFromDeclaration(t, src, probe)
+		if !errors.Is(err, ErrVariationUnselected) {
+			t.Errorf("%s = (%v, %v), want ErrVariationUnselected", probe, got, err)
+		}
 	}
 }
 
