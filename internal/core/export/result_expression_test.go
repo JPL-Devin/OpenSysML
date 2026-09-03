@@ -338,15 +338,23 @@ ex:y a sysml:AttributeUsage ; sysml:qualifiedName "P::C::y" ; sysml:declaredName
 ex:y_m a sysml:FeatureMembership ; sysml:membershipOwningNamespace ex:C ; sysml:memberElement ex:y .
 `
 	const want = "calc def C {\n        in attribute x : Real;\n        attribute y : Real;\n        (x * 2)\n    }"
-	back, err := export.Convert("m.ttl", []byte(turtle), export.FormatTurtle, export.FormatSysML)
-	if err != nil {
-		t.Fatalf("back to notation with the result listed first: %v", err)
+	// A member indexed as high as an index goes still comes ahead of the result.
+	indexed := strings.Replace(turtle, "ex:y a sysml:AttributeUsage ;",
+		fmt.Sprintf("ex:y a sysml:AttributeUsage ; <urn:opensysml:sysml:memberIndex> \"%d\"^^xsd:integer ;", math.MaxInt), 1)
+	if indexed == turtle {
+		t.Fatal("the attribute was not given an index")
 	}
-	if !strings.Contains(string(back), want) {
-		t.Errorf("the notation lacks %q:\n%s", want, back)
-	}
-	if _, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle); err != nil {
-		t.Fatalf("the notation written does not parse: %v", err)
+	for name, graph := range map[string]string{"unindexed": turtle, "highest index": indexed} {
+		back, err := export.Convert("m.ttl", []byte(graph), export.FormatTurtle, export.FormatSysML)
+		if err != nil {
+			t.Fatalf("%s: back to notation with the result listed first: %v", name, err)
+		}
+		if !strings.Contains(string(back), want) {
+			t.Errorf("%s: the notation lacks %q:\n%s", name, want, back)
+		}
+		if _, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle); err != nil {
+			t.Fatalf("%s: the notation written does not parse: %v", name, err)
+		}
 	}
 }
 

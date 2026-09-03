@@ -32,6 +32,9 @@ type element struct {
 	iri         string
 	metaclass   string
 	memberIndex int
+	// trailing marks a result expression the graph gives no index: it follows
+	// every indexed member, as the grammar has it.
+	trailing bool
 	// qname is the element's sysml:qualifiedName: the mutable label a
 	// reference is written back as. Identity is the element id, not the name.
 	qname string
@@ -533,8 +536,12 @@ func (d *decoder) build() ([]*element, error) {
 				Note: "it has no rdf:type, so there is no way to tell what to write",
 			}
 		}
-		el := &element{iri: subject.Value, metaclass: metaclass}
-		el.memberIndex = d.memberIndexOf(el)
+		el := &element{
+			iri:         subject.Value,
+			metaclass:   metaclass,
+			memberIndex: intOf(d.graph, subject, rdf.OpenSysML+xMemberIndex),
+		}
+		el.trailing = !d.graph.HasProperty(subject, rdf.OpenSysML+xMemberIndex) && d.isResultExpression(el)
 		el.qname, _ = d.stringOf(el, rdf.SysML+pQualifiedName)
 		// The identity key. An old graph without sysml:elementId is keyed on
 		// the encoding of its name, which is what its IRIs carry.
@@ -838,20 +845,15 @@ func (d *decoder) checkReachable(roots, all []*element) error {
 	return nil
 }
 
-// memberIndexOf places el among its siblings. A graph stating no
-// sysx:memberIndex leaves its members in graph order, except a result
-// expression, which the grammar puts last in its body.
-func (d *decoder) memberIndexOf(el *element) int {
-	subject := rdf.IRI(el.iri)
-	if !d.graph.HasProperty(subject, rdf.OpenSysML+xMemberIndex) && d.isResultExpression(el) {
-		return math.MaxInt
-	}
-	return intOf(d.graph, subject, rdf.OpenSysML+xMemberIndex)
-}
-
+// sortByIndex orders members by sysx:memberIndex, a result expression stated
+// without one after them all; members alike in both keep the graph's order.
 func sortByIndex(elements []*element) {
 	sort.SliceStable(elements, func(i, j int) bool {
-		return elements[i].memberIndex < elements[j].memberIndex
+		a, b := elements[i], elements[j]
+		if a.trailing != b.trailing {
+			return b.trailing
+		}
+		return a.memberIndex < b.memberIndex
 	})
 }
 
