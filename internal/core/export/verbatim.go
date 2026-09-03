@@ -79,22 +79,58 @@ func lexesClean(text string) bool {
 }
 
 // keepsText reports whether an element kept as source text is written as that
-// text: it lexes clean, and the graph states no form to rebuild its head from
-// or the head rebuilt from the form is the same spelling as the text. A form
-// the graph states but cannot rebuild is reported from the graph, not papered
-// over by the text.
+// text: it lexes clean, and the head rebuilt from the form the graph states is
+// the same spelling as the text — or, where the graph states no form, the text
+// read back as a declaration states the graph. A form the graph states but
+// cannot rebuild is reported from the graph, not papered over by the text.
 func (d *decoder) keepsText(el *element, text string) bool {
 	if !lexesClean(text) {
 		return false
 	}
 	if !d.graph.HasProperty(rdf.IRI(el.iri), rdf.OpenSysML+xEndForm) {
-		return true
+		return d.textStatesElement(el, text)
 	}
 	head, err := d.head(el)
 	if err != nil {
 		return false
 	}
 	return sameSpelling(text, head+";")
+}
+
+// textStatesElement reports whether a declaration kept as text alone states
+// exactly what the graph carries for its element: the text is parsed as the one
+// member it is, mapped with the same encoder in the element's scope, and the
+// two graphs must make the same statements about it. Where the element sits
+// is the graph's to state, not the text's (see placementPredicate). The graph
+// does not record which notation the text was read in, so both are tried.
+func (d *decoder) textStatesElement(el *element, text string) bool {
+	return d.textStatesElementIn(el, text, source.KindSysML) || d.textStatesElementIn(el, text, source.KindKerML)
+}
+
+func (d *decoder) textStatesElementIn(el *element, text string, kind source.Kind) bool {
+	sf := source.NewWithKind("<declaration>", []byte(text), kind)
+	p := parser.New(sf)
+	root := p.ParseFile()
+	if len(p.Diagnostics) > 0 || len(root.Members) != 1 {
+		return false
+	}
+	node, visibility := unwrapMember(root.Members[0])
+	if node == nil || visibilityKeyword(visibility) != d.visibility(el) {
+		return false
+	}
+	stated := &encoder{
+		file:     sf,
+		graph:    rdf.NewGraph(),
+		declared: d.declaredNames(),
+		ids:      &identityFacts{},
+		subjects: map[string]string{},
+	}
+	if err := stated.encodeMember(node, visibility, el.scope, rdf.Term{}, el.memberIndex); err != nil || stated.idErr != nil {
+		return false
+	}
+	name, _ := declaredNameAndMembers(node)
+	subject := stated.ids.subjectFor(qualify(el.scope, name, el.memberIndex))
+	return d.sameStatements(rdf.IRI(el.iri), subject, stated.graph, true)
 }
 
 // textStatesGraph reports whether an expression node's stored notation states
@@ -123,7 +159,7 @@ func (d *decoder) textStatesGraph(node rdf.Term, text, scope string) bool {
 		subjects: map[string]string{},
 	}
 	stated.expressionNode(node, scope, expr)
-	return d.sameStatements(node, stated.graph, true)
+	return d.sameStatements(node, node, stated.graph, true)
 }
 
 // textOnly reports whether the graph states nothing about an expression node
@@ -153,6 +189,19 @@ func layoutPredicate(predicate string, root bool) bool {
 	return false
 }
 
+// placementPredicate reports whether a predicate states where a declaration
+// sits rather than what it declares: its owner, its position, its declared id
+// and the visibility its membership carries, which the printer places itself.
+func placementPredicate(predicate string) bool {
+	switch predicate {
+	case rdf.SysML + pOwningNamespace, rdf.SysML + pOwner, rdf.SysML + pOwningRelationship,
+		rdf.SysML + pOwningMembership, rdf.SysML + pOwningRelatedElement, rdf.SysML + pVisibility,
+		rdf.OpenSysML + xMemberIndex, rdf.OpenSysML + xDeclaredID:
+		return true
+	}
+	return false
+}
+
 // declaredNames is the set of qualified names the graph declares, which is what
 // a name in an expression resolves against, as it did when the graph was written.
 func (d *decoder) declaredNames() map[string]bool {
@@ -167,22 +216,24 @@ func (d *decoder) declaredNames() map[string]bool {
 	return d.declared
 }
 
-// sameStatements reports whether the graph and stated make the same structural
-// statements about an expression node, nested nodes included. Objects are
+// sameStatements reports whether the graph's statements about have are the
+// statements stated makes about want, nested nodes included. Objects are
 // compared as sets: RDF states no order among the objects of one property.
-func (d *decoder) sameStatements(node rdf.Term, stated *rdf.Graph, root bool) bool {
+// At the root of a declaration, placement is the graph's alone to state.
+func (d *decoder) sameStatements(have, want rdf.Term, stated *rdf.Graph, root bool) bool {
+	declaration := root && !d.isExpressionNode(have)
 	predicates := map[string]bool{}
-	for _, predicate := range d.graph.Predicates(node) {
+	for _, predicate := range d.graph.Predicates(have) {
 		predicates[predicate] = true
 	}
-	for _, predicate := range stated.Predicates(node) {
+	for _, predicate := range stated.Predicates(want) {
 		predicates[predicate] = true
 	}
 	for predicate := range predicates {
-		if layoutPredicate(predicate, root) {
+		if layoutPredicate(predicate, root) || declaration && placementPredicate(predicate) {
 			continue
 		}
-		if !d.sameObjects(d.graph.Objects(node, predicate), stated.Objects(node, predicate), stated) {
+		if !d.sameObjects(d.graph.Objects(have, predicate), stated.Objects(want, predicate), stated) {
 			return false
 		}
 	}
@@ -212,13 +263,13 @@ func (d *decoder) sameObjects(have, want []rdf.Term, stated *rdf.Graph) bool {
 
 // sameObject compares one object the graph states with the one the text
 // states: a nested node recursively, an element by the element it names, and
-// anything else by value.
+// anything else by value. A nested node's position is among its statements.
 func (d *decoder) sameObject(have, want rdf.Term, stated *rdf.Graph) bool {
 	if have.IsLiteral() || want.IsLiteral() {
 		return have == want
 	}
 	if d.isExpressionNode(have) {
-		return have.Value == want.Value && d.sameStatements(have, stated, false)
+		return d.sameStatements(have, want, stated, false)
 	}
 	if target, err := d.referencedElement(have.Value); err == nil {
 		named, ok := rdf.DecodeElementID(rdf.LocalName(want.Value))

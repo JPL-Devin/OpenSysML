@@ -202,7 +202,11 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   compared token by token with whitespace, name quoting and `:>`-for-`subsets` set aside, and
   spells the head or expression from the graph's structure otherwise: a stored text naming other
   ends or another operator than the graph gives way to the graph, and a graph with no stored text
-  at all still writes as it did. Relationship clauses come back in the order the graph states them.
+  at all still writes as it did. A declaration the graph keeps as text alone, with no `sysx:endForm`
+  to rebuild its head from, is read back as a declaration and mapped again, and is written as
+  stored only while the result states the graph: editing its `rdf:type` or `sysx:declaredKeyword`
+  in the graph is written from the graph or refused, never overridden by the stale text.
+  Relationship clauses come back in the order the graph states them.
   KerML `connector … from a to b` heads record their form like the other end-binding heads, and
   an anonymous usage opened by `ref individual` or a portion keyword keeps that kind instead of
   parsing as an attribute. Over the 268 example models the mapping converts,

@@ -269,6 +269,70 @@ func TestStoredTextDoesNotReviveDeletedStructure(t *testing.T) {
 	}
 }
 
+// A declaration the graph keeps as text alone — no sysx:endForm to rebuild its
+// head from — is written as stored while the text, read back as a declaration,
+// states the graph, and gives way once the graph's metaclass or keyword is
+// edited under it: the edit is written or refused, never overridden by the text.
+func TestStoredDeclarationGivesWayToEditedGraph(t *testing.T) {
+	sysml := `package P {
+    port def Bus;
+    part def Car {
+        port left : Bus;
+        port right : Bus;
+        connect left to right {
+            doc /* wired */
+        }
+        bind left = right { doc /* same */ }
+    }
+}
+`
+	kerml := `package P {
+    feature a;
+    feature b;
+    binding ab of a = b;
+}
+`
+	toKerML, err := export.Convert("model.kerml", []byte(kerml), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	connector := `"""connect left to right {
+            doc /* wired */
+        }"""`
+	for _, tc := range []struct {
+		name, turtle, stored, edit, instead string
+	}{
+		{"connector metaclass", graphOf(t, sysml), connector, "a sysml:ConnectionUsage", "a sysml:InterfaceUsage"},
+		{"connector keyword", graphOf(t, sysml), connector, `sysx:declaredKeyword "connect"`, `sysx:declaredKeyword "connection"`},
+		{"binding metaclass", graphOf(t, sysml), `"bind left = right { doc /* same */ }"`, "a sysml:BindingConnectorAsUsage", "a sysml:ConnectionUsage"},
+		{"binding keyword", graphOf(t, sysml), `"bind left = right { doc /* same */ }"`, `sysx:declaredKeyword "bind"`, `sysx:declaredKeyword "binding"`},
+		{"kerml binding metaclass", string(toKerML), `"binding ab of a = b;"`, "a sysml:BindingConnectorAsUsage", "a sysml:ConnectorAsUsage"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stored := strings.Trim(tc.stored, `"`)
+			if !strings.Contains(toNotation(t, []byte(tc.turtle)), stored) {
+				t.Fatalf("untouched graph did not write %q as stored", stored)
+			}
+			if !strings.Contains(tc.turtle, tc.edit) {
+				t.Fatalf("graph does not state %s\n%s", tc.edit, tc.turtle)
+			}
+			edited := strings.Replace(tc.turtle, tc.edit, tc.instead, 1)
+			back, err := export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML)
+			if err == nil && strings.Contains(string(back), stored) {
+				t.Errorf("stored text overrode the edit %s -> %s\n%s", tc.edit, tc.instead, back)
+			}
+		})
+	}
+	relaid := restated(t, graphOf(t, sysml), `"bind left = right { doc /* same */ }"`, `"bind  left=right {\n\tdoc /* same */ }"`)
+	if back := toNotation(t, []byte(relaid)); !strings.Contains(back, "bind  left=right {\n\tdoc /* same */ }") {
+		t.Errorf("relaid declaration was not written as stored\n%s", back)
+	}
+	relaid = restated(t, string(toKerML), `"binding ab of a = b;"`, `"binding ab  of a =\n\tb;"`)
+	if back := toNotation(t, []byte(relaid)); !strings.Contains(back, "binding ab  of a =\n\tb;") {
+		t.Errorf("relaid KerML declaration was not written as stored\n%s", back)
+	}
+}
+
 // An expression the graph keeps as text alone is still held to lexing clean:
 // one leaving a comment open is refused as stating nothing, not written.
 func TestTextOnlyExpressionThatDoesNotLexCleanIsRefused(t *testing.T) {

@@ -515,15 +515,28 @@ What follows from this:
 - A relationship clause a head states is written in the order the graph states
   it, which is the order it was written, so `:>> x : T` does not come back as
   `: T :>> x` and change the graph's order on the next conversion.
-- A head kept as text that the graph states no `sysx:endForm` for is written as
-  its text: there is no structural spelling to check it against, which is why
-  the form is recorded whenever the head can be rebuilt (below).
+- A declaration kept as text that the graph states no `sysx:endForm` for has
+  no structural spelling to check against, so it is checked the way an
+  expression is: the text is read back as the one declaration it is (as SysML
+  and, failing that, as KerML — the graph does not record which notation it was
+  written in) and mapped with the same encoder in the element's scope, and the
+  graph and the result must make the same statements about the element — its
+  metaclass, `sysx:declaredKeyword`, name, flags, relationships, ends and
+  value, nested expression nodes included. Where the element sits (its owner,
+  memberships, `sysx:memberIndex`, `sysx:declaredId`, visibility) is the
+  graph's to state and is not compared. A text that no longer states the graph
+  — its `rdf:type` or keyword edited under it — gives way: the head is written
+  from the graph where the graph can spell it, and the conversion is refused
+  where it cannot. A body that lives in such a text alone goes with the text.
+  The form is recorded whenever the head can be rebuilt (below), and a head
+  that carries it is checked by spelling instead.
 
 Tests: `verbatim_test.go` covers the layout that survives, a stored text kept
 up to spelling, a stored head and a stored expression that disagree with the
 graph and give way to it, operand triples listed in another order, an operator,
-referent or end deleted from the graph, and the graph written with no stored
-text at all.
+referent or end deleted from the graph, a declaration kept as text alone whose
+metaclass or keyword is edited (in SysML and in KerML), and the graph written
+with no stored text at all.
 
 ### End-binding heads
 
@@ -577,8 +590,10 @@ more than their ends: an end with a multiplicity or a `references` clause, an
 inline payload declaration (`flow of x : P from a to b`), a satisfy that
 declares a name of its own (`satisfy s : R by v`), or any head with a body.
 Converting such an element from a graph that carries no `sysx:sourceText` is
-reported, not guessed. A graph that relates ends but gives no form at all is
-reported the same way (`export_test.go:TestEndsWithoutTheirFormAreReported`).
+reported, not guessed, and so is one whose text no longer states the graph
+(see [Stored text is layout](#stored-text-is-layout)). A graph that relates
+ends but gives no form at all is reported the same way
+(`export_test.go:TestEndsWithoutTheirFormAreReported`).
 
 Tests: `export_test.go:TestEndBindingHeadsComeBackFromTheGraphAlone` and
 `TestBehavioralHeadsComeBackFromTheGraphAlone` strip `sysx:sourceText` from the
