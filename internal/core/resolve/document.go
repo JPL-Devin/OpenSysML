@@ -339,6 +339,7 @@ func (r *Resolver) resolveBehaviorDecl(scope *symbols.Scope, decl ast.Node) bool
 		body := symbols.TriggerScope(scope, d)
 		r.resolveExpr(body, d.Guard)
 		r.walkMembers(body, d.Effect)
+		r.walkMembers(body, d.Members)
 		return true
 	case *ast.SendStatement:
 		r.resolveExpr(scope, d.Message)

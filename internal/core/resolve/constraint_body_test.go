@@ -188,6 +188,19 @@ func TestResolveTypoInControlNodeBody(t *testing.T) {
 	}
 }
 
+// A misspelled name inside a transition's braced body is reported there, whether
+// the transition is named or not, and the body reads the trigger's payload.
+func TestResolveTypoInTransitionBody(t *testing.T) {
+	for _, src := range []string{
+		`package P { state def S { state a; state b; transition t first a then b { action x; first x then nosuchInBody; } } }`,
+		`package P { state def S { state a; state b; transition first a then b { action x; first x then nosuchInBody; } } }`,
+		`package P { item def E; state def S { state a; state b; transition first a accept e : E then b { attribute v = e; attribute w = nosuchInBody; } } }`,
+	} {
+		r := resolveDoc(t, "d.sysml", src)
+		assertUnresolvedAt(t, r, src, "nosuchInBody")
+	}
+}
+
 // assertUnresolvedAt asserts one unresolved diagnostic spanning name in src.
 func assertUnresolvedAt(t *testing.T, r *Resolver, src, name string) {
 	t.Helper()
