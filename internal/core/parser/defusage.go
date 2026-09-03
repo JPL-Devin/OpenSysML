@@ -2335,7 +2335,10 @@ func (p *Parser) parseEnumBody() []ast.Node {
 			body.add(m)
 			continue
 		}
+		outer := p.inEnumBody
+		p.inEnumBody = true
 		body.add(p.parseBodyMember())
+		p.inEnumBody = outer
 		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
 			p.advance()
 		}
@@ -3090,8 +3093,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return mem
 	}
 
-	// Check for enum literal pattern: identifier = expr; OR identifier; OR identifier { body }
-	// Examples: low = 0.25; or pass; or open { doc } or done { doc } (keyword as name)
+	// Check for the bare-name pattern: identifier = expr; OR identifier; OR identifier { body }
+	// In an enumeration body it is an enumerated value (low = 0.25; pass; open { doc });
+	// in any other body a default reference usage (SysML.xtext DefaultReferenceUsage).
 	// But exclude usage-only keywords (inv, subject, etc.) - they're declarations, not enum literal names
 	// Also exclude constraint (has both def/usage forms but shouldn't be enum literal name)
 	isUsageOnlyKwForEnum := p.at(lexer.Keyword) && (p.peek().KeywordID == "subject" || p.peek().KeywordID == "objective" ||
@@ -3128,11 +3132,18 @@ func (p *Parser) parseBodyMember() ast.Node {
 			value = p.ParseExpression()
 		}
 
-		// Parse body or semicolon
+		kind := ast.UsageAttribute
+		if p.inEnumBody {
+			kind = ast.UsageEnumeration
+		}
+		// A value's own body holds its members, not further enumerated values.
+		outer := p.inEnumBody
+		p.inEnumBody = false
 		members, hasBody := p.parseDefUsageBody()
+		p.inEnumBody = outer
 
 		u := &ast.Usage{
-			Kind:              ast.UsageEnumeration,
+			Kind:              kind,
 			Ident:             id,
 			Value:             value,
 			ValueOperatorSpan: valueOperatorSpan,

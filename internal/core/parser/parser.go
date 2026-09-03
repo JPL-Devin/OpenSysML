@@ -41,6 +41,10 @@ type Parser struct {
 	// bodies, whose bare expressions are the conditions the constraint states.
 	constraintCalcDepth int
 
+	// inEnumBody is set while an enumeration body's direct members are parsed,
+	// where a bare name is an enumerated value rather than a default reference usage.
+	inEnumBody bool
+
 	// effectDepth counts the transition effects being parsed, whose statement is
 	// closed by the transition's next clause rather than by ';'.
 	effectDepth int
