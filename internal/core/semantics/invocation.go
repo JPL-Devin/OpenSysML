@@ -114,7 +114,6 @@ func (m *Model) SelectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, ar
 }
 
 func (m *Model) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, args []Argument, performs Performs) *InvocationSelection {
-	args = lastNamedWins(args)
 	sel := &InvocationSelection{}
 	for _, sym := range m.resolver.InvocationCandidates(scope, e.Type) {
 		target, ok := m.resolver.ResolveAliasTarget(sym)
@@ -253,7 +252,7 @@ type signatureParameter struct {
 	typ      *symbols.Symbol // the declared type, nil when untyped or unresolved
 	prim     PrimType
 	untyped  bool // typed Anything, whether written or by declaring no type
-	optional bool // declares a default value
+	optional bool // may go without an argument: a default, or a multiplicity admitting none
 }
 
 // signatureOf returns sym's effective input parameters, in signature order.
@@ -274,7 +273,7 @@ func (m *Model) signatureOf(sym *symbols.Symbol) invocationSignature {
 			name:     name,
 			typ:      m.featureType(p.Symbol),
 			prim:     m.PrimTypeOf(p.Symbol),
-			optional: isUsage && u.Value != nil,
+			optional: m.optionalParameter(p.Symbol),
 		}
 		switch {
 		case isAnything(param.typ):
@@ -287,6 +286,47 @@ func (m *Model) signatureOf(sym *symbols.Symbol) invocationSignature {
 	// A parameterless declaration with supertypes may inherit an unseen signature.
 	sig.known = len(sig.params) > 0 || (sym.Decl != nil && len(m.DirectSupertypes(sym)) == 0)
 	return sig
+}
+
+// optionalParameter reports whether a call may omit the parameter: it or a parameter it
+// redefines declares a default, or the nearest stated multiplicity admits no value.
+func (m *Model) optionalParameter(sym *symbols.Symbol) bool {
+	chain := m.parameterRedefinitionChain(sym)
+	for _, u := range chain {
+		if u.Value != nil {
+			return true
+		}
+	}
+	for _, u := range chain {
+		if u.Multiplicity != nil {
+			return m.IsOptionalParameter(u)
+		}
+	}
+	return false
+}
+
+// parameterRedefinitionChain is sym's declaration followed by those of the parameters it
+// redefines, explicitly or by position, nearest first.
+func (m *Model) parameterRedefinitionChain(sym *symbols.Symbol) []*ast.Usage {
+	var chain []*ast.Usage
+	visited := map[*symbols.Symbol]bool{}
+	for sym != nil && !visited[sym] {
+		visited[sym] = true
+		u, ok := sym.Decl.(*ast.Usage)
+		if !ok {
+			break
+		}
+		chain = append(chain, u)
+		redefined := m.RedefinedFeatures(sym)
+		if len(redefined) == 0 {
+			redefined = m.implicitParameterRedefinitions(sym)
+		}
+		if len(redefined) != 1 {
+			break
+		}
+		sym = redefined[0]
+	}
+	return chain
 }
 
 // declaresType reports whether sym writes a type or generalization, or implicitly
@@ -373,28 +413,6 @@ func (m *Model) argumentBinds(arg Argument, p signatureParameter, mode bindMode)
 		return fitOpen, true
 	}
 	return fitOpen, false
-}
-
-// lastNamedWins drops every named argument a later one of the same name
-// rebinds, as the evaluator's argument map does.
-func lastNamedWins(args []Argument) []Argument {
-	out := make([]Argument, 0, len(args))
-	for i, arg := range args {
-		if arg.Name != "" && namedAfter(args[i+1:], arg.Name) {
-			continue
-		}
-		out = append(out, arg)
-	}
-	return out
-}
-
-func namedAfter(args []Argument, name string) bool {
-	for _, arg := range args {
-		if arg.Name == name {
-			return true
-		}
-	}
-	return false
 }
 
 func argumentsKnown(args []Argument) bool {

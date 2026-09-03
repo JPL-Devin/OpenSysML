@@ -44,9 +44,10 @@ notation it was written from (#793, #813, #814); documents render as semantic HT
 the LSP serves the standard library read-only (#806) and mints identity annotations (#789); a
 library-derived semantic oracle adjudicates action and state execution (#804); the behavior
 execution review's findings became Track E (#802); and the identity design record states itself
-fully implemented (#844). The earlier baseline's retirements — element identity, document
-generation, the performance census, the client tours, the pilot pin — stay retired and are not
-repeated.
+fully implemented (#844). Since that baseline, the Connect + JSON wire contract is written down
+(#848, [wire-contract.md](../reference/wire-contract.md)), which closes I1. The earlier baseline's
+retirements — element identity, document generation, the performance census, the client tours, the
+pilot pin — stay retired and are not repeated.
 
 ## Where the repository stands
 
@@ -1174,11 +1175,11 @@ lowerCamelCase), which `Value` arm is which (`intValue` as a JSON *string* for 6
 `realValue`, `boolValue`, `stringValue`, quantity with unit, enumeration by identity not display
 name, instance references, `Complex`), how *unset* differs from *absent* and from *no result*, how a
 diagnostic and a Connect error arrive, the model-hash lifetime, and how a behavior call and a query
-are made. I1 is a `wire-contract` page under `docs/reference/`: every example captured from the
-running service, all eleven `Value` arms, the Connect code table, the
+are made. [wire-contract.md](../reference/wire-contract.md) is that page (#848, **landed**): every
+example captured from the running service, all eleven `Value` arms, the Connect code table, the
 `Instantiate`/`ExecuteState`/`Verify*`/`Query` answer shapes, and R, Julia, MATLAB and C
-illustrations marked untested, linked from the transports, clients and API pages. **Open** (#848,
-mergeable at the last check). Everything else in the track reads from it.
+illustrations marked untested, linked from the transports, clients and API pages. Everything else
+in the track reads from it.
 
 ## I2 — shared conformance fixtures for handwritten clients
 
@@ -1313,9 +1314,9 @@ thing.
 4. **Q2, then Q1** — runtime query bindings and `all T`, with the page that says which query is
    which. Depends on the object, state and trace representations being stable, which #810, #836
    and #843 are settling; Q4 (parameter defaults, #849, open) lands independently before it.
-5. **I1, I2, I3, then I4's client** — the wire contract, the shared fixtures, the thin R, Julia and
-   MATLAB packages, the C client. Documentation first because every client is derived from it;
-   the C *ABI* half of I4 is not here — it is step 9.
+5. **I2, I3, then I4's client** — the shared fixtures, the thin R, Julia and MATLAB packages, the
+   C client, each derived from the wire contract (I1, landed in #848); the C *ABI* half of I4 is
+   not here — it is step 9.
 6. **D3.4, then D2 and D1, then D9.1 and D9.2** — Flexo: the collection JSON annotations (#850,
    open), the standard vocabulary for expression trees and end structure, then the
    authenticated push and the branch read. Push and read depend on the collection and vocabulary

@@ -447,9 +447,9 @@ func TestInvocationOverloadNamedArguments(t *testing.T) {
 		"type.expr", "candidates: P::A::pick, P::B::pick")
 }
 
-// A named argument written twice binds its last value, as the evaluator does,
-// so only the last value decides the overload and is type-checked.
-func TestInvocationOverloadRepeatedNamedArgumentBindsLast(t *testing.T) {
+// A named argument written twice is refused, for one candidate and for several, as
+// the evaluator refuses it; no candidate applies, so the report names them all.
+func TestInvocationOverloadRepeatedNamedArgumentIsRefused(t *testing.T) {
 	const model = `package P {
 		private import ScalarValues::*;
 		package A { calc def pick { in x : Integer; return : Integer = 1; } }
@@ -462,11 +462,11 @@ func TestInvocationOverloadRepeatedNamedArgumentBindsLast(t *testing.T) {
 		calc def one { in x : Integer; return : Integer = x; }
 		attribute %s
 	}`
-	wantLibraryClean(t, fmt.Sprintf(model, `s : String = pick(x = 1, x = "s");`, `o : Integer = one(x = "s", x = 1);`))
-	wantLibraryDiag(t, fmt.Sprintf(model, `s : String = pick(x = "s", x = 1);`, `o : Integer = one(x = 1);`),
-		"type.expr", "cannot bind Integer value to a feature typed by String")
-	wantLibraryDiag(t, fmt.Sprintf(model, `s : String = pick(x = 1, x = "s");`, `o : Integer = one(x = 1, x = "s");`),
-		"type.expr", "expects Integer, found String")
+	wantLibraryClean(t, fmt.Sprintf(model, `s : String = pick(x = "s");`, `o : Integer = one(x = 1);`))
+	wantLibraryDiag(t, fmt.Sprintf(model, `s : String = pick(x = 1, x = "s");`, `o : Integer = one(x = 1);`),
+		"type.expr", `pick binds parameter "x" twice (candidates: P::A::pick, P::B::pick)`)
+	wantLibraryDiag(t, fmt.Sprintf(model, `s : String = pick(x = "s");`, `o : Integer = one(x = 1, x = 1);`),
+		"type.expr", `one binds parameter "x" twice`)
 }
 
 // Two same-named calcs one wildcard import surfaces are both candidates.
@@ -533,7 +533,7 @@ func TestInvocationNamedArgumentsAreTypeChecked(t *testing.T) {
 	wantLibraryDiag(t, fmt.Sprintf(model, `b : Real = density(m = kg, v = litre, scale = true);`),
 		"type.expr", `argument scale of density expects Real, found Boolean`)
 	wantLibraryDiag(t, fmt.Sprintf(model, `partial : Real = density(m = kg);`),
-		"type.expr", `density requires an argument for v`)
+		"type.expr", `density requires an argument for parameter v`)
 }
 
 // Candidates come through re-exporting public imports and from general types; an

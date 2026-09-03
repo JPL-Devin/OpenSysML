@@ -354,7 +354,9 @@ type calcArgs struct {
 // returns its result. Arguments bind to the calc's input parameters in
 // declaration order; a parameter with no argument falls back to its declared
 // default. The body is evaluated in the calc's own scope, so scope is used only
-// as a fallback for a symbol that owns no scope.
+// as a fallback for a symbol that owns no scope. A library function's `expr`
+// parameter takes a body or expression value, applied only when selected, or
+// the operand's value itself.
 func (ctx *Context) InvokeCalc(sym *symbols.Symbol, args []Value, scope *symbols.Scope) (Value, error) {
 	defer ctx.beginRun()()
 
@@ -381,6 +383,9 @@ func (ctx *Context) invokeCalc(sym *symbols.Symbol, args calcArgs, scope *symbol
 }
 
 func (ctx *Context) invokeCalcWithSelf(sym *symbols.Symbol, args calcArgs, scope *symbols.Scope, self *Instance) (Value, error) {
+	if fn, ok := ctx.builtinFor(sym); ok {
+		return ctx.invokeBuiltinValues(sym, fn, args, scope, self)
+	}
 	if fn, ok := ctx.libraryFunctionFor(sym); ok {
 		return fn.invoke(ctx, args)
 	}
@@ -390,6 +395,18 @@ func (ctx *Context) invokeCalcWithSelf(sym *symbols.Symbol, args calcArgs, scope
 		return Value{}, err
 	}
 	return ctx.invokeCalcShape(shape, args, scope, self)
+}
+
+// invokeBuiltinValues applies a built-in to arguments a direct invocation has
+// already evaluated, bound to its declared parameters as a call would bind them.
+func (ctx *Context) invokeBuiltinValues(sym *symbols.Symbol, fn builtinFunc, args calcArgs, callerScope *symbols.Scope, self *Instance) (Value, error) {
+	name := ctx.qualifiedSymbolName(sym)
+	return tracedBuiltin(ctx.trace, name,
+		func() ([]Value, error) { return bindBuiltinValues(name, args) },
+		func(bound []Value) (Value, error) {
+			return fn(NewEvalContextIn(ctx, ctx.calcScope(sym, nil, callerScope), self), bound)
+		},
+	)
 }
 
 // invocationFrame is the storage one calc invocation runs in, held off the
@@ -655,6 +672,12 @@ func (shape *calcShape) checkArgs(args calcArgs) error {
 	return nil
 }
 
+// optional reports whether the parameter may go without an argument: its
+// declared multiplicity admits no value, as `[0..1]` does.
+func (param *calcParameter) optional() bool {
+	return param.Decl.Target != nil && param.Decl.multStated && param.Decl.Target.mult.AllowsNone()
+}
+
 // hasParameter reports whether the calc declares an input parameter of that name.
 func (shape *calcShape) hasParameter(name string) bool {
 	for _, param := range shape.Params {
@@ -666,8 +689,9 @@ func (shape *calcShape) hasParameter(name string) bool {
 }
 
 // bindCalcParameter resolves the value of one parameter: its argument (by
-// position or by name), else its declared default. A parameter with neither is
-// unbound, which is a modeling error rather than a null value.
+// position or by name), else its declared default, else null for one whose
+// multiplicity admits no value. A parameter with none of these is unbound,
+// which is a modeling error rather than a null value.
 func (ec *EvalContext) bindCalcParameter(
 	shape *calcShape,
 	param *calcParameter,
@@ -681,6 +705,9 @@ func (ec *EvalContext) bindCalcParameter(
 		return value, "argument", nil
 	}
 	if param.Default == nil {
+		if param.optional() {
+			return nullValue(), "omitted", nil
+		}
 		return Value{}, "", fmt.Errorf(
 			"%w: calc %s parameter %q has no argument and no default",
 			ErrUnboundParameter, shape.Name, param.Name,
@@ -705,22 +732,6 @@ func (ctx *Context) calcScope(declarer, invoked *symbols.Symbol, callerScope *sy
 		}
 	}
 	return callerScope
-}
-
-// hasCalcBody reports whether sym's calc chain states a computation of its own:
-// a result expression, or a body assigning an output it declares. A library
-// function declared without one — or a symbol loaded from the library index,
-// which carries no declaration at all — has no body.
-func (ctx *Context) hasCalcBody(sym *symbols.Symbol) bool {
-	if sym == nil || sym.Decl == nil || !isCalcDecl(sym.Decl) {
-		return false
-	}
-	chain := ctx.calcChain(sym)
-	body, _ := calcBody(chain)
-	if lower.Returns(body) {
-		return true
-	}
-	return len(assignedOutputs(calcSteps(body), ctx.calcOutputs(chain))) > 0
 }
 
 // calcTypedFeature reports whether sym is a feature typed by a calc — a step, which an

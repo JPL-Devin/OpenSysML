@@ -24,7 +24,11 @@ sysml model.sysml -compile Pkg::Fib -source -o fib.c    # write the generated so
 The executable takes the calc's parameters as command-line arguments, positionally, and prints
 the result on one line in the interpreter's notation (`6765`, `1.75`, `2.0`, `1e21`, `true`). An
 input the interpreter would reject — Integer overflow, division or modulo by zero, a non-finite
-Real, recursion past the calc depth budget — exits with status 1 and the reason on stderr.
+Real, a Real argument written outside the Real range (`1e400`, or `1e-400` underflowing to
+zero), recursion past the calc depth budget — exits with status 1 and the reason on stderr; an
+argument that is not the notation of its type at all (`inf`, `nan`, a hexadecimal `0x1p-2`,
+`1_000.5`) exits with status 2 — a Real argument is decimal notation only, as the interpreter's
+literals and `ToReal` are.
 
 The generated source is always written beside the executable (`fib.c` / `fib.go`), so what was
 compiled is inspectable. `OPENSYSML_CC` names the C compiler (default `cc`).
@@ -108,7 +112,8 @@ arithmetic rather than the host language's:
   null zero times and refuses a scalar; indexing is one-based and out-of-range is an error; nested
   sequence literals flatten and null contributes no element; `lo..hi` is inclusive and empty when
   descending; `reduce` of an empty sequence is null and `minimize`/`maximize` of one is an error;
-  `==` compares elementwise while `===` also distinguishes shape and Integer from Real. Every
+  `==` compares elementwise while `===` also distinguishes shape and Integer from Real, and an
+  empty collection of any shape is null to both and to `??`. Every
   sequence a program builds or is given counts against the interpreter's element budget
   (`OPENSYSML_MAX_ELEMENTS`, default 1,000,000), reset per run under `--repeat` with the
   arguments still charged. A local a `{in v; …}` body declares is read on demand, as the

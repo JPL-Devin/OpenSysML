@@ -7,8 +7,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 )
 
-// A model the formatter leaves alone, so what the graph carries as source text
-// is the notation itself: comments, notes, blank lines and synonyms included.
+// A model whose graph carries the notation itself as source text: comments,
+// notes, blank lines and synonyms included.
 const commented = `// The rover, as modelled.
 package Rover {
     /* Definitions come first. */
@@ -27,13 +27,9 @@ package Rover {
 }
 `
 
-// commentedTurtle converts commented to Turtle, with the notation it formats to
-// (which is commented itself) for comparison.
+// commentedTurtle converts commented to Turtle.
 func commentedTurtle(t *testing.T) []byte {
 	t.Helper()
-	if got := formatted(t, commented); got != commented {
-		t.Fatalf("the fixture is not fixed under the formatter:\n%s", got)
-	}
 	return idTurtle(t, commented)
 }
 
@@ -51,11 +47,54 @@ func TestSourceTextComesBackByteForByte(t *testing.T) {
 	if back := toNotation(t, turtle); back != commented {
 		t.Errorf("round trip changed the notation:\n--- want ---\n%s--- got ---\n%s", commented, back)
 	}
-	// Unformatted notation comes back as the formatter writes it, since that
-	// is the text the graph carries.
+	// Unformatted notation comes back as written too: the graph carries the
+	// author's bytes, not the formatter's.
 	loose := strings.ReplaceAll(commented, "    ", "\t")
-	if back, want := toNotation(t, idTurtle(t, loose)), formatted(t, loose); back != want {
-		t.Errorf("round trip changed the formatted notation:\n--- want ---\n%s--- got ---\n%s", want, back)
+	if back := toNotation(t, idTurtle(t, loose)); back != loose {
+		t.Errorf("round trip changed the unformatted notation:\n--- want ---\n%s--- got ---\n%s", loose, back)
+	}
+}
+
+// What follows the last root — notes, comments, blank lines, or no final
+// newline — is the last root's tail, since the document itself has no subject.
+func TestTrailingTriviaComesBack(t *testing.T) {
+	for _, tail := range []string{"\n\n// the end\n\n/* really */\n\n\n", "\n\n", ""} {
+		src := strings.TrimSuffix(commented, "\n") + tail
+		if back := toNotation(t, idTurtle(t, src)); back != src {
+			t.Errorf("tail %q: round trip changed the notation:\n--- want ---\n%s--- got ---\n%s", tail, src, back)
+		}
+	}
+}
+
+// Roots have no owner to be written whole with, so roots sharing a line each
+// carry their slice of it, trivia between them included.
+func TestRootsSharingALineComeBack(t *testing.T) {
+	src := "package A; /* between */ package B; // after\n\npackage C {\n\tpart p; } package D;"
+	turtle := idTurtle(t, src)
+	if back := toNotation(t, turtle); back != src {
+		t.Errorf("round trip changed the notation:\n--- want ---\n%s--- got ---\n%s", src, back)
+	}
+	// An edited root is rebuilt where it stood, its trailing note with it; its
+	// neighbours stay as written.
+	edited := editTurtle(t, turtle,
+		"    sysml:declaredName \"B\" ;\n",
+		"    sysml:declaredName \"B\" ;\n    sysx:isLibraryPackage \"true\"^^xsd:boolean ;\n")
+	back := toNotation(t, edited)
+	want := "package A; /* between */ library package B;\n\npackage C {\n\tpart p; } package D;"
+	if back != want {
+		t.Errorf("the edited root was not rebuilt in place:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+	if got, want := structural(t, idTurtle(t, back)), structural(t, edited); got != want {
+		t.Errorf("the notation does not state the edited graph:\n--- want ---\n%s--- got ---\n%s", want, got)
+	}
+	// The trivia after a root is its own, so a root rebuilt ahead of another
+	// leaves that one at the start of its line.
+	edited = editTurtle(t, turtle,
+		"    sysml:declaredName \"A\" ;\n",
+		"    sysml:declaredName \"A\" ;\n    sysx:isLibraryPackage \"true\"^^xsd:boolean ;\n")
+	want = "library package A;\npackage B; // after\n\npackage C {\n\tpart p; } package D;"
+	if back := toNotation(t, edited); back != want {
+		t.Errorf("the first root was not rebuilt in place:\n--- want ---\n%s--- got ---\n%s", want, back)
 	}
 }
 
@@ -205,6 +244,31 @@ func TestBlankLinesStayWithTheMemberAfterThem(t *testing.T) {
 				t.Errorf("removing a member took the blank line after it:\n--- want ---\n%s--- got ---\n%s", want, back)
 			}
 		})
+	}
+}
+
+// The line ending rebuilt notation is written with is the one most of the file
+// uses. An expression's text lies inside its member's, so however deeply it
+// nests, the lines it spans count once.
+func TestNestedExpressionTextDoesNotOutvoteTheFileNewline(t *testing.T) {
+	notation := "package P {\n" +
+		"    part def A;\n" +
+		"    attribute x = (1 +\r\n" +
+		"        (2 *\r\n" +
+		"        (3 +\r\n" +
+		"        4)));\n" +
+		"    part def B;\n" +
+		"}\n"
+	turtle := idTurtle(t, notation)
+	if back := toNotation(t, turtle); back != notation {
+		t.Errorf("the notation changed:\n--- want ---\n%q--- got ---\n%q", notation, back)
+	}
+	edited := editTurtle(t, turtle,
+		"    sysml:declaredName \"A\" ;\n",
+		"    sysml:declaredName \"A\" ;\n    sysml:isAbstract \"true\"^^xsd:boolean ;\n")
+	want := strings.Replace(notation, "    part def A;", "    abstract part def A;", 1)
+	if back := toNotation(t, edited); back != want {
+		t.Errorf("the rebuilt member took the expression's line ending:\n--- want ---\n%q--- got ---\n%q", want, back)
 	}
 }
 

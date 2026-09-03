@@ -60,24 +60,24 @@ controls below use the `sysml:` prefix).
 Pass criterion: the source-text-free back-conversion is the canonical notation of the model —
 identical to the source-text-backed one up to trivia and keyword synonyms — and re-encoding it gives
 a `.ttl` byte-identical to `hop1.ttl` once both are stripped of the source text the same way. The
-source-text-backed conversion has its own criterion: it must be **byte-identical to the formatted
-input** (`sysml -fmt` it first), which `TestSourceTextComesBackByteForByte` locks in-process.
+source-text-backed conversion has its own criterion: it must be **byte-identical to the input as
+written** (tabs, odd indentation, CRLF, trailing notes included — do not `sysml -fmt` it first),
+which `TestSourceTextComesBackByteForByte` and `TestTrailingTriviaComesBack` lock in-process.
 
 For corpus files compare `hop1.ttl` and `hop2.ttl` as **triple sets**, not bytes (`pip install rdflib`,
 parse both with `rdflib.Graph().parse(p, format='turtle')`, diff the sets), and report
-`sysx:sourceText` differences separately from structural ones: the writer normalises whitespace and
-drops optional keywords (`connector x from a to b` → `connector x a to b`), so sourceText will legally
-differ on reformatted heads while every structural triple must still match.
+`sysx:sourceText` differences separately from structural ones: an element rebuilt from the graph
+(a stale head, a dropped optional keyword such as `connector x from a to b` → `connector x a to b`)
+changes its sourceText legally while every structural triple must still match.
 
 ### Heads that are *not* expected to survive without sourceText (as of this writing)
 
-- **Any end-binding head whose source spans lines.** `endForm` in `internal/core/export/end_forms.go`
-  is only emitted when rebuilding the head reproduces the text *exactly*, so a line break inside
-  `connect a\n to b;` or `flow x\n to y;` means no `sysx:endForm`, and the sourceText-free hop is
-  refused with `it has no sysx:endForm, and the ends it relates are written in the form the head
-  states`. Corpus files with wrapped heads (e.g. `sysml-validation/03-Function-based Behavior/3a-…`)
-  therefore fail the stripped trip even when the mapping is otherwise correct — check the source text
-  for a newline before treating the refusal as a regression.
+- **Any end-binding head that says more than its ends.** `endForm` in
+  `internal/core/export/end_forms.go` is only emitted when rebuilding the head reproduces its
+  *tokens* (layout and comments aside, so a line break inside `connect a\n to b;` is fine), so an
+  end with a multiplicity, an inline payload declaration or a head with a body carries no
+  `sysx:endForm`, and the sourceText-free hop is refused with `it has no sysx:endForm, and the ends
+  it relates are written in the form the head states`.
 - **Named satisfy heads** `satisfy requirement req1 : Req1 by system;` come back as
   `satisfy req1 : Req1 by system;` (the `requirement` keyword is dropped, and the parser then reads
   `req1` as the *satisfied* requirement instead of a new one — `unresolved reference: req1`). Minimal

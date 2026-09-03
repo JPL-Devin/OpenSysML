@@ -64,7 +64,7 @@ stable	pilot-corpora/kerml-examples/Simple Tests/Classifications.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Classifiers.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Comments.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Conjugation.kerml
-stable	pilot-corpora/kerml-examples/Simple Tests/Connectors.kerml
+refused:feature-declaration	pilot-corpora/kerml-examples/Simple Tests/Connectors.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Dependencies.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Expansion.kerml
 refused:operator-expr	pilot-corpora/kerml-examples/Simple Tests/Expressions.kerml
@@ -101,7 +101,7 @@ stable	pilot-corpora/sysml-examples/Association Examples/ProductSelection_OwnedE
 stable	pilot-corpora/sysml-examples/Association Examples/ProductSelection_UnownedEnds.sysml
 stable	pilot-corpora/sysml-examples/Camera Example/Camera.sysml
 stable	pilot-corpora/sysml-examples/Camera Example/PictureTaking.sysml
-stable	pilot-corpora/sysml-examples/Cause and Effect Examples/CauseAndEffectExample.sysml
+refused:prefix-metadata	pilot-corpora/sysml-examples/Cause and Effect Examples/CauseAndEffectExample.sysml
 stable	pilot-corpora/sysml-examples/Cause and Effect Examples/MedicalDeviceFailure.sysml
 stable	pilot-corpora/sysml-examples/Comment Examples/Comments.sysml
 stable	pilot-corpora/sysml-examples/Flashlight Example/Flashlight Example.sysml
