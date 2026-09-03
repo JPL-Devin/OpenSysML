@@ -280,7 +280,7 @@ func TestStateAddressesANestedPart(t *testing.T) {
 		0, `exhibited by object #`+id+` of "Fleet::driver.r"`, "attaches to that running machine", "`%state Fleet::driver.r`")
 
 	wantReport(t, check(t, binary, fleetModel, "-instantiate", "Fleet::driver", "-state", "Fleet::driver.x"),
-		2, `Fleet::driver has no feature "x" (its features are r)`)
+		2, `Fleet::driver has no feature "x" (its features are r, and 13 more the library declares)`)
 	wantReport(t, check(t, binary, fleetModel, "-instantiate", "Fleet::driver", "-state", "Fleet::driver.r.level"),
 		2, "level of Fleet::driver.r holds a value (10), not an object")
 	wantReport(t, check(t, binary, fleetModel, "-instantiate", "Fleet::driver", "-state", "#99"),

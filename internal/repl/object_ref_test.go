@@ -234,7 +234,7 @@ func TestObjectReferenceErrors(t *testing.T) {
 	wants(t, run(t, s, "%features #999"), fmt.Sprintf("error: no object #999 in this session: nothing materialized has that identity (the objects are #%d)", car.ID))
 	run(t, s, "%features car.fl")
 	wants(t, run(t, s, "%features #999"), fmt.Sprintf("error: no object #999 in this session: nothing materialized has that identity (the objects are #%d, #", car.ID))
-	wants(t, run(t, s, "%features car.nope"), "error: Garage::car has no feature \"nope\" (its features are fl, mass, wheels)")
+	wants(t, run(t, s, "%features car.nope"), "error: Garage::car has no feature \"nope\" (its features are fl, mass, wheels, and 13 more the library declares)")
 	wants(t, run(t, s, "%features car.fl.hub.bolts"), "error: bolts of Garage::car.fl.hub holds a value (5), not an object")
 	wants(t, run(t, s, "%features car.mass"), "error: mass of Garage::car holds a value (1500.0), not an object")
 	wants(t, run(t, s, "%features #"), "error:", "an object id is written #<id>")
@@ -606,9 +606,9 @@ package 'Two Words' {
 	}
 }
 
-// A multi-valued part is completed to the elements it holds, not to what its
-// multiplicity admits: a ranged part materializes its lower bound, an optional
-// one nothing — and every index offered is one a reference then resolves.
+// A part is completed to the elements it holds, not to what its multiplicity
+// admits: a ranged part materializes its lower bound, an optional one only what
+// subsets it — and every reference offered is one that then resolves.
 func TestCompleteIndexesOnlyHeldElements(t *testing.T) {
 	s := submitted(t, `package Fleet {
 	part def Wheel;
@@ -616,17 +616,19 @@ func TestCompleteIndexesOnlyHeldElements(t *testing.T) {
 		part axles : Wheel[2..4];
 		part spare : Wheel[0..1];
 		part crew : Wheel[0..*];
+		part backup : Wheel[0..1];
+		part kept : Wheel subsets backup;
 	}
 	part truck : Truck;
 }`)
 	run(t, s, "%instantiate truck")
 	got := s.Complete("%features truck.", len("%features truck."))
-	for _, want := range []string{"truck.axles[1]", "truck.axles[2]"} {
+	for _, want := range []string{"truck.axles[1]", "truck.axles[2]", "truck.backup", "truck.kept"} {
 		if !contains(got.Candidates, want) {
 			t.Errorf("want %q in %v", want, got.Candidates)
 		}
 	}
-	for _, bad := range []string{"truck.axles[3]", "truck.axles[4]", "truck.spare[1]", "truck.crew[1]"} {
+	for _, bad := range []string{"truck.axles[3]", "truck.axles[4]", "truck.spare", "truck.spare[1]", "truck.crew[1]"} {
 		if contains(got.Candidates, bad) {
 			t.Errorf("did not want %q in %v", bad, got.Candidates)
 		}

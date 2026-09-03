@@ -275,7 +275,7 @@ every command uses for an [object reference](../reference/repl-commands.md#objec
 
 ```sysml
 sysml> %state driver.x
-error: driver has no feature "x" (its features are r)
+error: driver has no feature "x" (its features are r, and 13 more the library declares)
 ```
 
 Naming a usage whose *definition* alone was instantiated is reported as such, with what to

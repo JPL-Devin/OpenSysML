@@ -849,7 +849,13 @@ func runInstanceConformance(t *testing.T, ctx *Context, idx *symbols.Index, expe
 	}
 
 	for name, expectedVal := range expected.FeatureValues {
+		// A slot is read as an expression reads it: an optional one holding
+		// nothing is the empty sequence, a required one an error.
+		var value Value
 		fv, err := featureValueAtPath(t, ctx, inst, name)
+		if err == nil {
+			value, err = fv.ReadValue(name)
+		}
 		if expectedVal.Error != "" {
 			requireError(t, "feature value "+name, err, expectedVal.Error)
 			continue
@@ -858,7 +864,7 @@ func runInstanceConformance(t *testing.T, ctx *Context, idx *symbols.Index, expe
 			t.Errorf("feature value %q: %v", name, err)
 			continue
 		}
-		validateValue(t, ctx, name, expectedVal, fv.HeldValue())
+		validateValue(t, ctx, name, expectedVal, value)
 	}
 
 	validateIdentity(t, ctx, inst, expected)

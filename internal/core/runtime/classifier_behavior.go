@@ -343,6 +343,7 @@ func (ctx *Context) restartClassifierBehaviors(objects []*Instance) error {
 // startBehaviorsOfAll attaches the behaviors of every object before running any
 // of them, so their starts are one collective run.
 func (ctx *Context) startBehaviorsOfAll(objects []*Instance) error {
+	defer ctx.holdDrivenWork()()
 	ctx.behaviorRunDepth++
 	for _, inst := range objects {
 		if err := ctx.startBehaviorsOf(inst); err != nil {
@@ -428,6 +429,7 @@ func (ctx *Context) runsBehaviors(typeSym *symbols.Symbol, visiting map[*symbols
 // startBehaviorsOf attaches the object's behaviors and, at the outermost start,
 // runs everything attached.
 func (ctx *Context) startBehaviorsOf(inst *Instance) error {
+	defer ctx.holdDrivenWork()()
 	for i, decl := range ctx.classifierBehaviorsOf(inst.Type) {
 		if inst.runsBound(decl.member) {
 			continue
@@ -446,6 +448,24 @@ func (ctx *Context) startBehaviorsOf(inst *Instance) error {
 	}
 
 	return ctx.runAttachedBehaviors()
+}
+
+// holdDrivenWork marks, at an outermost start, the behaviors already holding
+// work: a driver put it in flight, so the start leaves it to that driver.
+func (ctx *Context) holdDrivenWork() func() {
+	if ctx.behaviorRunDepth > 0 || ctx.heldBehaviors != nil {
+		return func() {}
+	}
+	held := make(map[*ObjectBehavior]bool)
+	ctx.behaviorRunDepth++
+	for _, behavior := range ctx.objectBehaviors {
+		if behavior.hasPendingWork() {
+			held[behavior] = true
+		}
+	}
+	ctx.behaviorRunDepth--
+	ctx.heldBehaviors = held
+	return func() { ctx.heldBehaviors = nil }
 }
 
 // runAttachedBehaviors runs everything attached, at the outermost start: a start
@@ -512,9 +532,9 @@ func (ctx *Context) drainObjectBehaviors() error {
 }
 
 // nextRunnableBehavior returns the next behavior with work to do: one not yet
-// started, else one holding an event delivered while it was suspended. Under a
-// run boundary only a behavior attached since it began is run: what one older
-// than the change under way does cannot be undone with it.
+// started, else one holding an event delivered while suspended — unless it held
+// work before the start began (holdDrivenWork), or was attached before the
+// innermost run boundary, as what it does cannot be undone with the change under way.
 func (ctx *Context) nextRunnableBehavior() (*ObjectBehavior, bool) {
 	first, attached := 0, 0
 	if n := len(ctx.runBoundaries); n > 0 {
@@ -528,7 +548,7 @@ func (ctx *Context) nextRunnableBehavior() (*ObjectBehavior, bool) {
 		return behavior, true
 	}
 	for _, behavior := range ctx.objectBehaviors[attached:] {
-		if behavior.hasPendingWork() {
+		if !ctx.heldBehaviors[behavior] && behavior.hasPendingWork() {
 			return behavior, true
 		}
 	}

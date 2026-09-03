@@ -168,7 +168,7 @@ func TestObjectPathErrorsNameTheSegment(t *testing.T) {
 	cases := []struct {
 		arg, object, segment, detail string
 	}{
-		{"Fleet::driver.x", "Fleet::driver", "x", `Fleet::driver has no feature "x" (its features are r)`},
+		{"Fleet::driver.x", "Fleet::driver", "x", `Fleet::driver has no feature "x" (its features are r, and 13 more the library declares)`},
 		{"Fleet::driver.r.level", "Fleet::driver.r", "level", "level of Fleet::driver.r holds a value (10), not an object"},
 		{"Fleet::driver.r.nothing", "Fleet::driver.r", "nothing", `Fleet::driver.r has no feature "nothing"`},
 	}

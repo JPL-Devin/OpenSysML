@@ -115,7 +115,9 @@ part rig : Rig;`
 // its own heading with what the object is doing with it: the active state of the
 // machine the object exhibits — the state %current reports, before and after the
 // debugger drives it — the execution state of the action it performs, and "not
-// running" for a behavior the object does not run.
+// running" for a behavior the object does not run. The behaviors follow the values,
+// the library's included; an abstract library collection of behaviors
+// (Part::performedActions) is a value among them, not a behavior of its own.
 func TestFeaturesListsBehaviorsUnderTheirOwnHeading(t *testing.T) {
 	s := NewSession()
 	if errs := errorDiagnostics(s.Submit(behaviorsModel).Diagnostics); len(errs) > 0 {
@@ -124,14 +126,14 @@ func TestFeaturesListsBehaviorsUnderTheirOwnHeading(t *testing.T) {
 	run(t, s, "%instantiate lamp")
 
 	got := run(t, s, "%features lamp")
+	wantsInOrder(t, got, "Features:\n  watts = 62.0\n", "\n  performedActions = []\n", "\nBehaviors:\n  modes: exhibited state machine, current state off")
 	wants(t, got,
-		"Features:\n  watts = 62.0\nBehaviors:",
-		"  modes: exhibited state machine, current state off",
 		"  tick: performed action, completed",
 		"  blink: action, not running",
 		"  standalone: state, not running",
 	)
-	rejects(t, got, "<unknown>", "off = ", "on = ", "bump = ", "n = ", "modes = Instance")
+	rejects(t, got, "<unknown>", "off = ", "on = ", "bump = ", "n = ", "modes = Instance",
+		"performedActions: action", "ownedStates: state")
 
 	wants(t, run(t, s, "%state lamp"), "Current state: off")
 	wants(t, run(t, s, "%current"), "Current state: off")
@@ -154,11 +156,8 @@ func TestFeaturesListsNestedBehaviorsUnderTheNestedObject(t *testing.T) {
 	run(t, s, "%instantiate rig")
 
 	got := run(t, s, "%features rig")
-	wants(t, got,
-		"  inner = Instance(ID: ",
-		"    watts = 62.0\n    Behaviors:\n      modes: exhibited state machine, current state off",
-		"      tick: performed action, completed",
-	)
+	wantsInOrder(t, got, "  inner = Instance(ID: ", "    watts = 62.0\n", "\n    Behaviors:\n      modes: exhibited state machine, current state off")
+	wants(t, got, "      tick: performed action, completed")
 	rejects(t, got, "\nBehaviors:", "<unknown>")
 }
 
@@ -186,9 +185,8 @@ part counter : Counter;`).Diagnostics); len(errs) > 0 {
 	run(t, s, "%instantiate counter")
 
 	got := run(t, s, "%features counter")
+	wantsInOrder(t, got, "Features:\n  count = 10\n", "\nBehaviors:\n  modes: exhibited state machine, current state running\n    count = 1\n")
 	wants(t, got,
-		"Features:\n  count = 10\nBehaviors:\n",
-		"  modes: exhibited state machine, current state running\n    count = 1\n",
 		"  tick: performed action, not started\n    total = 7\n",
 		"  idle: action, not running",
 	)
@@ -276,11 +274,8 @@ part door : Door;`).Diagnostics); len(errs) > 0 {
 
 	run(t, s, "%instantiate door")
 	got := run(t, s, "%features door")
-	wants(t, got,
-		"Features:\n  width = 0.9\nBehaviors:",
-		"  modes: exhibited state machine, current state ",
-		"  toggle: transition, modes.closed → modes.opened",
-	)
+	wantsInOrder(t, got, "Features:\n  width = 0.9\n", "\nBehaviors:\n  modes: exhibited state machine, current state ")
+	wants(t, got, "  toggle: transition, modes.closed → modes.opened")
 	rejects(t, got, "toggle: action", "toggle = ", "<unknown>")
 
 	run(t, s, "%instantiate DoorModes")

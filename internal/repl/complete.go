@@ -397,7 +397,7 @@ func (s *Session) peekObject(text string) (objectShape, bool) {
 	shape := objectShape{inst: root, typ: root.Type}
 	for _, seg := range rest {
 		feat := featureNamed(s.rtCtx.FeaturesOf(shape.typ), seg.name)
-		if feat == nil || feat.IsScalar() != (seg.index == 0) {
+		if feat == nil || feat.Scalar() != (seg.index == 0) {
 			return objectShape{}, false
 		}
 		if fv := heldFeatureValue(shape.inst, seg.name); fv != nil {
@@ -421,7 +421,7 @@ func (s *Session) peekObject(text string) (objectShape, bool) {
 			continue
 		}
 		typ := s.objectTypeOf(feat)
-		if typ == nil || seg.index > s.elementCount(shape, feat) {
+		if typ == nil || max(seg.index, 1) > s.elementCount(shape, feat) {
 			return objectShape{}, false
 		}
 		shape = objectShape{typ: typ}
@@ -432,10 +432,10 @@ func (s *Session) peekObject(text string) (objectShape, bool) {
 // holdsObjects reports whether a feature is a path segment of the object holding
 // it: once materialized, whether it holds an object (a selected variation's
 // object as much as a part's); before that, whether reading it would.
-func (s *Session) holdsObjects(inst *runtime.Instance, feat *runtime.EffectiveFeature) bool {
-	fv := heldFeatureValue(inst, feat.Name)
+func (s *Session) holdsObjects(shape objectShape, feat *runtime.EffectiveFeature) bool {
+	fv := heldFeatureValue(shape.inst, feat.Name)
 	if fv == nil {
-		return s.objectTypeOf(feat) != nil
+		return s.elementCount(shape, feat) > 0
 	}
 	if fv.Values.Kind == runtime.ValInvalid {
 		_, isObject := fv.Value.Object()
@@ -499,11 +499,11 @@ func (s *Session) featureCompletions(shape objectShape, prefix, partial string) 
 	features := s.rtCtx.FeaturesOf(shape.typ)
 	for i := range features {
 		feat := &features[i]
-		if feat.Name == "" || !s.holdsObjects(shape.inst, feat) {
+		if feat.Name == "" || !s.holdsObjects(shape, feat) {
 			continue
 		}
 		name := prefix + lexer.NameText(feat.Name)
-		if feat.IsScalar() {
+		if feat.Scalar() {
 			candidates = append(candidates, name)
 			continue
 		}
@@ -527,9 +527,10 @@ func (s *Session) elementCount(shape objectShape, feat *runtime.EffectiveFeature
 }
 
 // elementsToHold is how many objects feat holds, or would once read, as the
-// runtime materializes a collection: what the features subsetting it contribute
-// first, then anonymous objects up to its lower bound. reading guards a cycle of
-// subsetting features, which reading reports instead.
+// runtime materializes it: what the features subsetting it contribute first,
+// then — unless it is abstract or optional, which hold only contributions —
+// anonymous objects up to its lower bound. reading guards a cycle of subsetting
+// features, which reading reports instead.
 func (s *Session) elementsToHold(shape objectShape, feat *runtime.EffectiveFeature, reading map[string]bool) int {
 	if fv := heldFeatureValue(shape.inst, feat.Name); fv != nil {
 		if fv.Values.Kind == runtime.ValInvalid {
@@ -543,7 +544,7 @@ func (s *Session) elementsToHold(shape objectShape, feat *runtime.EffectiveFeatu
 	if reading[feat.Name] || s.objectTypeOf(feat) == nil {
 		return 0
 	}
-	if feat.IsScalar() {
+	if feat.Scalar() && !feat.HoldsOnlyContributions() {
 		return 1
 	}
 	lower := feat.Multiplicity.Lower
@@ -555,6 +556,13 @@ func (s *Session) elementsToHold(shape objectShape, feat *runtime.EffectiveFeatu
 	contributed := 0
 	for _, sub := range s.rtCtx.SubsettingFeatures(shape.inst, shape.typ, feat.Name) {
 		contributed += s.elementsToHold(shape, &sub, reading)
+	}
+	if feat.HoldsOnlyContributions() {
+		// A scalar holding more than one contribution holds none: reading it is refused.
+		if feat.Scalar() && contributed > 1 {
+			return 0
+		}
+		return contributed
 	}
 	return max(contributed, int(lower.Value))
 }

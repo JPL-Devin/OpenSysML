@@ -33,7 +33,7 @@ const participantEndName = "participant"
 // denotes, with its ends attached to the features the `connect` clause names,
 // resolved against the instance that owns the connector.
 func (ctx *Context) materializeConnectorFeatureValue(owner *Instance, fv *FeatureValue, name string) error {
-	if !fv.Feature.IsScalar() {
+	if !fv.Feature.Scalar() {
 		return &ConnectorEndError{
 			Connector: fmt.Sprintf("%s.%s", owner.Type.Name, name),
 			End:       name,

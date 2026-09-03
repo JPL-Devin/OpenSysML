@@ -237,12 +237,15 @@ func TestSendAddressesObjectsLikeEveryCommand(t *testing.T) {
 	wants(t, run(t, s, "%send go to bulb.nosuch"), "error:", `"nosuch"`)
 	wants(t, run(t, s, "%send go to #1."), "error:", "is not an object reference")
 
-	// The object a second %instantiate displaces is still reached by id, its machine now on.
+	// The object a second %instantiate displaces is still reached by id: its
+	// machine, driven to on by a step of its own, takes no second go.
 	m := regexp.MustCompile(`ID: (\d+)`).FindStringSubmatch(run(t, s, "%instantiate bulb"))
 	if m == nil {
 		t.Fatal("%instantiate bulb printed no id")
 	}
 	newID := "#" + m[1]
+	wants(t, run(t, s, "%state #1"), "Current state: off")
+	wants(t, run(t, s, "%advance 1"), "Current state: on")
 	wants(t, run(t, s, "%send go to #1"), "error: object #1 accepts no signal go now", `state machine "Lamp" in state on`)
 	got := run(t, s, "%send go to bulb")
 	wants(t, got, "✓ Sent go to object "+newID+` of "Lamps::bulb"`, `Accepted by state machine "Lamp" in state off`)

@@ -1191,13 +1191,19 @@ func (w *featureValueWalk) rows(inst *runtime.Instance, indent string, depth int
 			continue
 		}
 		lines = w.emit(lines, fmt.Sprintf("%s%s = %s", indent, feat.Name, formatFeatureValue(w.ctx, fv)))
+		// The object's remaining features keep a line each; a nested expansion
+		// spends only what is left beyond them.
+		reserved := len(features) - i - 1
 		for _, nested := range nestedInstances(w.ctx, fv) {
-			if w.budget <= 0 {
-				return truncated(lines, "  ")
+			if w.budget <= reserved {
+				lines = w.truncate(lines, indent+"  ")
+				break
 			}
+			w.budget -= reserved
 			w.onPath[nested.Type] = true
 			lines = append(lines, w.lines(nested, indent+"  ", depth+1)...)
 			delete(w.onPath, nested.Type)
+			w.budget += reserved
 		}
 	}
 	if w.budget <= 0 && len(behaviors) > 0 {
@@ -1209,7 +1215,8 @@ func (w *featureValueWalk) rows(inst *runtime.Instance, indent string, depth int
 // isBehaviorFeature reports whether a feature is a state or action usage — a
 // named transition among them — a behavior of the object rather than a value it holds.
 func isBehaviorFeature(feat *runtime.EffectiveFeature) bool {
-	if feat.Symbol == nil {
+	// An abstract one (Part::performedActions) is a collection held, not a run.
+	if feat.Symbol == nil || symbols.IsAbstract(feat.Symbol) {
 		return false
 	}
 	switch feat.Symbol.Kind {
@@ -1454,9 +1461,10 @@ func nestedInstances(ctx *runtime.Context, fv *runtime.FeatureValue) []*runtime.
 
 // featureVerdict evaluates a constraint or requirement feature against the
 // instance that carries it and renders the outcome for a feature value listing.
-// Reports false for a feature that holds a value rather than a verdict.
+// Reports false for a feature that holds a value rather than a verdict, which a
+// multi-valued one does: it collects checks rather than being one.
 func featureVerdict(ctx *runtime.Context, feat *runtime.EffectiveFeature, inst *runtime.Instance) (string, bool) {
-	if feat.Symbol == nil {
+	if feat.Symbol == nil || !feat.Scalar() {
 		return "", false
 	}
 	var (
@@ -1522,10 +1530,13 @@ func (s *Session) doInstances() ([]string, bool, error) {
 }
 
 // formatFeatureValue renders what a feature value holds: a multi-valued feature keeps its
-// contents in Values, leaving the scalar Value unset.
+// contents in Values, leaving the scalar Value unset; a scalar holding nothing reads as unset.
 func formatFeatureValue(ctx *runtime.Context, fv *runtime.FeatureValue) string {
 	if fv.Values.Kind != runtime.ValInvalid {
 		return formatValue(ctx, fv.Values)
+	}
+	if fv.Value.Kind == runtime.ValInvalid {
+		return runtime.UnsetText
 	}
 	return formatValue(ctx, fv.Value)
 }

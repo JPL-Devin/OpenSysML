@@ -1029,7 +1029,7 @@ func (s *Session) walkObjectPath(ctx *runtime.Context, inst *runtime.Instance, l
 		fv, err := inst.GetFeatureValue(ctx, seg.name)
 		if err != nil {
 			if _, has := inst.FeatureValues[seg.name]; !has {
-				return nil, "", pathError(label, seg, "%s has no feature %q%s", label, seg.name, featureListHint(inst))
+				return nil, "", pathError(label, seg, "%s has no feature %q%s", label, seg.name, s.featureListHint(inst))
 			}
 			perr := pathError(label, seg, "%s of %s could not be materialized: %v", lexer.NameText(seg.name), label, err)
 			perr.Err = err
@@ -1093,13 +1093,19 @@ func collectionElements(val runtime.Value) []runtime.Value {
 const featureListLimit = 12
 
 // featureListHint names the features an object has, so a misspelt one can be
-// corrected without another command.
-func featureListHint(inst *runtime.Instance) string {
+// corrected without another command: the model's own by name, the ones the
+// library declares for it by count.
+func (s *Session) featureListHint(inst *runtime.Instance) string {
 	if len(inst.FeatureValues) == 0 {
 		return " (it has no features)"
 	}
-	names := make([]string, 0, len(inst.FeatureValues))
-	for name := range inst.FeatureValues {
+	var names []string
+	library := 0
+	for name, fv := range inst.FeatureValues {
+		if s.idx != nil && fv.Feature != nil && s.idx.Library(fv.Feature.Symbol) {
+			library++
+			continue
+		}
 		names = append(names, name)
 	}
 	sort.Strings(names)
@@ -1107,6 +1113,12 @@ func featureListHint(inst *runtime.Instance) string {
 	if len(names) > featureListLimit {
 		more = fmt.Sprintf(", … (%d in all)", len(names))
 		names = names[:featureListLimit]
+	}
+	switch {
+	case len(names) == 0:
+		return fmt.Sprintf(" (its %d features are all declared by the library)", library)
+	case library > 0:
+		more += fmt.Sprintf(", and %d more the library declares", library)
 	}
 	return fmt.Sprintf(" (its features are %s%s)", strings.Join(names, ", "), more)
 }
