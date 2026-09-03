@@ -576,8 +576,7 @@ func contextSeparator(tail string) int {
 // evalIn evaluates an expression in the context the command pinned: the object
 // the reference denotes (`ctx`, `#3`, `ctx.recv`), whose feature values it then
 // reads as `%eval` does after `%instantiate`, or else the named element's own
-// namespace. The expression is parsed first: a malformed one is rejected before
-// the reference can materialize anything.
+// namespace. The expression is parsed before the reference materializes anything.
 func (s *Session) evalIn(name, expr string) ([]string, error) {
 	node, diags := parseExprAlone(expr)
 	if len(diags) > 0 {
@@ -2762,8 +2761,8 @@ func (s *Session) doInvoke(name, operation string, args []string) ([]string, boo
 }
 
 // invokeOperation binds the arguments written as `name=<expression>` and runs the
-// operation the object's type owns, performed by that object. The arguments are
-// parsed first, so a malformed one is rejected before the object is reached.
+// operation the object's type owns, performed by that object; the arguments are
+// parsed before the object is reached.
 func (s *Session) invokeOperation(name, operation string, args []string) ([]string, error) {
 	parsed, err := parseArguments(args)
 	if err != nil {
