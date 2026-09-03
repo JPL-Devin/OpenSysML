@@ -80,7 +80,7 @@ func TestFeaturesErrorPaths(t *testing.T) {
 // Help and completion name the one spelling there is.
 func TestFeaturesInHelpAndCompletion(t *testing.T) {
 	help := strings.Join(helpText(), "\n")
-	wants(t, help, "%features <name>")
+	wants(t, help, "%features <name> [all|depth <n>] [json]")
 	rejects(t, help, "%slots")
 
 	got := NewSession().Complete("%fea", len("%fea"))
