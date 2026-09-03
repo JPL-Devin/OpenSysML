@@ -109,6 +109,10 @@ type Context struct {
 	// behaviorRunDepth is the number of classifier-behavior starts under way.
 	behaviorRunDepth int
 
+	// heldBehaviors are the behaviors already holding work when the outermost
+	// start under way began: a driver put it in flight, and dispatches it.
+	heldBehaviors map[*ObjectBehavior]bool
+
 	// objectBehaviors are every behavior an object of this context runs, so a
 	// drain to quiescence can re-run one a sibling's send woke.
 	objectBehaviors []*ObjectBehavior

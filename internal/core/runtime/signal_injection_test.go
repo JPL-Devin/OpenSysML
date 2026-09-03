@@ -1294,6 +1294,85 @@ func TestProbeDrainLeavesThePendingStartupRunsOfTheStartUnderWay(t *testing.T) {
 	}
 }
 
+// A start does not dispatch a message a driver left in flight for a machine that
+// was already quiescent: the driver stepping the machine dispatches it, so a
+// signal accepted at send time and undercut by a later one is still reported by
+// the step that consumes it, not swallowed by an unrelated object's creation.
+func TestStartLeavesAMessageInFlightToTheDriverSteppingItsMachine(t *testing.T) {
+	src := `
+		private import ScalarValues::*;
+		attribute def Poke;
+		attribute def Lock;
+		part def Keeper {
+			attribute open : Boolean = true;
+			exhibit state gate {
+				entry; then shut;
+				state shut;
+				transition lock first shut accept Lock do assign open := false then shut;
+				transition shut_through first shut accept Poke if open then through;
+				state through;
+			}
+		}
+		part def Bystander {
+			exhibit state life { entry; then alive; state alive; }
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "keeper.sysml", parseAndBuild(t, src))
+	root := idx.DocumentRoot("keeper.sysml")
+	keeper, err := ctx.Instantiate(resolveSymbol(t, root, "Keeper"))
+	if err != nil {
+		t.Fatalf("Instantiate(Keeper): %v", err)
+	}
+	gate, ok := keeper.ExhibitedState()
+	if !ok || activeLeaf(gate.State) != "shut" {
+		t.Fatalf("keeper runs no gate machine at shut: ok=%v", ok)
+	}
+	for _, name := range []string{"Lock", "Poke"} {
+		msg, err := ctx.SignalMessage(resolveSymbol(t, root, name), nil, keeper)
+		if err != nil {
+			t.Fatalf("SignalMessage(%s): %v", name, err)
+		}
+		ctx.PostMessage(msg)
+	}
+
+	// An unrelated object's start, as a driver's read or command may make between
+	// dispatching two messages it has in flight.
+	if _, err := ctx.Instantiate(resolveSymbol(t, root, "Bystander")); err != nil {
+		t.Fatalf("Instantiate(Bystander): %v", err)
+	}
+	if got := len(ctx.PendingMessages()); got != 2 {
+		t.Fatalf("%d messages in flight after the bystander's start, want Lock and Poke left for the driver", got)
+	}
+	if got := FormatValue(keeper.FeatureValues["open"].HeldValue()); got != "true" {
+		t.Errorf("open = %s after the bystander's start, want true: Lock was not the start's to dispatch", got)
+	}
+
+	// The driver then dispatches each in turn: Lock shuts the gate, so Poke is
+	// consumed by no transition.
+	if err := gate.State.ProcessNextEvent(); err != nil {
+		t.Fatalf("ProcessNextEvent(Lock): %v", err)
+	}
+	if got := FormatValue(keeper.FeatureValues["open"].HeldValue()); got != "false" {
+		t.Errorf("open = %s after Lock, want false", got)
+	}
+	if got := len(ctx.PendingMessages()); got != 1 {
+		t.Fatalf("%d messages in flight after Lock, want Poke", got)
+	}
+	if err := gate.State.ProcessNextEvent(); err != nil {
+		t.Fatalf("ProcessNextEvent(Poke): %v", err)
+	}
+	d, ok := gate.State.LastDispatch()
+	if !ok || d.Fired || d.Deferred {
+		t.Errorf("last dispatch = %+v, %v; want Poke dispatched, firing nothing", d, ok)
+	}
+	if msg, isSignal := d.Event.Payload.(Message); !isSignal || msg.SignalType != "Poke" {
+		t.Errorf("last dispatch carried %+v, want the Poke message", d.Event.Payload)
+	}
+	if got := activeLeaf(gate.State); got != "shut" || len(ctx.PendingMessages()) != 0 {
+		t.Errorf("gate at %s with %d messages in flight, want shut and none", got, len(ctx.PendingMessages()))
+	}
+}
+
 // A message in flight is left as Decide found it, payload included: the machine
 // of an object a guard materializes may take it under the probe and cache the
 // occurrence it binds on the payload, an object the probe discards. Dispatch
