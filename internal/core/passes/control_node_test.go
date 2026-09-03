@@ -589,9 +589,16 @@ func TestControlNodeInConstraintBodyStatements(t *testing.T) {
 		assert constraint c { if x > 0 { action a; action b; action c; decide d; first a then d; first b then d; first d then c; } x > 0 }
 		constraint c2 { if x > 0 ? true else false }
 	}
+	requirement def R {
+		require constraint q { if x > 0 { action a; action b; action c; merge m; first a then m; first m then b; first m then c; } x > 0 }
+		assume constraint { while x > 0 { action a; action b; action c; fork f; first a then f; first b then f; first f then c; } }
+		assume constraint { if x > 0 ? true else false }
+	}
 }`, controlNodeWant{CodeForkIncomingSuccessions, 5, "fork f has 2 incoming successions"},
 		controlNodeWant{CodeJoinOutgoingSuccessions, 6, "join j has 2 outgoing successions"},
-		controlNodeWant{CodeDecisionIncomingSuccessions, 10, "decide d has 2 incoming successions"})
+		controlNodeWant{CodeDecisionIncomingSuccessions, 10, "decide d has 2 incoming successions"},
+		controlNodeWant{CodeMergeOutgoingSuccessions, 14, "merge m has 2 outgoing successions"},
+		controlNodeWant{CodeForkIncomingSuccessions, 15, "fork f has 2 incoming successions"})
 }
 
 // The action body a transition, a send, a guarded succession, or a state's

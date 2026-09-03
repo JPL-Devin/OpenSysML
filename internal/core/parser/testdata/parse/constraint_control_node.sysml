@@ -32,3 +32,8 @@ part def Valve {
     assert constraint c { if x > 0 { decide d; } x > 0 }
     constraint c2 { if x > 0 ? true else false }
 }
+requirement def Bounds {
+    require constraint q { if x > 0 { fork f; } x > 0 }
+    assume constraint { while x > 0 { join j; } }
+    assume constraint { if x > 0 ? true else false }
+}

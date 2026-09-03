@@ -68,4 +68,31 @@
                 (FeatureReference name="x")
                 (LiteralInteger value="0"))
               (LiteralBool value=true)
-              (LiteralBool value=false))))))))
+              (LiteralBool value=false)))))))
+  (Membership visibility="default"
+    (Definition kind="requirement" abstract=false variation=false name="Bounds"
+      (RequireMember constraint="q"
+        (IfActionNode
+          (OperatorExpr operator=">"
+            (FeatureReference name="x")
+            (LiteralInteger value="0"))
+          (IfBranchNode kind="then"
+            (ForkNode name="f")))
+        (ConstraintMember assert=true negated=false
+          (OperatorExpr operator=">"
+            (FeatureReference name="x")
+            (LiteralInteger value="0"))))
+      (AssumeMember
+        (WhileLoopActionNode kind="while" variable=""
+          (OperatorExpr operator=">"
+            (FeatureReference name="x")
+            (LiteralInteger value="0"))
+          (JoinNode name="j")))
+      (AssumeMember
+        (ConstraintMember assert=true negated=false
+          (OperatorExpr operator="if"
+            (OperatorExpr operator=">"
+              (FeatureReference name="x")
+              (LiteralInteger value="0"))
+            (LiteralBool value=true)
+            (LiteralBool value=false)))))))

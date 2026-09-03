@@ -2408,7 +2408,8 @@ func (p *Parser) tryParseNestedConstraint(start int, isAssert, isNegated bool, k
 // parseNestedConstraintConditions parses the body of the anonymous constraint an
 // `assume`/`require constraint { … }` member owns, through its closing brace,
 // and returns its ConstraintMembers. Every condition is kept: a constraint body
-// may state more than one. Action nodes are kept for the owning-type rule.
+// may state more than one. Its statements and action nodes are kept too, the
+// nodes for the owning-type rule.
 func (p *Parser) parseNestedConstraintConditions() []ast.Node {
 	var conditions []ast.Node
 	for !p.at(lexer.RBrace) && !p.atEOF() {
@@ -2417,7 +2418,7 @@ func (p *Parser) parseNestedConstraintConditions() []ast.Node {
 			p.parseDocumentation(before)
 			continue
 		}
-		if p.atActionNodeMember() {
+		if p.atCalcStatement() || p.atActionNodeMember() {
 			conditions = append(conditions, p.parseActionMember())
 		} else if c, ok := p.parseConstraintMember().(*ast.ConstraintMember); ok && (c.Expression != nil || len(c.Body) > 0) {
 			conditions = append(conditions, c)
