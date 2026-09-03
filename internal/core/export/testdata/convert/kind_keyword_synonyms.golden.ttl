@@ -179,6 +179,7 @@ elmt:Synonyms__note
     sysml:owningRelationship elmt:Synonyms__note_om ;
     sysml:owningMembership elmt:Synonyms__note_om ;
     sysml:declaredName "note" ;
+    sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "    message note;\n" .
 
 elmt:Synonyms__note_om
@@ -203,6 +204,7 @@ elmt:Synonyms___407
     sysx:relatedFeature expr:Synonyms___407_pend0, expr:Synonyms___407_pend1 ;
     sysx:endForm "to" ;
     sysx:declaredKeyword "allocate" ;
+    sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "    allocate reading to base;\n" .
 
 elmt:Synonyms___407_om

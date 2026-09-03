@@ -468,6 +468,7 @@ elmt:IrregularLayout__Rover___407
     sysx:relatedFeature expr:IrregularLayout__Rover___407_pend0, expr:IrregularLayout__Rover___407_pend1 ;
     sysx:endForm "to" ;
     sysx:declaredKeyword "connect" ;
+    sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        connect wheels\n            to axle;\n" .
 
 elmt:IrregularLayout__Rover___407_om

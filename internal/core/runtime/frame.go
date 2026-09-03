@@ -5,6 +5,9 @@ package runtime
 type frame struct {
 	slots *slotFrame
 	vars  map[string]Value
+	// perf is the action performance vars belongs to, if any, whose flow's nodes
+	// the frame also answers for (action_frame.go).
+	perf *actionFrame
 }
 
 // mapFrame is a frame holding vars alone.
@@ -54,6 +57,14 @@ func (f frame) each(fn func(name string, value Value)) {
 	for name, value := range f.vars {
 		fn(name, value)
 	}
+}
+
+// snapshot copies the frame's bindings into storage of its own, unchanged by
+// whatever later reuses the frame's.
+func (f frame) snapshot() frame {
+	vars := make(map[string]Value, f.width())
+	f.each(func(name string, value Value) { vars[name] = value })
+	return mapFrame(vars)
 }
 
 // width is the number of names the frame binds.

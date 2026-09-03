@@ -1317,6 +1317,10 @@ func validateValue(t *testing.T, ctx *Context, name string, expected ExpectedVal
 		if actual.Str() != want {
 			t.Errorf("%s: value = %q, want %q", name, actual.Str(), want)
 		}
+	case "Null":
+		if actual.Kind != ValNull {
+			t.Errorf("%s: type = %v, want Null", name, actual.Kind)
+		}
 	case "Variant":
 		if actual.Kind != ValVariant || actual.Variant() == nil {
 			t.Errorf("%s: type = %v, want Variant", name, actual.Kind)

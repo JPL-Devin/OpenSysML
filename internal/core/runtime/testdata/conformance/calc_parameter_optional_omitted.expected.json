@@ -1,0 +1,9 @@
+{
+  "libraries": true,
+  "type": "calcUsage",
+  "evaluate": "test::c",
+  "outputs": {
+    "omitted": {"type": "Integer", "value": 5},
+    "given": {"type": "Integer", "value": 15}
+  }
+}

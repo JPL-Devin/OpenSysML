@@ -332,6 +332,75 @@ func TestExprInvocationCorrectArityOK(t *testing.T) {
 	wantNoDiags(t, `package P { `+calcAdd+` calc c { add(1, 2) } }`)
 }
 
+// A parameter whose multiplicity admits no value may go without an argument,
+// as the library's `'-'(x)` and two-argument `'if'` do; one declaring `[1]` may not.
+func TestExprInvocationOptionalParameterMayBeOmitted(t *testing.T) {
+	const model = `package P {
+		calc def scale {
+			in x : ScalarValues::Integer;
+			in by : ScalarValues::Integer[0..1];
+			x
+		}
+		calc c { scale(%s) }
+	}`
+	wantNoDiags(t, fmt.Sprintf(model, `2`))
+	wantNoDiags(t, fmt.Sprintf(model, `2, 3`))
+	wantOneDiag(t, fmt.Sprintf(model, ``), "scale requires 1 argument(s), found 0")
+	wantNoDiags(t, `package P { calc c { IntegerFunctions::'-'(5) } }`)
+	wantNoDiags(t, `package P { calc c { ControlFunctions::'if'(false, 1) } }`)
+}
+
+func TestExprInvocationRedefinedParameterKeepsInheritedOptionality(t *testing.T) {
+	// A redefinition stating no multiplicity or default keeps the inherited ones.
+	const model = `package P {
+		calc def Scale {
+			in x : ScalarValues::Integer;
+			in by : ScalarValues::Integer[0..1];
+			in times : ScalarValues::Integer = 1;
+			x
+		}
+		calc def Scaled :> Scale {
+			in redefines x;
+			in redefines by;
+			in redefines times : ScalarValues::Integer;
+			x
+		}
+		calc def Tight :> Scale {
+			in redefines x;
+			in redefines by : ScalarValues::Integer[1];
+			x
+		}
+		calc c { %s }
+	}`
+	wantNoDiags(t, fmt.Sprintf(model, `Scaled(2)`))
+	wantNoDiags(t, fmt.Sprintf(model, `Scaled(2, 3, 4)`))
+	wantOneDiag(t, fmt.Sprintf(model, `Scaled()`), "Scaled requires 1 argument(s), found 0")
+	wantOneDiag(t, fmt.Sprintf(model, `Tight(2)`), "Tight requires 2 argument(s), found 1")
+}
+
+func TestExprInvocationOptionalBeforeRequiredParameter(t *testing.T) {
+	// Positional arguments bind in order, so an omittable parameter ahead of a
+	// required one does not stand in for it.
+	const model = `package P {
+		calc def Scale {
+			in by : ScalarValues::Integer[0..1];
+			in offset : ScalarValues::Integer = 0;
+			in x : ScalarValues::Integer;
+			x
+		}
+		calc def Scaled :> Scale {
+			in redefines by;
+			in redefines offset;
+			x
+		}
+		calc c { %s }
+	}`
+	wantNoDiags(t, fmt.Sprintf(model, `Scale(2, 0, 5)`))
+	wantOneDiag(t, fmt.Sprintf(model, `Scale(5)`), "Scale requires 3 argument(s), found 1")
+	wantOneDiag(t, fmt.Sprintf(model, `Scaled(5)`), "Scaled requires 3 argument(s), found 1")
+	wantNoDiags(t, fmt.Sprintf(model, `Scale(x = 5)`))
+}
+
 func TestExprInvocationThroughAliasChecksArguments(t *testing.T) {
 	const model = `package P {
 		` + calcAdd + `
@@ -386,10 +455,45 @@ func TestExprInvocationReceiverWithNamedArguments(t *testing.T) {
 	wantOneDiag(t,
 		`package P { `+calcAdd+` calc c { 1->add(a = 1, b = 2) } }`,
 		"add cannot be called with a receiver and named arguments")
+	// The receiver may be the missing argument, so nothing else is reported.
+	wantOneDiag(t,
+		`package P { `+calcAdd+` calc c { 1->add(b = 2) } }`,
+		"add cannot be called with a receiver and named arguments")
 }
 
 func TestExprInvocationNamedArgumentsOK(t *testing.T) {
 	wantNoDiags(t, `package P { `+calcAdd+` calc c { add(a = 1, b = 2) } }`)
+	wantNoDiags(t, `package P { `+calcAdd+` calc c { add(b = 2, a = 1) } }`)
+}
+
+// Arguments that bind by name are held to the parameters as positional ones
+// are: each parameter once, in its type, and none required left unbound.
+func TestExprInvocationNamedArgumentsChecked(t *testing.T) {
+	wantOneDiag(t,
+		`package P { `+calcAdd+` calc c { add(a = 1) } }`,
+		"add requires an argument for parameter b")
+	wantOneDiag(t,
+		`package P { `+calcAdd+` calc c { add(a = 1, a = 2, b = 3) } }`,
+		`add binds parameter "a" twice`)
+	wantOneDiag(t,
+		`package P { `+calcAdd+` calc c { add(b = "two", a = 1) } }`,
+		"argument b of add expects Integer, found String")
+	wantOneDiag(t,
+		`package P { `+calcAdd+` calc c { add(a = 1, c = 2) } }`,
+		`add has no parameter named "c"`)
+	const model = `package P {
+		calc def Scale {
+			in factor : ScalarValues::Integer[0..1];
+			in offset : ScalarValues::Integer = 0;
+			in x : ScalarValues::Integer;
+			x
+		}
+		calc c { %s }
+	}`
+	wantNoDiags(t, fmt.Sprintf(model, `Scale(x = 5)`))
+	wantNoDiags(t, fmt.Sprintf(model, `Scale(offset = 1, x = 5, factor = 2)`))
+	wantOneDiag(t, fmt.Sprintf(model, `Scale(factor = 2, offset = 1)`),
+		"Scale requires an argument for parameter x")
 }
 
 func TestExprLiteralConformsToNatural(t *testing.T) {

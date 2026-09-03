@@ -214,6 +214,7 @@ elmt:QuotedSuccessionEnds__provide_20power__s
     sysx:relatedFeature expr:QuotedSuccessionEnds__provide_20power__s_pend0, expr:QuotedSuccessionEnds__provide_20power__s_pend1 ;
     sysx:endForm "firstThen" ;
     sysx:endVerb "first" ;
+    sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        succession s first 'amplify torque' then done;\n" .
 
 elmt:QuotedSuccessionEnds__provide_20power__s_om
@@ -364,6 +365,7 @@ elmt:QuotedSuccessionEnds__drive___403
     sysx:relatedFeature expr:QuotedSuccessionEnds__drive___403_pend0, expr:QuotedSuccessionEnds__drive___403_pend1 ;
     sysx:endForm "firstThen" ;
     sysx:endVerb "first" ;
+    sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        succession first 'start engine' then 'drive vehicle';\n" .
 
 elmt:QuotedSuccessionEnds__drive___403_om

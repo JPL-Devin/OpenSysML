@@ -390,14 +390,26 @@ Execution runtime (Tiers 1-5: instances, expressions, behaviors).
   - `Location ast.Node` — Current node (InitialNode, ActionExecutionNode, etc.)
 
 - **`ActionExecutor`** — Petri-net token-flow execution engine
-  - `Step() error` — Advance all tokens one step
+  - `Step() error` — Advance all tokens one step; a breakpoint met inside a token's body
+    ends the step there, with no other token stepped, and the next step steps the other
+    tokens before resuming the paused one
   - `RunToCompletion() error` — Execute until StateCompleted (max 10k steps)
   - `Tokens() []Token` — Get active tokens (copy)
   - `State() ExecutionState` — Current execution state (Ready/Running/Completed/Suspended)
-  - `Results() map[string]Value` — Get results after completion
-  - `Data() map[string]Value` — The action's live feature space, shared by every token
-  - `SetBreakpoint(nodeName string)` — Set breakpoint on node
+  - `Results() map[string]Value` — The values the action's features hold, and under
+    `node.pin` (`p.v`, `leg.inner.v`) those the latest performance of each nested
+    action node holds; complete once execution has completed
+  - `Data() map[string]Value` — The live feature space of the action's own performance,
+    which every token in its flow shares. A nested action node performs in a frame of
+    its own, so its pins are not here; read them from `Results()`
+  - `SetBreakpoint(nodeName string)` — Set breakpoint on node: a run pauses when a token
+    reaches it, or before a body performs it when it is a node an `if` branch or a loop body
+    declares; `NodeNames()` lists every node a breakpoint may name
   - `ClearBreakpoints()` — Clear all breakpoints
+  - `Release()` — End the run for good, ending the paused work of every token a breakpoint
+    left mid-body; a later `Step()` or `RunToCompletion()` returns `ErrExecutorReleased`,
+    whether the run had completed or not. Call it when abandoning an executor that may be
+    suspended
   - `ActionSymbol() *symbols.Symbol` — Get action symbol
 
 - **`StateExecutor`** — Event-driven state machine execution

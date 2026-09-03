@@ -1,3 +1,0 @@
-# CHANGELOG.md is append-only under "## Unreleased": when two branches add entries at the
-# same spot, keep both sides rather than conflicting. New entries go in changes/unreleased/.
-CHANGELOG.md merge=union

@@ -223,6 +223,7 @@ elmt:FlowsAndViews__FuelInterface___402
     sysml:owningMembership elmt:FlowsAndViews__FuelInterface___402_om ;
     sysx:relatedFeature expr:FlowsAndViews__FuelInterface___402_pflowSource, expr:FlowsAndViews__FuelInterface___402_pflowTarget ;
     sysx:endForm "flowTo" ;
+    sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        flow supplierPort.fuelSupply to consumerPort.fuelSupply;\n" .
 
 elmt:FlowsAndViews__FuelInterface___402_om
@@ -464,6 +465,7 @@ elmt:FlowsAndViews__vehicle___404
     sysx:relatedFeature expr:FlowsAndViews__vehicle___404_pend0, expr:FlowsAndViews__vehicle___404_pend1 ;
     sysx:endForm "to" ;
     sysx:declaredKeyword "allocate" ;
+    sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        allocate tank to engine;\n" .
 
 elmt:FlowsAndViews__vehicle___404_om
