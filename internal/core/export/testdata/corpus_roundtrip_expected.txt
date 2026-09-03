@@ -27,7 +27,7 @@ refused:feature-declaration	parser_features_demo_declarations.kerml
 stable	parser_features_demo_defaults.kerml
 stable	parser_features_demo_edge_cases.kerml
 stable	parser_features_demo_messages_events.sysml
-unparseable	parser_features_demo_modifiers.kerml
+stable	parser_features_demo_modifiers.kerml
 stable	parser_features_demo_relationships.kerml
 refused:operator-expr	phase-c-behavioral-bodies.sysml
 stable	pilot-corpora/kerml-examples/Address Book Example/AddressBookModel.kerml
@@ -68,7 +68,7 @@ stable	pilot-corpora/kerml-examples/Simple Tests/Connectors.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Dependencies.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Expansion.kerml
 refused:operator-expr	pilot-corpora/kerml-examples/Simple Tests/Expressions.kerml
-unparseable	pilot-corpora/kerml-examples/Simple Tests/FeatureChains.kerml
+stable	pilot-corpora/kerml-examples/Simple Tests/FeatureChains.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/FeatureInheritance.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Features.kerml
 refused:prefix-metadata	pilot-corpora/kerml-examples/Simple Tests/Filtering.kerml
@@ -93,7 +93,7 @@ stable	pilot-corpora/sysml-examples/Analysis Examples/Dynamics.sysml
 refused:operator-expr	pilot-corpora/sysml-examples/Analysis Examples/Turbojet Stage Analysis.sysml
 stable	pilot-corpora/sysml-examples/Analysis Examples/Vehicle Analysis Demo.sysml
 stable	pilot-corpora/sysml-examples/Arrowhead Framework Example/AHFCoreLib.sysml
-unparseable	pilot-corpora/sysml-examples/Arrowhead Framework Example/AHFNorwayTopics.sysml
+stable	pilot-corpora/sysml-examples/Arrowhead Framework Example/AHFNorwayTopics.sysml
 stable	pilot-corpora/sysml-examples/Arrowhead Framework Example/AHFProfileLib.sysml
 refused:event-declaration	pilot-corpora/sysml-examples/Arrowhead Framework Example/AHFSequences.sysml
 stable	pilot-corpora/sysml-examples/Association Examples/ProductSelection_N_ary.sysml
@@ -132,12 +132,12 @@ refused:prefix-metadata	pilot-corpora/sysml-examples/Metadata Examples/Requireme
 refused:prefix-metadata	pilot-corpora/sysml-examples/Metadata Examples/RiskMetadataExample.sysml
 refused:prefix-metadata	pilot-corpora/sysml-examples/Metadata Examples/VerificationMetadataExample.sysml
 stable	pilot-corpora/sysml-examples/Packet Example/PacketUsage.sysml
-graph-diff	pilot-corpora/sysml-examples/Packet Example/Packets.sysml
+stable	pilot-corpora/sysml-examples/Packet Example/Packets.sysml
 stable	pilot-corpora/sysml-examples/Requirements Examples/HSUVRequirements.sysml
 stable	pilot-corpora/sysml-examples/Requirements Examples/RequirementDerivationExample.sysml
 stable	pilot-corpora/sysml-examples/Requirements Examples/VehicleRequirementDerivation.sysml
 stable	pilot-corpora/sysml-examples/Room Model/RoomModel.sysml
-unwritable	pilot-corpora/sysml-examples/Simple Tests/ActionTest.sysml
+stable	pilot-corpora/sysml-examples/Simple Tests/ActionTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/AliasTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/AllocationTest.sysml
 refused:feature-chain-expr	pilot-corpora/sysml-examples/Simple Tests/AnalysisTest.sysml
@@ -148,7 +148,7 @@ stable	pilot-corpora/sysml-examples/Simple Tests/ConjugationTest.sysml
 refused:prefix-metadata	pilot-corpora/sysml-examples/Simple Tests/ConnectionTest.sysml
 refused:assert-declaration	pilot-corpora/sysml-examples/Simple Tests/ConstraintTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/ControlNodeTest.sysml
-unparseable	pilot-corpora/sysml-examples/Simple Tests/DecisionTest.sysml
+stable	pilot-corpora/sysml-examples/Simple Tests/DecisionTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/DefaultValueTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/DependencyTest.sysml
 stable	pilot-corpora/sysml-examples/Simple Tests/EnumerationTest.sysml

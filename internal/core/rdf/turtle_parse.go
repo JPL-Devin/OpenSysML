@@ -345,6 +345,10 @@ func (p *parser) readLiteral() (Term, error) {
 				b.WriteByte('\r')
 			case 't':
 				b.WriteByte('\t')
+			case 'b':
+				b.WriteByte('\b')
+			case 'f':
+				b.WriteByte('\f')
 			case '\\', '"', '\'':
 				b.WriteByte(esc)
 			case 'u', 'U':

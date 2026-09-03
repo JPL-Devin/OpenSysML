@@ -264,8 +264,7 @@ func (d *decoder) resolveExpressions() error {
 			// The subject is an expression node; its parts are written with it.
 			continue
 		}
-		trigger := triple.Predicate.Value == rdf.SysML+pValue && d.boolOf(el, rdf.SysML+pIsAccept)
-		text, err := d.expressionText(triple.Object, el.scope, trigger)
+		text, err := d.expressionNodeText(triple.Object, el.scope)
 		if err != nil {
 			return err
 		}
@@ -278,15 +277,9 @@ func (d *decoder) resolveExpressions() error {
 }
 
 // expressionNodeText writes an expression node back as notation: the notation it
-// kept, when that still states the graph, or notation rebuilt from its structure.
+// kept, or notation rebuilt from its structure when it kept none it can use.
 func (d *decoder) expressionNodeText(node rdf.Term, scope string) (string, error) {
-	return d.expressionText(node, scope, false)
-}
-
-// expressionText is expressionNodeText for a node whose owner reads it as an
-// accept payload's trigger (`when …`, `at …`, `after …`) when trigger is set.
-func (d *decoder) expressionText(node rdf.Term, scope string, trigger bool) (string, error) {
-	if text, ok := d.graph.Lexical(node, rdf.OpenSysML+xSourceText); ok && text != "" && d.textStatesGraph(node, text, scope, trigger) {
+	if text, ok := d.expressionText(node); ok {
 		return text, nil
 	}
 	metaclass := rdf.LocalName(d.graph.Type(node))
@@ -308,7 +301,7 @@ func (d *decoder) expressionText(node rdf.Term, scope string, trigger bool) (str
 		if !ok {
 			return "", unsupported("a literal expression states the value it evaluates to")
 		}
-		return stringLiteral(value), nil
+		return lexer.StringText(value), nil
 	case mLiteralInfinity:
 		return "*", nil
 	case mNullExpression:

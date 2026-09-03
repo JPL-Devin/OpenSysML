@@ -1,429 +1,529 @@
 package export_test
 
 import (
-	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 )
 
-// The graph is authoritative and the stored text is layout: a head or expression
-// is written back byte-for-byte as stored while its spelling still states the
-// graph, and from the graph alone once it does not.
+// A model the formatter leaves alone, so what the graph carries as source text
+// is the notation itself: comments, notes, blank lines and synonyms included.
+const commented = `// The rover, as modelled.
+package Rover {
+    /* Definitions come first. */
+    part def Wheel :> Part; // a synonym the printer would spell out
+    //* A note the parser skips
+       over two lines. */
+    part def Hub;
 
-// graphOf converts notation and fails the test on refusal.
-func graphOf(t *testing.T, src string) string {
+    part def Vehicle {
+        doc /* what a vehicle is for */
+        part wheels : Wheel[4]; // four of them
+        part hub : Hub;
+        // connected at the hub
+        connect wheels to hub;
+    }
+}
+`
+
+// commentedTurtle converts commented to Turtle, with the notation it formats to
+// (which is commented itself) for comparison.
+func commentedTurtle(t *testing.T) []byte {
 	t.Helper()
-	turtle, err := export.Convert("model.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
-	if err != nil {
-		t.Fatalf("to turtle: %v", err)
+	if got := formatted(t, commented); got != commented {
+		t.Fatalf("the fixture is not fixed under the formatter:\n%s", got)
 	}
-	return string(turtle)
+	return idTurtle(t, commented)
 }
 
-// restated replaces one stored sysx:sourceText literal with another, the graph
-// otherwise untouched, as a tool that edits the text but not the structure would.
-func restated(t *testing.T, turtle, stored, instead string) string {
+// editTurtle rewrites one line of a Turtle document, failing when it is absent.
+func editTurtle(t *testing.T, turtle []byte, old, new string) []byte {
 	t.Helper()
-	from := `sysx:sourceText ` + stored
-	if !strings.Contains(turtle, from) {
-		t.Fatalf("graph stores no %s\n%s", from, turtle)
+	if !strings.Contains(string(turtle), old) {
+		t.Fatalf("%q is not in the graph:\n%s", old, turtle)
 	}
-	return strings.Replace(turtle, from, `sysx:sourceText `+instead, 1)
+	return []byte(strings.Replace(string(turtle), old, new, 1))
 }
 
-// Layout inside a stored condition, value, body or head survives both hops
-// untouched: tabs, blank lines, odd continuation indents, CRLF line ends and
-// escaped newlines in strings are part of the text, not of the graph.
-func TestStoredLayoutIsWrittenAsStored(t *testing.T) {
-	src := "package P {\r\n" +
-		"    doc /* first line\r\n" +
-		"\t\tsecond line */\r\n" +
-		"    part def A;\n" +
-		"    part a : A;\n" +
-		"    part b : A;\n" +
-		"    connect\ta\n" +
-		"\n" +
-		"          to b;\n" +
-		"    part def R {\n" +
-		"        attribute x : ScalarValues::Real =\n" +
-		"\t\t1\n" +
-		"\n" +
-		"              + 2;\n" +
-		"        attribute s : ScalarValues::String = \"two\\nlines\";\n" +
-		"        constraint c {\n" +
-		"            x > 0\r\n" +
-		"\t  and\n" +
-		"                  x < 10\n" +
-		"        }\n" +
-		"    }\n" +
-		"}\n"
-	first := graphOf(t, src)
-	back := toNotation(t, []byte(first))
-	for _, kept := range []string{
-		"doc /* first line\r\n\t\tsecond line */",
-		"connect\ta\n\n          to b;",
-		"= 1\n\n              + 2;",
-		`"two\nlines"`,
-		"x > 0\r\n\t  and\n                  x < 10",
-	} {
-		if !strings.Contains(back, kept) {
-			t.Errorf("written notation lost the stored layout %q\n%s", kept, back)
-		}
+func TestSourceTextComesBackByteForByte(t *testing.T) {
+	turtle := commentedTurtle(t)
+	if back := toNotation(t, turtle); back != commented {
+		t.Errorf("round trip changed the notation:\n--- want ---\n%s--- got ---\n%s", commented, back)
 	}
-	second := graphOf(t, back)
-	if first != second {
-		t.Errorf("second conversion moved the graph\n--- first ---\n%s\n--- second ---\n%s", first, second)
+	// Unformatted notation comes back as the formatter writes it, since that
+	// is the text the graph carries.
+	loose := strings.ReplaceAll(commented, "    ", "\t")
+	if back, want := toNotation(t, idTurtle(t, loose)), formatted(t, loose); back != want {
+		t.Errorf("round trip changed the formatted notation:\n--- want ---\n%s--- got ---\n%s", want, back)
 	}
 }
 
-// Stored text that spells the graph differently but not otherwise — spacing,
-// line breaks, quoted names, a comment — is still the author's layout and is kept.
-func TestStoredTextIsKeptUpToSpelling(t *testing.T) {
-	src := `package P {
-    part def A;
-    part a : A;
-    part b : A;
-    connect a to b;
-}
-`
-	for _, instead := range []string{
-		`"connect  a\n\t\tto   b;"`,
-		`"connect 'a' to 'b';"`,
-		`"connect a /* which */ to b;"`,
-	} {
-		turtle := restated(t, graphOf(t, src), `"connect a to b;"`, instead)
-		back := toNotation(t, []byte(turtle))
-		want := strings.NewReplacer(`\n`, "\n", `\t`, "\t").Replace(strings.Trim(instead, `"`))
-		if !strings.Contains(back, want) {
-			t.Errorf("stored %s was not written as stored\n%s", instead, back)
-		}
-	}
-}
-
-// Stored text that states other ends, or another kind, than the graph does is
-// not written: the head is spelled from the graph instead.
-func TestStoredHeadThatDisagreesWithTheGraphIsRebuilt(t *testing.T) {
-	src := `package P {
-    part def A;
-    part a : A;
-    part b : A;
-    connect a to b;
-}
-`
-	for _, instead := range []string{
-		`"connect b to a;"`,
-		`"connect a to a;"`,
-		`"bind a = b;"`,
-	} {
-		turtle := restated(t, graphOf(t, src), `"connect a to b;"`, instead)
-		back := toNotation(t, []byte(turtle))
-		if !strings.Contains(back, "connect a to b;") {
-			t.Errorf("stored %s did not give way to the graph's ends\n%s", instead, back)
-		}
-	}
-}
-
-// Stored text that leaves a comment, note, string or quoted name open would
-// swallow every declaration written after it; it is spelled from the graph.
-func TestStoredTextThatDoesNotLexCleanIsRebuilt(t *testing.T) {
-	src := `package P {
-    part def A;
-    part a : A;
-    part b : A;
-    connect a to b;
-    part c : A;
-}
-`
-	for _, instead := range []string{
-		`"connect a to b; /* rest"`,
-		`"connect a to b; //* rest"`,
-		`"connect 'a to b;"`,
-		`"connect a to b; \"rest"`,
-	} {
-		turtle := restated(t, graphOf(t, src), `"connect a to b;"`, instead)
-		back := toNotation(t, []byte(turtle))
-		if !strings.Contains(back, "connect a to b;\n    part c : A;") {
-			t.Errorf("stored %s was not rebuilt from the graph\n%s", instead, back)
-		}
-	}
-}
-
-// A stored expression is written as stored while reading it gives the operator
-// and operands the graph states, and from the graph once it does not.
-func TestStoredExpressionThatDisagreesWithTheGraphIsRebuilt(t *testing.T) {
-	src := `package P {
-    part def R {
-        attribute x : ScalarValues::Real;
-        constraint c {
-            x > 0
-        }
+// Without source text the graph converts to canonical notation as before: the
+// structural triples alone carry the model, and the trivia is gone.
+func TestStrippedGraphPrintsCanonically(t *testing.T) {
+	back := toNotation(t, withoutTriples(t, commentedTurtle(t), "sysx:sourceText"))
+	want := `package Rover {
+    part def Wheel specializes Part;
+    part def Hub;
+    part def Vehicle {
+        doc /* what a vehicle is for */
+        part wheels : Wheel[4];
+        part hub : Hub;
+        connect wheels to hub;
     }
 }
 `
-	first := graphOf(t, src)
-	kept := toNotation(t, []byte(restated(t, first, `"x > 0"`, `"x  >\n\t\t0"`)))
-	if !strings.Contains(kept, "x  >\n\t\t0") {
-		t.Errorf("relaid expression was not written as stored\n%s", kept)
-	}
-	for _, instead := range []string{`"x > 1"`, `"x < 0"`, `"0 > x"`, `"x >"`, `"x > 0 and true"`} {
-		back := toNotation(t, []byte(restated(t, first, `"x > 0"`, instead)))
-		if !strings.Contains(back, "x > 0") || strings.Contains(back, strings.Trim(instead, `"`)+"\n") {
-			t.Errorf("stored %s did not give way to the graph's expression\n%s", instead, back)
-		}
+	if back != want {
+		t.Errorf("canonical notation changed:\n--- want ---\n%s--- got ---\n%s", want, back)
 	}
 }
 
-// A string literal's sysml:value is the string itself, not its notation: editing
-// it to one with quotes, backslashes and line breaks, the stale stored text left
-// in place, writes a literal that reads back as the edited value.
-func TestEditedStringValueIsWrittenEscaped(t *testing.T) {
-	src := `package P {
-    attribute s = "plain";
-}
-`
-	first := graphOf(t, src)
-	if !strings.Contains(first, `sysml:value "plain" .`) {
-		t.Fatalf("graph does not carry the string's value\n%s", first)
-	}
-	edited := strings.Replace(first, `sysml:value "plain" .`,
-		"sysml:value \"\"\"say \\\"hi\\\"\\\\\ttab\nnext\"\"\" .", 1)
-	back := toNotation(t, []byte(edited))
-	want := `attribute s = "say \"hi\"\\\ttab\nnext";`
-	if !strings.Contains(back, want) {
-		t.Fatalf("edited value was not written as a valid escaped literal\nwant %s\n%s", want, back)
-	}
-	again := graphOf(t, back)
-	if !strings.Contains(again, "sysml:value \"\"\"say \\\"hi\\\"\\\\\ttab\nnext\"\"\" .") {
-		t.Errorf("written literal does not read back as the edited value\n%s", again)
-	}
-}
+// An edit after export wins over the stale text of the member it touched, and
+// only that member's lines are replaced with canonical notation; the blank line
+// ahead of the next member is that member's own.
+func TestEditedGraphDoesNotResurrectStaleText(t *testing.T) {
+	turtle := editTurtle(t, commentedTurtle(t),
+		"    sysml:declaredName \"Hub\" ;\n",
+		"    sysml:declaredName \"Hub\" ;\n    sysml:isAbstract \"true\"^^xsd:boolean ;\n")
+	back := toNotation(t, turtle)
+	want := `// The rover, as modelled.
+package Rover {
+    /* Definitions come first. */
+    part def Wheel :> Part; // a synonym the printer would spell out
+    abstract part def Hub;
 
-// The order in which a Turtle document lists the objects of one property states
-// nothing, so listing an expression's operands the other way round keeps the
-// stored text: sysx:argumentIndex carries their order.
-func TestStoredExpressionSurvivesReorderedOperandTriples(t *testing.T) {
-	src := `package P {
-    part def R {
-        attribute x : ScalarValues::Real;
-        constraint c {
-            x > 0
-        }
+    part def Vehicle {
+        doc /* what a vehicle is for */
+        part wheels : Wheel[4]; // four of them
+        part hub : Hub;
+        // connected at the hub
+        connect wheels to hub;
     }
 }
 `
-	first := restated(t, graphOf(t, src), `"x > 0"`, `"x  >\n\t\t0"`)
-	listed := regexp.MustCompile(`sysml:argument (expr:\S+_pa0), (expr:\S+_pa1)`)
-	if !listed.MatchString(first) {
-		t.Fatalf("graph lists no operands\n%s", first)
+	if back != want {
+		t.Errorf("stale text was not replaced by the edit:\n--- want ---\n%s--- got ---\n%s", want, back)
 	}
-	reordered := listed.ReplaceAllString(first, "sysml:argument $2, $1")
-	if !strings.Contains(toNotation(t, []byte(reordered)), "x  >\n\t\t0") {
-		t.Errorf("relaid expression gave way over operand order alone\n%s", reordered)
+	// Converting the result again reproduces the edited graph, so the notation
+	// states exactly what the graph states.
+	again := idTurtle(t, back)
+	if got, want := withoutTriples(t, again, "sysx:sourceText"), withoutTriples(t, turtle, "sysx:sourceText"); string(got) != string(want) {
+		t.Errorf("the notation does not state the edited graph:\n--- want ---\n%s--- got ---\n%s", want, got)
 	}
 }
 
-// Stored text that states more than the graph does — an operator, referent or
-// end the graph no longer carries — is not written either: what the graph does
-// not state is reported, never revived from the text.
-func TestStoredTextDoesNotReviveDeletedStructure(t *testing.T) {
-	expression := `package P {
-    part def R {
-        attribute x : ScalarValues::Real;
-        constraint c {
-            x > 0
-        }
+// A removed member takes its text with it: the owner's own text does not
+// state its members, so the owner and the remaining member print as written.
+func TestRemovedMemberIsNotResurrected(t *testing.T) {
+	turtle := idTurtle(t, `package P {
+    part def A; // the first
+    part def B; // the second
+}
+`)
+	back := toNotation(t, withoutMember(t, turtle, "elmt:P__B"))
+	want := "package P {\n    part def A; // the first\n}\n"
+	if back != want {
+		t.Errorf("the removed member came back:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+}
+
+// Removing a member from the middle of a body leaves the members after it
+// numbered as they were; their text, comments and spacing still stand.
+func TestMembersAfterARemovedOneKeepTheirText(t *testing.T) {
+	turtle := idTurtle(t, `package P {
+    part def A; // the first
+    part def B; // the second
+    /* about C */
+    part def C {
+        part x : A; // inside
     }
+
+    part def D; // the fourth
+}
+`)
+	turtle = withoutMember(t, turtle, "elmt:P__B")
+	back := toNotation(t, turtle)
+	want := `package P {
+    part def A; // the first
+    /* about C */
+    part def C {
+        part x : A; // inside
+    }
+
+    part def D; // the fourth
 }
 `
-	connector := `package P {
+	if back != want {
+		t.Errorf("members after the removed one lost their text:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+	// The members after the removed one are renumbered on the way back, but
+	// otherwise the notation states exactly what the graph states.
+	renumbered := func(turtle []byte) string {
+		return string(withoutTriples(t, withoutTriples(t, turtle, "sysx:sourceText"), "sysx:memberIndex"))
+	}
+	if got, want := renumbered(idTurtle(t, back)), renumbered(turtle); got != want {
+		t.Errorf("the notation does not state the edited graph:\n--- want ---\n%s--- got ---\n%s", want, got)
+	}
+}
+
+// The blank line ahead of a member is its own: it stays when the member before
+// it is rebuilt or removed, whichever newline the file is written with.
+func TestBlankLinesStayWithTheMemberAfterThem(t *testing.T) {
+	for name, nl := range map[string]string{"LF": "\n", "CRLF": "\r\n"} {
+		t.Run(name, func(t *testing.T) {
+			lines := func(text string) string { return strings.ReplaceAll(text, "\n", nl) }
+			notation := lines(`package P {
     part def A;
-    part a : A;
-    part b : A;
-    connect a to b;
+
+    // about B
+    part def B {
+
+        part x : A;
+    }
+
+    part def C; // the third
 }
-`
-	for _, tc := range []struct {
-		name, src, deleted, instead, reported string
-	}{
-		{"operator", expression, `\n    sysml:operator ">" ;`, "", "states the operator"},
-		{"referent", expression, `\n    sysml:referent elmt:P__R__x ;`, "", "feature reference"},
-		{"end", connector, `, expr:\S+_pend1 ;`, " ;", "end"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			turtle := graphOf(t, tc.src)
-			deleted := regexp.MustCompile(tc.deleted)
-			if !deleted.MatchString(turtle) {
-				t.Fatalf("graph does not state %q\n%s", tc.deleted, turtle)
+`)
+			if back := toNotation(t, idTurtle(t, notation)); back != notation {
+				t.Errorf("the notation changed:\n--- want ---\n%s--- got ---\n%s", notation, back)
 			}
-			edited := deleted.ReplaceAllLiteralString(turtle, tc.instead)
-			back, err := export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML)
-			if err == nil {
-				t.Fatalf("deleted %s was revived from the stored text\n%s", tc.name, back)
+			edited := editTurtle(t, idTurtle(t, notation),
+				"    sysml:declaredName \"A\" ;\n",
+				"    sysml:declaredName \"A\" ;\n    sysml:isAbstract \"true\"^^xsd:boolean ;\n")
+			want := strings.Replace(notation, "    part def A;", "    abstract part def A;", 1)
+			if back := toNotation(t, edited); back != want {
+				t.Errorf("rebuilding a member took the blank line after it:\n--- want ---\n%s--- got ---\n%s", want, back)
 			}
-			if !strings.Contains(err.Error(), tc.reported) {
-				t.Errorf("error does not name the missing %s: %v", tc.name, err)
+			want = lines(`package P {
+    part def A;
+
+    part def C; // the third
+}
+`)
+			if back := toNotation(t, withoutMember(t, idTurtle(t, notation), "elmt:P__B")); back != want {
+				t.Errorf("removing a member took the blank line after it:\n--- want ---\n%s--- got ---\n%s", want, back)
 			}
 		})
 	}
 }
 
-// A declaration the graph keeps as text alone — no sysx:endForm to rebuild its
-// head from — is written as stored while the text, read back as a declaration,
-// states the graph, and gives way once the graph's metaclass or keyword is
-// edited under it: the edit is written or refused, never overridden by the text.
-func TestStoredDeclarationGivesWayToEditedGraph(t *testing.T) {
-	sysml := `package P {
-    port def Bus;
-    part def Car {
-        port left : Bus;
-        port right : Bus;
-        connect left to right {
-            doc /* wired */
-        }
-        bind left = right { doc /* same */ }
+// A member introduced by `then` carries the word in its own text, whether its
+// owner is written as it was or rebuilt around it.
+func TestThenIsNotWrittenTwice(t *testing.T) {
+	notation := `package P {
+    action def Q {
+        action a;
+        // then b
+        then action b;
     }
 }
 `
-	kerml := `package P {
-    feature a;
-    feature b;
-    binding ab of a = b;
+	turtle := idTurtle(t, notation)
+	if back := toNotation(t, turtle); back != notation {
+		t.Errorf("the notation changed:\n--- want ---\n%s--- got ---\n%s", notation, back)
+	}
+	edited := editTurtle(t, turtle,
+		"    sysml:declaredName \"Q\" ;\n",
+		"    sysml:declaredName \"Q\" ;\n    sysml:isAbstract \"true\"^^xsd:boolean ;\n")
+	want := strings.Replace(notation, "    action def Q", "    abstract action def Q", 1)
+	if back := toNotation(t, edited); back != want {
+		t.Errorf("rebuilding the owner lost the members' text:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+}
+
+// A positional succession is written as the `then` ahead of its target, so a
+// target whose text does not state one the graph holds — or states one it no
+// longer holds — is rebuilt, and the rest of the body is kept as written.
+func TestPositionalSuccessionEditsRebuildTheirTarget(t *testing.T) {
+	sequenced := `package P {
+    action def Q {
+        // first
+        action a;
+        // b follows
+        then action b;
+        // last
+        action c;
+    }
 }
 `
-	toKerML, err := export.Convert("model.kerml", []byte(kerml), export.FormatSysML, export.FormatTurtle)
+	turtle := idTurtle(t, sequenced)
+	added := editTurtle(t, turtle, `        then action b;\n`, `        action b;\n`)
+	want := strings.Replace(sequenced, "        // b follows\n", "", 1)
+	if back := toNotation(t, added); back != want {
+		t.Errorf("an added succession was not written:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+	if got, want := structural(t, idTurtle(t, toNotation(t, added))), structural(t, turtle); got != want {
+		t.Errorf("the notation does not state the added succession:\n--- want ---\n%s--- got ---\n%s", want, got)
+	}
+
+	removed := withoutMember(t, turtle, "elmt:P__Q___402")
+	want = strings.Replace(want, "        then action b;\n", "        action b;\n", 1)
+	if back := toNotation(t, removed); back != want {
+		t.Errorf("a removed succession was still written:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+	unnumbered := func(turtle []byte) string {
+		return string(withoutTriples(t, []byte(structural(t, turtle)), "sysx:memberIndex"))
+	}
+	if got, want := unnumbered(idTurtle(t, toNotation(t, removed))), unnumbered(removed); got != want {
+		t.Errorf("the notation still states the removed succession:\n--- want ---\n%s--- got ---\n%s", want, got)
+	}
+}
+
+// withoutMember drops the given member of P from a Turtle document, its own
+// members with it, as an edit to the graph after export would, leaving the
+// other members numbered as before.
+func withoutMember(t *testing.T, turtle []byte, member string) []byte {
+	t.Helper()
+	var kept []string
+	for _, line := range strings.Split(string(turtle), "\n") {
+		if strings.Contains(line, member) && !strings.HasPrefix(line, member) {
+			for _, ref := range []string{member + "_om", member} {
+				line = strings.ReplaceAll(line, ", "+ref, "")
+				line = strings.ReplaceAll(line, ref+", ", "")
+			}
+		}
+		kept = append(kept, line)
+	}
+	var subjects []string
+	for _, block := range strings.Split(strings.Join(kept, "\n"), "\n\n") {
+		subject, _, _ := strings.Cut(block, "\n")
+		if subject == member || strings.HasPrefix(subject, member+"_") {
+			subjects = append(subjects, subject)
+		}
+	}
+	return withoutSubjects(t, []byte(strings.Join(kept, "\n")), subjects...)
+}
+
+// withoutSubjects drops every block of a Turtle document describing one of the
+// given subjects.
+func withoutSubjects(t *testing.T, turtle []byte, subjects ...string) []byte {
+	t.Helper()
+	var kept []string
+	for _, block := range strings.Split(string(turtle), "\n\n") {
+		dropped := false
+		for _, subject := range subjects {
+			dropped = dropped || strings.HasPrefix(block, subject+"\n")
+		}
+		if !dropped {
+			kept = append(kept, block)
+		}
+	}
+	return []byte(strings.Join(kept, "\n\n"))
+}
+
+// Identity the text no longer carries is re-materialized as annotations; text
+// that still carries them is kept as written.
+func TestIdentityIsRematerializedIntoStaleText(t *testing.T) {
+	const projectRef = `@IdentityMetadata::ProjectRef { projectId = "proj-1"; org = "acme"; }`
+	const elementID = `@IdentityMetadata::ElementId { id = "shared"; }`
+	src := "package P {\n    " + projectRef + "\n    part def A {\n        " + elementID + "\n    }\n    part a : A; // uses A\n}\n"
+	turtle := idTurtle(t, src)
+	if back := toNotation(t, turtle); back != src {
+		t.Errorf("annotated notation changed:\n--- want ---\n%s--- got ---\n%s", src, back)
+	}
+	// The scope root's text loses its ProjectRef: the root is rebuilt with the
+	// annotation, its members are kept as written.
+	stale := editTurtle(t, turtle, "    "+strings.ReplaceAll(projectRef, `"`, `\"`)+`\n`, "")
+	want := "package P {\n    " + projectRef + "\n    part def A {\n        " + elementID + "\n    }\n    part a : A; // uses A\n}\n"
+	if back := toNotation(t, stale); back != want {
+		t.Errorf("ProjectRef was not re-materialized:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+	// Both annotations gone from the text: everything but the untouched
+	// member is rebuilt.
+	stale = editTurtle(t, stale, "        "+strings.ReplaceAll(elementID, `"`, `\"`)+`\n`, "")
+	if back := toNotation(t, stale); back != want {
+		t.Errorf("ElementId was not re-materialized:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+	// Without any source text the same notation is built from the graph alone.
+	if back := toNotation(t, withoutTriples(t, turtle, "sysx:sourceText")); back != strings.Replace(want, " // uses A", "", 1) {
+		t.Errorf("stripped graph printed differently:\n%s", back)
+	}
+}
+
+// An expression's text is checked like an element's: an edited expression graph
+// wins over the text of the declaration holding it and over the node's own.
+func TestEditedExpressionDoesNotResurrectStaleText(t *testing.T) {
+	turtle := idTurtle(t, `package P {
+    attribute mass : Real = 4; // the mass
+    attribute count : Integer = 2; // and the count
+}
+`)
+	// The literal's value is edited; the text of the literal and of the
+	// attribute still say 4.
+	turtle = editTurtle(t, turtle, `sysml:value "4"^^xsd:integer`, `sysml:value "5"^^xsd:integer`)
+	back := toNotation(t, turtle)
+	want := `package P {
+    attribute mass : Real = 5;
+    attribute count : Integer = 2; // and the count
+}
+`
+	if back != want {
+		t.Errorf("the edited expression did not win:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+}
+
+// A string edited in the graph comes back as the literal the lexer reads to
+// that value, whatever characters it holds.
+func TestEditedStringValueIsWrittenAsALiteral(t *testing.T) {
+	turtle := idTurtle(t, `package P {
+    attribute label : String = "plain"; // the label
+    attribute count : Integer = 2; // and the count
+}
+`)
+	const value = "say \"hi\"\\\n\t\r\b\f"
+	turtle = editTurtle(t, turtle, `sysml:value "plain"`, "sysml:value "+quoteLiteral(value))
+	back := toNotation(t, turtle)
+	want := `package P {
+    attribute label : String = "say \"hi\"\\\n\t\r\b\f";
+    attribute count : Integer = 2; // and the count
+}
+`
+	if back != want {
+		t.Errorf("the edited string did not win:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+	again := idTurtle(t, back)
+	if !strings.Contains(string(again), quoteLiteral(value)) {
+		t.Errorf("the notation does not state the edited value %q:\n%s", value, again)
+	}
+	if got, want := structural(t, again), structural(t, turtle); got != want {
+		t.Errorf("the notation does not state the edited graph:\n--- want ---\n%s--- got ---\n%s", want, got)
+	}
+}
+
+// quoteLiteral writes a value as the Turtle literal the writer emits.
+func quoteLiteral(value string) string {
+	r := strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`, "\r", `\r`, "\t", `\t`, "\b", `\b`, "\f", `\f`)
+	return `"` + r.Replace(value) + `"`
+}
+
+// structural is a Turtle document without its source text.
+func structural(t *testing.T, turtle []byte) string {
+	t.Helper()
+	return string(withoutTriples(t, withoutTriples(t, turtle, "sysx:sourceText"), "sysx:sourceTail"))
+}
+
+// A member written on its owner's lines, such as an accept's payload, has no
+// text of its own: an edit to it rebuilds the whole construct, and only that.
+func TestEditedInlineMemberRebuildsItsConstruct(t *testing.T) {
+	turtle := idTurtle(t, `// The drive, as modelled.
+package Accepts {
+    attribute def Cmd;
+    attribute def Other;
+    action def Drive {
+        // waits for a command
+        accept sig : Cmd;
+        // then goes
+        action go;
+    }
+}
+`)
+	if strings.Contains(string(turtle), `sysx:sourceText "        accept`) || strings.Contains(string(turtle), `sysx:sourceTail ";`) {
+		t.Fatalf("the accept is split across its payload:\n%s", turtle)
+	}
+	turtle = editTurtle(t, turtle, "sysml:type elmt:Accepts__Cmd ;", "sysml:type elmt:Accepts__Other ;")
+	back := toNotation(t, turtle)
+	want := `// The drive, as modelled.
+package Accepts {
+    attribute def Cmd;
+    attribute def Other;
+    action def Drive {
+        accept sig : Other;
+        // then goes
+        action go;
+    }
+}
+`
+	if back != want {
+		t.Errorf("the edited payload did not rebuild its accept alone:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+	if got, want := structural(t, idTurtle(t, back)), structural(t, turtle); got != want {
+		t.Errorf("the notation does not state the edited graph:\n--- want ---\n%s--- got ---\n%s", want, got)
+	}
+}
+
+// A syntax error cannot be checked against the graph or pinned on one element,
+// so the whole document falls back to canonical notation.
+func TestUnparsableSourceTextIsIgnored(t *testing.T) {
+	turtle := editTurtle(t, commentedTurtle(t), `part def Hub;\n`, `part def Hub\n`)
+	back := toNotation(t, turtle)
+	if want := toNotation(t, withoutTriples(t, turtle, "sysx:sourceText")); back != want {
+		t.Errorf("unparsable text was not replaced:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+	if strings.Contains(back, "part def Hub\n") || !strings.Contains(back, "part def Hub;") {
+		t.Errorf("the notation is not valid:\n%s", back)
+	}
+}
+
+// A KerML document that also reads clean as SysML, with a different meaning:
+// `binding [1] a = b` names the binding `a` there. The graph records the
+// grammar its text was written in, so the check reads it as the file was.
+const kermlBindings = `package Bindings {
+    feature target[1];
+    feature a[1];
+    // an anonymous binding with a multiplicity
+    binding [1] a = target;
+}
+`
+
+func TestSourceTextIsReadInTheLanguageItWasWrittenIn(t *testing.T) {
+	turtle, err := export.Convert("m.kerml", []byte(kermlBindings), export.FormatSysML, export.FormatTurtle)
 	if err != nil {
 		t.Fatalf("to turtle: %v", err)
 	}
-	connector := `"""connect left to right {
-            doc /* wired */
-        }"""`
-	for _, tc := range []struct {
-		name, turtle, stored, edit, instead string
-	}{
-		{"connector metaclass", graphOf(t, sysml), connector, "a sysml:ConnectionUsage", "a sysml:InterfaceUsage"},
-		{"connector keyword", graphOf(t, sysml), connector, `sysx:declaredKeyword "connect"`, `sysx:declaredKeyword "connection"`},
-		{"binding metaclass", graphOf(t, sysml), `"bind left = right { doc /* same */ }"`, "a sysml:BindingConnectorAsUsage", "a sysml:ConnectionUsage"},
-		{"binding keyword", graphOf(t, sysml), `"bind left = right { doc /* same */ }"`, `sysx:declaredKeyword "bind"`, `sysx:declaredKeyword "binding"`},
-		{"kerml binding metaclass", string(toKerML), `"binding ab of a = b;"`, "a sysml:BindingConnectorAsUsage", "a sysml:ConnectorAsUsage"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			stored := strings.Trim(tc.stored, `"`)
-			if !strings.Contains(toNotation(t, []byte(tc.turtle)), stored) {
-				t.Fatalf("untouched graph did not write %q as stored", stored)
-			}
-			if !strings.Contains(tc.turtle, tc.edit) {
-				t.Fatalf("graph does not state %s\n%s", tc.edit, tc.turtle)
-			}
-			edited := strings.Replace(tc.turtle, tc.edit, tc.instead, 1)
-			back, err := export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML)
-			if err == nil && strings.Contains(string(back), stored) {
-				t.Errorf("stored text overrode the edit %s -> %s\n%s", tc.edit, tc.instead, back)
-			}
-		})
+	if !strings.Contains(string(turtle), `sysx:sourceLanguage "kerml"`) {
+		t.Fatalf("the graph does not record the language:\n%s", turtle)
 	}
-	relaid := restated(t, graphOf(t, sysml), `"bind left = right { doc /* same */ }"`, `"bind  left=right {\n\tdoc /* same */ }"`)
-	if back := toNotation(t, []byte(relaid)); !strings.Contains(back, "bind  left=right {\n\tdoc /* same */ }") {
-		t.Errorf("relaid declaration was not written as stored\n%s", back)
+	if back := toNotation(t, turtle); back != kermlBindings {
+		t.Errorf("round trip changed the notation:\n--- want ---\n%s--- got ---\n%s", kermlBindings, back)
 	}
-	relaid = restated(t, string(toKerML), `"binding ab of a = b;"`, `"binding ab  of a =\n\tb;"`)
-	if back := toNotation(t, []byte(relaid)); !strings.Contains(back, "binding ab  of a =\n\tb;") {
-		t.Errorf("relaid KerML declaration was not written as stored\n%s", back)
+	// A root stripped of its own text still says what grammar its members' text is in.
+	headless := editTurtle(t, turtle, `sysx:sourceText "package Bindings {\n" ;`, "")
+	if back := toNotation(t, headless); !strings.Contains(back, "// an anonymous binding with a multiplicity\n    binding [1] a = target;") {
+		t.Errorf("the members' text was not read as KerML:\n%s", back)
+	}
+	if !strings.Contains(string(idTurtle(t, commented)), `sysx:sourceLanguage "sysml"`) {
+		t.Errorf("a SysML file does not record its language")
 	}
 }
 
-// An expression the graph keeps as text alone is still held to lexing clean and
-// parsing whole: one leaving a comment open, or one cut short (`x >`), is
-// refused as stating nothing, not written.
-func TestTextOnlyExpressionThatDoesNotLexCleanIsRefused(t *testing.T) {
-	src := `package P {
-    part def R {
-        attribute x : ScalarValues::Real;
-        attribute y = x->select {in v; v > 0};
-        part c;
-    }
-}
-`
-	turtle := graphOf(t, src)
-	structure := regexp.MustCompile(`\n    sysx:(bodyParameter|resultExpression) [^\n]*;`)
-	if len(structure.FindAllString(turtle, -1)) != 2 {
-		t.Fatalf("graph does not state the body's parameter and result\n%s", turtle)
+// A buffer with no extension — standard input, a REPL session — is read as
+// SysML with KerML's `all` prefix, so `part all : T;` is an anonymous part
+// there and the part named `all` in a .sysml file. The graph records no
+// language for it, and the check reads the text as such a buffer again.
+func TestSourceTextOfAnExtensionlessBufferIsReadAsOne(t *testing.T) {
+	src := "package P {\n    part def T;\n    // every T\n    part all : T;\n}\n"
+	turtle, err := export.Convert("<stdin>", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
 	}
-	textOnly := structure.ReplaceAllLiteralString(turtle, "")
-	if !strings.Contains(toNotation(t, []byte(textOnly)), "{in v; v > 0}") {
-		t.Fatal("text-only body expression was not written from its text")
+	if strings.Contains(string(turtle), "sysx:sourceLanguage") {
+		t.Fatalf("an extensionless buffer records a language:\n%s", turtle)
 	}
-	for name, stale := range map[string]string{
-		"open comment": `"{in v; v > 0} /* rest"`,
-		"cut short":    `"{in v; v > }"`,
-		"trailing":     `"{in v; v > 0} x"`,
-		"trigger":      `"when v > 0"`,
-	} {
-		edited := restated(t, textOnly, `"{in v; v > 0}"`, stale)
-		back, err := export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML)
-		if err == nil {
-			t.Fatalf("%s in a text-only expression was written\n%s", name, back)
-		}
-		if !strings.Contains(err.Error(), "states no notation and no structure") {
-			t.Errorf("%s: error does not report the expression as stating nothing: %v", name, err)
-		}
+	if strings.Contains(string(turtle), `sysml:declaredName "all"`) {
+		t.Fatalf("`all` was read as a name:\n%s", turtle)
 	}
-	// Text alone is not a node: with its type deleted the graph states nothing to write.
-	untyped := strings.Replace(textOnly, "\n    a sysml:Expression ;\n    sysx:sourceText \"{in v; v > 0}\"", "\n    sysx:sourceText \"{in v; v > 0}\"", 1)
-	if untyped == textOnly {
-		t.Fatalf("body expression node not found to untype\n%s", textOnly)
+	if back := toNotation(t, turtle); back != src {
+		t.Errorf("round trip changed the notation:\n--- want ---\n%s--- got ---\n%s", src, back)
 	}
-	if back, err := export.Convert("m.ttl", []byte(untyped), export.FormatTurtle, export.FormatSysML); err == nil {
-		t.Fatalf("untyped text-only expression was written from stale text\n%s", back)
-	}
-	// An accept payload's value is a trigger expression, and only there is one read.
-	trigger := graphOf(t, "package P {\n    action def A {\n        action a accept when  x > 0;\n    }\n}\n")
-	if !strings.Contains(trigger, `sysx:sourceText "when  x > 0"`) {
-		t.Fatalf("trigger is not stored as text\n%s", trigger)
-	}
-	if back := toNotation(t, []byte(trigger)); !strings.Contains(back, "accept when  x > 0;") {
-		t.Errorf("stored trigger was not written as stored\n%s", back)
-	}
-	for name, stale := range map[string]string{"cut short": `"when  x >"`, "no trigger": `"x > 0"`} {
-		edited := restated(t, trigger, `"when  x > 0"`, stale)
-		if back, err := export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML); err == nil {
-			t.Fatalf("%s trigger was written\n%s", name, back)
-		}
+	// Read as SysML instead, the same text names the part `all`: a different
+	// model, so the text is not trusted.
+	sysml := editTurtle(t, turtle, `sysml:declaredName "P" ;`, `sysml:declaredName "P" ; sysx:sourceLanguage "sysml" ;`)
+	if back, want := toNotation(t, sysml), toNotation(t, withoutTriples(t, turtle, "sysx:sourceText")); back != want {
+		t.Errorf("text of another grammar was trusted:\n--- want ---\n%s--- got ---\n%s", want, back)
 	}
 }
 
-// Without any stored text the writer spells every head and expression from
-// the graph, and the graph it converts to states the same structure.
-func TestNotationComesBackFromTheGraphAlone(t *testing.T) {
-	src := "package P {\n" +
-		"    part def A;\n" +
-		"    part a : A;\n" +
-		"    part b : A;\n" +
-		"    connect a\n" +
-		"        to b;\n" +
-		"    part def R {\n" +
-		"        attribute x : ScalarValues::Real =\n" +
-		"            1 + 2;\n" +
-		"        constraint c {\n" +
-		"            x > 0\n" +
-		"                and x < 10\n" +
-		"        }\n" +
-		"    }\n" +
-		"}\n"
-	first := graphOf(t, src)
-	stripped := withoutTriples(t, []byte(first), "sysx:sourceText")
-	if strings.Contains(string(stripped), "sourceText") {
-		t.Fatal("sourceText not stripped")
+// Roots recording different languages cannot be read as one document, so their
+// text is not trusted: the graph is written canonically.
+func TestRootsOfTwoLanguagesAreWrittenCanonically(t *testing.T) {
+	two := "// two\npackage A { part def P; }\npackage B { part def Q; }\n"
+	turtle := idTurtle(t, two)
+	if back := toNotation(t, turtle); back != two {
+		t.Fatalf("round trip changed the notation:\n--- want ---\n%s--- got ---\n%s", two, back)
 	}
-	back := toNotation(t, stripped)
-	for _, want := range []string{"connect a to b;", "= (1 + 2);", "((x > 0) and (x < 10));"} {
-		if !strings.Contains(back, want) {
-			t.Errorf("graph alone did not spell %q\n%s", want, back)
-		}
-	}
-	second := withoutTriples(t, []byte(graphOf(t, back)), "sysx:sourceText")
-	if string(stripped) != string(second) {
-		t.Errorf("structural spelling changed the graph\n--- stripped ---\n%s\n--- second ---\n%s", stripped, second)
+	mixed := editTurtle(t, turtle, `sysx:sourceLanguage "sysml"`, `sysx:sourceLanguage "kerml"`)
+	if back, want := toNotation(t, mixed), toNotation(t, withoutTriples(t, turtle, "sysx:sourceText")); back != want {
+		t.Errorf("text of two languages was trusted:\n--- want ---\n%s--- got ---\n%s", want, back)
 	}
 }

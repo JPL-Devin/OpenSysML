@@ -1,278 +1,249 @@
 package export
 
 import (
-	"slices"
 	"strings"
 
-	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
-	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
-// Stored notation is written back verbatim only while it still states the
-// graph: the graph is authoritative, the text is layout. A head is checked by
-// spelling (keepsText), an expression by reading it back (textStatesGraph);
-// docs/reference/rdf-mapping.md § Limitations defines both.
+// Source text is printed only while it states what the graph states: the
+// candidate notation is converted back and each disagreement demotes its text.
 
-// sameSpelling reports whether two spellings differ only in what the graph does
-// not state: whitespace, notes and comments, name quoting, and a relationship
-// clause's symbol against its keyword (`:>` against `subsets`).
-func sameSpelling(a, b string) bool {
-	return slices.Equal(spellingOf(a), spellingOf(b))
-}
-
-type token struct {
-	kind lexer.Kind
-	text string
-}
-
-// clauseKeyword is the keyword each relationship symbol spells in a usage head.
-var clauseKeyword = map[lexer.Kind]string{
-	lexer.ColonGt:      "subsets",
-	lexer.ColonGtGt:    "redefines",
-	lexer.ColonColonGt: "references",
-}
-
-func spellingOf(text string) []token {
-	sf := source.New("<spelling>", []byte(text))
-	lx := lexer.New(sf)
-	var out []token
+// render prints the roots from source text where it agrees with the graph and
+// canonically where it does not; every pass demotes more text or is the last.
+func (d *decoder) render(roots []*element) (string, error) {
 	for {
-		tok := lx.Next()
-		if tok.Kind == lexer.EOF {
-			return out
+		d.printed = map[*element]bool{}
+		d.rebuilt = map[*element]bool{}
+		d.usedExpr = map[string]bool{}
+		d.written = nil
+		if err := d.resolveExpressions(); err != nil {
+			return "", err
 		}
-		if tok.IsTrivia() || tok.Kind == lexer.RegularComment {
-			continue
-		}
-		t := token{kind: tok.Kind, text: sf.Text(tok.Span)}
-		switch {
-		case tok.Kind == lexer.UnrestrictedName:
-			if name := strings.Trim(t.text, "'"); lexer.IsIdentifier(name) && !lexer.IsKeyword(name) {
-				t = token{kind: lexer.Identifier, text: name}
+		var b strings.Builder
+		for _, root := range roots {
+			if err := d.print(&b, root, 0); err != nil {
+				return "", err
 			}
-		case clauseKeyword[tok.Kind] != "":
-			t = token{kind: lexer.Keyword, text: clauseKeyword[tok.Kind]}
-		case tok.Kind == lexer.Keyword && t.text == "by" && len(out) > 0 &&
-			out[len(out)-1].kind == lexer.Keyword && (out[len(out)-1].text == "typed" || out[len(out)-1].text == "defined"):
-			out = out[:len(out)-1]
-			t = token{kind: lexer.Colon, text: ":"}
 		}
-		out = append(out, t)
-	}
-}
-
-// lexesClean reports whether text closes every comment, note, string and
-// quoted name it opens; one that does not would swallow what is written after it.
-func lexesClean(text string) bool {
-	lx := lexer.New(source.New("<spelling>", []byte(text)))
-	for {
-		tok := lx.Next()
-		if tok.Kind == lexer.Error || tok.Unterminated {
-			return false
+		if len(d.printed)+len(d.usedExpr) == 0 {
+			return b.String(), nil
 		}
-		if tok.Kind == lexer.EOF {
-			return true
+		before := len(d.demoted) + len(d.demotedExpr)
+		d.demoteStale(b.String(), roots)
+		if len(d.demoted)+len(d.demotedExpr) == before {
+			return b.String(), nil
 		}
 	}
 }
 
-// keepsText reports whether an element's stored text is written as is: it lexes
-// clean and spells the head the graph rebuilds, or states the graph where there is no form.
-func (d *decoder) keepsText(el *element, text string) bool {
-	if !lexesClean(text) {
-		return false
+// verbatim returns the source text an element is printed as, if it carries
+// one it has not been demoted from.
+func (d *decoder) verbatim(el *element) (string, bool) {
+	if d.demoted[el] {
+		return "", false
 	}
-	if !d.graph.HasProperty(rdf.IRI(el.iri), rdf.OpenSysML+xEndForm) {
-		return d.textStatesElement(el, text)
-	}
-	head, err := d.head(el)
-	if err != nil {
-		return false
-	}
-	return sameSpelling(text, head+";")
+	return d.graph.Lexical(rdf.IRI(el.iri), rdf.OpenSysML+xSourceText)
 }
 
-// textStatesElement reports whether a declaration kept as text alone, re-encoded
-// in its scope, states what the graph does; the graph records no dialect, so both are tried.
-func (d *decoder) textStatesElement(el *element, text string) bool {
-	return d.textStatesElementIn(el, text, source.KindSysML) || d.textStatesElementIn(el, text, source.KindKerML)
+// expressionText returns the source text an expression node is written as, if
+// it carries one it has not been demoted from.
+func (d *decoder) expressionText(node rdf.Term) (string, bool) {
+	if d.demotedExpr[node.Value] {
+		return "", false
+	}
+	text, ok := d.graph.Lexical(node, rdf.OpenSysML+xSourceText)
+	if ok && text != "" {
+		d.usedExpr[node.Value] = true
+	}
+	return text, ok && text != ""
 }
 
-func (d *decoder) textStatesElementIn(el *element, text string, kind source.Kind) bool {
-	sf := source.NewWithKind("<declaration>", []byte(text), kind)
-	p := parser.New(sf)
+// demoteStale demotes whatever verbatim text contradicts the graph; notation
+// that does not convert, or whose disagreement cannot be placed, demotes all.
+func (d *decoder) demoteStale(notation string, roots []*element) {
+	name, ok := d.candidateName(roots)
+	if !ok {
+		d.demoteAll()
+		return
+	}
+	file := source.New(name, []byte(notation))
+	p := parser.New(file)
 	root := p.ParseFile()
-	if len(p.Diagnostics) > 0 || len(root.Members) != 1 {
-		return false
+	if len(p.Diagnostics) > 0 {
+		d.demoteAll()
+		return
 	}
-	node, visibility := unwrapMember(root.Members[0])
-	if node == nil || visibilityKeyword(visibility) != d.visibility(el) {
-		return false
+	check, err := encodeDocument(file, root)
+	if err != nil {
+		d.demoteAll()
+		return
 	}
-	stated := &encoder{
-		file:     sf,
-		graph:    rdf.NewGraph(),
-		declared: d.declaredNames(),
-		ids:      &identityFacts{},
-		subjects: map[string]string{},
-	}
-	if err := stated.encodeMember(node, visibility, el.scope, rdf.Term{}, el.memberIndex); err != nil || stated.idErr != nil {
-		return false
-	}
-	name, _ := declaredNameAndMembers(node)
-	subject := stated.ids.subjectFor(qualify(el.scope, name, el.memberIndex))
-	return d.sameStatements(rdf.IRI(el.iri), subject, stated.graph, true)
-}
-
-// textStatesGraph reports whether an expression node's stored notation states
-// exactly the structure the graph carries for it: the text is parsed and mapped
-// with the same encoder, and the two graphs must make the same statements about
-// the node. A node the graph keeps as text alone is contradicted by no text,
-// though the text must still lex clean and parse whole as one expression — a
-// trigger expression (`when …`, `at …`, `after …`) where an accept payload's value is read.
-func (d *decoder) textStatesGraph(node rdf.Term, text, scope string, trigger bool) bool {
-	if !lexesClean(text) {
-		return false
-	}
-	sf := source.New("<expression>", []byte(text))
-	p := parser.New(sf)
-	var expr ast.Node
-	if trigger {
-		expr = p.ParseTriggerExpression()
-	} else {
-		expr = p.ParseExpression()
-	}
-	if expr == nil || len(p.Diagnostics) > 0 || p.Offset() != len(text) {
-		return false
-	}
-	if d.textOnly(node) {
-		return true
-	}
-	stated := &encoder{
-		file:     sf,
-		graph:    rdf.NewGraph(),
-		declared: d.declaredNames(),
-		ids:      &identityFacts{},
-		subjects: map[string]string{},
-	}
-	stated.expressionNode(node, scope, expr)
-	return d.sameStatements(node, node, stated.graph, true)
-}
-
-// textOnly reports whether the graph states nothing about an expression node
-// beyond that it is an expression: no operator, operands, referent or value.
-func (d *decoder) textOnly(node rdf.Term) bool {
-	if d.graph.Type(node) != rdf.SysMLTerm(mExpression).Value {
-		return false
-	}
-	for _, predicate := range d.graph.Predicates(node) {
-		if !layoutPredicate(predicate, true) && predicate != rdf.RDFType {
-			return false
+	for _, t := range disagreeingTriples(d.graph, check.graph) {
+		// A reference to an element only one graph has disagrees about that
+		// element's identity, not about the element referring to it.
+		var el *element
+		var expr string
+		if t.Object.IsIRI() && d.graph.HasProperty(t.Object, rdf.RDFType) != check.graph.HasProperty(t.Object, rdf.RDFType) {
+			el, expr = d.blame(t.Object.Value, check)
+		}
+		if el == nil && expr == "" {
+			el, expr = d.blame(t.Subject.Value, check)
+		}
+		if el == nil && expr == "" && t.Object.IsIRI() {
+			el, expr = d.blame(t.Object.Value, check)
+		}
+		// One landing on notation already rebuilt is the graph's own, not its text's.
+		switch {
+		case el != nil && d.printed[el]:
+			d.demoted[el] = true
+		case expr != "":
+			d.demotedExpr[expr] = true
+		case el == nil:
+			d.demoteAll()
+			return
 		}
 	}
-	return true
 }
 
-// layoutPredicate reports whether a predicate carries layout or identity rather
-// than structure: the notation itself, the id, and — on the node being checked,
-// whose position its owner states — the position among its siblings.
-func layoutPredicate(predicate string, root bool) bool {
-	switch predicate {
-	case rdf.OpenSysML + xSourceText, rdf.SysML + pElementID:
-		return true
-	case rdf.OpenSysML + xArgumentIndex, rdf.OpenSysML + xEndIndex, rdf.OpenSysML + xEndRole:
-		return root
-	}
-	return false
-}
-
-// placementPredicate reports whether a predicate states where a declaration sits
-// (owner, position, id, visibility), which the printer places itself.
-func placementPredicate(predicate string) bool {
-	switch predicate {
-	case rdf.SysML + pOwningNamespace, rdf.SysML + pOwner, rdf.SysML + pOwningRelationship,
-		rdf.SysML + pOwningMembership, rdf.SysML + pOwningRelatedElement, rdf.SysML + pVisibility,
-		rdf.OpenSysML + xMemberIndex, rdf.OpenSysML + xDeclaredID:
-		return true
-	}
-	return false
-}
-
-// declaredNames is the set of qualified names the graph declares, which is what
-// a name in an expression resolves against, as it did when the graph was written.
-func (d *decoder) declaredNames() map[string]bool {
-	if d.declared == nil {
-		d.declared = make(map[string]bool, len(d.byIRI))
-		for _, el := range d.byIRI {
-			if el.qname != "" {
-				d.declared[el.qname] = true
-			}
-		}
-	}
-	return d.declared
-}
-
-// sameStatements reports whether the graph's statements about have are the
-// statements stated makes about want, nested nodes included. Objects are
-// compared as sets: RDF states no order among the objects of one property.
-// At the root of a declaration, placement is the graph's alone to state.
-func (d *decoder) sameStatements(have, want rdf.Term, stated *rdf.Graph, root bool) bool {
-	declaration := root && !d.isExpressionNode(have)
-	predicates := map[string]bool{}
-	for _, predicate := range d.graph.Predicates(have) {
-		predicates[predicate] = true
-	}
-	for _, predicate := range stated.Predicates(want) {
-		predicates[predicate] = true
-	}
-	for predicate := range predicates {
-		if layoutPredicate(predicate, root) || declaration && placementPredicate(predicate) {
+// candidateName names the candidate notation for the grammar the roots record
+// their text was written in; a root with text recording none was read as a
+// buffer with no extension, and the candidate is named so it reads the same
+// way. Roots recording different grammars cannot be read as one document; one
+// with neither text nor grammar was added to the graph and says nothing.
+func (d *decoder) candidateName(roots []*element) (string, bool) {
+	language, seen := "", false
+	for _, root := range roots {
+		recorded, ok := d.stringOf(root, rdf.OpenSysML+xSourceLanguage)
+		if _, hasText := d.graph.Lexical(rdf.IRI(root.iri), rdf.OpenSysML+xSourceText); !ok && !hasText {
 			continue
 		}
-		if !d.sameObjects(d.graph.Objects(have, predicate), stated.Objects(want, predicate), stated) {
-			return false
+		if seen && recorded != language {
+			return "", false
 		}
+		language, seen = recorded, true
 	}
-	return true
+	if language == "" {
+		return "<converted>", true
+	}
+	return "<converted>." + language, true
 }
 
-// sameObjects reports whether two object lists match one to one, in any order.
-func (d *decoder) sameObjects(have, want []rdf.Term, stated *rdf.Graph) bool {
-	if len(have) != len(want) {
-		return false
+// demoteAll demotes every verbatim text and expression printed in this pass.
+func (d *decoder) demoteAll() {
+	for el := range d.printed {
+		d.demoted[el] = true
 	}
-	matched := make([]bool, len(want))
-	for _, h := range have {
-		found := false
-		for i, w := range want {
-			if !matched[i] && d.sameObject(h, w, stated) {
-				matched[i], found = true, true
-				break
+	for iri := range d.usedExpr {
+		d.demotedExpr[iri] = true
+	}
+}
+
+// disagreeingTriples lists the structural triples only one of the two graphs
+// states. Source text differs from canonical notation by design, and a member
+// index states an order the notation keeps whatever the numbers, so both skip.
+func disagreeingTriples(graph, check *rdf.Graph) []rdf.Triple {
+	var out []rdf.Triple
+	structural := func(t rdf.Triple) bool {
+		switch t.Predicate.Value {
+		case rdf.OpenSysML + xSourceText, rdf.OpenSysML + xSourceTail, rdf.OpenSysML + xSourceLanguage,
+			rdf.OpenSysML + xMemberIndex:
+			return false
+		}
+		return true
+	}
+	for _, t := range graph.Triples() {
+		if structural(t) && !check.Has(t) {
+			out = append(out, t)
+		}
+	}
+	for _, t := range check.Triples() {
+		if structural(t) && !graph.Has(t) {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// blame returns the verbatim element a disagreement over iri falls in, or else
+// the outermost expression node written from its text. A subject only the
+// candidate has is traced to the element written over where it was parsed.
+func (d *decoder) blame(iri string, check *encoder) (*element, string) {
+	var expr string
+	visited := map[string]bool{}
+	for iri != "" && !visited[iri] {
+		visited[iri] = true
+		if el, ok := d.byIRI[iri]; ok {
+			if target, ok := d.folded[el]; ok {
+				el = target
 			}
+			return d.nearestVerbatim(el), expr
 		}
-		if !found {
-			return false
+		if d.usedExpr[iri] {
+			expr = iri
 		}
+		if offset, ok := check.offsets[iri]; ok {
+			return d.writerAt(offset), ""
+		}
+		holder := holderOf(d.graph, iri)
+		if holder == "" {
+			holder = holderOf(check.graph, iri)
+		}
+		iri = holder
 	}
-	return true
+	return nil, expr
 }
 
-// sameObject compares one object the graph states with the one the text
-// states: a nested node recursively, an element by the element it names, and
-// anything else by value. A nested node's position is among its statements.
-func (d *decoder) sameObject(have, want rdf.Term, stated *rdf.Graph) bool {
-	if have.IsLiteral() || want.IsLiteral() {
-		return have == want
+// nearestVerbatim returns the element whose notation a disagreement over el
+// falls in: the nearest of el and its owners that was written at all. One
+// already rebuilt canonically is returned as is, so the blame stops there.
+func (d *decoder) nearestVerbatim(el *element) *element {
+	for x := el; x != nil; x = x.owner {
+		if d.printed[x] || d.rebuilt[x] {
+			return x
+		}
 	}
-	if d.isExpressionNode(have) {
-		return d.sameStatements(have, want, stated, false)
+	return nil
+}
+
+// writerAt returns the innermost element written over an offset of the
+// candidate notation: the one whose text the notation parsed there came from.
+func (d *decoder) writerAt(offset int) *element {
+	var best *writing
+	for i := range d.written {
+		w := &d.written[i]
+		if offset < w.where.start || offset >= w.where.end {
+			continue
+		}
+		if best == nil || w.where.end-w.where.start < best.where.end-best.where.start {
+			best = w
+		}
 	}
-	if target, err := d.referencedElement(have.Value); err == nil {
-		named, ok := rdf.DecodeElementID(rdf.LocalName(want.Value))
-		return ok && named == target.qname
+	if best == nil {
+		return nil
 	}
-	return have.Value == want.Value
+	return best.el
+}
+
+// holderOf returns the subject a node hangs off: the namespace owning an
+// element, or the subject that points at a membership or expression node.
+func holderOf(g *rdf.Graph, iri string) string {
+	subject := rdf.IRI(iri)
+	if g.HasProperty(subject, rdf.SysML+pQualifiedName) {
+		if owner, ok := g.Object(subject, rdf.SysML+pOwningNamespace); ok && owner.IsIRI() {
+			return owner.Value
+		}
+		return ""
+	}
+	if !g.HasProperty(subject, rdf.RDFType) {
+		return ""
+	}
+	for _, t := range g.Triples() {
+		if t.Object.IsIRI() && t.Object.Value == iri && t.Subject.Value != iri {
+			return t.Subject.Value
+		}
+	}
+	return ""
 }

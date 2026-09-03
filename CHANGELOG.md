@@ -160,8 +160,55 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   differential test now also compares Reals bit for bit over ±0.0, ±Inf and NaN, and focused
   fixtures under `internal/core/runtime/testdata/compiled/` run each construct through both tiers.
 
+### Fixed
+
+- **A qualified name through an import evaluates as the checker resolves it.** The evaluator
+  used to resolve only the first segment of `Bq::x` through the resolver and walk the rest as
+  owned and inherited members, so a segment a `public import` re-exports failed with
+  `member x not found in Bq` even though the checker accepted the reference — and the library's
+  own façades are built that way, so `ISQ::speed` and `SI::speed` failed with
+  `member speed not found`. The whole name now goes through the same `ResolveQualified` the
+  checker uses: a wildcard, single-member or recursive import, a façade of a façade, a short
+  name and an `alias` (which used to fail with `cannot evaluate element type *ast.Alias`) all
+  reach the element the checker reaches, a `private import` stays reachable only from inside
+  the importing namespace, and a name the checker rejects fails with the checker's own
+  `unresolved reference: Priv::x` or, when several members answer to it, its own
+  `ambiguous reference: Twice::t (2 candidates)`. The evaluator reads the name through a new
+  `Resolver.ReadQualified`, whose answer (element, segments, ambiguity) is memoized by scope and
+  node rather than by node alone, so one parsed expression evaluated in two scopes that each
+  hold their own `A::x` answers with each scope's value. A calc usage's outputs, and the "not a
+  variant" / "not a literal" reports, are unchanged.
+
 ### Changed
 
+- **A conversion from RDF returns the notation as written.** Every element written to `.ttl`
+  carries its lines as `sysx:sourceText` — comments, blank lines and keyword synonyms included —
+  and an element with members carries the lines closing its body as `sysx:sourceTail`; the writer
+  formats the file before slicing it, and the two properties are one-line literals with newlines
+  escaped. `sysml model.ttl -convert sysml` now writes that text back, so a formatted
+  `.sysml → .ttl → .sysml` round trip is byte for byte and an unformatted one comes back formatted,
+  where before it came back canonical with its `//` and `/* */` comments dropped. The graph stays
+  authoritative: the candidate notation is converted back to RDF and compared with the graph, and
+  each element whose text no longer states its triples — a flag set, a value changed, a member
+  removed or an identity annotation dropped after the export — is written canonically instead,
+  with `@IdentityMetadata::ElementId` and `ProjectRef` materialized exactly as for a graph without
+  text; text that no longer parses demotes the whole file. A member written on its owner's lines,
+  such as an accept's payload, carries no text of its own, so an edit to it rebuilds the owner
+  whole rather than splicing a line into it. Each root records the grammar its file was written in
+  as `sysx:sourceLanguage`, so KerML text is checked as KerML rather than as the SysML it may also
+  read as; a buffer with no extension records none and is checked as such a buffer again. With the
+  notation written from its text, the corpus round-trip ratchet moves 101 files to `stable` — every
+  `whitespace-only`, `graph-diff` and `unparseable` verdict and all but one `unwritable` — which says
+  the text survives, not that the structural predicates alone would (that remains the stripping
+  tests' job). A `LiteralString` node's `sysml:value` is now the value
+  the notation's escapes read to rather than the text between the quotes, and a value edited in the
+  graph is written back as a literal that reads to it, whatever characters it holds. A graph without `sysx:sourceText` — from
+  another tool, or stripped — converts as before, and the round-trip tests keep stripping it to
+  prove the structural predicates carry the model; each fixture under
+  `internal/core/export/testdata/convert` now locks both notations. The
+  [saving guide](docs/guide/07-saving-and-rdf.md), the
+  [RDF mapping](docs/reference/rdf-mapping.md#source-text) and the round-trip testing skill
+  describe the precedence.
 - **A calc whose `return` declares a result parameter it never binds says so.** In the notation
   `return` introduces a result *parameter* (SysML.xtext ReturnParameterMember), so `return h;`
   after `attribute h : Real = …;` declares a second member named `h` — the pilot flags the
@@ -237,34 +284,6 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Fixed
 
-- **A graph converted to notation and back is the same graph, byte for byte.** The notation
-  writer used to run its output through the formatter, which re-indented every multi-line head,
-  condition, value and `doc` body, so the `sysx:sourceText` a second conversion stored differed
-  from the first in whitespace alone; it also wrote a head's relationship clauses in a fixed order,
-  moving `:>> x : T` to `: T :>> x`. The writer now emits stored text byte for byte — tabs, blank
-  lines, odd indentation and CRLF included — whenever that text still spells what the graph states,
-  compared token by token with whitespace, name quoting and `:>`-for-`subsets` set aside, and
-  spells the head or expression from the graph's structure otherwise: a stored text naming other
-  ends or another operator than the graph gives way to the graph, and a graph with no stored text
-  at all still writes as it did. A declaration the graph keeps as text alone, with no `sysx:endForm`
-  to rebuild its head from, is read back as a declaration and mapped again, and is written as
-  stored only while the result states the graph: editing its `rdf:type` or `sysx:declaredKeyword`
-  in the graph is written from the graph or refused, never overridden by the stale text.
-  Relationship clauses come back in the order the graph states them.
-  KerML `connector … from a to b` heads record their form like the other end-binding heads, and
-  an anonymous usage opened by `ref individual` or a portion keyword keeps that kind instead of
-  parsing as an attribute. Over the 268 example models the mapping converts,
-  `TestCorpusRoundTrip` recorded 166 whose second Turtle is byte-identical to the first; this
-  change moves the 71 `whitespace-only` and 6 `graph-diff` verdicts to `stable` and nothing else,
-  and with the positional-`then` and usage-flag fixes below the baseline now records, over the 275
-  models that convert, 268 `stable`, 1 `graph-diff`, 2 `unwritable`, 4 `unparseable` and 70
-  `refused`. `docs/reference/rdf-mapping.md` § Stored text
-  is layout defines the rule.
-  A `LiteralString`'s `sysml:value` is now the string it evaluates to — `"two\nlines"` stores a
-  value with a line break, where it stored the notation body with the escape intact — and a
-  value written back from the graph is spelled with the escapes KerML defines, so a value edited
-  in the graph to hold quotes, backslashes or line breaks reads back as that value instead of as
-  broken notation.
 - **`satisfy … by config.child` is evaluated on the nested object it names.** A satisfaction
   assertion whose `by` operand is a feature chain used to be read as its last name alone:
   `%satisfy` and `-satisfy` reported `? satisfy r2 by child could not be evaluated — no subject

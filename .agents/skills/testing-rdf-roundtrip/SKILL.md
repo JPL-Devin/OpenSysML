@@ -20,16 +20,18 @@ Every RDF run prints an "RDF conversion is experimental" note on **stderr**; tha
 
 ## The pitfall that makes a naive round-trip test vacuous
 
-The encoder writes `sysx:sourceText "<the head as written>"` for most elements. With that triple
-present the decoder can rebuild the notation from the text alone, so a plain
-`.sysml → .ttl → .sysml` round trip **passes even if every structural predicate is broken**.
+The encoder writes `sysx:sourceText "<the element's lines as written>"` (and `sysx:sourceTail`
+for the lines closing a body) for every element, and the decoder writes that text back wherever it
+still agrees with the graph — that is what makes comments survive the hop. But it also means a
+plain `.sysml → .ttl → .sysml` round trip **passes even if a structural predicate is broken**, as
+long as the broken predicate is missing from both graphs alike.
 
-To make the test load-bearing, strip `sysx:sourceText` from the intermediate `.ttl` first (the same
-thing the `withoutTriples` test helper in `internal/core/export/export_test.go` does in-process) and
-only then convert back. A small Python filter is enough — drop any line containing
-`sysx:sourceText `, keep dropping while the literal it opened with `"""` is still open (a multi-line
-head, condition or `doc` body is stored as written, line breaks included), and when the dropped
-triple ended the block with ` .`, turn the previous line's trailing `;` into ` .`:
+To make the test load-bearing, strip `sysx:sourceText` and `sysx:sourceTail` from the intermediate
+`.ttl` first (the same thing the `withoutTriples` test helper in
+`internal/core/export/export_test.go` does in-process) and only then convert back. Every literal is
+written on one line, newlines escaped, so a small Python filter is enough — drop any line containing
+the predicate, and when the dropped line ended the triple block with ` .`, turn the previous line's
+trailing `;` into ` .`:
 
 ```python
 def strip(src, preds, dst):
@@ -50,20 +52,16 @@ def strip(src, preds, dst):
     open(dst, 'w').write('\n'.join(out))
 ```
 
-The multi-line branch matters for **corpus** files: any head whose source spans lines (`connector x from\n  a to b;`,
-`flow a.x\n  to b.y { /* doc */ }`) is written as a `"""..."""` literal, and a single-line filter leaves
-its tail behind — the writer then fails with `turtle: line N: unrecognized term`, which looks like a
-product bug but is the harness.
+Pass fully-prefixed predicate names —
+`strip("hop1.ttl", ["sysx:sourceText", "sysx:sourceTail"], "stripped.ttl")` — since not every
+load-bearing predicate lives in the `sysx:` namespace (the `sysml:isVariant` / `sysml:includes`
+controls below use the `sysml:` prefix).
 
-Pass fully-prefixed predicate names — `strip("hop1.ttl", ["sysx:sourceText"], "stripped.ttl")` —
-since not every load-bearing predicate lives in the `sysx:` namespace (the `sysml:isVariant` /
-`sysml:includes` controls below use the `sysml:` prefix).
-
-Pass criterion: the source-text-free back-conversion is **byte-identical** to the source-text-backed
-one when the model was written in the writer's own spelling, and re-encoding it gives a `.ttl`
-byte-identical to `hop1.ttl` once `sysx:sourceText` is stripped from both. A model laid out by hand
-(a head broken across lines, say) comes back in the writer's spelling without its text — the layout
-was the text — so compare the two `.ttl` files stripped, not the notation.
+Pass criterion: the source-text-free back-conversion is the canonical notation of the model —
+identical to the source-text-backed one up to trivia and keyword synonyms — and re-encoding it gives
+a `.ttl` byte-identical to `hop1.ttl` once both are stripped of the source text the same way. The
+source-text-backed conversion has its own criterion: it must be **byte-identical to the formatted
+input** (`sysml -fmt` it first), which `TestSourceTextComesBackByteForByte` locks in-process.
 
 For corpus files compare `hop1.ttl` and `hop2.ttl` as **triple sets**, not bytes (`pip install rdflib`,
 parse both with `rdflib.Graph().parse(p, format='turtle')`, diff the sets), and report
@@ -101,9 +99,9 @@ grep -o "sysx:[a-zA-Z]*" hop1.ttl | sort | uniq -c | sort -rn
 
 | Stripped | Observed behaviour (working mapping) |
 |---|---|
-| `sourceText` only | identical notation comes back — the structural predicates carried it |
-| `sourceText` + `endForm`/`endVerb`/`sourceMember`/`targetMember` | refusal: `cannot convert the element <urn:sysmlv2:element:…>: it has no sysx:endForm, and the ends it relates are written in the form the head states, so no valid declaration can be written for it` — **no file is written** |
-| `sourceText` + `endVerb` only | the noun-keyword heads degrade visibly: `connection c connect left to right;` → `connection c left to right;`, `binding bb of a = b;` → `binding bb a = b;`, `succession s first p then q;` → `succession s p then q;` |
+| `sourceText` + `sourceTail` only | canonical notation comes back — the structural predicates carried it; only comments and synonyms differ from the input |
+| `sourceText` + `sourceTail` + `endForm`/`endVerb`/`sourceMember`/`targetMember` | refusal: `cannot convert the element <urn:sysmlv2:element:…>: it has no sysx:endForm, and the ends it relates are written in the form the head states, so no valid declaration can be written for it` — **no file is written** |
+| `sourceText` + `sourceTail` + `endVerb` only | the noun-keyword heads degrade visibly: `connection c connect left to right;` → `connection c left to right;`, `binding bb of a = b;` → `binding bb a = b;`, `succession s first p then q;` → `succession s p then q;` |
 
 The `endVerb` degradation is the cheapest single proof that a predicate is not decorative. Note the
 degraded output still validates clean, so judge it by the *text*, not by the exit code.
@@ -203,17 +201,16 @@ OPENSYSML_REQUIRE_TRAINING_CORPUS=1 OPENSYSML_REQUIRE_PILOT_CORPORA=1 \
 
 Without the require variables an absent corpus **skips** the gate with a `GATE NOT RUN` banner on
 stderr; CI sets them so absence fails. The `-v` log holds the summary line CI greps for:
-`corpus round trip: 345 files: 255 stable, 0 whitespace-only, 8 graph-diff, 2 unwritable,
-3 unparseable, 77 refused` at the time of writing.
+`corpus round trip: 345 files: 166 stable, 71 whitespace-only, 14 graph-diff, 15 unwritable,
+2 unparseable, 77 refused` at the time of writing.
 
 Verdicts, in the order the trip can end: `refused:<class>` (hop 1 refused; the class is the
 construct kind from `UnsupportedError.What` without location or identifiers, e.g.
 `refused:feature-declaration`, `refused:prefix-metadata`, `refused:succession`), `unwritable`
 (Turtle → notation refused), `unparseable` (the written notation no longer converts), then a
 triple-set comparison of hop 1 against hop 2: `stable` (byte-identical), `whitespace-only` (equal
-once whitespace inside `sysx:sourceText` literals is collapsed — the writer re-laid a stored text
-out, which it no longer does: the stored text is written verbatim while it still states the graph,
-see `docs/reference/rdf-mapping.md` § Stored text is layout), `graph-diff` (anything else).
+once whitespace inside `sysx:sourceText` literals is collapsed — the writer re-indented a body),
+`graph-diff` (anything else).
 
 It is a **per-file ratchet**, like the pilot corpora gate: an improvement fails it just as a
 regression does, so every movement is adjudicated. When your change moves files:
