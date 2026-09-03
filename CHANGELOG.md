@@ -210,6 +210,21 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Fixed
 
+- **An expression evaluated after `-instantiate` reads the object that was created and run.**
+  `sysml model.sysml -instantiate P::ctx -e "ctx.recv.got"`, the bare line `ctx.recv.got` after
+  `%instantiate P::ctx`, and even `%eval in P::ctx : recv.got` — which printed
+  `(on P::ctx ID: 1)` — answered `0` while `%features #1` showed `got = 1` for that same object:
+  a name in the expression materialized a fresh object of the usage instead of the one
+  `%instantiate` created, and a nested part whose machine sends or accepts a signal ran only
+  once something read it, so what a read saw depended on the order the parts were first
+  inspected in. An instantiated usage now denotes the object created under it, and creating an
+  object materializes and runs the nested parts whose types exhibit or perform behaviors with
+  it, so the whole runs to quiescence once and every later read — a CLI `-e`, a piped
+  expression line, `%eval`, `%eval in` and `%features` — reports the same values.
+  `%eval in` also takes an object the way `%features` and `%state` do: by id (`%eval in #1 :
+  recv.got`) or by a path under a named object (`%eval in ctx.recv : got`), and its usage line
+  lists the forms. (Open-MBEE/OpenSysML#91)
+
 - **`%state <machine> <object>` attaches to the machine the object exhibits instead of performing
   it again.** Naming an object's own exhibited machine (`%state Rover::modes rover`, or `-state
   "Rover::modes rover"`) used to start a second performance of it on the same object, so its

@@ -256,9 +256,61 @@ func (ctx *Context) startBehaviorsOfAll(objects []*Instance) error {
 			ctx.behaviorRunDepth--
 			return err
 		}
+		ctx.materializeBehavingParts(inst)
 	}
 	ctx.behaviorRunDepth--
 	return ctx.runAttachedBehaviors()
+}
+
+// materializeBehavingParts materializes the composite parts of an object whose
+// type runs behaviors, so the object runs to quiescence as a whole when it is
+// created rather than part by part in the order its parts are first read.
+func (ctx *Context) materializeBehavingParts(inst *Instance) {
+	for _, feat := range ctx.FeaturesOf(inst.Type) {
+		fv, ok := inst.FeatureValues[feat.Name]
+		if !ok || fv.Materialized || ctx.model.IsConnectorUsage(feat.Symbol) {
+			continue
+		}
+		composite := ctx.CompositeTypeOf(fv.Feature)
+		if composite == nil || !fv.Feature.Multiplicity.Upper.Known || !fv.Feature.Multiplicity.Lower.Known {
+			continue
+		}
+		if !ctx.runsBehaviors(composite, make(map[*symbols.Symbol]bool)) {
+			continue
+		}
+		// A part that fails to materialize stays unmaterialized: the read that
+		// reaches it reports the failure, as for any lazy feature.
+		_, _ = inst.GetFeatureValue(ctx, feat.Name)
+	}
+}
+
+// runsBehaviors reports whether objects of a type run behaviors, of their own or
+// of a part nested in them. A type on the path being decided answers false: a
+// composition cycle has no finite object, so nothing is lost by cutting it.
+func (ctx *Context) runsBehaviors(typeSym *symbols.Symbol, visiting map[*symbols.Symbol]bool) bool {
+	if known, ok := ctx.behaving[typeSym]; ok {
+		return known
+	}
+	if visiting[typeSym] {
+		return false
+	}
+	visiting[typeSym] = true
+	defer delete(visiting, typeSym)
+	runs := len(ctx.classifierBehaviorsOf(typeSym)) > 0
+	features := ctx.FeaturesOf(typeSym)
+	for i := range features {
+		if runs {
+			break
+		}
+		if ctx.model.IsConnectorUsage(features[i].Symbol) {
+			continue
+		}
+		if composite := ctx.CompositeTypeOf(&features[i]); composite != nil && ctx.runsBehaviors(composite, visiting) {
+			runs = true
+		}
+	}
+	ctx.behaving[typeSym] = runs
+	return runs
 }
 
 // startBehaviorsOf attaches the object's behaviors and, at the outermost start,

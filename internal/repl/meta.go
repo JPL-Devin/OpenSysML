@@ -149,7 +149,7 @@ var metaCommandTable = []metaCommand{
 	{group: groupLibrary, name: "%render", args: "<name> [form]", desc: "render a view as the rendering it states — as text, or as a Mermaid diagram or a Markdown table"},
 
 	{group: groupRuntime, name: "%instantiate", args: argName, desc: "create an instance of a part def"},
-	{group: groupRuntime, name: "%eval", args: "[in <name> :] <expr>", desc: "evaluate an expression, in the named element or object when one is named"},
+	{group: groupRuntime, name: "%eval", args: "[in <name>|<path>|#<id> :] <expr>", desc: "evaluate an expression, in the named element or object when one is named"},
 	{group: groupRuntime, name: "%features", args: argName, desc: "show an object's features and their values"},
 	{group: groupRuntime, name: "%instances", desc: "list all instantiated objects"},
 	{group: groupRuntime, name: "%invoke", args: "<object> <op> [<p>=<expr>]", desc: "invoke an operation of an object's type, performed by that object (a name, a path such as driver.r, or an id such as #3)"},
@@ -495,7 +495,7 @@ func (s *Session) doInstantiate(name string) ([]string, bool, error) {
 
 // evalUsage is what %eval accepts: an expression, optionally pinned to the
 // context it is evaluated in.
-const evalUsage = "usage: %eval [in <qualified-name> :] <expression>"
+const evalUsage = "usage: %eval [in <qualified-name> | <object-path> | #<id> :] <expression>"
 
 // doEvalLine carries out %eval, in the context the line pins when it names one.
 func (s *Session) doEvalLine(tail string) ([]string, bool, error) {
@@ -565,14 +565,11 @@ func contextSeparator(tail string) int {
 	return -1
 }
 
-// evalIn evaluates an expression in the context the command pinned: the object
-// materialized under that name, whose feature values it then reads as `%eval` does after
+// evalIn evaluates an expression in the context the command pinned: an object
+// the session holds — by id (#3), by feature path (ctx.recv) or by the name it is
+// materialized under — whose feature values it then reads as `%eval` does after
 // `%instantiate`, or else the named element's own namespace.
 func (s *Session) evalIn(name, expr string) ([]string, error) {
-	sym, fqn, lerr := s.lookupSymbol(name)
-	if lerr != nil {
-		return nil, lerr
-	}
 	ctx, err := s.getOrCreateRuntime()
 	if err != nil {
 		return nil, err
@@ -583,6 +580,28 @@ func (s *Session) evalIn(name, expr string) ([]string, error) {
 	}
 	if node == nil {
 		return nil, errors.New("could not parse expression")
+	}
+	if _, isID := objectID(name); isID || isObjectPath(name) {
+		inst, held, oerr := s.objectRef(name)
+		if oerr != nil {
+			return nil, oerr
+		}
+		scope := s.contextScope(inst.Type)
+		if scope == nil {
+			return nil, fmt.Errorf("object #%d names no namespace to evaluate in", inst.ID)
+		}
+		val, err := ctx.EvalWithScopeOn(node, scope, inst)
+		if err != nil {
+			return nil, evalError(expr, err, len(exprPrefix))
+		}
+		return []string{
+			fmt.Sprintf("✓ %s%s", expr, onInstance(inst, held)),
+			fmt.Sprintf("  = %s", formatValue(ctx, val)),
+		}, nil
+	}
+	sym, fqn, lerr := s.lookupSymbol(name)
+	if lerr != nil {
+		return nil, lerr
 	}
 	scope := s.contextScope(sym)
 	if scope == nil {
@@ -606,6 +625,13 @@ func (s *Session) evalIn(name, expr string) ([]string, error) {
 		fmt.Sprintf("✓ %s (in %s)", expr, notationName(fqn)),
 		fmt.Sprintf("  = %s", formatValue(ctx, val)),
 	}, nil
+}
+
+// isObjectPath reports whether text spells a feature path from a name (ctx.recv),
+// which addresses an object rather than a namespace.
+func isObjectPath(text string) bool {
+	_, segments, ok := objectPath(text)
+	return ok && len(segments) > 0
 }
 
 // contextScope is the namespace a pinned context evaluates in: the element's own
