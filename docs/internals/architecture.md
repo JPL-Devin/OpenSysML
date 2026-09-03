@@ -442,7 +442,7 @@ See [the guide](../guide/) for VS Code configuration.
 **Runtime execution:**
 - `%instantiate <name>` — Create instance from part def
 - `%eval <expr>` — Evaluate expression (feature refs + literals)
-- `%features <name>` — Show an object's features and their values
+- `%features <name> [all|depth <n>] [json]` — Show an object's features and their values, bounded unless asked for whole or to a depth; `json` writes the graph in the API's `InstantiateResponse` shape
 - `%instances` — List all created instances
 
 **Behavioral execution:**
@@ -711,7 +711,7 @@ Every behavioral feature must have:
 
 What these numbers cannot show: the OMG corpora are demonstrations rather than an official conformance suite; the differential is one-directional, comparing the diagnostics the two implementations report on the same files; the Xpect suites are the pilot authors' test intent rather than a certification oracle; and none of these is a percentage of the specification — no global compliance figure is claimed anywhere.
 
-**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each of the 825 tracked rules stays in [spec compliance](../project/spec-compliance.md) as a census of our own row list. It moves when rows are rewritten and does not move when an oracle does, so it is not the progress measure.
+**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each of the 826 tracked rules stays in [spec compliance](../project/spec-compliance.md) as a census of our own row list. It moves when rows are rewritten and does not move when an oracle does, so it is not the progress measure.
 <!-- doc-counts:end refereed-figures -->
 
 Calc/constraint/requirement functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy, orthogonal regions all tested); every conformance case passes. Fork/join, shallow/deep history, entry/exit points and deferred events are implemented and reachable from source text — see docs/project/spec-compliance.md and docs/reference/grammar/README.md.
