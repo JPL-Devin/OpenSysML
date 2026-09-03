@@ -29,16 +29,6 @@ func convertFixture(t *testing.T, name string) []byte {
 	return turtle
 }
 
-// withoutSourceText drops the text triples — sysx:sourceText, sysx:sourceTail
-// and sysx:sourceLanguage — leaving the structure the mapping must carry.
-func withoutSourceText(t *testing.T, turtle []byte) []byte {
-	t.Helper()
-	for _, property := range []string{"sysx:sourceText", "sysx:sourceTail", "sysx:sourceLanguage"} {
-		turtle = withoutTriples(t, turtle, property)
-	}
-	return turtle
-}
-
 // A result expression is the Expression element itself, owned through a
 // ResultExpressionMembership whose member it is, and it keeps its place among
 // the body's other members.

@@ -66,7 +66,8 @@ func untypedArguments(e *ast.InvocationExpr) []Argument {
 type Performs int
 
 const (
-	// PerformsBehavior evaluates an expression: any behavior answers, a calc preferred.
+	// PerformsBehavior evaluates an expression: a calc answers; another behavior only
+	// when no calc is named.
 	PerformsBehavior Performs = iota
 	// PerformsAction runs an action, as `action a = tag(x);` does: only actions answer.
 	PerformsAction
@@ -196,12 +197,14 @@ func (m *Model) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, ar
 		sel.Selected = sel.Candidates[0]
 		return sel
 	}
-	sel.callable = behaviors[0]
+	// An expression takes its call's result, which only a calc yields: when the name
+	// denotes one, no action competes, however well its inputs fit the arguments.
 	if performs == PerformsBehavior {
 		if calcs := filterSymbols(behaviors, m.Evaluates); len(calcs) > 0 {
-			sel.callable = calcs[0]
+			behaviors = calcs
 		}
 	}
+	sel.callable = behaviors[0]
 
 	signatures := make([]invocationSignature, len(behaviors))
 	for i, c := range behaviors {
@@ -213,9 +216,6 @@ func (m *Model) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, ar
 	strict := len(applicable) > 0
 	if !strict {
 		applicable, sigs, fits = m.filterApplicable(behaviors, signatures, args, bindLoose)
-	}
-	if performs == PerformsBehavior {
-		applicable, sigs, fits = m.preferCalcs(applicable, sigs, fits)
 	}
 	sel.Applicable = applicable
 	switch len(applicable) {
@@ -288,25 +288,6 @@ func (m *Model) filterApplicable(cands []*symbols.Symbol, sigs []invocationSigna
 	return outCands, outSigs, outFits
 }
 
-// preferCalcs keeps only the calcs among applicable candidates, when there is one: an
-// expression evaluates to a calc's result, which an action or other behavior has none of.
-func (m *Model) preferCalcs(cands []*symbols.Symbol, sigs []invocationSignature, fits []bindFit) ([]*symbols.Symbol, []invocationSignature, []bindFit) {
-	var outCands []*symbols.Symbol
-	var outSigs []invocationSignature
-	var outFits []bindFit
-	for i, c := range cands {
-		if m.Evaluates(c) {
-			outCands = append(outCands, c)
-			outSigs = append(outSigs, sigs[i])
-			outFits = append(outFits, fits[i])
-		}
-	}
-	if len(outCands) == 0 {
-		return cands, sigs, fits
-	}
-	return outCands, outSigs, outFits
-}
-
 func indicesWithFit(fits []bindFit, want bindFit) []int {
 	var out []int
 	for i, fit := range fits {
@@ -374,7 +355,7 @@ func (m *Model) OptionalParameter(sym *symbols.Symbol) bool {
 	if value, _ := m.ParameterDefault(sym); value != nil {
 		return true
 	}
-	for _, p := range m.parameterRedefinitionChain(sym) {
+	for _, p := range m.ParameterRedefinitionChain(sym) {
 		if u := p.Decl.(*ast.Usage); u.Multiplicity != nil {
 			return m.IsOptionalParameter(u)
 		}
@@ -385,7 +366,7 @@ func (m *Model) OptionalParameter(sym *symbols.Symbol) bool {
 // ParameterDefault is the value the parameter takes when a call binds none: the nearest
 // declared along its redefinitions, with the scope it resolves in. Nil when none is.
 func (m *Model) ParameterDefault(sym *symbols.Symbol) (ast.Node, *symbols.Scope) {
-	for _, p := range m.parameterRedefinitionChain(sym) {
+	for _, p := range m.ParameterRedefinitionChain(sym) {
 		if u := p.Decl.(*ast.Usage); u.Value != nil {
 			return u.Value, p.OwnerScope
 		}
@@ -393,9 +374,9 @@ func (m *Model) ParameterDefault(sym *symbols.Symbol) (ast.Node, *symbols.Scope)
 	return nil, nil
 }
 
-// parameterRedefinitionChain is sym followed by the parameters it redefines, explicitly
+// ParameterRedefinitionChain is sym followed by the parameters it redefines, explicitly
 // or by position, nearest first; each declares a usage.
-func (m *Model) parameterRedefinitionChain(sym *symbols.Symbol) []*symbols.Symbol {
+func (m *Model) ParameterRedefinitionChain(sym *symbols.Symbol) []*symbols.Symbol {
 	var chain []*symbols.Symbol
 	visited := map[*symbols.Symbol]bool{}
 	for sym != nil && !visited[sym] {

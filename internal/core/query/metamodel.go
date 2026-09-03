@@ -1,14 +1,18 @@
 package query
 
 import (
+	"slices"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 var metamodelTypeNames = map[symbols.SymbolKind]string{
 	symbols.SymbolPackage: "Package", symbols.SymbolNamespace: "Namespace",
 	symbols.SymbolAlias: "Membership", symbols.SymbolDependency: "Dependency",
-	symbols.SymbolRelationship: "Relationship", symbols.SymbolComment: "Comment",
+	symbols.SymbolRelationship: "Relationship", symbols.SymbolMultiplicity: "Multiplicity",
+	symbols.SymbolComment:               "Comment",
 	symbols.SymbolDocumentation:         "Documentation",
 	symbols.SymbolTextualRepresentation: "TextualRepresentation",
 	symbols.SymbolPartDef:               "PartDefinition", symbols.SymbolAttributeDef: "AttributeDefinition",
@@ -52,6 +56,10 @@ var kermlUsageTypeNames = map[ast.UsageKind]string{
 	ast.UsageInteraction: "Interaction",
 }
 
+// refinedTypeNames are the metamodel type names MetamodelTypeNameOf reports for
+// a symbol kind that spans several metaclasses, beyond the kind's own name.
+var refinedTypeNames = []string{"MultiplicityRange"}
+
 // MetamodelTypeNameOf returns the metamodel type name an element reports as
 // @type, refining symbol kinds that span several metaclasses.
 func MetamodelTypeNameOf(sym *symbols.Symbol) string {
@@ -59,6 +67,8 @@ func MetamodelTypeNameOf(sym *symbols.Symbol) string {
 		return ""
 	}
 	switch sym.Kind {
+	case symbols.SymbolMultiplicity:
+		return semantics.MultiplicityMetaclassName(sym)
 	case symbols.SymbolConnectorEnd:
 		if sym.OwnerScope != nil {
 			if usage, ok := sym.OwnerScope.Node().(*ast.Usage); ok && usage.Kind == ast.UsageInterface {
@@ -81,4 +91,24 @@ func MetamodelTypeNameOf(sym *symbols.Symbol) string {
 // MetamodelTypeName returns the metamodel type associated with a symbol kind.
 func MetamodelTypeName(kind symbols.SymbolKind) string {
 	return metamodelTypeNames[kind]
+}
+
+// IsMetamodelTypeName reports whether some element can report name as its @type.
+func IsMetamodelTypeName(name string) bool {
+	for _, typeName := range metamodelTypeNames {
+		if typeName == name {
+			return true
+		}
+	}
+	for _, typeName := range kermlTypeNames {
+		if typeName == name {
+			return true
+		}
+	}
+	for _, typeName := range kermlUsageTypeNames {
+		if typeName == name {
+			return true
+		}
+	}
+	return slices.Contains(refinedTypeNames, name)
 }

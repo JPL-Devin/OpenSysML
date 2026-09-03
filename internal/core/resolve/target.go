@@ -219,6 +219,42 @@ type Reference struct {
 	// Performed is set when Invocation is the value of an action usage, which
 	// runs the action it names rather than evaluating a calc of that name.
 	Performed bool
+	// Endpoint is set when QN is a transition end, which names a vertex of the
+	// enclosing machine ahead of anything else it reaches (see ResolveEndpoint).
+	Endpoint bool
+	// Import is the import QN is the target of, if any; an `import all` reaches
+	// private members the visibility rule would otherwise hide.
+	Import *ast.Import
+	// Subsetting is the declaration QN subsets, if any; its spelling decides
+	// whether it is read as a redefinition or as the declaration's own name.
+	Subsetting ast.Node
+	// Member is the declaration whose text QN is written in, when known.
+	Member ast.Node
+}
+
+// Spelled returns ref as it would be collected had qn been written in its
+// place: the same occurrence, read the way the document walk reads that spelling.
+func (ref Reference) Spelled(qn *ast.QualifiedName) Reference {
+	ref.QN = qn
+	if ref.Subsetting != nil {
+		if namesDecl(qn, ref.Subsetting) {
+			ref.Referrer, ref.Redefines = nil, false
+		} else {
+			ref.Referrer, ref.Redefines = ref.Subsetting, true
+		}
+	}
+	return ref
+}
+
+// ProbeReference resolves ref as a trial reading: what a name spelled differently
+// at the same place would denote. Its diagnostics are suppressed.
+func (r *Resolver) ProbeReference(ref Reference) (*symbols.Symbol, bool) {
+	var (
+		sym *symbols.Symbol
+		ok  bool
+	)
+	r.aside(func() { sym, ok = r.ResolveReference(ref) })
+	return sym, ok
 }
 
 // ResolveReference resolves a single name occurrence, honoring both the
@@ -245,6 +281,19 @@ func (r *Resolver) ResolveReference(ref Reference) (*symbols.Symbol, bool) {
 		if !ok {
 			return nil, false
 		}
+		// A qualified segment the owner has no member for reads outward, as
+		// resolveFeatureChain does.
+		if len(ref.QN.Parts) > 1 {
+			if _, member := r.chainMember(owner, ref.QN.Parts[0].Text); !member {
+				var outward *symbols.Symbol
+				if r.probe(ref.QN, func() bool {
+					outward, ok = r.resolveQualified(ref.Scope, ref.QN, hide)
+					return ok
+				}) {
+					return outward, true
+				}
+			}
+		}
 		return r.memberChain(owner, ref.QN)
 	}
 	if ref.Constructed != nil {
@@ -260,6 +309,12 @@ func (r *Resolver) ResolveReference(ref Reference) (*symbols.Symbol, bool) {
 	if ref.Redefines {
 		r.resolveRedefinition(ref.Scope, ref.QN, ref.Referrer)
 		return r.PartSymbol(ref.QN, len(ref.QN.Parts)-1)
+	}
+	if ref.Endpoint {
+		return r.ResolveEndpoint(ref.Scope, ref.QN)
+	}
+	if ref.Import != nil {
+		return r.resolveImportName(ref.Scope, ref.QN, ref.Import)
 	}
 	if ref.Invocation != nil {
 		return r.ResolveInvocationName(ref.Scope, ref.QN)

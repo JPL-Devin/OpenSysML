@@ -14,20 +14,20 @@ package OtherPkg {
 }
 package R90 {
     public import OtherPkg::*;
-    alias Ledger for OtherPkg::BudgetLedger;
+    alias Ledger for BudgetLedger;
     part def A {
-        item custodyBudget : OtherPkg::BudgetLedger;
-        attribute t : OtherPkg::Tempo = OtherPkg::Tempo::operative;
-        item b2 : OtherPkg::BudgetLedger;
-        item b3 : OtherPkg::BudgetLedger;
-        part w : OtherPkg::Inner::Wheel subsets OtherPkg::Inner::wheels;
-        ref spare references OtherPkg::spare;
+        item custodyBudget : BudgetLedger;
+        attribute t : Tempo = Tempo::operative;
+        item b2 : BudgetLedger;
+        item b3 : BudgetLedger;
+        part w : Inner::Wheel subsets Inner::wheels;
+        ref spare references spare;
         attribute size;
         attribute s = w.size;
         part unresolved : Elsewhere::Missing;
     }
     part def B specializes A {
-        part : OtherPkg::Inner::Wheel redefines w;
+        part : Inner::Wheel redefines w;
     }
     part def G1 {
         part x;
@@ -54,9 +54,9 @@ package Meta {
     part def Plain;
 }
 package Filtered {
-    public import Meta::* [(@ Meta::Safety)];
+    public import Meta::* [(@ Safety)];
     part def C {
-        attribute other : Meta::Tagged;
-        filter (@ Meta::Safety);
+        attribute other : Tagged;
+        filter (@ Safety);
     }
 }
