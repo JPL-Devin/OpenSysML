@@ -563,36 +563,34 @@ func TestShortKindKeywordSurvivesTheRoundTrip(t *testing.T) {
 	}
 }
 
-// A metadata annotation states what the element it prefixes is, so the graph
-// carries it as a metadata usage the element owns, marked with the `#` it was
-// written as, and the head comes back from the mapping alone — without the
-// source text — in its place after the modifiers.
+// A `#M` prefix is an owned metadata usage linked to its definition; the head
+// comes back from the graph alone, a `$::`/short-name type as its declared name.
 func TestPrefixMetadataComesBackFromTheGraphAlone(t *testing.T) {
-	heads := []string{
-		"#Safety part def Car;",
-		"abstract #Safety #Reviewed part def Truck;",
-		"#Safety part car : Car;",
-		"#$::P::Safety part car : Car;",
-		"#safe part named : Car;",
-		"private ref #Safety part spare : Car;",
-		"variant #Reviewed part option : Car;",
-		"end #Safety part wheel : Car;",
-		"#Reviewed package Notes;",
-		"#Safety dependency from Car to Vehicle;",
-		"requirement def R {\n        subject #Safety s : Car;\n    }",
-		"use case def U {\n        objective #Safety o : Goal;\n    }",
-		"use case def U {\n        #Safety include Ride;\n    }",
-		"use case def U {\n        #Safety include use case ride : Ride;\n    }",
-		"requirement def R {\n        assume #Reviewed constraint {\n            true;\n        }\n    }",
-		"requirement def R {\n        require #Safety constraint {\n            true;\n        }\n    }",
-		"part def Q {\n        #Safety assert constraint ok : Stopped;\n    }",
-		"part def Q {\n        #Safety assert not constraint bad : Stopped;\n    }",
-		"part def Q {\n        ref #Safety assert not constraint bad : Stopped;\n    }",
-		"part def Q {\n        #Safety perform action go : Move;\n    }",
+	heads := []struct{ written, back string }{
+		{written: "#Safety part def Car;"},
+		{written: "abstract #Safety #Reviewed part def Truck;"},
+		{written: "#Safety part car : Car;"},
+		{written: "#$::P::Safety part car : Car;", back: "#Safety part car : Car;"},
+		{written: "#safe part named : Car;", back: "#Safety part named : Car;"},
+		{written: "private ref #Safety part spare : Car;"},
+		{written: "variant #Reviewed part option : Car;"},
+		{written: "end #Safety part wheel : Car;"},
+		{written: "#Reviewed package Notes;"},
+		{written: "#Safety dependency from Car to Vehicle;"},
+		{written: "requirement def R {\n        subject #Safety s : Car;\n    }"},
+		{written: "use case def U {\n        objective #Safety o : Goal;\n    }"},
+		{written: "use case def U {\n        #Safety include Ride;\n    }"},
+		{written: "use case def U {\n        #Safety include use case ride : Ride;\n    }"},
+		{written: "requirement def R {\n        assume #Reviewed constraint {\n            true;\n        }\n    }"},
+		{written: "requirement def R {\n        require #Safety constraint {\n            true;\n        }\n    }"},
+		{written: "part def Q {\n        #Safety assert constraint ok : Stopped;\n    }"},
+		{written: "part def Q {\n        #Safety assert not constraint bad : Stopped;\n    }"},
+		{written: "part def Q {\n        ref #Safety assert not constraint bad : Stopped;\n    }"},
+		{written: "part def Q {\n        #Safety perform action go : Move;\n    }"},
 	}
 	for _, head := range heads {
-		t.Run(head, func(t *testing.T) {
-			src := "package P {\n    metadata def <safe> Safety;\n    metadata def Reviewed;\n    part def Vehicle;\n    requirement def Goal;\n    use case def Ride;\n    constraint def Stopped;\n    action def Move;\n    " + head + "\n}\n"
+		t.Run(head.written, func(t *testing.T) {
+			src := "package P {\n    metadata def <safe> Safety;\n    metadata def Reviewed;\n    part def Vehicle;\n    requirement def Goal;\n    use case def Ride;\n    constraint def Stopped;\n    action def Move;\n    " + head.written + "\n}\n"
 			turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
 			if err != nil {
 				t.Fatalf("to turtle: %v", err)
@@ -600,19 +598,33 @@ func TestPrefixMetadataComesBackFromTheGraphAlone(t *testing.T) {
 			if !strings.Contains(string(turtle), `sysx:declaredKeyword "#"`) {
 				t.Fatalf("the graph does not state the prefix form:\n%s", turtle)
 			}
+			for _, name := range []string{"Safety", "safe", "$::P::Safety", "Reviewed"} {
+				if strings.Contains(string(turtle), `sysml:type "`+name+`"`) {
+					t.Fatalf("the metadata type %s is written as a name, not linked to its definition:\n%s", name, turtle)
+				}
+			}
 			back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
 			if err != nil {
 				t.Fatalf("back to notation: %v", err)
 			}
-			if !strings.Contains(string(back), head) {
-				t.Fatalf("the head should come back as written:\n%s", back)
+			want := head.back
+			if want == "" {
+				want = head.written
+			}
+			if !strings.Contains(string(back), want) {
+				t.Fatalf("the head should come back as `%s`:\n%s", want, back)
 			}
 			again, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle)
 			if err != nil {
 				t.Fatalf("to turtle again: %v", err)
 			}
-			if string(again) != string(turtle) {
-				t.Errorf("the second hop changed the graph\n--- first ---\n%s\n--- second ---\n%s", turtle, again)
+			first, second := turtle, again
+			if head.back != "" {
+				first = withoutTriples(t, turtle, "sysx:sourceText")
+				second = withoutTriples(t, again, "sysx:sourceText")
+			}
+			if string(second) != string(first) {
+				t.Errorf("the second hop changed the graph\n--- first ---\n%s\n--- second ---\n%s", first, second)
 			}
 		})
 	}

@@ -1165,9 +1165,9 @@ func (e *encoder) metadataUsage(subject rdf.Term, fqn, owner string, n *ast.Pref
 	}
 	e.ident(subject, n.Ident)
 	e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String(sigil))
-	e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelTyping]), e.reference(owner, qualifiedText(n.Type)))
+	e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelTyping]), e.link(owner, n.Type))
 	for _, about := range n.About {
-		e.graph.Add(subject, e.sysml(pAnnotatedElement), e.reference(owner, qualifiedText(about)))
+		e.graph.Add(subject, e.sysml(pAnnotatedElement), e.link(owner, about))
 	}
 	e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 	e.metadataBodies[fqn] = true

@@ -232,7 +232,7 @@ elmt:Prefixed__car___400
     sysml:owningRelationship elmt:Prefixed__car___400_om ;
     sysml:owningMembership elmt:Prefixed__car___400_om ;
     sysx:declaredKeyword "#" ;
-    sysml:type "safe" ;
+    sysml:type elmt:Prefixed__Safety ;
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:Prefixed__car___400_om

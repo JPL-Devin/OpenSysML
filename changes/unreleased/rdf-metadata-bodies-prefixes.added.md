@@ -6,7 +6,10 @@
   ahead of, carrying its type, one `sysml:annotatedElement` per target, `sysx:hasBody`, the sigil
   it was written with as `sysx:declaredKeyword` (`@`, `#`, or none for `metadata`) and its
   body's members as owned members with their `sysml:value` expression trees, so the notation is
-  written back from the graph alone, without `sysx:sourceText`. `sysx:prefixMetadata` and
+  written back from the graph alone, without `sysx:sourceText`. A prefix's type and `about`
+  targets link their element IRIs by name resolution as every other typing does, so `#safe` and
+  `#$::P::Safety` link `Safety` rather than carrying the spelling as a literal (they come back as
+  `#Safety`). `sysx:prefixMetadata` and
   `sysml:annotates` are gone; a `.ttl` file written by 0.4.3 that states either is refused naming
   the property rather than read without the annotation — re-export it from its notation source.
   Of the 19 files refused for this reason, 17 now convert and 13 of those come back as an equal

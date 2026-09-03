@@ -3,7 +3,7 @@ package Prefixed {
     metadata def Reviewed;
     #Safety part def Car;
     abstract #Reviewed #Safety part def Vehicle;
-    #safe part car : Car;
+    #Safety part car : Car;
     private ref #Safety part spare : Car;
     variant #Reviewed part option : Car;
     end #Safety part wheel : Car;
