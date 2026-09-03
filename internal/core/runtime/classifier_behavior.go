@@ -265,10 +265,11 @@ func (ctx *Context) startBehaviorsOfAll(objects []*Instance) error {
 	return ctx.runAttachedBehaviors()
 }
 
-// materializeBehavingParts materializes the composite parts of an object whose
-// type runs behaviors, so the object runs to quiescence as a whole when it is
-// created rather than part by part in the order its parts are first read. A
-// part that fails to materialize or start fails the creation of its holder.
+// materializeBehavingParts materializes the required composite parts of an
+// object whose type runs behaviors, so the object runs to quiescence as a whole
+// when it is created rather than part by part in the order its parts are first
+// read. An optional part (lower bound 0) is required to hold nothing, so it is
+// left unread. A part that fails to materialize or start fails its holder.
 func (ctx *Context) materializeBehavingParts(inst *Instance) error {
 	for _, feat := range ctx.FeaturesOf(inst.Type) {
 		fv, ok := inst.FeatureValues[feat.Name]
@@ -276,7 +277,8 @@ func (ctx *Context) materializeBehavingParts(inst *Instance) error {
 			continue
 		}
 		composite := ctx.CompositeTypeOf(fv.Feature)
-		if composite == nil || !fv.Feature.Multiplicity.Upper.Known || !fv.Feature.Multiplicity.Lower.Known {
+		mult := fv.Feature.Multiplicity
+		if composite == nil || !mult.Upper.Known || !mult.Lower.Known || mult.Lower.Value == 0 {
 			continue
 		}
 		if !ctx.runsBehaviors(composite, make(map[*symbols.Symbol]bool)) {

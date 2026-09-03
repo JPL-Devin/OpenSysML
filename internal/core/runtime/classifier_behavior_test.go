@@ -1002,6 +1002,45 @@ func TestFailedNestedStartFailsTheHolder(t *testing.T) {
 	}
 }
 
+// An optional part whose type runs a machine is not created with its holder:
+// nothing is required to hold it, so nothing runs until something reads it.
+func TestOptionalBehavingPartIsNotCreatedWithItsHolder(t *testing.T) {
+	src := `
+		package test {
+			part def Ticker {
+				attribute n : ScalarValues::Integer = 0;
+				exhibit state ticking {
+					entry; then on;
+					state on { entry assign n := n + 1; }
+				}
+			}
+			part def Holder {
+				part maybe : Ticker [0..1];
+				part must : Ticker;
+			}
+			part holder : Holder;
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	pkg := resolveSymbol(t, root, "test")
+	ctx := NewContext(model, resolver, 10000)
+
+	inst, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "holder"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fv := inst.FeatureValues["maybe"]; fv.Materialized {
+		t.Errorf("the optional part was created with its holder: %+v", fv)
+	}
+	if fv := inst.FeatureValues["must"]; !fv.Materialized {
+		t.Errorf("the required part was not created with its holder: %+v", fv)
+	}
+	// The holder, the required part, and the required part's state performance.
+	if got := len(ctx.instances); got != 3 {
+		t.Errorf("%d object(s) after creating the holder, want 3", got)
+	}
+}
+
 // A behavior started by a creation that names its own usage reaches the object
 // being created, and a second creation of the usage is what it denotes from then
 // on; a failed second creation leaves the first as what the usage denotes.
