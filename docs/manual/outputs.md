@@ -122,8 +122,13 @@ renderer emits no `style` attributes to compete with.
 
 A `-render-documents -doc-form html` set writes its stylesheets as files
 beside the pages — `sysml-document.css` and each `-html-css` file, under its
-own base name — and every page links them in order, so the styling of a whole
-set is edited in one place. A `-html-css` URL stays a link.
+own base name, escaped and shortened where a name is not a portable file name
+and distinguished where two sheets share one — and every page links them in
+order, so the styling of a whole set is edited in one place. A `-html-css` URL
+stays a link.
+
+A title page, a table of contents and section numbering are
+[deliverable options](#deliverable-options) shared with PDF.
 
 ## PDF
 
@@ -158,7 +163,7 @@ configuration for Mermaid CLI). The repository's
 `scripts/download-doc-pdf-toolchain.sh` fetches a pinned WeasyPrint, pandoc
 and Mermaid CLI and prints the exports to use them.
 
-### PDF options
+### Deliverable options
 
 | Flag | Effect |
 |---|---|
