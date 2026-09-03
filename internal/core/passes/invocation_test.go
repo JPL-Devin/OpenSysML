@@ -230,6 +230,32 @@ func TestInvocationOverloadExplicitAnythingEqualsUntyped(t *testing.T) {
 		"type.expr", "cannot bind Integer value to a feature typed by String")
 }
 
+// Candidates each narrower on a different parameter are incomparable, so the call is
+// ambiguous however the least specific parameter is spelt; typing both wins outright.
+func TestInvocationOverloadCrossedSpecificityIsAmbiguous(t *testing.T) {
+	const model = `package P {
+		private import ScalarValues::*;
+		private import Base::Anything;
+		attribute def Foo;
+		package A { calc def pick { in x%s; in y : Real; return : String = "a"; } }
+		package B { calc def pick { in x : Foo; in y%s; return : Integer = 2; } }
+		package C {
+			private import A::*;
+			private import B::*;
+			attribute f : Foo;
+			attribute w : Real = 1.0;
+			attribute r%s = pick(f, w);
+		}
+	}`
+	for _, spelling := range [][2]string{{``, ``}, {` : Anything`, ` : Anything`}, {` : Anything`, ``}, {``, ` : Anything`}} {
+		wantLibraryDiag(t, fmt.Sprintf(model, spelling[0], spelling[1], ``),
+			"invocation-ambiguous", "call of pick is ambiguous between P::A::pick, P::B::pick")
+	}
+	wantLibraryClean(t, fmt.Sprintf(model, ` : Foo`, ` : Anything`, ` : String`))
+	wantLibraryDiag(t, fmt.Sprintf(model, ` : Foo`, ` : Anything`, ` : Integer`),
+		"type.expr", "cannot bind String value to a feature typed by Integer")
+}
+
 // A calc the model declares under a library function's name shadows every
 // library declaration, imported or not, however its arguments are typed.
 func TestInvocationOverloadModelShadowsLibrary(t *testing.T) {

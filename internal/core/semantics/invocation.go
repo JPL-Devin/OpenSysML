@@ -395,9 +395,15 @@ func (m *Model) atLeastAsSpecific(a, b invocationSignature, args []Argument) boo
 	return true
 }
 
-// parameterConforms reports whether a's type conforms to b's: by declared type
-// where both declare one, by scalar lattice otherwise; an untyped b accepts anything.
+// parameterConforms reports whether a's type conforms to b's: by declared type where
+// both declare one, by scalar lattice otherwise; the untyped parameter is the top type.
 func (m *Model) parameterConforms(a, b signatureParameter) bool {
+	if b.untyped {
+		return true
+	}
+	if a.untyped {
+		return false
+	}
 	if a.typ != nil && b.typ != nil {
 		return m.Conforms(a.typ, b.typ)
 	}

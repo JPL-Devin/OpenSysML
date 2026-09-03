@@ -21,6 +21,7 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("calc_call_selects_by_sibling_scalar_type", testCalcCallSelectsBySiblingScalarType)
 	t.Run("calc_call_typed_parameter_beats_untyped", testCalcCallTypedParameterBeatsUntyped)
 	t.Run("calc_call_explicit_anything_ties_with_untyped", testCalcCallExplicitAnythingTiesWithUntyped)
+	t.Run("calc_call_crossed_specificity_is_ambiguous", testCalcCallCrossedSpecificityIsAmbiguous)
 	t.Run("calc_call_repeated_named_argument_binds_last", testCalcCallRepeatedNamedArgumentBindsLast)
 	t.Run("calc_call_selects_among_owned_inherited_and_recursive_import", testCalcCallSelectsAmongOwnedInheritedAndRecursiveImport)
 	t.Run("action_call_selects_by_argument_type", testActionCallSelectsByArgumentType)
@@ -416,6 +417,47 @@ func testCalcCallExplicitAnythingTiesWithUntyped(t *testing.T) {
 	real := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 1.5}}
 	integer := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}
 	result, err := ctx.InvokeCalc(sym, []Value{real, integer}, rootScope)
+	if err == nil {
+		t.Fatalf("expected an ambiguity error, calc returned %+v", result)
+	}
+	if !errors.Is(err, ErrAmbiguousInvocation) {
+		t.Fatalf("expected ErrAmbiguousInvocation, got: %v", err)
+	}
+	for _, want := range []string{"A::pick", "B::pick"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name candidate %s", err, want)
+		}
+	}
+}
+
+// Candidates each narrower on a different parameter are incomparable: neither is
+// selected, whether the wide parameter is written `: Anything` or left untyped.
+func testCalcCallCrossedSpecificityIsAmbiguous(t *testing.T) {
+	src := `
+		package Types { attribute def Foo; }
+		package A { private import ScalarValues::*; private import Base::Anything; calc def pick { in x : Anything; in y : Real; return : Integer = 1; } }
+		package B { private import ScalarValues::*; private import Types::Foo; calc def pick { in x : Foo; in y; return : Integer = 2; } }
+		package test {
+			private import ScalarValues::*;
+			private import Types::Foo;
+			private import A::*;
+			private import B::*;
+			calc choose { in f : Foo; in w : Real; pick(f, w) }
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "choose", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("choose calc not found")
+	}
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "Types::Foo"))
+	if err != nil {
+		t.Fatalf("instantiate Foo: %v", err)
+	}
+	foo := Value{Kind: ValInstance, Instance: inst.ID}
+	real := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 1.5}}
+	result, err := ctx.InvokeCalc(sym, []Value{foo, real}, rootScope)
 	if err == nil {
 		t.Fatalf("expected an ambiguity error, calc returned %+v", result)
 	}
