@@ -324,6 +324,15 @@ func TestSendWellFormedShapesAreSilent(t *testing.T) {
 			part def V { part r; action a { send Ping() to r; } } }`,
 		"to an untyped reference": `package P {` + sendPrelude + `
 			part def V { ref r; action a { send Ping() to r; } } }`,
+		"to a bare member": `package P {` + sendPrelude + `
+			part def V { target; action a { send Ping() to target; } } }`,
+		"to a bare member of an action def": `package P {` + sendPrelude + `
+			action def A { target; action s send Ping() to target; } }`,
+		"to an annotated bare member": `package P {` + sendPrelude + `
+			metadata def Tag;
+			part def V { #Tag target; action a { send Ping() to target; } } }`,
+		"via a bare member": `package P {` + sendPrelude + `
+			part def V { sender; part r : Receiver; action a { send Ping() via sender to r; } } }`,
 		"to an inherited part": `package P {` + sendPrelude + `
 			part def Base { part r : Receiver; }
 			part def V :> Base { action a { send Ping() to r; } } }`,

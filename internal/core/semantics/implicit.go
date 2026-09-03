@@ -184,8 +184,9 @@ func kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
 			fqn, ok := implicitKerMLBases[d.Keyword]
 			return fqn, ok
 		}
-		// A `ref` usage is typed by Anything, not an attribute's DataValue (SysML v2 §7.6.2).
-		if d.IsReference && d.Keyword == "" && d.Kind == ast.UsageAttribute {
+		// A usage with no kind keyword (`ref x`, `x;`, `#M x`) is a reference or plain
+		// usage typed by Anything, not an attribute's DataValue (SysML v2 §7.6.2).
+		if d.Keyword == "" && d.Kind == ast.UsageAttribute {
 			return "Base::Anything", true
 		}
 		if len(ownedEnds(sym)) == 2 {

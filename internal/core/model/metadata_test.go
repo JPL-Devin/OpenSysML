@@ -1,6 +1,7 @@
 package model
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -103,17 +104,22 @@ func TestSemanticMetadataKeywordSubclassifiesBaseTypeOfDefinition(t *testing.T) 
 
 // TestPlainMetadataKeywordAddsNoSpecialization pins the other side of §7.27.3:
 // a keyword naming a metadata definition that is not semantic metadata
-// annotates the declaration without specializing anything.
+// annotates the declaration without specializing anything: the usage keeps the
+// Anything base every kindless usage has (pilot ImplicitGeneralizationMap).
 func TestPlainMetadataKeywordAddsNoSpecialization(t *testing.T) {
 	src := `package P {
 		metadata def Approved;
 		part def Design {
 			#Approved wheel;
+			plain;
 		}
 	}`
 	got := implicitBaseOf(t, src, "P", "Design", "wheel")
-	if len(got) != 1 || got[0] != "Base::DataValue" {
-		t.Fatalf("supertypes of the annotated usage = %v, want [Base::DataValue]", got)
+	if len(got) != 1 || got[0] != "Base::Anything" {
+		t.Fatalf("supertypes of the annotated usage = %v, want [Base::Anything]", got)
+	}
+	if plain := implicitBaseOf(t, src, "P", "Design", "plain"); !slices.Equal(plain, got) {
+		t.Fatalf("supertypes of the plain usage = %v, want %v as the annotated one", plain, got)
 	}
 }
 
