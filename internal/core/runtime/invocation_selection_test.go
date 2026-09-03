@@ -215,8 +215,7 @@ func testStateBehaviorCallArgumentsReadThePerformingObject(t *testing.T) {
 }
 
 // An argument reaches the performing object only through names the caller's
-// scope resolves to its features: a behavior declared outside the part cannot
-// name the part's attribute, even when the performing instance has it.
+// scope resolves to its features, not through every feature the instance has.
 func testActionCallArgumentCannotNameAFeatureOutOfScope(t *testing.T) {
 	src := `package P {
 		private import ScalarValues::*;
