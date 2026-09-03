@@ -553,8 +553,22 @@ func (d *decoder) head(el *element) (string, error) {
 		if _, err := d.metadataDefinition(el); err != nil {
 			return "", err
 		}
-		if d.metadataSigil(el) == "@" {
+		// A `#` prefix is written into its owner's head, so one reaching here
+		// has no declaration to prefix; any other keyword is not a metadata form.
+		switch keyword, written := d.stringOf(el, rdf.OpenSysML+xDeclaredKeyword); {
+		case !written:
+		case keyword == "@":
 			return d.metadataHead(el)
+		case keyword == "#":
+			return "", &UnsupportedError{
+				What: fmt.Sprintf("the prefix annotation <%s>", el.iri),
+				Note: "a prefix is written ahead of the declaration that owns it, and this one is owned by no declaration",
+			}
+		default:
+			return "", &UnsupportedError{
+				What: fmt.Sprintf("the element <%s>", el.iri),
+				Note: fmt.Sprintf("its sysx:%s %q is not a metadata form; a metadata usage is written as `metadata`, `@` or `#`", xDeclaredKeyword, keyword),
+			}
 		}
 	}
 	// A succession carrying its ends as references is the one the parser builds

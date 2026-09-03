@@ -785,6 +785,51 @@ func TestMetadataUsageWithoutOneDefinitionIsReported(t *testing.T) {
 	}
 }
 
+// A metadata usage's keyword is `metadata`, `@` or `#`; a graph stating any
+// other is refused rather than written as a declaration of that other kind,
+// and a `#` prefix owned by no declaration has nothing to prefix.
+func TestMetadataUsageWithAnUnsupportedKeywordIsReported(t *testing.T) {
+	refused := func(name, graph string, wants ...string) {
+		t.Helper()
+		_, err := export.Convert("m.ttl", []byte(graph), export.FormatTurtle, export.FormatSysML)
+		var unsupported *export.UnsupportedError
+		if !errors.As(err, &unsupported) {
+			t.Fatalf("%s: expected an unsupported error, got %v", name, err)
+		}
+		for _, want := range wants {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("%s: expected %q in error:\n%s", name, want, err.Error())
+			}
+		}
+	}
+
+	src := "package P {\n\tmetadata def M;\n\tpart def Car;\n\tmetadata m : M about Car;\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structural := string(withoutTriples(t, turtle, "sysx:sourceText"))
+	if !strings.Contains(structural, `sysml:declaredName "m" ;`) {
+		t.Fatalf("the metadata usage's name was not found in the graph:\n%s", structural)
+	}
+	for _, keyword := range []string{"part", "metadata", "@@"} {
+		graph := strings.Replace(structural, `sysml:declaredName "m" ;`, `sysml:declaredName "m" ;`+"\n"+`    sysx:declaredKeyword "`+keyword+`" ;`, 1)
+		refused(keyword, graph, "the element <urn:sysmlv2:element:P__m>", "sysx:declaredKeyword", `"`+keyword+`"`, "is not a metadata form")
+	}
+
+	root := "metadata def M;\n@M;\n"
+	turtle, err = export.Convert("m.sysml", []byte(root), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structural = string(withoutTriples(t, turtle, "sysx:sourceText"))
+	if !strings.Contains(structural, `sysx:declaredKeyword "@"`) {
+		t.Fatalf("the root annotation's sigil was not found in the graph:\n%s", structural)
+	}
+	asPrefix := strings.Replace(structural, `sysx:declaredKeyword "@"`, `sysx:declaredKeyword "#"`, 1)
+	refused("root prefix", asPrefix, "the prefix annotation <urn:sysmlv2:element:", "owned by no declaration")
+}
+
 // A prefix annotation on an element whose notation has no place for one is
 // refused rather than dropped from the body it was read from.
 func TestPrefixOnAnUnprefixableHeadIsReported(t *testing.T) {
