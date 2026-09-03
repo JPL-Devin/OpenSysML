@@ -158,7 +158,7 @@ func aggregateWithIdentity(op, param string, args []Value, operator ast.Operator
 	if len(elementsOf(args[0])) == 0 {
 		return identity, nil
 	}
-	return aggregate(op, args[:1], operator)
+	return aggregate(op, args[:1], operator, false)
 }
 
 // isIdentityElement reports whether val is the additive (0) or multiplicative

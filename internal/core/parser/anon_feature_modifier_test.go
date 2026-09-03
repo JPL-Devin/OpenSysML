@@ -43,3 +43,36 @@ func TestAnonymousFeatureWithModifier(t *testing.T) {
 		t.Errorf("Expected RelTyping, got %v", usage.Relationships[0].Kind)
 	}
 }
+
+func TestAnonymousFeatureUnrestrictedNameIsUnquoted(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		ref  bool
+	}{
+		{"keyword subsets", "ref 'spare wheel' subsets base;", true},
+		{"symbolic subsets", "ref 'spare wheel' :> base;", true},
+		{"typed", "ref 'spare wheel' : Wheel;", true},
+		{"bare", "ref 'spare wheel';", true},
+		{"multiplicity", "ref 'spare wheel'[2];", true},
+		{"typed without modifier", "'spare wheel' : Wheel;", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			input := "part def D {\n\t" + tc.body + "\n\tpart base;\n}"
+			p := New(source.New("test.sysml", []byte(input)))
+			file := p.ParseFile()
+			for _, d := range p.Diagnostics {
+				t.Errorf("parse error: %s", d.Message)
+			}
+			def := file.Members[0].(*ast.Membership).Member.(*ast.Definition)
+			usage := def.Members[0].(*ast.Membership).Member.(*ast.Usage)
+			if usage.Ident.Name != "spare wheel" {
+				t.Errorf("name = %q, want %q", usage.Ident.Name, "spare wheel")
+			}
+			if usage.IsReference != tc.ref {
+				t.Errorf("IsReference = %v, want %v", usage.IsReference, tc.ref)
+			}
+		})
+	}
+}

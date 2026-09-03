@@ -41,19 +41,26 @@ A calc compiles when everything it reaches is in this subset:
 | Construct | Compiled as |
 |---|---|
 | `in` parameters typed `Integer`, `Natural`, `Positive`, `Real`/`Rational`, `Boolean`, with no multiplicity or `[1]` | `int64_t` / `double` / `bool` |
+| The same types with any multiplicity (`[0..*]`, `[2..3]`, `[0..1]`, …), as parameters, results and body-local attributes | a sequence of the element type with its shape (null, one value, many); the bounds are checked where the interpreter checks them |
 | Result: the body's trailing expression, or `return : T = <expr>;` | function result |
+| `attribute x : T;` with no value | null, until assigned |
+| `(a, b, …)`, `()`, `null`, `lo..hi`, `s#(i)`, `??`, `==`/`!=` and `===`/`!==` over sequences | sequence literals (nested ones flatten, null contributes nothing), inclusive ranges, one-based indexing, coalescing, elementwise and identity comparison |
+| `for v in s { … }` | a loop over the elements |
+| `CollectionFunctions`/`SequenceFunctions` `size isEmpty notEmpty head tail last contains containsAll includes includesOnly excludes including includingAt excluding excludingAt subsequence union intersection equals same`; `ControlFunctions` `allTrue anyTrue select reject selectOne collect forAll exists reduce minimize maximize` with `{in v; …}` bodies; `sum product` in the numeric libraries | the collection runtime in the prelude, with the interpreter's index, multiplicity and element-budget errors |
 | Literals; parameter and body-local attribute references | as written |
 | `+ - * / % **`, unary `-`, comparison, `== !=`, `and or xor not`, `implies`, `if c ? a else b` | checked native operations |
 | `attribute x : T = e;`, `x = e;` / `assign x := e;` | locals and stores |
 | `if` / `else`, `while … [until]`, `loop { … } until` | control flow |
 | Invocation of another compilable calc, positional or named; direct and mutual recursion | native call |
 | `calc c : D;`, `calc def E :> D;` adding no member of its own | compiles as `D` |
+| Scalar library functions: `RealFunctions`/`RationalFunctions`/`NumericalFunctions` `sqrt floor round abs max min isZero isUnit`, `IntegerFunctions`/`NaturalFunctions` `abs max min`, `TrigFunctions` (`sin cos tan cot arcsin arccos arctan deg rad pi`), `OpenSysMLMathFunctions` (`exp ln log atan2`) | `libm` / Go `math` with the interpreter's domain, overflow and `Natural` errors |
 
-Everything else refuses: String, sequence or structured parameters/results, parameter defaults,
-body-local attributes without a value (the interpreter holds null there, which no compiled type can),
-multiplicity other than `[1]`, a calc that `:>`/`:>>`/`redefines` another *and* declares members
-(redefining inherited parameters or body is not compiled), library-function invocations (`ScalarFunctions::sqrt` and the like), `for` and
-collection operations, quantities and units, and `Integer ** <non-literal Integer>` (whether the
+Everything else refuses: String, record (`attribute def`) and enum parameters, results or
+attributes, parameter defaults, a calc that `:>`/`:>>`/`redefines` another *and* declares members
+(redefining inherited parameters or body is not compiled), sequences whose elements mix Integer
+and Real (`==`, `same`, `union` between an `Integer[0..*]` and a `Real[0..*]`, `Integer[0..*] ?? 5.5`),
+a `collect` body that yields null, a `select` body that is not Boolean, `===` between a Real and an
+Integer, library functions over strings, quantities and units, and `Integer ** <non-literal Integer>` (whether the
 result is an Integer depends on the exponent's sign at run time, which a static type cannot
 express; write the exponent as a literal or make the base Real). The refusal names the calc and
 the construct (`codegen.UnsupportedError`, `errors.Is(err, codegen.ErrUnsupported)`).
@@ -89,14 +96,40 @@ arithmetic rather than the host language's:
   `X__Y`, the unrestricted name `'X::Y'` and a Unicode name never share a function.
 - **Recursion** is bounded by the same depth as the interpreter's default
   (`runtime.DefaultMaxCalcDepth`), reported as the interpreter reports it.
+- **Library functions** dispatch as the interpreter does: `NumericalFunctions::max(a, b)` keeps
+  Integer operands Integer, `RealFunctions::floor` returns an Integer and fails when the value
+  exceeds `int64`, `IntegerFunctions`/`NaturalFunctions` refuse Real operands at compile time and
+  report negative Naturals at run time, `ln`/`log`/`sqrt`/`arcsin` report the interpreter's domain
+  errors. Named and positional arguments bind and evaluate as for model calcs.
 - **Output** uses the interpreter's `FormatReal` convention: positional notation with a `.0` on
-  whole values, exponent notation below `1e-4` and from `1e21`, `-0.0` preserved.
+  whole values, exponent notation below `1e-4` and from `1e21`, `-0.0` preserved. A sequence
+  prints as `[1, 2]`, an empty one as `[]`, an unbound value as `null`.
+- **Collections** keep the interpreter's three shapes — null (unbound), one value, many — and its
+  rules: a one-valued sequence is a scalar wherever a scalar is expected (`(3) + 1` is `4`), a
+  many-valued or null one is the interpreter's `type mismatch` at the same operator; `for` iterates
+  null zero times and refuses a scalar; indexing is one-based and out-of-range is an error; nested
+  sequence literals flatten and null contributes no element; `lo..hi` is inclusive and empty when
+  descending; `reduce` of an empty sequence is null and `minimize`/`maximize` of one is an error;
+  `==` compares elementwise while `===` also distinguishes shape and Integer from Real, and an
+  empty collection of any shape is null to both and to `??`. Every
+  sequence a program builds or is given counts against the interpreter's element budget
+  (`OPENSYSML_MAX_ELEMENTS`, default 1,000,000), reset per run under `--repeat` with the
+  arguments still charged. A local a `{in v; …}` body declares is read on demand, as the
+  interpreter reads it, so an initializer the result never names never runs. The C program's
+  memory is bounded the same way: its arena is released at the end of every statement that stores
+  no collection and at the end of every loop pass, the collections a pass stored into longer-lived
+  variables being copied down first (`TestCompiledCLoopMemoryIsBounded`); Go leaves this to its
+  collector. On the command
+  line a sequence argument is written as the interpreter would read it: `null`, `4`, `(4)`,
+  `(1, 2)`, `()`.
 
 `internal/repl/compile_test.go:TestCompiledCalcsAgreeWithInterpreter` is the differential contract:
 every calc in `testdata/compile_calcs.sysml` is compiled by both backends and run over a matrix of
-values and failure inputs (overflow, zero divisors, non-finite Reals, deep recursion), and each
-value or failure class must equal the interpreter's. `TestCompileRefusesWhatItCannotCompile` pins
-the refusals.
+values and failure inputs (overflow, zero divisors, non-finite Reals, deep recursion, null and
+many-valued operands, out-of-range indexes, multiplicity and element-budget violations), and each
+value must equal the interpreter's; a scalar failure must be of the same class and a collection
+failure must carry the interpreter's message verbatim. `TestCompileRefusesWhatItCannotCompile`
+pins the refusals.
 
 ### Known differences
 
@@ -105,6 +138,15 @@ the refusals.
   a `while` that never terminates runs forever, and a long loop the interpreter would cut short
   runs to completion. The differential test lifts the interpreter's budget for this reason. This
   is the one bound the interpreter has that compiled code lacks; a compiled program is a program.
+- **Widened copies are charged.** An Integer collection bound to a Real slot is copied into
+  Reals and the copy is charged to the element budget; the interpreter keeps the Integers and
+  holds no copy. At the limit the program can therefore fail where the interpreter runs, never
+  the reverse. `TestCompiledBudgetChargesInputsAndWidening` pins both sides.
+- **Transcendental last bits.** `sin`, `cos`, `tan`, `exp`, `ln`, `log`, `atan2` and the inverse
+  trigonometric functions come from glibc's `libm` in C and Go's `math` in Go and the interpreter;
+  the two libraries agree to within an ulp but not bit-for-bit (Go's own `Exp` differs between
+  amd64 and arm64). The differential test allows the C target 2 ulps on these calcs and requires
+  everything else — `sqrt`, `floor`, `round`, `abs`, `max`, `min`, `deg`, `rad` — to be exact.
 - **No evaluation trace.** There is nothing to `%trace`; the result is all the program produces.
 - **GNU C.** The C backend uses `__int128`, `__builtin_*_overflow` and `setjmp`/`longjmp`, so it
   needs GCC or Clang, not an arbitrary ISO C compiler. Tested with GCC 11.4.
@@ -244,6 +286,11 @@ spike is lifted. The multiplicity and element budgets are enforced at the same p
 Exit: every calc in the runtime conformance corpus either compiles and matches, or is refused
 with a documented reason; `OPENSYSML_CALC_COMPILE`'s closure tier and the native tier share the
 eligibility rule.
+Status: the collection half is done — homogeneous sequences of the scalar types with any
+multiplicity, the shape rules, `for`, the sequence and control libraries and the element budget, in
+both backends, under the differential test described above. Records, enums and record field access
+are still refused (`type X is not Integer, Real or Boolean`), as are sequences mixing Integer and
+Real elements; they are the remainder of this phase.
 
 **Phase 2 — Instances: parts, attributes, ports, connections.**
 IR: `Program` gains `Struct` layouts derived from the flattened shape (redefinitions, subsetting,

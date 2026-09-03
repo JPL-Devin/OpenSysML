@@ -276,6 +276,15 @@ func libraryFunctionByName(fqn string) (*libraryFunction, bool) {
 	return fn, ok
 }
 
+// LibraryFunctionParams is the declared parameter names of the library function fqn.
+func LibraryFunctionParams(fqn string) (params []string, ok bool) {
+	fn, ok := libraryFunctions[fqn]
+	if !ok {
+		return nil, false
+	}
+	return slices.Clone(fn.params), true
+}
+
 // libraryFunctionFor answers the implementation of a library-declared scalar
 // function; a calc the model declares under the same name is never answered here.
 func (ctx *Context) libraryFunctionFor(sym *symbols.Symbol) (*libraryFunction, bool) {

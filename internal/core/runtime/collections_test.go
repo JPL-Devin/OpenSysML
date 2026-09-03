@@ -266,6 +266,8 @@ func TestCollectionScalarResults(t *testing.T) {
 		// collection, as the library's own sum0/product1 compute it.
 		{"sum(())", integerValue(0)},
 		{"product(())", integerValue(1)},
+		{"RealFunctions::sum(())", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 0}}},
+		{"RealFunctions::product(xs)", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 6}}},
 		{"sum((1, 2.5))", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 3.5}}},
 		{"xs.{in x; x * 2}->sum()", integerValue(12)},
 		{"xs->forAll {in x; x > 0}", boolValue(true)},
