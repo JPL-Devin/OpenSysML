@@ -1105,7 +1105,11 @@ func (e *EvalContext) buildInvokedMessage(scope *symbols.Scope, invocation *ast.
 	if invocation.Operand != nil {
 		return Message{}, fmt.Errorf("send %s: a message is not sent through a receiver", ast.SimpleName(invocation.Type))
 	}
-	msg, err := e.buildTypedMessage(scope, invocation.Type, invocation.Args, invocation.NamedArgs, target)
+	signalType, signal, err := e.messageType(scope, invocation.Type)
+	if err != nil {
+		return Message{}, err
+	}
+	msg, err := e.buildTypedMessage(scope, invocation.Type, signalType, signal, invocation.Args, invocation.NamedArgs, target)
 	if err != nil {
 		return Message{}, err
 	}
@@ -1118,23 +1122,38 @@ func (e *EvalContext) buildInvokedMessage(scope *symbols.Scope, invocation *ast.
 // buildConstructedMessage builds the message of `send new Telemetry(3) via
 // antenna`: the constructed definition types it and the arguments bind its
 // features, so an accept binds a Telemetry whose first feature is 3, never the 3.
+// A positional argument beyond those features is rejected at the send.
 func (e *EvalContext) buildConstructedMessage(scope *symbols.Scope, constructor *ast.ConstructorExpr, target string) (Message, error) {
-	return e.buildTypedMessage(scope, constructor.Type, constructor.Args, constructor.NamedArgs, target)
+	signalType, signal, err := e.messageType(scope, constructor.Type)
+	if err != nil {
+		return Message{}, err
+	}
+	if signal != nil && e.ctx != nil && e.ctx.model != nil {
+		if n := len(e.ctx.model.ConstructibleFeatures(signal)); len(constructor.Args) > n {
+			return Message{}, fmt.Errorf("send %s: new %s takes %d argument(s), found %d", signalType, signalType, n, len(constructor.Args))
+		}
+	}
+	return e.buildTypedMessage(scope, constructor.Type, signalType, signal, constructor.Args, constructor.NamedArgs, target)
 }
 
-// buildTypedMessage builds a message typed by a name carrying its arguments by
-// name or position. Two labels for one feature (the same label twice, qualified
-// or not, or a redefinition and its target) are an error rather than the last value.
-func (e *EvalContext) buildTypedMessage(scope *symbols.Scope, typeRef *ast.QualifiedName, args []ast.Node, named []ast.NamedArg, target string) (Message, error) {
+// messageType names the type of a message and resolves it to the definition it
+// reaches, nil when it reaches none.
+func (e *EvalContext) messageType(scope *symbols.Scope, typeRef *ast.QualifiedName) (string, *symbols.Symbol, error) {
 	signalType := ast.SimpleName(typeRef)
 	if signalType == "" {
-		return Message{}, fmt.Errorf("send: the message names no signal")
+		return "", nil, fmt.Errorf("send: the message names no signal")
 	}
 	signal, ok := e.definitionNamed(scope, typeRef)
-	if ok {
-		signalType = signal.Name
+	if !ok {
+		return signalType, nil, nil
 	}
+	return signal.Name, signal, nil
+}
 
+// buildTypedMessage builds a message typed by signal, named typeRef, carrying its arguments by
+// name or position. Two labels for one feature (the same label twice, qualified
+// or not, or a redefinition and its target) are an error rather than the last value.
+func (e *EvalContext) buildTypedMessage(scope *symbols.Scope, typeRef *ast.QualifiedName, signalType string, signal *symbols.Symbol, args []ast.Node, named []ast.NamedArg, target string) (Message, error) {
 	payload := make(map[string]Value, len(args)+len(named))
 	for i, arg := range args {
 		value, err := e.Eval(arg)

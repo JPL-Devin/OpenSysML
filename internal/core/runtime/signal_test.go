@@ -155,6 +155,74 @@ func TestSendNewResolvesQualifiedLabelsAtSend(t *testing.T) {
 	}
 }
 
+// A positional argument beyond the constructed type's features fails at the
+// send, also when no accept ever consumes the message. Nothing is validated first.
+func TestSendNewRejectsExcessPositionalArgumentsAtSend(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		item def Empty;
+		item def One { attribute a : Integer; }
+		action pipeline {
+			first start;
+			action sender { send new Empty(1) to nobody; }
+			done;
+			succession first start then sender;
+			succession first sender then done;
+		}
+		action two {
+			first start;
+			action sender { send new One(1, 2) to nobody; }
+			done;
+			succession first start then sender;
+			succession first sender then done;
+		}
+	}`))
+	for _, tc := range []struct{ action, want string }{
+		{"pipeline", "new Empty takes 0 argument(s), found 1"},
+		{"two", "new One takes 1 argument(s), found 2"},
+	} {
+		sym := findSymbolByName(idx.DocumentRoot("<test>"), tc.action, ast.DefAction)
+		if sym == nil {
+			t.Fatalf("action %s not found", tc.action)
+		}
+		if _, err := ctx.ExecuteAction(sym); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: error %v, want %q", tc.action, err, tc.want)
+		}
+	}
+}
+
+// A label may name a feature the constructed type inherits from its library
+// kind, which holds no position: the accepted object carries the value.
+func TestSendNewBindsInheritedLibraryFeatureByLabel(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		item def Box { attribute w : Integer; }
+		action pipeline {
+			attribute got : Integer = 0;
+			attribute solid : Boolean = false;
+			first start;
+			action sender { send new Box(w = 7, isSolid = true) to reader; }
+			action reader accept b : Box { assign got := b.w; assign solid := b.isSolid; }
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
+		}
+	}`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action pipeline not found")
+	}
+	outputs, err := ctx.ExecuteAction(sym)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	assertIntOutput(t, outputs, "got", 7)
+	if v := outputs["solid"]; v.Kind != ValConst || !v.Const.Bool {
+		t.Errorf("solid = %+v, want true", v)
+	}
+}
+
 // executeActionSource executes the named action declared in src.
 func executeActionSource(t *testing.T, name, src string) (map[string]Value, error) {
 	t.Helper()
