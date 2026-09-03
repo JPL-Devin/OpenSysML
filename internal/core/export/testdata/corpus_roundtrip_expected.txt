@@ -21,19 +21,19 @@ stable	orthogonal-regions-demo.sysml
 stable	parser_features_demo_action_semantics.sysml
 refused:operator-expr	parser_features_demo_advanced_bodies.kerml
 refused:duplicate-declaration	parser_features_demo_advanced_connectors.kerml
-whitespace-only	parser_features_demo_binding.kerml
+stable	parser_features_demo_binding.kerml
 whitespace-only	parser_features_demo_connectors.sysml
 refused:feature-declaration	parser_features_demo_declarations.kerml
 stable	parser_features_demo_defaults.kerml
 whitespace-only	parser_features_demo_edge_cases.kerml
-whitespace-only	parser_features_demo_messages_events.sysml
+stable	parser_features_demo_messages_events.sysml
 unparseable	parser_features_demo_modifiers.kerml
 stable	parser_features_demo_relationships.kerml
 refused:operator-expr	phase-c-behavioral-bodies.sysml
 stable	pilot-corpora/kerml-examples/Address Book Example/AddressBookModel.kerml
 whitespace-only	pilot-corpora/kerml-examples/Association Examples/ProductSelection_N_ary.kerml
-whitespace-only	pilot-corpora/kerml-examples/Association Examples/ProductSelection_OwnedEnds.kerml
-whitespace-only	pilot-corpora/kerml-examples/Association Examples/ProductSelection_UnownedEnds.kerml
+stable	pilot-corpora/kerml-examples/Association Examples/ProductSelection_OwnedEnds.kerml
+stable	pilot-corpora/kerml-examples/Association Examples/ProductSelection_UnownedEnds.kerml
 stable	pilot-corpora/kerml-examples/Behavior Examples/Camera.kerml
 stable	pilot-corpora/kerml-examples/Behavior Examples/TakePicture.kerml
 refused:feature-declaration	pilot-corpora/kerml-examples/Individuals Examples/JohnIndividualExample.kerml
@@ -64,7 +64,7 @@ stable	pilot-corpora/kerml-examples/Simple Tests/Classifications.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Classifiers.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Comments.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Conjugation.kerml
-whitespace-only	pilot-corpora/kerml-examples/Simple Tests/Connectors.kerml
+refused:feature-declaration	pilot-corpora/kerml-examples/Simple Tests/Connectors.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Dependencies.kerml
 stable	pilot-corpora/kerml-examples/Simple Tests/Expansion.kerml
 refused:operator-expr	pilot-corpora/kerml-examples/Simple Tests/Expressions.kerml
@@ -97,14 +97,14 @@ unparseable	pilot-corpora/sysml-examples/Arrowhead Framework Example/AHFNorwayTo
 whitespace-only	pilot-corpora/sysml-examples/Arrowhead Framework Example/AHFProfileLib.sysml
 refused:event-declaration	pilot-corpora/sysml-examples/Arrowhead Framework Example/AHFSequences.sysml
 stable	pilot-corpora/sysml-examples/Association Examples/ProductSelection_N_ary.sysml
-whitespace-only	pilot-corpora/sysml-examples/Association Examples/ProductSelection_OwnedEnds.sysml
-whitespace-only	pilot-corpora/sysml-examples/Association Examples/ProductSelection_UnownedEnds.sysml
+stable	pilot-corpora/sysml-examples/Association Examples/ProductSelection_OwnedEnds.sysml
+stable	pilot-corpora/sysml-examples/Association Examples/ProductSelection_UnownedEnds.sysml
 stable	pilot-corpora/sysml-examples/Camera Example/Camera.sysml
 stable	pilot-corpora/sysml-examples/Camera Example/PictureTaking.sysml
-graph-diff	pilot-corpora/sysml-examples/Cause and Effect Examples/CauseAndEffectExample.sysml
+refused:prefix-metadata	pilot-corpora/sysml-examples/Cause and Effect Examples/CauseAndEffectExample.sysml
 stable	pilot-corpora/sysml-examples/Cause and Effect Examples/MedicalDeviceFailure.sysml
 stable	pilot-corpora/sysml-examples/Comment Examples/Comments.sysml
-whitespace-only	pilot-corpora/sysml-examples/Flashlight Example/Flashlight Example.sysml
+stable	pilot-corpora/sysml-examples/Flashlight Example/Flashlight Example.sysml
 stable	pilot-corpora/sysml-examples/Geometry Examples/CarWithEnvelopingShape.sysml
 graph-diff	pilot-corpora/sysml-examples/Geometry Examples/CarWithShapeAndCSG.sysml
 whitespace-only	pilot-corpora/sysml-examples/Geometry Examples/ExternalShapeRefExample.sysml
@@ -189,7 +189,7 @@ whitespace-only	pilot-corpora/sysml-examples/v1 Spec Examples/8.4.5 Constraining
 stable	pilot-corpora/sysml-examples/v1 Spec Examples/D.4.7.8 Dynamics/HSUVDynamics.sysml
 stable	pilot-corpora/sysml-validation/01-Parts Tree/1a-Parts Tree.sysml
 stable	pilot-corpora/sysml-validation/01-Parts Tree/1c-Parts Tree Redefinition.sysml
-whitespace-only	pilot-corpora/sysml-validation/01-Parts Tree/1d-Parts Tree with Reference.sysml
+stable	pilot-corpora/sysml-validation/01-Parts Tree/1d-Parts Tree with Reference.sysml
 whitespace-only	pilot-corpora/sysml-validation/02-Parts Interconnection/2a-Parts Interconnection.sysml
 stable	pilot-corpora/sysml-validation/02-Parts Interconnection/2c-Parts Interconnection-Multiple Decompositions.sysml
 graph-diff	pilot-corpora/sysml-validation/03-Function-based Behavior/3a-Function-based Behavior-1.sysml
@@ -218,7 +218,7 @@ stable	pilot-corpora/sysml-validation/11-View and Viewpoint/11a-View-Viewpoint.s
 refused:prefix-metadata	pilot-corpora/sysml-validation/11-View and Viewpoint/11b-Safety and Security Feature Views.sysml
 stable	pilot-corpora/sysml-validation/12-Dependency Relationships/12a-Dependency.sysml
 whitespace-only	pilot-corpora/sysml-validation/12-Dependency Relationships/12b-Allocation-1.sysml
-whitespace-only	pilot-corpora/sysml-validation/12-Dependency Relationships/12b-Allocation.sysml
+stable	pilot-corpora/sysml-validation/12-Dependency Relationships/12b-Allocation.sysml
 stable	pilot-corpora/sysml-validation/13-Model Containment/13a-Model Containment.sysml
 refused:prefix-metadata	pilot-corpora/sysml-validation/13-Model Containment/13b-Safety and Security Features Element Group-1.sysml
 refused:prefix-metadata	pilot-corpora/sysml-validation/13-Model Containment/13b-Safety and Security Features Element Group-2.sysml
@@ -347,7 +347,7 @@ stable	sysml-v2-training/36. Variability/Variation Definitions.sysml
 whitespace-only	sysml-v2-training/36. Variability/Variation Usages.sysml
 stable	sysml-v2-training/37. Dependencies/Dependency Example.sysml
 stable	sysml-v2-training/38. Allocation/Allocation Definition Example.sysml
-whitespace-only	sysml-v2-training/38. Allocation/Allocation Usage Example.sysml
+stable	sysml-v2-training/38. Allocation/Allocation Usage Example.sysml
 refused:duplicate-declaration	sysml-v2-training/39. Metadata/Metadata Example-1.sysml
 refused:prefix-metadata	sysml-v2-training/39. Metadata/Metadata Example-2.sysml
 refused:prefix-metadata	sysml-v2-training/40. Filtering/Filtering Example-1.sysml

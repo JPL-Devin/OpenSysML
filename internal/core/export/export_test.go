@@ -785,6 +785,77 @@ func TestEndBindingHeadsComeBackFromTheGraphAlone(t *testing.T) {
 	}
 }
 
+// The body of an end-binding usage is owned by the graph like any other body:
+// its members are elements of their own, and the notation comes back with the
+// body from the structure alone (Open-MBEE/OpenSysML#89).
+func TestEndBindingBodiesComeBackFromTheGraphAlone(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("testdata", "convert", "end_binding_bodies.sysml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	turtle, err := export.Convert("m.sysml", src, export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	graph := string(turtle)
+	for _, triple := range []string{
+		"elmt:R89__Ctx__seam__coupling\n    a sysml:AttributeUsage ;",
+		"sysml:declaredName \"coupling\" ;",
+		"sysx:memberIndex \"0\"^^xsd:integer ;\n    sysml:owningNamespace elmt:R89__Ctx__seam ;",
+		"sysml:ownedMember elmt:R89__Ctx__seam__coupling ;",
+		"sysml:ownedFeature elmt:R89__Ctx__seam__coupling ;",
+		"sysml:ownedMembership elmt:R89__Ctx__seam__coupling_om ;",
+		"elmt:R89__Ctx__seam__coupling_om\n    a sysml:FeatureMembership ;",
+		"sysx:sourceText \"interface seam connect w.outp to r.inp\" ;",
+	} {
+		if !strings.Contains(graph, triple) {
+			t.Errorf("the graph should carry the body of the interface usage:\nmissing %q in\n%s", triple, graph)
+		}
+	}
+	if !strings.Contains(graph, "elmt:R89__Ctx__seam__coupling\n") || !strings.Contains(graph, "sysml:type elmt:R89__SeamCoupling") || !strings.Contains(graph, "SeamCoupling::learnFromData") {
+		t.Errorf("the attribute should keep its type and value:\n%s", graph)
+	}
+	if strings.Contains(graph, "sysx:sourceText \"interface seam connect w.outp to r.inp {") {
+		t.Errorf("the body should not be carried as text:\n%s", graph)
+	}
+	for _, body := range []string{
+		"connection c connect x.p to y.q {",
+		"connect x.p to y.q {",
+		"flow f from x.i to y.j {",
+		"binding bd bind x.a = y.b {",
+		"bind x.a = y.b {",
+		"allocation al allocate x to y {",
+		"succession s first x then y {",
+		"succession first a1 then a2 {",
+		"first a1 then a2 {",
+	} {
+		if strings.Contains(graph, "sysx:sourceText \""+body) {
+			t.Errorf("the body of %q should not be carried as text", body)
+		}
+	}
+	back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation without source text: %v", err)
+	}
+	withText, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	if string(back) != string(withText) {
+		t.Errorf("the notation should not depend on the source text\n--- from the graph alone ---\n%s\n--- with source text ---\n%s", back, withText)
+	}
+	if strings.Count(string(back), "attribute w : Prio;") != 9 || !strings.Contains(string(back), "interface seam connect w.outp to r.inp {\n            attribute coupling : SeamCoupling = SeamCoupling::learnFromData;\n        }") {
+		t.Errorf("every body should come back with its members:\n%s", back)
+	}
+	again, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle again: %v", err)
+	}
+	if string(again) != string(turtle) {
+		t.Errorf("the second hop changed the graph\n--- first ---\n%s\n--- second ---\n%s", turtle, again)
+	}
+}
+
 // A transition and an accept state their trigger and payload in the head too,
 // inside the bodies that allow them.
 func TestBehavioralHeadsComeBackFromTheGraphAlone(t *testing.T) {

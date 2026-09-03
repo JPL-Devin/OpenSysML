@@ -178,9 +178,10 @@ elmt:ThenAfterMembers__AfterFlow___401
     sysml:owner elmt:ThenAfterMembers__AfterFlow ;
     sysml:owningRelationship elmt:ThenAfterMembers__AfterFlow___401_om ;
     sysml:owningMembership elmt:ThenAfterMembers__AfterFlow___401_om ;
-    sysx:sourceText "flow from a.y to b.x;" ;
+    sysx:sourceText "flow from a.y to b.x" ;
     sysx:relatedFeature expr:ThenAfterMembers__AfterFlow___401_pflowSource, expr:ThenAfterMembers__AfterFlow___401_pflowTarget ;
-    sysx:endForm "fromTo" .
+    sysx:endForm "fromTo" ;
+    sysx:hasBody "false"^^xsd:boolean .
 
 elmt:ThenAfterMembers__AfterFlow___401_om
     a sysml:OwningMembership ;
@@ -387,9 +388,10 @@ elmt:ThenAfterMembers__AfterBind___403
     sysml:owningMembership elmt:ThenAfterMembers__AfterBind___403_om ;
     sysml:references elmt:ThenAfterMembers__AfterBind__k ;
     sysml:value expr:ThenAfterMembers__AfterBind___403_pvalue ;
-    sysx:sourceText "bind k = m;" ;
+    sysx:sourceText "bind k = m" ;
     sysx:endForm "equals" ;
-    sysx:declaredKeyword "bind" .
+    sysx:declaredKeyword "bind" ;
+    sysx:hasBody "false"^^xsd:boolean .
 
 elmt:ThenAfterMembers__AfterBind___403_om
     a sysml:FeatureMembership ;
@@ -794,10 +796,11 @@ elmt:ThenAfterMembers__AfterSuccession___402
     sysml:owner elmt:ThenAfterMembers__AfterSuccession ;
     sysml:owningRelationship elmt:ThenAfterMembers__AfterSuccession___402_om ;
     sysml:owningMembership elmt:ThenAfterMembers__AfterSuccession___402_om ;
-    sysx:sourceText "succession first a then c;" ;
+    sysx:sourceText "succession first a then c" ;
     sysx:relatedFeature expr:ThenAfterMembers__AfterSuccession___402_pend0, expr:ThenAfterMembers__AfterSuccession___402_pend1 ;
     sysx:endForm "firstThen" ;
-    sysx:endVerb "first" .
+    sysx:endVerb "first" ;
+    sysx:hasBody "false"^^xsd:boolean .
 
 elmt:ThenAfterMembers__AfterSuccession___402_om
     a sysml:FeatureMembership ;
@@ -1251,9 +1254,10 @@ elmt:ThenAfterMembers__AfterPerform___401
     sysml:owner elmt:ThenAfterMembers__AfterPerform ;
     sysml:owningRelationship elmt:ThenAfterMembers__AfterPerform___401_om ;
     sysml:owningMembership elmt:ThenAfterMembers__AfterPerform___401_om ;
-    sysx:sourceText "flow from stride.y to b.x;" ;
+    sysx:sourceText "flow from stride.y to b.x" ;
     sysx:relatedFeature expr:ThenAfterMembers__AfterPerform___401_pflowSource, expr:ThenAfterMembers__AfterPerform___401_pflowTarget ;
-    sysx:endForm "fromTo" .
+    sysx:endForm "fromTo" ;
+    sysx:hasBody "false"^^xsd:boolean .
 
 elmt:ThenAfterMembers__AfterPerform___401_om
     a sysml:OwningMembership ;
@@ -1408,9 +1412,10 @@ elmt:ThenAfterMembers__ThenAlone___401
     sysml:owner elmt:ThenAfterMembers__ThenAlone ;
     sysml:owningRelationship elmt:ThenAfterMembers__ThenAlone___401_om ;
     sysml:owningMembership elmt:ThenAfterMembers__ThenAlone___401_om ;
-    sysx:sourceText "flow from a.y to b.x;" ;
+    sysx:sourceText "flow from a.y to b.x" ;
     sysx:relatedFeature expr:ThenAfterMembers__ThenAlone___401_pflowSource, expr:ThenAfterMembers__ThenAlone___401_pflowTarget ;
-    sysx:endForm "fromTo" .
+    sysx:endForm "fromTo" ;
+    sysx:hasBody "false"^^xsd:boolean .
 
 elmt:ThenAfterMembers__ThenAlone___401_om
     a sysml:OwningMembership ;

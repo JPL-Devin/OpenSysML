@@ -200,9 +200,10 @@ elmt:FlowsAndViews__FuelInterface___402
     sysml:owner elmt:FlowsAndViews__FuelInterface ;
     sysml:owningRelationship elmt:FlowsAndViews__FuelInterface___402_om ;
     sysml:owningMembership elmt:FlowsAndViews__FuelInterface___402_om ;
-    sysx:sourceText "flow supplierPort.fuelSupply to consumerPort.fuelSupply;" ;
+    sysx:sourceText "flow supplierPort.fuelSupply to consumerPort.fuelSupply" ;
     sysx:relatedFeature expr:FlowsAndViews__FuelInterface___402_pflowSource, expr:FlowsAndViews__FuelInterface___402_pflowTarget ;
-    sysx:endForm "flowTo" .
+    sysx:endForm "flowTo" ;
+    sysx:hasBody "false"^^xsd:boolean .
 
 elmt:FlowsAndViews__FuelInterface___402_om
     a sysml:OwningMembership ;
@@ -428,10 +429,11 @@ elmt:FlowsAndViews__vehicle___404
     sysml:owner elmt:FlowsAndViews__vehicle ;
     sysml:owningRelationship elmt:FlowsAndViews__vehicle___404_om ;
     sysml:owningMembership elmt:FlowsAndViews__vehicle___404_om ;
-    sysx:sourceText "allocate tank to engine;" ;
+    sysx:sourceText "allocate tank to engine" ;
     sysx:relatedFeature expr:FlowsAndViews__vehicle___404_pend0, expr:FlowsAndViews__vehicle___404_pend1 ;
     sysx:endForm "to" ;
-    sysx:declaredKeyword "allocate" .
+    sysx:declaredKeyword "allocate" ;
+    sysx:hasBody "false"^^xsd:boolean .
 
 elmt:FlowsAndViews__vehicle___404_om
     a sysml:FeatureMembership ;

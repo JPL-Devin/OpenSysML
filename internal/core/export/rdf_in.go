@@ -390,9 +390,16 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 	indent := strings.Repeat("    ", depth)
 	lead := indent + el.prefix
 	if text, ok := d.stringOf(el, rdf.OpenSysML+xSourceText); ok {
-		// A declaration whose head this mapping keeps verbatim.
-		b.WriteString(lead + strings.TrimSpace(text) + "\n")
-		return nil
+		// A declaration whose head this mapping keeps verbatim; its body, if
+		// any, is written from its members like any other. Text that already
+		// ends in a body is a whole declaration from an earlier mapping.
+		text = strings.TrimSpace(text)
+		if strings.HasSuffix(text, "}") && len(el.children) == 0 {
+			b.WriteString(lead + text + "\n")
+			return nil
+		}
+		b.WriteString(lead + strings.TrimSuffix(text, ";"))
+		return d.printBody(b, el, indent, depth)
 	}
 	if handled, err := d.printBehavior(b, el, lead, depth); handled {
 		return err
@@ -408,6 +415,12 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 		b.WriteString("\n")
 		return nil
 	}
+	return d.printBody(b, el, indent, depth)
+}
+
+// printBody writes what follows a head: its terminator, or its body with the
+// members it owns.
+func (d *decoder) printBody(b *strings.Builder, el *element, indent string, depth int) error {
 	// An accept parameter is written into its parent's head, not its body.
 	children := el.children
 	if accept := d.acceptParam(el); accept != nil {
@@ -418,7 +431,7 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 			}
 		}
 	}
-	children, err = d.positionalSuccessions(children)
+	children, err := d.positionalSuccessions(children)
 	if err != nil {
 		return err
 	}

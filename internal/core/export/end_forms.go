@@ -261,10 +261,9 @@ func (e *encoder) firstEnd(n *ast.Usage) ast.Node {
 }
 
 // headTail returns the declaration text from an offset to the end of the head,
-// which is what the ends notation has to reproduce. A head with a body is
-// refused: the mapping keeps such a declaration whole, as text.
+// which is what the ends notation has to reproduce.
 func (e *encoder) headTail(n *ast.Usage, from int) (string, bool) {
-	end := n.Span().End()
+	end := e.headEnd(n)
 	if from < n.Span().Offset || from >= end {
 		return "", false
 	}

@@ -387,7 +387,7 @@ the node, that name is used; the rest are `sysx:` terms, marked below.
 
 | written | metaclass | carries |
 |---|---|---|
-| `first x;` | `sysx:InitialNode` | `sysml:sourceFeature` (the member the body starts at — a reference, not a name it declares), `sysml:targetFeature`, `sysx:guard` |
+| `first x;`, `first x then y { … }` | `sysx:InitialNode` | `sysml:sourceFeature` (the member the body starts at — a reference, not a name it declares), `sysml:targetFeature`, `sysx:guard`, `sysx:hasBody` and the members of its body |
 | `done;` | `sysx:FinalNode` | — |
 | `action a;`, `action a { x + 1 }` | `sysx:ActionExecutionNode` | `sysml:references` or `sysx:expression` |
 | `perform a;` | `sysml:PerformActionUsage` | `sysx:expression` (the action performed) |
@@ -511,13 +511,23 @@ The encoder writes the ends back from `sysx:endForm` and compares them with the
 source before recording it, so a head this mapping cannot rebuild exactly
 carries no form and stays readable as text alone. Those are the heads that say
 more than their ends: an end with a multiplicity or a `references` clause, an
-inline payload declaration (`flow of x : P from a to b`), a satisfy that
-declares a name of its own (`satisfy s : R by v`), or any head with a body.
+inline payload declaration (`flow of x : P from a to b`), or a satisfy that
+declares a name of its own (`satisfy s : R by v`).
 Converting such an element from a graph that carries no `sysx:sourceText` is
 reported, not guessed. A graph that relates ends but gives no form at all is
 reported the same way (`export_test.go:TestEndsWithoutTheirFormAreReported`).
 
-Tests: `export_test.go:TestEndBindingHeadsComeBackFromTheGraphAlone` and
+**The body of such a head is mapped like any other body.** `sysx:sourceText`
+carries the head alone — up to its `{` or `;` — and the members written in the
+body (`interface seam connect w.outp to r.inp { attribute coupling : C = C::x; }`)
+are elements of their own, owned through `sysml:ownedMember`,
+`sysml:ownedFeature` and their membership with a `sysx:memberIndex`, with
+`sysx:hasBody` stating that a body was written. The same holds for the body an
+action's `first a then b { … }` or `then b { … }` carries. The decoder writes
+the body from those members whether or not the graph carries the head's text.
+
+Tests: `export_test.go:TestEndBindingHeadsComeBackFromTheGraphAlone`,
+`TestEndBindingBodiesComeBackFromTheGraphAlone` and
 `TestBehavioralHeadsComeBackFromTheGraphAlone` strip `sysx:sourceText` from the
 graph, write the notation back from the mapping alone, and convert it again.
 The second graph must equal the first, which is what proves the second hop loses

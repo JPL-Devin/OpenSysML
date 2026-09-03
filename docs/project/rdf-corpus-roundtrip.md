@@ -59,20 +59,30 @@ Recorded against the corpus above, reproduced byte-identically on a second run:
 
 | Verdict | Files |
 |---|---|
-| `stable` | 177 |
-| `whitespace-only` | 72 |
-| `graph-diff` | 14 |
+| `stable` | 187 |
+| `whitespace-only` | 61 |
+| `graph-diff` | 13 |
 | `unwritable` | 2 |
 | `unparseable` | 3 |
-| `refused` | 77 |
+| `refused` | 79 |
 | **total** | **345** |
 
-So 268 of 345 files convert to Turtle, and of those 249 come back as the same graph (177 exactly,
-72 up to `sysx:sourceText` whitespace). The refusals by class: 19 `feature-declaration`,
-18 `prefix-metadata`, 9 `event-declaration`, 7 `succession`, 6 `operator-expr`,
+So 266 of 345 files convert to Turtle, and of those 248 come back as the same graph (187 exactly,
+61 up to `sysx:sourceText` whitespace). The refusals by class: 20 `feature-declaration`,
+19 `prefix-metadata`, 9 `event-declaration`, 7 `succession`, 6 `operator-expr`,
 4 `duplicate-declaration`, 3 each of `snapshot-declaration`, `invocation-expr` and
 `assert-declaration`, 2 `feature-chain-expr`, and 1 each of `timeslice-declaration`,
 `feature-reference` and `constructor-expr`.
+
+Two of the refusals were `whitespace-only` and `graph-diff` verdicts while the body of an
+end-binding usage (`connector = c2 { end feature references a; }`, `#causation connect b to d {
+@CausationMetadata { … } }`) travelled inside the head's `sysx:sourceText`:
+`Simple Tests/Connectors.kerml` and `Cause and Effect Examples/CauseAndEffectExample.sysml`. Such a
+body is now mapped as members (see
+[rdf-mapping.md § End-binding heads](../reference/rdf-mapping.md#end-binding-heads)), so those two
+files meet the mapping's standing refusals of an anonymous `feature` declaration and of a metadata
+annotation with a body — the refusals the same members draw in any other body. The refusal is the
+honest verdict; the earlier one measured text, not structure.
 
 ## Policy
 

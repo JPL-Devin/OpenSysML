@@ -90,7 +90,10 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 				Note: "it names no successor, so the branch its guard states cannot be written back",
 			}
 		}
-		return true, nil
+		if n.HasBody {
+			e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(true))
+		}
+		return true, e.encode(n.Members, fqn, subject)
 
 	case *ast.FinalNode:
 		head(rdf.OpenSysMLTerm(mFinalNode))
@@ -172,9 +175,15 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 			// member written before it, which the form records.
 			e.graph.Add(subject, e.sysx(xEndForm), rdf.String(formThen))
 		}
-		return true, e.edgeEnds(subject, n, owner,
+		if err := e.edgeEnds(subject, n, owner,
 			edgeEnd{name: n.Source, member: n.SourceMember, implied: implied},
-			edgeEnd{name: n.Target, member: n.TargetMember})
+			edgeEnd{name: n.Target, member: n.TargetMember}); err != nil {
+			return true, err
+		}
+		if len(n.Members) > 0 {
+			e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(true))
+		}
+		return true, e.encode(n.Members, fqn, subject)
 
 	case *ast.ControlFlowEdge:
 		// A guarded branch of a decision, or the `else` branch taken when no
@@ -555,7 +564,9 @@ func behaviorNameAndMembers(node ast.Node) (string, []ast.Node, bool) {
 	switch n := node.(type) {
 	case *ast.InitialNode:
 		// Its name references the starting member, so it declares none.
-		return "", nil, true
+		return "", n.Members, true
+	case *ast.SuccessionEdge:
+		return "", n.Members, true
 	case *ast.FinalNode:
 		return "", nil, true
 	case *ast.ForkNode:
