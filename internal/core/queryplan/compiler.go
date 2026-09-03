@@ -325,26 +325,35 @@ func (c *compiler) parameterType(sym *symbols.Symbol) string {
 
 func (c *compiler) parameterTypeSymbol(sym *symbols.Symbol) *symbols.Symbol {
 	for _, candidate := range c.parameterLineage(sym) {
-		for _, relationship := range semantics.RelationshipsOf(candidate) {
-			if relationship == nil || relationship.Kind != ast.RelTyping || relationship.Target == nil {
-				continue
-			}
-			target := relationship.Target
-			if reference, ok := target.(*ast.FeatureReference); ok {
-				target = reference.Name
-			}
-			name, ok := target.(*ast.QualifiedName)
-			if !ok {
-				continue
-			}
-			if resolved, ok := c.resolver.ResolveQualified(candidate.OwnerScope, name); ok {
-				if canonical, ok := c.resolver.ResolveAliasTarget(resolved); ok {
-					return canonical
-				}
-			}
+		if types := c.declaredTypes(candidate); len(types) > 0 {
+			return types[0]
 		}
 	}
 	return nil
+}
+
+// declaredTypes resolves the targets of sym's explicit typing clauses.
+func (c *compiler) declaredTypes(sym *symbols.Symbol) []*symbols.Symbol {
+	var types []*symbols.Symbol
+	for _, relationship := range semantics.RelationshipsOf(sym) {
+		if relationship == nil || relationship.Kind != ast.RelTyping || relationship.Target == nil {
+			continue
+		}
+		target := relationship.Target
+		if reference, ok := target.(*ast.FeatureReference); ok {
+			target = reference.Name
+		}
+		name, ok := target.(*ast.QualifiedName)
+		if !ok {
+			continue
+		}
+		if resolved, ok := c.resolver.ResolveQualified(sym.OwnerScope, name); ok {
+			if canonical, ok := c.resolver.ResolveAliasTarget(resolved); ok {
+				types = append(types, canonical)
+			}
+		}
+	}
+	return types
 }
 
 func (c *compiler) parameterMultiplicity(sym *symbols.Symbol) Multiplicity {
@@ -363,11 +372,23 @@ func (c *compiler) parameterMultiplicity(sym *symbols.Symbol) Multiplicity {
 	}
 }
 
+// parameterLineage lists sym and the parameters it redefines or subsets,
+// nearest first, following only parameter-to-parameter edges (never typing).
 func (c *compiler) parameterLineage(sym *symbols.Symbol) []*symbols.Symbol {
 	lineage := []*symbols.Symbol{sym}
-	for _, candidate := range c.model.AllSupertypes(sym) {
-		usage, ok := candidate.Decl.(*ast.Usage)
-		if ok && usage.Direction != ast.DirNone {
+	seen := map[*symbols.Symbol]bool{sym: true}
+	for next := 0; next < len(lineage); next++ {
+		current := lineage[next]
+		typed := make(map[*symbols.Symbol]bool)
+		for _, typ := range c.declaredTypes(current) {
+			typed[typ] = true
+		}
+		for _, candidate := range c.model.DirectSupertypes(current) {
+			usage, ok := candidate.Decl.(*ast.Usage)
+			if !ok || usage.Direction == ast.DirNone || typed[candidate] || seen[candidate] {
+				continue
+			}
+			seen[candidate] = true
 			lineage = append(lineage, candidate)
 		}
 	}
@@ -626,11 +647,8 @@ func (c *compiler) compileReference(
 }
 
 func (c *compiler) parameterIncludes(param, target *symbols.Symbol) bool {
-	if param == target {
-		return true
-	}
-	for _, inherited := range c.model.AllSupertypes(param) {
-		if inherited == target {
+	for _, candidate := range c.parameterLineage(param) {
+		if candidate == target {
 			return true
 		}
 	}

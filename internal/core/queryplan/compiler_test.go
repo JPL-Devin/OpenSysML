@@ -328,6 +328,10 @@ calc def FixedList :> Query {
 calc def FixedTyped :> Query {
 	Pointed(scope = telescope)
 }
+calc def NamesParameterType :> Query {
+	in scope : Telescope;
+	OwnedElements(source = Telescope)
+}
 `)
 	body := fixture.compile(t, "FixedBody").Definitions()[0].Expression()
 	if body.Operation() != OperationWhereName || len(body.Arguments()) != 3 {
@@ -372,6 +376,15 @@ calc def FixedTyped :> Query {
 	}
 
 	fixture.compile(t, "FixedTyped")
+
+	typed := fixture.compile(t, "NamesParameterType").Definitions()[0]
+	if params := typed.Parameters(); len(params) != 1 || params[0].Name != "scope" || params[0].Type != "Fixture::Telescope" {
+		t.Fatalf("parameters = %+v", params)
+	}
+	source = typed.Expression().Arguments()[0].Value
+	if element, ok := source.Element(); !ok || element != fixture.symbol(t, "Telescope") {
+		t.Fatalf("source = %+v, want the Telescope definition, not the scope parameter", source)
+	}
 }
 
 func TestCompileValidatesElementsNamedInArguments(t *testing.T) {

@@ -811,7 +811,9 @@ calc def NestedElementDefault :> Query {
 
 func TestExecuteBindsElementsNamedInQueryBodies(t *testing.T) {
 	fixture := loadExecutionFixture(t, `
-part def Telescope;
+part def Telescope {
+	part lens;
+}
 part telescope : Telescope {
 	part mount;
 	part optics;
@@ -819,6 +821,10 @@ part telescope : Telescope {
 part groundStation {
 	part antenna;
 	part modem;
+}
+calc def NamesParameterType :> Query {
+	in scope : Telescope;
+	OwnedElements(source = Telescope)
 }
 calc def Named :> Query {
 	in scope : Telescope;
@@ -859,6 +865,15 @@ calc def FixedList :> Query {
 	}
 	if got := elementNames(result); !slices.Equal(got, []string{"mount", "modem"}) {
 		t.Fatalf("fixed list rows = %v, want [mount modem]", got)
+	}
+	result, err = fixture.execute(t, "NamesParameterType", Bindings{
+		"scope": {ElementValue(fixture.symbol(t, "telescope"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute body naming a parameter's type: %v", err)
+	}
+	if got := elementNames(result); !slices.Equal(got, []string{"lens"}) {
+		t.Fatalf("parameter type rows = %v, want [lens] from the Telescope definition, not the bound scope", got)
 	}
 }
 
