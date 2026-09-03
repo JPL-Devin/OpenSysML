@@ -10,11 +10,14 @@ elmt:ReferenceSubsets
     sysml:qualifiedName "ReferenceSubsets" ;
     sysml:elementId "ReferenceSubsets" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "ReferenceSubsets" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:ReferenceSubsets__Vehicle, elmt:ReferenceSubsets__vehicle_5fc1, elmt:ReferenceSubsets__Person, elmt:ReferenceSubsets__design ;
     sysml:ownedMembership elmt:ReferenceSubsets__Vehicle_om, elmt:ReferenceSubsets__vehicle_5fc1_om, elmt:ReferenceSubsets__Person_om, elmt:ReferenceSubsets__design_om ;
-    sysml:ownedRelationship elmt:ReferenceSubsets__Vehicle_om, elmt:ReferenceSubsets__vehicle_5fc1_om, elmt:ReferenceSubsets__Person_om, elmt:ReferenceSubsets__design_om .
+    sysml:ownedRelationship elmt:ReferenceSubsets__Vehicle_om, elmt:ReferenceSubsets__vehicle_5fc1_om, elmt:ReferenceSubsets__Person_om, elmt:ReferenceSubsets__design_om ;
+    sysx:sourceText "package ReferenceSubsets {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:ReferenceSubsets__Vehicle
     a sysml:PartDefinition ;
@@ -26,7 +29,8 @@ elmt:ReferenceSubsets__Vehicle
     sysml:owningRelationship elmt:ReferenceSubsets__Vehicle_om ;
     sysml:owningMembership elmt:ReferenceSubsets__Vehicle_om ;
     sysml:declaredName "Vehicle" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    part def Vehicle;\n" .
 
 elmt:ReferenceSubsets__Vehicle_om
     a sysml:OwningMembership ;
@@ -49,7 +53,8 @@ elmt:ReferenceSubsets__vehicle_5fc1
     sysml:owningMembership elmt:ReferenceSubsets__vehicle_5fc1_om ;
     sysml:declaredName "vehicle_c1" ;
     sysml:type elmt:ReferenceSubsets__Vehicle ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    part vehicle_c1 : Vehicle;\n" .
 
 elmt:ReferenceSubsets__vehicle_5fc1_om
     a sysml:OwningMembership ;
@@ -71,7 +76,8 @@ elmt:ReferenceSubsets__Person
     sysml:owningRelationship elmt:ReferenceSubsets__Person_om ;
     sysml:owningMembership elmt:ReferenceSubsets__Person_om ;
     sysml:declaredName "Person" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    part def Person;\n" .
 
 elmt:ReferenceSubsets__Person_om
     a sysml:OwningMembership ;
@@ -98,7 +104,9 @@ elmt:ReferenceSubsets__design
     sysml:ownedMembership elmt:ReferenceSubsets__design__vehicle_5fdesign_om, elmt:ReferenceSubsets__design__spare_om, elmt:ReferenceSubsets__design__spare_20wheel_om, elmt:ReferenceSubsets__design__fleet_om, elmt:ReferenceSubsets__design__presidentOfCountry_om ;
     sysml:ownedRelationship elmt:ReferenceSubsets__design__vehicle_5fdesign_om, elmt:ReferenceSubsets__design__spare_om, elmt:ReferenceSubsets__design__spare_20wheel_om, elmt:ReferenceSubsets__design__fleet_om, elmt:ReferenceSubsets__design__presidentOfCountry_om ;
     sysml:ownedFeature elmt:ReferenceSubsets__design__vehicle_5fdesign, elmt:ReferenceSubsets__design__spare, elmt:ReferenceSubsets__design__spare_20wheel, elmt:ReferenceSubsets__design__fleet, elmt:ReferenceSubsets__design__presidentOfCountry ;
-    sysml:ownedFeatureMembership elmt:ReferenceSubsets__design__vehicle_5fdesign_om, elmt:ReferenceSubsets__design__spare_om, elmt:ReferenceSubsets__design__spare_20wheel_om, elmt:ReferenceSubsets__design__fleet_om, elmt:ReferenceSubsets__design__presidentOfCountry_om .
+    sysml:ownedFeatureMembership elmt:ReferenceSubsets__design__vehicle_5fdesign_om, elmt:ReferenceSubsets__design__spare_om, elmt:ReferenceSubsets__design__spare_20wheel_om, elmt:ReferenceSubsets__design__fleet_om, elmt:ReferenceSubsets__design__presidentOfCountry_om ;
+    sysx:sourceText "    part design {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:ReferenceSubsets__design_om
     a sysml:OwningMembership ;
@@ -123,7 +131,8 @@ elmt:ReferenceSubsets__design__vehicle_5fdesign
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:isReference "true"^^xsd:boolean ;
     sysml:subsets elmt:ReferenceSubsets__vehicle_5fc1 ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        ref vehicle_design :> vehicle_c1;\n" .
 
 elmt:ReferenceSubsets__design__vehicle_5fdesign_om
     a sysml:FeatureMembership ;
@@ -150,7 +159,8 @@ elmt:ReferenceSubsets__design__spare
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:isReference "true"^^xsd:boolean ;
     sysml:subsets elmt:ReferenceSubsets__vehicle_5fc1 ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        ref spare subsets vehicle_c1;\n" .
 
 elmt:ReferenceSubsets__design__spare_om
     a sysml:FeatureMembership ;
@@ -177,7 +187,8 @@ elmt:ReferenceSubsets__design__spare_20wheel
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:isReference "true"^^xsd:boolean ;
     sysml:subsets elmt:ReferenceSubsets__vehicle_5fc1 ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        ref 'spare wheel' subsets vehicle_c1;\n" .
 
 elmt:ReferenceSubsets__design__spare_20wheel_om
     a sysml:FeatureMembership ;
@@ -206,7 +217,8 @@ elmt:ReferenceSubsets__design__fleet
     sysml:subsets elmt:ReferenceSubsets__vehicle_5fc1 ;
     sysml:lowerBound expr:ReferenceSubsets__design__fleet_plowerBound ;
     sysml:upperBound expr:ReferenceSubsets__design__fleet_pupperBound ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        ref fleet[0..*] :> vehicle_c1;\n" .
 
 elmt:ReferenceSubsets__design__fleet_om
     a sysml:FeatureMembership ;
@@ -247,7 +259,8 @@ elmt:ReferenceSubsets__design__presidentOfCountry
     sysml:subsets elmt:ReferenceSubsets__vehicle_5fc1 ;
     sysml:lowerBound expr:ReferenceSubsets__design__presidentOfCountry_plowerBound ;
     sysml:upperBound expr:ReferenceSubsets__design__presidentOfCountry_pupperBound ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        ref presidentOfCountry[0..1] : Person :> vehicle_c1;\n" .
 
 elmt:ReferenceSubsets__design__presidentOfCountry_om
     a sysml:FeatureMembership ;

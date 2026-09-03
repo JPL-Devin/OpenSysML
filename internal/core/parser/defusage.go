@@ -501,8 +501,11 @@ func (p *Parser) namesReference(n int) bool {
 // here (`:`/`defined by`, `:>`/`subsets`, `::>`/`references`, `=>`/`crosses`,
 // `:>>`/`redefines`), so neither can be read differently from the other.
 // `specializes` is excluded: it relates two types (SubclassificationPart).
-func (p *Parser) atFeatureSpecialization() bool {
-	t := p.peek()
+func (p *Parser) atFeatureSpecialization() bool { return p.featureSpecializationAt(0) }
+
+// featureSpecializationAt is atFeatureSpecialization at the token i ahead.
+func (p *Parser) featureSpecializationAt(i int) bool {
+	t := p.peekN(i)
 	switch t.Kind {
 	case lexer.Colon, lexer.ColonGt, lexer.ColonGtGt, lexer.ColonColonGt, lexer.EqGt:
 		return true
@@ -511,7 +514,7 @@ func (p *Parser) atFeatureSpecialization() bool {
 		case "subsets", "references", "crosses", "redefines":
 			return true
 		case "defined", "typed":
-			n := p.peekN(1)
+			n := p.peekN(i + 1)
 			return n.Kind == lexer.Keyword && n.KeywordID == "by"
 		}
 	}
@@ -683,21 +686,44 @@ func (p *Parser) atDirectionKeyword() bool {
 	return false
 }
 
+// chainWord marks a feature chain declaration (`attribute chain a.b;`). It is
+// a modifier only when a name follows it; otherwise it names the feature.
+const chainWord = "chain"
+
+// atChainWord reports whether the cursor is at the word `chain`.
+func (p *Parser) atChainWord() bool {
+	t := p.peek()
+	return t.Kind == lexer.Identifier && p.src.Text(t.Span) == chainWord
+}
+
+// atChainModifier reports whether the cursor is at the `chain` modifier of a
+// declaration rather than at a feature named `chain`: what follows must spell a
+// name (atName), so a word this grammar reserves — `ordered`, `specializes`,
+// `default`, `about`, … — leaves `chain` as the name.
+func (p *Parser) atChainModifier() bool {
+	if !p.atChainWord() {
+		return false
+	}
+	next := p.peekN(1)
+	switch next.Kind {
+	case lexer.Identifier, lexer.UnrestrictedName, lexer.ColonColon, lexer.Lt:
+		return true
+	case lexer.Keyword:
+		return !p.reservedWord(next.KeywordID)
+	}
+	return false
+}
+
 func (p *Parser) parseFeatureModifiers() featureMods {
 	var m featureMods
 	for {
 		t := p.peek()
-		// Handle identifier "chain" as contextual modifier ONLY if followed by name/keyword
-		if t.Kind == lexer.Identifier && p.src.Text(t.Span) == "chain" {
-			next := p.peekN(1)
-			// "chain" is modifier if next token is identifier, keyword, or :: (qualified name)
-			isModifier := next.Kind == lexer.Identifier || next.Kind == lexer.Keyword || next.Kind == lexer.ColonColon
-			if isModifier {
+		if p.atChainWord() {
+			if p.atChainModifier() {
 				m.isChain = true
 				p.advance()
 				continue
 			}
-			// Otherwise "chain" is the declaration name itself - stop parsing modifiers
 			return m
 		}
 		if t.Kind == lexer.Identifier && p.src.Text(t.Span) == varPrefixWord {
@@ -1266,9 +1292,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	// Parse 'all' modifier if present (appears after keyword, before name)
 	isAll := p.acceptSufficientAll()
 
-	// Parse 'chain' modifier if present (identifier, not keyword)
-	t2 := p.peek()
-	if t2.Kind == lexer.Identifier && p.src.Text(t2.Span) == "chain" {
+	if p.atChainModifier() {
 		mods.isChain = true
 		p.advance()
 	}
@@ -1486,22 +1510,26 @@ func (p *Parser) isResultKeyword() bool {
 	return p.at(lexer.Keyword) && p.peek().KeywordID == "return"
 }
 
-// parseUsageIdentification parses identification for usage declarations, with special handling
-// for step usage to allow "do" keyword as identifier name (since "do" is a valid step name like entry/exit).
+// stepNameKeyword is `do`, which names a step (`step do[1] subsets middle;` in
+// StatePerformances.kerml) though it continues every other declaration.
+const stepNameKeyword = "do"
+
+// metadataStopKeyword is `about`, which ends a metadata declaration (SysML.xtext
+// MetadataUsage), so an unnamed `metadata : M about x;` is not named "about".
+const metadataStopKeyword = "about"
+
+// parseUsageIdentification parses the identification of a usage of kind: `do`
+// names a step and nothing else, `about` names nothing in a metadata usage.
 func (p *Parser) parseUsageIdentification(kind ast.UsageKind) ast.Identification {
-	// Special case: step usage allows "do" as identifier
-	if kind == ast.UsageStep && p.atKeyword("do") {
+	if kind == ast.UsageStep && p.atKeyword(stepNameKeyword) {
 		tok := p.advance()
 		return ast.Identification{
 			Name: tok.KeywordID,
 		}
 	}
-	// `about` ends a metadata declaration (SysML.xtext MetadataUsage), so an
-	// unnamed `metadata : M about x;` is not named "about".
 	if kind == ast.UsageMetadata {
-		return p.parseIdentificationStopping("about")
+		return p.parseIdentificationStopping(metadataStopKeyword)
 	}
-	// Default: use standard identification parsing
 	return p.parseIdentification()
 }
 

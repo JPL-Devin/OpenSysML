@@ -30,3 +30,28 @@ func TestStringValue(t *testing.T) {
 		}
 	}
 }
+
+// TestStringTextIsReadBackByStringValue escapes every character the notation
+// cannot carry bare, and no other, so a value survives being written and read.
+func TestStringTextIsReadBackByStringValue(t *testing.T) {
+	for _, tt := range []struct {
+		value string
+		want  string
+	}{
+		{"", `""`},
+		{"abc", `"abc"`},
+		{"say \"hi\"", `"say \"hi\""`},
+		{`a\b`, `"a\\b"`},
+		{"a\nb\rc\td\be\ff", `"a\nb\rc\td\be\ff"`},
+		{"it's", `"it's"`},
+		{"héllo 🚗", `"héllo 🚗"`},
+	} {
+		got := StringText(tt.value)
+		if got != tt.want {
+			t.Errorf("StringText(%q) = %s, want %s", tt.value, got, tt.want)
+		}
+		if back := StringValue(got); back != tt.value {
+			t.Errorf("StringValue(StringText(%q)) = %q", tt.value, back)
+		}
+	}
+}
