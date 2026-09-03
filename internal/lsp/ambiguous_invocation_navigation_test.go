@@ -342,9 +342,8 @@ func TestRenameSkipsAliasedAmbiguousCall(t *testing.T) {
 	}
 }
 
-// selectingAliasesSrc has two aliases named `conv`, one for an Integer overload and one
-// for a String overload, so each call selects one alias's target — and is a use of
-// that alias only.
+// selectingAliasesSrc has two aliases named `conv`, for an Integer and a String overload,
+// so each call selects one alias's target and is a use of that alias only.
 const selectingAliasesSrc = `package A {
 	private import ScalarValues::*;
 	calc def toText { in x : Integer; return : String = "i"; }
@@ -370,9 +369,8 @@ package Q {
 }
 `
 
-// A call through one of two same-named aliases is a use of the alias whose target
-// its arguments select, not of whichever alias is found first: references list it
-// under that alias only, and renaming the other alias leaves it as written.
+// A call through one of two same-named aliases is a use of the alias whose target it
+// selects, not the first found: references list it there only; renaming the other skips it.
 func TestReferencesAndRenameFollowSelectedAlias(t *testing.T) {
 	src := selectingAliasesSrc
 	ws := model.NewWorkspace()
