@@ -1,0 +1,16 @@
+{
+	"type": "action",
+	"libraries": true,
+	"evaluate": "test::Derived",
+	"outputs": {
+		"result": {"type": "Integer", "value": 11},
+		"x": {"type": "Integer", "value": 9},
+		"add.a": {"type": "Integer", "value": 9},
+		"add.b": {"type": "Integer", "value": 2},
+		"add.sum": {"type": "Integer", "value": 11},
+		"fin.n": {"type": "Integer", "value": 11},
+		"extra.a": {"type": "Integer", "value": 100},
+		"extra.b": {"type": "Integer", "value": 11},
+		"extra.sum": {"type": "Integer", "value": 111}
+	}
+}

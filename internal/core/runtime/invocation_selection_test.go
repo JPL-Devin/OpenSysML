@@ -246,8 +246,8 @@ func testActionCallNamedArgumentTwiceRefused(t *testing.T) {
 	if err == nil {
 		t.Fatalf("overloaded tag(x = 3, x = 4): expected a refusal, action returned %v", outputs)
 	}
-	if !errors.Is(err, ErrCalcArity) || !strings.Contains(err.Error(), `binds parameter "x" twice`) {
-		t.Fatalf("overloaded tag(x = 3, x = 4): error = %v, want ErrCalcArity naming x", err)
+	if !errors.Is(err, ErrDuplicateArgument) || !strings.Contains(err.Error(), `input parameter "x" of tag`) {
+		t.Fatalf("overloaded tag(x = 3, x = 4): error = %v, want ErrDuplicateArgument naming x", err)
 	}
 	const single = `
 		package test {
@@ -272,8 +272,8 @@ func testActionCallNamedArgumentTwiceRefused(t *testing.T) {
 	if err == nil {
 		t.Fatalf("single tag(x = 3, x = 4): expected a refusal, action returned %v", outputs)
 	}
-	if !errors.Is(err, ErrCalcArity) || !strings.Contains(err.Error(), `binds parameter "x" twice`) {
-		t.Fatalf("single tag(x = 3, x = 4): error = %v, want ErrCalcArity naming x", err)
+	if !errors.Is(err, ErrDuplicateArgument) || !strings.Contains(err.Error(), `input parameter "x" of tag`) {
+		t.Fatalf("single tag(x = 3, x = 4): error = %v, want ErrDuplicateArgument naming x", err)
 	}
 }
 

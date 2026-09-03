@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 )
 
@@ -86,4 +87,55 @@ func (h *calcStmtHost) performer() *Instance {
 
 func (h *calcStmtHost) effect(s lower.Effect) error {
 	return fmt.Errorf("%w: a calculation cannot state '%s'", ErrCalcSideEffect, s.Kind)
+}
+
+// performNode runs a nested action of a block in a frame of the body, since a calculation
+// keeps no performances; performing an action, a flow of its own or a connector at its pins is rejected.
+func (h *calcStmtHost) performNode(engine *stmtEngine, graph *lower.ActionGraph, node *ast.Usage) (stmtFlow, error) {
+	if _, performs := nestedInvocation(node); performs {
+		return flowNext, fmt.Errorf("%w: a calculation cannot perform action %s", ErrCalcSideEffect, ActionNodeName(node))
+	}
+	if connectsPins(graph, node) {
+		return flowNext, fmt.Errorf("%s: a binding or flow at a pin of %s in a body is not executable",
+			h.describe(), nodeDescription(node))
+	}
+	if sub, owns := graph.Subflows[node]; owns && sub != nil {
+		return flowNext, fmt.Errorf("%s: the flow %s states of its own in a body is not executable",
+			h.describe(), nodeDescription(node))
+	}
+	engine.env.enter()
+	defer engine.env.leave()
+	defer engine.enterActivation()()
+	for _, feature := range graph.Features[node] {
+		if feature.Value == nil {
+			engine.env.declareUnvalued(feature.Name)
+			continue
+		}
+		value, err := engine.evalIn(feature.Scope).Eval(feature.Value)
+		if err != nil {
+			return flowNext, fmt.Errorf("eval %s of %s: %w", feature.Name, nodeDescription(node), err)
+		}
+		engine.env.declare(feature.Name, value)
+	}
+	return engine.run(graph.Bodies[node])
+}
+
+// connectsPins reports whether graph states a binding or flow at a pin of node.
+func connectsPins(graph *lower.ActionGraph, node ast.Node) bool {
+	for _, binding := range graph.Bindings {
+		if binding.Node == node {
+			return true
+		}
+	}
+	if len(graph.DataFlows[node]) > 0 {
+		return true
+	}
+	for _, flows := range graph.DataFlows {
+		for _, flow := range flows {
+			if flow.Target == node {
+				return true
+			}
+		}
+	}
+	return false
 }
