@@ -359,7 +359,7 @@ func (e *ActionExecutor) HasPendingSignal() bool {
 // subsets.
 func (e *ActionExecutor) acceptMatch(accept lower.Accept, usage *ast.Usage) func(Message) bool {
 	return func(m Message) bool {
-		if !m.reaches(ActionNodeName(usage), accept.ViaPort, objectID(e.self)) {
+		if !e.ctx.messageReaches(m, ActionNodeName(usage), accept.ViaPort, e.self) {
 			return false
 		}
 		if accept.SignalType != nil {

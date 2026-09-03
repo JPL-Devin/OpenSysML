@@ -166,6 +166,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("accept_of_unsent_type", testAcceptOfUnsentTypeReports)
 	t.Run("send_via_unconnected_port", testSendViaUnconnectedPort)
 	t.Run("send_via_connector_into_an_empty_part", testSendViaConnectorIntoAnEmptyPart)
+	t.Run("send_via_bound_boundary_port_joined_to_nothing", testSendViaBoundBoundaryPortJoinedToNothing)
 	t.Run("send_addressed_to_an_unreachable_target", testSendAddressedToAnUnreachableTarget)
 	t.Run("routed_send_via_unknown_port", testRoutedSendViaUnknownPort)
 	t.Run("routed_send_port_type_mismatch", testRoutedSendPortTypeMismatch)
@@ -2604,6 +2605,44 @@ func testSendViaConnectorIntoAnEmptyPart(t *testing.T) {
 	_, err = ctx.ExecuteActionPerformedBy(oneSymbol(t, idx, "P::bay::ship"), bay, nil)
 	if !errors.Is(err, ErrUnroutableSend) {
 		t.Fatalf("execute action: err = %v, want %v", err, ErrUnroutableSend)
+	}
+	if pending := ctx.PendingMessages(); len(pending) != 0 {
+		t.Errorf("pending messages = %+v, want none", pending)
+	}
+}
+
+// testSendViaBoundBoundaryPortJoinedToNothing: the inner part's port is bound to
+// the assembly's boundary port, but nothing in the context joins that boundary
+// port, so the send reaches no receiving port. It is reported where the inner
+// machine sent it, the same as an unconnected port of the sender's own, rather
+// than dropped silently.
+func testSendViaBoundBoundaryPortJoinedToNothing(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {`+directedPorts+`
+		part def Inner {
+			port out : Chan;
+			exhibit state sm {
+				entry; then sending;
+				state sending { entry send 9 via out; }
+			}
+		}
+		part def Assembly {
+			port boundary : Chan;
+			part child : Inner;
+			bind boundary = child.out;
+		}
+		part def Env { port in : ~Chan; }
+		part ctx {
+			part asm : Assembly;
+			part env : Env;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::ctx"))
+	if err != nil {
+		t.Fatalf("instantiate ctx: %v", err)
+	}
+	_, err = featureValueAtPath(t, ctx, inst, "asm.child")
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Fatalf("materialize asm.child: err = %v, want %v", err, ErrUnroutableSend)
 	}
 	if pending := ctx.PendingMessages(); len(pending) != 0 {
 		t.Errorf("pending messages = %+v, want none", pending)

@@ -210,6 +210,22 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Fixed
 
+- **Messages cross a binding connector at an assembly's boundary port, in both directions**
+  (Open-MBEE/OpenSysML#92). An assembly that binds its boundary port to a port of a part it
+  holds (`part def Assembly { port bi : ~PP; part child : Inner; bind bi = child.i; }`) used
+  to swallow messages at the boundary: a `send Ping() via o` over a context-level
+  `connect env.o to asm.bi` arrived at `asm.bi` and stayed there, so the inner part's
+  `accept Ping via i` never fired and its counters stayed at 0, with no diagnostic; and a send
+  by the inner part through its own port was reported as reaching no receiving port, although
+  the boundary port it is bound to was connected. A binding connector now makes the two ports
+  one port for message delivery: an accept on either takes a message that reached the other,
+  and a send through either leaves over the connectors joined to the other, through any depth
+  of nested assemblies. Bindings chained through several assemblies also keep every bound port
+  the same object whichever end is read first — a chain used to split when the outer boundary
+  port was materialized before the inner assembly's. A send whose bound boundary port is
+  joined to nothing still reports `send reaches no receiving port` where it was written.
+  Delivery does not depend on the order connectors, bindings and parts are declared.
+
 - **`%state <machine> <object>` attaches to the machine the object exhibits instead of performing
   it again.** Naming an object's own exhibited machine (`%state Rover::modes rover`, or `-state
   "Rover::modes rover"`) used to start a second performance of it on the same object, so its

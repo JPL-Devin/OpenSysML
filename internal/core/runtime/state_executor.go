@@ -980,7 +980,7 @@ func (e *StateExecutor) matchesEvent(trans *lower.Transition, event *Event) bool
 			return true
 		}
 		msg, ok := event.Payload.(Message)
-		return ok && msg.reaches(e.stateMachine.Name, trans.Via, objectID(e.self))
+		return ok && e.ctx.messageReaches(msg, e.stateMachine.Name, trans.Via, e.self)
 
 	case EventTime:
 		// Time events carry the specific transition in Payload
@@ -1964,7 +1964,7 @@ func (e *StateExecutor) acceptsSignalFrom(state *ast.StateNode, msg Message) boo
 		if !ok {
 			continue
 		}
-		if !msg.reaches(e.stateMachine.Name, trans.Via, objectID(e.self)) {
+		if !e.ctx.messageReaches(msg, e.stateMachine.Name, trans.Via, e.self) {
 			continue
 		}
 		if typed := ast.AsQualifiedName(accept.SignalType); typed != nil && len(typed.Parts) > 0 {
