@@ -99,7 +99,7 @@ func lowerActionExecution(node *ast.ActionExecutionNode, scope *symbols.Scope) [
 // performs — by typing, by reference subsetting or by an invocation — rather than
 // stating its own body.
 func performsAction(usage *ast.Usage) bool {
-	if invocation, ok := usage.Value.(*ast.InvocationExpr); ok && invocation.Type != nil {
+	if usage.PerformedInvocation() != nil {
 		return true
 	}
 	for _, rel := range usage.Relationships {

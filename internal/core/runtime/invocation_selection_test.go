@@ -30,6 +30,7 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("calc_call_selects_by_collection_literal_element_type", testCalcCallSelectsByCollectionLiteralElementType)
 	t.Run("action_call_selects_by_argument_type", testActionCallSelectsByArgumentType)
 	t.Run("action_call_ambiguous_between_two_imports", testActionCallAmbiguousBetweenTwoImports)
+	t.Run("action_call_selects_an_action_over_a_more_specific_calc", testActionCallSelectsAnActionOverAMoreSpecificCalc)
 	t.Run("action_call_receiver_binds_first_input", testActionCallReceiverBindsFirstInput)
 	t.Run("action_call_receiver_with_named_arguments_refused", testActionCallReceiverWithNamedArgumentsRefused)
 	t.Run("action_call_arguments_read_the_performing_object", testActionCallArgumentsReadThePerformingObject)
@@ -85,6 +86,47 @@ func testActionCallSelectsByArgumentType(t *testing.T) {
 		if got := intOutput(t, outputs, "code"); got != want {
 			t.Errorf("tag(%s) code = %d, want %d", arg, got, want)
 		}
+	}
+}
+
+// An action performed by name runs an action of that name: a same-named calc a
+// calc call would prefer, its parameter fitting the argument more closely, is not a
+// candidate for an action performance.
+func testActionCallSelectsAnActionOverAMoreSpecificCalc(t *testing.T) {
+	src := `
+		package A {
+			private import ScalarValues::*;
+			calc def tag { in x : Integer; return : Integer = x + 1; }
+		}
+		package B {
+			private import ScalarValues::*;
+			action def tag { in x : Real; out code : Integer; first start; action set { assign code := 2; } done; succession first start then set; succession first set then done; }
+		}
+		package test {
+			private import ScalarValues::*;
+			private import A::*;
+			private import B::*;
+			action def Outer {
+				attribute code : Integer = 0;
+				first start;
+				action call = tag(3);
+				done;
+				succession first start then call;
+				succession first call then done;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	outer := findSymbolByName(idx.DocumentRoot("<test>"), "Outer", ast.DefAction)
+	if outer == nil {
+		t.Fatal("Outer action not found")
+	}
+	outputs, err := ctx.ExecuteAction(outer)
+	if err != nil {
+		t.Fatalf("tag(3): %v", err)
+	}
+	if got := intOutput(t, outputs, "code"); got != 2 {
+		t.Errorf("tag(3) code = %d, want 2 from B::tag", got)
 	}
 }
 

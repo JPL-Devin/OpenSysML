@@ -861,7 +861,7 @@ func (fc *funcCompiler) compileCall(n *ast.InvocationExpr) (Expr, error) {
 		return nil, fc.unsupported("an invocation naming no calc")
 	}
 	// The declaration the checker and interpreter select by the arguments' types.
-	sel := passes.SelectInvocation(fc.c.resolver, fc.c.model, fc.scope, n)
+	sel := passes.SelectInvocation(fc.c.resolver, fc.c.model, fc.scope, n, semantics.PerformsBehavior)
 	if sel.Ambiguous {
 		names := make([]string, len(sel.Tied))
 		for i, tied := range sel.Tied {

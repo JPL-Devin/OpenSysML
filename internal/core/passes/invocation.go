@@ -10,10 +10,11 @@ import (
 )
 
 // SelectInvocation is the declaration e calls in scope, chosen among every visible
-// declaration of its name by its arguments' static types; the runtime dispatches on it too.
-func SelectInvocation(resolver *resolve.Resolver, model *semantics.Model, scope *symbols.Scope, e *ast.InvocationExpr) *semantics.InvocationSelection {
+// declaration of its name the call site can run by its arguments' static types; the
+// runtime dispatches on it too.
+func SelectInvocation(resolver *resolve.Resolver, model *semantics.Model, scope *symbols.Scope, e *ast.InvocationExpr, performs semantics.Performs) *semantics.InvocationSelection {
 	silent := exprChecker{resolver: resolver, model: model}
-	return silent.selectInvocation(scope, e, silent.argumentTypes(scope, e))
+	return silent.selectInvocation(scope, e, silent.argumentTypes(scope, e), performs)
 }
 
 // argumentTyper is the checker's argument typing as the semantic model consumes
@@ -69,8 +70,17 @@ func invocationArgs(e *ast.InvocationExpr) []ast.Node {
 }
 
 // selectInvocation records the declaration e calls given the types of its arguments.
-func (ec *exprChecker) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, argTypes argumentTypes) *semantics.InvocationSelection {
-	return ec.model.SelectInvocation(scope, e, ec.arguments(scope, e, argTypes))
+func (ec *exprChecker) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, argTypes argumentTypes, performs semantics.Performs) *semantics.InvocationSelection {
+	return ec.model.SelectInvocation(scope, e, ec.arguments(scope, e, argTypes), performs)
+}
+
+// performs is the kind of call site e is: an action performance when it is the
+// value of an action usage the checker is reading, else an expression.
+func (ec *exprChecker) performs(e *ast.InvocationExpr) semantics.Performs {
+	if ec.performed[e] {
+		return semantics.PerformsAction
+	}
+	return semantics.PerformsBehavior
 }
 
 // arguments describes e's arguments for selection: the positional ones, then the named.

@@ -27,6 +27,9 @@ type exprChecker struct {
 	// being checked twice when its type is inferred more than once.
 	walkMembers   func(*symbols.Scope, []ast.Node)
 	bodiesChecked map[*ast.BodyExpr]bool
+	// performed are the calls that are the values of action usages, which run
+	// an action rather than evaluate a behavior (see performs).
+	performed map[*ast.InvocationExpr]bool
 }
 
 func (ec *exprChecker) errorf(span source.Span, format string, args ...any) {
@@ -54,6 +57,12 @@ func (ec *exprChecker) warnf(span source.Span, format string, args ...any) {
 func (ec *exprChecker) checkUsageValue(scope *symbols.Scope, u *ast.Usage) {
 	if u.Value == nil {
 		return
+	}
+	if inv := u.PerformedInvocation(); inv != nil {
+		if ec.performed == nil {
+			ec.performed = map[*ast.InvocationExpr]bool{}
+		}
+		ec.performed[inv] = true
 	}
 	ec.checkBoundValue(scope, scope, u, u.Value)
 }
@@ -631,7 +640,7 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 		}
 		return semantics.PrimUnknown
 	}
-	sel := ec.selectInvocation(scope, e, argTypes)
+	sel := ec.selectInvocation(scope, e, argTypes, ec.performs(e))
 	if !sel.Resolved() {
 		return semantics.PrimUnknown
 	}
