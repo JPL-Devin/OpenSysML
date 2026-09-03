@@ -93,29 +93,31 @@ func (s *Session) doSearch(substr string) ([]string, bool, error) {
 	return out, false, nil
 }
 
-// doBuiltins lists the library functions this build implements directly, the
-// OMG ones callable whatever the model imports and an extension one marked with
-// the import its unqualified name needs.
+// doBuiltins lists the library functions this build implements directly, each
+// beside the declaration it is and the import its unqualified name needs.
 func (s *Session) doBuiltins() ([]string, bool, error) {
 	all := runtime.Builtins()
 	scalar := make([]string, 0, len(all))
 	collection := make([]string, 0, len(all))
 	for _, b := range all {
 		if b.Collection {
-			collection = append(collection, fmt.Sprintf("x->%s()  %s", b.Name, b.FQN))
+			collection = append(collection, fmt.Sprintf("x->%s()  %s  (import %s::*;)", b.Name, b.FQN, b.Package))
 			continue
 		}
-		line := fmt.Sprintf("%s(%s)  %s", b.Name, strings.Join(b.Params, ", "), b.FQN)
-		if b.RequiresImport != "" {
-			line += fmt.Sprintf("  (needs `import %s::*;`)", b.RequiresImport)
-		}
-		scalar = append(scalar, line)
+		scalar = append(scalar, fmt.Sprintf("%s(%s)  %s  (import %s::*;)", b.Name, strings.Join(b.Params, ", "), b.FQN, b.Package))
 	}
-	out := []string{"Scalar functions:"}
+	out := []string{
+		"Each function is called by its unqualified name only where the model imports",
+		"its package, as the checker resolves it; the qualified name works anywhere,",
+		"e.g. RealFunctions::sqrt(2.0). Where several packages declare the name, each",
+		"import makes its own declaration the one a bare call denotes.",
+		"",
+		"Scalar functions:",
+	}
 	out = append(out, scalar...)
 	out = append(out, "", "Collection and control functions (also callable as name(x, ...)):")
 	out = append(out, collection...)
-	return append(out, "", "Every one is also callable by its qualified name, e.g. RealFunctions::sqrt(2.0)."), false, nil
+	return out, false, nil
 }
 
 // suggestCommand offers the meta commands closest to an unknown one.

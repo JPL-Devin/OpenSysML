@@ -138,6 +138,20 @@ echo "%load model.sysml
 %eval speedLimit" | sysml
 ```
 
+A whole run is read out the same way. `%features <name>` is bounded, since reading a
+feature value builds the objects it holds; `all` lifts the bound and `json` writes the
+graph in the shape the API's `Instantiate` returns, so a piped session is how a script
+gets the complete state of a large object tree:
+
+```bash
+printf '%%instantiate Plant::Context\n%%features Plant::Context all\n' | sysml model.sysml
+printf '%%instantiate Plant::Context\n%%features Plant::Context all json\n' | sysml model.sysml \
+  | sed -n '/^{/,$p' | jq '.instances | length'
+```
+
+The JSON document is written on the listing's own lines, after whatever the load
+reported, so a script that reads it takes the output from the first `{`.
+
 ## Command Reference
 
 | Flag | Shorthand | Description |
