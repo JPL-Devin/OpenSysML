@@ -35,7 +35,7 @@ func (ctx *Context) relatedFeatures(sym, owner *symbols.Symbol, kind ast.Relatio
 			if !ctx.inheritsDeclaration(owner, resolved) {
 				continue
 			}
-			if own, declared := ctx.ownDeclaration(owner, resolved.Name); declared && own != sym {
+			if own, declared := ctx.ownDeclarationNamed(owner, sym, qn.Parts[len(qn.Parts)-1].Text, resolved.Name, resolved.ShortName); declared {
 				features = append(features, own)
 			} else {
 				features = append(features, resolved)
@@ -65,16 +65,23 @@ func (ctx *Context) inheritsDeclaration(owner, feature *symbols.Symbol) bool {
 	return false
 }
 
-// ownDeclaration returns the member owner itself declares under name, not one it inherits.
-func (ctx *Context) ownDeclaration(owner *symbols.Symbol, name string) (*symbols.Symbol, bool) {
-	member, found := ctx.model.LookupMember(owner, name)
-	if !found || member == nil {
-		return nil, false
+// ownDeclarationNamed returns the first member other than sym that owner itself
+// declares under one of names (a feature's written, primary or short name), not one it inherits.
+func (ctx *Context) ownDeclarationNamed(owner, sym *symbols.Symbol, names ...string) (*symbols.Symbol, bool) {
+	for _, name := range names {
+		if name == "" {
+			continue
+		}
+		member, found := ctx.model.LookupMember(owner, name)
+		if !found || member == nil || member == sym {
+			continue
+		}
+		if contributed, ok := ctx.model.LookupContributedMember(owner, name); ok && contributed == member {
+			continue
+		}
+		return member, true
 	}
-	if contributed, ok := ctx.model.LookupContributedMember(owner, name); ok && contributed == member {
-		return nil, false
-	}
-	return member, true
+	return nil, false
 }
 
 // relationshipTargets returns the names sym's relationships of the given kind name.

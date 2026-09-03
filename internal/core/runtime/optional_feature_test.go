@@ -318,12 +318,13 @@ func TestSubsettingKeepsTargetAcrossInheritedNameCollision(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
 		part def Thing;
 		part def Left {
-			abstract part slots : Thing[1..*];
-			abstract part needed :> slots;
+			abstract part <s> slots : Thing[1..*];
+			abstract part needed :> s;
 		}
 		part def Right { abstract part slots : Thing[0..*]; }
 		part def Both :> Right, Left;
 		part def Masking :> Right, Left { abstract part slots : Thing[0..*] :>> Left::slots, Right::slots; }
+		part def ShortMasking :> Right, Left { abstract part s : Thing[0..*]; }
 	}`))
 	both := oneSymbol(t, idx, "test::Both")
 	needed := oneSymbol(t, idx, "test::Left::needed")
@@ -341,6 +342,19 @@ func TestSubsettingKeepsTargetAcrossInheritedNameCollision(t *testing.T) {
 	masking := oneSymbol(t, idx, "test::Masking")
 	if related := ctx.relatedFeatures(needed, masking, ast.RelSubsets); len(related) != 1 || related[0] != oneSymbol(t, idx, "test::Masking::slots") {
 		t.Errorf("Masking: needed subsets %s, want the owner's redefining slots", symbolNames(ctx, related))
+	}
+	shortMasking := oneSymbol(t, idx, "test::ShortMasking")
+	if related := ctx.relatedFeatures(needed, shortMasking, ast.RelSubsets); len(related) != 1 || related[0] != oneSymbol(t, idx, "test::ShortMasking::s") {
+		t.Errorf("ShortMasking: needed subsets %s, want the owner's s masking the short name", symbolNames(ctx, related))
+	}
+	inst, err = ctx.Instantiate(shortMasking)
+	if err != nil {
+		t.Fatalf("instantiate ShortMasking: %v", err)
+	}
+	if fv, err := inst.GetFeatureValue(ctx, "needed"); err != nil {
+		t.Errorf("shortMasking.needed: %v, want the empty collection through s' [0..*]", err)
+	} else if held := fv.HeldValue(); fv.Feature.Scalar() || elementCount(&held) != 0 {
+		t.Errorf("shortMasking.needed = %s (scalar %t), want an empty collection", FormatValue(held), fv.Feature.Scalar())
 	}
 }
 
