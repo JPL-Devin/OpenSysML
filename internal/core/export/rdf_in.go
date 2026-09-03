@@ -555,11 +555,17 @@ func (d *decoder) head(el *element) (string, error) {
 		}
 		// A `#` prefix is written into its owner's head, so one reaching here
 		// has no declaration to prefix; any other keyword is not a metadata form.
-		switch keyword, written := d.stringOf(el, rdf.OpenSysML+xDeclaredKeyword); {
-		case !written:
-		case keyword == "@":
+		keywords := d.graph.Objects(rdf.IRI(el.iri), rdf.OpenSysML+xDeclaredKeyword)
+		switch {
+		case len(keywords) == 0:
+		case len(keywords) > 1:
+			return "", &UnsupportedError{
+				What: fmt.Sprintf("the element <%s>", el.iri),
+				Note: fmt.Sprintf("it states sysx:%s %d times, and a metadata usage is written with one keyword", xDeclaredKeyword, len(keywords)),
+			}
+		case keywords[0].Value == "@":
 			return d.metadataHead(el)
-		case keyword == "#":
+		case keywords[0].Value == "#":
 			return "", &UnsupportedError{
 				What: fmt.Sprintf("the prefix annotation <%s>", el.iri),
 				Note: "a prefix is written ahead of the declaration that owns it, and this one is owned by no declaration",
@@ -567,7 +573,7 @@ func (d *decoder) head(el *element) (string, error) {
 		default:
 			return "", &UnsupportedError{
 				What: fmt.Sprintf("the element <%s>", el.iri),
-				Note: fmt.Sprintf("its sysx:%s %q is not a metadata form; a metadata usage is written as `metadata`, `@` or `#`", xDeclaredKeyword, keyword),
+				Note: fmt.Sprintf("its sysx:%s %q is not a metadata form; a metadata usage is written as `metadata`, `@` or `#`", xDeclaredKeyword, keywords[0].Value),
 			}
 		}
 	}
@@ -1265,12 +1271,17 @@ func qualifiedNameText(qname string) string {
 }
 
 // metadataSigil reports the sigil a metadata usage was written with: `#` for a
-// prefix ahead of a declaration, `@` for a member of its own.
+// prefix ahead of a declaration, `@` for a member of its own. Any other
+// statement of the keyword, repeated ones included, is left for head to refuse.
 func (d *decoder) metadataSigil(el *element) string {
 	if el.metaclass != usageMetaclass[ast.UsageMetadata] {
 		return ""
 	}
-	switch keyword, _ := d.stringOf(el, rdf.OpenSysML+xDeclaredKeyword); keyword {
+	keywords := d.graph.Objects(rdf.IRI(el.iri), rdf.OpenSysML+xDeclaredKeyword)
+	if len(keywords) != 1 {
+		return ""
+	}
+	switch keyword := keywords[0].Value; keyword {
 	case "#", "@":
 		return keyword
 	}

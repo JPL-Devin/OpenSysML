@@ -812,9 +812,15 @@ func TestMetadataUsageWithAnUnsupportedKeywordIsReported(t *testing.T) {
 	if !strings.Contains(structural, `sysml:declaredName "m" ;`) {
 		t.Fatalf("the metadata usage's name was not found in the graph:\n%s", structural)
 	}
-	for _, keyword := range []string{"part", "metadata", "@@"} {
+	for _, keyword := range []string{"part", "metadata", "@@", ""} {
 		graph := strings.Replace(structural, `sysml:declaredName "m" ;`, `sysml:declaredName "m" ;`+"\n"+`    sysx:declaredKeyword "`+keyword+`" ;`, 1)
 		refused(keyword, graph, "the element <urn:sysmlv2:element:P__m>", "sysx:declaredKeyword", `"`+keyword+`"`, "is not a metadata form")
+	}
+	// A repeated keyword is refused whichever value comes first, rather than
+	// read as the first one and written as a prefix or a member.
+	for _, keywords := range []string{`"@", "#"`, `"#", "@"`, `"@", "metadata"`} {
+		graph := strings.Replace(structural, `sysml:declaredName "m" ;`, `sysml:declaredName "m" ;`+"\n"+`    sysx:declaredKeyword `+keywords+` ;`, 1)
+		refused(keywords, graph, "the element <urn:sysmlv2:element:P__m>", "sysx:declaredKeyword 2 times", "written with one keyword")
 	}
 
 	root := "metadata def M;\n@M;\n"
