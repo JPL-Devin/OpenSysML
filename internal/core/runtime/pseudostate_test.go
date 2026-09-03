@@ -155,6 +155,76 @@ func TestJoinWaitsForEveryBranch(t *testing.T) {
 	}
 }
 
+// A transition into a join is not enabled until every branch has arrived: an
+// event reaching one branch first fires nothing, Decide and LastDispatch say so,
+// and the join fires on the event that completes the last branch.
+func TestJoinBranchArrivingFirstFiresNothing(t *testing.T) {
+	ctx, machine := loadState(t, `package test {
+    attribute def Go;
+    state Machine {
+        entry; then running;
+        state running parallel {
+            state left {
+                entry; then a;
+                state a;
+            }
+            state right {
+                entry; then b0;
+                state b0;
+                state b;
+                transition first b0 accept after 2 then b;
+            }
+        }
+        join sync;
+        transition first a accept Go then sync;
+        transition first b then sync;
+        transition first sync then done;
+    }
+}`, "Machine")
+	exec, err := ctx.CreateStateExecutor(machine)
+	if err != nil {
+		t.Fatalf("CreateStateExecutor: %v", err)
+	}
+	go_ := Message{SignalType: "Go"}
+	if accepted, err := exec.AcceptsMessage(go_); err != nil || !accepted {
+		t.Fatalf("AcceptsMessage(Go) = %v, %v; want a in the left region to accept it", accepted, err)
+	}
+	if d, err := exec.Decide(go_); err != nil || d.Enabled() {
+		t.Errorf("Decide(Go) with the right branch in b0 = %+v, %v; want nothing enabled", d, err)
+	}
+
+	exec.SendSignal("Go", nil)
+	if err := exec.ProcessNextEvent(); err != nil {
+		t.Fatalf("ProcessNextEvent(Go): %v", err)
+	}
+	if d, ok := exec.LastDispatch(); !ok || d.Fired || d.Deferred {
+		t.Errorf("LastDispatch after Go = %+v, %v; want dispatched, neither fired nor deferred", d, ok)
+	}
+	if got := activeStateNames(exec); got != "a|b0" {
+		t.Fatalf("configuration after Go = %s, want a|b0", got)
+	}
+
+	if err := exec.ProcessNextEvent(); err != nil {
+		t.Fatalf("ProcessNextEvent(after 2): %v", err)
+	}
+	if d, ok := exec.LastDispatch(); !ok || !d.Fired {
+		t.Errorf("LastDispatch after the timer = %+v, %v; want b0 -> b fired", d, ok)
+	}
+	if got := activeStateNames(exec); got != "a|b" {
+		t.Fatalf("configuration after the timer = %s, want a|b", got)
+	}
+
+	if err := exec.ProcessNextEvent(); err != nil {
+		t.Fatalf("ProcessNextEvent(completion of b): %v", err)
+	}
+	if d, ok := exec.LastDispatch(); !ok || !d.Fired {
+		t.Errorf("LastDispatch after b completed = %+v, %v; want the join fired", d, ok)
+	}
+	if exec.State() != StateCompleted {
+		t.Errorf("machine %v after the join, want completed; configuration %s", exec.State(), activeStateNames(exec))
+	}
+}
+
 // The executor must route through an entry or exit point like a junction. The
 // machine is built on the AST directly; the `entry point`/`exit point` notation
 // is covered by the state_entry_exit_points conformance case.

@@ -59,17 +59,22 @@ Recorded against the corpus above, reproduced byte-identically on a second run:
 
 | Verdict | Files |
 |---|---|
-| `stable` | 177 |
-| `whitespace-only` | 72 |
-| `graph-diff` | 14 |
-| `unwritable` | 2 |
-| `unparseable` | 3 |
-| `refused` | 77 |
+| `stable` | 274 |
+| `whitespace-only` | 0 |
+| `graph-diff` | 0 |
+| `unwritable` | 1 |
+| `unparseable` | 0 |
+| `refused` | 70 |
 | **total** | **345** |
 
-So 268 of 345 files convert to Turtle, and of those 249 come back as the same graph (177 exactly,
-72 up to `sysx:sourceText` whitespace). The refusals by class: 19 `feature-declaration`,
-18 `prefix-metadata`, 9 `event-declaration`, 7 `succession`, 6 `operator-expr`,
+So 275 of 345 files convert to Turtle, and of those 274 come back as the same Turtle byte for
+byte. That is the source text at work: the decoder writes each file back from the `sysx:sourceText`
+it carries (see [What the gate does not do](#what-the-gate-does-not-do)), so the files that came
+back up to whitespace, as a different graph, or that could not be written back or re-read from
+canonical notation all moved to `stable` when it landed. The one `unwritable` file has an element
+whose owner is not in the graph, which no text can repair.
+The refusals by class: 19 `feature-declaration`,
+18 `prefix-metadata`, 9 `event-declaration`, 6 `operator-expr`,
 4 `duplicate-declaration`, 3 each of `snapshot-declaration`, `invocation-expr` and
 `assert-declaration`, 2 `feature-chain-expr`, and 1 each of `timeslice-declaration`,
 `feature-reference` and `constructor-expr`.
@@ -97,8 +102,8 @@ adjudicated:
   poor mapping of the model, and a `refused` file's refusal may be a defect. Correctness is the
   fixture tests' job; this gate measures whether the second hop reproduces the first.
 - **It does not exercise the structural predicates on their own.** Every node carries
-  `sysx:sourceText`, and the decoder writes notation from it where it can, so a `stable` verdict
-  here does not prove the graph could be written back without the text. That is what the
+  `sysx:sourceText`, and the decoder writes notation from it while it still states the graph, so a
+  `stable` verdict here does not prove the graph could be written back without the text. That is what the
   `sysx:sourceText`-stripping tests in `export_test.go` are for; see
   `.agents/skills/testing-rdf-roundtrip/SKILL.md`.
 - **It does not run when the downloaded corpora are absent**, except in CI, where the require
