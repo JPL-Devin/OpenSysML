@@ -246,8 +246,14 @@ func (r *Resolver) resolveInitial(scope *symbols.Scope, n *ast.InitialNode) {
 	if n.Name == "" {
 		return
 	}
-	if sym, ok := scope.LookupLocal(n.Name); ok && sym.Decl != ast.Node(n) {
-		r.initials[n] = sym
+	var others []*symbols.Symbol
+	for _, sym := range scope.LookupLocalAll(n.Name) {
+		if sym.Decl != ast.Node(n) {
+			others = append(others, sym)
+		}
+	}
+	if len(others) > 0 {
+		r.initials[n] = symbols.PreferDeclared(others)[0]
 	}
 }
 

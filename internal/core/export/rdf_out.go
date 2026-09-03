@@ -1062,8 +1062,8 @@ func (e *encoder) linkOrText(name *ast.QualifiedName, sym *symbols.Symbol, ok bo
 	return rdf.String(text)
 }
 
-// linked is the declaration and qualified name of a symbol's element when the
-// graph names it; a `first start` label or loop variable is bound but unnamed.
+// linked is the declaration and qualified name of the element a symbol names,
+// declared or effectively; a `first start` label or loop variable names none.
 func (e *encoder) linked(sym *symbols.Symbol, ok bool) (ast.Node, string, bool) {
 	if !ok || sym == nil {
 		return nil, "", false
@@ -1072,7 +1072,7 @@ func (e *encoder) linked(sym *symbols.Symbol, ok bool) (ast.Node, string, bool) 
 	if !declared {
 		return nil, "", false
 	}
-	if name, _ := declaredNameAndMembers(sym.Decl); name == "" {
+	if name, _ := declaredNameAndMembers(sym.Decl); name == "" && !sym.EffectiveName {
 		return nil, "", false
 	}
 	return sym.Decl, fqn, true

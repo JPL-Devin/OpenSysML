@@ -44,6 +44,7 @@ type element struct {
 	// scope is the qualified name of the namespace this element is declared
 	// in, which is what a reference written inside it is relative to.
 	scope    string
+	parent   *element
 	children []*element
 	// prefix is written ahead of the declaration, for a member a succession
 	// attached itself to (`then send Show(x) to screen;`).
@@ -100,7 +101,7 @@ func newDecoder(graph *rdf.Graph, names nameChoices) *decoder {
 		memberships:      map[string]membership{},
 		owningMembership: map[string]membership{},
 		names:            names,
-		wanted:           map[nameKey]string{},
+		wanted:           map[nameKey]bool{},
 	}
 }
 
@@ -165,9 +166,9 @@ type decoder struct {
 	memberships      map[string]membership
 	owningMembership map[string]membership
 	// names is the spelling chosen for each reference; while nil, references are
-	// written fully qualified and their scope-relative spelling noted in wanted.
+	// written fully qualified and noted in wanted for chooseNames to read.
 	names  nameChoices
-	wanted map[nameKey]string
+	wanted map[nameKey]bool
 }
 
 // build reads every subject into an element and links it to its owner,
@@ -234,6 +235,7 @@ func (d *decoder) build() ([]*element, error) {
 			continue
 		}
 		el.scope = parent.qname
+		el.parent = parent
 		parent.children = append(parent.children, el)
 	}
 	if err := d.checkReferences(); err != nil {
@@ -1260,16 +1262,16 @@ func (d *decoder) referenceName(term rdf.Term, el *element) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	spelled := d.spelledName(target)
 	key := nameKey{member: el.qname, target: target.qname}
-	relative := relativeName(target.qname, el.scope)
 	if d.names == nil {
-		d.wanted[key] = relative
-		return qualifiedNameText(target.qname), nil
+		d.wanted[key] = true
+		return qualifiedNameText(spelled), nil
 	}
 	if spelling, ok := d.names[key]; ok {
 		return qualifiedNameText(spelling), nil
 	}
-	return qualifiedNameText(relative), nil
+	return qualifiedNameText(relativeName(spelled, el.scope)), nil
 }
 
 // memberName renders a feature-chain segment: a literal as written, an IRI as
@@ -1282,7 +1284,80 @@ func (d *decoder) memberName(term rdf.Term) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return nameText(lastSegment(target.qname)), nil
+	name, ok := d.effectiveName(target)
+	if !ok {
+		return "", &UnsupportedError{
+			What: fmt.Sprintf("the element <%s>", target.iri),
+			Note: "a feature chain reaches it, but it declares no name and takes none from a feature it references or redefines",
+		}
+	}
+	return nameText(name), nil
+}
+
+// spelledName is el's qualified name as notation states it: a membership's
+// segment is not written, an unnamed usage's is the name it answers to.
+func (d *decoder) spelledName(el *element) string {
+	segments := strings.Split(el.qname, "::")
+	spelled := make([]string, 0, len(segments))
+	for i, cur := len(segments)-1, el; i >= 0; i-- {
+		segment := segments[i]
+		if cur != nil && strings.HasPrefix(segment, "@") {
+			if ontology.IsAncestorOrSelf(cur.metaclass, mOwningMembership) {
+				cur = cur.parent
+				continue
+			}
+			if name, ok := d.effectiveName(cur); ok {
+				segment = name
+			}
+		}
+		spelled = append(spelled, segment)
+		if cur != nil {
+			cur = cur.parent
+		}
+	}
+	slices.Reverse(spelled)
+	return strings.Join(spelled, "::")
+}
+
+// effectiveName is the name el answers to: its declared name, else the one its
+// naming feature supplies, as answersTo picks it.
+func (d *decoder) effectiveName(el *element) (string, bool) {
+	seen := map[string]bool{}
+	for !seen[el.iri] {
+		seen[el.iri] = true
+		if name, ok := d.stringOf(el, rdf.SysML+pDeclaredName); ok {
+			return name, true
+		}
+		naming, ok := d.namingFeature(el)
+		if !ok {
+			return "", false
+		}
+		if naming.IsLiteral() {
+			return lastSegment(naming.Value), true
+		}
+		next, err := d.referencedElement(naming.Value)
+		if err != nil {
+			return "", false
+		}
+		el = next
+	}
+	return "", false
+}
+
+// namingFeature is the feature an unnamed usage takes its name from, the one
+// it references, else the one it alone redefines (KerML 7.3.4.5).
+func (d *decoder) namingFeature(el *element) (rdf.Term, bool) {
+	if _, usage := metaclassUsage[el.metaclass]; !usage {
+		return rdf.Term{}, false
+	}
+	subject := rdf.IRI(el.iri)
+	if refs := d.graph.Objects(subject, rdf.SysML+relationshipProperty[ast.RelReferences]); len(refs) == 1 {
+		return refs[0], true
+	}
+	if redefs := d.graph.Objects(subject, rdf.SysML+relationshipProperty[ast.RelRedefines]); len(redefs) == 1 {
+		return redefs[0], true
+	}
+	return rdf.Term{}, false
 }
 
 // relativeName strips from qname the longest prefix of scope it is declared

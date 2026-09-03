@@ -167,6 +167,10 @@ func (c *refCollector) namespaceDecl(scope *symbols.Scope, decl ast.Node) bool {
 			c.add(scope, sp)
 		}
 		return true
+	case *ast.MultiplicityDecl:
+		c.multiplicity(scope, d.Range)
+		c.add(scope, d.Subsets)
+		return true
 	case *ast.Comment:
 		for _, a := range d.About {
 			c.add(scope, a)

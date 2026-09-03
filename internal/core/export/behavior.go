@@ -847,15 +847,8 @@ func (d *decoder) answersTo(el *element) (rdf.Term, bool) {
 	if _, named := d.stringOf(el, rdf.SysML+pDeclaredName); named {
 		return subject, true
 	}
-	if _, usage := metaclassUsage[el.metaclass]; !usage {
-		return subject, true
-	}
-	// The naming feature of KerML 7.3.4.5, as ast.NamingFeature picks it.
-	if refs := d.graph.Objects(subject, rdf.SysML+relationshipProperty[ast.RelReferences]); len(refs) == 1 {
-		return refs[0], true
-	}
-	if redefs := d.graph.Objects(subject, rdf.SysML+relationshipProperty[ast.RelRedefines]); len(redefs) == 1 {
-		return redefs[0], true
+	if naming, ok := d.namingFeature(el); ok {
+		return naming, true
 	}
 	return subject, true
 }
@@ -873,8 +866,17 @@ func (d *decoder) sequencesTo(el, to *element) bool {
 	if !ok {
 		return false
 	}
-	answers, ok := d.answersTo(to)
-	return ok && target.Equal(answers)
+	return d.namesMember(target, to)
+}
+
+// namesMember reports whether an end names member: the member itself, or the
+// naming feature an unnamed one answers to.
+func (d *decoder) namesMember(end rdf.Term, member *element) bool {
+	if member.metaclass != mInitialNode && end.Equal(rdf.IRI(member.iri)) {
+		return true
+	}
+	answers, ok := d.answersTo(member)
+	return ok && end.Equal(answers)
 }
 
 // sourceEnd returns the end a succession sequences from, by position or by the
@@ -893,8 +895,7 @@ func (d *decoder) sequencesFrom(el, from *element) bool {
 	if !states {
 		return false
 	}
-	answers, ok := d.answersTo(from)
-	return ok && source.Equal(answers)
+	return d.namesMember(source, from)
 }
 
 // impliedSource checks a `then <target>`, whose source end is the member before

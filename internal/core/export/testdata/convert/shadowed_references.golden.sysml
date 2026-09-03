@@ -7,7 +7,7 @@ package Shadowing {
     }
     part def 'Thermal Packet' specializes Packet {
         attribute 'packet data field' redefines 'packet data field';
-        attribute 'data field' redefines Packet::'data field' {
+        attribute 'data field' redefines 'data field' {
             attribute 'data field' : Field;
         }
     }

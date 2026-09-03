@@ -166,11 +166,10 @@ func TestWrittenReferencesResolveWhereWritten(t *testing.T) {
 	}
 	notation := structuralRoundTrip(t, "shadowed_references", graph)
 	for _, want := range []string{
-		// A redefinition target is looked up past the redefining feature, so
-		// the same name written short still reaches the redefined one.
+		// A redefinition target is looked up in the owner's generals, past the
+		// redefining feature and its members, so the short name reaches it.
 		"attribute 'packet data field' redefines 'packet data field';",
-		// A nested member of the same name captures the short name.
-		"attribute 'data field' redefines Packet::'data field' {",
+		"attribute 'data field' redefines 'data field' {",
 		// The subsetting feature itself, or a sibling, captures the short name;
 		// a reference to that sibling is short because it is the target.
 		"part payload subsets Shadowing::payload;",

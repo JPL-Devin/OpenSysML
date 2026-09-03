@@ -180,6 +180,66 @@ package App {
 	}
 }
 
+// A named multiplicity's bounds and the multiplicity it subsets are names an
+// editor navigates, so the collector has to report them.
+func TestNamedMultiplicitiesReferencesAreCollected(t *testing.T) {
+	const src = `package M {
+	attribute def Count;
+	attribute limit : Count;
+	multiplicity exactlyOne [1];
+	multiplicity upToLimit [0..limit];
+	multiplicity fewer subsets upToLimit;
+}`
+	r, root, rootScope := resolvedDocNamed(t, "m.kerml", src)
+	found := map[string]bool{}
+	for _, ref := range resolve.References(root, rootScope) {
+		found[nameText(ref.QN)] = true
+		if _, ok := r.ResolveReference(ref); !ok {
+			t.Errorf("%s does not resolve on its own", nameText(ref.QN))
+		}
+	}
+	for _, want := range []string{"Count", "limit", "upToLimit"} {
+		if !found[want] {
+			t.Errorf("References does not report %s", want)
+		}
+	}
+}
+
+// `first x` may be written before `x` is declared in the same body, so the
+// initial node names that later declaration rather than its own label.
+func TestAnInitialReferenceReachesALaterDeclaration(t *testing.T) {
+	const src = `package P {
+	action def Drive {
+		first go;
+		then action stop;
+		action go;
+	}
+	action def Idle {
+		first start;
+		then action wait;
+	}
+}`
+	r, root, _ := resolvedDoc(t, src)
+	initials := map[string]*ast.InitialNode{}
+	for _, def := range declared(root.Members[0]).(*ast.Package).Members {
+		for _, member := range declared(def).(*ast.Definition).Members {
+			if n, ok := declared(member).(*ast.InitialNode); ok {
+				initials[n.Name] = n
+			}
+		}
+	}
+	sym, ok := r.InitialSymbol(initials["go"])
+	if !ok {
+		t.Fatal("`first go` names the action declared after it, but InitialSymbol reports none")
+	}
+	if usage, isUsage := sym.Decl.(*ast.Usage); !isUsage || usage.Ident.Name != "go" {
+		t.Errorf("`first go` names %T, want the action usage `go`", sym.Decl)
+	}
+	if sym, ok := r.InitialSymbol(initials["start"]); ok {
+		t.Errorf("`first start` names %T, but no member is called start", sym.Decl)
+	}
+}
+
 // resolvedDoc parses and resolves src the way the workspace does, with the model
 // attached before the walk.
 func resolvedDoc(t *testing.T, src string) (*resolve.Resolver, *ast.RootNamespace, *symbols.Scope) {
@@ -199,6 +259,14 @@ func resolvedDocNamed(t *testing.T, name, src string) (*resolve.Resolver, *ast.R
 	r.SetModel(semantics.NewModel(r))
 	r.ResolveDocument(name, root)
 	return r, root, idx.DocumentRoot(name)
+}
+
+// declared is the member a membership wraps, or the node itself.
+func declared(n ast.Node) ast.Node {
+	if m, ok := n.(*ast.Membership); ok {
+		return m.Member
+	}
+	return n
 }
 
 // nameText renders a qualified name the way it was written.

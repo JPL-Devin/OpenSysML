@@ -22,7 +22,7 @@ type nameChoices map[nameKey]string
 
 // chooseNames reads notation written with every reference fully qualified and
 // picks each a spelling that resolves to its target there; none is a refusal.
-func chooseNames(text []byte, wanted map[nameKey]string) (nameChoices, error) {
+func chooseNames(text []byte, wanted map[nameKey]bool) (nameChoices, error) {
 	names := nameChoices{}
 	if len(wanted) == 0 {
 		return names, nil
@@ -46,7 +46,7 @@ func chooseNames(text []byte, wanted map[nameKey]string) (nameChoices, error) {
 		if ref.QN == nil || ref.Chain != nil || ref.Member == nil {
 			continue
 		}
-		key := nameKey{member: e.fqn[ref.Member], target: qualifiedText(ref.QN)}
+		key := nameKey{member: e.fqn[ref.Member], target: e.writtenTarget(ref)}
 		if _, ok := wanted[key]; ok {
 			occurrences[key] = append(occurrences[key], ref)
 		}
@@ -56,7 +56,8 @@ func chooseNames(text []byte, wanted map[nameKey]string) (nameChoices, error) {
 		if !ok {
 			continue
 		}
-		spelling, ok := spellingFor(e.res, refs, wanted[key], key.target, target)
+		// Each occurrence was written with the same fully qualified spelling.
+		spelling, ok := spellingFor(e.res, refs, qualifiedText(refs[0].QN), target)
 		if !ok {
 			return nil, &UnsupportedError{
 				What: fmt.Sprintf("the reference to %s from %s", key.target, key.member),
@@ -66,6 +67,22 @@ func chooseNames(text []byte, wanted map[nameKey]string) (nameChoices, error) {
 		names[key] = spelling
 	}
 	return names, nil
+}
+
+// writtenTarget is the qualified name of the element a written reference names:
+// the alias it is written through, else what it resolves to, else its text.
+func (e *encoder) writtenTarget(ref resolve.Reference) string {
+	if alias, ok := e.res.PartAlias(ref.QN, len(ref.QN.Parts)-1); ok {
+		if fqn, ok := e.fqn[alias.Decl]; ok {
+			return fqn
+		}
+	}
+	if sym, ok := e.res.ProbeReference(ref); ok && sym != nil {
+		if fqn, ok := e.fqn[sym.Decl]; ok {
+			return fqn
+		}
+	}
+	return qualifiedText(ref.QN)
 }
 
 // readNotation parses text in whichever of the two languages reads it clean,
@@ -82,12 +99,9 @@ func readNotation(text []byte) (*source.SourceFile, *ast.RootNamespace, bool) {
 	return nil, nil, false
 }
 
-// spellingFor tries the preferred spelling, then qname's suffixes shortest
-// first, then the global form, returning the first every occurrence resolves.
-func spellingFor(res *resolve.Resolver, refs []resolve.Reference, preferred, qname string, target ast.Node) (string, bool) {
-	if resolvesTo(res, refs, strings.Split(preferred, "::"), false, target) {
-		return preferred, true
-	}
+// spellingFor tries qname's suffixes shortest first, then the global form,
+// returning the first every occurrence resolves to target.
+func spellingFor(res *resolve.Resolver, refs []resolve.Reference, qname string, target ast.Node) (string, bool) {
 	segments := strings.Split(qname, "::")
 	for i := len(segments) - 1; i >= 0; i-- {
 		if resolvesTo(res, refs, segments[i:], false, target) {
