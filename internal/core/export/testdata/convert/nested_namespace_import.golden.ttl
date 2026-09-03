@@ -1,4 +1,5 @@
 @prefix elmt: <urn:sysmlv2:element:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -16,7 +17,10 @@ elmt:NestedNamespaceImport
     sysml:ownedMembership elmt:NestedNamespaceImport__Pkg1_om, elmt:NestedNamespaceImport__Pkg2_om ;
     sysml:ownedRelationship elmt:NestedNamespaceImport__Pkg1_om, elmt:NestedNamespaceImport__Pkg2_om ;
     sysx:sourceText "package NestedNamespaceImport {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"NestedNamespaceImport__Pkg1\"},{\"@id\":\"NestedNamespaceImport__Pkg2\"}]" ;
+    json:ownedMembership "[{\"@id\":\"NestedNamespaceImport__Pkg1_om\"},{\"@id\":\"NestedNamespaceImport__Pkg2_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"NestedNamespaceImport__Pkg1_om\"},{\"@id\":\"NestedNamespaceImport__Pkg2_om\"}]" .
 
 elmt:NestedNamespaceImport__Pkg1
     a sysml:Package ;
@@ -33,7 +37,10 @@ elmt:NestedNamespaceImport__Pkg1
     sysml:ownedMembership elmt:NestedNamespaceImport__Pkg1__A_om, elmt:NestedNamespaceImport__Pkg1__Pkg11_om ;
     sysml:ownedRelationship elmt:NestedNamespaceImport__Pkg1__A_om, elmt:NestedNamespaceImport__Pkg1__Pkg11_om ;
     sysx:sourceText "    package Pkg1 {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"NestedNamespaceImport__Pkg1__A\"},{\"@id\":\"NestedNamespaceImport__Pkg1__Pkg11\"}]" ;
+    json:ownedMembership "[{\"@id\":\"NestedNamespaceImport__Pkg1__A_om\"},{\"@id\":\"NestedNamespaceImport__Pkg1__Pkg11_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"NestedNamespaceImport__Pkg1__A_om\"},{\"@id\":\"NestedNamespaceImport__Pkg1__Pkg11_om\"}]" .
 
 elmt:NestedNamespaceImport__Pkg1_om
     a sysml:OwningMembership ;
@@ -134,7 +141,11 @@ elmt:NestedNamespaceImport__Pkg2
     sysml:ownedMember elmt:NestedNamespaceImport__Pkg2__a, elmt:NestedNamespaceImport__Pkg2__b ;
     sysml:ownedMembership elmt:NestedNamespaceImport__Pkg2__a_om, elmt:NestedNamespaceImport__Pkg2__b_om ;
     sysx:sourceText "    package Pkg2 {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedRelationship "[{\"@id\":\"NestedNamespaceImport__Pkg2___400\"},{\"@id\":\"NestedNamespaceImport__Pkg2___401\"},{\"@id\":\"NestedNamespaceImport__Pkg2___402\"},{\"@id\":\"NestedNamespaceImport__Pkg2__a_om\"},{\"@id\":\"NestedNamespaceImport__Pkg2__b_om\"}]" ;
+    json:ownedImport "[{\"@id\":\"NestedNamespaceImport__Pkg2___400\"},{\"@id\":\"NestedNamespaceImport__Pkg2___401\"},{\"@id\":\"NestedNamespaceImport__Pkg2___402\"}]" ;
+    json:ownedMember "[{\"@id\":\"NestedNamespaceImport__Pkg2__a\"},{\"@id\":\"NestedNamespaceImport__Pkg2__b\"}]" ;
+    json:ownedMembership "[{\"@id\":\"NestedNamespaceImport__Pkg2__a_om\"},{\"@id\":\"NestedNamespaceImport__Pkg2__b_om\"}]" .
 
 elmt:NestedNamespaceImport__Pkg2_om
     a sysml:OwningMembership ;

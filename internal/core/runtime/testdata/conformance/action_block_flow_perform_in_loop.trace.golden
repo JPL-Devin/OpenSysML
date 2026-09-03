@@ -5,12 +5,11 @@ stmt for i
   eval operator .. -> (1, 2, 3)
   iteration 1
     stmt node Bump
-      stmt perform
 step 1: token 1@compute
-        stmt assign doubled
-            eval feature i -> 1
-            eval literal 2 -> 2
-          eval operator * -> 2
+      stmt assign doubled
+          eval feature i -> 1
+          eval literal 2 -> 2
+        eval operator * -> 2
 step 2: token 1@done
 step 3: no active tokens
     stmt assign total
@@ -19,12 +18,11 @@ step 3: no active tokens
       eval operator + -> 2
   iteration 2
     stmt node Bump
-      stmt perform
 step 1: token 1@compute
-        stmt assign doubled
-            eval feature i -> 2
-            eval literal 2 -> 2
-          eval operator * -> 4
+      stmt assign doubled
+          eval feature i -> 2
+          eval literal 2 -> 2
+        eval operator * -> 4
 step 2: token 1@done
 step 3: no active tokens
     stmt assign total
@@ -33,12 +31,11 @@ step 3: no active tokens
       eval operator + -> 6
   iteration 3
     stmt node Bump
-      stmt perform
 step 1: token 1@compute
-        stmt assign doubled
-            eval feature i -> 3
-            eval literal 2 -> 2
-          eval operator * -> 6
+      stmt assign doubled
+          eval feature i -> 3
+          eval literal 2 -> 2
+        eval operator * -> 6
 step 2: token 1@done
 step 3: no active tokens
     stmt assign total

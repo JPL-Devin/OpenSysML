@@ -1,0 +1,11 @@
+{
+	"type": "state",
+	"libraries": true,
+	"trace": true,
+	"finalState": "done",
+	"stateVisits": ["init", "summing", "done"],
+	"outputs": {
+		"total": {"type": "Integer", "value": 66},
+		"i": {"type": "Integer", "value": 3}
+	}
+}

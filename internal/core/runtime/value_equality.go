@@ -23,8 +23,12 @@ type valueKey struct {
 }
 
 // valueKeyFunc extracts a comparable key from a Value. Values valueEqual holds
-// equal share a key: a whole number has the Integer's whatever kind carries it.
+// equal share a key: a whole number has the Integer's whatever kind carries it,
+// and every empty value has null's.
 func valueKeyFunc(v Value) valueKey {
+	if isEmptyValue(v) {
+		return valueKey{kind: ValNull}
+	}
 	key := valueKey{kind: v.Kind}
 	switch v.Kind {
 	case ValConst:

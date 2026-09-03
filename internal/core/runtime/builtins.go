@@ -12,10 +12,10 @@ import (
 // semantics.Values, while these need runtime values and an evaluation context to
 // call a body with. Dispatch is by the declaration a call resolves to, never by
 // its bare name: `seq->size()` is SequenceFunctions::size only where imported.
-var builtins map[string]func(*EvalContext, []Value) (Value, error)
+var builtins map[string]builtinFunc
 
 func init() {
-	builtins = map[string]func(*EvalContext, []Value) (Value, error){
+	builtins = map[string]builtinFunc{
 		// SequenceFunctions: the operations on general sequences of values.
 		"SequenceFunctions::#":            builtinSequenceIndex,
 		"SequenceFunctions::size":         builtinSequenceSize,
@@ -40,7 +40,7 @@ func init() {
 		// CollectionFunctions: the same operations on a Collection, each defined
 		// by the library as the sequence operation over the collection's
 		// elements.
-		"CollectionFunctions::#":           builtinSequenceIndex,
+		"CollectionFunctions::#":           builtinCollectionIndex,
 		"CollectionFunctions::size":        builtinSequenceSize,
 		"CollectionFunctions::isEmpty":     builtinSequenceIsEmpty,
 		"CollectionFunctions::notEmpty":    builtinSequenceNotEmpty,
@@ -76,7 +76,7 @@ func init() {
 		"NumericalFunctions::product": builtinNumericalProduct,
 		// IntegerFunctions::'..', the range, whose result the library declares
 		// `Integer[0..*]`: an ordered sequence, not a value kind of its own.
-		"IntegerFunctions::..": builtinIntegerRange,
+		"IntegerFunctions::..": rangeBuiltin("IntegerFunctions::'..'"),
 
 		"IntegerFunctions::sum":      builtinNumericalSum,
 		"IntegerFunctions::product":  builtinNumericalProduct,
@@ -85,18 +85,13 @@ func init() {
 		"RealFunctions::sum":         builtinRealSum,
 		"RealFunctions::product":     builtinRealProduct,
 	}
+	registerNamedOperatorBuiltins()
 }
 
-// builtinFor returns the implementation of the library declaration sym is,
-// where it is one of the collection functions. Unlike the scalar library
-// functions, these declarations do carry bodies — SequenceFunctions::size is
-// defined recursively as `if isEmpty(seq)? 0 else size(tail(seq)) + 1` — but
-// the body is the specification of the operation, not the way to compute it, so
-// a name that denotes the library declaration is computed by the implementation
-// of that operation. A calc the model declares itself resolves to its own
-// symbol, whose qualified name is not one of these.
-func (ctx *Context) builtinFor(sym *symbols.Symbol) (func(*EvalContext, []Value) (Value, error), bool) {
-	if sym == nil {
+// builtinFor answers the implementation of a library-declared collection
+// function; a calc the model declares under the same name is never answered here.
+func (ctx *Context) builtinFor(sym *symbols.Symbol) (builtinFunc, bool) {
+	if sym == nil || !ctx.libraryDeclared(sym) {
 		return nil, false
 	}
 	fn, ok := builtins[ctx.qualifiedSymbolName(sym)]
