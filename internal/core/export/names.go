@@ -57,13 +57,21 @@ func chooseNames(name string, text []byte, want *wanted) (nameChoices, error) {
 	if want.empty() {
 		return names, nil
 	}
+	// A rendering that cannot be read back leaves every spelling unchecked, so
+	// none is chosen by guess.
 	file, root, ok := readNotation(name, text)
 	if !ok {
-		return names, nil
+		return nil, &UnsupportedError{
+			What: "the references the graph links",
+			Note: "the notation written for them does not parse, so no spelling can be checked to reach its element",
+		}
 	}
 	e, err := newEncoder(file, root)
 	if err != nil {
-		return names, nil
+		return nil, &UnsupportedError{
+			What: "the references the graph links",
+			Note: fmt.Sprintf("the notation written for them cannot be read back (%v), so no spelling can be checked to reach its element", err),
+		}
 	}
 	declared := make(map[string]ast.Node, len(e.fqn))
 	for node, fqn := range e.fqn {

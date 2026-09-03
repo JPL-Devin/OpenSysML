@@ -1413,6 +1413,33 @@ func TestInconsistentTransitionLinksAreRefused(t *testing.T) {
 	}
 }
 
+// A graph whose canonical notation does not parse gives the spelling of its
+// references nothing to be checked against, so the conversion refuses rather
+// than write them unchecked.
+func TestUnreadableNotationRefusesToSpellReferences(t *testing.T) {
+	src := "package P {\n\tpart def A;\n\tpart def B :> A;\n\tstate def M {\n\t\tstate s1;\n\t\tstate s2;\n\t\ttransition first s1 if true then s2;\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	const guard = "sysx:guard expr:P__M___402_pguard ;"
+	if !strings.Contains(string(turtle), guard) {
+		t.Fatalf("the guard is not the one the test rewrites:\n%s", turtle)
+	}
+	// A guard kept as text is written as it is, and this one cannot be read.
+	graph := strings.Replace(string(turtle), guard, `sysx:guard "(" ;`, 1)
+	graph = string(withoutTriples(t, []byte(graph), "sysx:sourceText"))
+	graph = string(withoutTriples(t, []byte(graph), "sysx:sourceTail"))
+	var unsupported *export.UnsupportedError
+	_, err = export.Convert("m.ttl", []byte(graph), export.FormatTurtle, export.FormatSysML)
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("got %v, want an UnsupportedError", err)
+	}
+	if !strings.Contains(err.Error(), "does not parse") {
+		t.Errorf("the error does not say the notation is unreadable: %v", err)
+	}
+}
+
 // A transition and an accept state their trigger and payload in the head too,
 // inside the bodies that allow them.
 func TestBehavioralHeadsComeBackFromTheGraphAlone(t *testing.T) {
