@@ -144,6 +144,16 @@ static inline sysml_int sysml_natural_arg(sysml_int v) {
 	return v;
 }
 
+/* Both arguments are checked, first then second, before comparing. */
+static inline sysml_int sysml_natural_max(sysml_int a, sysml_int b) {
+	sysml_natural_arg(a); sysml_natural_arg(b);
+	return sysml_imax(a, b);
+}
+static inline sysml_int sysml_natural_min(sysml_int a, sysml_int b) {
+	sysml_natural_arg(a); sysml_natural_arg(b);
+	return sysml_imin(a, b);
+}
+
 /* Zero signs follow Go's math.Max/Min: max prefers +0, min prefers -0. */
 static inline sysml_real sysml_rmax(sysml_real a, sysml_real b) {
 	if (a == 0 && b == 0) return signbit(a) ? b : a;
@@ -564,11 +574,19 @@ func (e *cEmitter) stmt(s Stmt) {
 		e.linef("while (%s) {", e.expr(s.Cond))
 		e.indent++
 		e.block(s.Body)
+		until := ""
+		if s.Until != nil {
+			until = e.expr(s.Until)
+			if e.collections {
+				e.linef("bool sysml_until = %s;", until)
+				until = "sysml_until"
+			}
+		}
 		if e.collections {
 			e.compact(escapingSeqs(s), mark)
 		}
-		if s.Until != nil {
-			e.linef("if (%s) break;", e.expr(s.Until))
+		if until != "" {
+			e.linef("if (%s) break;", until)
 		}
 		e.indent--
 		e.linef("}")

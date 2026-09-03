@@ -340,6 +340,7 @@ package Compiled {
 		calc def ForR { in x : Integer[0..*]; attribute s : Real = 0.0; for v in x { s = s + v; } return : Real = s; }
 		calc def Churn { in n : Integer; attribute i : Integer = 0; attribute total : Integer = 0; attribute keep : Integer[0..*] = (); while i < n { attribute s : Integer[0..*] = 1..100; total = total + size(s); keep = including(keep, i); i = i + 1; } return : Integer = total + size(keep); }
 		calc def ChurnFor { in n : Integer; attribute keep : Real[0..*] = (); for i in 1..n { attribute s : Real[0..*] = (1..100)->collect {in v : Integer; v / 2}; if i % 2 == 0 { keep = including(keep, s#(i % 100 + 1)); } } return : Real[0..*] = keep; }
+		calc def UntilSeq { in n : Integer; attribute i : Integer = 0; attribute keep : Integer[0..*] = (); loop { i = i + 1; attribute s : Integer[0..*] = including((), i * 10); keep = union(keep, (size(s) + 100, size(s) + 101, size(s) + 102)); } until s#(size(s)) >= n or size(including(s, i)) > 1 and i > 200; return : Integer[0..*] = keep; }
 		calc def ChurnNest { in n : Integer; attribute keep : Integer[0..*] = (); attribute inner : Integer[0..*] = (); attribute i : Integer = 0; while i < n { inner = (); for v in 1..50 { inner = including(inner, v); } keep = including(keep, size(inner)); for w in keep { i = i + 0; } i = i + 1; } return : Integer = size(keep) + size(inner); }
 		calc def ForB { in n : Integer; attribute s : Integer = 0; for v in 1..n { for w in 1..v { s = s + w; } } return : Integer = s; }
 		calc def RS { in x : Integer[0..*]; return : Real = RealFunctions::sum(x); }
