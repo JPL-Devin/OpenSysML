@@ -170,38 +170,47 @@ func (ec *EvalContext) evalSequenceIndex(n *ast.IndexExpr) (Value, error) {
 	return elementAt("sequence index", elementsOf(operand), index)
 }
 
-// bodyOf reads the body expression a collection operation takes as its
-// function-valued parameter, checking it declares the parameters the operation
-// calls it with. An argument that is not itself a body is evaluated to the body it denotes.
-func (ec *EvalContext) bodyOf(op string, val Value, arity int) (*ast.BodyExpr, error) {
+// bodyOf reads the body a collection operation takes as its function-valued
+// parameter, checking it declares the parameters the operation calls it with.
+// An argument that is not itself a body is evaluated to the body it denotes.
+func (ec *EvalContext) bodyOf(op string, val Value, arity int) (Value, error) {
 	if val.Kind != ValExpr {
-		return nil, fmt.Errorf("%w: %s requires a body expression, got %s", ErrTypeMismatch, op, describeValue(val))
+		return Value{}, fmt.Errorf("%w: %s requires a body expression, got %s", ErrTypeMismatch, op, describeValue(val))
 	}
 	body, ok := val.Expr().(*ast.BodyExpr)
 	if !ok {
-		denoted, err := ec.Eval(val.Expr())
+		denoted, err := ec.evalClosure(val)
 		if err != nil {
-			return nil, err
+			return Value{}, err
 		}
 		if denoted.Kind != ValExpr {
-			return nil, fmt.Errorf("%w: %s requires a body expression, got %s", ErrTypeMismatch, op, describeValue(denoted))
+			return Value{}, fmt.Errorf("%w: %s requires a body expression, got %s", ErrTypeMismatch, op, describeValue(denoted))
 		}
 		if body, ok = denoted.Expr().(*ast.BodyExpr); !ok {
-			return nil, fmt.Errorf("%w: %s requires a body expression, got %T", ErrTypeMismatch, op, denoted.Expr())
+			return Value{}, fmt.Errorf("%w: %s requires a body expression, got %T", ErrTypeMismatch, op, denoted.Expr())
 		}
+		val = denoted
 	}
 	if len(body.Params) != arity {
-		return nil, fmt.Errorf("%w: %s calls its body with %d argument(s), but it declares %d parameter(s)",
+		return Value{}, fmt.Errorf("%w: %s calls its body with %d argument(s), but it declares %d parameter(s)",
 			ErrBodyArity, op, arity, len(body.Params))
 	}
-	return body, nil
+	return val, nil
 }
 
-// applyBody evaluates a body expression with its parameters bound to args. The
-// bindings are a frame of their own, so the body sees the names of the scope it
-// was written in as well as its own parameters, and a nested body's parameters
-// shadow rather than replace the enclosing ones.
-func (ec *EvalContext) applyBody(body *ast.BodyExpr, args ...Value) (Value, error) {
+// evalClosure evaluates a deferred expression in the environment it closes over.
+func (ec *EvalContext) evalClosure(val Value) (Value, error) {
+	return val.exprEnv(ec).Eval(val.Expr())
+}
+
+// applyBody evaluates a body with its parameters bound to args, as a frame of
+// its own over the environment the body closes over.
+func (ec *EvalContext) applyBody(val Value, args ...Value) (Value, error) {
+	body, ok := val.Expr().(*ast.BodyExpr)
+	if !ok {
+		return Value{}, fmt.Errorf("%w: a body expression is required, got %s", ErrTypeMismatch, describeValue(val))
+	}
+	ec = val.exprEnv(ec)
 	if body.Result == nil {
 		return Value{}, fmt.Errorf("%w: body expression states no result", ErrNoResultExpression)
 	}
@@ -245,7 +254,7 @@ func (ec *EvalContext) applyBody(body *ast.BodyExpr, args ...Value) (Value, erro
 // `Boolean[1]` — a selector, a rejector, a test — and reports a result that is
 // not a Boolean rather than reading it as false, which would silently drop the
 // element it was asked about.
-func (ec *EvalContext) applyPredicate(op string, body *ast.BodyExpr, arg Value) (bool, error) {
+func (ec *EvalContext) applyPredicate(op string, body Value, arg Value) (bool, error) {
 	val, err := ec.applyBody(body, arg)
 	if err != nil {
 		return false, err

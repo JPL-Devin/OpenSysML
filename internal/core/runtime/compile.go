@@ -411,7 +411,7 @@ func (c *calcCompiler) compileNode(n ast.Node, scope *symbols.Scope, layout *fra
 		}
 		return constNode(intScalar(v)), nil
 	case *ast.LiteralReal:
-		v, err := strconv.ParseFloat(e.Value, 64)
+		v, err := semantics.ParseReal(e.Value)
 		if err != nil {
 			return nil, ineligible(fmt.Sprintf("real literal %s outside the range", e.Value))
 		}

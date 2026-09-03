@@ -72,7 +72,12 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   `ControlFunctions::'if'`, `'and'`, `'or'`, `'implies'` and `'??'`, which evaluate only the
   operand they select and accept an omitted second operand when the first decides. Built-in
   functions bind named arguments (`sum0(zero = 0, collection = xs)`), and a model's own calc
-  named like a library function is no longer shadowed by the built-in of that name.
+  named like a library function is no longer shadowed by the built-in of that name. A body
+  passed on through an `expr` parameter (`Keep(xs, { in x; x > threshold })` with `Keep`
+  doing `xs->select pred`) is applied in the scope it was written in, so it reads its writer's
+  `threshold`, and one a control function selects is applied rather than answered as a body.
+  A nonzero Real notation too small for a Real (`1e-400`, as a literal or through `ToReal`)
+  is an overflow error rather than `0.0`.
   `RationalFunctions::rat`/`numer`/`denom` (a Rational is a float64 here),
   `CollectionFunctions::'array#'` and `BaseFunctions::'['` (no Array value kind),
   `BaseFunctions::all`/`as`/`meta`/`istype`/`hastype`/`'@'`/`'@@'` and `ControlFunctions::'.'`

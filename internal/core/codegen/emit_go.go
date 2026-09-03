@@ -167,11 +167,29 @@ func sysmlParseInt(s, name string) int64 {
 
 func sysmlParseReal(s, name string) float64 {
 	v, err := strconv.ParseFloat(s, 64)
+	if errors.Is(err, strconv.ErrRange) || err == nil && v == 0 && sysmlNonzeroNotation(s) {
+		fmt.Fprintf(os.Stderr, "argument %s: arithmetic overflow: %s is outside the Real range\n", name, s)
+		os.Exit(1)
+	}
 	if err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
 		fmt.Fprintf(os.Stderr, "argument %s: %s is not a finite Real\n", name, s)
 		os.Exit(2)
 	}
 	return v
+}
+
+// sysmlNonzeroNotation reports whether the significand of s has a nonzero
+// digit, so a zero it parsed to is an underflow.
+func sysmlNonzeroNotation(s string) bool {
+	s = strings.ToLower(strings.TrimLeft(s, "+-"))
+	significand, digits := s, "123456789"
+	if strings.HasPrefix(s, "0x") {
+		significand, _, _ = strings.Cut(s[2:], "p")
+		digits += "abcdef"
+	} else {
+		significand, _, _ = strings.Cut(s, "e")
+	}
+	return strings.ContainsAny(significand, digits)
 }
 
 func sysmlParseBool(s, name string) bool {

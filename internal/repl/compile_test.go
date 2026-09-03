@@ -49,7 +49,8 @@ var compiledCases = []compiledCase{
 	{"UntilLoop", []string{"0"}}, {"UntilLoop", []string{"-3"}}, {"UntilLoop", []string{"5"}},
 	{"UntilLocal", []string{"0"}}, {"UntilLocal", []string{"3"}},
 	{"WhileUntil", []string{"0"}}, {"WhileUntil", []string{"5"}}, {"WhileUntil", []string{"20"}},
-	{"Hypot", []string{"1e-400", "4.0"}}, {"Hypot", []string{"1e-320", "4.0"}},
+	{"Hypot", []string{"1e-400", "4.0"}}, {"Hypot", []string{"1e-320", "4.0"}}, {"Hypot", []string{"1e400", "4.0"}},
+	{"Hypot", []string{"0e-400", "4.0"}},
 	{"fib", []string{"10"}}, {"Specialized", []string{"12"}}, {"ViaUsage", []string{"11"}},
 	{"NamedOrder", []string{"0", "9223372036854775807"}}, {"NamedOrder", []string{"3", "4"}},
 	{"NamedTwice", []string{"0", "9223372036854775807"}}, {"NamedTwice", []string{"3", "9223372036854775807"}}, {"NamedTwice", []string{"3", "4"}},
@@ -158,6 +159,13 @@ func TestCompiledCalcsAgreeWithInterpreter(t *testing.T) {
 				var exit *exec.ExitError
 				if !errors.As(err, &exit) || exit.ExitCode() != 2 {
 					t.Errorf("--repeat %q: got %v %q, want usage and exit status 2", repeat, err, out)
+				}
+			}
+			for _, arg := range []string{"inf", "-inf", "nan", "1x", ""} {
+				out, err := exec.Command(exes["Hypot"], arg, "4.0").CombinedOutput()
+				var exit *exec.ExitError
+				if !errors.As(err, &exit) || exit.ExitCode() != 2 || !strings.Contains(string(out), "is not a finite Real") {
+					t.Errorf("Hypot(%q, 4.0): got %v %q, want not a Real and exit status 2", arg, err, out)
 				}
 			}
 			if out, err := exec.Command(exes["Fib"], "--repeat", "3", "10").Output(); err != nil || strings.TrimSpace(string(out)) != "55" {

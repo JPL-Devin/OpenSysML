@@ -311,15 +311,11 @@ func parseReal(name, s, typeName string) (Value, error) {
 	if !isDecimalNotation(text) {
 		return Value{}, invalidNotation(name, s, typeName)
 	}
-	x, err := strconv.ParseFloat(text, 64)
-	if err != nil && !errors.Is(err, strconv.ErrRange) {
-		return Value{}, invalidNotation(name, s, typeName)
-	}
-	result, err := realResult(x)
+	x, err := semantics.ParseReal(text)
 	if err != nil {
-		return Value{}, fmt.Errorf("function %s: %s: %w", name, text, err)
+		return Value{}, fmt.Errorf("%w: function %s: %s is outside the Real range", err, name, text)
 	}
-	return Value{Kind: ValConst, Const: result}, nil
+	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: x}}, nil
 }
 
 // isDecimalNotation reports whether text is a decimal number: an optional sign,

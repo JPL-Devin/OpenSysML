@@ -170,7 +170,7 @@ func (ec *EvalContext) bindBuiltinArgs(name string, exprs []ast.Node, named []as
 // is evaluated (to itself) like any other argument, which the trace records.
 func (ec *EvalContext) evalArgument(params []builtinParam, i int, arg ast.Node) (Value, error) {
 	if _, body := arg.(*ast.BodyExpr); !body && i < len(params) && params[i].deferred {
-		return NewExprValue(arg), nil
+		return NewExprValue(arg, ec.closure()), nil
 	}
 	return ec.Eval(arg)
 }

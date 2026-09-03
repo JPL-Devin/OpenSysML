@@ -214,10 +214,29 @@ static sysml_int sysml_parse_int(const char *s, const char *name) {
 	return v;
 }
 
+/* Whether the significand of s has a nonzero digit, so a zero it parsed to is an underflow. */
+static bool sysml_nonzero_notation(const char *s) {
+	if (*s == '+' || *s == '-') s++;
+	bool hex = s[0] == '0' && (s[1] == 'x' || s[1] == 'X');
+	if (hex) s += 2;
+	for (; *s; s++) {
+		if (*s == (hex ? 'p' : 'e') || *s == (hex ? 'P' : 'E')) return false;
+		if (*s >= '1' && *s <= '9') return true;
+		if (hex && ((*s >= 'a' && *s <= 'f') || (*s >= 'A' && *s <= 'F'))) return true;
+	}
+	return false;
+}
+
 static sysml_real sysml_parse_real(const char *s, const char *name) {
 	char *end;
+	errno = 0;
 	double v = strtod(s, &end);
-	if (*s == 0 || *end != 0 || !isfinite(v)) {
+	bool notation = *s != 0 && *end == 0;
+	if (notation && ((isinf(v) && errno == ERANGE) || (v == 0 && sysml_nonzero_notation(s)))) {
+		fprintf(stderr, "argument %s: arithmetic overflow: %s is outside the Real range\n", name, s);
+		exit(1);
+	}
+	if (!notation || !isfinite(v)) {
 		fprintf(stderr, "argument %s: %s is not a finite Real\n", name, s);
 		exit(2);
 	}

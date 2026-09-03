@@ -502,7 +502,7 @@ func (fc *funcCompiler) compileExpr(n ast.Node) (Expr, error) {
 		}
 		return IntLit{Value: v}, nil
 	case *ast.LiteralReal:
-		v, err := strconv.ParseFloat(n.Value, 64)
+		v, err := semantics.ParseReal(n.Value)
 		if err != nil {
 			return nil, fc.unsupported(fmt.Sprintf("literal %s is outside the Real range", n.Value))
 		}

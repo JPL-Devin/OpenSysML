@@ -103,6 +103,12 @@ func (ec *EvalContext) nestedEnv(scope *symbols.Scope) *EvalContext {
 	}
 }
 
+// closure snapshots this environment for an expression evaluated later, so it
+// reads the bindings in force where it was written, not where it is applied.
+func (ec *EvalContext) closure() *EvalContext {
+	return ec.nestedEnv(ec.scope)
+}
+
 // Push adds a new frame to the stack (on calc invocation, lambda entry).
 func (ec *EvalContext) Push(bindings map[string]Value) {
 	ec.frames = append(ec.frames, mapFrame(bindings))
@@ -182,8 +188,8 @@ func (ec *EvalContext) eval(node ast.Node) (Value, error) {
 	case *ast.IndexExpr:
 		return ec.evalIndexExpr(n)
 	case *ast.BodyExpr:
-		// BodyExpr is not directly evaluated - wrapped as ValExpr for delayed evaluation
-		return NewExprValue(n), nil
+		// A body is a value closed over its environment, applied where it is called.
+		return NewExprValue(n, ec.closure()), nil
 	default:
 		return Value{}, fmt.Errorf("unsupported node type: %T", node)
 	}
@@ -250,9 +256,8 @@ func (ec *EvalContext) evalLiteralReal(n *ast.LiteralReal) (Value, error) {
 	val, ok := ec.ctx.realLiterals[n]
 	if !ok {
 		var err error
-		if val, err = strconv.ParseFloat(n.Value, 64); err != nil {
-			return Value{}, fmt.Errorf("%w: literal %s is outside the Real range",
-				semantics.ErrArithmeticOverflow, n.Value)
+		if val, err = semantics.ParseReal(n.Value); err != nil {
+			return Value{}, fmt.Errorf("%w: literal %s is outside the Real range", err, n.Value)
 		}
 		ec.ctx.realLiterals[n] = val
 	}

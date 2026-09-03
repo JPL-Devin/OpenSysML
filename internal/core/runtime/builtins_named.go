@@ -33,19 +33,28 @@ func registerNamedOperatorBuiltins() {
 }
 
 // evalDeferred evaluates an argument bound to an `expr` parameter: the
-// expression as it was written, or the result of a parameterless body.
+// expression as it was written, or the result of the parameterless body it is
+// or denotes.
 func (ec *EvalContext) evalDeferred(op string, val Value) (Value, error) {
 	if val.Kind != ValExpr {
 		return val, nil
 	}
-	if body, ok := val.Expr().(*ast.BodyExpr); ok {
-		if len(body.Params) != 0 {
-			return Value{}, fmt.Errorf("%w: %s evaluates its body with no argument, but it declares %d parameter(s)",
-				ErrBodyArity, op, len(body.Params))
+	body, ok := val.Expr().(*ast.BodyExpr)
+	if !ok {
+		denoted, err := ec.evalClosure(val)
+		if err != nil || denoted.Kind != ValExpr {
+			return denoted, err
 		}
-		return ec.applyBody(body)
+		if body, ok = denoted.Expr().(*ast.BodyExpr); !ok {
+			return Value{}, fmt.Errorf("%w: %s requires a value or a body expression, got %T", ErrTypeMismatch, op, denoted.Expr())
+		}
+		val = denoted
 	}
-	return ec.Eval(val.Expr())
+	if len(body.Params) != 0 {
+		return Value{}, fmt.Errorf("%w: %s evaluates its body with no argument, but it declares %d parameter(s)",
+			ErrBodyArity, op, len(body.Params))
+	}
+	return ec.applyBody(val)
 }
 
 // builtinControlIf is ControlFunctions::'if'(test, thenValue, elseValue): the

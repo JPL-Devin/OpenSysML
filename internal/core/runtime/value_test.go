@@ -186,7 +186,7 @@ func TestValuePayloadAccessorsAreKindSpecific(t *testing.T) {
 	values := []Value{
 		{}, {Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 7}},
 		{Kind: ValNull}, {Kind: ValInstance, Instance: 9},
-		NewStringValue("s"), NewSequenceValue(seq), NewSetValue(set), NewExprValue(body),
+		NewStringValue("s"), NewSequenceValue(seq), NewSetValue(set), NewExprValue(body, nil),
 		NewQuantityValue(q), NewVariantValue(variant, 4), NewEnumLiteral(literal),
 	}
 	// A payload whose Kind was rewritten afterwards answers only to the new kind.
@@ -226,7 +226,7 @@ func TestValuePayloadAccessorsAreKindSpecific(t *testing.T) {
 		t.Errorf("Str() = %q, want \"s\"", got)
 	}
 	if NewSequenceValue(seq).Sequence() != seq || NewSetValue(set).Set() != set ||
-		NewExprValue(body).Expr() != body || NewQuantityValue(q).Quantity() != q ||
+		NewExprValue(body, nil).Expr() != body || NewQuantityValue(q).Quantity() != q ||
 		NewVariantValue(variant, 4).Variant() != variant || NewEnumLiteral(literal).Literal() != literal {
 		t.Error("an accessor did not return the payload its constructor was given")
 	}

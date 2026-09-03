@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 	"strconv"
+	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 )
@@ -19,6 +20,23 @@ var (
 	// would have: an Integer that does not fit int64, or a non-finite Real.
 	ErrArithmeticOverflow = errors.New("arithmetic overflow")
 )
+
+// ParseReal reads decimal Real notation as a binary64 Real. A magnitude that
+// overflows to an infinity, or a nonzero one that underflows to zero, is
+// ErrArithmeticOverflow rather than a silently rounded value.
+func ParseReal(text string) (float64, error) {
+	x, err := strconv.ParseFloat(text, 64)
+	if err != nil || (x == 0 && !isZeroNotation(text)) {
+		return 0, ErrArithmeticOverflow
+	}
+	return x, nil
+}
+
+// isZeroNotation reports whether decimal notation denotes zero: no significand digit is nonzero.
+func isZeroNotation(text string) bool {
+	significand, _, _ := strings.Cut(strings.ToLower(text), "e")
+	return !strings.ContainsAny(significand, "123456789")
+}
 
 // ValueKind discriminates a model-level constant value.
 type ValueKind int
@@ -86,7 +104,7 @@ func evalConst(n ast.Node) (Value, bool) {
 		}
 		return Value{Kind: ValInt, Int: i}, true
 	case *ast.LiteralReal:
-		f, err := strconv.ParseFloat(e.Value, 64)
+		f, err := ParseReal(e.Value)
 		if err != nil {
 			return Value{}, false
 		}

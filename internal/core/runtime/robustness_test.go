@@ -219,6 +219,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("numeric_library_call_that_has_no_value", testNumericLibraryCallThatHasNoValue)
 	t.Run("named_library_call_that_has_no_value", testNamedLibraryCallThatHasNoValue)
 	t.Run("builtin_named_argument_that_binds_nothing", testBuiltinNamedArgumentThatBindsNothing)
+	t.Run("body_by_reference_that_cannot_be_applied", testBodyByReferenceThatCannotBeApplied)
+	t.Run("real_literal_that_underflows", testRealLiteralThatUnderflows)
 	t.Run("string_operand_of_the_wrong_kind", testStringOperandOfTheWrongKind)
 	t.Run("collection_body_of_the_wrong_arity", testCollectionBodyOfTheWrongArity)
 	t.Run("select_predicate_is_not_a_condition", testSelectPredicateIsNotACondition)
@@ -1354,6 +1356,69 @@ func testBuiltinNamedArgumentThatBindsNothing(t *testing.T) {
 		if !errors.Is(err, tt.want) {
 			t.Errorf("%s = (%v, %v), want %v", tt.expr, got, err, tt.want)
 		}
+	}
+}
+
+// testBodyByReferenceThatCannotBeApplied: a body reaching a built-in through an
+// `expr` parameter is applied in the scope it was written in, and one selected
+// by a control function that declares parameters is reported.
+func testBodyByReferenceThatCannotBeApplied(t *testing.T) {
+	src := `
+		package test {
+			calc def Pick { in expr chosen; return : Integer = ControlFunctions::'if'(true, chosen, 0); }
+			calc def Keep { in xs : Integer[*]; in expr pred; return : Integer[*] = xs->select pred; }
+			calc def PicksUnary { return : Integer = Pick({ in x; x }); }
+			calc def KeepsUnbound { in xs : Integer[*]; return : Integer[*] = Keep(xs, { in x; x > bound }); }
+			calc def KeepsPriorFrame {
+				in xs : Integer[*];
+				in pred : Integer;
+				return : Integer[*] = Keep(xs, { in x; x > pred });
+			}
+		}
+	`
+	for _, tt := range []struct {
+		calc string
+		args []Value
+		want error
+	}{
+		{"PicksUnary", nil, ErrBodyArity},
+		{"KeepsUnbound", []Value{constSequence(1, 2)}, ErrUnresolvedReference},
+	} {
+		err := calcErrorWithLibraries(t, src, tt.calc, tt.args, 10000)
+		if !errors.Is(err, tt.want) {
+			t.Errorf("%s = %v, want %v", tt.calc, err, tt.want)
+		}
+	}
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	sym, scope := calcByName(t, idx.DocumentRoot("<test>"), "test", "KeepsPriorFrame")
+	got, err := ctx.InvokeCalc(sym, []Value{constSequence(1, 2, 3), constInt(1)}, scope)
+	if err != nil {
+		t.Fatalf("KeepsPriorFrame = %v", err)
+	}
+	if want := constSequence(2, 3); !valueIdentical(got, want) {
+		t.Errorf("KeepsPriorFrame = %s, want %s: the body's pred is its caller's Integer, not Keep's body", FormatValue(got), FormatValue(want))
+	}
+}
+
+// testRealLiteralThatUnderflows: a nonzero Real literal too small for a Real is
+// reported rather than read as zero.
+func testRealLiteralThatUnderflows(t *testing.T) {
+	for _, tt := range []struct {
+		expr string
+		want error
+	}{
+		{`1.0e-400`, semantics.ErrArithmeticOverflow},
+		{`1.0e400`, semantics.ErrArithmeticOverflow},
+		{`RealFunctions::ToReal("1e-400")`, semantics.ErrArithmeticOverflow},
+	} {
+		got, err := evalCollectionExpr(t, tt.expr)
+		if !errors.Is(err, tt.want) {
+			t.Errorf("%s = (%v, %v), want %v", tt.expr, got, err, tt.want)
+		}
+	}
+	got, err := evalCollectionExpr(t, `0.0e-400`)
+	if err != nil || got.Kind != ValConst || got.Const.Kind != semantics.ValReal || got.Const.Real != 0 {
+		t.Errorf("0.0e-400 = (%v, %v), want the Real 0", got, err)
 	}
 }
 

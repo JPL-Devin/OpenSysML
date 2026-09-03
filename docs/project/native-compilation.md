@@ -24,7 +24,9 @@ sysml model.sysml -compile Pkg::Fib -source -o fib.c    # write the generated so
 The executable takes the calc's parameters as command-line arguments, positionally, and prints
 the result on one line in the interpreter's notation (`6765`, `1.75`, `2.0`, `1e21`, `true`). An
 input the interpreter would reject — Integer overflow, division or modulo by zero, a non-finite
-Real, recursion past the calc depth budget — exits with status 1 and the reason on stderr.
+Real, a Real argument written outside the Real range (`1e400`, or `1e-400` underflowing to
+zero), recursion past the calc depth budget — exits with status 1 and the reason on stderr; an
+argument that is not the notation of its type at all exits with status 2.
 
 The generated source is always written beside the executable (`fib.c` / `fib.go`), so what was
 compiled is inspectable. `OPENSYSML_CC` names the C compiler (default `cc`).

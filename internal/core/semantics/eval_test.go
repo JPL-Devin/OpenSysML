@@ -1,7 +1,9 @@
 package semantics
 
 import (
+	"errors"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -36,6 +38,32 @@ func TestEvalIntLiteralsAndArithmetic(t *testing.T) {
 		if !ok || v.Kind != ValInt || v.Int != want {
 			t.Fatalf("%q = %+v ok=%v, want int %d", src, v, ok, want)
 		}
+	}
+}
+
+// ParseReal reads every representable notation, a zero however written, and
+// reports a magnitude float64 cannot hold instead of rounding it to 0 or Inf.
+func TestParseReal(t *testing.T) {
+	for text, want := range map[string]float64{
+		"1.5":      1.5,
+		"-2e3":     -2000,
+		"0.0":      0,
+		"-0.000":   0,
+		"0e-400":   0,
+		"4.9e-324": math.SmallestNonzeroFloat64,
+		"1e-320":   1e-320,
+	} {
+		if got, err := ParseReal(text); err != nil || got != want {
+			t.Errorf("ParseReal(%q) = (%v, %v), want %v", text, got, err, want)
+		}
+	}
+	for _, text := range []string{"1e400", "-1e400", "1e-400", "-2e-324", "0." + strings.Repeat("0", 330) + "1", "abc"} {
+		if got, err := ParseReal(text); !errors.Is(err, ErrArithmeticOverflow) {
+			t.Errorf("ParseReal(%q) = (%v, %v), want %v", text, got, err, ErrArithmeticOverflow)
+		}
+	}
+	if v, ok := evalExpr(t, "1e-400"); ok {
+		t.Errorf("1e-400 folded to %+v, want not evaluable", v)
 	}
 }
 
