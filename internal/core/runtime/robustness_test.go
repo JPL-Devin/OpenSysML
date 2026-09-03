@@ -8550,9 +8550,8 @@ func testNodeBindingToANonParameter(t *testing.T) {
 	}
 }
 
-// testNodeUndirectedBindingCarriedToANonParameter: what a node's performance gave an
-// undirected attribute is carried to the other end when it ends, and a downstream
-// node holding no such pin is reported then rather than the value dropped.
+// testNodeUndirectedBindingCarriedToANonParameter: a changed undirected attribute carried
+// to a pin the downstream node does not declare is reported, not dropped.
 func testNodeUndirectedBindingCarriedToANonParameter(t *testing.T) {
 	src := `
 		package test {` + adderActionDef + `

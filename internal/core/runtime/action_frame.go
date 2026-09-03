@@ -560,9 +560,8 @@ func (f *actionFrame) collect(prefix string, into map[string]Value) {
 	}
 }
 
-// bindInputPins seeds the pins a performance reads from the bindings at them, where
-// nothing delivered ahead of it holds a value; bindings at one pin must agree. An
-// undirected pin whose other end holds no value yet is left for the performance to give one.
+// bindInputPins seeds the pins a performance reads from the bindings at them, where nothing
+// delivered ahead of it holds a value; bindings must agree, and an unvalued undirected end waits.
 func (e *ActionExecutor) bindInputPins(perf *actionFrame, activation int64) error {
 	bound := make(map[string]lower.PinBinding)
 	for _, binding := range e.bindingsAt(perf) {
@@ -718,8 +717,7 @@ func (e *ActionExecutor) otherEndHeld(perf *actionFrame, binding lower.PinBindin
 }
 
 // unheldEnd reports whether err, from reading the other end of a binding at perf's pin,
-// says that end holds no value yet: a node's pin before it runs or gives it one, or
-// an enclosing feature named outright that holds none.
+// says that end holds no value yet: an unperformed node's pin or an unvalued enclosing feature.
 func (e *ActionExecutor) unheldEnd(perf *actionFrame, binding lower.PinBinding, err error) bool {
 	var noValue *NoValueError
 	if errors.Is(err, ErrNodeNotPerformed) || errors.As(err, &noValue) {

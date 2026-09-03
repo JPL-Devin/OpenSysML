@@ -1,12 +1,8 @@
 package test {
 	private import ScalarValues::*;
 
-	// A binding at an undirected attribute of a node is an equality kept at both ends of
-	// the node's performance: the node reads the enclosing feature's value when it begins,
-	// and what it holds when the node ends is carried back where the node changed it — to
-	// the enclosing feature, or on to the pin of a node downstream. A node that leaves the
-	// attribute as it found it writes nothing back; one whose other end holds no value
-	// yet gives that end its first value.
+	// A binding at a node's undirected attribute holds at both ends: the node reads the other
+	// end as it begins and carries back what it changed (or first gave) as it ends.
 	action outer {
 		attribute base : Integer = 1;
 		attribute kept : Integer = 7;
