@@ -35,6 +35,7 @@ type Model struct {
 	scalars         map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
 	params          map[*symbols.Symbol]behaviorParameters
 	invocations     map[invocationKey]*InvocationSelection
+	arguments       ArgumentTyper // the checker's argument typing, nil when no checker runs
 	unioning        map[*symbols.Symbol][]*symbols.Symbol
 	ends            map[*symbols.Symbol][]*symbols.Symbol
 

@@ -104,8 +104,18 @@ func (m *Model) evaluableInvocation(scope *symbols.Scope, e *ast.InvocationExpr,
 			return false
 		}
 	}
-	fn, ok := m.resolveExprTarget(scope, e.Type)
+	fn, ok := m.calledFunction(scope, e)
 	return ok && m.modelLevelFunction(fn)
+}
+
+// calledFunction is the declaration e calls: the overload the checker's typing of the
+// arguments selects (none when they tie or fit no candidate), else the first its name denotes.
+func (m *Model) calledFunction(scope *symbols.Scope, e *ast.InvocationExpr) (*symbols.Symbol, bool) {
+	if m.arguments == nil {
+		return m.resolveExprTarget(scope, e.Type)
+	}
+	sel := m.SelectInvocation(scope, e, m.arguments.InvocationArguments(scope, e))
+	return sel.Selected, sel.Selected != nil
 }
 
 // evaluableRead decides a feature read: naming a type or an enumeration literal
