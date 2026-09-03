@@ -278,9 +278,9 @@ type actionParameter struct {
 	// Direction is the parameter's declared direction, which decides whether the
 	// caller writes it, reads it back, or both.
 	Direction ast.FeatureDirection
-	// HasDefault reports whether the declaration gives the parameter a value, so
-	// an invocation binding no argument to it still binds a value.
-	HasDefault bool
+	// Optional reports whether an invocation may bind no argument to the parameter: it
+	// or a parameter it redefines gives a value, or its multiplicity admits none.
+	Optional bool
 	// IsResult marks the `return` parameter, what the action's value read yields.
 	IsResult bool
 }
@@ -293,12 +293,11 @@ func (ctx *Context) actionParametersOf(sym *symbols.Symbol) []actionParameter {
 		if param.Symbol == nil || param.Symbol.Name == "" {
 			continue
 		}
-		usage, _ := param.Symbol.Decl.(*ast.Usage)
 		params = append(params, actionParameter{
-			Name:       param.Symbol.Name,
-			Direction:  param.Direction,
-			HasDefault: usage != nil && usage.Value != nil,
-			IsResult:   param.IsResult,
+			Name:      param.Symbol.Name,
+			Direction: param.Direction,
+			Optional:  ctx.model.OptionalParameter(param.Symbol),
+			IsResult:  param.IsResult,
 		})
 	}
 	return params

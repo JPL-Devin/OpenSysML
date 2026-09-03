@@ -273,7 +273,7 @@ func (m *Model) signatureOf(sym *symbols.Symbol) invocationSignature {
 			name:     name,
 			typ:      m.featureType(p.Symbol),
 			prim:     m.PrimTypeOf(p.Symbol),
-			optional: m.optionalParameter(p.Symbol),
+			optional: m.OptionalParameter(p.Symbol),
 		}
 		switch {
 		case isAnything(param.typ):
@@ -288,35 +288,42 @@ func (m *Model) signatureOf(sym *symbols.Symbol) invocationSignature {
 	return sig
 }
 
-// optionalParameter reports whether a call may omit the parameter: it or a parameter it
+// OptionalParameter reports whether a call may omit the parameter: it or a parameter it
 // redefines declares a default, or the nearest stated multiplicity admits no value.
-func (m *Model) optionalParameter(sym *symbols.Symbol) bool {
-	chain := m.parameterRedefinitionChain(sym)
-	for _, u := range chain {
-		if u.Value != nil {
-			return true
-		}
+func (m *Model) OptionalParameter(sym *symbols.Symbol) bool {
+	if value, _ := m.ParameterDefault(sym); value != nil {
+		return true
 	}
-	for _, u := range chain {
-		if u.Multiplicity != nil {
+	for _, p := range m.parameterRedefinitionChain(sym) {
+		if u := p.Decl.(*ast.Usage); u.Multiplicity != nil {
 			return m.IsOptionalParameter(u)
 		}
 	}
 	return false
 }
 
-// parameterRedefinitionChain is sym's declaration followed by those of the parameters it
-// redefines, explicitly or by position, nearest first.
-func (m *Model) parameterRedefinitionChain(sym *symbols.Symbol) []*ast.Usage {
-	var chain []*ast.Usage
+// ParameterDefault is the value the parameter takes when a call binds none: the nearest
+// declared along its redefinitions, with the scope it resolves in. Nil when none is.
+func (m *Model) ParameterDefault(sym *symbols.Symbol) (ast.Node, *symbols.Scope) {
+	for _, p := range m.parameterRedefinitionChain(sym) {
+		if u := p.Decl.(*ast.Usage); u.Value != nil {
+			return u.Value, p.OwnerScope
+		}
+	}
+	return nil, nil
+}
+
+// parameterRedefinitionChain is sym followed by the parameters it redefines, explicitly
+// or by position, nearest first; each declares a usage.
+func (m *Model) parameterRedefinitionChain(sym *symbols.Symbol) []*symbols.Symbol {
+	var chain []*symbols.Symbol
 	visited := map[*symbols.Symbol]bool{}
 	for sym != nil && !visited[sym] {
 		visited[sym] = true
-		u, ok := sym.Decl.(*ast.Usage)
-		if !ok {
+		if _, ok := sym.Decl.(*ast.Usage); !ok {
 			break
 		}
-		chain = append(chain, u)
+		chain = append(chain, sym)
 		redefined := m.RedefinedFeatures(sym)
 		if len(redefined) == 0 {
 			redefined = m.implicitParameterRedefinitions(sym)

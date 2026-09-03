@@ -145,7 +145,7 @@ func operationInputs(params []actionParameter, name string, args map[string]Valu
 		switch {
 		case bound:
 			inputs[param.Name] = value
-		case param.HasDefault:
+		case param.Optional:
 		default:
 			return nil, fmt.Errorf("%w: parameter %s of operation %s has no argument and no default",
 				ErrUnboundParameter, param.Name, name)

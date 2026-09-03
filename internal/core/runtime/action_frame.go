@@ -1051,7 +1051,7 @@ func checkInputsBound(inv actionInvocation, params []actionParameter, inputs map
 		if param.Direction != ast.DirIn && param.Direction != ast.DirInOut {
 			continue
 		}
-		if _, bound := inputs[param.Name]; bound || param.HasDefault {
+		if _, bound := inputs[param.Name]; bound || param.Optional {
 			continue
 		}
 		return fmt.Errorf("%w: action %s: input parameter %s is bound by no argument",

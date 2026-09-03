@@ -793,3 +793,35 @@ func TestInvocationOverloadCandidatesFromEveryGeneralAndRecursiveImport(t *testi
 		}
 	}`)
 }
+
+// A performed action's input is omitted when it may hold no value or a default reaches
+// it along its redefinitions; an input with neither must be bound.
+func TestInvocationPerformedActionOptionalInputs(t *testing.T) {
+	const outer = `
+		package test {
+			private import ScalarValues::*;
+			private import B::*;
+			action def Outer {
+				first start;
+				action call = tag();
+				done;
+				succession first start then call;
+				succession first call then done;
+			}
+		}
+	`
+	wantLibraryClean(t, `package B {
+		private import ScalarValues::*;
+		action def tag { in x : Integer[0..1]; out code : Integer; }
+	}`+outer)
+	wantLibraryClean(t, `package B {
+		private import ScalarValues::*;
+		action def base { in x : Integer = 3; out code : Integer; }
+		action def tag :> base { in x : Integer :>> x; }
+	}`+outer)
+	wantLibraryDiag(t, `package B {
+		private import ScalarValues::*;
+		action def base { in x : Integer = 3; out code : Integer; }
+		action def tag :> base { in x : Integer :>> x; in y : Integer; }
+	}`+outer, "type.expr", "tag requires 2 argument(s), found 0")
+}

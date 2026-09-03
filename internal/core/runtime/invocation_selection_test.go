@@ -41,6 +41,7 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("action_call_receiver_binds_first_input", testActionCallReceiverBindsFirstInput)
 	t.Run("action_call_receiver_with_named_arguments_refused", testActionCallReceiverWithNamedArgumentsRefused)
 	t.Run("action_call_named_argument_twice_refused", testActionCallNamedArgumentTwiceRefused)
+	t.Run("action_call_omits_optional_inputs", testActionCallOmitsOptionalInputs)
 	t.Run("action_call_arguments_read_the_performing_object", testActionCallArgumentsReadThePerformingObject)
 	t.Run("state_behavior_call_arguments_read_the_performing_object", testStateBehaviorCallArgumentsReadThePerformingObject)
 	t.Run("action_call_argument_cannot_name_a_feature_out_of_scope", testActionCallArgumentCannotNameAFeatureOutOfScope)
@@ -274,6 +275,69 @@ func testActionCallNamedArgumentTwiceRefused(t *testing.T) {
 	}
 	if !errors.Is(err, ErrDuplicateArgument) || !strings.Contains(err.Error(), `input parameter "x" of tag`) {
 		t.Fatalf("single tag(x = 3, x = 4): error = %v, want ErrDuplicateArgument naming x", err)
+	}
+}
+
+// An empty call binds an input that may hold no value, read as empty, and one whose
+// default reaches it along its redefinitions; an input with neither stays unbound.
+func testActionCallOmitsOptionalInputs(t *testing.T) {
+	const outer = `
+		package test {
+			private import ScalarValues::*;
+			private import B::*;
+			action def Outer {
+				attribute code : Integer = 0;
+				first start;
+				action call = tag();
+				done;
+				succession first start then call;
+				succession first call then done;
+			}
+		}
+	`
+	run := func(tag string) (map[string]Value, error) {
+		idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, tag+outer))
+		outer := findSymbolByName(idx.DocumentRoot("<test>"), "Outer", ast.DefAction)
+		if outer == nil {
+			t.Fatal("Outer action not found")
+		}
+		return ctx.ExecuteAction(outer)
+	}
+
+	outputs, err := run(`
+		package B {
+			private import ScalarValues::*;
+			private import SequenceFunctions::*;
+			action def tag { in x : Integer[0..1]; out code : Integer; first start; action set { assign code := x->size() + (if x->isEmpty() ? 100 else 200); } done; succession first start then set; succession first set then done; }
+		}`)
+	if err != nil {
+		t.Fatalf("tag() with x : Integer[0..1]: %v", err)
+	}
+	if got := intOutput(t, outputs, "code"); got != 100 {
+		t.Errorf("tag() with x : Integer[0..1]: code = %d, want 100 (x empty)", got)
+	}
+
+	outputs, err = run(`
+		package B {
+			private import ScalarValues::*;
+			action def base { in x : Integer = 3; out code : Integer; }
+			action def tag :> base { in x : Integer :>> x; first start; action set { assign code := x + 10; } done; succession first start then set; succession first set then done; }
+		}`)
+	if err != nil {
+		t.Fatalf("tag() with x redefining a defaulted input: %v", err)
+	}
+	if got := intOutput(t, outputs, "code"); got != 13 {
+		t.Errorf("tag() with x redefining a defaulted input: code = %d, want 13 (the inherited default 3)", got)
+	}
+
+	_, err = run(`
+		package B {
+			private import ScalarValues::*;
+			action def base { in x : Integer = 3; out code : Integer; }
+			action def tag :> base { in x : Integer :>> x; in y : Integer; first start; action set { assign code := x + y; } done; succession first start then set; succession first set then done; }
+		}`)
+	if !errors.Is(err, ErrUnboundParameter) || !strings.Contains(err.Error(), "input parameter y") {
+		t.Fatalf("tag() with a required y: err = %v, want ErrUnboundParameter for y", err)
 	}
 }
 
