@@ -263,13 +263,13 @@ func (ctx *Context) EvalWithScope(node ast.Node, scope *symbols.Scope) (Value, e
 // EvalDeclaredValue evaluates the value a usage declaration binds, as a read of
 // the declaration does: in its own scope, and answering to its declared type.
 func (ctx *Context) EvalDeclaredValue(sym *symbols.Symbol) (Value, error) {
-	usage, ok := sym.Decl.(*ast.Usage)
-	if !ok || usage.Value == nil {
+	value := ctx.extractDefaultValue(sym)
+	if value == nil {
 		return Value{}, fmt.Errorf("%w: %s", ErrNoValue, ctx.qualifiedSymbolName(sym))
 	}
 	defer ctx.beginRun()()
 
-	return NewEvalContext(ctx, sym.OwnerScope).declaredValue(sym, usage)
+	return NewEvalContext(ctx, sym.OwnerScope).declaredValue(sym, value)
 }
 
 // EvalWithScopeOn evaluates an expression against a concrete instance, so a
@@ -377,12 +377,12 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 					if ec.resolving[name] {
 						return Value{}, fmt.Errorf("%w: %s", ErrCyclicFeatureValue, name)
 					}
-					if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
+					if value := ec.ctx.extractDefaultValue(sym); value != nil {
 						if ec.resolving == nil {
 							ec.resolving = map[string]bool{}
 						}
 						ec.resolving[name] = true
-						val, err := ec.declaredValue(sym, usage)
+						val, err := ec.declaredValue(sym, value)
 						delete(ec.resolving, name)
 						return val, err
 					}
@@ -468,12 +468,17 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 				if val, ok, err := ec.occurrenceReference(sym); ok {
 					return val, err
 				}
-				if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
+				// A feature declared with no value, whose multiplicity admits none,
+				// states the empty sequence — what an object holding nothing reads.
+				if val, ok := ec.emptyDeclaredFeature(sym); ok {
+					return val, nil
+				}
+				if value := ec.ctx.extractDefaultValue(sym); value != nil {
 					if ec.resolving == nil {
 						ec.resolving = map[string]bool{}
 					}
 					ec.resolving[name] = true
-					val, err := ec.declaredValue(sym, usage)
+					val, err := ec.declaredValue(sym, value)
 					delete(ec.resolving, name)
 					return val, err
 				}
@@ -548,7 +553,7 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 			return ec.enumLiteralValue(currentSym)
 		}
 		if decl.Value != nil {
-			return ec.declaredValue(currentSym, decl)
+			return ec.declaredValue(currentSym, decl.Value)
 		}
 		if ec.ctx.model.IsVariationFeature(currentSym) {
 			return Value{}, fmt.Errorf("%w: %s", ErrVariationUnselected, qualifiedNameToString(qn))
@@ -556,6 +561,23 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 		// A part, item or structured value names an object, read as that object.
 		if val, ok, err := ec.occurrenceReference(currentSym); ok {
 			return val, err
+		}
+		// A calc usage or a KerML type is never the empty sequence, whatever it admits.
+		if isCalcUsageSymbol(currentSym) || declaresType(currentSym) {
+			return Value{}, ec.resolvedWithoutValue(currentSym, qn)
+		}
+		// A valueless feature admitting nothing is the empty sequence, however spelled.
+		if val, ok := ec.emptyDeclaredFeature(currentSym); ok {
+			return val, nil
+		}
+	}
+	// A subject is bound or, admitting nothing, empty; otherwise it awaits a binding.
+	if decl, ok := currentSym.Decl.(*ast.SubjectMember); ok {
+		if decl.BindingExpr != nil {
+			return ec.declaredValue(currentSym, decl.BindingExpr)
+		}
+		if val, ok := ec.emptyDeclaredFeature(currentSym); ok {
+			return val, nil
 		}
 	}
 	return Value{}, ec.resolvedWithoutValue(currentSym, qn)
@@ -632,8 +654,8 @@ func (ec *EvalContext) unresolvedQualifiedName(qn *ast.QualifiedName, reading re
 
 // declaredValue evaluates the value a declaration binds in the scope it was written
 // in (its units and imports answer its names); the value answers to the declared type.
-func (ec *EvalContext) declaredValue(sym *symbols.Symbol, usage *ast.Usage) (Value, error) {
-	val, err := ec.evalIn(sym.OwnerScope).Eval(usage.Value)
+func (ec *EvalContext) declaredValue(sym *symbols.Symbol, value ast.Node) (Value, error) {
+	val, err := ec.evalIn(sym.OwnerScope).Eval(value)
 	if err != nil {
 		return Value{}, err
 	}
@@ -656,6 +678,15 @@ func (ec *EvalContext) occurrenceReference(sym *symbols.Symbol) (Value, bool, er
 		return Value{}, true, fmt.Errorf("usage %s: %w", symbolText(sym), err)
 	}
 	return Value{Kind: ValInstance, Instance: inst.ID}, true, nil
+}
+
+// emptyDeclaredFeature reads a valueless feature declaration whose lower bound is
+// zero as the empty sequence. A variation is a choice, not an empty feature.
+func (ec *EvalContext) emptyDeclaredFeature(sym *symbols.Symbol) (Value, bool) {
+	if !ec.ctx.optionalValueless(sym) || ec.ctx.model.IsVariationFeature(sym) {
+		return Value{}, false
+	}
+	return sequenceOf(nil), true
 }
 
 // namesOccurrenceThis reports whether the name resolves to the library's
@@ -703,11 +734,8 @@ func (ec *EvalContext) selfFeatureValue(name string) (Value, bool, error) {
 	if err != nil {
 		return Value{}, true, err
 	}
-	value := fv.HeldValue()
-	if value.Kind == ValInvalid {
-		return Value{}, true, fmt.Errorf("%w: %s", ErrUninitializedFeatureValue, name)
-	}
-	return value, true, nil
+	value, err := fv.ReadValue(name)
+	return value, true, err
 }
 
 // evalFeatureChain evaluates a feature chain expression (e.g., obj.member.submember).
@@ -884,9 +912,9 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 	if err != nil {
 		return Value{}, err
 	}
-	member := fv.HeldValue()
-	if member.Kind == ValInvalid {
-		return Value{}, fmt.Errorf("%w: %s", ErrUninitializedFeatureValue, name)
+	member, err := fv.ReadValue(name)
+	if err != nil {
+		return Value{}, err
 	}
 	return ec.chainMemberValue(member, parts[1:], name)
 }
@@ -1113,19 +1141,21 @@ func (ec *EvalContext) evalTypeSubject(node ast.Node) (Value, error) {
 	if !ok || sym == nil {
 		return ec.Eval(node)
 	}
+	// A variation is a choice, not an object or an empty collection: the
+	// evaluator reports one that nothing selected a variant for.
+	if ec.ctx.model.IsVariationFeature(sym) {
+		return ec.Eval(node)
+	}
+	// Classification treats an optional valueless usage as its empty collection.
+	if ec.ctx.optionalValueless(sym) {
+		return NewSequenceValue(NewSequence()), nil
+	}
 	if isOccurrenceUsage(sym) {
 		inst, err := ec.ctx.occurrenceOf(sym)
 		if err != nil {
 			return Value{}, err
 		}
 		return Value{Kind: ValInstance, Instance: inst.ID}, nil
-	}
-	if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value == nil {
-		mult, _ := ec.ctx.extractMultiplicity(sym)
-		if !mult.Lower.Infinite && mult.Lower.Value == 0 {
-			// Classification treats an optional valueless usage as its empty collection.
-			return NewSequenceValue(NewSequence()), nil
-		}
 	}
 	return ec.Eval(node)
 }

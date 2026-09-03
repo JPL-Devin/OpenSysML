@@ -265,6 +265,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("variation_bound_to_two_variants", testVariationBoundToTwoVariants)
 	t.Run("variation_read_through_its_declaration", testVariationReadThroughItsDeclaration)
 	t.Run("chain_through_an_unselected_variation_part", testChainThroughAnUnselectedVariationPart)
+	t.Run("classify_an_unselected_optional_variation", testClassifyAnUnselectedOptionalVariation)
 	t.Run("repeated_reads_of_a_variant_object", testRepeatedReadsOfAVariantObject)
 	t.Run("two_owners_selecting_one_variant", testTwoOwnersSelectingOneVariant)
 	t.Run("two_ownerless_selections_of_one_variant", testTwoOwnerlessSelectionsOfOneVariant)
@@ -6747,6 +6748,30 @@ func testChainThroughAnUnselectedVariationPart(t *testing.T) {
 	got, err := variationFeatureValueInSource(t, src, "test::probe", "p")
 	if !errors.Is(err, ErrVariationUnselected) {
 		t.Errorf("p = (%v, %v), want ErrVariationUnselected", got, err)
+	}
+}
+
+// testClassifyAnUnselectedOptionalVariation: an optional variation nothing selects
+// a variant for is a choice, not an empty collection, so `istype` reports that
+// rather than vacuously matching every type.
+func testClassifyAnUnselectedOptionalVariation(t *testing.T) {
+	src := `
+	package test {
+		private import ScalarValues::*;
+		part def Engine;
+		part def Motor :> Engine;
+		variation part engine : Engine[0..1] {
+			variant part electric : Motor;
+			variant part diesel : Engine;
+		}
+		attribute isMotor : Boolean = engine istype Motor;
+		attribute hasMotor : Boolean = engine hastype Motor;
+	}`
+	for _, probe := range []string{"test::isMotor", "test::hasMotor"} {
+		got, err := variationReadFromDeclaration(t, src, probe)
+		if !errors.Is(err, ErrVariationUnselected) {
+			t.Errorf("%s = (%v, %v), want ErrVariationUnselected", probe, got, err)
+		}
 	}
 }
 

@@ -176,7 +176,7 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 		}
 	}
 	if len(attempts) > 1 {
-		if !isScalarFeature(target.Feature) {
+		if !target.Feature.Scalar() {
 			return Value{}, false, false, nil, fmt.Errorf(
 				"%w: multiple bindings contribute to multi-valued endpoint %q (element-wise contribution is not implemented)",
 				ErrBindingEnd, endpointName,
@@ -486,7 +486,7 @@ func (ctx *Context) assignBindingValue(inst *Instance, fv *FeatureValue, name st
 		return err
 	}
 	ctx.noteProbeWrite(fv)
-	if isScalarFeature(fv.Feature) {
+	if fv.Feature.Scalar() {
 		fv.Value = val
 		fv.Values = Value{}
 	} else {

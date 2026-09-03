@@ -62,6 +62,20 @@ func wants(t *testing.T, got string, fragments ...string) {
 	}
 }
 
+// wantsInOrder asserts every fragment appears in got, each after the one before it.
+func wantsInOrder(t *testing.T, got string, fragments ...string) {
+	t.Helper()
+	from := 0
+	for _, fragment := range fragments {
+		at := strings.Index(got[from:], fragment)
+		if at < 0 {
+			t.Errorf("expected %q after the fragments before it in output:\n%s", fragment, got)
+			return
+		}
+		from += at + len(fragment)
+	}
+}
+
 // hasNotice reports whether any of a submission's notices mentions fragment.
 func hasNotice(res Result, fragment string) bool {
 	for _, n := range res.Notices {
