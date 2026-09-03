@@ -150,7 +150,8 @@ func runCheck(root string, opts options, out io.Writer) error {
 }
 
 // runUpdate re-extracts the constraint list and rewrites the baseline around the
-// statuses already recorded; a name new to the baseline starts as unknown.
+// statuses already recorded; a name new to the baseline starts as unknown. The
+// jar is recorded under its pinned name, wherever -jar read it from.
 func runUpdate(root string, opts options, out io.Writer) error {
 	pin, err := baseline.ReadPin(root)
 	if err != nil {
@@ -183,7 +184,7 @@ func runUpdate(root string, opts options, out io.Writer) error {
 		PilotTag:      pin.Tag,
 		PilotCommit:   pin.Commit,
 		PilotArtifact: pin.Artifact,
-		Jar:           JarRecord{Name: filepath.Base(jar), Digest: digest},
+		Jar:           JarRecord{Name: pinnedJarName(pin), Digest: digest},
 		Extraction:    extractionRecord(),
 	}
 	for _, e := range extracted {

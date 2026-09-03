@@ -83,7 +83,8 @@ func TestRecordedDateFollowsContent(t *testing.T) {
 }
 
 // TestUpdateIsIdempotentAcrossDays runs -update over a copy of the committed
-// baseline carrying an old date; with the jar present it must not change a byte.
+// baseline carrying an old date, reading the jar through a renamed link; it must
+// not change a byte, and the result must pass -check.
 func TestUpdateIsIdempotentAcrossDays(t *testing.T) {
 	repo, err := moduleRoot()
 	if err != nil {
@@ -126,7 +127,11 @@ func TestUpdateIsIdempotentAcrossDays(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := runUpdate(root, options{jar: jar}, io.Discard); err != nil {
+	renamed := filepath.Join(root, "local-copy.jar")
+	if err := os.Symlink(jar, renamed); err != nil {
+		t.Skipf("cannot link the jar: %v", err)
+	}
+	if err := runUpdate(root, options{jar: renamed}, io.Discard); err != nil {
 		t.Fatal(err)
 	}
 	after, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(baselinePath)))
@@ -135,6 +140,16 @@ func TestUpdateIsIdempotentAcrossDays(t *testing.T) {
 	}
 	if !bytes.Equal(before, after) {
 		t.Fatalf("-update over an unchanged extraction rewrote the baseline:\n%s", after)
+	}
+	updated, err := loadBaseline(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := updated.validate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := compareJar(root, updated, options{jar: renamed}, io.Discard); err != nil {
+		t.Fatalf("a baseline recorded from a renamed copy must compare: %v", err)
 	}
 }
 
