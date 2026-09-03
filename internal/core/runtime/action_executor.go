@@ -3,6 +3,7 @@ package runtime
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -25,8 +26,11 @@ type ActionExecutor struct {
 	self *Instance
 	// occurrence is the action performance materialized for a performed usage. It
 	// holds what the action's own features hold, and data mirrors it.
-	occurrence  *Instance
-	graph       *lower.ActionGraph // Execution IR
+	occurrence *Instance
+	graph      *lower.ActionGraph // Execution IR
+	// features are the attributes and parameters the performance holds: those the
+	// graph declares, then the inherited ones none of them redefines.
+	features    []lower.Attribute
 	tokens      []Token
 	state       ExecutionState
 	nextTokenID int64
@@ -113,9 +117,40 @@ func newActionExecutorForOccurrence(
 		firedBreakpoints: make(map[breakpointVisit]bool),
 		mergeVisited:     make(map[mergeVisit]bool),
 	}
+	exec.features = exec.performanceFeatures()
 	exec.root = exec.newRootFrame()
 
 	return exec, nil
+}
+
+// performanceFeatures lists the graph's attributes, then the attributes and
+// parameters inherited from the model's generalizations that none redefines,
+// each default carrying the scope it was declared in. What the library base
+// types contribute is read through the feature seam, not held.
+func (e *ActionExecutor) performanceFeatures() []lower.Attribute {
+	features := slices.Clone(e.graph.Attributes)
+	declared := make(map[string]bool, len(features))
+	for _, attr := range features {
+		declared[attr.Name] = true
+	}
+	for _, member := range e.ctx.model.MembersOf(e.action) {
+		usage, ok := member.Decl.(*ast.Usage)
+		if !ok || !lower.DeclaresNodeFeature(usage) || e.ctx.libraryDeclared(member) {
+			continue
+		}
+		name, _ := ast.EffectiveName(usage)
+		if name == "" {
+			name = member.Name
+		}
+		if name == "" || declared[name] {
+			continue
+		}
+		declared[name] = true
+		features = append(features, lower.Attribute{
+			Name: name, Value: usage.Value, Node: usage, Scope: member.OwnerScope,
+		})
+	}
+	return features
 }
 
 // Step advances execution by one step for all active tokens.
@@ -498,10 +533,11 @@ func (e *ActionExecutor) NodeNames() []string {
 // initializeAttributes fills the features no supplied input holds yet: from the
 // performance occurrence, whose materialized slots carry a usage-level default or
 // redefinition, or from the declared defaults, evaluated in order over the values
-// already held so a default may read an input bound before it.
+// already held so a default may read an input bound before it. An inherited
+// default is evaluated in the scope it was declared in.
 func (e *ActionExecutor) initializeAttributes() error {
 	if e.occurrence != nil {
-		for _, attr := range e.graph.Attributes {
+		for _, attr := range e.features {
 			if _, held := e.root.data[attr.Name]; held {
 				continue
 			}
@@ -519,14 +555,14 @@ func (e *ActionExecutor) initializeAttributes() error {
 
 	ec := e.evalContextFor(e.root, e.graph.Scope)
 	defer ec.beginStep()()
-	for _, attr := range e.graph.Attributes {
+	for _, attr := range e.features {
 		if attr.Value == nil {
 			continue
 		}
 		if _, held := e.root.data[attr.Name]; held {
 			continue
 		}
-		value, err := ec.Eval(attr.Value)
+		value, err := ec.evalIn(attr.Scope).Eval(attr.Value)
 		if err != nil {
 			return fmt.Errorf("eval attribute default %s: %w", attr.Name, err)
 		}
@@ -539,7 +575,7 @@ func (e *ActionExecutor) initializeAttributes() error {
 // declaresAttribute reports whether the action declares an attribute of this
 // name, which its performance holds rather than the object performing it.
 func (e *ActionExecutor) declaresAttribute(name string) bool {
-	for _, attr := range e.graph.Attributes {
+	for _, attr := range e.features {
 		if attr.Name == name {
 			return true
 		}

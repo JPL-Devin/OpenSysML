@@ -35,6 +35,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("node_invocation_too_few_arguments", testNodeInvocationTooFewArguments)
 	t.Run("node_invocation_unknown_named_argument", testNodeInvocationUnknownNamedArgument)
 	t.Run("node_binding_to_a_non_parameter", testNodeBindingToANonParameter)
+	t.Run("node_inherited_default_that_cannot_be_evaluated", testNodeInheritedDefaultThatCannotBeEvaluated)
 	t.Run("node_binding_output_to_an_unknown_feature", testNodeBindingOutputToAnUnknownFeature)
 	t.Run("node_flow_into_a_pin_the_target_does_not_declare", testNodeFlowIntoAPinTheTargetDoesNotDeclare)
 	t.Run("fork_without_a_successor", testForkWithoutASuccessor)
@@ -7961,6 +7962,39 @@ func testNodeReadAsAValueWithoutAResult(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "result") {
 		t.Errorf("error %q does not name the missing result", err)
+	}
+}
+
+// testNodeInheritedDefaultThatCannotBeEvaluated: a default a node's action
+// inherits is seeded when the node starts, so one that fails is reported there,
+// naming the parameter, rather than when the body reads it.
+func testNodeInheritedDefaultThatCannotBeEvaluated(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			action def Base {
+				in divisor : Integer = 0;
+				in share : Integer = 6 / divisor;
+				out r : Integer;
+			}
+			action def Derived :> Base {
+				first start;
+				then assign r := 1;
+				then done;
+			}
+			action outer {
+				first start;
+				then action d : Derived;
+				then done;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if !errors.Is(err, ErrDivisionByZero) {
+		t.Fatalf("error = %v, want ErrDivisionByZero", err)
+	}
+	if !strings.Contains(err.Error(), "share") {
+		t.Errorf("error %q does not name the parameter whose default failed", err)
 	}
 }
 
