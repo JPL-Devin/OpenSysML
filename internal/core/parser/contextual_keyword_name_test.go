@@ -83,3 +83,109 @@ func TestParseVarPrefixQualifiesTheKind(t *testing.T) {
 		t.Errorf("derived = %v, prefix = %q, name = %q; want true, \"var\", \"a\"", u.IsDerived, u.PrefixKeyword, u.Ident.Name)
 	}
 }
+
+// `chain` is the feature chain modifier only when a name follows it; before
+// `=`, `:`, `;`, `[` or a word the grammar reserves — one that continues the
+// declaration (`default`, `ordered`, `subsets`, `specializes`) or ends it
+// (`about`) — it names the feature, on either side of the kind keyword.
+func TestParseChainIsANameBeforeAnythingButAName(t *testing.T) {
+	for _, src := range []string{
+		"package P { attribute chain = 1; attribute pt = chain + 1; }",
+		"package P { attribute chain : Integer; }",
+		"package P { part def D { attribute chain; attribute chain[*]; } }",
+		"package P { part def D { ref chain :> other; attribute other; } }",
+		"package P { action a { in chain : Integer; assign chain := 1; } }",
+		"package P { attribute chain default 1; }",
+		"package P { attribute chain defined by Integer; }",
+		"package P { attribute chain subsets other; attribute other; }",
+		"package P { attribute chain redefines other; attribute other; }",
+		"package P { metadata chain about other; attribute other; }",
+		"package P { attribute chain ordered :> other; attribute other : Integer[*]; }",
+		"package P { attribute chain nonunique :> other; attribute other : Integer[*]; }",
+		"package P { attribute chain ordered nonunique = other; attribute other : Integer[*]; }",
+	} {
+		root := parseClean(t, src)
+		pkg := root.(*ast.RootNamespace).Members[0].(*ast.Membership).Member.(*ast.Package)
+		u := firstUsage(t, pkg.Members[0].(*ast.Membership).Member)
+		if u.Ident.Name != "chain" || u.IsChain {
+			t.Errorf("%s\ndeclared %q chain=%t, want the feature named chain", src, u.Ident.Name, u.IsChain)
+		}
+	}
+
+	for _, src := range []string{
+		"package P { attribute chain x : Integer; }",
+		"package P { ref chain x : Integer; }",
+		"package P { ref chain 'x y' : Integer; }",
+		"package P { ref chain <s> x : Integer; }",
+		// A keyword of the other language is a name in this one.
+		"package P { attribute chain chains : Integer; }",
+	} {
+		root := parseClean(t, src)
+		pkg := root.(*ast.RootNamespace).Members[0].(*ast.Membership).Member.(*ast.Package)
+		u := firstUsage(t, pkg.Members[0].(*ast.Membership).Member)
+		if u.Ident.Name == "chain" || !u.IsChain {
+			t.Errorf("%s\ndeclared %q chain=%t, want the modifier and the name after it", src, u.Ident.Name, u.IsChain)
+		}
+	}
+}
+
+// The ordering modifiers keep their meaning when they follow the feature named
+// chain: `attribute chain ordered` is the ordered feature `chain`.
+func TestParseChainKeepsTheOrderingModifiersAfterIt(t *testing.T) {
+	root := parseClean(t, "package P { attribute chain ordered nonunique :> other; attribute other : Integer[*]; }")
+	pkg := root.(*ast.RootNamespace).Members[0].(*ast.Membership).Member.(*ast.Package)
+	u := firstUsage(t, pkg.Members[0].(*ast.Membership).Member)
+	if u.Ident.Name != "chain" || u.IsChain || !u.IsOrdered || !u.IsNonunique {
+		t.Errorf("declared %q chain=%t ordered=%t nonunique=%t; want chain, false, true, true", u.Ident.Name, u.IsChain, u.IsOrdered, u.IsNonunique)
+	}
+}
+
+// A KerML type named chain keeps its name before every type relationship the
+// grammar spells with a keyword, since none of those words can name a type.
+func TestParseKerMLTypeNamedChainKeepsItsName(t *testing.T) {
+	for _, src := range []string{
+		"package P { class Base; class chain specializes Base; }",
+		"package P { class Base; class chain :> Base; }",
+		"package P { struct Base; struct chain specializes Base; }",
+		"package P { datatype Base; datatype chain specializes Base; }",
+		"package P { class Base; class chain conjugates Base; }",
+		"package P { class Base; class chain disjoint from Base; }",
+		"package P { class Base; class chain unions Base; }",
+		"package P { class Base; class chain intersects Base; }",
+		"package P { class Base; class chain differences Base; }",
+		"package P { feature other; feature chain chains other; }",
+		"package P { feature other; feature chain redefines other; }",
+		"package P { feature chain ordered nonunique; }",
+	} {
+		p := New(source.New("test.kerml", []byte(src)))
+		root := p.ParseFile()
+		if len(p.Diagnostics) != 0 || len(p.Warnings) != 0 {
+			t.Errorf("%s\nerrors = %v, warnings = %v, want none", src, p.Diagnostics, p.Warnings)
+		}
+		pkg := root.Members[0].(*ast.Membership).Member.(*ast.Package)
+		u := firstUsage(t, pkg.Members[len(pkg.Members)-1].(*ast.Membership).Member)
+		if u.Ident.Name != "chain" || u.IsChain {
+			t.Errorf("%s\ndeclared %q chain=%t, want the type named chain", src, u.Ident.Name, u.IsChain)
+		}
+	}
+}
+
+// firstUsage returns n when it is a usage, else the first usage n declares.
+func firstUsage(t *testing.T, n ast.Node) *ast.Usage {
+	t.Helper()
+	switch d := n.(type) {
+	case *ast.Usage:
+		if len(d.Members) > 0 {
+			if u, ok := d.Members[0].(*ast.Membership).Member.(*ast.Usage); ok {
+				return u
+			}
+		}
+		return d
+	case *ast.Definition:
+		if u, ok := d.Members[0].(*ast.Membership).Member.(*ast.Usage); ok {
+			return u
+		}
+	}
+	t.Fatalf("member parsed to %T, want a usage", n)
+	return nil
+}
