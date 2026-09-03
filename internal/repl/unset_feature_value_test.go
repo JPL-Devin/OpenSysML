@@ -43,10 +43,11 @@ func TestFeatureValueListingReportsAValuelessValueTypedFeatureAsUnset(t *testing
 		"engine = Instance(ID: ",
 	)
 	// The object materialization holds for such a feature is not named, and not
-	// expanded — only the class-typed part is reported as an empty object.
-	rejects(t, fvs, "d = Instance(", "empty = Instance(")
-	if n := strings.Count(fvs, "(no features)"); n != 1 {
-		t.Errorf("%d empty objects reported, want only the class-typed part:\n%s", n, fvs)
+	// expanded — only the class-typed part is reported as an object, with what it
+	// inherits from the library.
+	rejects(t, fvs, "d = Instance(", "empty = Instance(", "(no features)")
+	if n := strings.Count(fvs, "    isSolid = true"); n != 1 {
+		t.Errorf("%d nested objects expanded, want only the class-typed part:\n%s", n, fvs)
 	}
 }
 

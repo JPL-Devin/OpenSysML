@@ -453,6 +453,32 @@ implicit value typing, and a member another candidate redefines is not inherited
 library members through `symbols.Index.LookupDirectChildren`, so it behaves identically whether the
 standard library was parsed or restored from cache (each focused test runs both states).
 
+#### The diamond beside a failed typing is not a consequence to suppress
+
+A validation assessment proposed suppressing this warning on an element whose usage typing had
+already been reported — `timeslice t : A;` with `A` an attribute def draws
+`An occurrence, item or part must be typed by occurrence definitions.` and then
+`Duplicate of inherited member name 'self' from DataValue, Occurrence`, and the second was read as
+noise that only exists because of the first. Refereed against the pinned pilot (`2026-07`,
+`0.61.0`), that reading does not hold: the pilot reports **both** diagnostics on that probe, at the
+same line and severity as ours, and does the same for every other kind mismatch tried (`part`,
+`item`, `action`, `port` and `snapshot` typed by an attribute def; `port` and `action` typed by a
+part def; a KerML `feature` typed by a datatype and a class at once). The assessment's "two errors"
+was one error and this warning.
+
+The pilot's own suite declares the pair deliberately: at this pin, 76 `Duplicate of inherited
+member name` `warnings` rows in 12 files (`ActionUsage_invalid`, `OccurrenceUsage_invalid`,
+`PartUsage_invalid`, `ItemUsage_invalid`, `PortUsage_Invalid`, `StateUsage_invalid`,
+`CaseUsage_Invalid`, `CalculationUsage_Invalid1`, `ConstraintUsage_Invalid`,
+`RequirementUsage_Invalid`, `FlowConnectionUsage_Invalid`, `AttributeUsage_invalid`) are anchored
+at, or inside, the anchor of a declared `… must be typed by …` error in the same file. Suppressing
+the warning per element would turn those rows silent. The rule is therefore kept as it is, and
+`TestW9CActionPartDiamondWarns`, `TestW11ASpecializationCycleKeepsImplicitBase` and
+`TestW10BReferenceSubsettingContributesABase` continue to assert the warning next to the error.
+What the probe did surface is a placement and wording divergence of ours on `timeslice`/`snapshot`
+alone: we report `timeslice usage cannot be typed by attributeDef (…)` at the type reference where
+the pilot reports the occurrence-typing rule at the usage, and `part`/`item` already match.
+
 What is still open in the family, by reproducer:
 
 | Rows | Reproducer | Why it still disagrees |

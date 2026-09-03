@@ -123,6 +123,7 @@ func (ctx *Context) resolveBindingValue(inst *Instance, name string) (Value, boo
 		return Value{}, false, &BindingCycleError{Features: []string{bindingLocationText(bindingLocation{instance: inst, name: name})}}
 	}
 	if target.BindingDerived && ctx.CompositeTypeOf(target.Feature) == nil {
+		ctx.noteProbeWrite(target)
 		target.Value = Value{}
 		target.Values = Value{}
 		target.Materialized = false
@@ -175,7 +176,7 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 		}
 	}
 	if len(attempts) > 1 {
-		if !isScalarFeature(target.Feature) {
+		if !target.Feature.Scalar() {
 			return Value{}, false, false, nil, fmt.Errorf(
 				"%w: multiple bindings contribute to multi-valued endpoint %q (element-wise contribution is not implemented)",
 				ErrBindingEnd, endpointName,
@@ -484,7 +485,8 @@ func (ctx *Context) assignBindingValue(inst *Instance, fv *FeatureValue, name st
 	if err := ctx.checkDefault(inst, fv, name, val); err != nil {
 		return err
 	}
-	if isScalarFeature(fv.Feature) {
+	ctx.noteProbeWrite(fv)
+	if fv.Feature.Scalar() {
 		fv.Value = val
 		fv.Values = Value{}
 	} else {
