@@ -653,15 +653,14 @@ func (ctx *Context) post(conns []lower.Connection, msg Message, send lower.Send,
 }
 
 // carriesEvent reports whether m was sent from the event feature an accept
-// subsets (`accept :> shutDown`), by resolved identity, else by name.
+// subsets (`accept :> shutDown`): by identity once the feature resolves, so a
+// typed message of a same-named type never satisfies it; by name otherwise.
 func (ctx *Context) carriesEvent(m Message, subsets string, scope *symbols.Scope) bool {
 	if subsets == "" {
 		return true
 	}
-	if m.Event != nil {
-		if want, ok := ctx.featureSymbol(scope, subsets); ok {
-			return want == m.Event
-		}
+	if want, ok := ctx.featureSymbol(scope, subsets); ok {
+		return m.Event != nil && want == m.Event
 	}
 	name := lastSegment(subsets)
 	return name == m.EventName || name == m.SignalType
