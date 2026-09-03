@@ -6,6 +6,8 @@
   looked a name up only along the owner's own namespaces; it now asks name resolution, so a type,
   subsetting, redefinition, relationship end or feature reference spelled through an import, an
   alias or a nested package path links to the same element its fully qualified spelling does.
-  A name that genuinely does not resolve is still carried as a literal, and a redefinition read
-  back from a linked target is written by the redefined feature's own name
-  (Open-MBEE/OpenSysML#90).
+  A feature chain's member (`w.size`) and a behavior's endpoints (`then idle`) link the same
+  way, a chain's member found in its operand's type. A name that genuinely does not resolve is
+  still carried as a literal; read back, a linked redefinition target is written by the
+  redefined feature's own name where one feature of that name is inherited, qualified where
+  several are (Open-MBEE/OpenSysML#90).

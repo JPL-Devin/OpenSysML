@@ -85,8 +85,8 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 			e.graph.Add(subject, e.sysml(pSourceFeature), e.reference(owner, n.Name))
 		}
 		e.expression(subject, e.sysx(xGuard), xGuard, owner, n.Guard)
-		if successor := qualifiedText(n.Successor); successor != "" {
-			e.graph.Add(subject, e.sysml(pTargetFeature), e.reference(owner, successor))
+		if qualifiedText(n.Successor) != "" {
+			e.graph.Add(subject, e.sysml(pTargetFeature), e.link(owner, n.Successor))
 		} else if n.Guard != nil {
 			return true, &UnsupportedError{
 				What: fmt.Sprintf("the guarded initial node at %s", e.where(n)),
@@ -314,17 +314,16 @@ func (e *encoder) encodeTransition(n *ast.TransitionMember, head func(rdf.Term),
 	head(rdf.SysMLTerm(mTransition))
 	e.name(subject, n.Name)
 	e.graph.Add(subject, e.sysx(xTransitionSyntax), rdf.String(e.transitionSyntax(n)))
-	if source := qualifiedText(n.Source); source != "" {
-		e.graph.Add(subject, e.sysml(pSourceFeature), e.reference(owner, source))
+	if qualifiedText(n.Source) != "" {
+		e.graph.Add(subject, e.sysml(pSourceFeature), e.link(owner, n.Source))
 	}
-	target := qualifiedText(n.Target)
-	if target == "" {
+	if qualifiedText(n.Target) == "" {
 		return &UnsupportedError{
 			What: fmt.Sprintf("the transition at %s", e.where(n)),
 			Note: "it names no target state, so the edge it declares cannot be written back",
 		}
 	}
-	e.graph.Add(subject, e.sysml(pTargetFeature), e.reference(owner, target))
+	e.graph.Add(subject, e.sysml(pTargetFeature), e.link(owner, n.Target))
 	if n.Trigger != nil {
 		e.graph.Add(subject, e.sysx(xTrigger), rdf.String(e.text(n.Trigger)))
 		e.graph.Add(subject, e.sysx(xTriggerKeyword), rdf.String(e.introducer(n, n.Trigger)))
@@ -413,8 +412,7 @@ func (e *encoder) edgeEnds(subject rdf.Term, node ast.Node, owner string, src, t
 		{tgt, pTargetFeature, xTargetMember, "sequences to"},
 	}
 	for _, end := range ends {
-		name := qualifiedText(end.end.name)
-		if name == "" {
+		if qualifiedText(end.end.name) == "" {
 			fqn, ok := e.fqn[end.end.member]
 			if !ok {
 				return &UnsupportedError{
@@ -425,7 +423,7 @@ func (e *encoder) edgeEnds(subject rdf.Term, node ast.Node, owner string, src, t
 			e.graph.Add(subject, e.sysx(end.member), e.ids.subjectForNode(end.end.member, fqn))
 			continue
 		}
-		e.graph.Add(subject, e.sysml(end.feature), e.reference(owner, name))
+		e.graph.Add(subject, e.sysml(end.feature), e.link(owner, end.end.name))
 	}
 	return nil
 }

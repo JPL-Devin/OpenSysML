@@ -11,6 +11,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf/ontology"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -196,6 +197,7 @@ func encodeDocument(file *source.SourceFile, root *ast.RootNamespace) (*encoder,
 	}
 	idx := symbols.NewIndexFromDoc(file.Name(), root)
 	e.resolver = resolve.New(idx)
+	e.resolver.SetModel(semantics.NewModel(e.resolver))
 	e.collectScopes(idx.DocumentRoot(file.Name()), "")
 	if err := e.encode(root.Members, "", rdf.Term{}); err != nil {
 		return nil, err
@@ -522,7 +524,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		if err := e.prefixes(subject, n, n.Prefixes); err != nil {
 			return err
 		}
-		e.relationships(subject, owner, n.Relationships)
+		e.relationships(subject, n, owner, n.Relationships)
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Members, fqn, subject)
 
@@ -586,7 +588,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		if keyword := directionKeyword(n.Direction); keyword != "" {
 			e.graph.Add(subject, e.sysml(pDirection), rdf.String(keyword))
 		}
-		e.relationships(subject, owner, n.Relationships)
+		e.relationships(subject, n, owner, n.Relationships)
 		e.multiplicity(subject, owner, n.Multiplicity)
 		e.expression(subject, e.sysml(pValue), pValue, owner, n.Value)
 		// A declaration head that binds ends (connect/bind/flow/succession),
@@ -724,7 +726,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		if n.TypeRef != nil {
 			e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelTyping]), e.link(owner, n.TypeRef))
 		}
-		e.relationships(subject, owner, n.Relationships)
+		e.relationships(subject, n, owner, n.Relationships)
 		e.multiplicity(subject, owner, n.Multiplicity)
 		e.expression(subject, e.sysml(pValue), pValue, owner, n.BindingExpr)
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
@@ -1088,7 +1090,7 @@ func (e *encoder) sigilBefore(offset int) string {
 	return ""
 }
 
-func (e *encoder) relationships(subject rdf.Term, owner string, rels []*ast.Relationship) {
+func (e *encoder) relationships(subject rdf.Term, decl ast.Node, owner string, rels []*ast.Relationship) {
 	for _, rel := range rels {
 		if rel == nil || rel.Target == nil {
 			continue
@@ -1099,9 +1101,13 @@ func (e *encoder) relationships(subject rdf.Term, owner string, rels []*ast.Rela
 		}
 		// A name is mapped as a reference, which links it when this document
 		// declares it; a feature chain or other expression is not a name, so it
-		// is carried as the text it was written as.
+		// is carried as the text it was written as. A reference subsetting names
+		// past decl's own binding of the name, a redefinition a general's feature.
 		if name, ok := rel.Target.(*ast.QualifiedName); ok {
 			ref := resolve.Reference{QN: name, Redefines: rel.Kind == ast.RelRedefines}
+			if rel.Kind == ast.RelReferences {
+				ref.Referrer = decl
+			}
 			e.graph.Add(subject, e.sysml(property), e.linkReference(owner, ref))
 			continue
 		}

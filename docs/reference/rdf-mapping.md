@@ -192,7 +192,11 @@ never by parsing the id — a declared id may legitimately end in `_om` or embed
   `includes`, `via`, `annotates`, `subject`. A literal carries the name itself,
   without the quotes an unrestricted name is written with; a target that is an
   expression rather than a name (a feature chain, say) is carried as the text it
-  was written as, typed `sysx:Expression` to tell the two apart.
+  was written as, typed `sysx:Expression` to tell the two apart. A feature
+  chain's `sysml:targetFeature` links the member the chain reaches in its
+  operand's type, a redefinition the general's feature; written back, the
+  former is spelled by its own name and the latter by its own name where that
+  reaches one feature among the owner's generals, else qualified.
 - `sysml:lowerBound`, `sysml:upperBound` — multiplicity, as expression nodes
   ([Expressions](#expressions))
 - `sysml:value` — a feature's value, as an expression node

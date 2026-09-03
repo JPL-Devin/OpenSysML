@@ -1716,3 +1716,82 @@ func TestWriteFileErrorNamesTheRequestedPath(t *testing.T) {
 		t.Errorf("error leaks the temporary file: %v", err)
 	}
 }
+
+// A reference reached through an import, an alias, a nested package path, a
+// feature chain or a redefinition across two generals links to the element it
+// names, and that link alone — without the text it was written as — brings the
+// notation back and the same graph after it. The fixture pairs each linked
+// reference with a same-named declaration nearer the writer, so a link that
+// went to the wrong element would surface here.
+func TestLinkedReferencesCarryTheRoundTripWithoutSourceText(t *testing.T) {
+	path := filepath.Join("testdata", "convert", "imported_references.sysml")
+	turtle := toTurtle(t, path)
+	for _, want := range []string{
+		"sysml:type elmt:OtherPkg__BudgetLedger ;",
+		"sysml:type elmt:OtherPkg__Tempo ;",
+		"sysml:referent elmt:OtherPkg__Tempo__operative .",
+		"sysml:references elmt:OtherPkg__spare ;",
+		"sysml:targetFeature elmt:OtherPkg__Inner__Wheel__size .",
+		"sysml:redefines elmt:R90__G2__x ;",
+		"sysml:targetFeature elmt:R90__Done__done .",
+		`sysml:type "Elsewhere::Missing" ;`,
+	} {
+		if !strings.Contains(turtle, want) {
+			t.Errorf("the graph should carry %q\n%s", want, turtle)
+		}
+	}
+	stripped := withoutTriples(t, withoutTriples(t, []byte(turtle), "sysx:sourceText"), "sysx:sourceTail")
+	back, err := export.Convert("m.ttl", stripped, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from the mapping alone: %v", err)
+	}
+	for _, want := range []string{
+		"item b2 : OtherPkg::BudgetLedger;",
+		"attribute t : OtherPkg::Tempo = OtherPkg::Tempo::operative;",
+		"ref spare references OtherPkg::spare;",
+		"attribute s = w.size;",
+		"part redefines G2::x;",
+		"part : OtherPkg::Inner::Wheel redefines w;",
+		"transition idle then Done::done;",
+		"part unresolved : Elsewhere::Missing;",
+	} {
+		if !strings.Contains(string(back), want) {
+			t.Errorf("the notation should read %q\n%s", want, back)
+		}
+	}
+	again, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle again: %v", err)
+	}
+	// The notation written back is canonical spelling, so the graphs are compared
+	// as sets of the structural triples, the written text set aside.
+	first := structuralTriples(t, []byte(turtle))
+	second := structuralTriples(t, again)
+	for triple := range first {
+		if !second[triple] {
+			t.Errorf("the second hop lost %s %s %s", triple.Subject.Value, triple.Predicate.Value, triple.Object.Value)
+		}
+	}
+	for triple := range second {
+		if !first[triple] {
+			t.Errorf("the second hop added %s %s %s", triple.Subject.Value, triple.Predicate.Value, triple.Object.Value)
+		}
+	}
+}
+
+// structuralTriples is the set of a graph's triples without the source text.
+func structuralTriples(t *testing.T, turtle []byte) map[rdf.Triple]bool {
+	t.Helper()
+	g, err := rdf.ParseTurtle(turtle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := map[rdf.Triple]bool{}
+	for _, triple := range g.Triples() {
+		if triple.Predicate == rdf.OpenSysMLTerm("sourceText") || triple.Predicate == rdf.OpenSysMLTerm("sourceTail") {
+			continue
+		}
+		out[triple] = true
+	}
+	return out
+}

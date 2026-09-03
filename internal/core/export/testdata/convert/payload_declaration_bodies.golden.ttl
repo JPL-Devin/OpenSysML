@@ -281,7 +281,7 @@ expr:Payloads__Ctx___402_pflowSource
     sysx:sourceText "x.i" ;
     sysml:elementId "Payloads__Ctx___402_pflowSource" ;
     sysml:argument expr:Payloads__Ctx___402_pflowSource_pa0 ;
-    sysml:targetFeature "i" ;
+    sysml:targetFeature elmt:Payloads__A__i ;
     sysx:endIndex "0"^^xsd:integer ;
     sysx:endRole "source" .
 
@@ -297,7 +297,7 @@ expr:Payloads__Ctx___402_pflowTarget
     sysx:sourceText "y.j" ;
     sysml:elementId "Payloads__Ctx___402_pflowTarget" ;
     sysml:argument expr:Payloads__Ctx___402_pflowTarget_pa0 ;
-    sysml:targetFeature "j" ;
+    sysml:targetFeature elmt:Payloads__B__j ;
     sysx:endIndex "1"^^xsd:integer ;
     sysx:endRole "target" .
 
@@ -366,7 +366,7 @@ expr:Payloads__Ctx__m_pflowSource
     sysx:sourceText "x.i" ;
     sysml:elementId "Payloads__Ctx__m_pflowSource" ;
     sysml:argument expr:Payloads__Ctx__m_pflowSource_pa0 ;
-    sysml:targetFeature "i" ;
+    sysml:targetFeature elmt:Payloads__A__i ;
     sysx:endIndex "0"^^xsd:integer ;
     sysx:endRole "source" .
 
@@ -382,7 +382,7 @@ expr:Payloads__Ctx__m_pflowTarget
     sysx:sourceText "y.j" ;
     sysml:elementId "Payloads__Ctx__m_pflowTarget" ;
     sysml:argument expr:Payloads__Ctx__m_pflowTarget_pa0 ;
-    sysml:targetFeature "j" ;
+    sysml:targetFeature elmt:Payloads__B__j ;
     sysx:endIndex "1"^^xsd:integer ;
     sysx:endRole "target" .
 
@@ -430,7 +430,7 @@ expr:Payloads__Ctx___404_pflowSource
     sysx:sourceText "x.i" ;
     sysml:elementId "Payloads__Ctx___404_pflowSource" ;
     sysml:argument expr:Payloads__Ctx___404_pflowSource_pa0 ;
-    sysml:targetFeature "i" ;
+    sysml:targetFeature elmt:Payloads__A__i ;
     sysx:endIndex "0"^^xsd:integer ;
     sysx:endRole "source" .
 
@@ -446,7 +446,7 @@ expr:Payloads__Ctx___404_pflowTarget
     sysx:sourceText "y.j" ;
     sysml:elementId "Payloads__Ctx___404_pflowTarget" ;
     sysml:argument expr:Payloads__Ctx___404_pflowTarget_pa0 ;
-    sysml:targetFeature "j" ;
+    sysml:targetFeature elmt:Payloads__B__j ;
     sysx:endIndex "1"^^xsd:integer ;
     sysx:endRole "target" .
 

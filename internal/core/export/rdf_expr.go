@@ -13,6 +13,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 )
 
 // Metaclasses of the expression nodes, as SysML v2 8.4 names them.
@@ -130,7 +131,7 @@ func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) 
 	case *ast.FeatureChainExpr:
 		e.typed(subject, mFeatureChain)
 		e.arguments(subject, owner, []ast.Node{n.Operand})
-		e.graph.Add(subject, e.sysml(pTargetFeature), e.link(owner, n.Member))
+		e.graph.Add(subject, e.sysml(pTargetFeature), e.linkReference(owner, resolve.Reference{QN: n.Member, Chain: n}))
 
 	case *ast.IndexExpr:
 		e.typed(subject, mOperator)
@@ -321,8 +322,7 @@ func (d *decoder) expressionNodeText(node rdf.Term, scope string) (string, error
 		if err != nil {
 			return "", err
 		}
-		member, err := d.expressionReference(node, rdf.SysML+pTargetFeature, scope,
-			"a feature chain names the feature it reaches")
+		member, err := d.chainMember(node, scope)
 		if err != nil {
 			return "", err
 		}
@@ -452,6 +452,29 @@ func (d *decoder) expressionArguments(node rdf.Term, scope string) ([]string, er
 		out = append(out, arg.text)
 	}
 	return out, nil
+}
+
+// chainMember names the feature a chain reaches: a linked one by its own name,
+// since a chain's member is looked up in its operand, not in the scope.
+func (d *decoder) chainMember(node rdf.Term, scope string) (string, error) {
+	object, ok := d.graph.Object(node, rdf.SysML+pTargetFeature)
+	if !ok {
+		return "", &UnsupportedError{
+			What: fmt.Sprintf("the expression <%s>", node.Value),
+			Note: "a feature chain names the feature it reaches",
+		}
+	}
+	if object.IsLiteral() {
+		return d.referenceName(object, scope)
+	}
+	target, err := d.referencedElement(object.Value)
+	if err != nil {
+		return "", err
+	}
+	if name, ok := d.stringOf(target, rdf.SysML+pDeclaredName); ok {
+		return qualifiedNameText(name), nil
+	}
+	return d.referenceName(object, scope)
 }
 
 // expressionReference names the element an expression property points at.

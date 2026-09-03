@@ -252,7 +252,7 @@ elmt:CompositeMultiplicity__Car__frontWheel__lugbolt
     sysml:declaredName "lugbolt" ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:isComposite "true"^^xsd:boolean ;
-    sysml:redefines "w::lugbolt" ;
+    sysml:redefines elmt:CompositeMultiplicity__Vehicle__w__lugbolt ;
     sysml:upperBound expr:CompositeMultiplicity__Car__frontWheel__lugbolt_pupperBound ;
     sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "            composite lugbolt[4] redefines w::lugbolt;\n" .
