@@ -19,3 +19,16 @@ requirement def R {
 part def Pump {
     assert constraint c { decide d; }
 }
+// The statements of a calculation body are read too, so a node nested in one
+// of their bodies is reached rather than the statement failing to parse.
+constraint def Guarded {
+    in attribute y : ScalarValues::Integer;
+    if y > 0 { fork f; }
+    while y > 0 { join j; }
+    x = 3;
+    y > 0
+}
+part def Valve {
+    assert constraint c { if x > 0 { decide d; } x > 0 }
+    constraint c2 { if x > 0 ? true else false }
+}

@@ -23,4 +23,49 @@
     (Definition kind="part" abstract=false variation=false name="Pump"
       (Membership visibility="default"
         (Usage kind="constraint" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="assert"
-          (DecisionNode name="d"))))))
+          (DecisionNode name="d")))))
+  (Membership visibility="default"
+    (Definition kind="constraint" abstract=false variation=false name="Guarded"
+      (Membership visibility="default"
+        (Usage kind="attribute" name="y" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=ScalarValues::Integer
+            (*ast.QualifiedName))))
+      (IfActionNode
+        (OperatorExpr operator=">"
+          (FeatureReference name="y")
+          (LiteralInteger value="0"))
+        (IfBranchNode kind="then"
+          (ForkNode name="f")))
+      (WhileLoopActionNode kind="while" variable=""
+        (OperatorExpr operator=">"
+          (FeatureReference name="y")
+          (LiteralInteger value="0"))
+        (JoinNode name="j"))
+      (*ast.AssignmentActionNode)
+      (ConstraintMember assert=true negated=false
+        (OperatorExpr operator=">"
+          (FeatureReference name="y")
+          (LiteralInteger value="0")))))
+  (Membership visibility="default"
+    (Definition kind="part" abstract=false variation=false name="Valve"
+      (Membership visibility="default"
+        (Usage kind="constraint" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="assert"
+          (IfActionNode
+            (OperatorExpr operator=">"
+              (FeatureReference name="x")
+              (LiteralInteger value="0"))
+            (IfBranchNode kind="then"
+              (DecisionNode name="d")))
+          (ConstraintMember assert=true negated=false
+            (OperatorExpr operator=">"
+              (FeatureReference name="x")
+              (LiteralInteger value="0")))))
+      (Membership visibility="default"
+        (Usage kind="constraint" name="c2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConstraintMember assert=true negated=false
+            (OperatorExpr operator="if"
+              (OperatorExpr operator=">"
+                (FeatureReference name="x")
+                (LiteralInteger value="0"))
+              (LiteralBool value=true)
+              (LiteralBool value=false))))))))

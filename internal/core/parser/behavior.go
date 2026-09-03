@@ -1756,9 +1756,9 @@ func (p *Parser) parseConstraintBody() []ast.Node {
 			// A declaration, a relationship where a name would go (`:>> x = v;`),
 			// or a metadata usage (`@M { … }`).
 			members = append(members, p.parseBodyMember())
-		} else if p.atActionNodeMember() {
-			// A constraint body is a calculation body (SysML.xtext CalculationBody),
-			// so it carries action nodes; the owning-type rule rejects them later.
+		} else if p.atCalcStatement() || p.atActionNodeMember() {
+			// A constraint body is a calculation body (SysML.xtext CalculationBody), so it
+			// carries statements and action nodes; the owning-type rule rejects the nodes later.
 			members = append(members, p.parseActionMember())
 		} else {
 			// Default: parse as constraint expression (bare expression)

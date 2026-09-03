@@ -573,6 +573,27 @@ func TestControlNodeInNestedConstraintBody(t *testing.T) {
 			"decide d is declared in constraint c, which is not an action"})
 }
 
+// A constraint body carries the statements of a calculation body, so a control
+// node nested in an `if` or `while` body there is reached and counted; the
+// statement's body is an action, so the node has an owner of the right kind.
+func TestControlNodeInConstraintBodyStatements(t *testing.T) {
+	wantControlNodeErrors(t, `package P {
+	attribute x : ScalarValues::Integer;
+	constraint def C {
+		in attribute y : ScalarValues::Integer;
+		if y > 0 { action a; action b; action c; fork f; first a then f; first b then f; first f then c; }
+		while y > 0 { action a; action b; action c; join j; first a then j; first j then b; first j then c; }
+		y > 0
+	}
+	part def Q {
+		assert constraint c { if x > 0 { action a; action b; action c; decide d; first a then d; first b then d; first d then c; } x > 0 }
+		constraint c2 { if x > 0 ? true else false }
+	}
+}`, controlNodeWant{CodeForkIncomingSuccessions, 5, "fork f has 2 incoming successions"},
+		controlNodeWant{CodeJoinOutgoingSuccessions, 6, "join j has 2 outgoing successions"},
+		controlNodeWant{CodeDecisionIncomingSuccessions, 10, "decide d has 2 incoming successions"})
+}
+
 // The action body a transition, a send, a guarded succession, or a state's
 // entry/do/exit block ends in is an action of its own, whose successions are
 // counted as a unit even when the body has no name.
