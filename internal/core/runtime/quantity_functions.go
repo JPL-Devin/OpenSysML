@@ -166,8 +166,8 @@ func angleArgument(val Value) (semantics.Value, bool) {
 	return semantics.Value{}, false
 }
 
-// quantityArg reads a ScalarQuantityValue argument: a quantity, or a number as
-// a quantity of dimension one.
+// quantityArg reads a ScalarQuantityValue argument: a quantity, or a number,
+// which is how the runtime holds a quantity of dimension one (ToDimensionOneValue).
 func quantityArg(name, param string, val Value) (*Quantity, error) {
 	q, ok := asQuantity(val)
 	if !ok {
@@ -201,7 +201,7 @@ func quantityMagnitudeUnary(apply func([]semantics.Value) (semantics.Value, erro
 		if err != nil {
 			return Value{}, fmt.Errorf("function %s: %w", name, err)
 		}
-		return NewQuantityValue(&Quantity{Num: num, Unit: q.Unit}), nil
+		return inUnit(num, q.Unit)
 	}
 }
 
@@ -217,7 +217,7 @@ func quantityAdditive(op ast.OperatorKind) libraryApply {
 			if op == ast.OpSub {
 				return negateQuantity(x)
 			}
-			return NewQuantityValue(x), nil
+			return inUnit(x.Num, x.Unit)
 		}
 		y, err := quantityArg(name, "y", args[1])
 		if err != nil {
@@ -311,7 +311,11 @@ func quantityToString(name string, _ *Context, args []Value) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	return NewStringValue(x.String()), nil
+	val, err := inUnit(x.Num, x.Unit)
+	if err != nil {
+		return Value{}, err
+	}
+	return NewStringValue(FormatValue(val)), nil
 }
 
 // quantityToInteger is ToInteger: the magnitude, which must be a whole number.

@@ -131,6 +131,19 @@ func TestQuantityCalculations(t *testing.T) {
 		{"sqrt(16.0)", "4.0"},
 		{"abs(-3 [m])", "3 [m]"},
 		{"abs(-2.5 [m/s])", "2.5 [m/s]"},
+		{"abs(-3 ['°'])", "3 ['°']"},
+		{"abs(-3)", "3"},
+		{"abs(ToDimensionOneValue(-2.5))", "2.5"},
+		{"floor(2.7)", "2"},
+		{"round(2.5)", "3"},
+		{"max(1, 2)", "2"},
+		{"QuantityCalculations::'+'(2)", "2"},
+		{"QuantityCalculations::'-'(2)", "-2"},
+		{"QuantityCalculations::'*'(2, 3 [m])", "6 [m]"},
+		{"QuantityCalculations::'*'(2 [m], 3)", "6 [m]"},
+		{"QuantityCalculations::'/'(6 [m], 3)", "2.0 [m]"},
+		{"QuantityCalculations::'=='(2, 2)", "true"},
+		{"ToString(2)", `"2"`},
 		{"abs(2 [kg])", "2 [kg]"},
 		{"floor(2.7 [m])", "2 [m]"},
 		{"floor(-2.2 [m])", "-3 [m]"},
@@ -210,7 +223,7 @@ func TestQuantityCalculationsReport(t *testing.T) {
 		{"sqrt(8 [m**3])", ErrUnitRoot, "raises metre to the odd power 3"},
 		{"sqrt(4 [m**2/s])", ErrUnitRoot, "raises second to the odd power -1"},
 		{"sqrt(9 [rad])", ErrUnitRoot, "function QuantityCalculations::sqrt: unit has no root: rad raises the dimension-one unit rad to the odd power 1"},
-		{"sqrt(9 ['°'])", ErrUnitRoot, "° raises the dimension-one unit ° to the odd power 1"},
+		{"sqrt(9 ['°'])", ErrUnitRoot, "'°' raises the dimension-one unit '°' to the odd power 1"},
 		{"sqrt(9 [rad**3])", ErrUnitRoot, "raises the dimension-one unit rad to the odd power 3"},
 		{"sqrt(9 [rad*m**2])", ErrUnitRoot, "raises the dimension-one unit rad to the odd power 1"},
 		{"sqrt(-4 [m**2])", semantics.ErrArithmeticDomain, "sqrt of a negative quantity -4 [m**2]"},
@@ -220,13 +233,16 @@ func TestQuantityCalculationsReport(t *testing.T) {
 		{"QuantityCalculations::min(1 [kg], 1 [m])", ErrIncommensurableUnits, "function QuantityCalculations::min"},
 		{"(1 [m], 1 [s])->sum()", ErrIncommensurableUnits, ""},
 		{"QuantityCalculations::'+'(1 [m], 1 [s])", ErrIncommensurableUnits, "function QuantityCalculations::+"},
+		{"QuantityCalculations::'+'(1 [m], 1)", ErrIncommensurableUnits, "function QuantityCalculations::+"},
+		{"QuantityCalculations::'<'(1 [m], 1)", ErrIncommensurableUnits, "function QuantityCalculations::<"},
+		{"max(1 [m], 1)", ErrIncommensurableUnits, "function QuantityCalculations::max"},
 		{"QuantityCalculations::'<'(1 [m], 1 [s])", ErrIncommensurableUnits, "function QuantityCalculations::<"},
 		{"QuantityCalculations::'/'(1 [m], 0 [s])", ErrDivisionByZero, "function QuantityCalculations::/"},
 		{"ToInteger(2.5 [m])", ErrTypeMismatch, "function QuantityCalculations::ToInteger requires a whole magnitude, 2.5 [m] has none"},
 		{"sin(90 [m])", ErrTypeMismatch, `function TrigFunctions::sin parameter "theta" requires a number of radians or an angle quantity, got a quantity in m`},
 		{"arcsin(1 [rad])", ErrTypeMismatch, `function TrigFunctions::arcsin parameter "x" requires a numeric value, got a quantity in rad`},
 		{"IntegerFunctions::abs(1 [rad])", ErrTypeMismatch, `function IntegerFunctions::abs parameter "x" requires a numeric value, got a quantity in rad`},
-		{"RealFunctions::sqrt(4 ['°'])", ErrTypeMismatch, `function RealFunctions::sqrt parameter "x" requires a numeric value, got a quantity in °`},
+		{"RealFunctions::sqrt(4 ['°'])", ErrTypeMismatch, `function RealFunctions::sqrt parameter "x" requires a numeric value, got a quantity in '°'`},
 		{"NaturalFunctions::max(1 [rad], 2)", ErrTypeMismatch, `function NaturalFunctions::max parameter "x" requires a numeric value`},
 		{"OpenSysMLMathFunctions::exp(1 [rad])", ErrTypeMismatch, `function OpenSysMLMathFunctions::exp parameter "x" requires a numeric value`},
 		{"ConvertQuantity(1 [m], 2 [cm])", ErrUnevaluableLibraryFunction, "QuantityCalculations::ConvertQuantity: a measurement reference is a library declaration"},
@@ -236,6 +252,9 @@ func TestQuantityCalculationsReport(t *testing.T) {
 		{"VectorCalculations::outer((1.0, 2.0), (3.0, 4.0))", ErrUnevaluableLibraryFunction, "VectorCalculations::outer: a tensor quantity has no representation"},
 		{"VectorCalculations::scalarQuantityVectorMult(2 [m], (1.0, 2.0))", ErrUnevaluableLibraryFunction, "VectorCalculations::scalarQuantityVectorMult: a vector quantity has no representation"},
 		{"VectorCalculations::transform(1, (1.0, 2.0))", ErrUnevaluableLibraryFunction, "VectorCalculations::transform: a coordinate transformation has no representation"},
+		{"VectorCalculations::'+'((1 [m], 2 [m]), (3 [m], 4 [m]))", ErrTypeMismatch, `function VectorCalculations::+ parameter "v" requires a vector of numeric values, element 1 is a quantity in m`},
+		{"VectorCalculations::norm((3 [m], 4 [m]))", ErrTypeMismatch, `function VectorCalculations::norm parameter "v" requires a vector of numeric values, element 1 is a quantity in m`},
+		{"VectorCalculations::vectorScalarMult((1.0, 2.0), 2 [m])", ErrTypeMismatch, `function VectorCalculations::vectorScalarMult parameter "x" requires a numeric value`},
 		{"TensorCalculations::'+'(1, 2)", ErrUnevaluableLibraryFunction, "TensorCalculations::+: a tensor quantity has no representation"},
 		{"TensorCalculations::tensorTensorMult(1, 2)", ErrUnevaluableLibraryFunction, "TensorCalculations::tensorTensorMult"},
 	}
@@ -280,7 +299,9 @@ func testQuantityCalculationThatHasNoValue(t *testing.T) {
 }
 
 // TestVectorCalculations: the VectorCalculations functions the vector
-// representation carries compute as their VectorFunctions counterparts.
+// representation carries compute as their VectorFunctions counterparts over a
+// vector of dimension one, the only vector quantity the runtime holds; a vector
+// of unit-bearing elements is rejected (TestQuantityCalculationsReport).
 func TestVectorCalculations(t *testing.T) {
 	ctx, scope := quantityCalculationsContext(t)
 

@@ -432,6 +432,19 @@ package Imperial {
 		t.Errorf("km * km over the wire = %s, want 4 [SI::km**2] = 1e+06/1·SI::metre^2", got)
 	}
 
+	// A unit whose name the notation quotes stays one unit when composed: `'A/m'`
+	// times `m` is `'A/m'*m`, not the quotient `A/m*m`.
+	density := mustEvaluateQuantity(t, srv, hash, "2.0 [SI::'A/m']")
+	if density.GetUnit() != "SI::'A/m'" {
+		t.Fatalf("a quoted unit crosses the wire in %q, want SI::'A/m'", density.GetUnit())
+	}
+	if got := describeQuantity(evaluate("Q::Area", density, mustEvaluateQuantity(t, srv, hash, "3.0 [SI::m]"))); got != "6 [SI::'A/m'*SI::m] = SI::ampere" {
+		t.Errorf("'A/m' * m over the wire = %s, want 6 [SI::'A/m'*SI::m] = SI::ampere", got)
+	}
+	if got := describeQuantity(evaluate("Q::Area", density, density)); got != "4 [SI::'A/m'**2] = SI::ampere^2·SI::metre^-2" {
+		t.Errorf("'A/m' * 'A/m' over the wire = %s, want 4 [SI::'A/m'**2] = SI::ampere^2·SI::metre^-2", got)
+	}
+
 	// Unit text that is no unit expression is one opaque unit: still a quantity
 	// over the reduction sent, and still what the sender wrote.
 	opaque := &pb.Quantity{

@@ -3,7 +3,7 @@
   "libraries": true,
   "instantiate": "test::Turn",
   "slots": {
-    "right": {"type": "Quantity", "value": 90, "unit": "°"},
+    "right": {"type": "Quantity", "value": 90, "unit": "'°'"},
     "risen": {"type": "Boolean", "value": true},
     "reversed": {"type": "Boolean", "value": true},
     "flat": {"type": "Real", "value": 0.0},

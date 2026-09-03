@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -14,7 +15,7 @@ import (
 // unit product, `N*m` being the powers N¹ and m¹.
 type UnitPower struct {
 	Unit         *symbols.Symbol // the unit the name resolves to, nil where it resolves to none
-	Name         string          // the unit as the model wrote it
+	Name         string          // the unit as the model wrote it, quoted where the notation must (`'A/m'`)
 	Exponent     float64
 	DimensionOne bool // the unit reduces to no base unit: an angle, a ratio, a count
 }
@@ -106,13 +107,28 @@ func (p UnitProduct) String() string {
 // powerText renders one unit raised to a positive exponent, grouping a name
 // that is itself an expression so `(km/h)**2` is not read as `km/(h**2)`.
 func powerText(name string, exp float64) string {
-	if strings.ContainsAny(name, "*/^·") {
+	if !atomicName(name) && strings.ContainsAny(name, "*/^·⋅") {
 		name = "(" + name + ")"
 	}
 	if exp == 1 {
 		return name
 	}
 	return fmt.Sprintf("%s**%g", name, exp)
+}
+
+// atomicName reports whether name is one qualified name as the notation spells it,
+// each segment a basic name or quoted, so its operator characters are all in quotes.
+func atomicName(name string) bool {
+	for _, segment := range strings.Split(name, "::") {
+		if lexer.IsIdentifier(segment) {
+			continue
+		}
+		if len(segment) < 2 || segment[0] != '\'' || segment[len(segment)-1] != '\'' ||
+			strings.Contains(segment[1:len(segment)-1], "'") {
+			return false
+		}
+	}
+	return true
 }
 
 // combineProducts multiplies two products, with the exponents of the second
@@ -231,7 +247,7 @@ func (m *Model) unitProductOfName(qn *ast.QualifiedName, lookup UnitLookup) (Uni
 			dimensionOne = term.Dimensionless()
 		}
 	}
-	return NamedUnitProduct(unit, QualifiedNameText(qn), dimensionOne), nil
+	return NamedUnitProduct(unit, UnitNameText(qn), dimensionOne), nil
 }
 
 // unitProductOfOperator reads a product, quotient or power of units.

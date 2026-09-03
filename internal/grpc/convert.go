@@ -9,6 +9,7 @@ import (
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
@@ -655,7 +656,8 @@ func unnamedUnitProduct(term semantics.UnitTerm) semantics.UnitProduct {
 	}
 	product := semantics.UnitProduct{}
 	for _, f := range term.Factors {
-		product = product.Times(semantics.NamedUnitProduct(f.Unit, symbols.FQNOf(f.Unit), false).Pow(f.Exponent))
+		name := lexer.QualifiedNameText(symbols.FQNOf(f.Unit))
+		product = product.Times(semantics.NamedUnitProduct(f.Unit, name, false).Pow(f.Exponent))
 	}
 	return product
 }

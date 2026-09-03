@@ -125,6 +125,15 @@ func asQuantity(val Value) (*Quantity, bool) {
 	return nil, false
 }
 
+// inUnit is a magnitude in the unit of a quantity asQuantity read; the unit a bare
+// number was read with is no unit at all, so the result is a bare number again.
+func inUnit(num semantics.Value, unit Unit) (Value, error) {
+	if unit.Text == "" && unit.Product.IsEmpty() {
+		return dimensionlessValue(num, unit.Term)
+	}
+	return NewQuantityValue(&Quantity{Num: num, Unit: unit}), nil
+}
+
 // quantityOperands views both operands of an operation as quantities, reporting
 // false when neither is one — then the operation is ordinary arithmetic.
 func quantityOperands(left, right Value) (*Quantity, *Quantity, bool) {
@@ -326,5 +335,5 @@ func negateQuantity(q *Quantity) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	return NewQuantityValue(&Quantity{Num: num, Unit: q.Unit}), nil
+	return inUnit(num, q.Unit)
 }

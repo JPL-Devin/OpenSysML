@@ -240,6 +240,13 @@ func TestComposedUnitCanonical(t *testing.T) {
 		{"1 [km] + 500 [m]", "1.5 [km]"},
 		{"1 [km] + 1000 [m]", "2.0 [km]"},
 		{"-(2 [m])", "-2 [m]"},
+		{"1 ['A/m']", "1 ['A/m']"},
+		{"1 ['A/m'] * 2 [m]", "2 ['A/m'*m]"},
+		{"(2 ['A/m']) ** 2", "4 ['A/m'**2]"},
+		{"6 [m] / 2 ['A/m']", "3.0 [m/'A/m']"},
+		{"1 [SI::'A/m'] * 2 [m]", "2 [SI::'A/m'*m]"},
+		{"1 ['A/m²'] * 2 ['A/m']", "2 ['A/m'*'A/m²']"},
+		{"90 ['°'] * 2 ['°']", "180 ['°'**2]"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.src, func(t *testing.T) {
@@ -279,6 +286,11 @@ func TestUnitProductRendering(t *testing.T) {
 		{"grouped denominator", named("m").DividedBy(named("s")).DividedBy(named("kg")), "m/(kg*s)"},
 		{"fractional power", named("m").Pow(0.5), "m**0.5"},
 		{"composed name grouped", named("km/h").Pow(2), "(km/h)**2"},
+		{"quoted name is one unit", named("'A/m'").Pow(2), "'A/m'**2"},
+		{"quoted name qualified", named("SI::'A/m'").Times(named("m")), "SI::'A/m'*m"},
+		{"quoted name divided by", named("m").DividedBy(named("'A/m'")), "m/'A/m'"},
+		{"quoted name in a composed name grouped", named("'A/m'*m").Pow(2), "('A/m'*m)**2"},
+		{"reduction text grouped", named("1000/1·SI::metre").Pow(2), "(1000/1·SI::metre)**2"},
 		{"sorted by name", named("s").Times(named("m")).Times(named("s")), "m*s**2"},
 		{"operand order does not matter", named("m").Times(named("N")), "N*m"},
 		{"one unit under two spellings", resolved(metre, "m").Times(resolved(metre, "SI::m")), "m**2"},

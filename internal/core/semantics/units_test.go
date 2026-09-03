@@ -64,6 +64,11 @@ func TestUnitExprTextReadsBack(t *testing.T) {
 		{"(m/s)*kg", "m/s*kg"},
 		{"m*(s*kg)", "m*s*kg"},
 		{"m**-1", "m**-1"},
+		{"'A/m'", "'A/m'"},
+		{"SI::'A/m'*m", "SI::'A/m'*m"},
+		{"('A/m')**2", "'A/m'**2"},
+		{"m/'A/m'", "m/'A/m'"},
+		{"'°'/rad", "'°'/rad"},
 	}
 	parse := func(src string) ast.Node {
 		p := parser.New(source.New("<unit>", []byte(src)))

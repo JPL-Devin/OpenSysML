@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -215,7 +216,7 @@ func (t UnitTerm) BaseProduct() UnitProduct {
 		if name == "" {
 			name = f.Unit.Name
 		}
-		out.Powers = append(out.Powers, UnitPower{Unit: f.Unit, Name: name, Exponent: f.Exponent})
+		out.Powers = append(out.Powers, UnitPower{Unit: f.Unit, Name: lexer.NameText(name), Exponent: f.Exponent})
 	}
 	return normalizeProduct(out)
 }
@@ -633,13 +634,14 @@ func (m *Model) unitTermOfOperator(scope *symbols.Scope, n *ast.OperatorExpr) (U
 
 // UnitExprText renders an expression in unit position as written, so a
 // diagnostic, a printed value or an exported type fact names the unit the model
-// used rather than its reduction. Grouping the text needs to read back is kept.
+// used rather than its reduction. Grouping and quoting the text needs to read
+// back are kept: `'A/m'` is one unit, `A/m` a quotient of two.
 func UnitExprText(node ast.Node) string {
 	switch n := node.(type) {
 	case *ast.FeatureReference:
-		return QualifiedNameText(n.Name)
+		return UnitNameText(n.Name)
 	case *ast.QualifiedName:
-		return QualifiedNameText(n)
+		return UnitNameText(n)
 	case *ast.OperatorExpr:
 		switch {
 		case len(n.Operands) == 2:
@@ -725,6 +727,19 @@ func qualifiedNameOf(node ast.Node) *ast.QualifiedName {
 	default:
 		return nil
 	}
+}
+
+// UnitNameText renders a unit's qualified name as the notation spells it, a
+// segment that is not a basic name in quotes: `SI::'A/m'`.
+func UnitNameText(qn *ast.QualifiedName) string {
+	if qn == nil {
+		return ""
+	}
+	parts := make([]string, len(qn.Parts))
+	for i, part := range qn.Parts {
+		parts[i] = lexer.NameText(part.Text)
+	}
+	return strings.Join(parts, "::")
 }
 
 // QualifiedNameText renders a qualified name as "A::B::C".
