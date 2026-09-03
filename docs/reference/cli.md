@@ -183,6 +183,7 @@ reported, so a script that reads it takes the output from the first `{`.
 | `--output <file>` | `-o` | Write the conversion, the rendering or the rendered document to a file instead of stdout |
 | `--version` | `-v` | Show version information |
 | `--help` | `-h` | Show usage information |
+| `--man` | | Write this command's manual page, in roff, to stdout (see [Installing](../guide/01-install.md)) |
 
 Check flags, each repeatable. `-instantiate` runs first whatever order the flags are
 written in, so the verdicts are about that object:

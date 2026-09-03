@@ -19,11 +19,26 @@ func (r *Resolver) resolveControlFlowEdge(scope *symbols.Scope, edge *ast.Contro
 	r.resolveEdgeEnd(scope, edge.Target, edge.TargetMember, edge.TargetImplied)
 }
 
-// resolveEdgeEnd resolves an end the author named. An end bound to a member by
+// resolveEdgeEnd resolves an edge or initial-node end the author named. An end bound to a member by
 // position, or one the notation supplied from the member beside the keyword,
 // names nothing an author could misspell: lowering reads that member itself.
 func (r *Resolver) resolveEdgeEnd(scope *symbols.Scope, qn *ast.QualifiedName, member ast.Node, implied bool) {
-	if qn == nil || len(qn.Parts) == 0 || member != nil || implied {
+	if qn == nil || len(qn.Parts) == 0 || member != nil {
+		return
+	}
+	if implied {
+		// The name is the body's own member's, the one a `first x` label also
+		// starts at; record what it binds, undiagnosed.
+		if len(qn.Parts) != 1 {
+			return
+		}
+		sym, ok := memberPastLabels(scope, qn.Parts[0].Text)
+		if !ok {
+			sym, ok = scope.LookupLocal(qn.Parts[0].Text)
+		}
+		if ok {
+			r.resolvedPart(qn, 0, sym)
+		}
 		return
 	}
 	if inStateMachine(scope) {

@@ -303,6 +303,47 @@ func TestInvocationOverloadFeatureTypedByABehavior(t *testing.T) {
 		"type.expr", "argument 1 of pick expects String, found Boolean (candidates: P::A::pick, P::B::pick)")
 }
 
+// A bodiless calc def specializing a library function is called through its own
+// effective inputs — renamed, defaulted, re-multiplied or added by position — as is
+// a feature typed by it; the runtime binds the same way (see runtime tests).
+func TestInvocationOverloadRedeclaredLibraryInputs(t *testing.T) {
+	const src = `package P {
+		private import ScalarValues::*;
+		private import RealFunctions::sqrt;
+		private import RealFunctions::max;
+		private import SequenceFunctions::isEmpty;
+		calc def Renamed :> sqrt { in y :>> x; }
+		calc def Defaulted :> sqrt { in x :>> x = 16.0; }
+		calc def ByPosition :> sqrt { in q : Real; }
+		calc def Floor :> max { in floor :>> y = 0.0; }
+		calc def Empty :> isEmpty { in items :>> seq; }
+		calc def Required :> isEmpty { in seq :>> seq [1]; }
+		ref renamed : Renamed;
+		ref defaulted : Defaulted;
+		attribute a : Real = Renamed(y = 16.0);
+		attribute b : Real = Renamed(16.0);
+		attribute c : Real = Defaulted();
+		attribute d : Real = Defaulted(x = 25.0);
+		attribute e : Real = ByPosition(4.0);
+		attribute f : Real = Floor(x = -3.0);
+		attribute g : Real = Floor(x = 5.0, floor = 7.0);
+		attribute h : Boolean = Empty();
+		attribute i : Boolean = Empty(items = 3);
+		attribute j : Real = renamed(y = 16.0);
+		attribute k : Real = defaulted();
+		%s
+	}`
+	wantLibraryClean(t, fmt.Sprintf(src, ""))
+	wantLibraryDiag(t, fmt.Sprintf(src, `attribute z : Real = Renamed(x = 16.0);`),
+		"type.expr", `Renamed has no parameter named "x"`)
+	wantLibraryDiag(t, fmt.Sprintf(src, `attribute z : Real = Renamed();`),
+		"type.expr", "Renamed requires 1 argument(s), found 0")
+	wantLibraryDiag(t, fmt.Sprintf(src, `attribute z : Real = Floor(2.0);`),
+		"type.expr", "Floor requires 2 argument(s), found 1")
+	wantLibraryDiag(t, fmt.Sprintf(src, `attribute z : Boolean = Required();`),
+		"type.expr", "Required requires 1 argument(s), found 0")
+}
+
 // An argument of unknown type binds to any parameter, so the first candidate
 // in lookup order is kept and nothing new is reported.
 func TestInvocationOverloadUnknownArgumentType(t *testing.T) {
@@ -430,6 +471,39 @@ func TestInvocationPerformedActionSelectsAmongActions(t *testing.T) {
 	`
 	wantLibraryClean(t, fmt.Sprintf(actions, "Real"))
 	wantLibraryDiag(t, fmt.Sprintf(actions, "String"), "type.expr", "argument 1 of tag expects String, found Natural")
+}
+
+// An evaluated call prefers a calc it fits over a same-named action whose input fits
+// the argument more closely: the expression's result is the calc's, so its type is
+// checked against that calc, whichever import names it first. An action's inputs
+// fitting where no calc's do does not make it the call: the arguments are reported
+// against the calc, as the runtime would refuse to evaluate the action.
+func TestInvocationEvaluatedCallPrefersACalc(t *testing.T) {
+	const src = `
+		package A {
+			private import ScalarValues::*;
+			action def pick { in x : Integer; out r : Integer; }
+		}
+		package B {
+			private import ScalarValues::*;
+			calc def pick { in x : %s; return : String = "s"; }
+		}
+		package test {
+			private import ScalarValues::*;
+			%s
+			attribute v : Integer = 3;
+			attribute %s
+		}
+	`
+	for _, imports := range []string{
+		"private import A::*; private import B::*;",
+		"private import B::*; private import A::*;",
+	} {
+		wantLibraryClean(t, fmt.Sprintf(src, "Real", imports, `s : String = pick(v);`))
+		wantLibraryDiag(t, fmt.Sprintf(src, "Real", imports, `i : Integer = pick(v);`), "type.expr", "String")
+		wantLibraryDiag(t, fmt.Sprintf(src, "Boolean", imports, `i : Integer = pick(v);`),
+			"type.expr", "argument 1 of pick expects Boolean, found Integer (candidates: ")
+	}
 }
 
 // An action usage's value that names only calcs, one or several, performs no

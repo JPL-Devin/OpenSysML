@@ -184,9 +184,10 @@ func TestExpressionResourcesAreNotElements(t *testing.T) {
 func TestLiteralExpressionsStillDecode(t *testing.T) {
 	src := `@prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix elmt: <urn:sysmlv2:element:> .
 
-elmt:P a sysml:Package ; sysml:declaredName "P" ; sysml:qualifiedName "P" ; sysx:hasBody "true" .
+elmt:P a sysml:Package ; sysml:declaredName "P" ; sysml:qualifiedName "P" ; sysx:hasBody "true"^^xsd:boolean .
 elmt:P__a a sysml:AttributeUsage ; sysml:declaredName "a" ; sysml:qualifiedName "P::a" ;
     sysml:owningNamespace elmt:P ; sysml:type "Integer" .
 elmt:P__total a sysml:AttributeUsage ; sysml:declaredName "total" ; sysml:qualifiedName "P::total" ;
@@ -209,6 +210,7 @@ elmt:P__total a sysml:AttributeUsage ; sysml:declaredName "total" ; sysml:qualif
 func TestForeignExpressionTreeIsWrittenFromItsStructure(t *testing.T) {
 	src := `@prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 <urn:uuid:1> a sysml:Package ; sysml:declaredName "P" ; sysml:qualifiedName "P" .
 <urn:uuid:2> a sysml:AttributeUsage ; sysml:declaredName "a" ; sysml:qualifiedName "P::a" ;
@@ -219,8 +221,8 @@ func TestForeignExpressionTreeIsWrittenFromItsStructure(t *testing.T) {
 <urn:uuid:4> a sysml:OperatorExpression ; sysml:operator "+" ;
     sysml:argument <urn:uuid:5>, <urn:uuid:6> .
 <urn:uuid:5> a sysml:FeatureReferenceExpression ; sysml:referent <urn:uuid:2> ;
-    sysx:argumentIndex "0" .
-<urn:uuid:6> a sysml:LiteralInteger ; sysml:value "1" ; sysx:argumentIndex "1" .`
+    sysx:argumentIndex "0"^^xsd:integer .
+<urn:uuid:6> a sysml:LiteralInteger ; sysml:value "1"^^xsd:integer ; sysx:argumentIndex "1"^^xsd:integer .`
 	out, err := export.Convert("foreign-expr.ttl", []byte(src), export.FormatTurtle, export.FormatSysML)
 	if err != nil {
 		t.Fatalf("convert: %v", err)
@@ -237,6 +239,7 @@ func TestForeignExpressionTreeIsWrittenFromItsStructure(t *testing.T) {
 func TestUnsupportedExpressionShapesAreReported(t *testing.T) {
 	const head = `@prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 <urn:uuid:1> a sysml:Package ; sysml:declaredName "P" ; sysml:qualifiedName "P" .
 <urn:uuid:3> a sysml:AttributeUsage ; sysml:declaredName "total" ; sysml:qualifiedName "P::total" ;
@@ -246,15 +249,15 @@ func TestUnsupportedExpressionShapesAreReported(t *testing.T) {
 	cases := map[string]struct{ triples, note string }{
 		"operator with no operator": {
 			"<urn:uuid:4> a sysml:OperatorExpression ; sysml:argument <urn:uuid:5> .\n" +
-				"<urn:uuid:5> a sysml:LiteralInteger ; sysml:value \"1\" .",
+				"<urn:uuid:5> a sysml:LiteralInteger ; sysml:value \"1\"^^xsd:integer .",
 			"states the operator it applies",
 		},
 		"operator with too many operands": {
 			"<urn:uuid:4> a sysml:OperatorExpression ; sysml:operator \"+\" ;\n" +
 				"    sysml:argument <urn:uuid:5>, <urn:uuid:6>, <urn:uuid:7> .\n" +
-				"<urn:uuid:5> a sysml:LiteralInteger ; sysml:value \"1\" ; sysx:argumentIndex \"0\" .\n" +
-				"<urn:uuid:6> a sysml:LiteralInteger ; sysml:value \"2\" ; sysx:argumentIndex \"1\" .\n" +
-				"<urn:uuid:7> a sysml:LiteralInteger ; sysml:value \"3\" ; sysx:argumentIndex \"2\" .",
+				"<urn:uuid:5> a sysml:LiteralInteger ; sysml:value \"1\"^^xsd:integer ; sysx:argumentIndex \"0\"^^xsd:integer .\n" +
+				"<urn:uuid:6> a sysml:LiteralInteger ; sysml:value \"2\"^^xsd:integer ; sysx:argumentIndex \"1\"^^xsd:integer .\n" +
+				"<urn:uuid:7> a sysml:LiteralInteger ; sysml:value \"3\"^^xsd:integer ; sysx:argumentIndex \"2\"^^xsd:integer .",
 			"has no notation",
 		},
 		"literal with no value": {

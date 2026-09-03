@@ -96,6 +96,9 @@ const (
 	// member of its own (`specialization Gen subtype A specializes B`), whose two
 	// ends are ordered (KerML §7.2).
 	SymbolRelationship
+	// SymbolMultiplicity classifies a named multiplicity member, `multiplicity
+	// exactlyOne [1..1]` or `multiplicity single subsets exactlyOne`.
+	SymbolMultiplicity
 )
 
 var symbolKindNames = map[SymbolKind]string{
@@ -105,6 +108,7 @@ var symbolKindNames = map[SymbolKind]string{
 	SymbolAlias:                   "alias",
 	SymbolDependency:              "dependency",
 	SymbolRelationship:            "relationship",
+	SymbolMultiplicity:            "multiplicity",
 	SymbolComment:                 "comment",
 	SymbolDocumentation:           "documentation",
 	SymbolTextualRepresentation:   "textualRepresentation",

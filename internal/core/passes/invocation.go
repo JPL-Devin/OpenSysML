@@ -17,6 +17,12 @@ func SelectInvocation(resolver *resolve.Resolver, model *semantics.Model, scope 
 	return silent.selectInvocation(scope, e, silent.argumentTypes(scope, e), performs)
 }
 
+// NewArgumentTyper is the checker's argument typing for model to select calls with, so
+// a consumer reading a call through the model selects what the checker selects.
+func NewArgumentTyper(resolver *resolve.Resolver, model *semantics.Model) semantics.ArgumentTyper {
+	return argumentTyper{resolver: resolver, model: model}
+}
+
 // argumentTyper is the checker's argument typing as the semantic model consumes
 // it, so a call it reads on its own selects what the checker selects.
 type argumentTyper struct {

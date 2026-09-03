@@ -8,7 +8,7 @@ package Scopes {
         attribute xs;
         attribute one = xs->collect({ in limit; limit });
         attribute two = xs->select({ in Gauge; Gauge });
-        attribute outside = Lib::limit;
-        attribute g : Lib::Gauge;
+        attribute outside = limit;
+        attribute g : Gauge;
     }
 }

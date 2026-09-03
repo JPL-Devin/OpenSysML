@@ -120,6 +120,15 @@ func (r *Resolver) resolveNamespaceDecl(scope *symbols.Scope, decl ast.Node) boo
 			r.ResolveQualified(scope, s)
 		}
 		return true
+	case *ast.MultiplicityDecl:
+		r.resolveMultiplicity(scope, d.Range)
+		if d.Subsets != nil {
+			r.ResolveQualified(scope, d.Subsets)
+		}
+		if child := r.childScope(scope, d); child != nil {
+			r.walkMembers(child, d.Members)
+		}
+		return true
 	case *ast.Comment:
 		for _, a := range d.About {
 			r.ResolveQualified(scope, a)
@@ -244,10 +253,8 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		}
 		return true
 	case *ast.InitialNode:
-		// Only resolve successor, not the name (which is just a label)
-		if d.Successor != nil {
-			r.ResolveQualified(scope, d.Successor)
-		}
+		r.resolveInitial(scope, d)
+		r.resolveEdgeEnd(scope, d.Successor, nil, false)
 		r.resolveExpr(scope, d.Guard)
 		r.walkBody(scope, d, d.Members)
 		return true
@@ -341,9 +348,19 @@ func (r *Resolver) resolveBehaviorDecl(scope *symbols.Scope, decl ast.Node) bool
 		r.ResolveEndpoint(scope, d.Source)
 		r.ResolveEndpoint(scope, d.Target)
 		r.resolveTrigger(scope, d.Trigger)
+		if d.Via != nil {
+			r.ResolveQualified(scope, d.Via)
+		}
 		body := symbols.TriggerScope(scope, d)
 		r.resolveExpr(body, d.Guard)
 		r.walkMembers(body, d.Effect)
+		// The body's members are the transition's own, outside the trigger's
+		// parameters (see symbols.buildBehaviorDecl).
+		members := scope
+		if child := r.childScope(scope, d); child != nil {
+			members = child
+		}
+		r.walkMembers(members, d.Members)
 		return true
 	case *ast.SendStatement:
 		r.resolveExpr(scope, d.Message)
@@ -689,7 +706,12 @@ func relationshipTargetsDecl(rel *ast.Relationship, decl ast.Node) bool {
 		target = fr.Name
 	}
 	qn, ok := target.(*ast.QualifiedName)
-	if !ok || len(qn.Parts) != 1 {
+	return ok && namesDecl(qn, decl)
+}
+
+// namesDecl reports whether qn is decl's own name written bare.
+func namesDecl(qn *ast.QualifiedName, decl ast.Node) bool {
+	if qn == nil || len(qn.Parts) != 1 {
 		return false
 	}
 	name := ""
@@ -1140,6 +1162,7 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 				r.ResolveQualified(scope, p.Type)
 			}
 			r.resolveRelationships(scope, v, p.Relationships)
+			r.resolveMultiplicity(scope, p.Multiplicity)
 			r.resolveExpr(scope, p.Value)
 		}
 		// A body expression's parameters and declarations live in a scope of its
@@ -1153,6 +1176,11 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 		}
 	case *ast.MetadataAccessExpr:
 		r.ResolveQualified(scope, v.Ref)
+	case *ast.CastExpr:
+		if v.TargetType != nil {
+			r.ResolveQualified(scope, v.TargetType)
+		}
+		r.resolveMultiplicity(scope, v.Multiplicity)
 	case *ast.QualifiedName:
 		// A bare name in expression position parses straight to a qualified
 		// name rather than to a FeatureReference wrapper.
@@ -1293,7 +1321,9 @@ func (r *Resolver) getOperandSymbol(scope *symbols.Scope, e ast.Node) *symbols.S
 		var ok bool
 		if len(v.Name.Parts) == 1 && !v.Name.Global {
 			sym, ok = r.LookupName(scope, v.Name.Parts[0].Text)
-			if !ok {
+			if ok {
+				r.resolvedPart(v.Name, 0, sym)
+			} else {
 				sym, ok = r.ResolveQualified(scope, v.Name)
 			}
 		} else {
