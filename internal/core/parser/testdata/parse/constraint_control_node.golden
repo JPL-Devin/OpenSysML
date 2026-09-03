@@ -12,4 +12,15 @@
           (MergeNode name="m")
           (DecisionNode name="d")
           (ConstraintMember assert=true negated=false
-            (LiteralBool value=true)))))))
+            (LiteralBool value=true))))))
+  (Membership visibility="default"
+    (Definition kind="requirement" abstract=false variation=false name="R"
+      (RequireMember constraint="q"
+        (MergeNode name="m"))
+      (AssumeMember
+        (ForkNode name="f"))))
+  (Membership visibility="default"
+    (Definition kind="part" abstract=false variation=false name="Pump"
+      (Membership visibility="default"
+        (Usage kind="constraint" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="assert"
+          (DecisionNode name="d"))))))

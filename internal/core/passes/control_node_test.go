@@ -398,6 +398,129 @@ func TestControlNodeOwningType(t *testing.T) {
 			"merge m is declared in constraint c, which is not an action"})
 }
 
+// A constraint stated through a nested body (`require constraint { … }`,
+// `assert constraint { … }`) owns the control nodes written in it just as a
+// constraint declared with a body does, and it is not an action either.
+func TestControlNodeInNestedConstraintBody(t *testing.T) {
+	wantControlNodeErrors(t, `package P {
+	requirement def R {
+		require constraint q { merge m; }
+		assume constraint { fork f; }
+	}
+	constraint def C {
+		assert constraint c2 { join j; }
+	}
+	part def Q {
+		assert constraint c { decide d; }
+	}
+}`, controlNodeWant{CodeControlNodeOwner, 3,
+		"merge m is declared in constraint q, which is not an action"},
+		controlNodeWant{CodeControlNodeOwner, 4,
+			"fork f is declared in an unnamed constraint, which is not an action"},
+		controlNodeWant{CodeControlNodeOwner, 7,
+			"join j is declared in constraint c2, which is not an action"},
+		controlNodeWant{CodeControlNodeOwner, 10,
+			"decide d is declared in constraint c, which is not an action"})
+}
+
+// The action body a transition, a send, a guarded succession, or a state's
+// entry/do/exit block ends in is an action of its own, whose successions are
+// counted as a unit even when the body has no name.
+func TestControlNodeInAnonymousActionBodies(t *testing.T) {
+	for _, tc := range []struct {
+		name, src string
+		want      []controlNodeWant
+	}{
+		{"named transition", `package P {
+	state def S {
+		state a; state b;
+		transition t first a then b {
+			action x; action y; action z; fork f;
+			first x then f; first y then f; first f then z;
+		}
+	}
+}`, []controlNodeWant{{CodeForkIncomingSuccessions, 5, "fork f has 2 incoming successions"}}},
+		{"anonymous transition", `package P {
+	state def S {
+		state a; state b;
+		transition first a then b {
+			action x; action y; action z; join j;
+			first x then j; first j then y; first j then z;
+		}
+	}
+}`, []controlNodeWant{{CodeJoinOutgoingSuccessions, 5, "join j has 2 outgoing successions"}}},
+		{"transition end multiplicity", `package P {
+	state def S {
+		state a; state b;
+		transition first a then b {
+			action x; action y; merge m;
+			succession s first [1..1] x then m;
+			first m then y;
+		}
+	}
+}`, []controlNodeWant{{CodeMergeIncomingMultiplicity, 6, "source multiplicity [1]; successions into a merge node must have source multiplicity [0..1]"}}},
+		{"do block", `package P {
+	state def S {
+		state c {
+			do { action x; action y; action z; merge m; first x then m; first m then y; first m then z; }
+		}
+	}
+}`, []controlNodeWant{{CodeMergeOutgoingSuccessions, 4, "merge m has 2 outgoing successions"}}},
+		{"entry action", `package P {
+	state def S {
+		state c {
+			entry action { action x; action y; decide d; first x then d; first y then d; }
+		}
+	}
+}`, []controlNodeWant{{CodeDecisionIncomingSuccessions, 4, "decide d has 2 incoming successions"}}},
+		{"exit block", `package P {
+	state def S {
+		state c {
+			exit { action x; action y; fork f; first x then f; first y then f; }
+		}
+	}
+}`, []controlNodeWant{{CodeForkIncomingSuccessions, 4, "fork f has 2 incoming successions"}}},
+		{"send body", `package P {
+	action def A {
+		action p;
+		send 1 to p { action x; action y; action z; fork f; first x then f; first y then f; first f then z; }
+	}
+}`, []controlNodeWant{{CodeForkIncomingSuccessions, 4, "fork f has 2 incoming successions"}}},
+		{"guarded succession body", `package P {
+	action def A {
+		action p; action q;
+		first p if true then q { action x; action y; action z; join j; first x then j; first j then y; first j then z; }
+	}
+}`, []controlNodeWant{{CodeJoinOutgoingSuccessions, 4, "join j has 2 outgoing successions"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			wantControlNodeErrors(t, tc.src, tc.want...)
+		})
+	}
+}
+
+// The same bodies are silent when their graphs are well formed, and a control
+// node in a state's entry/do/exit block is owned by that anonymous action.
+func TestControlNodeInAnonymousActionBodiesIsSilent(t *testing.T) {
+	wantControlNodesClean(t, `package P {
+	state def S {
+		state a; state b;
+		transition t first a then b { action x; action y; fork f; first x then f; first f then y; }
+		transition first b then a { action x; action y; join j; first x then j; first j then y; }
+		state c {
+			entry { fork e; }
+			do { action x; action y; merge m; first x then m; first m then y; }
+			exit action { decide d; }
+		}
+	}
+	action def A {
+		action p; action q;
+		send 1 to p { action x; action y; fork f; first x then f; first f then y; }
+		first p if true then q { join j; }
+	}
+}`)
+}
+
 // The runtime rejects a join or merge with several successors when it runs
 // them; the static rule reports the same graphs before anything runs.
 func TestControlNodeStaticRuleAgreesWithRuntime(t *testing.T) {

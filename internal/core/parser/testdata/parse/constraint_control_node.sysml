@@ -12,3 +12,10 @@ part def Tank {
         true
     }
 }
+requirement def R {
+    require constraint q { merge m; }
+    assume constraint { fork f; }
+}
+part def Pump {
+    assert constraint c { decide d; }
+}

@@ -90,26 +90,36 @@ func (c *controlNodeChecker) walkNode(scope *symbols.Scope, owner, decl ast.Node
 	case *ast.Namespace:
 		c.walk(child, n, n.Members)
 	case *ast.Definition:
-		c.checkAction(scope, n)
+		c.checkAction(scope, n, n.Members)
 		c.walk(child, n, n.Members)
 	case *ast.Usage:
-		c.checkAction(scope, n)
+		c.checkAction(scope, n, n.Members)
 		c.walk(child, n, n.Members)
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
 		c.checkOwner(n, owner)
-		c.checkAction(scope, n)
+		c.checkAction(scope, n, ast.NodeBodyMembers(n))
 		c.walk(child, n, ast.NodeBodyMembers(n))
 	case *ast.InitialNode:
+		c.checkAction(scope, n, n.Members)
 		c.walk(child, n, n.Members)
 	case *ast.SuccessionEdge:
 		c.walk(child, n, n.Members)
 	case *ast.SubjectMember:
 		c.walk(child, n, n.Body)
+	case *ast.ConstraintMember:
+		c.walk(child, n, n.Body)
+	case *ast.AssumeMember:
+		c.walk(child, n, n.Body)
+	case *ast.RequireMember:
+		c.walk(child, n, n.Body)
 	case *ast.EntryMember:
+		c.checkBlock(child, n.Actions)
 		c.walk(child, n, n.Actions)
 	case *ast.DoMember:
+		c.checkBlock(child, n.Actions)
 		c.walk(child, n, n.Actions)
 	case *ast.ExitMember:
+		c.checkBlock(child, n.Actions)
 		c.walk(child, n, n.Actions)
 	case *ast.StateNode:
 		c.walk(child, n, n.Entry)
@@ -122,8 +132,11 @@ func (c *controlNodeChecker) walkNode(scope *symbols.Scope, owner, decl ast.Node
 	case *ast.StateRegion:
 		c.walk(child, n, n.States)
 	case *ast.TransitionMember:
+		c.checkAction(scope, n, n.Members)
+		c.walk(child, n, n.Effect)
 		c.walk(child, n, n.Members)
 	case *ast.SendStatement:
+		c.checkAction(scope, n, n.Members)
 		c.walk(child, n, n.Members)
 	case *ast.WhileLoopActionNode:
 		c.checkBlock(child, n.Body)
@@ -141,7 +154,7 @@ func (c *controlNodeChecker) walkNode(scope *symbols.Scope, owner, decl ast.Node
 // checkOwner reports a control node whose owner is not an action definition or
 // usage.
 func (c *controlNodeChecker) checkOwner(node, owner ast.Node) {
-	if semantics.ActionDeclaration(owner) || c.ctx.DownstreamOfFailure(node) {
+	if actionOwner(owner) || c.ctx.DownstreamOfFailure(node) {
 		return
 	}
 	where := "outside any action"
@@ -158,22 +171,32 @@ func (c *controlNodeChecker) checkOwner(node, owner ast.Node) {
 	})
 }
 
-// checkAction checks the control nodes an action declaration declares or
-// inherits against the successions it declares or inherits.
-func (c *controlNodeChecker) checkAction(scope *symbols.Scope, decl ast.Node) {
+// actionOwner reports whether owner is an action declaration or an
+// entry/do/exit block (an anonymous action usage).
+func actionOwner(owner ast.Node) bool {
+	switch owner.(type) {
+	case *ast.EntryMember, *ast.DoMember, *ast.ExitMember:
+		return true
+	}
+	return semantics.ActionDeclaration(owner)
+}
+
+// checkAction checks an action's control nodes against the successions it
+// declares or inherits; an action without a symbol is checked as a block.
+func (c *controlNodeChecker) checkAction(scope *symbols.Scope, decl ast.Node, body []ast.Node) {
 	if !semantics.ActionDeclaration(decl) {
 		return
 	}
-	child := scope.ChildFor(decl)
-	if child == nil || child.Owner() == nil {
+	if child := scope.ChildFor(decl); child != nil && child.Owner() != nil {
+		sym := child.Owner()
+		c.check(sym, c.model.ActionSuccessions(sym))
 		return
 	}
-	sym := child.Owner()
-	c.check(sym, c.model.ActionSuccessions(sym))
+	c.checkBlock(bodyScope(scope, decl), body)
 }
 
-// checkBlock checks the control nodes a loop or branch body declares, which is
-// an anonymous action usage of its own.
+// checkBlock checks the control nodes of a symbol-less action body: a loop or
+// branch body, an entry/do/exit block, an anonymous transition or send.
 func (c *controlNodeChecker) checkBlock(scope *symbols.Scope, body []ast.Node) {
 	c.check(nil, c.model.DeclaredSuccessions(scope, nil, body))
 }
@@ -394,6 +417,12 @@ func declarationText(decl ast.Node) string {
 		return withName("namespace", d.Ident.Name)
 	case *ast.InitialNode, *ast.SuccessionEdge:
 		return "the body of a succession"
+	case *ast.ConstraintMember:
+		return withName("constraint", d.Name)
+	case *ast.AssumeMember:
+		return withName("constraint", d.Name)
+	case *ast.RequireMember:
+		return withName("constraint", d.Name)
 	}
 	return ""
 }
