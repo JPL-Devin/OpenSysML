@@ -264,6 +264,97 @@ func TestTransitionEffectSuccessionLinksItsEnds(t *testing.T) {
 	}
 }
 
+// relinked is a graph with one link pointed at another element, the shape of a
+// graph another tool wrote or an edit made; the link must occur exactly once.
+func relinked(t *testing.T, graph []byte, link, to string) []byte {
+	t.Helper()
+	if n := strings.Count(string(graph), link); n != 1 {
+		t.Fatalf("graph records %q %d times, want once\n%s", link, n, graph)
+	}
+	return []byte(strings.Replace(string(graph), link, to, 1))
+}
+
+// refusedAsUnsupported requires a graph to be refused rather than written as
+// notation that would read back as a different graph.
+func refusedAsUnsupported(t *testing.T, name string, graph []byte, why string) {
+	t.Helper()
+	out, err := export.Convert(name+".ttl", graph, export.FormatTurtle, export.FormatSysML)
+	var unsupported *export.UnsupportedError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("want an UnsupportedError, got %v; notation:\n%s", err, out)
+	}
+	if !strings.Contains(err.Error(), why) {
+		t.Errorf("error %q should say %q", err, why)
+	}
+}
+
+// TestChainSegmentMustReachTheGraphsTarget covers a chain whose target the
+// graph links to a same-named feature of another type than its operand's: the
+// segment written after the operand would read as the operand's own feature.
+func TestChainSegmentMustReachTheGraphsTarget(t *testing.T) {
+	src := `package P {
+    part def A { attribute x; }
+    part def B { attribute x; }
+    part a : A;
+    part b : B;
+    attribute v = a.x;
+    connect a.x to b.x;
+}`
+	graph, err := export.Convert("chain.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	for _, want := range []string{"sysml:targetFeature elmt:P__A__x", "sysml:targetFeature elmt:P__B__x"} {
+		if !strings.Contains(string(graph), want) {
+			t.Errorf("graph does not link %q\n%s", want, graph)
+		}
+	}
+	structuralRoundTrip(t, "chain", graph)
+	structural := withoutTriples(t, graph, "sysx:sourceText")
+	const why = "does not read as the element the graph names from the operand"
+	// The value's chain `a.x` cannot reach B::x from a, nor can the connector's
+	// first end, whether or not the notation is kept with the graph.
+	value := "    sysml:argument expr:P__v_pvalue_pa0 ;\n    sysml:targetFeature elmt:P__A__x ."
+	refusedAsUnsupported(t, "chain", relinked(t, structural, value, strings.Replace(value, "A__x", "B__x", 1)), why)
+	end := "    sysml:argument expr:P___405_pend0_pa0 ;\n    sysml:targetFeature elmt:P__A__x ;"
+	for name, g := range map[string][]byte{"structure": structural, "notation": graph} {
+		refusedAsUnsupported(t, "chain-"+name, relinked(t, g, end, strings.Replace(end, "A__x", "B__x", 1)), why)
+	}
+}
+
+// TestInitialStartMustBeAMemberOfItsBody covers a `first` whose start the graph
+// links to an action outside the body: written by name, it would read as a
+// label or as a member of the same name.
+func TestInitialStartMustBeAMemberOfItsBody(t *testing.T) {
+	src := `package P {
+    action def Outer {
+        action s1;
+        action inner {
+            action s2;
+            first s2;
+        }
+    }
+}`
+	graph, err := export.Convert("initial.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structuralRoundTrip(t, "initial", graph)
+	structural := withoutTriples(t, graph, "sysx:sourceText")
+	const link = "sysml:sourceFeature elmt:P__Outer__inner__s2"
+	refusedAsUnsupported(t, "initial", relinked(t, structural, link, "sysml:sourceFeature elmt:P__Outer__s1"),
+		"`first s1` does not name P::Outer::s1 in the body it is written in")
+	// A same-named sibling of the body would read as the start instead.
+	shadowed := strings.Replace(src, "action s1;", "action s2;", 1)
+	graph, err = export.Convert("initial.sysml", []byte(shadowed), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structural = withoutTriples(t, graph, "sysx:sourceText")
+	refusedAsUnsupported(t, "initial", relinked(t, structural, link, "sysml:sourceFeature elmt:P__Outer__s2"),
+		"`first s2` does not name P::Outer::s2 in the body it is written in")
+}
+
 // TestSaveKeepsComments covers the notation-to-notation path a save uses: every
 // lexeme survives, including the comments an AST printer would drop.
 func TestSaveKeepsComments(t *testing.T) {

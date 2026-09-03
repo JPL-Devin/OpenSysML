@@ -1027,11 +1027,19 @@ func (e *encoder) reference(name *ast.QualifiedName) rdf.Term {
 	if qualifiedText(name) == "" {
 		return rdf.String("")
 	}
+	if decl, fqn, ok := e.referent(name); ok {
+		return e.ids.subjectForNode(decl, fqn)
+	}
+	return rdf.String(qualifiedText(name))
+}
+
+// referent is the element reference links a name to, if any.
+func (e *encoder) referent(name *ast.QualifiedName) (ast.Node, string, bool) {
 	sym, ok := e.links[name]
 	if !ok {
 		sym, ok = e.res.PartSymbol(name, len(name.Parts)-1)
 	}
-	return e.linkOrText(name, sym, ok)
+	return e.linkedElement(name, sym, ok)
 }
 
 // edgeReference renders a transition or succession end from what the document
@@ -1050,16 +1058,21 @@ func (e *encoder) edgeReference(name *ast.QualifiedName) rdf.Term {
 // linkOrText links a resolved name to the element it names here, else to the
 // alias declared here it was written through, else carries it as written.
 func (e *encoder) linkOrText(name *ast.QualifiedName, sym *symbols.Symbol, ok bool) rdf.Term {
-	text := qualifiedText(name)
-	if decl, fqn, ok := e.linked(sym, ok); ok {
-		return e.ids.subjectForNode(decl, fqn)
-	}
-	if decl, fqn, ok := e.linked(e.res.PartAlias(name, len(name.Parts)-1)); ok {
+	if decl, fqn, ok := e.linkedElement(name, sym, ok); ok {
 		return e.ids.subjectForNode(decl, fqn)
 	}
 	// The quotes an unrestricted name needs are notation, added when it is
 	// written back out.
-	return rdf.String(text)
+	return rdf.String(qualifiedText(name))
+}
+
+// linkedElement is the element a resolved name links to: the one it names here,
+// else the alias declared here it was written through.
+func (e *encoder) linkedElement(name *ast.QualifiedName, sym *symbols.Symbol, ok bool) (ast.Node, string, bool) {
+	if decl, fqn, ok := e.linked(sym, ok); ok {
+		return decl, fqn, true
+	}
+	return e.linked(e.res.PartAlias(name, len(name.Parts)-1))
 }
 
 // linked is the declaration and qualified name of the element a symbol names,

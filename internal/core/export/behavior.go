@@ -608,9 +608,12 @@ func (d *decoder) behaviorHead(el *element) (string, bool, error) {
 		// The start is a member of this body or a label, so it is written by
 		// its own name: `first` takes no qualified name.
 		if starts := d.graph.Objects(rdf.IRI(el.iri), rdf.SysML+pSourceFeature); len(starts) > 0 {
-			start, err := d.memberName(starts[0])
+			start, target, err := d.memberName(starts[0])
 			if err != nil {
 				return "", true, err
+			}
+			if target != nil && d.names == nil {
+				d.wanted.starts[el.qname] = target.qname
 			}
 			words = append(words, start)
 		}

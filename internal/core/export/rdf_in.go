@@ -101,7 +101,7 @@ func newDecoder(graph *rdf.Graph, names nameChoices) *decoder {
 		memberships:      map[string]membership{},
 		owningMembership: map[string]membership{},
 		names:            names,
-		wanted:           map[nameKey]bool{},
+		wanted:           newWanted(),
 	}
 }
 
@@ -168,7 +168,7 @@ type decoder struct {
 	// names is the spelling chosen for each reference; while nil, references are
 	// written fully qualified and noted in wanted for chooseNames to read.
 	names  nameChoices
-	wanted map[nameKey]bool
+	wanted *wanted
 }
 
 // build reads every subject into an element and links it to its owner,
@@ -1265,7 +1265,7 @@ func (d *decoder) referenceName(term rdf.Term, el *element) (string, error) {
 	spelled := d.spelledName(target)
 	key := nameKey{member: el.qname, target: target.qname}
 	if d.names == nil {
-		d.wanted[key] = true
+		d.wanted.references[key] = true
 		return qualifiedNameText(spelled), nil
 	}
 	if spelling, ok := d.names[key]; ok {
@@ -1274,24 +1274,33 @@ func (d *decoder) referenceName(term rdf.Term, el *element) (string, error) {
 	return qualifiedNameText(relativeName(spelled, el.scope)), nil
 }
 
-// memberName renders a feature-chain segment: a literal as written, an IRI as
-// its element's own name, since a segment is looked up in the operand.
-func (d *decoder) memberName(term rdf.Term) (string, error) {
+// memberName renders a chain segment or `first` start, looked up in its operand
+// or body: a literal as written, an IRI as its element's own name.
+func (d *decoder) memberName(term rdf.Term) (string, *element, error) {
 	if term.IsLiteral() {
-		return qualifiedNameText(term.Value), nil
+		return qualifiedNameText(term.Value), nil, nil
 	}
+	target, name, err := d.namedMember(term)
+	if err != nil {
+		return "", nil, err
+	}
+	return nameText(name), target, nil
+}
+
+// namedMember is the element an IRI names and the name it is looked up by.
+func (d *decoder) namedMember(term rdf.Term) (*element, string, error) {
 	target, err := d.referencedElement(term.Value)
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
 	name, ok := d.effectiveName(target)
 	if !ok {
-		return "", &UnsupportedError{
+		return nil, "", &UnsupportedError{
 			What: fmt.Sprintf("the element <%s>", target.iri),
-			Note: "a feature chain reaches it, but it declares no name and takes none from a feature it references or redefines",
+			Note: "a feature chain or `first` names it, but it declares no name and takes none from a feature it references or redefines",
 		}
 	}
-	return nameText(name), nil
+	return target, name, nil
 }
 
 // spelledName is el's qualified name as notation states it: a membership's

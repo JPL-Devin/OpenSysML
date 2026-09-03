@@ -20,11 +20,39 @@ type nameKey struct {
 // from where it is written, to the element the graph names.
 type nameChoices map[nameKey]string
 
+// segmentKey identifies the chain segments of one name written in one
+// declaration after one operand (the element it reaches, "" for none).
+type segmentKey struct {
+	member, operand, name string
+}
+
+// wanted is what the fully qualified rendering notes for chooseNames: the
+// references to spell, and the names read in an operand or body to check.
+type wanted struct {
+	references map[nameKey]bool
+	// segments holds the elements the graph names by each chain segment.
+	segments map[segmentKey]map[string]bool
+	// starts holds the member each `first` names, keyed by the initial node.
+	starts map[string]string
+}
+
+func newWanted() *wanted {
+	return &wanted{
+		references: map[nameKey]bool{},
+		segments:   map[segmentKey]map[string]bool{},
+		starts:     map[string]string{},
+	}
+}
+
+func (w *wanted) empty() bool {
+	return len(w.references) == 0 && len(w.segments) == 0 && len(w.starts) == 0
+}
+
 // chooseNames reads notation written with every reference fully qualified and
 // picks each a spelling that resolves to its target there; none is a refusal.
-func chooseNames(text []byte, wanted map[nameKey]bool) (nameChoices, error) {
+func chooseNames(text []byte, want *wanted) (nameChoices, error) {
 	names := nameChoices{}
-	if len(wanted) == 0 {
+	if want.empty() {
 		return names, nil
 	}
 	file, root, ok := readNotation(text)
@@ -39,17 +67,24 @@ func chooseNames(text []byte, wanted map[nameKey]bool) (nameChoices, error) {
 	for node, fqn := range e.fqn {
 		declared[fqn] = node
 	}
-	// A chain's member segments are looked up in the operand, not the writing
-	// scope, so only their root is a reference whose spelling is chosen here.
 	occurrences := map[nameKey][]resolve.Reference{}
 	for _, ref := range resolve.References(root, e.res.Index().DocumentRoot(file.Name())) {
-		if ref.QN == nil || ref.Chain != nil || ref.Member == nil {
+		if ref.QN == nil || ref.Member == nil {
+			continue
+		}
+		if ref.Chain != nil {
+			if err := e.checkSegment(ref, want.segments); err != nil {
+				return nil, err
+			}
 			continue
 		}
 		key := nameKey{member: e.fqn[ref.Member], target: e.writtenTarget(ref)}
-		if _, ok := wanted[key]; ok {
+		if _, ok := want.references[key]; ok {
 			occurrences[key] = append(occurrences[key], ref)
 		}
+	}
+	if err := e.checkStarts(want.starts, declared); err != nil {
+		return nil, err
 	}
 	for key, refs := range occurrences {
 		target, ok := declared[key.target]
@@ -67,6 +102,61 @@ func chooseNames(text []byte, wanted map[nameKey]bool) (nameChoices, error) {
 		names[key] = spelling
 	}
 	return names, nil
+}
+
+// checkSegment refuses a chain segment that does not read, from the operand it
+// is written after, as one of the elements the graph names by it there.
+func (e *encoder) checkSegment(ref resolve.Reference, segments map[segmentKey]map[string]bool) error {
+	key := segmentKey{member: e.fqn[ref.Member], operand: e.operandElement(ref.Chain), name: qualifiedText(ref.QN)}
+	targets := segments[key]
+	if len(targets) == 0 {
+		return nil
+	}
+	if _, reached, ok := e.referent(ref.QN); ok && targets[reached] {
+		return nil
+	}
+	return &UnsupportedError{
+		What: fmt.Sprintf("the feature chain in %s reaching %s", key.member, key.name),
+		Note: "the segment does not read as the element the graph names from the operand it is written after, so the notation cannot state it",
+	}
+}
+
+// operandElement is the qualified name of the element the graph links a chain's
+// operand to: the name it is, or the segment an inner chain reaches.
+func (e *encoder) operandElement(chain *ast.FeatureChainExpr) string {
+	var name *ast.QualifiedName
+	if inner, ok := chain.Operand.(*ast.FeatureChainExpr); ok {
+		name = inner.Member
+	} else {
+		name = ast.AsQualifiedName(chain.Operand)
+	}
+	if name == nil {
+		return ""
+	}
+	_, fqn, _ := e.referent(name)
+	return fqn
+}
+
+// checkStarts refuses a `first` whose start does not read as the member the
+// graph names in the body it is written in.
+func (e *encoder) checkStarts(starts map[string]string, declared map[string]ast.Node) error {
+	for fqn, target := range starts {
+		initial, ok := declared[fqn].(*ast.InitialNode)
+		if !ok {
+			return &UnsupportedError{
+				What: fmt.Sprintf("the initial node %s", fqn),
+				Note: "the notation written for it does not read back as an initial node, so its start cannot be checked",
+			}
+		}
+		if _, reached, ok := e.linked(e.res.InitialSymbol(initial)); ok && reached == target {
+			continue
+		}
+		return &UnsupportedError{
+			What: fmt.Sprintf("the initial node %s", fqn),
+			Note: fmt.Sprintf("`first %s` does not name %s in the body it is written in, so the notation cannot state it", nameText(initial.Name), target),
+		}
+	}
+	return nil
 }
 
 // writtenTarget is the qualified name of the element a written reference names:
