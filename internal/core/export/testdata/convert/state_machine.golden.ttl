@@ -465,7 +465,8 @@ elmt:StateMachine__VehicleStates__active_5fto_5foff
     sysx:triggerKeyword "accept" ;
     sysml:via elmt:StateMachine__VehicleStates__lane ;
     sysx:guard expr:StateMachine__VehicleStates__active_5fto_5foff_pguard ;
-    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:bracedEffect "false"^^xsd:boolean ;
+    sysx:effectMember elmt:StateMachine__VehicleStates__active_5fto_5foff__stop ;
     sysml:ownedMember elmt:StateMachine__VehicleStates__active_5fto_5foff__stop ;
     sysml:ownedMembership elmt:StateMachine__VehicleStates__active_5fto_5foff__stop_om ;
     sysml:ownedRelationship elmt:StateMachine__VehicleStates__active_5fto_5foff__stop_om ;

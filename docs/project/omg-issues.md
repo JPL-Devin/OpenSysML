@@ -61,10 +61,15 @@ neither. Is the declared return type intended to be `Rational[1]` (matching
 `IntegerFunctions::'/'`), or is a conforming evaluator expected to truncate?
 ````
 
-OpenSysML follows the pilot's observed behavior: the type checker
-(`passes/typecheck_expr.go` `divisionResult`) types `Natural/Natural` division
-as `Rational`, and the runtime answers a Real, so a whole-number quotient bound
-to a `Natural`-typed feature is reported rather than truncated.
+OpenSysML follows the pilot's observed behavior for the operator: the type
+checker (`passes/typecheck_expr.go` `divisionResult`) types `Natural/Natural`
+division as `Rational`, and the runtime answers a Real, so a non-whole quotient
+bound to a `Natural`-typed feature is reported rather than truncated. The
+function called by name, `NaturalFunctions::'/'(x, y)`, is the one place the
+declaration itself is the contract: it returns the Natural quotient when `y`
+divides `x` and reports a non-whole quotient (`ErrArithmeticDomain`) rather
+than truncating or answering a Rational (`runtime/library_operators.go`
+`naturalDivision`).
 
 ---
 

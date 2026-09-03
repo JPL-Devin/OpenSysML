@@ -32,7 +32,7 @@ cmp build/pilot-reject/pilot-reject.json docs/project/pilot-rejection-baseline.j
 `docs/project/pilot-rejection-baseline.json` is the only authority for the counts; the numbers
 quoted here are as-of values, and `cmd/pilot-reject/doc_counts_test.go` fails if they drift from it.
 As of the `semantic/` source (named pilot constraints), with a fresh library cache:
-`163 case(s): 149 both reject, 14 only the pilot rejects, 0 only we reject, 0 both accept`,
+`163 case(s): 150 both reject, 13 only the pilot rejects, 0 only we reject, 0 both accept`,
 byte-identical to the committed baseline. Any `both accept` case is a bug in the corpus (the case
 is not actually invalid under the loaded standard library) — fix the case, never ignore it.
 

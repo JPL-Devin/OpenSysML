@@ -127,7 +127,7 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-163 case(s): 149 both reject, 14 only the pilot rejects, 0 only we reject, 0 both accept
+163 case(s): 150 both reject, 13 only the pilot rejects, 0 only we reject, 0 both accept
   of which 2 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -135,12 +135,13 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 7 | 7 | 0 | 0 | 0 |
 | grammar | 79 | 79 | 0 | 0 | 0 |
-| semantic | 43 | 29 | 14 | 0 | 0 |
+| semantic | 43 | 30 | 13 | 0 | 0 |
 | xpect | 34 | 34 | 0 | 0 | 0 |
 
 The corpus grew from 79 cases to 119 in wave 10G, to 120 with `g60` (an `alias` named by a
 keyword), and to 163 with the `semantic/` source, which reopened 14 gaps — all of them semantic
-rules the pilot enforces and we do not (see [Permissiveness gaps](#permissiveness-gaps)). Before
+rules the pilot enforces and we did not (see [Permissiveness gaps](#permissiveness-gaps)); the
+named-argument validation that landed alongside closed one of them (`k33`), leaving 13. Before
 that source the default-mode gap count was 2 of 120: only the intended `extensions/`
 notation. Wave 11 closed two `xpect/` gaps: `p11`
 (11D's and 11G's model-level evaluability predicate on metadata body values) and `p15` (11F's
@@ -158,8 +159,8 @@ extensions that the default mode accepts on purpose and strict mode reports as e
 initial state marker), `x04` (`region r { … }`) and `x07` (`transition <src> to <tgt>`) left that
 list when that notation was removed: each is now a parse error in either mode, so both
 implementations reject it by default. Judged in
-the default mode the same corpus gives 147 agreements and 16 gaps, which is what `-conformance
-default` prints. `-conformance strict` gives 149 and 14. Reserved keywords recovered as declared
+the default mode the same corpus gives 148 agreements and 15 gaps, which is what `-conformance
+default` prints. `-conformance strict` gives 150 and 13. Reserved keywords recovered as declared
 names and SysML declaration keywords recovered in KerML are now errors in either mode; the parser
 still preserves their trees for editors and later analysis. Of the 14 gaps this document carried before wave 8, six were closed by the
 validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
@@ -180,7 +181,7 @@ we no longer accept it either.
 
 ## Permissiveness gaps
 
-All 14 gaps under `-conformance auto` are open, and all of them come from the `semantic/` source:
+All 13 gaps under `-conformance auto` are open, and all of them come from the `semantic/` source:
 named KerML constraints the pinned validators enforce as errors and OpenSysML does not report.
 The three grammar gaps this section carried before were severity-policy gaps — the pinned grammar
 excluded the spellings, while OpenSysML retained recoverable trees and reported only warnings by
@@ -194,7 +195,6 @@ default — and the approved policy closed them by reporting errors without remo
 | `semantic/k19-cross-feature-not-specializing.kerml` | accepts | `Cross feature must specialized redefined-end cross features` | `internal/core/passes/w10b_cross_features.go` — the redefined-end specialization check does not reach a KerML `assoc` that specializes another and redefines its ends (`validateFeatureCrossFeatureSpecialization`) |
 | `semantic/k25-assoc-one-end.kerml` | accepts | `Must have at least two related elements` | `internal/core/passes/w10b_related_elements.go` — fires for a SysML `connection def` with one end (`xpect/p20`) but not for a KerML `assoc` with one end (`validateAssociationRelatedTypes`) |
 | `semantic/k26-binary-connector-three-ends.kerml` | accepts | `Cannot have more than two ends` | `internal/core/passes/constraint.go` `checkConnectorEndRedefinition` — counts declared `end` features (it rejects `k24`), not the positional ends of `connector c : BinaryLink (x, y, z)` (`validateConnectorBinarySpecialization`) |
-| `semantic/k33-parameter-bound-twice.kerml` | accepts | `Parameter already bound` | `internal/core/passes` — the invocation arity check (`k32`) counts arguments but does not detect the same named parameter bound twice (`validateInvocationExpressionNoDuplicateParameterRedefinition`) |
 | `semantic/k34-constructor-feature-bound-twice.kerml` | accepts | `Feature already bound` | `internal/core/passes` — no duplicate-binding check for `new T(f = …, f = …)` (`validateConstructorExpressionNoDuplicateFeatureRedefinition`) |
 | `semantic/k35-metadata-annotates-wrong-kind.kerml` | accepts | `Cannot annotate Feature` | `internal/core/passes/w8c_metadata_annotation.go` — does not read a metaclass's own `annotatedElement` redefinition (`:>> annotatedElement : KerML::Class`) to restrict what `@M about …` may annotate (`validateMetadataFeatureAnnotatedElement`) |
 | `semantic/k36-metadata-body-redefines-outside.kerml` | accepts | `Must redefine an owning-type feature` | `internal/core/passes/w8d_metadata_usage.go` — emits this message for a SysML metadata usage body but is gated on `ast.UsageMetadata`, so a KerML `@M about C { :>> g; }` body is not checked (`validateMetadataFeatureBody`) |

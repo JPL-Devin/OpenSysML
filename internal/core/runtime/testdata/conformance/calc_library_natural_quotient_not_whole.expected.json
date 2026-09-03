@@ -1,0 +1,5 @@
+{
+  "libraries": true,
+  "type": "calc",
+  "error": "arithmetic domain error: function NaturalFunctions::'/' has no Natural result for 7 / 2; the quotient is 3.5"
+}

@@ -72,17 +72,19 @@ func (m *Model) RangeOf(mult *ast.Multiplicity) (Range, bool) {
 	return m.multiplicityRange(mult)
 }
 
-// MultiplicityOf returns the extracted multiplicity range of a usage symbol, or
-// ok=false when the symbol is not a usage or declares no multiplicity.
+// MultiplicityOf returns the extracted multiplicity range of a usage symbol, a
+// subject included, or ok=false when the symbol is not a usage or declares none.
 func (m *Model) MultiplicityOf(sym *symbols.Symbol) (Range, bool) {
 	if sym == nil {
 		return Range{}, false
 	}
-	u, isUsage := sym.Decl.(*ast.Usage)
-	if !isUsage || u.Multiplicity == nil {
-		return Range{}, false
+	switch decl := sym.Decl.(type) {
+	case *ast.Usage:
+		return m.multiplicityRange(decl.Multiplicity)
+	case *ast.SubjectMember:
+		return m.multiplicityRange(decl.Multiplicity)
 	}
-	return m.multiplicityRange(u.Multiplicity)
+	return Range{}, false
 }
 
 // AssumedRange is the multiplicity of a feature that declares none: a feature
@@ -102,6 +104,53 @@ func (m *Model) EffectiveMultiplicityOf(sym *symbols.Symbol) Range {
 		return r
 	}
 	return AssumedRange()
+}
+
+// AllowsNone reports whether the range admits no value at all: a known lower
+// bound of 0, as `[0..1]` and `[*]` declare.
+func (r Range) AllowsNone() bool {
+	return r.Lower.Known && !r.Lower.Infinite && r.Lower.Value == 0
+}
+
+// IsOptionalParameter reports whether a parameter may be left without an
+// argument: its declared multiplicity admits no value (KerML 1.0 §7.4.7.2, an
+// input parameter with lower bound 0). One declaring none holds one value.
+func (m *Model) IsOptionalParameter(usage *ast.Usage) bool {
+	if usage == nil {
+		return false
+	}
+	r, ok := m.multiplicityRange(usage.Multiplicity)
+	return ok && r.AllowsNone()
+}
+
+// Intersect returns the range both ranges allow: the greater lower bound and the
+// lesser upper bound, an unknown bound deferring to a known one.
+func (r Range) Intersect(o Range) Range {
+	return Range{Lower: greaterBound(r.Lower, o.Lower), Upper: lesserBound(r.Upper, o.Upper)}
+}
+
+func greaterBound(a, b Bound) Bound {
+	switch {
+	case !a.Known:
+		return b
+	case !b.Known, a.Infinite:
+		return a
+	case b.Infinite, b.Value > a.Value:
+		return b
+	}
+	return a
+}
+
+func lesserBound(a, b Bound) Bound {
+	switch {
+	case !a.Known:
+		return b
+	case !b.Known, b.Infinite:
+		return a
+	case a.Infinite, b.Value < a.Value:
+		return b
+	}
+	return a
 }
 
 // CountViolation returns why count values do not conform to the range, phrased

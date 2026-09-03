@@ -1,7 +1,8 @@
 // Command doc-counts rewrites the documentation lines that are a function of the
-// compliance map's status markers, so no contributor types them. It reads the
-// census through internal/doccounts, which the guard in cmd/pilot-diff reads too,
-// and rewrites nothing else in the files it touches. Run it with `make docs-counts`.
+// committed oracle baselines, so no contributor types them. It reads them through
+// internal/doccounts, which the guard in cmd/pilot-diff reads too, and rewrites
+// nothing else in the files it touches. The compliance map's own row census is not
+// written anywhere: the documentation build counts it. Run it with `make docs-counts`.
 package main
 
 import (
@@ -93,7 +94,10 @@ func pendingRewrites(root string) ([]rewrite, error) {
 	}
 	counts := doccounts.CountRules(compliance)
 	if counts.Total == 0 {
-		return nil, fmt.Errorf("%s states no rule rows, so there is no census to write", doccounts.SpecCompliancePath)
+		return nil, fmt.Errorf("%s states no rule rows", doccounts.SpecCompliancePath)
+	}
+	if counts.KnownFailure != 0 {
+		return nil, fmt.Errorf("%s: %d 🚧 rows; give them a status the census states", doccounts.SpecCompliancePath, counts.KnownFailure)
 	}
 	refereed, err := doccounts.ReadRefereedCounts(root)
 	if err != nil {
@@ -107,14 +111,6 @@ func pendingRewrites(root string) ([]rewrite, error) {
 			return nil, err
 		}
 		updated := content
-		for _, line := range doccounts.Lines() {
-			if line.Path != path {
-				continue
-			}
-			if updated, err = doccounts.Rewrite(updated, line, counts); err != nil {
-				return nil, err
-			}
-		}
 		for _, line := range doccounts.BaselineLines() {
 			if line.Path != path {
 				continue
@@ -181,13 +177,6 @@ func checkWritable(root, path string) error {
 func paths() []string {
 	var ordered []string
 	seen := map[string]bool{}
-	for _, line := range doccounts.Lines() {
-		if seen[line.Path] {
-			continue
-		}
-		seen[line.Path] = true
-		ordered = append(ordered, line.Path)
-	}
 	for _, line := range doccounts.BaselineLines() {
 		if seen[line.Path] {
 			continue

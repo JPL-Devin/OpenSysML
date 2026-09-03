@@ -31,12 +31,12 @@
         "digest": "sha256:f2aa114ade1c3e5d0b514035b227bb1a6ee254fe9b7c24fc222a2b4d7ca3402a"
       }
     ],
-    "recorded": "2026-09-02"
+    "recorded": "2026-09-03"
   },
   "totals": {
     "cases": 163,
-    "bothReject": 149,
-    "pilotOnlyRejects": 14,
+    "bothReject": 150,
+    "pilotOnlyRejects": 13,
     "oursOnlyRejects": 0,
     "bothAccept": 0
   },
@@ -64,8 +64,8 @@
     {
       "source": "semantic",
       "cases": 43,
-      "bothReject": 29,
-      "pilotOnlyRejects": 14,
+      "bothReject": 30,
+      "pilotOnlyRejects": 13,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     },
@@ -1176,12 +1176,9 @@
       "source": "semantic",
       "rule": "an invocation cannot bind the same parameter twice (KerML 8.3.4.8 validateInvocationExpressionNoDuplicateParameterRedefinition; pilot validateInvocationExpressionNoDuplicateParameterRedefinition).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 6: Parameter already bound"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/k34-constructor-feature-bound-twice.kerml",
@@ -1635,8 +1632,8 @@
     ],
     "totals": {
       "cases": 163,
-      "bothReject": 149,
-      "pilotOnlyRejects": 14,
+      "bothReject": 150,
+      "pilotOnlyRejects": 13,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     },
