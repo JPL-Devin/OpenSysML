@@ -27,6 +27,7 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("action_call_receiver_with_named_arguments_refused", testActionCallReceiverWithNamedArgumentsRefused)
 	t.Run("action_call_arguments_read_the_performing_object", testActionCallArgumentsReadThePerformingObject)
 	t.Run("state_behavior_call_arguments_read_the_performing_object", testStateBehaviorCallArgumentsReadThePerformingObject)
+	t.Run("action_call_argument_cannot_name_a_feature_out_of_scope", testActionCallArgumentCannotNameAFeatureOutOfScope)
 }
 
 // overloadedActionsSrc declares two imported same-named actions, told apart
@@ -210,6 +211,38 @@ func testStateBehaviorCallArgumentsReadThePerformingObject(t *testing.T) {
 		if got := intOutput(t, data, "code"); got != 19 {
 			t.Errorf("%s code = %d, want 19 (rover1's speed 9 + 10)", call, got)
 		}
+	}
+}
+
+// An argument reaches the performing object only through names the caller's
+// scope resolves to its features: a behavior declared outside the part cannot
+// name the part's attribute, even when the performing instance has it.
+func testActionCallArgumentCannotNameAFeatureOutOfScope(t *testing.T) {
+	src := `package P {
+		private import ScalarValues::*;
+		action def report { in x : Integer; out code : Integer; first start; action set { assign code := x + 10; } done; succession first start then set; succession first set then done; }
+		part def Rover { attribute speed : Integer = 7; }
+		action def drive {
+			attribute code : Integer = 0;
+			first start;
+			action call = report(speed);
+			done;
+			succession first start then call;
+			succession first call then done;
+		}
+		part rover1 : Rover;
+	}`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	self, err := ctx.Instantiate(oneSymbol(t, idx, "P::rover1"))
+	if err != nil {
+		t.Fatalf("instantiate rover1: %v", err)
+	}
+	outputs, err := ctx.ExecuteActionPerformedBy(oneSymbol(t, idx, "P::drive"), self, nil)
+	if err == nil {
+		t.Fatalf("expected an unresolved reference, action returned %v", outputs)
+	}
+	if !errors.Is(err, ErrUnresolvedReference) || !strings.Contains(err.Error(), "speed") {
+		t.Fatalf("expected ErrUnresolvedReference naming speed, got: %v", err)
 	}
 }
 

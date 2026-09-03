@@ -188,6 +188,7 @@ func bindArguments(
 	}
 
 	ec := NewEvalContextIn(ctx, scope, self)
+	ec.inBehaviorBody = true
 	ec.Push(data)
 	defer ec.beginStep()()
 
