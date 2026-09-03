@@ -1634,13 +1634,23 @@ func TestActionSendCallsAFeatureTypedByACalc(t *testing.T) {
 	}
 }
 
-// A feature typed directly by a library function is a calc to send as well: the
-// function's result travels, not a message named after the feature.
+// A feature typed by a library function — directly, or through a bodiless model calc
+// specializing it — is a calc to send as well: the function's result travels, not a
+// message named after the feature.
 func TestActionSendCallsAFeatureTypedByALibraryFunction(t *testing.T) {
+	for _, decls := range []string{
+		"ref root : sqrt;",
+		"calc def Root :> sqrt; ref root : Root;",
+	} {
+		t.Run(decls, func(t *testing.T) { testActionSendCallsLibraryTypedFeature(t, decls) })
+	}
+}
+
+func testActionSendCallsLibraryTypedFeature(t *testing.T, decls string) {
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
 		private import ScalarValues::*;
 		private import RealFunctions::sqrt;
-		ref root : sqrt;
+		`+decls+`
 		action pipeline {
 			attribute got : Real = 0.0;
 			first start;

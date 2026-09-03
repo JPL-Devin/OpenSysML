@@ -3,6 +3,7 @@
 	"type": "action",
 	"outputs": {
 		"got": {"type": "Real", "value": 4.0},
-		"direct": {"type": "Real", "value": 4.0}
+		"direct": {"type": "Real", "value": 4.0},
+		"alias": {"type": "Real", "value": 4.0}
 	}
 }

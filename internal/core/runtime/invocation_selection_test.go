@@ -661,9 +661,10 @@ func testCalcCallSelectsAFeatureTypedByACalc(t *testing.T) {
 	}
 }
 
-// A feature typed directly by a library function — or a bodiless calc usage typed by
-// one — performs that function's implementation, by position or by parameter name.
-// A model calc typed by the same library function keeps its own body.
+// A feature typed by a library function — directly, or through bodiless model calcs
+// specializing it — performs that function's implementation, by position or by
+// parameter name, as does a bodiless calc def specializing it. A model calc stating
+// its own body keeps it.
 func testCalcCallAppliesTheLibraryFunctionAFeatureIsTypedBy(t *testing.T) {
 	src := `
 		package test {
@@ -675,11 +676,17 @@ func testCalcCallAppliesTheLibraryFunctionAFeatureIsTypedBy(t *testing.T) {
 			ref count : size;
 			calc def halfRoot :> sqrt { in x : Real; return : Real = sqrt(x) / 2.0; }
 			ref half : halfRoot;
+			calc def Root :> sqrt;
+			calc def Root2 :> Root;
+			ref viaDefs : Root2;
 			calc positional { root(16.0) }
 			calc named { root(x = 16.0) }
 			calc viaCalcUsage { rootCalc(16.0) }
 			calc collection { count((1, 2, 3)) }
 			calc ownBody { half(16.0) }
+			calc aliasDef { Root(16.0) }
+			calc aliasDefNamed { Root2(x = 16.0) }
+			calc viaAliasDefs { viaDefs(16.0) }
 		}
 	`
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
@@ -693,6 +700,9 @@ func testCalcCallAppliesTheLibraryFunctionAFeatureIsTypedBy(t *testing.T) {
 		{"viaCalcUsage", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 4}}},
 		{"collection", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}},
 		{"ownBody", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 2}}},
+		{"aliasDef", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 4}}},
+		{"aliasDefNamed", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 4}}},
+		{"viaAliasDefs", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 4}}},
 	}
 	for _, tc := range cases {
 		sym := findSymbolByName(rootScope, tc.calc, ast.DefCalc)
