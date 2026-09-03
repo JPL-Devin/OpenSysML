@@ -1,7 +1,8 @@
 // Package doccounts is the one census of the compliance map's status markers and
-// the one statement of which documentation lines derive from it: the guard in
-// cmd/pilot-diff checks those lines against it, cmd/doc-counts rewrites them from
-// it, and neither parses the markers itself.
+// the one statement of which documentation lines derive from the oracle baselines:
+// the guard in cmd/pilot-diff checks those lines, cmd/doc-counts rewrites them. The
+// rule census itself is counted at documentation-build time (scripts/mkdocs_census.py)
+// and is never written into a committed file.
 package doccounts
 
 import (
@@ -43,7 +44,6 @@ type RuleCounts struct {
 
 // RefereedCounts is the five-figure census read from the committed baselines.
 type RefereedCounts struct {
-	RuleCounts             RuleCounts
 	Files                  int
 	FilesAgreeing          int
 	OursOnly               int
@@ -63,7 +63,6 @@ type RefereedCounts struct {
 	RejectDefaultPilotOnly int
 	RejectDefaultBoth      int
 	RejectStrictOnly       int
-	SelfAssessed           int
 	PilotTag               string
 	PilotArtifact          string
 	// Errata is the same census with the declared corrections applied. It is a
@@ -147,14 +146,6 @@ type rejectionBaseline struct {
 
 // ReadRefereedCounts reads and derives all five headline figures.
 func ReadRefereedCounts(root string) (RefereedCounts, error) {
-	compliance, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(SpecCompliancePath))) // #nosec G304 -- the path is a fixed documentation file under the requested repository root
-	if err != nil {
-		return RefereedCounts{}, err
-	}
-	ruleCounts := CountRules(string(compliance))
-	if ruleCounts.Total == 0 {
-		return RefereedCounts{}, fmt.Errorf("%s states no rule rows, so there is no census to write", SpecCompliancePath)
-	}
 	var differential differentialBaseline
 	if err := readJSON(root, "docs/project/pilot-differential-baseline.json", &differential); err != nil {
 		return RefereedCounts{}, err
@@ -172,7 +163,6 @@ func ReadRefereedCounts(root string) (RefereedCounts, error) {
 		return RefereedCounts{}, fmt.Errorf("docs/project/pilot-differential-baseline.json: %w", err)
 	}
 	counts := RefereedCounts{
-		RuleCounts:       ruleCounts,
 		Files:            differential.Totals.Files,
 		FilesAgreeing:    differential.Totals.FilesAgreeing,
 		OursOnly:         differential.Totals.OursOnly,
@@ -216,11 +206,6 @@ func ReadRefereedCounts(root string) (RefereedCounts, error) {
 	if counts.Errata, err = readErrataCounts(differential, xpect, rejection); err != nil {
 		return RefereedCounts{}, err
 	}
-	selfAssessed, err := ReadSelfAssessedRows(root)
-	if err != nil {
-		return RefereedCounts{}, err
-	}
-	counts.SelfAssessed = selfAssessed
 	return counts, nil
 }
 
@@ -282,32 +267,6 @@ func parsePilotRelease(release string) (string, string, error) {
 	return match[1], match[2], nil
 }
 
-// ReadSelfAssessedRows counts rows in sections without an external referee.
-func ReadSelfAssessedRows(root string) (int, error) {
-	content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(SpecCompliancePath))) // #nosec G304 -- the path is a fixed documentation file under the requested repository root
-	if err != nil {
-		return 0, err
-	}
-	rows, sections := 0, 0
-	unrefereed := false
-	for _, line := range strings.Split(string(content), "\n") {
-		text := strings.TrimSpace(line)
-		switch {
-		case strings.HasPrefix(text, "#"):
-			unrefereed = false
-		case strings.HasPrefix(text, "**No external referee:**"):
-			unrefereed = true
-			sections++
-		case unrefereed && IsRuleRow(text):
-			rows++
-		}
-	}
-	if sections == 0 {
-		return 0, fmt.Errorf("%s: no section declares %q, so the self-assessed headline has no source", SpecCompliancePath, "**No external referee:**")
-	}
-	return rows, nil
-}
-
 // IsRuleRow reports whether a line is a compliance-map table row carrying exactly
 // one status marker. Header, separator and prose lines carry none, and a row
 // naming several statuses in its notes is not a census of one status.
@@ -349,36 +308,10 @@ func CountRules(content string) RuleCounts {
 	return counts
 }
 
-// Line is a documentation line whose numbers are a function of the census. Marker
-// locates it, Pattern captures its numbers in the order Values states them, and
-// Labels names them for a mismatch message.
-type Line struct {
-	Path    string
-	Marker  string
-	Pattern *regexp.Regexp
-	Values  func(RuleCounts) []int
-	Labels  []string
-	// Sources names, per value, the rows the census read it from.
-	Sources []string
-}
-
 var (
-	mapHeaderPattern     = regexp.MustCompile(`^The map below tracks ([0-9]+) semantic rules: \*\*([0-9]+) ✅ faithful, ([0-9]+) ⚠️ approximate, ([0-9]+) ❌ not implemented, ([0-9]+) ⛔ deliberate divergence\.\*\*`)
 	referenceLinePattern = regexp.MustCompile(`^\*\*Reference differential:\*\* ([0-9]+) files compared diagnostic-by-diagnostic against the pinned OMG pilot implementation \(` + "`" + `([^` + "`" + `]+)` + "`" + `\), ([0-9]+) in full agreement;`)
 	rejectionLinePattern = regexp.MustCompile(`^\*\*Rejection oracle:\*\* the reverse direction — do we reject what the reference rejects\? ([0-9]+) hand-written invalid models validated by both implementations, ([0-9]+) rejected by both, ([0-9]+) the pinned pilot rejects and we accept;`)
 	pilotReleasePattern  = regexp.MustCompile(`^([^ ]+) \(jupyter-sysml-kernel ([^)]+)\)$`)
-
-	censusValues = func(counts RuleCounts) []int {
-		return []int{counts.Total, counts.Faithful, counts.Approximate, counts.NotImplemented, counts.Deliberate}
-	}
-	censusLabels  = []string{"total", "✅ faithful", "⚠️ approximate", "❌ not implemented", "⛔ deliberate divergence"}
-	censusSources = []string{
-		SpecCompliancePath + " total rows",
-		SpecCompliancePath + " ✅ rows",
-		SpecCompliancePath + " ⚠️ rows",
-		SpecCompliancePath + " ❌ rows",
-		SpecCompliancePath + " ⛔ rows",
-	}
 )
 
 // BaselineLine is a line whose values come from the committed oracle baselines.
@@ -426,19 +359,6 @@ func Blocks() []Block {
 	}
 }
 
-// Lines are the documentation lines derived from the census, in the order the
-// regenerator rewrites them.
-func Lines() []Line {
-	return []Line{{
-		Path:    SpecCompliancePath,
-		Marker:  "The map below tracks",
-		Pattern: mapHeaderPattern,
-		Values:  censusValues,
-		Labels:  censusLabels,
-		Sources: censusSources,
-	}}
-}
-
 // FindLine returns the index of the first line of content carrying the marker.
 func FindLine(content, marker string) (int, bool) {
 	for i, line := range strings.Split(content, "\n") {
@@ -447,33 +367,6 @@ func FindLine(content, marker string) (int, bool) {
 		}
 	}
 	return 0, false
-}
-
-// Rewrite returns content with spec's numbers restated from counts and every other
-// byte untouched. Prose the pattern does not match is an error, not a rewrite.
-func Rewrite(content string, spec Line, counts RuleCounts) (string, error) {
-	if counts.KnownFailure != 0 {
-		return "", fmt.Errorf("%s: %d 🚧 rows have no place in the derived lines; give them a status the lines state", SpecCompliancePath, counts.KnownFailure)
-	}
-	index, ok := FindLine(content, spec.Marker)
-	if !ok {
-		return "", fmt.Errorf("%s: no line carries %q", spec.Path, spec.Marker)
-	}
-	lines := strings.Split(content, "\n")
-	match := spec.Pattern.FindStringSubmatchIndex(lines[index])
-	if match == nil {
-		return "", fmt.Errorf("%s:%d: line carrying %q does not match the derived-line pattern", spec.Path, index+1, spec.Marker)
-	}
-	values := spec.Values(counts)
-	if got := len(match)/2 - 1; got != len(values) {
-		return "", fmt.Errorf("%s:%d: line captures %d numbers, the census states %d", spec.Path, index+1, got, len(values))
-	}
-	rewritten := lines[index]
-	for i := len(values) - 1; i >= 0; i-- {
-		rewritten = rewritten[:match[2+i*2]] + strconv.Itoa(values[i]) + rewritten[match[3+i*2]:]
-	}
-	lines[index] = rewritten
-	return strings.Join(lines, "\n"), nil
 }
 
 // RewriteBaselineLine restates one baseline-derived line without other changes.
@@ -553,9 +446,9 @@ const refereedBlockTemplateText = "<!-- doc-counts:begin {{.Name}} -->\n" +
 	"- **Scope agreement:** {{.ScopeExact}} of {{.ScopeTotal}} declared scope assertions match exactly (same source).\n" +
 	"- **Permissiveness gaps:** of {{.RejectCases}} invalid models we wrote ourselves, the reference rejects {{.RejectDefaultPilotOnly}} that we accept by default, and {{.RejectDefaultBoth}} both reject; {{.RejectStrictOnly}} further cases agree only when we are asked strictly. We authored every one of these cases ourselves, so the denominator measures the reach of our own corpus and not our conformance; agreement reached only under an opt-in strict mode is weaker evidence than agreement by default ([rejection oracle]({{.LinkPrefix}}pilot-rejection.md), `go run ./cmd/pilot-reject`).\n" +
 	"- **Declared errata:** the registry declares {{.Errata.Registry}} defect(s) in the published reference material — {{.Errata.Corrections}} with a specification-derived correction, {{.Errata.Documented}} documented without one, since no intended reading can be inferred ([OMG issues]({{.LinkPrefix}}omg-issues.md), `internal/errata`). Every figure above is as published and stays the conformance statement; running the same oracles over the corrected text instead reports {{.Errata.FilesAgreeing}} of {{.Errata.Files}} files agreeing, {{.Errata.OursOnly}} diagnostics ours alone and {{.Errata.PilotOnly}} the reference's alone, {{.Errata.Silent}} declared rows we are silent on, and {{.Errata.RejectPilotOnly}} of {{.Errata.RejectCases}} authored cases the reference alone rejects. The corrected figures are diagnostic only: an erratum never reclassifies a divergence category, and the published corpus is never edited.\n" +
-	"- **Self-assessed surface:** {{.SelfAssessed}} of the tracked rules have no external referee at all — the action, state-machine and classifier-behavior rows, which the four refereed figures above cannot see, because the pinned artifact evaluates expressions but executes neither actions nor state machines.\n\n" +
+	"- **Self-assessed surface:** the action, state-machine and classifier-behavior rows have no external referee at all — the four refereed figures above cannot see them, because the pinned artifact evaluates expressions but executes neither actions nor state machines. [Spec compliance]({{.LinkPrefix}}spec-compliance.md) counts them.\n\n" +
 	"What these numbers cannot show: the OMG corpora are demonstrations rather than an official conformance suite; the differential is one-directional, comparing the diagnostics the two implementations report on the same files; the Xpect suites are the pilot authors' test intent rather than a certification oracle; and none of these is a percentage of the specification — no global compliance figure is claimed anywhere.\n\n" +
-	"**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each of the {{.RuleCounts.Total}} tracked rules stays in [spec compliance]({{.LinkPrefix}}spec-compliance.md) as a census of our own row list. It moves when rows are rewritten and does not move when an oracle does, so it is not the progress measure.\n" +
+	"**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each tracked rule stays in [spec compliance]({{.LinkPrefix}}spec-compliance.md) as a census of our own row list, counted when the documentation site is built rather than committed. It moves when rows are rewritten and does not move when an oracle does, so it is not the progress measure.\n" +
 	"<!-- doc-counts:end {{.Name}} -->"
 
 // blockTemplates is the one template per generated block name. A block naming no
