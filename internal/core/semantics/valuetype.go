@@ -2,8 +2,6 @@ package semantics
 
 import (
 	"fmt"
-	"slices"
-	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -20,6 +18,7 @@ const (
 	fqnNatural                    = "ScalarValues::Natural"
 	fqnRational                   = "ScalarValues::Rational"
 	fqnNumericalValue             = "ScalarValues::NumericalValue"
+	fqnAnything                   = "Base::Anything"
 	fqnTensorMeasurementReference = "MeasurementReferences::TensorMeasurementReference"
 )
 
@@ -31,8 +30,8 @@ type Conformance struct {
 	Holds bool
 	// Found describes what the value is, for a diagnostic when Holds is false.
 	Found string
-	// Untyped marks a value naming a feature that declares no type: it holds
-	// nothing statically, and a rule may leave it to evaluation.
+	// Untyped marks a value whose static type says nothing — a feature declaring
+	// no type, a result typed Anything — so a rule may leave it to evaluation.
 	Untyped bool
 }
 
@@ -296,16 +295,20 @@ func (m *Model) measurementReference(scope *symbols.Scope, unit ast.Node) *symbo
 	return sym
 }
 
-// operatorConformance judges an operator's value: comparisons are Boolean, a
-// conditional is what its branches are, `%` is a number, arithmetic a quantity.
+// operatorConformance judges an operator's value by the result of the library
+// function its operands select: comparisons are Boolean, a conditional the
+// Anything its function returns, `%` a number; arithmetic is a quantity when
+// every operand is one (QuantityCalculations), else a number, and `+` over
+// strings a String.
 func (m *Model) operatorConformance(scope *symbols.Scope, e *ast.OperatorExpr, want *symbols.Symbol, byUnit bool) Conformance {
 	switch e.Operator {
-	case ast.OpConditional:
-		if len(e.Operands) == 3 {
-			return m.branchesConformance(scope, e.Operands[1:], want, byUnit)
+	case ast.OpConditional, ast.OpNullCoalesce:
+		c := m.typeConformance(m.libSymbol(fqnAnything), want)
+		if c.Known && !c.Holds {
+			c.Found = fmt.Sprintf("the result of `%s`, typed Anything", e.Operator)
+			c.Untyped = true
 		}
-	case ast.OpNullCoalesce:
-		return m.branchesConformance(scope, e.Operands, want, byUnit)
+		return c
 	case ast.OpMod:
 		if m.operandsConformTo(scope, e, m.libSymbol(fqnNumericalValue)) {
 			return m.typeConformance(m.libSymbol(fqnNumericalValue), want)
@@ -315,14 +318,17 @@ func (m *Model) operatorConformance(scope *symbols.Scope, e *ast.OperatorExpr, w
 		ast.OpLt, ast.OpGt, ast.OpLe, ast.OpGe, ast.OpIsType, ast.OpHasType, ast.OpAt, ast.OpMetaAt:
 		return m.typeConformance(m.libSymbol(FQNBoolean), want)
 	case ast.OpNeg, ast.OpPos, ast.OpAdd, ast.OpSub, ast.OpMul, ast.OpDiv, ast.OpPow:
-		if byUnit {
-			return m.dimensionConformance(scope, e, want)
-		}
-		if got, ok := m.DimensionOfExpr(scope, e); ok && !got.Term.Dimensionless() {
-			return m.typeConformance(m.libSymbol(fqnScalarQuantityValue), want)
-		}
 		if m.operandsConformTo(scope, e, m.libSymbol(fqnScalarQuantityValue)) {
+			if byUnit {
+				return m.dimensionConformance(scope, e, want)
+			}
 			return m.typeConformance(m.libSymbol(fqnScalarQuantityValue), want)
+		}
+		if m.operandsConformTo(scope, e, m.libSymbol(fqnNumericalValue)) {
+			return m.typeConformance(m.libSymbol(fqnNumericalValue), want)
+		}
+		if e.Operator == ast.OpAdd && m.operandsConformTo(scope, e, m.libSymbol(fqnString)) {
+			return m.typeConformance(m.libSymbol(fqnString), want)
 		}
 	}
 	return conformanceUnknown()
@@ -340,37 +346,6 @@ func (m *Model) operandsConformTo(scope *symbols.Scope, e *ast.OperatorExpr, typ
 		}
 	}
 	return true
-}
-
-// branchesConformance judges a value that is one of its branches: it holds when
-// every branch does and fails when none does; otherwise only evaluation tells.
-func (m *Model) branchesConformance(scope *symbols.Scope, branches []ast.Node, want *symbols.Symbol, byUnit bool) Conformance {
-	if len(branches) == 0 {
-		return conformanceUnknown()
-	}
-	var found []string
-	allHold, noneHold := true, true
-	for _, branch := range branches {
-		c := m.exprConformance(scope, branch, want, byUnit)
-		if !c.Known {
-			return conformanceUnknown()
-		}
-		if c.Holds {
-			noneHold = false
-			continue
-		}
-		allHold = false
-		if !slices.Contains(found, c.Found) {
-			found = append(found, c.Found)
-		}
-	}
-	switch {
-	case allHold:
-		return Conformance{Known: true, Holds: true}
-	case noneHold:
-		return Conformance{Known: true, Found: strings.Join(found, " or ")}
-	}
-	return conformanceUnknown()
 }
 
 // dimensionConformance judges an expression whose value is a quantity of a

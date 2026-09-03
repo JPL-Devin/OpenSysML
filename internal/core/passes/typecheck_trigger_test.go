@@ -46,6 +46,8 @@ const triggerFixture = `package P {
 		attribute ready = false;
 		attribute lazy default false;
 		attribute count = 3;
+		attribute total = count + count;
+		attribute label : String;
 		attribute wait = 5 [s];
 		attribute waitTwice = d + d;
 		attribute alsoReady = ready;
@@ -111,10 +113,18 @@ func TestTriggerAfterRejectsNonDuration(t *testing.T) {
 		{"after IsOk()", "Boolean"},
 		{"after 5 % 2", "NumericalValue"},
 		{"after x % 2", "NumericalValue"},
-		{"after (if flag ? 5 else 6)", "Natural"},
-		{"after (if flag ? 5 else 5.5)", "Natural or Rational"},
-		{"after (if flag ? x else len)", "Integer or LengthValue"},
-		{"after x ?? 5", "Integer or Natural"},
+		{"after 5 + 5", "NumericalValue"},
+		{"after -5", "NumericalValue"},
+		{"after x + 1", "NumericalValue"},
+		{"after 2 * d", "NumericalValue"},
+		{"after d / 2", "NumericalValue"},
+		{"after total", "NumericalValue"},
+		{"after label + label", "String"},
+		{"after (if flag ? 5 else 6)", "the result of `if`, typed Anything"},
+		{"after (if flag ? d else d2)", "the result of `if`, typed Anything"},
+		{"after (if flag ? 5 [s] else 6 [s])", "the result of `if`, typed Anything"},
+		{"after x ?? 5", "the result of `??`, typed Anything"},
+		{"after d ?? 5 [s]", "the result of `??`, typed Anything"},
 	} {
 		body := "transition first a accept " + tc.trigger + " then b;"
 		wantTriggerDiag(t, body, "trigger-after-duration",
@@ -132,29 +142,24 @@ func TestTriggerAfterAcceptsDurations(t *testing.T) {
 		"after d2",
 		"after h.delay",
 		"after d + 5 [s]",
-		"after 2 * d",
+		"after 2 [one] * d",
 		"after -d",
 		"after t2 - t",
 		"after Twice(d)",
 		"after 10 [m] / 2 [m/s]",
-		"after (if flag ? 5 [s] else 6 [s])",
-		"after (if flag ? d else d2)",
-		"after d ?? 5 [s]",
 	} {
 		wantTriggerSilent(t, "transition first a accept "+trigger+" then b;")
 	}
 }
 
-// Time arithmetic is judged by dimension, as the pilot's isDuration/isTime admit
-// it; a conditional whose branches disagree is left to evaluation.
+// Time arithmetic is judged by dimension, as the pilot's isDuration/isTime
+// admit it: a sum of instants or of an instant and a duration passes either.
 func TestTriggerTimeArithmeticIsJudgedByDimension(t *testing.T) {
 	for _, trigger := range []string{
 		"after d + d",
 		"after t + d",
 		"at d + d",
 		"at t - t",
-		"after (if flag ? d else 5)",
-		"at (if flag ? t else 5)",
 	} {
 		wantTriggerSilent(t, "transition first a accept "+trigger+" then b;")
 	}
@@ -173,8 +178,9 @@ func TestTriggerAtRejectsNonTimeInstant(t *testing.T) {
 		{"at Twice(d)", "DurationValue"},
 		{"at d * d", "a value of dimension T^2"},
 		{"at x % 2", "NumericalValue"},
-		{"at (if flag ? 5 else 6)", "Natural"},
-		{"at (if flag ? d else 5 [s])", "DurationValue or a quantity in second (a DurationUnit)"},
+		{"at (if flag ? 5 else 6)", "the result of `if`, typed Anything"},
+		{"at (if flag ? t else t2)", "the result of `if`, typed Anything"},
+		{"at t ?? TimeOf(a)", "the result of `??`, typed Anything"},
 	} {
 		body := "transition first a accept " + tc.trigger + " then b;"
 		wantTriggerDiag(t, body, "trigger-at-time-instant",
@@ -191,9 +197,6 @@ func TestTriggerAtAcceptsTimeInstants(t *testing.T) {
 		"at TimeOf(a)",
 		"at t + d",
 		"at t2 - d",
-		"at (if flag ? t else t2)",
-		"at (if flag ? t else h.instant)",
-		"at t ?? TimeOf(a)",
 	} {
 		wantTriggerSilent(t, "transition first a accept "+trigger+" then b;")
 	}
@@ -212,11 +215,15 @@ func TestTriggerWhenRejectsNonBoolean(t *testing.T) {
 		{"when lazy", "an untyped feature"},
 		{"when given", "an untyped feature"},
 		{"when count", "Natural"},
+		{"when total", "NumericalValue"},
+		{"when label + label", "String"},
 		{"when wait", "ScalarQuantityValue"},
 		{"when x + 1", "Integer"},
 		{"when 5 [s]", "a quantity in second (a DurationUnit)"},
-		{"when d * 2", "a value of dimension T"},
+		{"when d * 2", "NumericalValue"},
+		{"when d * d", "a value of dimension T^2"},
 		{"when Twice(d)", "DurationValue"},
+		{"when flag ?? ready", "the result of `??`, typed Anything"},
 	} {
 		body := "transition first a accept " + tc.trigger + " then b;"
 		wantTriggerDiag(t, body, "trigger-when-boolean",
@@ -239,6 +246,13 @@ func TestTriggerWhenAcceptsBooleans(t *testing.T) {
 	} {
 		wantTriggerSilent(t, "transition first a accept "+trigger+" then b;")
 	}
+}
+
+// A conditional's result is typed Anything: a trigger judges it strictly, an
+// ordinary condition leaves it to evaluation, as the pilot does.
+func TestConditionalResultIsLeftToEvaluationOutsideTriggers(t *testing.T) {
+	wantTriggerSilent(t, "assert constraint { flag ?? ready }")
+	wantTriggerSilent(t, "entry action { if flag ?? ready { assign x := 1; } }")
 }
 
 // `transition ... when <expr>` without `accept` is a change trigger too; a bare
