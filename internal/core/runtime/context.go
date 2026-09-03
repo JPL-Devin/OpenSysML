@@ -161,10 +161,10 @@ type Context struct {
 	// the identities it keeps for connectors not yet materialized — run in reverse
 	// as each is undone; see noteProbeUndo.
 	journalUndos []func()
-	// probeBehaviors and probePending are where in objectBehaviors and in
-	// pendingBehaviors those the probes under way attached begin: the only ones a
-	// drain under a probe may run.
-	probeBehaviors, probePending int
+	// runBoundaries mark, innermost last, where in objectBehaviors and in
+	// pendingBehaviors the behaviors a change still to be kept or undone attached
+	// begin: the only ones a drain under it may run (see nextRunnableBehavior).
+	runBoundaries []runBoundary
 	// runDepth is the number of runs currently under way, so the step counter is
 	// reset per run rather than accumulated over the context's whole life.
 	runDepth int
@@ -397,8 +397,9 @@ func (ctx *Context) beginExecutorRun(started *bool) func() {
 func (ctx *Context) beginProbe() func() {
 	steps, elements, trace := ctx.steps, ctx.elements, ctx.trace
 	selected := maps.Clone(ctx.selectedVariants)
+	endBoundary := func() {}
 	if ctx.probes == 0 {
-		ctx.probeBehaviors, ctx.probePending = len(ctx.objectBehaviors), len(ctx.pendingBehaviors)
+		endBoundary = ctx.beginRunBoundary()
 	}
 	_, rollback := ctx.beginJournal()
 	ctx.trace = nil
@@ -406,11 +407,28 @@ func (ctx *Context) beginProbe() func() {
 	ctx.probes++
 	return func() {
 		rollback()
+		endBoundary()
 		ctx.selectedVariants = selected
 		ctx.probes--
 		ctx.runDepth--
 		ctx.steps, ctx.elements, ctx.trace = steps, elements, trace
 	}
+}
+
+// runBoundary is where in objectBehaviors and pendingBehaviors the behaviors
+// attached since a change began start.
+type runBoundary struct {
+	behaviors, pending int
+}
+
+// beginRunBoundary confines drains to the behaviors attached from now until the
+// returned function is called: what an older behavior does cannot be undone.
+func (ctx *Context) beginRunBoundary() func() {
+	ctx.runBoundaries = append(ctx.runBoundaries, runBoundary{
+		behaviors: len(ctx.objectBehaviors),
+		pending:   len(ctx.pendingBehaviors),
+	})
+	return func() { ctx.runBoundaries = ctx.runBoundaries[:len(ctx.runBoundaries)-1] }
 }
 
 // beginJournal brackets a change to be kept whole or not at all: the feature

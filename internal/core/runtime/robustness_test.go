@@ -252,6 +252,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("unattachable_connector_abandons_what_its_ends_materialized", testUnattachableConnectorAbandonsWhatItsEndsMaterialized)
 	t.Run("unattachable_connector_touches_no_other_object", testUnattachableConnectorTouchesNoOtherObject)
 	t.Run("unattachable_connector_ends_run_nothing_early", testUnattachableConnectorEndsRunNothingEarly)
+	t.Run("connector_whose_start_fails_leaves_no_trace", testConnectorWhoseStartFailsLeavesNoTrace)
 	t.Run("multiplicity_on_a_connector", testMultiplicityOnAConnector)
 	t.Run("connector_attached_to_itself", testConnectorAttachedToItself)
 	t.Run("mutually_attached_connectors", testMutuallyAttachedConnectors)

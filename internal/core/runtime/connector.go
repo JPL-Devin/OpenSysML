@@ -127,13 +127,13 @@ func (ctx *Context) materializeConnectorAs(owner *Instance, connSym, base *symbo
 	ctx.materializingConnectors[key] = true
 	defer delete(ctx.materializingConnectors, key)
 
-	// A connector attaches whole or not at all: a failure abandons what attaching
-	// created, undoes what that wrote or posted and keeps the identity for a retry.
-	// Behaviors — its own and those of the objects attaching an end materializes —
-	// only attach until every end is attached, then run as one start.
+	// Created whole or not at all: a failure through the start of its behaviors
+	// undoes every write and message; older behaviors answer once it is kept.
 	mark, attached := len(ctx.created), len(ctx.objectBehaviors)
 	commit, rollback := ctx.beginJournal()
+	endBoundary := ctx.beginRunBoundary()
 	abandon := func() {
+		endBoundary()
 		rollback()
 		ctx.abandonCreationSince(mark, attached)
 	}
@@ -163,8 +163,13 @@ func (ctx *Context) materializeConnectorAs(owner *Instance, connSym, base *symbo
 	if len(unnamed) > 0 {
 		ctx.bindParticipants(inst, inst.Ends)
 	}
-	commit()
 	if err := ctx.startClassifierBehaviors(inst, mark); err != nil {
+		abandon()
+		return nil, err
+	}
+	endBoundary()
+	commit()
+	if err := ctx.runAttachedBehaviors(); err != nil {
 		ctx.abandonCreationSince(mark, attached)
 		return nil, err
 	}

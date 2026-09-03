@@ -513,12 +513,14 @@ func (ctx *Context) drainObjectBehaviors() error {
 
 // nextRunnableBehavior returns the next behavior with work to do: one not yet
 // started, else one holding an event delivered while it was suspended. Under a
-// probe only a behavior the probe attached is run: what one outliving the probe
-// does cannot be undone.
+// run boundary only a behavior attached since it began is run: what one older
+// than the change under way does cannot be undone with it.
 func (ctx *Context) nextRunnableBehavior() (*ObjectBehavior, bool) {
 	first, attached := 0, 0
-	if ctx.probes > 0 {
-		first, attached = min(ctx.probePending, len(ctx.pendingBehaviors)), ctx.probeBehaviors
+	if n := len(ctx.runBoundaries); n > 0 {
+		boundary := ctx.runBoundaries[n-1]
+		first = min(boundary.pending, len(ctx.pendingBehaviors))
+		attached = min(boundary.behaviors, len(ctx.objectBehaviors))
 	}
 	if first < len(ctx.pendingBehaviors) {
 		behavior := ctx.pendingBehaviors[first]
