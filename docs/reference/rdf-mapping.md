@@ -463,7 +463,11 @@ spells — the referring subject's own when it spells none — or, absent one,
 standing as an element IRI that dangles as any other unresolved reference does.
 An annotation that names a cross-scope target by its bare id disagrees with the
 qualified typed triple and is refused as a conflict rather than retargeted to
-the referrer's scope.
+the referrer's scope. An id that both an element and an expression node carry
+(the two namespaces are disjoint, so an element may declare the id a node
+derives) resolves in the referrer's own namespace — an element's members are
+elements, an expression node's arguments are nodes — and a referrer in neither
+namespace has such an id refused rather than one subject picked.
 A string member reads as a plain literal, since the annotation carries no
 datatype: a head target written as an expression comes back from the annotation
 alone as a name, where the typed triple would have carried `sysx:Expression`.

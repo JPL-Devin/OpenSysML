@@ -122,7 +122,11 @@ func reconcileCollection(graph *Graph, ids map[string][]Term, subject Term, key 
 	bare := graph.Objects(subject, SysML+key)
 	if len(bare) == 0 {
 		for _, member := range members {
-			c.members = append(c.members, materialize(member, subject, ids))
+			term, err := materialize(member, subject, ids)
+			if err != nil {
+				return refuse(err.Error())
+			}
+			c.members = append(c.members, term)
 		}
 		return c, nil
 	}
@@ -179,14 +183,42 @@ func subjectsByID(graph *Graph) map[string][]Term {
 }
 
 // materialize turns an annotation member into the term a typed triple would hold:
-// the one subject carrying the id in the scope the @id names; an unknown id dangles as usual.
-func materialize(member CollectionMember, referrer Term, ids map[string][]Term) Term {
+// the subject carrying the id in the scope the @id names; an unknown id dangles as usual.
+func materialize(member CollectionMember, referrer Term, ids map[string][]Term) (Term, error) {
 	if member.ID == "" {
-		return member.Literal
+		return member.Literal, nil
 	}
 	ref := ReferenceIRI(referrer, member.ID)
-	if subjects := ids[ownerID(ref.Value)]; len(subjects) == 1 {
-		return subjects[0]
+	candidates := ids[ownerID(ref.Value)]
+	switch len(candidates) {
+	case 0:
+		return ref, nil
+	case 1:
+		return candidates[0], nil
 	}
-	return ref
+	// An element's collection holds elements, an expression node's its operand nodes.
+	var own []Term
+	for _, candidate := range candidates {
+		if namespaceOf(candidate.Value) == namespaceOf(referrer.Value) {
+			own = append(own, candidate)
+		}
+	}
+	if len(own) == 1 {
+		return own[0], nil
+	}
+	names := make([]string, len(candidates))
+	for i, candidate := range candidates {
+		names[i] = candidate.String()
+	}
+	return Term{}, fmt.Errorf("the member {\"@id\":%q} names %d subjects, %s, and the annotation cannot tell which", member.ID, len(candidates), strings.Join(names, " and "))
+}
+
+// namespaceOf is the identity namespace an IRI is minted in, Element or Expression; "" for any other.
+func namespaceOf(iri string) string {
+	for _, ns := range []string{Element, Expression} {
+		if strings.HasPrefix(iri, ns) {
+			return ns
+		}
+	}
+	return ""
 }

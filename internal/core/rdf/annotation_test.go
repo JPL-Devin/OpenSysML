@@ -1,6 +1,7 @@
 package rdf
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -61,6 +62,47 @@ func TestAnnotateCollections(t *testing.T) {
 	}
 	if g.Len() != before {
 		t.Errorf("annotating twice added %d triples", g.Len()-before)
+	}
+}
+
+// An id both an element and an expression node carry resolves, from an annotation
+// alone, in the referrer's namespace; a referrer in neither has it refused.
+func TestMaterializedReferencesFollowTheReferrersNamespace(t *testing.T) {
+	element, node := IRI(Element+"P__x_pvalue_pa0"), IRI(Expression+"P__x_pvalue_pa0")
+	base := func() *Graph {
+		g := NewGraph()
+		g.Add(element, IRI(RDFType), SysMLTerm("PartDefinition"))
+		g.Add(node, IRI(RDFType), SysMLTerm("LiteralInteger"))
+		return g
+	}
+	for _, tc := range []struct {
+		referrer, want Term
+	}{
+		{IRI(Element + "P"), element},
+		{IRI(Expression + "P__x_pvalue"), node},
+	} {
+		g := base()
+		g.Add(tc.referrer, AnnotationJSONTerm("argument"), String(`[{"@id":"P__x_pvalue_pa0"}]`))
+		out, err := ReconcileCollections(g)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.referrer, err)
+		}
+		if got := out.Objects(tc.referrer, SysML+"argument"); len(got) != 1 || got[0] != tc.want {
+			t.Errorf("%s resolved the member to %v, want %s", tc.referrer, got, tc.want)
+		}
+	}
+	g := base()
+	foreign := IRI("urn:other:P")
+	g.Add(foreign, AnnotationJSONTerm("argument"), String(`[{"@id":"P__x_pvalue_pa0"}]`))
+	_, err := ReconcileCollections(g)
+	var refused *AnnotationError
+	if !errors.As(err, &refused) || refused.Subject != foreign.Value || refused.Key != "argument" {
+		t.Fatalf("an id no namespace tells apart was not refused: %v", err)
+	}
+	for _, want := range []string{element.String(), node.String(), "cannot tell which"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal lacks %q: %v", want, err)
+		}
 	}
 }
 

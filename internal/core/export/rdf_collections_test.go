@@ -217,6 +217,36 @@ package Q {
 	}
 }
 
+// An element may declare the id an expression node derives, since the two live in
+// different namespaces. An annotation's bare id names either; a collection stated by
+// the annotation alone resolves it in the referrer's namespace — an expression node's
+// arguments to the node, an element's members to the element.
+func TestAnnotatedReferencesResolveInTheReferrersNamespace(t *testing.T) {
+	const model = `package P {
+    attribute x = f(1, 2, 3);
+    part def A {
+        @IdentityMetadata::ElementId { id = "P__x_pvalue_pa0"; }
+    }
+}
+`
+	turtle := string(idTurtle(t, model))
+	for _, want := range []string{
+		`json:argument "[{\"@id\":\"P__x_pvalue_pa0\"},{\"@id\":\"P__x_pvalue_pa1\"},{\"@id\":\"P__x_pvalue_pa2\"}]"`,
+		`json:ownedMember "[{\"@id\":\"P__x\"},{\"@id\":\"P__x_pvalue_pa0\"}]"`,
+		"expr:P__x_pvalue_pa0\n    a sysml:LiteralInteger ;",
+		"elmt:P__x_pvalue_pa0\n    a sysml:PartDefinition ;",
+	} {
+		if !strings.Contains(turtle, want) {
+			t.Fatalf("the fixture lacks %q:\n%s", want, turtle)
+		}
+	}
+	structured := []byte(structural(t, []byte(turtle)))
+	annotationOnly := withoutTriples(t, withoutTriples(t, structured, "sysml:argument"), "sysml:ownedMember")
+	if back := toNotation(t, annotationOnly); back != model {
+		t.Errorf("the annotation-only graph reads back as:\n%s\nwant:\n%s", back, model)
+	}
+}
+
 // A reference the annotation alone states to an element the graph does not
 // describe is refused as a dangling reference, as a typed triple's would be.
 func TestAnnotatedReferenceToAnAbsentElementIsRefused(t *testing.T) {
