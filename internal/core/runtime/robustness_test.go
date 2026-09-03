@@ -29,6 +29,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("node_pin_of_a_node_not_yet_performed", testNodePinOfANodeNotYetPerformed)
 	t.Run("node_pin_the_node_does_not_declare", testNodePinTheNodeDoesNotDeclare)
 	t.Run("node_read_as_a_value_without_a_result", testNodeReadAsAValueWithoutAResult)
+	t.Run("block_node_pin_of_a_node_not_yet_performed", testBlockNodePinOfANodeNotYetPerformed)
+	t.Run("block_node_pin_the_node_does_not_declare", testBlockNodePinTheNodeDoesNotDeclare)
 	t.Run("node_invocation_too_many_arguments", testNodeInvocationTooManyArguments)
 	t.Run("node_invocation_too_few_arguments", testNodeInvocationTooFewArguments)
 	t.Run("node_invocation_unknown_named_argument", testNodeInvocationUnknownNamedArgument)
@@ -7871,6 +7873,61 @@ func testNodePinTheNodeDoesNotDeclare(t *testing.T) {
 				first start;
 				then action p { out v : Integer; assign v := 1; }
 				then action fin { assign total := p.w; }
+				then done;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if !errors.Is(err, ErrNodePin) {
+		t.Fatalf("error = %v, want ErrNodePin", err)
+	}
+	if !strings.Contains(err.Error(), "p") || !strings.Contains(err.Error(), "w") {
+		t.Errorf("error %q does not name the node and the pin", err)
+	}
+}
+
+// testBlockNodePinOfANodeNotYetPerformed: a node declared in a branch is a
+// performance of its own like any other, so reading its pin from a sibling that
+// runs before it is reported the same way.
+func testBlockNodePinOfANodeNotYetPerformed(t *testing.T) {
+	src := `
+		package test {
+			action outer {
+				attribute total : Integer = 0;
+				first start;
+				then action run {
+					if true {
+						action early { assign total := late.v; }
+						action late { out v : Integer; assign v := 1; }
+					}
+				}
+				then done;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if !errors.Is(err, ErrNodeNotPerformed) {
+		t.Fatalf("error = %v, want ErrNodeNotPerformed", err)
+	}
+	if !strings.Contains(err.Error(), "late") {
+		t.Errorf("error %q does not name the node", err)
+	}
+}
+
+// testBlockNodePinTheNodeDoesNotDeclare: a pin read through a node declared in
+// a loop body that the node does not declare is reported with the node.
+func testBlockNodePinTheNodeDoesNotDeclare(t *testing.T) {
+	src := `
+		package test {
+			action outer {
+				attribute total : Integer = 0;
+				first start;
+				then action run {
+					for i in 1..2 {
+						action p { out v : Integer; assign v := i; }
+						assign total := total + p.w;
+					}
+				}
 				then done;
 			}
 		}

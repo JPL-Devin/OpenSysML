@@ -1180,7 +1180,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 		}
 	}
 
-	perf, err := e.beginPerformance(token.frame, usage)
+	perf, err := e.beginPerformance(token.frame, graph, usage, nil)
 	if err != nil {
 		return err
 	}
@@ -1341,7 +1341,7 @@ func (e *ActionExecutor) applyDataFlows(frame *actionFrame, sourceNode ast.Node,
 // target performing in a frame of its own, else in the flow's own features.
 func (e *ActionExecutor) deliverFlow(frame *actionFrame, flow lower.ObjectFlow, value Value) error {
 	if _, performs := flow.Target.(*ast.Usage); performs {
-		if err := e.deliver(frame, flow.Target, flow.TargetPin, value); err != nil {
+		if err := e.deliver(frame, frame.graph, flow.Target, flow.TargetPin, value); err != nil {
 			return fmt.Errorf("%s: %w", flowDescription(flow), err)
 		}
 		return nil

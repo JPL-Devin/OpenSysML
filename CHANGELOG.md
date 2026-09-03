@@ -83,8 +83,9 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   values into same-named enclosing features that exist. Not yet: `n.pin` on an untyped
   `action n = Callee(args)` is refused by name resolution, which does not type `n` by the
   invocation; read `n` itself, or type the usage. An action declared in an `if` branch or a
-  loop body still runs as a statement block in the enclosing frame, so a sibling in the branch
-  cannot read its pins as `p.v`.
+  loop body is a performance of its own like any other node, with the block's locals (a loop
+  variable) in reach, so a sibling in the branch reads its pins as `p.v` and `Results()`
+  reports them under its path (`iterate.square.s`), the latest iteration's standing for it.
 
 - **Action and state execution has a referee outside the executor.** Six conformance cases —
   a join fed by branches of unequal length, a join fed twice over one succession, a node two

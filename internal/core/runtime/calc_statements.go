@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 )
 
@@ -86,4 +87,13 @@ func (h *calcStmtHost) performer() *Instance {
 
 func (h *calcStmtHost) effect(s lower.Effect) error {
 	return fmt.Errorf("%w: a calculation cannot state '%s'", ErrCalcSideEffect, s.Kind)
+}
+
+// performNode runs a nested action declared in a block of the body in a frame
+// of the body; one performing another action is an effect, and is rejected.
+func (h *calcStmtHost) performNode(engine *stmtEngine, graph *lower.ActionGraph, node *ast.Usage) (stmtFlow, error) {
+	if _, performs := nestedInvocation(node); performs {
+		return flowNext, fmt.Errorf("%w: a calculation cannot perform action %s", ErrCalcSideEffect, ActionNodeName(node))
+	}
+	return engine.nodeInBlock(graph, node)
 }

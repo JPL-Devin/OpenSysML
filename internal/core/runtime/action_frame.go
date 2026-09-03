@@ -17,10 +17,16 @@ import (
 
 // actionFrame is one performance: the action's own (node nil) or a nested node's.
 type actionFrame struct {
-	node   ast.Node
-	graph  *lower.ActionGraph // the flow this performance runs, nil for a leaf node
-	scope  *symbols.Scope     // the namespace the performance's features resolve in
+	node  ast.Node
+	graph *lower.ActionGraph // the flow this performance runs, nil for a leaf node
+	// flow is the graph node is a node of: parent's own, or the flow of a block
+	// in a body parent runs (lower/block_graph.go). nil for the action's own.
+	flow   *lower.ActionGraph
+	scope  *symbols.Scope // the namespace the performance's features resolve in
 	parent *actionFrame
+	// locals are the block-local bindings entered around node in parent's body,
+	// outermost first: a loop variable the node's declarations read.
+	locals []map[string]Value
 	// live counts the tokens still running in this performance's flow, which a
 	// fork inside it raises and a join or a retiring token lowers.
 	live int
@@ -83,15 +89,19 @@ func (e *ActionExecutor) addFeatureDirections(features map[string]ast.FeatureDir
 	}
 }
 
-// beginPerformance starts a performance of node, a node of parent's flow. It
-// holds what was delivered to its pins ahead of it, then what the bindings at
-// its input pins give, and last the values its own declarations default to.
-func (e *ActionExecutor) beginPerformance(parent *actionFrame, node ast.Node) (*actionFrame, error) {
-	graph := parent.graph
+// beginPerformance starts a performance of node, a node of flow: parent's own,
+// or that of a block in a body parent runs, entered with locals bound. It holds
+// what was delivered to its pins ahead of it, then what the bindings at its
+// input pins give, and last the values its own declarations default to.
+func (e *ActionExecutor) beginPerformance(
+	parent *actionFrame, flow *lower.ActionGraph, node ast.Node, locals []map[string]Value,
+) (*actionFrame, error) {
 	perf := &actionFrame{
 		node:        node,
-		scope:       graph.Scopes[node],
+		flow:        flow,
+		scope:       flow.Scopes[node],
 		parent:      parent,
+		locals:      locals,
 		connections: parent.connections,
 		data:        make(map[string]Value),
 		features:    make(map[string]ast.FeatureDirection),
@@ -99,19 +109,22 @@ func (e *ActionExecutor) beginPerformance(parent *actionFrame, node ast.Node) (*
 	if perf.scope == nil {
 		perf.scope = parent.scope
 	}
-	if sub, owns := e.subflowOf(graph, node); owns {
+	if sub, owns := e.subflowOf(flow, node); owns {
 		perf.graph = sub.Graph
 		perf.live = 1
 		perf.connections = joinConnections(parent.connections, sub.Graph.Connections)
 		perf.subactions = make(map[ast.Node]*actionFrame)
 	}
-	pins, result, err := e.nodePins(graph, node)
+	pins, result, err := e.nodePins(flow, node)
 	if err != nil {
 		return nil, err
 	}
 	perf.features = pins
 	perf.result = result
 	parent.takeDeliveries(node, perf)
+	if parent.subactions == nil {
+		parent.subactions = make(map[ast.Node]*actionFrame)
+	}
 	parent.subactions[node] = perf
 
 	// The bindings and defaults are one evaluation: a calc usage two of them read
@@ -121,7 +134,7 @@ func (e *ActionExecutor) beginPerformance(parent *actionFrame, node ast.Node) (*
 	if err := e.bindInputPins(perf, activation); err != nil {
 		return nil, err
 	}
-	if err := e.seedDeclaredValues(perf, graph.Features[node], activation); err != nil {
+	if err := e.seedDeclaredValues(perf, flow.Features[node], activation); err != nil {
 		return nil, err
 	}
 	return perf, nil
@@ -230,30 +243,55 @@ func (f *actionFrame) holds(name string) bool {
 	return ok
 }
 
-// lexical returns the performances a body of f reads, outermost first.
-func (f *actionFrame) lexical() []*actionFrame {
-	var chain []*actionFrame
-	for p := f; p != nil; p = p.parent {
-		chain = append(chain, p)
+// lexicalFrames returns the frames a body of f reads, outermost first: those of
+// the performances around it, each followed by the block-locals around the node
+// it performs, and last f's own.
+func (f *actionFrame) lexicalFrames() []frame {
+	var frames []frame
+	if f.parent != nil {
+		frames = f.parent.lexicalFrames()
 	}
-	for i, j := 0, len(chain)-1; i < j; i, j = i+1, j-1 {
-		chain[i], chain[j] = chain[j], chain[i]
+	for _, local := range f.locals {
+		frames = append(frames, mapFrame(local))
 	}
-	return chain
+	return append(frames, performanceFrame(f))
 }
 
-// nodeNamed returns the node of the performance's flow answering to name.
+// nodeNamed returns the node answering to name among the subactions of the
+// performance: the nodes of its flow, and those the blocks in the bodies it
+// runs declare.
 func (f *actionFrame) nodeNamed(name string) (ast.Node, bool) {
-	if f.graph == nil {
-		return nil, false
-	}
-	for _, node := range f.graph.Nodes {
+	answers := func(node ast.Node) bool {
 		if _, isUsage := node.(*ast.Usage); !isUsage {
-			continue
+			return false
 		}
 		for _, candidate := range ActionNodeNames(node) {
 			if candidate == name {
+				return true
+			}
+		}
+		return false
+	}
+	if f.graph == nil {
+		for _, node := range f.flow.BlockNodes[f.node] {
+			if answers(node) {
 				return node, true
+			}
+		}
+		return nil, false
+	}
+	for _, node := range f.graph.Nodes {
+		if answers(node) {
+			return node, true
+		}
+	}
+	for _, node := range f.graph.Nodes {
+		if _, isUsage := node.(*ast.Usage); isUsage {
+			continue
+		}
+		for _, declared := range f.graph.BlockNodes[node] {
+			if answers(declared) {
+				return declared, true
 			}
 		}
 	}
@@ -301,17 +339,18 @@ func (f *actionFrame) resultValue() (Value, error) {
 	return Value{}, &NoValueError{Feature: f.path() + "." + f.result}
 }
 
-// deliver stores a value at a pin of a node of f's flow ahead of its next
-// performance, which is how a flow or binding reaches a node not yet running.
-func (e *ActionExecutor) deliver(f *actionFrame, node ast.Node, pin string, value Value) error {
-	pins, _, err := e.nodePins(f.graph, node)
+// deliver stores a value at a pin of node, a node of flow performed by f, ahead
+// of its next performance, which is how a flow or binding reaches a node not yet
+// running.
+func (e *ActionExecutor) deliver(f *actionFrame, flow *lower.ActionGraph, node ast.Node, pin string, value Value) error {
+	pins, _, err := e.nodePins(flow, node)
 	if err != nil {
 		return err
 	}
 	if _, declared := pins[pin]; !declared {
 		return fmt.Errorf("%w: %s declares no %s", ErrNodePin, nodeDescription(node), pin)
 	}
-	if err := e.ctx.checkNamedWrite(f.graph.Scopes[node], nodeDescription(node), pin, value); err != nil {
+	if err := e.ctx.checkNamedWrite(flow.Scopes[node], nodeDescription(node), pin, value); err != nil {
 		return err
 	}
 	if f.pending == nil {
@@ -354,44 +393,58 @@ func (e *ActionExecutor) setFrameFeature(f *actionFrame, name string, value Valu
 	return nil
 }
 
-// assignEnclosing writes name to the innermost performance around perf that
-// holds it, reporting whether one did.
+// assignEnclosing writes name to the innermost binding around perf that holds
+// it — a block-local entered around a node, or a performance's feature —
+// reporting whether one did.
 func (e *ActionExecutor) assignEnclosing(perf *actionFrame, name string, value Value) (bool, error) {
-	for f := perf.parent; f != nil; f = f.parent {
-		if f.holds(name) {
-			return true, e.setFrameFeature(f, name, value)
+	for f := perf; f != nil; f = f.parent {
+		for i := len(f.locals) - 1; i >= 0; i-- {
+			if _, ok := f.locals[i][name]; ok {
+				f.locals[i][name] = value
+				return true, nil
+			}
+		}
+		if f.parent != nil && f.parent.holds(name) {
+			return true, e.setFrameFeature(f.parent, name, value)
 		}
 	}
 	return false, nil
 }
 
-// lookupEnclosing reads name from the innermost performance around perf that
-// holds a value for it.
+// lookupEnclosing reads name from the innermost binding around perf that holds
+// a value for it.
 func lookupEnclosing(perf *actionFrame, name string) (Value, bool) {
-	for f := perf.parent; f != nil; f = f.parent {
-		if value, ok := f.data[name]; ok {
-			return value, true
+	for f := perf; f != nil; f = f.parent {
+		for i := len(f.locals) - 1; i >= 0; i-- {
+			if value, ok := f.locals[i][name]; ok {
+				return value, true
+			}
+		}
+		if f.parent != nil {
+			if value, ok := f.parent.data[name]; ok {
+				return value, true
+			}
 		}
 	}
 	return Value{}, false
 }
 
 // evalContextFor returns a context evaluating in scope with the performance and
-// every one around it in reach, innermost last.
+// every frame around it in reach, innermost last.
 func (e *ActionExecutor) evalContextFor(perf *actionFrame, scope *symbols.Scope) *EvalContext {
 	ec := NewEvalContextIn(e.ctx, scope, e.self)
-	for _, f := range perf.lexical() {
-		ec.pushFrame(performanceFrame(f))
+	for _, f := range perf.lexicalFrames() {
+		ec.pushFrame(f)
 	}
 	return ec
 }
 
-// lexicalValues merges the values a performance and those around it hold, the
-// innermost winning, for a caller reading them as one map.
+// lexicalValues merges the values a performance and the frames around it hold,
+// the innermost winning, for a caller reading them as one map.
 func lexicalValues(perf *actionFrame) map[string]Value {
 	merged := make(map[string]Value)
-	for _, f := range perf.lexical() {
-		for name, value := range f.data {
+	for _, f := range perf.lexicalFrames() {
+		for name, value := range f.vars {
 			merged[name] = value
 		}
 	}
@@ -455,7 +508,7 @@ func (e *ActionExecutor) bindOutputPins(perf *actionFrame) error {
 				ErrBindingEnd, perf.describe(), binding.Pin, bindingEndText(binding.Other))
 		}
 		if binding.OtherNode != nil {
-			if err := e.deliver(perf.parent, binding.OtherNode, binding.OtherPin, value); err != nil {
+			if err := e.deliver(perf.parent, perf.flow, binding.OtherNode, binding.OtherPin, value); err != nil {
 				return err
 			}
 			continue
@@ -477,10 +530,11 @@ func (e *ActionExecutor) bindOutputPins(perf *actionFrame) error {
 	return nil
 }
 
-// bindingsAt returns the bindings of the enclosing flow with an end at perf's node.
+// bindingsAt returns the bindings of the flow perf's node is a node of with an
+// end at it.
 func (e *ActionExecutor) bindingsAt(perf *actionFrame) []lower.PinBinding {
 	var at []lower.PinBinding
-	for _, binding := range perf.parent.graph.Bindings {
+	for _, binding := range perf.flow.Bindings {
 		if binding.Node == perf.node {
 			at = append(at, binding)
 		}
@@ -559,7 +613,7 @@ func bindingEndText(end ast.Node) string {
 // ends with becomes the node's, and its outputs are also returned to the
 // same-named features around it.
 func (e *ActionExecutor) performInvocation(perf *actionFrame, inv actionInvocation) error {
-	scope := perf.parent.graph.Scope
+	scope := perf.flow.Scope
 	sym, err := resolveActionSymbol(e.ctx, scope, inv)
 	if err != nil {
 		return err

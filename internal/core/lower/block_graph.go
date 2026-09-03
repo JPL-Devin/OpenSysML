@@ -122,20 +122,66 @@ func lowerBlockFlow(members []ast.Node, scope *symbols.Scope, nodeBody bool) *Ac
 	for i := 0; i+1 < len(graph.Nodes); i++ {
 		graph.Edges[graph.Nodes[i]] = []ActionEdge{{Target: graph.Nodes[i+1]}}
 	}
+	recordBlockNodes(graph)
 	return graph
 }
 
+// recordBlockNodes fills graph.BlockNodes from the bodies of its nodes.
+func recordBlockNodes(graph *ActionGraph) {
+	for node, body := range graph.Bodies {
+		nodes := blockNodesOf(body, nil)
+		if len(nodes) == 0 {
+			continue
+		}
+		if graph.BlockNodes == nil {
+			graph.BlockNodes = make(map[ast.Node][]ast.Node)
+		}
+		graph.BlockNodes[node] = nodes
+	}
+}
+
+// blockNodesOf appends the action nodes the blocks among stmts declare, in
+// declaration order; a node's own body declares its subperformances, not these.
+func blockNodesOf(stmts []Statement, into []ast.Node) []ast.Node {
+	for _, stmt := range stmts {
+		switch s := stmt.(type) {
+		case If:
+			into = blockNodesIn(s.Then, into)
+			if s.Else != nil {
+				into = blockNodesIn(*s.Else, into)
+			}
+		case Loop:
+			into = blockNodesIn(s.Body, into)
+		case Block:
+			into = blockNodesIn(s, into)
+		}
+	}
+	return into
+}
+
+// blockNodesIn appends the action nodes one block declares: the action usages
+// among the nodes of its flow, and those the blocks in its statement runs declare.
+func blockNodesIn(block Block, into []ast.Node) []ast.Node {
+	if block.Graph == nil {
+		return blockNodesOf(block.Statements, into)
+	}
+	for _, node := range block.Graph.Nodes {
+		if _, isUsage := node.(*ast.Usage); isUsage && !block.Graph.StatementRuns[node] {
+			into = append(into, node)
+			continue
+		}
+		into = blockNodesOf(block.Graph.Bodies[node], into)
+	}
+	return into
+}
+
 // lowerFlowNode records what one action node of a block's flow runs: the action
-// it performs, or the block a nested declaration states in a namespace of its own.
+// a `perform` names, or the features and body of a nested action declaration.
 func lowerFlowNode(graph *ActionGraph, node ast.Node, scope *symbols.Scope) {
 	switch n := node.(type) {
 	case *ast.PerformActionNode:
 		graph.Bodies[node] = []Statement{Effect{Kind: EffectPerform, Node: n, Scope: scope}}
 	case *ast.Usage:
-		if performsAction(n) {
-			graph.Bodies[node] = []Statement{Effect{Kind: EffectPerform, Node: n, Scope: scope}}
-			return
-		}
 		// An accept node suspends the action it is a node of, which a block's flow
 		// has no token to park; it is lowered as unsupported so that reaching it is
 		// reported rather than passed over.
@@ -147,7 +193,7 @@ func lowerFlowNode(graph *ActionGraph, node ast.Node, scope *symbols.Scope) {
 			}}
 			return
 		}
-		graph.Bodies[node] = []Statement{nestedActionBlock(n, childScope(scope, n))}
+		lowerNestedNode(graph, n, childScope(scope, n))
 	default:
 		graph.Bodies[node] = []Statement{lowerStatement(node, scope)}
 	}
@@ -164,34 +210,34 @@ func acceptsMessage(node *ast.Usage) bool {
 	return false
 }
 
-// nestedActionBlock lowers a nested action declared in a block: a block of its
-// own, holding the statements its members state — or the flow they state in
-// turn, which is how a nested action declares a nested action.
-func nestedActionBlock(node *ast.Usage, scope *symbols.Scope) Block {
+// lowerNestedNode records a nested action declared in a block like a node of the
+// action's flow: the features it declares, and the statements or flow its members state.
+func lowerNestedNode(graph *ActionGraph, node *ast.Usage, scope *symbols.Scope) {
+	lowerFeatures(graph, node, scope)
 	if blockNeedsFlow(node.Members) {
-		return Block{Node: node, Scope: scope, Graph: lowerBlockFlow(node.Members, scope, true)}
+		graph.Bodies[node] = []Statement{Block{
+			Node:  node,
+			Scope: scope,
+			Graph: lowerBlockFlow(node.Members, scope, true),
+		}}
+		return
 	}
-	block := Block{Node: node, Scope: scope}
 	for _, member := range node.Members {
 		actual := unwrapMembership(member)
 		if actual == nil || statesNoStep(actual) {
 			continue
 		}
 		if stmt, states := blockMemberStatement(actual, scope, true); states {
-			block.Statements = append(block.Statements, stmt)
+			graph.Bodies[node] = append(graph.Bodies[node], stmt)
 		}
 	}
-	return block
 }
 
 // blockMemberStatement lowers a member of a block's flow that is a statement, and
-// reports whether it states a step. Only a nested action's own parameter is
-// lowered as one; every other member is the statement it is in any body.
+// reports whether it states a step: a nested action's own feature is not one.
 func blockMemberStatement(member ast.Node, scope *symbols.Scope, nodeBody bool) (Statement, bool) {
-	if usage, ok := member.(*ast.Usage); ok && nodeBody {
-		if stmt, isParam := parameterStatement(usage, scope); isParam {
-			return stmt, stmt != nil
-		}
+	if usage, ok := member.(*ast.Usage); ok && nodeBody && DeclaresNodeFeature(usage) {
+		return nil, false
 	}
 	return lowerStatement(member, scope), true
 }
@@ -205,22 +251,4 @@ func statesNoStep(member ast.Node) bool {
 	default:
 		return false
 	}
-}
-
-// parameterStatement lowers a parameter a node of a block's flow declares, and
-// reports whether the usage was one. An input carrying a value declares it in
-// the node's own frame, an output carrying one binds it outward, and a parameter
-// carrying none is bound by what performs the node.
-func parameterStatement(u *ast.Usage, scope *symbols.Scope) (Statement, bool) {
-	if u.Direction == ast.DirNone && !u.IsResult {
-		return nil, false
-	}
-	name, _ := ast.EffectiveName(u)
-	if name == "" || u.Value == nil {
-		return nil, true
-	}
-	if u.IsResult || u.Direction == ast.DirOut {
-		return Assign{Target: name, Value: u.Value, Node: u, Scope: scope}, true
-	}
-	return Declare{Name: name, Value: u.Value, Node: u, Scope: scope}, true
 }

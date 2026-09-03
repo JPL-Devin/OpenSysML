@@ -117,6 +117,15 @@ func (h *stateStmtHost) effect(s lower.Effect) error {
 	return fmt.Errorf("%s: '%s' in a body is not executable", h.describe(), s.Kind)
 }
 
+// performNode runs a nested action declared in a block of the body: one naming
+// an action to perform performs it, any other runs in a frame of the body.
+func (h *stateStmtHost) performNode(engine *stmtEngine, graph *lower.ActionGraph, node *ast.Usage) (stmtFlow, error) {
+	if inv, performs := nestedInvocation(node); performs {
+		return flowNext, h.exec.invokeNested(inv)
+	}
+	return engine.nodeInBlock(graph, node)
+}
+
 // performedInvocation reports the action a `perform` statement names, in either
 // form the parser produces for one.
 func performedInvocation(node ast.Node) (actionInvocation, bool) {

@@ -134,6 +134,9 @@ type stmtHost interface {
 	acceptReturn(value Value, s lower.Return) error
 	// effect states an effect on the world outside the body.
 	effect(s lower.Effect) error
+	// performNode runs a nested action a block's flow declares, node of graph,
+	// as a performance of its own with engine's block-locals in reach.
+	performNode(engine *stmtEngine, graph *lower.ActionGraph, node *ast.Usage) (stmtFlow, error)
 	// performer is the object running the behavior, nil when it runs outside any
 	// object: what the body's names read and write through.
 	performer() *Instance
@@ -382,15 +385,39 @@ func (e *stmtEngine) blockFlow(block lower.Block) (stmtFlow, error) {
 	return flowNext, nil
 }
 
-// blockNode runs one node of a block's flow. A node declaring a namespace of its
-// own was lowered to a block, which enters a frame of its own; a node standing
-// for a run of statements shares the frame the enclosing block entered.
+// blockNode runs one node of a block's flow: the host performs an action usage in
+// a frame of its own; a run of statements runs in the frame the block entered.
 func (e *stmtEngine) blockNode(graph *lower.ActionGraph, node ast.Node) (stmtFlow, error) {
-	if name := ActionNodeName(node); name != "" && !graph.StatementRuns[node] {
-		if tr := e.ctx.trace; tr != nil {
+	if graph.StatementRuns[node] {
+		return e.run(graph.Bodies[node])
+	}
+	if tr := e.ctx.trace; tr != nil {
+		if name := ActionNodeName(node); name != "" {
 			tr.RecordStatement("node " + name)
 			defer tr.EndStatement()
 		}
+	}
+	if usage, ok := node.(*ast.Usage); ok {
+		return e.host.performNode(e, graph, usage)
+	}
+	return e.run(graph.Bodies[node])
+}
+
+// nodeInBlock runs a nested action of a block's flow for a host keeping no
+// performances: its features are declared in a frame of the body its body runs in.
+func (e *stmtEngine) nodeInBlock(graph *lower.ActionGraph, node *ast.Usage) (stmtFlow, error) {
+	e.env.enter()
+	defer e.env.leave()
+	defer e.enterActivation()()
+	for _, feature := range graph.Features[node] {
+		if feature.Value == nil {
+			continue
+		}
+		value, err := e.evalIn(feature.Scope).Eval(feature.Value)
+		if err != nil {
+			return flowNext, fmt.Errorf("eval %s of %s: %w", feature.Name, nodeDescription(node), err)
+		}
+		e.env.declare(feature.Name, value)
 	}
 	return e.run(graph.Bodies[node])
 }

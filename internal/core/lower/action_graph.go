@@ -69,6 +69,11 @@ type ActionGraph struct {
 	// statements rather than for an action node (block_graph.go). Such a node is
 	// keyed by the first statement of the run, whose name names no step.
 	StatementRuns map[ast.Node]bool
+
+	// BlockNodes lists, per node, the action nodes the blocks in its body declare
+	// (an `if` branch, a loop body) in declaration order: subperformances of the
+	// performance running that body, reached by name from it (block_graph.go).
+	BlockNodes map[ast.Node][]ast.Node
 }
 
 // ActionEdge is one succession out of a node: the target it reaches, the guard
@@ -544,6 +549,7 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 		}
 	}
 
+	recordBlockNodes(graph)
 	return graph, nil
 }
 

@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -27,12 +28,8 @@ type actionStmtHost struct {
 // performance they belong to, with the performances around it in lexical reach.
 func (e *ActionExecutor) executeBody(perf *actionFrame, graph *lower.ActionGraph, node ast.Node) error {
 	host := &actionStmtHost{exec: e, node: node, perf: perf}
-	lexical := perf.lexical()
-	enclosing := make([]frame, 0, len(lexical)-1)
-	for _, f := range lexical[:len(lexical)-1] {
-		enclosing = append(enclosing, performanceFrame(f))
-	}
-	engine := newStmtEngineIn(e.ctx, host, performanceFrame(perf), enclosing)
+	lexical := perf.lexicalFrames()
+	engine := newStmtEngineIn(e.ctx, host, lexical[len(lexical)-1], lexical[:len(lexical)-1])
 	host.engine = engine
 	// The body's activation ends with this execution of it, so a run stepping the
 	// node many times does not hold what every execution computed.
@@ -103,8 +100,8 @@ func (h *actionStmtHost) acceptReturn(Value, lower.Return) error {
 	return fmt.Errorf("%w: %s", ErrReturnOutsideCalc, h.describe())
 }
 
-// effect performs the action a `perform` names, as a node of the flow the block
-// holding it states (lower/block_graph.go); any other effect is reported.
+// effect performs the action a `perform` in statement form names, where it
+// stands; any other effect is reported.
 func (h *actionStmtHost) effect(s lower.Effect) error {
 	if s.Kind != lower.EffectPerform {
 		return fmt.Errorf("%s: '%s' in a body is not executable", h.describe(), s.Kind)
@@ -138,6 +135,24 @@ func (h *actionStmtHost) effect(s lower.Effect) error {
 		env.data.set(name, outputs[name])
 	}
 	return nil
+}
+
+// performNode performs a nested action a block of the body declares as a
+// subperformance of the body's, with the block-locals entered around it in reach.
+func (h *actionStmtHost) performNode(engine *stmtEngine, graph *lower.ActionGraph, node *ast.Usage) (stmtFlow, error) {
+	perf, err := h.exec.beginPerformance(h.perf, graph, node, slices.Clone(engine.env.frames))
+	if err != nil {
+		return flowNext, err
+	}
+	if inv, ok := nestedInvocation(node); ok {
+		if err := h.exec.performInvocation(perf, inv); err != nil {
+			return flowNext, err
+		}
+	}
+	if err := h.exec.executeBody(perf, graph, node); err != nil {
+		return flowNext, err
+	}
+	return flowNext, h.exec.endPerformance(perf)
 }
 
 // declaredOutput reports no output features: an action node's parameters live
