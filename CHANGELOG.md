@@ -8,25 +8,6 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Added
 
-- **A call selects the overload its arguments fit, and the checker and the runtime select the
-  same one.** A name visible as several function or calc declarations — owned, inherited,
-  imported or re-exported, a library function among them only where its package is imported — no
-  longer resolves to whichever declaration is found first: the candidates are filtered by arity,
-  by positional or named binding, and by argument-type conformance (the `ScalarValues` lattice,
-  strings, booleans, collections, quantities and declared types), and the most specific fit is
-  selected. `ToInteger("7")` is `IntegerFunctions::ToInteger`, `abs(-2)` answers `2` and
-  `abs(rect(3.0, 4.0))` answers `5.0` through `ComplexFunctions::abs`, where the unqualified
-  name used to be rejected with `expects Real, found String` or `requires a numeric value`. A
-  genuine tie is reported as `invocation-ambiguous`, naming the tied candidates, and refused at
-  runtime as `ErrAmbiguousInvocation` rather than dispatched silently; a call no candidate fits
-  keeps its argument diagnostic and names the declarations considered. The selection is
-  memoized in a side table keyed by the invocation node and scope, and the evaluator dispatches
-  the declaration recorded there. A model's own `calc` of the name still shadows the library,
-  and an argument whose type is statically unknown keeps the previous selection with no new
-  diagnostic. `ComplexFunctions::sum` and `product`, which a Real collection now selects where
-  `ComplexFunctions` is imported and `RealFunctions` is not, fold Real elements as the library's
-  `reduce '+'` does — on the real axis — so `sum((1.0, 2.0))` stays the Real `3.0` rather than
-  becoming `3.0 + 0.0i`.
 - **An object carries the features the Systems and Domain libraries declare for it.** A
   `part box : ShapeItems::Box` used to expose only the `length`, `width` and `height` the model
   wrote: every library-declared member was left out of an object's shape so that the Kernel
@@ -52,6 +33,7 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   `subject vehicle : Part = box;` now binds the subject on the object — it was left unset, as the
   binding was only read while checking the requirement — and the inherited `subj` reads the same
   object.
+
 - **The Connect + JSON wire contract is written down for clients with no library.** A
   MATLAB, R, Julia, C or shell program that posts JSON to `sysml-grpc` by hand had only the
   proto file and two rules on the transports page to decode answers with, and the questions
@@ -321,11 +303,15 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 - **A conversion from RDF returns the notation as written.** Every element written to `.ttl`
   carries its lines as `sysx:sourceText` — comments, blank lines and keyword synonyms included —
-  and an element with members carries the lines closing its body as `sysx:sourceTail`; the writer
-  formats the file before slicing it, and the two properties are one-line literals with newlines
-  escaped. `sysml model.ttl -convert sysml` now writes that text back, so a formatted
-  `.sysml → .ttl → .sysml` round trip is byte for byte and an unformatted one comes back formatted,
-  where before it came back canonical with its `//` and `/* */` comments dropped. The graph stays
+  and an element with members carries the lines closing its body as `sysx:sourceTail`; the text
+  is the file's own bytes — tabs, irregular indentation, blank lines inside a head, CRLF line
+  endings and the notes after the last root included, never a formatted copy — and the two
+  properties are one-line literals with newlines escaped. `sysml model.ttl -convert sysml` now
+  writes that text back untouched, so a `.sysml → .ttl → .sysml` round trip is byte for byte for
+  any file, where before it came back canonical with its `//` and `/* */` comments dropped. A head
+  laid out over several lines or with a comment inside it is recorded in the mapping
+  (`sysx:endForm`, `sysx:declaredKeyword`) like one written on a line, since the graph states
+  tokens, not layout. The graph stays
   authoritative: the candidate notation is converted back to RDF and compared with the graph, and
   each element whose text no longer states its triples — a flag set, a value changed, a member
   removed or an identity annotation dropped after the export — is written canonically instead,
