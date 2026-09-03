@@ -30,6 +30,10 @@ type Condition struct {
 	// condition stating an expression.
 	Group []Condition
 
+	// Statement is an action statement the body states before its conditions,
+	// which the evaluator does not execute; nil for a condition or a group.
+	Statement ast.Node
+
 	// Negated is the negation the declaration wrote, applied to Expr or to the
 	// whole conjunction Group stands for.
 	Negated bool
@@ -144,8 +148,28 @@ func (ctx *Context) appendConditions(out []Condition, node ast.Node, scope *symb
 		for _, nested := range m.Body {
 			out = ctx.appendConditions(out, nested, body, false, false, seen)
 		}
+	case *ast.AssignmentActionNode, *ast.IfActionNode, *ast.WhileLoopActionNode, *ast.SendStatement,
+		*ast.TerminateStatement, *ast.PerformActionNode:
+		out = append(out, Condition{Statement: m, Scope: scope, Required: required})
 	}
 	return out
+}
+
+// statementKeyword names the keyword an action statement was written with.
+func statementKeyword(node ast.Node) string {
+	switch node.(type) {
+	case *ast.AssignmentActionNode:
+		return "assign"
+	case *ast.IfActionNode:
+		return "if"
+	case *ast.WhileLoopActionNode:
+		return "loop"
+	case *ast.SendStatement:
+		return "send"
+	case *ast.TerminateStatement:
+		return "terminate"
+	}
+	return "perform"
 }
 
 // appendReferencedConditions appends what a require/assume member that
@@ -591,6 +615,10 @@ func (ctx *Context) definitionOf(sym *symbols.Symbol) *symbols.Symbol {
 // conditionHolds evaluates one condition: an expression, or a group that holds
 // when all of its conditions hold. Its negation, if any, is applied last.
 func (ctx *Context) conditionHolds(activation int64, cond Condition, features map[string]scopedExpr, self *Instance, bindings map[string]Value) (bool, error) {
+	if cond.Statement != nil {
+		return false, fmt.Errorf("`%s` %w; bind the value as a feature value or compute it in a calc the condition reads",
+			statementKeyword(cond.Statement), ErrStatementNotExecuted)
+	}
 	holds := true
 	if cond.Group != nil {
 		for _, sub := range cond.Group {
@@ -669,6 +697,9 @@ func (ctx *Context) conditionFeatures(sym *symbols.Symbol) map[string]scopedExpr
 // conditionLabel renders a condition as written, so a violation names the
 // condition that failed, negation and grouping included.
 func conditionLabel(cond Condition) string {
+	if cond.Statement != nil {
+		return "`" + statementKeyword(cond.Statement) + "` statement"
+	}
 	text := conditionText(cond.Expr)
 	if cond.Group != nil {
 		parts := make([]string, 0, len(cond.Group))

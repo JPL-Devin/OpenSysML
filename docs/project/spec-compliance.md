@@ -10,7 +10,7 @@
 
 ### ✅ Fully Implemented & Tested
 
-The map below tracks 840 semantic rules: **749 ✅ faithful, 84 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
+The map below tracks 841 semantic rules: **749 ✅ faithful, 85 ⚠️ approximate, 1 ❌ not implemented, 6 ⛔ deliberate divergence.**
 Read that as progress, not as a compliance percentage — the denominator is the list of rules *we*
 chose to track, so it moves when we add a row, and a specification-derived denominator does not
 exist. What is externally checked is enumerated in [the pilot differential](pilot-differential.md);
@@ -268,6 +268,7 @@ and no golden AST fixture of their own. `calc_defaults_and_invocation.sysml`
 | The conditions of a nested constraint (`assert constraint [name] { <expr> }`) are the conditions of the member stating it | `parser/behavior.go` `tryParseNestedConstraint`, `condition.go` `appendConditions` | `parser/behavior_require_member_test.go:TestConstraintMemberNestedBody` | ✅ Faithful |
 | A constraint body that declares parameters (`constraint c { in x : Real; assert x >= 0; }`) states conditions like any other, including conditions that start with a keyword (`assert true`, `assert not false`, `assume null != x`, `assert if …`); a condition missing its expression is a diagnostic | `parser/behavior.go` `atConstraintCondition`, `parser/expr.go` `exprStartKeywords` | `parse/constraint_parameterised_conditions.golden`, `parser/constraint_condition_test.go`, `parser/negative_test.go:constraint_params_assert_no_condition` | ✅ Faithful |
 | A constraint carrying no condition yields no verdict (`ErrNoConditions`) rather than a vacuous pass | `errors.go` `ErrNoConditions`, `context.go` `EvaluateConstraintOn`/`EvaluateRequirementOn` | `runtime/constraint_test.go:TestConstraintWithoutConditionsIsNotAVerdict` | ✅ Faithful |
+| A constraint body's action statements (`assign`, `if`, `while`/`loop`/`for`, `send`, `terminate`, `perform` — SysML v2 7.20, whose constraint body is a `CalculationBody`) parse, but a constraint stating one yields no verdict (`ErrStatementNotExecuted`) and no solver query rather than one that ignored the statement | `condition.go` `appendConditions`/`conditionHolds`, `solve/translate.go` `translator.condition` | `runtime/constraint_test.go:TestConstraintBodyStatementIsNotAVerdict`, `solve/translate_test.go:TestBodyStatementRefuses` | ⚠️ Approximate (the statements are not executed before the conditions are evaluated) |
 
 ### Instantiation and Feature Values (SysML v2 §7.6 Feature Values, KerML §8.3)
 

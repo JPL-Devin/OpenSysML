@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
@@ -233,5 +234,63 @@ func TestConstraintWithoutConditionsIsNotAVerdict(t *testing.T) {
 	}
 	if satisfied {
 		t.Error("an unevaluated constraint reported as satisfied")
+	}
+}
+
+func TestConstraintBodyStatementIsNotAVerdict(t *testing.T) {
+	// The assignment would make the condition hold; ignoring it would report a
+	// false verdict, so the check must refuse instead.
+	src := `
+		package test {
+			constraint def Reassigned {
+				attribute y = 1;
+				assign y := 10;
+				y > 5
+			}
+			part def Rig {
+				attribute z = 1;
+				constraint branched { if true { assign z := 10; } z > 5 }
+			}
+		}
+	`
+	file := parser.New(source.New("test.sysml", []byte(src))).ParseFile()
+	idx := symbols.NewIndex()
+	idx.AddDocument("test.sysml", file)
+	resolver := resolve.New(idx)
+	ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
+
+	testPkg := idx.DocumentRoot("test.sysml").Children()[0]
+	reassigned, ok := testPkg.LookupLocal("Reassigned")
+	if !ok {
+		t.Fatal("Reassigned not found")
+	}
+	satisfied, err := ctx.EvaluateConstraint(reassigned, testPkg)
+	if !errors.Is(err, ErrStatementNotExecuted) {
+		t.Fatalf("err = %v, want ErrStatementNotExecuted", err)
+	}
+	if want := "`assign` statement"; err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err = %v, want it to name the %s", err, want)
+	}
+	if satisfied {
+		t.Error("a constraint whose body statement was skipped reported as satisfied")
+	}
+
+	rig, ok := testPkg.LookupLocal("Rig")
+	if !ok {
+		t.Fatal("Rig not found")
+	}
+	feat := featureNamed(ctx, rig, "branched")
+	if feat == nil || feat.Symbol == nil {
+		t.Fatal("constraint feature not found")
+	}
+	satisfied, err = ctx.EvaluateConstraintOn(feat.Symbol, feat.DeclScope(), nil)
+	if !errors.Is(err, ErrStatementNotExecuted) {
+		t.Fatalf("err = %v, want ErrStatementNotExecuted", err)
+	}
+	if want := "`if` statement"; err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err = %v, want it to name the %s", err, want)
+	}
+	if satisfied {
+		t.Error("a constraint whose body statement was skipped reported as satisfied")
 	}
 }

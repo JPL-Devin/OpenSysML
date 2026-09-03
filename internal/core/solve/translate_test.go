@@ -551,3 +551,22 @@ func TestVariationSortIsShared(t *testing.T) {
 		t.Errorf("sort %s has values %v, want the two variants", q.Sorts[0].Name, q.Sorts[0].Values)
 	}
 }
+
+// TestBodyStatementRefuses: a statement in a constraint body is not executed, so
+// the translation refuses rather than solving the conditions as if it ran.
+func TestBodyStatementRefuses(t *testing.T) {
+	refused := refusal(t, constraintSource(`
+		attribute y : Integer = 1;
+		assign y := 10;
+		y > 5
+	`), "test::C")
+	if refused.Construct != "body statement" {
+		t.Errorf("refused construct is %q, want the body statement", refused.Construct)
+	}
+	if !strings.Contains(refused.Reason, "does not execute") {
+		t.Errorf("refusal reason is %q, want it to say the statement is not executed", refused.Reason)
+	}
+	if refused.Condition != "`assign` statement" {
+		t.Errorf("refused condition is %q, want the assign statement", refused.Condition)
+	}
+}

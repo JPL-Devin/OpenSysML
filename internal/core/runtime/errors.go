@@ -177,6 +177,10 @@ var (
 	// condition to evaluate: reporting a verdict would claim a check that never ran.
 	ErrNoConditions = errors.New("no condition to evaluate")
 
+	// ErrStatementNotExecuted is returned when a constraint body states an action
+	// statement: the evaluator does not run it, so a verdict would ignore it.
+	ErrStatementNotExecuted = errors.New("statement in a constraint body is not executed by OpenSysML")
+
 	// ErrUnboundSubject is returned when a condition reads a subject nothing
 	// supplied: the check is about no object, so it reaches no verdict.
 	ErrUnboundSubject = errors.New("subject is unbound")

@@ -22,6 +22,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   the rule requires; the runtime keeps its own structural checks and their timing. The pinned
   pilot implements only the owning-type rule, so the other eight are refereed against the
   specification and recorded as pilot gaps.
+  A constraint body now parses the action statements the specification's calculation body
+  allows (`assign`, `if`, loops, `send`), so a control node inside one reaches the rule; checking
+  or solving a constraint that states such a statement refuses — `statement in a constraint body
+  is not executed by OpenSysML` — rather than reporting a verdict that ignored it.
 
 - **The Connect + JSON wire contract is written down for clients with no library.** A
   MATLAB, R, Julia, C or shell program that posts JSON to `sysml-grpc` by hand had only the
