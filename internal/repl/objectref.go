@@ -15,9 +15,15 @@ import (
 // NoObjectError reports an object id the session holds no object under.
 type NoObjectError struct {
 	ID int64
+	// Superseded records that the runtime still has the object, but no name of
+	// the session reaches it any more: a later %instantiate took its name.
+	Superseded bool
 }
 
 func (e *NoObjectError) Error() string {
+	if e.Superseded {
+		return fmt.Sprintf("no object #%d in this session: it was superseded, and nothing the session names reaches it", e.ID)
+	}
 	return fmt.Sprintf("no object #%d in this session: nothing materialized has that identity", e.ID)
 }
 
@@ -228,11 +234,26 @@ func (s *Session) objectByID(id int64) (*runtime.Instance, string, error) {
 	if err != nil {
 		return nil, "", fmt.Errorf("%w: %w", errRuntimeInit, err)
 	}
-	inst, ok := ctx.Instance(id)
-	if !ok || inst == nil {
-		return nil, "", &NoObjectError{ID: id}
+	inst := s.heldByID(ctx, id)
+	if inst == nil {
+		_, retained := ctx.Instance(id)
+		return nil, "", &NoObjectError{ID: id, Superseded: retained}
 	}
 	return inst, s.nameOf(inst), nil
+}
+
+// heldByID finds an object among those the session holds: the named roots and
+// what their materialized features hold. An object the runtime retains after a
+// second %instantiate took its name is not among them.
+func (s *Session) heldByID(ctx *runtime.Context, id int64) *runtime.Instance {
+	var found *runtime.Instance
+	s.walkObjects(materializedObjectsIn(ctx), func(cur carrier) bool {
+		if cur.inst.ID == id {
+			found = cur.inst
+		}
+		return found == nil
+	})
+	return found
 }
 
 // nameOf is the qualified name the session reaches an object by: the name it is
