@@ -184,8 +184,9 @@ never by parsing the id — a declared id may legitimately end in `_om` or embed
 - Ownership, described under [Ownership](#ownership): `sysml:owner`, plus
   `sysml:owningMembership` and `sysml:owningRelationship`, or
   `sysml:owningRelatedElement` for an element a relationship owns
-- `sysml:owningNamespace` — the containing element (absent on a root), kept
-  alongside `sysml:owner` as the compact spelling earlier releases wrote
+- `sysml:owningNamespace` — the containing namespace (absent on a root and on
+  an element a relationship owns, whose owner is no namespace), kept alongside
+  `sysml:owner` as the compact spelling earlier releases wrote
 - `sysml:visibility`, `sysml:direction`
 - Feature flags, written only when true, so an absent flag reads as false:
   `isAbstract`, `isVariation`, `isVariant`, `isReference`, `isComposite`, `isDerived`,

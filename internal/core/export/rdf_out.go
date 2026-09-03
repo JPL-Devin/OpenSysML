@@ -430,7 +430,11 @@ func (e *encoder) head(subject rdf.Term, node ast.Node, visibility ast.Visibilit
 	e.provenance(subject, node)
 	membership := rdf.Term{}
 	if ownerTerm.Value != "" {
-		e.graph.Add(subject, e.sysml(pOwningNamespace), ownerTerm)
+		// Only a namespace is an owningNamespace; a relationship owner is
+		// stated by sysml:owner and the ownership owningMembership wires.
+		if !isRelationship(e.metaclassOf(ownerTerm)) {
+			e.graph.Add(subject, e.sysml(pOwningNamespace), ownerTerm)
+		}
 		membership = e.owningMembership(subject, ownerTerm, fqn)
 	}
 	if keyword := visibilityKeyword(visibility); keyword != "" {

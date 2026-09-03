@@ -65,6 +65,43 @@ func TestGoldenGraphsMatchOntology(t *testing.T) {
 		len(graphs), ontology.Version, ontology.SourceCommit, total, len(occurrences))
 }
 
+// TestOwningNamespaceNamesANamespace checks the one range the ontology table
+// does not: a member owned by a relationship — an entry action, a `#M` prefix
+// on a dependency or a subject — states its owner but no owningNamespace.
+func TestOwningNamespaceNamesANamespace(t *testing.T) {
+	relationshipOwned := 0
+	for _, path := range goldenGraphs(t) {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		graph, err := rdf.ParseTurtle(data)
+		if err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		for _, triple := range graph.Triples() {
+			property := triple.Predicate.Value
+			if property != rdf.SysML+"owner" && property != rdf.SysML+"owningNamespace" {
+				continue
+			}
+			owner := ontology.LocalName(graph.Type(triple.Object))
+			relationship := ontology.IsAncestorOrSelf(owner, "Relationship") && !ontology.IsAncestorOrSelf(owner, "Namespace")
+			if !relationship {
+				continue
+			}
+			if property == rdf.SysML+"owningNamespace" {
+				t.Errorf("%s: <%s> states owningNamespace <%s>, a sysml:%s, which is no namespace",
+					filepath.Base(path), triple.Subject.Value, triple.Object.Value, owner)
+			} else if graph.HasProperty(triple.Subject, rdf.SysML+"qualifiedName") {
+				relationshipOwned++
+			}
+		}
+	}
+	if relationshipOwned == 0 {
+		t.Fatal("no golden graph has an element owned by a relationship, so the check is vacuous")
+	}
+}
+
 // goldenGraphs returns the golden Turtle fixtures, failing when none are found so
 // that a moved fixture directory cannot make the gate vacuous.
 func goldenGraphs(t *testing.T) []string {

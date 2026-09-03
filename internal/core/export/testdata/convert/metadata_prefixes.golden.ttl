@@ -460,7 +460,6 @@ elmt:Prefixed___409___400
     sysml:qualifiedName "Prefixed::@9::@0" ;
     sysml:elementId "Prefixed___409___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
-    sysml:owningNamespace elmt:Prefixed___409 ;
     sysml:owner elmt:Prefixed___409 ;
     sysml:owningRelationship elmt:Prefixed___409___400_om ;
     sysml:owningMembership elmt:Prefixed___409___400_om ;
@@ -546,7 +545,6 @@ elmt:Prefixed__Braking__brakes___400
     sysml:qualifiedName "Prefixed::Braking::brakes::@0" ;
     sysml:elementId "Prefixed__Braking__brakes___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
-    sysml:owningNamespace elmt:Prefixed__Braking__brakes ;
     sysml:owner elmt:Prefixed__Braking__brakes ;
     sysml:owningRelationship elmt:Prefixed__Braking__brakes___400_om ;
     sysml:owningMembership elmt:Prefixed__Braking__brakes___400_om ;
