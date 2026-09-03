@@ -106,9 +106,8 @@ func (ec *EvalContext) invokeBuiltin(name string, fn builtinFunc, exprs []ast.No
 	)
 }
 
-// tracedBuiltin binds and applies a built-in within the calc events an
-// invocation records, so it reads in a trace like any other function; a
-// binding failure closes the level it opened.
+// tracedBuiltin binds and applies a built-in within the calc enter/bind/exit
+// events of any other function; a binding failure closes the level it opened.
 func tracedBuiltin(tr *TraceRecorder, name string, bind func() ([]Value, error), apply func([]Value) (Value, error)) (Value, error) {
 	if tr == nil {
 		args, err := bind()
