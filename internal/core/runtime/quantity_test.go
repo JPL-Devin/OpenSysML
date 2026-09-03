@@ -18,6 +18,7 @@ func quantityContext(t *testing.T) (*Context, *symbols.Scope) {
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
 		package test {
 			public import SI::*;
+			private import NumericalFunctions::*;
 			attribute speeds = (1.0, 2.0, 3.0);
 		}
 	`))
