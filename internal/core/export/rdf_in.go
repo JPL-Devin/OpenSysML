@@ -553,27 +553,19 @@ func (d *decoder) head(el *element) (string, error) {
 		if _, err := d.metadataDefinition(el); err != nil {
 			return "", err
 		}
-		// A `#` prefix is written into its owner's head, so one reaching here
-		// has no declaration to prefix; any other keyword is not a metadata form.
-		keywords := d.graph.Objects(rdf.IRI(el.iri), rdf.OpenSysML+xDeclaredKeyword)
-		switch {
-		case len(keywords) == 0:
-		case len(keywords) > 1:
-			return "", &UnsupportedError{
-				What: fmt.Sprintf("the element <%s>", el.iri),
-				Note: fmt.Sprintf("it states sysx:%s %d times, and a metadata usage is written with one keyword", xDeclaredKeyword, len(keywords)),
-			}
-		case keywords[0].Value == "@":
+		keyword, err := d.metadataKeyword(el)
+		if err != nil {
+			return "", err
+		}
+		switch keyword {
+		case "@":
 			return d.metadataHead(el)
-		case keywords[0].Value == "#":
+		case "#":
+			// A `#` prefix is written into its owner's head, so one reaching
+			// here has no declaration to prefix.
 			return "", &UnsupportedError{
 				What: fmt.Sprintf("the prefix annotation <%s>", el.iri),
 				Note: "a prefix is written ahead of the declaration that owns it, and this one is owned by no declaration",
-			}
-		default:
-			return "", &UnsupportedError{
-				What: fmt.Sprintf("the element <%s>", el.iri),
-				Note: fmt.Sprintf("its sysx:%s %q is not a metadata form; a metadata usage is written as `metadata`, `@` or `#`", xDeclaredKeyword, keywords[0].Value),
 			}
 		}
 	}
@@ -1270,22 +1262,43 @@ func qualifiedNameText(qname string) string {
 	return out
 }
 
-// metadataSigil reports the sigil a metadata usage was written with: `#` for a
-// prefix ahead of a declaration, `@` for a member of its own. Any other
-// statement of the keyword, repeated ones included, is left for head to refuse.
+// metadataKeyword reads the keyword a metadata usage was written with: `#` for
+// a prefix ahead of a declaration, `@` for a member of its own, and none for
+// `metadata`. Any other statement of the keyword, a repeated one included, is
+// refused rather than read as one of those.
+func (d *decoder) metadataKeyword(el *element) (string, error) {
+	keywords := d.graph.Objects(rdf.IRI(el.iri), rdf.OpenSysML+xDeclaredKeyword)
+	switch {
+	case len(keywords) == 0:
+		return "", nil
+	case len(keywords) > 1:
+		return "", &UnsupportedError{
+			What: fmt.Sprintf("the element <%s>", el.iri),
+			Note: fmt.Sprintf("it states sysx:%s %d times, and a metadata usage is written with one keyword", xDeclaredKeyword, len(keywords)),
+		}
+	}
+	switch keyword := keywords[0].Value; keyword {
+	case "#", "@":
+		return keyword, nil
+	default:
+		return "", &UnsupportedError{
+			What: fmt.Sprintf("the element <%s>", el.iri),
+			Note: fmt.Sprintf("its sysx:%s %q is not a metadata form; a metadata usage is written as `metadata`, `@` or `#`", xDeclaredKeyword, keyword),
+		}
+	}
+}
+
+// metadataSigil reports the sigil a metadata usage was written with, or none
+// for a `metadata` member and for a keyword its head will refuse.
 func (d *decoder) metadataSigil(el *element) string {
 	if el.metaclass != usageMetaclass[ast.UsageMetadata] {
 		return ""
 	}
-	keywords := d.graph.Objects(rdf.IRI(el.iri), rdf.OpenSysML+xDeclaredKeyword)
-	if len(keywords) != 1 {
+	keyword, err := d.metadataKeyword(el)
+	if err != nil {
 		return ""
 	}
-	switch keyword := keywords[0].Value; keyword {
-	case "#", "@":
-		return keyword
-	}
-	return ""
+	return keyword
 }
 
 // prefixAnnotation is a `#M` annotation a declaration owns: the name to write
@@ -1313,7 +1326,16 @@ func (d *decoder) prefixAnnotations(el *element) ([]prefixAnnotation, error) {
 	d.prefixed[el] = true
 	var annotations []prefixAnnotation
 	for _, child := range el.children {
-		if d.metadataSigil(child) != "#" {
+		if child.metaclass != usageMetaclass[ast.UsageMetadata] {
+			continue
+		}
+		// A head kept as source text prints no members, so a keyword the
+		// member form would refuse is refused here rather than dropped.
+		keyword, err := d.metadataKeyword(child)
+		if err != nil {
+			return nil, err
+		}
+		if keyword != "#" {
 			continue
 		}
 		definition, err := d.metadataDefinition(child)

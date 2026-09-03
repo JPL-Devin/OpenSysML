@@ -921,6 +921,27 @@ func TestPrefixOnAVerbatimHeadIsWrittenOrReported(t *testing.T) {
 			}
 		}
 	}
+	// The verbatim head prints no members, so an annotation whose keyword is
+	// not a metadata form is refused there rather than dropped with the body.
+	for _, tc := range []struct{ keywords, note string }{
+		{`"#", "@"`, "sysx:declaredKeyword 2 times"},
+		{`"part"`, `sysx:declaredKeyword "part" is not a metadata form`},
+	} {
+		edited := strings.Replace(string(turtle), `sysx:declaredKeyword "#"`, `sysx:declaredKeyword `+tc.keywords, 1)
+		if edited == string(turtle) {
+			t.Fatalf("the prefix's keyword was not found in the graph:\n%s", turtle)
+		}
+		_, err = export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML)
+		var unsupported *export.UnsupportedError
+		if !errors.As(err, &unsupported) {
+			t.Fatalf("%s: expected an unsupported error, got %v", tc.keywords, err)
+		}
+		for _, want := range []string{"the element <urn:sysmlv2:element:P__a__", tc.note} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("%s: expected %q in error:\n%s", tc.keywords, want, err.Error())
+			}
+		}
+	}
 }
 
 // A feature that wrote no kind keyword takes its kind from its owner, so the
