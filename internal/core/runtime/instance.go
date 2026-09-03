@@ -476,6 +476,12 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 		return fv, nil
 	}
 
+	// An abstract feature has no values of its own (KerML 1.0 §7.3.3.1) and an
+	// optional one demands none: each, a connector included, holds only contributions.
+	if fv.Feature.holdsOnlyContributions() && (ctx.model.IsConnectorUsage(fv.Feature.Symbol) || ctx.CompositeTypeOf(fv.Feature) != nil) {
+		return inst.holdContributions(ctx, fv, name)
+	}
+
 	// A connector holds the features it connects at its ends rather than objects
 	// of its own, so it is materialized from what the `connect` clause names.
 	if ctx.model.IsConnectorUsage(fv.Feature.Symbol) {
@@ -491,13 +497,6 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 		mult := fv.Feature.Multiplicity
 		if !mult.Upper.Known || !mult.Lower.Known {
 			return nil, fmt.Errorf("cannot materialize feature %q with unknown multiplicity", name)
-		}
-
-		// An abstract feature has no values of its own (KerML 1.0 §7.3.3.1), and
-		// an optional one demands none: each holds only what the features
-		// subsetting it hold, as a collection fills only to its lower bound.
-		if symbols.IsAbstract(fv.Feature.Symbol) || (mult.Lower.Value == 0 && fv.Feature.Scalar()) {
-			return inst.holdContributions(ctx, fv, name)
 		}
 
 		if !mult.Upper.Infinite && mult.Upper.Value == 1 {
@@ -566,8 +565,19 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 	return fv, nil
 }
 
-// holdContributions fills an abstract feature with the values the features
-// subsetting it contribute, checked against the multiplicity governing it.
+// holdsOnlyContributions reports whether a feature of known multiplicity
+// materializes no object of its own: it is abstract, or a scalar whose lower
+// bound demands none.
+func (f *EffectiveFeature) holdsOnlyContributions() bool {
+	mult := f.Multiplicity
+	if !mult.Lower.Known || !mult.Upper.Known {
+		return false
+	}
+	return symbols.IsAbstract(f.Symbol) || (!mult.Lower.Infinite && mult.Lower.Value == 0 && f.Scalar())
+}
+
+// holdContributions fills an abstract or optional feature with the values the
+// features subsetting it contribute, checked against the multiplicity governing it.
 func (inst *Instance) holdContributions(ctx *Context, fv *FeatureValue, name string) (*FeatureValue, error) {
 	contributed, err := ctx.subsettingContributions(inst, name)
 	if err != nil {

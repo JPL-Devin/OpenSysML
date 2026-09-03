@@ -516,7 +516,8 @@ func (e *snapshotEncoder) writeTables(idx *Index, docs []string) {
 	e.w.Len(len(keys))
 	for _, k := range keys {
 		e.w.String(k)
-		e.w.Uint(uint64(idx.libraryDocs.own[k]))
+		e.w.Uint(uint64(idx.libraryDocs.own[k].Tier))
+		e.w.String(idx.libraryDocs.own[k].Digest)
 	}
 
 	// nsFilters
@@ -921,7 +922,9 @@ func (d *sectionReader) readTables() *Index {
 		}
 		return out
 	})
-	idx.libraryDocs = stringTable(d, gen, d.libraryTier)
+	idx.libraryDocs = stringTable(d, gen, func() LibraryDocument {
+		return LibraryDocument{Tier: d.libraryTier(), Digest: d.r.String()}
+	})
 	idx.nsFilters = stringTable(d, gen, func() map[string][]ElementFilter {
 		n := d.r.Len()
 		byDoc := make(map[string][]ElementFilter, n)
@@ -938,6 +941,7 @@ func (d *sectionReader) readTables() *Index {
 		doc := d.r.String()
 		idx.aboutUsages[doc] = d.symbols()
 	}
+	idx.takeLibraryIdentity()
 	idx.frozen = true
 	return idx
 }

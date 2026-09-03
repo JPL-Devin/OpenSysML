@@ -114,7 +114,7 @@ func (ctx *Context) buildFeatures(typeSym *symbols.Symbol) []EffectiveFeature {
 		typ := ctx.extractType(memberSym)
 		mult, multStated := ctx.extractMultiplicity(memberSym)
 		if !multStated {
-			if inherited, ok := ctx.redefinedMultiplicity(memberSym, typeSym); ok {
+			if inherited, ok := ctx.inheritedMultiplicity(memberSym, typeSym, map[*symbols.Symbol]bool{memberSym: true}); ok {
 				mult = inherited
 			}
 		}
@@ -227,29 +227,37 @@ func (ctx *Context) extractDefaultValue(featureSym *symbols.Symbol) ast.Node {
 	return nil
 }
 
-// redefinedMultiplicity returns the multiplicity a feature takes from the
-// feature it redefines when it declares none: a redefining feature is the
-// redefined feature declared again (KerML 1.0 §7.3.4.5), so `:>> xs = (1, 2)`
-// is bound by the `xs` it restates. Subsetting is not inherited this way — a
-// subsetting feature is one of the subsetted feature's values, not the same
-// feature.
-func (ctx *Context) redefinedMultiplicity(sym, owner *symbols.Symbol) (semantics.Range, bool) {
-	seen := map[*symbols.Symbol]bool{sym: true}
-	for queue := []*symbols.Symbol{sym}; len(queue) > 0; {
-		cur := queue[0]
-		queue = queue[1:]
-		for _, redefined := range ctx.relatedFeatures(cur, owner, ast.RelRedefines) {
-			if seen[redefined] {
+// inheritedMultiplicity is the intersection of the multiplicities a feature declaring
+// none redefines — and, if abstract, subsets (KerML 1.0 §8.4.4.12.1); ok is false when none.
+func (ctx *Context) inheritedMultiplicity(sym, owner *symbols.Symbol, seen map[*symbols.Symbol]bool) (semantics.Range, bool) {
+	var mult semantics.Range
+	found := false
+	kinds := []ast.RelationshipKind{ast.RelRedefines}
+	if symbols.IsAbstract(sym) {
+		kinds = append(kinds, ast.RelSubsets)
+	}
+	for _, kind := range kinds {
+		for _, general := range ctx.relatedFeatures(sym, owner, kind) {
+			if seen[general] {
 				continue
 			}
-			seen[redefined] = true
-			if mult, ok := ctx.model.MultiplicityOf(redefined); ok {
-				return mult, true
+			seen[general] = true
+			generalMult, stated := ctx.model.MultiplicityOf(general)
+			if !stated {
+				if inherited, ok := ctx.inheritedMultiplicity(general, owner, seen); ok {
+					generalMult = inherited
+				} else {
+					generalMult = semantics.AssumedRange()
+				}
 			}
-			queue = append(queue, redefined)
+			if found {
+				mult = mult.Intersect(generalMult)
+			} else {
+				mult, found = generalMult, true
+			}
 		}
 	}
-	return semantics.Range{}, false
+	return mult, found
 }
 
 // redefinedDefault returns the value a feature takes from the feature it

@@ -104,6 +104,36 @@ func (m *Model) EffectiveMultiplicityOf(sym *symbols.Symbol) Range {
 	return AssumedRange()
 }
 
+// Intersect returns the range both ranges allow: the greater lower bound and the
+// lesser upper bound, an unknown bound deferring to a known one.
+func (r Range) Intersect(o Range) Range {
+	return Range{Lower: greaterBound(r.Lower, o.Lower), Upper: lesserBound(r.Upper, o.Upper)}
+}
+
+func greaterBound(a, b Bound) Bound {
+	switch {
+	case !a.Known:
+		return b
+	case !b.Known, a.Infinite:
+		return a
+	case b.Infinite, b.Value > a.Value:
+		return b
+	}
+	return a
+}
+
+func lesserBound(a, b Bound) Bound {
+	switch {
+	case !a.Known:
+		return b
+	case !b.Known, b.Infinite:
+		return a
+	case a.Infinite, b.Value < a.Value:
+		return b
+	}
+	return a
+}
+
 // CountViolation returns why count values do not conform to the range, phrased
 // for a diagnostic, or "" when they conform or a bound is not evaluable. It is
 // the one wording for a count against a multiplicity, shared by the static

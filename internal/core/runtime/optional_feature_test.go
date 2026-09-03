@@ -96,6 +96,49 @@ func TestRequiredAbstractFeatureDemandsContributions(t *testing.T) {
 	}
 }
 
+// An abstract feature declaring no multiplicity is bound by what it subsets, as
+// `abstract action decisions :> controls` is by `controls[0..*]`; a concrete one stays 1..1.
+func TestAbstractFeatureInheritsMultiplicityFromWhatItSubsets(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		part def Wheel;
+		part def Car {
+			part wheels : Wheel[0..*];
+			abstract part spares :> wheels;
+			part one : Wheel :> wheels;
+		}
+		part def Bare {
+			abstract part fitted : Wheel[1..*];
+			abstract part needed :> fitted;
+		}
+	}`))
+	car, err := ctx.Instantiate(oneSymbol(t, idx, "test::Car"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	spares, err := car.GetFeatureValue(ctx, "spares")
+	if err != nil {
+		t.Fatalf("car.spares: %v", err)
+	}
+	if held := spares.HeldValue(); spares.Feature.Scalar() || elementCount(&held) != 0 {
+		t.Errorf("car.spares = %s (scalar %t), want an empty collection", FormatValue(held), spares.Feature.Scalar())
+	}
+	one := objectAt(t, ctx, car, "one")
+	wheels, err := car.GetFeatureValue(ctx, "wheels")
+	if err != nil {
+		t.Fatalf("car.wheels: %v", err)
+	}
+	if held := wheels.HeldValue(); elementCount(&held) != 1 || held.Sequence().Elements()[0].Instance != one.ID {
+		t.Errorf("car.wheels = %s, want the one wheel (%d)", FormatValue(held), one.ID)
+	}
+	bare, err := ctx.Instantiate(oneSymbol(t, idx, "test::Bare"))
+	if err != nil {
+		t.Fatalf("instantiate Bare: %v", err)
+	}
+	if _, err := bare.GetFeatureValue(ctx, "needed"); !errors.Is(err, ErrMultiplicityViolation) {
+		t.Errorf("bare.needed: err = %v, want %v through fitted's [1..*]", err, ErrMultiplicityViolation)
+	}
+}
+
 // A valueless optional declaration evaluates to the empty sequence whether it is
 // named bare or qualified; a required one keeps its no-value error both ways.
 func TestValuelessOptionalDeclarationEvaluatesEmptyHoweverSpelled(t *testing.T) {

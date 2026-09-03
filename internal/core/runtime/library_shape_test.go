@@ -277,7 +277,7 @@ func TestShapeDigestNamesLibraryTypes(t *testing.T) {
 	if len(digest) > 2000 {
 		t.Errorf("digest of Crate is %d bytes, want the library types named, not expanded", len(digest))
 	}
-	if !strings.Contains(digest, "box:1..1@ShapeItems::RectangularCuboid/itemDef;") {
+	if !strings.Contains(digest, "box:1..1@ShapeItems::RectangularCuboid/itemDef#") {
 		t.Errorf("digest does not name the box's library type: %s", digest)
 	}
 	if strings.Contains(digest, "…") {

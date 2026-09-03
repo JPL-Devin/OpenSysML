@@ -24,8 +24,11 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   lists them, `%eval box.isSolid` answers `true`, `box.voids` is `[]`, and the gRPC
   `Instantiate` response carries them as feature values. A `%features` listing always shows
   every feature of the object asked about; nested expansions share the lines that remain. The
-  Kernel frame stays out, a model that inherits nothing from these libraries keeps its shape
-  digest, and a value the runtime cannot evaluate — the Geometry library's edge bindings among
+  Kernel frame stays out; a model that inherits nothing from these libraries keeps its shape
+  digest, which names a library type by the library's identity — a digest of every bundled
+  document — rather than expanding it, so an object is carried across a re-analysis over the
+  same library and refused by one over a library whose declarations differ; and a value the
+  runtime cannot evaluate — the Geometry library's edge bindings among
   them — is the typed error it already was, not a silent null. A requirement's
   `subject vehicle : Part = box;` now binds the subject on the object — it was left unset, as the
   binding was only read while checking the requirement — and the inherited `subj` reads the same
@@ -184,8 +187,12 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   to materialize an object, where `part wheels : Wheel[0..*]` materialized none; both now hold
   only the objects the features subsetting them hold, so an optional part reads as the empty
   sequence and an abstract one holds only what subsets it — a required abstract feature nothing
-  subsets is a multiplicity violation, not an empty value. A required feature holding nothing
-  is still uninitialized when read. What made this visible is the library: `Item::shape` and
+  subsets is a multiplicity violation, not an empty value — and an abstract feature that states
+  no multiplicity is bound by what it subsets, so a part's inherited `Action::decisions`,
+  `forks` and `joins` (`:> controls[0..*]`) hold nothing rather than demanding one control each.
+  A required feature holding nothing is still uninitialized when read. The same governs a connector: `connection c : Link[0..1]
+  connect a to b` links nothing of its own until a connector subsetting it does, while a
+  required connector still links its ends. What made this visible is the library: `Item::shape` and
   `Item::voids` are optional, and an anonymous object for each would have said the box had a
   void it does not have.
 

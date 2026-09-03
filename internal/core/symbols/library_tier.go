@@ -1,5 +1,12 @@
 package symbols
 
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"sort"
+)
+
 // LibraryTier is the part of the bundled library a document belongs to. The
 // Kernel tiers are the metamodel frame every element specializes; the Systems,
 // Domain and OpenSysML tiers declare features with semantics of their own.
@@ -59,4 +66,36 @@ func (t LibraryTier) Frame() bool {
 	default:
 		return t.Library()
 	}
+}
+
+// LibraryDocument describes the bundled library content a document holds: the
+// tier of its bundle and a digest of its text, empty when the loader stated none.
+type LibraryDocument struct {
+	Tier   LibraryTier
+	Digest string
+}
+
+// TextDigest is the digest of a library document's text that LibraryDocument
+// carries.
+func TextDigest(text []byte) string {
+	sum := sha256.Sum256(text)
+	return hex.EncodeToString(sum[:])
+}
+
+// libraryIdentityOf digests the library documents by name, tier and text, and
+// reports false when one states no text digest, since it may then hold anything.
+func libraryIdentityOf(docs map[string]LibraryDocument) (string, bool) {
+	names := make([]string, 0, len(docs))
+	for name, doc := range docs {
+		if doc.Digest == "" {
+			return "", false
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	h := sha256.New()
+	for _, name := range names {
+		fmt.Fprintf(h, "%s\x00%d\x00%s\x00", name, docs[name].Tier, docs[name].Digest)
+	}
+	return hex.EncodeToString(h.Sum(nil)), true
 }

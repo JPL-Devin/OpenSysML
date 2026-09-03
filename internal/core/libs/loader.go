@@ -115,7 +115,7 @@ func (l *Loader) add(f libraryFile, idx *symbols.Index) {
 		}
 	}
 	idx.AddDocument(f.name, f.root)
-	idx.MarkLibraryTier(f.name, TierOf(f.name))
+	idx.MarkLibraryDocument(f.name, symbols.LibraryDocument{Tier: TierOf(f.name), Digest: hex.EncodeToString(f.sum[:])})
 	l.loaded = append(l.loaded, doc)
 }
 

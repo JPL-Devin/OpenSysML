@@ -61,3 +61,62 @@ func TestLoadedLibraryCarriesTiers(t *testing.T) {
 		}
 	}
 }
+
+// Every bundled document is recorded with the digest of its text, so the library
+// as a whole has one identity, the same whether loaded from source or decoded
+// from the snapshot, and another once any document's text differs.
+func TestLoadedLibraryHasAnIdentity(t *testing.T) {
+	src := EmbeddedSource()
+	fresh := symbols.NewIndex()
+	if err := NewLoader(src, nil).LoadAll(fresh); err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+	decoded, err := SnapshotIndex()
+	if err != nil {
+		t.Fatalf("SnapshotIndex: %v", err)
+	}
+	for _, name := range src.List() {
+		text, err := src.Read(name)
+		if err != nil {
+			t.Fatalf("Read(%s): %v", name, err)
+		}
+		want := symbols.LibraryDocument{Tier: TierOf(name), Digest: symbols.TextDigest(text)}
+		for label, idx := range map[string]*symbols.Index{"fresh": fresh, "decoded": decoded} {
+			if got := idx.LibraryDocumentOf(name); got != want {
+				t.Errorf("%s: LibraryDocumentOf(%s) = %+v, want %+v", label, name, got, want)
+			}
+		}
+	}
+	identity, known := fresh.LibraryIdentity()
+	if !known || identity == "" {
+		t.Fatalf("fresh index: LibraryIdentity() = %q, %t; want a known identity", identity, known)
+	}
+	if got, known := decoded.LibraryIdentity(); !known || got != identity {
+		t.Errorf("decoded index: LibraryIdentity() = %q, %t; want %q, true", got, known, identity)
+	}
+	if got, known := symbols.NewOverlay(decoded).LibraryIdentity(); !known || got != identity {
+		t.Errorf("overlay: LibraryIdentity() = %q, %t; want %q, true", got, known, identity)
+	}
+
+	edited := symbols.NewIndex()
+	if err := NewLoader(editedSource{src, "Systems Library/Items.sysml"}, nil).LoadAll(edited); err != nil {
+		t.Fatalf("LoadAll(edited): %v", err)
+	}
+	if got, known := edited.LibraryIdentity(); !known || got == identity {
+		t.Errorf("edited library: LibraryIdentity() = %q, %t; want another known identity", got, known)
+	}
+}
+
+// editedSource serves src with a comment appended to one file.
+type editedSource struct {
+	Source
+	edit string
+}
+
+func (s editedSource) Read(name string) ([]byte, error) {
+	text, err := s.Source.Read(name)
+	if err == nil && name == s.edit {
+		text = append(append([]byte{}, text...), "\n// edited\n"...)
+	}
+	return text, nil
+}

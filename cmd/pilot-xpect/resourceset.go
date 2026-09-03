@@ -51,7 +51,7 @@ func loadResourceSet(suiteDir string, f xtFile, libs *libraryCache) resourceSet 
 		if isLibrary(r.From) {
 			if root := libs.parse(suiteDir, rel, content); root != nil {
 				idx.AddDocumentWithKind(rel, root, source.KindOf(rel))
-				idx.MarkLibraryTier(rel, pilotLibraryTier(r.From))
+				idx.MarkLibraryDocument(rel, symbols.LibraryDocument{Tier: pilotLibraryTier(r.From), Digest: symbols.TextDigest(content)})
 				set.libraryRoots = append(set.libraryRoots, rootPackagesIn(content)...)
 			}
 			continue
