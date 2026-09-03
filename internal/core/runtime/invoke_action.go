@@ -39,12 +39,7 @@ type actionInvocation struct {
 // of `accept msg : T via p` is a via edge, not a reference subsetting.
 func nestedInvocation(usage *ast.Usage) (actionInvocation, bool) {
 	if invocation, ok := usage.Value.(*ast.InvocationExpr); ok && invocation.Type != nil {
-		return actionInvocation{
-			target: invocation.Type,
-			args:   invocation.Args,
-			named:  invocation.NamedArgs,
-			expr:   invocation,
-		}, true
+		return expressionInvocation(invocation), true
 	}
 	for _, rel := range usage.Relationships {
 		if rel.Kind != ast.RelTyping && rel.Kind != ast.RelReferences {
@@ -59,6 +54,16 @@ func nestedInvocation(usage *ast.Usage) (actionInvocation, bool) {
 		}
 	}
 	return actionInvocation{}, false
+}
+
+// expressionInvocation reads an invocation expression as the action call it
+// writes. A receiver is the first argument, as `seq->size()` is for a calc.
+func expressionInvocation(e *ast.InvocationExpr) actionInvocation {
+	args := e.Args
+	if e.Operand != nil {
+		args = append([]ast.Node{e.Operand}, e.Args...)
+	}
+	return actionInvocation{target: e.Type, args: args, named: e.NamedArgs, expr: e}
 }
 
 // invokeAction runs the action named by inv to completion as a sub-execution of
@@ -165,6 +170,12 @@ func bindArguments(
 ) (map[string]Value, error) {
 	inputs := make(map[string]Value, len(in))
 
+	if inv.expr != nil && inv.expr.Operand != nil && len(inv.named) > 0 {
+		return nil, fmt.Errorf(
+			"%w: %s is called with a receiver and named arguments",
+			ErrReceiverWithNamedArgs, qualifiedNameText(inv.target),
+		)
+	}
 	if len(inv.args) == 0 && len(inv.named) == 0 {
 		for _, name := range in {
 			if value, ok := data[name]; ok {

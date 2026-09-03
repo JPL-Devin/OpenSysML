@@ -22,6 +22,8 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("calc_call_selects_among_owned_inherited_and_recursive_import", testCalcCallSelectsAmongOwnedInheritedAndRecursiveImport)
 	t.Run("action_call_selects_by_argument_type", testActionCallSelectsByArgumentType)
 	t.Run("action_call_ambiguous_between_two_imports", testActionCallAmbiguousBetweenTwoImports)
+	t.Run("action_call_receiver_binds_first_input", testActionCallReceiverBindsFirstInput)
+	t.Run("action_call_receiver_with_named_arguments_refused", testActionCallReceiverWithNamedArgumentsRefused)
 }
 
 // overloadedActionsSrc declares two imported same-named actions, told apart
@@ -72,6 +74,68 @@ func testActionCallSelectsByArgumentType(t *testing.T) {
 		if got := intOutput(t, outputs, "code"); got != want {
 			t.Errorf("tag(%s) code = %d, want %d", arg, got, want)
 		}
+	}
+}
+
+// receiverActionsSrc declares two same-named actions whose outputs depend on
+// the input, so a call shows both which one ran and what it was bound to.
+const receiverActionsSrc = `
+	package A {
+		private import ScalarValues::*;
+		action def tag { in x : Integer; out code : Integer; first start; action set { assign code := x + 10; } done; succession first start then set; succession first set then done; }
+	}
+	package B {
+		private import ScalarValues::*;
+		action def tag { in x : Integer; in y : Integer; out code : Integer; first start; action set { assign code := x * 100 + y; } done; succession first start then set; succession first set then done; }
+	}
+	package test {
+		private import ScalarValues::*;
+		private import A::*;
+		private import B::*;
+		action def Outer {
+			attribute code : Integer = 0;
+			first start;
+			action call = %s;
+			done;
+			succession first start then call;
+			succession first call then done;
+		}
+	}
+`
+
+func runReceiverAction(t *testing.T, call string) (map[string]Value, error) {
+	t.Helper()
+	src := fmt.Sprintf(receiverActionsSrc, call)
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	outer := findSymbolByName(idx.DocumentRoot("<test>"), "Outer", ast.DefAction)
+	if outer == nil {
+		t.Fatal("Outer action not found")
+	}
+	return ctx.ExecuteAction(outer)
+}
+
+// A receiver written before a nested action call is its first argument, both
+// for choosing among the same-named actions and for binding the chosen one.
+func testActionCallReceiverBindsFirstInput(t *testing.T) {
+	for call, want := range map[string]int64{"3->tag()": 13, "3->tag(4)": 304, "tag(3, 4)": 304} {
+		outputs, err := runReceiverAction(t, call)
+		if err != nil {
+			t.Fatalf("%s: %v", call, err)
+		}
+		if got := intOutput(t, outputs, "code"); got != want {
+			t.Errorf("%s code = %d, want %d", call, got, want)
+		}
+	}
+}
+
+// A receiver binds by position and so has no place beside named arguments.
+func testActionCallReceiverWithNamedArgumentsRefused(t *testing.T) {
+	outputs, err := runReceiverAction(t, "3->tag(y = 4)")
+	if err == nil {
+		t.Fatalf("expected a refusal, action returned %v", outputs)
+	}
+	if !errors.Is(err, ErrReceiverWithNamedArgs) {
+		t.Fatalf("expected ErrReceiverWithNamedArgs, got: %v", err)
 	}
 }
 

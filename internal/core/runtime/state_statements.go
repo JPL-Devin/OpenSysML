@@ -127,7 +127,7 @@ func performedInvocation(node ast.Node) (actionInvocation, bool) {
 			return actionInvocation{target: ref}, true
 		case *ast.InvocationExpr:
 			if ref.Type != nil {
-				return actionInvocation{target: ref.Type, args: ref.Args, named: ref.NamedArgs}, true
+				return expressionInvocation(ref), true
 			}
 		}
 	case *ast.Usage:
