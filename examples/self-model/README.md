@@ -177,13 +177,21 @@ The stage table in it is written nowhere; it is what the query returned:
 So moving a stage to another package rewrites that table on the next render, and a stage
 added to the model appears in it without anyone editing the document.
 
-The same document renders to PDF, converters installed:
+The same document renders to semantic HTML:
+
+```bash
+./bin/sysml examples/self-model/*.sysml \
+    -render-document OpenSysMLDocument::ArchitectureDocument \
+    -doc-form html -doc-toc -o build/self-model/architecture.html
+```
+
+and to PDF, converters installed:
 
 ```bash
 ./scripts/download-doc-pdf-toolchain.sh   # prints the variables to export
 ./bin/sysml examples/self-model/*.sysml \
     -render-document OpenSysMLDocument::ArchitectureDocument \
-    -doc-form pdf -pdf-title-page -pdf-toc -pdf-number-sections \
+    -doc-form pdf -doc-title-page -doc-toc -doc-number-sections \
     -o build/self-model/architecture.pdf
 ```
 
