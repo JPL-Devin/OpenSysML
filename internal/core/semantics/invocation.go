@@ -81,9 +81,9 @@ func (m *Model) Performable(p Performs, sym *symbols.Symbol) bool {
 	return m.performs(sym, behaviorLike)
 }
 
-// evaluates reports whether calling sym yields a result: it is a calc (a KerML
+// Evaluates reports whether calling sym yields a result: it is a calc (a KerML
 // function), or a feature typed by one, which is what an expression evaluates.
-func (m *Model) evaluates(sym *symbols.Symbol) bool {
+func (m *Model) Evaluates(sym *symbols.Symbol) bool {
 	return m.performs(sym, calcLike)
 }
 
@@ -198,7 +198,7 @@ func (m *Model) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, ar
 	}
 	sel.callable = behaviors[0]
 	if performs == PerformsBehavior {
-		if calcs := filterSymbols(behaviors, m.evaluates); len(calcs) > 0 {
+		if calcs := filterSymbols(behaviors, m.Evaluates); len(calcs) > 0 {
 			sel.callable = calcs[0]
 		}
 	}
@@ -295,7 +295,7 @@ func (m *Model) preferCalcs(cands []*symbols.Symbol, sigs []invocationSignature,
 	var outSigs []invocationSignature
 	var outFits []bindFit
 	for i, c := range cands {
-		if m.evaluates(c) {
+		if m.Evaluates(c) {
 			outCands = append(outCands, c)
 			outSigs = append(outSigs, sigs[i])
 			outFits = append(outFits, fits[i])

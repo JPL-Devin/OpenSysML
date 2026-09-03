@@ -22,6 +22,7 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("calc_call_fits_no_visible_candidate_behind_a_non_callable", testCalcCallFitsNoVisibleCandidateBehindANonCallable)
 	t.Run("calc_call_selects_by_argument_type", testCalcCallSelectsByArgumentType)
 	t.Run("calc_call_selects_a_feature_typed_by_a_calc", testCalcCallSelectsAFeatureTypedByACalc)
+	t.Run("calc_call_applies_the_library_function_a_feature_is_typed_by", testCalcCallAppliesTheLibraryFunctionAFeatureIsTypedBy)
 	t.Run("calc_call_selects_a_calc_over_a_more_specific_action", testCalcCallSelectsACalcOverAMoreSpecificAction)
 	t.Run("global_root_call_selects_by_argument_type", testGlobalRootCallSelectsByArgumentType)
 	t.Run("bare_call_selects_among_other_documents_root_declarations", testBareCallSelectsAmongOtherDocumentsRootDeclarations)
@@ -656,6 +657,54 @@ func testCalcCallSelectsAFeatureTypedByACalc(t *testing.T) {
 		}
 		if result.Kind != ValConst || result.Const.Int != tc.want {
 			t.Fatalf("%s = %+v, want %d", tc.calc, result, tc.want)
+		}
+	}
+}
+
+// A feature typed directly by a library function — or a bodiless calc usage typed by
+// one — performs that function's implementation, by position or by parameter name.
+// A model calc typed by the same library function keeps its own body.
+func testCalcCallAppliesTheLibraryFunctionAFeatureIsTypedBy(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			private import RealFunctions::sqrt;
+			private import SequenceFunctions::size;
+			ref root : sqrt;
+			calc rootCalc : sqrt;
+			ref count : size;
+			calc def halfRoot :> sqrt { in x : Real; return : Real = sqrt(x) / 2.0; }
+			ref half : halfRoot;
+			calc positional { root(16.0) }
+			calc named { root(x = 16.0) }
+			calc viaCalcUsage { rootCalc(16.0) }
+			calc collection { count((1, 2, 3)) }
+			calc ownBody { half(16.0) }
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	cases := []struct {
+		calc string
+		want Value
+	}{
+		{"positional", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 4}}},
+		{"named", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 4}}},
+		{"viaCalcUsage", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 4}}},
+		{"collection", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}},
+		{"ownBody", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 2}}},
+	}
+	for _, tc := range cases {
+		sym := findSymbolByName(rootScope, tc.calc, ast.DefCalc)
+		if sym == nil {
+			t.Fatalf("%s calc not found", tc.calc)
+		}
+		result, err := ctx.InvokeCalc(sym, nil, rootScope)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.calc, err)
+		}
+		if !valueEqual(result, tc.want) {
+			t.Fatalf("%s = %+v, want %+v", tc.calc, result, tc.want)
 		}
 	}
 }

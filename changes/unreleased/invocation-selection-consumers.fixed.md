@@ -8,4 +8,6 @@
   whose name is also an action's selects the calc: an action has no result to evaluate, so
   `attribute v = tag(3);` no longer fails at run time when an `Integer` action beside a `Real`
   calc fits its argument more closely. `action call = tag(3);` and `perform tag(3);` keep
-  selecting among actions only.
+  selecting among actions only. A feature typed by a calc — the model's own or a library
+  function such as `ref root : sqrt;` — is called as that calc by an expression and by a
+  `send`, which delivers the computed value rather than a message named after the feature.

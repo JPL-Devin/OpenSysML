@@ -383,6 +383,9 @@ func (ctx *Context) invokeCalc(sym *symbols.Symbol, args calcArgs, scope *symbol
 }
 
 func (ctx *Context) invokeCalcWithSelf(sym *symbols.Symbol, args calcArgs, scope *symbols.Scope, self *Instance) (Value, error) {
+	if lib := ctx.libraryCalcPerformed(sym); lib != nil {
+		sym = lib
+	}
 	if fn, ok := ctx.builtinFor(sym); ok {
 		return ctx.invokeBuiltinValues(sym, fn, args, scope, self)
 	}
@@ -741,6 +744,28 @@ func (ctx *Context) calcTypedFeature(sym *symbols.Symbol) bool {
 		return false
 	}
 	return len(ctx.calcChain(sym)) > 1
+}
+
+// libraryCalcPerformed returns the library function a bodiless usage is typed by,
+// nearest first, whose implementation a call of the usage applies; nil when none.
+func (ctx *Context) libraryCalcPerformed(sym *symbols.Symbol) *symbols.Symbol {
+	if sym == nil || ctx.model == nil {
+		return nil
+	}
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || len(usage.Members) > 0 || usage.Value != nil {
+		return nil
+	}
+	for _, super := range ctx.model.AllSupertypes(sym) {
+		if super == nil || !isCalcDecl(super.Decl) {
+			continue
+		}
+		if ctx.libraryDeclared(super) {
+			return super
+		}
+		return nil
+	}
+	return nil
 }
 
 // isCalcDecl reports whether a declaration is a calc definition or calc usage.

@@ -1,0 +1,8 @@
+{
+	"libraries": true,
+	"type": "action",
+	"outputs": {
+		"got": {"type": "Real", "value": 4.0},
+		"direct": {"type": "Real", "value": 4.0}
+	}
+}

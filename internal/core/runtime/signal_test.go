@@ -1634,6 +1634,42 @@ func TestActionSendCallsAFeatureTypedByACalc(t *testing.T) {
 	}
 }
 
+// A feature typed directly by a library function is a calc to send as well: the
+// function's result travels, not a message named after the feature.
+func TestActionSendCallsAFeatureTypedByALibraryFunction(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		private import RealFunctions::sqrt;
+		ref root : sqrt;
+		action pipeline {
+			attribute got : Real = 0.0;
+			first start;
+			action sender { send root(16.0) to reader; }
+			action reader accept n : Real;
+			action recorder { assign got := n; }
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then recorder;
+			succession first recorder then done;
+		}
+	}`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action pipeline not found")
+	}
+	outputs, err := ctx.ExecuteAction(sym)
+	if err != nil {
+		t.Fatalf("execute action: %v", err)
+	}
+	if got := outputs["got"]; got.Const.Kind != semantics.ValReal || got.Const.Real != 4 {
+		t.Errorf("got = %+v, want 4.0", got)
+	}
+	if pending := ctx.PendingMessages(); len(pending) != 0 {
+		t.Errorf("expected no message left in flight, got %v", pending)
+	}
+}
+
 // The same holds for a state's entry: a function imported by the state alone is
 // called and its value sent, so the transition on the value's type fires.
 func TestStateSendCallsFunctionImportedByNestedBlock(t *testing.T) {

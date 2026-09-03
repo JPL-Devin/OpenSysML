@@ -974,15 +974,14 @@ func (e *EvalContext) invokesCalc(scope *symbols.Scope, invocation *ast.Invocati
 	if invocation.Type == nil {
 		return false
 	}
-	if e.ctx == nil || e.ctx.resolver == nil || scope == nil {
+	if e.ctx == nil || e.ctx.resolver == nil || e.ctx.model == nil || scope == nil {
 		return false
 	}
 	sel := passes.SelectInvocation(e.ctx.resolver, e.ctx.model, scope, invocation, semantics.PerformsBehavior)
 	if sel.Ambiguous {
 		return true
 	}
-	called := sel.Called()
-	return isCalcSymbol(called) || (called != nil && e.ctx.calcTypedFeature(called))
+	return e.ctx.model.Evaluates(sel.Called())
 }
 
 // buildInvokedMessage builds the message of a send written as an invocation.
