@@ -72,6 +72,6 @@
               (Relationship kind="typing" target=Link
                 (*ast.QualifiedName))))
           (Membership visibility="default"
-            (Usage kind="attribute" name="'quoted name'" ref=true direction="none" composite=false derived=false ordered=false nonunique=false chain=true
+            (Usage kind="attribute" name="quoted name" ref=true direction="none" composite=false derived=false ordered=false nonunique=false chain=true
               (Relationship kind="typing" target=Link
                 (*ast.QualifiedName)))))))))

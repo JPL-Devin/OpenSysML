@@ -2891,6 +2891,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 					if len(endRels) > 0 {
 						u.Relationships = append(endRels, u.Relationships...)
 					}
+					// Every modifier ahead of the kind keyword belongs to the
+					// end, not `end` alone: `end ref attribute e : S;`.
+					applyFeatureMods(u, mods)
 					u.IsEnd = true
 					u.Visibility = mods.visibility
 				}
@@ -2938,7 +2941,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 		// Check for name + colon (typed) OR direct relationship (anonymous) OR name + relationship OR name + semicolon OR name + multiplicity
 		hasNameAndType := p.atName() && p.peekN(1).Kind == lexer.Colon
 		hasRelationship := p.at(lexer.ColonGt) || p.at(lexer.ColonGtGt) || p.at(lexer.ColonColonGt) || p.atRelationshipKeyword()
-		hasNameAndRelationship := p.atName() && (p.peekN(1).Kind == lexer.ColonGt || p.peekN(1).Kind == lexer.ColonGtGt || p.peekN(1).Kind == lexer.ColonColonGt)
+		// Either spelling of a specialization, or a value, continues the
+		// declaration: `ref x :> y`, `ref x subsets y`, `ref x = 5`.
+		hasNameAndRelationship := p.atName() && beginsDeclarationTail(p.peekN(1), p.peekN(2))
 		hasNameOnly := p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.RBrace)
 		hasNameAndBody := p.atName() && p.peekN(1).Kind == lexer.LBrace
 		hasNameAndMult := p.atName() && p.peekN(1).Kind == lexer.LBracket // name with multiplicity (e.g., ref payload [0..*])
@@ -2950,10 +2955,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 
 			// Parse optional name
 			if hasNameAndType || hasNameAndRelationship || hasNameOnly || hasNameAndBody || hasNameAndMult {
-				tok := p.advance()
-				if p.nameToken(tok) {
-					id.Name = p.src.Text(tok.Span)
-					id.NameSpan = tok.Span
+				if seg, ok := p.parseNameSegmentRelaxed(); ok {
+					id.Name = seg.Text
+					id.NameSpan = seg.Span
 				}
 				if hasNameAndType {
 					p.advance() // consume ':'
@@ -3038,10 +3042,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// Check for anonymous feature pattern without modifiers: name : Type
 	if p.atName() && nextKind == lexer.Colon {
 		var id ast.Identification
-		tok := p.advance()
-		if p.nameToken(tok) {
-			id.Name = p.src.Text(tok.Span)
-			id.NameSpan = tok.Span
+		if seg, ok := p.parseNameSegmentRelaxed(); ok {
+			id.Name = seg.Text
+			id.NameSpan = seg.Span
 		}
 
 		// Parse as anonymous usage (attribute by default)
