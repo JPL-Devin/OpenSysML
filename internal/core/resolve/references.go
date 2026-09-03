@@ -317,7 +317,11 @@ func (c *refCollector) behaviorDecl(scope *symbols.Scope, decl ast.Node) bool {
 		c.expr(scope, d.Expression)
 		return true
 	case *ast.PerformActionNode:
-		c.expr(scope, d.ActionRef)
+		if inv := d.PerformedInvocation(); inv != nil {
+			c.invocation(scope, inv, true)
+		} else {
+			c.expr(scope, d.ActionRef)
+		}
 		return true
 	case *ast.WhileLoopActionNode:
 		// A loop owns the scope its body declares into (see symbols.buildDecl).

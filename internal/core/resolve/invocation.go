@@ -31,29 +31,54 @@ func (r *Resolver) InvocationCandidates(scope *symbols.Scope, qn *ast.QualifiedN
 	return out
 }
 
-// qualifiedCandidates resolves qn as an invocation name and, when it has a
-// qualifier, widens the last segment to every member it names there.
+// qualifiedCandidates resolves qn as an invocation name and widens the last
+// segment to every member it names under its qualifier, or at the root for `$::f`.
 func (r *Resolver) qualifiedCandidates(scope *symbols.Scope, qn *ast.QualifiedName) []*symbols.Symbol {
 	r.invocationNames[qn] = true
 	sym, ok := r.resolveQualified(scope, qn, nil)
 	if !ok || sym == nil {
 		return nil
 	}
+	out := []*symbols.Symbol{sym}
 	last := len(qn.Parts) - 1
+	if last == 0 {
+		return r.appendNamed(out, r.rootCandidates(scope, qn.Parts[0].Text))
+	}
 	parts := r.parts[qn]
-	if last == 0 || len(parts) <= last || parts[last-1] == nil {
-		return []*symbols.Symbol{sym}
+	if len(parts) <= last || parts[last-1] == nil {
+		return out
 	}
 	qualifier := parts[last-1]
 	all, ok := r.qualifiedSegment(scope, qn, qualifier, last)
 	if !ok {
-		return []*symbols.Symbol{sym}
+		return out
 	}
-	out := []*symbols.Symbol{sym}
-	for _, found := range append(all, r.surfacedMembers(qualifier, scope, qn.Parts[last].Text)...) {
-		if !r.AliasNamesNothing(found) {
-			out = appendSymbol(out, r.AliasedElement(found))
+	return r.appendNamed(out, append(all, r.surfacedMembers(qualifier, scope, qn.Parts[last].Text)...))
+}
+
+// appendNamed appends the element each of found names, skipping aliases of nothing.
+func (r *Resolver) appendNamed(out, found []*symbols.Symbol) []*symbols.Symbol {
+	for _, sym := range found {
+		if !r.AliasNamesNothing(sym) {
+			out = appendSymbol(out, r.AliasedElement(sym))
 		}
+	}
+	return out
+}
+
+// rootCandidates returns every top-level declaration name denotes from scope: the
+// document root's own, then those of the global index (lookupGlobalTop's first).
+func (r *Resolver) rootCandidates(scope *symbols.Scope, name string) []*symbols.Symbol {
+	var out []*symbols.Symbol
+	if root := rootOf(scope); root != nil {
+		out, _ = r.localBindingCandidates(root, name)
+	}
+	if r.idx == nil {
+		return out
+	}
+	global := r.admittedUnder(r.documentOf(scope), r.ReferringNamespaceFQN(scope), name, r.idx.LookupQualified(name))
+	for _, sym := range global {
+		out = appendSymbol(out, sym)
 	}
 	return out
 }

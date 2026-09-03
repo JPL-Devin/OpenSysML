@@ -19,6 +19,7 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("calc_call_fits_no_visible_candidate", testCalcCallFitsNoVisibleCandidate)
 	t.Run("calc_call_fits_no_visible_candidate_behind_a_non_callable", testCalcCallFitsNoVisibleCandidateBehindANonCallable)
 	t.Run("calc_call_selects_by_argument_type", testCalcCallSelectsByArgumentType)
+	t.Run("global_root_call_selects_by_argument_type", testGlobalRootCallSelectsByArgumentType)
 	t.Run("calc_call_selects_by_named_argument", testCalcCallSelectsByNamedArgument)
 	t.Run("calc_call_selects_by_sibling_scalar_type", testCalcCallSelectsBySiblingScalarType)
 	t.Run("calc_call_typed_parameter_beats_untyped", testCalcCallTypedParameterBeatsUntyped)
@@ -31,6 +32,7 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("action_call_selects_by_argument_type", testActionCallSelectsByArgumentType)
 	t.Run("action_call_ambiguous_between_two_imports", testActionCallAmbiguousBetweenTwoImports)
 	t.Run("action_call_selects_an_action_over_a_more_specific_calc", testActionCallSelectsAnActionOverAMoreSpecificCalc)
+	t.Run("action_call_naming_only_a_calc_is_not_an_action", testActionCallNamingOnlyACalcIsNotAnAction)
 	t.Run("action_call_receiver_binds_first_input", testActionCallReceiverBindsFirstInput)
 	t.Run("action_call_receiver_with_named_arguments_refused", testActionCallReceiverWithNamedArgumentsRefused)
 	t.Run("action_call_arguments_read_the_performing_object", testActionCallArgumentsReadThePerformingObject)
@@ -127,6 +129,45 @@ func testActionCallSelectsAnActionOverAMoreSpecificCalc(t *testing.T) {
 	}
 	if got := intOutput(t, outputs, "code"); got != 2 {
 		t.Errorf("tag(3) code = %d, want 2 from B::tag", got)
+	}
+}
+
+// An action performed by a name only calcs declare is refused as not an action,
+// whether the name denotes one calc or several.
+func testActionCallNamingOnlyACalcIsNotAnAction(t *testing.T) {
+	const src = `
+		package A {
+			private import ScalarValues::*;
+			calc def tag { in x : Integer; return : Integer = x + 1; }
+		}
+		package B {
+			private import ScalarValues::*;
+			calc def tag { in x : String; return : Integer = 2; }
+		}
+		package test {
+			private import ScalarValues::*;
+			private import A::*;
+			%s
+			action def Outer {
+				attribute code : Integer = 0;
+				first start;
+				action call = tag(3);
+				done;
+				succession first start then call;
+				succession first call then done;
+			}
+		}
+	`
+	for _, imports := range []string{``, `private import B::*;`} {
+		idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, fmt.Sprintf(src, imports)))
+		outer := findSymbolByName(idx.DocumentRoot("<test>"), "Outer", ast.DefAction)
+		if outer == nil {
+			t.Fatal("Outer action not found")
+		}
+		_, err := ctx.ExecuteAction(outer)
+		if err == nil || !strings.Contains(err.Error(), "tag is not an action (calcDef)") {
+			t.Errorf("imports %q: error = %v, want 'tag is not an action (calcDef)'", imports, err)
+		}
 	}
 }
 
@@ -463,6 +504,44 @@ func testCalcCallSelectsByArgumentType(t *testing.T) {
 		}
 		if result.Kind != ValConst || result.Const.Int != tc.want {
 			t.Fatalf("%s = %+v, want %d", tc.calc, result, tc.want)
+		}
+	}
+}
+
+// `$::pick(v)` selects among every root-level pick, not only the first indexed;
+// the name is built since the expression parser does not read `$::`.
+func testGlobalRootCallSelectsByArgumentType(t *testing.T) {
+	src := `
+		private import ScalarValues::*;
+		calc def pick { in x : Integer; return : Integer = 1; }
+		calc def pick { in x : String; return : Integer = 2; }
+		calc def pick { in x : Boolean; return : Integer = 3; }
+		package test { calc def pick { in x : Boolean; return : Integer = 4; } }
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	pkg, ok := rootScope.LookupLocal("test")
+	if !ok || pkg.Scope == nil {
+		t.Fatal("package test not indexed")
+	}
+	call := func(arg ast.Node) *ast.InvocationExpr {
+		qn := &ast.QualifiedName{Global: true}
+		qn.Parts = append(qn.Parts, ast.NameSegment{Text: "pick"})
+		return &ast.InvocationExpr{Type: qn, Args: []ast.Node{arg}}
+	}
+	cases := []struct {
+		name string
+		arg  ast.Node
+		want string
+	}{
+		{"3", &ast.LiteralInteger{Value: "3"}, "1"},
+		{`"s"`, &ast.LiteralString{Value: "s"}, "2"},
+		{"true", &ast.LiteralBool{Value: true}, "3"},
+	}
+	for _, tc := range cases {
+		val, err := ctx.EvalWithScope(call(tc.arg), pkg.Scope)
+		if err != nil || FormatValue(val) != tc.want {
+			t.Errorf("$::pick(%s) = (%v, %v), want %s", tc.name, val, err, tc.want)
 		}
 	}
 }

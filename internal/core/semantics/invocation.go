@@ -41,8 +41,8 @@ const (
 	PerformsAction
 )
 
-// performable reports whether a call site of kind p can run sym.
-func (p Performs) performable(sym *symbols.Symbol) bool {
+// Performable reports whether a call site of kind p can run sym.
+func (p Performs) Performable(sym *symbols.Symbol) bool {
 	if p == PerformsAction {
 		return sym.Kind == symbols.SymbolActionDef || sym.Kind == symbols.SymbolActionUsage
 	}
@@ -116,23 +116,22 @@ func (m *Model) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, ar
 			sel.Candidates = append(sel.Candidates, target)
 		}
 	}
-	switch len(sel.Candidates) {
-	case 0:
-		return sel
-	case 1:
-		sel.Applicable = sel.Candidates
-		sel.Selected = sel.Candidates[0]
+	if len(sel.Candidates) == 0 {
 		return sel
 	}
-
 	behaviors := make([]*symbols.Symbol, 0, len(sel.Candidates))
 	for _, c := range sel.Candidates {
-		if performs.performable(c) {
+		if performs.Performable(c) {
 			behaviors = append(behaviors, c)
 		}
 	}
-	if len(behaviors) == 0 {
-		// Nothing callable: the checker reports the first as it always has.
+	switch {
+	case len(behaviors) == 0:
+		// Nothing the call site can run: the checker reports the first as it always has.
+		sel.Selected = sel.Candidates[0]
+		return sel
+	case len(sel.Candidates) == 1:
+		sel.Applicable = sel.Candidates
 		sel.Selected = sel.Candidates[0]
 		return sel
 	}
