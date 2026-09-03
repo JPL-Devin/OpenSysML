@@ -272,6 +272,9 @@ func TestEvalInObjectReadsMultiValuedFeatures(t *testing.T) {
 	run(t, s, "%instantiate car")
 	wants(t, run(t, s, "%eval in car : wheels"), "(on car ID: ", "= [Instance(ID: ")
 	wants(t, run(t, s, "%eval in car : tags"), "= [<unset>, <unset>, <unset>]")
+	wants(t, run(t, s, "%eval in car : unsetMass"), "✓ unsetMass (on car ID: ", "= "+runtime.UnsetText)
+	wants(t, run(t, s, "%eval in car : wheels.radius"), "= [0.3, 0.3, 0.3, 0.3]")
+	rejects(t, run(t, s, "%eval in car : unsetMass + 1.0"), "✓", "= "+runtime.UnsetText)
 }
 
 // A qualified name the prompt reaches through a usage resolves whether or not
