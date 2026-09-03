@@ -16,6 +16,18 @@ func SelectInvocation(resolver *resolve.Resolver, model *semantics.Model, scope 
 	return silent.selectInvocation(scope, e, silent.argumentTypes(scope, e))
 }
 
+// argumentTyper is the checker's argument typing as the semantic model consumes
+// it, so a call it reads on its own selects what the checker selects.
+type argumentTyper struct {
+	resolver *resolve.Resolver
+	model    *semantics.Model
+}
+
+func (t argumentTyper) InvocationArguments(scope *symbols.Scope, e *ast.InvocationExpr) []semantics.Argument {
+	silent := exprChecker{resolver: t.resolver, model: t.model}
+	return silent.arguments(scope, e, silent.argumentTypes(scope, e))
+}
+
 // argumentTypes are the types of e's arguments: the positional ones, the
 // receiver of `x->f(a)` first, and the named ones in the order written.
 type argumentTypes struct {
@@ -58,6 +70,11 @@ func invocationArgs(e *ast.InvocationExpr) []ast.Node {
 
 // selectInvocation records the declaration e calls given the types of its arguments.
 func (ec *exprChecker) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, argTypes argumentTypes) *semantics.InvocationSelection {
+	return ec.model.SelectInvocation(scope, e, ec.arguments(scope, e, argTypes))
+}
+
+// arguments describes e's arguments for selection: the positional ones, then the named.
+func (ec *exprChecker) arguments(scope *symbols.Scope, e *ast.InvocationExpr, argTypes argumentTypes) []semantics.Argument {
 	args := invocationArgs(e)
 	typed := make([]semantics.Argument, 0, len(args)+len(e.NamedArgs))
 	for i, arg := range args {
@@ -68,7 +85,7 @@ func (ec *exprChecker) selectInvocation(scope *symbols.Scope, e *ast.InvocationE
 			typed = append(typed, ec.argument(scope, arg.Value, argTypes.named[i], name))
 		}
 	}
-	return ec.model.SelectInvocation(scope, e, typed)
+	return typed
 }
 
 // namedArgumentName is the parameter name a named argument binds to.

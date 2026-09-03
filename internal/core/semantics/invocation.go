@@ -19,6 +19,17 @@ func (a Argument) known() bool {
 	return a.Prim != PrimUnknown || a.Type != nil
 }
 
+// ArgumentTyper types a call's arguments as the checker does, so a call read
+// anywhere in the model selects the overload the checker selects.
+type ArgumentTyper interface {
+	InvocationArguments(scope *symbols.Scope, e *ast.InvocationExpr) []Argument
+}
+
+// SetArgumentTyper installs the checker's argument typing on the model.
+func (m *Model) SetArgumentTyper(t ArgumentTyper) {
+	m.arguments = t
+}
+
 // InvocationSelection is which declaration an invocation calls, out of every
 // declaration its written name is visible as.
 type InvocationSelection struct {
