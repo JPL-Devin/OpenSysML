@@ -518,7 +518,9 @@ func (m *Model) AllSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 }
 
 // Conforms reports whether a conforms to b: a == b, b is a (transitive)
-// supertype of a, or a is the union of types that all conform to b.
+// supertype of a, or a is the union of types that all conform to b. Symbols
+// are compared as elements, so one declaration reached through two scope
+// trees (a document's and the index's) conforms to itself.
 func (m *Model) Conforms(a, b *symbols.Symbol) bool {
 	return m.conforms(a, b, nil)
 }
@@ -548,11 +550,11 @@ func (m *Model) conforms(a, b *symbols.Symbol, unioning map[*symbols.Symbol]bool
 	if a == nil || b == nil {
 		return false
 	}
-	if a == b || isAnything(b) {
+	if symbols.SameElement(a, b) || isAnything(b) {
 		return true
 	}
 	for _, s := range m.AllSupertypes(a) {
-		if s == b {
+		if symbols.SameElement(s, b) {
 			return true
 		}
 	}

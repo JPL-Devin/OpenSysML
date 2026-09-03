@@ -198,6 +198,45 @@ func TestRunQueryUsesParameterDefaults(t *testing.T) {
 		"Row 1: Observatory::telescope::segmentControl")
 }
 
+// The REPL looks names up in the document's own scope tree while the runtime
+// model reads the index, so a parameter typed by a declaration of the session
+// must accept that declaration's values whichever tree each came through.
+func TestRunQueryConformsAcrossScopeTrees(t *testing.T) {
+	s := NewSession()
+	res := s.Submit(`package Site {
+	private import DocumentQueries::*;
+	enum def Color { red; green; }
+	part def Telescope;
+	part def GroundStation :> Telescope;
+	part telescope : Telescope { part optics; }
+	part groundStation : GroundStation { part antenna; }
+	calc def Painted :> Query {
+		in hue : Color = Color::red;
+		OwnedElements(source = telescope)
+	}
+	calc def Sited :> Query {
+		in site : Telescope = groundStation;
+		OwnedElements(source = telescope)
+	}
+}
+`)
+	if len(errorDiagnostics(res.Diagnostics)) > 0 {
+		t.Fatalf("model did not analyse cleanly: %v", res.Diagnostics)
+	}
+	wants(t, run(t, s, "%run-query Painted"),
+		"✓ Query Site::Painted returned 1 row", "Row 1: Site::telescope::optics")
+	wants(t, run(t, s, "%run-query Painted hue=Color::green"),
+		"✓ Query Site::Painted returned 1 row")
+	wants(t, run(t, s, "%run-query Painted hue=telescope"),
+		"error:", "binding hue has type element, expected Site::Color")
+	wants(t, run(t, s, "%run-query Sited"),
+		"✓ Query Site::Sited returned 1 row")
+	wants(t, run(t, s, "%run-query Sited site=groundStation"),
+		"✓ Query Site::Sited returned 1 row")
+	wants(t, run(t, s, "%run-query Sited site=telescope"),
+		"✓ Query Site::Sited returned 1 row")
+}
+
 func TestRunQueryBindingExpressions(t *testing.T) {
 	s := docQuerySession(t)
 	wants(t, run(t, s, `%run-query NamedSubsystems root=telescope pattern="mo"`),
