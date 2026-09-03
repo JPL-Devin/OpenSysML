@@ -296,10 +296,8 @@ func (m *Model) measurementReference(scope *symbols.Scope, unit ast.Node) *symbo
 	return sym
 }
 
-// operatorConformance judges an operator's value: a comparison or logical
-// operator yields a Boolean; an arithmetic one over quantities yields a value
-// whose dimension is fixed by the operands'; `%` has no quantity function and
-// yields a number; a conditional yields what both its branches do.
+// operatorConformance judges an operator's value: comparisons are Boolean, a
+// conditional is what its branches are, `%` is a number, arithmetic a quantity.
 func (m *Model) operatorConformance(scope *symbols.Scope, e *ast.OperatorExpr, want *symbols.Symbol, byUnit bool) Conformance {
 	switch e.Operator {
 	case ast.OpConditional:

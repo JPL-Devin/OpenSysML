@@ -145,10 +145,8 @@ func TestTriggerAfterAcceptsDurations(t *testing.T) {
 	}
 }
 
-// Arithmetic over durations and time instants is judged by its dimension, as
-// the pilot's isDuration/isTime admit it, so a sum of instants or of an instant
-// and a duration passes either trigger; a conditional whose branches disagree
-// is left to evaluation.
+// Time arithmetic is judged by dimension, as the pilot's isDuration/isTime admit
+// it; a conditional whose branches disagree is left to evaluation.
 func TestTriggerTimeArithmeticIsJudgedByDimension(t *testing.T) {
 	for _, trigger := range []string{
 		"after d + d",
