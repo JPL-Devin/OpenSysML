@@ -454,9 +454,10 @@ func (f *actionFrame) collect(prefix string, into map[string]Value) {
 	}
 }
 
-// bindInputPins seeds the pins a performance reads from the bindings at them,
-// where nothing delivered ahead of the performance already holds a value.
+// bindInputPins seeds the pins a performance reads from the bindings at them, where
+// nothing delivered ahead of it holds a value; bindings at one pin must agree.
 func (e *ActionExecutor) bindInputPins(perf *actionFrame, activation int64) error {
+	bound := make(map[string]lower.PinBinding)
 	for _, binding := range e.bindingsAt(perf) {
 		dir, err := e.boundPin(perf, binding)
 		if err != nil {
@@ -465,16 +466,30 @@ func (e *ActionExecutor) bindInputPins(perf *actionFrame, activation int64) erro
 		if dir == ast.DirOut {
 			continue
 		}
-		if _, held := perf.data[binding.Pin]; held {
+		earlier, alreadyBound := bound[binding.Pin]
+		if _, held := perf.data[binding.Pin]; held && !alreadyBound {
 			continue
 		}
 		value, err := e.bindingOtherValue(perf, binding, activation)
 		if err != nil {
 			return err
 		}
+		if alreadyBound {
+			if held := perf.data[binding.Pin]; !valueEqual(held, value) {
+				return &BindingConflictError{
+					Target:     ActionNodeName(perf.node) + "." + binding.Pin,
+					Left:       bindingEndText(earlier.Other),
+					Right:      bindingEndText(binding.Other),
+					LeftValue:  held,
+					RightValue: value,
+				}
+			}
+			continue
+		}
 		if err := e.setFrameFeature(perf, binding.Pin, value); err != nil {
 			return err
 		}
+		bound[binding.Pin] = binding
 	}
 	return nil
 }

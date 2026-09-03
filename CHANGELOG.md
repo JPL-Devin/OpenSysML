@@ -72,12 +72,13 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   body still resolves a name it does not declare lexically to the enclosing action's feature and
   writes it in place, so a grandchild writing `legs` keeps working, and a perform usage on a
   part keeps its occurrence slot. Reading a pin before its node has run, a pin the node does not
-  declare, a surplus, missing or unknown argument, and a binding at a non-parameter or into a
-  feature no enclosing action holds are typed errors
+  declare, a surplus, missing or unknown argument, a binding at a non-parameter or into a
+  feature no enclosing action holds, and two bindings at one input pin whose other ends
+  disagree are typed errors
   (`ErrNodeNotPerformed`, `ErrNodePin`, `ErrActionArity`, `ErrUnboundParameter`,
-  `ErrUnknownParameter`, `ErrBindingEnd`). `Results()`, the REPL's `%continue`/`%tokens` and a
-  gRPC execution response report a node's pins under its path (`p.v`); `Data()` stays the
-  action's own performance. Kept for compatibility: a bare typed usage `action call : Callee;`
+  `ErrUnknownParameter`, `ErrBindingEnd`, `ErrBindingConflict`). `Results()`, the REPL's
+  `%continue`/`%tokens` and a gRPC execution response report a node's pins under its path
+  (`p.v`); `Data()` stays the action's own performance. Kept for compatibility: a bare typed usage `action call : Callee;`
   still reads an unbound `in` from the same-named enclosing feature — `Callee()` passes nothing
   and lets the callee's defaults apply — and every invocation form still returns its `out`
   values into same-named enclosing features that exist. Not yet: `n.pin` on an untyped

@@ -35,6 +35,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("node_invocation_too_few_arguments", testNodeInvocationTooFewArguments)
 	t.Run("node_invocation_unknown_named_argument", testNodeInvocationUnknownNamedArgument)
 	t.Run("node_binding_to_a_non_parameter", testNodeBindingToANonParameter)
+	t.Run("node_pin_bound_to_unequal_values", testNodePinBoundToUnequalValues)
 	t.Run("node_inherited_default_that_cannot_be_evaluated", testNodeInheritedDefaultThatCannotBeEvaluated)
 	t.Run("node_binding_output_to_an_unknown_feature", testNodeBindingOutputToAnUnknownFeature)
 	t.Run("node_flow_into_a_pin_the_target_does_not_declare", testNodeFlowIntoAPinTheTargetDoesNotDeclare)
@@ -8075,6 +8076,31 @@ func testNodeBindingToANonParameter(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "nope") {
 		t.Errorf("error %q does not name the pin", err)
+	}
+}
+
+// testNodePinBoundToUnequalValues: two bindings at one input pin are two equalities,
+// so unequal other ends are a binding conflict, not a declaration-order choice.
+func testNodePinBoundToUnequalValues(t *testing.T) {
+	src := `
+		package test {` + adderActionDef + `
+			action outer {
+				attribute x : Integer = 1;
+				attribute y : Integer = 2;
+				bind add.a = x;
+				bind add.a = y;
+				first start;
+				then action add : Adder { in b = 2; }
+				then done;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if !errors.Is(err, ErrBindingConflict) {
+		t.Fatalf("error = %v, want ErrBindingConflict", err)
+	}
+	if got, want := err.Error(), "binding conflict at add.a: x = 1, y = 2"; got != want {
+		t.Errorf("conflict error = %q, want %q", got, want)
 	}
 }
 
