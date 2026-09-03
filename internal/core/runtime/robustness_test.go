@@ -59,6 +59,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("block_node_own_flow_that_never_ends", testBlockNodeOwnFlowThatNeverEnds)
 	t.Run("inherited_binding_names_a_node_without_a_pin", testInheritedBindingNamesANodeWithoutAPin)
 	t.Run("inherited_binding_does_not_reach_a_masking_node", testInheritedBindingDoesNotReachAMaskingNode)
+	t.Run("inherited_binding_does_not_reach_through_a_replaced_other_end", testInheritedBindingDoesNotReachThroughAReplacedOtherEnd)
 	t.Run("node_inherited_default_that_cannot_be_evaluated", testNodeInheritedDefaultThatCannotBeEvaluated)
 	t.Run("node_binding_output_to_an_unknown_feature", testNodeBindingOutputToAnUnknownFeature)
 	t.Run("node_binding_output_through_a_scalar_chain", testNodeBindingOutputThroughAScalarChain)
@@ -9013,6 +9014,52 @@ func testInheritedBindingDoesNotReachAMaskingNode(t *testing.T) {
 	var noValue *NoValueError
 	if !errors.As(err, &noValue) || noValue.Feature != "a" {
 		t.Errorf("error %v, want %T for a", err, noValue)
+	}
+	if v, ok := exec.Results()["add.sum"]; ok {
+		t.Errorf("add.sum = %v, want no value", v)
+	}
+}
+
+// testInheritedBindingDoesNotReachThroughAReplacedOtherEnd: a base binding whose
+// other end names a node the derived action replaced holds at neither end, so
+// the inherited node's input is bound by nothing rather than by the replacement.
+func testInheritedBindingDoesNotReachThroughAReplacedOtherEnd(t *testing.T) {
+	src := `
+		package test {
+			action def Adder {
+				in a : Integer;
+				out sum : Integer;
+				first step;
+				action step { assign sum := a; }
+			}
+			action def Base {
+				action src { out n : Integer; assign n := 5; }
+				action add : Adder;
+				bind add.a = src.n;
+			}
+			action def Derived :> Base {
+				action src { out n : Integer; assign n := 1000; }
+				first start then src;
+				succession src then add;
+				succession add then done;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Derived", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action Derived not found")
+	}
+	exec, err := ctx.CreateActionExecutor(sym)
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+	err = exec.RunToCompletion()
+	if err == nil {
+		t.Fatal("the inherited node's pin took the replacement node's value")
+	}
+	if !errors.Is(err, ErrUnboundParameter) || !strings.Contains(err.Error(), "parameter a") {
+		t.Errorf("error %v, want ErrUnboundParameter for a", err)
 	}
 	if v, ok := exec.Results()["add.sum"]; ok {
 		t.Errorf("add.sum = %v, want no value", v)

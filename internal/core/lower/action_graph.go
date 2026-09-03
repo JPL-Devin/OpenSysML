@@ -581,6 +581,9 @@ func lowerInheritedPinConnections(graph *ActionGraph, scope *symbols.Scope) erro
 			}
 			switch u.Kind {
 			case ast.UsageBinding:
+				if bindsReplacedNode(nodes, body, u) {
+					continue
+				}
 				bindings, err := lowerPinBindings(graph, nodes, u, body)
 				if err != nil {
 					return err
@@ -609,6 +612,25 @@ func lowerInheritedPinConnections(graph *ActionGraph, scope *symbols.Scope) erro
 
 // nodeLookup returns the node of a graph a connector end names, nil for none.
 type nodeLookup func(name string) ast.Node
+
+// bindsReplacedNode reports whether an end of a general body's binding names a
+// node of that body the graph has no node for, so the binding holds at no end.
+func bindsReplacedNode(nodes nodeLookup, body *symbols.Scope, u *ast.Usage) bool {
+	binding, ok := lowerBinding(u, body)
+	if !ok {
+		return false
+	}
+	for _, end := range binding.Ends {
+		segments := endSegments(end.Expr)
+		if len(segments) == 0 {
+			continue
+		}
+		if _, isNode := resolve.ActionNodeOfBody(body, segments[0]); isNode && nodes(segments[0]) == nil {
+			return true
+		}
+	}
+	return false
+}
 
 // nodesNamed looks a connector end up among nodes by the names they answer to.
 func nodesNamed(nodes []ast.Node) nodeLookup {

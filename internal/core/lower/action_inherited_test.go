@@ -274,9 +274,11 @@ func TestToActionGraphInheritedPinConnectionsFollowDeclarationIdentity(t *testin
 	src := `
 		action def Base {
 			attribute x : Integer = 5;
+			action src { out n : Integer; }
 			action add { in a : Integer; out sum : Integer; }
 			action fin { in n : Integer; }
 			bind add.a = x;
+			bind fin.n = src.n;
 			flow add.sum to fin.n;
 		}
 		action def Masked :> Base {
@@ -286,15 +288,24 @@ func TestToActionGraphInheritedPinConnectionsFollowDeclarationIdentity(t *testin
 			succession add then fin;
 			then done;
 		}
+		action def HalfReplaced :> Base {
+			action src { out n : Integer; }
+			first start then src;
+			succession src then add;
+			succession add then fin;
+			then done;
+		}
 		action def Redefined :> Base {
 			action add :>> add { in a : Integer; out sum : Integer; }
-			first start then add;
+			first start then src;
+			succession src then add;
 			succession add then fin;
 			then done;
 		}
 		action def Twice :> Redefined {
 			action again :>> Redefined::add { in a : Integer; out sum : Integer; }
-			first start then again;
+			first start then src;
+			succession src then again;
 			succession again then fin;
 			then done;
 		}
@@ -314,6 +325,22 @@ func TestToActionGraphInheritedPinConnectionsFollowDeclarationIdentity(t *testin
 		t.Errorf("a base flow out of %s was lowered at local nodes taking its nodes' names: %+v", getNodeName(source), flows)
 	}
 
+	half, scope, root := inheritedActionDecl(t, src, "HalfReplaced")
+	graph, err = ToActionGraph(half, scope)
+	if err != nil {
+		t.Fatalf("ToActionGraph(HalfReplaced): %v", err)
+	}
+	inheritedAdd, inheritedFin := actionMember(t, root, "Base", "add"), actionMember(t, root, "Base", "fin")
+	if namedNode(graph, "src") != actionMember(t, root, "HalfReplaced", "src") || namedNode(graph, "fin") != inheritedFin {
+		t.Fatal("HalfReplaced: src is not the local node or fin is not the inherited declaration")
+	}
+	if len(graph.Bindings) != 1 || graph.Bindings[0].Node != inheritedAdd || graph.Bindings[0].Pin != "a" {
+		t.Errorf("HalfReplaced: bindings = %+v, want only x at add.a; a binding at src.n, whose src the action replaced, must not reach fin.n", graph.Bindings)
+	}
+	if flows := graph.DataFlows[inheritedAdd]; len(flows) != 1 || flows[0].Target != inheritedFin {
+		t.Errorf("HalfReplaced: data flows out of add = %+v, want one flow to the inherited fin", flows)
+	}
+
 	for _, tc := range []struct{ action, node string }{{"Redefined", "add"}, {"Twice", "again"}} {
 		derived, scope, root := inheritedActionDecl(t, src, tc.action)
 		graph, err := ToActionGraph(derived, scope)
@@ -326,9 +353,12 @@ func TestToActionGraphInheritedPinConnectionsFollowDeclarationIdentity(t *testin
 			t.Fatalf("%s: fin = %v, want the inherited declaration", tc.action, fin)
 		}
 		baseBody := scope.Parent().ChildFor(actionDefinition(t, root, "Base"))
-		if len(graph.Bindings) != 1 || graph.Bindings[0].Node != redefining || graph.Bindings[0].Pin != "a" ||
-			FeaturePath(graph.Bindings[0].Other) != "x" || graph.Bindings[0].Scope != baseBody {
-			t.Errorf("%s: bindings = %+v, want one binding of x at %s.a in Base's scope", tc.action, graph.Bindings, tc.node)
+		src := actionMember(t, root, "Base", "src")
+		if len(graph.Bindings) != 3 || graph.Bindings[0].Node != redefining || graph.Bindings[0].Pin != "a" ||
+			FeaturePath(graph.Bindings[0].Other) != "x" || graph.Bindings[0].Scope != baseBody ||
+			graph.Bindings[1].Node != fin || graph.Bindings[1].OtherNode != src ||
+			graph.Bindings[2].Node != src || graph.Bindings[2].OtherNode != fin {
+			t.Errorf("%s: bindings = %+v, want x at %s.a in Base's scope, then fin.n = src.n at both inherited ends", tc.action, graph.Bindings, tc.node)
 		}
 		flows := graph.DataFlows[redefining]
 		if len(flows) != 1 || flows[0].Target != fin || flows[0].SourcePin != "sum" || flows[0].TargetPin != "n" {

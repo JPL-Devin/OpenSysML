@@ -69,7 +69,10 @@
   inherited node ran with its input unbound. Such a connector follows the node's declaration: a
   node the derived action declares of its own under the inherited node's name does not take it
   (the connector lowers to nothing, and the replacement's same-named pin stays unbound), while
-  a node redefining the inherited one (`action add :>> add`) does. An action declared in a branch or loop body that
+  a node redefining the inherited one (`action add :>> add`) does. A binding between two of the
+  general action's nodes holds at both or at neither: when the derived action replaces the node
+  at one end (`bind add.a = src.n` with a `src` of its own), the other end no longer reads the
+  replacement's pin by name. An action declared in a branch or loop body that
   states a flow of its own (`first`, successions, forks and joins among its nodes) now runs that
   flow to completion in its frame, and its steps spend the action's own token-flow budget
   (`OPENSYSML_MAX_ACTION_STEPS`, `ErrActionStepLimitExceeded`) as the enclosing flow's do;
