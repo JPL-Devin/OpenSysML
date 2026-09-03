@@ -438,7 +438,7 @@ func (e *ActionExecutor) HasPendingSignal() bool {
 		if !isAccept || accept.Trigger != nil {
 			continue
 		}
-		matches, failed := e.acceptMatch(accept, usage)
+		matches, failed := e.acceptMatch(token.frame, accept, usage)
 		for _, msg := range e.ctx.PendingMessages() {
 			// A port that fails to resolve counts as pending: the step this
 			// provokes surfaces the failure.
@@ -452,13 +452,12 @@ func (e *ActionExecutor) HasPendingSignal() bool {
 
 // acceptMatch is the predicate an accept node holds a message to: it reaches
 // the node, and conforms to the type the accept names or carries the event it
-// subsets, read over the action's data. The signal is tested first, so only a
+// subsets, read over the performance's data. The signal is tested first, so only a
 // message of the accept's own signal resolves the `via` port; if that fails the
 // predicate matches nothing and the failure is left in the returned error slot.
-func (e *ActionExecutor) acceptMatch(accept lower.Accept, usage *ast.Usage) (func(Message) bool, *error) {
+func (e *ActionExecutor) acceptMatch(frame *actionFrame, accept lower.Accept, usage *ast.Usage) (func(Message) bool, *error) {
 	var failed error
-	ec := NewEvalContextIn(e.ctx, accept.Scope, e.self)
-	ec.Push(e.data)
+	ec := e.evalContextFor(frame, accept.Scope)
 	return func(m Message) bool {
 		if failed != nil {
 			return false
@@ -1273,7 +1272,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 		if want == "" {
 			want = lower.FeaturePath(accept.SubsetsEvent)
 		}
-		matches, failed := e.acceptMatch(accept, usage)
+		matches, failed := e.acceptMatch(token.frame, accept, usage)
 		msg, taken := e.ctx.TakeMessage(matches)
 		if *failed != nil {
 			return *failed
