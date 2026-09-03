@@ -1,0 +1,21 @@
+step 1: token 1@decide
+stmt if
+    eval feature value -> 5
+    eval literal 3 -> 3
+  eval operator > -> true
+  stmt node p
+    stmt assign v
+        eval feature value -> 5
+        eval literal 2 -> 2
+      eval operator * -> 10
+  stmt node q
+    stmt assign v
+        eval chain v -> 10
+        eval literal 1 -> 1
+      eval operator + -> 11
+  stmt assign total
+      eval chain v -> 10
+      eval chain v -> 11
+    eval operator + -> 21
+step 2: token 1@done
+step 3: no active tokens

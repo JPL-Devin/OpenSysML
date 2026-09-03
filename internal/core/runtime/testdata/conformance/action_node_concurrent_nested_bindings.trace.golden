@@ -1,0 +1,35 @@
+step 1: token 1@split
+step 2: token 2@left, token 3@right
+stmt assign v
+  eval literal 2 -> 2
+stmt assign v
+  eval literal 1 -> 1
+step 3: token 2@leg, token 3@leg
+enter action node: leg
+enter action node: leg
+step 4: token 2@inner, token 3@inner
+stmt assign v
+    eval feature w -> 2
+    eval literal 10 -> 10
+  eval operator * -> 20
+stmt assign v
+    eval feature w -> 1
+    eval literal 10 -> 10
+  eval operator * -> 10
+step 5: token 2@rest, token 3@rest
+stmt assign collected
+    eval feature collected -> 0
+      eval feature n -> 20
+      eval feature x -> 2
+    eval operator * -> 40
+  eval operator + -> 40
+leave action node: leg
+stmt assign collected
+    eval feature collected -> 40
+      eval feature n -> 10
+      eval feature x -> 1
+    eval operator * -> 10
+  eval operator + -> 50
+leave action node: leg
+step 6: token 2@sync, token 3@sync
+step 7: no active tokens

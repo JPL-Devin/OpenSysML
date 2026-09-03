@@ -13,20 +13,26 @@ import (
 // Actions::AssignmentAction, which "updates the accessedFeature of its target
 // Occurrence with the given replacementValues".
 func assignThroughChain(ec *EvalContext, host string, s lower.Assign, value Value) error {
-	target, err := ec.chainCarrier(s.Chain)
-	if err != nil {
-		return fmt.Errorf("%s: assignment to %s: %w", host, s.Chain.Text, err)
-	}
-	if _, ok := target.FeatureValues[s.Target]; !ok {
-		return fmt.Errorf("%s: assignment to %s: %w: object #%d (%s) has no feature %s",
-			host, s.Chain.Text, ErrNoSuchFeature, target.ID, symbolText(target.Type), s.Target)
-	}
-	// Written through the object itself, so the value is multiplicity-checked and
-	// seen by every feature reaching that object, as a direct write is.
-	if err := target.SetFeatureValue(ec.ctx, s.Target, value); err != nil {
+	if err := writeThroughChain(ec, s.Chain, s.Target, value); err != nil {
 		return fmt.Errorf("%s: assignment to %s: %w", host, s.Chain.Text, err)
 	}
 	return nil
+}
+
+// writeThroughChain writes value to feature of the object chain reaches, as an
+// assignment or a binding at a node's pin does.
+func writeThroughChain(ec *EvalContext, chain *lower.AssignTarget, feature string, value Value) error {
+	target, err := ec.chainCarrier(chain)
+	if err != nil {
+		return err
+	}
+	if _, ok := target.FeatureValues[feature]; !ok {
+		return fmt.Errorf("%w: object #%d (%s) has no feature %s",
+			ErrNoSuchFeature, target.ID, symbolText(target.Type), feature)
+	}
+	// Written through the object itself, so the value is multiplicity-checked and
+	// seen by every feature reaching that object, as a direct write is.
+	return target.SetFeatureValue(ec.ctx, feature, value)
 }
 
 // chainCarrier walks a chained target's steps to the object whose feature the

@@ -43,7 +43,13 @@ top-level one is. `instantiate` names an instance case's type the same way.
 }
 ```
 
-- `outputs`: map of output parameter names to their final values
+- `outputs`: map of output parameter names to their final values. The action's
+  own parameters and attributes are keyed by their bare names. A nested action
+  node performs in a frame of its own, so its pins — the parameters and
+  attributes it declares, and those of the action it performs — are keyed by
+  the node's path from the action, `p.v` or `leg.inner.v`, holding what the
+  node's latest performance left there. A value a bare `perform` in a node's
+  body returns to no declared feature is reported under that node the same way.
 - `tokenCount`: number of tokens processed (optional, for regression detection)
 - `evaluate`: qualified path of the action to execute (see [Entry Points](#entry-points))
 - `error`: text the execution must fail with, for a case whose contract is a

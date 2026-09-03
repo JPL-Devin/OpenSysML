@@ -1,0 +1,10 @@
+{
+	"type": "action",
+	"evaluate": "test::Adjust",
+	"libraries": true,
+	"outputs": {
+		"y": {"type": "Integer", "value": 31},
+		"seen": {"type": "Integer", "value": 31},
+		"scaled.y": {"type": "Integer", "value": 31}
+	}
+}
