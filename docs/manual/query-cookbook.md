@@ -118,6 +118,9 @@ calc def LightSubsystems :> HeavySubsystems {
 
 - A default follows the binding rule of `%run-query <p>=<expr>`: a default that
   names a model element binds that element; any other default is an expression.
+  The rule applies inside a list too, so `in roots : Element[0..*] = (telescope,
+  groundStation);` binds both elements, and a list may mix element names with
+  parameters and query invocations.
 - An expression default is evaluated once per query execution, before any row is
   produced, in the scope of the query that declared it — it may name that
   query's other parameters (`in candidates : Element[0..*] = OwnedElements(source = root);`)

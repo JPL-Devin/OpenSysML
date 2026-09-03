@@ -196,6 +196,7 @@ func literalOf(t *testing.T, expression Expression, kind LiteralKind, value stri
 func TestCompileRetainsParameterDefaults(t *testing.T) {
 	fixture := loadQueryFixture(t, `
 part shared;
+part spare;
 calc def Helper :> Query {
 	in source : Element;
 	OwnedElements(source = source)
@@ -206,6 +207,8 @@ calc def Defaulted :> Query {
 	in depth : Integer = 2;
 	in candidates : Element[0..*] = Helper(source = source);
 	in optional : Element[0..*] = null;
+	in roots : Element[0..*] = (shared, spare);
+	in mixed : Element[0..*] = (spare, source, Helper(source = source));
 	WhereName(source = candidates, operator = "startsWith", value = pattern)
 }
 `)
@@ -248,6 +251,30 @@ calc def Defaulted :> Query {
 		t.Fatalf("candidates default arguments = %+v", arguments)
 	}
 	literalOf(t, params["optional"].Default, LiteralNull, "null")
+	roots := params["roots"].Default
+	if roots.Operation() != OperationSequence || len(roots.Arguments()) != 2 {
+		t.Fatalf("roots default = %+v, want a sequence of two elements", roots)
+	}
+	for i, name := range []string{"shared", "spare"} {
+		member := roots.Arguments()[i].Value
+		element, ok := member.Element()
+		if !ok || element != fixture.symbol(t, name) {
+			t.Fatalf("roots default member %d = %+v, want %s bound", i, member, name)
+		}
+	}
+	mixed := params["mixed"].Default.Arguments()
+	if len(mixed) != 3 {
+		t.Fatalf("mixed default = %+v, want three members", mixed)
+	}
+	if element, ok := mixed[0].Value.Element(); !ok || element != fixture.symbol(t, "spare") {
+		t.Fatalf("mixed default member 0 = %+v, want spare bound", mixed[0].Value)
+	}
+	if mixed[1].Value.Operation() != OperationParameter || mixed[1].Value.Target() != "source" {
+		t.Fatalf("mixed default member 1 = %+v, want the source parameter", mixed[1].Value)
+	}
+	if mixed[2].Value.Operation() != OperationInvoke || mixed[2].Value.Target() != "Fixture::Helper" {
+		t.Fatalf("mixed default member 2 = %+v, want Helper invoked", mixed[2].Value)
+	}
 
 	mutable := definition.Parameters()
 	mutable[3].Default.Arguments()[0] = Argument{}

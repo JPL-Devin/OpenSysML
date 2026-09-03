@@ -695,6 +695,15 @@ calc def ForwardDefault :> Query {
 	in source : Element = root;
 	WhereName(source = candidates, operator = "startsWith", value = "o")
 }
+calc def ListDefault :> Query {
+	in roots : Element[0..*] = (root, other);
+	WhereName(source = OwnedElements(source = roots), operator = "startsWith", value = "m")
+}
+calc def MixedListDefault :> Query {
+	in extra : Element;
+	in roots : Element[0..*] = (root, extra);
+	WhereName(source = OwnedElements(source = roots), operator = "startsWith", value = "m")
+}
 `)
 	result, err := fixture.execute(t, "Defaulted", Bindings{}, Options{})
 	if err != nil {
@@ -765,6 +774,22 @@ calc def ForwardDefault :> Query {
 	}
 	if got := elementNames(result); !slices.Equal(got, []string{"optics"}) {
 		t.Fatalf("forward default rows = %v, want [optics]", got)
+	}
+	result, err = fixture.execute(t, "ListDefault", Bindings{}, Options{})
+	if err != nil {
+		t.Fatalf("execute element-list default: %v", err)
+	}
+	if got := elementNames(result); !slices.Equal(got, []string{"mount", "motor"}) {
+		t.Fatalf("element-list default rows = %v, want [mount motor]", got)
+	}
+	result, err = fixture.execute(t, "MixedListDefault", Bindings{
+		"extra": {ElementValue(fixture.symbol(t, "other"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute mixed element-list default: %v", err)
+	}
+	if got := elementNames(result); !slices.Equal(got, []string{"mount", "motor"}) {
+		t.Fatalf("mixed element-list default rows = %v, want [mount motor]", got)
 	}
 }
 

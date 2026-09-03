@@ -297,8 +297,9 @@ func (c *compiler) compileDefaultExpression(
 	node ast.Node,
 	dependency func(string),
 ) (Expression, error) {
-	if reference, ok := node.(*ast.FeatureReference); ok {
-		if element, ok := c.namedElement(query, owner, reference); ok {
+	switch expression := node.(type) {
+	case *ast.FeatureReference:
+		if element, ok := c.namedElement(query, owner, expression); ok {
 			return Expression{
 				operation: OperationElement,
 				target:    symbols.FQNOf(element),
@@ -306,6 +307,21 @@ func (c *compiler) compileDefaultExpression(
 				origin:    provenance.Node(owner.DocName, node),
 			}, nil
 		}
+	case *ast.SequenceExpr:
+		// Element naming applies to each member, so a list of names binds those elements.
+		args := make([]Argument, 0, len(expression.Elements))
+		for _, element := range expression.Elements {
+			value, err := c.compileDefaultExpression(query, owner, parameter, params, element, dependency)
+			if err != nil {
+				return Expression{}, err
+			}
+			args = append(args, Argument{Value: value})
+		}
+		return Expression{
+			operation: OperationSequence,
+			arguments: args,
+			origin:    provenance.Node(owner.DocName, node),
+		}, nil
 	}
 	value, err := c.compileExpression(query, owner, params, node, dependency)
 	if err != nil {
