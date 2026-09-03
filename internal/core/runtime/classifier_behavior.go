@@ -125,6 +125,35 @@ func (inst *Instance) ExhibitedState() (*ObjectBehavior, bool) {
 	return nil, false
 }
 
+// ExhibitedStatesOf returns the machines the object exhibits under sym's declaration:
+// the one sym itself binds, or else every one running sym's body, since one
+// definition can be the body of several exhibited usages. Declarations are compared.
+func (inst *Instance) ExhibitedStatesOf(sym *symbols.Symbol) []*ObjectBehavior {
+	if sym == nil || sym.Decl == nil {
+		return nil
+	}
+	var bodies []*ObjectBehavior
+	for _, b := range inst.behaviors {
+		if b.Kind != lower.ExhibitedState {
+			continue
+		}
+		if b.member != nil && b.member.Decl == sym.Decl {
+			return []*ObjectBehavior{b}
+		}
+		if b.Symbol != nil && b.Symbol.Decl == sym.Decl {
+			bodies = append(bodies, b)
+		}
+	}
+	return bodies
+}
+
+// Member is the declaration binding the behavior to the object's type: the
+// exhibiting or performing usage, which is what addresses this behavior
+// when several run the same body.
+func (b *ObjectBehavior) Member() *symbols.Symbol {
+	return b.member
+}
+
 // classifierBehaviorsOf reports the behaviors every object of a type runs:
 // those its own declaration binds and those it inherits.
 func (ctx *Context) classifierBehaviorsOf(typeSym *symbols.Symbol) []classifierBehaviorDecl {
