@@ -235,6 +235,45 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Fixed
 
+- **`%state <machine> <object>` attaches to the machine the object exhibits instead of performing
+  it again.** Naming an object's own exhibited machine (`%state Rover::modes rover`, or `-state
+  "Rover::modes rover"`) used to start a second performance of it on the same object, so its
+  `entry` and `do` actions ran twice against the same feature values — a `log` written once as
+  `"W"` read `"WW"`, a `level` raised by 10 read 20. The two-argument form now recognizes that
+  machine by its declaration and attaches to the running performance, saying so in a `note:` line
+  that names the one-argument form; a machine the object merely performs is still started as a
+  detached performance. The attached session follows the object over an unrelated declaration,
+  as the one-argument form's does, and stays on the machine it was attached to when the object
+  exhibits several. A definition the object exhibits as the body of several usages (`exhibit
+  state front : Blink; exhibit state rear : Blink;`) names no one running machine, so `%state
+  Blink lamp` refuses and names the usages that would: `object #1 of "lamp" exhibits "Blink" as
+  2 machines, so naming the definition attaches to none of them: name the exhibited usage
+  instead — Lamp::front or Lamp::rear`.
+- **`%state`, `%invoke` and `-state` reach a nested part by path and by id.** The object argument
+  accepted only the name of a top-level object, so the machine of a part reached through
+  composition could be watched with `%features` but neither debugged nor invoked on. The
+  argument now takes a feature path from a top-level object (`driver.r`, `driver.r.motor`,
+  `Fleet::driver::r`) and the id the prompt prints (`#3`), resolved by the same walk `%features`
+  uses. A path that stops short of an object is a typed error naming the segment
+  that reached none and why (`Fleet::driver.x reaches no object at "x": object #1 of
+  "Fleet::driver" has no feature "x"`; `… at "level": feature "level" of object #2 holds 10,
+  which is not an object`), and an id nothing is held under is `no object #99 in this session`.
+  A segment whose feature value the runtime could not materialize keeps the runtime's reason
+  (`… at "spare": feature "spare" of object #1 could not be materialized: … multiplicity
+  violation …`) rather than being reported as a missing feature, and reaches the session status
+  as a failed `%features` would. A qualified path is read as typed — `Fleet::driver::r` is the
+  usage's part even with `Fleet::Driver`, where `r` is declared, instantiated too — and a member
+  of a multi-valued part, which no path reaches, is named by its id alone, so a session attached
+  to it by id survives an unrelated declaration.
+- **An object of the wrong kind is named when a usage is not instantiated.** `-state
+  "Rover::modes rover"` after `-instantiate Rover` (the definition, not the usage) reported only
+  `no instance of "rover" (use %instantiate first)`. The REPL and the CLI now say that an object
+  of the definition exists, not of the usage, and name what to instantiate instead: `no instance
+  of the usage "Fleet::rover": object #1 of "Fleet::Rover" is of its definition "Fleet::Rover",
+  not of the usage — use %instantiate Fleet::rover to create the usage's object, or name
+  Fleet::Rover to address it`. Asking for a definition when only usages typed by it have
+  objects names those usages the same way; with no related object the plain hint stands.
+
 - **A `then` written after a flow, a binding or a standalone succession comes back from Turtle.**
   The parser sequences a positional `then` from the nearest preceding member that is not itself
   an edge — flows, bindings, connectors, successions and transitions are skipped, attributes and
