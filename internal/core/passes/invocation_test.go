@@ -255,6 +255,31 @@ func TestInvocationOverloadNamedArguments(t *testing.T) {
 		"type.expr", "candidates: P::A::pick, P::B::pick")
 }
 
+// Parameters typed by sibling specializations of one scalar type are told apart
+// by the argument's declared type; a bare scalar is not an ambiguity.
+func TestInvocationOverloadSiblingScalarTypes(t *testing.T) {
+	const model = `package P {
+		private import ScalarValues::*;
+		attribute def Mass :> Real;
+		attribute def Volume :> Real;
+		package A { calc def label { in m : Mass; return : String = "mass"; } }
+		package B { calc def label { in v : Volume; return : Integer = 1; } }
+		package C {
+			private import A::*;
+			private import B::*;
+			attribute kg : Mass = 3.0;
+			attribute litre : Volume = 2.0;
+			attribute r : Real = 1.0;
+			attribute %s
+		}
+	}`
+	wantLibraryClean(t, fmt.Sprintf(model, `m : String = label(kg);`))
+	wantLibraryClean(t, fmt.Sprintf(model, `v : Integer = label(litre);`))
+	wantLibraryClean(t, fmt.Sprintf(model, `first : String = label(r);`))
+	wantLibraryDiag(t, fmt.Sprintf(model, `wrong : Integer = label(kg);`),
+		"type.expr", "cannot bind String value to a feature typed by Integer")
+}
+
 // A named argument is checked against the parameter it names as a positional
 // one is against its position, and a parameter without a default must be named.
 func TestInvocationNamedArgumentsAreTypeChecked(t *testing.T) {
@@ -311,8 +336,9 @@ func TestInvocationOverloadReexportedAndInheritedCandidates(t *testing.T) {
 		"type.expr", "argument 1 of pick expects Integer, found String")
 }
 
-// Every general type and every descendant of a recursive import contributes its
-// declaration; two generals sharing a name is a warning, not a lost candidate.
+// Every general type, every owned member and every descendant of a recursive
+// import contributes its declaration; two sharing a name is a warning, not a
+// lost candidate.
 func TestInvocationOverloadCandidatesFromEveryGeneralAndRecursiveImport(t *testing.T) {
 	diags := libraryDiags(t, `package P {
 		private import ScalarValues::*;
@@ -325,6 +351,21 @@ func TestInvocationOverloadCandidatesFromEveryGeneralAndRecursiveImport(t *testi
 	}`)
 	if len(diags) != 1 || diags[0].Code != "name-conflict" || diags[0].Severity != SeverityWarning {
 		t.Fatalf("expected only the inherited name-conflict warning, got %v", diags)
+	}
+	diags = libraryDiags(t, `package P {
+		private import ScalarValues::*;
+		calc def pick { in x : Integer; return : Integer = x; }
+		calc def pick { in x : String; return : String = x; }
+		attribute i : Integer = pick(2);
+		attribute s : String = pick("s");
+	}`)
+	if len(diags) != 2 {
+		t.Fatalf("expected only the two owned name-conflict warnings, got %v", diags)
+	}
+	for _, d := range diags {
+		if d.Code != "name-conflict" || d.Severity != SeverityWarning {
+			t.Fatalf("expected only owned name-conflict warnings, got %v", diags)
+		}
 	}
 	wantLibraryClean(t, `package P {
 		private import ScalarValues::*;

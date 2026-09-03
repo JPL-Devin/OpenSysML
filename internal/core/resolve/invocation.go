@@ -94,7 +94,8 @@ func (r *Resolver) allLibrary(syms []*symbols.Symbol) bool {
 }
 
 // unqualifiedCandidates walks the scopes as walkUnqualifiedHiding does, stopping
-// at the first step that binds name; the imports of a scope yield every match.
+// at the first step that binds name; the owned members and the imports of a
+// scope yield every match.
 func (r *Resolver) unqualifiedCandidates(scope *symbols.Scope, name string) []*symbols.Symbol {
 	one := func(sym *symbols.Symbol, ok bool) ([]*symbols.Symbol, bool) {
 		if !ok || sym == nil {
@@ -106,7 +107,7 @@ func (r *Resolver) unqualifiedCandidates(scope *symbols.Scope, name string) []*s
 		return []*symbols.Symbol{sym}, true
 	}
 	for s := scope; s != nil; s = s.Parent() {
-		if out, ok := one(r.localBinding(s, name, nil)); ok {
+		if out, ok := r.localBindingCandidates(s, name); ok {
 			return out
 		}
 		if out, ok := one(r.acceptPayload(s, name)); ok {
@@ -121,15 +122,17 @@ func (r *Resolver) unqualifiedCandidates(scope *symbols.Scope, name string) []*s
 		if out, ok := one(r.lookupInheritedImports(s, name)); ok {
 			return out
 		}
-		if out, ok := one(r.enclosingLocal(s.Parent(), name, nil)); ok {
-			return out
+		for enclosing := s.Parent(); enclosing != nil; enclosing = enclosing.Parent() {
+			if out, ok := r.localBindingCandidates(enclosing, name); ok {
+				return out
+			}
 		}
 		if out := r.importMatches(s, name); len(out) > 0 {
 			return out
 		}
 	}
 	if root := rootOf(scope); root != nil {
-		if out, ok := one(r.localBinding(root, name, nil)); ok {
+		if out, ok := r.localBindingCandidates(root, name); ok {
 			return out
 		}
 	}
@@ -142,6 +145,26 @@ func (r *Resolver) unqualifiedCandidates(scope *symbols.Scope, name string) []*s
 		}
 	}
 	return nil
+}
+
+// localBindingCandidates is localBinding with every owned member of scope that
+// binds name contributing, the one localBinding returns first, and reports
+// whether that step binds name at all.
+func (r *Resolver) localBindingCandidates(scope *symbols.Scope, name string) ([]*symbols.Symbol, bool) {
+	first, ok := r.localBinding(scope, name, nil)
+	if !ok {
+		return nil, false
+	}
+	if r.AliasNamesNothing(first) {
+		return nil, true
+	}
+	out := []*symbols.Symbol{first}
+	for _, sym := range symbols.PreferDeclared(scope.LookupLocalAll(name)) {
+		if r.bindsEffectiveName(sym) && !r.AliasNamesNothing(sym) {
+			out = appendSymbol(out, sym)
+		}
+	}
+	return out, true
 }
 
 // visibleMemberCandidates is visibleMember with every import of sym's scope
