@@ -144,7 +144,10 @@ func (s *Session) sendSignal(text string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	accepting := acceptingMachines(target.machines, msg)
+	accepting, err := acceptingMachines(target.machines, msg)
+	if err != nil {
+		return nil, err
+	}
 	if len(accepting) == 0 {
 		return nil, fmt.Errorf("%s accepts no signal %s now: %s", target.label, msg.SignalType, machineStates(target.machines))
 	}
@@ -165,7 +168,7 @@ func (s *Session) sendSignal(text string) ([]string, error) {
 		out = append(out, "  "+d.text())
 	}
 	if s.stateExec != nil {
-		out = append(out, s.dispatchHint(msg, decisions)...)
+		out = append(out, s.dispatchHint(accepting, decisions)...)
 	}
 	return out, nil
 }
@@ -173,12 +176,12 @@ func (s *Session) sendSignal(text string) ([]string, error) {
 // dispatchHint says how the debugged machine relates to the signal just sent:
 // that a step of it dispatches it, or that the machine leaves it to a sibling
 // because its own guards would drop it.
-func (s *Session) dispatchHint(msg runtime.Message, decisions []machineDecision) []string {
+func (s *Session) dispatchHint(accepting []*runtime.StateExecutor, decisions []machineDecision) []string {
 	exec := s.stateExec.executor
 	if slices.ContainsFunc(decisions, func(d machineDecision) bool { return d.machine == exec }) {
 		return []string{"", "Use %step or %advance <time> to dispatch it"}
 	}
-	if exec.AcceptsMessage(msg) {
+	if slices.Contains(accepting, exec) {
 		return []string{fmt.Sprintf("  %s would fire nothing on it, so a step of it leaves it to the machine above", machineStates([]*runtime.StateExecutor{exec}))}
 	}
 	return nil
@@ -284,7 +287,14 @@ func (s *Session) signalMessage(ctx *runtime.Context, req sendRequest, target si
 			return runtime.Message{}, false, lerr
 		}
 		named := runtime.NamedSignalMessage(nameText(req.signal), target.object)
-		if len(req.args) > 0 || len(acceptingMachines(target.machines, named)) == 0 {
+		if len(req.args) > 0 {
+			return runtime.Message{}, false, lerr
+		}
+		accepting, err := acceptingMachines(target.machines, named)
+		if err != nil {
+			return runtime.Message{}, false, err
+		}
+		if len(accepting) == 0 {
 			return runtime.Message{}, false, lerr
 		}
 		return named, false, nil
@@ -324,15 +334,20 @@ func checkArgumentNames(args []string) error {
 	return nil
 }
 
-// acceptingMachines keeps the machines whose active configuration accepts msg.
-func acceptingMachines(machines []*runtime.StateExecutor, msg runtime.Message) []*runtime.StateExecutor {
+// acceptingMachines keeps the machines whose active configuration accepts msg;
+// a machine whose accept port fails to resolve is the error.
+func acceptingMachines(machines []*runtime.StateExecutor, msg runtime.Message) ([]*runtime.StateExecutor, error) {
 	var out []*runtime.StateExecutor
 	for _, m := range machines {
-		if m.AcceptsMessage(msg) {
+		accepted, err := m.AcceptsMessage(msg)
+		if err != nil {
+			return nil, fmt.Errorf("state machine %q cannot accept %s: %w", machineName(m), signalText(msg), err)
+		}
+		if accepted {
 			out = append(out, m)
 		}
 	}
-	return out
+	return out, nil
 }
 
 // droppedSignalNote says what became of a signal the last step dispatched and no

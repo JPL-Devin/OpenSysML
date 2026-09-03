@@ -113,6 +113,91 @@ func sysmlFinite(r float64) float64 {
 	return r
 }
 
+// Library functions: a NaN result is a domain error, an infinity an overflow.
+func sysmlLibReal(r float64) float64 {
+	if math.IsNaN(r) {
+		sysmlFail("arithmetic domain error: argument outside the function's domain")
+	}
+	if math.IsInf(r, 0) {
+		sysmlFail("arithmetic overflow: result is not a finite Real")
+	}
+	return r
+}
+
+func sysmlLibInt(x float64) int64 {
+	if math.IsNaN(x) {
+		sysmlFail("arithmetic domain error: argument outside the function's domain")
+	}
+	if !(x < 9223372036854775808.0 && x >= -9223372036854775808.0) {
+		sysmlFail("arithmetic overflow: result exceeds the Integer range")
+	}
+	return int64(x)
+}
+
+func sysmlIAbs(a int64) int64 {
+	if a == math.MinInt64 {
+		sysmlFail("arithmetic overflow: abs exceeds the Integer range")
+	}
+	if a < 0 {
+		return -a
+	}
+	return a
+}
+
+func sysmlIMax(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func sysmlIMin(a, b int64) int64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func sysmlNaturalArg(v int64) int64 {
+	if v < 0 {
+		sysmlFail("type mismatch: requires Natural arguments")
+	}
+	return v
+}
+
+func sysmlTan(t float64) float64 { return sysmlLibReal(math.Sin(t) / math.Cos(t)) }
+func sysmlCot(t float64) float64 { return sysmlLibReal(math.Cos(t) / math.Sin(t)) }
+
+func sysmlLn(x float64) float64 {
+	if x <= 0 {
+		sysmlFail("arithmetic domain error: the logarithm of a non-positive argument is not a Real (requires x > 0.0)")
+	}
+	return sysmlLibReal(math.Log(x))
+}
+
+func sysmlLog(x, base float64) float64 {
+	switch {
+	case x <= 0:
+		sysmlFail("arithmetic domain error: the logarithm of a non-positive argument is not a Real (requires x > 0.0)")
+	case base <= 0:
+		sysmlFail("arithmetic domain error: a non-positive base has no logarithm (requires base > 0.0)")
+	case base == 1:
+		sysmlFail("arithmetic domain error: base 1.0 has no logarithm")
+	case base == 10:
+		return sysmlLibReal(math.Log10(x))
+	case base == 2:
+		return sysmlLibReal(math.Log2(x))
+	}
+	return sysmlLibReal(math.Log(x) / math.Log(base))
+}
+
+func sysmlAtan2(y, x float64) float64 {
+	if y == 0 && x == 0 {
+		sysmlFail("arithmetic domain error: atan2(0.0, 0.0) has no angle")
+	}
+	return sysmlLibReal(math.Atan2(y, x))
+}
+
 func sysmlRDiv(a, b float64) float64 {
 	if b == 0 {
 		sysmlFail("division by zero")
@@ -221,9 +306,13 @@ func sysmlRun(fn func()) (err error) {
 // EmitGo writes program as a self-contained Go main package whose command line
 // and output match the C program's.
 func EmitGo(w io.Writer, p *Program) error {
-	e := &goEmitter{w: w}
+	e := &goEmitter{w: w, collections: p.Collections}
 	e.raw(goPrelude)
 	e.raw(fmt.Sprintf("const sysmlMaxCalcDepth = %d\n\n", runtime.DefaultMaxCalcDepth))
+	if p.Collections {
+		e.raw(fmt.Sprintf("const sysmlDefaultMaxElements = %d\n", runtime.DefaultMaxElements))
+		e.raw(goSeqPrelude)
+	}
 	for _, fn := range p.Funcs {
 		e.function(fn)
 	}
@@ -237,6 +326,9 @@ type goEmitter struct {
 	indent int
 	// resultRange is checked on each return of the function being emitted.
 	resultRange Range
+	// collections brackets every statement with the element budget's release.
+	collections bool
+	temps       int
 }
 
 func (e *goEmitter) raw(s string) {
@@ -258,6 +350,8 @@ func goType(t Type) string {
 		return "float64"
 	case TypeBool:
 		return "bool"
+	case TypeSeqInt, TypeSeqReal, TypeSeqBool:
+		return goSeqType(t)
 	}
 	return "struct{}"
 }
@@ -287,7 +381,13 @@ func (e *goEmitter) function(fn *Func) {
 	e.linef("sysmlEnter()")
 	e.linef("defer sysmlLeave()")
 	for _, p := range fn.Params {
-		if p.Range != RangeAny {
+		switch {
+		case p.Type.Many():
+			if p.Mult != MultAny || p.Range != RangeAny {
+				v := e.checked(Checked{X: Var{Name: p.Name, T: p.Type}, M: p.Mult, R: p.Range, Where: paramWhere(p.Name)})
+				e.linef("%s = %s", goLocal(p.Name), v)
+			}
+		case p.Range != RangeAny:
 			e.linef("%s = %s", goLocal(p.Name), goNarrowed(goLocal(p.Name), p.Range))
 		}
 	}
@@ -299,16 +399,36 @@ func (e *goEmitter) function(fn *Func) {
 	e.linef("}")
 }
 
+// block emits statements; with collections, the elements a statement
+// materializes are released when it ends, as the interpreter's step does.
 func (e *goEmitter) block(stmts []Stmt) {
+	releases := false
+	for _, s := range stmts {
+		if _, ok := s.(Return); !ok {
+			releases = true
+		}
+	}
+	if !e.collections || !releases {
+		for _, s := range stmts {
+			e.stmt(s)
+		}
+		return
+	}
+	e.temps++
+	held := fmt.Sprintf("sysmlH%d", e.temps)
+	e.linef("%s := sysmlElements", held)
 	for _, s := range stmts {
 		e.stmt(s)
+		if _, ok := s.(Return); !ok {
+			e.linef("sysmlElements = %s", held)
+		}
 	}
 }
 
 func (e *goEmitter) stmt(s Stmt) {
 	switch s := s.(type) {
 	case Declare:
-		e.linef("var %s %s = %s", goLocal(s.Name), goType(s.T), e.expr(s.Init))
+		e.linef("var %s %s = %s", goLocal(s.Name), goType(s.T), e.declInit(s))
 		e.linef("_ = %s", goLocal(s.Name))
 	case Assign:
 		e.linef("%s = %s", goLocal(s.Name), goNarrowed(e.expr(s.Value), s.Range))
@@ -335,6 +455,8 @@ func (e *goEmitter) stmt(s Stmt) {
 		}
 		e.indent--
 		e.linef("}")
+	case ForEach:
+		e.forEach(s)
 	case Return:
 		e.linef("return %s", goNarrowed(e.expr(s.Value), e.resultRange))
 	default:
@@ -356,6 +478,9 @@ func (e *goEmitter) expr(x Expr) string {
 	case Var:
 		return goLocal(x.Name)
 	case ToReal:
+		if x.X.Type().Many() {
+			return "sysmlWiden(" + e.expr(x.X) + ")"
+		}
 		return "float64(" + e.expr(x.X) + ")"
 	case Unary:
 		operand := e.expr(x.X)
@@ -375,7 +500,14 @@ func (e *goEmitter) expr(x Expr) string {
 	case Cond:
 		return fmt.Sprintf("func() %s { if %s { return %s }; return %s }()", goType(x.T), e.expr(x.C), e.expr(x.Then), e.expr(x.Else))
 	case Call:
-		return e.call(x)
+		return e.call(x.Args, len(x.Fn.Params), goType(x.Fn.Result), func(operands []string) string {
+			return fmt.Sprintf("%s(%s)", x.Fn.Ident, strings.Join(operands, ", "))
+		})
+	case LibCall:
+		return e.call(x.Args, len(x.Op.Operands()), goType(x.Op.Result()), x.Op.goExpr)
+	}
+	if s, ok := e.seqExpr(x); ok {
+		return s
 	}
 	e.err = fmt.Errorf("codegen: Go emitter has no case for %T", x)
 	return "0"
@@ -383,21 +515,21 @@ func (e *goEmitter) expr(x Expr) string {
 
 // call emits a call; Go evaluates operands left to right, so only arguments
 // written out of parameter order need temporaries to keep source order.
-func (e *goEmitter) call(x Call) string {
-	names := make([]string, len(x.Args))
-	for i, a := range x.Args {
+func (e *goEmitter) call(args []Arg, nParams int, result string, apply func(operands []string) string) string {
+	names := make([]string, len(args))
+	for i, a := range args {
 		names[i] = e.expr(a.Value)
 	}
-	if inParamOrder(x) {
-		return fmt.Sprintf("%s(%s)", x.Fn.Ident, strings.Join(names, ", "))
+	if inParamOrder(args, nParams) {
+		return apply(names)
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "func() %s { ", goType(x.Fn.Result))
-	for i := range x.Args {
+	fmt.Fprintf(&b, "func() %s { ", result)
+	for i := range args {
 		fmt.Fprintf(&b, "t%d := %s; _ = t%d; ", i, names[i], i)
 		names[i] = fmt.Sprintf("t%d", i)
 	}
-	fmt.Fprintf(&b, "return %s(%s) }()", x.Fn.Ident, strings.Join(callOperands(x, names), ", "))
+	fmt.Fprintf(&b, "return %s }()", apply(callOperands(args, nParams, names)))
 	return b.String()
 }
 
@@ -455,20 +587,43 @@ func (e *goEmitter) main(fn *Func) {
 	e.linef("\tfmt.Fprintf(os.Stderr, \"usage: %%s [--repeat N]%s\\n\", os.Args[0])", cUsage(fn))
 	e.linef("\tos.Exit(2)")
 	e.linef("}")
+	if e.collections {
+		e.linef("sysmlReadMaxElements()")
+	}
 	args := make([]string, len(fn.Params))
 	for i, p := range fn.Params {
-		parser := map[Type]string{TypeInt: "sysmlParseInt", TypeReal: "sysmlParseReal", TypeBool: "sysmlParseBool"}[p.Type]
-		e.linef("%s := %s(args[%d], %q)", goLocal(p.Name), parser, i, p.Name)
+		parser := map[Type]string{TypeInt: "sysmlParseInt", TypeReal: "sysmlParseReal", TypeBool: "sysmlParseBool"}[p.Type.Elem()]
+		if p.Type.Many() {
+			parser = fmt.Sprintf("sysmlParseSeq[%s](args[%d], %q, %s)", goElem(p.Type), i, p.Name, parser)
+		} else {
+			parser = fmt.Sprintf("%s(args[%d], %q)", parser, i, p.Name)
+		}
+		e.linef("%s := %s", goLocal(p.Name), parser)
 		args[i] = goLocal(p.Name)
 	}
 	e.linef("var result %s", goType(fn.Result))
+	reset := ""
+	if e.collections {
+		// A run holds its collection arguments throughout, as the interpreter
+		// holds the literals it evaluated them from.
+		reset = "sysmlElements = 0; "
+		for i, p := range fn.Params {
+			if p.Type.Many() {
+				reset += fmt.Sprintf("sysmlCharge(int64(len(%s.data))); ", args[i])
+			}
+		}
+	}
 	e.linef("for i := 0; i < repeat; i++ {")
-	e.linef("\tif err := sysmlRun(func() { result = %s(%s) }); err != nil {", fn.Ident, strings.Join(args, ", "))
+	e.linef("\tif err := sysmlRun(func() { %sresult = %s(%s) }); err != nil {", reset, fn.Ident, strings.Join(args, ", "))
 	e.linef("\t\tfmt.Fprintf(os.Stderr, \"%s: %%s\\n\", err)", fn.Name)
 	e.linef("\t\tos.Exit(1)")
 	e.linef("\t}")
 	e.linef("}")
-	e.linef("fmt.Println(sysmlFormat(result))")
+	if fn.Result.Many() {
+		e.linef("fmt.Println(sysmlFormatSeq(result))")
+	} else {
+		e.linef("fmt.Println(sysmlFormat(result))")
+	}
 	e.indent--
 	e.linef("}")
 }

@@ -1,0 +1,37 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="P" library=false standard=false
+      (Membership visibility="default"
+        (Usage kind="class" name="Base" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="class" name="chain" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="specializes" target=Base
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="struct" name="chainStruct" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="struct" name="chain" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="specializes" target=chainStruct
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="class" name="chain" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="specializes" target=Base conjugated=true
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="class" name="chain" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="disjoint" target=Base
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="class" name="chain" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="unions" target=Base
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="other" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="chain" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+          (Relationship kind="chains" target=other
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="chain" ref=false direction="none" composite=false derived=false ordered=true nonunique=true keyword="feature"))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="link" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" chain=true)))))

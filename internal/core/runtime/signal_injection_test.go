@@ -55,8 +55,8 @@ func TestSignalMessageDrivesTheExhibitedMachine(t *testing.T) {
 	if msg.Signal != goSym || msg.SignalType != "go" || msg.Object != bulb.ID || msg.Delivery != DeliverObject {
 		t.Errorf("message = %+v, want go typed by its definition and addressed to the bulb", msg)
 	}
-	if !exec.AcceptsMessage(msg) {
-		t.Fatal("the lamp in off does not accept go")
+	if accepted, err := exec.AcceptsMessage(msg); err != nil || !accepted {
+		t.Fatalf("AcceptsMessage(go) = %v, %v; want the lamp in off to accept it", accepted, err)
 	}
 	if d, err := exec.Decide(msg); err != nil || len(d.Fires) != 1 || d.Fires[0] != "transition off_on" || d.Deferred {
 		t.Errorf("Decide(go) = %+v, %v; want off_on firing", d, err)
@@ -107,8 +107,8 @@ func TestSignalMessageDrivesTheExhibitedMachine(t *testing.T) {
 	if _, bound := exec.StateData()["d"]; bound || len(ctx.instances) != objects || len(dark.Payload) != 1 {
 		t.Errorf("deciding left a trace: d bound %v, %d objects (was %d), payload %v", bound, len(ctx.instances), objects, dark.Payload)
 	}
-	if !exec.AcceptsMessage(dark) {
-		t.Error("a guarded-out Dim is not taken off the bus, though dispatch would take it")
+	if accepted, err := exec.AcceptsMessage(dark); err != nil || !accepted {
+		t.Errorf("AcceptsMessage(Dim) = %v, %v; want a guarded-out Dim taken off the bus as dispatch would", accepted, err)
 	}
 	ctx.PostMessage(dark)
 	if err := exec.ProcessNextEvent(); err != nil {
@@ -364,8 +364,8 @@ func TestSignalIdentityCrossesScopeTrees(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SignalMessage(go): %v", err)
 	}
-	if !exec.AcceptsMessage(msg) {
-		t.Fatal("go typed from another tree is not accepted in off")
+	if accepted, err := exec.AcceptsMessage(msg); err != nil || !accepted {
+		t.Fatalf("AcceptsMessage(go) = %v, %v; want go typed from another tree accepted in off", accepted, err)
 	}
 	if d, err := exec.Decide(msg); err != nil || len(d.Fires) != 1 {
 		t.Errorf("Decide(go) = %+v, %v; want off_on firing", d, err)
@@ -374,8 +374,8 @@ func TestSignalIdentityCrossesScopeTrees(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SignalMessage(Batch): %v", err)
 	}
-	if exec.AcceptsMessage(batch) {
-		t.Error("Batch is accepted in off, though no transition there takes it")
+	if accepted, err := exec.AcceptsMessage(batch); err != nil || accepted {
+		t.Errorf("AcceptsMessage(Batch) = %v, %v; want it refused in off, where no transition takes it", accepted, err)
 	}
 	if ms := bulb.ExhibitedStatesOf(resolveSymbol(t, other, "Lamp")); len(ms) != 1 || ms[0].State != exec {
 		t.Errorf("ExhibitedStatesOf(Lamp from another tree) = %v; want the lamp", ms)
@@ -416,16 +416,16 @@ func TestPostedMessageTheActiveStateDefersIsHeld(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SignalMessage(Noise): %v", err)
 	}
-	if exec.AcceptsMessage(noise) {
-		t.Error("Noise, neither accepted nor deferred in busy, is accepted")
+	if accepted, err := exec.AcceptsMessage(noise); err != nil || accepted {
+		t.Errorf("AcceptsMessage(Noise) = %v, %v; want it refused in busy, which neither accepts nor defers it", accepted, err)
 	}
 
 	ping, err := ctx.SignalMessage(resolveSymbol(t, root, "Ping"), nil, server)
 	if err != nil {
 		t.Fatalf("SignalMessage(Ping): %v", err)
 	}
-	if !exec.AcceptsMessage(ping) {
-		t.Fatal("Ping, deferred in busy, is not taken")
+	if accepted, err := exec.AcceptsMessage(ping); err != nil || !accepted {
+		t.Fatalf("AcceptsMessage(Ping) = %v, %v; want Ping, deferred in busy, taken", accepted, err)
 	}
 	if d, err := exec.Decide(ping); err != nil || !d.Deferred || len(d.Fires) != 0 {
 		t.Errorf("Decide(Ping) = %+v, %v; want deferred and nothing firing", d, err)
@@ -647,8 +647,8 @@ func TestPortRoutedMessageTheActiveStateDefersIsHeld(t *testing.T) {
 	if len(pending) != 1 || pending[0].Port != "inPort" {
 		t.Fatalf("after entering busy, on the bus: %+v; want Ping routed to inPort", pending)
 	}
-	if !exec.AcceptsMessage(pending[0]) {
-		t.Fatal("Ping at inPort, deferred in busy, is not taken")
+	if accepted, err := exec.AcceptsMessage(pending[0]); err != nil || !accepted {
+		t.Fatalf("AcceptsMessage(Ping at inPort) = %v, %v; want it taken, deferred in busy", accepted, err)
 	}
 	if d, err := exec.Decide(pending[0]); err != nil || !d.Deferred || len(d.Fires) != 0 {
 		t.Errorf("Decide(Ping via inPort) = %+v, %v; want deferred and nothing firing", d, err)

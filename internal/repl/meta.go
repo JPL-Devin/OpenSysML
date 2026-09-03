@@ -1965,6 +1965,7 @@ func (s *Session) startAction(name string, performer []string) ([]string, error)
 		name:     name,
 		fqn:      qualifiedOr(fqn, name),
 		selfFQN:  selfFQN,
+		self:     self,
 		symbol:   sym,
 		executor: exec,
 		rtCtx:    ctx,
@@ -2273,6 +2274,7 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 		name:     name,
 		fqn:      qualifiedOr(fqn, name),
 		selfFQN:  selfFQN,
+		self:     self,
 		symbol:   sym,
 		executor: exec,
 		rtCtx:    ctx,
@@ -2324,6 +2326,7 @@ func (s *Session) attachExhibitedMachine(
 		name:      name,
 		fqn:       held,
 		selfFQN:   held,
+		self:      inst,
 		symbol:    behavior.Symbol,
 		executor:  behavior.State,
 		machine:   behavior.Name,
@@ -2490,7 +2493,10 @@ func (s *Session) doEvents() ([]string, bool, error) {
 
 	exec := s.stateExec.executor
 	queue := exec.EventQueue()
-	signals := s.signalsInFlight(exec)
+	signals, err := s.signalsInFlight(exec)
+	if err != nil {
+		return nil, false, err
+	}
 	deferred := exec.DeferredEvents()
 
 	if queue.Len() == 0 && len(signals) == 0 && len(deferred) == 0 {
@@ -2519,14 +2525,18 @@ func (s *Session) doEvents() ([]string, bool, error) {
 
 // signalsInFlight lists the messages on the bus the debugged machine would
 // deliver on its next step.
-func (s *Session) signalsInFlight(exec *runtime.StateExecutor) []runtime.Message {
+func (s *Session) signalsInFlight(exec *runtime.StateExecutor) ([]runtime.Message, error) {
 	var out []runtime.Message
 	for _, msg := range s.stateExec.rtCtx.PendingMessages() {
-		if exec.AcceptsMessage(msg) {
+		accepted, err := exec.AcceptsMessage(msg)
+		if err != nil {
+			return nil, fmt.Errorf("state machine %q cannot accept %s: %w", s.stateExec.name, signalText(msg), err)
+		}
+		if accepted {
 			out = append(out, msg)
 		}
 	}
-	return out
+	return out, nil
 }
 
 // doCurrent shows current state and configuration.

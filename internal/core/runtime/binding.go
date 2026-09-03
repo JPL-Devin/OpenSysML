@@ -251,7 +251,21 @@ func (ctx *Context) attemptBinding(owner, targetInst *Instance, target *FeatureV
 		return attempt
 	}
 
-	leftValue, leftSet, err := ctx.bindingEndpointValue(left, owner, leftCarries)
+	// Read the other end first: an object it already holds is what the
+	// materializing end becomes, not a fresh object of its own.
+	var leftValue, rightValue Value
+	var leftSet, rightSet bool
+	if leftCarries {
+		rightValue, rightSet, err = ctx.bindingEndpointValue(right, owner, rightCarries)
+		if err == nil {
+			leftValue, leftSet, err = ctx.bindingEndpointValue(left, owner, !(rightSet && ctx.unmaterializedObjectEnd(left)))
+		}
+	} else {
+		leftValue, leftSet, err = ctx.bindingEndpointValue(left, owner, leftCarries)
+		if err == nil {
+			rightValue, rightSet, err = ctx.bindingEndpointValue(right, owner, !(leftSet && ctx.unmaterializedObjectEnd(right)))
+		}
+	}
 	if err != nil {
 		attempt.err = err
 		return attempt
@@ -262,11 +276,6 @@ func (ctx *Context) attemptBinding(owner, targetInst *Instance, target *FeatureV
 			feature:  left.location.name,
 		}, binding.Decl) {
 		attempt.cycle = true
-	}
-	rightValue, rightSet, err := ctx.bindingEndpointValue(right, owner, rightCarries)
-	if err != nil {
-		attempt.err = err
-		return attempt
 	}
 	if right.location.instance != nil &&
 		ctx.genuineBindingCycle(featureValueRef{
@@ -442,6 +451,18 @@ func (ctx *Context) bindingEndpointValue(endpoint bindingEndpoint, owner *Instan
 		return Value{}, false, err
 	}
 	return val, found, nil
+}
+
+// unmaterializedObjectEnd reports whether an endpoint is an object-valued
+// feature the run has not yet materialized, so materializing it would build a
+// fresh object rather than read one.
+func (ctx *Context) unmaterializedObjectEnd(endpoint bindingEndpoint) bool {
+	loc := endpoint.location
+	if loc.instance == nil {
+		return false
+	}
+	fv := loc.instance.FeatureValues[loc.name]
+	return !fv.Materialized && ctx.CompositeTypeOf(fv.Feature) != nil
 }
 
 func bindingEndpointDerived(endpoint bindingEndpoint) bool {

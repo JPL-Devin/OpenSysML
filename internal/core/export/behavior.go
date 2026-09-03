@@ -368,29 +368,9 @@ func (e *encoder) edgeEnds(subject rdf.Term, node ast.Node, owner string, src, t
 			e.graph.Add(subject, e.sysx(end.member), e.ids.subjectForNode(end.end.member, fqn))
 			continue
 		}
-		// The two-name form is read only as basic names, so an end needing quotes
-		// is refused; an implied end is not written, so its spelling is free.
-		if quotedName(name) && !end.end.implied {
-			return &UnsupportedError{
-				What: fmt.Sprintf("the succession at %s", e.where(node)),
-				Note: fmt.Sprintf("it sequences %s, whose name is not a basic name, and the two-end form the graph is written back as reads only basic names", name),
-			}
-		}
 		e.graph.Add(subject, e.sysml(end.feature), e.reference(owner, name))
 	}
 	return nil
-}
-
-// quotedName reports whether any segment of a qualified name is written with
-// quotes, the spelling nameText gives it back.
-func quotedName(qualified string) bool {
-	for _, segment := range strings.Split(qualified, "::") {
-		segment = strings.TrimSpace(segment)
-		if nameText(unquote(segment)) != segment {
-			return true
-		}
-	}
-	return false
 }
 
 func (e *encoder) name(subject rdf.Term, name string) {
@@ -804,6 +784,7 @@ func (d *decoder) positionalSuccessions(children []*element) ([]*element, error)
 				return nil, err
 			}
 			last().prefix = "then "
+			d.folded[child] = last()
 			continue
 		}
 		// The target is a member elsewhere in the body, so the succession
