@@ -1713,7 +1713,7 @@ func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget
 	}
 	target := &invocationTarget{qualName: qualifiedNameToString(n.Type)}
 	if sel := passes.SelectInvocation(ec.ctx.resolver, ec.ctx.model, ec.scope, n); sel.Ambiguous {
-		target.ambiguous = sel.Applicable
+		target.ambiguous = sel.Tied
 	} else if sym := selectedDeclaration(sel); sym != nil {
 		target.calc = sym
 		if fn, ok := ec.ctx.builtinFor(sym); ok {

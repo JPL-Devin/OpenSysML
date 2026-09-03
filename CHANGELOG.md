@@ -17,7 +17,7 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   selected. `ToInteger("7")` is `IntegerFunctions::ToInteger`, `abs(-2)` answers `2` and
   `abs(rect(3.0, 4.0))` answers `5.0` through `ComplexFunctions::abs`, where the unqualified
   name used to be rejected with `expects Real, found String` or `requires a numeric value`. A
-  genuine tie is reported as `invocation-ambiguous`, naming the candidates, and refused at
+  genuine tie is reported as `invocation-ambiguous`, naming the tied candidates, and refused at
   runtime as `ErrAmbiguousInvocation` rather than dispatched silently; a call no candidate fits
   keeps its argument diagnostic and names the declarations considered. The selection is
   memoized in a side table keyed by the invocation node and scope, and the evaluator dispatches

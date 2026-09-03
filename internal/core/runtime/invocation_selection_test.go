@@ -15,6 +15,7 @@ import (
 // declarations at play, never a silent pick.
 func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("calc_call_ambiguous_between_two_imports", testCalcCallAmbiguousBetweenTwoImports)
+	t.Run("calc_call_ambiguity_names_only_the_tied_best", testCalcCallAmbiguityNamesOnlyTheTiedBest)
 	t.Run("calc_call_fits_no_visible_candidate", testCalcCallFitsNoVisibleCandidate)
 	t.Run("calc_call_selects_by_argument_type", testCalcCallSelectsByArgumentType)
 	t.Run("calc_call_selects_by_named_argument", testCalcCallSelectsByNamedArgument)
@@ -295,6 +296,36 @@ func testCalcCallAmbiguousBetweenTwoImports(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not name candidate %s", err, want)
 		}
+	}
+}
+
+// A broader overload the arguments also fit is beaten by the tied ones, so the
+// ambiguity error names only those.
+func testCalcCallAmbiguityNamesOnlyTheTiedBest(t *testing.T) {
+	src := `
+		package A { private import ScalarValues::*; calc def pick { in x : Integer; return : Integer = 1; } }
+		package B { private import ScalarValues::*; calc def pick { in x : Integer; return : Integer = 2; } }
+		package C { private import ScalarValues::*; calc def pick { in x : Real; return : Integer = 3; } }
+		package test {
+			private import ScalarValues::*;
+			private import A::*;
+			private import B::*;
+			private import C::*;
+			calc choose { pick(3) }
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "choose", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("choose calc not found")
+	}
+	_, err := ctx.InvokeCalc(sym, nil, rootScope)
+	if !errors.Is(err, ErrAmbiguousInvocation) {
+		t.Fatalf("expected ErrAmbiguousInvocation, got: %v", err)
+	}
+	if !strings.HasSuffix(err.Error(), "pick denotes A::pick, B::pick") {
+		t.Errorf("error %q should name exactly the tied overloads A::pick, B::pick", err)
 	}
 }
 
