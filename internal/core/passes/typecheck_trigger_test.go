@@ -298,16 +298,21 @@ func TestTriggerOnAcceptActions(t *testing.T) {
 		"found a quantity in metre (a LengthUnit)")
 }
 
-// The body an action target succession carries (`then starting { ... }`) is a
-// behavior body like any other: its triggers and assignments see the enclosing
-// scope and the declarations the body itself makes.
+// The body an action target succession carries (`then starting { ... }`, or
+// `first prep then starting { ... }`) is a behavior body like any other: its
+// triggers, assignments and declarations see the enclosing scope and the
+// declarations the body itself makes.
 func TestTriggerInSuccessionBody(t *testing.T) {
-	const succession = `do action body {
-		action prep;
-		action starting;
-		first prep;
-		then starting { %s }
-	}`
+	for _, succession := range []string{
+		"do action body { action prep; action starting; first prep; then starting { %s } }",
+		"do action body { action prep; action starting; first prep then starting { %s } }",
+	} {
+		checkSuccessionBody(t, succession)
+	}
+}
+
+func checkSuccessionBody(t *testing.T, succession string) {
+	t.Helper()
 	body := func(stmt string) string { return strings.Replace(succession, "%s", stmt, 1) }
 	wantTriggerSilent(t, body("accept after 5 [s]; assign x := 1;"))
 	wantTriggerDiag(t, body("accept after 5;"), "trigger-after-duration", "found Natural")
@@ -326,6 +331,18 @@ func TestTriggerInSuccessionBody(t *testing.T) {
 	diags = triggerDiags(t, body(local+`assign n := "s";`))
 	if len(diags) != 1 || !strings.Contains(diags[0].Message, "cannot bind String value to a feature typed by Integer") {
 		t.Fatalf("want one assignment diagnostic, got %v", diags)
+	}
+}
+
+// A declaration a succession body makes is typed like one in any other body.
+func TestSuccessionBodyDeclarationsTyped(t *testing.T) {
+	for _, succession := range []string{"first prep; then starting { %s }", "first prep then starting { %s }"} {
+		src := `package P { private import ScalarValues::*; action def A { action prep; action starting; ` +
+			strings.Replace(succession, "%s", `attribute m : Integer = "s";`, 1) + " } }"
+		diags := libraryTypeDiags(t, src)
+		if len(diags) != 1 || !strings.Contains(diags[0].Message, "cannot bind String value to a feature typed by Integer") {
+			t.Errorf("%s: want one declaration value diagnostic, got %v", succession, diags)
+		}
 	}
 }
 

@@ -77,6 +77,14 @@ func (c *refCollector) childScope(scope *symbols.Scope, decl ast.Node) *symbols.
 	return nil
 }
 
+// walkBody walks the body decl owns in the scope built for it (see symbols.buildDecl).
+func (c *refCollector) walkBody(scope *symbols.Scope, decl ast.Node, members []ast.Node) {
+	if child := c.childScope(scope, decl); child != nil {
+		scope = child
+	}
+	c.walkMembers(scope, members)
+}
+
 func (c *refCollector) walkMembers(scope *symbols.Scope, members []ast.Node) {
 	for _, m := range members {
 		decl := m
@@ -226,6 +234,7 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		// The node's own name is a label, not a reference.
 		c.add(scope, d.Successor)
 		c.expr(scope, d.Guard)
+		c.walkBody(scope, d, d.Members)
 		return true
 	case *ast.ConstraintMember:
 		c.expr(scope, d.Expression)
@@ -299,6 +308,15 @@ func (c *refCollector) behaviorDecl(scope *symbols.Scope, decl ast.Node) bool {
 		c.expr(scope, d.Guard)
 		c.walkMembers(scope, d.Effect)
 		return true
+	case *ast.SuccessionEdge:
+		c.edgeEnd(scope, d.Source, d.SourceMember, d.SourceImplied)
+		c.edgeEnd(scope, d.Target, d.TargetMember, d.TargetImplied)
+		c.walkBody(scope, d, d.Members)
+		return true
+	case *ast.ControlFlowEdge:
+		c.edgeEnd(scope, d.Source, d.SourceMember, d.SourceImplied)
+		c.edgeEnd(scope, d.Target, d.TargetMember, d.TargetImplied)
+		return true
 	case *ast.SendStatement:
 		c.expr(scope, d.Message)
 		c.expr(scope, d.Target)
@@ -345,6 +363,15 @@ func (c *refCollector) behaviorDecl(scope *symbols.Scope, decl ast.Node) bool {
 	default:
 		return false
 	}
+}
+
+// edgeEnd collects an edge end the author named; one bound to a member by
+// position or supplied by the notation is no reference (see resolveEdgeEnd).
+func (c *refCollector) edgeEnd(scope *symbols.Scope, qn *ast.QualifiedName, member ast.Node, implied bool) {
+	if qn == nil || len(qn.Parts) == 0 || member != nil || implied {
+		return
+	}
+	c.add(scope, qn)
 }
 
 // trigger collects the references a transition trigger carries. Bare signal and

@@ -37,6 +37,15 @@ func (r *Resolver) walkMembers(scope *symbols.Scope, members []ast.Node) {
 	}
 }
 
+// walkBody walks the members of a body decl owns in the scope built for it, or in
+// scope itself when the builder made none (an empty body).
+func (r *Resolver) walkBody(scope *symbols.Scope, decl ast.Node, members []ast.Node) {
+	if child := r.childScope(scope, decl); child != nil {
+		scope = child
+	}
+	r.walkMembers(scope, members)
+}
+
 // unwrapForResolve mirrors the builder's unwrapMember: it strips *ast.Membership
 // wrappers so we resolve against the inner declaration.
 func unwrapForResolve(m ast.Node) (ast.Node, ast.Visibility) {
@@ -240,14 +249,11 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 			r.ResolveQualified(scope, d.Successor)
 		}
 		r.resolveExpr(scope, d.Guard)
+		r.walkBody(scope, d, d.Members)
 		return true
 	case *ast.SuccessionEdge:
 		r.resolveSuccessionEdge(scope, d)
-		body := scope
-		if child := r.childScope(scope, d); child != nil {
-			body = child
-		}
-		r.walkMembers(body, d.Members)
+		r.walkBody(scope, d, d.Members)
 		return true
 	case *ast.ControlFlowEdge:
 		r.resolveControlFlowEdge(scope, d)

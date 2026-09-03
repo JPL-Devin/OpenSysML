@@ -3,6 +3,7 @@
 package resolve_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -59,6 +60,15 @@ package App {
 		}
 		if speed > 1 { action fast; }
 		while speed > 1 { action loop; }
+		action prep;
+		action launch;
+		action left;
+		action right;
+		first prep then launch { attribute delay : Torque; attribute margin : Torque = delay; }
+		then launch { attribute wait : Torque; attribute slack : Torque = wait; }
+		then decide;
+		if speed > 1 then left;
+		else right;
 	}
 	state def Trip {
 		entry action begin;
@@ -177,6 +187,43 @@ package App {
 	}
 	if plain == 0 {
 		t.Error("the import's own name must be reported as an ordinary reference")
+	}
+}
+
+// A succession body is a scope of its own, whether written `first a then b { … }`
+// or `then b { … }`: a name it declares is found only by a reference collected
+// with that scope. The edge's own ends are references like a transition's.
+func TestSuccessionBodyReferencesCarryTheBodyScope(t *testing.T) {
+	r, root, rootScope := resolvedDoc(t, referencesModel)
+	fresh, _, _ := resolvedDoc(t, referencesModel) // resolution is memoized per name node
+	byName := map[string][]resolve.Reference{}
+	for _, ref := range resolve.References(root, rootScope) {
+		byName[nameText(ref.QN)] = append(byName[nameText(ref.QN)], ref)
+	}
+	for name, form := range map[string]string{"delay": "*ast.InitialNode", "wait": "*ast.SuccessionEdge"} {
+		refs := byName[name]
+		if len(refs) != 1 {
+			t.Errorf("`%s` is collected %d times, want 1: the `= %s` inside the %s body", name, len(refs), name, form)
+			continue
+		}
+		ref := refs[0]
+		if got := fmt.Sprintf("%T", ref.Scope.Node()); got != form {
+			t.Errorf("`= %s` is collected in the scope of %s, want the body scope of the %s", name, got, form)
+		}
+		sym, ok := r.ResolveReference(ref)
+		if !ok || sym.OwnerScope != ref.Scope {
+			t.Errorf("`= %s` resolves to %v, %v; want the attribute the body declares", name, sym, ok)
+		}
+		if _, ok := fresh.ResolveReference(resolve.Reference{Scope: ref.Scope.Parent(), QN: ref.QN}); ok {
+			t.Errorf("`%s` resolves from the action body, so the body scope was not needed", name)
+		}
+	}
+	// `first prep` labels the initial node, so `prep` is no reference; `launch` is
+	// the end of both successions, `left` and `right` the branches of the decision.
+	for name, want := range map[string]int{"prep": 0, "launch": 2, "left": 1, "right": 1} {
+		if n := len(byName[name]); n != want {
+			t.Errorf("edge end `%s` is collected %d times, want %d", name, n, want)
+		}
 	}
 }
 
