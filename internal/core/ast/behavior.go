@@ -458,9 +458,10 @@ type AssumeMember struct {
 	Reference  *QualifiedName // referenced constraint/requirement (reference-subsetting form)
 	Body       []Node         // ConstraintMembers of the nested constraint (for the braced form)
 	// Declaration of the constraint the member owns, when it is written with
-	// one: `assume constraint c1 : C;`.
+	// one: `assume constraint c1 : C;`. DeclSpan covers it from `constraint` on.
 	Name          string
 	NameSpan      source.Span
+	DeclSpan      source.Span
 	Relationships []*Relationship
 	Multiplicity  *Multiplicity
 	Value         Node
@@ -484,9 +485,10 @@ type RequireMember struct {
 	Reference  *QualifiedName // referenced requirement (reference-subsetting form, SysML v2 §7.20)
 	Body       []Node         // nested members: ConstraintMembers for the braced form, requirement members for the reference form
 	// Declaration of the constraint the member owns, when it is written with
-	// one: `require constraint c1 : C;`.
+	// one: `require constraint c1 : C;`. DeclSpan covers it from `constraint` on.
 	Name          string
 	NameSpan      source.Span
+	DeclSpan      source.Span
 	Relationships []*Relationship
 	Multiplicity  *Multiplicity
 	Value         Node
@@ -505,6 +507,7 @@ type RequireMember struct {
 type OwnedConstraint struct {
 	Name              string
 	NameSpan          source.Span
+	DeclSpan          source.Span
 	Relationships     []*Relationship
 	Multiplicity      *Multiplicity
 	Value             Node
@@ -523,18 +526,18 @@ func OwnedConstraintOf(n Node) (OwnedConstraint, bool) {
 			return OwnedConstraint{}, false
 		}
 		return OwnedConstraint{
-			Name: m.Name, NameSpan: m.NameSpan, Relationships: m.Relationships, Multiplicity: m.Multiplicity,
-			Value: m.Value, ValueOperatorSpan: m.ValueOperatorSpan, ValueIsDefault: m.ValueIsDefault,
-			ValueIsInitial: m.ValueIsInitial, Body: m.Body,
+			Name: m.Name, NameSpan: m.NameSpan, DeclSpan: m.DeclSpan, Relationships: m.Relationships,
+			Multiplicity: m.Multiplicity, Value: m.Value, ValueOperatorSpan: m.ValueOperatorSpan,
+			ValueIsDefault: m.ValueIsDefault, ValueIsInitial: m.ValueIsInitial, Body: m.Body,
 		}, true
 	case *RequireMember:
 		if m.Reference != nil || m.Expression != nil {
 			return OwnedConstraint{}, false
 		}
 		return OwnedConstraint{
-			Name: m.Name, NameSpan: m.NameSpan, Relationships: m.Relationships, Multiplicity: m.Multiplicity,
-			Value: m.Value, ValueOperatorSpan: m.ValueOperatorSpan, ValueIsDefault: m.ValueIsDefault,
-			ValueIsInitial: m.ValueIsInitial, Body: m.Body,
+			Name: m.Name, NameSpan: m.NameSpan, DeclSpan: m.DeclSpan, Relationships: m.Relationships,
+			Multiplicity: m.Multiplicity, Value: m.Value, ValueOperatorSpan: m.ValueOperatorSpan,
+			ValueIsDefault: m.ValueIsDefault, ValueIsInitial: m.ValueIsInitial, Body: m.Body,
 		}, true
 	}
 	return OwnedConstraint{}, false

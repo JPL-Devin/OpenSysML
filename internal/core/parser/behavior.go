@@ -2149,12 +2149,14 @@ func (p *Parser) parseAssumeMember(start int) ast.Node {
 	// Check for 'assume [#Meta...] [constraint] [<decl>] (; | { body })' pattern
 	prefixes := p.parsePrefixMetadata()
 	if p.atKeyword("constraint") || len(prefixes) > 0 {
+		declStart := p.peek().Span.Offset
 		p.acceptKeyword("constraint")
 		d := p.parseOwnedConstraintDecl("assume constraint")
 		node := &ast.AssumeMember{
 			Prefixes:          prefixes,
 			Name:              d.name,
 			NameSpan:          d.nameSpan,
+			DeclSpan:          p.spanFrom(declStart),
 			Relationships:     d.relationships,
 			Multiplicity:      d.multiplicity,
 			Value:             d.value,
@@ -2198,12 +2200,14 @@ func (p *Parser) parseRequireMember(start int) ast.Node {
 	// Check for 'require [#Meta...] [constraint] [<decl>] (; | { body })' pattern
 	prefixes := p.parsePrefixMetadata()
 	if p.atKeyword("constraint") || len(prefixes) > 0 {
+		declStart := p.peek().Span.Offset
 		p.acceptKeyword("constraint")
 		d := p.parseOwnedConstraintDecl("require constraint")
 		node := &ast.RequireMember{
 			Prefixes:          prefixes,
 			Name:              d.name,
 			NameSpan:          d.nameSpan,
+			DeclSpan:          p.spanFrom(declStart),
 			Relationships:     d.relationships,
 			Multiplicity:      d.multiplicity,
 			Value:             d.value,

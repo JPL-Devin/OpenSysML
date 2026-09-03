@@ -28,9 +28,9 @@ var oneTypeUsageMessages = map[ast.UsageKind]string{
 // checkOneType reports a usage that declares more than one type where the
 // reference admits one. A usage declaring none is silent: the reference counts
 // the type its library base supplies, so there is exactly one.
-func (tc *typeChecker) checkOneType(scope *symbols.Scope, u *ast.Usage) {
+func (tc *typeChecker) checkOneType(scope *symbols.Scope, d featureDecl) {
 	typings := 0
-	for _, rel := range u.Relationships {
+	for _, rel := range d.relationships {
 		if rel != nil && rel.Kind == ast.RelTyping {
 			typings++
 		}
@@ -38,10 +38,10 @@ func (tc *typeChecker) checkOneType(scope *symbols.Scope, u *ast.Usage) {
 	if typings <= 1 {
 		return
 	}
-	msg, ok := oneTypeUsageMessages[u.Kind]
+	msg, ok := oneTypeUsageMessages[d.kind]
 	// An attribute typed by an enumeration definition takes no other type
 	// (SysMLValidator checkAttributeUsage), even though attributes otherwise may.
-	if !ok && u.Kind == ast.UsageAttribute && tc.typesAnEnumeration(scope, u) {
+	if !ok && d.kind == ast.UsageAttribute && tc.typesAnEnumeration(scope, d.relationships) {
 		msg, ok = msgEnumerationAttributeTypes, true
 	}
 	if !ok {
@@ -49,15 +49,15 @@ func (tc *typeChecker) checkOneType(scope *symbols.Scope, u *ast.Usage) {
 	}
 	tc.appendUnique(Diagnostic{
 		Severity: SeverityError,
-		Span:     u.Span(),
+		Span:     d.span,
 		Message:  msg,
 		Code:     "one-type",
 		Source:   "type",
 	})
 }
 
-func (tc *typeChecker) typesAnEnumeration(scope *symbols.Scope, u *ast.Usage) bool {
-	for _, rel := range u.Relationships {
+func (tc *typeChecker) typesAnEnumeration(scope *symbols.Scope, rels []*ast.Relationship) bool {
+	for _, rel := range rels {
 		if rel == nil || rel.Kind != ast.RelTyping || rel.Target == nil {
 			continue
 		}

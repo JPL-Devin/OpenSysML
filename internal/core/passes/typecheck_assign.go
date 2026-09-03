@@ -94,14 +94,14 @@ func (ec *exprChecker) checkAssignmentValue(scope *symbols.Scope, n *ast.Assignm
 		ec.infer(scope, n.Value)
 		return
 	}
-	u, isUsage := target.Decl.(*ast.Usage)
-	if !isUsage {
+	d, isFeature := featureDeclOf(target.Decl)
+	if !isFeature {
 		ec.infer(scope, n.Value)
 		return
 	}
 	// The written value's names are the statement's; the declaration read is
 	// the target feature's own, which a chained target reaches elsewhere.
-	ec.checkBoundValue(scope, target.OwnerScope, u, n.Value)
+	ec.checkBoundValue(scope, target.OwnerScope, d, n.Value)
 }
 
 // resolveAssignmentTarget resolves the feature an assignment writes, following
