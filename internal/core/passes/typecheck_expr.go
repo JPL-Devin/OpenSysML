@@ -750,9 +750,8 @@ func (ec *exprChecker) checkArguments(
 		return
 	}
 	for i, arg := range args {
-		if !ec.argumentFits(arg, argTypes.positional[i], params[i]) {
-			report(arg.Span(), "argument %d of %s expects %s, found %s",
-				i+1, sym.Name, ec.parameterPrimType(params[i]), argTypes.positional[i])
+		if mismatch := ec.argumentMismatch(arg, argTypes.positional[i], params[i]); mismatch != "" {
+			report(arg.Span(), "argument %d of %s %s", i+1, sym.Name, mismatch)
 		}
 	}
 }
@@ -762,7 +761,7 @@ func (ec *exprChecker) checkArguments(
 func (ec *exprChecker) checkNamedArguments(
 	e *ast.InvocationExpr,
 	sym *symbols.Symbol,
-	namedTypes []semantics.PrimType,
+	namedTypes []semantics.Argument,
 	params []parameter,
 	report func(source.Span, string, ...any),
 ) {
@@ -794,9 +793,8 @@ func (ec *exprChecker) checkNamedArguments(
 			continue
 		}
 		bound[name] = true
-		if !ec.argumentFits(arg.Value, namedTypes[i], p) {
-			report(arg.Value.Span(), "argument %s of %s expects %s, found %s",
-				name, sym.Name, ec.parameterPrimType(p), namedTypes[i])
+		if mismatch := ec.argumentMismatch(arg.Value, namedTypes[i], p); mismatch != "" {
+			report(arg.Value.Span(), "argument %s of %s %s", name, sym.Name, mismatch)
 		}
 	}
 	// A misspelt name is the likelier cause of a parameter left unbound.
@@ -815,14 +813,21 @@ func (ec *exprChecker) parameterPrimType(p parameter) semantics.PrimType {
 	return ec.declaredPrimType(p.scope(), p.usage.Relationships)
 }
 
-// argumentFits reports whether value, of type got, binds to p; an unknown type
-// on either side is not held against the call.
-func (ec *exprChecker) argumentFits(value ast.Node, got semantics.PrimType, p parameter) bool {
-	want := ec.parameterPrimType(p)
-	if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
-		return true
+// argumentMismatch says why value, typed got, does not bind to p ("" when it does or a type is
+// unknown): a scalar parameter is judged by the lattice, any other by declared type, a Collection taking any sequence.
+func (ec *exprChecker) argumentMismatch(value ast.Node, got semantics.Argument, p parameter) string {
+	if want := ec.parameterPrimType(p); want != semantics.PrimUnknown {
+		if got.Prim == semantics.PrimUnknown || bindable(value, got.Prim, want) {
+			return ""
+		}
+		return fmt.Sprintf("expects %s, found %s", want, got.Prim)
 	}
-	return bindable(value, got, want)
+	want := ec.declaredTypeSymbol(p.scope(), p.usage.Relationships)
+	if want == nil || got.Type == nil || semantics.IsCollection(want) ||
+		ec.model.Conforms(got.Type, want) || ec.model.Conforms(want, got.Type) {
+		return ""
+	}
+	return fmt.Sprintf("expects %s, found %s", want.Name, got.Type.Name)
 }
 
 // isBehaviorKind reports the behavior kinds whose parameter lists are checked.
