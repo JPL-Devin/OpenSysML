@@ -63,6 +63,17 @@ class CensusTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             census.census(PAGE.split("### Calc")[0])
 
+    def test_malformed_markers_are_an_error(self):
+        begin, end = census.BEGIN, census.END
+        for page in (
+            PAGE.replace(begin, begin + begin),
+            PAGE.replace(end, end + end),
+            PAGE + begin + "again\n" + end,
+            PAGE.replace(begin, "\0").replace(end, begin).replace("\0", end),
+        ):
+            with self.assertRaises(ValueError):
+                census.census(page)
+
     def test_known_failure_rows_are_an_error(self):
         with self.assertRaises(ValueError):
             census.census(PAGE.replace("⛔ Deliberate", "🚧 Known failure"))

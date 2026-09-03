@@ -7,15 +7,12 @@ census it counts from the page's own rows; `internal/doccounts` counts rows the 
 """
 
 import logging
-import re
 
 log = logging.getLogger("mkdocs.hooks.census")
 
 PAGE = "project/spec-compliance.md"
-BLOCK = re.compile(
-    r"^<!-- doc-counts:begin census -->\n.*?^<!-- doc-counts:end census -->\n",
-    re.MULTILINE | re.DOTALL,
-)
+BEGIN = "<!-- doc-counts:begin census -->\n"
+END = "<!-- doc-counts:end census -->\n"
 # '⚠' without its variation selector: the map writes both spellings.
 MARKERS = ("✅", "⚠", "❌", "⛔", "🚧")
 UNREFEREED = "**No external referee:**"
@@ -49,8 +46,11 @@ def count_rules(markdown: str) -> dict[str, int]:
 
 def census(markdown: str) -> str:
     """Return the page with its census block replaced by the counted sentence."""
-    if not BLOCK.search(markdown):
-        raise ValueError(f"{PAGE}: no doc-counts census block")
+    if markdown.count(BEGIN) != 1 or markdown.count(END) != 1:
+        raise ValueError(f"{PAGE}: exactly one census begin and one end marker required")
+    start, end = markdown.index(BEGIN), markdown.index(END)
+    if end < start:
+        raise ValueError(f"{PAGE}: census end marker precedes its begin marker")
     c = count_rules(markdown)
     if c["total"] == 0:
         raise ValueError(f"{PAGE}: no rule rows to count")
@@ -61,7 +61,7 @@ def census(markdown: str) -> str:
         f"{c['⚠']} ⚠️ approximate, {c['❌']} ❌ not implemented, {c['⛔']} ⛔ deliberate divergence**; "
         f"{c['self-assessed']} of them have no external referee.\n"
     )
-    return BLOCK.sub(lambda _: sentence, markdown, count=1)
+    return markdown[:start] + sentence + markdown[end + len(END) :]
 
 
 def on_page_markdown(markdown: str, page, **_kwargs) -> str:
