@@ -641,10 +641,13 @@ for every REPL command — the last two overlap #810, which landed first, and ne
 against it before review. What the review found *after* #810 is that `%state <machine>` in its
 one-argument form attaches a fresh, detached performance rather than the one materialized object
 that exhibits the machine (after `%instantiate TA::Sys; %state lp; %advance 2.5 [s]`, object `#1`
-still reads `n = 1` where `%state #1` gives `n = 3`); making the machine form attach to the unique
-exhibiting object and refuse when there are zero or several is **in progress** (no pull request at
-the baseline). The double initial-`do` the review first reported is not reproducible on `main`
-since #810 and is retired.
+still reads `n = 1` where `%state #1` gives `n = 3`). The cause was a `StateExecutor` built with
+no `self`, so `entry`/`do` writes landed in the executor's own frame;
+[PR #845](https://github.com/JPL-Devin/OpenSysML/pull/845) makes the machine form walk the held
+objects and attach to the single exhibitor's running machine, refuses with a typed error naming the
+objects (or, before any object exists, the types) when there are zero or several, and leaves a
+truly unbound `state def` running detached. **Open** (mergeable at the last check). The double
+initial-`do` the review first reported is not reproducible on `main` since #810 and is retired.
 
 ## E1 — `terminate` in a body
 
@@ -1031,8 +1034,11 @@ A `query def` parameter with a default (`in limit : Natural = 10;`) is refused a
 `relies on a default not retained in the plan` — the plan records `HasDefault` and not the
 expression. The fix keeps the compiled default in the immutable plan, evaluates it in the declaring
 scope once per execution (not per row), honours inheritance and redefinition, and lets an explicit
-binding override it; `ErrorDefaultUnavailable` goes when nothing reaches it. **In progress** (no
-pull request at the baseline).
+binding override it; `ErrorDefaultUnavailable` goes when nothing reaches it.
+[PR #849](https://github.com/JPL-Devin/OpenSysML/pull/849) does that — the plan carries each
+default as a compiled expression with its declaring query, an unrepresentable default is a typed
+refusal at planning and a self-referencing one a composition-cycle error — with REPL, CLI, gRPC,
+document and nested-invocation tests. **Open** (mergeable at the last check).
 
 ---
 
@@ -1280,7 +1286,7 @@ not more harness work.
 Two orders, because there are two kinds of item. The **track-local** orders say where to start
 inside a track; the **cross-cutting** order says which tracks' first items go first when a session
 must choose, and it is the one that has been agreed. Everything in flight (the open pull requests
-named above, the three items marked *in progress*) lands or is closed before either order is
+named above, the item marked *in progress*) lands or is closed before either order is
 consulted — they are already the next thing.
 
 ## Cross-cutting order (agreed)
@@ -1293,13 +1299,13 @@ consulted — they are already the next thing.
    three items the standard analysis library (`SampledFunctions`, `TradeStudies`) needs to run, and
    what A2 waits on for `evaluationFunction`. L4 (dispatch by name) and X5's named reducers go in
    the same pass, since they are one lookup.
-3. **The REPL state attachment** — `%state <machine>` attaching to the exhibiting object (in
-   progress), *after* validating on `main` that #810 closed the original duplicate initial `do`,
+3. **The REPL state attachment** — `%state <machine>` attaching to the exhibiting object (#845,
+   open), *after* validating on `main` that #810 closed the original duplicate initial `do`,
    which the review did (it no longer reproduces; the probe and its oracle are recorded under
    Track E). Small, and it is what makes an accumulator-style simulation trustworthy from the REPL.
 4. **Q2, then Q1** — runtime query bindings and `all T`, with the page that says which query is
    which. Depends on the object, state and trace representations being stable, which #810, #836
-   and #843 are settling; Q4 (parameter defaults, in progress) lands independently before it.
+   and #843 are settling; Q4 (parameter defaults, #849, open) lands independently before it.
 5. **I1, I2, I3, then I4's client** — the wire contract, the shared fixtures, the thin R, Julia and
    MATLAB packages, the C client. Documentation first because every client is derived from it;
    the C *ABI* half of I4 is not here — it is step 9.
