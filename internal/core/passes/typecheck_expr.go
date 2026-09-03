@@ -814,7 +814,7 @@ func (ec *exprChecker) inferConstructor(scope *symbols.Scope, e *ast.Constructor
 			break
 		}
 		bound[features[i]] = true
-		ec.checkFeatureBinding(arg, argTypes[i], features[i], typ)
+		ec.checkFeatureBinding(scope, arg, argTypes[i], features[i], typ)
 	}
 	for i, na := range e.NamedArgs {
 		if na.Name == nil {
@@ -840,24 +840,67 @@ func (ec *exprChecker) inferConstructor(scope *symbols.Scope, e *ast.Constructor
 			continue
 		}
 		bound[slot] = true
-		ec.checkFeatureBinding(na.Value, namedTypes[i], feature, typ)
+		ec.checkFeatureBinding(scope, na.Value, namedTypes[i], feature, typ)
 	}
 	return semantics.PrimUnknown
 }
 
-// checkFeatureBinding reports a constructor argument whose scalar type cannot
-// bind the feature it is written for, typed as it declares or inherits.
-func (ec *exprChecker) checkFeatureBinding(arg ast.Node, got semantics.PrimType, feature, typ *symbols.Symbol) {
-	if _, ok := feature.Decl.(*ast.Usage); !ok {
+// checkFeatureBinding reports a constructor argument its feature cannot take: by
+// scalar type, by conformance to its declared or inherited type, or by count.
+func (ec *exprChecker) checkFeatureBinding(scope *symbols.Scope, arg ast.Node, got semantics.PrimType, feature, typ *symbols.Symbol) {
+	u, ok := feature.Decl.(*ast.Usage)
+	if !ok {
 		return
 	}
-	want := ec.model.PrimTypeOf(feature)
-	if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
+	if want := ec.model.PrimTypeOf(feature); want != semantics.PrimUnknown {
+		if got != semantics.PrimUnknown && !bindable(arg, got, want) {
+			ec.errorf(arg.Span(), "%s of %s expects %s, found %s", feature.Name, typ.Name, want, got)
+		}
+	} else {
+		ec.checkObjectBinding(scope, arg, feature, typ)
+	}
+	if count, known := exactCount(arg); known {
+		if r, ok := ec.effectiveRange(feature.OwnerScope, u, 0); ok {
+			if msg := r.CountViolation(count); msg != "" {
+				ec.errorf(arg.Span(), "%s of %s: %s", feature.Name, typ.Name, msg)
+			}
+		}
+	}
+}
+
+// checkObjectBinding checks each value of a constructor argument against the
+// non-scalar types its feature declares or inherits, in either direction.
+func (ec *exprChecker) checkObjectBinding(scope *symbols.Scope, arg ast.Node, feature, typ *symbols.Symbol) {
+	wants := w8cMostSpecific(ec.model, ec.model.DeclaredFeatureTypes(feature))
+	if len(wants) == 0 {
 		return
 	}
-	if !bindable(arg, got, want) {
-		ec.errorf(arg.Span(), "%s of %s expects %s, found %s", feature.Name, typ.Name, want, got)
+	for _, value := range valueElements(arg) {
+		got := ec.argumentTypeSymbol(scope, value)
+		if got == nil {
+			continue
+		}
+		for _, want := range wants {
+			if !ec.model.Conforms(got, want) && !ec.model.Conforms(want, got) {
+				ec.errorf(value.Span(), "%s of %s is typed by %s; cannot bind a value of type %s", feature.Name, typ.Name, want.Name, got.Name)
+			}
+		}
 	}
+}
+
+// argumentTypeSymbol resolves a value's type in scope (feature reference or
+// chain, invocation result, constructed type, literal scalar), or nil.
+func (ec *exprChecker) argumentTypeSymbol(scope *symbols.Scope, value ast.Node) *symbols.Symbol {
+	if got := ec.valueTypeSymbol(scope, value); got != nil {
+		return got
+	}
+	if got := ec.invocationResultTypeSymbol(scope, value); got != nil {
+		return got
+	}
+	if got := ec.constructedTypeSymbol(scope, value); got != nil {
+		return got
+	}
+	return ec.model.ScalarSymbol(literalPrimType(value))
 }
 
 // notConstructible words the rejection of a label for a member no constructor of

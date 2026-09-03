@@ -237,6 +237,58 @@ func TestConstructorPositionsSkipCalcUsages(t *testing.T) {
 	assertOneConstructorDiag(t, src, constructorDiags(t, src), "3", "new Frame takes 2 argument(s), found 3")
 }
 
+// An object-valued argument must conform to the feature's type, inherited through
+// a redefinition or not, and a collection's count must fit its multiplicity.
+func TestConstructorObjectAndCollectionArgumentsAreChecked(t *testing.T) {
+	const report = `item def Report { item src : Telemetry; part where : Station; attribute tags : String[2..*]; attribute code : Integer[1]; }
+		item def Sub :> Report { item :>> src; }
+		item def Log :> Report { attribute :>> tags; } `
+	silent := map[string]string{
+		"feature":         report + `send new Report(where = ground) to ground;`,
+		"constructor":     report + `send new Report(src = new Telemetry(1, "x", 2)) to ground;`,
+		"general type":    report + `send new Report(src = new Base(1)) to ground;`,
+		"positional":      report + `send new Report(new Telemetry(1, "x", 2), ground, ("a", "b"), 1) to ground;`,
+		"collection":      report + `send new Report(tags = ("a", "b", "c")) to ground;`,
+		"reference count": report + `attribute names : String[*]; send new Report(tags = names) to ground;`,
+		"redefined":       report + `send new Sub(src = new Telemetry(1, "x", 2)) to ground;`,
+	}
+	for name, send := range silent {
+		t.Run(name, func(t *testing.T) {
+			if got := constructorDiags(t, constructorModel(send)); len(got) != 0 {
+				t.Errorf("unexpected diagnostics: %+v", got)
+			}
+		})
+	}
+	reported := map[string]struct{ send, at, want string }{
+		"feature":            {send: report + `send new Report(src = ground) to ground;`, at: "ground", want: "src of Report is typed by Telemetry; cannot bind a value of type Station"},
+		"positional":         {send: report + `send new Report(ground) to ground;`, at: "ground", want: "src of Report is typed by Telemetry; cannot bind a value of type Station"},
+		"constructor":        {send: report + `send new Report(src = new Station()) to ground;`, at: "new Station()", want: "src of Report is typed by Telemetry; cannot bind a value of type Station"},
+		"literal":            {send: report + `send new Report(where = 3) to ground;`, at: "3", want: "where of Report is typed by Station; cannot bind a value of type Natural"},
+		"redefined":          {send: report + `send new Sub(src = ground) to ground;`, at: "ground", want: "src of Sub is typed by Telemetry; cannot bind a value of type Station"},
+		"too few":            {send: report + `send new Report(tags = "a") to ground;`, at: `"a"`, want: "tags of Report: 1 value(s) bound to a feature with multiplicity lower bound 2"},
+		"too many":           {send: report + `send new Report(code = (1, 2)) to ground;`, at: "(1, 2)", want: "code of Report: 2 value(s) bound to a feature with multiplicity upper bound 1"},
+		"redefined too few":  {send: report + `send new Log(tags = "a") to ground;`, at: `"a"`, want: "tags of Log: 1 value(s) bound to a feature with multiplicity lower bound 2"},
+		"positional too few": {send: report + `send new Report(new Telemetry(1, "x", 2), ground, "a") to ground;`, at: `"a"`, want: "tags of Report: 1 value(s) bound to a feature with multiplicity lower bound 2"},
+	}
+	for name, c := range reported {
+		t.Run(name, func(t *testing.T) {
+			src := constructorModel(c.send)
+			assertOneConstructorDiag(t, src, constructorDiags(t, src), c.at, c.want)
+		})
+	}
+	t.Run("each element of a collection", func(t *testing.T) {
+		got := constructorDiags(t, constructorModel(report+`send new Report(src = (ground, ground)) to ground;`))
+		if len(got) != 2 {
+			t.Fatalf("expected one diagnostic per element, got %+v", got)
+		}
+		for _, d := range got {
+			if !strings.Contains(d.Message, "src of Report is typed by Telemetry; cannot bind a value of type Station") {
+				t.Errorf("unexpected message %q", d.Message)
+			}
+		}
+	})
+}
+
 // A label binds only a feature the constructor binds: an inherited library
 // descriptor is refused naming the restatement that admits it; a restatement binds.
 func TestConstructorLabelMustNameConstructibleFeature(t *testing.T) {

@@ -90,3 +90,42 @@ func TestConstructibleFeaturesMergeRedefinitionsUnderOtherNames(t *testing.T) {
 		t.Errorf("ConstructibleFeatures(Mid) = %v, want %v", got, want)
 	}
 }
+
+// A feature's effective types come from the features it redefines or subsets
+// when it declares none; the kind's base is FeatureTypes' fallback only.
+func TestFeatureTypesFollowRedefinitionPastTheImplicitBase(t *testing.T) {
+	m, idx := shapeModel(t, `package T {
+		private import ScalarValues::*;
+		part def Station;
+		item def Report { item src : Station; attribute n : Integer; attribute text; }
+		item def Sub :> Report { item :>> src; attribute :>> n; attribute :>> text; }
+	}`)
+	for _, c := range []struct{ qn, want string }{
+		{"T::Sub::src", "Station"},
+		{"T::Sub::n", "Integer"},
+		{"T::Report::src", "Station"},
+	} {
+		sym := dimensionSymbol(t, idx, c.qn)
+		if got := symbolNames(m.FeatureTypes(sym)); !reflect.DeepEqual(got, []string{c.want}) {
+			t.Errorf("FeatureTypes(%s) = %v, want [%s]", c.qn, got, c.want)
+		}
+		if got := symbolNames(m.DeclaredFeatureTypes(sym)); !reflect.DeepEqual(got, []string{c.want}) {
+			t.Errorf("DeclaredFeatureTypes(%s) = %v, want [%s]", c.qn, got, c.want)
+		}
+	}
+	text := dimensionSymbol(t, idx, "T::Report::text")
+	if got := symbolNames(m.FeatureTypes(text)); !reflect.DeepEqual(got, []string{"DataValue"}) {
+		t.Errorf("FeatureTypes(text) = %v, want [DataValue]", got)
+	}
+	for _, qn := range []string{"T::Report::text", "T::Sub::text"} {
+		if got := m.DeclaredFeatureTypes(dimensionSymbol(t, idx, qn)); len(got) != 0 {
+			t.Errorf("DeclaredFeatureTypes(%s) = %v, want none", qn, symbolNames(got))
+		}
+	}
+	if got, want := m.ScalarSymbol(semantics.PrimInteger), dimensionSymbol(t, idx, "ScalarValues::Integer"); got != want {
+		t.Errorf("ScalarSymbol(Integer) = %v, want %v", got, want)
+	}
+	if got := m.ScalarSymbol(semantics.PrimUnknown); got != nil {
+		t.Errorf("ScalarSymbol(unknown) = %v, want nil", got)
+	}
+}

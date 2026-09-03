@@ -569,6 +569,21 @@ func (m *Model) FeatureTypes(sym *symbols.Symbol) []*symbols.Symbol {
 	if sym == nil || !isFeature(sym) {
 		return nil
 	}
+	if types := m.featureTypes(sym, make(map[*symbols.Symbol]bool)); len(types) > 0 {
+		return types
+	}
+	if base := m.implicitBase(sym); base != nil {
+		return []*symbols.Symbol{base}
+	}
+	return nil
+}
+
+// DeclaredFeatureTypes is FeatureTypes without the kind's base: the types a
+// feature is written with, directly or through the features it specializes.
+func (m *Model) DeclaredFeatureTypes(sym *symbols.Symbol) []*symbols.Symbol {
+	if sym == nil || !isFeature(sym) {
+		return nil
+	}
 	return m.featureTypes(sym, make(map[*symbols.Symbol]bool))
 }
 
@@ -577,11 +592,14 @@ func (m *Model) featureTypes(sym *symbols.Symbol, visiting map[*symbols.Symbol]b
 		return nil
 	}
 	visiting[sym] = true
+	base := m.implicitBase(sym)
 	var types, features []*symbols.Symbol
 	for _, super := range m.DirectSupertypes(sym) {
-		if isFeature(super) {
+		switch {
+		case super == base:
+		case isFeature(super):
 			features = append(features, super)
-		} else {
+		default:
 			types = append(types, super)
 		}
 	}
@@ -597,13 +615,7 @@ func (m *Model) featureTypes(sym *symbols.Symbol, visiting map[*symbols.Symbol]b
 			}
 		}
 	}
-	if len(types) > 0 {
-		return types
-	}
-	if base := m.implicitBase(sym); base != nil {
-		return []*symbols.Symbol{base}
-	}
-	return nil
+	return types
 }
 
 // UnioningTypes returns the resolved targets of sym's `unions` relationships:
