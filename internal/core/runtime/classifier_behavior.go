@@ -32,6 +32,9 @@ type ObjectBehavior struct {
 	// bindings is the chain from member to Symbol: each element names the next,
 	// so a machine addressed by any of them is this one.
 	bindings []*symbols.Symbol
+	// kinds are the types the bindings conform to, so a machine stating its own
+	// body under `exhibit state m : M { ... }` is still a machine of kind M.
+	kinds []*symbols.Symbol
 	// binding is member's position among the type's behavior bindings, which
 	// outlives the symbols and so tells the behavior a restart puts in its place.
 	binding int
@@ -133,8 +136,9 @@ func (inst *Instance) ExhibitedState() (*ObjectBehavior, bool) {
 
 // ExhibitedStatesOf returns the machines the object exhibits under sym's declaration:
 // the one sym itself binds, or else every one reaching sym through its bindings
-// (the usage it names, or the definition holding its body), since one definition
-// can be the body of several exhibited usages. Declarations are compared.
+// (the usage it names, or the definition holding its body) or typed by it, since
+// one definition can be the body or the kind of several exhibited usages.
+// Declarations are compared.
 func (inst *Instance) ExhibitedStatesOf(sym *symbols.Symbol) []*ObjectBehavior {
 	if sym == nil || sym.Decl == nil {
 		return nil
@@ -147,7 +151,7 @@ func (inst *Instance) ExhibitedStatesOf(sym *symbols.Symbol) []*ObjectBehavior {
 		if b.member != nil && b.member.Decl == sym.Decl {
 			return []*ObjectBehavior{b}
 		}
-		if len(b.bindings) > 1 && declaresAny(b.bindings[1:], sym) {
+		if (len(b.bindings) > 1 && declaresAny(b.bindings[1:], sym)) || declaresAny(b.kinds, sym) {
 			bodies = append(bodies, b)
 		}
 	}
@@ -155,7 +159,8 @@ func (inst *Instance) ExhibitedStatesOf(sym *symbols.Symbol) []*ObjectBehavior {
 }
 
 // ExhibitsState reports whether member is an exhibit declaration whose objects
-// run sym's machine: member itself, or anything its bindings reach. Declarations are compared.
+// run sym's machine: member itself, anything its bindings reach, or a type they
+// conform to. Declarations are compared.
 func (ctx *Context) ExhibitsState(member, sym *symbols.Symbol) bool {
 	if member == nil || member.Decl == nil || sym == nil || sym.Decl == nil {
 		return false
@@ -165,7 +170,22 @@ func (ctx *Context) ExhibitsState(member, sym *symbols.Symbol) bool {
 		return false
 	}
 	chain, err := ctx.classifierBehaviorChain(classifierBehaviorDecl{behavior: behavior, member: member})
-	return err == nil && declaresAny(chain, sym)
+	return err == nil && (declaresAny(chain, sym) || declaresAny(ctx.behaviorKinds(chain), sym))
+}
+
+// behaviorKinds collects the types the bindings of a behavior conform to, in
+// chain order, so a machine is addressable by the definition it is typed by
+// even when a usage on the way states the body itself.
+func (ctx *Context) behaviorKinds(chain []*symbols.Symbol) []*symbols.Symbol {
+	var kinds []*symbols.Symbol
+	for _, sym := range chain {
+		for _, sup := range ctx.model.AllSupertypes(sym) {
+			if !slices.Contains(chain, sup) && !slices.Contains(kinds, sup) {
+				kinds = append(kinds, sup)
+			}
+		}
+	}
+	return kinds
 }
 
 // declaresAny reports whether one of syms declares what sym declares.
@@ -593,6 +613,7 @@ func (ctx *Context) attachClassifierBehavior(inst *Instance, decl classifierBeha
 		Object:   inst,
 		member:   decl.member,
 		bindings: chain,
+		kinds:    ctx.behaviorKinds(chain),
 	}
 
 	switch decl.behavior.Kind {

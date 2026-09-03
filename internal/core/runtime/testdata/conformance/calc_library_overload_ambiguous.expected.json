@@ -1,0 +1,10 @@
+{
+  "libraries": true,
+  "type": "instance",
+  "instantiate": "test::Probe",
+  "slots": {
+    "tied": {"error": "ambiguous invocation: pick denotes test::A::pick, test::B::pick"},
+    "leftInteger": {"type": "Integer", "value": 1},
+    "rightInteger": {"type": "Integer", "value": 2}
+  }
+}

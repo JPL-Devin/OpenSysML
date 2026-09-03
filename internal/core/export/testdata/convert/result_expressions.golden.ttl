@@ -2125,7 +2125,7 @@ elmt:Results__MassAnalysis___401
     sysml:owningRelationship elmt:Results__MassAnalysis___401_om ;
     sysml:owningMembership elmt:Results__MassAnalysis___401_om ;
     sysml:argument expr:Results__MassAnalysis___401_pa0 ;
-    sysml:targetFeature "mass" ;
+    sysml:targetFeature elmt:Results__Vehicle__mass ;
     sysx:sourceText "        v.mass\n" .
 
 elmt:Results__MassAnalysis___401_om
@@ -2232,7 +2232,7 @@ expr:Results__MassCheck___401_pa0_pa0
     sysx:sourceText "v.mass" ;
     sysml:elementId "Results__MassCheck___401_pa0_pa0" ;
     sysml:argument expr:Results__MassCheck___401_pa0_pa0_pa0 ;
-    sysml:targetFeature "mass" ;
+    sysml:targetFeature elmt:Results__Vehicle__mass ;
     sysx:argumentIndex "0"^^xsd:integer .
 
 expr:Results__MassCheck___401_pa0_pa0_pa0
@@ -2324,7 +2324,7 @@ expr:Results__MassCase___401_pa0
     sysx:sourceText "v.mass" ;
     sysml:elementId "Results__MassCase___401_pa0" ;
     sysml:argument expr:Results__MassCase___401_pa0_pa0 ;
-    sysml:targetFeature "mass" ;
+    sysml:targetFeature elmt:Results__Vehicle__mass ;
     sysx:argumentIndex "0"^^xsd:integer .
 
 expr:Results__MassCase___401_pa0_pa0
@@ -2440,7 +2440,7 @@ expr:Results__rover__twice__x_pvalue
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "mass" ;
     sysml:elementId "Results__rover__twice__x_pvalue" ;
-    sysml:referent "mass" .
+    sysml:referent elmt:Results__Vehicle__mass .
 
 elmt:Results__rover__twice___401
     a sysml:OperatorExpression ;

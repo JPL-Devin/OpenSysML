@@ -674,6 +674,8 @@ func (c *calcCompiler) compileInvocation(n *ast.InvocationExpr, scope *symbols.S
 	}
 	target := (&EvalContext{ctx: c.ctx, scope: scope}).invocationTarget(n)
 	switch {
+	case len(target.ambiguous) > 0:
+		return nil, ineligible(fmt.Sprintf("%s is ambiguous", target.qualName))
 	case target.builtin != nil:
 		return c.compileAggregate(target.builtinName, target.builtin, &args, scope, layout)
 	case target.library != nil:

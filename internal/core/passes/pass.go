@@ -132,6 +132,7 @@ func (c *Context) Model() *semantics.Model {
 		c.model = semantics.NewModel(c.Resolver())
 		// Attach model to resolver for inheritance-aware member resolution
 		c.Resolver().SetModel(c.model)
+		c.model.SetArgumentTyper(argumentTyper{resolver: c.Resolver(), model: c.model})
 	}
 	return c.model
 }
