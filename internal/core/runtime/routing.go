@@ -566,7 +566,7 @@ func (ctx *Context) endReceivesMessage(scope *symbols.Scope, end string, msg Mes
 			continue
 		}
 		typed = true
-		if ctx.model.Conforms(typeSym, messageSym) || ctx.model.Conforms(messageSym, typeSym) {
+		if ctx.conforms(typeSym, messageSym) || ctx.conforms(messageSym, typeSym) {
 			return true, false
 		}
 	}
