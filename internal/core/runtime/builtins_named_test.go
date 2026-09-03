@@ -206,8 +206,8 @@ func TestAggregationsWithQuantityIdentity(t *testing.T) {
 	}
 }
 
-// A `[0..*]` body may be omitted over an empty collection, which answers the
-// operation's empty result; over any element the body is required.
+// A `[0..*]` body may be omitted or empty over an empty collection, which
+// answers the operation's empty result; over any element the body is required.
 func TestCollectionOperationsWithOmittedBody(t *testing.T) {
 	for _, tc := range []struct {
 		expr string
@@ -223,6 +223,13 @@ func TestCollectionOperationsWithOmittedBody(t *testing.T) {
 		{"ControlFunctions::forAll(())", "true"},
 		{"ControlFunctions::exists(())", "false"},
 		{"ControlFunctions::select(test::xs->select {in x; x > 3})", "[]"},
+		{"ControlFunctions::select((), ())", "[]"},
+		{"ControlFunctions::reject((), null)", "[]"},
+		{"ControlFunctions::collect((), test::xs->select {in x; x > 3})", "[]"},
+		{"ControlFunctions::reduce((), ())", "null"},
+		{"ControlFunctions::selectOne((), ())", "null"},
+		{"ControlFunctions::forAll(collection = (), test = ())", "true"},
+		{"ControlFunctions::exists((), ())", "false"},
 	} {
 		t.Run(tc.expr, func(t *testing.T) {
 			got, err := evalLibraryCall(t, tc.expr)
@@ -246,6 +253,8 @@ func TestCollectionOperationsWithOmittedBody(t *testing.T) {
 		{"ControlFunctions::forAll(test::xs)", ErrTypeMismatch},
 		{"ControlFunctions::exists(test::xs)", ErrTypeMismatch},
 		{"ControlFunctions::select((), 5)", ErrTypeMismatch},
+		{"ControlFunctions::select(test::xs, ())", ErrTypeMismatch},
+		{"ControlFunctions::forAll(test::xs, null)", ErrTypeMismatch},
 		{"ControlFunctions::reduce((), {in a; a})", ErrBodyArity},
 		{"ControlFunctions::minimize(())", ErrMultiplicityViolation},
 		{"ControlFunctions::maximize(test::xs)", ErrTypeMismatch},

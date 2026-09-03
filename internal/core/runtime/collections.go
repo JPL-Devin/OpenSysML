@@ -174,39 +174,53 @@ func (ec *EvalContext) evalSequenceIndex(n *ast.IndexExpr) (Value, error) {
 // parameter, checking it declares the parameters the operation calls it with.
 // An argument that is not itself a body is evaluated to the body it denotes.
 func (ec *EvalContext) bodyOf(op string, val Value, arity int) (Value, error) {
+	val, err := ec.denotedBody(val)
+	if err != nil {
+		return Value{}, err
+	}
+	return checkBody(op, val, arity)
+}
+
+// bodyOver is bodyOf for an operation over elements whose body parameter is
+// `[0..*]`: empty over no elements, there is nothing to call it with and
+// applied reports false. Any body given is checked as bodyOf checks it.
+func (ec *EvalContext) bodyOver(op string, val Value, arity int, elements []Value) (body Value, applied bool, err error) {
+	val, err = ec.denotedBody(val)
+	if err != nil {
+		return Value{}, false, err
+	}
+	if len(elements) == 0 && isEmptyValue(val) {
+		return Value{}, false, nil
+	}
+	body, err = checkBody(op, val, arity)
+	return body, err == nil, err
+}
+
+// denotedBody evaluates a deferred argument that is not itself a body to the
+// value it denotes; a body or an evaluated value is returned as is.
+func (ec *EvalContext) denotedBody(val Value) (Value, error) {
+	if val.Kind == ValExpr {
+		if _, ok := val.Expr().(*ast.BodyExpr); !ok {
+			return ec.evalClosure(val)
+		}
+	}
+	return val, nil
+}
+
+// checkBody verifies a denoted value is a body declaring arity parameters.
+func checkBody(op string, val Value, arity int) (Value, error) {
 	if val.Kind != ValExpr {
 		return Value{}, fmt.Errorf("%w: %s requires a body expression, got %s", ErrTypeMismatch, op, describeValue(val))
 	}
 	body, ok := val.Expr().(*ast.BodyExpr)
 	if !ok {
-		denoted, err := ec.evalClosure(val)
-		if err != nil {
-			return Value{}, err
-		}
-		if denoted.Kind != ValExpr {
-			return Value{}, fmt.Errorf("%w: %s requires a body expression, got %s", ErrTypeMismatch, op, describeValue(denoted))
-		}
-		if body, ok = denoted.Expr().(*ast.BodyExpr); !ok {
-			return Value{}, fmt.Errorf("%w: %s requires a body expression, got %T", ErrTypeMismatch, op, denoted.Expr())
-		}
-		val = denoted
+		return Value{}, fmt.Errorf("%w: %s requires a body expression, got %T", ErrTypeMismatch, op, val.Expr())
 	}
 	if len(body.Params) != arity {
 		return Value{}, fmt.Errorf("%w: %s calls its body with %d argument(s), but it declares %d parameter(s)",
 			ErrBodyArity, op, arity, len(body.Params))
 	}
 	return val, nil
-}
-
-// bodyOver is bodyOf for an operation over elements whose body parameter is
-// `[0..*]`: left unbound over no elements, there is nothing to call it with and
-// applied reports false. Any given body is checked as bodyOf checks it.
-func (ec *EvalContext) bodyOver(op string, val Value, arity int, elements []Value) (body Value, applied bool, err error) {
-	if val.Kind == ValNull && len(elements) == 0 {
-		return Value{}, false, nil
-	}
-	body, err = ec.bodyOf(op, val, arity)
-	return body, err == nil, err
 }
 
 // evalClosure evaluates a deferred expression in the environment it closes over.

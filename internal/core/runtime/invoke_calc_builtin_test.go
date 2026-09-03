@@ -143,7 +143,7 @@ func TestInvokeCalcOmittedBodyOverEmptyCollection(t *testing.T) {
 		{"ControlFunctions::exists", "false"},
 	} {
 		sym := lookupOne(t, idx, tc.fqn)
-		for _, args := range [][]Value{nil, {empty}, {empty, nullValue()}} {
+		for _, args := range [][]Value{nil, {empty}, {empty, nullValue()}, {empty, empty}} {
 			got, err := ctx.InvokeCalc(sym, args, nil)
 			if err != nil || FormatValue(got) != tc.want {
 				t.Errorf("InvokeCalc(%s, %d args) = %s, %v; want %s", tc.fqn, len(args), FormatValue(got), err, tc.want)
