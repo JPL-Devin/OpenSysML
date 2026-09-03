@@ -1381,7 +1381,7 @@ func complexProduct(name string, _ *Context, args []Value) (Value, error) {
 func aggregateComplex(name string, collection Value, operator ast.OperatorKind) (Value, error) {
 	elements := elementsOf(collection)
 	if len(elements) > 0 && !holdsComplex(elements) {
-		return aggregate(name, []Value{collection}, operator)
+		return aggregate(name, []Value{collection}, operator, false)
 	}
 	acc := complex(0, 0)
 	if operator == ast.OpMul {
