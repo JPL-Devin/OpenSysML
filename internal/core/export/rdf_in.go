@@ -2,6 +2,7 @@ package export
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -122,8 +123,8 @@ func legacyNamespaceError(iri string) error {
 	}
 }
 
-// checkLiterals refuses a literal whose datatype its property does not take:
-// "3"^^xsd:integer or "x"@en is a different term from the string it spells.
+// checkLiterals refuses a literal whose datatype its property does not take
+// ("3"^^xsd:integer as a name) or whose text is outside it ("false"^^xsd:int).
 func checkLiterals(graph *rdf.Graph) error {
 	for _, triple := range graph.Triples() {
 		object := triple.Object
@@ -137,8 +138,37 @@ func checkLiterals(graph *rdf.Graph) error {
 		if !slices.Contains(allowed, object.Datatype) {
 			return literalError(triple, fmt.Sprintf("%s takes %s", curie(triple.Predicate.Value), datatypeList(allowed)))
 		}
+		if !inLexicalSpace(object.Datatype, object.Value) {
+			return literalError(triple, fmt.Sprintf("%q is not in the lexical space of %s", object.Value, curie(object.Datatype)))
+		}
 	}
 	return nil
+}
+
+// Lexical spaces per XML Schema Part 2 §3.3; owl:real, which defines none,
+// takes a finite xsd:double's.
+var (
+	booleanLexical = regexp.MustCompile(`^(true|false|1|0)$`)
+	integerLexical = regexp.MustCompile(`^[+-]?[0-9]+$`)
+	decimalLexical = regexp.MustCompile(`^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)$`)
+	realLexical    = regexp.MustCompile(`^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?$`)
+	doubleLexical  = regexp.MustCompile(`^([+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?|[+-]?INF|NaN)$`)
+)
+
+func inLexicalSpace(datatype, value string) bool {
+	switch datatype {
+	case rdf.XSD + "boolean":
+		return booleanLexical.MatchString(value)
+	case rdf.XSD + "integer", rdf.XSD + "int":
+		return integerLexical.MatchString(value)
+	case rdf.XSD + "decimal":
+		return decimalLexical.MatchString(value)
+	case rdf.OWL + "real":
+		return realLexical.MatchString(value)
+	case rdf.XSD + "double", rdf.XSD + "float":
+		return doubleLexical.MatchString(value)
+	}
+	return true
 }
 
 func literalError(triple rdf.Triple, why string) error {

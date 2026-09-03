@@ -45,6 +45,10 @@ package Results {
         in x : Real;
         Double('the value' = x)
     }
+    calc def Scaled {
+        in x : Real;
+        x * 1.5E3
+    }
     calc def Predicate {
         in x : Real;
         in expr keep : Boolean {

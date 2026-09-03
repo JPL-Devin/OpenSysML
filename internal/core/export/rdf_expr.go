@@ -98,7 +98,7 @@ func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) 
 		e.graph.Add(subject, e.sysml(pValue), rdf.TypedLiteral(n.Value, rdf.XSD+"integer"))
 
 	case *ast.LiteralReal:
-		e.graph.Add(subject, e.sysml(pValue), rdf.TypedLiteral(n.Value, rdf.XSD+"decimal"))
+		e.graph.Add(subject, e.sysml(pValue), rdf.TypedLiteral(n.Value, realDatatype(n.Value)))
 
 	case *ast.QualifiedName:
 		// A position whose notation is a bare name holds the feature it names.
@@ -165,6 +165,15 @@ func (e *encoder) expressionNode(subject rdf.Term, owner string, node ast.Node) 
 			e.expressionNode(result, owner, n.Result)
 		}
 	}
+}
+
+// realDatatype is the datatype whose lexical space holds a REAL_VALUE token:
+// xsd:decimal, or xsd:double when the token has an exponent.
+func realDatatype(value string) string {
+	if strings.ContainsAny(value, "eE") {
+		return rdf.XSD + "double"
+	}
+	return rdf.XSD + "decimal"
 }
 
 func (e *encoder) typed(subject rdf.Term, metaclass string) {
@@ -372,6 +381,28 @@ func (d *decoder) resolveExpressions() error {
 	return nil
 }
 
+// realValueText spells a number as a REAL_VALUE token (`3` becomes `3.0`);
+// a signed or non-finite form has no such token.
+func realValueText(lexical string) (string, bool) {
+	if lexer.IsRealValue(lexical) {
+		return lexical, true
+	}
+	mantissa, exponent := lexical, ""
+	if i := strings.IndexAny(lexical, "eE"); i >= 0 {
+		mantissa, exponent = lexical[:i], lexical[i:]
+	}
+	switch {
+	case lexer.IsDecimalValue(mantissa):
+		mantissa += ".0"
+	case lexer.IsDecimalValue(strings.TrimSuffix(mantissa, ".")):
+		mantissa += "0"
+	default:
+		return "", false
+	}
+	text := mantissa + exponent
+	return text, lexer.IsRealValue(text)
+}
+
 // expressionNodeText writes an expression node back as notation: the notation it
 // kept, or notation rebuilt from its structure when it kept none.
 func (d *decoder) expressionNodeText(node rdf.Term, scope string) (string, error) {
@@ -386,12 +417,30 @@ func (d *decoder) expressionNodeText(node rdf.Term, scope string) (string, error
 		}
 	}
 	switch metaclass {
-	case mLiteralBoolean, mLiteralInteger, mLiteralRational:
+	case mLiteralBoolean:
+		if !d.graph.HasProperty(node, rdf.SysML+pValue) {
+			return "", unsupported("a literal expression states the value it evaluates to")
+		}
+		return strconv.FormatBool(d.graph.BoolValue(node, rdf.SysML+pValue)), nil
+	case mLiteralInteger:
 		value, ok := d.graph.Lexical(node, rdf.SysML+pValue)
 		if !ok {
 			return "", unsupported("a literal expression states the value it evaluates to")
 		}
+		if !lexer.IsDecimalValue(value) {
+			return "", unsupported(fmt.Sprintf("the notation spells an integer literal as digits alone, not %q; a sign is an OperatorExpression applied to it", value))
+		}
 		return value, nil
+	case mLiteralRational:
+		value, ok := d.graph.Lexical(node, rdf.SysML+pValue)
+		if !ok {
+			return "", unsupported("a literal expression states the value it evaluates to")
+		}
+		text, ok := realValueText(value)
+		if !ok {
+			return "", unsupported(fmt.Sprintf("the notation spells a rational literal as an unsigned finite number, not %q; a sign is an OperatorExpression applied to it", value))
+		}
+		return text, nil
 	case mLiteralString:
 		value, ok := d.graph.Lexical(node, rdf.SysML+pValue)
 		if !ok {

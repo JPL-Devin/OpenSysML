@@ -98,6 +98,7 @@ func TestResultExpressionsComeBackFromTheGraphAlone(t *testing.T) {
 		`"say \"hi\"\n\\ \t done"`,
 		"in x : Real;\n        {}",
 		"Double('the value' = x)",
+		"(x * 1.5E3)",
 	} {
 		if !strings.Contains(string(fromGraph), want) {
 			t.Errorf("the notation rebuilt from the graph lacks %q:\n%s", want, fromGraph)
@@ -243,6 +244,57 @@ ex:r_b a sysml:LiteralRational ; sysml:value "0.5"^^owl:real .
 	}
 }
 
+// A literal value is written back as the token the notation spells it with: a
+// rational lacking fractional digits gains them, a boolean is `true` or `false`,
+// and a value no token spells — signed, or not finite — is refused by name.
+func TestLiteralValuesAreSpelledAsTokens(t *testing.T) {
+	turtle := string(withoutTriples(t, convertFixture(t, "result_expressions"), "sysx:sourceText"))
+	const (
+		integer  = `sysml:value "2"^^xsd:integer ;`
+		rational = `sysml:value "1.5E3"^^xsd:double ;`
+		boolean  = `sysml:value "true"^^xsd:boolean .`
+	)
+	for _, from := range []string{integer, rational, boolean} {
+		if !strings.Contains(turtle, from) {
+			t.Fatalf("expected %q in the graph:\n%s", from, turtle)
+		}
+	}
+	for _, tc := range []struct{ from, to, want, refused string }{
+		{rational, `sysml:value "3"^^xsd:decimal ;`, "(x * 3.0)", ""},
+		{rational, `sysml:value "3."^^xsd:decimal ;`, "(x * 3.0)", ""},
+		{rational, `sysml:value "3.E2"^^xsd:double ;`, "(x * 3.0E2)", ""},
+		{rational, `sysml:value ".5"^^xsd:decimal ;`, "(x * .5)", ""},
+		{boolean, `sysml:value "1"^^xsd:boolean .`, "in expr always {\n            true\n        }", ""},
+		{boolean, `sysml:value "0"^^xsd:boolean .`, "in expr always {\n            false\n        }", ""},
+		{integer, `sysml:value "-2"^^xsd:integer ;`, "", `the expression <urn:opensysml:expr:Results__Double___401_pa1>: the notation spells an integer literal as digits alone, not "-2"`},
+		{integer, `sysml:value "+2"^^xsd:int ;`, "", `not "+2"`},
+		{rational, `sysml:value "-1.5"^^xsd:decimal ;`, "", `the expression <urn:opensysml:expr:Results__Scaled___401_pa1>: the notation spells a rational literal as an unsigned finite number, not "-1.5"`},
+		{rational, `sysml:value "INF"^^xsd:double ;`, "", `not "INF"`},
+		{rational, `sysml:value "NaN"^^xsd:float ;`, "", `not "NaN"`},
+	} {
+		back, err := export.Convert("m.ttl", []byte(strings.Replace(turtle, tc.from, tc.to, 1)), export.FormatTurtle, export.FormatSysML)
+		if tc.refused != "" {
+			var unsupported *export.UnsupportedError
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("want an UnsupportedError for %s, got %v", tc.to, err)
+			}
+			if !strings.Contains(err.Error(), tc.refused) {
+				t.Errorf("for %s:\n got %v\nwant %s", tc.to, err, tc.refused)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("back to notation with %s: %v", tc.to, err)
+		}
+		if !strings.Contains(string(back), tc.want) {
+			t.Errorf("for %s the notation lacks %q:\n%s", tc.to, tc.want, back)
+		}
+		if _, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle); err != nil {
+			t.Errorf("the notation rebuilt with %s should parse: %v", tc.to, err)
+		}
+	}
+}
+
 // A declaration inside an expression body is carried as its notation; a graph
 // that states such a member without its text is refused, naming the member.
 func TestExpressionBodyDeclarationNeedsItsText(t *testing.T) {
@@ -368,6 +420,13 @@ func TestMistypedLiteralsAreRefusedEverywhere(t *testing.T) {
 		{"result_expressions", `sysml:value "2"^^xsd:integer ;`, `sysml:value "2" ;`, "sysml:value takes xsd:int or xsd:integer"},
 		{"result_expressions", `sysml:value "2"^^xsd:integer ;`, `sysml:value "2"^^xsd:decimal ;`, "sysml:value takes xsd:int or xsd:integer"},
 		{"result_expressions", `sysml:value "true"^^xsd:boolean .`, `sysml:value "true" .`, "sysml:value takes xsd:boolean"},
+		{"result_expressions", `sysml:value "2"^^xsd:integer ;`, `sysml:value "false"^^xsd:int ;`, `"false" is not in the lexical space of xsd:int`},
+		{"result_expressions", `sysml:value "2"^^xsd:integer ;`, `sysml:value "2.0"^^xsd:integer ;`, `"2.0" is not in the lexical space of xsd:integer`},
+		{"result_expressions", `sysml:value "1.5E3"^^xsd:double ;`, `sysml:value "1.5E3"^^xsd:decimal ;`, `"1.5E3" is not in the lexical space of xsd:decimal`},
+		{"result_expressions", `sysml:value "1.5E3"^^xsd:double ;`, `sysml:value "INF"^^<http://www.w3.org/2002/07/owl#real> ;`, `"INF" is not in the lexical space of owl:real`},
+		{"result_expressions", `sysml:value "true"^^xsd:boolean .`, `sysml:value "yes"^^xsd:boolean .`, `"yes" is not in the lexical space of xsd:boolean`},
+		{"result_expressions", `sysx:hasBody "true"^^xsd:boolean ;`, `sysx:hasBody "True"^^xsd:boolean ;`, `"True" is not in the lexical space of xsd:boolean`},
+		{"result_expressions", `sysx:memberIndex "0"^^xsd:integer ;`, `sysx:memberIndex "first"^^xsd:integer ;`, `"first" is not in the lexical space of xsd:integer`},
 	} {
 		turtle := string(convertFixture(t, tc.fixture))
 		if !strings.Contains(turtle, tc.from) {

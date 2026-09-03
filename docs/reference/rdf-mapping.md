@@ -359,6 +359,15 @@ The rules the tree follows:
   `MetadataAccessExpression`, `Expression` for a body. `sysx:operator`,
   `sysx:argumentIndex` and `sysx:sourceText` are the properties the metamodel
   does not define.
+- **A literal's `sysml:value` is a typed literal** whose lexical form is the
+  token the notation spells it with: `"2"^^xsd:integer`, `"1.5"^^xsd:decimal`,
+  `"1.5E3"^^xsd:double` (an exponent is outside `xsd:decimal`'s lexical space),
+  `"true"^^xsd:boolean`, and a string with its escapes resolved. Read back, a
+  value is spelled as that token again: a rational with no fractional digits
+  (`"3"^^xsd:decimal`) gains them (`3.0`), a boolean is `true` or `false`, a
+  string is quoted and escaped; a value no token spells — a signed number, `INF`,
+  `NaN` — is reported as unsupported, naming the node, since the notation states
+  a sign as an operator applied to a literal.
 - **A feature reference links to the element** it names (`sysml:referent`) when
   that element is in the graph, and carries its name as a literal when it
   resolves outside it, the same rule the declaration-head relationships follow.
@@ -720,6 +729,11 @@ would be refused as a duplicate.
   (`LiteralRational`), `xsd:boolean` (`LiteralBoolean`) or a string
   (`LiteralString`). A `sysx:Expression` literal is taken only where the
   mapping writes notation — a relationship target — never as a name
+- a literal whose text is outside its datatype's lexical space
+  (`"false"^^xsd:int`, `"yes"^^xsd:boolean`, `"1e3"^^xsd:decimal`): it is no
+  term of that datatype, so it is reported rather than read as the text it
+  spells. `owl:real`, which names no lexical forms of its own, takes a finite
+  `xsd:double`'s
 
 A graph that uses none of OpenSysML's `sysx:` properties (one produced by
 another tool) converts as far as the mapping allows and errors on the first
