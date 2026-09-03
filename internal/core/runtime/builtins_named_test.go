@@ -158,6 +158,56 @@ func TestAggregationsWithIdentityErrors(t *testing.T) {
 	}
 }
 
+// QuantityCalculations::sum and product hand NumericalFunctions::sum0 and
+// product1 a quantity identity, whose isZero/isUnit is that of its magnitude
+// (`NumericalFunctions::isZero(x.num)`), so a quantity identity is judged by its
+// magnitude and answers the empty aggregation in its own unit.
+func TestAggregationsWithQuantityIdentity(t *testing.T) {
+	eval := func(t *testing.T, expr string) (Value, error) {
+		t.Helper()
+		return evalNamedAttribute(t, `package test {
+	private import SI::*;
+	attribute result = `+expr+`;
+}`, "result")
+	}
+	for _, tc := range []struct {
+		expr string
+		want string
+	}{
+		{"NumericalFunctions::sum0((1.0 [m], 2.0 [m]), 0.0 [m])", "3.0 [m]"},
+		{"NumericalFunctions::sum0((), 0.0 [m])", "0.0 [m]"},
+		{"NumericalFunctions::sum0((), 0 [m])", "0 [m]"},
+		{"NumericalFunctions::product1((2.0 [m], 3.0 [m]), 1.0 [m])", "6.0 [m*m]"},
+		{"NumericalFunctions::product1((), 1.0 [m])", "1.0 [m]"},
+	} {
+		t.Run(tc.expr, func(t *testing.T) {
+			got, err := eval(t, tc.expr)
+			if err != nil {
+				t.Fatalf("%s = error %v", tc.expr, err)
+			}
+			if FormatValue(got) != tc.want {
+				t.Fatalf("%s = %s, want %s", tc.expr, FormatValue(got), tc.want)
+			}
+		})
+	}
+	for _, tc := range []struct {
+		expr string
+		text string
+	}{
+		{"NumericalFunctions::sum0((1.0 [m]), 5.0 [m])", "isZero(zero)"},
+		{"NumericalFunctions::sum0((), 1.0 [m])", "isZero(zero)"},
+		{"NumericalFunctions::product1((2.0 [m]), 0.0 [m])", "isUnit(one)"},
+		{"NumericalFunctions::product1((), 2 [m])", "isUnit(one)"},
+	} {
+		t.Run(tc.expr, func(t *testing.T) {
+			_, err := eval(t, tc.expr)
+			if !errors.Is(err, ErrTypeMismatch) || !strings.Contains(err.Error(), tc.text) {
+				t.Fatalf("%s error = %v, want %v mentioning %q", tc.expr, err, ErrTypeMismatch, tc.text)
+			}
+		})
+	}
+}
+
 // The sequence and range operators called by name answer as the notation does.
 func TestSequenceOperatorCallForms(t *testing.T) {
 	cases := []struct {
