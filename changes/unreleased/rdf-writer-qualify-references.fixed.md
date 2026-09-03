@@ -15,7 +15,9 @@
   scope of its own, as a named one's does, so a succession between its members links both ends and
   the trigger's parameters reach however deeply the effect nests. A `then` after `first x` now
   sequences from the member `x` names, as the initial node itself does, so the pilot use-case model
-  that redefines `start` comes back from its graph. The corpus gate writes each file back from the
+  that redefines `start` comes back from its graph. A named multiplicity now owns the members its
+  body declares, so a reference made there resolves from the body and is a link rather than a
+  literal. The corpus gate writes each file back from the
   source text it carries, so its verdicts do not move; written from the graph alone, `Packets.sysml`
   now comes back as the same graph rather than a different one, and no file regresses.
   `TestRoundTripIsLossless` now also writes every

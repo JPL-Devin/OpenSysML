@@ -270,6 +270,33 @@ func TestCastTypeIsSpelledForItsScope(t *testing.T) {
 	}
 }
 
+// A named multiplicity's body is a namespace like any other: the references
+// its members make are links, spelled from that body when written back.
+func TestMultiplicityBodyMembersLinkTheirReferences(t *testing.T) {
+	src := "package P {\n    datatype T;\n    feature base : T;\n    multiplicity m [1..2] {\n        feature f : T;\n        feature g subsets base;\n    }\n" +
+		"    package Q {\n        datatype T;\n        multiplicity n [0..1] {\n            feature h : P::T;\n        }\n    }\n}\n"
+	graph, err := export.Convert("m.kerml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	for _, want := range []string{"sysml:type elmt:P__T", "sysml:subsets elmt:P__base"} {
+		if !strings.Contains(string(graph), want) {
+			t.Errorf("graph does not record %q\n%s", want, graph)
+		}
+	}
+	for _, text := range []string{`sysml:type "`, `sysml:subsets "`} {
+		if strings.Contains(string(graph), text) {
+			t.Errorf("a body member's reference is carried as text %s\n%s", text, graph)
+		}
+	}
+	notation := structuralRoundTrip(t, "multiplicity_body", graph)
+	for _, want := range []string{"feature f : T;", "feature g subsets base;", "feature h : P::T;"} {
+		if !strings.Contains(string(notation), want) {
+			t.Errorf("notation does not write %q\n%s", want, notation)
+		}
+	}
+}
+
 // TestPacketsRoundTripsStructurally is the corpus case the spelling rule was
 // found on: a redefining attribute that bears its target's own name.
 func TestPacketsRoundTripsStructurally(t *testing.T) {

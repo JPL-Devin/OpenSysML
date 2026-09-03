@@ -89,8 +89,11 @@ func buildNamespaceDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia 
 		defineIdent(scope, d.Ident, sym)
 		return true
 	case *ast.MultiplicityDecl:
-		sym := newSymbol(d.Ident, SymbolMultiplicity, d, vis, nil, scope, trivia)
+		child := NewScope(scope, d)
+		sym := newSymbol(d.Ident, SymbolMultiplicity, d, vis, child, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
+		scope.AddChild(child)
+		buildMembers(child, d.Members)
 		return true
 	case *ast.RelationshipMember:
 		// A keyword-first relationship owns its members, and names one only when

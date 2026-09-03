@@ -116,6 +116,9 @@ func (r *Resolver) resolveNamespaceDecl(scope *symbols.Scope, decl ast.Node) boo
 		if d.Subsets != nil {
 			r.ResolveQualified(scope, d.Subsets)
 		}
+		if child := r.childScope(scope, d); child != nil {
+			r.walkMembers(child, d.Members)
+		}
 		return true
 	case *ast.Comment:
 		for _, a := range d.About {

@@ -1,9 +1,12 @@
 package libs
 
 import (
-	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
-	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 func TestMultiplicityDeclaration(t *testing.T) {
@@ -46,5 +49,54 @@ func TestMultiplicityDeclaration(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A ranged library multiplicity is a MultiplicityRange on every load path: the
+// cache and the snapshot restore its declaration, which is what the kind reads.
+func TestLibraryMultiplicityRangeKeepsItsMetaclassOnEveryPath(t *testing.T) {
+	cacheDir := t.TempDir()
+	cold := NewLoader(DefaultSource(), &Cache{dir: cacheDir})
+	warm := NewLoader(DefaultSource(), &Cache{dir: cacheDir})
+	load := func(ld *Loader) func(*testing.T) *symbols.Index {
+		return func(t *testing.T) *symbols.Index {
+			idx := symbols.NewIndex()
+			if err := ld.LoadAll(idx); err != nil {
+				t.Fatalf("load the library: %v", err)
+			}
+			return idx
+		}
+	}
+	paths := []struct {
+		name string
+		load func(*testing.T) *symbols.Index
+	}{
+		{"cold", load(cold)},
+		{"warm", load(warm)},
+		{"no cache", load(NewLoader(DefaultSource(), nil))},
+		{"snapshot", func(t *testing.T) *symbols.Index {
+			idx, err := SnapshotIndex()
+			if err != nil {
+				t.Fatalf("load the snapshot: %v", err)
+			}
+			return idx
+		}},
+	}
+	for _, path := range paths {
+		t.Run(path.name, func(t *testing.T) {
+			idx := path.load(t)
+			for _, fqn := range []string{"Base::exactlyOne", "Base::zeroOrOne", "Base::oneToMany", "Base::zeroToMany"} {
+				sym := lookupOne(t, idx, fqn)
+				if sym.Kind != symbols.SymbolMultiplicity {
+					t.Errorf("%s has kind %v, want multiplicity", fqn, sym.Kind)
+				}
+				if got := semantics.MultiplicityMetaclassName(sym); got != "MultiplicityRange" {
+					t.Errorf("%s classifies as %s, want MultiplicityRange", fqn, got)
+				}
+			}
+		})
+	}
+	if warm.Hits() == 0 {
+		t.Error("the warm load hit no record, so it did not exercise the restored path")
 	}
 }

@@ -3,6 +3,7 @@
 package resolve_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -202,6 +203,37 @@ func TestNamedMultiplicitiesReferencesAreCollected(t *testing.T) {
 		if !found[want] {
 			t.Errorf("References does not report %s", want)
 		}
+	}
+}
+
+// A named multiplicity's body declares members whose references resolve from
+// that body, and the document walk and the collector both descend into it.
+func TestMultiplicityBodyMembersResolveFromTheBody(t *testing.T) {
+	const src = `package M {
+	datatype T;
+	feature base : T;
+	multiplicity m [1..2] {
+		datatype T;
+		feature f : T;
+		feature g subsets base;
+	}
+}`
+	walk, root, rootScope := resolvedDocNamed(t, "m.kerml", src)
+	if len(walk.Diagnostics) != 0 {
+		t.Fatalf("the document walk must resolve every name: %v", walk.Diagnostics)
+	}
+	var found []string
+	for _, ref := range resolve.References(root, rootScope) {
+		sym, ok := walk.ResolveReference(ref)
+		if !ok {
+			t.Errorf("%s does not resolve on its own", nameText(ref.QN))
+			continue
+		}
+		found = append(found, nameText(ref.QN)+" -> "+symbols.FQNOf(sym))
+	}
+	want := []string{"T -> M::T", "T -> M::m::T", "base -> M::base"}
+	if !reflect.DeepEqual(found, want) {
+		t.Errorf("References resolve as %v, want %v", found, want)
 	}
 }
 
