@@ -13,7 +13,7 @@ rerunning one command.
 ## The pipeline
 
 ```
-model  →  queries  →  document plan  →  document tree  →  Markdown  →  PDF
+model → queries → document plan → document tree → Markdown or HTML → (PDF)
 ```
 
 1. **The model** is ordinary SysML v2: parts, attributes, requirements,
@@ -33,9 +33,11 @@ model  →  queries  →  document plan  →  document tree  →  Markdown  → 
 5. Evaluating the plan runs every query and produces an immutable,
    backend-neutral **document tree**: the fully-resolved title, sections,
    text runs, table rows, list items and diagram renderings.
-6. The Markdown backend writes the tree as deterministic CommonMark. The PDF
-   path converts that Markdown with an external engine
-   ([WeasyPrint, pandoc or Prince](outputs.md#pdf)).
+6. A backend writes the tree out. The Markdown backend writes deterministic
+   CommonMark; the [HTML backend](outputs.md#html) writes semantic HTML whose
+   `sysml-` classes and `data-` attributes keep each node's model facts, so a
+   stylesheet can address them. The PDF path converts the Markdown with an
+   external engine ([WeasyPrint, pandoc or Prince](outputs.md#pdf)).
 
 ## The vocabulary
 
@@ -68,14 +70,14 @@ section):
 | `Section` | A titled heading with nested content |
 | `Paragraph` | Static text, inline runs, or one query's values |
 | `Span`, `Link`, `Ref` | Inline runs inside a paragraph: styled text, a URL link, a cross-reference to another block |
-| `Table` | A query's rows as a pipe table, optionally grouped by a column |
+| `Table` | A query's rows as a table, optionally grouped by a column |
 | `List` | A query's values as a bullet or numbered list |
-| `Diagram` | A view or element drawn by the view engine, as a Mermaid diagram or pipe table |
+| `Diagram` | A view or element drawn by the view engine, as a Mermaid diagram or table |
 
 ## What "deterministic" means here
 
-The same model renders to byte-identical Markdown every time: queries preserve
-model declaration order unless an `OrderBy` says otherwise, ordering policies
+The same model renders to byte-identical Markdown or HTML every time: queries
+preserve model declaration order unless an `OrderBy` says otherwise, ordering policies
 for missing and duplicate keys are explicit parameters rather than accidents,
 and the renderer escapes content so model text can never corrupt document
 structure. PDF output adds an external converter to the loop; its guarantees
