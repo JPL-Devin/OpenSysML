@@ -276,15 +276,8 @@ func (ctx *Context) materializeBehavingParts(inst *Instance) error {
 		if !ok || fv.Materialized || ctx.model.IsConnectorUsage(feat.Symbol) {
 			continue
 		}
-		composite := ctx.CompositeTypeOf(fv.Feature)
-		mult := fv.Feature.Multiplicity
-		if composite == nil || !mult.Upper.Known || !mult.Lower.Known {
-			continue
-		}
-		if !mult.Lower.Infinite && mult.Lower.Value == 0 {
-			continue
-		}
-		if !ctx.runsBehaviors(composite, make(map[*symbols.Symbol]bool)) {
+		composite := ctx.requiredPartType(fv.Feature)
+		if composite == nil || !ctx.runsBehaviors(composite, make(map[*symbols.Symbol]bool)) {
 			continue
 		}
 		if _, err := inst.GetFeatureValue(ctx, feat.Name); err != nil {
@@ -294,8 +287,24 @@ func (ctx *Context) materializeBehavingParts(inst *Instance) error {
 	return nil
 }
 
+// requiredPartType is the type of the objects a composite feature is required to
+// hold, or nil when it may hold none: an optional part (finite lower bound 0) or
+// one whose multiplicity is unknown.
+func (ctx *Context) requiredPartType(feat *EffectiveFeature) *symbols.Symbol {
+	composite := ctx.CompositeTypeOf(feat)
+	mult := feat.Multiplicity
+	if composite == nil || !mult.Upper.Known || !mult.Lower.Known {
+		return nil
+	}
+	if !mult.Lower.Infinite && mult.Lower.Value == 0 {
+		return nil
+	}
+	return composite
+}
+
 // runsBehaviors reports whether objects of a type run behaviors, of their own or
-// of a part nested in them. A type on the path being decided answers false: a
+// of a part they are required to hold; an optional part is left absent, so what
+// it would run does not count. A type on the path being decided answers false: a
 // composition cycle has no finite object, so nothing is lost by cutting it.
 func (ctx *Context) runsBehaviors(typeSym *symbols.Symbol, visiting map[*symbols.Symbol]bool) bool {
 	if known, ok := ctx.behaving[typeSym]; ok {
@@ -315,7 +324,7 @@ func (ctx *Context) runsBehaviors(typeSym *symbols.Symbol, visiting map[*symbols
 		if ctx.model.IsConnectorUsage(features[i].Symbol) {
 			continue
 		}
-		if composite := ctx.CompositeTypeOf(&features[i]); composite != nil && ctx.runsBehaviors(composite, visiting) {
+		if composite := ctx.requiredPartType(&features[i]); composite != nil && ctx.runsBehaviors(composite, visiting) {
 			runs = true
 		}
 	}

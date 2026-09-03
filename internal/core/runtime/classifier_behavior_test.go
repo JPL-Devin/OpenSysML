@@ -1014,8 +1014,10 @@ func TestOptionalBehavingPartIsNotCreatedWithItsHolder(t *testing.T) {
 					state on { entry assign n := n + 1; }
 				}
 			}
+			part def Bay { part maybe : Ticker [0..1]; }
 			part def Holder {
 				part maybe : Ticker [0..1];
+				part bay : Bay;
 				part must : Ticker;
 			}
 			part holder : Holder;
@@ -1031,6 +1033,11 @@ func TestOptionalBehavingPartIsNotCreatedWithItsHolder(t *testing.T) {
 	}
 	if fv := inst.FeatureValues["maybe"]; fv.Materialized {
 		t.Errorf("the optional part was created with its holder: %+v", fv)
+	}
+	// A required part that runs nothing itself, and whose only behaving part is
+	// optional, is as lazy as any other part without behaviors.
+	if fv := inst.FeatureValues["bay"]; fv.Materialized {
+		t.Errorf("the part holding only an optional behaving part was created with its holder: %+v", fv)
 	}
 	if fv := inst.FeatureValues["must"]; !fv.Materialized {
 		t.Errorf("the required part was not created with its holder: %+v", fv)
