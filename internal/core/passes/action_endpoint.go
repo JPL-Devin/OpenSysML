@@ -89,6 +89,8 @@ func (c *actionEndpointChecker) walkNode(scope *symbols.Scope, decl ast.Node) {
 		c.walk(child, n.Members)
 	case *ast.SendStatement:
 		c.walk(child, n.Members)
+	case *ast.SuccessionEdge:
+		c.walk(child, n.Members)
 	case *ast.WhileLoopActionNode:
 		c.walk(child, n.Body)
 	case *ast.IfActionNode:
