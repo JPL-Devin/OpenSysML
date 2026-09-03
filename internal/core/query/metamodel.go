@@ -83,3 +83,23 @@ func MetamodelTypeNameOf(sym *symbols.Symbol) string {
 func MetamodelTypeName(kind symbols.SymbolKind) string {
 	return metamodelTypeNames[kind]
 }
+
+// IsMetamodelTypeName reports whether some element can report name as its @type.
+func IsMetamodelTypeName(name string) bool {
+	for _, typeName := range metamodelTypeNames {
+		if typeName == name {
+			return true
+		}
+	}
+	for _, typeName := range kermlTypeNames {
+		if typeName == name {
+			return true
+		}
+	}
+	for _, typeName := range kermlUsageTypeNames {
+		if typeName == name {
+			return true
+		}
+	}
+	return false
+}

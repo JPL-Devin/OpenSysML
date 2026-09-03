@@ -157,7 +157,7 @@ func (e *executor) evaluateWhereType(expression queryplan.Expression) (sequence,
 			appendSelected(&result, source, i)
 		}
 	}
-	if target == nil && len(result.values) == 0 && !knownMetamodelType(typeName) {
+	if target == nil && len(result.values) == 0 && !query.IsMetamodelTypeName(typeName) {
 		return sequence{}, &Error{
 			Kind:      ErrorUnknownClassification,
 			Query:     e.definition.Name(),
@@ -849,15 +849,6 @@ func (e *executor) resolveClassification(name string) *symbols.Symbol {
 		}
 	}
 	return match
-}
-
-func knownMetamodelType(name string) bool {
-	for kind := symbols.SymbolUnknown; kind <= symbols.SymbolRelationship; kind++ {
-		if query.MetamodelTypeName(kind) == name {
-			return true
-		}
-	}
-	return false
 }
 
 // filtered starts a filter's result, keeping the source's projected columns

@@ -1488,6 +1488,46 @@ calc def Usages :> Query {
 	}
 }
 
+// TestExecuteWhereTypeKnowsEveryMetamodelTypeName checks that a type filter that
+// selects nothing distinguishes a real metamodel type from a misspelt one, also
+// when a model element shares the metaclass's name so no classifier is unique.
+func TestExecuteWhereTypeKnowsEveryMetamodelTypeName(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+part root {
+	part child;
+}
+attribute def Multiplicity;
+attribute def Class;
+calc def Multiplicities :> Query {
+	in source : Element;
+	WhereType(source = OwnedElements(source = source), type = "Multiplicity")
+}
+calc def Classes :> Query {
+	in source : Element;
+	WhereType(source = OwnedElements(source = source), type = "Class")
+}
+calc def Misspelt :> Query {
+	in source : Element;
+	WhereType(source = OwnedElements(source = source), type = "Multiplicty")
+}
+`)
+	bindings := Bindings{"source": {ElementValue(fixture.symbol(t, "root"))}}
+	for _, name := range []string{"Multiplicities", "Classes"} {
+		rows, err := fixture.execute(t, name, bindings, Options{})
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if len(rows.Rows()) != 0 {
+			t.Fatalf("%s rows = %v, want none", name, elementNames(rows))
+		}
+	}
+	_, err := fixture.execute(t, "Misspelt", bindings, Options{})
+	var executionError *Error
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorUnknownClassification {
+		t.Fatalf("Misspelt error = %v, want %s", err, ErrorUnknownClassification)
+	}
+}
+
 // TestExecuteFilterKeepsProjectedColumnsWhenEmpty checks that a filter over a
 // projection keeps the projected columns even when it selects no row.
 func TestExecuteFilterKeepsProjectedColumnsWhenEmpty(t *testing.T) {
