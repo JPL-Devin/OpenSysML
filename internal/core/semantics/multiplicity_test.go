@@ -156,6 +156,31 @@ func TestRangeCountViolation(t *testing.T) {
 	}
 }
 
+// Intersecting ranges keeps the tighter of each bound, a known bound standing in
+// for an unknown one, so a feature bound by two specializations conforms to both.
+func TestRangeIntersect(t *testing.T) {
+	known := func(v int64) Bound { return Bound{Value: v, Known: true} }
+	star := Bound{Infinite: true, Known: true}
+	for _, tc := range []struct {
+		name string
+		a, b Range
+		want Range
+	}{
+		{"tighter lower and upper", Range{known(0), star}, Range{known(1), known(3)}, Range{known(1), known(3)}},
+		{"mixed", Range{known(2), star}, Range{known(0), known(5)}, Range{known(2), known(5)}},
+		{"unknown defers", Range{}, Range{known(1), known(1)}, Range{known(1), known(1)}},
+		{"infinite upper loses", Range{known(0), known(4)}, Range{known(0), star}, Range{known(0), known(4)}},
+		{"both unknown", Range{}, Range{}, Range{}},
+	} {
+		if got := tc.a.Intersect(tc.b); got != tc.want {
+			t.Errorf("%s: %v ∩ %v = %v, want %v", tc.name, tc.a, tc.b, got, tc.want)
+		}
+		if got := tc.b.Intersect(tc.a); got != tc.want {
+			t.Errorf("%s reversed: %v ∩ %v = %v, want %v", tc.name, tc.b, tc.a, got, tc.want)
+		}
+	}
+}
+
 // A bound that is not a literal is not evaluable, so the ordering check reports
 // ok=false and a caller skips it rather than diagnosing an unknown bound.
 func TestMultiplicityWithANonEvaluableBound(t *testing.T) {
