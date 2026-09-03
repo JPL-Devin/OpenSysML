@@ -10,11 +10,14 @@ elmt:R89
     sysml:qualifiedName "R89" ;
     sysml:elementId "R89" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "R89" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:R89__SeamCoupling, elmt:R89__P, elmt:R89__W, elmt:R89__Rd, elmt:R89__Ctx ;
     sysml:ownedMembership elmt:R89__SeamCoupling_om, elmt:R89__P_om, elmt:R89__W_om, elmt:R89__Rd_om, elmt:R89__Ctx_om ;
-    sysml:ownedRelationship elmt:R89__SeamCoupling_om, elmt:R89__P_om, elmt:R89__W_om, elmt:R89__Rd_om, elmt:R89__Ctx_om .
+    sysml:ownedRelationship elmt:R89__SeamCoupling_om, elmt:R89__P_om, elmt:R89__W_om, elmt:R89__Rd_om, elmt:R89__Ctx_om ;
+    sysx:sourceText "package R89 {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:R89__SeamCoupling
     a sysml:EnumerationDefinition ;
@@ -31,7 +34,9 @@ elmt:R89__SeamCoupling
     sysml:ownedMembership elmt:R89__SeamCoupling__learnFromData_om, elmt:R89__SeamCoupling__fixed_om ;
     sysml:ownedRelationship elmt:R89__SeamCoupling__learnFromData_om, elmt:R89__SeamCoupling__fixed_om ;
     sysml:ownedFeature elmt:R89__SeamCoupling__learnFromData, elmt:R89__SeamCoupling__fixed ;
-    sysml:ownedFeatureMembership elmt:R89__SeamCoupling__learnFromData_om, elmt:R89__SeamCoupling__fixed_om .
+    sysml:ownedFeatureMembership elmt:R89__SeamCoupling__learnFromData_om, elmt:R89__SeamCoupling__fixed_om ;
+    sysx:sourceText "    enum def SeamCoupling {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:R89__SeamCoupling_om
     a sysml:OwningMembership ;
@@ -54,7 +59,8 @@ elmt:R89__SeamCoupling__learnFromData
     sysml:owningMembership elmt:R89__SeamCoupling__learnFromData_om ;
     sysml:declaredName "learnFromData" ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        learnFromData;\n" .
 
 elmt:R89__SeamCoupling__learnFromData_om
     a sysml:FeatureMembership ;
@@ -79,7 +85,8 @@ elmt:R89__SeamCoupling__fixed
     sysml:owningMembership elmt:R89__SeamCoupling__fixed_om ;
     sysml:declaredName "fixed" ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        fixed;\n" .
 
 elmt:R89__SeamCoupling__fixed_om
     a sysml:FeatureMembership ;
@@ -108,7 +115,9 @@ elmt:R89__P
     sysml:ownedMembership elmt:R89__P__x_om ;
     sysml:ownedRelationship elmt:R89__P__x_om ;
     sysml:ownedFeature elmt:R89__P__x ;
-    sysml:ownedFeatureMembership elmt:R89__P__x_om .
+    sysml:ownedFeatureMembership elmt:R89__P__x_om ;
+    sysx:sourceText "    port def P {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:R89__P_om
     a sysml:OwningMembership ;
@@ -131,7 +140,8 @@ elmt:R89__P__x
     sysml:owningMembership elmt:R89__P__x_om ;
     sysml:declaredName "x" ;
     sysml:direction "out" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        out item x;\n" .
 
 elmt:R89__P__x_om
     a sysml:FeatureMembership ;
@@ -160,7 +170,9 @@ elmt:R89__W
     sysml:ownedMembership elmt:R89__W__outp_om ;
     sysml:ownedRelationship elmt:R89__W__outp_om ;
     sysml:ownedFeature elmt:R89__W__outp ;
-    sysml:ownedFeatureMembership elmt:R89__W__outp_om .
+    sysml:ownedFeatureMembership elmt:R89__W__outp_om ;
+    sysx:sourceText "    part def W {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:R89__W_om
     a sysml:OwningMembership ;
@@ -183,7 +195,8 @@ elmt:R89__W__outp
     sysml:owningMembership elmt:R89__W__outp_om ;
     sysml:declaredName "outp" ;
     sysml:type elmt:R89__P ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        port outp : P;\n" .
 
 elmt:R89__W__outp_om
     a sysml:FeatureMembership ;
@@ -212,7 +225,9 @@ elmt:R89__Rd
     sysml:ownedMembership elmt:R89__Rd__inp_om ;
     sysml:ownedRelationship elmt:R89__Rd__inp_om ;
     sysml:ownedFeature elmt:R89__Rd__inp ;
-    sysml:ownedFeatureMembership elmt:R89__Rd__inp_om .
+    sysml:ownedFeatureMembership elmt:R89__Rd__inp_om ;
+    sysx:sourceText "    part def Rd {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:R89__Rd_om
     a sysml:OwningMembership ;
@@ -236,7 +251,8 @@ elmt:R89__Rd__inp
     sysml:declaredName "inp" ;
     sysml:isConjugated "true"^^xsd:boolean ;
     sysml:type elmt:R89__P ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        port inp : ~P;\n" .
 
 elmt:R89__Rd__inp_om
     a sysml:FeatureMembership ;
@@ -265,7 +281,9 @@ elmt:R89__Ctx
     sysml:ownedMembership elmt:R89__Ctx__w_om, elmt:R89__Ctx__r_om, elmt:R89__Ctx__seam_om ;
     sysml:ownedRelationship elmt:R89__Ctx__w_om, elmt:R89__Ctx__r_om, elmt:R89__Ctx__seam_om ;
     sysml:ownedFeature elmt:R89__Ctx__w, elmt:R89__Ctx__r, elmt:R89__Ctx__seam ;
-    sysml:ownedFeatureMembership elmt:R89__Ctx__w_om, elmt:R89__Ctx__r_om, elmt:R89__Ctx__seam_om .
+    sysml:ownedFeatureMembership elmt:R89__Ctx__w_om, elmt:R89__Ctx__r_om, elmt:R89__Ctx__seam_om ;
+    sysx:sourceText "    part def Ctx {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:R89__Ctx_om
     a sysml:OwningMembership ;
@@ -288,7 +306,8 @@ elmt:R89__Ctx__w
     sysml:owningMembership elmt:R89__Ctx__w_om ;
     sysml:declaredName "w" ;
     sysml:type elmt:R89__W ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part w : W;\n" .
 
 elmt:R89__Ctx__w_om
     a sysml:FeatureMembership ;
@@ -313,7 +332,8 @@ elmt:R89__Ctx__r
     sysml:owningMembership elmt:R89__Ctx__r_om ;
     sysml:declaredName "r" ;
     sysml:type elmt:R89__Rd ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part r : Rd;\n" .
 
 elmt:R89__Ctx__r_om
     a sysml:FeatureMembership ;
@@ -337,7 +357,6 @@ elmt:R89__Ctx__seam
     sysml:owningRelationship elmt:R89__Ctx__seam_om ;
     sysml:owningMembership elmt:R89__Ctx__seam_om ;
     sysml:declaredName "seam" ;
-    sysx:sourceText "interface seam connect w.outp to r.inp" ;
     sysx:relatedFeature expr:R89__Ctx__seam_pend0, expr:R89__Ctx__seam_pend1 ;
     sysx:endForm "to" ;
     sysx:endVerb "connect" ;
@@ -346,7 +365,9 @@ elmt:R89__Ctx__seam
     sysml:ownedMembership elmt:R89__Ctx__seam__coupling_om ;
     sysml:ownedRelationship elmt:R89__Ctx__seam__coupling_om ;
     sysml:ownedFeature elmt:R89__Ctx__seam__coupling ;
-    sysml:ownedFeatureMembership elmt:R89__Ctx__seam__coupling_om .
+    sysml:ownedFeatureMembership elmt:R89__Ctx__seam__coupling_om ;
+    sysx:sourceText "        interface seam connect w.outp to r.inp {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:R89__Ctx__seam_om
     a sysml:FeatureMembership ;
@@ -402,7 +423,8 @@ elmt:R89__Ctx__seam__coupling
     sysml:declaredName "coupling" ;
     sysml:type elmt:R89__SeamCoupling ;
     sysml:value expr:R89__Ctx__seam__coupling_pvalue ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            attribute coupling : SeamCoupling = SeamCoupling::learnFromData;\n" .
 
 elmt:R89__Ctx__seam__coupling_om
     a sysml:FeatureMembership ;
@@ -427,11 +449,14 @@ elmt:Bodies
     sysml:qualifiedName "Bodies" ;
     sysml:elementId "Bodies" ;
     sysx:memberIndex "1"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Bodies" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Bodies__Prio, elmt:Bodies__Fuel, elmt:Bodies__A, elmt:Bodies__B, elmt:Bodies__Ctx ;
     sysml:ownedMembership elmt:Bodies__Prio_om, elmt:Bodies__Fuel_om, elmt:Bodies__A_om, elmt:Bodies__B_om, elmt:Bodies__Ctx_om ;
-    sysml:ownedRelationship elmt:Bodies__Prio_om, elmt:Bodies__Fuel_om, elmt:Bodies__A_om, elmt:Bodies__B_om, elmt:Bodies__Ctx_om .
+    sysml:ownedRelationship elmt:Bodies__Prio_om, elmt:Bodies__Fuel_om, elmt:Bodies__A_om, elmt:Bodies__B_om, elmt:Bodies__Ctx_om ;
+    sysx:sourceText "package Bodies {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:Bodies__Prio
     a sysml:AttributeDefinition ;
@@ -443,7 +468,8 @@ elmt:Bodies__Prio
     sysml:owningRelationship elmt:Bodies__Prio_om ;
     sysml:owningMembership elmt:Bodies__Prio_om ;
     sysml:declaredName "Prio" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    attribute def Prio;\n" .
 
 elmt:Bodies__Prio_om
     a sysml:OwningMembership ;
@@ -465,7 +491,8 @@ elmt:Bodies__Fuel
     sysml:owningRelationship elmt:Bodies__Fuel_om ;
     sysml:owningMembership elmt:Bodies__Fuel_om ;
     sysml:declaredName "Fuel" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    item def Fuel;\n" .
 
 elmt:Bodies__Fuel_om
     a sysml:OwningMembership ;
@@ -492,7 +519,9 @@ elmt:Bodies__A
     sysml:ownedMembership elmt:Bodies__A__p_om, elmt:Bodies__A__a_om, elmt:Bodies__A__i_om ;
     sysml:ownedRelationship elmt:Bodies__A__p_om, elmt:Bodies__A__a_om, elmt:Bodies__A__i_om ;
     sysml:ownedFeature elmt:Bodies__A__p, elmt:Bodies__A__a, elmt:Bodies__A__i ;
-    sysml:ownedFeatureMembership elmt:Bodies__A__p_om, elmt:Bodies__A__a_om, elmt:Bodies__A__i_om .
+    sysml:ownedFeatureMembership elmt:Bodies__A__p_om, elmt:Bodies__A__a_om, elmt:Bodies__A__i_om ;
+    sysx:sourceText "    part def A {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Bodies__A_om
     a sysml:OwningMembership ;
@@ -514,7 +543,8 @@ elmt:Bodies__A__p
     sysml:owningRelationship elmt:Bodies__A__p_om ;
     sysml:owningMembership elmt:Bodies__A__p_om ;
     sysml:declaredName "p" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        port p;\n" .
 
 elmt:Bodies__A__p_om
     a sysml:FeatureMembership ;
@@ -538,7 +568,8 @@ elmt:Bodies__A__a
     sysml:owningRelationship elmt:Bodies__A__a_om ;
     sysml:owningMembership elmt:Bodies__A__a_om ;
     sysml:declaredName "a" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute a;\n" .
 
 elmt:Bodies__A__a_om
     a sysml:FeatureMembership ;
@@ -564,7 +595,8 @@ elmt:Bodies__A__i
     sysml:declaredName "i" ;
     sysml:direction "out" ;
     sysml:type elmt:Bodies__Fuel ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        out item i : Fuel;\n" .
 
 elmt:Bodies__A__i_om
     a sysml:FeatureMembership ;
@@ -593,7 +625,9 @@ elmt:Bodies__B
     sysml:ownedMembership elmt:Bodies__B__q_om, elmt:Bodies__B__b_om, elmt:Bodies__B__j_om ;
     sysml:ownedRelationship elmt:Bodies__B__q_om, elmt:Bodies__B__b_om, elmt:Bodies__B__j_om ;
     sysml:ownedFeature elmt:Bodies__B__q, elmt:Bodies__B__b, elmt:Bodies__B__j ;
-    sysml:ownedFeatureMembership elmt:Bodies__B__q_om, elmt:Bodies__B__b_om, elmt:Bodies__B__j_om .
+    sysml:ownedFeatureMembership elmt:Bodies__B__q_om, elmt:Bodies__B__b_om, elmt:Bodies__B__j_om ;
+    sysx:sourceText "    part def B {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Bodies__B_om
     a sysml:OwningMembership ;
@@ -615,7 +649,8 @@ elmt:Bodies__B__q
     sysml:owningRelationship elmt:Bodies__B__q_om ;
     sysml:owningMembership elmt:Bodies__B__q_om ;
     sysml:declaredName "q" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        port q;\n" .
 
 elmt:Bodies__B__q_om
     a sysml:FeatureMembership ;
@@ -639,7 +674,8 @@ elmt:Bodies__B__b
     sysml:owningRelationship elmt:Bodies__B__b_om ;
     sysml:owningMembership elmt:Bodies__B__b_om ;
     sysml:declaredName "b" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        attribute b;\n" .
 
 elmt:Bodies__B__b_om
     a sysml:FeatureMembership ;
@@ -665,7 +701,8 @@ elmt:Bodies__B__j
     sysml:declaredName "j" ;
     sysml:direction "in" ;
     sysml:type elmt:Bodies__Fuel ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        in item j : Fuel;\n" .
 
 elmt:Bodies__B__j_om
     a sysml:FeatureMembership ;
@@ -694,7 +731,9 @@ elmt:Bodies__Ctx
     sysml:ownedMembership elmt:Bodies__Ctx__x_om, elmt:Bodies__Ctx__y_om, elmt:Bodies__Ctx__c_om, elmt:Bodies__Ctx___403_om, elmt:Bodies__Ctx__f_om, elmt:Bodies__Ctx__bd_om, elmt:Bodies__Ctx___406_om, elmt:Bodies__Ctx__al_om, elmt:Bodies__Ctx__s_om, elmt:Bodies__Ctx__Act_om, elmt:Bodies__Ctx__Machine_om ;
     sysml:ownedRelationship elmt:Bodies__Ctx__x_om, elmt:Bodies__Ctx__y_om, elmt:Bodies__Ctx__c_om, elmt:Bodies__Ctx___403_om, elmt:Bodies__Ctx__f_om, elmt:Bodies__Ctx__bd_om, elmt:Bodies__Ctx___406_om, elmt:Bodies__Ctx__al_om, elmt:Bodies__Ctx__s_om, elmt:Bodies__Ctx__Act_om, elmt:Bodies__Ctx__Machine_om ;
     sysml:ownedFeature elmt:Bodies__Ctx__x, elmt:Bodies__Ctx__y, elmt:Bodies__Ctx__c, elmt:Bodies__Ctx___403, elmt:Bodies__Ctx__bd, elmt:Bodies__Ctx___406, elmt:Bodies__Ctx__al, elmt:Bodies__Ctx__s ;
-    sysml:ownedFeatureMembership elmt:Bodies__Ctx__x_om, elmt:Bodies__Ctx__y_om, elmt:Bodies__Ctx__c_om, elmt:Bodies__Ctx___403_om, elmt:Bodies__Ctx__bd_om, elmt:Bodies__Ctx___406_om, elmt:Bodies__Ctx__al_om, elmt:Bodies__Ctx__s_om .
+    sysml:ownedFeatureMembership elmt:Bodies__Ctx__x_om, elmt:Bodies__Ctx__y_om, elmt:Bodies__Ctx__c_om, elmt:Bodies__Ctx___403_om, elmt:Bodies__Ctx__bd_om, elmt:Bodies__Ctx___406_om, elmt:Bodies__Ctx__al_om, elmt:Bodies__Ctx__s_om ;
+    sysx:sourceText "    part def Ctx {\n" ;
+    sysx:sourceTail "    }\n" .
 
 elmt:Bodies__Ctx_om
     a sysml:OwningMembership ;
@@ -717,7 +756,8 @@ elmt:Bodies__Ctx__x
     sysml:owningMembership elmt:Bodies__Ctx__x_om ;
     sysml:declaredName "x" ;
     sysml:type elmt:Bodies__A ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part x : A;\n" .
 
 elmt:Bodies__Ctx__x_om
     a sysml:FeatureMembership ;
@@ -742,7 +782,8 @@ elmt:Bodies__Ctx__y
     sysml:owningMembership elmt:Bodies__Ctx__y_om ;
     sysml:declaredName "y" ;
     sysml:type elmt:Bodies__B ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "        part y : B;\n" .
 
 elmt:Bodies__Ctx__y_om
     a sysml:FeatureMembership ;
@@ -766,7 +807,6 @@ elmt:Bodies__Ctx__c
     sysml:owningRelationship elmt:Bodies__Ctx__c_om ;
     sysml:owningMembership elmt:Bodies__Ctx__c_om ;
     sysml:declaredName "c" ;
-    sysx:sourceText "connection c connect x.p to y.q" ;
     sysx:relatedFeature expr:Bodies__Ctx__c_pend0, expr:Bodies__Ctx__c_pend1 ;
     sysx:endForm "to" ;
     sysx:endVerb "connect" ;
@@ -775,7 +815,9 @@ elmt:Bodies__Ctx__c
     sysml:ownedMembership elmt:Bodies__Ctx__c__w_om ;
     sysml:ownedRelationship elmt:Bodies__Ctx__c__w_om ;
     sysml:ownedFeature elmt:Bodies__Ctx__c__w ;
-    sysml:ownedFeatureMembership elmt:Bodies__Ctx__c__w_om .
+    sysml:ownedFeatureMembership elmt:Bodies__Ctx__c__w_om ;
+    sysx:sourceText "        connection c connect x.p to y.q {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:Bodies__Ctx__c_om
     a sysml:FeatureMembership ;
@@ -830,7 +872,8 @@ elmt:Bodies__Ctx__c__w
     sysml:owningMembership elmt:Bodies__Ctx__c__w_om ;
     sysml:declaredName "w" ;
     sysml:type elmt:Bodies__Prio ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            attribute w : Prio;\n" .
 
 elmt:Bodies__Ctx__c__w_om
     a sysml:FeatureMembership ;
@@ -853,7 +896,6 @@ elmt:Bodies__Ctx___403
     sysml:owner elmt:Bodies__Ctx ;
     sysml:owningRelationship elmt:Bodies__Ctx___403_om ;
     sysml:owningMembership elmt:Bodies__Ctx___403_om ;
-    sysx:sourceText "connect x.p to y.q" ;
     sysx:relatedFeature expr:Bodies__Ctx___403_pend0, expr:Bodies__Ctx___403_pend1 ;
     sysx:endForm "to" ;
     sysx:declaredKeyword "connect" ;
@@ -862,7 +904,9 @@ elmt:Bodies__Ctx___403
     sysml:ownedMembership elmt:Bodies__Ctx___403__w_om ;
     sysml:ownedRelationship elmt:Bodies__Ctx___403__w_om ;
     sysml:ownedFeature elmt:Bodies__Ctx___403__w ;
-    sysml:ownedFeatureMembership elmt:Bodies__Ctx___403__w_om .
+    sysml:ownedFeatureMembership elmt:Bodies__Ctx___403__w_om ;
+    sysx:sourceText "        connect x.p to y.q {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:Bodies__Ctx___403_om
     a sysml:FeatureMembership ;
@@ -917,7 +961,8 @@ elmt:Bodies__Ctx___403__w
     sysml:owningMembership elmt:Bodies__Ctx___403__w_om ;
     sysml:declaredName "w" ;
     sysml:type elmt:Bodies__Prio ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            attribute w : Prio;\n" .
 
 elmt:Bodies__Ctx___403__w_om
     a sysml:FeatureMembership ;
@@ -941,13 +986,14 @@ elmt:Bodies__Ctx__f
     sysml:owningRelationship elmt:Bodies__Ctx__f_om ;
     sysml:owningMembership elmt:Bodies__Ctx__f_om ;
     sysml:declaredName "f" ;
-    sysx:sourceText "flow f from x.i to y.j" ;
     sysx:relatedFeature expr:Bodies__Ctx__f_pflowSource, expr:Bodies__Ctx__f_pflowTarget ;
     sysx:endForm "fromTo" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Bodies__Ctx__f__w ;
     sysml:ownedMembership elmt:Bodies__Ctx__f__w_om ;
-    sysml:ownedRelationship elmt:Bodies__Ctx__f__w_om .
+    sysml:ownedRelationship elmt:Bodies__Ctx__f__w_om ;
+    sysx:sourceText "        flow f from x.i to y.j {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:Bodies__Ctx__f_om
     a sysml:OwningMembership ;
@@ -1002,7 +1048,8 @@ elmt:Bodies__Ctx__f__w
     sysml:owningMembership elmt:Bodies__Ctx__f__w_om ;
     sysml:declaredName "w" ;
     sysml:type elmt:Bodies__Prio ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            attribute w : Prio;\n" .
 
 elmt:Bodies__Ctx__f__w_om
     a sysml:OwningMembership ;
@@ -1026,7 +1073,6 @@ elmt:Bodies__Ctx__bd
     sysml:declaredName "bd" ;
     sysml:references "x.a"^^sysx:Expression ;
     sysml:value expr:Bodies__Ctx__bd_pvalue ;
-    sysx:sourceText "binding bd bind x.a = y.b" ;
     sysx:endForm "equals" ;
     sysx:endVerb "bind" ;
     sysx:hasBody "true"^^xsd:boolean ;
@@ -1034,7 +1080,9 @@ elmt:Bodies__Ctx__bd
     sysml:ownedMembership elmt:Bodies__Ctx__bd__w_om ;
     sysml:ownedRelationship elmt:Bodies__Ctx__bd__w_om ;
     sysml:ownedFeature elmt:Bodies__Ctx__bd__w ;
-    sysml:ownedFeatureMembership elmt:Bodies__Ctx__bd__w_om .
+    sysml:ownedFeatureMembership elmt:Bodies__Ctx__bd__w_om ;
+    sysx:sourceText "        binding bd bind x.a = y.b {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:Bodies__Ctx__bd_om
     a sysml:FeatureMembership ;
@@ -1073,7 +1121,8 @@ elmt:Bodies__Ctx__bd__w
     sysml:owningMembership elmt:Bodies__Ctx__bd__w_om ;
     sysml:declaredName "w" ;
     sysml:type elmt:Bodies__Prio ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            attribute w : Prio;\n" .
 
 elmt:Bodies__Ctx__bd__w_om
     a sysml:FeatureMembership ;
@@ -1098,7 +1147,6 @@ elmt:Bodies__Ctx___406
     sysml:owningMembership elmt:Bodies__Ctx___406_om ;
     sysml:references "x.a"^^sysx:Expression ;
     sysml:value expr:Bodies__Ctx___406_pvalue ;
-    sysx:sourceText "bind x.a = y.b" ;
     sysx:endForm "equals" ;
     sysx:declaredKeyword "bind" ;
     sysx:hasBody "true"^^xsd:boolean ;
@@ -1106,7 +1154,9 @@ elmt:Bodies__Ctx___406
     sysml:ownedMembership elmt:Bodies__Ctx___406__w_om ;
     sysml:ownedRelationship elmt:Bodies__Ctx___406__w_om ;
     sysml:ownedFeature elmt:Bodies__Ctx___406__w ;
-    sysml:ownedFeatureMembership elmt:Bodies__Ctx___406__w_om .
+    sysml:ownedFeatureMembership elmt:Bodies__Ctx___406__w_om ;
+    sysx:sourceText "        bind x.a = y.b {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:Bodies__Ctx___406_om
     a sysml:FeatureMembership ;
@@ -1145,7 +1195,8 @@ elmt:Bodies__Ctx___406__w
     sysml:owningMembership elmt:Bodies__Ctx___406__w_om ;
     sysml:declaredName "w" ;
     sysml:type elmt:Bodies__Prio ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            attribute w : Prio;\n" .
 
 elmt:Bodies__Ctx___406__w_om
     a sysml:FeatureMembership ;
@@ -1169,7 +1220,6 @@ elmt:Bodies__Ctx__al
     sysml:owningRelationship elmt:Bodies__Ctx__al_om ;
     sysml:owningMembership elmt:Bodies__Ctx__al_om ;
     sysml:declaredName "al" ;
-    sysx:sourceText "allocation al allocate x to y" ;
     sysx:relatedFeature expr:Bodies__Ctx__al_pend0, expr:Bodies__Ctx__al_pend1 ;
     sysx:endForm "to" ;
     sysx:endVerb "allocate" ;
@@ -1178,7 +1228,9 @@ elmt:Bodies__Ctx__al
     sysml:ownedMembership elmt:Bodies__Ctx__al__w_om ;
     sysml:ownedRelationship elmt:Bodies__Ctx__al__w_om ;
     sysml:ownedFeature elmt:Bodies__Ctx__al__w ;
-    sysml:ownedFeatureMembership elmt:Bodies__Ctx__al__w_om .
+    sysml:ownedFeatureMembership elmt:Bodies__Ctx__al__w_om ;
+    sysx:sourceText "        allocation al allocate x to y {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:Bodies__Ctx__al_om
     a sysml:FeatureMembership ;
@@ -1217,7 +1269,8 @@ elmt:Bodies__Ctx__al__w
     sysml:owningMembership elmt:Bodies__Ctx__al__w_om ;
     sysml:declaredName "w" ;
     sysml:type elmt:Bodies__Prio ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            attribute w : Prio;\n" .
 
 elmt:Bodies__Ctx__al__w_om
     a sysml:FeatureMembership ;
@@ -1241,7 +1294,6 @@ elmt:Bodies__Ctx__s
     sysml:owningRelationship elmt:Bodies__Ctx__s_om ;
     sysml:owningMembership elmt:Bodies__Ctx__s_om ;
     sysml:declaredName "s" ;
-    sysx:sourceText "succession s first x then y" ;
     sysx:relatedFeature expr:Bodies__Ctx__s_pend0, expr:Bodies__Ctx__s_pend1 ;
     sysx:endForm "firstThen" ;
     sysx:endVerb "first" ;
@@ -1250,7 +1302,9 @@ elmt:Bodies__Ctx__s
     sysml:ownedMembership elmt:Bodies__Ctx__s__w_om ;
     sysml:ownedRelationship elmt:Bodies__Ctx__s__w_om ;
     sysml:ownedFeature elmt:Bodies__Ctx__s__w ;
-    sysml:ownedFeatureMembership elmt:Bodies__Ctx__s__w_om .
+    sysml:ownedFeatureMembership elmt:Bodies__Ctx__s__w_om ;
+    sysx:sourceText "        succession s first x then y {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:Bodies__Ctx__s_om
     a sysml:FeatureMembership ;
@@ -1289,7 +1343,8 @@ elmt:Bodies__Ctx__s__w
     sysml:owningMembership elmt:Bodies__Ctx__s__w_om ;
     sysml:declaredName "w" ;
     sysml:type elmt:Bodies__Prio ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            attribute w : Prio;\n" .
 
 elmt:Bodies__Ctx__s__w_om
     a sysml:FeatureMembership ;
@@ -1318,7 +1373,9 @@ elmt:Bodies__Ctx__Act
     sysml:ownedMembership elmt:Bodies__Ctx__Act__a1_om, elmt:Bodies__Ctx__Act__a2_om, elmt:Bodies__Ctx__Act___402_om, elmt:Bodies__Ctx__Act___403_om, elmt:Bodies__Ctx__Act__a3_om, elmt:Bodies__Ctx__Act___405_om, elmt:Bodies__Ctx__Act__a4_om, elmt:Bodies__Ctx__Act___407_om, elmt:Bodies__Ctx__Act___408_om ;
     sysml:ownedRelationship elmt:Bodies__Ctx__Act__a1_om, elmt:Bodies__Ctx__Act__a2_om, elmt:Bodies__Ctx__Act___402_om, elmt:Bodies__Ctx__Act___403_om, elmt:Bodies__Ctx__Act__a3_om, elmt:Bodies__Ctx__Act___405_om, elmt:Bodies__Ctx__Act__a4_om, elmt:Bodies__Ctx__Act___407_om, elmt:Bodies__Ctx__Act___408_om ;
     sysml:ownedFeature elmt:Bodies__Ctx__Act__a1, elmt:Bodies__Ctx__Act__a2, elmt:Bodies__Ctx__Act___402, elmt:Bodies__Ctx__Act__a3, elmt:Bodies__Ctx__Act__a4, elmt:Bodies__Ctx__Act___407, elmt:Bodies__Ctx__Act___408 ;
-    sysml:ownedFeatureMembership elmt:Bodies__Ctx__Act__a1_om, elmt:Bodies__Ctx__Act__a2_om, elmt:Bodies__Ctx__Act___402_om, elmt:Bodies__Ctx__Act__a3_om, elmt:Bodies__Ctx__Act__a4_om, elmt:Bodies__Ctx__Act___407_om, elmt:Bodies__Ctx__Act___408_om .
+    sysml:ownedFeatureMembership elmt:Bodies__Ctx__Act__a1_om, elmt:Bodies__Ctx__Act__a2_om, elmt:Bodies__Ctx__Act___402_om, elmt:Bodies__Ctx__Act__a3_om, elmt:Bodies__Ctx__Act__a4_om, elmt:Bodies__Ctx__Act___407_om, elmt:Bodies__Ctx__Act___408_om ;
+    sysx:sourceText "        action def Act {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:Bodies__Ctx__Act_om
     a sysml:OwningMembership ;
@@ -1340,7 +1397,8 @@ elmt:Bodies__Ctx__Act__a1
     sysml:owningRelationship elmt:Bodies__Ctx__Act__a1_om ;
     sysml:owningMembership elmt:Bodies__Ctx__Act__a1_om ;
     sysml:declaredName "a1" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            action a1;\n" .
 
 elmt:Bodies__Ctx__Act__a1_om
     a sysml:FeatureMembership ;
@@ -1364,7 +1422,8 @@ elmt:Bodies__Ctx__Act__a2
     sysml:owningRelationship elmt:Bodies__Ctx__Act__a2_om ;
     sysml:owningMembership elmt:Bodies__Ctx__Act__a2_om ;
     sysml:declaredName "a2" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            action a2;\n" .
 
 elmt:Bodies__Ctx__Act__a2_om
     a sysml:FeatureMembership ;
@@ -1387,7 +1446,6 @@ elmt:Bodies__Ctx__Act___402
     sysml:owner elmt:Bodies__Ctx__Act ;
     sysml:owningRelationship elmt:Bodies__Ctx__Act___402_om ;
     sysml:owningMembership elmt:Bodies__Ctx__Act___402_om ;
-    sysx:sourceText "succession first a1 then a2" ;
     sysx:relatedFeature expr:Bodies__Ctx__Act___402_pend0, expr:Bodies__Ctx__Act___402_pend1 ;
     sysx:endForm "firstThen" ;
     sysx:endVerb "first" ;
@@ -1396,7 +1454,9 @@ elmt:Bodies__Ctx__Act___402
     sysml:ownedMembership elmt:Bodies__Ctx__Act___402__w_om ;
     sysml:ownedRelationship elmt:Bodies__Ctx__Act___402__w_om ;
     sysml:ownedFeature elmt:Bodies__Ctx__Act___402__w ;
-    sysml:ownedFeatureMembership elmt:Bodies__Ctx__Act___402__w_om .
+    sysml:ownedFeatureMembership elmt:Bodies__Ctx__Act___402__w_om ;
+    sysx:sourceText "            succession first a1 then a2 {\n" ;
+    sysx:sourceTail "            }\n" .
 
 elmt:Bodies__Ctx__Act___402_om
     a sysml:FeatureMembership ;
@@ -1435,7 +1495,8 @@ elmt:Bodies__Ctx__Act___402__w
     sysml:owningMembership elmt:Bodies__Ctx__Act___402__w_om ;
     sysml:declaredName "w" ;
     sysml:type elmt:Bodies__Prio ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "                attribute w : Prio;\n" .
 
 elmt:Bodies__Ctx__Act___402__w_om
     a sysml:FeatureMembership ;
@@ -1463,7 +1524,9 @@ elmt:Bodies__Ctx__Act___403
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Bodies__Ctx__Act___403__w ;
     sysml:ownedMembership elmt:Bodies__Ctx__Act___403__w_om ;
-    sysml:ownedRelationship elmt:Bodies__Ctx__Act___403__w_om .
+    sysml:ownedRelationship elmt:Bodies__Ctx__Act___403__w_om ;
+    sysx:sourceText "            first a1 then a2 {\n" ;
+    sysx:sourceTail "            }\n" .
 
 elmt:Bodies__Ctx__Act___403_om
     a sysml:OwningMembership ;
@@ -1486,7 +1549,8 @@ elmt:Bodies__Ctx__Act___403__w
     sysml:owningMembership elmt:Bodies__Ctx__Act___403__w_om ;
     sysml:declaredName "w" ;
     sysml:type elmt:Bodies__Prio ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "                attribute w : Prio;\n" .
 
 elmt:Bodies__Ctx__Act___403__w_om
     a sysml:OwningMembership ;
@@ -1508,7 +1572,8 @@ elmt:Bodies__Ctx__Act__a3
     sysml:owningRelationship elmt:Bodies__Ctx__Act__a3_om ;
     sysml:owningMembership elmt:Bodies__Ctx__Act__a3_om ;
     sysml:declaredName "a3" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            action a3;\n" .
 
 elmt:Bodies__Ctx__Act__a3_om
     a sysml:FeatureMembership ;
@@ -1533,7 +1598,8 @@ elmt:Bodies__Ctx__Act___405
     sysml:owningMembership elmt:Bodies__Ctx__Act___405_om ;
     sysml:sourceFeature elmt:Bodies__Ctx__Act__a2 ;
     sysml:targetFeature elmt:Bodies__Ctx__Act__a3 ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysx:sourceText "            first a2 then a3 {\n            }\n" .
 
 elmt:Bodies__Ctx__Act___405_om
     a sysml:OwningMembership ;
@@ -1555,7 +1621,8 @@ elmt:Bodies__Ctx__Act__a4
     sysml:owningRelationship elmt:Bodies__Ctx__Act__a4_om ;
     sysml:owningMembership elmt:Bodies__Ctx__Act__a4_om ;
     sysml:declaredName "a4" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            action a4;\n" .
 
 elmt:Bodies__Ctx__Act__a4_om
     a sysml:FeatureMembership ;
@@ -1581,7 +1648,8 @@ elmt:Bodies__Ctx__Act___407
     sysx:endForm "then" ;
     sysml:sourceFeature elmt:Bodies__Ctx__Act__a4 ;
     sysml:targetFeature elmt:Bodies__Ctx__Act__a3 ;
-    sysx:hasBody "true"^^xsd:boolean .
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysx:sourceText "            then a3 {\n            }\n" .
 
 elmt:Bodies__Ctx__Act___407_om
     a sysml:FeatureMembership ;
@@ -1606,7 +1674,8 @@ elmt:Bodies__Ctx__Act___408
     sysml:owningMembership elmt:Bodies__Ctx__Act___408_om ;
     sysx:endForm "then" ;
     sysml:sourceFeature elmt:Bodies__Ctx__Act__a4 ;
-    sysml:targetFeature elmt:Bodies__Ctx__Act__a4 .
+    sysml:targetFeature elmt:Bodies__Ctx__Act__a4 ;
+    sysx:sourceText "            then a4 /* { */;\n" .
 
 elmt:Bodies__Ctx__Act___408_om
     a sysml:FeatureMembership ;
@@ -1635,7 +1704,9 @@ elmt:Bodies__Ctx__Machine
     sysml:ownedMembership elmt:Bodies__Ctx__Machine__off_om, elmt:Bodies__Ctx__Machine__on_om, elmt:Bodies__Ctx__Machine__t1_om, elmt:Bodies__Ctx__Machine___403_om, elmt:Bodies__Ctx__Machine___404_om ;
     sysml:ownedRelationship elmt:Bodies__Ctx__Machine__off_om, elmt:Bodies__Ctx__Machine__on_om, elmt:Bodies__Ctx__Machine__t1_om, elmt:Bodies__Ctx__Machine___403_om, elmt:Bodies__Ctx__Machine___404_om ;
     sysml:ownedFeature elmt:Bodies__Ctx__Machine__off, elmt:Bodies__Ctx__Machine__on, elmt:Bodies__Ctx__Machine__t1, elmt:Bodies__Ctx__Machine___403, elmt:Bodies__Ctx__Machine___404 ;
-    sysml:ownedFeatureMembership elmt:Bodies__Ctx__Machine__off_om, elmt:Bodies__Ctx__Machine__on_om, elmt:Bodies__Ctx__Machine__t1_om, elmt:Bodies__Ctx__Machine___403_om, elmt:Bodies__Ctx__Machine___404_om .
+    sysml:ownedFeatureMembership elmt:Bodies__Ctx__Machine__off_om, elmt:Bodies__Ctx__Machine__on_om, elmt:Bodies__Ctx__Machine__t1_om, elmt:Bodies__Ctx__Machine___403_om, elmt:Bodies__Ctx__Machine___404_om ;
+    sysx:sourceText "        state def Machine {\n" ;
+    sysx:sourceTail "        }\n" .
 
 elmt:Bodies__Ctx__Machine_om
     a sysml:OwningMembership ;
@@ -1657,7 +1728,8 @@ elmt:Bodies__Ctx__Machine__off
     sysml:owningRelationship elmt:Bodies__Ctx__Machine__off_om ;
     sysml:owningMembership elmt:Bodies__Ctx__Machine__off_om ;
     sysml:declaredName "off" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            state off;\n" .
 
 elmt:Bodies__Ctx__Machine__off_om
     a sysml:FeatureMembership ;
@@ -1681,7 +1753,8 @@ elmt:Bodies__Ctx__Machine__on
     sysml:owningRelationship elmt:Bodies__Ctx__Machine__on_om ;
     sysml:owningMembership elmt:Bodies__Ctx__Machine__on_om ;
     sysml:declaredName "on" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "            state on;\n" .
 
 elmt:Bodies__Ctx__Machine__on_om
     a sysml:FeatureMembership ;
@@ -1713,7 +1786,9 @@ elmt:Bodies__Ctx__Machine__t1
     sysml:ownedMembership elmt:Bodies__Ctx__Machine__t1__w_om ;
     sysml:ownedRelationship elmt:Bodies__Ctx__Machine__t1__w_om ;
     sysml:ownedFeature elmt:Bodies__Ctx__Machine__t1__w ;
-    sysml:ownedFeatureMembership elmt:Bodies__Ctx__Machine__t1__w_om .
+    sysml:ownedFeatureMembership elmt:Bodies__Ctx__Machine__t1__w_om ;
+    sysx:sourceText "            transition t1 first off then on {\n" ;
+    sysx:sourceTail "            }\n" .
 
 elmt:Bodies__Ctx__Machine__t1_om
     a sysml:FeatureMembership ;
@@ -1738,7 +1813,8 @@ elmt:Bodies__Ctx__Machine__t1__w
     sysml:owningMembership elmt:Bodies__Ctx__Machine__t1__w_om ;
     sysml:declaredName "w" ;
     sysml:type elmt:Bodies__Prio ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "                attribute w : Prio;\n" .
 
 elmt:Bodies__Ctx__Machine__t1__w_om
     a sysml:FeatureMembership ;
@@ -1771,7 +1847,8 @@ elmt:Bodies__Ctx__Machine___403
     sysml:ownedMembership elmt:Bodies__Ctx__Machine___403___400_om ;
     sysml:ownedRelationship elmt:Bodies__Ctx__Machine___403___400_om ;
     sysml:ownedFeature elmt:Bodies__Ctx__Machine___403___400 ;
-    sysml:ownedFeatureMembership elmt:Bodies__Ctx__Machine___403___400_om .
+    sysml:ownedFeatureMembership elmt:Bodies__Ctx__Machine___403___400_om ;
+    sysx:sourceText "            transition first on do assign x.a := 1 then off {\n            }\n" .
 
 elmt:Bodies__Ctx__Machine___403_om
     a sysml:FeatureMembership ;
@@ -1849,7 +1926,8 @@ elmt:Bodies__Ctx__Machine___404
     sysml:ownedMembership elmt:Bodies__Ctx__Machine___404___400_om, elmt:Bodies__Ctx__Machine___404__w_om ;
     sysml:ownedRelationship elmt:Bodies__Ctx__Machine___404___400_om, elmt:Bodies__Ctx__Machine___404__w_om ;
     sysml:ownedFeature elmt:Bodies__Ctx__Machine___404___400, elmt:Bodies__Ctx__Machine___404__w ;
-    sysml:ownedFeatureMembership elmt:Bodies__Ctx__Machine___404___400_om, elmt:Bodies__Ctx__Machine___404__w_om .
+    sysml:ownedFeatureMembership elmt:Bodies__Ctx__Machine___404___400_om, elmt:Bodies__Ctx__Machine___404__w_om ;
+    sysx:sourceText "            transition first off do {\n                assign x.a := 2;\n            } then on {\n                attribute w : Prio;\n            }\n" .
 
 elmt:Bodies__Ctx__Machine___404_om
     a sysml:FeatureMembership ;

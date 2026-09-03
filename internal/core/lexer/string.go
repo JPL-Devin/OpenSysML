@@ -37,3 +37,33 @@ func StringValue(raw string) string {
 	}
 	return text.String()
 }
+
+// StringText writes a value as the double-quoted STRING_VALUE token that
+// StringValue reads back to it, escaping the quote, the backslash and the
+// control characters KerML §8.2.2 names; everything else stands as it is.
+func StringText(value string) string {
+	var text strings.Builder
+	text.Grow(len(value) + 2)
+	text.WriteByte('"')
+	for i := 0; i < len(value); i++ {
+		switch c := value[i]; c {
+		case '"', '\\':
+			text.WriteByte('\\')
+			text.WriteByte(c)
+		case '\b':
+			text.WriteString(`\b`)
+		case '\t':
+			text.WriteString(`\t`)
+		case '\n':
+			text.WriteString(`\n`)
+		case '\f':
+			text.WriteString(`\f`)
+		case '\r':
+			text.WriteString(`\r`)
+		default:
+			text.WriteByte(c)
+		}
+	}
+	text.WriteByte('"')
+	return text.String()
+}

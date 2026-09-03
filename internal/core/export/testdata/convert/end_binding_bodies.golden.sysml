@@ -72,7 +72,7 @@ package Bodies {
             action a4;
             then a3 {
             }
-            then a4;
+            then a4 /* { */;
         }
         state def Machine {
             state off;

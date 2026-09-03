@@ -352,6 +352,11 @@ func (e *encoder) encodeTransition(n *ast.TransitionMember, head func(rdf.Term),
 	if n.HasBody {
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(true))
 	}
+	// `then t` lies between the effect and the body, so neither tiles the
+	// transition's lines on its own.
+	if len(n.Effect) > 0 && len(n.Members) > 0 {
+		return e.encodeInline(transitionMembers(n), fqn, subject)
+	}
 	return e.encode(transitionMembers(n), fqn, subject)
 }
 
@@ -825,6 +830,7 @@ func (d *decoder) positionalSuccessions(children []*element) ([]*element, error)
 				return nil, err
 			}
 			last().prefix = "then "
+			d.folded[child] = last()
 			continue
 		}
 		// The target is a member elsewhere in the body, so the succession

@@ -10,11 +10,14 @@ elmt:Payloads
     sysml:qualifiedName "Payloads" ;
     sysml:elementId "Payloads" ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:sourceLanguage "sysml" ;
     sysml:declaredName "Payloads" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Payloads__Prio, elmt:Payloads__Fuel, elmt:Payloads__A, elmt:Payloads__B, elmt:Payloads__Ctx ;
     sysml:ownedMembership elmt:Payloads__Prio_om, elmt:Payloads__Fuel_om, elmt:Payloads__A_om, elmt:Payloads__B_om, elmt:Payloads__Ctx_om ;
-    sysml:ownedRelationship elmt:Payloads__Prio_om, elmt:Payloads__Fuel_om, elmt:Payloads__A_om, elmt:Payloads__B_om, elmt:Payloads__Ctx_om .
+    sysml:ownedRelationship elmt:Payloads__Prio_om, elmt:Payloads__Fuel_om, elmt:Payloads__A_om, elmt:Payloads__B_om, elmt:Payloads__Ctx_om ;
+    sysx:sourceText "package Payloads {\n" ;
+    sysx:sourceTail "}\n" .
 
 elmt:Payloads__Prio
     a sysml:AttributeDefinition ;
@@ -26,7 +29,8 @@ elmt:Payloads__Prio
     sysml:owningRelationship elmt:Payloads__Prio_om ;
     sysml:owningMembership elmt:Payloads__Prio_om ;
     sysml:declaredName "Prio" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    attribute def Prio;\n" .
 
 elmt:Payloads__Prio_om
     a sysml:OwningMembership ;
@@ -48,7 +52,8 @@ elmt:Payloads__Fuel
     sysml:owningRelationship elmt:Payloads__Fuel_om ;
     sysml:owningMembership elmt:Payloads__Fuel_om ;
     sysml:declaredName "Fuel" ;
-    sysx:hasBody "false"^^xsd:boolean .
+    sysx:hasBody "false"^^xsd:boolean ;
+    sysx:sourceText "    item def Fuel;\n" .
 
 elmt:Payloads__Fuel_om
     a sysml:OwningMembership ;
@@ -75,7 +80,8 @@ elmt:Payloads__A
     sysml:ownedMembership elmt:Payloads__A__i_om ;
     sysml:ownedRelationship elmt:Payloads__A__i_om ;
     sysml:ownedFeature elmt:Payloads__A__i ;
-    sysml:ownedFeatureMembership elmt:Payloads__A__i_om .
+    sysml:ownedFeatureMembership elmt:Payloads__A__i_om ;
+    sysx:sourceText "    part def A { out item i : Fuel; }\n" .
 
 elmt:Payloads__A_om
     a sysml:OwningMembership ;
@@ -128,7 +134,8 @@ elmt:Payloads__B
     sysml:ownedMembership elmt:Payloads__B__j_om ;
     sysml:ownedRelationship elmt:Payloads__B__j_om ;
     sysml:ownedFeature elmt:Payloads__B__j ;
-    sysml:ownedFeatureMembership elmt:Payloads__B__j_om .
+    sysml:ownedFeatureMembership elmt:Payloads__B__j_om ;
+    sysx:sourceText "    part def B { in item j : Fuel; }\n" .
 
 elmt:Payloads__B_om
     a sysml:OwningMembership ;
@@ -181,7 +188,8 @@ elmt:Payloads__Ctx
     sysml:ownedMembership elmt:Payloads__Ctx__x_om, elmt:Payloads__Ctx__y_om, elmt:Payloads__Ctx___402_om, elmt:Payloads__Ctx__m_om, elmt:Payloads__Ctx___404_om ;
     sysml:ownedRelationship elmt:Payloads__Ctx__x_om, elmt:Payloads__Ctx__y_om, elmt:Payloads__Ctx___402_om, elmt:Payloads__Ctx__m_om, elmt:Payloads__Ctx___404_om ;
     sysml:ownedFeature elmt:Payloads__Ctx__x, elmt:Payloads__Ctx__y ;
-    sysml:ownedFeatureMembership elmt:Payloads__Ctx__x_om, elmt:Payloads__Ctx__y_om .
+    sysml:ownedFeatureMembership elmt:Payloads__Ctx__x_om, elmt:Payloads__Ctx__y_om ;
+    sysx:sourceText "    part def Ctx {\n        part x : A; part y : B;\n        flow of fuel : Fuel from x.i to y.j { attribute w : Prio; }\n        message m of cmd : Prio from x.i to y.j;\n        message of cmd : Prio = m.cmd from x.i to y.j { attribute w : Prio; }\n    }\n" .
 
 elmt:Payloads__Ctx_om
     a sysml:OwningMembership ;
@@ -252,7 +260,6 @@ elmt:Payloads__Ctx___402
     sysml:owner elmt:Payloads__Ctx ;
     sysml:owningRelationship elmt:Payloads__Ctx___402_om ;
     sysml:owningMembership elmt:Payloads__Ctx___402_om ;
-    sysx:sourceText "flow of fuel : Fuel from x.i to y.j" ;
     sysx:relatedFeature expr:Payloads__Ctx___402_pflowSource, expr:Payloads__Ctx___402_pflowTarget, expr:Payloads__Ctx___402_pflowPayload ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Payloads__Ctx___402__w ;
@@ -341,7 +348,6 @@ elmt:Payloads__Ctx__m
     sysml:owningRelationship elmt:Payloads__Ctx__m_om ;
     sysml:owningMembership elmt:Payloads__Ctx__m_om ;
     sysml:declaredName "m" ;
-    sysx:sourceText "message m of cmd : Prio from x.i to y.j" ;
     sysx:relatedFeature expr:Payloads__Ctx__m_pflowSource, expr:Payloads__Ctx__m_pflowTarget, expr:Payloads__Ctx__m_pflowPayload ;
     sysx:hasBody "false"^^xsd:boolean .
 
@@ -403,7 +409,6 @@ elmt:Payloads__Ctx___404
     sysml:owner elmt:Payloads__Ctx ;
     sysml:owningRelationship elmt:Payloads__Ctx___404_om ;
     sysml:owningMembership elmt:Payloads__Ctx___404_om ;
-    sysx:sourceText "message of cmd : Prio = m.cmd from x.i to y.j" ;
     sysx:relatedFeature expr:Payloads__Ctx___404_pflowSource, expr:Payloads__Ctx___404_pflowTarget, expr:Payloads__Ctx___404_pflowPayload ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Payloads__Ctx___404__w ;
