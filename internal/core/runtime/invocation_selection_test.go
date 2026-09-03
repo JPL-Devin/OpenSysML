@@ -40,6 +40,7 @@ func TestInvocationSelectionRobustness(t *testing.T) {
 	t.Run("action_call_naming_only_a_calc_is_not_an_action", testActionCallNamingOnlyACalcIsNotAnAction)
 	t.Run("action_call_receiver_binds_first_input", testActionCallReceiverBindsFirstInput)
 	t.Run("action_call_receiver_with_named_arguments_refused", testActionCallReceiverWithNamedArgumentsRefused)
+	t.Run("action_call_named_argument_twice_refused", testActionCallNamedArgumentTwiceRefused)
 	t.Run("action_call_arguments_read_the_performing_object", testActionCallArgumentsReadThePerformingObject)
 	t.Run("state_behavior_call_arguments_read_the_performing_object", testStateBehaviorCallArgumentsReadThePerformingObject)
 	t.Run("action_call_argument_cannot_name_a_feature_out_of_scope", testActionCallArgumentCannotNameAFeatureOutOfScope)
@@ -235,6 +236,44 @@ func testActionCallReceiverWithNamedArgumentsRefused(t *testing.T) {
 	}
 	if !errors.Is(err, ErrReceiverWithNamedArgs) {
 		t.Fatalf("expected ErrReceiverWithNamedArgs, got: %v", err)
+	}
+}
+
+// A named argument written twice is refused before any action runs, whether the
+// name denotes one action or several, as a calc call refuses it.
+func testActionCallNamedArgumentTwiceRefused(t *testing.T) {
+	outputs, err := runReceiverAction(t, "tag(x = 3, x = 4)")
+	if err == nil {
+		t.Fatalf("overloaded tag(x = 3, x = 4): expected a refusal, action returned %v", outputs)
+	}
+	if !errors.Is(err, ErrDuplicateArgument) || !strings.Contains(err.Error(), `input parameter "x" of tag`) {
+		t.Fatalf("overloaded tag(x = 3, x = 4): error = %v, want ErrDuplicateArgument naming x", err)
+	}
+	const single = `
+		package test {
+			private import ScalarValues::*;
+			action def tag { in x : Integer; out code : Integer; first start; action set { assign code := x + 10; } done; succession first start then set; succession first set then done; }
+			action def Outer {
+				attribute code : Integer = 0;
+				first start;
+				action call = tag(x = 3, x = 4);
+				done;
+				succession first start then call;
+				succession first call then done;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, single))
+	outer := findSymbolByName(idx.DocumentRoot("<test>"), "Outer", ast.DefAction)
+	if outer == nil {
+		t.Fatal("Outer action not found")
+	}
+	outputs, err = ctx.ExecuteAction(outer)
+	if err == nil {
+		t.Fatalf("single tag(x = 3, x = 4): expected a refusal, action returned %v", outputs)
+	}
+	if !errors.Is(err, ErrDuplicateArgument) || !strings.Contains(err.Error(), `input parameter "x" of tag`) {
+		t.Fatalf("single tag(x = 3, x = 4): error = %v, want ErrDuplicateArgument naming x", err)
 	}
 }
 

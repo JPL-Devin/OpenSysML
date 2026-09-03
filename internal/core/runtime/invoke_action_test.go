@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -230,8 +231,8 @@ package caller {
 }
 
 // An explicit empty call binds nothing: unlike a bare `perform`, it does not read
-// the caller's same-named `v`, so a required input stays unbound and a defaulted
-// one takes its default.
+// the caller's same-named `v`, so a required input is reported unbound and a
+// defaulted one takes its default.
 func TestInvokeActionEmptyCallBindsNoCallerValues(t *testing.T) {
 	const caller = `
 package caller {
@@ -249,8 +250,8 @@ package caller {
 }`
 	ctx, outer := loadAction(t, doublerModel+caller, "Outer")
 	_, err := ctx.ExecuteAction(outer)
-	if err == nil || !strings.Contains(err.Error(), "no value for feature v") {
-		t.Fatalf("ExecuteAction with a required input unbound: err = %v, want no value for feature v", err)
+	if !errors.Is(err, ErrUnboundParameter) || !strings.Contains(err.Error(), "input parameter v") {
+		t.Fatalf("ExecuteAction with a required input unbound: err = %v, want ErrUnboundParameter for v", err)
 	}
 
 	defaulted := strings.Replace(doublerModel, "in v : Integer;", "in v : Integer = 3;", 1)
