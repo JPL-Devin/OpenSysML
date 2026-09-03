@@ -387,10 +387,6 @@ func (s *Session) peekObject(text string) (objectShape, bool) {
 		if feat == nil || feat.IsScalar() != (seg.index == 0) {
 			return objectShape{}, false
 		}
-		typ := s.objectTypeOf(feat)
-		if typ == nil {
-			return objectShape{}, false
-		}
 		if fv := heldFeatureValue(shape.inst, seg.name); fv != nil {
 			val := fv.Value
 			if seg.index > 0 {
@@ -411,7 +407,8 @@ func (s *Session) peekObject(text string) (objectShape, bool) {
 			shape = objectShape{inst: child, typ: child.Type}
 			continue
 		}
-		if seg.index > s.elementCount(shape.inst, feat) {
+		typ := s.objectTypeOf(feat)
+		if typ == nil || seg.index > s.elementCount(shape.inst, feat) {
 			return objectShape{}, false
 		}
 		shape = objectShape{typ: typ}
@@ -419,9 +416,30 @@ func (s *Session) peekObject(text string) (objectShape, bool) {
 	return shape, true
 }
 
+// holdsObjects reports whether a feature is a path segment of the object holding
+// it: once materialized, whether it holds an object (a selected variation's
+// object as much as a part's); before that, whether reading it would.
+func (s *Session) holdsObjects(inst *runtime.Instance, feat *runtime.EffectiveFeature) bool {
+	fv := heldFeatureValue(inst, feat.Name)
+	if fv == nil {
+		return s.objectTypeOf(feat) != nil
+	}
+	if fv.Values.Kind == runtime.ValInvalid {
+		_, isObject := fv.Value.Object()
+		return isObject
+	}
+	for _, el := range collectionElements(fv.Values) {
+		if _, isObject := el.Object(); isObject {
+			return true
+		}
+	}
+	return false
+}
+
 // objectTypeOf is the type of the object a feature holds once read, as the
 // runtime materializes it (a part, port or structured attribute from its type, a
-// connector from its own usage), or nil for a feature a value binds.
+// connector from its own usage), or nil for a feature a value binds and for a
+// variation, whose object is of whichever variant is selected.
 func (s *Session) objectTypeOf(feat *runtime.EffectiveFeature) *symbols.Symbol {
 	if feat.Name == "" {
 		return nil
@@ -468,7 +486,7 @@ func (s *Session) featureCompletions(shape objectShape, prefix, partial string) 
 	features := s.rtCtx.FeaturesOf(shape.typ)
 	for i := range features {
 		feat := &features[i]
-		if s.objectTypeOf(feat) == nil {
+		if feat.Name == "" || !s.holdsObjects(shape.inst, feat) {
 			continue
 		}
 		name := prefix + lexer.NameText(feat.Name)
