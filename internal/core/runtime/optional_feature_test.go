@@ -206,6 +206,71 @@ func TestInheritedOptionalDeclarationEvaluatesEmpty(t *testing.T) {
 	}
 }
 
+// Branches of inheritance converging on one ancestor each carry its multiplicity:
+// `both :> front, rear` over `front, rear :> wheels[0..*]` is [0..*], not 1..1.
+func TestDiamondInheritanceKeepsAncestorMultiplicity(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		part def Wheel;
+		part def Car {
+			part wheels : Wheel[0..*];
+			abstract part front :> wheels;
+			abstract part rear :> wheels;
+			abstract part both :> front, rear;
+		}
+	}`))
+	car, err := ctx.Instantiate(oneSymbol(t, idx, "test::Car"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	both, err := car.GetFeatureValue(ctx, "both")
+	if err != nil {
+		t.Fatalf("car.both: %v", err)
+	}
+	if mult := both.Feature.Multiplicity; mult.Lower.Value != 0 || !mult.Upper.Infinite {
+		t.Errorf("car.both multiplicity = %+v, want [0..*] through both branches", mult)
+	}
+	if held := both.HeldValue(); elementCount(&held) != 0 {
+		t.Errorf("car.both = %s, want an empty collection", FormatValue(held))
+	}
+}
+
+// A subject states its multiplicity like any usage: `subject items : Item[0..*]`
+// reads as empty when nothing binds it and holds every value a binding gives it.
+func TestSubjectDeclaresItsMultiplicity(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package test {
+		item def Item;
+		item a : Item;
+		item b : Item;
+		requirement def Unbound { subject items : Item[0..*]; }
+		requirement def Bound { subject items : Item[0..*] = (a, b); }
+	}`))
+	unbound, err := ctx.Instantiate(oneSymbol(t, idx, "test::Unbound"))
+	if err != nil {
+		t.Fatalf("instantiate Unbound: %v", err)
+	}
+	items, err := unbound.GetFeatureValue(ctx, "items")
+	if err != nil {
+		t.Fatalf("unbound.items: %v", err)
+	}
+	if mult := items.Feature.Multiplicity; mult.Lower.Value != 0 || !mult.Upper.Infinite {
+		t.Errorf("unbound.items multiplicity = %+v, want the declared [0..*]", mult)
+	}
+	if read, err := items.ReadValue("items"); err != nil || elementCount(&read) != 0 {
+		t.Errorf("unbound.items reads %s, %v; want the empty sequence", FormatValue(read), err)
+	}
+	bound, err := ctx.Instantiate(oneSymbol(t, idx, "test::Bound"))
+	if err != nil {
+		t.Fatalf("instantiate Bound: %v", err)
+	}
+	items, err = bound.GetFeatureValue(ctx, "items")
+	if err != nil {
+		t.Fatalf("bound.items: %v", err)
+	}
+	if held := items.HeldValue(); elementCount(&held) != 2 {
+		t.Errorf("bound.items = %s, want both bound items", FormatValue(held))
+	}
+}
+
 // A feature whose lower bound is infinite admits no count, so holding nothing
 // does not read as empty.
 func TestInfiniteLowerBoundDoesNotReadAsEmpty(t *testing.T) {

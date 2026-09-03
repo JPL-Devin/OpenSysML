@@ -72,17 +72,19 @@ func (m *Model) RangeOf(mult *ast.Multiplicity) (Range, bool) {
 	return m.multiplicityRange(mult)
 }
 
-// MultiplicityOf returns the extracted multiplicity range of a usage symbol, or
-// ok=false when the symbol is not a usage or declares no multiplicity.
+// MultiplicityOf returns the extracted multiplicity range of a usage symbol, a
+// subject included, or ok=false when the symbol is not a usage or declares none.
 func (m *Model) MultiplicityOf(sym *symbols.Symbol) (Range, bool) {
 	if sym == nil {
 		return Range{}, false
 	}
-	u, isUsage := sym.Decl.(*ast.Usage)
-	if !isUsage || u.Multiplicity == nil {
-		return Range{}, false
+	switch decl := sym.Decl.(type) {
+	case *ast.Usage:
+		return m.multiplicityRange(decl.Multiplicity)
+	case *ast.SubjectMember:
+		return m.multiplicityRange(decl.Multiplicity)
 	}
-	return m.multiplicityRange(u.Multiplicity)
+	return Range{}, false
 }
 
 // AssumedRange is the multiplicity of a feature that declares none: a feature

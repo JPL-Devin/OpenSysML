@@ -235,9 +235,9 @@ func (ctx *Context) featureMultiplicity(sym, owner *symbols.Symbol) semantics.Ra
 	return mult
 }
 
-// inheritedMultiplicity is the intersection of the multiplicities a feature declaring
-// none redefines — and, if abstract, subsets (KerML 1.0 §8.4.4.12.1); ok is false when none.
-func (ctx *Context) inheritedMultiplicity(sym, owner *symbols.Symbol, seen map[*symbols.Symbol]bool) (semantics.Range, bool) {
+// inheritedMultiplicity intersects the multiplicities a feature declaring none redefines —
+// and, if abstract, subsets (KerML 1.0 §8.4.4.12.1); path ends cycles, not shared ancestors.
+func (ctx *Context) inheritedMultiplicity(sym, owner *symbols.Symbol, path map[*symbols.Symbol]bool) (semantics.Range, bool) {
 	var mult semantics.Range
 	found := false
 	kinds := []ast.RelationshipKind{ast.RelRedefines}
@@ -246,13 +246,15 @@ func (ctx *Context) inheritedMultiplicity(sym, owner *symbols.Symbol, seen map[*
 	}
 	for _, kind := range kinds {
 		for _, general := range ctx.relatedFeatures(sym, owner, kind) {
-			if seen[general] {
+			if path[general] {
 				continue
 			}
-			seen[general] = true
 			generalMult, stated := ctx.model.MultiplicityOf(general)
 			if !stated {
-				if inherited, ok := ctx.inheritedMultiplicity(general, owner, seen); ok {
+				path[general] = true
+				inherited, ok := ctx.inheritedMultiplicity(general, owner, path)
+				delete(path, general)
+				if ok {
 					generalMult = inherited
 				} else {
 					generalMult = semantics.AssumedRange()
