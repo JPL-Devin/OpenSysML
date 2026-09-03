@@ -1954,6 +1954,9 @@ func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget
 		target.ambiguous = sel.Tied
 	} else if sym := sel.Called(); sym != nil {
 		target.calc = sym
+		if lib := ec.ctx.libraryCalcPerformed(sym); lib != nil {
+			sym = lib
+		}
 		if fn, ok := ec.ctx.builtinFor(sym); ok {
 			target.builtin, target.builtinName = fn, ec.ctx.qualifiedSymbolName(sym)
 		} else if fn, ok := ec.ctx.libraryFunctionFor(sym); ok {

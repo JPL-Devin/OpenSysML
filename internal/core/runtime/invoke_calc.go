@@ -383,6 +383,9 @@ func (ctx *Context) invokeCalc(sym *symbols.Symbol, args calcArgs, scope *symbol
 }
 
 func (ctx *Context) invokeCalcWithSelf(sym *symbols.Symbol, args calcArgs, scope *symbols.Scope, self *Instance) (Value, error) {
+	if lib := ctx.libraryCalcPerformed(sym); lib != nil {
+		sym = lib
+	}
 	if fn, ok := ctx.builtinFor(sym); ok {
 		return ctx.invokeBuiltinValues(sym, fn, args, scope, self)
 	}
@@ -741,6 +744,37 @@ func (ctx *Context) calcTypedFeature(sym *symbols.Symbol) bool {
 		return false
 	}
 	return len(ctx.calcChain(sym)) > 1
+}
+
+// libraryCalcPerformed returns the library function whose implementation a call of
+// sym applies: the nearest one sym specializes, when neither sym nor a model calc
+// between them states a computation of its own; nil otherwise.
+func (ctx *Context) libraryCalcPerformed(sym *symbols.Symbol) *symbols.Symbol {
+	if sym == nil || ctx.model == nil || ctx.libraryDeclared(sym) {
+		return nil
+	}
+	if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
+		return nil
+	}
+	if ctx.calcComputes(ctx.calcChain(sym)) {
+		return nil
+	}
+	for _, super := range ctx.model.AllSupertypes(sym) {
+		if super != nil && isCalcDecl(super.Decl) && ctx.libraryDeclared(super) {
+			return super
+		}
+	}
+	return nil
+}
+
+// calcComputes reports whether a calc chain states a computation: a body that
+// returns or assigns an output, or a binding of the result.
+func (ctx *Context) calcComputes(chain []*symbols.Symbol) bool {
+	body, _ := calcBody(chain)
+	if lower.Returns(body) || resultBindingExpr(calcBindings(chain)) != nil {
+		return true
+	}
+	return len(assignedOutputs(calcSteps(body), ctx.calcOutputs(chain))) > 0
 }
 
 // isCalcDecl reports whether a declaration is a calc definition or calc usage.
