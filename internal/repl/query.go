@@ -288,18 +288,19 @@ func (s *Session) reportedSubject(result runtime.CheckResult, inst *runtime.Inst
 	if result.SubjectPath == "" {
 		return result.Subject, root
 	}
-	return result.Subject, root + "::" + result.SubjectPath
+	return result.Subject, root + "::" + notationName(result.SubjectPath)
 }
 
-// instanceName is the name the session holds inst under — `#<id>` for one
-// displaced from its name — and empty for an object it did not create.
+// instanceName is the label the session holds inst under — its name as the
+// notation writes it, `#<id>` for one displaced from its name — and empty for
+// an object it did not create.
 func (s *Session) instanceName(inst *runtime.Instance) string {
 	if inst == nil {
 		return ""
 	}
 	for name, held := range s.instances {
 		if held == inst {
-			return name
+			return notationName(name)
 		}
 	}
 	for _, u := range s.unnamed {

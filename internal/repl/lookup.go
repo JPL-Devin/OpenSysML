@@ -119,7 +119,7 @@ func (s *Session) owningInstance(fqn string) (*runtime.Instance, string) {
 // objectNamed returns the object a fully-qualified name denotes: the one
 // materialized under it, or the longest instantiated prefix with the remaining
 // segments walked through that instance's feature values, since a nested part is an
-// object of its own. The second result is the found object's FQN, for reporting.
+// object of its own. The second result is the found object's label, for reporting.
 func (s *Session) objectNamed(fqn string) (*runtime.Instance, string) {
 	if fqn == "" {
 		return nil, ""
@@ -131,7 +131,7 @@ func (s *Session) objectNamed(fqn string) (*runtime.Instance, string) {
 		if !ok {
 			continue
 		}
-		return s.walkFeatureValues(inst, key, segments[i:])
+		return s.walkFeatureValues(inst, notationName(key), segments[i:])
 	}
 	return nil, ""
 }
@@ -204,7 +204,7 @@ func carriesDeclaration(model *semantics.Model, typ *symbols.Symbol, decl ast.No
 	return false
 }
 
-// carrierInstances names the session's objects of the type declaring sym,
+// carrierInstances labels the session's objects of the type declaring sym,
 // sorted: an object of `part hot : Sensor` carries `Sensor::inRange`. Nested
 // objects carry the features of their own type too, so `Spec::c` is carried by
 // the `o::inner::b` a redefinition gave a value on, not only by a top-level
@@ -246,8 +246,8 @@ func (s *Session) carrierInstances(sym *symbols.Symbol) []string {
 	return names
 }
 
-// carrier is an object reachable from the session's objects, under the
-// qualified name it is reached by.
+// carrier is an object reachable from the session's objects, under the label
+// it is reached by.
 type carrier struct {
 	name string
 	inst *runtime.Instance
@@ -259,7 +259,7 @@ func (s *Session) rootCarriers() []carrier {
 	roots := make([]carrier, 0, s.heldObjects())
 	for name, inst := range s.instances {
 		if inst != nil {
-			roots = append(roots, carrier{name: name, inst: inst})
+			roots = append(roots, carrier{name: notationName(name), inst: inst})
 		}
 	}
 	for _, u := range s.unnamed {
@@ -271,49 +271,44 @@ func (s *Session) rootCarriers() []carrier {
 	return roots
 }
 
-// carrierLess orders carrier labels: named objects alphabetically before
-// displaced ones, which go by id; indexed elements go by index, so wheels[2]
-// precedes wheels[10].
+// carrierLess orders labels: named objects alphabetically before displaced
+// ones, which go by id; indexed elements go by index, so wheels[2] precedes
+// wheels[10].
 func carrierLess(a, b string) bool {
-	aID, aOK := labelRootID(a)
-	bID, bOK := labelRootID(b)
+	aRef, bRef := parseLabel(a), parseLabel(b)
 	switch {
-	case aOK != bOK:
-		return !aOK
-	case aOK && aID != bID:
-		return aID < bID
+	case (aRef.id > 0) != (bRef.id > 0):
+		return aRef.id == 0
+	case aRef.id != bRef.id:
+		return aRef.id < bRef.id
 	}
-	as, bs := strings.Split(a, "::"), strings.Split(b, "::")
-	for i := 0; i < len(as) && i < len(bs); i++ {
-		aName, aIndex := splitIndex(as[i])
-		bName, bIndex := splitIndex(bs[i])
-		if aName != bName {
-			return aName < bName
+	for i := 0; i < len(aRef.segments) && i < len(bRef.segments); i++ {
+		aSeg, bSeg := aRef.segments[i], bRef.segments[i]
+		if aSeg.name != bSeg.name {
+			return aSeg.name < bSeg.name
 		}
-		if aIndex != bIndex {
-			return aIndex < bIndex
+		if aSeg.index != bSeg.index {
+			return aSeg.index < bSeg.index
 		}
 	}
-	return len(as) < len(bs)
+	return len(aRef.segments) < len(bRef.segments)
 }
 
-// labelRootID is the id a carrier label is rooted at, if it is rooted at one.
-func labelRootID(label string) (int64, bool) {
-	root, _, _ := strings.Cut(label, "::")
-	if !isObjectID(root) {
-		return 0, false
+// parseLabel reads a label back as the reference it spells. A label is built
+// from names the notation quotes as needed, so it always reads; text that does
+// not is one nameless segment, ordered by its spelling.
+func parseLabel(label string) objectRef {
+	ref, err := parseObjectRef(label)
+	if err != nil {
+		return objectRef{text: label, segments: []objectSegment{{text: label, name: label}}}
 	}
-	id, err := strconv.ParseInt(root[1:], 10, 64)
-	return id, err == nil
+	return ref
 }
 
-// carrierObject is the object a carrier label denotes: reached by name, or from
-// the id a displaced one is rooted at.
+// carrierObject is the object a carrier label denotes, and the label it is
+// reported under.
 func (s *Session) carrierObject(label string) (*runtime.Instance, string) {
-	if _, byID := labelRootID(label); !byID {
-		return s.objectNamed(label)
-	}
-	inst, owner, err := s.resolveObject(objectText(label))
+	inst, owner, err := s.resolveObject(label)
 	if err != nil {
 		return nil, ""
 	}
@@ -321,7 +316,7 @@ func (s *Session) carrierObject(label string) (*runtime.Instance, string) {
 }
 
 // nestedObjects returns the objects held in an object's feature values, in feature-value-name
-// order, each under the name it is reached by; the elements of a multi-valued
+// order, each under the label it is reached by; the elements of a multi-valued
 // feature are reached by their 1-based index, `wheels[2]`.
 func nestedObjects(ctx *runtime.Context, of carrier) []carrier {
 	fvs := make([]string, 0, len(of.inst.FeatureValues))
@@ -330,10 +325,10 @@ func nestedObjects(ctx *runtime.Context, of carrier) []carrier {
 	}
 	sort.Strings(fvs)
 	out := make([]carrier, 0, len(fvs))
-	add := func(name string, val runtime.Value) {
+	add := func(segment string, val runtime.Value) {
 		if id, isObject := val.Object(); isObject {
 			if child, ok := ctx.Instance(id); ok && child != nil {
-				out = append(out, carrier{name: of.name + "::" + name, inst: child})
+				out = append(out, carrier{name: of.name + "::" + segment, inst: child})
 			}
 		}
 	}
@@ -344,11 +339,11 @@ func nestedObjects(ctx *runtime.Context, of carrier) []carrier {
 			continue
 		}
 		if fv.Values.Kind == runtime.ValInvalid {
-			add(name, fv.Value)
+			add(lexer.NameText(name), fv.Value)
 			continue
 		}
 		for i, val := range collectionElements(fv.Values) {
-			add(fmt.Sprintf("%s[%d]", name, i+1), val)
+			add(fmt.Sprintf("%s[%d]", lexer.NameText(name), i+1), val)
 		}
 	}
 	return out
@@ -390,26 +385,26 @@ func (s *Session) subjectFor(name, fqn string, sym *symbols.Symbol) (*runtime.In
 	}
 }
 
-// walkFeatureValues follows a chain of part feature values from inst. An unwalkable segment
-// yields no object, since binding to an ancestor would answer about the wrong one.
-func (s *Session) walkFeatureValues(inst *runtime.Instance, name string, segments []string) (*runtime.Instance, string) {
-	if len(segments) == 0 {
-		return inst, name
+// walkFeatureValues follows a chain of feature names from inst, labelled label.
+// An unwalkable segment yields no object, since binding to an ancestor would
+// answer about the wrong one.
+func (s *Session) walkFeatureValues(inst *runtime.Instance, label string, names []string) (*runtime.Instance, string) {
+	if len(names) == 0 {
+		return inst, label
 	}
 	ctx, err := s.getOrCreateRuntime()
 	if err != nil {
 		return nil, ""
 	}
-	path := make([]objectSegment, 0, len(segments))
-	for _, seg := range segments {
-		name, index := splitIndex(seg)
-		path = append(path, objectSegment{text: seg, name: name, index: index})
+	path := make([]objectSegment, 0, len(names))
+	for _, name := range names {
+		path = append(path, objectSegment{text: lexer.NameText(name), name: name})
 	}
-	inst, name, err = s.walkObjectPath(ctx, inst, name, path)
+	inst, label, err = s.walkObjectPath(ctx, inst, label, path)
 	if err != nil {
 		return nil, ""
 	}
-	return inst, name
+	return inst, label
 }
 
 // An object reference is how every command that takes an object names one:
@@ -422,8 +417,13 @@ func (s *Session) walkFeatureValues(inst *runtime.Instance, name string, segment
 // `.` and `::` separate segments alike, so `Demo::car::fl` and `Demo::car.fl` name
 // one object. The leading segments are the declared name — the longest run of them
 // a declaration answers to and an object was created under — and the rest are
-// features walked through that object's feature values. The REPL reports an
-// object under its declared name with the walked features joined by `::`.
+// features walked through that object's feature values.
+//
+// The REPL reports an object under a label: its declared name or id with the
+// walked features joined by `::`, every name spelled as the notation writes it.
+// A label is thus a reference that reads back to the object, and one a name
+// alone cannot forge — an object named '#3' or a feature named 'wheels[2]' is
+// quoted, where a generated id or index is not.
 
 // objectSegment is one segment of an object reference.
 type objectSegment struct {
@@ -504,37 +504,7 @@ func pathError(object string, seg objectSegment, format string, args ...any) *Ob
 	return &ObjectPathError{Object: object, Segment: seg.text, Detail: fmt.Sprintf(format, args...)}
 }
 
-// objectText spells an object label the way it is typed back: the declared name
-// quoted as the notation requires, an id as `#<id>`, an index as `[<n>]`.
-func objectText(label string) string {
-	segments := strings.Split(label, "::")
-	for i, segment := range segments {
-		if isObjectID(segment) {
-			continue
-		}
-		name, index := splitIndex(segment)
-		segments[i] = lexer.NameText(name)
-		if index > 0 {
-			segments[i] += fmt.Sprintf("[%d]", index)
-		}
-	}
-	return strings.Join(segments, "::")
-}
-
-// splitIndex splits the `[<n>]` a label segment ends in from the feature name.
-func splitIndex(segment string) (name string, index int) {
-	cut := strings.LastIndex(segment, "[")
-	if cut <= 0 || !strings.HasSuffix(segment, "]") {
-		return segment, 0
-	}
-	index, err := strconv.Atoi(segment[cut+1 : len(segment)-1])
-	if err != nil || index < 1 {
-		return segment, 0
-	}
-	return segment[:cut], index
-}
-
-// isObjectID reports whether text is an id segment, `#` followed by digits.
+// isObjectID reports whether text is an id alone, `#` followed by digits.
 func isObjectID(text string) bool {
 	return len(text) > 1 && text[0] == '#' && leadingDigits(text[1:]) == text[1:]
 }
@@ -730,7 +700,7 @@ func (s *Session) resolveNamedObject(ref objectRef) (*runtime.Instance, string, 
 	if err != nil {
 		return nil, "", err
 	}
-	return s.walkObjectPath(ctx, inst, fqn, rest)
+	return s.walkObjectPath(ctx, inst, notationName(fqn), rest)
 }
 
 // namedRoot finds the object a name-rooted reference starts from: the object,
@@ -792,13 +762,9 @@ func joinTyped(segments []objectSegment) string {
 }
 
 // heldObject is the object the session holds under a label it reported — a
-// declared name, an id or a path — if it still holds one. A label joins raw
-// names, so it is spelt as notation before it is read back as a reference.
+// declared name, an id or a path — if it still holds one.
 func (s *Session) heldObject(label string) (*runtime.Instance, bool) {
-	if inst, ok := s.instances[label]; ok {
-		return inst, true
-	}
-	inst, _, err := s.resolveObject(objectText(label))
+	inst, _, err := s.resolveObject(label)
 	return inst, err == nil && inst != nil
 }
 
@@ -811,43 +777,43 @@ func (s *Session) walkObjectPath(ctx *runtime.Context, inst *runtime.Instance, l
 		fv, err := inst.GetFeatureValue(ctx, seg.name)
 		if err != nil {
 			if _, has := inst.FeatureValues[seg.name]; !has {
-				return nil, "", pathError(label, seg, "%s has no feature %q%s", objectText(label), seg.name, featureListHint(inst))
+				return nil, "", pathError(label, seg, "%s has no feature %q%s", label, seg.name, featureListHint(inst))
 			}
-			return nil, "", pathError(label, seg, "%s of %s could not be materialized: %v", seg.name, objectText(label), err)
+			return nil, "", pathError(label, seg, "%s of %s could not be materialized: %v", lexer.NameText(seg.name), label, err)
 		}
 		var val runtime.Value
-		next := label + "::" + seg.name
+		next := label + "::" + lexer.NameText(seg.name)
 		if fv.Values.Kind != runtime.ValInvalid {
 			elements := collectionElements(fv.Values)
 			switch {
 			case len(elements) == 0:
-				return nil, "", pathError(label, seg, "%s of %s holds no objects", seg.name, objectText(label))
+				return nil, "", pathError(label, seg, "%s of %s holds no objects", lexer.NameText(seg.name), label)
 			case seg.index == 0:
 				return nil, "", pathError(label, seg, "%s of %s holds %d %s: pick one by index, %s[1] to %s[%d]",
-					seg.name, objectText(label), len(elements), plural(len(elements), "object", "objects"), seg.name, seg.name, len(elements))
+					lexer.NameText(seg.name), label, len(elements), plural(len(elements), "object", "objects"), lexer.NameText(seg.name), lexer.NameText(seg.name), len(elements))
 			case seg.index > len(elements):
 				return nil, "", pathError(label, seg, "%s of %s holds %d %s, so %s names none (indexes run from 1 to %d)",
-					seg.name, objectText(label), len(elements), plural(len(elements), "object", "objects"), seg.text, len(elements))
+					lexer.NameText(seg.name), label, len(elements), plural(len(elements), "object", "objects"), seg.text, len(elements))
 			}
 			val = elements[seg.index-1]
 			next = fmt.Sprintf("%s[%d]", next, seg.index)
 		} else {
 			if seg.index > 0 {
 				return nil, "", pathError(label, seg, "%s of %s holds one value and takes no index: write %s, not %s",
-					seg.name, objectText(label), seg.name, seg.text)
+					lexer.NameText(seg.name), label, lexer.NameText(seg.name), seg.text)
 			}
 			val = fv.Value
 		}
 		id, isObject := val.Object()
 		switch {
 		case val.Kind == runtime.ValInvalid:
-			return nil, "", pathError(label, seg, "%s of %s holds no object", seg.name, objectText(label))
+			return nil, "", pathError(label, seg, "%s of %s holds no object", lexer.NameText(seg.name), label)
 		case !isObject || ctx.HoldsNoValue(val):
-			return nil, "", pathError(label, seg, "%s of %s holds a value (%s), not an object", seg.name, objectText(label), formatValue(ctx, val))
+			return nil, "", pathError(label, seg, "%s of %s holds a value (%s), not an object", lexer.NameText(seg.name), label, formatValue(ctx, val))
 		}
 		child, ok := ctx.Instance(id)
 		if !ok {
-			return nil, "", pathError(label, seg, "%s of %s holds object #%d, which the session no longer has", seg.name, objectText(label), id)
+			return nil, "", pathError(label, seg, "%s of %s holds object #%d, which the session no longer has", lexer.NameText(seg.name), label, id)
 		}
 		inst, label = child, next
 	}

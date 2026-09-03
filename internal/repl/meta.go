@@ -599,7 +599,7 @@ func (s *Session) evalIn(name, expr string) ([]string, error) {
 	}
 	scope := s.contextScope(sym)
 	if scope == nil {
-		return nil, fmt.Errorf("%s names no namespace to evaluate in", objectText(fqn))
+		return nil, fmt.Errorf("%s names no namespace to evaluate in", fqn)
 	}
 	if inst != nil {
 		val, err := ctx.EvalWithScopeOn(node, scope, inst)
@@ -1045,7 +1045,7 @@ func (s *Session) doFeatures(name string) ([]string, bool, error) {
 	}
 
 	lines := []string{
-		fmt.Sprintf("Instance: %s (ID: %d)", objectText(label), inst.ID),
+		fmt.Sprintf("Instance: %s (ID: %d)", label, inst.ID),
 		"Features:",
 	}
 	w := &featureValueWalk{ctx: ctx, onPath: map[*symbols.Symbol]bool{inst.Type: true}, budget: maxFeatureValueLines}
@@ -1756,7 +1756,7 @@ func onInstance(inst *runtime.Instance, owner string) string {
 	if inst == nil {
 		return ""
 	}
-	return fmt.Sprintf(" (on %s ID: %d)", objectText(owner), inst.ID)
+	return fmt.Sprintf(" (on %s ID: %d)", owner, inst.ID)
 }
 
 // objectMention names an object by id and, unless the id is all the label
@@ -1765,7 +1765,7 @@ func objectMention(inst *runtime.Instance, label string) string {
 	if isObjectID(label) {
 		return fmt.Sprintf("object #%d", inst.ID)
 	}
-	return fmt.Sprintf("object #%d of %q", inst.ID, objectText(label))
+	return fmt.Sprintf("object #%d of %q", inst.ID, label)
 }
 
 // doRequirement evaluates a requirement definition.
@@ -1791,18 +1791,22 @@ func (s *Session) doSatisfy(args []string) ([]string, bool, error) {
 // against an object of its subject: the one the session already created for that
 // subject, so a `%instantiate` before it is what the verdict is about.
 func (s *Session) satisfyVerdict(ctx *runtime.Context, a *runtime.SatisfyAssertion) Verdict {
-	subject, owner := s.subjectInstance(a)
+	subject, name := s.subjectInstance(a)
 	if subject == nil && a.Subject != nil {
 		// No object of the subject exists yet, so the verdict is about a fresh
 		// one, created here rather than inside the evaluation so it can be named.
 		if inst, serr := ctx.SatisfySubject(a); serr == nil {
-			subject, owner = inst, s.subjectName(a)
+			subject, name = inst, s.subjectName(a)
 			// Kept like %instantiate would, so a repeated %satisfy is about the
 			// same object rather than another copy of it.
-			s.instances[owner] = inst
+			s.instances[name] = inst
 		}
 	}
 	result, err := ctx.CheckSatisfactionOn(a, subject)
+	owner := ""
+	if subject != nil {
+		owner = notationName(name)
+	}
 	subject, owner = s.reportedSubject(result, subject, owner)
 	if unevaluable(err) {
 		return unevaluableVerdict(satisfyText(a), satisfyText(a), err, subject, owner)
@@ -2213,11 +2217,11 @@ func (s *Session) debugExhibitedMachine(
 	performer []string,
 ) ([]string, error) {
 	if len(performer) > 0 {
-		return nil, fmt.Errorf("%q is an object, which performs its exhibited machine itself", objectText(label))
+		return nil, fmt.Errorf("%q is an object, which performs its exhibited machine itself", label)
 	}
 	behavior, ok := inst.ExhibitedState()
 	if !ok {
-		return nil, fmt.Errorf("object %q exhibits no state machine", objectText(label))
+		return nil, fmt.Errorf("object %q exhibits no state machine", label)
 	}
 	behavior.State.SetTrace(s.trace)
 
