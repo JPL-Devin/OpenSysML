@@ -1436,9 +1436,19 @@ func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 	var skip []ast.RelationshipKind
 	// The declaration form states its keyword; a graph written before it did
 	// is one only where a body follows and nothing is referenced.
-	declaredKeyword, _ := d.stringOf(el, rdf.OpenSysML+xDeclaredKeyword)
 	hasBody := d.boolOf(el, rdf.OpenSysML+xHasBody)
-	declared := declaredKeyword == "constraint" || (hasBody && len(references) == 0)
+	declared := hasBody && len(references) == 0
+	if el.metaclass == mAssume || el.metaclass == mRequire {
+		if written, ok := d.stringOf(el, rdf.OpenSysML+xDeclaredKeyword); ok {
+			if written != "constraint" {
+				return "", &UnsupportedError{
+					What: fmt.Sprintf("the condition member <%s>", el.iri),
+					Note: fmt.Sprintf("its sysx:%s %q is not a form of a %s member, which declares a `constraint` or states one bare", xDeclaredKeyword, written, keyword),
+				}
+			}
+			declared = true
+		}
+	}
 	switch condition, ok := d.stringOf(el, rdf.OpenSysML+xCondition); {
 	case ok:
 		if len(prefixes) > 0 {

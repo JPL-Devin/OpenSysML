@@ -967,7 +967,9 @@ own — `sysml:declaredName`, its specializations, `sysml:lowerBound`/`upperBoun
 and `sysml:value` (`require #Goal constraint braked [1] = true;`) — and
 `subject s : X;` as the `sysml:SubjectMembership` it declares. The `assert` prefixing a named usage
 (`assert constraint c : C`) is carried as `sysx:declaredPrefix`. The conditions
-themselves are notation, with the limits stated above.
+themselves are notation, with the limits stated above. An `assume`/`require`
+member's `sysx:declaredKeyword`, when present, is `constraint`; any other value
+is reported rather than the member written in a form the keyword did not state.
 
 The nodes in an action or state body are mapped under
 [Behavior](#behavior), together with the shapes still refused there.

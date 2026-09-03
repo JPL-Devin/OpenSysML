@@ -350,13 +350,15 @@ func (p *Parser) atVarPrefix() bool {
 
 // atVarDeclaration reports whether the cursor is at a `var`-prefixed
 // declaration, whose kind keyword may be left out (`var x : Integer;`). A
-// following name cannot continue an expression, so `var` there is the prefix.
+// following name or `#M` prefix cannot continue an expression, so `var` there
+// is the prefix; `var#(1)` indexes a feature named `var`.
 func (p *Parser) atVarDeclaration() bool {
 	if !p.atVarWord() {
 		return false
 	}
 	next := p.peekN(1).Kind
-	return p.isKindKeyword(p.peekN(1)) || next == lexer.Identifier || next == lexer.UnrestrictedName
+	return p.isKindKeyword(p.peekN(1)) || next == lexer.Identifier || next == lexer.UnrestrictedName ||
+		(next == lexer.Hash && p.peekN(2).Kind != lexer.LParen)
 }
 
 // kindPrefixWord returns the word at the cursor that may qualify a following

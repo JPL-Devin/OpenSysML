@@ -1123,6 +1123,63 @@ func TestConditionWithoutAConditionIsReported(t *testing.T) {
 	}
 }
 
+// An `assume`/`require` member's sysx:declaredKeyword names the `constraint`
+// declaration form and nothing else; another value is refused rather than the
+// member written in a form the keyword did not state.
+func TestConditionWithAnUnsupportedKeywordIsReported(t *testing.T) {
+	src := "package P {\n\tconstraint def C;\n\trequirement def R {\n\t\tassume constraint c { true }\n\t\trequire constraint d;\n\t\trequire C;\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structural := string(withoutTriples(t, turtle, "sysx:sourceText"))
+	if got := strings.Count(structural, `sysx:declaredKeyword "constraint" ;`); got != 2 {
+		t.Fatalf("expected two declared constraints in the graph, found %d:\n%s", got, structural)
+	}
+	// `require C;` reads as an inline condition naming C; the reference form is
+	// what a graph states through sysml:references.
+	const inline = `sysx:condition expr:P__R___402_pcondition .`
+	if !strings.Contains(structural, inline) {
+		t.Fatalf("the inline require member was not found in the graph:\n%s", structural)
+	}
+	const declared, assert = `sysx:declaredKeyword "constraint" ;`, `sysx:declaredKeyword "assert" ;`
+	// The two declared constraints are written in source order: c, then d.
+	secondDeclared := strings.Replace(structural, declared, "\x00", 1)
+	secondDeclared = strings.Replace(strings.Replace(secondDeclared, declared, assert, 1), "\x00", declared, 1)
+	for _, tc := range []struct{ name, edited, member string }{
+		{"bodied assume", strings.Replace(structural, declared, assert, 1), "assume"},
+		{"bodyless require", secondDeclared, "require"},
+		{"inline require", strings.Replace(structural, inline, `sysx:declaredKeyword "verify" ;`+"\n    "+inline, 1), "require"},
+		{"reference-form require", strings.Replace(structural, inline, `sysx:declaredKeyword "verify" ;`+"\n    "+`sysml:references elmt:P__C .`, 1), "require"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.edited == structural {
+				t.Fatal("the graph was not edited")
+			}
+			_, err := export.Convert("m.ttl", []byte(tc.edited), export.FormatTurtle, export.FormatSysML)
+			var unsupported *export.UnsupportedError
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("expected an unsupported error, got %v", err)
+			}
+			for _, want := range []string{"the condition member <", "is not a form of a " + tc.member + " member"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("expected %q in error:\n%s", want, err.Error())
+				}
+			}
+		})
+	}
+	// The unedited graph still round-trips: `constraint` is the one supported keyword.
+	back, err := export.Convert("m.ttl", []byte(structural), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to sysml: %v", err)
+	}
+	for _, want := range []string{"assume constraint c {", "require constraint d;", "require C;"} {
+		if !strings.Contains(string(back), want) {
+			t.Errorf("expected %q in:\n%s", want, back)
+		}
+	}
+}
+
 // A head kept as source text writes its prefix annotations in that text; when
 // the text and the graph disagree, the text is stale and the head is rebuilt
 // from the graph rather than the annotation lost.
