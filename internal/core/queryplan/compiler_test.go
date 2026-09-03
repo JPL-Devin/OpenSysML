@@ -392,6 +392,7 @@ func TestCompileValidatesElementsNamedInArguments(t *testing.T) {
 part def Telescope;
 part telescope : Telescope;
 part groundStation;
+attribute label : String = "scope";
 calc def Pointed :> Query {
 	in scope : Telescope;
 	OwnedElements(source = telescope)
@@ -405,6 +406,9 @@ calc def WrongElementType :> Query {
 }
 calc def ElementAsString :> Query {
 	WhereName(source = OwnedElements(source = telescope), operator = "startsWith", value = telescope)
+}
+calc def StringAttributeAsString :> Query {
+	WhereName(source = OwnedElements(source = telescope), operator = "startsWith", value = label)
 }
 calc def OneElementForMany :> Query {
 	NeedsMany(sources = telescope)
@@ -426,6 +430,7 @@ calc def ResultAsValue :> Query {
 	}{
 		{"WrongElementType", ErrorArgumentType, "scope", "Fixture::Telescope", "Fixture::groundStation", "groundStation"},
 		{"ElementAsString", ErrorArgumentType, "value", "ScalarValues::String", "Fixture::telescope", "telescope"},
+		{"StringAttributeAsString", ErrorArgumentType, "value", "ScalarValues::String", "Fixture::label", "label"},
 		{"OneElementForMany", ErrorArgumentMultiplicity, "sources", "[2..*]", "[1..1]", "telescope"},
 		{"Unresolved", ErrorUnknownParameter, "missing", "", "", "missing"},
 		{"ResultAsValue", ErrorUnknownParameter, "result", "", "", "result"},

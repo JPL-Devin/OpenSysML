@@ -665,6 +665,7 @@ part root {
 part other {
 	part motor;
 }
+attribute label : String = "m";
 calc def Defaulted :> Query {
 	in source : Element = root;
 	in pattern : String default "m";
@@ -678,6 +679,11 @@ calc def DerivedDefault :> Query {
 calc def MismatchedDefault :> Query {
 	in source : Element;
 	in pattern : String default 3;
+	WhereName(source = OwnedElements(source = source), operator = "startsWith", value = pattern)
+}
+calc def AttributeAsStringDefault :> Query {
+	in source : Element;
+	in pattern : String = label;
 	WhereName(source = OwnedElements(source = source), operator = "startsWith", value = pattern)
 }
 calc def OverfullDefault :> Query {
@@ -755,6 +761,20 @@ calc def NestedElementDefault :> Query {
 	if !errors.As(err, &executionError) || executionError.Kind != ErrorBindingType ||
 		executionError.Parameter != "pattern" || executionError.Actual != string(ValueInteger) {
 		t.Fatalf("default type error = %v", err)
+	}
+	_, err = fixture.execute(t, "AttributeAsStringDefault", Bindings{
+		"source": {ElementValue(fixture.symbol(t, "root"))},
+	}, Options{})
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorBindingType ||
+		executionError.Parameter != "pattern" || executionError.Actual != string(ValueElement) {
+		t.Fatalf("attribute-as-string default error = %v", err)
+	}
+	_, err = fixture.execute(t, "Defaulted", Bindings{
+		"pattern": {ElementValue(fixture.symbol(t, "label"))},
+	}, Options{})
+	if !errors.As(err, &executionError) || executionError.Kind != ErrorBindingType ||
+		executionError.Parameter != "pattern" || executionError.Actual != string(ValueElement) {
+		t.Fatalf("attribute-as-string binding error = %v", err)
 	}
 	_, err = fixture.execute(t, "OverfullDefault", Bindings{
 		"pool": {ElementValue(fixture.symbol(t, "root"))},

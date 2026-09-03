@@ -243,6 +243,9 @@ func (e *executor) valueConforms(value Value, expected string) bool {
 		}
 		targets := e.context.Index.LookupQualified(expected)
 		for _, target := range targets {
+			if e.context.Model.PrimTypeOf(target) != semantics.PrimUnknown {
+				return false
+			}
 			if symbols.SameElement(sym, target) || e.context.Model.Conforms(sym, target) {
 				return true
 			}

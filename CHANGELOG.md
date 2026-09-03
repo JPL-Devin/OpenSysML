@@ -30,8 +30,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   parameters now binds the element it denotes — `OwnedElements(source = telescope)` starts
   from that part, in a default or in the query body alike — where planning previously refused
   it as an unknown parameter. The element is checked against the receiving parameter's type
-  and multiplicity when the query is planned, with the same typed `argument-type` and
-  `argument-multiplicity` failures a mismatched parameter reference gets.
+  and multiplicity when the query is planned — an element is never a scalar value, so an
+  attribute named where a `String` is due is refused rather than passed by name — with the
+  same typed `argument-type` and `argument-multiplicity` failures a mismatched parameter
+  reference gets.
 
 - **An object carries the features the Systems and Domain libraries declare for it.** A
   `part box : ShapeItems::Box` used to expose only the `length`, `width` and `height` the model

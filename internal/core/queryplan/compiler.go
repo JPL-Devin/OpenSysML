@@ -1037,8 +1037,11 @@ func (c *compiler) argumentTypesConform(actual []*symbols.Symbol, expected *symb
 }
 
 // elementConforms mirrors the executor's check of an element value against a
-// parameter type: every model element is an Element.
+// parameter type: an element is never a scalar value, and every element is an Element.
 func (c *compiler) elementConforms(element, expected *symbols.Symbol) bool {
+	if c.model.PrimTypeOf(expected) != semantics.PrimUnknown {
+		return false
+	}
 	if symbols.SameElement(element, expected) || c.model.Conforms(element, expected) {
 		return true
 	}
