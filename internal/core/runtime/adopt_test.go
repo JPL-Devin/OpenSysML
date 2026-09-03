@@ -336,6 +336,41 @@ func TestRestoreConnectorMaterializesTheOneAskedForAlone(t *testing.T) {
 	}
 }
 
+// A probe that restores one set-aside connector discards it with the probe and
+// leaves the object as it found it: every identity kept, the one restored
+// included, and what was materialized before still so.
+func TestProbedRestorationLeavesTheIdentitiesKept(t *testing.T) {
+	ctx, obj, ids := carriedSysWithThreeConnectors(t)
+	if first, err := obj.RestoreConnector(ctx, ids[0]); err != nil || first == nil || first.ID != ids[0] {
+		t.Fatalf("RestoreConnector(%d) = %v, %v; want the connector", ids[0], first, err)
+	}
+	held := len(ctx.InstanceIDs())
+
+	end := ctx.beginProbe()
+	mark := len(ctx.created)
+	if last, err := obj.RestoreConnector(ctx, ids[2]); err != nil || last == nil || last.ID != ids[2] {
+		t.Fatalf("RestoreConnector(%d) under a probe = %v, %v; want the connector under that identity", ids[2], last, err)
+	}
+	ctx.abandonInstancesSince(mark)
+	end()
+
+	if got := obj.KeptConnectorIDs(); fmt.Sprint(got) != fmt.Sprint(ids[1:]) {
+		t.Errorf("KeptConnectorIDs() after the probe = %v, want %v set aside as before it", got, ids[1:])
+	}
+	if got := obj.MaterializedConnectors(ctx); len(got) != 1 || got[0].ID != ids[0] {
+		t.Errorf("MaterializedConnectors() after the probe = %v, want the one restored before it, %d", got, ids[0])
+	}
+	if got := len(ctx.InstanceIDs()); got != held {
+		t.Errorf("the probe left %d objects, want %d as before it", got, held)
+	}
+	if last, err := obj.RestoreConnector(ctx, ids[2]); err != nil || last == nil || last.ID != ids[2] {
+		t.Errorf("RestoreConnector(%d) after the probe = %v, %v; want the connector under that identity", ids[2], last, err)
+	}
+	if got := obj.KeptConnectorIDs(); fmt.Sprint(got) != fmt.Sprint(ids[1:2]) {
+		t.Errorf("KeptConnectorIDs() = %v, want the sibling %v alone still set aside", got, ids[1:2])
+	}
+}
+
 // A restoration that fails leaves every identity set aside, the one asked for
 // included, and no object behind, so asking again under a budget that admits it
 // materializes the connector under its identity.

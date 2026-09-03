@@ -8,6 +8,18 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Added
 
+- **The Connect + JSON wire contract is written down for clients with no library.** A
+  MATLAB, R, Julia, C or shell program that posts JSON to `sysml-grpc` by hand had only the
+  proto file and two rules on the transports page to decode answers with, and the questions
+  that page leaves open — how long a `modelHash` lives and what a stale one answers, how the
+  eleven arms of `Value` are told apart and which of `unset`, `null` and an absent `result`
+  means what, how a parse diagnostic differs from an in-body `error` and both from a Connect
+  `{"code","message"}`, and what `Instantiate`, the behavior calls, `Verify*`, `Query` and
+  `RunDocumentQuery` answer — are now on
+  [docs/reference/wire-contract.md](docs/reference/wire-contract.md), each with a request and
+  the response captured verbatim from the service, and with a short illustrative decoder in
+  each of the four languages that is explicitly not a shipped client.
+
 - **`%features` reads out a whole object tree, as text or as JSON.** A large run could not
   be read out: the listing stopped at 200 lines with `… (listing truncated)`, so the
   counters two levels under a context of twelve parts were simply absent, and there was no
@@ -95,14 +107,38 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   classed by the construct it names. The mapping's reference now states that measurement in place
   of the claim that a second conversion yields the same graph, which held for the fixtures alone
   ([docs/project/rdf-corpus-roundtrip.md](docs/project/rdf-corpus-roundtrip.md)).
+- **The REPL sends a signal into a running machine.** `%send go` and
+  `%send Dim(level=3+4) to bulb` put the signal on the runtime's message bus exactly as a
+  `send` from an action body would, so a `transition ... accept go then on` is driven from the
+  prompt without writing an action just to fire it: `%events` lists the signal in flight, and
+  `%step` or `%advance` dispatches it. Without `to`, the signal goes to the object whose machine
+  the `%state` session is debugging, and with no session the command says so rather than
+  guessing. Arguments are written `<parameter>=<expression>` as for `%invoke` and are checked
+  against the signal's declaration — the feature it names, and the type and multiplicity that
+  feature admits — before anything is sent; an unresolved signal name gets the usual unresolved-reference
+  report, an object that runs no machine is reported as such, and a signal nothing in the
+  machine's current state accepts is refused up front with the state named, never queued to be
+  dropped in silence — and so is one whose every triggered transition is held back by its guard,
+  decided as the dispatch would decide it with the payload bound; a guard that cannot be evaluated
+  is an error. A signal the current state defers rather than accepts is sent and said to be
+  deferred: the step dispatching it holds it, `%events` lists it as held, and it is recalled to
+  fire once the machine reaches a state that accepts it — as a machine now holds any message
+  addressed to it that its active state defers, instead of leaving it on the bus. A signal in
+  flight is due now, so a single step dispatches it ahead of a timer set
+  for later, as a run holding time where it is would; a step that dispatches a signal no transition
+  fires on, because the state or the data its guards read changed since it was sent, says so.
+  When an object runs several machines, `%send` decides the signal with each of them and reports
+  which would fire on it, and a machine whose guards would drop it leaves it in flight for a
+  sibling that fires on or defers it — at the prompt and in a run alike — so the machine `%send`
+  named as accepting a signal is the one that gets it.
 
 - **The REPL addresses an object by id and by path, not only by name.** Every command that takes
-  an object — `%features`, `%invoke`, `%eval in`, and the object `%action` and `%state` work on —
-  reads the same reference: the name the object was instantiated under, the id `%instantiate`
-  printed (`%features #3`), or either followed by a path into the objects it holds (`car.fl.hub`,
-  `#3.fl`) — parts, ports, connectors and structured attributes alike, every feature the runtime
-  holds an object for — one element of a multi-valued feature picked by an index counted from 1
-  (`car.wheels[2]`). In a path `.` and `::` mean the same thing, except that what follows a `.` is
+  an object — `%features`, `%invoke`, `%eval in`, the object `%action` and `%state` work on, and
+  the one `%send … to` delivers to — reads the same reference: the name the object was
+  instantiated under, the id `%instantiate` printed (`%features #3`), or either followed by a path
+  into the objects it holds (`car.fl.hub`, `#3.fl`) — parts, ports, connectors and structured
+  attributes alike, every feature the runtime holds an object for — one element of a multi-valued
+  feature picked by an index counted from 1 (`car.wheels[2]`). In a path `.` and `::` mean the same thing, except that what follows a `.` is
   always a feature of the object before it, never a declaration. The id is the object's identity
   for the session: it survives the carry-over an unrelated declaration triggers, and a second
   `%instantiate` of the same name, which re-points the name and now says how the first object is
@@ -194,8 +230,55 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   differential test now also compares Reals bit for bit over ±0.0, ±Inf and NaN, and focused
   fixtures under `internal/core/runtime/testdata/compiled/` run each construct through both tiers.
 
+### Fixed
+
+- **A qualified name through an import evaluates as the checker resolves it.** The evaluator
+  used to resolve only the first segment of `Bq::x` through the resolver and walk the rest as
+  owned and inherited members, so a segment a `public import` re-exports failed with
+  `member x not found in Bq` even though the checker accepted the reference — and the library's
+  own façades are built that way, so `ISQ::speed` and `SI::speed` failed with
+  `member speed not found`. The whole name now goes through the same `ResolveQualified` the
+  checker uses: a wildcard, single-member or recursive import, a façade of a façade, a short
+  name and an `alias` (which used to fail with `cannot evaluate element type *ast.Alias`) all
+  reach the element the checker reaches, a `private import` stays reachable only from inside
+  the importing namespace, and a name the checker rejects fails with the checker's own
+  `unresolved reference: Priv::x` or, when several members answer to it, its own
+  `ambiguous reference: Twice::t (2 candidates)`. The evaluator reads the name through a new
+  `Resolver.ReadQualified`, whose answer (element, segments, ambiguity) is memoized by scope and
+  node rather than by node alone, so one parsed expression evaluated in two scopes that each
+  hold their own `A::x` answers with each scope's value. A calc usage's outputs, and the "not a
+  variant" / "not a literal" reports, are unchanged.
+
 ### Changed
 
+- **A conversion from RDF returns the notation as written.** Every element written to `.ttl`
+  carries its lines as `sysx:sourceText` — comments, blank lines and keyword synonyms included —
+  and an element with members carries the lines closing its body as `sysx:sourceTail`; the writer
+  formats the file before slicing it, and the two properties are one-line literals with newlines
+  escaped. `sysml model.ttl -convert sysml` now writes that text back, so a formatted
+  `.sysml → .ttl → .sysml` round trip is byte for byte and an unformatted one comes back formatted,
+  where before it came back canonical with its `//` and `/* */` comments dropped. The graph stays
+  authoritative: the candidate notation is converted back to RDF and compared with the graph, and
+  each element whose text no longer states its triples — a flag set, a value changed, a member
+  removed or an identity annotation dropped after the export — is written canonically instead,
+  with `@IdentityMetadata::ElementId` and `ProjectRef` materialized exactly as for a graph without
+  text; text that no longer parses demotes the whole file. A member written on its owner's lines,
+  such as an accept's payload, carries no text of its own, so an edit to it rebuilds the owner
+  whole rather than splicing a line into it. Each root records the grammar its file was written in
+  as `sysx:sourceLanguage`, so KerML text is checked as KerML rather than as the SysML it may also
+  read as; a buffer with no extension records none and is checked as such a buffer again. With the
+  notation written from its text, the corpus round-trip ratchet moves 101 files to `stable` — every
+  `whitespace-only`, `graph-diff` and `unparseable` verdict and all but one `unwritable` — which says
+  the text survives, not that the structural predicates alone would (that remains the stripping
+  tests' job). A `LiteralString` node's `sysml:value` is now the value
+  the notation's escapes read to rather than the text between the quotes, and a value edited in the
+  graph is written back as a literal that reads to it, whatever characters it holds. A graph without `sysx:sourceText` — from
+  another tool, or stripped — converts as before, and the round-trip tests keep stripping it to
+  prove the structural predicates carry the model; each fixture under
+  `internal/core/export/testdata/convert` now locks both notations. The
+  [saving guide](docs/guide/07-saving-and-rdf.md), the
+  [RDF mapping](docs/reference/rdf-mapping.md#source-text) and the round-trip testing skill
+  describe the precedence.
 - **A calc whose `return` declares a result parameter it never binds says so.** In the notation
   `return` introduces a result *parameter* (SysML.xtext ReturnParameterMember), so `return h;`
   after `attribute h : Real = …;` declares a second member named `h` — the pilot flags the
@@ -270,6 +353,22 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   document gains a paragraph and diagram on invoking a calc.
 
 ### Fixed
+
+- **Messages cross a binding connector at an assembly's boundary port, in both directions**
+  (Open-MBEE/OpenSysML#92). An assembly that binds its boundary port to a port of a part it
+  holds (`part def Assembly { port bi : ~PP; part child : Inner; bind bi = child.i; }`) used
+  to swallow messages at the boundary: a `send Ping() via o` over a context-level
+  `connect env.o to asm.bi` arrived at `asm.bi` and stayed there, so the inner part's
+  `accept Ping via i` never fired and its counters stayed at 0, with no diagnostic; and a send
+  by the inner part through its own port was reported as reaching no receiving port, although
+  the boundary port it is bound to was connected. A binding connector now makes the two ports
+  one port for message delivery: an accept on either takes a message that reached the other,
+  and a send through either leaves over the connectors joined to the other, through any depth
+  of nested assemblies. Bindings chained through several assemblies also keep every bound port
+  the same object whichever end is read first — a chain used to split when the outer boundary
+  port was materialized before the inner assembly's. A send whose bound boundary port is
+  joined to nothing still reports `send reaches no receiving port` where it was written.
+  Delivery does not depend on the order connectors, bindings and parts are declared.
 
 - **`satisfy … by config.child` is evaluated on the nested object it names.** A satisfaction
   assertion whose `by` operand is a feature chain used to be read as its last name alone:

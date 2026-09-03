@@ -323,11 +323,16 @@ func (feat *EffectiveFeature) IsScalar() bool {
 // checkDefault reports a value the feature does not admit: a count outside its
 // multiplicity (1..1 when none is declared) or an element outside its type.
 func (ctx *Context) checkDefault(inst *Instance, fv *FeatureValue, name string, val Value) error {
-	what := fmt.Sprintf("feature value %s.%s", inst.Type.Name, name)
-	if msg := fv.Feature.Multiplicity.CountViolation(elementCount(&val)); msg != "" {
+	return ctx.checkAdmits(fv.Feature, fmt.Sprintf("feature value %s.%s", inst.Type.Name, name), val)
+}
+
+// checkAdmits reports a value the feature does not admit, by count or by type,
+// naming the value as what.
+func (ctx *Context) checkAdmits(feat *EffectiveFeature, what string, val Value) error {
+	if msg := feat.Multiplicity.CountViolation(elementCount(&val)); msg != "" {
 		return fmt.Errorf("%s: %w: %s", what, ErrMultiplicityViolation, msg)
 	}
-	return ctx.checkWriteType(fv.Feature.DeclScope(), what, fv.Feature.Type, val)
+	return ctx.checkWriteType(feat.DeclScope(), what, feat.Type, val)
 }
 
 // GetFeatureValue retrieves the feature value for the named feature, materializing it lazily
@@ -361,6 +366,7 @@ func (inst *Instance) SetFeatureValue(ctx *Context, name string, value Value) er
 	if err := ctx.checkDefault(inst, fv, name, value); err != nil {
 		return err
 	}
+	ctx.noteProbeWrite(fv)
 	if fv.Feature.IsScalar() {
 		fv.Value = value
 		fv.Values = Value{}
@@ -410,6 +416,7 @@ func (inst *Instance) materializeFeatureValue(ctx *Context, name string) (*Featu
 // binding connectors; binding resolution calls it to inspect an endpoint.
 func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string) (*FeatureValue, error) {
 	fv := inst.FeatureValues[name]
+	ctx.noteProbeWrite(fv)
 
 	// A variation holds the variant it was bound to, and nothing until it is
 	// bound: it classifies its variants abstractly, so it is no object of itself.

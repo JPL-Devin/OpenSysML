@@ -110,8 +110,9 @@ func atSecondArgument(head string) bool {
 
 // atObjectArgument reports whether the word being typed is an argument the
 // command takes an object in: the object %features, %invoke and %state inspect,
-// the performer of %action and %state, and the context of a pinned %eval. A
-// quoted name still being typed is part of that argument.
+// the performer of %action and %state, the destination of %send after `to`, and
+// the context of a pinned %eval. A quoted name still being typed is part of that
+// argument.
 func atObjectArgument(head string) bool {
 	switch firstToken(head) {
 	case "%features", "%invoke":
@@ -121,6 +122,9 @@ func atObjectArgument(head string) bool {
 		return at == 1 || at == 2
 	case "%action":
 		return argumentIndex(head) == 2
+	case "%send":
+		at, args := argumentIndex(head), typedArgs(head)
+		return at >= 2 && at-1 < len(args) && args[at-1] == "to"
 	case "%eval":
 		tail := strings.TrimLeft(strings.TrimPrefix(strings.TrimLeft(head, " \t"), "%eval"), " \t")
 		rest, pinned := cutWord(tail, "in")
@@ -133,14 +137,20 @@ func atObjectArgument(head string) bool {
 // arguments, the command itself being 0. Counted the way dispatch splits them,
 // with a quoted name still being typed closed so it counts as one argument.
 func argumentIndex(head string) int {
-	if inUnfinishedName(head) {
-		return len(parseArgs(head+"'")) - 1
-	}
-	args := parseArgs(head)
-	if strings.HasSuffix(head, " ") || strings.HasSuffix(head, "\t") {
+	args := typedArgs(head)
+	if !inUnfinishedName(head) && (strings.HasSuffix(head, " ") || strings.HasSuffix(head, "\t")) {
 		return len(args)
 	}
 	return len(args) - 1
+}
+
+// typedArgs splits head the way dispatch splits a line, closing a quoted name
+// still being typed so it counts as one argument.
+func typedArgs(head string) []string {
+	if inUnfinishedName(head) {
+		return parseArgs(head + "'")
+	}
+	return parseArgs(head)
 }
 
 // inUnfinishedName reports whether head ends inside an unrestricted name whose

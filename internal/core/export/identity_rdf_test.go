@@ -426,14 +426,16 @@ func TestAnnotatedUnnamedSuccessionEndRoundTrips(t *testing.T) {
 
 // TestAboutFormElementIDRoundTrips checks an `about`-form ElementId is
 // consumed into identity like an inline one: the target's subject carries the
-// declared id, and the notation comes back with the annotation inline.
+// declared id, and the notation built from the graph alone has the annotation
+// inline, while the source text keeps the form it was written in.
 func TestAboutFormElementIDRoundTrips(t *testing.T) {
-	turtle := idTurtle(t, `package P {
-	@IdentityMetadata::ProjectRef { projectId = "proj-1"; }
-	part def A;
-	metadata : IdentityMetadata::ElementId about A { id = "stable-a"; }
+	src := `package P {
+    @IdentityMetadata::ProjectRef { projectId = "proj-1"; }
+    part def A;
+    metadata : IdentityMetadata::ElementId about A { id = "stable-a"; }
 }
-`)
+`
+	turtle := idTurtle(t, src)
 	graph, err := rdf.ParseTurtle(turtle)
 	if err != nil {
 		t.Fatal(err)
@@ -442,7 +444,10 @@ func TestAboutFormElementIDRoundTrips(t *testing.T) {
 	if got := rdf.LocalName(graph.Type(subject)); got != "PartDefinition" {
 		t.Fatalf("subject stable-a typed %q, want PartDefinition", got)
 	}
-	back := toNotation(t, turtle)
+	if back := toNotation(t, turtle); back != src {
+		t.Errorf("the about-form annotation did not come back as written:\n%s", back)
+	}
+	back := toNotation(t, withoutTriples(t, turtle, "sysx:sourceText"))
 	if !strings.Contains(back, `@IdentityMetadata::ElementId { id = "stable-a"; }`) {
 		t.Errorf("about-form id was not re-materialized:\n%s", back)
 	}

@@ -41,11 +41,16 @@ func (ctx *Context) materializeConnectorFeatureValue(owner *Instance, fv *Featur
 			Err:       errors.New("a connector of more than one object has no set of ends to attach"),
 		}
 	}
-	conn, err := ctx.materializeConnectorAs(owner, fv.Feature.Symbol, ctx.connectorBaseOf(fv.Feature), owner.keptConnectors[fv])
+	kept, held := owner.keptConnectors[fv]
+	conn, err := ctx.materializeConnectorAs(owner, fv.Feature.Symbol, ctx.connectorBaseOf(fv.Feature), kept)
 	if err != nil {
 		return err
 	}
-	delete(owner.keptConnectors, fv)
+	if held {
+		// A probe discards the object, so the identity is kept for the one materialized after it.
+		ctx.noteProbeUndo(func() { owner.keepConnector(fv, kept) })
+		delete(owner.keptConnectors, fv)
+	}
 	fv.Value = Value{Kind: ValInstance, Instance: conn.ID}
 	fv.Materialized = true
 	return nil
@@ -191,6 +196,7 @@ func (ctx *Context) bindEndFeatureValue(inst *Instance, end semantics.ConnectorE
 		}}
 		inst.FeatureValues[end.Name] = fv
 	}
+	ctx.noteProbeWrite(fv)
 	fv.Value = val
 	fv.Values = Value{}
 	fv.Materialized = true
@@ -213,6 +219,7 @@ func (ctx *Context) bindParticipants(inst *Instance, ends []ConnectorEnd) {
 		}}
 		inst.FeatureValues[participantEndName] = fv
 	}
+	ctx.noteProbeWrite(fv)
 	fv.Value = Value{}
 	fv.Values = NewSequenceValue(seq)
 	fv.Materialized = true
@@ -242,7 +249,7 @@ func participants(n int) semantics.Range {
 func (inst *Instance) OwnedConnectors(ctx *Context) ([]*Instance, error) {
 	defer ctx.beginRun()()
 	members := ctx.anonymousConnectors(inst.Type)
-	inst.holdAnonymous(len(members))
+	inst.holdAnonymous(ctx, len(members))
 	for i, member := range members {
 		if inst.anonymous[i] != 0 {
 			continue
@@ -257,10 +264,20 @@ func (inst *Instance) OwnedConnectors(ctx *Context) ([]*Instance, error) {
 // materializeAnonymousConnector materializes the instance's i-th anonymous
 // connector, member, under the identity a carry-over kept for it, if any.
 func (inst *Instance) materializeAnonymousConnector(ctx *Context, i int, member *symbols.Symbol) (*Instance, error) {
-	conn, err := ctx.materializeConnectorAs(inst, member, member, inst.keptIdentity(i))
+	kept := inst.keptIdentity(i)
+	conn, err := ctx.materializeConnectorAs(inst, member, member, kept)
 	if err != nil {
 		return nil, err
 	}
+	// A probe discards the object, so the identity is kept for the one materialized after it.
+	ctx.noteProbeUndo(func() {
+		if i < len(inst.anonymous) {
+			inst.anonymous[i] = 0
+		}
+		if i < len(inst.keptAnonymous) {
+			inst.keptAnonymous[i] = kept
+		}
+	})
 	inst.anonymous[i] = conn.ID
 	if i < len(inst.keptAnonymous) {
 		inst.keptAnonymous[i] = 0
@@ -325,19 +342,20 @@ func (inst *Instance) restoreAnonymousConnector(ctx *Context, i int) (*Instance,
 	if i >= len(members) {
 		return nil, nil
 	}
-	inst.holdAnonymous(len(members))
+	inst.holdAnonymous(ctx, len(members))
 	return inst.materializeAnonymousConnector(ctx, i, members[i])
 }
 
 // holdAnonymous gives the instance a slot per anonymous connector declared, n of
-// them, 0 standing for one not materialized yet.
-func (inst *Instance) holdAnonymous(n int) {
-	if inst.anonymous == nil {
-		inst.anonymous = []int64{}
+// them, 0 standing for one not materialized yet. A probe leaves the slots as found.
+func (inst *Instance) holdAnonymous(ctx *Context, n int) {
+	if inst.anonymous != nil && len(inst.anonymous) >= n {
+		return
 	}
-	for len(inst.anonymous) < n {
-		inst.anonymous = append(inst.anonymous, 0)
-	}
+	prior := inst.anonymous
+	ctx.noteProbeUndo(func() { inst.anonymous = prior })
+	inst.anonymous = make([]int64, n)
+	copy(inst.anonymous, prior)
 }
 
 // keepAnonymous sets aside, for a carry-over, the identities of the anonymous

@@ -89,7 +89,7 @@ func (e *StateExecutor) pollChangeEvents() (bool, error) {
 		e.changeFired[candidate.trans] = true
 		e.firingChange = candidate.trans
 		fired = true
-		err = e.fireFrom(candidate.source, candidate.trans)
+		_, err = e.fireFrom(candidate.source, candidate.trans)
 		e.firingChange = nil
 		if err != nil {
 			return fired, fmt.Errorf("fire transition out of %s: %w", candidate.source.Name, err)
