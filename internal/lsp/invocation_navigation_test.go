@@ -140,3 +140,33 @@ func TestDefinitionReachesImportedLibraryFunction(t *testing.T) {
 		t.Errorf("definition line = %q, want the sqrt declaration", line)
 	}
 }
+
+// Go-to-definition through a qualifier that both inherits and imports the name
+// opens the inherited declaration, which hides the import, for a call and a plain reference.
+func TestDefinitionQualifiedInheritedHidesImported(t *testing.T) {
+	const src = `package P {
+	private import ScalarValues::*;
+	package Lib { calc def pick { in x : Integer; return : Integer = 1; } }
+	part def Base { calc def pick { in x : String; return : Integer = 2; } }
+	part def T :> Base { public import Lib::pick; }
+	attribute s : Integer = T::pick("s");
+	calc def again :> T::pick;
+}
+`
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	name := uri.File("/tmp/qualified_hidden_nav.sysml").Filename()
+	ws.Open(name, []byte(src), 1)
+
+	want := uint32(strings.Index(src, "in x : String"))
+	wantLine := offsetToPosition([]byte(src), int(want)).Line
+	for _, needle := range []string{`pick("s")`, "pick;\n}"} {
+		locs := definitionOf(t, s, name, src, needle)
+		if len(locs) != 1 {
+			t.Fatalf("%s: locations = %d, want 1: %v", needle, len(locs), locs)
+		}
+		if locs[0].Range.Start.Line != wantLine {
+			t.Errorf("%s: decl line = %d, want %d (the inherited pick)", needle, locs[0].Range.Start.Line, wantLine)
+		}
+	}
+}

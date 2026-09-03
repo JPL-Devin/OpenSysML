@@ -97,6 +97,14 @@ func (r *Resolver) qualifiedSegment(scope *symbols.Scope, qn *ast.QualifiedName,
 		all = r.namedThroughNamespaces(symbols.PreferDeclared(cur.Scope.LookupLocalAll(seg.Text)))
 	}
 
+	// A member cur inherits hides one its imports surface (KerML 8.3.3.1.4).
+	if len(all) == 0 {
+		if sym, ok := r.lookupContributedMember(cur, seg.Text); ok &&
+			visibleAsInheritedMember(cur, sym) && r.namedThroughNamespace(sym) {
+			all = []*symbols.Symbol{sym}
+		}
+	}
+
 	if len(all) == 0 && cur.Scope != nil {
 		if sym, ok := r.lookupImportedMember(cur, cur.Scope, scope, seg.Text); ok &&
 			r.namedThroughNamespace(sym) {
