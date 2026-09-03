@@ -397,6 +397,43 @@ func testUnattachableConnectorLeavesNoBehavior(t *testing.T) {
 	}
 }
 
+// testUnattachableConnectorAbandonsWhatItsEndsMaterialized: an object an earlier
+// end materialized goes with the connector a later end fails, its behaviors too.
+func testUnattachableConnectorAbandonsWhatItsEndsMaterialized(t *testing.T) {
+	inst, ctx := instantiatePart(t, "Sys", `
+		package test {
+			port def P;
+			part def Ticking {
+				port p : P;
+				exhibit state life { entry; then on; state on; }
+			}
+			part def Sys {
+				part a : Ticking;
+				connection link connect a.p to a.missing;
+			}
+		}
+	`)
+	before := len(ctx.InstanceIDs())
+	if _, err := inst.GetFeatureValue(ctx, "link"); !errors.Is(err, ErrConnectorEnd) {
+		t.Fatalf("expected ErrConnectorEnd, got: %v", err)
+	}
+	if got := len(ctx.InstanceIDs()); got != before {
+		t.Errorf("%d object(s) held, want %d: the part the first end materialized is gone with the connector", got, before)
+	}
+	if got := len(ctx.objectBehaviors); got != 0 {
+		t.Errorf("%d behavior(s) left attached by the part the connector's first end materialized", got)
+	}
+	if got := len(ctx.pendingBehaviors); got != 0 {
+		t.Errorf("%d behavior(s) left queued by the part the connector's first end materialized", got)
+	}
+
+	a := fvInstance(t, ctx, inst, "a")
+	assertCurrentState(t, machineOf(t, a, "life").State, "on")
+	if got := len(ctx.objectBehaviors); got != 1 {
+		t.Errorf("%d behavior(s) attached once a is read on its own, want its machine alone", got)
+	}
+}
+
 // testUnattachableConnectorTouchesNoOtherObject: a connector that cannot attach
 // has sent no message and written nothing on the objects that survive it.
 func testUnattachableConnectorTouchesNoOtherObject(t *testing.T) {
