@@ -353,7 +353,7 @@ func (s *Session) notInstantiated(sym *symbols.Symbol, fqn string) error {
 	switch sym.Decl.(type) {
 	case *ast.Usage:
 		e.UsageAsked = true
-		for _, sup := range model.DirectSupertypes(sym) {
+		for _, sup := range model.AllSupertypes(sym) {
 			if _, isDef := sup.Decl.(*ast.Definition); isDef {
 				definition = sup
 				break

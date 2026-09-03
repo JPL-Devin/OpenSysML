@@ -236,6 +236,26 @@ func TestNotInstantiatedNamesWhatToInstantiate(t *testing.T) {
 		`object #`+usage+` of "Fleet::rover" is typed by it`, "name Fleet::rover to address it", "%instantiate Fleet::Rover")
 }
 
+// A usage that reaches its definition only through the usage it subsets is still
+// of that definition, so objects of it are named the same way.
+func TestNotInstantiatedFindsTheDefinitionThroughASubsettedUsage(t *testing.T) {
+	s := loadFixture(t, "testdata/indirect_usage.sysml")
+	wants(t, run(t, s, "%invoke Fleet::scout bump"), `error: no instance of "Fleet::scout" (use %instantiate first)`)
+
+	defOnly := objectIDIn(t, run(t, s, "%instantiate Fleet::Rover"))
+	rover := objectIDIn(t, run(t, s, "%instantiate Fleet::rover"))
+	wants(t, run(t, s, "%invoke Fleet::scout bump"), `error: no instance of the usage "Fleet::scout"`,
+		`objects #`+defOnly+` of "Fleet::Rover", #`+rover+` of "Fleet::rover" are of its definition "Fleet::Rover", not of the usage`,
+		"use %instantiate Fleet::scout to create the usage's object", "or name Fleet::Rover or Fleet::rover to address one of them")
+	wants(t, run(t, s, "%state Fleet::Rover::modes Fleet::scout"), `no instance of the usage "Fleet::scout"`, `of its definition "Fleet::Rover"`)
+
+	_, _, err := s.objectRef("Fleet::scout")
+	var nerr *NotInstantiatedError
+	if !errors.As(err, &nerr) || !nerr.UsageAsked || nerr.Definition != "Fleet::Rover" || len(nerr.Objects) != 2 {
+		t.Errorf("got %v (%+v), want a NotInstantiatedError naming Fleet::Rover's two objects", err, nerr)
+	}
+}
+
 // A session over a nested part's machine survives an unrelated declaration as one
 // over a top-level object does: the object keeps its identity and the session
 // follows the restarted machine.
