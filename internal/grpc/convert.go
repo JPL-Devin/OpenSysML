@@ -750,6 +750,28 @@ const (
 	maxGraphInstances = 1000
 )
 
+// GraphBounds is how far InstanceGraphToProtoWithin expands an object graph:
+// nested objects to Depth, and Instances objects in all.
+type GraphBounds struct {
+	Depth     int
+	Instances int
+}
+
+// DefaultGraphBounds are the bounds the service serializes an instance graph under.
+func DefaultGraphBounds() GraphBounds {
+	return GraphBounds{Depth: maxGraphDepth, Instances: maxGraphInstances}
+}
+
+// InstanceGraph is an object graph serialized by InstanceGraphToProtoWithin.
+type InstanceGraph struct {
+	Root *pb.Instance
+	All  []*pb.Instance // the root first
+	// Truncated reports that the instance bound cut the graph short.
+	Truncated bool
+	// Errors are the typed failures behind every FeatureValue.Error in All.
+	Errors []error
+}
+
 // InstanceGraphToProto converts inst and every instance reachable from it. The
 // root is returned first; runtime instances live only for the duration of a
 // request, so the whole reachable graph is serialized while the context is alive.
@@ -759,13 +781,24 @@ const (
 // holds, so a self-referential part would otherwise instantiate forever. An
 // unexpanded child stays a bare instance id.
 func InstanceGraphToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.Index) (*pb.Instance, []*pb.Instance) {
-	var all []*pb.Instance
+	g := InstanceGraphToProtoWithin(rt, inst, idx, DefaultGraphBounds())
+	return g.Root, g.All
+}
+
+// InstanceGraphToProtoWithin is InstanceGraphToProto under the given bounds; the
+// type cycle guard applies whatever the bounds.
+func InstanceGraphToProtoWithin(rt *runtime.Context, inst *runtime.Instance, idx *symbols.Index, bounds GraphBounds) InstanceGraph {
+	var g InstanceGraph
 	seen := make(map[int64]bool)
 	onPath := make(map[*symbols.Symbol]bool)
 
 	var walk func(*runtime.Instance, int) *pb.Instance
 	walk = func(cur *runtime.Instance, depth int) *pb.Instance {
-		if seen[cur.ID] || len(all) >= maxGraphInstances {
+		if seen[cur.ID] {
+			return nil
+		}
+		if len(g.All) >= bounds.Instances {
+			g.Truncated = true
 			return nil
 		}
 		seen[cur.ID] = true
@@ -774,10 +807,10 @@ func InstanceGraphToProto(rt *runtime.Context, inst *runtime.Instance, idx *symb
 
 		// InstanceToProto reads every feature value through GetFeatureValue, which is what
 		// lazily materializes the children the ids below resolve to.
-		pbInst := InstanceToProto(rt, cur, idx)
-		all = append(all, pbInst)
+		pbInst := instanceToProto(rt, cur, idx, func(err error) { g.Errors = append(g.Errors, err) })
+		g.All = append(g.All, pbInst)
 
-		if depth >= maxGraphDepth {
+		if depth >= bounds.Depth {
 			return pbInst
 		}
 
@@ -794,8 +827,8 @@ func InstanceGraphToProto(rt *runtime.Context, inst *runtime.Instance, idx *symb
 		return pbInst
 	}
 
-	root := walk(inst, 0)
-	return root, all
+	g.Root = walk(inst, 0)
+	return g
 }
 
 // instanceRefs collects the instance IDs a feature value references, scalar or not.
@@ -843,11 +876,18 @@ func collectionElements(val runtime.Value) []runtime.Value {
 // Features are read in name order, because reading one materializes the object it
 // holds, so map order would decide the ids those objects are given.
 func InstanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.Index) *pb.Instance {
+	return instanceToProto(rt, inst, idx, func(error) {})
+}
+
+// instanceToProto is InstanceToProto, handing each feature value it could not
+// read to failed as the runtime's typed error before reporting its text.
+func instanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.Index, failed func(error)) *pb.Instance {
 	pbValues := make(map[string]*pb.FeatureValue)
 
 	for _, name := range slices.Sorted(maps.Keys(inst.FeatureValues)) {
 		fv, err := inst.GetFeatureValue(rt, name)
 		if err != nil {
+			failed(err)
 			pbValues[name] = &pb.FeatureValue{
 				FeatureName: name,
 				Error:       err.Error(),
