@@ -27,17 +27,17 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 120,
-        "digest": "sha256:1807bc173996cee5a9776a987e3bec4409245d16bdbb0d71e6b4d362b60cd81f"
+        "files": 129,
+        "digest": "sha256:3d6d9f82cd898809a7aa735da7cba08f51913fe66274bcdb167e488571d9b011"
       }
     ],
     "recorded": "2026-09-02"
   },
   "totals": {
-    "cases": 120,
-    "bothReject": 120,
+    "cases": 129,
+    "bothReject": 121,
     "pilotOnlyRejects": 0,
-    "oursOnlyRejects": 0,
+    "oursOnlyRejects": 8,
     "bothAccept": 0
   },
   "strictOnlyAgreements": [
@@ -59,6 +59,14 @@
       "bothReject": 79,
       "pilotOnlyRejects": 0,
       "oursOnlyRejects": 0,
+      "bothAccept": 0
+    },
+    {
+      "source": "semantic",
+      "cases": 9,
+      "bothReject": 1,
+      "pilotOnlyRejects": 0,
+      "oursOnlyRejects": 8,
       "bothAccept": 0
     },
     {
@@ -858,6 +866,111 @@
       "pilotErrors": 4
     },
     {
+      "path": "semantic/cn01-fork-two-incoming.sysml",
+      "source": "semantic",
+      "rule": "a fork node may have at most one incoming succession (SysML v2 8.3.17.8; pilot validateForkNodeIncomingSuccessions, unimplemented at the pin, so this case lands in ours-only-rejects).",
+      "mode": "default",
+      "bucket": "ours-only-rejects",
+      "oursErrors": 1,
+      "pilotErrors": 0,
+      "ours": [
+        "line 6: fork f has 2 incoming successions; a fork node may have at most one — merge or join the flows before the fork"
+      ]
+    },
+    {
+      "path": "semantic/cn02-join-two-outgoing.sysml",
+      "source": "semantic",
+      "rule": "a join node may have at most one outgoing succession (SysML v2 8.3.17.11; pilot validateJoinNodeOutgoingSuccessions, unimplemented at the pin, so this case lands in ours-only-rejects).",
+      "mode": "default",
+      "bucket": "ours-only-rejects",
+      "oursErrors": 1,
+      "pilotErrors": 0,
+      "ours": [
+        "line 6: join j has 2 outgoing successions; a join node may have at most one — follow the join with a fork or decision node to branch"
+      ]
+    },
+    {
+      "path": "semantic/cn03-merge-two-outgoing.sysml",
+      "source": "semantic",
+      "rule": "a merge node may have at most one outgoing succession (SysML v2 8.3.17.13; pilot validateMergeNodeOutgoingSuccessions, unimplemented at the pin, so this case lands in ours-only-rejects).",
+      "mode": "default",
+      "bucket": "ours-only-rejects",
+      "oursErrors": 1,
+      "pilotErrors": 0,
+      "ours": [
+        "line 6: merge m has 2 outgoing successions; a merge node may have at most one — follow the merge with a fork or decision node to branch"
+      ]
+    },
+    {
+      "path": "semantic/cn04-decide-two-incoming.sysml",
+      "source": "semantic",
+      "rule": "a decision node may have at most one incoming succession (SysML v2 8.3.17.7; pilot validateDecisionNodeIncomingSuccessions, unimplemented at the pin, so this case lands in ours-only-rejects).",
+      "mode": "default",
+      "bucket": "ours-only-rejects",
+      "oursErrors": 1,
+      "pilotErrors": 0,
+      "ours": [
+        "line 8: decide d has 2 incoming successions; a decision node may have at most one — merge the flows before the decision"
+      ]
+    },
+    {
+      "path": "semantic/cn05-control-node-outside-action.sysml",
+      "source": "semantic",
+      "rule": "a control node must be owned by an action definition or action usage (SysML v2 8.3.17.6; pilot validateControlNodeOwningType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 2
+    },
+    {
+      "path": "semantic/cn06-fork-incoming-target-multiplicity.sysml",
+      "source": "semantic",
+      "rule": "every succession into a control node must have target multiplicity 1..1 (SysML v2 8.3.17.6; pilot validateControlNodeIncomingSuccessions, unimplemented at the pin, so this case lands in ours-only-rejects).",
+      "mode": "default",
+      "bucket": "ours-only-rejects",
+      "oursErrors": 1,
+      "pilotErrors": 0,
+      "ours": [
+        "line 8: succession into fork f has target multiplicity [0..1]; successions into a fork node must have target multiplicity [1]"
+      ]
+    },
+    {
+      "path": "semantic/cn07-join-outgoing-source-multiplicity.sysml",
+      "source": "semantic",
+      "rule": "every succession out of a control node must have source multiplicity 1..1 (SysML v2 8.3.17.6; pilot validateControlNodeOutgoingSuccessions, unimplemented at the pin, so this case lands in ours-only-rejects).",
+      "mode": "default",
+      "bucket": "ours-only-rejects",
+      "oursErrors": 1,
+      "pilotErrors": 0,
+      "ours": [
+        "line 10: succession out of join j has source multiplicity [0..1]; successions out of a join node must have source multiplicity [1]"
+      ]
+    },
+    {
+      "path": "semantic/cn08-merge-incoming-source-multiplicity.sysml",
+      "source": "semantic",
+      "rule": "every succession into a merge node must have source multiplicity 0..1 (SysML v2 8.3.17.13; pilot validateMergeNodeIncomingSuccessions, unimplemented at the pin, so this case lands in ours-only-rejects).",
+      "mode": "default",
+      "bucket": "ours-only-rejects",
+      "oursErrors": 1,
+      "pilotErrors": 0,
+      "ours": [
+        "line 8: succession into merge m has source multiplicity [1]; successions into a merge node must have source multiplicity [0..1]"
+      ]
+    },
+    {
+      "path": "semantic/cn09-decide-outgoing-target-multiplicity.sysml",
+      "source": "semantic",
+      "rule": "every succession out of a decision node must have target multiplicity 0..1 (SysML v2 8.3.17.7; pilot validateDecisionNodeOutgoingSuccessions, unimplemented at the pin, so this case lands in ours-only-rejects).",
+      "mode": "default",
+      "bucket": "ours-only-rejects",
+      "oursErrors": 1,
+      "pilotErrors": 0,
+      "ours": [
+        "line 9: succession out of decide d has target multiplicity [1]; successions out of a decision node must have target multiplicity [0..1]"
+      ]
+    },
+    {
       "path": "xpect/p01-public-root-import.kerml",
       "source": "xpect",
       "rule": "a root-namespace import must be private (KerML 8.2.3.5.2 validateImportTopLevelVisibility; pilot Import_RootNamspace_invalid.kerml.xt).",
@@ -1196,10 +1309,10 @@
       }
     ],
     "totals": {
-      "cases": 120,
-      "bothReject": 120,
+      "cases": 129,
+      "bothReject": 121,
       "pilotOnlyRejects": 0,
-      "oursOnlyRejects": 0,
+      "oursOnlyRejects": 8,
       "bothAccept": 0
     },
     "note": "no declared correction lies under cmd/pilot-reject/testdata/negative, so the errata-applied corpus is byte-identical to the published one and both figures coincide"
