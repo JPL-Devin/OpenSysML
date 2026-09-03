@@ -9,6 +9,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -1129,6 +1130,10 @@ func (e *EvalContext) buildTypedMessage(scope *symbols.Scope, typeRef *ast.Quali
 	if signalType == "" {
 		return Message{}, fmt.Errorf("send: the message names no signal")
 	}
+	signal, ok := e.definitionNamed(scope, typeRef)
+	if ok {
+		signalType = signal.Name
+	}
 
 	payload := make(map[string]Value, len(args)+len(named))
 	for i, arg := range args {
@@ -1138,52 +1143,62 @@ func (e *EvalContext) buildTypedMessage(scope *symbols.Scope, typeRef *ast.Quali
 		}
 		payload[fmt.Sprintf("arg%d", i+1)] = value
 	}
+	bound := make(map[*symbols.Symbol]string, len(named))
 	for _, arg := range named {
-		name := ast.SimpleName(arg.Name)
-		if name == "" {
+		label := ast.QualifiedText(arg.Name)
+		if label == "" {
 			return Message{}, fmt.Errorf("send %s: an argument is named by nothing", signalType)
 		}
-		if _, bound := payload[name]; bound {
-			return Message{}, fmt.Errorf("send %s: %s is bound twice", signalType, name)
+		name, err := e.constructorLabel(scope, signal, typeRef, arg.Name, bound)
+		if err != nil {
+			return Message{}, fmt.Errorf("send %s: %w", signalType, err)
+		}
+		if _, twice := payload[name]; twice {
+			return Message{}, fmt.Errorf("send %s: %s is bound twice", signalType, label)
 		}
 		value, err := e.Eval(arg.Value)
 		if err != nil {
-			return Message{}, fmt.Errorf("eval argument %s of send %s: %w", name, signalType, err)
+			return Message{}, fmt.Errorf("eval argument %s of send %s: %w", label, signalType, err)
 		}
 		payload[name] = value
-	}
-
-	signal, ok := e.definitionNamed(scope, typeRef)
-	if ok {
-		signalType = signal.Name
-		if err := e.labelsBindEachFeatureOnce(signal, named); err != nil {
-			return Message{}, fmt.Errorf("send %s: %w", signalType, err)
-		}
 	}
 	return Message{SignalType: signalType, Signal: signal, Target: target, Payload: payload}, nil
 }
 
-// labelsBindEachFeatureOnce reports the first distinct label reaching a
-// constructor slot of signal that an earlier label already binds.
-func (e *EvalContext) labelsBindEachFeatureOnce(signal *symbols.Symbol, named []ast.NamedArg) error {
-	bound := make(map[*symbols.Symbol]string, len(named))
-	shape := e.ctx.model.ShapeFeatures(signal)
-	for _, arg := range named {
-		name := ast.SimpleName(arg.Name)
-		i := slices.IndexFunc(shape, func(f semantics.ShapeFeature) bool { return f.Name == name })
-		if i < 0 {
-			continue
+// constructorLabel returns the shape name of the feature of signal a constructor
+// label names (resolved as the checker does); a foreign or rebound feature is an error.
+func (e *EvalContext) constructorLabel(scope *symbols.Scope, signal *symbols.Symbol, typeRef, qn *ast.QualifiedName, bound map[*symbols.Symbol]string) (string, error) {
+	label := ast.QualifiedText(qn)
+	if signal == nil || e.ctx == nil || e.ctx.resolver == nil || e.ctx.model == nil {
+		if len(qn.Parts) != 1 {
+			return "", fmt.Errorf("%s is not a feature of %s", label, ast.SimpleName(typeRef))
 		}
-		slot := e.ctx.model.ConstructibleFeatureFor(signal, shape[i].Declared)
-		if slot == nil {
-			slot = shape[i].Declared
-		}
-		if earlier, twice := bound[slot]; twice {
-			return fmt.Errorf("%s and %s are one feature, bound twice", earlier, name)
-		}
-		bound[slot] = name
+		return qn.Parts[0].Text, nil
 	}
-	return nil
+	feature, ok := e.ctx.resolver.ResolveReference(resolve.Reference{Scope: scope, QN: qn, Constructed: typeRef})
+	if !ok || feature == nil {
+		return "", fmt.Errorf("%s is not a feature of %s", label, signal.Name)
+	}
+	shape := e.ctx.model.ShapeFeatures(signal)
+	i := slices.IndexFunc(shape, func(f semantics.ShapeFeature) bool {
+		return f.Declared == feature || f.Symbol == feature
+	})
+	if i < 0 {
+		return "", fmt.Errorf("%s is not a feature of %s", label, signal.Name)
+	}
+	slot := e.ctx.model.ConstructibleFeatureFor(signal, shape[i].Declared)
+	if slot == nil {
+		slot = shape[i].Declared
+	}
+	name := shape[i].Name
+	if earlier, twice := bound[slot]; twice {
+		if earlier == name {
+			return "", fmt.Errorf("%s is bound twice", name)
+		}
+		return "", fmt.Errorf("%s and %s are one feature, bound twice", earlier, name)
+	}
+	bound[slot] = name
+	return name, nil
 }
 
 // triggerName describes a transition's trigger for traces. Traces are compared

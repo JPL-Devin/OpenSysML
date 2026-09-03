@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -77,6 +78,68 @@ func TestSendNewRejectsDuplicateLabelsAtSend(t *testing.T) {
 					succession first reader then done;
 				}
 			}`))
+			sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+			if sym == nil {
+				t.Fatal("action pipeline not found")
+			}
+			_, err := ctx.ExecuteAction(sym)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("send new Sub(%s): error %v, want %q", tc.args, err, tc.want)
+			}
+			if errors.Is(err, ErrAcceptDeadlock) {
+				t.Errorf("send new Sub(%s): reported as a deadlock, want the send itself rejected", tc.args)
+			}
+		})
+	}
+}
+
+// A qualified label is resolved whole at the send: `Sub::b`/`Base::a` bind their
+// feature, while `Other::b` is rejected even though Sub has a `b`, unvalidated.
+func TestSendNewResolvesQualifiedLabelsAtSend(t *testing.T) {
+	const model = `package P {
+		private import ScalarValues::*;
+		attribute def Base { attribute a : Integer; attribute k : Integer; }
+		attribute def Sub :> Base { attribute b redefines a; }
+		attribute def Other { attribute b : Integer; attribute k : Integer; }
+		action pipeline {
+			attribute got : Integer = 0;
+			first start;
+			action sender { send new Sub(%s) to reader; }
+			action reader accept msg : Sub { assign got := msg.b * 10 + msg.k; }
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
+		}
+	}`
+	for _, tc := range []struct {
+		args string
+		want int64
+	}{
+		{"Sub::b = 4, Sub::k = 6", 46},
+		{"Base::a = 4, Base::k = 6", 46},
+		{"P::Sub::b = 4, k = 6", 46},
+	} {
+		t.Run(tc.args, func(t *testing.T) {
+			idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, fmt.Sprintf(model, tc.args)))
+			sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+			if sym == nil {
+				t.Fatal("action pipeline not found")
+			}
+			outputs, err := ctx.ExecuteAction(sym)
+			if err != nil {
+				t.Fatalf("send new Sub(%s): %v", tc.args, err)
+			}
+			assertIntOutput(t, outputs, "got", tc.want)
+		})
+	}
+	for _, tc := range []struct{ args, want string }{
+		{"Other::b = 4, k = 6", "Other::b is not a feature of Sub"},
+		{"b = 4, Other::k = 6", "Other::k is not a feature of Sub"},
+		{"Sub::b = 4, Base::a = 6", "b and a are one feature, bound twice"},
+	} {
+		t.Run(tc.args, func(t *testing.T) {
+			idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, fmt.Sprintf(model, tc.args)))
 			sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
 			if sym == nil {
 				t.Fatal("action pipeline not found")
