@@ -37,6 +37,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("node_invocation_too_many_arguments", testNodeInvocationTooManyArguments)
 	t.Run("node_invocation_too_few_arguments", testNodeInvocationTooFewArguments)
 	t.Run("node_invocation_unknown_named_argument", testNodeInvocationUnknownNamedArgument)
+	t.Run("node_invocation_repeated_named_argument", testNodeInvocationRepeatedNamedArgument)
 	t.Run("node_invocation_argument_fails_before_defaults", testNodeInvocationArgumentFailsBeforeDefaults)
 	t.Run("performed_action_input_bound_by_nothing", testPerformedActionInputBoundByNothing)
 	t.Run("state_entry_action_input_bound_by_nothing", testStateEntryActionInputBoundByNothing)
@@ -8435,6 +8436,27 @@ func testNodeInvocationUnknownNamedArgument(t *testing.T) {
 	err := runOuterAction(t, src)
 	if !errors.Is(err, ErrUnknownParameter) {
 		t.Fatalf("error = %v, want ErrUnknownParameter", err)
+	}
+}
+
+// testNodeInvocationRepeatedNamedArgument: a parameter named twice is rejected, not
+// bound to whichever argument comes last.
+func testNodeInvocationRepeatedNamedArgument(t *testing.T) {
+	src := `
+		package test {` + adderActionDef + `
+			action outer {
+				first start;
+				then action add = Adder(a = 1, b = 2, a = 3);
+				then done;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if !errors.Is(err, ErrDuplicateArgument) {
+		t.Fatalf("error = %v, want ErrDuplicateArgument", err)
+	}
+	if !strings.Contains(err.Error(), `"a"`) {
+		t.Errorf("error %q does not name the parameter bound twice", err)
 	}
 }
 

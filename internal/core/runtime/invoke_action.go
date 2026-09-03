@@ -204,6 +204,7 @@ func resolveActionSymbol(
 
 // bindArgumentList binds an invocation's arguments into inputs by the callee's parameter
 // order (positional) or names (named); arguments are evaluated in ec, the caller's context.
+// A parameter two arguments would bind is rejected rather than taking the later one.
 func bindArgumentList(ec *EvalContext, inv actionInvocation, in []string, inputs map[string]Value) error {
 	if len(inv.args) > len(in) {
 		return fmt.Errorf(
@@ -211,12 +212,14 @@ func bindArgumentList(ec *EvalContext, inv actionInvocation, in []string, inputs
 			ErrActionArity, qualifiedNameText(inv.target), len(in), len(inv.args),
 		)
 	}
+	bound := make(map[string]bool, len(inv.args)+len(inv.named))
 	for i, arg := range inv.args {
 		value, err := ec.Eval(arg)
 		if err != nil {
 			return fmt.Errorf("eval argument %d of %s: %w", i+1, qualifiedNameText(inv.target), err)
 		}
 		inputs[in[i]] = value
+		bound[in[i]] = true
 	}
 
 	for _, named := range inv.named {
@@ -230,6 +233,13 @@ func bindArgumentList(ec *EvalContext, inv actionInvocation, in []string, inputs
 				ErrUnknownParameter, qualifiedNameText(inv.target), name,
 			)
 		}
+		if bound[name] {
+			return fmt.Errorf(
+				"%w: input parameter %q of %s is given more than one argument",
+				ErrDuplicateArgument, name, qualifiedNameText(inv.target),
+			)
+		}
+		bound[name] = true
 		value, err := ec.Eval(named.Value)
 		if err != nil {
 			return fmt.Errorf("eval argument %q of %s: %w", name, qualifiedNameText(inv.target), err)

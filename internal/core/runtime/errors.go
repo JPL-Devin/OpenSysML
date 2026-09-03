@@ -171,6 +171,10 @@ var (
 	// positional arguments than the action declares input parameters.
 	ErrActionArity = errors.New("action argument count mismatch")
 
+	// ErrDuplicateArgument is returned when an action invocation binds one input
+	// parameter twice: by two named arguments, or by a positional and a named one.
+	ErrDuplicateArgument = errors.New("argument bound more than once")
+
 	// ErrNodeNotPerformed is returned when a pin of an action node is read before
 	// any performance of the node has started.
 	ErrNodeNotPerformed = errors.New("action node read before it is performed")
