@@ -798,6 +798,92 @@ func TestSignalGoesToTheSiblingMachineThatFiresOnIt(t *testing.T) {
 	}
 }
 
+// A guard a sibling machine cannot evaluate on the message is that sibling's
+// error to report: the machine whose guard merely refuses the message leaves it
+// in flight instead of consuming it, and the error surfaces where it is
+// dispatched, stepped or drained alike.
+func TestSignalLeftForASiblingWhoseGuardFails(t *testing.T) {
+	src := `
+		private import ScalarValues::*;
+		attribute def Ping { attribute level : Integer; }
+		part def Twin {
+			attribute leftArmed : Boolean = false;
+			exhibit state left {
+				entry; then idle;
+				state idle;
+				transition first idle accept Ping if leftArmed then done;
+				state done;
+			}
+			exhibit state right {
+				entry; then idle;
+				state idle;
+				transition right_go first idle accept p : Ping if 10 / p.level > 1 then done;
+				state done;
+			}
+		}
+		part twin : Twin;
+	`
+	twinWithPing := func(t *testing.T) (*Context, *StateExecutor, *StateExecutor, Message) {
+		t.Helper()
+		idx, _, ctx := buildRuntimeWithLibraries(t, "twin.sysml", parseAndBuild(t, src))
+		root := idx.DocumentRoot("twin.sysml")
+		twin, err := ctx.occurrenceOf(resolveSymbol(t, root, "twin"))
+		if err != nil {
+			t.Fatalf("occurrenceOf(twin): %v", err)
+		}
+		var left, right *StateExecutor
+		for _, b := range twin.Behaviors() {
+			switch b.Name {
+			case "left":
+				left = b.State
+			case "right":
+				right = b.State
+			}
+		}
+		if left == nil || right == nil {
+			t.Fatalf("twin runs %d behaviors; want left and right", len(twin.Behaviors()))
+		}
+		ping, err := ctx.SignalMessage(resolveSymbol(t, root, "Ping"), map[string]Value{"level": integerValue(0)}, twin)
+		if err != nil {
+			t.Fatalf("SignalMessage(Ping): %v", err)
+		}
+		return ctx, left, right, ping
+	}
+	const wantErr = "eval guard of transition right_go: division by zero"
+
+	t.Run("stepped", func(t *testing.T) {
+		ctx, left, right, ping := twinWithPing(t)
+		ctx.PostMessage(ping)
+		if left.HasPendingSignal() {
+			t.Fatal("the left machine, whose guard refuses Ping, took it from the sibling whose guard fails on it")
+		}
+		if !right.HasPendingSignal() {
+			t.Fatal("the right machine, whose guard fails on Ping, does not have it pending")
+		}
+		if got := len(ctx.PendingMessages()); got != 1 {
+			t.Fatalf("%d messages in flight before the right machine steps, want 1", got)
+		}
+		err := right.ProcessNextEvent()
+		if err == nil || !strings.Contains(err.Error(), wantErr) {
+			t.Fatalf("right.ProcessNextEvent() = %v, want the guard error %q", err, wantErr)
+		}
+		if got := activeLeaf(left) + "/" + activeLeaf(right); got != "idle/idle" {
+			t.Errorf("left/right = %s after the failed guard, want idle/idle", got)
+		}
+	})
+	t.Run("drained", func(t *testing.T) {
+		ctx, left, right, ping := twinWithPing(t)
+		ctx.PostMessage(ping)
+		err := ctx.drainObjectBehaviors()
+		if err == nil || !strings.Contains(err.Error(), wantErr) {
+			t.Fatalf("drainObjectBehaviors() = %v, want the guard error %q", err, wantErr)
+		}
+		if got := activeLeaf(left) + "/" + activeLeaf(right); got != "idle/idle" {
+			t.Errorf("left/right = %s after the failed guard, want idle/idle", got)
+		}
+	})
+}
+
 // ExhibitedMachineOf finds the machine an object runs by its definition or its
 // usage, and none on an object exhibiting no such machine.
 func TestExhibitedMachineOf(t *testing.T) {

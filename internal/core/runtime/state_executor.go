@@ -905,7 +905,16 @@ func (e *StateExecutor) enabledTransition(state *ast.StateNode, event *Event) (*
 		if err != nil {
 			return nil, err
 		}
-		if pass {
+		if !pass {
+			continue
+		}
+		// A transition into a join whose other branches have not arrived is not
+		// enabled either: firing it would move nothing.
+		synchronized, err := e.joinSynchronized(trans)
+		if err != nil {
+			return nil, err
+		}
+		if synchronized {
 			return trans, nil
 		}
 	}
@@ -1100,7 +1109,7 @@ func (e *StateExecutor) fireTransition(trans *lower.Transition) (bool, error) {
 		case ast.PseudostateFork:
 			return true, e.fireForkTransition(trans, ps)
 		case ast.PseudostateJoin:
-			return true, e.fireJoinTransition(trans, ps)
+			return e.fireJoinTransition(trans, ps)
 		default:
 			return true, e.fireHistoryTransition(trans, ps)
 		}
@@ -1528,26 +1537,24 @@ func (e *StateExecutor) fireForkTransition(trans *lower.Transition, fork *ast.Ps
 	return nil
 }
 
-// fireJoinTransition takes a transition into a join. The join only fires once
-// every one of its incoming branches has an active source state; until then the
-// completed branch simply waits.
-func (e *StateExecutor) fireJoinTransition(trans *lower.Transition, join *ast.PseudostateNode) error {
+// fireJoinTransition takes a transition into a join, reporting whether the join
+// fired. It only fires once every one of its incoming branches has an active
+// source state; until then the completed branch simply waits.
+func (e *StateExecutor) fireJoinTransition(trans *lower.Transition, join *ast.PseudostateNode) (bool, error) {
 	sources, err := e.joinSources(join)
 	if err != nil {
-		return err
+		return false, err
 	}
-	for _, source := range sources {
-		if !e.isActive(source) {
-			return nil // Not yet synchronized: wait for the other branches.
-		}
+	if !e.allActive(sources) {
+		return false, nil // Not yet synchronized: wait for the other branches.
 	}
 
 	target, err := e.pseudostateTarget(join)
 	if err != nil {
-		return fmt.Errorf("evaluate pseudostate: %w", err)
+		return false, fmt.Errorf("evaluate pseudostate: %w", err)
 	}
 	if target == nil {
-		return fmt.Errorf("join %s has no target state", join.Name)
+		return false, fmt.Errorf("join %s has no target state", join.Name)
 	}
 
 	// Exit every synchronized branch, then continue from the composite state
@@ -1558,13 +1565,37 @@ func (e *StateExecutor) fireJoinTransition(trans *lower.Transition, join *ast.Ps
 			owner = e.graph.RegionOwner[region]
 		}
 		if err := e.exitState(source); err != nil {
-			return fmt.Errorf("exit state: %w", err)
+			return false, fmt.Errorf("exit state: %w", err)
 		}
 	}
 	e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
 	e.activeConfig.simpleState = owner
 
-	return e.transitionTo(trans, target)
+	return true, e.transitionTo(trans, target)
+}
+
+// joinSynchronized reports whether a transition is enabled as far as its target
+// goes: one into a join only while every source of the join is active.
+func (e *StateExecutor) joinSynchronized(trans *lower.Transition) (bool, error) {
+	join, ok := trans.Target.(*ast.PseudostateNode)
+	if !ok || join.Kind != ast.PseudostateJoin {
+		return true, nil
+	}
+	sources, err := e.joinSources(join)
+	if err != nil {
+		return false, err
+	}
+	return e.allActive(sources), nil
+}
+
+// allActive reports whether every state is part of the active configuration.
+func (e *StateExecutor) allActive(states []*ast.StateNode) bool {
+	for _, state := range states {
+		if !e.isActive(state) {
+			return false
+		}
+	}
+	return true
 }
 
 // joinSources returns the source state of every transition into join, in state
@@ -1940,7 +1971,9 @@ func (e *StateExecutor) takesMessage(m Message) bool {
 
 // yieldsTo reports whether a machine the performer also exhibits, one that
 // would fire on or defer the message where this one would only drop it, should
-// take it instead. A guard error is left for dispatch to report.
+// take it instead. A guard error is left for the dispatch of the machine whose
+// guard it is to report: this machine takes the message when its own guard
+// fails, and leaves it when a sibling's does.
 func (e *StateExecutor) yieldsTo(m Message) bool {
 	siblings := e.siblingsAccepting(m)
 	if len(siblings) == 0 {
@@ -1950,7 +1983,7 @@ func (e *StateExecutor) yieldsTo(m Message) bool {
 		return false
 	}
 	for _, sibling := range siblings {
-		if theirs, err := sibling.Decide(m); err == nil && theirs.Enabled() {
+		if theirs, err := sibling.Decide(m); err != nil || theirs.Enabled() {
 			return true
 		}
 	}
