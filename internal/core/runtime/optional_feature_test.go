@@ -4,7 +4,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // An optional composite feature fills to its lower bound like a collection:
@@ -307,6 +309,47 @@ func TestSubsettingOutsideTheObjectNamesNoSameNamedMember(t *testing.T) {
 	if held := tags.HeldValue(); elementCount(&held) != 1 {
 		t.Errorf("derived.tags = %s, want the one tagged part through the masking redefinition", FormatValue(held))
 	}
+}
+
+// A subsetting keeps its resolved target when another inherited branch carries
+// an unrelated feature under the same name: only a declaration of the owner's
+// own masks the target, so the multiplicity it lends stays that of the target.
+func TestSubsettingKeepsTargetAcrossInheritedNameCollision(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		part def Thing;
+		part def Left {
+			abstract part slots : Thing[1..*];
+			abstract part needed :> slots;
+		}
+		part def Right { abstract part slots : Thing[0..*]; }
+		part def Both :> Right, Left;
+		part def Masking :> Right, Left { abstract part slots : Thing[0..*] :>> Left::slots, Right::slots; }
+	}`))
+	both := oneSymbol(t, idx, "test::Both")
+	needed := oneSymbol(t, idx, "test::Left::needed")
+	leftSlots := oneSymbol(t, idx, "test::Left::slots")
+	if related := ctx.relatedFeatures(needed, both, ast.RelSubsets); len(related) != 1 || related[0] != leftSlots {
+		t.Errorf("Both: needed subsets %s, want Left::slots alone", symbolNames(ctx, related))
+	}
+	inst, err := ctx.Instantiate(both)
+	if err != nil {
+		t.Fatalf("instantiate Both: %v", err)
+	}
+	if _, err := inst.GetFeatureValue(ctx, "needed"); !errors.Is(err, ErrMultiplicityViolation) {
+		t.Errorf("both.needed: err = %v, want %v through Left::slots' [1..*]", err, ErrMultiplicityViolation)
+	}
+	masking := oneSymbol(t, idx, "test::Masking")
+	if related := ctx.relatedFeatures(needed, masking, ast.RelSubsets); len(related) != 1 || related[0] != oneSymbol(t, idx, "test::Masking::slots") {
+		t.Errorf("Masking: needed subsets %s, want the owner's redefining slots", symbolNames(ctx, related))
+	}
+}
+
+func symbolNames(ctx *Context, syms []*symbols.Symbol) []string {
+	names := make([]string, 0, len(syms))
+	for _, sym := range syms {
+		names = append(names, ctx.qualifiedSymbolName(sym))
+	}
+	return names
 }
 
 // An unbound optional subject evaluated by name, bare or qualified, reads as

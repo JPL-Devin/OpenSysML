@@ -21,11 +21,8 @@ import (
 // the two names read one feature value rather than two — `part subsystems :>> Subsystems`
 // makes `Subsystems.mass` read the values held under `subsystems`.
 
-// relatedFeatures returns the features of owner that sym's relationships of the
-// given kind name. An unqualified name the declaring scope cannot see, or one
-// owner inherits but carries under a declaration of its own masking it, is
-// looked up among owner's members (`part a : Sub :> subsystem`); a target
-// resolving outside owner names no feature of it (`:> ISQ::mass`).
+// relatedFeatures returns the features of owner that sym's relationships of the given kind name:
+// the resolved target, or owner's own same-named declaration masking it; an unresolved name is looked up on owner.
 func (ctx *Context) relatedFeatures(sym, owner *symbols.Symbol, kind ast.RelationshipKind) []*symbols.Symbol {
 	var features []*symbols.Symbol
 	for _, qn := range relationshipTargets(sym, kind) {
@@ -38,6 +35,12 @@ func (ctx *Context) relatedFeatures(sym, owner *symbols.Symbol, kind ast.Relatio
 			if !ctx.inheritsDeclaration(owner, resolved) {
 				continue
 			}
+			if own, declared := ctx.ownDeclaration(owner, resolved.Name); declared && own != sym {
+				features = append(features, own)
+			} else {
+				features = append(features, resolved)
+			}
+			continue
 		}
 		if len(qn.Parts) != 1 {
 			continue
@@ -49,8 +52,7 @@ func (ctx *Context) relatedFeatures(sym, owner *symbols.Symbol, kind ast.Relatio
 	return features
 }
 
-// inheritsDeclaration reports whether owner takes its members from the type
-// declaring feature, so a declaration of owner's under that name masks it.
+// inheritsDeclaration reports whether owner takes its members from the type declaring feature.
 func (ctx *Context) inheritsDeclaration(owner, feature *symbols.Symbol) bool {
 	if feature.OwnerScope == nil {
 		return false
@@ -61,6 +63,18 @@ func (ctx *Context) inheritsDeclaration(owner, feature *symbols.Symbol) bool {
 		}
 	}
 	return false
+}
+
+// ownDeclaration returns the member owner itself declares under name, not one it inherits.
+func (ctx *Context) ownDeclaration(owner *symbols.Symbol, name string) (*symbols.Symbol, bool) {
+	member, found := ctx.model.LookupMember(owner, name)
+	if !found || member == nil {
+		return nil, false
+	}
+	if contributed, ok := ctx.model.LookupContributedMember(owner, name); ok && contributed == member {
+		return nil, false
+	}
+	return member, true
 }
 
 // relationshipTargets returns the names sym's relationships of the given kind name.
