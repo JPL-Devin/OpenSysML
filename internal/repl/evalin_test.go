@@ -307,8 +307,8 @@ func TestReadsAfterInstantiateSeeTheRunObject(t *testing.T) {
 	wants(t, joinLines(bare), "= 1")
 	wants(t, run(t, s, "%eval ctx.recv.got"), "= 1")
 	wants(t, run(t, s, "%eval in P::ctx : recv.got"), "recv.got (on P::ctx ID: 1)", "= 1")
-	wants(t, run(t, s, "%eval in #1 : recv.got"), "recv.got (on P::ctx ID: 1)", "= 1")
-	wants(t, run(t, s, "%eval in ctx.recv : got"), "got (on P::ctx::recv ID: ", "= 1")
+	wants(t, run(t, s, "%eval in #1 : recv.got"), "recv.got (on #1 ID: 1)", "= 1")
+	wants(t, run(t, s, "%eval in ctx.recv : got"), "got (on P::ctx.recv ID: ", "= 1")
 	wants(t, run(t, s, "%eval in P::ctx.recv : got + 1"), "= 2")
 	wants(t, run(t, s, "%features #1"), "got = 1")
 }

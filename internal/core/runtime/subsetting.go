@@ -139,7 +139,7 @@ func (ctx *Context) aliasRedefinedFeatureValues(inst *Instance) error {
 		byName[features[i].Name] = &features[i]
 	}
 
-	for _, names := range ctx.redefinitionGroups(inst, features) {
+	for _, names := range ctx.redefinitionGroups(inst.Type, features) {
 		chosen, err := ctx.sharedRedefinitionName(inst, byName, names)
 		if err != nil {
 			return err
@@ -152,11 +152,15 @@ func (ctx *Context) aliasRedefinedFeatureValues(inst *Instance) error {
 	return nil
 }
 
-// redefinitionGroups groups the instance's feature names by the feature they name,
+// redefinitionGroups groups the names of typ's features by the feature they name,
 // in feature order, keeping only names that share a feature with another. Each
 // group's names are ordered from the most specific declaration to the least,
 // which is the order the features are computed in.
-func (ctx *Context) redefinitionGroups(inst *Instance, features []EffectiveFeature) [][]string {
+func (ctx *Context) redefinitionGroups(typ *symbols.Symbol, features []EffectiveFeature) [][]string {
+	declared := make(map[string]bool, len(features))
+	for _, feat := range features {
+		declared[feat.Name] = true
+	}
 	leader := map[string]string{}
 	var find func(string) string
 	find = func(name string) string {
@@ -170,14 +174,11 @@ func (ctx *Context) redefinitionGroups(inst *Instance, features []EffectiveFeatu
 		return root
 	}
 	for _, feat := range features {
-		if _, ok := inst.FeatureValues[feat.Name]; !ok || feat.Symbol == nil {
+		if feat.Symbol == nil {
 			continue
 		}
-		for _, redefined := range ctx.redefinedNames(feat.Symbol, inst.Type) {
-			if redefined == feat.Name {
-				continue
-			}
-			if _, ok := inst.FeatureValues[redefined]; !ok {
+		for _, redefined := range ctx.redefinedNames(feat.Symbol, typ) {
+			if redefined == feat.Name || !declared[redefined] {
 				continue
 			}
 			if a, b := find(feat.Name), find(redefined); a != b {
@@ -201,6 +202,24 @@ func (ctx *Context) redefinitionGroups(inst *Instance, features []EffectiveFeatu
 		groups = append(groups, []string{feat.Name})
 	}
 	return groups
+}
+
+// redefinitionAliases returns the names under which typ's features read the
+// feature called name: name itself and every name redefinition makes one with it.
+func (ctx *Context) redefinitionAliases(typ *symbols.Symbol, name string) map[string]bool {
+	aliases := map[string]bool{name: true}
+	for _, names := range ctx.redefinitionGroups(typ, ctx.FeaturesOf(typ)) {
+		for _, n := range names {
+			if n != name {
+				continue
+			}
+			for _, alias := range names {
+				aliases[alias] = true
+			}
+			return aliases
+		}
+	}
+	return aliases
 }
 
 // sharedRedefinitionName returns the name in a group of names of one feature
@@ -258,6 +277,30 @@ func (ctx *Context) redefinedNames(sym, owner *symbols.Symbol) []string {
 	return names
 }
 
+// SubsettingFeatures returns the features of typ subsetting the named feature under any
+// of its redefinition names, in declaration order, reading nothing; inst is nil for a type alone.
+func (ctx *Context) SubsettingFeatures(inst *Instance, typ *symbols.Symbol, name string) []EffectiveFeature {
+	aliases := ctx.redefinitionAliases(typ, name)
+	var subsetting []EffectiveFeature
+	for _, feat := range ctx.FeaturesOf(typ) {
+		if aliases[feat.Name] || feat.Symbol == nil {
+			continue
+		}
+		if inst != nil {
+			if _, ok := inst.FeatureValues[feat.Name]; !ok {
+				continue
+			}
+		}
+		for _, subsetted := range ctx.relatedFeatureNames(feat.Symbol, typ, ast.RelSubsets) {
+			if aliases[subsetted] {
+				subsetting = append(subsetting, feat)
+				break
+			}
+		}
+	}
+	return subsetting
+}
+
 // subsettingContributions returns the values the features subsetting the named
 // feature contribute to it, in declaration order. A redefinition shares one feature value
 // under two names, so membership is decided by the feature value a subsetted name reads
@@ -265,7 +308,6 @@ func (ctx *Context) redefinedNames(sym, owner *symbols.Symbol) []string {
 // feature materializes it, so a cycle between subsetting features is reported as
 // ErrCyclicFeatureValue rather than recursing until the step budget runs out.
 func (ctx *Context) subsettingContributions(inst *Instance, name string) ([]Value, error) {
-	target := inst.FeatureValues[name]
 	key := featureValueRef{instance: inst.ID, feature: name}
 	if ctx.collectingSubsets[key] {
 		return nil, fmt.Errorf("%w: %s.%s subsets itself", ErrCyclicFeatureValue, inst.Type.Name, name)
@@ -274,24 +316,7 @@ func (ctx *Context) subsettingContributions(inst *Instance, name string) ([]Valu
 	defer delete(ctx.collectingSubsets, key)
 
 	var values []Value
-	for _, feat := range ctx.FeaturesOf(inst.Type) {
-		if feat.Name == name || feat.Symbol == nil {
-			continue
-		}
-		subsets := false
-		for _, subsetted := range ctx.relatedFeatureNames(feat.Symbol, inst.Type, ast.RelSubsets) {
-			if subsetted == name || (target != nil && inst.FeatureValues[subsetted] == target) {
-				subsets = true
-				break
-			}
-		}
-		if !subsets {
-			continue
-		}
-		fv, ok := inst.FeatureValues[feat.Name]
-		if !ok || fv == inst.FeatureValues[name] {
-			continue
-		}
+	for _, feat := range ctx.SubsettingFeatures(inst, inst.Type, name) {
 		sub, err := inst.GetFeatureValue(ctx, feat.Name)
 		if err != nil {
 			return nil, fmt.Errorf("subsetting feature %s of %s: %w", feat.Name, name, err)

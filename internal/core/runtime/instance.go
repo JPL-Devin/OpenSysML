@@ -29,14 +29,13 @@ type Instance struct {
 	// own is identified by.
 	Ends []ConnectorEnd
 
-	// anonymous holds the objects the instance's anonymous connectors
-	// materialized to, nil until they are asked for. An empty slice means there
-	// are none.
+	// anonymous holds, per anonymous connector declared, the object it materialized
+	// to, 0 for one not materialized yet; nil until any is asked for.
 	anonymous []int64
 
-	// keptAnonymous holds the identities those objects had before a carry-over, in
-	// declaration order, which the ones materialized again here take back.
-	keptAnonymous []int64
+	// keptAnonymous holds the identities those objects had before a carry-over, by
+	// the declaration each was of, until the one materialized again here takes it back.
+	keptAnonymous []keptAnonymous
 
 	// keptConnectors holds, per feature value of a named connector, the identity the object
 	// of it had before a carry-over, which the one materialized again takes back.
@@ -524,7 +523,7 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 
 	// An abstract feature has no values of its own (KerML 1.0 §7.3.3.1) and an
 	// optional one demands none: each, a connector included, holds only contributions.
-	if fv.Feature.holdsOnlyContributions() && (ctx.model.IsConnectorUsage(fv.Feature.Symbol) || ctx.CompositeTypeOf(fv.Feature) != nil) {
+	if fv.Feature.HoldsOnlyContributions() && (ctx.model.IsConnectorUsage(fv.Feature.Symbol) || ctx.CompositeTypeOf(fv.Feature) != nil) {
 		return inst.holdContributions(ctx, fv, name)
 	}
 
@@ -611,10 +610,10 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 	return fv, nil
 }
 
-// holdsOnlyContributions reports whether a feature of known multiplicity
+// HoldsOnlyContributions reports whether a feature of known multiplicity
 // materializes no object of its own: it is abstract, or a scalar whose lower
 // bound demands none.
-func (f *EffectiveFeature) holdsOnlyContributions() bool {
+func (f *EffectiveFeature) HoldsOnlyContributions() bool {
 	mult := f.Multiplicity
 	if !mult.Lower.Known || !mult.Upper.Known {
 		return false

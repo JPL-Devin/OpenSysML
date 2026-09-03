@@ -405,7 +405,7 @@ elmt:Annotated__car___402___400
     sysml:redefines "level" ;
     sysml:value expr:Annotated__car___402___400_pvalue ;
     sysx:hasBody "false"^^xsd:boolean ;
-    sysx:sourceText "                :>> level = 3;\n" .
+    sysx:sourceText "            :>> level = 3;\n" .
 
 elmt:Annotated__car___402___400_om
     a sysml:FeatureMembership ;

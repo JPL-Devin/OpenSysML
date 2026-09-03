@@ -133,32 +133,6 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   classed by the construct it names. The mapping's reference now states that measurement in place
   of the claim that a second conversion yields the same graph, which held for the fixtures alone
   ([docs/project/rdf-corpus-roundtrip.md](docs/project/rdf-corpus-roundtrip.md)).
-- **Metadata annotations convert to RDF structurally, bodies and prefixes included.** The
-  encoder used to carry a `#Safety` prefix as the text it was written as and to refuse an
-  annotation with a body (`@Safety { level = 2; }`), the most common refusal across the corpus.
-  Every annotation — `@M;`, `@M { … }`, `metadata m : M about a, b;` and the prefix
-  `#M part def P;` — is now a `sysml:MetadataUsage` owned by the element it is written in or
-  ahead of, carrying its type, one `sysml:annotatedElement` per target, `sysx:hasBody`, the sigil
-  it was written with as `sysx:declaredKeyword` (`@`, `#`, or none for `metadata`) and its
-  body's members as owned members with their `sysml:value` expression trees, so the notation is
-  written back from the graph alone, without `sysx:sourceText`. `sysx:prefixMetadata` and
-  `sysml:annotates` are gone; a `.ttl` file written by 0.4.3 that states either is refused naming
-  the property rather than read without the annotation — re-export it from its notation source.
-  Of the 18 files refused for this reason, 16 now convert and 13 of those come back as an equal
-  graph without `sysx:sourceText`; the other three run into older gaps the refusal had hidden
-  (an `isEnd` and an `isNamespaceImport` flag the writer drops, an invocation expression it
-  refuses), and the remaining two fall to an older refusal, an unnamed `feature` or `event`
-  declaration. The parser now reads
-  `metadata M about x;` as typed by `M` and unnamed, as the grammar's
-  `MetadataUsageDeclaration` requires, rather than naming the usage `M` — which had made the
-  training corpus's `Metadata Example-1.sysml` a duplicate declaration under conversion
-  ([docs/reference/rdf-mapping.md](docs/reference/rdf-mapping.md)).
-- **An `assume`/`require` member's constraint declaration converts to RDF.** The encoder carried
-  only the condition of a requirement's `assume`/`require` members, so
-  `assume constraint c : C;` and `require constraint d [1] = true;` came back as
-  `assume constraint { }` and `require constraint { }`. The name, specializations, multiplicity
-  and value of the constraint usage the member owns are now carried as they are for any usage,
-  and a body-less member comes back with its `;` rather than an empty body.
 - **The REPL sends a signal into a running machine.** `%send go` and
   `%send Dim(level=3+4) to bulb` put the signal on the runtime's message bus exactly as a
   `send` from an action body would, so a `transition ... accept go then on` is driven from the
@@ -183,6 +157,44 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   which would fire on it, and a machine whose guards would drop it leaves it in flight for a
   sibling that fires on or defers it — at the prompt and in a run alike — so the machine `%send`
   named as accepting a signal is the one that gets it.
+
+- **The REPL addresses an object by id and by path, not only by name.** Every command that takes
+  an object — `%features`, `%invoke`, `%eval in`, the object `%action` and `%state` work on, and
+  the one `%send … to` delivers to — reads the same reference: the name the object was
+  instantiated under, the id `%instantiate` printed (`%features #3`), or either followed by a path
+  into the objects it holds (`car.fl.hub`, `#3.fl`) — parts, ports, connectors and structured
+  attributes alike, every feature the runtime holds an object for — one element of a multi-valued
+  feature picked by an index counted from 1 (`car.wheels[2]`). In a path `.` and `::` mean the same thing, except that what follows a `.` is
+  always a feature of the object before it, never a declaration. The id is the object's identity
+  for the session: it survives the carry-over an unrelated declaration triggers, and a second
+  `%instantiate` of the same name, which re-points the name and now says how the first object is
+  still reached; `%instances` lists such an object as `#3 (ID: 3, displaced from Demo::car)`, and a
+  `%state` or `%action` session started on it stays with it under that id; a connector `%features`
+  has shown, anonymous or named, keeps answering to its id across that carry-over though its ends
+  are only attached again when it is next read — and a connector attached whole is kept, its
+  writes with it, when an older object's behavior then fails answering it, that failure reported
+  as the older object's; changing the run bounds,
+  which drops every object as a reset does, ends such a session too, and the next `%step` or
+  `%advance` says so. The old object still counts: a `%constraint`, `%requirement` or `%eval` that
+  names no object and whose condition both carry says so and names both (`Demo::car, #3`) rather
+  than answering about the new one — the elements of a multi-valued part among the carriers, each
+  by its index (`car.wheels[2]`) — and `%state #3` debugs a state machine the session holds by id
+  or path as it does by name. A nested object is reported with its features after `.`
+  (`Demo::car.fl`, `#3.wheels[2]`), which typed back reaches that object even when the `::`
+  spelling names a declaration of its own. A bad reference is reported in the same words by every
+  command: an unknown id lists the ids there are, a segment that is no feature names the object
+  and its features, an attribute at the end of a path says it holds a value, and a multi-valued
+  part with no index says how many objects it holds and how to pick one. <kbd>Tab</kbd> completes
+  references where a command takes one: `#` offers the ids, `car.` the objects `car` holds — a
+  variation among them once a command has read which variant it selected, and of a part nothing
+  has read yet the elements it will hold, the parts subsetting it counted before its lower bound,
+  so an optional or abstract part is offered only once something subsets it
+  ([reference](docs/reference/repl-commands.md#object-references)).
+  Names that need quoting are completed as the notation writes them, `'the ra` to `'the rack'` and
+  `Q::'the ra` to `Q::'the rack'`, the closing quote typed or not, and every object a command
+  reports is spelled that way too, so a name that merely looks like an id or an index (`Demo::'#3'`,
+  `car::'hub[2]'`) reads back as the name it is, and one holding `::` inside its quotes
+  (`Demo::'left::right'`) stays one segment rather than reading back as two names.
 
 ### Performance
 
@@ -291,11 +303,15 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 - **A conversion from RDF returns the notation as written.** Every element written to `.ttl`
   carries its lines as `sysx:sourceText` — comments, blank lines and keyword synonyms included —
-  and an element with members carries the lines closing its body as `sysx:sourceTail`; the writer
-  formats the file before slicing it, and the two properties are one-line literals with newlines
-  escaped. `sysml model.ttl -convert sysml` now writes that text back, so a formatted
-  `.sysml → .ttl → .sysml` round trip is byte for byte and an unformatted one comes back formatted,
-  where before it came back canonical with its `//` and `/* */` comments dropped. The graph stays
+  and an element with members carries the lines closing its body as `sysx:sourceTail`; the text
+  is the file's own bytes — tabs, irregular indentation, blank lines inside a head, CRLF line
+  endings and the notes after the last root included, never a formatted copy — and the two
+  properties are one-line literals with newlines escaped. `sysml model.ttl -convert sysml` now
+  writes that text back untouched, so a `.sysml → .ttl → .sysml` round trip is byte for byte for
+  any file, where before it came back canonical with its `//` and `/* */` comments dropped. A head
+  laid out over several lines or with a comment inside it is recorded in the mapping
+  (`sysx:endForm`, `sysx:declaredKeyword`) like one written on a line, since the graph states
+  tokens, not layout. The graph stays
   authoritative: the candidate notation is converted back to RDF and compared with the graph, and
   each element whose text no longer states its triples — a flag set, a value changed, a member
   removed or an identity annotation dropped after the export — is written canonically instead,
@@ -495,19 +511,16 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 - **`%state`, `%invoke` and `-state` reach a nested part by path and by id.** The object argument
   accepted only the name of a top-level object, so the machine of a part reached through
   composition could be watched with `%features` but neither debugged nor invoked on. The
-  argument now takes a feature path from a top-level object (`driver.r`, `driver.r.motor`,
-  `Fleet::driver::r`) and the id the prompt prints (`#3`), resolved by the same walk `%features`
-  uses. A path that stops short of an object is a typed error naming the segment
-  that reached none and why (`Fleet::driver.x reaches no object at "x": object #1 of
-  "Fleet::driver" has no feature "x"`; `… at "level": feature "level" of object #2 holds 10,
-  which is not an object`), and an id nothing is held under is `no object #99 in this session`.
-  A segment whose feature value the runtime could not materialize keeps the runtime's reason
-  (`… at "spare": feature "spare" of object #1 could not be materialized: … multiplicity
-  violation …`) rather than being reported as a missing feature, and reaches the session status
-  as a failed `%features` would. A qualified path is read as typed — `Fleet::driver::r` is the
-  usage's part even with `Fleet::Driver`, where `r` is declared, instantiated too — and a member
-  of a multi-valued part, which no path reaches, is named by its id alone, so a session attached
-  to it by id survives an unrelated declaration.
+  argument now takes the same reference every other command reads — a feature path from a
+  top-level object (`driver.r`, `driver.r.motor`, `Fleet::driver::r`), the id the prompt prints
+  (`#3`), or an element of a multi-valued part by index (`garage.bays[2]`) — and the CLI's
+  `-state "<machine> <object>"` reads it the same way. A segment whose feature value the runtime
+  could not materialize keeps the runtime's reason (`spare of Shared::lamp could not be
+  materialized: … multiplicity violation …`) rather than being reported as a missing feature, and
+  reaches the session status as a failed `%features` would. A qualified path is read as typed —
+  `Fleet::driver::r` is the usage's part, reported as `Fleet::driver.r`, even with `Fleet::Driver`,
+  where `r` is declared, instantiated too — and an object addressed by id is reported by that id
+  alone, so a session attached to it survives an unrelated declaration.
 - **An object of the wrong kind is named when a usage is not instantiated.** `-state
   "Rover::modes rover"` after `-instantiate Rover` (the definition, not the usage) reported only
   `no instance of "rover" (use %instantiate first)`. The REPL and the CLI now say that an object
@@ -515,16 +528,20 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   of the usage "Fleet::rover": object #1 of "Fleet::Rover" is of its definition "Fleet::Rover",
   not of the usage — use %instantiate Fleet::rover to create the usage's object, or name
   Fleet::Rover to address it`. Asking for a definition when only usages typed by it have
-  objects names those usages the same way; with no related object the plain hint stands.
-- **An object a second `%instantiate` superseded is no longer addressable by id.** After
-  `%instantiate Fleet::rover` twice, the prompt said `object #1 is no longer named`, yet
-  `%features #1`, `%invoke #1 bump` and `%state #1` still reached it, since the runtime keeps the
-  object until the next rebuild. An id now denotes only an object the session holds: one it
-  named, or one a materialized feature of such an object holds, members of a multi-valued part
-  included — checked without materializing anything. The superseded object is `no object #1 in
-  this session: it was superseded, and nothing the session names reaches it`. A debugging
-  session over that object ends with the `%instantiate` that superseded it, with a `note:` saying
-  so, and the next `%step` or `%advance` repeats why; a session over an object another name
+  objects names those objects the same way — a nested one by its path (`Fleet::driver.r`), an
+  element of a multi-valued part by its index (`Depot::garage.bays[2]`) — and a usage reaches its
+  definition through the usages it subsets; with no related object the plain hint stands. The
+  hint names only objects the session holds and materializes none to find them.
+- **An id reaches an object the session holds, and looking it up builds nothing.** `%features #4`
+  used to materialize the features of every named object on the way to finding object #4; an id
+  now denotes an object the session holds — one it named, one a materialized feature of such an
+  object holds, members of a multi-valued part included however many there are, or one a second
+  `%instantiate` of its name displaced — and is found without materializing anything. An id the
+  runtime never issued is `no object #9 in this session: nothing materialized has that identity
+  (the objects are #1, #2)`. The second `%instantiate` says how the first object goes on being
+  reached — `Fleet::rover now denotes this object; object #1 is displaced from that name and stays
+  reachable as #1` — and a `%state` or `%action` session over the displaced object keeps running,
+  the same notice saying it now follows the object as `#1`; a session over an object another name
   denotes is untouched.
 
 - **A `then` written after a flow, a binding or a standalone succession comes back from Turtle.**
