@@ -1,6 +1,10 @@
 package semantics
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+)
 
 func TestImplicitRoleRedefinitionDeduplicatesDiamond(t *testing.T) {
 	m, root := buildModel(t, `package P {
@@ -62,5 +66,26 @@ func TestImplicitRoleRedefinitionMatchesRole(t *testing.T) {
 	}
 	if got[0] == baseSubject {
 		t.Fatal("objective implicitly redefined the inherited subject")
+	}
+}
+
+func TestImplicitRoleRedefinitionSurvivesExplicitRedefinition(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		part def X;
+		requirement def A { subject s : X; }
+		requirement def B { subject s : X; }
+		requirement def C :> A, B { subject s :>> A::s; }
+	}`)
+	p := sym(t, root, "P")
+	aSubject := nested(t, nested(t, p.Scope, "A").Scope, "s")
+	bSubject := nested(t, nested(t, p.Scope, "B").Scope, "s")
+	cSubject := nested(t, nested(t, p.Scope, "C").Scope, "s")
+
+	if got := RelationshipsOf(cSubject); len(got) != 1 || got[0].Kind != ast.RelRedefines {
+		t.Fatalf("RelationshipsOf(C's subject) = %v, want its one redefinition", got)
+	}
+	got := m.ImplicitRoleRedefinitions(cSubject)
+	if len(got) != 2 || got[0] != aSubject || got[1] != bSubject {
+		t.Fatalf("ImplicitRoleRedefinitions(C's subject) = %v, want [A::s B::s]", got)
 	}
 }

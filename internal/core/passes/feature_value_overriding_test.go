@@ -136,3 +136,22 @@ func TestFeatureValueOverridingSubject(t *testing.T) {
 	}`
 	overridingDiags(t, src, "= v1", "= v1", "default = v1")
 }
+
+// A subject redefines the subject of every general requirement by position, so
+// naming one general's subject explicitly does not exempt another's binding.
+func TestFeatureValueOverridingSubjectOfEveryGeneral(t *testing.T) {
+	const src = `package P {
+		part def X;
+		part x0 : X;
+		part x1 : X;
+		part x2 : X;
+		requirement def A { subject s : X default = x0; }
+		requirement def B { subject s : X = x1; }
+		requirement def C :> A, B { subject s :>> A::s = x2; }
+		requirement def D :> A { subject s :>> A::s = x2; }
+	}`
+	diags := overridingDiags(t, src, "= x2")
+	if !strings.Contains(diags[0].Message, "P::B::s") {
+		t.Errorf("message %q does not name P::B::s", diags[0].Message)
+	}
+}

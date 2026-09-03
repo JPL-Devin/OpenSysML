@@ -145,7 +145,8 @@ func GeneralizationKind(k ast.RelationshipKind) bool {
 }
 
 // RelationshipsOf returns the declared relationships of a symbol's def/usage
-// declaration, or nil for symbols that are not def/usage.
+// declaration, or nil for symbols that are not def/usage. A subject's typing
+// is its TypeRef, not a relationship, so it is not among them.
 func RelationshipsOf(sym *symbols.Symbol) []*ast.Relationship {
 	switch d := sym.Decl.(type) {
 	case *ast.Definition:
@@ -153,6 +154,8 @@ func RelationshipsOf(sym *symbols.Symbol) []*ast.Relationship {
 	case *ast.Usage:
 		return d.Relationships
 	case *ast.ConnectorEnd:
+		return d.Relationships
+	case *ast.SubjectMember:
 		return d.Relationships
 	case *ast.BodyExpr:
 		// A body parameter is not a node of its own, so its symbol declares the
@@ -249,7 +252,7 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		out = append(out, target)
 	}
 
-	// SubjectMember has TypeRef instead of Relationships - handle separately
+	// A subject's typing is its TypeRef rather than a relationship.
 	if subj, ok := sym.Decl.(*ast.SubjectMember); ok && subj.TypeRef != nil {
 		target, ok := m.resolver.ResolveQualified(sym.OwnerScope, subj.TypeRef)
 		if ok && target != nil {

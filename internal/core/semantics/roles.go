@@ -14,9 +14,10 @@ const (
 )
 
 // ImplicitRoleRedefinitions returns same-role features of the owner's generals.
+// The role redefines every general's, so an explicit `:>>` does not suppress it.
 func (m *Model) ImplicitRoleRedefinitions(sym *symbols.Symbol) []*symbols.Symbol {
 	role := roleOf(sym)
-	if role == noCaseRole || hasExplicitRedefinition(sym) || sym.OwnerScope == nil {
+	if role == noCaseRole || sym.OwnerScope == nil {
 		return nil
 	}
 	owner := sym.OwnerScope.Owner()
@@ -99,13 +100,4 @@ func roleOfNode(node ast.Node) caseRole {
 		}
 	}
 	return noCaseRole
-}
-
-func hasExplicitRedefinition(sym *symbols.Symbol) bool {
-	for _, rel := range RelationshipsOf(sym) {
-		if rel != nil && rel.Kind == ast.RelRedefines {
-			return true
-		}
-	}
-	return false
 }
