@@ -1,0 +1,452 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/SysML/Systems/States>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Types>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Behaviors>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Connectors>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Functions>, <https://www.omg.org/spec/SysML/modules/KerML/Root/Namespaces>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Actions> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "SysML/Systems/States" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:ExhibitStateUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:PerformActionUsage, sysml:StateUsage, [
+        a owl:Restriction ;
+        owl:onProperty sysml:ExhibitStateUsage_exhibitedState ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "ExhibitStateUsage" ;
+    rdfs:comment """<p>An <code>ExhibitStateUsage</code> is a <code>StateUsage</code> that represents the exhibiting of a <code>StateUsage</code>. Unless it is the <code>StateUsage</code> itself, the <code>StateUsage</code> to be exhibited is related to the <code>ExhibitStateUsage</code> by a <code>ReferenceSubsetting</code> <code>Relationship</code>. An <code>ExhibitStateUsage</code> is also a <code>PerformActionUsage</code>, with its <code>exhibitedState</code> as the <code>performedAction</code>.</p>
+	
+	owningType <> null and
+	(owningType.oclIsKindOf(PartDefinition) or
+	owningType.oclIsKindOf(PartUsage)) implies
+	specializesFromLibrary('Parts::Part::exhibitedStates')
+	ownedReferenceSubsetting <> null implies
+	ownedReferenceSubsetting.referencedFeature.oclIsKindOf(StateUsage)""" .
+
+sysml:ExhibitStateUsage_exhibitedState
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:PerformActionUsage_performedAction ;
+    rdfs:domain sysml:ExhibitStateUsage ;
+    rdfs:range sysml:StateUsage ;
+    rdfs:label "exhibitedState" ;
+    rdfs:comment "<p>The <code>StateUsage</code> to be exhibited by the <code>ExhibitStateUsage</code>. It is the <code>performedAction</code> of the <code>ExhibitStateUsage</code> considered as a <code>PerformActionUsage</code>, which must be a <code>StateUsage</code>.</p>" .
+
+sysml:StateDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:ActionDefinition, [
+        a owl:Restriction ;
+        owl:onProperty sysml:StateDefinition_isParallel ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "StateDefinition" ;
+    rdfs:comment """<p>A <code>StateDefinition</code> is the <code>Definition</code> of the </code>Behavior</code> of a system or part of a system in a certain state condition.</p>
+	
+	<p>A <code>StateDefinition</code> may be related to up to three of its <code>ownedFeatures</code> by <code>StateBehaviorMembership</code> <code>Relationships</code>, all of different <code>kinds</code>, corresponding to the entry, do and exit actions of the <code>StateDefinition</code>.</p>
+	specializesFromLibrary('States::StateAction')
+	ownedMembership->
+	selectByKind(StateSubactionMembership)->
+	isUnique(kind)
+	state = action->selectByKind(StateUsage)
+	doAction =
+	let doMemberships : Sequence(StateSubactionMembership) =
+	ownedMembership->
+	selectByKind(StateSubactionMembership)->
+	select(kind = StateSubactionKind::do) in
+	if doMemberships->isEmpty() then null
+	else doMemberships->at(1)
+	endif
+	entryAction =
+	let entryMemberships : Sequence(StateSubactionMembership) =
+	ownedMembership->
+	selectByKind(StateSubactionMembership)->
+	select(kind = StateSubactionKind::entry) in
+	if entryMemberships->isEmpty() then null
+	else entryMemberships->at(1)
+	endif
+	isParallel implies
+	ownedAction.incomingTransition->isEmpty() and
+	ownedAction.outgoingTransition->isEmpty()
+	exitAction =
+	let exitMemberships : Sequence(StateSubactionMembership) =
+	ownedMembership->
+	selectByKind(StateSubactionMembership)->
+	select(kind = StateSubactionKind::exit) in
+	if exitMemberships->isEmpty() then null
+	else exitMemberships->at(1)
+	endif""" .
+
+sysml:StateDefinition_doAction
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:StateDefinition ;
+    rdfs:range sysml:ActionUsage ;
+    rdfs:label "doAction" ;
+    rdfs:comment "<p>The <code>ActionUsage</code> of this <code>StateDefinition</code> to be performed while in the state defined by the <code>StateDefinition</code>. It is the owned <code>ActionUsage</code> related to the <code>StateDefinition</code> by a <code>StateSubactionMembership</code>  with <code>kind = do</code>.</p>" .
+
+sysml:StateDefinition_entryAction
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:StateDefinition ;
+    rdfs:range sysml:ActionUsage ;
+    rdfs:label "entryAction" ;
+    rdfs:comment "<p>The <code>ActionUsage</code> of this <code>StateDefinition</code> to be performed on entry to the state defined by the <code>StateDefinition</code>. It is the owned <code>ActionUsage</code> related to the <code>StateDefinition</code> by a <code>StateSubactionMembership</code>  with <code>kind = entry</code>.</p>" .
+
+sysml:StateDefinition_exitAction
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:StateDefinition ;
+    rdfs:range sysml:ActionUsage ;
+    rdfs:label "exitAction" ;
+    rdfs:comment "<p>The <code>ActionUsage</code> of this <code>StateDefinition</code> to be performed on exit to the state defined by the <code>StateDefinition</code>. It is the owned <code>ActionUsage</code> related to the <code>StateDefinition</code> by a <code>StateSubactionMembership</code>  with <code>kind = exit</code>.</p>" .
+
+sysml:StateDefinition_isParallel
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:StateDefinition ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isParallel" ;
+    rdfs:comment "<p>Whether the <code>ownedStates</code> of this <code>StateDefinition</code> are to all be performed in parallel. If true, none of the <code>ownedActions</code> (which includes <code>ownedStates</code>) may have any incoming or outgoing <code>Transitions</code>. If false, only one <code>ownedState</code> may be performed at a time.</p>" .
+
+sysml:StateDefinition_state
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:ActionDefinition_action ;
+    rdfs:domain sysml:StateDefinition ;
+    rdfs:range sysml:StateUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "state" ;
+    rdfs:comment "<p>The <code>StateUsages</code>, which are <code>actions</code> in the <code>StateDefinition</code>, that specify the discrete states in the behavior defined by the <code>StateDefinition</code>.</p>" .
+
+sysml:StateSubactionKind
+    a rdfs:Datatype ;
+    owl:equivalentClass [
+        a rdfs:Datatype ;
+        owl:oneOf [
+            a rdf:List ;
+            rdf:first "do" ;
+            rdf:rest [
+                a rdf:List ;
+                rdf:first "entry" ;
+                rdf:rest [
+                    a rdf:List ;
+                    rdf:first "exit" ;
+                    rdf:rest rdf:nil
+                ]
+            ]
+        ]
+    ] ;
+    rdfs:label "StateSubactionKind" ;
+    rdfs:comment "<p>A <code>StateSubactionKind</code> indicates whether the <code>action</code> of a StateSubactionMembership is an entry, do or exit action.</p>" .
+
+sysml:StateSubactionMembership
+    a owl:Class ;
+    rdfs:subClassOf sysml:FeatureMembership, [
+        a owl:Restriction ;
+        owl:onProperty sysml:StateSubactionMembership_action ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:StateSubactionMembership_kind ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "StateSubactionMembership" ;
+    rdfs:comment """<p>A <code>StateSubactionMembership</code> is a <code>FeatureMembership</code> for an entry, do or exit <code>ActionUsage<code> of a <code>StateDefinition</code> or <code>StateUsage</code>.</p>
+	owningType.oclIsKindOf(StateDefinition) or
+	owningType.oclIsKindOf(StateUsage)""" .
+
+sysml:StateSubactionMembership_action
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:FeatureMembership_ownedMemberFeature ;
+    rdfs:domain sysml:StateSubactionMembership ;
+    rdfs:range sysml:ActionUsage ;
+    rdfs:label "action" ;
+    rdfs:comment "<p>The <code>ActionUsage</code> that is the <code>ownedMemberFeature</code> of this <code>StateSubactionMembership</code>.</p>" .
+
+sysml:StateSubactionMembership_kind
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:StateSubactionMembership ;
+    rdfs:range sysml:StateSubactionKind ;
+    rdfs:label "kind" ;
+    rdfs:comment "<p>Whether this <code>StateSubactionMembership</code> is for an <code>entry<code>, <code>do</code> or <code>exit</code> <code>ActionUsage</code>.</p>" .
+
+sysml:StateUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:ActionUsage, [
+        a owl:Restriction ;
+        owl:onProperty sysml:StateUsage_isParallel ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "StateUsage" ;
+    rdfs:comment """<p>A <code>StateUsage</code> is an <code>ActionUsage</code> that is nominally the <code>Usage</code> of a <code>StateDefinition</code>. However, other kinds of kernel <code>Behaviors</code> are also allowed as <code>types</code>, to permit use of <code>Behaviors</code from the Kernel Model Libraries.</p>
+	
+	<p>A <code>StateUsage</code> may be related to up to three of its <code>ownedFeatures</code> by <code>StateSubactionMembership</code> <code>Relationships</code>, all of different <code>kinds</code>, corresponding to the entry, do and exit actions of the <code>StateUsage</code>.</p>
+	
+	doAction =
+	let doMemberships : Sequence(StateSubactionMembership) =
+	ownedMembership->
+	selectByKind(StateSubactionMembership)->
+	select(kind = StateSubactionKind::do) in
+	if doMemberships->isEmpty() then null
+	else doMemberships->at(1)
+	endif
+	entryAction =
+	let entryMemberships : Sequence(StateSubactionMembership) =
+	ownedMembership->
+	selectByKind(StateSubactionMembership)->
+	select(kind = StateSubactionKind::entry) in
+	if entryMemberships->isEmpty() then null
+	else entryMemberships->at(1)
+	endif
+	isParallel implies
+	nestedAction.incomingTransition->isEmpty() and
+	nestedAction.outgoingTransition->isEmpty()
+	isSubstateUsage(false) implies
+	specializesFromLibrary('States::StateAction::exclusiveStates')
+	exitAction =
+	let exitMemberships : Sequence(StateSubactionMembership) =
+	ownedMembership->
+	selectByKind(StateSubactionMembership)->
+	select(kind = StateSubactionKind::exit) in
+	if exitMemberships->isEmpty() then null
+	else exitMemberships->at(1)
+	endif
+	specializesFromLibrary('States::stateActions')
+	ownedMembership->
+	selectByKind(StateSubactionMembership)->
+	isUnique(kind)
+	isSubstateUsage(true) implies
+	specializesFromLibrary('States::StateAction::substates')""" .
+
+sysml:StateUsage_doAction
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:StateUsage ;
+    rdfs:range sysml:ActionUsage ;
+    rdfs:label "doAction" ;
+    rdfs:comment "<p>The <code>ActionUsage</code> of this <code>StateUsage</code> to be performed while in the state defined by the <code>StateDefinition</code>. It is the owned <code>ActionUsage</code> related to the <code>StateUsage</code> by a <code>StateSubactionMembership</code>  with <code>kind = do</code>.</p>" .
+
+sysml:StateUsage_entryAction
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:StateUsage ;
+    rdfs:range sysml:ActionUsage ;
+    rdfs:label "entryAction" ;
+    rdfs:comment "<p>The <code>ActionUsage</code> of this <code>StateUsage</code> to be performed on entry to the state defined by the <code>StateDefinition</code>. It is the owned <code>ActionUsage</code> related to the <code>StateUsage</code> by a <code>StateSubactionMembership</code>  with <code>kind = entry</code>.</p>" .
+
+sysml:StateUsage_exitAction
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:StateUsage ;
+    rdfs:range sysml:ActionUsage ;
+    rdfs:label "exitAction" ;
+    rdfs:comment "<p>The <code>ActionUsage</code> of this <code>StateUsage</code> to be performed on exit to the state defined by the <code>StateDefinition</code>. It is the owned <code>ActionUsage</code> related to the <code>StateUsage</code> by a <code>StateSubactionMembership</code>  with <code>kind = exit</code>.</p>" .
+
+sysml:StateUsage_isParallel
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:StateUsage ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isParallel" ;
+    rdfs:comment "<p>Whether the <code>nestedStates</code> of this <code>StateUsage</code> are to all be performed in parallel. If true, none of the <code>nestedActions</code> (which include <code>nestedStates</code>) may have any incoming or outgoing <code>Transitions</code>. If false, only one <code>nestedState</code> may be performed at a time.</p>" .
+
+sysml:StateUsage_stateDefinition
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:ActionUsage_actionDefinition ;
+    rdfs:domain sysml:StateUsage ;
+    rdfs:range sysml:Behavior ;
+    ecore:isOrdered true ;
+    rdfs:label "stateDefinition" ;
+    rdfs:comment "<p>The <code>Behaviors</code> that are the <code>types</code> of this <code>StateUsage</code>. Nominally, these would be <code>StateDefinitions</code>, but kernel <code>Behaviors</code> are also allowed, to permit use of <code>Behaviors</code> from the Kernel Model Libraries.</p>" .
+
+sysml:TransitionFeatureKind
+    a rdfs:Datatype ;
+    owl:equivalentClass [
+        a rdfs:Datatype ;
+        owl:oneOf [
+            a rdf:List ;
+            rdf:first "effect" ;
+            rdf:rest [
+                a rdf:List ;
+                rdf:first "guard" ;
+                rdf:rest [
+                    a rdf:List ;
+                    rdf:first "trigger" ;
+                    rdf:rest rdf:nil
+                ]
+            ]
+        ]
+    ] ;
+    rdfs:label "TransitionFeatureKind" ;
+    rdfs:comment "<p>A <code>TransitionActionKind</code> indicates whether the <code>transitionFeature</code> of a <code>TransitionFeatureMembership</code> is a trigger, guard or effect.</p>" .
+
+sysml:TransitionFeatureMembership
+    a owl:Class ;
+    rdfs:subClassOf sysml:FeatureMembership, [
+        a owl:Restriction ;
+        owl:onProperty sysml:TransitionFeatureMembership_transitionFeature ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:TransitionFeatureMembership_kind ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "TransitionFeatureMembership" ;
+    rdfs:comment """<p>A <code>TransitionFeatureMembership</code> is a <code>FeatureMembership</code> for a trigger, guard or effect of a <code>TransitionUsage</code>, whose <code>transitionFeature</code> is a <code>AcceptActionUsage</code>, <em><code>Boolean</code></em>-valued <code>Expression</code> or <code>ActionUsage</code>, depending on its <code>kind</code>. </p>
+	kind = TransitionFeatureKind::trigger implies
+	transitionFeature.oclIsKindOf(AcceptActionUsage)
+	owningType.oclIsKindOf(TransitionUsage)
+	kind = TransitionFeatureKind::guard implies
+	transitionFeature.oclIsKindOf(Expression) and
+	let guard : Expression = transitionFeature.oclIsKindOf(Expression) in
+	guard.result.specializesFromLibrary('ScalarValues::Boolean') and
+	guard.result.multiplicity <> null and
+	guard.result.multiplicity.hasBounds(1,1)
+	kind = TransitionFeatureKind::effect implies
+	transitionFeature.oclIsKindOf(ActionUsage)""" .
+
+sysml:TransitionFeatureMembership_kind
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:TransitionFeatureMembership ;
+    rdfs:range sysml:TransitionFeatureKind ;
+    rdfs:label "kind" ;
+    rdfs:comment "<p>Whether this <code>TransitionFeatureMembership </code> is for a <code>trigger</code>, <code>guard</code> or <code>effect</code>.</p>" .
+
+sysml:TransitionFeatureMembership_transitionFeature
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:FeatureMembership_ownedMemberFeature ;
+    rdfs:domain sysml:TransitionFeatureMembership ;
+    rdfs:range sysml:Step ;
+    rdfs:label "transitionFeature" ;
+    rdfs:comment "<p>The <code>Step</code> that is the <code>ownedMemberFeature</code> of this <code>TransitionFeatureMembership</code>.</p>" .
+
+sysml:TransitionUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:ActionUsage, [
+        a owl:Restriction ;
+        owl:onProperty sysml:TransitionUsage_source ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:TransitionUsage_succession ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:TransitionUsage_target ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "TransitionUsage" ;
+    rdfs:comment """<p>A <code>TransitionUsage</code> is an <code>ActionUsage</code> representing a triggered transition between <code>ActionUsages</code> or <code>StateUsages</code>. When triggered by a <code>triggerAction</code>, when its <code>guardExpression</code> is true, the <code>TransitionUsage</code> asserts that its <code>source</code> is exited, then its <code>effectAction</code> (if any) is performed, and then its <code>target</code> is entered.</p>
+	
+	<p>A <code>TransitionUsage</code> can be related to some of its <code>ownedFeatures</code> using <code>TransitionFeatureMembership</code> <code>Relationships</code>, corresponding to the <code>triggerAction</code>, <code>guardExpression</code> and <code>effectAction</code> of the <code>TransitionUsage</code>.</p>
+	isComposite and owningType <> null and
+	(owningType.oclIsKindOf(ActionDefinition) or
+	owningType.oclIsKindOf(ActionUsage)) and
+	not (owningType.oclIsKindOf(StateDefinition) or
+	owningType.oclIsKindOf(StateUsage)) implies
+	specializesFromLibrary('Actions::Action::decisionTransitions')
+	isComposite and owningType <> null and
+	(owningType.oclIsKindOf(StateDefinition) or
+	owningType.oclIsKindOf(StateUsage)) implies
+	specializesFromLibrary('States::State::stateTransitions')
+	specializesFromLibrary('Actions::transitionActions')
+	source =
+	if ownedMembership->isEmpty() then null
+	else
+	let member : Element =
+	ownedMembership->at(1).memberElement in
+	if not member.oclIsKindOf(ActionUsage) then null
+	else member.oclAsKindOf(ActionUsage)
+	endif
+	endif
+	target =
+	if succession.targetFeature->isEmpty() then null
+	else
+	let targetFeature : Feature =
+	succession.targetFeature->at(1) in
+	if not targetFeature.oclIsKindOf(ActionUsage) then null
+	else targetFeature.oclAsType(ActionUsage)
+	endif
+	endif
+	triggerAction = ownedFeatureMembership->
+	selectByKind(TransitionFeatureMembership)->
+	select(kind = TransitionFeatureKind::trigger).transitionFeature->
+	selectByKind(AcceptActionUsage)
+	let successions : Sequence(Successions) =
+	ownedMember->selectByKind(Succession) in
+	successions->notEmpty() and
+	successions->at(1).targetFeature->
+	forAll(oclIsKindOf(ActionUsage))
+	guardExpression = ownedFeatureMembership->
+	selectByKind(TransitionFeatureMembership)->
+	select(kind = TransitionFeatureKind::trigger).transitionFeature->
+	selectByKind(Expression)
+	triggerAction->forAll(specializesFromLibrary('Actions::TransitionAction::accepter') and
+	guardExpression->forAll(specializesFromLibrary('Actions::TransitionAction::guard') and
+	effectAction->forAll(specializesFromLibrary('Actions::TransitionAction::effect'))
+	triggerAction = ownedFeatureMembership->
+	selectByKind(TransitionFeatureMembership)->
+	select(kind = TransitionFeatureKind::trigger).transitionFeatures->
+	selectByKind(AcceptActionUsage)
+	succession.sourceFeature = source
+	ownedMember->selectByKind(BindingConnector)->exists(b |
+	b.relatedFeatures->includes(source) and
+	b.relatedFeatures->includes(inputParameter(1)))
+	triggerAction->notEmpty() implies
+	let payloadParameter : Feature = inputParameter(2) in
+	payloadParameter <> null and
+	payloadParameter.subsetsChain(triggerAction->at(1), triggerPayloadParameter())
+	ownedMember->selectByKind(BindingConnector)->exists(b |
+	b.relatedFeatures->includes(succession) and
+	b.relatedFeatures->includes(resolveGlobal(
+	'TransitionPerformances::TransitionPerformance::transitionLink')))
+	if triggerAction->isEmpty() then
+	inputParameters()->size() >= 1
+	else
+	inputParameters()->size() >= 2
+	endif
+	
+	succession = ownedMember->selectByKind(Succession)->at(1)""" .
+
+sysml:TransitionUsage_effectAction
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_feature ;
+    rdfs:domain sysml:TransitionUsage ;
+    rdfs:range sysml:ActionUsage ;
+    rdfs:label "effectAction" ;
+    rdfs:comment "<p>The <code>ActionUsages</code> that define the effects of this <code>TransitionUsage</code>, which are the <code>ownedFeatures</code> of the <code>TransitionUsage</code> related to it by <code>TransitionFeatureMemberships</code> with <code>kind = effect</code>, which must all be <code>ActionUsages</code>.</p>" .
+
+sysml:TransitionUsage_guardExpression
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_ownedFeature ;
+    rdfs:domain sysml:TransitionUsage ;
+    rdfs:range sysml:Expression ;
+    rdfs:label "guardExpression" ;
+    rdfs:comment "<p>The <code>Expressions</code> that define the guards of this <code>TransitionUsage</code>, which are the <code>ownedFeatures</code> of the <code>TransitionUsage</code> related to it by <code>TransitionFeatureMemberships</code> with <code>kind = guard</code>, which must all be <code>Expressions</code>.</p>" .
+
+sysml:TransitionUsage_source
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:TransitionUsage ;
+    rdfs:range sysml:ActionUsage ;
+    rdfs:label "source" ;
+    rdfs:comment "<p>The source <code>ActionUsage</code> of this <code>TransitionUsage</code>, which becomes the <code>source</code> of the <code>succession</code> for the <code>TransitionUsage</code>.</p>" .
+
+sysml:TransitionUsage_succession
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Namespace_ownedMember ;
+    rdfs:domain sysml:TransitionUsage ;
+    rdfs:range sysml:Succession ;
+    rdfs:label "succession" ;
+    rdfs:comment "<p>The <code>Succession</code> that is the <code>ownedFeature</code> of this <code>TransitionUsage</code>, which, if the <code>TransitionUsage</code> is triggered, asserts the temporal ordering of the <code>source</code> and <code>target</code>.</p>" .
+
+sysml:TransitionUsage_target
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:TransitionUsage ;
+    rdfs:range sysml:ActionUsage ;
+    rdfs:label "target" ;
+    rdfs:comment "<p>The target <code>ActionUsage</code> of this <code>TransitionUsage<code>, which is the <code>targetFeature</code> of the <code>succession</code> for the <code>TransitionUsage</code>.</p>" .
+
+sysml:TransitionUsage_triggerAction
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_ownedFeature ;
+    rdfs:domain sysml:TransitionUsage ;
+    rdfs:range sysml:AcceptActionUsage ;
+    rdfs:label "triggerAction" ;
+    rdfs:comment "<p>The <code>AcceptActionUsages</code> that define the triggers of this <code>TransitionUsage</code>, which are the <code>ownedFeatures</code> of the <code>TransitionUsage</code> related to it by <code>TransitionFeatureMemberships</code> with <code>kind = trigger</code>, which must all be <code>AcceptActionUsages</code>.</p>" .

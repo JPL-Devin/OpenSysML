@@ -1,0 +1,330 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/KerML/Root/Namespaces>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Root/Elements> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "KerML/Root/Namespaces" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:Import
+    a owl:Class ;
+    rdfs:subClassOf sysml:Relationship, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Import_importOwningNamespace ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Import_importedElement ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Import_isImportAll ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Import_isRecursive ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Import_visibility ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Import" ;
+    rdfs:comment """<p>An <code>Import</code> is an <code>Relationship</code> between its <code>importOwningNamespace</code> and either a <code>Membership</code> (for a <code>MembershipImport</code>) or another <code>Namespace</code> (for a <code>NamespaceImport</code>), which determines a set of <code>Memberships</code> that become <code>importedMemberships</code> of the <code>importOwningNamespace</code>. If <code>isImportAll = false</code> (the default), then only public <code>Memberships</code> are considered &quot;visible&quot;. If <code>isImportAll = true</code>, then all <code>Memberships</code> are considered &quot;visible&quot;, regardless of their declared <code>visibility</code>. If <code>isRecursive = true</code>, then visible <code>Memberships</code> are also recursively imported from owned sub-<code>Namespaces</code>.</p>
+	
+	
+	importOwningNamespace.owningNamespace = null implies
+	visibility = VisibilityKind::private""" .
+
+sysml:Import_importOwningNamespace
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_owningRelatedElement, sysml:Relationship_source ;
+    rdfs:domain sysml:Import ;
+    rdfs:range sysml:Namespace ;
+    rdfs:label "importOwningNamespace" ;
+    rdfs:comment "<p>The Namespace into which Memberships are imported by this Import, which must be the <code>owningRelatedElement</code> of the Import.</p>" .
+
+sysml:Import_importedElement
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:Import ;
+    rdfs:range sysml:Element ;
+    rdfs:label "importedElement" ;
+    rdfs:comment "<p>The effectively imported <code>Element</code> for this </code>Import</code>. For a <code>MembershipImport</code>, this is the <code>memberElement</code> of the <code>importedMembership</code>. For a <code>NamespaceImport</code>, it is the <code>importedNamespace</code>.</p>" .
+
+sysml:Import_isImportAll
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Import ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isImportAll" ;
+    rdfs:comment "<p>Whether to import memberships without regard to declared visibility.</p>" .
+
+sysml:Import_isRecursive
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Import ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isRecursive" ;
+    rdfs:comment "<p>Whether to recursively import Memberships from visible, owned sub-Namespaces.</p>" .
+
+sysml:Import_visibility
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Import ;
+    rdfs:range sysml:VisibilityKind ;
+    rdfs:label "visibility" ;
+    rdfs:comment "<p>The visibility level of the imported <code>members</code> from this Import relative to the <code>importOwningNamespace</code>. The default is <code>private</code>.</p>" .
+
+sysml:Membership
+    a owl:Class ;
+    rdfs:subClassOf sysml:Relationship, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Membership_memberElement ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Membership_membershipOwningNamespace ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Membership_memberElementId ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Membership_visibility ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Membership" ;
+    rdfs:comment """<p>A <code>Membership</code> is a <code>Relationship</code> between a <code>Namespace</code> and an <code>Element</code> that indicates the <code>Element</code> is a <code>member</code> of (i.e., is contained in) the Namespace. Any <code>memberNames</code> specify how the <code>memberElement</code> is identified in the <code>Namespace</code> and the <code>visibility</code> specifies whether or not the <code>memberElement</code> is publicly visible from outside the <code>Namespace</code>.</p>
+	
+	<p>If a <code>Membership</code> is an <code>OwningMembership</code>, then it owns its <code>memberElement</code>, which becomes an <code>ownedMember</code> of the <code>membershipOwningNamespace</code>. Otherwise, the <code>memberNames</code> of a <code>Membership</code> are effectively aliases within the <code>membershipOwningNamespace</code> for an <code>Element</code> with a separate <code>OwningMembership</code> in the same or a different <code>Namespace</code>.</p>
+	
+	<p>&nbsp;</p>
+	
+	memberElementId = memberElement.elementId""" .
+
+sysml:MembershipImport
+    a owl:Class ;
+    rdfs:subClassOf sysml:Import, [
+        a owl:Restriction ;
+        owl:onProperty sysml:MembershipImport_importedMembership ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "MembershipImport" ;
+    rdfs:comment """<p>A <code>MembershipImport</code> is an <code>Import</code> that imports its <code>importedMembership</code> into the <code>importOwningNamespace</code>. If <code>isRecursive = true</code> and the <code>memberElement</code> of the <code>importedMembership</code> is a <code>Namespace</code>, then the equivalent of a recursive <code>NamespaceImport</code> is also performed on that <code>Namespace</code>.</p>
+	
+	importedElement = importedMembership.memberElement""" .
+
+sysml:MembershipImport_importedMembership
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_target ;
+    rdfs:domain sysml:MembershipImport ;
+    rdfs:range sysml:Membership ;
+    rdfs:label "importedMembership" ;
+    rdfs:comment "<p>The <code>Membership</code> to be imported.</p>" .
+
+sysml:Membership_memberElement
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_target ;
+    rdfs:domain sysml:Membership ;
+    rdfs:range sysml:Element ;
+    rdfs:label "memberElement" ;
+    rdfs:comment "<p>The <code>Element</code> that becomes a <code>member</code> of the <code>membershipOwningNamespace</code> due to this <code>Membership</code>.</p>" .
+
+sysml:Membership_memberElementId
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Membership ;
+    rdfs:range xsd:string ;
+    rdfs:label "memberElementId" ;
+    rdfs:comment "<p>The <code>elementId</code> of the <code>memberElement</code>.</p>" .
+
+sysml:Membership_memberName
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Membership ;
+    rdfs:range xsd:string ;
+    rdfs:label "memberName" ;
+    rdfs:comment "<p>The name of the <code>memberElement</code> relative to the <code>membershipOwningNamespace</code>.</p>" .
+
+sysml:Membership_memberShortName
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Membership ;
+    rdfs:range xsd:string ;
+    rdfs:label "memberShortName" ;
+    rdfs:comment "<p>The short name of the <code>memberElement</code> relative to the <code>membershipOwningNamespace</code>.</p>" .
+
+sysml:Membership_membershipOwningNamespace
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_owningRelatedElement, sysml:Relationship_source ;
+    rdfs:domain sysml:Membership ;
+    rdfs:range sysml:Namespace ;
+    rdfs:label "membershipOwningNamespace" ;
+    rdfs:comment "<p>The <code>Namespace</code> of which the <code>memberElement</code> becomes a <code>member</code> due to this <code>Membership</code>.</p>" .
+
+sysml:Membership_visibility
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Membership ;
+    rdfs:range sysml:VisibilityKind ;
+    rdfs:label "visibility" ;
+    rdfs:comment "<p>Whether or not the <code>Membership</code> of the <code>memberElement</code> in the <code>membershipOwningNamespace</code> is publicly visible outside that <code>Namespace</code>.</p>" .
+
+sysml:Namespace
+    a owl:Class ;
+    rdfs:subClassOf sysml:Element ;
+    rdfs:label "Namespace" ;
+    rdfs:comment """<p>A <code>Namespace</code> is an <code>Element</code> that contains other <code>Elements</code>, known as its <code>members</code>, via <code>Membership</code> <code>Relationships</code> with those <code>Elements</code>. The <code>members</code> of a <code>Namespace</code> may be owned by the <code>Namespace</code>, aliased in the <code>Namespace</code>, or imported into the <code>Namespace</code> via <code>Import</code> <code>Relationships</code>.</p>
+	
+	<p>A <code>Namespace</code> can provide names for its <code>members</code> via the <code>memberNames</code> and <code>memberShortNames</code> specified by the <code>Memberships</code> in the <code>Namespace</code>. If a <code>Membership</code> specifies a <code>memberName</code> and/or <code>memberShortName</code>, then those are names of the corresponding <code>memberElement</code> relative to the <code>Namespace</code>. For an <code>OwningMembership</code>, the <code>owningMemberName</code> and <code>owningMemberShortName</code> are given by the <code>Element</code> <code>name</code> and <code>shortName</code>. Note that the same <code>Element</code> may be the <code>memberElement</code> of multiple <code>Memberships</code> in a <code>Namespace</code> (though it may be owned at most once), each of which may define a separate alias for the <code>Element</code> relative to the <code>Namespace</code>.</p>
+	
+	membership->forAll(m1 |
+	membership->forAll(m2 |
+	m1 <> m2 implies m1.isDistinguishableFrom(m2)))
+	member = membership.memberElement
+	ownedMember = ownedMembership->selectByKind(OwningMembership).ownedMemberElement
+	importedMembership = importedMemberships(Set{})
+	ownedImport = ownedRelationship->selectByKind(Import)
+	ownedMembership = ownedRelationship->selectByKind(Membership)""" .
+
+sysml:NamespaceImport
+    a owl:Class ;
+    rdfs:subClassOf sysml:Import, [
+        a owl:Restriction ;
+        owl:onProperty sysml:NamespaceImport_importedNamespace ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "NamespaceImport" ;
+    rdfs:comment """<p>A <code>NamespaceImport</code> is an Import that imports <code>Memberships</code> from its <code>importedNamespace</code> into the <code>importOwningNamespace</code>. If <code> isRecursive = false</code>, then only the visible <code>Memberships</code> of the <code>importedNamespace</code> are imported. If <code> isRecursive = true</code>, then, in addition, <code>Memberships</code> are recursively imported from any <code>ownedMembers</code> of the <code>importedNamespace</code> that are <code>Namespaces</code>.</p>
+	
+	importedElement = importedNamespace""" .
+
+sysml:NamespaceImport_importedNamespace
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_target ;
+    rdfs:domain sysml:NamespaceImport ;
+    rdfs:range sysml:Namespace ;
+    rdfs:label "importedNamespace" ;
+    rdfs:comment "<p>The <code>Namespace</code> whose visible <code>Memberships</code> are imported by this <code>NamespaceImport</code>.</p>" .
+
+sysml:Namespace_importedMembership
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Namespace_membership ;
+    rdfs:domain sysml:Namespace ;
+    rdfs:range sysml:Membership ;
+    ecore:isOrdered true ;
+    rdfs:label "importedMembership" ;
+    rdfs:comment "<p>The <code>Memberships</code> in this <code>Namespace</code> that result from the <code>ownedImports</code> of this <code>Namespace</code>.</p>" .
+
+sysml:Namespace_member
+    a owl:ObjectProperty ;
+    rdfs:domain sysml:Namespace ;
+    rdfs:range sysml:Element ;
+    ecore:isOrdered true ;
+    rdfs:label "member" ;
+    rdfs:comment "<p>The set of all member <code>Elements</code> of this <code>Namespace</code>, which are the <code>memberElements</code> of all <code>memberships</code> of the <code>Namespace</code>.</p>" .
+
+sysml:Namespace_membership
+    a owl:ObjectProperty ;
+    rdfs:domain sysml:Namespace ;
+    rdfs:range sysml:Membership ;
+    ecore:isOrdered true ;
+    rdfs:label "membership" ;
+    rdfs:comment "<p>All <code>Memberships</code> in this <code>Namespace</code>, including (at least) the union of <code>ownedMemberships</code> and <code>importedMemberships</code>.</p>" .
+
+sysml:Namespace_ownedImport
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    owl:inverseOf sysml:Import_importOwningNamespace ;
+    rdfs:domain sysml:Namespace ;
+    rdfs:range sysml:Import ;
+    rdfs:label "ownedImport" ;
+    rdfs:comment "<p>The <code>ownedRelationships</code> of this <code>Namespace</code> that are <code>Imports</code>, for which the <code>Namespace</code> is the <code>importOwningNamespace</code>.</p>" .
+
+sysml:Namespace_ownedMember
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Namespace_member ;
+    rdfs:domain sysml:Namespace ;
+    rdfs:range sysml:Element ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedMember" ;
+    rdfs:comment "<p>The owned <code>members</code> of this <code>Namespace</code>, which are the <cpde><code>ownedMemberElements</code> of the <code>ownedMemberships</code> of the <code>Namespace</code>.</p>" .
+
+sysml:Namespace_ownedMembership
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Namespace_membership ;
+    owl:inverseOf sysml:Membership_membershipOwningNamespace ;
+    rdfs:domain sysml:Namespace ;
+    rdfs:range sysml:Membership ;
+    rdfs:label "ownedMembership" ;
+    rdfs:comment "<p>The <code>ownedRelationships</code> of this <code>Namespace</code> that are <code>Memberships</code>, for which the <code>Namespace</code> is the <code>membershipOwningNamespace</code>.</p>" .
+
+sysml:OwningMembership
+    a owl:Class ;
+    rdfs:subClassOf sysml:Membership, [
+        a owl:Restriction ;
+        owl:onProperty sysml:OwningMembership_ownedMemberElement ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:OwningMembership_ownedMemberElementId ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "OwningMembership" ;
+    rdfs:comment """<p>An <code>OwningMembership</code> is a <code>Membership</code> that owns its <code>memberElement</code> as a <code>ownedRelatedElement</code>. The <code>ownedMemberElement</code> becomes an <code>ownedMember</code> of the <code>membershipOwningNamespace</code>.</p>
+	
+	ownedMemberName = ownedMemberElement.name
+	ownedMemberShortName = ownedMemberElement.shortName""" .
+
+sysml:OwningMembership_ownedMemberElement
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Membership_memberElement, sysml:Relationship_ownedRelatedElement ;
+    rdfs:domain sysml:OwningMembership ;
+    rdfs:range sysml:Element ;
+    rdfs:label "ownedMemberElement" ;
+    rdfs:comment "<p>The <code>Element</code> that becomes an <code>ownedMember</code> of the <code>membershipOwningNamespace</code> due to this <code>OwningMembership</code>.</p>" .
+
+sysml:OwningMembership_ownedMemberElementId
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:subPropertyOf sysml:Membership_memberElementId ;
+    rdfs:domain sysml:OwningMembership ;
+    rdfs:range xsd:string ;
+    rdfs:label "ownedMemberElementId" ;
+    rdfs:comment "<p>The <code>elementId</code> of the <code>ownedMemberElement</code>.</p>" .
+
+sysml:OwningMembership_ownedMemberName
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:subPropertyOf sysml:Membership_memberName ;
+    rdfs:domain sysml:OwningMembership ;
+    rdfs:range xsd:string ;
+    rdfs:label "ownedMemberName" ;
+    rdfs:comment "<p>The <code>name</code> of the <code>ownedMemberElement</code>.</p>" .
+
+sysml:OwningMembership_ownedMemberShortName
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:subPropertyOf sysml:Membership_memberShortName ;
+    rdfs:domain sysml:OwningMembership ;
+    rdfs:range xsd:string ;
+    rdfs:label "ownedMemberShortName" ;
+    rdfs:comment "<p>The <code>shortName</code> of the <code>ownedMemberElement</code>.</p>" .
+
+sysml:VisibilityKind
+    a rdfs:Datatype ;
+    owl:equivalentClass [
+        a rdfs:Datatype ;
+        owl:oneOf [
+            a rdf:List ;
+            rdf:first "private" ;
+            rdf:rest [
+                a rdf:List ;
+                rdf:first "protected" ;
+                rdf:rest [
+                    a rdf:List ;
+                    rdf:first "public" ;
+                    rdf:rest rdf:nil
+                ]
+            ]
+        ]
+    ] ;
+    rdfs:label "VisibilityKind" ;
+    rdfs:comment "<p><code>VisibilityKind</code> is an enumeration whose literals specify the visibility of a <code>Membership</code> of an <code>Element</code> in a <code>Namespace</code> outside of that <code>Namespace</code>. Note that &quot;visibility&quot; specifically restricts whether an <code>Element</code> in a <code>Namespace</code> may be referenced by name from outside the <code>Namespace</code> and only otherwise restricts access to an <code>Element</code> as provided by specific constraints in the abstract syntax (e.g., preventing the import or inheritance of private <code>Elements</code>).</p>" .

@@ -1,0 +1,133 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/KerML/Kernel/Interactions>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Classifiers>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Features>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Types>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Associations>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Behaviors>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Connectors> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "KerML/Kernel/Interactions" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:Interaction
+    a owl:Class ;
+    rdfs:subClassOf sysml:Association, sysml:Behavior ;
+    rdfs:label "Interaction" ;
+    rdfs:comment "<p>An <code>Interaction</code> is a <code>Behavior</code> that is also an <code>Association</code>, providing a context for multiple objects that have behaviors that impact one another.</p>" .
+
+sysml:ItemFeature
+    a owl:Class ;
+    rdfs:subClassOf sysml:Feature ;
+    rdfs:label "ItemFeature" ;
+    rdfs:comment """<p>An <code>ItemFeature</code> is the <code>ownedFeature</code> of an <code>ItemFlow</code> that identifies the things carried by the kinds of transfers that are instances of the <code>ItemFlow</code>.</p>
+	ownedRedefinition.redefinedFeature->
+	redefinesFromLibrary('Transfers::Transfer::item')""" .
+
+sysml:ItemFlow
+    a owl:Class ;
+    rdfs:subClassOf sysml:Connector, sysml:Step, [
+        a owl:Restriction ;
+        owl:onProperty sysml:ItemFlow_itemFlowEnd ;
+        owl:maxCardinality "2"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "ItemFlow" ;
+    rdfs:comment """<p>An <code>ItemFlow</code> is a <code>Step</code> that represents the transfer of objects or data values from one <code>Feature</code> to another. <code>ItemFlows</code> can take non-zero time to complete.</p>
+	
+	if itemFlowEnds->isEmpty() then
+	specializesFromLibrary('Transfers::transfers')
+	else
+	specializesFromLibrary('Transfers::flowTransfers')
+	endif
+	itemType =
+	if itemFeature = null then Sequence{}
+	else itemFeature.type
+	endif
+	sourceOutputFeature =
+	if connectorEnd->isEmpty() or
+	connectorEnd.ownedFeature->isEmpty()
+	then null
+	else connectorEnd.ownedFeature->first()
+	endif
+	targetInputFeature =
+	if connectorEnd->size() < 2 or
+	connectorEnd->at(2).ownedFeature->isEmpty()
+	then null
+	else connectorEnd->at(2).ownedFeature->first()
+	endif
+	itemFlowEnd = connectorEnd->selectByKind(ItemFlowEnd)
+	itemFeature =
+	let itemFeatures : Sequence(ItemFeature) =
+	ownedFeature->selectByKind(ItemFeature) in
+	if itemFeatures->isEmpty() then null
+	else itemFeatures->first()
+	endif
+	ownedFeature->selectByKind(ItemFeature)->size() <= 1""" .
+
+sysml:ItemFlowEnd
+    a owl:Class ;
+    rdfs:subClassOf sysml:Feature ;
+    rdfs:label "ItemFlowEnd" ;
+    rdfs:comment """<p>An <code>ItemFlowEnd</code> is a <code>Feature</code> that is one of the <code>connectorEnds</code> giving the <code><em>source</em></code> or <code><em>target</em></code> of an <code>ItemFlow</code>. For <code>ItemFlows</code> typed by <code><em>FlowTransfer</em></code> or its specializations, <code>ItemFlowEnds</code> must have exactly one <code>ownedFeature</code>, which redefines <code><em>Transfer::source::sourceOutput</em></code> or <code><em>Transfer::target::targetInput</em></code> and redefines the corresponding feature of the <code>relatedElement</code> for its end.</p>
+	isEnd
+	ownedFeature->size() = 1
+	owningType <> null and owningType.oclIsKindOf(ItemFlow)""" .
+
+sysml:ItemFlow_interaction
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Connector_association, sysml:Step_behavior ;
+    rdfs:domain sysml:ItemFlow ;
+    rdfs:range sysml:Interaction ;
+    ecore:isOrdered true ;
+    rdfs:label "interaction" ;
+    rdfs:comment "<p>The <code>Interactions</code> that type this <code>ItemFlow</code>. <code>Interactions</code> are both <code>Associations</code> and <code>Behaviors</code>, which can type <code>Connectors</code> and <code>Steps</code>, respectively.</p>" .
+
+sysml:ItemFlow_itemFeature
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_ownedFeature ;
+    rdfs:domain sysml:ItemFlow ;
+    rdfs:range sysml:ItemFeature ;
+    rdfs:label "itemFeature" ;
+    rdfs:comment "<p>The <code>ownedFeature</code> of the <code>ItemFlow</code> that is an <code>ItemFeature</code> (if any).</p>" .
+
+sysml:ItemFlow_itemFlowEnd
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Connector_connectorEnd ;
+    rdfs:domain sysml:ItemFlow ;
+    rdfs:range sysml:ItemFlowEnd ;
+    ecore:isOrdered true ;
+    rdfs:label "itemFlowEnd" ;
+    rdfs:comment "<p>The <code>connectorEnds</code> of this <code>ItemFlow</code> that are <code>ItemFlowEnds</code>.</p>" .
+
+sysml:ItemFlow_itemType
+    a owl:ObjectProperty ;
+    rdfs:domain sysml:ItemFlow ;
+    rdfs:range sysml:Classifier ;
+    ecore:isOrdered true ;
+    rdfs:label "itemType" ;
+    rdfs:comment "<p>The type of values transferred, which is the <code>type</code> of the <code>itemFeature</code> of the <code>ItemFlow</code>.</p>" .
+
+sysml:ItemFlow_sourceOutputFeature
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:ItemFlow ;
+    rdfs:range sysml:Feature ;
+    ecore:isOrdered true ;
+    rdfs:label "sourceOutputFeature" ;
+    rdfs:comment "<p>The <code>Feature</code> that provides the items carried by the <code>ItemFlow</code>. It must be an owned <code>output</code> of the <code>source</code> of the <code>ItemFlow</code>.</p>" .
+
+sysml:ItemFlow_targetInputFeature
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:ItemFlow ;
+    rdfs:range sysml:Feature ;
+    ecore:isOrdered true ;
+    rdfs:label "targetInputFeature" ;
+    rdfs:comment "<p>The <code>Feature</code> that receives the values carried by the <code>ItemFlow</code>. It must be an owned <code>output</code> of the target participant of the <code>ItemFlow</code>.</p>" .
+
+sysml:SuccessionItemFlow
+    a owl:Class ;
+    rdfs:subClassOf sysml:ItemFlow, sysml:Succession ;
+    rdfs:label "SuccessionItemFlow" ;
+    rdfs:comment """<p>A <code>SuccessionItemFlow</code> is an <code>ItemFlow</code> that also provides temporal ordering. It classifies <code><em>Transfers</em></code> that cannot start until the source <code><em>Occurrence</em></code> has completed and that must complete before the target <code><em>Occurrence</em></code> can start.</p>
+	specializesFromLibrary('Transfers::flowTransfersBefore')""" .

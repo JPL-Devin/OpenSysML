@@ -1,0 +1,53 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/SysML/Systems/Parts>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Items> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "SysML/Systems/Parts" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:PartDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:ItemDefinition ;
+    rdfs:label "PartDefinition" ;
+    rdfs:comment """<p>A <code>PartDefinition</code> is an <code>ItemDefinition</code> of a <code>Class</code> of systems or parts of systems. Note that all parts may be considered items for certain purposes, but not all items are parts that can perform actions within a system.</p>
+	
+	specializesFromLibrary('Parts::Part')""" .
+
+sysml:PartUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:ItemUsage ;
+    rdfs:label "PartUsage" ;
+    rdfs:comment """<p>A <code>PartUsage</code> is a usage of a <code>PartDefinition</code> to represent a system or a part of a system. At least one of the <code>itemDefinitions</code> of the <code>PartUsage</code> must be a <code>PartDefinition</code>.</p>
+	
+	<p>A <code>PartUsage</code> must subset, directly or indirectly, the base <code>PartUsage</code> <em><code>parts</code></em> from the Systems Model Library.</p>
+	itemDefinition->selectByKind(PartDefinition)
+	partDefinition->notEmpty()
+	specializesFromLibrary('Parts::parts')
+	isComposite and owningType <> null and
+	(owningType.oclIsKindOf(ItemDefinition) or
+	owningType.oclIsKindOf(ItemUsage)) implies
+	specializesFromLibrary('Items::Item::subparts')
+	owningFeatureMembership <> null and
+	owningFeatureMembership.oclIsKindOf(ActorMembership) implies
+	if owningType.oclIsKindOf(RequirementDefinition) or
+	owningType.oclIsKindOf(RequirementUsage)
+	then specializesFromLibrary('Requirements::RequirementCheck::actors')
+	else specializesFromLibrary('Cases::Case::actors')
+	owningFeatureMembership <> null and
+	owningFeatureMembership.oclIsKindOf(StakeholderMembership) implies
+	specializesFromLibrary('Requirements::RequirementCheck::stakeholders')""" .
+
+sysml:PartUsage_partDefinition
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:ItemUsage_itemDefinition ;
+    rdfs:domain sysml:PartUsage ;
+    rdfs:range sysml:PartDefinition ;
+    ecore:isOrdered true ;
+    rdfs:label "partDefinition" ;
+    rdfs:comment "<p>The <code>itemDefinitions</code> of this PartUsage that are PartDefinitions.</p>" .

@@ -549,18 +549,20 @@ declares, each either a relationship the metamodel reifies as an element (`speci
 metamodel property (`isAccept`, `isResult`, `isSnapshot`, `isTimeslice`, `isChain`) — arguably
 those belong in `sysx:` regardless of this item.
 
-**Open:** [PR #774](https://github.com/JPL-Devin/OpenSysML/pull/774) (mergeable, awaiting review)
-ships the ontology itself as **41 leaf Turtle modules and 6 layer ontologies** under
-`ontology/sysmlv2/`, cut along
-the package hierarchy of the normative KerML/SysML XMI (`KerML/Root/Elements.ttl`,
-`KerML/Kernel/Expressions.ttl`, `SysML/Systems/Requirements.ttl`, …) with a `catalog.tsv` from
-term to declaring module and `owl:imports` computed from use. The generator
-(`cmd/ontology-modules`, `internal/core/rdf/ontology/modules`) errors rather than dropping data —
-every source triple lands in exactly one module and the union is graph-isomorphic to upstream —
-and `make ontology-modules-check` in CI keeps the committed output equal to the pinned sources
-(`scripts/download-ontology-sources.sh`). It is additive to the term table and the Flexo export;
-once merged, the profile can import the module a metaclass lives in rather than the monolith, and
-a consumer wanting only, say, the requirements vocabulary has a file to import.
+**The ontology is also shipped modularized.** `ontology/sysmlv2/` holds `SysML.owl` split into one
+Turtle module per package of the normative KerML/SysML XMI (release `20240201`, whose class set is
+exactly the ontology's 172): 41 leaf modules (`KerML/Root/Elements`, `SysML/Systems/Requirements`,
+…) under 6 layer ontologies that import their children (`KerML`, `KerML/Core`, `SysML/Systems`, …),
+a `catalog.tsv` from every term to its module, a `catalog-v001.xml` resolving imports to local
+files, and a `VERSION` file naming the pinned sources. A class goes to the package that owns it, a
+property to the package of its `rdfs:domain`, blank-node content with its subject, and the union of
+the modules is isomorphic to the source graph. Each module imports whatever declares the terms it
+mentions, so an import closure is always complete. `cmd/ontology-modules` generates them from
+sources `scripts/download-ontology-sources.sh` pins by commit and SHA-256 (`make ontology-modules`),
+and CI runs its `-check` so a hand-edited or stale module fails the build. It is additive to the
+term table and the Flexo export; the profile can import the module a metaclass lives in rather than
+the monolith, and a consumer wanting only, say, the requirements vocabulary has a file to import.
+`ontology/sysmlv2/README.md` is the consumer's guide.
 
 **Not started:** the profile plumbing itself — about one session now that the table, the gate and
 the modules exist. Conformance beyond that is gated on D1 and D2 rather than on this item: `sysx:`

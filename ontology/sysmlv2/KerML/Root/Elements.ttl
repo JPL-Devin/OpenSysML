@@ -1,0 +1,259 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/KerML/Root/Elements>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Root/Annotations>, <https://www.omg.org/spec/SysML/modules/KerML/Root/Namespaces> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "KerML/Root/Elements" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:Element
+    a owl:Class ;
+    rdfs:subClassOf [
+        a owl:Restriction ;
+        owl:onProperty sysml:Element_elementId ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Element_isImpliedIncluded ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Element_isLibraryElement ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Element" ;
+    rdfs:comment """<p>An <code>Element</code> is a constituent of a model that is uniquely identified relative to all other <code>Elements</code>. It can have <code>Relationships</code> with other <code>Elements</code>. Some of these <code>Relationships</code> might imply ownership of other <code>Elements</code>, which means that if an <code>Element</code> is deleted from a model, then so are all the <code>Elements</code> that it owns.</p>
+	
+	ownedElement = ownedRelationship.ownedRelatedElement
+	owner = owningRelationship.owningRelatedElement
+	qualifiedName =
+	if owningNamespace = null then null
+	else if owningNamespace.owner = null then escapedName()
+	else if owningNamespace.qualifiedName = null or
+	escapedName() = null then null
+	else owningNamespace.qualifiedName + '::' + escapedName()
+	endif endif endif
+	documentation = ownedElement->selectByKind(Documentation)
+	ownedAnnotation = ownedRelationship->
+	selectByKind(Annotation)->
+	select(a | a.annotatedElement = self)
+	name = effectiveName()
+	ownedRelationship->exists(isImplied) implies isImpliedIncluded
+	isLibraryElement = libraryNamespace() <> null
+	
+	shortName = effectiveShortName()
+	owningNamespace =
+	if owningMembership = null then null
+	else owningMembership.membershipOwningNamespace
+	endif
+	textualRepresentation = ownedElement->selectByKind(TextualRepresentation)""" .
+
+sysml:Element_aliasIds
+    a owl:DatatypeProperty ;
+    rdfs:domain sysml:Element ;
+    rdfs:range xsd:string ;
+    ecore:isOrdered true ;
+    rdfs:label "aliasIds" ;
+    rdfs:comment "<p>Various alternative identifiers for this Element. Generally, these will be set by tools.</p>" .
+
+sysml:Element_declaredName
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Element ;
+    rdfs:range xsd:string ;
+    rdfs:label "declaredName" ;
+    rdfs:comment "<p>The declared name of this <code>Element</code>.</p>" .
+
+sysml:Element_declaredShortName
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Element ;
+    rdfs:range xsd:string ;
+    rdfs:label "declaredShortName" ;
+    rdfs:comment "<p>An optional alternative name for the <code>Element</code> that is intended to be shorter or in some way more succinct than its primary <code>name</code>. It may act as a modeler-specified identifier for the <code>Element</code>, though it is then the responsibility of the modeler to maintain the uniqueness of this identifier within a model or relative to some other context.</p>" .
+
+sysml:Element_documentation
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Element_ownedElement ;
+    rdfs:domain sysml:Element ;
+    rdfs:range sysml:Documentation ;
+    ecore:isOrdered true ;
+    rdfs:label "documentation" ;
+    rdfs:comment "<p>The Documentation owned by this Element.</p>" .
+
+sysml:Element_elementId
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Element ;
+    rdfs:range xsd:string ;
+    rdfs:label "elementId" ;
+    rdfs:comment "<p>The globally unique identifier for this Element. This is intended to be set by tooling, and it must not change during the lifetime of the Element.</p>" .
+
+sysml:Element_isImpliedIncluded
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Element ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isImpliedIncluded" ;
+    rdfs:comment "<p>Whether all necessary implied Relationships have been included in the <code>ownedRelationships</code> of this Element. This property may be true, even if there are not actually any <code>ownedRelationships</code> with <code>isImplied = true</code>, meaning that no such Relationships are actually implied for this Element. However, if it is false, then <code>ownedRelationships</code> may <em>not</em> contain any implied Relationships. That is, either <em>all</em> required implied Relationships must be included, or none of them.</p>" .
+
+sysml:Element_isLibraryElement
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Element ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isLibraryElement" ;
+    rdfs:comment "<p>Whether this Element is contained in the ownership tree of a library model.</p>" .
+
+sysml:Element_name
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Element ;
+    rdfs:range xsd:string ;
+    rdfs:label "name" ;
+    rdfs:comment "<p>The name to be used for this <code>Element</code> during name resolution within its <code>owningNamespace</code>. This is derived using the <code>effectiveName()</code> operation. By default, it is the same as the <code>declaredName</code>, but this is overridden for certain kinds of <code>Elements</code> to compute a <code>name</code> even when the <code>declaredName</code> is null.</p>" .
+
+sysml:Element_ownedAnnotation
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    owl:inverseOf sysml:Annotation_owningAnnotatedElement ;
+    rdfs:domain sysml:Element ;
+    rdfs:range sysml:Annotation ;
+    rdfs:label "ownedAnnotation" ;
+    rdfs:comment "<p>The <code>ownedRelationships</code> of this <code>Element</code> that are <code>Annotations</code>, for which this <code>Element</code> is the <code>annotatedElement</code>.</code>" .
+
+sysml:Element_ownedElement
+    a owl:ObjectProperty ;
+    rdfs:domain sysml:Element ;
+    rdfs:range sysml:Element ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedElement" ;
+    rdfs:comment "<p>The Elements owned by this Element, derived as the <tt>ownedRelatedElements</tt> of the <tt>ownedRelationships</tt> of this Element.</p>" .
+
+sysml:Element_ownedRelationship
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    owl:inverseOf sysml:Relationship_owningRelatedElement ;
+    rdfs:domain sysml:Element ;
+    rdfs:range sysml:Relationship ;
+    rdfs:label "ownedRelationship" ;
+    rdfs:comment "<p>The Relationships for which this Element is the <tt>owningRelatedElement</tt>.</p>" .
+
+sysml:Element_owner
+    a owl:ObjectProperty ;
+    owl:inverseOf sysml:Element_ownedElement ;
+    rdfs:domain sysml:Element ;
+    rdfs:range sysml:Element ;
+    rdfs:label "owner" ;
+    rdfs:comment "<p>The owner of this Element, derived as the <code>owningRelatedElement</code> of the <code>owningRelationship</code> of this Element, if any.</p>" .
+
+sysml:Element_owningMembership
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    owl:inverseOf sysml:OwningMembership_ownedMemberElement ;
+    rdfs:domain sysml:Element ;
+    rdfs:range sysml:OwningMembership ;
+    rdfs:label "owningMembership" ;
+    rdfs:comment "<p>The <code>owningRelationship</code> of this <code>Element</code>, if that <code>Relationship</code> is a <code>Membership</code>.</p>" .
+
+sysml:Element_owningNamespace
+    a owl:ObjectProperty ;
+    owl:inverseOf sysml:Namespace_ownedMember ;
+    rdfs:domain sysml:Element ;
+    rdfs:range sysml:Namespace ;
+    rdfs:label "owningNamespace" ;
+    rdfs:comment "<p>The <code>Namespace</code> that owns this <code>Element</code>, which is the <code>membershipOwningNamespace</code> of the <code>owningMembership</code> of this <code>Element</code>, if any.</p>" .
+
+sysml:Element_owningRelationship
+    a owl:ObjectProperty ;
+    owl:inverseOf sysml:Relationship_ownedRelatedElement ;
+    rdfs:domain sysml:Element ;
+    rdfs:range sysml:Relationship ;
+    rdfs:label "owningRelationship" ;
+    rdfs:comment "<p>The Relationship for which this Element is an <tt>ownedRelatedElement</tt>, if any.</p>" .
+
+sysml:Element_qualifiedName
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Element ;
+    rdfs:range xsd:string ;
+    rdfs:label "qualifiedName" ;
+    rdfs:comment "<p>The full ownership-qualified name of this <code>Element</code>, represented in a form that is valid according to the KerML textual concrete syntax for qualified names (including use of unrestricted name notation and escaped characters, as necessary). The <code>qualifiedName</code> is null if this <code>Element</code> has no <code>owningNamespace</code> or if there is not a complete ownership chain of named <code>Namespaces</code> from a root <code>Namespace</code> to this <code>Element</code>.</p>" .
+
+sysml:Element_shortName
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Element ;
+    rdfs:range xsd:string ;
+    rdfs:label "shortName" ;
+    rdfs:comment "<p>The short name to be used for this <code>Element</code> during name resolution within its <code>owningNamespace</code>. This is derived using the <code>effectiveShortName()</code> operation. By default, it is the same as the <code>declaredShortName</code>, but this is overridden for certain kinds of <code>Elements</code> to compute a <code>shortName</code> even when the <code>declaredName</code> is null.</p>" .
+
+sysml:Element_textualRepresentation
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Element_ownedElement ;
+    rdfs:domain sysml:Element ;
+    rdfs:range sysml:TextualRepresentation ;
+    ecore:isOrdered true ;
+    rdfs:label "textualRepresentation" ;
+    rdfs:comment "<p>The <code>TextualRepresentations</code> that annotate this <code>Element</code>.</p>" .
+
+sysml:Relationship
+    a owl:Class ;
+    rdfs:subClassOf sysml:Element, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Relationship_isImplied ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Relationship" ;
+    rdfs:comment """<p>A <code>Relationship</code> is an <code>Element</code> that relates other <code>Element</code>. Some of its <code>relatedElements</code> may be owned, in which case those <code>ownedRelatedElements</code> will be deleted from a model if their <code>owningRelationship</code> is. A <code>Relationship</code> may also be owned by another <code>Element</code>, in which case the <code>ownedRelatedElements</code> of the <code>Relationship</code> are also considered to be transitively owned by the <code>owningRelatedElement</code> of the <code>Relationship</code>.</p>
+	
+	<p>The <code>relatedElements</code> of a <code>Relationship</code> are divided into <code>source</code> and <code>target</code> <code>Elements</code>. The <code>Relationship</code> is considered to be directed from the <code>source</code> to the <code>target</code> <code>Elements</code>. An undirected <code>Relationship</code> may have either all <code>source</code> or all <code>target</code> <code>Elements</code>.</p>
+	
+	<p>A &quot;relationship <code>Element</code>&quot; in the abstract syntax is generically any <code>Element</code> that is an instance of either <code>Relationship</code> or a direct or indirect specialization of <code>Relationship</code>. Any other kind of <code>Element</code> is a &quot;non-relationship <code>Element</code>&quot;. It is a convention of that non-relationship <code>Elements</code> are <em>only</em> related via reified relationship <code>Elements</code>. Any meta-associations directly between non-relationship <code>Elements</code> must be derived from underlying reified <code>Relationship</code>.</p>
+	
+	relatedElement = source->union(target)""" .
+
+sysml:Relationship_isImplied
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Relationship ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isImplied" ;
+    rdfs:comment "<p>Whether this Relationship was generated by tooling to meet semantic rules, rather than being directly created by a modeler.</p>" .
+
+sysml:Relationship_ownedRelatedElement
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_relatedElement ;
+    rdfs:domain sysml:Relationship ;
+    rdfs:range sysml:Element ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedRelatedElement" ;
+    rdfs:comment "<p>The <tt>relatedElements</tt> of this Relationship that are owned by the Relationship.</p>" .
+
+sysml:Relationship_owningRelatedElement
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_relatedElement ;
+    rdfs:domain sysml:Relationship ;
+    rdfs:range sysml:Element ;
+    rdfs:label "owningRelatedElement" ;
+    rdfs:comment "<p>The <tt>relatedElement</tt> of this Relationship that owns the Relationship, if any.</p>" .
+
+sysml:Relationship_relatedElement
+    a owl:ObjectProperty ;
+    rdfs:domain sysml:Relationship ;
+    rdfs:range sysml:Element ;
+    ecore:isOrdered true ;
+    rdfs:label "relatedElement" ;
+    rdfs:comment "<p>The Elements that are related by this Relationship, derived as the union of the <code>source</code> and <code>target</code> Elements of the Relationship.</p>" .
+
+sysml:Relationship_source
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_relatedElement ;
+    rdfs:domain sysml:Relationship ;
+    rdfs:range sysml:Element ;
+    ecore:isOrdered true ;
+    rdfs:label "source" ;
+    rdfs:comment "<p>The <code>relatedElements</c ode> from which this Relationship is considered to be directed.</p>" .
+
+sysml:Relationship_target
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_relatedElement ;
+    rdfs:domain sysml:Relationship ;
+    rdfs:range sysml:Element ;
+    ecore:isOrdered true ;
+    rdfs:label "target" ;
+    rdfs:comment "<p>The <code>relatedElements</code> to which this Relationship is considered to be directed.</p>" .

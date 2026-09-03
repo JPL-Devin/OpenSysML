@@ -1,0 +1,67 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/SysML/Systems/AnalysisCases>
+    a owl:Ontology ;
+    owl:imports <https://www.omg.org/spec/SysML/modules/KerML/Core/Types>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Functions>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Cases> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "SysML/Systems/AnalysisCases" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:AnalysisCaseDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:CaseDefinition ;
+    rdfs:label "AnalysisCaseDefinition" ;
+    rdfs:comment """<p>An <code>AnalysisCaseDefinition</code> is a <code>CaseDefinition</code> for the case of carrying out an analysis.</p>
+	resultExpression =
+	let results : OrderedSet(ResultExpressionMembership) =
+	featureMembersip->
+	selectByKind(ResultExpressionMembership) in
+	if results->isEmpty() then null
+	else results->first().ownedResultExpression
+	endif
+	specializesFromLibrary('AnalysisCases::AnalysisCase')""" .
+
+sysml:AnalysisCaseDefinition_resultExpression
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Function_expression, sysml:Type_ownedFeature ;
+    rdfs:domain sysml:AnalysisCaseDefinition ;
+    rdfs:range sysml:Expression ;
+    rdfs:label "resultExpression" ;
+    rdfs:comment "<p>An <code>Expression</code> used to compute the <code>result</code> of the <code>AnalysisCaseDefinition</code>, owned via a <code>ResultExpressionMembership</code>.</p>" .
+
+sysml:AnalysisCaseUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:CaseUsage ;
+    rdfs:label "AnalysisCaseUsage" ;
+    rdfs:comment """<p>An <code>AnalysisCaseUsage</code> is a <code>Usage</code> of an <code>AnalysisCaseDefinition</code>.</p>
+	resultExpression =
+	let results : OrderedSet(ResultExpressionMembership) =
+	featureMembersip->
+	selectByKind(ResultExpressionMembership) in
+	if results->isEmpty() then null
+	else results->first().ownedResultExpression
+	endif
+	specializesFromLibrary('AnalysisCases::analysisCases')
+	isComposite and owningType <> null and
+	(owningType.oclIsKindOf(AnalysisCaseDefinition) or
+	owningType.oclIsKindOf(AnalysisCaseUsage)) implies
+	specializesFromLibrary('AnalysisCases::AnalysisCase::subAnalysisCases')""" .
+
+sysml:AnalysisCaseUsage_analysisCaseDefinition
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:CaseUsage_caseDefinition ;
+    rdfs:domain sysml:AnalysisCaseUsage ;
+    rdfs:range sysml:AnalysisCaseDefinition ;
+    rdfs:label "analysisCaseDefinition" ;
+    rdfs:comment "<p>The <code>AnalysisCaseDefinition</code> that is the <code>definition</code> of this <code>AnalysisCaseUsage</code>.</p>" .
+
+sysml:AnalysisCaseUsage_resultExpression
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_ownedFeature ;
+    rdfs:domain sysml:AnalysisCaseUsage ;
+    rdfs:range sysml:Expression ;
+    rdfs:label "resultExpression" ;
+    rdfs:comment "<p>An <code>Expression</code> used to compute the <code>result</code> of the <code>AnalysisCaseUsage</code>, owned via a <code>ResultExpressionMembership</code>.</p>" .

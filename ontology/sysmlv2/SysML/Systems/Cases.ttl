@@ -1,0 +1,167 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/SysML/Systems/Cases>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Types>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Behaviors>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Calculations>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/DefinitionAndUsage>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Parts>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Requirements> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "SysML/Systems/Cases" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:CaseDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:CalculationDefinition, [
+        a owl:Restriction ;
+        owl:onProperty sysml:CaseDefinition_subjectParameter ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "CaseDefinition" ;
+    rdfs:comment """<p>A <code>CaseDefinition</code> is a <code>CalculationDefinition</code> for a process, often involving collecting evidence or data, relative to a subject, possibly involving the collaboration of one or more other actors, producing a result that meets an objective.</p>
+	objectiveRequirement =
+	let objectives: OrderedSet(RequirementUsage) =
+	featureMembership->
+	selectByKind(ObjectiveMembership).
+	ownedRequirement in
+	if objectives->isEmpty() then null
+	else objectives->first().ownedObjectiveRequirement
+	endif
+	featureMembership->
+	selectByKind(ObjectiveMembership)->
+	size() <= 1
+	subjectParameter =
+	let subjectMems : OrderedSet(SubjectMembership) =
+	featureMembership->selectByKind(SubjectMembership) in
+	if subjectMems->isEmpty() then null
+	else subjectMems->first().ownedSubjectParameter
+	endif
+	actorParameter = featureMembership->
+	selectByKind(ActorMembership).
+	ownedActorParameter
+	featureMembership->selectByKind(SubjectMembership)->size() <= 1
+	input->notEmpty() and input->first() = subjectParameter
+	specializesFromLibrary('Cases::Case')""" .
+
+sysml:CaseDefinition_actorParameter
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Behavior_parameter, sysml:Definition_usage ;
+    rdfs:domain sysml:CaseDefinition ;
+    rdfs:range sysml:PartUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "actorParameter" ;
+    rdfs:comment "<p>The <code>parameters</code> of this <code>CaseDefinition</code> that represent actors involved in the case.</p>" .
+
+sysml:CaseDefinition_objectiveRequirement
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_usage ;
+    rdfs:domain sysml:CaseDefinition ;
+    rdfs:range sysml:RequirementUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "objectiveRequirement" ;
+    rdfs:comment "<p>The <code>RequirementUsage</code> representing the objective of this <code>CaseDefinition</code>.</p>" .
+
+sysml:CaseDefinition_subjectParameter
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Behavior_parameter, sysml:Definition_usage ;
+    rdfs:domain sysml:CaseDefinition ;
+    rdfs:range sysml:Usage ;
+    rdfs:label "subjectParameter" ;
+    rdfs:comment "<p>The <code>parameter</code> of this <code>CaseDefinition</code> that represents its subject.</p>" .
+
+sysml:CaseUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:CalculationUsage, [
+        a owl:Restriction ;
+        owl:onProperty sysml:CaseUsage_subjectParameter ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "CaseUsage" ;
+    rdfs:comment """<p>A <code>CaseUsage</code> is a <code>Usage</code> of a <code>CaseDefinition</code>.</p>
+	objectiveRequirement =
+	let objectives: OrderedSet(RequirementUsage) =
+	featureMembership->
+	selectByKind(ObjectiveMembership).
+	ownedRequirement in
+	if objectives->isEmpty() then null
+	else objectives->first().ownedObjectiveRequirement
+	endif
+	featureMembership->
+	selectByKind(ObjectiveMembership)->
+	size() <= 1
+	featureMembership->
+	selectByKind(SubjectMembership)->
+	size() <= 1
+	actorParameter = featureMembership->
+	selectByKind(ActorMembership).
+	ownedActorParameter
+	subjectParameter =
+	let subjects : OrderedSet(SubjectMembership) =
+	featureMembership->selectByKind(SubjectMembership) in
+	if subjects->isEmpty() then null
+	else subjects->first().ownedSubjectParameter
+	endif
+	input->notEmpty() and input->first() = subjectParameter
+	specializesFromLibrary('Cases::cases')
+	isComposite and owningType <> null and
+	(owningType.oclIsKindOf(CaseDefinition) or
+	owningType.oclIsKindOf(CaseUsage)) implies
+	specializesFromLibrary('Cases::Case::subcases')""" .
+
+sysml:CaseUsage_actorParameter
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Step_parameter, sysml:Usage_usage ;
+    rdfs:domain sysml:CaseUsage ;
+    rdfs:range sysml:PartUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "actorParameter" ;
+    rdfs:comment "<p>The <code>parameters</code> of this <code>CaseUsage</code> that represent actors involved in the case.</p>" .
+
+sysml:CaseUsage_caseDefinition
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:CalculationUsage_calculationDefinition ;
+    rdfs:domain sysml:CaseUsage ;
+    rdfs:range sysml:CaseDefinition ;
+    rdfs:label "caseDefinition" ;
+    rdfs:comment "<p>The CaseDefinition that is the type of this CaseUsage.</p>" .
+
+sysml:CaseUsage_objectiveRequirement
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_usage ;
+    rdfs:domain sysml:CaseUsage ;
+    rdfs:range sysml:RequirementUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "objectiveRequirement" ;
+    rdfs:comment "<p>The <code>RequirementUsage</code> representing the objective of this <code>CaseUsage</code>.</p>" .
+
+sysml:CaseUsage_subjectParameter
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Step_parameter, sysml:Usage_usage ;
+    rdfs:domain sysml:CaseUsage ;
+    rdfs:range sysml:Usage ;
+    rdfs:label "subjectParameter" ;
+    rdfs:comment "<p>The <code>parameter</code> of this <code>CaseUsage</code> that represents its subject.</p>" .
+
+sysml:ObjectiveMembership
+    a owl:Class ;
+    rdfs:subClassOf sysml:FeatureMembership, [
+        a owl:Restriction ;
+        owl:onProperty sysml:ObjectiveMembership_ownedObjectiveRequirement ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "ObjectiveMembership" ;
+    rdfs:comment """<p>An <code>ObjectiveMembership</code> is a <code>FeatureMembership</code> that indicates that its <code>ownedObjectiveRequirement</code> is the objective <code>RequirementUsage</code> for its <code>owningType</code>, which must be a <code>CaseDefinition</code> or <code>CaseUsage</code>.</p>
+	owningType.oclIsType(CaseDefinition) or
+	owningType.oclIsType(CaseUsage)
+	
+	ownedObjectiveRequirement.isComposite""" .
+
+sysml:ObjectiveMembership_ownedObjectiveRequirement
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:FeatureMembership_ownedMemberFeature ;
+    rdfs:domain sysml:ObjectiveMembership ;
+    rdfs:range sysml:RequirementUsage ;
+    rdfs:label "ownedObjectiveRequirement" ;
+    rdfs:comment "<p>The RequirementUsage that is the <code>ownedMemberFeature</code> of this RequirementUsage.</p>" .

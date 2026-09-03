@@ -1,0 +1,178 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/SysML/Systems/Occurrences>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Classes>, <https://www.omg.org/spec/SysML/modules/KerML/Root/Namespaces>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/DefinitionAndUsage> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "SysML/Systems/Occurrences" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:EventOccurrenceUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:OccurrenceUsage, [
+        a owl:Restriction ;
+        owl:onProperty sysml:EventOccurrenceUsage_eventOccurrence ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "EventOccurrenceUsage" ;
+    rdfs:comment """<p>An <code>EventOccurrenceUsage</code> is an <code>OccurrenceUsage</code> that represents another <code>OccurrenceUsage</code> occurring as a <code><em>suboccurrence</em></code> of the containing occurrence of the <code>EventOccurrenceUsage</code>. Unless it is the <code>EventOccurrenceUsage</code> itself, the referenced <code>OccurrenceUsage</code> is related to the <code>EventOccurrenceUsage</code> by a <code>ReferenceSubsetting</code> <code>Relationship</code>.</p>
+	
+	<p>If the <code>EventOccurrenceUsage</code> is owned by an <code>OccurrenceDefinition</code> or <code>OccurrenceUsage</code>, then it also subsets the <em><code>timeEnclosedOccurrences</code></em> property of the <code>Class</code> <em><code>Occurrence</code></em> from the Kernel Semantic Library model <em><code>Occurrences</code></em>.</p>
+	eventOccurrence =
+	if ownedReferenceSubsetting = null then self
+	else if ownedReferenceSubsetting.referencedFeature.oclIsKindOf(OccurrenceUsage) then
+	ownedReferenceSubsetting.referencedFeature.oclAsType(OccurrenceUsage)
+	else null
+	endif endif
+	ownedReferenceSubsetting <> null implies
+	ownedReferenceSubsetting.referencedFeature.oclIsKindOf(OccurrenceUsage)
+	owningType <> null and
+	(owningType.oclIsKindOf(OccurrenceDefinition) or
+	owningType.oclIsKindOf(OccurrenceUsage)) implies
+	specializesFromLibrary('Occurrences::Occurrence::timeEnclosedOccurrences')
+	isReference""" .
+
+sysml:EventOccurrenceUsage_eventOccurrence
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:EventOccurrenceUsage ;
+    rdfs:range sysml:OccurrenceUsage ;
+    rdfs:label "eventOccurrence" ;
+    rdfs:comment "<p>The <code>OccurrenceUsage</code> referenced as an event by this <code>EventOccurrenceUsage</code>. It is the <code>referenceFeature</code> of the <code>ownedReferenceSubsetting</code> for the <code>EventOccurrenceUsage</code>, if there is one, and, otherwise, the <code>EventOccurrenceUsage</code> itself.</p>" .
+
+sysml:LifeClass
+    a owl:Class ;
+    rdfs:subClassOf sysml:Class ;
+    rdfs:label "LifeClass" ;
+    rdfs:comment """<p>A <code>LifeClass</code> is a <code>Class</code> that specializes both the <code>Class</code> <code><em>Occurrences::Life</em></code> from the Kernel Semantic Library and a single <code>OccurrenceDefinition</code>, and has a multiplicity of 0..1. This constrains the <code>OccurrenceDefinition</code> being specialized to have at most one instance that is a complete <code>Life</code>.</p>
+	
+	specializesFromLibrary('Occurrences::Life')
+	multiplicity <> null and
+	multiplicity.specializesFromLibrary('Base::zeroOrOne')
+	specializes(individualDefinition)
+	isSufficient""" .
+
+sysml:OccurrenceDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:Class, sysml:Definition, [
+        a owl:Restriction ;
+        owl:onProperty sysml:OccurrenceDefinition_isIndividual ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "OccurrenceDefinition" ;
+    rdfs:comment """<p>An <code>OccurrenceDefinition</code> is a <code>Definition</code> of a <code>Class</code> of individuals that have an independent life over time and potentially an extent over space. This includes both structural things and behaviors that act on such structures.</p>
+	
+	<p>If <code>isIndividual</code> is true, then the <code>OccurrenceDefinition</code> is constrained to represent an individual thing. The instances of such an <code>OccurrenceDefinition</code> include all spatial and temporal portions of the individual being represented, but only one of these can be the complete <code>Life</code> of the individual. All other instances must be portions of the &quot;maximal portion&quot; that is single <code>Life</code> instance, capturing the conception that all of the instances represent one individual with a single &quot;identity&quot;.</p>
+	
+	<p>An <code>OccurrenceDefinition</code> must specialize, directly or indirectly, the base <code>Class</code> <code><em>Occurrence</em></code> from the Kernel Semantic Library.</p>
+	
+	let n : Integer = ownedMember->selectByKind(LifeClass) in
+	if isIndividual then n = 1 else n = 0 endif
+	lifeClass =
+	let lifeClasses: OrderedSet(LifeClass) =
+	ownedMember->selectByKind(LifeClass) in
+	if lifeClasses->isEmpty() then null
+	else lifeClasses->first()
+	endif""" .
+
+sysml:OccurrenceDefinition_isIndividual
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:OccurrenceDefinition ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isIndividual" ;
+    rdfs:comment "<p>Whether this OccurrenceDefinition is constrained to represent single individual.</p>" .
+
+sysml:OccurrenceDefinition_lifeClass
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Namespace_ownedMember ;
+    rdfs:domain sysml:OccurrenceDefinition ;
+    rdfs:range sysml:LifeClass ;
+    rdfs:label "lifeClass" ;
+    rdfs:comment "<p>If <code>isIndividual</code> is true, a <code>LifeClass</code> that specializes this <code>OccurrenceDefinition</code>, restricting it to represent an individual.</p>" .
+
+sysml:OccurrenceUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:Usage, [
+        a owl:Restriction ;
+        owl:onProperty sysml:OccurrenceUsage_isIndividual ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "OccurrenceUsage" ;
+    rdfs:comment """<p>An <code>OccurrenceUsage</code> is a <code>Usage</code> whose <code>types</code> are all <code>Classes</code>. Nominally, if a <code>type</code> is an <code>OccurrenceDefinition</code>, an <code>OccurrenceUsage</code> is a <code>Usage</code> of that <code>OccurrenceDefinition</code> within a system. However, other types of Kernel <code>Classes</code> are also allowed, to permit use of <code>Classes</code> from the Kernel Model Libraries.</p>
+	
+	individualDefinition =
+	let individualDefinitions : OrderedSet(OccurrenceDefinition) =
+	occurrenceDefinition->
+	selectByKind(OccurrenceDefinition)->
+	select(isIndividual) in
+	if individualDefinitions->isEmpty() then null
+	else individualDefinitions->first() endif
+	isIndividual implies individualDefinition <> null
+	specializesFromLibrary('Occurrences::occurrences')
+	isComposite and
+	owningType <> null and
+	(owningType.oclIsKindOf(Class) or
+	owningType.oclIsKindOf(OccurrenceUsage) or
+	owningType.oclIsKindOf(Feature) and
+	owningType.oclAsType(Feature).type->
+	exists(oclIsKind(Class))) implies
+	specializesFromLibrary('Occurrences::Occurrence::suboccurrences')
+	occurrenceDefinition->
+	selectByKind(OccurrenceDefinition)->
+	select(isIndividual).size() <= 1
+	portionKind <> null implies
+	occurrenceDefinition->forAll(occ |
+	featuringType->exists(specializes(occ)))""" .
+
+sysml:OccurrenceUsage_individualDefinition
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:OccurrenceUsage_occurrenceDefinition ;
+    rdfs:domain sysml:OccurrenceUsage ;
+    rdfs:range sysml:OccurrenceDefinition ;
+    rdfs:label "individualDefinition" ;
+    rdfs:comment "<p>The at most one <code>occurrenceDefinition</code> that has <code>isIndividual = true</code>.</p>" .
+
+sysml:OccurrenceUsage_isIndividual
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:OccurrenceUsage ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isIndividual" ;
+    rdfs:comment "<p>Whether this <code>OccurrenceUsage</code> represents the usage of the specific individual (or portion of it) represented by its <code>individualDefinition</code>.</p>" .
+
+sysml:OccurrenceUsage_occurrenceDefinition
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_definition ;
+    rdfs:domain sysml:OccurrenceUsage ;
+    rdfs:range sysml:Class ;
+    ecore:isOrdered true ;
+    rdfs:label "occurrenceDefinition" ;
+    rdfs:comment "<p>The <code>Classes</code> that are the types of this <code>OccurrenceUsage</code>. Nominally, these are <code>OccurrenceDefinitions</code>, but other kinds of kernel <code>Classes</code> are also allowed, to permit use of <code>Classes</code> from the Kernel Model Libraries.</p>" .
+
+sysml:OccurrenceUsage_portionKind
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:OccurrenceUsage ;
+    rdfs:range sysml:PortionKind ;
+    rdfs:label "portionKind" ;
+    rdfs:comment "<p>The kind of (temporal) portion of the life of the <code>occurrenceDefinition</code> represented by this <code>OccurrenceUsage</code>, if it is so restricted.</p>" .
+
+sysml:PortionKind
+    a rdfs:Datatype ;
+    owl:equivalentClass [
+        a rdfs:Datatype ;
+        owl:oneOf [
+            a rdf:List ;
+            rdf:first "snapshot" ;
+            rdf:rest [
+                a rdf:List ;
+                rdf:first "timeslice" ;
+                rdf:rest rdf:nil
+            ]
+        ]
+    ] ;
+    rdfs:label "PortionKind" ;
+    rdfs:comment "<p><code>PortionKind</code> is an enumeration of the specific kinds of <code><em>Occurrence</em></code> portions that can be represented by an <code>OccurrenceUsage</code>.</p>" .

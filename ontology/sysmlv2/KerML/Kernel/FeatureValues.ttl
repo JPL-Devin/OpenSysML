@@ -1,0 +1,95 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/KerML/Kernel/FeatureValues>
+    a owl:Ontology ;
+    owl:imports <https://www.omg.org/spec/SysML/modules/KerML/Core/Features>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Functions>, <https://www.omg.org/spec/SysML/modules/KerML/Root/Namespaces> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "KerML/Kernel/FeatureValues" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:FeatureValue
+    a owl:Class ;
+    rdfs:subClassOf sysml:OwningMembership, [
+        a owl:Restriction ;
+        owl:onProperty sysml:FeatureValue_featureWithValue ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:FeatureValue_value ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:FeatureValue_isDefault ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:FeatureValue_isInitial ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "FeatureValue" ;
+    rdfs:comment """<p>A <code>FeatureValue</code> is a <code>Membership</code> that identifies a particular member <code>Expression</code> that provides the value of the <code>Feature</code> that owns the <code>FeatureValue</code>. The value is specified as either a bound value or an initial value, and as either a concrete or default value. A <code>Feature</code> can have at most one <code>FeatureValue</code>.</p>
+	
+	<p>The result of the <code>value</code> <code>Expression</code> is bound to the <code>featureWithValue</code> using a <code>BindingConnector</code>. If <code>isInitial = false</code>, then the <code>featuringType</code> of the <code>BindingConnector</code> is the same as the <code>featuringType</code> of the <code>featureWithValue</code>. If <code>isInitial = true</code>, then the <code>featuringType</code> of the <code>BindingConnector</code> is restricted to its <code>startShot</code>.
+	
+	<p>If <code>isDefault = false</code>, then the above semantics of the <code>FeatureValue</code> are realized for the given <code>featureWithValue</code>. Otherwise, the semantics are realized for any individual of the <code>featuringType</code> of the <code>featureWithValue</code>, unless another value is explicitly given for the <code>featureWithValue</code> for that individual.</p>
+	
+	not isDefault implies
+	featureWithValue.ownedMember->
+	selectByKind(BindingConnector)->exists(b |
+	b.relatedFeature->includes(featureWithValue) and
+	b.relatedFeature->includes(value.result) and
+	if not isInitial then
+	b.featuringType = featureWithValue.featuringType
+	else
+	b.featuringType->exists(t |
+	t.oclIsKindOf(Feature) and
+	t.oclAsType(Feature).chainingFeature =
+	Sequence{
+	resolveGlobal('Base::things::that').
+	memberElement,
+	resolveGlobal('Occurrences::Occurrence::startShot').
+	memberElement
+	}
+	)
+	endif)
+	featureWithValue.redefinition.redefinedFeature->
+	closure(redefinition.redefinedFeature).valuation->
+	forAll(isDefault)""" .
+
+sysml:FeatureValue_featureWithValue
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Membership_membershipOwningNamespace ;
+    rdfs:domain sysml:FeatureValue ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "featureWithValue" ;
+    rdfs:comment """<p>The <code>Feature</code> to be provided a value.</p>
+	
+	<p>The Feature to be provided a value.</p>""" .
+
+sysml:FeatureValue_isDefault
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:FeatureValue ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isDefault" ;
+    rdfs:comment "<p>Whether this <code>FeatureValue</code> is a concrete specification of the bound or initial value of the <code>featureWithValue</code>, or just a default value that may be overridden.</p>" .
+
+sysml:FeatureValue_isInitial
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:FeatureValue ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isInitial" ;
+    rdfs:comment "<p>Whether this <code>FeatureValue</code> specifies a bound value or an initial value for the <code>featureWithValue</code>.</p>" .
+
+sysml:FeatureValue_value
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:OwningMembership_ownedMemberElement ;
+    rdfs:domain sysml:FeatureValue ;
+    rdfs:range sysml:Expression ;
+    rdfs:label "value" ;
+    rdfs:comment """<p>The <code>Expression</code> that provides the value of the <code>featureWithValue</code> as its <code>result</code>.</p>
+	
+	<p>The Expression that provides the value as a result.</p>""" .

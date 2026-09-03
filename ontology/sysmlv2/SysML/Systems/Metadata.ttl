@@ -1,0 +1,33 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/SysML/Systems/Metadata>
+    a owl:Ontology ;
+    owl:imports <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Metadata>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Items> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "SysML/Systems/Metadata" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:MetadataDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:ItemDefinition, sysml:Metaclass ;
+    rdfs:label "MetadataDefinition" ;
+    rdfs:comment """<p>A <code>MetadataDefinition</code> is an <code>ItemDefinition</code> that is also a <code>Metaclass</code>.</p>
+	specializesFromLibrary('Metadata::MetadataItem')""" .
+
+sysml:MetadataUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:ItemUsage, sysml:MetadataFeature ;
+    rdfs:label "MetadataUsage" ;
+    rdfs:comment """<p>A  <code>MetadataUsage</code> is a <code>Usage</code> and a <code>MetadataFeature</code>, used to annotate other <code>Elements</code> in a system model with metadata. As a <code>MetadataFeature</code>, its type must be a <code>Metaclass</code>, which will nominally be a <code>MetadataDefinition</code>. However, any kernel <code>Metaclass</code> is also allowed, to permit use of <code>Metaclasses</code> from the Kernel Model Libraries.</p>
+	specializesFromLibrary('Metadata::metadataItems')""" .
+
+sysml:MetadataUsage_metadataDefinition
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:ItemUsage_itemDefinition, sysml:MetadataFeature_metaclass ;
+    rdfs:domain sysml:MetadataUsage ;
+    rdfs:range sysml:Metaclass ;
+    rdfs:label "metadataDefinition" ;
+    rdfs:comment "<p>The <code>MetadataDefinition</code> that is the <code>definition</code> of this <code>MetadataUsage</code>.</p>" .

@@ -1,0 +1,79 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/KerML/Kernel/Associations>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Classifiers>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Features>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Types>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Structures>, <https://www.omg.org/spec/SysML/modules/KerML/Root/Elements> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "KerML/Kernel/Associations" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:Association
+    a owl:Class ;
+    rdfs:subClassOf sysml:Classifier, sysml:Relationship ;
+    rdfs:label "Association" ;
+    rdfs:comment """<p>An <code>Association</code> is a <code>Relationship</code> and a <code>Classifier</code> to enable classification of links between things (in the universe). The co-domains (<code>types</code>) of the <code>associationEnd</code> <code>Features</code> are the <code>relatedTypes</code>, as co-domain and participants (linked things) of an <code>Association</code> identify each other.</p>
+	
+	relatedType = associationEnd.type
+	specializesFromLibrary('Links::Link')
+	oclIsKindOf(Structure) = oclIsKindOf(AssociationStructure)
+	associationEnd->size() = 2 implies
+	specializesFromLibrary('Links::BinaryLink')
+	not isAbstract implies relatedType->size() >= 2
+	associationEnds->size() > 2 implies
+	not specializesFromLibrary('Links::BinaryLink')
+	sourceType =
+	if relatedType->isEmpty() then null
+	else relatedType->first() endif
+	targetType =
+	if relatedType->size() < 2 then OrderedSet{}
+	else
+	relatedType->
+	subSequence(2, relatedType->size())->
+	asOrderedSet()
+	endif""" .
+
+sysml:AssociationStructure
+    a owl:Class ;
+    rdfs:subClassOf sysml:Association, sysml:Structure ;
+    rdfs:label "AssociationStructure" ;
+    rdfs:comment """<p>An <code>AssociationStructure</code> is an <code>Association</code> that is also a <code>Structure</code>, classifying link objects that are both links and objects. As objects, link objects can be created and destroyed, and their non-end <code>Features</code> can change over time. However, the values of the end <code>Features</code> of a link object are fixed and cannot change over its lifetime.</p>
+	specializesFromLibrary('Objects::LinkObject')
+	endFeature->size() = 2 implies
+	specializesFromLibrary('Objects::BinaryLinkObject')""" .
+
+sysml:Association_associationEnd
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_endFeature ;
+    rdfs:domain sysml:Association ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "associationEnd" ;
+    rdfs:comment "<p>The <code>features</code> of the <code>Association</code> that identify the things that can be related by it. A concrete <code>Association</code> must have at least two <code>associationEnds</code>. When it has exactly two, the <code>Association</code> is called a <em>binary</em> <code>Association</code>.</p>" .
+
+sysml:Association_relatedType
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_relatedElement ;
+    rdfs:domain sysml:Association ;
+    rdfs:range sysml:Type ;
+    ecore:isOrdered true ;
+    rdfs:label "relatedType" ;
+    rdfs:comment "<p>The <code>types</code> of the <code>associationEnds</code> of the <code>Association</code>, which are the <code>relatedElements</code> of the <code>Association</code> considered as a <code>Relationship</code>.</p>" .
+
+sysml:Association_sourceType
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Association_relatedType, sysml:Relationship_source ;
+    rdfs:domain sysml:Association ;
+    rdfs:range sysml:Type ;
+    rdfs:label "sourceType" ;
+    rdfs:comment "<p>The source <code>relatedType</code> for this <code>Association</code>. It is the first <code>relatedType</code> of the <code>Association</code>.</p>" .
+
+sysml:Association_targetType
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Association_relatedType, sysml:Relationship_target ;
+    rdfs:domain sysml:Association ;
+    rdfs:range sysml:Type ;
+    rdfs:label "targetType" ;
+    rdfs:comment "<p>The target <code>relatedTypes</code> for this <code>Association</code>. This includes all the <code>relatedTypes</code> other than the <code>sourceType</code>.</p>" .

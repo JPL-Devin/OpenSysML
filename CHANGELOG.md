@@ -8,6 +8,20 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Added
 
+- **The SysML v2 OWL ontology, modularized.** `ontology/sysmlv2/` ships the
+  [Open-MBEE SysML v2 RDF ontology](https://github.com/Open-MBEE/sysmlv2-rdf-ontology) as one
+  Turtle module per package of the normative KerML/SysML metamodel — 41 leaf modules such as
+  `KerML/Root/Elements` and `SysML/Systems/Requirements` under layer ontologies (`KerML`,
+  `KerML/Core`, `SysML/Systems`, …) that import their children — with a `catalog.tsv` from every
+  term to its module, a `catalog-v001.xml` resolving every `owl:imports` to its file so OWL tools
+  load the closure offline, and a `VERSION` file naming the pinned upstream commit and OMG XMI
+  release.
+  Every source triple lands in exactly one module and each module imports what declares the terms
+  it mentions, so the union of the modules is the original ontology and any import closure is
+  self-contained. `make ontology-modules` regenerates them from pinned sources
+  (`scripts/download-ontology-sources.sh`, `cmd/ontology-modules`) and CI fails on a stale or
+  hand-edited module. See `ontology/sysmlv2/README.md`.
+
 - **The Connect + JSON wire contract is written down for clients with no library.** A
   MATLAB, R, Julia, C or shell program that posts JSON to `sysml-grpc` by hand had only the
   proto file and two rules on the transports page to decode answers with, and the questions

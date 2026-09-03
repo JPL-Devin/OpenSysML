@@ -1,0 +1,74 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/KerML/Core/Classifiers>
+    a owl:Ontology ;
+    owl:imports <https://www.omg.org/spec/SysML/modules/KerML/Core/Types> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "KerML/Core/Classifiers" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:Classifier
+    a owl:Class ;
+    rdfs:subClassOf sysml:Type ;
+    rdfs:label "Classifier" ;
+    rdfs:comment """<p>A <code>Classifier</code> is a <code>Type</code> that classifies:</p>
+	
+	<ul>
+	<li>Things (in the universe) regardless of how <code>Features</code> relate them. (These are interpreted semantically as sequences of exactly one thing.)</li>
+	<li>How the above things are related by <code>Features.</code> (These are interpreted semantically as sequences of multiple things, such that the last thing in the sequence is also classified by the <code>Classifier</code>. Note that this means that a <code>Classifier</code> modeled as specializing a <code>Feature</code> cannot classify anything.)</li>
+	</ul>
+	
+	
+	ownedSubclassification =
+	ownedSpecialization->selectByKind(Subclassification)
+	multiplicity <> null implies multiplicity.featuringType->isEmpty()""" .
+
+sysml:Classifier_ownedSubclassification
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    owl:inverseOf sysml:Subclassification_owningClassifier ;
+    rdfs:domain sysml:Classifier ;
+    rdfs:range sysml:Subclassification ;
+    rdfs:label "ownedSubclassification" ;
+    rdfs:comment "<p>The <code>ownedSpecializations</code> of this <code>Classifier</code> that are <code>Subclassifications</code>, for which this <code>Classifier</code> is the <code>subclassifier</code>.</p>" .
+
+sysml:Subclassification
+    a owl:Class ;
+    rdfs:subClassOf sysml:Specialization, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Subclassification_subclassifier ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Subclassification_superclassifier ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Subclassification" ;
+    rdfs:comment "<p><code>Subclassification</code> is <code>Specialization</code> in which both the <code>specific</code> and <code>general</code> <code>Types</code> are <code>Classifier</code>. This means all instances of the specific <code>Classifier</code> are also instances of the general <code>Classifier</code>.</p>" .
+
+sysml:Subclassification_owningClassifier
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Specialization_owningType ;
+    rdfs:domain sysml:Subclassification ;
+    rdfs:range sysml:Classifier ;
+    rdfs:label "owningClassifier" ;
+    rdfs:comment "<p>The <code>Classifier</code> that owns this <code>Subclassification</code> relationship, which must also be its <code>subclassifier</code>.</p>" .
+
+sysml:Subclassification_subclassifier
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Specialization_specific ;
+    rdfs:domain sysml:Subclassification ;
+    rdfs:range sysml:Classifier ;
+    rdfs:label "subclassifier" ;
+    rdfs:comment "<p>The more specific <code>Classifier</code> in this <code>Subclassification</code>.</p>" .
+
+sysml:Subclassification_superclassifier
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Specialization_general ;
+    rdfs:domain sysml:Subclassification ;
+    rdfs:range sysml:Classifier ;
+    rdfs:label "superclassifier" ;
+    rdfs:comment "<p>The more <code>general</code> Classifier in this <code>Subclassification</code>.</p>" .

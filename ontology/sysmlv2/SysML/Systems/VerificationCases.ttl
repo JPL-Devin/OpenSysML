@@ -1,0 +1,103 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/SysML/Systems/VerificationCases>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Cases>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Requirements> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "SysML/Systems/VerificationCases" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:RequirementVerificationMembership
+    a owl:Class ;
+    rdfs:subClassOf sysml:RequirementConstraintMembership, [
+        a owl:Restriction ;
+        owl:onProperty sysml:RequirementVerificationMembership_ownedRequirement ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:RequirementVerificationMembership_verifiedRequirement ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "RequirementVerificationMembership" ;
+    rdfs:comment """<p>A <code>RequirementVerificationMembership</code> is a <code>RequirementConstraintMembership </code> used in the objective of a <code>VerificationCase</code> to identify a <code>RequirementUsage</code> that is verified by the <code>VerificationCase</code>.</p>
+	kind = RequirementConstraintKind::requirement
+	owningType.oclIsKindOf(RequirementUsage) and
+	owningType.owningFeatureMembership <> null and
+	owningType.owningFeatureMembership.oclIsKindOf(ObjectiveMembership)""" .
+
+sysml:RequirementVerificationMembership_ownedRequirement
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:RequirementConstraintMembership_ownedConstraint ;
+    rdfs:domain sysml:RequirementVerificationMembership ;
+    rdfs:range sysml:RequirementUsage ;
+    rdfs:label "ownedRequirement" ;
+    rdfs:comment "<p>The owned <code>RequirementUsage</code> that acts as the <code>ownedConstraint</code> for this <code>RequirementVerificationMembership</code>. This will either be the <code>verifiedRequirement</code>, or it will subset the <code>verifiedRequirement</code>.</p>" .
+
+sysml:RequirementVerificationMembership_verifiedRequirement
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:RequirementConstraintMembership_referencedConstraint ;
+    rdfs:domain sysml:RequirementVerificationMembership ;
+    rdfs:range sysml:RequirementUsage ;
+    rdfs:label "verifiedRequirement" ;
+    rdfs:comment "<p> The <code>RequirementUsage</code> that is identified as being verified. It is the <code>referencedConstraint</code> of the <code>RequirementVerificationMembership</code> considered as a <code>RequirementConstraintMembership</code>, which must be a <code>RequirementUsage</code>.</p>" .
+
+sysml:VerificationCaseDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:CaseDefinition ;
+    rdfs:label "VerificationCaseDefinition" ;
+    rdfs:comment """<p>A <code>VerificationCaseDefinition</code> is a <code>CaseDefinition</code> for the purpose of verification of the subject of the case against its requirements.</p>
+	verifiedRequirement =
+	if objectiveRequirement = null then OrderedSet{}
+	else
+	objectiveRequirement.featureMembership->
+	selectByKind(RequirementVerificationMembership).
+	verifiedRequirement->asOrderedSet()
+	endif
+	specializesFromLibrary('VerificationCases::VerificationCase')""" .
+
+sysml:VerificationCaseDefinition_verifiedRequirement
+    a owl:ObjectProperty ;
+    rdfs:domain sysml:VerificationCaseDefinition ;
+    rdfs:range sysml:RequirementUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "verifiedRequirement" ;
+    rdfs:comment "<p>The <code>RequirementUsages</code> verified by this <code>VerificationCaseDefinition</code>, which are the <code>verifiedRequirements</code> of all <code>RequirementVerificationMemberships</code> of the <code>objectiveRequirement</code>.</p>" .
+
+sysml:VerificationCaseUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:CaseUsage ;
+    rdfs:label "VerificationCaseUsage" ;
+    rdfs:comment """<p>A <code>VerificationCaseUsage</code> is a </code>Usage</code> of a <code>VerificationCaseDefinition</code>.</p>
+	verifiedRequirement =
+	if objectiveRequirement = null then OrderedSet{}
+	else
+	objectiveRequirement.featureMembership->
+	selectByKind(RequirementVerificationMembership).
+	verifiedRequirement->asOrderedSet()
+	endif
+	specializesFromLibrary('VerificationCases::verificationCases')
+	isComposite and owningType <> null and
+	(owningType.oclIsKindOf(VerificationCaseDefinition) or
+	owningType.oclIsKindOf(VerificationCaseUsage)) implies
+	specializesFromLibrary('VerificationCases::VerificationCase::subVerificationCases')""" .
+
+sysml:VerificationCaseUsage_verificationCaseDefinition
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:CaseUsage_caseDefinition ;
+    rdfs:domain sysml:VerificationCaseUsage ;
+    rdfs:range sysml:VerificationCaseDefinition ;
+    rdfs:label "verificationCaseDefinition" ;
+    rdfs:comment "<p>The <code>VerificationCase</code> that is the <code>definition</code> of this <code>VerificationCaseUsage</code>.</p>" .
+
+sysml:VerificationCaseUsage_verifiedRequirement
+    a owl:ObjectProperty ;
+    rdfs:domain sysml:VerificationCaseUsage ;
+    rdfs:range sysml:RequirementUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "verifiedRequirement" ;
+    rdfs:comment "<p>The <code>RequirementUsages</code> verified by this <code>VerificationCaseUsage</code>, which are the <code>verifiedRequirements</code> of all <code>RequirementVerificationMemberships</code> of the <code>objectiveRequirement</code>.</p>" .

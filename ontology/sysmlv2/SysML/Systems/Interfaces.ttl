@@ -1,0 +1,47 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/SysML/Systems/Interfaces>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Connections>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Ports> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "SysML/Systems/Interfaces" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:InterfaceDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:ConnectionDefinition ;
+    rdfs:label "InterfaceDefinition" ;
+    rdfs:comment """<p>An <code>InterfaceDefinition</code> is a <code>ConnectionDefinition</code> all of whose ends are <code>PortUsages</code>, defining an interface between elements that interact through such ports.</p>
+	specializesFromLibrary('Interfaces::Interface')
+	ownedEndFeature->size() = 2 implies
+	specializesFromLibrary('Interfaces::BinaryInterface')""" .
+
+sysml:InterfaceDefinition_interfaceEnd
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:ConnectionDefinition_connectionEnd ;
+    rdfs:domain sysml:InterfaceDefinition ;
+    rdfs:range sysml:PortUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "interfaceEnd" ;
+    rdfs:comment "<p>The <code>PortUsages</code> that are the <code>connectionEnds</code> of this <code>InterfaceDefinition</code>." .
+
+sysml:InterfaceUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:ConnectionUsage ;
+    rdfs:label "InterfaceUsage" ;
+    rdfs:comment """<p>An <code>InterfaceUsage</code> is a Usage of an <code>InterfaceDefinition</code> to represent an interface connecting parts of a system through specific ports.</p>
+	ownedEndFeature->size() = 2 implies
+	specializesFromLibrary('Interfaces::binaryInterfaces')
+	specializesFromLibrary('Interfaces::interfaces')""" .
+
+sysml:InterfaceUsage_interfaceDefinition
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:ConnectionUsage_connectionDefinition ;
+    rdfs:domain sysml:InterfaceUsage ;
+    rdfs:range sysml:InterfaceDefinition ;
+    rdfs:label "interfaceDefinition" ;
+    rdfs:comment "<p>The <code>InterfaceDefinitions</code> that type this <code>InterfaceUsage</code>.</p>" .

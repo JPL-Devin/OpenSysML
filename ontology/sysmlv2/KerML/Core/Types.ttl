@@ -1,0 +1,565 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/KerML/Core/Types>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Features>, <https://www.omg.org/spec/SysML/modules/KerML/Root/Elements>, <https://www.omg.org/spec/SysML/modules/KerML/Root/Namespaces> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "KerML/Core/Types" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:Conjugation
+    a owl:Class ;
+    rdfs:subClassOf sysml:Relationship, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Conjugation_conjugatedType ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Conjugation_originalType ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Conjugation" ;
+    rdfs:comment """<p><code>Conjugation</code> is a <code>Relationship</code> between two types in which the <code>conjugatedType</code> inherits all the <code>Features</code> of the <code>originalType</code>, but with all <code>input</code> and <code>output</code> <code>Features</code> reversed. That is, any <code>Features</code> with a <code>direction</code> <em>in</em> relative to the <code>originalType</code> are considered to have an effective <code>direction</code> of <em>out</em> relative to the <code>conjugatedType</code> and, similarly, <code>Features</code> with <code>direction</code> <em>out</em> in the <code>originalType</code> are considered to have an effective <code>direction</code> of <em>in</em> in the <code>conjugatedType</code>. <code>Features</code> with <code>direction</code> <em>inout</em>, or with no <code>direction</code>, in the <code>originalType</code>, are inherited without change.</p>
+	
+	<p>A <code>Type</code> may participate as a <code>conjugatedType</code> in at most one <code>Conjugation</code> relationship, and such a <code>Type</code> may not also be the <code>specific</code> <code>Type</code> in any <code>Specialization</code> relationship.</p>""" .
+
+sysml:Conjugation_conjugatedType
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_source ;
+    rdfs:domain sysml:Conjugation ;
+    rdfs:range sysml:Type ;
+    rdfs:label "conjugatedType" ;
+    rdfs:comment "<p>The <code>Type</code> that is the result of applying <code>Conjugation</code> to the <code>originalType</code>.</p>" .
+
+sysml:Conjugation_originalType
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_target ;
+    rdfs:domain sysml:Conjugation ;
+    rdfs:range sysml:Type ;
+    rdfs:label "originalType" ;
+    rdfs:comment "<p>The <code>Type</code> to be conjugated.</p>" .
+
+sysml:Conjugation_owningType
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Conjugation_conjugatedType, sysml:Relationship_owningRelatedElement ;
+    rdfs:domain sysml:Conjugation ;
+    rdfs:range sysml:Type ;
+    rdfs:label "owningType" ;
+    rdfs:comment "<p>The <code>conjugatedType</code> of this <code>Conjugation</code> that is also its <code>owningRelatedElement</code>.</p>" .
+
+sysml:Differencing
+    a owl:Class ;
+    rdfs:subClassOf sysml:Relationship, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Differencing_differencingType ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Differencing_typeDifferenced ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Differencing" ;
+    rdfs:comment "<p><code>Differencing</code> is a <code>Relationship</code> that makes its <code>differencingType</code> one of the <code>differencingTypes</code> of its <code>typeDifferenced</code>.</p>" .
+
+sysml:Differencing_differencingType
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_target ;
+    rdfs:domain sysml:Differencing ;
+    rdfs:range sysml:Type ;
+    rdfs:label "differencingType" ;
+    rdfs:comment "<p><code>Type</code> that partly determines interpretations of <code>typeDifferenced</code>, as described in <code>Type::differencingType</code>.</p>" .
+
+sysml:Differencing_typeDifferenced
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_owningRelatedElement, sysml:Relationship_source ;
+    rdfs:domain sysml:Differencing ;
+    rdfs:range sysml:Type ;
+    rdfs:label "typeDifferenced" ;
+    rdfs:comment "<p><code>Type</code> with interpretations partly determined by <code>differencingType</code>, as described in <code>Type::differencingType</code>.</p>" .
+
+sysml:Disjoining
+    a owl:Class ;
+    rdfs:subClassOf sysml:Relationship, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Disjoining_disjoiningType ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Disjoining_typeDisjoined ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Disjoining" ;
+    rdfs:comment "<p>A <code>Disjoining</code> is a <code>Relationship</code> between <code>Types</code> asserted to have interpretations that are not shared (disjoint) between them, identified as <code>typeDisjoined</code> and <code>disjoiningType</code>. For example, a <code>Classifier</code> for mammals is disjoint from a <code>Classifier</code> for minerals, and a <code>Feature</code> for people&#39;s parents is disjoint from a <code>Feature</code> for their children.</p>" .
+
+sysml:Disjoining_disjoiningType
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_target ;
+    rdfs:domain sysml:Disjoining ;
+    rdfs:range sysml:Type ;
+    rdfs:label "disjoiningType" ;
+    rdfs:comment "<p><code>Type</code> asserted to be disjoint with the <code>typeDisjoined</code>.</p>" .
+
+sysml:Disjoining_owningType
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Disjoining_typeDisjoined, sysml:Relationship_owningRelatedElement ;
+    rdfs:domain sysml:Disjoining ;
+    rdfs:range sysml:Type ;
+    rdfs:label "owningType" ;
+    rdfs:comment "<p>A <code>typeDisjoined</code> that is also an <code>owningRelatedElement</code>.</p>" .
+
+sysml:Disjoining_typeDisjoined
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_source ;
+    rdfs:domain sysml:Disjoining ;
+    rdfs:range sysml:Type ;
+    rdfs:label "typeDisjoined" ;
+    rdfs:comment "<p><code>Type</code> asserted to be disjoint with the <code>disjoiningType</code>.</p>" .
+
+sysml:FeatureDirectionKind
+    a rdfs:Datatype ;
+    owl:equivalentClass [
+        a rdfs:Datatype ;
+        owl:oneOf [
+            a rdf:List ;
+            rdf:first "in" ;
+            rdf:rest [
+                a rdf:List ;
+                rdf:first "inout" ;
+                rdf:rest [
+                    a rdf:List ;
+                    rdf:first "out" ;
+                    rdf:rest rdf:nil
+                ]
+            ]
+        ]
+    ] ;
+    rdfs:label "FeatureDirectionKind" ;
+    rdfs:comment "<p><code>FeatureDirectionKind</code> enumerates the possible kinds of <code>direction</code> that a <code>Feature</code> may be given as a member of a <code>Type</code>.</p>" .
+
+sysml:FeatureMembership
+    a owl:Class ;
+    rdfs:subClassOf sysml:Featuring, sysml:OwningMembership, [
+        a owl:Restriction ;
+        owl:onProperty sysml:FeatureMembership_ownedMemberFeature ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:FeatureMembership_owningType ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "FeatureMembership" ;
+    rdfs:comment "<p>A <code>FeatureMembership</code> is an <code>OwningMembership</code> between a <code>Feature</code> in an <code>owningType</code> that is also a <code>Featuring</code> <code>Relationship</code> between the <code>Feature</code> and the <code>Type</code>, in which the <code>featuringType</code> is the <code>source</code> and the <code>featureOfType</code> is the <code>target</code>. A <code>FeatureMembership</code> is always owned by its <code>owningType</code>, which is the <code>featuringType</code> for the <code>FeatureMembership</code> considered as a <code>Featuring</code>.</p>" .
+
+sysml:FeatureMembership_ownedMemberFeature
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Featuring_feature, sysml:OwningMembership_ownedMemberElement ;
+    rdfs:domain sysml:FeatureMembership ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "ownedMemberFeature" ;
+    rdfs:comment "<p>The <code>Feature</code> that this <code>FeatureMembership</code> relates to its <code>owningType</code>, making it an <code>ownedFeature</code> of the <code>owningType</code>.</p>" .
+
+sysml:FeatureMembership_owningType
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Featuring_type, sysml:Membership_membershipOwningNamespace ;
+    rdfs:domain sysml:FeatureMembership ;
+    rdfs:range sysml:Type ;
+    rdfs:label "owningType" ;
+    rdfs:comment "<p>The <code>Type</code> that owns this <code>FeatureMembership</code>.</p>" .
+
+sysml:Intersecting
+    a owl:Class ;
+    rdfs:subClassOf sysml:Relationship, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Intersecting_intersectingType ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Intersecting_typeIntersected ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Intersecting" ;
+    rdfs:comment "<p><code>Intersecting</code> is a <code>Relationship</code> that makes its <code>intersectingType</code> one of the <code>intersectingTypes</code> of its <code>typeIntersected</code>.</p>" .
+
+sysml:Intersecting_intersectingType
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_target ;
+    rdfs:domain sysml:Intersecting ;
+    rdfs:range sysml:Type ;
+    rdfs:label "intersectingType" ;
+    rdfs:comment "<p><code>Type</code> that partly determines interpretations of <code>typeIntersected</code>, as described in <code>Type::intersectingType</code>.</p>" .
+
+sysml:Intersecting_typeIntersected
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_owningRelatedElement, sysml:Relationship_source ;
+    rdfs:domain sysml:Intersecting ;
+    rdfs:range sysml:Type ;
+    rdfs:label "typeIntersected" ;
+    rdfs:comment "<p><code>Type</code> with interpretations partly determined by <code>intersectingType</code>, as described in <code>Type::intersectingType</code>.</p>" .
+
+sysml:Multiplicity
+    a owl:Class ;
+    rdfs:subClassOf sysml:Feature ;
+    rdfs:label "Multiplicity" ;
+    rdfs:comment """<p>A <code>Multiplicity</code> is a <code>Feature</code> whose co-domain is a set of natural numbers giving the allowed cardinalities of each <code>typeWithMultiplicity</code>. The <em>cardinality</em> of a <code>Type</code> is defined as follows, depending on whether the <code>Type</code> is a <code>Classifier</code> or <code>Feature</code>.
+	<ul>
+	<li><code>Classifier</code> – The number of basic instances of the <code>Classifier</code>, that is, those instances representing things, which are not instances of any subtypes of the <code>Classifier</code> that are <code>Features</code>.
+	<li><code>Features</code> – The number of instances with the same featuring instances. In the case of a <code>Feature</code> with a <code>Classifier</code> as its <code>featuringType</code>, this is the number of values of <code>Feature</code> for each basic instance of the <code>Classifier</code>. Note that, for non-unique <code>Features</code>, all duplicate values are included in this count.</li>
+	</ul>
+	
+	<p><code>Multiplicity</code> co-domains (in models) can be specified by <code>Expression</code> that might vary in their results. If the <code>typeWithMultiplicity</code> is a <code>Classifier</code>, the domain of the <code>Multiplicity</code> shall be <em><code>Base::Anything</code></em>.  If the <code>typeWithMultiplicity</code> is a <code>Feature</code>,  the <code>Multiplicity</code> shall have the same domain as the <code>typeWithMultiplicity</code>.</p>
+	
+	if owningType <> null and owningType.oclIsKindOf(Feature) then
+	featuringType =
+	owningType.oclAsType(Feature).featuringType
+	else
+	featuringType->isEmpty()
+	endif
+	specializesFromLibrary('Base::naturals')""" .
+
+sysml:Specialization
+    a owl:Class ;
+    rdfs:subClassOf sysml:Relationship, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Specialization_general ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Specialization_specific ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Specialization" ;
+    rdfs:comment """<p><code>Specialization</code> is a <code>Relationship</code> between two <code>Types</code> that requires all instances of the <code>specific</code> type to also be instances of the <code>general</code> Type (i.e., the set of instances of the <code>specific</code> Type is a <em>subset</em> of those of the <code>general</code> Type, which might be the same set).</p>
+	
+	not specific.isConjugated""" .
+
+sysml:Specialization_general
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_target ;
+    rdfs:domain sysml:Specialization ;
+    rdfs:range sysml:Type ;
+    rdfs:label "general" ;
+    rdfs:comment "<p>A <code>Type</code> with a superset of all instances of the <code>specific</code> <code>Type</code>, which might be the same set.</p>" .
+
+sysml:Specialization_owningType
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_owningRelatedElement, sysml:Specialization_specific ;
+    rdfs:domain sysml:Specialization ;
+    rdfs:range sysml:Type ;
+    rdfs:label "owningType" ;
+    rdfs:comment "<p>The <code>Type</code> that is the <code>specific</code> <code>Type</code> of this <code>Specialization</code> and owns it as its <code>owningRelatedElement</code>.</p>" .
+
+sysml:Specialization_specific
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_source ;
+    rdfs:domain sysml:Specialization ;
+    rdfs:range sysml:Type ;
+    rdfs:label "specific" ;
+    rdfs:comment "<p>A <code>Type</code> with a subset of all instances of the <code>general</code> <code>Type</code>, which might be the same set.</p>" .
+
+sysml:Type
+    a owl:Class ;
+    rdfs:subClassOf sysml:Namespace, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Type_isAbstract ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Type_isConjugated ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Type_isSufficient ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Type" ;
+    rdfs:comment """<p>A <code>Type</code> is a <code>Namespace</code> that is the most general kind of <code>Element</code> supporting the semantics of classification. A <code>Type</code> may be a <code>Classifier</code> or a <code>Feature</code>, defining conditions on what is classified by the <code>Type</code> (see also the description of <code>isSufficient</code>).</p>
+	
+	ownedSpecialization = ownedRelationship->selectByKind(Specialization)->
+	select(s | s.special = self)
+	
+	multiplicity =
+	let ownedMultiplicities: Sequence(Multiplicity) =
+	ownedMember->selectByKind(Multiplicity) in
+	if ownedMultiplicities->isEmpty() then null
+	else ownedMultiplicities->first()
+	endif
+	ownedFeatureMembership = ownedRelationship->selectByKind(FeatureMembership)
+	ownedConjugator =
+	let ownedConjugators: Sequence(Conjugator) =
+	ownedRelationship->selectByKind(Conjugation) in
+	if ownedConjugators->isEmpty() then null
+	else ownedConjugators->at(1) endif
+	output = feature->select(f |
+	let direction: FeatureDirectionKind = directionOf(f) in
+	direction = FeatureDirectionKind::out or
+	direction = FeatureDirectionKind::inout)
+	input = feature->select(f |
+	let direction: FeatureDirectionKind = directionOf(f) in
+	direction = FeatureDirectionKind::_'in' or
+	direction = FeatureDirectionKind::inout)
+	inheritedMembership = inheritedMemberships(Set{}, false)
+	specializesFromLibrary('Base::Anything')
+	directedFeature = feature->select(f | directionOf(f) <> null)
+	feature = featureMembership.ownedMemberFeature
+	featureMembership = ownedFeatureMembership->union(
+	inheritedMembership->selectByKind(FeatureMembership))
+	ownedFeature = ownedFeatureMembership.ownedMemberFeature
+	differencingType = ownedDifferencing.differencingType
+	intersectingType->excludes(self)
+	differencingType->excludes(self)
+	unioningType = ownedUnioning.unioningType
+	unioningType->excludes(self)
+	intersectingType = ownedIntersecting.intersectingType
+	ownedRelationship->selectByKind(Conjugation)->size() <= 1
+	ownedMember->selectByKind(Multiplicity)->size() <= 1
+	endFeature = feature->select(isEnd)
+	ownedDisjoining =
+	ownedRelationship->selectByKind(Disjoining)
+	ownedUnioning =
+	ownedRelationship->selectByKind(Unioning)
+	ownedRelationship->selectByKind(Intersecting)
+	ownedDifferencing =
+	ownedRelationship->selectByKind(Differencing)
+	ownedEndFeature = ownedFeature->select(isEnd)
+	inheritedFeature = inheritedMemberships->
+	selectByKind(FeatureMembership).memberFeature
+	ownedUnioning->size() <> 1
+	ownedIntersecting->size() <> 1
+	ownedDifferencing->size() <> 1""" .
+
+sysml:Type_differencingType
+    a owl:ObjectProperty ;
+    rdfs:domain sysml:Type ;
+    rdfs:range sysml:Type ;
+    ecore:isOrdered true ;
+    rdfs:label "differencingType" ;
+    rdfs:comment "<p>The interpretations of a <code>Type</code> with <code>differencingTypes</code> are asserted to be those of the first of those <code>Types</code>, but not including those of the remaining <code>Types</code>. For example, a <code>Classifier</code> might be the difference of a <code>Classifier</code> for people and another for people of a particular nationality, leaving people who are not of that nationality. Similarly, a feature of people might be the difference between a feature for their children and a <code>Classifier</code> for people of a particular sex, identifying their children not of that sex (because the interpretations of the children <code>Feature</code> that identify those of that sex are also interpretations of the <code>Classifier</code> for that sex).</p>" .
+
+sysml:Type_directedFeature
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_feature ;
+    rdfs:domain sysml:Type ;
+    rdfs:range sysml:Feature ;
+    ecore:isOrdered true ;
+    rdfs:label "directedFeature" ;
+    rdfs:comment "<p>The <code>features</code> of this <code>Type</code> that have a non-null <code>direction</code>.</p>" .
+
+sysml:Type_endFeature
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_feature ;
+    rdfs:domain sysml:Type ;
+    rdfs:range sysml:Feature ;
+    ecore:isOrdered true ;
+    rdfs:label "endFeature" ;
+    rdfs:comment "<p>All <code>features</code> of this <code>Type</code> with <code>isEnd = true</code>.</p>" .
+
+sysml:Type_feature
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Namespace_member ;
+    rdfs:domain sysml:Type ;
+    rdfs:range sysml:Feature ;
+    ecore:isOrdered true ;
+    rdfs:label "feature" ;
+    rdfs:comment "<p>The <code>ownedMemberFeatures</code> of the <code>featureMemberships</code> of this <code>Type</code>.</p>" .
+
+sysml:Type_featureMembership
+    a owl:ObjectProperty ;
+    rdfs:domain sysml:Type ;
+    rdfs:range sysml:FeatureMembership ;
+    ecore:isOrdered true ;
+    rdfs:label "featureMembership" ;
+    rdfs:comment "<p>The <code>FeatureMemberships</code> for <code>features</code> of this <code>Type</code>, which include all <code>ownedFeatureMemberships</code> and those <code>inheritedMemberships</code> that are <code>FeatureMemberships</code> (but does <em>not</em> include any <code>importedMemberships</code>).</p>" .
+
+sysml:Type_inheritedFeature
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_feature ;
+    rdfs:domain sysml:Type ;
+    rdfs:range sysml:Feature ;
+    ecore:isOrdered true ;
+    rdfs:label "inheritedFeature" ;
+    rdfs:comment "<p>All the <code>memberFeatures</code> of the <code>inheritedMemberships</code> of this <code>Type</code> that are <code>FeatureMemberships</code>.</p>" .
+
+sysml:Type_inheritedMembership
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Namespace_membership ;
+    rdfs:domain sysml:Type ;
+    rdfs:range sysml:Membership ;
+    ecore:isOrdered true ;
+    rdfs:label "inheritedMembership" ;
+    rdfs:comment "<p>All <code>Memberships</code> inherited by this <code>Type</code> via <code>Specialization</code> or <code>Conjugation</code>. These are included in the derived union for the <code>memberships</code> of the <code>Type</code>.</p>" .
+
+sysml:Type_input
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_directedFeature ;
+    rdfs:domain sysml:Type ;
+    rdfs:range sysml:Feature ;
+    ecore:isOrdered true ;
+    rdfs:label "input" ;
+    rdfs:comment "<p>All <code>features</code> related to this <code>Type</code> by <code>FeatureMemberships</code> that have <code>direction</code> <code>in</code> or <code>inout</code>.</p>" .
+
+sysml:Type_intersectingType
+    a owl:ObjectProperty ;
+    rdfs:domain sysml:Type ;
+    rdfs:range sysml:Type ;
+    ecore:isOrdered true ;
+    rdfs:label "intersectingType" ;
+    rdfs:comment "<p>The interpretations of a <code>Type</code> with <code>intersectingTypes</code> are asserted to be those in common among the <code>intersectingTypes</code>, which are the <code>Types</code> derived from the <code>intersectingType</code> of the <code>ownedIntersectings</code> of this <code>Type</code>. For example, a <code>Classifier</code> might be an intersection of <code>Classifiers</code> for people of a particular sex and of a particular nationality. Similarly, a feature for people&#39;s children of a particular sex might be the intersection of a <code>Feature</code> for their children and a <code>Classifier</code> for people of that sex (because the interpretations of the children <code>Feature</code> that identify those of that sex are also interpretations of the Classifier for that sex).</p>" .
+
+sysml:Type_isAbstract
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Type ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isAbstract" ;
+    rdfs:comment "<p>Indicates whether instances of this <code>Type</code> must also be instances of at least one of its specialized <code>Types</code>.</p>" .
+
+sysml:Type_isConjugated
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Type ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isConjugated" ;
+    rdfs:comment "<p>Indicates whether this <code>Type</code> has an <code>ownedConjugator</code>.</p>" .
+
+sysml:Type_isSufficient
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Type ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isSufficient" ;
+    rdfs:comment """<p>Whether all things that meet the classification conditions of this <code>Type</code> must be classified by the <code>Type</code>.</p>
+	
+	<p>(A <code>Type</code>&nbsp;gives conditions that must be met by whatever it classifies, but when <code>isSufficient</code> is false, things may meet those conditions but still not be classified by the <code>Type</code>. For example, a Type <code><em>Car</em></code> that is not sufficient could require everything it classifies to have four wheels, but not all four wheeled things would classify as cars. However, if the <code>Type</code> <code><em>Car</em></code> were sufficient, it would classify all four-wheeled things.)</p>""" .
+
+sysml:Type_multiplicity
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Namespace_ownedMember ;
+    rdfs:domain sysml:Type ;
+    rdfs:range sysml:Multiplicity ;
+    rdfs:label "multiplicity" ;
+    rdfs:comment "<p>An <code>ownedMember</code> of this <code>Type</code> that is a <code>Multiplicity</code>, which constraints the cardinality of the <code>Type</code>. If there is no such <code>ownedMember</code>, then the cardinality of this <code>Type</code> is constrained by all the <code>Multiplicity</code> constraints applicable to any direct supertypes.</p>" .
+
+sysml:Type_output
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_directedFeature ;
+    rdfs:domain sysml:Type ;
+    rdfs:range sysml:Feature ;
+    ecore:isOrdered true ;
+    rdfs:label "output" ;
+    rdfs:comment "<p>All <code>features</code> related to this <code>Type</code> by <code>FeatureMemberships</code> that have <code>direction</code> <code>out</code> or <code>inout</code>.</p>" .
+
+sysml:Type_ownedConjugator
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    owl:inverseOf sysml:Conjugation_owningType ;
+    rdfs:domain sysml:Type ;
+    rdfs:range sysml:Conjugation ;
+    rdfs:label "ownedConjugator" ;
+    rdfs:comment "<p>A <code>Conjugation</code> owned by this <code>Type</code> for which the <code>Type</code> is the <code>originalType</code>.</p>" .
+
+sysml:Type_ownedDifferencing
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    owl:inverseOf sysml:Differencing_typeDifferenced ;
+    rdfs:domain sysml:Type ;
+    rdfs:range sysml:Differencing ;
+    rdfs:label "ownedDifferencing" ;
+    rdfs:comment "<p>The <code>ownedRelationships</code> of this <code>Type</code> that are <code>Differencings</code>, having this <code>Type</code> as their <code>typeDifferenced</code>.</p>" .
+
+sysml:Type_ownedDisjoining
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    owl:inverseOf sysml:Disjoining_owningType ;
+    rdfs:domain sysml:Type ;
+    rdfs:range sysml:Disjoining ;
+    rdfs:label "ownedDisjoining" ;
+    rdfs:comment "<p>The <code>ownedRelationships</code> of this <code>Type</code> that are <code>Disjoinings</code>, for which the <code>Type</code> is the <code>typeDisjoined</code> <code>Type</code>.</p>" .
+
+sysml:Type_ownedEndFeature
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_endFeature, sysml:Type_ownedFeature ;
+    rdfs:domain sysml:Type ;
+    rdfs:range sysml:Feature ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedEndFeature" ;
+    rdfs:comment "<p>All <code>endFeatures</code> of this <code>Type</code> that are <code>ownedFeatures</code>.</p>" .
+
+sysml:Type_ownedFeature
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Namespace_ownedMember ;
+    rdfs:domain sysml:Type ;
+    rdfs:range sysml:Feature ;
+    ecore:isOrdered true ;
+    rdfs:label "ownedFeature" ;
+    rdfs:comment "<p>The <code>ownedMemberFeatures</code> of the <code>ownedFeatureMemberships</code> of this <code>Type</code>.</p>" .
+
+sysml:Type_ownedFeatureMembership
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_featureMembership ;
+    owl:inverseOf sysml:FeatureMembership_owningType ;
+    rdfs:domain sysml:Type ;
+    rdfs:range sysml:FeatureMembership ;
+    rdfs:label "ownedFeatureMembership" ;
+    rdfs:comment "<p>The <code>ownedMemberships</code> of this <code>Type</code> that are <code>FeatureMemberships</code>, for which the <code>Type</code> is the <code>owningType</code>. Each such <code>FeatureMembership</code> identifies an <code>ownedFeature</code> of the <code>Type</code>.</p>" .
+
+sysml:Type_ownedIntersecting
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    owl:inverseOf sysml:Intersecting_typeIntersected ;
+    rdfs:domain sysml:Type ;
+    rdfs:range sysml:Intersecting ;
+    rdfs:label "ownedIntersecting" ;
+    rdfs:comment "<p>The <code>ownedRelationships</code> of this <code>Type</code> that are <code>Intersectings</code>, have the <code>Type</code> as their <code>typeIntersected</code>.</p>" .
+
+sysml:Type_ownedSpecialization
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    owl:inverseOf sysml:Specialization_owningType ;
+    rdfs:domain sysml:Type ;
+    rdfs:range sysml:Specialization ;
+    rdfs:label "ownedSpecialization" ;
+    rdfs:comment "<p>The <code>ownedRelationships</code> of this <code>Type</code> that are <code>Specializations</code>, for which the <code>Type</code> is the <code>specific</code> <code>Type</code>.</p>" .
+
+sysml:Type_ownedUnioning
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    owl:inverseOf sysml:Unioning_typeUnioned ;
+    rdfs:domain sysml:Type ;
+    rdfs:range sysml:Unioning ;
+    rdfs:label "ownedUnioning" ;
+    rdfs:comment "<p>The <code>ownedRelationships</code> of this <code>Type</code> that are <code>Unionings</code>, having the <code>Type</code> as their <code>typeUnioned</code>.</p>" .
+
+sysml:Type_unioningType
+    a owl:ObjectProperty ;
+    rdfs:domain sysml:Type ;
+    rdfs:range sysml:Type ;
+    ecore:isOrdered true ;
+    rdfs:label "unioningType" ;
+    rdfs:comment "<p>The interpretations of a <code>Type</code> with <code>unioningTypes</code> are asserted to be the same as those of all the <code>unioningTypes</code> together, which are the <code>Types</code> derived from the <code>unioningType</code> of the <code>ownedUnionings</code> of this <code>Type</code>. For example, a <code>Classifier</code> for people might be the union of <code>Classifiers</code> for all the sexes. Similarly, a feature for people&#39;s children might be the union of features dividing them in the same ways as people in general.</p>" .
+
+sysml:Unioning
+    a owl:Class ;
+    rdfs:subClassOf sysml:Relationship, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Unioning_typeUnioned ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Unioning_unioningType ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Unioning" ;
+    rdfs:comment "<p><code>Unioning</code> is a <code>Relationship</code> that makes its <code>unioningType</code> one of the <code>unioningTypes</code> of its <code>typeUnioned</code>.</p>" .
+
+sysml:Unioning_typeUnioned
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_owningRelatedElement, sysml:Relationship_source ;
+    rdfs:domain sysml:Unioning ;
+    rdfs:range sysml:Type ;
+    rdfs:label "typeUnioned" ;
+    rdfs:comment "<p><code>Type</code> with interpretations partly determined by <code>unioningType</code>, as described in <code>Type::unioningType</code>.</p>" .
+
+sysml:Unioning_unioningType
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_target ;
+    rdfs:domain sysml:Unioning ;
+    rdfs:range sysml:Type ;
+    rdfs:label "unioningType" ;
+    rdfs:comment "<p><code>Type</code> that partly determines interpretations of <code>typeUnioned</code>, as described in <code>Type::unioningType</code>.</p>" .

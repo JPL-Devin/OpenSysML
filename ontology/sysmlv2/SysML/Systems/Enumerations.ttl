@@ -1,0 +1,47 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/SysML/Systems/Enumerations>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Attributes>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/DefinitionAndUsage> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "SysML/Systems/Enumerations" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:EnumerationDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:AttributeDefinition ;
+    rdfs:label "EnumerationDefinition" ;
+    rdfs:comment """<p>An <code>EnumerationDefinition</code> is an <code>AttributeDefinition</code> all of whose instances are given by an explicit list of <code>enumeratedValues</code>. This is realized by requiring that the <code>EnumerationDefinition</code> have <code>isVariation = true</code>, with the <code>enumeratedValues</code> being its <code>variants</code>.</p> 
+	isVariation""" .
+
+sysml:EnumerationDefinition_enumeratedValue
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_variant ;
+    rdfs:domain sysml:EnumerationDefinition ;
+    rdfs:range sysml:EnumerationUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "enumeratedValue" ;
+    rdfs:comment "<p><code>EnumerationUsages</code> of this <code>EnumerationDefinition</code>that have distinct, fixed values. Each <code>enumeratedValue</code> specifies one of the allowed instances of the <code>EnumerationDefinition</code>.</p>" .
+
+sysml:EnumerationUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:AttributeUsage, [
+        a owl:Restriction ;
+        owl:onProperty sysml:EnumerationUsage_enumerationDefinition ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "EnumerationUsage" ;
+    rdfs:comment "<p>An <code>EnumerationUsage</code> is an <code>AttributeUsage</code> whose <code>attributeDefinition</code> is an <code>EnumerationDefinition</code>.</p>" .
+
+sysml:EnumerationUsage_enumerationDefinition
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:AttributeUsage_attributeDefinition ;
+    rdfs:domain sysml:EnumerationUsage ;
+    rdfs:range sysml:EnumerationDefinition ;
+    rdfs:label "enumerationDefinition" ;
+    rdfs:comment "<p>The single EnumerationDefinition that is the type of this EnumerationUsage.</p>" .

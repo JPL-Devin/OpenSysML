@@ -1,0 +1,165 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/KerML/Kernel/Connectors>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Features>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Types>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Associations>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Behaviors>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Functions>, <https://www.omg.org/spec/SysML/modules/KerML/Root/Elements> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "KerML/Kernel/Connectors" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:BindingConnector
+    a owl:Class ;
+    rdfs:subClassOf sysml:Connector ;
+    rdfs:label "BindingConnector" ;
+    rdfs:comment """<p>A <code>BindingConnector</code> is a binary <code>Connector</code> that requires its <code>relatedFeatures</code> to identify the same things (have the same values).</p>
+	
+	specializesFromLibrary('Links::selfLinks')
+	relatedFeature->size() = 2""" .
+
+sysml:Connector
+    a owl:Class ;
+    rdfs:subClassOf sysml:Feature, sysml:Relationship ;
+    rdfs:label "Connector" ;
+    rdfs:comment """<p>A <code>Connector</code> is a usage of <code>Associations</code>, with links restricted according to instances of the <code>Type</code> in which they are used (domain of the <code>Connector</code>). The <code>associations</code> of the <code>Connector</code> restrict what kinds of things might be linked. The <code>Connector</code> further restricts these links to be between values of <code>Features</code> on instances of its domain.</p>
+	
+	relatedFeature = connectorEnd.ownedReferenceSubsetting->
+	select(s | s <> null).subsettedFeature
+	relatedFeature->forAll(f |
+	if featuringType->isEmpty() then f.isFeaturedWithin(null)
+	else featuringType->forAll(t | f.isFeaturedWithin(t))
+	endif)
+	sourceFeature =
+	if relatedFeature->isEmpty() then null
+	else relatedFeature->first()
+	endif
+	targetFeature =
+	if relatedFeature->size() < 2 then OrderedSet{}
+	else
+	relatedFeature->
+	subSequence(2, relatedFeature->size())->
+	asOrderedSet()
+	endif
+	not isAbstract implies relatedFeature->size() >= 2
+	specializesFromLibrary('Links::links')
+	association->exists(oclIsKindOf(AssociationStructure)) implies
+	specializesFromLibrary('Objects::linkObjects')
+	connectorEnds->size() = 2 and
+	association->exists(oclIsKindOf(AssocationStructure)) implies
+	specializesFromLibrary('Objects::binaryLinkObjects')
+	connectorEnd->size() = 2 implies
+	specializesFromLibrary('Links::binaryLinks')
+	connectorEnds->size() > 2 implies
+	not specializesFromLibrary('Links::BinaryLink')""" .
+
+sysml:Connector_association
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Feature_type ;
+    rdfs:domain sysml:Connector ;
+    rdfs:range sysml:Association ;
+    ecore:isOrdered true ;
+    rdfs:label "association" ;
+    rdfs:comment "<p>The <code>Associations</code> that type the <code>Connector</code>.</p>" .
+
+sysml:Connector_connectorEnd
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Type_endFeature ;
+    rdfs:domain sysml:Connector ;
+    rdfs:range sysml:Feature ;
+    ecore:isOrdered true ;
+    rdfs:label "connectorEnd" ;
+    rdfs:comment "<p>The <code>endFeatures</code> of a <code>Connector</code>, which redefine the <code>endFeatures</code> of the <code>associations</code> of the <code>Connector</code>. The <code>connectorEnds</code> determine via <code>ReferenceSubsetting</code> <code>Relationships</code> which <code>Features</code> are related by the <code>Connector</code>.</p>" .
+
+sysml:Connector_relatedFeature
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_relatedElement ;
+    rdfs:domain sysml:Connector ;
+    rdfs:range sysml:Feature ;
+    ecore:isOrdered true ;
+    rdfs:label "relatedFeature" ;
+    rdfs:comment "<p>The <code>Features</code> that are related by this <code>Connector</code> considered as a <code>Relationship</code> and that restrict the links it identifies, given by the referenced <code>Features</code> of the <code>connectorEnds</code> of the <code>Connector</code>.</p>" .
+
+sysml:Connector_sourceFeature
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Connector_relatedFeature, sysml:Relationship_source ;
+    rdfs:domain sysml:Connector ;
+    rdfs:range sysml:Feature ;
+    ecore:isOrdered true ;
+    rdfs:label "sourceFeature" ;
+    rdfs:comment "<p>The source <code>relatedFeature</code> for this <code>Connector</code>. It is the first <code>relatedFeature</code>.</p>" .
+
+sysml:Connector_targetFeature
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Connector_relatedFeature, sysml:Relationship_target ;
+    rdfs:domain sysml:Connector ;
+    rdfs:range sysml:Feature ;
+    ecore:isOrdered true ;
+    rdfs:label "targetFeature" ;
+    rdfs:comment "<p>The target <code>relatedFeatures</code> for this <code>Connector</code>. This includes all the <code>relatedFeatures</code> other than the <code>sourceFeature</code>.</p>" .
+
+sysml:Succession
+    a owl:Class ;
+    rdfs:subClassOf sysml:Connector ;
+    rdfs:label "Succession" ;
+    rdfs:comment """<p>A <code>Succession</code> is a binary <code>Connector</code> that requires its <code>relatedFeatures</code> to happen separately in time.</p>
+	
+	specializesFromLibrary('Occurences::happensBeforeLinks')
+	transitionStep =
+	if owningNamespace.oclIsKindOf(Step) and
+	owningNamespace.oclAsType(Step).
+	specializesFromLibrary('TransitionPerformances::TransitionPerformance') then
+	owningNamespace.oclAsType(Step)
+	else null
+	endif
+	triggerStep =
+	if transitionStep = null or
+	transitionStep.ownedFeature.size() < 2 or
+	not transitionStep.ownedFeature->at(2).oclIsKindOf(Step)
+	then Set{}
+	else Set{transitionStep.ownedFeature->at(2).oclAsType(Step)}
+	endif
+	effectStep =
+	if transitionStep = null or
+	transitionStep.ownedFeature.size() < 4 or
+	not transitionStep.ownedFeature->at(4).oclIsKindOf(Step)
+	then Set{}
+	else Set{transitionStep.ownedFeature->at(4).oclAsType(Step)}
+	endif
+	guardExpression =
+	if transitionStep = null or
+	transitionStep.ownedFeature.size() < 3 or
+	not transitionStep.ownedFeature->at(3).oclIsKindOf(Expression)
+	then Set{}
+	else Set{transitionStep.ownedFeature->at(3).oclAsType(Expression)}
+	endif""" .
+
+sysml:Succession_effectStep
+    a owl:ObjectProperty ;
+    rdfs:domain sysml:Succession ;
+    rdfs:range sysml:Step ;
+    rdfs:label "effectStep" ;
+    rdfs:comment "<p><code>Steps</code> that represent occurrences that are side effects of the <code>transitionStep</code> occurring.</p>" .
+
+sysml:Succession_guardExpression
+    a owl:ObjectProperty ;
+    rdfs:domain sysml:Succession ;
+    rdfs:range sysml:Expression ;
+    rdfs:label "guardExpression" ;
+    rdfs:comment "<p><code>Expressions</code> that must evaluate to true before the <code>transitionStep</code> can occur.</p>" .
+
+sysml:Succession_transitionStep
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:Succession ;
+    rdfs:range sysml:Step ;
+    rdfs:label "transitionStep" ;
+    rdfs:comment "<p>A <code>Step</code> that is typed by the <code>Behavior</code> <code><em>TransitionPerformances::TransitionPerformance</em></code> (from the Kernel Semantic Library) that has this <code>Succession</code> as its <em><code>transitionLink</code></em>.</p>" .
+
+sysml:Succession_triggerStep
+    a owl:ObjectProperty ;
+    rdfs:domain sysml:Succession ;
+    rdfs:range sysml:Step ;
+    rdfs:label "triggerStep" ;
+    rdfs:comment "<p><code>Steps</code> that map incoming events to the timing of occurrences of the <code>transitionStep</code>. The values of <code>triggerStep</code> subset the list of acceptable events to be received by a <code>Behavior</code> or the object that performs it.</p>" .

@@ -1,0 +1,41 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/SysML/Systems/Items>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Structures>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Occurrences> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "SysML/Systems/Items" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:ItemDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:OccurrenceDefinition, sysml:Structure ;
+    rdfs:label "ItemDefinition" ;
+    rdfs:comment """<p>An <code>ItemDefinition</code> is an <code>OccurrenceDefinition</code> of the <code>Structure</code> of things that may themselves be systems or parts of systems, but may also be things that are acted on by a system or parts of a system, but which do not necessarily perform actions themselves. This includes items that can be exchanged between parts of a system, such as water or electrical signals.</p>
+	
+	specializesFromLibrary('Items::Item')""" .
+
+sysml:ItemUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:OccurrenceUsage ;
+    rdfs:label "ItemUsage" ;
+    rdfs:comment """<p>An <code>ItemUsage</code> is a <code>ItemUsage</code> whose <code>definition</code> is a <code>Structure</code>. Nominally, if the <code>definition</code> is an <code>ItemDefinition</code>, an <code>ItemUsage</code> is a <code>ItemUsage</code> of that <code>ItemDefinition</code> within a system. However, other kinds of Kernel <code>Structures</code> are also allowed, to permit use of <code>Structures</code> from the Kernel Model Libraries.</p>
+	itemDefinition = occurrenceDefinition->selectByKind(ItemDefinition)
+	specializesFromLibrary('Items::items')
+	isComposite and owningType <> null and
+	(owningType.oclIsKindOf(ItemDefinition) or
+	owningType.oclIsKindOf(ItemUsage)) implies
+	specializesFromLibrary('Items::Item::subitem')""" .
+
+sysml:ItemUsage_itemDefinition
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:OccurrenceUsage_occurrenceDefinition ;
+    rdfs:domain sysml:ItemUsage ;
+    rdfs:range sysml:Structure ;
+    ecore:isOrdered true ;
+    rdfs:label "itemDefinition" ;
+    rdfs:comment "<p>The Structures that are the <code>definitions</code> of this ItemUsage. Nominally, these are ItemDefinitions, but other kinds of Kernel Structures are also allowed, to permit use of Structures from the Kernel Library.</p>" .

@@ -1,0 +1,682 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/KerML/Core/Features>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Types>, <https://www.omg.org/spec/SysML/modules/KerML/Root/Elements> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "KerML/Core/Features" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:EndFeatureMembership
+    a owl:Class ;
+    rdfs:subClassOf sysml:FeatureMembership ;
+    rdfs:label "EndFeatureMembership" ;
+    rdfs:comment """<p><code>EndFeatureMembership</code> is a <code>FeatureMembership</code> that requires its <code>memberFeature</code> be owned and have <code>isEnd = true</code>.</p>
+	
+	ownedMemberFeature.isEnd""" .
+
+sysml:Feature
+    a owl:Class ;
+    rdfs:subClassOf sysml:Type, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Feature_featureTarget ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Feature_isComposite ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Feature_isDerived ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Feature_isEnd ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Feature_isNonunique ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Feature_isOrdered ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Feature_isPortion ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Feature_isReadOnly ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Feature_isUnique ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Feature" ;
+    rdfs:comment """<p>A <code>Feature</code> is a <code>Type</code> that classifies relations between multiple things (in the universe). The domain of the relation is the intersection of the <code>featuringTypes</code> of the <code>Feature</code>. (The domain of a <code>Feature</code> with no <code>featuringTyps</code> is implicitly the most general <code>Type</code> <em><code>Base::Anything</code></em> from the Kernel Semantic Library.) The co-domain of the relation is the intersection of the <code>types</code> of the <code>Feature</code>.
+	
+	<p>In the simplest cases, the <code>featuringTypes</code> and <code>types</code> are <code>Classifiers</code> and the <code>Feature</code> relates two things, one from the domain and one from the range. Examples include cars paired with wheels, people paired with other people, and cars paired with numbers representing the car length.</p>
+	
+	<p>Since <code>Features</code> are <code>Types</code>, their <code>featuringTypes</code> and <code>types</code> can be <code>Features</code>. In this case, the <code>Feature</code> effectively classifies relations between relations, which can be interpreted as the sequence of things related by the domain <code>Feature</code> concatenated with the sequence of things related by the co-domain <code>Feature</code>.</p>
+	
+	<p>The <em>values</em> of a <code>Feature</code> for a given instance of its domain are all the instances of its co-domain that are related to that domain instance by the <code>Feature</code>. The values of a <code>Feature</code> with <code>chainingFeatures</code> are the same as values of the last <code>Feature</code> in the chain, which can be found by starting with values of the first <code>Feature</code>, then using those values as domain instances to obtain valus of the second <code>Feature</code>, and so on, to values of the last <code>Feature</code>.</p>
+	
+	ownedRedefinition = ownedSubsetting->selectByKind(Redefinition)
+	ownedTypeFeaturing = ownedRelationship->selectByKind(TypeFeaturing)->
+	select(tf | tf.featureOfType = self)
+	ownedSubsetting = ownedSpecialization->selectByKind(Subsetting)
+	ownedTyping = ownedGeneralization->selectByKind(FeatureTyping)
+	type =
+	let types : OrderedSet(Types) = OrderedSet{self}->
+	-- Note: The closure operation automatically handles circular relationships.
+	closure(typingFeatures()).typing.type->asOrderedSet() in
+	types->reject(t1 | types->exist(t2 | t2 <> t1 and t2.specializes(t1)))
+	multiplicity <> null implies multiplicity.featuringType = featuringType
+	specializesFromLibrary('Base::things')
+	chainingFeature->excludes(self)
+	ownedFeatureChaining = ownedRelationship->selectByKind(FeatureChaining)
+	chainingFeature = ownedFeatureChaining.chainingFeature
+	chainingFeature->size() <> 1
+	isEnd and owningType <> null implies
+	let i : Integer =
+	owningType.ownedEndFeature->indexOf(self) in
+	owningType.ownedSpecialization.general->
+	forAll(supertype |
+	supertype.endFeature->size() >= i implies
+	redefines(supertype.endFeature->at(i))
+	direction = null and
+	ownedSpecializations->forAll(isImplied) implies
+	ownedMembership->
+	selectByKind(FeatureValue)->
+	forAll(fv | specializes(fv.value.result))
+	isEnd and owningType <> null and
+	(owningType.oclIsKindOf(Association) or
+	owningType.oclIsKindOf(Connector)) implies
+	specializesFromLibrary('Links::Link::participant')
+	isComposite and
+	ownedTyping.type->includes(oclIsKindOf(Structure)) and
+	owningType <> null and
+	(owningType.oclIsKindOf(Structure) or
+	owningType.type->includes(oclIsKindOf(Structure))) implies
+	specializesFromLibrary('Occurrence::Occurrence::suboccurrences')
+	owningType <> null and
+	owningType.oclIsKindOf(FeatureReferenceExpression) and
+	self = owningType.oclAsType(FeatureReferenceExpression).result implies
+	specializes(owningType.oclAsType(FeatureReferenceExpression).referent)
+	
+	ownedTyping.type->exists(selectByKind(Class)) implies
+	specializesFromLibrary('Occurrences::occurrences')
+	isComposite and
+	ownedTyping.type->includes(oclIsKindOf(Class)) and
+	owningType <> null and
+	(owningType.oclIsKindOf(Class) or
+	owningType.oclIsKindOf(Feature) and
+	owningType.oclAsType(Feature).type->
+	exists(oclIsKindOf(Class))) implies
+	specializesFromLibrary('Occurrence::Occurrence::suboccurrences')
+	ownedTyping.type->exists(selectByKind(DataType)) implies
+	specializesFromLibrary('Base::dataValues')
+	owningType <> null and
+	owningType.oclIsKindOf(ItemFlowEnd) and
+	owningType.ownedFeature->at(1) = self implies
+	let flowType : Type = owningType.owningType in
+	flowType <> null implies
+	let i : Integer =
+	flowType.ownedFeature.indexOf(owningType) in
+	(i = 1 implies
+	redefinesFromLibrary('Transfers::Transfer::source::sourceOutput')) and
+	(i = 2 implies
+	redefinesFromLibrary('Transfers::Transfer::source::targetInput'))
+	
+	owningType <> null and
+	(owningType.oclIsKindOf(Behavior) or
+	owningType.oclIsKindOf(Step)) implies
+	let i : Integer =
+	owningType.ownedFeature->select(direction <> null) in
+	owningType.ownedSpecialization.general->
+	forAll(supertype |
+	let ownedParameters : Sequence(Feature) =
+	supertype.ownedFeature->select(direction <> null) in
+	ownedParameters->size() >= i implies
+	redefines(ownedParameters->at(i))
+	ownedTyping.type->exists(selectByKind(Structure)) implies
+	specializesFromLibary('Objects::objects')
+	owningType <> null and
+	(owningType.oclIsKindOf(Function) and
+	self = owningType.oclAsType(Function).result or
+	owningType.oclIsKindOf(Expression) and
+	self = owningType.oclAsType(Expression).result) implies
+	owningType.ownedSpecialization.general->
+	select(oclIsKindOf(Function) or oclIsKindOf(Expression))->
+	forAll(supertype |
+	redefines(
+	if superType.oclIsKindOf(Function) then
+	superType.oclAsType(Function).result
+	else
+	superType.oclAsType(Expression).result
+	endif)
+	ownedFeatureInverting = ownedRelationship->selectByKind(FeatureInverting)->
+	select(fi | fi.featureInverted = self)
+	featuringType =
+	let featuringTypes : OrderedSet(Type) =
+	featuring.type->asOrderedSet() in
+	if chainingFeature->isEmpty() then featuringTypes
+	else
+	featuringTypes->
+	union(chainingFeature->first().featuringType)->
+	asOrderedSet()
+	endif
+	ownedReferenceSubsetting =
+	let referenceSubsettings : OrderedSet(ReferenceSubsetting) =
+	ownedSubsetting->selectByKind(ReferenceSubsetting) in
+	if referenceSubsettings->isEmpty() then null
+	else referenceSubsettings->first() endif
+	ownedSubsetting->selectByKind(ReferenceSubsetting)->size() <= 1
+	Sequence{1..chainingFeature->size() - 1}->forAll(i |
+	chainingFeature->at(i + 1).featuringType->forAll(t |
+	chainingFeature->at(i).specializes(t)))
+	
+	isPortion and
+	ownedTyping.type->includes(oclIsKindOf(Class)) and
+	owningType <> null and
+	(owningType.oclIsKindOf(Class) or
+	owningType.oclIsKindOf(Feature) and
+	owningType.oclAsType(Feature).type->
+	exists(oclIsKindOf(Class))) implies
+	specializesFromLibrary('Occurrence::Occurrence::portions')
+	featureTarget = if chainingFeature->isEmpty() then self else chainingFeature->last() endif
+	owningType <> null and
+	owningType.oclIsKindOf(InvocationExpression) and
+	let owningInvocation: InvocationExpression = owningType.oclAsType(InvocationExpression) in
+	self = owningInvocation.result and
+	not owningInvocation.ownedTyping->exists(oclIsKindOf(Function)) and
+	not owningInvocation.ownedSubsetting->reject(isImplied).subsettedFeature.type->exists(oclIsKindOf(Function)) implies
+	owningInvocation.ownedTyping->forAll(type | self.specializes(type))""" .
+
+sysml:FeatureChaining
+    a owl:Class ;
+    rdfs:subClassOf sysml:Relationship, [
+        a owl:Restriction ;
+        owl:onProperty sysml:FeatureChaining_chainingFeature ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:FeatureChaining_featureChained ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "FeatureChaining" ;
+    rdfs:comment "<p><code>FeatureChaining</code> is a <code>Relationship</code> that makes its target <code>Feature</code> one of the <code>chainingFeatures</code> of its owning <code>Feature</code>.</p>" .
+
+sysml:FeatureChaining_chainingFeature
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_target ;
+    rdfs:domain sysml:FeatureChaining ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "chainingFeature" ;
+    rdfs:comment "<p>The <code>Feature</code> whose values partly determine values of <code>featureChained</code>, as described in <code>Feature::chainingFeature</code>.</p>" .
+
+sysml:FeatureChaining_featureChained
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_owningRelatedElement, sysml:Relationship_source ;
+    rdfs:domain sysml:FeatureChaining ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "featureChained" ;
+    rdfs:comment "<p>The <code>Feature</code> whose values are partly determined by values of the <code>chainingFeature</code>, as described in <code>Feature::chainingFeature</code>.</p>" .
+
+sysml:FeatureInverting
+    a owl:Class ;
+    rdfs:subClassOf sysml:Relationship, [
+        a owl:Restriction ;
+        owl:onProperty sysml:FeatureInverting_featureInverted ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:FeatureInverting_invertingFeature ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "FeatureInverting" ;
+    rdfs:comment "<p>A <code>FeatureInverting</code> is a <code>Relationship</code> between <code>Features</code> asserting that their interpretations (sequences) are the reverse of each other, identified as <code>featureInverted</code> and <code>invertingFeature</code>. For example, a <code>Feature</code> identifying each person&#39;s parents is the inverse of a <code>Feature</code> identifying each person&#39;s children. A person identified as a parent of another will identify that other as one of their children.</p>" .
+
+sysml:FeatureInverting_featureInverted
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_source ;
+    rdfs:domain sysml:FeatureInverting ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "featureInverted" ;
+    rdfs:comment "<p>The <code>Feature</code> that is an inverse of the <code>invertingFeature</code>.</p>" .
+
+sysml:FeatureInverting_invertingFeature
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_target ;
+    rdfs:domain sysml:FeatureInverting ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "invertingFeature" ;
+    rdfs:comment "<p>The <code>Feature</code> that is an inverse of the <code>invertedFeature</code>.</p>" .
+
+sysml:FeatureInverting_owningFeature
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:FeatureInverting_featureInverted, sysml:Relationship_owningRelatedElement ;
+    rdfs:domain sysml:FeatureInverting ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "owningFeature" ;
+    rdfs:comment "<p>A <code>featureInverted</code> that is also the <code>owningRelatedElement</code> of this <code>FeatureInverting</code>.</p>" .
+
+sysml:FeatureTyping
+    a owl:Class ;
+    rdfs:subClassOf sysml:Specialization, [
+        a owl:Restriction ;
+        owl:onProperty sysml:FeatureTyping_type ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:FeatureTyping_typedFeature ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "FeatureTyping" ;
+    rdfs:comment "<p><code>FeatureTyping</code> is <code>Specialization</code> in which the <code>specific</code> <code>Type</code> is a <code>Feature</code>. This means the set of instances of the (specific) <code>typedFeature</code> is a subset of the set of instances of the (general) <code>type</code>. In the simplest case, the <code>type</code> is a <code>Classifier</code>, whereupon the <code>typedFeature</code> has values that are instances of the <code>Classifier</code>.</p>" .
+
+sysml:FeatureTyping_owningFeature
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:FeatureTyping_typedFeature, sysml:Specialization_owningType ;
+    rdfs:domain sysml:FeatureTyping ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "owningFeature" ;
+    rdfs:comment "<p>A <code>typedFeature</code> that is also the <code>owningRelatedElement</code> of this <code>FeatureTyping</code>.</p>" .
+
+sysml:FeatureTyping_type
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Specialization_general ;
+    rdfs:domain sysml:FeatureTyping ;
+    rdfs:range sysml:Type ;
+    rdfs:label "type" ;
+    rdfs:comment "<p>The <code>Type</code> that is being applied by this <code>FeatureTyping</code>.</p>" .
+
+sysml:FeatureTyping_typedFeature
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Specialization_specific ;
+    rdfs:domain sysml:FeatureTyping ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "typedFeature" ;
+    rdfs:comment "<p>The <code>Feature</code> that has a <code>type</code> determined by this <code>FeatureTyping</code>.</p>" .
+
+sysml:Feature_chainingFeature
+    a owl:ObjectProperty ;
+    rdfs:domain sysml:Feature ;
+    rdfs:range sysml:Feature ;
+    ecore:isOrdered true ;
+    rdfs:label "chainingFeature" ;
+    rdfs:comment "<p>The <code>Feature</code> that are chained together to determine the values of this <code>Feature</code>, derived from the <code>chainingFeatures</code> of the <code>ownedFeatureChainings</code> of this <code>Feature</code>, in the same order. The values of a <code>Feature</code> with <code>chainingFeatures</code> are the same as values of the last <code>Feature</code> in the chain, which can be found by starting with the values of the first <code>Feature</code> (for each instance of the domain of the original <code>Feature</code>), then using each of those as domain instances to find the values of the second <code>Feature</code> in chainingFeatures, and so on, to values of the last <code>Feature</code>.</p>" .
+
+sysml:Feature_direction
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Feature ;
+    rdfs:range sysml:FeatureDirectionKind ;
+    rdfs:label "direction" ;
+    rdfs:comment "<p>Indicates how values of this <code>Feature</code> are determined or used (as specified for the <code>FeatureDirectionKind</code>).</p>" .
+
+sysml:Feature_endOwningType
+    a owl:ObjectProperty ;
+    owl:inverseOf sysml:Type_ownedEndFeature ;
+    rdfs:domain sysml:Feature ;
+    rdfs:range sysml:Type ;
+    rdfs:label "endOwningType" ;
+    rdfs:comment "<p>The <code>Type</code> that is related to this <code>Feature</code> by an <code>EndFeatureMembership</code> in which the <code>Feature</code> is an <code>ownedMemberFeature</code>.</p>" .
+
+sysml:Feature_featureTarget
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:Feature ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "featureTarget" ;
+    rdfs:comment "<p>The last of the <code>chainingFeatures</code> of this <code>Feature</code>, if it has any. Otherwise, this <code>Feature</code> itself.</p>" .
+
+sysml:Feature_featuringType
+    a owl:ObjectProperty ;
+    rdfs:domain sysml:Feature ;
+    rdfs:range sysml:Type ;
+    ecore:isOrdered true ;
+    rdfs:label "featuringType" ;
+    rdfs:comment "<p><code>Types</code> that feature this <code>Feature</code>, such that any instance in the domain of the <code>Feature</code> must be classified by all of these <code>Types</code>, including at least all the <code>featuringTypes</code> of its <code>typeFeaturings</code>.  If the <code>Feature</code> is chained, then the <code>featuringTypes</code> of the first <code>Feature</code> in the chain are also <code>featuringTypes</code> of the chained <code>Feature</code>.</p>" .
+
+sysml:Feature_isComposite
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Feature ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isComposite" ;
+    rdfs:comment "<p>Whether the <code>Feature</code> is a composite <code>feature</code> of its <code>featuringType</code>. If so, the values of the <code>Feature</code> cannot exist after its featuring instance no longer does.</p>" .
+
+sysml:Feature_isDerived
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Feature ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isDerived" ;
+    rdfs:comment "<p>Whether the values of this <code>Feature</code> can always be computed from the values of other <code>Features</code>.</p>" .
+
+sysml:Feature_isEnd
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Feature ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isEnd" ;
+    rdfs:comment """<p>Whether or not the this <code>Feature</code> is an end <code>Feature</code>, requiring a different interpretation of the <code>multiplicity</code> of the <code>Feature</code>.</p>
+	
+	<p>An end <code>Feature</code> is always considered to map each domain instance to a single co-domain instance, whether or not a <code>Multiplicity</code> is given for it. If a <code>Multiplicity</code> is given for an end <code>Feature</code>, rather than giving the co-domain cardinality for the <code>Feature</code> as usual, it specifies a cardinality constraint for <em>navigating</em> across the <code>endFeatures</code> of the <code>featuringType</code> of the end <code>Feature</code>. That is, if a <code>Type</code> has <em>n</em> <code>endFeatures</code>, then the <code>Multiplicity</code> of any one of those end <code>Features</code> constrains the cardinality of the set of values of that <code>Feature</code> when the values of the other <em>n-1</em> end <code>Features</code> are held fixed.</p>""" .
+
+sysml:Feature_isNonunique
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Feature ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isNonunique" .
+
+sysml:Feature_isOrdered
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Feature ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isOrdered" ;
+    rdfs:comment "<p>Whether an order exists for the values of this <code>Feature</code> or not.</p>" .
+
+sysml:Feature_isPortion
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Feature ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isPortion" ;
+    rdfs:comment "<p>Whether the values of this <code>Feature</code> are contained in the space and time of instances of the domain of the <code>Feature</code> and represent the same thing as those instances.</p>" .
+
+sysml:Feature_isReadOnly
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Feature ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isReadOnly" ;
+    rdfs:comment "<p>Whether the values of this <code>Feature</code> can change over the lifetime of an instance of the domain.</p>" .
+
+sysml:Feature_isUnique
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:Feature ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isUnique" ;
+    rdfs:comment "<p>Whether or not values for this <code>Feature</code> must have no duplicates or not.</p>" .
+
+sysml:Feature_ownedFeatureChaining
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    owl:inverseOf sysml:FeatureChaining_featureChained ;
+    rdfs:domain sysml:Feature ;
+    rdfs:range sysml:FeatureChaining ;
+    rdfs:label "ownedFeatureChaining" ;
+    rdfs:comment "<p>The <code>ownedRelationships</code> of this <code>Feature</code> that are <code>FeatureChainings</code>, for which the <code>Feature</code> will be the <code>featureChained</code>.</p>" .
+
+sysml:Feature_ownedFeatureInverting
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    owl:inverseOf sysml:FeatureInverting_owningFeature ;
+    rdfs:domain sysml:Feature ;
+    rdfs:range sysml:FeatureInverting ;
+    rdfs:label "ownedFeatureInverting" ;
+    rdfs:comment "<p>The <code>ownedRelationships</code> of this <code>Feature</code> that are <code>FeatureInvertings</code> and for which the <code>Feature</code> is the <code>featureInverted</code>.</p>" .
+
+sysml:Feature_ownedRedefinition
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Feature_ownedSubsetting ;
+    rdfs:domain sysml:Feature ;
+    rdfs:range sysml:Redefinition ;
+    rdfs:label "ownedRedefinition" ;
+    rdfs:comment "<p>The <code>ownedSubsettings</code> of this <code>Feature</code> that are <code>Redefinitions</code>, for which the <code>Feature</code> is the <code>redefiningFeature</code>.</p>" .
+
+sysml:Feature_ownedReferenceSubsetting
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    owl:inverseOf sysml:ReferenceSubsetting_referencingFeature ;
+    rdfs:domain sysml:Feature ;
+    rdfs:range sysml:ReferenceSubsetting ;
+    rdfs:label "ownedReferenceSubsetting" ;
+    rdfs:comment "<p>The one <code>ownedSubsetting</code> of this <code>Feature</code>, if any, that is a <code>ReferenceSubsetting</code>, for which the <code>Feature</code> is the <code>referencingFeature</code>.</p>" .
+
+sysml:Feature_ownedSubsetting
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    owl:inverseOf sysml:Subsetting_owningFeature ;
+    rdfs:domain sysml:Feature ;
+    rdfs:range sysml:Subsetting ;
+    rdfs:label "ownedSubsetting" ;
+    rdfs:comment "<p>The <code>ownedSpecializations</code> of this <code>Feature</code> that are <code>Subsettings</code>, for which the <code>Feature</code> is the <code>subsettingFeature</code>.</p>" .
+
+sysml:Feature_ownedTypeFeaturing
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    owl:inverseOf sysml:TypeFeaturing_owningFeatureOfType ;
+    rdfs:domain sysml:Feature ;
+    rdfs:range sysml:TypeFeaturing ;
+    rdfs:label "ownedTypeFeaturing" ;
+    rdfs:comment "<p>The <code>ownedRelationships</code> of this <code>Feature</code> that are <code>TypeFeaturings</code> and for which the <code>Feature</code> is the <code>featureOfType</code>.</p>" .
+
+sysml:Feature_ownedTyping
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    owl:inverseOf sysml:FeatureTyping_owningFeature ;
+    rdfs:domain sysml:Feature ;
+    rdfs:range sysml:FeatureTyping ;
+    rdfs:label "ownedTyping" ;
+    rdfs:comment "<p>The <code>ownedSpecializations</code> of this <code>Feature</code> that are <code>FeatureTypings</code>, for which the <code>Feature</code> is the <code>typedFeature</code>.</p>" .
+
+sysml:Feature_owningFeatureMembership
+    a owl:InverseFunctionalProperty, owl:ObjectProperty ;
+    owl:inverseOf sysml:FeatureMembership_ownedMemberFeature ;
+    rdfs:domain sysml:Feature ;
+    rdfs:range sysml:FeatureMembership ;
+    rdfs:label "owningFeatureMembership" ;
+    rdfs:comment "<p>The <code>FeatureMembership</code> that owns this <code>Feature</code> as an <code>ownedMemberFeature</code>, determining its <code>owningType</code>.</p>" .
+
+sysml:Feature_owningType
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Feature_featuringType ;
+    owl:inverseOf sysml:Type_ownedFeature ;
+    rdfs:domain sysml:Feature ;
+    rdfs:range sysml:Type ;
+    rdfs:label "owningType" ;
+    rdfs:comment "<p>The <code>Type</code> that is the <code>owningType</code> of the <code>owningFeatureMembership</code> of this <code>Feature</code>.</p>" .
+
+sysml:Feature_type
+    a owl:ObjectProperty ;
+    rdfs:domain sysml:Feature ;
+    rdfs:range sysml:Type ;
+    ecore:isOrdered true ;
+    rdfs:label "type" ;
+    rdfs:comment "<p><code>Types</code> that restrict the values of this <code>Feature</code>, such that the values must be instances of all the <code>types</code>. The types of a <code>Feature</code> are derived from its <code>typings</code> and the <code>types</code> of its <code>subsettings</code>. If the <code>Feature</code> is chained, then the <code>types</code> of the last <code>Feature</code> in the chain are also <code>types</code> of the chained <code>Feature</code>.</p>" .
+
+sysml:Featuring
+    a owl:Class ;
+    rdfs:subClassOf sysml:Relationship, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Featuring_feature ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Featuring_type ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Featuring" ;
+    rdfs:comment """<p><code>Featuring</code> is a <code>Relationship</code> between a <code>Type</code> and a <code>Feature</code> that is featured by that <code>Type</code>. It asserts that every instance in the domain of the <code>feature</code> must be classified by the <code>type</code>.</p>
+	
+	<p><code>Featuring</code> is abstract and does not commit to which of <code>feature</code> or <code>type</code> are the <code>source</code> or <code>target</code> of the <code>Relationship</code>. This commitment is made in the subclasses of <code>Featuring</code>, <code>TypeFeaturing</code> and <code>FeatureMembership</code>, which have opposite directions.</p>""" .
+
+sysml:Featuring_feature
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_relatedElement ;
+    rdfs:domain sysml:Featuring ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "feature" ;
+    rdfs:comment "<p>The <code>Feature</code> that is featured by the <code>featuringType</code>.</p>" .
+
+sysml:Featuring_type
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_relatedElement ;
+    rdfs:domain sysml:Featuring ;
+    rdfs:range sysml:Type ;
+    rdfs:label "type" ;
+    rdfs:comment "<p>The <code>Type<code> that features the <code>featureOfType</code>.</p>" .
+
+sysml:Redefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:Subsetting, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Redefinition_redefinedFeature ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Redefinition_redefiningFeature ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Redefinition" ;
+    rdfs:comment """<p><code>Redefinition</code> is a kind of <code>Subsetting</code> that requires the <code>redefinedFeature</code> and the <code>redefiningFeature</code> to have the same values (on each instance of the domain of the <code>redefiningFeature</code>). This means any restrictions on the <code>redefiningFeature</code>, such as <code>type</code> or <code>multiplicity</code>, also apply to the <code>redefinedFeature</code> (on each instance of the domain of the <code>redefiningFeature</code>), and vice versa. The <code>redefinedFeature</code> might have values for instances of the domain of the <code>redefiningFeature</code>, but only as instances of the domain of the <code>redefinedFeature</code> that happen to also be instances of the domain of the <code>redefiningFeature</code>. This is supported by the constraints inherited from <code>Subsetting</code> on the domains of the <code>redefiningFeature</code> and <code>redefinedFeature</code>. However, these constraints are narrowed for <code>Redefinition</code> to require the <code>owningTypes</code> of the <code>redefiningFeature</code> and <code>redefinedFeature</code> to be different and the <code>redefinedFeature</code> to not be inherited into the <code>owningNamespace</code> of the <code>redefiningFeature</code>.This enables the <code>redefiningFeature</code> to have the same name as the <code>redefinedFeature</code>, if desired.</p>
+	
+	let anythingType: Type =
+	redefiningFeature.resolveGlobal('Base::Anything').modelElement.oclAsType(Type) in
+	-- Including \"Anything\" accounts for implicit featuringType of Features
+	-- with no explicit featuringType.
+	let redefiningFeaturingTypes: Set(Type) =
+	redefiningFeature.featuringTypes->asSet()->including(anythingType) in
+	let redefinedFeaturingTypes: Set(Type) =
+	redefinedFeature.featuringTypes->asSet()->including(anythingType) in
+	redefiningFeaturingTypes <> redefinedFeaturingType
+	featuringType->forAll(t |
+	let direction : FeatureDirectionKind = t.directionOf(redefinedFeature) in
+	((direction = FeatureDirectionKind::_'in' or
+	direction = FeatureDirectionKind::out) implies
+	redefiningFeature.direction = direction)
+	and
+	(direction = FeatureDirectionKind::inout implies
+	redefiningFeature.direction <> null))""" .
+
+sysml:Redefinition_redefinedFeature
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Subsetting_subsettedFeature ;
+    rdfs:domain sysml:Redefinition ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "redefinedFeature" ;
+    rdfs:comment "<p>The <code>Feature</code> that is redefined by the <code>redefiningFeature</code> of this <code>Redefinition</code>.</p>" .
+
+sysml:Redefinition_redefiningFeature
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Subsetting_subsettingFeature ;
+    rdfs:domain sysml:Redefinition ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "redefiningFeature" ;
+    rdfs:comment "<p>The <code>Feature</code> that is redefining the <code>redefinedFeature</code> of this <code>Redefinition</code>.</p>" .
+
+sysml:ReferenceSubsetting
+    a owl:Class ;
+    rdfs:subClassOf sysml:Subsetting, [
+        a owl:Restriction ;
+        owl:onProperty sysml:ReferenceSubsetting_referencedFeature ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:ReferenceSubsetting_referencingFeature ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "ReferenceSubsetting" ;
+    rdfs:comment """<p><code>ReferenceSubsetting</code> is a kind of <code>Subsetting</code> in which the <code>referencedFeature</code> is syntactically distinguished from other <code>Features</code> subsetted by the <code>referencingFeature</code>. <code>ReferenceSubsetting</code> has the same semantics as <code>Subsetting</code>, but the <code>referenceFeature</code> may have a special purpose relative to the <code>referencingFeature</code>. For instance, <code>ReferenceSubsetting</code> is used to identify the <code>relatedFeatures</code> of a <code>Connector</code>.</p>
+	
+	<p><code>ReferenceSubsetting</code> is always an <code>ownedRelationship</code> of its <code>referencingFeature</code>. A <code>Feature</code> can have at most one <code>ownedReferenceSubsetting</code>.</p>""" .
+
+sysml:ReferenceSubsetting_referencedFeature
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Subsetting_subsettedFeature ;
+    rdfs:domain sysml:ReferenceSubsetting ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "referencedFeature" ;
+    rdfs:comment "<p>The <code>Feature</code> that is referenced by the <code>referencingFeature</code> of this <code>ReferenceSubsetting</code>.</p>" .
+
+sysml:ReferenceSubsetting_referencingFeature
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Subsetting_owningFeature ;
+    rdfs:domain sysml:ReferenceSubsetting ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "referencingFeature" ;
+    rdfs:comment "<p>The <code>Feature</code> that owns this <code>ReferenceSubsetting</code> relationship, which is also its <code>subsettingFeature</code>.</p>" .
+
+sysml:Subsetting
+    a owl:Class ;
+    rdfs:subClassOf sysml:Specialization, [
+        a owl:Restriction ;
+        owl:onProperty sysml:Subsetting_subsettedFeature ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:Subsetting_subsettingFeature ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "Subsetting" ;
+    rdfs:comment """<p><code>Subsetting</code> is <code>Specialization</code> in which the <code>specific</code> and <code>general</code> <code>Types</code> are <code>Features</code>. This means all values of the <code>subsettingFeature</code> (on instances of its domain, i.e., the intersection of its <code>featuringTypes</code>) are values of the <code>subsettedFeature</code> on instances of its domain. To support this the domain of the <code>subsettingFeature</code> must be the same or specialize (at least indirectly) the domain of the <code>subsettedFeature</code> (via <code>Specialization</code>), and the co-domain (intersection of the <code>types</code>) of the <code>subsettingFeature</code> must specialize the co-domain of the <code>subsettedFeature</code>.</p>
+	
+	let subsettingFeaturingTypes: OrderedSet(Type) =
+	subsettingFeature.featuringTypes in
+	let subsettedFeaturingTypes: OrderedSet(Type) =
+	subsettedFeature.featuringTypes in
+	let anythingType: Element =
+	subsettingFeature.resolveGlobal('Base::Anything').memberElement in
+	subsettedFeaturingTypes->forAll(t |
+	subsettingFeaturingTypes->isEmpty() and t = anythingType or
+	subsettingFeaturingTypes->exists(specializes(t))
+	subsettedFeature.isUnique implies subsettingFeature.isUnique""" .
+
+sysml:Subsetting_owningFeature
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Specialization_owningType, sysml:Subsetting_subsettingFeature ;
+    rdfs:domain sysml:Subsetting ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "owningFeature" ;
+    rdfs:comment "<p>A <code>subsettingFeature</code> that is also the <code>owningRelatedElement</code> of this <code>Subsetting</code>.</p>" .
+
+sysml:Subsetting_subsettedFeature
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Specialization_general ;
+    rdfs:domain sysml:Subsetting ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "subsettedFeature" ;
+    rdfs:comment "<p>The <code>Feature</code> that is subsetted by the <code>subsettingFeature</code> of this <code>Subsetting</code>.</p>" .
+
+sysml:Subsetting_subsettingFeature
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Specialization_specific ;
+    rdfs:domain sysml:Subsetting ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "subsettingFeature" ;
+    rdfs:comment "<p>The <code>Feature</code> that is a subset of the <code>subsettedFeature</code> of this <code>Subsetting</code>.</p>" .
+
+sysml:TypeFeaturing
+    a owl:Class ;
+    rdfs:subClassOf sysml:Featuring, [
+        a owl:Restriction ;
+        owl:onProperty sysml:TypeFeaturing_featureOfType ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:TypeFeaturing_featuringType ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "TypeFeaturing" ;
+    rdfs:comment "<p>A <code>TypeFeaturing</code> is a <code>Featuring</code> <code>Relationship</code> in which the <code>featureOfType</code> is the <code>source</code> and the <code>featuringType</code> is the <code>target</code>.</p>" .
+
+sysml:TypeFeaturing_featureOfType
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Featuring_feature, sysml:Relationship_source ;
+    rdfs:domain sysml:TypeFeaturing ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "featureOfType" ;
+    rdfs:comment "<p>The <code>Feature</code> that is featured by the <code>featuringType</code>. It is the <code>source</code> of the <code>TypeFeaturing</code>.</p>" .
+
+sysml:TypeFeaturing_featuringType
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Featuring_type, sysml:Relationship_target ;
+    rdfs:domain sysml:TypeFeaturing ;
+    rdfs:range sysml:Type ;
+    rdfs:label "featuringType" ;
+    rdfs:comment "<p>The <code>Type</code> that features the <code>featureOfType</code>. It is the <code>target</code> of the <code>TypeFeaturing</code>.</p>" .
+
+sysml:TypeFeaturing_owningFeatureOfType
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Relationship_owningRelatedElement, sysml:TypeFeaturing_featureOfType ;
+    rdfs:domain sysml:TypeFeaturing ;
+    rdfs:range sysml:Feature ;
+    rdfs:label "owningFeatureOfType" ;
+    rdfs:comment "<p>A <code>featureOfType</code> that is also the <code>owningRelatedElement</code> of this <code>TypeFeaturing</code>.</p>" .

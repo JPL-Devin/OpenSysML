@@ -1,0 +1,68 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/KerML/Kernel/Packages>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Functions>, <https://www.omg.org/spec/SysML/modules/KerML/Root/Namespaces> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "KerML/Kernel/Packages" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:ElementFilterMembership
+    a owl:Class ;
+    rdfs:subClassOf sysml:OwningMembership, [
+        a owl:Restriction ;
+        owl:onProperty sysml:ElementFilterMembership_condition ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "ElementFilterMembership" ;
+    rdfs:comment """<p><code>ElementFilterMembership</code> is a <code>Membership</code> between a <code>Namespace</code> and a model-level evaluable <code><em>Boolean</em></code>-valued <code>Expression</code>, asserting that imported <code>members</code> of the <code>Namespace</code> should be filtered using the <code>condition</code> <code>Expression</code>. A general <code>Namespace</code> does not define any specific filtering behavior, but such behavior may be defined for various specialized kinds of <code>Namespaces</code>.</p>
+	
+	condition.isModelLevelEvaluable
+	condition.result.specializesFromLibrary('ScalarValues::Boolean')""" .
+
+sysml:ElementFilterMembership_condition
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:OwningMembership_ownedMemberElement ;
+    rdfs:domain sysml:ElementFilterMembership ;
+    rdfs:range sysml:Expression ;
+    rdfs:label "condition" ;
+    rdfs:comment "<p>The model-level evaluable <code>Boolean</code>-valued <code>Expression</code> used to filter the imported <code>members</code> of the <code>membershipOwningNamespace</code> of this <code>ElementFilterMembership</code>.</p>" .
+
+sysml:LibraryPackage
+    a owl:Class ;
+    rdfs:subClassOf sysml:Package, [
+        a owl:Restriction ;
+        owl:onProperty sysml:LibraryPackage_isStandard ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "LibraryPackage" ;
+    rdfs:comment "<p>A <code>LibraryPackage</code> is a <code>Package</code> that is the container for a model library. A <code>LibraryPackage</code> is itself a library <code>Element</code> as are all <code>Elements</code> that are directly or indirectly contained in it.</p>" .
+
+sysml:LibraryPackage_isStandard
+    a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain sysml:LibraryPackage ;
+    rdfs:range xsd:boolean ;
+    rdfs:label "isStandard" ;
+    rdfs:comment "<p>Whether this <code>LibraryPackage</code> contains a standard library model. This should only be set to true for <code>LibraryPackages</code> in the standard Kernel Model Libraries or in normative model libraries for a language built on KerML.</p>" .
+
+sysml:Package
+    a owl:Class ;
+    rdfs:subClassOf sysml:Namespace ;
+    rdfs:label "Package" ;
+    rdfs:comment """<p>A <code>Package</code> is a <code>Namespace</code> used to group <code>Elements</code>, without any instance-level semantics. It may have one or more model-level evaluable <code>filterCondition</code> <code>Expressions</code> used to filter its <code>importedMemberships</code>. Any imported <code>member</code> must meet all of the <code>filterConditions</code>.</p>
+	filterCondition = ownedMembership->
+	selectByKind(ElementFilterMembership).condition""" .
+
+sysml:Package_filterCondition
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Namespace_ownedMember ;
+    rdfs:domain sysml:Package ;
+    rdfs:range sysml:Expression ;
+    ecore:isOrdered true ;
+    rdfs:label "filterCondition" ;
+    rdfs:comment "<p>The model-level evaluable <code><em>Boolean</em></code>-valued <code>Expression</code> used to filter the <code>members</code> of this <code>Package</code>, which are owned by the <code>Package</code> are via <code>ElementFilterMemberships</code>.</p>" .

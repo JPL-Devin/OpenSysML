@@ -1,0 +1,292 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/SysML/Systems/Views>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Types>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Functions>, <https://www.omg.org/spec/SysML/modules/KerML/Root/Elements>, <https://www.omg.org/spec/SysML/modules/KerML/Root/Namespaces>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/DefinitionAndUsage>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Parts>, <https://www.omg.org/spec/SysML/modules/SysML/Systems/Requirements> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "SysML/Systems/Views" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:Expose
+    a owl:Class ;
+    rdfs:subClassOf sysml:Import ;
+    rdfs:label "Expose" ;
+    rdfs:comment """<p>An <code>Expose</code> is an <code>Import</code> of <code>Memberships</code> into a <code>ViewUsage</code> that provide the <code>Elements</code> to be included in a view. Visibility is always ignored for an <code>Expose</code> (i.e., <code>isImportAll = true</code>).</p>
+	isImportAll
+	importOwningNamespace.oclIsType(ViewUsage)
+	visibility = VisibilityKind::protected""" .
+
+sysml:MembershipExpose
+    a owl:Class ;
+    rdfs:subClassOf sysml:Expose, sysml:MembershipImport ;
+    rdfs:label "MembershipExpose" ;
+    rdfs:comment "<p>A <code>MembershipExpose</code> is an <code>Expose</code> <code.Relationship</code> that exposes a specific <code>importedMembership</code> and, if <code>isRecursive = true</code>, additional <code>Memberships</code> recursively.</p>" .
+
+sysml:NamespaceExpose
+    a owl:Class ;
+    rdfs:subClassOf sysml:Expose, sysml:NamespaceImport ;
+    rdfs:label "NamespaceExpose" ;
+    rdfs:comment "<p>A <code>NamespaceExpose</code> is an <code>Expose</code> <code>Relationship</code> that exposes the <code>Memberships</code> of a specific <code>importedNamespace</code> and, if <code>isRecursive = true</code>, additional <code>Memberships</code> recursively.</p>" .
+
+sysml:RenderingDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:PartDefinition ;
+    rdfs:label "RenderingDefinition" ;
+    rdfs:comment """<p>A <code>RenderingDefinition</code> is a <code>PartDefinition</code> that defines a specific rendering of the content of a model view (e.g., symbols, style, layout, etc.).</p>
+	rendering = usages->selectByKind(RenderingUsage)
+	specializesFromLibrary('Views::Rendering')""" .
+
+sysml:RenderingDefinition_rendering
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_usage ;
+    rdfs:domain sysml:RenderingDefinition ;
+    rdfs:range sysml:RenderingUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "rendering" ;
+    rdfs:comment "<p>The <code>usages</code> of a <code>RenderingDefinition</code> that are <code>RenderingUsages</code>.</p>" .
+
+sysml:RenderingUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:PartUsage ;
+    rdfs:label "RenderingUsage" ;
+    rdfs:comment """<p>A <code>RenderingUsage</code> is the usage of a <code>RenderingDefinition</code> to specify the rendering of a specific model view to produce a physical view artifact.</p>
+	
+	
+	specializesFromLibrary('Views::renderings')
+	owningType <> null and
+	(owningType.oclIsKindOf(RenderingDefinition) or
+	owningType.oclIsKindOf(RenderingUsage)) implies
+	specializesFromLibrary('Views::Rendering::subrenderings')
+	owningFeatureMembership <> null and
+	owningFeatureMembership.oclIsKindOf(ViewRenderingMembership) implies
+	redefinesFromLibrary('Views::View::viewRendering')""" .
+
+sysml:RenderingUsage_renderingDefinition
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:PartUsage_partDefinition ;
+    rdfs:domain sysml:RenderingUsage ;
+    rdfs:range sysml:RenderingDefinition ;
+    rdfs:label "renderingDefinition" ;
+    rdfs:comment "<p>The <code>RenderingDefinition</code> that is the <code>definition</code> of this <code>RenderingUsage</code>.</p>" .
+
+sysml:ViewDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:PartDefinition ;
+    rdfs:label "ViewDefinition" ;
+    rdfs:comment """<p>A <code>ViewDefinition</code> is a <code>PartDefinition</code> that specifies how a view artifact is constructed to satisfy a <code>viewpoint</code>. It specifies a <code>viewConditions</code> to define the model content to be presented and a <code>viewRendering</code> to define how the model content is presented.</p>
+	view = usage->selectByKind(ViewUsage)
+	satisfiedViewpoint = ownedRequirement->
+	selectByKind(ViewpointUsage)->
+	select(isComposite)
+	viewRendering =
+	let renderings: OrderedSet(ViewRenderingMembership) =
+	featureMembership->selectByKind(ViewRenderingMembership) in
+	if renderings->isEmpty() then null
+	else renderings->first().referencedRendering
+	endif
+	viewCondition = ownedMembership->
+	selectByKind(ElementFilterMembership).
+	condition
+	featureMembership->
+	selectByKind(ViewRenderingMembership)->
+	size() <= 1
+	specializesFromLibrary('Views::View')""" .
+
+sysml:ViewDefinition_satisfiedViewpoint
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_ownedRequirement ;
+    rdfs:domain sysml:ViewDefinition ;
+    rdfs:range sysml:ViewpointUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "satisfiedViewpoint" ;
+    rdfs:comment "<p>The composite <code>ownedRequirements</code> of this <code>ViewDefinition</code> that are <code>ViewpointUsages</code> for viewpoints satisfied by the <code>ViewDefinition</code>.</p>" .
+
+sysml:ViewDefinition_view
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Definition_usage ;
+    rdfs:domain sysml:ViewDefinition ;
+    rdfs:range sysml:ViewUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "view" ;
+    rdfs:comment "<p>The <code>usages</code> of this <code>ViewDefinition</code> that are <code>ViewUsages</code>.</p>" .
+
+sysml:ViewDefinition_viewCondition
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Namespace_ownedMember ;
+    rdfs:domain sysml:ViewDefinition ;
+    rdfs:range sysml:Expression ;
+    ecore:isOrdered true ;
+    rdfs:label "viewCondition" ;
+    rdfs:comment "<p>The <code>Expressions</code> related to this <code>ViewDefinition</code> by <code>ElementFilterMemberships</code>, which specify conditions on <code>Elements</code> to be rendered in a view.</p>" .
+
+sysml:ViewDefinition_viewRendering
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:ViewDefinition ;
+    rdfs:range sysml:RenderingUsage ;
+    rdfs:label "viewRendering" ;
+    rdfs:comment "<p>The <code>RenderingUsage</code> to be used to render views defined by this <code>ViewDefinition</code>, which is the <code>referencedRendering</code> of the <code>ViewRenderingMembership</code> of the <code>ViewDefinition</code>.<p>" .
+
+sysml:ViewRenderingMembership
+    a owl:Class ;
+    rdfs:subClassOf sysml:FeatureMembership, [
+        a owl:Restriction ;
+        owl:onProperty sysml:ViewRenderingMembership_ownedRendering ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:ViewRenderingMembership_referencedRendering ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "ViewRenderingMembership" ;
+    rdfs:comment """<p>A <code>ViewRenderingMembership</code> is a <coed>FeatureMembership</code> that identifies the <code>viewRendering</code> of a <code>ViewDefinition</code> or <code>ViewUsage</code>.</p>
+	referencedRendering =
+	let reference: ReferenceSubsetting =
+	ownedRendering.ownedReferenceSubsetting in
+	if reference = null then ownedRendering
+	else if not reference.referencedFeature.oclIsKindOf(RenderingUsage) then null
+	else reference.referencedFeature.oclAsType(RenderingUsage)
+	endif
+	owningType.oclIsKindOf(ViewDefinition) or
+	owningType.oclIsKindOf(ViewUsage)""" .
+
+sysml:ViewRenderingMembership_ownedRendering
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:FeatureMembership_ownedMemberFeature ;
+    rdfs:domain sysml:ViewRenderingMembership ;
+    rdfs:range sysml:RenderingUsage ;
+    rdfs:label "ownedRendering" ;
+    rdfs:comment "<p>The owned <code>RenderingUsage</code> that is either itself the <code>referencedRendering</code> or subsets the <code>referencedRendering</code>." .
+
+sysml:ViewRenderingMembership_referencedRendering
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:ViewRenderingMembership ;
+    rdfs:range sysml:RenderingUsage ;
+    rdfs:label "referencedRendering" ;
+    rdfs:comment "<p> The <code>RenderingUsage</code> that is referenced through this <code>ViewRenderingMembership</code>. It is the <code>referencedFeature</code> of the <code>ownedReferenceSubsetting</code> for the <code>ownedRendering</code>, if there is one, and, otherwise, the <code>ownedRendering</code> itself.</p>" .
+
+sysml:ViewUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:PartUsage ;
+    rdfs:label "ViewUsage" ;
+    rdfs:comment """<p>A <code>ViewUsage</code> is a usage of a <code>ViewDefinition</code> to specify the generation of a view of the <code>members</code> of a collection of <code>exposedNamespaces</code>. The <code>ViewUsage</code> can satisfy more <code>viewpoints</code> than its definition, and it can specialize the <code>viewRendering</code> specified by its definition.<p>
+	exposedElement = ownedImport->selectByKind(Expose).
+	importedMemberships(Set{}).memberElement->
+	select(elm | includeAsExposed(elm))->
+	asOrderedSet()
+	satisfiedViewpoint = ownedRequirement->
+	selectByKind(ViewpointUsage)->
+	select(isComposite)
+	viewCondition = ownedMembership->
+	selectByKind(ElementFilterMembership).
+	condition
+	viewRendering =
+	let renderings: OrderedSet(ViewRenderingMembership) =
+	featureMembership->selectByKind(ViewRenderingMembership) in
+	if renderings->isEmpty() then null
+	else renderings->first().referencedRendering
+	endif
+	featureMembership->
+	selectByKind(ViewRenderingMembership)->
+	size() <= 1
+	specializesFromLibrary('Views::views')
+	owningType <> null and
+	(owningType.oclIsKindOf(ViewDefinition) or
+	owningType.oclIsKindOf(ViewUsage)) implies
+	specializesFromLibrary('Views::View::subviews')""" .
+
+sysml:ViewUsage_exposedElement
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Namespace_member ;
+    rdfs:domain sysml:ViewUsage ;
+    rdfs:range sysml:Element ;
+    ecore:isOrdered true ;
+    rdfs:label "exposedElement" ;
+    rdfs:comment "<p>The <code>Elements</code> that are exposed by this <code>ViewUsage</code>, which are those <code>memberElements</code> of the imported <code>Memberships</code> from all the <code>Expose</code> <code>Relationships</code> that meet all the owned and inherited <code>viewConditions</code>.</p>" .
+
+sysml:ViewUsage_satisfiedViewpoint
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Usage_nestedRequirement ;
+    rdfs:domain sysml:ViewUsage ;
+    rdfs:range sysml:ViewpointUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "satisfiedViewpoint" ;
+    rdfs:comment "<p>The <code>nestedRequirements</code> of this <code>ViewUsage</code> that are <code>ViewpointUsages</code> for (additional) viewpoints satisfied by the <code>ViewUsage</code>.</p>" .
+
+sysml:ViewUsage_viewCondition
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Namespace_ownedMember ;
+    rdfs:domain sysml:ViewUsage ;
+    rdfs:range sysml:Expression ;
+    ecore:isOrdered true ;
+    rdfs:label "viewCondition" ;
+    rdfs:comment "<p>The <code>Expressions</code> related to this <code>ViewUsage</code> by <code>ElementFilterMemberships</code>, which specify conditions on <code>Elements</code> to be rendered in a view.</p>" .
+
+sysml:ViewUsage_viewDefinition
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:PartUsage_partDefinition ;
+    rdfs:domain sysml:ViewUsage ;
+    rdfs:range sysml:ViewDefinition ;
+    rdfs:label "viewDefinition" ;
+    rdfs:comment "<p>The <code>ViewDefinition</code> that is the <code>definition</code> of this <code>ViewUsage</code>.</p>" .
+
+sysml:ViewUsage_viewRendering
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:domain sysml:ViewUsage ;
+    rdfs:range sysml:RenderingUsage ;
+    rdfs:label "viewRendering" ;
+    rdfs:comment "<p>The <code>RenderingUsage</code> to be used to render views defined by this <code>ViewUsage</code>, which is the <code>referencedRendering</code> of the <code>ViewRenderingMembership</code> of the <code>ViewUsage</code>.<p>" .
+
+sysml:ViewpointDefinition
+    a owl:Class ;
+    rdfs:subClassOf sysml:RequirementDefinition ;
+    rdfs:label "ViewpointDefinition" ;
+    rdfs:comment """<p>A <code>ViewpointDefinition</code> is a <code>RequirementDefinition</code> that specifies one or more stakeholder concerns that are to be satisfied by creating a view of a model.</p>
+	viewpointStakeholder = framedConcern.featureMemberhsip->
+	selectByKind(StakeholderMembership).
+	ownedStakeholderParameter
+	specializesFromLibrary('Views::Viewpoint')""" .
+
+sysml:ViewpointDefinition_viewpointStakeholder
+    a owl:ObjectProperty ;
+    rdfs:domain sysml:ViewpointDefinition ;
+    rdfs:range sysml:PartUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "viewpointStakeholder" ;
+    rdfs:comment "<p>The <code>PartUsages</code> that identify the stakeholders with concerns framed by this <code>ViewpointDefinition</code>, which are the owned and inherited <code>stakeholderParameters</code> of the <code>framedConcerns</code> of this <code>ViewpointDefinition</code>.</p>" .
+
+sysml:ViewpointUsage
+    a owl:Class ;
+    rdfs:subClassOf sysml:RequirementUsage ;
+    rdfs:label "ViewpointUsage" ;
+    rdfs:comment """<p>A <code>ViewpointUsage</code> is a <code>Usage</code> of a <code>ViewpointDefinition</code>.</p>
+	
+	
+	viewpointStakeholder = framedConcern.featureMemberhsip->
+	selectByKind(StakeholderMembership).
+	ownedStakeholderParameter
+	specializesFromLibrary('Views::viewpoints')
+	isComposite and owningType <> null and
+	(owningType.oclIsKindOf(ViewDefinition) or
+	owningType.oclIsKindOf(ViewUsage)) implies
+	specializesFromLibrary('Views::View::viewpointSatisfactions')""" .
+
+sysml:ViewpointUsage_viewpointDefinition
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:RequirementUsage_requirementDefinition ;
+    rdfs:domain sysml:ViewpointUsage ;
+    rdfs:range sysml:ViewpointDefinition ;
+    rdfs:label "viewpointDefinition" ;
+    rdfs:comment "<p>The <code>ViewpointDefinition</code> that is the <code>definition</code> of this <code>ViewpointUsage<code>.</p>" .
+
+sysml:ViewpointUsage_viewpointStakeholder
+    a owl:ObjectProperty ;
+    rdfs:domain sysml:ViewpointUsage ;
+    rdfs:range sysml:PartUsage ;
+    ecore:isOrdered true ;
+    rdfs:label "viewpointStakeholder" ;
+    rdfs:comment "<p>The <code>PartUsages</code> that identify the stakeholders with concerns framed by this <code>ViewpointUsage</code>, which are the owned and inherited <code>stakeholderParameters</code> of the <code>framedConcerns</code> of this <code>ViewpointUsage</code>.</p>" .

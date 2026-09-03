@@ -1,0 +1,78 @@
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ecore: <http://www.eclipse.org/emf/2002/Ecore#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+<https://www.omg.org/spec/SysML/modules/KerML/Kernel/Multiplicities>
+    a owl:Ontology ;
+    owl:imports <http://www.eclipse.org/emf/2002/Ecore>, <https://www.omg.org/spec/SysML/modules/KerML/Core/Types>, <https://www.omg.org/spec/SysML/modules/KerML/Kernel/Functions>, <https://www.omg.org/spec/SysML/modules/KerML/Root/Namespaces> ;
+    owl:versionInfo "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82+xmi20240201" ;
+    dc:title "KerML/Kernel/Multiplicities" ;
+    dc:source "OMG KerML/SysML XMI 20240201", "https://github.com/Open-MBEE/sysmlv2-rdf-ontology@a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82" .
+
+sysml:MultiplicityRange
+    a owl:Class ;
+    rdfs:subClassOf sysml:Multiplicity, [
+        a owl:Restriction ;
+        owl:onProperty sysml:MultiplicityRange_bound ;
+        owl:minCardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:MultiplicityRange_upperBound ;
+        owl:cardinality "1"^^xsd:nonNegativeInteger
+    ], [
+        a owl:Restriction ;
+        owl:onProperty sysml:MultiplicityRange_bound ;
+        owl:maxCardinality "2"^^xsd:nonNegativeInteger
+    ] ;
+    rdfs:label "MultiplicityRange" ;
+    rdfs:comment """<p>A <code>MultiplicityRange</code> is a <code>Multiplicity</code> whose value is defined to be the (inclusive) range of natural numbers given by the result of a <code>lowerBound</code> <code>Expression</code> and the result of an <code>upperBound</code> <code>Expression</code>. The result of these <code>Expressions</code> shall be of type <code><em>Natural</em></code>. If the result of the <code>upperBound</code> <code>Expression</code> is the unbounded value <code>*</code>, then the specified range includes all natural numbers greater than or equal to the <code>lowerBound</code> value. If no <code>lowerBound</code> <code>Expression</code>, then the default is that the lower bound has the same value as the upper bound, except if the <code>upperBound</code> evaluates to <code>*</code>, in which case the default for the lower bound is 0.</p>
+	
+	bound->forAll(b | b.featuringType = self.featuringType)
+	bound->forAll(b |
+	b.result.specializesFromLibrary('ScalarValues::Integer') and
+	let value : UnlimitedNatural = valueOf(b) in
+	value <> null implies value >= 0
+	)
+	lowerBound =
+	let ownedMembers : Sequence(Element) =
+	ownedMembership->selectByKind(OwningMembership).ownedMember in
+	if ownedMembers->size() < 2 or
+	not ownedMembers->first().oclIsKindOf(Expression) then null
+	else ownedMembers->first().oclAsType(Expression)
+	endif
+	upperBound =
+	let ownedMembers : Sequence(Element) =
+	ownedMembership->selectByKind(OwningMembership).ownedMember in
+	if ownedMembers->isEmpty() or
+	not ownedMembers->last().oclIsKindOf(Expression)
+	then null
+	else ownedMembers->last().oclAsType(Expression)
+	endif""" .
+
+sysml:MultiplicityRange_bound
+    a owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:Namespace_ownedMember ;
+    rdfs:domain sysml:MultiplicityRange ;
+    rdfs:range sysml:Expression ;
+    ecore:isOrdered true ;
+    rdfs:label "bound" ;
+    rdfs:comment "<p>The owned <code>Expressions</code> of the <code>MultiplicityRange</code> whose results provide its bounds. These must be the only <code>ownedMembers</code> of the <code>MultiplicityRange</code>.</p>" .
+
+sysml:MultiplicityRange_lowerBound
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:MultiplicityRange_bound ;
+    rdfs:domain sysml:MultiplicityRange ;
+    rdfs:range sysml:Expression ;
+    rdfs:label "lowerBound" ;
+    rdfs:comment "<p>The <code>Expression</code> whose result provides the lower bound of the <code>MultiplicityRange</code>. If no <code>lowerBound</code> <code>Expression</code> is given, then the lower bound shall have the same value as the upper bound, unless the upper bound is unbounded (<code>*</code>), in which case the lower bound shall be 0.</p>" .
+
+sysml:MultiplicityRange_upperBound
+    a owl:FunctionalProperty, owl:ObjectProperty ;
+    rdfs:subPropertyOf sysml:MultiplicityRange_bound ;
+    rdfs:domain sysml:MultiplicityRange ;
+    rdfs:range sysml:Expression ;
+    rdfs:label "upperBound" ;
+    rdfs:comment "<p>The <code>Expression</code> whose result is the upper bound of the <code>MultiplicityRange</code>.</p>" .
