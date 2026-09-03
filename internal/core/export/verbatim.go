@@ -111,14 +111,15 @@ func (d *decoder) demoteStale(notation string, roots []*element) {
 // candidateName names the candidate notation for the grammar the roots record
 // their text was written in; a root with text recording none was read as a
 // buffer with no extension, and the candidate is named so it reads the same
-// way. Roots recording different grammars cannot be read as one document.
+// way. Roots recording different grammars cannot be read as one document; one
+// with neither text nor grammar was added to the graph and says nothing.
 func (d *decoder) candidateName(roots []*element) (string, bool) {
 	language, seen := "", false
 	for _, root := range roots {
-		if _, ok := d.graph.Lexical(rdf.IRI(root.iri), rdf.OpenSysML+xSourceText); !ok {
+		recorded, ok := d.stringOf(root, rdf.OpenSysML+xSourceLanguage)
+		if _, hasText := d.graph.Lexical(rdf.IRI(root.iri), rdf.OpenSysML+xSourceText); !ok && !hasText {
 			continue
 		}
-		recorded, _ := d.stringOf(root, rdf.OpenSysML+xSourceLanguage)
 		if seen && recorded != language {
 			return "", false
 		}

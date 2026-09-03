@@ -477,6 +477,11 @@ func TestSourceTextIsReadInTheLanguageItWasWrittenIn(t *testing.T) {
 	if back := toNotation(t, turtle); back != kermlBindings {
 		t.Errorf("round trip changed the notation:\n--- want ---\n%s--- got ---\n%s", kermlBindings, back)
 	}
+	// A root stripped of its own text still says what grammar its members' text is in.
+	headless := editTurtle(t, turtle, `sysx:sourceText "package Bindings {\n" ;`, "")
+	if back := toNotation(t, headless); !strings.Contains(back, "// an anonymous binding with a multiplicity\n    binding [1] a = target;") {
+		t.Errorf("the members' text was not read as KerML:\n%s", back)
+	}
 	if !strings.Contains(string(idTurtle(t, commented)), `sysx:sourceLanguage "sysml"`) {
 		t.Errorf("a SysML file does not record its language")
 	}
