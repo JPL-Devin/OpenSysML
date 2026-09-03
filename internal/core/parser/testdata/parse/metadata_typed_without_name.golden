@@ -31,6 +31,8 @@
           (Relationship kind="about" target=X
             (*ast.QualifiedName))))
       (Membership visibility="default"
+        (PrefixMetadata type="M" emptyBody=true))
+      (Membership visibility="default"
         (Usage kind="metadata" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Relationship kind="typing" target=$::P::M
             (*ast.QualifiedName))

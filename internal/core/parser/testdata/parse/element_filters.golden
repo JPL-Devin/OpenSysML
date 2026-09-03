@@ -12,7 +12,10 @@
           (Membership visibility="default"
             (Usage kind="part" name="seatBelt" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (Membership visibility="default"
-                (PrefixMetadata type="Safety"))))
+                (PrefixMetadata type="Safety"
+                  (Membership visibility="default"
+                    (Usage kind="enum" name="isMandatory" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                      (LiteralBool value=true)))))))
           (Membership visibility="default"
             (Usage kind="part" name="keylessEntry" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
       (Membership visibility="default"

@@ -11,4 +11,7 @@
       (Membership visibility="default"
         (Usage kind="attribute" name="tagged" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Membership visibility="default"
-            (PrefixMetadata type="Metadata")))))))
+            (PrefixMetadata type="Metadata"
+              (Membership visibility="default"
+                (Usage kind="enum" name="name" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (LiteralString value="\"tagged\""))))))))))
