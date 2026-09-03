@@ -528,26 +528,35 @@ func (d *decoder) chainMember(node rdf.Term, scope string) (string, error) {
 	if !ok {
 		return d.referenceName(object, scope)
 	}
-	if operand, ok := d.chainOperand(node); ok {
-		if named := d.operandMembersNamed(operand, name); len(named) > 0 && (len(named) > 1 || named[0] != target) {
-			return d.referenceName(object, scope)
-		}
+	operand, ok := d.chainOperand(node)
+	if !ok {
+		return d.referenceName(object, scope)
+	}
+	if named := d.operandMembersNamed(operand, name); len(named) > 0 && (len(named) > 1 || named[0] != target) {
+		return d.referenceName(object, scope)
 	}
 	return qualifiedNameText(name), nil
 }
 
-// chainOperand is the element a chain's operand refers to, when it is a feature
-// reference linked to one of this document's elements.
+// chainOperand is the element a chain's operand refers to: the feature a
+// reference links, or the one an inner chain reaches; another shape is unknown.
 func (d *decoder) chainOperand(node rdf.Term) (*element, bool) {
 	arg, ok := d.graph.Object(node, rdf.SysML+pArgument)
 	if !ok {
 		return nil, false
 	}
-	referent, ok := d.graph.Object(arg, rdf.SysML+pReferent)
-	if !ok || referent.IsLiteral() {
+	var linked rdf.Term
+	ok = false
+	switch rdf.LocalName(d.graph.Type(arg)) {
+	case mFeatureReference:
+		linked, ok = d.graph.Object(arg, rdf.SysML+pReferent)
+	case mFeatureChain:
+		linked, ok = d.graph.Object(arg, rdf.SysML+pTargetFeature)
+	}
+	if !ok || linked.IsLiteral() {
 		return nil, false
 	}
-	el, ok := d.byIRI[referent.Value]
+	el, ok := d.byIRI[linked.Value]
 	return el, ok
 }
 

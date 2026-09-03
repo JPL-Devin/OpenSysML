@@ -9,10 +9,16 @@ package Gen {
 }
 package Chains {
     part def Wheel specializes Gen::G1, Gen::G2;
+    part def Axle {
+        part hub : Wheel;
+    }
     part def Car {
         part w : Wheel;
+        part axle : Axle;
         attribute a = w.Gen::G1::x;
         attribute b = w.Gen::G2::x;
         attribute c = w.y;
+        attribute d = axle.hub.Gen::G2::x;
+        attribute e = axle.hub.y;
     }
 }
