@@ -173,6 +173,14 @@ func (a *actionSession) selfOf() string {
 	return a.selfFQN
 }
 
+// release lets go of the session's run, ending any work a breakpoint left
+// paused; a nil session has none.
+func (a *actionSession) release() {
+	if a != nil {
+		a.executor.Release()
+	}
+}
+
 // performer is the object performing the debugged action, nil for none.
 func (a *actionSession) performer() *runtime.Instance {
 	if a == nil {
@@ -927,6 +935,7 @@ func (s *Session) dropStaleDebugSessions(gone []string, over carryover) []string
 			objectGone: objectGone,
 			version:    s.version,
 		}
+		s.actionExec.release()
 		s.actionExec = nil
 	}
 	if by, objectGone, ok := s.staleDebugState(gone, s.stateExec.fqnOf(), s.stateExec.selfOf(), s.stateExec.performer(), over.state); ok {
@@ -991,6 +1000,7 @@ func (s *Session) dropSupersededDebugSessions(name string) []string {
 			objectID:   self.ID,
 			superseded: true,
 		}
+		s.actionExec.release()
 		s.actionExec = nil
 	}
 	if self := s.stateExec.performer(); self != nil && !s.holdsObject(self) {
@@ -1066,6 +1076,7 @@ func (s *Session) clear() []string {
 		s.idxVersion = 0
 	}
 	s.instances = make(map[string]*runtime.Instance)
+	s.actionExec.release()
 	s.actionExec = nil
 	s.stateExec = nil
 	s.lost, s.endedAction, s.endedState = lost, endedAction, endedState

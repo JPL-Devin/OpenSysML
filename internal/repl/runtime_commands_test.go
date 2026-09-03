@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -476,6 +477,50 @@ func TestBreakpointOnABlockNodePausesEachIteration(t *testing.T) {
 	wants(t, run(t, s, "%continue"), `⏸ Paused at breakpoint "add"`)
 	wants(t, run(t, s, "%tokens"), "total = 3")
 	wants(t, run(t, s, "%continue"), "✓ Action completed", "total = 6")
+}
+
+// Ending a session paused in a block node — by %stop, by starting another, or
+// by redeclaring the action — releases its executor: the paused run ends and
+// the executor takes no further step.
+func TestEndingAPausedSessionReleasesItsRun(t *testing.T) {
+	pauseAtAdd := func(t *testing.T) (*Session, *runtime.ActionExecutor) {
+		t.Helper()
+		s := loadFixture(t, "testdata/action_block_debug.sysml")
+		run(t, s, "%action count")
+		run(t, s, "%break add")
+		wants(t, run(t, s, "%continue"), `⏸ Paused at breakpoint "add"`)
+		return s, s.actionExec.executor
+	}
+	released := func(t *testing.T, exec *runtime.ActionExecutor) {
+		t.Helper()
+		if err := exec.Step(); !errors.Is(err, runtime.ErrExecutorReleased) {
+			t.Errorf("Step of the ended session's executor = %v, want ErrExecutorReleased", err)
+		}
+	}
+
+	t.Run("stop", func(t *testing.T) {
+		s, exec := pauseAtAdd(t)
+		wants(t, run(t, s, "%stop"), `✓ Stopped debugging session for "count"`)
+		released(t, exec)
+	})
+	t.Run("another session", func(t *testing.T) {
+		s, exec := pauseAtAdd(t)
+		wants(t, run(t, s, "%action count"), `✓ Started action executor for "count"`)
+		released(t, exec)
+	})
+	t.Run("redeclared", func(t *testing.T) {
+		s, exec := pauseAtAdd(t)
+		res := s.Submit(`package Debug { action count { attribute total : Integer = 1; } }`)
+		wants(t, strings.Join(res.Notices, "\n"), `action debugging session for "count" ended`)
+		released(t, exec)
+	})
+	t.Run("unrelated declaration keeps it", func(t *testing.T) {
+		s, _ := pauseAtAdd(t)
+		if res := s.Submit(`package Other { attribute x = 1; }`); len(res.Notices) > 0 {
+			t.Fatalf("unrelated declaration ended the session: %v", res.Notices)
+		}
+		wants(t, run(t, s, "%step"), "✓ Step complete", `⏸ Paused at breakpoint "add"`)
+	})
 }
 
 func TestBreakpointRejectsUnknownNode(t *testing.T) {

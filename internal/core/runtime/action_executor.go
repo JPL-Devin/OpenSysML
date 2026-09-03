@@ -49,6 +49,10 @@ type ActionExecutor struct {
 	// pause is set while a token's work runs as a coroutine (action_body_run.go):
 	// called with a breakpoint's name, it pauses the run there until resumed.
 	pause func(string) bool
+	// released is set once Release has ended the run for good.
+	released bool
+	// pauses counts the body pauses so far, ordering the paused runs' resumption.
+	pauses int64
 
 	// runStarted marks this executor's run as begun, so the step budget is reset
 	// once however many calls the run is driven over.
@@ -166,8 +170,9 @@ func (e *ActionExecutor) performanceFeatures() []lower.Attribute {
 // that leaves the executor waiting into ErrAcceptDeadlock.
 //
 // A step ends early, with the executor suspended, when a body a token runs is
-// about to perform a node a breakpoint is set on (see SetBreakpoint); the token
-// stays at its node with its work half done, and the next step resumes it.
+// about to perform a node a breakpoint is set on (see SetBreakpoint): the token
+// stays at its node with its work half done and no further token steps. The
+// next step steps the other tokens first, then resumes it.
 //
 // Returns an error if a deadlock unrelated to accepts is detected (no progress
 // made and nothing is waiting for a message).
@@ -180,6 +185,10 @@ func (e *ActionExecutor) Step() error {
 
 	if e.state == StateReady {
 		return fmt.Errorf("executor not initialized (call initialize first)")
+	}
+
+	if e.released {
+		return fmt.Errorf("%w: its run ended when it was let go of", ErrExecutorReleased)
 	}
 
 	// Stepping resumes a run a breakpoint suspended.
@@ -207,21 +216,38 @@ func (e *ActionExecutor) Step() error {
 		tokenIndices[i] = i
 	}
 
+	// The tokens a breakpoint left paused resume last, the longest paused first,
+	// once every other token has had its step: one pausing again and again does
+	// not hold the rest back.
+	paused := e.pausedTokens()
+
 	// Step tokens in reverse order to handle removal safely
 	// (removing token at higher index doesn't affect lower indices)
-	for i := len(tokenIndices) - 1; i >= 0; i-- {
+	for i := len(tokenIndices) - 1; i >= 0 && e.state != StateSuspended; i-- {
 		// Check if token still exists (may have been removed by join/final)
-		if i >= len(e.tokens) || e.tokens[i].drivenByBody() {
+		if i >= len(e.tokens) || e.tokens[i].drivenByBody() || e.tokens[i].body != nil {
 			continue
 		}
 
-		err := e.stepToken(i)
-		if err != nil {
+		if err := e.stepToken(i); err != nil {
+			e.endPausedBodies()
 			return err
 		}
 	}
+	for _, id := range paused {
+		if e.state == StateSuspended {
+			break
+		}
+		if i := e.tokenIndex(id); i >= 0 {
+			if err := e.stepToken(i); err != nil {
+				e.endPausedBodies()
+				return err
+			}
+		}
+	}
 
-	// A token whose work a breakpoint paused has stayed put, yet the run went on.
+	// A step a breakpoint ends leaves every other token where it was, yet the run
+	// went on.
 	progressMade := e.state == StateSuspended
 
 	// Progress indicators:

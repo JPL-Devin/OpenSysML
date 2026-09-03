@@ -156,6 +156,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   node an `if` branch or a loop body declares now pauses the run before the node performs, once
   per performance, and `%step`/`Step` resumes it; `NodeNames()` lists such nodes, so `%break add`
   on a loop body's node is accepted — before, the name was refused and the node never paused.
+  Such a pause ends the step at once: a token forked alongside the paused one takes no step of
+  its own in that call, and is stepped first by the next one. A REPL session ended while paused
+  there — by `%stop`, another `%action`, or a redeclaration of what it debugs — releases its
+  executor (`ActionExecutor.Release()`), ending the paused work rather than holding it suspended.
 
 - **Action and state execution has a referee outside the executor.** Six conformance cases —
   a join fed by branches of unequal length, a join fed twice over one succession, a node two

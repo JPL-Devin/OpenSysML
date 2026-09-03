@@ -126,6 +126,9 @@ var (
 	// ErrActionDeadlock is returned when action tokens cannot make progress.
 	ErrActionDeadlock = errors.New("action deadlock")
 
+	// ErrExecutorReleased is returned when a released executor is stepped.
+	ErrExecutorReleased = errors.New("executor released")
+
 	// ErrInvalidActionFlow is returned for a structurally invalid action graph.
 	ErrInvalidActionFlow = errors.New("invalid action flow")
 

@@ -1960,7 +1960,8 @@ func (s *Session) startAction(name string, performer []string) ([]string, error)
 	}
 	exec.SetTrace(s.trace)
 
-	// Store session
+	// Store session, letting go of the one it replaces
+	s.actionExec.release()
 	s.actionExec = &actionSession{
 		name:     name,
 		fqn:      qualifiedOr(fqn, name),
@@ -2173,6 +2174,7 @@ func (s *Session) doStop() ([]string, bool, error) {
 	sessionName := ""
 	if s.actionExec != nil {
 		sessionName = s.actionExec.name
+		s.actionExec.release()
 		s.actionExec = nil
 	} else if s.stateExec != nil {
 		sessionName = s.stateExec.name

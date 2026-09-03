@@ -390,7 +390,9 @@ Execution runtime (Tiers 1-5: instances, expressions, behaviors).
   - `Location ast.Node` — Current node (InitialNode, ActionExecutionNode, etc.)
 
 - **`ActionExecutor`** — Petri-net token-flow execution engine
-  - `Step() error` — Advance all tokens one step
+  - `Step() error` — Advance all tokens one step; a breakpoint met inside a token's body
+    ends the step there, with no other token stepped, and the next step steps the other
+    tokens before resuming the paused one
   - `RunToCompletion() error` — Execute until StateCompleted (max 10k steps)
   - `Tokens() []Token` — Get active tokens (copy)
   - `State() ExecutionState` — Current execution state (Ready/Running/Completed/Suspended)
@@ -404,6 +406,9 @@ Execution runtime (Tiers 1-5: instances, expressions, behaviors).
     reaches it, or before a body performs it when it is a node an `if` branch or a loop body
     declares; `NodeNames()` lists every node a breakpoint may name
   - `ClearBreakpoints()` — Clear all breakpoints
+  - `Release()` — End the run for good, ending the paused work of every token a breakpoint
+    left mid-body; a later `Step()` returns `ErrExecutorReleased`. Call it when abandoning
+    an executor that may be suspended
   - `ActionSymbol() *symbols.Symbol` — Get action symbol
 
 - **`StateExecutor`** — Event-driven state machine execution
