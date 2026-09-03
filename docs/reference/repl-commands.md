@@ -133,7 +133,12 @@ from that id, `#1.r`, for a nested object), and `%step`, `%advance` and `%contin
 Looking an id up materializes nothing: an id the runtime never issued is `no object #9 in this
 session: nothing materialized has that identity (the objects are #1, #2)`, and so is one of an object
 made in passing — by `%eval in` on a usage nothing was instantiated under, say — which `%instances`
-does not list and `#<id>` completion does not offer.
+does not list and `#<id>` completion does not offer. A connector is the one object a submission sets
+aside: a declaration that leaves its owner's shape alone keeps the owner and attaches the connector's
+ends again when it is next read, and the id `%features` printed for it — anonymous or named — goes on
+reaching it and being offered by completion in the meantime, naming it being what reads it. An end
+that cannot be attached again is reported with the id: `no object #4 in this session: the connector
+that had that identity cannot be materialized again: …`.
 
 ## Rendering a view
 

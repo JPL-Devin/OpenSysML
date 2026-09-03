@@ -371,7 +371,10 @@ func (s *Session) peekObject(text string) (objectShape, bool) {
 		ok   bool
 	)
 	if ref.id > 0 {
-		root, ok = s.heldByID(ref.id)
+		// A connector a carry-over set aside is offered by id but not built to
+		// complete a path from.
+		root, _ = s.heldByID(ref.id)
+		ok = root != nil
 		rest = ref.segments
 	} else {
 		var rerr error

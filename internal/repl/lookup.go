@@ -350,28 +350,30 @@ func nestedObjectsIn(ctx *runtime.Context) func(carrier) []carrier {
 	}
 }
 
-// heldByID finds the object with id among those the session holds — named,
-// displaced, or held by a materialized feature of one — so an object evaluation
-// created in passing is not an id the REPL answers to. It materializes nothing.
-func (s *Session) heldByID(id int64) (*runtime.Instance, bool) {
-	var found *runtime.Instance
+// heldByID finds the object with id among those the session holds, materializing
+// nothing; keeper is the held object that kept id for a connector set aside by a carry-over.
+func (s *Session) heldByID(id int64) (found, keeper *runtime.Instance) {
 	s.walkHeldObjects(s.rtCtx, func(cur carrier) bool {
 		if found != nil {
 			return false
 		}
 		if cur.inst.ID == id {
 			found = cur.inst
+		} else if keeper == nil && slices.Contains(cur.inst.KeptConnectorIDs(), id) {
+			keeper = cur.inst
 		}
 		return found == nil
 	})
-	return found, found != nil
+	return found, keeper
 }
 
-// heldIDs lists the ids of the objects the session holds, ascending.
+// heldIDs lists the ids of the objects the session holds, ascending, the
+// connectors a carry-over set aside included.
 func (s *Session) heldIDs() []int64 {
 	var ids []int64
 	s.walkHeldObjects(s.rtCtx, func(cur carrier) bool {
 		ids = append(ids, cur.inst.ID)
+		ids = append(ids, cur.inst.KeptConnectorIDs()...)
 		return true
 	})
 	slices.Sort(ids)
@@ -557,12 +559,18 @@ func (e *ObjectRefError) Error() string {
 type UnknownObjectIDError struct {
 	ID    int64
 	Known []int64
+	// Err is what kept the connector a carry-over set aside under ID from being
+	// materialized again, nil when no object was ever there.
+	Err error
 }
 
 // unknownIDListed bounds the ids an UnknownObjectIDError spells out.
 const unknownIDListed = 20
 
 func (e *UnknownObjectIDError) Error() string {
+	if e.Err != nil {
+		return fmt.Sprintf("no object #%d in this session: the connector that had that identity cannot be materialized again: %v", e.ID, e.Err)
+	}
 	if len(e.Known) == 0 {
 		return fmt.Sprintf("no object #%d in this session: nothing materialized has that identity (no objects have been created)", e.ID)
 	}
@@ -578,6 +586,8 @@ func (e *UnknownObjectIDError) Error() string {
 	}
 	return fmt.Sprintf("no object #%d in this session: nothing materialized has that identity (the objects are %s%s)", e.ID, strings.Join(ids, ", "), more)
 }
+
+func (e *UnknownObjectIDError) Unwrap() error { return e.Err }
 
 // NotInstantiatedError reports a declared name no object has been created
 // under. When objects of the definition that name is typed by (or, for a
@@ -876,8 +886,15 @@ func (s *Session) resolveObject(text string) (*runtime.Instance, string, error) 
 		if s.rtCtx == nil {
 			return nil, "", &UnknownObjectIDError{ID: ref.id}
 		}
-		inst, ok := s.heldByID(ref.id)
-		if !ok {
+		inst, keeper := s.heldByID(ref.id)
+		if inst == nil && keeper != nil {
+			conn, err := keeper.RestoreConnector(s.rtCtx, ref.id)
+			if err != nil {
+				return nil, "", &UnknownObjectIDError{ID: ref.id, Err: err}
+			}
+			inst = conn
+		}
+		if inst == nil {
 			return nil, "", &UnknownObjectIDError{ID: ref.id, Known: s.heldIDs()}
 		}
 		return s.walkObjectPath(s.rtCtx, inst, fmt.Sprintf("#%d", ref.id), ref.segments)

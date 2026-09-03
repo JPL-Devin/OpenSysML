@@ -660,6 +660,66 @@ func TestMaterializedAnonymousConnectorIsAddressableByID(t *testing.T) {
 	wants(t, run(t, s, "%features #99"), "the objects are "+strings.Join(after, ", ")+")")
 }
 
+// A carry-over sets a connector's object aside to attach its ends again against
+// the declarations as they are now, but the id %features printed for it still
+// reaches it — anonymous or named — and still completes, without an owner being
+// asked after first; completion builds nothing to say so.
+func TestShownConnectorsStayAddressableByIDAcrossCarryOver(t *testing.T) {
+	s := loadSource(t, `package Demo {
+		port def P;
+		part def A { port p : P; }
+		part def B { port q : P; }
+		part def Sys { part a : A; part b : B; connect a.p to b.q; connection c connect a.p to b.q; }
+	}`)
+	wants(t, run(t, s, "%instantiate Demo::Sys"), "ID: 1")
+	listing := run(t, s, "%features Demo::Sys")
+	anon := objectIDIn(t, connectorLine(t, listing))
+	named := objectIDIn(t, featureLine(t, listing, "c"))
+	wants(t, run(t, s, "%features #"+anon), "Instance: #"+anon+" (ID: "+anon+")")
+	wants(t, run(t, s, "%features #"+named), "Instance: #"+named+" (ID: "+named+")")
+	shown := s.Complete("%features #", len("%features #")).Candidates
+
+	if res := s.Submit("part def Widget;"); len(res.Notices) != 0 {
+		t.Fatalf("the declaration reported %v", res.Notices)
+	}
+	held := len(s.rtCtx.InstanceIDs())
+	if got := s.Complete("%features #", len("%features #")).Candidates; !slices.Equal(got, shown) {
+		t.Errorf("after the declaration completion offers %v, want %v as before", got, shown)
+	}
+	if len(s.rtCtx.InstanceIDs()) != held {
+		t.Errorf("completion materialized objects: %v were held, now %v", held, s.rtCtx.InstanceIDs())
+	}
+	wants(t, run(t, s, "%features #99"), "the objects are "+strings.Join(shown, ", ")+")")
+	if len(s.rtCtx.InstanceIDs()) != held {
+		t.Errorf("an unknown id materialized objects: %v were held, now %v", held, s.rtCtx.InstanceIDs())
+	}
+
+	wants(t, run(t, s, "%features #"+anon), "Instance: #"+anon+" (ID: "+anon+")", "source = ")
+	wants(t, run(t, s, "%features #"+named), "Instance: #"+named+" (ID: "+named+")", "source = ")
+	wants(t, run(t, s, "%eval in #"+anon+" : source"), "Instance(ID: ")
+	if got := s.Complete("%features #", len("%features #")).Candidates; !slices.Equal(got, shown) {
+		t.Errorf("after reaching the connectors again completion offers %v, want %v", got, shown)
+	}
+	if got := connectorLine(t, run(t, s, "%features Demo::Sys")); objectIDIn(t, got) != anon {
+		t.Errorf("the owner lists its connector as %q, want #%s", got, anon)
+	}
+	// Nothing else took an identity along the way.
+	next := fmt.Sprintf("ID: %d", slices.Max(s.rtCtx.InstanceIDs())+1)
+	wants(t, run(t, s, "%instantiate Demo::A"), next)
+}
+
+// featureLine returns the line of a %features listing that shows feature's value.
+func featureLine(t *testing.T, listing, feature string) string {
+	t.Helper()
+	for _, line := range strings.Split(listing, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), feature+" = ") {
+			return strings.TrimSpace(line)
+		}
+	}
+	t.Fatalf("no feature %s in:\n%s", feature, listing)
+	return ""
+}
+
 // collectionIDs reads the identities a %features listing shows feature holding.
 func collectionIDs(t *testing.T, listing, feature string) []string {
 	t.Helper()

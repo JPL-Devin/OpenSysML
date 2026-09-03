@@ -3,6 +3,7 @@ package runtime
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -260,6 +261,49 @@ func (inst *Instance) MaterializedConnectors(ctx *Context) []*Instance {
 	}
 	conns, _ := inst.anonymousConnectors(ctx)
 	return conns
+}
+
+// KeptConnectorIDs returns the identities of the connectors a carry-over set
+// aside for the instance to materialize again, anonymous and named, ascending.
+func (inst *Instance) KeptConnectorIDs() []int64 {
+	ids := make([]int64, 0, len(inst.keptAnonymous)+len(inst.keptConnectors))
+	for _, id := range inst.keptAnonymous {
+		if id != 0 {
+			ids = append(ids, id)
+		}
+	}
+	for _, id := range inst.keptConnectors {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	return ids
+}
+
+// RestoreConnector materializes again the connector a carry-over set aside under
+// id, which takes the identity back so no other object is created; nil when the
+// instance kept no such identity.
+func (inst *Instance) RestoreConnector(ctx *Context, id int64) (*Instance, error) {
+	if id == 0 {
+		return nil, nil
+	}
+	if slices.Contains(inst.keptAnonymous, id) {
+		if _, err := inst.OwnedConnectors(ctx); err != nil {
+			return nil, err
+		}
+		conn, _ := ctx.Instance(id)
+		return conn, nil
+	}
+	for name, fv := range inst.FeatureValues {
+		if inst.keptConnectors[fv] != id {
+			continue
+		}
+		if _, err := inst.GetFeatureValue(ctx, name); err != nil {
+			return nil, err
+		}
+		conn, _ := ctx.Instance(id)
+		return conn, nil
+	}
+	return nil, nil
 }
 
 // keptIdentity returns the identity the instance's i-th anonymous connector had

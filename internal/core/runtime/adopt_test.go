@@ -165,6 +165,72 @@ func TestAdoptCarriesAnObjectOwningAnAnonymousConnector(t *testing.T) {
 	}
 }
 
+// The identities of the connectors a carry-over set aside are known without
+// materializing them, and asking for one materializes it again under its identity.
+func TestAdoptKeepsTheIdentitiesOfConnectorsSetAside(t *testing.T) {
+	src := strings.Replace(adoptConnectSrc, "connect a.p to b.q;", "connect a.p to b.q; connection c connect a.p to b.q;", 1)
+	prev := contextOver(t, src)
+	obj, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::Sys"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if got := obj.KeptConnectorIDs(); len(got) != 0 {
+		t.Fatalf("KeptConnectorIDs() = %v before any carry-over, want none", got)
+	}
+	conns, err := obj.OwnedConnectors(prev)
+	if err != nil {
+		t.Fatalf("OwnedConnectors: %v", err)
+	}
+	named := fvInstance(t, prev, obj, "c")
+	anon := conns[0].ID
+	shapes := prev.ShapesOf(obj)
+
+	ctx := contextOver(t, src+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, shapes, obj); err != nil {
+		t.Fatalf("Adopt: %v", err)
+	}
+	want := []int64{min(anon, named.ID), max(anon, named.ID)}
+	if got := obj.KeptConnectorIDs(); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("KeptConnectorIDs() = %v after the carry-over, want %v", got, want)
+	}
+	if got := obj.MaterializedConnectors(ctx); len(got) != 0 {
+		t.Errorf("MaterializedConnectors() = %v, want none until they are asked for", got)
+	}
+	held := len(ctx.InstanceIDs())
+	if got, err := obj.RestoreConnector(ctx, 99); got != nil || err != nil {
+		t.Errorf("RestoreConnector(99) = %v, %v; want nothing for an identity never kept", got, err)
+	}
+	if len(ctx.InstanceIDs()) != held {
+		t.Fatalf("asking after the identities materialized objects: %v", ctx.InstanceIDs())
+	}
+
+	for _, id := range []int64{anon, named.ID} {
+		conn, err := obj.RestoreConnector(ctx, id)
+		if err != nil {
+			t.Fatalf("RestoreConnector(%d): %v", id, err)
+		}
+		if conn == nil || conn.ID != id {
+			t.Fatalf("RestoreConnector(%d) = %v, want the connector under that identity", id, conn)
+		}
+		if got, found := ctx.Instance(id); !found || got != conn {
+			t.Errorf("Instance(%d) = %v, %v; want the connector materialized again", id, got, found)
+		}
+		port := fvInstance(t, ctx, obj, "a", "p")
+		if end := conn.Ends[0].Value; !holdsObject(end, port.ID) {
+			t.Errorf("connector %d's end holds %v, want the port object %d", id, end, port.ID)
+		}
+	}
+	if got := obj.KeptConnectorIDs(); len(got) != 0 {
+		t.Errorf("KeptConnectorIDs() = %v once both are materialized again, want none", got)
+	}
+	if got := obj.MaterializedConnectors(ctx); len(got) != 1 || got[0].ID != anon {
+		t.Errorf("MaterializedConnectors() = %v, want the anonymous connector %d", got, anon)
+	}
+	if len(ctx.InstanceIDs()) != held+2 {
+		t.Errorf("materializing the two connectors again left %v, want the two objects more", ctx.InstanceIDs())
+	}
+}
+
 // holdsObject reports whether the value is the object of the given identity.
 func holdsObject(val Value, id int64) bool {
 	got, ok := val.Object()

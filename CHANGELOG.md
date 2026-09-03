@@ -107,7 +107,9 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   for the session: it survives the carry-over an unrelated declaration triggers, and a second
   `%instantiate` of the same name, which re-points the name and now says how the first object is
   still reached; `%instances` lists such an object as `#3 (ID: 3, displaced from Demo::car)`, and a
-  `%state` or `%action` session started on it stays with it under that id; changing the run bounds,
+  `%state` or `%action` session started on it stays with it under that id; a connector `%features`
+  has shown, anonymous or named, keeps answering to its id across that carry-over though its ends
+  are only attached again when it is next read; changing the run bounds,
   which drops every object as a reset does, ends such a session too, and the next `%step` or
   `%advance` says so. The old object still counts: a `%constraint`, `%requirement` or `%eval` that
   names no object and whose condition both carry says so and names both (`Demo::car, #3`) rather
