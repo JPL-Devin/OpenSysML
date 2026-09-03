@@ -51,7 +51,7 @@ class ModelExamplesTest {
   private static final String INHERITANCE =
       """
       package Inherit {
-        part def Base { attribute a = 1; attribute b = 2; }
+        part def Base { attribute a default = 1; attribute b default = 2; }
         part def Mid :> Base { attribute :>> b = 20; attribute c = 3; }
         part def Leaf :> Mid { attribute :>> a = 100; }
         part def Holder {
@@ -70,7 +70,7 @@ class ModelExamplesTest {
         attribute def Temp :> ScalarValues::Real;
         enum def Color { red; green; blue; }
         part def Tank {
-          attribute level : ScalarValues::Real = 0.5;
+          attribute level : ScalarValues::Real default = 0.5;
           attribute colour : Color = Color::green;
           assert constraint notOverfull { level <= 1.0 }
         }
