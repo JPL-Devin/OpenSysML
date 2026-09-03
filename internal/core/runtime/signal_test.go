@@ -191,9 +191,8 @@ func TestSendNewRejectsExcessPositionalArgumentsAtSend(t *testing.T) {
 	}
 }
 
-// A label names only a feature the constructor binds: one the constructed type
-// inherits from its library kind holds no position and is refused at the send,
-// while a restatement of it in the type is bound as any declared feature.
+// A label names only a feature the constructor binds: an inherited library
+// descriptor is refused at the send; a restatement of it in the type binds.
 func TestSendNewLabelMustNameConstructibleFeature(t *testing.T) {
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
 		private import ScalarValues::*;

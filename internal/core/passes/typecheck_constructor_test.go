@@ -237,9 +237,8 @@ func TestConstructorPositionsSkipCalcUsages(t *testing.T) {
 	assertOneConstructorDiag(t, src, constructorDiags(t, src), "3", "new Frame takes 2 argument(s), found 3")
 }
 
-// A label binds only a feature the constructor binds: one the type inherits from
-// its library kind is refused with the restatement that would admit it, and a
-// restatement, under its own name or redefining one, is bound as declared.
+// A label binds only a feature the constructor binds: an inherited library
+// descriptor is refused naming the restatement that admits it; a restatement binds.
 func TestConstructorLabelMustNameConstructibleFeature(t *testing.T) {
 	const solid = `item def Solid :> Telemetry { attribute :>> isSolid = false; } `
 	const renamed = `item def Hollow :> Telemetry { attribute hollow redefines isSolid = false; } `

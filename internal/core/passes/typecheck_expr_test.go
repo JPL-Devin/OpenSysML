@@ -496,9 +496,8 @@ func TestExprInvocationNamedArgumentsChecked(t *testing.T) {
 		"Scale requires an argument for parameter x")
 }
 
-// The parameters a node declares in its body redefine the invoked ones by
-// position, so one the body binds a value to is not required of the call —
-// wherever the node is written, a state action's body included.
+// A node's body parameters redefine the invoked ones by position, so one the
+// body binds a value to is not required of the call, wherever the node is written.
 func TestExprNodeBodyParameterSuppliesArgument(t *testing.T) {
 	const model = `package P {
 		action def Scale { in a : ScalarValues::Integer; in b : ScalarValues::Integer; }
