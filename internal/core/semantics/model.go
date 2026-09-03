@@ -70,6 +70,8 @@ type Model struct {
 	redefClosure               map[*symbols.Symbol]map[*symbols.Symbol]bool
 	computingRedefClosure      map[*symbols.Symbol]bool
 	computingRedefinedFeatures int
+	// ctorSlots memoizes each type's constructible features (see shape.go).
+	ctorSlots map[*symbols.Symbol]constructorSlots
 }
 
 // declMaskKey keys the mask a declaration written in a type sees, by the type
@@ -119,6 +121,7 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		declMask:              make(map[declMaskKey]map[*symbols.Symbol]bool),
 		redefClosure:          make(map[*symbols.Symbol]map[*symbols.Symbol]bool),
 		computingRedefClosure: make(map[*symbols.Symbol]bool),
+		ctorSlots:             make(map[*symbols.Symbol]constructorSlots),
 	}
 	if resolver != nil {
 		resolver.SetModel(m)

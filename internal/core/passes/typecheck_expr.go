@@ -769,11 +769,16 @@ func (ec *exprChecker) inferConstructor(scope *symbols.Scope, e *ast.Constructor
 			ec.errorf(na.Name.Span(), "%s is not a feature of %s", ast.QualifiedText(na.Name), typ.Name)
 			continue
 		}
-		if bound[feature] {
+		// A redefinition and its target are one feature: they share one binding.
+		slot := ec.model.ConstructibleFeatureFor(typ, feature)
+		if slot == nil {
+			slot = feature
+		}
+		if bound[slot] {
 			ec.errorf(na.Name.Span(), "%s of %s is already bound by an earlier argument", feature.Name, typ.Name)
 			continue
 		}
-		bound[feature] = true
+		bound[slot] = true
 		ec.checkFeatureBinding(na.Value, namedTypes[i], feature, typ)
 	}
 	return semantics.PrimUnknown

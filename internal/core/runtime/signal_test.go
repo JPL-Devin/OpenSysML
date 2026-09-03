@@ -11,6 +11,48 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
+// A feature redefined under another name is one payload slot: filled once
+// positionally, and reported when named twice rather than resolved by map order.
+func TestMaterializeAcceptedBindsRedefinedFeatureOnce(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		attribute def Base { attribute a : Integer; attribute k : Integer; }
+		attribute def Sub :> Base { attribute b redefines a; }
+	}`))
+	subs := idx.LookupQualified("P::Sub")
+	if len(subs) != 1 {
+		t.Fatalf("P::Sub matched %d symbols, want 1", len(subs))
+	}
+	message := func(payload map[string]Value) Message {
+		return Message{SignalType: "Sub", Signal: subs[0], Payload: payload}
+	}
+	got, err := ctx.materializeAccepted(message(map[string]Value{"arg1": integerValue(4), "arg2": integerValue(6)}))
+	if err != nil {
+		t.Fatalf("materialize positional payload: %v", err)
+	}
+	inst, ok := ctx.Instance(got.Instance)
+	if !ok {
+		t.Fatalf("no instance %d", got.Instance)
+	}
+	for name, want := range map[string]int64{"b": 4, "a": 4, "k": 6} {
+		if v := inst.FeatureValues[name].HeldValue(); v.Kind != ValConst || v.Const.Int != want {
+			t.Errorf("%s = %+v, want %d", name, v, want)
+		}
+	}
+	for _, payload := range []map[string]Value{
+		{"arg1": integerValue(4), "b": integerValue(5)},
+		{"a": integerValue(4), "b": integerValue(5)},
+	} {
+		created := len(ctx.created)
+		if _, err := ctx.materializeAccepted(message(payload)); err == nil || !strings.Contains(err.Error(), "bound twice") {
+			t.Errorf("payload %v: error %v, want the feature reported bound twice", payload, err)
+		}
+		if len(ctx.created) != created {
+			t.Errorf("payload %v left %d instance(s) behind", payload, len(ctx.created)-created)
+		}
+	}
+}
+
 // executeActionSource executes the named action declared in src.
 func executeActionSource(t *testing.T, name, src string) (map[string]Value, error) {
 	t.Helper()

@@ -62,3 +62,31 @@ func TestConstructibleFeaturesAreTheModelsOwnShapeFeatures(t *testing.T) {
 		t.Errorf("ShapeFeatures(Frame) = %v, want the Item descriptors after the model's own", shape)
 	}
 }
+
+// A feature redefined under another name, directly or through a chain, holds one
+// position, that of its earliest declaration; every name of it binds that position.
+func TestConstructibleFeaturesMergeRedefinitionsUnderOtherNames(t *testing.T) {
+	m, idx := shapeModel(t, `package T {
+		private import ScalarValues::*;
+		item def Base { attribute a : Integer; attribute k : String; }
+		item def Mid :> Base { attribute b redefines a; }
+		item def Leaf :> Mid { attribute c redefines b; attribute z : Boolean; }
+	}`)
+	leaf := dimensionSymbol(t, idx, "T::Leaf")
+	if got, want := symbolNames(m.ConstructibleFeatures(leaf)), []string{"c", "z", "k"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("ConstructibleFeatures(Leaf) = %v, want %v", got, want)
+	}
+	c := m.ConstructibleFeatures(leaf)[0]
+	for _, qn := range []string{"T::Leaf::c", "T::Mid::b", "T::Base::a"} {
+		if got := m.ConstructibleFeatureFor(leaf, dimensionSymbol(t, idx, qn)); got != c {
+			t.Errorf("ConstructibleFeatureFor(Leaf, %s) = %v, want c", qn, got)
+		}
+	}
+	if got := m.ConstructibleFeatureFor(leaf, dimensionSymbol(t, idx, "T::Base::k")); got == nil || got.Name != "k" {
+		t.Errorf("ConstructibleFeatureFor(Leaf, k) = %v, want k", got)
+	}
+	mid := dimensionSymbol(t, idx, "T::Mid")
+	if got, want := symbolNames(m.ConstructibleFeatures(mid)), []string{"b", "k"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("ConstructibleFeatures(Mid) = %v, want %v", got, want)
+	}
+}

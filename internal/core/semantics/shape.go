@@ -74,15 +74,112 @@ func (m *Model) shapeFeatures(typ *symbols.Symbol, keep func(*symbols.Symbol) bo
 // arguments bind, in shape order: those declared or restated in the constructed
 // type's own tier (the model's for a model type, a library's for one of its
 // types), not the ones a more general library declares for every object of the kind.
+// A redefinition and its target are one feature, so they take one position.
 func (m *Model) ConstructibleFeatures(typ *symbols.Symbol) []*symbols.Symbol {
-	if m == nil || m.resolver == nil || m.resolver.Index() == nil {
-		return nil
+	return m.constructorSlots(typ).features
+}
+
+// ConstructibleFeatureFor returns the constructible feature of typ standing for
+// feature (itself, or one it redefines or is redefined by); nil when none does.
+func (m *Model) ConstructibleFeatureFor(typ, feature *symbols.Symbol) *symbols.Symbol {
+	return m.constructorSlots(typ).slotOf[feature]
+}
+
+// constructorSlots is a type's constructible features and, for every declaration
+// of one of them under any name, the feature listed for it.
+type constructorSlots struct {
+	features []*symbols.Symbol
+	slotOf   map[*symbols.Symbol]*symbols.Symbol
+}
+
+// constructorSlots computes typ's constructor slots. Memoized.
+func (m *Model) constructorSlots(typ *symbols.Symbol) constructorSlots {
+	if m == nil || typ == nil || m.resolver == nil || m.resolver.Index() == nil {
+		return constructorSlots{}
 	}
+	if cached, ok := m.ctorSlots[typ]; ok {
+		return cached
+	}
+	slots := m.computeConstructorSlots(typ)
+	if m.computingRedefinedFeatures == 0 {
+		m.ctorSlots[typ] = slots
+	}
+	return slots
+}
+
+func (m *Model) computeConstructorSlots(typ *symbols.Symbol) constructorSlots {
 	tier := m.libraryTier(typ)
-	var out []*symbols.Symbol
+	var declared []*symbols.Symbol
 	for _, f := range m.shapeFeatures(typ, func(member *symbols.Symbol) bool { return m.libraryTier(member) == tier }) {
 		if _, isUsage := f.Declared.Decl.(*ast.Usage); isUsage {
-			out = append(out, f.Declared)
+			declared = append(declared, f.Declared)
+		}
+	}
+	// Union-find over declarations: the earliest positioned one leads its group;
+	// one holding no position (masked, or of another tier) never does.
+	position := make(map[*symbols.Symbol]int, len(declared))
+	for i, decl := range declared {
+		position[decl] = i
+	}
+	leader := make(map[*symbols.Symbol]*symbols.Symbol, len(declared))
+	var find func(*symbols.Symbol) *symbols.Symbol
+	find = func(decl *symbols.Symbol) *symbols.Symbol {
+		next, ok := leader[decl]
+		if !ok || next == decl {
+			leader[decl] = decl
+			return decl
+		}
+		root := find(next)
+		leader[decl] = root
+		return root
+	}
+	for _, decl := range declared {
+		for _, redefined := range m.redefinedTransitively(decl) {
+			if _, known := position[redefined]; !known {
+				position[redefined] = len(position)
+			}
+			a, b := find(decl), find(redefined)
+			switch {
+			case a == b:
+			case position[a] < position[b]:
+				leader[b] = a
+			default:
+				leader[a] = b
+			}
+		}
+	}
+	features := make([]*symbols.Symbol, 0, len(declared))
+	for _, decl := range declared {
+		if find(decl) == decl {
+			features = append(features, decl)
+		}
+	}
+	slotOf := make(map[*symbols.Symbol]*symbols.Symbol, len(position))
+	for decl := range position {
+		slotOf[decl] = find(decl)
+	}
+	return constructorSlots{features: features, slotOf: slotOf}
+}
+
+// redefinedTransitively returns every feature sym redefines, by clause or by
+// position (an end, a subject or objective), and those they redefine in turn.
+func (m *Model) redefinedTransitively(sym *symbols.Symbol) []*symbols.Symbol {
+	var out []*symbols.Symbol
+	seen := map[*symbols.Symbol]bool{sym: true}
+	for queue := []*symbols.Symbol{sym}; len(queue) > 0; {
+		cur := queue[0]
+		queue = queue[1:]
+		for _, redefined := range [][]*symbols.Symbol{
+			m.RedefinedFeatures(cur), m.ImplicitEndRedefinitions(cur), m.ImplicitRoleRedefinitions(cur),
+		} {
+			for _, target := range redefined {
+				if target == nil || seen[target] {
+					continue
+				}
+				seen[target] = true
+				out = append(out, target)
+				queue = append(queue, target)
+			}
 		}
 	}
 	return out

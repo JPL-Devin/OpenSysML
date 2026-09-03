@@ -1023,8 +1023,8 @@ func (ctx *Context) acceptedValue(msg Message) (Value, error) {
 	return value, nil
 }
 
-// materializeAccepted builds the occurrence a typed message binds as, leaving
-// no instance behind when a payload argument does not fit it.
+// materializeAccepted builds the occurrence a typed message binds as, leaving no
+// instance behind when an argument does not fit it or two name one feature.
 func (ctx *Context) materializeAccepted(msg Message) (Value, error) {
 	mark := len(ctx.created)
 	inst, err := ctx.materialize(msg.Signal, 0)
@@ -1033,7 +1033,13 @@ func (ctx *Context) materializeAccepted(msg Message) (Value, error) {
 		return Value{}, fmt.Errorf("materialize accepted %s: %w", msg.SignalType, err)
 	}
 	positional := ctx.model.ConstructibleFeatures(msg.Signal)
-	for name, value := range msg.Payload {
+	names := make([]string, 0, len(msg.Payload))
+	for name := range msg.Payload {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	written := make(map[*FeatureValue]string, len(names))
+	for _, name := range names {
 		target := name
 		if _, held := inst.FeatureValues[name]; !held {
 			n := positionalArg(name)
@@ -1044,7 +1050,18 @@ func (ctx *Context) materializeAccepted(msg Message) (Value, error) {
 			}
 			target = positional[n-1].Name
 		}
-		if err := inst.SetFeatureValue(ctx, target, value); err != nil {
+		if fv := inst.FeatureValues[target]; fv != nil {
+			if earlier, twice := written[fv]; twice {
+				ctx.abandonInstancesSince(mark)
+				if earlier == target {
+					return Value{}, fmt.Errorf("accepted %s: %s is bound twice", msg.SignalType, target)
+				}
+				return Value{}, fmt.Errorf("accepted %s: %s and %s are one feature, bound twice",
+					msg.SignalType, earlier, target)
+			}
+			written[fv] = target
+		}
+		if err := inst.SetFeatureValue(ctx, target, msg.Payload[name]); err != nil {
 			ctx.abandonInstancesSince(mark)
 			return Value{}, fmt.Errorf("accepted %s: %w", msg.SignalType, err)
 		}

@@ -175,6 +175,34 @@ func TestConstructorQualifiedLabelMustBeAFeatureOfTheType(t *testing.T) {
 	}
 }
 
+// A feature redefined under another name is one feature: it takes one position
+// and one binding, and the name it had before is no feature of the subtype.
+func TestConstructorRedefinitionUnderAnotherNameIsOneSlot(t *testing.T) {
+	sub := `item def Sub :> Base { attribute b redefines a; attribute k : String; } `
+	silent := []string{
+		`send new Sub(1, "k") to ground;`,
+		`send new Sub(b = 1) to ground;`,
+		`send new Sub(Sub::b = 1, k = "k") to ground;`,
+	}
+	for _, send := range silent {
+		if got := analyzeAll(t, "ctor.sysml", constructorModel(sub+send)); len(got) != 0 {
+			t.Errorf("%s: unexpected diagnostics: %+v", send, got)
+		}
+	}
+	reported := map[string]struct{ send, at, want string }{
+		"two positional for one feature":  {send: `send new Sub(1, "k", 2) to ground;`, at: "2", want: "new Sub takes 2 argument(s), found 3"},
+		"redefining label twice":          {send: `send new Sub(b = 1, Sub::b = 2) to ground;`, at: "Sub::b", want: "b of Sub is already bound by an earlier argument"},
+		"redefined name":                  {send: `send new Sub(P::Base::a = 1) to ground;`, at: "P::Base::a", want: "P::Base::a is not a feature of Sub"},
+		"redefined name after redefining": {send: `send new Sub(b = 1, P::Base::a = 2) to ground;`, at: "P::Base::a", want: "P::Base::a is not a feature of Sub"},
+	}
+	for name, c := range reported {
+		t.Run(name, func(t *testing.T) {
+			src := constructorModel(sub + c.send)
+			assertOneConstructorDiag(t, src, constructorDiags(t, src), c.at, c.want)
+		})
+	}
+}
+
 // A label naming no feature of the constructed type is the resolver's report;
 // the type tier adds nothing to it.
 func TestConstructorUnknownLabelIsReportedOnce(t *testing.T) {
