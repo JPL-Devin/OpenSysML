@@ -219,10 +219,12 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   resolver reads it there as the linked element, else the shortest qualified suffix that it does,
   else the global form, and refuses a reference no spelling reaches. An unnamed usage that
   redefines or references a feature takes that feature's name, so a reference to it is a graph
-  link written back by that name rather than a literal. Over the example corpus fifteen files
-  move: `Packets.sysml` from a different graph to byte-identical, two pilot behavior files to
-  identical up to `sysx:sourceText` whitespace, and twelve files that could not be written back
-  from Turtle now round-trip; none regresses. `TestRoundTripIsLossless` now also writes every
+  link written back by that name rather than a literal. An unnamed transition's effect now has a
+  scope of its own, as a named one's does, so a succession between its members links both ends and
+  the trigger's parameters reach however deeply the effect nests. Over the example corpus three
+  files move: `Packets.sysml` from a different graph to byte-identical and two pilot function-based
+  behavior files to identical up to `sysx:sourceText` whitespace; none regresses.
+  `TestRoundTripIsLossless` now also writes every
   fixture back from its graph with the source text removed and requires the same graph again, and
   a fixture reproduces each shadowing
   ([docs/reference/rdf-mapping.md](docs/reference/rdf-mapping.md#limitations)).

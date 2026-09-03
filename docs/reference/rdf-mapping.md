@@ -462,6 +462,30 @@ The `comment` and `doc` keywords declare elements, so they convert both ways.
 Save straight to `.sysml` when the comments matter; that path writes the source
 and keeps everything.
 
+**A reference is written in the spelling that resolves, where it is written, to
+the element the graph names.** Every reference an element carries — a
+specialization, subsetting, redefinition, reference-subsetting or typing target,
+the root and members of a feature chain, an import, a succession, connection or
+transition end, the requirement a `satisfy` names — is a link to that element,
+not a name. Writing it back, the converter spells the link as the short name when
+the resolver reads that name, from the writing scope, as the linked element, and
+otherwise as the shortest qualified name it does read that way. So a redefining
+attribute that bears its target's name inside a definition whose supertype also
+redefines it writes `redefines Packets::'packet data field'`, since the short
+name there would reach the inherited redefinition; a `part payload :> payload`
+whose target is the package's `payload` writes `subsets Shadowing::payload`,
+since `payload` inside the definition would be the subsetting part itself; and a
+`: Packet` inside a definition that declares its own `Packet` writes
+`: Shadowing::Packet` when the outer one is meant. A name shadowed at every
+level falls back to the global form (`$::Shadowing::Packet`), and an element
+that no spelling reaches from where it is written is reported rather than
+written as a different element. The fixture
+`testdata/convert/shadowed_references.sysml` covers the three shadowings, and
+`TestRoundTripIsLossless` writes every fixture back from the graph with its
+`sysx:sourceText` removed and requires the graph the notation produces to be the
+one it came from (`export_test.go:TestWrittenReferencesResolveWhereWritten`,
+`TestPacketsRoundTripsStructurally`).
+
 ### End-binding heads
 
 **A head that binds ends records the form it writes them in.** A `connect`,

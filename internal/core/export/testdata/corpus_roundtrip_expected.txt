@@ -132,7 +132,7 @@ refused:prefix-metadata	pilot-corpora/sysml-examples/Metadata Examples/Requireme
 refused:prefix-metadata	pilot-corpora/sysml-examples/Metadata Examples/RiskMetadataExample.sysml
 refused:prefix-metadata	pilot-corpora/sysml-examples/Metadata Examples/VerificationMetadataExample.sysml
 stable	pilot-corpora/sysml-examples/Packet Example/PacketUsage.sysml
-graph-diff	pilot-corpora/sysml-examples/Packet Example/Packets.sysml
+stable	pilot-corpora/sysml-examples/Packet Example/Packets.sysml
 stable	pilot-corpora/sysml-examples/Requirements Examples/HSUVRequirements.sysml
 graph-diff	pilot-corpora/sysml-examples/Requirements Examples/RequirementDerivationExample.sysml
 stable	pilot-corpora/sysml-examples/Requirements Examples/VehicleRequirementDerivation.sysml
@@ -192,8 +192,8 @@ stable	pilot-corpora/sysml-validation/01-Parts Tree/1c-Parts Tree Redefinition.s
 whitespace-only	pilot-corpora/sysml-validation/01-Parts Tree/1d-Parts Tree with Reference.sysml
 whitespace-only	pilot-corpora/sysml-validation/02-Parts Interconnection/2a-Parts Interconnection.sysml
 stable	pilot-corpora/sysml-validation/02-Parts Interconnection/2c-Parts Interconnection-Multiple Decompositions.sysml
-graph-diff	pilot-corpora/sysml-validation/03-Function-based Behavior/3a-Function-based Behavior-1.sysml
-graph-diff	pilot-corpora/sysml-validation/03-Function-based Behavior/3a-Function-based Behavior-2.sysml
+whitespace-only	pilot-corpora/sysml-validation/03-Function-based Behavior/3a-Function-based Behavior-1.sysml
+whitespace-only	pilot-corpora/sysml-validation/03-Function-based Behavior/3a-Function-based Behavior-2.sysml
 whitespace-only	pilot-corpora/sysml-validation/03-Function-based Behavior/3a-Function-based Behavior-3.sysml
 refused:succession	pilot-corpora/sysml-validation/03-Function-based Behavior/3c-Function-based Behavior-structure mod-1.sysml
 refused:succession	pilot-corpora/sysml-validation/03-Function-based Behavior/3c-Function-based Behavior-structure mod-2.sysml

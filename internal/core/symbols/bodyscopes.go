@@ -184,7 +184,7 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		bodyScopesInTrigger(scope, d.Trigger)
 		// The parameters a trigger declares are visible to the transition's own
 		// guard and effect, and nowhere else.
-		body := newTriggerScope(scope, d)
+		body := TriggerScope(scope, d)
 		bodyScopesInExpr(body, d.Guard)
 		buildBodyScopes(body, d.Effect)
 		buildBodyScopes(body, d.Members)
@@ -231,7 +231,8 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 
 // TriggerScope returns the innermost scope trans's guard and effect resolve
 // against: the one holding the parameters its trigger declares when it declares
-// any, the transition's own scope when it has one, and parent otherwise.
+// any, the transition's own scope when it has one, and parent otherwise
+// (builder.buildDecl builds both, with the effect in the innermost).
 func TriggerScope(parent *Scope, trans *ast.TransitionMember) *Scope {
 	if parent == nil {
 		return nil
@@ -239,52 +240,13 @@ func TriggerScope(parent *Scope, trans *ast.TransitionMember) *Scope {
 	scope := parent
 	if child := bodyScopeChild(parent, trans); child != nil {
 		scope = child
-		if params := triggerParameterScope(child, trans); params != nil {
-			scope = params
+		if trans.Trigger != nil {
+			if params := bodyScopeChild(child, trans.Trigger); params != nil {
+				scope = params
+			}
 		}
 	}
 	return scope
-}
-
-// newTriggerScope creates and links the scope a trigger's parameters declare
-// into, so `accept setSpeed(value) if value > 0` resolves `value` and
-// `accept w : Warning do assign level := w` resolves `w`.
-func newTriggerScope(parent *Scope, trans *ast.TransitionMember) *Scope {
-	// A named transition already owns a scope holding its effect members
-	// (builder.buildDecl); an unnamed one owns none until its trigger needs it.
-	scope := bodyScopeChild(parent, trans)
-	define := triggerParameterDefiner(trans.Trigger)
-	if define == nil {
-		if scope != nil {
-			return scope
-		}
-		return parent
-	}
-	if scope == nil {
-		scope = NewScope(parent, trans)
-		scope.markBodyLocal()
-		parent.AddChild(scope)
-	}
-	// The parameters go in a scope of their own, nested in the transition's: they
-	// are visible to the guard and effect that resolve through it, but are not
-	// features of the transition the way its effect behaviors are.
-	params := triggerParameterScope(scope, trans)
-	if params == nil {
-		params = NewScope(scope, trans.Trigger)
-		params.markBodyLocal()
-		scope.AddChild(params)
-	}
-	define(params)
-	return params
-}
-
-// triggerParameterScope returns the scope holding the parameters trans's
-// trigger declares, or nil when it has none.
-func triggerParameterScope(transScope *Scope, trans *ast.TransitionMember) *Scope {
-	if trans.Trigger == nil {
-		return nil
-	}
-	return bodyScopeChild(transScope, trans.Trigger)
 }
 
 // triggerParameterDefiner returns a function defining the parameters trigger

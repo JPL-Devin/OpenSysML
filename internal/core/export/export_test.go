@@ -229,6 +229,41 @@ func TestPacketsRoundTripsStructurally(t *testing.T) {
 	}
 }
 
+// TestTransitionEffectSuccessionLinksItsEnds covers a succession inside the
+// action a transition performs: its ends are members of that action, so the
+// graph links them and the notation written back names the same members.
+func TestTransitionEffectSuccessionLinksItsEnds(t *testing.T) {
+	src := `package P {
+    item def Order;
+    port def Inbox { in item o : Order; }
+    part sys {
+        port inbox : Inbox;
+        state B {
+            state Waiting;
+            accept o : Order via inbox do action {
+                first start;
+                then action fulfil { in what = o; }
+                then send o via inbox;
+            } then Waiting;
+        }
+    }
+}`
+	graph, err := export.Convert("effect.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	if want := "sysml:targetFeature elmt:P__sys__B___401___400__fulfil"; !strings.Contains(string(graph), want) {
+		t.Errorf("graph does not link the succession's target %q\n%s", want, graph)
+	}
+	if want := "sysml:sourceFeature elmt:P__sys__B___401___400__fulfil"; !strings.Contains(string(graph), want) {
+		t.Errorf("graph does not link the next succession's source %q\n%s", want, graph)
+	}
+	notation := structuralRoundTrip(t, "effect", graph)
+	if want := "then action fulfil {"; !strings.Contains(string(notation), want) {
+		t.Errorf("notation does not write %q\n%s", want, notation)
+	}
+}
+
 // TestSaveKeepsComments covers the notation-to-notation path a save uses: every
 // lexeme survives, including the comments an AST printer would drop.
 func TestSaveKeepsComments(t *testing.T) {

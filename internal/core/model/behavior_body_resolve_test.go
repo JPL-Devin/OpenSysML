@@ -249,6 +249,39 @@ func TestTriggerParametersDoNotEscapeTheirTransition(t *testing.T) {
 	}
 }
 
+// TestTriggerParametersReachNestedEffects covers the other side: the effect
+// sees the parameters however deeply it nests, a succession in the effect names
+// the effect's own members, and a named transition's effect stays its feature.
+func TestTriggerParametersReachNestedEffects(t *testing.T) {
+	src := `package P {
+		private import ScalarValues::*;
+		item def Warning { attribute level : Integer; }
+		state S {
+			attribute level : Integer = 0;
+			state a; state b;
+			transition alert first a accept w : Warning do action {
+				first start;
+				then action record { in what = w.level; }
+				then action raise { in cause = w; }
+			} then b;
+			transition setSpeed first a accept req(value) if value > 0
+				do action set { in target = value; } then b;
+		}
+		package Q {
+			private import P::S::**;
+			attribute effectOf = setSpeed.set;
+		}
+	}`
+	if got := diagnose(t, "nestedeffects", src); len(got) != 0 {
+		t.Errorf("expected no findings in a well-formed model, got %v", got)
+	}
+	// The nested bodies are walked: a name they misspell is reported.
+	misspelled := strings.NewReplacer("w.level", "ww.level", "= value;", "= vaule;").Replace(src)
+	if got := diagnose(t, "nestedeffects", misspelled); len(got) != 2 {
+		t.Errorf("misspelled parameters in nested effects reported %v, want two findings", got)
+	}
+}
+
 // TestKeywordNamedDeclarationIsReferenceable covers a declaration whose name is
 // a keyword: the name must reach the symbol table, or references to it resolve
 // against nothing while the misspelled control case reports nothing either.
