@@ -236,7 +236,7 @@ The project is under active development, with the core infrastructure operationa
 
 What these numbers cannot show: the OMG corpora are demonstrations rather than an official conformance suite; the differential is one-directional, comparing the diagnostics the two implementations report on the same files; the Xpect suites are the pilot authors' test intent rather than a certification oracle; and none of these is a percentage of the specification — no global compliance figure is claimed anywhere.
 
-**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each of the 841 tracked rules stays in [spec compliance](docs/project/spec-compliance.md) as a census of our own row list. It moves when rows are rewritten and does not move when an oracle does, so it is not the progress measure.
+**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each of the 842 tracked rules stays in [spec compliance](docs/project/spec-compliance.md) as a census of our own row list. It moves when rows are rewritten and does not move when an oracle does, so it is not the progress measure.
 <!-- doc-counts:end refereed-figures -->
 
 **Current commit:** All tests pass (`go test -race ./...`), builds clean (`go build ./...`).
