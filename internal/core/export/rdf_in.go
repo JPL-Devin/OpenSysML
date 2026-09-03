@@ -390,9 +390,8 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 	indent := strings.Repeat("    ", depth)
 	lead := indent + el.prefix
 	if text, ok := d.stringOf(el, rdf.OpenSysML+xSourceText); ok {
-		// A declaration whose head this mapping keeps verbatim; its body, if
-		// any, is written from its members like any other. Text that already
-		// ends in a body is a whole declaration from an earlier mapping.
+		// A verbatim head; its body is written from its members. Text that
+		// already ends in a body is a whole declaration from an earlier mapping.
 		text = strings.TrimSpace(text)
 		if strings.HasSuffix(text, "}") && len(el.children) == 0 {
 			b.WriteString(lead + text + "\n")

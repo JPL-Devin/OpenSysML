@@ -785,9 +785,8 @@ func TestEndBindingHeadsComeBackFromTheGraphAlone(t *testing.T) {
 	}
 }
 
-// The body of an end-binding usage is owned by the graph like any other body:
-// its members are elements of their own, and the notation comes back with the
-// body from the structure alone (Open-MBEE/OpenSysML#89).
+// An end-binding usage's body members are elements of their own and come back
+// from the structure alone (Open-MBEE/OpenSysML#89).
 func TestEndBindingBodiesComeBackFromTheGraphAlone(t *testing.T) {
 	src, err := os.ReadFile(filepath.Join("testdata", "convert", "end_binding_bodies.sysml"))
 	if err != nil {

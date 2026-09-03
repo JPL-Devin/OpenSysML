@@ -463,10 +463,8 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		e.relationships(subject, owner, n.Relationships)
 		e.multiplicity(subject, owner, n.Multiplicity)
 		e.expression(subject, e.sysml(pValue), pValue, owner, n.Value)
-		// A declaration head that binds ends (connect/bind/flow/succession),
-		// a transition, an accept action or a satisfy usage is kept as source
-		// text: its head is not reconstructible from the properties above. Its
-		// body is mapped like any other usage's.
+		// A head that binds ends, a transition, an accept or a satisfy is kept
+		// as source text; its body is mapped like any other usage's.
 		if verbatimUsage(n) {
 			e.graph.Add(subject, e.sysx(xSourceText), rdf.String(e.headText(n)))
 			e.bindingEnds(subject, owner, n)
@@ -1062,9 +1060,8 @@ func (e *encoder) headText(n *ast.Usage) string {
 	return strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(text), ";"))
 }
 
-// headEnd is the offset a usage's head ends at: its `{` or `;`, or the end of
-// the declaration. The head's own nodes are stepped over first, so a brace or
-// semicolon inside a value expression is never taken for the body's.
+// headEnd is the offset of the `{` or `;` ending a usage's head, found after
+// stepping over the head's own nodes so a value's braces are not mistaken for it.
 func (e *encoder) headEnd(n *ast.Usage) int {
 	span := n.Span()
 	from := span.Offset
