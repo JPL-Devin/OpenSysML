@@ -67,7 +67,7 @@ func TestAnnotateCollections(t *testing.T) {
 // Literal members are spelled as the JSON value of their datatype: booleans and
 // numbers bare, everything else as a string.
 func TestCollectionJSONLiterals(t *testing.T) {
-	text, err := CollectionJSON([]Term{
+	text, err := CollectionJSON(IRI(Element+"P"), []Term{
 		Bool(true), Int(3), TypedLiteral("2.50", XSD+"decimal"), String("a <b>"), TypedLiteral("2024-01-01", XSD+"date"),
 	})
 	if err != nil {
@@ -76,8 +76,38 @@ func TestCollectionJSONLiterals(t *testing.T) {
 	if want := `[true,3,2.50,"a <b>","2024-01-01"]`; text != want {
 		t.Errorf("got %s, want %s", text, want)
 	}
-	if _, err := CollectionJSON([]Term{TypedLiteral("three", XSD+"integer")}); err == nil {
+	if _, err := CollectionJSON(IRI(Element+"P"), []Term{TypedLiteral("three", XSD+"integer")}); err == nil {
 		t.Error("a non-numeric integer literal was accepted")
+	}
+}
+
+// A reference is spelled by its bare id within the subject's project scope and
+// scope-qualified across scopes, and either spelling names its IRI back.
+func TestReferenceIDCarriesTheScopeItCrosses(t *testing.T) {
+	inP := ScopedElementIRIForID("acme.p", "shared")
+	inQ := ScopedElementIRIForID("acme.q", "shared")
+	root := ElementIRIForID("shared")
+	cases := []struct {
+		subject, target Term
+		id              string
+	}{
+		{inP, inQ, "acme.q:shared"},
+		{inP, inP, "shared"},
+		{inP, root, ":shared"},
+		{root, inQ, "acme.q:shared"},
+		{root, root, "shared"},
+		{inP, IRI(Expression + "acme.q:shared_p0"), "acme.q:shared_p0"},
+	}
+	for _, c := range cases {
+		if got := ReferenceID(c.subject, c.target); got != c.id {
+			t.Errorf("ReferenceID(%s, %s) = %q, want %q", c.subject, c.target, got, c.id)
+		}
+		if c.target.Value[:len(Element)] != Element {
+			continue
+		}
+		if got := ReferenceIRI(c.subject, c.id); got != c.target {
+			t.Errorf("ReferenceIRI(%s, %q) = %s, want %s", c.subject, c.id, got, c.target)
+		}
 	}
 }
 

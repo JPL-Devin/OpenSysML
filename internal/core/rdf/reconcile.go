@@ -129,7 +129,7 @@ func reconcileCollection(graph *Graph, ids map[string][]Term, subject Term, key 
 	c.bare = true
 	spelled := make([]string, len(bare))
 	for i, term := range bare {
-		if spelled[i], err = ValueJSON(term); err != nil {
+		if spelled[i], err = ValueJSON(subject, term); err != nil {
 			return refuse(fmt.Sprintf("the typed sysml:%s value %s has no JSON spelling: %v", key, term, err))
 		}
 	}
@@ -166,12 +166,12 @@ func sameMembers(a, b []string) bool {
 	return true
 }
 
-// subjectsByID indexes IRI subjects by local id.
+// subjectsByID indexes IRI subjects by scope-qualified id.
 func subjectsByID(graph *Graph) map[string][]Term {
 	ids := map[string][]Term{}
 	for _, subject := range graph.Subjects() {
 		if subject.IsIRI() {
-			id := LocalName(subject.Value)
+			id := ownerID(subject.Value)
 			ids[id] = append(ids[id], subject)
 		}
 	}
@@ -179,35 +179,14 @@ func subjectsByID(graph *Graph) map[string][]Term {
 }
 
 // materialize turns an annotation member into the term a typed triple would hold:
-// the subject in the referrer's scope, else the only one; an unknown id dangles as usual.
+// the one subject carrying the id in the scope the @id names; an unknown id dangles as usual.
 func materialize(member CollectionMember, referrer Term, ids map[string][]Term) Term {
 	if member.ID == "" {
 		return member.Literal
 	}
-	scope := scopeOf(referrer.Value)
-	var inScope []Term
-	for _, subject := range ids[member.ID] {
-		if scopeOf(subject.Value) == scope {
-			inScope = append(inScope, subject)
-		}
-	}
-	if len(inScope) == 1 {
-		return inScope[0]
-	}
-	if subjects := ids[member.ID]; len(subjects) == 1 {
+	ref := ReferenceIRI(referrer, member.ID)
+	if subjects := ids[ownerID(ref.Value)]; len(subjects) == 1 {
 		return subjects[0]
 	}
-	if scope != "" {
-		return ScopedElementIRIForID(scope, member.ID)
-	}
-	return ElementIRIForID(member.ID)
-}
-
-// scopeOf is the project qualifier of an element or expression IRI, empty when unscoped.
-func scopeOf(iri string) string {
-	qualifier, _, scoped := strings.Cut(ownerID(iri), ":")
-	if !scoped {
-		return ""
-	}
-	return qualifier
+	return ref
 }

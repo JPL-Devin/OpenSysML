@@ -155,8 +155,8 @@ package Q {
 	}
 }
 
-// A reference into another project scope — which the typed triple spells with that
-// scope's qualifier — reads from the annotation's bare id when no other subject carries it.
+// A reference into another project scope is spelled with that scope's qualifier in
+// the annotation as in the typed triple, and reads back from the annotation alone.
 func TestAnnotatedReferencesReachAcrossScopes(t *testing.T) {
 	turtle := structural(t, idTurtle(t, `package P {
 	@IdentityMetadata::ProjectRef { projectId = "proj-1"; org = "acme"; }
@@ -173,10 +173,47 @@ package Q {
 	if !strings.Contains(turtle, "sysml:specializes elmt:acme.proj-2:b-id, elmt:acme.proj-2:Q__C ;") {
 		t.Fatalf("the fixture does not reference across scopes:\n%s", turtle)
 	}
+	if !strings.Contains(turtle, `json:specializes "[{\"@id\":\"acme.proj-2:b-id\"},{\"@id\":\"acme.proj-2:Q__C\"}]"`) {
+		t.Fatalf("the annotation does not qualify the references it makes across scopes:\n%s", turtle)
+	}
 	want := toNotation(t, []byte(turtle))
 	back := toNotation(t, withoutTriples(t, []byte(turtle), "sysml:specializes"))
 	if back != want || !strings.Contains(back, "part def A specializes Q::B, Q::C;") {
 		t.Errorf("the annotation-only graph reads differently:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+}
+
+// A reference across scopes to an id the referrer's own scope also carries names the
+// other scope's element, from the annotation alone as from the typed triple; a bare id
+// annotation for it disagrees with the typed triple and is refused.
+func TestAnnotatedCrossScopeReferenceIsNotRetargetedLocally(t *testing.T) {
+	turtle := structural(t, idTurtle(t, `package P {
+	@IdentityMetadata::ProjectRef { projectId = "proj-1"; org = "acme"; }
+	part def A {
+		@IdentityMetadata::ElementId { id = "shared"; }
+	}
+	part def D :> Q::B, P::A;
+}
+package Q {
+	@IdentityMetadata::ProjectRef { projectId = "proj-2"; org = "acme"; }
+	part def B {
+		@IdentityMetadata::ElementId { id = "shared"; }
+	}
+}
+`))
+	annotation := `json:specializes "[{\"@id\":\"acme.proj-2:shared\"},{\"@id\":\"shared\"}]"`
+	if !strings.Contains(turtle, "sysml:specializes elmt:acme.proj-2:shared, elmt:acme.proj-1:shared ;") || !strings.Contains(turtle, annotation) {
+		t.Fatalf("the fixture does not reference the same id in both scopes:\n%s", turtle)
+	}
+	want := toNotation(t, []byte(turtle))
+	back := toNotation(t, withoutTriples(t, []byte(turtle), "sysml:specializes"))
+	if back != want || !strings.Contains(back, "part def D specializes Q::B, A;") {
+		t.Errorf("the annotation-only graph reads differently:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
+	bare := editTurtle(t, []byte(turtle), annotation, `json:specializes "[{\"@id\":\"shared\"},{\"@id\":\"shared\"}]"`)
+	var conflict *rdf.CollectionConflictError
+	if _, err := export.Convert("m.ttl", bare, export.FormatTurtle, export.FormatSysML); !errors.As(err, &conflict) || conflict.Key != "specializes" {
+		t.Errorf("a bare id for a cross-scope reference was not refused as a conflict: %v", err)
 	}
 }
 

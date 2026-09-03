@@ -45,7 +45,7 @@ func AnnotateCollections(g *Graph) error {
 		if g.HasProperty(p.subject, AnnotationJSON+key) {
 			continue
 		}
-		text, err := CollectionJSON(values)
+		text, err := CollectionJSON(p.subject, values)
 		if err != nil {
 			return fmt.Errorf("annotate %s of <%s>: %w", key, p.subject.Value, err)
 		}
@@ -54,12 +54,12 @@ func AnnotateCollections(g *Graph) error {
 	return nil
 }
 
-// CollectionJSON spells values as the service stores a collection: a JSON array of
-// {"@id": <id>} references and typed primitives.
-func CollectionJSON(values []Term) (string, error) {
+// CollectionJSON spells the values of subject as the service stores a collection: a
+// JSON array of {"@id": <id>} references and typed primitives.
+func CollectionJSON(subject Term, values []Term) (string, error) {
 	members := make([]any, 0, len(values))
 	for _, value := range values {
-		member, err := jsonValue(value)
+		member, err := jsonValue(subject, value)
 		if err != nil {
 			return "", err
 		}
@@ -68,9 +68,9 @@ func CollectionJSON(values []Term) (string, error) {
 	return encodeJSON(members)
 }
 
-// ValueJSON spells one term as a collection member; two spellings compare by it.
-func ValueJSON(value Term) (string, error) {
-	member, err := jsonValue(value)
+// ValueJSON spells one value of subject as a collection member; two spellings compare by it.
+func ValueJSON(subject, value Term) (string, error) {
+	member, err := jsonValue(subject, value)
 	if err != nil {
 		return "", err
 	}
@@ -94,9 +94,9 @@ type reference struct {
 }
 
 // jsonValue maps a term onto its JSON member: reference, boolean, number or string.
-func jsonValue(value Term) (any, error) {
+func jsonValue(subject, value Term) (any, error) {
 	if value.IsIRI() {
-		return reference{ID: LocalName(value.Value)}, nil
+		return reference{ID: ReferenceID(subject, value)}, nil
 	}
 	switch value.Datatype {
 	case XSD + "boolean":
@@ -111,9 +111,42 @@ func jsonValue(value Term) (any, error) {
 	return value.Value, nil
 }
 
+// ReferenceID spells target as the @id of a member of subject: the bare id within
+// the subject's project scope, `<qualifier>:<id>` across scopes (an empty
+// qualifier being the unscoped root), so the id alone names the target exactly.
+func ReferenceID(subject, target Term) string {
+	id := LocalName(target.Value)
+	if scope := scopeOf(target.Value); scope != scopeOf(subject.Value) {
+		return scope + ":" + id
+	}
+	return id
+}
+
+// ReferenceIRI is the element IRI an @id names from subject: the scope it
+// spells, else the subject's own.
+func ReferenceIRI(subject Term, id string) Term {
+	scope, local, qualified := strings.Cut(id, ":")
+	if !qualified {
+		scope, local = scopeOf(subject.Value), id
+	}
+	if scope == "" {
+		return ElementIRIForID(local)
+	}
+	return ScopedElementIRIForID(scope, local)
+}
+
+// scopeOf is the project qualifier of an element or expression IRI, empty when unscoped.
+func scopeOf(iri string) string {
+	qualifier, _, scoped := strings.Cut(ownerID(iri), ":")
+	if !scoped {
+		return ""
+	}
+	return qualifier
+}
+
 // CollectionMember is one parsed annotation member: a reference by id, or a literal.
 type CollectionMember struct {
-	ID      string // element id of a {"@id": …} member; empty for a literal
+	ID      string // @id of a reference member, as ReferenceID spells it; empty for a literal
 	Literal Term   // typed literal of a primitive member
 }
 
@@ -122,7 +155,7 @@ func (m CollectionMember) JSON() (string, error) {
 	if m.ID != "" {
 		return encodeJSON(reference{ID: m.ID})
 	}
-	return ValueJSON(m.Literal)
+	return ValueJSON(Term{}, m.Literal)
 }
 
 var (

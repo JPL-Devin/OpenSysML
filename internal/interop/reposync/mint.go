@@ -55,16 +55,16 @@ func mintTriple(triple rdf.Triple, mints map[string]string) rdf.Triple {
 	case triple.Predicate.Value == rdf.SysML+"elementId" && subject != triple.Subject:
 		object = rdf.String(rdf.LocalName(subject.Value))
 	case rdf.IsAnnotationJSON(triple.Predicate.Value) && object.IsLiteral():
-		if text, ok := mintedAnnotation(object.Value, mints); ok {
+		if text, ok := mintedAnnotation(subject, object.Value, mints); ok {
 			object = rdf.String(text)
 		}
 	}
 	return rdf.Triple{Subject: subject, Predicate: triple.Predicate, Object: object}
 }
 
-// mintedAnnotation rewrites the references of a collection annotation onto their
-// minted ids. A literal that is not a collection stays as it is, for the reader to refuse.
-func mintedAnnotation(text string, mints map[string]string) (string, bool) {
+// mintedAnnotation rewrites the references of subject's collection annotation onto
+// their minted ids. A literal that is not a collection stays as it is, for the reader to refuse.
+func mintedAnnotation(subject rdf.Term, text string, mints map[string]string) (string, bool) {
 	members, err := rdf.ParseCollectionJSON(text)
 	if err != nil {
 		return "", false
@@ -75,13 +75,14 @@ func mintedAnnotation(text string, mints map[string]string) (string, bool) {
 			values = append(values, member.Literal)
 			continue
 		}
-		term := mintedTerm(rdf.IRI(rdf.Element+member.ID), mints)
-		if rdf.LocalName(term.Value) == member.ID {
-			term = mintedTerm(rdf.IRI(rdf.Expression+member.ID), mints)
+		element := rdf.ReferenceIRI(subject, member.ID)
+		term := mintedTerm(element, mints)
+		if term == element {
+			term = mintedTerm(rdf.IRI(rdf.Expression+strings.TrimPrefix(element.Value, rdf.Element)), mints)
 		}
 		values = append(values, term)
 	}
-	minted, err := rdf.CollectionJSON(values)
+	minted, err := rdf.CollectionJSON(subject, values)
 	return minted, err == nil
 }
 

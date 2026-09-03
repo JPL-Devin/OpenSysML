@@ -423,7 +423,13 @@ the live measurement is in `internal/interop/flexo/testdata/interop_expected.txt
 The JSON shape is the commit path's:
 
 - a **reference** is `{"@id": "<id>"}`, the id being the part of the IRI after
-  the final `:`, for elements and expression nodes alike;
+  the final `:`, for elements and expression nodes alike. In a [multi-scope
+  document](#element-identity) a reference into another project scope keeps that
+  scope's qualifier, `{"@id": "<encoded-org>.<encoded-project>:<id>"}` (an
+  empty qualifier, `":<id>"`, naming the unscoped root), exactly as its typed
+  triple does; so an id that both scopes carry still names one element, and the
+  two spellings compare exactly. A single-scope graph, which is what the service
+  holds, never spells a qualifier;
 - a **primitive** is a JSON string, boolean or number: `xsd:boolean` as
   `true`/`false`, `xsd:integer`, `xsd:decimal`, `xsd:double` and `xsd:float` as
   numbers, every other literal as a string of its lexical form;
@@ -452,10 +458,12 @@ another property twice gets the annotation on that property too.
 **Reading a graph back** accepts either spelling or both. A collection stated by
 the annotation alone — what that service writes back for a graph it holds —
 is materialized as typed triples in the annotation's order before decoding, a
-`{"@id": …}` member resolving to the subject with that id — in a graph of several
-project scopes whose ids repeat, the one in the referring subject's scope — or,
-absent one, standing as an element IRI that dangles as any other unresolved
-reference does.
+`{"@id": …}` member resolving to the subject with that id in the scope the id
+spells — the referring subject's own when it spells none — or, absent one,
+standing as an element IRI that dangles as any other unresolved reference does.
+An annotation that names a cross-scope target by its bare id disagrees with the
+qualified typed triple and is refused as a conflict rather than retargeted to
+the referrer's scope.
 A string member reads as a plain literal, since the annotation carries no
 datatype: a head target written as an expression comes back from the annotation
 alone as a name, where the typed triple would have carried `sysx:Expression`.
