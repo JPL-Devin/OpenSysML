@@ -563,6 +563,49 @@ func (m *Model) unionConforms(a, b *symbols.Symbol, unioning map[*symbols.Symbol
 	return true
 }
 
+// FeatureTypes returns a feature's effective types: those it declares, else those
+// of the features it redefines or subsets (KerML §8.3.3.3), else its kind's base.
+func (m *Model) FeatureTypes(sym *symbols.Symbol) []*symbols.Symbol {
+	if sym == nil || !isFeature(sym) {
+		return nil
+	}
+	return m.featureTypes(sym, make(map[*symbols.Symbol]bool))
+}
+
+func (m *Model) featureTypes(sym *symbols.Symbol, visiting map[*symbols.Symbol]bool) []*symbols.Symbol {
+	if visiting[sym] {
+		return nil
+	}
+	visiting[sym] = true
+	var types, features []*symbols.Symbol
+	for _, super := range m.DirectSupertypes(sym) {
+		if isFeature(super) {
+			features = append(features, super)
+		} else {
+			types = append(types, super)
+		}
+	}
+	if len(types) > 0 {
+		return types
+	}
+	seen := make(map[*symbols.Symbol]bool)
+	for _, feature := range features {
+		for _, t := range m.featureTypes(feature, visiting) {
+			if !seen[t] {
+				seen[t] = true
+				types = append(types, t)
+			}
+		}
+	}
+	if len(types) > 0 {
+		return types
+	}
+	if base := m.implicitBase(sym); base != nil {
+		return []*symbols.Symbol{base}
+	}
+	return nil
+}
+
 // UnioningTypes returns the resolved targets of sym's `unions` relationships:
 // the types sym is declared to be the union of (KerML 1.0 §8.3.3). Unioning is
 // not a generalization edge — a union is constrained by its members rather than

@@ -285,5 +285,9 @@ func isFeature(sym *symbols.Symbol) bool {
 	if _, ok := sym.Decl.(*ast.Usage); !ok {
 		return false
 	}
-	return !isKerMLTypeDecl(sym)
+	switch sym.Kind {
+	case symbols.SymbolKerMLType, symbols.SymbolAttributeDef, symbols.SymbolCalcDef:
+		return false
+	}
+	return true
 }

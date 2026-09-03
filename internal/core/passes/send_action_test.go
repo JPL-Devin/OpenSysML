@@ -158,6 +158,24 @@ func TestSendArgumentNotAnOccurrenceWarns(t *testing.T) {
 			part def V :> Base { action s {
 				send Ping() to a;
 			} } }`},
+		"untyped redefinition of an attribute receiver": {code: CodeSendReceiverNotOccurrence, at: "a", want: "Real", src: `package P {` + sendPrelude + `
+			part def Base { attribute a : ScalarValues::Real; }
+			part def V :> Base { attribute :>> a; action s {
+				send Ping() to a;
+			} } }`},
+		"renamed redefinition of an attribute sender": {code: CodeSendSenderNotOccurrence, at: "b", want: "Real", src: `package P {` + sendPrelude + `
+			part def Base { attribute a : ScalarValues::Real; }
+			part def V :> Base { attribute b :>> a; part r : Receiver; action s {
+				send Ping() via b to r;
+			} } }`},
+		"subsetting an attribute receiver": {code: CodeSendReceiverNotOccurrence, at: "b", want: "Real", src: `package P {` + sendPrelude + `
+			part def V { attribute a : ScalarValues::Real; attribute b :> a; action s {
+				send Ping() to b;
+			} } }`},
+		"untyped attribute receiver": {code: CodeSendReceiverNotOccurrence, at: "a", want: "DataValue", src: `package P {` + sendPrelude + `
+			part def V { attribute a; action s {
+				send Ping() to a;
+			} } }`},
 		"user attribute def receiver": {code: CodeSendReceiverNotOccurrence, at: "sig", want: "Sig", src: `package P {` + sendPrelude + `
 			part def V { attribute sig : Sig; action s {
 				send Ping() to sig;
@@ -312,6 +330,15 @@ func TestSendWellFormedShapesAreSilent(t *testing.T) {
 		"to a redefined part": `package P {` + sendPrelude + `
 			part def Base { part r; }
 			part def V :> Base { part :>> r : Receiver; action a { send Ping() to r; } } }`,
+		"to an untyped redefinition of a part": `package P {` + sendPrelude + `
+			part def Base { part r : Receiver; }
+			part def V :> Base { part :>> r; action a { send Ping() to r; } } }`,
+		"to an untyped redefinition of a reference": `package P {` + sendPrelude + `
+			part def Base { ref r; }
+			part def V :> Base { ref :>> r; action a { send Ping() to r; } } }`,
+		"via an untyped redefinition of a port": `package P {` + sendPrelude + `
+			part def Base { port q : PD; }
+			part def V :> Base { port :>> q; action a { send Ping() via q; } } }`,
 		"via an inherited port": `package P {` + sendPrelude + `
 			part def Base { port q : PD; }
 			part def V :> Base { action a { send Ping() via q; } } }`,

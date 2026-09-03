@@ -282,14 +282,14 @@ func (c *sendActionChecker) checkSender(scope *symbols.Scope, sender ast.Node) {
 	}
 }
 
-// nonOccurrenceTypes names a feature's declared types when none of them
-// conforms to Occurrence in either direction, as a binding to one requires.
+// nonOccurrenceTypes names a feature's effective types (semantics.FeatureTypes)
+// when none conforms to Occurrence in either direction, as a binding requires.
 func (c *sendActionChecker) nonOccurrenceTypes(sym *symbols.Symbol) (string, bool) {
 	model := c.bindings.model
 	if c.occurrence == nil || model == nil || model.Conforms(sym, c.occurrence) {
 		return "", false
 	}
-	types := c.bindings.endTypes(sym)
+	types := w8cMostSpecific(model, model.FeatureTypes(sym))
 	if len(types) == 0 || w9cTypesConform(model, types, []*symbols.Symbol{c.occurrence}) {
 		return "", false
 	}
