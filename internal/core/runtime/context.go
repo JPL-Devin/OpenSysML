@@ -757,6 +757,17 @@ func (ctx *Context) ExecuteActionWithInputs(action *symbols.Symbol, inputs map[s
 // connections route what the action sends and whose variant selections decide
 // which of them are realized. A nil self performs the action outside any object.
 func (ctx *Context) ExecuteActionPerformedBy(action *symbols.Symbol, self *Instance, inputs map[string]Value) (map[string]Value, error) {
+	exec, err := ctx.performAction(action, self, inputs)
+	if err != nil {
+		return nil, err
+	}
+	// Return the values the action's features hold once it completed
+	return exec.Results(), nil
+}
+
+// performAction runs action to completion, performed by self, and returns the
+// executor that ran it, whose root performance holds what it produced.
+func (ctx *Context) performAction(action *symbols.Symbol, self *Instance, inputs map[string]Value) (*ActionExecutor, error) {
 	defer ctx.beginRun()()
 
 	// Create executor
@@ -779,9 +790,7 @@ func (ctx *Context) ExecuteActionPerformedBy(action *symbols.Symbol, self *Insta
 	if err := exec.RunToCompletion(); err != nil {
 		return nil, fmt.Errorf("execute action: %w", err)
 	}
-
-	// Return the values the action's features hold once it completed
-	return exec.Results(), nil
+	return exec, nil
 }
 
 // ExecuteState executes a state machine, processing events until completion or suspension.

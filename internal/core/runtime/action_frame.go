@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -37,6 +38,11 @@ type actionFrame struct {
 	// result names the parameter a value read of the performance stands for,
 	// "" when the action it performs states no result parameter.
 	result string
+	// began is the activation the performance began in, which orders performances.
+	began int64
+	// performs is the flow of the action a typed or invoked node performed, whose
+	// subactions the node's performance adopted as its own. nil otherwise.
+	performs *lower.ActionGraph
 	// subactions holds the latest performance of each node of graph, which is
 	// what a read of the node's pins by name sees.
 	subactions map[ast.Node]*actionFrame
@@ -126,6 +132,7 @@ func (e *ActionExecutor) beginPerformance(
 	// answers once, and another performance evaluates it anew.
 	activation, endStep := e.ctx.beginStep()
 	defer endStep()
+	perf.began = activation
 	if err := e.bindInputPins(perf, activation); err != nil {
 		return nil, err
 	}
@@ -249,52 +256,60 @@ func (f *actionFrame) lexicalFrames() []frame {
 	return append(frames, performanceFrame(f))
 }
 
-// nodeNamed returns the node named among the performance's subactions: its flow's
-// nodes and those its bodies' blocks declare.
-func (f *actionFrame) nodeNamed(name string) (ast.Node, bool) {
-	answers := func(node ast.Node) bool {
-		if _, isUsage := node.(*ast.Usage); !isUsage {
-			return false
+// nodesNamed returns the nodes named name among the performance's subactions: its
+// flow's nodes, those its bodies' blocks declare, and those of the action it performed.
+func (f *actionFrame) nodesNamed(name string) []ast.Node {
+	var named []ast.Node
+	add := func(node ast.Node) {
+		if _, isUsage := node.(*ast.Usage); isUsage && slices.Contains(ActionNodeNames(node), name) {
+			named = append(named, node)
 		}
-		for _, candidate := range ActionNodeNames(node) {
-			if candidate == name {
-				return true
+	}
+	inFlow := func(graph *lower.ActionGraph) {
+		for _, node := range graph.Nodes {
+			add(node)
+		}
+		for _, node := range graph.Nodes {
+			if _, isUsage := node.(*ast.Usage); isUsage {
+				continue
+			}
+			for _, declared := range graph.BlockNodes[node] {
+				add(declared)
 			}
 		}
-		return false
 	}
-	if f.graph == nil {
+	if f.graph != nil {
+		inFlow(f.graph)
+	} else {
 		for _, node := range f.flow.BlockNodes[f.node] {
-			if answers(node) {
-				return node, true
-			}
-		}
-		return nil, false
-	}
-	for _, node := range f.graph.Nodes {
-		if answers(node) {
-			return node, true
+			add(node)
 		}
 	}
-	for _, node := range f.graph.Nodes {
-		if _, isUsage := node.(*ast.Usage); isUsage {
-			continue
-		}
-		for _, declared := range f.graph.BlockNodes[node] {
-			if answers(declared) {
-				return declared, true
-			}
-		}
+	if f.performs != nil {
+		inFlow(f.performs)
 	}
-	return nil, false
+	return named
 }
 
 // subaction returns the latest performance of f's node named name; declared reports
-// whether the flow has such a node, one not yet performed is ErrNodeNotPerformed.
-func (f *actionFrame) subaction(name string) (perf *actionFrame, declared bool, err error) {
-	node, ok := f.nodeNamed(name)
-	if !ok {
+// whether f has such a node, one not yet performed is ErrNodeNotPerformed. Among
+// same-named nodes (one per branch of a conditional), decl names the reader's own,
+// else the one performed latest answers.
+func (f *actionFrame) subaction(name string, decl ast.Node) (perf *actionFrame, declared bool, err error) {
+	named := f.nodesNamed(name)
+	if len(named) == 0 {
 		return nil, false, nil
+	}
+	node := named[0]
+	if slices.Contains(named, decl) {
+		node = decl
+	} else {
+		for _, candidate := range named {
+			performed, ok := f.subactions[candidate]
+			if ok && (f.subactions[node] == nil || f.subactions[node].began < performed.began) {
+				node = candidate
+			}
+		}
 	}
 	perf, performed := f.subactions[node]
 	if !performed {
@@ -455,16 +470,22 @@ func lexicalValues(perf *actionFrame) map[string]Value {
 }
 
 // collect reports the values the performance and its subactions hold, a node's
-// under its path (`p.v`), the latest performance of each node standing for it.
+// under its path (`p.v`), the latest performance of each name standing for it.
 func (f *actionFrame) collect(prefix string, into map[string]Value) {
 	for name, value := range f.data {
 		into[prefix+name] = value
 	}
+	latest := make(map[string]*actionFrame)
 	for node, sub := range f.subactions {
 		name := ActionNodeName(node)
 		if name == "" {
 			continue
 		}
+		if earlier, named := latest[name]; !named || earlier.began < sub.began {
+			latest[name] = sub
+		}
+	}
+	for name, sub := range latest {
 		sub.collect(prefix+name+".", into)
 	}
 }
@@ -668,13 +689,12 @@ func (e *ActionExecutor) performInvocation(perf *actionFrame, inv actionInvocati
 		return err
 	}
 
-	results, err := e.ctx.ExecuteActionPerformedBy(sym, e.self, inputs)
+	callee, err := e.ctx.performAction(sym, e.self, inputs)
 	if err != nil {
 		return fmt.Errorf("invoke action %s: %w", qualifiedNameText(inv.target), err)
 	}
-	for name, value := range results {
-		perf.data[name] = value
-	}
+	results := callee.root.data
+	perf.adopt(callee)
 	sort.Strings(out)
 	for _, name := range out {
 		value, ok := results[name]
@@ -686,6 +706,22 @@ func (e *ActionExecutor) performInvocation(perf *actionFrame, inv actionInvocati
 		}
 	}
 	return nil
+}
+
+// adopt makes the completed performance of the action a node performed the node's
+// own: its features' values, and its subactions, read as `call.inner.v`.
+func (f *actionFrame) adopt(callee *ActionExecutor) {
+	for name, value := range callee.root.data {
+		f.data[name] = value
+	}
+	f.performs = callee.graph
+	if len(callee.root.subactions) > 0 && f.subactions == nil {
+		f.subactions = make(map[ast.Node]*actionFrame, len(callee.root.subactions))
+	}
+	for node, sub := range callee.root.subactions {
+		sub.parent = f
+		f.subactions[node] = sub
+	}
 }
 
 // checkInputsBound reports an input parameter that no argument, pin value or

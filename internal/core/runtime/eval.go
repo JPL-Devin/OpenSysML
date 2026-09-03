@@ -113,14 +113,21 @@ func (ec *EvalContext) pushFrame(f frame) {
 }
 
 // lookupSubaction finds the node named name in the flow of an action performance
-// on the stack, innermost first, and returns its latest performance.
+// on the stack, innermost first, and returns its latest performance. Where the
+// name resolves in the reading scope, it is that declaration's node.
 func (ec *EvalContext) lookupSubaction(name string) (perf *actionFrame, declared bool, err error) {
+	var decl ast.Node
+	if ec.ctx.resolver != nil {
+		if sym, ok := ec.ctx.resolver.LookupName(ec.scope, name); ok && sym != nil {
+			decl = sym.Decl
+		}
+	}
 	for i := len(ec.frames) - 1; i >= 0; i-- {
 		f := ec.frames[i].perf
 		if f == nil {
 			continue
 		}
-		if perf, declared, err = f.subaction(name); declared {
+		if perf, declared, err = f.subaction(name, decl); declared {
 			return perf, true, err
 		}
 	}
@@ -131,7 +138,7 @@ func (ec *EvalContext) lookupSubaction(name string) (perf *actionFrame, declared
 // of the nodes the path names, the last part being a pin or a node read as a value.
 func (ec *EvalContext) evalSubactionPath(perf *actionFrame, parts []ast.NameSegment) (Value, error) {
 	for i, part := range parts {
-		if inner, declared, err := perf.subaction(part.Text); declared {
+		if inner, declared, err := perf.subaction(part.Text, nil); declared {
 			if err != nil {
 				return Value{}, err
 			}

@@ -31,6 +31,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("node_read_as_a_value_without_a_result", testNodeReadAsAValueWithoutAResult)
 	t.Run("block_node_pin_of_a_node_not_yet_performed", testBlockNodePinOfANodeNotYetPerformed)
 	t.Run("block_node_pin_the_node_does_not_declare", testBlockNodePinTheNodeDoesNotDeclare)
+	t.Run("else_branch_node_read_before_it_performs", testElseBranchNodeReadBeforeItPerforms)
+	t.Run("typed_node_pin_of_a_node_the_callee_does_not_declare", testTypedNodePinOfANodeTheCalleeDoesNotDeclare)
 	t.Run("node_invocation_too_many_arguments", testNodeInvocationTooManyArguments)
 	t.Run("node_invocation_too_few_arguments", testNodeInvocationTooFewArguments)
 	t.Run("node_invocation_unknown_named_argument", testNodeInvocationUnknownNamedArgument)
@@ -7996,6 +7998,67 @@ func testBlockNodePinTheNodeDoesNotDeclare(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "p") || !strings.Contains(err.Error(), "w") {
 		t.Errorf("error %q does not name the node and the pin", err)
+	}
+}
+
+// testElseBranchNodeReadBeforeItPerforms: an else branch's `p` is the one its
+// own reads name even where the then branch declares a `p` too, so a read ahead
+// of it is not-yet-performed rather than a read of the other branch's node.
+func testElseBranchNodeReadBeforeItPerforms(t *testing.T) {
+	src := `
+		package test {
+			action outer {
+				attribute total : Integer = 0;
+				first start;
+				then action run {
+					if false {
+						action p { out v : Integer; assign v := 1; }
+						assign total := p.v;
+					} else {
+						assign total := p.v;
+						action p { out v : Integer; assign v := 2; }
+					}
+				}
+				then done;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if !errors.Is(err, ErrNodeNotPerformed) {
+		t.Fatalf("error = %v, want ErrNodeNotPerformed", err)
+	}
+	if !strings.Contains(err.Error(), "p") {
+		t.Errorf("error %q does not name the node", err)
+	}
+}
+
+// testTypedNodePinOfANodeTheCalleeDoesNotDeclare: a typed node's subactions are
+// those of the action it performed; a path through one it declares not is reported.
+func testTypedNodePinOfANodeTheCalleeDoesNotDeclare(t *testing.T) {
+	src := `
+		package test {
+			action def Seven {
+				out result : Integer;
+				first start;
+				then action inner { out v : Integer; assign v := 7; }
+				then action publish { assign result := inner.v; }
+				then done;
+			}
+			action outer {
+				attribute total : Integer = 0;
+				first start;
+				then action call : Seven;
+				then action read { assign total := call.other.v; }
+				then done;
+			}
+		}
+	`
+	err := runOuterAction(t, src)
+	if !errors.Is(err, ErrNodePin) {
+		t.Fatalf("error = %v, want ErrNodePin", err)
+	}
+	if !strings.Contains(err.Error(), "call") || !strings.Contains(err.Error(), "other") {
+		t.Errorf("error %q does not name the node and the missing one", err)
 	}
 }
 

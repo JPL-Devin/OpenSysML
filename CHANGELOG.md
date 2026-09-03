@@ -89,7 +89,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   reports them under its path (`iterate.square.s`), the latest iteration's standing for it; a
   `bind` or `flow` written in the branch or body at such a node's pin is applied per
   performance (`bind dbl.a = i` seeds each iteration's node from its loop variable) where
-  before it failed as a statement a body cannot run. A `perform` in statement form and a
+  before it failed as a statement a body cannot run; where both branches declare a `p`, a read
+  of `p.v` in a branch is of that branch's node. A typed or invoked node adopts the subactions
+  of the action it performed, so `call.inner.v` reads a pin inside the callee through it and
+  `Results()` reports it under `call.inner.v`. A `perform` in statement form and a
   state's entry/do/exit action now refuse an `in` without a default that nothing binds
   (`ErrUnboundParameter`) instead of failing later inside the callee. A
   default an action inherits from a generalization (`action def Derived :> Base` with Base's
