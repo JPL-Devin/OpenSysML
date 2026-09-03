@@ -74,8 +74,8 @@ elmt:Results__Double
     sysml:ownedMember elmt:Results__Double__x, elmt:Results__Double___401 ;
     sysml:ownedMembership elmt:Results__Double__x_om, elmt:Results__Double___401_om ;
     sysml:ownedRelationship elmt:Results__Double__x_om, elmt:Results__Double___401_om ;
-    sysml:ownedFeature elmt:Results__Double__x ;
-    sysml:ownedFeatureMembership elmt:Results__Double__x_om .
+    sysml:ownedFeature elmt:Results__Double__x, elmt:Results__Double___401 ;
+    sysml:ownedFeatureMembership elmt:Results__Double__x_om, elmt:Results__Double___401_om .
 
 elmt:Results__Double_om
     a sysml:OwningMembership ;
@@ -115,7 +115,7 @@ elmt:Results__Double__x_om
     sysml:owningType elmt:Results__Double .
 
 elmt:Results__Double___401
-    a sysx:ResultExpressionMember ;
+    a sysml:OperatorExpression ;
     sysml:qualifiedName "Results::Double::@1" ;
     sysml:elementId "Results__Double___401" ;
     sysx:memberIndex "1"^^xsd:integer ;
@@ -123,7 +123,9 @@ elmt:Results__Double___401
     sysml:owner elmt:Results__Double ;
     sysml:owningRelationship elmt:Results__Double___401_om ;
     sysml:owningMembership elmt:Results__Double___401_om ;
-    sysx:resultExpression expr:Results__Double___401_presultExpression .
+    sysx:sourceText "x * 2" ;
+    sysml:operator "*" ;
+    sysml:argument expr:Results__Double___401_pa0, expr:Results__Double___401_pa1 .
 
 elmt:Results__Double___401_om
     a sysml:ResultExpressionMembership ;
@@ -134,26 +136,21 @@ elmt:Results__Double___401_om
     sysml:ownedRelatedElement elmt:Results__Double___401 ;
     sysml:owningRelatedElement elmt:Results__Double ;
     sysml:membershipOwningNamespace elmt:Results__Double ;
-    sysml:ownedResultExpression expr:Results__Double___401_presultExpression .
+    sysml:ownedMemberFeature elmt:Results__Double___401 ;
+    sysml:owningType elmt:Results__Double ;
+    sysml:ownedResultExpression elmt:Results__Double___401 .
 
-expr:Results__Double___401_presultExpression
-    a sysml:OperatorExpression ;
-    sysx:sourceText "x * 2" ;
-    sysml:elementId "Results__Double___401_presultExpression" ;
-    sysml:operator "*" ;
-    sysml:argument expr:Results__Double___401_presultExpression_pa0, expr:Results__Double___401_presultExpression_pa1 .
-
-expr:Results__Double___401_presultExpression_pa0
+expr:Results__Double___401_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "x" ;
-    sysml:elementId "Results__Double___401_presultExpression_pa0" ;
+    sysml:elementId "Results__Double___401_pa0" ;
     sysml:referent elmt:Results__Double__x ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Results__Double___401_presultExpression_pa1
+expr:Results__Double___401_pa1
     a sysml:LiteralInteger ;
     sysx:sourceText "2" ;
-    sysml:elementId "Results__Double___401_presultExpression_pa1" ;
+    sysml:elementId "Results__Double___401_pa1" ;
     sysml:value "2"^^xsd:integer ;
     sysx:argumentIndex "1"^^xsd:integer .
 
@@ -170,7 +167,9 @@ elmt:Results__Only
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Results__Only___400 ;
     sysml:ownedMembership elmt:Results__Only___400_om ;
-    sysml:ownedRelationship elmt:Results__Only___400_om .
+    sysml:ownedRelationship elmt:Results__Only___400_om ;
+    sysml:ownedFeature elmt:Results__Only___400 ;
+    sysml:ownedFeatureMembership elmt:Results__Only___400_om .
 
 elmt:Results__Only_om
     a sysml:OwningMembership ;
@@ -183,7 +182,7 @@ elmt:Results__Only_om
     sysml:membershipOwningNamespace elmt:Results .
 
 elmt:Results__Only___400
-    a sysx:ResultExpressionMember ;
+    a sysml:LiteralInteger ;
     sysml:qualifiedName "Results::Only::@0" ;
     sysml:elementId "Results__Only___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
@@ -191,7 +190,8 @@ elmt:Results__Only___400
     sysml:owner elmt:Results__Only ;
     sysml:owningRelationship elmt:Results__Only___400_om ;
     sysml:owningMembership elmt:Results__Only___400_om ;
-    sysx:resultExpression expr:Results__Only___400_presultExpression .
+    sysx:sourceText "42" ;
+    sysml:value "42"^^xsd:integer .
 
 elmt:Results__Only___400_om
     a sysml:ResultExpressionMembership ;
@@ -202,13 +202,9 @@ elmt:Results__Only___400_om
     sysml:ownedRelatedElement elmt:Results__Only___400 ;
     sysml:owningRelatedElement elmt:Results__Only ;
     sysml:membershipOwningNamespace elmt:Results__Only ;
-    sysml:ownedResultExpression expr:Results__Only___400_presultExpression .
-
-expr:Results__Only___400_presultExpression
-    a sysml:LiteralInteger ;
-    sysx:sourceText "42" ;
-    sysml:elementId "Results__Only___400_presultExpression" ;
-    sysml:value "42"^^xsd:integer .
+    sysml:ownedMemberFeature elmt:Results__Only___400 ;
+    sysml:owningType elmt:Results__Only ;
+    sysml:ownedResultExpression elmt:Results__Only___400 .
 
 elmt:Results__AfterMembers
     a sysml:CalculationDefinition ;
@@ -224,8 +220,8 @@ elmt:Results__AfterMembers
     sysml:ownedMember elmt:Results__AfterMembers__x, elmt:Results__AfterMembers___401, elmt:Results__AfterMembers__y, elmt:Results__AfterMembers___403 ;
     sysml:ownedMembership elmt:Results__AfterMembers__x_om, elmt:Results__AfterMembers___401_om, elmt:Results__AfterMembers__y_om, elmt:Results__AfterMembers___403_om ;
     sysml:ownedRelationship elmt:Results__AfterMembers__x_om, elmt:Results__AfterMembers___401_om, elmt:Results__AfterMembers__y_om, elmt:Results__AfterMembers___403_om ;
-    sysml:ownedFeature elmt:Results__AfterMembers__x, elmt:Results__AfterMembers__y ;
-    sysml:ownedFeatureMembership elmt:Results__AfterMembers__x_om, elmt:Results__AfterMembers__y_om .
+    sysml:ownedFeature elmt:Results__AfterMembers__x, elmt:Results__AfterMembers__y, elmt:Results__AfterMembers___403 ;
+    sysml:ownedFeatureMembership elmt:Results__AfterMembers__x_om, elmt:Results__AfterMembers__y_om, elmt:Results__AfterMembers___403_om .
 
 elmt:Results__AfterMembers_om
     a sysml:OwningMembership ;
@@ -333,7 +329,7 @@ expr:Results__AfterMembers__y_pvalue_pa1
     sysx:argumentIndex "1"^^xsd:integer .
 
 elmt:Results__AfterMembers___403
-    a sysx:ResultExpressionMember ;
+    a sysml:OperatorExpression ;
     sysml:qualifiedName "Results::AfterMembers::@3" ;
     sysml:elementId "Results__AfterMembers___403" ;
     sysx:memberIndex "3"^^xsd:integer ;
@@ -341,7 +337,9 @@ elmt:Results__AfterMembers___403
     sysml:owner elmt:Results__AfterMembers ;
     sysml:owningRelationship elmt:Results__AfterMembers___403_om ;
     sysml:owningMembership elmt:Results__AfterMembers___403_om ;
-    sysx:resultExpression expr:Results__AfterMembers___403_presultExpression .
+    sysx:sourceText "y * y" ;
+    sysml:operator "*" ;
+    sysml:argument expr:Results__AfterMembers___403_pa0, expr:Results__AfterMembers___403_pa1 .
 
 elmt:Results__AfterMembers___403_om
     a sysml:ResultExpressionMembership ;
@@ -352,26 +350,21 @@ elmt:Results__AfterMembers___403_om
     sysml:ownedRelatedElement elmt:Results__AfterMembers___403 ;
     sysml:owningRelatedElement elmt:Results__AfterMembers ;
     sysml:membershipOwningNamespace elmt:Results__AfterMembers ;
-    sysml:ownedResultExpression expr:Results__AfterMembers___403_presultExpression .
+    sysml:ownedMemberFeature elmt:Results__AfterMembers___403 ;
+    sysml:owningType elmt:Results__AfterMembers ;
+    sysml:ownedResultExpression elmt:Results__AfterMembers___403 .
 
-expr:Results__AfterMembers___403_presultExpression
-    a sysml:OperatorExpression ;
-    sysx:sourceText "y * y" ;
-    sysml:elementId "Results__AfterMembers___403_presultExpression" ;
-    sysml:operator "*" ;
-    sysml:argument expr:Results__AfterMembers___403_presultExpression_pa0, expr:Results__AfterMembers___403_presultExpression_pa1 .
-
-expr:Results__AfterMembers___403_presultExpression_pa0
+expr:Results__AfterMembers___403_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "y" ;
-    sysml:elementId "Results__AfterMembers___403_presultExpression_pa0" ;
+    sysml:elementId "Results__AfterMembers___403_pa0" ;
     sysml:referent elmt:Results__AfterMembers__y ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Results__AfterMembers___403_presultExpression_pa1
+expr:Results__AfterMembers___403_pa1
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "y" ;
-    sysml:elementId "Results__AfterMembers___403_presultExpression_pa1" ;
+    sysml:elementId "Results__AfterMembers___403_pa1" ;
     sysml:referent elmt:Results__AfterMembers__y ;
     sysx:argumentIndex "1"^^xsd:integer .
 
@@ -389,8 +382,8 @@ elmt:Results__Body
     sysml:ownedMember elmt:Results__Body__x, elmt:Results__Body___401 ;
     sysml:ownedMembership elmt:Results__Body__x_om, elmt:Results__Body___401_om ;
     sysml:ownedRelationship elmt:Results__Body__x_om, elmt:Results__Body___401_om ;
-    sysml:ownedFeature elmt:Results__Body__x ;
-    sysml:ownedFeatureMembership elmt:Results__Body__x_om .
+    sysml:ownedFeature elmt:Results__Body__x, elmt:Results__Body___401 ;
+    sysml:ownedFeatureMembership elmt:Results__Body__x_om, elmt:Results__Body___401_om .
 
 elmt:Results__Body_om
     a sysml:OwningMembership ;
@@ -430,7 +423,7 @@ elmt:Results__Body__x_om
     sysml:owningType elmt:Results__Body .
 
 elmt:Results__Body___401
-    a sysx:ResultExpressionMember ;
+    a sysml:Expression ;
     sysml:qualifiedName "Results::Body::@1" ;
     sysml:elementId "Results__Body___401" ;
     sysx:memberIndex "1"^^xsd:integer ;
@@ -438,7 +431,9 @@ elmt:Results__Body___401
     sysml:owner elmt:Results__Body ;
     sysml:owningRelationship elmt:Results__Body___401_om ;
     sysml:owningMembership elmt:Results__Body___401_om ;
-    sysx:resultExpression expr:Results__Body___401_presultExpression .
+    sysx:sourceText "{ in y : Real; y + x }" ;
+    sysx:bodyParameter expr:Results__Body___401_pin0 ;
+    sysx:resultExpression expr:Results__Body___401_presult .
 
 elmt:Results__Body___401_om
     a sysml:ResultExpressionMembership ;
@@ -449,41 +444,36 @@ elmt:Results__Body___401_om
     sysml:ownedRelatedElement elmt:Results__Body___401 ;
     sysml:owningRelatedElement elmt:Results__Body ;
     sysml:membershipOwningNamespace elmt:Results__Body ;
-    sysml:ownedResultExpression expr:Results__Body___401_presultExpression .
+    sysml:ownedMemberFeature elmt:Results__Body___401 ;
+    sysml:owningType elmt:Results__Body ;
+    sysml:ownedResultExpression elmt:Results__Body___401 .
 
-expr:Results__Body___401_presultExpression
-    a sysml:Expression ;
-    sysx:sourceText "{ in y : Real; y + x }" ;
-    sysml:elementId "Results__Body___401_presultExpression" ;
-    sysx:bodyParameter expr:Results__Body___401_presultExpression_pin0 ;
-    sysx:resultExpression expr:Results__Body___401_presultExpression_presult .
-
-expr:Results__Body___401_presultExpression_pin0
+expr:Results__Body___401_pin0
     a sysml:ReferenceUsage ;
-    sysml:elementId "Results__Body___401_presultExpression_pin0" ;
+    sysml:elementId "Results__Body___401_pin0" ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:direction "in" ;
     sysml:declaredName "y" ;
     sysml:type elmt:Results__Real .
 
-expr:Results__Body___401_presultExpression_presult
+expr:Results__Body___401_presult
     a sysml:OperatorExpression ;
     sysx:sourceText "y + x" ;
-    sysml:elementId "Results__Body___401_presultExpression_presult" ;
+    sysml:elementId "Results__Body___401_presult" ;
     sysml:operator "+" ;
-    sysml:argument expr:Results__Body___401_presultExpression_presult_pa0, expr:Results__Body___401_presultExpression_presult_pa1 .
+    sysml:argument expr:Results__Body___401_presult_pa0, expr:Results__Body___401_presult_pa1 .
 
-expr:Results__Body___401_presultExpression_presult_pa0
+expr:Results__Body___401_presult_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "y" ;
-    sysml:elementId "Results__Body___401_presultExpression_presult_pa0" ;
+    sysml:elementId "Results__Body___401_presult_pa0" ;
     sysml:referent "y" ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Results__Body___401_presultExpression_presult_pa1
+expr:Results__Body___401_presult_pa1
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "x" ;
-    sysml:elementId "Results__Body___401_presultExpression_presult_pa1" ;
+    sysml:elementId "Results__Body___401_presult_pa1" ;
     sysml:referent elmt:Results__Body__x ;
     sysx:argumentIndex "1"^^xsd:integer .
 
@@ -501,8 +491,8 @@ elmt:Results__Quoted
     sysml:ownedMember elmt:Results__Quoted__x, elmt:Results__Quoted___401 ;
     sysml:ownedMembership elmt:Results__Quoted__x_om, elmt:Results__Quoted___401_om ;
     sysml:ownedRelationship elmt:Results__Quoted__x_om, elmt:Results__Quoted___401_om ;
-    sysml:ownedFeature elmt:Results__Quoted__x ;
-    sysml:ownedFeatureMembership elmt:Results__Quoted__x_om .
+    sysml:ownedFeature elmt:Results__Quoted__x, elmt:Results__Quoted___401 ;
+    sysml:ownedFeatureMembership elmt:Results__Quoted__x_om, elmt:Results__Quoted___401_om .
 
 elmt:Results__Quoted_om
     a sysml:OwningMembership ;
@@ -542,7 +532,7 @@ elmt:Results__Quoted__x_om
     sysml:owningType elmt:Results__Quoted .
 
 elmt:Results__Quoted___401
-    a sysx:ResultExpressionMember ;
+    a sysml:Expression ;
     sysml:qualifiedName "Results::Quoted::@1" ;
     sysml:elementId "Results__Quoted___401" ;
     sysx:memberIndex "1"^^xsd:integer ;
@@ -550,7 +540,9 @@ elmt:Results__Quoted___401
     sysml:owner elmt:Results__Quoted ;
     sysml:owningRelationship elmt:Results__Quoted___401_om ;
     sysml:owningMembership elmt:Results__Quoted___401_om ;
-    sysx:resultExpression expr:Results__Quoted___401_presultExpression .
+    sysx:sourceText "{ in 'the input' : Real; 'the input' + x }" ;
+    sysx:bodyParameter expr:Results__Quoted___401_pin0 ;
+    sysx:resultExpression expr:Results__Quoted___401_presult .
 
 elmt:Results__Quoted___401_om
     a sysml:ResultExpressionMembership ;
@@ -561,41 +553,36 @@ elmt:Results__Quoted___401_om
     sysml:ownedRelatedElement elmt:Results__Quoted___401 ;
     sysml:owningRelatedElement elmt:Results__Quoted ;
     sysml:membershipOwningNamespace elmt:Results__Quoted ;
-    sysml:ownedResultExpression expr:Results__Quoted___401_presultExpression .
+    sysml:ownedMemberFeature elmt:Results__Quoted___401 ;
+    sysml:owningType elmt:Results__Quoted ;
+    sysml:ownedResultExpression elmt:Results__Quoted___401 .
 
-expr:Results__Quoted___401_presultExpression
-    a sysml:Expression ;
-    sysx:sourceText "{ in 'the input' : Real; 'the input' + x }" ;
-    sysml:elementId "Results__Quoted___401_presultExpression" ;
-    sysx:bodyParameter expr:Results__Quoted___401_presultExpression_pin0 ;
-    sysx:resultExpression expr:Results__Quoted___401_presultExpression_presult .
-
-expr:Results__Quoted___401_presultExpression_pin0
+expr:Results__Quoted___401_pin0
     a sysml:ReferenceUsage ;
-    sysml:elementId "Results__Quoted___401_presultExpression_pin0" ;
+    sysml:elementId "Results__Quoted___401_pin0" ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:direction "in" ;
     sysml:declaredName "the input" ;
     sysml:type elmt:Results__Real .
 
-expr:Results__Quoted___401_presultExpression_presult
+expr:Results__Quoted___401_presult
     a sysml:OperatorExpression ;
     sysx:sourceText "'the input' + x" ;
-    sysml:elementId "Results__Quoted___401_presultExpression_presult" ;
+    sysml:elementId "Results__Quoted___401_presult" ;
     sysml:operator "+" ;
-    sysml:argument expr:Results__Quoted___401_presultExpression_presult_pa0, expr:Results__Quoted___401_presultExpression_presult_pa1 .
+    sysml:argument expr:Results__Quoted___401_presult_pa0, expr:Results__Quoted___401_presult_pa1 .
 
-expr:Results__Quoted___401_presultExpression_presult_pa0
+expr:Results__Quoted___401_presult_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "'the input'" ;
-    sysml:elementId "Results__Quoted___401_presultExpression_presult_pa0" ;
+    sysml:elementId "Results__Quoted___401_presult_pa0" ;
     sysml:referent "the input" ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Results__Quoted___401_presultExpression_presult_pa1
+expr:Results__Quoted___401_presult_pa1
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "x" ;
-    sysml:elementId "Results__Quoted___401_presultExpression_presult_pa1" ;
+    sysml:elementId "Results__Quoted___401_presult_pa1" ;
     sysml:referent elmt:Results__Quoted__x ;
     sysx:argumentIndex "1"^^xsd:integer .
 
@@ -613,8 +600,8 @@ elmt:Results__Nested
     sysml:ownedMember elmt:Results__Nested__x, elmt:Results__Nested___401 ;
     sysml:ownedMembership elmt:Results__Nested__x_om, elmt:Results__Nested___401_om ;
     sysml:ownedRelationship elmt:Results__Nested__x_om, elmt:Results__Nested___401_om ;
-    sysml:ownedFeature elmt:Results__Nested__x ;
-    sysml:ownedFeatureMembership elmt:Results__Nested__x_om .
+    sysml:ownedFeature elmt:Results__Nested__x, elmt:Results__Nested___401 ;
+    sysml:ownedFeatureMembership elmt:Results__Nested__x_om, elmt:Results__Nested___401_om .
 
 elmt:Results__Nested_om
     a sysml:OwningMembership ;
@@ -654,7 +641,7 @@ elmt:Results__Nested__x_om
     sysml:owningType elmt:Results__Nested .
 
 elmt:Results__Nested___401
-    a sysx:ResultExpressionMember ;
+    a sysml:Expression ;
     sysml:qualifiedName "Results::Nested::@1" ;
     sysml:elementId "Results__Nested___401" ;
     sysx:memberIndex "1"^^xsd:integer ;
@@ -662,7 +649,9 @@ elmt:Results__Nested___401
     sysml:owner elmt:Results__Nested ;
     sysml:owningRelationship elmt:Results__Nested___401_om ;
     sysml:owningMembership elmt:Results__Nested___401_om ;
-    sysx:resultExpression expr:Results__Nested___401_presultExpression .
+    sysx:sourceText "{ in y : Real; Double(x = { in z : Real; z + y }) }" ;
+    sysx:bodyParameter expr:Results__Nested___401_pin0 ;
+    sysx:resultExpression expr:Results__Nested___401_presult .
 
 elmt:Results__Nested___401_om
     a sysml:ResultExpressionMembership ;
@@ -673,65 +662,60 @@ elmt:Results__Nested___401_om
     sysml:ownedRelatedElement elmt:Results__Nested___401 ;
     sysml:owningRelatedElement elmt:Results__Nested ;
     sysml:membershipOwningNamespace elmt:Results__Nested ;
-    sysml:ownedResultExpression expr:Results__Nested___401_presultExpression .
+    sysml:ownedMemberFeature elmt:Results__Nested___401 ;
+    sysml:owningType elmt:Results__Nested ;
+    sysml:ownedResultExpression elmt:Results__Nested___401 .
 
-expr:Results__Nested___401_presultExpression
-    a sysml:Expression ;
-    sysx:sourceText "{ in y : Real; Double(x = { in z : Real; z + y }) }" ;
-    sysml:elementId "Results__Nested___401_presultExpression" ;
-    sysx:bodyParameter expr:Results__Nested___401_presultExpression_pin0 ;
-    sysx:resultExpression expr:Results__Nested___401_presultExpression_presult .
-
-expr:Results__Nested___401_presultExpression_pin0
+expr:Results__Nested___401_pin0
     a sysml:ReferenceUsage ;
-    sysml:elementId "Results__Nested___401_presultExpression_pin0" ;
+    sysml:elementId "Results__Nested___401_pin0" ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:direction "in" ;
     sysml:declaredName "y" ;
     sysml:type elmt:Results__Real .
 
-expr:Results__Nested___401_presultExpression_presult
+expr:Results__Nested___401_presult
     a sysml:InvocationExpression ;
     sysx:sourceText "Double(x = { in z : Real; z + y })" ;
-    sysml:elementId "Results__Nested___401_presultExpression_presult" ;
+    sysml:elementId "Results__Nested___401_presult" ;
     sysml:function elmt:Results__Double ;
-    sysml:argument expr:Results__Nested___401_presultExpression_presult_pn0 .
+    sysml:argument expr:Results__Nested___401_presult_pn0 .
 
-expr:Results__Nested___401_presultExpression_presult_pn0
+expr:Results__Nested___401_presult_pn0
     a sysml:Expression ;
     sysx:sourceText "{ in z : Real; z + y }" ;
-    sysml:elementId "Results__Nested___401_presultExpression_presult_pn0" ;
-    sysx:bodyParameter expr:Results__Nested___401_presultExpression_presult_pn0_pin0 ;
-    sysx:resultExpression expr:Results__Nested___401_presultExpression_presult_pn0_presult ;
+    sysml:elementId "Results__Nested___401_presult_pn0" ;
+    sysx:bodyParameter expr:Results__Nested___401_presult_pn0_pin0 ;
+    sysx:resultExpression expr:Results__Nested___401_presult_pn0_presult ;
     sysx:argumentIndex "0"^^xsd:integer ;
     sysx:argumentName "x" .
 
-expr:Results__Nested___401_presultExpression_presult_pn0_pin0
+expr:Results__Nested___401_presult_pn0_pin0
     a sysml:ReferenceUsage ;
-    sysml:elementId "Results__Nested___401_presultExpression_presult_pn0_pin0" ;
+    sysml:elementId "Results__Nested___401_presult_pn0_pin0" ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:direction "in" ;
     sysml:declaredName "z" ;
     sysml:type elmt:Results__Real .
 
-expr:Results__Nested___401_presultExpression_presult_pn0_presult
+expr:Results__Nested___401_presult_pn0_presult
     a sysml:OperatorExpression ;
     sysx:sourceText "z + y" ;
-    sysml:elementId "Results__Nested___401_presultExpression_presult_pn0_presult" ;
+    sysml:elementId "Results__Nested___401_presult_pn0_presult" ;
     sysml:operator "+" ;
-    sysml:argument expr:Results__Nested___401_presultExpression_presult_pn0_presult_pa0, expr:Results__Nested___401_presultExpression_presult_pn0_presult_pa1 .
+    sysml:argument expr:Results__Nested___401_presult_pn0_presult_pa0, expr:Results__Nested___401_presult_pn0_presult_pa1 .
 
-expr:Results__Nested___401_presultExpression_presult_pn0_presult_pa0
+expr:Results__Nested___401_presult_pn0_presult_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "z" ;
-    sysml:elementId "Results__Nested___401_presultExpression_presult_pn0_presult_pa0" ;
+    sysml:elementId "Results__Nested___401_presult_pn0_presult_pa0" ;
     sysml:referent "z" ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Results__Nested___401_presultExpression_presult_pn0_presult_pa1
+expr:Results__Nested___401_presult_pn0_presult_pa1
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "y" ;
-    sysml:elementId "Results__Nested___401_presultExpression_presult_pn0_presult_pa1" ;
+    sysml:elementId "Results__Nested___401_presult_pn0_presult_pa1" ;
     sysml:referent "y" ;
     sysx:argumentIndex "1"^^xsd:integer .
 
@@ -749,8 +733,8 @@ elmt:Results__Documented
     sysml:ownedMember elmt:Results__Documented__x, elmt:Results__Documented___401 ;
     sysml:ownedMembership elmt:Results__Documented__x_om, elmt:Results__Documented___401_om ;
     sysml:ownedRelationship elmt:Results__Documented__x_om, elmt:Results__Documented___401_om ;
-    sysml:ownedFeature elmt:Results__Documented__x ;
-    sysml:ownedFeatureMembership elmt:Results__Documented__x_om .
+    sysml:ownedFeature elmt:Results__Documented__x, elmt:Results__Documented___401 ;
+    sysml:ownedFeatureMembership elmt:Results__Documented__x_om, elmt:Results__Documented___401_om .
 
 elmt:Results__Documented_om
     a sysml:OwningMembership ;
@@ -790,7 +774,7 @@ elmt:Results__Documented__x_om
     sysml:owningType elmt:Results__Documented .
 
 elmt:Results__Documented___401
-    a sysx:ResultExpressionMember ;
+    a sysml:Expression ;
     sysml:qualifiedName "Results::Documented::@1" ;
     sysml:elementId "Results__Documented___401" ;
     sysx:memberIndex "1"^^xsd:integer ;
@@ -798,7 +782,10 @@ elmt:Results__Documented___401
     sysml:owner elmt:Results__Documented ;
     sysml:owningRelationship elmt:Results__Documented___401_om ;
     sysml:owningMembership elmt:Results__Documented___401_om ;
-    sysx:resultExpression expr:Results__Documented___401_presultExpression .
+    sysx:sourceText "{ doc /* the parameter, unchanged */ in y : Real; y }" ;
+    sysx:bodyMember expr:Results__Documented___401_pm0 ;
+    sysx:bodyParameter expr:Results__Documented___401_pin1 ;
+    sysx:resultExpression expr:Results__Documented___401_presult .
 
 elmt:Results__Documented___401_om
     a sysml:ResultExpressionMembership ;
@@ -809,35 +796,29 @@ elmt:Results__Documented___401_om
     sysml:ownedRelatedElement elmt:Results__Documented___401 ;
     sysml:owningRelatedElement elmt:Results__Documented ;
     sysml:membershipOwningNamespace elmt:Results__Documented ;
-    sysml:ownedResultExpression expr:Results__Documented___401_presultExpression .
+    sysml:ownedMemberFeature elmt:Results__Documented___401 ;
+    sysml:owningType elmt:Results__Documented ;
+    sysml:ownedResultExpression elmt:Results__Documented___401 .
 
-expr:Results__Documented___401_presultExpression
-    a sysml:Expression ;
-    sysx:sourceText "{ doc /* the parameter, unchanged */ in y : Real; y }" ;
-    sysml:elementId "Results__Documented___401_presultExpression" ;
-    sysx:bodyMember expr:Results__Documented___401_presultExpression_pm0 ;
-    sysx:bodyParameter expr:Results__Documented___401_presultExpression_pin1 ;
-    sysx:resultExpression expr:Results__Documented___401_presultExpression_presult .
-
-expr:Results__Documented___401_presultExpression_pm0
+expr:Results__Documented___401_pm0
     a sysml:Documentation ;
-    sysml:elementId "Results__Documented___401_presultExpression_pm0" ;
+    sysml:elementId "Results__Documented___401_pm0" ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:sourceText "doc /* the parameter, unchanged */" ;
     sysml:body " the parameter, unchanged " .
 
-expr:Results__Documented___401_presultExpression_pin1
+expr:Results__Documented___401_pin1
     a sysml:ReferenceUsage ;
-    sysml:elementId "Results__Documented___401_presultExpression_pin1" ;
+    sysml:elementId "Results__Documented___401_pin1" ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysml:direction "in" ;
     sysml:declaredName "y" ;
     sysml:type elmt:Results__Real .
 
-expr:Results__Documented___401_presultExpression_presult
+expr:Results__Documented___401_presult
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "y" ;
-    sysml:elementId "Results__Documented___401_presultExpression_presult" ;
+    sysml:elementId "Results__Documented___401_presult" ;
     sysml:referent "y" .
 
 elmt:Results__Passes
@@ -854,8 +835,8 @@ elmt:Results__Passes
     sysml:ownedMember elmt:Results__Passes__ok, elmt:Results__Passes___401 ;
     sysml:ownedMembership elmt:Results__Passes__ok_om, elmt:Results__Passes___401_om ;
     sysml:ownedRelationship elmt:Results__Passes__ok_om, elmt:Results__Passes___401_om ;
-    sysml:ownedFeature elmt:Results__Passes__ok ;
-    sysml:ownedFeatureMembership elmt:Results__Passes__ok_om .
+    sysml:ownedFeature elmt:Results__Passes__ok, elmt:Results__Passes___401 ;
+    sysml:ownedFeatureMembership elmt:Results__Passes__ok_om, elmt:Results__Passes___401_om .
 
 elmt:Results__Passes_om
     a sysml:OwningMembership ;
@@ -895,7 +876,7 @@ elmt:Results__Passes__ok_om
     sysml:owningType elmt:Results__Passes .
 
 elmt:Results__Passes___401
-    a sysx:ResultExpressionMember ;
+    a sysml:FeatureReferenceExpression ;
     sysml:qualifiedName "Results::Passes::@1" ;
     sysml:elementId "Results__Passes___401" ;
     sysx:memberIndex "1"^^xsd:integer ;
@@ -903,7 +884,8 @@ elmt:Results__Passes___401
     sysml:owner elmt:Results__Passes ;
     sysml:owningRelationship elmt:Results__Passes___401_om ;
     sysml:owningMembership elmt:Results__Passes___401_om ;
-    sysx:resultExpression expr:Results__Passes___401_presultExpression .
+    sysx:sourceText "ok" ;
+    sysml:referent elmt:Results__Passes__ok .
 
 elmt:Results__Passes___401_om
     a sysml:ResultExpressionMembership ;
@@ -914,13 +896,9 @@ elmt:Results__Passes___401_om
     sysml:ownedRelatedElement elmt:Results__Passes___401 ;
     sysml:owningRelatedElement elmt:Results__Passes ;
     sysml:membershipOwningNamespace elmt:Results__Passes ;
-    sysml:ownedResultExpression expr:Results__Passes___401_presultExpression .
-
-expr:Results__Passes___401_presultExpression
-    a sysml:FeatureReferenceExpression ;
-    sysx:sourceText "ok" ;
-    sysml:elementId "Results__Passes___401_presultExpression" ;
-    sysml:referent elmt:Results__Passes__ok .
+    sysml:ownedMemberFeature elmt:Results__Passes___401 ;
+    sysml:owningType elmt:Results__Passes ;
+    sysml:ownedResultExpression elmt:Results__Passes___401 .
 
 elmt:Results__Predicate
     a sysml:CalculationDefinition ;
@@ -936,8 +914,8 @@ elmt:Results__Predicate
     sysml:ownedMember elmt:Results__Predicate__x, elmt:Results__Predicate__keep, elmt:Results__Predicate__always, elmt:Results__Predicate___403 ;
     sysml:ownedMembership elmt:Results__Predicate__x_om, elmt:Results__Predicate__keep_om, elmt:Results__Predicate__always_om, elmt:Results__Predicate___403_om ;
     sysml:ownedRelationship elmt:Results__Predicate__x_om, elmt:Results__Predicate__keep_om, elmt:Results__Predicate__always_om, elmt:Results__Predicate___403_om ;
-    sysml:ownedFeature elmt:Results__Predicate__x, elmt:Results__Predicate__keep, elmt:Results__Predicate__always ;
-    sysml:ownedFeatureMembership elmt:Results__Predicate__x_om, elmt:Results__Predicate__keep_om, elmt:Results__Predicate__always_om .
+    sysml:ownedFeature elmt:Results__Predicate__x, elmt:Results__Predicate__keep, elmt:Results__Predicate__always, elmt:Results__Predicate___403 ;
+    sysml:ownedFeatureMembership elmt:Results__Predicate__x_om, elmt:Results__Predicate__keep_om, elmt:Results__Predicate__always_om, elmt:Results__Predicate___403_om .
 
 elmt:Results__Predicate_om
     a sysml:OwningMembership ;
@@ -992,8 +970,8 @@ elmt:Results__Predicate__keep
     sysml:ownedMember elmt:Results__Predicate__keep__v, elmt:Results__Predicate__keep___401 ;
     sysml:ownedMembership elmt:Results__Predicate__keep__v_om, elmt:Results__Predicate__keep___401_om ;
     sysml:ownedRelationship elmt:Results__Predicate__keep__v_om, elmt:Results__Predicate__keep___401_om ;
-    sysml:ownedFeature elmt:Results__Predicate__keep__v ;
-    sysml:ownedFeatureMembership elmt:Results__Predicate__keep__v_om .
+    sysml:ownedFeature elmt:Results__Predicate__keep__v, elmt:Results__Predicate__keep___401 ;
+    sysml:ownedFeatureMembership elmt:Results__Predicate__keep__v_om, elmt:Results__Predicate__keep___401_om .
 
 elmt:Results__Predicate__keep_om
     a sysml:FeatureMembership ;
@@ -1035,7 +1013,7 @@ elmt:Results__Predicate__keep__v_om
     sysml:owningType elmt:Results__Predicate__keep .
 
 elmt:Results__Predicate__keep___401
-    a sysx:ResultExpressionMember ;
+    a sysml:OperatorExpression ;
     sysml:qualifiedName "Results::Predicate::keep::@1" ;
     sysml:elementId "Results__Predicate__keep___401" ;
     sysx:memberIndex "1"^^xsd:integer ;
@@ -1043,7 +1021,9 @@ elmt:Results__Predicate__keep___401
     sysml:owner elmt:Results__Predicate__keep ;
     sysml:owningRelationship elmt:Results__Predicate__keep___401_om ;
     sysml:owningMembership elmt:Results__Predicate__keep___401_om ;
-    sysx:resultExpression expr:Results__Predicate__keep___401_presultExpression .
+    sysx:sourceText "v > x" ;
+    sysml:operator ">" ;
+    sysml:argument expr:Results__Predicate__keep___401_pa0, expr:Results__Predicate__keep___401_pa1 .
 
 elmt:Results__Predicate__keep___401_om
     a sysml:ResultExpressionMembership ;
@@ -1054,26 +1034,21 @@ elmt:Results__Predicate__keep___401_om
     sysml:ownedRelatedElement elmt:Results__Predicate__keep___401 ;
     sysml:owningRelatedElement elmt:Results__Predicate__keep ;
     sysml:membershipOwningNamespace elmt:Results__Predicate__keep ;
-    sysml:ownedResultExpression expr:Results__Predicate__keep___401_presultExpression .
+    sysml:ownedMemberFeature elmt:Results__Predicate__keep___401 ;
+    sysml:owningType elmt:Results__Predicate__keep ;
+    sysml:ownedResultExpression elmt:Results__Predicate__keep___401 .
 
-expr:Results__Predicate__keep___401_presultExpression
-    a sysml:OperatorExpression ;
-    sysx:sourceText "v > x" ;
-    sysml:elementId "Results__Predicate__keep___401_presultExpression" ;
-    sysml:operator ">" ;
-    sysml:argument expr:Results__Predicate__keep___401_presultExpression_pa0, expr:Results__Predicate__keep___401_presultExpression_pa1 .
-
-expr:Results__Predicate__keep___401_presultExpression_pa0
+expr:Results__Predicate__keep___401_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "v" ;
-    sysml:elementId "Results__Predicate__keep___401_presultExpression_pa0" ;
+    sysml:elementId "Results__Predicate__keep___401_pa0" ;
     sysml:referent elmt:Results__Predicate__keep__v ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Results__Predicate__keep___401_presultExpression_pa1
+expr:Results__Predicate__keep___401_pa1
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "x" ;
-    sysml:elementId "Results__Predicate__keep___401_presultExpression_pa1" ;
+    sysml:elementId "Results__Predicate__keep___401_pa1" ;
     sysml:referent elmt:Results__Predicate__x ;
     sysx:argumentIndex "1"^^xsd:integer .
 
@@ -1091,7 +1066,9 @@ elmt:Results__Predicate__always
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Results__Predicate__always___400 ;
     sysml:ownedMembership elmt:Results__Predicate__always___400_om ;
-    sysml:ownedRelationship elmt:Results__Predicate__always___400_om .
+    sysml:ownedRelationship elmt:Results__Predicate__always___400_om ;
+    sysml:ownedFeature elmt:Results__Predicate__always___400 ;
+    sysml:ownedFeatureMembership elmt:Results__Predicate__always___400_om .
 
 elmt:Results__Predicate__always_om
     a sysml:FeatureMembership ;
@@ -1106,7 +1083,7 @@ elmt:Results__Predicate__always_om
     sysml:owningType elmt:Results__Predicate .
 
 elmt:Results__Predicate__always___400
-    a sysx:ResultExpressionMember ;
+    a sysml:LiteralBoolean ;
     sysml:qualifiedName "Results::Predicate::always::@0" ;
     sysml:elementId "Results__Predicate__always___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
@@ -1114,7 +1091,8 @@ elmt:Results__Predicate__always___400
     sysml:owner elmt:Results__Predicate__always ;
     sysml:owningRelationship elmt:Results__Predicate__always___400_om ;
     sysml:owningMembership elmt:Results__Predicate__always___400_om ;
-    sysx:resultExpression expr:Results__Predicate__always___400_presultExpression .
+    sysx:sourceText "true" ;
+    sysml:value "true"^^xsd:boolean .
 
 elmt:Results__Predicate__always___400_om
     a sysml:ResultExpressionMembership ;
@@ -1125,16 +1103,12 @@ elmt:Results__Predicate__always___400_om
     sysml:ownedRelatedElement elmt:Results__Predicate__always___400 ;
     sysml:owningRelatedElement elmt:Results__Predicate__always ;
     sysml:membershipOwningNamespace elmt:Results__Predicate__always ;
-    sysml:ownedResultExpression expr:Results__Predicate__always___400_presultExpression .
-
-expr:Results__Predicate__always___400_presultExpression
-    a sysml:LiteralBoolean ;
-    sysx:sourceText "true" ;
-    sysml:elementId "Results__Predicate__always___400_presultExpression" ;
-    sysml:value "true"^^xsd:boolean .
+    sysml:ownedMemberFeature elmt:Results__Predicate__always___400 ;
+    sysml:owningType elmt:Results__Predicate__always ;
+    sysml:ownedResultExpression elmt:Results__Predicate__always___400 .
 
 elmt:Results__Predicate___403
-    a sysx:ResultExpressionMember ;
+    a sysml:InvocationExpression ;
     sysml:qualifiedName "Results::Predicate::@3" ;
     sysml:elementId "Results__Predicate___403" ;
     sysx:memberIndex "3"^^xsd:integer ;
@@ -1142,7 +1116,9 @@ elmt:Results__Predicate___403
     sysml:owner elmt:Results__Predicate ;
     sysml:owningRelationship elmt:Results__Predicate___403_om ;
     sysml:owningMembership elmt:Results__Predicate___403_om ;
-    sysx:resultExpression expr:Results__Predicate___403_presultExpression .
+    sysx:sourceText "keep(x)" ;
+    sysml:function elmt:Results__Predicate__keep ;
+    sysml:argument expr:Results__Predicate___403_pa0 .
 
 elmt:Results__Predicate___403_om
     a sysml:ResultExpressionMembership ;
@@ -1153,19 +1129,14 @@ elmt:Results__Predicate___403_om
     sysml:ownedRelatedElement elmt:Results__Predicate___403 ;
     sysml:owningRelatedElement elmt:Results__Predicate ;
     sysml:membershipOwningNamespace elmt:Results__Predicate ;
-    sysml:ownedResultExpression expr:Results__Predicate___403_presultExpression .
+    sysml:ownedMemberFeature elmt:Results__Predicate___403 ;
+    sysml:owningType elmt:Results__Predicate ;
+    sysml:ownedResultExpression elmt:Results__Predicate___403 .
 
-expr:Results__Predicate___403_presultExpression
-    a sysml:InvocationExpression ;
-    sysx:sourceText "keep(x)" ;
-    sysml:elementId "Results__Predicate___403_presultExpression" ;
-    sysml:function elmt:Results__Predicate__keep ;
-    sysml:argument expr:Results__Predicate___403_presultExpression_pa0 .
-
-expr:Results__Predicate___403_presultExpression_pa0
+expr:Results__Predicate___403_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "x" ;
-    sysml:elementId "Results__Predicate___403_presultExpression_pa0" ;
+    sysml:elementId "Results__Predicate___403_pa0" ;
     sysml:referent elmt:Results__Predicate__x ;
     sysx:argumentIndex "0"^^xsd:integer .
 
@@ -1183,8 +1154,8 @@ elmt:Results__Chained
     sysml:ownedMember elmt:Results__Chained__x, elmt:Results__Chained___401 ;
     sysml:ownedMembership elmt:Results__Chained__x_om, elmt:Results__Chained___401_om ;
     sysml:ownedRelationship elmt:Results__Chained__x_om, elmt:Results__Chained___401_om ;
-    sysml:ownedFeature elmt:Results__Chained__x ;
-    sysml:ownedFeatureMembership elmt:Results__Chained__x_om .
+    sysml:ownedFeature elmt:Results__Chained__x, elmt:Results__Chained___401 ;
+    sysml:ownedFeatureMembership elmt:Results__Chained__x_om, elmt:Results__Chained___401_om .
 
 elmt:Results__Chained_om
     a sysml:OwningMembership ;
@@ -1224,7 +1195,7 @@ elmt:Results__Chained__x_om
     sysml:owningType elmt:Results__Chained .
 
 elmt:Results__Chained___401
-    a sysx:ResultExpressionMember ;
+    a sysml:FeatureChainExpression ;
     sysml:qualifiedName "Results::Chained::@1" ;
     sysml:elementId "Results__Chained___401" ;
     sysx:memberIndex "1"^^xsd:integer ;
@@ -1232,7 +1203,9 @@ elmt:Results__Chained___401
     sysml:owner elmt:Results__Chained ;
     sysml:owningRelationship elmt:Results__Chained___401_om ;
     sysml:owningMembership elmt:Results__Chained___401_om ;
-    sysx:resultExpression expr:Results__Chained___401_presultExpression .
+    sysx:sourceText "Double(x = Double(x)).result" ;
+    sysml:argument expr:Results__Chained___401_pa0 ;
+    sysml:targetFeature "result" .
 
 elmt:Results__Chained___401_om
     a sysml:ResultExpressionMembership ;
@@ -1243,36 +1216,31 @@ elmt:Results__Chained___401_om
     sysml:ownedRelatedElement elmt:Results__Chained___401 ;
     sysml:owningRelatedElement elmt:Results__Chained ;
     sysml:membershipOwningNamespace elmt:Results__Chained ;
-    sysml:ownedResultExpression expr:Results__Chained___401_presultExpression .
+    sysml:ownedMemberFeature elmt:Results__Chained___401 ;
+    sysml:owningType elmt:Results__Chained ;
+    sysml:ownedResultExpression elmt:Results__Chained___401 .
 
-expr:Results__Chained___401_presultExpression
-    a sysml:FeatureChainExpression ;
-    sysx:sourceText "Double(x = Double(x)).result" ;
-    sysml:elementId "Results__Chained___401_presultExpression" ;
-    sysml:argument expr:Results__Chained___401_presultExpression_pa0 ;
-    sysml:targetFeature "result" .
-
-expr:Results__Chained___401_presultExpression_pa0
+expr:Results__Chained___401_pa0
     a sysml:InvocationExpression ;
     sysx:sourceText "Double(x = Double(x))" ;
-    sysml:elementId "Results__Chained___401_presultExpression_pa0" ;
+    sysml:elementId "Results__Chained___401_pa0" ;
     sysml:function elmt:Results__Double ;
-    sysml:argument expr:Results__Chained___401_presultExpression_pa0_pn0 ;
+    sysml:argument expr:Results__Chained___401_pa0_pn0 ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Results__Chained___401_presultExpression_pa0_pn0
+expr:Results__Chained___401_pa0_pn0
     a sysml:InvocationExpression ;
     sysx:sourceText "Double(x)" ;
-    sysml:elementId "Results__Chained___401_presultExpression_pa0_pn0" ;
+    sysml:elementId "Results__Chained___401_pa0_pn0" ;
     sysml:function elmt:Results__Double ;
-    sysml:argument expr:Results__Chained___401_presultExpression_pa0_pn0_pa0 ;
+    sysml:argument expr:Results__Chained___401_pa0_pn0_pa0 ;
     sysx:argumentIndex "0"^^xsd:integer ;
     sysx:argumentName "x" .
 
-expr:Results__Chained___401_presultExpression_pa0_pn0_pa0
+expr:Results__Chained___401_pa0_pn0_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "x" ;
-    sysml:elementId "Results__Chained___401_presultExpression_pa0_pn0_pa0" ;
+    sysml:elementId "Results__Chained___401_pa0_pn0_pa0" ;
     sysml:referent elmt:Results__Chained__x ;
     sysx:argumentIndex "0"^^xsd:integer .
 
@@ -1290,8 +1258,8 @@ elmt:Results__Conditional
     sysml:ownedMember elmt:Results__Conditional__x, elmt:Results__Conditional___401 ;
     sysml:ownedMembership elmt:Results__Conditional__x_om, elmt:Results__Conditional___401_om ;
     sysml:ownedRelationship elmt:Results__Conditional__x_om, elmt:Results__Conditional___401_om ;
-    sysml:ownedFeature elmt:Results__Conditional__x ;
-    sysml:ownedFeatureMembership elmt:Results__Conditional__x_om .
+    sysml:ownedFeature elmt:Results__Conditional__x, elmt:Results__Conditional___401 ;
+    sysml:ownedFeatureMembership elmt:Results__Conditional__x_om, elmt:Results__Conditional___401_om .
 
 elmt:Results__Conditional_om
     a sysml:OwningMembership ;
@@ -1331,7 +1299,7 @@ elmt:Results__Conditional__x_om
     sysml:owningType elmt:Results__Conditional .
 
 elmt:Results__Conditional___401
-    a sysx:ResultExpressionMember ;
+    a sysml:OperatorExpression ;
     sysml:qualifiedName "Results::Conditional::@1" ;
     sysml:elementId "Results__Conditional___401" ;
     sysx:memberIndex "1"^^xsd:integer ;
@@ -1339,7 +1307,9 @@ elmt:Results__Conditional___401
     sysml:owner elmt:Results__Conditional ;
     sysml:owningRelationship elmt:Results__Conditional___401_om ;
     sysml:owningMembership elmt:Results__Conditional___401_om ;
-    sysx:resultExpression expr:Results__Conditional___401_presultExpression .
+    sysx:sourceText "if x > 0 ? x else -x" ;
+    sysml:operator "if" ;
+    sysml:argument expr:Results__Conditional___401_pa0, expr:Results__Conditional___401_pa1, expr:Results__Conditional___401_pa2 .
 
 elmt:Results__Conditional___401_om
     a sysml:ResultExpressionMembership ;
@@ -1350,56 +1320,51 @@ elmt:Results__Conditional___401_om
     sysml:ownedRelatedElement elmt:Results__Conditional___401 ;
     sysml:owningRelatedElement elmt:Results__Conditional ;
     sysml:membershipOwningNamespace elmt:Results__Conditional ;
-    sysml:ownedResultExpression expr:Results__Conditional___401_presultExpression .
+    sysml:ownedMemberFeature elmt:Results__Conditional___401 ;
+    sysml:owningType elmt:Results__Conditional ;
+    sysml:ownedResultExpression elmt:Results__Conditional___401 .
 
-expr:Results__Conditional___401_presultExpression
-    a sysml:OperatorExpression ;
-    sysx:sourceText "if x > 0 ? x else -x" ;
-    sysml:elementId "Results__Conditional___401_presultExpression" ;
-    sysml:operator "if" ;
-    sysml:argument expr:Results__Conditional___401_presultExpression_pa0, expr:Results__Conditional___401_presultExpression_pa1, expr:Results__Conditional___401_presultExpression_pa2 .
-
-expr:Results__Conditional___401_presultExpression_pa0
+expr:Results__Conditional___401_pa0
     a sysml:OperatorExpression ;
     sysx:sourceText "x > 0" ;
-    sysml:elementId "Results__Conditional___401_presultExpression_pa0" ;
+    sysml:elementId "Results__Conditional___401_pa0" ;
     sysml:operator ">" ;
-    sysml:argument expr:Results__Conditional___401_presultExpression_pa0_pa0, expr:Results__Conditional___401_presultExpression_pa0_pa1 ;
+    sysml:argument expr:Results__Conditional___401_pa0_pa0, expr:Results__Conditional___401_pa0_pa1 ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Results__Conditional___401_presultExpression_pa0_pa0
+expr:Results__Conditional___401_pa0_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "x" ;
-    sysml:elementId "Results__Conditional___401_presultExpression_pa0_pa0" ;
+    sysml:elementId "Results__Conditional___401_pa0_pa0" ;
     sysml:referent elmt:Results__Conditional__x ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Results__Conditional___401_presultExpression_pa0_pa1
+expr:Results__Conditional___401_pa0_pa1
     a sysml:LiteralInteger ;
     sysx:sourceText "0" ;
-    sysml:elementId "Results__Conditional___401_presultExpression_pa0_pa1" ;
+    sysml:elementId "Results__Conditional___401_pa0_pa1" ;
     sysml:value "0"^^xsd:integer ;
     sysx:argumentIndex "1"^^xsd:integer .
 
-expr:Results__Conditional___401_presultExpression_pa1
+expr:Results__Conditional___401_pa1
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "x" ;
-    sysml:elementId "Results__Conditional___401_presultExpression_pa1" ;
+    sysml:elementId "Results__Conditional___401_pa1" ;
     sysml:referent elmt:Results__Conditional__x ;
     sysx:argumentIndex "1"^^xsd:integer .
 
-expr:Results__Conditional___401_presultExpression_pa2
+expr:Results__Conditional___401_pa2
     a sysml:OperatorExpression ;
     sysx:sourceText "-x" ;
-    sysml:elementId "Results__Conditional___401_presultExpression_pa2" ;
+    sysml:elementId "Results__Conditional___401_pa2" ;
     sysml:operator "-" ;
-    sysml:argument expr:Results__Conditional___401_presultExpression_pa2_pa0 ;
+    sysml:argument expr:Results__Conditional___401_pa2_pa0 ;
     sysx:argumentIndex "2"^^xsd:integer .
 
-expr:Results__Conditional___401_presultExpression_pa2_pa0
+expr:Results__Conditional___401_pa2_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "x" ;
-    sysml:elementId "Results__Conditional___401_presultExpression_pa2_pa0" ;
+    sysml:elementId "Results__Conditional___401_pa2_pa0" ;
     sysml:referent elmt:Results__Conditional__x ;
     sysx:argumentIndex "0"^^xsd:integer .
 
@@ -1417,8 +1382,8 @@ elmt:Results__Widened
     sysml:ownedMember elmt:Results__Widened__x, elmt:Results__Widened___401 ;
     sysml:ownedMembership elmt:Results__Widened__x_om, elmt:Results__Widened___401_om ;
     sysml:ownedRelationship elmt:Results__Widened__x_om, elmt:Results__Widened___401_om ;
-    sysml:ownedFeature elmt:Results__Widened__x ;
-    sysml:ownedFeatureMembership elmt:Results__Widened__x_om .
+    sysml:ownedFeature elmt:Results__Widened__x, elmt:Results__Widened___401 ;
+    sysml:ownedFeatureMembership elmt:Results__Widened__x_om, elmt:Results__Widened___401_om .
 
 elmt:Results__Widened_om
     a sysml:OwningMembership ;
@@ -1458,7 +1423,7 @@ elmt:Results__Widened__x_om
     sysml:owningType elmt:Results__Widened .
 
 elmt:Results__Widened___401
-    a sysx:ResultExpressionMember ;
+    a sysml:OperatorExpression ;
     sysml:qualifiedName "Results::Widened::@1" ;
     sysml:elementId "Results__Widened___401" ;
     sysx:memberIndex "1"^^xsd:integer ;
@@ -1466,7 +1431,10 @@ elmt:Results__Widened___401
     sysml:owner elmt:Results__Widened ;
     sysml:owningRelationship elmt:Results__Widened___401_om ;
     sysml:owningMembership elmt:Results__Widened___401_om ;
-    sysx:resultExpression expr:Results__Widened___401_presultExpression .
+    sysx:sourceText "(as Real[2])" ;
+    sysml:operator "as" ;
+    sysx:typeArgument elmt:Results__Real ;
+    sysml:upperBound expr:Results__Widened___401_pupperBound .
 
 elmt:Results__Widened___401_om
     a sysml:ResultExpressionMembership ;
@@ -1477,20 +1445,14 @@ elmt:Results__Widened___401_om
     sysml:ownedRelatedElement elmt:Results__Widened___401 ;
     sysml:owningRelatedElement elmt:Results__Widened ;
     sysml:membershipOwningNamespace elmt:Results__Widened ;
-    sysml:ownedResultExpression expr:Results__Widened___401_presultExpression .
+    sysml:ownedMemberFeature elmt:Results__Widened___401 ;
+    sysml:owningType elmt:Results__Widened ;
+    sysml:ownedResultExpression elmt:Results__Widened___401 .
 
-expr:Results__Widened___401_presultExpression
-    a sysml:OperatorExpression ;
-    sysx:sourceText "(as Real[2])" ;
-    sysml:elementId "Results__Widened___401_presultExpression" ;
-    sysml:operator "as" ;
-    sysx:typeArgument elmt:Results__Real ;
-    sysml:upperBound expr:Results__Widened___401_presultExpression_pupperBound .
-
-expr:Results__Widened___401_presultExpression_pupperBound
+expr:Results__Widened___401_pupperBound
     a sysml:LiteralInteger ;
     sysx:sourceText "2" ;
-    sysml:elementId "Results__Widened___401_presultExpression_pupperBound" ;
+    sysml:elementId "Results__Widened___401_pupperBound" ;
     sysml:value "2"^^xsd:integer .
 
 elmt:Results__Ranged
@@ -1507,8 +1469,8 @@ elmt:Results__Ranged
     sysml:ownedMember elmt:Results__Ranged__x, elmt:Results__Ranged___401 ;
     sysml:ownedMembership elmt:Results__Ranged__x_om, elmt:Results__Ranged___401_om ;
     sysml:ownedRelationship elmt:Results__Ranged__x_om, elmt:Results__Ranged___401_om ;
-    sysml:ownedFeature elmt:Results__Ranged__x ;
-    sysml:ownedFeatureMembership elmt:Results__Ranged__x_om .
+    sysml:ownedFeature elmt:Results__Ranged__x, elmt:Results__Ranged___401 ;
+    sysml:ownedFeatureMembership elmt:Results__Ranged__x_om, elmt:Results__Ranged___401_om .
 
 elmt:Results__Ranged_om
     a sysml:OwningMembership ;
@@ -1548,7 +1510,7 @@ elmt:Results__Ranged__x_om
     sysml:owningType elmt:Results__Ranged .
 
 elmt:Results__Ranged___401
-    a sysx:ResultExpressionMember ;
+    a sysml:OperatorExpression ;
     sysml:qualifiedName "Results::Ranged::@1" ;
     sysml:elementId "Results__Ranged___401" ;
     sysx:memberIndex "1"^^xsd:integer ;
@@ -1556,7 +1518,11 @@ elmt:Results__Ranged___401
     sysml:owner elmt:Results__Ranged ;
     sysml:owningRelationship elmt:Results__Ranged___401_om ;
     sysml:owningMembership elmt:Results__Ranged___401_om ;
-    sysx:resultExpression expr:Results__Ranged___401_presultExpression .
+    sysx:sourceText "(as Real[1..*])" ;
+    sysml:operator "as" ;
+    sysx:typeArgument elmt:Results__Real ;
+    sysml:lowerBound expr:Results__Ranged___401_plowerBound ;
+    sysml:upperBound expr:Results__Ranged___401_pupperBound .
 
 elmt:Results__Ranged___401_om
     a sysml:ResultExpressionMembership ;
@@ -1567,27 +1533,20 @@ elmt:Results__Ranged___401_om
     sysml:ownedRelatedElement elmt:Results__Ranged___401 ;
     sysml:owningRelatedElement elmt:Results__Ranged ;
     sysml:membershipOwningNamespace elmt:Results__Ranged ;
-    sysml:ownedResultExpression expr:Results__Ranged___401_presultExpression .
+    sysml:ownedMemberFeature elmt:Results__Ranged___401 ;
+    sysml:owningType elmt:Results__Ranged ;
+    sysml:ownedResultExpression elmt:Results__Ranged___401 .
 
-expr:Results__Ranged___401_presultExpression
-    a sysml:OperatorExpression ;
-    sysx:sourceText "(as Real[1..*])" ;
-    sysml:elementId "Results__Ranged___401_presultExpression" ;
-    sysml:operator "as" ;
-    sysx:typeArgument elmt:Results__Real ;
-    sysml:lowerBound expr:Results__Ranged___401_presultExpression_plowerBound ;
-    sysml:upperBound expr:Results__Ranged___401_presultExpression_pupperBound .
-
-expr:Results__Ranged___401_presultExpression_plowerBound
+expr:Results__Ranged___401_plowerBound
     a sysml:LiteralInteger ;
     sysx:sourceText "1" ;
-    sysml:elementId "Results__Ranged___401_presultExpression_plowerBound" ;
+    sysml:elementId "Results__Ranged___401_plowerBound" ;
     sysml:value "1"^^xsd:integer .
 
-expr:Results__Ranged___401_presultExpression_pupperBound
+expr:Results__Ranged___401_pupperBound
     a sysml:LiteralInfinity ;
     sysx:sourceText "*" ;
-    sysml:elementId "Results__Ranged___401_presultExpression_pupperBound" .
+    sysml:elementId "Results__Ranged___401_pupperBound" .
 
 elmt:Results__Vehicle
     a sysml:PartDefinition ;
@@ -1655,7 +1614,9 @@ elmt:Results__MassAnalysis
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedRelationship elmt:Results__MassAnalysis__v, elmt:Results__MassAnalysis___401_om ;
     sysml:ownedMember elmt:Results__MassAnalysis___401 ;
-    sysml:ownedMembership elmt:Results__MassAnalysis___401_om .
+    sysml:ownedMembership elmt:Results__MassAnalysis___401_om ;
+    sysml:ownedFeature elmt:Results__MassAnalysis___401 ;
+    sysml:ownedFeatureMembership elmt:Results__MassAnalysis___401_om .
 
 elmt:Results__MassAnalysis_om
     a sysml:OwningMembership ;
@@ -1680,7 +1641,7 @@ elmt:Results__MassAnalysis__v
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:Results__MassAnalysis___401
-    a sysx:ResultExpressionMember ;
+    a sysml:FeatureChainExpression ;
     sysml:qualifiedName "Results::MassAnalysis::@1" ;
     sysml:elementId "Results__MassAnalysis___401" ;
     sysx:memberIndex "1"^^xsd:integer ;
@@ -1688,7 +1649,9 @@ elmt:Results__MassAnalysis___401
     sysml:owner elmt:Results__MassAnalysis ;
     sysml:owningRelationship elmt:Results__MassAnalysis___401_om ;
     sysml:owningMembership elmt:Results__MassAnalysis___401_om ;
-    sysx:resultExpression expr:Results__MassAnalysis___401_presultExpression .
+    sysx:sourceText "v.mass" ;
+    sysml:argument expr:Results__MassAnalysis___401_pa0 ;
+    sysml:targetFeature "mass" .
 
 elmt:Results__MassAnalysis___401_om
     a sysml:ResultExpressionMembership ;
@@ -1699,19 +1662,14 @@ elmt:Results__MassAnalysis___401_om
     sysml:ownedRelatedElement elmt:Results__MassAnalysis___401 ;
     sysml:owningRelatedElement elmt:Results__MassAnalysis ;
     sysml:membershipOwningNamespace elmt:Results__MassAnalysis ;
-    sysml:ownedResultExpression expr:Results__MassAnalysis___401_presultExpression .
+    sysml:ownedMemberFeature elmt:Results__MassAnalysis___401 ;
+    sysml:owningType elmt:Results__MassAnalysis ;
+    sysml:ownedResultExpression elmt:Results__MassAnalysis___401 .
 
-expr:Results__MassAnalysis___401_presultExpression
-    a sysml:FeatureChainExpression ;
-    sysx:sourceText "v.mass" ;
-    sysml:elementId "Results__MassAnalysis___401_presultExpression" ;
-    sysml:argument expr:Results__MassAnalysis___401_presultExpression_pa0 ;
-    sysml:targetFeature "mass" .
-
-expr:Results__MassAnalysis___401_presultExpression_pa0
+expr:Results__MassAnalysis___401_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "v" ;
-    sysml:elementId "Results__MassAnalysis___401_presultExpression_pa0" ;
+    sysml:elementId "Results__MassAnalysis___401_pa0" ;
     sysml:referent elmt:Results__MassAnalysis__v ;
     sysx:argumentIndex "0"^^xsd:integer .
 
@@ -1729,7 +1687,9 @@ elmt:Results__MassCheck
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedRelationship elmt:Results__MassCheck__v, elmt:Results__MassCheck___401_om ;
     sysml:ownedMember elmt:Results__MassCheck___401 ;
-    sysml:ownedMembership elmt:Results__MassCheck___401_om .
+    sysml:ownedMembership elmt:Results__MassCheck___401_om ;
+    sysml:ownedFeature elmt:Results__MassCheck___401 ;
+    sysml:ownedFeatureMembership elmt:Results__MassCheck___401_om .
 
 elmt:Results__MassCheck_om
     a sysml:OwningMembership ;
@@ -1754,7 +1714,7 @@ elmt:Results__MassCheck__v
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:Results__MassCheck___401
-    a sysx:ResultExpressionMember ;
+    a sysml:InvocationExpression ;
     sysml:qualifiedName "Results::MassCheck::@1" ;
     sysml:elementId "Results__MassCheck___401" ;
     sysx:memberIndex "1"^^xsd:integer ;
@@ -1762,7 +1722,9 @@ elmt:Results__MassCheck___401
     sysml:owner elmt:Results__MassCheck ;
     sysml:owningRelationship elmt:Results__MassCheck___401_om ;
     sysml:owningMembership elmt:Results__MassCheck___401_om ;
-    sysx:resultExpression expr:Results__MassCheck___401_presultExpression .
+    sysx:sourceText "Passes(v.mass > 0)" ;
+    sysml:function elmt:Results__Passes ;
+    sysml:argument expr:Results__MassCheck___401_pa0 .
 
 elmt:Results__MassCheck___401_om
     a sysml:ResultExpressionMembership ;
@@ -1773,42 +1735,37 @@ elmt:Results__MassCheck___401_om
     sysml:ownedRelatedElement elmt:Results__MassCheck___401 ;
     sysml:owningRelatedElement elmt:Results__MassCheck ;
     sysml:membershipOwningNamespace elmt:Results__MassCheck ;
-    sysml:ownedResultExpression expr:Results__MassCheck___401_presultExpression .
+    sysml:ownedMemberFeature elmt:Results__MassCheck___401 ;
+    sysml:owningType elmt:Results__MassCheck ;
+    sysml:ownedResultExpression elmt:Results__MassCheck___401 .
 
-expr:Results__MassCheck___401_presultExpression
-    a sysml:InvocationExpression ;
-    sysx:sourceText "Passes(v.mass > 0)" ;
-    sysml:elementId "Results__MassCheck___401_presultExpression" ;
-    sysml:function elmt:Results__Passes ;
-    sysml:argument expr:Results__MassCheck___401_presultExpression_pa0 .
-
-expr:Results__MassCheck___401_presultExpression_pa0
+expr:Results__MassCheck___401_pa0
     a sysml:OperatorExpression ;
     sysx:sourceText "v.mass > 0" ;
-    sysml:elementId "Results__MassCheck___401_presultExpression_pa0" ;
+    sysml:elementId "Results__MassCheck___401_pa0" ;
     sysml:operator ">" ;
-    sysml:argument expr:Results__MassCheck___401_presultExpression_pa0_pa0, expr:Results__MassCheck___401_presultExpression_pa0_pa1 ;
+    sysml:argument expr:Results__MassCheck___401_pa0_pa0, expr:Results__MassCheck___401_pa0_pa1 ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Results__MassCheck___401_presultExpression_pa0_pa0
+expr:Results__MassCheck___401_pa0_pa0
     a sysml:FeatureChainExpression ;
     sysx:sourceText "v.mass" ;
-    sysml:elementId "Results__MassCheck___401_presultExpression_pa0_pa0" ;
-    sysml:argument expr:Results__MassCheck___401_presultExpression_pa0_pa0_pa0 ;
+    sysml:elementId "Results__MassCheck___401_pa0_pa0" ;
+    sysml:argument expr:Results__MassCheck___401_pa0_pa0_pa0 ;
     sysml:targetFeature "mass" ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Results__MassCheck___401_presultExpression_pa0_pa0_pa0
+expr:Results__MassCheck___401_pa0_pa0_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "v" ;
-    sysml:elementId "Results__MassCheck___401_presultExpression_pa0_pa0_pa0" ;
+    sysml:elementId "Results__MassCheck___401_pa0_pa0_pa0" ;
     sysml:referent elmt:Results__MassCheck__v ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Results__MassCheck___401_presultExpression_pa0_pa1
+expr:Results__MassCheck___401_pa0_pa1
     a sysml:LiteralInteger ;
     sysx:sourceText "0" ;
-    sysml:elementId "Results__MassCheck___401_presultExpression_pa0_pa1" ;
+    sysml:elementId "Results__MassCheck___401_pa0_pa1" ;
     sysml:value "0"^^xsd:integer ;
     sysx:argumentIndex "1"^^xsd:integer .
 
@@ -1825,7 +1782,9 @@ elmt:Results__MassCase
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedRelationship elmt:Results__MassCase__v, elmt:Results__MassCase___401_om ;
     sysml:ownedMember elmt:Results__MassCase___401 ;
-    sysml:ownedMembership elmt:Results__MassCase___401_om .
+    sysml:ownedMembership elmt:Results__MassCase___401_om ;
+    sysml:ownedFeature elmt:Results__MassCase___401 ;
+    sysml:ownedFeatureMembership elmt:Results__MassCase___401_om .
 
 elmt:Results__MassCase_om
     a sysml:OwningMembership ;
@@ -1850,7 +1809,7 @@ elmt:Results__MassCase__v
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:Results__MassCase___401
-    a sysx:ResultExpressionMember ;
+    a sysml:OperatorExpression ;
     sysml:qualifiedName "Results::MassCase::@1" ;
     sysml:elementId "Results__MassCase___401" ;
     sysx:memberIndex "1"^^xsd:integer ;
@@ -1858,7 +1817,9 @@ elmt:Results__MassCase___401
     sysml:owner elmt:Results__MassCase ;
     sysml:owningRelationship elmt:Results__MassCase___401_om ;
     sysml:owningMembership elmt:Results__MassCase___401_om ;
-    sysx:resultExpression expr:Results__MassCase___401_presultExpression .
+    sysx:sourceText "v.mass * 2" ;
+    sysml:operator "*" ;
+    sysml:argument expr:Results__MassCase___401_pa0, expr:Results__MassCase___401_pa1 .
 
 elmt:Results__MassCase___401_om
     a sysml:ResultExpressionMembership ;
@@ -1869,34 +1830,29 @@ elmt:Results__MassCase___401_om
     sysml:ownedRelatedElement elmt:Results__MassCase___401 ;
     sysml:owningRelatedElement elmt:Results__MassCase ;
     sysml:membershipOwningNamespace elmt:Results__MassCase ;
-    sysml:ownedResultExpression expr:Results__MassCase___401_presultExpression .
+    sysml:ownedMemberFeature elmt:Results__MassCase___401 ;
+    sysml:owningType elmt:Results__MassCase ;
+    sysml:ownedResultExpression elmt:Results__MassCase___401 .
 
-expr:Results__MassCase___401_presultExpression
-    a sysml:OperatorExpression ;
-    sysx:sourceText "v.mass * 2" ;
-    sysml:elementId "Results__MassCase___401_presultExpression" ;
-    sysml:operator "*" ;
-    sysml:argument expr:Results__MassCase___401_presultExpression_pa0, expr:Results__MassCase___401_presultExpression_pa1 .
-
-expr:Results__MassCase___401_presultExpression_pa0
+expr:Results__MassCase___401_pa0
     a sysml:FeatureChainExpression ;
     sysx:sourceText "v.mass" ;
-    sysml:elementId "Results__MassCase___401_presultExpression_pa0" ;
-    sysml:argument expr:Results__MassCase___401_presultExpression_pa0_pa0 ;
+    sysml:elementId "Results__MassCase___401_pa0" ;
+    sysml:argument expr:Results__MassCase___401_pa0_pa0 ;
     sysml:targetFeature "mass" ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Results__MassCase___401_presultExpression_pa0_pa0
+expr:Results__MassCase___401_pa0_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "v" ;
-    sysml:elementId "Results__MassCase___401_presultExpression_pa0_pa0" ;
+    sysml:elementId "Results__MassCase___401_pa0_pa0" ;
     sysml:referent elmt:Results__MassCase__v ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Results__MassCase___401_presultExpression_pa1
+expr:Results__MassCase___401_pa1
     a sysml:LiteralInteger ;
     sysx:sourceText "2" ;
-    sysml:elementId "Results__MassCase___401_presultExpression_pa1" ;
+    sysml:elementId "Results__MassCase___401_pa1" ;
     sysml:value "2"^^xsd:integer ;
     sysx:argumentIndex "1"^^xsd:integer .
 
@@ -1943,8 +1899,8 @@ elmt:Results__rover__twice
     sysml:ownedMember elmt:Results__rover__twice__x, elmt:Results__rover__twice___401 ;
     sysml:ownedMembership elmt:Results__rover__twice__x_om, elmt:Results__rover__twice___401_om ;
     sysml:ownedRelationship elmt:Results__rover__twice__x_om, elmt:Results__rover__twice___401_om ;
-    sysml:ownedFeature elmt:Results__rover__twice__x ;
-    sysml:ownedFeatureMembership elmt:Results__rover__twice__x_om .
+    sysml:ownedFeature elmt:Results__rover__twice__x, elmt:Results__rover__twice___401 ;
+    sysml:ownedFeatureMembership elmt:Results__rover__twice__x_om, elmt:Results__rover__twice___401_om .
 
 elmt:Results__rover__twice_om
     a sysml:FeatureMembership ;
@@ -1992,7 +1948,7 @@ expr:Results__rover__twice__x_pvalue
     sysml:referent "mass" .
 
 elmt:Results__rover__twice___401
-    a sysx:ResultExpressionMember ;
+    a sysml:OperatorExpression ;
     sysml:qualifiedName "Results::rover::twice::@1" ;
     sysml:elementId "Results__rover__twice___401" ;
     sysx:memberIndex "1"^^xsd:integer ;
@@ -2000,7 +1956,9 @@ elmt:Results__rover__twice___401
     sysml:owner elmt:Results__rover__twice ;
     sysml:owningRelationship elmt:Results__rover__twice___401_om ;
     sysml:owningMembership elmt:Results__rover__twice___401_om ;
-    sysx:resultExpression expr:Results__rover__twice___401_presultExpression .
+    sysx:sourceText "x + x" ;
+    sysml:operator "+" ;
+    sysml:argument expr:Results__rover__twice___401_pa0, expr:Results__rover__twice___401_pa1 .
 
 elmt:Results__rover__twice___401_om
     a sysml:ResultExpressionMembership ;
@@ -2011,25 +1969,20 @@ elmt:Results__rover__twice___401_om
     sysml:ownedRelatedElement elmt:Results__rover__twice___401 ;
     sysml:owningRelatedElement elmt:Results__rover__twice ;
     sysml:membershipOwningNamespace elmt:Results__rover__twice ;
-    sysml:ownedResultExpression expr:Results__rover__twice___401_presultExpression .
+    sysml:ownedMemberFeature elmt:Results__rover__twice___401 ;
+    sysml:owningType elmt:Results__rover__twice ;
+    sysml:ownedResultExpression elmt:Results__rover__twice___401 .
 
-expr:Results__rover__twice___401_presultExpression
-    a sysml:OperatorExpression ;
-    sysx:sourceText "x + x" ;
-    sysml:elementId "Results__rover__twice___401_presultExpression" ;
-    sysml:operator "+" ;
-    sysml:argument expr:Results__rover__twice___401_presultExpression_pa0, expr:Results__rover__twice___401_presultExpression_pa1 .
-
-expr:Results__rover__twice___401_presultExpression_pa0
+expr:Results__rover__twice___401_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "x" ;
-    sysml:elementId "Results__rover__twice___401_presultExpression_pa0" ;
+    sysml:elementId "Results__rover__twice___401_pa0" ;
     sysml:referent elmt:Results__rover__twice__x ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Results__rover__twice___401_presultExpression_pa1
+expr:Results__rover__twice___401_pa1
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "x" ;
-    sysml:elementId "Results__rover__twice___401_presultExpression_pa1" ;
+    sysml:elementId "Results__rover__twice___401_pa1" ;
     sysml:referent elmt:Results__rover__twice__x ;
     sysx:argumentIndex "1"^^xsd:integer .

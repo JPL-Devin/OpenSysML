@@ -26,35 +26,27 @@ func convertFixture(t *testing.T, name string) []byte {
 	return turtle
 }
 
-// memberResultLink matches the sysx:resultExpression a result member ends in,
-// leaving the results of expression bodies in place.
-var memberResultLink = regexp.MustCompile(` ;\n    sysx:resultExpression expr:[^ \n]+_presultExpression \.\n`)
-
-// withoutMemberResultLinks drops the member-level sysx:resultExpression triples.
-func withoutMemberResultLinks(t *testing.T, turtle []byte) []byte {
-	t.Helper()
-	out := memberResultLink.ReplaceAll(turtle, []byte(" .\n"))
-	if string(out) == string(turtle) {
-		t.Fatal("the graph has no result member links to drop")
-	}
-	return out
-}
-
-// A result expression is a member of its own, owned through a
-// ResultExpressionMembership that states the expression, and it keeps its
-// place among the body's other members.
+// A result expression is the Expression element itself, owned through a
+// ResultExpressionMembership whose member it is, and it keeps its place among
+// the body's other members.
 func TestResultExpressionIsAResultExpressionMembership(t *testing.T) {
 	turtle := string(convertFixture(t, "result_expressions"))
 	for _, want := range []string{
-		"elmt:Results__AfterMembers___403\n    a sysx:ResultExpressionMember ;",
+		"elmt:Results__AfterMembers___403\n    a sysml:OperatorExpression ;",
 		"sysx:memberIndex \"3\"^^xsd:integer ;\n    sysml:owningNamespace elmt:Results__AfterMembers ;",
-		"sysx:resultExpression expr:Results__AfterMembers___403_presultExpression .",
+		"sysx:sourceText \"y * y\" ;\n    sysml:operator \"*\" ;",
 		"elmt:Results__AfterMembers___403_om\n    a sysml:ResultExpressionMembership ;",
-		"sysml:ownedResultExpression expr:Results__AfterMembers___403_presultExpression .",
-		"expr:Results__AfterMembers___403_presultExpression\n    a sysml:OperatorExpression ;\n    sysx:sourceText \"y * y\" ;",
+		"sysml:ownedMemberElement elmt:Results__AfterMembers___403 ;",
+		"sysml:ownedMemberFeature elmt:Results__AfterMembers___403 ;",
+		"sysml:ownedResultExpression elmt:Results__AfterMembers___403 .",
 	} {
 		if !strings.Contains(turtle, want) {
 			t.Errorf("the graph lacks\n%s\n--- graph ---\n%s", want, turtle)
+		}
+	}
+	for _, unwanted := range []string{"ResultExpressionMember ", "ResultExpressionMember;", "_presultExpression"} {
+		if strings.Contains(turtle, unwanted) {
+			t.Errorf("the graph still wraps the result in a member of its own (%q):\n%s", unwanted, turtle)
 		}
 	}
 	back, err := export.Convert("m.ttl", []byte(turtle), export.FormatTurtle, export.FormatSysML)
@@ -110,11 +102,35 @@ func TestResultExpressionsComeBackFromTheGraphAlone(t *testing.T) {
 	}
 }
 
+// membershipMember matches the member properties of a membership.
+var membershipMember = regexp.MustCompile(`    sysml:(memberElement|ownedMemberElement|ownedRelatedElement|ownedMemberFeature) elmt:[^ \n]+ ;\n`)
+
+// withoutResultMembers drops the member properties of every result membership,
+// leaving its sysml:ownedResultExpression and every other membership in place.
+func withoutResultMembers(t *testing.T, turtle []byte) []byte {
+	t.Helper()
+	blocks := strings.Split(string(turtle), "\n\n")
+	stripped := 0
+	for i, block := range blocks {
+		if strings.Contains(block, "a sysml:ResultExpressionMembership ;") {
+			blocks[i] = membershipMember.ReplaceAllString(block, "")
+			stripped++
+		}
+	}
+	if stripped == 0 {
+		t.Fatal("the graph has no result memberships to strip")
+	}
+	return []byte(strings.Join(blocks, "\n\n"))
+}
+
 // A graph another tool wrote states the result only the metamodel's way, as the
 // membership's ownedResultExpression; that is enough to write the body back.
 func TestResultExpressionComesBackFromItsMembershipAlone(t *testing.T) {
 	turtle := convertFixture(t, "result_expressions")
-	stripped := withoutMemberResultLinks(t, withoutTriples(t, turtle, "sysx:sourceText"))
+	stripped := withoutResultMembers(t, withoutTriples(t, turtle, "sysx:sourceText"))
+	if !strings.Contains(string(stripped), "sysml:owningType elmt:Results__AfterMembers ;\n    sysml:ownedResultExpression elmt:Results__AfterMembers___403 .") {
+		t.Fatalf("expected the result membership to keep only its ownedResultExpression:\n%s", stripped)
+	}
 	back, err := export.Convert("m.ttl", stripped, export.FormatTurtle, export.FormatSysML)
 	if err != nil {
 		t.Fatalf("back to notation from the membership alone: %v", err)
@@ -133,19 +149,52 @@ func TestResultExpressionComesBackFromItsMembershipAlone(t *testing.T) {
 	}
 }
 
-// A result expression member whose graph states no expression at all cannot be
-// written as a bare expression; it is refused by name rather than dropped.
+// A result expression whose graph states no structure to rebuild it from
+// cannot be written as a bare expression; it is refused by name rather than
+// dropped.
 func TestResultExpressionWithoutAnExpressionIsRefused(t *testing.T) {
-	turtle := convertFixture(t, "result_expressions")
-	stripped := withoutMemberResultLinks(t, withoutTriples(t, turtle, "sysx:sourceText"))
-	stripped = withoutTriples(t, stripped, "sysml:ownedResultExpression")
-	_, err := export.Convert("m.ttl", stripped, export.FormatTurtle, export.FormatSysML)
+	turtle := string(withoutTriples(t, convertFixture(t, "result_expressions"), "sysx:sourceText"))
+	const operands = "    sysml:operator \"*\" ;\n    sysml:argument expr:Results__AfterMembers___403_pa0, expr:Results__AfterMembers___403_pa1 .\n"
+	if !strings.Contains(turtle, operands) {
+		t.Fatalf("expected the operands of the AfterMembers result in the graph:\n%s", turtle)
+	}
+	turtle = strings.Replace(turtle, operands, "    sysml:operator \"*\" .\n", 1)
+	_, err := export.Convert("m.ttl", []byte(turtle), export.FormatTurtle, export.FormatSysML)
 	var unsupported *export.UnsupportedError
 	if !errors.As(err, &unsupported) {
-		t.Fatalf("want an UnsupportedError for a result member without its expression, got %v", err)
+		t.Fatalf("want an UnsupportedError for a result expression without its operands, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "urn:sysmlv2:element:Results__") || !strings.Contains(err.Error(), "sysx:resultExpression") {
-		t.Errorf("the refusal should name the member and the property it lacks: %v", err)
+	if !strings.Contains(err.Error(), "the expression <urn:sysmlv2:element:Results__AfterMembers___403>") {
+		t.Errorf("the refusal should name the result expression: %v", err)
+	}
+}
+
+// A graph a conforming tool wrote owns a body's result the abstract syntax way
+// alone — an Expression with no qualified name, no sysx: property and no
+// notation, reached from its ResultExpressionMembership — and is written back.
+func TestResultExpressionOwnedTheStandardWayIsRead(t *testing.T) {
+	const turtle = `@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ex: <urn:example:> .
+
+ex:P a sysml:Package ; sysml:qualifiedName "P" ; sysml:declaredName "P" .
+ex:Real a sysml:AttributeDefinition ; sysml:qualifiedName "P::Real" ; sysml:declaredName "Real" ; sysml:owningMembership ex:Real_m .
+ex:Real_m a sysml:OwningMembership ; sysml:membershipOwningNamespace ex:P ; sysml:memberElement ex:Real .
+ex:C a sysml:CalculationDefinition ; sysml:qualifiedName "P::C" ; sysml:declaredName "C" ; sysml:owningMembership ex:C_m .
+ex:C_m a sysml:OwningMembership ; sysml:membershipOwningNamespace ex:P ; sysml:memberElement ex:C .
+ex:x a sysml:ReferenceUsage ; sysml:qualifiedName "P::C::x" ; sysml:declaredName "x" ; sysml:direction "in" ; sysml:type ex:Real ; sysml:owningMembership ex:x_m .
+ex:x_m a sysml:ParameterMembership ; sysml:membershipOwningNamespace ex:C ; sysml:memberElement ex:x .
+ex:r a sysml:OperatorExpression ; sysml:operator "*" ; sysml:argument ex:r_a, ex:r_b ; sysml:owningMembership ex:r_m .
+ex:r_m a sysml:ResultExpressionMembership ; sysml:membershipOwningNamespace ex:C ; sysml:ownedMemberFeature ex:r ; sysml:ownedResultExpression ex:r .
+ex:r_a a sysml:FeatureReferenceExpression ; sysml:referent ex:x .
+ex:r_b a sysml:LiteralInteger ; sysml:value "2"^^xsd:integer .
+`
+	back, err := export.Convert("m.ttl", []byte(turtle), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from a standard graph: %v", err)
+	}
+	if want := "x : Real;\n        (x * 2)\n    }"; !strings.Contains(string(back), want) {
+		t.Errorf("the notation lacks %q:\n%s", want, back)
 	}
 }
 
@@ -168,7 +217,7 @@ func TestExpressionBodyDeclarationNeedsItsText(t *testing.T) {
 	if !errors.As(err, &unsupported) {
 		t.Fatalf("want an UnsupportedError for a body member without its text, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "the body member <urn:opensysml:expr:Bodies__Scaled___401_presultExpression_pm1>") {
+	if !strings.Contains(err.Error(), "the body member <urn:opensysml:expr:Bodies__Scaled___401_pm1>") {
 		t.Errorf("the refusal should name the body member: %v", err)
 	}
 }
@@ -202,7 +251,7 @@ func TestExpressionBodyKeepsTheOrderOfItsDeclarations(t *testing.T) {
 // literal; an unrestricted name among them comes back quoted.
 func TestExpressionBodyParameterLiteralIsQuoted(t *testing.T) {
 	turtle := string(withoutTriples(t, convertFixture(t, "result_expressions"), "sysx:sourceText"))
-	const node = "sysx:bodyParameter expr:Results__Quoted___401_presultExpression_pin0 ;"
+	const node = "sysx:bodyParameter expr:Results__Quoted___401_pin0 ;"
 	if !strings.Contains(turtle, node) {
 		t.Fatalf("expected the parameter node of the Quoted body in the graph:\n%s", turtle)
 	}

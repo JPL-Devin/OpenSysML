@@ -52,8 +52,8 @@ elmt:Bodies__Scaled
     sysml:ownedMember elmt:Bodies__Scaled__x, elmt:Bodies__Scaled___401 ;
     sysml:ownedMembership elmt:Bodies__Scaled__x_om, elmt:Bodies__Scaled___401_om ;
     sysml:ownedRelationship elmt:Bodies__Scaled__x_om, elmt:Bodies__Scaled___401_om ;
-    sysml:ownedFeature elmt:Bodies__Scaled__x ;
-    sysml:ownedFeatureMembership elmt:Bodies__Scaled__x_om .
+    sysml:ownedFeature elmt:Bodies__Scaled__x, elmt:Bodies__Scaled___401 ;
+    sysml:ownedFeatureMembership elmt:Bodies__Scaled__x_om, elmt:Bodies__Scaled___401_om .
 
 elmt:Bodies__Scaled_om
     a sysml:OwningMembership ;
@@ -93,7 +93,7 @@ elmt:Bodies__Scaled__x_om
     sysml:owningType elmt:Bodies__Scaled .
 
 elmt:Bodies__Scaled___401
-    a sysx:ResultExpressionMember ;
+    a sysml:Expression ;
     sysml:qualifiedName "Bodies::Scaled::@1" ;
     sysml:elementId "Bodies__Scaled___401" ;
     sysx:memberIndex "1"^^xsd:integer ;
@@ -101,7 +101,10 @@ elmt:Bodies__Scaled___401
     sysml:owner elmt:Bodies__Scaled ;
     sysml:owningRelationship elmt:Bodies__Scaled___401_om ;
     sysml:owningMembership elmt:Bodies__Scaled___401_om ;
-    sysx:resultExpression expr:Bodies__Scaled___401_presultExpression .
+    sysx:sourceText "{ in y : Real; private attribute k : Real = 2; y * k + x }" ;
+    sysx:bodyParameter expr:Bodies__Scaled___401_pin0 ;
+    sysx:bodyMember expr:Bodies__Scaled___401_pm1 ;
+    sysx:resultExpression expr:Bodies__Scaled___401_presult .
 
 elmt:Bodies__Scaled___401_om
     a sysml:ResultExpressionMembership ;
@@ -112,62 +115,56 @@ elmt:Bodies__Scaled___401_om
     sysml:ownedRelatedElement elmt:Bodies__Scaled___401 ;
     sysml:owningRelatedElement elmt:Bodies__Scaled ;
     sysml:membershipOwningNamespace elmt:Bodies__Scaled ;
-    sysml:ownedResultExpression expr:Bodies__Scaled___401_presultExpression .
+    sysml:ownedMemberFeature elmt:Bodies__Scaled___401 ;
+    sysml:owningType elmt:Bodies__Scaled ;
+    sysml:ownedResultExpression elmt:Bodies__Scaled___401 .
 
-expr:Bodies__Scaled___401_presultExpression
-    a sysml:Expression ;
-    sysx:sourceText "{ in y : Real; private attribute k : Real = 2; y * k + x }" ;
-    sysml:elementId "Bodies__Scaled___401_presultExpression" ;
-    sysx:bodyParameter expr:Bodies__Scaled___401_presultExpression_pin0 ;
-    sysx:bodyMember expr:Bodies__Scaled___401_presultExpression_pm1 ;
-    sysx:resultExpression expr:Bodies__Scaled___401_presultExpression_presult .
-
-expr:Bodies__Scaled___401_presultExpression_pin0
+expr:Bodies__Scaled___401_pin0
     a sysml:ReferenceUsage ;
-    sysml:elementId "Bodies__Scaled___401_presultExpression_pin0" ;
+    sysml:elementId "Bodies__Scaled___401_pin0" ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:direction "in" ;
     sysml:declaredName "y" ;
     sysml:type elmt:Bodies__Real .
 
-expr:Bodies__Scaled___401_presultExpression_pm1
+expr:Bodies__Scaled___401_pm1
     a sysx:BodyMember ;
-    sysml:elementId "Bodies__Scaled___401_presultExpression_pm1" ;
+    sysml:elementId "Bodies__Scaled___401_pm1" ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysx:sourceText "private attribute k : Real = 2;" .
 
-expr:Bodies__Scaled___401_presultExpression_presult
+expr:Bodies__Scaled___401_presult
     a sysml:OperatorExpression ;
     sysx:sourceText "y * k + x" ;
-    sysml:elementId "Bodies__Scaled___401_presultExpression_presult" ;
+    sysml:elementId "Bodies__Scaled___401_presult" ;
     sysml:operator "+" ;
-    sysml:argument expr:Bodies__Scaled___401_presultExpression_presult_pa0, expr:Bodies__Scaled___401_presultExpression_presult_pa1 .
+    sysml:argument expr:Bodies__Scaled___401_presult_pa0, expr:Bodies__Scaled___401_presult_pa1 .
 
-expr:Bodies__Scaled___401_presultExpression_presult_pa0
+expr:Bodies__Scaled___401_presult_pa0
     a sysml:OperatorExpression ;
     sysx:sourceText "y * k" ;
-    sysml:elementId "Bodies__Scaled___401_presultExpression_presult_pa0" ;
+    sysml:elementId "Bodies__Scaled___401_presult_pa0" ;
     sysml:operator "*" ;
-    sysml:argument expr:Bodies__Scaled___401_presultExpression_presult_pa0_pa0, expr:Bodies__Scaled___401_presultExpression_presult_pa0_pa1 ;
+    sysml:argument expr:Bodies__Scaled___401_presult_pa0_pa0, expr:Bodies__Scaled___401_presult_pa0_pa1 ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Bodies__Scaled___401_presultExpression_presult_pa0_pa0
+expr:Bodies__Scaled___401_presult_pa0_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "y" ;
-    sysml:elementId "Bodies__Scaled___401_presultExpression_presult_pa0_pa0" ;
+    sysml:elementId "Bodies__Scaled___401_presult_pa0_pa0" ;
     sysml:referent "y" ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Bodies__Scaled___401_presultExpression_presult_pa0_pa1
+expr:Bodies__Scaled___401_presult_pa0_pa1
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "k" ;
-    sysml:elementId "Bodies__Scaled___401_presultExpression_presult_pa0_pa1" ;
+    sysml:elementId "Bodies__Scaled___401_presult_pa0_pa1" ;
     sysml:referent "k" ;
     sysx:argumentIndex "1"^^xsd:integer .
 
-expr:Bodies__Scaled___401_presultExpression_presult_pa1
+expr:Bodies__Scaled___401_presult_pa1
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "x" ;
-    sysml:elementId "Bodies__Scaled___401_presultExpression_presult_pa1" ;
+    sysml:elementId "Bodies__Scaled___401_presult_pa1" ;
     sysml:referent elmt:Bodies__Scaled__x ;
     sysx:argumentIndex "1"^^xsd:integer .

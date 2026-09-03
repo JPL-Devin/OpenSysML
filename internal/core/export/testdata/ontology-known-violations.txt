@@ -58,7 +58,6 @@ unknown-class urn:opensysml:sysml:FinalNode -                # an action's final
 unknown-class urn:opensysml:sysml:IfBranch -                 # an if/else branch, standardly an IfActionUsage's then/else parameter
 unknown-class urn:opensysml:sysml:MultiplicityDeclaration -  # a named multiplicity, standardly a MultiplicityRange
 unknown-class urn:opensysml:sysml:Pseudostate -              # a state machine pseudostate, standardly a StateUsage or TransitionUsage shape
-unknown-class urn:opensysml:sysml:ResultExpressionMember -   # a body's result expression, standardly the Expression a ResultExpressionMembership owns
 unknown-class urn:opensysml:sysml:BodyMember -               # a declaration inside an expression body, standardly a Feature the Expression owns
 
 # 5. Properties written in the SysML namespace that no metaclass declares. Every

@@ -230,7 +230,7 @@ func (d *decoder) build() ([]*element, error) {
 // is accepted, since a graph from another tool may carry only one.
 func (d *decoder) readMembership(subject rdf.Term) error {
 	owner, hasOwner := d.firstObject(subject, pMembershipOwningNamespace, pOwningRelatedElement)
-	member, hasMember := d.firstObject(subject, pMemberElement, pOwnedMemberElement, pOwnedMemberFeature, pOwnedRelatedElement)
+	member, hasMember := d.firstObject(subject, pMemberElement, pOwnedMemberElement, pOwnedMemberFeature, pOwnedResultExpression, pOwnedRelatedElement)
 	if !hasOwner || !hasMember {
 		return &UnsupportedError{
 			What: fmt.Sprintf("the membership <%s>", subject.Value),
@@ -402,7 +402,7 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 		return err
 	}
 	b.WriteString(lead + head)
-	if annotationMetaclasses[el.metaclass] || el.metaclass == mResultExpression {
+	if annotationMetaclasses[el.metaclass] || d.isResultExpression(el) {
 		// A comment, doc or rep declaration ends with its comment body, and a
 		// result expression is bare: neither takes a terminator.
 		b.WriteString("\n")
@@ -474,6 +474,9 @@ func identityAnnotations(el *element) []string {
 
 // head builds the declaration text up to the body or terminator.
 func (d *decoder) head(el *element) (string, error) {
+	if d.isResultExpression(el) {
+		return d.expressionNodeText(rdf.IRI(el.iri), el.scope)
+	}
 	switch el.metaclass {
 	case "Package", "Namespace":
 		return d.namespaceHead(el), nil
@@ -508,8 +511,6 @@ func (d *decoder) head(el *element) (string, error) {
 		return d.conditionHead(el, "assume")
 	case mRequire:
 		return d.conditionHead(el, "require")
-	case mResultExpression:
-		return d.resultExpressionHead(el)
 	}
 	// A succession carrying its ends as references is the one the parser builds
 	// for a succession, written back as `succession first <source> then <target>;`.
@@ -834,19 +835,11 @@ func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 	return strings.Join(words, " "), nil
 }
 
-// resultExpressionHead writes a result expression member back as the bare
-// expression it states, read from the member or, as the abstract syntax
-// spells it, from the sysml:ownedResultExpression of its membership.
-func (d *decoder) resultExpressionHead(el *element) (string, error) {
-	if text, ok := d.stringOf(el, rdf.OpenSysML+xResultExpression); ok {
-		return text, nil
-	}
-	if m, owned := d.owningMembership[el.iri]; owned {
-		if node, ok := d.graph.Object(rdf.IRI(m.iri), rdf.SysML+pOwnedResultExpression); ok {
-			return d.expressionNodeText(node, el.scope)
-		}
-	}
-	return "", d.missing(el, "sysx:"+xResultExpression, "a result expression member is the expression it states")
+// isResultExpression reports whether el is the result expression of a body:
+// the Expression a ResultExpressionMembership owns, written back bare.
+func (d *decoder) isResultExpression(el *element) bool {
+	m, owned := d.owningMembership[el.iri]
+	return owned && rdf.LocalName(d.graph.Type(rdf.IRI(m.iri))) == mResultExpressionMembership
 }
 
 // acceptParam returns the synthetic parameter of an accept shorthand, whose

@@ -52,8 +52,8 @@ elmt:Ordered__Mixed
     sysml:ownedMember elmt:Ordered__Mixed__x, elmt:Ordered__Mixed___401 ;
     sysml:ownedMembership elmt:Ordered__Mixed__x_om, elmt:Ordered__Mixed___401_om ;
     sysml:ownedRelationship elmt:Ordered__Mixed__x_om, elmt:Ordered__Mixed___401_om ;
-    sysml:ownedFeature elmt:Ordered__Mixed__x ;
-    sysml:ownedFeatureMembership elmt:Ordered__Mixed__x_om .
+    sysml:ownedFeature elmt:Ordered__Mixed__x, elmt:Ordered__Mixed___401 ;
+    sysml:ownedFeatureMembership elmt:Ordered__Mixed__x_om, elmt:Ordered__Mixed___401_om .
 
 elmt:Ordered__Mixed_om
     a sysml:OwningMembership ;
@@ -93,7 +93,7 @@ elmt:Ordered__Mixed__x_om
     sysml:owningType elmt:Ordered__Mixed .
 
 elmt:Ordered__Mixed___401
-    a sysx:ResultExpressionMember ;
+    a sysml:Expression ;
     sysml:qualifiedName "Ordered::Mixed::@1" ;
     sysml:elementId "Ordered__Mixed___401" ;
     sysx:memberIndex "1"^^xsd:integer ;
@@ -101,7 +101,10 @@ elmt:Ordered__Mixed___401
     sysml:owner elmt:Ordered__Mixed ;
     sysml:owningRelationship elmt:Ordered__Mixed___401_om ;
     sysml:owningMembership elmt:Ordered__Mixed___401_om ;
-    sysx:resultExpression expr:Ordered__Mixed___401_presultExpression .
+    sysx:sourceText "{ in a : Real; private attribute k : Real = 1; in b : Real; a + b + k * x }" ;
+    sysx:bodyParameter expr:Ordered__Mixed___401_pin0, expr:Ordered__Mixed___401_pin2 ;
+    sysx:bodyMember expr:Ordered__Mixed___401_pm1 ;
+    sysx:resultExpression expr:Ordered__Mixed___401_presult .
 
 elmt:Ordered__Mixed___401_om
     a sysml:ResultExpressionMembership ;
@@ -112,86 +115,80 @@ elmt:Ordered__Mixed___401_om
     sysml:ownedRelatedElement elmt:Ordered__Mixed___401 ;
     sysml:owningRelatedElement elmt:Ordered__Mixed ;
     sysml:membershipOwningNamespace elmt:Ordered__Mixed ;
-    sysml:ownedResultExpression expr:Ordered__Mixed___401_presultExpression .
+    sysml:ownedMemberFeature elmt:Ordered__Mixed___401 ;
+    sysml:owningType elmt:Ordered__Mixed ;
+    sysml:ownedResultExpression elmt:Ordered__Mixed___401 .
 
-expr:Ordered__Mixed___401_presultExpression
-    a sysml:Expression ;
-    sysx:sourceText "{ in a : Real; private attribute k : Real = 1; in b : Real; a + b + k * x }" ;
-    sysml:elementId "Ordered__Mixed___401_presultExpression" ;
-    sysx:bodyParameter expr:Ordered__Mixed___401_presultExpression_pin0, expr:Ordered__Mixed___401_presultExpression_pin2 ;
-    sysx:bodyMember expr:Ordered__Mixed___401_presultExpression_pm1 ;
-    sysx:resultExpression expr:Ordered__Mixed___401_presultExpression_presult .
-
-expr:Ordered__Mixed___401_presultExpression_pin0
+expr:Ordered__Mixed___401_pin0
     a sysml:ReferenceUsage ;
-    sysml:elementId "Ordered__Mixed___401_presultExpression_pin0" ;
+    sysml:elementId "Ordered__Mixed___401_pin0" ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:direction "in" ;
     sysml:declaredName "a" ;
     sysml:type elmt:Ordered__Real .
 
-expr:Ordered__Mixed___401_presultExpression_pm1
+expr:Ordered__Mixed___401_pm1
     a sysx:BodyMember ;
-    sysml:elementId "Ordered__Mixed___401_presultExpression_pm1" ;
+    sysml:elementId "Ordered__Mixed___401_pm1" ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysx:sourceText "private attribute k : Real = 1;" .
 
-expr:Ordered__Mixed___401_presultExpression_pin2
+expr:Ordered__Mixed___401_pin2
     a sysml:ReferenceUsage ;
-    sysml:elementId "Ordered__Mixed___401_presultExpression_pin2" ;
+    sysml:elementId "Ordered__Mixed___401_pin2" ;
     sysx:memberIndex "2"^^xsd:integer ;
     sysml:direction "in" ;
     sysml:declaredName "b" ;
     sysml:type elmt:Ordered__Real .
 
-expr:Ordered__Mixed___401_presultExpression_presult
+expr:Ordered__Mixed___401_presult
     a sysml:OperatorExpression ;
     sysx:sourceText "a + b + k * x" ;
-    sysml:elementId "Ordered__Mixed___401_presultExpression_presult" ;
+    sysml:elementId "Ordered__Mixed___401_presult" ;
     sysml:operator "+" ;
-    sysml:argument expr:Ordered__Mixed___401_presultExpression_presult_pa0, expr:Ordered__Mixed___401_presultExpression_presult_pa1 .
+    sysml:argument expr:Ordered__Mixed___401_presult_pa0, expr:Ordered__Mixed___401_presult_pa1 .
 
-expr:Ordered__Mixed___401_presultExpression_presult_pa0
+expr:Ordered__Mixed___401_presult_pa0
     a sysml:OperatorExpression ;
     sysx:sourceText "a + b" ;
-    sysml:elementId "Ordered__Mixed___401_presultExpression_presult_pa0" ;
+    sysml:elementId "Ordered__Mixed___401_presult_pa0" ;
     sysml:operator "+" ;
-    sysml:argument expr:Ordered__Mixed___401_presultExpression_presult_pa0_pa0, expr:Ordered__Mixed___401_presultExpression_presult_pa0_pa1 ;
+    sysml:argument expr:Ordered__Mixed___401_presult_pa0_pa0, expr:Ordered__Mixed___401_presult_pa0_pa1 ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Ordered__Mixed___401_presultExpression_presult_pa0_pa0
+expr:Ordered__Mixed___401_presult_pa0_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "a" ;
-    sysml:elementId "Ordered__Mixed___401_presultExpression_presult_pa0_pa0" ;
+    sysml:elementId "Ordered__Mixed___401_presult_pa0_pa0" ;
     sysml:referent "a" ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Ordered__Mixed___401_presultExpression_presult_pa0_pa1
+expr:Ordered__Mixed___401_presult_pa0_pa1
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "b" ;
-    sysml:elementId "Ordered__Mixed___401_presultExpression_presult_pa0_pa1" ;
+    sysml:elementId "Ordered__Mixed___401_presult_pa0_pa1" ;
     sysml:referent "b" ;
     sysx:argumentIndex "1"^^xsd:integer .
 
-expr:Ordered__Mixed___401_presultExpression_presult_pa1
+expr:Ordered__Mixed___401_presult_pa1
     a sysml:OperatorExpression ;
     sysx:sourceText "k * x" ;
-    sysml:elementId "Ordered__Mixed___401_presultExpression_presult_pa1" ;
+    sysml:elementId "Ordered__Mixed___401_presult_pa1" ;
     sysml:operator "*" ;
-    sysml:argument expr:Ordered__Mixed___401_presultExpression_presult_pa1_pa0, expr:Ordered__Mixed___401_presultExpression_presult_pa1_pa1 ;
+    sysml:argument expr:Ordered__Mixed___401_presult_pa1_pa0, expr:Ordered__Mixed___401_presult_pa1_pa1 ;
     sysx:argumentIndex "1"^^xsd:integer .
 
-expr:Ordered__Mixed___401_presultExpression_presult_pa1_pa0
+expr:Ordered__Mixed___401_presult_pa1_pa0
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "k" ;
-    sysml:elementId "Ordered__Mixed___401_presultExpression_presult_pa1_pa0" ;
+    sysml:elementId "Ordered__Mixed___401_presult_pa1_pa0" ;
     sysml:referent "k" ;
     sysx:argumentIndex "0"^^xsd:integer .
 
-expr:Ordered__Mixed___401_presultExpression_presult_pa1_pa1
+expr:Ordered__Mixed___401_presult_pa1_pa1
     a sysml:FeatureReferenceExpression ;
     sysx:sourceText "x" ;
-    sysml:elementId "Ordered__Mixed___401_presultExpression_presult_pa1_pa1" ;
+    sysml:elementId "Ordered__Mixed___401_presult_pa1_pa1" ;
     sysml:referent elmt:Ordered__Mixed__x ;
     sysx:argumentIndex "1"^^xsd:integer .
 
@@ -208,7 +205,9 @@ elmt:Ordered__Declares
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Ordered__Declares___400 ;
     sysml:ownedMembership elmt:Ordered__Declares___400_om ;
-    sysml:ownedRelationship elmt:Ordered__Declares___400_om .
+    sysml:ownedRelationship elmt:Ordered__Declares___400_om ;
+    sysml:ownedFeature elmt:Ordered__Declares___400 ;
+    sysml:ownedFeatureMembership elmt:Ordered__Declares___400_om .
 
 elmt:Ordered__Declares_om
     a sysml:OwningMembership ;
@@ -221,7 +220,7 @@ elmt:Ordered__Declares_om
     sysml:membershipOwningNamespace elmt:Ordered .
 
 elmt:Ordered__Declares___400
-    a sysx:ResultExpressionMember ;
+    a sysml:Expression ;
     sysml:qualifiedName "Ordered::Declares::@0" ;
     sysml:elementId "Ordered__Declares___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
@@ -229,7 +228,8 @@ elmt:Ordered__Declares___400
     sysml:owner elmt:Ordered__Declares ;
     sysml:owningRelationship elmt:Ordered__Declares___400_om ;
     sysml:owningMembership elmt:Ordered__Declares___400_om ;
-    sysx:resultExpression expr:Ordered__Declares___400_presultExpression .
+    sysx:sourceText "{ private attribute k : Real = 1; }" ;
+    sysx:bodyMember expr:Ordered__Declares___400_pm0 .
 
 elmt:Ordered__Declares___400_om
     a sysml:ResultExpressionMembership ;
@@ -240,16 +240,12 @@ elmt:Ordered__Declares___400_om
     sysml:ownedRelatedElement elmt:Ordered__Declares___400 ;
     sysml:owningRelatedElement elmt:Ordered__Declares ;
     sysml:membershipOwningNamespace elmt:Ordered__Declares ;
-    sysml:ownedResultExpression expr:Ordered__Declares___400_presultExpression .
+    sysml:ownedMemberFeature elmt:Ordered__Declares___400 ;
+    sysml:owningType elmt:Ordered__Declares ;
+    sysml:ownedResultExpression elmt:Ordered__Declares___400 .
 
-expr:Ordered__Declares___400_presultExpression
-    a sysml:Expression ;
-    sysx:sourceText "{ private attribute k : Real = 1; }" ;
-    sysml:elementId "Ordered__Declares___400_presultExpression" ;
-    sysx:bodyMember expr:Ordered__Declares___400_presultExpression_pm0 .
-
-expr:Ordered__Declares___400_presultExpression_pm0
+expr:Ordered__Declares___400_pm0
     a sysx:BodyMember ;
-    sysml:elementId "Ordered__Declares___400_presultExpression_pm0" ;
+    sysml:elementId "Ordered__Declares___400_pm0" ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:sourceText "private attribute k : Real = 1;" .

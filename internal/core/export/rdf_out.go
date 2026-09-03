@@ -130,9 +130,6 @@ const (
 	mConstraint = "ConstraintMember"
 	mAssume     = "AssumeMember"
 	mRequire    = "RequireMember"
-	// The bare expression a calculation or case body ends in, which the
-	// abstract syntax owns through a ResultExpressionMembership.
-	mResultExpression = "ResultExpressionMember"
 )
 
 // boolProperty pairs an RDF property name with the AST flag it mirrors. Only
@@ -330,6 +327,8 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 			Note: fmt.Sprintf("its id lands on the same IRI as %s, and merging two elements into one subject would be a different model", prior),
 		}
 	}
+	// A bare expression among a body's members is the result the body computes.
+	result := isExpressionMember(node)
 
 	// A metaclass name this mapping invents is typed in the OpenSysML namespace,
 	// so a consumer can tell it from the standard OMG vocabulary.
@@ -347,7 +346,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		membership := rdf.Term{}
 		if ownerTerm.Value != "" {
 			e.graph.Add(subject, e.sysml(pOwningNamespace), ownerTerm)
-			membership = e.owningMembership(subject, ownerTerm, fqn)
+			membership = e.owningMembership(subject, ownerTerm, fqn, result)
 		}
 		if keyword := visibilityKeyword(visibility); keyword != "" {
 			// The membership states the visibility a member is declared with; a
@@ -621,12 +620,14 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 			Note: "fix the syntax error before converting",
 		}
 	}
-	// A bare expression among a body's members is the result the body computes.
-	if isExpressionMember(node) {
-		head(rdf.OpenSysMLTerm(mResultExpression))
-		e.expression(subject, e.sysx(xResultExpression), xResultExpression, owner, node)
+	// The result is the Expression element itself, owned through its
+	// ResultExpressionMembership as the abstract syntax has it.
+	if result {
+		head(rdf.SysMLTerm(expressionMetaclass(node)))
+		e.graph.Prefixes[rdf.ExpressionPrefix] = rdf.Expression
+		e.expressionNode(subject, owner, node)
 		if membership, ok := e.graph.Object(subject, rdf.SysML+pOwningMembership); ok {
-			e.graph.Add(membership, e.sysml(pOwnedResultExpression), rdf.ExpressionIRI(subject, xResultExpression))
+			e.graph.Add(membership, e.sysml(pOwnedResultExpression), subject)
 		}
 		return nil
 	}
@@ -645,8 +646,9 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 // returning the membership minted between them, or the empty term when no
 // membership stands between the two. The API's payloads reach a member through
 // its membership, so a compact owner triple alone leaves a client walking down
-// from a root with nothing to follow.
-func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string) rdf.Term {
+// from a root with nothing to follow. result marks a body's result expression,
+// which a ResultExpressionMembership owns.
+func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string, result bool) rdf.Term {
 	ownerClass, memberClass := e.metaclassOf(owner), e.metaclassOf(member)
 	switch {
 	case isRelationship(ownerClass):
@@ -683,10 +685,10 @@ func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string) rdf
 
 	metaclass := mOwningMembership
 	switch {
+	case result:
+		metaclass = mResultExpressionMembership
 	case feature:
 		metaclass = mFeatureMembership
-	case e.graph.Type(member) == rdf.OpenSysML+mResultExpression:
-		metaclass = mResultExpressionMembership
 	}
 	e.graph.Add(membership, rdf.IRI(rdf.RDFType), e.sysml(metaclass))
 	e.graph.Add(membership, e.sysml(pElementID), rdf.String(rdf.LocalName(membership.Value)))
