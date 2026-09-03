@@ -63,6 +63,7 @@ hooks:
   - scripts/mkdocs_repo_links.py
   - scripts/mkdocs_landing.py
   - scripts/mkdocs_header_menu.py
+  - scripts/mkdocs_census.py
 
 markdown_extensions:
   - admonition
