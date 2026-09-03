@@ -59,16 +59,16 @@ Recorded against the corpus above, reproduced byte-identically on a second run:
 
 | Verdict | Files |
 |---|---|
-| `stable` | 176 |
-| `whitespace-only` | 75 |
-| `graph-diff` | 16 |
-| `unwritable` | 16 |
-| `unparseable` | 2 |
+| `stable` | 187 |
+| `whitespace-only` | 76 |
+| `graph-diff` | 17 |
+| `unwritable` | 2 |
+| `unparseable` | 3 |
 | `refused` | 60 |
 | **total** | **345** |
 
-So 285 of 345 files convert to Turtle, and of those 251 come back as the same graph (176 exactly,
-75 up to `sysx:sourceText` whitespace). The refusals by class: 20 `feature-declaration`,
+So 285 of 345 files convert to Turtle, and of those 263 come back as the same graph (187 exactly,
+76 up to `sysx:sourceText` whitespace). The refusals by class: 20 `feature-declaration`,
 10 `event-declaration`, 7 `succession`, 6 `operator-expr`, 3 each of `duplicate-declaration`,
 `snapshot-declaration`, `invocation-expr` and `assert-declaration`, 2 `feature-chain-expr`, and
 1 each of `timeslice-declaration`, `feature-reference` and `constructor-expr`.
@@ -78,7 +78,10 @@ converting and 77 refused, 18 of them `prefix-metadata`; of those 18, 16 now con
 3 `whitespace-only`, 2 `graph-diff`, 1 `unwritable`) and 2 fall to the `feature-declaration` and
 `event-declaration` refusals the metadata refusal had hidden. A 19th file, refused as a
 `duplicate-declaration` because the parser had read `metadata M about x;` as a usage *named* `M`,
-converts (`whitespace-only`) now that it is read as typed by `M`.
+converts (`whitespace-only`) now that it is read as typed by `M`. Folding a positional `then`
+past the edge members the parser skips moved 15 more files off `unwritable`: 11 to `stable`, 1 to
+`whitespace-only`, 2 to `graph-diff`, and `AHFNorwayTopics.sysml` to `unparseable`: its `then Wait;`
+is written onto the line comment that ends the verbatim `accept` before it, which swallows it.
 
 ## Policy
 
