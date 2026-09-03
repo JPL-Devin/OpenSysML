@@ -57,6 +57,23 @@ type ActionExecutor struct {
 	// runStarted marks this executor's run as begun, so the step budget is reset
 	// once however many calls the run is driven over.
 	runStarted bool
+	// steps of the action's token-flow budget the current call has spent, by the
+	// tokens of its flow and of the flows body statements run alike.
+	steps int64
+	// inRun is set while RunToCompletion drives the steps, whose budget they share.
+	inRun bool
+}
+
+// chargeActionStep spends one step of the action's token-flow budget
+// (MaxActionStepsEnvVar), which the tokens of every flow of the run share.
+func (e *ActionExecutor) chargeActionStep() error {
+	if e.steps >= e.ctx.maxActionSteps {
+		return budgetExceeded(ErrActionStepLimitExceeded,
+			fmt.Sprintf("execution exceeded max steps (%d steps; raise %s to allow more), possible infinite loop",
+				e.ctx.maxActionSteps, MaxActionStepsEnvVar))
+	}
+	e.steps++
+	return nil
 }
 
 // breakpointVisit identifies one token's stay at one node.
@@ -189,6 +206,10 @@ func (e *ActionExecutor) Step() error {
 
 	if e.state == StateReady {
 		return fmt.Errorf("executor not initialized (call initialize first)")
+	}
+
+	if !e.inRun {
+		e.steps = 0
 	}
 
 	// Stepping resumes a run a breakpoint suspended.
@@ -358,8 +379,9 @@ func (e *ActionExecutor) RunToCompletion() error {
 		return fmt.Errorf("%w: its run ended when it was let go of", ErrExecutorReleased)
 	}
 
-	maxSteps := e.ctx.maxActionSteps
-	var steps int64
+	e.steps = 0
+	e.inRun = true
+	defer func() { e.inRun = false }()
 
 	e.pausedAt = ""
 	if e.state == StateSuspended {
@@ -375,10 +397,8 @@ func (e *ActionExecutor) RunToCompletion() error {
 			return nil
 		}
 
-		if steps >= maxSteps {
-			return budgetExceeded(ErrActionStepLimitExceeded,
-				fmt.Sprintf("execution exceeded max steps (%d steps; raise %s to allow more), possible infinite loop",
-					maxSteps, MaxActionStepsEnvVar))
+		if err := e.chargeActionStep(); err != nil {
+			return err
 		}
 
 		if err := e.Step(); err != nil {
@@ -387,8 +407,6 @@ func (e *ActionExecutor) RunToCompletion() error {
 		if e.state == StateWaiting {
 			return e.deadlockError(nil)
 		}
-
-		steps++
 	}
 
 	return nil

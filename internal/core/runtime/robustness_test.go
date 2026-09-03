@@ -52,6 +52,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("block_node_pin_bound_where_nodes_are_not_performed", testBlockNodePinBoundWhereNodesAreNotPerformed)
 	t.Run("block_node_own_flow_malformed", testBlockNodeOwnFlowMalformed)
 	t.Run("block_node_own_flow_where_nodes_are_not_performed", testBlockNodeOwnFlowWhereNodesAreNotPerformed)
+	t.Run("block_node_own_flow_that_never_ends", testBlockNodeOwnFlowThatNeverEnds)
 	t.Run("inherited_binding_names_a_node_without_a_pin", testInheritedBindingNamesANodeWithoutAPin)
 	t.Run("node_inherited_default_that_cannot_be_evaluated", testNodeInheritedDefaultThatCannotBeEvaluated)
 	t.Run("node_binding_output_to_an_unknown_feature", testNodeBindingOutputToAnUnknownFeature)
@@ -8841,6 +8842,49 @@ func testBlockNodeOwnFlowWhereNodesAreNotPerformed(t *testing.T) {
 	err := calcUsageOutputInSource(t, src, "c", "result", 10000)
 	if err == nil || !strings.Contains(err.Error(), "the flow node p states of its own in a body is not executable") {
 		t.Errorf("expected p's own flow to be reported, got: %v", err)
+	}
+}
+
+// testBlockNodeOwnFlowThatNeverEnds: a cycle in the flow a block-declared node
+// states of its own spends the action's token-flow budget, run by a body statement
+// as it is, and reports that budget's error.
+func testBlockNodeOwnFlowThatNeverEnds(t *testing.T) {
+	src := `
+		package test {
+			action outer {
+				attribute x : Integer = 3;
+				first start;
+				then action pick {
+					if x > 0 {
+						action leg {
+							first a;
+							action a;
+							action b;
+							succession first a then b;
+							succession first b then a;
+						}
+					}
+				}
+				then done;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	ctx.maxActionSteps = 50
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "outer", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action outer not found")
+	}
+	exec, err := ctx.CreateActionExecutor(sym)
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+	err = exec.RunToCompletion()
+	if !errors.Is(err, ErrActionStepLimitExceeded) {
+		t.Fatalf("error = %v, want ErrActionStepLimitExceeded", err)
+	}
+	if !strings.Contains(err.Error(), MaxActionStepsEnvVar) {
+		t.Errorf("error %q does not name %s", err, MaxActionStepsEnvVar)
 	}
 }
 

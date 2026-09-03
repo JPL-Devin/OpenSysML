@@ -313,6 +313,45 @@ func TestBreakpointPausesOnEachLoopIteration(t *testing.T) {
 	}
 }
 
+// TestStepSpendsTheActionBudgetOnABlockNodesOwnFlow: one Step performs the flow a
+// block-declared node states of its own to its end, so a cycle in it spends the
+// action's token-flow budget within that step.
+func TestStepSpendsTheActionBudgetOnABlockNodesOwnFlow(t *testing.T) {
+	ctx, sym := loadAction(t, `package test {
+		private import ScalarValues::*;
+		action outer {
+			attribute x : Integer = 3;
+			first start;
+			then action pick {
+				if x > 0 {
+					action leg {
+						first a;
+						action a;
+						action b;
+						succession first a then b;
+						succession first b then a;
+					}
+				}
+			}
+			then done;
+		}
+	}`, "outer")
+	ctx.maxActionSteps = 50
+	exec, err := ctx.CreateActionExecutor(sym)
+	if err != nil {
+		t.Fatalf("CreateActionExecutor: %v", err)
+	}
+	for i := 0; i < 10; i++ {
+		err = exec.Step()
+		if err != nil {
+			break
+		}
+	}
+	if !errors.Is(err, ErrActionStepLimitExceeded) {
+		t.Fatalf("Step() = %v, want ErrActionStepLimitExceeded", err)
+	}
+}
+
 // A breakpoint on a step of the flow a block node owns pauses the run when a
 // token of that flow reaches it, with the tokens of both flows in view.
 func TestBreakpointPausesInsideABlockNodesOwnFlow(t *testing.T) {

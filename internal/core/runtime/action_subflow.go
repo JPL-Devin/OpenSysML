@@ -66,7 +66,7 @@ func (e *ActionExecutor) runSubflow(perf *actionFrame) error {
 				return err
 			}
 		}
-		if err := e.ctx.incrementStep(); err != nil {
+		if err := e.chargeActionStep(); err != nil {
 			return err
 		}
 		moved, err := e.stepSubflow(perf)

@@ -142,7 +142,9 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   general action's scope — before, only the derived action's own connectors were lowered and the
   inherited node ran with its input unbound. An action declared in a branch or loop body that
   states a flow of its own (`first`, successions, forks and joins among its nodes) now runs that
-  flow to completion in its frame; before, its `first` was reported as not executable. The
+  flow to completion in its frame, and its steps spend the action's own token-flow budget
+  (`OPENSYSML_MAX_ACTION_STEPS`, `ErrActionStepLimitExceeded`) as the enclosing flow's do;
+  before, its `first` was reported as not executable. The
   arguments of `action n = Callee(a = 3) { in a = ...; }` bind the node's pins before its own
   defaults are evaluated, so the default an argument replaces is never evaluated and one the
   node keeps (`in b = a * 10;`) reads the argument — before, the replaced default ran first and
