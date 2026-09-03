@@ -644,7 +644,9 @@ func (ctx *Context) chainMembers(sym *symbols.Symbol, scope *symbols.Scope) []sc
 }
 
 // replacedConstraintBodies returns the supertypes a constraint's chain leaves out:
-// those a redefinition stating its own body replaces, and what only they reach.
+// those a redefinition stating a condition of its own replaces, and what only they
+// reach. A body stating none — `;`, `{ }`, docs only — inherits the redefined
+// condition, as the pilot's getResultExpressionOf falls back to the inherited one.
 func (ctx *Context) replacedConstraintBodies(sym *symbols.Symbol, supers []*symbols.Symbol) map[*symbols.Symbol]bool {
 	if !isConstraintSymbol(sym) {
 		return nil
@@ -682,7 +684,8 @@ func (ctx *Context) replacedConstraintBodies(sym *symbols.Symbol, supers []*symb
 	return skipped
 }
 
-// statesCondition reports whether any of the members states a condition.
+// statesCondition reports whether any of the members states a condition: the
+// body owns a result expression, whatever else it declares.
 func statesCondition(members []ast.Node) bool {
 	for _, member := range members {
 		switch member.(type) {

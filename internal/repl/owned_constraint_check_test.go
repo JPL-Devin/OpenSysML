@@ -28,6 +28,10 @@ const ownedConstraintFixture = `package Power {
         require constraint :>> tooLittle;
         require constraint :>> typed;
     }
+    requirement def Braced :> Margin {
+        require constraint :>> tooLittle { }
+        require constraint :>> typed { doc /* still the shortfall rule */ }
+    }
 }
 `
 
@@ -52,9 +56,8 @@ func TestCheckNamedOwnedConstraint(t *testing.T) {
 	wantVerdict(t, s.CheckConstraint("Power::Margin"), VerdictUnresolved, "not a constraint")
 }
 
-// TestCheckRedefinedNamedOwnedConstraint checks that a redefinition stating its
-// own body replaces the redefined constraint's, whether written or typed, while
-// one stating none keeps it.
+// TestCheckRedefinedNamedOwnedConstraint checks that a redefinition stating a
+// condition replaces the redefined one's; one stating none (`;`, `{ }`) inherits it.
 func TestCheckRedefinedNamedOwnedConstraint(t *testing.T) {
 	s := loadSource(t, ownedConstraintFixture)
 
@@ -67,6 +70,12 @@ func TestCheckRedefinedNamedOwnedConstraint(t *testing.T) {
 		"Assertion evaluated to false: 300.0 >= 450.0")
 	wantVerdict(t, s.CheckConstraint("Power::Kept::typed"), VerdictFails,
 		"✗ Constraint Power::Kept::typed failed",
+		"Assertion evaluated to false: 300.0 >= 450.0")
+	wantVerdict(t, s.CheckConstraint("Power::Braced::tooLittle"), VerdictFails,
+		"✗ Constraint Power::Braced::tooLittle failed",
+		"Assertion evaluated to false: 300.0 >= 450.0")
+	wantVerdict(t, s.CheckConstraint("Power::Braced::typed"), VerdictFails,
+		"✗ Constraint Power::Braced::typed failed",
 		"Assertion evaluated to false: 300.0 >= 450.0")
 }
 
@@ -86,7 +95,8 @@ func TestCheckRequirementWithNamedOwnedConstraints(t *testing.T) {
 
 // TestCheckRequirementMasksRedefinedNamedConstraints checks that a requirement
 // requires what its redefining constraints state, not the inherited bodies
-// they replace — and still the inherited body a bodiless redefinition keeps.
+// they replace — and still the inherited body a redefinition stating no
+// condition (`;`, `{ }`, a doc-only body) keeps.
 func TestCheckRequirementMasksRedefinedNamedConstraints(t *testing.T) {
 	s := loadSource(t, ownedConstraintFixture)
 
@@ -94,5 +104,8 @@ func TestCheckRequirementMasksRedefinedNamedConstraints(t *testing.T) {
 		"✓ Requirement Power::Fixed satisfied")
 	wantVerdict(t, s.CheckRequirement("Power::Kept"), VerdictFails,
 		"✗ Requirement Power::Kept failed",
+		"Required condition evaluated to false: 300.0 >= 450.0")
+	wantVerdict(t, s.CheckRequirement("Power::Braced"), VerdictFails,
+		"✗ Requirement Power::Braced failed",
 		"Required condition evaluated to false: 300.0 >= 450.0")
 }
