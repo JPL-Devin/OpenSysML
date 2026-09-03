@@ -68,6 +68,9 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 	if err := checkExtensionNamespace(graph); err != nil {
 		return nil, err
 	}
+	if err := checkLiterals(graph); err != nil {
+		return nil, err
+	}
 	d := &decoder{
 		graph:            graph,
 		byIRI:            map[string]*element{},
@@ -117,6 +120,83 @@ func legacyNamespaceError(iri string) error {
 		What: fmt.Sprintf("the term <%s>", iri),
 		Note: fmt.Sprintf("it is in the pre-rename extension namespace %s, which this version does not read; convert the model from source again to write %s", rdf.LegacyExtension, rdf.OpenSysML),
 	}
+}
+
+// checkLiterals refuses a literal whose datatype its property does not take:
+// "3"^^xsd:integer or "x"@en is a different term from the string it spells.
+func checkLiterals(graph *rdf.Graph) error {
+	for _, triple := range graph.Triples() {
+		object := triple.Object
+		if !object.IsLiteral() || !mappingPredicate(triple.Predicate.Value) {
+			continue
+		}
+		if object.Lang != "" {
+			return literalError(triple, "a language-tagged literal is an rdf:langString, and no property this mapping reads takes one")
+		}
+		allowed := literalDatatypes(triple.Predicate.Value)
+		if !slices.Contains(allowed, object.Datatype) {
+			return literalError(triple, fmt.Sprintf("%s takes %s", curie(triple.Predicate.Value), datatypeList(allowed)))
+		}
+	}
+	return nil
+}
+
+func literalError(triple rdf.Triple, why string) error {
+	literal := rdf.String(triple.Object.Value).String()
+	switch {
+	case triple.Object.Lang != "":
+		literal += "@" + triple.Object.Lang
+	case triple.Object.Datatype != "":
+		literal += "^^" + curie(triple.Object.Datatype)
+	}
+	return &UnsupportedError{
+		What: fmt.Sprintf("the literal %s stated by <%s> %s", literal, triple.Subject.Value, curie(triple.Predicate.Value)),
+		Note: why,
+	}
+}
+
+func mappingPredicate(iri string) bool {
+	return strings.HasPrefix(iri, rdf.SysML) || strings.HasPrefix(iri, rdf.OpenSysML)
+}
+
+// literalDatatypes lists the datatypes a literal of the property may carry: a
+// string ("" is plain, sysx:Expression is notation text), plus what it counts.
+func literalDatatypes(predicate string) []string {
+	text := []string{"", rdf.XSD + "string", rdf.OpenSysML + dtExpression}
+	name := rdf.LocalName(predicate)
+	switch {
+	case name == xMemberIndex, name == xArgumentIndex, name == xEndIndex,
+		name == pLowerBound, name == pUpperBound:
+		return append(text, rdf.XSD+"integer")
+	case strings.HasPrefix(name, "is"), name == xHasBody, name == xDeclaredID:
+		return append(text, rdf.XSD+"boolean")
+	case name == pValue:
+		return append(text, rdf.XSD+"integer", rdf.XSD+"decimal", rdf.XSD+"boolean")
+	}
+	return text
+}
+
+// datatypeList words the datatypes literalDatatypes lists: the strings as one.
+func datatypeList(datatypes []string) string {
+	names := []string{"a string"}
+	for _, datatype := range datatypes {
+		if strings.HasPrefix(datatype, rdf.XSD) && datatype != rdf.XSD+"string" {
+			names = append(names, curie(datatype))
+		}
+	}
+	return strings.Join(names, " or ")
+}
+
+// curie abbreviates an IRI with the prefix the mapping writes it under.
+func curie(iri string) string {
+	for _, ns := range [...]struct{ prefix, iri string }{
+		{"sysml", rdf.SysML}, {"sysx", rdf.OpenSysML}, {"xsd", rdf.XSD},
+	} {
+		if strings.HasPrefix(iri, ns.iri) {
+			return ns.prefix + ":" + strings.TrimPrefix(iri, ns.iri)
+		}
+	}
+	return "<" + iri + ">"
 }
 
 // membership is one materialized membership of the graph: the namespace it

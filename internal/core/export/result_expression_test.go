@@ -268,6 +268,69 @@ func TestExpressionBodyParameterLiteralIsQuoted(t *testing.T) {
 	}
 }
 
+// A name is a string; a literal of any other datatype or with a language tag is
+// a different term, so a graph stating one as a parameter is refused with the
+// literal and the subject that states it named.
+func TestNonStringLiteralsAreRefused(t *testing.T) {
+	turtle := string(withoutTriples(t, convertFixture(t, "result_expressions"), "sysx:sourceText"))
+	const node = "sysx:bodyParameter expr:Results__Quoted___401_pin0 ;"
+	if !strings.Contains(turtle, node) {
+		t.Fatalf("expected the parameter node of the Quoted body in the graph:\n%s", turtle)
+	}
+	cases := []struct {
+		name, literal, want string
+	}{
+		{"typed", `sysx:bodyParameter "3"^^xsd:integer ;`, `the literal "3"^^xsd:integer stated by <urn:sysmlv2:element:Results__Quoted___401> sysx:bodyParameter: sysx:bodyParameter takes a string`},
+		{"language-tagged", `sysx:bodyParameter "eingabe"@de ;`, `the literal "eingabe"@de stated by <urn:sysmlv2:element:Results__Quoted___401> sysx:bodyParameter: a language-tagged literal is an rdf:langString`},
+		{"explicit string", `sysx:bodyParameter "the input"^^xsd:string ;`, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			graph := strings.Replace(turtle, node, tc.literal, 1)
+			back, err := export.Convert("m.ttl", []byte(graph), export.FormatTurtle, export.FormatSysML)
+			if tc.want == "" {
+				if err != nil {
+					t.Fatalf("an xsd:string literal is a string: %v", err)
+				}
+				if want := "{ in 'the input'; ('the input' + x) }"; !strings.Contains(string(back), want) {
+					t.Errorf("the notation rebuilt from the graph lacks %q:\n%s", want, back)
+				}
+				return
+			}
+			var unsupported *export.UnsupportedError
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("want an UnsupportedError for %s, got %v", tc.literal, err)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("the refusal should name the literal and its subject:\n got %v\nwant %s", err, tc.want)
+			}
+		})
+	}
+}
+
+// The check is decoder-wide: a typed literal where the metamodel has a String
+// is refused whichever property states it.
+func TestTypedLiteralNamesAreRefusedEverywhere(t *testing.T) {
+	turtle := string(convertFixture(t, "result_expressions"))
+	for _, tc := range []struct{ from, to, want string }{
+		{`sysml:declaredName "Quoted" ;`, `sysml:declaredName "42"^^xsd:integer ;`, "sysml:declaredName takes a string"},
+		{`sysml:operator "+" ;`, `sysml:operator "+"@en ;`, "a language-tagged literal is an rdf:langString"},
+		{`sysx:memberIndex "0"^^xsd:integer ;`, `sysx:memberIndex "0"^^xsd:decimal ;`, "sysx:memberIndex takes a string or xsd:integer"},
+	} {
+		if !strings.Contains(turtle, tc.from) {
+			t.Fatalf("expected %q in the graph:\n%s", tc.from, turtle)
+		}
+		_, err := export.Convert("m.ttl", []byte(strings.Replace(turtle, tc.from, tc.to, 1)), export.FormatTurtle, export.FormatSysML)
+		var unsupported *export.UnsupportedError
+		if !errors.As(err, &unsupported) {
+			t.Fatalf("want an UnsupportedError for %s, got %v", tc.to, err)
+		}
+		if !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("for %s:\n got %v\nwant %s", tc.to, err, tc.want)
+		}
+	}
+}
+
 // A body parameter is named; a graph stating one without a name is refused,
 // naming the parameter, since `in ;` declares nothing the result could read.
 func TestExpressionBodyParameterNeedsItsName(t *testing.T) {
