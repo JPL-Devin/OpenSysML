@@ -9,7 +9,7 @@ package NestedNamespaceImport {
         private import Pkg1::*;
         public import Pkg1::**;
         private import Pkg1::*::**;
-        part a : A;
-        part b : B;
+        part a : Pkg1::A;
+        part b : Pkg1::Pkg11::B;
     }
 }

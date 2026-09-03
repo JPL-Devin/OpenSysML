@@ -14,11 +14,12 @@
 [graph]
 fixture	model.sysml
 subjects	49
-triples	522
-bytes	25312
+triples	564
+bytes	29941
+triples.json	14
 triples.rdf	49
 triples.sysml	417
-triples.sysx	56
+triples.sysx	84
 
 [graph-load]
 accepted	yes
@@ -42,14 +43,14 @@ sysml:elementId	written=49	delivered=49	multi-valued=0/0
 sysml:isAbstract	written=1	delivered=1	multi-valued=0/0
 sysml:memberElement	written=20	delivered=20	multi-valued=0/0
 sysml:membershipOwningNamespace	written=20	delivered=20	multi-valued=0/0
-sysml:ownedFeature	written=6	delivered=4	multi-valued=0/2
-sysml:ownedFeatureMembership	written=6	delivered=4	multi-valued=0/2
-sysml:ownedMember	written=7	delivered=4	multi-valued=0/3
+sysml:ownedFeature	written=6	delivered=6	multi-valued=2/2
+sysml:ownedFeatureMembership	written=6	delivered=6	multi-valued=2/2
+sysml:ownedMember	written=7	delivered=7	multi-valued=3/3
 sysml:ownedMemberElement	written=20	delivered=20	multi-valued=0/0
 sysml:ownedMemberFeature	written=10	delivered=10	multi-valued=0/0
-sysml:ownedMembership	written=7	delivered=4	multi-valued=0/3
+sysml:ownedMembership	written=7	delivered=7	multi-valued=3/3
 sysml:ownedRelatedElement	written=20	delivered=20	multi-valued=0/0
-sysml:ownedRelationship	written=7	delivered=4	multi-valued=0/3
+sysml:ownedRelationship	written=7	delivered=7	multi-valued=3/3
 sysml:owner	written=40	delivered=40	multi-valued=0/0
 sysml:owningMembership	written=20	delivered=20	multi-valued=0/0
 sysml:owningNamespace	written=20	delivered=20	multi-valued=0/0
@@ -58,7 +59,7 @@ sysml:owningRelationship	written=20	delivered=20	multi-valued=0/0
 sysml:owningType	written=10	delivered=10	multi-valued=0/0
 sysml:qualifiedName	written=21	delivered=21	multi-valued=0/0
 sysml:referent	written=2	delivered=2	multi-valued=0/0
-sysml:specializes	written=3	delivered=2	multi-valued=0/1
+sysml:specializes	written=3	delivered=3	multi-valued=1/1
 sysml:targetFeature	written=2	delivered=2	multi-valued=0/0
 sysml:type	written=6	delivered=6	multi-valued=0/0
 sysml:upperBound	written=1	delivered=1	multi-valued=0/0
@@ -70,57 +71,59 @@ sysx:endIndex	written=2	delivered=0	multi-valued=0/0
 sysx:hasBody	written=18	delivered=0	multi-valued=0/0
 sysx:memberIndex	written=21	delivered=0	multi-valued=0/0
 sysx:relatedFeature	written=1	delivered=0	multi-valued=0/1
-sysx:sourceText	written=9	delivered=0	multi-valued=0/0
+sysx:sourceLanguage	written=1	delivered=0	multi-valued=0/0
+sysx:sourceTail	written=7	delivered=0	multi-valued=0/0
+sysx:sourceText	written=29	delivered=0	multi-valued=0/0
 
 [graph-load.elements]
-Interop	type=Package	listed=yes	direct=ok	properties=3/8	lost=sysml:ownedMember,sysml:ownedMembership,sysml:ownedRelationship,sysx:hasBody,sysx:memberIndex
-Interop__Battery	type=PartDefinition	listed=yes	direct=ok	properties=13/16	lost=sysml:specializes,sysx:hasBody,sysx:memberIndex
-Interop__Battery__capacity	type=AttributeUsage	listed=yes	direct=ok	properties=8/10	lost=sysx:hasBody,sysx:memberIndex
+Interop	type=Package	listed=yes	direct=ok	properties=6/11	lost=sysx:hasBody,sysx:memberIndex,sysx:sourceLanguage,sysx:sourceTail,sysx:sourceText
+Interop__Battery	type=PartDefinition	listed=yes	direct=ok	properties=14/18	lost=sysx:hasBody,sysx:memberIndex,sysx:sourceTail,sysx:sourceText
+Interop__Battery__capacity	type=AttributeUsage	listed=yes	direct=ok	properties=8/11	lost=sysx:hasBody,sysx:memberIndex,sysx:sourceText
 Interop__Battery__capacity_om	type=FeatureMembership	listed=yes	direct=ok	properties=9/9
 Interop__Battery__capacity_pvalue	type=LiteralRational	listed=yes	direct=ok	properties=2/3	lost=sysx:sourceText
 Interop__Battery_om	type=OwningMembership	listed=yes	direct=ok	properties=7/7
-Interop__Component	type=PartDefinition	listed=yes	direct=ok	properties=12/14	lost=sysx:hasBody,sysx:memberIndex
-Interop__Component__mass	type=AttributeUsage	listed=yes	direct=ok	properties=8/10	lost=sysx:hasBody,sysx:memberIndex
+Interop__Component	type=PartDefinition	listed=yes	direct=ok	properties=12/16	lost=sysx:hasBody,sysx:memberIndex,sysx:sourceTail,sysx:sourceText
+Interop__Component__mass	type=AttributeUsage	listed=yes	direct=ok	properties=8/11	lost=sysx:hasBody,sysx:memberIndex,sysx:sourceText
 Interop__Component__mass_om	type=FeatureMembership	listed=yes	direct=ok	properties=9/9
 Interop__Component__mass_pvalue	type=LiteralRational	listed=yes	direct=ok	properties=2/3	lost=sysx:sourceText
 Interop__Component_om	type=OwningMembership	listed=yes	direct=ok	properties=7/7
-Interop__GroundStation	type=PartDefinition	listed=yes	direct=ok	properties=12/14	lost=sysx:hasBody,sysx:memberIndex
-Interop__GroundStation__uplink	type=PortUsage	listed=yes	direct=ok	properties=8/10	lost=sysx:hasBody,sysx:memberIndex
+Interop__GroundStation	type=PartDefinition	listed=yes	direct=ok	properties=12/16	lost=sysx:hasBody,sysx:memberIndex,sysx:sourceTail,sysx:sourceText
+Interop__GroundStation__uplink	type=PortUsage	listed=yes	direct=ok	properties=8/11	lost=sysx:hasBody,sysx:memberIndex,sysx:sourceText
 Interop__GroundStation__uplink_om	type=FeatureMembership	listed=yes	direct=ok	properties=9/9
 Interop__GroundStation_om	type=OwningMembership	listed=yes	direct=ok	properties=7/7
-Interop__Mission	type=PartDefinition	listed=yes	direct=ok	properties=7/14	lost=sysml:ownedFeature,sysml:ownedFeatureMembership,sysml:ownedMember,sysml:ownedMembership,sysml:ownedRelationship,sysx:hasBody,sysx:memberIndex
+Interop__Mission	type=PartDefinition	listed=yes	direct=ok	properties=12/16	lost=sysx:hasBody,sysx:memberIndex,sysx:sourceTail,sysx:sourceText
 Interop__Mission___402	type=ConnectionUsage	listed=yes	direct=ok	properties=6/11	lost=sysx:declaredKeyword,sysx:endForm,sysx:memberIndex,sysx:relatedFeature,sysx:sourceText
 Interop__Mission___402_om	type=FeatureMembership	listed=yes	direct=ok	properties=9/9
 Interop__Mission___402_pend0	type=FeatureChainExpression	listed=yes	direct=ok	properties=3/5	lost=sysx:endIndex,sysx:sourceText
 Interop__Mission___402_pend0_pa0	type=FeatureReferenceExpression	listed=yes	direct=ok	properties=2/4	lost=sysx:argumentIndex,sysx:sourceText
 Interop__Mission___402_pend1	type=FeatureChainExpression	listed=yes	direct=ok	properties=3/5	lost=sysx:endIndex,sysx:sourceText
 Interop__Mission___402_pend1_pa0	type=FeatureReferenceExpression	listed=yes	direct=ok	properties=2/4	lost=sysx:argumentIndex,sysx:sourceText
-Interop__Mission__rover	type=PartUsage	listed=yes	direct=ok	properties=8/10	lost=sysx:hasBody,sysx:memberIndex
+Interop__Mission__rover	type=PartUsage	listed=yes	direct=ok	properties=8/11	lost=sysx:hasBody,sysx:memberIndex,sysx:sourceText
 Interop__Mission__rover_om	type=FeatureMembership	listed=yes	direct=ok	properties=9/9
-Interop__Mission__station	type=PartUsage	listed=yes	direct=ok	properties=8/10	lost=sysx:hasBody,sysx:memberIndex
+Interop__Mission__station	type=PartUsage	listed=yes	direct=ok	properties=8/11	lost=sysx:hasBody,sysx:memberIndex,sysx:sourceText
 Interop__Mission__station_om	type=FeatureMembership	listed=yes	direct=ok	properties=9/9
 Interop__Mission_om	type=OwningMembership	listed=yes	direct=ok	properties=7/7
-Interop__Powered	type=PartDefinition	listed=yes	direct=ok	properties=7/9	lost=sysx:hasBody,sysx:memberIndex
+Interop__Powered	type=PartDefinition	listed=yes	direct=ok	properties=7/10	lost=sysx:hasBody,sysx:memberIndex,sysx:sourceText
 Interop__Powered_om	type=OwningMembership	listed=yes	direct=ok	properties=7/7
-Interop__Rover	type=PartDefinition	listed=yes	direct=ok	properties=8/15	lost=sysml:ownedFeature,sysml:ownedFeatureMembership,sysml:ownedMember,sysml:ownedMembership,sysml:ownedRelationship,sysx:hasBody,sysx:memberIndex
-Interop__Rover__battery	type=PartUsage	listed=yes	direct=ok	properties=8/10	lost=sysx:hasBody,sysx:memberIndex
+Interop__Rover	type=PartDefinition	listed=yes	direct=ok	properties=13/17	lost=sysx:hasBody,sysx:memberIndex,sysx:sourceTail,sysx:sourceText
+Interop__Rover__battery	type=PartUsage	listed=yes	direct=ok	properties=8/11	lost=sysx:hasBody,sysx:memberIndex,sysx:sourceText
 Interop__Rover__battery_om	type=FeatureMembership	listed=yes	direct=ok	properties=9/9
-Interop__Rover__telemetry	type=PortUsage	listed=yes	direct=ok	properties=8/10	lost=sysx:hasBody,sysx:memberIndex
+Interop__Rover__telemetry	type=PortUsage	listed=yes	direct=ok	properties=8/11	lost=sysx:hasBody,sysx:memberIndex,sysx:sourceText
 Interop__Rover__telemetry_om	type=FeatureMembership	listed=yes	direct=ok	properties=9/9
-Interop__Rover__wheels	type=PartUsage	listed=yes	direct=ok	properties=9/11	lost=sysx:hasBody,sysx:memberIndex
+Interop__Rover__wheels	type=PartUsage	listed=yes	direct=ok	properties=9/12	lost=sysx:hasBody,sysx:memberIndex,sysx:sourceText
 Interop__Rover__wheels_om	type=FeatureMembership	listed=yes	direct=ok	properties=9/9
 Interop__Rover__wheels_pupperBound	type=LiteralInteger	listed=yes	direct=ok	properties=2/3	lost=sysx:sourceText
 Interop__Rover_om	type=OwningMembership	listed=yes	direct=ok	properties=7/7
-Interop__TelemetryPort	type=PortDefinition	listed=yes	direct=ok	properties=7/9	lost=sysx:hasBody,sysx:memberIndex
+Interop__TelemetryPort	type=PortDefinition	listed=yes	direct=ok	properties=7/10	lost=sysx:hasBody,sysx:memberIndex,sysx:sourceText
 Interop__TelemetryPort_om	type=OwningMembership	listed=yes	direct=ok	properties=7/7
-Interop__Wheel	type=PartDefinition	listed=yes	direct=ok	properties=14/16	lost=sysx:hasBody,sysx:memberIndex
-Interop__Wheel__diameter	type=AttributeUsage	listed=yes	direct=ok	properties=8/10	lost=sysx:hasBody,sysx:memberIndex
+Interop__Wheel	type=PartDefinition	listed=yes	direct=ok	properties=14/18	lost=sysx:hasBody,sysx:memberIndex,sysx:sourceTail,sysx:sourceText
+Interop__Wheel__diameter	type=AttributeUsage	listed=yes	direct=ok	properties=8/11	lost=sysx:hasBody,sysx:memberIndex,sysx:sourceText
 Interop__Wheel__diameter_om	type=FeatureMembership	listed=yes	direct=ok	properties=9/9
 Interop__Wheel__diameter_pvalue	type=LiteralRational	listed=yes	direct=ok	properties=2/3	lost=sysx:sourceText
 Interop__Wheel_om	type=OwningMembership	listed=yes	direct=ok	properties=7/7
-Interop___400	type=Documentation	listed=yes	direct=ok	properties=7/8	lost=sysx:memberIndex
+Interop___400	type=Documentation	listed=yes	direct=ok	properties=7/9	lost=sysx:memberIndex,sysx:sourceText
 Interop___400_om	type=OwningMembership	listed=yes	direct=ok	properties=7/7
-Interop___409	type=Comment	listed=yes	direct=ok	properties=8/9	lost=sysx:memberIndex
+Interop___409	type=Comment	listed=yes	direct=ok	properties=8/10	lost=sysx:memberIndex,sysx:sourceText
 Interop___409_om	type=OwningMembership	listed=yes	direct=ok	properties=7/7
 
 [json-commit]
@@ -194,10 +197,10 @@ Interop___400	type=Documentation	listed=yes	direct=ok	properties=4/4
 Interop___409	type=Comment	listed=yes	direct=ok	properties=5/5
 
 [findings]
-graph-load: 49 of 49 elements listed, 355 of 424 properties delivered
+graph-load: 49 of 49 elements listed, 369 of 452 properties delivered
 json-commit: 33 of 33 elements listed, 158 of 158 properties delivered
-graph-load: 8 properties are in the sysx: extension namespace and are dropped unread — extractModelElementToJson ignores every predicate outside the sysml: vocabulary and the JSON annotation namespace (sysx:argumentIndex, sysx:declaredKeyword, sysx:endForm, sysx:endIndex, sysx:hasBody, sysx:memberIndex, sysx:relatedFeature, sysx:sourceText)
-graph-load: 0 of 15 multi-valued properties are delivered (sysml:ownedFeature on 0/2, sysml:ownedFeatureMembership on 0/2, sysml:ownedMember on 0/3, sysml:ownedMembership on 0/3, sysml:ownedRelationship on 0/3, sysml:specializes on 0/1, sysx:relatedFeature on 0/1); a standard predicate with several values is skipped entirely unless a JSON annotation supplies the array
+graph-load: 10 properties are in the sysx: extension namespace and are dropped unread — extractModelElementToJson ignores every predicate outside the sysml: vocabulary and the JSON annotation namespace (sysx:argumentIndex, sysx:declaredKeyword, sysx:endForm, sysx:endIndex, sysx:hasBody, sysx:memberIndex, sysx:relatedFeature, sysx:sourceLanguage, sysx:sourceTail, sysx:sourceText)
+graph-load: 14 of 15 multi-valued properties are delivered (sysml:ownedFeature on 2/2, sysml:ownedFeatureMembership on 2/2, sysml:ownedMember on 3/3, sysml:ownedMembership on 3/3, sysml:ownedRelationship on 3/3, sysml:specializes on 1/1, sysx:relatedFeature on 0/1); a standard predicate with several values is skipped entirely unless a JSON annotation supplies the array
 graph-load: the roots endpoint reports 9 of 49 elements as roots (9 have no owner in the model); it filters on sysml:owner and sysml:owningRelatedElement
 json-commit: the roots endpoint reports 1 of 33 elements as roots, 1 in the payload
 both: the element listing answered every element it has in 1 response(s) at pageSize=10 — the service accepts pageAfter/pageBefore/pageSize and ignores them

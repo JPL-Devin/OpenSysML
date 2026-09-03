@@ -213,6 +213,12 @@ type Reference struct {
 	// Condition is set when QN is a name inside an element-filter condition, which
 	// its own namespace's filters do not restrict (see InCondition).
 	Condition bool
+	// Invocation is set when QN is the name an invocation calls, which overload
+	// selection may resolve to one of several declarations (see ResolveInvocationName).
+	Invocation *ast.InvocationExpr
+	// Performed is set when Invocation is the value of an action usage, which
+	// runs the action it names rather than evaluating a calc of that name.
+	Performed bool
 }
 
 // ResolveReference resolves a single name occurrence, honoring both the
@@ -254,6 +260,9 @@ func (r *Resolver) ResolveReference(ref Reference) (*symbols.Symbol, bool) {
 	if ref.Redefines {
 		r.resolveRedefinition(ref.Scope, ref.QN, ref.Referrer)
 		return r.PartSymbol(ref.QN, len(ref.QN.Parts)-1)
+	}
+	if ref.Invocation != nil {
+		return r.ResolveInvocationName(ref.Scope, ref.QN)
 	}
 	return r.resolveQualified(ref.Scope, ref.QN, hide)
 }

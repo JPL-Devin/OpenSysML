@@ -145,11 +145,12 @@ func newActionExecutorForOccurrence(
 
 // performanceFeatures lists the graph's attributes, then the inherited ones none
 // redefines with their declaring scope; library-contributed features stay behind the seam.
+// An attribute valued by none of its own takes the default of the one it redefines.
 func (e *ActionExecutor) performanceFeatures() []lower.Attribute {
 	features := slices.Clone(e.graph.Attributes)
-	declared := make(map[string]bool, len(features))
-	for _, attr := range features {
-		declared[attr.Name] = true
+	declared := make(map[string]int, len(features))
+	for i, attr := range features {
+		declared[attr.Name] = i
 	}
 	for _, member := range e.ctx.model.MembersOf(e.action) {
 		usage, ok := member.Decl.(*ast.Usage)
@@ -160,13 +161,18 @@ func (e *ActionExecutor) performanceFeatures() []lower.Attribute {
 		if name == "" {
 			name = member.Name
 		}
-		if name == "" || declared[name] {
+		if name == "" {
 			continue
 		}
-		declared[name] = true
-		features = append(features, lower.Attribute{
-			Name: name, Value: usage.Value, Node: usage, Scope: member.OwnerScope,
-		})
+		if i, ok := declared[name]; ok {
+			if features[i].Value == nil && features[i].Node == ast.Node(usage) {
+				features[i].Value, features[i].Scope = e.ctx.model.ParameterDefault(member)
+			}
+			continue
+		}
+		declared[name] = len(features)
+		value, scope := e.ctx.model.ParameterDefault(member)
+		features = append(features, lower.Attribute{Name: name, Value: value, Node: usage, Scope: scope})
 	}
 	return features
 }

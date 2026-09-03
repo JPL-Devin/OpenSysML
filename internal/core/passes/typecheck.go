@@ -163,6 +163,8 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 		tc.expr.checkAssignmentValue(scope, m)
 	case *ast.ActionExecutionNode:
 		tc.expr.infer(scope, m.Expression)
+	case *ast.PerformActionNode:
+		tc.expr.checkPerform(scope, m)
 	case *ast.SubjectMember:
 		tc.checkSubjectMember(scope, m)
 	default:

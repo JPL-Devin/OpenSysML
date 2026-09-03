@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -17,7 +18,10 @@ elmt:SendNew
     sysml:ownedMembership elmt:SendNew__Telemetry_om, elmt:SendNew__Command_om, elmt:SendNew__Radio_om, elmt:SendNew__Station_om, elmt:SendNew__Downlink_om ;
     sysml:ownedRelationship elmt:SendNew__Telemetry_om, elmt:SendNew__Command_om, elmt:SendNew__Radio_om, elmt:SendNew__Station_om, elmt:SendNew__Downlink_om ;
     sysx:sourceText "package SendNew {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"SendNew__Telemetry\"},{\"@id\":\"SendNew__Command\"},{\"@id\":\"SendNew__Radio\"},{\"@id\":\"SendNew__Station\"},{\"@id\":\"SendNew__Downlink\"}]" ;
+    json:ownedMembership "[{\"@id\":\"SendNew__Telemetry_om\"},{\"@id\":\"SendNew__Command_om\"},{\"@id\":\"SendNew__Radio_om\"},{\"@id\":\"SendNew__Station_om\"},{\"@id\":\"SendNew__Downlink_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"SendNew__Telemetry_om\"},{\"@id\":\"SendNew__Command_om\"},{\"@id\":\"SendNew__Radio_om\"},{\"@id\":\"SendNew__Station_om\"},{\"@id\":\"SendNew__Downlink_om\"}]" .
 
 elmt:SendNew__Telemetry
     a sysml:ItemDefinition ;
@@ -159,7 +163,12 @@ elmt:SendNew__Downlink
     sysml:ownedFeature elmt:SendNew__Downlink__antenna, elmt:SendNew__Downlink__ground, elmt:SendNew__Downlink___402, elmt:SendNew__Downlink___403 ;
     sysml:ownedFeatureMembership elmt:SendNew__Downlink__antenna_om, elmt:SendNew__Downlink__ground_om, elmt:SendNew__Downlink___402_om, elmt:SendNew__Downlink___403_om ;
     sysx:sourceText "    action def Downlink {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"SendNew__Downlink__antenna\"},{\"@id\":\"SendNew__Downlink__ground\"},{\"@id\":\"SendNew__Downlink___402\"},{\"@id\":\"SendNew__Downlink___403\"}]" ;
+    json:ownedMembership "[{\"@id\":\"SendNew__Downlink__antenna_om\"},{\"@id\":\"SendNew__Downlink__ground_om\"},{\"@id\":\"SendNew__Downlink___402_om\"},{\"@id\":\"SendNew__Downlink___403_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"SendNew__Downlink__antenna_om\"},{\"@id\":\"SendNew__Downlink__ground_om\"},{\"@id\":\"SendNew__Downlink___402_om\"},{\"@id\":\"SendNew__Downlink___403_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"SendNew__Downlink__antenna\"},{\"@id\":\"SendNew__Downlink__ground\"},{\"@id\":\"SendNew__Downlink___402\"},{\"@id\":\"SendNew__Downlink___403\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"SendNew__Downlink__antenna_om\"},{\"@id\":\"SendNew__Downlink__ground_om\"},{\"@id\":\"SendNew__Downlink___402_om\"},{\"@id\":\"SendNew__Downlink___403_om\"}]" .
 
 elmt:SendNew__Downlink_om
     a sysml:OwningMembership ;

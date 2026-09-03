@@ -39,6 +39,23 @@ func TestStateOverTheExhibitedMachineAttachesToIt(t *testing.T) {
 	wants(t, run(t, s, "%features Fleet::rover"), `log = "WM"`)
 }
 
+// An exhibited usage stating its own body under a definition's type is the
+// object's machine of that definition too: naming the definition attaches to it.
+func TestStateOverTheDefinitionOfABodyStatingUsageAttachesToIt(t *testing.T) {
+	s := loadFixture(t, "testdata/typed_body_machine.sysml")
+	run(t, s, "%instantiate Fleet::tank")
+	wants(t, run(t, s, "%features Fleet::tank.m"), "level = 10", `log = "W"`)
+
+	got := run(t, s, "%state Fleet::Mission Fleet::tank")
+	wants(t, got, `Debugging state machine "m" exhibited by object #`, "note:",
+		`already exhibits "Fleet::Mission"`, "attaches to that running machine", "`%state Fleet::tank`")
+	if strings.Contains(got, "Started state machine executor") {
+		t.Errorf("a second performance of the exhibited machine was started:\n%s", got)
+	}
+	wants(t, run(t, s, "%state Fleet::Mission"), `Debugging state machine "m" exhibited by object #`, `of "Fleet::tank"`)
+	wants(t, run(t, s, "%features Fleet::tank.m"), "level = 10", `log = "W"`)
+}
+
 // A machine the object merely performs is still a detached run, as before.
 func TestStateOverAPerformedMachineStillStartsIt(t *testing.T) {
 	s := loadFixture(t, "testdata/performed_machine.sysml")
