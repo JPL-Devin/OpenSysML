@@ -812,6 +812,29 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 			skip = append(skip, ast.RelReferences)
 		}
 	}
+	// The multiplicity part (`[1] ordered nonunique`) qualifies the type it
+	// follows, so it goes with the typing clause and ahead of any further
+	// specialization; with no type it follows the name (`x[2] redefines y`),
+	// and with neither it closes the head (`:>> y[2]`).
+	multPart := d.multiplicityText(el)
+	if d.boolOf(el, rdf.SysML+"isOrdered") {
+		multPart += " ordered"
+	}
+	if d.boolOf(el, rdf.SysML+"isNonunique") {
+		multPart += " nonunique"
+	}
+	typed, err := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelTyping])
+	if err != nil {
+		return "", err
+	}
+	typedPart := ""
+	switch {
+	case len(typed) > 0:
+		typedPart, multPart = multPart, ""
+	case len(identWords) > 0 && multPart != "":
+		identWords[len(identWords)-1] += multPart
+		multPart = ""
+	}
 	words = append(words, identWords...)
 	// The accept shorthand writes its parameter into the head, ahead of the
 	// `via` clause the parent's relationships supply.
@@ -828,24 +851,6 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		if trigger, ok := d.stringOf(accept, rdf.SysML+pValue); ok {
 			words = append(words, trigger)
 		}
-	}
-	// The multiplicity part (`[1] ordered nonunique`) qualifies the type it
-	// follows, so it goes with the typing clause and ahead of any further
-	// specialization; with no type it follows the name.
-	multPart := d.multiplicityText(el)
-	if d.boolOf(el, rdf.SysML+"isOrdered") {
-		multPart += " ordered"
-	}
-	if d.boolOf(el, rdf.SysML+"isNonunique") {
-		multPart += " nonunique"
-	}
-	typed, err := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelTyping])
-	if err != nil {
-		return "", err
-	}
-	typedPart := ""
-	if len(typed) > 0 {
-		typedPart, multPart = multPart, ""
 	}
 	// `metadata M about x;` writes its typing bare (SysML.xtext MetadataUsageDeclaration).
 	if kind == ast.UsageMetadata && len(identWords) == 0 && len(typed) == 1 {
@@ -978,11 +983,13 @@ func (d *decoder) importHead(el *element) (string, error) {
 		return "", d.missing(el, sysmlPrefix+pImportedNamespace, "an import names the namespace it imports")
 	}
 	imported = qualifiedNameText(imported)
-	switch {
-	case d.boolOf(el, rdf.OpenSysML+xRecursive):
-		imported += "::**"
-	case d.boolOf(el, rdf.OpenSysML+xNamespaceImport):
+	// `P::*::**` imports the members of P recursively; `P::**` imports P itself
+	// and, recursively, its members. Both flags may hold at once.
+	if d.boolOf(el, rdf.OpenSysML+xNamespaceImport) {
 		imported += "::*"
+	}
+	if d.boolOf(el, rdf.OpenSysML+xRecursive) {
+		imported += "::**"
 	}
 	words = append(words, imported)
 	if filter, ok := d.stringOf(el, rdf.OpenSysML+xFilter); ok {

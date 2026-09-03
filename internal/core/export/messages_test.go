@@ -24,13 +24,6 @@ func TestUnsupportedConversionMessages(t *testing.T) {
 		name: "result_expression",
 		src:  "package P {\n\tcalc def C {\n\t\tin x : Real;\n\t\tx + 1\n\t}\n}",
 		want: []string{"cannot convert the operator expr at m.sysml:4:3", remedy},
-	}, {
-		// A succession naming both ends is written back as the two-name form,
-		// which the parser reads only as basic names, so a quoted end is
-		// refused rather than written as notation it rejects.
-		name: "succession_naming_a_quoted_end",
-		src:  "package P {\n\taction Move {\n\t\taction a;\n\t\tthen 'a b';\n\t\taction 'a b';\n\t}\n}",
-		want: []string{"cannot convert the succession at m.sysml:4:3", "whose name is not a basic name"},
 	}}
 
 	for _, tc := range cases {

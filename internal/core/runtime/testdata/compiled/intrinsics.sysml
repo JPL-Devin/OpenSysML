@@ -40,8 +40,8 @@ package test {
 	calc def IntMin { in a : Integer; in b : Integer; return : Integer = IntegerFunctions::min(a, b); }
 	calc def NumAbs { in k : Integer; return : Integer = NumericalFunctions::abs(k); }
 	calc def NumMax { in a : Integer; in b : Integer; return : Integer = NumericalFunctions::max(a, b); }
-	calc def IntSum { in k : Integer; return : Integer = sum(k); }
-	calc def IntProduct { in k : Integer; return : Integer = product(k); }
+	calc def IntSum { in k : Integer; return : Integer = IntegerFunctions::sum(k); }
+	calc def IntProduct { in k : Integer; return : Integer = IntegerFunctions::product(k); }
 
 	// The Real-only declarations refuse an Integer argument as the evaluator does.
 	calc def RealSqrtOfInt { in k : Integer; return : Real = RealFunctions::sqrt(k); }

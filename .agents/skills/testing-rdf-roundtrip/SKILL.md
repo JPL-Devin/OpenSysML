@@ -32,18 +32,27 @@ line's trailing `;` into ` .`:
 
 ```python
 def strip(src, preds, dst):
-    out = []
-    for line in open(src):
-        s = line.strip()
+    out, lines, i = [], open(src).read().split('\n'), 0
+    while i < len(lines):
+        s = lines[i].strip()
         if any((p + " ") in s for p in preds):
-            if s.endswith('.') and out:
-                prev = out[-1].rstrip()
-                if prev.endswith(';'):
-                    out[-1] = prev[:-1].rstrip() + ' .\n'
+            j = i
+            if s.count('"""') % 2 == 1:          # multi-line """...""" literal
+                j += 1
+                while '"""' not in lines[j]:
+                    j += 1
+            if lines[j].rstrip().endswith('.') and out and out[-1].rstrip().endswith(';'):
+                out[-1] = out[-1].rstrip()[:-1].rstrip() + ' .'
+            i = j + 1
             continue
-        out.append(line)
-    open(dst, 'w').write(''.join(out))
+        out.append(lines[i]); i += 1
+    open(dst, 'w').write('\n'.join(out))
 ```
+
+The multi-line branch matters for **corpus** files: any head whose source spans lines (`connector x from\n  a to b;`,
+`flow a.x\n  to b.y { /* doc */ }`) is written as a `"""..."""` literal, and a single-line filter leaves
+its tail behind — the writer then fails with `turtle: line N: unrecognized term`, which looks like a
+product bug but is the harness.
 
 Pass fully-prefixed predicate names — `strip("hop1.ttl", ["sysx:sourceText"], "stripped.ttl")` —
 since not every load-bearing predicate lives in the `sysx:` namespace (the `sysml:isVariant` /
@@ -68,6 +77,27 @@ back-conversion differs from the source-text-backed one on the corpus files.
 
 Pass criterion: the source-text-free back-conversion is **byte-identical** to the source-text-backed
 one, and re-encoding it gives a `.ttl` byte-identical to `hop1.ttl`.
+
+For corpus files compare `hop1.ttl` and `hop2.ttl` as **triple sets**, not bytes (`pip install rdflib`,
+parse both with `rdflib.Graph().parse(p, format='turtle')`, diff the sets), and report
+`sysx:sourceText` differences separately from structural ones: the writer normalises whitespace and
+drops optional keywords (`connector x from a to b` → `connector x a to b`), so sourceText will legally
+differ on reformatted heads while every structural triple must still match.
+
+### Heads that are *not* expected to survive without sourceText (as of this writing)
+
+- **Any end-binding head whose source spans lines.** `endForm` in `internal/core/export/end_forms.go`
+  is only emitted when rebuilding the head reproduces the text *exactly*, so a line break inside
+  `connect a\n to b;` or `flow x\n to y;` means no `sysx:endForm`, and the sourceText-free hop is
+  refused with `it has no sysx:endForm, and the ends it relates are written in the form the head
+  states`. Corpus files with wrapped heads (e.g. `sysml-validation/03-Function-based Behavior/3a-…`)
+  therefore fail the stripped trip even when the mapping is otherwise correct — check the source text
+  for a newline before treating the refusal as a regression.
+- **Named satisfy heads** `satisfy requirement req1 : Req1 by system;` come back as
+  `satisfy req1 : Req1 by system;` (the `requirement` keyword is dropped, and the parser then reads
+  `req1` as the *satisfied* requirement instead of a new one — `unresolved reference: req1`). Minimal
+  fixture: `part ctx { satisfy requirement req1 : Req1 by system; }`. Affects
+  `sysml-examples/Requirements Examples/RequirementDerivationExample.sysml`.
 
 ## Negative controls that prove each predicate is load-bearing
 
@@ -128,6 +158,24 @@ grep -rn "targetMember" internal/core/export/testdata/ internal/core/export/*_te
 ```
 
 If it is still absent, say so — the predicate is decoder-only and its encoder branch is untested.
+
+## Flag / import / succession-end predicates (fixtures under `internal/core/export/testdata/convert/`)
+
+Each of these degrades visibly (exit 0, judge by text) or is refused when stripped together with
+`sysx:sourceText`; if the notation comes back unchanged the predicate has become decorative:
+
+| Fixture | Strip | Working behaviour |
+|---|---|---|
+| `ref_subsets.sysml` | `sysml:isReference` | `ref x subsets y;` → `x subsets y;` |
+| `composite_multiplicity.kerml` | `sysml:isComposite` | `composite frontWheel[2] redefines w` → `frontWheel[2] redefines w` |
+| `end_prefix_metadata.sysml` | `sysml:isEnd` | `end #derive r1_1 : Req1_1;` → `#derive r1_1 : Req1_1;` |
+| `nested_namespace_import.sysml` | `sysx:isNamespaceImport` | `import Pkg1::*;` → `import Pkg1;`, `Pkg1::*::**` → `Pkg1::**` |
+| `nested_namespace_import.sysml` | `sysx:isRecursive` | `import Pkg1::**;` → `import Pkg1;` |
+| `quoted_succession_ends.sysml` | `sysml:targetFeature` | refusal: `does not name both of the members it sequences` |
+| `quoted_succession_ends.sysml` | `sysml:sourceFeature` | refusal: `it has no sysml:sourceFeature, and a succession written as `then` …` |
+
+Quoted succession ends are IRIs (`sysml:targetFeature elmt:…__generate_20torque`), except `start`/`done`,
+which stay string literals because they name no element.
 
 ## The `variant` / `include` prefixes (formerly normalized away)
 
