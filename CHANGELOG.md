@@ -279,6 +279,16 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   not of the usage — use %instantiate Fleet::rover to create the usage's object, or name
   Fleet::Rover to address it`. Asking for a definition when only usages typed by it have
   objects names those usages the same way; with no related object the plain hint stands.
+- **An object a second `%instantiate` superseded is no longer addressable by id.** After
+  `%instantiate Fleet::rover` twice, the prompt said `object #1 is no longer named`, yet
+  `%features #1`, `%invoke #1 bump` and `%state #1` still reached it, since the runtime keeps the
+  object until the next rebuild. An id now denotes only an object the session holds: one it
+  named, or one a materialized feature of such an object holds, members of a multi-valued part
+  included — checked without materializing anything. The superseded object is `no object #1 in
+  this session: it was superseded, and nothing the session names reaches it`. A debugging
+  session over that object ends with the `%instantiate` that superseded it, with a `note:` saying
+  so, and the next `%step` or `%advance` repeats why; a session over an object another name
+  denotes is untouched.
 
 - **A `then` written after a flow, a binding or a standalone succession comes back from Turtle.**
   The parser sequences a positional `then` from the nearest preceding member that is not itself
