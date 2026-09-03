@@ -3,6 +3,8 @@ package grpc
 import (
 	"context"
 	"os"
+	"slices"
+	"strings"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -17,10 +19,19 @@ const telescopeFixture = "../core/docrender/testdata/telescope_report.sysml"
 // telescopeGolden is the Markdown the fixture's MassReport renders to.
 const telescopeGolden = "../core/docrender/testdata/telescope_report.golden.md"
 
+// defaultedFixture declares queries whose parameters carry defaults.
+const defaultedFixture = "../core/docrender/testdata/defaulted_queries.sysml"
+
 // parseTelescope loads the telescope fixture into a fresh service.
 func parseTelescope(t *testing.T, srv *Service) string {
 	t.Helper()
-	content, err := os.ReadFile(telescopeFixture)
+	return parseFixture(t, srv, telescopeFixture)
+}
+
+// parseFixture loads a fixture file into a fresh service.
+func parseFixture(t *testing.T, srv *Service, path string) string {
+	t.Helper()
+	content, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}
@@ -125,6 +136,39 @@ func TestRunDocumentQueryBindsScalars(t *testing.T) {
 	}
 	if len(names) != 2 || names[0] != "mount" || names[1] != "segmentControl" {
 		t.Fatalf("names = %v, want [mount segmentControl]", names)
+	}
+}
+
+func TestRunDocumentQueryUsesParameterDefaults(t *testing.T) {
+	srv := mustNewService(t, 10)
+	hash := parseFixture(t, srv, defaultedFixture)
+
+	namesOf := func(t *testing.T, query string, bindings ...*pb.DocumentQueryBinding) []string {
+		t.Helper()
+		resp, err := srv.RunDocumentQuery(context.Background(), &pb.RunDocumentQueryRequest{
+			ModelHash: hash, QueryId: query, Bindings: bindings,
+		})
+		if err != nil {
+			t.Fatalf("RunDocumentQuery %s failed: %v", query, err)
+		}
+		names := make([]string, 0, len(resp.Rows))
+		for _, row := range resp.Rows {
+			names = append(names, stringCell(t, row.Cells[0]))
+		}
+		return names
+	}
+
+	if got := namesOf(t, "Observatory::HeavySubsystems"); !slices.Equal(got, []string{"mount", "segmentControl"}) {
+		t.Errorf("defaulted names = %v, want [mount segmentControl]", got)
+	}
+	if got := namesOf(t, "Observatory::LightSubsystems"); !slices.Equal(got, []string{"mount", "optics", "segmentControl"}) {
+		t.Errorf("redefined default names = %v, want [mount optics segmentControl]", got)
+	}
+	got := namesOf(t, "Observatory::HeavySubsystems",
+		binding("root", element("Observatory::instruments")),
+		binding("threshold", &pb.DocumentValue{Kind: &pb.DocumentValue_StringValue{StringValue: "1"}}))
+	if !slices.Equal(got, []string{"spectrograph"}) {
+		t.Errorf("explicitly bound names = %v, want [spectrograph]", got)
 	}
 }
 
@@ -280,6 +324,27 @@ func TestRenderDocumentMatchesTheRendererGolden(t *testing.T) {
 	}
 	if resp.Markdown != string(golden) {
 		t.Errorf("markdown differs from the renderer's golden:\n%s", resp.Markdown)
+	}
+}
+
+func TestRenderDocumentUsesParameterDefaults(t *testing.T) {
+	srv := mustNewService(t, 10)
+	hash := parseFixture(t, srv, defaultedFixture)
+
+	resp, err := srv.RenderDocument(context.Background(), &pb.RenderDocumentRequest{
+		ModelHash: hash, DocumentId: "Observatory::DefaultedReport",
+	})
+	if err != nil {
+		t.Fatalf("RenderDocument failed: %v", err)
+	}
+	for _, want := range []string{
+		"| mount | 15 |\n| segmentControl | 20 |",
+		"- mount 15\n- optics 8.5\n- segmentControl 20",
+		"- spectrograph 4",
+	} {
+		if !strings.Contains(resp.Markdown, want) {
+			t.Errorf("markdown lacks %q:\n%s", want, resp.Markdown)
+		}
 	}
 }
 
