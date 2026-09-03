@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -17,7 +18,10 @@ elmt:Payloads
     sysml:ownedMembership elmt:Payloads__Prio_om, elmt:Payloads__Fuel_om, elmt:Payloads__A_om, elmt:Payloads__B_om, elmt:Payloads__Ctx_om ;
     sysml:ownedRelationship elmt:Payloads__Prio_om, elmt:Payloads__Fuel_om, elmt:Payloads__A_om, elmt:Payloads__B_om, elmt:Payloads__Ctx_om ;
     sysx:sourceText "package Payloads {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Payloads__Prio\"},{\"@id\":\"Payloads__Fuel\"},{\"@id\":\"Payloads__A\"},{\"@id\":\"Payloads__B\"},{\"@id\":\"Payloads__Ctx\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Payloads__Prio_om\"},{\"@id\":\"Payloads__Fuel_om\"},{\"@id\":\"Payloads__A_om\"},{\"@id\":\"Payloads__B_om\"},{\"@id\":\"Payloads__Ctx_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Payloads__Prio_om\"},{\"@id\":\"Payloads__Fuel_om\"},{\"@id\":\"Payloads__A_om\"},{\"@id\":\"Payloads__B_om\"},{\"@id\":\"Payloads__Ctx_om\"}]" .
 
 elmt:Payloads__Prio
     a sysml:AttributeDefinition ;
@@ -189,7 +193,12 @@ elmt:Payloads__Ctx
     sysml:ownedRelationship elmt:Payloads__Ctx__x_om, elmt:Payloads__Ctx__y_om, elmt:Payloads__Ctx___402_om, elmt:Payloads__Ctx__m_om, elmt:Payloads__Ctx___404_om ;
     sysml:ownedFeature elmt:Payloads__Ctx__x, elmt:Payloads__Ctx__y ;
     sysml:ownedFeatureMembership elmt:Payloads__Ctx__x_om, elmt:Payloads__Ctx__y_om ;
-    sysx:sourceText "    part def Ctx {\n        part x : A; part y : B;\n        flow of fuel : Fuel from x.i to y.j { attribute w : Prio; }\n        message m of cmd : Prio from x.i to y.j;\n        message of cmd : Prio = m.cmd from x.i to y.j { attribute w : Prio; }\n    }\n" .
+    sysx:sourceText "    part def Ctx {\n        part x : A; part y : B;\n        flow of fuel : Fuel from x.i to y.j { attribute w : Prio; }\n        message m of cmd : Prio from x.i to y.j;\n        message of cmd : Prio = m.cmd from x.i to y.j { attribute w : Prio; }\n    }\n" ;
+    json:ownedMember "[{\"@id\":\"Payloads__Ctx__x\"},{\"@id\":\"Payloads__Ctx__y\"},{\"@id\":\"Payloads__Ctx___402\"},{\"@id\":\"Payloads__Ctx__m\"},{\"@id\":\"Payloads__Ctx___404\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Payloads__Ctx__x_om\"},{\"@id\":\"Payloads__Ctx__y_om\"},{\"@id\":\"Payloads__Ctx___402_om\"},{\"@id\":\"Payloads__Ctx__m_om\"},{\"@id\":\"Payloads__Ctx___404_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Payloads__Ctx__x_om\"},{\"@id\":\"Payloads__Ctx__y_om\"},{\"@id\":\"Payloads__Ctx___402_om\"},{\"@id\":\"Payloads__Ctx__m_om\"},{\"@id\":\"Payloads__Ctx___404_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Payloads__Ctx__x\"},{\"@id\":\"Payloads__Ctx__y\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Payloads__Ctx__x_om\"},{\"@id\":\"Payloads__Ctx__y_om\"}]" .
 
 elmt:Payloads__Ctx_om
     a sysml:OwningMembership ;

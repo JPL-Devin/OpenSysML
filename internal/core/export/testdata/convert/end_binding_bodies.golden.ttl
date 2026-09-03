@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -17,7 +18,10 @@ elmt:R89
     sysml:ownedMembership elmt:R89__SeamCoupling_om, elmt:R89__P_om, elmt:R89__W_om, elmt:R89__Rd_om, elmt:R89__Ctx_om ;
     sysml:ownedRelationship elmt:R89__SeamCoupling_om, elmt:R89__P_om, elmt:R89__W_om, elmt:R89__Rd_om, elmt:R89__Ctx_om ;
     sysx:sourceText "package R89 {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"R89__SeamCoupling\"},{\"@id\":\"R89__P\"},{\"@id\":\"R89__W\"},{\"@id\":\"R89__Rd\"},{\"@id\":\"R89__Ctx\"}]" ;
+    json:ownedMembership "[{\"@id\":\"R89__SeamCoupling_om\"},{\"@id\":\"R89__P_om\"},{\"@id\":\"R89__W_om\"},{\"@id\":\"R89__Rd_om\"},{\"@id\":\"R89__Ctx_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"R89__SeamCoupling_om\"},{\"@id\":\"R89__P_om\"},{\"@id\":\"R89__W_om\"},{\"@id\":\"R89__Rd_om\"},{\"@id\":\"R89__Ctx_om\"}]" .
 
 elmt:R89__SeamCoupling
     a sysml:EnumerationDefinition ;
@@ -36,7 +40,12 @@ elmt:R89__SeamCoupling
     sysml:ownedFeature elmt:R89__SeamCoupling__learnFromData, elmt:R89__SeamCoupling__fixed ;
     sysml:ownedFeatureMembership elmt:R89__SeamCoupling__learnFromData_om, elmt:R89__SeamCoupling__fixed_om ;
     sysx:sourceText "    enum def SeamCoupling {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"R89__SeamCoupling__learnFromData\"},{\"@id\":\"R89__SeamCoupling__fixed\"}]" ;
+    json:ownedMembership "[{\"@id\":\"R89__SeamCoupling__learnFromData_om\"},{\"@id\":\"R89__SeamCoupling__fixed_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"R89__SeamCoupling__learnFromData_om\"},{\"@id\":\"R89__SeamCoupling__fixed_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"R89__SeamCoupling__learnFromData\"},{\"@id\":\"R89__SeamCoupling__fixed\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"R89__SeamCoupling__learnFromData_om\"},{\"@id\":\"R89__SeamCoupling__fixed_om\"}]" .
 
 elmt:R89__SeamCoupling_om
     a sysml:OwningMembership ;
@@ -283,7 +292,12 @@ elmt:R89__Ctx
     sysml:ownedFeature elmt:R89__Ctx__w, elmt:R89__Ctx__r, elmt:R89__Ctx__seam ;
     sysml:ownedFeatureMembership elmt:R89__Ctx__w_om, elmt:R89__Ctx__r_om, elmt:R89__Ctx__seam_om ;
     sysx:sourceText "    part def Ctx {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"R89__Ctx__w\"},{\"@id\":\"R89__Ctx__r\"},{\"@id\":\"R89__Ctx__seam\"}]" ;
+    json:ownedMembership "[{\"@id\":\"R89__Ctx__w_om\"},{\"@id\":\"R89__Ctx__r_om\"},{\"@id\":\"R89__Ctx__seam_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"R89__Ctx__w_om\"},{\"@id\":\"R89__Ctx__r_om\"},{\"@id\":\"R89__Ctx__seam_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"R89__Ctx__w\"},{\"@id\":\"R89__Ctx__r\"},{\"@id\":\"R89__Ctx__seam\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"R89__Ctx__w_om\"},{\"@id\":\"R89__Ctx__r_om\"},{\"@id\":\"R89__Ctx__seam_om\"}]" .
 
 elmt:R89__Ctx_om
     a sysml:OwningMembership ;
@@ -456,7 +470,10 @@ elmt:Bodies
     sysml:ownedMembership elmt:Bodies__Prio_om, elmt:Bodies__Fuel_om, elmt:Bodies__A_om, elmt:Bodies__B_om, elmt:Bodies__Ctx_om ;
     sysml:ownedRelationship elmt:Bodies__Prio_om, elmt:Bodies__Fuel_om, elmt:Bodies__A_om, elmt:Bodies__B_om, elmt:Bodies__Ctx_om ;
     sysx:sourceText "package Bodies {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Bodies__Prio\"},{\"@id\":\"Bodies__Fuel\"},{\"@id\":\"Bodies__A\"},{\"@id\":\"Bodies__B\"},{\"@id\":\"Bodies__Ctx\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Bodies__Prio_om\"},{\"@id\":\"Bodies__Fuel_om\"},{\"@id\":\"Bodies__A_om\"},{\"@id\":\"Bodies__B_om\"},{\"@id\":\"Bodies__Ctx_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Bodies__Prio_om\"},{\"@id\":\"Bodies__Fuel_om\"},{\"@id\":\"Bodies__A_om\"},{\"@id\":\"Bodies__B_om\"},{\"@id\":\"Bodies__Ctx_om\"}]" .
 
 elmt:Bodies__Prio
     a sysml:AttributeDefinition ;
@@ -521,7 +538,12 @@ elmt:Bodies__A
     sysml:ownedFeature elmt:Bodies__A__p, elmt:Bodies__A__a, elmt:Bodies__A__i ;
     sysml:ownedFeatureMembership elmt:Bodies__A__p_om, elmt:Bodies__A__a_om, elmt:Bodies__A__i_om ;
     sysx:sourceText "    part def A {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Bodies__A__p\"},{\"@id\":\"Bodies__A__a\"},{\"@id\":\"Bodies__A__i\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Bodies__A__p_om\"},{\"@id\":\"Bodies__A__a_om\"},{\"@id\":\"Bodies__A__i_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Bodies__A__p_om\"},{\"@id\":\"Bodies__A__a_om\"},{\"@id\":\"Bodies__A__i_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Bodies__A__p\"},{\"@id\":\"Bodies__A__a\"},{\"@id\":\"Bodies__A__i\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Bodies__A__p_om\"},{\"@id\":\"Bodies__A__a_om\"},{\"@id\":\"Bodies__A__i_om\"}]" .
 
 elmt:Bodies__A_om
     a sysml:OwningMembership ;
@@ -627,7 +649,12 @@ elmt:Bodies__B
     sysml:ownedFeature elmt:Bodies__B__q, elmt:Bodies__B__b, elmt:Bodies__B__j ;
     sysml:ownedFeatureMembership elmt:Bodies__B__q_om, elmt:Bodies__B__b_om, elmt:Bodies__B__j_om ;
     sysx:sourceText "    part def B {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Bodies__B__q\"},{\"@id\":\"Bodies__B__b\"},{\"@id\":\"Bodies__B__j\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Bodies__B__q_om\"},{\"@id\":\"Bodies__B__b_om\"},{\"@id\":\"Bodies__B__j_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Bodies__B__q_om\"},{\"@id\":\"Bodies__B__b_om\"},{\"@id\":\"Bodies__B__j_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Bodies__B__q\"},{\"@id\":\"Bodies__B__b\"},{\"@id\":\"Bodies__B__j\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Bodies__B__q_om\"},{\"@id\":\"Bodies__B__b_om\"},{\"@id\":\"Bodies__B__j_om\"}]" .
 
 elmt:Bodies__B_om
     a sysml:OwningMembership ;
@@ -733,7 +760,12 @@ elmt:Bodies__Ctx
     sysml:ownedFeature elmt:Bodies__Ctx__x, elmt:Bodies__Ctx__y, elmt:Bodies__Ctx__c, elmt:Bodies__Ctx___403, elmt:Bodies__Ctx__bd, elmt:Bodies__Ctx___406, elmt:Bodies__Ctx__al, elmt:Bodies__Ctx__s ;
     sysml:ownedFeatureMembership elmt:Bodies__Ctx__x_om, elmt:Bodies__Ctx__y_om, elmt:Bodies__Ctx__c_om, elmt:Bodies__Ctx___403_om, elmt:Bodies__Ctx__bd_om, elmt:Bodies__Ctx___406_om, elmt:Bodies__Ctx__al_om, elmt:Bodies__Ctx__s_om ;
     sysx:sourceText "    part def Ctx {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Bodies__Ctx__x\"},{\"@id\":\"Bodies__Ctx__y\"},{\"@id\":\"Bodies__Ctx__c\"},{\"@id\":\"Bodies__Ctx___403\"},{\"@id\":\"Bodies__Ctx__f\"},{\"@id\":\"Bodies__Ctx__bd\"},{\"@id\":\"Bodies__Ctx___406\"},{\"@id\":\"Bodies__Ctx__al\"},{\"@id\":\"Bodies__Ctx__s\"},{\"@id\":\"Bodies__Ctx__Act\"},{\"@id\":\"Bodies__Ctx__Machine\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Bodies__Ctx__x_om\"},{\"@id\":\"Bodies__Ctx__y_om\"},{\"@id\":\"Bodies__Ctx__c_om\"},{\"@id\":\"Bodies__Ctx___403_om\"},{\"@id\":\"Bodies__Ctx__f_om\"},{\"@id\":\"Bodies__Ctx__bd_om\"},{\"@id\":\"Bodies__Ctx___406_om\"},{\"@id\":\"Bodies__Ctx__al_om\"},{\"@id\":\"Bodies__Ctx__s_om\"},{\"@id\":\"Bodies__Ctx__Act_om\"},{\"@id\":\"Bodies__Ctx__Machine_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Bodies__Ctx__x_om\"},{\"@id\":\"Bodies__Ctx__y_om\"},{\"@id\":\"Bodies__Ctx__c_om\"},{\"@id\":\"Bodies__Ctx___403_om\"},{\"@id\":\"Bodies__Ctx__f_om\"},{\"@id\":\"Bodies__Ctx__bd_om\"},{\"@id\":\"Bodies__Ctx___406_om\"},{\"@id\":\"Bodies__Ctx__al_om\"},{\"@id\":\"Bodies__Ctx__s_om\"},{\"@id\":\"Bodies__Ctx__Act_om\"},{\"@id\":\"Bodies__Ctx__Machine_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Bodies__Ctx__x\"},{\"@id\":\"Bodies__Ctx__y\"},{\"@id\":\"Bodies__Ctx__c\"},{\"@id\":\"Bodies__Ctx___403\"},{\"@id\":\"Bodies__Ctx__bd\"},{\"@id\":\"Bodies__Ctx___406\"},{\"@id\":\"Bodies__Ctx__al\"},{\"@id\":\"Bodies__Ctx__s\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Bodies__Ctx__x_om\"},{\"@id\":\"Bodies__Ctx__y_om\"},{\"@id\":\"Bodies__Ctx__c_om\"},{\"@id\":\"Bodies__Ctx___403_om\"},{\"@id\":\"Bodies__Ctx__bd_om\"},{\"@id\":\"Bodies__Ctx___406_om\"},{\"@id\":\"Bodies__Ctx__al_om\"},{\"@id\":\"Bodies__Ctx__s_om\"}]" .
 
 elmt:Bodies__Ctx_om
     a sysml:OwningMembership ;
@@ -1375,7 +1407,12 @@ elmt:Bodies__Ctx__Act
     sysml:ownedFeature elmt:Bodies__Ctx__Act__a1, elmt:Bodies__Ctx__Act__a2, elmt:Bodies__Ctx__Act___402, elmt:Bodies__Ctx__Act__a3, elmt:Bodies__Ctx__Act__a4, elmt:Bodies__Ctx__Act___407, elmt:Bodies__Ctx__Act___408 ;
     sysml:ownedFeatureMembership elmt:Bodies__Ctx__Act__a1_om, elmt:Bodies__Ctx__Act__a2_om, elmt:Bodies__Ctx__Act___402_om, elmt:Bodies__Ctx__Act__a3_om, elmt:Bodies__Ctx__Act__a4_om, elmt:Bodies__Ctx__Act___407_om, elmt:Bodies__Ctx__Act___408_om ;
     sysx:sourceText "        action def Act {\n" ;
-    sysx:sourceTail "        }\n" .
+    sysx:sourceTail "        }\n" ;
+    json:ownedMember "[{\"@id\":\"Bodies__Ctx__Act__a1\"},{\"@id\":\"Bodies__Ctx__Act__a2\"},{\"@id\":\"Bodies__Ctx__Act___402\"},{\"@id\":\"Bodies__Ctx__Act___403\"},{\"@id\":\"Bodies__Ctx__Act__a3\"},{\"@id\":\"Bodies__Ctx__Act___405\"},{\"@id\":\"Bodies__Ctx__Act__a4\"},{\"@id\":\"Bodies__Ctx__Act___407\"},{\"@id\":\"Bodies__Ctx__Act___408\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Bodies__Ctx__Act__a1_om\"},{\"@id\":\"Bodies__Ctx__Act__a2_om\"},{\"@id\":\"Bodies__Ctx__Act___402_om\"},{\"@id\":\"Bodies__Ctx__Act___403_om\"},{\"@id\":\"Bodies__Ctx__Act__a3_om\"},{\"@id\":\"Bodies__Ctx__Act___405_om\"},{\"@id\":\"Bodies__Ctx__Act__a4_om\"},{\"@id\":\"Bodies__Ctx__Act___407_om\"},{\"@id\":\"Bodies__Ctx__Act___408_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Bodies__Ctx__Act__a1_om\"},{\"@id\":\"Bodies__Ctx__Act__a2_om\"},{\"@id\":\"Bodies__Ctx__Act___402_om\"},{\"@id\":\"Bodies__Ctx__Act___403_om\"},{\"@id\":\"Bodies__Ctx__Act__a3_om\"},{\"@id\":\"Bodies__Ctx__Act___405_om\"},{\"@id\":\"Bodies__Ctx__Act__a4_om\"},{\"@id\":\"Bodies__Ctx__Act___407_om\"},{\"@id\":\"Bodies__Ctx__Act___408_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Bodies__Ctx__Act__a1\"},{\"@id\":\"Bodies__Ctx__Act__a2\"},{\"@id\":\"Bodies__Ctx__Act___402\"},{\"@id\":\"Bodies__Ctx__Act__a3\"},{\"@id\":\"Bodies__Ctx__Act__a4\"},{\"@id\":\"Bodies__Ctx__Act___407\"},{\"@id\":\"Bodies__Ctx__Act___408\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Bodies__Ctx__Act__a1_om\"},{\"@id\":\"Bodies__Ctx__Act__a2_om\"},{\"@id\":\"Bodies__Ctx__Act___402_om\"},{\"@id\":\"Bodies__Ctx__Act__a3_om\"},{\"@id\":\"Bodies__Ctx__Act__a4_om\"},{\"@id\":\"Bodies__Ctx__Act___407_om\"},{\"@id\":\"Bodies__Ctx__Act___408_om\"}]" .
 
 elmt:Bodies__Ctx__Act_om
     a sysml:OwningMembership ;
@@ -1706,7 +1743,12 @@ elmt:Bodies__Ctx__Machine
     sysml:ownedFeature elmt:Bodies__Ctx__Machine__off, elmt:Bodies__Ctx__Machine__on, elmt:Bodies__Ctx__Machine__t1, elmt:Bodies__Ctx__Machine___403, elmt:Bodies__Ctx__Machine___404 ;
     sysml:ownedFeatureMembership elmt:Bodies__Ctx__Machine__off_om, elmt:Bodies__Ctx__Machine__on_om, elmt:Bodies__Ctx__Machine__t1_om, elmt:Bodies__Ctx__Machine___403_om, elmt:Bodies__Ctx__Machine___404_om ;
     sysx:sourceText "        state def Machine {\n" ;
-    sysx:sourceTail "        }\n" .
+    sysx:sourceTail "        }\n" ;
+    json:ownedMember "[{\"@id\":\"Bodies__Ctx__Machine__off\"},{\"@id\":\"Bodies__Ctx__Machine__on\"},{\"@id\":\"Bodies__Ctx__Machine__t1\"},{\"@id\":\"Bodies__Ctx__Machine___403\"},{\"@id\":\"Bodies__Ctx__Machine___404\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Bodies__Ctx__Machine__off_om\"},{\"@id\":\"Bodies__Ctx__Machine__on_om\"},{\"@id\":\"Bodies__Ctx__Machine__t1_om\"},{\"@id\":\"Bodies__Ctx__Machine___403_om\"},{\"@id\":\"Bodies__Ctx__Machine___404_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Bodies__Ctx__Machine__off_om\"},{\"@id\":\"Bodies__Ctx__Machine__on_om\"},{\"@id\":\"Bodies__Ctx__Machine__t1_om\"},{\"@id\":\"Bodies__Ctx__Machine___403_om\"},{\"@id\":\"Bodies__Ctx__Machine___404_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Bodies__Ctx__Machine__off\"},{\"@id\":\"Bodies__Ctx__Machine__on\"},{\"@id\":\"Bodies__Ctx__Machine__t1\"},{\"@id\":\"Bodies__Ctx__Machine___403\"},{\"@id\":\"Bodies__Ctx__Machine___404\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Bodies__Ctx__Machine__off_om\"},{\"@id\":\"Bodies__Ctx__Machine__on_om\"},{\"@id\":\"Bodies__Ctx__Machine__t1_om\"},{\"@id\":\"Bodies__Ctx__Machine___403_om\"},{\"@id\":\"Bodies__Ctx__Machine___404_om\"}]" .
 
 elmt:Bodies__Ctx__Machine_om
     a sysml:OwningMembership ;
@@ -1929,7 +1971,12 @@ elmt:Bodies__Ctx__Machine___404
     sysml:ownedRelationship elmt:Bodies__Ctx__Machine___404___400_om, elmt:Bodies__Ctx__Machine___404__w_om ;
     sysml:ownedFeature elmt:Bodies__Ctx__Machine___404___400, elmt:Bodies__Ctx__Machine___404__w ;
     sysml:ownedFeatureMembership elmt:Bodies__Ctx__Machine___404___400_om, elmt:Bodies__Ctx__Machine___404__w_om ;
-    sysx:sourceText "            transition first off do {\n                assign x.a := 2;\n            } then on {\n                attribute w : Prio;\n            }\n" .
+    sysx:sourceText "            transition first off do {\n                assign x.a := 2;\n            } then on {\n                attribute w : Prio;\n            }\n" ;
+    json:ownedMember "[{\"@id\":\"Bodies__Ctx__Machine___404___400\"},{\"@id\":\"Bodies__Ctx__Machine___404__w\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Bodies__Ctx__Machine___404___400_om\"},{\"@id\":\"Bodies__Ctx__Machine___404__w_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Bodies__Ctx__Machine___404___400_om\"},{\"@id\":\"Bodies__Ctx__Machine___404__w_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Bodies__Ctx__Machine___404___400\"},{\"@id\":\"Bodies__Ctx__Machine___404__w\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Bodies__Ctx__Machine___404___400_om\"},{\"@id\":\"Bodies__Ctx__Machine___404__w_om\"}]" .
 
 elmt:Bodies__Ctx__Machine___404_om
     a sysml:FeatureMembership ;
