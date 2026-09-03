@@ -442,3 +442,27 @@ func TestActionAttributeLowering_KeepsValuelessAttributes(t *testing.T) {
 		t.Errorf("attribute 1 = %#v, want valueless n", got)
 	}
 }
+
+// actionGraphErr lowers the first action usage of src, reporting the error
+// lowering returns rather than failing on it.
+func actionGraphErr(t *testing.T, src string) (*ActionGraph, error) {
+	t.Helper()
+	p := parser.New(source.New("test.sysml", []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) > 0 {
+		t.Fatalf("parse errors: %v", p.Diagnostics)
+	}
+	for _, member := range root.Members {
+		membership, ok := member.(*ast.Membership)
+		if !ok {
+			continue
+		}
+		usage, ok := membership.Member.(*ast.Usage)
+		if !ok || usage.Kind != ast.UsageAction {
+			continue
+		}
+		return ToActionGraph(usage, nil)
+	}
+	t.Fatal("no action usage found")
+	return nil, nil
+}

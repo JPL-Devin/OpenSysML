@@ -1,0 +1,12 @@
+{
+	"type": "action",
+	"evaluate": "test::outer",
+	"outputs": {
+		"total": {"type": "Integer", "value": 12},
+		"a": {"type": "Integer", "value": 100},
+		"b": {"type": "Integer", "value": 100},
+		"scaled.a": {"type": "Integer", "value": 3},
+		"scaled.b": {"type": "Integer", "value": 4},
+		"scaled.result": {"type": "Integer", "value": 12}
+	}
+}

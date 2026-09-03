@@ -106,6 +106,23 @@ func (m *Model) EffectiveMultiplicityOf(sym *symbols.Symbol) Range {
 	return AssumedRange()
 }
 
+// AllowsNone reports whether the range admits no value at all: a known lower
+// bound of 0, as `[0..1]` and `[*]` declare.
+func (r Range) AllowsNone() bool {
+	return r.Lower.Known && !r.Lower.Infinite && r.Lower.Value == 0
+}
+
+// IsOptionalParameter reports whether a parameter may be left without an
+// argument: its declared multiplicity admits no value (KerML 1.0 §7.4.7.2, an
+// input parameter with lower bound 0). One declaring none holds one value.
+func (m *Model) IsOptionalParameter(usage *ast.Usage) bool {
+	if usage == nil {
+		return false
+	}
+	r, ok := m.multiplicityRange(usage.Multiplicity)
+	return ok && r.AllowsNone()
+}
+
 // Intersect returns the range both ranges allow: the greater lower bound and the
 // lesser upper bound, an unknown bound deferring to a known one.
 func (r Range) Intersect(o Range) Range {
