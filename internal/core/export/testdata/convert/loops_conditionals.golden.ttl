@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -17,7 +18,10 @@ elmt:LoopsAndConditionals
     sysml:ownedMembership elmt:LoopsAndConditionals__Tick_om, elmt:LoopsAndConditionals__Control_om ;
     sysml:ownedRelationship elmt:LoopsAndConditionals__Tick_om, elmt:LoopsAndConditionals__Control_om ;
     sysx:sourceText "package LoopsAndConditionals {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"LoopsAndConditionals__Tick\"},{\"@id\":\"LoopsAndConditionals__Control\"}]" ;
+    json:ownedMembership "[{\"@id\":\"LoopsAndConditionals__Tick_om\"},{\"@id\":\"LoopsAndConditionals__Control_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"LoopsAndConditionals__Tick_om\"},{\"@id\":\"LoopsAndConditionals__Control_om\"}]" .
 
 elmt:LoopsAndConditionals__Tick
     a sysml:ActionDefinition ;
@@ -59,7 +63,12 @@ elmt:LoopsAndConditionals__Control
     sysml:ownedFeature elmt:LoopsAndConditionals__Control__count, elmt:LoopsAndConditionals__Control__total, elmt:LoopsAndConditionals__Control__tick, elmt:LoopsAndConditionals__Control___403, elmt:LoopsAndConditionals__Control___404, elmt:LoopsAndConditionals__Control___405, elmt:LoopsAndConditionals__Control___406, elmt:LoopsAndConditionals__Control___407, elmt:LoopsAndConditionals__Control___408, elmt:LoopsAndConditionals__Control___409 ;
     sysml:ownedFeatureMembership elmt:LoopsAndConditionals__Control__count_om, elmt:LoopsAndConditionals__Control__total_om, elmt:LoopsAndConditionals__Control__tick_om, elmt:LoopsAndConditionals__Control___403_om, elmt:LoopsAndConditionals__Control___404_om, elmt:LoopsAndConditionals__Control___405_om, elmt:LoopsAndConditionals__Control___406_om, elmt:LoopsAndConditionals__Control___407_om, elmt:LoopsAndConditionals__Control___408_om, elmt:LoopsAndConditionals__Control___409_om ;
     sysx:sourceText "    action def Control {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"LoopsAndConditionals__Control__count\"},{\"@id\":\"LoopsAndConditionals__Control__total\"},{\"@id\":\"LoopsAndConditionals__Control__tick\"},{\"@id\":\"LoopsAndConditionals__Control___403\"},{\"@id\":\"LoopsAndConditionals__Control___404\"},{\"@id\":\"LoopsAndConditionals__Control___405\"},{\"@id\":\"LoopsAndConditionals__Control___406\"},{\"@id\":\"LoopsAndConditionals__Control___407\"},{\"@id\":\"LoopsAndConditionals__Control___408\"},{\"@id\":\"LoopsAndConditionals__Control___409\"}]" ;
+    json:ownedMembership "[{\"@id\":\"LoopsAndConditionals__Control__count_om\"},{\"@id\":\"LoopsAndConditionals__Control__total_om\"},{\"@id\":\"LoopsAndConditionals__Control__tick_om\"},{\"@id\":\"LoopsAndConditionals__Control___403_om\"},{\"@id\":\"LoopsAndConditionals__Control___404_om\"},{\"@id\":\"LoopsAndConditionals__Control___405_om\"},{\"@id\":\"LoopsAndConditionals__Control___406_om\"},{\"@id\":\"LoopsAndConditionals__Control___407_om\"},{\"@id\":\"LoopsAndConditionals__Control___408_om\"},{\"@id\":\"LoopsAndConditionals__Control___409_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"LoopsAndConditionals__Control__count_om\"},{\"@id\":\"LoopsAndConditionals__Control__total_om\"},{\"@id\":\"LoopsAndConditionals__Control__tick_om\"},{\"@id\":\"LoopsAndConditionals__Control___403_om\"},{\"@id\":\"LoopsAndConditionals__Control___404_om\"},{\"@id\":\"LoopsAndConditionals__Control___405_om\"},{\"@id\":\"LoopsAndConditionals__Control___406_om\"},{\"@id\":\"LoopsAndConditionals__Control___407_om\"},{\"@id\":\"LoopsAndConditionals__Control___408_om\"},{\"@id\":\"LoopsAndConditionals__Control___409_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"LoopsAndConditionals__Control__count\"},{\"@id\":\"LoopsAndConditionals__Control__total\"},{\"@id\":\"LoopsAndConditionals__Control__tick\"},{\"@id\":\"LoopsAndConditionals__Control___403\"},{\"@id\":\"LoopsAndConditionals__Control___404\"},{\"@id\":\"LoopsAndConditionals__Control___405\"},{\"@id\":\"LoopsAndConditionals__Control___406\"},{\"@id\":\"LoopsAndConditionals__Control___407\"},{\"@id\":\"LoopsAndConditionals__Control___408\"},{\"@id\":\"LoopsAndConditionals__Control___409\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"LoopsAndConditionals__Control__count_om\"},{\"@id\":\"LoopsAndConditionals__Control__total_om\"},{\"@id\":\"LoopsAndConditionals__Control__tick_om\"},{\"@id\":\"LoopsAndConditionals__Control___403_om\"},{\"@id\":\"LoopsAndConditionals__Control___404_om\"},{\"@id\":\"LoopsAndConditionals__Control___405_om\"},{\"@id\":\"LoopsAndConditionals__Control___406_om\"},{\"@id\":\"LoopsAndConditionals__Control___407_om\"},{\"@id\":\"LoopsAndConditionals__Control___408_om\"},{\"@id\":\"LoopsAndConditionals__Control___409_om\"}]" .
 
 elmt:LoopsAndConditionals__Control_om
     a sysml:OwningMembership ;
@@ -184,7 +193,8 @@ expr:LoopsAndConditionals__Control___403_pwhileCondition
     sysx:sourceText "count > 0" ;
     sysml:elementId "LoopsAndConditionals__Control___403_pwhileCondition" ;
     sysml:operator ">" ;
-    sysml:argument expr:LoopsAndConditionals__Control___403_pwhileCondition_pa0, expr:LoopsAndConditionals__Control___403_pwhileCondition_pa1 .
+    sysml:argument expr:LoopsAndConditionals__Control___403_pwhileCondition_pa0, expr:LoopsAndConditionals__Control___403_pwhileCondition_pa1 ;
+    json:argument "[{\"@id\":\"LoopsAndConditionals__Control___403_pwhileCondition_pa0\"},{\"@id\":\"LoopsAndConditionals__Control___403_pwhileCondition_pa1\"}]" .
 
 expr:LoopsAndConditionals__Control___403_pwhileCondition_pa0
     a sysml:FeatureReferenceExpression ;
@@ -293,7 +303,8 @@ expr:LoopsAndConditionals__Control___404___400_pvalue
     sysx:sourceText "total + 1" ;
     sysml:elementId "LoopsAndConditionals__Control___404___400_pvalue" ;
     sysml:operator "+" ;
-    sysml:argument expr:LoopsAndConditionals__Control___404___400_pvalue_pa0, expr:LoopsAndConditionals__Control___404___400_pvalue_pa1 .
+    sysml:argument expr:LoopsAndConditionals__Control___404___400_pvalue_pa0, expr:LoopsAndConditionals__Control___404___400_pvalue_pa1 ;
+    json:argument "[{\"@id\":\"LoopsAndConditionals__Control___404___400_pvalue_pa0\"},{\"@id\":\"LoopsAndConditionals__Control___404___400_pvalue_pa1\"}]" .
 
 expr:LoopsAndConditionals__Control___404___400_pvalue_pa0
     a sysml:FeatureReferenceExpression ;
@@ -345,7 +356,8 @@ expr:LoopsAndConditionals__Control___405_puntilCondition
     sysx:sourceText "total > 100" ;
     sysml:elementId "LoopsAndConditionals__Control___405_puntilCondition" ;
     sysml:operator ">" ;
-    sysml:argument expr:LoopsAndConditionals__Control___405_puntilCondition_pa0, expr:LoopsAndConditionals__Control___405_puntilCondition_pa1 .
+    sysml:argument expr:LoopsAndConditionals__Control___405_puntilCondition_pa0, expr:LoopsAndConditionals__Control___405_puntilCondition_pa1 ;
+    json:argument "[{\"@id\":\"LoopsAndConditionals__Control___405_puntilCondition_pa0\"},{\"@id\":\"LoopsAndConditionals__Control___405_puntilCondition_pa1\"}]" .
 
 expr:LoopsAndConditionals__Control___405_puntilCondition_pa0
     a sysml:FeatureReferenceExpression ;
@@ -424,7 +436,8 @@ expr:LoopsAndConditionals__Control___406_pcollection
     sysx:sourceText "1..10" ;
     sysml:elementId "LoopsAndConditionals__Control___406_pcollection" ;
     sysml:operator ".." ;
-    sysml:argument expr:LoopsAndConditionals__Control___406_pcollection_pa0, expr:LoopsAndConditionals__Control___406_pcollection_pa1 .
+    sysml:argument expr:LoopsAndConditionals__Control___406_pcollection_pa0, expr:LoopsAndConditionals__Control___406_pcollection_pa1 ;
+    json:argument "[{\"@id\":\"LoopsAndConditionals__Control___406_pcollection_pa0\"},{\"@id\":\"LoopsAndConditionals__Control___406_pcollection_pa1\"}]" .
 
 expr:LoopsAndConditionals__Control___406_pcollection_pa0
     a sysml:LiteralInteger ;
@@ -477,7 +490,8 @@ expr:LoopsAndConditionals__Control___406___400_pvalue
     sysx:sourceText "total + idx" ;
     sysml:elementId "LoopsAndConditionals__Control___406___400_pvalue" ;
     sysml:operator "+" ;
-    sysml:argument expr:LoopsAndConditionals__Control___406___400_pvalue_pa0, expr:LoopsAndConditionals__Control___406___400_pvalue_pa1 .
+    sysml:argument expr:LoopsAndConditionals__Control___406___400_pvalue_pa0, expr:LoopsAndConditionals__Control___406___400_pvalue_pa1 ;
+    json:argument "[{\"@id\":\"LoopsAndConditionals__Control___406___400_pvalue_pa0\"},{\"@id\":\"LoopsAndConditionals__Control___406___400_pvalue_pa1\"}]" .
 
 expr:LoopsAndConditionals__Control___406___400_pvalue_pa0
     a sysml:FeatureReferenceExpression ;
@@ -525,7 +539,8 @@ expr:LoopsAndConditionals__Control___407_pcondition
     sysx:sourceText "count > 0" ;
     sysml:elementId "LoopsAndConditionals__Control___407_pcondition" ;
     sysml:operator ">" ;
-    sysml:argument expr:LoopsAndConditionals__Control___407_pcondition_pa0, expr:LoopsAndConditionals__Control___407_pcondition_pa1 .
+    sysml:argument expr:LoopsAndConditionals__Control___407_pcondition_pa0, expr:LoopsAndConditionals__Control___407_pcondition_pa1 ;
+    json:argument "[{\"@id\":\"LoopsAndConditionals__Control___407_pcondition_pa0\"},{\"@id\":\"LoopsAndConditionals__Control___407_pcondition_pa1\"}]" .
 
 expr:LoopsAndConditionals__Control___407_pcondition_pa0
     a sysml:FeatureReferenceExpression ;
@@ -603,7 +618,10 @@ elmt:LoopsAndConditionals__Control___408
     sysml:ownedMember elmt:LoopsAndConditionals__Control___408___400, elmt:LoopsAndConditionals__Control___408___401 ;
     sysml:ownedMembership elmt:LoopsAndConditionals__Control___408___400_om, elmt:LoopsAndConditionals__Control___408___401_om ;
     sysml:ownedRelationship elmt:LoopsAndConditionals__Control___408___400_om, elmt:LoopsAndConditionals__Control___408___401_om ;
-    sysx:sourceText "        if count > 0 {\n            perform tick;\n        } else {\n            assign total := 0;\n        }\n" .
+    sysx:sourceText "        if count > 0 {\n            perform tick;\n        } else {\n            assign total := 0;\n        }\n" ;
+    json:ownedMember "[{\"@id\":\"LoopsAndConditionals__Control___408___400\"},{\"@id\":\"LoopsAndConditionals__Control___408___401\"}]" ;
+    json:ownedMembership "[{\"@id\":\"LoopsAndConditionals__Control___408___400_om\"},{\"@id\":\"LoopsAndConditionals__Control___408___401_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"LoopsAndConditionals__Control___408___400_om\"},{\"@id\":\"LoopsAndConditionals__Control___408___401_om\"}]" .
 
 elmt:LoopsAndConditionals__Control___408_om
     a sysml:FeatureMembership ;
@@ -622,7 +640,8 @@ expr:LoopsAndConditionals__Control___408_pcondition
     sysx:sourceText "count > 0" ;
     sysml:elementId "LoopsAndConditionals__Control___408_pcondition" ;
     sysml:operator ">" ;
-    sysml:argument expr:LoopsAndConditionals__Control___408_pcondition_pa0, expr:LoopsAndConditionals__Control___408_pcondition_pa1 .
+    sysml:argument expr:LoopsAndConditionals__Control___408_pcondition_pa0, expr:LoopsAndConditionals__Control___408_pcondition_pa1 ;
+    json:argument "[{\"@id\":\"LoopsAndConditionals__Control___408_pcondition_pa0\"},{\"@id\":\"LoopsAndConditionals__Control___408_pcondition_pa1\"}]" .
 
 expr:LoopsAndConditionals__Control___408_pcondition_pa0
     a sysml:FeatureReferenceExpression ;
@@ -761,7 +780,10 @@ elmt:LoopsAndConditionals__Control___409
     sysml:ownedMember elmt:LoopsAndConditionals__Control___409___400, elmt:LoopsAndConditionals__Control___409___401 ;
     sysml:ownedMembership elmt:LoopsAndConditionals__Control___409___400_om, elmt:LoopsAndConditionals__Control___409___401_om ;
     sysml:ownedRelationship elmt:LoopsAndConditionals__Control___409___400_om, elmt:LoopsAndConditionals__Control___409___401_om ;
-    sysx:sourceText "        if count > 0 {\n            perform tick;\n        } else if total > 0 {\n            assign total := 0;\n        }\n" .
+    sysx:sourceText "        if count > 0 {\n            perform tick;\n        } else if total > 0 {\n            assign total := 0;\n        }\n" ;
+    json:ownedMember "[{\"@id\":\"LoopsAndConditionals__Control___409___400\"},{\"@id\":\"LoopsAndConditionals__Control___409___401\"}]" ;
+    json:ownedMembership "[{\"@id\":\"LoopsAndConditionals__Control___409___400_om\"},{\"@id\":\"LoopsAndConditionals__Control___409___401_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"LoopsAndConditionals__Control___409___400_om\"},{\"@id\":\"LoopsAndConditionals__Control___409___401_om\"}]" .
 
 elmt:LoopsAndConditionals__Control___409_om
     a sysml:FeatureMembership ;
@@ -780,7 +802,8 @@ expr:LoopsAndConditionals__Control___409_pcondition
     sysx:sourceText "count > 0" ;
     sysml:elementId "LoopsAndConditionals__Control___409_pcondition" ;
     sysml:operator ">" ;
-    sysml:argument expr:LoopsAndConditionals__Control___409_pcondition_pa0, expr:LoopsAndConditionals__Control___409_pcondition_pa1 .
+    sysml:argument expr:LoopsAndConditionals__Control___409_pcondition_pa0, expr:LoopsAndConditionals__Control___409_pcondition_pa1 ;
+    json:argument "[{\"@id\":\"LoopsAndConditionals__Control___409_pcondition_pa0\"},{\"@id\":\"LoopsAndConditionals__Control___409_pcondition_pa1\"}]" .
 
 expr:LoopsAndConditionals__Control___409_pcondition_pa0
     a sysml:FeatureReferenceExpression ;
@@ -899,7 +922,8 @@ expr:LoopsAndConditionals__Control___409___401___400_pcondition
     sysx:sourceText "total > 0" ;
     sysml:elementId "LoopsAndConditionals__Control___409___401___400_pcondition" ;
     sysml:operator ">" ;
-    sysml:argument expr:LoopsAndConditionals__Control___409___401___400_pcondition_pa0, expr:LoopsAndConditionals__Control___409___401___400_pcondition_pa1 .
+    sysml:argument expr:LoopsAndConditionals__Control___409___401___400_pcondition_pa0, expr:LoopsAndConditionals__Control___409___401___400_pcondition_pa1 ;
+    json:argument "[{\"@id\":\"LoopsAndConditionals__Control___409___401___400_pcondition_pa0\"},{\"@id\":\"LoopsAndConditionals__Control___409___401___400_pcondition_pa1\"}]" .
 
 expr:LoopsAndConditionals__Control___409___401___400_pcondition_pa0
     a sysml:FeatureReferenceExpression ;

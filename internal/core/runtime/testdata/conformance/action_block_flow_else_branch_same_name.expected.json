@@ -1,0 +1,7 @@
+{
+	"type": "action",
+	"outputs": {
+		"total": {"type": "Integer", "value": 30},
+		"choose.p.v": {"type": "Integer", "value": 30}
+	}
+}

@@ -1,5 +1,6 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix expr: <urn:opensysml:expr:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -17,7 +18,10 @@ elmt:Shadowing
     sysml:ownedMembership elmt:Shadowing__Field_om, elmt:Shadowing__packet_20data_20field_om, elmt:Shadowing__Packet_om, elmt:Shadowing__Thermal_20Packet_om, elmt:Shadowing__payload_om, elmt:Shadowing__Bus_om, elmt:Shadowing__Budget_om, elmt:Shadowing__budget_om, elmt:Shadowing___408_om, elmt:Shadowing__bus_om, elmt:Shadowing__Study_om, elmt:Shadowing__study_om, elmt:Shadowing__deeper_om, elmt:Shadowing__Frame_om, elmt:Shadowing__Lib_om, elmt:Shadowing__Consumer_om, elmt:Shadowing__Exposed_om ;
     sysml:ownedRelationship elmt:Shadowing__Field_om, elmt:Shadowing__packet_20data_20field_om, elmt:Shadowing__Packet_om, elmt:Shadowing__Thermal_20Packet_om, elmt:Shadowing__payload_om, elmt:Shadowing__Bus_om, elmt:Shadowing__Budget_om, elmt:Shadowing__budget_om, elmt:Shadowing___408_om, elmt:Shadowing__bus_om, elmt:Shadowing__Study_om, elmt:Shadowing__study_om, elmt:Shadowing__deeper_om, elmt:Shadowing__Frame_om, elmt:Shadowing__Lib_om, elmt:Shadowing__Consumer_om, elmt:Shadowing__Exposed_om ;
     sysx:sourceText "package Shadowing {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Shadowing__Field\"},{\"@id\":\"Shadowing__packet_20data_20field\"},{\"@id\":\"Shadowing__Packet\"},{\"@id\":\"Shadowing__Thermal_20Packet\"},{\"@id\":\"Shadowing__payload\"},{\"@id\":\"Shadowing__Bus\"},{\"@id\":\"Shadowing__Budget\"},{\"@id\":\"Shadowing__budget\"},{\"@id\":\"Shadowing___408\"},{\"@id\":\"Shadowing__bus\"},{\"@id\":\"Shadowing__Study\"},{\"@id\":\"Shadowing__study\"},{\"@id\":\"Shadowing__deeper\"},{\"@id\":\"Shadowing__Frame\"},{\"@id\":\"Shadowing__Lib\"},{\"@id\":\"Shadowing__Consumer\"},{\"@id\":\"Shadowing__Exposed\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Shadowing__Field_om\"},{\"@id\":\"Shadowing__packet_20data_20field_om\"},{\"@id\":\"Shadowing__Packet_om\"},{\"@id\":\"Shadowing__Thermal_20Packet_om\"},{\"@id\":\"Shadowing__payload_om\"},{\"@id\":\"Shadowing__Bus_om\"},{\"@id\":\"Shadowing__Budget_om\"},{\"@id\":\"Shadowing__budget_om\"},{\"@id\":\"Shadowing___408_om\"},{\"@id\":\"Shadowing__bus_om\"},{\"@id\":\"Shadowing__Study_om\"},{\"@id\":\"Shadowing__study_om\"},{\"@id\":\"Shadowing__deeper_om\"},{\"@id\":\"Shadowing__Frame_om\"},{\"@id\":\"Shadowing__Lib_om\"},{\"@id\":\"Shadowing__Consumer_om\"},{\"@id\":\"Shadowing__Exposed_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Shadowing__Field_om\"},{\"@id\":\"Shadowing__packet_20data_20field_om\"},{\"@id\":\"Shadowing__Packet_om\"},{\"@id\":\"Shadowing__Thermal_20Packet_om\"},{\"@id\":\"Shadowing__payload_om\"},{\"@id\":\"Shadowing__Bus_om\"},{\"@id\":\"Shadowing__Budget_om\"},{\"@id\":\"Shadowing__budget_om\"},{\"@id\":\"Shadowing___408_om\"},{\"@id\":\"Shadowing__bus_om\"},{\"@id\":\"Shadowing__Study_om\"},{\"@id\":\"Shadowing__study_om\"},{\"@id\":\"Shadowing__deeper_om\"},{\"@id\":\"Shadowing__Frame_om\"},{\"@id\":\"Shadowing__Lib_om\"},{\"@id\":\"Shadowing__Consumer_om\"},{\"@id\":\"Shadowing__Exposed_om\"}]" .
 
 elmt:Shadowing__Field
     a sysml:AttributeDefinition ;
@@ -83,7 +87,12 @@ elmt:Shadowing__Packet
     sysml:ownedFeature elmt:Shadowing__Packet__data_20field, elmt:Shadowing__Packet__payload ;
     sysml:ownedFeatureMembership elmt:Shadowing__Packet__data_20field_om, elmt:Shadowing__Packet__payload_om ;
     sysx:sourceText "    part def Packet {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Shadowing__Packet__data_20field\"},{\"@id\":\"Shadowing__Packet__payload\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Shadowing__Packet__data_20field_om\"},{\"@id\":\"Shadowing__Packet__payload_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Shadowing__Packet__data_20field_om\"},{\"@id\":\"Shadowing__Packet__payload_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Shadowing__Packet__data_20field\"},{\"@id\":\"Shadowing__Packet__payload\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Shadowing__Packet__data_20field_om\"},{\"@id\":\"Shadowing__Packet__payload_om\"}]" .
 
 elmt:Shadowing__Packet_om
     a sysml:OwningMembership ;
@@ -164,7 +173,12 @@ elmt:Shadowing__Thermal_20Packet
     sysml:ownedFeature elmt:Shadowing__Thermal_20Packet__packet_20data_20field, elmt:Shadowing__Thermal_20Packet__data_20field ;
     sysml:ownedFeatureMembership elmt:Shadowing__Thermal_20Packet__packet_20data_20field_om, elmt:Shadowing__Thermal_20Packet__data_20field_om ;
     sysx:sourceText "    part def 'Thermal Packet' :> Packet {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Shadowing__Thermal_20Packet__packet_20data_20field\"},{\"@id\":\"Shadowing__Thermal_20Packet__data_20field\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Shadowing__Thermal_20Packet__packet_20data_20field_om\"},{\"@id\":\"Shadowing__Thermal_20Packet__data_20field_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Shadowing__Thermal_20Packet__packet_20data_20field_om\"},{\"@id\":\"Shadowing__Thermal_20Packet__data_20field_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Shadowing__Thermal_20Packet__packet_20data_20field\"},{\"@id\":\"Shadowing__Thermal_20Packet__data_20field\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Shadowing__Thermal_20Packet__packet_20data_20field_om\"},{\"@id\":\"Shadowing__Thermal_20Packet__data_20field_om\"}]" .
 
 elmt:Shadowing__Thermal_20Packet_om
     a sysml:OwningMembership ;
@@ -300,7 +314,12 @@ elmt:Shadowing__Bus
     sysml:ownedFeature elmt:Shadowing__Bus__payload, elmt:Shadowing__Bus__cargo, elmt:Shadowing__Bus__carried, elmt:Shadowing__Bus__wrapped, elmt:Shadowing__Bus__raw, elmt:Shadowing__Bus__link, elmt:Shadowing__Bus__budgeted ;
     sysml:ownedFeatureMembership elmt:Shadowing__Bus__payload_om, elmt:Shadowing__Bus__cargo_om, elmt:Shadowing__Bus__carried_om, elmt:Shadowing__Bus__wrapped_om, elmt:Shadowing__Bus__raw_om, elmt:Shadowing__Bus__link_om, elmt:Shadowing__Bus__budgeted_om ;
     sysx:sourceText "    part def Bus {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Shadowing__Bus__payload\"},{\"@id\":\"Shadowing__Bus__cargo\"},{\"@id\":\"Shadowing__Bus__carried\"},{\"@id\":\"Shadowing__Bus__Packet\"},{\"@id\":\"Shadowing__Bus__wrapped\"},{\"@id\":\"Shadowing__Bus__raw\"},{\"@id\":\"Shadowing__Bus__link\"},{\"@id\":\"Shadowing__Bus__Budget\"},{\"@id\":\"Shadowing__Bus__budgeted\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Shadowing__Bus__payload_om\"},{\"@id\":\"Shadowing__Bus__cargo_om\"},{\"@id\":\"Shadowing__Bus__carried_om\"},{\"@id\":\"Shadowing__Bus__Packet_om\"},{\"@id\":\"Shadowing__Bus__wrapped_om\"},{\"@id\":\"Shadowing__Bus__raw_om\"},{\"@id\":\"Shadowing__Bus__link_om\"},{\"@id\":\"Shadowing__Bus__Budget_om\"},{\"@id\":\"Shadowing__Bus__budgeted_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Shadowing__Bus__payload_om\"},{\"@id\":\"Shadowing__Bus__cargo_om\"},{\"@id\":\"Shadowing__Bus__carried_om\"},{\"@id\":\"Shadowing__Bus__Packet_om\"},{\"@id\":\"Shadowing__Bus__wrapped_om\"},{\"@id\":\"Shadowing__Bus__raw_om\"},{\"@id\":\"Shadowing__Bus__link_om\"},{\"@id\":\"Shadowing__Bus__Budget_om\"},{\"@id\":\"Shadowing__Bus__budgeted_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Shadowing__Bus__payload\"},{\"@id\":\"Shadowing__Bus__cargo\"},{\"@id\":\"Shadowing__Bus__carried\"},{\"@id\":\"Shadowing__Bus__wrapped\"},{\"@id\":\"Shadowing__Bus__raw\"},{\"@id\":\"Shadowing__Bus__link\"},{\"@id\":\"Shadowing__Bus__budgeted\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Shadowing__Bus__payload_om\"},{\"@id\":\"Shadowing__Bus__cargo_om\"},{\"@id\":\"Shadowing__Bus__carried_om\"},{\"@id\":\"Shadowing__Bus__wrapped_om\"},{\"@id\":\"Shadowing__Bus__raw_om\"},{\"@id\":\"Shadowing__Bus__link_om\"},{\"@id\":\"Shadowing__Bus__budgeted_om\"}]" .
 
 elmt:Shadowing__Bus_om
     a sysml:OwningMembership ;
@@ -828,7 +847,12 @@ elmt:Shadowing__Frame
     sysml:ownedFeature elmt:Shadowing__Frame__packet_20data_20field, elmt:Shadowing__Frame__outer, elmt:Shadowing__Frame__inner ;
     sysml:ownedFeatureMembership elmt:Shadowing__Frame__packet_20data_20field_om, elmt:Shadowing__Frame__outer_om, elmt:Shadowing__Frame__inner_om ;
     sysx:sourceText "    part def Frame {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Shadowing__Frame__Frame\"},{\"@id\":\"Shadowing__Frame__packet_20data_20field\"},{\"@id\":\"Shadowing__Frame__outer\"},{\"@id\":\"Shadowing__Frame__inner\"},{\"@id\":\"Shadowing__Frame__Field\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Shadowing__Frame__Frame_om\"},{\"@id\":\"Shadowing__Frame__packet_20data_20field_om\"},{\"@id\":\"Shadowing__Frame__outer_om\"},{\"@id\":\"Shadowing__Frame__inner_om\"},{\"@id\":\"Shadowing__Frame__Field_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Shadowing__Frame__Frame_om\"},{\"@id\":\"Shadowing__Frame__packet_20data_20field_om\"},{\"@id\":\"Shadowing__Frame__outer_om\"},{\"@id\":\"Shadowing__Frame__inner_om\"},{\"@id\":\"Shadowing__Frame__Field_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Shadowing__Frame__packet_20data_20field\"},{\"@id\":\"Shadowing__Frame__outer\"},{\"@id\":\"Shadowing__Frame__inner\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Shadowing__Frame__packet_20data_20field_om\"},{\"@id\":\"Shadowing__Frame__outer_om\"},{\"@id\":\"Shadowing__Frame__inner_om\"}]" .
 
 elmt:Shadowing__Frame_om
     a sysml:OwningMembership ;
@@ -1032,7 +1056,10 @@ elmt:Shadowing__Consumer
     sysml:ownedRelationship elmt:Shadowing__Consumer__Lib_om, elmt:Shadowing__Consumer___401, elmt:Shadowing__Consumer__cell_om, elmt:Shadowing__Consumer__inner_om ;
     sysml:ownedImport elmt:Shadowing__Consumer___401 ;
     sysx:sourceText "    package Consumer {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Shadowing__Consumer__Lib\"},{\"@id\":\"Shadowing__Consumer__cell\"},{\"@id\":\"Shadowing__Consumer__inner\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Shadowing__Consumer__Lib_om\"},{\"@id\":\"Shadowing__Consumer__cell_om\"},{\"@id\":\"Shadowing__Consumer__inner_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Shadowing__Consumer__Lib_om\"},{\"@id\":\"Shadowing__Consumer___401\"},{\"@id\":\"Shadowing__Consumer__cell_om\"},{\"@id\":\"Shadowing__Consumer__inner_om\"}]" .
 
 elmt:Shadowing__Consumer_om
     a sysml:OwningMembership ;
@@ -1172,7 +1199,8 @@ elmt:Shadowing__Exposed
     sysml:ownedRelationship elmt:Shadowing__Exposed__Lib_om, elmt:Shadowing__Exposed___401 ;
     sysml:ownedImport elmt:Shadowing__Exposed___401 ;
     sysx:sourceText "    package Exposed {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedRelationship "[{\"@id\":\"Shadowing__Exposed__Lib_om\"},{\"@id\":\"Shadowing__Exposed___401\"}]" .
 
 elmt:Shadowing__Exposed_om
     a sysml:OwningMembership ;
