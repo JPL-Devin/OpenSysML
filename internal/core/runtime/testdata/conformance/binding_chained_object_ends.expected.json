@@ -1,0 +1,11 @@
+{
+  "type": "instance",
+  "instantiate": "test::OuterAssembly",
+  "slots": {
+    "bi": {"type": "Instance"}
+  },
+  "identical": [
+    ["bi", "inner.leaf.i"],
+    ["inner.bi", "bi"]
+  ]
+}
