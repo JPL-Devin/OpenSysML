@@ -34,7 +34,9 @@ const libraryPi = math.Pi
 // declaration. Its name is the fully-qualified name dispatch matches, and its
 // parameters carry the names and order the declared signature gives.
 type libraryFunction struct {
-	name   string
+	name string
+	// params holds each parameter's effective name in declared order; an anonymous
+	// parameter is "" and binds by position only.
 	params []string
 	// required is how many leading parameters the signature declares [1]; the
 	// rest are declared [0..1] and bind null where a call omits them.
@@ -237,8 +239,8 @@ func numericScalars(params []string, apply func([]semantics.Value) (semantics.Va
 		for i, arg := range args {
 			if arg.Kind != ValConst || !arg.Const.IsNumeric() {
 				return Value{}, fmt.Errorf(
-					"%w: function %s parameter %q requires a numeric value, got %s",
-					ErrTypeMismatch, name, params[i], describeValue(arg),
+					"%w: function %s parameter %s requires a numeric value, got %s",
+					ErrTypeMismatch, name, parameterLabel(params, i), describeValue(arg),
 				)
 			}
 			values[i] = arg.Const
@@ -258,7 +260,8 @@ func libraryFunctionByName(fqn string) (*libraryFunction, bool) {
 	return fn, ok
 }
 
-// LibraryFunctionParams is the declared parameter names of the library function fqn.
+// LibraryFunctionParams is the declared parameter names of the library function
+// fqn in declared order, an anonymous parameter as "".
 func LibraryFunctionParams(fqn string) (params []string, ok bool) {
 	fn, ok := libraryFunctions[fqn]
 	if !ok {
@@ -349,7 +352,11 @@ func (fn *libraryFunction) bindAndApply(ctx *Context, args calcArgs) (Value, err
 		}
 		values[i] = arg
 		if ctx.trace != nil {
-			ctx.trace.RecordCalcBind(param, arg, "argument")
+			label := param
+			if label == "" {
+				label = fn.parameterLabel(i)
+			}
+			ctx.trace.RecordCalcBind(label, arg, "argument")
 		}
 	}
 	return fn.apply(fn.name, ctx, values)
@@ -360,7 +367,7 @@ func (fn *libraryFunction) bindAndApply(ctx *Context, args calcArgs) (Value, err
 func (fn *libraryFunction) checkNamedArguments(args calcArgs) error {
 	unknown := make([]string, 0, len(args.named))
 	for name := range args.named {
-		if !slices.Contains(fn.params, name) {
+		if name == "" || !slices.Contains(fn.params, name) {
 			unknown = append(unknown, name)
 		}
 	}
@@ -374,24 +381,50 @@ func (fn *libraryFunction) checkNamedArguments(args calcArgs) error {
 	)
 }
 
-// parameterList renders the declared parameter names for an error message.
+// parameterList renders the declared parameters for an error message.
 func (fn *libraryFunction) parameterList() string {
-	quoted := make([]string, len(fn.params))
-	for i, param := range fn.params {
-		quoted[i] = fmt.Sprintf("%q", param)
+	labels := make([]string, len(fn.params))
+	for i := range fn.params {
+		labels[i] = fn.parameterLabel(i)
 	}
-	return strings.Join(quoted, ", ")
+	return strings.Join(labels, ", ")
+}
+
+// parameterLabel names the i-th parameter in a diagnostic: its declared name
+// quoted, or its position (`#2`) when it is anonymous.
+func (fn *libraryFunction) parameterLabel(i int) string {
+	return parameterLabel(fn.params, i)
+}
+
+// parameterLabel is libraryFunction.parameterLabel over a parameter list.
+func parameterLabel(params []string, i int) string {
+	if params[i] == "" {
+		return positionLabel(i)
+	}
+	return fmt.Sprintf("%q", params[i])
+}
+
+// positionLabel names the anonymous parameter at 0-based index i by its position.
+func positionLabel(i int) string {
+	return fmt.Sprintf("#%d", i+1)
 }
 
 // argumentFor returns the argument bound to the i-th declared parameter: the
 // positional argument in that place, the named argument the library's own
-// parameter name matches, or null for an omitted [0..1] parameter.
+// parameter name matches, or null for an omitted [0..1] parameter. An anonymous
+// parameter has no name to match, so a named call cannot bind it.
 func (fn *libraryFunction) argumentFor(i int, param string, args calcArgs) (Value, error) {
 	if len(args.named) > 0 {
-		if bound, ok := args.named[param]; ok {
+		if bound, ok := args.named[param]; ok && param != "" {
 			return bound, nil
 		}
 		if i < fn.required {
+			if param == "" {
+				return Value{}, fmt.Errorf(
+					"%w: function %s parameter %s is anonymous and binds only by position",
+					ErrUnknownParameter, fn.name, fn.parameterLabel(i),
+				)
+			}
 			return Value{}, fmt.Errorf(
 				"%w: function %s has no input parameter matching the arguments given (expected %q)",
 				ErrUnknownParameter, fn.name, param,
@@ -733,13 +766,19 @@ func radiansFromDegrees(args []semantics.Value) (semantics.Value, error) {
 // is what VectorValues declares a NumericalVectorValue to be: a sequence is that
 // vector, one number the one-dimensional vector of it, and null the empty vector.
 func vectorElements(name, param string, val Value) ([]semantics.Value, error) {
+	return labelledVectorElements(name, fmt.Sprintf("%q", param), val)
+}
+
+// labelledVectorElements is vectorElements reporting the parameter by a
+// rendered label, which names an anonymous parameter by position.
+func labelledVectorElements(name, label string, val Value) ([]semantics.Value, error) {
 	elements := elementsOf(val)
 	out := make([]semantics.Value, len(elements))
 	for i, elem := range elements {
 		if elem.Kind != ValConst || !elem.Const.IsNumeric() {
 			return nil, fmt.Errorf(
-				"%w: function %s parameter %q requires a vector of numeric values, element %d is %s",
-				ErrTypeMismatch, name, param, i+1, describeValue(elem),
+				"%w: function %s parameter %s requires a vector of numeric values, element %d is %s",
+				ErrTypeMismatch, name, label, i+1, describeValue(elem),
 			)
 		}
 		out[i] = elem.Const

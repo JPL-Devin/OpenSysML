@@ -74,22 +74,27 @@ func registerMeasurementRefCalculations() {
 	registerUnevaluable("MeasurementRefCalculations::ToString", []string{"x"}, 1, noMeasurementRefValue)
 }
 
+// anonymous is an `in : Type` parameter: it has no name and binds by position only.
+const anonymous = ""
+
 // registerVectorCalculations registers VectorCalculations over a vector of numbers;
 // those needing a measurement reference, a quantity-scaled vector or a tensor are named.
+// A parameter declared `in : Type` under a VectorFunctions general takes that
+// general's parameter name (KerML implicit redefinition); otherwise it is anonymous.
 func registerVectorCalculations() {
 	registerUnevaluable("VectorCalculations::[", []string{"elements", "mRef"}, 2, noMeasurementRefValue)
 	registerValueFunction("VectorCalculations::isZeroVectorQuantity", []string{"v"}, 1, vectorIsZero)
-	registerValueFunction("VectorCalculations::isUnitVectorQuantity", []string{"v"}, 1, vectorIsUnit)
+	registerValueFunction("VectorCalculations::isUnitVectorQuantity", []string{anonymous}, 1, vectorIsUnit)
 	registerValueFunction("VectorCalculations::+", []string{"v", "w"}, 2, vectorAdd)
 	registerValueFunction("VectorCalculations::-", []string{"v", "w"}, 2, vectorSubtract)
 	registerValueFunction("VectorCalculations::scalarVectorMult", []string{"x", "v"}, 2, scalarVectorMult)
 	registerValueFunction("VectorCalculations::vectorScalarMult", []string{"v", "x"}, 2, vectorScalarMult)
-	registerUnevaluable("VectorCalculations::scalarQuantityVectorMult", []string{"x", "v"}, 2, noVectorQuantity)
-	registerUnevaluable("VectorCalculations::vectorScalarQuantityMult", []string{"v", "x"}, 2, noVectorQuantity)
+	registerUnevaluable("VectorCalculations::scalarQuantityVectorMult", []string{anonymous, anonymous}, 2, noVectorQuantity)
+	registerUnevaluable("VectorCalculations::vectorScalarQuantityMult", []string{anonymous, anonymous}, 2, noVectorQuantity)
 	registerValueFunction("VectorCalculations::vectorScalarDiv", []string{"v", "x"}, 2, vectorScalarDiv)
-	registerUnevaluable("VectorCalculations::vectorScalarQuantityDiv", []string{"v", "x"}, 2, noVectorQuantity)
+	registerUnevaluable("VectorCalculations::vectorScalarQuantityDiv", []string{anonymous, anonymous}, 2, noVectorQuantity)
 	registerValueFunction("VectorCalculations::inner", []string{"v", "w"}, 2, vectorInner)
-	registerUnevaluable("VectorCalculations::outer", []string{"v", "w"}, 2, noTensorQuantity)
+	registerUnevaluable("VectorCalculations::outer", []string{anonymous, anonymous}, 2, noTensorQuantity)
 	registerValueFunction("VectorCalculations::norm", []string{"v"}, 1, vectorNorm)
 	registerValueFunction("VectorCalculations::angle", []string{"v", "w"}, 2, vectorAngle)
 	registerUnevaluable("VectorCalculations::transform",
@@ -104,13 +109,13 @@ func registerTensorCalculations() {
 	registerUnevaluable("TensorCalculations::isUnitTensorQuantity", []string{"x"}, 1, noTensorQuantity)
 	registerUnevaluable("TensorCalculations::+", []string{"x", "y"}, 2, noTensorQuantity)
 	registerUnevaluable("TensorCalculations::-", []string{"x", "y"}, 2, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::scalarTensorMult", []string{"x", "t"}, 2, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::TensorScalarMult", []string{"t", "x"}, 2, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::scalarQuantityTensorMult", []string{"x", "t"}, 2, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::TensorScalarQuantityMult", []string{"t", "x"}, 2, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::tensorVectorMult", []string{"t", "v"}, 2, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::vectorTensorMult", []string{"v", "t"}, 2, noTensorQuantity)
-	registerUnevaluable("TensorCalculations::tensorTensorMult", []string{"s", "t"}, 2, noTensorQuantity)
+	registerUnevaluable("TensorCalculations::scalarTensorMult", []string{anonymous, anonymous}, 2, noTensorQuantity)
+	registerUnevaluable("TensorCalculations::TensorScalarMult", []string{anonymous, anonymous}, 2, noTensorQuantity)
+	registerUnevaluable("TensorCalculations::scalarQuantityTensorMult", []string{anonymous, anonymous}, 2, noTensorQuantity)
+	registerUnevaluable("TensorCalculations::TensorScalarQuantityMult", []string{anonymous, anonymous}, 2, noTensorQuantity)
+	registerUnevaluable("TensorCalculations::tensorVectorMult", []string{anonymous, anonymous}, 2, noTensorQuantity)
+	registerUnevaluable("TensorCalculations::vectorTensorMult", []string{anonymous, anonymous}, 2, noTensorQuantity)
+	registerUnevaluable("TensorCalculations::tensorTensorMult", []string{anonymous, anonymous}, 2, noTensorQuantity)
 	registerUnevaluable("TensorCalculations::transform",
 		[]string{"transformation", "sourceTensor"}, 2, noCoordinateTransformation)
 }
@@ -133,8 +138,8 @@ func angleScalars(params []string, apply func([]semantics.Value) (semantics.Valu
 			num, ok := angleArgument(ctx, arg)
 			if !ok {
 				return Value{}, fmt.Errorf(
-					"%w: function %s parameter %q requires a number of radians or an angle quantity, got %s",
-					ErrTypeMismatch, name, params[i], describeValue(arg),
+					"%w: function %s parameter %s requires a number of radians or an angle quantity, got %s",
+					ErrTypeMismatch, name, parameterLabel(params, i), describeValue(arg),
 				)
 			}
 			values[i] = num
@@ -375,13 +380,18 @@ func quantityAggregate(op ast.OperatorKind) libraryApply {
 	}
 }
 
-// vectorIsUnit is VectorCalculations::isUnitVectorQuantity: whether the norm is one.
+// vectorIsUnit is VectorCalculations::isUnitVectorQuantity: whether the norm of
+// its one anonymous parameter is one.
 func vectorIsUnit(name string, _ *Context, args []Value) (Value, error) {
-	elements, err := realElements(name, "v", args[0])
+	elements, err := labelledVectorElements(name, positionLabel(0), args[0])
 	if err != nil {
 		return Value{}, err
 	}
-	return boolValue(euclideanNorm(elements) == 1), nil
+	reals := make([]float64, len(elements))
+	for i, elem := range elements {
+		reals[i] = asReal(elem)
+	}
+	return boolValue(euclideanNorm(reals) == 1), nil
 }
 
 // quantityArgs reads the two ScalarQuantityValue parameters x and y.

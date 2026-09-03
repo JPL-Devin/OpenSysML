@@ -95,8 +95,12 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   and is a type mismatch. `VectorCalculations` over a numeric vector
   compute as the Kernel `VectorFunctions` do; the quantity-scaled vector forms, `outer`, and
   every `MeasurementRefCalculations` and `TensorCalculations` declaration report themselves by
-  name with the reason instead of `no result expression`. A gate asserts every declaration of
-  the four packages is either computed or named, parameters in declared order.
+  name with the reason instead of `no result expression`. A parameter these libraries declare
+  as `in : Type` binds by the name of the general's parameter it implicitly redefines
+  (`VectorCalculations::angle(v = a, w = b)`), and where there is no general it is anonymous:
+  it binds by position only, a named call is `ErrUnknownParameter` listing it as `#1`, and the
+  registry publishes no name for it. A gate asserts every declaration of the four packages is
+  either computed or named, parameters by effective name in declared order.
 - **Composed units render in one canonical form.** A unit an operation composes is a sorted
   product of powers of the units the operands were written in — `3 [m] * 3 [m]`,
   `(3 [m]) ** 2` and `(3 [m] * 3 [m]) / 3 [m]` print `9 [m**2]`, `9 [m**2]` and `3.0 [m]` rather

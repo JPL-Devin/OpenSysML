@@ -3,20 +3,21 @@ package runtime
 import (
 	"errors"
 	"math"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
-	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
-	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // TestQuantityCalculationsAreAllDispatchable: every Quantities and Units calculation is
-// registered with its parameters in declared order (anonymous ones by position) or is a builtin.
+// registered with its parameters' effective names in declared order, or is a builtin.
+// An `in : Type` parameter takes the name of the parameter it implicitly redefines
+// in the calc's general (KerML 7.4.7.2); with no general it is anonymous, "".
 func TestQuantityCalculationsAreAllDispatchable(t *testing.T) {
 	packages := map[string]string{
 		"QuantityCalculations":       "Domain Libraries/Quantities and Units/QuantityCalculations.sysml",
@@ -24,23 +25,13 @@ func TestQuantityCalculationsAreAllDispatchable(t *testing.T) {
 		"VectorCalculations":         "Domain Libraries/Quantities and Units/VectorCalculations.sysml",
 		"TensorCalculations":         "Domain Libraries/Quantities and Units/TensorCalculations.sysml",
 	}
+	idx := libs.NewModelIndex()
+	resolver := resolve.New(idx)
+	model := semantics.NewModel(resolver)
+	ctx := NewContext(model, resolver, 10000)
 
 	for pkg, path := range packages {
 		t.Run(pkg, func(t *testing.T) {
-			data, err := libs.DefaultSource().Read(path)
-			if err != nil {
-				t.Fatalf("Read(%q): %v", path, err)
-			}
-			p := parser.New(source.New(path, data))
-			file := p.ParseFile()
-			if len(p.Diagnostics) > 0 {
-				t.Fatalf("%s has %d parse diagnostics, want 0: %v", path, len(p.Diagnostics), p.Diagnostics)
-			}
-			idx := symbols.NewIndex()
-			idx.AddDocument(path, file)
-			resolver := resolve.New(idx)
-			ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
-
 			declared := 0
 			for _, sym := range idx.LookupDirectChildren(pkg) {
 				if !isCalcSymbol(sym) {
@@ -55,15 +46,9 @@ func TestQuantityCalculationsAreAllDispatchable(t *testing.T) {
 					}
 					continue
 				}
-				params := declaredInputs(sym)
-				if len(params) != len(fn.params) {
-					t.Errorf("%s declares %v, implementation takes %v", fqn, params, fn.params)
-					continue
-				}
-				for i, name := range params {
-					if name != "" && fn.params[i] != name {
-						t.Errorf("%s parameter %d is %q, implementation names it %q", fqn, i, name, fn.params[i])
-					}
+				params := effectiveInputNames(model, sym)
+				if !slices.Equal(params, fn.params) {
+					t.Errorf("%s declares %q, implementation takes %q", fqn, params, fn.params)
 				}
 			}
 			if declared == 0 {
@@ -73,19 +58,73 @@ func TestQuantityCalculationsAreAllDispatchable(t *testing.T) {
 	}
 }
 
-// declaredInputs lists a calc's own input parameters in declared order, an
-// anonymous one as "".
-func declaredInputs(sym *symbols.Symbol) []string {
+// effectiveInputNames lists a calc's input parameters in declared order by
+// effective name, an anonymous one as "".
+func effectiveInputNames(model *semantics.Model, sym *symbols.Symbol) []string {
 	var params []string
-	for _, member := range declMembers(sym.Decl) {
-		usage, ok := member.(*ast.Usage)
-		if !ok || (usage.Direction != ast.DirIn && usage.Direction != ast.DirInOut) {
+	for _, param := range model.BehaviorParametersOf(sym) {
+		if param.IsResult || (param.Direction != ast.DirIn && param.Direction != ast.DirInOut) {
 			continue
 		}
-		name, _ := ast.EffectiveName(usage)
-		params = append(params, name)
+		params = append(params, model.EffectiveNameOf(param.Symbol))
 	}
 	return params
+}
+
+// An anonymous library parameter binds by position only: a call cannot name it,
+// and LibraryFunctionParams publishes no name for it, while a parameter that
+// takes its name from the redefined general parameter binds by that name.
+func TestAnonymousLibraryParametersBindByPositionOnly(t *testing.T) {
+	unit := realVec(0.6, 0.8)
+
+	params, ok := LibraryFunctionParams("VectorCalculations::isUnitVectorQuantity")
+	if !ok || !slices.Equal(params, []string{""}) {
+		t.Fatalf("LibraryFunctionParams(isUnitVectorQuantity) = %q, %v; want [\"\"], true", params, ok)
+	}
+	params, ok = LibraryFunctionParams("VectorCalculations::angle")
+	if !ok || !slices.Equal(params, []string{"v", "w"}) {
+		t.Fatalf("LibraryFunctionParams(angle) = %q, %v; want [v w], true", params, ok)
+	}
+
+	fn, ok := libraryFunctionByName("VectorCalculations::isUnitVectorQuantity")
+	if !ok {
+		t.Fatal("VectorCalculations::isUnitVectorQuantity is not registered")
+	}
+	got, err := fn.invoke(libCtx(t), calcArgs{positional: []Value{unit}})
+	if err != nil || !valueEqual(got, boolValue(true)) {
+		t.Fatalf("isUnitVectorQuantity((0.6, 0.8)) = %+v, %v; want true", got, err)
+	}
+	for _, name := range []string{"v", "x", ""} {
+		_, err = fn.invoke(libCtx(t), calcArgs{named: map[string]Value{name: unit}})
+		if !errors.Is(err, ErrUnknownParameter) {
+			t.Fatalf("isUnitVectorQuantity(%s = ...) error = %v, want %v", name, err, ErrUnknownParameter)
+		}
+		if !strings.Contains(err.Error(), "(expected #1)") {
+			t.Fatalf("isUnitVectorQuantity(%s = ...) error %q does not list the parameter by position", name, err)
+		}
+	}
+	_, err = fn.invoke(libCtx(t), calcArgs{positional: []Value{vec(strValue("a"))}})
+	if !errors.Is(err, ErrTypeMismatch) || !strings.Contains(err.Error(), `parameter #1 requires`) {
+		t.Fatalf("isUnitVectorQuantity((\"a\")) error = %v, want %v naming parameter #1", err, ErrTypeMismatch)
+	}
+
+	outer, ok := libraryFunctionByName("VectorCalculations::outer")
+	if !ok {
+		t.Fatal("VectorCalculations::outer is not registered")
+	}
+	_, err = outer.invoke(libCtx(t), calcArgs{named: map[string]Value{"v": unit, "w": unit}})
+	if !errors.Is(err, ErrUnknownParameter) || !strings.Contains(err.Error(), "(expected #1, #2)") {
+		t.Fatalf("outer(v = ..., w = ...) error = %v, want %v listing #1, #2", err, ErrUnknownParameter)
+	}
+
+	angle, ok := libraryFunctionByName("VectorCalculations::angle")
+	if !ok {
+		t.Fatal("VectorCalculations::angle is not registered")
+	}
+	got, err = angle.invoke(libCtx(t), calcArgs{named: map[string]Value{"w": realVec(0, 1), "v": realVec(1, 0)}})
+	if err != nil || asReal(got.Const) != math.Pi/2 {
+		t.Fatalf("angle(w = (0, 1), v = (1, 0)) = %+v, %v; want π/2", got, err)
+	}
 }
 
 // quantityCalculationsContext evaluates expressions in a package that imports
