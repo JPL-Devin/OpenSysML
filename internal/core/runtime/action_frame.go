@@ -225,11 +225,12 @@ func (e *performances) bindArguments(perf *actionFrame, activation int64) error 
 		return nil
 	}
 	inv, performs := nestedInvocation(usage)
-	if !performs || !inv.invoked {
+	if !performs || inv.expr == nil {
 		return nil
 	}
 	scope := nodeScope(perf.flow, perf.node)
 	ec := e.evalContextAround(perf, scope)
+	ec.inBehaviorBody = true
 	ec.activation = activation
 	arguments, err := invocationArguments(e.ctx, scope, inv, ec)
 	if err != nil {
@@ -1003,7 +1004,7 @@ func (e *performances) performInvocation(perf *actionFrame, inv actionInvocation
 			inputs[name] = value
 		}
 	}
-	if !inv.invoked {
+	if inv.expr == nil {
 		for _, name := range in {
 			if _, bound := inputs[name]; bound {
 				continue
@@ -1050,7 +1051,7 @@ func checkInputsBound(inv actionInvocation, params []actionParameter, inputs map
 		if param.Direction != ast.DirIn && param.Direction != ast.DirInOut {
 			continue
 		}
-		if _, bound := inputs[param.Name]; bound || param.HasDefault {
+		if _, bound := inputs[param.Name]; bound || param.Optional {
 			continue
 		}
 		return fmt.Errorf("%w: action %s: input parameter %s is bound by no argument",

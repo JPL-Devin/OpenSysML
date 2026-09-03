@@ -24,6 +24,16 @@ func (v Value) realPart() (float64, bool) {
 	return real(v.Complex()), true
 }
 
+// holdsComplex reports whether any element is a ValComplex.
+func holdsComplex(elements []Value) bool {
+	for _, elem := range elements {
+		if elem.Kind == ValComplex {
+			return true
+		}
+	}
+	return false
+}
+
 // complexOf reads a value as a complex number: a ValComplex, or a numeric
 // constant, which ScalarValues declares a Complex (Real :> Complex) with a zero
 // imaginary part. Nothing else is one.
