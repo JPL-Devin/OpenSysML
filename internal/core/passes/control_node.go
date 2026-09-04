@@ -132,10 +132,13 @@ func (c *controlNodeChecker) walkNode(scope *symbols.Scope, owner, decl ast.Node
 	case *ast.StateRegion:
 		c.walk(child, n, n.States)
 	case *ast.TransitionMember:
+		// Effect and body members are built in the trigger scope when the
+		// trigger declares parameters.
+		body := symbols.TriggerScope(scope, n)
 		c.checkAction(scope, n, n.Members)
-		c.checkBlock(child, n.Effect)
-		c.walk(child, n, n.Effect)
-		c.walk(child, n, n.Members)
+		c.checkBlock(body, n.Effect)
+		c.walk(body, n, n.Effect)
+		c.walk(body, n, n.Members)
 	case *ast.SendStatement:
 		c.checkAction(scope, n, n.Members)
 		c.walk(child, n, n.Members)

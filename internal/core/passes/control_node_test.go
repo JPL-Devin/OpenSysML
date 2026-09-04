@@ -684,6 +684,30 @@ func TestControlNodeInAnonymousActionBodies(t *testing.T) {
 		transition first b do send 1 to a { action x; action y; decide d; first x then d; first y then d; } then a;
 	}
 }`, []controlNodeWant{{CodeDecisionIncomingSuccessions, 4, "decide d has 2 incoming successions"}}},
+		{"triggered transition body", `package P {
+	attribute def Sig;
+	state def S {
+		state a; state b;
+		transition first a accept e : Sig then b {
+			action x; action y; action z; fork f;
+			first x then f; first y then f; first f then z;
+		}
+	}
+}`, []controlNodeWant{{CodeForkIncomingSuccessions, 6, "fork f has 2 incoming successions"}}},
+		{"triggered transition braced effect", `package P {
+	attribute def Sig;
+	state def S {
+		state a; state b;
+		transition t first a accept e : Sig do { action x; action y; merge m; succession s first [1..1] x then m; first m then y; } then b;
+	}
+}`, []controlNodeWant{{CodeMergeIncomingMultiplicity, 5, "source multiplicity [1]; successions into a merge node must have source multiplicity [0..1]"}}},
+		{"triggered transition effect action", `package P {
+	attribute def Sig;
+	state def S {
+		state a; state b;
+		transition first a accept e : Sig do action { action x; action y; action z; join j; first x then j; first j then y; first j then z; } then b;
+	}
+}`, []controlNodeWant{{CodeJoinOutgoingSuccessions, 5, "join j has 2 outgoing successions"}}},
 		{"do block", `package P {
 	state def S {
 		state c {
@@ -728,12 +752,15 @@ func TestControlNodeInAnonymousActionBodies(t *testing.T) {
 // node in a state's entry/do/exit block is owned by that anonymous action.
 func TestControlNodeInAnonymousActionBodiesIsSilent(t *testing.T) {
 	wantControlNodesClean(t, `package P {
+	attribute def Sig;
 	state def S {
 		state a; state b;
 		transition t first a then b { action x; action y; fork f; first x then f; first f then y; }
 		transition first b then a { action x; action y; join j; first x then j; first j then y; }
 		transition v first a do action g { action x; action y; fork f; first x then f; first f then y; } then b;
 		transition first b do { action x; action y; merge m; first x then m; first m then y; } then a;
+		transition first a accept e : Sig then b { action x; action y; fork f; first x then f; first f then y; }
+		transition first b accept e : Sig do action { action x; action y; join j; first x then j; first j then y; } then a;
 		state c {
 			entry { fork e; }
 			do { action x; action y; merge m; first x then m; first m then y; }
