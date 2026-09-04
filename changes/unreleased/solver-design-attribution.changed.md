@@ -1,0 +1,1 @@
+- **The solver's design provenance is now credited.** The README's new Acknowledgements section and the `internal/core/solve` package documentation name OpenMBEE's [hcf-runtime](https://github.com/hivecore-dev/hcf-runtime) `ParametricAnalysisService` (Apache 2.0) as the design the constraint-solving capability set follows; the implementation itself remains independent.
