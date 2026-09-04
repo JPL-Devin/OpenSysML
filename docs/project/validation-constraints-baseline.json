@@ -1015,17 +1015,17 @@
     {
       "name": "validateTriggerInvocationActionAfterArgument",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateTriggerInvocationActionAtArgument",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateTriggerInvocationActionWhenArgument",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateTypeAtMostOneConjugator",

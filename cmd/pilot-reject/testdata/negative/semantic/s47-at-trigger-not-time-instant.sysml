@@ -1,5 +1,5 @@
 // Invalid: The argument of an `at` trigger must be a TimeInstantValue (SysML 7.16 TriggerInvocationExpression; pilot validateTriggerInvocationActionAtArgument).
-package S02AtTriggerNotTimeInstant {
+package S47AtTriggerNotTimeInstant {
     private import ISQ::*;
     private import SI::*;
     state def S {

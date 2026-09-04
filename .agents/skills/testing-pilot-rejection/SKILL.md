@@ -9,7 +9,7 @@ Sibling of `testing-pilot-differential` and `testing-pilot-xpect` (same pin
 `scripts/pilot-pin.sh`, same committed-baseline shape), but pointed the other way: the
 differential measures what the reference accepts and we reject; this oracle measures what the
 reference **rejects and we accept** — permissiveness gaps. Its corpus is committed under
-`cmd/pilot-reject/testdata/negative/` (175 hand-written invalid models, one violated rule + citation
+`cmd/pilot-reject/testdata/negative/` (228 hand-written invalid models, one violated rule + citation
 in each file's mandatory `// Invalid: ...` first line), so no corpus download exists. Method and
 findings: `docs/project/pilot-rejection.md`.
 
@@ -31,22 +31,27 @@ cmp build/pilot-reject/pilot-reject.json docs/project/pilot-rejection-baseline.j
 
 `docs/project/pilot-rejection-baseline.json` is the only authority for the counts; the numbers
 quoted here are as-of values, and `cmd/pilot-reject/doc_counts_test.go` fails if they drift from it.
-As of the `semantic/` source (named pilot constraints and the control-node succession rules), with
-a fresh library cache:
-`175 case(s): 154 both reject, 13 only the pilot rejects, 8 only we reject, 0 both accept`,
+As of the `semantic/` source (named pilot constraints, KerML and SysML, the trigger-argument typing
+rules and the control-node
+succession rules), with a fresh library cache:
+`228 case(s): 198 both reject, 22 only the pilot rejects, 8 only we reject, 0 both accept`,
 byte-identical to the committed baseline. Any `both accept` case is a bug in the corpus (the case
-is not actually invalid under the loaded standard library) — fix the case, never ignore it.
+is not actually invalid under the loaded standard library) — fix the case, never ignore it. A
+candidate the pilot accepts because it does not enforce the named constraint is not a case either:
+record it under "Constraints the pilot declares but does not enforce" in
+`docs/project/pilot-rejection.md` with the evidence from the pinned `KerMLValidator` or
+`SysMLValidator` source.
 
 ## Conformance policy (`-conformance auto|default|strict`)
 
 The baseline is the default `auto` policy: the `extensions/` cases are judged under strict
 conformance (OpenSysML notation the reference rejects as a syntax error), everything else in the
-default mode. The report names each case's mode and lists the seven strict-only agreements
+default mode. The report names each case's mode and lists the three strict-only agreements
 separately, so a strict agreement never reads as a default one.
 
 ```bash
 go run ./cmd/pilot-reject -conformance default -out build/pilot-reject-default
-# as of the reserved-keyword tightening: 115 agreements, 5 gaps — the numbers strict mode leaves alone
+# as of the `semantic/` source: 191 agreements, 25 gaps — the numbers strict mode leaves alone
 go run ./cmd/pilot-reject -conformance lenient   # must fail: unknown conformance policy
 ```
 
@@ -76,9 +81,20 @@ rm -rf build/pilot-reject-2
 
 ## Extending the corpus
 
-Add a file under the subdirectory naming its derivation (`grammar/`, `extensions/`, `xpect/`, `semantic/`), give
-it the mandatory first-line header, re-run, and inspect its bucket. Then recommit the baseline
-(`cp build/pilot-reject/pilot-reject.json docs/project/pilot-rejection-baseline.json`) and update
+Add a file under the subdirectory naming its derivation (`grammar/`, `extensions/`, `xpect/`,
+`semantic/`), give it the mandatory first-line header, re-run, and inspect its bucket. A
+`semantic/` header cites the pilot's constraint name: `// Invalid: <rule> (<clause>; pilot
+validate<Name>).`, so grep the corpus for the name before authoring to avoid a duplicate. Referee
+the candidate on both sides before committing it:
+
+```bash
+build/pilot-sysml-validator/validate-sysml-batch --root <dir> <dir>/<file>.sysml   # empty output = accepted
+build/pilot-kerml-validator/validate-kerml <dir>/<file>.kerml
+./bin/sysml -validate <dir>/<file>.sysml
+```
+
+Then recommit the baseline
+(`go run ./cmd/pilot-reject -update`) and update
 the counts and gap table in `docs/project/pilot-rejection.md`, the README's rejection-oracle line,
 and the headline above. `TestPilotRejectionDocumentCountsMatchBaseline` (CI-cheap, reads only
 committed files) fails on any stale count, and on a gap table that does not enumerate exactly the
