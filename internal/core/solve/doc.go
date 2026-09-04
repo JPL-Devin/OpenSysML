@@ -13,9 +13,9 @@
 // solving semantics, so this is an advertised extension, not a conformance
 // claim.
 //
-// The capability set — satisfiability, requirement consistency, value synthesis
-// and objective optimization over an SMT solver — follows the design of OpenMBEE's
-// hcf-runtime ParametricAnalysisService (Apache 2.0); see README Acknowledgements.
+// The capability set — satisfiability, unsat-core conflict explanation, value
+// synthesis and objective optimization over an SMT solver — follows the design of
+// OpenMBEE's HMF ConstraintSolverService (Apache 2.0); see README Acknowledgements.
 //
 // # Solver compatibility
 //

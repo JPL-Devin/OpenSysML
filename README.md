@@ -499,10 +499,10 @@ Apache 2.0
 
 ## Acknowledgements
 
-The constraint-solving capability set — satisfiability checking, requirement-consistency
-detection, value synthesis and objective optimization through an SMT solver — follows the
-design of the `ParametricAnalysisService` in OpenMBEE's
-[hcf-runtime](https://github.com/hivecore-dev/hcf-runtime) (Apache 2.0). The
+The constraint-solving capability set — satisfiability checking, conflict explanation
+through unsat cores, value synthesis and objective optimization through an SMT solver —
+follows the design of the `ConstraintSolverService` in OpenMBEE's
+[HMF (Hivecore Model Framework)](https://github.com/hivecore-dev/hmf) (Apache 2.0). The
 implementation in `internal/core/solve` is independent: it translates conditions to
 SMT-LIB 2 for an external `z3`/`cvc5` process rather than binding to Z3 in-process.
 
