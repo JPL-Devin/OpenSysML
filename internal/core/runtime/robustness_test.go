@@ -107,7 +107,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_symbol_is_not_a_calc", testCalcSymbolIsNotACalc)
 	t.Run("calc_direct_recursion", testCalcDirectRecursion)
 	t.Run("calc_mutual_recursion", testCalcMutualRecursion)
+	t.Run("calc_default_recursion", testCalcDefaultRecursion)
 	t.Run("calc_library_default_recursion", testCalcLibraryDefaultRecursion)
+	t.Run("calc_library_default_failure_names_one_frame", testCalcLibraryDefaultFailureNamesOneFrame)
 	t.Run("calc_recursion_spends_step_budget", testCalcRecursionSpendsStepBudget)
 	t.Run("calc_recursion_at_depth_ceiling", testCalcRecursionAtDepthCeiling)
 	t.Run("calc_non_terminating_loop", testCalcNonTerminatingLoop)
@@ -458,31 +460,319 @@ func testBindingMultipleScalarContributors(t *testing.T) {
 }
 
 func testBindingMultipleCollectionContributors(t *testing.T) {
-	idx, _, ctx := buildRuntime(t, "<binding-multiple-collection-contributors>", parseAndBuild(t, `package P {
-		part def Sys {
-			attribute edges : Integer[*];
-			attribute leftEdge : Integer[0..1] = (1);
-			attribute rightEdge : Integer[0..1] = (2);
-			binding [1] bind [0..1] edges = [0..1] leftEdge;
-			binding [1] bind [0..1] edges = [0..1] rightEdge;
+	t.Run("partial", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-multiple-collection-contributors>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute edges : Integer[*];
+				attribute leftEdge : Integer[0..1] = (1);
+				attribute rightEdge : Integer[0..1] = (2);
+				binding [1] bind [0..1] edges = [0..1] leftEdge;
+				binding [1] bind [0..1] edges = [0..1] rightEdge;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
 		}
-	}`))
-	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
-	if err != nil {
-		t.Fatalf("instantiate: %v", err)
-	}
-	_, err = inst.GetFeatureValue(ctx, "edges")
-	if !errors.Is(err, ErrBindingEnd) {
-		t.Fatalf("GetFeatureValue(edges) = %v, want ErrBindingEnd", err)
-	}
-	if !strings.Contains(err.Error(), "multiple bindings contribute to multi-valued endpoint") ||
-		!strings.Contains(err.Error(), "edges") {
-		t.Errorf("error %q does not name the unsupported multiple-contributor endpoint", err)
-	}
-	fv := inst.FeatureValues["edges"]
-	if fv.Materialized || fv.Written || fv.BindingDerived || fv.HeldValue().Kind != ValInvalid {
-		t.Errorf("unsupported binding left an assignment behind: %+v", *fv)
-	}
+		_, err = inst.GetFeatureValue(ctx, "edges")
+		if !errors.Is(err, ErrBindingEnd) {
+			t.Fatalf("GetFeatureValue(edges) = %v, want ErrBindingEnd", err)
+		}
+		if got, want := err.Error(), "binding end cannot be resolved: Sys.edges is bound by `bind [0..1] edges = [0..1] leftEdge`, "+
+			"which links one unspecified value of each end; the model does not determine which value edges holds"; got != want {
+			t.Errorf("error = %q, want %q", got, want)
+		}
+		fv := inst.FeatureValues["edges"]
+		if fv.Materialized || fv.Written || fv.BindingDerived || fv.HeldValue().Kind != ValInvalid {
+			t.Errorf("unsupported binding left an assignment behind: %+v", *fv)
+		}
+	})
+
+	// An end admitting one value links a feature holding one value whole,
+	// however wide the feature is declared; one holding more stays partial.
+	t.Run("partial_by_values_held", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-partial-by-values-held>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute edges : Integer[*];
+				attribute pick : Integer[1];
+				binding [1] bind [0..1] edges = [0..1] pick;
+			}
+			part one : Sys { :>> edges = (7); }
+			part two : Sys { :>> edges = (7, 8); }
+		}`))
+		one, err := ctx.Instantiate(oneSymbol(t, idx, "P::one"))
+		if err != nil {
+			t.Fatalf("instantiate one: %v", err)
+		}
+		fv, err := one.GetFeatureValue(ctx, "pick")
+		if err != nil {
+			t.Fatalf("one.pick: %v", err)
+		}
+		if got := fv.HeldValue().Const.Int; got != 7 {
+			t.Errorf("one.pick = %d (%s), want 7, the one value edges holds", got, FormatValue(fv.HeldValue()))
+		}
+		two, err := ctx.Instantiate(oneSymbol(t, idx, "P::two"))
+		if err != nil {
+			t.Fatalf("instantiate two: %v", err)
+		}
+		if _, err := two.GetFeatureValue(ctx, "pick"); !errors.Is(err, ErrBindingEnd) {
+			t.Fatalf("two.pick = %v, want ErrBindingEnd", err)
+		}
+		// An end valued on its own — written, as one valued by a default — keeps that value.
+		if err := two.SetFeatureValue(ctx, "pick", integerValue(8)); err != nil {
+			t.Fatalf("write two.pick: %v", err)
+		}
+		fv, err = two.GetFeatureValue(ctx, "pick")
+		if err != nil {
+			t.Fatalf("two.pick after the write: %v", err)
+		}
+		if got := fv.HeldValue().Const.Int; got != 8 {
+			t.Errorf("two.pick = %s after writing 8, want 8", FormatValue(fv.HeldValue()))
+		}
+	})
+
+	// A binding of the whole feature determines it whatever partial bindings it has
+	// besides, and in whatever order they are declared.
+	t.Run("whole_beside_partial", func(t *testing.T) {
+		for name, bindings := range map[string]string{
+			"partial_first": "binding [1] bind [0..1] edges = [0..1] pick; bind edges = every;",
+			"whole_first":   "bind edges = every; binding [1] bind [0..1] edges = [0..1] pick;",
+		} {
+			t.Run(name, func(t *testing.T) {
+				idx, _, ctx := buildRuntime(t, "<binding-whole-beside-partial>", parseAndBuild(t, `package P {
+					part def Sys {
+						attribute edges : Integer[*];
+						attribute every : Integer[*] = (1, 2, 3);
+						attribute pick : Integer[0..1] = (2);
+						`+bindings+`
+					}
+				}`))
+				inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+				if err != nil {
+					t.Fatalf("instantiate: %v", err)
+				}
+				fv, err := inst.GetFeatureValue(ctx, "edges")
+				if err != nil {
+					t.Fatalf("edges: %v", err)
+				}
+				if got := FormatValue(fv.HeldValue()); got != "[1, 2, 3]" {
+					t.Errorf("edges = %s, want [1, 2, 3], what the whole binding determines", got)
+				}
+			})
+		}
+	})
+
+	// An end of multiplicity [0] links no value: each feature reads what it holds on its own.
+	t.Run("zero_width_end", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-zero-width-end>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute edges : Integer[*] = (7, 8);
+				attribute pick : Integer[0..1];
+				binding [1] bind [0] edges = [0..1] pick;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		fv, err := inst.GetFeatureValue(ctx, "edges")
+		if err != nil {
+			t.Fatalf("edges: %v", err)
+		}
+		if got := len(elementsOf(fv.HeldValue())); got != 2 {
+			t.Errorf("edges holds %d values (%s), want the two it is valued with", got, FormatValue(fv.HeldValue()))
+		}
+		fv, err = inst.GetFeatureValue(ctx, "pick")
+		if err != nil {
+			t.Fatalf("pick: %v", err)
+		}
+		if got := elementsOf(fv.HeldValue()); len(got) != 0 {
+			t.Errorf("pick = %s, want nothing: the binding links no value to it", FormatValue(fv.HeldValue()))
+		}
+	})
+
+	// An end stating how many values it links is not met by a feature holding fewer: the
+	// binding is a multiplicity violation, not a whole binding of what there is — whichever
+	// end is read, whether the features admit more than the end links or exactly as many.
+	t.Run("under_lower_bound", func(t *testing.T) {
+		for name, c := range map[string]struct{ ends, same string }{
+			"exact":  {"[2]", "[0..2]"},
+			"ranged": {"[2..3]", "[0..3]"},
+		} {
+			ends := c.ends
+			for shape, declared := range map[string]string{"wider": "[*]", "same": c.same} {
+				t.Run(name+"_"+shape, func(t *testing.T) {
+					idx, _, ctx := buildRuntime(t, "<binding-under-lower-bound>", parseAndBuild(t, `package P {
+						part def Sys {
+							attribute edges : Integer`+declared+` = (7);
+							attribute pair : Integer`+declared+`;
+							binding [1] bind `+ends+` edges = `+ends+` pair;
+						}
+					}`))
+					want := "multiplicity violation: `bind " + ends + " edges = " + ends + " pair` links " +
+						ends + " of edges, which holds 1 value(s)"
+					for _, order := range [][]string{{"pair", "edges", "pair"}, {"edges", "pair", "edges"}} {
+						inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+						if err != nil {
+							t.Fatalf("instantiate: %v", err)
+						}
+						for _, feature := range order {
+							_, err := inst.GetFeatureValue(ctx, feature)
+							if !errors.Is(err, ErrMultiplicityViolation) {
+								t.Fatalf("%v: %s = %v, want ErrMultiplicityViolation", order, feature, err)
+							}
+							if got := err.Error(); got != want {
+								t.Errorf("%v: %s error = %q, want %q", order, feature, got, want)
+							}
+						}
+						fv := inst.FeatureValues["pair"]
+						if fv.Materialized || fv.Written || fv.BindingDerived || fv.HeldValue().Kind != ValInvalid {
+							t.Errorf("%v: the refused binding left an assignment behind: %+v", order, *fv)
+						}
+					}
+				})
+			}
+		}
+	})
+
+	// An end that makes the binding partial does not excuse the other end from its
+	// lower bound, whichever end is read.
+	t.Run("under_lower_bound_beyond_partial_end", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-under-lower-bound-beyond-partial>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute edges : Integer[*];
+				attribute pair : Integer[0..3] = (5);
+				binding [1] bind [2] edges = [2] pair;
+			}
+		}`))
+		want := "multiplicity violation: `bind [2] edges = [2] pair` links [2] of pair, which holds 1 value(s)"
+		for _, order := range [][]string{{"edges", "pair"}, {"pair", "edges"}} {
+			inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+			if err != nil {
+				t.Fatalf("instantiate: %v", err)
+			}
+			for _, feature := range order {
+				_, err := inst.GetFeatureValue(ctx, feature)
+				if !errors.Is(err, ErrMultiplicityViolation) {
+					t.Fatalf("%v: %s = %v, want ErrMultiplicityViolation", order, feature, err)
+				}
+				if got := err.Error(); got != want {
+					t.Errorf("%v: %s error = %q, want %q", order, feature, got, want)
+				}
+			}
+			fv := inst.FeatureValues["edges"]
+			if fv.Written || fv.BindingDerived || fv.HeldValue().Kind != ValInvalid {
+				t.Errorf("%v: the refused binding left an assignment behind: %+v", order, *fv)
+			}
+		}
+	})
+
+	// Ends requiring a value are not met by two optional features holding none: the
+	// binding links nothing, a multiplicity violation rather than an unknown value or a
+	// cycle. Once anything values the features — a default, another binding — it is whole.
+	t.Run("empty_required_ends", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-empty-required-ends>", parseAndBuild(t, `package P {
+			part def Empty {
+				attribute a : Integer[0..1];
+				attribute b : Integer[0..1];
+				binding [1] bind [1] a = [1] b;
+			}
+			part def Defaulted {
+				attribute a : Integer[0..1] = 5;
+				attribute b : Integer[0..1];
+				binding [1] bind [1] a = [1] b;
+			}
+			part def Joined {
+				attribute a : Integer[0..1];
+				attribute b : Integer[0..1];
+				attribute c : Integer[0..1] = 5;
+				binding [1] bind [1] a = [1] b;
+				binding [1] bind [1] a = [1] c;
+			}
+		}`))
+		want := "multiplicity violation: `bind [1] a = [1] b` links [1] of a, which holds 0 value(s)"
+		for _, order := range [][]string{{"a", "b"}, {"b", "a"}} {
+			inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Empty"))
+			if err != nil {
+				t.Fatalf("instantiate: %v", err)
+			}
+			for _, feature := range order {
+				_, err := inst.GetFeatureValue(ctx, feature)
+				if !errors.Is(err, ErrMultiplicityViolation) {
+					t.Fatalf("Empty %v: %s = %v, want ErrMultiplicityViolation", order, feature, err)
+				}
+				if got := err.Error(); got != want {
+					t.Errorf("Empty %v: %s error = %q, want %q", order, feature, got, want)
+				}
+			}
+		}
+		for def, orders := range map[string][][]string{
+			"P::Defaulted": {{"a", "b"}, {"b", "a"}},
+			"P::Joined":    {{"a", "b", "c"}, {"b", "a", "c"}, {"c", "b", "a"}},
+		} {
+			for _, order := range orders {
+				inst, err := ctx.Instantiate(oneSymbol(t, idx, def))
+				if err != nil {
+					t.Fatalf("instantiate: %v", err)
+				}
+				for _, feature := range order {
+					fv, err := inst.GetFeatureValue(ctx, feature)
+					if err != nil {
+						t.Fatalf("%s %v: %s: %v", def, order, feature, err)
+					}
+					if got := fv.HeldValue(); got.Kind != ValConst || got.Const.Int != 5 {
+						t.Errorf("%s %v: %s = %s, want 5", def, order, feature, FormatValue(got))
+					}
+				}
+			}
+		}
+	})
+
+	t.Run("whole_unequal", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-multiple-collection-conflict>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute edges : Integer[*];
+				attribute left : Integer[*] = (1, 2);
+				attribute right : Integer[*] = (2, 1);
+				bind edges = left;
+				bind edges = right;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		_, err = inst.GetFeatureValue(ctx, "edges")
+		if !errors.Is(err, ErrBindingConflict) {
+			t.Fatalf("GetFeatureValue(edges) = %v, want ErrBindingConflict", err)
+		}
+		if got, want := err.Error(), "binding conflict at Sys.edges: left = [1, 2], right = [2, 1]"; got != want {
+			t.Errorf("conflict error = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("whole_equal", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-multiple-collection-equal>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute edges : Integer[*];
+				attribute left : Integer[*] = (1, 2);
+				attribute right : Integer[*] = (1, 2);
+				bind edges = left;
+				bind edges = right;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		fv, err := inst.GetFeatureValue(ctx, "edges")
+		if err != nil {
+			t.Fatalf("GetFeatureValue(edges): %v", err)
+		}
+		if got := FormatValue(fv.HeldValue()); got != "[1, 2]" {
+			t.Errorf("edges = %s, want [1, 2]", got)
+		}
+	})
 }
 
 func testBindingPropagationSpendsElementBudget(t *testing.T) {
@@ -4886,6 +5176,50 @@ func testCalcMutualRecursion(t *testing.T) {
 	assertCalcRecursionBounded(t, src, "ping", ErrCalcRecursionLimit)
 }
 
+// testCalcDefaultRecursion: a default re-invoking its own calc nests through the
+// binding rather than the body, and is bounded and collapsed the same way.
+func testCalcDefaultRecursion(t *testing.T) {
+	src := `
+		package test {
+			calc def f {
+				in x : Integer;
+				in y : Integer = f(x);
+				return : Integer = x;
+			}
+		}
+	`
+	assertCalcRecursionBounded(t, src, "f", ErrCalcRecursionLimit)
+}
+
+// testCalcLibraryDefaultFailureNamesOneFrame: a default failing once on a library
+// specialization is reported under one calc name, as a calc with a body reports it.
+func testCalcLibraryDefaultFailureNamesOneFrame(t *testing.T) {
+	src := `
+		package test {
+			import ScalarValues::*;
+			import RealFunctions::*;
+			calc def again :> max {
+				in x :>> x;
+				in y :>> y = missing;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "again", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("calc again not found")
+	}
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 10}}
+	_, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
+	if err == nil {
+		t.Fatal("expected the unresolved default to fail the invocation")
+	}
+	if got, prefix := err.Error(), `calc test::again: default for parameter "y": `; !strings.HasPrefix(got, prefix) || strings.Count(got, "calc test::again") != 1 {
+		t.Errorf("err = %q; want one frame %q", got, prefix)
+	}
+}
+
 // testCalcLibraryDefaultRecursion: a library specialization whose default invokes
 // itself nests through its own binding, so the depth budget reports it like any calc.
 func testCalcLibraryDefaultRecursion(t *testing.T) {
@@ -4984,6 +5318,11 @@ func assertCalcInvocationBounded(t *testing.T, idx *symbols.Index, ctx *Context,
 		}
 		if !errors.Is(err, want) {
 			t.Errorf("expected %v, got: %v", want, err)
+		}
+		// One line per frame would make the message (and the memory building
+		// it) grow with the square of the depth.
+		if msg := err.Error(); len(msg) > 1024 {
+			t.Errorf("error for recursive calc %s is %d bytes; want frames collapsed: %.200s…", calcName, len(msg), msg)
 		}
 	case <-time.After(30 * time.Second):
 		t.Fatalf("recursive calc %s did not terminate", calcName)

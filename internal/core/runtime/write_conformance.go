@@ -18,6 +18,15 @@ type writeTarget struct {
 	mult semantics.Range
 }
 
+// admission is how an object written to a feature answers to the feature's type: a declared value
+// or binding classifies the object it holds (KerML 1.0 §7.3.4.1); a write or message takes it as it is.
+type admission uint8
+
+const (
+	admitWritten admission = iota
+	admitDeclared
+)
+
 // writeTargetKey identifies a target by where it was written and the name it
 // wrote, which resolve to one declaration however often the write runs.
 type writeTargetKey struct {
@@ -61,7 +70,7 @@ func (ctx *Context) checkWrite(scope *symbols.Scope, what string, target *writeT
 	if msg := ctx.writeCountRefusal(target, &value); msg != "" {
 		return fmt.Errorf("%s: %w: %s", what, ErrMultiplicityViolation, msg)
 	}
-	return ctx.checkWriteType(scope, what, target.typ, value)
+	return ctx.checkWriteType(scope, what, target.typ, value, admitWritten)
 }
 
 // writeCountRefusal says why the number of values written is outside the
@@ -107,8 +116,8 @@ func storeBodyValue(ctx *Context, host stmtHost, env *stmtEnv, name string, valu
 // checkWriteType reports an element of a written value that no feature of the
 // declared type could hold. A target declaring no type holds anything, and a
 // value whose type the run time cannot name is not judged here.
-func (ctx *Context) checkWriteType(scope *symbols.Scope, what string, declared *symbols.Symbol, value Value) error {
-	if refusal, refused := ctx.writeTypeRefusal(scope, declared, &value); refused {
+func (ctx *Context) checkWriteType(scope *symbols.Scope, what string, declared *symbols.Symbol, value Value, how admission) error {
+	if refusal, refused := ctx.writeTypeRefusal(scope, declared, &value, how); refused {
 		return fmt.Errorf("%s: %w: %s", what, ErrTypeMismatch, refusal)
 	}
 	return nil
@@ -116,7 +125,7 @@ func (ctx *Context) checkWriteType(scope *symbols.Scope, what string, declared *
 
 // writeTypeRefusal says why the first element no feature of the declared type
 // could hold is refused; the second result is false where every element conforms.
-func (ctx *Context) writeTypeRefusal(scope *symbols.Scope, declared *symbols.Symbol, value *Value) (string, bool) {
+func (ctx *Context) writeTypeRefusal(scope *symbols.Scope, declared *symbols.Symbol, value *Value, how admission) (string, bool) {
 	if declared == nil {
 		return "", false
 	}
@@ -124,18 +133,18 @@ func (ctx *Context) writeTypeRefusal(scope *symbols.Scope, declared *symbols.Sym
 	case ValSequence, ValSet:
 		elements := elementsOf(*value)
 		for i := range elements {
-			if refusal, refused := ctx.elementRefusal(scope, declared, &elements[i]); refused {
+			if refusal, refused := ctx.elementRefusal(scope, declared, &elements[i], how); refused {
 				return refusal, true
 			}
 		}
 		return "", false
 	}
-	return ctx.elementRefusal(scope, declared, value)
+	return ctx.elementRefusal(scope, declared, value, how)
 }
 
 // elementRefusal says why one element is refused by a feature of the declared type.
-func (ctx *Context) elementRefusal(scope *symbols.Scope, declared *symbols.Symbol, element *Value) (string, bool) {
-	conforms, refusal, err := ctx.valueConforms(scope, element, declared)
+func (ctx *Context) elementRefusal(scope *symbols.Scope, declared *symbols.Symbol, element *Value, how admission) (string, bool) {
+	conforms, refusal, err := ctx.valueConforms(scope, element, declared, how)
 	if err != nil || conforms {
 		return "", false
 	}
@@ -151,7 +160,7 @@ func (ctx *Context) elementRefusal(scope *symbols.Scope, declared *symbols.Symbo
 // lattice where the target is a scalar type, specialization otherwise. The
 // second result says why a value was refused where the general message would
 // not say it, and is empty otherwise.
-func (ctx *Context) valueConforms(scope *symbols.Scope, value *Value, declared *symbols.Symbol) (bool, string, error) {
+func (ctx *Context) valueConforms(scope *symbols.Scope, value *Value, declared *symbols.Symbol, how admission) (bool, string, error) {
 	switch value.Kind {
 	case ValNull, ValInvalid:
 		// Holds no value to type; how many values a feature may hold is the
@@ -160,15 +169,19 @@ func (ctx *Context) valueConforms(scope *symbols.Scope, value *Value, declared *
 	case ValQuantity:
 		return ctx.quantityConforms(*value, declared)
 	case ValArray, ValVector, ValVectorQuantity:
-		return ctx.structuredConforms(scope, *value, declared)
-	case ValInstance:
-		// An object is what its usage is, implicit bases included: a `part box : Box`
-		// is a Part as well as a Box.
-		inst, ok := ctx.instances[value.Instance]
+		return ctx.structuredConforms(scope, *value, declared, how)
+	}
+	if id, ok := value.Object(); ok {
+		// An object, a selected variant's included, is what its usage is; declared as a
+		// value of a narrower type, it is classified by that type too (see classify.go).
+		inst, ok := ctx.instances[id]
 		if !ok || inst == nil || inst.Type == nil {
-			return false, "", fmt.Errorf("%w: instance %d", ErrUndeterminedValueType, value.Instance)
+			return false, "", fmt.Errorf("%w: instance %d", ErrUndeterminedValueType, id)
 		}
-		return ctx.model.Conforms(inst.Type, declared), "", nil
+		if how == admitDeclared {
+			return ctx.canClassify(inst, declared), "", nil
+		}
+		return ctx.instanceConforms(inst, declared), "", nil
 	}
 	prim := ctx.model.PrimTypeOf(declared)
 	if got := valuePrimType(value); prim != semantics.PrimUnknown && got != semantics.PrimUnknown {
@@ -201,7 +214,7 @@ func isStructuredValue(value *Value) bool {
 
 // structuredConforms judges a written array, vector or vector quantity: its type's
 // supertypes, or a non-scalar specialization of its base type whose shape it fits.
-func (ctx *Context) structuredConforms(scope *symbols.Scope, value Value, declared *symbols.Symbol) (bool, string, error) {
+func (ctx *Context) structuredConforms(scope *symbols.Scope, value Value, declared *symbols.Symbol, how admission) (bool, string, error) {
 	direct, err := ctx.structuredValueType(value)
 	if err != nil {
 		return false, "", err
@@ -221,7 +234,7 @@ func (ctx *Context) structuredConforms(scope *symbols.Scope, value Value, declar
 		if refusal := ctx.shapeRefusal(value, declared); refusal != "" {
 			return false, refusal, nil
 		}
-		if ok, refusal, err := ctx.elementsConform(scope, value, declared); !ok || err != nil {
+		if ok, refusal, err := ctx.elementsConform(scope, value, declared, how); !ok || err != nil {
 			return ok, refusal, err
 		}
 	}
@@ -322,7 +335,7 @@ func (ctx *Context) constantIntegers(member, owner *symbols.Symbol) ([]int64, bo
 
 // elementsConform judges the elements (a vector quantity's magnitudes) against each
 // effective feature that is or redefines Array's `elements`: count and element type.
-func (ctx *Context) elementsConform(scope *symbols.Scope, value Value, declared *symbols.Symbol) (bool, string, error) {
+func (ctx *Context) elementsConform(scope *symbols.Scope, value Value, declared *symbols.Symbol, how admission) (bool, string, error) {
 	elements := structuredElements(value)
 	refuse := func(feat EffectiveFeature, mult, got string) string {
 		declares := feat.Name
@@ -343,7 +356,7 @@ func (ctx *Context) elementsConform(scope *symbols.Scope, value Value, declared 
 			continue
 		}
 		for _, elem := range elements {
-			ok, refusal, err := ctx.valueConforms(scope, &elem, feat.Type)
+			ok, refusal, err := ctx.valueConforms(scope, &elem, feat.Type, how)
 			if err != nil || !ok {
 				if refusal == "" {
 					refusal = refuse(feat, "", fmt.Sprintf("element %s (%s)", FormatValue(elem), describeValue(elem)))

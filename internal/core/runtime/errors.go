@@ -348,9 +348,9 @@ var (
 	// that feature value rather than deciding anything about the model.
 	ErrFeatureValueMaterialization = errors.New("feature value could not be materialized")
 
-	// ErrNoSuchFeature is returned when a chained assignment reaches an object
-	// whose type declares no feature of the name the target's last segment
-	// writes: the object has nowhere to hold the value.
+	// ErrNoSuchFeature is returned when a member read, a write, or a chained
+	// assignment reaches an object whose type declares no feature of that name:
+	// the object has nothing to answer with and nowhere to hold the value.
 	ErrNoSuchFeature = errors.New("object has no such feature")
 
 	// ErrNoSubject is returned when the feature a satisfaction assertion names
@@ -502,4 +502,10 @@ func calcFrame(calc string, err error) error {
 		return &CalcFrameError{Calc: calc, Frames: 1, Err: err, calcs: calcs}
 	}
 	return &CalcFrameError{Calc: calc, Frames: 1, Err: err, calcs: map[string]bool{calc: true}}
+}
+
+// calcDefaultError reports err raised evaluating calc's default for param as one
+// frame of calc, so a default re-invoking its own calc collapses into a count.
+func calcDefaultError(calc, param string, err error) error {
+	return calcFrame(calc, fmt.Errorf("default for parameter %q: %w", param, err))
 }

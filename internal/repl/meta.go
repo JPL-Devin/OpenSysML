@@ -1165,7 +1165,7 @@ func (w *featureValueWalk) rows(inst *runtime.Instance, indent string, depth int
 	if life, ok := w.ctx.OccurrenceLife(inst.ID); ok && life.Destroyed {
 		return w.emit(nil, fmt.Sprintf("%s(%s)", indent, life))
 	}
-	features := w.ctx.FeaturesOf(inst.Type)
+	features := w.ctx.FeaturesOfObject(inst)
 	connectors := w.connectors(inst, indent)
 	if len(features) == 0 && len(connectors) == 0 && withBehaviors {
 		return w.emit(nil, indent+"(no features)")
@@ -1178,37 +1178,37 @@ func (w *featureValueWalk) rows(inst *runtime.Instance, indent string, depth int
 	}
 
 	var lines []string
-	var behaviors []*runtime.EffectiveFeature
-	for i := range features {
+	var behaviors []runtime.ObjectFeature
+	for i, of := range features {
 		if w.budget <= 0 {
 			return truncated(lines, "")
 		}
-		feat := &features[i]
+		feat := of.Feature
 		// A state or action holds no value either; what it has is a run, or none,
 		// which is listed under its own heading after the values.
 		if isBehaviorFeature(feat) {
 			if withBehaviors {
-				behaviors = append(behaviors, feat)
+				behaviors = append(behaviors, of)
 			}
 			continue
 		}
 		// A constraint or requirement the part carries has no value; what it has
 		// is a verdict about this instance, which is the useful thing to show.
 		if verdict, ok := featureVerdict(w.ctx, feat, inst); ok {
-			lines = w.emit(lines, fmt.Sprintf("%s%s: %s", indent, feat.Name, verdict))
+			lines = w.emit(lines, fmt.Sprintf("%s%s: %s", indent, of.Name, verdict))
 			continue
 		}
 		if held, elided := w.elided(feat, depth); elided {
-			lines = w.emit(lines, fmt.Sprintf("%s%s : %s (not expanded: %s)", indent, feat.Name, held, w.elisionReason(depth)))
+			lines = w.emit(lines, fmt.Sprintf("%s%s : %s (not expanded: %s)", indent, of.Name, held, w.elisionReason(depth)))
 			continue
 		}
-		fv, err := inst.GetFeatureValue(w.ctx, feat.Name)
+		fv, err := inst.GetFeatureValue(w.ctx, of.Name)
 		if err != nil {
 			w.errs = append(w.errs, err)
-			lines = w.emit(lines, fmt.Sprintf("%s%s: <error: %v>", indent, feat.Name, err))
+			lines = w.emit(lines, fmt.Sprintf("%s%s: <error: %v>", indent, of.Name, err))
 			continue
 		}
-		lines = w.emit(lines, fmt.Sprintf("%s%s = %s", indent, feat.Name, formatFeatureValue(w.ctx, fv)))
+		lines = w.emit(lines, fmt.Sprintf("%s%s = %s", indent, of.Name, formatFeatureValue(w.ctx, fv)))
 		// The object's remaining features keep a line each; a nested expansion
 		// spends only what is left beyond them.
 		reserved := len(features) - i - 1
@@ -1247,7 +1247,7 @@ func isBehaviorFeature(feat *runtime.EffectiveFeature) bool {
 
 // behaviorLines lists an object's behaviors under their own heading with what each
 // is doing, and the values a running one's occurrence holds beneath its row.
-func (w *featureValueWalk) behaviorLines(inst *runtime.Instance, behaviors []*runtime.EffectiveFeature, indent string, depth int) []string {
+func (w *featureValueWalk) behaviorLines(inst *runtime.Instance, behaviors []runtime.ObjectFeature, indent string, depth int) []string {
 	if len(behaviors) == 0 {
 		return nil
 	}
@@ -1256,21 +1256,21 @@ func (w *featureValueWalk) behaviorLines(inst *runtime.Instance, behaviors []*ru
 		heading, rowIndent = "Behaviors:", indent
 	}
 	lines := w.emit(nil, heading)
-	for _, feat := range behaviors {
+	for _, of := range behaviors {
 		if w.budget <= 0 {
 			return w.truncate(lines, rowIndent)
 		}
-		row := fmt.Sprintf("%s%s: %s", rowIndent, feat.Name, behaviorStatus(w.ctx, inst, feat))
-		if _, runs := w.ctx.BehaviorNamed(inst, feat.Name); !runs {
+		row := fmt.Sprintf("%s%s: %s", rowIndent, of.Name, behaviorStatus(w.ctx, inst, of.Feature))
+		if _, runs := w.ctx.BehaviorNamed(inst, of.Name); !runs {
 			lines = w.emit(lines, row)
 			continue
 		}
-		if _, elided := w.elided(feat, depth); elided {
+		if _, elided := w.elided(of.Feature, depth); elided {
 			lines = w.emit(lines, fmt.Sprintf("%s (not expanded: %s)", row, w.elisionReason(depth)))
 			continue
 		}
 		lines = w.emit(lines, row)
-		fv, err := inst.GetFeatureValue(w.ctx, feat.Name)
+		fv, err := inst.GetFeatureValue(w.ctx, of.Name)
 		if err != nil {
 			w.errs = append(w.errs, err)
 			lines = w.emit(lines, fmt.Sprintf("%s  <error: %v>", rowIndent, err))
@@ -1558,16 +1558,14 @@ func (s *Session) destroyedNote(inst *runtime.Instance) string {
 	return ""
 }
 
-// formatFeatureValue renders what a feature value holds: a multi-valued feature keeps its
-// contents in Values, leaving the scalar Value unset; a scalar holding nothing reads as unset.
+// formatFeatureValue renders what a feature value reads as: what it holds, the empty
+// sequence when an optional feature holds nothing, and unset for a required one.
 func formatFeatureValue(ctx *runtime.Context, fv *runtime.FeatureValue) string {
-	if fv.Values.Kind != runtime.ValInvalid {
-		return formatValue(ctx, fv.Values)
-	}
-	if fv.Value.Kind == runtime.ValInvalid {
+	val, err := fv.ReadValue(fv.Feature.Name)
+	if err != nil {
 		return runtime.UnsetText
 	}
-	return formatValue(ctx, fv.Value)
+	return formatValue(ctx, val)
 }
 
 // formatValue renders a value as every surface spells it. ctx may be nil, which

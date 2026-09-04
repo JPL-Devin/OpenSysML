@@ -960,6 +960,7 @@ func (e *Encoder) encodeFields(node ast.Node) {
 		e.w.Int(int64(n.Kind))
 		e.node(n.Target)
 		e.w.Bool(n.Conjugated)
+		e.node(n.Multiplicity)
 	case *ast.RelationshipMember:
 		e.base(&n.NodeBase)
 		e.ident(n.Ident)
@@ -1116,6 +1117,7 @@ func (e *Encoder) encodeFields(node ast.Node) {
 		e.node(n.CrossFeature)
 		e.node(n.Value)
 		e.span(n.ValueOperatorSpan)
+		e.node(n.ValueMultiplicity)
 		e.w.Bool(n.ValueIsDefault)
 		e.w.Bool(n.ValueIsInitial)
 		e.nodes(n.Members)
@@ -1450,6 +1452,7 @@ func (d *Decoder) decodeFields(node ast.Node) {
 		n.Kind = ast.RelationshipKind(d.r.Int())
 		n.Target = d.node()
 		n.Conjugated = d.r.Bool()
+		n.Multiplicity = typed[*ast.Multiplicity](d)
 	case *ast.RelationshipMember:
 		d.base(&n.NodeBase)
 		n.Ident = d.ident()
@@ -1606,6 +1609,7 @@ func (d *Decoder) decodeFields(node ast.Node) {
 		n.CrossFeature = typed[*ast.CrossFeatureMember](d)
 		n.Value = d.node()
 		n.ValueOperatorSpan = d.span()
+		n.ValueMultiplicity = typed[*ast.Multiplicity](d)
 		n.ValueIsDefault = d.r.Bool()
 		n.ValueIsInitial = d.r.Bool()
 		n.Members = d.nodes()

@@ -1,0 +1,15 @@
+{
+  "type": "instance",
+  "instantiate": "test::campus",
+  "libraries": true,
+  "slots": {
+    "site.label": {"type": "String", "value": "north"},
+    "site.codes": {"type": "Sequence", "elements": [
+      {"type": "Integer", "value": 7}, {"type": "Integer", "value": 8}
+    ]},
+    "site.unit.lastCode": {"type": "Integer", "value": 7}
+  },
+  "identical": [
+    ["site", "raw"]
+  ]
+}

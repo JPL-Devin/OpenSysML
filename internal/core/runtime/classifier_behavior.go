@@ -86,7 +86,8 @@ func (inst *Instance) Behavior(name string) (*ObjectBehavior, bool) {
 
 // BehaviorNamed returns the behavior the object runs under the given name or
 // under another name of the same feature: a redefinition renames the behavior
-// it redefines (KerML 1.0 §7.3.4.5), so both names denote one execution.
+// it redefines (KerML 1.0 §7.3.4.5), so both names denote one execution. The
+// renaming may come from any type of the object, a classifier included.
 func (ctx *Context) BehaviorNamed(inst *Instance, name string) (*ObjectBehavior, bool) {
 	if b, ok := inst.Behavior(name); ok {
 		return b, true
@@ -94,29 +95,39 @@ func (ctx *Context) BehaviorNamed(inst *Instance, name string) (*ObjectBehavior,
 	if name == "" {
 		return nil, false
 	}
-	for _, b := range inst.behaviors {
-		if b.member != nil && slices.Contains(ctx.redefinedNames(b.member, inst.Type), name) {
-			return b, true
-		}
-	}
-	for _, feat := range ctx.FeaturesOf(inst.Type) {
-		if feat.Name != name || feat.Symbol == nil {
-			continue
-		}
-		for _, redefined := range ctx.redefinedNames(feat.Symbol, inst.Type) {
-			if b, ok := inst.Behavior(redefined); ok {
+	for _, typ := range inst.types() {
+		for _, b := range inst.behaviors {
+			if b.member != nil && slices.Contains(ctx.redefinedNames(b.member, typ), name) {
 				return b, true
+			}
+		}
+		for _, feat := range ctx.FeaturesOf(typ) {
+			if feat.Name != name || feat.Symbol == nil {
+				continue
+			}
+			for _, redefined := range ctx.redefinedNames(feat.Symbol, typ) {
+				if b, ok := inst.Behavior(redefined); ok {
+					return b, true
+				}
 			}
 		}
 	}
 	return nil, false
 }
 
-// runsBound reports whether the object already runs the behavior a declaration
-// binds, so a start reached twice attaches it once.
-func (inst *Instance) runsBound(member *symbols.Symbol) bool {
+// runsBound reports whether the object already runs the behavior a member of typ binds,
+// under that member or one redefinition makes the same feature: a start reached twice, or
+// a classifier renaming a running behavior, attaches nothing.
+func (ctx *Context) runsBound(inst *Instance, member, typ *symbols.Symbol) bool {
 	for _, b := range inst.behaviors {
 		if b.member == member {
+			return true
+		}
+		if b.member == nil || member == nil {
+			continue
+		}
+		if slices.Contains(ctx.redefinedFeatures(member, typ), b.member) ||
+			slices.Contains(ctx.redefinedFeatures(b.member, typ), member) {
 			return true
 		}
 	}
@@ -407,18 +418,20 @@ func (ctx *Context) startBehaviorsOfAll(objects []*Instance) error {
 // read. An optional part (lower bound 0) is required to hold nothing, so it is
 // left unread. A part that fails to materialize or start fails its holder.
 func (ctx *Context) materializeBehavingParts(inst *Instance) error {
-	features := ctx.FeaturesOf(inst.Type)
-	for _, i := range ctx.behavingParts(inst.Type) {
-		fv, ok := inst.FeatureValues[features[i].Name]
-		if !ok || fv.Materialized {
-			continue
-		}
-		// An adopted object's feature may differ from its type's; decide on it.
-		if fv.Feature != &features[i] && !ctx.holdsBehavingPart(fv.Feature) {
-			continue
-		}
-		if _, err := inst.GetFeatureValue(ctx, features[i].Name); err != nil {
-			return err
+	for _, typ := range inst.types() {
+		features := ctx.FeaturesOf(typ)
+		for _, i := range ctx.behavingParts(typ) {
+			fv, ok := inst.FeatureValues[features[i].Name]
+			if !ok || fv.Materialized {
+				continue
+			}
+			// An adopted object's feature may differ from its type's; decide on it.
+			if fv.Feature != &features[i] && !ctx.holdsBehavingPart(fv.Feature) {
+				continue
+			}
+			if _, err := inst.GetFeatureValue(ctx, features[i].Name); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -496,21 +509,23 @@ func (ctx *Context) runsBehaviors(typeSym *symbols.Symbol, visiting map[*symbols
 // runs everything attached.
 func (ctx *Context) startBehaviorsOf(inst *Instance) error {
 	defer ctx.holdDrivenWork()()
-	for i, decl := range ctx.classifierBehaviorsOf(inst.Type) {
-		if inst.runsBound(decl.member) {
-			continue
+	for _, typ := range inst.types() {
+		for i, decl := range ctx.classifierBehaviorsOf(typ) {
+			if ctx.runsBound(inst, decl.member, typ) {
+				continue
+			}
+			if ctx.trace != nil {
+				ctx.trace.RecordBehaviorStart(decl.behavior.Kind.String(), decl.behavior.Name, inst.ID)
+			}
+			behavior, err := ctx.attachClassifierBehavior(inst, decl)
+			if err != nil {
+				return err
+			}
+			behavior.binding = i
+			inst.behaviors = append(inst.behaviors, behavior)
+			ctx.pendingBehaviors = append(ctx.pendingBehaviors, behavior)
+			ctx.objectBehaviors = append(ctx.objectBehaviors, behavior)
 		}
-		if ctx.trace != nil {
-			ctx.trace.RecordBehaviorStart(decl.behavior.Kind.String(), decl.behavior.Name, inst.ID)
-		}
-		behavior, err := ctx.attachClassifierBehavior(inst, decl)
-		if err != nil {
-			return err
-		}
-		behavior.binding = i
-		inst.behaviors = append(inst.behaviors, behavior)
-		ctx.pendingBehaviors = append(ctx.pendingBehaviors, behavior)
-		ctx.objectBehaviors = append(ctx.objectBehaviors, behavior)
 	}
 
 	return ctx.runAttachedBehaviors()
@@ -557,14 +572,23 @@ func (ctx *Context) forgetBehaviorsBetween(attached, end int) {
 	if attached >= end || end > len(ctx.objectBehaviors) {
 		return
 	}
-	dropped := make(map[*ObjectBehavior]bool, end-attached)
-	for _, behavior := range ctx.objectBehaviors[attached:end] {
+	ctx.forgetBehaviors(ctx.objectBehaviors[attached:end])
+}
+
+// forgetBehaviors detaches the given behaviors from their objects and from the
+// context, wherever they stand among the behaviors attached.
+func (ctx *Context) forgetBehaviors(behaviors []*ObjectBehavior) {
+	if len(behaviors) == 0 {
+		return
+	}
+	dropped := make(map[*ObjectBehavior]bool, len(behaviors))
+	for _, behavior := range behaviors {
 		dropped[behavior] = true
 	}
 	for behavior := range dropped {
 		behavior.Object.behaviors = behaviorsExcept(behavior.Object.behaviors, dropped)
 	}
-	ctx.objectBehaviors = append(ctx.objectBehaviors[:attached], ctx.objectBehaviors[end:]...)
+	ctx.objectBehaviors = behaviorsExcept(ctx.objectBehaviors, dropped)
 	ctx.pendingBehaviors = behaviorsExcept(ctx.pendingBehaviors, dropped)
 }
 
@@ -925,8 +949,8 @@ func assignPerformerFeature(ctx *Context, self *Instance, scope *symbols.Scope, 
 }
 
 // namesPerformerFeature reports whether name, resolved where the statement was
-// written, denotes a feature of the object performing the behavior: the
-// performer is not a namespace the body's names are looked up in.
+// written, denotes a feature of the object performing the behavior under any of
+// its types: the performer is not a namespace the body's names are looked up in.
 func namesPerformerFeature(ctx *Context, self *Instance, scope *symbols.Scope, name string) bool {
 	if ctx == nil || ctx.resolver == nil || self == nil || scope == nil {
 		return false
@@ -935,7 +959,12 @@ func namesPerformerFeature(ctx *Context, self *Instance, scope *symbols.Scope, n
 	if !ok || sym == nil {
 		return false
 	}
-	return ctx.typeHoldsFeature(self.Type, sym)
+	for _, typ := range self.types() {
+		if ctx.typeHoldsFeature(typ, sym) {
+			return true
+		}
+	}
+	return false
 }
 
 // typeHoldsFeature reports whether a feature symbol is one the type holds:
