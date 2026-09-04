@@ -127,13 +127,12 @@ func (ctx *Context) materializeConnectorAs(owner *Instance, connSym, base *symbo
 	ctx.materializingConnectors[key] = true
 	defer delete(ctx.materializingConnectors, key)
 
-	mark, attached := len(ctx.created), len(ctx.objectBehaviors)
+	mark := len(ctx.created)
 	commit, rollback := ctx.beginJournal()
 	endBoundary := ctx.beginRunBoundary()
 	abandon := func() {
 		endBoundary()
 		rollback()
-		ctx.abandonCreationSince(mark, attached)
 	}
 	inst, err := ctx.materializeOwnedBy(base, id, nil, "")
 	if err != nil {

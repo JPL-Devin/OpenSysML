@@ -2078,15 +2078,9 @@ func (e *StateExecutor) AcceptsMessage(m Message) (accepted bool, err error) {
 	return accepted, err
 }
 
-// preview runs fn as a probe of the context, discarding the objects it
-// materializes and the behaviors they start along with what beginProbe restores.
+// preview runs fn as a probe of the context, which beginProbe undoes whole.
 func (e *StateExecutor) preview(fn func()) {
 	defer e.ctx.beginProbe()()
-	mark, attached := len(e.ctx.created), len(e.ctx.objectBehaviors)
-	defer func() {
-		e.ctx.forgetBehaviorsFrom(attached)
-		e.ctx.abandonInstancesSince(mark)
-	}()
 	fn()
 }
 

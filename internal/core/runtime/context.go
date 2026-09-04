@@ -430,8 +430,9 @@ func (ctx *Context) beginExecutorRun(started *bool) func() {
 }
 
 // beginProbe brackets an evaluation previewing what a run would do, restoring the
-// budget, trace, bus, variant selections, every feature value written (see
-// noteProbeWrite) and every other change noted (see noteProbeUndo) after.
+// budget, trace, bus, variant selections, objects made, behaviors attached, every
+// feature value written (see noteProbeWrite) and every other change noted (see
+// noteProbeUndo) after.
 // Behaviors the probe starts are the only ones it runs (see nextRunnableBehavior).
 func (ctx *Context) beginProbe() func() {
 	steps, elements, trace := ctx.steps, ctx.elements, ctx.trace
@@ -472,10 +473,12 @@ func (ctx *Context) beginRunBoundary() func() {
 
 // beginJournal brackets a change to be kept whole or not at all: the feature
 // values written (see noteProbeWrite), the other changes noted (see
-// noteProbeUndo) and the bus are journaled until commit keeps them or rollback
-// restores them. A commit inside an enclosing journal leaves the entries to it.
+// noteProbeUndo), the bus, and the objects made and behaviors attached are
+// journaled until commit keeps them or rollback restores them. A commit inside
+// an enclosing journal leaves the entries to it.
 func (ctx *Context) beginJournal() (commit, rollback func()) {
 	mark, undoMark := len(ctx.journalWrites), len(ctx.journalUndos)
+	created, attached := len(ctx.created), len(ctx.objectBehaviors)
 	messages := slices.Clone(ctx.messages)
 	ctx.journals++
 	commit = func() {
@@ -495,6 +498,7 @@ func (ctx *Context) beginJournal() (commit, rollback func()) {
 		}
 		ctx.journalUndos = ctx.journalUndos[:undoMark]
 		ctx.messages = messages
+		ctx.abandonCreationSince(created, attached)
 	}
 	return commit, rollback
 }

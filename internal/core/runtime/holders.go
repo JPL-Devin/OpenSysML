@@ -7,17 +7,17 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// holdingFeatures names the features of typ whose stated value lists the named
-// feature, so their types classify its objects (KerML 1.0 §7.3.4.1); memoized per type.
+// holdingFeatures names the features of typ whose stated value may hold the named
+// feature's objects, so their types classify them (KerML 1.0 §7.3.4.1); memoized per type.
 func (ctx *Context) holdingFeatures(typ *symbols.Symbol, name string) []string {
 	index, ok := ctx.holders[typ]
 	if !ok {
 		index = make(map[string][]string)
 		for _, feat := range ctx.FeaturesOf(typ) {
-			if feat.DefaultValue == nil || !ctx.valueBinds(&feat) {
+			if feat.DefaultValue == nil || !ctx.valueBinds(&feat) || ctx.holdsData(&feat) {
 				continue
 			}
-			for _, held := range ctx.listedFeatures(typ, &feat) {
+			for _, held := range ctx.mentionedFeatures(typ, &feat) {
 				if held != feat.Name {
 					index[held] = append(index[held], feat.Name)
 				}
@@ -28,31 +28,89 @@ func (ctx *Context) holdingFeatures(typ *symbols.Symbol, name string) []string {
 	return index[name]
 }
 
-// listedFeatures names the features of typ that feat's value lists as its
-// elements: the names of a sequence, or one name standing alone.
-func (ctx *Context) listedFeatures(typ *symbols.Symbol, feat *EffectiveFeature) []string {
+// holdsData reports a feature whose values are data, never objects: an attribute, or
+// one typed by a data type. It classifies nothing.
+func (ctx *Context) holdsData(feat *EffectiveFeature) bool {
+	if feat.Symbol != nil {
+		if usage, ok := feat.Symbol.Decl.(*ast.Usage); ok && usage.Kind == ast.UsageAttribute {
+			return true
+		}
+	}
+	return ctx.model.IsDataType(feat.Type)
+}
+
+// mentionedFeatures names the features of typ whose values feat's value may pass
+// on as its own, wherever its expression refers to them.
+func (ctx *Context) mentionedFeatures(typ *symbols.Symbol, feat *EffectiveFeature) []string {
 	scope := feat.DefaultScope()
 	if scope == nil {
 		return nil
 	}
 	var names []string
-	var visit func(n ast.Node)
-	visit = func(n ast.Node) {
-		switch n := n.(type) {
-		case *ast.SequenceExpr:
-			for _, el := range n.Elements {
-				visit(el)
-			}
-		case *ast.FeatureReference:
-			if sym := ctx.referencedSymbol(scope, n.Name); sym != nil {
-				if name, ok := ctx.denotedFeature(typ, sym); ok {
-					names = append(names, name)
+	seen := make(map[string]bool)
+	for _, ref := range passedFeatureReferences(feat.DefaultValue) {
+		sym := ctx.referencedSymbol(scope, ref.Name)
+		if sym == nil {
+			continue
+		}
+		if name, ok := ctx.denotedFeature(typ, sym); ok && !seen[name] {
+			seen[name] = true
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// passedFeatureReferences lists the feature references an expression may answer the
+// values of as its own: a branch chosen, an element indexed or selected, a receiver or
+// argument a function may return — not a chain's values, a condition or an operand computed from.
+func passedFeatureReferences(expr ast.Node) []*ast.FeatureReference {
+	var refs []*ast.FeatureReference
+	var visit func(nodes ...ast.Node)
+	visit = func(nodes ...ast.Node) {
+		for _, n := range nodes {
+			switch n := n.(type) {
+			case *ast.FeatureReference:
+				refs = append(refs, n)
+			case *ast.SequenceExpr:
+				visit(n.Elements...)
+			case *ast.OperatorExpr:
+				switch n.Operator {
+				case ast.OpConditional:
+					if len(n.Operands) > 1 {
+						visit(n.Operands[1:]...)
+					}
+				case ast.OpNullCoalesce, ast.OpAs:
+					visit(n.Operands...)
 				}
+			case *ast.IndexExpr:
+				visit(n.Operand)
+			case *ast.InvocationExpr:
+				visit(n.Operand)
+				visit(n.Args...)
+				visit(namedArgValues(n.NamedArgs)...)
+			case *ast.CollectExpr:
+				visit(n.Body)
+			case *ast.SelectExpr:
+				visit(n.Operand)
+			case *ast.BodyExpr:
+				visit(n.Result)
+			case *ast.Usage:
+				visit(n.Value)
 			}
 		}
 	}
-	visit(feat.DefaultValue)
-	return names
+	visit(expr)
+	return refs
+}
+
+// namedArgValues lists the value expressions of named arguments.
+func namedArgValues(args []ast.NamedArg) []ast.Node {
+	values := make([]ast.Node, 0, len(args))
+	for _, a := range args {
+		values = append(values, a.Value)
+	}
+	return values
 }
 
 // referencedSymbol resolves a name the way the evaluator does: a single part by

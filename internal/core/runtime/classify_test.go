@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"errors"
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -106,6 +108,95 @@ func TestListedValueIsClassifiedByTheFeatureType(t *testing.T) {
 				t.Fatalf("classifying an object twice grew its classifiers from %d to %d", before, len(e1.classifiers))
 			}
 		})
+	}
+}
+
+// A holding computed rather than listed — the object chosen by a condition, an index, an
+// invocation or a body — classifies its object before it is first read all the same: the
+// classifier's features and behavior are there whichever feature is read first.
+func TestComputedHoldingIsClassifiedWhicheverIsReadFirst(t *testing.T) {
+	holdings := map[string]string{
+		"conditional": "if pickLead ? lead else trail",
+		"indexed":     "(trail, lead)#(2)",
+		"invocation":  "SequenceFunctions::head((lead, trail))",
+		"body":        "(lead, trail)->select { in x; x == lead }",
+	}
+	for name, holding := range holdings {
+		t.Run(name, func(t *testing.T) {
+			ctx, idx := libraryShapeContext(t, `package test {
+				private import ScalarValues::*;
+				private import ControlFunctions::*;
+				state def Glowing {
+					attribute cycles : Integer = 0;
+					entry; then lit;
+					state lit { entry action count { assign cycles := cycles + 1; } }
+				}
+				item def Tallied { attribute tally : Integer = 7; exhibit state glow : Glowing; }
+				item def Rack {
+					attribute pickLead : Boolean = true;
+					item lead [1];
+					item trail [1];
+					item tallied : Tallied [1] = `+holding+`;
+				}
+				item rack : Rack;
+			}`)
+			rack := instantiateQualified(t, ctx, idx, "test::rack")
+			tallied := idx.LookupQualified("test::Tallied")[0]
+
+			lead := readInstance(t, ctx, rack, "lead")
+			if !ctx.instanceConforms(lead, tallied) {
+				t.Fatalf("lead, read first, is classified by %v, want Tallied", lead.classifiers)
+			}
+			if got := readInt(t, ctx, lead, "tally"); got != 7 {
+				t.Fatalf("lead.tally = %d, want 7", got)
+			}
+			glow, ok := lead.Behavior("glow")
+			if !ok || glow.State == nil || glow.State.stateData["cycles"].Const.Int != 1 {
+				t.Fatal("lead, read first, runs no glow state machine")
+			}
+			if held := readInstance(t, ctx, rack, "tallied"); held != lead {
+				t.Fatalf("tallied holds object %d, want lead (%d)", held.ID, lead.ID)
+			}
+			if trail := readInstance(t, ctx, rack, "trail"); ctx.instanceConforms(trail, tallied) {
+				t.Fatal("trail, which tallied does not hold, is a Tallied")
+			}
+		})
+	}
+}
+
+// Only a feature that may answer another's objects as its own holds them: an attribute
+// computing from a feature, a condition tested, and a chain through a feature hold nothing,
+// so reading those features forces no other.
+func TestOnlyFeaturesPassingObjectsOnHoldThem(t *testing.T) {
+	ctx, idx := libraryShapeContext(t, `package test {
+		private import ScalarValues::*;
+		item def Gauge { item cell [1]; }
+		item def Tallied { attribute tally : Integer = 7; }
+		item def Rack {
+			attribute pickLead : Boolean = true;
+			attribute count : Integer = 2;
+			attribute doubled : Integer = count * 2;
+			item lead : Gauge [1];
+			item trail : Gauge [1];
+			item tallied : Tallied [1] = if pickLead ? lead else trail;
+			item cells [2] = (lead, trail).cell;
+			item picked = (lead, trail)#(count - 1);
+		}
+		item rack : Rack;
+	}`)
+	rack := idx.LookupQualified("test::Rack")[0]
+
+	want := map[string][]string{
+		"lead":     {"tallied", "picked"},
+		"trail":    {"tallied", "picked"},
+		"pickLead": nil,
+		"count":    nil,
+		"doubled":  nil,
+	}
+	for name, holders := range want {
+		if got := ctx.holdingFeatures(rack, name); !slices.Equal(got, holders) {
+			t.Errorf("holdingFeatures(Rack, %s) = %v, want %v", name, got, holders)
+		}
 	}
 }
 
@@ -628,6 +719,66 @@ func TestRefusedCollectionClassificationUndoesTheEarlierObjects(t *testing.T) {
 	}
 	if hits := lead.FeatureValues["hits"]; hits.Written {
 		t.Fatalf("a refused collection left lead.hits written to %s", FormatValue(hits.HeldValue()))
+	}
+}
+
+// The objects a classification's behaviors make go with it when it is undone: a refused
+// collection leaves the context holding what it held, however often the read is retried.
+func TestRefusedCollectionClassificationAbandonsWhatItsBehaviorsMade(t *testing.T) {
+	ctx, idx := libraryShapeContext(t, `package test {
+		private import ScalarValues::*;
+		item def Counter { attribute hits : Integer; }
+		item def Gauge { attribute reading : Integer = 1; }
+		item def Tallied :> Counter {
+			item gauge : Gauge [1];
+			exhibit state tally {
+				entry; then on;
+				state on { entry action bump { assign hits := gauge.reading / hits; } }
+			}
+		}
+		item def Rack {
+			item lead : Counter [1] { :>> hits = 1; }
+			item trail : Counter [1] { :>> hits = 0; }
+			item tallied : Tallied [2] = (lead, trail);
+		}
+		item rack : Rack;
+	}`)
+	rack := instantiateQualified(t, ctx, idx, "test::rack")
+
+	// The read materializes rack's lead and trail, which stay; lead's gauge, made by the
+	// tally lead ran as a Tallied, does not.
+	var held []int64
+	var occurrences map[*symbols.Symbol]int64
+	for attempt := 1; attempt <= 3; attempt++ {
+		if _, err := rack.GetFeatureValue(ctx, "tallied"); !errors.Is(err, ErrDivisionByZero) {
+			t.Fatalf("attempt %d: rack.tallied = %v, want ErrDivisionByZero", attempt, err)
+		}
+		if attempt == 1 {
+			held, occurrences = ctx.InstanceIDs(), maps.Clone(ctx.occurrences)
+			if len(held) != 3 {
+				t.Fatalf("a refused collection left the objects %v, want rack, lead and trail only", held)
+			}
+		}
+		if after := ctx.InstanceIDs(); !slices.Equal(after, held) {
+			t.Fatalf("attempt %d: a refused collection changed the objects held from %v to %v", attempt, held, after)
+		}
+		if !maps.Equal(ctx.occurrences, occurrences) {
+			t.Fatalf("attempt %d: a refused collection changed the occurrences held to %v", attempt, ctx.occurrences)
+		}
+		if len(ctx.created) != len(held) || len(ctx.objectBehaviors) != 0 {
+			t.Fatalf("attempt %d: a refused collection left %d creations and %d behaviors",
+				attempt, len(ctx.created), len(ctx.objectBehaviors))
+		}
+		for _, name := range []string{"lead", "trail"} {
+			inst, ok := ctx.getInstance(rack.FeatureValues[name].HeldValue().Instance)
+			if !ok {
+				t.Fatalf("attempt %d: %s holds no object", attempt, name)
+			}
+			if _, ok := inst.FeatureValues["gauge"]; ok || len(inst.classifiers) != 0 || len(inst.behaviors) != 0 {
+				t.Fatalf("attempt %d: a refused collection left %s classified by %v running %d behaviors",
+					attempt, name, inst.classifiers, len(inst.behaviors))
+			}
+		}
 	}
 }
 
