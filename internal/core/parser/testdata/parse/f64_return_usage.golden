@@ -22,7 +22,7 @@
               (*ast.QualifiedName))
             (Multiplicity range=false
               (LiteralInfinity))
-            (SequenceExpr))))
+            (NullExpr))))
       (Membership visibility="default"
         (Definition kind="calc" abstract=false variation=false name="Sum"
           (Membership visibility="default"

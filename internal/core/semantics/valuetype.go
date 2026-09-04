@@ -51,9 +51,10 @@ func (m *Model) ExprConformsToLibrary(scope *symbols.Scope, node ast.Node, fqn s
 // as the declarations the expression names determine it statically: a literal by
 // its scalar type, a feature by its declared type, a quantity literal by the unit
 // it is written in, an invocation by its result, an arithmetic expression by the
-// dimension of its value. A feature declared by nothing but a value is typed by
-// that value (KerML checkFeatureValuationSpecialization); a declared type is
-// never narrowed by the value.
+// dimension of its value, `null` as the empty Anything. A feature declared by
+// nothing but a value is typed by that value (KerML
+// checkFeatureValuationSpecialization); a declared type is never narrowed by
+// the value.
 func (m *Model) ExprConformsTo(scope *symbols.Scope, node ast.Node, want *symbols.Symbol) Conformance {
 	return m.exprConformance(scope, node, want, true)
 }
@@ -95,6 +96,14 @@ func (m *Model) exprConformance(scope *symbols.Scope, node ast.Node, want *symbo
 		return m.operatorConformance(scope, n, want, byUnit)
 	case *ast.InvocationExpr:
 		return m.invocationConformance(scope, n, want)
+	case *ast.NullExpr:
+		// `null` evaluates to nothing, typed Anything (KerML nullEvaluations).
+		c := m.typeConformance(m.libSymbol(fqnAnything), want)
+		if c.Known && !c.Holds {
+			c.Found = "`null`, an empty value typed Anything"
+			c.Untyped = true
+		}
+		return c
 	case *ast.ConstructorExpr:
 		if n.Type == nil {
 			return conformanceUnknown()

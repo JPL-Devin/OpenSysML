@@ -334,6 +334,19 @@ func TestConditionalResultIsLeftToEvaluationOutsideTriggers(t *testing.T) {
 	wantTriggerSilent(t, "entry action { if flag ?? ready { assign x := 1; } }")
 }
 
+// `null` is the empty value, typed Anything: no trigger argument may be it (the
+// pilot rejects all three), while an ordinary value or condition may hold
+// nothing, as the pilot accepts.
+func TestNullTriggerArgumentIsRejected(t *testing.T) {
+	wantTriggerDiag(t, "transition first a accept after null then b;", "trigger-after-duration", "found `null`")
+	wantTriggerDiag(t, "transition first a accept after () then b;", "trigger-after-duration", "found `null`")
+	wantTriggerDiag(t, "transition first a accept at null then b;", "trigger-at-time-instant", "found `null`")
+	wantTriggerDiag(t, "transition first a accept when null then b;", "trigger-when-boolean", "found `null`")
+	wantTriggerSilent(t, "attribute empty : ISQ::DurationValue = null;")
+	wantTriggerSilent(t, "entry action { if null { assign x := 1; } }")
+	wantTriggerSilent(t, "assert constraint { null }")
+}
+
 // `transition ... when <expr>` without `accept` is a change trigger too; a bare
 // name there names a signal and is not a condition.
 func TestTriggerBareWhenTransition(t *testing.T) {

@@ -123,6 +123,9 @@ func exactCount(value ast.Node) (int64, bool) {
 	if value == nil {
 		return 0, false
 	}
+	if _, ok := value.(*ast.NullExpr); ok {
+		return 0, true
+	}
 	// Binding flattens a collection into the values its elements produce, so a
 	// nested literal contributes its own elements rather than one value.
 	if seq, ok := value.(*ast.SequenceExpr); ok {
@@ -148,8 +151,11 @@ func valueElements(value ast.Node) []ast.Node {
 	if value == nil {
 		return nil
 	}
-	if seq, ok := value.(*ast.SequenceExpr); ok {
-		return seq.Elements
+	switch n := value.(type) {
+	case *ast.NullExpr:
+		return nil
+	case *ast.SequenceExpr:
+		return n.Elements
 	}
 	return []ast.Node{value}
 }

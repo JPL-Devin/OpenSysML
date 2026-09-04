@@ -427,7 +427,8 @@ func (p *Parser) parseBase() ast.Node {
 	}
 }
 
-// parseParenOrSequence parses `( )`, `( expr )`, or `( expr, expr, ... )`.
+// parseParenOrSequence parses `( )` (the null expression), `( expr )`, or
+// `( expr, expr, ... )`.
 func (p *Parser) parseParenOrSequence(start int) ast.Node {
 	p.advance() // (
 
@@ -458,7 +459,12 @@ func (p *Parser) parseParenOrSequence(start int) ast.Node {
 		}
 	}
 	p.expect(lexer.RParen, msgExpectedCloseParen)
-	if len(elems) == 1 {
+	switch len(elems) {
+	case 0:
+		null := &ast.NullExpr{}
+		null.NodeSpan = p.spanFrom(start)
+		return null
+	case 1:
 		return elems[0]
 	}
 	seq := &ast.SequenceExpr{Elements: elems}
