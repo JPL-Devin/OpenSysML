@@ -23,7 +23,7 @@ package SendOwnerConnection {
 
 			state sending {
 				entry action issue {
-					send Command(7) via command;
+					send new Command(7) via command;
 					assign sent := sent + 1;
 				}
 			}
@@ -50,7 +50,7 @@ package SendOwnerConnection {
 
 			transition first standingBy
 				accept order : Command via command
-				do assign lastCode := order
+				do assign lastCode := order.code
 				then working;
 		}
 	}

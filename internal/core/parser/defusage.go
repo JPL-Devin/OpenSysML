@@ -2169,6 +2169,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			}
 			p.effectStmtStart = savedEffectStmtStart
 			hasBody = true
+			u.IsActionNode = true
 		} else {
 			// Expected ';' or '{' or behavioral keyword
 			p.error(p.peek().Span, "expected '{' or ';' after action declaration")
@@ -2443,7 +2444,10 @@ func (p *Parser) parseEnumBody() []ast.Node {
 			body.add(m)
 			continue
 		}
+		outer := p.inEnumBody
+		p.inEnumBody = true
 		body.add(p.parseBodyMember())
+		p.inEnumBody = outer
 		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
 			p.advance()
 		}
@@ -2509,6 +2513,10 @@ func (p *Parser) parseBodyMember() ast.Node {
 	start := p.peek().Span.Offset
 	trivia := p.takeTrivia()
 	vis := p.parseVisibility()
+	// The enumeration context names this member only; bodies nested in it hold
+	// ordinary members, so it is consumed here rather than left set while they parse.
+	enumValue := p.inEnumBody
+	p.inEnumBody = false
 
 	// A member-attached `then` is taken by the body loop, which owns the member
 	// list the succession it desugars to is synthesised into (see
@@ -2519,6 +2527,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 	if p.atKeyword("then") {
 		tok := p.advance()
 		p.error(tok.Span, "`then` cannot prefix a member here: a succession sequences two members of a definition, usage, action, state, calculation or requirement body")
+		p.inEnumBody = enumValue
 		return p.parseBodyMember()
 	}
 
@@ -3207,8 +3216,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return mem
 	}
 
-	// Check for enum literal pattern: identifier = expr; OR identifier; OR identifier { body }
-	// Examples: low = 0.25; or pass; or open { doc } or done { doc } (keyword as name)
+	// Check for the bare-name pattern: identifier = expr; OR identifier; OR identifier { body }
+	// In an enumeration body it is an enumerated value (low = 0.25; pass; open { doc });
+	// in any other body a default reference usage (SysML.xtext DefaultReferenceUsage).
 	// But exclude usage-only keywords (inv, subject, etc.) - they're declarations, not enum literal names
 	// Also exclude constraint (has both def/usage forms but shouldn't be enum literal name)
 	isUsageOnlyKwForEnum := p.at(lexer.Keyword) && (p.peek().KeywordID == "subject" || p.peek().KeywordID == "objective" ||
@@ -3245,11 +3255,14 @@ func (p *Parser) parseBodyMember() ast.Node {
 			value = p.ParseExpression()
 		}
 
-		// Parse body or semicolon
+		kind := ast.UsageAttribute
+		if enumValue {
+			kind = ast.UsageEnumeration
+		}
 		members, hasBody := p.parseDefUsageBody()
 
 		u := &ast.Usage{
-			Kind:              ast.UsageEnumeration,
+			Kind:              kind,
 			Ident:             id,
 			Value:             value,
 			ValueOperatorSpan: valueOperatorSpan,

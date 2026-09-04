@@ -8,7 +8,7 @@
               (LiteralReal value="0.0")))
           (InitialNode name="start" successor="")
           (Membership visibility="default"
-            (Usage kind="action" name="bump" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="action" name="bump" ref=false direction="none" composite=false derived=false ordered=false nonunique=false node=true
               (*ast.AssignmentActionNode)))
           (FinalNode)
           (Membership visibility="default"
@@ -30,7 +30,7 @@
               (LiteralReal value="0.0")))
           (InitialNode name="start" successor="")
           (Membership visibility="default"
-            (Usage kind="action" name="bump" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="action" name="bump" ref=false direction="none" composite=false derived=false ordered=false nonunique=false node=true
               (*ast.AssignmentActionNode)))
           (Membership visibility="default"
             (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
@@ -54,6 +54,6 @@
             (Usage kind="attribute" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (LiteralInteger value="0")))
           (Membership visibility="default"
-            (Usage kind="action" name="steps" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="action" name="steps" ref=false direction="none" composite=false derived=false ordered=false nonunique=false node=true
               (*ast.AssignmentActionNode)
               (*ast.AssignmentActionNode))))))))

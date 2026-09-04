@@ -4,7 +4,7 @@ package test {
 	item def Ping;
 
 	// An accept whose payload subsets a declared event waits for an occurrence of
-	// that one event: `send shutDown()` names the event feature, and the accept
+	// that one event: `send shutDown` sends the event feature, and the accept
 	// subsetting it consumes the message it makes.
 	action controller {
 		attribute stopped : Integer = 0;
@@ -13,7 +13,7 @@ package test {
 		first start;
 
 		action finish {
-			send shutDown() to interrupt;
+			send shutDown to interrupt;
 		}
 
 		action interrupt accept :> shutDown;

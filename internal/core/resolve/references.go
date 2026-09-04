@@ -64,6 +64,14 @@ func (c *refCollector) addRedefinition(scope *symbols.Scope, decl ast.Node, qn *
 	}
 }
 
+// addConstructed records a constructor argument's label, which names a feature
+// of the instantiated type rather than an element of scope.
+func (c *refCollector) addConstructed(scope *symbols.Scope, typ, label *ast.QualifiedName) {
+	if typ != nil && label != nil {
+		c.push(Reference{Scope: scope, QN: label, Constructed: typ})
+	}
+}
+
 // addEndpoint records a transition endpoint, which names a vertex of the
 // enclosing machine ahead of anything else the name reaches.
 func (c *refCollector) addEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) {
@@ -100,6 +108,15 @@ func (c *refCollector) childScope(scope *symbols.Scope, decl ast.Node) *symbols.
 		}
 	}
 	return nil
+}
+
+// bodyScope is the scope the body of an action node resolves against: its own
+// where the builder gave it one, and the enclosing scope otherwise.
+func (c *refCollector) bodyScope(scope *symbols.Scope, decl ast.Node) *symbols.Scope {
+	if child := c.childScope(scope, decl); child != nil {
+		return child
+	}
+	return scope
 }
 
 func (c *refCollector) walkMembers(scope *symbols.Scope, members []ast.Node) {
@@ -271,11 +288,7 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		}
 		return true
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
-		body := scope
-		if child := c.childScope(scope, d); child != nil {
-			body = child
-		}
-		c.walkMembers(body, ast.NodeBodyMembers(d))
+		c.walkMembers(c.bodyScope(scope, d), ast.NodeBodyMembers(d))
 		return true
 	case *ast.ConstraintMember:
 		c.expr(scope, d.Expression)
@@ -363,7 +376,7 @@ func (c *refCollector) behaviorDecl(scope *symbols.Scope, decl ast.Node) bool {
 	case *ast.SuccessionEdge:
 		c.edgeEnd(scope, d.Source, d.SourceMember, d.SourceImplied)
 		c.edgeEnd(scope, d.Target, d.TargetMember, d.TargetImplied)
-		c.walkMembers(scope, d.Members)
+		c.walkMembers(c.bodyScope(scope, d), d.Members)
 		return true
 	case *ast.ControlFlowEdge:
 		c.edgeEnd(scope, d.Source, d.SourceMember, d.SourceImplied)
@@ -373,6 +386,8 @@ func (c *refCollector) behaviorDecl(scope *symbols.Scope, decl ast.Node) bool {
 	case *ast.SendStatement:
 		c.expr(scope, d.Message)
 		c.expr(scope, d.Target)
+		c.expr(scope, d.Receiver)
+		c.walkMembers(c.bodyScope(scope, d), d.Members)
 		return true
 	case *ast.TerminateStatement:
 		c.expr(scope, d.Target)
@@ -586,6 +601,10 @@ func (c *refCollector) expr(scope *symbols.Scope, e ast.Node) {
 		c.add(scope, v.Type)
 		for _, a := range v.Args {
 			c.expr(scope, a)
+		}
+		for _, na := range v.NamedArgs {
+			c.addConstructed(scope, v.Type, na.Name)
+			c.expr(scope, na.Value)
 		}
 	case *ast.BodyExpr:
 		for i := range v.Params {

@@ -338,8 +338,7 @@ func (Unsupported) statement() { /* marker: closed Statement set */ }
 // port it arrived at, so the two forms do not consume each other's messages.
 //
 // SubsetsEvent is the event feature the payload subsets (`accept :> shutDown`),
-// empty when it subsets none. Such an accept waits for an occurrence of that
-// one event rather than for any occurrence of a type.
+// as written, nil for none: the accept waits for that one event.
 //
 // Trigger is the time or change event of `accept at t` / `accept after d` /
 // `accept when c`, nil when the accept waits for a message instead.
@@ -347,7 +346,7 @@ type Accept struct {
 	ParamName    string
 	SignalType   *ast.QualifiedName
 	ViaPort      string
-	SubsetsEvent string
+	SubsetsEvent ast.Node
 	Trigger      ast.Node
 	// Scope is the scope the accept was declared in, in which SignalType resolves.
 	Scope *symbols.Scope
@@ -907,7 +906,7 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 		}
 		message := m.Message
 		if message == nil {
-			message = sendPayload(m)
+			message = SendPayload(m)
 		}
 		if message == nil {
 			return Unsupported{
@@ -994,15 +993,51 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 	}
 }
 
-// sendPayload returns the message a send with no argument carries: the value
+// SendPayload returns the message a send with no argument carries: the value
 // its body binds the payload parameter to (`send { in :>> payload = s; }`).
-func sendPayload(m *ast.SendStatement) ast.Node {
-	for _, member := range m.Members {
-		if u, ok := unwrapMembership(member).(*ast.Usage); ok && u.Direction == ast.DirIn && u.Value != nil {
-			return u.Value
-		}
+func SendPayload(m *ast.SendStatement) ast.Node {
+	if payload := SendPayloadParameter(m); payload != nil {
+		return payload.Value
 	}
 	return nil
+}
+
+// SendPayloadParameter returns the body feature redefining SendAction::payload:
+// by name in a `:>>` clause, else by position as the first parameter of an argument-less send.
+func SendPayloadParameter(m *ast.SendStatement) *ast.Usage {
+	var byPosition *ast.Usage
+	positional := m.Message == nil && m.Target == nil
+	for _, member := range m.Members {
+		u, ok := unwrapMembership(member).(*ast.Usage)
+		if !ok || u.Direction == ast.DirNone || u.IsResult {
+			continue
+		}
+		redefined := redefinedNames(u)
+		for _, target := range redefined {
+			if target == "payload" {
+				return u
+			}
+		}
+		if positional && len(redefined) == 0 && u.Direction == ast.DirIn {
+			byPosition = u
+		}
+		positional = false
+	}
+	return byPosition
+}
+
+// redefinedNames returns the last segment of every feature a usage redefines.
+func redefinedNames(u *ast.Usage) []string {
+	var out []string
+	for _, rel := range u.Relationships {
+		if rel == nil || rel.Kind != ast.RelRedefines {
+			continue
+		}
+		if name, _ := ast.TargetName(rel.Target); name != "" {
+			out = append(out, name)
+		}
+	}
+	return out
 }
 
 // lowerBlock lowers the body of a loop or of one branch of a conditional. owner
@@ -1069,10 +1104,9 @@ func acceptPort(node *ast.Usage) string {
 	return ""
 }
 
-// subsettingTarget returns the name a usage subsets (`:> e`, `:>> e`), or ""
-// when it subsets nothing. For an accept payload that name is the event it
-// waits for.
-func subsettingTarget(usage *ast.Usage) string {
+// subsettingTarget is the feature a usage subsets (`:> e`, `:>> a.e`) as the
+// path written, or "" for none.
+func subsettingTarget(usage *ast.Usage) ast.Node {
 	for _, rel := range usage.Relationships {
 		if rel == nil {
 			continue
@@ -1082,11 +1116,11 @@ func subsettingTarget(usage *ast.Usage) string {
 		default:
 			continue
 		}
-		if name := ast.SimpleName(rel.Target); name != "" {
-			return name
+		if FeaturePath(rel.Target) != "" {
+			return rel.Target
 		}
 	}
-	return ""
+	return nil
 }
 
 // typingTarget returns the name a usage was typed with (`: T`) as written,

@@ -68,11 +68,7 @@ func (h *stateStmtHost) describe() string {
 }
 
 func (h *stateStmtHost) send(ec *EvalContext, s lower.Send) error {
-	msg, err := ec.buildMessage(h.exec.stateMachine.Scope, s)
-	if err != nil {
-		return err
-	}
-	return h.exec.ctx.post(h.exec.graph.Connections, msg, s, h.exec.self)
+	return h.exec.ctx.send(ec, h.exec.stateMachine.Scope, h.exec.graph.Connections, s, h.exec.self)
 }
 
 // assignOuter writes a name the machine does not declare to the object
