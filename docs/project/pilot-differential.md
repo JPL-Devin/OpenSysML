@@ -218,9 +218,9 @@ nor double-counted as two independent disagreements.
 | `examples/pilot-corpora/sysml-validation` | 56 | 56 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `examples/pilot-corpora/kerml-examples` | 58 | 51 | 3 | 6 | 0 | 0 | 3 | 6 |
 | `testdata` | 17 | 10 | 38 | 55 | 34 | 1 | 3 | 20 |
-| `examples` | 32 | 24 | 11 | 287 | 9 | 1 | 1 | 277 |
+| `examples` | 32 | 25 | 11 | 286 | 9 | 1 | 1 | 276 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **366** | **337** | **65** | **348** | **43** | **2** | **20** | **303** |
+| **Total** | **366** | **338** | **65** | **347** | **43** | **2** | **20** | **302** |
 
 **Read the `only ours` total by root, never as one number.** Step 2 removes nine resolver false
 positives from the reference's **own** corpora: `pilot-examples` 16 → **7** and
@@ -347,8 +347,8 @@ cascades through the rest of the file. The movement is entirely one file,
 
 | Count | Before the initializer rewrite | Now |
 |---|---:|---:|
-| only pilot | 82 | **303** |
-| pilot diagnostics | 123 | **348** |
+| only pilot | 82 | **302** |
+| pilot diagnostics | 123 | **347** |
 | severity-only | 9 | **2** |
 
 The rewrite itself took only-pilot to 61 and pilot diagnostics to 101; the `Now` column states
@@ -398,6 +398,30 @@ agreement, severity-only and every pilot column unmoved:
 | `pilot-examples`: only ours | 6 | **7** |
 | overall: fully agreeing | 330 | **329** |
 | overall: our diagnostics | 71 | **72** |
+
+### Send-argument round
+
+Typing a send's payload, `via` and `to` arguments moves one row in `examples`, taking only-pilot
+from **303** to **302** and fully agreeing from **337** to **338**: one pilot-only row is retired.
+No OMG root moves — the training corpus and the three pilot corpora write their sends in the
+shapes the rule accepts (an invocation of a behavioral feature, an item or occurrence reference,
+`new Def(args)`), so the reference's `Must invoke a behavior or a behavioral feature` never fires
+there and neither does ours.
+
+| Row | Before | Now | Why |
+|---|---|---|---|
+| `relay-probe-demo/mission.sysml`:133, pilot-only `kind-mismatch` | 1 | **0** | The demo sent `Telemetry(frames = 3.0)`, an invocation of an item definition, which the reference rejects and we accepted. We now report the same error at the same span — the case is the refereed `semantic/send-payload-non-behavior.sysml` of the rejection corpus — so the demo is rewritten to the constructor form the specification means, `send new Telemetry(frames = 3.0) via antenna`, which both tools accept. The row is retired, not agreed, because a valid demo should draw nothing from either side. |
+| `self-model/pipeline.sysml`:194 | 0 | **0** | The self-model's pass registry gains the send-argument pass and marks it element-scoped; with `elementScoped` declared `default =` since the feature-value overriding round, that redefinition draws no row from either tool. |
+
+Where the two tools differ on this family, the difference is in reach, not in rule. The
+reference's `validateSendActionUsageReceiver` warns when `to` names a port (we report
+`send-to-port` on the same argument) and its `validateSendActionUsagePayloadArgument` requires a
+payload on a state subaction or transition effect, but its grammar rejects a payload-less
+`send to x` before that rule can run, so `semantic/send-subaction-no-payload.sysml` reaches the
+both-reject bucket by its parser and by our type-tier rule. A `via` or `to` argument whose types are
+disjoint from `Occurrence` draws the reference's generic `Bound features should have conforming
+types` at the argument; we report `send-sender-not-occurrence` / `send-receiver-not-occurrence`
+at the same span. Neither shape occurs in the seven roots, so none of this moves a row.
 
 ### Phase C initial-state round
 
@@ -552,9 +576,11 @@ Per category, the only-ours totals are: `pilot-examples` 4 `unmapped`, 2
 `units`, 1 `kind-mismatch`; `kerml-examples` 3 `unmapped`; `examples` 1 syntax; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 12 `kind-mismatch`, 3 `unmapped`, 3 syntax, 2 `unresolved-reference`;
-`examples` 10 syntax, 15 `unmapped`, 71 `kind-mismatch`, 181 `unresolved-reference` — of which
-`relay-probe-demo/mission.sysml` carries one, a `kind-mismatch` on its send of a `Telemetry`
-instantiation, the same rule the reference flags on the send-statement demos — all of them
+`examples` 10 syntax, 15 `unmapped`, 70 `kind-mismatch`, 181 `unresolved-reference` — of which
+`relay-probe-demo/mission.sysml` carries none: it carried a `kind-mismatch` on its send of a
+`Telemetry` invocation until the send-argument round above, and the demo now writes the
+constructor, `send new Telemetry(…) via antenna`, which both implementations accept, so the row
+is retired rather than agreed — all of them
 `.sysml`, none `.kerml`, which is the F96 fixture round below;
 `kerml-examples` 6 `unmapped` (K6).
 
@@ -564,7 +590,8 @@ carries, the syntax rows where `views.sysml` frames a concern, which the referen
 `surfaces.sysml` and `identity.sysml` redefined an inherited attribute's default that was written as
 a binding — nineteen once the control-node succession check, element-scoped like the passes
 beside it, joined the pass registry; the feature-value overriding round above wrote those bases as
-`default =`, and with them the two rows `relay-probe-demo/mission.sysml` drew from the same rule.
+`default =`, and with them the two rows `relay-probe-demo/mission.sysml` drew from the same rule,
+so the send-argument pass joining the registry element-scoped the same way draws none.
 
 **`self-model/document.sysml` carries 259 pilot-only rows on its own, and every one of them has a
 single cause: the reference has no `DocumentQueries` library.** The file is the architecture
@@ -616,12 +643,12 @@ For round 3, the fresh control column is the `1af78d94` base, before the wave-12
 
 | Count | Base after wave 12D (`1af78d94`) | Now |
 |---|---:|---:|
-| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **337 / 20 / 65** |
+| overall: fully agreeing / only ours / our diagnostics | **317 / 119 / 175** | **338 / 20 / 65** |
 | `pilot-examples`: only ours | **43** | **7** |
 | `pilot-validation`: only ours | **1** | **0** |
 | `kerml-examples`: only ours | **3** | **3** |
-| `examples`: only pilot | **40** | **277** |
-| `examples`: fully agreeing | **15** | **24** |
+| `examples`: only pilot | **40** | **276** |
+| `examples`: fully agreeing | **15** | **25** |
 | `unmapped`, our side | **20** | **28** |
 
 The `Now` column's movement since Step 2's resolver round is the removal of alias notation from

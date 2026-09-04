@@ -1,7 +1,7 @@
 // An accept that names a payload binds it to an occurrence of the signal when
-// the send named the signal rather than a value: `send Telemetry(frames = 3.0)`
+// the send constructed the signal rather than a value: `send new Telemetry(frames = 3.0)`
 // binds `t` to a Telemetry object whose `frames` the effect reads, and a
-// payload-less `send Ping()` still binds its accept's name.
+// payload-less `send new Ping()` still binds its accept's name.
 package test {
 	private import ScalarValues::*;
 
@@ -21,8 +21,8 @@ package test {
 
 			state sending {
 				entry action downlink {
-					send Telemetry(frames = 3.0) via antenna;
-					send Ping() via antenna;
+					send new Telemetry(frames = 3.0) via antenna;
+					send new Ping() via antenna;
 				}
 			}
 		}

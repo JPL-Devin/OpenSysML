@@ -15,6 +15,6 @@ package TransitionEffects {
 		transition first alerting do assign c := c + 1 then idle;
 		transition first idle do { assign c := c + 1; } then alerting;
 		transition first alerting do action nudge : Bump then idle;
-		transition first idle do send Alert() to operator then alerting;
+		transition first idle do send new Alert() to operator then alerting;
 	}
 }

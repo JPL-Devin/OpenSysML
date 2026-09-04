@@ -68,7 +68,7 @@ const pingCounterModel = `package P {
     port def PP { out item p : Ping; }
     part def Sender {
         port o : PP;
-        exhibit state sm { entry; then S1; state S1 { entry send Ping() via o; } }
+        exhibit state sm { entry; then S1; state S1 { entry send new Ping() via o; } }
     }
     part def Recv {
         port i : ~PP;
