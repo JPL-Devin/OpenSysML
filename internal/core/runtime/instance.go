@@ -397,7 +397,7 @@ func (ctx *Context) checkAdmits(feat *EffectiveFeature, what string, val Value) 
 func (inst *Instance) GetFeatureValue(ctx *Context, name string) (*FeatureValue, error) {
 	if _, ok := inst.FeatureValues[name]; !ok {
 		// Naming no feature value of the object is no materialization of one.
-		return nil, fmt.Errorf("feature %q not found in instance %d (type %s)", name, inst.ID, inst.Type.Name)
+		return nil, fmt.Errorf("%w: feature %q not found in instance %d (type %s)", ErrNoSuchFeature, name, inst.ID, inst.Type.Name)
 	}
 	fv, err := inst.materializeFeatureValue(ctx, name)
 	if err != nil {
@@ -413,7 +413,7 @@ func (inst *Instance) GetFeatureValue(ctx *Context, name string) (*FeatureValue,
 func (inst *Instance) SetFeatureValue(ctx *Context, name string, value Value) error {
 	fv, ok := inst.FeatureValues[name]
 	if !ok {
-		return fmt.Errorf("feature %q not found in instance %d (type %s)", name, inst.ID, inst.Type.Name)
+		return fmt.Errorf("%w: feature %q not found in instance %d (type %s)", ErrNoSuchFeature, name, inst.ID, inst.Type.Name)
 	}
 	// Checked before the write, so a value the feature does not admit leaves it
 	// holding what it held.
@@ -691,10 +691,25 @@ func (ctx *Context) CompositeTypeOf(feat *EffectiveFeature) *symbols.Symbol {
 	if isSubjectUsage(feat.Symbol) {
 		return nil
 	}
-	if feat.Symbol != nil && (declaresFeatures(feat.Symbol) || untypedOccurrenceUsage(feat)) {
+	if feat.Symbol != nil && (ctx.declaresFeatures(feat) || untypedOccurrenceUsage(feat)) {
 		return feat.Symbol
 	}
 	return feat.Type
+}
+
+// declaresFeatures reports whether a usage's body, or the body of a feature it
+// redefines, restates or adds features: a redefining feature inherits the
+// redefined one's features (KerML 1.0 §7.3.4.5), so its objects carry them.
+func (ctx *Context) declaresFeatures(feat *EffectiveFeature) bool {
+	if declaresFeatures(feat.Symbol) {
+		return true
+	}
+	for _, redefined := range ctx.redefinedFeatures(feat.Symbol, feat.OwnerType) {
+		if declaresFeatures(redefined) {
+			return true
+		}
+	}
+	return false
 }
 
 // untypedOccurrenceUsage reports an occurrence usage declaring no type, which

@@ -929,7 +929,7 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 		if sym, found := ec.ctx.model.LookupMember(inst.Type, name); found && isCalcUsageSymbol(sym) {
 			return ec.calcUsageMemberValue(sym, inst, parts[1:])
 		}
-		return Value{}, fmt.Errorf("member %s not found in instance", name)
+		return Value{}, fmt.Errorf("%w: member %s not found in instance", ErrNoSuchFeature, name)
 	}
 	// A variant named through the variation feature it belongs to is the choice
 	// itself, not a member of the variation's value.

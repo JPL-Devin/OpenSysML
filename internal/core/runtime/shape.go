@@ -163,6 +163,10 @@ func isFeature(sym *symbols.Symbol) bool {
 		// (SysML v2 §8.3.19), so an object carries it as a feature.
 		symbols.SymbolAllocationUsage:
 		return true
+	case symbols.SymbolEnumerationUsage:
+		// A kindless `name = value;` outside an enumeration body is a reference
+		// usage (SysML.xtext DefaultReferenceUsage), not a literal.
+		return semantics.EnumerationOwning(sym) == nil
 	default:
 		return false
 	}
