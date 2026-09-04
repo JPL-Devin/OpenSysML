@@ -1053,7 +1053,9 @@ elmt:Meta__Tagged
     sysml:owningRelationship elmt:Meta__Tagged_om ;
     sysml:owningMembership elmt:Meta__Tagged_om ;
     sysml:declaredName "Tagged" ;
-    sysx:prefixMetadata "#Safety" ;
+    sysml:ownedMember elmt:Meta__Tagged___400 ;
+    sysml:ownedMembership elmt:Meta__Tagged___400_om ;
+    sysml:ownedRelationship elmt:Meta__Tagged___400_om ;
     sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "    #Safety part def Tagged;\n" .
 
@@ -1066,6 +1068,29 @@ elmt:Meta__Tagged_om
     sysml:ownedRelatedElement elmt:Meta__Tagged ;
     sysml:owningRelatedElement elmt:Meta ;
     sysml:membershipOwningNamespace elmt:Meta .
+
+elmt:Meta__Tagged___400
+    a sysml:MetadataUsage ;
+    sysml:qualifiedName "Meta::Tagged::@0" ;
+    sysml:elementId "Meta__Tagged___400" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:owningNamespace elmt:Meta__Tagged ;
+    sysml:owner elmt:Meta__Tagged ;
+    sysml:owningRelationship elmt:Meta__Tagged___400_om ;
+    sysml:owningMembership elmt:Meta__Tagged___400_om ;
+    sysx:declaredKeyword "#" ;
+    sysml:type elmt:Meta__Safety ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:Meta__Tagged___400_om
+    a sysml:OwningMembership ;
+    sysml:elementId "Meta__Tagged___400_om" ;
+    sysml:owner elmt:Meta__Tagged ;
+    sysml:memberElement elmt:Meta__Tagged___400 ;
+    sysml:ownedMemberElement elmt:Meta__Tagged___400 ;
+    sysml:ownedRelatedElement elmt:Meta__Tagged___400 ;
+    sysml:owningRelatedElement elmt:Meta__Tagged ;
+    sysml:membershipOwningNamespace elmt:Meta__Tagged .
 
 elmt:Meta__Plain
     a sysml:PartDefinition ;

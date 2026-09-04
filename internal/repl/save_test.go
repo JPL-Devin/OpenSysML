@@ -293,14 +293,14 @@ func TestMetaSaveTurtleIsMarkedExperimental(t *testing.T) {
 	}
 
 	refusing := NewSession()
-	refusing.Submit("package P { metadata def Safety; part seat {@Safety{isMandatory = true;}} }")
+	refusing.Submit("package P { part def Seat; part seat : Seat; part seat : Seat; }")
 	out, _, err = refusing.runMeta("%save " + filepath.Join(dir, "refused.ttl"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	joined := strings.Join(out, "\n")
 	if !strings.Contains(joined, "error:") {
-		t.Fatalf("expected the mapping to refuse inline metadata, got %v", out)
+		t.Fatalf("expected the mapping to refuse the duplicate declaration, got %v", out)
 	}
 	if !strings.Contains(joined, "RDF conversion is experimental") {
 		t.Errorf("a refusal is the experimental behavior, but was not marked: %v", out)

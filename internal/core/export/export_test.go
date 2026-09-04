@@ -817,6 +817,38 @@ func TestRequirementConditionsSurviveRDF(t *testing.T) {
 	}
 }
 
+// An `assume`/`require` member declares a constraint usage of its own — name,
+// typing, multiplicity, value, specializations — which the graph must carry
+// without the source text, prefixed or not.
+func TestRequirementConditionDeclarationsSurviveRDF(t *testing.T) {
+	for _, member := range []string{
+		"assume constraint c : Light;",
+		"require #Goal constraint d[1] = true;",
+		"assume #Goal constraint f : Light subsets Light[0..1] {\n            true;\n        }",
+		"assume constraint c references Light;",
+		"assume #Goal constraint c references Light;",
+		"require #Goal constraint c references Light;",
+		"require constraint references Light;",
+		"require Light subsets Light[1];",
+		"require Light {\n        }",
+	} {
+		src := "package P {\n\tattribute mass;\n\tconstraint def Light;\n\tmetadata def Goal;\n\trequirement r {\n\t\t" + member + "\n\t}\n}"
+		turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+		if err != nil {
+			t.Fatalf("%s: to turtle: %v", member, err)
+		}
+		for _, graph := range [][]byte{turtle, withoutTriples(t, turtle, "sysx:sourceText")} {
+			back, err := export.Convert("m.ttl", graph, export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("%s: back to notation: %v", member, err)
+			}
+			if !strings.Contains(string(back), member) {
+				t.Errorf("the requirement member %q was rewritten:\n%s", member, back)
+			}
+		}
+	}
+}
+
 // `assert` before a kind keyword says what the declaration it qualifies is for,
 // so dropping it would come back as a plain constraint — a different model.
 func TestAssertedUsagePrefixSurvivesRDF(t *testing.T) {
@@ -1006,20 +1038,765 @@ func TestShortKindKeywordSurvivesTheRoundTrip(t *testing.T) {
 	}
 }
 
-// A metadata annotation states what the element it prefixes is, so the graph
-// carries the notation it was written as rather than dropping it.
-func TestPrefixMetadataSurvivesTheRoundTrip(t *testing.T) {
-	src := "package P {\n\tmetadata def Safety;\n\t#Safety part def Car;\n}"
+// A `#M` prefix is an owned metadata usage linked to its definition; the head
+// comes back from the graph alone, a `$::`/short-name type as its declared name.
+func TestPrefixMetadataComesBackFromTheGraphAlone(t *testing.T) {
+	heads := []struct{ written, back string }{
+		{written: "#Safety part def Car;"},
+		{written: "abstract #Safety #Reviewed part def Truck;"},
+		{written: "#Safety part car : Car;"},
+		{written: "#$::P::Safety part car : Car;", back: "#Safety part car : Car;"},
+		{written: "#safe part named : Car;", back: "#Safety part named : Car;"},
+		{written: "private ref #Safety part spare : Car;"},
+		{written: "variant #Reviewed part option : Car;"},
+		{written: "end #Safety part wheel : Car;"},
+		{written: "#Reviewed package Notes;"},
+		{written: "#Safety dependency from Car to Vehicle;"},
+		{written: "requirement def R {\n        subject #Safety s : Car;\n    }"},
+		{written: "use case def U {\n        objective #Safety o : Goal;\n    }"},
+		{written: "use case def U {\n        #Safety include Ride;\n    }"},
+		{written: "use case def U {\n        #Safety include use case ride : Ride;\n    }"},
+		{written: "requirement def R {\n        assume #Reviewed constraint {\n            true;\n        }\n    }"},
+		{written: "requirement def R {\n        require #Safety constraint {\n            true;\n        }\n    }"},
+		{written: "part def Q {\n        #Safety assert constraint ok : Stopped;\n    }"},
+		{written: "part def Q {\n        #Safety assert not constraint bad : Stopped;\n    }"},
+		{written: "part def Q {\n        ref #Safety assert not constraint bad : Stopped;\n    }"},
+		{written: "part def Q {\n        #Safety perform action go : Move;\n    }"},
+	}
+	for _, head := range heads {
+		t.Run(head.written, func(t *testing.T) {
+			src := "package P {\n    metadata def <safe> Safety;\n    metadata def Reviewed;\n    part def Vehicle;\n    requirement def Goal;\n    use case def Ride;\n    constraint def Stopped;\n    action def Move;\n    " + head.written + "\n}\n"
+			turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle: %v", err)
+			}
+			if !strings.Contains(string(turtle), `sysx:declaredKeyword "#"`) {
+				t.Fatalf("the graph does not state the prefix form:\n%s", turtle)
+			}
+			for _, name := range []string{"Safety", "safe", "$::P::Safety", "Reviewed"} {
+				if strings.Contains(string(turtle), `sysml:type "`+name+`"`) {
+					t.Fatalf("the metadata type %s is written as a name, not linked to its definition:\n%s", name, turtle)
+				}
+			}
+			back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation: %v", err)
+			}
+			want := head.back
+			if want == "" {
+				want = head.written
+			}
+			if !strings.Contains(string(back), want) {
+				t.Fatalf("the head should come back as `%s`:\n%s", want, back)
+			}
+			again, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle again: %v", err)
+			}
+			first, second := turtle, again
+			if head.back != "" {
+				first = withoutTriples(t, turtle, "sysx:sourceText")
+				second = withoutTriples(t, again, "sysx:sourceText")
+			}
+			if string(second) != string(first) {
+				t.Errorf("the second hop changed the graph\n--- first ---\n%s\n--- second ---\n%s", first, second)
+			}
+		})
+	}
+}
+
+// KerML's FeaturePrefix puts prefix metadata after `var`, so a variable
+// feature's `#M` comes back there from the graph alone.
+func TestVarPrefixMetadataComesBackFromTheGraphAlone(t *testing.T) {
+	heads := []string{
+		"var #Safety feature x;",
+		"derived var #Safety feature y : Safety;",
+	}
+	for _, head := range heads {
+		t.Run(head, func(t *testing.T) {
+			src := "package P {\n    metadata def Safety;\n    class C {\n        " + head + "\n    }\n}\n"
+			turtle, err := export.Convert("m.kerml", []byte(src), export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle: %v", err)
+			}
+			back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation: %v", err)
+			}
+			if !strings.Contains(string(back), head) {
+				t.Fatalf("the head should come back as written:\n%s", back)
+			}
+			again, err := export.Convert("m.kerml", back, export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle again: %v", err)
+			}
+			if string(again) != string(turtle) {
+				t.Errorf("the second hop changed the graph\n--- first ---\n%s\n--- second ---\n%s", turtle, again)
+			}
+		})
+	}
+}
+
+// A prefix annotation is identified by its position after the body members,
+// so a body member named as that position is refused rather than merged with
+// it; a member named as another position is no collision.
+func TestPrefixCollidingWithAPositionNamedMemberIsReported(t *testing.T) {
+	src := "package P {\n\tmetadata def Safety;\n\t#Safety part def Car {\n\t\tpart '@1';\n\t}\n}"
+	_, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	var unsupported *export.UnsupportedError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("expected an unsupported error, got %v", err)
+	}
+	for _, want := range []string{"the prefix annotation at m.sysml:3:2", "identified by its position as P::Car::@1, which a body member is named"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("expected %q in error:\n%s", want, err.Error())
+		}
+	}
+
+	src = "package P {\n\tmetadata def Safety;\n\t#Safety part def Car {\n\t\tpart '@0';\n\t}\n}"
 	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
 	if err != nil {
 		t.Fatalf("to turtle: %v", err)
 	}
-	back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+	back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
 	if err != nil {
 		t.Fatalf("back to notation: %v", err)
 	}
-	if !strings.Contains(string(back), "#Safety part def Car;") {
-		t.Errorf("the annotation did not survive the round trip:\n%s", back)
+	if !strings.Contains(string(back), "#Safety part def Car {\n        part '@0';\n    }") {
+		t.Errorf("the prefix and the member should both come back:\n%s", back)
+	}
+}
+
+// A metadata usage is owned through an OwningMembership even when a
+// relationship owns it, so a client reaches it the way it reaches any member.
+func TestMetadataOnARelationshipIsOwnedThroughAMembership(t *testing.T) {
+	src := "package P {\n\tmetadata def Safety;\n\tpart def Car;\n\t#Safety dependency from P to Car;\n\trequirement def R {\n\t\tsubject #Safety s : Car;\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	for _, owner := range []string{"P___402", "P__R__s"} {
+		member, membership := "elmt:"+owner+"___400", "elmt:"+owner+"___400_om"
+		for _, want := range []string{
+			membership + "\n    a sysml:OwningMembership ;",
+			"sysml:memberElement " + member,
+			"sysml:ownedMemberElement " + member,
+			"sysml:owningRelatedElement elmt:" + owner,
+			"sysml:owningMembership " + membership,
+			"sysml:ownedRelationship " + membership,
+		} {
+			if !strings.Contains(string(turtle), want) {
+				t.Errorf("the graph does not state %q:\n%s", want, turtle)
+			}
+		}
+		for _, reject := range []string{"sysml:memberElement " + member + " ;\n    sysml:ownedMemberFeature", "sysml:membershipOwningNamespace elmt:" + owner} {
+			if strings.Contains(string(turtle), reject) {
+				t.Errorf("a relationship is no namespace, yet the graph states %q:\n%s", reject, turtle)
+			}
+		}
+	}
+	back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	for _, head := range []string{"#Safety dependency from P to Car;", "subject #Safety s : Car;"} {
+		if !strings.Contains(string(back), head) {
+			t.Errorf("the head should come back as written:\n%s", back)
+		}
+	}
+}
+
+// A metadata usage member carries its body's feature values, its name, the
+// elements it is about and the `@` it was written with, so every member form
+// comes back from the mapping alone and converts to the same graph again. A
+// linked type or body reference is spelled relative to the member's scope, so a
+// globally qualified type comes back by its name and an inherited feature
+// unqualified.
+func TestMetadataMembersComeBackFromTheGraphAlone(t *testing.T) {
+	members := []struct{ written, back string }{
+		{written: "@Safety;"},
+		{written: "private @Safety;"},
+		{written: "protected @ checked : Safety about Car;"},
+		{written: "@Safety {\n            level = 2;\n        }"},
+		{written: "@Safety {\n            redefines level = 3;\n            reviewer = \"ops\";\n            audit {\n                year = 2026;\n            }\n        }"},
+		{written: "@ checked : Safety;"},
+		{written: "@Safety about Car, Vehicle;"},
+		{
+			written: "@Safety about Car {\n            level = mass;\n            reviewer = Car::name;\n        }",
+			back:    "@Safety about Car {\n            level = mass;\n            reviewer = name;\n        }",
+		},
+		{written: "metadata tagged : Safety about Car;"},
+		{written: "metadata Safety about Car;"},
+		{
+			written: "metadata $::P::Safety about Car {\n            level = 4;\n        }",
+			back:    "metadata Safety about Car {\n            level = 4;\n        }",
+		},
+	}
+	for _, member := range members {
+		t.Run(member.written, func(t *testing.T) {
+			want := member.back
+			if want == "" {
+				want = member.written
+			}
+			src := "package P {\n    metadata def Safety {\n        attribute level : Integer;\n        attribute reviewer : String;\n        item audit {\n            attribute year : Integer;\n        }\n    }\n    part def Vehicle;\n    part def Car {\n        attribute name : String;\n    }\n    part car : Car {\n        attribute mass : Real;\n        " + member.written + "\n    }\n}\n"
+			turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle: %v", err)
+			}
+			back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation: %v", err)
+			}
+			if !strings.Contains(string(back), want) {
+				t.Fatalf("the member should come back as %q:\n%s", want, back)
+			}
+			again, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle again: %v", err)
+			}
+			first, second := turtle, again
+			if member.back != "" {
+				first = withoutTriples(t, turtle, "sysx:sourceText")
+				second = withoutTriples(t, again, "sysx:sourceText")
+			}
+			if string(second) != string(first) {
+				t.Errorf("the second hop changed the graph\n--- first ---\n%s\n--- second ---\n%s", first, second)
+			}
+		})
+	}
+}
+
+// A metadata usage that annotates several elements states each of them, and
+// the writer puts every one back in its about clause.
+func TestEveryAnnotatedElementIsStated(t *testing.T) {
+	src := "package P {\n\tmetadata def Safety;\n\tpart def Car;\n\tpart def Truck;\n\tpart def Van;\n\t@Safety about Car, Truck, Van;\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	if !strings.Contains(string(turtle), "sysml:annotatedElement elmt:P__Car, elmt:P__Truck, elmt:P__Van") {
+		t.Errorf("the graph does not annotate every element:\n%s", turtle)
+	}
+	back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	if !strings.Contains(string(back), "@Safety about Car, Truck, Van;") {
+		t.Errorf("the about clause did not come back whole:\n%s", back)
+	}
+}
+
+// A prefix annotation is spelled as its type alone, so a graph that gives one
+// a body, a name or an about clause is refused rather than written as a form
+// the grammar has no place for.
+func TestPrefixAnnotationWithABodyIsReported(t *testing.T) {
+	src := "package P {\n\tmetadata def Safety {\n\t\tattribute level : Integer;\n\t}\n\tpart car {\n\t\t@Safety {\n\t\t\tlevel = 2;\n\t\t}\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	asPrefix := strings.Replace(string(withoutTriples(t, turtle, "sysx:sourceText")), `sysx:declaredKeyword "@"`, `sysx:declaredKeyword "#"`, 1)
+	_, err = export.Convert("m.ttl", []byte(asPrefix), export.FormatTurtle, export.FormatSysML)
+	var unsupported *export.UnsupportedError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("expected an unsupported error, got %v", err)
+	}
+	for _, want := range []string{"the prefix annotation <urn:sysmlv2:element:P__car__", "a body is written by the `@` member form"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("expected %q in error:\n%s", want, err.Error())
+		}
+	}
+}
+
+// A `metadata` usage typed by no definition, or by several, is refused in every
+// written form rather than written as a declaration that does not parse.
+func TestMetadataUsageWithoutOneDefinitionIsReported(t *testing.T) {
+	src := "package P {\n\tmetadata def M;\n\tpart def Car;\n\tmetadata m : M about Car;\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structural := string(withoutTriples(t, turtle, "sysx:sourceText"))
+	if !strings.Contains(structural, "    sysml:type elmt:P__M ;\n") {
+		t.Fatalf("the metadata usage's typing was not found in the graph:\n%s", structural)
+	}
+	for _, form := range []struct{ keyword, replacement string }{
+		{"metadata", ""},
+		{"metadata", "    sysml:type elmt:P__M, elmt:P__Car ;\n"},
+		{"@", ""},
+		{"@", "    sysml:type elmt:P__M, elmt:P__Car ;\n"},
+	} {
+		graph := strings.Replace(structural, "    sysml:type elmt:P__M ;\n", form.replacement, 1)
+		if form.keyword == "@" {
+			graph = strings.Replace(graph, `sysml:declaredName "m" ;`, `sysml:declaredName "m" ;`+"\n"+`    sysx:declaredKeyword "@" ;`, 1)
+		}
+		_, err := export.Convert("m.ttl", []byte(graph), export.FormatTurtle, export.FormatSysML)
+		var unsupported *export.UnsupportedError
+		if !errors.As(err, &unsupported) {
+			t.Fatalf("%s form, types %q: expected an unsupported error, got %v", form.keyword, form.replacement, err)
+		}
+		for _, want := range []string{"the element <urn:sysmlv2:element:P__m>", "sysml:type", "names the one metadata definition it applies"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("%s form, types %q: expected %q in error:\n%s", form.keyword, form.replacement, want, err.Error())
+			}
+		}
+	}
+}
+
+// A metadata usage is typed by a metadata definition (or a KerML metaclass);
+// a graph typing one by a part or attribute definition is refused rather than
+// written as an `@Car` annotation, in each of the three forms.
+func TestMetadataUsageTypedByANonMetadataDefinitionIsReported(t *testing.T) {
+	src := "package P {\n\tmetadata def M;\n\tpart def Car;\n\tattribute def Mass;\n\tmetadata m : M about Car;\n\t@M;\n\t#M part def Truck;\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structural := string(withoutTriples(t, turtle, "sysx:sourceText"))
+	const typing = "    sysml:type elmt:P__M ;\n"
+	typings := strings.Split(structural, typing)
+	if len(typings) != 4 {
+		t.Fatalf("expected three metadata usages typed by M in the graph:\n%s", structural)
+	}
+	if _, err := export.Convert("m.ttl", []byte(structural), export.FormatTurtle, export.FormatSysML); err != nil {
+		t.Fatalf("control: the graph typed by M does not convert: %v", err)
+	}
+	for _, other := range []struct{ id, metaclass string }{{"P__Car", "PartDefinition"}, {"P__Mass", "AttributeDefinition"}} {
+		// Retype the metadata usages one at a time: the named member, the
+		// `@` member and the `#` prefix.
+		for i := 0; i < 3; i++ {
+			graph := typings[0]
+			for n, rest := range typings[1:] {
+				if n == i {
+					graph += "    sysml:type elmt:" + other.id + " ;\n" + rest
+				} else {
+					graph += typing + rest
+				}
+			}
+			_, err := export.Convert("m.ttl", []byte(graph), export.FormatTurtle, export.FormatSysML)
+			var unsupported *export.UnsupportedError
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("usage %d typed by %s: expected an unsupported error, got %v", i, other.id, err)
+			}
+			for _, want := range []string{"sysml:type <urn:sysmlv2:element:" + other.id + ">", "is a sysml:" + other.metaclass, "names the one metadata definition it applies"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("usage %d typed by %s: expected %q in error:\n%s", i, other.id, want, err.Error())
+				}
+			}
+		}
+	}
+}
+
+// A metadata usage typed by a literal is typed by a name the graph does not
+// define; a literal that is no name — a number, a boolean, a tagged or an
+// expression-typed string, an empty or broken qualified name — is refused in
+// each of the three forms rather than written as `@42` or `@1 + 2`.
+func TestMetadataUsageTypedByANonNameLiteralIsReported(t *testing.T) {
+	src := "package P {\n\tmetadata def M;\n\tpart def Car;\n\tmetadata m : M about Car;\n\t@M;\n\t#M part def Truck;\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structural := string(withoutTriples(t, turtle, "sysx:sourceText"))
+	const typing = "    sysml:type elmt:P__M ;\n"
+	typings := strings.Split(structural, typing)
+	if len(typings) != 4 {
+		t.Fatalf("expected three metadata usages typed by M in the graph:\n%s", structural)
+	}
+	retyped := func(i int, object string) string {
+		graph := typings[0]
+		for n, rest := range typings[1:] {
+			if n == i {
+				graph += "    sysml:type " + object + " ;\n" + rest
+			} else {
+				graph += typing + rest
+			}
+		}
+		return graph
+	}
+	// Control: a name the graph does not define is written as that name.
+	for i, want := range []string{"metadata m : Ext::'Safety Level' about Car;", "@Ext::'Safety Level';", "#Ext::'Safety Level' part def Truck;"} {
+		back, err := export.Convert("m.ttl", []byte(retyped(i, `"Ext::Safety Level"`)), export.FormatTurtle, export.FormatSysML)
+		if err != nil {
+			t.Fatalf("usage %d typed by a plain name: %v", i, err)
+		}
+		if !strings.Contains(string(back), want) {
+			t.Errorf("usage %d typed by a plain name: expected %q in:\n%s", i, want, back)
+		}
+	}
+	// A literal of a datatype no name has is refused by the graph-wide literal
+	// gate; a string that spells no name by the metadata usage's own check.
+	for _, literal := range []struct{ object, why string }{
+		{`"42"^^xsd:integer`, "sysml:type takes a string or sysx:Expression"},
+		{`"true"^^xsd:boolean`, "sysml:type takes a string or sysx:Expression"},
+		{`"M"@en`, "a language-tagged literal is an rdf:langString"},
+	} {
+		for i := 0; i < 3; i++ {
+			_, err := export.Convert("m.ttl", []byte(retyped(i, literal.object)), export.FormatTurtle, export.FormatSysML)
+			var unsupported *export.UnsupportedError
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("usage %d typed by %s: expected an unsupported error, got %v", i, literal.object, err)
+			}
+			for _, want := range []string{"the literal " + literal.object + " stated by <urn:sysmlv2:element:P__", "sysml:type", literal.why} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("usage %d typed by %s: expected %q in error:\n%s", i, literal.object, want, err.Error())
+				}
+			}
+		}
+	}
+	for _, literal := range []struct{ object, why string }{
+		{`"1 + 2"^^sysx:Expression`, "an expression, not a name"},
+		{`""`, "is empty"},
+		{`"P::"`, "an empty name segment"},
+		{`"$::"`, "an empty name segment"},
+		{"\"Safety\\nLevel\"", "a line break"},
+		{`"M\\"`, "ending in a backslash"},
+	} {
+		for i := 0; i < 3; i++ {
+			_, err := export.Convert("m.ttl", []byte(retyped(i, literal.object)), export.FormatTurtle, export.FormatSysML)
+			var unsupported *export.UnsupportedError
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("usage %d typed by %s: expected an unsupported error, got %v", i, literal.object, err)
+			}
+			for _, want := range []string{"the element <urn:sysmlv2:element:P__", "sysml:type", literal.why, "names the one metadata definition it applies"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("usage %d typed by %s: expected %q in error:\n%s", i, literal.object, want, err.Error())
+				}
+			}
+		}
+	}
+}
+
+// A metadata usage's keyword is `metadata`, `@` or `#`; a graph stating any
+// other is refused rather than written as a declaration of that other kind,
+// and a `#` prefix owned by no declaration has nothing to prefix.
+func TestMetadataUsageWithAnUnsupportedKeywordIsReported(t *testing.T) {
+	refused := func(name, graph string, wants ...string) {
+		t.Helper()
+		_, err := export.Convert("m.ttl", []byte(graph), export.FormatTurtle, export.FormatSysML)
+		var unsupported *export.UnsupportedError
+		if !errors.As(err, &unsupported) {
+			t.Fatalf("%s: expected an unsupported error, got %v", name, err)
+		}
+		for _, want := range wants {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("%s: expected %q in error:\n%s", name, want, err.Error())
+			}
+		}
+	}
+
+	src := "package P {\n\tmetadata def M;\n\tpart def Car;\n\tmetadata m : M about Car;\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structural := string(withoutTriples(t, turtle, "sysx:sourceText"))
+	if !strings.Contains(structural, `sysml:declaredName "m" ;`) {
+		t.Fatalf("the metadata usage's name was not found in the graph:\n%s", structural)
+	}
+	for _, keyword := range []string{"part", "metadata", "@@", ""} {
+		graph := strings.Replace(structural, `sysml:declaredName "m" ;`, `sysml:declaredName "m" ;`+"\n"+`    sysx:declaredKeyword "`+keyword+`" ;`, 1)
+		refused(keyword, graph, "the element <urn:sysmlv2:element:P__m>", "sysx:declaredKeyword", `"`+keyword+`"`, "is not a metadata form")
+	}
+	// A repeated keyword is refused by the graph-wide cardinality gate whichever
+	// value comes first, rather than read as the first one and written as a
+	// prefix or a member.
+	for _, keywords := range []string{`"@", "#"`, `"#", "@"`, `"@", "metadata"`} {
+		graph := strings.Replace(structural, `sysml:declaredName "m" ;`, `sysml:declaredName "m" ;`+"\n"+`    sysx:declaredKeyword `+keywords+` ;`, 1)
+		refused(keywords, graph, "the subject <urn:sysmlv2:element:P__m>", "states sysx:declaredKeyword twice", "one of them would be dropped")
+	}
+
+	root := "metadata def M;\n@M;\n"
+	turtle, err = export.Convert("m.sysml", []byte(root), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structural = string(withoutTriples(t, turtle, "sysx:sourceText"))
+	if !strings.Contains(structural, `sysx:declaredKeyword "@"`) {
+		t.Fatalf("the root annotation's sigil was not found in the graph:\n%s", structural)
+	}
+	asPrefix := strings.Replace(structural, `sysx:declaredKeyword "@"`, `sysx:declaredKeyword "#"`, 1)
+	refused("root prefix", asPrefix, "the prefix annotation <urn:sysmlv2:element:", "owned by no declaration")
+}
+
+// A prefix annotation on an element whose notation has no place for one is
+// refused rather than dropped from the body it was read from.
+func TestPrefixOnAnUnprefixableHeadIsReported(t *testing.T) {
+	src := "package P {\n\tmetadata def Safety;\n\taction def A {\n\t\t#Safety action a;\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	asFork := strings.Replace(string(withoutTriples(t, turtle, "sysx:sourceText")), "a sysml:ActionUsage ;", "a sysml:ForkNode ;", 1)
+	if asFork == string(turtle) {
+		t.Fatalf("the action usage was not found in the graph:\n%s", turtle)
+	}
+	_, err = export.Convert("m.ttl", []byte(asFork), export.FormatTurtle, export.FormatSysML)
+	var unsupported *export.UnsupportedError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("expected an unsupported error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "whose notation takes no prefix annotation") {
+		t.Errorf("unexpected error: %s", err.Error())
+	}
+}
+
+// A prefix annotation on a condition member that states an inline condition or
+// a constraint reference has no position in the notation (`assume #M x > 0`
+// does not parse), so such a graph is refused rather than written unparseable.
+func TestPrefixOnAConditionWithoutADeclarationIsReported(t *testing.T) {
+	src := "package P {\n\tmetadata def Safety;\n\tconstraint def C;\n\trequirement def R {\n\t\tassume #Safety constraint c;\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structural := string(withoutTriples(t, turtle, "sysx:sourceText"))
+	// The reference form declares nothing: neither a name nor the `constraint`
+	// keyword, which is what tells a declaration's `references C` from it.
+	declaration := `sysml:declaredName "c" ;` + "\n    " + `sysx:declaredKeyword "constraint" ;`
+	if !strings.Contains(structural, declaration) {
+		t.Fatalf("the assume member's declaration was not found in the graph:\n%s", structural)
+	}
+	for _, tc := range []struct{ triples, form string }{
+		{declaration + "\n    " + `sysx:condition "true" ;`, "an inline condition"},
+		{`sysml:references elmt:P__C ;`, "a constraint reference"},
+	} {
+		t.Run(tc.form, func(t *testing.T) {
+			edited := strings.Replace(structural, declaration, tc.triples, 1)
+			_, err := export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML)
+			var unsupported *export.UnsupportedError
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("expected an unsupported error, got %v", err)
+			}
+			for _, want := range []string{"the condition member <", "this member states " + tc.form} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("expected %q in error:\n%s", want, err.Error())
+				}
+			}
+		})
+	}
+}
+
+// A condition member stating no condition, reference, keyword or body
+// (`sysx:hasBody false`) is refused, not written as an invented constraint.
+func TestConditionWithoutAConditionIsReported(t *testing.T) {
+	src := "package P {\n\tconstraint def C;\n\trequirement def R {\n\t\tassume constraint c;\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structural := string(withoutTriples(t, turtle, "sysx:sourceText"))
+	for _, want := range []string{`sysx:declaredKeyword "constraint" ;`, `sysx:hasBody "false"^^xsd:boolean .`} {
+		if !strings.Contains(structural, want) {
+			t.Fatalf("%s was not found in the graph:\n%s", want, structural)
+		}
+	}
+	edited := strings.Replace(structural, `sysx:declaredKeyword "constraint" ;`, "", 1)
+	_, err = export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML)
+	var unsupported *export.UnsupportedError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("expected an unsupported error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "a condition member states a condition") {
+		t.Errorf("unexpected error: %s", err.Error())
+	}
+}
+
+// An `assume`/`require` member's sysx:declaredKeyword names the `constraint`
+// declaration form and nothing else; another value is refused rather than the
+// member written in a form the keyword did not state.
+func TestConditionWithAnUnsupportedKeywordIsReported(t *testing.T) {
+	src := "package P {\n\tconstraint def C;\n\trequirement def R {\n\t\tassume constraint c { true }\n\t\trequire constraint d;\n\t\trequire C;\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structural := string(withoutTriples(t, turtle, "sysx:sourceText"))
+	if got := strings.Count(structural, `sysx:declaredKeyword "constraint" ;`); got != 2 {
+		t.Fatalf("expected two declared constraints in the graph, found %d:\n%s", got, structural)
+	}
+	// `require C;` reads as an inline condition naming C; the reference form is
+	// what a graph states through sysml:references.
+	const inline = `sysx:condition expr:P__R___402_pcondition .`
+	if !strings.Contains(structural, inline) {
+		t.Fatalf("the inline require member was not found in the graph:\n%s", structural)
+	}
+	const declared, assert = `sysx:declaredKeyword "constraint" ;`, `sysx:declaredKeyword "assert" ;`
+	// The two declared constraints are written in source order: c, then d.
+	secondDeclared := strings.Replace(structural, declared, "\x00", 1)
+	secondDeclared = strings.Replace(strings.Replace(secondDeclared, declared, assert, 1), "\x00", declared, 1)
+	for _, tc := range []struct{ name, edited, member string }{
+		{"bodied assume", strings.Replace(structural, declared, assert, 1), "assume"},
+		{"bodyless require", secondDeclared, "require"},
+		{"inline require", strings.Replace(structural, inline, `sysx:declaredKeyword "verify" ;`+"\n    "+inline, 1), "require"},
+		{"reference-form require", strings.Replace(structural, inline, `sysx:declaredKeyword "verify" ;`+"\n    "+`sysml:references elmt:P__C .`, 1), "require"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.edited == structural {
+				t.Fatal("the graph was not edited")
+			}
+			_, err := export.Convert("m.ttl", []byte(tc.edited), export.FormatTurtle, export.FormatSysML)
+			var unsupported *export.UnsupportedError
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("expected an unsupported error, got %v", err)
+			}
+			for _, want := range []string{"the condition member <", "is not a form of a " + tc.member + " member"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("expected %q in error:\n%s", want, err.Error())
+				}
+			}
+		})
+	}
+	// The unedited graph still round-trips: `constraint` is the one supported keyword.
+	back, err := export.Convert("m.ttl", []byte(structural), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to sysml: %v", err)
+	}
+	for _, want := range []string{"assume constraint c {", "require constraint d;", "require C;"} {
+		if !strings.Contains(string(back), want) {
+			t.Errorf("expected %q in:\n%s", want, back)
+		}
+	}
+}
+
+// A member stating an inline condition and also facts of the declaration or
+// reference form is refused: the notation writes one form, and writing the
+// condition alone would drop the rest.
+func TestInlineConditionWithDeclarationFactsIsReported(t *testing.T) {
+	src := "package P {\n\tconstraint def C;\n\trequirement def R {\n\t\trequire C;\n\t}\n\tconstraint q {\n\t\tassert C;\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structural := string(withoutTriples(t, turtle, "sysx:sourceText"))
+	const require, assert = `sysx:condition expr:P__R___400_pcondition .`, `sysx:condition expr:P__q___400_pcondition .`
+	for _, inline := range []string{require, assert} {
+		if !strings.Contains(structural, inline) {
+			t.Fatalf("%s was not found in the graph:\n%s", inline, structural)
+		}
+	}
+	for _, tc := range []struct{ name, inline, added, drops string }{
+		{"declared constraint keyword", require, `sysx:declaredKeyword "constraint" ;`, "declares a `constraint`"},
+		{"stated constraint", require, `sysml:references elmt:P__C ;`, "states a constraint through sysml:references"},
+		{"body", require, `sysx:hasBody "true"^^xsd:boolean ;`, "has a body"},
+		{"name", require, `sysml:declaredName "c" ;`, "declares a name"},
+		{"specialization", require, `sysml:subsets elmt:P__C ;`, "declares specializations"},
+		{"multiplicity", require, `sysml:upperBound "1" ;`, "declares a multiplicity"},
+		{"value", require, `sysml:value "1" ;`, "has a value"},
+		{"asserted body", assert, `sysx:hasBody "true"^^xsd:boolean ;`, "has a body"},
+		{"asserted name", assert, `sysml:declaredName "c" ;`, "declares a name"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			edited := strings.Replace(structural, tc.inline, tc.added+"\n    "+tc.inline, 1)
+			if edited == structural {
+				t.Fatal("the graph was not edited")
+			}
+			_, err := export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML)
+			var unsupported *export.UnsupportedError
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("expected an unsupported error, got %v", err)
+			}
+			for _, want := range []string{"the condition member <", "states an inline condition", tc.drops} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("expected %q in error:\n%s", want, err.Error())
+				}
+			}
+		})
+	}
+	// The unedited graph still round-trips: the inline form alone is the form.
+	back, err := export.Convert("m.ttl", []byte(structural), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to sysml: %v", err)
+	}
+	for _, want := range []string{"require C;", "assert C;"} {
+		if !strings.Contains(string(back), want) {
+			t.Errorf("expected %q in:\n%s", want, back)
+		}
+	}
+}
+
+// A head kept as source text writes its prefix annotations in that text; when
+// the text and the graph disagree, the text is stale and the head is rebuilt
+// from the graph rather than the annotation lost.
+func TestPrefixOnAVerbatimHeadIsWrittenOrReported(t *testing.T) {
+	// The text may space or qualify a prefix in ways the graph's rendering does
+	// not; a `#` in the body or in a sequence index is not a prefix.
+	heads := []string{
+		"#Safety connect x to y;",
+		"# Safety connect x to y;",
+		"#P::Safety #Audit connect x to y;",
+		"#$::P::Safety connect x to y;",
+		"#Safety connect x to y {\n\t\t\t#Audit part p;\n\t\t}",
+		"connect x to y {\n\t\t\t#Safety part p;\n\t\t}",
+		"transition t first x if xs#(1) > 0 then y;",
+	}
+	for _, head := range heads {
+		src := "package P {\n\tmetadata def Safety;\n\tmetadata def Audit;\n\tattribute xs : Integer[*];\n\tpart def A {\n\t\tport x;\n\t\tport y;\n\t}\n\tpart a : A {\n\t\t" + head + "\n\t}\n}"
+		turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+		if err != nil {
+			t.Fatalf("%s: to turtle: %v", head, err)
+		}
+		back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+		if err != nil {
+			t.Fatalf("%s: back to notation: %v", head, err)
+		}
+		spaced := func(s string) string { return strings.Join(strings.Fields(s), " ") }
+		if !strings.Contains(spaced(string(back)), spaced(head)) {
+			t.Errorf("%s: the prefixed head should come back as written:\n%s", head, back)
+		}
+	}
+	src := "package P {\n    metadata def Safety;\n    metadata def Audit;\n    part a {\n        port x;\n        port y;\n        #Safety connect x to y;\n    }\n}\n"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation without source text: %v", err)
+	}
+	if !strings.Contains(string(back), "#Safety connect x to y;") {
+		t.Errorf("the prefixed head should come back from the graph alone:\n%s", back)
+	}
+	written := `sysx:sourceText "        #Safety connect x to y;\n"`
+	for _, stale := range []string{
+		`"        connect x to y;\n"`,
+		`"        #Audit connect x to y;\n"`,
+		`"        #Q::Safety connect x to y;\n"`,
+		`"        #Safety #Safety connect x to y;\n"`,
+	} {
+		edited := strings.Replace(string(turtle), written, `sysx:sourceText `+stale, 1)
+		if edited == string(turtle) {
+			t.Fatalf("the verbatim head was not found in the graph:\n%s", turtle)
+		}
+		back, err := export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML)
+		if err != nil {
+			t.Fatalf("%s: back to notation: %v", stale, err)
+		}
+		if strings.Count(string(back), "#Safety connect x to y;") != 1 || strings.Contains(string(back), "#Audit") || strings.Contains(string(back), "#Q::") {
+			t.Errorf("%s: the stale head should be rebuilt with the graph's annotation:\n%s", stale, back)
+		}
+	}
+	// The verbatim head prints no members, so an annotation whose keyword is
+	// not a metadata form is refused there rather than dropped with the body;
+	// a repeated keyword is refused by the graph-wide cardinality gate.
+	for _, tc := range []struct{ keywords, subject, note string }{
+		{`"#", "@"`, "the subject <urn:sysmlv2:element:P__a__", "states sysx:declaredKeyword twice"},
+		{`"part"`, "the element <urn:sysmlv2:element:P__a__", `sysx:declaredKeyword "part" is not a metadata form`},
+	} {
+		edited := strings.Replace(string(turtle), `sysx:declaredKeyword "#"`, `sysx:declaredKeyword `+tc.keywords, 1)
+		if edited == string(turtle) {
+			t.Fatalf("the prefix's keyword was not found in the graph:\n%s", turtle)
+		}
+		_, err = export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML)
+		var unsupported *export.UnsupportedError
+		if !errors.As(err, &unsupported) {
+			t.Fatalf("%s: expected an unsupported error, got %v", tc.keywords, err)
+		}
+		for _, want := range []string{tc.subject, tc.note} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("%s: expected %q in error:\n%s", tc.keywords, want, err.Error())
+			}
+		}
 	}
 }
 
@@ -1968,6 +2745,43 @@ func TestLegacyExtensionNamespaceIsRefused(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), rdf.LegacyExtension) {
 			t.Errorf("%s: error does not name the legacy namespace: %v", name, err)
+		}
+	}
+}
+
+// The fixture is 0.4.3's own output: `sysx:prefixMetadata` for a `#` prefix and
+// `sysml:annotates` for an `about` target, neither of which this version reads.
+func TestSupersededMetadataPredicatesAreRefused(t *testing.T) {
+	turtle, err := os.ReadFile(filepath.Join("testdata", "superseded", "metadata_0_4_3.ttl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	refused := func(turtle []byte, property string) {
+		t.Helper()
+		_, err := export.Convert("old.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+		var unsupported *export.UnsupportedError
+		if !errors.As(err, &unsupported) {
+			t.Fatalf("expected the graph to be refused for %s, got %v", property, err)
+		}
+		for _, want := range []string{"the property <" + property + ">", "an earlier version wrote a metadata annotation this way", "convert the model from source again"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("expected %q in error:\n%s", want, err.Error())
+			}
+		}
+	}
+	refused(turtle, rdf.OpenSysML+"prefixMetadata")
+	withoutPrefix := withoutTriples(t, turtle, "sysx:prefixMetadata")
+	refused(withoutPrefix, rdf.SysML+"annotates")
+
+	// Without the superseded properties the graph converts, so the refusal is
+	// the only thing standing between the graph and a silently dropped annotation.
+	back, err := export.Convert("old.ttl", withoutTriples(t, withoutPrefix, "sysml:annotates"), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	for _, unwanted := range []string{"#Safety", "about"} {
+		if strings.Contains(string(back), unwanted) {
+			t.Errorf("%q should not come from a graph that no longer states it:\n%s", unwanted, back)
 		}
 	}
 }

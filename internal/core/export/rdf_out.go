@@ -68,7 +68,6 @@ const (
 	xSourceText      = "sourceText"
 	xSourceTail      = "sourceTail"
 	xSourceLanguage  = "sourceLanguage"
-	xPrefixMetadata  = "prefixMetadata"
 	xFilter          = "filter"
 	xNamespaceImport = "isNamespaceImport"
 	xRecursive       = "isRecursive"
@@ -235,18 +234,19 @@ func newEncoder(file *source.SourceFile, root *ast.RootNamespace) (*encoder, err
 		return nil, err
 	}
 	e := &encoder{
-		file:      file,
-		graph:     rdf.NewGraph(),
-		res:       res,
-		declared:  map[string]bool{},
-		fqn:       map[ast.Node]string{},
-		links:     map[*ast.QualifiedName]*symbols.Symbol{},
-		preceding: map[ast.Node]ast.Node{},
-		ids:       ids,
-		subjects:  map[string]string{},
-		regions:   map[rdf.Term]region{},
-		bodies:    map[rdf.Term]region{},
-		offsets:   map[string]int{},
+		file:           file,
+		graph:          rdf.NewGraph(),
+		res:            res,
+		declared:       map[string]bool{},
+		metadataBodies: map[string]bool{},
+		fqn:            map[ast.Node]string{},
+		links:          map[*ast.QualifiedName]*symbols.Symbol{},
+		preceding:      map[ast.Node]ast.Node{},
+		ids:            ids,
+		subjects:       map[string]string{},
+		regions:        map[rdf.Term]region{},
+		bodies:         map[rdf.Term]region{},
+		offsets:        map[string]int{},
 	}
 	for _, ref := range resolve.References(root, res.Index().DocumentRoot(file.Name())) {
 		if sym, ok := res.ProbeReference(ref); ok && sym != nil {
@@ -268,6 +268,9 @@ type encoder struct {
 	// the language reaches from where it is written, not to one of the same name.
 	res      *resolve.Resolver
 	declared map[string]bool
+	// metadataBodies holds the qualified names of the metadata usages and the nested
+	// members of their bodies: a keywordless member there is a ReferenceUsage.
+	metadataBodies map[string]bool
 	// fqn is the qualified name of each member node, which is how a succession
 	// end the notation leaves unnamed addresses the member it binds.
 	fqn map[ast.Node]string
@@ -372,6 +375,34 @@ func (e *encoder) collect(members []ast.Node, owner string) error {
 		if err := e.collect(children, fqn); err != nil {
 			return err
 		}
+		if err := e.collectPrefixes(node, fqn, len(e.kept(children))); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// collectPrefixes records the names of a declaration's `#M` prefix annotations,
+// which take the positions after its kept body members, and of their bodies.
+func (e *encoder) collectPrefixes(node ast.Node, owner string, index int) error {
+	for _, prefix := range declaredPrefixes(node) {
+		if prefix == nil || e.ids.skip(prefix) {
+			continue
+		}
+		fqn := qualify(owner, "", index)
+		// A body member may be named `'@N'`, the position name the prefix takes.
+		if e.declared[fqn] {
+			return &UnsupportedError{
+				What: fmt.Sprintf("the prefix annotation at %s", e.where(prefix)),
+				Note: fmt.Sprintf("it is identified by its position as %s, which a body member is named, and merging two elements into one subject would be a different model", fqn),
+			}
+		}
+		e.fqn[prefix] = fqn
+		e.declared[fqn] = true
+		if err := e.collect(prefix.Body, fqn); err != nil {
+			return err
+		}
+		index++
 	}
 	return nil
 }
@@ -463,55 +494,73 @@ func (e *encoder) kept(members []ast.Node) []ast.Node {
 	return out
 }
 
+// mint reserves the subject IRI of the element node declares as fqn.
+func (e *encoder) mint(node ast.Node, fqn string) (rdf.Term, error) {
+	subject := e.ids.subjectForNode(node, fqn)
+	if prior, taken := e.claim(subject.Value, fqn); taken {
+		return rdf.Term{}, &UnsupportedError{
+			What: fmt.Sprintf("the declaration of %s at %s", fqn, e.where(node)),
+			Note: fmt.Sprintf("its id lands on the same IRI as %s, and merging two elements into one subject would be a different model", prior),
+		}
+	}
+	return subject, nil
+}
+
+// head types an element and states its identity, position and membership in
+// its owner; a metaclass this mapping invents is typed in the OpenSysML namespace.
+// lines is the text of the member, wrapper and all, unless inline: one written
+// on its owner's own lines is part of the owner's text.
+func (e *encoder) head(subject rdf.Term, node ast.Node, visibility ast.Visibility, fqn string, ownerTerm rdf.Term, index int, metaclass rdf.Term, lines region, inline bool) {
+	e.graph.Add(subject, rdf.IRI(rdf.RDFType), metaclass)
+	e.graph.Add(subject, e.sysml(pQualifiedName), rdf.String(fqn))
+	// The id an API reader addresses the element by, which is the id its own
+	// IRI ends in, so the two cannot disagree.
+	e.graph.Add(subject, e.sysml(pElementID), rdf.String(rdf.LocalName(subject.Value)))
+	e.graph.Add(subject, e.sysx(xMemberIndex), rdf.Int(index))
+	e.offsets[subject.Value] = node.Span().Offset
+	if !inline {
+		e.regions[subject] = lines
+	}
+	if language := languageName(e.file.Kind()); ownerTerm.Value == "" && language != "" {
+		e.graph.Add(subject, e.sysx(xSourceLanguage), rdf.String(language))
+	}
+	if e.ids.declaredIDAt(node) {
+		e.graph.Add(subject, e.sysx(xDeclaredID), rdf.Bool(true))
+	}
+	e.provenance(subject, node)
+	membership := rdf.Term{}
+	if ownerTerm.Value != "" {
+		// Only a namespace is an owningNamespace; a relationship owner is
+		// stated by sysml:owner and the ownership owningMembership wires.
+		if !isRelationship(e.metaclassOf(ownerTerm)) {
+			e.graph.Add(subject, e.sysml(pOwningNamespace), ownerTerm)
+		}
+		membership = e.owningMembership(subject, ownerTerm, fqn, isExpressionMember(node))
+	}
+	if keyword := visibilityKeyword(visibility); keyword != "" {
+		// The membership states the visibility a member is declared with; a
+		// relationship, such as an import, states its own.
+		visible := subject
+		if membership.Value != "" {
+			visible = membership
+		}
+		e.graph.Add(visible, e.sysml(pVisibility), rdf.String(keyword))
+	}
+}
+
 // encodeMember maps one member: node is the declaration inside its membership
 // wrapper, and lines the text of the member, wrapper and all, unless inline.
 func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines region, inline bool, owner string, ownerTerm rdf.Term, index int) error {
 	name, _ := declaredNameAndMembers(node)
 	fqn := qualify(owner, name, index)
-	subject := e.ids.subjectForNode(node, fqn)
-	if prior, taken := e.claim(subject.Value, fqn); taken {
-		return &UnsupportedError{
-			What: fmt.Sprintf("the declaration of %s at %s", fqn, e.where(node)),
-			Note: fmt.Sprintf("its id lands on the same IRI as %s, and merging two elements into one subject would be a different model", prior),
-		}
+	subject, err := e.mint(node, fqn)
+	if err != nil {
+		return err
 	}
 	// A bare expression among a body's members is the result the body computes.
 	result := isExpressionMember(node)
-
-	// A metaclass name this mapping invents is typed in the OpenSysML namespace,
-	// so a consumer can tell it from the standard OMG vocabulary.
 	head := func(metaclass rdf.Term) {
-		e.graph.Add(subject, rdf.IRI(rdf.RDFType), metaclass)
-		e.graph.Add(subject, e.sysml(pQualifiedName), rdf.String(fqn))
-		// The id an API reader addresses the element by, which is the id its own
-		// IRI ends in, so the two cannot disagree.
-		e.graph.Add(subject, e.sysml(pElementID), rdf.String(rdf.LocalName(subject.Value)))
-		e.graph.Add(subject, e.sysx(xMemberIndex), rdf.Int(index))
-		e.offsets[subject.Value] = node.Span().Offset
-		if !inline {
-			e.regions[subject] = lines
-		}
-		if language := languageName(e.file.Kind()); ownerTerm.Value == "" && language != "" {
-			e.graph.Add(subject, e.sysx(xSourceLanguage), rdf.String(language))
-		}
-		if e.ids.declaredIDAt(node) {
-			e.graph.Add(subject, e.sysx(xDeclaredID), rdf.Bool(true))
-		}
-		e.provenance(subject, node)
-		membership := rdf.Term{}
-		if ownerTerm.Value != "" {
-			e.graph.Add(subject, e.sysml(pOwningNamespace), ownerTerm)
-			membership = e.owningMembership(subject, ownerTerm, fqn, result)
-		}
-		if keyword := visibilityKeyword(visibility); keyword != "" {
-			// The membership states the visibility a member is declared with; a
-			// relationship, such as an import, states its own.
-			visible := subject
-			if membership.Value != "" {
-				visible = membership
-			}
-			e.graph.Add(visible, e.sysml(pVisibility), rdf.String(keyword))
-		}
+		e.head(subject, node, visibility, fqn, ownerTerm, index, metaclass, lines, inline)
 	}
 
 	switch n := node.(type) {
@@ -522,7 +571,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 			{"isLibraryPackage", n.IsLibrary},
 			{"isStandardLibraryPackage", n.IsStandard},
 		})
-		if err := e.prefixes(subject, n, n.Prefixes); err != nil {
+		if err := e.prefixes(subject, fqn, n.Prefixes, n.Members); err != nil {
 			return err
 		}
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
@@ -531,7 +580,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 	case *ast.Namespace:
 		head(rdf.SysMLTerm("Namespace"))
 		e.ident(subject, n.Ident)
-		if err := e.prefixes(subject, n, n.Prefixes); err != nil {
+		if err := e.prefixes(subject, fqn, n.Prefixes, n.Members); err != nil {
 			return err
 		}
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
@@ -555,7 +604,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 			{"isEvent", n.IsEvent},
 			{"isParallel", n.IsParallel},
 		})
-		if err := e.prefixes(subject, n, n.Prefixes); err != nil {
+		if err := e.prefixes(subject, fqn, n.Prefixes, n.Members); err != nil {
 			return err
 		}
 		e.relationships(subject, owner, n.Relationships)
@@ -563,7 +612,8 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		return e.encode(n.Members, fqn, subject)
 
 	case *ast.Usage:
-		metaclass, ok := usageMetaclassOf(n)
+		inBody := e.metadataBodies[owner]
+		metaclass, ok := usageMetaclassOf(n, inBody)
 		if !ok {
 			return &UnsupportedError{What: fmt.Sprintf("usage kind %q at %s", n.Kind, e.where(n))}
 		}
@@ -616,7 +666,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 			{"isResult", n.IsResult},
 			{"isParallel", n.IsParallel},
 		})
-		if err := e.prefixes(subject, n, n.Prefixes); err != nil {
+		if err := e.prefixes(subject, fqn, n.Prefixes, bodyMembers(n)); err != nil {
 			return err
 		}
 		if keyword := directionKeyword(n.Direction); keyword != "" {
@@ -633,6 +683,9 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 			e.endForm(subject, n)
 		}
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
+		if inBody || n.Kind == ast.UsageMetadata {
+			e.metadataBodies[fqn] = true
+		}
 		return e.encode(bodyMembers(n), fqn, subject)
 
 	case *ast.Import:
@@ -683,7 +736,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		for _, supplier := range n.Suppliers {
 			e.graph.Add(subject, e.sysml(pSupplier), e.reference(supplier))
 		}
-		if err := e.prefixes(subject, n, n.Prefixes); err != nil {
+		if err := e.prefixes(subject, fqn, n.Prefixes, n.Body); err != nil {
 			return err
 		}
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
@@ -736,15 +789,27 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 			e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String(n.Keyword))
 		}
 		e.flags(subject, []boolProperty{{"isNegated", n.IsNegated}})
-		return e.condition(subject, fqn, owner, n.Expression, nil, n.Body)
+		return e.condition(subject, fqn, owner, n.Expression, nil, true, n.Body)
 
 	case *ast.AssumeMember:
 		head(rdf.OpenSysMLTerm(mAssume))
-		return e.condition(subject, fqn, owner, n.Expression, n.Reference, n.Body)
+		return e.requirementCondition(subject, fqn, owner, requirementConditionDecl{
+			prefixes: n.Prefixes, name: n.Name, relationships: n.Relationships, multiplicity: n.Multiplicity,
+			value: n.Value, expression: n.Expression, reference: n.Reference, hasBody: n.HasBody, body: n.Body,
+		})
 
 	case *ast.RequireMember:
 		head(rdf.OpenSysMLTerm(mRequire))
-		return e.condition(subject, fqn, owner, n.Expression, n.Reference, n.Body)
+		return e.requirementCondition(subject, fqn, owner, requirementConditionDecl{
+			prefixes: n.Prefixes, name: n.Name, relationships: n.Relationships, multiplicity: n.Multiplicity,
+			value: n.Value, expression: n.Expression, reference: n.Reference, hasBody: n.HasBody, body: n.Body,
+		})
+
+	case *ast.PrefixMetadata:
+		// `@M { … }` written as a member annotates its owner, or what its
+		// `about` names (SysML v2 MetadataUsage).
+		head(rdf.SysMLTerm(usageMetaclass[ast.UsageMetadata]))
+		return e.metadataUsage(subject, fqn, owner, n, "@")
 
 	case *ast.SubjectMember:
 		// A subject parameter is a usage of its own (SysML v2 8.2.2.16), so it
@@ -755,6 +820,9 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		}
 		if n.TypeRef != nil {
 			e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelTyping]), e.reference(n.TypeRef))
+		}
+		if err := e.prefixes(subject, fqn, n.Prefixes, n.Body); err != nil {
+			return err
 		}
 		e.relationships(subject, owner, n.Relationships)
 		e.multiplicity(subject, owner, n.Multiplicity)
@@ -803,8 +871,11 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 // which a ResultExpressionMembership owns.
 func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string, result bool) rdf.Term {
 	ownerClass, memberClass := e.metaclassOf(owner), e.metaclassOf(member)
+	// A metadata usage annotates its owner through an OwningMembership whatever
+	// the owner is, a relationship included (SysML.xtext PrefixMetadataMember).
+	metadata := memberClass == "MetadataUsage"
 	switch {
-	case isRelationship(ownerClass):
+	case isRelationship(ownerClass) && !metadata:
 		// A relationship owns its related element itself, as a state's entry
 		// membership owns the action it states.
 		e.relationshipOwnership(member, owner, ownerClass, memberClass)
@@ -822,8 +893,9 @@ func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string, res
 		return rdf.Term{}
 	}
 	// A type owns a feature through a FeatureMembership, which is the membership
-	// the API's payloads carry for it; anything else through an OwningMembership.
-	feature := ontology.IsAncestorOrSelf(memberClass, "Feature") && ontology.IsAncestorOrSelf(ownerClass, "Type")
+	// the API's payloads carry for it; anything else, a metadata usage included,
+	// through an OwningMembership.
+	feature := ontology.IsAncestorOrSelf(memberClass, "Feature") && ontology.IsAncestorOrSelf(ownerClass, "Type") && !metadata
 	membership := rdf.OwningMembershipIRIOf(member)
 	// The membership shares the element namespace, so its IRI is reserved too.
 	if prior, taken := e.claim(membership.Value, memberFQN+"'s owning membership"); taken && e.idErr == nil {
@@ -851,10 +923,12 @@ func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string, res
 	e.graph.Add(membership, e.sysml(pOwnedMemberElement), member)
 	e.graph.Add(membership, e.sysml(pOwnedRelatedElement), member)
 	e.graph.Add(membership, e.sysml(pOwningRelatedElement), owner)
-	e.graph.Add(membership, e.sysml(pMembershipOwningNamespace), owner)
-
-	e.graph.Add(owner, e.sysml(pOwnedMember), member)
-	e.graph.Add(owner, e.sysml(pOwnedMembership), membership)
+	// Only a namespace has members; a relationship owner just owns the membership.
+	if !isRelationship(ownerClass) {
+		e.graph.Add(membership, e.sysml(pMembershipOwningNamespace), owner)
+		e.graph.Add(owner, e.sysml(pOwnedMember), member)
+		e.graph.Add(owner, e.sysml(pOwnedMembership), membership)
+	}
 	e.graph.Add(owner, e.sysml(pOwnedRelationship), membership)
 	if feature {
 		e.graph.Add(membership, e.sysml(pOwnedMemberFeature), member)
@@ -906,7 +980,7 @@ func isRelationship(metaclass string) bool {
 // condition emits the three forms a condition member is written in: an inline
 // expression, a reference to the constraint it states (`require R { … }`), or a
 // nested constraint stating its conditions in a body.
-func (e *encoder) condition(subject rdf.Term, fqn, owner string, expr ast.Node, ref *ast.QualifiedName, body []ast.Node) error {
+func (e *encoder) condition(subject rdf.Term, fqn, owner string, expr ast.Node, ref *ast.QualifiedName, hasBody bool, body []ast.Node) error {
 	if expr != nil {
 		e.expression(subject, e.sysx(xCondition), xCondition, owner, expr)
 		return nil
@@ -914,10 +988,42 @@ func (e *encoder) condition(subject rdf.Term, fqn, owner string, expr ast.Node, 
 	if ref != nil {
 		e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelReferences]), e.reference(ref))
 	}
-	// Both remaining forms — a nested constraint and the constraint a member
-	// names — are written with a body, whether or not it has members.
-	e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(true))
+	e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(hasBody))
 	return e.encode(body, fqn, subject)
+}
+
+// requirementConditionDecl is the head an `assume`/`require` member declares
+// for the constraint usage it owns, besides the condition itself.
+type requirementConditionDecl struct {
+	prefixes      []*ast.PrefixMetadata
+	name          string
+	relationships []*ast.Relationship
+	multiplicity  *ast.Multiplicity
+	value         ast.Node
+	expression    ast.Node
+	reference     *ast.QualifiedName
+	hasBody       bool
+	body          []ast.Node
+}
+
+// requirementCondition emits an `assume`/`require` member together with its
+// constraint usage's declaration (`require #goal constraint c : C [1] = true`).
+func (e *encoder) requirementCondition(subject rdf.Term, fqn, owner string, n requirementConditionDecl) error {
+	if n.name != "" {
+		e.graph.Add(subject, e.sysml(pDeclaredName), rdf.String(n.name))
+	}
+	// The declaration form is keyed by its keyword: its `references C` is a
+	// specialization, where the reference form's `require C` is the head.
+	if n.expression == nil && n.reference == nil {
+		e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String("constraint"))
+	}
+	if err := e.prefixes(subject, fqn, n.prefixes, n.body); err != nil {
+		return err
+	}
+	e.relationships(subject, owner, n.relationships)
+	e.multiplicity(subject, owner, n.multiplicity)
+	e.expression(subject, e.sysml(pValue), pValue, owner, n.value)
+	return e.condition(subject, fqn, owner, n.expression, n.reference, n.hasBody, n.body)
 }
 
 // shorthandRelationship reports whether a usage's identification is the first
@@ -1038,43 +1144,48 @@ func isExtensionFlag(name string) bool {
 	return false
 }
 
-func (e *encoder) prefixes(subject rdf.Term, node ast.Node, prefixes []*ast.PrefixMetadata) error {
+// prefixes maps the `#M` annotations ahead of a declaration as metadata usages
+// it owns after its body members (PrefixMetadataMember), keyed `#` for the writer.
+func (e *encoder) prefixes(subject rdf.Term, fqn string, prefixes []*ast.PrefixMetadata, members []ast.Node) error {
+	index := len(e.kept(members))
 	for _, prefix := range prefixes {
 		if prefix == nil || e.ids.skip(prefix) {
 			continue
 		}
-		written, err := e.prefixText(node, prefix)
+		prefixFQN := e.fqn[prefix]
+		prefixSubject, err := e.mint(prefix, prefixFQN)
 		if err != nil {
 			return err
 		}
-		e.graph.Add(subject, e.sysx(xPrefixMetadata), rdf.String(written))
+		// A prefix is written in its owner's head, so its text is the owner's.
+		e.head(prefixSubject, prefix, ast.VisibilityDefault, prefixFQN, subject, index,
+			rdf.SysMLTerm(usageMetaclass[ast.UsageMetadata]), region{}, true)
+		if err := e.metadataUsage(prefixSubject, prefixFQN, fqn, prefix, "#"); err != nil {
+			return err
+		}
+		index++
 	}
 	return nil
 }
 
-// prefixText writes an annotation as the notation it was written as. The node
-// carries no span of its own, so its sigil is read from ahead of the type it
-// names; a prefix that cannot be rebuilt that way is refused, not dropped.
-func (e *encoder) prefixText(node ast.Node, prefix *ast.PrefixMetadata) (string, error) {
-	at := ast.Node(prefix)
-	if prefix.Type != nil {
-		at = prefix.Type
+// metadataUsage states an annotation's definition, the elements it is about and
+// its body; the sigil it was written with is its declared keyword.
+func (e *encoder) metadataUsage(subject rdf.Term, fqn, owner string, n *ast.PrefixMetadata, sigil string) error {
+	if n.Type == nil {
+		return &UnsupportedError{
+			What: fmt.Sprintf("the metadata annotation at %s", e.where(n)),
+			Note: "it names no metadata definition, and an annotation of nothing would be a different model",
+		}
 	}
-	unsupported := &UnsupportedError{
-		What: fmt.Sprintf("the metadata annotation at %s", e.where(at)),
-		Note: "its notation cannot be rebuilt from the graph, and a graph without it would be a different model; " + rdfLimitationsNote,
+	e.ident(subject, n.Ident)
+	e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String(sigil))
+	e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelTyping]), e.reference(n.Type))
+	for _, about := range n.About {
+		e.graph.Add(subject, e.sysml(pAnnotatedElement), e.reference(about))
 	}
-	// An annotation the parser records ahead of the declaration it belongs to
-	// would be written back onto a different element.
-	if prefix.Type == nil || len(prefix.Body) > 0 || prefix.Type.Span().Offset >= node.Span().End() {
-		return "", unsupported
-	}
-	name := e.text(prefix.Type)
-	sigil := e.sigilBefore(prefix.Type.Span().Offset)
-	if name == "" || sigil == "" {
-		return "", unsupported
-	}
-	return sigil + name, nil
+	e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
+	e.metadataBodies[fqn] = true
+	return e.encode(n.Body, fqn, subject)
 }
 
 // wroteKindKeyword reports whether the declaration spells its kind keyword out.
@@ -1126,22 +1237,6 @@ func withoutComments(text string) string {
 		}
 	}
 	return kept.String()
-}
-
-// sigilBefore reads the `#` or `@` that introduces an annotation: the character
-// ahead of the type it names.
-func (e *encoder) sigilBefore(offset int) string {
-	for at := offset - 1; at >= 0; at-- {
-		switch text := e.file.Text(source.Span{Offset: at, Len: 1}); text {
-		case "#", "@":
-			return text
-		case " ", "\t", "\n", "\r":
-			continue
-		default:
-			return ""
-		}
-	}
-	return ""
 }
 
 func (e *encoder) relationships(subject rdf.Term, owner string, rels []*ast.Relationship) {
@@ -1412,6 +1507,29 @@ func referencesFeature(n *ast.Usage) bool {
 	return false
 }
 
+// declaredPrefixes is the `#M` annotations written ahead of a declaration.
+func declaredPrefixes(node ast.Node) []*ast.PrefixMetadata {
+	switch n := node.(type) {
+	case *ast.Package:
+		return n.Prefixes
+	case *ast.Namespace:
+		return n.Prefixes
+	case *ast.Dependency:
+		return n.Prefixes
+	case *ast.Definition:
+		return n.Prefixes
+	case *ast.Usage:
+		return n.Prefixes
+	case *ast.SubjectMember:
+		return n.Prefixes
+	case *ast.AssumeMember:
+		return n.Prefixes
+	case *ast.RequireMember:
+		return n.Prefixes
+	}
+	return nil
+}
+
 // declaredNameAndMembers returns the name a declaration introduces and the
 // members it owns, for the node kinds that have either.
 func declaredNameAndMembers(node ast.Node) (string, []ast.Node) {
@@ -1443,11 +1561,13 @@ func declaredNameAndMembers(node ast.Node) (string, []ast.Node) {
 	case *ast.ConstraintMember:
 		return n.Name, n.Body
 	case *ast.AssumeMember:
-		return "", n.Body
+		return n.Name, n.Body
 	case *ast.RequireMember:
-		return "", n.Body
+		return n.Name, n.Body
 	case *ast.SubjectMember:
 		return n.Name, n.Body
+	case *ast.PrefixMetadata:
+		return n.Ident.Name, n.Body
 	case *ast.Comment:
 		return n.Ident.Name, nil
 	case *ast.Documentation:
