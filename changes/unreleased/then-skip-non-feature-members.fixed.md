@@ -6,7 +6,9 @@
   parser and the RDF writer share is now `ast.IsSuccessionSource` — a feature that is not an edge
   (`ast.UsageKind.IsEdge`) — so a `then` sequences from the nearest feature before it, as the pilot
   implementation resolves it (`UsageUtil.getPreviousFeature`) and as SysML v2 §7.17.4 reads. A
-  `then` with only non-feature members before it is diagnosed as having nothing to sequence from.
+  `then` with only non-feature members before it is diagnosed as having nothing to sequence from,
+  whether attached to a member (`then action b;`) or naming its target (`then b;`, `if g then b;`,
+  `else b;`), which before reached lowering as an edge with no source.
   The writer folds a succession back into `then` past the same members and refuses a graph whose
   source is one of them; `docs/reference/rdf-mapping.md` records the rule and its two known gaps
   (an end-less `flow`/`message`, and an `alias` of a feature, which the pilot keeps as the source).

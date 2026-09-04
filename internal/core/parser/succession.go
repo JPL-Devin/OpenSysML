@@ -332,6 +332,8 @@ func (b *bodyBuilder) add(m ast.Node) {
 		}
 	} else if b.lastNode != nil {
 		bindPositionalSource(memberNode(m), b.lastNode)
+	} else if !b.hasMember {
+		b.reportSourceless(memberNode(m))
 	}
 
 	target := memberDeclaredName(m)
@@ -354,6 +356,20 @@ func (b *bodyBuilder) add(m ast.Node) {
 		edge.Target, edge.TargetMember = nil, memberNode(m)
 	}
 	b.members = append(b.members, edge)
+}
+
+// reportSourceless diagnoses a one-name edge (`then b;`, `if x then b;`, `else b;`)
+// that no member a succession can sequence from precedes, as takeSuccession does
+// for a member-attached `then`.
+func (b *bodyBuilder) reportSourceless(m ast.Node) {
+	if unnamedEdgeSource(m) == nil {
+		return
+	}
+	word := "then"
+	if edge, ok := m.(*ast.ControlFlowEdge); ok && edge.IsElse {
+		word = "else"
+	}
+	b.p.error(m.Span(), "`"+word+"` has no member before it to sequence from: it sequences the member it names with the nearest feature before it, and none precedes it")
 }
 
 // bindPositionalSource binds the source of a one-name edge (`then b;`, `if x

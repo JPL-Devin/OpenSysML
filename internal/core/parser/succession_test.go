@@ -205,6 +205,40 @@ func TestThenWithNoFeatureBeforeItIsDiagnosed(t *testing.T) {
 	}
 }
 
+// A one-name edge (`then b;`, `if x then b;`, `else b;`) leaves its source to the
+// member before it, so one that no feature precedes is diagnosed the same way.
+func TestOneNameEdgeWithNoFeatureBeforeItIsDiagnosed(t *testing.T) {
+	for name, body := range map[string]string{
+		"nothing":            "",
+		"only documentation": "doc /* b */",
+		"only a definition":  "part def Inner;",
+		"only an import":     "private import Q::*;",
+		"only an alias":      "alias Bump for Step;",
+	} {
+		for spelling, edge := range map[string]string{
+			"then":    "then b;",
+			"if then": "if true then b;",
+			"else":    "else b;",
+		} {
+			t.Run(name+"/"+spelling, func(t *testing.T) {
+				src := "package P { action def Step; package Q { part def W; }\n" +
+					"action def A { " + body + " " + edge + " action b : Step; } }"
+				p := New(source.New("succession.sysml", []byte(src)))
+				p.ParseFile()
+				if len(p.Diagnostics) != 1 || !strings.Contains(p.Diagnostics[0].Message, "has no member before it to sequence from") {
+					t.Fatalf("diagnostics %v, want one saying the edge has no member before it", p.Diagnostics)
+				}
+			})
+		}
+	}
+
+	// The initial node is a member a `then` sequences from.
+	_, p := parseSuccessions(t, "package P { action def Step; action def A { first start; then b; action b : Step; } }")
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", p.Diagnostics)
+	}
+}
+
 // A nested state body carries the members of a state body, so a `then` attached
 // to one of its states is the same succession it would be one level up.
 func TestMemberAttachedThenInNestedStateDesugars(t *testing.T) {
