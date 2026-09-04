@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"errors"
+	"sort"
 	"strings"
 	"testing"
 
@@ -137,6 +138,86 @@ func TestIncomparableValueIsRefusedByTheFeatureType(t *testing.T) {
 			}
 		})
 	}
+}
+
+const heldObjectModel = `
+	package test {
+		private import ScalarValues::*;
+		item def Segment { item ends [2]; }
+		item def Rack {
+			item slot : Segment [0..1];
+			item raw [1];
+			item spare [1];
+		}
+		item rack : Rack;
+		attribute def Load { item seg : Segment; attribute n : Integer; }
+	}
+`
+
+// isUnclassified reports whether an object still is what it was declared alone.
+func isUnclassified(inst *Instance) bool {
+	_, ends := inst.FeatureValues["ends"]
+	return len(inst.classifiers) == 0 && !ends
+}
+
+// Classifying an object is part of the change that holds it: a probe undoes it
+// with the write, and a value refused, or a message refused for another of its
+// arguments, classifies nothing.
+func TestClassificationIsKeptOrUndoneWithTheChange(t *testing.T) {
+	ctx, idx := libraryShapeContext(t, heldObjectModel)
+	rack := instantiateQualified(t, ctx, idx, "test::rack")
+	raw, spare := readInstance(t, ctx, rack, "raw"), readInstance(t, ctx, rack, "spare")
+	rawVal := Value{Kind: ValInstance, Instance: raw.ID}
+	spareVal := Value{Kind: ValInstance, Instance: spare.ID}
+
+	end := ctx.beginProbe()
+	if err := rack.SetFeatureValue(ctx, "slot", rawVal); err != nil {
+		t.Fatalf("SetFeatureValue(slot) under a probe: %v", err)
+	}
+	if isUnclassified(raw) {
+		t.Fatal("raw is not a Segment while it is held by slot")
+	}
+	end()
+	if !isUnclassified(raw) {
+		t.Fatalf("after the probe, raw is classified by %v with %v", raw.classifiers, sortedNames(raw.FeatureValues))
+	}
+	if rack.FeatureValues["slot"].Materialized {
+		t.Fatal("after the probe, slot is still written")
+	}
+
+	two := sequenceOf([]Value{rawVal, spareVal})
+	if err := rack.SetFeatureValue(ctx, "slot", two); !errors.Is(err, ErrMultiplicityViolation) {
+		t.Fatalf("SetFeatureValue(slot, two objects) = %v, want ErrMultiplicityViolation", err)
+	}
+	if !isUnclassified(raw) || !isUnclassified(spare) {
+		t.Fatal("a refused write classified its objects")
+	}
+
+	load := idx.LookupQualified("test::Load")[0]
+	args := map[string]Value{"seg": rawVal, "n": NewStringValue("many")}
+	if _, err := ctx.SignalMessage(load, args, rack); !errors.Is(err, ErrSignalArgument) {
+		t.Fatalf("SignalMessage(Load) = %v, want ErrSignalArgument", err)
+	}
+	if !isUnclassified(raw) {
+		t.Fatal("a refused message classified the object of an argument it admitted")
+	}
+	args["n"] = integerValue(2)
+	if _, err := ctx.SignalMessage(load, args, rack); err != nil {
+		t.Fatalf("SignalMessage(Load): %v", err)
+	}
+	if isUnclassified(raw) {
+		t.Fatal("raw is not a Segment once carried by Load.seg")
+	}
+}
+
+// sortedNames is the feature names an object carries, sorted.
+func sortedNames(values map[string]*FeatureValue) []string {
+	names := make([]string, 0, len(values))
+	for name := range values {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // A qualified name of a feature of an enclosing type, written in a nested

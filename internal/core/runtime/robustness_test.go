@@ -482,6 +482,38 @@ func testBindingMultipleCollectionContributors(t *testing.T) {
 		}
 	})
 
+	// An end admitting one value links a feature holding one value whole,
+	// however wide the feature is declared; one holding more stays partial.
+	t.Run("partial_by_values_held", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-partial-by-values-held>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute edges : Integer[*];
+				attribute pick : Integer[1];
+				binding [1] bind [0..1] edges = [0..1] pick;
+			}
+			part one : Sys { :>> edges = (7); }
+			part two : Sys { :>> edges = (7, 8); }
+		}`))
+		one, err := ctx.Instantiate(oneSymbol(t, idx, "P::one"))
+		if err != nil {
+			t.Fatalf("instantiate one: %v", err)
+		}
+		fv, err := one.GetFeatureValue(ctx, "pick")
+		if err != nil {
+			t.Fatalf("one.pick: %v", err)
+		}
+		if got := fv.HeldValue().Const.Int; got != 7 {
+			t.Errorf("one.pick = %d (%s), want 7, the one value edges holds", got, FormatValue(fv.HeldValue()))
+		}
+		two, err := ctx.Instantiate(oneSymbol(t, idx, "P::two"))
+		if err != nil {
+			t.Fatalf("instantiate two: %v", err)
+		}
+		if _, err := two.GetFeatureValue(ctx, "pick"); !errors.Is(err, ErrBindingEnd) {
+			t.Fatalf("two.pick = %v, want ErrBindingEnd", err)
+		}
+	})
+
 	t.Run("whole_unequal", func(t *testing.T) {
 		idx, _, ctx := buildRuntime(t, "<binding-multiple-collection-conflict>", parseAndBuild(t, `package P {
 			part def Sys {

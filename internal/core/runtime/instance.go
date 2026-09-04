@@ -380,13 +380,40 @@ func (ctx *Context) checkAdmits(feat *EffectiveFeature, what string, val Value) 
 	if msg := feat.Multiplicity.CountViolation(elementCount(&val)); msg != "" {
 		return fmt.Errorf("%s: %w: %s", what, ErrMultiplicityViolation, msg)
 	}
-	if err := ctx.checkWriteType(feat.DeclScope(), what, feat.Type, val); err != nil {
-		return err
-	}
+	return ctx.checkWriteType(feat.DeclScope(), what, feat.Type, val)
+}
+
+// heldBy is the declaration whose values the feature's are: the feature itself,
+// or its type for a feature the run time made up.
+func (feat *EffectiveFeature) heldBy() *symbols.Symbol {
 	if feat.Symbol != nil {
-		return ctx.classifyHeld(feat.Symbol, val)
+		return feat.Symbol
 	}
-	return ctx.classifyHeld(feat.Type, val)
+	return feat.Type
+}
+
+// admitted is the value an admitted val is stored as: a collection for a
+// multi-valued feature, its elements charged to the budget, with the objects it
+// holds classified by the feature. Nothing is charged or classified for a value refused.
+func (ctx *Context) admitted(feat *EffectiveFeature, val Value) (Value, error) {
+	if !feat.Scalar() && val.Kind != ValSequence && val.Kind != ValSet {
+		// A multi-valued feature holds a collection however it was written, so a
+		// single value written to one is that collection's one element.
+		elements := elementsOf(val)
+		if err := ctx.chargeElements(int64(len(elements))); err != nil {
+			return Value{}, err
+		}
+		val = sequenceOf(elements)
+	} else if feat.Scalar() && (val.Kind == ValSequence || val.Kind == ValSet) {
+		// A scalar feature holds the one element of a one-element collection.
+		if elements := elementsOf(val); len(elements) == 1 {
+			val = elements[0]
+		}
+	}
+	if err := ctx.classifyHeld(feat.heldBy(), val); err != nil {
+		return Value{}, err
+	}
+	return val, nil
 }
 
 // GetFeatureValue retrieves the feature value for the named feature, materializing it lazily
@@ -420,20 +447,15 @@ func (inst *Instance) SetFeatureValue(ctx *Context, name string, value Value) er
 	if err := ctx.checkDefault(inst, fv, name, value); err != nil {
 		return err
 	}
+	value, err := ctx.admitted(fv.Feature, value)
+	if err != nil {
+		return err
+	}
 	ctx.noteProbeWrite(fv)
 	if fv.Feature.Scalar() {
 		fv.Value = value
 		fv.Values = Value{}
 	} else {
-		// A multi-valued feature holds a collection however it was written, so a
-		// single value written to one is that collection's one element.
-		if value.Kind != ValSequence && value.Kind != ValSet {
-			elements := elementsOf(value)
-			if err := ctx.chargeElements(int64(len(elements))); err != nil {
-				return err
-			}
-			value = sequenceOf(elements)
-		}
 		fv.Values = value
 		fv.Value = Value{}
 	}
@@ -509,20 +531,12 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 		if err := ctx.checkDefault(inst, fv, name, val); err != nil {
 			return nil, err
 		}
+		if val, err = ctx.admitted(fv.Feature, val); err != nil {
+			return nil, err
+		}
 		if fv.Feature.Scalar() {
 			fv.Value = val
 		} else {
-			// A multi-valued feature holds a collection, so a single value
-			// stated as its default is that collection's one element, and a
-			// default that is no value at all holds nothing: the elements
-			// stored are the ones counted above.
-			if val.Kind != ValSequence && val.Kind != ValSet {
-				elements := elementsOf(val)
-				if err := ctx.chargeElements(int64(len(elements))); err != nil {
-					return nil, err
-				}
-				val = sequenceOf(elements)
-			}
 			fv.Values = val
 		}
 		fv.Materialized = true

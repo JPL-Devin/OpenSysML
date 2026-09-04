@@ -161,7 +161,7 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 	var cycleFeatures []string
 	var attempts []bindingAttempt
 	for _, binding := range bindings {
-		partial, err := ctx.partialBinding(owner, binding)
+		partial, err := ctx.partialBinding(owner, targetInst, target, binding)
 		if err != nil {
 			return Value{}, false, false, nil, err
 		}
@@ -229,7 +229,9 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 // whose stated multiplicity admits fewer values than the feature it names holds
 // (`bind [0..1] tf.edges = [0..1] tfe`) links one value of that feature per
 // link rather than all of them (KerML 1.0 §7.4.9.2, connector end multiplicity).
-func (ctx *Context) partialBinding(owner *Instance, binding lower.Binding) (bool, error) {
+// A feature declared wider than the end but holding no more values than it
+// admits is linked whole; the end being resolved has none to count yet.
+func (ctx *Context) partialBinding(owner, targetInst *Instance, target *FeatureValue, binding lower.Binding) (bool, error) {
 	for end := range binding.Ends {
 		stated, ok := ctx.model.RangeOf(binding.Ends[end].Multiplicity)
 		if !ok || !stated.Upper.Known || stated.Upper.Infinite {
@@ -239,11 +241,22 @@ func (ctx *Context) partialBinding(owner *Instance, binding lower.Binding) (bool
 		if err != nil {
 			return false, err
 		}
-		if endpoint.location.instance == nil {
+		loc := endpoint.location
+		if loc.instance == nil {
 			continue
 		}
-		held := endpoint.location.instance.FeatureValues[endpoint.location.name].Feature.Multiplicity.Upper
-		if held.Infinite || (held.Known && held.Value > stated.Upper.Value) {
+		declared := loc.instance.FeatureValues[loc.name].Feature.Multiplicity.Upper
+		if !declared.Infinite && (!declared.Known || declared.Value <= stated.Upper.Value) {
+			continue
+		}
+		if bindingLocationCarries(loc, target, targetInst) {
+			return true, nil
+		}
+		val, found, err := ctx.bindingEndpointValue(endpoint, owner, false)
+		if err != nil {
+			return false, err
+		}
+		if count := int64(len(elementsOf(val))); !found || count == 0 || count > stated.Upper.Value {
 			return true, nil
 		}
 	}
@@ -535,18 +548,15 @@ func (ctx *Context) assignBindingValue(inst *Instance, fv *FeatureValue, name st
 	if err := ctx.checkDefault(inst, fv, name, val); err != nil {
 		return err
 	}
+	val, err := ctx.admitted(fv.Feature, val)
+	if err != nil {
+		return err
+	}
 	ctx.noteProbeWrite(fv)
 	if fv.Feature.Scalar() {
 		fv.Value = val
 		fv.Values = Value{}
 	} else {
-		if val.Kind != ValSequence && val.Kind != ValSet {
-			elements := elementsOf(val)
-			if err := ctx.chargeElements(int64(len(elements))); err != nil {
-				return err
-			}
-			val = sequenceOf(elements)
-		}
 		fv.Value = Value{}
 		fv.Values = val
 	}

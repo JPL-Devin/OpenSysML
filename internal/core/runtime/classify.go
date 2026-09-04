@@ -1,6 +1,8 @@
 package runtime
 
 import (
+	"maps"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -79,10 +81,15 @@ func (ctx *Context) classifyHeld(feature *symbols.Symbol, val Value) error {
 }
 
 // classify records typ as a classifier of inst and gives it the feature values
-// typ declares that it does not carry yet, unmaterialized.
+// typ declares that it does not carry yet, unmaterialized. A probe or transaction
+// under way restores the object as it was (see noteProbeUndo).
 func (ctx *Context) classify(inst *Instance, typ *symbols.Symbol) error {
 	if ctx.instanceConforms(inst, typ) {
 		return nil
+	}
+	if ctx.journals > 0 {
+		classifiers, values := inst.classifiers, maps.Clone(inst.FeatureValues)
+		ctx.noteProbeUndo(func() { inst.classifiers, inst.FeatureValues = classifiers, values })
 	}
 	inst.classifiers = append(inst.classifiers, typ)
 	carried := make(map[string]bool, len(inst.FeatureValues))

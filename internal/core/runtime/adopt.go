@@ -87,6 +87,9 @@ func (ctx *Context) recordShapes(obj *Instance, shapes *Shapes, seen map[int64]b
 	}
 	seen[obj.ID] = true
 	ctx.recordShape(obj.Type, shapes)
+	for _, c := range obj.classifiers {
+		ctx.recordShape(c, shapes)
+	}
 	for _, val := range obj.held() {
 		ctx.walkValue(val, func(v Value) {
 			if v.Kind == ValVariant {
@@ -396,11 +399,13 @@ type adoption struct {
 }
 
 // adoptPlan is what one object becomes in the new context: the declaration it is
-// of, and the feature each of its feature values fills.
+// of, the features that classified it, and the feature each of its feature
+// values fills.
 type adoptPlan struct {
-	obj      *Instance
-	typeSym  *symbols.Symbol
-	features map[string]*EffectiveFeature
+	obj         *Instance
+	typeSym     *symbols.Symbol
+	classifiers []*symbols.Symbol
+	features    map[string]*EffectiveFeature
 }
 
 // featureFor returns the feature a feature value reached under name fills: the one its
@@ -431,24 +436,26 @@ func (a *adoption) plan(obj *Instance) error {
 		}
 		return &AdoptError{Type: a.ctx.fqnOf(obj.Type), Reason: fmt.Sprintf("its identity %d is taken", obj.ID)}
 	}
-	typeSym, err := a.rebind(obj.Type, "its type")
+	typeSym, err := a.rebindShaped(obj.Type, "its type")
 	if err != nil {
 		return err
 	}
 	fqn := a.ctx.fqnOf(typeSym)
-	want, recorded := a.shapes.digests[fqn]
-	if !recorded {
-		return &AdoptError{Type: fqn, Reason: "the shape it was materialized against was not recorded"}
+	byName := make(map[string]*EffectiveFeature)
+	a.indexFeatures(typeSym, byName)
+	// A feature that classified the object declares features of it too, so the
+	// object is rebound to what that feature is declared as here.
+	classifiers := make([]*symbols.Symbol, 0, len(obj.classifiers))
+	for _, c := range obj.classifiers {
+		found, err := a.rebindShaped(c, "a feature that held it")
+		if err != nil {
+			return err
+		}
+		classifiers = append(classifiers, found)
+		a.indexFeatures(found, byName)
 	}
-	if a.ctx.ShapeDigest(typeSym) != want {
-		return &AdoptError{Type: fqn, Reason: "its declaration resolves to a different shape now"}
-	}
-	features := a.ctx.FeaturesOf(typeSym)
-	byName := make(map[string]*EffectiveFeature, len(features))
-	for i := range features {
-		byName[features[i].Name] = &features[i]
-	}
-	plan := &adoptPlan{obj: obj, typeSym: typeSym, features: make(map[string]*EffectiveFeature, len(obj.FeatureValues))}
+	plan := &adoptPlan{obj: obj, typeSym: typeSym, classifiers: classifiers,
+		features: make(map[string]*EffectiveFeature, len(obj.FeatureValues))}
 	for _, name := range obj.featureNames() {
 		feat, err := a.planFeature(fqn, typeSym, name, obj.FeatureValues[name], byName)
 		if err != nil {
@@ -463,6 +470,35 @@ func (a *adoption) plan(obj *Instance) error {
 		}
 	}
 	return nil
+}
+
+// rebindShaped rebinds a declaration an object was materialized against and
+// checks that it still resolves to the shape recorded for it.
+func (a *adoption) rebindShaped(sym *symbols.Symbol, what string) (*symbols.Symbol, error) {
+	found, err := a.rebind(sym, what)
+	if err != nil {
+		return nil, err
+	}
+	fqn := a.ctx.fqnOf(found)
+	want, recorded := a.shapes.digests[fqn]
+	if !recorded {
+		return nil, &AdoptError{Type: fqn, Reason: "the shape it was materialized against was not recorded"}
+	}
+	if a.ctx.ShapeDigest(found) != want {
+		return nil, &AdoptError{Type: fqn, Reason: "its declaration resolves to a different shape now"}
+	}
+	return found, nil
+}
+
+// indexFeatures adds the features sym declares to byName, keeping the ones a
+// declaration indexed before it already gave a name.
+func (a *adoption) indexFeatures(sym *symbols.Symbol, byName map[string]*EffectiveFeature) {
+	features := a.ctx.FeaturesOf(sym)
+	for i := range features {
+		if _, taken := byName[features[i].Name]; !taken {
+			byName[features[i].Name] = &features[i]
+		}
+	}
 }
 
 // planFeature is the feature a feature value fills in this context: the effective feature
@@ -577,6 +613,7 @@ func (a *adoption) commit() {
 		adopted[id] = true
 		prevType := plan.obj.Type
 		plan.obj.Type = plan.typeSym
+		plan.obj.classifiers = plan.classifiers
 		// Names of one redefined feature share a feature value, which is rebound once, to
 		// the feature of the name the shared feature value was created under.
 		done := make(map[*FeatureValue]bool, len(plan.obj.FeatureValues))

@@ -545,6 +545,62 @@ func holdsObject(val Value, id int64) bool {
 	return ok && got == id
 }
 
+const adoptClassifiedSrc = `package Demo {
+	private import ScalarValues::*;
+	item def Segment { attribute span : Real = 2.0; item ends [2]; }
+	item def Loop { item edges : Segment [*]; }
+	item def Square :> Loop {
+		item :>> edges [4] = (e1, e2, e3, e4);
+		item e1 [1]; item e2 [1]; item e3 [1]; item e4 [1];
+	}
+}`
+
+// An object classified by the feature that held it carries that classification
+// over: the feature is rebound to its declaration in the new analysis, and the
+// feature values the classification added fill the features it declares there.
+func TestAdoptCarriesAClassifiedObject(t *testing.T) {
+	prev := contextOver(t, adoptClassifiedSrc)
+	obj, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::Square"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if _, err := obj.GetFeatureValue(prev, "edges"); err != nil {
+		t.Fatalf("GetFeatureValue(edges): %v", err)
+	}
+	id, ok := obj.FeatureValues["e1"].Value.Object()
+	if !ok {
+		t.Fatalf("e1 holds %v, want an object", obj.FeatureValues["e1"].Value)
+	}
+	e1 := prev.instances[id]
+	if len(e1.classifiers) != 1 {
+		t.Fatalf("e1 has %d classifiers, want the edges feature alone", len(e1.classifiers))
+	}
+	shapes := prev.ShapesOf(obj)
+
+	ctx := contextOver(t, adoptClassifiedSrc+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, shapes, obj); err != nil {
+		t.Fatalf("Adopt: %v", err)
+	}
+	edges := lookupOne(t, ctx.resolver.Index(), "Demo::Square::edges")
+	if len(e1.classifiers) != 1 || e1.classifiers[0] != edges {
+		t.Errorf("e1 is classified by %v, want the edges feature of the new analysis", e1.classifiers)
+	}
+	if !ctx.instanceConforms(e1, lookupOne(t, ctx.resolver.Index(), "Demo::Segment")) {
+		t.Error("e1 no longer conforms to Segment in the new analysis")
+	}
+	feat := e1.FeatureValues["span"].Feature
+	if features := ctx.FeaturesOf(edges); feat != &features[indexOfFeature(t, features, "span")] {
+		t.Error("span still fills a feature of the analysis e1 was classified in")
+	}
+	span, err := e1.GetFeatureValue(ctx, "span")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(span): %v", err)
+	}
+	if got := fmt.Sprint(span.Value.Const); !strings.Contains(got, "2") {
+		t.Errorf("span = %s, want 2 from Segment as it is declared now", got)
+	}
+}
+
 // A declaration that no longer resolves to the shape an object was materialized
 // against cannot hold that object, so it is refused rather than rebound onto
 // feature values that no longer mean the same thing.
