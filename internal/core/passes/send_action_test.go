@@ -363,6 +363,10 @@ func TestSendWellFormedShapesAreSilent(t *testing.T) {
 			part def V { action a { send Ping() to new Receiver(); } } }`,
 		"via a constructed port": `package P {` + sendPrelude + `
 			part def V { part r : Receiver; action a { send Ping() via new PD() to r; } } }`,
+		"to a constructed package is the instantiation rule's": `package P {` + sendPrelude + `
+			package Q; part def V { action a { send Ping() to new Q(); } } }`,
+		"via a constructed package is the instantiation rule's": `package P {` + sendPrelude + `
+			package Q; part def V { part r : Receiver; action a { send Ping() via new Q() to r; } } }`,
 		"to an occurrence-valued calculation": `package P {` + sendPrelude + `
 			calc def pick { return : Receiver; }
 			part def V { action a { send Ping() to pick(); } } }`,

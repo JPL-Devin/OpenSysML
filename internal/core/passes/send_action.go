@@ -200,6 +200,9 @@ func (c *sendActionChecker) argument(scope *symbols.Scope, arg ast.Node) (sendAr
 		return sendArgument{valueType: prim.String()}, true
 	}
 	typ := c.expr.constructedTypeSymbol(scope, arg)
+	if typ != nil && !isTypeKind(typ.Kind) {
+		return sendArgument{}, false
+	}
 	if typ == nil {
 		typ = c.expr.invocationResultTypeSymbol(scope, arg)
 	}
