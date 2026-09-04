@@ -1161,6 +1161,10 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 		for _, a := range v.Args {
 			r.resolveExpr(scope, a)
 		}
+		for _, na := range v.NamedArgs {
+			// The name is a feature of the constructed type, looked up there.
+			r.resolveExpr(scope, na.Value)
+		}
 	case *ast.BodyExpr:
 		for i := range v.Params {
 			p := &v.Params[i]

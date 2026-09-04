@@ -38,7 +38,15 @@ func (m *Model) evaluable(scope *symbols.Scope, expr ast.Node, depth int) bool {
 		return m.evaluableOperator(scope, e, depth)
 	case *ast.ConstructorExpr:
 		// A constructor names a type and fills its features: the model decides it.
-		return m.allEvaluable(scope, e.Args, depth)
+		if !m.allEvaluable(scope, e.Args, depth) {
+			return false
+		}
+		for _, arg := range e.NamedArgs {
+			if !m.evaluable(scope, arg.Value, depth+1) {
+				return false
+			}
+		}
+		return true
 	case *ast.InvocationExpr:
 		return m.evaluableInvocation(scope, e, depth)
 	case *ast.FeatureReference:

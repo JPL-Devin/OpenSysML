@@ -191,11 +191,11 @@ func dumpExpression(b *strings.Builder, n Node, depth int) bool {
 		return true
 	case *InvocationExpr:
 		fmt.Fprintf(b, `(InvocationExpr type=%q`, qnString(v.Type))
-		writeChildren(b, depth, invocationChildren(v))
+		writeArgChildren(b, depth, invocationChildren(v), v.NamedArgs)
 		return true
 	case *ConstructorExpr:
 		fmt.Fprintf(b, `(ConstructorExpr type=%q`, qnString(v.Type))
-		writeChildren(b, depth, v.Args)
+		writeArgChildren(b, depth, v.Args, v.NamedArgs)
 		return true
 	case *SequenceExpr:
 		b.WriteString(`(SequenceExpr`)
@@ -744,6 +744,26 @@ func writeChildren(b *strings.Builder, depth int, kids []Node) {
 	for _, k := range kids {
 		b.WriteString("\n")
 		dumpNode(b, k, depth+1)
+	}
+	b.WriteString(")")
+}
+
+// writeArgChildren is writeChildren for an argument list, each named argument
+// appearing as `(NamedArg name="n" <value>)` after the positional ones.
+func writeArgChildren(b *strings.Builder, depth int, kids []Node, named []NamedArg) {
+	if len(named) == 0 {
+		writeChildren(b, depth, kids)
+		return
+	}
+	for _, k := range kids {
+		b.WriteString("\n")
+		dumpNode(b, k, depth+1)
+	}
+	for _, na := range named {
+		b.WriteString("\n")
+		indent(b, depth+1)
+		fmt.Fprintf(b, `(NamedArg name=%q`, qnString(na.Name))
+		writeChildren(b, depth+1, []Node{na.Value})
 	}
 	b.WriteString(")")
 }

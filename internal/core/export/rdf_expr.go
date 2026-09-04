@@ -145,7 +145,7 @@ func (e *encoder) expressionStructure(subject rdf.Term, owner string, node ast.N
 	case *ast.ConstructorExpr:
 		// The 202407 rendering declares no ConstructorExpression, so `new` is a flag.
 		e.graph.Add(subject, e.sysx(xIsConstructor), rdf.Bool(true))
-		e.invocation(subject, owner, n.Type, nil, n.Args, nil)
+		e.invocation(subject, owner, n.Type, nil, n.Args, n.NamedArgs)
 
 	case *ast.CollectExpr:
 		e.arguments(subject, owner, []ast.Node{n.Operand, n.Body})
