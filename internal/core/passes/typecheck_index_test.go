@@ -42,6 +42,26 @@ func TestIndexIntoNullReported(t *testing.T) {
 		"sequence index 1 is outside 1..0")
 }
 
+// A sequence is flat: a `null` element adds no position, a nested sequence adds
+// its own, and a lone scalar is a sequence of one.
+func TestIndexCountsWrittenElementsFlat(t *testing.T) {
+	wantOneDiag(t,
+		`package P { attribute x = (1, null)#(2); }`,
+		"sequence index 2 is outside 1..1")
+	wantOneDiag(t,
+		`package P { attribute x = (null, null)#(1); }`,
+		"sequence index 1 is outside 1..0")
+	wantOneDiag(t,
+		`package P { attribute x = (1, (2, 3))#(4); }`,
+		"sequence index 4 is outside 1..3")
+	wantOneDiag(t,
+		`package P { attribute x = 5#(2); }`,
+		"sequence index 2 is outside 1..1")
+	wantNoDiags(t, `package P { attribute x = (1, null, 2)#(2); }`)
+	wantNoDiags(t, `package P { attribute x = (1, (2, 3))#(3); }`)
+	wantNoDiags(t, `package P { attribute x = 5#(1); }`)
+}
+
 func TestIndexInRangeOK(t *testing.T) {
 	wantNoDiags(t, `package P { attribute x = (1, 2, 3)#(3); }`)
 }

@@ -301,29 +301,28 @@ func (ec *exprChecker) inferIndex(scope *symbols.Scope, e *ast.IndexExpr) semant
 }
 
 // writtenLength answers how many elements an operand written out holds, and
-// whether that is knowable at all: `null` holds none; a KerML sequence is flat,
-// so an element that is itself multi-valued contributes its own elements and
-// the length is known only from the values.
+// whether that is knowable at all: a literal is one, `null` is none, and a KerML
+// sequence is flat, so a written element contributes its own count while a name
+// or a call may be a collection whose length only the values know.
 func writtenLength(operand ast.Node) (int64, bool) {
+	if isLiteral(operand) {
+		return 1, true
+	}
 	switch n := operand.(type) {
 	case *ast.NullExpr:
 		return 0, true
 	case *ast.SequenceExpr:
+		total := int64(0)
 		for _, el := range n.Elements {
-			if !isSingleValued(el) {
+			length, known := writtenLength(el)
+			if !known {
 				return 0, false
 			}
+			total += length
 		}
-		return int64(len(n.Elements)), true
+		return total, true
 	}
 	return 0, false
-}
-
-// isSingleValued reports whether an expression written as a sequence element is
-// one value whatever the model holds — a literal is, a name or a call may be a
-// collection.
-func isSingleValued(el ast.Node) bool {
-	return isLiteral(el)
 }
 
 // isLiteral reports whether an expression is a scalar literal, whose exact type is written out.

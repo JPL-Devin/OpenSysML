@@ -3,6 +3,7 @@ package docplan
 import (
 	"errors"
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
@@ -536,15 +537,27 @@ func TestCompileReportsBindingMultiplicityMismatch(t *testing.T) {
 	}
 }
 
-// `()` and `null` are the one null expression, binding no value: within a
-// parameter's multiplicity that is a binding, outside it a mismatch.
+// `()` and `null` are the one null expression, binding no value, and a sequence
+// is flat: a `null` element adds nothing and a nested sequence its own values.
+// Within a parameter's multiplicity that is a binding, outside it a mismatch.
 func TestCompileBindsNullToNoValues(t *testing.T) {
-	for name, binding := range map[string]string{"parens": "()", "null": "null"} {
+	cases := map[string]struct {
+		binding string
+		want    []string
+	}{
+		"parens":    {"()", nil},
+		"null":      {"null", nil},
+		"all null":  {"(null, null)", nil},
+		"mixed":     {`("a", null, "b")`, []string{"a", "b"}},
+		"nested":    {`("a", ("b", null, "c"))`, []string{"a", "b", "c"}},
+		"one value": {`"a"`, []string{"a"}},
+	}
+	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fixture := loadPlanningFixture(t, `
 				calc def Names :> Query {
 					in root : Element;
-					in extra : Element[0..*];
+					in tags : String[0..*];
 					OwnedElements(source = root)
 				}
 				part telescope;
@@ -553,7 +566,7 @@ func TestCompileBindsNullToNoValues(t *testing.T) {
 					part list : List {
 						calc items : Names {
 							in root = telescope;
-							in extra = `+binding+`;
+							in tags = `+tc.binding+`;
 						}
 					}
 				}
@@ -563,32 +576,44 @@ func TestCompileBindsNullToNoValues(t *testing.T) {
 				t.Fatalf("compile: %v", err)
 			}
 			bindings := plan.Content()[0].Query().Bindings()
-			if len(bindings) != 2 || bindings[1].Parameter() != "extra" {
+			if len(bindings) != 2 || bindings[1].Parameter() != "tags" {
 				t.Fatalf("bindings = %+v", bindings)
 			}
-			if values := bindings[1].Values(); len(values) != 0 {
-				t.Fatalf("extra values = %+v, want none", values)
+			var got []string
+			for _, value := range bindings[1].Values() {
+				text, ok := value.String()
+				if !ok {
+					t.Fatalf("tags value %+v is not a string", value)
+				}
+				got = append(got, text)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("tags = %q, want %q", got, tc.want)
 			}
 		})
 	}
-	fixture := loadPlanningFixture(t, `
-		calc def Names :> Query {
-			in root : Element[1];
-			OwnedElements(source = root)
-		}
-		part def Report :> Document {
-			attribute redefines title = "Report";
-			part list : List {
-				calc items : Names {
-					in root = ();
+	for name, binding := range map[string]string{"parens": "()", "all null": "(null, null)"} {
+		t.Run(name+" required", func(t *testing.T) {
+			fixture := loadPlanningFixture(t, `
+				calc def Names :> Query {
+					in root : Element[1];
+					OwnedElements(source = root)
 				}
+				part def Report :> Document {
+					attribute redefines title = "Report";
+					part list : List {
+						calc items : Names {
+							in root = `+binding+`;
+						}
+					}
+				}
+			`)
+			_, err := fixture.compile(t, "Report")
+			planning := planningError(t, err)
+			if planning.Kind != ErrorBindingMultiplicity || planning.Parameter != "root" || planning.Actual != "0" {
+				t.Fatalf("error = %+v", planning)
 			}
-		}
-	`)
-	_, err := fixture.compile(t, "Report")
-	planning := planningError(t, err)
-	if planning.Kind != ErrorBindingMultiplicity || planning.Parameter != "root" || planning.Actual != "0" {
-		t.Fatalf("error = %+v", planning)
+		})
 	}
 }
 
