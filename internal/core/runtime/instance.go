@@ -23,6 +23,9 @@ type Instance struct {
 	ID            int64                    // unique identity
 	Type          *symbols.Symbol          // the def/usage symbol this instantiates
 	FeatureValues map[string]*FeatureValue // feature name → feature value
+	// classifiers are the features this object was held as a value of since it
+	// was materialized, each of which classifies it further (see classify.go).
+	classifiers []*symbols.Symbol
 	// Ends are the ends of the connector this object materializes, in declaration
 	// order, and nil for an object that is no connector. A named end also reads
 	// through the feature value of that name; the order is what an end with no name of its
@@ -192,6 +195,25 @@ func (ctx *Context) instantiateOwnedBy(sym *symbols.Symbol, id int64, owner *Ins
 	return inst, nil
 }
 
+// newFeatureValue is the unmaterialized feature value inst holds for feat. A
+// constant default the feature admits is folded eagerly; a default that is not
+// constant may read sibling feature values, so GetFeatureValue evaluates (and
+// reports) it.
+func (ctx *Context) newFeatureValue(inst *Instance, feat *EffectiveFeature) *FeatureValue {
+	fv := &FeatureValue{Feature: feat}
+	if ctx.valueBinds(feat) && feat.Scalar() && !ctx.model.IsVariationFeature(feat.Symbol) &&
+		ctx.restatedInValuedBody(feat) == "" {
+		if semVal, ok := ctx.model.Eval(feat.DefaultValue); ok {
+			val := Value{Kind: ValConst, Const: semVal}
+			if ctx.checkDefault(inst, fv, feat.Name, val) == nil {
+				fv.Value = val
+				fv.Materialized = true
+			}
+		}
+	}
+	return fv
+}
+
 // materializeOwnedBy materializes an object held by owner as the feature value
 // named feature, without starting its behaviors: a holder records the object it
 // holds before those behaviors run, so one addressing it back through its holder
@@ -231,33 +253,13 @@ func (ctx *Context) materialize(sym *symbols.Symbol, id int64) (*Instance, error
 	// Get effective features
 	features := ctx.FeaturesOf(sym)
 
-	// Create feature value for each feature
 	for i := range features {
-		feat := &features[i]
-		fv := &FeatureValue{
-			Feature:      feat,
-			Materialized: false,
-		}
-
-		// Fold constant defaults the feature admits eagerly; a default that is not constant
-		// may read sibling feature values, so GetFeatureValue evaluates (and reports) it.
-		if ctx.valueBinds(feat) && feat.Scalar() && !ctx.model.IsVariationFeature(feat.Symbol) &&
-			ctx.restatedInValuedBody(feat) == "" {
-			if semVal, ok := ctx.model.Eval(feat.DefaultValue); ok {
-				val := Value{Kind: ValConst, Const: semVal}
-				if ctx.checkDefault(inst, fv, feat.Name, val) == nil {
-					fv.Value = val
-					fv.Materialized = true
-				}
-			}
-		}
-
-		inst.FeatureValues[feat.Name] = fv
+		inst.FeatureValues[features[i].Name] = ctx.newFeatureValue(inst, &features[i])
 	}
 
 	// A redefining feature declares the feature it redefines again, so the two
 	// names read one feature value.
-	if err := ctx.aliasRedefinedFeatureValues(inst); err != nil {
+	if err := ctx.aliasRedefinedFeatureValuesOf(inst, sym, nil); err != nil {
 		return nil, err
 	}
 
@@ -378,7 +380,13 @@ func (ctx *Context) checkAdmits(feat *EffectiveFeature, what string, val Value) 
 	if msg := feat.Multiplicity.CountViolation(elementCount(&val)); msg != "" {
 		return fmt.Errorf("%s: %w: %s", what, ErrMultiplicityViolation, msg)
 	}
-	return ctx.checkWriteType(feat.DeclScope(), what, feat.Type, val)
+	if err := ctx.checkWriteType(feat.DeclScope(), what, feat.Type, val); err != nil {
+		return err
+	}
+	if feat.Symbol != nil {
+		return ctx.classifyHeld(feat.Symbol, val)
+	}
+	return ctx.classifyHeld(feat.Type, val)
 }
 
 // GetFeatureValue retrieves the feature value for the named feature, materializing it lazily
@@ -521,6 +529,18 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 		return fv, nil
 	}
 
+	// A feature listing this one as a value, or a collection an optional one
+	// subsets, classifies or fills its objects: each is read first.
+	if err := ctx.materializeHolders(inst, name); err != nil {
+		return nil, err
+	}
+	if err := ctx.materializeSubsettedCollections(inst, fv); err != nil {
+		return nil, err
+	}
+	if fv.Materialized {
+		return fv, nil
+	}
+
 	// An abstract feature has no values of its own (KerML 1.0 §7.3.3.1) and an
 	// optional one demands none: each, a connector included, holds only contributions.
 	if fv.Feature.HoldsOnlyContributions() && (ctx.model.IsConnectorUsage(fv.Feature.Symbol) || ctx.CompositeTypeOf(fv.Feature) != nil) {
@@ -565,8 +585,9 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 			}
 
 			// A feature subsetting this one holds values this one holds, so the
-			// objects those features name are members of this collection;
-			// anonymous objects make up the rest of the lower bound.
+			// objects those features name are members of this collection; optional
+			// subsetting features with room, then anonymous objects, make up the
+			// rest of the lower bound.
 			contributed, err := ctx.subsettingContributions(inst, name)
 			if err != nil {
 				return nil, err
@@ -577,7 +598,16 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 				count = 0
 			}
 
-			// Determine collection type (Sequence vs Set)
+			// The whole collection is held before any of its objects starts, so a
+			// behavior reading the feature back reads the objects held in it.
+			mark := len(ctx.created)
+			children, err := ctx.fillOptionalSubsetters(inst, name, count)
+			if err != nil {
+				ctx.abandonInstancesSince(mark)
+				return nil, err
+			}
+			count -= len(children)
+
 			if err := ctx.chargeElements(int64(count)); err != nil {
 				return nil, err
 			}
@@ -585,10 +615,9 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 			for _, val := range contributed {
 				seq.Append(val)
 			}
-			// The whole collection is held before any of its objects starts, so a
-			// behavior reading the feature back reads the objects held in it.
-			mark := len(ctx.created)
-			children := make([]*Instance, 0, count)
+			for _, child := range children {
+				seq.Append(Value{Kind: ValInstance, Instance: child.ID})
+			}
 			for i := 0; i < count; i++ {
 				childInst, err := ctx.materializeOwnedBy(composite, 0, inst, name)
 				if err != nil {
@@ -662,10 +691,21 @@ func (ctx *Context) CompositeTypeOf(feat *EffectiveFeature) *symbols.Symbol {
 	if isSubjectUsage(feat.Symbol) {
 		return nil
 	}
-	if feat.Symbol != nil && declaresFeatures(feat.Symbol) {
+	if feat.Symbol != nil && (declaresFeatures(feat.Symbol) || untypedOccurrenceUsage(feat)) {
 		return feat.Symbol
 	}
 	return feat.Type
+}
+
+// untypedOccurrenceUsage reports an occurrence usage declaring no type, which
+// its kind's implicit base still classifies (SysML v2 §7.9.2: an untyped
+// `item` is an Items::Item), so it materializes as itself.
+func untypedOccurrenceUsage(feat *EffectiveFeature) bool {
+	if feat.Type != nil || !isOccurrenceUsage(feat.Symbol) {
+		return false
+	}
+	usage := feat.Symbol.Decl.(*ast.Usage)
+	return !usage.IsReference
 }
 
 // isSubjectUsage reports whether sym is the subject parameter of a case.

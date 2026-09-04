@@ -454,31 +454,79 @@ func testBindingMultipleScalarContributors(t *testing.T) {
 }
 
 func testBindingMultipleCollectionContributors(t *testing.T) {
-	idx, _, ctx := buildRuntime(t, "<binding-multiple-collection-contributors>", parseAndBuild(t, `package P {
-		part def Sys {
-			attribute edges : Integer[*];
-			attribute leftEdge : Integer[0..1] = (1);
-			attribute rightEdge : Integer[0..1] = (2);
-			binding [1] bind [0..1] edges = [0..1] leftEdge;
-			binding [1] bind [0..1] edges = [0..1] rightEdge;
+	t.Run("partial", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-multiple-collection-contributors>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute edges : Integer[*];
+				attribute leftEdge : Integer[0..1] = (1);
+				attribute rightEdge : Integer[0..1] = (2);
+				binding [1] bind [0..1] edges = [0..1] leftEdge;
+				binding [1] bind [0..1] edges = [0..1] rightEdge;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
 		}
-	}`))
-	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
-	if err != nil {
-		t.Fatalf("instantiate: %v", err)
-	}
-	_, err = inst.GetFeatureValue(ctx, "edges")
-	if !errors.Is(err, ErrBindingEnd) {
-		t.Fatalf("GetFeatureValue(edges) = %v, want ErrBindingEnd", err)
-	}
-	if !strings.Contains(err.Error(), "multiple bindings contribute to multi-valued endpoint") ||
-		!strings.Contains(err.Error(), "edges") {
-		t.Errorf("error %q does not name the unsupported multiple-contributor endpoint", err)
-	}
-	fv := inst.FeatureValues["edges"]
-	if fv.Materialized || fv.Written || fv.BindingDerived || fv.HeldValue().Kind != ValInvalid {
-		t.Errorf("unsupported binding left an assignment behind: %+v", *fv)
-	}
+		_, err = inst.GetFeatureValue(ctx, "edges")
+		if !errors.Is(err, ErrBindingEnd) {
+			t.Fatalf("GetFeatureValue(edges) = %v, want ErrBindingEnd", err)
+		}
+		if got, want := err.Error(), "binding end cannot be resolved: Sys.edges is bound by `bind [0..1] edges = [0..1] leftEdge`, "+
+			"which links one unspecified value of each end; the model does not determine which value edges holds"; got != want {
+			t.Errorf("error = %q, want %q", got, want)
+		}
+		fv := inst.FeatureValues["edges"]
+		if fv.Materialized || fv.Written || fv.BindingDerived || fv.HeldValue().Kind != ValInvalid {
+			t.Errorf("unsupported binding left an assignment behind: %+v", *fv)
+		}
+	})
+
+	t.Run("whole_unequal", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-multiple-collection-conflict>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute edges : Integer[*];
+				attribute left : Integer[*] = (1, 2);
+				attribute right : Integer[*] = (2, 1);
+				bind edges = left;
+				bind edges = right;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		_, err = inst.GetFeatureValue(ctx, "edges")
+		if !errors.Is(err, ErrBindingConflict) {
+			t.Fatalf("GetFeatureValue(edges) = %v, want ErrBindingConflict", err)
+		}
+		if got, want := err.Error(), "binding conflict at Sys.edges: left = [1, 2], right = [2, 1]"; got != want {
+			t.Errorf("conflict error = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("whole_equal", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-multiple-collection-equal>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute edges : Integer[*];
+				attribute left : Integer[*] = (1, 2);
+				attribute right : Integer[*] = (1, 2);
+				bind edges = left;
+				bind edges = right;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		fv, err := inst.GetFeatureValue(ctx, "edges")
+		if err != nil {
+			t.Fatalf("GetFeatureValue(edges): %v", err)
+		}
+		if got := FormatValue(fv.HeldValue()); got != "[1, 2]" {
+			t.Errorf("edges = %s, want [1, 2]", got)
+		}
+	})
 }
 
 func testBindingPropagationSpendsElementBudget(t *testing.T) {

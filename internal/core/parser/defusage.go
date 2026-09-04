@@ -1806,12 +1806,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			// ends after the `bind` keyword instead of naming the connector, so the
 			// keyword is consumed rather than read as the name.
 			p.advance()
-			if p.at(lexer.LBracket) {
-				p.parseMultiplicity() // end multiplicity, not the connector's
-			}
-			if source := p.parseRelationshipTarget(); source != nil {
-				u.Relationships = append(u.Relationships, bindingEnd(source))
-			}
+			p.parseBindingEnd(u)
 		} else if p.atNameOrKeyword() && p.peekN(1).Kind != lexer.Dot && p.peekN(1).Kind != lexer.ColonColon && p.peekN(1).Kind != lexer.LBracket {
 			// Parse source (name or feature chain like x.field)
 			// Check if simple name or feature chain
@@ -1845,12 +1840,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		// ends, so the keyword follows the declaration instead of replacing it.
 		if p.atKeyword("bind") {
 			p.advance()
-			if p.at(lexer.LBracket) {
-				p.parseMultiplicity() // end multiplicity, not the connector's
-			}
-			if source := p.parseRelationshipTarget(); source != nil {
-				u.Relationships = append(u.Relationships, bindingEnd(source))
-			}
+			p.parseBindingEnd(u)
 		}
 
 		// Check for source expression: binding [mult] name[mult2] source = target
@@ -1868,19 +1858,8 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		// that form `bind` and keeps `=` as a value.
 		sawOf := p.atKeyword("of") && p.src.Kind() == source.KindKerML
 		if p.acceptKeyword("of") {
-			// Parse source multiplicity and target
-			if p.at(lexer.LBracket) {
-				// Store source multiplicity somewhere - for now skip or use relationships
-				p.parseMultiplicity() // consume but don't store separately
-			}
 			// `of` names the feature the binding binds, not its type.
-			target := p.parseRelationshipTarget()
-			if target != nil {
-				u.Relationships = append(u.Relationships, &ast.Relationship{
-					Kind:   ast.RelReferences,
-					Target: target,
-				})
-			}
+			p.parseBindingEnd(u)
 		}
 
 		// A KerML binding has no feature value, so `x = y` states its two ends and
@@ -1893,15 +1872,12 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		// Parse value: = [mult] expr
 		if op, ok := p.accept(lexer.Eq); ok {
 			u.ValueOperatorSpan = op.Span
-			// Optional multiplicity before value expression
-			if p.at(lexer.LBracket) {
-				p.parseMultiplicity() // consume multiplicity prefix in value
-			}
 			if endsOnly {
-				if target := p.parseRelationshipTarget(); target != nil {
-					u.Relationships = append(u.Relationships, bindingEnd(target))
-				}
+				p.parseBindingEnd(u)
 			} else {
+				if p.at(lexer.LBracket) {
+					u.ValueMultiplicity = p.parseMultiplicity()
+				}
 				// The right side is the second ConnectorEndMember (SysML.xtext:1020),
 				// so it names a feature; an expression there is an error.
 				u.Value = p.ParseExpression()
@@ -3356,6 +3332,20 @@ func (p *Parser) parseReferenceMemberUsage(start int, kind ast.UsageKind, kw, no
 // it resolves outside the connector rather than as an inherited redefinition.
 func bindingEnd(target ast.Node) *ast.Relationship {
 	return &ast.Relationship{Kind: ast.RelReferences, Target: target}
+}
+
+// parseBindingEnd parses a connector end of a binding, its end multiplicity
+// included (`[0..1] tf.edges`), and records it as an end of u.
+func (p *Parser) parseBindingEnd(u *ast.Usage) {
+	var mult *ast.Multiplicity
+	if p.at(lexer.LBracket) {
+		mult = p.parseMultiplicity()
+	}
+	if target := p.parseRelationshipTarget(); target != nil {
+		end := bindingEnd(target)
+		end.Multiplicity = mult
+		u.Relationships = append(u.Relationships, end)
+	}
 }
 
 // bindingEndReference reports whether a parsed value names a feature, as a

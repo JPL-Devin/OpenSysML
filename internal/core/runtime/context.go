@@ -41,6 +41,14 @@ type Context struct {
 
 	features map[*symbols.Symbol][]EffectiveFeature
 
+	// denotedFeatures memoizes, per type, the name of its feature each declared
+	// feature symbol denotes on an object of that type: itself or a redefinition.
+	denotedFeatures map[*symbols.Symbol]map[*symbols.Symbol]string
+
+	// holders memoizes, per type, the features whose stated value lists each
+	// named feature of the type.
+	holders map[*symbols.Symbol]map[string][]string
+
 	// writeTargets memoizes the declaration an assignment's target names, per
 	// scope the statement was written in: what a value written must conform to.
 	writeTargets map[writeTargetKey]*writeTarget
@@ -189,6 +197,9 @@ type Context struct {
 	// collectingSubsets holds the feature values whose subsetting features are being read,
 	// so features that subset each other are reported as a cycle.
 	collectingSubsets map[featureValueRef]bool
+	// readingSubsetted holds the optional features whose subsetted collections are
+	// being read ahead of them, so two subsetting each other do not recurse.
+	readingSubsetted map[featureValueRef]bool
 
 	// sources holds the text of the files the model was read from, by name, so an
 	// error about a declaration can say where it was written. A file no caller
@@ -238,6 +249,8 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		maxSteps:            maxSteps,
 		instances:           make(map[int64]*Instance),
 		features:            make(map[*symbols.Symbol][]EffectiveFeature),
+		denotedFeatures:     make(map[*symbols.Symbol]map[*symbols.Symbol]string),
+		holders:             make(map[*symbols.Symbol]map[string][]string),
 		calcShapes:          make(map[*symbols.Symbol]*calcShape),
 		libraryPerformances: make(map[*symbols.Symbol]*libraryPerformance),
 
@@ -268,6 +281,7 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		bindingOwners:           make(map[featureValueRef]*ast.Usage),
 		bindingFeatures:         make(map[*symbols.Symbol]map[string][]lower.Binding),
 		collectingSubsets:       make(map[featureValueRef]bool),
+		readingSubsetted:        make(map[featureValueRef]bool),
 		sources:                 make(map[string]*source.SourceFile),
 	}
 }

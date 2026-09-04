@@ -1529,16 +1529,14 @@ func (s *Session) doInstances() ([]string, bool, error) {
 	return lines, false, nil
 }
 
-// formatFeatureValue renders what a feature value holds: a multi-valued feature keeps its
-// contents in Values, leaving the scalar Value unset; a scalar holding nothing reads as unset.
+// formatFeatureValue renders what a feature value reads as: what it holds, the empty
+// sequence when an optional feature holds nothing, and unset for a required one.
 func formatFeatureValue(ctx *runtime.Context, fv *runtime.FeatureValue) string {
-	if fv.Values.Kind != runtime.ValInvalid {
-		return formatValue(ctx, fv.Values)
-	}
-	if fv.Value.Kind == runtime.ValInvalid {
+	val, err := fv.ReadValue(fv.Feature.Name)
+	if err != nil {
 		return runtime.UnsetText
 	}
-	return formatValue(ctx, fv.Value)
+	return formatValue(ctx, val)
 }
 
 // formatValue renders a value as every surface spells it. ctx may be nil, which

@@ -161,6 +161,23 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 	var cycleFeatures []string
 	var attempts []bindingAttempt
 	for _, binding := range bindings {
+		partial, err := ctx.partialBinding(owner, binding)
+		if err != nil {
+			return Value{}, false, false, nil, err
+		}
+		if partial {
+			// A binding of one unspecified value per end constrains the ends
+			// without determining either: an end valued on its own keeps that
+			// value, one valued by nothing else is not evaluable.
+			if target.Feature.DefaultValue != nil {
+				continue
+			}
+			return Value{}, false, false, nil, fmt.Errorf(
+				"%w: %s is bound by `%s`, which links one unspecified value of each end; the model does not determine which value %s holds",
+				ErrBindingEnd, bindingLocationText(bindingLocation{instance: targetInst, name: key.feature}),
+				ctx.bindingText(binding), endpointName,
+			)
+		}
 		attempt := ctx.attemptBinding(owner, targetInst, target, binding, key)
 		if attempt.err != nil {
 			return Value{}, false, false, nil, attempt.err
@@ -175,13 +192,9 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 			attempts = append(attempts, attempt)
 		}
 	}
+	// Every binding of the whole feature identifies it with its other end, so
+	// two of them must agree on its values, a sequence like a scalar.
 	if len(attempts) > 1 {
-		if !target.Feature.Scalar() {
-			return Value{}, false, false, nil, fmt.Errorf(
-				"%w: multiple bindings contribute to multi-valued endpoint %q (element-wise contribution is not implemented)",
-				ErrBindingEnd, endpointName,
-			)
-		}
 		for _, attempt := range attempts[1:] {
 			if !valueEqual(attempts[0].value, attempt.value) {
 				return Value{}, false, false, nil, &BindingConflictError{
@@ -210,6 +223,43 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 		return attempts[0].value, true, false, nil, nil
 	}
 	return Value{}, false, len(cycleFeatures) != 0, cycleFeatures, nil
+}
+
+// partialBinding reports a binding an end multiplicity makes partial: an end
+// whose stated multiplicity admits fewer values than the feature it names holds
+// (`bind [0..1] tf.edges = [0..1] tfe`) links one value of that feature per
+// link rather than all of them (KerML 1.0 §7.4.9.2, connector end multiplicity).
+func (ctx *Context) partialBinding(owner *Instance, binding lower.Binding) (bool, error) {
+	for end := range binding.Ends {
+		stated, ok := ctx.model.RangeOf(binding.Ends[end].Multiplicity)
+		if !ok || !stated.Upper.Known || stated.Upper.Infinite {
+			continue
+		}
+		endpoint, err := ctx.resolveBindingEndpoint(owner, binding, end)
+		if err != nil {
+			return false, err
+		}
+		if endpoint.location.instance == nil {
+			continue
+		}
+		held := endpoint.location.instance.FeatureValues[endpoint.location.name].Feature.Multiplicity.Upper
+		if held.Infinite || (held.Known && held.Value > stated.Upper.Value) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// bindingText spells a binding as written, end multiplicities included.
+func (ctx *Context) bindingText(binding lower.Binding) string {
+	ends := make([]string, len(binding.Ends))
+	for i, end := range binding.Ends {
+		ends[i] = ctx.bindingEndpointText(binding, i)
+		if r, ok := ctx.model.RangeOf(end.Multiplicity); ok {
+			ends[i] = r.Text() + " " + ends[i]
+		}
+	}
+	return "bind " + strings.Join(ends, " = ")
 }
 
 func bindingEndForPath(binding lower.Binding, path string) int {

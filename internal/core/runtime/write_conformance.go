@@ -13,6 +13,7 @@ import (
 // values it holds.
 type writeTarget struct {
 	name string
+	sym  *symbols.Symbol
 	typ  *symbols.Symbol
 	mult semantics.Range
 }
@@ -38,7 +39,7 @@ func (ctx *Context) writeTargetIn(scope *symbols.Scope, name string) (*writeTarg
 	var target *writeTarget
 	if sym, ok := ctx.resolver.LookupName(scope, name); ok && sym != nil && isFeature(sym) {
 		mult, _ := ctx.extractMultiplicity(sym)
-		target = &writeTarget{name: name, typ: ctx.extractType(sym), mult: mult}
+		target = &writeTarget{name: name, sym: sym, typ: ctx.extractType(sym), mult: mult}
 	}
 	if ctx.writeTargets == nil {
 		ctx.writeTargets = make(map[writeTargetKey]*writeTarget)
@@ -60,7 +61,10 @@ func (ctx *Context) checkWrite(scope *symbols.Scope, what string, target *writeT
 	if msg := ctx.writeCountRefusal(target, &value); msg != "" {
 		return fmt.Errorf("%s: %w: %s", what, ErrMultiplicityViolation, msg)
 	}
-	return ctx.checkWriteType(scope, what, target.typ, value)
+	if err := ctx.checkWriteType(scope, what, target.typ, value); err != nil {
+		return err
+	}
+	return ctx.classifyHeld(target.sym, value)
 }
 
 // writeCountRefusal says why the number of values written is outside the
@@ -160,12 +164,13 @@ func (ctx *Context) valueConforms(scope *symbols.Scope, value *Value, declared *
 		return ctx.quantityConforms(*value, declared)
 	case ValInstance:
 		// An object is what its usage is, implicit bases included: a `part box : Box`
-		// is a Part as well as a Box.
+		// is a Part as well as a Box. Holding it as a value of a narrower type
+		// classifies it by that type too (see classify.go).
 		inst, ok := ctx.instances[value.Instance]
 		if !ok || inst == nil || inst.Type == nil {
 			return false, "", fmt.Errorf("%w: instance %d", ErrUndeterminedValueType, value.Instance)
 		}
-		return ctx.model.Conforms(inst.Type, declared), "", nil
+		return ctx.canClassify(inst, declared), "", nil
 	}
 	prim := ctx.model.PrimTypeOf(declared)
 	if got := valuePrimType(value); prim != semantics.PrimUnknown && got != semantics.PrimUnknown {

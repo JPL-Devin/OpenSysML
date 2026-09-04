@@ -476,6 +476,12 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 				if semantics.EnumerationOwning(sym) != nil {
 					return ec.enumLiteralValue(sym)
 				}
+				// A feature of an enclosing type, named from a nested usage, is read
+				// from the object enclosing the bound one: `e1` inside `e3` is the
+				// containing rectangle's e1, not a fresh occurrence of the declaration.
+				if val, ok, err := ec.outerFeatureValue(sym); ok {
+					return val, err
+				}
 				// A library feature's value comes from the feature seam, not its
 				// declared body: a warm library cache restores symbols without AST.
 				if val, ok, err := ec.ctx.libraryFeatureValue(sym); ok {
@@ -556,6 +562,11 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 	// A library feature reads through the feature seam, whatever the library
 	// declares for it and whether or not the cache kept its declaration.
 	if val, ok, err := ec.ctx.libraryFeatureValue(currentSym); ok {
+		return val, err
+	}
+	// A qualified feature of an enclosing type (`Rectangle::length` inside its
+	// `e1`) reads the enclosing object's value of that feature.
+	if val, ok, err := ec.outerFeatureValue(currentSym); ok {
 		return val, err
 	}
 
@@ -785,6 +796,14 @@ func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) 
 	// A part carries no value of its own: it denotes an occurrence, whose features
 	// `lander.mass.mDry` reads, so the chain is read from that object.
 	if sym, ok := ec.occurrenceOperand(base); ok {
+		// A usage of an enclosing object is read from that object, so a sibling
+		// chain `e1.length` inside `e3` reads the containing rectangle's e1.
+		if val, ok, err := ec.outerFeatureValue(sym); ok {
+			if err != nil {
+				return Value{}, err
+			}
+			return ec.chainMemberValue(val, parts, sym.Name)
+		}
 		inst, err := ec.ctx.occurrenceOf(sym)
 		if err != nil {
 			return Value{}, fmt.Errorf("usage %s: %w", sym.Name, err)

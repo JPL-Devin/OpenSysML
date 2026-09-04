@@ -126,23 +126,31 @@ func (ctx *Context) relatedFeatureNames(sym, owner *symbols.Symbol, kind ast.Rel
 	return names
 }
 
-// aliasRedefinedFeatureValues makes every name of one feature of this instance read one
-// feature value: a redefinition declares the redefined feature again under a new name, so
-// however many names a chain of redefinitions gives it, they name one set of
-// values. The feature value they share is the one the most specific declaration writing a
-// value created, whichever of the names that declaration used; one declaration
-// valuing two names of the feature is reported rather than silently picked from.
-func (ctx *Context) aliasRedefinedFeatureValues(inst *Instance) error {
-	features := ctx.FeaturesOf(inst.Type)
+// aliasRedefinedFeatureValuesOf makes every name of one feature typ declares of this
+// instance read one feature value: a redefinition declares the redefined feature again
+// under a new name, so however many names a chain of redefinitions gives it, they
+// name one set of values. The feature value they share is the one the most specific
+// declaration writing a value created, whichever of the names that declaration
+// used; one declaration valuing two names of the feature is reported rather than
+// silently picked from. A name the instance carried before typ classified it keeps
+// its feature value, which the names typ adds then read.
+func (ctx *Context) aliasRedefinedFeatureValuesOf(inst *Instance, typ *symbols.Symbol, carried map[string]bool) error {
+	features := ctx.FeaturesOf(typ)
 	byName := make(map[string]*EffectiveFeature, len(features))
 	for i := range features {
 		byName[features[i].Name] = &features[i]
 	}
 
-	for _, names := range ctx.redefinitionGroups(inst.Type, features) {
+	for _, names := range ctx.redefinitionGroups(typ, features) {
 		chosen, err := ctx.sharedRedefinitionName(inst, byName, names)
 		if err != nil {
 			return err
+		}
+		for _, name := range names {
+			if carried[name] {
+				chosen = name
+				break
+			}
 		}
 		fv := inst.FeatureValues[chosen]
 		for _, name := range names {
@@ -253,7 +261,18 @@ func (ctx *Context) sharedRedefinitionName(inst *Instance, byName map[string]*Ef
 // directly or through a redefinition of a redefinition: a restated redefinition
 // still declares the feature at the end of the chain (KerML 1.0 §7.3.4.5).
 func (ctx *Context) redefinedNames(sym, owner *symbols.Symbol) []string {
-	var names []string
+	redefined := ctx.redefinedFeatures(sym, owner)
+	names := make([]string, 0, len(redefined))
+	for _, feat := range redefined {
+		names = append(names, feat.Name)
+	}
+	return names
+}
+
+// redefinedFeatures returns every feature of owner sym redefines, directly or
+// through a redefinition of a redefinition, in breadth-first order.
+func (ctx *Context) redefinedFeatures(sym, owner *symbols.Symbol) []*symbols.Symbol {
+	var features []*symbols.Symbol
 	seen := map[*symbols.Symbol]bool{sym: true}
 	for queue := []*symbols.Symbol{sym}; len(queue) > 0; {
 		cur := queue[0]
@@ -270,9 +289,20 @@ func (ctx *Context) redefinedNames(sym, owner *symbols.Symbol) []string {
 				continue
 			}
 			seen[redefined] = true
-			names = append(names, redefined.Name)
+			features = append(features, redefined)
 			queue = append(queue, redefined)
 		}
+	}
+	return features
+}
+
+// subsettedNames returns the names of the features of owner sym subsets: those it
+// names itself and those a feature it redefines names, since a redefining feature
+// subsets what the redefined one subsets (KerML 1.0 §7.3.4.5).
+func (ctx *Context) subsettedNames(sym, owner *symbols.Symbol) []string {
+	names := ctx.relatedFeatureNames(sym, owner, ast.RelSubsets)
+	for _, redefined := range ctx.redefinedFeatures(sym, owner) {
+		names = append(names, ctx.relatedFeatureNames(redefined, owner, ast.RelSubsets)...)
 	}
 	return names
 }
@@ -291,7 +321,7 @@ func (ctx *Context) SubsettingFeatures(inst *Instance, typ *symbols.Symbol, name
 				continue
 			}
 		}
-		for _, subsetted := range ctx.relatedFeatureNames(feat.Symbol, typ, ast.RelSubsets) {
+		for _, subsetted := range ctx.subsettedNames(feat.Symbol, typ) {
 			if aliases[subsetted] {
 				subsetting = append(subsetting, feat)
 				break
@@ -327,4 +357,95 @@ func (ctx *Context) subsettingContributions(inst *Instance, name string) ([]Valu
 		return nil, err
 	}
 	return values, nil
+}
+
+// fillsFromSubsetted reports whether feat may hold objects a collection it
+// subsets makes up: it is optional, holds objects, and states no value.
+func (ctx *Context) fillsFromSubsetted(feat *EffectiveFeature) bool {
+	lower := feat.Multiplicity.Lower
+	return lower.Known && !lower.Infinite && lower.Value == 0 &&
+		!ctx.model.IsConnectorUsage(feat.Symbol) && ctx.CompositeTypeOf(feat) != nil
+}
+
+// materializeSubsettedCollections reads the collections of inst that an optional
+// feature subsets before the feature itself, so what those collections make up
+// for their lower bounds is held by it whichever is read first.
+func (ctx *Context) materializeSubsettedCollections(inst *Instance, fv *FeatureValue) error {
+	if !ctx.fillsFromSubsetted(fv.Feature) {
+		return nil
+	}
+	key := featureValueRef{instance: inst.ID, feature: fv.Feature.Name}
+	if ctx.readingSubsetted[key] {
+		return nil
+	}
+	ctx.readingSubsetted[key] = true
+	defer delete(ctx.readingSubsetted, key)
+	for _, name := range ctx.subsettedNames(fv.Feature.Symbol, inst.Type) {
+		sub, ok := inst.FeatureValues[name]
+		if !ok || sub.Materialized || sub.Feature.Scalar() ||
+			ctx.collectingSubsets[featureValueRef{instance: inst.ID, feature: name}] ||
+			ctx.readingSubsetted[featureValueRef{instance: inst.ID, feature: name}] {
+			continue
+		}
+		if _, err := inst.GetFeatureValue(ctx, name); err != nil {
+			return fmt.Errorf("subsetted feature %s of %s: %w", name, fv.Feature.Name, err)
+		}
+	}
+	return nil
+}
+
+// fillOptionalSubsetters makes up to n objects for the optional features
+// subsetting the named collection, in declaration order and within each one's
+// upper bound: a collection short of its lower bound is filled through the
+// features declared to describe its members before anonymous ones make up the rest.
+func (ctx *Context) fillOptionalSubsetters(inst *Instance, name string, n int) ([]*Instance, error) {
+	type filled struct {
+		fv   *FeatureValue
+		held []Value
+	}
+	var made []*Instance
+	var fills []filled
+	for _, feat := range ctx.SubsettingFeatures(inst, inst.Type, name) {
+		if n == 0 {
+			break
+		}
+		if !ctx.fillsFromSubsetted(&feat) {
+			continue
+		}
+		fv := inst.FeatureValues[feat.Name]
+		held := elementsOf(fv.HeldValue())
+		spare := n
+		if upper := feat.Multiplicity.Upper; upper.Known && !upper.Infinite {
+			if spare = int(upper.Value) - len(held); spare > n {
+				spare = n
+			}
+		}
+		if spare <= 0 {
+			continue
+		}
+		if err := ctx.chargeElements(int64(spare)); err != nil {
+			return made, err
+		}
+		composite := ctx.CompositeTypeOf(&feat)
+		for i := 0; i < spare; i++ {
+			obj, err := ctx.materializeOwnedBy(composite, 0, inst, feat.Name)
+			if err != nil {
+				return made, err
+			}
+			made = append(made, obj)
+			held = append(held, Value{Kind: ValInstance, Instance: obj.ID})
+		}
+		fills = append(fills, filled{fv: fv, held: held})
+		n -= spare
+	}
+	// Held only once every object is made, so a failure leaves each feature as it was.
+	for _, fill := range fills {
+		if fill.fv.Feature.Scalar() {
+			fill.fv.Value = fill.held[0]
+		} else {
+			fill.fv.Values = sequenceOf(fill.held)
+		}
+		fill.fv.Materialized = true
+	}
+	return made, nil
 }
