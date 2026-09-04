@@ -27,6 +27,8 @@ BUF_BREAKING_AGAINST ?= .git\#ref=origin/main,subdir=api/proto
 BIN_DIR := bin
 PYTHON_DIR := clients/python
 NODE_DIR := clients/node
+# The TypeScript protobuf plugin, installed by `npm ci` from the client's lockfile.
+PROTOC_GEN_ES := $(NODE_DIR)/node_modules/.bin/protoc-gen-es
 VSCODE_DIR := editors/vscode
 PYTHON ?= python3
 # buf.gen.python.yaml starts the interpreter this names.
@@ -203,10 +205,13 @@ python-proto: ## Regenerate Python protobuf stubs
 	$(BUF) generate --template buf.gen.python.yaml
 	@echo "✓ Regenerated Python stubs"
 
-proto-ts: ## Regenerate the TypeScript stubs the npm client in clients/node ships
+proto-ts: $(PROTOC_GEN_ES) ## Regenerate the TypeScript stubs the npm client in clients/node ships
 	@echo "Regenerating TypeScript protobuf stubs..."
 	$(BUF) generate --template buf.gen.ts.yaml
 	@echo "✓ Regenerated TypeScript stubs"
+
+$(PROTOC_GEN_ES): $(NODE_DIR)/package-lock.json
+	cd $(NODE_DIR) && npm ci --ignore-scripts
 
 proto-rust: ## Generate Rust stubs and the descriptor for the Rust clients
 	$(BUF) generate --template buf.gen.rust.yaml

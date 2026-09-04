@@ -33,19 +33,20 @@ elmt:R89__SeamCoupling
     sysml:owningRelationship elmt:R89__SeamCoupling_om ;
     sysml:owningMembership elmt:R89__SeamCoupling_om ;
     sysml:declaredName "SeamCoupling" ;
+    sysml:isVariation "true"^^xsd:boolean ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:R89__SeamCoupling__learnFromData, elmt:R89__SeamCoupling__fixed ;
     sysml:ownedMembership elmt:R89__SeamCoupling__learnFromData_om, elmt:R89__SeamCoupling__fixed_om ;
     sysml:ownedRelationship elmt:R89__SeamCoupling__learnFromData_om, elmt:R89__SeamCoupling__fixed_om ;
-    sysml:ownedFeature elmt:R89__SeamCoupling__learnFromData, elmt:R89__SeamCoupling__fixed ;
-    sysml:ownedFeatureMembership elmt:R89__SeamCoupling__learnFromData_om, elmt:R89__SeamCoupling__fixed_om ;
+    sysml:variant elmt:R89__SeamCoupling__learnFromData, elmt:R89__SeamCoupling__fixed ;
+    sysml:variantMembership elmt:R89__SeamCoupling__learnFromData_om, elmt:R89__SeamCoupling__fixed_om ;
     sysx:sourceText "    enum def SeamCoupling {\n" ;
     sysx:sourceTail "    }\n" ;
     json:ownedMember "[{\"@id\":\"R89__SeamCoupling__learnFromData\"},{\"@id\":\"R89__SeamCoupling__fixed\"}]" ;
     json:ownedMembership "[{\"@id\":\"R89__SeamCoupling__learnFromData_om\"},{\"@id\":\"R89__SeamCoupling__fixed_om\"}]" ;
     json:ownedRelationship "[{\"@id\":\"R89__SeamCoupling__learnFromData_om\"},{\"@id\":\"R89__SeamCoupling__fixed_om\"}]" ;
-    json:ownedFeature "[{\"@id\":\"R89__SeamCoupling__learnFromData\"},{\"@id\":\"R89__SeamCoupling__fixed\"}]" ;
-    json:ownedFeatureMembership "[{\"@id\":\"R89__SeamCoupling__learnFromData_om\"},{\"@id\":\"R89__SeamCoupling__fixed_om\"}]" .
+    json:variant "[{\"@id\":\"R89__SeamCoupling__learnFromData\"},{\"@id\":\"R89__SeamCoupling__fixed\"}]" ;
+    json:variantMembership "[{\"@id\":\"R89__SeamCoupling__learnFromData_om\"},{\"@id\":\"R89__SeamCoupling__fixed_om\"}]" .
 
 elmt:R89__SeamCoupling_om
     a sysml:OwningMembership ;
@@ -68,11 +69,12 @@ elmt:R89__SeamCoupling__learnFromData
     sysml:owningMembership elmt:R89__SeamCoupling__learnFromData_om ;
     sysml:declaredName "learnFromData" ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
+    sysml:isVariant "true"^^xsd:boolean ;
     sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        learnFromData;\n" .
 
 elmt:R89__SeamCoupling__learnFromData_om
-    a sysml:FeatureMembership ;
+    a sysml:VariantMembership ;
     sysml:elementId "R89__SeamCoupling__learnFromData_om" ;
     sysml:owner elmt:R89__SeamCoupling ;
     sysml:memberElement elmt:R89__SeamCoupling__learnFromData ;
@@ -80,8 +82,7 @@ elmt:R89__SeamCoupling__learnFromData_om
     sysml:ownedRelatedElement elmt:R89__SeamCoupling__learnFromData ;
     sysml:owningRelatedElement elmt:R89__SeamCoupling ;
     sysml:membershipOwningNamespace elmt:R89__SeamCoupling ;
-    sysml:ownedMemberFeature elmt:R89__SeamCoupling__learnFromData ;
-    sysml:owningType elmt:R89__SeamCoupling .
+    sysml:ownedVariantUsage elmt:R89__SeamCoupling__learnFromData .
 
 elmt:R89__SeamCoupling__fixed
     a sysml:EnumerationUsage ;
@@ -94,11 +95,12 @@ elmt:R89__SeamCoupling__fixed
     sysml:owningMembership elmt:R89__SeamCoupling__fixed_om ;
     sysml:declaredName "fixed" ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
+    sysml:isVariant "true"^^xsd:boolean ;
     sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        fixed;\n" .
 
 elmt:R89__SeamCoupling__fixed_om
-    a sysml:FeatureMembership ;
+    a sysml:VariantMembership ;
     sysml:elementId "R89__SeamCoupling__fixed_om" ;
     sysml:owner elmt:R89__SeamCoupling ;
     sysml:memberElement elmt:R89__SeamCoupling__fixed ;
@@ -106,8 +108,7 @@ elmt:R89__SeamCoupling__fixed_om
     sysml:ownedRelatedElement elmt:R89__SeamCoupling__fixed ;
     sysml:owningRelatedElement elmt:R89__SeamCoupling ;
     sysml:membershipOwningNamespace elmt:R89__SeamCoupling ;
-    sysml:ownedMemberFeature elmt:R89__SeamCoupling__fixed ;
-    sysml:owningType elmt:R89__SeamCoupling .
+    sysml:ownedVariantUsage elmt:R89__SeamCoupling__fixed .
 
 elmt:R89__P
     a sysml:PortDefinition ;

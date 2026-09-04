@@ -88,6 +88,7 @@ func (cc *constraintChecker) check(sym *symbols.Symbol) {
 	cc.checkW10BCrossFeatures(sym)
 	cc.checkSubsettingFeaturingTypes(sym)
 	cc.checkUnnamedRedefinitionValue(sym)
+	cc.checkFeatureValueOverriding(sym)
 	cc.checkVariantOutsideVariation(sym)
 	cc.checkViewSatisfyTarget(sym)
 	cc.checkAtMostOneMember(sym)
@@ -150,15 +151,22 @@ func (cc *constraintChecker) checkViewSatisfyTarget(sym *symbols.Symbol) {
 
 // checkVariantOutsideVariation reports a `variant` whose owner is not a
 // variation: it offers no choice to anything (SysML v2 §7.20 VariantMembership).
-// Pilot SysMLValidator (2026-05) validateVariantMembershipOwningNamespace.
+// Pilot SysMLValidator (2026-07) validateVariantMembershipOwningNamespace. An
+// enumeration body admits no `variant` keyword: its values are variants already.
 func (cc *constraintChecker) checkVariantOutsideVariation(sym *symbols.Symbol) {
-	if !semantics.DeclaresVariant(sym) || cc.model.VariationPointOwning(sym) != nil {
+	if !semantics.DeclaresVariant(sym) {
+		return
+	}
+	msg := msgVariantOutsideVariation
+	if owner := semantics.EnumerationDefinitionOwning(sym); owner != nil {
+		msg = fmt.Sprintf("`variant` is not written in enumeration definition %s: every enumerated value of an enumeration definition is already a variant; drop the keyword", w8dSymbolName(owner))
+	} else if cc.model.VariationPointOwning(sym) != nil {
 		return
 	}
 	cc.diags = append(cc.diags, Diagnostic{
 		Severity: SeverityError,
 		Span:     sym.Decl.Span(),
-		Message:  msgVariantOutsideVariation,
+		Message:  msg,
 		Code:     "variant-outside-variation",
 		Source:   "constraint",
 	})
@@ -249,10 +257,9 @@ func (cc *constraintChecker) checkMultiplicityRange(sym *symbols.Symbol) {
 	if !evaluable || valid {
 		return
 	}
-	u, isUsage := sym.Decl.(*ast.Usage)
 	span := sym.DeclSpan
-	if isUsage && u.Multiplicity != nil {
-		span = u.Multiplicity.Span()
+	if mult := semantics.UsageMultiplicityOf(sym); mult != nil {
+		span = mult.Span()
 	}
 	cc.diags = append(cc.diags, Diagnostic{
 		Severity: SeverityError,

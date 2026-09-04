@@ -73,18 +73,8 @@ func (c *metadataTypeChecker) check(scope *symbols.Scope, pm *ast.PrefixMetadata
 // w8cPrefixMetadata returns the annotations a declaration carries, both as
 // prefixes and as members of its body.
 func w8cPrefixMetadata(decl ast.Node) []*ast.PrefixMetadata {
-	var prefixes []*ast.PrefixMetadata
-	var members []ast.Node
-	switch d := decl.(type) {
-	case *ast.Definition:
-		prefixes, members = d.Prefixes, d.Members
-	case *ast.Usage:
-		prefixes, members = d.Prefixes, d.Members
-	case *ast.Package:
-		prefixes, members = d.Prefixes, d.Members
-	case *ast.Namespace:
-		prefixes, members = d.Prefixes, d.Members
-	default:
+	prefixes, members, ok := ast.DeclaredMetadata(decl)
+	if !ok {
 		return nil
 	}
 	out := append([]*ast.PrefixMetadata(nil), prefixes...)
