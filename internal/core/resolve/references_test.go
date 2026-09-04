@@ -355,6 +355,45 @@ func TestTransitionBodyResolvesInTriggerScope(t *testing.T) {
 	}
 }
 
+// A body expression in a transition's trailing body declares its parameter in a
+// scope beneath the trigger's, so both it and the accept's parameter resolve —
+// also on a cold resolver, with nothing memoized from a document walk.
+func TestTransitionBodyExpressionParametersResolveInTriggerScope(t *testing.T) {
+	const src = `package App {
+	attribute def Id;
+	item def Request { attribute ids : Id[*]; }
+	state def Server {
+		state idle;
+		state busy;
+		transition t first idle accept origin : Request then busy {
+			attribute positive = origin.ids->forAll { in i : Id; i == origin };
+		}
+	}
+}`
+	walk, root, rootScope := resolvedDoc(t, src)
+	for _, d := range walk.Diagnostics {
+		if strings.Contains(d.Message, "unresolved reference: i") || strings.Contains(d.Message, "unresolved reference: origin") {
+			t.Errorf("unexpected diagnostic %v", d)
+		}
+	}
+	cold := resolve.New(walk.Index())
+	cold.SetModel(semantics.NewModel(cold))
+	byName := map[string]int{}
+	for _, ref := range resolve.References(root, rootScope) {
+		name := nameText(ref.QN)
+		if name != "origin" && name != "i" {
+			continue
+		}
+		byName[name]++
+		if _, ok := cold.ResolveReference(ref); !ok {
+			t.Errorf("`%s` at %v did not resolve", name, ref.QN.Span())
+		}
+	}
+	if byName["origin"] != 2 || byName["i"] != 1 {
+		t.Errorf("body references collected: %v, want origin twice and i once", byName)
+	}
+}
+
 // An unnamed transition's trailing body declares into a scope of its own, nested
 // under the state and holding the trigger's parameters below it: a feature it
 // declares is seen by a later member, and its sends reach the accept's parameter.

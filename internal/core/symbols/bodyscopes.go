@@ -183,11 +183,11 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 	case *ast.TransitionMember:
 		bodyScopesInTrigger(scope, d.Trigger)
 		// The parameters a trigger declares are visible to the transition's own
-		// guard and effect, and nowhere else.
+		// guard, effect and body, and nowhere else.
 		body := TriggerScope(scope, d)
 		bodyScopesInExpr(body, d.Guard)
 		buildBodyScopes(body, d.Effect)
-		buildBodyScopes(nodeBodyScope(scope, d), d.Members)
+		buildBodyScopes(body, d.Members)
 	case *ast.SendStatement:
 		bodyScopesInExpr(scope, d.Message)
 		bodyScopesInExpr(scope, d.Target)
