@@ -267,7 +267,7 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		return true
 	case *ast.ConstraintMember:
 		r.resolveExpr(scope, d.Expression)
-		r.walkMembers(scope, d.Body)
+		r.walkConstraintBody(scope, d, nil, d.Body)
 		return true
 	case *ast.AssumeMember:
 		r.resolvePrefixes(scope, d.Prefixes)

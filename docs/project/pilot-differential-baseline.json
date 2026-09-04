@@ -61,7 +61,7 @@
         "dir": "examples",
         "origin": "ours",
         "files": 32,
-        "digest": "sha256:aaba727edb23e445f0182985713da6a2943e35325be502c757c5a22100991436"
+        "digest": "sha256:55bbe45ef1a98ef58359b82990a1a5baec77bc43781f2d39e23c0a01beb4e148"
       },
       {
         "name": "probes",
@@ -71,7 +71,7 @@
         "digest": "sha256:b0153c55bbfcdacabab911725dc44e0e7f4d3a501a281b1f3f2a13cda19737c6"
       }
     ],
-    "recorded": "2026-09-03"
+    "recorded": "2026-09-04"
   },
   "totals": {
     "files": 366,
@@ -79,9 +79,9 @@
     "agreement": 34,
     "severityMismatch": 2,
     "openSysMLOnly": 20,
-    "pilotOnly": 332,
+    "pilotOnly": 333,
     "openSysMLDiagnostics": 56,
-    "pilotDiagnostics": 368
+    "pilotDiagnostics": 369
   },
   "roots": [
     {
@@ -739,9 +739,9 @@
         "agreement": 0,
         "severityMismatch": 1,
         "openSysMLOnly": 1,
-        "pilotOnly": 306,
+        "pilotOnly": 307,
         "openSysMLDiagnostics": 2,
-        "pilotDiagnostics": 307
+        "pilotDiagnostics": 308
       },
       "files": [
         {
@@ -2368,13 +2368,19 @@
               "count": 1
             },
             {
-              "line": 343,
+              "line": 255,
               "severity": "error",
               "category": "unmapped",
               "count": 1
             },
             {
-              "line": 352,
+              "line": 347,
+              "severity": "error",
+              "category": "unmapped",
+              "count": 1
+            },
+            {
+              "line": 356,
               "severity": "error",
               "category": "unmapped",
               "count": 1
@@ -2574,7 +2580,7 @@
     {
       "side": "pilot",
       "message": "Cannot override a binding feature value",
-      "count": 30
+      "count": 31
     },
     {
       "side": "pilot",
@@ -2814,9 +2820,9 @@
       "agreement": 34,
       "severityMismatch": 2,
       "openSysMLOnly": 19,
-      "pilotOnly": 332,
+      "pilotOnly": 333,
       "openSysMLDiagnostics": 55,
-      "pilotDiagnostics": 368
+      "pilotDiagnostics": 369
     },
     "findings": [
       {

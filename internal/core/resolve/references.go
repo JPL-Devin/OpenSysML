@@ -292,7 +292,7 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		return true
 	case *ast.ConstraintMember:
 		c.expr(scope, d.Expression)
-		c.walkMembers(scope, d.Body)
+		c.walkMembers(symbols.ConstraintBodyScope(scope, d), d.Body)
 		return true
 	case *ast.AssumeMember:
 		c.prefixes(scope, d.Prefixes)

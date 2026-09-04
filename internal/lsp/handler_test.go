@@ -374,3 +374,43 @@ func TestWireDidChangeRepublishesDiagnosticsOnBothPaths(t *testing.T) {
 		}
 	})
 }
+
+// textDocument/rangeFormatting is dispatched over the wire and answers only
+// the edits on the requested lines.
+func TestWireRangeFormattingAnswersEditsOnSelectedLines(t *testing.T) {
+	w := newWireSession(t)
+	w.open("package Vehicles {\n  part def Wheel;\n  part w : Wheel;\n}\n")
+
+	request := func(startLine, endLine int) []any {
+		result := w.call("textDocument/rangeFormatting", fmt.Sprintf(
+			`{"textDocument":{"uri":%q},"range":{"start":{"line":%d,"character":0},"end":{"line":%d,"character":0}},"options":{"tabSize":4,"insertSpaces":true}}`,
+			wireURI, startLine, endLine))
+		if result == nil {
+			return nil
+		}
+		edits, ok := result.([]any)
+		if !ok {
+			t.Fatalf("rangeFormatting result = %v, want an array", result)
+		}
+		return edits
+	}
+
+	edits := request(2, 3)
+	if len(edits) != 1 {
+		t.Fatalf("edits for line 2 = %v, want exactly one", edits)
+	}
+	want := map[string]any{
+		"range":   map[string]any{"start": map[string]any{"line": 2.0, "character": 2.0}, "end": map[string]any{"line": 2.0, "character": 2.0}},
+		"newText": "  ",
+	}
+	if got := edits[0]; fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("edit = %v, want %v", got, want)
+	}
+
+	if edits := request(0, 1); len(edits) != 0 {
+		t.Errorf("edits for the well-formatted first line = %v, want none", edits)
+	}
+	if edits := request(0, 4); len(edits) != 2 {
+		t.Errorf("edits for the whole file = %v, want both indentation fixes", edits)
+	}
+}

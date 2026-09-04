@@ -265,6 +265,8 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 			child.AddChild(body)
 			defineParams(body)
 		}
+		// The body's members read the trigger's parameters as the effect does,
+		// and are the transition's features like it.
 		params := len(body.AllMembers())
 		buildEffect(body, d.Effect)
 		buildMembers(body, d.Members)
@@ -285,6 +287,9 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 		}
 		scope.AddChild(regionScope)
 		buildMembers(regionScope, d.States)
+		return true
+	case *ast.ConstraintMember:
+		buildConstraintBodyScope(scope, d, d.Body)
 		return true
 	case *ast.AssumeMember:
 		buildConstraintBodyScope(scope, d, d.Body)
@@ -415,9 +420,10 @@ func buildMetadataBodyScope(parent *Scope, prefix *ast.PrefixMetadata) *Scope {
 // final node is registered, at its name's span; an unnamed one declares no name
 // but still owns the scope its body declares into.
 func buildControlNode(scope *Scope, decl ast.Node, name string, nameSpan source.Span, vis ast.Visibility, trivia []ast.Trivia) {
+	body := ast.NodeBodyMembers(decl)
 	if name == "" {
-		if members := ast.NodeBodyMembers(decl); len(members) > 0 {
-			buildAnonymousNode(scope, decl, SymbolActionUsage, members, vis, trivia)
+		if len(body) > 0 {
+			buildAnonymousNode(scope, decl, SymbolActionUsage, body, vis, trivia)
 		}
 		return
 	}
@@ -428,11 +434,11 @@ func buildControlNode(scope *Scope, decl ast.Node, name string, nameSpan source.
 	scope.AddChild(child)
 	// A control node ends in ActionBody, so what its body declares are features
 	// of the node a flow may name (`flow F.b1 to B1.b`).
-	buildMembers(child, ast.NodeBodyMembers(decl))
+	buildMembers(child, body)
 }
 
-// buildConstraintBodyScope links the scope a require/assume body declares into.
-// The body states the requirement its member references (SysML v2 §7.20.5), so
+// buildConstraintBodyScope links the scope a nested constraint body declares
+// into. The body states the constraint its member owns (SysML v2 §7.20.5), so
 // its declarations are visible inside it and are no members of the namespace the
 // member itself is declared in.
 func buildConstraintBodyScope(scope *Scope, decl ast.Node, body []ast.Node) {
@@ -445,7 +451,7 @@ func buildConstraintBodyScope(scope *Scope, decl ast.Node, body []ast.Node) {
 	buildMembers(child, body)
 }
 
-// ConstraintBodyScope returns the scope a require/assume body resolves against:
+// ConstraintBodyScope returns the scope a nested constraint body resolves against:
 // the one its declarations were built into, or parent for a body declaring none.
 func ConstraintBodyScope(parent *Scope, decl ast.Node) *Scope {
 	if parent == nil {
