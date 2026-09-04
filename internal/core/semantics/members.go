@@ -78,13 +78,45 @@ func (m *Model) membersOf(sym *symbols.Symbol, view memberView, declaring *symbo
 
 func (m *Model) collectMembers(sym *symbols.Symbol, view memberView, declaring *symbols.Symbol) []*symbols.Symbol {
 	var out []*symbols.Symbol
+	m.eachMember(sym, view, declaring, func(s *symbols.Symbol) bool {
+		out = append(out, s)
+		return true
+	})
+	return out
+}
+
+// HasMember reports whether member is among MembersOf(sym), without
+// enumerating the members past it.
+func (m *Model) HasMember(sym, member *symbols.Symbol) bool {
+	if sym == nil || member == nil {
+		return false
+	}
+	if m.resolver != nil {
+		if target, ok := m.resolver.ResolveAliasTarget(sym); ok {
+			sym = target
+		}
+	}
+	if cached, ok := m.members[memberKey{sym: sym, view: memberViewEffective}]; ok {
+		return containsSymbol(cached, member)
+	}
+	found := false
+	m.eachMember(sym, memberViewEffective, nil, func(s *symbols.Symbol) bool {
+		found = s == member
+		return !found
+	})
+	return found
+}
+
+// eachMember yields the members of sym in MembersOf order until yield returns false.
+func (m *Model) eachMember(sym *symbols.Symbol, view memberView, declaring *symbols.Symbol, yield func(*symbols.Symbol) bool) {
 	seenName := make(map[string]bool)
 	seenSym := make(map[*symbols.Symbol]bool)
 	// One mask per enumeration: it depends only on sym and declaring.
 	mask := m.viewMask(sym, view, declaring)
 
+	stopped := false
 	collect := func(scope *symbols.Scope, inherited bool) {
-		if scope == nil {
+		if scope == nil || stopped {
 			return
 		}
 		for _, key := range scope.MemberNames() {
@@ -100,7 +132,10 @@ func (m *Model) collectMembers(sym *symbols.Symbol, view memberView, declaring *
 				}
 				if !seenSym[s] {
 					seenSym[s] = true
-					out = append(out, s)
+					if !yield(s) {
+						stopped = true
+						return
+					}
 				}
 			}
 		}
@@ -119,9 +154,11 @@ func (m *Model) collectMembers(sym *symbols.Symbol, view memberView, declaring *
 
 	collect(sym.Scope, false)
 	for _, src := range m.MemberSources(sym) {
+		if stopped {
+			return
+		}
 		collect(src.Scope, true)
 	}
-	return out
 }
 
 // LookupMember returns the first visible member of sym — declared by it, or

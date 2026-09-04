@@ -33,6 +33,7 @@ type Model struct {
 	referenced      map[*symbols.Symbol]*symbols.Symbol
 	resolvingRef    map[*symbols.Symbol]bool
 	memberSources   map[*symbols.Symbol][]*symbols.Symbol
+	contributed     map[*symbols.Symbol][]*symbols.Symbol // memoized contributors
 	primTypes       map[*symbols.Symbol]PrimType
 	scalars         map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
 	params          map[*symbols.Symbol]behaviorParameters
@@ -104,6 +105,7 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		referenced:        make(map[*symbols.Symbol]*symbols.Symbol),
 		resolvingRef:      make(map[*symbols.Symbol]bool),
 		memberSources:     make(map[*symbols.Symbol][]*symbols.Symbol),
+		contributed:       make(map[*symbols.Symbol][]*symbols.Symbol),
 		primTypes:         make(map[*symbols.Symbol]PrimType),
 		params:            make(map[*symbols.Symbol]behaviorParameters),
 		invocations:       make(map[invocationKey]*InvocationSelection),
