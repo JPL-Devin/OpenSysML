@@ -221,9 +221,8 @@ func TestArgumentNotReturnedIsNotHeldByTheCall(t *testing.T) {
 	}
 }
 
-// A holding feature that cannot materialize — too few values for its multiplicity, a type
-// its object is not classified by — holds nothing: the held feature reads in either order
-// with the value it states, and the holder's error is reported when the holder is read.
+// A holder that cannot materialize holds nothing: the held feature reads alike in either
+// order, and the holder's own error is reported when the holder is read.
 func TestFailingHolderDoesNotFailTheFeatureItWouldHold(t *testing.T) {
 	src := `package test {
 		private import ScalarValues::*;
@@ -415,9 +414,8 @@ func TestMutuallyRecursiveCalcsPassArgumentsThroughEachOther(t *testing.T) {
 	}
 }
 
-// A calc returning a local it declared from an input, assigned one to, or declared from another
-// such local passes that input on, so the typed feature receiving the result classifies the
-// argument's object whichever of the two is read first; a local computing data passes nothing.
+// A calc returning a local written from an input passes that input on, so the typed feature
+// receiving the result classifies the argument whichever is read first; a data local passes nothing.
 func TestCalcLocalsPassArgumentsOnToTheReturn(t *testing.T) {
 	src := `package test {
 		private import ScalarValues::*;

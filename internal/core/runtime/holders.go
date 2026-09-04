@@ -308,9 +308,8 @@ type valueSource struct {
 	expr  ast.Node
 }
 
-// collectReturnedParameters adds to passed the parameters of shape the returns of its body
-// and its result binding pass on — directly, or through the locals its body declares,
-// assigns or iterates with, followed back to what was written to them.
+// collectReturnedParameters adds to passed the parameters of shape its returns and result
+// binding pass on, directly or through the locals its body writes them to.
 func (ctx *Context) collectReturnedParameters(shape *calcShape, passed, params map[string]bool) {
 	var returns []valueSource
 	locals := make(map[*symbols.Symbol][]valueSource)
