@@ -86,7 +86,8 @@ func (inst *Instance) Behavior(name string) (*ObjectBehavior, bool) {
 
 // BehaviorNamed returns the behavior the object runs under the given name or
 // under another name of the same feature: a redefinition renames the behavior
-// it redefines (KerML 1.0 §7.3.4.5), so both names denote one execution.
+// it redefines (KerML 1.0 §7.3.4.5), so both names denote one execution. The
+// renaming may come from any type of the object, a classifier included.
 func (ctx *Context) BehaviorNamed(inst *Instance, name string) (*ObjectBehavior, bool) {
 	if b, ok := inst.Behavior(name); ok {
 		return b, true
@@ -94,29 +95,39 @@ func (ctx *Context) BehaviorNamed(inst *Instance, name string) (*ObjectBehavior,
 	if name == "" {
 		return nil, false
 	}
-	for _, b := range inst.behaviors {
-		if b.member != nil && slices.Contains(ctx.redefinedNames(b.member, inst.Type), name) {
-			return b, true
-		}
-	}
-	for _, feat := range ctx.FeaturesOf(inst.Type) {
-		if feat.Name != name || feat.Symbol == nil {
-			continue
-		}
-		for _, redefined := range ctx.redefinedNames(feat.Symbol, inst.Type) {
-			if b, ok := inst.Behavior(redefined); ok {
+	for _, typ := range inst.types() {
+		for _, b := range inst.behaviors {
+			if b.member != nil && slices.Contains(ctx.redefinedNames(b.member, typ), name) {
 				return b, true
+			}
+		}
+		for _, feat := range ctx.FeaturesOf(typ) {
+			if feat.Name != name || feat.Symbol == nil {
+				continue
+			}
+			for _, redefined := range ctx.redefinedNames(feat.Symbol, typ) {
+				if b, ok := inst.Behavior(redefined); ok {
+					return b, true
+				}
 			}
 		}
 	}
 	return nil, false
 }
 
-// runsBound reports whether the object already runs the behavior a declaration
-// binds, so a start reached twice attaches it once.
-func (inst *Instance) runsBound(member *symbols.Symbol) bool {
+// runsBound reports whether the object already runs the behavior a member of typ binds,
+// under that member or one redefinition makes the same feature: a start reached twice, or
+// a classifier renaming a running behavior, attaches nothing.
+func (ctx *Context) runsBound(inst *Instance, member, typ *symbols.Symbol) bool {
 	for _, b := range inst.behaviors {
 		if b.member == member {
+			return true
+		}
+		if b.member == nil || member == nil {
+			continue
+		}
+		if slices.Contains(ctx.redefinedFeatures(member, typ), b.member) ||
+			slices.Contains(ctx.redefinedFeatures(b.member, typ), member) {
 			return true
 		}
 	}
@@ -466,7 +477,7 @@ func (ctx *Context) startBehaviorsOf(inst *Instance) error {
 	defer ctx.holdDrivenWork()()
 	for _, typ := range inst.types() {
 		for i, decl := range ctx.classifierBehaviorsOf(typ) {
-			if inst.runsBound(decl.member) {
+			if ctx.runsBound(inst, decl.member, typ) {
 				continue
 			}
 			if ctx.trace != nil {

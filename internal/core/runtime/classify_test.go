@@ -200,6 +200,65 @@ func TestOnlyFeaturesPassingObjectsOnHoldThem(t *testing.T) {
 	}
 }
 
+// The object a selected variant materialized is held like any other: a typed feature
+// holding a variation's value classifies that object, which then carries the feature's
+// own features and runs its behaviors, and stays the variant's object.
+func TestSelectedVariantObjectIsClassifiedByTheFeatureHoldingIt(t *testing.T) {
+	ctx, idx := libraryShapeContext(t, `package test {
+		private import ScalarValues::*;
+		state def Glowing {
+			attribute cycles : Integer = 0;
+			entry; then lit;
+			state lit { entry action count { assign cycles := cycles + 1; } }
+		}
+		item def Engine { attribute cylinders : Integer = 4; }
+		item def Tallied :> Engine { attribute tally : Integer = 7; exhibit state glow : Glowing; }
+		item def Car {
+			variation item engine : Engine [1] {
+				variant item small : Engine;
+				variant item big : Engine { :>> cylinders = 8; }
+			}
+		}
+		item def Garage {
+			item car : Car { :>> engine = engine::big; }
+			item tallied : Tallied [1] = car.engine { attribute label : String = "kept"; }
+		}
+		item garage : Garage;
+	}`)
+	garage := instantiateQualified(t, ctx, idx, "test::garage")
+	tallied := idx.LookupQualified("test::Tallied")[0]
+
+	fv, err := garage.GetFeatureValue(ctx, "tallied")
+	if err != nil {
+		t.Fatalf("garage.tallied: %v", err)
+	}
+	if fv.Value.Kind != ValVariant || fv.Value.Variant().Name != "big" || fv.Value.Instance == 0 {
+		t.Fatalf("garage.tallied = %+v, want the materialized big variant", fv.Value)
+	}
+	car := readInstance(t, ctx, garage, "car")
+	engine, err := car.GetFeatureValue(ctx, "engine")
+	if err != nil || engine.Value.Instance != fv.Value.Instance {
+		t.Fatalf("car.engine = %+v, %v; want the same object tallied holds (%d)", engine.Value, err, fv.Value.Instance)
+	}
+	big := ctx.instances[fv.Value.Instance]
+	if !ctx.instanceConforms(big, tallied) {
+		t.Fatalf("the big variant's object is classified by %v, want Tallied", big.classifiers)
+	}
+	if got := readInt(t, ctx, big, "cylinders"); got != 8 {
+		t.Fatalf("big.cylinders = %d, want the variant's 8", got)
+	}
+	if got := readInt(t, ctx, big, "tally"); got != 7 {
+		t.Fatalf("big.tally = %d, want 7", got)
+	}
+	if label, err := big.GetFeatureValue(ctx, "label"); err != nil || label.Value.Str() != "kept" {
+		t.Fatalf("big.label = %+v, %v; want the holding feature's \"kept\"", label, err)
+	}
+	glow, ok := big.Behavior("glow")
+	if !ok || glow.State == nil || glow.State.stateData["cycles"].Const.Int != 1 {
+		t.Fatal("the big variant's object runs no glow state machine")
+	}
+}
+
 // A value none of whose types is comparable with the feature's type is refused: a number,
 // an object of an unrelated definition, or one already classified by one, cannot become a Segment.
 func TestIncomparableValueIsRefusedByTheFeatureType(t *testing.T) {

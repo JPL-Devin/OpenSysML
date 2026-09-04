@@ -14,7 +14,9 @@
   collection one object of which is refused is refused whole, every object as it was and the
   objects the refused classifications made abandoned; an object a typed feature's value chooses
   by a condition, an index, an invocation or a body is classified as a listed one is, whichever
-  feature is read first; a
+  feature is read first, and so is the object a selected variant stands for when a typed
+  feature holds the variation's value; a classifier renaming a behavior the object already runs
+  starts no second one, and the one execution answers to both names; a
   qualified name of an enclosing type's feature read inside a nested usage (`attribute :>> length = Rectangle::length;`) is
   that feature of the enclosing object, and a sibling chain (`e3.length = e1.length`) the
   sibling's; a feature chain valued over a collection (`edges = faces.edges`) collects across

@@ -68,10 +68,11 @@ func (ctx *Context) classifyHeld(feature *symbols.Symbol, val Value) error {
 	}
 	commit, rollback := ctx.beginJournal()
 	for _, el := range elementsOf(val) {
-		if el.Kind != ValInstance {
+		id, ok := el.Object()
+		if !ok {
 			continue
 		}
-		inst, ok := ctx.instances[el.Instance]
+		inst, ok := ctx.instances[id]
 		if !ok || inst == nil || inst.Type == nil {
 			continue
 		}

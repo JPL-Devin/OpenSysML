@@ -167,12 +167,13 @@ func (ctx *Context) valueConforms(scope *symbols.Scope, value *Value, declared *
 		return true, "", nil
 	case ValQuantity:
 		return ctx.quantityConforms(*value, declared)
-	case ValInstance:
-		// An object is what its usage is, implicit bases included; declared as a value
-		// of a narrower type, it is classified by that type too (see classify.go).
-		inst, ok := ctx.instances[value.Instance]
+	}
+	if id, ok := value.Object(); ok {
+		// An object, a selected variant's included, is what its usage is; declared as a
+		// value of a narrower type, it is classified by that type too (see classify.go).
+		inst, ok := ctx.instances[id]
 		if !ok || inst == nil || inst.Type == nil {
-			return false, "", fmt.Errorf("%w: instance %d", ErrUndeterminedValueType, value.Instance)
+			return false, "", fmt.Errorf("%w: instance %d", ErrUndeterminedValueType, id)
 		}
 		if how == admitDeclared {
 			return ctx.canClassify(inst, declared), "", nil
