@@ -192,3 +192,21 @@ func TestW8CVariableFeatureRulesSurviveADuplicateOccurrenceName(t *testing.T) {
 		t.Errorf("want one initial-value message, got %d", got)
 	}
 }
+
+func TestW8CVariableFeatureRulesIgnoreAWorkspaceOnlyOccurrenceName(t *testing.T) {
+	idx := symbols.NewIndex()
+	shadow := "<shadow>.sysml"
+	shadowRoot := parser.New(source.New(shadow,
+		[]byte(`package Occurrences { occurrence def Occurrence; }`))).ParseFile()
+	idx.AddDocument(shadow, shadowRoot)
+	name := "<t>.sysml"
+	root := parser.New(source.New(name,
+		[]byte(`package P { part def PD { attribute y := 2; constant attribute c = 1; } }`))).ParseFile()
+	idx.AddDocument(name, root)
+	// A workspace declaration is not the bundled library: variability stays underivable.
+	for _, d := range Analyze(name, root, nil, idx) {
+		if d.Message == msgInitialValueNotVariable || d.Message == msgConstantNotVariable {
+			t.Errorf("library-free analysis reported %q", d.Message)
+		}
+	}
+}
