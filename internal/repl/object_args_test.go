@@ -1153,3 +1153,28 @@ func collectionIDs(t *testing.T, listing, feature string) []string {
 	}
 	return ids
 }
+
+// A type exhibiting the same definition through several usages, one of them
+// unnamed, is named once in the refusal; the search stops at its first match.
+func TestRefusalNamesAnExhibitingTypeOnce(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(`package Twice {
+		state def Modes { entry; then idle; state idle; }
+		part def Sys {
+			exhibit state a : Modes;
+			exhibit state : Modes;
+			exhibit state b : Modes;
+		}
+	}`).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+
+	_, err := s.startStateMachine("Twice::Modes", nil)
+	var eerr *ExhibitorsError
+	if !errors.As(err, &eerr) {
+		t.Fatalf("got %v, want an ExhibitorsError", err)
+	}
+	if got := strings.Join(eerr.Types, ","); got != "Twice::Sys" {
+		t.Errorf("got types %q, want Twice::Sys once", got)
+	}
+}

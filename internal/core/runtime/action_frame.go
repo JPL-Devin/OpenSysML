@@ -143,7 +143,7 @@ func (e *performances) addFeatureDirections(features map[string]ast.FeatureDirec
 	if action == nil {
 		return
 	}
-	for _, member := range e.ctx.model.MembersOf(action) {
+	for _, member := range e.ctx.membersOf(action) {
 		usage, ok := member.Decl.(*ast.Usage)
 		if !ok || !lower.DeclaresNodeFeature(usage) {
 			continue

@@ -76,6 +76,16 @@ func (ctx *Context) FeaturesOf(typeSym *symbols.Symbol) []EffectiveFeature {
 	return features
 }
 
+// membersOf is Model.MembersOf memoized per type; callers read the list and never write it.
+func (ctx *Context) membersOf(typeSym *symbols.Symbol) []*symbols.Symbol {
+	if cached, ok := ctx.members[typeSym]; ok {
+		return cached
+	}
+	members := ctx.model.MembersOf(typeSym)
+	ctx.members[typeSym] = members
+	return members
+}
+
 // buildFeatures constructs the effective-feature list by walking the type hierarchy.
 func (ctx *Context) buildFeatures(typeSym *symbols.Symbol) []EffectiveFeature {
 	// Redefined features stay in the shape: a redefinition shares its target's
@@ -304,6 +314,12 @@ func (ctx *Context) findOwnerType(featureSym *symbols.Symbol) *symbols.Symbol {
 	ownerNode := ownerScope.Node()
 	if ownerNode == nil {
 		return nil
+	}
+
+	// The scope records the symbol declaring it; a scope re-owned by another
+	// declaration (a metadata body owned by its definition) is searched below.
+	if owner := ownerScope.Owner(); owner != nil && owner.Decl == ownerNode {
+		return owner
 	}
 
 	// Look up the symbol for the owner node in the parent scope

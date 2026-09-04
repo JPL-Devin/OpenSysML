@@ -52,15 +52,17 @@ func (m *Model) ActionSuccessions(sym *symbols.Symbol) []ActionSuccession {
 		if src == nil || src.Scope == nil {
 			continue
 		}
-		if visible == nil {
-			visible = make(map[*symbols.Symbol]bool)
-			for _, member := range m.MembersOf(sym) {
-				visible[member] = true
-			}
-		}
 		for _, s := range m.DeclaredSuccessions(src.Scope, src, actionBodyMembers(src)) {
-			if named, ok := namedSuccession(src.Scope, s.Decl); ok && !visible[named] {
-				continue
+			if named, ok := namedSuccession(src.Scope, s.Decl); ok {
+				if visible == nil {
+					visible = make(map[*symbols.Symbol]bool)
+					for _, member := range m.MembersOf(sym) {
+						visible[member] = true
+					}
+				}
+				if !visible[named] {
+					continue
+				}
 			}
 			out = append(out, s)
 		}

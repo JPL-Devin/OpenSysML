@@ -40,6 +40,8 @@ type Context struct {
 	maxElements int64
 
 	features map[*symbols.Symbol][]EffectiveFeature
+	// members memoizes Model.MembersOf per type; the model is fixed for the context's life.
+	members map[*symbols.Symbol][]*symbols.Symbol
 
 	// writeTargets memoizes the declaration an assignment's target names, per
 	// scope the statement was written in: what a value written must conform to.
@@ -238,6 +240,7 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		maxSteps:            maxSteps,
 		instances:           make(map[int64]*Instance),
 		features:            make(map[*symbols.Symbol][]EffectiveFeature),
+		members:             make(map[*symbols.Symbol][]*symbols.Symbol),
 		calcShapes:          make(map[*symbols.Symbol]*calcShape),
 		libraryPerformances: make(map[*symbols.Symbol]*libraryPerformance),
 

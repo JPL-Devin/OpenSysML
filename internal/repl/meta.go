@@ -2624,11 +2624,14 @@ func (s *Session) exhibitingTypes(ctx *runtime.Context, sym *symbols.Symbol) []*
 		if scope == nil {
 			return
 		}
-		for _, member := range scope.Members() {
-			if owner := scope.Owner(); owner != nil && ctx.ExhibitsState(member, sym) {
+		if owner := scope.Owner(); owner != nil {
+			scope.ForEachMember(func(member *symbols.Symbol) bool {
+				if member.Name == "" || !ctx.ExhibitsState(member, sym) {
+					return true
+				}
 				types = append(types, owner)
-				break
-			}
+				return false
+			})
 		}
 		for _, child := range scope.Children() {
 			collect(child)

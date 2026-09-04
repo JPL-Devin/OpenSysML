@@ -152,7 +152,7 @@ func (e *ActionExecutor) performanceFeatures() []lower.Attribute {
 	for i, attr := range features {
 		declared[attr.Name] = i
 	}
-	for _, member := range e.ctx.model.MembersOf(e.action) {
+	for _, member := range e.ctx.membersOf(e.action) {
 		usage, ok := member.Decl.(*ast.Usage)
 		if !ok || !lower.DeclaresNodeFeature(usage) || e.ctx.libraryDeclared(member) {
 			continue
