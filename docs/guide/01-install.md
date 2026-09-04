@@ -107,7 +107,10 @@ whether it holds for a given object (see [reference/repl-commands.md](../referen
 The solver is a separate program. OpenSysML runs it as a child process and talks to it in
 SMT-LIB2; nothing is linked in and nothing is bundled in the release archives, which stay single
 static binaries. Either [z3](https://github.com/Z3Prover/z3) (MIT) or [cvc5](https://github.com/cvc5/cvc5)
-works; install z3 unless you have a specific reason to prefer cvc5.
+works; install z3 unless you have a specific reason to prefer cvc5. The solving commands
+follow the design of the `ConstraintSolverService` in OpenMBEE's
+[HMF](https://github.com/hivecore-dev/hmf) (Apache 2.0); see
+[Acknowledgements](../../README.md#acknowledgements).
 
 **macOS and Linux, Homebrew — automatic:** z3 is a dependency of the formula, so the
 recommended install already gives you a working `%check`:

@@ -68,6 +68,10 @@ into the parts it holds (`car.fl.hub`, `#3.fl`, `car.wheels[2]`).
 | `Tab` | Complete meta commands, symbol names (after `%print`, `%instantiate`, `%features` …; a name that needs quoting is offered in quotes, `Q::'the ra` completing to `Q::'the rack'`), object references where a command takes one (`#` offers the ids there are; `car.` offers the object-holding features of `car` — the same ones a path may pass through — a multi-valued one as `car.wheels[1]`, `car.wheels[2]` …; completing reads and materializes nothing, so a part no command has reached yet is offered by type, and only the elements reading it would hold: those the features subsetting it contribute, then anonymous ones up to its lower bound — so an optional part (`spare : Wheel[0..1]`) or an abstract one, which hold only what subsets them, is offered only once something does), the form after `%render <name>`, and file paths after `%load` and `%save` |
 | `Ctrl-D` | Exit REPL |
 
+The five solving commands (`%check`, `%explain`, `%solve`, `%configure`, `%optimize`) follow the
+design of the `ConstraintSolverService` in OpenMBEE's [HMF](https://github.com/hivecore-dev/hmf)
+(Apache 2.0); see [Acknowledgements](../../README.md#acknowledgements).
+
 ## Object references
 
 An object reference names one object the session holds. It is one of:
