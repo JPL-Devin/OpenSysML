@@ -207,8 +207,8 @@ extensions that the default mode accepts on purpose and strict mode reports as e
 initial state marker), `x04` (`region r { … }`) and `x07` (`transition <src> to <tgt>`) left that
 list when that notation was removed: each is now a parse error in either mode, so both
 implementations reject it by default. Judged in
-the default mode the same corpus gives 216 agreements and 10 gaps, which is what `-conformance
-default` prints. `-conformance strict` gives 219 and 7. Reserved keywords recovered as declared
+the default mode the same corpus gives 220 agreements and 6 gaps, which is what `-conformance
+default` prints. `-conformance strict` gives 223 and 3. Reserved keywords recovered as declared
 names and SysML declaration keywords recovered in KerML are now errors in either mode; the parser
 still preserves their trees for editors and later analysis. Of the 14 gaps this document carried before wave 8, six were closed by the
 validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
