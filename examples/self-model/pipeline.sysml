@@ -219,7 +219,10 @@ package OpenSysMLPipeline {
         part referenceSubsetting : ConstraintCheck { attribute :>> goType = "ReferenceSubsettingPass"; }
         part topLevelImports : ConstraintCheck { attribute :>> goType = "TopLevelImportPass"; }
         part associationEndTypes : ConstraintCheck { attribute :>> goType = "AssociationEndTypesPass"; }
-        part variableFeatures : ConstraintCheck { attribute :>> goType = "VariableFeaturePass"; }
+        part variableFeatures : ConstraintCheck {
+            attribute :>> goType = "VariableFeaturePass";
+            attribute :>> elementScoped = true;
+        }
         part assignmentReferents : ConstraintCheck {
             attribute :>> goType = "AssignmentReferentPass";
             attribute :>> elementScoped = true;
