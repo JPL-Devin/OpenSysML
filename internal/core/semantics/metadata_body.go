@@ -48,8 +48,17 @@ func (m *Model) MetadataBodyInevaluableValues(scope *symbols.Scope, prefix *ast.
 	if m == nil || prefix == nil || len(prefix.Body) == 0 {
 		return nil
 	}
+	return m.MetadataBodyInevaluableValuesOf(valueScope(scope, prefix), prefix.Body)
+}
+
+// MetadataBodyInevaluableValuesOf is MetadataBodyInevaluableValues for a body whose
+// declarations are registered in scope, such as that of `metadata m : A { … }`.
+func (m *Model) MetadataBodyInevaluableValuesOf(scope *symbols.Scope, body []ast.Node) []ast.Node {
+	if m == nil || len(body) == 0 {
+		return nil
+	}
 	var out []ast.Node
-	m.collectInevaluableValues(valueScope(scope, prefix), prefix.Body, &out)
+	m.collectInevaluableValues(scope, body, &out)
 	return out
 }
 

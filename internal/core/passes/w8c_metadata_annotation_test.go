@@ -142,8 +142,8 @@ func TestMetadataAnnotatedElementMustConform(t *testing.T) {
 	}
 }
 
-// The annotatedElement feature is read through inheritance, redefinition and
-// subsetting, and in the `about`, usage and prefix spellings alike.
+// The annotatedElement feature is read through inheritance, redefinition and subsetting,
+// in every spelling; a private redefinition is not inherited but its sibling subsets it.
 func TestMetadataAnnotatedElementReadsEffectiveFeatures(t *testing.T) {
 	src := `package P {
 	metaclass M { :>> annotatedElement : KerML::Class; }
@@ -151,6 +151,7 @@ func TestMetadataAnnotatedElementReadsEffectiveFeatures(t *testing.T) {
 	metaclass Narrows :> M { :>> annotatedElement : KerML::Structure; }
 	metaclass Either { :>> annotatedElement : KerML::Class; feature alt :> annotatedElement : KerML::Package; }
 	metaclass Any;
+	metaclass Hidden { private feature :>> annotatedElement : KerML::Class; feature alt :> annotatedElement : KerML::Package; }
 	class C { feature f; }
 	struct S;
 	package Q;
@@ -160,6 +161,7 @@ func TestMetadataAnnotatedElementReadsEffectiveFeatures(t *testing.T) {
 	#Narrows struct NS;
 	@Either about Q, C, C::f;
 	@Any about Q, C, C::f;
+	@Hidden about Q, C, C::f;
 }`
 	var got []string
 	for _, f := range findingsWithCode(metadataDiags(t, src), "metadata-annotated-element") {
@@ -171,6 +173,9 @@ func TestMetadataAnnotatedElementReadsEffectiveFeatures(t *testing.T) {
 		"#Narrows => Cannot annotate Class",
 		"@Either about Q, C, C::f; => Cannot annotate Package",
 		"@Either about Q, C, C::f; => Cannot annotate Feature",
+		"@Hidden about Q, C, C::f; => Cannot annotate Package",
+		"@Hidden about Q, C, C::f; => Cannot annotate Class",
+		"@Hidden about Q, C, C::f; => Cannot annotate Feature",
 	}
 	sort.Strings(got)
 	sort.Strings(want)

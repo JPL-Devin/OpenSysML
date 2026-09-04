@@ -78,12 +78,12 @@ func (m *Model) annotatedElementViolationOf(annotated, def *symbols.Symbol) (str
 	return leafName(meta.Name), true
 }
 
-// annotatedElementFeatures are the features of def specializing annotatedElement,
-// each an alternative; a concrete one supersedes the abstract ones.
+// annotatedElementFeatures are the features the annotation inherits from def that
+// specialize annotatedElement, each an alternative; a concrete one supersedes the abstract ones.
 func (m *Model) annotatedElementFeatures(def *symbols.Symbol) []*symbols.Symbol {
 	var all, concrete []*symbols.Symbol
 	for _, member := range m.MembersOf(def) {
-		if !m.specializesAnnotatedElement(member) {
+		if !symbols.VisibleAs(member.Visibility, false, true) || !m.specializesAnnotatedElement(member) {
 			continue
 		}
 		all = append(all, member)

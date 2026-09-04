@@ -146,7 +146,7 @@ func (c *metadataAnnotationChecker) checkBody(scope *symbols.Scope, prefix *ast.
 	for _, value := range c.model.MetadataBodyInevaluableValues(scope, prefix) {
 		c.diags = append(c.diags, Diagnostic{
 			Severity: SeverityError,
-			Span:     c.metadataValueSpan(prefix, value),
+			Span:     metadataValueSpan(prefix.Body, value),
 			Message:  msgFilterNotEvaluable,
 			Code:     "metadata-value-not-evaluable",
 			Source:   "constraint",
@@ -154,7 +154,8 @@ func (c *metadataAnnotationChecker) checkBody(scope *symbols.Scope, prefix *ast.
 	}
 }
 
-func (c *metadataAnnotationChecker) metadataValueSpan(prefix *ast.PrefixMetadata, value ast.Node) source.Span {
+// metadataValueSpan is the span of the binding `= value` in a metadata body, or of the value alone.
+func metadataValueSpan(body []ast.Node, value ast.Node) source.Span {
 	var found source.Span
 	var walk func([]ast.Node)
 	walk = func(body []ast.Node) {
@@ -180,7 +181,7 @@ func (c *metadataAnnotationChecker) metadataValueSpan(prefix *ast.PrefixMetadata
 			}
 		}
 	}
-	walk(prefix.Body)
+	walk(body)
 	if found.Len > 0 {
 		return found
 	}

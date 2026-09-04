@@ -12,7 +12,8 @@ import (
 const msgMetadataBodyFeature = "Must redefine an owning-type feature"
 
 // W8DMetadataUsagePass checks that every feature in a `metadata m : A { … }` usage body
-// redefines one of A's own (KerML §7.5); the type itself is MetadataTypePass's.
+// redefines one of A's own and binds a model-level evaluable value (KerML §7.5);
+// the type itself is MetadataTypePass's.
 type W8DMetadataUsagePass struct{}
 
 func (W8DMetadataUsagePass) Level() PassLevel { return LevelConstraint }
@@ -85,6 +86,15 @@ func (mc *w8dMetadataChecker) checkBody(sym *symbols.Symbol, typeRef *ast.Qualif
 			Span:     node.Span(),
 			Message:  msgMetadataBodyFeature,
 			Code:     "metadata-body-feature",
+			Source:   "constraint",
+		})
+	}
+	for _, value := range mc.model.MetadataBodyInevaluableValuesOf(sym.Scope, body) {
+		mc.diags = append(mc.diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     metadataValueSpan(body, value),
+			Message:  msgFilterNotEvaluable,
+			Code:     "metadata-value-not-evaluable",
 			Source:   "constraint",
 		})
 	}

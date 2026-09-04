@@ -888,7 +888,7 @@ func (r *Resolver) resolveOwnSibling(scope *symbols.Scope, qn *ast.QualifiedName
 		return false
 	}
 	sym, ok := scope.LookupLocal(qn.Parts[0].Text)
-	if !ok || sym == nil || sym.Decl == decl || !sym.EffectiveName || !inheritableMember(sym) {
+	if !ok || sym == nil || sym.Decl == decl || !sym.EffectiveName {
 		return false
 	}
 	usage, isUsage := sym.Decl.(*ast.Usage)
