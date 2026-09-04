@@ -12,7 +12,7 @@
           (Membership visibility="default"
             (PrefixMetadata type="Tag"
               (Membership visibility="default"
-                (Usage kind="enum" name="id" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                (Usage kind="attribute" name="id" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
                   (LiteralString value="\"a\"")))))
           (Membership visibility="default"
             (Usage kind="attribute" name="x" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
@@ -33,7 +33,7 @@
           (Membership visibility="default"
             (PrefixMetadata type="Tag" name="m"
               (Membership visibility="default"
-                (Usage kind="enum" name="id" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                (Usage kind="attribute" name="id" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
                   (LiteralString value="\"m\"")))))))
       (Membership visibility="default"
         (Usage kind="constraint" name="short" ref=false direction="none" composite=false derived=false ordered=false nonunique=false

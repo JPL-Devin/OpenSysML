@@ -17,7 +17,7 @@ package BindRelayNested {
 			entry; then S1;
 
 			state S1 {
-				entry send Ping() via o;
+				entry send new Ping() via o;
 			}
 		}
 	}

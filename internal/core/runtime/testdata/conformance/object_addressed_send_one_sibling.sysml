@@ -12,7 +12,7 @@ package test {
 				entry; then sent;
 
 				state sent {
-					entry send Ping() to b;
+					entry send new Ping() to b;
 				}
 			}
 		}

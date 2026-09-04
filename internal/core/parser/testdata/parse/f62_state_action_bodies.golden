@@ -4,7 +4,7 @@
       (Membership visibility="default"
         (Definition kind="attribute" abstract=false variation=false name="Sig"
           (Membership visibility="default"
-            (Usage kind="enum" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
+            (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
       (Membership visibility="default"
         (Usage kind="part" name="p" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
       (Membership visibility="default"
@@ -45,7 +45,7 @@
                   (Relationship kind="typing" target=Pt
                     (*ast.QualifiedName))))))
           (Membership visibility="default"
-            (Usage kind="action" name="turnOn" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="action" name="turnOn" ref=false direction="none" composite=false derived=false ordered=false nonunique=false node=true
               (SendStatement via=true
                 (FeatureReference name="ignitionCmd")
                 (*ast.QualifiedName)

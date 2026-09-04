@@ -1,0 +1,19 @@
+{
+  "type": "instance",
+  "instantiate": "SendNewThroughAlias::site",
+  "objects": [
+    {
+      "path": "probe",
+      "finalState": "sending",
+      "stateVisits": ["sending"]
+    },
+    {
+      "path": "station",
+      "finalState": "confirmed",
+      "stateVisits": ["standingBy", "logged", "confirmed"],
+      "slots": {
+        "frames": {"type": "Real", "value": 7.0}
+      }
+    }
+  ]
+}

@@ -155,17 +155,17 @@ func TestConstructorDuplicateFeatureBindingKerML(t *testing.T) {
 		"new C(x = t, xa = t)", "new C(sn = t, longName = t)", "new C(C::x = t, x = t)",
 	} {
 		diags := kermlLibraryDiags(t, fmt.Sprintf(model, call))
-		if len(diags) != 1 || diags[0].Code != "type.expr" || !strings.Contains(diags[0].Message, "binds feature") ||
-			!strings.HasSuffix(diags[0].Message, "twice") {
+		if len(diags) != 1 || diags[0].Code != "type.expr" ||
+			!strings.Contains(diags[0].Message, "is already bound by an earlier argument") {
 			t.Errorf("%s: expected one duplicate-binding diagnostic, got %v", call, diags)
 		}
 	}
 	wantMessages(t, kermlLibraryDiags(t, fmt.Sprintf(model, "new C(x = t, x = t, xa = t)")),
-		`C binds feature "x" twice`, `C binds feature "x" twice`)
+		"x of C is already bound by an earlier argument", "x of C is already bound by an earlier argument")
 }
 
 // A constructed SysML payload — a part or attribute value, a sent message — binds
-// each feature once; a call sent as a payload is checked no further, as before.
+// each feature once, however deeply the payload expression nests the constructor.
 func TestConstructorDuplicateFeatureBindingSysML(t *testing.T) {
 	const model = `package P {
 		private import ScalarValues::*;
@@ -177,27 +177,28 @@ func TestConstructorDuplicateFeatureBindingSysML(t *testing.T) {
 		action def Owner {
 			part rcv : Recv;
 			attribute flag : Boolean;
+			item msg : Sig;
 			%s
 		}
 	}`
 	for _, member := range []string{
 		"send new Sig(p = 1, q = 2) to rcv;",
-		"send SendM() to rcv;",
-		"send (if flag ? SendM() else SendM()) to rcv;",
+		"send SendM(msg) to rcv;",
+		"send (if flag ? SendM(msg) else SendM(msg)) to rcv;",
 		"send SendM(new Sig(p = 1, q = 2)) to rcv;",
-		"send (1, 2).{in i : Integer; SendM()} to rcv;",
+		"send (1, 2).{in i : Integer; SendM(msg)} to rcv;",
 		"part s : Sub = new Sub(x = 1);",
 		"item a : Sig = new Sig(p = 1, q = 2);",
 	} {
 		wantLibraryClean(t, fmt.Sprintf(model, member))
 	}
-	wantLibraryDiag(t, fmt.Sprintf(model, "send new Sig(p = 1, p = 2) to rcv;"), "type.expr", `Sig binds feature "p" twice`)
-	wantLibraryDiag(t, fmt.Sprintf(model, "send (if flag ? new Sig(p = 1, p = 2) else new Sig(p = 1)) to rcv;"), "type.expr", `Sig binds feature "p" twice`)
-	wantLibraryDiag(t, fmt.Sprintf(model, "send (new Sig(p = 1), new Sig(q = 1, q = 2)) to rcv;"), "type.expr", `Sig binds feature "q" twice`)
-	wantLibraryDiag(t, fmt.Sprintf(model, "send SendM(new Sig(p = 1, p = 2)) to rcv;"), "type.expr", `Sig binds feature "p" twice`)
-	wantLibraryDiag(t, fmt.Sprintf(model, "send new Sig(p = 1, p = 2).p to rcv;"), "type.expr", `Sig binds feature "p" twice`)
-	wantLibraryDiag(t, fmt.Sprintf(model, "send new Sig(p = 1, p = 2).SendM() to rcv;"), "type.expr", `Sig binds feature "p" twice`)
-	wantLibraryDiag(t, fmt.Sprintf(model, "send (1, 2).{in i : Integer; new Sig(q = i, q = i)} to rcv;"), "type.expr", `Sig binds feature "q" twice`)
-	wantLibraryDiag(t, fmt.Sprintf(model, "part s : Sub = new Sub(x = 1, x = 2);"), "type.expr", `Sub binds feature "x" twice`)
-	wantLibraryDiag(t, fmt.Sprintf(model, "item a : Sig = new Sig(p = 1, Sig::p = 2);"), "type.expr", `Sig binds feature "p" twice`)
+	wantLibraryDiag(t, fmt.Sprintf(model, "send new Sig(p = 1, p = 2) to rcv;"), "type.expr", `p of Sig is already bound by an earlier argument`)
+	wantLibraryDiag(t, fmt.Sprintf(model, "send (if flag ? new Sig(p = 1, p = 2) else new Sig(p = 1)) to rcv;"), "type.expr", `p of Sig is already bound by an earlier argument`)
+	wantLibraryDiag(t, fmt.Sprintf(model, "send (new Sig(p = 1), new Sig(q = 1, q = 2)) to rcv;"), "type.expr", `q of Sig is already bound by an earlier argument`)
+	wantLibraryDiag(t, fmt.Sprintf(model, "send SendM(new Sig(p = 1, p = 2)) to rcv;"), "type.expr", `p of Sig is already bound by an earlier argument`)
+	wantLibraryDiag(t, fmt.Sprintf(model, "send new Sig(p = 1, p = 2).p to rcv;"), "type.expr", `p of Sig is already bound by an earlier argument`)
+	wantLibraryDiag(t, fmt.Sprintf(model, "send new Sig(p = 1, p = 2).SendM() to rcv;"), "type.expr", `p of Sig is already bound by an earlier argument`)
+	wantLibraryDiag(t, fmt.Sprintf(model, "send (1, 2).{in i : Integer; new Sig(q = i, q = i)} to rcv;"), "type.expr", `q of Sig is already bound by an earlier argument`)
+	wantLibraryDiag(t, fmt.Sprintf(model, "part s : Sub = new Sub(x = 1, x = 2);"), "type.expr", `x of Sub is already bound by an earlier argument`)
+	wantLibraryDiag(t, fmt.Sprintf(model, "item a : Sig = new Sig(p = 1, Sig::p = 2);"), "type.expr", `p of Sig is already bound by an earlier argument`)
 }
