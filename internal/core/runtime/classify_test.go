@@ -422,6 +422,51 @@ func TestCollectionReadRefusedByTheBudgetFillsNothing(t *testing.T) {
 	}
 }
 
+// Types conform one way or the other (KerML 1.0 §8.4.4.4, binding connector type conformance):
+// an object held by a Segment feature and a Line :> Segment feature is both, in either order;
+// held by two siblings under one general type, it is refused, as the pilot warns for such a binding.
+func TestClassifiersMustBeComparable(t *testing.T) {
+	model := `package test {
+		item def Common;
+		item def Segment :> Common;
+		item def Line :> Segment;
+		item def Bolt :> Common;
+		item def Rack { item raw [1]; }
+		item rack : Rack;
+	}`
+	for _, order := range [][2]string{{"Segment", "Line"}, {"Line", "Segment"}} {
+		t.Run(order[0]+"_then_"+order[1], func(t *testing.T) {
+			ctx, idx := libraryShapeContext(t, model)
+			raw := readInstance(t, ctx, instantiateQualified(t, ctx, idx, "test::rack"), "raw")
+			for _, name := range order {
+				typ := idx.LookupQualified("test::" + name)[0]
+				if err := ctx.classify(raw, typ); err != nil {
+					t.Fatalf("classify(raw, %s): %v", name, err)
+				}
+			}
+			for _, name := range []string{"Common", "Segment", "Line"} {
+				if typ := idx.LookupQualified("test::" + name)[0]; !ctx.instanceConforms(raw, typ) {
+					t.Fatalf("raw, a Segment and a Line, is no %s", name)
+				}
+			}
+		})
+	}
+	t.Run("siblings", func(t *testing.T) {
+		ctx, idx := libraryShapeContext(t, model)
+		raw := readInstance(t, ctx, instantiateQualified(t, ctx, idx, "test::rack"), "raw")
+		bolt, segment := idx.LookupQualified("test::Bolt")[0], idx.LookupQualified("test::Segment")[0]
+		if err := ctx.classify(raw, bolt); err != nil {
+			t.Fatalf("classify(raw, Bolt): %v", err)
+		}
+		if ctx.canClassify(raw, segment) {
+			t.Fatal("a Bolt can become a Segment, though neither conforms to the other")
+		}
+		if !ctx.canClassify(raw, idx.LookupQualified("test::Common")[0]) {
+			t.Fatal("a Bolt cannot be held as the Common it already is")
+		}
+	})
+}
+
 // A classification the classifier's body makes impossible (two names of one redefined
 // feature valued) is refused whole outside any probe: the object keeps what it had.
 func TestRefusedClassificationLeavesTheObjectAsItWas(t *testing.T) {
