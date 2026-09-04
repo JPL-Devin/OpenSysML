@@ -71,9 +71,8 @@ func (ctx *Context) referencedSymbol(scope *symbols.Scope, qn *ast.QualifiedName
 	return sym
 }
 
-// materializeHolders reads the features of inst whose value lists the named
-// feature before its objects are made, so they are classified by the types of
-// every feature holding them whichever is read first.
+// materializeHolders reads the features of inst whose value lists the named feature before its
+// objects are made, so every holding feature classifies them whichever is read first.
 func (ctx *Context) materializeHolders(inst *Instance, name string) error {
 	for _, typ := range inst.types() {
 		for _, holder := range ctx.holdingFeatures(typ, name) {

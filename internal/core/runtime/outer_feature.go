@@ -5,11 +5,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// outerFeatureValue reads the feature a name resolved to from the nearest object
-// in the bound object's ownership chain that carries it. A nested usage naming a
-// feature of an enclosing type (`Rectangle::length`, or a sibling `e1`) reads the
-// enclosing object's value of it, redefinitions included (KerML 1.0 §7.4.8.1:
-// a feature reference denotes the feature relative to the containing object).
+// outerFeatureValue reads the resolved feature from the nearest owner carrying it: a nested usage
+// naming `Rectangle::length` or a sibling reads the enclosing object's value (KerML 1.0 §7.4.8.1).
 func (ec *EvalContext) outerFeatureValue(sym *symbols.Symbol) (Value, bool, error) {
 	if sym == nil || !semantics.IsShapeFeature(sym) {
 		return Value{}, false, nil
@@ -29,9 +26,8 @@ func (ec *EvalContext) outerFeatureValue(sym *symbols.Symbol) (Value, bool, erro
 	return Value{}, false, nil
 }
 
-// featureDenoting names the feature value of inst that sym denotes: the one whose
-// feature is sym or redefines it. A value whose own default is being evaluated is
-// skipped, so its expression naming sym reads an outer object's value instead.
+// featureDenoting names the feature value of inst whose feature is sym or redefines it, skipping
+// one whose own default is being evaluated so that default reads an outer object's value.
 func (ctx *Context) featureDenoting(inst *Instance, sym *symbols.Symbol) (string, bool) {
 	for _, typ := range inst.types() {
 		name, ok := ctx.denotedFeature(typ, sym)

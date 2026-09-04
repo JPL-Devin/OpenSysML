@@ -514,6 +514,35 @@ func testBindingMultipleCollectionContributors(t *testing.T) {
 		}
 	})
 
+	// An end of multiplicity [0] links no value: each feature reads what it holds on its own.
+	t.Run("zero_width_end", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-zero-width-end>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute edges : Integer[*] = (7, 8);
+				attribute pick : Integer[0..1];
+				binding [1] bind [0] edges = [0..1] pick;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		fv, err := inst.GetFeatureValue(ctx, "edges")
+		if err != nil {
+			t.Fatalf("edges: %v", err)
+		}
+		if got := len(elementsOf(fv.HeldValue())); got != 2 {
+			t.Errorf("edges holds %d values (%s), want the two it is valued with", got, FormatValue(fv.HeldValue()))
+		}
+		fv, err = inst.GetFeatureValue(ctx, "pick")
+		if err != nil {
+			t.Fatalf("pick: %v", err)
+		}
+		if got := elementsOf(fv.HeldValue()); len(got) != 0 {
+			t.Errorf("pick = %s, want nothing: the binding links no value to it", FormatValue(fv.HeldValue()))
+		}
+	})
+
 	t.Run("whole_unequal", func(t *testing.T) {
 		idx, _, ctx := buildRuntime(t, "<binding-multiple-collection-conflict>", parseAndBuild(t, `package P {
 			part def Sys {

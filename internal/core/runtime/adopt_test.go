@@ -555,9 +555,8 @@ const adoptClassifiedSrc = `package Demo {
 	}
 }`
 
-// An object classified by the feature that held it carries that classification
-// over: the feature is rebound to its declaration in the new analysis, and the
-// feature values the classification added fill the features it declares there.
+// A classification carries over adoption: the feature is rebound to its declaration in
+// the new analysis and the feature values it added fill the features declared there.
 func TestAdoptCarriesAClassifiedObject(t *testing.T) {
 	prev := contextOver(t, adoptClassifiedSrc)
 	obj, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::Square"))

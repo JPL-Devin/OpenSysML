@@ -693,8 +693,11 @@ func (ec *EvalContext) declaredValue(sym *symbols.Symbol, value ast.Node) (Value
 		return Value{}, err
 	}
 	what := fmt.Sprintf("feature value %s", ec.ctx.qualifiedSymbolName(sym))
-	if err := ec.ctx.checkWriteType(sym.OwnerScope, what, ec.ctx.extractType(sym), val); err != nil {
+	if err := ec.ctx.checkWriteType(sym.OwnerScope, what, ec.ctx.extractType(sym), val, admitDeclared); err != nil {
 		return Value{}, err
+	}
+	if err := ec.ctx.classifyHeld(sym, val); err != nil {
+		return Value{}, fmt.Errorf("%s: %w", what, err)
 	}
 	return ec.bindVariationOf(sym, val)
 }

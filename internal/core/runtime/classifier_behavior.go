@@ -397,17 +397,19 @@ func (ctx *Context) startBehaviorsOfAll(objects []*Instance) error {
 // read. An optional part (lower bound 0) is required to hold nothing, so it is
 // left unread. A part that fails to materialize or start fails its holder.
 func (ctx *Context) materializeBehavingParts(inst *Instance) error {
-	for _, feat := range ctx.FeaturesOf(inst.Type) {
-		fv, ok := inst.FeatureValues[feat.Name]
-		if !ok || fv.Materialized || ctx.model.IsConnectorUsage(feat.Symbol) {
-			continue
-		}
-		composite := ctx.requiredPartType(fv.Feature)
-		if composite == nil || !ctx.runsBehaviors(composite, make(map[*symbols.Symbol]bool)) {
-			continue
-		}
-		if _, err := inst.GetFeatureValue(ctx, feat.Name); err != nil {
-			return err
+	for _, typ := range inst.types() {
+		for _, feat := range ctx.FeaturesOf(typ) {
+			fv, ok := inst.FeatureValues[feat.Name]
+			if !ok || fv.Materialized || ctx.model.IsConnectorUsage(feat.Symbol) {
+				continue
+			}
+			composite := ctx.requiredPartType(fv.Feature)
+			if composite == nil || !ctx.runsBehaviors(composite, make(map[*symbols.Symbol]bool)) {
+				continue
+			}
+			if _, err := inst.GetFeatureValue(ctx, feat.Name); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -462,21 +464,23 @@ func (ctx *Context) runsBehaviors(typeSym *symbols.Symbol, visiting map[*symbols
 // runs everything attached.
 func (ctx *Context) startBehaviorsOf(inst *Instance) error {
 	defer ctx.holdDrivenWork()()
-	for i, decl := range ctx.classifierBehaviorsOf(inst.Type) {
-		if inst.runsBound(decl.member) {
-			continue
+	for _, typ := range inst.types() {
+		for i, decl := range ctx.classifierBehaviorsOf(typ) {
+			if inst.runsBound(decl.member) {
+				continue
+			}
+			if ctx.trace != nil {
+				ctx.trace.RecordBehaviorStart(decl.behavior.Kind.String(), decl.behavior.Name, inst.ID)
+			}
+			behavior, err := ctx.attachClassifierBehavior(inst, decl)
+			if err != nil {
+				return err
+			}
+			behavior.binding = i
+			inst.behaviors = append(inst.behaviors, behavior)
+			ctx.pendingBehaviors = append(ctx.pendingBehaviors, behavior)
+			ctx.objectBehaviors = append(ctx.objectBehaviors, behavior)
 		}
-		if ctx.trace != nil {
-			ctx.trace.RecordBehaviorStart(decl.behavior.Kind.String(), decl.behavior.Name, inst.ID)
-		}
-		behavior, err := ctx.attachClassifierBehavior(inst, decl)
-		if err != nil {
-			return err
-		}
-		behavior.binding = i
-		inst.behaviors = append(inst.behaviors, behavior)
-		ctx.pendingBehaviors = append(ctx.pendingBehaviors, behavior)
-		ctx.objectBehaviors = append(ctx.objectBehaviors, behavior)
 	}
 
 	return ctx.runAttachedBehaviors()
@@ -523,14 +527,23 @@ func (ctx *Context) forgetBehaviorsBetween(attached, end int) {
 	if attached >= end || end > len(ctx.objectBehaviors) {
 		return
 	}
-	dropped := make(map[*ObjectBehavior]bool, end-attached)
-	for _, behavior := range ctx.objectBehaviors[attached:end] {
+	ctx.forgetBehaviors(ctx.objectBehaviors[attached:end])
+}
+
+// forgetBehaviors detaches the given behaviors from their objects and from the
+// context, wherever they stand among the behaviors attached.
+func (ctx *Context) forgetBehaviors(behaviors []*ObjectBehavior) {
+	if len(behaviors) == 0 {
+		return
+	}
+	dropped := make(map[*ObjectBehavior]bool, len(behaviors))
+	for _, behavior := range behaviors {
 		dropped[behavior] = true
 	}
 	for behavior := range dropped {
 		behavior.Object.behaviors = behaviorsExcept(behavior.Object.behaviors, dropped)
 	}
-	ctx.objectBehaviors = append(ctx.objectBehaviors[:attached], ctx.objectBehaviors[end:]...)
+	ctx.objectBehaviors = behaviorsExcept(ctx.objectBehaviors, dropped)
 	ctx.pendingBehaviors = behaviorsExcept(ctx.pendingBehaviors, dropped)
 }
 

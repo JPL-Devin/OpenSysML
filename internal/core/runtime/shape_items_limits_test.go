@@ -6,10 +6,8 @@ import (
 	"testing"
 )
 
-// The ShapeItems expressions the runtime cannot honestly compute fail with a
-// typed error naming what stopped them: a Kernel-frame feature the shape leaves
-// out, a partial binding that fixes no witness, a binding end the library types
-// without the feature it names, or a collection the library's own bounds contradict.
+// ShapeItems expressions the runtime cannot honestly compute fail with a typed error naming
+// what stopped them: a missing Kernel-frame feature, a witnessless partial binding, a contradicted bound.
 func TestShapeItemsUnsupportedExpressionsAreTypedErrors(t *testing.T) {
 	ctx, idx := libraryShapeContext(t, `package Geo {
 		private import ShapeItems::*; private import SI::*;

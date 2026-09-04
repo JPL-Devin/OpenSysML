@@ -57,10 +57,8 @@ const classifiedValueModel = `
 	}
 `
 
-// The values of a feature are instances of its type (KerML 1.0 §7.3.4.1): an
-// untyped member listed as a value of `edges : Segment` is the same object,
-// now a Segment carrying its features, whichever of the two is read first; and
-// holding it again adds nothing.
+// A feature's values are instances of its type (KerML 1.0 §7.3.4.1): an untyped member listed
+// in `edges : Segment` is the same object, now a Segment, whichever is read first, and only once.
 func TestListedValueIsClassifiedByTheFeatureType(t *testing.T) {
 	for _, first := range []string{"e1", "edges"} {
 		t.Run(first+"_first", func(t *testing.T) {
@@ -102,8 +100,8 @@ func TestListedValueIsClassifiedByTheFeatureType(t *testing.T) {
 	}
 }
 
-// A value none of whose types is comparable with the feature's type is refused:
-// a number or an object of an unrelated definition cannot become a Segment.
+// A value none of whose types is comparable with the feature's type is refused: a number,
+// an object of an unrelated definition, or one already classified by one, cannot become a Segment.
 func TestIncomparableValueIsRefusedByTheFeatureType(t *testing.T) {
 	cases := map[string]struct {
 		decl string
@@ -115,6 +113,10 @@ func TestIncomparableValueIsRefusedByTheFeatureType(t *testing.T) {
 		},
 		"unrelated_object": {
 			decl: `item :>> edges [1] = (bolt); item bolt : Bolt;`,
+			want: "to a feature typed by Segment",
+		},
+		"object_classified_by_an_unrelated_definition": {
+			decl: `item :>> edges [1] = (raw); item raw [1]; item fastener : Bolt [1] = raw;`,
 			want: "to a feature typed by Segment",
 		},
 	}
@@ -142,15 +144,21 @@ func TestIncomparableValueIsRefusedByTheFeatureType(t *testing.T) {
 
 const heldObjectModel = `
 	package test {
-		private import ScalarValues::*;
 		item def Segment { item ends [2]; }
+		item def Bolt;
 		item def Rack {
-			item slot : Segment [0..1];
+			item slot : Segment [0..1] = raw;
 			item raw [1];
-			item spare [1];
+			item loose [1];
 		}
 		item rack : Rack;
-		attribute def Load { item seg : Segment; attribute n : Integer; }
+		item def Bin {
+			item pair : Segment [2] = (spare, bolt);
+			item spare [1];
+			item bolt : Bolt;
+		}
+		item bin : Bin;
+		attribute def Load { item seg : Segment; }
 	}
 `
 
@@ -160,20 +168,15 @@ func isUnclassified(inst *Instance) bool {
 	return len(inst.classifiers) == 0 && !ends
 }
 
-// Classifying an object is part of the change that holds it: a probe undoes it
-// with the write, and a value refused, or a message refused for another of its
-// arguments, classifies nothing.
+// A declared holding classifies its object and a probe undoes both; a refused value
+// classifies nothing, and a write or message admits an object by what it already is.
 func TestClassificationIsKeptOrUndoneWithTheChange(t *testing.T) {
 	ctx, idx := libraryShapeContext(t, heldObjectModel)
 	rack := instantiateQualified(t, ctx, idx, "test::rack")
-	raw, spare := readInstance(t, ctx, rack, "raw"), readInstance(t, ctx, rack, "spare")
-	rawVal := Value{Kind: ValInstance, Instance: raw.ID}
-	spareVal := Value{Kind: ValInstance, Instance: spare.ID}
 
+	// Reading raw reads slot, which holds it, first.
 	end := ctx.beginProbe()
-	if err := rack.SetFeatureValue(ctx, "slot", rawVal); err != nil {
-		t.Fatalf("SetFeatureValue(slot) under a probe: %v", err)
-	}
+	raw := readInstance(t, ctx, rack, "raw")
 	if isUnclassified(raw) {
 		t.Fatal("raw is not a Segment while it is held by slot")
 	}
@@ -182,31 +185,42 @@ func TestClassificationIsKeptOrUndoneWithTheChange(t *testing.T) {
 		t.Fatalf("after the probe, raw is classified by %v with %v", raw.classifiers, sortedNames(raw.FeatureValues))
 	}
 	if rack.FeatureValues["slot"].Materialized {
-		t.Fatal("after the probe, slot is still written")
+		t.Fatal("after the probe, slot still holds its value")
 	}
 
-	two := sequenceOf([]Value{rawVal, spareVal})
-	if err := rack.SetFeatureValue(ctx, "slot", two); !errors.Is(err, ErrMultiplicityViolation) {
-		t.Fatalf("SetFeatureValue(slot, two objects) = %v, want ErrMultiplicityViolation", err)
+	bin := instantiateQualified(t, ctx, idx, "test::bin")
+	if _, err := bin.GetFeatureValue(ctx, "pair"); !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("pair = %v, want ErrTypeMismatch: bolt is a Bolt", err)
 	}
-	if !isUnclassified(raw) || !isUnclassified(spare) {
-		t.Fatal("a refused write classified its objects")
+	for _, inst := range ctx.instances {
+		if !isUnclassified(inst) {
+			t.Fatalf("a refused value classified object %d, a %s, by %v", inst.ID, symbolText(inst.Type), inst.classifiers)
+		}
 	}
 
+	loose := readInstance(t, ctx, rack, "loose")
+	looseVal := Value{Kind: ValInstance, Instance: loose.ID}
+	if err := rack.SetFeatureValue(ctx, "slot", looseVal); !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("SetFeatureValue(slot, loose) = %v, want ErrTypeMismatch: loose is no Segment", err)
+	}
 	load := idx.LookupQualified("test::Load")[0]
-	args := map[string]Value{"seg": rawVal, "n": NewStringValue("many")}
-	if _, err := ctx.SignalMessage(load, args, rack); !errors.Is(err, ErrSignalArgument) {
-		t.Fatalf("SignalMessage(Load) = %v, want ErrSignalArgument", err)
+	if _, err := ctx.SignalMessage(load, map[string]Value{"seg": looseVal}, rack); !errors.Is(err, ErrSignalArgument) {
+		t.Fatalf("SignalMessage(Load, seg = loose) = %v, want ErrSignalArgument", err)
 	}
-	if !isUnclassified(raw) {
-		t.Fatal("a refused message classified the object of an argument it admitted")
+	if !isUnclassified(loose) {
+		t.Fatal("a refused write or message classified its object")
 	}
-	args["n"] = integerValue(2)
-	if _, err := ctx.SignalMessage(load, args, rack); err != nil {
-		t.Fatalf("SignalMessage(Load): %v", err)
-	}
+
+	raw = readInstance(t, ctx, rack, "raw")
+	rawVal := Value{Kind: ValInstance, Instance: raw.ID}
 	if isUnclassified(raw) {
-		t.Fatal("raw is not a Segment once carried by Load.seg")
+		t.Fatal("raw is not a Segment once slot holds it")
+	}
+	if err := rack.SetFeatureValue(ctx, "slot", rawVal); err != nil {
+		t.Fatalf("SetFeatureValue(slot, raw), a Segment now: %v", err)
+	}
+	if _, err := ctx.SignalMessage(load, map[string]Value{"seg": rawVal}, rack); err != nil {
+		t.Fatalf("SignalMessage(Load, seg = raw), a Segment now: %v", err)
 	}
 }
 
@@ -220,10 +234,8 @@ func sortedNames(values map[string]*FeatureValue) []string {
 	return names
 }
 
-// A qualified name of a feature of an enclosing type, written in a nested
-// usage, reads the enclosing object's value (KerML 1.0 §7.4.4: a feature is
-// evaluated on the object it is a feature of), while a qualified name of a
-// declaration outside the object reads that declaration.
+// A qualified name of an enclosing type's feature, written in a nested usage, reads the enclosing
+// object's value (KerML 1.0 §7.4.4); one naming a declaration outside the object reads that.
 func TestQualifiedOuterFeatureReadsTheEnclosingObject(t *testing.T) {
 	ctx, idx := libraryShapeContext(t, `package test {
 		private import ScalarValues::*;
@@ -260,9 +272,8 @@ func TestQualifiedOuterFeatureReadsTheEnclosingObject(t *testing.T) {
 	}
 }
 
-// A feature valued by a chain over a collection holds the chain's values from
-// every member, in member order, and the members' objects are made only when
-// the chain is read.
+// A feature valued by a chain over a collection holds the chain's values from every member,
+// in member order, and the members' objects are made only when the chain is read.
 func TestChainValueCollectsAcrossTheCollection(t *testing.T) {
 	ctx, idx := libraryShapeContext(t, `package test {
 		item def Corner;
@@ -308,9 +319,8 @@ func TestChainValueCollectsAcrossTheCollection(t *testing.T) {
 	}
 }
 
-// A collection short of its lower bound is made up through its optional
-// subsetting features first, each within its upper bound, and through anonymous
-// members only past them; a required subsetter is never made twice.
+// A collection short of its lower bound is made up through its optional subsetters first, within
+// their upper bounds, and through anonymous members only past them; a required one is never made twice.
 func TestOptionalSubsetterFillsTheCollection(t *testing.T) {
 	ctx, idx := libraryShapeContext(t, `package test {
 		item def Side;
@@ -341,5 +351,144 @@ func TestOptionalSubsetterFillsTheCollection(t *testing.T) {
 	els := elementsOf(sides.HeldValue())
 	if left := readInstance(t, ctx, panel, "left"); els[0].Instance != left.ID || els[1].Instance != top.ID {
 		t.Fatalf("sides = %s, want left (%d) then top (%d) first", FormatValue(sides.HeldValue()), left.ID, top.ID)
+	}
+}
+
+// A collection read is one change: charged whole before any object is made, and a read
+// the budget refuses leaves no object, filled subsetter or charged element behind.
+func TestCollectionReadRefusedByTheBudgetFillsNothing(t *testing.T) {
+	ctx, idx := libraryShapeContext(t, `package test {
+		item def Side;
+		item def Panel {
+			item sides : Side [4];
+			item left : Side [1] :> sides;
+			item top : Side [0..1] :> sides;
+		}
+		item panel : Panel;
+	}`)
+	panel := instantiateQualified(t, ctx, idx, "test::panel")
+	left := readInstance(t, ctx, panel, "left")
+	objects := len(ctx.instances)
+
+	end := ctx.beginRun()
+	defer end()
+	ctx.maxElements = 3
+	_, err := panel.GetFeatureValue(ctx, "sides")
+	if !errors.Is(err, ErrElementLimitExceeded) {
+		t.Fatalf("sides under a budget of 3: %v, want ErrElementLimitExceeded", err)
+	}
+	if ctx.elements != 0 {
+		t.Fatalf("a refused read left %d elements charged", ctx.elements)
+	}
+	if got := len(ctx.instances); got != objects {
+		t.Fatalf("a refused read left %d objects behind", got-objects)
+	}
+	if top := panel.FeatureValues["top"]; len(elementsOf(top.HeldValue())) != 0 {
+		t.Fatalf("a refused read filled top with %s", FormatValue(top.HeldValue()))
+	}
+
+	// The budget runs out at each point of the read in turn; each refusal leaves nothing behind.
+	ctx.maxElements = 4
+	maxSteps, refused := ctx.maxSteps, 0
+	var sides *FeatureValue
+	for extra := int64(0); sides == nil; extra++ {
+		ctx.maxSteps = ctx.steps + extra
+		fv, err := panel.GetFeatureValue(ctx, "sides")
+		ctx.maxSteps = maxSteps
+		if err == nil {
+			sides = fv
+			break
+		}
+		if !errors.Is(err, ErrStepLimitExceeded) {
+			t.Fatalf("sides with %d steps: %v, want ErrStepLimitExceeded", extra, err)
+		}
+		refused++
+		if got := len(ctx.instances); got != objects {
+			t.Fatalf("a read refused after %d steps left %d objects behind", extra, got-objects)
+		}
+		if top := panel.FeatureValues["top"]; len(elementsOf(top.HeldValue())) != 0 {
+			t.Fatalf("a read refused after %d steps filled top with %s", extra, FormatValue(top.HeldValue()))
+		}
+		if ctx.elements != 0 {
+			t.Fatalf("a read refused after %d steps left %d elements charged", extra, ctx.elements)
+		}
+	}
+	if refused < 3 {
+		t.Fatalf("only %d step budgets refused the read; the objects it makes each take one", refused)
+	}
+	els := elementsOf(sides.HeldValue())
+	if top := readInstance(t, ctx, panel, "top"); len(els) != 4 || els[0].Instance != left.ID || els[1].Instance != top.ID {
+		t.Fatalf("sides = %s, want left (%d) then top (%d) first of four", FormatValue(sides.HeldValue()), left.ID, top.ID)
+	}
+}
+
+// A classification the classifier's body makes impossible (two names of one redefined
+// feature valued) is refused whole outside any probe: the object keeps what it had.
+func TestRefusedClassificationLeavesTheObjectAsItWas(t *testing.T) {
+	ctx, idx := libraryShapeContext(t, `package test {
+		private import ScalarValues::*;
+		item def Ring { attribute ringCost : Real; }
+		item def Band :> Ring { attribute bandCost :>> ringCost = 400.0; attribute :>> ringCost = 500.0; }
+		item def Rack { item raw [1]; }
+		item rack : Rack;
+	}`)
+	rack := instantiateQualified(t, ctx, idx, "test::rack")
+	raw := readInstance(t, ctx, rack, "raw")
+	before := sortedNames(raw.FeatureValues)
+
+	band := idx.LookupQualified("test::Band")[0]
+	if err := ctx.classify(raw, band); !errors.Is(err, ErrConflictingRedefinition) {
+		t.Fatalf("classify(raw, Band) = %v, want ErrConflictingRedefinition", err)
+	}
+	if len(raw.classifiers) != 0 {
+		t.Fatalf("a refused classification left raw classified by %v", raw.classifiers)
+	}
+	if after := sortedNames(raw.FeatureValues); strings.Join(after, ",") != strings.Join(before, ",") {
+		t.Fatalf("a refused classification changed raw's features from %v to %v", before, after)
+	}
+}
+
+// An object classified by a type exhibiting a behavior runs it (KerML 1.0 §7.4.9), once,
+// however many features hold it; a probe undoes the run with the holding.
+func TestClassificationStartsTheClassifierBehaviors(t *testing.T) {
+	ctx, idx := libraryShapeContext(t, `package test {
+		private import ScalarValues::*;
+		state def Glowing {
+			attribute cycles : Integer = 0;
+			entry; then lit;
+			state lit { entry action count { assign cycles := cycles + 1; } }
+		}
+		part def Lamp { exhibit state glow : Glowing; }
+		part def Room {
+			part lamp : Lamp [1] = bulb;
+			part spare : Lamp [1] = bulb;
+			part bulb [1];
+		}
+		part room : Room;
+	}`)
+	room := instantiateQualified(t, ctx, idx, "test::room")
+
+	end := ctx.beginProbe()
+	bulb := readInstance(t, ctx, room, "lamp")
+	if _, ok := bulb.Behavior("glow"); !ok {
+		t.Fatal("bulb, a Lamp while lamp holds it, runs no glow behavior")
+	}
+	end()
+	if len(bulb.behaviors) != 0 || len(ctx.objectBehaviors) != 0 {
+		t.Fatalf("after the probe, bulb runs %d behaviors and the context %d", len(bulb.behaviors), len(ctx.objectBehaviors))
+	}
+
+	if bulb = readInstance(t, ctx, room, "lamp"); readInstance(t, ctx, room, "spare") != bulb {
+		t.Fatal("lamp and spare hold different objects")
+	}
+	if len(bulb.behaviors) != 1 {
+		t.Fatalf("bulb, held by two Lamp features, runs %d behaviors, want 1", len(bulb.behaviors))
+	}
+	behavior, ok := bulb.Behavior("glow")
+	if !ok || behavior.State == nil {
+		t.Fatal("bulb runs no glow state machine")
+	}
+	if got := behavior.State.stateData["cycles"].Const.Int; got != 1 {
+		t.Fatalf("glow ran to cycles = %d, want 1", got)
 	}
 }

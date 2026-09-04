@@ -2,14 +2,14 @@ package runtime
 
 import (
 	"maps"
+	"slices"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// instanceConforms reports whether an object is an instance of typ: by the
-// declaration it was materialized from, or by a feature it was since held as a
-// value of (KerML 1.0 §7.3.4.1: the values of a feature are instances of its types).
+// instanceConforms reports whether an object is an instance of typ by its declaration or by
+// a feature it was held as a value of (KerML 1.0 §7.3.4.1: a feature's values are instances of its types).
 func (ctx *Context) instanceConforms(inst *Instance, typ *symbols.Symbol) bool {
 	if ctx.model.Conforms(inst.Type, typ) {
 		return true
@@ -22,10 +22,8 @@ func (ctx *Context) instanceConforms(inst *Instance, typ *symbols.Symbol) bool {
 	return false
 }
 
-// canClassify reports whether an object may be held as a value of a feature
-// typed by typ: it is an instance of typ already, or every type classifying it
-// so far is comparable with typ, so holding it classifies it further rather
-// than contradicting a type it has.
+// canClassify reports whether an object may be held by a feature typed by typ: it is one
+// already, or every type classifying it is comparable with typ, so holding it narrows it.
 func (ctx *Context) canClassify(inst *Instance, typ *symbols.Symbol) bool {
 	if ctx.instanceConforms(inst, typ) {
 		return true
@@ -59,9 +57,8 @@ func (ctx *Context) comparableTypes(typ, other *symbols.Symbol, seen map[*symbol
 	return true
 }
 
-// classifyHeld classifies every object held as a value of feature by feature
-// itself, so it carries the features its type and body declare of its values.
-// The caller has already checked that each object may be held.
+// classifyHeld classifies every object held as a value of feature by the feature itself,
+// so it carries the features its type and body declare; the caller has checked each may be held.
 func (ctx *Context) classifyHeld(feature *symbols.Symbol, val Value) error {
 	if feature == nil {
 		return nil
@@ -81,16 +78,20 @@ func (ctx *Context) classifyHeld(feature *symbols.Symbol, val Value) error {
 	return nil
 }
 
-// classify records typ as a classifier of inst and gives it the feature values
-// typ declares that it does not carry yet, unmaterialized. A probe or transaction
-// under way restores the object as it was (see noteProbeUndo).
+// classify records typ as a classifier of inst with the features and behaviors it adds;
+// a classification that fails or that a probe rolls back leaves the object as it was.
 func (ctx *Context) classify(inst *Instance, typ *symbols.Symbol) error {
 	if ctx.instanceConforms(inst, typ) {
 		return nil
 	}
+	classifiers, values := inst.classifiers, maps.Clone(inst.FeatureValues)
+	var started []*ObjectBehavior
+	restore := func() {
+		inst.classifiers, inst.FeatureValues = classifiers, values
+		ctx.forgetBehaviors(started)
+	}
 	if ctx.journals > 0 {
-		classifiers, values := inst.classifiers, maps.Clone(inst.FeatureValues)
-		ctx.noteProbeUndo(func() { inst.classifiers, inst.FeatureValues = classifiers, values })
+		ctx.noteProbeUndo(restore)
 	}
 	inst.classifiers = append(inst.classifiers, typ)
 	carried := make(map[string]bool, len(inst.FeatureValues))
@@ -105,5 +106,15 @@ func (ctx *Context) classify(inst *Instance, typ *symbols.Symbol) error {
 		}
 		inst.FeatureValues[feat.Name] = ctx.newFeatureValue(inst, feat)
 	}
-	return ctx.aliasRedefinedFeatureValuesOf(inst, typ, carried)
+	if err := ctx.aliasRedefinedFeatureValuesOf(inst, typ, carried); err != nil {
+		restore()
+		return err
+	}
+	running := len(inst.behaviors)
+	if err := ctx.startClassifierBehaviors(inst, len(ctx.created)); err != nil {
+		restore()
+		return err
+	}
+	started = slices.Clone(inst.behaviors[running:])
+	return nil
 }

@@ -166,24 +166,16 @@ func (ctx *Context) SignalMessage(signal *symbols.Symbol, args map[string]Value,
 	}
 	features := ctx.FeaturesOf(signal)
 	payload := make(map[string]Value, len(args))
-	carried := make([]*EffectiveFeature, 0, len(args))
 	for _, name := range sortedArgNames(args) {
 		feat := carriedFeature(features, name)
 		if feat == nil {
 			return Message{}, fmt.Errorf("%w: %s carries no feature %q%s",
 				ErrSignalArgument, symbolText(signal), name, carriedFeaturesNote(features))
 		}
-		if err := ctx.checkAdmits(feat, symbolText(signal)+"."+name, args[name]); err != nil {
+		if err := ctx.checkAdmits(feat, symbolText(signal)+"."+name, args[name], admitWritten); err != nil {
 			return Message{}, fmt.Errorf("%w: %w", ErrSignalArgument, err)
 		}
 		payload[name] = args[name]
-		carried = append(carried, feat)
-	}
-	// Classified once every argument is admitted, so a refused message classifies nothing.
-	for _, feat := range carried {
-		if err := ctx.classifyHeld(feat.heldBy(), payload[feat.Name]); err != nil {
-			return Message{}, fmt.Errorf("%w: %w", ErrSignalArgument, err)
-		}
 	}
 	msg := NamedSignalMessage(signal.Name, to)
 	msg.Signal, msg.Payload = signal, payload

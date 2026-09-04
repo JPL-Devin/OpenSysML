@@ -105,12 +105,23 @@ func (ctx *Context) bindingsForFeature(typeSym *symbols.Symbol, name string) []l
 	}
 	var bindings []lower.Binding
 	for _, binding := range ctx.objectBindings(typeSym) {
-		if bindingInvolvesFeature(binding, name) {
+		if bindingInvolvesFeature(binding, name) && !ctx.bindingLinksNothing(binding) {
 			bindings = append(bindings, binding)
 		}
 	}
 	byFeature[name] = bindings
 	return bindings
+}
+
+// bindingLinksNothing reports a binding with an end of multiplicity [0], which links no
+// value and so constrains neither feature (KerML 1.0 §7.4.9.2, connector end multiplicity).
+func (ctx *Context) bindingLinksNothing(binding lower.Binding) bool {
+	for _, end := range binding.Ends {
+		if r, ok := ctx.model.RangeOf(end.Multiplicity); ok && r.Upper.Known && !r.Upper.Infinite && r.Upper.Value == 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func (ctx *Context) resolveBindingValue(inst *Instance, name string) (Value, bool, error) {
@@ -225,12 +236,8 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 	return Value{}, false, len(cycleFeatures) != 0, cycleFeatures, nil
 }
 
-// partialBinding reports a binding an end multiplicity makes partial: an end
-// whose stated multiplicity admits fewer values than the feature it names holds
-// (`bind [0..1] tf.edges = [0..1] tfe`) links one value of that feature per
-// link rather than all of them (KerML 1.0 §7.4.9.2, connector end multiplicity).
-// A feature declared wider than the end but holding no more values than it
-// admits is linked whole; the end being resolved has none to count yet.
+// partialBinding reports an end admitting fewer values than its feature holds, which links
+// one of them per link, not all (KerML 1.0 §7.4.9.2); the end being resolved has none to count yet.
 func (ctx *Context) partialBinding(owner, targetInst *Instance, target *FeatureValue, binding lower.Binding) (bool, error) {
 	for end := range binding.Ends {
 		stated, ok := ctx.model.RangeOf(binding.Ends[end].Multiplicity)
@@ -545,10 +552,10 @@ func (ctx *Context) assignBindingEndpoint(endpoint bindingEndpoint, val Value, b
 }
 
 func (ctx *Context) assignBindingValue(inst *Instance, fv *FeatureValue, name string, val Value) error {
-	if err := ctx.checkDefault(inst, fv, name, val); err != nil {
+	if err := ctx.checkDefault(inst, fv, name, val, admitDeclared); err != nil {
 		return err
 	}
-	val, err := ctx.admitted(fv.Feature, val)
+	val, err := ctx.admitted(fv.Feature, val, admitDeclared)
 	if err != nil {
 		return err
 	}
