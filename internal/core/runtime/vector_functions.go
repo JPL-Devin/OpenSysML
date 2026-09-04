@@ -665,13 +665,14 @@ func vectorNorm(name string, _ *Context, args []Value) (Value, error) {
 	return checkedReal(euclideanNorm(reals))
 }
 
-// euclideanNorm is the square root of the sum of the squares.
+// euclideanNorm is the square root of the sum of the squares, accumulated so
+// that a square outside the Real range does not overflow a finite norm.
 func euclideanNorm(elements []float64) float64 {
-	sum := 0.0
+	norm := 0.0
 	for _, x := range elements {
-		sum += x * x
+		norm = math.Hypot(norm, x)
 	}
-	return math.Sqrt(sum)
+	return norm
 }
 
 // vectorAngle is the angle between two vectors of equal dimension,
@@ -705,13 +706,15 @@ func vectorAngle(name string, _ *Context, args []Value) (Value, error) {
 			semantics.ErrArithmeticDomain, name,
 		)
 	}
-	inner := 0.0
+	// The cosine is the inner product of the unit vectors, so components whose
+	// product would leave the Real range still give a finite cosine.
+	cosine := 0.0
 	for i := range v {
-		inner += v[i] * w[i]
+		cosine += (v[i] / normV) * (w[i] / normW)
 	}
 	// Rounding can carry the cosine of two parallel vectors just outside
 	// [-1.0, 1.0], where the arc cosine has no value; the angle there is 0 or pi.
-	cosine := math.Max(-1, math.Min(1, inner/(normV*normW)))
+	cosine = math.Max(-1, math.Min(1, cosine))
 	return checkedReal(math.Acos(cosine))
 }
 

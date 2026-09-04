@@ -582,6 +582,39 @@ func TestVectorFunctionScalarValues(t *testing.T) {
 	}
 }
 
+// A norm is finite whenever it is in the Real range, even where the squares of
+// the components are not, and the angle between such vectors is defined.
+func TestVectorNormAndAngleOfLargeComponents(t *testing.T) {
+	norm, err := applyLibrary(t, "VectorFunctions::norm", realVec(3e200, 4e200))
+	if err != nil {
+		t.Fatalf("norm = error %v", err)
+	}
+	if got := norm.Const.Real; math.Abs(got-5e200) > 1e185 {
+		t.Fatalf("norm = %g, want 5e200", got)
+	}
+	cases := []struct {
+		name string
+		v, w Value
+		want float64
+	}{
+		{"orthogonal", realVec(1e200, 0), realVec(0, 1e200), math.Pi / 2},
+		{"parallel", realVec(1e200, 2e200), realVec(2e200, 4e200), 0},
+		{"opposite", realVec(1e200, 0), realVec(-1e200, 0), math.Pi},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := applyLibrary(t, "VectorFunctions::angle", tc.v, tc.w)
+			if err != nil {
+				t.Fatalf("angle = error %v", err)
+			}
+			// The arc cosine magnifies a rounding of the cosine near ±1 to ~1e-8.
+			if got.Kind != ValConst || math.Abs(got.Const.Real-tc.want) > 1e-7 {
+				t.Fatalf("angle = %s, want %g", FormatValue(got), tc.want)
+			}
+		})
+	}
+}
+
 // cx is a Complex runtime value with the given parts.
 func cx(re, im float64) Value { return NewComplex(complex(re, im)) }
 
@@ -890,7 +923,7 @@ func TestVectorAndComplexFunctionErrors(t *testing.T) {
 		{"two components of a three-vector", "VectorFunctions::CartesianThreeVectorOf", []Value{realVec(1, 2)}, ErrMultiplicityViolation},
 		{"division of a vector by zero", "VectorFunctions::vectorScalarDiv", []Value{realVec(1, 2), constReal(0)}, ErrDivisionByZero},
 		{"the angle to a zero vector", "VectorFunctions::angle", []Value{realVec(0, 0), realVec(1, 0)}, semantics.ErrArithmeticDomain},
-		{"a norm beyond the Real range", "VectorFunctions::norm", []Value{realVec(1e200, 1e200)}, semantics.ErrArithmeticOverflow},
+		{"a norm beyond the Real range", "VectorFunctions::norm", []Value{realVec(1.5e308, 1.5e308)}, semantics.ErrArithmeticOverflow},
 		{"a sum beyond the Real range", "VectorFunctions::cartesian+", []Value{realVec(1e308, 1), realVec(1e308, 1)}, semantics.ErrArithmeticOverflow},
 		{"a difference beyond the Real range", "VectorFunctions::cartesian-", []Value{realVec(1e308, 1), realVec(-1e308, 1)}, semantics.ErrArithmeticOverflow},
 		{"a scaled element beyond the Real range", "VectorFunctions::scalarVectorMult", []Value{constReal(1e300), realVec(1e300)}, semantics.ErrArithmeticOverflow},
