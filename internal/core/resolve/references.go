@@ -270,6 +270,7 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		}
 		return true
 	case *ast.SubjectMember:
+		c.prefixes(scope, d.Prefixes)
 		c.add(scope, d.TypeRef)
 		c.multiplicity(scope, d.Multiplicity)
 		c.relationships(scope, d, d.Relationships)
@@ -535,11 +536,18 @@ func (c *refCollector) prefixes(scope *symbols.Scope, prefixes []*ast.PrefixMeta
 	}
 }
 
-// metadataPrefix collects an annotation's metaclass name and the references its
-// body carries, in the body's own scope — the same scope the resolver resolves
-// them in (see resolveMetadataPrefix).
+// metadataPrefix collects an annotation's metaclass name, the elements it is
+// about and the references its body carries, in the body's own scope — the same
+// scope the resolver resolves them in (see resolveMetadataPrefix). The
+// annotation is the member its own names are written in, prefix or not.
 func (c *refCollector) metadataPrefix(scope *symbols.Scope, p *ast.PrefixMetadata) {
+	prev := c.member
+	c.member = p
+	defer func() { c.member = prev }()
 	c.add(scope, p.Type)
+	for _, a := range p.About {
+		c.add(scope, a)
+	}
 	if len(p.Body) == 0 {
 		return
 	}

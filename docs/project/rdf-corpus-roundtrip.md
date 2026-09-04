@@ -47,7 +47,7 @@ Each file gets exactly one of:
 | `graph-diff` | The triple sets differ beyond `sysx:sourceText` whitespace: hop 2 gained, lost or changed a triple. |
 | `unwritable` | Hop 1 succeeded but Turtle → notation was refused. |
 | `unparseable` | The notation written back was refused on its way to Turtle again. |
-| `refused:<class>` | Notation → Turtle was refused on the first hop. `<class>` is the kind of construct the refusal names (`feature-declaration`, `prefix-metadata`, `succession`, `operator-expr`, `duplicate-declaration`, …), derived from `export.UnsupportedError.What` with its location and identifiers removed so the class is the same wherever in the file the construct sits; `syntax` for source that does not parse; `error` for anything else. |
+| `refused:<class>` | Notation → Turtle was refused on the first hop. `<class>` is the kind of construct the refusal names (`feature-declaration`, `event-declaration`, `succession`, `operator-expr`, `duplicate-declaration`, …), derived from `export.UnsupportedError.What` with its location and identifiers removed so the class is the same wherever in the file the construct sits; `syntax` for source that does not parse; `error` for anything else. |
 
 The comparison is over triple sets, not bytes, so the order in which triples are written is never
 a difference, and only `sysx:sourceText` is normalised: whitespace anywhere else, a datatype, a
@@ -59,36 +59,42 @@ Recorded against the corpus above, reproduced byte-identically on a second run:
 
 | Verdict | Files |
 |---|---|
-| `stable` | 285 |
+| `stable` | 303 |
 | `whitespace-only` | 0 |
 | `graph-diff` | 0 |
 | `unwritable` | 0 |
 | `unparseable` | 0 |
-| `refused` | 60 |
+| `refused` | 42 |
 | **total** | **345** |
 
-So 285 of 345 files convert to Turtle, and every one of them comes back as the same Turtle byte for
+So 303 of 345 files convert to Turtle, and every one of them comes back as the same Turtle byte for
 byte. That is the source text at work: the decoder writes each file back from the `sysx:sourceText`
 it carries (see [What the gate does not do](#what-the-gate-does-not-do)), so the files that came
 back up to whitespace, as a different graph, or that could not be written back or re-read from
-canonical notation all moved to `stable` when it landed. The refusals by class: 21
-`feature-declaration`, 19 `prefix-metadata`, 9 `event-declaration`, 4 `duplicate-declaration`,
-3 each of `snapshot-declaration` and `assert-declaration`, and 1 `timeslice-declaration`. No file
+canonical notation all moved to `stable` when it landed. The refusals by class: 22
+`feature-declaration`, 10 `event-declaration`, 3 each of `duplicate-declaration`,
+`snapshot-declaration` and `assert-declaration`, and 1 `timeslice-declaration`. No file
 is refused for an expression any longer: a body's result expression is mapped
 ([rdf-mapping.md § Result expressions](../reference/rdf-mapping.md#result-expressions)), which
 took the 13 files refused for one from `refused` to `stable` (12) or to the standing refusal of an
 anonymous `feature` declaration (`Simple Tests/Expressions.kerml`), and the one `unwritable` file
 (`ExtendedOccurrences.kerml`) with it.
 
-Two of the refusals were `stable` verdicts while the body of an
-end-binding usage (`connector = c2 { end feature references a; }`, `#causation connect b to d {
-@CausationMetadata { … } }`) travelled inside the head's `sysx:sourceText`:
-`Simple Tests/Connectors.kerml` and `Cause and Effect Examples/CauseAndEffectExample.sysml`. Such a
-body is now mapped as members (see
-[rdf-mapping.md § End-binding heads](../reference/rdf-mapping.md#end-binding-heads)), so those two
-files meet the mapping's standing refusals of an anonymous `feature` declaration and of a metadata
-annotation with a body — the refusals the same members draw in any other body. The refusal is the
-honest verdict; the earlier one measured text, not structure.
+Before metadata annotations were carried structurally, 285 files converted and 60 were refused,
+19 of them `prefix-metadata`; of those 19, 17 now convert and 2 fall to the `feature-declaration`
+and `event-declaration` refusals the metadata refusal had hidden. A 20th file, refused as a
+`duplicate-declaration` because the parser had read `metadata M about x;` as a usage *named* `M`,
+converts now that it is read as typed by `M`.
+
+One of the refusals was a `stable` verdict while the body of an end-binding usage
+(`connector = c2 { end feature references a; }`) travelled inside the head's `sysx:sourceText`:
+`Simple Tests/Connectors.kerml`. Such a body is now mapped as members (see
+[rdf-mapping.md § End-binding heads](../reference/rdf-mapping.md#end-binding-heads)), so the file
+meets the mapping's standing refusal of an anonymous `feature` declaration — the refusal the same
+member draws in any other body. The refusal is the honest verdict; the earlier one measured text,
+not structure. `Cause and Effect Examples/CauseAndEffectExample.sysml`, whose `#causation connect b
+to d { @CausationMetadata { … } }` body is a metadata annotation with a body, converts and comes
+back `stable` now that such bodies are carried as members.
 
 ## Policy
 
