@@ -157,6 +157,24 @@ func TestRenameCapturingAFeatureChainMemberIsRefused(t *testing.T) {
 	}
 }
 
+// The same refusal where the new name is an alias for the element itself: the
+// references would be read through the alias, which the rename turns cyclic.
+func TestRenameCapturingByAnAliasForItselfIsRefused(t *testing.T) {
+	const src = "package P {\n\tpart def Old;\n\tpart def Q {\n\t\talias New for Old;\n" +
+		"\t\tpart u : Old;\n\t}\n}\n"
+	e := refusedRename(t, "capture-alias.sysml", src, "P::Old", "New")
+
+	if e.Failure != FailureInvalidName {
+		t.Fatalf("failure is %s (%s), want invalid-name", e.Failure, e.Message)
+	}
+	if !strings.Contains(e.Message, "P::Q::New") {
+		t.Fatalf("refusal does not name the alias: %s", e.Message)
+	}
+	if len(e.Referring) != 1 || e.Referring[0] != "P::Q" {
+		t.Fatalf("refusal reports referring %v, want [P::Q]", e.Referring)
+	}
+}
+
 // The same refusal for a qualified reference: the new name is already a member
 // of the namespace the reference qualifies through.
 func TestRenameCapturingAQualifiedSegmentIsRefused(t *testing.T) {

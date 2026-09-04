@@ -10,9 +10,11 @@
   any open workspace document, as a whole name, a segment of a qualified one or a feature chain's
   member — would read another element afterwards. Each rewritten segment is checked by a trial
   reading of its reference with the new spelling, so a chain member is read in its operand's type
-  rather than where the chain is written; the batch edit API gains that check too, where it
-  previously let `d.x` be renamed onto a `y` that `d`'s type declares. A name taken only in an
-  unrelated scope is not a conflict, nor is renaming a name to itself, and a shorthand
+  rather than where the chain is written, and a segment that would write an alias name is captured
+  by the alias even when it aliases the renamed element (the rename would leave `alias New for
+  New`); the batch edit API gains both checks too, where it previously let `d.x` be renamed onto
+  a `y` that `d`'s type declares. A name taken only in an unrelated scope is not a conflict, nor
+  is renaming a name to itself, and a shorthand
   redefinition whose declaration and reference share one span still renames. Aliases, short-name
   references and out-of-workspace declarations keep their rules, and
   `textDocument/prepareRename` is unchanged.

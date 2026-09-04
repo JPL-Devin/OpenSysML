@@ -96,6 +96,26 @@ func TestRenameRefusesCaptureInAnotherDocument(t *testing.T) {
 	wantRefusal(t, msg, `P::Old cannot be renamed to "New"`, "reference to it in Q", "would read Q::New instead")
 }
 
+func TestRenameRefusesTakingAnAliasForItself(t *testing.T) {
+	// The alias names the target itself, but it is a distinct membership: the
+	// rename would leave `alias New for New`.
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/alias_self.sysml",
+		"package P {\n\tpart def Old;\n\talias New for Old;\n\tpart x : Old;\n}\n")
+	msg := refuseRename(t, ws, name, "Old;", "New")
+	wantRefusal(t, msg, `P::Old cannot be renamed to "New"`, "already means P::New")
+}
+
+func TestRenameRefusesCaptureByAnAliasForItself(t *testing.T) {
+	// The rewritten references would be read through the alias, which the rename
+	// turns cyclic.
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/alias_capture.sysml",
+		"package P {\n\tpart def Old;\n\tpart def Q {\n\t\talias New for Old;\n\t\tpart u : Old;\n\t}\n}\n")
+	msg := refuseRename(t, ws, name, "Old;", "New")
+	wantRefusal(t, msg, `P::Old cannot be renamed to "New"`, "reference to it in P::Q", "would read P::Q::New instead")
+}
+
 func TestRenameRefusesShadowingAnOuterName(t *testing.T) {
 	ws := model.NewWorkspace()
 	name := openRenameDoc(t, ws, "/tmp/shadow_outer.sysml",
