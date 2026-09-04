@@ -1,4 +1,5 @@
 package test {
+	private import SequenceFunctions::*;
 	// A recursive descent over a structure: each invocation takes one element and
 	// hands the rest to itself.
 	calc sumFrom {

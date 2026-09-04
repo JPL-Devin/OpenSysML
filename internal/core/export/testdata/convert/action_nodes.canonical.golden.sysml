@@ -1,0 +1,1 @@
+sysml: cannot convert the expression <urn:opensysml:expr:ActionNodes__Drive___4015___400_pvalue>: this expression states no notation and no structure to write one from; save to .sysml or .kerml instead, which writes the source exactly; see docs/reference/rdf-mapping.md § Limitations

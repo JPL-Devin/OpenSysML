@@ -2,6 +2,8 @@
 // NumericalFunctions, the element-naming head, last and tail of
 // SequenceFunctions, and union and intersection.
 package test {
+	private import SequenceFunctions::*;
+	private import NumericalFunctions::*;
 	calc aggregate {
 		attribute xs : Integer[*] = (1, 2, 3, 4);
 		attribute ys : Integer[*] = (3, 4, 5);

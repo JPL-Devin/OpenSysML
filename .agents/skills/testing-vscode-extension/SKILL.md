@@ -344,6 +344,29 @@ Confirm the whole expected list cheaply first with a stdio JSON-RPC completion p
   `length/width/height` with `attributeUsage` details) even though the file is momentarily a syntax
   error; keep the fixture otherwise valid and `Escape` + revert the line afterwards.
 
+### Overload / ambiguous-call navigation (`internal/lsp/definition.go`, `hover.go`, `references.go`, `rename.go`)
+
+- A compact fixture: two packages each declaring `calc def pick { in x : Integer; ... }`, one of them
+  also `calc def pick { in x : String; ... }`, and a `package Use` importing both with
+  `attribute a : String = pick(2);` / `attribute b : String = pick("s");`. Expect one error
+  `call of pick is ambiguous between OvA::pick, OvB::pick` on `pick(2)` and nothing on `pick("s")`.
+  The two `Duplicate of other owned member name` **warnings** on the same-named `calc def`s are
+  pre-existing (identical on a main build) — do not report them.
+- `F12` on the tied call opens a **peek "Definitions (2)"** listing the overloads in declaration
+  order; on a selected call it jumps straight to the winning overload. Hover on the tied call shows a
+  fence `calc def OvA::pick` / `calc def OvB::pick` plus `Ambiguous call: the arguments fit each of
+  these overloads equally.`; on a selected call it is just `calc def pick` (no FQN — that is the
+  ordinary hover path, not a bug). Both hovers stack under the diagnostic popup, so read the lower
+  part of the tooltip.
+- References on the *declaration* of an overload the call does not select must NOT list the tied
+  call; rename from the tied call is refused with a tooltip
+  `cannot rename "pick": the call is ambiguous between several overloads` (no rename box).
+- The main-build negative control differs on all four surfaces (F12 = 1 location, plain hover,
+  rename succeeds editing the first overload, OvA::pick references include the call), so the
+  Settings-UI `opensysml.server.path` swap described above is a strong before/after here.
+- `ctrl+shift+m` (Problems), `ctrl+g` (Go to Line `line:col`), `F2`, `F12`, `ctrl+comma` all reach
+  VS Code via xdotool; `F1` opens the Command Palette (use it for "References: Find All References").
+
 ## Metadata annotation body testing (`internal/lsp/metadata.go`, `internal/core/model/metadata.go`)
 
 For `@Anno { x = ...; }` bodies (KerML 7.4.7 implicit redefinition), a compact fixture is
@@ -526,6 +549,35 @@ column is too small to read in a 1024x768 full screenshot.
   prefix (`Subsy`) — expect only the query defs (`Subsystems`, `SubsystemTable`), not the part def
   `Subsystem`. In binding-name position (delete `root` before `= telescope`) the list is exactly
   one item `root` with detail `attribute : Element`.
+
+## References / rename latency testing on a large workspace (`internal/core/model/refindex.go`)
+
+- The training corpus `examples/sysml-v2-training` (100 files, fetch with
+  `./scripts/download-training-examples.sh`) is a ready-made large workspace. Open that *folder*; it has
+  no `bin/`, so set `opensysml.server.path` to `<repo>/bin/sysml-lsp` in User settings first.
+  A good cross-file fixture: `part def Vehicle` in "02. Part Definitions/Part Definition Example.sysml"
+  is used by `Vehicle_1 :> Vehicle` in both "28. Individuals/Individuals and Roles-1.sysml" and
+  "…Individuals and Snapshots Example.sysml" (3 locations). "01. Packages/Package Example.sysml" has
+  `alias Car for Automobile` with no uses — add `part c : Car;` (unsaved) to exercise alias identity.
+- **On-screen timing evidence without instrumentation:** set `"opensysml.trace.server": "messages"`
+  (needs `Developer: Reload Window`) and open the "SysML v2" Output channel. vscode-languageclient then
+  logs `Received response 'textDocument/references - (N)' in X ms.` for every request, which is far
+  more convincing than eyeballing. Expected on that corpus: index build ~50–60 ms on the first query
+  after any edit, ~1–2 ms warm; a main-built server (pre reverse index) takes ~1.4 s *every* time.
+- Do not type into the Output panel's filter box to isolate lines — it hides most of the trace and
+  only shows some later lines; clear it and read the tail (`ctrl+End` inside the panel) instead.
+- Rename preview is **Ctrl+Enter** in the rename box (the box's own hint says so); Shift+Enter does
+  nothing. The Refactor Preview panel lists edits grouped by file, so "3 edits in 3 files" is readable.
+- Find All References on a name that has become **unresolved** (you renamed its declaration in another
+  unsaved buffer) does not return "no results": `referenceTarget` falls back to the enclosing
+  declaration (e.g. `Vehicle_1`) and lists *its* references. That is pre-existing behaviour, not an
+  index-staleness bug — the staleness oracle is "the old declaration file is absent from the list",
+  plus re-querying after making the use current (`:> Vehicle2`) returns decl + use.
+- Switching `opensysml.server.path` in the Settings UI restarts the server in place (request ids in the
+  trace reset to 1, `pgrep` pid changes) — no window reload needed for a main-vs-branch comparison.
+- `make vscode-package` runs `npm ci` first and takes several minutes; when backgrounded, wait for
+  the ` DONE  Packaged: opensysml-sysml.vsix` line before `ls editors/vscode/*.vsix`, or you will
+  conclude the build failed while it is still installing node modules.
 
 ## Devin Secrets Needed
 

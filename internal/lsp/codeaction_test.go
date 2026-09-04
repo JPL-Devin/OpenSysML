@@ -140,16 +140,17 @@ func TestCodeActionFiltersByRange(t *testing.T) {
 		Start: protocol.Position{Line: 3},
 		End:   protocol.Position{Line: 3, Character: 18},
 	})
-	if len(line3) != 1 || line3[0].Title != "Change 'Whel' to 'Wheel'" {
+	// The whole line selects b's header too, so its identity rewrite comes along.
+	if len(line3) != 2 || line3[0].Title != "Change 'Whel' to 'Wheel'" || line3[1].Kind != identityActionKind {
 		t.Errorf("actions for line 3 = %+v", line3)
 	}
 	// An empty range is a cursor: it still asks for the fixes of the diagnostic
-	// it sits inside.
+	// it sits inside, alongside the identity rewrite of the declaration it is on.
 	cursor := actionsFor(t, file, src, protocol.Range{
 		Start: protocol.Position{Line: 2, Character: 15},
 		End:   protocol.Position{Line: 2, Character: 15},
 	})
-	if len(cursor) != 1 || cursor[0].Title != "Change 'Wheeel' to 'Wheel'" {
+	if len(cursor) != 2 || cursor[0].Title != "Change 'Wheeel' to 'Wheel'" || cursor[1].Kind != identityActionKind {
 		t.Errorf("actions at the cursor = %+v", cursor)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
@@ -18,6 +19,9 @@ var (
 
 	// ErrUnresolvedReference is returned when a feature reference cannot be resolved.
 	ErrUnresolvedReference = errors.New("unresolved reference")
+
+	// ErrAmbiguousReference is returned when a qualified name names several elements.
+	ErrAmbiguousReference = errors.New("ambiguous reference")
 
 	// ErrTypeMismatch is returned when an operation receives a value of unexpected type.
 	ErrTypeMismatch = errors.New("type mismatch")
@@ -123,6 +127,9 @@ var (
 	// ErrActionDeadlock is returned when action tokens cannot make progress.
 	ErrActionDeadlock = errors.New("action deadlock")
 
+	// ErrExecutorReleased is returned when a released executor is stepped.
+	ErrExecutorReleased = errors.New("executor released")
+
 	// ErrInvalidActionFlow is returned for a structurally invalid action graph.
 	ErrInvalidActionFlow = errors.New("invalid action flow")
 
@@ -160,6 +167,22 @@ var (
 	// action-step budget.
 	ErrDoStepLimitExceeded = errors.New("state do-step limit exceeded")
 
+	// ErrActionArity is returned when an action invocation passes more
+	// positional arguments than the action declares input parameters.
+	ErrActionArity = errors.New("action argument count mismatch")
+
+	// ErrDuplicateArgument is returned when an action invocation binds one input
+	// parameter twice: by two named arguments, or by a positional and a named one.
+	ErrDuplicateArgument = errors.New("argument bound more than once")
+
+	// ErrNodeNotPerformed is returned when a pin of an action node is read before
+	// any performance of the node has started.
+	ErrNodeNotPerformed = errors.New("action node read before it is performed")
+
+	// ErrNodePin is returned when a pin read, flow, or binding names a feature the
+	// action node does not declare, or the node's result where it has none.
+	ErrNodePin = errors.New("action node pin not declared")
+
 	// ErrViolated is returned when an asserted constraint or a required
 	// condition evaluates to false. It is a verdict about the model, not a
 	// failure to evaluate, so callers can tell the two apart.
@@ -172,6 +195,10 @@ var (
 	// ErrNoConditions is returned when a constraint or requirement carries no
 	// condition to evaluate: reporting a verdict would claim a check that never ran.
 	ErrNoConditions = errors.New("no condition to evaluate")
+
+	// ErrStatementNotExecuted is returned when a constraint body states an action
+	// statement: the evaluator does not run it, so a verdict would ignore it.
+	ErrStatementNotExecuted = errors.New("statement in a constraint body is not executed by OpenSysML")
 
 	// ErrUnboundSubject is returned when a condition reads a subject nothing
 	// supplied: the check is about no object, so it reaches no verdict.
@@ -196,6 +223,10 @@ var (
 	// whose units measure different things, or whose conversion is not derivable
 	// from the library. It is never answered by comparing magnitudes.
 	ErrIncommensurableUnits = errors.New("incommensurable units")
+
+	// ErrUnitRoot is returned when the root of a quantity is taken whose unit
+	// has none: `sqrt(9 [m])`, since no unit squares to a metre.
+	ErrUnitRoot = errors.New("unit has no root")
 
 	// ErrNotASatisfaction is returned when a satisfaction assertion is asked of
 	// an element that states none.
@@ -222,6 +253,14 @@ var (
 	// ErrNotABehavior is returned when a name invoked on an object resolves to an
 	// element that states no behavior to run.
 	ErrNotABehavior = errors.New("not a behavior")
+
+	// ErrNotASignal is returned when a message injected from outside the model
+	// names an element that is no definition, so no accept could be typed by it.
+	ErrNotASignal = errors.New("not a signal definition")
+
+	// ErrSignalArgument is returned when a message injected from outside the
+	// model carries an argument its signal definition has no feature for.
+	ErrSignalArgument = errors.New("signal argument")
 
 	// ErrBehaviorBudget is returned when the behaviors of materialized objects
 	// never reach quiescence within the event budget.
@@ -350,6 +389,9 @@ func budgetExceeded(sentinel error, message string, causes ...error) error {
 // naming the feature so a caller can tell which one is uninitialized.
 type NoValueError struct {
 	Feature string
+	// Ref is the written name whose read found no value, so a caller can tell a
+	// read of its own expression from one made while evaluating a default.
+	Ref *ast.QualifiedName
 }
 
 func (e *NoValueError) Error() string {

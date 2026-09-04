@@ -2,6 +2,7 @@ package libs
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"os"
 	"path/filepath"
@@ -47,7 +48,7 @@ func TestSnapshotIndexMatchesFreshLoad(t *testing.T) {
 	// The whole object graph, less the lookup caches an index fills lazily and
 	// the inline storage a multi-part name leaves behind (see symbols' tests).
 	if err := graphcmp.Equal(fresh, decoded, graphcmp.SkipFields(
-		"Index.directChildrenGeneration", "Index.directChildrenCache", "QualifiedName.part0",
+		"Index.directChildrenGeneration", "libraryIdentityMemo.gen", "Index.directChildrenCache", "QualifiedName.part0",
 	)); err != nil {
 		t.Errorf("decoded index differs from a fresh load: %v", err)
 	}
@@ -74,9 +75,17 @@ func TestDecodeSnapshotRefusesOtherFiles(t *testing.T) {
 	if _, err := DecodeSnapshot(stdlibSnapshot, "0000"); !errors.Is(err, ErrSnapshotStale) {
 		t.Errorf("digest mismatch: got %v, want ErrSnapshotStale", err)
 	}
-	other := []byte(snapshotMagic + "\x02\x04abcd")
-	if _, err := DecodeSnapshot(other, "abcd"); !errors.Is(err, ErrSnapshotStale) {
-		t.Errorf("format mismatch: got %v, want ErrSnapshotStale", err)
+	// A blob in the previous or a later format is refused before its stream
+	// is read, so a layout change never decodes into shifted fields.
+	digest := NewLoader(EmbeddedSource(), nil).setDigest()
+	for _, version := range []uint64{snapshotFormatVersion - 1, snapshotFormatVersion + 1} {
+		other := binary.AppendUvarint([]byte(snapshotMagic), version)
+		other = binary.AppendUvarint(other, uint64(len(digest)))
+		other = append(other, digest...)
+		other = append(other, stdlibSnapshot[len(other):]...)
+		if _, err := DecodeSnapshot(other, digest); !errors.Is(err, ErrSnapshotStale) {
+			t.Errorf("format %d: got %v, want ErrSnapshotStale", version, err)
+		}
 	}
 }
 

@@ -51,8 +51,8 @@ package OpenSysMLArtifacts {
     // Every modelled unit names the Go package that implements it.
     abstract part def CodeUnit {
         attribute goPackage : String;
-        attribute lazy : Boolean = false;
-        attribute memoized : Boolean = false;
+        attribute lazy : Boolean default = false;
+        attribute memoized : Boolean default = false;
     }
 
     abstract part def Stage :> CodeUnit {
@@ -144,7 +144,7 @@ package OpenSysMLPipeline {
         attribute :>> goPackage = "internal/core/passes";
         attribute goType : String;
         attribute level : String;
-        attribute elementScoped : Boolean = false;
+        attribute elementScoped : Boolean default = false;
         out item findings : Diagnostic;
     }
 
@@ -170,12 +170,13 @@ package OpenSysMLPipeline {
     #SemanticEngine part def PassRegistry :> Stage {
         attribute :>> goPackage = "internal/core/passes";
         attribute tierCount : Integer = 4;
-        attribute passCount : Integer = 47;
+        attribute passCount : Integer = 50;
         attribute sortsByLevel : Boolean = true;
         attribute skipsDocumentScopedAboveFailure : Boolean = true;
 
         part syntax : SyntaxCheck { attribute :>> goType = "SyntaxPass"; }
         part importVisibility : SyntaxCheck { attribute :>> goType = "ImportVisibilityPass"; }
+        part enumerationBody : SyntaxCheck { attribute :>> goType = "EnumerationBodyPass"; }
         // Non-standard notation is a syntax-level warning, not a constraint.
         part notation : SyntaxCheck { attribute :>> goType = "NonstandardNotationPass"; }
         part nameResolution : NameResolutionCheck { attribute :>> goType = "NameResolutionPass"; }
@@ -187,6 +188,10 @@ package OpenSysMLPipeline {
         part typeCheck : TypeCheck { attribute :>> goType = "TypeCheckPass"; }
         part transitionGuards : TypeCheck {
             attribute :>> goType = "TransitionGuardPass";
+            attribute :>> elementScoped = true;
+        }
+        part sendActions : TypeCheck {
+            attribute :>> goType = "SendActionPass";
             attribute :>> elementScoped = true;
         }
         part kermlSubsettingMetaclass : TypeCheck {
@@ -246,6 +251,10 @@ package OpenSysMLPipeline {
         part boundFeatureTypes : TypeCheck { attribute :>> goType = "W9CBoundFeatureTypesPass"; }
         part usageTyping : TypeCheck { attribute :>> goType = "W11AUsageTypingPass"; }
         part kermlSpecialization : TypeCheck { attribute :>> goType = "W11AKerMLSpecializationPass"; }
+        part controlNodeSuccessions : ConstraintCheck {
+            attribute :>> goType = "ControlNodeSuccessionPass";
+            attribute :>> elementScoped = true;
+        }
 
         in item typed : TypeTable;
         out item findings : Diagnostic;
@@ -332,8 +341,8 @@ package OpenSysMLPipeline {
         out item trace : ExecutionTrace;
     }
 
-    // Pure scalar calc bodies compiled once per context into closures held in a
-    // side table; the evaluator stays the reference the compiled tier must match.
+    // Scalar calc bodies — expressions and statements alike — compiled once per
+    // context into closures held in a side table; the evaluator stays the reference.
     part def CalcCompiler :> CodeUnit {
         attribute :>> goPackage = "internal/core/runtime";
         attribute :>> memoized = true;

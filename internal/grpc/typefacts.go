@@ -6,6 +6,7 @@ import (
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -51,6 +52,7 @@ func NewSymbolContext(idx *symbols.Index) *SymbolContext {
 	resolver := resolve.New(idx)
 	sem := semantics.NewModel(resolver)
 	resolver.SetModel(sem)
+	sem.SetArgumentTyper(passes.NewArgumentTyper(resolver, sem))
 	return &SymbolContext{Index: idx, Resolver: resolver, Semantics: sem}
 }
 

@@ -262,7 +262,13 @@ func refDestination(run docir.TextRun) string {
 // document from its fully-qualified name, using the same escaping as anchors
 // so distinct documents never collide.
 func DocumentFileName(fqn string) string {
-	return docir.AnchorFor(strings.Split(fqn, "::")) + ".md"
+	return documentFileName(fqn, ".md")
+}
+
+// documentFileName derives a rendered document's file name in one backend's
+// extension, escaped as anchors are.
+func documentFileName(fqn, extension string) string {
+	return docir.AnchorFor(strings.Split(fqn, "::")) + extension
 }
 
 // delimited wraps escaped text in emphasis delimiters, keeping leading and

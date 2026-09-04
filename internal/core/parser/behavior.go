@@ -42,12 +42,6 @@ func (p *Parser) parseCalcBody() []ast.Node {
 			body.takeSuccession()
 			continue
 		}
-		// A member-attached `then` desugars to `succession first a then b;`,
-		// which is the form used when writing the converted model back.
-		if p.atKeyword("then") {
-			body.add(p.parseSuccessionEdge(p.advance(), true))
-			continue
-		}
 
 		// A constraint body that declares parameters is read here, so its
 		// asserted conditions are members of this body too.
@@ -59,10 +53,7 @@ func (p *Parser) parseCalcBody() []ast.Node {
 		// `return` declares the result parameter (SysML.xtext ReturnParameterMember).
 		if p.isResultKeyword() {
 			body.add(p.parseResultMember())
-		} else if p.atCalcStatement() || p.atActionNodeMember() {
-			// A behavioural item of a calculation body — a conditional, a loop, an
-			// assignment — is read the way an action body reads it
-			// (SysML.xtext CalculationBodyItem carries ActionBodyItem).
+		} else if p.atCalcBodyItem() {
 			body.add(p.parseActionMember())
 		} else {
 			// Try parsing as body member (parameters, doc, import, etc.)
@@ -392,7 +383,8 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 
 	// Optional value (= expr, := expr, or default [=] expr)
 	var value ast.Node
-	if _, ok := p.acceptValueOperatorSpan(); ok {
+	valueOp, hasValue := p.acceptValueOperator()
+	if hasValue {
 		value = p.ParseExpression()
 	}
 
@@ -418,20 +410,23 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 
 	// Create Usage node with direction
 	usage := &ast.Usage{
-		Kind:          kind,
-		Ident:         ident,
-		Relationships: relationships,
-		Multiplicity:  multiplicity,
-		Value:         value,
-		Members:       members,
-		HasBody:       hasBody,
-		IsReference:   isRef,
-		Direction:     direction,
-		IsOrdered:     postMods.isOrdered,
-		IsNonunique:   postMods.isNonunique,
-		IsEvent:       isEvent,
-		IsIndividual:  isIndividual,
-		Portion:       portion,
+		Kind:              kind,
+		Ident:             ident,
+		Relationships:     relationships,
+		Multiplicity:      multiplicity,
+		Value:             value,
+		ValueOperatorSpan: valueOp.span,
+		ValueIsDefault:    valueOp.isDefault,
+		ValueIsInitial:    valueOp.isInitial,
+		Members:           members,
+		HasBody:           hasBody,
+		IsReference:       isRef,
+		Direction:         direction,
+		IsOrdered:         postMods.isOrdered,
+		IsNonunique:       postMods.isNonunique,
+		IsEvent:           isEvent,
+		IsIndividual:      isIndividual,
+		Portion:           portion,
 	}
 	usage.NodeSpan = p.spanFrom(start)
 
@@ -568,11 +563,13 @@ func (p *Parser) parseActionMember() ast.Node {
 func (p *Parser) parseInitialNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 	var name string
+	var nameSpan source.Span
 
-	if p.at(lexer.Identifier) || p.atNameOrKeyword() {
-		nameToken := p.peek()
-		name = p.src.Text(nameToken.Span)
-		p.advance()
+	// The name refers to a member, so it is kept as the name itself: an
+	// unrestricted name without its quotes, as a qualified name segment is.
+	if seg, ok := p.parseNameSegmentRelaxed(); ok {
+		name = seg.Text
+		nameSpan = seg.Span
 	}
 
 	// Check for succession edge continuation: first X [if <expr>] then Y;
@@ -599,6 +596,7 @@ func (p *Parser) parseInitialNode(tok lexer.Token) ast.Node {
 
 	node := &ast.InitialNode{
 		Name:      name,
+		NameSpan:  nameSpan,
 		Successor: successor,
 		Guard:     guard,
 		Members:   members,
@@ -934,7 +932,9 @@ func (p *Parser) parseSuccessionEdge(tok lexer.Token, allowBody bool) ast.Node {
 
 	// An action target succession ends in a UsageBody (SysML.xtext:1698).
 	var members []ast.Node
+	hasBody := false
 	if allowBody && p.accept2(lexer.LBrace) {
+		hasBody = true
 		members = p.parseActionBodyMixed()
 	} else {
 		p.expect(lexer.Semicolon, "expected ';' after succession edge")
@@ -945,6 +945,7 @@ func (p *Parser) parseSuccessionEdge(tok lexer.Token, allowBody bool) ast.Node {
 		Source:   source,
 		Target:   target,
 		Members:  members,
+		HasBody:  hasBody,
 	}
 	return node
 }
@@ -1416,6 +1417,17 @@ func (p *Parser) atCalcStatement() bool {
 	return false
 }
 
+// atCalcBodyItem reports whether the cursor begins a behavioural item of a
+// calculation body (SysML.xtext CalculationBodyItem carries ActionBodyItem): a
+// statement, an action node, or a succession (`first a then b;`, `then b;`, `else b;`).
+// A member-attached `then` is the body builder's to take before this is asked.
+func (p *Parser) atCalcBodyItem() bool {
+	if p.atCalcStatement() || p.atActionNodeMember() {
+		return true
+	}
+	return p.atKeyword("first") || p.atKeyword("then") || p.atKeyword("else")
+}
+
 // atActionNodeMember reports whether the cursor begins an action node a calculation or case
 // body carries (SysML.xtext:1389 ActionNodeMember, from Calculation/CaseBodyItem).
 func (p *Parser) atActionNodeMember() bool {
@@ -1481,7 +1493,8 @@ func continuesCondition(tok lexer.Token) bool {
 
 // atReturnedUsage reports whether `return` is followed by a usage declaration
 // rather than an expression (`'return' UsageElement`, SysML.xtext:1961): a
-// specialization begins one, as does a name a specialization follows.
+// specialization begins one, as does a name a specialization or a
+// multiplicity follows (`return y[*] subsets A;`).
 func (p *Parser) atReturnedUsage() bool {
 	if p.atFeatureSpecialization() {
 		return true
@@ -1491,10 +1504,10 @@ func (p *Parser) atReturnedUsage() bool {
 	}
 	cp := p.checkpoint()
 	p.parseIdentification()
-	specialized := p.atFeatureSpecialization()
+	declared := p.atFeatureSpecialization() || p.at(lexer.LBracket)
 	p.restore(cp)
 	p.release()
-	return specialized
+	return declared
 }
 
 // parseResultMember parses a `return` member: the declaration of a result
@@ -1645,11 +1658,11 @@ func (p *Parser) parseResultMember() ast.Node {
 		return u
 	}
 
-	// Check for Pattern 5: return [kind] [modifiers] name [mult] [body/semicolon] (no type, no value)
+	// Check for Pattern 5: return [kind] [modifiers] name [body/semicolon] (no type, no value)
 	// `return` introduces a return parameter, so a lone name after it declares
 	// that parameter (`calc acc : Acceleration { return a; }`) rather than
 	// referencing one.
-	if p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.LBracket) {
+	if p.atName() && p.peekN(1).Kind == lexer.Semicolon {
 		u := &ast.Usage{
 			Kind:        usageKind,
 			Direction:   ast.DirOut,
@@ -1665,14 +1678,6 @@ func (p *Parser) parseResultMember() ast.Node {
 			IsNonunique: mods.isNonunique,
 		}
 		u.Ident = p.parseIdentification()
-
-		// Parse optional multiplicity '[n..m]'
-		if p.at(lexer.LBracket) {
-			u.Multiplicity = p.parseMultiplicity()
-		}
-
-		// A value operator here makes this Pattern 4 (value), not Pattern 5 (no value)
-		p.parseUsageValue(u)
 
 		// Check for body or semicolon
 		if p.at(lexer.LBrace) {
@@ -1741,40 +1746,111 @@ func (p *Parser) parseResultMember() ast.Node {
 // Expects '{' already consumed, returns list of ConstraintMember nodes.
 // Syntax: constraint example { assert x > 0; assume y != null; assert not z < 0; }
 func (p *Parser) parseConstraintBody() []ast.Node {
-	var members []ast.Node
+	return p.parseConstraintMembers(false)
+}
+
+// parseConstraintMembers parses the members of a constraint body through its
+// closing brace. A constraint body is a calculation body (SysML.xtext
+// CalculationBody), so beside its conditions it carries declarations, statements,
+// action nodes and successions; the owning-type rule rejects the nodes later.
+// A nested body keeps no documentation and no condition that failed to parse.
+func (p *Parser) parseConstraintMembers(nested bool) []ast.Node {
+	body := p.newBodyBuilder()
 
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		before := p.peek().Span.Offset
 
-		// Check for doc keyword → parse as documentation
-		if p.atKeyword("doc") {
-			members = append(members, p.parseDocumentation(before))
-		} else if p.atKeyword("assert") || p.atKeyword("assume") {
-			// Parse constraint expression (assert/assume)
-			members = append(members, p.parseConstraintMember())
-		} else if p.atKeyword("return") {
-			// Parse return member (for constraint defs that return result)
-			// Example: return result = expr { doc }
-			members = append(members, p.parseBodyMember())
-		} else if p.atDefUsageStart() || p.atRelationshipKeyword() || p.atKindlessFeatureTyping() {
-			// A declaration, or a member that states a relationship where its
-			// name would go (`redefines partMasses = expr;`, `:>> x = value;`):
-			// both spellings reach parseBodyMember, which reads them as one form
-			// and diagnoses the relationships that are not member forms.
-			members = append(members, p.parseBodyMember())
-		} else {
-			// Default: parse as constraint expression (bare expression)
-			members = append(members, p.parseConstraintMember())
+		// A member-attached `then` sequences the members either side of it.
+		if body.atSuccession() {
+			body.takeSuccession()
+			continue
 		}
 
-		// Safety check: if position hasn't advanced, force progress to avoid infinite loop
+		var member ast.Node
+		switch {
+		case p.atKeyword("doc"):
+			if doc := p.parseDocumentation(before); !nested {
+				member = doc
+			}
+		case p.atKeyword("assert") || p.atKeyword("assume"):
+			member = p.parseConstraintMember()
+		case p.atConstraintBodyDeclaration():
+			member = p.parseBodyMember()
+		case p.atCalcBodyItem():
+			member = p.parseActionMember()
+		default:
+			member = p.parseConstraintMember()
+		}
+		if c, ok := member.(*ast.ConstraintMember); ok && nested && c.Expression == nil && len(c.Body) == 0 {
+			member = nil
+		}
+		body.add(member)
+
+		// Force progress: a member that consumed nothing would spin the loop.
 		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
 			p.advance()
 		}
 	}
 
 	p.expect(lexer.RBrace, "expected '}' after constraint body")
-	return members
+	return body.finish()
+}
+
+// atConstraintBodyDeclaration reports whether a declaration member of a
+// calculation body follows: a `return` member, a definition or usage, a
+// relationship where a name would go (`:>> x = v;`) or a metadata usage (`@M { … }`).
+func (p *Parser) atConstraintBodyDeclaration() bool {
+	return p.atKeyword("return") || p.atDefUsageStart() || p.atRelationshipKeyword() ||
+		p.atKindlessFeatureTyping() || p.atMetadataMember()
+}
+
+// atMetadataMember tells a metadata usage (`@M;`, `@M { … }`, `@ m : M about x;`)
+// from a classification condition of the implicit subject (`@M`, `@M < x`).
+func (p *Parser) atMetadataMember() bool {
+	if !p.at(lexer.At) {
+		return false
+	}
+	n := 1
+	// An identification (`<sn>`? name?) is only one where a typing keyword follows.
+	m := n
+	if p.peekN(m).Kind == lexer.Lt {
+		if !isNameToken(p.peekN(m+1).Kind) || p.peekN(m+2).Kind != lexer.Gt {
+			return false
+		}
+		m += 3
+	}
+	if isNameToken(p.peekN(m).Kind) {
+		m++
+	}
+	if t := p.peekN(m); t.Kind == lexer.Colon {
+		n = m + 1
+	} else if t.Kind == lexer.Keyword && (t.KeywordID == "defined" || t.KeywordID == "typed") {
+		if by := p.peekN(m + 1); by.Kind != lexer.Keyword || by.KeywordID != "by" {
+			return false
+		}
+		n = m + 2
+	}
+	// The metaclass, a qualified name.
+	if !isNameToken(p.peekN(n).Kind) {
+		return false
+	}
+	for n++; p.peekN(n).Kind == lexer.ColonColon; n += 2 {
+		if !isNameToken(p.peekN(n + 1).Kind) {
+			return false
+		}
+	}
+	switch t := p.peekN(n); t.Kind {
+	case lexer.LBrace, lexer.Semicolon:
+		return true
+	case lexer.Keyword:
+		return t.KeywordID == "about"
+	}
+	return false
+}
+
+// isNameToken reports whether k spells a name segment.
+func isNameToken(k lexer.Kind) bool {
+	return k == lexer.Identifier || k == lexer.UnrestrictedName
 }
 
 // atConstraintCondition reports whether an `assert`/`assume` condition follows,
@@ -2012,39 +2088,14 @@ func usageIsSubstantive(u *ast.Usage) bool {
 		len(u.ConnectorEnds) > 0 || u.FlowEnds != nil
 }
 
-// parseSubjectMember parses: subject <name> : <Type>; OR subject = <expr>; OR subject <name> = <expr>;
+// parseSubjectMember parses a subject parameter: `subject [name] [: Type] [mult]
+// [specializations] [value] (; | body)`, the value written with any value operator.
 func (p *Parser) parseSubjectMember(start int) ast.Node {
 	// 'subject' already consumed
 
 	// A subject takes prefix metadata after its keyword: `subject #B s;`
 	// (SysML.xtext SubjectUsage, `'subject' UsageExtensionKeyword* Usage`).
-	var prefixes []*ast.PrefixMetadata
-	for p.at(lexer.Hash) {
-		p.advance()
-		if metaName := p.parseQualifiedNameRelaxed(); metaName != nil {
-			prefixes = append(prefixes, &ast.PrefixMetadata{Type: metaName})
-		}
-	}
-
-	// Check for binding pattern: subject = <expr>; OR subject <name> = <expr>;
-	if p.at(lexer.Eq) {
-		// Anonymous binding: subject = <expr>;
-		p.advance() // consume '='
-
-		// Parse value expression
-		value := p.ParseExpression()
-
-		// Expect semicolon
-		p.expect(lexer.Semicolon, "expected ';' after subject binding")
-
-		node := &ast.SubjectMember{
-			Prefixes:    prefixes,
-			Name:        "", // Empty name means binding inherited subject
-			BindingExpr: value,
-		}
-		node.NodeSpan = p.spanFrom(start)
-		return node
-	}
+	prefixes := p.parsePrefixMetadata()
 
 	// A bare `subject;` declares the subject parameter without naming or typing
 	// it, as the OMG viewpoint examples write it.
@@ -2055,27 +2106,11 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 		return node
 	}
 
-	// A subject parameter is a full usage (SysML v2 8.2.2.16): an optional name,
-	// an optional specialization part, a multiplicity, a value and a body.
-	var name string
-	if seg, ok := p.parseNameSegment(); ok {
-		name = seg.Text
-
-		// Named binding: subject <name> = <expr>;
-		if p.at(lexer.Eq) {
-			p.advance()
-			value := p.ParseExpression()
-			p.expect(lexer.Semicolon, "expected ';' after subject binding")
-
-			node := &ast.SubjectMember{
-				Prefixes:    prefixes,
-				Name:        name,
-				BindingExpr: value,
-			}
-			node.NodeSpan = p.spanFrom(start)
-			return node
-		}
-	}
+	// A subject parameter is a full usage (SysML v2 8.2.2.16): an optional
+	// identification (`<short> name`), an optional specialization part, a
+	// multiplicity, a value and a body. An anonymous one with just a value
+	// (`subject = p;`) binds the inherited subject.
+	ident := p.parseIdentification()
 
 	var typeRef *ast.QualifiedName
 	if p.at(lexer.Colon) {
@@ -2091,9 +2126,11 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 	// A subject may redefine the one it inherits: subject subj : View[1] :>> RequirementCheck::subj;
 	rels := p.parseRelationships(true)
 
-	if name == "" && typeRef == nil && len(rels) == 0 {
-		p.error(p.peek().Span, "expected a name, ':' or a specialization after 'subject'")
-		en := &ast.ErrorNode{Message: "expected a name, ':' or a specialization after 'subject'"}
+	// Value part: `= expr`, `:= expr` or `default [=] expr`.
+	valueOp, hasValue := p.acceptValueOperator()
+	if ident == (ast.Identification{}) && typeRef == nil && len(rels) == 0 && !hasValue {
+		p.error(p.peek().Span, "expected a name, ':', a specialization or a value after 'subject'")
+		en := &ast.ErrorNode{Message: "expected a name, ':', a specialization or a value after 'subject'"}
 		if !p.atEOF() && !p.at(lexer.RBrace) {
 			p.advance()
 		}
@@ -2101,19 +2138,21 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 		return en
 	}
 
-	// Value part: `= expr`, `:= expr` or `default [=] expr`.
 	var value ast.Node
-	if _, ok := p.acceptValueOperatorSpan(); ok {
+	if hasValue {
 		value = p.ParseExpression()
 	}
 
 	node := &ast.SubjectMember{
-		Prefixes:      prefixes,
-		Name:          name,
-		TypeRef:       typeRef,
-		Multiplicity:  mult,
-		Relationships: rels,
-		BindingExpr:   value,
+		Prefixes:          prefixes,
+		Ident:             ident,
+		TypeRef:           typeRef,
+		Multiplicity:      mult,
+		Relationships:     rels,
+		BindingExpr:       value,
+		ValueOperatorSpan: valueOp.span,
+		ValueIsDefault:    valueOp.isDefault,
+		ValueIsInitial:    valueOp.isInitial,
 	}
 
 	if p.at(lexer.LBrace) {
@@ -2134,17 +2173,21 @@ func (p *Parser) parseAssumeMember(start int) ast.Node {
 	// Check for 'assume [#Meta...] [constraint] [<decl>] (; | { body })' pattern
 	prefixes := p.parsePrefixMetadata()
 	if p.atKeyword("constraint") || len(prefixes) > 0 {
+		declStart := p.peek().Span.Offset
 		p.acceptKeyword("constraint")
 		d := p.parseOwnedConstraintDecl("assume constraint")
 		node := &ast.AssumeMember{
-			Prefixes:      prefixes,
-			Name:          d.name,
-			NameSpan:      d.nameSpan,
-			Relationships: d.relationships,
-			Multiplicity:  d.multiplicity,
-			Value:         d.value,
-			HasBody:       d.hasBody,
-			Body:          d.body,
+			Prefixes:          prefixes,
+			Ident:             d.ident,
+			DeclSpan:          p.spanFrom(declStart),
+			Relationships:     d.relationships,
+			Multiplicity:      d.multiplicity,
+			Value:             d.value,
+			ValueOperatorSpan: d.valueOp.span,
+			ValueIsDefault:    d.valueOp.isDefault,
+			ValueIsInitial:    d.valueOp.isInitial,
+			HasBody:           d.hasBody,
+			Body:              d.body,
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
@@ -2180,17 +2223,21 @@ func (p *Parser) parseRequireMember(start int) ast.Node {
 	// Check for 'require [#Meta...] [constraint] [<decl>] (; | { body })' pattern
 	prefixes := p.parsePrefixMetadata()
 	if p.atKeyword("constraint") || len(prefixes) > 0 {
+		declStart := p.peek().Span.Offset
 		p.acceptKeyword("constraint")
 		d := p.parseOwnedConstraintDecl("require constraint")
 		node := &ast.RequireMember{
-			Prefixes:      prefixes,
-			Name:          d.name,
-			NameSpan:      d.nameSpan,
-			Relationships: d.relationships,
-			Multiplicity:  d.multiplicity,
-			Value:         d.value,
-			HasBody:       d.hasBody,
-			Body:          d.body,
+			Prefixes:          prefixes,
+			Ident:             d.ident,
+			DeclSpan:          p.spanFrom(declStart),
+			Relationships:     d.relationships,
+			Multiplicity:      d.multiplicity,
+			Value:             d.value,
+			ValueOperatorSpan: d.valueOp.span,
+			ValueIsDefault:    d.valueOp.isDefault,
+			ValueIsInitial:    d.valueOp.isInitial,
+			HasBody:           d.hasBody,
+			Body:              d.body,
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
@@ -2243,11 +2290,11 @@ func (p *Parser) parseRequirementCondition(start int, keyword string) ast.Node {
 // ownedConstraintDecl is the declaration and body of the constraint an
 // `assume`/`require constraint …` member owns.
 type ownedConstraintDecl struct {
-	name          string
-	nameSpan      source.Span
+	ident         ast.Identification
 	relationships []*ast.Relationship
 	multiplicity  *ast.Multiplicity
 	value         ast.Node
+	valueOp       valueOperator
 	body          []ast.Node
 	hasBody       bool
 }
@@ -2258,16 +2305,15 @@ type ownedConstraintDecl struct {
 // `assume constraint { … }` are equally well formed.
 func (p *Parser) parseOwnedConstraintDecl(what string) ownedConstraintDecl {
 	var d ownedConstraintDecl
-	if p.atName() {
-		ident := p.parseIdentification()
-		d.name = ident.Name
-		d.nameSpan = ident.NameSpan
+	if p.atName() || p.at(lexer.Lt) {
+		d.ident = p.parseIdentification()
 	}
 	d.relationships = p.parseRelationships(true)
 	if p.at(lexer.LBracket) {
 		d.multiplicity = p.parseMultiplicity()
 	}
-	if _, ok := p.acceptValueOperatorSpan(); ok {
+	if op, ok := p.acceptValueOperator(); ok {
+		d.valueOp = op
 		d.value = p.ParseExpression()
 	}
 	if p.at(lexer.LBrace) {
@@ -2360,27 +2406,10 @@ func (p *Parser) tryParseNestedConstraint(start int, isAssert, isNegated bool, k
 
 // parseNestedConstraintConditions parses the body of the anonymous constraint an
 // `assume`/`require constraint { … }` member owns, through its closing brace,
-// and returns its ConstraintMembers. Every condition is kept: a constraint body
-// may state more than one.
+// and returns its members. Every condition is kept: a constraint body may state
+// more than one.
 func (p *Parser) parseNestedConstraintConditions() []ast.Node {
-	var conditions []ast.Node
-	for !p.at(lexer.RBrace) && !p.atEOF() {
-		before := p.peek().Span.Offset
-		if p.atKeyword("doc") {
-			p.parseDocumentation(before)
-			continue
-		}
-		member := p.parseConstraintMember()
-		if c, ok := member.(*ast.ConstraintMember); ok && (c.Expression != nil || len(c.Body) > 0) {
-			conditions = append(conditions, c)
-		}
-		// Force progress: a member that consumed nothing would spin the loop.
-		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
-			p.advance()
-		}
-	}
-	p.expect(lexer.RBrace, "expected '}' after constraint body")
-	return conditions
+	return p.parseConstraintMembers(true)
 }
 
 // Phase C4: State Body Parsing
@@ -3142,6 +3171,7 @@ func (p *Parser) parseTransitionTail(start int, name ast.NameSegment, source *as
 				return err
 			}
 			node.Effect = effect
+			node.HasEffect = true
 			continue
 		case p.atKeyword("then"):
 			p.advance() // consume 'then'

@@ -324,7 +324,7 @@ func (ctx *Context) objectiveConditionsOf(sym *symbols.Symbol) []Condition {
 	for _, node := range declMembers(sym.Decl) {
 		members = append(members, scopedMember{node: node, scope: body})
 	}
-	return ctx.conditionsOf(members)
+	return ctx.conditionsOf(sym, members)
 }
 
 // CaseConditionsOf returns the conditions a case states as what it holds true of
@@ -341,6 +341,10 @@ func (ctx *Context) CaseConditionsOf(sym *symbols.Symbol, scope *symbols.Scope) 
 	}
 	var out []Condition
 	for _, member := range ctx.chainMembers(sym, scope) {
+		// A case's own steps are its procedure, not a statement its conditions miss.
+		if _, step := statementKeyword(member.node); step {
+			continue
+		}
 		out = ctx.appendConditions(out, member.node, member.scope, true, false, nil)
 		out = ctx.appendCheckedConstraint(out, member)
 	}

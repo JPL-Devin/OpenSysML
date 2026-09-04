@@ -3,6 +3,7 @@ package runtime
 import (
 	"errors"
 	"math"
+	"slices"
 	"strings"
 	"testing"
 
@@ -27,6 +28,8 @@ func libCtx(t *testing.T) *Context {
 func constInt(i int64) Value {
 	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: i}}
 }
+
+func emptySequence() Value { return NewSequenceValue(NewSequence()) }
 
 func constReal(f float64) Value {
 	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: f}}
@@ -212,6 +215,7 @@ func TestOpenSysMLMathFunctionsMatchTheShippedDeclarations(t *testing.T) {
 
 	idx := symbols.NewIndex()
 	idx.AddDocument(path, file)
+	idx.MarkLibrary(path)
 	resolver := resolve.New(idx)
 	ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
 
@@ -227,84 +231,85 @@ func TestOpenSysMLMathFunctionsMatchTheShippedDeclarations(t *testing.T) {
 			t.Errorf("%s is declared in %s but has no built-in implementation", fqn, path)
 			continue
 		}
-		var params []string
-		for _, param := range ctx.calcParameters(ctx.calcChain(sym)) {
-			params = append(params, param.Name)
-		}
-		if len(params) != len(fn.params) {
-			t.Errorf("%s declares %v, implementation takes %v", fqn, params, fn.params)
-			continue
-		}
-		for i, name := range params {
-			if fn.params[i] != name {
-				t.Errorf("%s parameter %d is %q, implementation names it %q", fqn, i, name, fn.params[i])
-			}
-		}
+		checkLibrarySignature(t, ctx, fqn, sym, fn)
 	}
 	if declared != 4 {
 		t.Errorf("%s declares %d functions, want 4 (exp, ln, log, atan2)", path, declared)
 	}
 }
 
-// Every unqualified name denotes a registered function, and dispatch by
-// unqualified name is what makes a call evaluable in a model that imports no
-// part of the function library.
+// An unqualified call denotes the library function of that name exactly where
+// the validator resolves it to one: under an import of the package that declares
+// it. Without the import the call fails with a typed error carrying the same
+// hint the validator's diagnostic does — the qualified names the model may have
+// meant, whose package an import would make visible — rather than being answered
+// by a declaration the model never made visible.
 func TestLibraryFunctionUnqualifiedNames(t *testing.T) {
-	for local, fn := range libraryFunctionsByLocalName {
-		if _, ok := libraryFunctions[fn.name]; !ok {
-			t.Errorf("unqualified name %q maps to unregistered %q", local, fn.name)
-		}
+	cases := []struct {
+		name     string
+		call     string
+		imported string
+		want     string
+		hints    []string
+	}{
+		{"sqrt", "sqrt(x)", "RealFunctions", "2.0", []string{"RealFunctions::sqrt"}},
+		{"abs", "abs(-x)", "RealFunctions", "4.0", []string{"RealFunctions::abs", "IntegerFunctions::abs"}},
+		{"floor", "floor(x)", "RealFunctions", "4", []string{"RealFunctions::floor"}},
+		{"sin", "sin(0.0 * x)", "TrigFunctions", "0.0", []string{"TrigFunctions::sin"}},
+		{"exp", "exp(0.0 * x)", "OpenSysMLMathFunctions", "1.0", []string{"OpenSysMLMathFunctions::exp"}},
+		{"size", "(x, x)->size()", "SequenceFunctions", "2", []string{"SequenceFunctions::size", "CollectionFunctions::size"}},
 	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			model := func(imports string) string {
+				return "package test {\n" + imports + "\n\tcalc f { in x : Real; " + tc.call + " }\n}"
+			}
 
-	for _, local := range []string{"sqrt", "abs", "max", "min", "floor", "round", "sin", "cos", "tan", "cot", "arcsin", "arccos", "arctan", "isZero", "isUnit"} {
-		if _, ok := libraryFunctionsByLocalName[local]; !ok {
-			t.Errorf("unqualified name %q is not dispatchable", local)
-		}
-	}
+			ctx, idx := libraryModelContext(t, model(""))
+			sym := lookupOne(t, idx, "test::f")
+			_, err := ctx.InvokeCalc(sym, []Value{constReal(4)}, nil)
+			if !errors.Is(err, ErrUnresolvedReference) {
+				t.Fatalf("%s without an import: error = %v, want %v", tc.call, err, ErrUnresolvedReference)
+			}
+			if !strings.Contains(err.Error(), ": unresolved reference: "+tc.name+" — did you mean ") {
+				t.Errorf("error %q does not read as the validator's diagnostic", err)
+			}
+			for _, hint := range tc.hints {
+				if !strings.Contains(err.Error(), hint) {
+					t.Errorf("error %q does not offer %s", err, hint)
+				}
+			}
 
-	// The extension names are no part of any OMG library, so nothing puts them
-	// in scope and they are dispatched by their import alone.
-	for _, local := range []string{"exp", "ln", "log", "atan2"} {
-		if _, ok := libraryFunctionsByLocalName[local]; ok {
-			t.Errorf("extension name %q is dispatchable without its import", local)
-		}
-		if _, ok := extensionLocalNames[local]; !ok {
-			t.Errorf("extension name %q names no import", local)
-		}
+			ctx, idx = libraryModelContext(t, model("\tprivate import "+tc.imported+"::*;"))
+			sym = lookupOne(t, idx, "test::f")
+			got, err := ctx.InvokeCalc(sym, []Value{constReal(4)}, nil)
+			if err != nil {
+				t.Fatalf("%s under import %s::*: %v", tc.call, tc.imported, err)
+			}
+			if FormatValue(got) != tc.want {
+				t.Errorf("%s under import %s::* = %s, want %s", tc.call, tc.imported, FormatValue(got), tc.want)
+			}
+		})
 	}
 }
 
-// An unimported extension call fails with a typed error naming the function and
-// the import that makes it legal, rather than being answered by a declaration
-// the model never made visible.
-func TestUnimportedExtensionFunctionCallIsATypedError(t *testing.T) {
-	fn, err := unresolvedLibraryFunction(&ast.QualifiedName{Parts: []ast.NameSegment{{Text: "exp"}}}, "exp")
-	if fn != nil {
-		t.Fatalf("exp dispatched to %v without its import", fn.name)
-	}
-	if !errors.Is(err, ErrUnimportedExtensionFunction) {
-		t.Fatalf("error = %v, want %v", err, ErrUnimportedExtensionFunction)
-	}
-	for _, want := range []string{"exp", "import OpenSysMLMathFunctions::*;"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("error %q does not mention %q", err, want)
-		}
-	}
-
-	// The qualified name is the model's own reading and stays dispatchable.
-	qualified := &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "OpenSysMLMathFunctions"}, {Text: "exp"}}}
-	if fn, err := unresolvedLibraryFunction(qualified, "OpenSysMLMathFunctions::exp"); fn == nil || err != nil {
-		t.Fatalf("qualified exp = %v, %v; want the implementation", fn, err)
-	}
-}
-
-// A call written with a qualified name that resolves to the library declaration
-// is applied by the built-in implementation, because the library gives that
-// declaration no body.
-func TestLibraryFunctionDispatchByResolvedSymbol(t *testing.T) {
-	ctx, idx := contextForSource(t, `package RealFunctions {
-	function sqrt { in x : Real[1]; return : Real[1]; }
+// A qualified name reaches a library function whatever the model imports: the
+// library packages are members of the root namespace, so the qualified spelling
+// is the model's own reading of the declaration.
+func TestLibraryFunctionQualifiedCallNeedsNoImport(t *testing.T) {
+	ctx, idx := libraryModelContext(t, `package test {
+	calc f { in x : Real; OpenSysMLMathFunctions::exp(0.0 * x) + RealFunctions::sqrt(x) + (x, x)->SequenceFunctions::size() }
 }`)
+	got, err := ctx.InvokeCalc(lookupOne(t, idx, "test::f"), []Value{constReal(4)}, nil)
+	if err != nil || FormatValue(got) != "5.0" {
+		t.Fatalf("qualified calls = %s, %v; want 5.0", FormatValue(got), err)
+	}
+}
+
+// A call that resolves to the library's declaration is applied by the built-in
+// implementation, because the library gives that declaration no body.
+func TestLibraryFunctionDispatchByResolvedSymbol(t *testing.T) {
+	ctx, idx := libraryModelContext(t, `package test {}`)
 	sym := lookupOne(t, idx, "RealFunctions::sqrt")
 
 	if _, ok := ctx.libraryFunctionFor(sym); !ok {
@@ -313,6 +318,35 @@ func TestLibraryFunctionDispatchByResolvedSymbol(t *testing.T) {
 	got, err := ctx.InvokeCalc(sym, []Value{constReal(25)}, nil)
 	if err != nil || got.Const.Real != 5 {
 		t.Fatalf("InvokeCalc(sqrt, 25.0) = %+v, %v", got, err)
+	}
+}
+
+// A declaration the model makes under a library function's qualified name is
+// the model's own, so it is never answered by the built-in: without a body it
+// has no result, whether the library is loaded beside it or not.
+func TestLibraryFunctionNeverAnswersAModelDeclaration(t *testing.T) {
+	const src = `package RealFunctions {
+	function sqrt { in x : Real[1]; return : Real[1]; }
+}`
+	for name, build := range map[string]func(*testing.T, string) (*Context, *symbols.Index){
+		"alone": contextForSource, "beside the library": libraryModelContext,
+	} {
+		ctx, idx := build(t, src)
+		var sym *symbols.Symbol
+		for _, s := range idx.LookupQualified("RealFunctions::sqrt") {
+			if !ctx.libraryDeclared(s) {
+				sym = s
+			}
+		}
+		if sym == nil {
+			t.Fatalf("%s: the model's RealFunctions::sqrt was not indexed", name)
+		}
+		if _, ok := ctx.libraryFunctionFor(sym); ok {
+			t.Errorf("%s: the model's RealFunctions::sqrt dispatched to the built-in", name)
+		}
+		if _, err := ctx.InvokeCalc(sym, []Value{constReal(25)}, nil); !errors.Is(err, ErrNoResultExpression) {
+			t.Errorf("%s: InvokeCalc(model sqrt, 25.0) = %v, want %v", name, err, ErrNoResultExpression)
+		}
 	}
 }
 
@@ -395,6 +429,18 @@ func TestLibraryFunctionDoesNotClaimANonCalcDeclaration(t *testing.T) {
 	if _, err := ctx.InvokeCalc(sym, []Value{constReal(2)}, nil); !errors.Is(err, ErrNotACalc) {
 		t.Fatalf("InvokeCalc(attribute sqrt) error = %v; want ErrNotACalc", err)
 	}
+}
+
+// libraryModelContext indexes src as a model over the standard library and
+// returns a runtime context over it.
+func libraryModelContext(t *testing.T, src string) (*Context, *symbols.Index) {
+	t.Helper()
+	file := parser.New(source.New("<test>", []byte(src))).ParseFile()
+	idx := libs.NewModelIndex()
+	idx.AddDocument("<test>", file)
+	idx.ExpandWildcardImports()
+	resolver := resolve.New(idx)
+	return NewContext(semantics.NewModel(resolver), resolver, 10000), idx
 }
 
 // contextForSource indexes src as one document and returns a runtime context
@@ -629,6 +675,32 @@ func TestComplexFunctionScalarValues(t *testing.T) {
 			}
 			if got.Kind != ValConst || got.Const != tc.want {
 				t.Fatalf("%s = %+v, want %+v", tc.fn, got, tc.want)
+			}
+		})
+	}
+}
+
+// The library's `reduce '+'` over Reals stays on the real axis, so the Complex
+// aggregations keep the elements' kind unless one is a Complex.
+func TestComplexAggregationsKeepRealElementsReal(t *testing.T) {
+	cases := []struct {
+		fn   string
+		args []Value
+		want semantics.Value
+	}{
+		{"ComplexFunctions::sum", []Value{vec(constReal(1), constReal(2))}, semantics.Value{Kind: semantics.ValReal, Real: 3}},
+		{"ComplexFunctions::sum", []Value{vec(constInt(1), constInt(2))}, semantics.Value{Kind: semantics.ValInt, Int: 3}},
+		{"ComplexFunctions::product", []Value{vec(constInt(2), constReal(1.5))}, semantics.Value{Kind: semantics.ValReal, Real: 3}},
+		{"ComplexFunctions::product", []Value{constInt(4)}, semantics.Value{Kind: semantics.ValInt, Int: 4}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.fn, func(t *testing.T) {
+			got, err := applyLibrary(t, tc.fn, tc.args...)
+			if err != nil {
+				t.Fatalf("%s = error %v", tc.fn, err)
+			}
+			if got.Kind != ValConst || got.Const != tc.want {
+				t.Fatalf("%s = %s, want %+v", tc.fn, FormatValue(got), tc.want)
 			}
 		})
 	}
@@ -953,7 +1025,7 @@ func TestStringFunctionErrors(t *testing.T) {
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("%s%v = %+v, %v; want error %v", tc.fn, tc.args, got, err, tc.want)
 			}
-			if !strings.Contains(err.Error(), tc.fn) {
+			if !strings.Contains(err.Error(), writtenName(tc.fn)) {
 				t.Fatalf("%s error %q does not name the function", tc.fn, err)
 			}
 		})
@@ -990,6 +1062,19 @@ func TestUnevaluableLibraryFunctionsNameThemselves(t *testing.T) {
 		{"VectorFunctions::sum0", []Value{realVec(1, 2, 3), realVec(0, 0, 0)}},
 		{"ComplexFunctions::ToString", []Value{cx(1, 2)}},
 		{"ComplexFunctions::ToComplex", []Value{NewStringValue("1.0")}},
+		{"BaseFunctions::ToString", []Value{cx(1, 2)}},
+		{"CollectionFunctions::array#", []Value{constInt(1), constInt(1)}},
+		{"BaseFunctions::[", []Value{constInt(1), constInt(1)}},
+		{"BaseFunctions::all", nil},
+		{"BaseFunctions::as", []Value{constInt(1)}},
+		{"BaseFunctions::meta", []Value{constInt(1)}},
+		{"BaseFunctions::istype", []Value{constInt(1), constInt(1)}},
+		{"BaseFunctions::hastype", []Value{constInt(1), constInt(1)}},
+		{"BaseFunctions::@", []Value{constInt(1), constInt(1)}},
+		{"BaseFunctions::@@", []Value{constInt(1), constInt(1)}},
+		{"ControlFunctions::.", []Value{constInt(1)}},
+		{"DataFunctions::~", []Value{constInt(1)}},
+		{"ScalarFunctions::~", []Value{constInt(1)}},
 	}
 
 	for _, tc := range unevaluable {
@@ -998,29 +1083,105 @@ func TestUnevaluableLibraryFunctionsNameThemselves(t *testing.T) {
 			if !errors.Is(err, ErrUnevaluableLibraryFunction) {
 				t.Fatalf("%s error = %v, want %v", tc.fn, err, ErrUnevaluableLibraryFunction)
 			}
-			if !strings.Contains(err.Error(), tc.fn) {
+			if !strings.Contains(err.Error(), writtenName(tc.fn)) {
 				t.Fatalf("%s error %q does not name the function", tc.fn, err)
 			}
 		})
 	}
 }
 
-// The vendored declarations these implementations are registered against cannot
-// drift from the registry: every function VectorFunctions, ComplexFunctions,
-// SequenceFunctions and TrigFunctions declare is either implemented here with
-// the declared parameter names in the declared order, or implemented as a
-// built-in over collections (builtins.go), which takes its arguments
-// positionally.
-func TestVendoredFunctionsAreAllDispatchable(t *testing.T) {
-	packages := map[string]string{
-		"VectorFunctions":   "Kernel Libraries/Kernel Function Library/VectorFunctions.kerml",
-		"ComplexFunctions":  "Kernel Libraries/Kernel Function Library/ComplexFunctions.kerml",
-		"SequenceFunctions": "Kernel Libraries/Kernel Function Library/SequenceFunctions.kerml",
-		"TrigFunctions":     "Kernel Libraries/Kernel Function Library/TrigFunctions.kerml",
-		"StringFunctions":   "Kernel Libraries/Kernel Function Library/StringFunctions.kerml",
+// applyBuiltin binds args to a built-in's declared parameters as a direct
+// invocation does and applies it in a context with no caller.
+func applyBuiltin(t *testing.T, name string, args calcArgs) (Value, error) {
+	t.Helper()
+	fn, ok := builtins[name]
+	if !ok {
+		t.Fatalf("%s is not registered", name)
+	}
+	bound, err := bindBuiltinValues(name, args)
+	if err != nil {
+		return Value{}, err
+	}
+	return fn(NewEvalContext(libCtx(t), nil), bound)
+}
+
+// TestOccurrenceFunctionArity pins arity before binding: `group [0..*]` may be
+// omitted, a missing `occ`/`index` is an arity error, a data value is no occurrence.
+func TestOccurrenceFunctionArity(t *testing.T) {
+	one := constInt(1)
+	for _, tc := range []struct {
+		fn   string
+		args calcArgs
+		want error
+	}{
+		{"OccurrenceFunctions::addNew", calcArgs{positional: []Value{one}}, ErrCalcArity},
+		{"OccurrenceFunctions::addNew", calcArgs{named: map[string]Value{"group": one}}, ErrCalcArity},
+		{"OccurrenceFunctions::addNew", calcArgs{named: map[string]Value{"occ": one}}, ErrNotAnOccurrence},
+		{"OccurrenceFunctions::addNew", calcArgs{positional: []Value{one, one}}, ErrNotAnOccurrence},
+		{"OccurrenceFunctions::addNewAt", calcArgs{positional: []Value{one, one}}, ErrCalcArity},
+		{"OccurrenceFunctions::addNewAt", calcArgs{named: map[string]Value{"occ": one}}, ErrCalcArity},
+		{"OccurrenceFunctions::addNewAt", calcArgs{named: map[string]Value{"group": one, "index": one}}, ErrCalcArity},
+		{"OccurrenceFunctions::addNewAt", calcArgs{named: map[string]Value{"occ": one, "index": one}}, ErrNotAnOccurrence},
+		{"OccurrenceFunctions::addNewAt", calcArgs{positional: []Value{one, one, one}}, ErrNotAnOccurrence},
+		{"OccurrenceFunctions::create", calcArgs{}, ErrCalcArity},
+		{"OccurrenceFunctions::create", calcArgs{positional: []Value{one}}, ErrNotAnOccurrence},
+		{"OccurrenceFunctions::isDuring", calcArgs{}, ErrCalcArity},
+		{"OccurrenceFunctions::isDuring", calcArgs{positional: []Value{one}}, ErrNotAnOccurrence},
+		{"OccurrenceFunctions::destroy", calcArgs{positional: []Value{one}}, ErrNotAnOccurrence},
+		{"OccurrenceFunctions::===", calcArgs{positional: []Value{one, one}}, ErrNotAnOccurrence},
+		{"OccurrenceFunctions::===", calcArgs{positional: []Value{one, one, one}}, ErrCalcArity},
+	} {
+		_, err := applyBuiltin(t, tc.fn, tc.args)
+		if !errors.Is(err, tc.want) {
+			t.Errorf("%s(%+v) error = %v, want %v", tc.fn, tc.args, err, tc.want)
+		}
+		if errors.Is(err, ErrNotAnOccurrence) && !strings.Contains(err.Error(), writtenName(tc.fn)) {
+			t.Errorf("%s(%+v) error %q does not name the function", tc.fn, tc.args, err)
+		}
 	}
 
-	for pkg, path := range packages {
+	// `destroy` of nothing destroys nothing; `'==='` of nothing with nothing holds.
+	if got, err := applyBuiltin(t, "OccurrenceFunctions::destroy", calcArgs{}); err != nil || !isEmptyValue(got) {
+		t.Errorf("destroy() = %v, %v; want nothing", got, err)
+	}
+	nothing := calcArgs{positional: []Value{emptySequence(), emptySequence()}}
+	if got, err := applyBuiltin(t, "OccurrenceFunctions::===", nothing); err != nil || got.Kind != ValConst || !got.Const.Bool {
+		t.Errorf("===((), ()) = %v, %v; want true", got, err)
+	}
+}
+
+// vendoredFunctionPackages lists every function library package the runtime
+// vendors. The declarations the implementations are registered against cannot
+// drift from the registry: every function these packages declare is either
+// implemented here with the declared parameter names in the declared order, or
+// implemented as a built-in over collections (builtins.go) whose signature
+// (builtins_signature.go) states the declared names, optionality and `expr`.
+var vendoredFunctionPackages = map[string]string{
+	"BaseFunctions":          "Kernel Libraries/Kernel Function Library/BaseFunctions.kerml",
+	"BooleanFunctions":       "Kernel Libraries/Kernel Function Library/BooleanFunctions.kerml",
+	"CollectionFunctions":    "Kernel Libraries/Kernel Function Library/CollectionFunctions.kerml",
+	"ComplexFunctions":       "Kernel Libraries/Kernel Function Library/ComplexFunctions.kerml",
+	"ControlFunctions":       "Kernel Libraries/Kernel Function Library/ControlFunctions.kerml",
+	"DataFunctions":          "Kernel Libraries/Kernel Function Library/DataFunctions.kerml",
+	"IntegerFunctions":       "Kernel Libraries/Kernel Function Library/IntegerFunctions.kerml",
+	"NaturalFunctions":       "Kernel Libraries/Kernel Function Library/NaturalFunctions.kerml",
+	"NumericalFunctions":     "Kernel Libraries/Kernel Function Library/NumericalFunctions.kerml",
+	"OccurrenceFunctions":    "Kernel Libraries/Kernel Function Library/OccurrenceFunctions.kerml",
+	"RationalFunctions":      "Kernel Libraries/Kernel Function Library/RationalFunctions.kerml",
+	"RealFunctions":          "Kernel Libraries/Kernel Function Library/RealFunctions.kerml",
+	"ScalarFunctions":        "Kernel Libraries/Kernel Function Library/ScalarFunctions.kerml",
+	"SequenceFunctions":      "Kernel Libraries/Kernel Function Library/SequenceFunctions.kerml",
+	"StringFunctions":        "Kernel Libraries/Kernel Function Library/StringFunctions.kerml",
+	"TrigFunctions":          "Kernel Libraries/Kernel Function Library/TrigFunctions.kerml",
+	"VectorFunctions":        "Kernel Libraries/Kernel Function Library/VectorFunctions.kerml",
+	"OpenSysMLMathFunctions": "OpenSysML Libraries/OpenSysMLMathFunctions.kerml",
+}
+
+// Every function each vendored package declares, operator-named ones included,
+// is registered: computed, a builtin, or unevaluable by name with a reason. No
+// declaration is exempt.
+func TestVendoredFunctionsAreAllDispatchable(t *testing.T) {
+	for pkg, path := range vendoredFunctionPackages {
 		t.Run(pkg, func(t *testing.T) {
 			data, err := libs.DefaultSource().Read(path)
 			if err != nil {
@@ -1036,33 +1197,85 @@ func TestVendoredFunctionsAreAllDispatchable(t *testing.T) {
 			resolver := resolve.New(idx)
 			ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
 
+			declared := 0
 			for _, sym := range idx.LookupDirectChildren(pkg) {
 				if !isCalcSymbol(sym) {
 					continue
 				}
+				declared++
 				fqn := ctx.qualifiedSymbolName(sym)
 				fn, ok := libraryFunctionByName(fqn)
 				if !ok {
 					if _, isBuiltin := builtins[fqn]; !isBuiltin {
 						t.Errorf("%s is declared in %s and is not dispatchable", fqn, path)
+						continue
 					}
+					checkBuiltinSignature(t, ctx, fqn, sym)
 					continue
 				}
-				var params []string
-				for _, param := range ctx.calcParameters(ctx.calcChain(sym)) {
-					params = append(params, param.Name)
-				}
-				if len(params) != len(fn.params) {
-					t.Errorf("%s declares %v, implementation takes %v", fqn, params, fn.params)
-					continue
-				}
-				for i, name := range params {
-					if fn.params[i] != name {
-						t.Errorf("%s parameter %d is %q, implementation names it %q", fqn, i, name, fn.params[i])
-					}
-				}
+				checkLibrarySignature(t, ctx, fqn, sym, fn)
+			}
+			if declared == 0 {
+				t.Fatalf("%s declares no function in %s; the package name or path is wrong", pkg, path)
 			}
 		})
+	}
+}
+
+// checkLibrarySignature holds the registered signature of the library function
+// fqn to the parameters sym declares: name, order and optionality.
+func checkLibrarySignature(t *testing.T, ctx *Context, fqn string, sym *symbols.Symbol, fn *libraryFunction) {
+	t.Helper()
+	var declared []declaredParam
+	for _, param := range ctx.calcParameters(ctx.calcChain(sym)) {
+		declared = append(declared, declaredParam{
+			name:     param.Name,
+			optional: param.Default != nil || param.optional(),
+		})
+	}
+	if !slices.Equal(declared, fn.params) {
+		t.Errorf("%s declares %+v, implementation takes %+v", fqn, declared, fn.params)
+	}
+}
+
+// checkBuiltinSignature holds the registered signature of the built-in fqn to
+// the parameters sym declares: name, order, optionality and `expr`.
+func checkBuiltinSignature(t *testing.T, ctx *Context, fqn string, sym *symbols.Symbol) {
+	t.Helper()
+	sig, ok := builtinSignatures[fqn]
+	if !ok {
+		t.Errorf("%s is a built-in with no signature in builtinSignatures", fqn)
+		return
+	}
+	var declared []declaredParam
+	for _, member := range declMembers(sym.Decl) {
+		usage, ok := member.(*ast.Usage)
+		if !ok || (usage.Direction != ast.DirIn && usage.Direction != ast.DirInOut) {
+			continue
+		}
+		name, _ := ast.EffectiveName(usage)
+		declared = append(declared, declaredParam{
+			name:     name,
+			optional: usage.Value != nil || ctx.model.IsOptionalParameter(usage),
+			deferred: usage.Kind == ast.UsageExpr,
+		})
+	}
+	if !slices.Equal(declared, sig) {
+		t.Errorf("%s declares %+v, builtinSignatures has %+v", fqn, declared, sig)
+	}
+}
+
+// Every registered signature belongs to a registered built-in.
+func TestBuiltinSignaturesNameBuiltins(t *testing.T) {
+	for name := range builtinSignatures {
+		if _, ok := builtins[name]; !ok {
+			t.Errorf("builtinSignatures has %s, which is no built-in", name)
+		}
+	}
+	for name := range builtins {
+		if _, ok := builtinSignatures[name]; !ok {
+			t.Errorf("built-in %s has no signature", name)
+		}
 	}
 }
 
@@ -1237,28 +1450,53 @@ func TestLibraryFunctionAnswersALibraryDeclarationWithABody(t *testing.T) {
 	}
 }
 
-// The listing covers every implemented function, an extension one carrying the
-// import its unqualified name needs, so a working function is never advertised
-// as unsupported nor as callable bare.
-func TestBuiltinsListExtensionFunctionsWithTheirImport(t *testing.T) {
+// The listing covers every implemented function a model calls by name, each
+// with the package an import must name for the unqualified call to resolve, so
+// a working function is never advertised as unsupported nor as callable bare.
+func TestBuiltinsListEveryFunctionWithItsPackage(t *testing.T) {
 	listed := make(map[string]Builtin)
 	for _, b := range Builtins() {
-		listed[b.Name] = b
+		listed[b.FQN] = b
+		if want := b.Package + "::" + b.Name; b.FQN != want {
+			t.Errorf("%q is listed under package %q and name %q", b.FQN, b.Package, b.Name)
+		}
 	}
-	for local, pkg := range extensionLocalNames {
-		b, ok := listed[local]
-		if !ok {
-			t.Errorf("extension function %q is implemented but not listed", local)
+	for fqn, fn := range libraryFunctions {
+		if _, operator := builtinNamed(fqn); !operator || fn.unevaluable {
+			if _, ok := listed[fqn]; ok {
+				t.Errorf("%q is listed, want operators and unevaluable declarations left out", fqn)
+			}
 			continue
 		}
-		if b.RequiresImport != pkg {
-			t.Errorf("%q requires import %q, want %q", local, b.RequiresImport, pkg)
+		b, ok := listed[fqn]
+		if !ok {
+			t.Errorf("%q is implemented but not listed", fqn)
+			continue
 		}
-		if want := pkg + "::" + local; b.FQN != want {
-			t.Errorf("%q is listed as %q, want %q", local, b.FQN, want)
+		if b.Collection || !slices.Equal(b.Params, fn.paramNames()) {
+			t.Errorf("%q is listed as %+v, want a scalar function with parameters %v", fqn, b, fn.paramNames())
 		}
 	}
-	if b, ok := listed["sqrt"]; !ok || b.RequiresImport != "" {
-		t.Errorf("sqrt is listed as %+v, want an OMG function needing no import", b)
+	for fqn := range builtins {
+		if _, named := builtinNamed(fqn); !named {
+			continue
+		}
+		if b, ok := listed[fqn]; !ok || !b.Collection {
+			t.Errorf("%q is listed as %+v, want a collection function", fqn, b)
+		}
+	}
+	for _, want := range []struct{ fqn, pkg string }{
+		{"RealFunctions::sqrt", "RealFunctions"},
+		{"OpenSysMLMathFunctions::exp", "OpenSysMLMathFunctions"},
+		{"SequenceFunctions::size", "SequenceFunctions"},
+	} {
+		if b := listed[want.fqn]; b.Package != want.pkg {
+			t.Errorf("%s is listed as %+v, want package %s", want.fqn, b, want.pkg)
+		}
+	}
+	for _, absent := range []string{"SequenceFunctions::#", "IntegerFunctions::..", "VectorFunctions::sum", "ComplexFunctions::ToString"} {
+		if b, ok := listed[absent]; ok {
+			t.Errorf("%s is listed as %+v, want it left out", absent, b)
+		}
 	}
 }

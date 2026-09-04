@@ -82,6 +82,10 @@ CAPABILITY_INLINE_LANGUAGE = "inline_language"
 #: Without it the service refuses a request that sets the field.
 CAPABILITY_STRICT_CONFORMANCE = "strict_conformance"
 
+#: A complex number as ``Value.complex``, read as a Python ``complex``. Without it
+#: the service sends an unsupported null naming the value, which is an error.
+CAPABILITY_COMPLEX_VALUES = "complex_values"
+
 
 @dataclass(frozen=True)
 class ServerInfo:

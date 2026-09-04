@@ -11,6 +11,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/model"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
@@ -83,6 +84,9 @@ type Session struct {
 
 	// Runtime execution context
 	rtCtx *runtime.Context
+	// exhibits indexes the documents' exhibited-state declarations for rtCtx;
+	// a different context invalidates it (see exhibitEntries).
+	exhibits *exhibitIndex
 	// replaced is a context a debugging session still runs against, whose identity
 	// sequence the context built next takes over.
 	replaced   *runtime.Context
@@ -90,6 +94,7 @@ type Session struct {
 	idxVersion int                          // document version idx holds, 0 when it holds none
 	names      *nameTable                   // simple names of the documents, rebuilt when their scope trees change
 	instances  map[string]*runtime.Instance // FQN -> instance for %instantiate tracking
+	unnamed    []unnamedObject              // objects a later %instantiate of their name displaced, still addressed by id
 
 	// argMemo and nameMemo hold what command text parsed to, so a repeated
 	// invocation is evaluated without being parsed again.
@@ -128,6 +133,17 @@ type Session struct {
 	// renderWidth is the width a text rendering's table is written to fit, 0 for
 	// as wide as its widest cell.
 	renderWidth int
+}
+
+// unnamedObject is an object a later %instantiate of its name displaced.
+type unnamedObject struct {
+	fqn string
+	obj *runtime.Instance
+}
+
+// heldObjects counts the objects the session holds, named and displaced alike.
+func (s *Session) heldObjects() int {
+	return len(s.instances) + len(s.unnamed)
 }
 
 // actionSession holds an active action executor debugging session.
@@ -170,6 +186,14 @@ func (a *actionSession) selfOf() string {
 	return a.selfFQN
 }
 
+// release lets go of the session's run, ending any work a breakpoint left
+// paused; a nil session has none.
+func (a *actionSession) release() {
+	if a != nil {
+		a.executor.Release()
+	}
+}
+
 // stateSession holds an active state machine executor debugging session.
 type stateSession struct {
 	name string
@@ -179,6 +203,11 @@ type stateSession struct {
 	selfFQN  string
 	symbol   *symbols.Symbol
 	executor *runtime.StateExecutor
+	// machine names the exhibited machine the session is attached to, and
+	// machineAt is its position among the object's exhibited machines, so a
+	// restart rebinds to the same one when the object exhibits several.
+	machine   string
+	machineAt int
 	// rtCtx is the context the executor runs in; see actionSession.rtCtx.
 	rtCtx *runtime.Context
 	// now is the debugger's clock. The executor's own clock only moves when an
@@ -221,8 +250,10 @@ func NewSession() *Session {
 	}
 }
 
-// SetBudgets sets the bounds for runtime contexts created from here on. It
-// errors on a non-positive bound, which no run could make progress under.
+// SetBudgets sets the bounds for runtime contexts created from here on, dropping
+// the current one with its objects and the debuggers driving it, which the next
+// command reports. It errors on a non-positive bound, which no run could make
+// progress under.
 func (s *Session) SetBudgets(budgets runtime.Budgets) error {
 	if err := budgets.Validate(); err != nil {
 		return err
@@ -230,15 +261,28 @@ func (s *Session) SetBudgets(budgets runtime.Budgets) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.budgets = budgets
-	// Dropping the context invalidates everything derived from it, instances
-	// included: their IDs restart with the next context. What goes is recorded, so
-	// a later command explains it.
-	s.rtCtx = nil
-	if n := len(s.instances); n > 0 {
+	s.rtCtx, s.replaced = nil, nil
+	if n := s.heldObjects(); n > 0 {
 		s.lost = lossOnBudgets(n)
 	}
 	s.instances = make(map[string]*runtime.Instance)
+	s.unnamed = nil
+	s.endDebugSessions(boundsChanged)
 	return nil
+}
+
+// endDebugSessions ends both debuggers for a cause outside any submission,
+// recording it for the next debugging command.
+func (s *Session) endDebugSessions(cause string) {
+	if s.actionExec != nil {
+		s.endedAction = &endedSession{kind: "action", name: s.actionExec.name, outside: cause}
+		s.actionExec.release()
+		s.actionExec = nil
+	}
+	if s.stateExec != nil {
+		s.endedState = &endedSession{kind: "state machine", name: s.stateExec.name, outside: cause}
+		s.stateExec = nil
+	}
 }
 
 // Budgets returns the bounds this session gives its runtime contexts.
@@ -827,11 +871,11 @@ func (s *Session) rebindRestartedMachine() {
 	if s.stateExec == nil || s.stateExec.selfFQN == "" || s.stateExec.fqn != s.stateExec.selfFQN {
 		return
 	}
-	inst, ok := s.instances[s.stateExec.selfFQN]
+	inst, ok := s.heldObject(s.stateExec.selfFQN)
 	if !ok {
 		return
 	}
-	behavior, ok := inst.ExhibitedState()
+	behavior, ok := s.stateExec.restartedMachine(inst)
 	if !ok || behavior.State == s.stateExec.executor {
 		return
 	}
@@ -840,6 +884,80 @@ func (s *Session) rebindRestartedMachine() {
 	s.stateExec.executor = behavior.State
 	s.stateExec.rtCtx = s.rtCtx
 	s.stateExec.now = behavior.State.CurrentTime()
+}
+
+// restartedMachine finds, among the machines the rebuilt object exhibits, the
+// one this session was attached to: the machine of the same name, or for an
+// unnamed one, the machine declared in the same position.
+func (st *stateSession) restartedMachine(inst *runtime.Instance) (*runtime.ObjectBehavior, bool) {
+	var atPosition *runtime.ObjectBehavior
+	position := 0
+	for _, b := range inst.Behaviors() {
+		if b.Kind != lower.ExhibitedState {
+			continue
+		}
+		if st.machine != "" && b.Name == st.machine {
+			return b, true
+		}
+		if position == st.machineAt {
+			atPosition = b
+		}
+		position++
+	}
+	if st.machine == "" && atPosition != nil {
+		return atPosition, true
+	}
+	return nil, false
+}
+
+// exhibitedPosition is behavior's position among the machines its object
+// exhibits, which identifies it when it has no name.
+func exhibitedPosition(behavior *runtime.ObjectBehavior) int {
+	position := 0
+	for _, b := range behavior.Object.Behaviors() {
+		if b == behavior {
+			return position
+		}
+		if b.Kind == lower.ExhibitedState {
+			position++
+		}
+	}
+	return position
+}
+
+// releaseDebuggedName respells the debuggers' object labels rooted at the object
+// fqn names by its id, before the name is given to another object, so they keep
+// following the object they were started on. It reports each label it respelled.
+func (s *Session) releaseDebuggedName(fqn string) []string {
+	var notices []string
+	if a := s.actionExec; a != nil && a.selfFQN != "" {
+		was := a.selfFQN
+		a.selfFQN = s.relabelByID(a.selfFQN, fqn)
+		if a.selfFQN != was {
+			notices = append(notices, debugSessionRelabelled("action", a.name, was, a.selfFQN))
+		}
+	}
+	st := s.stateExec
+	if st == nil || st.selfFQN == "" {
+		return notices
+	}
+	// An exhibited machine is held under its object's label as both.
+	exhibited := st.fqn == st.selfFQN
+	was := st.selfFQN
+	st.selfFQN = s.relabelByID(st.selfFQN, fqn)
+	if exhibited {
+		st.fqn = st.selfFQN
+	}
+	if st.selfFQN != was {
+		notices = append(notices, debugSessionRelabelled("state", st.name, was, st.selfFQN))
+	}
+	return notices
+}
+
+// debugSessionRelabelled reports a debugging session that keeps running over the
+// object it was started on, now addressed by the label a displaced name left it.
+func debugSessionRelabelled(kind, name, was, now string) string {
+	return fmt.Sprintf("note: %s debugging session for %q keeps running over the object %s named, now %s", kind, name, was, now)
 }
 
 // dropStaleDebugSessions ends the debugging sessions this submission
@@ -862,6 +980,7 @@ func (s *Session) dropStaleDebugSessions(gone []string, over carryover) []string
 			objectGone: objectGone,
 			version:    s.version,
 		}
+		s.actionExec.release()
 		s.actionExec = nil
 	}
 	if by, objectGone, ok := s.staleDebugState(gone, s.stateExec.fqnOf(), s.stateExec.selfOf(), over.state); ok {
@@ -894,7 +1013,7 @@ func (s *Session) staleDebugState(gone []string, fqn, selfFQN string, shapes *ru
 	// The behavior is performed by an object this submission dropped, so what it
 	// runs against is no longer part of the session.
 	if selfFQN != "" {
-		if _, kept := s.instances[selfFQN]; !kept {
+		if _, kept := s.heldObject(selfFQN); !kept {
 			return selfFQN, true, true
 		}
 	}
@@ -912,7 +1031,7 @@ func (s *Session) staleDebugState(gone []string, fqn, selfFQN string, shapes *ru
 // debugSessionResetEnded reports a debugging session a reset ended, which no
 // redeclaration accounts for.
 func debugSessionResetEnded(kind, name string) string {
-	return fmt.Sprintf("note: %s debugging session for %q ended (the session was reset)", kind, name)
+	return fmt.Sprintf("note: %s debugging session for %q ended (%s)", kind, name, sessionReset)
 }
 
 func debugSessionEnded(kind, name, superseded string, objectGone bool) string {
@@ -948,7 +1067,7 @@ func (s *Session) Clear() []string {
 // declaration, so nothing materialized from the old one can be rebound: what
 // goes is reported and recorded rather than silently emptied.
 func (s *Session) clear() []string {
-	notices, lost, endedAction, endedState := s.resetLoss()
+	notices, lost := s.resetLoss()
 	s.ws.Remove(docName)
 	s.ws.Remove(kermlDocName)
 	s.snippets = nil
@@ -961,9 +1080,10 @@ func (s *Session) clear() []string {
 		s.idxVersion = 0
 	}
 	s.instances = make(map[string]*runtime.Instance)
-	s.actionExec = nil
-	s.stateExec = nil
-	s.lost, s.endedAction, s.endedState = lost, endedAction, endedState
+	s.unnamed = nil
+	s.lost = lost
+	s.endedAction, s.endedState = nil, nil
+	s.endDebugSessions(sessionReset)
 	s.notedBlocker.record("")
 	return notices
 }
@@ -971,20 +1091,18 @@ func (s *Session) clear() []string {
 // resetLoss reports what a reset takes with it and records why, so a later
 // %instances, %features or %step explains the loss instead of reading as a session
 // that never materialized anything.
-func (s *Session) resetLoss() (notices []string, lost instanceLoss, action, state *endedSession) {
-	if n := len(s.instances); n > 0 {
+func (s *Session) resetLoss() (notices []string, lost instanceLoss) {
+	if n := s.heldObjects(); n > 0 {
 		notices = append(notices, instancesResetNotice(n))
 		lost = lossOnReset(n)
 	}
 	if s.actionExec != nil {
 		notices = append(notices, debugSessionResetEnded("action", s.actionExec.name))
-		action = &endedSession{kind: "action", name: s.actionExec.name, reset: true}
 	}
 	if s.stateExec != nil {
 		notices = append(notices, debugSessionResetEnded("state", s.stateExec.name))
-		state = &endedSession{kind: "state machine", name: s.stateExec.name, reset: true}
 	}
-	return notices, lost, action, state
+	return notices, lost
 }
 
 // getOrCreateRuntime lazily creates runtime context when first needed.

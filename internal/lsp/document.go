@@ -40,7 +40,7 @@ func (s *Server) Documents() *documentsResult {
 	for _, def := range s.ws.DocumentDefinitions() {
 		out.Documents = append(out.Documents, documentInfo{
 			Name: def.FQN,
-			URI:  string(nameToURI(def.Doc)),
+			URI:  string(s.documentURI(def.Doc)),
 		})
 	}
 	return out

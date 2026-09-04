@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -16,7 +17,7 @@ import (
 // verification RPCs report.
 const verifyModelSource = `package Demo {
 	part def Vehicle {
-		attribute mass = 1500.0;
+		attribute mass default = 1500.0;
 
 		constraint massPositive {
 			mass > 0.0
@@ -318,7 +319,7 @@ func TestVerifySatisfactionNarrowedToASymbol(t *testing.T) {
 	srv := mustNewService(t, 10)
 	source := `package Demo {
 	part def Vehicle {
-		attribute mass = 1500.0;
+		attribute mass default = 1500.0;
 	}
 	requirement def MassLimit {
 		subject vehicle : Vehicle;
@@ -366,7 +367,7 @@ func TestVerifySatisfactionNarrowedToANamedAssertion(t *testing.T) {
 	srv := mustNewService(t, 10)
 	source := `package Demo {
 	part def Vehicle {
-		attribute mass = 1500.0;
+		attribute mass default = 1500.0;
 	}
 	requirement def MassLimit {
 		subject vehicle : Vehicle;
@@ -594,5 +595,48 @@ func TestVerdictFalseCarriesNoFailureReason(t *testing.T) {
 	}
 	if resp.Verdict.FailureReason != pb.FailureReason_FAILURE_REASON_UNSPECIFIED {
 		t.Errorf("failure_reason = %v, want UNSPECIFIED", resp.Verdict.FailureReason)
+	}
+}
+
+// TestVerifyConstraintConcurrentRequestsShareTheModel verifies concurrent
+// requests over one model answer alike, including ones that name an unknown
+// symbol, whose resolution errors must not leak into the shared resolver.
+func TestVerifyConstraintConcurrentRequestsShareTheModel(t *testing.T) {
+	srv := mustNewService(t, 10)
+	hash := mustVerifyModel(t, srv, verifyModelSource, "verify-concurrent")
+
+	var wg sync.WaitGroup
+	errs := make(chan string, 64)
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			symbol, subject := "Demo::Vehicle::massPositive", "Demo::sedan"
+			if i%4 == 3 {
+				symbol = "Demo::NoSuchConstraint"
+			}
+			resp, err := srv.VerifyConstraint(context.Background(), &pb.VerifyConstraintRequest{
+				ModelHash: hash, SymbolId: symbol, SubjectSymbolId: subject,
+			})
+			switch {
+			case err != nil:
+				errs <- err.Error()
+			case symbol == "Demo::NoSuchConstraint" && !strings.Contains(resp.Error, "NoSuchConstraint"):
+				errs <- "unknown symbol not reported: " + resp.Error
+			case symbol != "Demo::NoSuchConstraint" && (resp.Error != "" || !resp.Verdict.Holds):
+				errs <- "massPositive did not hold: " + resp.Error
+			}
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+	for e := range errs {
+		t.Error(e)
+	}
+	cached, _ := srv.cache.Get(hash)
+	rs, release := cached.RuntimeSemantics()
+	defer release()
+	if n := len(rs.Resolver.Diagnostics); n != 0 {
+		t.Errorf("shared resolver kept %d request diagnostics", n)
 	}
 }

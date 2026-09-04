@@ -25,7 +25,7 @@ java_pattern='^clients/java/'
 rust_pattern='^clients/rust/'
 vscode_pattern='^editors/vscode/'
 
-known_pattern="$service_pattern|$docs_pattern|$node_pattern|$python_pattern|$java_pattern|$rust_pattern|$vscode_pattern|^\.agents/|^\.gitignore$|^LICENSE|^packaging/"
+known_pattern="$service_pattern|$docs_pattern|$node_pattern|$python_pattern|$java_pattern|$rust_pattern|$vscode_pattern|^\.agents/|^\.gitignore$|^\.gitattributes$|^LICENSE|^packaging/"
 
 matches() {
   local pattern=$1

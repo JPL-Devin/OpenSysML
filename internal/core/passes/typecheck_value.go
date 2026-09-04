@@ -13,8 +13,8 @@ import (
 // Like the scalar rules, every check is one-sided — it reports only when both
 // the expected and the actual property are known — so a partially typed model
 // never produces a false positive.
-func (ec *exprChecker) checkValueConformance(valueScope, declScope *symbols.Scope, u *ast.Usage, value ast.Node) {
-	want := ec.declaredTypeSymbol(declScope, u.Relationships)
+func (ec *exprChecker) checkValueConformance(valueScope, declScope *symbols.Scope, d featureDecl, value ast.Node) {
+	want := ec.declaredTypeSymbol(declScope, d.relationships)
 	if want == nil || ec.model.PrimTypeOf(want) != semantics.PrimUnknown {
 		// An untyped feature has nothing to conform to, and a scalar-typed one
 		// is the lattice rules' to report — in lattice terms (Natural vs
@@ -65,12 +65,12 @@ func literalPrimType(value ast.Node) semantics.PrimType {
 
 // checkValueCount checks a bound value's element count against the multiplicity
 // governing the feature.
-func (ec *exprChecker) checkValueCount(declScope *symbols.Scope, u *ast.Usage, value ast.Node) {
+func (ec *exprChecker) checkValueCount(declScope *symbols.Scope, d featureDecl, value ast.Node) {
 	count, known := exactCount(value)
 	if !known {
 		return
 	}
-	r, ok := ec.effectiveRange(declScope, u, 0)
+	r, ok := ec.effectiveRange(declScope, d, 0)
 	if !ok {
 		return
 	}
@@ -83,31 +83,31 @@ func (ec *exprChecker) checkValueCount(declScope *symbols.Scope, u *ast.Usage, v
 // is looked up along, so a cyclic chain terminates.
 const maxRedefinitionDepth = 32
 
-// effectiveRange returns the multiplicity governing a usage: the one it
+// effectiveRange returns the multiplicity governing a feature: the one it
 // declares, or the one it inherits from the feature it redefines
 // (KerML 1.0 §7.3.4.5).
-func (ec *exprChecker) effectiveRange(scope *symbols.Scope, u *ast.Usage, depth int) (semantics.Range, bool) {
-	if r, ok := ec.model.RangeOf(u.Multiplicity); ok {
+func (ec *exprChecker) effectiveRange(scope *symbols.Scope, d featureDecl, depth int) (semantics.Range, bool) {
+	if r, ok := ec.model.RangeOf(d.multiplicity); ok {
 		return r, true
 	}
 	if depth >= maxRedefinitionDepth {
 		return semantics.Range{}, false
 	}
-	for _, rel := range u.Relationships {
+	for _, rel := range d.relationships {
 		if rel == nil || rel.Kind != ast.RelRedefines || rel.Target == nil {
 			continue
 		}
 		// The redefining declaration may carry the redefined feature's name, so
 		// the target is resolved with the declaration's own bindings hidden.
-		target, ok := ec.resolver.ResolveReferenceTarget(scope, u, rel.Target)
+		target, ok := ec.resolver.ResolveReferenceTarget(scope, d.node, rel.Target)
 		if !ok || target == nil {
 			continue
 		}
-		tu, isUsage := target.Decl.(*ast.Usage)
-		if !isUsage || tu == u {
+		td, isFeature := featureDeclOf(target.Decl)
+		if !isFeature || td.node == d.node {
 			continue
 		}
-		if r, ok := ec.effectiveRange(target.OwnerScope, tu, depth+1); ok {
+		if r, ok := ec.effectiveRange(target.OwnerScope, td, depth+1); ok {
 			return r, true
 		}
 	}
@@ -168,14 +168,13 @@ func (ec *exprChecker) declaredTypeSymbol(scope *symbols.Scope, rels []*ast.Rela
 }
 
 // valueTypeSymbol returns the type of a bound value as a symbol, or nil when it
-// is not a name the checker can type: a literal (the scalar rules cover those),
-// an expression, or a name that does not resolve.
+// is not a feature the checker can type (a literal, an expression, an unresolved
+// name). A feature chain is typed by its last feature (KerML 8.3.3.3).
 func (ec *exprChecker) valueTypeSymbol(scope *symbols.Scope, value ast.Node) *symbols.Symbol {
-	qn, ok := qualifiedNameOf(value)
-	if !ok {
+	if !namesFeature(value) {
 		return nil
 	}
-	sym, resolved := ec.resolver.ResolveQualified(scope, qn)
+	sym, resolved := ec.resolver.ResolveTarget(scope, value)
 	if !resolved || sym == nil {
 		return nil
 	}
@@ -212,14 +211,8 @@ func (ec *exprChecker) invocationResultTypeSymbol(scope *symbols.Scope, value as
 	if !ok || inv.Type == nil {
 		return nil
 	}
-	sym, resolved := ec.resolver.ResolveQualified(scope, inv.Type)
-	if !resolved || sym == nil {
-		return nil
-	}
-	if target, ok := ec.resolver.ResolveAliasTarget(sym); ok && target != nil {
-		sym = target
-	}
-	if !ec.isInvocationBehavior(sym, map[*symbols.Symbol]bool{}) {
+	sym := SelectInvocation(ec.resolver, ec.model, scope, inv, ec.performs(inv)).Selected
+	if sym == nil || !ec.isInvocationBehavior(sym, map[*symbols.Symbol]bool{}) {
 		return nil
 	}
 	result := ec.model.ResultParameterOf(sym)
@@ -231,6 +224,16 @@ func (ec *exprChecker) invocationResultTypeSymbol(scope *symbols.Scope, value as
 		return nil
 	}
 	return ec.declaredTypeSymbol(result.OwnerScope, u.Relationships)
+}
+
+// constructedTypeSymbol returns the type a constructor `new T(…)` instantiates,
+// which is the type of the instance it produces, or nil for any other value.
+func (ec *exprChecker) constructedTypeSymbol(scope *symbols.Scope, value ast.Node) *symbols.Symbol {
+	ctor, ok := value.(*ast.ConstructorExpr)
+	if !ok || ctor.Type == nil {
+		return nil
+	}
+	return ec.resolveTarget(scope, ctor.Type)
 }
 
 // owningEnumeration returns the enumeration definition a literal belongs to, or
@@ -246,13 +249,18 @@ func (ec *exprChecker) owningEnumeration(sym *symbols.Symbol) *symbols.Symbol {
 	return owner
 }
 
-// qualifiedNameOf unwraps the name forms a value expression can take.
-func qualifiedNameOf(value ast.Node) (*ast.QualifiedName, bool) {
+// namesFeature reports whether a value expression names a feature outright — a
+// qualified name, a feature chain or an element `a#(i)` — rather than computing one.
+func namesFeature(value ast.Node) bool {
 	switch v := value.(type) {
 	case *ast.FeatureReference:
-		return v.Name, v.Name != nil
+		return v.Name != nil
 	case *ast.QualifiedName:
-		return v, true
+		return true
+	case *ast.FeatureChainExpr:
+		return v.Member != nil && namesFeature(v.Operand)
+	case *ast.IndexExpr:
+		return !v.Bracket && namesFeature(v.Operand)
 	}
-	return nil, false
+	return false
 }

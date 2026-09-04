@@ -123,6 +123,122 @@ func TestMemberAttachedThenDesugars(t *testing.T) {
 	}
 }
 
+// A positional `then` sequences from the nearest feature before it (SysML v2
+// §7.17.4; the pilot's UsageUtil.getPreviousFeature): a member that is not a
+// feature — documentation, a comment, an import, an alias, a nested definition
+// or package — is read past, while a usage that is not an edge stays the source.
+func TestThenSequencesFromTheNearestFeatureBefore(t *testing.T) {
+	tests := []struct {
+		name   string
+		member string
+		want   string
+	}{
+		{"doc", "doc /* a then b */", "a->b"},
+		{"comment", "comment /* a then b */", "a->b"},
+		{"comment about", "comment about a /* the first */", "a->b"},
+		{"textual representation", "rep asText language \"text\" /* a then b */", "a->b"},
+		{"import", "private import Q::*;", "a->b"},
+		{"alias", "alias Bump for Step;", "a->b"},
+		{"nested part def", "part def Inner;", "a->b"},
+		{"nested action def", "action def Inner;", "a->b"},
+		{"nested package", "package Inner;", "a->b"},
+		{"multiplicity declaration", "multiplicity m [1];", "a->b"},
+		{"several non-features", "doc /* a then b */ part def Inner; private import Q::*;", "a->b"},
+		{"metadata about stays a source", "metadata Note about a;", "@metadata->b"},
+		{"prefix metadata stays a source", "@Note;", "@*ast.PrefixMetadata->b"},
+		{"attribute stays a source", "attribute k;", "k->b"},
+		{"part stays a source", "part p;", "p->b"},
+		{"action stays a source", "action c : Step;", "c->b"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			src := "package P { action def Step; metadata def Note; package Q { part def W; }\n" +
+				"action def A { action a : Step; " + tt.member + " then action b : Step; } }"
+			edges, p := parseSuccessions(t, src)
+			if len(p.Diagnostics) != 0 {
+				t.Fatalf("unexpected diagnostics: %v", p.Diagnostics)
+			}
+			if strings.Join(edges, " ") != tt.want {
+				t.Errorf("succession edges %v, want %v", edges, tt.want)
+			}
+		})
+	}
+}
+
+// A state's deferral declares no feature, so a `then` after it sequences from the state before.
+func TestThenSequencesPastADeferral(t *testing.T) {
+	edges, p := parseSuccessions(t, "state def S { state a; defer Ping; then state b; }")
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", p.Diagnostics)
+	}
+	if got := strings.Join(edges, " "); got != "a->b" {
+		t.Errorf("succession edges %q, want a->b", got)
+	}
+}
+
+// A `then` with only non-feature members before it has nothing to sequence
+// from: it is diagnosed, and no succession is built from the member it passed.
+func TestThenWithNoFeatureBeforeItIsDiagnosed(t *testing.T) {
+	for name, body := range map[string]string{
+		"nothing":            "",
+		"only documentation": "doc /* b */",
+		"only a definition":  "part def Inner;",
+		"only an import":     "private import Q::*;",
+		"only an alias":      "alias Bump for Step;",
+	} {
+		t.Run(name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("parser panicked: %v", r)
+				}
+			}()
+			src := "package P { action def Step; package Q { part def W; }\n" +
+				"action def A { " + body + " then action b : Step; } }"
+			edges, p := parseSuccessions(t, src)
+			if len(edges) != 0 {
+				t.Errorf("succession edges %v, want none", edges)
+			}
+			if len(p.Diagnostics) != 1 || !strings.Contains(p.Diagnostics[0].Message, "has no member before it to sequence from") {
+				t.Fatalf("diagnostics %v, want one saying the `then` has no member before it", p.Diagnostics)
+			}
+		})
+	}
+}
+
+// A one-name edge (`then b;`, `if x then b;`, `else b;`) leaves its source to the
+// member before it, so one that no feature precedes is diagnosed the same way.
+func TestOneNameEdgeWithNoFeatureBeforeItIsDiagnosed(t *testing.T) {
+	for name, body := range map[string]string{
+		"nothing":            "",
+		"only documentation": "doc /* b */",
+		"only a definition":  "part def Inner;",
+		"only an import":     "private import Q::*;",
+		"only an alias":      "alias Bump for Step;",
+	} {
+		for spelling, edge := range map[string]string{
+			"then":    "then b;",
+			"if then": "if true then b;",
+			"else":    "else b;",
+		} {
+			t.Run(name+"/"+spelling, func(t *testing.T) {
+				src := "package P { action def Step; package Q { part def W; }\n" +
+					"action def A { " + body + " " + edge + " action b : Step; } }"
+				p := New(source.New("succession.sysml", []byte(src)))
+				p.ParseFile()
+				if len(p.Diagnostics) != 1 || !strings.Contains(p.Diagnostics[0].Message, "has no member before it to sequence from") {
+					t.Fatalf("diagnostics %v, want one saying the edge has no member before it", p.Diagnostics)
+				}
+			})
+		}
+	}
+
+	// The initial node is a member a `then` sequences from.
+	_, p := parseSuccessions(t, "package P { action def Step; action def A { first start; then b; action b : Step; } }")
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", p.Diagnostics)
+	}
+}
+
 // A nested state body carries the members of a state body, so a `then` attached
 // to one of its states is the same succession it would be one level up.
 func TestMemberAttachedThenInNestedStateDesugars(t *testing.T) {

@@ -28,7 +28,7 @@ var stdlibSnapshot []byte
 // whenever the stream layout does, so a stale blob is refused, not misread.
 const (
 	snapshotMagic         = "OpenSysML library snapshot\n"
-	snapshotFormatVersion = 1
+	snapshotFormatVersion = 8
 )
 
 // snapshotCRC checksums the index stream, so a damaged byte that still parses
@@ -119,6 +119,11 @@ var gcPause sync.Mutex
 // file, a LibraryPathEnvVar override with other content — and the caller
 // loads the files instead.
 func SnapshotIndex() (*symbols.Index, error) {
-	digest := NewLoader(DefaultSource(), nil).setDigest()
+	return snapshotIndexOf(DefaultSource())
+}
+
+// snapshotIndexOf is SnapshotIndex over the given source.
+func snapshotIndexOf(src Source) (*symbols.Index, error) {
+	digest := NewLoader(src, nil).setDigest()
 	return DecodeSnapshot(stdlibSnapshot, digest)
 }

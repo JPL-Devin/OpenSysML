@@ -14,12 +14,14 @@ func DefaultRegistry() *Registry {
 	reg := NewRegistry()
 	reg.Register(SyntaxPass{})
 	reg.Register(ImportVisibilityPass{})
+	reg.Register(EnumerationBodyPass{})
 	reg.Register(NonstandardNotationPass{})
 	reg.Register(NameResolutionPass{})
 	reg.Register(StateTransitionPass{})
 	reg.Register(ActionEndpointPass{})
 	reg.Register(TypeCheckPass{})
 	reg.Register(TransitionGuardPass{})
+	reg.Register(SendActionPass{})
 	reg.Register(KerMLSubsettingMetaclassPass{})
 	reg.Register(RedefinitionDirectionPass{})
 	reg.Register(ElementFilterPass{})
@@ -59,6 +61,7 @@ func DefaultRegistry() *Registry {
 	reg.Register(W9CBoundFeatureTypesPass{})
 	reg.Register(W11AUsageTypingPass{})
 	reg.Register(W11AKerMLSpecializationPass{})
+	reg.Register(ControlNodeSuccessionPass{})
 	return reg
 }
 

@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import {
+  CAPABILITY_COMPLEX_VALUES,
   CAPABILITY_QUERY,
   ClosedConnectionError,
   MissingCapabilityError,
@@ -16,6 +17,7 @@ import {
   SERVICE_ENV,
   connect,
   currentPrivateService,
+  formatValue,
   loads,
   requireCapability,
 } from "../src/node/index.js";
@@ -99,6 +101,40 @@ test("inline source parses, and its symbols, values and objects come back", asyn
   const wheel = wheels.values[0];
   assert.ok(wheel.kind === "instance");
   assert.equal(tree.byId(wheel.id)?.typeId, "Sample::Wheel");
+});
+
+const COMPLEX_MODEL = `package C {
+  private import ScalarValues::*;
+  private import ComplexFunctions::*;
+  part def Signal {
+    attribute z : Complex = rect(1.5, -2.0);
+    attribute zs : Complex[2] = (rect(1.0, 2.0), rect(3.0, 4.0));
+  }
+}
+`;
+
+test("a complex number is one value over gRPC, Connect protobuf and Connect JSON", async () => {
+  for (const options of [{ protocol: "grpc" as const }, {}, { encoding: "json" as const }]) {
+    await using connection = await connect(options);
+    assert.ok((await connection.serverInfo()).has(CAPABILITY_COMPLEX_VALUES));
+    await using model = await connection.loads(COMPLEX_MODEL);
+    assert.deepEqual(await model.eval("ComplexFunctions::rect(1.0, -1.0)"), {
+      kind: "complex",
+      value: { real: 1, imaginary: -1 },
+    });
+
+    const signal = await model.instantiate("C::Signal");
+    const z = signal.get("z");
+    assert.ok(z?.kind === "single");
+    assert.deepEqual(z.value, { kind: "complex", value: { real: 1.5, imaginary: -2 } });
+    assert.equal(formatValue(z.value), "1.5 - 2.0i");
+    const zs = signal.get("zs");
+    assert.ok(zs?.kind === "many");
+    assert.deepEqual(zs.values, [
+      { kind: "complex", value: { real: 1, imaginary: 2 } },
+      { kind: "complex", value: { real: 3, imaginary: 4 } },
+    ]);
+  }
 });
 
 test("a file parses, and a syntax error is a diagnostic, not a thrown call", async () => {

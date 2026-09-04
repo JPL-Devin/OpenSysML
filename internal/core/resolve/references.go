@@ -22,12 +22,15 @@ type refCollector struct {
 	refs []Reference
 	// condition is set while the names of an element-filter condition are walked.
 	condition bool
+	// member is the declaration whose text is being walked.
+	member ast.Node
 }
 
 // push records a reference, marking it as a filter condition's own name when one
 // is being walked: those names resolve unfiltered, as in resolve/document.go.
 func (c *refCollector) push(ref Reference) {
 	ref.Condition = c.condition
+	ref.Member = c.member
 	c.refs = append(c.refs, ref)
 }
 
@@ -53,11 +56,41 @@ func (c *refCollector) addReference(scope *symbols.Scope, decl ast.Node, qn *ast
 }
 
 // addRedefinition records a redefinition's target, which names a feature of the
-// owning scope's generals rather than a member of the scope itself.
-func (c *refCollector) addRedefinition(scope *symbols.Scope, qn *ast.QualifiedName) {
+// owning scope's generals rather than a member of the scope itself, past the
+// name decl itself borrows from it.
+func (c *refCollector) addRedefinition(scope *symbols.Scope, decl ast.Node, qn *ast.QualifiedName) {
 	if qn != nil {
-		c.push(Reference{Scope: scope, QN: qn, Redefines: true})
+		c.push(Reference{Scope: scope, QN: qn, Referrer: decl, Redefines: true})
 	}
+}
+
+// addConstructed records a constructor argument's label, which names a feature
+// of the instantiated type rather than an element of scope.
+func (c *refCollector) addConstructed(scope *symbols.Scope, typ, label *ast.QualifiedName) {
+	if typ != nil && label != nil {
+		c.push(Reference{Scope: scope, QN: label, Constructed: typ})
+	}
+}
+
+// addEndpoint records a transition endpoint, which names a vertex of the
+// enclosing machine ahead of anything else the name reaches.
+func (c *refCollector) addEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) {
+	if qn != nil {
+		c.push(Reference{Scope: scope, QN: qn, Endpoint: true})
+	}
+}
+
+// edgeEnd records a succession or control-flow end the author named; one bound
+// by position is no reference (see resolveEdgeEnd).
+func (c *refCollector) edgeEnd(scope *symbols.Scope, qn *ast.QualifiedName, member ast.Node, implied bool) {
+	if qn == nil || member != nil || implied {
+		return
+	}
+	if inStateMachine(scope) {
+		c.addEndpoint(scope, qn)
+		return
+	}
+	c.add(scope, qn)
 }
 
 // addChainMember records the member segments of a feature chain, which name
@@ -77,6 +110,15 @@ func (c *refCollector) childScope(scope *symbols.Scope, decl ast.Node) *symbols.
 	return nil
 }
 
+// bodyScope is the scope the body of an action node resolves against: its own
+// where the builder gave it one, and the enclosing scope otherwise.
+func (c *refCollector) bodyScope(scope *symbols.Scope, decl ast.Node) *symbols.Scope {
+	if child := c.childScope(scope, decl); child != nil {
+		return child
+	}
+	return scope
+}
+
 func (c *refCollector) walkMembers(scope *symbols.Scope, members []ast.Node) {
 	for _, m := range members {
 		decl := m
@@ -89,6 +131,9 @@ func (c *refCollector) walkMembers(scope *symbols.Scope, members []ast.Node) {
 }
 
 func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
+	prev := c.member
+	c.member = decl
+	defer func() { c.member = prev }()
 	switch {
 	case c.namespaceDecl(scope, decl):
 	case c.typeDecl(scope, decl):
@@ -105,19 +150,21 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 func (c *refCollector) namespaceDecl(scope *symbols.Scope, decl ast.Node) bool {
 	switch d := decl.(type) {
 	case *ast.Package:
-		c.prefixes(scope, d.Prefixes)
+		c.prefixes(scope, d, d.Prefixes)
 		if child := c.childScope(scope, d); child != nil {
 			c.walkMembers(child, d.Members)
 		}
 		return true
 	case *ast.Namespace:
-		c.prefixes(scope, d.Prefixes)
+		c.prefixes(scope, d, d.Prefixes)
 		if child := c.childScope(scope, d); child != nil {
 			c.walkMembers(child, d.Members)
 		}
 		return true
 	case *ast.Import:
-		c.add(scope, d.Imported)
+		if d.Imported != nil {
+			c.push(Reference{Scope: scope, QN: d.Imported, Import: d})
+		}
 		c.conditionExpr(scope, d.FilterExpr)
 		return true
 	case *ast.Alias:
@@ -131,12 +178,19 @@ func (c *refCollector) namespaceDecl(scope *symbols.Scope, decl ast.Node) bool {
 		}
 		return true
 	case *ast.Dependency:
-		c.prefixes(scope, d.Prefixes)
+		c.prefixes(scope, d, d.Prefixes)
 		for _, cl := range d.Clients {
 			c.add(scope, cl)
 		}
 		for _, sp := range d.Suppliers {
 			c.add(scope, sp)
+		}
+		return true
+	case *ast.MultiplicityDecl:
+		c.multiplicity(scope, d.Range)
+		c.add(scope, d.Subsets)
+		if child := c.childScope(scope, d); child != nil {
+			c.walkMembers(child, d.Members)
 		}
 		return true
 	case *ast.Comment:
@@ -145,7 +199,7 @@ func (c *refCollector) namespaceDecl(scope *symbols.Scope, decl ast.Node) bool {
 		}
 		return true
 	case *ast.PrefixMetadata:
-		c.metadataPrefix(scope, d)
+		c.metadataPrefix(scope, scope, d)
 		return true
 	case *ast.FilterMember:
 		c.conditionExpr(scope, d.Condition)
@@ -160,19 +214,21 @@ func (c *refCollector) namespaceDecl(scope *symbols.Scope, decl ast.Node) bool {
 func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 	switch d := decl.(type) {
 	case *ast.Definition:
-		c.prefixes(scope, d.Prefixes)
+		c.prefixes(scope, d, d.Prefixes)
 		c.relationships(scope, d, d.Relationships)
 		if child := c.childScope(scope, d); child != nil {
 			c.walkMembers(child, d.Members)
 		}
 		return true
 	case *ast.Usage:
-		c.prefixes(scope, d.Prefixes)
+		c.prefixes(scope, d, d.Prefixes)
 		c.relationships(scope, d, d.Relationships)
 		c.multiplicity(scope, d.Multiplicity)
 		// An accept node keeps its trigger in the usage's value.
 		if d.IsAccept {
 			c.trigger(scope, d.Value)
+		} else if inv := d.PerformedInvocation(); inv != nil {
+			c.invocation(scope, inv, true)
 		} else {
 			c.expr(scope, d.Value)
 		}
@@ -214,6 +270,7 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		}
 		return true
 	case *ast.SubjectMember:
+		c.prefixes(scope, d, d.Prefixes)
 		c.add(scope, d.TypeRef)
 		c.multiplicity(scope, d.Multiplicity)
 		c.relationships(scope, d, d.Relationships)
@@ -224,15 +281,21 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		return true
 	case *ast.InitialNode:
 		// The node's own name is a label, not a reference.
-		c.add(scope, d.Successor)
+		c.edgeEnd(scope, d.Successor, nil, false)
 		c.expr(scope, d.Guard)
+		if child := c.childScope(scope, d); child != nil {
+			c.walkMembers(child, d.Members)
+		}
+		return true
+	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
+		c.walkMembers(c.bodyScope(scope, d), ast.NodeBodyMembers(d))
 		return true
 	case *ast.ConstraintMember:
 		c.expr(scope, d.Expression)
-		c.walkMembers(scope, d.Body)
+		c.walkMembers(symbols.ConstraintBodyScope(scope, d), d.Body)
 		return true
 	case *ast.AssumeMember:
-		c.prefixes(scope, d.Prefixes)
+		c.prefixes(scope, d, d.Prefixes)
 		c.expr(scope, d.Expression)
 		c.add(scope, d.Reference)
 		c.relationships(scope, d, d.Relationships)
@@ -241,7 +304,7 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		c.walkMembers(symbols.ConstraintBodyScope(scope, d), d.Body)
 		return true
 	case *ast.RequireMember:
-		c.prefixes(scope, d.Prefixes)
+		c.prefixes(scope, d, d.Prefixes)
 		c.expr(scope, d.Expression)
 		c.add(scope, d.Reference)
 		c.relationships(scope, d, d.Relationships)
@@ -293,15 +356,38 @@ func (c *refCollector) behaviorDecl(scope *symbols.Scope, decl ast.Node) bool {
 		c.walkMembers(states, d.States)
 		return true
 	case *ast.TransitionMember:
-		c.add(scope, d.Source)
-		c.add(scope, d.Target)
+		// Ends, trigger and guard scopes as in resolveBehaviorDecl.
+		c.addEndpoint(scope, d.Source)
+		c.addEndpoint(scope, d.Target)
 		c.trigger(scope, d.Trigger)
+		c.add(scope, d.Via)
+		body := symbols.TriggerScope(scope, d)
+		c.expr(body, d.Guard)
+		c.walkMembers(body, d.Effect)
+		c.walkMembers(body, d.Members)
+		return true
+	case *ast.InitialNode:
+		c.edgeEnd(scope, d.Successor, nil, false)
 		c.expr(scope, d.Guard)
-		c.walkMembers(scope, d.Effect)
+		if child := c.childScope(scope, d); child != nil {
+			c.walkMembers(child, d.Members)
+		}
+		return true
+	case *ast.SuccessionEdge:
+		c.edgeEnd(scope, d.Source, d.SourceMember, d.SourceImplied)
+		c.edgeEnd(scope, d.Target, d.TargetMember, d.TargetImplied)
+		c.walkMembers(c.bodyScope(scope, d), d.Members)
+		return true
+	case *ast.ControlFlowEdge:
+		c.edgeEnd(scope, d.Source, d.SourceMember, d.SourceImplied)
+		c.edgeEnd(scope, d.Target, d.TargetMember, d.TargetImplied)
+		c.expr(scope, d.Guard)
 		return true
 	case *ast.SendStatement:
 		c.expr(scope, d.Message)
 		c.expr(scope, d.Target)
+		c.expr(scope, d.Receiver)
+		c.walkMembers(c.bodyScope(scope, d), d.Members)
 		return true
 	case *ast.TerminateStatement:
 		c.expr(scope, d.Target)
@@ -315,7 +401,11 @@ func (c *refCollector) behaviorDecl(scope *symbols.Scope, decl ast.Node) bool {
 		c.expr(scope, d.Expression)
 		return true
 	case *ast.PerformActionNode:
-		c.expr(scope, d.ActionRef)
+		if inv := d.PerformedInvocation(); inv != nil {
+			c.invocation(scope, inv, true)
+		} else {
+			c.expr(scope, d.ActionRef)
+		}
 		return true
 	case *ast.WhileLoopActionNode:
 		// A loop owns the scope its body declares into (see symbols.buildDecl).
@@ -383,9 +473,15 @@ func (c *refCollector) relationships(scope *symbols.Scope, decl ast.Node, rels [
 		if fr, ok := target.(*ast.FeatureReference); ok {
 			target = fr.Name
 		}
+		// A subsetting other than of decl itself reaches a sibling redefinition
+		// or resolves as a redefinition does, as in resolveRelationships.
+		if qn, ok := target.(*ast.QualifiedName); ok && rel.Kind == ast.RelSubsets {
+			c.push(Reference{Scope: scope, Subsetting: decl}.Spelled(qn))
+			continue
+		}
 		if rel.Kind == ast.RelRedefines {
 			if qn, ok := target.(*ast.QualifiedName); ok {
-				c.addRedefinition(scope, qn)
+				c.addRedefinition(scope, decl, qn)
 				continue
 			}
 		}
@@ -432,24 +528,51 @@ func (c *refCollector) multiplicity(scope *symbols.Scope, m *ast.Multiplicity) {
 	c.expr(scope, m.Upper)
 }
 
-func (c *refCollector) prefixes(scope *symbols.Scope, prefixes []*ast.PrefixMetadata) {
+// prefixes collects the prefix annotations of decl, a member of scope, in the
+// scopes the resolver resolves them in (see resolvePrefixes).
+func (c *refCollector) prefixes(scope *symbols.Scope, decl ast.Node, prefixes []*ast.PrefixMetadata) {
+	names := c.bodyScope(scope, decl)
 	for _, p := range prefixes {
 		if p != nil {
-			c.metadataPrefix(scope, p)
+			c.metadataPrefix(names, scope, p)
 		}
 	}
 }
 
-// metadataPrefix collects an annotation's metaclass name and the references its
-// body carries, in the body's own scope — the same scope the resolver resolves
-// them in (see resolveMetadataPrefix).
-func (c *refCollector) metadataPrefix(scope *symbols.Scope, p *ast.PrefixMetadata) {
-	c.add(scope, p.Type)
+// metadataPrefix collects an annotation's metaclass name and the elements it is
+// about in names, and the references its body carries in the body's own scope,
+// hung off parent — the same scopes the resolver resolves them in (see
+// resolveMetadataPrefix). The annotation is the member its own names are
+// written in, prefix or not.
+func (c *refCollector) metadataPrefix(names, parent *symbols.Scope, p *ast.PrefixMetadata) {
+	prev := c.member
+	c.member = p
+	defer func() { c.member = prev }()
+	c.add(names, p.Type)
+	for _, a := range p.About {
+		c.add(names, a)
+	}
 	if len(p.Body) == 0 {
 		return
 	}
-	if body := c.childScope(scope, p); body != nil {
+	if body := c.childScope(parent, p); body != nil {
 		c.walkMembers(body, p.Body)
+	}
+}
+
+// invocation collects a call's receiver, name and arguments; performed marks the
+// call an action usage runs as its value.
+func (c *refCollector) invocation(scope *symbols.Scope, v *ast.InvocationExpr, performed bool) {
+	c.expr(scope, v.Operand)
+	if v.Type != nil {
+		c.push(Reference{Scope: scope, QN: v.Type, Invocation: v, Performed: performed})
+	}
+	for _, a := range v.Args {
+		c.expr(scope, a)
+	}
+	for _, na := range v.NamedArgs {
+		c.add(scope, na.Name)
+		c.expr(scope, na.Value)
 	}
 }
 
@@ -471,15 +594,7 @@ func (c *refCollector) expr(scope *symbols.Scope, e ast.Node) {
 		c.expr(scope, v.Operand)
 		c.expr(scope, v.Index)
 	case *ast.InvocationExpr:
-		c.expr(scope, v.Operand)
-		c.add(scope, v.Type)
-		for _, a := range v.Args {
-			c.expr(scope, a)
-		}
-		for _, na := range v.NamedArgs {
-			c.add(scope, na.Name)
-			c.expr(scope, na.Value)
-		}
+		c.invocation(scope, v, false)
 	case *ast.CollectExpr:
 		c.expr(scope, v.Operand)
 		c.expr(scope, v.Body)
@@ -491,11 +606,16 @@ func (c *refCollector) expr(scope *symbols.Scope, e ast.Node) {
 		for _, a := range v.Args {
 			c.expr(scope, a)
 		}
+		for _, na := range v.NamedArgs {
+			c.addConstructed(scope, v.Type, na.Name)
+			c.expr(scope, na.Value)
+		}
 	case *ast.BodyExpr:
 		for i := range v.Params {
 			p := &v.Params[i]
 			c.add(scope, p.Type)
 			c.relationships(scope, v, p.Relationships)
+			c.multiplicity(scope, p.Multiplicity)
 			c.expr(scope, p.Value)
 		}
 		// The same scope the resolver uses, so a reference to a parameter or a
@@ -509,6 +629,9 @@ func (c *refCollector) expr(scope *symbols.Scope, e ast.Node) {
 		}
 	case *ast.MetadataAccessExpr:
 		c.add(scope, v.Ref)
+	case *ast.CastExpr:
+		c.add(scope, v.TargetType)
+		c.multiplicity(scope, v.Multiplicity)
 	case *ast.QualifiedName:
 		// A bare name in expression position parses straight to a qualified
 		// name rather than to a FeatureReference wrapper: `return r = speed;`

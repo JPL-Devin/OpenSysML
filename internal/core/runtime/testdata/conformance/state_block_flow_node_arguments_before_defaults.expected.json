@@ -1,0 +1,11 @@
+{
+	"type": "state",
+	"libraries": true,
+	"finalState": "done",
+	"stateVisits": ["init", "active", "done"],
+	"outputs": {
+		"seven": {"type": "Integer", "value": 7},
+		"product": {"type": "Integer", "value": 490},
+		"seen": {"type": "Integer", "value": 770}
+	}
+}

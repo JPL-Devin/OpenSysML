@@ -3,6 +3,7 @@
 // sequence expression `(seq1, seq2)`. The two spellings must therefore agree on
 // their size, their elements and what each position holds.
 package test {
+	private import SequenceFunctions::*;
 	calc flat {
 		attribute xs : Integer[*] = (1, 2, 3);
 		attribute ys : Integer[*] = (2, 4);

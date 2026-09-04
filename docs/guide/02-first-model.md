@@ -1,8 +1,8 @@
 # 2. Your first model
 
-This chapter declares a part, gives it values, instantiates it and inspects the result, first
-at the interactive prompt and then from a file. Every construct shown is the same notation a
-`.sysml` file contains; the REPL reports the result more quickly.
+In this chapter you declare a part, give it values, instantiate it and inspect the result, first
+at the interactive prompt and then from a file. Everything shown is the same notation you would
+write in a `.sysml` file; the REPL just shows you the result sooner.
 
 ## At the prompt
 
@@ -30,16 +30,16 @@ sysml> part def Wheel {
 ✓ part def Wheel
 ```
 
-Each accepted declaration is echoed back as `✓ <kind> <name>`. An opening brace begins a
-continuation (`...>`) that runs to the matching closing brace. A **blank line ends the
-submission**, so a declaration being typed must not contain one.
+Each accepted declaration is echoed back as `✓ <kind> <name>`. An opening brace starts a
+continuation prompt (`...>`) that lasts until the matching closing brace. A **blank line ends the
+submission**, so don't put one inside a declaration you are typing.
 
-Re-typing a namespace **adds to** the one already in the session: `package P { part def B; }`
-submitted after `package P { part def A; }` leaves both declared. An empty body
-(`package P { }`) clears the namespace. Anything a submission drops is reported on a `note:`
-line: the members it no longer declares, the instances it invalidated (whose IDs restart with
-the new model), and any `%action` or `%state` debugging session it ended. A debugging session
-over a declaration the submission did not touch continues to run.
+Typing a namespace again **adds to** the one already in the session: submitting
+`package P { part def B; }` after `package P { part def A; }` leaves both declared. An empty body
+(`package P { }`) clears the namespace. Whenever a submission drops something, a `note:`
+line says what: the members no longer declared, the instances that became invalid (their IDs
+restart with the new model), and any `%action` or `%state` debugging session that was ended. A
+debugging session over a declaration the submission did not touch keeps running.
 
 ### Define a Vehicle
 
@@ -111,8 +111,8 @@ package MyModel {
 }
 ```
 
-Load the file in the REPL. `%load` submits the file's contents as though they had been typed,
-so it reports the same `✓` lines. `%list` echoes everything the session currently holds:
+Load the file in the REPL. `%load` submits the file's contents as if you had typed them,
+so it reports the same `✓` lines. `%list` prints everything the session currently holds:
 
 ```bash
 $ sysml
@@ -148,9 +148,9 @@ Features:
     threshold = 100.0
 ```
 
-A composite feature lists the features of each of its objects under it, in order.
+A composite feature lists the features of each of its objects beneath it, in order.
 
 ---
 
-Next: [3. From the command line](03-command-line.md), which performs these same checks without
+Next: [3. From the command line](03-command-line.md), which runs these same checks without
 a prompt. The prompt itself is covered in [4. The REPL](04-repl.md).

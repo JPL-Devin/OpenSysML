@@ -237,6 +237,17 @@ func (k UsageKind) String() string {
 	return usageKindNames[k]
 }
 
+// IsEdge reports whether a usage of the kind is a connector or transition relating
+// other members rather than declaring one: a `then` stating no source sequences past it.
+func (k UsageKind) IsEdge() bool {
+	switch k {
+	case UsageSuccession, UsageTransition, UsageConnector, UsageFlow, UsageBinding,
+		UsageConnection, UsageInterface, UsageAllocation:
+		return true
+	}
+	return false
+}
+
 // RelationshipKind discriminates a specialization/typing edge at a
 // definition or usage declaration head.
 type RelationshipKind int
@@ -415,7 +426,10 @@ type Usage struct {
 	// IsBodyParameter marks the `action [<name>] { … }` a loop or branch body is
 	// written as (SysML.xtext ActionBodyParameter), not a nested action node.
 	IsBodyParameter bool
-	IsResult        bool // declared with 'return': the result parameter of a calculation/expression
+	// IsActionNode marks an action written as one node with its statement
+	// (`action s send x to r;`, SysML.xtext SendNode): Members hold that statement, not a body.
+	IsActionNode bool
+	IsResult     bool // declared with 'return': the result parameter of a calculation/expression
 	// IsNegated is the `not` of `assert not constraint { … }` and
 	// `assert not satisfy … by …`: the conditions are asserted to be false
 	// (Invariant::isNegated, SysML v2 §8.3.21.10).
@@ -442,13 +456,29 @@ type Usage struct {
 	CrossFeature      *CrossFeatureMember
 	Value             Node
 	ValueOperatorSpan source.Span
-	Members           []Node
-	HasBody           bool
+	// ValueIsDefault and ValueIsInitial are the `default` and `:=` of the value
+	// part (KerML FeatureValue::isDefault, isInitial).
+	ValueIsDefault bool
+	ValueIsInitial bool
+	Members        []Node
+	HasBody        bool
 
 	// Tier B connection/flow/port grammar. These are nil/zero for kinds
 	// that do not use them.
 	ConnectorEnds []*ConnectorEnd // connection / interface / allocation usage ends
 	FlowEnds      *FlowEnds       // flow usage ends
+}
+
+// IsSuccessionFlow reports whether the usage is a `succession flow`: a flow that
+// also orders its ends (SysML v2 SuccessionFlowUsage).
+func (u *Usage) IsSuccessionFlow() bool {
+	return u.Kind == UsageFlow && u.PrefixKeyword == "succession"
+}
+
+// IsPerformedAction reports whether the usage is a `perform action a : A;` or a
+// `perform a;`: an action the owner performs (SysML v2 PerformActionUsage).
+func (u *Usage) IsPerformedAction() bool {
+	return u.Kind == UsageAction && (u.Keyword == "perform" || u.PrefixKeyword == "perform")
 }
 
 // HasConjugatedTyping reports whether the usage declares a `: ~P` typing.
@@ -465,6 +495,18 @@ func (u *Usage) ConjugatedTyping() (*Relationship, bool) {
 		}
 	}
 	return nil, false
+}
+
+// PerformedInvocation is the call an action usage performs as its value
+// (`action a = tag(x);`); nil for any other usage or value.
+func (u *Usage) PerformedInvocation() *InvocationExpr {
+	if u.Kind != UsageAction {
+		return nil
+	}
+	if inv, ok := u.Value.(*InvocationExpr); ok && inv.Type != nil {
+		return inv
+	}
+	return nil
 }
 
 // FlowEnds holds the ends of a flow usage: the `from`/`to` targets and an

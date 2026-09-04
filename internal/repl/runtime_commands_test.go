@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -58,6 +59,20 @@ func wants(t *testing.T, got string, fragments ...string) {
 		if !strings.Contains(got, fragment) {
 			t.Errorf("expected %q in output:\n%s", fragment, got)
 		}
+	}
+}
+
+// wantsInOrder asserts every fragment appears in got, each after the one before it.
+func wantsInOrder(t *testing.T, got string, fragments ...string) {
+	t.Helper()
+	from := 0
+	for _, fragment := range fragments {
+		at := strings.Index(got[from:], fragment)
+		if at < 0 {
+			t.Errorf("expected %q after the fragments before it in output:\n%s", fragment, got)
+			return
+		}
+		from += at + len(fragment)
 	}
 }
 
@@ -241,18 +256,60 @@ func TestEvalReportsTheAnswerOfALiteralExpressionThatFails(t *testing.T) {
 	wants(t, run(t, empty, "%eval mass + 1"), "no declarations loaded")
 }
 
-// A collection operation is answered from literals alone, but a name the
-// session declares is that declaration's: the library implementation cannot
-// answer for a calc the session wrote under the same name.
-func TestEvalPrefersASessionDeclarationOverALibraryOperation(t *testing.T) {
+// A library operation is answered by its unqualified name only where the
+// session imports its package, as the checker resolves it; the qualified name is
+// answered anywhere. A calc the session wrote under the same name is that
+// declaration's, never the library's.
+func TestEvalResolvesALibraryOperationAsTheCheckerDoes(t *testing.T) {
 	empty := NewSession()
-	wants(t, run(t, empty, "%eval size((1, 2, 3))"), "= 3")
-	wants(t, run(t, empty, "%eval sum((1, 2, 3))"), "= 6")
+	wants(t, run(t, empty, "%eval SequenceFunctions::size((1, 2, 3))"), "= 3")
+	wants(t, run(t, empty, "%eval RealFunctions::sqrt(16.0)"), "= 4.0")
+	wants(t, run(t, empty, "%eval size((1, 2, 3))"),
+		"error: no declarations loaded",
+		"unresolved reference: size — did you mean SequenceFunctions::size or CollectionFunctions::size?")
+	wants(t, run(t, empty, "%eval sqrt(16.0)"),
+		"unresolved reference: sqrt — did you mean RealFunctions::sqrt or QuantityCalculations::sqrt?")
+
+	imported := NewSession()
+	imported.Submit("private import SequenceFunctions::*;")
+	imported.Submit("private import NumericalFunctions::*;")
+	wants(t, run(t, imported, "%eval size((1, 2, 3))"), "= 3")
+	wants(t, run(t, imported, "%eval (1, 2, 3)->size()"), "= 3")
+	wants(t, run(t, imported, "%eval sum((1, 2, 3))"), "= 6")
+	wants(t, run(t, imported, "%eval sqrt(16.0)"),
+		"unresolved reference: sqrt — did you mean RealFunctions::sqrt or QuantityCalculations::sqrt?")
+	rejects(t, run(t, imported, "%eval sqrt(16.0)"), "no declarations loaded")
 
 	own := NewSession()
+	own.Submit("private import NumericalFunctions::*;")
 	own.Submit("calc sum { in a; in b; return : Integer = a + b; }")
 	wants(t, run(t, own, "%eval sum(1, 2)"), "= 3")
 	wants(t, run(t, own, "%eval sum((1, 2, 3))"), "error:")
+}
+
+// A model's own calc that calls a library function by its unqualified name is
+// answered only once the model imports the package, whether it is read through
+// a feature it computes or invoked with %calc.
+func TestEvalAndCalcOfAnUnimportedLibraryFunction(t *testing.T) {
+	const wheels = `
+		package Demo {
+			part def Car {
+				attribute wheels : ScalarValues::Integer[*] = (1, 2, 3, 4);
+				attribute wheelCount = wheels->size();
+			}
+			calc def Count { in xs : ScalarValues::Integer[*]; return : ScalarValues::Integer = xs->size(); }
+		}`
+	unimported := NewSession()
+	unimported.Submit(wheels)
+	wants(t, run(t, unimported, "%eval Demo::Car::wheelCount"),
+		"error:", "unresolved reference: size — did you mean SequenceFunctions::size or CollectionFunctions::size?")
+	wants(t, run(t, unimported, "%calc Demo::Count((1, 2, 3))"),
+		"unresolved reference: size — did you mean SequenceFunctions::size or CollectionFunctions::size?")
+
+	imported := NewSession()
+	imported.Submit(strings.Replace(wheels, "package Demo {", "package Demo {\n\t\t\tprivate import SequenceFunctions::*;", 1))
+	wants(t, run(t, imported, "%eval Demo::Car::wheelCount"), "= 4")
+	wants(t, run(t, imported, "%calc Demo::Count((1, 2, 3))"), "= 3")
 }
 
 func TestCalcWithPositionalArgs(t *testing.T) {
@@ -413,6 +470,71 @@ func TestBreakpointOnInitialNodeStops(t *testing.T) {
 
 	wants(t, run(t, s, "%tokens"), "Token 1 @ start")
 	wants(t, run(t, s, "%continue"), "✓ Action completed", "total = 5")
+}
+
+// %break names a node a loop body declares: the run pauses before each of its
+// performances, with the token at the node running the loop, and resumes once per pause.
+func TestBreakpointOnABlockNodePausesEachIteration(t *testing.T) {
+	s := loadFixture(t, "testdata/action_block_debug.sysml")
+	run(t, s, "%action count")
+
+	wants(t, run(t, s, "%break add"), `✓ Breakpoint set at node "add"`)
+
+	paused := run(t, s, "%continue")
+	wants(t, paused, `⏸ Paused at breakpoint "add"`, "Tokens: 1")
+	rejects(t, paused, "Action completed")
+	wants(t, run(t, s, "%tokens"), "Token 1 @ iterate", "total = 0")
+
+	wants(t, run(t, s, "%step"), "✓ Step complete", `⏸ Paused at breakpoint "add"`)
+	wants(t, run(t, s, "%tokens"), "Token 1 @ iterate", "total = 1")
+
+	wants(t, run(t, s, "%continue"), `⏸ Paused at breakpoint "add"`)
+	wants(t, run(t, s, "%tokens"), "total = 3")
+	wants(t, run(t, s, "%continue"), "✓ Action completed", "total = 6")
+}
+
+// Ending a session paused in a block node — by %stop, by starting another, or
+// by redeclaring the action — releases its executor: the paused run ends and
+// the executor takes no further step.
+func TestEndingAPausedSessionReleasesItsRun(t *testing.T) {
+	pauseAtAdd := func(t *testing.T) (*Session, *runtime.ActionExecutor) {
+		t.Helper()
+		s := loadFixture(t, "testdata/action_block_debug.sysml")
+		run(t, s, "%action count")
+		run(t, s, "%break add")
+		wants(t, run(t, s, "%continue"), `⏸ Paused at breakpoint "add"`)
+		return s, s.actionExec.executor
+	}
+	released := func(t *testing.T, exec *runtime.ActionExecutor) {
+		t.Helper()
+		if err := exec.Step(); !errors.Is(err, runtime.ErrExecutorReleased) {
+			t.Errorf("Step of the ended session's executor = %v, want ErrExecutorReleased", err)
+		}
+	}
+
+	t.Run("stop", func(t *testing.T) {
+		s, exec := pauseAtAdd(t)
+		wants(t, run(t, s, "%stop"), `✓ Stopped debugging session for "count"`)
+		released(t, exec)
+	})
+	t.Run("another session", func(t *testing.T) {
+		s, exec := pauseAtAdd(t)
+		wants(t, run(t, s, "%action count"), `✓ Started action executor for "count"`)
+		released(t, exec)
+	})
+	t.Run("redeclared", func(t *testing.T) {
+		s, exec := pauseAtAdd(t)
+		res := s.Submit(`package Debug { action count { attribute total : Integer = 1; } }`)
+		wants(t, strings.Join(res.Notices, "\n"), `action debugging session for "count" ended`)
+		released(t, exec)
+	})
+	t.Run("unrelated declaration keeps it", func(t *testing.T) {
+		s, _ := pauseAtAdd(t)
+		if res := s.Submit(`package Other { attribute x = 1; }`); len(res.Notices) > 0 {
+			t.Fatalf("unrelated declaration ended the session: %v", res.Notices)
+		}
+		wants(t, run(t, s, "%step"), "✓ Step complete", `⏸ Paused at breakpoint "add"`)
+	})
 }
 
 func TestBreakpointRejectsUnknownNode(t *testing.T) {
@@ -626,6 +748,24 @@ func TestEvalResolvesImportedUnitsUnqualified(t *testing.T) {
 	wants(t, run(t, pkg, "%eval mass * 2"), "= 6.0")
 }
 
+// A require/assume constraint binding a value reads that value, as a constraint
+// usage's `= expr` does; one binding none holds no value to evaluate.
+func TestEvalReadsRequirementConstraintValues(t *testing.T) {
+	s := NewSession()
+	s.Submit(`package Demo {
+		constraint plain = false;
+		requirement def R {
+			require constraint failed = false;
+			assume constraint granted = true;
+			require constraint bare;
+		}
+	}`)
+	wants(t, run(t, s, "%eval Demo::plain"), "= false")
+	wants(t, run(t, s, "%eval Demo::R::failed"), "= false")
+	wants(t, run(t, s, "%eval Demo::R::granted"), "= true")
+	wants(t, run(t, s, "%eval Demo::R::bare"), "has no value to evaluate")
+}
+
 // The namespace the session works in is the last one it declared, so declaring
 // another moves it: the earlier package is then reached by qualified name.
 func TestPromptScopeIsTheLastNamespaceDeclared(t *testing.T) {
@@ -648,12 +788,12 @@ func TestPromptScopeIsTheLastNamespaceDeclared(t *testing.T) {
 // spaces — a quantity, a parenthesized expression, a nested call — survives.
 func TestCalcParsesExpressionArguments(t *testing.T) {
 	s := quantitySession(t)
-	wants(t, run(t, s, "%calc Fall -15.0 [m/s] 8.5 [s]"), "✓ Fall(-15.0 [m/s], 8.5 [s])", "= -127.5 [(m/s)*s]")
+	wants(t, run(t, s, "%calc Fall -15.0 [m/s] 8.5 [s]"), "✓ Fall(-15.0 [m/s], 8.5 [s])", "= -127.5 [m]")
 	// The same invocation written the way the notation writes one.
-	wants(t, run(t, s, "%calc Fall(-15.0 [m/s], 8.5 [s])"), "= -127.5 [(m/s)*s]")
+	wants(t, run(t, s, "%calc Fall(-15.0 [m/s], 8.5 [s])"), "= -127.5 [m]")
 	// A parenthesized subexpression, and a call standing as an argument.
-	wants(t, run(t, s, "%calc Fall (-5.0 [m/s] - 10.0 [m/s]) 8.5 [s]"), "= -127.5 [(m/s)*s]")
-	wants(t, run(t, s, "%calc Fall -15.0 [m/s] (4.0 [s] + 4.5 [s])"), "= -127.5 [(m/s)*s]")
+	wants(t, run(t, s, "%calc Fall (-5.0 [m/s] - 10.0 [m/s]) 8.5 [s]"), "= -127.5 [m]")
+	wants(t, run(t, s, "%calc Fall -15.0 [m/s] (4.0 [s] + 4.5 [s])"), "= -127.5 [m]")
 	// Named arguments are a different production; the limitation is reported.
 	wants(t, run(t, s, "%calc Fall v0=-15.0 [m/s] tb=8.5 [s]"), "named arguments are not supported")
 }
@@ -711,7 +851,7 @@ func TestFormatValueQuantityUsesRealFormatting(t *testing.T) {
 	wants(t, run(t, s, "%eval -15.200531548598184 [m/s]"), "= -15.200531548598184 [m/s]")
 	wants(t, run(t, s, "%eval 32.99999999999993 [s]"), "= 32.99999999999993 [s]")
 	// A whole magnitude keeps its ".0", as a bare Real does.
-	wants(t, run(t, s, "%eval 2.0 [m] * 3.0 [m]"), "= 6.0 [m*m]")
+	wants(t, run(t, s, "%eval 2.0 [m] * 3.0 [m]"), "= 6.0 [m**2]")
 	// A magnitude below what two decimals can show reads as itself, not as zero.
 	wants(t, run(t, s, "%eval 0.0001 [m]"), "= 0.0001 [m]")
 }

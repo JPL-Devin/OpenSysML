@@ -10,7 +10,7 @@ import (
 
 const vehicleSource = `package Demo {
 	part def Vehicle {
-		attribute mass = 1500.0;
+		attribute mass default = 1500.0;
 	}
 	part sedan : Vehicle {
 		attribute :>> mass = 1800.0;

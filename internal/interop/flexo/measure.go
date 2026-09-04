@@ -104,7 +104,7 @@ func Measure(ctx context.Context, c *Client, fixture string, model, reference []
 		return report, err
 	}
 	report.Reference, err = c.measureSide(ctx, "json-commit", referenceProject, referenceWritten,
-		func(project string) error { return c.PostChanges(ctx, project, changes) })
+		func(project string) error { _, err := c.PostChanges(ctx, project, "", changes); return err })
 	if err != nil {
 		return report, err
 	}
@@ -137,6 +137,8 @@ func prefixOf(iri string) string {
 		return "sysml"
 	case strings.HasPrefix(iri, rdf.OpenSysML):
 		return "sysx"
+	case rdf.IsAnnotationJSON(iri):
+		return "json"
 	default:
 		return "other"
 	}
@@ -164,6 +166,10 @@ func writtenFromGraph(graph *rdf.Graph) map[string]*writtenElement {
 		}
 		if triple.Predicate.Value == rdf.RDFType {
 			element.metaclass = rdf.LocalName(triple.Object.Value)
+			continue
+		}
+		if rdf.IsAnnotationJSON(triple.Predicate.Value) {
+			// The array spelling of a sysml: collection, not a property of its own.
 			continue
 		}
 		kind := "literal"

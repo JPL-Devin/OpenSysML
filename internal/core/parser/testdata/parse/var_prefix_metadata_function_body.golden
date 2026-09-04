@@ -1,0 +1,28 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="P" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="metaclass" abstract=false variation=false name="Safety"))
+      (Membership visibility="default"
+        (Usage kind="calc" name="F" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="function"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variable=true keyword="feature" prefix="var"
+              (PrefixMetadata type="Safety")
+              (Relationship kind="typing" target=Safety
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variable=true prefix="var"
+              (PrefixMetadata type="Safety")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="z" ref=false direction="none" composite=false derived=false ordered=false nonunique=false variable=true prefix="var"
+              (PrefixMetadata type="Safety")
+              (LiteralInteger value="1")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="vals" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Safety
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInteger value="3"))))
+          (IndexExpr
+            (FeatureReference name="vals")
+            (LiteralInteger value="1")))))))

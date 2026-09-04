@@ -71,5 +71,9 @@ func (s *Service) filterValueCapabilities(value *pb.Value) {
 		if !s.capabilities.has(CapabilityUnsetValue) {
 			value.Kind = &pb.Value_Null{Null: "unsupported: unset value"}
 		}
+	case *pb.Value_Complex:
+		if !s.capabilities.has(CapabilityComplexValues) {
+			value.Kind = &pb.Value_Null{Null: "unsupported: complex number " + runtime.FormatComplex(ProtoToComplex(kind.Complex))}
+		}
 	}
 }

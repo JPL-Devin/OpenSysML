@@ -18,6 +18,12 @@ type EffectiveFeature struct {
 	DefaultDecl  *symbols.Symbol // feature the DefaultValue was written on (nil if none)
 }
 
+// Scalar reports whether the feature holds at most one value. An unbounded
+// upper bound carries Value 0, so the infinite flag has to be tested separately.
+func (f *EffectiveFeature) Scalar() bool {
+	return !f.Multiplicity.Upper.Infinite && f.Multiplicity.Upper.Value <= 1
+}
+
 // DefaultScope returns the scope DefaultValue resolves its names in, which for
 // an inherited default is where the redefined declaration wrote it.
 func (f *EffectiveFeature) DefaultScope() *symbols.Scope {
@@ -70,101 +76,34 @@ func (ctx *Context) FeaturesOf(typeSym *symbols.Symbol) []EffectiveFeature {
 	return features
 }
 
-// buildFeatures constructs the effective-feature list by walking the type hierarchy.
+// buildFeatures constructs the effective-feature list from the semantic shape.
 func (ctx *Context) buildFeatures(typeSym *symbols.Symbol) []EffectiveFeature {
 	// Redefined features stay in the shape: a redefinition shares its target's
 	// feature value, which both names read (see subsetting_test.go).
-	allMembers := ctx.model.MembersOfIncludingRedefined(typeSym)
-
-	// Track which features to keep (deduplication by name: last declarator wins per masking/redefinition)
-	featureMap := make(map[string]EffectiveFeature)
-	seen := make(map[*symbols.Symbol]bool)
-
-	// Process members in order (local first, then inherited)
-	for _, memberSym := range allMembers {
-		// Dedupe by pointer (short+primary names alias the same symbol)
-		if seen[memberSym] {
-			continue
-		}
-		seen[memberSym] = true
-
-		// Only include features (attributes, parts, etc.)
-		if !isFeature(memberSym) {
-			continue
-		}
-		// A library-declared feature belongs to the metamodel frame every element
-		// specializes, not to the object the model asked for.
-		if ctx.libraryDeclared(memberSym) {
-			continue
-		}
-		// A variant is a choice offered for its variation, not a feature of the
-		// object declaring it: it materializes no feature value of its own. A `variant`
-		// outside a variation offers no choice, so it stays an ordinary feature.
-		if ctx.model.VariationPointOwning(memberSym) != nil {
-			continue
-		}
-
-		name := memberSym.Name
+	shape := ctx.model.ShapeFeatures(typeSym)
+	result := make([]EffectiveFeature, 0, len(shape))
+	seenNames := make(map[string]bool, len(shape))
+	for _, f := range shape {
+		memberSym := f.Symbol
 		typ := ctx.extractType(memberSym)
-		mult, multStated := ctx.extractMultiplicity(memberSym)
-		if !multStated {
-			if inherited, ok := ctx.redefinedMultiplicity(memberSym, typeSym); ok {
-				mult = inherited
-			}
-		}
+		mult := ctx.featureMultiplicity(memberSym, typeSym)
 		defaultVal := ctx.extractDefaultValue(memberSym)
 		defaultDecl := memberSym
 		if defaultVal == nil {
 			defaultVal, defaultDecl = ctx.redefinedDefault(memberSym, typeSym)
 		}
-
-		// Determine owner type (walk up to find the declaration scope's owner)
-		ownerType := ctx.findOwnerType(memberSym)
-
-		// Store feature; last one wins (redefinition/masking)
-		featureMap[name] = EffectiveFeature{
-			Name:         name,
+		seenNames[f.Name] = true
+		result = append(result, EffectiveFeature{
+			Name:         f.Name,
 			Symbol:       memberSym,
-			OwnerType:    ownerType,
+			OwnerType:    ctx.findOwnerType(memberSym),
 			Type:         typ,
 			Multiplicity: mult,
 			DefaultValue: defaultVal,
 			DefaultDecl:  defaultDecl,
-		}
+		})
 	}
-
-	// Convert map to ordered list (stable order: iterate over allMembers and pick from map)
-	result := make([]EffectiveFeature, 0, len(featureMap))
-	seenNames := make(map[string]bool)
-	for _, memberSym := range allMembers {
-		name := memberSym.Name
-		if seenNames[name] {
-			continue
-		}
-		if feat, ok := featureMap[name]; ok {
-			result = append(result, feat)
-			seenNames[name] = true
-		}
-	}
-
 	return append(result, ctx.connectorEndFeatures(typeSym, seenNames)...)
-}
-
-// isFeature returns true if the symbol represents a structural feature (attribute, part, etc.).
-func isFeature(sym *symbols.Symbol) bool {
-	switch sym.Kind {
-	case symbols.SymbolAttributeUsage, symbols.SymbolPartUsage, symbols.SymbolItemUsage,
-		symbols.SymbolPortUsage, symbols.SymbolConnectionUsage, symbols.SymbolActionUsage,
-		symbols.SymbolStateUsage, symbols.SymbolConstraintUsage, symbols.SymbolRequirementUsage,
-		symbols.SymbolOccurrenceUsage, symbols.SymbolIndividualUsage,
-		symbols.SymbolInterfaceUsage, symbols.SymbolFlowUsage,
-		// An allocation usage is a connection usage of the allocation library
-		// (SysML v2 §8.3.19), so an object carries it as a feature.
-		symbols.SymbolAllocationUsage:
-		return true
-	default:
-		return false
-	}
 }
 
 // extractType resolves the type of a feature: the one it declares, or the one
@@ -212,35 +151,64 @@ func (ctx *Context) extractMultiplicity(featureSym *symbols.Symbol) (r semantics
 
 // extractDefaultValue returns the default-value expression for a feature (nil if none).
 func (ctx *Context) extractDefaultValue(featureSym *symbols.Symbol) ast.Node {
-	if usage, ok := featureSym.Decl.(*ast.Usage); ok {
-		return usage.Value // nil if no default
+	if oc, ok := ast.OwnedConstraintOf(featureSym.Decl); ok {
+		return oc.Value
+	}
+	switch decl := featureSym.Decl.(type) {
+	case *ast.Usage:
+		return decl.Value // nil if no default
+	case *ast.SubjectMember:
+		return decl.BindingExpr
 	}
 	return nil
 }
 
-// redefinedMultiplicity returns the multiplicity a feature takes from the
-// feature it redefines when it declares none: a redefining feature is the
-// redefined feature declared again (KerML 1.0 §7.3.4.5), so `:>> xs = (1, 2)`
-// is bound by the `xs` it restates. Subsetting is not inherited this way — a
-// subsetting feature is one of the subsetted feature's values, not the same
-// feature.
-func (ctx *Context) redefinedMultiplicity(sym, owner *symbols.Symbol) (semantics.Range, bool) {
-	seen := map[*symbols.Symbol]bool{sym: true}
-	for queue := []*symbols.Symbol{sym}; len(queue) > 0; {
-		cur := queue[0]
-		queue = queue[1:]
-		for _, redefined := range ctx.relatedFeatures(cur, owner, ast.RelRedefines) {
-			if seen[redefined] {
+// featureMultiplicity is the multiplicity a feature has on owner: as stated, else
+// as inherited from what it redefines or subsets, else the assumed 1..1.
+func (ctx *Context) featureMultiplicity(sym, owner *symbols.Symbol) semantics.Range {
+	mult, stated := ctx.extractMultiplicity(sym)
+	if stated {
+		return mult
+	}
+	if inherited, ok := ctx.inheritedMultiplicity(sym, owner, map[*symbols.Symbol]bool{sym: true}); ok {
+		return inherited
+	}
+	return mult
+}
+
+// inheritedMultiplicity intersects the multiplicities a feature declaring none redefines —
+// and, if abstract, subsets (KerML 1.0 §8.4.4.12.1); path ends cycles, not shared ancestors.
+func (ctx *Context) inheritedMultiplicity(sym, owner *symbols.Symbol, path map[*symbols.Symbol]bool) (semantics.Range, bool) {
+	var mult semantics.Range
+	found := false
+	kinds := []ast.RelationshipKind{ast.RelRedefines}
+	if symbols.IsAbstract(sym) {
+		kinds = append(kinds, ast.RelSubsets)
+	}
+	for _, kind := range kinds {
+		for _, general := range ctx.relatedFeatures(sym, owner, kind) {
+			if path[general] {
 				continue
 			}
-			seen[redefined] = true
-			if mult, ok := ctx.model.MultiplicityOf(redefined); ok {
-				return mult, true
+			generalMult, stated := ctx.model.MultiplicityOf(general)
+			if !stated {
+				path[general] = true
+				inherited, ok := ctx.inheritedMultiplicity(general, owner, path)
+				delete(path, general)
+				if ok {
+					generalMult = inherited
+				} else {
+					generalMult = semantics.AssumedRange()
+				}
 			}
-			queue = append(queue, redefined)
+			if found {
+				mult = mult.Intersect(generalMult)
+			} else {
+				mult, found = generalMult, true
+			}
 		}
 	}
-	return semantics.Range{}, false
+	return mult, found
 }
 
 // redefinedDefault returns the value a feature takes from the feature it
@@ -277,6 +245,12 @@ func (ctx *Context) findOwnerType(featureSym *symbols.Symbol) *symbols.Symbol {
 	ownerNode := ownerScope.Node()
 	if ownerNode == nil {
 		return nil
+	}
+
+	// The scope records the symbol declaring it; a scope re-owned by another
+	// declaration (a metadata body owned by its definition) is searched below.
+	if owner := ownerScope.Owner(); owner != nil && owner.Decl == ownerNode {
+		return owner
 	}
 
 	// Look up the symbol for the owner node in the parent scope

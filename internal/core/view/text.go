@@ -29,7 +29,7 @@ func (r *Rendering) TextWidth(width int) string {
 	}
 	b.WriteString("\n")
 	if r.Empty() {
-		b.WriteString("\n" + r.emptyReason() + "\n")
+		b.WriteString("\n" + r.EmptyReason() + "\n")
 		writeNotices(&b, r.Notices)
 		return b.String()
 	}
@@ -57,10 +57,10 @@ func (r *Rendering) TextWidth(width int) string {
 	return b.String()
 }
 
-// emptyReason says why a rendering shows nothing: a view exposing nothing, or a
+// EmptyReason says why a rendering shows nothing: a view exposing nothing, or a
 // view whose exposed elements this kind of rendering cannot show, which the
 // notices then account for one by one.
-func (r *Rendering) emptyReason() string {
+func (r *Rendering) EmptyReason() string {
 	if len(r.Notices) > 0 {
 		return fmt.Sprintf("the rendering is empty: nothing the view exposes is shown by %s %s rendering",
 			r.Kind.article(), r.Kind)

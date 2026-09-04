@@ -21,9 +21,19 @@ import (
 
 var update = flag.Bool("update", false, "rewrite golden Markdown files")
 
-// renderFixtureDocument runs the whole pipeline on a fixture: parse, resolve,
-// semantics, docplan, docir, then Markdown rendering.
+// renderFixtureDocument evaluates a fixture document and renders it as Markdown.
 func renderFixtureDocument(t *testing.T, path, name string) string {
+	t.Helper()
+	markdown, err := Markdown(fixtureDocument(t, path, name))
+	if err != nil {
+		t.Fatalf("render document %s: %v", name, err)
+	}
+	return markdown
+}
+
+// fixtureDocument runs the whole pipeline on a fixture: parse, resolve,
+// semantics, docplan, then document IR evaluation.
+func fixtureDocument(t *testing.T, path, name string) *docir.Document {
 	t.Helper()
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -51,11 +61,7 @@ func renderFixtureDocument(t *testing.T, path, name string) string {
 	if err != nil {
 		t.Fatalf("evaluate document %s: %v", name, err)
 	}
-	markdown, err := Markdown(document)
-	if err != nil {
-		t.Fatalf("render document %s: %v", name, err)
-	}
-	return markdown
+	return document
 }
 
 // TestMarkdownTelescopeReportGolden locks the end-to-end rendering of a
@@ -113,6 +119,22 @@ func TestMarkdownGoldenStructure(t *testing.T) {
 		if strings.HasPrefix(line, "| ") && strings.Contains(line, "\\|") && !strings.HasSuffix(line, " |") {
 			t.Errorf("table row not terminated: %q", line)
 		}
+	}
+}
+
+// TestMarkdownDefaultedQueryParameters renders content that omits defaulted
+// query parameters: element, inherited, and redefining defaults all apply.
+func TestMarkdownDefaultedQueryParameters(t *testing.T) {
+	got := renderFixtureDocument(t,
+		filepath.Join("testdata", "defaulted_queries.sysml"),
+		"Observatory::DefaultedReport")
+	want := "# Defaulted Queries\n\n" +
+		"<!-- caption -->\n*Heavy subsystems by default*\n\n" +
+		"| name | mass |\n| --- | --- |\n| mount | 15 |\n| segmentControl | 20 |\n\n" +
+		"- mount 15\n- optics 8.5\n- segmentControl 20\n\n" +
+		"- spectrograph 4\n"
+	if got != want {
+		t.Errorf("rendered Markdown = \n%s\nwant:\n%s", got, want)
 	}
 }
 

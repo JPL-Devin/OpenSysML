@@ -344,19 +344,21 @@ func (p *Parser) atVarPrefix() bool {
 		return false
 	}
 	next := p.peekN(1)
-	return p.isKindKeyword(next) ||
+	return p.isKindKeyword(next) || next.Kind == lexer.Hash ||
 		(next.Kind == lexer.Keyword && featureModifierKeywords[next.KeywordID])
 }
 
 // atVarDeclaration reports whether the cursor is at a `var`-prefixed
 // declaration, whose kind keyword may be left out (`var x : Integer;`). A
-// following name cannot continue an expression, so `var` there is the prefix.
+// following name or `#M` prefix cannot continue an expression, so `var` there
+// is the prefix; `var#(1)` indexes a feature named `var`.
 func (p *Parser) atVarDeclaration() bool {
 	if !p.atVarWord() {
 		return false
 	}
 	next := p.peekN(1).Kind
-	return p.isKindKeyword(p.peekN(1)) || next == lexer.Identifier || next == lexer.UnrestrictedName
+	return p.isKindKeyword(p.peekN(1)) || next == lexer.Identifier || next == lexer.UnrestrictedName ||
+		(next == lexer.Hash && p.peekN(2).Kind != lexer.LParen)
 }
 
 // kindPrefixWord returns the word at the cursor that may qualify a following
@@ -389,8 +391,8 @@ func (p *Parser) atKindPrefix() bool {
 	if p.atUseCase() {
 		return false
 	}
-	if kw == varPrefixWord && p.peekN(1).Kind == lexer.Keyword &&
-		featureModifierKeywords[p.peekN(1).KeywordID] {
+	if kw == varPrefixWord && (p.peekN(1).Kind == lexer.Hash ||
+		p.peekN(1).Kind == lexer.Keyword && featureModifierKeywords[p.peekN(1).KeywordID]) {
 		return true
 	}
 	if !p.isKindKeyword(p.peekN(1)) {
@@ -501,8 +503,11 @@ func (p *Parser) namesReference(n int) bool {
 // here (`:`/`defined by`, `:>`/`subsets`, `::>`/`references`, `=>`/`crosses`,
 // `:>>`/`redefines`), so neither can be read differently from the other.
 // `specializes` is excluded: it relates two types (SubclassificationPart).
-func (p *Parser) atFeatureSpecialization() bool {
-	t := p.peek()
+func (p *Parser) atFeatureSpecialization() bool { return p.featureSpecializationAt(0) }
+
+// featureSpecializationAt is atFeatureSpecialization at the token i ahead.
+func (p *Parser) featureSpecializationAt(i int) bool {
+	t := p.peekN(i)
 	switch t.Kind {
 	case lexer.Colon, lexer.ColonGt, lexer.ColonGtGt, lexer.ColonColonGt, lexer.EqGt:
 		return true
@@ -511,7 +516,7 @@ func (p *Parser) atFeatureSpecialization() bool {
 		case "subsets", "references", "crosses", "redefines":
 			return true
 		case "defined", "typed":
-			n := p.peekN(1)
+			n := p.peekN(i + 1)
 			return n.Kind == lexer.Keyword && n.KeywordID == "by"
 		}
 	}
@@ -576,6 +581,117 @@ func (p *Parser) atKindlessFeatureTyping() bool {
 		return false
 	}
 	return beginsDeclarationTail(next, p.peekN(2))
+}
+
+// atEnumeratedValueDeclaration reports whether the enum-body member ahead is an
+// EnumeratedValue the body loop reads itself: prefixed, anonymous or keywordless.
+func (p *Parser) atEnumeratedValueDeclaration() bool {
+	off := 0
+	if t := p.peek(); t.Kind == lexer.Keyword {
+		switch t.KeywordID {
+		case "public", "private", "protected":
+			off = 1
+		}
+	}
+	end := p.prefixMetadataEndAt(off)
+	prefixed := end > off
+	off = end
+	if t := p.peekN(off); t.Kind == lexer.Keyword && t.KeywordID == "enum" {
+		if prefixed {
+			return true
+		}
+		off++
+		return p.peekN(off).Kind == lexer.Eq || p.peekN(off).Kind == lexer.ColonEq
+	}
+	switch t := p.peekN(off); t.Kind {
+	case lexer.Eq, lexer.ColonEq, lexer.Lt:
+		return true
+	case lexer.Semicolon, lexer.LBrace:
+		return prefixed
+	}
+	if p.atNameAt(off) {
+		off++
+		if endsEnumeratedValueName(p.peekN(off)) {
+			return true
+		}
+	}
+	return p.atFeatureSpecializationPartAt(off)
+}
+
+// atNameAt reports whether the token off positions ahead can begin a name
+// segment, as atName does for the current token.
+func (p *Parser) atNameAt(off int) bool {
+	t := p.peekN(off)
+	switch t.Kind {
+	case lexer.Identifier, lexer.UnrestrictedName:
+		return true
+	case lexer.Keyword:
+		return !p.reservedWord(t.KeywordID)
+	}
+	return false
+}
+
+// endsEnumeratedValueName reports whether t follows the name of an enumerated
+// value that states no specialization: its value, body or `;`.
+func endsEnumeratedValueName(t lexer.Token) bool {
+	switch t.Kind {
+	case lexer.Semicolon, lexer.LBrace, lexer.Eq, lexer.ColonEq:
+		return true
+	case lexer.Keyword:
+		return t.KeywordID == "default"
+	}
+	return false
+}
+
+// prefixMetadataEndAt returns the offset just past the `#Name` prefixes that
+// begin off tokens ahead, reading each name as parseQualifiedNameRelaxed does.
+func (p *Parser) prefixMetadataEndAt(off int) int {
+	for p.peekN(off).Kind == lexer.Hash {
+		off++
+		if p.peekN(off).Kind == lexer.Dollar && p.peekN(off+1).Kind == lexer.ColonColon {
+			off += 2
+		}
+		for {
+			switch p.peekN(off).Kind {
+			case lexer.Identifier, lexer.UnrestrictedName, lexer.Keyword:
+				off++
+			default:
+				return off
+			}
+			if p.peekN(off).Kind != lexer.ColonColon {
+				break
+			}
+			off++
+		}
+	}
+	return off
+}
+
+// atFeatureSpecializationPartAt reports whether the token off positions ahead
+// opens a FeatureSpecializationPart (KerML.xtext): a specialization or a
+// multiplicity. Only such tokens are looked past, since reading beyond a `doc`
+// or `;` would pull the trivia that follows into the current member.
+func (p *Parser) atFeatureSpecializationPartAt(off int) bool {
+	t := p.peekN(off)
+	switch t.Kind {
+	case lexer.LBracket, lexer.ColonGt, lexer.ColonGtGt, lexer.ColonColonGt, lexer.EqGt:
+		return true
+	case lexer.Colon:
+		off++
+		if p.peekN(off).Kind == lexer.Dollar && p.peekN(off+1).Kind == lexer.ColonColon {
+			off += 2
+		}
+		return p.atNameAt(off)
+	case lexer.Keyword:
+		switch t.KeywordID {
+		case "subsets", "references", "crosses", "redefines":
+			return true
+		case "defined", "typed":
+			n := p.peekN(off + 1)
+			return n.Kind == lexer.Keyword && n.KeywordID == "by"
+		}
+	}
+	return false
 }
 
 // atKeywordlessFeature reports whether the cursor is at such a feature, either
@@ -683,26 +799,50 @@ func (p *Parser) atDirectionKeyword() bool {
 	return false
 }
 
+// chainWord marks a feature chain declaration (`attribute chain a.b;`). It is
+// a modifier only when a name follows it; otherwise it names the feature.
+const chainWord = "chain"
+
+// atChainWord reports whether the cursor is at the word `chain`.
+func (p *Parser) atChainWord() bool {
+	t := p.peek()
+	return t.Kind == lexer.Identifier && p.src.Text(t.Span) == chainWord
+}
+
+// atChainModifier reports whether the cursor is at the `chain` modifier of a
+// declaration rather than at a feature named `chain`: what follows must spell a
+// name (atName), so a word this grammar reserves — `ordered`, `specializes`,
+// `default`, `about`, … — leaves `chain` as the name.
+func (p *Parser) atChainModifier() bool {
+	if !p.atChainWord() {
+		return false
+	}
+	next := p.peekN(1)
+	switch next.Kind {
+	case lexer.Identifier, lexer.UnrestrictedName, lexer.ColonColon, lexer.Lt:
+		return true
+	case lexer.Keyword:
+		return !p.reservedWord(next.KeywordID)
+	}
+	return false
+}
+
 func (p *Parser) parseFeatureModifiers() featureMods {
 	var m featureMods
 	for {
 		t := p.peek()
-		// Handle identifier "chain" as contextual modifier ONLY if followed by name/keyword
-		if t.Kind == lexer.Identifier && p.src.Text(t.Span) == "chain" {
-			next := p.peekN(1)
-			// "chain" is modifier if next token is identifier, keyword, or :: (qualified name)
-			isModifier := next.Kind == lexer.Identifier || next.Kind == lexer.Keyword || next.Kind == lexer.ColonColon
-			if isModifier {
+		if p.atChainWord() {
+			if p.atChainModifier() {
 				m.isChain = true
 				p.advance()
 				continue
 			}
-			// Otherwise "chain" is the declaration name itself - stop parsing modifiers
 			return m
 		}
 		if t.Kind == lexer.Identifier && p.src.Text(t.Span) == varPrefixWord {
 			next := p.peekN(1)
-			isModifier := p.isKindKeyword(next) ||
+			// KerML FeaturePrefix puts prefix metadata after `var`: `var #M feature f`.
+			isModifier := p.isKindKeyword(next) || next.Kind == lexer.Hash ||
 				(next.Kind == lexer.Keyword && featureModifierKeywords[next.KeywordID]) ||
 				p.atVarPrefixedFeature()
 			if isModifier {
@@ -868,17 +1008,7 @@ func (p *Parser) warnAmbiguousModifierKind(mods featureMods, isKind func(lexer.T
 // already established (via atDefUsageStart) that a def/usage begins here.
 func (p *Parser) parseDefUsage(start int) ast.Node {
 	// Parse optional `#MetadataType` prefixes (user-defined keywords)
-	var prefixes []*ast.PrefixMetadata
-	for p.at(lexer.Hash) {
-		p.advance() // consume #
-		// Allow keywords as metadata type names (e.g., #scenario, #cause)
-		metaName := p.parseQualifiedNameRelaxed()
-		if metaName != nil {
-			prefixes = append(prefixes, &ast.PrefixMetadata{
-				Type: metaName,
-			})
-		}
-	}
+	prefixes := p.parsePrefixMetadata()
 
 	// Helper to apply prefixes to result node
 	applyPrefixes := func(node ast.Node) ast.Node {
@@ -911,12 +1041,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 
 	// UsagePrefix ends in UsageExtensionKeyword* (SysML.xtext:582), so prefix
 	// metadata may follow the modifiers: `abstract #Classified z;`.
-	for p.at(lexer.Hash) {
-		p.advance()
-		if metaName := p.parseQualifiedNameRelaxed(); metaName != nil {
-			prefixes = append(prefixes, &ast.PrefixMetadata{Type: metaName})
-		}
-	}
+	prefixes = append(prefixes, p.parsePrefixMetadata()...)
 
 	// `snapshot` and `timeslice` portion the occurrence usage they prefix:
 	// `timeslice item i;` as well as the bare `timeslice t;`
@@ -931,6 +1056,9 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			p.error(tok.Span, "a usage declares at most one portion kind ('snapshot' or 'timeslice')")
 		}
 		mods.portion = portion
+		// The portion kind is part of the usage prefix, so prefix metadata may
+		// still follow it: `snapshot #Classified part s;`.
+		prefixes = append(prefixes, p.parsePrefixMetadata()...)
 		// Without a kind keyword the portion itself declares an occurrence usage.
 		if !p.atPortionedKind() {
 			isAll := p.acceptSufficientAll()
@@ -993,16 +1121,15 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		}
 
 		p.advance() // consume the kind keyword
-		// A subject, actor or stakeholder takes prefix metadata after its
-		// keyword: `actor #B a;` (SysML.xtext SubjectUsage, ActorUsage,
-		// StakeholderUsage, each `'keyword' UsageExtensionKeyword* Usage`).
-		if kw == "subject" || kw == "actor" || kw == "stakeholder" {
-			for p.at(lexer.Hash) {
-				p.advance()
-				if metaName := p.parseQualifiedNameRelaxed(); metaName != nil {
-					prefixes = append(prefixes, &ast.PrefixMetadata{Type: metaName})
-				}
-			}
+		// A subject, actor, stakeholder or objective takes prefix metadata after
+		// its keyword: `actor #B a;` (SysML.xtext SubjectUsage, ActorUsage,
+		// StakeholderUsage, ObjectiveRequirementUsage, each `'keyword'
+		// UsageExtensionKeyword* …`), as does a keyword that qualifies the
+		// declaration after it: `variant #B part v;`, `assume #B constraint c;`
+		// (VariantUsageElement, RequirementConstraintUsage) — not `assert`, whose
+		// OccurrenceUsagePrefix puts them ahead of it: `#B assert not constraint c;`.
+		if kw == "subject" || kw == "actor" || kw == "stakeholder" || kw == "objective" || kw == "variant" || kw == "assume" || kw == "require" {
+			prefixes = append(prefixes, p.parsePrefixMetadata()...)
 		}
 		// `variant x` declares a variant of the variation that owns it
 		// (VariantMembership, SysML v2 §7.20).
@@ -1076,19 +1203,12 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			return applyPrefixes(p.parseTransitionMember(start))
 		}
 
-		// Special case: succession flow from X to Y
-		// If succession is followed by flow keyword, parse as flow usage with succession typing
+		// `succession flow from X to Y` is a flow that is also a succession
+		// (SysML.xtext:1278 SuccessionFlowUsage); the prefix keeps it apart.
 		if kw == "succession" && p.atKeyword("flow") {
-			p.advance() // consume 'flow'
-			u := p.parseUsage(start, ast.UsageFlow, "flow", mods, isAll)
-			// Add implicit succession typing - succession concept applies to this flow
-			// Use typing relationship to indicate this flow has succession semantics
-			if u != nil {
-				// Add succession as typing (could also use specialization)
-				// For now, treat as semantic annotation - flow inherits succession characteristics
-				// Implementation note: May need dedicated AST flag or relationship for this hybrid
-			}
-			return applyPrefixes(u)
+			p.advance()
+			mods.prefixKeyword = kw
+			return applyPrefixes(p.parseUsage(start, ast.UsageFlow, "flow", mods, isAll))
 		}
 
 		// `event m.start;` names an existing occurrence rather than declaring
@@ -1273,9 +1393,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	// Parse 'all' modifier if present (appears after keyword, before name)
 	isAll := p.acceptSufficientAll()
 
-	// Parse 'chain' modifier if present (identifier, not keyword)
-	t2 := p.peek()
-	if t2.Kind == lexer.Identifier && p.src.Text(t2.Span) == "chain" {
+	if p.atChainModifier() {
 		mods.isChain = true
 		p.advance()
 	}
@@ -1493,22 +1611,26 @@ func (p *Parser) isResultKeyword() bool {
 	return p.at(lexer.Keyword) && p.peek().KeywordID == "return"
 }
 
-// parseUsageIdentification parses identification for usage declarations, with special handling
-// for step usage to allow "do" keyword as identifier name (since "do" is a valid step name like entry/exit).
+// stepNameKeyword is `do`, which names a step (`step do[1] subsets middle;` in
+// StatePerformances.kerml) though it continues every other declaration.
+const stepNameKeyword = "do"
+
+// metadataStopKeyword is `about`, which ends a metadata declaration (SysML.xtext
+// MetadataUsage), so an unnamed `metadata : M about x;` is not named "about".
+const metadataStopKeyword = "about"
+
+// parseUsageIdentification parses the identification of a usage of kind: `do`
+// names a step and nothing else, `about` names nothing in a metadata usage.
 func (p *Parser) parseUsageIdentification(kind ast.UsageKind) ast.Identification {
-	// Special case: step usage allows "do" as identifier
-	if kind == ast.UsageStep && p.atKeyword("do") {
+	if kind == ast.UsageStep && p.atKeyword(stepNameKeyword) {
 		tok := p.advance()
 		return ast.Identification{
 			Name: tok.KeywordID,
 		}
 	}
-	// `about` ends a metadata declaration (SysML.xtext MetadataUsage), so an
-	// unnamed `metadata : M about x;` is not named "about".
 	if kind == ast.UsageMetadata {
-		return p.parseIdentificationStopping("about")
+		return p.parseIdentificationStopping(metadataStopKeyword)
 	}
-	// Default: use standard identification parsing
 	return p.parseIdentification()
 }
 
@@ -1944,6 +2066,15 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		(kind == ast.UsageConnector && (p.atKeyword("from") || p.atConnectorChainFirstEnd())) ||
 		((kind == ast.UsageConnection || kind == ast.UsageInterface) &&
 			(keyword == "connect" || p.atConnectorShorthandEnds()))
+	atGlobalName := p.at(lexer.Dollar) && p.peekN(1).Kind == lexer.ColonColon
+	if kind == ast.UsageMetadata && !skipIdentification && (atGlobalName || p.atName() && !p.atMetadataIdentification()) {
+		// `metadata M about x;` states the typing M and no name of its own
+		// (SysML.xtext MetadataUsageDeclaration).
+		skipIdentification = true
+		if metaType := p.parseQualifiedName(); metaType != nil {
+			preRels = append(preRels, &ast.Relationship{Kind: ast.RelTyping, Target: metaType})
+		}
+	}
 	if !skipIdentification {
 		u.Ident = p.parseUsageIdentification(kind)
 	}
@@ -2038,6 +2169,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			}
 			p.effectStmtStart = savedEffectStmtStart
 			hasBody = true
+			u.IsActionNode = true
 		} else {
 			// Expected ';' or '{' or behavioral keyword
 			p.error(p.peek().Span, "expected '{' or ';' after action declaration")
@@ -2285,28 +2417,37 @@ func (p *Parser) parseEnumBody() []ast.Node {
 	body := p.newBodyBuilder()
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		before := p.peek().Span.Offset
-		anonymousValue := p.at(lexer.Eq) || p.at(lexer.ColonEq)
-		if p.atKeyword("enum") &&
-			(p.peekN(1).Kind == lexer.Eq || p.peekN(1).Kind == lexer.ColonEq) {
-			anonymousValue = true
-		}
-		if anonymousValue {
+		// `= 60.0;`, `uncl : Level = 0;`, `<u> uncl;`, `: Level;` and `#M a;` are
+		// enumerated values (SysML.xtext EnumeratedValue), not keyword-less attributes.
+		if p.atEnumeratedValueDeclaration() {
 			start := p.peek().Span.Offset
 			trivia := p.takeTrivia()
-			if p.atKeyword("enum") {
-				p.advance()
+			vis := p.parseVisibility()
+			prefixes := p.parsePrefixMetadata()
+			keyword := ""
+			if p.acceptKeyword("enum") {
+				keyword = "enum"
 			}
-			u := &ast.Usage{Kind: ast.UsageEnumeration}
-			p.parseUsageValue(u)
-			p.expect(lexer.Semicolon, "expected ';' after enumerated value")
-			u.NodeSpan = p.spanFrom(start)
-			m := &ast.Membership{Member: u}
+			var u *ast.Usage
+			if p.at(lexer.Eq) || p.at(lexer.ColonEq) {
+				u = &ast.Usage{Kind: ast.UsageEnumeration, Keyword: keyword, Visibility: vis}
+				p.parseUsageValue(u)
+				p.expect(lexer.Semicolon, "expected ';' after enumerated value")
+				u.NodeSpan = p.spanFrom(start)
+			} else {
+				u = p.parseUsage(start, ast.UsageEnumeration, keyword, featureMods{visibility: vis}, false)
+			}
+			u.Prefixes = prefixes
+			m := &ast.Membership{Visibility: vis, Member: u}
 			m.NodeSpan = p.spanFrom(start)
 			m.SetLeadingTrivia(trivia)
 			body.add(m)
 			continue
 		}
+		outer := p.inEnumBody
+		p.inEnumBody = true
 		body.add(p.parseBodyMember())
+		p.inEnumBody = outer
 		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
 			p.advance()
 		}
@@ -2372,6 +2513,10 @@ func (p *Parser) parseBodyMember() ast.Node {
 	start := p.peek().Span.Offset
 	trivia := p.takeTrivia()
 	vis := p.parseVisibility()
+	// The enumeration context names this member only; bodies nested in it hold
+	// ordinary members, so it is consumed here rather than left set while they parse.
+	enumValue := p.inEnumBody
+	p.inEnumBody = false
 
 	// A member-attached `then` is taken by the body loop, which owns the member
 	// list the succession it desugars to is synthesised into (see
@@ -2382,6 +2527,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 	if p.atKeyword("then") {
 		tok := p.advance()
 		p.error(tok.Span, "`then` cannot prefix a member here: a succession sequences two members of a definition, usage, action, state, calculation or requirement body")
+		p.inEnumBody = enumValue
 		return p.parseBodyMember()
 	}
 
@@ -2863,6 +3009,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 					if len(endRels) > 0 {
 						u.Relationships = append(endRels, u.Relationships...)
 					}
+					// Every modifier ahead of the kind keyword belongs to the
+					// end, not `end` alone: `end ref attribute e : S;`.
+					applyFeatureMods(u, mods)
 					u.IsEnd = true
 					u.Visibility = mods.visibility
 				}
@@ -2910,7 +3059,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 		// Check for name + colon (typed) OR direct relationship (anonymous) OR name + relationship OR name + semicolon OR name + multiplicity
 		hasNameAndType := p.atName() && p.peekN(1).Kind == lexer.Colon
 		hasRelationship := p.at(lexer.ColonGt) || p.at(lexer.ColonGtGt) || p.at(lexer.ColonColonGt) || p.atRelationshipKeyword()
-		hasNameAndRelationship := p.atName() && (p.peekN(1).Kind == lexer.ColonGt || p.peekN(1).Kind == lexer.ColonGtGt || p.peekN(1).Kind == lexer.ColonColonGt)
+		// Either spelling of a specialization, or a value, continues the
+		// declaration: `ref x :> y`, `ref x subsets y`, `ref x = 5`.
+		hasNameAndRelationship := p.atName() && beginsDeclarationTail(p.peekN(1), p.peekN(2))
 		hasNameOnly := p.atName() && (p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.RBrace)
 		hasNameAndBody := p.atName() && p.peekN(1).Kind == lexer.LBrace
 		hasNameAndMult := p.atName() && p.peekN(1).Kind == lexer.LBracket // name with multiplicity (e.g., ref payload [0..*])
@@ -2922,31 +3073,39 @@ func (p *Parser) parseBodyMember() ast.Node {
 
 			// Parse optional name
 			if hasNameAndType || hasNameAndRelationship || hasNameOnly || hasNameAndBody || hasNameAndMult {
-				tok := p.advance()
-				if p.nameToken(tok) {
-					id.Name = p.src.Text(tok.Span)
-					id.NameSpan = tok.Span
+				if seg, ok := p.parseNameSegmentRelaxed(); ok {
+					id.Name = seg.Text
+					id.NameSpan = seg.Span
 				}
 				if hasNameAndType {
 					p.advance() // consume ':'
 				}
 			}
 
-			// Parse as anonymous usage (attribute by default)
+			// Parse as anonymous usage: the kind an occurrence modifier implies
+			// (`ref individual v : V`), else an attribute.
+			kind, keyword := modifierImpliedKind(mods)
+			if keyword == "" {
+				kind = p.anonymousUsageKind(mods)
+			}
 			u := &ast.Usage{
-				Kind:        p.anonymousUsageKind(mods),
-				Ident:       id,
-				Visibility:  mods.visibility,
-				IsReference: mods.isReference,
-				IsVariable:  mods.isVariable,
-				IsDerived:   mods.isDerived,
-				IsComposite: mods.isComposite,
-				IsPortion:   mods.isPortion,
-				IsEnd:       mods.isEnd,
-				IsChain:     mods.isChain,
-				Direction:   mods.direction,
-				IsOrdered:   mods.isOrdered,
-				IsNonunique: mods.isNonunique,
+				Kind:         kind,
+				Keyword:      keyword,
+				Ident:        id,
+				Visibility:   mods.visibility,
+				IsReference:  mods.isReference,
+				IsIndividual: mods.isIndividual,
+				IsEvent:      mods.isEvent,
+				Portion:      mods.portion,
+				IsVariable:   mods.isVariable,
+				IsDerived:    mods.isDerived,
+				IsComposite:  mods.isComposite,
+				IsPortion:    mods.isPortion,
+				IsEnd:        mods.isEnd,
+				IsChain:      mods.isChain,
+				Direction:    mods.direction,
+				IsOrdered:    mods.isOrdered,
+				IsNonunique:  mods.isNonunique,
 			}
 
 			if hasTypeOnly {
@@ -3010,10 +3169,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// Check for anonymous feature pattern without modifiers: name : Type
 	if p.atName() && nextKind == lexer.Colon {
 		var id ast.Identification
-		tok := p.advance()
-		if p.nameToken(tok) {
-			id.Name = p.src.Text(tok.Span)
-			id.NameSpan = tok.Span
+		if seg, ok := p.parseNameSegmentRelaxed(); ok {
+			id.Name = seg.Text
+			id.NameSpan = seg.Span
 		}
 
 		// Parse as anonymous usage (attribute by default)
@@ -3058,8 +3216,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return mem
 	}
 
-	// Check for enum literal pattern: identifier = expr; OR identifier; OR identifier { body }
-	// Examples: low = 0.25; or pass; or open { doc } or done { doc } (keyword as name)
+	// Check for the bare-name pattern: identifier = expr; OR identifier; OR identifier { body }
+	// In an enumeration body it is an enumerated value (low = 0.25; pass; open { doc });
+	// in any other body a default reference usage (SysML.xtext DefaultReferenceUsage).
 	// But exclude usage-only keywords (inv, subject, etc.) - they're declarations, not enum literal names
 	// Also exclude constraint (has both def/usage forms but shouldn't be enum literal name)
 	isUsageOnlyKwForEnum := p.at(lexer.Keyword) && (p.peek().KeywordID == "subject" || p.peek().KeywordID == "objective" ||
@@ -3096,11 +3255,14 @@ func (p *Parser) parseBodyMember() ast.Node {
 			value = p.ParseExpression()
 		}
 
-		// Parse body or semicolon
+		kind := ast.UsageAttribute
+		if enumValue {
+			kind = ast.UsageEnumeration
+		}
 		members, hasBody := p.parseDefUsageBody()
 
 		u := &ast.Usage{
-			Kind:              ast.UsageEnumeration,
+			Kind:              kind,
 			Ident:             id,
 			Value:             value,
 			ValueOperatorSpan: valueOperatorSpan,
@@ -3607,22 +3769,18 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 	case ast.UsageFlow:
 		p.parseFlowEnds(u)
 	case ast.UsageMetadata:
-		// Metadata usage syntax: metadata Name about target1, target2, ...;
-		// The 'about' clause specifies what elements this metadata annotates
+		// `about` names the elements the usage annotates, each a qualified name
+		// (SysML.xtext AnnotatedElement: [Element|QualifiedName]).
 		if p.acceptKeyword("about") {
-			// Parse comma-separated list of targets
-			for {
-				target := p.parseRelationshipTarget()
-				if target != nil {
-					// Store as an annotation relationship: metadata annotates its target
-					u.Relationships = append(u.Relationships, &ast.Relationship{
-						Kind:   ast.RelAnnotates,
-						Target: target,
-					})
-				}
-				if !p.accept2(lexer.Comma) {
-					break
-				}
+			about := p.parseQualifiedNameList()
+			if len(about) == 0 {
+				p.error(p.peek().Span, "expected an annotated element after 'about'")
+			}
+			for _, target := range about {
+				u.Relationships = append(u.Relationships, &ast.Relationship{
+					Kind:   ast.RelAnnotates,
+					Target: target,
+				})
 			}
 		}
 	case ast.UsageOccurrence:
@@ -4219,6 +4377,7 @@ func (p *Parser) parseMetadataUsage(start int) *ast.PrefixMetadata {
 		}
 		p.expect(lexer.RBrace, "expected '}' after metadata body")
 		pm.Body = body
+		pm.HasBody = true
 	} else {
 		// A usage is a member of its own, so it ends here rather than annotating
 		// whatever follows it — `#Type` is the prefix spelling.

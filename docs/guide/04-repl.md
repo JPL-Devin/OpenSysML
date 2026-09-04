@@ -1,8 +1,8 @@
 # 4. The REPL
 
-Running `sysml` without a model starts an interactive prompt. Each entry is a declaration, an
+Running `sysml` without a model starts an interactive prompt. Each thing you type is a declaration, an
 expression or a meta-command beginning with `%`. Declarations accumulate into a session model,
-which is the model every command reports on.
+and that is the model every command reports on.
 
 ```
 $ sysml
@@ -16,33 +16,34 @@ sysml> %eval Demo::Wheel::diameter
   = 16.0
 ```
 
-The import makes `Real` resolvable, as described in [chapter 2](02-first-model.md). A session
-that uses a library type without importing it is rejected with `unresolved reference: Real`.
+The import is what makes `Real` resolvable, as described in [chapter 2](02-first-model.md). If a
+session uses a library type without importing it, the declaration is rejected with
+`unresolved reference: Real`.
 
 ## What a submission does
 
-A declaration is parsed and validated on submission, and the result is reported immediately as
-either `✓` with the declared name or a set of diagnostics. An unterminated declaration continues
+A declaration is parsed and validated when you submit it, and the result comes back immediately:
+either `✓` with the declared name, or a set of diagnostics. An unfinished declaration continues
 on the next line (`  ...>`) until its braces close.
 
-Two properties of the session model are important to understand before beginning a long session:
+Two things about the session model are worth understanding before you start a long session:
 
-- **A submission adds to the namespace already present in the session.** Re-entering
-  `package Demo { … }` with an additional member merges into the existing declaration —
-  `note: added to the existing package Demo (its other members are kept)` — rather than
-  replacing its body. Re-entering a member does replace that member, and the replacement is
-  reported. An empty body (`package Demo { }`) empties the namespace.
-- **A submission invalidates only what it changed.** Objects created with `%instantiate` are
-  retained while the declarations they were built from remain untouched, and an `%action` or
-  `%state` debugging session over an unaffected declaration continues to run. A retained object
+- **A submission adds to whatever namespace is already in the session.** Entering
+  `package Demo { … }` again with an extra member merges into the existing declaration
+  (`note: added to the existing package Demo (its other members are kept)`) rather than
+  replacing its body. Entering an existing member again does replace that member, and the REPL
+  says so. An empty body (`package Demo { }`) empties the namespace.
+- **A submission invalidates only what it changed.** Objects created with `%instantiate` survive
+  as long as the declarations they were built from are untouched, and an `%action` or
+  `%state` debugging session over an unaffected declaration keeps running. A surviving object
   keeps its identity but not its execution state: the behaviors its type exhibits or performs
-  restart from their initial states in the rebuilt analysis. Everything dropped or restarted is
-  reported on a `note:` line describing what occurred.
+  restart from their initial states. Everything dropped or restarted is reported on a `note:`
+  line.
 
 `%list` shows the session's declarations, `%clear` resets the session, and `%save` writes it out
-([chapter 7](07-saving-and-rdf.md)). Because `%clear` discards every declaration, nothing it held
-remains available: it reports what was discarded, and the next command that would have used it
-explains why it is no longer present.
+([chapter 7](07-saving-and-rdf.md)). `%clear` discards every declaration, so nothing it held is
+available afterwards: it reports what was discarded, and the next command that would have used
+something explains why it is gone.
 
 ```
 sysml> %clear
@@ -54,8 +55,8 @@ sysml> %instances
 
 ## Seeing the model
 
-`%print` writes the session back to the prompt as notation, either the whole model or, when a
-name is given, a single element and its body:
+`%print` writes the session back to the prompt as notation, either the whole model or, if you
+give a name, a single element and its body:
 
 ```
 sysml> package Demo {
@@ -72,20 +73,20 @@ part def Vehicle {
 }
 ```
 
-`%print` uses the same writer that `%save` uses for a `.sysml` file, so it preserves comments and
-the original text, re-indented as a save would indent it, and its output can be typed or loaded
-back to rebuild the same model. Names are written as in every other command
+`%print` uses the same writer `%save` uses for a `.sysml` file, so it preserves comments and
+the original text, re-indented the way a save would indent it, and its output can be typed or
+loaded back to rebuild the same model. Names are written as in every other command
 (`%print 'My Pkg'::Car`). Printing only reads the session: it creates no objects, and an
-`%action` or `%state` session continues across it. An empty session, a name that nothing
-declares, and a name whose element the session holds no source for are each reported on a single
-line. RDF output is available through `%save` with a `.ttl` path
+`%action` or `%state` session continues across it. An empty session, a name nothing
+declares, and a name whose element the session has no source for each get a one-line
+report. For RDF output, use `%save` with a `.ttl` path
 ([chapter 7](07-saving-and-rdf.md)); `%print` emits notation only.
 
 ## A name that needs quotes
 
-A name that the notation requires to be quoted — one containing a space or punctuation, or a
-keyword used as a name — is supplied to a command exactly as it is written in a model, including
-the quotes. A quoted segment may appear anywhere in the qualified name:
+If the notation requires a name to be quoted (it contains a space or punctuation, or it is a
+keyword used as a name), pass it to a command exactly as it is written in the model, quotes
+included. A quoted segment may appear anywhere in the qualified name:
 
 ```
 sysml> package 'My Pkg' { part def Car { attribute m = 5.0; } }
@@ -94,8 +95,8 @@ sysml> %features 'My Pkg'::Car
 sysml> %eval 'My Pkg'::Car::m
 ```
 
-Names that do not require quoting are written unquoted, as before. Commands report names back
-with the same quoting, so a name returned by `%search` can be entered into the next command
+Names that do not need quoting are written unquoted, as before. Commands report names back
+with the same quoting, so a name returned by `%search` can be pasted into the next command
 exactly as it appears.
 
 ## Loading files
@@ -106,16 +107,16 @@ sysml> %load examples/*.sysml
 sysml> %load examples/
 ```
 
-`%load` accepts files, globs and directories, and submits their contents as though they had been
-typed, with one difference: a loaded namespace retains the identity of its file, so re-entering
-it at the prompt *replaces* it (`note: replaced package …`) rather than adding to it. To change a
+`%load` accepts files, globs and directories, and submits their contents as if you had
+typed them, with one difference: a loaded namespace remembers which file it came from, so entering
+it again at the prompt *replaces* it (`note: replaced package …`) rather than adding to it. To change a
 loaded file, edit it and load it again. Tab completion completes paths after `%load` and `%save`,
-and completes meta-commands and symbol names elsewhere.
+and meta-commands and symbol names everywhere else.
 
-A file the parser cannot read is reported in the same way as a typed declaration, with the same
-diagnostic pointing at the corresponding line of the file. None of its contents enter the
-session, so the next submission is parsed against the model as it stood before the load. In the
-non-interactive path, the diagnostics of a load are errors, so a script that loads a malformed
+A file the parser cannot read is reported the same way as a typed declaration, with the
+diagnostic pointing at the offending line of the file. None of its contents enter the
+session, so the next submission is parsed against the model as it stood before the load. In
+non-interactive use, a load's diagnostics are errors, so a script that loads a malformed
 file fails rather than continuing against an empty session.
 
 Two loaded files that both open `package P` declare two packages of that name, and the load
@@ -127,18 +128,20 @@ note: P is opened by more than one loaded file; each opening stays a declaration
 member of one is not visible unqualified in the other — qualify it (P::member)
 ```
 
-Each file retains its own identity, which is what allows re-loading one of them to replace only
-its own contribution. Merging the two openings into a single namespace would therefore allow an
-edit to one file to silently delete the other file's members. The members of both openings are
+Each file keeps its own identity, which is what lets you reload one of them and replace only
+its own contribution. If the two openings were merged into a single namespace, an edit to one
+file could silently delete the other file's members. The members of both openings are
 declared and reachable when qualified (`P::Wheel`, `P::Axle`), but an unqualified reference
-across the two does not resolve. Re-entering a package at the prompt is unaffected: it still
-merges into the package already present in the session.
+from one to the other does not resolve. Entering a package at the prompt is unaffected: it still
+merges into the package already in the session.
 
 ## Finding what a build offers
 
-`%search` looks up a substring across the declared and library symbols and reports the kind of
-each. `%builtins` lists the library functions that the current build evaluates directly, which
-determines whether an expression can be evaluated before a model is written around it.
+`%search` looks for a substring across the declared and library symbols and reports the kind of
+each match. `%builtins` lists the library functions the current build can evaluate directly,
+which tells you whether an expression will evaluate before you write a model around it, and the
+package each must be imported from for its bare name to resolve (`x->size()` needs
+`import SequenceFunctions::*;`; `SequenceFunctions::size(x)` resolves anywhere).
 
 ```
 sysml> %search Vehicle
@@ -146,15 +149,15 @@ sysml> %builtins
 sysml> %view Demo::summary
 ```
 
-`%view <name>` reports the elements a view exposes, the views nested within it, and whether it
+`%view <name>` reports the elements a view exposes, the views nested inside it, and whether it
 conforms to the viewpoints it satisfies. Conformance checking is read-only and reported in
-declaration order. Each `satisfy` carries a verdict of `conforms`, `violated` or `unevaluable`,
+declaration order. Each `satisfy` gets a verdict of `conforms`, `violated` or `unevaluable`,
 followed by a verdict for each concern the viewpoint frames; a concern whose condition fails
-names the exposed element it failed for, together with the reason. A `satisfy` inherited from a
-specialized view is marked `(from <view>)`. A concern that the viewpoint frames but the view does
-not is reported as `violated`, and a concern that states no condition, or names one that does not
-resolve, is reported as `unevaluable` with the reason rather than as a pass. These verdicts, and
-the treatment of a nested view's framing, are decisions made by this implementation, because
+names the exposed element it failed for and the reason. A `satisfy` inherited from a
+specialized view is marked `(from <view>)`. A concern the viewpoint frames but the view does
+not is reported as `violated`. A concern that states no condition, or names one that does not
+resolve, is reported as `unevaluable` with the reason, not as a pass. These verdicts, and
+the way a nested view's framing is treated, are this implementation's own decisions, because
 SysML v2 leaves verification verdict semantics non-normative.
 
 ```
@@ -226,16 +229,16 @@ view Demo::report
       concern modularity: conforms
 ```
 
-When a name cannot be found, the session suggests the qualified names under which it is known,
-nearest scope first — declarations in the session before library symbols, and a package's member
-before a name nested inside another element — up to a maximum of three suggestions.
+When a name cannot be found, the session suggests up to three qualified names it might have meant,
+nearest scope first: declarations in the session before library symbols, and a package's direct
+member before a name nested inside another element.
 
 ## Rendering a view
 
-`%render <name>` renders the exposed set in the form the view's `render` member specifies: a
+`%render <name>` renders the exposed elements in the form the view's `render` member specifies: a
 containment tree with nested views as subtrees, an interconnection diagram of the exposed parts
 and the connections between them, a state machine's states and transitions, an action's nodes and
-successions, or a table of the exposed elements. A view that specifies no rendering is rendered
+successions, or a table of the exposed elements. A view that specifies no rendering is drawn
 as a tree:
 
 ```
@@ -251,21 +254,21 @@ view Demo::summary::detail
 ```
 
 A view that states `render asElementTable;` is rendered as aligned columns instead, listing the
-exposed elements, what they declare, and the views nested within the rendered view.
+exposed elements, what they declare, and the views nested inside the rendered view.
 
 `%render <name> mermaid` writes a graph-shaped rendering as a Mermaid diagram, and
-`%render <name> markdown` writes a table as a Markdown table. Either form can be pasted directly
-into a Markdown document or an editor, and requesting a form that the rendering kind does not
-support reports the form it does support. State and action renderings read the lowered graphs
-that the runtime executes, so the rendering reflects what actually runs. The rendering itself is
-specific to this implementation, because SysML v2 §10.2 specifies the notation rather than how a
-tool draws it.
+`%render <name> markdown` writes a table as a Markdown table. Either can be pasted straight
+into a Markdown document or an editor. If you ask for a form the rendering kind does not
+support, the REPL tells you which form it does support. State and action renderings read the
+lowered graphs the runtime executes, so the picture reflects what actually runs. The rendering
+itself is specific to this implementation, because SysML v2 §10.2 specifies the notation rather
+than how a tool draws it.
 
 Rendering only reads the model: it creates no objects, and a `%render` issued between two `%step`
 commands leaves an action or state debugging session unchanged. A view that exposes nothing
-renders as empty and reports this, a rendering kind the build does not produce is reported by
-name together with the view rather than substituted, and an element the rendering cannot
-represent is reported rather than omitted. The equivalent operation outside the prompt is
+renders as empty and says so. A rendering kind the build does not produce is reported by
+name along with the view, not silently substituted, and an element the rendering cannot
+represent is reported rather than left out. The same operation outside the prompt is
 [`sysml -render`](../reference/cli.md#rendering-a-view).
 
 ## Where an expression is evaluated
@@ -288,14 +291,41 @@ sysml> %eval in Demo::Vehicle : mass * 2
 ```
 
 The pinned name may be an element, in which case the expression reads that element's namespace,
-or a name under which an object was materialized, in which case the expression reads that
-object's feature values — the same values an unpinned `%eval` reads after `%instantiate`. The `:`
-character separates the context from the expression; the `::` within a qualified name is not a
-separator.
+or an object reference, in which case the expression reads that object's feature values, the same
+values an unpinned `%eval` reads after `%instantiate`. A single `:` separates the context from the
+expression; the `::` inside a qualified name is not a separator.
+
+## Addressing an object
+
+Every command that takes an object — `%features`, `%invoke`, `%eval in`, and the object `%action`
+and `%state` work on — accepts the same three spellings: the name the object was instantiated
+under, the id `%instantiate` printed, and either followed by a path into the objects it holds, an
+element of a multi-valued feature picked by index counted from 1:
+
+```
+sysml> %eval in Demo::Vehicle : mass * 2
+sysml> %eval in #1 : mass * 2
+sysml> %features Demo::Vehicle.engine
+sysml> %features #1.engine
+sysml> %features Demo::Vehicle.wheels[2]
+```
+
+The id is the object's identity for the rest of the session: a later submission that carries the
+object over keeps it, and so does a second `%instantiate` of the same name, which creates a new
+object and re-points the name — the first object is still there as `#1`, and `%instances` lists it
+as such. A path walks the features that hold objects — parts, ports, connectors, and structured
+attributes, the ones `%features` shows as `Instance(ID: n)`; an attribute holding a plain value at
+the end of one is not an object, and the error says so. In a path `.` and `::` mean the same
+thing, so `Demo::Vehicle::engine` and `Demo::Vehicle.engine` are the same object — with one
+difference: what follows a `.` is always a feature of the object before it, whereas `::` may still be
+spelling the declared name, which wins when an object was created under it. The forms and
+every error a bad reference produces are
+listed in the [reference](../reference/repl-commands.md#object-references). <kbd>Tab</kbd>
+completes them: `#` offers the ids there are, `car.` the objects `car` holds.
 
 ## Command summary
 
-| To determine | Use | Chapter |
+| To find out | Use | Chapter |
 |--------|-----|---------|
 | what a view shows | `%view`, `%render` | this chapter |
 | what an expression is worth | `%eval`, `%eval in … : …` | [5](05-checking.md) |
@@ -310,7 +340,7 @@ separator.
 | where a run stopped and why | `%trace`, `%budget`, `%verbosity` | [10](10-troubleshooting.md) |
 | whether what is typed is conforming SysML v2 | `%strict` | [3](03-command-line.md#strict-conformance) |
 
-Every command, with its arguments, is [reference/repl-commands.md](../reference/repl-commands.md).
+Every command and its arguments is listed in [reference/repl-commands.md](../reference/repl-commands.md).
 
 ## Non-interactive use
 

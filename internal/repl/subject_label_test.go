@@ -6,7 +6,7 @@ import "testing"
 // declaration and the object answer a condition over it differently.
 const nestedSubjectFixture = `package A {
     part def Inner {
-        attribute c = 5.0;
+        attribute c default = 5.0;
         constraint small { c < 10.0 }
     }
     part def Outer {
@@ -29,6 +29,6 @@ func TestVerdictNamesTheNestedSubject(t *testing.T) {
 
 	v := s.CheckConstraint("A::Inner::small")
 	wantVerdict(t, v, VerdictFails,
-		"✗ Constraint A::Inner::small failed (on A::o::b ID:")
+		"✗ Constraint A::Inner::small failed (on A::o.b ID:")
 	rejectVerdict(t, v, "(on A::o ID:")
 }

@@ -1,0 +1,5 @@
+{
+	"type": "action",
+	"evaluate": "test::outer",
+	"error": "action node late has not been performed"
+}

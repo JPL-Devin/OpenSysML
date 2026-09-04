@@ -15,7 +15,7 @@ package PortIdentity {
 			state start;
 
 			state waiting {
-				entry send Ping() to inPort;
+				entry send new Ping() to inPort;
 			}
 			state received;
 

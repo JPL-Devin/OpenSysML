@@ -524,14 +524,6 @@ func (m *Model) concernSubjectType(concern *symbols.Symbol) *symbols.Symbol {
 // declaredSubjectType resolves the type a subject parameter declares, ignoring
 // the implicit standard-library base an untyped `subject;` takes.
 func (m *Model) declaredSubjectType(subject *symbols.Symbol) *symbols.Symbol {
-	if decl, ok := subject.Decl.(*ast.SubjectMember); ok && decl.TypeRef != nil {
-		if target, ok := m.resolver.ResolveQualified(subject.OwnerScope, decl.TypeRef); ok {
-			if resolved, aliasOK := m.resolver.ResolveAliasTarget(target); aliasOK {
-				return resolved
-			}
-		}
-		return nil
-	}
 	for _, rel := range RelationshipsOf(subject) {
 		if rel == nil || rel.Target == nil || rel.Kind != ast.RelTyping {
 			continue

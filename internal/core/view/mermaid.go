@@ -62,7 +62,7 @@ func (r *Rendering) writeFlowchart(b *strings.Builder, direction Direction) {
 	}
 	fmt.Fprintf(b, "flowchart %s\n", flow)
 	if r.Empty() {
-		fmt.Fprintf(b, "  empty[\"%s\"]\n", mermaidText(r.emptyReason()))
+		fmt.Fprintf(b, "  empty[\"%s\"]\n", mermaidText(r.EmptyReason()))
 		return
 	}
 	for _, root := range r.Roots {
@@ -112,7 +112,7 @@ func (r *Rendering) writeStateDiagram(b *strings.Builder, direction Direction) {
 	if r.Empty() {
 		// A state diagram takes a note only attached to a state, so the reason
 		// is a state of its own.
-		fmt.Fprintf(b, "  state \"%s\" as empty\n", mermaidText(r.emptyReason()))
+		fmt.Fprintf(b, "  state \"%s\" as empty\n", mermaidText(r.EmptyReason()))
 		return
 	}
 	for _, root := range r.Roots {
@@ -135,7 +135,7 @@ func (r *Rendering) writeSequenceDiagram(b *strings.Builder) {
 	if r.Empty() {
 		// A sequence diagram carries no free text, so the reason is a
 		// participant of its own.
-		fmt.Fprintf(b, "  participant empty as %s\n", mermaidText(r.emptyReason()))
+		fmt.Fprintf(b, "  participant empty as %s\n", mermaidText(r.EmptyReason()))
 		return
 	}
 	for _, node := range r.Roots {

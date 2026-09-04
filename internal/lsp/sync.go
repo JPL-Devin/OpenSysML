@@ -8,8 +8,12 @@ import (
 
 // DidOpen registers a newly opened document with the workspace. The buffer the
 // editor sends can differ from what was read from disk, so the other open
-// documents are refreshed too.
+// documents are refreshed too. A library document is served from the bundled
+// text the index holds, so opening one changes nothing.
 func (s *Server) DidOpen(ctx context.Context, params *protocol.DidOpenTextDocumentParams) error {
+	if isLibraryURI(params.TextDocument.URI) {
+		return nil
+	}
 	name := uriToName(params.TextDocument.URI)
 	s.ws.Open(name, []byte(params.TextDocument.Text), int(params.TextDocument.Version))
 	s.publishDiagnostics(ctx, name)
@@ -28,6 +32,9 @@ func (s *Server) DidOpen(ctx context.Context, params *protocol.DidOpenTextDocume
 // a value type, this path treats a zero Range as an incremental splice at
 // [0,0) and never as a full replace.
 func (s *Server) DidChange(ctx context.Context, params *protocol.DidChangeTextDocumentParams) error {
+	if isLibraryURI(params.TextDocument.URI) {
+		return s.refuseLibraryChange(ctx, params.TextDocument.URI)
+	}
 	raw := make([]rawContentChange, len(params.ContentChanges))
 	for i, ch := range params.ContentChanges {
 		rng := ch.Range
@@ -42,6 +49,9 @@ func (s *Server) DidChange(ctx context.Context, params *protocol.DidChangeTextDo
 // markers are withdrawn: only an open document has a set that keeps pace with
 // the workspace.
 func (s *Server) DidClose(ctx context.Context, params *protocol.DidCloseTextDocumentParams) error {
+	if isLibraryURI(params.TextDocument.URI) {
+		return nil
+	}
 	name := uriToName(params.TextDocument.URI)
 	s.loadFromDisk(name)
 	s.ws.Close(name)
@@ -53,6 +63,9 @@ func (s *Server) DidClose(ctx context.Context, params *protocol.DidCloseTextDocu
 // DidSave refreshes diagnostics for every open document, since an edit to one
 // file changes what the others resolve.
 func (s *Server) DidSave(ctx context.Context, params *protocol.DidSaveTextDocumentParams) error {
+	if isLibraryURI(params.TextDocument.URI) {
+		return nil
+	}
 	name := uriToName(params.TextDocument.URI)
 	s.publishDiagnostics(ctx, name)
 	s.refreshOpenDiagnostics(ctx, name)

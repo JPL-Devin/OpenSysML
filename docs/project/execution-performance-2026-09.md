@@ -211,3 +211,104 @@ counts: 8 920 invocations, none differing. The execution conformance,
 trace and robustness suites pass with the tier on and with
 `OPENSYSML_CALC_COMPILE=0`. The pilot execution referee's bucket counts are as
 committed.
+
+## Follow-up (2026-09-02): statement bodies, redefined parameters, library intrinsics, named arguments
+
+Measured on the same machine, same method, at revision `1d98f6e5` (the tier
+above) before and after widening the tier's subset
+(`compile.go`, `compiled_ops.go`, the new `compiled_stmts.go`). Four
+constructs that analysis models write joined the subset:
+
+- **Statement bodies.** A body of body-local scalar declarations, `return`
+  and `if`/`else` statements is compiled from the lowered `calcShape.Steps`
+  into the same closure tree: each declaration takes a fresh frame slot at
+  compile time and masks an earlier binding of its name for the rest of its
+  block, so a local named like a parameter, a later local reading an earlier
+  one, and a local declared in one branch alone read exactly as
+  `stmtEngine`/`LookupBodyLocal` read them; a name read before its
+  declaration, a local without a value, a body that may run off its end, an
+  `out` feature, a loop, an `assign`, a non-scalar local stay on the
+  evaluator. A body that is one `return` compiles to the expression itself,
+  as before, so the pure-expression path is unchanged.
+- **Parameters redefined along the specialization chain.** The compiled slot
+  layout is the effective parameter list `calcShape` flattens (a `:>>`
+  redefinition masks its base's slot in place), the same list
+  `bindCalcParameters` binds, so a 3-level chain, a redefinition adding a
+  default, a qualified `in x :>> Base::x` all compile; a Real→Integer
+  narrowing compiles and refuses a non-integral Real with the evaluator's
+  own message, since parameter checks are the declaration's.
+- **Library intrinsics.** A call whose resolved symbol *is* a standard
+  library scalar function (`RealFunctions::sqrt`/`abs`/`floor`/`round`/
+  `min`/`max`, the `IntegerFunctions`, `NaturalFunctions`,
+  `RationalFunctions` and `NumericalFunctions` members, `TrigFunctions::sin`/
+  `cos`/`tan`/`cot`/`arcsin`/`arccos`/`arctan`/`deg`/`rad`,
+  `OpenSysMLMathFunctions::exp`/`ln`/`log`/`atan2`) dispatches to the Go
+  implementation the evaluator's `libraryFunction` table already holds — the
+  same function, so values are bit-identical — and a library constant read
+  (`TrigFunctions::pi`; the library declares no `e`) is folded to the value
+  the evaluator's library seam supplies. Resolution is by symbol, so an
+  alias, an import or a qualified name reach the intrinsic and a model's own
+  `sqrt` or `pi` is an ordinary calc or attribute. `sum`/`product` and the
+  other collection functions over a lone scalar run the evaluator's
+  collection built-in over a one-element sequence; a call over a collection,
+  a String or a vector keeps the evaluator.
+- **Named arguments.** `Fib(k = n - 1)` binds to slots at compile time,
+  arguments evaluated in source order, a name given twice taking the later
+  value as the evaluator's map does; a call mixing positional and named
+  arguments, or missing an argument for a parameter without a default,
+  declines; an unknown name and a receiver beside named arguments are
+  reported by the evaluator's argument check that precedes dispatch, so the
+  message is the evaluator's verbatim.
+
+The benchmarks are `Fib(25)` again (242 785 invocations, no statement body,
+to show the pure-expression path is unchanged) and `HypotTree(16)`: a
+recursive tree of 65 535 invocations whose leaves call `Hypot`, a three-local
+statement body (`aa = a * a; bb = b * b; h = sqrt(aa + bb); return h;`)
+65 536 times — 131 071 invocations, half of them statement bodies calling an
+intrinsic. Before, `Hypot` was ineligible (statement body, library callee),
+so the whole tree ran on the evaluator.
+
+| figure | before | after |
+| ------ | ------ | ----- |
+| marginal cost per `Fib(25)` eval | 5.0–5.8 ms (compiled) | 5.0–5.5 ms (compiled) |
+| per `Fib` invocation | 21–24 ns | 21–23 ns |
+| marginal cost per `HypotTree(16)` eval | 132–133 ms (evaluator) | 10.4–10.8 ms (compiled) |
+| per `HypotTree(16)` invocation, averaged | ~1 010 ns | ~80 ns |
+| `HypotTree(16)` with `OPENSYSML_CALC_COMPILE=0` | 132–133 ms | 132–133 ms |
+
+The `Fib` figures are within run-to-run noise of each other. `HypotTree`
+improves 12.6×; the remaining ~137 ns per `Hypot` is the intrinsic call,
+which boxes its argument into the evaluator's library-call path and back
+(the closure tree, a slot write per local, and the `+`/`*` nodes are the
+same ~20 ns as `Fib`). Unboxing the library table is the natural next step
+and is out of scope here.
+
+Eligibility over the repository's fixtures, examples and the OMG corpora
+(`go test -run TestCompiledCalcDifferential -v ./internal/core/runtime`),
+before → after: 42 eligible of 263 calc definitions (16.0%) → 127 of 343
+(37.0%), the new fixtures under `internal/core/runtime/testdata/compiled/`
+included; 84 449 invocations compared through both tiers over the generated
+vectors — 0, ±1, the Integer extremes, ±0.0, 1.5, −1e300, ±Inf, NaN, true
+and false — positionally and by name, none differing in value (Reals
+compared bit for bit), error text or step count. What remains ineligible,
+and why:
+
+```
+   67 parameter _ declares a type outside the scalar lattice   quantities with units, strings, collections
+   65 output feature _ beside the result                       calcs with out features (bound by the usage)
+   27 *ast.SequenceExpr is outside the pure subset            collections
+    9 statement _ is outside the compiled subset              loops, assignments, sends
+    5 *ast.FeatureChainExpr / 5 *ast.LiteralString / 1 IndexExpr / 1 ConstructorExpr
+    5 name _ is not bound in the frame                        self, that, a calc usage, a read before declaration
+    3 result declares a type outside the scalar lattice
+   14 library function … is not over scalars alone            String, Vector, Complex, Sequence and Control functions
+    2 library feature _ is not a scalar / 1 has no value      vector constants
+    2 local _ declares no value · 2 body without a result expression · 1 body may end without returning
+    1 default of _ is not a literal · 1 operator _ is outside the pure subset · 1 called without an argument for _
+```
+
+Compliance was checked as before: the execution conformance, trace,
+robustness and REPL suites pass with the tier on and with
+`OPENSYSML_CALC_COMPILE=0`; the pilot execution referee's bucket counts are as
+committed; the training and pilot corpus gates and the SMT suite are
+unchanged.

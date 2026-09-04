@@ -10,10 +10,11 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// DocumentSymbol returns the hierarchical symbol tree for a document.
+// DocumentSymbol returns the hierarchical symbol tree for a document, a bundled
+// library one included.
 func (s *Server) DocumentSymbol(ctx context.Context, params *protocol.DocumentSymbolParams) ([]interface{}, error) {
 	name := uriToName(params.TextDocument.URI)
-	doc := s.ws.Document(name)
+	doc := s.document(name)
 	if doc == nil || doc.Scope == nil {
 		return nil, nil
 	}
@@ -46,7 +47,7 @@ func walkDocumentSymbols(content []byte, scope *symbols.Scope) []protocol.Docume
 		out = append(out, ds)
 	}
 	for _, child := range scope.Children() {
-		if isMetadataBodyScope(child) {
+		if isAnnotationBodyScope(child) {
 			out = append(out, walkDocumentSymbols(content, child)...)
 		}
 	}
@@ -83,7 +84,7 @@ func (s *Server) Symbols(ctx context.Context, params *protocol.WorkspaceSymbolPa
 			continue
 		}
 		content := doc.Content
-		uriStr := nameToURI(name)
+		uriStr := s.documentURI(name)
 		collectWorkspaceSymbols(doc.Scope, "", query, content, uriStr, &out)
 	}
 	return out, nil
@@ -111,7 +112,7 @@ func collectWorkspaceSymbols(scope *symbols.Scope, container, query string, cont
 		}
 	}
 	for _, child := range scope.Children() {
-		if isMetadataBodyScope(child) {
+		if isAnnotationBodyScope(child) {
 			collectWorkspaceSymbols(child, container, query, content, docURI, out)
 		}
 	}

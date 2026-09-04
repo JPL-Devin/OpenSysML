@@ -17,13 +17,13 @@ package test {
 		first start;
 
 		action transmit {
-			send Data(reading) via commPort;
+			send new Data(reading) via commPort;
 		}
 
 		then accept msg : Data via groundPort;
 
 		then action record {
-			assign received := msg;
+			assign received := msg.value;
 		}
 
 		done;

@@ -14,7 +14,7 @@ import (
 
 // behavioralModels are the models whose whole point is behavior: every action
 // node, loop, conditional, state and transition the mapping covers.
-var behavioralModels = []string{"action_nodes", "loops_conditionals", "state_machine"}
+var behavioralModels = []string{"action_nodes", "loops_conditionals", "state_machine", "then_after_members"}
 
 // The fidelity contract for behavior: a model that states behavior comes back
 // from RDF as the same bytes it was written as, not merely as a graph that says
@@ -229,6 +229,266 @@ func TestUnsupportedBehavioralShapesAreReported(t *testing.T) {
 	}
 }
 
+// A `then` sequences from the member before it that is not an edge — past the
+// connectors (flow, bind, connect, interface, allocate, succession) and the
+// transitions, and past the members that declare no action at all — the way the
+// parser reads it. The graph alone, without the text each member was written
+// as, has to bring every such `then` back where it stood.
+func TestThenComesBackPastTheMembersTheParserSkips(t *testing.T) {
+	path := filepath.Join("testdata", "convert", "then_after_members.sysml")
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	turtle := toTurtle(t, path)
+	back, err := export.Convert("m.ttl", withoutSourceText(t, []byte(turtle)), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from the mapping alone: %v", err)
+	}
+	if string(back) != string(src) {
+		t.Fatalf("the notation changed\n--- want ---\n%s\n--- got ---\n%s", src, back)
+	}
+	again, err := export.Convert("m.sysml", back, export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle again: %v", err)
+	}
+	if string(again) != turtle {
+		t.Errorf("the second hop changed the graph\n--- first ---\n%s\n--- second ---\n%s", turtle, again)
+	}
+}
+
+// A usage that declares no name answers to the feature that names it, so a
+// `then` after `perform walk;` or `action redefines walk;` sequences from walk.
+func TestThenSequencesFromTheNameAnUnnamedUsageAnswersTo(t *testing.T) {
+	for name, body := range map[string]string{
+		"perform":    "    action walk : Step;\n    action def A {\n        perform walk;\n        then action b : Step;\n    }\n",
+		"redefines":  "    action def Base {\n        action walk : Step;\n    }\n    action def A specializes Base {\n        action redefines walk;\n        then action b : Step;\n    }\n",
+		"named":      "    action def A {\n        action walk : Step;\n        then action b : Step;\n    }\n",
+		"introduced": "    action walk : Step;\n    action run : Step;\n    action def A {\n        perform walk;\n        then perform run;\n        then action b : Step;\n    }\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			src := "package P {\n    action def Step;\n" + body + "}\n"
+			turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle: %v", err)
+			}
+			back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation from the mapping alone: %v\n%s", err, turtle)
+			}
+			if string(back) != src {
+				t.Fatalf("the notation changed\n--- want ---\n%s\n--- got ---\n%s", src, back)
+			}
+		})
+	}
+}
+
+// A `then` after `first start;` sequences from the member `start` names, the
+// one the initial node links to, so the graph reads back unchanged.
+func TestThenAfterFirstSequencesFromTheMemberTheStartNames(t *testing.T) {
+	src := "package P {\n    use case enter;\n    use case drive {\n        ref redefines start {\n            doc /* pre */\n        }\n" +
+		"        first start;\n        then include enter;\n        then done;\n    }\n}\n"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	const start = "sysml:sourceFeature elmt:P__drive___400"
+	if n := strings.Count(string(turtle), start); n != 2 {
+		t.Fatalf("the initial node and the then after it should both state %s, found %d:\n%s", start, n, turtle)
+	}
+	back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from the mapping alone: %v\n%s", err, turtle)
+	}
+	if string(back) != src {
+		t.Fatalf("the notation changed\n--- want ---\n%s\n--- got ---\n%s", src, back)
+	}
+}
+
+// A state machine's initial successor is a transition endpoint: it may name a
+// nested state or one in a sibling region, which no lexical lookup from the
+// machine's body reaches, so it is linked the way transition ends are.
+func TestInitialSuccessorLinksAVertexOfTheMachine(t *testing.T) {
+	src := "package P {\n    state def M {\n        first start then nested;\n        state outer {\n            state nested;\n        }\n    }\n" +
+		"    state def Q parallel {\n        state a {\n            state a1;\n        }\n        state b {\n            first start then a1;\n            state b2;\n        }\n    }\n" +
+		"    action def A {\n        first start then walk;\n        action walk;\n    }\n}\n"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	for _, target := range []string{
+		"sysml:targetFeature elmt:P__M__outer__nested",
+		"sysml:targetFeature elmt:P__Q__a__a1",
+		"sysml:targetFeature elmt:P__A__walk",
+	} {
+		if !strings.Contains(string(turtle), target) {
+			t.Errorf("the initial node should link its successor as %s:\n%s", target, turtle)
+		}
+	}
+	if strings.Contains(string(turtle), `sysml:targetFeature "`) {
+		t.Errorf("no initial successor should be carried as text:\n%s", turtle)
+	}
+	back, err := export.Convert("m.ttl", withoutSourceText(t, turtle), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from the mapping alone: %v\n%s", err, turtle)
+	}
+	if string(back) != src {
+		t.Fatalf("the notation changed\n--- want ---\n%s\n--- got ---\n%s", src, back)
+	}
+}
+
+// A source end that is only a name is no member of the body: a `then` whose
+// graph names its source so is not folded beside a linked neighbour that merely
+// declares the name, since another member may be what the name reaches. The
+// encoder links the member the name reaches, a redefinition answering to it too.
+func TestANameOnlySourceIsNotFoldedBesideASameNamedLinkedMember(t *testing.T) {
+	const positional = "sysx:sourceMember elmt:P__A___401"
+	src := "package P {\n    action def Step;\n    action def Base {\n        action walk : Step;\n    }\n" +
+		"    action def A specializes Base {\n        action walk : Step;\n        action redefines Base::walk;\n        then action b : Step;\n    }\n}\n"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	// The parser names the source after the redefinition, and that name reaches
+	// the body's own walk, so it is linked to that member and no position is stated.
+	if !strings.Contains(string(turtle), "sysml:sourceFeature elmt:P__A__walk") || strings.Contains(string(turtle), positional) {
+		t.Fatalf("the source should link the body's own walk by name alone:\n%s", turtle)
+	}
+	edited := strings.Replace(string(withoutTriples(t, turtle, "sysx:sourceText")),
+		"sysml:sourceFeature elmt:P__A__walk", `sysml:sourceFeature "walk"`, 1)
+	_, err = export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML)
+	var unsupported *export.UnsupportedError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("want an UnsupportedError for a name-only source beside a linked member, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "sequences from the member written before the member it introduces") {
+		t.Errorf("the refusal should say which order the graph states: %v", err)
+	}
+
+	// Without a member declaring the name, the name reaches the redefinition
+	// before the `then`, which answers to it: the source links that member.
+	own := "package P {\n    action def Step;\n    action def Base {\n        action walk : Step;\n    }\n" +
+		"    action def A specializes Base {\n        action w : Step;\n        action redefines walk;\n        then action b : Step;\n    }\n}\n"
+	turtle, err = export.Convert("m.sysml", []byte(own), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	if !strings.Contains(string(turtle), "sysml:sourceFeature elmt:P__A___401") || strings.Contains(string(turtle), positional) {
+		t.Fatalf("the source should link the redefinition the name reaches:\n%s", turtle)
+	}
+	back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	if string(back) != own {
+		t.Fatalf("the notation changed\n--- want ---\n%s\n--- got ---\n%s", own, back)
+	}
+}
+
+// A `then` folded into the member it introduces sequences from one member only,
+// so a graph whose source end is any other member — an earlier action, or the
+// flow the `then` is read past — cannot be written in that form and is refused.
+func TestThenIsRefusedWhenTheGraphSequencesFromAnotherMember(t *testing.T) {
+	src := "package P {\n    item def Signal;\n    action def Step {\n        in item x : Signal;\n        out item y : Signal;\n    }\n" +
+		"    action def A {\n        action x : Step;\n        action a : Step;\n        flow from a.y to b.x;\n        then action b : Step;\n    }\n}\n"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	const stated = "sysml:sourceFeature elmt:P__A__a"
+	if strings.Count(string(turtle), stated) != 1 {
+		t.Fatalf("the succession should state its source once as %s:\n%s", stated, turtle)
+	}
+	for name, source := range map[string]string{
+		"an earlier action":       "elmt:P__A__x",
+		"the flow written before": "elmt:P__A___402",
+	} {
+		t.Run(name, func(t *testing.T) {
+			checkThenIsRefusedWithSource(t, turtle, stated, source)
+		})
+	}
+}
+
+// The non-feature members a `then` is read past are no source for it either: a
+// graph that sequences from the documentation, nested definition or multiplicity
+// written before the `then`, or from a feature written earlier still, is refused.
+func TestThenIsRefusedWhenTheGraphSequencesFromANonFeature(t *testing.T) {
+	src := "package P {\n    action def Step;\n" +
+		"    action def A {\n        action x : Step;\n        action a : Step;\n        doc /* a then b */\n        part def Inner;\n        multiplicity m [1];\n        then action b : Step;\n    }\n}\n"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	const stated = "sysml:sourceFeature elmt:P__A__a"
+	if strings.Count(string(turtle), stated) != 1 {
+		t.Fatalf("the succession should state its source once as %s:\n%s", stated, turtle)
+	}
+	back, err := export.Convert("m.ttl", withoutSourceText(t, turtle), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from the mapping alone: %v\n%s", err, turtle)
+	}
+	if string(back) != src {
+		t.Fatalf("the notation changed\n--- want ---\n%s\n--- got ---\n%s", src, back)
+	}
+	for name, source := range map[string]string{
+		"an earlier action":                    "elmt:P__A__x",
+		"the documentation written before":     "elmt:P__A___402",
+		"the nested definition written before": "elmt:P__A__Inner",
+		"the multiplicity written before":      "elmt:P__A__m",
+	} {
+		t.Run(name, func(t *testing.T) {
+			checkThenIsRefusedWithSource(t, turtle, stated, source)
+		})
+	}
+}
+
+// A state's deferral is no feature: a `then` after it sequences from the state
+// before, and a graph that sequences from the deferral itself is refused.
+func TestThenIsRefusedWhenTheGraphSequencesFromADeferral(t *testing.T) {
+	src := "package P {\n    state def S {\n        state x;\n        state a;\n        defer Ping;\n        then state b;\n    }\n}\n"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	const stated = "sysml:sourceFeature elmt:P__S__a"
+	if strings.Count(string(turtle), stated) != 1 {
+		t.Fatalf("the succession should state its source once as %s:\n%s", stated, turtle)
+	}
+	back, err := export.Convert("m.ttl", withoutSourceText(t, turtle), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from the mapping alone: %v\n%s", err, turtle)
+	}
+	if string(back) != src {
+		t.Fatalf("the notation changed\n--- want ---\n%s\n--- got ---\n%s", src, back)
+	}
+	for name, source := range map[string]string{
+		"an earlier state":            "elmt:P__S__x",
+		"the deferral written before": "elmt:P__S___402",
+	} {
+		t.Run(name, func(t *testing.T) {
+			checkThenIsRefusedWithSource(t, turtle, stated, source)
+		})
+	}
+}
+
+// checkThenIsRefusedWithSource moves the stated source of the one succession
+// in turtle to source, an element of the graph, and requires the refusal.
+func checkThenIsRefusedWithSource(t *testing.T, turtle []byte, stated, source string) {
+	t.Helper()
+	if !strings.Contains(string(turtle), "\n"+source+"\n") {
+		t.Fatalf("%s is not an element of the graph:\n%s", source, turtle)
+	}
+	moved := strings.Replace(string(turtle), stated, "sysml:sourceFeature "+source, 1)
+	_, err := export.Convert("m.ttl", []byte(moved), export.FormatTurtle, export.FormatSysML)
+	var unsupported *export.UnsupportedError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("want an UnsupportedError, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "sequences from the member written before the member it introduces") {
+		t.Errorf("the refusal should say which order the graph states: %v", err)
+	}
+}
+
 // The `else` branch is marked with a term the SysML metamodel does not define,
 // so it belongs to the OpenSysML namespace and is read from there on its own —
 // without the branch's keyword having to say `else` as well.
@@ -276,16 +536,18 @@ func TestSubactionDoSurvivesWithoutASpace(t *testing.T) {
 		if !strings.Contains(string(turtle), "sysx:declaredKeyword \"entry do\"") {
 			t.Fatalf("the `do` of %q was not recorded:\n%s", subaction, turtle)
 		}
-		back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
-		if err != nil {
-			t.Fatalf("back to notation: %v", err)
+		// With its source text the graph comes back as written; without, as the
+		// printer writes the keyword the graph recorded.
+		if back, want := toNotation(t, turtle), src; back != want {
+			t.Fatalf("%q did not come back as written:\n--- want ---\n%s--- got ---\n%s", subaction, want, back)
 		}
-		if !strings.Contains(string(back), "entry do {") {
+		back := toNotation(t, withoutTriples(t, turtle, "sysx:sourceText"))
+		if !strings.Contains(back, "entry do {") {
 			t.Fatalf("%q lost its `do`:\n%s", subaction, back)
 		}
 		// The notation it comes back as is what the printer writes, so converting
 		// that again must change nothing at all.
-		checkRoundTrip(t, string(back))
+		checkRoundTrip(t, back)
 	}
 }
 

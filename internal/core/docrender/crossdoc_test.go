@@ -54,6 +54,21 @@ func (f renderFixture) symbol(t *testing.T, name string) *symbols.Symbol {
 // a fixture, evaluating them together so cross-document anchors are stamped.
 func renderFixtureDocumentSet(t *testing.T, path string, names []string) map[string]string {
 	t.Helper()
+	out := make(map[string]string, len(names))
+	for _, document := range fixtureDocumentSet(t, path, names) {
+		markdown, err := Markdown(document)
+		if err != nil {
+			t.Fatalf("render document %s: %v", document.Name(), err)
+		}
+		out[DocumentFileName(document.Name())] = markdown
+	}
+	return out
+}
+
+// fixtureDocumentSet evaluates every named document of a fixture together, so
+// cross-document anchors are stamped.
+func fixtureDocumentSet(t *testing.T, path string, names []string) []*docir.Document {
+	t.Helper()
 	fixture := loadRenderFixture(t, path)
 	plans := make([]*docplan.Plan, 0, len(names))
 	for _, name := range names {
@@ -69,15 +84,7 @@ func renderFixtureDocumentSet(t *testing.T, path string, names []string) map[str
 	if err != nil {
 		t.Fatalf("evaluate document set: %v", err)
 	}
-	out := make(map[string]string, len(documents))
-	for _, document := range documents {
-		markdown, err := Markdown(document)
-		if err != nil {
-			t.Fatalf("render document %s: %v", document.Name(), err)
-		}
-		out[DocumentFileName(document.Name())] = markdown
-	}
-	return out
+	return documents
 }
 
 // TestMarkdownLinkedDocumentsGolden locks the end-to-end rendering of a

@@ -56,8 +56,10 @@ package test {
 	calc def Collects { in k : Integer; return r = (1, 2, k)->size(); }
 	calc def CallsIneligible { in k : Integer; return : Integer = k + UsesUsage(k); }
 	calc def CycleA { in k : Integer; return : Integer = if k <= 0 ? 0 else CycleB(k - 1); }
-	calc def CycleB { in k : Integer; return : Integer = if k <= 0 ? 0 else CycleA(k - 1) + Local(k); }
+	calc def CycleB { in k : Integer; return : Integer = if k <= 0 ? 0 else CycleA(k - 1) + UsesUsage(k); }
 	calc def NamedCall { in k : Integer; return : Integer = Add(a = k, b = 1); }
+	calc def UnknownName { in k : Integer; return : Integer = Add(a = k, c = 1); }
+	calc def ReceiverNamed { in k : Integer; return : Integer = k->Add(b = 1); }
 	calc def Untyped { in k; k + 1 }
 	calc def WithOut { in k : Integer; out o : Integer = k; return : Integer = k + 1; }
 	calc def Inherits :> Add;
@@ -126,13 +128,23 @@ func wantOutcomesEqual(t *testing.T, name string, compiled, reference calcOutcom
 			t.Errorf("%s: compiled error %q, reference error %q", name, compiled.err, reference.err)
 		}
 	default:
-		if !valueIdentical(compiled.value, reference.value) {
+		if !outcomeValuesIdentical(compiled.value, reference.value) {
 			t.Errorf("%s: compiled %s, reference %s", name, FormatTraceValue(compiled.value), FormatTraceValue(reference.value))
 		}
 	}
 	if compiled.steps != reference.steps {
 		t.Errorf("%s: compiled spent %d steps, reference %d", name, compiled.steps, reference.steps)
 	}
+}
+
+// outcomeValuesIdentical is identity down to the bits of a Real, so a NaN is
+// identical to the same NaN and a negative zero only to a negative zero.
+func outcomeValuesIdentical(compiled, reference Value) bool {
+	if compiled.Kind == ValConst && reference.Kind == ValConst &&
+		compiled.Const.Kind == semantics.ValReal && reference.Const.Kind == semantics.ValReal {
+		return math.Float64bits(compiled.Const.Real) == math.Float64bits(reference.Const.Real)
+	}
+	return valueIdentical(compiled, reference)
 }
 
 func wantOutcomeInt(t *testing.T, name string, got calcOutcome, want int64) {
@@ -248,8 +260,8 @@ func TestCompiledCalcDefaults(t *testing.T) {
 	if partial.err != nil || partial.value.Const.Real != 26 {
 		t.Fatalf("Dflt(1) = %s, %v", FormatTraceValue(partial.value), partial.err)
 	}
-	// An inherited body binds the flattened parameters; a redeclared parameter
-	// keeps the calc on the evaluator, which answers as before.
+	// An inherited body binds the flattened parameters, a redeclared one in the
+	// slot of the parameter it redefines.
 	inherited := wantSameOutcome(t, "Inherits", intArg(2), intArg(3))
 	wantOutcomeInt(t, "Inherits(2, 3)", inherited, 5)
 	redeclared := wantSameOutcome(t, "Redeclares", intArg(1))
@@ -297,19 +309,17 @@ func eligibility(t *testing.T, ctx *Context, scope *symbols.Scope, name string) 
 	return compiled != nil
 }
 
-// Only the pure subset compiles; everything else stays on the evaluator, and
-// a caller of an ineligible calc is ineligible with it. An untyped parameter
-// compiles, holding any scalar as it does on the evaluator; a redeclared one
-// keeps the calc on the evaluator.
+// Only the scalar subset compiles — untyped and redeclared parameters, scalar
+// locals, named calls included; a caller of an ineligible calc is ineligible too.
 func TestCompiledCalcEligibility(t *testing.T) {
 	scope, ctx := compileRuntime(t, true)
-	eligible := []string{"Fib", "SumTo", "Add", "Div", "Pow", "Mixed", "Less", "Same", "Not", "Least", "Dflt", "Natural1", "IsEven", "IsOdd", "Nested", "Tail", "TailNat", "Untyped", "Inherits"}
+	eligible := []string{"Fib", "SumTo", "Add", "Div", "Pow", "Mixed", "Less", "Same", "Not", "Least", "Dflt", "Natural1", "IsEven", "IsOdd", "Nested", "Tail", "TailNat", "Untyped", "Inherits", "Local", "NamedCall", "Redeclares"}
 	for _, name := range eligible {
 		if !eligibility(t, ctx, scope, name) {
 			t.Errorf("%s is ineligible, want eligible", name)
 		}
 	}
-	ineligible := []string{"UsesUsage", "Local", "Stringy", "NonLiteralDefault", "Collects", "CallsIneligible", "CycleA", "CycleB", "NamedCall", "Twice", "WithOut", "Redeclares"}
+	ineligible := []string{"UsesUsage", "Stringy", "NonLiteralDefault", "Collects", "CallsIneligible", "CycleA", "CycleB", "Twice", "WithOut", "UnknownName", "ReceiverNamed"}
 	for _, name := range ineligible {
 		if eligibility(t, ctx, scope, name) {
 			t.Errorf("%s is eligible, want ineligible", name)
@@ -321,6 +331,8 @@ func TestCompiledCalcEligibility(t *testing.T) {
 	for _, name := range ineligible {
 		wantSameOutcome(t, name, intArg(3))
 	}
+	wantErrorIs(t, "UnknownName", wantSameOutcome(t, "UnknownName", intArg(3)), ErrUnknownParameter)
+	wantErrorIs(t, "ReceiverNamed", wantSameOutcome(t, "ReceiverNamed", intArg(3)), ErrReceiverWithNamedArgs)
 }
 
 // A traced run takes the evaluator, so the trace records every sub-expression.

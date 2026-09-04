@@ -129,6 +129,69 @@
       }
     },
     {
+      "id": "evaluate/a_complex_number_arrives_as_one_value",
+      "description": "A complex number travels as its two parts in one arm, so a client cannot mistake it for a sequence of two reals.",
+      "rpc": "Evaluate",
+      "requires_capabilities": [
+        "complex_values"
+      ],
+      "model": {
+        "fixture": "complex.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "expression": "z",
+        "context_symbol_id": "C::Signal"
+      },
+      "expect": {
+        "response": {
+          "result": {
+            "complex": {
+              "real": 1.5,
+              "imaginary": -2.0
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "evaluate/a_sequence_of_complex_numbers_keeps_each_whole",
+      "rpc": "Evaluate",
+      "requires_capabilities": [
+        "complex_values"
+      ],
+      "model": {
+        "fixture": "complex.sysml"
+      },
+      "request": {
+        "model_hash": "${model_hash}",
+        "expression": "zs",
+        "context_symbol_id": "C::Signal"
+      },
+      "expect": {
+        "response": {
+          "result": {
+            "sequence": {
+              "elements": [
+                {
+                  "complex": {
+                    "real": 1.0,
+                    "imaginary": 2.0
+                  }
+                },
+                {
+                  "complex": {
+                    "real": 3.0,
+                    "imaginary": 4.0
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
       "id": "evaluate/an_unparsable_expression_is_reported_in_band",
       "description": "A bad expression is an answer about the expression, not a transport failure.",
       "rpc": "Evaluate",

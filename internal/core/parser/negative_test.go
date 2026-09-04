@@ -60,6 +60,10 @@ func TestNegative(t *testing.T) {
 		// Prefix metadata needs a name, and the declaration after it a terminator.
 		{"require_prefix_metadata_no_type", "requirement r { require #; }"},
 		{"require_prefix_metadata_unterminated", "requirement r { require #goal c }"},
+		// An assertion's prefix metadata comes ahead of `assert`, not after it or
+		// its `not` (SysML.xtext AssertConstraintUsage `OccurrenceUsagePrefix 'assert'`).
+		{"assert_prefix_metadata_after_keyword", "package P { part def D { assert #B constraint c; } }"},
+		{"assert_prefix_metadata_after_not", "package P { part def D { assert not #B constraint c; } }"},
 		// A target succession's body closes, and its ends are still required
 		// (SysML.xtext:1698 ActionTargetSuccession).
 		{"succession_body_unclosed", "package P { action def A { action a; first a; then a { doc /* x */ } }"},
@@ -81,6 +85,9 @@ func TestNegative(t *testing.T) {
 		// (SysML.xtext:145-147).
 		{"metadata_about_no_target", "package P { metadata def M; @M about ; }"},
 		{"metadata_about_trailing_comma", "package P { metadata def M; part a; @M about a, ; }"},
+		// Each one is a qualified name, not a feature chain (SysML.xtext AnnotatedElement).
+		{"metadata_usage_about_feature_chain", "package P { metadata def M; part a { attribute x; } metadata m : M about a.x; }"},
+		{"metadata_usage_about_no_target", "package P { metadata def M; metadata m : M about ; }"},
 		// A prefixed dependency still states both of its ends
 		// (SysML.xtext:55-58).
 		{"prefixed_dependency_no_supplier", "package P { metadata def M; part a; #M dependency d from a to ; }"},
@@ -181,6 +188,16 @@ func TestNegative(t *testing.T) {
 		{"short_name_redefines_no_target", "part p { attribute <sn> redefines; }"},
 		{"short_name_redefines_symbol_no_target", "part p { attribute <sn> :>>; }"},
 		{"short_name_defined_by_no_type", "part p { attribute <sn> defined by ; }"},
+
+		// A requirement's subject, assume and require members take an
+		// identification (SysML.xtext SubjectUsage, RequirementConstraintUsage →
+		// UsageDeclaration), so a malformed short name is an error there too.
+		{"subject_empty_short_name", "requirement def R { subject <> x; }"},
+		{"subject_unclosed_short_name", "requirement def R { subject <s x; }"},
+		{"assume_empty_short_name", "requirement def R { assume constraint <> c; }"},
+		{"assume_unclosed_short_name", "requirement def R { assume constraint <c x; }"},
+		{"require_empty_short_name", "requirement def R { require constraint <> c; }"},
+		{"require_unclosed_short_name", "requirement def R { require constraint <c x; }"},
 
 		// The notation has no definition of a rendering a view names, of a
 		// concern a body frames, or of a stakeholder or actor: those keywords own

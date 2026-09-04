@@ -10,7 +10,11 @@ import (
 // when it is available. A failure is non-fatal: it is logged, and the index
 // stays usable for a model that does not depend on the file that failed.
 func LoadInto(idx *symbols.Index) {
-	src := DefaultSource()
+	loadInto(idx, DefaultSource())
+}
+
+// loadInto is LoadInto over the given source.
+func loadInto(idx *symbols.Index, src Source) {
 	cache, err := NewCache()
 	if err != nil {
 		slog.Warn("stdlib symbol cache unavailable, loading without cache", "error", err)

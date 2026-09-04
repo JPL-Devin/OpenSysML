@@ -35,7 +35,7 @@ try (Connection connection = Connection.open()) {      // starts a private sysml
 ```
 
 Every value the API answers with is immutable: `Value` is a sealed interface over
-records (`IntegerValue`, `RealValue`, `QuantityValue`, `EnumerationValue`,
+records (`IntegerValue`, `RealValue`, `ComplexValue`, `QuantityValue`, `EnumerationValue`,
 `InstanceReference`, `Sequence`, `NullValue`, `UnsetValue`, …), and `Symbol`,
 `Diagnostic`, `Instance` and `Instantiation` are records with copied collections.
 No generated protobuf message or builder appears in the public API.
@@ -372,7 +372,7 @@ and `SuiteTest.aCorruptedAnswerIsCaught` asserts each corruption is caught:
 
 ```bash
 make build                                   # bin/sysml-grpc; tests skip without it
-mvn -f clients/java/pom.xml test             # 116 client tests, 27 conformance tests
+mvn -f clients/java/pom.xml test             # 119 client tests, 27 conformance tests
 mvn -f clients/java/pom.xml test -Dopensysml.requireService=true   # CI: absence fails
 ```
 

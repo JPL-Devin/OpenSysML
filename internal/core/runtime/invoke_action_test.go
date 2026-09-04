@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -226,6 +227,44 @@ package caller {
 	}
 	if got := intOutput(t, outputs, "doubled"); got != 14 {
 		t.Errorf("doubled = %d, want 14", got)
+	}
+}
+
+// An explicit empty call binds nothing: unlike a bare `perform`, it does not read
+// the caller's same-named `v`, so a required input is reported unbound and a
+// defaulted one takes its default.
+func TestInvokeActionEmptyCallBindsNoCallerValues(t *testing.T) {
+	const caller = `
+package caller {
+    action def Outer {
+        attribute v : Integer = 21;
+        attribute doubled : Integer = 0;
+
+        first start;
+        action call = test::Doubler();
+        done;
+
+        succession first start then call;
+        succession first call then done;
+    }
+}`
+	ctx, outer := loadAction(t, doublerModel+caller, "Outer")
+	_, err := ctx.ExecuteAction(outer)
+	if !errors.Is(err, ErrUnboundParameter) || !strings.Contains(err.Error(), "input parameter v") {
+		t.Fatalf("ExecuteAction with a required input unbound: err = %v, want ErrUnboundParameter for v", err)
+	}
+
+	defaulted := strings.Replace(doublerModel, "in v : Integer;", "in v : Integer = 3;", 1)
+	ctx, outer = loadAction(t, defaulted+caller, "Outer")
+	outputs, err := ctx.ExecuteAction(outer)
+	if err != nil {
+		t.Fatalf("ExecuteAction: %v", err)
+	}
+	if got := intOutput(t, outputs, "doubled"); got != 6 {
+		t.Errorf("doubled = %d, want 6 (the default, not the caller's 21)", got)
+	}
+	if got := intOutput(t, outputs, "v"); got != 21 {
+		t.Errorf("v = %d, want the caller's 21 untouched", got)
 	}
 }
 

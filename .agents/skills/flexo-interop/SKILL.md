@@ -121,6 +121,49 @@ the paged listing route ignores `pageSize`/`pageAfter` and returns every subject
 and it therefore does not apply its own query's `sysml:elementId` filter. Elements missing
 `elementId` are listed today for that reason alone.
 
+## Driving `sysml -sync-diff` / `-sync-apply` against the stack by hand
+
+The CLI sync (`cmd/sysml/sync.go`) shares the client above, so the same token and defaults apply
+(`FLEXO_INTEROP_TOKEN`, `FLEXO_LAYER1_URL`, `FLEXO_SYSMLV2_ORG`). Things that cost time when they
+are not known up front:
+
+- **The CLI does not create the project.** Only `apply_measure.go`'s `CreateProject` does. Against a
+  project id the stack has never seen, `-sync-diff`/`-sync-apply` fail on the first Layer 1 read
+  (`.../branches/main/query: Not Found`). Pre-create it exactly as the harness does:
+  `POST :8083/projects` with `{"@type":"Project","@id":"<id>","name":"...","defaultBranch":{"@id":"main"}}`,
+  and use a fresh id per run (project deletion is soft; branches survive).
+- **The endpoint argument only sets the SysML v2 URL.** The branch head and commits go there;
+  the graphs themselves — the head's, the last-seen commit's — are read from Layer 1 at
+  `FLEXO_LAYER1_URL` (default `http://localhost:8080`). A plaintext `http://` endpoint off this
+  machine is refused (exit 2) unless `FLEXO_ALLOW_PLAIN_HTTP=1`; the compose stack on `localhost`
+  needs nothing.
+  So a wrong endpoint (`http://localhost:9`, or Fuseki's `:3030`) fails at the very first read
+  with `read the repository: GET .../branches/main: ...` and exit 1 even when the model already
+  agrees with the repository — nothing is silently accepted. An unroutable opt-in endpoint
+  (`FLEXO_ALLOW_PLAIN_HTTP=1 ... http://192.0.2.10:8083`) takes ~30 s to fail with `dial tcp ...
+  i/o timeout`; wrap it in `timeout 75`.
+- **A no-op apply still writes `<model>.sync.json`** with the head commit it compared against
+  (`nothing applied: ...; head commit <id> recorded in <state>`; a second no-op run prints no
+  `recorded` and leaves the file byte-identical). Check it against `GET
+  :8083/projects/<id>/branches/main` → `.head["@id"]`. A state file naming a commit the stack does
+  not have fails with `read the repository at last-seen commit <id>: ...` (exit 1) and is left
+  untouched. A commit is refused (exit 1, `moved from commit ... since the change set was
+  computed`) if the branch head changed between the read and the write.
+- **Observe commits through the API, not the CLI**: `GET :8083/projects/<id>/commits` (count and
+  ids), `GET :8083/projects/<id>/commits/<commit>/elements/<elementId>` to read an element back.
+  A deleted element reads back as `{"@id": ..., "@type": null}` (emptied), not 404.
+- **Stage a repository-side change for a conflict** the way `MeasureApply` does: `POST
+  :8083/projects/<id>/commits?branchId=main` with one `DataVersion` whose payload rewrites a
+  retained id (e.g. `declaredName`). The next `-sync-apply` with a state file that names an older
+  commit reports `conflict ... (changed in the repository since the last-seen commit)` and exits 1.
+- Exit statuses to assert: 0 applied / nothing to change; 1 refused (unconfirmed deletes,
+  conflicts, a moved head) or a repository read or write that failed; 2 usage (no token,
+  `-sync-mint-ids` without `-sync-annotate`, non-http target for apply, extra positional argument).
+- The full `TestFlexoInterop` + `TestFlexoInteropApply` run takes ~5 minutes against the compose
+  stack (the identity and apply rounds each create a project and read every element back), not the
+  10–20 s the round-trip gate alone used to take. Do not mistake the silence for a hang; check
+  `docker logs --since 1m flexo-sysmlv2` for the requests it is making.
+
 ## Scope
 
 The harness measures; it does not fix. Do not change `internal/core/export` or `internal/core/rdf`

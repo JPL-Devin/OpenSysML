@@ -244,16 +244,17 @@ func renderForm(rendering *view.Rendering, asked string) (view.Form, error) {
 
 // origin is a core origin as a client navigates to it, nil for an element with
 // no locatable declaration and for one declared in a document the session does
-// not hold — a standard library file the index served from its cache.
+// not hold. A standard library declaration is located in its sysml-stdlib
+// document.
 func (s *Server) origin(o view.Origin) *renderOrigin {
 	if !o.Located() {
 		return nil
 	}
-	doc := s.ws.Document(o.Doc)
+	doc := s.document(o.Doc)
 	if doc == nil {
 		return nil
 	}
-	out := &renderOrigin{URI: nameToURI(o.Doc), Range: spanToRange(doc.Content, o.Span)}
+	out := &renderOrigin{URI: s.documentURI(o.Doc), Range: spanToRange(doc.Content, o.Span)}
 	if o.Name.Len > 0 {
 		name := spanToRange(doc.Content, o.Name)
 		out.SelectionRange = &name

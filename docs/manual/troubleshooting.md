@@ -3,11 +3,11 @@
 ## How errors surface
 
 Document generation fails loudly and early, never partially. Every mistake is
-a **typed error**: planning problems (structure, query references, bindings)
-surface when the document is compiled — as `document-plan-*` diagnostics in
-the editor, and as source-located errors from the CLI — while execution
+a **typed error**. Planning problems (structure, query references, bindings)
+surface when the document is compiled, as `document-plan-*` diagnostics in
+the editor and as source-located errors from the CLI. Execution
 problems (a query that cannot run) stop the render with the query error's
-message. A document that cannot be rendered exits `2`; nothing is written.
+message. A document that cannot be rendered exits `2`, and nothing is written.
 
 ```console
 $ sysml report.sysml -render-document E::R
@@ -79,6 +79,18 @@ $ echo $?
 | A query invoking a query that does not exist | `unknown-invocation` |
 | A query invocation cycle, or exceeding a depth, count or visit budget | `invocation-cycle` / `invocation-depth` / `invocation-budget` / `visit-budget` — the engine terminates rather than hangs |
 
+### HTML
+
+| Mistake | Error |
+|---|---|
+| `-html-*` flags without `-doc-form html` | flag-conflict error |
+| `-html-css` naming a file that cannot be read | the file's own read error |
+| `-html-css` with a scheme other than `http`, `https` or a protocol-relative URL | read as a path, so a URL of another scheme is a missing file |
+| `-html-css` or `-html-no-default-css` with `-html-fragment` | refused — a fragment has no place for a stylesheet; style the page you embed it in |
+| `-html-default-css` beside any flag that loads a model or writes something else | refused — it writes the default stylesheet and nothing else |
+| `-doc-title-page`, `-doc-toc` or `-doc-number-sections` with `-doc-form markdown` | flag-conflict error — Markdown has no page shell to put them in |
+| `-pdf-engine` with `-doc-form html` | flag-conflict error — HTML needs no external converter |
+
 ### PDF
 
 | Mistake | Error |
@@ -86,12 +98,12 @@ $ echo $?
 | `-doc-form pdf` without `-o` | refused — a PDF is a binary artifact |
 | The selected converter not installed | `tool-missing`, naming the tool, its `OPENSYSML_*` override variable and the other engines |
 | The converter exits non-zero | `tool-failed`, with the tool's own words |
-| `-pdf-*` flags without `-doc-form pdf` | flag-conflict error |
+| `-pdf-engine` without `-doc-form pdf` | flag-conflict error |
 
 ## Limitations
 
-Kept honest per the project's compliance record; each of these is a current
-fact about the implementation, not a design position.
+Each of these is a current fact about the implementation, not a design
+position; they are tracked in the project's compliance record.
 
 - **The vocabulary is non-normative.** `DocumentQueries` is an OpenSysML
   extension; other SysML v2 tools will parse models that use it but will not
@@ -109,16 +121,19 @@ fact about the implementation, not a design position.
 - **Captions are marked, not inferred.** The Markdown dialect writes a
   `<!-- caption -->` comment line before every table and diagram caption; the
   PDF backend styles only marked lines as captions, and an emphasized line
-  without the marker stays an ordinary paragraph. A marker whose next line is
+  without the marker stays an ordinary paragraph. HTML needs no marker, as it
+  writes a real `<caption>` or `<figcaption>`. A marker whose next line is
   not a fully emphasized caption is a typed `dangling-caption` error.
-- **PDF is CLI-only.** The REPL, gRPC and LSP surfaces render Markdown only.
+- **HTML and PDF are CLI-only.** The REPL, gRPC and LSP surfaces render
+  Markdown only.
 - **PDF reproducibility is per-toolchain.** Byte-identical output holds for
   one pinned converter toolchain; different converter versions or fonts
   produce different bytes. Prince is recognized but not provisioned by the
   toolchain download script (it is commercial).
-- **Presentation is not configurable.** No Mermaid theme or stylesheet
-  options; a diagram's caption and direction, plus the PDF deliverable
-  flags, are the whole presentation surface.
+- **Only HTML presentation is configurable.** `-html-css` and its companions
+  restyle an HTML document, but there is no Mermaid theme option and the PDF
+  path's stylesheet is fixed, so for PDF a diagram's caption and direction plus
+  the deliverable flags are the whole presentation surface.
 - **`-json` does not combine with `-render-document`** — the document IR is
   not reported as JSON.
 - **Editor rendering is on demand.** The Render Document command re-renders

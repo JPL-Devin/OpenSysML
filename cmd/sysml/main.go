@@ -13,9 +13,9 @@ import (
 	"github.com/chzyer/readline"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/conformance"
-	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 	"github.com/Open-MBEE/OpenSysML/internal/repl"
+	"github.com/Open-MBEE/OpenSysML/internal/usage"
 )
 
 // errPrefix names the tool in the messages it writes to stderr.
@@ -103,6 +103,7 @@ func writableFile(dir, name string) (string, bool) {
 var (
 	evalExprs     stringSlice
 	showHelp      bool
+	showMan       bool
 	showVersion   bool
 	debugMode     bool
 	quietMode     bool
@@ -121,10 +122,18 @@ var (
 	pdfTitlePage  bool
 	pdfTOC        bool
 	pdfNumbering  bool
+	htmlCSS       stringSlice
+	htmlNoCSS     bool
+	htmlShowCSS   bool
+	htmlFragment  bool
 	strictMode    bool
 	modelChecks   checks
+	compileCalc   string
+	compileTarget string
+	compileSource bool
 
 	syncDiffWith       string
+	syncApplyTo        string
 	syncBase           string
 	syncState          string
 	syncConfirmDeletes bool
@@ -151,25 +160,6 @@ func main() {
 	os.Exit(runCLI())
 }
 
-// wrapped breaks text into lines of at most width characters, so a sentence the
-// help prints rather than restates still reads as a paragraph.
-func wrapped(text string, width int) string {
-	var lines []string
-	line := ""
-	for _, word := range strings.Fields(text) {
-		switch {
-		case line == "":
-			line = word
-		case len(line)+1+len(word) <= width:
-			line += " " + word
-		default:
-			lines = append(lines, line)
-			line = word
-		}
-	}
-	return strings.Join(append(lines, line), "\n")
-}
-
 // flagGiven reports whether the run named this flag, which an empty value
 // cannot be told apart from otherwise.
 func flagGiven(name string) bool {
@@ -185,101 +175,13 @@ func flagGiven(name string) bool {
 // printUsage writes the help to w: the caller chooses the stream, since help
 // asked for is a result and help shown over a misuse belongs with the error.
 func printUsage(w io.Writer) {
-	// PrintDefaults writes to the flag set's own stream, restored after so it does
-	// not decide where a later error is reported.
-	previous := flag.CommandLine.Output()
-	flag.CommandLine.SetOutput(w)
-	defer flag.CommandLine.SetOutput(previous)
+	doc().WriteText(w, flag.CommandLine)
+}
 
-	fmt.Fprintf(w, "Usage: sysml [options] [file...]\n\n")
-	fmt.Fprintf(w, "Options:\n")
-	flag.PrintDefaults()
-	fmt.Fprintf(w, "\nExamples:\n")
-	fmt.Fprintf(w, "  sysml                     # Start interactive REPL\n")
-	fmt.Fprintf(w, "  sysml -e \"5 + 3\"          # Evaluate and exit\n")
-	fmt.Fprintf(w, "  sysml -e \"expr\" file.sysml # Load file, evaluate, and exit\n")
-	fmt.Fprintf(w, "  sysml file.sysml          # Load file and start REPL\n")
-	fmt.Fprintf(w, "  sysml -debug file.sysml   # Load file, reporting every diagnostic\n")
-	fmt.Fprintf(w, "  sysml -trace file.sysml   # Load file, reporting each execution step\n")
-	fmt.Fprintf(w, "\nChecking a model:\n")
-	fmt.Fprintf(w, "  sysml -constraint MassBudget model.sysml       # Evaluate one constraint and exit\n")
-	fmt.Fprintf(w, "  sysml -requirement PowerMargin model.sysml     # Evaluate one requirement and exit\n")
-	fmt.Fprintf(w, "  sysml -satisfy model.sysml                     # Evaluate every satisfaction assertion\n")
-	fmt.Fprintf(w, "  sysml -satisfy=Ctx model.sysml                 # ...only the ones Ctx states\n")
-	fmt.Fprintf(w, "  sysml -instantiate p -constraint C model.sysml  # Check C against an object of p\n")
-	fmt.Fprintf(w, "  sysml -validate model.sysml                    # Report diagnostics only\n")
-	fmt.Fprintf(w, "  sysml -validate -strict model.sysml            # ...asking whether it is conforming SysML v2\n")
-	fmt.Fprintf(w, "  sysml -calc \"Fall(3, 4)\" model.sysml           # Invoke a calculation\n")
-	fmt.Fprintf(w, "  sysml -run-query \"Heavy root=scope\" model.sysml # Execute a document query\n")
-	fmt.Fprintf(w, "  sysml -action Drive model.sysml                # Run an action to completion\n")
-	fmt.Fprintf(w, "  sysml -state Mission -advance 10 model.sysml   # Run a state machine for 10 time units\n")
-	fmt.Fprintf(w, "  sysml -satisfy -json model.sysml               # Report the verdicts as JSON\n")
-	fmt.Fprintf(w, "\nEvery run that is not a prompt exits 0 when it did what was asked, 1 when the\n")
-	fmt.Fprintf(w, "model answered false for a check, and 2 when what was asked could not be\n")
-	fmt.Fprintf(w, "carried out at all — an unreadable file, a model that did not analyse cleanly,\n")
-	fmt.Fprintf(w, "an unresolved name, a failed conversion — so a run can gate a build. What was\n")
-	fmt.Fprintf(w, "asked for is reported on stdout and what went wrong on stderr, prefixed\n")
-	fmt.Fprintf(w, "\"sysml: \" unless it locates a finding in the source. Each check flag may be\n")
-	fmt.Fprintf(w, "repeated.\n")
-	fmt.Fprintf(w, "\nConversion:\n")
-	fmt.Fprintf(w, "  sysml model.sysml -convert ttl              # SysML notation to RDF Turtle, on stdout\n")
-	fmt.Fprintf(w, "  sysml model.ttl -convert sysml              # RDF Turtle to SysML notation\n")
-	fmt.Fprintf(w, "  sysml model.sysml -convert ttl -o m.ttl     # Write the conversion to a file\n")
-	fmt.Fprintf(w, "  sysml in.txt -convert ttl -from sysml       # Name the input format explicitly\n")
-	fmt.Fprintf(w, "\nThe input format is taken from the file extension (.sysml, .kerml, .ttl) unless\n")
-	fmt.Fprintf(w, "-from names it. Converting to the format it is already in rewrites the input:\n")
-	fmt.Fprintf(w, "notation is reformatted, Turtle is normalized.\n")
-	// The notice is printed, not restated, so the help cannot drift from what a
-	// conversion reports.
-	fmt.Fprintf(w, "\n%s\n", wrapped(export.ExperimentalNotice, 78))
-	fmt.Fprintf(w, "Every run that converts RDF says so on stderr. Saving to .sysml or .kerml is\n")
-	fmt.Fprintf(w, "stable.\n")
-	fmt.Fprintf(w, "\nSyncing against a repository (dry run):\n")
-	fmt.Fprintf(w, "  sysml model.sysml -sync-diff repo.ttl          # Show the change set, keyed by effective id\n")
-	fmt.Fprintf(w, "  sysml model.sysml -sync-diff repo.ttl -sync-base last-seen.ttl\n")
-	fmt.Fprintf(w, "  sysml model.sysml -sync-diff repo.ttl -sync-confirm-deletes\n")
-	fmt.Fprintf(w, "  sysml model.sysml -sync-diff repo.ttl -sync-mint-ids -sync-annotate out.sysml\n")
-	fmt.Fprintf(w, "\nThe diff correlates elements by their effective id — an @ElementId annotation, or\n")
-	fmt.Fprintf(w, "the encoded qualified name — so a rename, move or retype is an update, never a\n")
-	fmt.Fprintf(w, "delete plus a create. Repository-only elements are reported as deletes but applying\n")
-	fmt.Fprintf(w, "them needs -sync-confirm-deletes; conflicts — a declared id the branch no longer\n")
-	fmt.Fprintf(w, "has, or a repository change since the last-seen commit — exit 1 and are never\n")
-	fmt.Fprintf(w, "resolved silently. The last-seen commit is tool state in <model>.sync.json (or\n")
-	fmt.Fprintf(w, "-sync-state), never written into the notation.\n")
-	fmt.Fprintf(w, "\nRendering a view:\n")
-	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView   # ASCII text at a terminal\n")
-	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView -render-form markdown\n")
-	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView -o view.mmd\n")
-	fmt.Fprintf(w, "  sysml model.sysml -render-all rendered\n")
-	fmt.Fprintf(w, "\nRendering a document:\n")
-	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport           # Markdown on stdout\n")
-	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport -o report.md\n")
-	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport -doc-form pdf -o report.pdf\n")
-	fmt.Fprintf(w, "  sysml model.sysml -render-documents rendered                     # every document, linked\n")
-	fmt.Fprintf(w, "  sysml model.sysml -render-document Reports::MassReport -doc-form pdf \\\n")
-	fmt.Fprintf(w, "        -pdf-engine pandoc -pdf-title-page -pdf-toc -pdf-number-sections -o report.pdf\n")
-	fmt.Fprintf(w, "\nA document is a part def specializing DocumentQueries::Document. Its queries\n")
-	fmt.Fprintf(w, "are bound in the model and run against it, and the result is written as\n")
-	fmt.Fprintf(w, "CommonMark-compatible Markdown. -doc-form pdf converts that Markdown with an\n")
-	fmt.Fprintf(w, "external converter named by -pdf-engine — weasyprint (default), pandoc or\n")
-	fmt.Fprintf(w, "prince — run as a subprocess, never linked in; diagrams are pre-rendered to\n")
-	fmt.Fprintf(w, "SVG with mermaid-cli (mmdc). None of these tools is needed until PDF output\n")
-	fmt.Fprintf(w, "is asked for; scripts/download-doc-pdf-toolchain.sh provisions pinned copies.\n")
-	fmt.Fprintf(w, "\nThe rendering is the one the view's render member states, and a containment tree\n")
-	fmt.Fprintf(w, "where it states none. It is tool-defined output: SysML v2 specifies the notation,\n")
-	fmt.Fprintf(w, "not how a tool draws it. Notices — an empty view, an element the rendering cannot\n")
-	fmt.Fprintf(w, "represent — go on stderr.\n")
-	fmt.Fprintf(w, "\nFlags may be written before or after the model they apply to. A file named like\n")
-	fmt.Fprintf(w, "a flag is read as a file after --, which ends the flags: sysml -trace -- -m.sysml\n")
-	fmt.Fprintf(w, "\nReading from standard input:\n")
-	fmt.Fprintf(w, "  cat model.sysml | sysml -validate -           # A lone - names standard input\n")
-	fmt.Fprintf(w, "  cat model.sysml | sysml - -convert ttl -from sysml\n")
-	fmt.Fprintf(w, "\nWhat was read from standard input is called <stdin> in diagnostics, and a file\n")
-	fmt.Fprintf(w, "really named \"-\" is read by naming it ./- instead.\n")
-	fmt.Fprintf(w, "\nProfiling a run:\n")
-	fmt.Fprintf(w, "  sysml -validate -memstats model.sysml            # Report what the run cost, on stderr\n")
-	fmt.Fprintf(w, "  sysml -validate -memprofile heap.out model.sysml # Write a heap profile for go tool pprof\n")
-	fmt.Fprintf(w, "  sysml -validate -cpuprofile cpu.out model.sysml  # Write a CPU profile for go tool pprof\n")
+// printMan writes the command's manual page, rendered from the same description
+// the help is, so the shipped page cannot document a different command.
+func printMan(w io.Writer) {
+	doc().WriteRoff(w, flag.CommandLine, usage.DefaultManMeta())
 }
 
 // runCLI carries out what the command line asked for and returns the exit
@@ -288,52 +190,7 @@ func runCLI() int {
 	// Usage shown over a misuse goes on the stream the error naming it goes on.
 	flag.Usage = func() { printUsage(flag.CommandLine.Output()) }
 
-	flag.BoolVar(&showHelp, "help", false, "Show this help and exit")
-	flag.BoolVar(&showHelp, "h", false, "Show this help (shorthand)")
-	flag.Var(&evalExprs, "eval", "Evaluate expression and exit (can be specified multiple times)")
-	flag.Var(&evalExprs, "e", "Evaluate expression and exit (shorthand)")
-	flag.BoolVar(&showVersion, "version", false, "Show version information")
-	flag.BoolVar(&showVersion, "v", false, "Show version (shorthand)")
-	flag.BoolVar(&debugMode, "debug", false, "Report every diagnostic over the whole session buffer, with the pass that produced it")
-	flag.BoolVar(&quietMode, "quiet", false, "Report errors only, suppressing warnings")
-	flag.BoolVar(&strictMode, "strict", false, "Judge the model as conforming SysML v2: notation no pinned production admits is an error, not a warning")
-	flag.BoolVar(&traceMode, "trace", false, "Report each execution step: expression evaluation, calc invocation, action tokens, state transitions")
-	flag.StringVar(&convertFormat, "convert", "", "Convert the model to this format instead of running it: sysml, kerml, ttl, turtle or rdf (RDF is experimental)")
-	flag.StringVar(&queryText, "query", "", "Evaluate OSLC Query text against the model instead of running the REPL")
-	flag.StringVar(&outputPath, "output", "", "Write conversion output to this file (default: stdout)")
-	flag.StringVar(&outputPath, "o", "", "Write conversion output to this file (shorthand)")
-	flag.StringVar(&fromFormat, "from", "", "Input format for -convert: sysml, kerml, ttl, turtle or rdf (default: from the input's extension)")
-	flag.StringVar(&renderView, "render", "", "Render this view of the model instead of running it, in the form its render member states")
-	flag.StringVar(&renderAllDir, "render-all", "", "Render every declared view into this directory")
-	flag.StringVar(&renderForm, "render-form", "", "Form -render or -render-all writes: text, mermaid or markdown (default: destination-dependent for -render, each kind's machine form for -render-all)")
-	flag.StringVar(&renderDoc, "render-document", "", "Compile this document definition, run its queries and write the rendered Markdown")
-	flag.StringVar(&renderDocsDir, "render-documents", "", "Render every document definition as linked Markdown into this directory")
-	flag.StringVar(&docForm, "doc-form", "", "Form -render-document writes: markdown (default) or pdf, which drives an external converter")
-	flag.StringVar(&pdfEngine, "pdf-engine", "", "Converter -doc-form pdf drives: weasyprint (default), pandoc or prince")
-	flag.BoolVar(&pdfTitlePage, "pdf-title-page", false, "Put the document title on a page of its own (-doc-form pdf)")
-	flag.BoolVar(&pdfTOC, "pdf-toc", false, "Write a table of contents ahead of the content (-doc-form pdf)")
-	flag.BoolVar(&pdfNumbering, "pdf-number-sections", false, "Number the section headings hierarchically (-doc-form pdf)")
-	flag.StringVar(&syncDiffWith, "sync-diff", "", "Show the change set between the model and this repository graph (.ttl), keyed by effective element id, instead of running it")
-	flag.StringVar(&syncBase, "sync-base", "", "Repository graph at the last-seen commit; with it, repository changes since then surface as conflicts")
-	flag.StringVar(&syncState, "sync-state", "", "Sync state file recording project, branch and last-seen commit (default: <model>.sync.json beside the model)")
-	flag.BoolVar(&syncConfirmDeletes, "sync-confirm-deletes", false, "Confirm repository-side deletes; without it the diff reports them but applying is refused")
-	flag.BoolVar(&syncMintIDs, "sync-mint-ids", false, "Mint a UUID for each unannotated element being created, so the repository can address it stably")
-	flag.StringVar(&syncAnnotate, "sync-annotate", "", "Write the model to this file with each minted id declared as an @ElementId annotation (needs -sync-mint-ids)")
-	flag.Var(&deprecatedFlag{instead: "-to has been replaced by -convert, as `sysml model.sysml -convert ttl`"}, "to", "Replaced by -convert, which names the output format")
-	flag.Var(&modelChecks.instantiate, "instantiate", "Create an object of this definition before the checks, so a verdict is about it (repeatable)")
-	flag.Var(&modelChecks.constraints, "constraint", "Evaluate this constraint and exit (repeatable)")
-	flag.Var(&modelChecks.requirements, "requirement", "Evaluate this requirement and exit (repeatable)")
-	flag.Var(&modelChecks.satisfy, "satisfy", "Evaluate every satisfaction assertion, or with -satisfy=<name> those the named element states (repeatable)")
-	flag.BoolVar(&modelChecks.validate, "validate", false, "Analyse the model and report its diagnostics, exiting nonzero on an error")
-	flag.Var(&modelChecks.calcs, "calc", "Invoke this calculation and report what it computed, as -calc \"Fall(3, 4)\" (repeatable)")
-	flag.Var(&modelChecks.queries, "run-query", "Execute this document query and report its rows, as -run-query \"HeavySubsystems root=telescope\" (repeatable)")
-	flag.Var(&modelChecks.actions, "action", "Run this action to completion, as -action \"Drive rover1\" to run it on an object (repeatable)")
-	flag.Var(&modelChecks.states, "state", "Run this state machine, as -state \"Mission rover1\" to run it on an object (repeatable)")
-	flag.Var(&modelChecks.advance, "advance", "Simulated time units to run each -state machine for (default: only its initial transition)")
-	flag.BoolVar(&modelChecks.jsonOut, "json", false, "Report checks as one JSON document rather than as lines")
-	flag.StringVar(&cpuProfilePath, "cpuprofile", "", "Write a CPU profile of the run to this file, for go tool pprof")
-	flag.StringVar(&memProfilePath, "memprofile", "", "Write a heap profile of the run to this file, for go tool pprof")
-	flag.BoolVar(&memStats, "memstats", false, "Report on stderr what the run cost: wall time, memory allocated, memory taken from the OS")
+	registerFlags(flag.CommandLine)
 	if err := flag.CommandLine.Parse(permuteArgs(flag.CommandLine, os.Args[1:])); err != nil {
 		// flag.CommandLine exits on error; unreachable unless that changes.
 		return 2
@@ -343,6 +200,12 @@ func runCLI() int {
 	// it can be piped, and the run did what was asked.
 	if showHelp {
 		printUsage(os.Stdout)
+		return exitHolds
+	}
+
+	// The page asked for is the result of the run, like the help.
+	if showMan {
+		printMan(os.Stdout)
 		return exitHolds
 	}
 
@@ -382,36 +245,112 @@ func runCLI() int {
 		return 2
 	}
 
-	if renderDoc == "" && (docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering) {
-		fmt.Fprintln(os.Stderr, "sysml: -doc-form, -pdf-engine, -pdf-title-page, -pdf-toc and -pdf-number-sections apply to -render-document; name the document to render")
+	// The default stylesheet is asked for on its own; it needs no model, and
+	// writing it is the whole run, so it cannot stand in for another.
+	if htmlShowCSS {
+		switch {
+		case len(args) > 0:
+			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet, which no model shapes; ask for it without model files")
+			return 2
+		case renderDoc != "" || renderDocsDir != "" || renderView != "" || renderAllDir != "" ||
+			convertFormat != "" || flagGiven("sync-diff") || flagGiven("sync-apply") ||
+			queryText != "" || len(evalExprs) > 0 || modelChecks.requested():
+			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet and nothing else; ask for it in its own run")
+			return 2
+		case docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering ||
+			len(htmlCSS) > 0 || htmlNoCSS || htmlFragment:
+			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet itself; the document and stylesheet options shape a rendered document, not the sheet")
+			return 2
+		case fromFormat != "" || strictMode || syncBase != "" || syncState != "" ||
+			syncConfirmDeletes || syncMintIDs || syncAnnotate != "":
+			fmt.Fprintln(os.Stderr, "sysml: -html-default-css writes the default stylesheet, which reads no input; the input and repository options do not apply")
+			return 2
+		}
+		if err := runDefaultStylesheet(); err != nil {
+			return fail(err)
+		}
+		return exitHolds
+	}
+
+	if renderDoc == "" && renderDocsDir == "" &&
+		(docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering ||
+			len(htmlCSS) > 0 || htmlNoCSS || htmlFragment) {
+		fmt.Fprintln(os.Stderr, "sysml: -doc-form, the document options and the stylesheet options apply to -render-document and -render-documents; name the document to render")
 		return 2
 	}
 
 	if flagGiven("sync-diff") && syncDiffWith == "" {
-		fmt.Fprintln(os.Stderr, "sysml: -sync-diff is empty; name the repository graph to diff against")
+		fmt.Fprintln(os.Stderr, "sysml: -sync-diff is empty; name the repository graph or endpoint to diff against")
 		return 2
 	}
-	if syncDiffWith != "" {
+	if flagGiven("sync-apply") && syncApplyTo == "" {
+		fmt.Fprintln(os.Stderr, "sysml: -sync-apply is empty; name the SysML v2 API endpoint to apply to")
+		return 2
+	}
+	if flagGiven("compile") && compileCalc == "" {
+		fmt.Fprintln(os.Stderr, "sysml: -compile is empty; name the calc def to compile, as -compile Pkg::Fib")
+		return 2
+	}
+	if compileCalc == "" && (flagGiven("target") || compileSource) {
+		fmt.Fprintln(os.Stderr, "sysml: -target and -source apply to -compile; name the calc def to compile")
+		return 2
+	}
+	if compileCalc != "" {
 		switch {
-		case convertFormat != "" || renderView != "" || renderDoc != "" || renderAllDir != "" || renderDocsDir != "" || queryText != "" || len(evalExprs) > 0:
-			fmt.Fprintln(os.Stderr, "sysml: -sync-diff shows a change set; it cannot be combined with -convert, -render, -render-all, -render-document, -render-documents, -query or -eval")
+		case convertFormat != "" || renderView != "" || renderAllDir != "" || renderDoc != "" || renderDocsDir != "" || queryText != "" || len(evalExprs) > 0 || fromFormat != "" || syncDiffWith != "" || syncApplyTo != "":
+			fmt.Fprintln(os.Stderr, "sysml: -compile builds an executable; it cannot be combined with -convert, -render, -render-all, -render-document, -render-documents, -query, -eval, -from, -sync-diff or -sync-apply")
 			return 2
-		case outputPath != "" || fromFormat != "" || renderForm != "" || docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering:
-			fmt.Fprintln(os.Stderr, "sysml: -sync-diff reads SysML or Turtle inputs and prints the change set; -output, -from and the render options do not apply")
+		case syncBase != "" || syncState != "" || syncConfirmDeletes || syncMintIDs || syncAnnotate != "":
+			fmt.Fprintln(os.Stderr, "sysml: -sync-base, -sync-state, -sync-confirm-deletes, -sync-mint-ids and -sync-annotate apply to -sync-diff or -sync-apply, not to -compile")
 			return 2
 		case modelChecks.requested():
 			return refuse(modelChecks,
-				"-sync-diff shows a change set and decides nothing else about the model; check it in its own run")
+				"-compile builds an executable and decides nothing about the model; check it in its own run")
+		case outputPath == "":
+			fmt.Fprintln(os.Stderr, "sysml: -compile needs -o to name the executable (or the source file, with -source)")
+			return 2
+		}
+		if err := runCompile(args); err != nil {
+			return fail(err)
+		}
+		return exitHolds
+	}
+
+	if syncDiffWith != "" && syncApplyTo != "" {
+		fmt.Fprintln(os.Stderr, "sysml: -sync-diff shows a change set without writing and -sync-apply writes one; ask for one per run")
+		return 2
+	}
+	if syncDiffWith != "" || syncApplyTo != "" {
+		mode := "-sync-diff"
+		if syncApplyTo != "" {
+			mode = "-sync-apply"
+		}
+		switch {
+		case convertFormat != "" || renderView != "" || renderDoc != "" || renderAllDir != "" || renderDocsDir != "" || queryText != "" || len(evalExprs) > 0:
+			fmt.Fprintf(os.Stderr, "sysml: %s syncs a change set; it cannot be combined with -convert, -render, -render-all, -render-document, -render-documents, -query or -eval\n", mode)
+			return 2
+		case outputPath != "" || fromFormat != "" || renderForm != "" || docForm != "" || pdfEngine != "" || pdfTitlePage || pdfTOC || pdfNumbering:
+			fmt.Fprintf(os.Stderr, "sysml: %s reads SysML or Turtle inputs and reports the change set; -output, -from and the render options do not apply\n", mode)
+			return 2
+		case modelChecks.requested():
+			return refuse(modelChecks,
+				mode+" syncs a change set and decides nothing else about the model; check it in its own run")
+		}
+		if syncApplyTo != "" {
+			return runSyncApply(args)
 		}
 		return runSyncDiff(args)
 	}
 	if syncBase != "" || syncState != "" || syncConfirmDeletes || syncMintIDs || syncAnnotate != "" {
-		fmt.Fprintln(os.Stderr, "sysml: -sync-base, -sync-state, -sync-confirm-deletes, -sync-mint-ids and -sync-annotate apply to -sync-diff; name the repository graph to diff against")
+		fmt.Fprintln(os.Stderr, "sysml: -sync-base, -sync-state, -sync-confirm-deletes, -sync-mint-ids and -sync-annotate apply to -sync-diff or -sync-apply; name the repository to sync against")
 		return 2
 	}
 
 	if renderDocsDir != "" {
 		switch {
+		case htmlFragment:
+			fmt.Fprintln(os.Stderr, "sysml: -render-documents writes whole pages linking to one another; -html-fragment writes one document element to embed, so it applies to -render-document")
+			return 2
 		case renderDoc != "":
 			fmt.Fprintln(os.Stderr, "sysml: -render-documents renders every document; -render-document renders one; ask for one per run")
 			return 2

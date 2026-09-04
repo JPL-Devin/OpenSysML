@@ -186,5 +186,32 @@ public interface ValueOrBuilder extends
    */
   boolean getUnset();
 
+  /**
+   * <pre>
+   * one complex number, never two Reals
+   * </pre>
+   *
+   * <code>.sysml.Complex complex = 11 [json_name = "complex"];</code>
+   * @return Whether the complex field is set.
+   */
+  boolean hasComplex();
+  /**
+   * <pre>
+   * one complex number, never two Reals
+   * </pre>
+   *
+   * <code>.sysml.Complex complex = 11 [json_name = "complex"];</code>
+   * @return The complex.
+   */
+  org.openmbee.opensysml.proto.Complex getComplex();
+  /**
+   * <pre>
+   * one complex number, never two Reals
+   * </pre>
+   *
+   * <code>.sysml.Complex complex = 11 [json_name = "complex"];</code>
+   */
+  org.openmbee.opensysml.proto.ComplexOrBuilder getComplexOrBuilder();
+
   org.openmbee.opensysml.proto.Value.KindCase getKindCase();
 }

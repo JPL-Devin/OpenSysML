@@ -13,7 +13,7 @@ import (
 // a decoded index rebuilds lazily, and the inline segment storage a multi-part
 // name leaves behind once its parts are appended elsewhere.
 var unobservable = graphcmp.SkipFields(
-	"Index.directChildrenGeneration",
+	"Index.directChildrenGeneration", "libraryIdentityMemo.gen",
 	"Index.directChildrenCache",
 	"QualifiedName.part0",
 )
@@ -29,6 +29,7 @@ var snapshotDocs = map[string]string{
 	"d.sysml": "package D { public import A::*; part def Cyclic; part x : Widget; part :>> Gadget; " +
 		"metadata def Safety; metadata s : Safety about Widget; }",
 	"e.kerml": "package E { classifier K; feature f : K; import A::*; }",
+	"f.sysml": "package F { action def Run { action a; action b; first a then b; then done; } }",
 }
 
 func roundTrip(t *testing.T, idx *Index) *Index {

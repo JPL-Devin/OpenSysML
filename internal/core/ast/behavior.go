@@ -10,6 +10,7 @@ import "github.com/Open-MBEE/OpenSysML/internal/core/source"
 type InitialNode struct {
 	NodeBase
 	Name      string         // optional identifier for edge referencing
+	NameSpan  source.Span    // span of Name, empty when none is written
 	Successor *QualifiedName // optional target for implicit succession (from `first X then Y` syntax)
 	Guard     Node           // optional guard condition for succession
 	// Members are the members of the body the succession was written with
@@ -104,6 +105,15 @@ type AssignmentActionNode struct {
 type PerformActionNode struct {
 	NodeBase
 	ActionRef Node // qualified name or invocation expression
+}
+
+// PerformedInvocation is the call the statement performs (`perform tag(x);`);
+// nil when it names the action without arguments.
+func (n *PerformActionNode) PerformedInvocation() *InvocationExpr {
+	if inv, ok := n.ActionRef.(*InvocationExpr); ok && inv.Type != nil {
+		return inv
+	}
+	return nil
 }
 
 // LoopKind discriminates the loop forms, which share one node because they
@@ -305,8 +315,10 @@ type SuccessionEdge struct {
 	SourceImplied bool
 	TargetImplied bool
 	// Members are the body an action target succession carries
-	// (SysML.xtext:1698 ActionTargetSuccession ends in a UsageBody).
+	// (SysML.xtext:1698 ActionTargetSuccession ends in a UsageBody), and
+	// HasBody that it was written with one rather than ended by ';'.
 	Members []Node
+	HasBody bool
 }
 
 // ControlFlowEdge is guarded control flow from decision nodes.
@@ -426,18 +438,23 @@ type ConstraintMember struct {
 // Phase C2: Requirement Body Members
 
 // SubjectMember represents the subject declaration in a requirement body.
-// Syntax: subject <name> : <Type>; OR subject = <expr>;
+// Syntax: subject [<short>] [name] : <Type>; OR subject = <expr>;
 type SubjectMember struct {
 	NodeBase
 	// Prefixes are the metadata written after the keyword: the `#B` of
 	// `subject #B s` (SysML.xtext SubjectUsage UsageExtensionKeyword).
 	Prefixes      []*PrefixMetadata
-	Name          string
+	Ident         Identification  // `<short> name`, either or both optional (SysML.xtext Identification)
 	TypeRef       *QualifiedName  // subject type (for declaration form)
 	Multiplicity  *Multiplicity   // optional multiplicity
 	Relationships []*Relationship // specializations written after the type (`:>> RequirementCheck::subj`)
 	Body          []Node          // optional nested members
 	BindingExpr   Node            // value part: `subject = <expr>;` or a declaration's `= expr` / `default expr`
+	// ValueOperatorSpan, ValueIsDefault and ValueIsInitial describe BindingExpr's
+	// operator as Usage's fields of the same names do.
+	ValueOperatorSpan source.Span
+	ValueIsDefault    bool
+	ValueIsInitial    bool
 	// HasBody records that the declaration was written with braces, which an
 	// empty body does not otherwise show.
 	HasBody bool
@@ -453,12 +470,17 @@ type AssumeMember struct {
 	Reference  *QualifiedName // referenced constraint/requirement (reference-subsetting form)
 	Body       []Node         // ConstraintMembers of the nested constraint (for the braced form)
 	// Declaration of the constraint the member owns, when it is written with
-	// one: `assume constraint c1 : C;`.
-	Name          string
-	NameSpan      source.Span
+	// one: `assume constraint <c> c1 : C;`. DeclSpan covers it from `constraint` on.
+	Ident         Identification
+	DeclSpan      source.Span
 	Relationships []*Relationship
 	Multiplicity  *Multiplicity
 	Value         Node
+	// ValueOperatorSpan covers the value operator; ValueIsDefault and
+	// ValueIsInitial are its `default` and `:=` (KerML FeatureValue).
+	ValueOperatorSpan source.Span
+	ValueIsDefault    bool
+	ValueIsInitial    bool
 	// HasBody records that the member was written with braces, which an empty
 	// body does not otherwise show.
 	HasBody bool
@@ -474,15 +496,121 @@ type RequireMember struct {
 	Reference  *QualifiedName // referenced requirement (reference-subsetting form, SysML v2 §7.20)
 	Body       []Node         // nested members: ConstraintMembers for the braced form, requirement members for the reference form
 	// Declaration of the constraint the member owns, when it is written with
-	// one: `require constraint c1 : C;`.
-	Name          string
-	NameSpan      source.Span
+	// one: `require constraint <c> c1 : C;`. DeclSpan covers it from `constraint` on.
+	Ident         Identification
+	DeclSpan      source.Span
 	Relationships []*Relationship
 	Multiplicity  *Multiplicity
 	Value         Node
+	// ValueOperatorSpan covers the value operator; ValueIsDefault and
+	// ValueIsInitial are its `default` and `:=` (KerML FeatureValue).
+	ValueOperatorSpan source.Span
+	ValueIsDefault    bool
+	ValueIsInitial    bool
 	// HasBody records that the member was written with braces, which an empty
 	// body does not otherwise show.
 	HasBody bool
+}
+
+// OwnedConstraint is the constraint usage an assume or require member declares
+// with the `constraint` keyword (SysML.xtext RequirementConstraintUsage).
+type OwnedConstraint struct {
+	Ident             Identification
+	DeclSpan          source.Span
+	Relationships     []*Relationship
+	Multiplicity      *Multiplicity
+	Value             Node
+	ValueOperatorSpan source.Span
+	ValueIsDefault    bool
+	ValueIsInitial    bool
+	Body              []Node
+}
+
+// OwnedConstraintOf returns the constraint an assume or require member declares,
+// or false for one that references a requirement or states a condition instead.
+func OwnedConstraintOf(n Node) (OwnedConstraint, bool) {
+	switch m := n.(type) {
+	case *AssumeMember:
+		if m.Reference != nil || m.Expression != nil {
+			return OwnedConstraint{}, false
+		}
+		return OwnedConstraint{
+			Ident: m.Ident, DeclSpan: m.DeclSpan, Relationships: m.Relationships,
+			Multiplicity: m.Multiplicity, Value: m.Value, ValueOperatorSpan: m.ValueOperatorSpan,
+			ValueIsDefault: m.ValueIsDefault, ValueIsInitial: m.ValueIsInitial, Body: m.Body,
+		}, true
+	case *RequireMember:
+		if m.Reference != nil || m.Expression != nil {
+			return OwnedConstraint{}, false
+		}
+		return OwnedConstraint{
+			Ident: m.Ident, DeclSpan: m.DeclSpan, Relationships: m.Relationships,
+			Multiplicity: m.Multiplicity, Value: m.Value, ValueOperatorSpan: m.ValueOperatorSpan,
+			ValueIsDefault: m.ValueIsDefault, ValueIsInitial: m.ValueIsInitial, Body: m.Body,
+		}, true
+	}
+	return OwnedConstraint{}, false
+}
+
+// NamingFeature returns the relationship naming a constraint declared without a
+// name, as NamingFeature does for a usage; a short name alone is not a declared
+// name (KerML derives effectiveName from declaredName), so it leaves it in place.
+func (c OwnedConstraint) NamingFeature() *Relationship {
+	if c.Ident.Name != "" {
+		return nil
+	}
+	return namingRelationship(c.Relationships, true)
+}
+
+// EffectiveName returns the name the constraint answers to: its declared name,
+// else the name its naming feature supplies.
+func (c OwnedConstraint) EffectiveName() (string, source.Span) {
+	if c.Ident.Name != "" {
+		return c.Ident.Name, c.Ident.NameSpan
+	}
+	if rel := c.NamingFeature(); rel != nil {
+		return TargetName(rel.Target)
+	}
+	return "", source.Span{}
+}
+
+// NamingFeature returns the relationship naming a subject declared without a
+// name, as for a usage: `subject <s> :>> vehicle;` answers to `vehicle`.
+func (m *SubjectMember) NamingFeature() *Relationship {
+	if m == nil || m.Ident.Name != "" {
+		return nil
+	}
+	return namingRelationship(m.Relationships, true)
+}
+
+// EffectiveName returns the name the subject answers to: its declared name,
+// else the name its naming feature supplies.
+func (m *SubjectMember) EffectiveName() (string, source.Span) {
+	if m == nil {
+		return "", source.Span{}
+	}
+	if m.Ident.Name != "" {
+		return m.Ident.Name, m.Ident.NameSpan
+	}
+	if rel := m.NamingFeature(); rel != nil {
+		return TargetName(rel.Target)
+	}
+	return "", source.Span{}
+}
+
+// DeclNamingFeature is NamingFeature over every declaration that may borrow its
+// name: a usage, a requirement subject or an assume/require constraint.
+func DeclNamingFeature(decl Node) *Relationship {
+	if oc, ok := OwnedConstraintOf(decl); ok {
+		return oc.NamingFeature()
+	}
+	switch d := decl.(type) {
+	case *Usage:
+		return NamingFeature(d)
+	case *SubjectMember:
+		return d.NamingFeature()
+	}
+	return nil
 }
 
 // Phase C4: State Body Members
@@ -542,6 +670,7 @@ type TransitionMember struct {
 	TriggerSpan source.Span
 	Guard       Node   // optional guard expression
 	Effect      []Node // optional effect actions
+	HasEffect   bool   // a `do` was written, even one whose braces hold nothing
 	// Via is the port the trigger's message must arrive at
 	// (`accept :> ping via commPort`), nil when the trigger named none.
 	Via *QualifiedName

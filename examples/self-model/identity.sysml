@@ -108,11 +108,11 @@ package OpenSysMLIdentity {
         in item repository : RdfGraph;
     }
 
-    // The command-line side of the sync: one model, one repository graph,
-    // conflicts in the exit status.
+    // The command-line side of the sync: one model, one repository (a graph
+    // file or a live endpoint); only -sync-apply writes, the rest is a dry run.
     #Identity part def SyncCommand :> CodeUnit {
         attribute :>> goPackage = "cmd/sysml";
-        attribute flags : String = "-sync-diff, -sync-base, -sync-state, -sync-confirm-deletes, -sync-mint-ids, -sync-annotate";
+        attribute flags : String = "-sync-diff, -sync-apply, -sync-base, -sync-state, -sync-confirm-deletes, -sync-mint-ids, -sync-annotate";
         attribute conflictsFailExit : Boolean = true;
     }
 

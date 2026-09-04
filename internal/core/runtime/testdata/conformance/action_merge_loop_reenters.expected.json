@@ -1,0 +1,8 @@
+{
+	"type": "action",
+	"trace": true,
+	"outputs": {
+		"level": {"type": "Integer", "value": 100},
+		"passes": {"type": "Integer", "value": 3}
+	}
+}

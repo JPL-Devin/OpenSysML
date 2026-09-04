@@ -85,6 +85,29 @@ func w8cCollectSymbols(root *symbols.Scope) []*symbols.Symbol {
 	return out
 }
 
+// unnamedMetadataBody is the scope of an unnamed annotation's body, which no
+// symbol owns and the symbol walk therefore never reaches; nil for a named one.
+func unnamedMetadataBody(scope *symbols.Scope, prefix *ast.PrefixMetadata) *symbols.Scope {
+	if scope == nil || prefix == nil || prefix.Ident.Name != "" || prefix.Ident.ShortName != "" {
+		return nil
+	}
+	return scope.ChildFor(prefix)
+}
+
+// forEachBodySymbol visits the symbols a metadata body declares, at any depth.
+func forEachBodySymbol(body *symbols.Scope, visit func(*symbols.Symbol)) {
+	if body == nil {
+		return
+	}
+	body.ForEachMember(func(sym *symbols.Symbol) bool {
+		if sym != nil {
+			visit(sym)
+			forEachBodySymbol(sym.Scope, visit)
+		}
+		return true
+	})
+}
+
 // w8cScopeOf returns the scope a declaration's own references resolve in.
 func w8cScopeOf(sym *symbols.Symbol) *symbols.Scope {
 	if sym == nil {
@@ -104,12 +127,16 @@ func w8cMultiplicityOf(sym *symbols.Symbol) *ast.Multiplicity {
 	switch d := sym.Decl.(type) {
 	case *ast.Definition:
 		return d.Multiplicity
-	case *ast.Usage:
-		return d.Multiplicity
 	case *ast.ConnectorEnd:
 		return d.Multiplicity
+	case *ast.SubjectMember:
+		return d.Multiplicity
+	case *ast.AssumeMember:
+		return d.Multiplicity
+	case *ast.RequireMember:
+		return d.Multiplicity
 	default:
-		return nil
+		return semantics.UsageMultiplicityOf(sym)
 	}
 }
 

@@ -22,17 +22,18 @@ import (
 // under examples/.
 var differentialRoots = []string{
 	filepath.Join("testdata", "conformance"),
+	filepath.Join("testdata", "compiled"),
 	filepath.Join("..", "..", "..", "testdata"),
 	filepath.Join("..", "..", "..", "examples"),
 	filepath.Join("..", "..", "..", "docs", "manual", "examples"),
 }
 
-// differentialArgs are the scalars every parameter is tried with: the edges of
-// the Integer range, reals of either sign, and both Booleans, so a mismatched
-// kind is tried as often as a fitting one.
+// differentialArgs are the scalars every parameter is tried with: Integer
+// extremes, Reals of either sign, both zeros, both infinities, NaN, both Booleans.
 var differentialArgs = []Value{
 	intArg(0), intArg(1), intArg(-1), intArg(math.MaxInt64), intArg(math.MinInt64),
-	realArg(0), realArg(1.5), realArg(-1e300),
+	realArg(0), realArg(math.Copysign(0, -1)), realArg(1.5), realArg(-1e300),
+	realArg(math.Inf(1)), realArg(math.Inf(-1)), realArg(math.NaN()),
 	boolArg(true), boolArg(false),
 }
 
@@ -40,10 +41,8 @@ var differentialArgs = []Value{
 // extreme argument stops at the budget on both tiers rather than at the depth.
 const differentialMaxSteps int64 = 20000
 
-// TestCompiledCalcDifferential invokes every eligible calc in the fixture and
-// example trees through the compiled tier and the evaluator, on generated
-// arguments, and requires the same value or the same error, spent in the same
-// number of steps. It reports how many calcs were eligible.
+// TestCompiledCalcDifferential invokes every eligible calc through both tiers on
+// generated arguments, by position and by name, requiring identical outcomes.
 func TestCompiledCalcDifferential(t *testing.T) {
 	var files []string
 	for _, root := range differentialRoots {
@@ -139,8 +138,8 @@ func differentialFile(t *testing.T, path string, reasons map[string]int) (eligib
 			continue
 		}
 		eligible++
+		name := path + ": " + shape.Name
 		for _, args := range differentialVectors(len(body.params)) {
-			name := path + ": " + shape.Name
 			got := calcOutcome{steps: -1}
 			got.value, got.err = compiled.InvokeCalc(sym, args, root)
 			got.steps = compiled.steps
@@ -148,6 +147,21 @@ func differentialFile(t *testing.T, path string, reasons map[string]int) (eligib
 			want.value, want.err = reference.InvokeCalc(sym, args, root)
 			want.steps = reference.steps
 			wantOutcomesEqual(t, name+describeArgs(args), got, want)
+			invocations++
+			if len(args) == 0 {
+				continue
+			}
+			named := make(map[string]Value, len(args))
+			for i, arg := range args {
+				named[shape.ParamNames[i]] = arg
+			}
+			got = calcOutcome{steps: -1}
+			got.value, got.err = compiled.InvokeCalcNamed(sym, named, root)
+			got.steps = compiled.steps
+			want = calcOutcome{}
+			want.value, want.err = reference.InvokeCalcNamed(sym, named, root)
+			want.steps = reference.steps
+			wantOutcomesEqual(t, name+describeNamedArgs(named), got, want)
 			invocations++
 		}
 	}

@@ -9,14 +9,14 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
-	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// Hover returns type/kind information for the declaration under the cursor.
+// Hover returns type/kind information for the declaration under the cursor, in
+// a workspace document or a bundled library one.
 func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*protocol.Hover, error) {
 	name := uriToName(params.TextDocument.URI)
-	doc := s.ws.Document(name)
+	doc := s.document(name)
 	if doc == nil || doc.Scope == nil {
 		return nil, nil
 	}
@@ -26,7 +26,7 @@ func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 	// A cursor on a reference hovers what it names, not the declaration it sits
 	// in: the type a usage declares, the query a document block invokes.
 	if ref := refAtOffset(collectRefs(doc.AST, doc.Scope), offset); ref != nil {
-		if target, span, ok := s.hoveredSegment(name, *ref, offset); ok && target != nil {
+		if target, span, ok := s.referencedSegment(name, *ref, offset); ok && target != nil {
 			signature := target.Notation()
 			if target.Name != "" {
 				signature += " " + lexer.NameText(target.Name)
@@ -36,6 +36,9 @@ func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 				Contents: s.hoverContents(signature, s.symbolDocComments(target)),
 				Range:    &rng,
 			}, nil
+		}
+		if hover := s.ambiguousCallHover(name, content, *ref, offset); hover != nil {
+			return hover, nil
 		}
 	}
 
@@ -50,12 +53,10 @@ func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 	}
 	// A metadata body declaration implicitly redefines a feature of the
 	// annotation's metadata definition (KerML 7.4.7); name it and its type.
-	if isMetadataBodyScope(sym.OwnerScope) {
-		if target, fqn, ok := s.ws.MetadataBodyRedefines(sym); ok {
-			signature += " redefines " + fqn
-			if t := declaredTypeText(target); t != "" {
-				signature += " : " + t
-			}
+	if target, fqn, ok := s.ws.MetadataBodyRedefines(sym); ok {
+		signature += " redefines " + fqn
+		if t := declaredTypeText(target); t != "" {
+			signature += " : " + t
 		}
 	}
 	comments := leadingDocComments(content, sym.LeadingTrivia)
@@ -67,41 +68,38 @@ func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 	}, nil
 }
 
-// hoveredSegment resolves the qualified-name segment containing offset, so a
-// qualifier hovers the namespace it names rather than the reference's target.
-func (s *Server) hoveredSegment(doc string, ref resolve.Reference, offset int) (*symbols.Symbol, source.Span, bool) {
+// ambiguousCallHover lists the overloads a call's arguments leave tied when the
+// cursor is on the called name itself; nil on a qualifier or a `::`. content is the
+// document text ref was collected from.
+func (s *Server) ambiguousCallHover(doc string, content []byte, ref resolve.Reference, offset int) *protocol.Hover {
 	parts := ref.QN.Parts
-	if len(parts) == 0 {
-		return nil, source.Span{}, false
+	if len(parts) == 0 || segmentAt(ref, offset) != len(parts)-1 {
+		return nil
 	}
-	idx := -1
-	for i, p := range parts {
-		if offset >= p.Span.Offset && offset < p.Span.End() {
-			idx = i
-			break
-		}
+	last := parts[len(parts)-1]
+	overloads := s.ws.AmbiguousInvocationInDoc(doc, ref)
+	if len(overloads) == 0 {
+		return nil
 	}
-	if idx < 0 {
-		return nil, source.Span{}, false
+	lines := make([]string, len(overloads))
+	for i, sym := range overloads {
+		lines[i] = sym.Notation() + " " + s.ws.FQNOf(sym)
 	}
-	if idx == len(parts)-1 {
-		target, ok := s.ws.ResolveReferenceInDoc(doc, ref)
-		return target, parts[idx].Span, ok
+	rng := spanToRange(content, last.Span)
+	return &protocol.Hover{
+		Contents: s.hoverContents(strings.Join(lines, "\n"), []string{"Ambiguous call: the arguments fit each of these overloads equally."}),
+		Range:    &rng,
 	}
-	segs := s.ws.ResolveReferenceSegmentsInDoc(doc, ref)
-	if idx >= len(segs) || segs[idx] == nil {
-		return nil, source.Span{}, false
-	}
-	return segs[idx], parts[idx].Span, true
 }
 
 // symbolDocComments returns the comment trivia preceding a symbol's
-// declaration, when the document declaring it is loaded.
+// declaration, when the document declaring it is loaded or is a bundled library
+// file.
 func (s *Server) symbolDocComments(sym *symbols.Symbol) []string {
 	if len(sym.LeadingTrivia) == 0 || sym.DocName == "" {
 		return nil
 	}
-	doc := s.ws.Document(sym.DocName)
+	doc := s.document(sym.DocName)
 	if doc == nil {
 		return nil
 	}

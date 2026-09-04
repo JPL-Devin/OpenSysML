@@ -8,6 +8,7 @@ import org.openmbee.opensysml.Instance;
 import org.openmbee.opensysml.TransportException;
 import org.openmbee.opensysml.Value;
 import org.openmbee.opensysml.proto.AttributeInfo;
+import org.openmbee.opensysml.proto.Complex;
 import org.openmbee.opensysml.proto.FeatureValue;
 import org.openmbee.opensysml.proto.SymbolInfo;
 import org.openmbee.opensysml.proto.ValueSequence;
@@ -21,6 +22,37 @@ class ProtosTest {
   @Test
   void aValueOfNoKindIsAbsentRatherThanGuessed() {
     assertEquals(Optional.empty(), Protos.value(org.openmbee.opensysml.proto.Value.getDefaultInstance()));
+  }
+
+  @Test
+  void aComplexNumberReadsAsOneValueWithBothParts() {
+    org.openmbee.opensysml.proto.Value complex =
+        org.openmbee.opensysml.proto.Value.newBuilder()
+            .setComplex(Complex.newBuilder().setReal(1.5).setImaginary(-2.0))
+            .build();
+    assertEquals(Optional.of(new Value.ComplexValue(1.5, -2.0)), Protos.value(complex));
+
+    // Proto3 defaults are zero, so a Complex with neither part set is 0 + 0i.
+    org.openmbee.opensysml.proto.Value zero =
+        org.openmbee.opensysml.proto.Value.newBuilder()
+            .setComplex(Complex.getDefaultInstance())
+            .build();
+    assertEquals(Optional.of(new Value.ComplexValue(0.0, 0.0)), Protos.value(zero));
+
+    org.openmbee.opensysml.proto.Value sequence =
+        org.openmbee.opensysml.proto.Value.newBuilder()
+            .setSequence(
+                ValueSequence.newBuilder()
+                    .addElements(complex)
+                    .addElements(
+                        org.openmbee.opensysml.proto.Value.newBuilder()
+                            .setComplex(Complex.newBuilder().setReal(3.0).setImaginary(4.0))))
+            .build();
+    assertEquals(
+        Optional.of(
+            new Value.Sequence(
+                List.of(new Value.ComplexValue(1.5, -2.0), new Value.ComplexValue(3.0, 4.0)))),
+        Protos.value(sequence));
   }
 
   @Test

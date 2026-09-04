@@ -45,21 +45,78 @@ const (
 	memberViewDeclaring
 )
 
+// memberKey keys a memoized members answer: the declaring view is asked per
+// declaration and never memoized.
+type memberKey struct {
+	sym  *symbols.Symbol
+	view memberView
+}
+
 func (m *Model) membersOf(sym *symbols.Symbol, view memberView, declaring *symbols.Symbol) []*symbols.Symbol {
 	if sym == nil {
 		return nil
 	}
-	if target, ok := m.resolver.ResolveAliasTarget(sym); ok {
-		sym = target
+	if m.resolver != nil {
+		if target, ok := m.resolver.ResolveAliasTarget(sym); ok {
+			sym = target
+		}
 	}
+	key := memberKey{sym: sym, view: view}
+	if view != memberViewDeclaring {
+		if cached, ok := m.members[key]; ok {
+			return cached
+		}
+	}
+	out := m.collectMembers(sym, view, declaring)
+	// Memoized once the sources are complete and no redefinition is mid-resolution,
+	// the same condition MemberSources and the constructor slots memoize under.
+	if view != memberViewDeclaring && m.MemberSourcesStable(sym) && m.computingRedefinedFeatures == 0 {
+		m.members[key] = out
+	}
+	return out
+}
+
+func (m *Model) collectMembers(sym *symbols.Symbol, view memberView, declaring *symbols.Symbol) []*symbols.Symbol {
 	var out []*symbols.Symbol
+	m.eachMember(sym, view, declaring, func(s *symbols.Symbol) bool {
+		out = append(out, s)
+		return true
+	})
+	return out
+}
+
+// HasMember reports whether member is among MembersOf(sym), without
+// enumerating the members past it.
+func (m *Model) HasMember(sym, member *symbols.Symbol) bool {
+	if sym == nil || member == nil {
+		return false
+	}
+	if m.resolver != nil {
+		if target, ok := m.resolver.ResolveAliasTarget(sym); ok {
+			sym = target
+		}
+	}
+	if cached, ok := m.members[memberKey{sym: sym, view: memberViewEffective}]; ok {
+		return containsSymbol(cached, member)
+	}
+	found := false
+	m.eachMember(sym, memberViewEffective, nil, func(s *symbols.Symbol) bool {
+		found = s == member
+		return !found
+	})
+	return found
+}
+
+// eachMember yields the members of sym in MembersOf order until yield returns false.
+func (m *Model) eachMember(sym *symbols.Symbol, view memberView, declaring *symbols.Symbol, yield func(*symbols.Symbol) bool) {
 	seenName := make(map[string]bool)
 	seenSym := make(map[*symbols.Symbol]bool)
 	// One mask per enumeration: it depends only on sym and declaring.
 	mask := m.viewMask(sym, view, declaring)
 
+	stopped := false
 	collect := func(scope *symbols.Scope, inherited bool) {
-		if scope == nil {
+		if scope == nil || stopped {
 			return
 		}
 		for _, key := range scope.MemberNames() {
@@ -75,7 +132,10 @@ func (m *Model) membersOf(sym *symbols.Symbol, view memberView, declaring *symbo
 				}
 				if !seenSym[s] {
 					seenSym[s] = true
-					out = append(out, s)
+					if !yield(s) {
+						stopped = true
+						return
+					}
 				}
 			}
 		}
@@ -94,9 +154,11 @@ func (m *Model) membersOf(sym *symbols.Symbol, view memberView, declaring *symbo
 
 	collect(sym.Scope, false)
 	for _, src := range m.MemberSources(sym) {
+		if stopped {
+			return
+		}
 		collect(src.Scope, true)
 	}
-	return out
 }
 
 // LookupMember returns the first visible member of sym — declared by it, or
@@ -139,34 +201,56 @@ func (m *Model) LookupMember(sym *symbols.Symbol, name string) (*symbols.Symbol,
 // reference subsetting's target past the borrowed name it binds itself — ask
 // for the contributed member instead.
 func (m *Model) LookupContributedMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
+	var found *symbols.Symbol
+	m.eachContributedMember(sym, name, func(s *symbols.Symbol) bool {
+		found = s
+		return false
+	})
+	return found, found != nil
+}
+
+// LookupContributedMembers is LookupContributedMember collecting the member
+// each source contributes under name, in source order, without duplicates.
+func (m *Model) LookupContributedMembers(sym *symbols.Symbol, name string) []*symbols.Symbol {
+	var out []*symbols.Symbol
+	m.eachContributedMember(sym, name, func(s *symbols.Symbol) bool {
+		if !containsSymbol(out, s) {
+			out = append(out, s)
+		}
+		return true
+	})
+	return out
+}
+
+// eachContributedMember calls yield with the member each of sym's member
+// sources holds under name, until yield returns false.
+func (m *Model) eachContributedMember(sym *symbols.Symbol, name string, yield func(*symbols.Symbol) bool) {
 	if sym == nil || name == "" {
-		return nil, false
+		return
 	}
 	if target, ok := m.resolver.ResolveAliasTarget(sym); ok {
 		sym = target
 	}
 	for _, sup := range m.MemberSources(sym) {
 		if sup.Scope != nil {
-			if s, ok := sup.Scope.LookupLocal(name); ok {
-				return s, true
+			for _, s := range symbols.PreferDeclared(sup.Scope.LookupLocalAll(name)) {
+				if !yield(s) {
+					return
+				}
 			}
+			continue
 		}
-		// Also check index for cached sources with nil Scope
-		if sup.Scope == nil {
-			idx := m.resolver.Index()
-			children := idx.LookupDirectChildren(sup.Name)
-			for _, child := range children {
-				leafName := child.Name
-				if lastIdx := lastDoubleColon(child.Name); lastIdx >= 0 {
-					leafName = child.Name[lastIdx+2:]
-				}
-				if leafName == name {
-					return child, true
-				}
+		// A cached source with no scope is read from the index.
+		for _, child := range m.resolver.Index().LookupDirectChildren(sup.Name) {
+			leafName := child.Name
+			if lastIdx := lastDoubleColon(child.Name); lastIdx >= 0 {
+				leafName = child.Name[lastIdx+2:]
+			}
+			if leafName == name && !yield(child) {
+				return
 			}
 		}
 	}
-	return nil, false
 }
 
 // lastDoubleColon returns the index of the last "::" in s, or -1 if not found.

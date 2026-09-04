@@ -504,6 +504,11 @@ func TestEnumerationIsAFiniteSort(t *testing.T) {
 	if !strings.Contains(Script(q), "(declare-datatypes ((|test::Finish| 0)) (((|test::Finish::polished|) (|test::Finish::brushed|))))") {
 		t.Errorf("the script does not declare the enumeration:\n%s", Script(q))
 	}
+	// The enumeration's values are its variants, yet a feature holding one is a
+	// value to pin rather than a variation point to configure.
+	if sort.Variation || len(q.Variations()) != 0 {
+		t.Errorf("an enumeration-typed feature is not a variation point: %+v", sort)
+	}
 }
 
 // TestVariationPointIsAFiniteSort: the variant a variation point selects ranges
@@ -549,5 +554,91 @@ func TestVariationSortIsShared(t *testing.T) {
 	}
 	if len(q.Sorts[0].Values) != 2 {
 		t.Errorf("sort %s has values %v, want the two variants", q.Sorts[0].Name, q.Sorts[0].Values)
+	}
+}
+
+// TestBodyStatementRefuses: a statement in a constraint body is not executed, so
+// the translation refuses rather than solving the conditions as if it ran.
+func TestBodyStatementRefuses(t *testing.T) {
+	refused := refusal(t, constraintSource(`
+		attribute y : Integer = 1;
+		assign y := 10;
+		y > 5
+	`), "test::C")
+	if refused.Construct != "body statement" {
+		t.Errorf("refused construct is %q, want the body statement", refused.Construct)
+	}
+	if !strings.Contains(refused.Reason, "does not execute") {
+		t.Errorf("refusal reason is %q, want it to say the statement is not executed", refused.Reason)
+	}
+	if refused.Condition != "`assign` statement" {
+		t.Errorf("refused condition is %q, want the assign statement", refused.Condition)
+	}
+}
+
+// TestPerformedActionRefuses: a performed action is a usage rather than a
+// statement node, and translation refuses it the same way, nested or not.
+func TestPerformedActionRefuses(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			action def Bump;
+			constraint def C {
+				attribute y : Integer = 1;
+				perform action bump : Bump;
+				y > 5
+			}
+			part def Rig {
+				attribute z : Integer = 1;
+				action bump : Bump;
+				constraint nested { assert constraint { perform bump; z > 5 } }
+			}
+		}
+	`
+	for _, name := range []string{"test::C", "test::Rig::nested"} {
+		refused := refusal(t, src, name)
+		if refused.Construct != "body statement" {
+			t.Errorf("%s: refused construct is %q, want the body statement", name, refused.Construct)
+		}
+		if refused.Condition != "`perform` statement" {
+			t.Errorf("%s: refused condition is %q, want the perform statement", name, refused.Condition)
+		}
+	}
+}
+
+// TestActionFlowRefuses: action nodes and the successions between them are steps
+// of a constraint body that translation refuses rather than drops.
+func TestActionFlowRefuses(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			constraint def C {
+				attribute y : Integer = 1;
+				action a; action b;
+				first a then b;
+				y > 5
+			}
+			part def Rig {
+				attribute z : Integer = 1;
+				action a; action b;
+				constraint edge { first a then b; z > 5 }
+				constraint node { action c; fork f; first c then f; z > 5 }
+				constraint nested { assert constraint { action c; z > 5 } }
+			}
+		}
+	`
+	for name, want := range map[string]string{
+		"test::C":           "`action` statement",
+		"test::Rig::edge":   "`first` statement",
+		"test::Rig::node":   "`action` statement",
+		"test::Rig::nested": "`action` statement",
+	} {
+		refused := refusal(t, src, name)
+		if refused.Construct != "body statement" {
+			t.Errorf("%s: refused construct is %q, want the body statement", name, refused.Construct)
+		}
+		if refused.Condition != want {
+			t.Errorf("%s: refused condition is %q, want %s", name, refused.Condition, want)
+		}
 	}
 }

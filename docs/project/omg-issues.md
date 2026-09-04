@@ -61,10 +61,15 @@ neither. Is the declared return type intended to be `Rational[1]` (matching
 `IntegerFunctions::'/'`), or is a conforming evaluator expected to truncate?
 ````
 
-OpenSysML follows the pilot's observed behavior: the type checker
-(`passes/typecheck_expr.go` `divisionResult`) types `Natural/Natural` division
-as `Rational`, and the runtime answers a Real, so a whole-number quotient bound
-to a `Natural`-typed feature is reported rather than truncated.
+OpenSysML follows the pilot's observed behavior for the operator: the type
+checker (`passes/typecheck_expr.go` `divisionResult`) types `Natural/Natural`
+division as `Rational`, and the runtime answers a Real, so a non-whole quotient
+bound to a `Natural`-typed feature is reported rather than truncated. The
+function called by name, `NaturalFunctions::'/'(x, y)`, is the one place the
+declaration itself is the contract: it returns the Natural quotient when `y`
+divides `x` and reports a non-whole quotient (`ErrArithmeticDomain`) rather
+than truncating or answering a Rational (`runtime/library_operators.go`
+`naturalDivision`).
 
 ---
 
@@ -107,6 +112,10 @@ and not from a disagreement alone.
 |---|---|---|---|---|
 | `org.omg.sysml` — `Type::ownedDisjoining` setting delegate | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | every `disjoint from` clause in a type declaration draws EMF's `The opposite features 'owningType' … and 'ownedDisjoining' … do not refer to each other` | [one cause for all six corpus diagnostics](pilot-differential.md#k6-diagnostic-by-diagnostic-f33), reproduced in three lines and probed through the pilot's API | filed upstream as [Systems-Modeling/SysML-v2-Pilot-Implementation#790](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/790) **pending adjudication**, body below |
 | `org.omg.sysml` — the `queryx/failing` Xpect fixtures | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | `QPE-Qualifier`, `QPE-Traversal` and `QPE-Wildcard` declare `XPECT noErrors`, yet the pinned validator rejects all three with `no viable alternative at input '/'`, `For input string: "."` and `no viable alternative at input '@'` | [wave12d-decisions.md](wave12d-decisions.md) — established by running the pinned pilot's own SysML validator on the three fixtures, not from a disagreement | **not filed** — question drafted below, awaiting maintainer authorisation |
+| `org.omg.sysml.xtext` — `checkTransitionFeatureMembership` (`validateTransitionFeatureMembershipGuardExpression`) | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | `TransitionUsage_invalid.sysml.xt` expects `Must be a Boolean expression.` at `if "test"`, yet the pinned validator with the full standard library accepts a `String` or arithmetic guard in the same shape | [pilot-rejection.md](pilot-rejection.md#constraints-the-pilot-declares-but-does-not-enforce) — established by running the pinned pilot's own SysML validator on the fixture's shape, not from a disagreement alone | **not filed** — question drafted below, awaiting maintainer authorisation |
+| `org.omg.sysml.xtext` — `SysMLValidator.checkControlNode`, `checkDecisionNode`, `checkForkNode`, `checkJoinNode`, `checkMergeNode` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a fork or decision node with two incoming successions, a join or merge node with two outgoing, and a succession end whose written multiplicity is not the one SysML v2 §7.17.3 requires all validate clean; only `validateControlNodeOwningType` is reported | established from the pilot's source: eight of the nine constraints are `// TODO: Check validate… (?)` comments in the check methods (`SysMLValidator.xtend:857–888` at `c7fc737`); the reproducers are `cmd/pilot-reject/testdata/negative/semantic/cn01`–`cn04`, `cn06`–`cn09`, run through the pinned batch validator | **not filed** — drafted below, awaiting maintainer authorisation |
+| `org.omg.kerml.xtext` — `KerMLValidator.checkFeature`, the `validateFeatureOwnedCrossSubsetting` check | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a feature with two `crosses` clauses reports `Error executing EValidator` instead of `At most one cross subsetting is allowed`: the loop indexes `refSubsettings` (the reference subsettings, collected for the check above it) with the cross-subsetting index, and throws | established from the pinned `KerMLValidator.xtend` line 649 and reproduced with `cmd/pilot-reject/testdata/negative/semantic/k42-two-cross-subsettings.kerml`; the same file is byte-identical at upstream `master` `13c32ea2` (2026-09-01), so the defect is still present; [pilot-rejection.md](pilot-rejection.md#permissiveness-gaps) records the case as a gap of ours | filed upstream as [Systems-Modeling/SysML-v2-Pilot-Implementation#794](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/794) **pending adjudication**, body below |
+| `org.omg.sysml.interactive` — the expression evaluator over `OccurrenceFunctions` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | `OccurrenceFunctions::'==='(w1, w1)` evaluates to `false` while `w1 === w1` and `BaseFunctions::'==='(w1, w1)` evaluate to `true`; `isDuring(1)` and `isDuring("x")` evaluate to `true`; `create`, `destroy`, `addNew` and `addNewAt` answer their `occ` argument for any argument, an out-of-range `addNewAt` index included | established by evaluating the calls through the pinned pilot's own headless evaluator (`build/pilot-evaluator/eval-sysml --cases`, transcript below): the evaluator folds each declared body over the *declarations* (`x.portionOfLife == y.portionOfLife` over features no value has, `notEmpty(during)` over the function's own feature) rather than over occurrences, so its answers contradict its own operator | **not filed** — question drafted below, awaiting maintainer authorisation |
 
 ### `Type::ownedDisjoining` does not contain a `Disjoining` whose `owningType` is that `Type` (pilot `2026-05`)
 
@@ -252,6 +261,259 @@ and extends `KerMLXtextTests`.
 A second implementation reading the corpus cannot tell from the fixtures alone
 whether the declared silence is an obligation or an aspiration, which is the
 reason for asking rather than implementing.
+````
+
+### `validateFeatureOwnedCrossSubsetting` indexes the wrong list and throws (pilot `2026-07`)
+
+Filed as
+[Systems-Modeling/SysML-v2-Pilot-Implementation#794](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/794);
+the body below is what was submitted. The reproduction is the rejection-corpus case
+`cmd/pilot-reject/testdata/negative/semantic/k42-two-cross-subsettings.kerml`.
+Checked against upstream `master` at `13c32ea26680323921c14e76755897fc551ec258`
+(2026-09-01): `KerMLValidator.xtend` is byte-identical to the pinned `2026-07`
+copy and the tag-to-master diff touches no validation or grammar source, so the
+reproduction below stands for the current head as well as for the pin (no
+master build was run — Maven Central was unreachable from the sandbox).
+
+````markdown
+### A feature with two `crosses` clauses reports `Error executing EValidator`
+
+**Version:** `2026-07` (`jupyter-sysml-kernel` 0.61.0, the KerML standalone
+setup); the offending lines are unchanged on `master` at `13c32ea2`.
+
+#### Minimal reproduction
+
+```kerml
+package K42TwoCrossSubsettings {
+    class A {
+        feature x : A;
+        feature y : A;
+    }
+    assoc S {
+        end a : A;
+        end b : A crosses a.x crosses a.y;
+    }
+}
+```
+
+The grammar admits the second `crosses` (`FeatureSpecializationPart` repeats
+`FeatureSpecialization`), and `validateFeatureOwnedCrossSubsetting` is meant to
+report it as `At most one cross subsetting is allowed`. Instead the validator
+reports
+
+```
+k42-two-cross-subsettings.kerml:0:0: error: Error executing EValidator
+k42-two-cross-subsettings.kerml:9:39: error: The opposite features 'crossingFeature' of '...CrossSubsettingImpl{...@ownedRelationship.2}' and 'ownedCrossSubsetting' of '...FeatureImpl{...}' do not refer to each other
+```
+
+The second line is EMF's opposite-consistency check on the extra
+`CrossSubsetting` (`Feature::ownedCrossSubsetting` is single-valued), not the
+intended constraint message. Dropping the second clause (`end b : A crosses a.x;`)
+makes the model validate clean, so the second `crosses` is the only defect.
+
+#### Cause
+
+In `KerMLValidator.checkFeature` (`KerMLValidator.xtend`, the
+`validateFeatureOwnedCrossSubsetting` block):
+
+```xtend
+val crossSubsettings = f.ownedRelationship.filter[r | r instanceof CrossSubsetting].toList
+if (crossSubsettings.size > 1) {
+    for (var i = 1; i < crossSubsettings.size; i++)
+        error(INVALID_FEATURE_OWNED_CROSS_SUBSETTING_MSG, refSubsettings.get(i), null, INVALID_FEATURE_OWNED_CROSS_SUBSETTING)
+}
+```
+
+`refSubsettings.get(i)` reads the reference-subsetting list collected for the
+`validateFeatureOwnedReferenceSubsetting` check just above; with no `references`
+clause on the feature that list is empty and the `get(1)` throws, which Xtext
+surfaces as `Error executing EValidator`. The intended target is
+`crossSubsettings.get(i)`.
+````
+
+---
+
+### A non-Boolean transition guard is accepted with the full library loaded (pilot `2026-07`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream. The observation is recorded under [constraints the pilot
+declares but does not enforce](pilot-rejection.md#constraints-the-pilot-declares-but-does-not-enforce).
+
+````markdown
+**Question, not a bug report:** `validateTransitionFeatureMembershipGuardExpression`
+is implemented in `SysMLValidator.checkTransitionFeatureMembership` and
+`validation/invalid/TransitionUsage_invalid.sysml.xt` expects its message:
+
+```sysml
+transition
+    first S2_1
+    // XPECT errors ---> "Must be a Boolean expression." at "if \"test\""
+    if "test"
+    then S2_2;
+```
+
+That fixture's `XPECT_SETUP` loads a reduced resource set (`Base`, `Occurrences`,
+`Performances`, `States`, ... but not `ScalarValues`). Running the release's
+SysML validator (`jupyter-sysml-kernel-0.61.0-all.jar`, tag `2026-07`) with the
+full standard library over the same shape reports no error:
+
+```sysml
+package T2 {
+    state def S2 {
+        state S2_1;
+        transition first S2_1 if "test" then S2_2;
+        state S2_2;
+    }
+    state def S3 {
+        state a;
+        state b;
+        transition t first a if 1 + 2 then b;
+    }
+}
+```
+
+Is the guard check intended to fire in a full-library workspace? A second
+implementation that rejects `if "test"` with the full library loaded, as the
+fixture suggests it should, currently disagrees with the release's validator on
+the same text.
+````
+
+---
+
+### Eight control-node succession constraints are unimplemented `TODO`s (pilot `2026-07`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream. The rules are implemented on our side by
+`internal/core/passes/control_node.go` and refereed against the specification
+text; the adjudication is in
+[pilot-differential.md](pilot-differential.md#control-node-successions-the-pilot-does-not-validate).
+
+````markdown
+### `SysMLValidator` does not check the succession constraints on control nodes
+
+**Version:** `2026-07` (`jupyter-sysml-kernel` 0.61.0, `validate-sysml-batch` over the
+shipped standard library).
+
+SysML v2 8.3.17 (`ControlNode`, `DecisionNode`, `ForkNode`, `JoinNode`, `MergeNode`)
+declares nine validation constraints. `SysMLValidator.xtend` (`:857–888`) declares an
+error code for each, but implements only `validateControlNodeOwningType`; the other
+eight are `// TODO: Check validate… (?)` comments in otherwise empty `@Check` methods:
+`validateControlNodeIncomingSuccessions`, `validateControlNodeOutgoingSuccessions`,
+`validateDecisionNodeIncomingSuccessions`, `validateDecisionNodeOutgoingSuccessions`,
+`validateForkNodeIncomingSuccessions`, `validateJoinNodeOutgoingSuccessions`,
+`validateMergeNodeIncomingSuccessions`, `validateMergeNodeOutgoingSuccessions`.
+
+#### Minimal reproduction
+
+```sysml
+package ForkTwoIncoming {
+    action def A {
+        action a;
+        action b;
+        action c;
+        fork f;
+        first a then f;
+        first b then f;
+        first f then c;
+    }
+}
+```
+
+`f` has two incoming successions; `validateForkNodeIncomingSuccessions`
+(`targetConnector->selectByKind(Succession)->size() <= 1`, SysML v2 8.3.17 `ForkNode`) is
+violated.
+
+#### Expected
+
+An error on `fork f`.
+
+#### Actual
+
+No diagnostics. The same holds for a join or merge node with two outgoing successions, a
+decision node with two incoming ones, and for the end multiplicities — `succession s first
+[0..1] a then [1] m;` into a merge is accepted where `validateMergeNodeIncomingSuccessions`
+requires source multiplicity `0..1`, and `succession s first a then [0..1] f;` into a fork
+is accepted where `validateControlNodeIncomingSuccessions` requires target multiplicity
+`1..1`.
+
+#### Note
+
+The grammar admits every one of these models, and the specification says the rules "shall
+be enforced in the abstract syntax, even if not shown explicitly in the concrete syntax
+notation for a model" (7.17.3), so a validator is the only place they can be caught. One
+reading question may be behind the `(?)` on the `TODO` lines: `multiplicityHasBounds`
+requires `mult <> null`, and a connector end written without a multiplicity (`first a then
+f;`) is given none by the pilot's `SuccessionAdapter`/`ConnectorAdapter`, so a literal evaluation of the four
+multiplicity constraints would reject the specification's own examples. Treating an
+unwritten end multiplicity as the required one, and checking only written ones, is what a
+second implementation has to assume; a note in the release on the intended reading would
+help.
+````
+
+---
+
+### `OccurrenceFunctions` are evaluated over declarations rather than occurrences (pilot `2026-07`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream. OpenSysML's own semantics for the six functions are recorded in
+[spec-compliance.md](spec-compliance.md) (the *Occurrences have a lifetime* rows).
+
+The probe model and the pinned evaluator's verbatim answers
+(`jupyter-sysml-kernel-0.61.0-all.jar`, tag `2026-07`, through
+`build/pilot-evaluator/eval-sysml --cases`; the evaluator exited 0, every answer is
+its own):
+
+```sysml
+package OccProbe {
+    private import ScalarValues::*;
+    private import OccurrenceFunctions::*;
+    private import SequenceFunctions::*;
+    part def Widget { attribute mass : Real = 1.0; }
+    part w1 : Widget;
+    part w2 : Widget;
+    part group : Widget[0..*] ordered nonunique;
+}
+```
+
+| Expression | Pilot answer |
+|---|---|
+| `OccProbe::w1 === OccProbe::w1` | `LiteralBoolean true` |
+| `OccProbe::w1 === OccProbe::w2` | `LiteralBoolean false` |
+| `OccProbe::w1 !== OccProbe::w2` | `LiteralBoolean true` |
+| `BaseFunctions::'==='(OccProbe::w1, OccProbe::w1)` | `LiteralBoolean true` |
+| `OccurrenceFunctions::'==='(OccProbe::w1, OccProbe::w1)` | `LiteralBoolean false` |
+| `OccurrenceFunctions::'==='(OccProbe::w1, OccProbe::w2)` | `LiteralBoolean false` |
+| `OccurrenceFunctions::'==='(null, null)` | `LiteralBoolean true` |
+| `OccurrenceFunctions::isDuring(OccProbe::w1)` | `LiteralBoolean true` |
+| `OccurrenceFunctions::isDuring(1)` | `LiteralBoolean true` |
+| `OccurrenceFunctions::isDuring("x")` | `LiteralBoolean true` |
+| `OccurrenceFunctions::create(OccProbe::w1)` | `PartUsage w1` |
+| `OccurrenceFunctions::create(1)` | `LiteralInteger 1` |
+| `OccurrenceFunctions::destroy(OccProbe::w1)` | `PartUsage w1` |
+| `OccurrenceFunctions::destroy(null)` | (nothing) |
+| `OccurrenceFunctions::addNew(OccProbe::group, OccProbe::w1)` | `PartUsage w1` |
+| `OccurrenceFunctions::addNewAt(OccProbe::group, OccProbe::w1, 1)` | `PartUsage w1` |
+| `OccurrenceFunctions::addNewAt(OccProbe::group, OccProbe::w1, 5)` | `PartUsage w1` |
+| `OccurrenceFunctions::addNewAt((1, 2), 3, 9)` | `LiteralInteger 3` |
+| `SequenceFunctions::includingAt((1, 2), 3, 5)` | `EXCEPTION:java.lang.IndexOutOfBoundsException: toIndex = 4` |
+
+````markdown
+**Question, not a bug report:** the interactive evaluator answers the
+`OccurrenceFunctions` declarations by folding their declared bodies over the
+model elements the arguments name, which gives answers that contradict its own
+operators. With `part w1 : Widget;` in scope, `w1 === w1` and
+`BaseFunctions::'==='(w1, w1)` are `true` but `OccurrenceFunctions::'==='(w1, w1)`
+is `false` — the body `x.portionOfLife == y.portionOfLife` is evaluated over
+features that hold no value. `isDuring(1)` and `isDuring("x")` are `true`: the
+body `notEmpty(during)` is evaluated over the function's own `during` feature
+rather than the argument's lifetime, so a data value that is no occurrence is
+reported as happening during. `create`, `destroy`, `addNew` and `addNewAt` answer
+their `occ` argument for any argument, an `addNewAt` index past the group's end
+included, while `SequenceFunctions::includingAt` with the same index throws
+`IndexOutOfBoundsException`. Is the evaluator intended to answer these six at all
+outside an executing performance? If so, is `OccurrenceFunctions::'==='` intended
+to agree with the `===` operator, and `isDuring` to reject an argument that is
+not an `Occurrence`, as the declared parameter types say?
 ````
 
 ---

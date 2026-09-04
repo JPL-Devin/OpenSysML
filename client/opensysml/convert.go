@@ -2,6 +2,7 @@ package opensysml
 
 import (
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	sysmlgrpc "github.com/Open-MBEE/OpenSysML/internal/grpc"
 )
 
 // The conversions from the wire types to the public ones. Every conversion
@@ -90,6 +91,8 @@ func valueFromProto(value *pb.Value) Value {
 		return Int(kind.IntValue)
 	case *pb.Value_RealValue:
 		return Real(kind.RealValue)
+	case *pb.Value_Complex:
+		return Complex(sysmlgrpc.ProtoToComplex(kind.Complex))
 	case *pb.Value_BoolValue:
 		return Bool(kind.BoolValue)
 	case *pb.Value_StringValue:
@@ -130,6 +133,8 @@ func valueToProto(value Value) (*pb.Value, error) {
 		return &pb.Value{Kind: &pb.Value_IntValue{IntValue: int64(v)}}, nil
 	case Real:
 		return &pb.Value{Kind: &pb.Value_RealValue{RealValue: float64(v)}}, nil
+	case Complex:
+		return &pb.Value{Kind: &pb.Value_Complex{Complex: sysmlgrpc.ComplexToProto(complex128(v))}}, nil
 	case Bool:
 		return &pb.Value{Kind: &pb.Value_BoolValue{BoolValue: bool(v)}}, nil
 	case String:

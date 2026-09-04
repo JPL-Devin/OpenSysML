@@ -1,0 +1,12 @@
+step 1: token 1@split
+step 2: token 2@left, token 3@right
+stmt assign x
+  eval literal 2 -> 2
+stmt assign rightRan
+  eval literal true -> true
+stmt assign x
+  eval literal 1 -> 1
+stmt assign leftRan
+  eval literal true -> true
+step 3: token 2@sync, token 3@sync
+step 4: no active tokens

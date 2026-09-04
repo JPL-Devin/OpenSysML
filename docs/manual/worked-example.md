@@ -22,12 +22,21 @@ $ sysml docs/manual/examples/observatory.sysml \
     -render-document Observatory::MassReport -o observatory.md
 ```
 
+or as [semantic HTML](outputs.md#html), with a stylesheet of your own after the
+default one:
+
+```console
+$ sysml docs/manual/examples/observatory.sysml \
+    -render-document Observatory::MassReport \
+    -doc-form html -doc-toc -html-css theme.css -o observatory.html
+```
+
 or as a PDF ([how inline runs and anchors render](outputs.md#pdf-rendering-of-inline-runs-and-anchors)):
 
 ```console
 $ sysml docs/manual/examples/observatory.sysml \
     -render-document Observatory::MassReport \
-    -doc-form pdf -pdf-title-page -pdf-toc -pdf-number-sections \
+    -doc-form pdf -doc-title-page -doc-toc -doc-number-sections \
     -o observatory.pdf
 ```
 

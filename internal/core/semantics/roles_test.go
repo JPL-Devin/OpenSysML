@@ -1,6 +1,10 @@
 package semantics
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+)
 
 func TestImplicitRoleRedefinitionDeduplicatesDiamond(t *testing.T) {
 	m, root := buildModel(t, `package P {
@@ -20,6 +24,29 @@ func TestImplicitRoleRedefinitionDeduplicatesDiamond(t *testing.T) {
 	got := m.ImplicitRoleRedefinitions(derivedObjective)
 	if len(got) != 1 || got[0] != baseObjective {
 		t.Fatalf("ImplicitRoleRedefinitions(derivedObjective) = %v, want [baseObjective]", got)
+	}
+}
+
+// A role redefines the same role of every general: naming one by `:>>` leaves
+// the others implicit, and naming something else leaves them all implicit.
+func TestImplicitRoleRedefinitionSkipsOnlyTheExplicitlyRedefinedRole(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		requirement def Weight { subject w; attribute limit; }
+		requirement def Volume { subject vol; }
+		requirement def Both :> Weight, Volume { subject s :>> w; }
+		requirement def Neither :> Weight, Volume { subject s :>> limit; }
+	}`)
+	p := sym(t, root, "P")
+	w := nested(t, nested(t, p.Scope, "Weight").Scope, "w")
+	vol := nested(t, nested(t, p.Scope, "Volume").Scope, "vol")
+
+	both := nested(t, nested(t, p.Scope, "Both").Scope, "s")
+	if got := m.ImplicitRoleRedefinitions(both); len(got) != 1 || got[0] != vol {
+		t.Errorf("ImplicitRoleRedefinitions(Both::s) = %v, want [vol]", got)
+	}
+	neither := nested(t, nested(t, p.Scope, "Neither").Scope, "s")
+	if got := m.ImplicitRoleRedefinitions(neither); len(got) != 2 || got[0] != w || got[1] != vol {
+		t.Errorf("ImplicitRoleRedefinitions(Neither::s) = %v, want [w vol]", got)
 	}
 }
 
@@ -62,5 +89,29 @@ func TestImplicitRoleRedefinitionMatchesRole(t *testing.T) {
 	}
 	if got[0] == baseSubject {
 		t.Fatal("objective implicitly redefined the inherited subject")
+	}
+}
+
+func TestImplicitRoleRedefinitionSurvivesExplicitRedefinition(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		part def X;
+		requirement def A { subject s : X; }
+		requirement def B { subject s : X; }
+		requirement def C :> A, B { subject s :>> A::s; }
+	}`)
+	p := sym(t, root, "P")
+	aSubject := nested(t, nested(t, p.Scope, "A").Scope, "s")
+	bSubject := nested(t, nested(t, p.Scope, "B").Scope, "s")
+	cSubject := nested(t, nested(t, p.Scope, "C").Scope, "s")
+
+	if got := RelationshipsOf(cSubject); len(got) != 1 || got[0].Kind != ast.RelRedefines {
+		t.Fatalf("RelationshipsOf(C's subject) = %v, want its one redefinition", got)
+	}
+	if got := m.ImplicitRoleRedefinitions(cSubject); len(got) != 1 || got[0] != bSubject {
+		t.Fatalf("ImplicitRoleRedefinitions(C's subject) = %v, want [B::s]", got)
+	}
+	got := m.AllRedefinedFeatures(cSubject)
+	if len(got) != 2 || got[0] != aSubject || got[1] != bSubject {
+		t.Fatalf("AllRedefinedFeatures(C's subject) = %v, want [A::s B::s]", got)
 	}
 }

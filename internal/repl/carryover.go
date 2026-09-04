@@ -12,9 +12,10 @@ import (
 // document resolves is what decides whether the object still means the same
 // thing.
 type carried struct {
-	fqn    string
-	obj    *runtime.Instance
-	shapes *runtime.Shapes
+	fqn     string
+	obj     *runtime.Instance
+	shapes  *runtime.Shapes
+	unnamed bool // a later %instantiate of fqn displaced it; only its id reaches it
 }
 
 // carryover is the state of a session that a submission may be able to keep: the
@@ -44,6 +45,9 @@ func (s *Session) recordCarryover() carryover {
 		obj := s.instances[fqn]
 		over.objects = append(over.objects, carried{fqn: fqn, obj: obj, shapes: s.rtCtx.ShapesOf(obj)})
 	}
+	for _, u := range s.unnamed {
+		over.objects = append(over.objects, carried{fqn: u.fqn, obj: u.obj, shapes: s.rtCtx.ShapesOf(u.obj), unnamed: true})
+	}
 	if s.actionExec != nil {
 		over.action = s.rtCtx.ShapesOfType(s.actionExec.symbol)
 	}
@@ -57,10 +61,12 @@ func (s *Session) recordCarryover() carryover {
 // declarations, keeping those whose shape the reload still resolves to — a reload
 // of unchanged text keeps them all — and reporting the ones it had to drop.
 func (s *Session) carryOverObjects(over carryover) []string {
-	if len(s.instances) == 0 {
+	held := s.heldObjects()
+	if held == 0 {
 		return nil
 	}
 	kept := make(map[string]*runtime.Instance, len(over.objects))
+	var keptUnnamed []unnamedObject
 	ctx, err := s.getOrCreateRuntime()
 	var restarted []string
 	for _, c := range over.objects {
@@ -71,13 +77,18 @@ func (s *Session) carryOverObjects(over carryover) []string {
 		if adoptErr != nil {
 			continue
 		}
-		kept[c.fqn] = c.obj
+		if c.unnamed {
+			keptUnnamed = append(keptUnnamed, unnamedObject{fqn: c.fqn, obj: c.obj})
+		} else {
+			kept[c.fqn] = c.obj
+		}
 		restarted = append(restarted, again...)
 	}
 	// Anything not carried over is gone, including an object whose resolution was
 	// not there to record.
-	dropped := len(s.instances) - len(kept)
+	dropped := held - len(kept) - len(keptUnnamed)
 	s.instances = kept
+	s.unnamed = keptUnnamed
 	var notices []string
 	if note := behaviorsRestartedNotice(restarted); note != "" {
 		notices = append(notices, note)

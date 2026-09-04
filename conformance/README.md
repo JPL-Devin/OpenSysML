@@ -147,6 +147,7 @@ What a request asks for is fixed per capability:
 | `feature_values` | Response-population capability: omit instance feature values; no request asks for them. |
 | `enum_values` | Response-population capability: encode enum values as unsupported nulls; no request asks for them. |
 | `unset_value` | Response-population capability: encode unset values as unsupported nulls; no request asks for them. |
+| `complex_values` | Response-population capability: encode complex numbers as unsupported nulls; no request asks for them. |
 
 The default service reports and supports every capability above. `make conformance` also starts a
 second service with `strict_conformance` and `oslc_query` withheld, verifies that its advertisement

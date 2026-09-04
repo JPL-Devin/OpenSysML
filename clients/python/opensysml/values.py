@@ -377,8 +377,9 @@ def value_to_python(pb_value, resolve_instance=None):
             when omitted, instance references are returned as their integer id.
 
     Returns:
-        int, float, bool, str, list, None, :data:`UNSET`, a :class:`Quantity`, an
-        :class:`~opensysml.enumeration.EnumLiteral`, or the resolved instance object.
+        int, float, complex, bool, str, list, None, :data:`UNSET`, a
+        :class:`Quantity`, an :class:`~opensysml.enumeration.EnumLiteral`, or
+        the resolved instance object. A Complex is one ``complex``, never two floats.
 
     Raises:
         UnsupportedValueError: If the service reported the value as unsupported.
@@ -388,6 +389,8 @@ def value_to_python(pb_value, resolve_instance=None):
         return pb_value.int_value
     if kind == 'real_value':
         return pb_value.real_value
+    if kind == 'complex':
+        return complex(pb_value.complex.real, pb_value.complex.imaginary)
     if kind == 'bool_value':
         return pb_value.bool_value
     if kind == 'string_value':

@@ -3,8 +3,10 @@ package runtime
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -65,6 +67,11 @@ func (ctx *Context) calcMemberDeclOf(link *symbols.Symbol, usage *ast.Usage, nam
 	if sym == nil {
 		return calcMemberDecl{}
 	}
+	return ctx.calcMemberDeclFor(link, sym, name)
+}
+
+// calcMemberDeclFor is what the member sym of link declares for a value bound to it.
+func (ctx *Context) calcMemberDeclFor(link, sym *symbols.Symbol, name string) calcMemberDecl {
 	mult, stated := ctx.extractMultiplicity(sym)
 	return calcMemberDecl{
 		Target:     &writeTarget{name: name, typ: ctx.extractType(sym), mult: mult},
@@ -120,7 +127,7 @@ func (ctx *Context) calcShapeOf(sym *symbols.Symbol) (*calcShape, error) {
 	}
 
 	name := ctx.qualifiedSymbolName(sym)
-	if !isCalcDecl(sym.Decl) {
+	if !isCalcDecl(sym.Decl) && !ctx.calcTypedFeature(sym) {
 		return nil, fmt.Errorf("%w: %s is %s, not a calc definition or usage", ErrNotACalc, name, describeDecl(sym.Decl))
 	}
 
@@ -147,7 +154,7 @@ func (ctx *Context) calcShapeOf(sym *symbols.Symbol) (*calcShape, error) {
 	// A calc computes nothing when it neither returns a value nor binds an output
 	// feature — by a declaration or by an assignment in its body.
 	if !lower.Returns(shape.Body) && len(shape.BodyOutputs) == 0 && shape.ResultExpr == nil {
-		return nil, fmt.Errorf("%w: calc %s has no return expression", ErrNoResultExpression, name)
+		return nil, fmt.Errorf("%w: calc %s has no return expression%s", ErrNoResultExpression, name, unboundResultHint(chain))
 	}
 
 	ctx.calcShapes[sym] = shape
@@ -257,6 +264,89 @@ func calcBody(chain []*symbols.Symbol) ([]lower.Statement, *symbols.Symbol) {
 	return stated, owner
 }
 
+// unboundResultHint explains a `return` that declares a result parameter without
+// binding it (`return h;` declares h, it does not return the member h).
+func unboundResultHint(chain []*symbols.Symbol) string {
+	for i := len(chain) - 1; i >= 0; i-- {
+		if chain[i] == nil {
+			continue
+		}
+		members := declMembers(chain[i].Decl)
+		result := unboundResultParameter(members)
+		if result == nil {
+			continue
+		}
+		name, _ := ast.EffectiveName(result)
+		who, trailing, expr := "the result parameter", "of the body", "<expr>"
+		typ := usageTypeText(result)
+		if name != "" {
+			spelled := lexer.NameText(name)
+			who = "result parameter " + spelled
+			if sibling := valuedMemberNamed(members, name, result); sibling != nil {
+				trailing, expr = "`"+spelled+"`", spelled
+				if typ == "" {
+					typ = usageTypeText(sibling)
+				}
+			}
+		}
+		if typ == "" {
+			typ = "<type>"
+		}
+		return fmt.Sprintf(": %s binds no value; write the result as the trailing expression %s, or bind it with `return : %s = %s;`",
+			who, trailing, typ, expr)
+	}
+	return ""
+}
+
+// unboundResultParameter returns the body's `return` member that binds no value.
+func unboundResultParameter(members []ast.Node) *ast.Usage {
+	for _, member := range members {
+		if u, ok := member.(*ast.Usage); ok && u.IsResult && u.Value == nil {
+			return u
+		}
+	}
+	return nil
+}
+
+// valuedMemberNamed returns the body member called name, other than except,
+// whose declaration binds a value; an unbound one would not compute a result.
+func valuedMemberNamed(members []ast.Node, name string, except *ast.Usage) *ast.Usage {
+	for _, member := range members {
+		u, ok := member.(*ast.Usage)
+		if !ok || u == except || u.Value == nil {
+			continue
+		}
+		if actual, _ := ast.EffectiveName(u); actual == name {
+			return u
+		}
+	}
+	return nil
+}
+
+// usageTypeText spells the type a usage declares with `:` as the notation
+// writes it (each segment quoted when it must be), or "" without one.
+func usageTypeText(u *ast.Usage) string {
+	for _, rel := range u.Relationships {
+		if rel == nil || rel.Kind != ast.RelTyping {
+			continue
+		}
+		qn, ok := rel.Target.(*ast.QualifiedName)
+		if !ok || len(qn.Parts) == 0 {
+			continue
+		}
+		segments := make([]string, 0, len(qn.Parts))
+		for _, part := range qn.Parts {
+			segments = append(segments, lexer.NameText(part.Text))
+		}
+		text := strings.Join(segments, "::")
+		if qn.Global {
+			text = "$::" + text
+		}
+		return text
+	}
+	return ""
+}
+
 // calcArgs are the arguments of one calc invocation. The notation keeps the two
 // forms mutually exclusive: positional arguments bind in parameter order, named
 // arguments by parameter name.
@@ -269,7 +359,9 @@ type calcArgs struct {
 // returns its result. Arguments bind to the calc's input parameters in
 // declaration order; a parameter with no argument falls back to its declared
 // default. The body is evaluated in the calc's own scope, so scope is used only
-// as a fallback for a symbol that owns no scope.
+// as a fallback for a symbol that owns no scope. A library function's `expr`
+// parameter takes a body or expression value, applied only when selected, or
+// the operand's value itself.
 func (ctx *Context) InvokeCalc(sym *symbols.Symbol, args []Value, scope *symbols.Scope) (Value, error) {
 	defer ctx.beginRun()()
 
@@ -296,6 +388,15 @@ func (ctx *Context) invokeCalc(sym *symbols.Symbol, args calcArgs, scope *symbol
 }
 
 func (ctx *Context) invokeCalcWithSelf(sym *symbols.Symbol, args calcArgs, scope *symbols.Scope, self *Instance) (Value, error) {
+	if perf := ctx.libraryCalcPerformed(sym); perf != nil {
+		if perf.signature != nil {
+			return ctx.invokeLibraryPerformance(perf, args, scope, self)
+		}
+		sym = perf.lib
+	}
+	if fn, ok := ctx.builtinFor(sym); ok {
+		return ctx.invokeBuiltinValues(sym, fn, args, scope, self)
+	}
 	if fn, ok := ctx.libraryFunctionFor(sym); ok {
 		return fn.invoke(ctx, args)
 	}
@@ -305,6 +406,21 @@ func (ctx *Context) invokeCalcWithSelf(sym *symbols.Symbol, args calcArgs, scope
 		return Value{}, err
 	}
 	return ctx.invokeCalcShape(shape, args, scope, self)
+}
+
+// invokeBuiltinValues applies a built-in to arguments a direct invocation has
+// already evaluated, bound to its declared parameters as a call would bind them.
+func (ctx *Context) invokeBuiltinValues(sym *symbols.Symbol, fn builtinFunc, args calcArgs, callerScope *symbols.Scope, self *Instance) (Value, error) {
+	name := ctx.qualifiedSymbolName(sym)
+	entered := ctx.activations
+	return tracedBuiltin(ctx.trace, name,
+		func() ([]Value, error) { return bindBuiltinValues(name, args) },
+		func(bound []Value) (Value, error) {
+			ec := NewEvalContextIn(ctx, ctx.calcScope(sym, nil, callerScope), self)
+			ec.entered = entered
+			return fn(ec, bound)
+		},
+	)
 }
 
 // invocationFrame is the storage one calc invocation runs in, held off the
@@ -375,10 +491,11 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 	}
 
 	// A pure body runs compiled unless the run is traced, which records every
-	// sub-expression, or an argument is bound by name or is not a scalar.
-	if ctx.compileCalcs && ctx.trace == nil && len(args.named) == 0 {
-		if compiled := ctx.compiledCalcOf(shape); compiled != nil {
-			if result, ran, err := compiled.invokeBoxed(ctx, args.positional); ran {
+	// sub-expression, an argument is not a scalar, or a bound object may answer
+	// a library constant the body reads before the library does.
+	if ctx.compileCalcs && ctx.trace == nil {
+		if compiled := ctx.compiledCalcOf(shape); compiled != nil && (self == nil || !compiled.readsLibrary) {
+			if result, ran, err := compiled.invokeBoxed(ctx, args); ran {
 				return result, err
 			}
 		}
@@ -569,6 +686,12 @@ func (shape *calcShape) checkArgs(args calcArgs) error {
 	return nil
 }
 
+// optional reports whether the parameter may go without an argument: its
+// declared multiplicity admits no value, as `[0..1]` does.
+func (param *calcParameter) optional() bool {
+	return param.Decl.Target != nil && param.Decl.multStated && param.Decl.Target.mult.AllowsNone()
+}
+
 // hasParameter reports whether the calc declares an input parameter of that name.
 func (shape *calcShape) hasParameter(name string) bool {
 	for _, param := range shape.Params {
@@ -580,8 +703,9 @@ func (shape *calcShape) hasParameter(name string) bool {
 }
 
 // bindCalcParameter resolves the value of one parameter: its argument (by
-// position or by name), else its declared default. A parameter with neither is
-// unbound, which is a modeling error rather than a null value.
+// position or by name), else its declared default, else null for one whose
+// multiplicity admits no value. A parameter with none of these is unbound,
+// which is a modeling error rather than a null value.
 func (ec *EvalContext) bindCalcParameter(
 	shape *calcShape,
 	param *calcParameter,
@@ -595,6 +719,9 @@ func (ec *EvalContext) bindCalcParameter(
 		return value, "argument", nil
 	}
 	if param.Default == nil {
+		if param.optional() {
+			return nullValue(), "omitted", nil
+		}
 		return Value{}, "", fmt.Errorf(
 			"%w: calc %s parameter %q has no argument and no default",
 			ErrUnboundParameter, shape.Name, param.Name,
@@ -621,17 +748,220 @@ func (ctx *Context) calcScope(declarer, invoked *symbols.Symbol, callerScope *sy
 	return callerScope
 }
 
-// hasCalcBody reports whether sym's calc chain states a computation of its own:
-// a result expression, or a body assigning an output it declares. A library
-// function declared without one — or a symbol loaded from the library index,
-// which carries no declaration at all — has no body.
-func (ctx *Context) hasCalcBody(sym *symbols.Symbol) bool {
-	if sym == nil || sym.Decl == nil || !isCalcDecl(sym.Decl) {
+// calcTypedFeature reports whether sym is a feature typed by a calc — a step, which an
+// invocation performs as the calc it is typed by.
+func (ctx *Context) calcTypedFeature(sym *symbols.Symbol) bool {
+	if _, ok := sym.Decl.(*ast.Usage); !ok {
 		return false
 	}
+	return len(ctx.calcChain(sym)) > 1
+}
+
+// libraryPerformance is how a call of a model calc applies an inherited library
+// function: the library declaration implementing it and, when the model calcs
+// redeclare inputs, the effective signature the call's arguments bind through.
+type libraryPerformance struct {
+	lib       *symbols.Symbol
+	signature *calcShape // the effective inputs, bodiless; nil when the library's own bind as written
+	positions []int      // per signature parameter, the library input it redefines; -1 for none
+	arity     int        // the library declaration's input parameter count
+}
+
+// libraryCalcPerformed returns the library function whose implementation a call of
+// sym applies: the nearest one sym specializes, when neither sym nor a model calc
+// between them states a computation of its own; nil otherwise.
+func (ctx *Context) libraryCalcPerformed(sym *symbols.Symbol) *libraryPerformance {
+	if sym == nil || ctx.model == nil || ctx.libraryDeclared(sym) {
+		return nil
+	}
+	if cached, ok := ctx.libraryPerformances[sym]; ok {
+		return cached
+	}
+	perf := ctx.resolveLibraryPerformance(sym)
+	ctx.libraryPerformances[sym] = perf
+	return perf
+}
+
+func (ctx *Context) resolveLibraryPerformance(sym *symbols.Symbol) *libraryPerformance {
+	if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
+		return nil
+	}
 	chain := ctx.calcChain(sym)
+	if ctx.calcComputes(chain) {
+		return nil
+	}
+	lib := ctx.implementedLibraryCalc(sym)
+	if lib == nil {
+		return nil
+	}
+	libInputs := ctx.ownedInputSymbols(lib)
+	perf := &libraryPerformance{lib: lib, arity: len(libInputs)}
+	if !ctx.redeclaresInputs(chain) {
+		return perf
+	}
+	perf.signature = &calcShape{Sym: sym, Name: ctx.qualifiedSymbolName(sym)}
+	for _, p := range ctx.model.BehaviorParametersOf(sym) {
+		if p.IsResult || (p.Direction != ast.DirIn && p.Direction != ast.DirInOut) {
+			continue
+		}
+		param, position := ctx.effectiveParameter(p.Symbol, libInputs)
+		perf.signature.Params = append(perf.signature.Params, param)
+		perf.signature.ParamNames = append(perf.signature.ParamNames, param.Name)
+		perf.positions = append(perf.positions, position)
+	}
+	return perf
+}
+
+// effectiveParameter is the input parameter sym as a call binds it — named as
+// written, declared and defaulted by the nearest of its redefinitions the model
+// states — with the position of the library input it redefines, -1 for none.
+func (ctx *Context) effectiveParameter(sym *symbols.Symbol, libInputs []*symbols.Symbol) (calcParameter, int) {
+	param := calcParameter{Name: sym.Name}
+	if effective, _ := ast.EffectiveName(sym.Decl.(*ast.Usage)); effective != "" {
+		param.Name = effective
+	}
+	for _, link := range ctx.model.ParameterRedefinitionChain(sym) {
+		owner := link.OwnerScope.Owner()
+		param.Decl = param.Decl.redeclaring(ctx.calcMemberDeclFor(owner, link, param.Name))
+		if at := indexOfSymbol(libInputs, link); at >= 0 {
+			return param, at
+		}
+		if ctx.libraryDeclared(link) {
+			break
+		}
+		if usage := link.Decl.(*ast.Usage); param.Default == nil && usage.Value != nil {
+			param.Default, param.Owner = usage.Value, owner
+		}
+	}
+	return param, -1
+}
+
+// implementedLibraryCalc returns the nearest library calc sym specializes that
+// this runtime implements, or nil when none is.
+func (ctx *Context) implementedLibraryCalc(sym *symbols.Symbol) *symbols.Symbol {
+	for _, super := range ctx.model.AllSupertypes(sym) {
+		if super == nil || !isCalcDecl(super.Decl) || !ctx.libraryDeclared(super) {
+			continue
+		}
+		if _, ok := ctx.builtinFor(super); ok {
+			return super
+		}
+		if _, ok := ctx.libraryFunctionFor(super); ok {
+			return super
+		}
+	}
+	return nil
+}
+
+// redeclaresInputs reports whether a model calc along chain declares an input
+// parameter of its own, redefining or adding to the ones it inherits.
+func (ctx *Context) redeclaresInputs(chain []*symbols.Symbol) bool {
+	for _, link := range chain {
+		if len(ctx.ownedInputSymbols(link)) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// ownedInputSymbols returns the symbols of the input parameters sym's declaration
+// owns, in declaration order.
+func (ctx *Context) ownedInputSymbols(sym *symbols.Symbol) []*symbols.Symbol {
+	var inputs []*symbols.Symbol
+	for _, member := range declMembers(sym.Decl) {
+		usage, ok := member.(*ast.Usage)
+		if !ok || (usage.Direction != ast.DirIn && usage.Direction != ast.DirInOut) {
+			continue
+		}
+		if found := memberSymbol(declScope(sym), usage); found != nil {
+			inputs = append(inputs, found)
+		}
+	}
+	return inputs
+}
+
+func indexOfSymbol(syms []*symbols.Symbol, want *symbols.Symbol) int {
+	for i, sym := range syms {
+		if sym == want {
+			return i
+		}
+	}
+	return -1
+}
+
+// invokeLibraryPerformance binds args to the effective signature of a calc performing
+// a library function as any calc binds its parameters — each default evaluated where
+// it is declared with the earlier parameters bound, each value checked against its
+// declaration — then applies the function to them in its own parameter order.
+func (ctx *Context) invokeLibraryPerformance(perf *libraryPerformance, args calcArgs, callerScope *symbols.Scope, self *Instance) (Value, error) {
+	sig := perf.signature
+	if err := sig.checkArgs(args); err != nil {
+		return Value{}, err
+	}
+	if err := ctx.enterCalc(sig.Name); err != nil {
+		return Value{}, err
+	}
+	defer ctx.leaveCalc()
+	if ctx.trace != nil {
+		ctx.trace.RecordCalcEnter(sig.Name)
+	}
+	result, err := ctx.applyLibraryPerformance(perf, args, callerScope, self)
+	if ctx.trace != nil {
+		if err != nil {
+			ctx.trace.RecordCalcExitError(sig.Name, err)
+		} else {
+			ctx.trace.RecordCalcExit(sig.Name, result)
+		}
+	}
+	return result, err
+}
+
+func (ctx *Context) applyLibraryPerformance(perf *libraryPerformance, args calcArgs, callerScope *symbols.Scope, self *Instance) (Value, error) {
+	sig := perf.signature
+	frame := ctx.acquireInvocationFrame()
+	defer ctx.releaseInvocationFrame(frame)
+	activation := ctx.newActivation()
+	defer ctx.endActivation(activation)
+
+	frame.slots.reset(sig.ParamNames)
+	locals := frame.locals()
+	ec := &frame.ec
+	*ec = EvalContext{
+		ctx:        ctx,
+		scope:      ctx.calcScope(sig.Sym, sig.Sym, callerScope),
+		self:       self,
+		frames:     append(frame.frames[:0], locals),
+		trace:      ctx.trace,
+		activation: activation,
+	}
+	if err := ctx.bindCalcParameters(sig, ec, args, callerScope, locals, nil); err != nil {
+		return Value{}, err
+	}
+
+	values := make([]Value, perf.arity)
+	for i := range values {
+		values[i] = nullValue()
+	}
+	for i, position := range perf.positions {
+		if position < 0 {
+			return Value{}, fmt.Errorf("%w: function %s has no input parameter for %q of calc %s",
+				ErrUnknownParameter, ctx.qualifiedSymbolName(perf.lib), sig.ParamNames[i], sig.Name)
+		}
+		values[position] = frame.slots.values[i]
+	}
+	libArgs := calcArgs{positional: values}
+	if fn, ok := ctx.builtinFor(perf.lib); ok {
+		return ctx.invokeBuiltinValues(perf.lib, fn, libArgs, callerScope, self)
+	}
+	fn, _ := ctx.libraryFunctionFor(perf.lib)
+	return fn.invoke(ctx, libArgs)
+}
+
+// calcComputes reports whether a calc chain states a computation: a body that
+// returns or assigns an output, or a binding of the result.
+func (ctx *Context) calcComputes(chain []*symbols.Symbol) bool {
 	body, _ := calcBody(chain)
-	if lower.Returns(body) {
+	if lower.Returns(body) || resultBindingExpr(calcBindings(chain)) != nil {
 		return true
 	}
 	return len(assignedOutputs(calcSteps(body), ctx.calcOutputs(chain))) > 0
@@ -697,10 +1027,13 @@ func isStateSymbol(sym *symbols.Symbol) bool {
 	return sym.Kind == symbols.SymbolStateDef || sym.Kind == symbols.SymbolStateUsage
 }
 
-// declMembers returns the body members of a definition or usage, unwrapping the
-// Membership wrappers the parser produces.
+// declMembers returns the body members of a definition, usage or named owned
+// constraint, unwrapping the Membership wrappers the parser produces.
 func declMembers(decl ast.Node) []ast.Node {
 	var members []ast.Node
+	if oc, ok := ast.OwnedConstraintOf(decl); ok {
+		return oc.Body
+	}
 	switch d := decl.(type) {
 	case *ast.Definition:
 		members = d.Members

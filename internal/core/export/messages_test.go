@@ -9,32 +9,23 @@ import (
 
 // TestUnsupportedConversionMessages pins the text of a conversion refusal: the
 // position of the construct, its SysML name rather than a Go type, and the
-// remedy docs/reference/rdf-mapping.md documents.
+// reason it has no place in the graph.
 func TestUnsupportedConversionMessages(t *testing.T) {
-	const remedy = "save to .sysml or .kerml instead, which writes the source exactly; " +
-		"see docs/reference/rdf-mapping.md § Limitations"
-
 	cases := []struct {
 		name string
 		src  string
 		want []string
 	}{{
-		name: "metadata_prefix",
-		src:  "package P {\n\tmetadata def M;\n\tpart p {@M{isSet = true;}}\n}",
-		want: []string{"cannot convert the prefix metadata at m.sysml:3:10", remedy},
+		// `event e;` refers to e rather than declaring an element of its own.
+		name: "event_reference",
+		src:  "package P {\n\tpart def A {\n\t\tevent e;\n\t}\n}",
+		want: []string{"cannot convert the `event` declaration at m.sysml:3:3",
+			"would come back as `occurrence`, a different declaration"},
 	}, {
-		// A metadata usage member (`@M;`) has no mapping in this graph yet, so it
-		// is refused rather than dropped.
-		name: "metadata_usage_member",
-		src:  "package P {\n\tmetadata def M;\n\t@M;\n}",
-		want: []string{"cannot convert the prefix metadata at m.sysml:3:2", remedy},
-	}, {
-		// A succession naming both ends is written back as the two-name form,
-		// which the parser reads only as basic names, so a quoted end is
-		// refused rather than written as notation it rejects.
-		name: "succession_naming_a_quoted_end",
-		src:  "package P {\n\taction Move {\n\t\taction a;\n\t\tthen 'a b';\n\t\taction 'a b';\n\t}\n}",
-		want: []string{"cannot convert the succession at m.sysml:4:3", "whose name is not a basic name"},
+		name: "duplicate_declaration",
+		src:  "package P {\n\tpart def A {\n\t\tattribute x : Real;\n\t\tattribute x : Real;\n\t}\n}",
+		want: []string{"cannot convert the duplicate declaration of \"x\" at m.sysml:4:3",
+			"two members of one namespace cannot share it"},
 	}}
 
 	for _, tc := range cases {

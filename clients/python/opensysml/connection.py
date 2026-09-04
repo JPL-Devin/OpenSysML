@@ -16,6 +16,7 @@ from opensysml.capabilities import (
     CAPABILITY_APPLY_EDITS,
     CAPABILITY_AUTHORING, CAPABILITY_INLINE_LANGUAGE,
     CAPABILITY_STRICT_CONFORMANCE,
+    CAPABILITY_COMPLEX_VALUES,
     CAPABILITY_CONVERT,
     CAPABILITY_DOCUMENT_QUERY,
     CAPABILITY_EVALUATE_SUBJECT,
@@ -1123,6 +1124,8 @@ class Connection:
         Raises:
             ExecutionError: If execution fails
             ModelNotFoundError: If the service no longer holds the model
+            MissingCapabilityError: If an input holds a ``complex`` and the
+                service predates ``complex_values``; nothing is sent
         """
         # Convert Python inputs to protobuf Values
         pb_inputs = {name: self._python_to_value(val) for name, val in (inputs or {}).items()}
@@ -1309,7 +1312,9 @@ class Connection:
         Raises:
             WrongKindError: If symbol_id names an element that is not a calc
             ExecutionError: If the calculation could not be evaluated
-            MissingCapabilityError: If the service cannot verify
+            MissingCapabilityError: If the service cannot verify, or an
+                argument holds a ``complex`` and the service predates
+                ``complex_values``; nothing is sent
             ModelNotFoundError: If the service no longer holds the model
         """
         self._require_verification()
@@ -1319,7 +1324,9 @@ class Connection:
             arguments=[self._python_to_value(arg) for arg in (arguments or [])],
         )
         with translate_rpc_errors(
-            unimplemented=self._capability_refusal((CAPABILITY_VERIFICATION,))
+            unimplemented=self._capability_refusal(
+                (CAPABILITY_VERIFICATION, CAPABILITY_COMPLEX_VALUES)
+            )
         ):
             response = self._stub.EvaluateCalc(request)
 
@@ -1379,6 +1386,14 @@ class Connection:
             diagnostics=diagnostics,
         )
 
+    def _require_complex_values(self):
+        """Refuse to send a complex a service without ``complex_values`` would read as null."""
+        require(
+            self.server_info(),
+            CAPABILITY_COMPLEX_VALUES,
+            upgrade_remedy(CAPABILITY_COMPLEX_VALUES),
+        )
+
     def _require_feature_values(self):
         """Refuse instances from a service that populates only the removed `slots` field."""
         require(
@@ -1410,6 +1425,11 @@ class Connection:
             return sysml_pb2.Value(int_value=py_value)
         elif isinstance(py_value, float):
             return sysml_pb2.Value(real_value=py_value)
+        elif isinstance(py_value, complex):
+            self._require_complex_values()
+            return sysml_pb2.Value(complex=sysml_pb2.Complex(
+                real=py_value.real, imaginary=py_value.imag,
+            ))
         elif isinstance(py_value, str):
             return sysml_pb2.Value(string_value=py_value)
         elif py_value is None:

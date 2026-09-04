@@ -3,9 +3,12 @@ package runtime
 import (
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
@@ -23,6 +26,8 @@ type Context struct {
 	maxSteps  int64
 	instances map[int64]*Instance
 	created   []int64
+	// lives holds, per registered object, when it began and ended (lifetimes.go).
+	lives map[int64]life
 
 	// maxActionSteps, maxStateEvents and maxDoSteps bound the executors this
 	// context runs: token-flow steps, dispatched events, and do actions.
@@ -46,6 +51,10 @@ type Context struct {
 	// defaults, result expression) per calc symbol.
 	calcShapes map[*symbols.Symbol]*calcShape
 
+	// libraryPerformances memoizes, per model calc, the inherited library function a
+	// call of it applies; nil for a calc that computes on its own.
+	libraryPerformances map[*symbols.Symbol]*libraryPerformance
+
 	// invocationTargets memoizes what each invocation expression denotes in the
 	// scope it is evaluated in; the model does not change under one context.
 	invocationTargets map[invocationKey]*invocationTarget
@@ -67,6 +76,11 @@ type Context struct {
 	// occurrences holds the object each usage carrying no value of its own
 	// denotes, so a feature chain through a part reads one occurrence of it.
 	occurrences map[*symbols.Symbol]int64
+	// behaving memoizes runsBehaviors per type; the model is fixed for the context's life.
+	behaving map[*symbols.Symbol]bool
+	// behavingFeatures memoizes behavingParts and redefGroups redefinitionGroups, per type.
+	behavingFeatures map[*symbols.Symbol][]int
+	redefGroups      map[*symbols.Symbol][][]string
 
 	// variantObjects holds the object a variant stands for per owner that
 	// selected it, so repeated reads of one selection read the same object.
@@ -107,6 +121,10 @@ type Context struct {
 	// behaviorRunDepth is the number of classifier-behavior starts under way.
 	behaviorRunDepth int
 
+	// heldBehaviors are the behaviors already holding work when the outermost
+	// start under way began: a driver put it in flight, and dispatches it.
+	heldBehaviors map[*ObjectBehavior]bool
+
 	// objectBehaviors are every behavior an object of this context runs, so a
 	// drain to quiescence can re-run one a sibling's send woke.
 	objectBehaviors []*ObjectBehavior
@@ -131,14 +149,36 @@ type Context struct {
 	// innermost last, so an invocation borrows rather than allocates its storage.
 	argStack []Value
 
-	// scalarStack holds the unboxed arguments of the compiled calc invocations
-	// under way, innermost last, the compiled tier's counterpart of argStack.
+	// scalarStack holds the frames of the compiled calc invocations under way —
+	// parameters, then body locals — innermost last, the compiled tier's
+	// counterpart of argStack.
 	scalarStack []scalar
+
+	// libraryArgBuf holds the boxed arguments of the library call a compiled body
+	// is making, and libraryEval the context a collection built-in it calls takes.
+	libraryArgBuf []Value
+	libraryEval   EvalContext
 
 	// compileCalcs enables the compiled tier for eligible calc bodies; the
 	// OPENSYSML_CALC_COMPILE escape hatch clears it.
 	compileCalcs bool
 
+	// probes is the number of probes under way; see beginProbe.
+	probes int
+	// journals is the number of probes and transactions under way: while one is,
+	// every change is journaled for it to undo; see beginJournal.
+	journals int
+	// journalWrites are the feature values the journals under way changed, with
+	// what each held before, restored as each is undone.
+	journalWrites []journalWrite
+	// journalUndos restore what else the journals under way changed on an object —
+	// the identities it keeps for connectors not yet materialized — run in reverse
+	// as each is undone; see noteProbeUndo.
+	journalUndos []func()
+	// runBoundaries mark, innermost last, where in objectBehaviors and in
+	// pendingBehaviors the behaviors a change still to be kept or undone attached
+	// begin: the only ones a drain under it may run (see nextRunnableBehavior).
+	runBoundaries []runBoundary
 	// runDepth is the number of runs currently under way, so the step counter is
 	// reset per run rather than accumulated over the context's whole life.
 	runDepth int
@@ -190,15 +230,22 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 	if maxSteps <= 0 {
 		panic(fmt.Sprintf("runtime: maxSteps must be > 0, got %d", maxSteps))
 	}
+	if model != nil {
+		// Calls the model selects on its own (document queries, signal payloads) then
+		// pick the overload the checker's argument typing picks.
+		model.SetArgumentTyper(passes.NewArgumentTyper(resolver, model))
+	}
 	return &Context{
-		model:      model,
-		resolver:   resolver,
-		ids:        &idSequence{next: 1}, // IDs start at 1 (0 = invalid)
-		steps:      0,
-		maxSteps:   maxSteps,
-		instances:  make(map[int64]*Instance),
-		features:   make(map[*symbols.Symbol][]EffectiveFeature),
-		calcShapes: make(map[*symbols.Symbol]*calcShape),
+		model:               model,
+		resolver:            resolver,
+		ids:                 &idSequence{next: 1}, // IDs start at 1 (0 = invalid)
+		steps:               0,
+		maxSteps:            maxSteps,
+		instances:           make(map[int64]*Instance),
+		lives:               make(map[int64]life),
+		features:            make(map[*symbols.Symbol][]EffectiveFeature),
+		calcShapes:          make(map[*symbols.Symbol]*calcShape),
+		libraryPerformances: make(map[*symbols.Symbol]*libraryPerformance),
 
 		invocationTargets: make(map[invocationKey]*invocationTarget),
 		integerLiterals:   make(map[*ast.LiteralInteger]int64),
@@ -214,6 +261,9 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		maxCalcDepth:   DefaultMaxCalcDepth,
 
 		occurrences:      make(map[*symbols.Symbol]int64),
+		behaving:         make(map[*symbols.Symbol]bool),
+		behavingFeatures: make(map[*symbols.Symbol][]int),
+		redefGroups:      make(map[*symbols.Symbol][][]string),
 		variantObjects:   make(map[variantObject]int64),
 		selectedVariants: make(map[variantSelection]string),
 
@@ -275,6 +325,27 @@ func (ctx *Context) SetTrace(tr *TraceRecorder) {
 // Model returns the semantic model this context operates over.
 func (ctx *Context) Model() *semantics.Model {
 	return ctx.model
+}
+
+// conforms is the model's conformance across scope trees: the index and a
+// document each build a symbol of their own for one declaration, so a symbol
+// conforms to another declared by the same node as it or one of its supertypes.
+func (ctx *Context) conforms(a, b *symbols.Symbol) bool {
+	if ctx.model.Conforms(a, b) {
+		return true
+	}
+	if a == nil || b == nil || b.Decl == nil {
+		return false
+	}
+	if a.Decl == b.Decl {
+		return true
+	}
+	for _, sup := range ctx.model.AllSupertypes(a) {
+		if sup != nil && sup.Decl == b.Decl {
+			return true
+		}
+	}
+	return false
 }
 
 // Resolver returns the name resolver this context resolves references with.
@@ -340,6 +411,101 @@ func (ctx *Context) beginExecutorRun(started *bool) func() {
 	*started = true
 	ctx.runDepth++
 	return func() { ctx.runDepth-- }
+}
+
+// beginProbe brackets an evaluation previewing what a run would do, restoring the
+// budget, trace, bus, variant selections, every feature value written (see
+// noteProbeWrite) and every other change noted (see noteProbeUndo) after.
+// Behaviors the probe starts are the only ones it runs (see nextRunnableBehavior).
+func (ctx *Context) beginProbe() func() {
+	steps, elements, trace := ctx.steps, ctx.elements, ctx.trace
+	selected := maps.Clone(ctx.selectedVariants)
+	endBoundary := func() {}
+	if ctx.probes == 0 {
+		endBoundary = ctx.beginRunBoundary()
+	}
+	_, rollback := ctx.beginJournal()
+	ctx.trace = nil
+	ctx.runDepth++
+	ctx.probes++
+	return func() {
+		rollback()
+		endBoundary()
+		ctx.selectedVariants = selected
+		ctx.probes--
+		ctx.runDepth--
+		ctx.steps, ctx.elements, ctx.trace = steps, elements, trace
+	}
+}
+
+// runBoundary is where in objectBehaviors and pendingBehaviors the behaviors
+// attached since a change began start.
+type runBoundary struct {
+	behaviors, pending int
+}
+
+// beginRunBoundary confines drains to the behaviors attached from now until the
+// returned function is called: what an older behavior does cannot be undone.
+func (ctx *Context) beginRunBoundary() func() {
+	ctx.runBoundaries = append(ctx.runBoundaries, runBoundary{
+		behaviors: len(ctx.objectBehaviors),
+		pending:   len(ctx.pendingBehaviors),
+	})
+	return func() { ctx.runBoundaries = ctx.runBoundaries[:len(ctx.runBoundaries)-1] }
+}
+
+// beginJournal brackets a change to be kept whole or not at all: the feature
+// values written (see noteProbeWrite), the other changes noted (see
+// noteProbeUndo) and the bus are journaled until commit keeps them or rollback
+// restores them. A commit inside an enclosing journal leaves the entries to it.
+func (ctx *Context) beginJournal() (commit, rollback func()) {
+	mark, undoMark := len(ctx.journalWrites), len(ctx.journalUndos)
+	messages := slices.Clone(ctx.messages)
+	ctx.journals++
+	commit = func() {
+		ctx.journals--
+		if ctx.journals == 0 {
+			ctx.journalWrites, ctx.journalUndos = ctx.journalWrites[:mark], ctx.journalUndos[:undoMark]
+		}
+	}
+	rollback = func() {
+		ctx.journals--
+		for i := len(ctx.journalWrites) - 1; i >= mark; i-- {
+			*ctx.journalWrites[i].fv = ctx.journalWrites[i].prior
+		}
+		ctx.journalWrites = ctx.journalWrites[:mark]
+		for i := len(ctx.journalUndos) - 1; i >= undoMark; i-- {
+			ctx.journalUndos[i]()
+		}
+		ctx.journalUndos = ctx.journalUndos[:undoMark]
+		ctx.messages = messages
+	}
+	return commit, rollback
+}
+
+// journalWrite is a feature value a journal changed and what it held before.
+type journalWrite struct {
+	fv    *FeatureValue
+	prior FeatureValue
+}
+
+// noteProbeWrite records a feature value about to change, for the probe or
+// transaction under way to restore; outside one it records nothing.
+func (ctx *Context) noteProbeWrite(fv *FeatureValue) {
+	if ctx.journals == 0 {
+		return
+	}
+	ctx.journalWrites = append(ctx.journalWrites, journalWrite{fv: fv, prior: *fv})
+}
+
+// noteProbeUndo records how to restore state no feature value holds that is about
+// to change, for the probe or transaction under way to run; outside one it
+// records nothing.
+func (ctx *Context) noteProbeUndo(undo func()) {
+	if ctx.journals == 0 {
+		return
+	}
+	ctx.journalUndos = append(ctx.journalUndos, undo)
 }
 
 // newActivation begins one activation: the identity of a single execution of a
@@ -415,6 +581,17 @@ func (ctx *Context) Instance(id int64) (*Instance, bool) {
 	return ctx.getInstance(id)
 }
 
+// InstanceIDs lists the identities of every object this context holds, in
+// ascending order, so a caller can say which ids an unknown one is not among.
+func (ctx *Context) InstanceIDs() []int64 {
+	ids := make([]int64, 0, len(ctx.instances))
+	for id := range ctx.instances {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	return ids
+}
+
 // getInstance retrieves an instance by ID.
 func (ctx *Context) getInstance(id int64) (*Instance, bool) {
 	inst, ok := ctx.instances[id]
@@ -445,6 +622,9 @@ func (ctx *Context) EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope
 // RequireConstraint returns an ErrNotAConstraint usage error unless sym
 // declares a constraint, so a caller can settle the kind before evaluating.
 func RequireConstraint(sym *symbols.Symbol) error {
+	if _, ok := ast.OwnedConstraintOf(sym.Decl); ok {
+		return nil
+	}
 	switch decl := sym.Decl.(type) {
 	case *ast.Definition:
 		if decl.Kind == ast.DefConstraint {
@@ -499,7 +679,7 @@ func (ctx *Context) CheckConstraintOn(sym *symbols.Symbol, scope *symbols.Scope,
 	}
 
 	// Evaluate every condition the constraint states, inherited ones included.
-	conds := ctx.conditionsOf(ctx.chainMembers(sym, scope))
+	conds := ctx.conditionsOf(sym, ctx.chainMembers(sym, scope))
 	holds, err := ctx.evaluateConditions(conditionCheck{
 		sym:     sym,
 		kind:    "constraint",
@@ -513,14 +693,15 @@ func (ctx *Context) CheckConstraintOn(sym *symbols.Symbol, scope *symbols.Scope,
 // CheckResult is the outcome of one check: whether it holds, the object its
 // conditions were evaluated against — nil when they were evaluated against the
 // declaration because no object carries the checked element — and, for a nested
-// subject, the object the search started from plus the features walked from it —
-// ending in the declaration the object materializes, as an ambiguity names it —
-// which are how a caller names an object holding no name of its own.
+// subject, the object the search started from plus the features walked from it,
+// one name a segment — ending in the declaration the object materializes, as an
+// ambiguity names it — which are how a caller names an object holding no name of
+// its own.
 type CheckResult struct {
 	Holds       bool
 	Subject     *Instance
 	SubjectRoot *Instance
-	SubjectPath string
+	SubjectPath []string
 }
 
 // checkResultOf reports a verdict about the object a check resolved to.
@@ -555,38 +736,94 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members 
 	}
 
 	for _, member := range members {
-		var what, name string
+		var what string
+		var names []string
 		var expr ast.Node
 		isSubject := false
 		switch rm := member.node.(type) {
 		case *ast.SubjectMember:
-			what, name, expr, isSubject = "subject", rm.Name, rm.BindingExpr, true
+			what, names, expr, isSubject = "subject", ctx.memberNames(sym, member, rm.Ident.Name, rm.Ident.ShortName), rm.BindingExpr, true
 		case *ast.Usage:
 			switch rm.Kind {
 			case ast.UsageSubject:
-				name, isSubject = effectiveName(rm), true
+				names, isSubject = ctx.memberNames(sym, member, effectiveName(rm), rm.Ident.ShortName), true
 			case ast.UsageActor:
-				what, name, expr = "actor", effectiveName(rm), rm.Value
+				what, names, expr = "actor", ctx.memberNames(sym, member, effectiveName(rm), rm.Ident.ShortName), rm.Value
 			}
 		default:
 			continue
 		}
 		if isSubject && subject != nil {
-			if name != "" {
+			for _, name := range names {
 				bindings[name] = Value{Kind: ValInstance, Instance: subject.ID}
 			}
 			continue
 		}
 		if expr == nil {
+			// A redeclaration valuing nothing reads the value the feature it
+			// redefines binds, under its own names too.
+			if value, ok := boundUnder(bindings, names); ok {
+				for _, name := range names {
+					bindings[name] = value
+				}
+			}
 			continue
 		}
 		value, err := evalIn(member.scope).Eval(expr)
 		if err != nil {
 			return nil, fmt.Errorf("requirement %s: %s binding evaluation failed: %w", element, what, err)
 		}
-		bindings[name] = value
+		for _, name := range names {
+			bindings[name] = value
+		}
 	}
 	return bindings, nil
+}
+
+// memberNames are the names a condition may read a bound member of owner by: its
+// own and those of every feature it redefines, one feature with it (KerML §7.3.4.5).
+func (ctx *Context) memberNames(owner *symbols.Symbol, member scopedMember, name, shortName string) []string {
+	names := bindingNames(name, shortName)
+	memberSym := memberSymbol(member.scope, member.node)
+	if memberSym == nil {
+		return names
+	}
+	seen := make(map[string]bool, len(names))
+	for _, n := range names {
+		seen[n] = true
+	}
+	for _, redefined := range ctx.redefinedFeatures(memberSym, owner) {
+		for _, n := range bindingNames(redefined.Name, redefined.ShortName) {
+			if !seen[n] {
+				seen[n] = true
+				names = append(names, n)
+			}
+		}
+	}
+	return names
+}
+
+// boundUnder returns the value bindings hold under any of names.
+func boundUnder(bindings map[string]Value, names []string) (Value, bool) {
+	for _, name := range names {
+		if value, ok := bindings[name]; ok {
+			return value, true
+		}
+	}
+	return Value{}, false
+}
+
+// bindingNames are the names a condition may read a bound member by: its name
+// and its short name, whichever it declares.
+func bindingNames(name, shortName string) []string {
+	var names []string
+	if name != "" {
+		names = append(names, name)
+	}
+	if shortName != "" && shortName != name {
+		names = append(names, shortName)
+	}
+	return names
 }
 
 // effectiveName is the name a usage answers to, which for a member written as a
@@ -615,15 +852,20 @@ type scopedMember struct {
 // definition (constraint limit : MassLimit) carries no members itself. A library
 // supertype states the metamodel frame every element specializes rather than the
 // model's own objectives, conditions or parameters, so it contributes none.
+// A supertype whose result expression a redefinition replaces keeps its other members.
 func (ctx *Context) chainMembers(sym *symbols.Symbol, scope *symbols.Scope) []scopedMember {
 	var out []scopedMember
 	supers := ctx.model.AllSupertypes(sym)
+	replaced := ctx.replacedResultExpressions(sym, supers)
 	for i := len(supers) - 1; i >= 0; i-- {
 		link := supers[i]
 		if link == nil || ctx.libraryDeclared(link) {
 			continue
 		}
 		for _, node := range declMembers(link.Decl) {
+			if replaced[link] && isResultExpression(node) {
+				continue
+			}
 			out = append(out, scopedMember{node: node, scope: bodyScope(link, link.OwnerScope)})
 		}
 	}
@@ -631,6 +873,62 @@ func (ctx *Context) chainMembers(sym *symbols.Symbol, scope *symbols.Scope) []sc
 		out = append(out, scopedMember{node: node, scope: bodyScope(sym, scope)})
 	}
 	return out
+}
+
+// replacedResultExpressions returns the supertypes a redefinition owning a result
+// expression replaces (and those only they reach); a body owning none inherits it.
+func (ctx *Context) replacedResultExpressions(sym *symbols.Symbol, supers []*symbols.Symbol) map[*symbols.Symbol]bool {
+	if !isConstraintSymbol(sym) {
+		return nil
+	}
+	replaced := map[*symbols.Symbol]bool{}
+	for _, link := range append([]*symbols.Symbol{sym}, supers...) {
+		if link == nil || !isConstraintSymbol(link) || !ownsResultExpression(declMembers(link.Decl)) {
+			continue
+		}
+		for _, redefined := range ctx.model.AllRedefinedFeatures(link) {
+			replaced[redefined] = true
+		}
+	}
+	if len(replaced) == 0 {
+		return nil
+	}
+	kept := map[*symbols.Symbol]bool{}
+	var keep func(*symbols.Symbol)
+	keep = func(s *symbols.Symbol) {
+		for _, direct := range ctx.model.DirectSupertypes(s) {
+			if direct == nil || direct == sym || replaced[direct] || kept[direct] {
+				continue
+			}
+			kept[direct] = true
+			keep(direct)
+		}
+	}
+	keep(sym)
+	skipped := map[*symbols.Symbol]bool{}
+	for _, link := range supers {
+		if link != nil && !kept[link] {
+			skipped[link] = true
+		}
+	}
+	return skipped
+}
+
+// ownsResultExpression reports whether one of a body's members is its result expression.
+func ownsResultExpression(members []ast.Node) bool {
+	for _, member := range members {
+		if isResultExpression(member) {
+			return true
+		}
+	}
+	return false
+}
+
+// isResultExpression reports whether node is a bare condition (`x > 0`), the body's
+// result expression; a nested `assert constraint { … }` or reference is a feature instead.
+func isResultExpression(node ast.Node) bool {
+	c, ok := node.(*ast.ConstraintMember)
+	return ok && c.Keyword == "" && c.Expression != nil
 }
 
 // bodyScope is the scope a member of sym's body was written in: sym's own body,
@@ -685,7 +983,7 @@ func (ctx *Context) CheckRequirementOn(sym *symbols.Symbol, scope *symbols.Scope
 	}
 
 	// Second pass: evaluate the assumed and required conditions.
-	conds := ctx.conditionsOf(members)
+	conds := ctx.conditionsOf(sym, members)
 	holds, err := ctx.evaluateConditions(conditionCheck{
 		sym:      sym,
 		kind:     "requirement",
@@ -695,14 +993,14 @@ func (ctx *Context) CheckRequirementOn(sym *symbols.Symbol, scope *symbols.Scope
 		negated:  NegatedDecl(sym),
 	}, conds)
 	if err != nil {
-		err = unboundSubjectError(err, "requirement", sym.Name, unboundSubjectNames(members, subject.instance))
+		err = unboundSubjectError(err, "requirement", sym.Name, ctx.unboundSubjectNames(sym, members, subject.instance))
 	}
 	return ctx.checkResultOf(holds, subject), err
 }
 
 // unboundSubjectNames are the subjects the members declare that nothing supplies
 // a value for: no binding expression, no object supplied from outside.
-func unboundSubjectNames(members []scopedMember, subject *Instance) map[string]bool {
+func (ctx *Context) unboundSubjectNames(sym *symbols.Symbol, members []scopedMember, subject *Instance) map[string]bool {
 	if subject != nil {
 		return nil
 	}
@@ -710,12 +1008,14 @@ func unboundSubjectNames(members []scopedMember, subject *Instance) map[string]b
 	for _, member := range members {
 		switch rm := member.node.(type) {
 		case *ast.SubjectMember:
-			if rm.BindingExpr == nil && rm.Name != "" {
-				names[rm.Name] = true
+			if rm.BindingExpr == nil {
+				for _, name := range ctx.memberNames(sym, member, rm.Ident.Name, rm.Ident.ShortName) {
+					names[name] = true
+				}
 			}
 		case *ast.Usage:
 			if rm.Kind == ast.UsageSubject {
-				if name := effectiveName(rm); name != "" {
+				for _, name := range ctx.memberNames(sym, member, effectiveName(rm), rm.Ident.ShortName) {
 					names[name] = true
 				}
 			}
@@ -751,6 +1051,17 @@ func (ctx *Context) ExecuteActionWithInputs(action *symbols.Symbol, inputs map[s
 // connections route what the action sends and whose variant selections decide
 // which of them are realized. A nil self performs the action outside any object.
 func (ctx *Context) ExecuteActionPerformedBy(action *symbols.Symbol, self *Instance, inputs map[string]Value) (map[string]Value, error) {
+	exec, err := ctx.performAction(action, self, inputs)
+	if err != nil {
+		return nil, err
+	}
+	// Return the values the action's features hold once it completed
+	return exec.Results(), nil
+}
+
+// performAction runs action to completion, performed by self, and returns the
+// executor that ran it, whose root performance holds what it produced.
+func (ctx *Context) performAction(action *symbols.Symbol, self *Instance, inputs map[string]Value) (*ActionExecutor, error) {
 	defer ctx.beginRun()()
 
 	// Create executor
@@ -773,9 +1084,7 @@ func (ctx *Context) ExecuteActionPerformedBy(action *symbols.Symbol, self *Insta
 	if err := exec.RunToCompletion(); err != nil {
 		return nil, fmt.Errorf("execute action: %w", err)
 	}
-
-	// Return the values the action's features hold once it completed
-	return exec.Results(), nil
+	return exec, nil
 }
 
 // ExecuteState executes a state machine, processing events until completion or suspension.

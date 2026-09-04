@@ -136,6 +136,18 @@ type Query struct {
 	Select  []string
 	Where   []Predicate
 	OrderBy []OrderTerm
+	// Spelling names, per query property, the name the request asked for it by,
+	// where that differs from the query property name.
+	Spelling map[string]string
+}
+
+// SpellingOf returns the name the request asked for property by, so a frontend
+// reports a result in terms its caller can ask the next query in.
+func (q Query) SpellingOf(property string) string {
+	if spelled, ok := q.Spelling[property]; ok {
+		return spelled
+	}
+	return property
 }
 
 // Element is a transport-neutral query result.

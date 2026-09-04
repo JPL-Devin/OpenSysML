@@ -11,11 +11,20 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
+// renameTarget is the name under the rename cursor: the symbol it belongs to,
+// which of that symbol's names it is (long or short) and where the declaration
+// states that name.
+type renameTarget struct {
+	sym      *symbols.Symbol
+	name     string
+	declSpan source.Span
+}
+
 // PrepareRename reports the range the client should offer for editing, and
 // rejects positions that name nothing renameable before the user types.
 func (s *Server) PrepareRename(ctx context.Context, params *protocol.PrepareRenameParams) (*protocol.Range, error) {
 	name := uriToName(params.TextDocument.URI)
-	_, span, err := s.renameTarget(name, params.Position)
+	_, span, err := s.renameTargetAt(name, params.Position)
 	if err != nil {
 		return nil, err
 	}
@@ -23,12 +32,14 @@ func (s *Server) PrepareRename(ctx context.Context, params *protocol.PrepareRena
 	return &rng, nil
 }
 
-// Rename renames the declaration under the cursor and every reference to it
-// across the workspace's documents, including the qualifier positions of
-// multi-segment names (`A::B` when renaming A).
+// Rename renames the name under the cursor — a declaration's long or short name —
+// where the declaration states it and at every reference across the workspace's
+// documents written with that name, including the qualifier positions of
+// multi-segment names (`A::B` when renaming A). A reference written with the
+// element's other name still resolves afterwards, so it is left as written.
 func (s *Server) Rename(ctx context.Context, params *protocol.RenameParams) (*protocol.WorkspaceEdit, error) {
 	name := uriToName(params.TextDocument.URI)
-	target, _, err := s.renameTarget(name, params.Position)
+	target, _, err := s.renameTargetAt(name, params.Position)
 	if err != nil {
 		return nil, err
 	}
@@ -57,35 +68,23 @@ func (s *Server) Rename(ctx context.Context, params *protocol.RenameParams) (*pr
 	}
 
 	// The declaration itself.
-	declDoc := s.ws.Document(target.DocName)
-	addEdit(target.DocName, declDoc.Content, target.NameSpan)
+	declDoc := s.ws.Document(target.sym.DocName)
+	addEdit(target.sym.DocName, declDoc.Content, target.declSpan)
 
-	// Every reference, in every document, at whichever segment denotes target.
-	for _, docName := range s.ws.DocumentNames() {
-		doc := s.ws.Document(docName)
-		if doc == nil || doc.Scope == nil {
-			continue
-		}
-		for _, ref := range collectRefs(doc.AST, doc.Scope) {
-			// The name each segment writes, so an alias use is rewritten by
-			// renaming the alias and not by renaming its target.
-			segs := s.ws.ResolveReferenceNameSegmentsInDoc(docName, ref)
-			for i, seg := range segs {
-				if symbols.SameElement(seg, target) {
-					addEdit(docName, doc.Content, ref.QN.Parts[i].Span)
-				}
-			}
-		}
+	// Every segment, in every document, that writes this name of target: an alias
+	// use is rewritten by renaming the alias and not by renaming its target.
+	for _, ref := range s.ws.NameReferencesTo(target.sym, target.name) {
+		addEdit(ref.Doc, ref.Content, ref.Span)
 	}
 	return &protocol.WorkspaceEdit{Changes: changes}, nil
 }
 
-// renameTarget returns the symbol named at pos and the span of the name as
-// written there (a declaration's identifier, or one segment of a reference).
-func (s *Server) renameTarget(name string, pos protocol.Position) (*symbols.Symbol, source.Span, error) {
+// renameTargetAt returns the name at pos and the span of that name as written
+// there (a declaration's long or short identifier, or one segment of a reference).
+func (s *Server) renameTargetAt(name string, pos protocol.Position) (renameTarget, source.Span, error) {
 	doc := s.ws.Document(name)
 	if doc == nil || doc.Scope == nil {
-		return nil, source.Span{}, fmt.Errorf("no document %q", name)
+		return renameTarget{}, source.Span{}, fmt.Errorf("no document %q", name)
 	}
 	offset := positionToOffset(doc.Content, pos)
 
@@ -98,33 +97,59 @@ func (s *Server) renameTarget(name string, pos protocol.Position) (*symbols.Symb
 				continue
 			}
 			if i < len(segs) && segs[i] != nil {
-				return s.renameable(segs[i], part.Span)
+				return s.renameable(segs[i], part.Text, part.Span)
 			}
-			return nil, source.Span{}, fmt.Errorf("cannot rename %q: unresolved", part.Text)
+			if i == len(ref.QN.Parts)-1 && len(s.ws.AmbiguousInvocationInDoc(name, *ref)) > 0 {
+				return renameTarget{}, source.Span{}, fmt.Errorf("cannot rename %q: the call is ambiguous between several overloads", part.Text)
+			}
+			return renameTarget{}, source.Span{}, fmt.Errorf("cannot rename %q: unresolved", part.Text)
 		}
 	}
 
-	// On a declaration: the cursor must be on the declared identifier itself,
-	// not merely somewhere inside the declaration's body.
+	// On a declaration: the cursor must be on a declared identifier itself — the
+	// name or the short name between its angle brackets — not merely somewhere
+	// inside the declaration's body.
 	if sym := symbolAtOffset(doc.Scope, offset); sym != nil {
 		if sp := sym.NameSpan; sp.Len > 0 && offset >= sp.Offset && offset < sp.End() {
-			return s.renameable(sym, sp)
+			return s.renameable(sym, sym.Name, sp)
+		}
+		if sp := shortNameSpan(sym); sp.Len > 0 && offset >= sp.Offset && offset < sp.End() {
+			return s.renameable(sym, sym.ShortName, sp)
 		}
 	}
-	return nil, source.Span{}, fmt.Errorf("no renameable name at this position")
+	return renameTarget{}, source.Span{}, fmt.Errorf("no renameable name at this position")
 }
 
-// renameable rejects symbols whose declaration this server cannot edit.
-func (s *Server) renameable(sym *symbols.Symbol, span source.Span) (*symbols.Symbol, source.Span, error) {
+// renameable rejects symbols whose declaration this server cannot edit, and
+// otherwise pairs the name written at span with where sym's declaration states it.
+func (s *Server) renameable(sym *symbols.Symbol, name string, span source.Span) (renameTarget, source.Span, error) {
 	if sym.NameSpan.Len == 0 {
-		return nil, source.Span{}, fmt.Errorf("cannot rename %q: no declared name", sym.Name)
+		return renameTarget{}, source.Span{}, fmt.Errorf("cannot rename %q: no declared name", sym.Name)
 	}
 	if s.ws.Document(sym.DocName) == nil {
 		// Standard-library and other out-of-workspace declarations: renaming
 		// the references alone would break the model.
-		return nil, source.Span{}, fmt.Errorf("cannot rename %q: declared outside the workspace", sym.Name)
+		return renameTarget{}, source.Span{}, fmt.Errorf("cannot rename %q: declared outside the workspace", sym.Name)
 	}
-	return sym, span, nil
+	target := renameTarget{sym: sym, name: name, declSpan: sym.NameSpan}
+	if name != sym.Name {
+		if sp := shortNameSpan(sym); name == sym.ShortName && sp.Len > 0 {
+			target.declSpan = sp
+		} else {
+			return renameTarget{}, source.Span{}, fmt.Errorf("cannot rename %q: not a name %q declares", name, sym.Name)
+		}
+	}
+	return target, span, nil
+}
+
+// shortNameSpan is where sym's declaration states its short name (`<s>`), or an
+// empty span when it states none.
+func shortNameSpan(sym *symbols.Symbol) source.Span {
+	id, ok := symbols.DeclIdent(sym.Decl)
+	if !ok || id.ShortName == "" {
+		return source.Span{}
+	}
+	return id.ShortNameSpan
 }
 
 // validateNewName rejects names that would not lex as the identifier they are

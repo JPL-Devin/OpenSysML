@@ -10,10 +10,10 @@ import (
 	"connectrpc.com/connect"
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast/astcodec"
 	"github.com/Open-MBEE/OpenSysML/internal/core/conformance"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
-	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
@@ -90,6 +90,10 @@ const CapabilityFeatureValues = "feature_values"
 // documents as one model so a name one declares resolves in another.
 const CapabilityParseSources = "parse_sources"
 
+// CapabilityComplexValues names the capability of carrying a complex number as
+// Value.complex, rather than reporting it as an unsupported null.
+const CapabilityComplexValues = "complex_values"
+
 // capabilities is what this build supports, in report order. A capability is
 // only ever added: renaming or dropping one breaks clients that require it.
 var capabilities = []string{
@@ -98,7 +102,7 @@ var capabilities = []string{
 	CapabilitySymbolAttributes, CapabilityUnsetValue, CapabilityFeatureValues,
 	CapabilityApplyEdits, CapabilityAuthoring, CapabilityInlineLanguage,
 	CapabilityStrictConformance, CapabilityDocumentQuery, CapabilityRenderDocument,
-	CapabilityParseSources,
+	CapabilityParseSources, CapabilityComplexValues,
 }
 
 type capabilityAvailability struct {
@@ -235,14 +239,26 @@ func (s *Service) requireCapability(capability string) error {
 	return statusErrorf(connect.CodeUnimplemented, "capability %q is unavailable", capability)
 }
 
-// newRuntime returns a runtime context under the service's budgets.
-func (s *Service) newRuntime(semModel *semantics.Model, resolver *resolve.Resolver) *runtime.Context {
-	ctx := runtime.NewContext(semModel, resolver, s.budgets.MaxSteps)
+// requireValueCapabilities refuses a supplied value of a kind whose capability
+// is unavailable, rather than reading it as something else.
+func (s *Service) requireValueCapabilities(pv *pb.Value) error {
+	if ValueCarriesComplex(pv) {
+		return s.requireCapability(CapabilityComplexValues)
+	}
+	return nil
+}
+
+// newRuntime returns a runtime context under the service's budgets over the
+// model's shared semantics, held for the request; the caller defers release.
+// The context itself is the request's own: the objects it creates are not shared.
+func (s *Service) newRuntime(cached *CachedModel) (*runtime.Context, *semantics.Model, func()) {
+	rs, release := cached.RuntimeSemantics()
+	ctx := runtime.NewContext(rs.Model, rs.Resolver, s.budgets.MaxSteps)
 	if err := ctx.SetBudgets(s.budgets); err != nil {
 		// Unreachable: NewService validated these budgets.
 		panic(fmt.Sprintf("grpc: invalid service budgets: %v", err))
 	}
-	return ctx
+	return ctx, rs.Model, release
 }
 
 // sourceInput is one document a parse request named, read and ready to parse.
@@ -567,9 +583,8 @@ func (s *Service) Evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.Ev
 	}
 
 	// Create runtime context
-	resolver := resolve.New(cached.Index)
-	semModel := semantics.NewModel(resolver)
-	runtimeCtx := s.newRuntime(semModel, resolver)
+	runtimeCtx, _, release := s.newRuntime(cached)
+	defer release()
 
 	var self *runtime.Instance
 	if subject != nil {
@@ -582,9 +597,12 @@ func (s *Service) Evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.Ev
 		self = inst
 	}
 
-	// Create eval context and evaluate
+	// The expression is the request's, not the model's: the shared resolver
+	// must not keep what it memoizes about its nodes.
 	evalCtx := runtime.NewEvalContextIn(runtimeCtx, scope, self)
-	result, err := evalCtx.Eval(exprNode)
+	var result runtime.Value
+	var err error
+	runtimeCtx.Resolver().Scratch(astcodec.Reachable(exprNode), func() { result, err = evalCtx.Eval(exprNode) })
 	if err != nil {
 		return &pb.EvaluateResponse{
 			Error: fmt.Sprintf("evaluation failed: %v", err),
@@ -630,9 +648,8 @@ func (s *Service) Instantiate(ctx context.Context, req *pb.InstantiateRequest) (
 	sym := syms[0]
 
 	// Create runtime context
-	resolver := resolve.New(cached.Index)
-	semModel := semantics.NewModel(resolver)
-	runtimeCtx := s.newRuntime(semModel, resolver)
+	runtimeCtx, _, release := s.newRuntime(cached)
+	defer release()
 
 	// Instantiate
 	inst, err := runtimeCtx.Instantiate(sym)
@@ -667,9 +684,8 @@ func (s *Service) ExecuteAction(ctx context.Context, req *pb.ExecuteActionReques
 	action := syms[0]
 
 	// Create runtime context
-	resolver := resolve.New(cached.Index)
-	semModel := semantics.NewModel(resolver)
-	runtimeCtx := s.newRuntime(semModel, resolver)
+	runtimeCtx, semModel, release := s.newRuntime(cached)
+	defer release()
 
 	// Converted against the model's index, so a quantity input keeps the base
 	// units it is commensurable with instead of binding an unusable value.
@@ -677,6 +693,9 @@ func (s *Service) ExecuteAction(ctx context.Context, req *pb.ExecuteActionReques
 	if len(req.Inputs) > 0 {
 		inputs = make(map[string]runtime.Value, len(req.Inputs))
 		for name, pv := range req.Inputs {
+			if err := s.requireValueCapabilities(pv); err != nil {
+				return nil, err
+			}
 			val, cerr := ProtoToValueIn(pv, cached.Index, semModel)
 			if cerr != nil {
 				return &pb.ExecuteActionResponse{
@@ -724,9 +743,8 @@ func (s *Service) ExecuteState(ctx context.Context, req *pb.ExecuteStateRequest)
 	stateMachine := syms[0]
 
 	// Create runtime context
-	resolver := resolve.New(cached.Index)
-	semModel := semantics.NewModel(resolver)
-	runtimeCtx := s.newRuntime(semModel, resolver)
+	runtimeCtx, _, release := s.newRuntime(cached)
+	defer release()
 
 	// Execute state machine, injecting the requested events and capturing the
 	// real ordered state-visit trace.

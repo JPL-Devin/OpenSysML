@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::Arc;
 
 use crate::{error::Error, wire, Connection};
@@ -197,6 +198,30 @@ pub struct Quantity {
     pub unit_term: Option<UnitTerm>,
 }
 
+/// A complex number in rectangular form: one value, never two reals.
+///
+/// A service advertising `complex_values` sends one as itself; an older one
+/// sends an unsupported [`Value::Null`] in its place.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Complex {
+    /// Real part.
+    pub real: f64,
+    /// Imaginary part.
+    pub imaginary: f64,
+}
+
+impl fmt::Display for Complex {
+    /// Writes `1.5 - 2.0i`; the sign between the parts is the imaginary part's.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let sign = if self.imaginary.is_sign_negative() {
+            '-'
+        } else {
+            '+'
+        };
+        write!(f, "{:?} {sign} {:?}i", self.real, self.imaginary.abs())
+    }
+}
+
 /// An enumeration literal value.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EnumLiteral {
@@ -215,6 +240,8 @@ pub enum Value {
     Integer(i64),
     /// Real value.
     Real(f64),
+    /// Complex value.
+    Complex(Complex),
     /// Boolean value.
     Boolean(bool),
     /// Text value.
@@ -240,6 +267,10 @@ pub(crate) fn value_from_wire(value: wire::Value) -> Result<Value, Error> {
     match kind {
         wire::value::Kind::IntValue(v) => Ok(Value::Integer(v)),
         wire::value::Kind::RealValue(v) => Ok(Value::Real(v)),
+        wire::value::Kind::Complex(v) => Ok(Value::Complex(Complex {
+            real: v.real,
+            imaginary: v.imaginary,
+        })),
         wire::value::Kind::BoolValue(v) => Ok(Value::Boolean(v)),
         wire::value::Kind::StringValue(v) => Ok(Value::Text(v)),
         wire::value::Kind::InstanceId(v) => Ok(Value::InstanceRef(v)),
@@ -593,6 +624,68 @@ mod tests {
             result.ok(),
             Some(Value::Sequence(vec![Value::Integer(7), Value::Real(2.5)]))
         );
+    }
+
+    #[test]
+    fn a_complex_number_is_one_value_with_both_parts() {
+        let complex = |real, imaginary| wire::Value {
+            kind: Some(wire::value::Kind::Complex(wire::Complex {
+                real,
+                imaginary,
+            })),
+        };
+        assert_eq!(
+            value_from_wire(complex(1.5, -2.0)).ok(),
+            Some(Value::Complex(Complex {
+                real: 1.5,
+                imaginary: -2.0
+            }))
+        );
+        // Proto3 defaults are zero, so an empty Complex message is 0 + 0i.
+        assert_eq!(
+            value_from_wire(wire::Value {
+                kind: Some(wire::value::Kind::Complex(wire::Complex::default())),
+            })
+            .ok(),
+            Some(Value::Complex(Complex {
+                real: 0.0,
+                imaginary: 0.0
+            }))
+        );
+        let sequence = wire::Value {
+            kind: Some(wire::value::Kind::Sequence(wire::ValueSequence {
+                elements: vec![complex(1.0, 2.0), complex(3.0, 4.0)],
+            })),
+        };
+        assert_eq!(
+            value_from_wire(sequence).ok(),
+            Some(Value::Sequence(vec![
+                Value::Complex(Complex {
+                    real: 1.0,
+                    imaginary: 2.0
+                }),
+                Value::Complex(Complex {
+                    real: 3.0,
+                    imaginary: 4.0
+                }),
+            ]))
+        );
+        assert_ne!(
+            Value::Complex(Complex {
+                real: 1.5,
+                imaginary: 0.0
+            }),
+            Value::Real(1.5)
+        );
+    }
+
+    #[test]
+    fn a_complex_number_prints_in_rectangular_form() {
+        let print = |real, imaginary| Complex { real, imaginary }.to_string();
+        assert_eq!(print(1.5, -2.0), "1.5 - 2.0i");
+        assert_eq!(print(1.0, 2.0), "1.0 + 2.0i");
+        assert_eq!(print(0.0, 0.0), "0.0 + 0.0i");
+        assert_eq!(print(-3.25, -0.0), "-3.25 - 0.0i");
     }
 
     #[test]

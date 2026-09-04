@@ -18,11 +18,14 @@ func (ctx *Context) InvokeOperation(inst *Instance, name string, args map[string
 	if inst == nil {
 		return nil, fmt.Errorf("%w: no object to perform %s", ErrNoSuchBehavior, name)
 	}
+	if err := ctx.checkPerformer(inst); err != nil {
+		return nil, fmt.Errorf("invoke %s on object #%d: %w", name, inst.ID, err)
+	}
 	sym, err := ctx.operationOf(inst, name)
 	if err != nil {
 		return nil, err
 	}
-	inputs, err := operationInputs(sym, name, args)
+	inputs, err := operationInputs(ctx.actionParametersOf(sym), name, args)
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +36,7 @@ func (ctx *Context) InvokeOperation(inst *Instance, name string, args map[string
 			return nil, fmt.Errorf("invoke %s on object #%d: %w", name, inst.ID, err)
 		}
 
-		_, out := actionParameters(sym.Decl)
+		_, out := parameterNames(ctx.actionParametersOf(sym))
 		outputs := make(map[string]Value, len(out))
 		for _, param := range out {
 			if value, ok := results[param]; ok {
@@ -101,6 +104,9 @@ func isConstraintSymbol(sym *symbols.Symbol) bool {
 	if sym == nil {
 		return false
 	}
+	if _, ok := ast.OwnedConstraintOf(sym.Decl); ok {
+		return true
+	}
 	switch decl := sym.Decl.(type) {
 	case *ast.Definition:
 		return decl.Kind == ast.DefConstraint
@@ -125,7 +131,7 @@ func (ctx *Context) evaluateConstraintInvocation(sym *symbols.Symbol, scope *sym
 		self:     subject.instance,
 		bindings: bindings,
 		negated:  NegatedDecl(sym),
-	}, ctx.conditionsOf(ctx.chainMembers(sym, scope)))
+	}, ctx.conditionsOf(sym, ctx.chainMembers(sym, scope)))
 	if errors.Is(err, ErrViolated) {
 		return false, nil
 	}
@@ -135,8 +141,7 @@ func (ctx *Context) evaluateConstraintInvocation(sym *symbols.Symbol, scope *sym
 // operationInputs binds arguments to the operation's input parameters, reporting
 // an argument naming no parameter and a parameter left with no value: either
 // would otherwise run the body against values the invocation never stated.
-func operationInputs(sym *symbols.Symbol, name string, args map[string]Value) (map[string]Value, error) {
-	params := actionParameterDecls(sym.Decl)
+func operationInputs(params []actionParameter, name string, args map[string]Value) (map[string]Value, error) {
 	inputs := make(map[string]Value, len(args))
 	for _, param := range params {
 		if param.Direction == ast.DirOut {
@@ -146,7 +151,7 @@ func operationInputs(sym *symbols.Symbol, name string, args map[string]Value) (m
 		switch {
 		case bound:
 			inputs[param.Name] = value
-		case param.HasDefault:
+		case param.Optional:
 		default:
 			return nil, fmt.Errorf("%w: parameter %s of operation %s has no argument and no default",
 				ErrUnboundParameter, param.Name, name)

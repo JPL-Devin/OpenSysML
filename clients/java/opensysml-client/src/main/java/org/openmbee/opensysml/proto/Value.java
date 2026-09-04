@@ -63,6 +63,7 @@ private static final long serialVersionUID = 0L;
     QUANTITY(8),
     ENUM_LITERAL(9),
     UNSET(10),
+    COMPLEX(11),
     KIND_NOT_SET(0);
     private final int value;
     private KindCase(int value) {
@@ -90,6 +91,7 @@ private static final long serialVersionUID = 0L;
         case 8: return QUANTITY;
         case 9: return ENUM_LITERAL;
         case 10: return UNSET;
+        case 11: return COMPLEX;
         case 0: return KIND_NOT_SET;
         default: return null;
       }
@@ -449,6 +451,49 @@ private static final long serialVersionUID = 0L;
     return false;
   }
 
+  public static final int COMPLEX_FIELD_NUMBER = 11;
+  /**
+   * <pre>
+   * one complex number, never two Reals
+   * </pre>
+   *
+   * <code>.sysml.Complex complex = 11 [json_name = "complex"];</code>
+   * @return Whether the complex field is set.
+   */
+  @java.lang.Override
+  public boolean hasComplex() {
+    return kindCase_ == 11;
+  }
+  /**
+   * <pre>
+   * one complex number, never two Reals
+   * </pre>
+   *
+   * <code>.sysml.Complex complex = 11 [json_name = "complex"];</code>
+   * @return The complex.
+   */
+  @java.lang.Override
+  public org.openmbee.opensysml.proto.Complex getComplex() {
+    if (kindCase_ == 11) {
+       return (org.openmbee.opensysml.proto.Complex) kind_;
+    }
+    return org.openmbee.opensysml.proto.Complex.getDefaultInstance();
+  }
+  /**
+   * <pre>
+   * one complex number, never two Reals
+   * </pre>
+   *
+   * <code>.sysml.Complex complex = 11 [json_name = "complex"];</code>
+   */
+  @java.lang.Override
+  public org.openmbee.opensysml.proto.ComplexOrBuilder getComplexOrBuilder() {
+    if (kindCase_ == 11) {
+       return (org.openmbee.opensysml.proto.Complex) kind_;
+    }
+    return org.openmbee.opensysml.proto.Complex.getDefaultInstance();
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -497,6 +542,9 @@ private static final long serialVersionUID = 0L;
     if (kindCase_ == 10) {
       output.writeBool(
           10, (boolean)((java.lang.Boolean) kind_));
+    }
+    if (kindCase_ == 11) {
+      output.writeMessage(11, (org.openmbee.opensysml.proto.Complex) kind_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -549,6 +597,10 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeBoolSize(
             10, (boolean)((java.lang.Boolean) kind_));
+    }
+    if (kindCase_ == 11) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeMessageSize(11, (org.openmbee.opensysml.proto.Complex) kind_);
     }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
@@ -607,6 +659,10 @@ private static final long serialVersionUID = 0L;
       case 10:
         if (getUnset()
             != other.getUnset()) return false;
+        break;
+      case 11:
+        if (!getComplex()
+            .equals(other.getComplex())) return false;
         break;
       case 0:
       default:
@@ -667,6 +723,10 @@ private static final long serialVersionUID = 0L;
         hash = (37 * hash) + UNSET_FIELD_NUMBER;
         hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
             getUnset());
+        break;
+      case 11:
+        hash = (37 * hash) + COMPLEX_FIELD_NUMBER;
+        hash = (53 * hash) + getComplex().hashCode();
         break;
       case 0:
       default:
@@ -815,6 +875,9 @@ private static final long serialVersionUID = 0L;
       if (enumLiteralBuilder_ != null) {
         enumLiteralBuilder_.clear();
       }
+      if (complexBuilder_ != null) {
+        complexBuilder_.clear();
+      }
       kindCase_ = 0;
       kind_ = null;
       return this;
@@ -867,6 +930,10 @@ private static final long serialVersionUID = 0L;
       if (kindCase_ == 9 &&
           enumLiteralBuilder_ != null) {
         result.kind_ = enumLiteralBuilder_.build();
+      }
+      if (kindCase_ == 11 &&
+          complexBuilder_ != null) {
+        result.kind_ = complexBuilder_.build();
       }
     }
 
@@ -925,6 +992,10 @@ private static final long serialVersionUID = 0L;
         }
         case UNSET: {
           setUnset(other.getUnset());
+          break;
+        }
+        case COMPLEX: {
+          mergeComplex(other.getComplex());
           break;
         }
         case KIND_NOT_SET: {
@@ -1015,6 +1086,13 @@ private static final long serialVersionUID = 0L;
               kindCase_ = 10;
               break;
             } // case 80
+            case 90: {
+              input.readMessage(
+                  internalGetComplexFieldBuilder().getBuilder(),
+                  extensionRegistry);
+              kindCase_ = 11;
+              break;
+            } // case 90
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1963,6 +2041,184 @@ private static final long serialVersionUID = 0L;
         onChanged();
       }
       return this;
+    }
+
+    private com.google.protobuf.SingleFieldBuilder<
+        org.openmbee.opensysml.proto.Complex, org.openmbee.opensysml.proto.Complex.Builder, org.openmbee.opensysml.proto.ComplexOrBuilder> complexBuilder_;
+    /**
+     * <pre>
+     * one complex number, never two Reals
+     * </pre>
+     *
+     * <code>.sysml.Complex complex = 11 [json_name = "complex"];</code>
+     * @return Whether the complex field is set.
+     */
+    @java.lang.Override
+    public boolean hasComplex() {
+      return kindCase_ == 11;
+    }
+    /**
+     * <pre>
+     * one complex number, never two Reals
+     * </pre>
+     *
+     * <code>.sysml.Complex complex = 11 [json_name = "complex"];</code>
+     * @return The complex.
+     */
+    @java.lang.Override
+    public org.openmbee.opensysml.proto.Complex getComplex() {
+      if (complexBuilder_ == null) {
+        if (kindCase_ == 11) {
+          return (org.openmbee.opensysml.proto.Complex) kind_;
+        }
+        return org.openmbee.opensysml.proto.Complex.getDefaultInstance();
+      } else {
+        if (kindCase_ == 11) {
+          return complexBuilder_.getMessage();
+        }
+        return org.openmbee.opensysml.proto.Complex.getDefaultInstance();
+      }
+    }
+    /**
+     * <pre>
+     * one complex number, never two Reals
+     * </pre>
+     *
+     * <code>.sysml.Complex complex = 11 [json_name = "complex"];</code>
+     */
+    public Builder setComplex(org.openmbee.opensysml.proto.Complex value) {
+      if (complexBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        kind_ = value;
+        onChanged();
+      } else {
+        complexBuilder_.setMessage(value);
+      }
+      kindCase_ = 11;
+      return this;
+    }
+    /**
+     * <pre>
+     * one complex number, never two Reals
+     * </pre>
+     *
+     * <code>.sysml.Complex complex = 11 [json_name = "complex"];</code>
+     */
+    public Builder setComplex(
+        org.openmbee.opensysml.proto.Complex.Builder builderForValue) {
+      if (complexBuilder_ == null) {
+        kind_ = builderForValue.build();
+        onChanged();
+      } else {
+        complexBuilder_.setMessage(builderForValue.build());
+      }
+      kindCase_ = 11;
+      return this;
+    }
+    /**
+     * <pre>
+     * one complex number, never two Reals
+     * </pre>
+     *
+     * <code>.sysml.Complex complex = 11 [json_name = "complex"];</code>
+     */
+    public Builder mergeComplex(org.openmbee.opensysml.proto.Complex value) {
+      if (complexBuilder_ == null) {
+        if (kindCase_ == 11 &&
+            kind_ != org.openmbee.opensysml.proto.Complex.getDefaultInstance()) {
+          kind_ = org.openmbee.opensysml.proto.Complex.newBuilder((org.openmbee.opensysml.proto.Complex) kind_)
+              .mergeFrom(value).buildPartial();
+        } else {
+          kind_ = value;
+        }
+        onChanged();
+      } else {
+        if (kindCase_ == 11) {
+          complexBuilder_.mergeFrom(value);
+        } else {
+          complexBuilder_.setMessage(value);
+        }
+      }
+      kindCase_ = 11;
+      return this;
+    }
+    /**
+     * <pre>
+     * one complex number, never two Reals
+     * </pre>
+     *
+     * <code>.sysml.Complex complex = 11 [json_name = "complex"];</code>
+     */
+    public Builder clearComplex() {
+      if (complexBuilder_ == null) {
+        if (kindCase_ == 11) {
+          kindCase_ = 0;
+          kind_ = null;
+          onChanged();
+        }
+      } else {
+        if (kindCase_ == 11) {
+          kindCase_ = 0;
+          kind_ = null;
+        }
+        complexBuilder_.clear();
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * one complex number, never two Reals
+     * </pre>
+     *
+     * <code>.sysml.Complex complex = 11 [json_name = "complex"];</code>
+     */
+    public org.openmbee.opensysml.proto.Complex.Builder getComplexBuilder() {
+      return internalGetComplexFieldBuilder().getBuilder();
+    }
+    /**
+     * <pre>
+     * one complex number, never two Reals
+     * </pre>
+     *
+     * <code>.sysml.Complex complex = 11 [json_name = "complex"];</code>
+     */
+    @java.lang.Override
+    public org.openmbee.opensysml.proto.ComplexOrBuilder getComplexOrBuilder() {
+      if ((kindCase_ == 11) && (complexBuilder_ != null)) {
+        return complexBuilder_.getMessageOrBuilder();
+      } else {
+        if (kindCase_ == 11) {
+          return (org.openmbee.opensysml.proto.Complex) kind_;
+        }
+        return org.openmbee.opensysml.proto.Complex.getDefaultInstance();
+      }
+    }
+    /**
+     * <pre>
+     * one complex number, never two Reals
+     * </pre>
+     *
+     * <code>.sysml.Complex complex = 11 [json_name = "complex"];</code>
+     */
+    private com.google.protobuf.SingleFieldBuilder<
+        org.openmbee.opensysml.proto.Complex, org.openmbee.opensysml.proto.Complex.Builder, org.openmbee.opensysml.proto.ComplexOrBuilder> 
+        internalGetComplexFieldBuilder() {
+      if (complexBuilder_ == null) {
+        if (!(kindCase_ == 11)) {
+          kind_ = org.openmbee.opensysml.proto.Complex.getDefaultInstance();
+        }
+        complexBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+            org.openmbee.opensysml.proto.Complex, org.openmbee.opensysml.proto.Complex.Builder, org.openmbee.opensysml.proto.ComplexOrBuilder>(
+                (org.openmbee.opensysml.proto.Complex) kind_,
+                getParentForChildren(),
+                isClean());
+        kind_ = null;
+      }
+      kindCase_ = 11;
+      onChanged();
+      return complexBuilder_;
     }
 
     // @@protoc_insertion_point(builder_scope:sysml.Value)

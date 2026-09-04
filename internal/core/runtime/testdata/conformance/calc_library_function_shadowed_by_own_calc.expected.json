@@ -1,0 +1,9 @@
+{
+  "libraries": true,
+  "type": "calc",
+  "evaluate": "test::wheelCount",
+  "result": {
+    "type": "Integer",
+    "value": 84
+  }
+}

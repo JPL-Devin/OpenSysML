@@ -1,0 +1,9 @@
+{
+	"type": "action",
+	"trace": true,
+	"outputs": {
+		"x": {"type": "Integer", "value": 1},
+		"leftRan": {"type": "Boolean", "value": true},
+		"rightRan": {"type": "Boolean", "value": true}
+	}
+}

@@ -3,6 +3,7 @@ package resolve
 import (
 	"strings"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/suggest"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -17,8 +18,9 @@ type suggestKey struct {
 // suggestFor returns the spellings an unresolvable unqualified name written in
 // scope may have meant: the qualified names the index declares that very name
 // under — an unimported library name — and the near spellings a typo justifies,
-// each scored by how the user would reach it. Memoized per scope and name.
-func (r *Resolver) suggestFor(scope *symbols.Scope, name string) []string {
+// each scored by how the user would reach it. Memoized per scope and name for
+// as long as at, the reference written so, is (see Scratch).
+func (r *Resolver) suggestFor(scope *symbols.Scope, name string, at ast.Node) []string {
 	if r.idx == nil || name == "" {
 		return nil
 	}
@@ -49,6 +51,7 @@ func (r *Resolver) suggestFor(scope *symbols.Scope, name string) []string {
 		}
 	}
 	out := suggest.Rank(cands)
+	journalNew(r, r.suggestions, key, at)
 	r.suggestions[key] = out
 	return out
 }
@@ -111,8 +114,15 @@ func (r *Resolver) suggestTable() *suggest.Table {
 // unresolvedMessage is what an unresolved unqualified reference written in scope
 // reports. The hint belongs to the diagnostic, not to one renderer, so the CLI,
 // the REPL and the LSP all show it.
-func (r *Resolver) unresolvedMessage(scope *symbols.Scope, name string) string {
-	return suggest.With(unresolvedReferencePrefix+name, name, r.suggestFor(scope, name))
+func (r *Resolver) unresolvedMessage(scope *symbols.Scope, name string, at ast.Node) string {
+	return unresolvedReferencePrefix + r.UnresolvedName(scope, name, at)
+}
+
+// UnresolvedName is the text after "unresolved reference: " for an unqualified
+// name written at in scope that resolves to nothing: the name and the spellings
+// it may mean.
+func (r *Resolver) UnresolvedName(scope *symbols.Scope, name string, at ast.Node) string {
+	return suggest.With(name, name, r.suggestFor(scope, name, at))
 }
 
 // unresolvedReferencePrefix is how a reference that resolves to nothing reads.

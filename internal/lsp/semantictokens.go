@@ -35,10 +35,11 @@ func semanticTokensLegend() protocol.SemanticTokensLegend {
 	return protocol.SemanticTokensLegend{TokenTypes: types, TokenModifiers: modifiers}
 }
 
-// SemanticTokensFull answers the semantic tokens of a whole document.
+// SemanticTokensFull answers the semantic tokens of a whole document, a bundled
+// library one included.
 func (s *Server) SemanticTokensFull(ctx context.Context, params *protocol.SemanticTokensParams) (*protocol.SemanticTokens, error) {
 	name := uriToName(params.TextDocument.URI)
-	doc := s.ws.Document(name)
+	doc := s.document(name)
 	if doc == nil {
 		return &protocol.SemanticTokens{}, nil
 	}
@@ -51,7 +52,7 @@ func (s *Server) SemanticTokensFull(ctx context.Context, params *protocol.Semant
 // tokens filtered: highlighting a name resolves the whole document either way.
 func (s *Server) SemanticTokensRange(ctx context.Context, params *protocol.SemanticTokensRangeParams) (*protocol.SemanticTokens, error) {
 	name := uriToName(params.TextDocument.URI)
-	doc := s.ws.Document(name)
+	doc := s.document(name)
 	if doc == nil {
 		return &protocol.SemanticTokens{}, nil
 	}

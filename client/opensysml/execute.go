@@ -2,6 +2,8 @@ package opensysml
 
 import (
 	"context"
+	"maps"
+	"slices"
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 )
@@ -37,6 +39,9 @@ func (c *client) ExecuteAction(
 	}
 	req := &pb.ExecuteActionRequest{ModelHash: hash, ActionSymbolId: actionSymbolID}
 	if len(inputs) > 0 {
+		if err := c.requireComplexValues(ctx, slices.Collect(maps.Values(inputs))...); err != nil {
+			return nil, err
+		}
 		req.Inputs = make(map[string]*pb.Value, len(inputs))
 		for name, value := range inputs {
 			sent, err := valueToProto(value)

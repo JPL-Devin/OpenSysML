@@ -71,7 +71,7 @@ func TestQueryFlagRefusesWildcardValue(t *testing.T) {
 		t.Fatalf("outcome = %#v", outcome)
 	}
 	out := run(t, binary, "-query", `oslc.where=sysml:multiplicityUpper%3D*&oslc.select=sysml:multiplicityUpper`, model)
-	if !strings.Contains(out, "Demo::wheel  PartUsage  multiplicityUpper=*") {
+	if !strings.Contains(out, "Demo::wheel  PartUsage  sysml:multiplicityUpper=*") {
 		t.Fatalf("query output = %s", out)
 	}
 }

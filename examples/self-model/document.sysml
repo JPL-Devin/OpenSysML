@@ -197,7 +197,7 @@ package OpenSysMLDocument {
             }
 
             part calculating : Paragraph {
-                attribute redefines text = "A calc whose body is one pure scalar expression is compiled on its first invocation into closures over an unboxed frame, kept in a side table on the context like every other derived fact. The evaluator remains the reference: the compiled tier must reproduce its values, errors and step charges exactly, a traced run or an invocation it cannot take goes to the evaluator whole, and an environment variable switches the tier off for bisecting.";
+                attribute redefines text = "A calc whose body is scalar — an expression, or local declarations, returns and conditionals over scalars, calling other such calcs by position or by name and the library's scalar functions — is compiled on its first invocation into closures over an unboxed frame, kept in a side table on the context like every other derived fact. The evaluator remains the reference: the compiled tier must reproduce its values, errors and step charges exactly, a traced run or an invocation it cannot take goes to the evaluator whole, and an environment variable switches the tier off for bisecting.";
             }
 
             part calculation : Diagram {

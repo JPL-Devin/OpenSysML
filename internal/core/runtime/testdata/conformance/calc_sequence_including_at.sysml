@@ -2,6 +2,7 @@
 // result is longer than the input by the values inserted.
 package test {
 	private import ScalarValues::*;
+	private import SequenceFunctions::*;
 
 	calc def insert {
 		in x : Integer;

@@ -98,11 +98,11 @@ type bodyBuilder struct {
 	members []ast.Node
 
 	// last names the last member a succession can reference, the source a `then`
-	// taken next sequences from. An edge or an unnamed member is not one.
+	// taken next sequences from (ast.IsSuccessionSource). An unnamed member clears it.
 	last      string
 	lastSpan  source.Span
 	lastNode  ast.Node // that member itself, the end a `then` beside an unnamed member binds
-	hasMember bool     // whether any member precedes, named or not
+	hasMember bool     // whether a member a `then` sequences from precedes, named or not
 
 	// pending is set between taking a `then` and adding the member it prefixes;
 	// valid is false once it has been diagnosed, so a bad succession is reported
@@ -255,7 +255,7 @@ func (b *bodyBuilder) takeSuccession() {
 	case illegal:
 		p.error(tok.Span, fmt.Sprintf("`then` cannot sequence %s: it sequences the members either side of it, which the notation allows only before an occurrence usage such as a part, item, action or state", what))
 	case !b.hasMember:
-		p.error(tok.Span, "`then` has no member before it to sequence from: it sequences the member after it with the member before it, so a body cannot begin with one")
+		p.error(tok.Span, "`then` has no member before it to sequence from: it sequences the member after it with the nearest feature before it, and none precedes it")
 	default:
 		return
 	}
@@ -332,11 +332,13 @@ func (b *bodyBuilder) add(m ast.Node) {
 		}
 	} else if b.lastNode != nil {
 		bindPositionalSource(memberNode(m), b.lastNode)
+	} else if !b.hasMember {
+		b.reportSourceless(memberNode(m))
 	}
 
 	target := memberDeclaredName(m)
 	b.members = append(b.members, m)
-	if !isEdgeMember(m) {
+	if ast.IsSuccessionSource(m) {
 		// An unnamed member clears the source name too: keeping an older name would
 		// sequence from a member other than the one before the keyword.
 		b.hasMember = true
@@ -354,6 +356,20 @@ func (b *bodyBuilder) add(m ast.Node) {
 		edge.Target, edge.TargetMember = nil, memberNode(m)
 	}
 	b.members = append(b.members, edge)
+}
+
+// reportSourceless diagnoses a one-name edge (`then b;`, `if x then b;`, `else b;`)
+// that no member a succession can sequence from precedes, as takeSuccession does
+// for a member-attached `then`.
+func (b *bodyBuilder) reportSourceless(m ast.Node) {
+	if unnamedEdgeSource(m) == nil {
+		return
+	}
+	word := "then"
+	if edge, ok := m.(*ast.ControlFlowEdge); ok && edge.IsElse {
+		word = "else"
+	}
+	b.p.error(m.Span(), "`"+word+"` has no member before it to sequence from: it sequences the member it names with the nearest feature before it, and none precedes it")
 }
 
 // bindPositionalSource binds the source of a one-name edge (`then b;`, `if x
@@ -408,25 +424,6 @@ func unnamedEdgeSource(m ast.Node) **ast.QualifiedName {
 		return nil
 	}
 	return end
-}
-
-// isEdgeMember reports whether a member is an edge between other members, which
-// declares no name of its own for a succession to reference.
-func isEdgeMember(m ast.Node) bool {
-	switch n := m.(type) {
-	case *ast.Membership:
-		return n.Member != nil && isEdgeMember(n.Member)
-	case *ast.SuccessionEdge, *ast.ControlFlowEdge, *ast.ObjectFlowEdge, *ast.TransitionMember:
-		return true
-	case *ast.Usage:
-		// `succession first a then b;` and the connector forms are usages of an edge kind.
-		switch n.Kind {
-		case ast.UsageSuccession, ast.UsageTransition, ast.UsageConnector,
-			ast.UsageFlow, ast.UsageBinding:
-			return true
-		}
-	}
-	return false
 }
 
 // finish returns the body's members, reporting a `then` that no member follows.

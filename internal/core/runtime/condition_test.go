@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -17,8 +18,9 @@ import (
 func conditionFixture(t *testing.T, src string) (*Context, *symbols.Scope) {
 	t.Helper()
 	file := parser.New(source.New("test.sysml", []byte(src))).ParseFile()
-	idx := symbols.NewIndex()
+	idx := libs.NewModelIndex()
 	idx.AddDocument("test.sysml", file)
+	idx.ExpandWildcardImports()
 	resolver := resolve.New(idx)
 	ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
 	return ctx, idx.DocumentRoot("test.sysml").Children()[0]
@@ -38,6 +40,7 @@ func requirementNamed(t *testing.T, scope *symbols.Scope, name string) *symbols.
 func TestRequirementConditionSeesOwnAttributes(t *testing.T) {
 	src := `
 		package test {
+			private import RealFunctions::*;
 			requirement def TouchdownRequirement {
 				attribute actualVerticalSpeed;
 				attribute maxVerticalSpeed;
@@ -95,6 +98,7 @@ func TestRequirementConditionSeesOwnAttributes(t *testing.T) {
 func TestRequirementConditionWithoutValueIsNotUnresolved(t *testing.T) {
 	src := `
 		package test {
+			private import RealFunctions::*;
 			requirement def TouchdownRequirement {
 				attribute actualVerticalSpeed;
 				attribute maxVerticalSpeed;

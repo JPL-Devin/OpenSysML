@@ -1,6 +1,7 @@
 package export_test
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -11,16 +12,16 @@ import (
 // ownershipModel nests packages, definitions, usages and a state's entry action,
 // so it covers ownership by a namespace and ownership by a relationship.
 const ownershipModel = `package Outer {
-	package Inner {
-		part def Vehicle {
-			attribute mass;
-			private part wheel;
-		}
-		state def Modes {
-			entry action warm;
-			state off;
-		}
-	}
+    package Inner {
+        part def Vehicle {
+            attribute mass;
+            private part wheel;
+        }
+        state def Modes {
+            entry action warm;
+            state off;
+        }
+    }
 }
 `
 
@@ -201,15 +202,57 @@ func TestOwnershipComesBackFromTheMembershipsAlone(t *testing.T) {
 	}
 }
 
-// The negative control for the test above: with every ownership property gone
-// the tree flattens, which is what makes those properties load-bearing.
-func TestWithoutAnyOwnershipPropertyTheTreeFlattens(t *testing.T) {
+// elementSideOwnership are the properties an element states its owner with; a
+// membership states the same edge from its own side.
+var elementSideOwnership = []string{"sysx:sourceText", "sysml:owningNamespace", "sysml:owner", "sysml:owningMembership", "sysml:owningRelationship"}
+
+// A graph built from the abstract syntax may state ownership from the membership
+// alone — sysml:membershipOwningNamespace and sysml:memberElement, with no
+// inverse on the member — and the tree comes back from that. An entry action is
+// owned by a membership that is an element in its own right, which no membership
+// edge states, so it alone floats to the root.
+func TestOwnershipComesBackFromTheMembershipSideAlone(t *testing.T) {
 	turtle, err := export.Convert("m.sysml", []byte(ownershipModel), export.FormatSysML, export.FormatTurtle)
 	if err != nil {
 		t.Fatalf("to turtle: %v", err)
 	}
 	stripped := turtle
-	for _, property := range []string{"sysx:sourceText", "sysml:owningNamespace", "sysml:owner", "sysml:owningMembership", "sysml:owningRelationship"} {
+	for _, property := range elementSideOwnership {
+		stripped = withoutTriples(t, stripped, property)
+	}
+	back, err := export.Convert("m.ttl", stripped, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from the membership side alone: %v", err)
+	}
+	const want = `package Outer {
+    package Inner {
+        part def Vehicle {
+            attribute mass;
+            private part wheel;
+        }
+        state def Modes {
+            entry;
+            state off;
+        }
+    }
+}
+action warm;
+`
+	if string(back) != want {
+		t.Errorf("the memberships did not carry the tree\n--- want ---\n%s\n--- got ---\n%s", want, back)
+	}
+}
+
+// The negative control for the tests above: with every ownership property gone
+// from the elements and the memberships gone with them, the tree flattens, which
+// is what makes those properties load-bearing.
+func TestWithoutAnyOwnershipPropertyTheTreeFlattens(t *testing.T) {
+	turtle, err := export.Convert("m.sysml", []byte(ownershipModel), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	stripped := withoutMemberships(turtle)
+	for _, property := range elementSideOwnership {
 		stripped = withoutTriples(t, stripped, property)
 	}
 	back, err := export.Convert("m.ttl", stripped, export.FormatTurtle, export.FormatSysML)
@@ -219,6 +262,19 @@ func TestWithoutAnyOwnershipPropertyTheTreeFlattens(t *testing.T) {
 	if !strings.HasPrefix(string(back), "package Outer {\n}\n") {
 		t.Errorf("the package should have lost its members, since nothing states them:\n%s", back)
 	}
+}
+
+// withoutMemberships drops the subjects that state ownership rather than a
+// declaration: the memberships this tool mints, whose IRIs end in _om.
+func withoutMemberships(turtle []byte) []byte {
+	var kept []string
+	for _, block := range strings.Split(string(turtle), "\n\n") {
+		if head, _, _ := strings.Cut(block, "\n"); strings.HasSuffix(head, "_om") {
+			continue
+		}
+		kept = append(kept, block)
+	}
+	return []byte(strings.Join(kept, "\n\n"))
 }
 
 // A graph in the compact shape this tool wrote before memberships were
@@ -282,5 +338,42 @@ elmt:Outer__Vehicle_om
 	}
 	if !strings.Contains(err.Error(), "sysml:memberElement") {
 		t.Errorf("the report should name the property it needs: %v", err)
+	}
+}
+
+// A membership whose end names no element of the graph is reported rather than
+// dropped: the owner would be written without the member it owns.
+func TestMembershipWithAnAbsentEndIsReported(t *testing.T) {
+	const graph = `@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ex: <urn:example:> .
+
+ex:P a sysml:Package ; sysml:qualifiedName "P" ; sysml:declaredName "P" .
+ex:C a sysml:CalculationDefinition ; sysml:qualifiedName "P::C" ; sysml:declaredName "C" ; sysml:owningMembership ex:C_m .
+ex:C_m a sysml:OwningMembership ; sysml:membershipOwningNamespace ex:P ; sysml:memberElement ex:C .
+ex:r_m a sysml:ResultExpressionMembership ; sysml:membershipOwningNamespace ex:C ; sysml:ownedMemberFeature ex:r ; sysml:ownedResultExpression ex:r .
+ex:r a sysml:OperatorExpression ; sysml:operator "+" ; sysml:argument ex:r_a, ex:r_b .
+ex:r_a a sysml:LiteralInteger ; sysml:value "2"^^xsd:integer .
+ex:r_b a sysml:LiteralInteger ; sysml:value "3"^^xsd:integer .
+`
+	if _, err := export.Convert("m.ttl", []byte(graph), export.FormatTurtle, export.FormatSysML); err != nil {
+		t.Fatalf("the intact graph should convert: %v", err)
+	}
+	for _, tc := range []struct{ end, from, to, want string }{
+		{"member", "sysml:ownedMemberFeature ex:r ; sysml:ownedResultExpression ex:r .", "sysml:ownedMemberFeature ex:gone ; sysml:ownedResultExpression ex:gone .", "its member <urn:example:gone> is not an element of the graph"},
+		{"owning namespace", "sysml:membershipOwningNamespace ex:C ; sysml:ownedMemberFeature", "sysml:membershipOwningNamespace ex:nowhere ; sysml:ownedMemberFeature", "its owning namespace <urn:example:nowhere> is not an element of the graph"},
+	} {
+		broken := strings.Replace(graph, tc.from, tc.to, 1)
+		if broken == graph {
+			t.Fatalf("the %s was not rewritten", tc.end)
+		}
+		_, err := export.Convert("m.ttl", []byte(broken), export.FormatTurtle, export.FormatSysML)
+		var unsupported *export.UnsupportedError
+		if !errors.As(err, &unsupported) {
+			t.Fatalf("a membership with an absent %s should be an UnsupportedError, got %v", tc.end, err)
+		}
+		if !strings.Contains(err.Error(), "the membership <urn:example:r_m>") || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("for an absent %s:\n got %v\nwant %s", tc.end, err, tc.want)
+		}
 	}
 }

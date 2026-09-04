@@ -35,17 +35,6 @@ func (p *Parser) reservedWord(w string) bool {
 	return lexer.IsKeywordIn(w, kind)
 }
 
-// nameToken reports whether a consumed token spells a declaration's name.
-func (p *Parser) nameToken(t lexer.Token) bool {
-	switch t.Kind {
-	case lexer.Identifier, lexer.UnrestrictedName:
-		return true
-	case lexer.Keyword:
-		return !p.reservedWord(t.KeywordID)
-	}
-	return false
-}
-
 // atNameOrKeyword reports whether the current token can begin a name segment,
 // including keywords used as identifiers (relaxed parsing for identification).
 func (p *Parser) atNameOrKeyword() bool {
@@ -796,13 +785,18 @@ func (p *Parser) identificationThenFrom() bool {
 	return t.Kind == lexer.Keyword && t.KeywordID == "from"
 }
 
-// parsePrefixMetadata parses zero or more `# QualifiedName` prefix annotations.
+// parsePrefixMetadata parses zero or more `# QualifiedName` prefix annotations
+// (SysML.xtext PrefixMetadataUsage). A keyword is allowed as the type name
+// (`#scenario`, `#cause`).
 func (p *Parser) parsePrefixMetadata() []*ast.PrefixMetadata {
 	var prefixes []*ast.PrefixMetadata
 	for p.at(lexer.Hash) {
 		start := p.peek().Span.Offset
 		p.advance() // #
-		qn := p.parseQualifiedName()
+		qn := p.parseQualifiedNameRelaxed()
+		if qn == nil {
+			continue
+		}
 		pm := &ast.PrefixMetadata{Type: qn}
 		pm.NodeSpan = p.spanFrom(start)
 		prefixes = append(prefixes, pm)
@@ -847,28 +841,9 @@ func (p *Parser) parseNamespace(start int) ast.Node {
 }
 
 // prefixLookahead returns the buffer index of the token following all
-// leading `# QualifiedName` prefixes, without consuming anything.
+// leading `# [$::] QualifiedName` prefixes, without consuming anything.
 func (p *Parser) prefixLookahead() int {
-	i := 0
-	for p.peekN(i).Kind == lexer.Hash {
-		i++ // '#'
-		// QualifiedName: Name (:: Name)*
-		// Allow keywords as metadata type names (e.g., #scenario, #cause)
-		k := p.peekN(i).Kind
-		if k != lexer.Identifier && k != lexer.UnrestrictedName && k != lexer.Keyword {
-			return i
-		}
-		i++
-		for p.peekN(i).Kind == lexer.ColonColon {
-			i++
-			k := p.peekN(i).Kind
-			if k != lexer.Identifier && k != lexer.UnrestrictedName && k != lexer.Keyword {
-				return i
-			}
-			i++
-		}
-	}
-	return i
+	return p.prefixMetadataEndAt(0)
 }
 
 func (p *Parser) leadingPrefixIsPackage() bool {

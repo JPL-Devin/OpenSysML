@@ -489,7 +489,7 @@ func (p *Parser) parseConstructor(start int) ast.Node {
 	qn := p.parseQualifiedName()
 	c := &ast.ConstructorExpr{Type: qn}
 	if p.at(lexer.LParen) {
-		c.Args, _ = p.parseArgList()
+		c.Args, c.NamedArgs = p.parseArgList()
 	}
 	c.NodeSpan = p.spanFrom(start)
 	return c
@@ -583,11 +583,9 @@ func (p *Parser) parseBodyExpr(start int) ast.Node {
 	p.advance() // {
 	b := &ast.BodyExpr{}
 
-	// Parse optional doc comment at start of body expression
+	// A body may open with documentation, a member of the body like its features.
 	if p.atKeyword("doc") {
-		// Skip doc comment - not stored in BodyExpr AST node
-		// Doc is part of the body expression context but not the expression itself
-		p.parseDocumentation(p.peek().Span.Offset)
+		b.Members = append(b.Members, p.parseDocumentation(p.peek().Span.Offset))
 	}
 
 	// Check for shorthand param syntax: {name : Type; expr} without "in" keyword

@@ -161,20 +161,19 @@ func TestRequirementEvaluation_SubjectNotFound(t *testing.T) {
 }
 
 func TestRequirementEvaluation_Complete(t *testing.T) {
-	t.Skip("TODO: instance references in expressions not yet implemented (vehicle != null requires instance model)")
 	src := `
 		package test {
 			part def Vehicle;
 			part def Driver;
 			
-			part vehicle : Vehicle;
-			part driver : Driver;
+			part car : Vehicle;
+			part pilot : Driver;
 			
 			requirement SafetyReq {
-				subject vehicle : Vehicle;
-				actor driver : Driver;
+				subject vehicle : Vehicle = car;
+				actor driver : Driver = pilot;
 				assume constraint { vehicle != null }
-				require constraint { 50 < 100 }
+				require constraint { driver != null and 50 < 100 }
 			}
 		}
 	`
@@ -201,7 +200,7 @@ func TestRequirementEvaluation_Complete(t *testing.T) {
 		t.Fatal("SafetyReq not found")
 	}
 
-	// Evaluate - should pass (subject/actor exist, assume passes, require is true)
+	// Evaluate - should pass (subject and actor are bound, assume passes, require is true)
 	satisfied, err := ctx.EvaluateRequirement(reqSym, testPkg)
 	if err != nil {
 		t.Fatalf("Complete requirement evaluation failed: %v", err)

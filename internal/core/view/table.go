@@ -10,6 +10,9 @@ import (
 // the notation calls it, the type it is declared with, and what declares it.
 var tableColumns = []string{"Element", "Kind", "Type", "Declared in"}
 
+// TableColumns are the headings a tabular rendering carries when it names none.
+func TableColumns() []string { return append([]string(nil), tableColumns...) }
+
 // renderTable renders the exposed elements as rows of a table: one row per
 // exposed element, one per element declared in it, and one per view nested in
 // the rendered view with its own exposed elements beneath it.

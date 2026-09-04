@@ -1,6 +1,6 @@
 # Testing Strategy
 
-OpenSysML uses a **multi-layer test contract** to ensure correctness and prevent regressions across parsing, semantic analysis, and execution.
+OpenSysML uses a **multi-layer test contract** to keep parsing, semantic analysis, and execution correct and to catch regressions in each.
 
 ## Test Organization
 

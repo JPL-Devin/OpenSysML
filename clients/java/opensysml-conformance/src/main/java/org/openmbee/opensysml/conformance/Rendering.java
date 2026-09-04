@@ -40,6 +40,11 @@ final class Rendering {
       builder.setIntValue(integral.value());
     } else if (value instanceof Value.RealValue real) {
       builder.setRealValue(real.value());
+    } else if (value instanceof Value.ComplexValue complex) {
+      builder.setComplex(
+          org.openmbee.opensysml.proto.Complex.newBuilder()
+              .setReal(complex.real())
+              .setImaginary(complex.imaginary()));
     } else if (value instanceof Value.BooleanValue flag) {
       builder.setBoolValue(flag.value());
     } else if (value instanceof Value.StringValue text) {

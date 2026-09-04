@@ -1,0 +1,7 @@
+{
+	"type": "action",
+	"trace": true,
+	"outputs": {
+		"hits": {"type": "Integer", "value": 1}
+	}
+}

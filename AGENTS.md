@@ -64,6 +64,12 @@ expectation file holds no per-file counts and `-update-training` refuses to reco
 the other three are a **per-file ratchet** whose every movement must be adjudicated. Do not
 turn the assertion into a ratchet.
 
+The RDF mapping has a per-file ratchet of its own over every model under `examples/`, the
+downloaded corpora included: `TestCorpusRoundTrip` in `internal/core/export` converts each file
+notation → Turtle → notation → Turtle and pins the verdict. Run it with both require variables
+set after any change to `internal/core/export`, adjudicate every movement, then regenerate with
+`-update-corpus-roundtrip`. See `docs/project/rdf-corpus-roundtrip.md`.
+
 ---
 
 ## 3. Repository Map
@@ -146,6 +152,10 @@ Then update `docs/project/spec-compliance.md` mapping: semantic rule → impleme
 ## 7. Code Style & Commits
 
 - **Formatting:** `gofmt` is mandatory (CI-enforced). Follow *Effective Go*. Document exported types/functions.
+- **Changelog: add a fragment, never edit `CHANGELOG.md`.** Write the entry to
+  `changes/unreleased/<slug>.<section>.md` (`<section>` is `added`, `changed`, `fixed`, …; body is
+  the list item(s) only — see the README there). Concurrent PRs then cannot conflict on the changelog;
+  the release procedure folds fragments in. `python3 scripts/changelog.py check` validates them.
 - **Comments:** don't add or remove comments/docs unrelated to your change.
 - **Commit messages — Conventional Commits:** `<type>(<scope>): <description>`
   - types: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`
@@ -155,7 +165,7 @@ Then update `docs/project/spec-compliance.md` mapping: semantic rule → impleme
   classes (`K5`, `S10`) are this project's private bookkeeping — a reader has nothing to resolve them
   against. Write what the change *did* instead: not "F3 unreserved these four", but "these four are
   unreserved by file kind".
-  - This applies to `CHANGELOG.md`, `README.md`, `docs/guide/`, `docs/reference/`, `docs/internals/`,
+  - This applies to `CHANGELOG.md` and `changes/unreleased/`, `README.md`, `docs/guide/`, `docs/reference/`, `docs/internals/`,
     doc comments, diagnostic messages, **and equally to PR titles/bodies, release notes and GitHub
     comments** — CI only guards the files (`python3 scripts/check-doc-ids.py`, or `make docs-check`
     with the link checker), so the prose you write around them is on you.

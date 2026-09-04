@@ -223,6 +223,92 @@ item p {
 	}
 }
 
+// Declarations nested in a metadata body redefine the members of the feature
+// the enclosing declaration redefines, in either language and at any depth.
+func TestMetadataBodyNestedDeclarationsFollowTheRedefinedFeature(t *testing.T) {
+	kerml := `package P {
+	class U { feature d; }
+	class T { feature b; feature c : U; }
+	metaclass M { feature a : T; }
+	class C {
+		@M { a { b = 1; c { d = 2; } } }
+	}
+	metadata m : M about C { :>> a { b = 3; c { d = 4; } } }
+}
+`
+	sysml := strings.NewReplacer(
+		"class U", "attribute def U",
+		"class T", "attribute def T",
+		"class C", "part def C",
+		"metaclass", "metadata def",
+		"feature", "attribute",
+	).Replace(kerml)
+	for file, src := range map[string]string{"/tmp/metanest.kerml": kerml, "/tmp/metanest.sysml": sysml} {
+		ws := model.NewWorkspace()
+		s := NewServer(ws)
+		name := uri.File(file).Filename()
+		ws.Open(name, []byte(src), 1)
+		keyword := "feature "
+		if strings.HasSuffix(file, ".sysml") {
+			keyword = "attribute "
+		}
+		at := func(anchor string) protocol.TextDocumentPositionParams {
+			return protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+				Position:     offsetToPosition([]byte(src), strings.Index(src, anchor)),
+			}
+		}
+		for anchor, want := range map[string]string{
+			"b = 1": "P::T::b",
+			"d = 2": "P::U::d",
+			"b = 3": "P::T::b",
+			"d = 4": "P::U::d",
+		} {
+			locs, err := s.Definition(context.Background(), &protocol.DefinitionParams{TextDocumentPositionParams: at(anchor)})
+			if err != nil {
+				t.Fatalf("%s: Definition err = %v", file, err)
+			}
+			if len(locs) != 1 {
+				t.Fatalf("%s: definitions of %q = %d, want 1", file, anchor, len(locs))
+			}
+			leaf := want[strings.LastIndex(want, "::")+2:]
+			wantOffset := strings.Index(src, keyword+leaf+";")
+			if got := positionToOffset([]byte(src), locs[0].Range.Start); got != wantOffset {
+				t.Errorf("%s: definition of %q at offset %d, want %d (%s)", file, anchor, got, wantOffset, want)
+			}
+			h, err := s.Hover(context.Background(), &protocol.HoverParams{TextDocumentPositionParams: at(anchor)})
+			if err != nil || h == nil {
+				t.Fatalf("%s: Hover on %q = %v, %v", file, anchor, h, err)
+			}
+			if !strings.Contains(h.Contents.Value, "redefines "+want) {
+				t.Errorf("%s: hover on %q = %q, want it to redefine %s", file, anchor, h.Contents.Value, want)
+			}
+		}
+		for anchor, want := range map[string][]string{
+			"b = 1": {"b", "c"},
+			"d = 2": {"d"},
+			"d = 4": {"d"},
+		} {
+			list, err := s.Completion(context.Background(), &protocol.CompletionParams{TextDocumentPositionParams: at(anchor)})
+			if err != nil {
+				t.Fatalf("%s: Completion err = %v", file, err)
+			}
+			labels := map[string]bool{}
+			for _, item := range list.Items {
+				labels[item.Label] = true
+			}
+			for _, label := range want {
+				if !labels[label] {
+					t.Errorf("%s: completion at %q = %v, want %s", file, anchor, labels, label)
+				}
+			}
+			if labels["a"] || labels["M"] || labels["C"] {
+				t.Errorf("%s: completion at %q = %v, must offer only the nested feature's members", file, anchor, labels)
+			}
+		}
+	}
+}
+
 func TestMetadataBodyDocumentSymbols(t *testing.T) {
 	s, name := openMetadataBodyDoc(t)
 

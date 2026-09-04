@@ -27,6 +27,9 @@ type exprChecker struct {
 	// being checked twice when its type is inferred more than once.
 	walkMembers   func(*symbols.Scope, []ast.Node)
 	bodiesChecked map[*ast.BodyExpr]bool
+	// performed are the calls that are the values of action usages, which run
+	// an action rather than evaluate a behavior (see performs).
+	performed map[*ast.InvocationExpr]bool
 }
 
 func (ec *exprChecker) errorf(span source.Span, format string, args ...any) {
@@ -49,25 +52,57 @@ func (ec *exprChecker) warnf(span source.Span, format string, args ...any) {
 	})
 }
 
-// checkUsageValue checks a feature's bound value (`attribute x : T = expr`)
+// checkDeclValue checks a feature's bound value (`attribute x : T = expr`)
 // against the type and multiplicity the feature declares.
-func (ec *exprChecker) checkUsageValue(scope *symbols.Scope, u *ast.Usage) {
-	if u.Value == nil {
+func (ec *exprChecker) checkDeclValue(scope *symbols.Scope, d featureDecl) {
+	if d.value == nil {
 		return
 	}
-	ec.checkBoundValue(scope, scope, u, u.Value)
+	if u, ok := d.node.(*ast.Usage); ok {
+		ec.markPerformed(u.PerformedInvocation())
+	}
+	// The node's own body folds over the parameters of an invocation written as
+	// its value (`action n = B(a = 1) { in b = 2; }`).
+	var node *symbols.Symbol
+	if body := scope.ChildFor(d.node); body != nil {
+		node = body.Owner()
+	}
+	ec.checkBoundValue(scope, scope, d, d.value, node)
+}
+
+// checkPerform types the action a `perform` statement runs.
+func (ec *exprChecker) checkPerform(scope *symbols.Scope, n *ast.PerformActionNode) {
+	ec.markPerformed(n.PerformedInvocation())
+	ec.infer(scope, n.ActionRef)
+}
+
+// markPerformed records inv, when not nil, as a call that runs an action.
+func (ec *exprChecker) markPerformed(inv *ast.InvocationExpr) {
+	if inv == nil {
+		return
+	}
+	if ec.performed == nil {
+		ec.performed = map[*ast.InvocationExpr]bool{}
+	}
+	ec.performed[inv] = true
 }
 
 // checkBoundValue checks a value against the type and multiplicity of the
 // feature it is bound to. The value's names resolve in valueScope and the
 // feature's declaration in declScope, which differ when the value is written by
-// an assignment rather than declared on the feature.
-func (ec *exprChecker) checkBoundValue(valueScope, declScope *symbols.Scope, u *ast.Usage, value ast.Node) {
-	want := ec.declaredPrimType(declScope, u.Relationships)
+// an assignment rather than declared on the feature. node is the feature's own
+// symbol when the value is declared on it, or nil.
+func (ec *exprChecker) checkBoundValue(valueScope, declScope *symbols.Scope, d featureDecl, value ast.Node, node *symbols.Symbol) {
+	want := ec.declaredPrimType(declScope, d.relationships)
 	// A collection literal binds elementwise, so each element is checked
 	// against the feature's type rather than the sequence as a whole.
 	for _, element := range valueElements(value) {
-		got := ec.infer(valueScope, element)
+		var got semantics.PrimType
+		if inv, ok := element.(*ast.InvocationExpr); ok && node != nil {
+			got = ec.inferNodeInvocation(valueScope, inv, node)
+		} else {
+			got = ec.infer(valueScope, element)
+		}
 		if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
 			continue
 		}
@@ -75,9 +110,9 @@ func (ec *exprChecker) checkBoundValue(valueScope, declScope *symbols.Scope, u *
 			ec.errorf(element.Span(), "cannot bind %s value to a feature typed by %s", got, want)
 		}
 	}
-	ec.checkValueConformance(valueScope, declScope, u, value)
-	ec.checkValueDimension(valueScope, declScope, u, value)
-	ec.checkValueCount(declScope, u, value)
+	ec.checkValueConformance(valueScope, declScope, d, value)
+	ec.checkValueDimension(valueScope, declScope, d, value)
+	ec.checkValueCount(declScope, d, value)
 }
 
 // bindable reports whether a got-typed value may bind to a want-typed feature: a literal's
@@ -192,6 +227,9 @@ func (ec *exprChecker) infer(scope *symbols.Scope, n ast.Node) semantics.PrimTyp
 		return ec.inferOperator(scope, e)
 	case *ast.InvocationExpr:
 		return ec.inferInvocation(scope, e)
+	case *ast.ConstructorExpr:
+		// An instance has no scalar type; the arguments are checked in place.
+		return ec.inferConstructor(scope, e)
 	case *ast.SequenceExpr:
 		// A sequence has no scalar type of its own; walking the elements keeps
 		// errors inside them reported.
@@ -619,34 +657,47 @@ func (ec *exprChecker) operands(scope *symbols.Scope, e *ast.OperatorExpr) (sema
 	return ec.infer(scope, e.Operands[0]), ec.infer(scope, e.Operands[1]), true
 }
 
-// inferInvocation checks the argument list of a calc/action invocation against
-// the invoked behavior's `in` parameters. In the arrow form `x->f(a)` the
-// receiver binds to the first parameter, so it is prepended to the arguments.
+// inferInvocation checks a call's arguments against the `in` parameters of the declaration
+// SelectInvocation chose and types it by its result; a receiver `x->f(a)` is the first argument.
 func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationExpr) semantics.PrimType {
-	args := e.Args
-	if e.Operand != nil {
-		args = append([]ast.Node{e.Operand}, args...)
-	}
+	return ec.inferNodeInvocation(scope, e, nil)
+}
+
+// inferNodeInvocation is inferInvocation for an invocation performed by node,
+// whose body parameters redefine the invoked ones; node is nil for a bare call.
+func (ec *exprChecker) inferNodeInvocation(scope *symbols.Scope, e *ast.InvocationExpr, node *symbols.Symbol) semantics.PrimType {
+	args := invocationArgs(e)
 	// Typed once and reused by checkArguments, so nested errors report once.
-	argTypes := make([]semantics.PrimType, len(args))
-	for i, arg := range args {
-		argTypes[i] = ec.infer(scope, arg)
-	}
-	for _, arg := range e.NamedArgs {
-		ec.infer(scope, arg.Value)
-	}
+	argTypes := ec.argumentTypes(scope, e)
 	if e.Type == nil {
+		for _, arg := range e.NamedArgs {
+			ec.infer(scope, arg.Value)
+		}
 		return semantics.PrimUnknown
 	}
-	sym, ok := ec.resolver.ResolveQualified(scope, e.Type)
-	if !ok || sym == nil {
+	performs := ec.performs(e)
+	sel := ec.selectInvocation(scope, e, argTypes, performs)
+	if !sel.Resolved() {
 		return semantics.PrimUnknown
 	}
-	resolved, aliasOK := ec.resolver.ResolveAliasTarget(sym)
-	if !aliasOK {
+	if sel.Ambiguous {
+		ec.diags = append(ec.diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     e.Type.Span(),
+			Message: fmt.Sprintf("call of %s is ambiguous between %s",
+				e.Type.Parts[len(e.Type.Parts)-1].Text, candidateNames(sel.Tied)),
+			Code:   "invocation-ambiguous",
+			Source: "type",
+		})
 		return semantics.PrimUnknown
 	}
-	sym = resolved
+	// With no candidate the arguments fit, the first is checked as before and
+	// the diagnostic names the rest.
+	var considered []*symbols.Symbol
+	sym := sel.Called()
+	if sel.Selected == nil {
+		considered = sel.Candidates
+	}
 	if !ec.isInvocationBehavior(sym, map[*symbols.Symbol]bool{}) {
 		if ec.isDefinitelyNonBehavior(sym) {
 			ec.diags = append(ec.diags, Diagnostic{
@@ -659,69 +710,307 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 		}
 		return semantics.PrimUnknown
 	}
+	// A performed call runs its behavior, so it must name an action (SysML v2
+	// §8.3.16.7 validatePerformActionUsage), as the runtime requires.
+	if performs == semantics.PerformsAction && !ec.model.Performable(performs, sym) {
+		ec.diags = append(ec.diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     e.Type.Span(),
+			Message:  msgReferenceAction,
+			Code:     "usage-reference-kind",
+			Source:   "type",
+		})
+		return semantics.PrimUnknown
+	}
 	if isInvocationBehaviorKind(sym.Kind) && !isBehaviorKind(sym.Kind) {
 		return semantics.PrimUnknown
 	}
-	params, ok := ec.effectiveInParameters(sym)
+	params, ok := ec.effectiveInParameters(sym, node)
 	if !ok {
 		return semantics.PrimUnknown
 	}
-	ec.checkArguments(e, sym, args, argTypes, params)
-	return semantics.PrimUnknown
+	ec.checkArguments(e, sym, args, argTypes, params, considered)
+	if considered != nil {
+		return semantics.PrimUnknown
+	}
+	return ec.model.PrimTypeOf(ec.model.ResultParameterOf(sym))
 }
 
+// checkArguments reports the arguments of e that do not bind to sym's `in` parameters,
+// listing considered (the other declarations the call could name) on each report.
 func (ec *exprChecker) checkArguments(
 	e *ast.InvocationExpr,
 	sym *symbols.Symbol,
 	args []ast.Node,
-	argTypes []semantics.PrimType,
+	argTypes argumentTypes,
 	params []parameter,
+	considered []*symbols.Symbol,
 ) {
+	report := ec.errorf
+	if len(considered) > 1 {
+		suffix := " (candidates: " + candidateNames(considered) + ")"
+		report = func(span source.Span, format string, args ...any) {
+			ec.errorf(span, "%s"+suffix, fmt.Sprintf(format, args...))
+		}
+	}
 	if len(e.NamedArgs) > 0 {
-		// A receiver binds by position, so which parameter it binds to is
-		// unstated beside arguments that bind by name (runtime/eval.go reports
-		// the same call).
-		if e.Operand != nil {
-			ec.errorf(e.Span(), "%s cannot be called with a receiver and named arguments", sym.Name)
-		}
-		names := make(map[string]bool, len(params))
-		for _, p := range params {
-			names[p.name()] = true
-		}
-		for _, arg := range e.NamedArgs {
-			if arg.Name == nil || len(arg.Name.Parts) != 1 {
-				continue
-			}
-			if name := arg.Name.Parts[0].Text; !names[name] {
-				ec.errorf(e.Span(), "%s has no parameter named %q", sym.Name, name)
-			}
-		}
+		ec.checkNamedArguments(e, sym, argTypes.named, params, report)
 		return
 	}
+	// Arguments bind in order, so a call must reach the last required parameter.
 	required := 0
-	for _, p := range params {
-		if p.usage.Value == nil {
-			required++
+	for i, p := range params {
+		if p.required(ec.model) {
+			required = i + 1
 		}
 	}
 	switch {
 	case len(args) > len(params):
-		ec.errorf(e.Span(), "%s takes %d argument(s), found %d", sym.Name, len(params), len(args))
+		report(e.Span(), "%s takes %d argument(s), found %d", sym.Name, len(params), len(args))
 		return
 	case len(args) < required:
-		ec.errorf(e.Span(), "%s requires %d argument(s), found %d", sym.Name, required, len(args))
+		report(e.Span(), "%s requires %d argument(s), found %d", sym.Name, required, len(args))
 		return
 	}
 	for i, arg := range args {
-		want := ec.declaredPrimType(params[i].scope(), params[i].usage.Relationships)
-		got := argTypes[i]
-		if want == semantics.PrimUnknown || got == semantics.PrimUnknown {
-			continue
-		}
-		if !bindable(arg, got, want) {
-			ec.errorf(arg.Span(), "argument %d of %s expects %s, found %s", i+1, sym.Name, want, got)
+		if mismatch := ec.argumentMismatch(arg, argTypes.positional[i], params[i]); mismatch != "" {
+			report(arg.Span(), "argument %d of %s %s", i+1, sym.Name, mismatch)
 		}
 	}
+}
+
+// inferConstructor checks the arguments of `new T(…)` against T's features: a
+// positional argument binds the feature at its position, a label the feature it
+// names, and a feature is bound at most once.
+func (ec *exprChecker) inferConstructor(scope *symbols.Scope, e *ast.ConstructorExpr) semantics.PrimType {
+	argTypes := make([]semantics.PrimType, len(e.Args))
+	for i, a := range e.Args {
+		argTypes[i] = ec.infer(scope, a)
+	}
+	namedTypes := make([]semantics.PrimType, len(e.NamedArgs))
+	for i, na := range e.NamedArgs {
+		namedTypes[i] = ec.infer(scope, na.Value)
+	}
+	if e.Type == nil {
+		return semantics.PrimUnknown
+	}
+	typ := ec.resolveTarget(scope, e.Type)
+	if typ == nil {
+		return semantics.PrimUnknown
+	}
+	// Only a Type is instantiated (KerML §8.3.4.8 validateInstantiationExpressionInstantiatedType).
+	if !isTypeKind(typ.Kind) {
+		ec.diags = append(ec.diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     e.Type.Span(),
+			Message:  fmt.Sprintf("Must have an invoked/instantiated type: %s is a %s, not a type", typ.Name, typ.Kind),
+			Code:     "instantiation-not-type",
+			Source:   "type",
+		})
+		return semantics.PrimUnknown
+	}
+	features := ec.model.ConstructibleFeatures(typ)
+	bound := make(map[*symbols.Symbol]bool, len(features))
+	for i, arg := range e.Args {
+		if i >= len(features) {
+			ec.errorf(arg.Span(), "new %s takes %d argument(s), found %d", typ.Name, len(features), len(e.Args))
+			break
+		}
+		bound[features[i]] = true
+		ec.checkFeatureBinding(scope, arg, argTypes[i], features[i], typ)
+	}
+	for i, na := range e.NamedArgs {
+		if na.Name == nil {
+			continue
+		}
+		// An unresolved label is the resolver's to report.
+		feature, ok := ec.resolver.ResolveReference(resolve.Reference{Scope: scope, QN: na.Name, Constructed: e.Type})
+		if !ok || feature == nil {
+			continue
+		}
+		if !ec.memberOf(typ, feature) {
+			ec.errorf(na.Name.Span(), "%s is not a feature of %s", ast.QualifiedText(na.Name), typ.Name)
+			continue
+		}
+		// A redefinition and its target are one feature: they share one binding.
+		slot := ec.model.ConstructibleFeatureFor(typ, feature)
+		if slot == nil {
+			ec.errorf(na.Name.Span(), "%s", notConstructible(feature, typ))
+			continue
+		}
+		if bound[slot] {
+			ec.errorf(na.Name.Span(), "%s of %s is already bound by an earlier argument", feature.Name, typ.Name)
+			continue
+		}
+		bound[slot] = true
+		ec.checkFeatureBinding(scope, na.Value, namedTypes[i], feature, typ)
+	}
+	return semantics.PrimUnknown
+}
+
+// checkFeatureBinding reports a constructor argument its feature cannot take: by
+// scalar type, by conformance to its declared or inherited type, or by count.
+func (ec *exprChecker) checkFeatureBinding(scope *symbols.Scope, arg ast.Node, got semantics.PrimType, feature, typ *symbols.Symbol) {
+	u, ok := feature.Decl.(*ast.Usage)
+	if !ok {
+		return
+	}
+	// An argument with no scalar type (an object, a constructor) is checked by
+	// conformance against the feature's types whether or not those are scalar.
+	if want := ec.model.PrimTypeOf(feature); want != semantics.PrimUnknown && got != semantics.PrimUnknown {
+		if !bindable(arg, got, want) {
+			ec.errorf(arg.Span(), "%s of %s expects %s, found %s", feature.Name, typ.Name, want, got)
+		}
+	} else {
+		ec.checkObjectBinding(scope, arg, feature, typ)
+	}
+	if count, known := exactCount(arg); known {
+		if r, ok := ec.effectiveRange(feature.OwnerScope, usageDecl(u), 0); ok {
+			if msg := r.CountViolation(count); msg != "" {
+				ec.errorf(arg.Span(), "%s of %s: %s", feature.Name, typ.Name, msg)
+			}
+		}
+	}
+}
+
+// checkObjectBinding checks each value of a constructor argument against the
+// non-scalar types its feature declares or inherits; a `new T(…)` is exactly a T.
+func (ec *exprChecker) checkObjectBinding(scope *symbols.Scope, arg ast.Node, feature, typ *symbols.Symbol) {
+	wants := w8cMostSpecific(ec.model, ec.model.DeclaredFeatureTypes(feature))
+	if len(wants) == 0 {
+		return
+	}
+	for _, value := range valueElements(arg) {
+		got := ec.argumentTypeSymbol(scope, value)
+		if got == nil {
+			continue
+		}
+		_, exact := value.(*ast.ConstructorExpr)
+		for _, want := range wants {
+			if ec.model.Conforms(got, want) || (!exact && ec.model.Conforms(want, got)) {
+				continue
+			}
+			ec.errorf(value.Span(), "%s of %s is typed by %s; cannot bind a value of type %s", feature.Name, typ.Name, want.Name, got.Name)
+		}
+	}
+}
+
+// argumentTypeSymbol resolves a value's type in scope (feature reference or
+// chain, invocation result, constructed type, literal scalar), or nil.
+func (ec *exprChecker) argumentTypeSymbol(scope *symbols.Scope, value ast.Node) *symbols.Symbol {
+	if got := ec.valueTypeSymbol(scope, value); got != nil {
+		return got
+	}
+	if got := ec.invocationResultTypeSymbol(scope, value); got != nil {
+		return got
+	}
+	if got := ec.constructedTypeSymbol(scope, value); got != nil {
+		return got
+	}
+	return ec.model.ScalarSymbol(literalPrimType(value))
+}
+
+// notConstructible words the rejection of a label for a member no constructor of
+// typ binds: a feature every object of its kind has from a more general library.
+func notConstructible(feature, typ *symbols.Symbol) string {
+	msg := fmt.Sprintf("%s is not a feature a constructor of %s binds", feature.Name, typ.Name)
+	if owner := ownerOf(feature); owner != nil && owner != typ {
+		msg += fmt.Sprintf(": %s declares it for every %s; redefine it in %s to bind it", owner.Name, owner.Name, typ.Name)
+	}
+	return msg
+}
+
+// ownerOf returns the type declaring feature, or nil.
+func ownerOf(feature *symbols.Symbol) *symbols.Symbol {
+	if feature.OwnerScope == nil {
+		return nil
+	}
+	return feature.OwnerScope.Owner()
+}
+
+// memberOf reports whether feature is a member typ declares or inherits.
+func (ec *exprChecker) memberOf(typ, feature *symbols.Symbol) bool {
+	for _, m := range ec.model.MembersOf(typ) {
+		if m == feature {
+			return true
+		}
+	}
+	return false
+}
+
+// checkNamedArguments reports named arguments that name no `in` parameter of sym or do
+// not bind to it, and default-less parameters no argument names.
+func (ec *exprChecker) checkNamedArguments(
+	e *ast.InvocationExpr,
+	sym *symbols.Symbol,
+	namedTypes []semantics.Argument,
+	params []parameter,
+	report func(source.Span, string, ...any),
+) {
+	// A receiver binds by position, which named arguments leave unstated; runtime/eval.go
+	// reports the same call.
+	if e.Operand != nil {
+		report(e.Span(), "%s cannot be called with a receiver and named arguments", sym.Name)
+		return
+	}
+	byName := make(map[string]parameter, len(params))
+	for _, p := range params {
+		byName[p.name()] = p
+	}
+	bound := make(map[string]bool, len(e.NamedArgs))
+	unknown := false
+	for i, arg := range e.NamedArgs {
+		name, ok := namedArgumentName(arg)
+		if !ok {
+			continue
+		}
+		p, declared := byName[name]
+		if !declared {
+			report(e.Span(), "%s has no parameter named %q", sym.Name, name)
+			unknown = true
+			continue
+		}
+		if bound[name] {
+			report(arg.Value.Span(), "%s binds parameter %q twice", sym.Name, name)
+			continue
+		}
+		bound[name] = true
+		if mismatch := ec.argumentMismatch(arg.Value, namedTypes[i], p); mismatch != "" {
+			report(arg.Value.Span(), "argument %s of %s %s", name, sym.Name, mismatch)
+		}
+	}
+	// A misspelt name is the likelier cause of a parameter left unbound.
+	if unknown {
+		return
+	}
+	for _, p := range params {
+		if !bound[p.name()] && p.required(ec.model) {
+			report(e.Span(), "%s requires an argument for parameter %s", sym.Name, p.name())
+		}
+	}
+}
+
+// parameterPrimType is the scalar type p is declared with, PrimUnknown when none is known.
+func (ec *exprChecker) parameterPrimType(p parameter) semantics.PrimType {
+	return ec.declaredPrimType(p.scope(), p.usage.Relationships)
+}
+
+// argumentMismatch says why value, typed got, does not bind to p ("" when it does or a type is
+// unknown): a scalar parameter is judged by the lattice, any other by declared type, a Collection
+// taking any sequence and Element the element any argument names.
+func (ec *exprChecker) argumentMismatch(value ast.Node, got semantics.Argument, p parameter) string {
+	if want := ec.parameterPrimType(p); want != semantics.PrimUnknown {
+		if got.Prim == semantics.PrimUnknown || bindable(value, got.Prim, want) {
+			return ""
+		}
+		return fmt.Sprintf("expects %s, found %s", want, got.Prim)
+	}
+	want := ec.declaredTypeSymbol(p.scope(), p.usage.Relationships)
+	if want == nil || got.Type == nil || semantics.IsCollection(want) || semantics.IsElementType(want) ||
+		ec.model.Conforms(got.Type, want) || ec.model.Conforms(want, got.Type) {
+		return ""
+	}
+	return fmt.Sprintf("expects %s, found %s", want.Name, got.Type.Name)
 }
 
 // isBehaviorKind reports the behavior kinds whose parameter lists are checked.
@@ -831,6 +1120,25 @@ func isRequirementDeclaration(decl ast.Node) bool {
 type parameter struct {
 	usage *ast.Usage
 	owner *symbols.Symbol
+	// redefined is the inherited parameter this declaration redefines, whose
+	// default and multiplicity it keeps where it states none (KerML 1.0 §7.3.4.5).
+	redefined *parameter
+}
+
+// required reports whether an invocation must supply the parameter: it has no
+// default, its own or inherited, and its multiplicity admits no omission.
+func (p parameter) required(m *semantics.Model) bool {
+	for q := &p; q != nil; q = q.redefined {
+		if q.usage.Value != nil {
+			return false
+		}
+	}
+	for q := &p; q != nil; q = q.redefined {
+		if q.usage.Multiplicity != nil {
+			return !m.IsOptionalParameter(q.usage)
+		}
+	}
+	return true
 }
 
 // name returns the name the parameter answers to, which a declaration written
@@ -853,14 +1161,19 @@ func (p parameter) scope() *symbols.Scope {
 // with, in inherited declaration order. A behavior inherits the signature of the
 // types it specializes or is typed by; a parameter it declares itself replaces
 // the inherited one it redefines and is appended otherwise, so a specialization
-// refining only a subset of them keeps the full signature. ok is false when no
-// signature can be determined, in which case the invocation is left unchecked.
-func (ec *exprChecker) effectiveInParameters(sym *symbols.Symbol) ([]parameter, bool) {
+// refining only a subset of them keeps the full signature. The parameters a
+// performing node declares in its body fold in the same way, so one it binds a
+// value to is not required of the call. ok is false when no signature can be
+// determined, in which case the invocation is left unchecked.
+func (ec *exprChecker) effectiveInParameters(sym, node *symbols.Symbol) ([]parameter, bool) {
 	// Merging runs over every parameter, because redefinition is positional
 	// over the whole parameter list (KerML 7.4.7.2), as
 	// semantics.Model.parametersOf computes it; only the invocation signature
 	// is restricted to the inputs.
 	all := ec.mergedParameters(sym, map[*symbols.Symbol]bool{})
+	if node != nil {
+		all = mergeParameters(all, node)
+	}
 	var params []parameter
 	for _, p := range all {
 		if p.usage.Direction == ast.DirIn || p.usage.Direction == ast.DirInOut {
@@ -919,7 +1232,7 @@ func mergeParameters(inherited []parameter, sym *symbols.Symbol) []parameter {
 	merged := make([]parameter, 0, len(declared)+len(inherited))
 	claimed := make([]bool, len(inherited))
 	for position, u := range declared {
-		merged = append(merged, parameter{usage: u, owner: sym})
+		p := parameter{usage: u, owner: sym}
 		i := indexOfRedefined(inherited, u)
 		if i < 0 {
 			i = position
@@ -928,7 +1241,9 @@ func mergeParameters(inherited []parameter, sym *symbols.Symbol) []parameter {
 		// inherited parameter there stays in the list.
 		if i < len(inherited) && inherited[i].usage.Direction == u.Direction {
 			claimed[i] = true
+			p.redefined = &inherited[i]
 		}
+		merged = append(merged, p)
 	}
 	for i, p := range inherited {
 		if !claimed[i] {

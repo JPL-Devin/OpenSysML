@@ -1,0 +1,10 @@
+{
+  "type": "satisfy",
+  "libraries": true,
+  "assertions": {
+    "satisfy r1 by direct": true,
+    "satisfy r2 by config.child": true,
+    "satisfy r3 by assembly.config.child": true,
+    "satisfy r4 by rig.housing.inner": false
+  }
+}

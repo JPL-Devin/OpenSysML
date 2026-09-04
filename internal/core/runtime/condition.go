@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -30,6 +31,10 @@ type Condition struct {
 	// condition stating an expression.
 	Group []Condition
 
+	// Statement is an action statement the body states before its conditions,
+	// which the evaluator does not execute; nil for a condition or a group.
+	Statement ast.Node
+
 	// Negated is the negation the declaration wrote, applied to Expr or to the
 	// whole conjunction Group stands for.
 	Negated bool
@@ -42,13 +47,11 @@ type Condition struct {
 // Label renders the condition as written, negation and grouping included.
 func (c Condition) Label() string { return conditionLabel(c) }
 
-// Owner is the element declaring the condition, which is the supertype it was
-// inherited from for an inherited one, or nil when the scope has no owner.
+// Owner is the nearest named element declaring the condition (the supertype an
+// inherited one came from), or nil; a body-local or anonymous scope is skipped.
 func (c Condition) Owner() *symbols.Symbol {
-	// A body-local scope owns no symbol, so the declaring element is the
-	// nearest enclosing scope that does.
 	for s := c.Scope; s != nil; s = s.Parent() {
-		if owner := s.Owner(); owner != nil {
+		if owner := s.Owner(); owner != nil && owner.Name != "" {
 			return owner
 		}
 	}
@@ -65,7 +68,7 @@ func (ctx *Context) ConditionsOf(sym *symbols.Symbol, scope *symbols.Scope) []Co
 	if scope == nil {
 		scope = sym.OwnerScope
 	}
-	return ctx.conditionsOf(ctx.chainMembers(sym, scope))
+	return ctx.conditionsOf(sym, ctx.chainMembers(sym, scope))
 }
 
 // scopedExpr is an expression with the scope its names resolve in.
@@ -74,15 +77,54 @@ type scopedExpr struct {
 	scope *symbols.Scope
 }
 
-// conditionsOf returns the conditions the members state, inherited ones first.
+// conditionsOf returns the conditions sym's members state, inherited ones first.
 // A member states its condition either directly (`require x < y;`, `assert x < y;`)
 // or through the body of an anonymous nested constraint (`require constraint { x < y }`).
-func (ctx *Context) conditionsOf(members []scopedMember) []Condition {
-	var out []Condition
+func (ctx *Context) conditionsOf(sym *symbols.Symbol, members []scopedMember) []Condition {
+	return ctx.appendMemberConditions(nil, sym, members, true, nil)
+}
+
+// appendMemberConditions appends the conditions sym's members state, leaving out
+// an inherited named constraint a closer one shadows or redefines (KerML 7.3.4.5);
+// an anonymous one, which no name can redefine, is always inherited.
+func (ctx *Context) appendMemberConditions(out []Condition, sym *symbols.Symbol, members []scopedMember,
+	required bool, seen map[*symbols.Symbol]bool) []Condition {
+	var effective map[*symbols.Symbol]bool
 	for _, member := range members {
-		out = ctx.appendConditions(out, member.node, member.scope, true, false, nil)
+		if owner := ctx.namedConstraintOf(member); owner != nil && owner != sym && owner.Name != "" {
+			if effective == nil {
+				effective = ctx.effectiveMembers(sym)
+			}
+			if !effective[owner] {
+				continue
+			}
+		}
+		out = ctx.appendConditions(out, member.node, member.scope, required, false, seen)
 	}
 	return out
+}
+
+// namedConstraintOf returns the constraint usage a require/assume constraint
+// member declares, named or anonymous; nil for any other member.
+func (ctx *Context) namedConstraintOf(member scopedMember) *symbols.Symbol {
+	if _, ok := ast.OwnedConstraintOf(member.node); !ok {
+		return nil
+	}
+	body := symbols.ConstraintBodyScope(member.scope, member.node)
+	if body == nil || body.Owner() == nil || body.Owner().Decl != member.node {
+		return nil
+	}
+	return body.Owner()
+}
+
+// effectiveMembers is the set of members sym has: MembersOf as a set.
+func (ctx *Context) effectiveMembers(sym *symbols.Symbol) map[*symbols.Symbol]bool {
+	members := ctx.model.MembersOf(sym)
+	set := make(map[*symbols.Symbol]bool, len(members))
+	for _, member := range members {
+		set[member] = true
+	}
+	return set
 }
 
 // appendConditions appends the conditions node states. required says whether the
@@ -103,8 +145,9 @@ func (ctx *Context) appendConditions(out []Condition, node ast.Node, scope *symb
 			return out
 		}
 		var body []Condition
+		bodyScope := symbols.ConstraintBodyScope(scope, m)
 		for _, nested := range m.Body {
-			body = ctx.appendConditions(body, nested, scope, true, false, seen)
+			body = ctx.appendConditions(body, nested, bodyScope, true, false, seen)
 		}
 		if !negated {
 			for _, c := range body {
@@ -128,23 +171,96 @@ func (ctx *Context) appendConditions(out []Condition, node ast.Node, scope *symb
 			out = append(out, Condition{Expr: m.Expression, Scope: scope, Required: true})
 		}
 		out = ctx.appendReferencedConditions(out, m.Reference, scope, true, seen)
-		// The body is a scope of its own, which is where a condition it states
-		// reads the names it declares.
-		body := symbols.ConstraintBodyScope(scope, m)
-		for _, nested := range m.Body {
-			out = ctx.appendConditions(out, nested, body, true, false, seen)
-		}
+		out = ctx.appendOwnedConditions(out, m, m.Body, scope, true, seen)
 	case *ast.AssumeMember:
 		if m.Expression != nil {
 			out = append(out, Condition{Expr: m.Expression, Scope: scope})
 		}
 		out = ctx.appendReferencedConditions(out, m.Reference, scope, false, seen)
-		body := symbols.ConstraintBodyScope(scope, m)
-		for _, nested := range m.Body {
-			out = ctx.appendConditions(out, nested, body, false, false, seen)
+		out = ctx.appendOwnedConditions(out, m, m.Body, scope, false, seen)
+	case *ast.Membership:
+		out = ctx.appendConditions(out, m.Member, scope, required, negated, seen)
+	default:
+		if _, ok := statementKeyword(m); ok {
+			out = append(out, Condition{Statement: m, Scope: scope, Required: required})
 		}
 	}
 	return out
+}
+
+// appendOwnedConditions appends what a require/assume member's constraint states:
+// a named one its whole chain, an anonymous body its own conditions.
+func (ctx *Context) appendOwnedConditions(out []Condition, member ast.Node, body []ast.Node, scope *symbols.Scope,
+	required bool, seen map[*symbols.Symbol]bool) []Condition {
+	if owner := ctx.namedConstraintOf(scopedMember{node: member, scope: scope}); owner != nil {
+		return ctx.appendMemberConditions(out, owner, ctx.chainMembers(owner, scope), required, seen)
+	}
+	bodyScope := symbols.ConstraintBodyScope(scope, member)
+	for _, nested := range body {
+		out = ctx.appendConditions(out, nested, bodyScope, required, false, seen)
+	}
+	return out
+}
+
+// unexecutedStatement returns the first statement conds state, groups included,
+// or nil when they state none.
+func unexecutedStatement(conds []Condition) ast.Node {
+	for _, cond := range conds {
+		if cond.Statement != nil {
+			return cond.Statement
+		}
+		if stmt := unexecutedStatement(cond.Group); stmt != nil {
+			return stmt
+		}
+	}
+	return nil
+}
+
+// statementKeyword names the keyword a body item the evaluator does not run
+// was written with: an action statement, an action node, or a succession.
+func statementKeyword(node ast.Node) (string, bool) {
+	switch n := node.(type) {
+	case *ast.AssignmentActionNode:
+		return "assign", true
+	case *ast.IfActionNode:
+		return "if", true
+	case *ast.WhileLoopActionNode:
+		return "loop", true
+	case *ast.SendStatement:
+		return "send", true
+	case *ast.TerminateStatement:
+		return "terminate", true
+	case *ast.PerformActionNode:
+		return "perform", true
+	case *ast.ActionExecutionNode, *ast.AcceptActionUsage:
+		return "action", true
+	case *ast.InitialNode:
+		return "first", true
+	case *ast.SuccessionEdge, *ast.ControlFlowEdge:
+		return "then", true
+	case *ast.ForkNode:
+		return "fork", true
+	case *ast.JoinNode:
+		return "join", true
+	case *ast.MergeNode:
+		return "merge", true
+	case *ast.DecisionNode:
+		return "decide", true
+	case *ast.FinalNode:
+		return "done", true
+	case *ast.Usage:
+		switch {
+		case n.IsPerformedAction():
+			return "perform", true
+		case n.Kind == ast.UsageAction:
+			return "action", true
+		case n.IsSuccessionFlow():
+			return "succession flow", true
+		case n.Kind == ast.UsageSuccession:
+			return "succession", true
+		}
+	}
+	return "", false
 }
 
 // appendReferencedConditions appends what a require/assume member that
@@ -168,10 +284,7 @@ func (ctx *Context) appendReferencedConditions(out []Condition, ref *ast.Qualifi
 	}
 	seen[sym] = true
 	defer delete(seen, sym)
-	var conds []Condition
-	for _, member := range ctx.chainMembers(sym, nil) {
-		conds = ctx.appendConditions(conds, member.node, member.scope, true, false, seen)
-	}
+	conds := ctx.appendMemberConditions(nil, sym, ctx.chainMembers(sym, nil), true, seen)
 	for i := range conds {
 		conds[i].Required = required
 	}
@@ -236,6 +349,13 @@ func (c conditionCheck) name() string {
 func (ctx *Context) evaluateConditions(check conditionCheck, conds []Condition) (bool, error) {
 	if len(conds) == 0 {
 		return false, fmt.Errorf("%s %s: %w", check.kind, check.name(), ErrNoConditions)
+	}
+	// A statement anywhere in the body could change what the conditions read, so
+	// no verdict is reached, not even from a condition stated before it.
+	if stmt := unexecutedStatement(conds); stmt != nil {
+		keyword, _ := statementKeyword(stmt)
+		return false, fmt.Errorf("%s %s: %s evaluation failed: `%s` %w; bind the value as a feature value or compute it in a calc the condition reads",
+			check.kind, check.name(), check.what, keyword, ErrStatementNotExecuted)
 	}
 	features := ctx.conditionFeatures(check.sym)
 	self := check.self
@@ -340,6 +460,9 @@ func nestedFeature(sym *symbols.Symbol) bool {
 // readThrough reports whether inst is the object a value expression materialized
 // to read a declaration through, which is an occurrence of nothing.
 func (ctx *Context) readThrough(inst *Instance) bool {
+	if inst.explicit {
+		return false
+	}
 	id, ok := ctx.occurrences[inst.Type]
 	return ok && id == inst.ID
 }
@@ -397,8 +520,8 @@ func (ctx *Context) carriersUnder(roots []*Instance, owner *symbols.Symbol) []ca
 	seen := make(map[int64]bool, len(roots))
 	declared := make(map[carrierOccurrence]bool)
 	path := make(map[*symbols.Symbol]bool)
-	var descend func(root, inst *Instance, through, features string)
-	descend = func(root, inst *Instance, through, features string) {
+	var descend func(root, inst *Instance, through string, features []string)
+	descend = func(root, inst *Instance, through string, features []string) {
 		if inst == nil || seen[inst.ID] {
 			return
 		}
@@ -416,15 +539,12 @@ func (ctx *Context) carriersUnder(roots []*Instance, owner *symbols.Symbol) []ca
 			defer delete(path, inst.Type)
 		}
 		for _, child := range ctx.nestedObjects(inst) {
-			nested := child.feature
-			if features != "" {
-				nested = features + "::" + child.feature
-			}
-			descend(root, child.instance, through+"::"+child.feature, nested)
+			nested := append(features[:len(features):len(features)], child.feature)
+			descend(root, child.instance, through+"/"+strconv.Quote(child.feature), nested)
 		}
 	}
 	for _, root := range roots {
-		descend(root, root, strconv.FormatInt(root.ID, 10), "")
+		descend(root, root, strconv.FormatInt(root.ID, 10), nil)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].instance.ID < out[j].instance.ID })
 	return out
@@ -435,13 +555,14 @@ func (ctx *Context) carriersUnder(roots []*Instance, owner *symbols.Symbol) []ca
 type carrier struct {
 	instance *Instance
 	root     *Instance
-	features string
+	features []string
 }
 
 // carrierOccurrence identifies the declaration an object occurs as: the features
-// walked through to reach it and the declaration it materializes. Objects a
-// multiplicity repeated share both, while ones a collection gathers from
-// different declarations — the features subsetting it — do not.
+// walked through to reach it, each quoted so any name is one segment, and the
+// declaration it materializes. Objects a multiplicity repeated share both, while
+// ones a collection gathers from different declarations — the features
+// subsetting it — do not.
 type carrierOccurrence struct {
 	through string
 	decl    *symbols.Symbol
@@ -528,37 +649,50 @@ func (ctx *Context) carrierLabels(carriers []carrier) []string {
 			name = def.Name
 		}
 		label := fmt.Sprintf("%s #%d", name, inst.ID)
-		if path := carrierPath(c, name); path != "" {
-			label += " (" + path + ")"
+		if path := carrierPath(c, name); len(path) != 0 {
+			label += " (" + qualifiedText(path) + ")"
 		}
 		out = append(out, label)
 	}
 	return out
 }
 
+// qualifiedText spells walked feature names as a `::`-joined path in the
+// notation, each quoted where its spelling needs it.
+func qualifiedText(names []string) string {
+	parts := make([]string, len(names))
+	for i, name := range names {
+		parts[i] = lexer.NameText(name)
+	}
+	return strings.Join(parts, "::")
+}
+
 // carrierPath names a carrier apart from its siblings: the features walked to
 // it, ending in the declaration it materializes — which differs from the feature
 // holding it when a collection gathers objects of several declarations.
-func carrierPath(c carrier, definition string) string {
+func carrierPath(c carrier, definition string) []string {
 	decl := ""
 	if c.instance.Type != nil && c.instance.Type.Name != definition {
 		decl = c.instance.Type.Name
 	}
-	if c.features == "" {
-		return decl
+	if len(c.features) == 0 {
+		if decl == "" {
+			return nil
+		}
+		return []string{decl}
 	}
-	walked := strings.Split(c.features, "::")
+	walked := append([]string(nil), c.features...)
 	if decl != "" && walked[len(walked)-1] != decl {
 		walked[len(walked)-1] = decl
 	}
-	return strings.Join(walked, "::")
+	return walked
 }
 
-// carrierFeatures is the feature path to a nested carrier as a caller can quote
-// it, corrected the way carrierLabels names an ambiguity's carriers.
-func (ctx *Context) carrierFeatures(c carrier) string {
-	if c.features == "" || c.instance == nil {
-		return ""
+// carrierFeatures is the feature path to a nested carrier, one name a segment,
+// corrected the way carrierLabels names an ambiguity's carriers.
+func (ctx *Context) carrierFeatures(c carrier) []string {
+	if len(c.features) == 0 || c.instance == nil {
+		return nil
 	}
 	name := "object"
 	if def := ctx.definitionOf(c.instance.Type); def != nil && def.Name != "" {
@@ -665,6 +799,10 @@ func (ctx *Context) conditionFeatures(sym *symbols.Symbol) map[string]scopedExpr
 // conditionLabel renders a condition as written, so a violation names the
 // condition that failed, negation and grouping included.
 func conditionLabel(cond Condition) string {
+	if cond.Statement != nil {
+		keyword, _ := statementKeyword(cond.Statement)
+		return "`" + keyword + "` statement"
+	}
 	text := conditionText(cond.Expr)
 	if cond.Group != nil {
 		parts := make([]string, 0, len(cond.Group))

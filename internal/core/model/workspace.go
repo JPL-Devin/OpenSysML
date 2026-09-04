@@ -1,6 +1,8 @@
 package model
 
 import (
+	"path/filepath"
+	"slices"
 	"sync"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -23,9 +25,16 @@ type Workspace struct {
 	open      map[string]bool   // names with an authoritative open buffer
 	index     *symbols.Index
 	diagCache map[string][]passes.Diagnostic
+	// refs is the reverse reference index, nil until a query after a change
+	// rebuilds it (see refindex.go).
+	refs *refIndex
 	// analysis is the options every document of this workspace is analyzed under,
 	// so one session asks one question of all its files.
 	analysis passes.Options
+	// libSource yields the text of the library files the index was built from,
+	// nil when the index came without one; libDocs caches them parsed.
+	libSource libs.Source
+	libDocs   map[string]*Document
 }
 
 // Option configures a workspace at construction.
@@ -36,11 +45,20 @@ func WithConformanceMode(mode conformance.Mode) Option {
 	return func(w *Workspace) { w.analysis.Conformance = mode }
 }
 
+// WithLibrarySource names the source the index's library documents were read
+// from, so LibraryDocument can serve their text. It must serve the bytes the
+// index was built from, or the index's spans address the wrong text.
+func WithLibrarySource(src libs.Source) Option {
+	return func(w *Workspace) { w.libSource = src }
+}
+
 // NewWorkspace returns a workspace with stdlib pre-loaded into the global index.
 // Stdlib files are loaded from embedded sources (or OPENSYSML_LIBRARY_PATH if set).
 // Without options it analyzes in the default conformance mode.
 func NewWorkspace(opts ...Option) *Workspace {
-	return NewWorkspaceWithIndex(libs.NewModelIndex(), opts...)
+	base, src := libs.SharedLibrary()
+	opts = append([]Option{WithLibrarySource(src)}, opts...)
+	return NewWorkspaceWithIndex(symbols.NewOverlay(base), opts...)
 }
 
 // NewWorkspaceWithIndex returns a workspace over a caller-built index, for a
@@ -53,6 +71,7 @@ func NewWorkspaceWithIndex(idx *symbols.Index, opts ...Option) *Workspace {
 		open:      map[string]bool{},
 		index:     idx,
 		diagCache: map[string][]passes.Diagnostic{},
+		libDocs:   map[string]*Document{},
 	}
 	for _, opt := range opts {
 		opt(w)
@@ -185,11 +204,15 @@ func (w *Workspace) removeLocked(name string) {
 	w.invalidateLocked()
 }
 
-// invalidateLocked clears all cached diagnostics. Caller holds the write lock.
+// invalidateLocked clears all cached diagnostics and the reverse reference index.
+// Caller holds the write lock.
 func (w *Workspace) invalidateLocked() {
 	// Conservative: any change clears all cached diagnostics. Correctness first;
 	// fine-grained cross-document dependency tracking is a later optimization.
 	w.diagCache = map[string][]passes.Diagnostic{}
+	// A change anywhere can alter what a name elsewhere resolves to (a shadowing
+	// declaration, an import target, an alias, an overload), so the index goes too.
+	w.refs = nil
 }
 
 // Diagnostics returns the analysis diagnostics for name, computing them lazily
@@ -308,7 +331,7 @@ func (w *Workspace) MembersOnPath(scope *symbols.Scope, path []string) []*symbol
 // Callers hold the read lock.
 func (w *Workspace) memberSymbolsLocked(resolver *resolve.Resolver, sem *semantics.Model,
 	scope *symbols.Scope, sym *symbols.Symbol) []*symbols.Symbol {
-	members := sem.MembersOf(sym)
+	members := slices.Clone(sem.MembersOf(sym))
 	// A cached library symbol has no scope, and a package's own scope does not
 	// hold what its imports brought in; both are reachable through the index,
 	// as seen from the namespace the completion is requested in so that another
@@ -325,10 +348,12 @@ func (w *Workspace) memberSymbolsLocked(resolver *resolve.Resolver, sem *semanti
 // newResolver is a resolver over the index with a semantic model attached: an
 // inherited member and the element filters gating an import are both answered by
 // the model, so a read path without one resolves differently to a checked one.
+// Calls are selected under the checker's argument typing, as a checked document's are.
 func (w *Workspace) newResolver() (*resolve.Resolver, *semantics.Model) {
 	resolver := resolve.New(w.index)
 	sem := semantics.NewModel(resolver)
 	resolver.SetModel(sem)
+	sem.SetArgumentTyper(passes.NewArgumentTyper(resolver, sem))
 	return resolver, sem
 }
 
@@ -350,6 +375,60 @@ func (w *Workspace) DocumentNames() []string {
 	return names
 }
 
+// IsLibraryDocument reports whether name is a bundled library file the index
+// holds, as opposed to a document of the workspace's own.
+func (w *Workspace) IsLibraryDocument(name string) bool {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	_, ok := w.libraryNameLocked(name)
+	return ok
+}
+
+// libraryNameLocked is the index's name for the library file name denotes,
+// accepting the forward-slash form a URI carries where the source listed the
+// file with the OS separator. Caller holds the lock.
+func (w *Workspace) libraryNameLocked(name string) (string, bool) {
+	if w.index.IsLibraryDocument(name) {
+		return name, true
+	}
+	if alt := filepath.FromSlash(name); alt != name && w.index.IsLibraryDocument(alt) {
+		return alt, true
+	}
+	return "", false
+}
+
+// LibraryDocument returns the parsed text of the named bundled library file,
+// read from the source the index was built from, so its spans are the ones the
+// index's symbols carry. It is nil for a name that is no library document and
+// when the workspace has no library source. Library documents are read-only:
+// they are never added to the index, which holds them already.
+func (w *Workspace) LibraryDocument(name string) *Document {
+	w.mu.RLock()
+	name, isLibrary := w.libraryNameLocked(name)
+	doc, cached := w.libDocs[name]
+	src := w.libSource
+	w.mu.RUnlock()
+	if cached {
+		return doc
+	}
+	if src == nil || !isLibrary {
+		return nil
+	}
+	content, err := src.Read(name)
+	if err != nil {
+		return nil
+	}
+	doc = newDocument(name, content, 0)
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if existing, ok := w.libDocs[name]; ok {
+		return existing
+	}
+	w.libDocs[name] = doc
+	return doc
+}
+
 // ResolveQualifiedInDoc resolves a qualified name against the given scope using
 // the workspace's symbol index. Used by the LSP layer for go-to-definition.
 func (w *Workspace) ResolveQualifiedInDoc(name string, scope *symbols.Scope, qn *ast.QualifiedName) (*symbols.Symbol, bool) {
@@ -362,8 +441,58 @@ func (w *Workspace) ResolveQualifiedInDoc(name string, scope *symbols.Scope, qn 
 func (w *Workspace) ResolveReferenceInDoc(name string, ref resolve.Reference) (*symbols.Symbol, bool) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	resolver, _ := w.newResolver()
-	return resolver.ResolveReference(ref)
+	resolver, sem := w.newResolver()
+	sym, ok := resolver.ResolveReference(ref)
+	if sel := invocationSelection(resolver, sem, ref); sel != nil {
+		sym = calledDeclaration(sel, sym)
+		ok = sym != nil
+	}
+	return sym, ok
+}
+
+// AmbiguousInvocationInDoc returns the equally specific overloads an invocation's
+// arguments leave tied, when ref is the name it calls; nil for any other reference
+// and for a call that selects one declaration.
+func (w *Workspace) AmbiguousInvocationInDoc(name string, ref resolve.Reference) []*symbols.Symbol {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	resolver, sem := w.newResolver()
+	if sel := invocationSelection(resolver, sem, ref); sel != nil && sel.Ambiguous {
+		return sel.Tied
+	}
+	return nil
+}
+
+// invocationSelection is the overload selection for the call whose name ref is,
+// nil for a reference that names no call.
+func invocationSelection(resolver *resolve.Resolver, sem *semantics.Model, ref resolve.Reference) *semantics.InvocationSelection {
+	if ref.Invocation == nil {
+		return nil
+	}
+	return passes.SelectInvocation(resolver, sem, ref.Scope, ref.Invocation, performs(ref))
+}
+
+// performs is the kind of call site a reference is: an action performance when
+// the call is an action usage's value, else an expression.
+func performs(ref resolve.Reference) semantics.Performs {
+	if ref.Performed {
+		return semantics.PerformsAction
+	}
+	return semantics.PerformsBehavior
+}
+
+// calledDeclaration is what a call's name denotes once its arguments are read: the
+// overload they select, nothing when several tie, else the name-only resolution.
+func calledDeclaration(sel *semantics.InvocationSelection, nameOnly *symbols.Symbol) *symbols.Symbol {
+	switch {
+	case sel == nil:
+		return nameOnly
+	case sel.Ambiguous:
+		return nil
+	case sel.Selected != nil:
+		return sel.Selected
+	}
+	return nameOnly
 }
 
 // ResolveQualifiedSegmentsInDoc resolves a qualified name and returns the symbol
@@ -377,42 +506,37 @@ func (w *Workspace) ResolveQualifiedSegmentsInDoc(name string, scope *symbols.Sc
 // ResolveReferenceSegmentsInDoc is ResolveQualifiedSegmentsInDoc for one name
 // occurrence (see ResolveReferenceInDoc).
 func (w *Workspace) ResolveReferenceSegmentsInDoc(name string, ref resolve.Reference) []*symbols.Symbol {
-	if ref.QN == nil {
+	if ref.QN == nil || len(ref.QN.Parts) == 0 {
 		return nil
 	}
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	r, _ := w.newResolver()
+	r, sem := w.newResolver()
 	r.ResolveReference(ref)
-	out := make([]*symbols.Symbol, len(ref.QN.Parts))
-	for i := range ref.QN.Parts {
-		if sym, ok := r.PartSymbol(ref.QN, i); ok {
-			out[i] = sym
-		}
-	}
-	return out
+	return segmentElements(r, ref, invocationSelection(r, sem, ref))
 }
 
 // ResolveReferenceNameSegmentsInDoc is ResolveReferenceSegmentsInDoc reporting
 // what each segment's name *is* rather than the element it reaches, so a segment
 // written as an alias name is the alias. Rename edits names, not elements.
 func (w *Workspace) ResolveReferenceNameSegmentsInDoc(name string, ref resolve.Reference) []*symbols.Symbol {
-	if ref.QN == nil {
+	if ref.QN == nil || len(ref.QN.Parts) == 0 {
 		return nil
 	}
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	r, _ := w.newResolver()
+	r, sem := w.newResolver()
 	r.ResolveReference(ref)
-	out := make([]*symbols.Symbol, len(ref.QN.Parts))
-	for i := range ref.QN.Parts {
-		if sym, ok := r.PartAlias(ref.QN, i); ok {
-			out[i] = sym
-			continue
-		}
-		if sym, ok := r.PartSymbol(ref.QN, i); ok {
-			out[i] = sym
+	return segmentNames(r, ref, invocationSelection(r, sem, ref))
+}
+
+// selectedName is the name a call's written last segment is once selected names
+// the overload it runs: the first candidate alias for selected, else selected itself.
+func selectedName(r *resolve.Resolver, ref resolve.Reference, selected *symbols.Symbol) *symbols.Symbol {
+	for _, c := range r.InvocationCandidates(ref.Scope, ref.QN) {
+		if target, ok := r.ResolveAliasTarget(c); ok && target == selected {
+			return c
 		}
 	}
-	return out
+	return selected
 }

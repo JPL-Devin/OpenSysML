@@ -44,7 +44,8 @@ type ExpectedValue struct {
 type ExpectedEvent struct {
 	Signal string                   `json:"signal,omitempty"` // Signal type name
 	Call   string                   `json:"call,omitempty"`   // Invoked operation name
-	Args   map[string]ExpectedValue `json:"args,omitempty"`   // Signal payload or call arguments
+	Args   map[string]ExpectedValue `json:"args,omitempty"`   // Signal feature bindings or call arguments
+	Value  *ExpectedValue           `json:"value,omitempty"`  // The one bare value a signal carries
 }
 
 // Performer is one object performing the case's behavior, and the outcome
@@ -464,8 +465,13 @@ func injectEvents(t *testing.T, exec *StateExecutor, events []ExpectedEvent) {
 		switch {
 		case event.Call != "" && event.Signal != "":
 			t.Fatalf("event declares both signal %q and call %q", event.Signal, event.Call)
+		case event.Value != nil && (event.Call != "" || len(args) > 0):
+			t.Fatalf("event %s%s carries a bare value beside its arguments", event.Signal, event.Call)
 		case event.Call != "":
 			exec.InvokeOperation(event.Call, args)
+		case event.Value != nil:
+			value := expectedToRuntimeValue(t, *event.Value)
+			exec.enqueueSignal(Message{SignalType: event.Signal, Value: &value})
 		case event.Signal != "":
 			exec.SendSignal(event.Signal, args)
 		default:
@@ -849,7 +855,13 @@ func runInstanceConformance(t *testing.T, ctx *Context, idx *symbols.Index, expe
 	}
 
 	for name, expectedVal := range expected.FeatureValues {
+		// A slot is read as an expression reads it: an optional one holding
+		// nothing is the empty sequence, a required one an error.
+		var value Value
 		fv, err := featureValueAtPath(t, ctx, inst, name)
+		if err == nil {
+			value, err = fv.ReadValue(name)
+		}
 		if expectedVal.Error != "" {
 			requireError(t, "feature value "+name, err, expectedVal.Error)
 			continue
@@ -858,7 +870,7 @@ func runInstanceConformance(t *testing.T, ctx *Context, idx *symbols.Index, expe
 			t.Errorf("feature value %q: %v", name, err)
 			continue
 		}
-		validateValue(t, ctx, name, expectedVal, fv.HeldValue())
+		validateValue(t, ctx, name, expectedVal, value)
 	}
 
 	validateIdentity(t, ctx, inst, expected)
@@ -1310,6 +1322,10 @@ func validateValue(t *testing.T, ctx *Context, name string, expected ExpectedVal
 		want := expected.Value.(string)
 		if actual.Str() != want {
 			t.Errorf("%s: value = %q, want %q", name, actual.Str(), want)
+		}
+	case "Null":
+		if actual.Kind != ValNull {
+			t.Errorf("%s: type = %v, want Null", name, actual.Kind)
 		}
 	case "Variant":
 		if actual.Kind != ValVariant || actual.Variant() == nil {

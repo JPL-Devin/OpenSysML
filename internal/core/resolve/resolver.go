@@ -92,6 +92,9 @@ type Resolver struct {
 	// endpoints are the vertices transition endpoints resolve to, memoized per
 	// name node: lowering consumes what this tier resolved (see ResolveEndpoint).
 	endpoints map[*ast.QualifiedName]resolution
+	// initials are the body members `first x` names, memoized per node: a name
+	// no member of the body answers to is a label the node declares.
+	initials map[*ast.InitialNode]*symbols.Symbol
 	// imports are the import declarations of a namespace-bearing node, found once
 	// and kept: see (*Resolver).importsOf.
 	imports          map[ast.Node][]*ast.Import
@@ -145,9 +148,87 @@ type Resolver struct {
 	// reached in another one is not reported against it (see foreignScope).
 	document          string
 	reportedQualified map[*ast.QualifiedName]bool
+	// ambiguities are the candidate counts of the qualified names that failed
+	// by naming several elements, so a consumer can tell that apart from none.
+	ambiguities map[*ast.QualifiedName]int
+	// readings are the answers to qualified names read in a chosen scope, kept
+	// apart from the written name's memo: see ReadQualified.
+	readings map[readingKey]Reading
 	// valuesInProgress are the usages whose value expression is being read for
 	// the type it names, so a value naming its own feature ends the walk.
 	valuesInProgress map[*ast.Usage]bool
+	// invocationNames are the names invocations call, whose last segment may
+	// denote several declarations: see ResolveInvocationName.
+	invocationNames map[*ast.QualifiedName]bool
+	// scratch are the Scratch calls in progress, innermost last.
+	scratch []*scratchFrame
+}
+
+// scratchFrame is one Scratch call: the nodes it disowns and the entries
+// first memoized under it.
+type scratchFrame struct {
+	transient map[ast.Node]bool
+	journal   []journaled
+}
+
+type journaled struct {
+	node ast.Node
+	drop func()
+}
+
+// Scratch runs f, then forgets what f memoized about the transient nodes, so
+// syntax the model does not own (a request expression) is not retained.
+func (r *Resolver) Scratch(transient map[ast.Node]bool, f func()) {
+	frame := &scratchFrame{transient: transient}
+	r.scratch = append(r.scratch, frame)
+	defer func() {
+		r.scratch = r.scratch[:len(r.scratch)-1]
+		var parent *scratchFrame
+		if n := len(r.scratch); n > 0 {
+			parent = r.scratch[n-1]
+		}
+		for _, j := range frame.journal {
+			switch {
+			case frame.transient[j.node]:
+				j.drop()
+			case parent != nil:
+				parent.journal = append(parent.journal, j)
+			}
+		}
+	}()
+	f()
+}
+
+// MemoSize is the number of resolutions this resolver retains.
+func (r *Resolver) MemoSize() int {
+	return len(r.memo) + len(r.modeMemo) + len(r.filtered) + len(r.featureChains) +
+		len(r.parts) + len(r.aliasNames) + len(r.endpoints) + len(r.readings) +
+		len(r.invocationNames) + len(r.ambiguities) + len(r.reportedQualified) +
+		len(r.initials) + len(r.imports) + len(r.suggestions)
+}
+
+// journalNew lets the enclosing Scratch drop m[k], about to be written for
+// node the first time.
+func journalNew[K comparable, V any](r *Resolver, m map[K]V, k K, node ast.Node) {
+	if len(r.scratch) == 0 {
+		return
+	}
+	if _, had := m[k]; had {
+		return
+	}
+	r.Journal(node, func() { delete(m, k) })
+}
+
+// Journal registers drop to run when the enclosing Scratch, if any, ends with
+// node transient: how a side table keyed by node joins the resolver's lifecycle.
+func (r *Resolver) Journal(node ast.Node, drop func()) {
+	if r == nil {
+		return
+	}
+	if n := len(r.scratch); n > 0 {
+		frame := r.scratch[n-1]
+		frame.journal = append(frame.journal, journaled{node: node, drop: drop})
+	}
 }
 
 // New creates a resolver over the given index.
@@ -162,6 +243,7 @@ func New(idx *symbols.Index) *Resolver {
 		parts:            map[*ast.QualifiedName][]*symbols.Symbol{},
 		aliasNames:       map[*ast.QualifiedName][]*symbols.Symbol{},
 		endpoints:        map[*ast.QualifiedName]resolution{},
+		initials:         map[*ast.InitialNode]*symbols.Symbol{},
 		imports:          map[ast.Node][]*ast.Import{},
 		importStack:      map[*ast.Import]bool{},
 		resolvingImports: map[*ast.Import]bool{},
@@ -180,6 +262,9 @@ func New(idx *symbols.Index) *Resolver {
 		aliasTargets:      map[*symbols.Symbol]resolution{},
 		resolvingAlias:    map[*symbols.Symbol]bool{},
 		reportedQualified: map[*ast.QualifiedName]bool{},
+		invocationNames:   map[*ast.QualifiedName]bool{},
+		ambiguities:       map[*ast.QualifiedName]int{},
+		readings:          map[readingKey]Reading{},
 	}
 }
 
@@ -201,6 +286,7 @@ func (r *Resolver) resolvedPart(qn *ast.QualifiedName, i int, sym *symbols.Symbo
 	syms, ok := r.parts[qn]
 	if !ok {
 		syms = make([]*symbols.Symbol, len(qn.Parts))
+		journalNew(r, r.parts, qn, qn)
 		r.parts[qn] = syms
 	}
 	syms[i] = element
@@ -208,6 +294,7 @@ func (r *Resolver) resolvedPart(qn *ast.QualifiedName, i int, sym *symbols.Symbo
 		aliases, ok := r.aliasNames[qn]
 		if !ok {
 			aliases = make([]*symbols.Symbol, len(qn.Parts))
+			journalNew(r, r.aliasNames, qn, qn)
 			r.aliasNames[qn] = aliases
 		}
 		aliases[i] = sym
@@ -227,6 +314,50 @@ func (r *Resolver) PartSymbol(qn *ast.QualifiedName, i int) (*symbols.Symbol, bo
 	return syms[i], true
 }
 
+// EndSymbol returns what the edge end qn resolved to: the vertex a transition
+// end was judged as, or otherwise its last segment's symbol.
+func (r *Resolver) EndSymbol(qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+	if res, done := r.endpoints[qn]; done {
+		return res.sym, res.ok
+	}
+	return r.PartSymbol(qn, len(qn.Parts)-1)
+}
+
+// resolveInitial binds `first x` to the member of the body x names, if any:
+// lowering starts the flow there instead of at the node (see lower).
+func (r *Resolver) resolveInitial(scope *symbols.Scope, n *ast.InitialNode) {
+	if n.Name == "" {
+		return
+	}
+	if sym, ok := memberPastLabels(scope, n.Name); ok {
+		journalNew(r, r.initials, n, n)
+		r.initials[n] = sym
+	}
+}
+
+// memberPastLabels is the member of scope that name reaches past the labels
+// initial nodes declare; false where only a label bears it.
+func memberPastLabels(scope *symbols.Scope, name string) (*symbols.Symbol, bool) {
+	var members []*symbols.Symbol
+	for _, sym := range scope.LookupLocalAll(name) {
+		if _, label := sym.Decl.(*ast.InitialNode); label {
+			continue
+		}
+		members = append(members, sym)
+	}
+	if len(members) == 0 {
+		return nil, false
+	}
+	return symbols.PreferDeclared(members)[0], true
+}
+
+// InitialSymbol returns the body member the initial node's name resolved to,
+// or false where the name is a label the node itself declares.
+func (r *Resolver) InitialSymbol(n *ast.InitialNode) (*symbols.Symbol, bool) {
+	sym, ok := r.initials[n]
+	return sym, ok
+}
+
 // PartAlias returns the alias membership the i-th segment of qn was written as,
 // where the name it wrote is an alias of the element PartSymbol reports.
 func (r *Resolver) PartAlias(qn *ast.QualifiedName, i int) (*symbols.Symbol, bool) {
@@ -235,6 +366,15 @@ func (r *Resolver) PartAlias(qn *ast.QualifiedName, i int) (*symbols.Symbol, boo
 		return nil, false
 	}
 	return aliases[i], true
+}
+
+// PartName returns the symbol whose name the i-th segment of qn wrote: the alias
+// membership when it was written as an alias name, else the element it reached.
+func (r *Resolver) PartName(qn *ast.QualifiedName, i int) (*symbols.Symbol, bool) {
+	if alias, ok := r.PartAlias(qn, i); ok {
+		return alias, true
+	}
+	return r.PartSymbol(qn, i)
 }
 
 // Index returns the symbol index this resolver operates over.
@@ -248,13 +388,7 @@ func (r *Resolver) lookupMember(sym *symbols.Symbol, name string) (*symbols.Symb
 	if r.model == nil || sym == nil {
 		return nil, false
 	}
-	if found, ok := r.model.LookupMember(sym, name); ok {
-		return found, true
-	}
-	if found, ok := r.model.LookupContributedMember(sym, name); ok {
-		return found, true
-	}
-	if found, ok := r.triggerPayload(sym, name); ok {
+	if found, ok := r.lookupMemberOf(sym, name); ok {
 		return found, true
 	}
 	if sym.Scope == nil {
@@ -272,6 +406,18 @@ func (r *Resolver) lookupMember(sym *symbols.Symbol, name string) (*symbols.Symb
 		}
 	}
 	return nil, false
+}
+
+// lookupMemberOf resolves name as a member sym declares, inherits, or accepts as
+// a trigger payload; what its imports surface is not considered.
+func (r *Resolver) lookupMemberOf(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
+	if found, ok := r.model.LookupMember(sym, name); ok {
+		return found, true
+	}
+	if found, ok := r.model.LookupContributedMember(sym, name); ok {
+		return found, true
+	}
+	return r.triggerPayload(sym, name)
 }
 
 // lookupContributedMember resolves name as a member sym inherits or
@@ -338,6 +484,7 @@ func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName,
 	// belongs to must still report when its own document is resolved.
 	if keyed {
 		if res.ok || r.quiet == 0 {
+			journalNew(r, r.modeMemo, mode, qn)
 			r.modeMemo[mode] = res
 		}
 	}
@@ -347,10 +494,12 @@ func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName,
 				r.memoize(qn, res)
 			}
 		} else if res.ok || r.quiet == 0 {
-			r.filtered[filteredMemoKey{
+			key := filteredMemoKey{
 				qn: qn, decl: hide.decl, prefix: hide.skipNamingTarget,
 				skipBorrowedName: hide.skipBorrowedName,
-			}] = res
+			}
+			journalNew(r, r.filtered, key, qn)
+			r.filtered[key] = res
 		}
 	}
 	return res.sym, res.ok
@@ -384,17 +533,17 @@ func (r *Resolver) ResolveName(scope *symbols.Scope, name string, at ast.Node) (
 	// A result found with the boundary lifted for an enclosing `import all` is
 	// not what this reference resolves to in general, so it is not memoized.
 	if keyed && (res.ok || r.quiet == 0) {
+		journalNew(r, r.modeMemo, mode, at)
 		r.modeMemo[mode] = res
 	}
 	if (res.ok || r.quiet == 0) && r.allVisible == 0 {
 		r.memoize(at, res)
 	}
 	if !res.ok {
-		span := spanOf(at)
 		r.report(Diagnostic{
-			Span:    span,
-			Message: r.unresolvedMessage(scope, name),
-			Fixes:   r.unresolvedFixes(scope, name, span),
+			Span:    spanOf(at),
+			Message: r.unresolvedMessage(scope, name, at),
+			Fixes:   r.unresolvedFixes(scope, name, at),
 		})
 	}
 	return res.sym, res.ok
@@ -450,30 +599,59 @@ func (r *Resolver) outsideAllVisible(f func()) {
 // kept only where it resolved: a reading not adopted leaves nothing behind for a
 // caller to read back.
 func (r *Resolver) probe(qn *ast.QualifiedName, f func() bool) bool {
-	saved, had := r.parts[qn]
-	if had {
-		saved = append([]*symbols.Symbol(nil), saved...)
-	}
-	savedAliases, hadAliases := r.aliasNames[qn]
-	if hadAliases {
-		savedAliases = append([]*symbols.Symbol(nil), savedAliases...)
-	}
+	saved := r.saveSegments(qn)
 	resolved := false
 	r.aside(func() { resolved = f() })
-	if resolved {
-		return true
+	if !resolved {
+		r.restoreSegments(qn, saved)
 	}
-	if had {
-		r.parts[qn] = saved
-	} else {
-		delete(r.parts, qn)
+	return resolved
+}
+
+// segmentRecords are the per-segment records a walk of a qualified name leaves
+// behind, copied so a later walk cannot alter them.
+type segmentRecords struct {
+	parts, aliases       []*symbols.Symbol
+	hadParts, hadAliases bool
+	ambiguity            int
+	hadAmbiguity         bool
+}
+
+// saveSegments copies the records qn holds, for restoreSegments to put back.
+func (r *Resolver) saveSegments(qn *ast.QualifiedName) segmentRecords {
+	var saved segmentRecords
+	if parts, had := r.parts[qn]; had {
+		saved.parts, saved.hadParts = append([]*symbols.Symbol(nil), parts...), true
 	}
-	if hadAliases {
-		r.aliasNames[qn] = savedAliases
-	} else {
-		delete(r.aliasNames, qn)
+	if aliases, had := r.aliasNames[qn]; had {
+		saved.aliases, saved.hadAliases = append([]*symbols.Symbol(nil), aliases...), true
 	}
-	return false
+	saved.ambiguity, saved.hadAmbiguity = r.ambiguities[qn]
+	return saved
+}
+
+// restoreSegments puts back the records qn held when saved was taken.
+func (r *Resolver) restoreSegments(qn *ast.QualifiedName, saved segmentRecords) {
+	r.clearSegments(qn)
+	if saved.hadParts {
+		journalNew(r, r.parts, qn, qn)
+		r.parts[qn] = saved.parts
+	}
+	if saved.hadAliases {
+		journalNew(r, r.aliasNames, qn, qn)
+		r.aliasNames[qn] = saved.aliases
+	}
+	if saved.hadAmbiguity {
+		journalNew(r, r.ambiguities, qn, qn)
+		r.ambiguities[qn] = saved.ambiguity
+	}
+}
+
+// clearSegments drops the records qn holds, so a walk records it afresh.
+func (r *Resolver) clearSegments(qn *ast.QualifiedName) {
+	delete(r.parts, qn)
+	delete(r.aliasNames, qn)
+	delete(r.ambiguities, qn)
 }
 
 // modeKey keys a lookup made in a non-default mode, reporting false when the
@@ -496,6 +674,7 @@ func (r *Resolver) memoize(at ast.Node, res resolution) {
 	if at == nil || r.inCondition > 0 {
 		return
 	}
+	journalNew(r, r.memo, at, at)
 	r.memo[at] = res
 }
 
@@ -504,7 +683,9 @@ func (r *Resolver) memoizeFeatureChain(scope *symbols.Scope, fc *ast.FeatureChai
 	if fc == nil || r.inCondition > 0 || (!res.ok && r.quiet > 0) {
 		return
 	}
-	r.featureChains[featureChainKey{scope: scope, node: fc}] = res
+	key := featureChainKey{scope: scope, node: fc}
+	journalNew(r, r.featureChains, key, fc)
+	r.featureChains[key] = res
 }
 
 // InCondition runs the resolution of a filter condition's own names, which its

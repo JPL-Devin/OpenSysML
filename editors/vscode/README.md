@@ -27,6 +27,19 @@ Then open any `.sysml` file. The extension finds the server in this order:
 If none exist, highlighting still works and a warning explains how to build the
 server. `SysML: Restart Language Server` restarts it after a rebuild.
 
+## The standard library
+
+The server bundles the standard library, so a definition, reference or hover can
+land in a file that is not on disk. The extension serves those as read-only
+`sysml-stdlib:` documents, fetched from the server with its
+`opensysml/stdlibContent` request: <kbd>Ctrl</kbd>+click on `ScalarValues::Integer`
+opens the bundled `ScalarValues.kerml` on the declaring line, and hover,
+go-to-definition, the outline and semantic highlighting work inside it, so
+navigation continues from one library file into the next. The editor cannot be
+edited, and the server refuses a change to such a document. An older `sysml-lsp`
+that does not advertise the request reports its library locations as before, and
+the Output channel says so.
+
 ## The diagram panel
 
 `SysML: Open Diagram` opens a diagram of the active model beside it, drawn as
@@ -35,7 +48,7 @@ Mermaid from the server's rendering and redrawn as the model is typed.
 | | |
 | --- | --- |
 | **What it draws** | The view the document declares, chosen in the picker when it declares several. A document declaring none is drawn directly, as a model tree, interconnection diagram, state diagram, action flow, sequence diagram or element table — a table is written as Markdown rather than drawn, and is shown as that. A view whose rendering is not supported (`geometry`, `textual`) is listed but not drawable, and the reason is written under the diagram. |
-| **Navigation** | Click a node to open the declaration it was built from; moving the cursor in the editor highlights the node whose declaration contains it. A node with no locatable declaration, such as a standard library symbol, is inert. |
+| **Navigation** | Click a node to open the declaration it was built from; moving the cursor in the editor highlights the node whose declaration contains it. A node built from a standard library declaration opens the bundled library file, read-only. |
 | **While typing** | A rendering that fails mid-keystroke leaves the last good diagram on screen, dimmed, with the error in the status line: the panel never blanks. What a rendering could not represent is listed under it. |
 | **Cost** | The panel asks for a diagram only while visible, and only once an editing burst settles. Mermaid is bundled into the extension, and the panel's CSP allows the bundled script alone — nothing is fetched from the network. |
 

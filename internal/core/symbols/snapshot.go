@@ -320,8 +320,8 @@ func (e *snapshotEncoder) filters(fs []ElementFilter) {
 	}
 }
 
-// sortedSymbols returns the symbols of a set in numbering order.
-func (e *snapshotEncoder) sortedSymbols(m map[*Symbol]bool) []*Symbol {
+// sortedSymbols returns the keys of a map in e's numbering order.
+func sortedSymbols[V any](e *snapshotEncoder, m map[*Symbol]V) []*Symbol {
 	syms := make([]*Symbol, 0, len(m))
 	for s := range m {
 		syms = append(syms, s)
@@ -421,7 +421,7 @@ func (e *snapshotEncoder) writeTables(idx *Index, docs []string) {
 		e.w.Len(len(keys))
 		for _, k := range keys {
 			e.w.String(k)
-			e.symbols(e.sortedSymbols(table.own[k]))
+			e.symbols(sortedSymbols(e, table.own[k]))
 		}
 	}
 
@@ -474,7 +474,12 @@ func (e *snapshotEncoder) writeTables(idx *Index, docs []string) {
 		e.sym(s)
 		e.w.String(idx.declaredAt.own[s])
 	}
-	e.symbols(e.sortedSymbols(idx.librarySyms.own))
+	syms = sortedSymbols(e, idx.librarySyms.own)
+	e.w.Len(len(syms))
+	for _, s := range syms {
+		e.sym(s)
+		e.w.Uint(uint64(idx.librarySyms.own[s]))
+	}
 
 	// children
 	keys = sortedKeys(idx.children.own)
@@ -511,7 +516,8 @@ func (e *snapshotEncoder) writeTables(idx *Index, docs []string) {
 	e.w.Len(len(keys))
 	for _, k := range keys {
 		e.w.String(k)
-		e.w.Bool(idx.libraryDocs.own[k])
+		e.w.Uint(uint64(idx.libraryDocs.own[k].Tier))
+		e.w.String(idx.libraryDocs.own[k].Digest)
 	}
 
 	// nsFilters
@@ -785,6 +791,16 @@ func (d *sectionReader) symbolSet() map[*Symbol]bool {
 	return m
 }
 
+// libraryTier reads a tier, refusing one this build does not know.
+func (d *sectionReader) libraryTier() LibraryTier {
+	v := d.r.Uint()
+	if v >= uint64(numLibraryTiers) {
+		d.r.Fail("library tier")
+		return TierNone
+	}
+	return LibraryTier(v)
+}
+
 func (d *sectionReader) reexportKey() reexportKey {
 	return reexportKey{fqn: d.r.String(), sym: d.sym()}
 }
@@ -880,7 +896,13 @@ func (d *sectionReader) readTables() *Index {
 		declaredAt[s] = d.r.String()
 	}
 	idx.declaredAt = &layer[*Symbol, string]{own: declaredAt, gen: gen}
-	idx.librarySyms = &layer[*Symbol, bool]{own: d.symbolSet(), gen: gen}
+	n = d.r.Len()
+	librarySyms := make(map[*Symbol]LibraryTier, n)
+	for i := 0; i < n; i++ {
+		s := d.sym()
+		librarySyms[s] = d.libraryTier()
+	}
+	idx.librarySyms = &layer[*Symbol, LibraryTier]{own: librarySyms, gen: gen}
 
 	idx.children = stringTable(d, gen, d.strings)
 	idx.bySegment = stringTable(d, gen, func() map[string]bool {
@@ -900,7 +922,9 @@ func (d *sectionReader) readTables() *Index {
 		}
 		return out
 	})
-	idx.libraryDocs = stringTable(d, gen, d.r.Bool)
+	idx.libraryDocs = stringTable(d, gen, func() LibraryDocument {
+		return LibraryDocument{Tier: d.libraryTier(), Digest: d.r.String()}
+	})
 	idx.nsFilters = stringTable(d, gen, func() map[string][]ElementFilter {
 		n := d.r.Len()
 		byDoc := make(map[string][]ElementFilter, n)
@@ -917,6 +941,7 @@ func (d *sectionReader) readTables() *Index {
 		doc := d.r.String()
 		idx.aboutUsages[doc] = d.symbols()
 	}
+	idx.takeLibraryIdentity()
 	idx.frozen = true
 	return idx
 }
