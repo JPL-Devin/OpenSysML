@@ -230,8 +230,8 @@ we no longer accept it either.
 
 ## Permissiveness gaps
 
-No gap is open under `-conformance auto`. Every gap the `semantic/` source and the SysML
-constraint census opened is closed: the 6 SysML body-item spellings the census opened
+All 0 gaps under `-conformance auto` are open — that is, none: every gap the `semantic/` source
+and the SysML constraint census opened is closed: the 6 SysML body-item spellings the census opened
 (`g61`–`g66`) are rejected by the parser, which admits `subject`, `actor`, `stakeholder`,
 `objective`, `entry`/`do`/`exit` and `render` only in the body kinds whose grammar offers them. The
 cross-subsetting family the `semantic/` source opened (`k16`, `k17`, `k19`, `k42`) was closed by
