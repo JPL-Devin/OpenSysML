@@ -27,16 +27,16 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 231,
-        "digest": "sha256:4a85c7b78d6c2d67365fd7cfcef451fb64c03d7ff459318b5183cea1b77eed63"
+        "files": 234,
+        "digest": "sha256:61c9fd1f7ea5f1cdce45f9544587756ca368657736b3fd08e9170d2998640027"
       }
     ],
     "recorded": "2026-09-04"
   },
   "totals": {
-    "cases": 231,
-    "bothReject": 208,
-    "pilotOnlyRejects": 15,
+    "cases": 234,
+    "bothReject": 213,
+    "pilotOnlyRejects": 13,
     "oursOnlyRejects": 8,
     "bothAccept": 0
   },
@@ -64,9 +64,9 @@
     },
     {
       "source": "semantic",
-      "cases": 102,
-      "bothReject": 85,
-      "pilotOnlyRejects": 9,
+      "cases": 105,
+      "bothReject": 90,
+      "pilotOnlyRejects": 7,
       "oursOnlyRejects": 8,
       "bothAccept": 0
     },
@@ -1172,12 +1172,9 @@
       "source": "semantic",
       "rule": "only a variable feature can have an initial value (KerML 8.4.4.9 validateFeatureValueIsInitial; pilot validateFeatureValueIsInitial).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 4: Initialized feature must be variable"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/k12-chain-through-self.kerml",
@@ -1904,16 +1901,40 @@
       "pilotErrors": 1
     },
     {
+      "path": "semantic/s48-after-trigger-not-duration.sysml",
+      "source": "semantic",
+      "rule": "The argument of an `after` trigger must be a DurationValue (SysML 7.16 TriggerInvocationExpression; pilot validateTriggerInvocationActionAfterArgument).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s49-at-trigger-not-time-instant.sysml",
+      "source": "semantic",
+      "rule": "The argument of an `at` trigger must be a TimeInstantValue (SysML 7.16 TriggerInvocationExpression; pilot validateTriggerInvocationActionAtArgument).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s50-when-trigger-not-boolean.sysml",
+      "source": "semantic",
+      "rule": "The argument of a `when` trigger must be Boolean (SysML 7.16 TriggerInvocationExpression; pilot validateTriggerInvocationActionWhenArgument).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
       "path": "semantic/s80-constant-attribute-not-variable.sysml",
       "source": "semantic",
       "rule": "only a variable feature can be constant, and an attribute of a data type is not variable (KerML 8.3.3.3 validateFeatureConstantIsVariable; pilot validateFeatureConstantIsVariable).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 5: Only a variable feature can be constant"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/send-constructor-non-type.sysml",
@@ -2281,9 +2302,9 @@
       }
     ],
     "totals": {
-      "cases": 231,
-      "bothReject": 208,
-      "pilotOnlyRejects": 15,
+      "cases": 234,
+      "bothReject": 213,
+      "pilotOnlyRejects": 13,
       "oursOnlyRejects": 8,
       "bothAccept": 0
     },
