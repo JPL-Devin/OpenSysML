@@ -24,6 +24,15 @@ func (ctx *Context) instanceConforms(inst *Instance, typ *symbols.Symbol) bool {
 	return false
 }
 
+// isDirectTypeOf reports whether typ is already a direct type of an object: one it was
+// declared by or held by, or a type one of those is typed by when typ declares no more.
+func (ctx *Context) isDirectTypeOf(inst *Instance, typ *symbols.Symbol) bool {
+	direct := ctx.directType(typ)
+	return slices.ContainsFunc(inst.types(), func(t *symbols.Symbol) bool {
+		return symbols.SameElement(t, typ) || (direct == typ && ctx.directType(t) == direct)
+	})
+}
+
 // canClassify reports whether an object may be held by a feature typed by typ: it is one
 // already, or every type classifying it is comparable with typ, so holding it narrows it.
 func (ctx *Context) canClassify(inst *Instance, typ *symbols.Symbol) bool {
@@ -85,13 +94,15 @@ func (ctx *Context) classifyHeld(feature *symbols.Symbol, val Value) error {
 	return nil
 }
 
-// classify records typ as a classifier of inst with the features and behaviors it adds.
+// classify records typ as a classifier of inst with the features and behaviors it adds; a
+// type the object already conforms to adds nothing and is recorded as a direct type alone.
 // It is one transaction: a failure, or a probe rolling it back, leaves the object, what its
 // behaviors wrote, the bus and the objects they made as they were.
 func (ctx *Context) classify(inst *Instance, typ *symbols.Symbol) error {
-	if ctx.instanceConforms(inst, typ) {
+	if ctx.isDirectTypeOf(inst, typ) {
 		return nil
 	}
+	inherited := ctx.instanceConforms(inst, typ)
 	commit, rollback := ctx.beginJournal()
 	classifiers, values, running := inst.classifiers, maps.Clone(inst.FeatureValues), len(inst.behaviors)
 	ctx.noteProbeUndo(func() {
@@ -101,6 +112,10 @@ func (ctx *Context) classify(inst *Instance, typ *symbols.Symbol) error {
 		inst.classifiers, inst.FeatureValues = classifiers, values
 	})
 	inst.classifiers = append(inst.classifiers, typ)
+	if inherited {
+		commit()
+		return nil
+	}
 	carried := make(map[string]bool, len(inst.FeatureValues))
 	for name := range inst.FeatureValues {
 		carried[name] = true

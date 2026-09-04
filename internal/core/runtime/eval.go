@@ -1193,36 +1193,54 @@ func (ec *EvalContext) valueHasType(value Value, target *symbols.Symbol, exact b
 }
 
 // directValueTypes names the types a value is of, resolved in the scope reading it:
-// the scalar type of a constant, the enumeration a literal belongs to, and for an object
-// its declared type then the type of each feature it was held as a value of.
+// the scalar type of a constant, the enumeration a literal belongs to, for an object its
+// declared type then the type of each feature it was held as a value of, and for a selected
+// variant the variant itself then what its object was held by.
 func (ctx *Context) directValueTypes(scope *symbols.Scope, value Value) ([]*symbols.Symbol, error) {
-	if value.Kind != ValInstance {
+	id, ok := value.Object()
+	if !ok {
 		typ, err := ctx.directValueType(scope, value)
 		if err != nil {
 			return nil, err
 		}
 		return []*symbols.Symbol{typ}, nil
 	}
-	inst, ok := ctx.instances[value.Instance]
+	inst, ok := ctx.instances[id]
 	if !ok || inst == nil || inst.Type == nil {
-		return nil, fmt.Errorf("%w: instance %d", ErrUndeterminedValueType, value.Instance)
+		return nil, fmt.Errorf("%w: instance %d", ErrUndeterminedValueType, id)
 	}
+	var out []*symbols.Symbol
 	types := inst.types()
-	out := make([]*symbols.Symbol, 0, len(types))
+	if value.Kind == ValVariant {
+		out, types = []*symbols.Symbol{value.Variant()}, inst.classifiers
+	}
 	for _, sym := range types {
-		if typ := ctx.extractType(sym); typ != nil {
-			sym = typ
-		}
-		if !slices.Contains(out, sym) {
-			out = append(out, sym)
+		if typ := ctx.directType(sym); !slices.Contains(out, typ) {
+			out = append(out, typ)
 		}
 	}
 	return out, nil
 }
 
+// directType is the type an object is of for being of sym: the type a feature is typed
+// by, else sym itself.
+func (ctx *Context) directType(sym *symbols.Symbol) *symbols.Symbol {
+	if typ := ctx.extractType(sym); typ != nil {
+		return typ
+	}
+	return sym
+}
+
 // directValueType names the one type a value is of (see directValueTypes); an object
-// answers with its declared type.
+// answers with its declared type, a selected variant with the variant.
 func (ctx *Context) directValueType(scope *symbols.Scope, value Value) (*symbols.Symbol, error) {
+	if _, ok := value.Object(); ok {
+		types, err := ctx.directValueTypes(scope, value)
+		if err != nil {
+			return nil, err
+		}
+		return types[0], nil
+	}
 	var name string
 	switch value.Kind {
 	case ValConst:
@@ -1238,12 +1256,6 @@ func (ctx *Context) directValueType(scope *symbols.Scope, value Value) (*symbols
 		}
 	case ValString:
 		name = "String"
-	case ValInstance:
-		types, err := ctx.directValueTypes(scope, value)
-		if err != nil {
-			return nil, err
-		}
-		return types[0], nil
 	case ValVariant:
 		if value.Variant() == nil {
 			return nil, fmt.Errorf("%w: variant", ErrUndeterminedValueType)

@@ -1391,3 +1391,96 @@ func TestTypePredicatesSeeTheClassifiersOfAnObject(t *testing.T) {
 		}
 	}
 }
+
+// A selected variant is exactly the variant chosen, and its object is judged by each type
+// it is classified by once a typed feature holds it, like any object.
+func TestTypePredicatesSeeTheTypesOfASelectedVariantObject(t *testing.T) {
+	ctx, idx := libraryShapeContext(t, `package test {
+		private import ScalarValues::*;
+		item def Engine { attribute cylinders : Integer = 4; }
+		item def Tallied :> Engine { attribute tally : Integer = 7; }
+		item def Car {
+			variation item engine : Engine [1] {
+				variant item small : Engine;
+				variant item big : Engine { :>> cylinders = 8; }
+			}
+		}
+		item def Garage {
+			item car : Car { :>> engine = engine::big; }
+			item tallied : Tallied [1] = car.engine;
+			attribute isEngine = car.engine istype Engine;
+			attribute hasEngine = car.engine hastype Engine;
+			attribute isTallied = car.engine istype Tallied;
+			attribute hasTallied = car.engine hastype Tallied;
+			attribute hasCar = car.engine hastype Car;
+			attribute isData = car.engine istype ScalarValues::ScalarValue;
+		}
+		item garage : Garage;
+	}`)
+	garage := instantiateQualified(t, ctx, idx, "test::garage")
+	fv, err := garage.GetFeatureValue(ctx, "tallied")
+	if err != nil || fv.Value.Kind != ValVariant || fv.Value.Instance == 0 {
+		t.Fatalf("garage.tallied = %+v, %v; want the materialized big variant", fv, err)
+	}
+	for name, want := range map[string]bool{
+		"isEngine": true, "hasEngine": false,
+		"isTallied": true, "hasTallied": true,
+		"hasCar": false, "isData": false,
+	} {
+		if got := readBool(t, ctx, garage, name); got != want {
+			t.Errorf("%s = %t once tallied : Tallied holds the big variant, want %t", name, got, want)
+		}
+	}
+}
+
+// A type an object already conforms to declares nothing it lacks, but a feature of that
+// type holding it still makes it a direct type of the object: hastype answers alike in
+// either classification order, and classifying by a type twice records it once.
+func TestHoldingByAWiderTypeRecordsItAsADirectType(t *testing.T) {
+	for _, order := range [][]string{{"Line", "Segment"}, {"Segment", "Line"}} {
+		t.Run(strings.Join(order, "-then-"), func(t *testing.T) {
+			ctx, idx := libraryShapeContext(t, `package test {
+				item def Curve;
+				item def Line :> Curve { attribute slope : Real; }
+				item def Segment :> Line { attribute span : Real; }
+				item def Rack { item raw [1]; }
+				item rack : Rack;
+			}`)
+			pkg, ok := idx.DocumentRoot("<test>").LookupLocal("test")
+			if !ok || pkg.Scope == nil {
+				t.Fatal("test package not indexed")
+			}
+			raw := readInstance(t, ctx, instantiateQualified(t, ctx, idx, "test::rack"), "raw")
+			for _, name := range order {
+				if err := ctx.classify(raw, idx.LookupQualified("test::" + name)[0]); err != nil {
+					t.Fatalf("classify(raw, %s): %v", name, err)
+				}
+			}
+			features := len(raw.FeatureValues)
+			if err := ctx.classify(raw, idx.LookupQualified("test::Line")[0]); err != nil {
+				t.Fatalf("classify(raw, Line) again: %v", err)
+			}
+			if len(raw.classifiers) != 2 || len(raw.FeatureValues) != features {
+				t.Fatalf("classifiers = %v with %d feature values after classifying by Line again, want Line and Segment once with %d",
+					raw.classifiers, len(raw.FeatureValues), features)
+			}
+			for _, name := range []string{"slope", "span"} {
+				if _, ok := raw.FeatureValues[name]; !ok {
+					t.Errorf("raw carries no %s", name)
+				}
+			}
+			for src, want := range map[string]bool{
+				"rack.raw hastype Line": true, "rack.raw hastype Segment": true,
+				"rack.raw hastype Curve": false, "rack.raw istype Curve": true,
+			} {
+				val, err := evalIn(t, ctx, pkg.Scope, src)
+				if err != nil || val.Kind != ValConst || val.Const.Kind != semantics.ValBool {
+					t.Fatalf("%s = %s, %v; want a Boolean", src, FormatValue(val), err)
+				}
+				if val.Const.Bool != want {
+					t.Errorf("%s = %t, want %t", src, val.Const.Bool, want)
+				}
+			}
+		})
+	}
+}
