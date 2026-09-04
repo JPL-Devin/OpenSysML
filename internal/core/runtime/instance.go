@@ -486,6 +486,15 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 	fv := inst.FeatureValues[name]
 	ctx.noteProbeWrite(fv)
 
+	// A feature listing this one as a value, on this object or an owner reaching it by a
+	// chain, classifies its objects: each is read first, and may have materialized this one.
+	if err := ctx.materializeHolders(inst, name); err != nil {
+		return nil, err
+	}
+	if fv.Materialized {
+		return fv, nil
+	}
+
 	// A variation holds the variant it was bound to, and nothing until it is
 	// bound: it classifies its variants abstractly, so it is no object of itself.
 	if ctx.model.IsVariationFeature(fv.Feature.Symbol) {
@@ -536,11 +545,7 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 		return fv, nil
 	}
 
-	// A feature listing this one as a value, or a collection an optional one
-	// subsets, classifies or fills its objects: each is read first.
-	if err := ctx.materializeHolders(inst, name); err != nil {
-		return nil, err
-	}
+	// A collection an optional feature subsets fills its objects: it is read first.
 	if err := ctx.materializeSubsettedCollections(inst, fv); err != nil {
 		return nil, err
 	}

@@ -2,15 +2,17 @@ package runtime
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// holdingFeatures names the features of typ whose stated value may hold the named
-// feature's objects, so their types classify them (KerML 1.0 §7.3.4.1); memoized per type.
-func (ctx *Context) holdingFeatures(typ *symbols.Symbol, name string) []string {
+// holdingFeatures names the features of typ whose stated value may hold the objects of the
+// feature at path — a feature's name, or a chain of names from one of typ's features into the
+// objects it holds — so their types classify them (KerML 1.0 §7.3.4.1); memoized per type.
+func (ctx *Context) holdingFeatures(typ *symbols.Symbol, path string) []string {
 	index, ok := ctx.holders[typ]
 	if !ok {
 		index = make(map[string][]string)
@@ -25,54 +27,62 @@ func (ctx *Context) holdingFeatures(typ *symbols.Symbol, name string) []string {
 				continue
 			}
 			for _, held := range ctx.mentionedFeatures(typ, feat) {
-				if held != feat.Name && !data[held] {
+				if root, _, _ := strings.Cut(held, "."); root != feat.Name && !data[root] {
 					index[held] = append(index[held], feat.Name)
 				}
 			}
 		}
 		ctx.holders[typ] = index
 	}
-	return index[name]
+	return index[path]
 }
 
-// holdsData reports a feature whose values are data, never objects: an attribute, or
-// one typed by a data type. It classifies nothing.
+// holdsData reports a feature whose values are data, never objects: one declared an attribute
+// by keyword (`:>> x` alone declares no kind), or typed by a data type. It classifies nothing.
 func (ctx *Context) holdsData(feat *EffectiveFeature) bool {
 	if feat.Symbol != nil {
-		if usage, ok := feat.Symbol.Decl.(*ast.Usage); ok && usage.Kind == ast.UsageAttribute {
+		usage, ok := feat.Symbol.Decl.(*ast.Usage)
+		if ok && usage.Kind == ast.UsageAttribute && usage.Keyword != "" {
 			return true
 		}
 	}
 	return ctx.model.IsDataType(feat.Type)
 }
 
-// mentionedFeatures names the features of typ whose values feat's value may pass
-// on as its own, wherever its expression refers to them.
+// mentionedFeatures names the features of typ whose values feat's value may pass on as its
+// own, wherever its expression refers to them: a feature by name, a chain into the objects
+// one holds as the names along it.
 func (ctx *Context) mentionedFeatures(typ *symbols.Symbol, feat *EffectiveFeature) []string {
 	scope := feat.DefaultScope()
 	if scope == nil {
 		return nil
 	}
-	var names []string
+	var paths []string
 	seen := make(map[string]bool)
 	for _, passed := range ctx.passedFeatureReferences(scope, feat.DefaultValue) {
 		sym := passed.symbol(ctx)
 		if sym == nil {
 			continue
 		}
-		if name, ok := ctx.denotedFeature(typ, sym); ok && !seen[name] {
-			seen[name] = true
-			names = append(names, name)
+		if name, ok := ctx.denotedFeature(typ, sym); ok {
+			path := strings.Join(append([]string{name}, passed.members...), ".")
+			if !seen[path] {
+				seen[path] = true
+				paths = append(paths, path)
+			}
 		}
 	}
-	return names
+	return paths
 }
 
-// passedReference is a feature reference an expression may answer the values of, in
-// the scope it is written in: a body's parameters are looked up in the body's own.
+// passedReference is a feature reference an expression may answer the values of, in the
+// scope it is written in: a body's parameters are looked up in the body's own. members
+// are the names a chain reads from the objects the reference holds, none for the
+// reference's own values.
 type passedReference struct {
-	scope *symbols.Scope
-	ref   *ast.FeatureReference
+	scope   *symbols.Scope
+	ref     *ast.FeatureReference
+	members []string
 }
 
 // symbol resolves the reference where it is written.
@@ -80,10 +90,31 @@ func (p passedReference) symbol(ctx *Context) *symbols.Symbol {
 	return ctx.referencedSymbol(p.scope, p.ref.Name)
 }
 
+// through is the reference read on through further members.
+func (p passedReference) through(members []string) passedReference {
+	if len(members) == 0 {
+		return p
+	}
+	p.members = append(append([]string{}, p.members...), members...)
+	return p
+}
+
+// readThrough is refs each read on through members.
+func readThrough(refs []passedReference, members []string) []passedReference {
+	if len(members) == 0 {
+		return refs
+	}
+	out := make([]passedReference, len(refs))
+	for i, ref := range refs {
+		out[i] = ref.through(members)
+	}
+	return out
+}
+
 // passedFeatureReferences lists the feature references an expression written in scope
 // may answer the values of as its own: a branch chosen, an element indexed or selected,
-// an argument a call returns, a collected element the body answers — not a chain's
-// values, a condition or an operand computed from.
+// an argument a call returns, a collected element the body answers, a chain's last member
+// read from what its operand passes on — not a condition or an operand computed from.
 func (ctx *Context) passedFeatureReferences(scope *symbols.Scope, expr ast.Node) []passedReference {
 	var refs []passedReference
 	var visit func(nodes ...ast.Node)
@@ -92,6 +123,16 @@ func (ctx *Context) passedFeatureReferences(scope *symbols.Scope, expr ast.Node)
 			switch n := n.(type) {
 			case *ast.FeatureReference:
 				refs = append(refs, passedReference{scope: scope, ref: n})
+			case *ast.FeatureChainExpr:
+				if n.Member == nil || len(n.Member.Parts) == 0 {
+					continue
+				}
+				base, parts := chainBase(n)
+				members := make([]string, len(parts))
+				for i, part := range parts {
+					members[i] = part.Text
+				}
+				refs = append(refs, readThrough(ctx.passedFeatureReferences(scope, base), members)...)
 			case *ast.SequenceExpr:
 				visit(n.Elements...)
 			case *ast.OperatorExpr:
@@ -157,12 +198,12 @@ func (ctx *Context) bodyReferences(scope *symbols.Scope, body *ast.BodyExpr, ope
 			seen[sym] = true
 			if sym.Decl == body {
 				if operand != nil {
-					refs = append(refs, ctx.passedFeatureReferences(scope, operand)...)
+					refs = append(refs, readThrough(ctx.passedFeatureReferences(scope, operand), p.members)...)
 				}
 				continue
 			}
 			if value := ctx.extractDefaultValue(sym); value != nil {
-				expand(ctx.passedFeatureReferences(bodyScope, value))
+				expand(readThrough(ctx.passedFeatureReferences(bodyScope, value), p.members))
 			}
 		}
 	}
@@ -270,21 +311,22 @@ func (ctx *Context) collectReturnedParameters(shape *calcShape, passed, params m
 		collection ast.Node
 	}
 	variables := make(map[*symbols.Symbol]loopVariable)
-	var follow func(scope *symbols.Scope, expr ast.Node)
-	follow = func(scope *symbols.Scope, expr ast.Node) {
+	// A chain from a parameter passes on objects the parameter holds, not the parameter.
+	var follow func(scope *symbols.Scope, expr ast.Node, members []string)
+	follow = func(scope *symbols.Scope, expr ast.Node, members []string) {
 		if scope == nil {
 			return
 		}
-		for _, ref := range ctx.passedFeatureReferences(scope, expr) {
+		for _, ref := range readThrough(ctx.passedFeatureReferences(scope, expr), members) {
 			sym := ref.symbol(ctx)
 			if sym == nil {
 				continue
 			}
 			if variable, ok := variables[sym]; ok {
-				follow(variable.scope, variable.collection)
+				follow(variable.scope, variable.collection, ref.members)
 				continue
 			}
-			if name, ok := ctx.denotedFeature(shape.Sym, sym); ok && params[name] {
+			if name, ok := ctx.denotedFeature(shape.Sym, sym); ok && params[name] && len(ref.members) == 0 {
 				passed[name] = true
 			}
 		}
@@ -294,7 +336,7 @@ func (ctx *Context) collectReturnedParameters(shape *calcShape, passed, params m
 		for _, stmt := range stmts {
 			switch s := stmt.(type) {
 			case lower.Return:
-				follow(s.Scope, s.Value)
+				follow(s.Scope, s.Value, nil)
 			case lower.If:
 				walk(s.Then.Steps())
 				if s.Else != nil {
@@ -316,7 +358,7 @@ func (ctx *Context) collectReturnedParameters(shape *calcShape, passed, params m
 	for _, binding := range shape.Bindings {
 		for i := range binding.Ends {
 			if binding.Ends[i].Path == "result" && binding.Ends[1-i].Expr != nil {
-				follow(binding.Scope, binding.Ends[1-i].Expr)
+				follow(binding.Scope, binding.Ends[1-i].Expr, nil)
 			}
 		}
 	}
@@ -338,20 +380,32 @@ func (ctx *Context) referencedSymbol(scope *symbols.Scope, qn *ast.QualifiedName
 	return sym
 }
 
-// materializeHolders reads the features of inst whose value lists the named feature before its
+// materializeHolders reads the features whose value lists the named feature of inst — on inst,
+// or on an object holding it as a chain through the features leading to inst — before its
 // objects are made, so every holding feature classifies them whichever is read first.
 func (ctx *Context) materializeHolders(inst *Instance, name string) error {
-	for _, typ := range inst.types() {
-		for _, holder := range ctx.holdingFeatures(typ, name) {
-			fv, ok := inst.FeatureValues[holder]
-			if !ok || fv.Materialized ||
-				ctx.derivingFeatureValues[featureValueRef{instance: inst.ID, feature: holder}] {
-				continue
-			}
-			if _, err := inst.GetFeatureValue(ctx, holder); err != nil {
-				return fmt.Errorf("feature %s holding %s: %w", holder, name, err)
+	if fv, ok := inst.FeatureValues[name]; !ok || ctx.holdsData(fv.Feature) {
+		return nil
+	}
+	path := name
+	for holding := inst; holding != nil; {
+		for _, typ := range holding.types() {
+			for _, holder := range ctx.holdingFeatures(typ, path) {
+				fv, ok := holding.FeatureValues[holder]
+				if !ok || fv.Materialized ||
+					ctx.derivingFeatureValues[featureValueRef{instance: holding.ID, feature: holder}] {
+					continue
+				}
+				if _, err := holding.GetFeatureValue(ctx, holder); err != nil {
+					return fmt.Errorf("feature %s holding %s: %w", holder, path, err)
+				}
 			}
 		}
+		owner, feature := holding.Owner()
+		if owner == nil || feature == "" {
+			break
+		}
+		path, holding = feature+"."+path, owner
 	}
 	return nil
 }

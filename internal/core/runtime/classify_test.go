@@ -222,9 +222,10 @@ func TestArgumentNotReturnedIsNotHeldByTheCall(t *testing.T) {
 }
 
 // Only a feature that may answer another's objects as its own holds them: an attribute
-// computing from a feature, a condition tested, a chain through a feature, and an argument
-// a calc's returns do not pass on hold nothing, so reading those features forces no other.
-// A function whose body the model does not state may return any argument.
+// computing from a feature, a condition tested, and an argument a calc's returns do not pass
+// on hold nothing, so reading those features forces no other; a chain holds its last member
+// read from the objects before it, not those objects. A function whose body the model does
+// not state may return any argument.
 func TestOnlyFeaturesPassingObjectsOnHoldThem(t *testing.T) {
 	ctx, idx := libraryShapeContext(t, `package test {
 		private import ScalarValues::*;
@@ -259,12 +260,14 @@ func TestOnlyFeaturesPassingObjectsOnHoldThem(t *testing.T) {
 	rack := idx.LookupQualified("test::Rack")[0]
 
 	want := map[string][]string{
-		"lead":     {"tallied", "picked", "led", "indexed", "looped", "headed"},
-		"trail":    {"tallied", "picked", "trailed", "indexed", "looped"},
-		"spare":    {"looped"},
-		"pickLead": nil,
-		"count":    nil,
-		"doubled":  nil,
+		"lead":       {"tallied", "picked", "led", "indexed", "looped", "headed"},
+		"trail":      {"tallied", "picked", "trailed", "indexed", "looped"},
+		"spare":      {"looped"},
+		"lead.cell":  {"cells"},
+		"trail.cell": {"cells"},
+		"pickLead":   nil,
+		"count":      nil,
+		"doubled":    nil,
 	}
 	for name, holders := range want {
 		if got := ctx.holdingFeatures(rack, name); !slices.Equal(got, holders) {
@@ -276,7 +279,8 @@ func TestOnlyFeaturesPassingObjectsOnHoldThem(t *testing.T) {
 // A collect body's parameter stands for the operand's elements: a body answering it, directly,
 // through a feature it declares, or in a nested body, passes the operand's objects on, so the
 // collecting feature holds them whichever is read first; a body answering another feature
-// passes that one on instead, and one chaining through the parameter passes nothing on.
+// passes that one on instead, and one chaining through the parameter passes on the chain's
+// last member of the operand's objects.
 func TestCollectedObjectsAreHeldByTheCollectingFeature(t *testing.T) {
 	src := `package test {
 		private import ScalarValues::*;
@@ -296,9 +300,11 @@ func TestCollectedObjectsAreHeldByTheCollectingFeature(t *testing.T) {
 	ctx, idx := libraryShapeContext(t, src)
 	rack := idx.LookupQualified("test::Rack")[0]
 	want := map[string][]string{
-		"lead":  {"same", "local", "nested"},
-		"trail": {"same", "local", "nested"},
-		"spare": {"nested", "other"},
+		"lead":       {"same", "local", "nested"},
+		"trail":      {"same", "local", "nested"},
+		"spare":      {"nested", "other"},
+		"lead.cell":  {"cells"},
+		"trail.cell": {"cells"},
 	}
 	for name, holders := range want {
 		if got := ctx.holdingFeatures(rack, name); !slices.Equal(got, holders) {
@@ -418,6 +424,132 @@ func TestSelectedVariantObjectIsClassifiedByTheFeatureHoldingIt(t *testing.T) {
 	if !ok || glow.State == nil || glow.State.stateData["cycles"].Const.Int != 1 {
 		t.Fatal("the big variant's object runs no glow state machine")
 	}
+}
+
+// A feature valued by a chain holds the chain's last member of the objects before it: reading
+// that member on a nested object — through one owner, several, or a collection — classifies
+// it before its classifier's features are read, while the objects along the chain and the
+// chains other features read stay untouched.
+func TestChainedHoldingClassifiesTheLastMemberWhicheverIsReadFirst(t *testing.T) {
+	src := `package test {
+		private import ScalarValues::*;
+		item def Engine { attribute cylinders : Integer = 4; }
+		item def Tallied :> Engine { attribute tally : Integer = 7; }
+		item def Car {
+			variation item engine : Engine [1] {
+				variant item small : Engine;
+				variant item big : Engine { :>> cylinders = 8; }
+			}
+		}
+		item def Plain { item engine : Engine [1]; }
+		item def Lot { item parked : Plain [1]; }
+		item def Garage {
+			item car : Car { :>> engine = engine::big; }
+			item spare : Car { :>> engine = engine::small; }
+			item fleet : Plain [2];
+			item lot : Lot [1];
+			item tallied : Tallied [1] = car.engine;
+			item spared : Tallied [1] = spare.engine;
+			item fleeted : Tallied [2] = fleet.engine;
+			item deep : Tallied [1] = lot.parked.engine;
+			attribute isTallied : Boolean = car.engine istype Tallied;
+		}
+		item garage : Garage;
+	}`
+	engineOf := func(t *testing.T, ctx *Context, holder *Instance) *Instance {
+		t.Helper()
+		fv, err := holder.GetFeatureValue(ctx, "engine")
+		if err != nil {
+			t.Fatalf("%s.engine: %v", holder.Type.Name, err)
+		}
+		id, ok := fv.HeldValue().Object()
+		if !ok {
+			t.Fatalf("%s.engine = %s, want one object", holder.Type.Name, FormatValue(fv.HeldValue()))
+		}
+		return ctx.instances[id]
+	}
+
+	for _, first := range []string{"car.engine", "tallied"} {
+		t.Run(first+"_first", func(t *testing.T) {
+			ctx, idx := libraryShapeContext(t, src)
+			garage := instantiateQualified(t, ctx, idx, "test::garage")
+			tallied := idx.LookupQualified("test::Tallied")[0]
+			car := readInstance(t, ctx, garage, "car")
+			if first == "tallied" {
+				if _, err := garage.GetFeatureValue(ctx, "tallied"); err != nil {
+					t.Fatalf("garage.tallied: %v", err)
+				}
+			}
+			engine := engineOf(t, ctx, car)
+			if !ctx.instanceConforms(engine, tallied) {
+				t.Fatalf("car.engine is classified by %v, want Tallied", engine.classifiers)
+			}
+			if got := readInt(t, ctx, engine, "tally"); got != 7 {
+				t.Fatalf("car.engine.tally = %d, want 7", got)
+			}
+			if got := readInt(t, ctx, engine, "cylinders"); got != 8 {
+				t.Fatalf("car.engine.cylinders = %d, want the big variant's 8", got)
+			}
+			if ctx.instanceConforms(car, tallied) {
+				t.Fatalf("car, an object the chain passes through, is classified by %v", car.classifiers)
+			}
+			if fv := garage.FeatureValues["tallied"]; fv == nil || !fv.Materialized {
+				t.Fatal("garage.tallied is not read once car.engine is")
+			}
+			if held, ok := garage.FeatureValues["tallied"].HeldValue().Object(); !ok || held != engine.ID {
+				t.Fatalf("garage.tallied holds %s, want car.engine (%d)", FormatValue(garage.FeatureValues["tallied"].HeldValue()), engine.ID)
+			}
+			for _, other := range []string{"spared", "fleeted", "deep"} {
+				if garage.FeatureValues[other].Materialized {
+					t.Errorf("garage.%s, a chain through other objects, is read along with car.engine", other)
+				}
+			}
+			if !readBool(t, ctx, garage, "isTallied") {
+				t.Error("car.engine istype Tallied = false")
+			}
+		})
+	}
+
+	t.Run("over_a_collection", func(t *testing.T) {
+		ctx, idx := libraryShapeContext(t, src)
+		garage := instantiateQualified(t, ctx, idx, "test::garage")
+		tallied := idx.LookupQualified("test::Tallied")[0]
+		fleet, err := garage.GetFeatureValue(ctx, "fleet")
+		if err != nil {
+			t.Fatalf("garage.fleet: %v", err)
+		}
+		for _, el := range elementsOf(fleet.HeldValue()) {
+			plain := ctx.instances[el.Instance]
+			engine := engineOf(t, ctx, plain)
+			if !ctx.instanceConforms(engine, tallied) {
+				t.Fatalf("fleet.engine is classified by %v, want Tallied", engine.classifiers)
+			}
+			if ctx.instanceConforms(plain, tallied) {
+				t.Fatalf("a fleet car is classified by %v", plain.classifiers)
+			}
+		}
+		if got := len(elementsOf(garage.FeatureValues["fleeted"].HeldValue())); got != 2 {
+			t.Fatalf("garage.fleeted holds %d objects, want the two engines", got)
+		}
+	})
+
+	t.Run("through_nested_owners", func(t *testing.T) {
+		ctx, idx := libraryShapeContext(t, src)
+		garage := instantiateQualified(t, ctx, idx, "test::garage")
+		tallied := idx.LookupQualified("test::Tallied")[0]
+		lot := readInstance(t, ctx, garage, "lot")
+		parked := readInstance(t, ctx, lot, "parked")
+		engine := engineOf(t, ctx, parked)
+		if !ctx.instanceConforms(engine, tallied) {
+			t.Fatalf("lot.parked.engine is classified by %v, want Tallied", engine.classifiers)
+		}
+		if ctx.instanceConforms(parked, tallied) || ctx.instanceConforms(lot, tallied) {
+			t.Fatal("an object along lot.parked.engine is classified as Tallied")
+		}
+		if held := readInstance(t, ctx, garage, "deep"); held != engine {
+			t.Fatalf("garage.deep holds object %d, want lot.parked.engine (%d)", held.ID, engine.ID)
+		}
+	})
 }
 
 // A value none of whose types is comparable with the feature's type is refused: a number,
