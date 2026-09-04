@@ -50,11 +50,10 @@ func (ec *exprChecker) argumentTypes(scope *symbols.Scope, e *ast.InvocationExpr
 		named:      make([]semantics.Argument, len(e.NamedArgs)),
 	}
 	for i, arg := range args {
-		types.positional[i] = ec.argument(scope, arg, "")
+		types.positional[i] = ec.argument(scope, arg, nil)
 	}
 	for i, arg := range e.NamedArgs {
-		name, _ := namedArgumentName(arg)
-		types.named[i] = ec.argument(scope, arg.Value, name)
+		types.named[i] = ec.argument(scope, arg.Value, arg.Name)
 	}
 	return types
 }
@@ -87,25 +86,17 @@ func (t argumentTypes) arguments() []semantics.Argument {
 	typed := make([]semantics.Argument, 0, len(t.positional)+len(t.named))
 	typed = append(typed, t.positional...)
 	for _, arg := range t.named {
-		if arg.Name != "" {
+		if arg.Name != nil && len(arg.Name.Parts) > 0 {
 			typed = append(typed, arg)
 		}
 	}
 	return typed
 }
 
-// namedArgumentName is the parameter name a named argument binds to.
-func namedArgumentName(arg ast.NamedArg) (string, bool) {
-	if arg.Name == nil || len(arg.Name.Parts) != 1 {
-		return "", false
-	}
-	return arg.Name.Parts[0].Text, true
-}
-
 // argument describes value as an argument: its scalar type, and the declared type
 // of the feature it names, or of the result of the call it makes. A collection
 // literal binds its elements, so it is typed by the type they have in common.
-func (ec *exprChecker) argument(scope *symbols.Scope, value ast.Node, name string) semantics.Argument {
+func (ec *exprChecker) argument(scope *symbols.Scope, value ast.Node, name *ast.QualifiedName) semantics.Argument {
 	if seq, ok := value.(*ast.SequenceExpr); ok {
 		return semantics.Argument{
 			Prim:  ec.commonElementType(scope, seq),

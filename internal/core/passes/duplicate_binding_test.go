@@ -71,6 +71,28 @@ func TestInvocationDuplicateParameterBindingKerML(t *testing.T) {
 	wantMessages(t, kermlLibraryDiags(t, fmt.Sprintf(model, "G(x = t, F::y = t)")), `G has no parameter named "F::y"`)
 }
 
+// A written name that only resolves within a later overload — a qualified or aliased
+// parameter — selects that overload, and a second spelling of it is a duplicate there.
+func TestInvocationOverloadSelectedByResolvedParameterName(t *testing.T) {
+	const model = `package P {
+		class T;
+		package A { function f { in x : T; in a : T; return r : T; } }
+		package B { function f { in x : T; in b : T; alias bs for b; return r : T; } }
+		private import A::*;
+		private import B::*;
+		feature t : T;
+		feature v : T = %s;
+	}`
+	for _, call := range []string{"f(x = t, B::f::b = t)", "f(x = t, bs = t)", "f(x = t, A::f::a = t)"} {
+		if diags := kermlLibraryDiags(t, fmt.Sprintf(model, call)); len(diags) != 0 {
+			t.Errorf("%s: expected no diagnostics, got %v", call, diags)
+		}
+	}
+	wantMessages(t, kermlLibraryDiags(t, fmt.Sprintf(model, "f(x = t, B::f::b = t, b = t)")), `f binds parameter "b" twice`)
+	wantMessages(t, kermlLibraryDiags(t, fmt.Sprintf(model, "f(x = t, bs = t, b = t)")), `f binds parameter "b" twice`)
+	wantMessages(t, kermlLibraryDiags(t, fmt.Sprintf(model, "f(x = t, b = t, B::f::b = t)")), `f binds parameter "b" twice`)
+}
+
 // The rule reads through the receiver: a call of a feature typed by the function
 // binds the function's parameters.
 func TestInvocationDuplicateParameterBindingThroughUsage(t *testing.T) {
