@@ -551,7 +551,7 @@ func beginsDeclarationTail(t, t2 lexer.Token) bool {
 // body, or nothing at all.
 func (p *Parser) keywordlessFeatureAt(off int) bool {
 	t := p.peekN(off)
-	if t.Kind != lexer.Identifier && t.Kind != lexer.UnrestrictedName {
+	if !p.atNameAt(off) {
 		return false
 	}
 	// KerML reserves `var`, so it prefixes a declaration and never names one.
@@ -1110,7 +1110,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		// `render` keyword, and the Kernel Semantic Library writes `in frame :
 		// SpatialFrame[1]`. Read the keyword as the declaration's own name
 		// unless what follows can begin the member form.
-		if (kw == "frame" || kw == "render") && !p.atMemberKeywordUsedAsKeyword(kw) {
+		if memberKeywordNames[kw] && !p.atMemberKeywordUsedAsKeyword(kw) {
 			return applyPrefixes(p.parseUsage(start, ast.UsageAttribute, "", mods, false))
 		}
 
@@ -1620,10 +1620,10 @@ func usageBodyContext(kind ast.UsageKind) bodyContext {
 }
 
 // bodyAdmitsMember reports whether the innermost body offers the member kw
-// introduces (SysML.xtext RequirementBodyItem, CaseBodyItem, StateBodyItem, ViewBodyItem).
+// introduces; a word the file's language does not reserve is a name instead.
 func (p *Parser) bodyAdmitsMember(kw string) bool {
 	m, ok := ownedMembers[kw]
-	if !ok {
+	if !ok || !p.reservedWord(kw) {
 		return true
 	}
 	return slices.Contains(m.bodies, p.bodyContext())
@@ -2358,9 +2358,16 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 func (p *Parser) parseSuccessionAsUsage(start int) ast.Node {
 	u := &ast.Usage{Kind: ast.UsageSuccession}
 	p.parseConnectorEnds(u, "")
-	u.Members, u.HasBody = p.parseDefUsageBody()
+	u.Members, u.HasBody = p.parseGenericBody()
 	u.NodeSpan = p.spanFrom(start)
 	return u
+}
+
+// parseGenericBody parses the body of a member whose kind offers no members of
+// its own (SysML.xtext UsageBody), so it does not inherit the body around it.
+func (p *Parser) parseGenericBody() (members []ast.Node, hasBody bool) {
+	defer p.pushBodyContext(bodyOther)()
+	return p.parseDefUsageBody()
 }
 
 // parseDefUsageBody parses a definition/usage body: `;` (no body) or
@@ -3232,7 +3239,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 			p.parseUsageValue(u)
 
 			// Parse body or semicolon
-			members, hasBody := p.parseDefUsageBody()
+			members, hasBody := p.parseGenericBody()
 			u.Members = members
 			u.HasBody = hasBody
 
@@ -3284,7 +3291,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 		p.parseUsageValue(u)
 
 		// Parse body or semicolon
-		members, hasBody := p.parseDefUsageBody()
+		members, hasBody := p.parseGenericBody()
 		u.Members = members
 		u.HasBody = hasBody
 
@@ -3338,7 +3345,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 		if enumValue {
 			kind = ast.UsageEnumeration
 		}
-		members, hasBody := p.parseDefUsageBody()
+		members, hasBody := p.parseGenericBody()
 
 		u := &ast.Usage{
 			Kind:              kind,
@@ -3458,16 +3465,16 @@ func (p *Parser) parsePerformedActionReference(start int, mods featureMods, kw s
 	return p.parseReferenceMemberUsage(start, ast.UsageAction, kw, "action", mods, p.parseActionBodyMixed, true)
 }
 
-// atMemberKeywordUsedAsKeyword reports whether the `frame` or `render` token at
-// the cursor introduces a member rather than being the name of the declaration
-// it starts. Both member forms continue with the referenced name or with the
-// notation's own kind keyword (SysML.xtext ViewRenderingUsage,
-// FramedConcernUsage), so anything else — a multiplicity, a specialization, a
-// type, a body — can only follow a name, and `frame` and `render` are legal
-// names in KerML.
+// memberKeywordNames are the SysML member keywords KerML does not reserve, so a
+// KerML declaration may carry one as its name (`in frame : SpatialFrame[1]`).
+var memberKeywordNames = map[string]bool{
+	"frame": true, "render": true, "subject": true, "actor": true,
+	"stakeholder": true, "objective": true,
+}
+
+// atMemberKeywordUsedAsKeyword reports whether the member keyword at the cursor
+// introduces a member (a name or its kind keyword follows) or names a KerML feature.
 func (p *Parser) atMemberKeywordUsedAsKeyword(kw string) bool {
-	// SysML.xtext holds both literals, so neither can name a declaration there;
-	// only KerML, which has neither, reads them as names.
 	if p.src.Kind() != source.KindKerML {
 		return true
 	}
@@ -3476,10 +3483,12 @@ func (p *Parser) atMemberKeywordUsedAsKeyword(kw string) bool {
 	case lexer.Identifier, lexer.UnrestrictedName:
 		return true
 	case lexer.Keyword:
-		if kw == "frame" {
+		switch kw {
+		case "frame":
 			return next.KeywordID == "concern"
+		case "render":
+			return next.KeywordID == "rendering"
 		}
-		return next.KeywordID == "rendering"
 	}
 	return false
 }
@@ -3738,7 +3747,7 @@ func (p *Parser) parseAnonymousEndUsage(start int, mods featureMods) ast.Node {
 		Direction:    mods.direction,
 		Multiplicity: mods.earlyMultiplicity,
 	}
-	u.Members, u.HasBody = p.parseDefUsageBody()
+	u.Members, u.HasBody = p.parseGenericBody()
 	u.NodeSpan = p.spanFrom(start)
 	return u
 }
@@ -4451,6 +4460,7 @@ func (p *Parser) parseMetadataUsage(start int) *ast.PrefixMetadata {
 	if p.at(lexer.LBrace) {
 		p.advance() // '{'
 		var body []ast.Node
+		leave := p.pushBodyContext(bodyOther)
 		for !p.at(lexer.RBrace) && !p.atEOF() {
 			if m := p.parseBodyMember(); m != nil {
 				body = append(body, m)
@@ -4460,6 +4470,7 @@ func (p *Parser) parseMetadataUsage(start int) *ast.PrefixMetadata {
 			p.accept2(lexer.Semicolon)
 			body = append(body, expr)
 		}
+		leave()
 		p.expect(lexer.RBrace, "expected '}' after metadata body")
 		pm.Body = body
 		pm.HasBody = true

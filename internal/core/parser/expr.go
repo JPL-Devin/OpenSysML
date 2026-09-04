@@ -581,6 +581,7 @@ func (p *Parser) atBodyExprMember() bool {
 // parseBodyExpr parses `{ [doc] (in param ;)* (member)* resultExpr }`.
 func (p *Parser) parseBodyExpr(start int) ast.Node {
 	p.advance() // {
+	defer p.pushBodyContext(bodyOther)()
 	b := &ast.BodyExpr{}
 
 	// A body may open with documentation, a member of the body like its features.
@@ -670,9 +671,11 @@ func (p *Parser) parseBodyExpr(start int) ast.Node {
 			// Parse optional body members: in ref a { doc ... }
 			if p.at(lexer.LBrace) {
 				p.advance() // {
+				leave := p.pushBodyContext(bodyOther)
 				for !p.at(lexer.RBrace) && !p.atEOF() {
 					paramMembers = append(paramMembers, p.parseBodyMember())
 				}
+				leave()
 				p.expect(lexer.RBrace, "expected '}'")
 			}
 			b.Params = append(b.Params, ast.BodyParam{

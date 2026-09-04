@@ -397,12 +397,14 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 	} else if p.at(lexer.LBrace) {
 		p.advance() // consume '{'
 		// Parse body members generically
+		leave := p.pushBodyContext(bodyOther)
 		for !p.at(lexer.RBrace) && !p.atEOF() {
 			m := p.parseBodyMember()
 			if m != nil {
 				members = append(members, m)
 			}
 		}
+		leave()
 		p.expect(lexer.RBrace, "expected '}'")
 		hasBody = true
 	} else {
@@ -1663,7 +1665,7 @@ func (p *Parser) parseResultMember() ast.Node {
 
 		// Check for body or semicolon
 		if p.at(lexer.LBrace) || p.at(lexer.Semicolon) {
-			members, hasBody := p.parseDefUsageBody()
+			members, hasBody := p.parseGenericBody()
 			u.Members = members
 			u.HasBody = hasBody
 		} else {
@@ -1698,7 +1700,7 @@ func (p *Parser) parseResultMember() ast.Node {
 
 		// Check for body or semicolon
 		if p.at(lexer.LBrace) {
-			bodyMembers, hasBody := p.parseDefUsageBody()
+			bodyMembers, hasBody := p.parseGenericBody()
 			u.Members = bodyMembers
 			if !hasBody {
 				p.expect(lexer.Semicolon, msgExpectedReturnSemi)
@@ -1733,7 +1735,7 @@ func (p *Parser) parseResultMember() ast.Node {
 
 		// Check for optional body or semicolon
 		if p.at(lexer.LBrace) {
-			bodyMembers, hasBody := p.parseDefUsageBody()
+			bodyMembers, hasBody := p.parseGenericBody()
 			u.Members = bodyMembers
 			if !hasBody {
 				p.expect(lexer.Semicolon, msgExpectedReturnSemi)

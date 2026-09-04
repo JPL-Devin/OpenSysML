@@ -134,7 +134,7 @@ func (p *Parser) parseRelationshipMember(start int, vis ast.Visibility, trivia [
 		Conjugated:    form.conjugated,
 		Visibility:    vis,
 	}
-	rel.Members, rel.HasBody = p.parseDefUsageBody()
+	rel.Members, rel.HasBody = p.parseGenericBody()
 	rel.NodeSpan = p.spanFrom(start)
 	rel.SetLeadingTrivia(trivia)
 	return rel
@@ -189,7 +189,7 @@ func (p *Parser) parseTypeFeaturingMember(start int, vis ast.Visibility, trivia 
 		Target:     featuring,
 		Visibility: vis,
 	}
-	rel.Members, rel.HasBody = p.parseDefUsageBody()
+	rel.Members, rel.HasBody = p.parseGenericBody()
 	rel.NodeSpan = p.spanFrom(start)
 	rel.SetLeadingTrivia(trivia)
 	return rel

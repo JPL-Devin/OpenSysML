@@ -76,6 +76,37 @@ func TestMemberOutsideOwningBodyIsRejected(t *testing.T) {
 		{"objective in do block", "state def S { do { objective o; } }", "objective", `kind="objective"`},
 		{"entry in transition body", "state def S { state a; state b; transition first a then b { entry q; } }", "entry", "EntryMember"},
 		{"exit in transition effect block", "state def S { state a; state b; transition t first a accept e : E do { exit w; } then b; }", "exit", "ExitMember"},
+		// A usage that offers no members of its own has a plain UsageBody, whatever
+		// body it is written in.
+		{"objective in typed usage under case", "case def C { x : T { objective o; } }", "objective", `kind="objective"`},
+		{"objective in bare usage under case", "case def C { x { objective o; } }", "objective", `kind="objective"`},
+		{"objective in ref usage under case", "case def C { ref x : T { objective o; } }", "objective", `kind="objective"`},
+		{"objective in in parameter under case", "case def C { in x : T { objective o; } }", "objective", `kind="objective"`},
+		{"objective in return parameter under case", "case def C { return x : T { objective o; } }", "objective", `kind="objective"`},
+		{"objective in redefinition under case", "case def C { :>> x { objective o; } }", "objective", `kind="objective"`},
+		{"objective in anonymous end under case", "case def C { end ref { objective o; } }", "objective", `kind="objective"`},
+		{"objective in metadata usage under case", "case def C { @M { objective o; } }", "objective", `kind="objective"`},
+		{"objective in body expression under case", "case def C { attribute x = { in y; objective o; y }; }", "objective", `kind="objective"`},
+		{"objective in succession body under case", "case def C { first a then b { objective o; } }", "objective", `kind="objective"`},
+		{"objective in subject body under case", "case def C { subject s { objective o; } }", "objective", `kind="objective"`},
+		{"objective in part usage under case", "case def C { part p : T { objective o; } }", "objective", `kind="objective"`},
+		{"objective in typed usage under analysis case", "analysis def A { x : T { objective o; } }", "objective", `kind="objective"`},
+		{"stakeholder in typed usage under requirement", "requirement def R { x : T { stakeholder s; } }", "stakeholder", `kind="stakeholder"`},
+		{"stakeholder in bare usage under requirement", "requirement def R { x { stakeholder s; } }", "stakeholder", `kind="stakeholder"`},
+		{"actor in typed usage under requirement", "requirement def R { x : T { actor a; } }", "actor", `kind="actor"`},
+		{"subject in typed usage under requirement", "requirement def R { x : T { subject s; } }", "subject", "SubjectMember"},
+		{"stakeholder in stakeholder body", "requirement def R { stakeholder s { stakeholder t; } }", "stakeholder", `name="t"`},
+		{"entry in typed usage under state", "state def S { x : T { entry; } }", "entry", "EntryMember"},
+		{"entry action in bare usage under state", "state def S { x { entry action a; } }", "entry", "EntryMember"},
+		{"do action in typed usage under state", "state def S { x : T { do action a; } }", "do", "DoMember"},
+		{"exit in entry action body", "state def S { entry action a { exit; } }", "exit", "ExitMember"},
+		{"render in typed usage under view", "view def V { x : T { render r; } }", "render", `kind="render"`},
+		{"render in bare usage under view", "view def V { x { render r; } }", "render", `kind="render"`},
+		{"render in in parameter under view", "view def V { in x : T { render r; } }", "render", `kind="render"`},
+		{"render in rendering body", "view def V { render r { render q; } }", "render", `name="q"`},
+		{"render in part usage under view", "view def V { part p { render r; } }", "render", `kind="render"`},
+		{"render in typed usage under nested view", "view def V { view v { x { render r; } } }", "render", `kind="render"`},
+		{"render in typed usage under view usage", "view v { x : T { render r; } }", "render", `kind="render"`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -107,6 +138,43 @@ func TestMemberOutsideOwningBodyIsRejected(t *testing.T) {
 				t.Fatalf("misplaced member kept as %s:\n%s", tt.forbiddenNode, dump)
 			}
 		})
+	}
+}
+
+// KerML reserves none of the member keywords, so each names an ordinary feature
+// in a `.kerml` file, in every shape the KerML Feature production offers.
+func TestOwnedMemberKeywordsAreKerMLNames(t *testing.T) {
+	for _, word := range []string{"actor", "subject", "stakeholder", "objective", "entry", "do", "exit", "render"} {
+		for _, shape := range []string{
+			"feature %s : A;",
+			"feature %s;",
+			"%s : A;",
+			"%s;",
+			"%s [1] : A;",
+			"%s :> other;",
+			"in %s : A;",
+			"%s = 1;",
+			"feature %s { feature nested; }",
+			"%s : A { feature nested; }",
+			"class C { %s : A; feature %s; }",
+		} {
+			decl := strings.ReplaceAll(shape, "%s", word)
+			src := "package P { class A; feature other; " + decl + " }"
+			t.Run(decl, func(t *testing.T) {
+				p := New(source.New("t.kerml", []byte(src)))
+				root := p.ParseFile()
+				if len(p.Diagnostics) != 0 || len(p.Warnings) != 0 {
+					t.Fatalf("errors = %v, warnings = %v, want none", p.Diagnostics, p.Warnings)
+				}
+				dump := ast.Dump(root)
+				if !strings.Contains(dump, `name="`+word+`"`) {
+					t.Fatalf("no feature named %q:\n%s", word, dump)
+				}
+				if strings.Contains(dump, "ErrorNode") || strings.Contains(dump, `kind="`+word+`"`) {
+					t.Fatalf("%q read as a member keyword:\n%s", word, dump)
+				}
+			})
+		}
 	}
 }
 
@@ -149,6 +217,7 @@ func TestMemberInsideOwningBodyStaysClean(t *testing.T) {
 		{"exhibit reference body", "part def P { exhibit s { entry; do action run; } }"},
 		{"parallel state", "state def S parallel { state a { entry action init; } state b { exit; } }"},
 		{"keywords as names", "package P { attribute actor; attribute subject; part render; }"},
+		{"nested view keeps its body", "view def V { view v { render r; } }"},
 		{"nested action bodies under case", "case def C { subject s : S; action a { if true { x := 1; } else { y := 2; } while true { z := 3; } for i in 1..3 { action n; } fork f { action g; } send x to y { in item q; } } }"},
 	}
 	for _, c := range cases {
