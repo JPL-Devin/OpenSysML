@@ -9,14 +9,20 @@ import (
 // nil when sym is no enumeration literal: a literal is an enumeration usage
 // declared in an enumeration definition's body (SysML v2 §7.6.4).
 func EnumerationOwning(sym *symbols.Symbol) *symbols.Symbol {
-	if sym == nil || sym.OwnerScope == nil {
+	if sym == nil {
 		return nil
 	}
 	usage, ok := sym.Decl.(*ast.Usage)
 	if !ok || usage.Kind != ast.UsageEnumeration {
 		return nil
 	}
-	owner := sym.OwnerScope.Owner()
+	return EnumerationDefinitionOwning(sym)
+}
+
+// EnumerationDefinitionOwning returns the enumeration definition whose body
+// declares sym, whatever sym is, or nil when its owner is not one.
+func EnumerationDefinitionOwning(sym *symbols.Symbol) *symbols.Symbol {
+	owner := ownerOf(sym)
 	if owner == nil || owner.Kind != symbols.SymbolEnumerationDef {
 		return nil
 	}
