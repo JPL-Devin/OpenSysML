@@ -1,5 +1,5 @@
 // Invalid: The argument of a `when` trigger must be Boolean (SysML 7.16 TriggerInvocationExpression; pilot validateTriggerInvocationActionWhenArgument).
-package S48WhenTriggerNotBoolean {
+package S49WhenTriggerNotBoolean {
     private import ScalarValues::*;
     state def S {
         attribute level : Integer;

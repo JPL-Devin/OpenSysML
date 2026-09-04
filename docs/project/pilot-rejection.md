@@ -89,7 +89,7 @@ systematically from four sources, one subdirectory each:
    an existing case where an `xpect/` or `grammar/` case already violates the rule (their headers
    now cite the `validate*` name), a new minimal model here otherwise — giving 45 `.sysml` cases
    (`s01`–`s45`); the full mapping is the [constraint census](#sysml-constraint-census) at the end
-   of this document. `s46`–`s48` are the three typing rules of `TriggerInvocationExpression` —
+   of this document. `s47`–`s49` are the three typing rules of `TriggerInvocationExpression` —
    an `after` argument that is not a `DurationValue`, an `at` argument that is not a
    `TimeInstantValue`, a `when` argument that is not Boolean. `cn01`–`cn09` are the control-node
    succession rules of SysML v2 8.3.17:
