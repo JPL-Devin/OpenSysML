@@ -1,6 +1,7 @@
 package semantics
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -72,4 +73,41 @@ func stdlibModelWithDoc(t *testing.T, name, src string) (*Model, *symbols.Scope)
 	r.SetModel(m)
 	r.ResolveDocument(name, root)
 	return m, idx.DocumentRoot(name)
+}
+
+// A named multiplicity classifies as the KerML Multiplicity metaclass in either
+// language — a range as MultiplicityRange, which specializes it — so a filter
+// for `Multiplicity` keeps it.
+func TestNamedMultiplicityClassifiesAsMultiplicity(t *testing.T) {
+	for _, tc := range []struct{ file, src string }{
+		{"multiplicity.kerml", "multiplicity one [1];\nmultiplicity some subsets one;\n"},
+		{"multiplicity.sysml", "package P {\n\tmultiplicity one [1];\n\tmultiplicity some subsets one;\n}\n"},
+	} {
+		m, root := stdlibModelWithDoc(t, tc.file, tc.src)
+		if strings.HasSuffix(tc.file, ".sysml") {
+			root = sym(t, root, "P").Scope
+		}
+		for _, tm := range []struct{ name, metaclass string }{
+			{"one", "MultiplicityRange"},
+			{"some", "Multiplicity"},
+		} {
+			elem := sym(t, root, tm.name)
+			got := m.metaclassOf(elem)
+			if got == nil {
+				t.Fatalf("%s: %s has no metaclass, want %s", tc.file, tm.name, tm.metaclass)
+			}
+			if got.Name != tm.metaclass {
+				t.Errorf("%s: %s classifies as %s, want %s", tc.file, tm.name, got.Name, tm.metaclass)
+			}
+			if !m.metaclassConforms(elem, "KerML::Kernel::Multiplicity") {
+				t.Errorf("%s: %s should conform to the Multiplicity metaclass", tc.file, tm.name)
+			}
+			if !m.metaclassConforms(elem, "KerML::Core::Feature") {
+				t.Errorf("%s: %s should conform to Feature, which Multiplicity specializes", tc.file, tm.name)
+			}
+			if m.metaclassConforms(elem, "KerML::Core::Classifier") {
+				t.Errorf("%s: %s should not conform to Classifier", tc.file, tm.name)
+			}
+		}
+	}
 }

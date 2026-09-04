@@ -77,6 +77,15 @@ func TestConvertedNotationParses(t *testing.T) {
 	}
 }
 
+// textOnlyFixtures are the models whose graph the mapping cannot write back
+// without its source text, by the refusal it must keep reporting for them.
+var textOnlyFixtures = map[string]string{
+	"action_nodes":               "this expression states no notation and no structure",
+	"expression_body_members":    "a declaration inside an expression body is carried as its notation",
+	"expression_body_order":      "a declaration inside an expression body is carried as its notation",
+	"payload_declaration_bodies": "it has no sysx:endForm",
+}
+
 // TestRoundTripIsLossless is the fidelity contract: converting the notation a
 // graph produced back to a graph gives the same graph. Notation and RDF say the
 // same thing in different words, so this is what "no data lost" means — the
@@ -105,8 +114,480 @@ func TestRoundTripIsLossless(t *testing.T) {
 			if string(first) != string(second) {
 				t.Errorf("round trip changed the graph\n--- first ---\n%s\n--- second ---\n%s", first, second)
 			}
+			if textOnly, ok := textOnlyFixtures[name]; ok {
+				_, err := export.Convert(name+".ttl", withoutTriples(t, first, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+				var unsupported *export.UnsupportedError
+				if !errors.As(err, &unsupported) || !strings.Contains(err.Error(), textOnly) {
+					t.Fatalf("the mapping alone should still refuse %s (%s), got: %v", name, textOnly, err)
+				}
+				return
+			}
+			structuralRoundTrip(t, name, first)
 		})
 	}
+}
+
+// structuralRoundTrip strips the source text from a graph and requires the
+// structure alone to carry it to notation and back; it returns that notation.
+func structuralRoundTrip(t *testing.T, name string, first []byte) []byte {
+	t.Helper()
+	fromGraph, err := export.Convert(name+".ttl", withoutTriples(t, first, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from the mapping alone: %v", err)
+	}
+	again, err := export.Convert(name+".sysml", fromGraph, export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle again from the mapping alone: %v", err)
+	}
+	if lost, gained := tripleSetDiff(t, withoutSourceText(t, first), withoutSourceText(t, again)); len(lost)+len(gained) > 0 {
+		t.Errorf("the mapping alone changed the graph\n--- notation ---\n%s\n--- lost ---\n%s\n--- gained ---\n%s",
+			fromGraph, strings.Join(lost, "\n"), strings.Join(gained, "\n"))
+	}
+	return fromGraph
+}
+
+// withoutSourceText strips the triples that carry notation rather than structure.
+func withoutSourceText(t *testing.T, turtle []byte) []byte {
+	t.Helper()
+	for _, property := range []string{"sysx:sourceText", "sysx:sourceTail", "sysx:sourceLanguage"} {
+		turtle = withoutTriples(t, turtle, property)
+	}
+	return turtle
+}
+
+// TestWrittenReferencesResolveWhereWritten pins the spelling rule: short when
+// the short name resolves to the graph's element there, else qualified enough.
+func TestWrittenReferencesResolveWhereWritten(t *testing.T) {
+	path := filepath.Join("testdata", "convert", "shadowed_references.sysml")
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	graph, err := export.Convert(path, src, export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	for _, want := range []string{
+		// The graph names the package-level targets, not the shadowing members.
+		"sysml:redefines elmt:Shadowing__packet_20data_20field",
+		"sysml:redefines elmt:Shadowing__Packet__data_20field",
+		"sysml:subsets elmt:Shadowing__payload",
+		"sysml:references elmt:Shadowing__Bus__payload",
+		"sysml:type elmt:Shadowing__Packet",
+		"sysml:type elmt:Shadowing__Bus__Packet",
+		"sysml:type elmt:Shadowing__Frame",
+		"sysml:type elmt:Shadowing__Frame__Frame",
+		"sysml:type elmt:Shadowing__Field",
+		"sysml:targetFeature elmt:Shadowing__Packet__payload",
+		"sysml:referent elmt:Shadowing__payload",
+		"sysml:importedNamespace elmt:Shadowing__Lib__Cell",
+		"sysml:importedNamespace elmt:Shadowing__Lib",
+		"sysml:type elmt:Shadowing__Lib__Cell",
+		"sysml:type elmt:Shadowing__Consumer__Lib__Cell",
+	} {
+		if !strings.Contains(string(graph), want) {
+			t.Errorf("graph does not record %q\n%s", want, graph)
+		}
+	}
+	notation := structuralRoundTrip(t, "shadowed_references", graph)
+	for _, want := range []string{
+		// A redefinition target is looked up in the owner's generals, past the
+		// redefining feature and its members, so the short name reaches it.
+		"attribute 'packet data field' redefines 'packet data field';",
+		"attribute 'data field' redefines 'data field' {",
+		// The subsetting feature itself, or a sibling, captures the short name;
+		// a reference to that sibling is short because it is the target.
+		"part payload subsets Shadowing::payload;",
+		"part cargo subsets Shadowing::payload;",
+		"ref part carried references payload;",
+		// A nested definition captures the outer one's name; the nested one
+		// is what the short name reaches.
+		"part wrapped : Shadowing::Packet;",
+		"part raw : Packet;",
+		"ref part outer : Shadowing::Frame;",
+		"ref part inner : Frame;",
+		"attribute 'packet data field' : Shadowing::Field;",
+		// Nothing shadows Field inside Packet, so it stays short.
+		"attribute 'data field' : Field;",
+		"connection link connect wrapped.payload to Shadowing::payload;",
+		// A nested package captures the imported one's name; the import itself
+		// does not surface its target as a spelling of its target.
+		"private import Shadowing::Lib::Cell;",
+		"private import Shadowing::Lib::*;",
+		"part cell : Cell;",
+		"part inner : Lib::Cell;",
+	} {
+		if !strings.Contains(string(notation), want) {
+			t.Errorf("notation does not write %q\n%s", want, notation)
+		}
+	}
+}
+
+// TestGlobalSpellingIsReachedPastAShadowedRoot covers a target whose short
+// name and whose qualified name are both captured where it is written: only the
+// global form reaches it, so that is what the graph alone must write.
+func TestGlobalSpellingIsReachedPastAShadowedRoot(t *testing.T) {
+	src := "package Root {\n    part def Target;\n    part def Holder {\n        part def Root {\n            part def Target;\n        }\n" +
+		"        part def Target;\n        part t : $::Root::Target;\n    }\n}\n"
+	graph, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	if want := "sysml:type elmt:Root__Target ;"; !strings.Contains(string(graph), want) {
+		t.Fatalf("graph does not record %q\n%s", want, graph)
+	}
+	notation := structuralRoundTrip(t, "shadowed_root", graph)
+	if want := "part t : $::Root::Target;"; !strings.Contains(string(notation), want) {
+		t.Errorf("notation does not write %q\n%s", want, notation)
+	}
+}
+
+// TestCastTypeIsSpelledForItsScope covers the type of a cast, a reference the
+// expression tree carries: written where a nearer definition bears its name, the
+// graph alone must keep the qualified spelling, and relinked to that nearer
+// definition it must write the short one.
+func TestCastTypeIsSpelledForItsScope(t *testing.T) {
+	src := "package P {\n    part def T;\n    part def H {\n        part def T;\n        attribute v = (as P::T);\n    }\n}\n"
+	graph, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	if want := "sysx:typeArgument elmt:P__T ."; !strings.Contains(string(graph), want) {
+		t.Fatalf("graph does not record %q\n%s", want, graph)
+	}
+	notation := structuralRoundTrip(t, "cast_type", graph)
+	if want := "attribute v = (as P::T);"; !strings.Contains(string(notation), want) {
+		t.Errorf("notation does not write %q\n%s", want, notation)
+	}
+	structural := withoutTriples(t, graph, "sysx:sourceText")
+	relinkedGraph := relinked(t, structural, "sysx:typeArgument elmt:P__T .", "sysx:typeArgument elmt:P__H__T .")
+	back, err := export.Convert("cast_type.ttl", relinkedGraph, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v\n%s", err, relinkedGraph)
+	}
+	if want := "attribute v = (as T);"; !strings.Contains(string(back), want) {
+		t.Errorf("notation does not write %q\n%s", want, back)
+	}
+}
+
+// A named multiplicity's body is a namespace like any other: the references
+// its members make are links, spelled from that body when written back.
+func TestMultiplicityBodyMembersLinkTheirReferences(t *testing.T) {
+	src := "package P {\n    datatype T;\n    feature base : T;\n    multiplicity m [1..2] {\n        feature f : T;\n        feature g subsets base;\n    }\n" +
+		"    package Q {\n        datatype T;\n        multiplicity n [0..1] {\n            feature h : P::T;\n        }\n    }\n}\n"
+	graph, err := export.Convert("m.kerml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	for _, want := range []string{"sysml:type elmt:P__T", "sysml:subsets elmt:P__base"} {
+		if !strings.Contains(string(graph), want) {
+			t.Errorf("graph does not record %q\n%s", want, graph)
+		}
+	}
+	for _, text := range []string{`sysml:type "`, `sysml:subsets "`} {
+		if strings.Contains(string(graph), text) {
+			t.Errorf("a body member's reference is carried as text %s\n%s", text, graph)
+		}
+	}
+	notation := structuralRoundTrip(t, "multiplicity_body", graph)
+	for _, want := range []string{"feature f : T;", "feature g subsets base;", "feature h : P::T;"} {
+		if !strings.Contains(string(notation), want) {
+			t.Errorf("notation does not write %q\n%s", want, notation)
+		}
+	}
+}
+
+// TestPacketsRoundTripsStructurally is the corpus case the spelling rule was
+// found on: a redefining attribute that bears its target's own name.
+func TestPacketsRoundTripsStructurally(t *testing.T) {
+	path := filepath.Join(corpusRoundTripExamples, "pilot-corpora", "sysml-examples", "Packet Example", "Packets.sysml")
+	src, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		for _, root := range corpusRoundTripRoots {
+			if root.name == "pilot-corpora/sysml-examples" {
+				root.skip(t, path+" is missing")
+			}
+		}
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	graph, err := export.Convert(path, src, export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	// Two definitions redefine the package's 'packet data field', one nested
+	// attribute its 'user data field'; none may be its own target.
+	for want, n := range map[string]int{
+		"sysml:redefines elmt:Packets__packet_20data_20field ;":                      2,
+		"sysml:redefines elmt:Packets__packet_20data_20field__user_20data_20field ;": 1,
+	} {
+		if got := strings.Count(string(graph), want); got != n {
+			t.Errorf("graph records %q %d times, want %d\n%s", want, got, n, graph)
+		}
+	}
+	notation := structuralRoundTrip(t, "Packets", graph)
+	// Written short, 'packet data field' would reach the redefinition
+	// inherited from 'Data Packet' instead of the package's attribute.
+	if want := "attribute 'packet data field' redefines Packets::'packet data field' {"; !strings.Contains(string(notation), want) {
+		t.Errorf("notation does not write %q\n%s", want, notation)
+	}
+}
+
+// TestTransitionEffectSuccessionLinksItsEnds covers a succession inside the
+// action a transition performs: its ends are members of that action, so the
+// graph links them and the notation written back names the same members.
+func TestTransitionEffectSuccessionLinksItsEnds(t *testing.T) {
+	src := `package P {
+    item def Order;
+    port def Inbox { in item o : Order; }
+    part sys {
+        port inbox : Inbox;
+        state B {
+            state Waiting;
+            accept o : Order via inbox do action {
+                first start;
+                then action fulfil { in what = o; }
+                then send o via inbox;
+            } then Waiting;
+        }
+    }
+}`
+	graph, err := export.Convert("effect.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	if want := "sysml:targetFeature elmt:P__sys__B___401___400__fulfil"; !strings.Contains(string(graph), want) {
+		t.Errorf("graph does not link the succession's target %q\n%s", want, graph)
+	}
+	if want := "sysml:sourceFeature elmt:P__sys__B___401___400__fulfil"; !strings.Contains(string(graph), want) {
+		t.Errorf("graph does not link the next succession's source %q\n%s", want, graph)
+	}
+	notation := structuralRoundTrip(t, "effect", graph)
+	if want := "then action fulfil {"; !strings.Contains(string(notation), want) {
+		t.Errorf("notation does not write %q\n%s", want, notation)
+	}
+}
+
+// relinked is a graph with one link pointed at another element, the shape of a
+// graph another tool wrote or an edit made; the link must occur exactly once.
+func relinked(t *testing.T, graph []byte, link, to string) []byte {
+	t.Helper()
+	if n := strings.Count(string(graph), link); n != 1 {
+		t.Fatalf("graph records %q %d times, want once\n%s", link, n, graph)
+	}
+	return []byte(strings.Replace(string(graph), link, to, 1))
+}
+
+// refusedAsUnsupported requires a graph to be refused rather than written as
+// notation that would read back as a different graph.
+func refusedAsUnsupported(t *testing.T, name string, graph []byte, why string) {
+	t.Helper()
+	out, err := export.Convert(name+".ttl", graph, export.FormatTurtle, export.FormatSysML)
+	var unsupported *export.UnsupportedError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("want an UnsupportedError, got %v; notation:\n%s", err, out)
+	}
+	if !strings.Contains(err.Error(), why) {
+		t.Errorf("error %q should say %q", err, why)
+	}
+}
+
+// TestChainReachingAUsageNamedByAChainWritesItsEffectiveName covers a chain
+// segment the graph links to an unnamed usage whose name comes from the chain
+// it performs: the segment is written as that chain's last member, which is the
+// name the usage answers to (KerML 7.3.4.5), not the chain text.
+func TestChainReachingAUsageNamedByAChainWritesItsEffectiveName(t *testing.T) {
+	src := `package P {
+    action provide { action generate; }
+    part generator { perform provide.generate; }
+    part train { part engine { perform provide.generate; } }
+    allocate generator.generate to train.engine.generate;
+}`
+	graph, err := export.Convert("performed.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	for _, want := range []string{"sysml:targetFeature elmt:P__generator___400", "sysml:targetFeature elmt:P__train__engine___400"} {
+		if !strings.Contains(string(graph), want) {
+			t.Errorf("graph does not link %q\n%s", want, graph)
+		}
+	}
+	notation := structuralRoundTrip(t, "performed", graph)
+	if want := "allocate generator.generate to train.engine.generate;"; !strings.Contains(string(notation), want) {
+		t.Errorf("notation does not write %q\n%s", want, notation)
+	}
+}
+
+// TestSpellingsAreCheckedBesideEachOther covers an import target whose short
+// name reaches its element only while the sibling imports it reads through are
+// fully qualified: `P211` reaches through `Pkg211::*::**` beside
+// `Pkg2::Pkg21::*` only when the resolver can bind their prefixes, so the
+// spelling chosen must reach its element in the notation actually written.
+func TestSpellingsAreCheckedBesideEachOther(t *testing.T) {
+	src := `package ImportTest {
+    package Pkg1 {
+        private import Pkg2::Pkg21::Pkg211::P211;
+        private import Pkg2::Pkg21::*;
+        private import Pkg211::*::**;
+        part p11 : Pkg211::P211;
+        part def P12;
+    }
+    package Pkg2 {
+        private import Pkg1::*;
+        package Pkg21 { package Pkg211 { part def P211 :> P12; } }
+    }
+}`
+	graph, err := export.Convert("imports.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	if want := "sysml:importedNamespace elmt:ImportTest__Pkg2__Pkg21__Pkg211__P211"; !strings.Contains(string(graph), want) {
+		t.Fatalf("graph does not link %q\n%s", want, graph)
+	}
+	notation := structuralRoundTrip(t, "imports", graph)
+	if want := "private import Pkg211::P211;"; !strings.Contains(string(notation), want) {
+		t.Errorf("notation does not write %q\n%s", want, notation)
+	}
+}
+
+// TestChainSegmentIsSpelledToReachTheGraphsTarget covers a chain whose target
+// the graph links to a same-named feature of another type than its operand's:
+// the segment is written qualified, since its name alone would read as the
+// operand's own feature, and a target no segment spelling reaches is refused.
+func TestChainSegmentIsSpelledToReachTheGraphsTarget(t *testing.T) {
+	src := `package P {
+    part def A { attribute x; }
+    part def B { attribute x; }
+    part a : A;
+    part b : B;
+    attribute v = a.x;
+    attribute w = a.x + a.x;
+    connect a.x to b.x;
+}`
+	graph, err := export.Convert("chain.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	for _, want := range []string{"sysml:targetFeature elmt:P__A__x", "sysml:targetFeature elmt:P__B__x"} {
+		if !strings.Contains(string(graph), want) {
+			t.Errorf("graph does not link %q\n%s", want, graph)
+		}
+	}
+	structuralRoundTrip(t, "chain", graph)
+	structural := withoutTriples(t, graph, "sysx:sourceText")
+	// The value's chain `a.x` relinked to B::x is written `a.B::x`, as is the
+	// connector's first end, whether or not the notation is kept with the graph.
+	value := "    sysml:argument expr:P__v_pvalue_pa0 ;\n    sysml:targetFeature elmt:P__A__x ."
+	relinkedValue := relinked(t, structural, value, strings.Replace(value, "A__x", "B__x", 1))
+	if back := backFromTheGraphAlone(t, string(relinkedValue)); !strings.Contains(back, "attribute v = a.B::x;") {
+		t.Errorf("the relinked value should be written qualified\n%s", back)
+	}
+	end := "    sysml:argument expr:P___406_pend0_pa0 ;\n    sysml:targetFeature elmt:P__A__x ;"
+	for name, g := range map[string][]byte{"structure": structural, "notation": graph} {
+		back, err := export.Convert("chain-"+name+".ttl", relinked(t, g, end, strings.Replace(end, "A__x", "B__x", 1)), export.FormatTurtle, export.FormatSysML)
+		if err != nil {
+			t.Fatalf("back to notation (%s): %v", name, err)
+		}
+		if !strings.Contains(string(back), "connect a.B::x to b.x;") {
+			t.Errorf("the relinked end should be written qualified (%s)\n%s", name, back)
+		}
+	}
+	// A target no chain from a can name — the package itself — is refused.
+	refusedAsUnsupported(t, "chain-package", relinked(t, structural, value, strings.Replace(value, "P__A__x", "P", 1)),
+		"no spelling of the segment reads as the element the graph names from the operand")
+	// The sum repeats `a.x`: the occurrence still reaching A::x must not vouch
+	// for the one relinked to B::x, which is spelled to reach its own element.
+	second := "    sysml:argument expr:P__w_pvalue_pa1_pa0 ;\n    sysml:targetFeature elmt:P__A__x ;"
+	repeated := relinked(t, structural, second, strings.Replace(second, "A__x", "B__x", 1))
+	if back := backFromTheGraphAlone(t, string(repeated)); !strings.Contains(back, "attribute w = (a.x + a.B::x);") {
+		t.Errorf("each repeated chain should be spelled for its own element\n%s", back)
+	}
+	// Both relinked, neither occurrence reads as A::x any more.
+	first := "    sysml:argument expr:P__w_pvalue_pa0_pa0 ;\n    sysml:targetFeature elmt:P__A__x ;"
+	both := relinked(t, repeated, first, strings.Replace(first, "A__x", "B__x", 1))
+	if back := backFromTheGraphAlone(t, string(both)); !strings.Contains(back, "attribute w = (a.B::x + a.B::x);") {
+		t.Errorf("both relinked chains should be spelled qualified\n%s", back)
+	}
+}
+
+// TestSharedChainIsCheckedInEveryDeclaration covers one FeatureChainExpression
+// two declarations share: written in each, its segment must reach the graph's
+// element from each, not only from the owner met last.
+func TestSharedChainIsCheckedInEveryDeclaration(t *testing.T) {
+	src := `package P {
+    part def A { attribute x; }
+    part def B { attribute x; }
+    part a : A;
+    attribute v = a.x;
+    part def H {
+        part a : B;
+        attribute w = a.x;
+    }
+}`
+	graph, err := export.Convert("shared.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structural := withoutTriples(t, graph, "sysx:sourceText")
+	// w's value is v's chain: its root, linked to P::a, is spelled to reach it
+	// from both declarations, so both state A::x.
+	shared := relinked(t, structural, "sysml:value expr:P__H__w_pvalue ;", "sysml:value expr:P__v_pvalue ;")
+	back, err := export.Convert("shared.ttl", shared, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v\n%s", err, shared)
+	}
+	for _, want := range []string{"attribute v = a.x;", "attribute w = P::a.x;"} {
+		if !strings.Contains(string(back), want) {
+			t.Errorf("notation does not write %q\n%s", want, back)
+		}
+	}
+	// With the root a name as written, `a.x` reads A::x from v but B::x from w:
+	// the declaration that reads it otherwise qualifies the segment, whichever
+	// owner is met last.
+	byName := relinked(t, shared, "sysml:referent elmt:P__a ;", `sysml:referent "a" ;`)
+	if back := toNotation(t, byName); !strings.Contains(back, "attribute w = a.A::x;") {
+		t.Errorf("w should reach A::x through a qualified segment\n%s", back)
+	}
+	// The same with w's chain shared into v, so the qualifying owner is the other one.
+	shared = relinked(t, structural, "sysml:value expr:P__v_pvalue ;", "sysml:value expr:P__H__w_pvalue ;")
+	byName = relinked(t, shared, "sysml:referent elmt:P__H__a ;", `sysml:referent "a" ;`)
+	if back := toNotation(t, byName); !strings.Contains(back, "attribute v = a.B::x;") {
+		t.Errorf("v should reach B::x through a qualified segment\n%s", back)
+	}
+}
+
+// TestInitialStartMustBeAMemberOfItsBody covers a `first` whose start the graph
+// links to an action outside the body: written by name, it would read as a
+// label or as a member of the same name.
+func TestInitialStartMustBeAMemberOfItsBody(t *testing.T) {
+	src := `package P {
+    action def Outer {
+        action s1;
+        action inner {
+            action s2;
+            first s2;
+        }
+    }
+}`
+	graph, err := export.Convert("initial.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structuralRoundTrip(t, "initial", graph)
+	structural := withoutTriples(t, graph, "sysx:sourceText")
+	const link = "sysml:sourceFeature elmt:P__Outer__inner__s2"
+	refusedAsUnsupported(t, "initial", relinked(t, structural, link, "sysml:sourceFeature elmt:P__Outer__s1"),
+		"`first s1` does not name P::Outer::s1 in the body it is written in")
+	// A same-named sibling of the body would read as the start instead.
+	shadowed := strings.Replace(src, "action s1;", "action s2;", 1)
+	graph, err = export.Convert("initial.sysml", []byte(shadowed), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structural = withoutTriples(t, graph, "sysx:sourceText")
+	refusedAsUnsupported(t, "initial", relinked(t, structural, link, "sysml:sourceFeature elmt:P__Outer__s2"),
+		"`first s2` does not name P::Outer::s2 in the body it is written in")
 }
 
 // TestFixturesComeBackFromTheGraphAlone strips sysx:sourceText before writing back,
@@ -139,13 +620,7 @@ func TestFixturesComeBackFromTheGraphAlone(t *testing.T) {
 			if err != nil {
 				t.Fatalf("to turtle again: %v", err)
 			}
-			structural := func(turtle []byte) []byte {
-				for _, property := range []string{"sysx:sourceText", "sysx:sourceTail", "sysx:sourceLanguage"} {
-					turtle = withoutTriples(t, turtle, property)
-				}
-				return turtle
-			}
-			if lost, gained := tripleSetDiff(t, structural(first), structural(second)); len(lost)+len(gained) > 0 {
+			if lost, gained := tripleSetDiff(t, withoutSourceText(t, first), withoutSourceText(t, second)); len(lost)+len(gained) > 0 {
 				t.Errorf("the second hop changed the graph\n--- notation ---\n%s\n--- lost ---\n%s\n--- gained ---\n%s",
 					back, strings.Join(lost, "\n"), strings.Join(gained, "\n"))
 			}
@@ -734,8 +1209,9 @@ func TestMetadataOnARelationshipIsOwnedThroughAMembership(t *testing.T) {
 // A metadata usage member carries its body's feature values, its name, the
 // elements it is about and the `@` it was written with, so every member form
 // comes back from the mapping alone and converts to the same graph again. A
-// linked type is spelled relative to the member's scope, so a globally
-// qualified one comes back by its name.
+// linked type or body reference is spelled relative to the member's scope, so a
+// globally qualified type comes back by its name and an inherited feature
+// unqualified.
 func TestMetadataMembersComeBackFromTheGraphAlone(t *testing.T) {
 	members := []struct{ written, back string }{
 		{written: "@Safety;"},
@@ -745,7 +1221,10 @@ func TestMetadataMembersComeBackFromTheGraphAlone(t *testing.T) {
 		{written: "@Safety {\n            redefines level = 3;\n            reviewer = \"ops\";\n            audit {\n                year = 2026;\n            }\n        }"},
 		{written: "@ checked : Safety;"},
 		{written: "@Safety about Car, Vehicle;"},
-		{written: "@Safety about Car {\n            level = mass;\n            reviewer = Car::name;\n        }"},
+		{
+			written: "@Safety about Car {\n            level = mass;\n            reviewer = Car::name;\n        }",
+			back:    "@Safety about Car {\n            level = mass;\n            reviewer = name;\n        }",
+		},
 		{written: "metadata tagged : Safety about Car;"},
 		{written: "metadata Safety about Car;"},
 		{
@@ -1766,6 +2245,33 @@ func TestInconsistentTransitionLinksAreRefused(t *testing.T) {
 	}
 }
 
+// A graph whose canonical notation does not parse gives the spelling of its
+// references nothing to be checked against, so the conversion refuses rather
+// than write them unchecked.
+func TestUnreadableNotationRefusesToSpellReferences(t *testing.T) {
+	src := "package P {\n\tpart def A;\n\tpart def B :> A;\n\tstate def M {\n\t\tstate s1;\n\t\tstate s2;\n\t\ttransition first s1 if true then s2;\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	const guard = "sysx:guard expr:P__M___402_pguard ;"
+	if !strings.Contains(string(turtle), guard) {
+		t.Fatalf("the guard is not the one the test rewrites:\n%s", turtle)
+	}
+	// A guard kept as text is written as it is, and this one cannot be read.
+	graph := strings.Replace(string(turtle), guard, `sysx:guard "(" ;`, 1)
+	graph = string(withoutTriples(t, []byte(graph), "sysx:sourceText"))
+	graph = string(withoutTriples(t, []byte(graph), "sysx:sourceTail"))
+	var unsupported *export.UnsupportedError
+	_, err = export.Convert("m.ttl", []byte(graph), export.FormatTurtle, export.FormatSysML)
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("got %v, want an UnsupportedError", err)
+	}
+	if !strings.Contains(err.Error(), "does not parse") {
+		t.Errorf("the error does not say the notation is unreadable: %v", err)
+	}
+}
+
 // A transition and an accept state their trigger and payload in the head too,
 // inside the bodies that allow them.
 func TestBehavioralHeadsComeBackFromTheGraphAlone(t *testing.T) {
@@ -2474,10 +2980,11 @@ func TestWriteFileErrorNamesTheRequestedPath(t *testing.T) {
 // A reference reached through an import, an alias, a nested package path, a
 // feature chain or a redefinition across two generals links to the element it
 // names, and that link alone — without the text it was written as — brings the
-// notation back and the same graph after it. The fixture pairs each linked
-// reference with a same-named declaration nearer the writer, so a link that
-// went to the wrong element would surface here. A filter condition names the
-// metadata its own import filters by.
+// notation back in the shortest spelling that reaches the element again, and
+// the same graph after it. The fixture pairs each linked reference with a
+// same-named declaration nearer the writer, so a link that went to the wrong
+// element would surface here. A filter condition names the metadata its own
+// import filters by.
 func TestLinkedReferencesCarryTheRoundTripWithoutSourceText(t *testing.T) {
 	path := filepath.Join("testdata", "convert", "imported_references.sysml")
 	turtle := toTurtle(t, path)
@@ -2499,16 +3006,18 @@ func TestLinkedReferencesCarryTheRoundTripWithoutSourceText(t *testing.T) {
 	}
 	back := backFromTheGraphAlone(t, turtle)
 	for _, want := range []string{
-		"item b2 : OtherPkg::BudgetLedger;",
-		"attribute t : OtherPkg::Tempo = OtherPkg::Tempo::operative;",
-		"ref spare references OtherPkg::spare;",
+		"item b2 : BudgetLedger;",
+		"item b3 : BudgetLedger;",
+		"attribute t : Tempo = Tempo::operative;",
+		"part w : Inner::Wheel subsets Inner::wheels;",
+		"ref spare references spare;",
 		"attribute s = w.size;",
 		"part redefines G2::x;",
-		"part : OtherPkg::Inner::Wheel redefines w;",
+		"part : Inner::Wheel redefines w;",
 		"transition idle then Done::done;",
 		"part unresolved : Elsewhere::Missing;",
-		"public import Meta::* [(@ Meta::Safety)];",
-		"attribute other : Meta::Tagged;",
+		"public import Meta::* [(@ Safety)];",
+		"attribute other : Tagged;",
 	} {
 		if !strings.Contains(back, want) {
 			t.Errorf("the notation should read %q\n%s", want, back)
@@ -2673,11 +3182,11 @@ func TestShadowingParametersStayNames(t *testing.T) {
 	}
 }
 
-// A chain member inherited by the operand's type from two generals under one
-// name comes back qualified, so the spelling reaches the linked one — behind a
-// nested chain too; a member reached under its name alone comes back as that name.
-// One the operand's own members and types do not reach keeps its qualification too.
-func TestChainMembersKeepTheirQualificationWhenAmbiguous(t *testing.T) {
+// A chain member the operand's type inherits from two generals under one name
+// comes back as that name where the name reads as the linked one, and qualified
+// where it reads as the other — behind a nested chain too; one reached through
+// a subsetting comes back as its name.
+func TestChainMembersAreQualifiedOnlyWhereTheirNameReadsAsAnother(t *testing.T) {
 	turtle := toTurtle(t, filepath.Join("testdata", "convert", "chain_scopes.sysml"))
 	for _, want := range []string{
 		"sysml:targetFeature elmt:Gen__G1__x .",
@@ -2689,7 +3198,7 @@ func TestChainMembersKeepTheirQualificationWhenAmbiguous(t *testing.T) {
 		}
 	}
 	back := backFromTheGraphAlone(t, turtle)
-	for _, want := range []string{"attribute a = w.Gen::G1::x;", "attribute b = w.Gen::G2::x;", "attribute c = w.y;", "attribute d = axle.hub.Gen::G2::x;", "attribute e = axle.hub.y;", "attribute f = spare.Gen::G1::y;"} {
+	for _, want := range []string{"attribute a = w.x;", "attribute b = w.Gen::G2::x;", "attribute c = w.y;", "attribute d = axle.hub.Gen::G2::x;", "attribute e = axle.hub.y;", "attribute f = spare.y;"} {
 		if !strings.Contains(back, want) {
 			t.Errorf("the notation should read %q\n%s", want, back)
 		}

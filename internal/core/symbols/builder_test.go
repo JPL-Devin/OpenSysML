@@ -90,6 +90,29 @@ func TestBuildAliasSymbol(t *testing.T) {
 	}
 }
 
+// A named multiplicity owns its body, so the members declared there are its own.
+func TestBuildMultiplicityBodyScope(t *testing.T) {
+	root := build(t, "package P { multiplicity m [1..2] { feature f; } multiplicity n subsets m; }")
+	pkg, _ := root.LookupLocal("P")
+	m, ok := pkg.Scope.LookupLocal("m")
+	if !ok || m.Kind != SymbolMultiplicity {
+		t.Fatalf("m not found as multiplicity symbol")
+	}
+	if m.Scope == nil {
+		t.Fatalf("m has no child scope")
+	}
+	if f, ok := m.Scope.LookupLocal("f"); !ok || f.OwnerScope != m.Scope {
+		t.Fatalf("f not owned by m's body")
+	}
+	n, ok := pkg.Scope.LookupLocal("n")
+	if !ok || n.Kind != SymbolMultiplicity || n.Scope == nil {
+		t.Fatalf("n not found as multiplicity symbol with a scope")
+	}
+	if _, ok := n.Scope.LookupLocal("f"); ok {
+		t.Fatalf("n's empty body must not see m's members")
+	}
+}
+
 func TestBuildErrorNodeSkipped(t *testing.T) {
 	// Unknown declaration keyword yields an ErrorNode; builder must not panic
 	// and must still register the good package.

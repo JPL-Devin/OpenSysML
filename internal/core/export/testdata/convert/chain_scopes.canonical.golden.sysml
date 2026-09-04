@@ -15,12 +15,12 @@ package Chains {
     part def Car {
         part w : Wheel;
         part axle : Axle;
-        attribute a = w.Gen::G1::x;
+        attribute a = w.x;
         attribute b = w.Gen::G2::x;
         attribute c = w.y;
         attribute d = axle.hub.Gen::G2::x;
         attribute e = axle.hub.y;
         part spare subsets w;
-        attribute f = spare.Gen::G1::y;
+        attribute f = spare.y;
     }
 }
