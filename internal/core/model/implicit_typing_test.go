@@ -70,7 +70,8 @@ func TestImplicitUsageBaseTypes(t *testing.T) {
 		{"view x;", "Views::View"},
 		{"viewpoint x;", "Views::ViewpointCheck"},
 		{"rendering x;", "Views::Rendering"},
-		{"metadata x;", "Metadata::MetadataItem"},
+		// No `metadata x;` row: the grammar reads x as the usage's typing, not
+		// its name (SysML.xtext MetadataUsageDeclaration).
 	}
 
 	for _, tc := range cases {

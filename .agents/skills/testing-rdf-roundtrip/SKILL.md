@@ -185,6 +185,35 @@ package RT2 {
 }
 ```
 
+## Metadata annotations
+
+Every `@M;`, `@M { … }`, `metadata m : M about a, b;` and `#M part def P;` is a
+`sysml:MetadataUsage` with `sysml:type`, one `sysml:annotatedElement` per `about` target,
+`sysx:hasBody`, `sysx:declaredKeyword` `"@"`/`"#"` (absent for the `metadata` keyword) and body
+members as owned members ordered by `sysx:memberIndex`. Fixtures:
+`internal/core/export/testdata/convert/metadata_bodies.sysml` and `metadata_prefixes.sysml`
+(neither validates clean on its own — unqualified `Integer`/`Real` and a `variant` outside a
+`variation` — so judge semantic equality by identical `-validate` diagnostics, or add
+`private import ScalarValues::*;` to a copy). Hand-edit the stripped `.ttl` for the controls:
+
+| Edit | Working mapping |
+|---|---|
+| drop one IRI from `sysml:annotatedElement a, b` | `about a, b` → `about a` (exit 0) |
+| `sysx:declaredKeyword "#"` → `"@"` on a prefix | `#M part def P;` → `part def P { @M; }` |
+| `"@"` → `"#"` on a bodiless member `@M;` | it moves into the owner's head: `#M part car : Car {` |
+| swap two body members' `sysx:memberIndex` | the body lines swap order |
+| give a `"#"` annotation an `about`, a body or a `declaredName` | refused: `cannot convert the prefix annotation <urn:sysmlv2:element:…>: a prefix names only its metadata definition; …` — no file written |
+
+In notation, `@M part def Q;` is a parse error (`expected ';' or '{' after a metadata usage`),
+an annotation whose type does not resolve is still converted with `sysml:type "M"` as a literal,
+and `@IdentityMetadata::ElementId { id = "…"; }` must **not** appear as a `sysml:MetadataUsage`
+(it becomes the element's IRI/`sysml:elementId`). Unnamed `metadata M about x;` and
+`metadata $::P::M about x;` come back spelled as written, typing bare.
+
+The pilot validation files live in numbered subdirectories
+(`examples/pilot-corpora/sysml-validation/13-Model Containment/13b-*.sysml`); a glob on the parent
+directory alone matches nothing and `sysml` then complains about a missing extension.
+
 ## The corpus round-trip ratchet (run it before and after any writer/encoder change)
 
 `TestCorpusRoundTrip` (`internal/core/export/corpus_roundtrip_test.go`) runs the three-hop trip
