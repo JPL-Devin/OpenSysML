@@ -34,7 +34,11 @@ func goCommand() (string, error) {
 	if g == "" {
 		g = "go"
 	}
-	return exec.LookPath(g)
+	resolved, err := exec.LookPath(g)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Abs(resolved)
 }
 
 // CFlags are the C compiler options; the prelude's explicit checks keep -O3 safe,
