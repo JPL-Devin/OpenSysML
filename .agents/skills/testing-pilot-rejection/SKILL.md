@@ -9,7 +9,7 @@ Sibling of `testing-pilot-differential` and `testing-pilot-xpect` (same pin
 `scripts/pilot-pin.sh`, same committed-baseline shape), but pointed the other way: the
 differential measures what the reference accepts and we reject; this oracle measures what the
 reference **rejects and we accept** — permissiveness gaps. Its corpus is committed under
-`cmd/pilot-reject/testdata/negative/` (226 hand-written invalid models, one violated rule + citation
+`cmd/pilot-reject/testdata/negative/` (231 hand-written invalid models, one violated rule + citation
 in each file's mandatory `// Invalid: ...` first line), so no corpus download exists. Method and
 findings: `docs/project/pilot-rejection.md`.
 
@@ -32,8 +32,8 @@ cmp build/pilot-reject/pilot-reject.json docs/project/pilot-rejection-baseline.j
 `docs/project/pilot-rejection-baseline.json` is the only authority for the counts; the numbers
 quoted here are as-of values, and `cmd/pilot-reject/doc_counts_test.go` fails if they drift from it.
 As of the `semantic/` source (named pilot constraints, KerML and SysML, the control-node
-succession rules and the feature-value overriding rule), with a fresh library cache:
-`226 case(s): 196 both reject, 22 only the pilot rejects, 8 only we reject, 0 both accept`,
+succession rules, the feature-value overriding rule, the enumeration-variation rules and the send-action cases), with a fresh library cache:
+`231 case(s): 202 both reject, 21 only the pilot rejects, 8 only we reject, 0 both accept`,
 byte-identical to the committed baseline. Any `both accept` case is a bug in the corpus (the case
 is not actually invalid under the loaded standard library) — fix the case, never ignore it. A
 candidate the pilot accepts because it does not enforce the named constraint is not a case either:

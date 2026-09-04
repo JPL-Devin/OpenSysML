@@ -232,12 +232,12 @@
     {
       "name": "validateConstructorExpressionNoDuplicateFeatureRedefinition",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateConstructorExpressionOwnedFeatures",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "approximate"
     },
     {
       "name": "validateControlNodeIncomingSuccessions",
@@ -292,7 +292,7 @@
     {
       "name": "validateDefinitionVariationSpecialization",
       "source": "sysml",
-      "status": "approximate"
+      "status": "faithful"
     },
     {
       "name": "validateElementFilterMembershipIsBoolean",
@@ -565,7 +565,7 @@
     {
       "name": "validateInstantiationExpressionInstantiatedType",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateInstantiationExpressionResult",
@@ -893,13 +893,13 @@
     {
       "name": "validateSendActionUsagePayloadArgument",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateSendActionUsageReceiver",
       "raw": "validateSendActionUsageReceiver_",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateSpecializationSpecificNotConjugated",
