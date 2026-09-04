@@ -164,17 +164,40 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 	case *ast.PerformActionNode:
 		tc.expr.checkPerform(scope, m)
 	case *ast.SendStatement:
-		// A payload constructed with `new` binds features of its type; a call as
-		// payload names a signal by its parameters and is not an arity-checked call.
-		if constructed, ok := m.Message.(*ast.ConstructorExpr); ok {
-			tc.expr.infer(scope, constructed)
-		}
+		tc.checkPayload(scope, m.Message)
 	case *ast.SubjectMember:
 		tc.checkSubjectMember(scope, m)
 	default:
 		// A body member that is an expression is a value the body computes — a
 		// calc body whose result is its last expression — and is typed as one.
 		tc.expr.infer(scope, n)
+	}
+}
+
+// checkPayload types the constructors a send payload contains, wherever they sit
+// in it; a call names a signal by its parameters and is not an arity-checked call.
+func (tc *typeChecker) checkPayload(scope *symbols.Scope, n ast.Node) {
+	switch e := n.(type) {
+	case *ast.ConstructorExpr:
+		tc.expr.infer(scope, e)
+	case *ast.InvocationExpr:
+		for _, a := range e.Args {
+			tc.checkPayload(scope, a)
+		}
+		for _, na := range e.NamedArgs {
+			tc.checkPayload(scope, na.Value)
+		}
+	case *ast.OperatorExpr:
+		for _, op := range e.Operands {
+			tc.checkPayload(scope, op)
+		}
+	case *ast.SequenceExpr:
+		for _, el := range e.Elements {
+			tc.checkPayload(scope, el)
+		}
+	case *ast.IndexExpr:
+		tc.checkPayload(scope, e.Operand)
+		tc.checkPayload(scope, e.Index)
 	}
 }
 

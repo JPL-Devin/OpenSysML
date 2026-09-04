@@ -176,18 +176,24 @@ func TestConstructorDuplicateFeatureBindingSysML(t *testing.T) {
 		action def SendM { in item m : Sig; }
 		action def Owner {
 			part rcv : Recv;
+			attribute flag : Boolean;
 			%s
 		}
 	}`
 	for _, member := range []string{
 		"send new Sig(p = 1, q = 2) to rcv;",
 		"send SendM() to rcv;",
+		"send (if flag ? SendM() else SendM()) to rcv;",
+		"send SendM(new Sig(p = 1, q = 2)) to rcv;",
 		"part s : Sub = new Sub(x = 1);",
 		"item a : Sig = new Sig(p = 1, q = 2);",
 	} {
 		wantLibraryClean(t, fmt.Sprintf(model, member))
 	}
 	wantLibraryDiag(t, fmt.Sprintf(model, "send new Sig(p = 1, p = 2) to rcv;"), "type.expr", `Sig binds feature "p" twice`)
+	wantLibraryDiag(t, fmt.Sprintf(model, "send (if flag ? new Sig(p = 1, p = 2) else new Sig(p = 1)) to rcv;"), "type.expr", `Sig binds feature "p" twice`)
+	wantLibraryDiag(t, fmt.Sprintf(model, "send (new Sig(p = 1), new Sig(q = 1, q = 2)) to rcv;"), "type.expr", `Sig binds feature "q" twice`)
+	wantLibraryDiag(t, fmt.Sprintf(model, "send SendM(new Sig(p = 1, p = 2)) to rcv;"), "type.expr", `Sig binds feature "p" twice`)
 	wantLibraryDiag(t, fmt.Sprintf(model, "part s : Sub = new Sub(x = 1, x = 2);"), "type.expr", `Sub binds feature "x" twice`)
 	wantLibraryDiag(t, fmt.Sprintf(model, "item a : Sig = new Sig(p = 1, Sig::p = 2);"), "type.expr", `Sig binds feature "p" twice`)
 }
