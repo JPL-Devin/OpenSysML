@@ -122,7 +122,7 @@ func (ctx *Context) ownerDeliveries(
 			sendingPaths[i] = child.ownerFeature + "." + sendingPaths[i]
 		}
 		sendingPaths, targetSyms = ctx.boundPortPaths(owner, sendingPaths, targetSyms)
-		conns := ctx.realizedConnections(ctx.objectConnections(owner.Type), owner)
+		conns := ctx.realizedConnections(ctx.connectionsOf(owner), owner)
 		for _, conn := range conns {
 			if !ctx.joinsAnyTarget(conn, sendingPaths, targetSyms) {
 				continue
@@ -175,10 +175,10 @@ func (ctx *Context) joinsAnyTarget(conn lower.Connection, paths []string, target
 }
 
 // boundPortPaths extends the paths a port is known by from owner with every
-// path a binding connector of owner's type joins to one of them, transitively.
+// path a binding connector of owner's types joins to one of them, transitively.
 func (ctx *Context) boundPortPaths(owner *Instance, paths []string, targets []*symbols.Symbol) ([]string, []*symbols.Symbol) {
 	for i := 0; i < len(paths); i++ {
-		for _, binding := range ctx.bindingsForFeature(owner.Type, paths[i]) {
+		for _, binding := range ctx.bindingsOf(owner, paths[i]) {
 			end := bindingEndForPath(binding, paths[i])
 			if end < 0 {
 				continue
@@ -332,12 +332,12 @@ func (ctx *Context) routableConnections(own []lower.Connection, self *Instance, 
 }
 
 // performerConnections returns the connections of the part performing a
-// behavior: those of the object's type when an object performs it, and those of
+// behavior: those of the object's types when an object performs it, and those of
 // the enclosing part when none does, so a behavior declared in a part reaches
 // that part's own ports either way.
 func (ctx *Context) performerConnections(self *Instance, scope *symbols.Scope) []lower.Connection {
 	if self != nil {
-		return ctx.objectConnections(self.Type)
+		return ctx.connectionsOf(self)
 	}
 	return ctx.objectConnections(enclosingPart(scope))
 }

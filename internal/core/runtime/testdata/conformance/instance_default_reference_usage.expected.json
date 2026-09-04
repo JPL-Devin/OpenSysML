@@ -1,0 +1,10 @@
+{
+  "type": "instance",
+  "instantiate": "test::Rig",
+  "libraries": true,
+  "slots": {
+    "beam.span": {"type": "Real", "value": 4.0},
+    "beam.doubled": {"type": "Real", "value": 8.0},
+    "beam.end.offset": {"type": "Real", "value": 4.0}
+  }
+}

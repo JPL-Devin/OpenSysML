@@ -4,6 +4,31 @@
   "libraries": true,
   "slots": {
     "box.length": {"type": "Quantity", "value": 2, "unit": "m"},
+    "box.faces": {"type": "Sequence", "elements": [
+      {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"},
+      {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"}
+    ]},
+    "box.tf.length": {"type": "Quantity", "value": 2, "unit": "m"},
+    "box.tf.width": {"type": "Quantity", "value": 1, "unit": "m"},
+    "box.ff.length": {"type": "Quantity", "value": 2, "unit": "m"},
+    "box.ff.width": {"type": "Quantity", "value": 1, "unit": "m"},
+    "box.slf.length": {"type": "Quantity", "value": 1, "unit": "m"},
+    "box.slf.width": {"type": "Quantity", "value": 1, "unit": "m"},
+    "box.tf.e1.length": {"type": "Quantity", "value": 2, "unit": "m"},
+    "box.tf.e2.length": {"type": "Quantity", "value": 1, "unit": "m"},
+    "box.tf.edges": {"type": "Sequence", "elements": [
+      {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"}
+    ]},
+    "box.edges": {"type": "Sequence", "elements": [
+      {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"},
+      {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"},
+      {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"},
+      {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"},
+      {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"},
+      {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"}
+    ]},
+    "box.tfe": {"error": "binding end cannot be resolved: box.tfe is bound by `bind [0..1] tf.edges = [0..1] tfe`, which links one unspecified value of each end; the model does not determine which value tfe holds"},
+    "box.vertices": {"error": "binding end cannot be resolved: box.tfe is bound by `bind [0..1] tf.edges = [0..1] tfe`, which links one unspecified value of each end; the model does not determine which value tfe holds"},
     "box.isSolid": {"type": "Boolean", "value": true},
     "box.voids": {"type": "Sequence", "elements": []},
     "box.shape": {"type": "Sequence", "elements": []},
@@ -12,5 +37,13 @@
     "box.timeSlices": {"error": "feature \"timeSlices\" not found"},
     "box.startShot": {"error": "feature \"startShot\" not found"},
     "box.start": {"error": "feature \"start\" not found"}
-  }
+  },
+  "identical": [
+    ["box.faces.1", "box.tf"],
+    ["box.edges.1", "box.tf.e1"],
+    ["box.edges.24", "box.srf.e4"]
+  ],
+  "distinct": [
+    ["box.edges.1", "box.edges.5"]
+  ]
 }

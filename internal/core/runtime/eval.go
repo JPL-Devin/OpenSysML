@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -493,6 +494,12 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 				if ec.ctx.model.VariationPointOwning(sym) != nil {
 					return variantReference(sym), nil
 				}
+				// A feature of an enclosing type, named from a nested usage, is read
+				// from the object enclosing the bound one: `e1` inside `e3` is the
+				// containing rectangle's e1, not a fresh occurrence of the declaration.
+				if val, ok, err := ec.outerFeatureValue(sym); ok {
+					return val, err
+				}
 				// A library feature's value comes from the feature seam, not its
 				// declared body: a warm library cache restores symbols without AST.
 				if val, ok, err := ec.ctx.libraryFeatureValue(sym); ok {
@@ -573,6 +580,11 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 	// A library feature reads through the feature seam, whatever the library
 	// declares for it and whether or not the cache kept its declaration.
 	if val, ok, err := ec.ctx.libraryFeatureValue(currentSym); ok {
+		return val, err
+	}
+	// A qualified feature of an enclosing type (`Rectangle::length` inside its
+	// `e1`) reads the enclosing object's value of that feature.
+	if val, ok, err := ec.outerFeatureValue(currentSym); ok {
 		return val, err
 	}
 
@@ -699,8 +711,11 @@ func (ec *EvalContext) declaredValue(sym *symbols.Symbol, value ast.Node) (Value
 		return Value{}, err
 	}
 	what := fmt.Sprintf("feature value %s", ec.ctx.qualifiedSymbolName(sym))
-	if err := ec.ctx.checkWriteType(sym.OwnerScope, what, ec.ctx.extractType(sym), val); err != nil {
+	if err := ec.ctx.checkWriteType(sym.OwnerScope, what, ec.ctx.extractType(sym), val, admitDeclared); err != nil {
 		return Value{}, err
+	}
+	if err := ec.ctx.classifyHeld(sym, val); err != nil {
+		return Value{}, fmt.Errorf("%s: %w", what, err)
 	}
 	return ec.bindVariationOf(sym, val)
 }
@@ -805,6 +820,14 @@ func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) 
 	// A part carries no value of its own: it denotes an occurrence, whose features
 	// `lander.mass.mDry` reads, so the chain is read from that object.
 	if sym, ok := ec.occurrenceOperand(base); ok {
+		// A usage of an enclosing object is read from that object, so a sibling
+		// chain `e1.length` inside `e3` reads the containing rectangle's e1.
+		if val, ok, err := ec.outerFeatureValue(sym); ok {
+			if err != nil {
+				return Value{}, err
+			}
+			return ec.chainMemberValue(val, parts, sym.Name)
+		}
 		inst, err := ec.ctx.occurrenceOf(sym)
 		if err != nil {
 			return Value{}, fmt.Errorf("usage %s: %w", sym.Name, err)
@@ -930,7 +953,7 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 		if sym, found := ec.ctx.model.LookupMember(inst.Type, name); found && isCalcUsageSymbol(sym) {
 			return ec.calcUsageMemberValue(sym, inst, parts[1:])
 		}
-		return Value{}, fmt.Errorf("member %s not found in instance", name)
+		return Value{}, fmt.Errorf("%w: member %s not found in instance", ErrNoSuchFeature, name)
 	}
 	// A variant named through the variation feature it belongs to is the choice
 	// itself, not a member of the variation's value.
@@ -1108,7 +1131,7 @@ func (ec *EvalContext) resolveClassificationType(qn *ast.QualifiedName) (*symbol
 }
 
 // evalTypeClassification evaluates `x hastype T`, `x istype T` and the value
-// form of `x @ T`; only `hastype` demands the value's direct type be T itself.
+// form of `x @ T`; only `hastype` demands T be one of the value's direct types.
 func (ec *EvalContext) evalTypeClassification(n *ast.OperatorExpr) (Value, error) {
 	if len(n.Operands) != 1 || n.TypeRef == nil {
 		return Value{}, fmt.Errorf("%w: '%s' requires one value and one type",
@@ -1119,7 +1142,7 @@ func (ec *EvalContext) evalTypeClassification(n *ast.OperatorExpr) (Value, error
 		return Value{}, fmt.Errorf("%w: %s", ErrUnresolvedType,
 			qualifiedNameToString(n.TypeRef))
 	}
-	value, err := ec.evalTypeSubject(n.Operands[0])
+	value, err := ec.Eval(n.Operands[0])
 	if err != nil {
 		return Value{}, err
 	}
@@ -1161,48 +1184,67 @@ func (ec *EvalContext) valueHasType(value Value, target *symbols.Symbol, exact b
 		}
 		return true, nil
 	}
-	direct, err := ec.ctx.directValueType(ec.scope, value)
+	direct, err := ec.ctx.directValueTypes(ec.scope, value)
 	if err != nil {
 		return false, err
 	}
-	if exact {
-		return direct == target, nil
-	}
-	return ec.ctx.model.Conforms(direct, target), nil
-}
-
-func (ec *EvalContext) evalTypeSubject(node ast.Node) (Value, error) {
-	qn := ast.AsQualifiedName(node)
-	if qn == nil {
-		return ec.Eval(node)
-	}
-	sym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, qn)
-	if !ok || sym == nil {
-		return ec.Eval(node)
-	}
-	// A variation is a choice, not an object or an empty collection: the
-	// evaluator reports one that nothing selected a variant for.
-	if ec.ctx.model.IsVariationFeature(sym) {
-		return ec.Eval(node)
-	}
-	// Classification treats an optional valueless usage as its empty collection.
-	if ec.ctx.optionalValueless(sym) {
-		return NewSequenceValue(NewSequence()), nil
-	}
-	if isOccurrenceUsage(sym) {
-		inst, err := ec.ctx.occurrenceOf(sym)
-		if err != nil {
-			return Value{}, err
+	for _, typ := range direct {
+		if (exact && typ == target) || (!exact && ec.ctx.model.Conforms(typ, target)) {
+			return true, nil
 		}
-		return Value{Kind: ValInstance, Instance: inst.ID}, nil
 	}
-	return ec.Eval(node)
+	return false, nil
 }
 
-// directValueType names the type a value is of, resolved in the scope reading
-// it: the scalar type of a constant, the type of the object an instance value
-// denotes, the enumeration a literal belongs to.
+// directValueTypes names the types a value is of, resolved in the scope reading it:
+// the scalar type of a constant, the enumeration a literal belongs to, for an object its
+// declared type then the type of each feature it was held as a value of, and for a selected
+// variant the variant itself then what its object was held by.
+func (ctx *Context) directValueTypes(scope *symbols.Scope, value Value) ([]*symbols.Symbol, error) {
+	id, ok := value.Object()
+	if !ok {
+		typ, err := ctx.directValueType(scope, value)
+		if err != nil {
+			return nil, err
+		}
+		return []*symbols.Symbol{typ}, nil
+	}
+	inst, ok := ctx.instances[id]
+	if !ok || inst == nil || inst.Type == nil {
+		return nil, fmt.Errorf("%w: instance %d", ErrUndeterminedValueType, id)
+	}
+	var out []*symbols.Symbol
+	types := inst.types()
+	if value.Kind == ValVariant {
+		out, types = []*symbols.Symbol{value.Variant()}, inst.classifiers
+	}
+	for _, sym := range types {
+		if typ := ctx.directType(sym); !slices.Contains(out, typ) {
+			out = append(out, typ)
+		}
+	}
+	return out, nil
+}
+
+// directType is the type an object is of for being of sym: the type a feature is typed
+// by, else sym itself.
+func (ctx *Context) directType(sym *symbols.Symbol) *symbols.Symbol {
+	if typ := ctx.extractType(sym); typ != nil {
+		return typ
+	}
+	return sym
+}
+
+// directValueType names the one type a value is of (see directValueTypes); an object
+// answers with its declared type, a selected variant with the variant.
 func (ctx *Context) directValueType(scope *symbols.Scope, value Value) (*symbols.Symbol, error) {
+	if _, ok := value.Object(); ok {
+		types, err := ctx.directValueTypes(scope, value)
+		if err != nil {
+			return nil, err
+		}
+		return types[0], nil
+	}
 	var name string
 	switch value.Kind {
 	case ValConst:
@@ -1218,15 +1260,6 @@ func (ctx *Context) directValueType(scope *symbols.Scope, value Value) (*symbols
 		}
 	case ValString:
 		name = "String"
-	case ValInstance:
-		inst, ok := ctx.instances[value.Instance]
-		if !ok || inst == nil || inst.Type == nil {
-			return nil, fmt.Errorf("%w: instance %d", ErrUndeterminedValueType, value.Instance)
-		}
-		if typ := ctx.extractType(inst.Type); typ != nil {
-			return typ, nil
-		}
-		return inst.Type, nil
 	case ValVariant:
 		if value.Variant() == nil {
 			return nil, fmt.Errorf("%w: variant", ErrUndeterminedValueType)

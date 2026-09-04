@@ -172,7 +172,7 @@ func (ctx *Context) SignalMessage(signal *symbols.Symbol, args map[string]Value,
 			return Message{}, fmt.Errorf("%w: %s carries no feature %q%s",
 				ErrSignalArgument, symbolText(signal), name, carriedFeaturesNote(features))
 		}
-		if err := ctx.checkAdmits(feat, symbolText(signal)+"."+name, args[name]); err != nil {
+		if err := ctx.checkAdmits(feat, symbolText(signal)+"."+name, args[name], admitWritten); err != nil {
 			return Message{}, fmt.Errorf("%w: %w", ErrSignalArgument, err)
 		}
 		payload[name] = args[name]
@@ -446,8 +446,8 @@ func (ctx *Context) routedReceiverExists(scope *symbols.Scope, segments []string
 	if self == nil {
 		return false
 	}
-	for _, feature := range ctx.FeaturesOf(self.Type) {
-		if feature.Name == name && isRoutedReceiverSymbol(feature.Symbol) {
+	for _, of := range ctx.FeaturesOfObject(self) {
+		if of.Name == name && isRoutedReceiverSymbol(of.Feature.Symbol) {
 			return true
 		}
 	}
@@ -737,8 +737,8 @@ func (ctx *Context) namesFeature(scope *symbols.Scope, self *Instance, fv *Featu
 	if !ok || (fv.Feature != nil && fv.Feature.Symbol == sym) {
 		return true
 	}
-	for _, feat := range ctx.FeaturesOf(self.Type) {
-		if feat.Symbol == sym {
+	for _, of := range ctx.FeaturesOfObject(self) {
+		if of.Feature.Symbol == sym {
 			return true
 		}
 	}

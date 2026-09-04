@@ -55,7 +55,7 @@ func (d *calcMemberDecl) check(ctx *Context, value *Value, what func() string) e
 	if msg := ctx.writeCountRefusal(d.Target, value); msg != "" {
 		return fmt.Errorf("%s: %w: %s", what(), ErrMultiplicityViolation, msg)
 	}
-	if refusal, refused := ctx.writeTypeRefusal(declScope(d.Owner), d.Target.typ, value); refused {
+	if refusal, refused := ctx.writeTypeRefusal(declScope(d.Owner), d.Target.typ, value, admitWritten); refused {
 		return fmt.Errorf("%s: %w: %s", what(), ErrTypeMismatch, refusal)
 	}
 	return nil

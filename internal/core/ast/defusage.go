@@ -355,6 +355,9 @@ type Relationship struct {
 	// 8.3.12.3): the type is the conjugate of Target, which reverses the
 	// directions of the target port definition's features.
 	Conjugated bool
+	// Multiplicity is the end multiplicity written ahead of a connector end this
+	// relationship states: the `[0..1]` of `bind [0..1] a = b` (SysML.xtext:1020).
+	Multiplicity *Multiplicity
 }
 
 // Multiplicity is a `[n]` / `[lo..hi]` / `[*]` bound on a usage. Bounds are
@@ -456,6 +459,9 @@ type Usage struct {
 	CrossFeature      *CrossFeatureMember
 	Value             Node
 	ValueOperatorSpan source.Span
+	// ValueMultiplicity is the end multiplicity written ahead of the value when
+	// the value is a connector end: the `[0..1]` of `bind a = [0..1] b`.
+	ValueMultiplicity *Multiplicity
 	// ValueIsDefault and ValueIsInitial are the `default` and `:=` of the value
 	// part (KerML FeatureValue::isDefault, isInitial).
 	ValueIsDefault bool
