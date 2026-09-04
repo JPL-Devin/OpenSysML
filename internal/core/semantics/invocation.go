@@ -1,6 +1,8 @@
 package semantics
 
 import (
+	"reflect"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -27,13 +29,23 @@ type ArgumentTyper interface {
 
 // SetArgumentTyper installs the checker's argument typing on the model. Selections
 // memoized under a different typing are dropped, so none outlives the typing it
-// read; installing the typing already in place (typers compare by value) keeps them.
+// read; installing the typing already in place keeps them.
 func (m *Model) SetArgumentTyper(t ArgumentTyper) {
-	if m.arguments == t {
+	if sameTyping(m.arguments, t) {
 		return
 	}
 	m.arguments = t
 	clear(m.invocations)
+}
+
+// sameTyping reports whether two typers are one typing: equal values of a
+// comparable type. A typer that cannot be compared is taken as new.
+func sameTyping(a, b ArgumentTyper) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	ta, tb := reflect.TypeOf(a), reflect.TypeOf(b)
+	return ta == tb && ta.Comparable() && a == b
 }
 
 // SelectCall selects what e calls, its arguments typed as the checker types them; with no
