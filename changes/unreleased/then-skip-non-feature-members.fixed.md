@@ -1,6 +1,6 @@
 - **A positional `then` sequences past every member that is not a feature.** The parser read
   `action a; doc /* … */ then action b;` as a succession from the documentation, and the same for
-  a `comment`, a `rep`, an `import`, an `alias`, a nested definition or `package` written before
+  a `comment`, a `rep`, an `import`, an `alias`, a nested definition or `package`, a `defer` written before
   the `then`: the runtime then refused to lower an action body (`succession edge references
   undefined source node`) and a state machine stopped at the state before the `doc`. The rule the
   parser and the RDF writer share is now `ast.IsSuccessionSource` — a feature that is not an edge

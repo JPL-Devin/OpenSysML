@@ -889,7 +889,7 @@ func isSuccessionSource(el *element) bool {
 	switch el.metaclass {
 	case mSubaction:
 		return true
-	case mAlias, mFilter:
+	case mAlias, mFilter, mDeferMember:
 		return false
 	}
 	if _, declared := ontology.LookupClass(el.metaclass); declared {

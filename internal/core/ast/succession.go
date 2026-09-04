@@ -11,7 +11,8 @@ func IsSuccessionSource(member Node) bool {
 	case *SuccessionEdge, *ControlFlowEdge, *ObjectFlowEdge, *TransitionEdge, *TransitionMember:
 		return false
 	case *Definition, *Package, *Namespace, *Import, *Alias, *Dependency,
-		*RelationshipMember, *Comment, *Documentation, *TextualRepresentation, *FilterMember:
+		*RelationshipMember, *Comment, *Documentation, *TextualRepresentation, *FilterMember,
+		*DeferMember:
 		return false
 	}
 	return true

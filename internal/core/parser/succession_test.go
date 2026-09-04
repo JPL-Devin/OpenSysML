@@ -164,6 +164,17 @@ func TestThenSequencesFromTheNearestFeatureBefore(t *testing.T) {
 	}
 }
 
+// A state's deferral declares no feature, so a `then` after it sequences from the state before.
+func TestThenSequencesPastADeferral(t *testing.T) {
+	edges, p := parseSuccessions(t, "state def S { state a; defer Ping; then state b; }")
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", p.Diagnostics)
+	}
+	if got := strings.Join(edges, " "); got != "a->b" {
+		t.Errorf("succession edges %q, want a->b", got)
+	}
+}
+
 // A `then` with only non-feature members before it has nothing to sequence
 // from: it is diagnosed, and no succession is built from the member it passed.
 func TestThenWithNoFeatureBeforeItIsDiagnosed(t *testing.T) {

@@ -441,6 +441,35 @@ func TestThenIsRefusedWhenTheGraphSequencesFromANonFeature(t *testing.T) {
 	}
 }
 
+// A state's deferral is no feature: a `then` after it sequences from the state
+// before, and a graph that sequences from the deferral itself is refused.
+func TestThenIsRefusedWhenTheGraphSequencesFromADeferral(t *testing.T) {
+	src := "package P {\n    state def S {\n        state x;\n        state a;\n        defer Ping;\n        then state b;\n    }\n}\n"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	const stated = "sysml:sourceFeature elmt:P__S__a"
+	if strings.Count(string(turtle), stated) != 1 {
+		t.Fatalf("the succession should state its source once as %s:\n%s", stated, turtle)
+	}
+	back, err := export.Convert("m.ttl", withoutSourceText(t, turtle), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from the mapping alone: %v\n%s", err, turtle)
+	}
+	if string(back) != src {
+		t.Fatalf("the notation changed\n--- want ---\n%s\n--- got ---\n%s", src, back)
+	}
+	for name, source := range map[string]string{
+		"an earlier state":            "elmt:P__S__x",
+		"the deferral written before": "elmt:P__S___402",
+	} {
+		t.Run(name, func(t *testing.T) {
+			checkThenIsRefusedWithSource(t, turtle, stated, source)
+		})
+	}
+}
+
 // checkThenIsRefusedWithSource moves the stated source of the one succession
 // in turtle to source, an element of the graph, and requires the refusal.
 func checkThenIsRefusedWithSource(t *testing.T, turtle []byte, stated, source string) {

@@ -155,4 +155,9 @@ package ThenAfterMembers {
         then idle;
         state idle;
     }
+    state def AfterDefer {
+        state on;
+        defer Ping;
+        then state off;
+    }
 }

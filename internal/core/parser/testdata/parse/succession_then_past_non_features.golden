@@ -219,7 +219,11 @@
           (SubstateMember name="on")
           (Documentation locale="")
           (SubstateMember name="off")
-          (SuccessionEdge source="on" target="off")))
+          (SuccessionEdge source="on" target="off")
+          (DeferMember
+            (*ast.QualifiedName))
+          (SubstateMember name="broken")
+          (SuccessionEdge source="off" target="broken")))
       (Membership visibility="default"
         (Definition kind="part" abstract=false variation=false name="Structural"
           (Membership visibility="default"
