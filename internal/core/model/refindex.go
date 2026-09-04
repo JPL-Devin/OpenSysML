@@ -3,7 +3,6 @@ package model
 import (
 	"sort"
 
-	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rename"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -22,14 +21,14 @@ type ReferenceLocation struct {
 // refEntry is a segment listed under an element: one it reaches, one whose name it
 // writes (an alias's own name), or both when the name is the element's own.
 // text is the name as written, telling a long-name spelling from a short one;
-// scope and qualifier are where a rename of that name is checked for capture.
+// ref and part locate the segment in its reference, for a rename's capture check.
 type refEntry struct {
 	ReferenceLocation
-	text      string
-	reached   bool
-	named     bool
-	scope     *symbols.Scope
-	qualifier *symbols.Symbol
+	text    string
+	reached bool
+	named   bool
+	ref     resolve.Reference
+	part    int
 }
 
 // refIndex maps every element (by symbols.KeyOf) to the segments in the
@@ -38,16 +37,15 @@ type refIndex struct {
 	entries map[symbols.ElementKey][]refEntry
 }
 
-// add records one segment, spelled text, that reaches element and writes name
-// (either may be nil), read in scope after the segment reaching qualifier.
-func (x *refIndex) add(doc *Document, seg ast.NameSegment, scope *symbols.Scope,
-	qualifier, element, name *symbols.Symbol) {
-
+// add records segment part of ref, which reaches element and writes name (either
+// may be nil).
+func (x *refIndex) add(doc *Document, ref resolve.Reference, part int, element, name *symbols.Symbol) {
+	seg := ref.QN.Parts[part]
 	loc := ReferenceLocation{Doc: doc.Name, Content: doc.Content, Span: seg.Span}
 	put := func(sym *symbols.Symbol, reached, named bool) {
 		key := symbols.KeyOf(sym)
 		x.entries[key] = append(x.entries[key], refEntry{ReferenceLocation: loc, text: seg.Text,
-			reached: reached, named: named, scope: scope, qualifier: qualifier})
+			reached: reached, named: named, ref: ref, part: part})
 	}
 	switch {
 	case element == nil && name == nil:
@@ -90,12 +88,8 @@ func (w *Workspace) referenceIndexLocked() *refIndex {
 			sel := invocationSelection(r, sem, ref)
 			elements := segmentElements(r, ref, sel)
 			written := segmentNames(r, ref, sel)
-			for i, part := range ref.QN.Parts {
-				var qualifier *symbols.Symbol
-				if i > 0 {
-					qualifier = elements[i-1]
-				}
-				idx.add(doc, part, ref.Scope, qualifier, elements[i], written[i])
+			for i := range ref.QN.Parts {
+				idx.add(doc, ref, i, elements[i], written[i])
 			}
 		}
 	}
@@ -147,7 +141,7 @@ func (w *Workspace) RenameConflict(target *symbols.Symbol, name, newName string)
 	var occurrences []rename.Occurrence
 	for _, e := range w.referenceIndexLocked().entries[symbols.KeyOf(target)] {
 		if e.named && e.text == name {
-			occurrences = append(occurrences, rename.Occurrence{Span: e.Span, Scope: e.scope, Qualifier: e.qualifier})
+			occurrences = append(occurrences, rename.Occurrence{Ref: e.ref, Part: e.part})
 		}
 	}
 	r, _ := w.newResolver()

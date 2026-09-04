@@ -186,8 +186,9 @@ A rename that would change what a name means is refused, and the editor shows th
 error naming the element the new name would mean: the new name — long or short — already means
 something where the element is declared (a sibling's long or short name, or an outer, imported or
 inherited name it would shadow), or a reference the rename rewrites, in any open document, would
-afterwards read another element (`part w : Tyre;` in a scope that declares its own `Tyre`, or
-`A::x` renamed to `y` when `A::y` exists). A name taken only in an unrelated scope is no conflict.
+afterwards read another element (`part w : Tyre;` in a scope that declares its own `Tyre`,
+`A::x` renamed to `y` when `A::y` exists, or `d.x` renamed to `y` when `d`'s type declares its
+own `y`). A name taken only in an unrelated scope is no conflict, nor is renaming a name to itself.
 
 To check the installation in an editor, open a file containing
 `part Wheel { attribute diameter = 16.0; }` and hover over `Wheel`.

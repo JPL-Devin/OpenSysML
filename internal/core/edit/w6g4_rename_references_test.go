@@ -139,6 +139,24 @@ func TestRenameCapturingANameAtAReferenceIsRefused(t *testing.T) {
 	}
 }
 
+// The same refusal for a feature chain's member, which is read in the operand's
+// type rather than where the chain is written: the subtype's own member captures it.
+func TestRenameCapturingAFeatureChainMemberIsRefused(t *testing.T) {
+	const src = "package P {\n\tpart def Base { part x; }\n\tpart def Derived :> Base { part y; }\n" +
+		"\tpart d : Derived;\n\tpart e :> d.x;\n}\n"
+	e := refusedRename(t, "capture-chain.sysml", src, "P::Base::x", "y")
+
+	if e.Failure != FailureInvalidName {
+		t.Fatalf("failure is %s (%s), want invalid-name", e.Failure, e.Message)
+	}
+	if !strings.Contains(e.Message, "P::Derived::y") {
+		t.Fatalf("refusal does not name what the chain would read: %s", e.Message)
+	}
+	if len(e.Referring) != 1 || e.Referring[0] != "P" {
+		t.Fatalf("refusal reports referring %v, want [P]", e.Referring)
+	}
+}
+
 // The same refusal for a qualified reference: the new name is already a member
 // of the namespace the reference qualifies through.
 func TestRenameCapturingAQualifiedSegmentIsRefused(t *testing.T) {

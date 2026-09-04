@@ -104,6 +104,48 @@ func TestRenameRefusesShadowingAnOuterName(t *testing.T) {
 	wantRefusal(t, msg, `Demo::P::y cannot be renamed to "x"`, "already means Demo::x")
 }
 
+// A feature chain's member is read in the operand's type, not where the chain is
+// written: a subtype's own member captures the renamed inherited one there.
+func TestRenameRefusesCaptureThroughFeatureChain(t *testing.T) {
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/capture_chain.sysml",
+		"package P {\n\tpart def Base { part x; }\n\tpart def Derived :> Base { part y; }\n"+
+			"\tpart d : Derived;\n\tpart e :> d.x;\n}\n")
+	msg := refuseRename(t, ws, name, "x; }", "y")
+	wantRefusal(t, msg, `P::Base::x cannot be renamed to "y"`, "reference to it in P", "would read P::Derived::y instead")
+}
+
+func TestRenameSucceedsThroughFeatureChainWhenSubtypeLacksName(t *testing.T) {
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/chain_clean.sysml",
+		"package P {\n\tpart def Base { part x; }\n\tpart def Derived :> Base { part y; }\n"+
+			"\tpart d : Derived;\n\tpart e :> d.x;\n}\n")
+	got, err := applyRename(t, ws, name, "x; }", "z")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	want := "package P {\n\tpart def Base { part z; }\n\tpart def Derived :> Base { part y; }\n" +
+		"\tpart d : Derived;\n\tpart e :> d.z;\n}\n"
+	if got[name] != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", got[name], want)
+	}
+}
+
+// Renaming a name to itself changes nothing, even where the declaration shadows
+// an outer namesake that the collision check would otherwise report.
+func TestRenameToTheSameNameIsNotAConflict(t *testing.T) {
+	ws := model.NewWorkspace()
+	const src = "package Demo {\n\tattribute x = 1;\n\tpart def P {\n\t\tattribute x = 2;\n\t\tattribute z = x;\n\t}\n}\n"
+	name := openRenameDoc(t, ws, "/tmp/same_name.sysml", src)
+	got, err := applyRename(t, ws, name, "x = 2", "x")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	if got[name] != src {
+		t.Fatalf("got:\n%s\nwant the document unchanged", got[name])
+	}
+}
+
 func TestRenameSucceedsWhenNameTakenOnlyInUnrelatedScope(t *testing.T) {
 	ws := model.NewWorkspace()
 	name := openRenameDoc(t, ws, "/tmp/unrelated_scope.sysml",

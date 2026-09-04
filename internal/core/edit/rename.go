@@ -38,7 +38,7 @@ func (m Model) renameSplices(i int, op Operation, sym *symbols.Symbol) ([]splice
 	out := make([]splice, 0, len(occurrences)+1)
 	out = append(out, splice{span: ident.NameSpan, text: op.NewName, opIndex: i, target: op.Target})
 	for _, occ := range occurrences {
-		out = append(out, splice{span: occ.Span, text: op.NewName, opIndex: i, target: op.Target})
+		out = append(out, splice{span: occ.Span(), text: op.NewName, opIndex: i, target: op.Target})
 	}
 	return out, nil
 }
@@ -71,13 +71,9 @@ func (m Model) renameOccurrences(r *resolve.Resolver, sym *symbols.Symbol, ident
 				continue
 			}
 			seen[segment.Span.Offset] = true
-			occ := rename.Occurrence{Span: segment.Span, Scope: ref.Scope}
-			if part > 0 {
-				occ.Qualifier, _ = r.PartSymbol(ref.QN, part-1)
-			}
-			out = append(out, occ)
+			out = append(out, rename.Occurrence{Ref: ref, Part: part})
 		}
 	}
-	sort.Slice(out, func(a, b int) bool { return out[a].Span.Offset < out[b].Span.Offset })
+	sort.Slice(out, func(a, b int) bool { return out[a].Span().Offset < out[b].Span().Offset })
 	return out
 }

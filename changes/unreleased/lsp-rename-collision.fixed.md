@@ -7,8 +7,12 @@
   (`internal/core/rename`): it is refused, with an error the editor shows naming the element the
   new name would mean, when the new long or short name already means something where the element
   is declared (a sibling's long or short name included), or when any reference it rewrites — in
-  any open workspace document, as a whole name or as a segment of a qualified one — would read
-  another element afterwards. A name taken only in an unrelated scope is not a conflict, and a
-  shorthand redefinition whose declaration and reference share one span still renames. Aliases,
-  short-name references and out-of-workspace declarations keep their rules, and
+  any open workspace document, as a whole name, a segment of a qualified one or a feature chain's
+  member — would read another element afterwards. Each rewritten segment is checked by a trial
+  reading of its reference with the new spelling, so a chain member is read in its operand's type
+  rather than where the chain is written; the batch edit API gains that check too, where it
+  previously let `d.x` be renamed onto a `y` that `d`'s type declares. A name taken only in an
+  unrelated scope is not a conflict, nor is renaming a name to itself, and a shorthand
+  redefinition whose declaration and reference share one span still renames. Aliases, short-name
+  references and out-of-workspace declarations keep their rules, and
   `textDocument/prepareRename` is unchanged.

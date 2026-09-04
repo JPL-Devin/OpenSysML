@@ -5,6 +5,7 @@ package rename
 import (
 	"fmt"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -12,12 +13,15 @@ import (
 
 // Occurrence is one reference segment written with the name being renamed.
 type Occurrence struct {
-	// Span is the segment's bytes in its document.
-	Span source.Span
-	// Scope is where the reference is read; an unqualified segment is checked here.
-	Scope *symbols.Scope
-	// Qualifier is what the preceding segment reaches; nil for a first segment.
-	Qualifier *symbols.Symbol
+	// Ref is the reference the segment belongs to, as the document walk collected it.
+	Ref resolve.Reference
+	// Part indexes the segment in Ref.QN.
+	Part int
+}
+
+// Span is the segment's bytes in its document.
+func (o Occurrence) Span() source.Span {
+	return o.Ref.QN.Parts[o.Part].Span
 }
 
 // Conflict is why a rename is refused: what the new name would mean instead.
@@ -47,6 +51,9 @@ func (c *Conflict) Error() string {
 // Check reports the first conflict renaming sym's written name to newName would
 // create: the declaration's own scope first, then each occurrence in order.
 func Check(r *resolve.Resolver, sym *symbols.Symbol, name, newName string, occurrences []Occurrence) *Conflict {
+	if name == newName {
+		return nil
+	}
 	subject := qualifiedName(r.Index(), sym)
 	if means, ok := taken(r, sym, newName); ok {
 		return &Conflict{Subject: subject, NewName: newName, Means: means}
@@ -69,27 +76,25 @@ func taken(r *resolve.Resolver, sym *symbols.Symbol, newName string) (string, bo
 	return otherThan(r, sym, other, ok)
 }
 
-// capturedAt names what a rewritten reference would read instead of sym: an
-// unqualified segment in its own scope, a qualified one as a member of its qualifier.
+// capturedAt names what the reference would read at the segment once it is spelled
+// newName: a trial reading by the path the document walk takes for that reference
+// (a scope lookup, a namespace member, a feature chain step, a redefined feature, …).
 func capturedAt(r *resolve.Resolver, sym *symbols.Symbol, occ Occurrence, newName string) (string, bool) {
-	if occ.Qualifier != nil {
-		prefix := r.Index().GetFQN(occ.Qualifier)
-		if prefix == "" {
-			return "", false
-		}
-		candidate := prefix + "::" + newName
-		for _, other := range r.Index().LookupQualifiedFrom(candidate, prefix) {
-			if other != nil && !symbols.SameElement(other, sym) {
-				return candidate, true
-			}
-		}
-		return "", false
+	qn := respelled(occ.Ref.QN, occ.Part, newName)
+	other, ok := r.ProbeReference(occ.Ref.Spelled(qn))
+	if occ.Part < len(qn.Parts)-1 {
+		other, ok = r.PartSymbol(qn, occ.Part)
 	}
-	if occ.Scope == nil {
-		return "", false
-	}
-	other, ok := r.LookupNameExcluding(occ.Scope, newName, sym.Decl)
 	return otherThan(r, sym, other, ok)
+}
+
+// respelled is qn with segment i spelled name, on a fresh node: the resolver
+// memoizes by node, so the trial must not overwrite the real reading.
+func respelled(qn *ast.QualifiedName, i int, name string) *ast.QualifiedName {
+	out := &ast.QualifiedName{NodeBase: qn.NodeBase, Global: qn.Global}
+	out.Parts = append([]ast.NameSegment(nil), qn.Parts...)
+	out.Parts[i].Text = name
+	return out
 }
 
 // otherThan names a lookup's result when it is an element other than sym.
@@ -111,7 +116,7 @@ func qualifiedName(idx *symbols.Index, sym *symbols.Symbol) string {
 // site names the namespace a reference is made in, or the name as written where
 // that namespace has no FQN.
 func site(r *resolve.Resolver, occ Occurrence, name string) string {
-	if fqn := r.ReferringNamespaceFQN(occ.Scope); fqn != "" {
+	if fqn := r.ReferringNamespaceFQN(occ.Ref.Scope); fqn != "" {
 		return fqn
 	}
 	return name
