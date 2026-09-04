@@ -282,10 +282,64 @@ func TestThenSequencesFromTheNameAnUnnamedUsageAnswersTo(t *testing.T) {
 	}
 }
 
+// A `then` after `first start;` sequences from the member `start` names, the
+// one the initial node links to, so the graph reads back unchanged.
+func TestThenAfterFirstSequencesFromTheMemberTheStartNames(t *testing.T) {
+	src := "package P {\n    use case enter;\n    use case drive {\n        ref redefines start {\n            doc /* pre */\n        }\n" +
+		"        first start;\n        then include enter;\n        then done;\n    }\n}\n"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	const start = "sysml:sourceFeature elmt:P__drive___400"
+	if n := strings.Count(string(turtle), start); n != 2 {
+		t.Fatalf("the initial node and the then after it should both state %s, found %d:\n%s", start, n, turtle)
+	}
+	back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from the mapping alone: %v\n%s", err, turtle)
+	}
+	if string(back) != src {
+		t.Fatalf("the notation changed\n--- want ---\n%s\n--- got ---\n%s", src, back)
+	}
+}
+
+// A state machine's initial successor is a transition endpoint: it may name a
+// nested state or one in a sibling region, which no lexical lookup from the
+// machine's body reaches, so it is linked the way transition ends are.
+func TestInitialSuccessorLinksAVertexOfTheMachine(t *testing.T) {
+	src := "package P {\n    state def M {\n        first start then nested;\n        state outer {\n            state nested;\n        }\n    }\n" +
+		"    state def Q parallel {\n        state a {\n            state a1;\n        }\n        state b {\n            first start then a1;\n            state b2;\n        }\n    }\n" +
+		"    action def A {\n        first start then walk;\n        action walk;\n    }\n}\n"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	for _, target := range []string{
+		"sysml:targetFeature elmt:P__M__outer__nested",
+		"sysml:targetFeature elmt:P__Q__a__a1",
+		"sysml:targetFeature elmt:P__A__walk",
+	} {
+		if !strings.Contains(string(turtle), target) {
+			t.Errorf("the initial node should link its successor as %s:\n%s", target, turtle)
+		}
+	}
+	if strings.Contains(string(turtle), `sysml:targetFeature "`) {
+		t.Errorf("no initial successor should be carried as text:\n%s", turtle)
+	}
+	back, err := export.Convert("m.ttl", withoutSourceText(t, turtle), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from the mapping alone: %v\n%s", err, turtle)
+	}
+	if string(back) != src {
+		t.Fatalf("the notation changed\n--- want ---\n%s\n--- got ---\n%s", src, back)
+	}
+}
+
 // A source end that is only a name is no member of the body: a `then` whose
 // graph names its source so is not folded beside a linked neighbour that merely
 // declares the name, since another member may be what the name reaches. The
-// encoder states such a source by position too, so its own graphs come back.
+// encoder links the member the name reaches, a redefinition answering to it too.
 func TestANameOnlySourceIsNotFoldedBesideASameNamedLinkedMember(t *testing.T) {
 	const positional = "sysx:sourceMember elmt:P__A___401"
 	src := "package P {\n    action def Step;\n    action def Base {\n        action walk : Step;\n    }\n" +
@@ -310,16 +364,16 @@ func TestANameOnlySourceIsNotFoldedBesideASameNamedLinkedMember(t *testing.T) {
 		t.Errorf("the refusal should say which order the graph states: %v", err)
 	}
 
-	// Without a member of the name in the body the name links nothing, and the
-	// encoder states the member before the `then` by position instead.
+	// Without a member declaring the name, the name reaches the redefinition
+	// before the `then`, which answers to it: the source links that member.
 	own := "package P {\n    action def Step;\n    action def Base {\n        action walk : Step;\n    }\n" +
 		"    action def A specializes Base {\n        action w : Step;\n        action redefines walk;\n        then action b : Step;\n    }\n}\n"
 	turtle, err = export.Convert("m.sysml", []byte(own), export.FormatSysML, export.FormatTurtle)
 	if err != nil {
 		t.Fatalf("to turtle: %v", err)
 	}
-	if !strings.Contains(string(turtle), `sysml:sourceFeature "walk"`) || !strings.Contains(string(turtle), positional) {
-		t.Fatalf("the source should be the name and the member's position:\n%s", turtle)
+	if !strings.Contains(string(turtle), "sysml:sourceFeature elmt:P__A___401") || strings.Contains(string(turtle), positional) {
+		t.Fatalf("the source should link the redefinition the name reaches:\n%s", turtle)
 	}
 	back, err := export.Convert("m.ttl", withoutTriples(t, turtle, "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
 	if err != nil {

@@ -1,0 +1,1136 @@
+{
+  "pilotTag": "2026-07",
+  "pilotCommit": "c7fc737d56da9e2d78f9d7df6d38efbec2e7e965",
+  "pilotArtifact": "0.61.0",
+  "jar": {
+    "name": "jupyter-sysml-kernel-0.61.0-all.jar",
+    "digest": "sha256:602b53fa64d5af84480aa00e06e590a140d7d5c3651d4d76ac0e0055f89f0079"
+  },
+  "extraction": {
+    "classes": [
+      "org/omg/kerml/xtext/validation/KerMLValidator.class",
+      "org/omg/sysml/xtext/validation/SysMLValidator.class"
+    ],
+    "method": "CONSTANT_String entries of each class's constant pool matching ^(in)?validate[A-Za-z]+_?$, normalized to the validate... name by dropping the in prefix and one trailing underscore; a name found in both classes has source \"both\""
+  },
+  "recorded": "2026-09-02",
+  "constraints": [
+    {
+      "name": "validateAcceptActionUsageParameters",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateActionUsageType",
+      "raw": "validateActionUsageType_",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateActorMembershipOwningType",
+      "source": "sysml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateAllocationUsageType",
+      "raw": "validateAllocationUsageType_",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateAnalysisCaseUsageType",
+      "raw": "validateAnalysisCaseUsageType_",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateAnnotationAnnotatedElementOwnership",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateAnnotationAnnotatingElement",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateAssertConstraintUsageReference",
+      "source": "sysml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateAssignmentActionUsageArguments",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateAssignmentActionUsageReferent",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateAssignmentActionUsageReferentIsTimeVarying",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateAssociationBinarySpecialization",
+      "source": "kerml",
+      "status": "approximate"
+    },
+    {
+      "name": "validateAssociationEndTypes",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateAssociationRelatedTypes",
+      "source": "kerml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateAssociationStructureIntersection",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateAttributeDefinitionFeatures",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateAttributeUsageEnumerationType",
+      "raw": "validateAttributeUsageEnumerationType_",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateAttributeUsageFeatures",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateAttributeUsageIsReferential",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateAttributeUsageType",
+      "raw": "validateAttributeUsageType_",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateBehaviorSpecialization",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateBindingConnectorArgumentTypeConformance",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateBindingConnectorIsBinary",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateBindingConnectorTypeConformance",
+      "source": "kerml",
+      "status": "approximate"
+    },
+    {
+      "name": "validateCalculationUsageType",
+      "raw": "validateCalculationUsageType_",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateCaseDefinitionOnlyOneObjective",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateCaseDefinitionOnlyOneSubject",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateCaseDefinitionSubjectParameterPosition",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateCaseUsageOnlyOneObjective",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateCaseUsageOnlyOneSubject",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateCaseUsageSubjectParameterPosition",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateCaseUsageType",
+      "raw": "validateCaseUsageType_",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateClassSpecialization",
+      "source": "both",
+      "status": "approximate"
+    },
+    {
+      "name": "validateClassifierDefaultSupertype",
+      "raw": "validateClassifierDefaultSupertype_",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateClassifierMultiplicityDomain",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateCollectExpressionOperator",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateConjugatedPortDefinitionConjugatedPortDefinition",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateConnectionUsageType",
+      "raw": "validateConnectionUsageType_",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateConnectorBinarySpecialization",
+      "source": "kerml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateConnectorRelatedFeatures",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateConnectorTypeFeaturing",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateConstructorExpressionNoDuplicateFeatureRedefinition",
+      "source": "kerml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateConstructorExpressionOwnedFeatures",
+      "source": "kerml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateControlNodeIncomingSuccessions",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateControlNodeOutgoingSuccessions",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateControlNodeOwningType",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateCrossSubsettingCrossedFeature",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateCrossSubsettingCrossingFeature",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateDataTypeSpecialization",
+      "source": "both",
+      "status": "approximate"
+    },
+    {
+      "name": "validateDecisionNodeIncomingSuccessions",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateDecisionNodeOutgoingSuccessions",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateDefinitionVariationIsAbstract",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateDefinitionVariationMembership",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateDefinitionVariationSpecialization",
+      "source": "sysml",
+      "status": "approximate"
+    },
+    {
+      "name": "validateElementFilterMembershipIsBoolean",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateElementFilterMembershipIsModelLevelEvaluable",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateElementIsImpliedIncluded",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateEndFeatureMembershpIsEnd",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateEnumerationDefinitionIsVariation",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateEnumerationUsageType",
+      "raw": "validateEnumerationUsageType_",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateEventOccurrenceUsageIsReference",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateEventOccurrenceUsageReferent",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateExhibitStateUsageReference",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateExposeIsImportAll",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateExposeOwningNamespace",
+      "source": "sysml",
+      "status": "approximate"
+    },
+    {
+      "name": "validateExpressionResultExpressionMembership",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateExpressionResultParameterMembership",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateFeatureChainExpressionFeatureConformance",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateFeatureChainExpressionOperator",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateFeatureChainingFeatureConformance",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateFeatureChainingFeatureNotOne",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateFeatureChainingFeaturesNotSelf",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateFeatureConstantIsVariable",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateFeatureCrossFeatureSpecialization",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateFeatureCrossFeatureType",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateFeatureEndFeatureMultiplicity",
+      "source": "kerml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateFeatureEndIsConstant",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateFeatureEndNoDirection",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateFeatureEndNotDerivedAbstractCompositeOrPortion",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateFeatureHasType",
+      "raw": "validateFeatureHasType_",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateFeatureIsVariable",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateFeatureMultiplicityDomain",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateFeatureOwnedCrossSubsetting",
+      "source": "kerml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateFeatureOwnedReferenceSubsetting",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateFeaturePortionNotVariable",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateFeatureReferenceExpressionReferentIsFeature",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateFeatureReferenceExpressionResult",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateFeatureValueIsInitial",
+      "source": "kerml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateFeatureValueOverriding",
+      "source": "kerml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateFlowDefinitionConnectionEnds",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateFlowEndImplicitSubsetting",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateFlowEndIsEnd",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateFlowEndNestedFeature",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateFlowEndOwningType",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateFlowEndSubsetting",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateFlowItemFeature",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateFlowUsageType",
+      "raw": "validateFlowUsageType_",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateForLoopActionUsageLoopVariable",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateForLoopActionUsageParameters",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateForkNodeIncomingSuccessions",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateFramedConcernMembershipConstraintKind",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateFunctionResultExpressionMembership",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateFunctionResultParameterMembership",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateIfActionUsageParameters",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateImportTopLevelVisibility",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateIncludeUseCaseUsageReference",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateIndexExpressionOperator",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateInstantiationExpressionInstantiatedType",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateInstantiationExpressionResult",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateInterfaceDefinitionEnd",
+      "raw": "validateInterfaceDefinitionEnd_",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateInterfaceUsageEnd",
+      "raw": "validateInterfaceUsageEnd_",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateInterfaceUsageType",
+      "raw": "validateInterfaceUsageType_",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateInvocationExpressionInstantiatedType",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateInvocationExpressionNoDuplicateParameterRedefinition",
+      "source": "kerml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateInvocationExpressionOwnedFeatures",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateInvocationExpressionParameterRedefinition",
+      "source": "kerml",
+      "status": "approximate"
+    },
+    {
+      "name": "validateItemUsageType",
+      "raw": "validateItemUsageType_",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateJoinNodeOutgoingSuccessions",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateLibraryPackageNotStandard",
+      "raw": "validateLibraryPackageNotStandard_",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateMergeNodeIncomingSuccessions",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateMergeNodeOutgoingSuccessions",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateMetadataFeatureAnnotatedElement",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateMetadataFeatureBody",
+      "raw": "invalidateMetadataFeatureBody",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateMetadataFeatureMetadata",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateMetadataFeatureMetadataNotAbstract",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateMetadataUsageType",
+      "raw": "validateMetadataUsageType_",
+      "source": "sysml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateMultiplicityRangeBounds",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateMultiplicityRangeResultTypes",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateNamespaceDistinguishablity",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateObjectiveMembershipIsComposite",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateObjectiveMembershipOwningType",
+      "source": "sysml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateOccurrenceUsageIndividualDefinition",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateOccurrenceUsageIndividualUsage",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateOccurrenceUsageIsPortion",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateOccurrenceUsageType",
+      "raw": "validateOccurrenceUsageType_",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateOperatorExpressionBracketOperator",
+      "raw": "validateOperatorExpressionBracketOperator_",
+      "source": "kerml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateOperatorExpressionCastConformance",
+      "source": "kerml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateOperatorExpressionQuantity",
+      "source": "sysml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateOwnedDifferencingNotOne",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateOwnedIntersectingNotOne",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateOwnedUnioningNotOne",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateParameterMembershipDirection",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateParameterMembershipOwningType",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validatePartUsagePartDefinition",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validatePartUsageType",
+      "raw": "validatePartUsageType_",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validatePerformActionUsageReference",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validatePortDefinitionConjugatedPortDefinition",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validatePortDefinitionOwnedUsagesNotComposite",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validatePortUsageIsReference",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validatePortUsageNestedUsagesNotComposite",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validatePortUsageType",
+      "raw": "validatePortUsageType_",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateRedefinitionDirectionConformance",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateRedefinitionEndConformance",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateRedefinitionFeaturingTypes",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateRedefinitionMultiplicityConformance",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateReferenceUsageIsReference",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateRenderingUsageType",
+      "raw": "validateRenderingUsageType_",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateRequirementConstraintMembershipIsComposite",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateRequirementConstraintMembershipOwningType",
+      "source": "sysml",
+      "status": "approximate"
+    },
+    {
+      "name": "validateRequirementDefinitionOnlyOneSubject",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateRequirementDefinitionSubjectParameterPosition",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateRequirementUsageOnlyOneSubject",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateRequirementUsageSubjectParameterPosition",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateRequirementUsageType",
+      "raw": "validateRequirementUsageType_",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateRequirementVerificationMembershipKind",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateRequirementVerificationMembershipOwningType",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateResultExpressionMembershipOwningType",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateReturnParameterMembershipOwningType",
+      "source": "kerml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateSatisfyRequirementUsageReference",
+      "source": "sysml",
+      "status": "approximate"
+    },
+    {
+      "name": "validateSelectExpressionOperator",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateSendActionUsagePayloadArgument",
+      "source": "sysml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateSendActionUsageReceiver",
+      "raw": "validateSendActionUsageReceiver_",
+      "source": "sysml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateSpecializationSpecificNotConjugated",
+      "source": "kerml",
+      "status": "approximate"
+    },
+    {
+      "name": "validateStakeholderMembershipOwningType",
+      "source": "sysml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateStateDefinitionParallelSubactions",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateStateDefinitionSubactionKind",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateStateSubactionMembershioOwningType",
+      "source": "sysml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateStateUsageParallelSubactions",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateStateUsageSubactionKind",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateStateUsageType",
+      "raw": "validateStateUsageType_",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateStructureSpecialization",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateSubjectMembershipOwningType",
+      "source": "sysml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateSubsettingConstantConformance",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateSubsettingFeaturingTypes",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateSubsettingMultiplicityConformance",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateSubsettingPortionConformance",
+      "source": "kerml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateSubsettingUniquenessConformance",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateTransitionFeatureMembershipEffectAction",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateTransitionFeatureMembershipGuardExpression",
+      "source": "sysml",
+      "status": "approximate"
+    },
+    {
+      "name": "validateTransitionFeatureMembershipOwningType",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateTransitionFeatureMembershipTriggerAction",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateTransitionUsageParameters",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateTransitionUsageSuccession",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateTransitionUsageTriggerActions",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateTriggerInvocationActionAfterArgument",
+      "source": "sysml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateTriggerInvocationActionAtArgument",
+      "source": "sysml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateTriggerInvocationActionWhenArgument",
+      "source": "sysml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateTypeAtMostOneConjugator",
+      "source": "kerml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateTypeDifferencingTypesNotSelf",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateTypeIntersectingTypesNotSelf",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateTypeOwnedMultiplicity",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateTypeUnioningTypesNotSelf",
+      "source": "kerml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateUsageIsReferential",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateUsageType",
+      "raw": "validateUsageType_",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateUsageVariationIsAbstract",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateUsageVariationMembership",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateUsageVariationSpecialization",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateUseCaseUsageReference",
+      "source": "sysml",
+      "status": "unknown"
+    },
+    {
+      "name": "validateUseCaseUsageType",
+      "raw": "validateUseCaseUsageType_",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateVariationMembershipOwningNamespace",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateVerificationCaseUsageType",
+      "raw": "validateVerificationCaseUsageType_",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateViewDefinitionOnlyOnvViewRendering",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateViewRenderingMembershipOwningType",
+      "source": "sysml",
+      "status": "not-implemented"
+    },
+    {
+      "name": "validateViewUsageOnlyOneRendering",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateViewUsageType",
+      "raw": "validateViewUsageType_",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateViewpointUsageType",
+      "raw": "validateViewpointUsageType_",
+      "source": "sysml",
+      "status": "faithful"
+    },
+    {
+      "name": "validateWhileLoopActionUsageParameters",
+      "source": "sysml",
+      "status": "unknown"
+    }
+  ]
+}

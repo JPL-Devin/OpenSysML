@@ -350,3 +350,46 @@ func TestAnalysisWithPins(t *testing.T) {
 		t.Errorf("pinning changed the objectives: %+v", pinned.Objectives)
 	}
 }
+
+// TestCaseStepsAreNotBodyStatements: a case's own action steps are its procedure,
+// so an analysis stating them still translates; a step inside a required
+// constraint's body is refused as any body statement is.
+func TestCaseStepsAreNotBodyStatements(t *testing.T) {
+	ctx, idx := fixture(t, "case_steps.sysml", `
+		package test {
+			private import ScalarValues::*;
+			private import TradeStudies::*;
+			analysis def Stepped {
+				attribute used : Integer;
+				attribute spare : Natural;
+				action measure; action compare;
+				first measure then compare;
+				perform action tally : Tally;
+				require constraint { used <= 3 }
+				objective roomiest : MaximizeObjective {
+					attribute :>> best = spare;
+				}
+			}
+			action def Tally;
+			analysis def Flowed {
+				attribute used : Integer;
+				require constraint { action a; used <= 3 }
+				objective roomiest : MaximizeObjective {
+					attribute :>> best = used;
+				}
+			}
+		}`)
+	sym := symbolNamed(t, idx, "test::Stepped")
+	if _, err := Analysis(ctx, sym, sym.OwnerScope); err != nil {
+		t.Fatalf("translate: %v", err)
+	}
+	sym = symbolNamed(t, idx, "test::Flowed")
+	_, err := Analysis(ctx, sym, sym.OwnerScope)
+	var refused *NotTranslatableError
+	if !errors.As(err, &refused) {
+		t.Fatalf("translate: %v, want a refusal", err)
+	}
+	if refused.Construct != "body statement" || refused.Condition != "`action` statement" {
+		t.Errorf("refused %q (%q), want the body statement's action", refused.Construct, refused.Condition)
+	}
+}

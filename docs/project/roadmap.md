@@ -1,6 +1,6 @@
 # OpenSysML — Roadmap
 
-Baseline: `main` @ `4e3d5f2e`, verified locally on 2026-09-03 with Go 1.25.0.
+Baseline: `main` @ `3c454856`, verified locally on 2026-09-03 with Go 1.25.0.
 Read `AGENTS.md` first; it governs everything below.
 
 > **Labels.** This is an engineering record. The RDF items keep the `D` numbers (`D1`, `D2`,
@@ -28,7 +28,7 @@ snapshot, the calc-evaluator work and the self-model updates describing them) sh
 the **0.4.3** heading is dated 2026-09-01 — see R1. Everything in "Release follow-through" is
 maintainer- or account-gated; everything after it is ordinary engineering work.
 
-**What closed since the last baseline** (`1f136d27`, 2026-09-02) — in `CHANGELOG.md` for the
+**What closed between `1f136d27` (2026-09-02) and `4e3d5f2e`** — in `CHANGELOG.md` for the
 detail, listed here because each retires or narrows a roadmap line: native compilation landed in
 four pull requests (#778 the scalar spike, #781 the interpreter's closure fast path, #796
 statement bodies, redefined parameters, library intrinsics and named arguments, #828 sequences,
@@ -44,10 +44,26 @@ notation it was written from (#793, #813, #814); documents render as semantic HT
 the LSP serves the standard library read-only (#806) and mints identity annotations (#789); a
 library-derived semantic oracle adjudicates action and state execution (#804); the behavior
 execution review's findings became Track E (#802); and the identity design record states itself
-fully implemented (#844). Since that baseline, the Connect + JSON wire contract is written down
-(#848, [wire-contract.md](../reference/wire-contract.md)), which closes I1. The earlier baseline's
-retirements — element identity, document generation, the performance census, the client tours, the
-pilot pin — stay retired and are not repeated.
+fully implemented (#844).
+
+**What closed since `4e3d5f2e`** (2026-09-03, the previous baseline; 22 pull requests): the
+Connect + JSON wire contract is written down (#848,
+[wire-contract.md](../reference/wire-contract.md)), which closes I1; every Kernel Function Library
+declaration dispatches by name or is refused by name (#821, closes L4); `QuantityCalculations`
+dispatches and composed units render canonically (#818, closes L5); Systems and Domain library
+features are materialized on objects (#830, closes L3); each nested action node has its own
+performance frame (#823); messages route across binding connectors at boundary ports (#839);
+expression surfaces read the instantiated object after `-instantiate` (#843), `%eval in` reads a
+valueless feature as `<unset>` (#805), `%send` exists (#808), every REPL command takes one
+object-reference grammar (#809) and `%state <machine>` attaches to the one object exhibiting the
+machine (#845); document-query parameter defaults are evaluated when unbound (#849, closes Q4);
+multi-valued RDF properties are written as the JSON annotation Flexo reads (#850, closes D3.4 and
+D3), stored source text is written back byte for byte (#819) and an end-binding usage's body is
+kept as elements (#842); the inherited-name warning beside a typing error is adjudicated as not a
+defect (#837); and the changelog is written as fragments under `changes/unreleased/` (#852, #854)
+with the compliance census counted at docs build instead of committed (#853) — which retargets R1
+below. The earlier baseline's retirements — element identity, document generation, the performance
+census, the client tours, the pilot pin — stay retired and are not repeated.
 
 ## Where the repository stands
 
@@ -63,11 +79,11 @@ before re-recording anything.
 | OMG training corpus | **100/100 clean** — asserted, not ratcheted: no file reports a semantic error |
 | OMG pilot corpora (ratchet) | 213 files; 5 report a diagnostic, each adjudicated in [pilot-corpora.md](pilot-corpora.md) and [omg-issues.md](omg-issues.md) |
 | Stdlib parser conformance | 97/97 clean — 94 vendored OMG files and 3 non-normative OpenSysML extensions |
-| Execution conformance cases | 454 (`TestExecutionConformance`) |
-| Golden execution traces | 128 (`TestExecutionTrace`) |
-| Runtime robustness cases | 252 first-level subtests of `TestRuntimeRobustness` |
+| Execution conformance cases | 551 (`TestExecutionConformance`) |
+| Golden execution traces | 136 (`TestExecutionTrace`) |
+| Runtime robustness cases | 314 first-level subtests of `TestRuntimeRobustness` |
 | gRPC conformance fixtures / robustness cases | 15 / 10 |
-| Golden AST fixtures | 158 (`TestGolden`) |
+| Golden AST fixtures | 162 (`TestGolden`) |
 | Negative parser subtests | 201 first-level subtests of `TestNegative` (319 across every `*Negative*` parser test) |
 
 The pilot differential, the Xpect oracle, the scope oracle and the rejection oracle are the
@@ -130,9 +146,12 @@ The procedure and its post-tag verification are in `docs/project/releasing.md`.
 `v0.4.3` was tagged at `99e02003`, which contains everything `CHANGELOG.md` files under
 **Unreleased** above the **0.4.3** heading; a reader of the changelog concludes the 20 ms
 start-up and the calc-evaluator work are not in the release they are running. Fold those entries
-into the 0.4.3 section and date it to the tag (2026-09-02), leaving Unreleased empty. Small, and
-the gate recount above belongs in the same pass, since `releasing.md` checks the four count
-surfaces before the next tag.
+into the 0.4.3 section and date it to the tag (2026-09-02), leaving Unreleased holding only what
+landed after the tag. Since #852 a change no longer edits `CHANGELOG.md`: it adds a fragment under
+`changes/unreleased/` and `python3 scripts/changelog.py render` folds the fragments in at release
+time (`releasing.md`), so the fold is the one remaining hand edit of the file. The gate recount
+above is no longer part of this item — #853 counts the compliance census at docs build instead of
+committing it.
 
 ## R2 — the Node, Java and Rust clients are unpublished
 
@@ -203,37 +222,43 @@ A feature a user type inherits from the standard library has no value at run tim
 Box :> Item; part b : Box;`, both `b.isSolid` (declared `isSolid = isEmpty(voids)` in `Systems
 Library/Items.sysml`) and `b.voids` report `member … not found in instance`; the cause is
 `runtime/shape.go` skipping every `libraryDeclared` feature when it lays out an object, so
-`Model.Eval` never gets as far as folding the library's value expression. **Open, mergeable:**
+`Model.Eval` never gets as far as folding the library's value expression. **Landed:**
 [PR #830](https://github.com/JPL-Devin/OpenSysML/pull/830) materializes Systems and Domain library
-features on objects in tiers (a feature's own value, then inherited value expressions), and needs a
-rebase onto `main` before review. The solver has the mirror gap and is not in
-that PR: its translatable subset does not take library-declared conditions, and `solve`'s
+features on objects in tiers (a feature's own value, then inherited value expressions); at this
+baseline `%instantiate L::b; %eval in b : isSolid` answers `true` and `voids` `[]`. The solver has
+the mirror gap and is not in that PR: its translatable subset does not take library-declared
+conditions, and `solve`'s
 differential harness still indexes the standard library as ordinary documents (`parseLibraries`)
 to reach them. [wave12c-lossless-library-records.md](wave12c-lossless-library-records.md) records
 what was measured.
 
 ## L4 — every Kernel Function Library declaration dispatches by name
 
-At the baseline ~135 runtime names are registered explicitly (`runtime/builtin_names.go`,
-`library_functions.go`), operators and the core builtins are handled separately, and **12 of the 17
-KFL packages have no dispatch gate**: a call to one of their ~38 named functions — every
+At the previous baseline ~135 runtime names were registered explicitly (`runtime/builtin_names.go`,
+`library_functions.go`), operators and the core builtins were handled separately, and **12 of the
+17 KFL packages had no dispatch gate**: a call to one of their ~38 named functions — every
 `ToString`/`ToInteger`/`ToReal`/… conversion in `BaseFunctions`/`ScalarFunctions`, `Rational
 floor/round/gcd`, `sum0`, the generic `max`/`min`, the explicit operator-call spellings `'+'(a, b)`
-— falls through to `no result expression` naming the wrong thing, instead of either computing or
-failing as `library function X is not implemented`. **Open, mergeable:**
+— fell through to `no result expression` naming the wrong thing, instead of either computing or
+failing as `library function X is not implemented`. **Landed:**
 [PR #821](https://github.com/JPL-Devin/OpenSysML/pull/821) adds the gate and implementations for
-every KFL declaration; with it a call either computes the library's stated result or is refused by
-name. The named-reducer forms (`->reduce '+'`) are the same mechanism read from a different
-position and are X5 below.
+every KFL declaration; a call now either computes the library's stated result or is refused by
+name (`ToString(42)` is `"42"`, `max(1, 2)` is `2`, `max(1.0, 2.5)` is `2.5` at this baseline).
+The named-reducer forms (`->reduce '+'`) are the same mechanism read from a different position and
+are X5 below; which overload a name reaches is L6.
 
 ## L5 — `QuantityCalculations`, unit canonicalization and domain failures
 
-`QuantityCalculations` (28 declarations) has no runtime registration at the baseline, and a model
-that imports it loses `->sum()` over quantities (measured; the import brings a `sum` declaration
-nothing dispatches into scope ahead of the scalar one). Composed units have no canonical rendering.
-**Open, mergeable:** [PR #818](https://github.com/JPL-Devin/OpenSysML/pull/818) dispatches the
-package and renders composed units canonically. Domain failures (`sqrt` of a negative quantity, a unit mismatch in `+`)
-must stay typed errors naming the function and the units, as the scalar library's already do.
+`QuantityCalculations` (28 declarations) had no runtime registration at the previous baseline, and
+a model that imported it lost `->sum()` over quantities (measured; the import brought a `sum`
+declaration nothing dispatched into scope ahead of the scalar one). Composed units had no canonical
+rendering. **Landed:** [PR #818](https://github.com/JPL-Devin/OpenSysML/pull/818) dispatches the
+package and renders composed units canonically — with the import in scope, `(2 [kg], 3 [kg])->sum()`
+is `5 [kg]` and `2 [m] * 3 [m]` is `6 [m**2]` at this baseline. What the same probe shows is L6's
+gap: with `ScalarFunctions` and `QuantityCalculations` both imported, `ToReal("2.5")` reaches
+`QuantityCalculations::ToReal` and is refused for its argument type instead of selecting the
+scalar overload. Domain failures (`sqrt` of a negative quantity, a unit mismatch in `+`) must stay
+typed errors naming the function and the units, as the scalar library's already do.
 
 ## L6 — invocation overloads selected by argument type
 
@@ -340,32 +365,34 @@ drops what those items carry. Every surface says so (`export.ExperimentalNotice`
 it to stable is re-measuring the harness once those land, not a documentation change.
 
 Measured by the per-file ratchet at this baseline (`TestCorpusRoundTrip`,
-`internal/core/export/testdata/corpus_roundtrip_expected.txt`), **275 of the 345 models under
+`internal/core/export/testdata/corpus_roundtrip_expected.txt`), **273 of the 345 models under
 `examples/` convert** (the training corpus, the three pilot corpora and this repository's own
-demos): 184 round-trip `notation → RDF → notation → RDF` byte-identically, 78 differ only in the
-whitespace inside source-text literals, 7 differ as graphs, 4 write notation that no longer parses
-and 2 write a graph the decoder refuses — each pinned by file, so a movement in any direction has
-to be adjudicated ([rdf-corpus-roundtrip.md](rdf-corpus-roundtrip.md)). A model the mapping cannot
-write back is refused rather than converted lossily, and the 70 refusals sort into: 35 declarations
-that name no element of their own (19 features, 9 events, 3 snapshots, 3 asserts, 1 timeslice — the
-notation cannot be rebuilt from a graph keyed by name), 18 prefix metadata, 13 expressions standing
-as a body member — a calc's trailing result expression such as `a - b`, which the mapping writes
-only in a valued position (**D1**), and 4 duplicate declarations, where two members of one namespace
-share a name the graph would merge. The 7 successions whose end was not a basic name at the last
-baseline convert now (#814 quotes the end); the other classes are unchanged.
+demos): 272 round-trip `notation → RDF → notation → RDF` byte-identically and 1 writes a graph the
+decoder refuses — each pinned by file, so a movement in any direction has to be adjudicated
+([rdf-corpus-roundtrip.md](rdf-corpus-roundtrip.md)). The 78 whitespace-only, 7 graph-diff and 4
+unparseable verdicts of the previous baseline are gone: #819 writes the stored source text back
+byte for byte when it still states the graph, and #842 keeps an end-binding usage's body as
+elements. A model the mapping cannot write back is refused rather than converted lossily, and the 72
+refusals sort into: 36 declarations that name no element of their own (20 features, 9 events, 3
+snapshots, 3 asserts, 1 timeslice — the notation cannot be rebuilt from a graph keyed by name), 19
+prefix metadata, 13 expressions standing as a body member — a calc's trailing result expression such
+as `a - b` (6 operator, 3 invocation, 2 feature-chain, 1 feature-reference, 1 constructor), which
+the mapping writes only in a valued position (**D1**), and 4 duplicate declarations, where two
+members of one namespace share a name the graph would merge. Two models the previous ratchet
+counted as converting now refuse (one feature declaration, one prefix metadata) because the
+source-preserving writer states what the earlier one skipped.
 
-**In flight against these numbers**, every one open, and every one but #842 in conflict with
-`main` since the ratchet file moved under it: [#815](https://github.com/JPL-Devin/OpenSysML/pull/815)
-carries a calc's trailing result expression as a `ResultExpressionMembership` (the 13 refusals
-above) and [#835](https://github.com/JPL-Devin/OpenSysML/pull/835), branched from it, makes the
-expression itself the member so a foreign graph reads — they land in that order;
-[#824](https://github.com/JPL-Devin/OpenSysML/pull/824) writes metadata bodies and prefix metadata
-as owned `MetadataUsage`s (the 18); [#819](https://github.com/JPL-Devin/OpenSysML/pull/819) writes
-stored source text byte for byte when it still states the graph (the 78 whitespace-only verdicts);
-[#827](https://github.com/JPL-Devin/OpenSysML/pull/827) spells a reference back so it re-resolves
-to the element the graph named; [#842](https://github.com/JPL-Devin/OpenSysML/pull/842) keeps the
-body of an end-binding usage as elements. Each moves rows of the ratchet and must regenerate it in
+**In flight against these numbers**, every one open: [#815](https://github.com/JPL-Devin/OpenSysML/pull/815)
+(mergeable) carries a calc's trailing result expression as a `ResultExpressionMembership` (the 13
+refusals above) and [#835](https://github.com/JPL-Devin/OpenSysML/pull/835) (conflicts), branched
+from it, makes the expression itself the member so a foreign graph reads — they land in that order;
+[#824](https://github.com/JPL-Devin/OpenSysML/pull/824) (conflicts) writes metadata bodies and
+prefix metadata as owned `MetadataUsage`s (the 19);
+[#827](https://github.com/JPL-Devin/OpenSysML/pull/827) (conflicts) spells a reference back so it
+re-resolves to the element the graph named. Each moves rows of the ratchet and must regenerate it in
 the same change; rebase each onto the current ratchet, re-run it, and adjudicate the rows it moves.
+The three in conflict also carry a `CHANGELOG.md` edit that must move to a fragment under
+`changes/unreleased/` (#852).
 
 ## The target, stated precisely
 
@@ -629,9 +656,9 @@ failure mode, and the row in `spec-compliance.md` moving out of the "not support
 every item is self-assessed, since the pinned pilot evaluates expressions and executes no action
 or state machine ([pilot-execution-referee.md](pilot-execution-referee.md)).
 
-**In flight ahead of E1–E7**, all open and mergeable at the baseline: the one structural finding
-of the review — nested action nodes share the enclosing action's flat feature space, so `p.v` and
-`q.v` collide and same-named outputs overwrite each other — is
+**Landed ahead of E1–E7**, all merged at this baseline: the one structural finding of the review
+— nested action nodes shared the enclosing action's flat feature space, so `p.v` and `q.v`
+collided and same-named outputs overwrote each other — is
 [PR #823](https://github.com/JPL-Devin/OpenSysML/pull/823), which gives each performance its own
 frame with the callee's pins, precedence-ordered binding (flow payload, then `bind`, then the
 declared value) and block-flow nodes inside `if`/loop bodies as real nodes. Message delivery
@@ -643,16 +670,16 @@ beside `%features`' `1`, and `%eval in #1` being an unresolved reference),
 [PR #805](https://github.com/JPL-Devin/OpenSysML/pull/805) reads a valueless feature as `<unset>`
 in `%eval in` and lists behaviors, [PR #808](https://github.com/JPL-Devin/OpenSysML/pull/808) adds
 `%send` and [PR #809](https://github.com/JPL-Devin/OpenSysML/pull/809) one object-reference grammar
-for every REPL command — the last two overlap #810, which landed first, and need reconciling
-against it before review. What the review found *after* #810 is that `%state <machine>` in its
-one-argument form attaches a fresh, detached performance rather than the one materialized object
-that exhibits the machine (after `%instantiate TA::Sys; %state lp; %advance 2.5 [s]`, object `#1`
-still reads `n = 1` where `%state #1` gives `n = 3`). The cause was a `StateExecutor` built with
-no `self`, so `entry`/`do` writes landed in the executor's own frame;
+for every REPL command, reconciled against #810. What the review found *after* #810 was that
+`%state <machine>` in its one-argument form attached a fresh, detached performance rather than the
+one materialized object that exhibits the machine (after `%instantiate TA::Sys; %state lp; %advance
+2.5 [s]`, object `#1` still read `n = 1` where `%state #1` gave `n = 3`). The cause was a
+`StateExecutor` built with no `self`, so `entry`/`do` writes landed in the executor's own frame;
 [PR #845](https://github.com/JPL-Devin/OpenSysML/pull/845) makes the machine form walk the held
 objects and attach to the single exhibitor's running machine, refuses with a typed error naming the
 objects (or, before any object exists, the types) when there are zero or several, and leaves a
-truly unbound `state def` running detached. **Open** (mergeable at the last check). The double
+truly unbound `state def` running detached; re-run at this baseline the same probe reads `n = 4`
+on object `#1` after `%advance 2.5 [s]` (entry, then the timed re-entries at 1 and 2). The double
 initial-`do` the review first reported is not reproducible on `main` since #810 and is retired.
 
 ## E1 — `terminate` in a body
@@ -671,8 +698,9 @@ calculation is pure (`robustness_test.go:calc_terminate_is_rejected`). So an act
 reaches `then terminate;` fails with that error rather than ending. The training corpus's
 `19. Terminate Actions/Terminate Actions Example-1.sysml` (`MonitoredActivity`) uses it twice
 and does not run at this baseline: it stops earlier, at the nested action node whose members are
-`perform`s with no `first` (the nested-action frames item the same review found), and would stop
-at the first `terminate` once that is in.
+`perform`s with no `first` (`no initial node found in action node performCriticalActivity`,
+re-measured after #823's nested frames landed — the refusal is the flow rule, not the frame), and
+would stop at the first `terminate` once that is in.
 
 One position is not refused. A nested action node written as a statement body
 (`action a { assign n := 1; terminate; }`) is lowered by `lower/action_graph.go` `lowerBody`,
@@ -789,10 +817,10 @@ at the source pin is moved to the target pin when the source node completes
 target reads it when its own token arrives. SysML v2 §7.16 draws the distinction the runtime does
 not: "the input and output parameters are streaming unless designated as succession flows" — a
 streaming `flow` "can be ongoing while both the source and target action are being performed",
-while a `succession flow` "cannot begin until the source completes". The parser accepts
-`succession flow` and drops the distinction (`parser/defusage.go`: the keyword is consumed and the
-usage is parsed as a plain `flow`), `ast.FlowEnds`/`lower.ObjectFlow` carry no kind, and no
-position refuses anything — both spellings run, both as the succession reading. That is a wrong
+while a `succession flow` "cannot begin until the source completes". The parser keeps the
+distinction (`ast.Usage.IsSuccessionFlow`, used by the control-node succession rule), but
+`lower.ObjectFlow` carries no kind and no position refuses anything — both spellings run, both as
+the succession reading. That is a wrong
 result only for a model whose target reads before its source completes, and no conformance
 fixture writes one.
 
@@ -802,7 +830,7 @@ Library/Flows.sysml`, `Kernel Semantic Library/Transfers.kerml`): a streaming fl
 value the source parameter takes while both performances are ongoing; a succession flow transfers
 after the source completes. What runs today is the second, applied to both.
 
-**Work.** Carry the kind from the parser (`succession flow` as an AST flag) through
+**Work.** Carry the kind from the AST (`ast.Usage.IsSuccessionFlow`) through
 `lower.ObjectFlow` to the executor; keep the succession behavior for the `succession flow`
 spelling; for a plain `flow`, deliver on each write to the source parameter while the target is
 ongoing, which needs a node to be readable while it still holds a token — the same notion of an
@@ -1034,17 +1062,19 @@ filter forms as Q2, so the trace stops being something one reads by eye. Depends
 and on the trace representation staying stable while A5 (the shared clock) changes it; sequence
 Q3 after A5.
 
-## Q4 — document-query parameter defaults evaluate
+## Q4 — document-query parameter defaults evaluate (done)
 
-A `query def` parameter with a default (`in limit : Natural = 10;`) is refused at execution with
-`relies on a default not retained in the plan` — the plan records `HasDefault` and not the
-expression. The fix keeps the compiled default in the immutable plan, evaluates it in the declaring
-scope once per execution (not per row), honours inheritance and redefinition, and lets an explicit
-binding override it; `ErrorDefaultUnavailable` goes when nothing reaches it.
-[PR #849](https://github.com/JPL-Devin/OpenSysML/pull/849) does that — the plan carries each
-default as a compiled expression with its declaring query, an unrepresentable default is a typed
-refusal at planning and a self-referencing one a composition-cycle error — with REPL, CLI, gRPC,
-document and nested-invocation tests. **Open** (mergeable at the last check).
+A `query def` parameter with a default (`in limit : Natural = 10;`) was refused at execution with
+`relies on a default not retained in the plan` — the plan recorded `HasDefault` and not the
+expression. [PR #849](https://github.com/JPL-Devin/OpenSysML/pull/849) (**landed**) keeps the
+compiled default in the immutable plan with its declaring query, evaluates it in the declaring scope
+once per execution (not per row), honours inheritance and redefinition (`in redefines threshold
+default "5"`), lets an explicit binding override it, refuses an unrepresentable default at planning
+and a self-referencing one as a composition cycle; `ErrorDefaultUnavailable` is gone. Verified at
+this baseline over `docrender/testdata/defaulted_queries.sysml` through `-run-query` and
+`-render-document`. One adjacent rough edge, not a defaults defect: `-run-query "Q threshold=1"`
+types the bare `1` as an integer and is refused against a `String` parameter — quote it
+(`threshold="1"`).
 
 ---
 
@@ -1139,12 +1169,12 @@ queue is already open:
   (open, mergeable; carries the `=`/`default =` distinction through the AST, which the parser dropped);
   control-node succession counts and placement — [PR #832](https://github.com/JPL-Devin/OpenSysML/pull/832)
   (open, mergeable); trigger arguments (`after` a duration, `at` an instant, `when` a Boolean) —
-  [PR #833](https://github.com/JPL-Devin/OpenSysML/pull/833) (open, conflicts); `send` payload,
+  [PR #833](https://github.com/JPL-Devin/OpenSysML/pull/833) (open, mergeable); `send` payload,
   `via` and `to` typing — [PR #838](https://github.com/JPL-Devin/OpenSysML/pull/838) (open,
   mergeable); [PR #817](https://github.com/JPL-Devin/OpenSysML/pull/817) adds further rejection
   cases (open, mergeable).
 - **One finding adjudicated as not a defect** —
-  [PR #837](https://github.com/JPL-Devin/OpenSysML/pull/837) (open, mergeable) records why the
+  [PR #837](https://github.com/JPL-Devin/OpenSysML/pull/837) (landed) records why the
   inherited-name warning beside a typing error stays: the pilot reports both.
 - **Still to take**: `enum def F :> E` (an enumeration specializing another) — related to
   [PR #811](https://github.com/JPL-Devin/OpenSysML/pull/811) (open, mergeable), which treats
@@ -1306,12 +1336,12 @@ thing.
    what A2 waits on for `evaluationFunction`. L4 (dispatch by name) and X5's named reducers go in
    the same pass, since they are one lookup.
 3. **The REPL state attachment** — `%state <machine>` attaching to the exhibiting object (#845,
-   open), *after* validating on `main` that #810 closed the original duplicate initial `do`,
+   **landed**), *after* validating on `main` that #810 closed the original duplicate initial `do`,
    which the review did (it no longer reproduces; the probe and its oracle are recorded under
-   Track E). Small, and it is what makes an accumulator-style simulation trustworthy from the REPL.
+   Track E). Done; kept here so the order reads as agreed.
 4. **Q2, then Q1** — runtime query bindings and `all T`, with the page that says which query is
    which. Depends on the object, state and trace representations being stable, which #810, #836
-   and #843 are settling; Q4 (parameter defaults, #849, open) lands independently before it.
+   and #843 (all landed) have settled; Q4 (parameter defaults, #849) landed independently ahead of it.
 5. **I2, I3, then I4's client** — the shared fixtures, the thin R, Julia and MATLAB packages, the
    C client, each derived from the wire contract (I1, landed in #848); the C *ABI* half of I4 is
    not here — it is step 9.
@@ -1332,22 +1362,22 @@ thing.
 ## Track-local orders
 
 - **Release follow-through.** **R1** first — fold the shipped Unreleased entries into the 0.4.3
-  notes — with the gate-count recount (or its move into `cmd/doc-counts`) in the same pass, because
-  `releasing.md` checks it before the next tag. **R2**–**R5** as the accounts and hardware appear:
+  notes (the census recount that used to ride with it is generated at docs build since #853).
+  **R2**–**R5** as the accounts and hardware appear:
   publisher tokens for npm, Maven Central and crates.io, a real Mac for the tap, an Apple Developer
   and an OV/EV certificate to sign with, and a marketplace publisher for the extension. None gates
   the others or anything below.
-- **Track L.** The three open pull requests (#821 dispatch, #818 `QuantityCalculations`, #825
-  overloads) are mergeable and need review before anything new; #830 (L3) likewise. Then L7, which is
-  step 2 above.
+- **Track L.** L3, L4 and L5 landed (#830, #821, #818); the one open pull request, #825
+  (L6, overloads by argument type), is mergeable and needs review before anything new — the
+  `ToReal("2.5")` probe under L5 is what it fixes. Then L7, which is step 2 above.
 - **Track N.** N2.1 (records and enums) first, since A1's "an analysis case compiles" and the
   differential's record coverage both need it; decide N2.2 (the budget) before N2.4; N2.3 tracks L4
   package by package; N2.6's actions and states are Track M's M1/M2.
-- **Track D.** Rebase and land the open RDF work (#815, #835, #824, #819, #827; #842 is clean)
-  first; then step 6 above; **D7** is mechanical now that identity is stable and fits anywhere; **D8**'s
+- **Track D.** Land #815 (clean), then rebase and land the rest of the open RDF work (#835, #824,
+  #827, each moving its changelog entry to a fragment) first; then step 6 above; **D7** is mechanical now that identity is stable and fits anywhere; **D8**'s
   profile after #774 merges, since it only becomes conformant behind D1 and D2.
-- **Track E.** Land the in-flight fixes (#823 nested frames, #839, #843, #805, #808, #809, #845)
-  first.
+- **Track E.** The in-flight fixes (#823 nested frames, #839, #843, #805, #808, #809, #845) have
+  all landed.
   The track itself is not scheduled; each item states what would prioritize it. If one is picked
   up without such a trigger, the order is **E1** (termination of an ongoing performance, which
   **E2** and **E4** build on), then **E2**, then **E4**; **E6** whenever asked, being a day's

@@ -1,6 +1,8 @@
 package semantics
 
 import (
+	"slices"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -132,10 +134,16 @@ func (m *Model) parametersOf(sym *symbols.Symbol) behaviorParameters {
 
 	// Only a single general behavior or step may leave parameters inherited;
 	// with more than one, every parameter has to be redefined by an owned one.
+	// The kind's implicit base beside a declared general does not count as one.
 	var generals []*symbols.Symbol
 	for _, sup := range m.DirectSupertypes(sym) {
 		if behaviorLike(sup) {
 			generals = append(generals, sup)
+		}
+	}
+	if len(generals) > 1 {
+		if base := m.implicitBase(sym); base != nil {
+			generals = slices.DeleteFunc(generals, func(sup *symbols.Symbol) bool { return sup == base })
 		}
 	}
 	if len(generals) == 1 {

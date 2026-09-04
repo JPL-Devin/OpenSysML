@@ -88,6 +88,13 @@ func buildNamespaceDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia 
 		sym := newSymbol(d.Ident, SymbolDependency, d, vis, nil, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
 		return true
+	case *ast.MultiplicityDecl:
+		child := NewScope(scope, d)
+		sym := newSymbol(d.Ident, SymbolMultiplicity, d, vis, child, scope, trivia)
+		defineIdent(scope, d.Ident, sym)
+		scope.AddChild(child)
+		buildMembers(child, d.Members)
+		return true
 	case *ast.RelationshipMember:
 		// A keyword-first relationship owns its members, and names one only when
 		// the notation gives it an identification.
@@ -178,16 +185,22 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 		}
 		return true
 	case *ast.InitialNode:
-		// Register initial node by name so transitions can reference it
-		if d.Name != "" {
+		// Register initial node by name so transitions can reference it; an
+		// unnamed one with a body owns a body-local scope for its members.
+		if d.Name == "" && len(d.Members) == 0 {
+			return true
+		}
+		child := NewScope(scope, d)
+		if d.Name == "" {
+			child.markBodyLocal()
+		} else {
 			id := ast.Identification{Name: d.Name}
-			child := NewScope(scope, d)
 			// Use attribute usage kind (control flow nodes are structural members)
 			sym := newSymbol(id, SymbolAttributeUsage, d, vis, child, scope, trivia)
 			defineIdent(scope, id, sym)
-			scope.AddChild(child)
-			buildMembers(child, d.Members)
 		}
+		scope.AddChild(child)
+		buildMembers(child, d.Members)
 		return true
 	case *ast.SendStatement:
 		// A send's body declares the node's own parameters, and the node is the
@@ -215,16 +228,41 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 		// A named transition is a feature of the state that declares it (SysML v2
 		// §7.19.2: TransitionUsage specializes ActionUsage), and its effect
 		// behaviors are features of the transition, so `t.effectAction` resolves.
-		if d.Name == "" {
+		// An unnamed transition owns a body-local scope for its effect and body
+		// members instead.
+		defineParams := triggerParameterDefiner(d.Trigger)
+		if d.Name == "" && len(d.Effect) == 0 && len(d.Members) == 0 && defineParams == nil {
 			return true
 		}
-		id := ast.Identification{Name: d.Name, NameSpan: d.NameSpan}
 		child := NewScope(scope, d)
-		sym := newSymbol(id, SymbolActionUsage, d, vis, child, scope, trivia)
-		defineIdent(scope, id, sym)
+		var sym *Symbol
+		if d.Name == "" {
+			child.markBodyLocal()
+		} else {
+			id := ast.Identification{Name: d.Name, NameSpan: d.NameSpan}
+			sym = newSymbol(id, SymbolActionUsage, d, vis, child, scope, trivia)
+			defineIdent(scope, id, sym)
+		}
 		scope.AddChild(child)
-		buildMembers(child, d.Effect)
-		defineTransitionEffect(child, d)
+		body := child
+		if defineParams != nil {
+			// The trigger's parameters are visible to the guard and effect, however
+			// deeply the effect nests, but are not features of the transition: they
+			// live in a body-local scope of their own that the effect is built in.
+			body = NewScope(child, d.Trigger)
+			body.markBodyLocal()
+			child.AddChild(body)
+			defineParams(body)
+		}
+		// The body's members read the trigger's parameters as the effect does,
+		// and are the transition's features like it.
+		params := len(body.AllMembers())
+		buildMembers(body, d.Effect)
+		buildMembers(body, d.Members)
+		if body != child {
+			ownEffectMembers(child, body.AllMembers()[params:])
+		}
+		defineTransitionEffect(child, body, d)
 		return true
 	case *ast.StateRegion:
 		// A region is a namespace of its own: sibling regions routinely reuse
@@ -238,6 +276,9 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 		}
 		scope.AddChild(regionScope)
 		buildMembers(regionScope, d.States)
+		return true
+	case *ast.ConstraintMember:
+		buildConstraintBodyScope(scope, d, d.Body)
 		return true
 	case *ast.AssumeMember:
 		buildRequirementConstraint(scope, d, d.Body, vis, trivia)
@@ -365,9 +406,18 @@ func buildMetadataBodyScope(parent *Scope, prefix *ast.PrefixMetadata) *Scope {
 }
 
 // buildControlNode registers a named fork/join/merge/decision node the way a
-// final node is registered, at its name's span; an unnamed one declares none.
+// final node is registered, at its name's span; an unnamed one declares no
+// symbol, but its body members still go into a scope local to that body.
 func buildControlNode(scope *Scope, decl ast.Node, name string, nameSpan source.Span, vis ast.Visibility, trivia []ast.Trivia) {
+	body := ast.NodeBodyMembers(decl)
 	if name == "" {
+		if len(body) == 0 {
+			return
+		}
+		child := NewScope(scope, decl)
+		child.markBodyLocal()
+		scope.AddChild(child)
+		buildMembers(child, body)
 		return
 	}
 	id := ast.Identification{Name: name, NameSpan: nameSpan}
@@ -377,7 +427,7 @@ func buildControlNode(scope *Scope, decl ast.Node, name string, nameSpan source.
 	scope.AddChild(child)
 	// A control node ends in ActionBody, so what its body declares are features
 	// of the node a flow may name (`flow F.b1 to B1.b`).
-	buildMembers(child, ast.NodeBodyMembers(decl))
+	buildMembers(child, body)
 }
 
 // buildRequirementConstraint registers the constraint usage an assume/require member
@@ -405,8 +455,8 @@ func buildRequirementConstraint(scope *Scope, decl ast.Node, body []ast.Node, vi
 	buildMembers(child, oc.Body)
 }
 
-// buildConstraintBodyScope links the scope a require/assume body declares into.
-// The body states the requirement its member references (SysML v2 §7.20.5), so
+// buildConstraintBodyScope links the scope a nested constraint body declares
+// into. The body states the constraint its member owns (SysML v2 §7.20.5), so
 // its declarations are visible inside it and are no members of the namespace the
 // member itself is declared in.
 func buildConstraintBodyScope(scope *Scope, decl ast.Node, body []ast.Node) {
@@ -419,7 +469,7 @@ func buildConstraintBodyScope(scope *Scope, decl ast.Node, body []ast.Node) {
 	buildMembers(child, body)
 }
 
-// ConstraintBodyScope returns the scope a require/assume body resolves against:
+// ConstraintBodyScope returns the scope a nested constraint body resolves against:
 // the one its declarations were built into, or parent for a body declaring none.
 func ConstraintBodyScope(parent *Scope, decl ast.Node) *Scope {
 	if parent == nil {
@@ -458,7 +508,9 @@ const transitionEffectName = "effect"
 // defineTransitionEffect names a transition's effect action `effect`, the
 // TransitionAction feature it redefines (SysML v2 §7.19.2), so `t.effect.x`
 // reads through the effect action rather than the abstract library feature.
-func defineTransitionEffect(scope *Scope, trans *ast.TransitionMember) {
+// The effect was built in body, the transition's scope or the one holding
+// its trigger's parameters.
+func defineTransitionEffect(scope, body *Scope, trans *ast.TransitionMember) {
 	if len(trans.Effect) != 1 {
 		return
 	}
@@ -471,21 +523,43 @@ func defineTransitionEffect(scope *Scope, trans *ast.TransitionMember) {
 	}
 	// A declared effect action is already a member of the transition's scope:
 	// name that symbol rather than building a second one for it.
-	for _, sym := range scope.AllMembers() {
-		if sym.Decl == effect {
-			scope.Define(transitionEffectName, sym)
-			return
-		}
+	if sym, ok := memberDeclaring(body, effect); ok {
+		scope.Define(transitionEffectName, sym)
+		return
 	}
 	// A statement (`do send x to y`) declares no member of its own, so the
 	// action it performs is named here, its members staying the transition's.
-	body := NewScope(scope, effect)
+	statement := NewScope(body, effect)
 	sym := newSymbol(
 		ast.Identification{Name: transitionEffectName, NameSpan: effect.Span()},
-		SymbolActionUsage, effect, ast.VisibilityDefault, body, scope, nil,
+		SymbolActionUsage, effect, ast.VisibilityDefault, statement, scope, nil,
 	)
 	scope.Define(transitionEffectName, sym)
-	scope.AddChild(body)
+	body.AddChild(statement)
+}
+
+// ownEffectMembers makes the members an effect built after the trigger's
+// parameters (an action's symbol, a `do send`'s own parameters) the transition's.
+func ownEffectMembers(scope *Scope, members []*Symbol) {
+	seen := map[*Symbol]bool{}
+	for _, sym := range members {
+		if seen[sym] {
+			continue
+		}
+		seen[sym] = true
+		sym.OwnerScope = scope
+		defineIdent(scope, ast.Identification{Name: sym.Name, ShortName: sym.ShortName}, sym)
+	}
+}
+
+// memberDeclaring returns the member of scope that decl declared.
+func memberDeclaring(scope *Scope, decl ast.Node) (*Symbol, bool) {
+	for _, sym := range scope.AllMembers() {
+		if sym.Decl == decl {
+			return sym, true
+		}
+	}
+	return nil, false
 }
 
 // newSymbol builds a Symbol from an identification. scope is the child scope the

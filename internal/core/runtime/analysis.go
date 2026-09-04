@@ -341,6 +341,10 @@ func (ctx *Context) CaseConditionsOf(sym *symbols.Symbol, scope *symbols.Scope) 
 	}
 	var out []Condition
 	for _, member := range ctx.chainMembers(sym, scope) {
+		// A case's own steps are its procedure, not a statement its conditions miss.
+		if _, step := statementKeyword(member.node); step {
+			continue
+		}
 		out = ctx.appendConditions(out, member.node, member.scope, true, false, nil)
 		out = ctx.appendCheckedConstraint(out, member)
 	}

@@ -9,7 +9,7 @@ Sibling of `testing-pilot-differential` and `testing-pilot-xpect` (same pin
 `scripts/pilot-pin.sh`, same committed-baseline shape), but pointed the other way: the
 differential measures what the reference accepts and we reject; this oracle measures what the
 reference **rejects and we accept** — permissiveness gaps. Its corpus is committed under
-`cmd/pilot-reject/testdata/negative/` (121 hand-written invalid models, one violated rule + citation
+`cmd/pilot-reject/testdata/negative/` (173 hand-written invalid models, one violated rule + citation
 in each file's mandatory `// Invalid: ...` first line), so no corpus download exists. Method and
 findings: `docs/project/pilot-rejection.md`.
 
@@ -31,8 +31,9 @@ cmp build/pilot-reject/pilot-reject.json docs/project/pilot-rejection-baseline.j
 
 `docs/project/pilot-rejection-baseline.json` is the only authority for the counts; the numbers
 quoted here are as-of values, and `cmd/pilot-reject/doc_counts_test.go` fails if they drift from it.
-As of the default-mode reserved-keyword tightening, with a fresh library cache:
-`121 case(s): 121 both reject, 0 only the pilot rejects, 0 only we reject, 0 both accept`,
+As of the `semantic/` source (named pilot constraints, the control-node succession rules and the
+feature-value overriding rule), with a fresh library cache:
+`173 case(s): 152 both reject, 13 only the pilot rejects, 8 only we reject, 0 both accept`,
 byte-identical to the committed baseline. Any `both accept` case is a bug in the corpus (the case
 is not actually invalid under the loaded standard library) — fix the case, never ignore it.
 

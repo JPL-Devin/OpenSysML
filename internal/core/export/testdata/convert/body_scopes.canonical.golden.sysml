@@ -1,1 +1,14 @@
-sysml: cannot convert the expression <urn:opensysml:expr:Scopes__D__one_pvalue_pa0>: this expression states no notation and no structure to write one from; save to .sysml or .kerml instead, which writes the source exactly; see docs/reference/rdf-mapping.md § Limitations
+package Lib {
+    attribute def Gauge;
+    attribute limit : Gauge;
+}
+package Scopes {
+    public import Lib::*;
+    part def D {
+        attribute xs;
+        attribute one = xs->collect({ in limit; limit });
+        attribute two = xs->select({ in Gauge; Gauge });
+        attribute outside = limit;
+        attribute g : Gauge;
+    }
+}

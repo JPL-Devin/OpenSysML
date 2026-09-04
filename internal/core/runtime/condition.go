@@ -31,6 +31,10 @@ type Condition struct {
 	// condition stating an expression.
 	Group []Condition
 
+	// Statement is an action statement the body states before its conditions,
+	// which the evaluator does not execute; nil for a condition or a group.
+	Statement ast.Node
+
 	// Negated is the negation the declaration wrote, applied to Expr or to the
 	// whole conjunction Group stands for.
 	Negated bool
@@ -141,8 +145,9 @@ func (ctx *Context) appendConditions(out []Condition, node ast.Node, scope *symb
 			return out
 		}
 		var body []Condition
+		bodyScope := symbols.ConstraintBodyScope(scope, m)
 		for _, nested := range m.Body {
-			body = ctx.appendConditions(body, nested, scope, true, false, seen)
+			body = ctx.appendConditions(body, nested, bodyScope, true, false, seen)
 		}
 		if !negated {
 			for _, c := range body {
@@ -173,6 +178,12 @@ func (ctx *Context) appendConditions(out []Condition, node ast.Node, scope *symb
 		}
 		out = ctx.appendReferencedConditions(out, m.Reference, scope, false, seen)
 		out = ctx.appendOwnedConditions(out, m, m.Body, scope, false, seen)
+	case *ast.Membership:
+		out = ctx.appendConditions(out, m.Member, scope, required, negated, seen)
+	default:
+		if _, ok := statementKeyword(m); ok {
+			out = append(out, Condition{Statement: m, Scope: scope, Required: required})
+		}
 	}
 	return out
 }
@@ -189,6 +200,67 @@ func (ctx *Context) appendOwnedConditions(out []Condition, member ast.Node, body
 		out = ctx.appendConditions(out, nested, bodyScope, required, false, seen)
 	}
 	return out
+}
+
+// unexecutedStatement returns the first statement conds state, groups included,
+// or nil when they state none.
+func unexecutedStatement(conds []Condition) ast.Node {
+	for _, cond := range conds {
+		if cond.Statement != nil {
+			return cond.Statement
+		}
+		if stmt := unexecutedStatement(cond.Group); stmt != nil {
+			return stmt
+		}
+	}
+	return nil
+}
+
+// statementKeyword names the keyword a body item the evaluator does not run
+// was written with: an action statement, an action node, or a succession.
+func statementKeyword(node ast.Node) (string, bool) {
+	switch n := node.(type) {
+	case *ast.AssignmentActionNode:
+		return "assign", true
+	case *ast.IfActionNode:
+		return "if", true
+	case *ast.WhileLoopActionNode:
+		return "loop", true
+	case *ast.SendStatement:
+		return "send", true
+	case *ast.TerminateStatement:
+		return "terminate", true
+	case *ast.PerformActionNode:
+		return "perform", true
+	case *ast.ActionExecutionNode, *ast.AcceptActionUsage:
+		return "action", true
+	case *ast.InitialNode:
+		return "first", true
+	case *ast.SuccessionEdge, *ast.ControlFlowEdge:
+		return "then", true
+	case *ast.ForkNode:
+		return "fork", true
+	case *ast.JoinNode:
+		return "join", true
+	case *ast.MergeNode:
+		return "merge", true
+	case *ast.DecisionNode:
+		return "decide", true
+	case *ast.FinalNode:
+		return "done", true
+	case *ast.Usage:
+		switch {
+		case n.IsPerformedAction():
+			return "perform", true
+		case n.Kind == ast.UsageAction:
+			return "action", true
+		case n.IsSuccessionFlow():
+			return "succession flow", true
+		case n.Kind == ast.UsageSuccession:
+			return "succession", true
+		}
+	}
+	return "", false
 }
 
 // appendReferencedConditions appends what a require/assume member that
@@ -277,6 +349,13 @@ func (c conditionCheck) name() string {
 func (ctx *Context) evaluateConditions(check conditionCheck, conds []Condition) (bool, error) {
 	if len(conds) == 0 {
 		return false, fmt.Errorf("%s %s: %w", check.kind, check.name(), ErrNoConditions)
+	}
+	// A statement anywhere in the body could change what the conditions read, so
+	// no verdict is reached, not even from a condition stated before it.
+	if stmt := unexecutedStatement(conds); stmt != nil {
+		keyword, _ := statementKeyword(stmt)
+		return false, fmt.Errorf("%s %s: %s evaluation failed: `%s` %w; bind the value as a feature value or compute it in a calc the condition reads",
+			check.kind, check.name(), check.what, keyword, ErrStatementNotExecuted)
 	}
 	features := ctx.conditionFeatures(check.sym)
 	self := check.self
@@ -720,6 +799,10 @@ func (ctx *Context) conditionFeatures(sym *symbols.Symbol) map[string]scopedExpr
 // conditionLabel renders a condition as written, so a violation names the
 // condition that failed, negation and grouping included.
 func conditionLabel(cond Condition) string {
+	if cond.Statement != nil {
+		keyword, _ := statementKeyword(cond.Statement)
+		return "`" + keyword + "` statement"
+	}
 	text := conditionText(cond.Expr)
 	if cond.Group != nil {
 		parts := make([]string, 0, len(cond.Group))

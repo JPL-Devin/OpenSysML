@@ -112,6 +112,8 @@ and not from a disagreement alone.
 |---|---|---|---|---|
 | `org.omg.sysml` — `Type::ownedDisjoining` setting delegate | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | every `disjoint from` clause in a type declaration draws EMF's `The opposite features 'owningType' … and 'ownedDisjoining' … do not refer to each other` | [one cause for all six corpus diagnostics](pilot-differential.md#k6-diagnostic-by-diagnostic-f33), reproduced in three lines and probed through the pilot's API | filed upstream as [Systems-Modeling/SysML-v2-Pilot-Implementation#790](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/790) **pending adjudication**, body below |
 | `org.omg.sysml` — the `queryx/failing` Xpect fixtures | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | `QPE-Qualifier`, `QPE-Traversal` and `QPE-Wildcard` declare `XPECT noErrors`, yet the pinned validator rejects all three with `no viable alternative at input '/'`, `For input string: "."` and `no viable alternative at input '@'` | [wave12d-decisions.md](wave12d-decisions.md) — established by running the pinned pilot's own SysML validator on the three fixtures, not from a disagreement | **not filed** — question drafted below, awaiting maintainer authorisation |
+| `org.omg.sysml.xtext` — `SysMLValidator.checkControlNode`, `checkDecisionNode`, `checkForkNode`, `checkJoinNode`, `checkMergeNode` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a fork or decision node with two incoming successions, a join or merge node with two outgoing, and a succession end whose written multiplicity is not the one SysML v2 §7.17.3 requires all validate clean; only `validateControlNodeOwningType` is reported | established from the pilot's source: eight of the nine constraints are `// TODO: Check validate… (?)` comments in the check methods (`SysMLValidator.xtend:857–888` at `c7fc737`); the reproducers are `cmd/pilot-reject/testdata/negative/semantic/cn01`–`cn04`, `cn06`–`cn09`, run through the pinned batch validator | **not filed** — drafted below, awaiting maintainer authorisation |
+| `org.omg.kerml.xtext` — `KerMLValidator.checkFeature`, the `validateFeatureOwnedCrossSubsetting` check | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a feature with two `crosses` clauses reports `Error executing EValidator` instead of `At most one cross subsetting is allowed`: the loop indexes `refSubsettings` (the reference subsettings, collected for the check above it) with the cross-subsetting index, and throws | established from the pinned `KerMLValidator.xtend` line 649 and reproduced with `cmd/pilot-reject/testdata/negative/semantic/k42-two-cross-subsettings.kerml`; the same file is byte-identical at upstream `master` `13c32ea2` (2026-09-01), so the defect is still present; [pilot-rejection.md](pilot-rejection.md#permissiveness-gaps) records the case as a gap of ours | filed upstream as [Systems-Modeling/SysML-v2-Pilot-Implementation#794](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/794) **pending adjudication**, body below |
 
 ### `Type::ownedDisjoining` does not contain a `Disjoining` whose `owningType` is that `Type` (pilot `2026-05`)
 
@@ -257,6 +259,146 @@ and extends `KerMLXtextTests`.
 A second implementation reading the corpus cannot tell from the fixtures alone
 whether the declared silence is an obligation or an aspiration, which is the
 reason for asking rather than implementing.
+````
+
+### `validateFeatureOwnedCrossSubsetting` indexes the wrong list and throws (pilot `2026-07`)
+
+Filed as
+[Systems-Modeling/SysML-v2-Pilot-Implementation#794](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/794);
+the body below is what was submitted. The reproduction is the rejection-corpus case
+`cmd/pilot-reject/testdata/negative/semantic/k42-two-cross-subsettings.kerml`.
+Checked against upstream `master` at `13c32ea26680323921c14e76755897fc551ec258`
+(2026-09-01): `KerMLValidator.xtend` is byte-identical to the pinned `2026-07`
+copy and the tag-to-master diff touches no validation or grammar source, so the
+reproduction below stands for the current head as well as for the pin (no
+master build was run — Maven Central was unreachable from the sandbox).
+
+````markdown
+### A feature with two `crosses` clauses reports `Error executing EValidator`
+
+**Version:** `2026-07` (`jupyter-sysml-kernel` 0.61.0, the KerML standalone
+setup); the offending lines are unchanged on `master` at `13c32ea2`.
+
+#### Minimal reproduction
+
+```kerml
+package K42TwoCrossSubsettings {
+    class A {
+        feature x : A;
+        feature y : A;
+    }
+    assoc S {
+        end a : A;
+        end b : A crosses a.x crosses a.y;
+    }
+}
+```
+
+The grammar admits the second `crosses` (`FeatureSpecializationPart` repeats
+`FeatureSpecialization`), and `validateFeatureOwnedCrossSubsetting` is meant to
+report it as `At most one cross subsetting is allowed`. Instead the validator
+reports
+
+```
+k42-two-cross-subsettings.kerml:0:0: error: Error executing EValidator
+k42-two-cross-subsettings.kerml:9:39: error: The opposite features 'crossingFeature' of '...CrossSubsettingImpl{...@ownedRelationship.2}' and 'ownedCrossSubsetting' of '...FeatureImpl{...}' do not refer to each other
+```
+
+The second line is EMF's opposite-consistency check on the extra
+`CrossSubsetting` (`Feature::ownedCrossSubsetting` is single-valued), not the
+intended constraint message. Dropping the second clause (`end b : A crosses a.x;`)
+makes the model validate clean, so the second `crosses` is the only defect.
+
+#### Cause
+
+In `KerMLValidator.checkFeature` (`KerMLValidator.xtend`, the
+`validateFeatureOwnedCrossSubsetting` block):
+
+```xtend
+val crossSubsettings = f.ownedRelationship.filter[r | r instanceof CrossSubsetting].toList
+if (crossSubsettings.size > 1) {
+    for (var i = 1; i < crossSubsettings.size; i++)
+        error(INVALID_FEATURE_OWNED_CROSS_SUBSETTING_MSG, refSubsettings.get(i), null, INVALID_FEATURE_OWNED_CROSS_SUBSETTING)
+}
+```
+
+`refSubsettings.get(i)` reads the reference-subsetting list collected for the
+`validateFeatureOwnedReferenceSubsetting` check just above; with no `references`
+clause on the feature that list is empty and the `get(1)` throws, which Xtext
+surfaces as `Error executing EValidator`. The intended target is
+`crossSubsettings.get(i)`.
+````
+
+---
+
+### Eight control-node succession constraints are unimplemented `TODO`s (pilot `2026-07`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream. The rules are implemented on our side by
+`internal/core/passes/control_node.go` and refereed against the specification
+text; the adjudication is in
+[pilot-differential.md](pilot-differential.md#control-node-successions-the-pilot-does-not-validate).
+
+````markdown
+### `SysMLValidator` does not check the succession constraints on control nodes
+
+**Version:** `2026-07` (`jupyter-sysml-kernel` 0.61.0, `validate-sysml-batch` over the
+shipped standard library).
+
+SysML v2 8.3.17 (`ControlNode`, `DecisionNode`, `ForkNode`, `JoinNode`, `MergeNode`)
+declares nine validation constraints. `SysMLValidator.xtend` (`:857–888`) declares an
+error code for each, but implements only `validateControlNodeOwningType`; the other
+eight are `// TODO: Check validate… (?)` comments in otherwise empty `@Check` methods:
+`validateControlNodeIncomingSuccessions`, `validateControlNodeOutgoingSuccessions`,
+`validateDecisionNodeIncomingSuccessions`, `validateDecisionNodeOutgoingSuccessions`,
+`validateForkNodeIncomingSuccessions`, `validateJoinNodeOutgoingSuccessions`,
+`validateMergeNodeIncomingSuccessions`, `validateMergeNodeOutgoingSuccessions`.
+
+#### Minimal reproduction
+
+```sysml
+package ForkTwoIncoming {
+    action def A {
+        action a;
+        action b;
+        action c;
+        fork f;
+        first a then f;
+        first b then f;
+        first f then c;
+    }
+}
+```
+
+`f` has two incoming successions; `validateForkNodeIncomingSuccessions`
+(`targetConnector->selectByKind(Succession)->size() <= 1`, SysML v2 8.3.17 `ForkNode`) is
+violated.
+
+#### Expected
+
+An error on `fork f`.
+
+#### Actual
+
+No diagnostics. The same holds for a join or merge node with two outgoing successions, a
+decision node with two incoming ones, and for the end multiplicities — `succession s first
+[0..1] a then [1] m;` into a merge is accepted where `validateMergeNodeIncomingSuccessions`
+requires source multiplicity `0..1`, and `succession s first a then [0..1] f;` into a fork
+is accepted where `validateControlNodeIncomingSuccessions` requires target multiplicity
+`1..1`.
+
+#### Note
+
+The grammar admits every one of these models, and the specification says the rules "shall
+be enforced in the abstract syntax, even if not shown explicitly in the concrete syntax
+notation for a model" (7.17.3), so a validator is the only place they can be caught. One
+reading question may be behind the `(?)` on the `TODO` lines: `multiplicityHasBounds`
+requires `mult <> null`, and a connector end written without a multiplicity (`first a then
+f;`) is given none by the pilot's `SuccessionAdapter`/`ConnectorAdapter`, so a literal evaluation of the four
+multiplicity constraints would reject the specification's own examples. Treating an
+unwritten end multiplicity as the required one, and checking only written ones, is what a
+second implementation has to assume; a note in the release on the intended reading would
+help.
 ````
 
 ---

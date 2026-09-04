@@ -96,7 +96,7 @@ elmt:Scopes___400
     sysml:owningRelatedElement elmt:Scopes ;
     sysml:importOwningNamespace elmt:Scopes ;
     sysml:visibility "public" ;
-    sysml:importedNamespace "Lib" ;
+    sysml:importedNamespace elmt:Lib ;
     sysx:isNamespaceImport "true"^^xsd:boolean ;
     sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "    public import Lib::*;\n" .
@@ -204,9 +204,17 @@ expr:Scopes__D__one_pvalue_pa0
     a sysml:Expression ;
     sysx:sourceText "{in limit; limit}" ;
     sysml:elementId "Scopes__D__one_pvalue_pa0" ;
-    sysx:bodyParameter "limit" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysx:bodyParameter expr:Scopes__D__one_pvalue_pa0_pin0 ;
     sysx:resultExpression expr:Scopes__D__one_pvalue_pa0_presult ;
     sysx:argumentIndex "0"^^xsd:integer .
+
+expr:Scopes__D__one_pvalue_pa0_pin0
+    a sysml:ReferenceUsage ;
+    sysml:elementId "Scopes__D__one_pvalue_pa0_pin0" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:direction "in" ;
+    sysml:declaredName "limit" .
 
 expr:Scopes__D__one_pvalue_pa0_presult
     a sysml:FeatureReferenceExpression ;
@@ -258,9 +266,17 @@ expr:Scopes__D__two_pvalue_pa0
     a sysml:Expression ;
     sysx:sourceText "{in Gauge; Gauge}" ;
     sysml:elementId "Scopes__D__two_pvalue_pa0" ;
-    sysx:bodyParameter "Gauge" ;
+    sysx:hasBody "true"^^xsd:boolean ;
+    sysx:bodyParameter expr:Scopes__D__two_pvalue_pa0_pin0 ;
     sysx:resultExpression expr:Scopes__D__two_pvalue_pa0_presult ;
     sysx:argumentIndex "0"^^xsd:integer .
+
+expr:Scopes__D__two_pvalue_pa0_pin0
+    a sysml:ReferenceUsage ;
+    sysml:elementId "Scopes__D__two_pvalue_pa0_pin0" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:direction "in" ;
+    sysml:declaredName "Gauge" .
 
 expr:Scopes__D__two_pvalue_pa0_presult
     a sysml:FeatureReferenceExpression ;

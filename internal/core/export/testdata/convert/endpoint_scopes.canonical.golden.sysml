@@ -17,11 +17,11 @@ package Machines {
                 state dim;
                 state bright;
                 transition dim then bright;
-                transition bright then heat::hot;
+                transition bright then hot;
             }
         }
         transition off then on;
-        transition on then on::light::bright;
-        transition on::heat::hot then off;
+        transition on then bright;
+        transition hot then off;
     }
 }

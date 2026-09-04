@@ -19,6 +19,7 @@ import (
 	"time"
 
 	sysmlgrpc "github.com/Open-MBEE/OpenSysML/internal/grpc"
+	"github.com/Open-MBEE/OpenSysML/internal/usage"
 )
 
 // Build metadata, set by the linker: the names match the -X flags the Makefile
@@ -30,51 +31,40 @@ var (
 )
 
 func main() {
-	var (
-		port          = flag.Int("port", 50051, "gRPC server port")
-		healthPort    = flag.Int("health-port", 8081, "Health check HTTP port")
-		cacheSize     = flag.Int("cache-size", 100, "Maximum number of cached parsed files")
-		logLevel      = flag.String("log-level", "info", "Log level (debug, info, warn, error)")
-		showVer       = flag.Bool("version", false, "Show version and exit")
-		reportAddress = flag.Bool("report-address", false,
-			"Print the address to dial on stdout, as one line, once the listener is "+
-				"bound; with -port 0 this is how a client learns the port the kernel chose")
-		exitWithParent = flag.Bool("exit-with-parent", false,
-			"Exit at end of file on stdin, so a child cannot outlive the process that "+
-				"holds the write end of a pipe on it, SIGKILL included")
-		transport = flag.String("transport", transportConnect,
-			"Transport to serve: connect (default; gRPC, gRPC-Web and Connect on one port), "+
-				"grpc (grpc-go only), or stdio (an evaluation prototype over stdin/stdout)")
-		corsOrigins = flag.String("cors-allowed-origins", "", "Comma-separated exact origins allowed for browser CORS")
-		tlsCert     = flag.String("tls-cert", "", "TLS certificate file for the main server")
-		tlsKey      = flag.String("tls-key", "", "TLS private key file for the main server")
-	)
+	opts := registerFlags(flag.CommandLine)
+	flag.Usage = func() { doc().WriteText(flag.CommandLine.Output(), flag.CommandLine) }
 	flag.Parse()
 
-	switch *transport {
+	// The page asked for is the result of the run, as the help is.
+	if opts.showMan {
+		doc().WriteRoff(os.Stdout, flag.CommandLine, usage.DefaultManMeta())
+		return
+	}
+
+	switch opts.transport {
 	case transportGRPC, transportConnect, transportStdio:
 	default:
-		fmt.Fprintf(os.Stderr, "sysml-grpc: unknown -transport %q; want grpc, connect or stdio\n", *transport)
+		fmt.Fprintf(os.Stderr, "sysml-grpc: unknown -transport %q; want grpc, connect or stdio\n", opts.transport)
 		os.Exit(2)
 	}
-	if (*tlsCert == "") != (*tlsKey == "") {
+	if (opts.tlsCert == "") != (opts.tlsKey == "") {
 		fmt.Fprintln(os.Stderr, "sysml-grpc: -tls-cert and -tls-key must be supplied together")
 		os.Exit(2)
 	}
-	origins, err := parseCORSOrigins(*corsOrigins)
+	origins, err := parseCORSOrigins(opts.corsOrigins)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "sysml-grpc: %v\n", err)
 		os.Exit(2)
 	}
 
-	if *transport == transportStdio {
+	if opts.transport == transportStdio {
 		switch {
-		case *exitWithParent:
+		case opts.exitWithParent:
 			fmt.Fprintln(os.Stderr,
 				"sysml-grpc: -exit-with-parent is not for -transport stdio, whose stdin is "+
 					"the session and already ends it at end of file")
 			os.Exit(2)
-		case *reportAddress:
+		case opts.reportAddress:
 			fmt.Fprintln(os.Stderr,
 				"sysml-grpc: -report-address is not for -transport stdio, which binds no "+
 					"address and speaks the protocol itself on stdout")
@@ -82,7 +72,7 @@ func main() {
 		}
 	}
 
-	if *showVer {
+	if opts.showVersion {
 		fmt.Printf("sysml-grpc version %s\n", Version)
 		fmt.Printf("commit: %s\n", Commit)
 		fmt.Printf("built: %s\n", BuildTime)
@@ -91,7 +81,7 @@ func main() {
 
 	// Configure logging
 	var lvl slog.Level
-	switch *logLevel {
+	switch opts.logLevel {
 	case "debug":
 		lvl = slog.LevelDebug
 	case "info":
@@ -110,17 +100,17 @@ func main() {
 		"version", Version,
 		"commit", Commit,
 		"buildTime", BuildTime,
-		"transport", *transport,
+		"transport", opts.transport,
 	)
 
 	// Create gRPC service (cache is internal to the service)
 	unavailable := unavailableCapabilitiesForTesting()
 	var svc *sysmlgrpc.Service
 	if len(unavailable) == 0 {
-		svc, err = sysmlgrpc.NewService(*cacheSize, Version)
+		svc, err = sysmlgrpc.NewService(opts.cacheSize, Version)
 	} else {
 		svc, err = sysmlgrpc.NewServiceWithUnavailableCapabilitiesForTesting(
-			*cacheSize, Version, unavailable)
+			opts.cacheSize, Version, unavailable)
 	}
 	if err != nil {
 		slog.Error("Invalid service configuration", "error", err)
@@ -131,7 +121,7 @@ func main() {
 	// arrive does not pay for the library and startup stays prompt.
 	svc.Prewarm()
 
-	if *transport == transportStdio {
+	if opts.transport == transportStdio {
 		// The pipe is the session: there is no port to bind, nothing to poll
 		// for readiness, and the client's exit closes stdin, which ends this.
 		os.Exit(runStdio(svc))
@@ -139,9 +129,9 @@ func main() {
 
 	// Start health check server
 	var healthSrv *http.Server
-	if *healthPort != 0 {
+	if opts.healthPort != 0 {
 		healthSrv = &http.Server{
-			Addr:              fmt.Sprintf(":%d", *healthPort),
+			Addr:              fmt.Sprintf(":%d", opts.healthPort),
 			Handler:           healthHandler(Version),
 			ReadHeaderTimeout: 10 * time.Second,
 		}
@@ -151,22 +141,22 @@ func main() {
 				slog.Error("Health check server failed", "error", err)
 			}
 		}()
-		if *transport == transportConnect {
+		if opts.transport == transportConnect {
 			slog.Warn("the separate health listener is deprecated; /health is served on the main port and -health-port 0 disables it",
-				"health_port", *healthPort)
+				"health_port", opts.healthPort)
 		}
 	}
 
 	// Start gRPC server
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", opts.port))
 	if err != nil {
-		slog.Error("Failed to listen", "port", *port, "error", err)
+		slog.Error("Failed to listen", "port", opts.port, "error", err)
 		os.Exit(1)
 	}
 
 	// The port is the kernel's under -port 0, so report the bound one before
 	// serving: a client waiting on this line cannot miss the address it must dial.
-	if *reportAddress {
+	if opts.reportAddress {
 		if _, err := fmt.Fprintln(os.Stdout, dialAddress(lis.Addr())); err != nil {
 			slog.Error("Failed to report the listening address", "error", err)
 			os.Exit(1)
@@ -176,14 +166,14 @@ func main() {
 	// Graceful shutdown
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
-	if *exitWithParent {
+	if opts.exitWithParent {
 		go exitWhenStdinCloses(shutdown)
 	}
 
-	if *transport == transportConnect {
+	if opts.transport == transportConnect {
 		serveCtx, cancelServe := context.WithCancel(context.Background())
 		served := make(chan error, 1)
-		go func() { served <- serveConnect(serveCtx, lis, svc, Version, origins, *tlsCert, *tlsKey) }()
+		go func() { served <- serveConnect(serveCtx, lis, svc, Version, origins, opts.tlsCert, opts.tlsKey) }()
 
 		select {
 		case err := <-served:

@@ -25,9 +25,40 @@ type ArgumentTyper interface {
 	InvocationArguments(scope *symbols.Scope, e *ast.InvocationExpr) []Argument
 }
 
-// SetArgumentTyper installs the checker's argument typing on the model.
+// SetArgumentTyper installs the checker's argument typing on the model. Selections
+// memoized under the previous typing are dropped, so none outlives the typing it read.
 func (m *Model) SetArgumentTyper(t ArgumentTyper) {
 	m.arguments = t
+	clear(m.invocations)
+}
+
+// SelectCall selects what e calls, its arguments typed as the checker types them; with no
+// checker's typing installed the arguments are unknown, so arity and names alone decide.
+func (m *Model) SelectCall(scope *symbols.Scope, e *ast.InvocationExpr, performs Performs) *InvocationSelection {
+	if m == nil || e == nil {
+		return &InvocationSelection{}
+	}
+	if m.arguments != nil {
+		return m.SelectInvocation(scope, e, m.arguments.InvocationArguments(scope, e), performs)
+	}
+	return m.SelectInvocation(scope, e, untypedArguments(e), performs)
+}
+
+// untypedArguments lists e's arguments, the receiver first, with nothing known of their types.
+func untypedArguments(e *ast.InvocationExpr) []Argument {
+	args := make([]Argument, 0, len(e.Args)+len(e.NamedArgs)+1)
+	if e.Operand != nil {
+		args = append(args, Argument{})
+	}
+	for range e.Args {
+		args = append(args, Argument{})
+	}
+	for _, arg := range e.NamedArgs {
+		if arg.Name != nil && len(arg.Name.Parts) == 1 {
+			args = append(args, Argument{Name: arg.Name.Parts[0].Text})
+		}
+	}
+	return args
 }
 
 // Performs is what a call site does with the declaration it names, which
@@ -35,7 +66,8 @@ func (m *Model) SetArgumentTyper(t ArgumentTyper) {
 type Performs int
 
 const (
-	// PerformsBehavior evaluates an expression: any behavior answers.
+	// PerformsBehavior evaluates an expression: a calc answers; another behavior only
+	// when no calc is named.
 	PerformsBehavior Performs = iota
 	// PerformsAction runs an action, as `action a = tag(x);` does: only actions answer.
 	PerformsAction
@@ -47,15 +79,37 @@ func (m *Model) Performable(p Performs, sym *symbols.Symbol) bool {
 	if p == PerformsAction {
 		return sym.Kind == symbols.SymbolActionDef || sym.Kind == symbols.SymbolActionUsage
 	}
+	return m.performs(sym, behaviorLike)
+}
+
+// Evaluates reports whether calling sym yields a result: it is a calc (a KerML
+// function), or a feature typed by one, which is what an expression evaluates.
+func (m *Model) Evaluates(sym *symbols.Symbol) bool {
+	return m.performs(sym, calcLike)
+}
+
+// performs reports whether sym, or a behavior it is typed by, satisfies is.
+func (m *Model) performs(sym *symbols.Symbol, is func(*symbols.Symbol) bool) bool {
 	visited := map[*symbols.Symbol]bool{}
 	for sym != nil && !visited[sym] {
-		if behaviorLike(sym) {
+		if is(sym) {
 			return true
 		}
 		visited[sym] = true
 		sym = m.featureType(sym)
 	}
 	return false
+}
+
+// calcLike reports whether sym declares a calc (a KerML function).
+func calcLike(sym *symbols.Symbol) bool {
+	switch d := sym.Decl.(type) {
+	case *ast.Definition:
+		return d.Kind == ast.DefCalc
+	case *ast.Usage:
+		return d.Kind == ast.UsageCalc
+	}
+	return sym.Kind == symbols.SymbolCalcDef || sym.Kind == symbols.SymbolCalcUsage
 }
 
 // InvocationSelection is which declaration an invocation calls, out of every
@@ -142,6 +196,13 @@ func (m *Model) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, ar
 		sel.Applicable = sel.Candidates
 		sel.Selected = sel.Candidates[0]
 		return sel
+	}
+	// An expression takes its call's result, which only a calc yields: when the name
+	// denotes one, no action competes, however well its inputs fit the arguments.
+	if performs == PerformsBehavior {
+		if calcs := filterSymbols(behaviors, m.Evaluates); len(calcs) > 0 {
+			behaviors = calcs
+		}
 	}
 	sel.callable = behaviors[0]
 
@@ -294,7 +355,7 @@ func (m *Model) OptionalParameter(sym *symbols.Symbol) bool {
 	if value, _ := m.ParameterDefault(sym); value != nil {
 		return true
 	}
-	for _, p := range m.parameterRedefinitionChain(sym) {
+	for _, p := range m.ParameterRedefinitionChain(sym) {
 		if u := p.Decl.(*ast.Usage); u.Multiplicity != nil {
 			return m.IsOptionalParameter(u)
 		}
@@ -305,7 +366,7 @@ func (m *Model) OptionalParameter(sym *symbols.Symbol) bool {
 // ParameterDefault is the value the parameter takes when a call binds none: the nearest
 // declared along its redefinitions, with the scope it resolves in. Nil when none is.
 func (m *Model) ParameterDefault(sym *symbols.Symbol) (ast.Node, *symbols.Scope) {
-	for _, p := range m.parameterRedefinitionChain(sym) {
+	for _, p := range m.ParameterRedefinitionChain(sym) {
 		if u := p.Decl.(*ast.Usage); u.Value != nil {
 			return u.Value, p.OwnerScope
 		}
@@ -313,9 +374,9 @@ func (m *Model) ParameterDefault(sym *symbols.Symbol) (ast.Node, *symbols.Scope)
 	return nil, nil
 }
 
-// parameterRedefinitionChain is sym followed by the parameters it redefines, explicitly
+// ParameterRedefinitionChain is sym followed by the parameters it redefines, explicitly
 // or by position, nearest first; each declares a usage.
-func (m *Model) parameterRedefinitionChain(sym *symbols.Symbol) []*symbols.Symbol {
+func (m *Model) ParameterRedefinitionChain(sym *symbols.Symbol) []*symbols.Symbol {
 	var chain []*symbols.Symbol
 	visited := map[*symbols.Symbol]bool{}
 	for sym != nil && !visited[sym] {
@@ -538,4 +599,14 @@ func containsSymbol(syms []*symbols.Symbol, sym *symbols.Symbol) bool {
 		}
 	}
 	return false
+}
+
+func filterSymbols(syms []*symbols.Symbol, keep func(*symbols.Symbol) bool) []*symbols.Symbol {
+	var out []*symbols.Symbol
+	for _, s := range syms {
+		if keep(s) {
+			out = append(out, s)
+		}
+	}
+	return out
 }

@@ -774,8 +774,8 @@ elmt:Constraints__Rover__bounds__inner
     sysml:owner elmt:Constraints__Rover__bounds ;
     sysml:owningRelationship elmt:Constraints__Rover__bounds__inner_om ;
     sysml:owningMembership elmt:Constraints__Rover__bounds__inner_om ;
-    sysx:declaredKeyword "assert" ;
     sysml:declaredName "inner" ;
+    sysx:declaredKeyword "assert" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Constraints__Rover__bounds__inner___400 ;
     sysml:ownedMembership elmt:Constraints__Rover__bounds__inner___400_om ;

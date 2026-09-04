@@ -8,6 +8,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
@@ -47,6 +48,10 @@ type Context struct {
 	// calcShapes memoizes resolved calc invocation interfaces (parameters,
 	// defaults, result expression) per calc symbol.
 	calcShapes map[*symbols.Symbol]*calcShape
+
+	// libraryPerformances memoizes, per model calc, the inherited library function a
+	// call of it applies; nil for a calc that computes on its own.
+	libraryPerformances map[*symbols.Symbol]*libraryPerformance
 
 	// invocationTargets memoizes what each invocation expression denotes in the
 	// scope it is evaluated in; the model does not change under one context.
@@ -220,15 +225,21 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 	if maxSteps <= 0 {
 		panic(fmt.Sprintf("runtime: maxSteps must be > 0, got %d", maxSteps))
 	}
+	if model != nil {
+		// Calls the model selects on its own (document queries, signal payloads) then
+		// pick the overload the checker's argument typing picks.
+		model.SetArgumentTyper(passes.NewArgumentTyper(resolver, model))
+	}
 	return &Context{
-		model:      model,
-		resolver:   resolver,
-		ids:        &idSequence{next: 1}, // IDs start at 1 (0 = invalid)
-		steps:      0,
-		maxSteps:   maxSteps,
-		instances:  make(map[int64]*Instance),
-		features:   make(map[*symbols.Symbol][]EffectiveFeature),
-		calcShapes: make(map[*symbols.Symbol]*calcShape),
+		model:               model,
+		resolver:            resolver,
+		ids:                 &idSequence{next: 1}, // IDs start at 1 (0 = invalid)
+		steps:               0,
+		maxSteps:            maxSteps,
+		instances:           make(map[int64]*Instance),
+		features:            make(map[*symbols.Symbol][]EffectiveFeature),
+		calcShapes:          make(map[*symbols.Symbol]*calcShape),
+		libraryPerformances: make(map[*symbols.Symbol]*libraryPerformance),
 
 		invocationTargets: make(map[invocationKey]*invocationTarget),
 		integerLiterals:   make(map[*ast.LiteralInteger]int64),
