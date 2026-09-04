@@ -1433,8 +1433,8 @@ func TestDecideLeavesNoOccurrenceCachedOnAMessageInFlight(t *testing.T) {
 	if len(pending) != 1 || pending[0].SignalType != "Kick" {
 		t.Fatalf("after Decide, on the bus: %+v; want the Kick still in flight", pending)
 	}
-	if _, cached := pending[0].Payload["value"]; cached || len(pending[0].Payload) != 1 {
-		t.Errorf("Kick payload after Decide = %v; want the argument alone, no occurrence cached under the probe", pending[0].Payload)
+	if pending[0].Value != nil || len(pending[0].Payload) != 1 {
+		t.Errorf("Kick after Decide = %+v; want the argument alone, no occurrence cached by the probe", pending[0])
 	}
 
 	ctx.PostMessage(go_)
@@ -1490,8 +1490,9 @@ func TestPreviewsDiscardThePortTheyMaterialize(t *testing.T) {
 	instances, behaviors := len(ctx.instances), len(ctx.objectBehaviors)
 	// Delivered to a port object by identity, under a name the accept does not
 	// use, so only materializing `in` can tell whether it is the same port.
+	four := integerValue(4)
 	elsewhere := Message{SignalType: "Integer", Port: "other", Object: listener.ID, PortID: -1,
-		Delivery: DeliverPort, Payload: map[string]Value{"value": integerValue(4)}}
+		Delivery: DeliverPort, Value: &four}
 	if accepted, err := exec.AcceptsMessage(elsewhere); err != nil || accepted {
 		t.Errorf("AcceptsMessage(Integer at another port) = %v, %v; want it left", accepted, err)
 	}

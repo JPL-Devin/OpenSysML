@@ -390,6 +390,9 @@ func machineName(exec *runtime.StateExecutor) string {
 // payload, parameter by parameter.
 func signalText(msg runtime.Message) string {
 	if len(msg.Payload) == 0 {
+		if msg.Value != nil {
+			return msg.SignalType + "(" + runtime.FormatValue(*msg.Value) + ")"
+		}
 		return msg.SignalType
 	}
 	names := make([]string, 0, len(msg.Payload))

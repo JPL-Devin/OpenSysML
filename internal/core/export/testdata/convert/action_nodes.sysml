@@ -16,8 +16,8 @@ package ActionNodes {
         perform brake;
         action Brake;
         assign log := speed;
-        send Command() to antenna;
-        send Command() via antenna;
+        send new Command() to antenna;
+        send new Command() via antenna;
         accept when speed > 0;
         terminate;
         terminate brake;

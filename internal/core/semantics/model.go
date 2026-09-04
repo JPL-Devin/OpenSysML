@@ -74,6 +74,8 @@ type Model struct {
 	redefClosure               map[*symbols.Symbol]map[*symbols.Symbol]bool
 	computingRedefClosure      map[*symbols.Symbol]bool
 	computingRedefinedFeatures int
+	// ctorSlots memoizes each type's constructible features (see shape.go).
+	ctorSlots map[*symbols.Symbol]constructorSlots
 }
 
 // declMaskKey keys the mask a declaration written in a type sees, by the type
@@ -124,6 +126,7 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		declMask:              make(map[declMaskKey]map[*symbols.Symbol]bool),
 		redefClosure:          make(map[*symbols.Symbol]map[*symbols.Symbol]bool),
 		computingRedefClosure: make(map[*symbols.Symbol]bool),
+		ctorSlots:             make(map[*symbols.Symbol]constructorSlots),
 	}
 	if resolver != nil {
 		resolver.SetModel(m)
@@ -600,6 +603,61 @@ func (m *Model) unionConforms(a, b *symbols.Symbol, unioning map[*symbols.Symbol
 		}
 	}
 	return true
+}
+
+// FeatureTypes returns a feature's effective types: those it declares, else those
+// of the features it redefines or subsets (KerML §8.3.3.3), else its kind's base.
+func (m *Model) FeatureTypes(sym *symbols.Symbol) []*symbols.Symbol {
+	if sym == nil || !isFeature(sym) {
+		return nil
+	}
+	if types := m.featureTypes(sym, make(map[*symbols.Symbol]bool)); len(types) > 0 {
+		return types
+	}
+	if base := m.implicitBase(sym); base != nil {
+		return []*symbols.Symbol{base}
+	}
+	return nil
+}
+
+// DeclaredFeatureTypes is FeatureTypes without the kind's base: the types a
+// feature is written with, directly or through the features it specializes.
+func (m *Model) DeclaredFeatureTypes(sym *symbols.Symbol) []*symbols.Symbol {
+	if sym == nil || !isFeature(sym) {
+		return nil
+	}
+	return m.featureTypes(sym, make(map[*symbols.Symbol]bool))
+}
+
+func (m *Model) featureTypes(sym *symbols.Symbol, visiting map[*symbols.Symbol]bool) []*symbols.Symbol {
+	if visiting[sym] {
+		return nil
+	}
+	visiting[sym] = true
+	base := m.implicitBase(sym)
+	var types, features []*symbols.Symbol
+	for _, super := range m.DirectSupertypes(sym) {
+		switch {
+		case super == base:
+		case isFeature(super):
+			features = append(features, super)
+		default:
+			types = append(types, super)
+		}
+	}
+	if len(types) > 0 {
+		return types
+	}
+	seen := make(map[*symbols.Symbol]bool)
+	for _, feature := range features {
+		for _, t := range m.featureTypes(feature, visiting) {
+			if !seen[t] {
+				seen[t] = true
+				types = append(types, t)
+			}
+		}
+	}
+	return types
 }
 
 // UnioningTypes returns the resolved targets of sym's `unions` relationships:
