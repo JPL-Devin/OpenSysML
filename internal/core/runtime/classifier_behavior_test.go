@@ -1126,7 +1126,8 @@ func TestFailedMaterializationLeavesNoNeighbourBehind(t *testing.T) {
 
 // Two nested objects addressing each other are materialized once each: an object
 // is held by the feature that materializes it before its behaviors start, so a
-// reply addressed back reaches it instead of materializing a second copy.
+// reply addressed back reaches it instead of materializing a second copy. The
+// only other objects are the two messages the sends construct.
 func TestMutuallyAddressedObjectsAreMaterializedOnce(t *testing.T) {
 	src := `
 		package test {
@@ -1140,7 +1141,7 @@ func TestMutuallyAddressedObjectsAreMaterializedOnce(t *testing.T) {
 					exhibit state pinging {
 						entry; then sending;
 						state sending {
-							entry send Ping() to b;
+							entry send new Ping() to b;
 							accept Pong then answered;
 						}
 						state answered;
@@ -1150,7 +1151,7 @@ func TestMutuallyAddressedObjectsAreMaterializedOnce(t *testing.T) {
 					exhibit state replying {
 						entry; then waiting;
 						state waiting { accept Ping then replied; }
-						state replied { entry send Pong() to a; }
+						state replied { entry send new Pong() to a; }
 					}
 				}
 			}
@@ -1167,8 +1168,8 @@ func TestMutuallyAddressedObjectsAreMaterializedOnce(t *testing.T) {
 	a := instanceAtPath(t, ctx, pair, "a")
 	b := instanceAtPath(t, ctx, pair, "b")
 
-	if got := len(ctx.instances); got != 5 {
-		t.Errorf("%d objects materialized, want the pair, its parts, and their state performances", got)
+	if got := len(ctx.instances); got != 7 {
+		t.Errorf("%d objects materialized, want the pair, its parts, their state performances, and the two messages", got)
 	}
 	assertCurrentState(t, machineOf(t, a, "pinging").State, "answered")
 	assertCurrentState(t, machineOf(t, b, "replying").State, "replied")

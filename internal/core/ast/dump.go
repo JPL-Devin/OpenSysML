@@ -195,7 +195,7 @@ func dumpExpression(b *strings.Builder, n Node, depth int) bool {
 		return true
 	case *ConstructorExpr:
 		fmt.Fprintf(b, `(ConstructorExpr type=%q`, qnString(v.Type))
-		writeChildren(b, depth, v.Args)
+		writeConstructorArgs(b, depth, v)
 		return true
 	case *SequenceExpr:
 		b.WriteString(`(SequenceExpr`)
@@ -398,6 +398,10 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 		if v.IsNegated {
 			b.WriteString(` negated=true`)
 		}
+		if v.IsActionNode {
+			b.WriteString(` node=true`)
+		}
+		writeValueOperator(b, v.ValueIsDefault, v.ValueIsInitial)
 		writeChildren(b, depth, usageChildren(v))
 		return true
 	case *FlowEnds:
@@ -492,6 +496,7 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 		return true
 	case *SubjectMember:
 		fmt.Fprintf(b, `(SubjectMember name=%q type=%q`, v.Name, qnString(v.TypeRef))
+		writeValueOperator(b, v.ValueIsDefault, v.ValueIsInitial)
 		kids := make([]Node, 0)
 		for _, pm := range v.Prefixes {
 			kids = append(kids, pm)
@@ -516,6 +521,7 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 			if v.Name != "" {
 				fmt.Fprintf(b, ` constraint=%q`, v.Name)
 			}
+			writeValueOperator(b, v.ValueIsDefault, v.ValueIsInitial)
 			writeChildren(b, depth, prefixesAnd(v.Prefixes,
 				ownedConstraintChildren(v.Relationships, v.Multiplicity, v.Value, v.Body)))
 		} else {
@@ -535,6 +541,7 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 			if v.Name != "" {
 				fmt.Fprintf(b, ` constraint=%q`, v.Name)
 			}
+			writeValueOperator(b, v.ValueIsDefault, v.ValueIsInitial)
 			writeChildren(b, depth, prefixesAnd(v.Prefixes,
 				ownedConstraintChildren(v.Relationships, v.Multiplicity, v.Value, v.Body)))
 		} else {
@@ -765,6 +772,22 @@ func invocationChildren(v *InvocationExpr) []Node {
 	return kids
 }
 
+// writeConstructorArgs writes the arguments of `new T(…)`, each named one as
+// `(NamedArg name="n" …)` so a golden locks which feature the value fills.
+func writeConstructorArgs(b *strings.Builder, depth int, v *ConstructorExpr) {
+	for _, a := range v.Args {
+		b.WriteString("\n")
+		dumpNode(b, a, depth+1)
+	}
+	for _, na := range v.NamedArgs {
+		b.WriteString("\n")
+		indent(b, depth+1)
+		fmt.Fprintf(b, `(NamedArg name=%q`, qnString(na.Name))
+		writeChildren(b, depth+1, []Node{na.Value})
+	}
+	b.WriteString(")")
+}
+
 func visibilityString(v Visibility) string {
 	switch v {
 	case VisibilityPublic:
@@ -845,6 +868,16 @@ func defusageChildren(prefixes []*PrefixMetadata, rels []*Relationship, mult *Mu
 
 // ownedConstraintChildren are the children of the constraint an assume/require
 // member declares, in written order.
+// writeValueOperator emits the `default` and `:=` of a value part.
+func writeValueOperator(b *strings.Builder, isDefault, isInitial bool) {
+	if isDefault {
+		b.WriteString(` default=true`)
+	}
+	if isInitial {
+		b.WriteString(` initial=true`)
+	}
+}
+
 func ownedConstraintChildren(rels []*Relationship, mult *Multiplicity, value Node, body []Node) []Node {
 	kids := make([]Node, 0, len(rels)+len(body)+2)
 	for _, r := range rels {

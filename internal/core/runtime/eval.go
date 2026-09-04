@@ -138,11 +138,24 @@ func (ec *EvalContext) pushFrame(f frame) {
 	ec.frames = append(ec.frames, f)
 }
 
+// hasPerformanceFrame reports whether an action performance is on the stack.
+func (ec *EvalContext) hasPerformanceFrame() bool {
+	for i := range ec.frames {
+		if ec.frames[i].perf != nil {
+			return true
+		}
+	}
+	return false
+}
+
 // lookupSubaction finds the node named name in the flow of an action performance
 // on the stack, innermost first, and returns its latest performance. Where the
 // name resolves in the reading scope, it is that declaration's node — or no node
 // at all when the declaration is a feature, which shadows a same-named node.
 func (ec *EvalContext) lookupSubaction(name string) (perf *actionFrame, declared bool, err error) {
+	if !ec.hasPerformanceFrame() {
+		return nil, false, nil
+	}
 	var decl ast.Node
 	if ec.ctx.resolver != nil {
 		if sym, ok := ec.ctx.resolver.LookupName(ec.scope, name); ok && sym != nil {
@@ -472,13 +485,13 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 		// — rather than the ones in force here — answer the names it uses.
 		if ec.scope != nil && !ec.resolving[name] {
 			if sym, ok := ec.ctx.resolver.LookupName(ec.scope, name); ok && sym != nil {
-				// A variant names a choice, not the value it declares.
-				if ec.ctx.model.VariationPointOwning(sym) != nil {
-					return variantReference(sym), nil
-				}
-				// A literal of an enumeration is a value of that enumeration.
+				// An enumerated value is the value of its enumeration it stands
+				// for; any other variant names a choice, not the value it declares.
 				if semantics.EnumerationOwning(sym) != nil {
 					return ec.enumLiteralValue(sym)
+				}
+				if ec.ctx.model.VariationPointOwning(sym) != nil {
+					return variantReference(sym), nil
 				}
 				// A library feature's value comes from the feature seam, not its
 				// declared body: a warm library cache restores symbols without AST.
@@ -565,15 +578,14 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 
 	// Evaluate the final symbol's declaration
 	if decl, ok := currentSym.Decl.(*ast.Usage); ok {
-		// A variant names a choice its variation can be bound to, and compares
-		// equal to the variation that selected it.
-		if ec.ctx.model.VariationPointOwning(currentSym) != nil {
-			return variantReference(currentSym), nil
-		}
-		// A literal of an enumeration is a value of that enumeration, whether or
-		// not it declares one of its own.
+		// An enumerated value is a value of its enumeration, whether or not it
+		// declares one of its own; any other variant names a choice its variation
+		// can be bound to, and compares equal to the variation that selected it.
 		if semantics.EnumerationOwning(currentSym) != nil {
 			return ec.enumLiteralValue(currentSym)
+		}
+		if ec.ctx.model.VariationPointOwning(currentSym) != nil {
+			return variantReference(currentSym), nil
 		}
 		if decl.Value != nil {
 			return ec.declaredValue(currentSym, decl.Value)
@@ -593,6 +605,10 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 		if val, ok := ec.emptyDeclaredFeature(currentSym); ok {
 			return val, nil
 		}
+	}
+	// A require/assume constraint reads the value it binds, as a constraint usage does.
+	if oc, ok := ast.OwnedConstraintOf(currentSym.Decl); ok && oc.Value != nil {
+		return ec.declaredValue(currentSym, oc.Value)
 	}
 	// A subject is bound or, admitting nothing, empty; otherwise it awaits a binding.
 	if decl, ok := currentSym.Decl.(*ast.SubjectMember); ok {
@@ -624,7 +640,7 @@ func (ec *EvalContext) resolvedWithoutValue(sym *symbols.Symbol, qn *ast.Qualifi
 		)
 	}
 	// A usage of any kind — a subject or a state included — is a feature.
-	if _, usage := sym.Decl.(*ast.Usage); usage || isFeature(sym) {
+	if _, usage := sym.Decl.(*ast.Usage); usage || semantics.IsShapeFeature(sym) {
 		return &NoValueError{Feature: spelled, Ref: qn}
 	}
 	return fmt.Errorf("cannot evaluate %s %s", sym.Kind, spelled)
@@ -662,13 +678,13 @@ func (ec *EvalContext) unresolvedQualifiedName(qn *ast.QualifiedName, reading re
 			continue
 		}
 		memberName := qn.Parts[i+1].Text
-		if ec.ctx.model.IsVariationFeature(owner) {
-			return fmt.Errorf("%w: %s is not a variant of %s (%s)",
-				ErrNotAVariant, memberName, owner.Name, ec.ctx.variantSummary(owner))
-		}
 		if owner.Kind == symbols.SymbolEnumerationDef {
 			return fmt.Errorf("%w: %s is not a literal of %s (%s)",
 				ErrNotALiteral, memberName, owner.Name, ec.ctx.enumerationSummary(owner))
+		}
+		if ec.ctx.model.IsVariationFeature(owner) {
+			return fmt.Errorf("%w: %s is not a variant of %s (%s)",
+				ErrNotAVariant, memberName, owner.Name, ec.ctx.variantSummary(owner))
 		}
 		break
 	}
@@ -1997,7 +2013,7 @@ func ambiguousInvocationError(qualName string, candidates []*symbols.Symbol) err
 // same "did you mean" hint the validator gives an unqualified reference.
 func (ec *EvalContext) unresolvedInvocation(qn *ast.QualifiedName, written string) error {
 	if qn != nil && len(qn.Parts) == 1 && !qn.Global && ec.ctx.resolver != nil {
-		return fmt.Errorf("%w: %s", ErrUnresolvedReference, ec.ctx.resolver.UnresolvedName(ec.scope, written))
+		return fmt.Errorf("%w: %s", ErrUnresolvedReference, ec.ctx.resolver.UnresolvedName(ec.scope, written, qn))
 	}
 	return fmt.Errorf("%w: %s", ErrUnresolvedReference, written)
 }

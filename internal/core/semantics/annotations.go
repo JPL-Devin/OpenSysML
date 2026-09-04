@@ -138,18 +138,8 @@ func sortedFeatureNames(values map[string]symbols.FilterValue) []string {
 // prefix metadata, the prefix metadata written among its members, and the
 // metadata usages in its body.
 func (m *Model) declaredAnnotations(sym *symbols.Symbol) []annotation {
-	var prefixes []*ast.PrefixMetadata
-	var members []ast.Node
-	switch d := sym.Decl.(type) {
-	case *ast.Definition:
-		prefixes, members = d.Prefixes, d.Members
-	case *ast.Usage:
-		prefixes, members = d.Prefixes, d.Members
-	case *ast.Package:
-		prefixes, members = d.Prefixes, d.Members
-	case *ast.Namespace:
-		prefixes, members = d.Prefixes, d.Members
-	default:
+	prefixes, members, ok := ast.DeclaredMetadata(sym.Decl)
+	if !ok {
 		return nil
 	}
 
@@ -534,10 +524,57 @@ func (m *Model) metaclassOf(sym *symbols.Symbol) *symbols.Symbol {
 			return meta
 		}
 	}
+	if isMetadataBodyFeature(sym) {
+		return m.metadataBodyFeatureMetaclass(m.isKerMLDoc(sym))
+	}
 	if meta := m.kermlMetaclass(kermlMetaclassName(sym, m.isKerMLDoc(sym))); meta != nil {
 		return meta
 	}
-	name := metaclassName(sym.Kind)
+	return m.sysmlMetaclass(metaclassName(sym.Kind))
+}
+
+// isMetadataBodyFeature reports whether sym is a feature a metadata body declares,
+// at any depth, other than a metadata feature annotating the body's owner.
+func isMetadataBodyFeature(sym *symbols.Symbol) bool {
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || usage.Kind == ast.UsageMetadata {
+		return false
+	}
+	for scope := sym.OwnerScope; scope != nil; {
+		if scope.BodyLocal() {
+			_, prefix := scope.Node().(*ast.PrefixMetadata)
+			return prefix
+		}
+		owner := scope.Owner()
+		if owner == nil {
+			return false
+		}
+		if owner.Kind == symbols.SymbolMetadataUsage {
+			return true
+		}
+		if _, feature := owner.Decl.(*ast.Usage); !feature {
+			return false
+		}
+		scope = owner.OwnerScope
+	}
+	return false
+}
+
+// metadataBodyFeatureMetaclass is the metaclass of a metadata body's feature:
+// KerML.xtext MetadataBodyFeature is a Feature, SysML.xtext MetadataBodyUsage a ReferenceUsage.
+func (m *Model) metadataBodyFeatureMetaclass(isKerML bool) *symbols.Symbol {
+	if isKerML {
+		return m.kermlMetaclass(kermlMetaclassNames["feature"])
+	}
+	return m.sysmlMetaclass(referenceUsageMetaclassName)
+}
+
+// referenceUsageMetaclassName is the SysML metaclass of a usage written with no kind.
+const referenceUsageMetaclassName = "ReferenceUsage"
+
+// sysmlMetaclass is the library element declaring the named SysML metaclass,
+// or nil for an unnamed or undeclared one.
+func (m *Model) sysmlMetaclass(name string) *symbols.Symbol {
 	if name == "" {
 		return nil
 	}
@@ -615,6 +652,7 @@ var kermlMetaclassNames = map[string]string{
 	"predicate":    "Predicate",
 	"interaction":  "Interaction",
 	"metaclass":    "Metaclass",
+	"metadata":     "MetadataFeature",
 	"feature":      "Feature",
 	"step":         "Step",
 	"expr":         "Expression",
@@ -641,6 +679,8 @@ func kermlMetaclassName(sym *symbols.Symbol, isKerML bool) string {
 		return kermlMetaclassNames[d.Keyword]
 	case *ast.Usage:
 		return kermlMetaclassNames[d.Keyword]
+	case *ast.PrefixMetadata:
+		return kermlMetaclassNames["metadata"]
 	}
 	return ""
 }
@@ -674,7 +714,7 @@ func (m *Model) reflectiveFeatureValue(sym *symbols.Symbol, feature string) (sym
 		case "isConstant":
 			return boolValue(d.IsConstant), true
 		case "isVariation":
-			return boolValue(d.IsVariation), true
+			return boolValue(IsVariation(sym)), true
 		case "isIndividual":
 			return boolValue(d.IsIndividual), true
 		case "isParallel":
@@ -703,9 +743,9 @@ func (m *Model) reflectiveFeatureValue(sym *symbols.Symbol, feature string) (sym
 		case "isPortion":
 			return boolValue(d.Portion != ast.PortionNone), true
 		case "isVariation":
-			return boolValue(d.IsVariation), true
+			return boolValue(IsVariation(sym)), true
 		case "isVariant":
-			return boolValue(d.IsVariant), true
+			return boolValue(IsVariant(sym)), true
 		case "isReference":
 			return boolValue(!d.IsComposite && usageIsReferential(d)), true
 		case "isIndividual":

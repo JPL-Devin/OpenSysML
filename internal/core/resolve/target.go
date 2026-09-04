@@ -203,6 +203,10 @@ type Reference struct {
 	// Chain is set when QN is the member of a feature chain, whose segments are
 	// members of the operand rather than of Scope (SysML 7.6.6).
 	Chain *ast.FeatureChainExpr
+	// Constructed is set when QN labels a constructor argument: a simple name is
+	// a feature of the instantiated type Constructed names, a qualified one is
+	// resolved in Scope.
+	Constructed *ast.QualifiedName
 	// Redefines is set when QN is the target of a redefinition, which names a
 	// feature of Scope's generals rather than a member of Scope itself.
 	Redefines bool
@@ -222,7 +226,8 @@ type Reference struct {
 	// private members the visibility rule would otherwise hide.
 	Import *ast.Import
 	// Subsetting is the declaration QN subsets, if any; its spelling decides
-	// whether it is read as a redefinition or as the declaration's own name.
+	// whether it is read as a redefinition, as a sibling redefining the name, or
+	// as the declaration's own name.
 	Subsetting ast.Node
 	// Member is the declaration whose text QN is written in, when known.
 	Member ast.Node
@@ -292,8 +297,21 @@ func (r *Resolver) ResolveReference(ref Reference) (*symbols.Symbol, bool) {
 		}
 		return r.memberChain(owner, ref.QN)
 	}
+	if ref.Constructed != nil {
+		if ref.QN != nil && len(ref.QN.Parts) > 1 {
+			return r.resolveQualified(ref.Scope, ref.QN, hide)
+		}
+		owner, ok := r.resolveQualified(ref.Scope, ref.Constructed, hide)
+		if !ok {
+			return nil, false
+		}
+		return r.memberChain(owner, ref.QN)
+	}
 	if ref.Redefines {
-		r.resolveRedefinition(ref.Scope, ref.QN, ref.Referrer)
+		// A subsetting reaches a sibling redefinition first, as resolveRelationships does.
+		if ref.Subsetting == nil || !r.resolveOwnSibling(ref.Scope, ref.QN, ref.Subsetting) {
+			r.resolveRedefinition(ref.Scope, ref.QN, ref.Referrer)
+		}
 		return r.PartSymbol(ref.QN, len(ref.QN.Parts)-1)
 	}
 	if ref.Endpoint {

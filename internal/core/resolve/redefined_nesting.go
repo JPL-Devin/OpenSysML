@@ -41,15 +41,7 @@ func (r *Resolver) redefinedFeatures(sym *symbols.Symbol) []*symbols.Symbol {
 		return cached
 	}
 	r.redefined[sym] = nil
-	var out []*symbols.Symbol
-	for _, rel := range redefinesRelationships(sym.Decl) {
-		// Redefinitions search features of the owner's generals; hide only the
-		// declaration's own binding so a same-named target reaches that feature.
-		hide := &refFilter{decl: sym.Decl, skipBorrowedName: true}
-		if found, ok := r.resolveTarget(sym.OwnerScope, rel.Target, hide); ok && found != sym {
-			out = append(out, found)
-		}
-	}
+	out := r.explicitRedefinitions(sym)
 	if model, ok := r.model.(endRedefinitionLookup); ok {
 		for _, end := range model.ImplicitEndRedefinitions(sym) {
 			if end != nil && end != sym {
@@ -62,9 +54,8 @@ func (r *Resolver) redefinedFeatures(sym *symbols.Symbol) []*symbols.Symbol {
 			}
 		}
 	}
-	if usage, ok := sym.Decl.(*ast.Usage); ok && sym.OwnerScope != nil &&
-		sym.OwnerScope.BodyLocal() {
-		if owner := r.scopeOwner(sym.OwnerScope); owner != nil {
+	if usage, ok := sym.Decl.(*ast.Usage); ok {
+		if owner := r.MetadataBodyOwner(sym.OwnerScope); owner != nil {
 			if target := symbols.MetadataBodyTarget(r.model, owner, usage.Ident); target != nil &&
 				target != sym {
 				out = append(out, target)
@@ -72,6 +63,21 @@ func (r *Resolver) redefinedFeatures(sym *symbols.Symbol) []*symbols.Symbol {
 		}
 	}
 	r.redefined[sym] = out
+	return out
+}
+
+// explicitRedefinitions returns the features the `:>>` clauses of sym's
+// declaration resolve to.
+func (r *Resolver) explicitRedefinitions(sym *symbols.Symbol) []*symbols.Symbol {
+	var out []*symbols.Symbol
+	for _, rel := range redefinesRelationships(sym.Decl) {
+		// Redefinitions search features of the owner's generals; hide only the
+		// declaration's own binding so a same-named target reaches that feature.
+		hide := &refFilter{decl: sym.Decl, skipBorrowedName: true}
+		if found, ok := r.resolveTarget(sym.OwnerScope, rel.Target, hide); ok && found != sym {
+			out = append(out, found)
+		}
+	}
 	return out
 }
 
@@ -110,13 +116,19 @@ func (r *Resolver) nestedMember(sym *symbols.Symbol, name string, hide *refFilte
 // redefinesRelationships returns decl's explicit redefinitions.
 func redefinesRelationships(decl ast.Node) []*ast.Relationship {
 	var rels []*ast.Relationship
-	switch d := decl.(type) {
-	case *ast.Usage:
-		rels = d.Relationships
-	case *ast.Definition:
-		rels = d.Relationships
-	default:
-		return nil
+	if oc, ok := ast.OwnedConstraintOf(decl); ok {
+		rels = oc.Relationships
+	} else {
+		switch d := decl.(type) {
+		case *ast.Usage:
+			rels = d.Relationships
+		case *ast.Definition:
+			rels = d.Relationships
+		case *ast.SubjectMember:
+			rels = d.Relationships
+		default:
+			return nil
+		}
 	}
 	var out []*ast.Relationship
 	for _, rel := range rels {
@@ -129,6 +141,12 @@ func redefinesRelationships(decl ast.Node) []*ast.Relationship {
 
 // isFeatureDecl reports whether decl declares a feature rather than a type.
 func isFeatureDecl(decl ast.Node) bool {
-	_, ok := decl.(*ast.Usage)
-	return ok
+	if _, ok := ast.OwnedConstraintOf(decl); ok {
+		return true
+	}
+	switch decl.(type) {
+	case *ast.Usage, *ast.SubjectMember:
+		return true
+	}
+	return false
 }

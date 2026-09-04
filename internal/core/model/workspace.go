@@ -2,6 +2,7 @@ package model
 
 import (
 	"path/filepath"
+	"slices"
 	"sync"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -24,6 +25,9 @@ type Workspace struct {
 	open      map[string]bool   // names with an authoritative open buffer
 	index     *symbols.Index
 	diagCache map[string][]passes.Diagnostic
+	// refs is the reverse reference index, nil until a query after a change
+	// rebuilds it (see refindex.go).
+	refs *refIndex
 	// analysis is the options every document of this workspace is analyzed under,
 	// so one session asks one question of all its files.
 	analysis passes.Options
@@ -200,11 +204,15 @@ func (w *Workspace) removeLocked(name string) {
 	w.invalidateLocked()
 }
 
-// invalidateLocked clears all cached diagnostics. Caller holds the write lock.
+// invalidateLocked clears all cached diagnostics and the reverse reference index.
+// Caller holds the write lock.
 func (w *Workspace) invalidateLocked() {
 	// Conservative: any change clears all cached diagnostics. Correctness first;
 	// fine-grained cross-document dependency tracking is a later optimization.
 	w.diagCache = map[string][]passes.Diagnostic{}
+	// A change anywhere can alter what a name elsewhere resolves to (a shadowing
+	// declaration, an import target, an alias, an overload), so the index goes too.
+	w.refs = nil
 }
 
 // Diagnostics returns the analysis diagnostics for name, computing them lazily
@@ -323,7 +331,7 @@ func (w *Workspace) MembersOnPath(scope *symbols.Scope, path []string) []*symbol
 // Callers hold the read lock.
 func (w *Workspace) memberSymbolsLocked(resolver *resolve.Resolver, sem *semantics.Model,
 	scope *symbols.Scope, sym *symbols.Symbol) []*symbols.Symbol {
-	members := sem.MembersOf(sym)
+	members := slices.Clone(sem.MembersOf(sym))
 	// A cached library symbol has no scope, and a package's own scope does not
 	// hold what its imports brought in; both are reachable through the index,
 	// as seen from the namespace the completion is requested in so that another
@@ -505,15 +513,7 @@ func (w *Workspace) ResolveReferenceSegmentsInDoc(name string, ref resolve.Refer
 	defer w.mu.RUnlock()
 	r, sem := w.newResolver()
 	r.ResolveReference(ref)
-	out := make([]*symbols.Symbol, len(ref.QN.Parts))
-	for i := range ref.QN.Parts {
-		if sym, ok := r.PartSymbol(ref.QN, i); ok {
-			out[i] = sym
-		}
-	}
-	last := len(out) - 1
-	out[last] = calledDeclaration(invocationSelection(r, sem, ref), out[last])
-	return out
+	return segmentElements(r, ref, invocationSelection(r, sem, ref))
 }
 
 // ResolveReferenceNameSegmentsInDoc is ResolveReferenceSegmentsInDoc reporting
@@ -527,26 +527,7 @@ func (w *Workspace) ResolveReferenceNameSegmentsInDoc(name string, ref resolve.R
 	defer w.mu.RUnlock()
 	r, sem := w.newResolver()
 	r.ResolveReference(ref)
-	out := make([]*symbols.Symbol, len(ref.QN.Parts))
-	for i := range ref.QN.Parts {
-		if sym, ok := r.PartAlias(ref.QN, i); ok {
-			out[i] = sym
-			continue
-		}
-		if sym, ok := r.PartSymbol(ref.QN, i); ok {
-			out[i] = sym
-		}
-	}
-	// A written alias stays the name — the alias naming the overload the call selects,
-	// when same-named aliases name several — unless the call is tied: then none is.
-	last := len(out) - 1
-	sel := invocationSelection(r, sem, ref)
-	if _, aliased := r.PartAlias(ref.QN, last); !aliased || (sel != nil && sel.Ambiguous) {
-		out[last] = calledDeclaration(sel, out[last])
-	} else if element, _ := r.PartSymbol(ref.QN, last); sel != nil && sel.Selected != nil && element != sel.Selected {
-		out[last] = selectedName(r, ref, sel.Selected)
-	}
-	return out
+	return segmentNames(r, ref, invocationSelection(r, sem, ref))
 }
 
 // selectedName is the name a call's written last segment is once selected names

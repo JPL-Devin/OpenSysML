@@ -38,7 +38,7 @@ func (m *Model) evaluable(scope *symbols.Scope, expr ast.Node, depth int) bool {
 		return m.evaluableOperator(scope, e, depth)
 	case *ast.ConstructorExpr:
 		// A constructor names a type and fills its features: the model decides it.
-		return m.allEvaluable(scope, e.Args, depth)
+		return m.allEvaluable(scope, constructorArgs(e), depth)
 	case *ast.InvocationExpr:
 		return m.evaluableInvocation(scope, e, depth)
 	case *ast.FeatureReference:
@@ -54,6 +54,15 @@ func (m *Model) evaluable(scope *symbols.Scope, expr ast.Node, depth int) bool {
 	}
 	// A cast, a body and anything else read the instance the expression runs on.
 	return false
+}
+
+// constructorArgs lists every argument expression of `new T(…)`, named or not.
+func constructorArgs(e *ast.ConstructorExpr) []ast.Node {
+	args := append([]ast.Node{}, e.Args...)
+	for _, na := range e.NamedArgs {
+		args = append(args, na.Value)
+	}
+	return args
 }
 
 func (m *Model) allEvaluable(scope *symbols.Scope, nodes []ast.Node, depth int) bool {
@@ -118,8 +127,8 @@ func (m *Model) calledFunction(scope *symbols.Scope, e *ast.InvocationExpr) (*sy
 	return sel.Selected, sel.Selected != nil
 }
 
-// evaluableRead decides a feature read: naming a type or an enumeration literal
-// is model-level, and so is naming a feature whose value is evaluable.
+// evaluableRead decides a feature read (FeatureReferenceExpression::modelLevelEvaluable):
+// a metadata feature is, a feature of another type is not, an unfeatured one is as its value.
 func (m *Model) evaluableRead(scope *symbols.Scope, qn *ast.QualifiedName, depth int) bool {
 	sym, ok := m.resolveExprTarget(scope, qn)
 	if !ok {
@@ -128,11 +137,18 @@ func (m *Model) evaluableRead(scope *symbols.Scope, qn *ast.QualifiedName, depth
 	if EnumerationOwning(sym) != nil {
 		return true
 	}
-	if usage, isUsage := sym.Decl.(*ast.Usage); isUsage && !isKerMLTypeDecl(sym) {
-		return usage.Value != nil && m.evaluable(sym.OwnerScope, usage.Value, depth+1)
+	usage, isUsage := sym.Decl.(*ast.Usage)
+	if !isUsage || isKerMLTypeDecl(sym) {
+		return true // a type or a namespace, which the model holds
 	}
-	// Anything else named here is a type or a namespace, which the model holds.
-	return true
+	owner := m.ownerOf(sym)
+	if IsMetadataType(owner) {
+		return true
+	}
+	if isFeaturingType(owner) {
+		return false
+	}
+	return usage.Value == nil || m.evaluable(sym.OwnerScope, usage.Value, depth+1)
 }
 
 // resolveExprTarget resolves a name an expression reads, following an alias.

@@ -117,23 +117,7 @@ func (ctx *Context) HoldsNoValue(val Value) bool {
 		return false
 	}
 	inst, ok := ctx.instances[val.Instance]
-	return ok && len(inst.FeatureValues) == 0 && isValueTypeSymbol(inst.Type)
-}
-
-// isValueTypeSymbol reports whether sym declares a value type: a `datatype` or
-// `attribute def` (KerML DataType) or an enumeration, as distinct from a class
-// whose instances are objects. Mirrors passes.isDataTypeDefKind.
-func isValueTypeSymbol(sym *symbols.Symbol) bool {
-	if sym == nil {
-		return false
-	}
-	switch sym.Kind {
-	case symbols.SymbolAttributeDef, symbols.SymbolEnumerationDef,
-		symbols.SymbolAttributeUsage, symbols.SymbolEnumerationUsage:
-		return true
-	default:
-		return false
-	}
+	return ok && len(inst.FeatureValues) == 0 && semantics.IsValueType(inst.Type)
 }
 
 // Instantiate materializes an instance of the given usage/definition symbol.
@@ -211,25 +195,24 @@ func (ctx *Context) materialize(sym *symbols.Symbol, id int64, owner *Instance, 
 	}
 	ctx.ids.atLeast(id + 1)
 
+	// Get effective features
+	features := ctx.FeaturesOf(sym)
+
 	// Create instance
 	inst := &Instance{
 		ID:            id,
 		Type:          sym,
-		FeatureValues: make(map[string]*FeatureValue),
+		FeatureValues: make(map[string]*FeatureValue, len(features)),
 		owner:         owner,
 		ownerFeature:  feature,
 	}
 
-	// Get effective features
-	features := ctx.FeaturesOf(sym)
-
-	// Create feature value for each feature
+	// Create feature value for each feature, allocated as one block.
+	values := make([]FeatureValue, len(features))
 	for i := range features {
 		feat := &features[i]
-		fv := &FeatureValue{
-			Feature:      feat,
-			Materialized: false,
-		}
+		fv := &values[i]
+		fv.Feature = feat
 
 		// Fold constant defaults the feature admits eagerly; a default that is not constant
 		// may read sibling feature values, so GetFeatureValue evaluates (and reports) it.

@@ -104,6 +104,9 @@ func isConstraintSymbol(sym *symbols.Symbol) bool {
 	if sym == nil {
 		return false
 	}
+	if _, ok := ast.OwnedConstraintOf(sym.Decl); ok {
+		return true
+	}
 	switch decl := sym.Decl.(type) {
 	case *ast.Definition:
 		return decl.Kind == ast.DefConstraint
@@ -128,7 +131,7 @@ func (ctx *Context) evaluateConstraintInvocation(sym *symbols.Symbol, scope *sym
 		self:     subject.instance,
 		bindings: bindings,
 		negated:  NegatedDecl(sym),
-	}, ctx.conditionsOf(ctx.chainMembers(sym, scope)))
+	}, ctx.conditionsOf(sym, ctx.chainMembers(sym, scope)))
 	if errors.Is(err, ErrViolated) {
 		return false, nil
 	}

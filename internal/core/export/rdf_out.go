@@ -40,12 +40,17 @@ const (
 	pOwningType                = "owningType"
 	pOwnedFeature              = "ownedFeature"
 	pOwnedFeatureMembership    = "ownedFeatureMembership"
+	pVariant                   = "variant"
+	pVariantMembership         = "variantMembership"
+	pOwnedVariantUsage         = "ownedVariantUsage"
 	pOwnedImport               = "ownedImport"
 	pImportOwningNamespace     = "importOwningNamespace"
 	pDirection                 = "direction"
 	pLowerBound                = "lowerBound"
 	pUpperBound                = "upperBound"
 	pValue                     = "value"
+	pIsDefault                 = "isDefault"
+	pIsInitial                 = "isInitial"
 	pImportedNamespace         = "importedNamespace"
 	pAliasFor                  = "aliasedElement"
 	pClient                    = "client"
@@ -109,11 +114,13 @@ const (
 const dtExpression = "Expression"
 
 // The metaclasses of the membership elements ownership is materialized as: a
-// type owns a feature through a FeatureMembership, and every other namespace
-// member is owned through an OwningMembership. Both are concrete in KerML.
+// type owns a feature through a FeatureMembership, a variation its variants
+// through a VariantMembership, and every other namespace member is owned
+// through an OwningMembership. All three are concrete.
 const (
 	mOwningMembership  = "OwningMembership"
 	mFeatureMembership = "FeatureMembership"
+	mVariantMembership = "VariantMembership"
 	// The membership a body owns its result expression through, which states
 	// the expression as sysml:ownedResultExpression.
 	mResultExpressionMembership = "ResultExpressionMembership"
@@ -443,7 +450,7 @@ func (e *encoder) encodeInline(members []ast.Node, owner string, ownerTerm rdf.T
 }
 
 func (e *encoder) encodeMembers(kept []ast.Node, regions []region, inline bool, owner string, ownerTerm rdf.Term) error {
-	// last and beforeLast are the latest members that are not edges; a
+	// last and beforeLast are the latest members a `then` sequences from; a
 	// member-attached `then` follows its target, so its source is beforeLast.
 	var last, beforeLast ast.Node
 	for i, member := range kept {
@@ -462,23 +469,11 @@ func (e *encoder) encodeMembers(kept []ast.Node, regions []region, inline bool, 
 		if err := e.encodeMember(node, visibility, regions[i], inline, owner, ownerTerm, i); err != nil {
 			return err
 		}
-		if !isEdgeNode(node) {
+		if ast.IsSuccessionSource(node) {
 			last, beforeLast = node, last
 		}
 	}
 	return nil
-}
-
-// isEdgeNode reports whether a member is an edge between other members, which a
-// `then` sequences past (parser.isEdgeMember).
-func isEdgeNode(node ast.Node) bool {
-	switch n := node.(type) {
-	case *ast.SuccessionEdge, *ast.ControlFlowEdge, *ast.ObjectFlowEdge, *ast.TransitionMember:
-		return true
-	case *ast.Usage:
-		return n.Kind.IsEdge()
-	}
-	return false
 }
 
 // kept filters out the identity annotations consumed into the graph's
@@ -535,7 +530,7 @@ func (e *encoder) head(subject rdf.Term, node ast.Node, visibility ast.Visibilit
 		if !isRelationship(e.metaclassOf(ownerTerm)) {
 			e.graph.Add(subject, e.sysml(pOwningNamespace), ownerTerm)
 		}
-		membership = e.owningMembership(subject, ownerTerm, fqn, isExpressionMember(node))
+		membership = e.owningMembership(subject, ownerTerm, fqn, isExpressionMember(node), e.variantMember(node, ownerTerm))
 	}
 	if keyword := visibilityKeyword(visibility); keyword != "" {
 		// The membership states the visibility a member is declared with; a
@@ -598,7 +593,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		}
 		e.flags(subject, []boolProperty{
 			{"isAbstract", n.IsAbstract},
-			{"isVariation", n.IsVariation},
+			{"isVariation", n.IsVariation || n.Kind == ast.DefEnumeration},
 			{"isAll", n.IsAll},
 			{"isConstant", n.IsConstant},
 			{"isEvent", n.IsEvent},
@@ -646,7 +641,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		e.flags(subject, []boolProperty{
 			{"isAbstract", n.IsAbstract},
 			{"isVariation", n.IsVariation},
-			{"isVariant", n.IsVariant},
+			{"isVariant", e.variantMember(n, ownerTerm)},
 			{"isNegated", n.IsNegated},
 			{"isReference", n.IsReference},
 			{"isAll", n.IsAll},
@@ -674,7 +669,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		}
 		e.relationships(subject, owner, n.Relationships)
 		e.multiplicity(subject, owner, n.Multiplicity)
-		e.expression(subject, e.sysml(pValue), pValue, owner, n.Value)
+		e.featureValue(subject, owner, n.Value, n.ValueIsDefault, n.ValueIsInitial)
 		// A declaration head that binds ends (connect/bind/flow/succession),
 		// a transition, an accept action or a satisfy usage states its ends
 		// and form structurally, since the properties above do not.
@@ -795,14 +790,16 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		head(rdf.OpenSysMLTerm(mAssume))
 		return e.requirementCondition(subject, fqn, owner, requirementConditionDecl{
 			prefixes: n.Prefixes, name: n.Name, relationships: n.Relationships, multiplicity: n.Multiplicity,
-			value: n.Value, expression: n.Expression, reference: n.Reference, hasBody: n.HasBody, body: n.Body,
+			value: n.Value, isDefault: n.ValueIsDefault, isInitial: n.ValueIsInitial,
+			expression: n.Expression, reference: n.Reference, hasBody: n.HasBody, body: n.Body,
 		})
 
 	case *ast.RequireMember:
 		head(rdf.OpenSysMLTerm(mRequire))
 		return e.requirementCondition(subject, fqn, owner, requirementConditionDecl{
 			prefixes: n.Prefixes, name: n.Name, relationships: n.Relationships, multiplicity: n.Multiplicity,
-			value: n.Value, expression: n.Expression, reference: n.Reference, hasBody: n.HasBody, body: n.Body,
+			value: n.Value, isDefault: n.ValueIsDefault, isInitial: n.ValueIsInitial,
+			expression: n.Expression, reference: n.Reference, hasBody: n.HasBody, body: n.Body,
 		})
 
 	case *ast.PrefixMetadata:
@@ -826,7 +823,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		}
 		e.relationships(subject, owner, n.Relationships)
 		e.multiplicity(subject, owner, n.Multiplicity)
-		e.expression(subject, e.sysml(pValue), pValue, owner, n.BindingExpr)
+		e.featureValue(subject, owner, n.BindingExpr, n.ValueIsDefault, n.ValueIsInitial)
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Body, fqn, subject)
 
@@ -868,8 +865,8 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 // membership stands between the two. The API's payloads reach a member through
 // its membership, so a compact owner triple alone leaves a client walking down
 // from a root with nothing to follow. result marks a body's result expression,
-// which a ResultExpressionMembership owns.
-func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string, result bool) rdf.Term {
+// which a ResultExpressionMembership owns; variant a usage a VariantMembership owns.
+func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string, result, variant bool) rdf.Term {
 	ownerClass, memberClass := e.metaclassOf(owner), e.metaclassOf(member)
 	// A metadata usage annotates its owner through an OwningMembership whatever
 	// the owner is, a relationship included (SysML.xtext PrefixMetadataMember).
@@ -908,10 +905,17 @@ func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string, res
 	e.graph.Add(member, e.sysml(pOwningRelationship), membership)
 	e.graph.Add(member, e.sysml(pOwningMembership), membership)
 
+	// A variant is a member of its variation, not a feature of it: the metamodel
+	// owns it through a VariantMembership, which is an OwningMembership.
+	if variant {
+		feature = false
+	}
 	metaclass := mOwningMembership
 	switch {
 	case result:
 		metaclass = mResultExpressionMembership
+	case variant:
+		metaclass = mVariantMembership
 	case feature:
 		metaclass = mFeatureMembership
 	}
@@ -936,7 +940,32 @@ func (e *encoder) owningMembership(member, owner rdf.Term, memberFQN string, res
 		e.graph.Add(owner, e.sysml(pOwnedFeature), member)
 		e.graph.Add(owner, e.sysml(pOwnedFeatureMembership), membership)
 	}
+	if variant {
+		e.graph.Add(membership, e.sysml(pOwnedVariantUsage), member)
+		// Only a definition or usage derives its variants; a package that
+		// declares one still owns it through the membership the grammar states.
+		if ontology.IsAncestorOrSelf(ownerClass, "Definition") || ontology.IsAncestorOrSelf(ownerClass, "Usage") {
+			e.graph.Add(owner, e.sysml(pVariant), member)
+			e.graph.Add(owner, e.sysml(pVariantMembership), membership)
+		}
+	}
 	return membership
+}
+
+// variantMember reports whether node is a variant of its owner: a usage declared
+// `variant`, or an enumerated value, which its enumeration definition owns as one.
+func (e *encoder) variantMember(node ast.Node, ownerTerm rdf.Term) bool {
+	usage, ok := node.(*ast.Usage)
+	if !ok {
+		return false
+	}
+	return usage.IsVariant || enumeratedValue(usage, e.metaclassOf(ownerTerm))
+}
+
+// enumeratedValue reports whether usage is an enumerated value: an enumeration
+// usage that an enumeration definition owns (SysML.xtext EnumerationUsageMember).
+func enumeratedValue(usage *ast.Usage, ownerClass string) bool {
+	return usage.Kind == ast.UsageEnumeration && ownerClass == definitionMetaclass[ast.DefEnumeration]
 }
 
 // relationshipOwnership wires a member owned by a relationship rather than by a
@@ -1000,6 +1029,8 @@ type requirementConditionDecl struct {
 	relationships []*ast.Relationship
 	multiplicity  *ast.Multiplicity
 	value         ast.Node
+	isDefault     bool
+	isInitial     bool
 	expression    ast.Node
 	reference     *ast.QualifiedName
 	hasBody       bool
@@ -1022,7 +1053,7 @@ func (e *encoder) requirementCondition(subject rdf.Term, fqn, owner string, n re
 	}
 	e.relationships(subject, owner, n.relationships)
 	e.multiplicity(subject, owner, n.multiplicity)
-	e.expression(subject, e.sysml(pValue), pValue, owner, n.value)
+	e.featureValue(subject, owner, n.value, n.isDefault, n.isInitial)
 	return e.condition(subject, fqn, owner, n.expression, n.reference, n.hasBody, n.body)
 }
 
@@ -1119,6 +1150,19 @@ func (e *encoder) ident(subject rdf.Term, ident ast.Identification) {
 	if ident.ShortName != "" {
 		e.graph.Add(subject, e.sysml(pDeclaredShortName), rdf.String(ident.ShortName))
 	}
+}
+
+// featureValue emits a feature's value with the `default` and `:=` of its
+// operator (FeatureValue::isDefault, isInitial), so the operator converts back.
+func (e *encoder) featureValue(subject rdf.Term, owner string, value ast.Node, isDefault, isInitial bool) {
+	if value == nil {
+		return
+	}
+	e.expression(subject, e.sysml(pValue), pValue, owner, value)
+	e.flags(subject, []boolProperty{
+		{pIsDefault, isDefault},
+		{pIsInitial, isInitial},
+	})
 }
 
 func (e *encoder) flags(subject rdf.Term, flags []boolProperty) {

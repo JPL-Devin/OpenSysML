@@ -12,6 +12,571 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
+// A message built outside a send carries its payload by feature name: a feature
+// redefined under another name is one slot, reported when two entries name it
+// rather than resolved by map order, and an entry naming no feature is refused.
+func TestMaterializeAcceptedBindsRedefinedFeatureOnce(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		attribute def Base { attribute a : Integer; attribute k : Integer; }
+		attribute def Sub :> Base { attribute b redefines a; }
+	}`))
+	subs := idx.LookupQualified("P::Sub")
+	if len(subs) != 1 {
+		t.Fatalf("P::Sub matched %d symbols, want 1", len(subs))
+	}
+	message := func(payload map[string]Value) Message {
+		return Message{SignalType: "Sub", Signal: subs[0], Payload: payload}
+	}
+	got, err := ctx.materializeAccepted(message(map[string]Value{"b": integerValue(4), "k": integerValue(6)}))
+	if err != nil {
+		t.Fatalf("materialize payload: %v", err)
+	}
+	inst, ok := ctx.Instance(got.Instance)
+	if !ok {
+		t.Fatalf("no instance %d", got.Instance)
+	}
+	for name, want := range map[string]int64{"b": 4, "a": 4, "k": 6} {
+		if v := inst.FeatureValues[name].HeldValue(); v.Kind != ValConst || v.Const.Int != want {
+			t.Errorf("%s = %+v, want %d", name, v, want)
+		}
+	}
+	for _, tc := range []struct {
+		payload map[string]Value
+		want    string
+	}{
+		{map[string]Value{"a": integerValue(4), "b": integerValue(5)}, "a and b are one feature, bound twice"},
+		{map[string]Value{"arg1": integerValue(4)}, `"arg1" names no feature it carries`},
+	} {
+		created := len(ctx.created)
+		if _, err := ctx.materializeAccepted(message(tc.payload)); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("payload %v: error %v, want %q", tc.payload, err, tc.want)
+		}
+		if len(ctx.created) != created {
+			t.Errorf("payload %v left %d instance(s) behind", tc.payload, len(ctx.created)-created)
+		}
+	}
+}
+
+// Positional arguments bind features by name, so a feature named like a
+// position (`arg1`) takes the argument at its own position and no other.
+func TestSendNewBindsFeatureNamedLikeAPosition(t *testing.T) {
+	assertIntOutput(t, sendNewOutputs(t, `item def Pair { attribute head : Integer; attribute arg1 : Integer; }`,
+		"send new Pair(4, 6) to reader;", "assign got := p.head * 10 + p.arg1;", "Pair"), "got", 46)
+}
+
+// A feature named `value` is bound like any other: the accept still binds the
+// constructed occurrence, not the value that feature holds.
+func TestSendNewBindsFeatureNamedValue(t *testing.T) {
+	assertIntOutput(t, sendNewOutputs(t, `item def Data { attribute value : Integer; }`,
+		"send new Data(value = 7) to reader;", "assign got := p.value;", "Data"), "got", 7)
+}
+
+// sendNewOutputs runs a pipeline that sends as told and reads the accepted p into got.
+func sendNewOutputs(t *testing.T, def, send, read, typ string) map[string]Value {
+	t.Helper()
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		`+def+`
+		action pipeline {
+			attribute got : Integer = 0;
+			first start;
+			action sender { `+send+` }
+			action reader accept p : `+typ+` { `+read+` }
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
+		}
+	}`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action pipeline not found")
+	}
+	outputs, err := ctx.ExecuteAction(sym)
+	if err != nil {
+		t.Fatalf("%s %v", send, err)
+	}
+	return outputs
+}
+
+// A constructor that labels one feature twice fails at the send, whichever
+// spelling names it: the same label or its qualified form; the name a
+// redefinition masks is no member. Nothing is validated first; the runtime alone rejects it.
+func TestSendNewRejectsDuplicateLabelsAtSend(t *testing.T) {
+	for _, tc := range []struct{ args, want string }{
+		{"b = 1, b = 2", "b is bound twice"},
+		{"b = 1, Sub::b = 2", "b is bound twice"},
+		{"a = 1, b = 2", "a is not a feature of Sub"},
+	} {
+		t.Run(tc.args, func(t *testing.T) {
+			idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+				private import ScalarValues::*;
+				attribute def Base { attribute a : Integer; attribute k : Integer; }
+				attribute def Sub :> Base { attribute b redefines a; }
+				action pipeline {
+					first start;
+					action sender { send new Sub(`+tc.args+`) to reader; }
+					action reader accept got : Sub;
+					done;
+					succession first start then sender;
+					succession first sender then reader;
+					succession first reader then done;
+				}
+			}`))
+			sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+			if sym == nil {
+				t.Fatal("action pipeline not found")
+			}
+			_, err := ctx.ExecuteAction(sym)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("send new Sub(%s): error %v, want %q", tc.args, err, tc.want)
+			}
+			if errors.Is(err, ErrAcceptDeadlock) {
+				t.Errorf("send new Sub(%s): reported as a deadlock, want the send itself rejected", tc.args)
+			}
+		})
+	}
+}
+
+// A qualified label is resolved whole at the send: `Sub::b`/`Base::a` bind their
+// feature, while `Other::b` is rejected even though Sub has a `b`, unvalidated.
+func TestSendNewResolvesQualifiedLabelsAtSend(t *testing.T) {
+	const model = `package P {
+		private import ScalarValues::*;
+		attribute def Base { attribute a : Integer; attribute k : Integer; }
+		attribute def Sub :> Base { attribute b redefines a; }
+		attribute def Other { attribute b : Integer; attribute k : Integer; }
+		action pipeline {
+			attribute got : Integer = 0;
+			first start;
+			action sender { send new Sub(%s) to reader; }
+			action reader accept msg : Sub { assign got := msg.b * 10 + msg.k; }
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
+		}
+	}`
+	for _, tc := range []struct {
+		args string
+		want int64
+	}{
+		{"Sub::b = 4, Sub::k = 6", 46},
+		{"b = 4, Base::k = 6", 46},
+		{"P::Sub::b = 4, k = 6", 46},
+	} {
+		t.Run(tc.args, func(t *testing.T) {
+			idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, fmt.Sprintf(model, tc.args)))
+			sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+			if sym == nil {
+				t.Fatal("action pipeline not found")
+			}
+			outputs, err := ctx.ExecuteAction(sym)
+			if err != nil {
+				t.Fatalf("send new Sub(%s): %v", tc.args, err)
+			}
+			assertIntOutput(t, outputs, "got", tc.want)
+		})
+	}
+	for _, tc := range []struct{ args, want string }{
+		{"Other::b = 4, k = 6", "Other::b is not a feature of Sub"},
+		{"b = 4, Other::k = 6", "Other::k is not a feature of Sub"},
+		{"Base::a = 4, Base::k = 6", "Base::a is not a feature of Sub"},
+		{"Sub::b = 4, Base::a = 6", "Base::a is not a feature of Sub"},
+	} {
+		t.Run(tc.args, func(t *testing.T) {
+			idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, fmt.Sprintf(model, tc.args)))
+			sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+			if sym == nil {
+				t.Fatal("action pipeline not found")
+			}
+			_, err := ctx.ExecuteAction(sym)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("send new Sub(%s): error %v, want %q", tc.args, err, tc.want)
+			}
+			if errors.Is(err, ErrAcceptDeadlock) {
+				t.Errorf("send new Sub(%s): reported as a deadlock, want the send itself rejected", tc.args)
+			}
+		})
+	}
+}
+
+// A positional argument beyond the constructed type's features fails at the
+// send, also when no accept ever consumes the message. Nothing is validated first.
+func TestSendNewRejectsExcessPositionalArgumentsAtSend(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		item def Empty;
+		item def One { attribute a : Integer; }
+		action pipeline {
+			first start;
+			action sender { send new Empty(1) to nobody; }
+			done;
+			succession first start then sender;
+			succession first sender then done;
+		}
+		action two {
+			first start;
+			action sender { send new One(1, 2) to nobody; }
+			done;
+			succession first start then sender;
+			succession first sender then done;
+		}
+	}`))
+	for _, tc := range []struct{ action, want string }{
+		{"pipeline", "new Empty takes 0 argument(s), found 1"},
+		{"two", "new One takes 1 argument(s), found 2"},
+	} {
+		sym := findSymbolByName(idx.DocumentRoot("<test>"), tc.action, ast.DefAction)
+		if sym == nil {
+			t.Fatalf("action %s not found", tc.action)
+		}
+		if _, err := ctx.ExecuteAction(sym); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: error %v, want %q", tc.action, err, tc.want)
+		}
+	}
+}
+
+// An argument the feature does not admit, by type or by count, fails at the send
+// whether an accept consumes the message or none does. Nothing is validated first.
+// An object is admitted by what it is, not by what its feature is typed by.
+func TestSendNewRejectsInadmissibleArgumentsAtSend(t *testing.T) {
+	const model = `package P {
+		private import ScalarValues::*;
+		item def Base;
+		item def Telemetry :> Base;
+		item def Reading { attribute n : Integer; attribute pair : Integer[2]; ref item src : Telemetry; }
+		part station { part base : Base; part tele : Telemetry; }
+		action pipeline {
+			first start;
+			action sender { send new Reading(%s) to %s; }
+			action reader accept r : Reading;
+			done;
+			succession first start then sender;
+			succession first sender then %s;
+			succession first reader then done;
+		}
+	}`
+	t.Run("special object admitted", func(t *testing.T) {
+		idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, fmt.Sprintf(model, `n = 7, pair = (1, 2), src = station.tele`, "reader", "reader")))
+		sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+		if sym == nil {
+			t.Fatal("action pipeline not found")
+		}
+		if _, err := ctx.ExecuteAction(sym); err != nil {
+			t.Fatalf("send new Reading(src = station.tele): %v", err)
+		}
+	})
+	for _, tc := range []struct{ args, want string }{
+		{`"seven", (1, 2)`, "feature value Reading.n: type mismatch"},
+		{`n = 7, pair = 1`, "feature value Reading.pair: multiplicity violation"},
+		{`n = 7, pair = (1, 2), src = station.base`, "feature value Reading.src: type mismatch"},
+	} {
+		for _, receiver := range []string{"reader", "nobody"} {
+			t.Run(tc.args+" to "+receiver, func(t *testing.T) {
+				next := "reader"
+				if receiver == "nobody" {
+					next = "done"
+				}
+				idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, fmt.Sprintf(model, tc.args, receiver, next)))
+				sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+				if sym == nil {
+					t.Fatal("action pipeline not found")
+				}
+				created := len(ctx.created)
+				_, err := ctx.ExecuteAction(sym)
+				if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), "send new Reading") {
+					t.Fatalf("send new Reading(%s): error %v, want the send rejected with %q", tc.args, err, tc.want)
+				}
+				if errors.Is(err, ErrAcceptDeadlock) {
+					t.Errorf("send new Reading(%s): reported as a deadlock, want the send itself rejected", tc.args)
+				}
+				if len(ctx.created) != created {
+					t.Errorf("send new Reading(%s) left %d instance(s) behind", tc.args, len(ctx.created)-created)
+				}
+			})
+		}
+	}
+}
+
+// A constructed message whose delivery fails (bad address, unjoined port) leaves
+// nothing behind — not the occurrence, not an object its payload created, not the
+// behaviors that object started — in an action or a state machine alike.
+func TestSendNewLeavesNothingBehindWhenDeliveryFails(t *testing.T) {
+	const src = `package test {
+		private import ScalarValues::*;
+		item def Ping;
+		item def Tagged { ref source : Beacon; }
+		part def Beacon {
+			exhibit state machine { entry; then idle; state idle; }
+		}
+		part def Node {
+			attribute count : Integer = 0;
+			port lonely;
+			action tag {
+				first start;
+				action sender { send new Tagged(source = station.beacon) via lonely; }
+				done;
+				succession first start then sender;
+				succession first sender then done;
+			}
+			action listen {
+				first start;
+				action sender { send new Ping() to alpha.count; }
+				done;
+				succession first start then sender;
+				succession first sender then done;
+			}
+			action ship {
+				first start;
+				action sender { send new Ping() via lonely; }
+				done;
+				succession first start then sender;
+				succession first sender then done;
+			}
+			state machine {
+				entry; then sending;
+				state sending { entry send new Ping() via lonely; }
+			}
+			state tagging {
+				entry; then sending;
+				state sending { entry send new Tagged(source = station.beacon) via lonely; }
+			}
+		}
+		part alpha : Node;
+		part station { part beacon : Beacon; }
+	}`
+	for _, tc := range []struct{ name, behavior string }{
+		{"action addressed to an attribute", "test::Node::listen"},
+		{"action through an unjoined port", "test::Node::ship"},
+		{"action whose payload creates a behaving object", "test::Node::tag"},
+		{"state machine through an unjoined port", "test::Node::machine"},
+		{"state machine whose payload creates a behaving object", "test::Node::tagging"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+			alpha := instanceOfUsage(t, ctx, idx, "test::alpha")
+			sym := oneSymbol(t, idx, tc.behavior)
+			var err error
+			if sym.Kind == symbols.SymbolStateUsage {
+				_, _, err = ctx.ExecuteStatePerformedBy(sym, alpha, nil)
+			} else {
+				_, err = ctx.ExecuteActionPerformedBy(sym, alpha, nil)
+			}
+			if !errors.Is(err, ErrUnroutableSend) {
+				t.Fatalf("%s: %v, want %v", tc.behavior, err, ErrUnroutableSend)
+			}
+			for _, inst := range ctx.instances {
+				if inst.Type != nil && (inst.Type.Name == "Ping" || inst.Type.Name == "Tagged" || inst.Type.Name == "station" || inst.Type.Name == "Beacon") {
+					t.Errorf("a %s the failed send created is still alive as instance %d", inst.Type.Name, inst.ID)
+				}
+			}
+			for _, behavior := range append(append([]*ObjectBehavior(nil), ctx.objectBehaviors...), ctx.pendingBehaviors...) {
+				if _, live := ctx.instances[behavior.Object.ID]; !live {
+					t.Errorf("%s still attached to abandoned instance %d", behavior.Describe(), behavior.Object.ID)
+				}
+			}
+			if len(ctx.PendingMessages()) != 0 {
+				t.Errorf("the failed send posted %+v", ctx.PendingMessages())
+			}
+		})
+	}
+}
+
+// A constructed message that cannot be built — a later argument names no feature,
+// or does not fit the one it names — leaves nothing an earlier argument created
+// behind, not the object it materialized nor the behaviors that object started.
+func TestSendNewLeavesNothingBehindWhenBuildFails(t *testing.T) {
+	const src = `package test {
+		private import ScalarValues::*;
+		item def Tagged { ref source : Beacon; attribute count : Integer[2..3]; }
+		part def Beacon {
+			exhibit state machine { entry; then idle; state idle; }
+		}
+		part def Node {
+			port lonely;
+			action mislabel {
+				first start;
+				action sender { send new Tagged(source = station.beacon, bogus = 1) via lonely; }
+				done;
+				succession first start then sender;
+				succession first sender then done;
+			}
+			action misfit {
+				first start;
+				action sender { send new Tagged(source = station.beacon, count = 7) via lonely; }
+				done;
+				succession first start then sender;
+				succession first sender then done;
+			}
+			state mislabeling {
+				entry; then sending;
+				state sending { entry send new Tagged(source = station.beacon, bogus = 1) via lonely; }
+			}
+			state misfitting {
+				entry; then sending;
+				state sending { entry send new Tagged(source = station.beacon, count = 7) via lonely; }
+			}
+		}
+		part alpha : Node;
+		part station { part beacon : Beacon; }
+	}`
+	for _, tc := range []struct{ name, behavior, want string }{
+		{"action with an unknown label", "test::Node::mislabel", "bogus is not a feature of Tagged"},
+		{"action with a misfitting value", "test::Node::misfit", "multiplicity"},
+		{"state machine with an unknown label", "test::Node::mislabeling", "bogus is not a feature of Tagged"},
+		{"state machine with a misfitting value", "test::Node::misfitting", "multiplicity"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+			alpha := instanceOfUsage(t, ctx, idx, "test::alpha")
+			sym := oneSymbol(t, idx, tc.behavior)
+			var err error
+			if sym.Kind == symbols.SymbolStateUsage {
+				_, _, err = ctx.ExecuteStatePerformedBy(sym, alpha, nil)
+			} else {
+				_, err = ctx.ExecuteActionPerformedBy(sym, alpha, nil)
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("%s: error %v, want one mentioning %q", tc.behavior, err, tc.want)
+			}
+			for _, inst := range ctx.instances {
+				if inst.Type != nil && (inst.Type.Name == "Tagged" || inst.Type.Name == "station" || inst.Type.Name == "Beacon") {
+					t.Errorf("a %s the failed send created is still alive as instance %d", inst.Type.Name, inst.ID)
+				}
+			}
+			for _, behavior := range append(append([]*ObjectBehavior(nil), ctx.objectBehaviors...), ctx.pendingBehaviors...) {
+				if _, live := ctx.instances[behavior.Object.ID]; !live {
+					t.Errorf("%s still attached to abandoned instance %d", behavior.Describe(), behavior.Object.ID)
+				}
+			}
+			if len(ctx.PendingMessages()) != 0 {
+				t.Errorf("the failed send posted %+v", ctx.PendingMessages())
+			}
+		})
+	}
+}
+
+// A label names only a feature the constructor binds: an inherited library
+// descriptor is refused at the send; a restatement of it in the type binds.
+func TestSendNewLabelMustNameConstructibleFeature(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		item def Box { attribute w : Integer; }
+		item def Solid :> Box { attribute :>> isSolid = false; }
+		action inherited {
+			first start;
+			action sender { send new Box(w = 7, isSolid = true) to reader; }
+			action reader accept b : Box;
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
+		}
+		action restated {
+			attribute got : Integer = 0;
+			attribute solid : Boolean = false;
+			first start;
+			action sender { send new Solid(w = 7, isSolid = true) to reader; }
+			action reader accept b : Solid { assign got := b.w; assign solid := b.isSolid; }
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
+		}
+	}`))
+	root := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(root, "inherited", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action inherited not found")
+	}
+	const want = "isSolid is not a feature a constructor of Box binds"
+	if _, err := ctx.ExecuteAction(sym); err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("inherited: error %v, want %q", err, want)
+	}
+	sym = findSymbolByName(root, "restated", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action restated not found")
+	}
+	outputs, err := ctx.ExecuteAction(sym)
+	if err != nil {
+		t.Fatalf("restated: %v", err)
+	}
+	assertIntOutput(t, outputs, "got", 7)
+	if v := outputs["solid"]; v.Kind != ValConst || !v.Const.Bool {
+		t.Errorf("solid = %+v, want true", v)
+	}
+}
+
+// A constructor names a type: an unresolved name or a package is rejected at
+// the send rather than posted as a message of that name. Nothing is validated first.
+func TestSendNewRejectsNonTypeTargetsAtSend(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		package Q { item def Sig { attribute a : Integer; } }
+		action missing {
+			first start;
+			action sender { send new Missing(a = 1) to nobody; }
+			done;
+			succession first start then sender;
+			succession first sender then done;
+		}
+		action pkg {
+			first start;
+			action sender { send new Q() to nobody; }
+			done;
+			succession first start then sender;
+			succession first sender then done;
+		}
+	}`))
+	for _, tc := range []struct{ action, want string }{
+		{"missing", "send new Missing: unresolved reference: Missing"},
+		{"pkg", "send new Q: Q is a package, not a type"},
+	} {
+		sym := findSymbolByName(idx.DocumentRoot("<test>"), tc.action, ast.DefAction)
+		if sym == nil {
+			t.Fatalf("action %s not found", tc.action)
+		}
+		_, err := ctx.ExecuteAction(sym)
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: error %v, want %q", tc.action, err, tc.want)
+		}
+		if errors.Is(err, ErrAcceptDeadlock) {
+			t.Errorf("%s: reported as a deadlock, want the send itself rejected", tc.action)
+		}
+	}
+}
+
+// A usage is a type too: `new sig(a = 4)` with `item sig : Sig` constructs an
+// occurrence an `accept : Sig` binds, carrying the argument.
+func TestSendNewConstructsAUsage(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		item def Sig { attribute a : Integer; }
+		item sig : Sig;
+		action pipeline {
+			attribute got : Integer = 0;
+			first start;
+			action sender { send new sig(a = 4) to reader; }
+			action reader accept msg : Sig { assign got := msg.a * 10; }
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
+		}
+	}`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action pipeline not found")
+	}
+	outputs, err := ctx.ExecuteAction(sym)
+	if err != nil {
+		t.Fatalf("send new sig(a = 4): %v", err)
+	}
+	assertIntOutput(t, outputs, "got", 40)
+}
+
 // executeActionSource executes the named action declared in src.
 func executeActionSource(t *testing.T, name, src string) (map[string]Value, error) {
 	t.Helper()
@@ -611,13 +1176,8 @@ func TestAcceptParksTokenUntilMessageArrives(t *testing.T) {
 	}
 
 	// A message posted from outside the action resumes it.
-	ctx.PostMessage(Message{
-		SignalType: "Integer",
-		Target:     "reader",
-		Payload: map[string]Value{
-			"value": {Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 9}},
-		},
-	})
+	nine := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 9}}
+	ctx.PostMessage(Message{SignalType: "Integer", Target: "reader", Value: &nine})
 	if err := exec.RunToCompletion(); err != nil {
 		t.Fatalf("resume after the message arrived: %v", err)
 	}
@@ -657,12 +1217,10 @@ func TestParkedAcceptTakesOnlyItsOwnMessage(t *testing.T) {
 	}
 
 	// A String arrives first and must be left in flight; the Integer resumes it.
-	ctx.PostMessage(Message{SignalType: "String", Target: "reader", Payload: map[string]Value{
-		"value": NewStringValue("not for you"),
-	}})
-	ctx.PostMessage(Message{SignalType: "Integer", Target: "reader", Payload: map[string]Value{
-		"value": {Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 4}},
-	}})
+	text := NewStringValue("not for you")
+	four := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 4}}
+	ctx.PostMessage(Message{SignalType: "String", Target: "reader", Value: &text})
+	ctx.PostMessage(Message{SignalType: "Integer", Target: "reader", Value: &four})
 	if err := exec.RunToCompletion(); err != nil {
 		t.Fatalf("resume after the message arrived: %v", err)
 	}

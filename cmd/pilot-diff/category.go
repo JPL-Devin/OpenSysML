@@ -52,9 +52,10 @@ func categorizeOpenSysML(code, pass, message string) Category {
 	case strings.Contains(lower, "expected"), strings.Contains(lower, "unexpected"),
 		strings.Contains(lower, "missing"):
 		return CategorySyntax
-	// `must have` mirrors the pilot side below: both implementations write it for
-	// the metaclass and result-type constraints, and word them identically.
+	// `must have`/`must invoke` mirror the pilot side below: both implementations
+	// word the metaclass, result-type and invocation constraints identically.
 	case strings.Contains(lower, "must be"), strings.Contains(lower, "must have"),
+		strings.Contains(lower, "must invoke"),
 		strings.Contains(lower, "not a "),
 		strings.Contains(lower, "type"), strings.Contains(lower, "kind"),
 		strings.Contains(lower, "conform"):

@@ -27,16 +27,16 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 225,
-        "digest": "sha256:7e0e48b3dfa79a7184eface8a980e1fe9241798e68e9e73e926b1dcab9ff67c7"
+        "files": 231,
+        "digest": "sha256:4a85c7b78d6c2d67365fd7cfcef451fb64c03d7ff459318b5183cea1b77eed63"
       }
     ],
     "recorded": "2026-09-04"
   },
   "totals": {
-    "cases": 225,
-    "bothReject": 195,
-    "pilotOnlyRejects": 22,
+    "cases": 231,
+    "bothReject": 206,
+    "pilotOnlyRejects": 17,
     "oursOnlyRejects": 8,
     "bothAccept": 0
   },
@@ -56,17 +56,17 @@
     },
     {
       "source": "grammar",
-      "cases": 86,
-      "bothReject": 80,
+      "cases": 87,
+      "bothReject": 81,
       "pilotOnlyRejects": 6,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     },
     {
       "source": "semantic",
-      "cases": 97,
-      "bothReject": 73,
-      "pilotOnlyRejects": 16,
+      "cases": 102,
+      "bothReject": 83,
+      "pilotOnlyRejects": 11,
       "oursOnlyRejects": 8,
       "bothAccept": 0
     },
@@ -793,6 +793,15 @@
       "pilotErrors": 2
     },
     {
+      "path": "grammar/g68-definition-in-enumeration-body.sysml",
+      "source": "grammar",
+      "rule": "an enumeration body admits only enumerated values and annotating elements, not a nested definition (SysML.xtext EnumerationBody).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
       "path": "grammar/k01-specializes-without-target.kerml",
       "source": "grammar",
       "rule": "OwnedSpecialization requires a general type after 'specializes' (KerML.xtext SpecializationPart).",
@@ -1388,36 +1397,27 @@
       "source": "semantic",
       "rule": "a constructor expression cannot bind the same feature twice (KerML 8.3.4.8 validateConstructorExpressionNoDuplicateFeatureRedefinition; pilot validateConstructorExpressionNoDuplicateFeatureRedefinition).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 6: Feature already bound"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/k35-metadata-annotates-wrong-kind.kerml",
       "source": "semantic",
       "rule": "a metadata feature's annotated element must conform to its annotatedElement redefinition (KerML 8.3.4.11 validateMetadataFeatureAnnotatedElement; pilot validateMetadataFeatureAnnotatedElement).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 9: Cannot annotate Feature"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/k36-metadata-body-redefines-outside.kerml",
       "source": "semantic",
       "rule": "a metadata body feature must redefine a feature of the metaclass (KerML 8.3.4.11 validateMetadataFeatureBody; pilot validateMetadataFeatureBody).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 7: Must redefine an owning-type feature"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/k37-multiplicity-bound-not-natural.kerml",
@@ -1454,12 +1454,9 @@
       "source": "semantic",
       "rule": "a metadata feature must be typed by a metaclass, not an ordinary class (KerML 8.3.4.11 validateMetadataFeatureMetadata; pilot validateMetadataFeatureMetadata).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 5: Must have a concrete type"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/k41-chain-expression-to-nested-class.kerml",
@@ -1689,13 +1686,9 @@
       "source": "semantic",
       "rule": "A metadata usage must be typed by one metadata definition (SysML 7.26 Metadata; pilot validateMetadataUsageType).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 2,
-      "pilot": [
-        "line 5: A metadata usage must be typed by one metadata definition.",
-        "line 5: Must have a concrete type"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
     },
     {
       "path": "semantic/s24-perform-references-non-action.sysml",
@@ -1899,6 +1892,24 @@
       "pilotErrors": 1
     },
     {
+      "path": "semantic/s46-feature-value-overriding.sysml",
+      "source": "semantic",
+      "rule": "a feature bound with `=` may not be given another value by a redefining feature; only a `default =` value may be overridden (KerML 8.3.4.10.2; pilot validateFeatureValueOverriding).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 2
+    },
+    {
+      "path": "semantic/s47-enumeration-specializes-enumeration.sysml",
+      "source": "semantic",
+      "rule": "An enumeration definition is a variation and a variation must not specialize another variation (SysML v2 7.6.4 and 8.3.9 validateEnumerationDefinitionIsVariation, validateDefinitionVariationSpecialization; pilot validateDefinitionVariationSpecialization).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
       "path": "semantic/s80-constant-attribute-not-variable.sysml",
       "source": "semantic",
       "rule": "only a variable feature can be constant, and an attribute of a data type is not variable (KerML 8.3.3.3 validateFeatureConstantIsVariable; pilot validateFeatureConstantIsVariable).",
@@ -1909,6 +1920,33 @@
       "pilot": [
         "line 5: Only a variable feature can be constant"
       ]
+    },
+    {
+      "path": "semantic/send-constructor-non-type.sysml",
+      "source": "semantic",
+      "rule": "a constructor must instantiate a type, not a package (KerML 8.3.4.8 InstantiationExpression validateInstantiationExpressionInstantiatedType; pilot validateInstantiationExpressionInstantiatedType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/send-payload-non-behavior.sysml",
+      "source": "semantic",
+      "rule": "a send payload that is an invocation must invoke a behavior or a behavioral feature (KerML 8.3.4.8 InvocationExpression validateInvocationExpressionInstantiatedType; pilot validateInvocationExpressionInstantiatedType).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/send-subaction-no-payload.sysml",
+      "source": "semantic",
+      "rule": "a send that is a state subaction or a transition effect must have a payload (SysML v2 8.3.16 SendActionUsage validateSendActionUsagePayloadArgument; pilot validateSendActionUsagePayloadArgument, which its grammar enforces first: SysML.xtext:1511 SendNodeDeclaration requires the payload).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 6
     },
     {
       "path": "xpect/p01-public-root-import.kerml",
@@ -2249,9 +2287,9 @@
       }
     ],
     "totals": {
-      "cases": 225,
-      "bothReject": 195,
-      "pilotOnlyRejects": 22,
+      "cases": 231,
+      "bothReject": 206,
+      "pilotOnlyRejects": 17,
       "oursOnlyRejects": 8,
       "bothAccept": 0
     },

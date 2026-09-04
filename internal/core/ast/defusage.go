@@ -237,11 +237,12 @@ func (k UsageKind) String() string {
 	return usageKindNames[k]
 }
 
-// IsEdge reports whether a usage of the kind relates other members rather than
-// declaring one: a `then` stating no source sequences past it to the member before.
+// IsEdge reports whether a usage of the kind is a connector or transition relating
+// other members rather than declaring one: a `then` stating no source sequences past it.
 func (k UsageKind) IsEdge() bool {
 	switch k {
-	case UsageSuccession, UsageTransition, UsageConnector, UsageFlow, UsageBinding:
+	case UsageSuccession, UsageTransition, UsageConnector, UsageFlow, UsageBinding,
+		UsageConnection, UsageInterface, UsageAllocation:
 		return true
 	}
 	return false
@@ -425,7 +426,10 @@ type Usage struct {
 	// IsBodyParameter marks the `action [<name>] { … }` a loop or branch body is
 	// written as (SysML.xtext ActionBodyParameter), not a nested action node.
 	IsBodyParameter bool
-	IsResult        bool // declared with 'return': the result parameter of a calculation/expression
+	// IsActionNode marks an action written as one node with its statement
+	// (`action s send x to r;`, SysML.xtext SendNode): Members hold that statement, not a body.
+	IsActionNode bool
+	IsResult     bool // declared with 'return': the result parameter of a calculation/expression
 	// IsNegated is the `not` of `assert not constraint { … }` and
 	// `assert not satisfy … by …`: the conditions are asserted to be false
 	// (Invariant::isNegated, SysML v2 §8.3.21.10).
@@ -452,8 +456,12 @@ type Usage struct {
 	CrossFeature      *CrossFeatureMember
 	Value             Node
 	ValueOperatorSpan source.Span
-	Members           []Node
-	HasBody           bool
+	// ValueIsDefault and ValueIsInitial are the `default` and `:=` of the value
+	// part (KerML FeatureValue::isDefault, isInitial).
+	ValueIsDefault bool
+	ValueIsInitial bool
+	Members        []Node
+	HasBody        bool
 
 	// Tier B connection/flow/port grammar. These are nil/zero for kinds
 	// that do not use them.

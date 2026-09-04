@@ -1299,7 +1299,8 @@ func (idx *Index) indexScope(doc string, scope *Scope, prefix string) {
 		// Try cached shortName first (for stdlib), fallback to extracting from Decl
 		shortName := sym.ShortName
 		if shortName == "" {
-			shortName = shortNameOf(sym.Decl)
+			id, _ := DeclIdent(sym.Decl)
+			shortName = id.ShortName
 		}
 		if shortName != "" && shortName != sym.Name {
 			shortFQN := joinFQN(prefix, shortName)
@@ -1378,27 +1379,6 @@ func joinQualifiedName(parts []string) string {
 		result += part
 	}
 	return result
-}
-
-// shortNameOf extracts the short name from a declaration's Identification.
-// Returns "" if the node has no Identification or no short name.
-func shortNameOf(decl ast.Node) string {
-	switch d := decl.(type) {
-	case *ast.Package:
-		return d.Ident.ShortName
-	case *ast.Namespace:
-		return d.Ident.ShortName
-	case *ast.Definition:
-		return d.Ident.ShortName
-	case *ast.Usage:
-		return d.Ident.ShortName
-	case *ast.Alias:
-		return d.Ident.ShortName
-	case *ast.RelationshipMember:
-		return d.Ident.ShortName
-	default:
-		return ""
-	}
 }
 
 // LookupQualified returns the symbols a qualified reference from outside the

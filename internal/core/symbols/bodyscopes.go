@@ -148,9 +148,13 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		buildBodyScopes(ConstraintBodyScope(scope, d), d.Body)
 	case *ast.AssumeMember:
 		bodyScopesInExpr(scope, d.Expression)
+		bodyScopesInMultiplicity(scope, d.Multiplicity)
+		bodyScopesInExpr(scope, d.Value)
 		buildBodyScopes(ConstraintBodyScope(scope, d), d.Body)
 	case *ast.RequireMember:
 		bodyScopesInExpr(scope, d.Expression)
+		bodyScopesInMultiplicity(scope, d.Multiplicity)
+		bodyScopesInExpr(scope, d.Value)
 		buildBodyScopes(ConstraintBodyScope(scope, d), d.Body)
 	case *ast.EntryMember:
 		buildBodyScopes(scope, d.Actions)
@@ -192,6 +196,8 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		bodyScopesInExpr(scope, d.Message)
 		bodyScopesInExpr(scope, d.Target)
 		bodyScopesInExpr(scope, d.Receiver)
+		buildBodyScopes(nodeBodyScope(scope, d), d.Members)
+	case *ast.SuccessionEdge:
 		buildBodyScopes(nodeBodyScope(scope, d), d.Members)
 	case *ast.TerminateStatement:
 		bodyScopesInExpr(scope, d.Target)
@@ -373,6 +379,9 @@ func bodyScopesInExpr(scope *Scope, e ast.Node) {
 	case *ast.ConstructorExpr:
 		for _, a := range v.Args {
 			bodyScopesInExpr(scope, a)
+		}
+		for _, na := range v.NamedArgs {
+			bodyScopesInExpr(scope, na.Value)
 		}
 	case *ast.BodyExpr:
 		for i := range v.Params {

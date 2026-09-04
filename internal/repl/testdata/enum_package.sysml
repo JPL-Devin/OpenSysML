@@ -1,9 +1,11 @@
 package D {
     enum def Color { red; green; blue; }
 
-    enum def Level {
+    attribute def LevelBase {
         attribute n : ScalarValues::Integer;
+    }
 
+    enum def Level :> LevelBase {
         low { :>> n = 1; }
         high { :>> n = 9; }
     }

@@ -184,6 +184,11 @@ func kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
 			fqn, ok := implicitKerMLBases[d.Keyword]
 			return fqn, ok
 		}
+		// A usage with no kind keyword (`ref x`, `x;`, `#M x`) is a reference or plain
+		// usage typed by Anything, not an attribute's DataValue (SysML v2 §7.6.2).
+		if d.Keyword == "" && d.Kind == ast.UsageAttribute {
+			return "Base::Anything", true
+		}
 		if len(ownedEnds(sym)) == 2 {
 			switch d.Kind {
 			case ast.UsageConnection:
@@ -223,6 +228,11 @@ func kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
 		// A textual transition is a TransitionUsage (SysML v2 §7.19.2), so it
 		// gets the same base as `transition` written as a usage.
 		fqn, ok := implicitUsageBases[ast.UsageTransition]
+		return fqn, ok
+	case *ast.AssumeMember, *ast.RequireMember:
+		// An assume/require member owns a ConstraintUsage (SysML v2
+		// RequirementConstraintUsage), so it takes a constraint's base.
+		fqn, ok := implicitUsageBases[ast.UsageConstraint]
 		return fqn, ok
 	}
 	return "", false

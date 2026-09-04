@@ -1357,8 +1357,12 @@ func testNamedLibraryCallThatHasNoValue(t *testing.T) {
 		{`RationalFunctions::gcd(1.5, 2)`, semantics.ErrArithmeticDomain},
 		{`RationalFunctions::gcd("1", 2)`, ErrTypeMismatch},
 		{`RationalFunctions::gcd(1.0e19, 1.0e19)`, semantics.ErrArithmeticOverflow},
-		{`RationalFunctions::rat(1, 3)`, ErrUnevaluableLibraryFunction},
-		{`RationalFunctions::numer(0.5)`, ErrUnevaluableLibraryFunction},
+		{`RationalFunctions::rat(1, 0)`, ErrDivisionByZero},
+		{`RationalFunctions::rat(1.5, 3)`, ErrTypeMismatch},
+		{`RationalFunctions::rat(xs, 3)`, ErrTypeMismatch},
+		{`RationalFunctions::numer("0.5")`, ErrTypeMismatch},
+		{`RationalFunctions::numer(1.0e19)`, semantics.ErrArithmeticOverflow},
+		{`RationalFunctions::denom(0.0001)`, semantics.ErrArithmeticOverflow},
 		{`CollectionFunctions::'array#'(xs, (1, 1))`, ErrUnevaluableLibraryFunction},
 		{`OccurrenceFunctions::isDuring(xs)`, ErrMultiplicityViolation},
 		{`OccurrenceFunctions::isDuring(factor)`, ErrNotAnOccurrence},
@@ -3059,7 +3063,7 @@ func testAcceptViaAPortThatFailsToMaterialize(t *testing.T) {
 	// use, so only materializing `in` can tell whether it is the same port.
 	viaPort := func(signal string, value Value) Message {
 		return Message{SignalType: signal, Port: "other", Object: listener.ID, PortID: -1,
-			Delivery: DeliverPort, Payload: map[string]Value{"value": value}}
+			Delivery: DeliverPort, Value: &value}
 	}
 	ctx.PostMessage(viaPort("String", NewStringValue("not for you")))
 	if exec.HasPendingSignal() {
@@ -3124,7 +3128,7 @@ func testActionAcceptViaAPortThatFailsToMaterialize(t *testing.T) {
 	}
 	viaPort := func(signal string, value Value) Message {
 		return Message{SignalType: signal, Target: "reader", Port: "other", Object: listener.ID, PortID: -1,
-			Delivery: DeliverPort, Payload: map[string]Value{"value": value}}
+			Delivery: DeliverPort, Value: &value}
 	}
 	ctx.PostMessage(viaPort("String", NewStringValue("not for you")))
 	if exec.HasPendingSignal() {
@@ -3439,9 +3443,8 @@ func testInjectedMessageNamesAReceiverNoAcceptHas(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create action executor: %v", err)
 	}
-	ctx.PostMessage(Message{SignalType: "Integer", Target: "reader", Payload: map[string]Value{
-		"value": {Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 1}},
-	}})
+	one := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 1}}
+	ctx.PostMessage(Message{SignalType: "Integer", Target: "reader", Value: &one})
 	err = exec.RunToCompletion()
 	if err == nil {
 		t.Fatal("expected an error: `other` is not the receiver the message names")

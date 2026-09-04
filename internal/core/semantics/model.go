@@ -33,6 +33,7 @@ type Model struct {
 	referenced      map[*symbols.Symbol]*symbols.Symbol
 	resolvingRef    map[*symbols.Symbol]bool
 	memberSources   map[*symbols.Symbol][]*symbols.Symbol
+	contributed     map[*symbols.Symbol][]*symbols.Symbol // memoized contributors
 	primTypes       map[*symbols.Symbol]PrimType
 	scalars         map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
 	params          map[*symbols.Symbol]behaviorParameters
@@ -74,6 +75,12 @@ type Model struct {
 	redefClosure               map[*symbols.Symbol]map[*symbols.Symbol]bool
 	computingRedefClosure      map[*symbols.Symbol]bool
 	computingRedefinedFeatures int
+	// ctorSlots memoizes each type's constructible features (see shape.go).
+	ctorSlots map[*symbols.Symbol]constructorSlots
+	// members and shapes memoize MembersOf and ShapeFeatures once the member
+	// sources they read are complete (see members.go).
+	members map[memberKey][]*symbols.Symbol
+	shapes  map[*symbols.Symbol][]ShapeFeature
 }
 
 // declMaskKey keys the mask a declaration written in a type sees, by the type
@@ -98,6 +105,7 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		referenced:        make(map[*symbols.Symbol]*symbols.Symbol),
 		resolvingRef:      make(map[*symbols.Symbol]bool),
 		memberSources:     make(map[*symbols.Symbol][]*symbols.Symbol),
+		contributed:       make(map[*symbols.Symbol][]*symbols.Symbol),
 		primTypes:         make(map[*symbols.Symbol]PrimType),
 		params:            make(map[*symbols.Symbol]behaviorParameters),
 		invocations:       make(map[invocationKey]*InvocationSelection),
@@ -124,6 +132,9 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		declMask:              make(map[declMaskKey]map[*symbols.Symbol]bool),
 		redefClosure:          make(map[*symbols.Symbol]map[*symbols.Symbol]bool),
 		computingRedefClosure: make(map[*symbols.Symbol]bool),
+		ctorSlots:             make(map[*symbols.Symbol]constructorSlots),
+		members:               make(map[memberKey][]*symbols.Symbol),
+		shapes:                make(map[*symbols.Symbol][]ShapeFeature),
 	}
 	if resolver != nil {
 		resolver.SetModel(m)
@@ -152,6 +163,9 @@ func GeneralizationKind(k ast.RelationshipKind) bool {
 // RelationshipsOf returns the declared relationships of a symbol's def/usage
 // declaration, or nil for symbols that are not def/usage.
 func RelationshipsOf(sym *symbols.Symbol) []*ast.Relationship {
+	if oc, ok := ast.OwnedConstraintOf(sym.Decl); ok {
+		return oc.Relationships
+	}
 	switch d := sym.Decl.(type) {
 	case *ast.Definition:
 		return d.Relationships
@@ -165,6 +179,10 @@ func RelationshipsOf(sym *symbols.Symbol) []*ast.Relationship {
 		return bodyParamRelationships(d, sym.Name)
 	case *ast.SubjectMember:
 		return subjectRelationships(d)
+	case *ast.AssumeMember:
+		return d.Relationships
+	case *ast.RequireMember:
+		return d.Relationships
 	default:
 		return nil
 	}
@@ -253,7 +271,8 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		}
 		// Same-named subsettings and redefinitions target the inherited feature,
 		// not the binding that resolves first in the owner's scope.
-		if len(qn.Parts) == 1 && (rel.Kind == ast.RelRedefines || rel.Kind == ast.RelSubsets) {
+		if len(qn.Parts) == 1 && (rel.Kind == ast.RelRedefines ||
+			(rel.Kind == ast.RelSubsets && !subsetsSibling(sym, target))) {
 			if redefined := m.inheritedFeature(sym, qn); redefined != nil {
 				target = redefined
 			} else if target == sym {
@@ -438,6 +457,12 @@ func (m *Model) supersUnstable(sym *symbols.Symbol) bool {
 	return m.provisionalSupers[sym] || m.computingSupers[sym]
 }
 
+// subsetsSibling reports whether sym's subsetting resolved to another member of
+// its own type, which shadows the inherited feature of that name (KerML 7.3.4.5).
+func subsetsSibling(sym, target *symbols.Symbol) bool {
+	return target != sym && sym.OwnerScope != nil && target.OwnerScope == sym.OwnerScope
+}
+
 // inheritedFeature returns the feature that sym's owner inherits under the name
 // qn denotes, skipping the owner's own members so a redefinition does not find
 // itself. Only a single-segment name can denote an inherited feature this way;
@@ -586,6 +611,61 @@ func (m *Model) unionConforms(a, b *symbols.Symbol, unioning map[*symbols.Symbol
 		}
 	}
 	return true
+}
+
+// FeatureTypes returns a feature's effective types: those it declares, else those
+// of the features it redefines or subsets (KerML §8.3.3.3), else its kind's base.
+func (m *Model) FeatureTypes(sym *symbols.Symbol) []*symbols.Symbol {
+	if sym == nil || !isFeature(sym) {
+		return nil
+	}
+	if types := m.featureTypes(sym, make(map[*symbols.Symbol]bool)); len(types) > 0 {
+		return types
+	}
+	if base := m.implicitBase(sym); base != nil {
+		return []*symbols.Symbol{base}
+	}
+	return nil
+}
+
+// DeclaredFeatureTypes is FeatureTypes without the kind's base: the types a
+// feature is written with, directly or through the features it specializes.
+func (m *Model) DeclaredFeatureTypes(sym *symbols.Symbol) []*symbols.Symbol {
+	if sym == nil || !isFeature(sym) {
+		return nil
+	}
+	return m.featureTypes(sym, make(map[*symbols.Symbol]bool))
+}
+
+func (m *Model) featureTypes(sym *symbols.Symbol, visiting map[*symbols.Symbol]bool) []*symbols.Symbol {
+	if visiting[sym] {
+		return nil
+	}
+	visiting[sym] = true
+	base := m.implicitBase(sym)
+	var types, features []*symbols.Symbol
+	for _, super := range m.DirectSupertypes(sym) {
+		switch {
+		case super == base:
+		case isFeature(super):
+			features = append(features, super)
+		default:
+			types = append(types, super)
+		}
+	}
+	if len(types) > 0 {
+		return types
+	}
+	seen := make(map[*symbols.Symbol]bool)
+	for _, feature := range features {
+		for _, t := range m.featureTypes(feature, visiting) {
+			if !seen[t] {
+				seen[t] = true
+				types = append(types, t)
+			}
+		}
+	}
+	return types
 }
 
 // UnioningTypes returns the resolved targets of sym's `unions` relationships:

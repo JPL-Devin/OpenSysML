@@ -186,36 +186,6 @@ func (m Model) resolver() *resolve.Resolver {
 	return r
 }
 
-// declIdent returns the identification a declaration node carries.
-func declIdent(node ast.Node) (ast.Identification, bool) {
-	switch d := node.(type) {
-	case *ast.Definition:
-		return d.Ident, true
-	case *ast.Usage:
-		return d.Ident, true
-	case *ast.Package:
-		return d.Ident, true
-	case *ast.Namespace:
-		return d.Ident, true
-	case *ast.Alias:
-		return d.Ident, true
-	case *ast.MultiplicityDecl:
-		return d.Ident, true
-	case *ast.Dependency:
-		return d.Ident, true
-	case *ast.RelationshipMember:
-		return d.Ident, true
-	case *ast.Comment:
-		return d.Ident, true
-	case *ast.Documentation:
-		return d.Ident, true
-	case *ast.TextualRepresentation:
-		return d.Ident, true
-	default:
-		return ast.Identification{}, false
-	}
-}
-
 // referenceSite names where a reference is made: the namespace containing it,
 // or the name as written when that namespace has no FQN.
 func referenceSite(r *resolve.Resolver, ref resolve.Reference, text string) string {

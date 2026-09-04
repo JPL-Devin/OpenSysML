@@ -974,10 +974,11 @@ func (e *StateExecutor) bindAcceptPayload(acceptEvent *ast.AcceptEvent, event *E
 		return unbind, fmt.Errorf("accept %s: event carries %T, not a message",
 			name.Text, event.Payload)
 	}
-	value, err := e.ctx.acceptedValue(msg)
+	value, err := e.ctx.acceptedValue(&msg)
 	if err != nil {
 		return unbind, fmt.Errorf("accept %s: %w", name.Text, err)
 	}
+	event.Payload = msg
 	e.stateData[name.Text] = value
 	return unbind, nil
 }
@@ -1067,11 +1068,10 @@ func (e *StateExecutor) triggerMatches(trigger ast.Node, scope *symbols.Scope, e
 		if typed := ast.AsQualifiedName(acceptEvent.SignalType); typed != nil && len(typed.Parts) > 0 {
 			return e.ctx.messageMatches(msg, typed, scope)
 		}
-		subsets := ast.SimpleName(acceptEvent.Subsets)
-		if subsets == "" {
+		if lower.FeaturePath(acceptEvent.Subsets) == "" {
 			return false
 		}
-		return msg.carriesSignal(subsets)
+		return e.triggerEval(scope).carriesEvent(msg, acceptEvent.Subsets)
 
 	case EventCall:
 		callEvent, ok := trigger.(*ast.CallEvent)
@@ -2125,12 +2125,7 @@ func (e *StateExecutor) decide(m Message) (Decision, error) {
 	if accepted, err := e.acceptableMessage(m); err != nil || !accepted {
 		return Decision{}, err
 	}
-	probe := m
-	probe.Payload = make(map[string]Value, len(m.Payload))
-	for name, value := range m.Payload {
-		probe.Payload[name] = value
-	}
-	event := Event{Type: EventAccept, Timestamp: e.currentTime, Payload: probe}
+	event := Event{Type: EventAccept, Timestamp: e.currentTime, Payload: m}
 	candidates, err := e.selectTransitions(&event)
 	if err != nil {
 		return Decision{}, err
@@ -2200,8 +2195,16 @@ func (e *StateExecutor) triggerSignalMatches(accept *ast.AcceptEvent, scope *sym
 	if typed := ast.AsQualifiedName(accept.SignalType); typed != nil && len(typed.Parts) > 0 {
 		return e.ctx.messageMatches(msg, typed, scope)
 	}
-	signal := ast.SimpleName(accept.Subsets)
-	return signal != "" && msg.carriesSignal(signal)
+	return lower.FeaturePath(accept.Subsets) != "" && e.triggerEval(scope).carriesEvent(msg, accept.Subsets)
+}
+
+// triggerEval evaluates what a trigger declared in scope names, over the
+// machine's data.
+func (e *StateExecutor) triggerEval(scope *symbols.Scope) *EvalContext {
+	ec := NewEvalContextIn(e.ctx, scope, e.self)
+	ec.inBehaviorBody = true
+	ec.Push(e.stateData)
+	return ec
 }
 
 // activeStates returns the states currently active, in region declaration
