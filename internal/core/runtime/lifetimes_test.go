@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"errors"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 	"strings"
 	"testing"
 )
@@ -117,6 +118,59 @@ func TestBindingRefusesADestroyedEnd(t *testing.T) {
 	}
 	if m := w.FeatureValues["m"]; m.Materialized || m.HeldValue().Kind != ValInvalid {
 		t.Errorf("destroyed w.m = %s; want it left unwritten", FormatValue(m.HeldValue()))
+	}
+}
+
+// TestDestroyedObjectPerformsNothing: a destroyed object performs no behavior of
+// its type, not even one that touches none of its features, and sends nothing.
+func TestDestroyedObjectPerformsNothing(t *testing.T) {
+	instantiate, invoke, ctx := lifetimeFixture(t, `
+		package test {
+			private import ScalarValues::*;
+			private import OccurrenceFunctions::*;
+			item def Ping;
+			part def Beacon {
+				action ping { first start; action fire { send Ping to tower; } succession first start then fire; }
+				calc def Seven { return : Integer = 7; }
+				constraint def Sure { true }
+				state def Blink { entry; then on; state on; }
+			}
+			calc def DestroyBeacon { in b : Beacon; return : Beacon = destroy(b); }
+		}
+	`)
+	beacon := instantiate("Beacon")
+	if _, err := ctx.InvokeOperation(beacon, "ping", nil); err != nil {
+		t.Fatalf("ping before destroy: %v", err)
+	}
+	if sent := len(ctx.PendingMessages()); sent != 1 {
+		t.Fatalf("messages before destroy = %d, want 1", sent)
+	}
+	if _, err := invoke("DestroyBeacon", objectValue(beacon)); err != nil {
+		t.Fatalf("destroy(beacon): %v", err)
+	}
+	for _, op := range []string{"ping", "Seven", "Sure", "missing"} {
+		if _, err := ctx.InvokeOperation(beacon, op, nil); !errors.Is(err, ErrOccurrenceDestroyed) {
+			t.Errorf("invoke %s on a destroyed object = %v; want %v", op, err, ErrOccurrenceDestroyed)
+		}
+	}
+	if sent := len(ctx.PendingMessages()); sent != 1 {
+		t.Errorf("messages after destroy = %d, want the 1 sent before it", sent)
+	}
+	members := map[string]*symbols.Symbol{}
+	for _, member := range ctx.model.MembersOf(beacon.Type) {
+		members[member.Name] = member
+	}
+	if _, err := ctx.ExecuteActionPerformedBy(members["ping"], beacon, nil); !errors.Is(err, ErrOccurrenceDestroyed) {
+		t.Errorf("ExecuteActionPerformedBy a destroyed object = %v; want %v", err, ErrOccurrenceDestroyed)
+	}
+	if _, _, err := ctx.ExecuteStatePerformedBy(members["Blink"], beacon, nil); !errors.Is(err, ErrOccurrenceDestroyed) {
+		t.Errorf("ExecuteStatePerformedBy a destroyed object = %v; want %v", err, ErrOccurrenceDestroyed)
+	}
+	if _, err := ctx.CreateActionExecutorFor(members["ping"], beacon); !errors.Is(err, ErrOccurrenceDestroyed) {
+		t.Errorf("CreateActionExecutorFor a destroyed object = %v; want %v", err, ErrOccurrenceDestroyed)
+	}
+	if _, err := ctx.CreateStateExecutorFor(members["Blink"], beacon); !errors.Is(err, ErrOccurrenceDestroyed) {
+		t.Errorf("CreateStateExecutorFor a destroyed object = %v; want %v", err, ErrOccurrenceDestroyed)
 	}
 }
 

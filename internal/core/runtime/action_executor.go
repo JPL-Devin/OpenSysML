@@ -111,6 +111,9 @@ func newActionExecutorForOccurrence(
 	if action.Kind != symbols.SymbolActionUsage && action.Kind != symbols.SymbolActionDef {
 		return nil, fmt.Errorf("symbol %s is not an action", action.Name)
 	}
+	if err := ctx.checkPerformer(self); err != nil {
+		return nil, err
+	}
 
 	// A usage stating no body of its own performs the body of the action it
 	// names — the definition typing it — as a classifier behavior binding does.

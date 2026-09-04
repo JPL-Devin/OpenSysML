@@ -168,6 +168,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("performed_action_binding_names_nothing", testPerformedActionBindingNamesNothing)
 	t.Run("no_flow_performed_action_checks_its_inputs", testNoFlowPerformedActionChecksItsInputs)
 	t.Run("binding_end_of_a_destroyed_object", testBindingEndOfADestroyedObject)
+	t.Run("operation_of_a_destroyed_object", testOperationOfADestroyedObject)
 	t.Run("structured_attribute_chain_of_an_unknown_feature", testStructuredAttributeChainOfAnUnknownFeature)
 	t.Run("elements_chain_of_a_non_numeric_collection", testElementsChainOfANonNumericCollection)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
@@ -7687,6 +7688,29 @@ func testBindingEndOfADestroyedObject(t *testing.T) {
 	}
 	if m := w.FeatureValues["m"]; m.Materialized {
 		t.Errorf("destroyed w.m = %s; want it left unwritten", FormatValue(m.HeldValue()))
+	}
+}
+
+// testOperationOfADestroyedObject: an operation invoked on a destroyed object is
+// ErrOccurrenceDestroyed before it runs, even one reading no feature of it.
+func testOperationOfADestroyedObject(t *testing.T) {
+	instantiate, invoke, ctx := lifetimeFixture(t, `
+		package test {
+			private import OccurrenceFunctions::*;
+			item def Ping;
+			part def Beacon { action ping { first start; action fire { send Ping to tower; } succession first start then fire; } }
+			calc def DestroyBeacon { in b : Beacon; return : Beacon = destroy(b); }
+		}
+	`)
+	beacon := instantiate("Beacon")
+	if _, err := invoke("DestroyBeacon", objectValue(beacon)); err != nil {
+		t.Fatalf("destroy(beacon): %v", err)
+	}
+	if _, err := ctx.InvokeOperation(beacon, "ping", nil); !errors.Is(err, ErrOccurrenceDestroyed) {
+		t.Errorf("invoke ping on a destroyed object = %v; want %v", err, ErrOccurrenceDestroyed)
+	}
+	if sent := len(ctx.PendingMessages()); sent != 0 {
+		t.Errorf("a destroyed object sent %d message(s); want none", sent)
 	}
 }
 

@@ -126,6 +126,9 @@ func newStateExecutorForOccurrence(
 	if stateMachine.Kind != symbols.SymbolStateUsage && stateMachine.Kind != symbols.SymbolStateDef {
 		return nil, fmt.Errorf("symbol %s is not a state machine", stateMachine.Name)
 	}
+	if err := ctx.checkPerformer(self); err != nil {
+		return nil, err
+	}
 
 	// Lower to StateGraph, in the scope the machine's body was written in, so
 	// that everything the graph carries is evaluated where it was declared.

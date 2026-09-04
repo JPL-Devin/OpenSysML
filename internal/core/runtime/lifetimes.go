@@ -176,6 +176,18 @@ func (ctx *Context) portionsOf(inst *Instance) []*Instance {
 	return portions
 }
 
+// checkPerformer refuses a destroyed object as the performer of a behavior: an
+// occurrence performs nothing after its end. A nil self performs outside any object.
+func (ctx *Context) checkPerformer(self *Instance) error {
+	if self == nil {
+		return nil
+	}
+	if err := ctx.checkNotDestroyed(self); err != nil {
+		return fmt.Errorf("performer of the behavior: %w", err)
+	}
+	return nil
+}
+
 // checkMayEnd reports why inst cannot end now: it ended already, or a behavior
 // it performs, or one performed as it, is under way.
 func (ctx *Context) checkMayEnd(inst *Instance) error {

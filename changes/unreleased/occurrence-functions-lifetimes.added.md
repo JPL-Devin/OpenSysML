@@ -12,7 +12,8 @@
   action). `create(occ)` begins an occurrence the call is the
   first to reach; `destroy(occ)` ends it with the parts it owns, after which `isDuring` is
   `false`, any feature read or write
-  is `occurrence was destroyed` rather than a stale value, `%features` prints the destruction
+  is `occurrence was destroyed` rather than a stale value, so is any operation invoked on it or
+  behavior performed by it (it sends no message), `%features` prints the destruction
   and `%instances` marks the object `destroyed`; `addNew`/`addNewAt` create and insert into an
   ordered group, an index outside `1..size + 1` being `index out of range`. A data value, an
   empty or several-valued argument, a second `destroy`, or an object whose behavior is still
