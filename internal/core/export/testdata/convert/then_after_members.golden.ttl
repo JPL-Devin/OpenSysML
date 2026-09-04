@@ -2076,7 +2076,8 @@ elmt:ThenAfterMembers__AfterDoc___403
     sysml:owner elmt:ThenAfterMembers__AfterDoc ;
     sysml:owningRelationship elmt:ThenAfterMembers__AfterDoc___403_om ;
     sysml:owningMembership elmt:ThenAfterMembers__AfterDoc___403_om ;
-    sysx:sourceMember elmt:ThenAfterMembers__AfterDoc___401 ;
+    sysx:endForm "then" ;
+    sysml:sourceFeature elmt:ThenAfterMembers__AfterDoc__a ;
     sysml:targetFeature elmt:ThenAfterMembers__AfterDoc__b ;
     sysx:sourceText "" .
 
@@ -3115,7 +3116,8 @@ elmt:ThenAfterMembers__Lamp___405
     sysml:owner elmt:ThenAfterMembers__Lamp ;
     sysml:owningRelationship elmt:ThenAfterMembers__Lamp___405_om ;
     sysml:owningMembership elmt:ThenAfterMembers__Lamp___405_om ;
-    sysx:sourceMember elmt:ThenAfterMembers__Lamp___402 ;
+    sysx:endForm "then" ;
+    sysml:sourceFeature elmt:ThenAfterMembers__Lamp__on ;
     sysml:targetFeature elmt:ThenAfterMembers__Lamp__off ;
     sysx:sourceText "" .
 

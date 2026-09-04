@@ -98,11 +98,11 @@ type bodyBuilder struct {
 	members []ast.Node
 
 	// last names the last member a succession can reference, the source a `then`
-	// taken next sequences from. An edge or an unnamed member is not one.
+	// taken next sequences from (ast.IsSuccessionSource). An unnamed member clears it.
 	last      string
 	lastSpan  source.Span
 	lastNode  ast.Node // that member itself, the end a `then` beside an unnamed member binds
-	hasMember bool     // whether any member precedes, named or not
+	hasMember bool     // whether a member a `then` sequences from precedes, named or not
 
 	// pending is set between taking a `then` and adding the member it prefixes;
 	// valid is false once it has been diagnosed, so a bad succession is reported
@@ -255,7 +255,7 @@ func (b *bodyBuilder) takeSuccession() {
 	case illegal:
 		p.error(tok.Span, fmt.Sprintf("`then` cannot sequence %s: it sequences the members either side of it, which the notation allows only before an occurrence usage such as a part, item, action or state", what))
 	case !b.hasMember:
-		p.error(tok.Span, "`then` has no member before it to sequence from: it sequences the member after it with the member before it, so a body cannot begin with one")
+		p.error(tok.Span, "`then` has no member before it to sequence from: it sequences the member after it with the nearest feature before it, and none precedes it")
 	default:
 		return
 	}
@@ -336,7 +336,7 @@ func (b *bodyBuilder) add(m ast.Node) {
 
 	target := memberDeclaredName(m)
 	b.members = append(b.members, m)
-	if !isEdgeMember(m) {
+	if ast.IsSuccessionSource(m) {
 		// An unnamed member clears the source name too: keeping an older name would
 		// sequence from a member other than the one before the keyword.
 		b.hasMember = true
@@ -408,34 +408,6 @@ func unnamedEdgeSource(m ast.Node) **ast.QualifiedName {
 		return nil
 	}
 	return end
-}
-
-// isEdgeMember reports whether a member is an edge between other members, which
-// a `then` sequences past; the RDF writer folds `then` back by the same UsageKind.IsEdge.
-func isEdgeMember(m ast.Node) bool {
-	kind, ok := memberUsageKind(m)
-	return ok && kind.IsEdge()
-}
-
-// memberUsageKind gives the usage kind a member is an instance of: the dedicated
-// edge nodes stand for the succession, flow and transition kinds.
-func memberUsageKind(m ast.Node) (ast.UsageKind, bool) {
-	switch n := m.(type) {
-	case *ast.Membership:
-		if n.Member == nil {
-			return 0, false
-		}
-		return memberUsageKind(n.Member)
-	case *ast.SuccessionEdge, *ast.ControlFlowEdge:
-		return ast.UsageSuccession, true
-	case *ast.ObjectFlowEdge:
-		return ast.UsageFlow, true
-	case *ast.TransitionMember:
-		return ast.UsageTransition, true
-	case *ast.Usage:
-		return n.Kind, true
-	}
-	return 0, false
 }
 
 // finish returns the body's members, reporting a `then` that no member follows.
