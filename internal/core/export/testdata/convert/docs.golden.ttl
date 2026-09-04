@@ -1,4 +1,5 @@
 @prefix elmt: <urn:sysmlv2:element:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -16,7 +17,10 @@ elmt:Documented
     sysml:ownedMembership elmt:Documented___400_om, elmt:Documented__Wheel_om, elmt:Documented___402_om, elmt:Documented__asJava_om ;
     sysml:ownedRelationship elmt:Documented___400_om, elmt:Documented__Wheel_om, elmt:Documented___402_om, elmt:Documented__asJava_om ;
     sysx:sourceText "package Documented {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Documented___400\"},{\"@id\":\"Documented__Wheel\"},{\"@id\":\"Documented___402\"},{\"@id\":\"Documented__asJava\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Documented___400_om\"},{\"@id\":\"Documented__Wheel_om\"},{\"@id\":\"Documented___402_om\"},{\"@id\":\"Documented__asJava_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Documented___400_om\"},{\"@id\":\"Documented__Wheel_om\"},{\"@id\":\"Documented___402_om\"},{\"@id\":\"Documented__asJava_om\"}]" .
 
 elmt:Documented___400
     a sysml:Documentation ;

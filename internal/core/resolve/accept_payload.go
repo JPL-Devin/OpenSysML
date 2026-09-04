@@ -77,7 +77,7 @@ func acceptPayloadsIn(scope *symbols.Scope) map[string]*symbols.Symbol {
 
 // sharesBodyFeatureSpace reports whether node is an action body, whose nodes
 // execute against one feature space — a part declaring an action node is not one.
-// A state body's accept is a transition trigger, scoped by symbols.newTriggerScope.
+// A state body's accept is a transition trigger, scoped by symbols.TriggerScope.
 func sharesBodyFeatureSpace(node ast.Node) bool {
 	switch n := node.(type) {
 	case *ast.Usage:

@@ -1,0 +1,10 @@
+{
+  "libraries": true,
+  "type": "instance",
+  "instantiate": "test::Probe",
+  "slots": {
+    "realSum": {"type": "Real", "value": 3.0},
+    "integerProduct": {"type": "Integer", "value": 6},
+    "complexSum": {"type": "Complex", "value": 4.0, "im": 2.0}
+  }
+}

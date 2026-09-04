@@ -1,0 +1,11 @@
+{
+  "libraries": true,
+  "type": "calcUsage",
+  "evaluate": "test::p",
+  "outputs": {
+    "ownByPosition": {"type": "Integer", "value": 42},
+    "ownByName": {"type": "Integer", "value": 42},
+    "ownLocal": {"type": "Integer", "value": 40},
+    "librarySize": {"type": "Integer", "value": 3}
+  }
+}

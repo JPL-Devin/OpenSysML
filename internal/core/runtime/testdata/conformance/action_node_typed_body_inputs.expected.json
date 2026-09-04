@@ -1,0 +1,10 @@
+{
+	"type": "action",
+	"evaluate": "test::outer",
+	"outputs": {
+		"result": {"type": "Integer", "value": 7},
+		"add.a": {"type": "Integer", "value": 3},
+		"add.b": {"type": "Integer", "value": 4},
+		"add.sum": {"type": "Integer", "value": 7}
+	}
+}

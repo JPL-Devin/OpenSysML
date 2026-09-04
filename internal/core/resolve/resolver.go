@@ -92,6 +92,9 @@ type Resolver struct {
 	// endpoints are the vertices transition endpoints resolve to, memoized per
 	// name node: lowering consumes what this tier resolved (see ResolveEndpoint).
 	endpoints map[*ast.QualifiedName]resolution
+	// initials are the body members `first x` names, memoized per node: a name
+	// no member of the body answers to is a label the node declares.
+	initials map[*ast.InitialNode]*symbols.Symbol
 	// imports are the import declarations of a namespace-bearing node, found once
 	// and kept: see (*Resolver).importsOf.
 	imports          map[ast.Node][]*ast.Import
@@ -154,6 +157,9 @@ type Resolver struct {
 	// valuesInProgress are the usages whose value expression is being read for
 	// the type it names, so a value naming its own feature ends the walk.
 	valuesInProgress map[*ast.Usage]bool
+	// invocationNames are the names invocations call, whose last segment may
+	// denote several declarations: see ResolveInvocationName.
+	invocationNames map[*ast.QualifiedName]bool
 }
 
 // New creates a resolver over the given index.
@@ -168,6 +174,7 @@ func New(idx *symbols.Index) *Resolver {
 		parts:            map[*ast.QualifiedName][]*symbols.Symbol{},
 		aliasNames:       map[*ast.QualifiedName][]*symbols.Symbol{},
 		endpoints:        map[*ast.QualifiedName]resolution{},
+		initials:         map[*ast.InitialNode]*symbols.Symbol{},
 		imports:          map[ast.Node][]*ast.Import{},
 		importStack:      map[*ast.Import]bool{},
 		resolvingImports: map[*ast.Import]bool{},
@@ -186,6 +193,7 @@ func New(idx *symbols.Index) *Resolver {
 		aliasTargets:      map[*symbols.Symbol]resolution{},
 		resolvingAlias:    map[*symbols.Symbol]bool{},
 		reportedQualified: map[*ast.QualifiedName]bool{},
+		invocationNames:   map[*ast.QualifiedName]bool{},
 		ambiguities:       map[*ast.QualifiedName]int{},
 		readings:          map[readingKey]Reading{},
 	}
@@ -235,6 +243,49 @@ func (r *Resolver) PartSymbol(qn *ast.QualifiedName, i int) (*symbols.Symbol, bo
 	return syms[i], true
 }
 
+// EndSymbol returns what the edge end qn resolved to: the vertex a transition
+// end was judged as, or otherwise its last segment's symbol.
+func (r *Resolver) EndSymbol(qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+	if res, done := r.endpoints[qn]; done {
+		return res.sym, res.ok
+	}
+	return r.PartSymbol(qn, len(qn.Parts)-1)
+}
+
+// resolveInitial binds `first x` to the member of the body x names, if any:
+// lowering starts the flow there instead of at the node (see lower).
+func (r *Resolver) resolveInitial(scope *symbols.Scope, n *ast.InitialNode) {
+	if n.Name == "" {
+		return
+	}
+	if sym, ok := memberPastLabels(scope, n.Name); ok {
+		r.initials[n] = sym
+	}
+}
+
+// memberPastLabels is the member of scope that name reaches past the labels
+// initial nodes declare; false where only a label bears it.
+func memberPastLabels(scope *symbols.Scope, name string) (*symbols.Symbol, bool) {
+	var members []*symbols.Symbol
+	for _, sym := range scope.LookupLocalAll(name) {
+		if _, label := sym.Decl.(*ast.InitialNode); label {
+			continue
+		}
+		members = append(members, sym)
+	}
+	if len(members) == 0 {
+		return nil, false
+	}
+	return symbols.PreferDeclared(members)[0], true
+}
+
+// InitialSymbol returns the body member the initial node's name resolved to,
+// or false where the name is a label the node itself declares.
+func (r *Resolver) InitialSymbol(n *ast.InitialNode) (*symbols.Symbol, bool) {
+	sym, ok := r.initials[n]
+	return sym, ok
+}
+
 // PartAlias returns the alias membership the i-th segment of qn was written as,
 // where the name it wrote is an alias of the element PartSymbol reports.
 func (r *Resolver) PartAlias(qn *ast.QualifiedName, i int) (*symbols.Symbol, bool) {
@@ -256,13 +307,7 @@ func (r *Resolver) lookupMember(sym *symbols.Symbol, name string) (*symbols.Symb
 	if r.model == nil || sym == nil {
 		return nil, false
 	}
-	if found, ok := r.model.LookupMember(sym, name); ok {
-		return found, true
-	}
-	if found, ok := r.model.LookupContributedMember(sym, name); ok {
-		return found, true
-	}
-	if found, ok := r.triggerPayload(sym, name); ok {
+	if found, ok := r.lookupMemberOf(sym, name); ok {
 		return found, true
 	}
 	if sym.Scope == nil {
@@ -280,6 +325,18 @@ func (r *Resolver) lookupMember(sym *symbols.Symbol, name string) (*symbols.Symb
 		}
 	}
 	return nil, false
+}
+
+// lookupMemberOf resolves name as a member sym declares, inherits, or accepts as
+// a trigger payload; what its imports surface is not considered.
+func (r *Resolver) lookupMemberOf(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
+	if found, ok := r.model.LookupMember(sym, name); ok {
+		return found, true
+	}
+	if found, ok := r.model.LookupContributedMember(sym, name); ok {
+		return found, true
+	}
+	return r.triggerPayload(sym, name)
 }
 
 // lookupContributedMember resolves name as a member sym inherits or

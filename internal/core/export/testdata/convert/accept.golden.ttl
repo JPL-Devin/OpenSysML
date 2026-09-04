@@ -1,4 +1,5 @@
 @prefix elmt: <urn:sysmlv2:element:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -16,7 +17,10 @@ elmt:Accepts
     sysml:ownedMembership elmt:Accepts__Scene_om, elmt:Accepts__Camera_om, elmt:Accepts__Observe_om, elmt:Accepts__Watch_om ;
     sysml:ownedRelationship elmt:Accepts__Scene_om, elmt:Accepts__Camera_om, elmt:Accepts__Observe_om, elmt:Accepts__Watch_om ;
     sysx:sourceText "package Accepts {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Accepts__Scene\"},{\"@id\":\"Accepts__Camera\"},{\"@id\":\"Accepts__Observe\"},{\"@id\":\"Accepts__Watch\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Accepts__Scene_om\"},{\"@id\":\"Accepts__Camera_om\"},{\"@id\":\"Accepts__Observe_om\"},{\"@id\":\"Accepts__Watch_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Accepts__Scene_om\"},{\"@id\":\"Accepts__Camera_om\"},{\"@id\":\"Accepts__Observe_om\"},{\"@id\":\"Accepts__Watch_om\"}]" .
 
 elmt:Accepts__Scene
     a sysml:ItemDefinition ;
@@ -169,7 +173,12 @@ elmt:Accepts__Watch
     sysml:ownedFeature elmt:Accepts__Watch__lens, elmt:Accepts__Watch__framed ;
     sysml:ownedFeatureMembership elmt:Accepts__Watch__lens_om, elmt:Accepts__Watch__framed_om ;
     sysx:sourceText "    action def Watch {\n" ;
-    sysx:sourceTail "    }\n" .
+    sysx:sourceTail "    }\n" ;
+    json:ownedMember "[{\"@id\":\"Accepts__Watch__lens\"},{\"@id\":\"Accepts__Watch__framed\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Accepts__Watch__lens_om\"},{\"@id\":\"Accepts__Watch__framed_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Accepts__Watch__lens_om\"},{\"@id\":\"Accepts__Watch__framed_om\"}]" ;
+    json:ownedFeature "[{\"@id\":\"Accepts__Watch__lens\"},{\"@id\":\"Accepts__Watch__framed\"}]" ;
+    json:ownedFeatureMembership "[{\"@id\":\"Accepts__Watch__lens_om\"},{\"@id\":\"Accepts__Watch__framed_om\"}]" .
 
 elmt:Accepts__Watch_om
     a sysml:OwningMembership ;
