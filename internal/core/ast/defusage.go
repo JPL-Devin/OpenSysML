@@ -237,11 +237,12 @@ func (k UsageKind) String() string {
 	return usageKindNames[k]
 }
 
-// IsEdge reports whether a usage of the kind relates other members rather than
-// declaring one: a `then` stating no source sequences past it to the member before.
+// IsEdge reports whether a usage of the kind is a connector or transition relating
+// other members rather than declaring one: a `then` stating no source sequences past it.
 func (k UsageKind) IsEdge() bool {
 	switch k {
-	case UsageSuccession, UsageTransition, UsageConnector, UsageFlow, UsageBinding:
+	case UsageSuccession, UsageTransition, UsageConnector, UsageFlow, UsageBinding,
+		UsageConnection, UsageInterface, UsageAllocation:
 		return true
 	}
 	return false
@@ -458,8 +459,12 @@ type Usage struct {
 	// ValueMultiplicity is the end multiplicity written ahead of the value when
 	// the value is a connector end: the `[0..1]` of `bind a = [0..1] b`.
 	ValueMultiplicity *Multiplicity
-	Members           []Node
-	HasBody           bool
+	// ValueIsDefault and ValueIsInitial are the `default` and `:=` of the value
+	// part (KerML FeatureValue::isDefault, isInitial).
+	ValueIsDefault bool
+	ValueIsInitial bool
+	Members        []Node
+	HasBody        bool
 
 	// Tier B connection/flow/port grammar. These are nil/zero for kinds
 	// that do not use them.

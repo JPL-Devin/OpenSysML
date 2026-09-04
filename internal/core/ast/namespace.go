@@ -108,16 +108,22 @@ func NamingFeature(u *Usage) *Relationship {
 	if u == nil || u.Ident.Name != "" {
 		return nil
 	}
+	// A binding's reference subsetting is the end it binds, not a name it
+	// answers to: `bind a.b.c = d` declares no member `c`.
+	return namingRelationship(u.Relationships, u.Kind != UsageBinding)
+}
+
+// namingRelationship is NamingFeature over a declaration's relationships, with
+// reference subsettings considered only when referencesName is set.
+func namingRelationship(rels []*Relationship, referencesName bool) *Relationship {
 	var redefinitions []*Relationship
-	for _, rel := range u.Relationships {
+	for _, rel := range rels {
 		if rel == nil {
 			continue
 		}
 		switch rel.Kind {
 		case RelReferences:
-			// A binding's reference subsetting is the end it binds, not a name
-			// it answers to: `bind a.b.c = d` declares no member `c`.
-			if u.Kind == UsageBinding {
+			if !referencesName {
 				continue
 			}
 			if name, _ := TargetName(rel.Target); name != "" {

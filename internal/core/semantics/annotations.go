@@ -138,18 +138,8 @@ func sortedFeatureNames(values map[string]symbols.FilterValue) []string {
 // prefix metadata, the prefix metadata written among its members, and the
 // metadata usages in its body.
 func (m *Model) declaredAnnotations(sym *symbols.Symbol) []annotation {
-	var prefixes []*ast.PrefixMetadata
-	var members []ast.Node
-	switch d := sym.Decl.(type) {
-	case *ast.Definition:
-		prefixes, members = d.Prefixes, d.Members
-	case *ast.Usage:
-		prefixes, members = d.Prefixes, d.Members
-	case *ast.Package:
-		prefixes, members = d.Prefixes, d.Members
-	case *ast.Namespace:
-		prefixes, members = d.Prefixes, d.Members
-	default:
+	prefixes, members, ok := ast.DeclaredMetadata(sym.Decl)
+	if !ok {
 		return nil
 	}
 
@@ -674,7 +664,7 @@ func (m *Model) reflectiveFeatureValue(sym *symbols.Symbol, feature string) (sym
 		case "isConstant":
 			return boolValue(d.IsConstant), true
 		case "isVariation":
-			return boolValue(d.IsVariation), true
+			return boolValue(IsVariation(sym)), true
 		case "isIndividual":
 			return boolValue(d.IsIndividual), true
 		case "isParallel":
@@ -703,9 +693,9 @@ func (m *Model) reflectiveFeatureValue(sym *symbols.Symbol, feature string) (sym
 		case "isPortion":
 			return boolValue(d.Portion != ast.PortionNone), true
 		case "isVariation":
-			return boolValue(d.IsVariation), true
+			return boolValue(IsVariation(sym)), true
 		case "isVariant":
-			return boolValue(d.IsVariant), true
+			return boolValue(IsVariant(sym)), true
 		case "isReference":
 			return boolValue(!d.IsComposite && usageIsReferential(d)), true
 		case "isIndividual":

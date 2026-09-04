@@ -51,8 +51,8 @@ package OpenSysMLArtifacts {
     // Every modelled unit names the Go package that implements it.
     abstract part def CodeUnit {
         attribute goPackage : String;
-        attribute lazy : Boolean = false;
-        attribute memoized : Boolean = false;
+        attribute lazy : Boolean default = false;
+        attribute memoized : Boolean default = false;
     }
 
     abstract part def Stage :> CodeUnit {
@@ -144,7 +144,7 @@ package OpenSysMLPipeline {
         attribute :>> goPackage = "internal/core/passes";
         attribute goType : String;
         attribute level : String;
-        attribute elementScoped : Boolean = false;
+        attribute elementScoped : Boolean default = false;
         out item findings : Diagnostic;
     }
 
@@ -170,12 +170,13 @@ package OpenSysMLPipeline {
     #SemanticEngine part def PassRegistry :> Stage {
         attribute :>> goPackage = "internal/core/passes";
         attribute tierCount : Integer = 4;
-        attribute passCount : Integer = 48;
+        attribute passCount : Integer = 49;
         attribute sortsByLevel : Boolean = true;
         attribute skipsDocumentScopedAboveFailure : Boolean = true;
 
         part syntax : SyntaxCheck { attribute :>> goType = "SyntaxPass"; }
         part importVisibility : SyntaxCheck { attribute :>> goType = "ImportVisibilityPass"; }
+        part enumerationBody : SyntaxCheck { attribute :>> goType = "EnumerationBodyPass"; }
         // Non-standard notation is a syntax-level warning, not a constraint.
         part notation : SyntaxCheck { attribute :>> goType = "NonstandardNotationPass"; }
         part nameResolution : NameResolutionCheck { attribute :>> goType = "NameResolutionPass"; }

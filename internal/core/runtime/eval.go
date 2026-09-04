@@ -468,13 +468,13 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 		// — rather than the ones in force here — answer the names it uses.
 		if ec.scope != nil && !ec.resolving[name] {
 			if sym, ok := ec.ctx.resolver.LookupName(ec.scope, name); ok && sym != nil {
-				// A variant names a choice, not the value it declares.
-				if ec.ctx.model.VariationPointOwning(sym) != nil {
-					return variantReference(sym), nil
-				}
-				// A literal of an enumeration is a value of that enumeration.
+				// An enumerated value is the value of its enumeration it stands
+				// for; any other variant names a choice, not the value it declares.
 				if semantics.EnumerationOwning(sym) != nil {
 					return ec.enumLiteralValue(sym)
+				}
+				if ec.ctx.model.VariationPointOwning(sym) != nil {
+					return variantReference(sym), nil
 				}
 				// A feature of an enclosing type, named from a nested usage, is read
 				// from the object enclosing the bound one: `e1` inside `e3` is the
@@ -572,15 +572,14 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 
 	// Evaluate the final symbol's declaration
 	if decl, ok := currentSym.Decl.(*ast.Usage); ok {
-		// A variant names a choice its variation can be bound to, and compares
-		// equal to the variation that selected it.
-		if ec.ctx.model.VariationPointOwning(currentSym) != nil {
-			return variantReference(currentSym), nil
-		}
-		// A literal of an enumeration is a value of that enumeration, whether or
-		// not it declares one of its own.
+		// An enumerated value is a value of its enumeration, whether or not it
+		// declares one of its own; any other variant names a choice its variation
+		// can be bound to, and compares equal to the variation that selected it.
 		if semantics.EnumerationOwning(currentSym) != nil {
 			return ec.enumLiteralValue(currentSym)
+		}
+		if ec.ctx.model.VariationPointOwning(currentSym) != nil {
+			return variantReference(currentSym), nil
 		}
 		if decl.Value != nil {
 			return ec.declaredValue(currentSym, decl.Value)
@@ -600,6 +599,10 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 		if val, ok := ec.emptyDeclaredFeature(currentSym); ok {
 			return val, nil
 		}
+	}
+	// A require/assume constraint reads the value it binds, as a constraint usage does.
+	if oc, ok := ast.OwnedConstraintOf(currentSym.Decl); ok && oc.Value != nil {
+		return ec.declaredValue(currentSym, oc.Value)
 	}
 	// A subject is bound or, admitting nothing, empty; otherwise it awaits a binding.
 	if decl, ok := currentSym.Decl.(*ast.SubjectMember); ok {
@@ -669,13 +672,13 @@ func (ec *EvalContext) unresolvedQualifiedName(qn *ast.QualifiedName, reading re
 			continue
 		}
 		memberName := qn.Parts[i+1].Text
-		if ec.ctx.model.IsVariationFeature(owner) {
-			return fmt.Errorf("%w: %s is not a variant of %s (%s)",
-				ErrNotAVariant, memberName, owner.Name, ec.ctx.variantSummary(owner))
-		}
 		if owner.Kind == symbols.SymbolEnumerationDef {
 			return fmt.Errorf("%w: %s is not a literal of %s (%s)",
 				ErrNotALiteral, memberName, owner.Name, ec.ctx.enumerationSummary(owner))
+		}
+		if ec.ctx.model.IsVariationFeature(owner) {
+			return fmt.Errorf("%w: %s is not a variant of %s (%s)",
+				ErrNotAVariant, memberName, owner.Name, ec.ctx.variantSummary(owner))
 		}
 		break
 	}

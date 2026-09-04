@@ -204,7 +204,7 @@ package OpenSysMLSurfaces {
     // A rendering kind the standard view definitions name.
     part def RenderingKind {
         attribute kind : String;
-        attribute supported : Boolean = true;
+        attribute supported : Boolean default = true;
     }
 
     // Every kind in StandardViewDefinitions is recognized, so a view stating
@@ -380,7 +380,7 @@ package OpenSysMLSurfaces {
     abstract part def ConformanceOracle :> CodeUnit {
         attribute reference : String;
         attribute baseline : String;
-        attribute gating : Boolean = false;
+        attribute gating : Boolean default = false;
     }
 
     #Oracle part def RejectionOracle :> ConformanceOracle {

@@ -441,7 +441,7 @@ func TestObjectIDsStableAcrossCarryover(t *testing.T) {
 // then lists the survivor by its id rather than reporting an empty session.
 func TestInstancesListsADisplacedObjectThatAloneSurvived(t *testing.T) {
 	s := submitted(t, `package Demo {
-	part def Engine { attribute size = 1.0; }
+	part def Engine { attribute size default = 1.0; }
 	abstract part family {
 		variation part engine : Engine {
 			variant part electric : Engine;

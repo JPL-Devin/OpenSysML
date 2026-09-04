@@ -217,6 +217,9 @@ func (ctx *Context) extractMultiplicity(featureSym *symbols.Symbol) (r semantics
 
 // extractDefaultValue returns the default-value expression for a feature (nil if none).
 func (ctx *Context) extractDefaultValue(featureSym *symbols.Symbol) ast.Node {
+	if oc, ok := ast.OwnedConstraintOf(featureSym.Decl); ok {
+		return oc.Value
+	}
 	switch decl := featureSym.Decl.(type) {
 	case *ast.Usage:
 		return decl.Value // nil if no default
