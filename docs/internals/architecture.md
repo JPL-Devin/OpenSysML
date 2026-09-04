@@ -170,8 +170,23 @@ source → lexer → parser → AST → symbol index → resolve → passes
 ### 7. Workspace (`internal/core/model`)
 
 - **Single source of truth:** Owns document set + global index + diagnostic cache
+  + reverse reference index
 - **Document:** `{source, AST, scope, version}`
 - **One Workspace per session** (LSP/REPL)
+- **Reverse reference index** (`refindex.go`): every name segment written in a
+  workspace document, keyed by the element it denotes (`symbols.KeyOf`, i.e.
+  declaring document + declaration span — stable across reindexing, unlike a
+  `*Symbol`). Each segment is stored under two identities: the element it
+  *reaches* (after invocation overload selection; a tied call reaches nothing)
+  and the name it *writes* (an alias, where one was written). Find References
+  matches either; Rename edits only the written name. Built lazily on the first
+  query after a change, over all documents with one shared resolver and
+  semantic model, under the workspace's write lock; never built on the
+  `didChange` path. Any mutation (`reindexLocked`, `removeLocked`, a
+  conformance-mode switch) drops the whole index, because an edit to one
+  document can change what a name in another resolves to (a shadowing
+  declaration, an import target, an alias, an overload that ties a call).
+  Library documents are never enumerated; only workspace documents are.
 
 ### 8. Standard library (`internal/core/libs`)
 
@@ -364,6 +379,8 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - Find all usages of symbol, in every workspace document, at whichever segment
   of a qualified name denotes it
 - Include declaration option, reported in the declaring document
+- Answered from the workspace's reverse reference index (a lookup, not a scan);
+  Rename reads the same index
 
 **Completion (textDocument/completion):**
 - Trigger characters: `:`, `.`

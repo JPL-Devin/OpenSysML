@@ -550,6 +550,35 @@ column is too small to read in a 1024x768 full screenshot.
   `Subsystem`. In binding-name position (delete `root` before `= telescope`) the list is exactly
   one item `root` with detail `attribute : Element`.
 
+## References / rename latency testing on a large workspace (`internal/core/model/refindex.go`)
+
+- The training corpus `examples/sysml-v2-training` (100 files, fetch with
+  `./scripts/download-training-examples.sh`) is a ready-made large workspace. Open that *folder*; it has
+  no `bin/`, so set `opensysml.server.path` to `<repo>/bin/sysml-lsp` in User settings first.
+  A good cross-file fixture: `part def Vehicle` in "02. Part Definitions/Part Definition Example.sysml"
+  is used by `Vehicle_1 :> Vehicle` in both "28. Individuals/Individuals and Roles-1.sysml" and
+  "…Individuals and Snapshots Example.sysml" (3 locations). "01. Packages/Package Example.sysml" has
+  `alias Car for Automobile` with no uses — add `part c : Car;` (unsaved) to exercise alias identity.
+- **On-screen timing evidence without instrumentation:** set `"opensysml.trace.server": "messages"`
+  (needs `Developer: Reload Window`) and open the "SysML v2" Output channel. vscode-languageclient then
+  logs `Received response 'textDocument/references - (N)' in X ms.` for every request, which is far
+  more convincing than eyeballing. Expected on that corpus: index build ~50–60 ms on the first query
+  after any edit, ~1–2 ms warm; a main-built server (pre reverse index) takes ~1.4 s *every* time.
+- Do not type into the Output panel's filter box to isolate lines — it hides most of the trace and
+  only shows some later lines; clear it and read the tail (`ctrl+End` inside the panel) instead.
+- Rename preview is **Ctrl+Enter** in the rename box (the box's own hint says so); Shift+Enter does
+  nothing. The Refactor Preview panel lists edits grouped by file, so "3 edits in 3 files" is readable.
+- Find All References on a name that has become **unresolved** (you renamed its declaration in another
+  unsaved buffer) does not return "no results": `referenceTarget` falls back to the enclosing
+  declaration (e.g. `Vehicle_1`) and lists *its* references. That is pre-existing behaviour, not an
+  index-staleness bug — the staleness oracle is "the old declaration file is absent from the list",
+  plus re-querying after making the use current (`:> Vehicle2`) returns decl + use.
+- Switching `opensysml.server.path` in the Settings UI restarts the server in place (request ids in the
+  trace reset to 1, `pgrep` pid changes) — no window reload needed for a main-vs-branch comparison.
+- `make vscode-package` runs `npm ci` first and takes several minutes; when backgrounded, wait for
+  the ` DONE  Packaged: opensysml-sysml.vsix` line before `ls editors/vscode/*.vsix`, or you will
+  conclude the build failed while it is still installing node modules.
+
 ## Devin Secrets Needed
 
 None.
