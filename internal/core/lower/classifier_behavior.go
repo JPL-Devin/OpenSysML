@@ -156,6 +156,7 @@ func behaviorArguments(members []ast.Node) []Attribute {
 
 // isBehaviorArgument reports whether a member of an `exhibit`/`perform`
 // declaration binds one of the behavior's parameters rather than stating body.
+// The value of an `out` member is what the behavior answers, not an argument.
 func isBehaviorArgument(usage *ast.Usage) bool {
-	return usage.Direction != ast.DirNone
+	return usage.Direction == ast.DirIn || usage.Direction == ast.DirInOut
 }

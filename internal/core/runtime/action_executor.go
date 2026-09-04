@@ -715,11 +715,30 @@ func (e *ActionExecutor) hasFlow() bool {
 }
 
 // completeWithoutFlow completes an action stating no flow: it performs no step,
-// so its performance begins and ends at once.
-func (e *ActionExecutor) completeWithoutFlow() {
+// so its performance begins, takes its inputs, and ends at once.
+func (e *ActionExecutor) completeWithoutFlow() error {
 	e.ctx.beginPerformanceLife(e.occurrence, e.ctx.newActivation())
+	if err := e.bindInputs(); err != nil {
+		return err
+	}
 	e.state = StateCompleted
 	e.ctx.endPerformanceLife(e.occurrence)
+	return nil
+}
+
+// bindInputs writes the supplied inputs into the performance, then the
+// attributes it declares: a default written in terms of an input reads it.
+func (e *ActionExecutor) bindInputs() error {
+	if err := e.checkInputNames(); err != nil {
+		return err
+	}
+	if err := e.setFrameFeatures(e.root, e.inputs); err != nil {
+		return err
+	}
+	if err := e.initializeAttributes(); err != nil {
+		return fmt.Errorf("initialize attributes: %w", err)
+	}
+	return nil
 }
 
 // parameterDirection reports the direction of the parameter of this name, and
@@ -781,16 +800,8 @@ func (e *ActionExecutor) initialize() error {
 
 	initialNode := e.graph.Initial
 	e.ctx.beginPerformanceLife(e.occurrence, e.ctx.newActivation())
-
-	// Bind the supplied inputs first: a default written in terms of one reads it.
-	if err := e.checkInputNames(); err != nil {
+	if err := e.bindInputs(); err != nil {
 		return err
-	}
-	if err := e.setFrameFeatures(e.root, e.inputs); err != nil {
-		return err
-	}
-	if err := e.initializeAttributes(); err != nil {
-		return fmt.Errorf("initialize attributes: %w", err)
 	}
 
 	// Spawn initial token

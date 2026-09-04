@@ -6,8 +6,10 @@
   agree: `true` only for one and the same occurrence, so two structurally equal parts are
   `!==` while their attributes are `==`. `isDuring(occ)` is `true` while `occ` is alive at the
   evaluation — an object until it is destroyed, a performed action or exhibited state until it
-  completes (a performed action stating no flow is complete at once, so `%features` lists it
-  `completed` rather than `not started`). `create(occ)` begins an occurrence the call is the
+  completes (a performed action stating no flow takes its inputs and is complete at once, so
+  `%features` lists it `completed` rather than `not started`, and a binding it cannot take —
+  an `out` parameter or a name it does not declare — fails the performer as it does a flowed
+  action). `create(occ)` begins an occurrence the call is the
   first to reach; `destroy(occ)` ends it with the parts it owns, after which `isDuring` is
   `false`, any feature read or write
   is `occurrence was destroyed` rather than a stale value, `%features` prints the destruction

@@ -648,12 +648,12 @@ func (ctx *Context) attachClassifierBehavior(inst *Instance, decl classifierBeha
 		}
 		// An action stating no flow performs no step; the object still performs it,
 		// completed at once, rather than failing to be created.
+		start := exec.completeWithoutFlow
 		if exec.hasFlow() {
-			if err := exec.initialize(); err != nil {
-				return nil, fmt.Errorf("performed action %s of %s: %w", decl.behavior.Name, symbolText(inst.Type), err)
-			}
-		} else {
-			exec.completeWithoutFlow()
+			start = exec.initialize
+		}
+		if err := start(); err != nil {
+			return nil, fmt.Errorf("performed action %s of %s: %w", decl.behavior.Name, symbolText(inst.Type), err)
 		}
 		behavior.Action = exec
 	default:

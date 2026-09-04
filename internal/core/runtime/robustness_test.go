@@ -166,6 +166,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("collection_spends_the_element_budget", testCollectionSpendsTheElementBudget)
 	t.Run("usage_read_through_a_part_without_an_output", testUsageReadThroughAPartWithoutAnOutput)
 	t.Run("performed_action_binding_names_nothing", testPerformedActionBindingNamesNothing)
+	t.Run("no_flow_performed_action_checks_its_inputs", testNoFlowPerformedActionChecksItsInputs)
 	t.Run("structured_attribute_chain_of_an_unknown_feature", testStructuredAttributeChainOfAnUnknownFeature)
 	t.Run("elements_chain_of_a_non_numeric_collection", testElementsChainOfANonNumericCollection)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
@@ -7646,6 +7647,31 @@ func testPerformedActionBindingNamesNothing(t *testing.T) {
 	}
 	if err != nil && !strings.Contains(err.Error(), "nowhere") {
 		t.Errorf("error should name the binding that resolves to nothing, got: %v", err)
+	}
+}
+
+// testNoFlowPerformedActionChecksItsInputs: an action stating no flow takes its
+// inputs as a flowed one does, so a binding it cannot take fails the performer.
+func testNoFlowPerformedActionChecksItsInputs(t *testing.T) {
+	for name, tc := range map[string]struct {
+		binding string
+		want    error
+	}{
+		"output":  {"in r = 5;", ErrOutputActionInput},
+		"unknown": {"in bogus = 5;", ErrUnknownActionInput},
+	} {
+		src := `
+			package test {
+				private import ScalarValues::*;
+				action def Report { in n : Integer; out r : Integer; }
+				part def Camera { perform action report : Report { ` + tc.binding + ` } }
+			}
+		`
+		idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+		_, err := ctx.Instantiate(idx.LookupQualified("test::Camera")[0])
+		if !errors.Is(err, tc.want) {
+			t.Errorf("%s: Instantiate(Camera) = %v; want %v", name, err, tc.want)
+		}
 	}
 }
 

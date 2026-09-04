@@ -178,6 +178,33 @@ func TestPerformedActionWithoutAFlowCompletes(t *testing.T) {
 	}
 }
 
+const noFlowInputModel = `
+	package test {
+		private import ScalarValues::*;
+		action def Report { in n : Integer; attribute twice : Integer = n * 2; }
+		part def Camera { attribute level : Integer = 21; perform action report : Report { in n = level; } }
+		calc def Twice { in c : Camera; return : Integer = c.report.twice; }
+	}
+`
+
+// TestPerformedActionWithoutAFlowTakesItsInputs: an action stating no flow
+// completes holding the inputs bound to it and the attributes read from them.
+func TestPerformedActionWithoutAFlowTakesItsInputs(t *testing.T) {
+	instantiate, invoke, ctx := lifetimeFixture(t, noFlowInputModel)
+	camera := instantiate("Camera")
+	behavior, ok := camera.Behavior("report")
+	if !ok || behavior.Action == nil || behavior.Action.State() != StateCompleted {
+		t.Fatalf("report = %v, %v; want a completed action", behavior, ok)
+	}
+	fv, err := behavior.Action.occurrence.GetFeatureValue(ctx, "n")
+	if err != nil || !valueIdentical(fv.HeldValue(), constInt(21)) {
+		t.Errorf("report.n = %s, %v; want 21", FormatValue(fv.HeldValue()), err)
+	}
+	if got, err := invoke("Twice", objectValue(camera)); err != nil || !valueIdentical(got, constInt(42)) {
+		t.Errorf("camera.report.twice = %s, %v; want 42", FormatValue(got), err)
+	}
+}
+
 const createBehavingModel = `
 	package test {
 		private import ScalarValues::*;

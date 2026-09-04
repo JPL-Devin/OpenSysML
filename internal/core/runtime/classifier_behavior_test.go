@@ -691,6 +691,36 @@ func TestPerformedActionWithoutAFlowStillMaterializes(t *testing.T) {
 	}
 }
 
+// TestPerformedActionDeclaringAnOutputDefaultStarts: the value an `out` member
+// of the binding declares is the answer's default, not an input the performer
+// seeds, so it neither fails the start nor is lost, with or without a flow.
+func TestPerformedActionDeclaringAnOutputDefaultStarts(t *testing.T) {
+	for name, body := range map[string]string{
+		"flowed":  "out total : Integer = 7; first start; then done;",
+		"no_flow": "out total : Integer = 7; action step;",
+	} {
+		src := `
+			private import ScalarValues::*;
+			part def Counter { perform action tick { ` + body + ` } }
+		`
+		model, resolver, root := parseAndBuildLibraryModel(t, src)
+		ctx := NewContext(model, resolver, 10000)
+		inst, err := ctx.Instantiate(resolveSymbol(t, root, "Counter"))
+		if err != nil {
+			t.Errorf("%s: Instantiate: %v", name, err)
+			continue
+		}
+		behavior, ok := inst.Behavior("tick")
+		if !ok || behavior.Action == nil {
+			t.Fatalf("%s: object performs no tick action, behaviors: %v", name, inst.Behaviors())
+		}
+		fv, err := behavior.Action.occurrence.GetFeatureValue(ctx, "total")
+		if err != nil || !valueIdentical(fv.HeldValue(), constInt(7)) {
+			t.Errorf("%s: tick.total = %s, %v; want 7", name, FormatValue(fv.HeldValue()), err)
+		}
+	}
+}
+
 // A single value written to a many-valued feature is that collection's one
 // element, the shape materialization gives such a feature.
 func TestWritingOneValueToAManyValuedFeatureHoldsACollection(t *testing.T) {
