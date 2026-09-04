@@ -46,7 +46,7 @@ mandatory header — `// Invalid: <rule> (<citation>).` — naming the one rule 
 where that rule comes from; the harness refuses a corpus file without it. Cases were derived
 systematically from four sources, one subdirectory each:
 
-1. **`grammar/` — grammar mutation** (86 cases; 20 in wave 8, 45 added by wave 9F along the
+1. **`grammar/` — grammar mutation** (87 cases; 20 in wave 8, 45 added by wave 9F along the
    *unreached* axis described below, 13 by wave 10G's second pass, and 7 body-position cases
    `g61`–`g67` from the constraint census described under `semantic/`). For productions our corpus exercises in the
    pinned Xtext grammars (`build/pilot-grammars/`, see the `testing-grammar-coverage` skill), the
@@ -75,7 +75,7 @@ systematically from four sources, one subdirectory each:
    `Feature_invalid_noType.kerml.xt`) only error in a library-less resource set — with the
    standard library loaded, `feature f;` gets an implicit type and is legal — so only
    library-independent expectations became cases.
-4. **`semantic/` — the pilot validators' named constraints** (98 cases). The pinned
+4. **`semantic/` — the pilot validators' named constraints** (102 cases). The pinned
    `KerMLValidator` and `SysMLValidator` implement 217 named `validate*` constraints
    (`validate<Metaclass><Rule>`, the names of the specification's own constraint clauses), and
    before this source only the 34 `xpect/` cases tested any of them. Each case here is one minimal
@@ -104,9 +104,14 @@ systematically from four sources, one subdirectory each:
    declares but only warns about or never checks, and constraints for which no legal violating
    model exists under the loaded standard library — both listed under
    [Permissiveness gaps](#permissiveness-gaps) below, since a both-accept case is a corpus bug
-   and none was kept.
+   and none was kept. The send-action family contributes three further `.sysml` cases, each the
+   minimal model our validator was found permissive on and re-checked after the rule was
+   implemented: a payload that invokes a non-behavior (`send-payload-non-behavior`), a state
+   subaction or transition effect send with no payload (`send-subaction-no-payload`, which the
+   pilot's grammar rejects before its validator would), and a constructed payload whose `new`
+   names a package rather than a type (`send-constructor-non-type`).
 
-What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 228
+What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 231
 cases ourselves**, so the denominator measures our coverage of the rejection surface, not our
 conformance: it is a **sample, not a proof** — a clean bucket here does not mean OpenSysML rejects
 everything the reference rejects, and no official conformance suite exists to make that claim
@@ -154,7 +159,7 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-228 case(s): 202 both reject, 18 only the pilot rejects, 8 only we reject, 0 both accept
+231 case(s): 206 both reject, 17 only the pilot rejects, 8 only we reject, 0 both accept
   of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -162,21 +167,23 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 8 | 8 | 0 | 0 | 0 |
 | grammar | 87 | 81 | 6 | 0 | 0 |
-| semantic | 99 | 79 | 12 | 8 | 0 |
+| semantic | 102 | 83 | 11 | 8 | 0 |
 | xpect | 34 | 34 | 0 | 0 | 0 |
 
 The eight ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
 the pinned pilot does not implement; they are not permissiveness gaps on our side and are
 adjudicated as pilot gaps in the differential. The corpus grew from 79 cases to 119 in wave 10G, to
-120 with `g60` (an `alias` named by a keyword), and to 225 with the `semantic/` source (97 cases)
-and the 7 `grammar/` and 1 `extensions/` cases the SysML constraint census added beside it. The KerML constraints in that
+120 with `g60` (an `alias` named by a keyword), to 225 with the `semantic/` source (97 cases)
+and the 7 `grammar/` and 1 `extensions/` cases the SysML constraint census added beside it, to
+228 with the three send-action cases, to 229 with `s46`, and to 231 with `s47` and `g68`. The KerML constraints in that
 source reopened 14 gaps — all of them semantic rules the pilot enforces and we did not; the
-named-argument validation that landed alongside closed one of them (`k33`), leaving 13, and the
-cross-subsetting rules closed four more (`k16`, `k17`, `k19`, `k42`), leaving 9 — and the
+named-argument validation that landed alongside closed one of them (`k33`), the constructor
+argument checking of the send-action family closed another (`k34`), and the cross-subsetting
+rules closed four more (`k16`, `k17`, `k19`, `k42`), leaving 8 — and the
 SysML census opened nine more, six of them `grammar/` (see
-[Permissiveness gaps](#permissiveness-gaps)); `s46` (the feature-value overriding rule) took the
-corpus to 226 with both implementations rejecting, and `s47` (an enumeration definition specializing
-another) with `g68` (a definition nested in an enumeration body) took it to 228. Before that source the default-mode gap count was 2
+[Permissiveness gaps](#permissiveness-gaps)); `s46` (the feature-value overriding rule) landed
+with both implementations rejecting, as did `s47` (an enumeration definition specializing
+another) with `g68` (a definition nested in an enumeration body). Before that source the default-mode gap count was 2
 of 120: only the intended `extensions/` notation. Wave 11 closed two `xpect/` gaps: `p11`
 (11D's and 11G's model-level evaluability predicate on metadata body values) and `p15` (11F's
 attribute-usage typing rule), and wave 12C closed the last one, `p24`: a library metaclass now carries its
@@ -193,8 +200,8 @@ extensions that the default mode accepts on purpose and strict mode reports as e
 initial state marker), `x04` (`region r { … }`) and `x07` (`transition <src> to <tgt>`) left that
 list when that notation was removed: each is now a parse error in either mode, so both
 implementations reject it by default. Judged in
-the default mode the same corpus gives 197 agreements and 21 gaps, which is what `-conformance
-default` prints. `-conformance strict` gives 200 and 18. Reserved keywords recovered as declared
+the default mode the same corpus gives 203 agreements and 20 gaps, which is what `-conformance
+default` prints. `-conformance strict` gives 206 and 17. Reserved keywords recovered as declared
 names and SysML declaration keywords recovered in KerML are now errors in either mode; the parser
 still preserves their trees for editors and later analysis. Of the 14 gaps this document carried before wave 8, six were closed by the
 validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
@@ -203,7 +210,7 @@ validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wav
 Read those three as agreement *when asked strictly*, not as gaps that disappeared. An opt-in
 check is weaker evidence than a default one: it says the strict question has an answer we agree on,
 not that the pipeline a user gets by default rejects the notation — by design it does not. And
-because we authored all 228 cases ourselves, a small gap count means we ran out of questions we
+because we authored all 231 cases ourselves, a small gap count means we ran out of questions we
 thought to ask, not that we stopped being permissive: the denominator measures our coverage of the
 rejection surface, not our conformance.
 
@@ -215,8 +222,8 @@ we no longer accept it either.
 
 ## Permissiveness gaps
 
-All 18 gaps under `-conformance auto` are open, and all of them were opened by the `semantic/`
-source and the SysML constraint census: 9 named KerML constraints (`k11`–`k40`, `s80`) and 3
+All 17 gaps under `-conformance auto` are open, and all of them were opened by the `semantic/`
+source and the SysML constraint census: 8 named KerML constraints (`k11`–`k40`, `s80`) and 3
 named SysML constraints (`s04`, `s23`, `s43`) the pinned validators enforce as errors and
 OpenSysML does not report, plus 6 SysML body-item spellings (`g61`–`g66`) the pinned grammar
 rejects and our parser admits in any body. Every gap the corpus carried before is closed. The
@@ -243,7 +250,6 @@ silent in either mode.
 | `semantic/k11-initial-value-nonvariable.kerml` | accepts | `Initialized feature must be variable` | `internal/core/passes` — no pass relates the `:=` initial-value form to the feature's variability (`validateFeatureValueIsInitial`) |
 | `semantic/k25-assoc-one-end.kerml` | accepts | `Must have at least two related elements` | `internal/core/passes/w10b_related_elements.go` — fires for a SysML `connection def` with one end (`xpect/p20`) but not for a KerML `assoc` with one end (`validateAssociationRelatedTypes`) |
 | `semantic/k26-binary-connector-three-ends.kerml` | accepts | `Cannot have more than two ends` | `internal/core/passes/constraint.go` `checkConnectorEndRedefinition` — counts declared `end` features (it rejects `k24`), not the positional ends of `connector c : BinaryLink (x, y, z)` (`validateConnectorBinarySpecialization`) |
-| `semantic/k34-constructor-feature-bound-twice.kerml` | accepts | `Feature already bound` | `internal/core/passes` — no duplicate-binding check for `new T(f = …, f = …)` (`validateConstructorExpressionNoDuplicateFeatureRedefinition`) |
 | `semantic/k35-metadata-annotates-wrong-kind.kerml` | accepts | `Cannot annotate Feature` | `internal/core/passes/w8c_metadata_annotation.go` — does not read a metaclass's own `annotatedElement` redefinition (`:>> annotatedElement : KerML::Class`) to restrict what `@M about …` may annotate (`validateMetadataFeatureAnnotatedElement`) |
 | `semantic/k36-metadata-body-redefines-outside.kerml` | accepts | `Must redefine an owning-type feature` | `internal/core/passes/w8d_metadata_usage.go` — emits this message for a SysML metadata usage body but is gated on `ast.UsageMetadata`, so a KerML `@M about C { :>> g; }` body is not checked (`validateMetadataFeatureBody`) |
 | `semantic/k37-multiplicity-bound-not-natural.kerml` | accepts | `Must have a Natural value` | `internal/core/passes/w8c_multiplicity_bounds.go` — only reports a bound whose primitive type is known and non-integer; a bound naming a feature typed by a class has no primitive type and is passed (`validateMultiplicityRangeResultTypes`) |

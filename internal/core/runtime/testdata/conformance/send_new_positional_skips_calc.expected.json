@@ -1,0 +1,11 @@
+{
+  "type": "instance",
+  "instantiate": "test::site",
+  "objects": [
+    {
+      "path": "station",
+      "finalState": "logged",
+      "slots": {"packed": {"type": "Integer", "value": 71}}
+    }
+  ]
+}
