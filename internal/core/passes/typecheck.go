@@ -96,7 +96,7 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 	switch m := n.(type) {
 	case *ast.ConstraintMember:
 		tc.expr.checkBoolean(scope, m.Expression, "constraint expression")
-		tc.walk(scope, m.Body)
+		tc.walk(symbols.ConstraintBodyScope(scope, m), m.Body)
 	case *ast.AssumeMember:
 		tc.expr.checkBoolean(scope, m.Expression, "assume expression")
 		tc.walk(symbols.ConstraintBodyScope(scope, m), m.Body)

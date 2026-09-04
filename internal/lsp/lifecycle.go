@@ -33,8 +33,9 @@ func (s *Server) Initialize(ctx context.Context, params *protocol.InitializePara
 			CompletionProvider: &protocol.CompletionOptions{
 				TriggerCharacters: []string{":", "."},
 			},
-			DocumentFormattingProvider: true,
-			RenameProvider:             &protocol.RenameOptions{PrepareProvider: true},
+			DocumentFormattingProvider:      true,
+			DocumentRangeFormattingProvider: true,
+			RenameProvider:                  &protocol.RenameOptions{PrepareProvider: true},
 			SemanticTokensProvider: &semanticTokensProvider{
 				Legend: semanticTokensLegend(),
 				Full:   true,

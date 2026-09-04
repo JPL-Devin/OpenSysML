@@ -50,11 +50,13 @@ func (r *Resolver) resolveEdgeEnd(scope *symbols.Scope, qn *ast.QualifiedName, m
 }
 
 // inStateMachine reports whether an edge written in scope belongs to a state
-// machine, the body a vertex lookup applies to; an action body or anything else
-// is not one.
+// machine, the body a vertex lookup applies to; an action body (a transition's
+// included) or anything else is not one.
 func inStateMachine(scope *symbols.Scope) bool {
 	for s := scope; s != nil; s = s.Parent() {
 		switch n := s.Node().(type) {
+		case *ast.TransitionMember:
+			return false
 		case *ast.Definition:
 			if n.Kind == ast.DefState {
 				return true

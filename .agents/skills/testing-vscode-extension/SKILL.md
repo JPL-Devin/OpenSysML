@@ -344,6 +344,29 @@ Confirm the whole expected list cheaply first with a stdio JSON-RPC completion p
   `length/width/height` with `attributeUsage` details) even though the file is momentarily a syntax
   error; keep the fixture otherwise valid and `Escape` + revert the line afterwards.
 
+### Overload / ambiguous-call navigation (`internal/lsp/definition.go`, `hover.go`, `references.go`, `rename.go`)
+
+- A compact fixture: two packages each declaring `calc def pick { in x : Integer; ... }`, one of them
+  also `calc def pick { in x : String; ... }`, and a `package Use` importing both with
+  `attribute a : String = pick(2);` / `attribute b : String = pick("s");`. Expect one error
+  `call of pick is ambiguous between OvA::pick, OvB::pick` on `pick(2)` and nothing on `pick("s")`.
+  The two `Duplicate of other owned member name` **warnings** on the same-named `calc def`s are
+  pre-existing (identical on a main build) — do not report them.
+- `F12` on the tied call opens a **peek "Definitions (2)"** listing the overloads in declaration
+  order; on a selected call it jumps straight to the winning overload. Hover on the tied call shows a
+  fence `calc def OvA::pick` / `calc def OvB::pick` plus `Ambiguous call: the arguments fit each of
+  these overloads equally.`; on a selected call it is just `calc def pick` (no FQN — that is the
+  ordinary hover path, not a bug). Both hovers stack under the diagnostic popup, so read the lower
+  part of the tooltip.
+- References on the *declaration* of an overload the call does not select must NOT list the tied
+  call; rename from the tied call is refused with a tooltip
+  `cannot rename "pick": the call is ambiguous between several overloads` (no rename box).
+- The main-build negative control differs on all four surfaces (F12 = 1 location, plain hover,
+  rename succeeds editing the first overload, OvA::pick references include the call), so the
+  Settings-UI `opensysml.server.path` swap described above is a strong before/after here.
+- `ctrl+shift+m` (Problems), `ctrl+g` (Go to Line `line:col`), `F2`, `F12`, `ctrl+comma` all reach
+  VS Code via xdotool; `F1` opens the Command Palette (use it for "References: Find All References").
+
 ## Metadata annotation body testing (`internal/lsp/metadata.go`, `internal/core/model/metadata.go`)
 
 For `@Anno { x = ...; }` bodies (KerML 7.4.7 implicit redefinition), a compact fixture is
