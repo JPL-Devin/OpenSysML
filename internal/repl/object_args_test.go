@@ -1153,3 +1153,57 @@ func collectionIDs(t *testing.T, listing, feature string) []string {
 	}
 	return ids
 }
+
+// A type exhibiting the same definition through several usages, one of them
+// unnamed, is named once in the refusal; the search stops at its first match.
+func TestRefusalNamesAnExhibitingTypeOnce(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(`package Twice {
+		state def Modes { entry; then idle; state idle; }
+		part def Sys {
+			exhibit state a : Modes;
+			exhibit state : Modes;
+			exhibit state b : Modes;
+		}
+	}`).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+
+	_, err := s.startStateMachine("Twice::Modes", nil)
+	var eerr *ExhibitorsError
+	if !errors.As(err, &eerr) {
+		t.Fatalf("got %v, want an ExhibitorsError", err)
+	}
+	if got := strings.Join(eerr.Types, ","); got != "Twice::Sys" {
+		t.Errorf("got types %q, want Twice::Sys once", got)
+	}
+}
+
+// The exhibitor index a refusal is answered from follows the declarations: a
+// submission adding an exhibiting type is named by the next refusal.
+func TestRefusalFollowsNewExhibitingTypes(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(`package M {
+		state def Modes { entry; then idle; state idle; }
+		part def A { exhibit state a : Modes; }
+	}`).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+	types := func() string {
+		_, err := s.startStateMachine("M::Modes", nil)
+		var eerr *ExhibitorsError
+		if !errors.As(err, &eerr) {
+			t.Fatalf("got %v, want an ExhibitorsError", err)
+		}
+		return strings.Join(eerr.Types, ",")
+	}
+	if got := types(); got != "M::A" {
+		t.Fatalf("got types %q, want M::A", got)
+	}
+	if errs := errorDiagnostics(s.Submit(`package N { part def B { exhibit state b : M::Modes; } }`).Diagnostics); len(errs) > 0 {
+		t.Fatalf("second submission has errors: %v", errs)
+	}
+	if got := types(); got != "M::A,N::B" {
+		t.Errorf("got types %q after a submission, want M::A,N::B", got)
+	}
+}

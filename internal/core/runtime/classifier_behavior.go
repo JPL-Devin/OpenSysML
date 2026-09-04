@@ -409,21 +409,45 @@ func (ctx *Context) startBehaviorsOfAll(objects []*Instance) error {
 // left unread. A part that fails to materialize or start fails its holder.
 func (ctx *Context) materializeBehavingParts(inst *Instance) error {
 	for _, typ := range inst.types() {
-		for _, feat := range ctx.FeaturesOf(typ) {
-			fv, ok := inst.FeatureValues[feat.Name]
-			if !ok || fv.Materialized || ctx.model.IsConnectorUsage(feat.Symbol) {
+		features := ctx.FeaturesOf(typ)
+		for _, i := range ctx.behavingParts(typ) {
+			fv, ok := inst.FeatureValues[features[i].Name]
+			if !ok || fv.Materialized {
 				continue
 			}
-			composite := ctx.requiredPartType(fv.Feature)
-			if composite == nil || !ctx.runsBehaviors(composite, make(map[*symbols.Symbol]bool)) {
+			// An adopted object's feature may differ from its type's; decide on it.
+			if fv.Feature != &features[i] && !ctx.holdsBehavingPart(fv.Feature) {
 				continue
 			}
-			if _, err := inst.GetFeatureValue(ctx, feat.Name); err != nil {
+			if _, err := inst.GetFeatureValue(ctx, features[i].Name); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+// behavingParts returns the positions in FeaturesOf(typeSym) of the required
+// composite parts whose objects run behaviors, memoized per type.
+func (ctx *Context) behavingParts(typeSym *symbols.Symbol) []int {
+	if parts, ok := ctx.behavingFeatures[typeSym]; ok {
+		return parts
+	}
+	features := ctx.FeaturesOf(typeSym)
+	parts := []int{}
+	for i := range features {
+		if !ctx.model.IsConnectorUsage(features[i].Symbol) && ctx.holdsBehavingPart(&features[i]) {
+			parts = append(parts, i)
+		}
+	}
+	ctx.behavingFeatures[typeSym] = parts
+	return parts
+}
+
+// holdsBehavingPart reports whether a feature is required to hold objects that run behaviors.
+func (ctx *Context) holdsBehavingPart(feat *EffectiveFeature) bool {
+	composite := ctx.requiredPartType(feat)
+	return composite != nil && ctx.runsBehaviors(composite, make(map[*symbols.Symbol]bool))
 }
 
 // requiredPartType is the type of the objects a composite feature is required to

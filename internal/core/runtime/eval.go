@@ -134,11 +134,24 @@ func (ec *EvalContext) pushFrame(f frame) {
 	ec.frames = append(ec.frames, f)
 }
 
+// hasPerformanceFrame reports whether an action performance is on the stack.
+func (ec *EvalContext) hasPerformanceFrame() bool {
+	for i := range ec.frames {
+		if ec.frames[i].perf != nil {
+			return true
+		}
+	}
+	return false
+}
+
 // lookupSubaction finds the node named name in the flow of an action performance
 // on the stack, innermost first, and returns its latest performance. Where the
 // name resolves in the reading scope, it is that declaration's node — or no node
 // at all when the declaration is a feature, which shadows a same-named node.
 func (ec *EvalContext) lookupSubaction(name string) (perf *actionFrame, declared bool, err error) {
+	if !ec.hasPerformanceFrame() {
+		return nil, false, nil
+	}
 	var decl ast.Node
 	if ec.ctx.resolver != nil {
 		if sym, ok := ec.ctx.resolver.LookupName(ec.scope, name); ok && sym != nil {
@@ -2018,7 +2031,7 @@ func ambiguousInvocationError(qualName string, candidates []*symbols.Symbol) err
 // same "did you mean" hint the validator gives an unqualified reference.
 func (ec *EvalContext) unresolvedInvocation(qn *ast.QualifiedName, written string) error {
 	if qn != nil && len(qn.Parts) == 1 && !qn.Global && ec.ctx.resolver != nil {
-		return fmt.Errorf("%w: %s", ErrUnresolvedReference, ec.ctx.resolver.UnresolvedName(ec.scope, written))
+		return fmt.Errorf("%w: %s", ErrUnresolvedReference, ec.ctx.resolver.UnresolvedName(ec.scope, written, qn))
 	}
 	return fmt.Errorf("%w: %s", ErrUnresolvedReference, written)
 }

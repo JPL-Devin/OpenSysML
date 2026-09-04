@@ -8,7 +8,6 @@ import (
 	"connectrpc.com/connect"
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
-	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -49,15 +48,14 @@ type verifyContext struct {
 }
 
 // newVerifyContext looks the model up and builds a runtime over it, the same way
-// every other runtime RPC in this service does.
-func (s *Service) newVerifyContext(modelHash string) (*verifyContext, error) {
+// every other runtime RPC in this service does; the caller defers release.
+func (s *Service) newVerifyContext(modelHash string) (*verifyContext, func(), error) {
 	cached, ok := s.cache.Get(modelHash)
 	if !ok {
-		return nil, statusErrorf(connect.CodeNotFound, "model not found: %s", modelHash)
+		return nil, nil, statusErrorf(connect.CodeNotFound, "model not found: %s", modelHash)
 	}
-	resolver := resolve.New(cached.Index)
-	semModel := semantics.NewModel(resolver)
-	return &verifyContext{service: s, cached: cached, runtime: s.newRuntime(semModel, resolver), sem: semModel}, nil
+	rt, sem, release := s.newRuntime(cached)
+	return &verifyContext{service: s, cached: cached, runtime: rt, sem: sem}, release, nil
 }
 
 // lookup resolves an FQN to the symbol it names.
@@ -163,10 +161,11 @@ func (s *Service) VerifyConstraint(ctx context.Context, req *pb.VerifyConstraint
 	if err := s.requireCapability(CapabilityVerification); err != nil {
 		return nil, err
 	}
-	v, err := s.newVerifyContext(req.ModelHash)
+	v, release, err := s.newVerifyContext(req.ModelHash)
 	if err != nil {
 		return nil, err
 	}
+	defer release()
 	sym, err := v.lookup(req.SymbolId)
 	if err != nil {
 		return &pb.VerifyConstraintResponse{Error: err.Error()}, nil
@@ -190,10 +189,11 @@ func (s *Service) VerifyRequirement(ctx context.Context, req *pb.VerifyRequireme
 	if err := s.requireCapability(CapabilityVerification); err != nil {
 		return nil, err
 	}
-	v, err := s.newVerifyContext(req.ModelHash)
+	v, release, err := s.newVerifyContext(req.ModelHash)
 	if err != nil {
 		return nil, err
 	}
+	defer release()
 	sym, err := v.lookup(req.SymbolId)
 	if err != nil {
 		return &pb.VerifyRequirementResponse{Error: err.Error()}, nil
@@ -218,10 +218,11 @@ func (s *Service) VerifySatisfaction(ctx context.Context, req *pb.VerifySatisfac
 	if err := s.requireCapability(CapabilityVerification); err != nil {
 		return nil, err
 	}
-	v, err := s.newVerifyContext(req.ModelHash)
+	v, release, err := s.newVerifyContext(req.ModelHash)
 	if err != nil {
 		return nil, err
 	}
+	defer release()
 
 	// Every document of the model states assertions, unless one scope is named.
 	scopes := v.cached.DocumentRoots()
@@ -307,10 +308,11 @@ func (s *Service) EvaluateCalc(ctx context.Context, req *pb.EvaluateCalcRequest)
 	if err := s.requireCapability(CapabilityVerification); err != nil {
 		return nil, err
 	}
-	v, err := s.newVerifyContext(req.ModelHash)
+	v, release, err := s.newVerifyContext(req.ModelHash)
 	if err != nil {
 		return nil, err
 	}
+	defer release()
 	sym, err := v.lookup(req.SymbolId)
 	if err != nil {
 		return &pb.EvaluateCalcResponse{Error: err.Error()}, nil

@@ -179,10 +179,17 @@ func (ctx *Context) instantiateOwnedBy(sym *symbols.Symbol, id int64, owner *Ins
 	return inst, nil
 }
 
-// newFeatureValue is the unmaterialized feature value inst holds for feat; an admitted constant
-// default is folded eagerly, any other default is left for GetFeatureValue to evaluate and report.
+// newFeatureValue is the unmaterialized feature value inst holds for feat.
 func (ctx *Context) newFeatureValue(inst *Instance, feat *EffectiveFeature) *FeatureValue {
-	fv := &FeatureValue{Feature: feat}
+	fv := &FeatureValue{}
+	ctx.initFeatureValue(inst, fv, feat)
+	return fv
+}
+
+// initFeatureValue makes fv the unmaterialized feature value inst holds for feat; an admitted constant
+// default is folded eagerly, any other default is left for GetFeatureValue to evaluate and report.
+func (ctx *Context) initFeatureValue(inst *Instance, fv *FeatureValue, feat *EffectiveFeature) {
+	*fv = FeatureValue{Feature: feat}
 	if ctx.valueBinds(feat) && feat.Scalar() && !ctx.model.IsVariationFeature(feat.Symbol) &&
 		ctx.restatedInValuedBody(feat) == "" {
 		if semVal, ok := ctx.model.Eval(feat.DefaultValue); ok {
@@ -193,7 +200,6 @@ func (ctx *Context) newFeatureValue(inst *Instance, feat *EffectiveFeature) *Fea
 			}
 		}
 	}
-	return fv
 }
 
 // materializeOwnedBy materializes an object held by owner as the feature value
@@ -225,18 +231,22 @@ func (ctx *Context) materialize(sym *symbols.Symbol, id int64) (*Instance, error
 	}
 	ctx.ids.atLeast(id + 1)
 
+	// Get effective features
+	features := ctx.FeaturesOf(sym)
+
 	// Create instance
 	inst := &Instance{
 		ID:            id,
 		Type:          sym,
-		FeatureValues: make(map[string]*FeatureValue),
+		FeatureValues: make(map[string]*FeatureValue, len(features)),
 	}
 
-	// Get effective features
-	features := ctx.FeaturesOf(sym)
-
+	// Create feature value for each feature, allocated as one block.
+	values := make([]FeatureValue, len(features))
 	for i := range features {
-		inst.FeatureValues[features[i].Name] = ctx.newFeatureValue(inst, &features[i])
+		fv := &values[i]
+		ctx.initFeatureValue(inst, fv, &features[i])
+		inst.FeatureValues[features[i].Name] = fv
 	}
 
 	// A redefining feature declares the feature it redefines again, so the two

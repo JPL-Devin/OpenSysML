@@ -444,3 +444,17 @@ func (d *Decoder) params() []ast.BodyParam {
 	}
 	return out
 }
+
+// Reachable is the set of nodes reachable from roots, roots included: what
+// Encode would write for them.
+func Reachable(roots ...ast.Node) map[ast.Node]bool {
+	e := &Encoder{w: pack.NewWriter(), ids: make(map[ast.Node]uint64), collecting: true}
+	for _, root := range roots {
+		e.node(root)
+	}
+	set := make(map[ast.Node]bool, len(e.ids))
+	for n := range e.ids {
+		set[n] = true
+	}
+	return set
+}

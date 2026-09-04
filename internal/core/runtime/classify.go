@@ -139,7 +139,7 @@ func (ctx *Context) refineFeatureValue(inst *Instance, fv *FeatureValue, feat *E
 	}
 	ctx.noteProbeWrite(fv)
 	if !fv.Materialized || (!fv.Written && feat.DefaultValue != have.DefaultValue) {
-		*fv = *ctx.newFeatureValue(inst, feat)
+		ctx.initFeatureValue(inst, fv, feat)
 		return nil
 	}
 	how := admitDeclared

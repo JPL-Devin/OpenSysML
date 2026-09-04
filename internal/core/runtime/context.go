@@ -94,6 +94,9 @@ type Context struct {
 	occurrences map[*symbols.Symbol]int64
 	// behaving memoizes runsBehaviors per type; the model is fixed for the context's life.
 	behaving map[*symbols.Symbol]bool
+	// behavingFeatures memoizes behavingParts and redefGroups redefinitionGroups, per type.
+	behavingFeatures map[*symbols.Symbol][]int
+	redefGroups      map[*symbols.Symbol][][]string
 
 	// variantObjects holds the object a variant stands for per owner that
 	// selected it, so repeated reads of one selection read the same object.
@@ -285,6 +288,8 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 
 		occurrences:      make(map[*symbols.Symbol]int64),
 		behaving:         make(map[*symbols.Symbol]bool),
+		behavingFeatures: make(map[*symbols.Symbol][]int),
+		redefGroups:      make(map[*symbols.Symbol][][]string),
 		variantObjects:   make(map[variantObject]int64),
 		selectedVariants: make(map[variantSelection]string),
 

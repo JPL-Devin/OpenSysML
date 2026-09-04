@@ -33,10 +33,17 @@ type ShapeFeature struct {
 // its own then its inherited members, less what is no feature, what frames every
 // object, and the variants a variation offers.
 func (m *Model) ShapeFeatures(typ *symbols.Symbol) []ShapeFeature {
-	if m == nil {
+	if m == nil || typ == nil {
 		return nil
 	}
-	return m.shapeFeatures(typ, func(member *symbols.Symbol) bool { return !m.FrameFeature(member) })
+	if cached, ok := m.shapes[typ]; ok {
+		return cached
+	}
+	out := m.shapeFeatures(typ, func(member *symbols.Symbol) bool { return !m.FrameFeature(member) })
+	if m.MemberSourcesStable(typ) && m.computingRedefinedFeatures == 0 {
+		m.shapes[typ] = out
+	}
+	return out
 }
 
 // shapeFeatures collects typ's shape features in shape order, keeping the
