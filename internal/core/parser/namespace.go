@@ -309,6 +309,9 @@ func (p *Parser) parseMember() ast.Node {
 	if p.atRelationshipMember() {
 		return p.parseRelationshipMember(start, vis, trivia)
 	}
+	if en := p.parseMisplacedStateSubaction(start, trivia); en != nil {
+		return en
+	}
 
 	// A namespace member may be a succession stated without its keyword
 	// (SysML v2 8.2.2.13.3): `first a::b then c;`, whose ends are qualified

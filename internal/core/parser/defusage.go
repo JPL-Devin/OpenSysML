@@ -1647,6 +1647,21 @@ var ownedMembers = map[string]ownedMember{
 	"render":      {"the rendering of a view", "view", []bodyContext{bodyView}},
 }
 
+// parseMisplacedStateSubaction reads an entry/do/exit member outside a state body
+// into one ErrorNode; nil when the cursor is not on one. A state body reads them itself.
+func (p *Parser) parseMisplacedStateSubaction(start int, trivia []ast.Trivia) ast.Node {
+	tok := p.peek()
+	if tok.Kind != lexer.Keyword || !isStateSubactionKeyword(tok.KeywordID) || p.bodyAdmitsMember(tok.KeywordID) {
+		return nil
+	}
+	en := p.misplacedMember(tok)
+	p.advance()
+	p.parseStateSubaction(start, stateSubactionKind(tok.KeywordID))
+	en.NodeSpan = p.spanFrom(start)
+	en.SetLeadingTrivia(trivia)
+	return en
+}
+
 // misplacedMember reports a member written outside the body kind that owns it and
 // returns the ErrorNode standing in for it; the caller parses the member and spans the node.
 func (p *Parser) misplacedMember(kw lexer.Token) *ast.ErrorNode {
@@ -2607,13 +2622,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return p.parseBodyMember()
 	}
 
-	// A state body reads entry/do/exit itself; one reaching here is outside its state.
-	if tok := p.peek(); tok.Kind == lexer.Keyword && isStateSubactionKeyword(tok.KeywordID) && !p.bodyAdmitsMember(tok.KeywordID) {
-		en := p.misplacedMember(tok)
-		p.advance()
-		p.parseStateSubaction(start, stateSubactionKind(tok.KeywordID))
-		en.NodeSpan = p.spanFrom(start)
-		en.SetLeadingTrivia(trivia)
+	if en := p.parseMisplacedStateSubaction(start, trivia); en != nil {
 		return en
 	}
 

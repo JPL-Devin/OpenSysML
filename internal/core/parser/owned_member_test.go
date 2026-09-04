@@ -45,6 +45,13 @@ func TestMemberOutsideOwningBodyIsRejected(t *testing.T) {
 		{"objective in requirement def", "requirement def R { objective o; }", "objective", `kind="objective"`},
 		{"anonymous objective in action", "action def A { objective { require constraint { x > 0 } } }", "objective", `kind="objective"`},
 		{"entry action in part def", "part def P { entry action init; }", "entry", "EntryMember"},
+		{"entry action at package root", "package P { entry action init; }", "entry", `name="init"`},
+		{"do action at package root", "package P { do action work; }", "do", `name="work"`},
+		{"exit action at package root", "package P { exit action fin; }", "exit", `name="fin"`},
+		{"bare entry at file root", "entry;", "entry", "EntryMember"},
+		{"entry in nested namespace", "package P { namespace N { entry init; } }", "entry", "EntryMember"},
+		{"private do in library package", "library package L { private do action work; }", "do", `name="work"`},
+		{"exit reference in nested package", "package P { package Q { exit fin; } }", "exit", "ExitMember"},
 		{"entry reference in action def", "action def A { entry init; }", "entry", "EntryMember"},
 		{"bare entry in part def", "part def P { entry; }", "entry", "EntryMember"},
 		{"do action in part def", "part def P { do action run; }", "do", "DoMember"},
@@ -136,6 +143,9 @@ func TestMemberOutsideOwningBodyIsRejected(t *testing.T) {
 			}
 			if strings.Contains(dump, tt.forbiddenNode) {
 				t.Fatalf("misplaced member kept as %s:\n%s", tt.forbiddenNode, dump)
+			}
+			if len(p.Diagnostics) != 1 {
+				t.Fatalf("want the owning-body diagnostic alone, got %v", p.Diagnostics)
 			}
 		})
 	}
