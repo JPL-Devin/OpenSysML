@@ -412,6 +412,40 @@ func TestSendBodyPayloadResolvesInEveryHost(t *testing.T) {
 	}
 }
 
+// A payload the body binds is typed by the send rule itself, so it is still
+// reported when an unrelated unresolved name elsewhere in the document gates
+// the document-wide type pass — once, wherever the send is written.
+func TestSendBodyPayloadCheckedWhenTypePassIsGated(t *testing.T) {
+	const unrelated = ` part def Broken : Nowhere; `
+	cases := map[string]string{
+		"action node": `package P {` + sendPrelude + unrelated + `
+			action def A { part r : Receiver; action s send to r { in :>> payload = Sig(); } } }`,
+		"bare in a definition": `package P {` + sendPrelude + unrelated + `
+			action def A { part r : Receiver; send to r { in :>> payload = Sig(); } } }`,
+		"state entry": `package P {` + sendPrelude + unrelated + `
+			state def M { part r : Receiver; entry send to r { in :>> payload = Sig(); } } }`,
+		"transition effect": `package P {` + sendPrelude + unrelated + `
+			state def M { part r : Receiver; state a; state b;
+				transition first a do send to r { in :>> payload = Sig(); } then b; } }`,
+		"positional payload": `package P {` + sendPrelude + unrelated + `
+			state def M { part r : Receiver; entry send { in msg = Sig(); } } }`,
+	}
+	for name, src := range cases {
+		t.Run(name, func(t *testing.T) {
+			var unresolved []Diagnostic
+			for _, d := range analyzeAll(t, "send.sysml", src) {
+				if d.Code == "unresolved" {
+					unresolved = append(unresolved, d)
+				}
+			}
+			if len(unresolved) != 1 || !strings.Contains(unresolved[0].Message, "Nowhere") {
+				t.Fatalf("expected one unresolved reference to Nowhere, got %+v", unresolved)
+			}
+			assertOneSendDiag(t, src, sendDiags(t, src), "invocation-not-behavior", SeverityError, "Sig", "Must invoke a behavior")
+		})
+	}
+}
+
 // A send whose arguments fail to resolve is left to the name-resolution tier:
 // the rule does not pile a second diagnostic on an unresolved receiver, nor on
 // an unresolved payload the body binds.

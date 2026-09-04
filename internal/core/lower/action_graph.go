@@ -996,15 +996,15 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 // SendPayload returns the message a send with no argument carries: the value
 // its body binds the payload parameter to (`send { in :>> payload = s; }`).
 func SendPayload(m *ast.SendStatement) ast.Node {
-	if payload := sendPayloadParameter(m); payload != nil {
+	if payload := SendPayloadParameter(m); payload != nil {
 		return payload.Value
 	}
 	return nil
 }
 
-// sendPayloadParameter returns the body feature redefining SendAction::payload:
+// SendPayloadParameter returns the body feature redefining SendAction::payload:
 // by name in a `:>>` clause, else by position as the first parameter of an argument-less send.
-func sendPayloadParameter(m *ast.SendStatement) *ast.Usage {
+func SendPayloadParameter(m *ast.SendStatement) *ast.Usage {
 	var byPosition *ast.Usage
 	positional := m.Message == nil && m.Target == nil
 	for _, member := range m.Members {

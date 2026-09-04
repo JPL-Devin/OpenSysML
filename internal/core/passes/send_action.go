@@ -37,14 +37,18 @@ func (SendActionPass) Run(ctx *Context, name string, root *ast.RootNamespace) []
 	if rootScope == nil {
 		return nil
 	}
+	expr := &exprChecker{resolver: ctx.Resolver(), model: ctx.Model()}
+	// A payload value may own body-expression members, typed as the type pass does.
+	bodies := &typeChecker{resolver: ctx.Resolver(), expr: expr, lang: ctx.Kind}
+	expr.walkMembers = bodies.walk
 	c := &sendActionChecker{
 		ctx:        ctx,
-		expr:       &exprChecker{resolver: ctx.Resolver(), model: ctx.Model()},
+		expr:       expr,
 		bindings:   &w9cBindingChecker{model: ctx.Model(), resolver: ctx.Resolver(), idx: ctx.Index},
 		occurrence: w8cLibraryType(ctx, "Occurrences::Occurrence"),
 	}
 	c.walk(rootScope, root.Members)
-	return append(c.diags, c.expr.diags...)
+	return append(append(c.diags, bodies.diags...), expr.diags...)
 }
 
 type sendActionChecker struct {
@@ -157,11 +161,16 @@ func (c *sendActionChecker) checkPayload(send *ast.SendStatement) {
 	})
 }
 
-// check types the arguments of one send and checks its sender and receiver; the
-// body's declarations, a payload binding among them, are the type checker's.
+// check types the arguments of one send — its payload, in the argument or bound
+// in the body — and checks its sender and receiver; the body's other
+// declarations are the type checker's.
 func (c *sendActionChecker) check(scope *symbols.Scope, send *ast.SendStatement) {
 	if send.Message != nil && !c.ctx.DownstreamOfFailure(send.Message) {
 		c.expr.infer(scope, send.Message)
+	}
+	body := childScopeOr(scope, send)
+	if payload := lower.SendPayloadParameter(send); payload != nil && !c.ctx.DownstreamOfFailure(payload) {
+		c.expr.checkUsageValue(body, payload)
 	}
 	receiver := send.Target
 	if send.IsVia {
@@ -169,7 +178,7 @@ func (c *sendActionChecker) check(scope *symbols.Scope, send *ast.SendStatement)
 		c.checkSender(scope, send.Target)
 	}
 	c.checkReceiver(scope, receiver)
-	c.walk(childScopeOr(scope, send), send.Members)
+	c.walk(body, send.Members)
 }
 
 // sendArgument is a send argument as classified: the feature it names, or else

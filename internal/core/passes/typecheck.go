@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -45,6 +46,9 @@ type typeChecker struct {
 	// buffer — reads as SysML, the notation its prompt takes.
 	lang  source.Kind
 	diags []Diagnostic
+	// sendPayloads are the payload bindings of send bodies, which the send-action
+	// pass types so they are checked even when this pass is gated.
+	sendPayloads map[*ast.Usage]bool
 }
 
 func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
@@ -71,7 +75,9 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 				span:         d.Span(),
 			})
 			tc.checkOneType(scope, d)
-			tc.expr.checkUsageValue(scope, d)
+			if !tc.sendPayloads[d] {
+				tc.expr.checkUsageValue(scope, d)
+			}
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
 			}
@@ -154,6 +160,12 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 	case *ast.StateRegion:
 		tc.walk(childScopeOr(scope, m), m.States)
 	case *ast.SendStatement:
+		if payload := lower.SendPayloadParameter(m); payload != nil {
+			if tc.sendPayloads == nil {
+				tc.sendPayloads = map[*ast.Usage]bool{}
+			}
+			tc.sendPayloads[payload] = true
+		}
 		tc.walk(childScopeOr(scope, m), m.Members)
 	case *ast.SuccessionEdge:
 		tc.walk(childScopeOr(scope, m), m.Members)
