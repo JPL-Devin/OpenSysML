@@ -401,12 +401,13 @@ jobs:
     docker:
       - image: cimg/go:1.25
     # The Go sensor holds a whole directory's parse in memory; internal/core/runtime
-    # (168 files) overflows a 4 GB heap. 16 GB here fits the 12 GB below plus the Go parser.
-    resource_class: xlarge
+    # (168 files) overflows a 4 GB heap. 8 GB is the largest class in the project's
+    # plan (xlarge is rejected), so the heap below leaves ~1.5 GB for the Go parser.
+    resource_class: large
     environment:
       # The pinned orb runs sonar-scanner-cli 8.0.1, whose launcher passes only
       # $SONAR_SCANNER_OPTS to the JVM; SONAR_SCANNER_JAVA_OPTS is ignored there.
-      SONAR_SCANNER_OPTS: -Xmx12g
+      SONAR_SCANNER_OPTS: -Xmx6500m
     steps:
       # Forked PRs get no context, so the token is absent there: end green
       # rather than fail every outside contribution. With a token, a failing
