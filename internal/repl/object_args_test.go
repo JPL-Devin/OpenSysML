@@ -1178,3 +1178,32 @@ func TestRefusalNamesAnExhibitingTypeOnce(t *testing.T) {
 		t.Errorf("got types %q, want Twice::Sys once", got)
 	}
 }
+
+// The exhibitor index a refusal is answered from follows the declarations: a
+// submission adding an exhibiting type is named by the next refusal.
+func TestRefusalFollowsNewExhibitingTypes(t *testing.T) {
+	s := NewSession()
+	if errs := errorDiagnostics(s.Submit(`package M {
+		state def Modes { entry; then idle; state idle; }
+		part def A { exhibit state a : Modes; }
+	}`).Diagnostics); len(errs) > 0 {
+		t.Fatalf("model has errors: %v", errs)
+	}
+	types := func() string {
+		_, err := s.startStateMachine("M::Modes", nil)
+		var eerr *ExhibitorsError
+		if !errors.As(err, &eerr) {
+			t.Fatalf("got %v, want an ExhibitorsError", err)
+		}
+		return strings.Join(eerr.Types, ",")
+	}
+	if got := types(); got != "M::A" {
+		t.Fatalf("got types %q, want M::A", got)
+	}
+	if errs := errorDiagnostics(s.Submit(`package N { part def B { exhibit state b : M::Modes; } }`).Diagnostics); len(errs) > 0 {
+		t.Fatalf("second submission has errors: %v", errs)
+	}
+	if got := types(); got != "M::A,N::B" {
+		t.Errorf("got types %q after a submission, want M::A,N::B", got)
+	}
+}

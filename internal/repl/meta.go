@@ -13,6 +13,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
@@ -2628,6 +2629,37 @@ func (s *Session) exhibitorsOf(ctx *runtime.Context, sym *symbols.Symbol) []exhi
 // of sym's machine (the usage itself, or one typed by or naming it), in declaration order.
 func (s *Session) exhibitingTypes(ctx *runtime.Context, sym *symbols.Symbol) []*symbols.Symbol {
 	var types []*symbols.Symbol
+	for _, e := range s.exhibitEntries(ctx) {
+		// One mention per type: the entries of a type are contiguous.
+		if len(types) > 0 && types[len(types)-1] == e.owner {
+			continue
+		}
+		if ctx.ExhibitsState(e.member, sym) {
+			types = append(types, e.owner)
+		}
+	}
+	return types
+}
+
+// exhibitEntry is a named member declaring an exhibited state, with the type owning it.
+type exhibitEntry struct {
+	owner, member *symbols.Symbol
+}
+
+// exhibitIndex is the documents' exhibitEntry list in declaration order, valid
+// for the runtime context it was built alongside.
+type exhibitIndex struct {
+	ctx     *runtime.Context
+	entries []exhibitEntry
+}
+
+// exhibitEntries returns the session's exhibited-state declarations, indexed once
+// per runtime context: a submission rebuilds the context, and the scopes with it.
+func (s *Session) exhibitEntries(ctx *runtime.Context) []exhibitEntry {
+	if s.exhibits != nil && s.exhibits.ctx == ctx {
+		return s.exhibits.entries
+	}
+	idx := &exhibitIndex{ctx: ctx}
 	var collect func(scope *symbols.Scope)
 	collect = func(scope *symbols.Scope) {
 		if scope == nil {
@@ -2635,11 +2667,12 @@ func (s *Session) exhibitingTypes(ctx *runtime.Context, sym *symbols.Symbol) []*
 		}
 		if owner := scope.Owner(); owner != nil {
 			scope.ForEachMember(func(member *symbols.Symbol) bool {
-				if member.Name == "" || !ctx.ExhibitsState(member, sym) {
-					return true
+				if member.Name != "" && member.Decl != nil {
+					if b, ok := lower.ClassifierBehaviorOf(member.Decl); ok && b.Kind == lower.ExhibitedState {
+						idx.entries = append(idx.entries, exhibitEntry{owner: owner, member: member})
+					}
 				}
-				types = append(types, owner)
-				return false
+				return true
 			})
 		}
 		for _, child := range scope.Children() {
@@ -2649,7 +2682,8 @@ func (s *Session) exhibitingTypes(ctx *runtime.Context, sym *symbols.Symbol) []*
 	for _, scope := range s.docScopes() {
 		collect(scope)
 	}
-	return types
+	s.exhibits = idx
+	return idx.entries
 }
 
 // exhibitorsError reports sym's machine as one `%state <machine>` alone cannot
