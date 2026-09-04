@@ -106,6 +106,34 @@ func TestClassifierBehaviorDeclaredAttributeIsABody(t *testing.T) {
 	}
 }
 
+// The `in` and `inout` members of a binding are its arguments; an `out` member
+// with a value declares what the behavior answers, so it is not one.
+func TestClassifierBehaviorOutMemberIsNotAnArgument(t *testing.T) {
+	behaviors := classifierBehaviorsIn(t, `
+		package test {
+			action def Report { in n : Integer; inout m : Integer; out total : Integer; }
+			part def Monitor {
+				attribute level : Integer = 1;
+				perform action report : Report { in n = level; inout m = level; out total = 7; }
+			}
+		}
+	`)
+
+	if len(behaviors) != 1 {
+		t.Fatalf("expected the type to bind 1 behavior, got %d", len(behaviors))
+	}
+	var names []string
+	for _, arg := range behaviors[0].Arguments {
+		names = append(names, arg.Name)
+	}
+	if len(names) != 2 || names[0] != "n" || names[1] != "m" {
+		t.Errorf("arguments = %v, want [n m]", names)
+	}
+	if behaviors[0].StatesBody {
+		t.Error("parameter members were read as a replacement behavior body")
+	}
+}
+
 // classifierBehaviorsIn parses src and reports the behaviors the first part
 // definition in it binds to its objects.
 func classifierBehaviorsIn(t *testing.T, src string) []ClassifierBehavior {

@@ -24,13 +24,4 @@ func registerUnevaluableDeclarations() {
 	noBitwise := "bitwise complement is declared by no function library the runtime applies"
 	registerUnevaluable("DataFunctions::~", []declaredParam{param("x")}, noBitwise)
 	registerUnevaluable("ScalarFunctions::~", []declaredParam{param("x")}, noBitwise)
-
-	noOccurrenceTime := "occurrence-time and lifecycle semantics are not represented by the evaluator"
-	registerUnevaluable("OccurrenceFunctions::===", []declaredParam{optionalParam("x"), optionalParam("y")}, noOccurrenceTime)
-	registerUnevaluable("OccurrenceFunctions::isDuring", []declaredParam{param("occ")}, noOccurrenceTime)
-	registerUnevaluable("OccurrenceFunctions::create", []declaredParam{param("occ")}, noOccurrenceTime)
-	registerUnevaluable("OccurrenceFunctions::destroy", []declaredParam{optionalParam("occ")}, noOccurrenceTime)
-	registerUnevaluable("OccurrenceFunctions::addNew", []declaredParam{optionalParam("group"), param("occ")}, noOccurrenceTime)
-	registerUnevaluable("OccurrenceFunctions::addNewAt",
-		[]declaredParam{optionalParam("group"), param("occ"), param("index")}, noOccurrenceTime)
 }

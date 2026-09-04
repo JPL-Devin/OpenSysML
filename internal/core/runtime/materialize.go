@@ -52,6 +52,10 @@ type materializeWalk struct {
 }
 
 func (w *materializeWalk) walk(inst *Instance, depth int) {
+	// A destroyed object holds no feature values to materialize any more.
+	if w.ctx.checkNotDestroyed(inst) != nil {
+		return
+	}
 	features := w.ctx.FeaturesOf(inst.Type)
 	for i := range features {
 		if w.budget <= 0 {
