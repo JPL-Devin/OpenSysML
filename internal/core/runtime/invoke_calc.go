@@ -729,9 +729,7 @@ func (ec *EvalContext) bindCalcParameter(
 	}
 	value, err := ec.Eval(param.Default)
 	if err != nil {
-		return Value{}, "", fmt.Errorf(
-			"calc %s: default for parameter %q: %w", shape.Name, param.Name, err,
-		)
+		return Value{}, "", calcDefaultError(shape.Name, param.Name, err)
 	}
 	return value, "default", nil
 }
@@ -913,10 +911,7 @@ func (ctx *Context) invokeLibraryPerformance(perf *libraryPerformance, args calc
 			ctx.trace.RecordCalcExit(sig.Name, result)
 		}
 	}
-	if err != nil {
-		return Value{}, calcFrame(sig.Name, err)
-	}
-	return result, nil
+	return result, err
 }
 
 func (ctx *Context) applyLibraryPerformance(perf *libraryPerformance, args calcArgs, callerScope *symbols.Scope, self *Instance) (Value, error) {

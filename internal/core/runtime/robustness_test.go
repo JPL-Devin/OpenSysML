@@ -107,7 +107,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_symbol_is_not_a_calc", testCalcSymbolIsNotACalc)
 	t.Run("calc_direct_recursion", testCalcDirectRecursion)
 	t.Run("calc_mutual_recursion", testCalcMutualRecursion)
+	t.Run("calc_default_recursion", testCalcDefaultRecursion)
 	t.Run("calc_library_default_recursion", testCalcLibraryDefaultRecursion)
+	t.Run("calc_library_default_failure_names_one_frame", testCalcLibraryDefaultFailureNamesOneFrame)
 	t.Run("calc_recursion_spends_step_budget", testCalcRecursionSpendsStepBudget)
 	t.Run("calc_recursion_at_depth_ceiling", testCalcRecursionAtDepthCeiling)
 	t.Run("calc_non_terminating_loop", testCalcNonTerminatingLoop)
@@ -4727,6 +4729,50 @@ func testCalcMutualRecursion(t *testing.T) {
 		}
 	`
 	assertCalcRecursionBounded(t, src, "ping", ErrCalcRecursionLimit)
+}
+
+// testCalcDefaultRecursion: a default re-invoking its own calc nests through the
+// binding rather than the body, and is bounded and collapsed the same way.
+func testCalcDefaultRecursion(t *testing.T) {
+	src := `
+		package test {
+			calc def f {
+				in x : Integer;
+				in y : Integer = f(x);
+				return : Integer = x;
+			}
+		}
+	`
+	assertCalcRecursionBounded(t, src, "f", ErrCalcRecursionLimit)
+}
+
+// testCalcLibraryDefaultFailureNamesOneFrame: a default failing once on a library
+// specialization is reported under one calc name, as a calc with a body reports it.
+func testCalcLibraryDefaultFailureNamesOneFrame(t *testing.T) {
+	src := `
+		package test {
+			import ScalarValues::*;
+			import RealFunctions::*;
+			calc def again :> max {
+				in x :>> x;
+				in y :>> y = missing;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "again", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("calc again not found")
+	}
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 10}}
+	_, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
+	if err == nil {
+		t.Fatal("expected the unresolved default to fail the invocation")
+	}
+	if got, prefix := err.Error(), `calc test::again: default for parameter "y": `; !strings.HasPrefix(got, prefix) || strings.Count(got, "calc test::again") != 1 {
+		t.Errorf("err = %q; want one frame %q", got, prefix)
+	}
 }
 
 // testCalcLibraryDefaultRecursion: a library specialization whose default invokes

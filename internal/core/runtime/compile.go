@@ -774,7 +774,7 @@ func (c *compiledCalc) invoke(ctx *Context, base int, bound paramSet) (scalar, e
 			var err error
 			if v, err = p.dflt(ctx, frame); err != nil {
 				ctx.leaveCalc()
-				return scalar{}, fmt.Errorf("calc %s: default for parameter %q: %w", c.name, p.name, err)
+				return scalar{}, calcDefaultError(c.name, p.name, err)
 			}
 			source = "default"
 			frame[i] = v
