@@ -3977,9 +3977,7 @@ func (p *Parser) atConnectorBinaryEnds() bool {
 	if p.endThenKeywordAt(from, "to") {
 		return true
 	}
-	switch p.peekN(from).Kind {
-	case lexer.Identifier, lexer.UnrestrictedName:
-	default:
+	if !p.atNameAt(from) {
 		return false
 	}
 	if p.peekN(from+1).Kind == lexer.ColonColonGt || p.peekIsKeyword(from+1, "references") {
@@ -3997,9 +3995,7 @@ func (p *Parser) atEndThenKeyword(kw string) bool {
 
 // endThenKeywordAt is atEndThenKeyword from the token at offset from.
 func (p *Parser) endThenKeywordAt(from int, kw string) bool {
-	switch p.peekN(from).Kind {
-	case lexer.Identifier, lexer.UnrestrictedName:
-	default:
+	if !p.atNameAt(from) {
 		return false
 	}
 	i := from + 1
