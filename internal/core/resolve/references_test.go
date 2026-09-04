@@ -676,6 +676,73 @@ package Chains {
 	}
 }
 
+// A subsetting of a name a sibling redefines reaches that sibling, which shadows
+// the inherited feature in the owning type, on its own and in the document walk
+// alike (KerML 7.3.4.5): `y :> x` beside `:>> x` or `x :>> x` names the redefining x.
+func TestASubsettingReachesTheSiblingRedefinitionOnItsOwn(t *testing.T) {
+	for name, src := range map[string]string{
+		"sibling.kerml": `package P {
+	class A { feature x; }
+	class B :> A {
+		feature :>> x;
+		feature y :> x;
+	}
+}`,
+		"sibling.sysml": `package P {
+	part def A { attribute x; }
+	part def B :> A {
+		attribute :>> x;
+		attribute y :> x;
+	}
+}`,
+		"named.kerml": `package P {
+	class A { feature x; }
+	class B :> A {
+		feature x :>> x;
+		feature y :> x;
+	}
+}`,
+		"named.sysml": `package P {
+	part def A { attribute x; }
+	part def B :> A {
+		attribute x :>> x;
+		attribute y :> x;
+	}
+}`,
+	} {
+		walk, root, rootScope := resolvedDocNamed(t, name, src)
+		if len(walk.Diagnostics) != 0 {
+			t.Fatalf("%s: %v", name, walk.Diagnostics)
+		}
+		query, _, _ := resolvedDocNamed(t, name, src) // a fresh resolver, as the editor's is
+		var subsetted []resolve.Reference
+		for _, ref := range resolve.References(root, rootScope) {
+			if nameText(ref.QN) == "x" && ref.Subsetting != nil {
+				subsetted = append(subsetted, ref)
+			}
+		}
+		if len(subsetted) != 1 {
+			t.Fatalf("%s: %d subsetting references to x, want the one `y :> x` writes", name, len(subsetted))
+		}
+		ref := subsetted[0]
+		walked, ok := walk.PartSymbol(ref.QN, 0)
+		if !ok || symbols.FQNOf(walked) != "P::B::x" {
+			t.Fatalf("%s: the document walk resolved `y :> x` to %v, want the sibling P::B::x", name, walked)
+		}
+		for how, read := range map[string]func(resolve.Reference) (*symbols.Symbol, bool){
+			"ResolveReference": query.ResolveReference,
+			"ProbeReference":   query.ProbeReference,
+		} {
+			if sym, ok := read(ref); !ok || sym != walked {
+				t.Errorf("%s: %s resolves `y :> x` to %v, want the sibling %v the document walk reached", name, how, sym, walked)
+			}
+		}
+		if sym, ok := walk.ResolveReference(ref); !ok || sym != walked {
+			t.Errorf("%s: resolving `y :> x` again on the walked resolver gives %v, want %v", name, sym, walked)
+		}
+	}
+}
+
 // An import's target is collected as the import's reference, read with its rule:
 // a spelling only the import itself surfaces reaches nothing, while an `import
 // all` reaches a private member.

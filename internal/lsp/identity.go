@@ -26,7 +26,7 @@ const placeholderProjectID = "<projectId>"
 // identityActions offers, for the declaration whose header the range touches,
 // minting an ElementId it lacks and binding an unbound root to a project.
 func (s *Server) identityActions(name string, doc *model.Document, want source.Span) ([]protocol.CodeAction, error) {
-	sym := declarationAt(doc, want)
+	sym := s.declarationAt(doc, want)
 	if sym == nil {
 		return nil, nil
 	}
@@ -68,13 +68,13 @@ func (s *Server) identityActions(name string, doc *model.Document, want source.S
 // declarationAt returns the declaration whose header — the text before its
 // body, or the whole declaration when it has none — the range lies in, trivia
 // and comments at either end of a selection (a whole-line selection) skipped.
-func declarationAt(doc *model.Document, want source.Span) *symbols.Symbol {
+func (s *Server) declarationAt(doc *model.Document, want source.Span) *symbols.Symbol {
 	at, until := want.Offset, want.End()
 	if tokens := trimComments(tokensIn(doc.Content, want)); len(tokens) > 0 {
 		at, until = tokens[0].Span.Offset, tokens[len(tokens)-1].Span.End()
 	}
 	sym := symbolAtOffset(doc.Scope, at)
-	if sym == nil || sym.Decl == nil || enclosingMetadataBody(sym.OwnerScope) != nil {
+	if sym == nil || sym.Decl == nil || s.ws.EnclosingMetadataBody(sym.OwnerScope) != nil {
 		return nil
 	}
 	body, hasBody := bodyOf(doc.Content, sym.DeclSpan)

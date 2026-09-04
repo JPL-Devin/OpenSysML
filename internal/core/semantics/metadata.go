@@ -79,13 +79,13 @@ type MetadataAnnotation struct {
 	Prefix bool
 }
 
-// resolveAnnotationType resolves the metadata type an annotation names. An
-// annotation written as a member is inside the annotated element's body, so it
-// is looked up there first and in the owning namespace after.
+// resolveAnnotationType resolves the metadata type an annotation names. The
+// annotated element owns the annotation, prefix or member (KerML 8.2.4.2
+// PrefixMetadataMember), so the type is looked up in its own scope first.
 func (m *Model) resolveAnnotationType(sym *symbols.Symbol, a MetadataAnnotation) (*symbols.Symbol, bool) {
-	scopes := []*symbols.Scope{sym.OwnerScope}
-	if !a.Prefix && sym.Scope != nil {
-		scopes = []*symbols.Scope{sym.Scope, sym.OwnerScope}
+	scopes := []*symbols.Scope{AnnotationScope(sym)}
+	if scopes[0] != sym.OwnerScope {
+		scopes = append(scopes, sym.OwnerScope)
 	}
 	for _, scope := range scopes {
 		if def, ok := m.resolver.ResolveQualified(scope, a.Node.Type); ok && def != nil {
@@ -95,16 +95,49 @@ func (m *Model) resolveAnnotationType(sym *symbols.Symbol, a MetadataAnnotation)
 	return nil, false
 }
 
+// AnnotationScope is where an annotation on sym names its type: sym's own scope,
+// or the enclosing one when sym has none.
+func AnnotationScope(sym *symbols.Symbol) *symbols.Scope {
+	if sym.Scope != nil {
+		return sym.Scope
+	}
+	return sym.OwnerScope
+}
+
 // MetadataAnnotationsOf returns the metadata features annotating a declaration,
 // in declaration order. `@A about x` annotates other elements, so it is not one.
 func MetadataAnnotationsOf(decl ast.Node) []MetadataAnnotation {
+	return metadataAnnotationsAbout(decl, false)
+}
+
+// MetadataAnnotationsAboutOthers returns the metadata features written on a
+// declaration that annotate other elements (`@A about x`), in declaration order.
+func MetadataAnnotationsAboutOthers(decl ast.Node) []MetadataAnnotation {
+	return metadataAnnotationsAbout(decl, true)
+}
+
+// metadataAnnotationsAbout keeps the annotations written on decl with (about)
+// or without an `about`.
+func metadataAnnotationsAbout(decl ast.Node, about bool) []MetadataAnnotation {
+	var out []MetadataAnnotation
+	for _, a := range MetadataAnnotationsWritten(decl) {
+		if (len(a.Node.About) > 0) == about {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// MetadataAnnotationsWritten returns every metadata feature written on decl, as
+// prefixes then as members of its body, in declaration order.
+func MetadataAnnotationsWritten(decl ast.Node) []MetadataAnnotation {
 	prefixes, members, ok := ast.DeclaredMetadata(decl)
 	if !ok {
 		return nil
 	}
 	var out []MetadataAnnotation
 	for _, p := range prefixes {
-		if p != nil && len(p.About) == 0 {
+		if p != nil {
 			out = append(out, MetadataAnnotation{Node: p, Prefix: true})
 		}
 	}
@@ -112,7 +145,7 @@ func MetadataAnnotationsOf(decl ast.Node) []MetadataAnnotation {
 		if mem, ok := member.(*ast.Membership); ok {
 			member = mem.Member
 		}
-		if p, ok := member.(*ast.PrefixMetadata); ok && len(p.About) == 0 {
+		if p, ok := member.(*ast.PrefixMetadata); ok {
 			out = append(out, MetadataAnnotation{Node: p})
 		}
 	}
