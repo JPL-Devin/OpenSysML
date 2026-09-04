@@ -553,9 +553,8 @@ func OwnedConstraintOf(n Node) (OwnedConstraint, bool) {
 }
 
 // NamingFeature returns the relationship naming a constraint declared without a
-// name, as NamingFeature does for a usage. A short name alone is no declared
-// name (KerML derives effectiveName from declaredName), so it leaves the
-// naming feature in place.
+// name, as NamingFeature does for a usage; a short name alone is not a declared
+// name (KerML derives effectiveName from declaredName), so it leaves it in place.
 func (c OwnedConstraint) NamingFeature() *Relationship {
 	if c.Ident.Name != "" {
 		return nil

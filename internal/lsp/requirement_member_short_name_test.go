@@ -98,8 +98,8 @@ func TestHoverRequirementMemberShortName(t *testing.T) {
 	}
 	for _, tc := range []struct{ anchor, want string }{
 		{":>> s;", "subject x"},
-		{":>> a;", "constraint usage ac"},
-		{":>> r;", "constraint usage rc"},
+		{":>> a;", "assume constraint ac"},
+		{":>> r;", "require constraint rc"},
 		{":>> t;", "subject t"},
 	} {
 		if got := hover(tc.anchor, len(tc.anchor)-2); !strings.Contains(got, tc.want) {
