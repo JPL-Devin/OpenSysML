@@ -10,7 +10,7 @@ func IsSuccessionSource(member Node) bool {
 		return !n.Kind.IsEdge()
 	case *SuccessionEdge, *ControlFlowEdge, *ObjectFlowEdge, *TransitionEdge, *TransitionMember:
 		return false
-	case *Definition, *Package, *Namespace, *Import, *Alias, *Dependency,
+	case *Definition, *Package, *Namespace, *Import, *Alias, *Dependency, *MultiplicityDecl,
 		*RelationshipMember, *Comment, *Documentation, *TextualRepresentation, *FilterMember,
 		*DeferMember:
 		return false

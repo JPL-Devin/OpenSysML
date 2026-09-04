@@ -142,6 +142,7 @@ func TestThenSequencesFromTheNearestFeatureBefore(t *testing.T) {
 		{"nested part def", "part def Inner;", "a->b"},
 		{"nested action def", "action def Inner;", "a->b"},
 		{"nested package", "package Inner;", "a->b"},
+		{"multiplicity declaration", "multiplicity m [1];", "a->b"},
 		{"several non-features", "doc /* a then b */ part def Inner; private import Q::*;", "a->b"},
 		{"metadata about stays a source", "metadata Note about a;", "@metadata->b"},
 		{"prefix metadata stays a source", "@Note;", "@*ast.PrefixMetadata->b"},

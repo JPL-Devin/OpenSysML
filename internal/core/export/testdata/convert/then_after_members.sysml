@@ -99,6 +99,11 @@ package ThenAfterMembers {
         package Inner;
         then action b : Step;
     }
+    action def AfterMultiplicity {
+        action a : Step;
+        multiplicity m [1];
+        then action b : Step;
+    }
     action def AfterSeveralNonFeatures {
         action a : Step;
         doc /* a is followed by b */

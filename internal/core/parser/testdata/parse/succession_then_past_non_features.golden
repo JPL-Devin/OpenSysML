@@ -126,6 +126,21 @@
                 (*ast.QualifiedName))))
           (SuccessionEdge source="a" target="b")))
       (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterMultiplicity"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (MultiplicityDecl name="m" subsets=""
+              (Multiplicity range=false
+                (LiteralInteger value="1"))))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="a" target="b")))
+      (Membership visibility="default"
         (Definition kind="action" abstract=false variation=false name="AfterSeveral"
           (Membership visibility="default"
             (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false

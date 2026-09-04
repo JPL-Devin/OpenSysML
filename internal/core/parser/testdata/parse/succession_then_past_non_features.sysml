@@ -62,6 +62,12 @@ package ThenPastNonFeatures {
 		then action b : Step;
 	}
 
+	action def AfterMultiplicity {
+		action a : Step;
+		multiplicity m [1];
+		then action b : Step;
+	}
+
 	// Several non-feature members in a row are all read past.
 	action def AfterSeveral {
 		action a : Step;

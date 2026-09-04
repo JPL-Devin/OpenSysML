@@ -961,8 +961,8 @@ the declaration the `then` was written ahead of.
 The member a `then` sequences from is the one the parser gives it: the nearest
 feature before it that is not a connector or a transition. A member that is not
 a feature — a `doc`, a `comment`, a `rep`, an `import`, an `alias`, a nested
-definition or `package`, a state's `defer` — declares nothing a succession can
-run from, so a `then` written after one is read past it. A connector of any kind, named or not
+definition or `package`, a `multiplicity` declaration, a state's `defer` — declares
+nothing a succession can run from, so a `then` written after one is read past it. A connector of any kind, named or not
 (`connect p to q;`, `interface i connect …`, `allocate`, `bind`, `flow`,
 `succession`), and a transition relate other members rather than declaring one,
 so those are read past too, while an `attribute`, a `part`, an `action`, a

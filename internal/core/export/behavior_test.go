@@ -410,11 +410,11 @@ func TestThenIsRefusedWhenTheGraphSequencesFromAnotherMember(t *testing.T) {
 }
 
 // The non-feature members a `then` is read past are no source for it either: a
-// graph that sequences from the documentation or the nested definition written
-// before the `then`, or from a feature written earlier still, is refused.
+// graph that sequences from the documentation, nested definition or multiplicity
+// written before the `then`, or from a feature written earlier still, is refused.
 func TestThenIsRefusedWhenTheGraphSequencesFromANonFeature(t *testing.T) {
 	src := "package P {\n    action def Step;\n" +
-		"    action def A {\n        action x : Step;\n        action a : Step;\n        doc /* a then b */\n        part def Inner;\n        then action b : Step;\n    }\n}\n"
+		"    action def A {\n        action x : Step;\n        action a : Step;\n        doc /* a then b */\n        part def Inner;\n        multiplicity m [1];\n        then action b : Step;\n    }\n}\n"
 	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
 	if err != nil {
 		t.Fatalf("to turtle: %v", err)
@@ -434,6 +434,7 @@ func TestThenIsRefusedWhenTheGraphSequencesFromANonFeature(t *testing.T) {
 		"an earlier action":                    "elmt:P__A__x",
 		"the documentation written before":     "elmt:P__A___402",
 		"the nested definition written before": "elmt:P__A__Inner",
+		"the multiplicity written before":      "elmt:P__A__m",
 	} {
 		t.Run(name, func(t *testing.T) {
 			checkThenIsRefusedWithSource(t, turtle, stated, source)
