@@ -57,18 +57,33 @@ type Parser struct {
 	bodyCtx []bodyContext
 }
 
-// bodyContext is the notation of the body being parsed, for members whose
-// grammar depends on it: an interface body's default end is a port usage and
-// may be anonymous (SysML v2 8.2.2.14, DefaultInterfaceEnd).
+// bodyContext is the notation of the body being parsed, for members whose grammar
+// depends on it: interface default ends (SysML v2 8.2.2.14) and the members only
+// one body kind offers (see bodyAdmitsMember).
 type bodyContext int
 
 const (
 	bodyOther bodyContext = iota
 	bodyInterface
-	// bodyBehavior is an action-carrying body (action, state, calc, case),
-	// whose `first` opens an InitialNodeMember rather than a SuccessionAsUsage.
-	bodyBehavior
+	bodyAction
+	bodyState
+	bodyCalc
+	bodyCase
+	// bodyRequirement is a RequirementBody: requirement, concern and viewpoint
+	// bodies, and those of the usages written with them (satisfy, frame, objective).
+	bodyRequirement
+	bodyView
 )
+
+// carriesActions reports whether the body is action-carrying (action, state,
+// calc, case), whose `first` opens an InitialNodeMember rather than a SuccessionAsUsage.
+func (c bodyContext) carriesActions() bool {
+	switch c {
+	case bodyAction, bodyState, bodyCalc, bodyCase:
+		return true
+	}
+	return false
+}
 
 // pushBodyContext enters a body of the given notation and returns the function
 // that leaves it.

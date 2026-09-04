@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
@@ -1009,6 +1010,16 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			return applyPrefixes(p.parseUsage(start, ast.UsageConnection, "connect", mods, false))
 		}
 
+		// A subject, actor, stakeholder, objective or rendering the body does
+		// not own is parsed as itself and then replaced by an ErrorNode.
+		if !p.bodyAdmitsMember(kw) {
+			en := p.misplacedMember(t)
+			applyPrefixes = func(ast.Node) ast.Node {
+				en.NodeSpan = p.spanFrom(start)
+				return en
+			}
+		}
+
 		p.advance() // consume the kind keyword
 		// A subject, actor, stakeholder or objective takes prefix metadata after
 		// its keyword: `actor #B a;` (SysML.xtext SubjectUsage, ActorUsage,
@@ -1155,12 +1166,14 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 				p.advance() // consume '{'
 				// Parse body members
 				var members []ast.Node
+				leave := p.pushBodyContext(usageBodyContext(ast.UsageUseCase))
 				for !p.at(lexer.RBrace) && !p.atEOF() {
 					m := p.parseBodyMember()
 					if m != nil {
 						members = append(members, m)
 					}
 				}
+				leave()
 				p.expect(lexer.RBrace, msgExpectedBodyClose)
 				u.Members = members
 				u.HasBody = true
@@ -1456,9 +1469,18 @@ func defBodyContext(kind ast.DefinitionKind) bodyContext {
 	switch kind {
 	case ast.DefInterface:
 		return bodyInterface
-	case ast.DefAction, ast.DefState, ast.DefCalc, ast.DefCase,
-		ast.DefAnalysisCase, ast.DefVerificationCase, ast.DefUseCase, ast.DefBehavior:
-		return bodyBehavior
+	case ast.DefAction, ast.DefBehavior:
+		return bodyAction
+	case ast.DefState:
+		return bodyState
+	case ast.DefCalc:
+		return bodyCalc
+	case ast.DefCase, ast.DefAnalysisCase, ast.DefVerificationCase, ast.DefUseCase:
+		return bodyCase
+	case ast.DefRequirement, ast.DefConcern, ast.DefViewpoint:
+		return bodyRequirement
+	case ast.DefView:
+		return bodyView
 	}
 	return bodyOther
 }
@@ -1469,12 +1491,59 @@ func usageBodyContext(kind ast.UsageKind) bodyContext {
 	switch kind {
 	case ast.UsageInterface:
 		return bodyInterface
-	case ast.UsageAction, ast.UsageState, ast.UsageTransition, ast.UsageStep,
-		ast.UsageCalc, ast.UsageCase, ast.UsageAnalysisCase,
-		ast.UsageVerificationCase, ast.UsageUseCase, ast.UsageBehavior:
-		return bodyBehavior
+	case ast.UsageAction, ast.UsageTransition, ast.UsageStep, ast.UsageBehavior:
+		return bodyAction
+	case ast.UsageState:
+		return bodyState
+	case ast.UsageCalc:
+		return bodyCalc
+	case ast.UsageCase, ast.UsageAnalysisCase, ast.UsageVerificationCase, ast.UsageUseCase:
+		return bodyCase
+	case ast.UsageRequirement, ast.UsageConcern, ast.UsageViewpoint,
+		ast.UsageFramedConcern, ast.UsageObjective, ast.UsageSatisfy:
+		return bodyRequirement
+	case ast.UsageView:
+		return bodyView
 	}
 	return bodyOther
+}
+
+// bodyAdmitsMember reports whether the innermost body offers the member kw
+// introduces (SysML.xtext RequirementBodyItem, CaseBodyItem, StateBodyItem, ViewBodyItem).
+func (p *Parser) bodyAdmitsMember(kw string) bool {
+	m, ok := ownedMembers[kw]
+	if !ok {
+		return true
+	}
+	return slices.Contains(m.bodies, p.bodyContext())
+}
+
+// ownedMember describes a member notation that only certain body kinds offer.
+type ownedMember struct {
+	role   string // what the member declares, for the diagnostic
+	owner  string // the kind of element whose body offers it
+	bodies []bodyContext
+}
+
+var ownedMembers = map[string]ownedMember{
+	"subject":     {"the subject of a requirement or case", "requirement or case", []bodyContext{bodyRequirement, bodyCase}},
+	"actor":       {"an actor of a requirement or case", "requirement or case", []bodyContext{bodyRequirement, bodyCase}},
+	"stakeholder": {"a stakeholder of a requirement", "requirement", []bodyContext{bodyRequirement}},
+	"objective":   {"the objective of a case", "case", []bodyContext{bodyCase}},
+	"entry":       {"the entry action of a state", "state", []bodyContext{bodyState}},
+	"do":          {"the do action of a state", "state", []bodyContext{bodyState}},
+	"exit":        {"the exit action of a state", "state", []bodyContext{bodyState}},
+	"render":      {"the rendering of a view", "view", []bodyContext{bodyView}},
+}
+
+// misplacedMember reports a member written outside the body kind that owns it and
+// returns the ErrorNode standing in for it; the caller parses the member and spans the node.
+func (p *Parser) misplacedMember(kw lexer.Token) *ast.ErrorNode {
+	m := ownedMembers[kw.KeywordID]
+	msg := fmt.Sprintf("'%s' declares %s and is only allowed in a %s body; move it into the %s it belongs to",
+		kw.KeywordID, m.role, m.owner, m.owner)
+	p.error(kw.Span, msg)
+	return &ast.ErrorNode{Message: msg}
 }
 
 // isBehavioralKeyword checks if next token is a behavioral keyword
@@ -2405,6 +2474,16 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return p.parseBodyMember()
 	}
 
+	// A state body reads entry/do/exit itself; one reaching here is outside its state.
+	if tok := p.peek(); tok.Kind == lexer.Keyword && isStateSubactionKeyword(tok.KeywordID) && !p.bodyAdmitsMember(tok.KeywordID) {
+		en := p.misplacedMember(tok)
+		p.advance()
+		p.parseStateSubaction(start, stateSubactionKind(tok.KeywordID))
+		en.NodeSpan = p.spanFrom(start)
+		en.SetLeadingTrivia(trivia)
+		return en
+	}
+
 	// Check for `#MetadataType` prefix (user-defined keyword)
 	// Parse prefixes and then parse def/usage declaration
 	if p.at(lexer.Hash) {
@@ -2505,7 +2584,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 		// InitialNodeMember — which would declare a member shadowing end `a`.
 		// The one-ended `first a;` stays an initial node (extension notation).
 		if p.atChainedFirstSuccession() ||
-			(p.bodyContext() != bodyBehavior && p.atTwoEndedFirst()) {
+			(!p.bodyContext().carriesActions() && p.atTwoEndedFirst()) {
 			return p.parseSuccessionAsUsage(start)
 		}
 		firstTok := p.advance()
@@ -3337,7 +3416,9 @@ func (p *Parser) parseReferenceMemberUsage(start int, kind ast.UsageKind, kw, no
 		u.HasBody = false
 	case p.at(lexer.LBrace):
 		p.advance()
+		leave := p.pushBodyContext(usageBodyContext(kind))
 		u.Members = parseBody()
+		leave()
 		u.HasBody = true
 	case allowValue && (p.atKeyword("then") || p.atKeyword("if") || p.atKeyword("do")):
 		// A performed action written as a transition's effect is terminated by

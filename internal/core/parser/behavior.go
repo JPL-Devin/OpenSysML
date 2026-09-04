@@ -2185,7 +2185,10 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 	if p.at(lexer.LBrace) {
 		p.advance()
 		node.HasBody = true
+		// A subject's body is a UsageBody, not the RequirementBody around it.
+		leave := p.pushBodyContext(bodyOther)
 		node.Body = p.parseRequirementBody()
+		leave()
 	} else {
 		p.expect(lexer.Semicolon, "expected ';' or '{' after subject declaration")
 	}
@@ -2380,7 +2383,11 @@ func (p *Parser) tryParseConstraintReference() (constraintReference, bool) {
 	}
 	if p.at(lexer.LBrace) {
 		p.advance() // consume '{'
-		return constraintReference{ref: ref, relationships: rels, multiplicity: mult, body: p.parseRequirementBody(), hasBody: true}, true
+		// A constraint's body is a CalculationBody, not the RequirementBody around it.
+		leave := p.pushBodyContext(bodyOther)
+		members := p.parseRequirementBody()
+		leave()
+		return constraintReference{ref: ref, relationships: rels, multiplicity: mult, body: members, hasBody: true}, true
 	}
 	// A body-less bare name stays a condition expression; only a qualified name or
 	// a specialization part can be the reference form.
@@ -2429,6 +2436,8 @@ func (p *Parser) tryParseNestedConstraint(start int, isAssert, isNegated bool, k
 // and returns its members. Every condition is kept: a constraint body may state
 // more than one.
 func (p *Parser) parseNestedConstraintConditions() []ast.Node {
+	// A constraint's body is a CalculationBody, not the body around it.
+	defer p.pushBodyContext(bodyOther)()
 	return p.parseConstraintMembers(true)
 }
 
@@ -2898,6 +2907,15 @@ const (
 	subactionDo    stateSubactionKind = "do"
 	subactionExit  stateSubactionKind = "exit"
 )
+
+// isStateSubactionKeyword reports whether kw opens a StateSubactionMember.
+func isStateSubactionKeyword(kw string) bool {
+	switch stateSubactionKind(kw) {
+	case subactionEntry, subactionDo, subactionExit:
+		return true
+	}
+	return false
+}
 
 // parseEntryMember parses a state's entry subaction; the keyword is consumed.
 func (p *Parser) parseEntryMember(start int) ast.Node {
