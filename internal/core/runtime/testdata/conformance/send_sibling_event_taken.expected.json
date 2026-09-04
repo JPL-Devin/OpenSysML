@@ -1,0 +1,6 @@
+{
+	"type": "action",
+	"outputs": {
+		"rightTaken": {"type": "Integer", "value": 1}
+	}
+}

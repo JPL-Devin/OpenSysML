@@ -1,0 +1,6 @@
+{
+	"type": "action",
+	"outputs": {
+		"leftTaken": {"type": "Integer", "value": 1}
+	}
+}

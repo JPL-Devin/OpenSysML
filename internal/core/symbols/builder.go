@@ -203,9 +203,20 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 		buildMembers(child, d.Members)
 		return true
 	case *ast.SendStatement:
-		// A send's body declares the node's own parameters, and the node is the
-		// action the send was written on (`action a send x via p { in x; }`).
-		buildMembers(scope, d.Members)
+		// The send is the action usage it was written on (`action a send x { in x; }`),
+		// whose body declares the parameters; anywhere else it is a node of its own.
+		if usage, ok := scope.Node().(*ast.Usage); ok && usage.IsActionNode {
+			buildMembers(scope, d.Members)
+			return true
+		}
+		buildAnonymousNode(scope, d, SymbolActionUsage, d.Members, vis, trivia)
+		return true
+	case *ast.SuccessionEdge:
+		// A succession with a body is a SuccessionAsUsage whose body declares its
+		// own features (SysML.xtext ActionTargetSuccession ends in a UsageBody).
+		if len(d.Members) > 0 {
+			buildAnonymousNode(scope, d, SymbolSuccessionUsage, d.Members, vis, trivia)
+		}
 		return true
 	case *ast.StateNode:
 		// Register state node by name (including initial/final pseudostates)
@@ -246,9 +257,9 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 		scope.AddChild(child)
 		body := child
 		if defineParams != nil {
-			// The trigger's parameters are visible to the guard and effect, however
-			// deeply the effect nests, but are not features of the transition: they
-			// live in a body-local scope of their own that the effect is built in.
+			// The trigger's parameters are visible to the guard, effect and body,
+			// however deeply they nest, but are not features of the transition: they
+			// live in a body-local scope of their own that both are built in.
 			body = NewScope(child, d.Trigger)
 			body.markBodyLocal()
 			child.AddChild(body)
@@ -257,7 +268,7 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 		// The body's members read the trigger's parameters as the effect does,
 		// and are the transition's features like it.
 		params := len(body.AllMembers())
-		buildMembers(body, d.Effect)
+		buildEffect(body, d.Effect)
 		buildMembers(body, d.Members)
 		if body != child {
 			ownEffectMembers(child, body.AllMembers()[params:])
@@ -394,18 +405,14 @@ func buildMetadataBodyScope(parent *Scope, prefix *ast.PrefixMetadata) *Scope {
 }
 
 // buildControlNode registers a named fork/join/merge/decision node the way a
-// final node is registered, at its name's span; an unnamed one declares no
-// symbol, but its body members still go into a scope local to that body.
+// final node is registered, at its name's span; an unnamed one declares no name
+// but still owns the scope its body declares into.
 func buildControlNode(scope *Scope, decl ast.Node, name string, nameSpan source.Span, vis ast.Visibility, trivia []ast.Trivia) {
 	body := ast.NodeBodyMembers(decl)
 	if name == "" {
-		if len(body) == 0 {
-			return
+		if len(body) > 0 {
+			buildAnonymousNode(scope, decl, SymbolActionUsage, body, vis, trivia)
 		}
-		child := NewScope(scope, decl)
-		child.markBodyLocal()
-		scope.AddChild(child)
-		buildMembers(child, body)
 		return
 	}
 	id := ast.Identification{Name: name, NameSpan: nameSpan}
@@ -526,7 +533,21 @@ func defineTransitionEffect(scope, body *Scope, trans *ast.TransitionMember) {
 	body.AddChild(statement)
 }
 
-// ownEffectMembers makes the members an effect built after the trigger's
+// buildEffect builds a transition's effect. A `do send` statement's parameters
+// are the transition's own members, not a nested node's (ownEffectMembers).
+func buildEffect(body *Scope, effect []ast.Node) {
+	for _, m := range effect {
+		if decl, _ := unwrapMember(m); decl != nil {
+			if send, ok := decl.(*ast.SendStatement); ok {
+				buildMembers(body, send.Members)
+				continue
+			}
+		}
+		buildMembers(body, []ast.Node{m})
+	}
+}
+
+// ownEffectMembers makes the members an effect or body built after the trigger's
 // parameters (an action's symbol, a `do send`'s own parameters) the transition's.
 func ownEffectMembers(scope *Scope, members []*Symbol) {
 	seen := map[*Symbol]bool{}
@@ -606,6 +627,16 @@ func namingTargetNode(target ast.Node) ast.Node {
 		return qn
 	}
 	return target
+}
+
+// buildAnonymousNode registers an unnamed node as a member of scope with a
+// child scope its body members are built in.
+func buildAnonymousNode(scope *Scope, node ast.Node, kind SymbolKind, members []ast.Node, vis ast.Visibility, trivia []ast.Trivia) {
+	child := NewScope(scope, node)
+	sym := newSymbol(ast.Identification{}, kind, node, vis, child, scope, trivia)
+	defineIdent(scope, ast.Identification{}, sym)
+	scope.AddChild(child)
+	buildMembers(child, members)
 }
 
 // defineIdent registers sym under its short and primary name keys, skipping
