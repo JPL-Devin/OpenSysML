@@ -278,4 +278,3 @@ func metaCastOperand(value ast.Node) *ast.QualifiedName {
 	}
 	return nil
 }
-
