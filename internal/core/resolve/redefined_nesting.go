@@ -115,8 +115,14 @@ func redefinesRelationships(decl ast.Node) []*ast.Relationship {
 		rels = d.Relationships
 	case *ast.Definition:
 		rels = d.Relationships
+	case *ast.SubjectMember:
+		rels = d.Relationships
 	default:
-		return nil
+		c, ok := ast.RequirementConstraintOf(decl)
+		if !ok {
+			return nil
+		}
+		rels = c.Relationships
 	}
 	var out []*ast.Relationship
 	for _, rel := range rels {
@@ -129,6 +135,9 @@ func redefinesRelationships(decl ast.Node) []*ast.Relationship {
 
 // isFeatureDecl reports whether decl declares a feature rather than a type.
 func isFeatureDecl(decl ast.Node) bool {
-	_, ok := decl.(*ast.Usage)
-	return ok
+	switch decl.(type) {
+	case *ast.Usage, *ast.SubjectMember, *ast.AssumeMember, *ast.RequireMember:
+		return true
+	}
+	return false
 }

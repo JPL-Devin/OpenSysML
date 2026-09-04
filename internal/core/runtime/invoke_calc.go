@@ -1024,8 +1024,8 @@ func isStateSymbol(sym *symbols.Symbol) bool {
 	return sym.Kind == symbols.SymbolStateDef || sym.Kind == symbols.SymbolStateUsage
 }
 
-// declMembers returns the body members of a definition or usage, unwrapping the
-// Membership wrappers the parser produces.
+// declMembers returns the body members of a definition or usage, a requirement's
+// named constraint included, unwrapping the Membership wrappers the parser produces.
 func declMembers(decl ast.Node) []ast.Node {
 	var members []ast.Node
 	switch d := decl.(type) {
@@ -1033,6 +1033,10 @@ func declMembers(decl ast.Node) []ast.Node {
 		members = d.Members
 	case *ast.Usage:
 		members = d.Members
+	case *ast.AssumeMember:
+		members = d.Body
+	case *ast.RequireMember:
+		members = d.Body
 	default:
 		return nil
 	}

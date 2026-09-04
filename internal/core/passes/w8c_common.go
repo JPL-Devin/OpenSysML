@@ -108,6 +108,12 @@ func w8cMultiplicityOf(sym *symbols.Symbol) *ast.Multiplicity {
 		return d.Multiplicity
 	case *ast.ConnectorEnd:
 		return d.Multiplicity
+	case *ast.SubjectMember:
+		return d.Multiplicity
+	case *ast.AssumeMember:
+		return d.Multiplicity
+	case *ast.RequireMember:
+		return d.Multiplicity
 	default:
 		return nil
 	}

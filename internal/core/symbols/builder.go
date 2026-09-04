@@ -280,11 +280,8 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 	case *ast.ConstraintMember:
 		buildConstraintBodyScope(scope, d, d.Body)
 		return true
-	case *ast.AssumeMember:
-		buildConstraintBodyScope(scope, d, d.Body)
-		return true
-	case *ast.RequireMember:
-		buildConstraintBodyScope(scope, d, d.Body)
+	case *ast.AssumeMember, *ast.RequireMember:
+		buildRequirementConstraint(scope, d, vis, trivia)
 		return true
 	case *ast.EntryMember:
 		// An entry/do/exit action is a feature of the state declaring it, so a
@@ -363,25 +360,13 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 	}
 }
 
+// prefixMetadataOf returns the prefix metadata written on a declaration.
 func prefixMetadataOf(decl ast.Node) []*ast.PrefixMetadata {
-	switch d := decl.(type) {
-	case *ast.Package:
+	if d, ok := decl.(*ast.Dependency); ok {
 		return d.Prefixes
-	case *ast.Namespace:
-		return d.Prefixes
-	case *ast.Dependency:
-		return d.Prefixes
-	case *ast.Definition:
-		return d.Prefixes
-	case *ast.Usage:
-		return d.Prefixes
-	case *ast.AssumeMember:
-		return d.Prefixes
-	case *ast.RequireMember:
-		return d.Prefixes
-	default:
-		return nil
 	}
+	prefixes, _, _ := ast.DeclaredMetadata(decl)
+	return prefixes
 }
 
 func buildMetadataBodyScopes(scope *Scope, prefixes []*ast.PrefixMetadata) {
@@ -442,6 +427,22 @@ func buildConstraintBodyScope(scope *Scope, decl ast.Node, body []ast.Node) {
 	child.markBodyLocal()
 	scope.AddChild(child)
 	buildMembers(child, body)
+}
+
+// buildRequirementConstraint declares the constraint usage an `assume`/`require`
+// member owns: a named one is a symbol with its own scope, an anonymous one only a body.
+func buildRequirementConstraint(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Trivia) {
+	c, _ := ast.RequirementConstraintOf(decl)
+	if c.Name == "" {
+		buildConstraintBodyScope(scope, decl, c.Body)
+		return
+	}
+	id := ast.Identification{Name: c.Name, NameSpan: c.NameSpan}
+	child := NewScope(scope, decl)
+	sym := newSymbol(id, SymbolConstraintUsage, decl, vis, child, scope, trivia)
+	defineIdent(scope, id, sym)
+	scope.AddChild(child)
+	buildMembers(child, c.Body)
 }
 
 // ConstraintBodyScope returns the scope a nested constraint body resolves against:

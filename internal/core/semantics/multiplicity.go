@@ -74,7 +74,8 @@ func (m *Model) RangeOf(mult *ast.Multiplicity) (Range, bool) {
 }
 
 // MultiplicityOf returns the extracted multiplicity range of a usage symbol, a
-// subject included, or ok=false when the symbol is not a usage or declares none.
+// subject or a requirement constraint included, or ok=false when the symbol is
+// not a usage or declares none.
 func (m *Model) MultiplicityOf(sym *symbols.Symbol) (Range, bool) {
 	if sym == nil {
 		return Range{}, false
@@ -84,6 +85,9 @@ func (m *Model) MultiplicityOf(sym *symbols.Symbol) (Range, bool) {
 		return m.multiplicityRange(decl.Multiplicity)
 	case *ast.SubjectMember:
 		return m.multiplicityRange(decl.Multiplicity)
+	}
+	if c, ok := ast.RequirementConstraintOf(sym.Decl); ok {
+		return m.multiplicityRange(c.Multiplicity)
 	}
 	return Range{}, false
 }

@@ -497,6 +497,47 @@ type RequireMember struct {
 	HasBody bool
 }
 
+// RequirementConstraint is the constraint usage declaration an `assume` or
+// `require` member owns (SysML.xtext RequirementConstraintUsage); Name is ""
+// for the anonymous and reference forms.
+type RequirementConstraint struct {
+	Prefixes      []*PrefixMetadata
+	Name          string
+	NameSpan      source.Span
+	Relationships []*Relationship
+	Multiplicity  *Multiplicity
+	Value         Node
+	Body          []Node
+}
+
+// Constraint returns the constraint usage declaration the member owns.
+func (m *AssumeMember) Constraint() RequirementConstraint {
+	return RequirementConstraint{
+		Prefixes: m.Prefixes, Name: m.Name, NameSpan: m.NameSpan, Relationships: m.Relationships,
+		Multiplicity: m.Multiplicity, Value: m.Value, Body: m.Body,
+	}
+}
+
+// Constraint returns the constraint usage declaration the member owns.
+func (m *RequireMember) Constraint() RequirementConstraint {
+	return RequirementConstraint{
+		Prefixes: m.Prefixes, Name: m.Name, NameSpan: m.NameSpan, Relationships: m.Relationships,
+		Multiplicity: m.Multiplicity, Value: m.Value, Body: m.Body,
+	}
+}
+
+// RequirementConstraintOf returns the constraint usage declaration an
+// assume/require member owns; ok is false for any other node.
+func RequirementConstraintOf(node Node) (RequirementConstraint, bool) {
+	switch m := node.(type) {
+	case *AssumeMember:
+		return m.Constraint(), true
+	case *RequireMember:
+		return m.Constraint(), true
+	}
+	return RequirementConstraint{}, false
+}
+
 // Phase C4: State Body Members
 
 // EntryMember represents entry behavior in a state body.
