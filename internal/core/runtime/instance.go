@@ -488,9 +488,7 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 
 	// A feature listing this one as a value, on this object or an owner reaching it by a
 	// chain, classifies its objects: each is read first, and may have materialized this one.
-	if err := ctx.materializeHolders(inst, name); err != nil {
-		return nil, err
-	}
+	ctx.materializeHolders(inst, name)
 	if fv.Materialized {
 		return fv, nil
 	}

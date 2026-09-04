@@ -221,6 +221,54 @@ func TestArgumentNotReturnedIsNotHeldByTheCall(t *testing.T) {
 	}
 }
 
+// A holding feature that cannot materialize — too few values for its multiplicity, a type
+// its object is not classified by — holds nothing: the held feature reads in either order
+// with the value it states, and the holder's error is reported when the holder is read.
+func TestFailingHolderDoesNotFailTheFeatureItWouldHold(t *testing.T) {
+	src := `package test {
+		private import ScalarValues::*;
+		private import SequenceFunctions::*;
+		item def Gauge;
+		item def Tallied { attribute tally : Integer = 7; }
+		item def Rack {
+			item lead : Gauge [1];
+			item trail : Gauge [1];
+			item both : Gauge [0..*] = (lead, trail);
+			item stowed : Gauge [3] = both;
+			item tallied : Tallied [1] = lead;
+			attribute count : Integer = size(both);
+		}
+		item rack : Rack;
+	}`
+	for _, order := range [][]string{{"both", "stowed"}, {"stowed", "both"}, {"count", "stowed"}, {"lead", "tallied"}, {"tallied", "lead"}} {
+		ctx, idx := libraryShapeContext(t, src)
+		rack := instantiateQualified(t, ctx, idx, "test::rack")
+		for _, name := range order {
+			_, err := rack.GetFeatureValue(ctx, name)
+			switch name {
+			case "stowed":
+				if !errors.Is(err, ErrMultiplicityViolation) || !strings.Contains(err.Error(), "lower bound 3") {
+					t.Fatalf("reading %v: stowed: %v, want its own multiplicity violation", order, err)
+				}
+			case "tallied":
+				if !errors.Is(err, ErrTypeMismatch) {
+					t.Fatalf("reading %v: tallied: %v, want a type mismatch", order, err)
+				}
+			default:
+				if err != nil {
+					t.Fatalf("reading %v: %s: %v", order, name, err)
+				}
+			}
+		}
+		if got := len(elementsOf(rack.FeatureValues["both"].HeldValue())); rack.FeatureValues["both"].Materialized && got != 2 {
+			t.Fatalf("reading %v: both holds %d objects, want 2", order, got)
+		}
+		if got := readInt(t, ctx, rack, "count"); got != 2 {
+			t.Fatalf("reading %v: count = %d, want 2", order, got)
+		}
+	}
+}
+
 // Only a feature that may answer another's objects as its own holds them: an attribute
 // computing from a feature, a condition tested, and an argument a calc's returns do not pass
 // on hold nothing, so reading those features forces no other; a chain holds its last member
@@ -364,6 +412,77 @@ func TestMutuallyRecursiveCalcsPassArgumentsThroughEachOther(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A calc returning a local it declared from an input, assigned one to, or declared from another
+// such local passes that input on, so the typed feature receiving the result classifies the
+// argument's object whichever of the two is read first; a local computing data passes nothing.
+func TestCalcLocalsPassArgumentsOnToTheReturn(t *testing.T) {
+	src := `package test {
+		private import ScalarValues::*;
+		item def Gauge { item cell [1]; }
+		item def Tallied :> Gauge { attribute tally : Integer = 7; }
+		calc def viaDeclared { in chosen : Gauge; in other : Gauge; attribute held = chosen; return : Gauge = held; }
+		calc def viaAssigned {
+			in chosen : Gauge; in other : Gauge;
+			attribute held = other;
+			assign held := chosen;
+			return : Gauge = held;
+		}
+		calc def viaBlock {
+			in chosen : Gauge; in other : Gauge; in wanted : Boolean;
+			if wanted { attribute held = chosen; return : Gauge = held; }
+			return : Gauge = other;
+		}
+		calc def viaLater {
+			in chosen : Gauge; in other : Gauge;
+			attribute held = chosen;
+			attribute passed = held;
+			return : Gauge = passed;
+		}
+		calc def viaMember { in chosen : Gauge; in other : Gauge; attribute held = chosen; return = held.cell; }
+		calc def viaSelf { in chosen : Gauge; in other : Gauge; attribute held = chosen; assign held := held; return : Gauge = held; }
+		calc def viaComputed { in chosen : Gauge; in n : Integer; attribute held = n + 1; return : Integer = held; }
+		item def Rack {
+			attribute count : Integer = 2;
+			item lead : Gauge [1];
+			item trail : Gauge [1];
+			item declared : Tallied [1] = viaDeclared(lead, trail);
+			item assigned : Tallied [1] = viaAssigned(lead, trail);
+			item blocked : Tallied [1] = viaBlock(lead, trail, true);
+			item later : Tallied [1] = viaLater(lead, trail);
+			item celled : Tallied [1] = viaMember(lead, trail);
+			item selfed : Tallied [1] = viaSelf(lead, trail);
+			attribute computed : Integer = viaComputed(lead, count);
+		}
+		item rack : Rack;
+	}`
+	ctx, idx := libraryShapeContext(t, src)
+	rack := idx.LookupQualified("test::Rack")[0]
+	want := map[string][]string{
+		"lead":  {"declared", "assigned", "blocked", "later", "selfed"},
+		"trail": {"assigned", "blocked"},
+		"count": nil,
+	}
+	for name, holders := range want {
+		if got := ctx.holdingFeatures(rack, name); !slices.Equal(got, holders) {
+			t.Errorf("holdingFeatures(Rack, %s) = %v, want %v", name, got, holders)
+		}
+	}
+
+	for _, order := range [][]string{{"lead", "declared"}, {"declared", "lead"}, {"lead", "assigned"}, {"lead", "blocked"}, {"lead", "later"}, {"lead", "selfed"}} {
+		ctx, idx := libraryShapeContext(t, src)
+		rack := instantiateQualified(t, ctx, idx, "test::rack")
+		for _, name := range order {
+			if _, err := rack.GetFeatureValue(ctx, name); err != nil {
+				t.Fatalf("reading %v: %s: %v", order, name, err)
+			}
+		}
+		lead := readInstance(t, ctx, rack, "lead")
+		if got := readInt(t, ctx, lead, "tally"); got != 7 {
+			t.Errorf("reading %v: lead.tally = %d, want 7 from the classifier", order, got)
+		}
 	}
 }
 

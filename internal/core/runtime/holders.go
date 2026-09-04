@@ -1,7 +1,6 @@
 package runtime
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -303,32 +302,24 @@ func (ctx *Context) returnedParameters(shape *calcShape) map[string]bool {
 	return a.passed
 }
 
+// valueSource is an expression a local's value may come from, in the scope it is written in.
+type valueSource struct {
+	scope *symbols.Scope
+	expr  ast.Node
+}
+
 // collectReturnedParameters adds to passed the parameters of shape the returns of its body
-// and its result binding pass on.
+// and its result binding pass on — directly, or through the locals its body declares,
+// assigns or iterates with, followed back to what was written to them.
 func (ctx *Context) collectReturnedParameters(shape *calcShape, passed, params map[string]bool) {
-	type loopVariable struct {
-		scope      *symbols.Scope
-		collection ast.Node
-	}
-	variables := make(map[*symbols.Symbol]loopVariable)
-	// A chain from a parameter passes on objects the parameter holds, not the parameter.
-	var follow func(scope *symbols.Scope, expr ast.Node, members []string)
-	follow = func(scope *symbols.Scope, expr ast.Node, members []string) {
-		if scope == nil {
+	var returns []valueSource
+	locals := make(map[*symbols.Symbol][]valueSource)
+	written := func(in *symbols.Scope, name string, source valueSource) {
+		if source.expr == nil {
 			return
 		}
-		for _, ref := range readThrough(ctx.passedFeatureReferences(scope, expr), members) {
-			sym := ref.symbol(ctx)
-			if sym == nil {
-				continue
-			}
-			if variable, ok := variables[sym]; ok {
-				follow(variable.scope, variable.collection, ref.members)
-				continue
-			}
-			if name, ok := ctx.denotedFeature(shape.Sym, sym); ok && params[name] && len(ref.members) == 0 {
-				passed[name] = true
-			}
+		if sym, ok := ctx.resolver.LookupName(in, name); ok {
+			locals[sym] = append(locals[sym], source)
 		}
 	}
 	var walk func(stmts []lower.Statement)
@@ -336,7 +327,13 @@ func (ctx *Context) collectReturnedParameters(shape *calcShape, passed, params m
 		for _, stmt := range stmts {
 			switch s := stmt.(type) {
 			case lower.Return:
-				follow(s.Scope, s.Value, nil)
+				returns = append(returns, valueSource{scope: s.Scope, expr: s.Value})
+			case lower.Declare:
+				written(s.Scope, s.Name, valueSource{scope: s.Scope, expr: s.Value})
+			case lower.Assign:
+				if s.Chain == nil {
+					written(s.Scope, s.Target, valueSource{scope: s.Scope, expr: s.Value})
+				}
 			case lower.If:
 				walk(s.Then.Steps())
 				if s.Else != nil {
@@ -344,9 +341,7 @@ func (ctx *Context) collectReturnedParameters(shape *calcShape, passed, params m
 				}
 			case lower.Loop:
 				if s.Variable != "" {
-					if sym, ok := ctx.resolver.LookupName(s.Body.Scope, s.Variable); ok {
-						variables[sym] = loopVariable{scope: s.Scope, collection: s.Collection}
-					}
+					written(s.Body.Scope, s.Variable, valueSource{scope: s.Scope, expr: s.Collection})
 				}
 				walk(s.Body.Steps())
 			case lower.Block:
@@ -358,9 +353,39 @@ func (ctx *Context) collectReturnedParameters(shape *calcShape, passed, params m
 	for _, binding := range shape.Bindings {
 		for i := range binding.Ends {
 			if binding.Ends[i].Path == "result" && binding.Ends[1-i].Expr != nil {
-				follow(binding.Scope, binding.Ends[1-i].Expr, nil)
+				returns = append(returns, valueSource{scope: binding.Scope, expr: binding.Ends[1-i].Expr})
 			}
 		}
+	}
+
+	// A chain from a parameter passes on objects the parameter holds, not the parameter;
+	// a local written from itself is followed once.
+	following := make(map[*symbols.Symbol]bool)
+	var follow func(source valueSource, members []string)
+	follow = func(source valueSource, members []string) {
+		if source.scope == nil {
+			return
+		}
+		for _, ref := range readThrough(ctx.passedFeatureReferences(source.scope, source.expr), members) {
+			sym := ref.symbol(ctx)
+			if sym == nil || following[sym] {
+				continue
+			}
+			if name, ok := ctx.denotedFeature(shape.Sym, sym); ok && params[name] {
+				if len(ref.members) == 0 {
+					passed[name] = true
+				}
+				continue
+			}
+			following[sym] = true
+			for _, from := range locals[sym] {
+				follow(from, ref.members)
+			}
+			delete(following, sym)
+		}
+	}
+	for _, ret := range returns {
+		follow(ret, nil)
 	}
 }
 
@@ -383,9 +408,10 @@ func (ctx *Context) referencedSymbol(scope *symbols.Scope, qn *ast.QualifiedName
 // materializeHolders reads the features whose value lists the named feature of inst — on inst,
 // or on an object holding it as a chain through the features leading to inst — before its
 // objects are made, so every holding feature classifies them whichever is read first.
-func (ctx *Context) materializeHolders(inst *Instance, name string) error {
+// A holder that fails to materialize holds nothing: its error is its own, reported when it is read.
+func (ctx *Context) materializeHolders(inst *Instance, name string) {
 	if fv, ok := inst.FeatureValues[name]; !ok || ctx.holdsData(fv.Feature) {
-		return nil
+		return
 	}
 	path := name
 	for holding := inst; holding != nil; {
@@ -396,9 +422,7 @@ func (ctx *Context) materializeHolders(inst *Instance, name string) error {
 					ctx.derivingFeatureValues[featureValueRef{instance: holding.ID, feature: holder}] {
 					continue
 				}
-				if _, err := holding.GetFeatureValue(ctx, holder); err != nil {
-					return fmt.Errorf("feature %s holding %s: %w", holder, path, err)
-				}
+				_, _ = holding.GetFeatureValue(ctx, holder)
 			}
 		}
 		owner, feature := holding.Owner()
@@ -407,5 +431,4 @@ func (ctx *Context) materializeHolders(inst *Instance, name string) error {
 		}
 		path, holding = feature+"."+path, owner
 	}
-	return nil
 }
