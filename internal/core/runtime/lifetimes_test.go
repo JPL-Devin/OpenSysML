@@ -77,6 +77,49 @@ func TestOccurrenceLifeBeginsWithWhole(t *testing.T) {
 	}
 }
 
+// TestBindingRefusesADestroyedEnd: a binding neither reads a destroyed object's
+// feature into a live one nor writes a live value into it.
+func TestBindingRefusesADestroyedEnd(t *testing.T) {
+	instantiate, invoke, ctx := lifetimeFixture(t, `
+		package test {
+			private import ScalarValues::*;
+			private import OccurrenceFunctions::*;
+			part def Widget { attribute n : Integer = 1; attribute m : Integer; }
+			part def Rig {
+				part w : Widget;
+				attribute shown : Integer;
+				bind shown = w.n;
+				attribute knob : Integer = 9;
+				bind w.m = knob;
+			}
+			calc def DestroyWidget { in w : Widget; return : Widget = destroy(w); }
+		}
+	`)
+	rig := instantiate("Rig")
+	if fv, err := rig.GetFeatureValue(ctx, "shown"); err != nil || !valueIdentical(fv.HeldValue(), constInt(1)) {
+		t.Fatalf("shown before destroy = %v, %v; want 1", fv, err)
+	}
+	fv, err := rig.GetFeatureValue(ctx, "w")
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := fv.HeldValue().Object()
+	w, _ := ctx.getInstance(id)
+	if _, err := invoke("DestroyWidget", objectValue(w)); err != nil {
+		t.Fatalf("destroy(w): %v", err)
+	}
+
+	if _, err := rig.GetFeatureValue(ctx, "shown"); !errors.Is(err, ErrOccurrenceDestroyed) {
+		t.Errorf("shown bound to a destroyed end: %v; want %v", err, ErrOccurrenceDestroyed)
+	}
+	if _, err := rig.GetFeatureValue(ctx, "knob"); !errors.Is(err, ErrOccurrenceDestroyed) {
+		t.Errorf("knob bound into a destroyed end: %v; want %v", err, ErrOccurrenceDestroyed)
+	}
+	if m := w.FeatureValues["m"]; m.Materialized || m.HeldValue().Kind != ValInvalid {
+		t.Errorf("destroyed w.m = %s; want it left unwritten", FormatValue(m.HeldValue()))
+	}
+}
+
 // TestDestroyEndsPortionsAndRefusesReads: `destroy` ends the object and the parts
 // it holds, after which no feature of theirs is read or written, and none is
 // destroyed again.

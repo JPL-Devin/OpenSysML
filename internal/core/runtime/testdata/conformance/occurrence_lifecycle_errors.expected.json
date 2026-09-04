@@ -5,6 +5,7 @@
   "slots": {
     "destroyedTwice": {"error": "was destroyed at"},
     "readAfter": {"error": "occurrence was destroyed"},
+    "boundAfter": {"error": "occurrence was destroyed"},
     "tooFar": {"error": "insertion index 3 is outside 1..1"},
     "begunBefore": {"error": "before the call"}
   }

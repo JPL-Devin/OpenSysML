@@ -167,6 +167,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("usage_read_through_a_part_without_an_output", testUsageReadThroughAPartWithoutAnOutput)
 	t.Run("performed_action_binding_names_nothing", testPerformedActionBindingNamesNothing)
 	t.Run("no_flow_performed_action_checks_its_inputs", testNoFlowPerformedActionChecksItsInputs)
+	t.Run("binding_end_of_a_destroyed_object", testBindingEndOfADestroyedObject)
 	t.Run("structured_attribute_chain_of_an_unknown_feature", testStructuredAttributeChainOfAnUnknownFeature)
 	t.Run("elements_chain_of_a_non_numeric_collection", testElementsChainOfANonNumericCollection)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
@@ -7647,6 +7648,45 @@ func testPerformedActionBindingNamesNothing(t *testing.T) {
 	}
 	if err != nil && !strings.Contains(err.Error(), "nowhere") {
 		t.Errorf("error should name the binding that resolves to nothing, got: %v", err)
+	}
+}
+
+// testBindingEndOfADestroyedObject: a binding end naming a destroyed object's
+// feature is ErrOccurrenceDestroyed, never a stale read of it or a write into it.
+func testBindingEndOfADestroyedObject(t *testing.T) {
+	instantiate, invoke, ctx := lifetimeFixture(t, `
+		package test {
+			private import ScalarValues::*;
+			private import OccurrenceFunctions::*;
+			part def Widget { attribute n : Integer = 1; attribute m : Integer; }
+			part def Rig {
+				part w : Widget;
+				attribute shown : Integer;
+				bind shown = w.n;
+				attribute knob : Integer = 9;
+				bind w.m = knob;
+			}
+			calc def DestroyWidget { in w : Widget; return : Widget = destroy(w); }
+		}
+	`)
+	rig := instantiate("Rig")
+	fv, err := rig.GetFeatureValue(ctx, "w")
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := fv.HeldValue().Object()
+	w, _ := ctx.getInstance(id)
+	if _, err := invoke("DestroyWidget", objectValue(w)); err != nil {
+		t.Fatalf("destroy(w): %v", err)
+	}
+	for _, name := range []string{"shown", "knob"} {
+		_, err := rig.GetFeatureValue(ctx, name)
+		if !errors.Is(err, ErrOccurrenceDestroyed) || !errors.Is(err, ErrBindingEnd) {
+			t.Errorf("%s bound to a destroyed end: %v; want %v naming the binding end", name, err, ErrOccurrenceDestroyed)
+		}
+	}
+	if m := w.FeatureValues["m"]; m.Materialized {
+		t.Errorf("destroyed w.m = %s; want it left unwritten", FormatValue(m.HeldValue()))
 	}
 }
 
