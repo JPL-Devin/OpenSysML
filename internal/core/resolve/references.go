@@ -473,8 +473,8 @@ func (c *refCollector) relationships(scope *symbols.Scope, decl ast.Node, rels [
 		if fr, ok := target.(*ast.FeatureReference); ok {
 			target = fr.Name
 		}
-		// A subsetting other than of decl itself resolves as a redefinition
-		// does, as in resolveRelationships.
+		// A subsetting other than of decl itself reaches a sibling redefinition
+		// or resolves as a redefinition does, as in resolveRelationships.
 		if qn, ok := target.(*ast.QualifiedName); ok && rel.Kind == ast.RelSubsets {
 			c.push(Reference{Scope: scope, Subsetting: decl}.Spelled(qn))
 			continue
