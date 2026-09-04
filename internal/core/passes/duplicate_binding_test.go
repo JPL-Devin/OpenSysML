@@ -169,9 +169,9 @@ func TestConstructorDuplicateFeatureBindingKerML(t *testing.T) {
 func TestConstructorDuplicateFeatureBindingSysML(t *testing.T) {
 	const model = `package P {
 		private import ScalarValues::*;
-		item def Sig { attribute p : Integer; attribute q : Integer; }
+		item def Sig { attribute p : Integer; attribute q : Integer; ref item inner : Sig; }
 		part def Base { attribute x : Integer; }
-		part def Sub :> Base { attribute :>> x; }
+		part def Sub :> Base { attribute :>> x; ref part inner : Sub; }
 		part def Recv;
 		action def SendM { in item m : Sig; }
 		action def Owner {
@@ -188,6 +188,7 @@ func TestConstructorDuplicateFeatureBindingSysML(t *testing.T) {
 		"send SendM(new Sig(p = 1, q = 2)) to rcv;",
 		"send (1, 2).{in i : Integer; SendM(msg)} to rcv;",
 		"part s : Sub = new Sub(x = 1);",
+		"part s : Sub = new Sub(x = 1).inner.inner;",
 		"item a : Sig = new Sig(p = 1, q = 2);",
 	} {
 		wantLibraryClean(t, fmt.Sprintf(model, member))
@@ -198,6 +199,8 @@ func TestConstructorDuplicateFeatureBindingSysML(t *testing.T) {
 	wantLibraryDiag(t, fmt.Sprintf(model, "send SendM(new Sig(p = 1, p = 2)) to rcv;"), "type.expr", `p of Sig is already bound by an earlier argument`)
 	wantLibraryDiag(t, fmt.Sprintf(model, "send new Sig(p = 1, p = 2).p to rcv;"), "type.expr", `p of Sig is already bound by an earlier argument`)
 	wantLibraryDiag(t, fmt.Sprintf(model, "send new Sig(p = 1, p = 2).SendM() to rcv;"), "type.expr", `p of Sig is already bound by an earlier argument`)
+	wantLibraryDiag(t, fmt.Sprintf(model, "send new Sig(p = 1, p = 2).inner.inner.p to rcv;"), "type.expr", `p of Sig is already bound by an earlier argument`)
+	wantLibraryDiag(t, fmt.Sprintf(model, "part s : Sub = new Sub(x = 1, x = 2).inner.inner;"), "type.expr", `x of Sub is already bound by an earlier argument`)
 	wantLibraryDiag(t, fmt.Sprintf(model, "send (1, 2).{in i : Integer; new Sig(q = i, q = i)} to rcv;"), "type.expr", `q of Sig is already bound by an earlier argument`)
 	wantLibraryDiag(t, fmt.Sprintf(model, "part s : Sub = new Sub(x = 1, x = 2);"), "type.expr", `x of Sub is already bound by an earlier argument`)
 	wantLibraryDiag(t, fmt.Sprintf(model, "item a : Sig = new Sig(p = 1, Sig::p = 2);"), "type.expr", `p of Sig is already bound by an earlier argument`)
