@@ -236,6 +236,51 @@ func TestRenameLeavingAQualifiedSegmentAmbiguousIsRefused(t *testing.T) {
 	}
 }
 
+// A renamed call selects by arguments among the overloads its new spelling denotes:
+// another overload chosen, a tie, or an alias is refused; the target still chosen applies.
+func TestRenameSelectsAmongOverloadsOfRenamedCall(t *testing.T) {
+	const lib = "package Lib {\n\tcalc def g { in v : ScalarValues::Integer; return r : ScalarValues::Integer = v; }\n" +
+		"\tcalc def h { in v : ScalarValues::Integer; return r : ScalarValues::Integer = v; }\n\talias gg for h;\n}\n"
+	const realF = "package P {\n\tcalc def f { in v : ScalarValues::Real; return r : ScalarValues::Real = v; }\n}\n"
+	const intF = "package P {\n\tcalc def f { in v : ScalarValues::Integer; return r : ScalarValues::Integer = v; }\n}\n"
+	call := func(imports, arg string) string {
+		return "package R {\n" + imports + "\tattribute c : ScalarValues::Real = f(" + arg + ");\n}\n"
+	}
+	const both = "\tprivate import P::*;\n\tprivate import Lib::*;\n"
+
+	for _, tt := range []struct{ name, src, newName, want string }{
+		{"other", lib + realF + call(both, "1"), "g", "would read Lib::g instead"},
+		{"tie", lib + intF + call(both, "1"), "g", "would name 2 elements at once"},
+		{"alias", lib + realF + call(both, "1"), "gg", "would read Lib::gg instead"},
+		// The name alone still reads the target through its short name; the arguments do not.
+		{"short", lib + strings.Replace(realF, "def f", "def <g> f", 1) + call(both, "1"), "g", "would read Lib::g instead"},
+	} {
+		e := refusedRename(t, "overload-"+tt.name+".sysml", tt.src, "P::f", tt.newName)
+		if e.Failure != FailureInvalidName {
+			t.Fatalf("%s: failure is %s (%s), want invalid-name", tt.name, e.Failure, e.Message)
+		}
+		if !strings.Contains(e.Message, tt.want) {
+			t.Fatalf("%s: refusal does not say %q: %s", tt.name, tt.want, e.Message)
+		}
+		if len(e.Referring) != 1 || e.Referring[0] != "R" {
+			t.Fatalf("%s: refusal reports referring %v, want [R]", tt.name, e.Referring)
+		}
+	}
+
+	for _, imports := range []string{both, "\tprivate import Lib::*;\n\tprivate import P::*;\n"} {
+		m := loadContent(t, "overload-kept.sysml", lib+realF+call(imports, "1.5"))
+		requireClean(t, m)
+		res, err := Apply(m, []Operation{Rename("P::f", "g")})
+		if err != nil {
+			t.Fatalf("rename refused: %v", err)
+		}
+		want := lib + strings.Replace(realF, "def f", "def g", 1) + strings.Replace(call(imports, "1.5"), "= f(", "= g(", 1)
+		if string(res.Content) != want {
+			t.Fatalf("got:\n%s\nwant:\n%s", res.Content, want)
+		}
+	}
+}
+
 // Renaming onto a name declared in a scope the element's references are written
 // in is refused even when nothing at the declaration shadows it.
 func TestRenameShadowingAtAReferenceIsRefused(t *testing.T) {

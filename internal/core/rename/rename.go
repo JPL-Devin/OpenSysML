@@ -7,6 +7,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -57,8 +58,9 @@ func (c *Conflict) Error() string {
 }
 
 // Check reports the first conflict renaming sym's written name to newName would
-// create: the declaration's own scope first, then each occurrence in order.
-func Check(r *resolve.Resolver, sym *symbols.Symbol, name, newName string, occurrences []Occurrence) *Conflict {
+// create: the declaration's own scope first, then each occurrence in order. sem
+// selects what a respelled call would run, as the checker selects it.
+func Check(r *resolve.Resolver, sem *semantics.Model, sym *symbols.Symbol, name, newName string, occurrences []Occurrence) *Conflict {
 	if name == newName {
 		return nil
 	}
@@ -67,7 +69,7 @@ func Check(r *resolve.Resolver, sym *symbols.Symbol, name, newName string, occur
 		return &Conflict{Subject: subject, NewName: newName, Means: means}
 	}
 	for _, occ := range occurrences {
-		if c, ok := capturedAt(r, sym, occ, newName); ok {
+		if c, ok := capturedAt(r, sem, sym, occ, newName); ok {
 			c.Subject, c.NewName, c.Site = subject, newName, site(r, occ, name)
 			return &c
 		}
@@ -85,11 +87,9 @@ func taken(r *resolve.Resolver, sym *symbols.Symbol, newName string) (string, bo
 	return otherThan(r, sym, other, ok)
 }
 
-// capturedAt reports what the segment would read spelled newName, by a trial reading
-// of the reference: a qualifier that reaches another element captures even where the
-// rest of the name then fails, a segment that would write an alias is captured by it,
-// and a name that would reach several elements leaves the reference ambiguous.
-func capturedAt(r *resolve.Resolver, sym *symbols.Symbol, occ Occurrence, newName string) (Conflict, bool) {
+// capturedAt trial-reads the reference spelled newName: an alias or a qualifier reaching
+// another element captures, several elements leave it ambiguous, a call selects by arguments.
+func capturedAt(r *resolve.Resolver, sem *semantics.Model, sym *symbols.Symbol, occ Occurrence, newName string) (Conflict, bool) {
 	qn := respelled(occ.Ref.QN, occ.Part, newName)
 	rd := r.ProbeReading(occ.Ref.Spelled(qn))
 	if n, ambiguous := rd.Ambiguity(); ambiguous {
@@ -100,8 +100,27 @@ func capturedAt(r *resolve.Resolver, sym *symbols.Symbol, occ Occurrence, newNam
 		other, ok = alias, true
 	} else if occ.Part < len(qn.Parts)-1 {
 		other, ok = rd.Part(occ.Part)
+	} else if occ.Ref.Invocation != nil {
+		return calledInstead(r, sem, sym, occ, qn)
 	}
 	means, captured := otherThan(r, sym, other, ok)
+	return Conflict{Means: means}, captured
+}
+
+// calledInstead selects, as the checker would, among the overloads qn denotes plus the
+// renamed sym (or its alias target): another one chosen, or a tie, captures the call.
+func calledInstead(r *resolve.Resolver, sem *semantics.Model, sym *symbols.Symbol, occ Occurrence, qn *ast.QualifiedName) (Conflict, bool) {
+	named := append(r.InvocationCandidates(occ.Ref.Scope, qn), sym)
+	sel := sem.SelectCallAmong(occ.Ref.Scope, occ.Ref.Invocation, named, semantics.CallSite(occ.Ref))
+	if sel.Ambiguous {
+		return Conflict{Ambiguity: len(sel.Tied)}, true
+	}
+	runs, ok := r.ResolveAliasTarget(sym)
+	if !ok {
+		runs = sym
+	}
+	called := sel.Called()
+	means, captured := otherThan(r, runs, called, called != nil)
 	return Conflict{Means: means}, captured
 }
 

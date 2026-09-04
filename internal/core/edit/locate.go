@@ -5,6 +5,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
@@ -156,11 +157,12 @@ func (m Model) terminator(usage *ast.Usage) (source.Span, bool) {
 	return last, found
 }
 
-// resolver is a resolver with a semantic model attached, as every other caller
-// builds one: without one, members reached through inheritance or a reference
-// subsetting are invisible both to a lookup and to a reference's resolution.
-func (m Model) resolver() *resolve.Resolver {
+// resolver is a resolver and semantic model set up as the checker's: inherited and
+// subsetted members are visible, and a call's overloads are told apart by argument type.
+func (m Model) resolver() (*resolve.Resolver, *semantics.Model) {
 	r := resolve.New(m.Index)
-	r.SetModel(semantics.NewModel(r))
-	return r
+	sem := semantics.NewModel(r)
+	r.SetModel(sem)
+	sem.SetArgumentTyper(passes.NewArgumentTyper(r, sem))
+	return r, sem
 }

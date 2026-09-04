@@ -144,8 +144,8 @@ func (w *Workspace) RenameConflict(target *symbols.Symbol, name, newName string)
 			occurrences = append(occurrences, rename.Occurrence{Ref: e.ref, Part: e.part})
 		}
 	}
-	r, _ := w.newResolver()
-	return rename.Check(r, target, name, newName, occurrences)
+	r, sem := w.newResolver()
+	return rename.Check(r, sem, target, name, newName, occurrences)
 }
 
 // segmentElements is the element each segment of a resolved ref reaches (nil where

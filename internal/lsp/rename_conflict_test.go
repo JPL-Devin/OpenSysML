@@ -114,6 +114,53 @@ func TestRenameRefusesSegmentLeftAmbiguous(t *testing.T) {
 	wantRefusal(t, msg, `P::x cannot be renamed to "y"`, "reference to it in R", "would name 2 elements at once")
 }
 
+// A renamed call selects by arguments among the overloads its new spelling denotes:
+// another overload chosen, a tie, or an alias is refused; the target still chosen applies.
+func TestRenameSelectsAmongOverloadsOfRenamedCall(t *testing.T) {
+	const lib = "package Lib {\n\tcalc def g { in v : ScalarValues::Integer; return r : ScalarValues::Integer = v; }\n" +
+		"\tcalc def h { in v : ScalarValues::Integer; return r : ScalarValues::Integer = v; }\n\talias gg for h;\n}\n"
+	const realF = "package P {\n\tcalc def f { in v : ScalarValues::Real; return r : ScalarValues::Real = v; }\n}\n"
+	const intF = "package P {\n\tcalc def f { in v : ScalarValues::Integer; return r : ScalarValues::Integer = v; }\n}\n"
+	call := func(imports, arg string) string {
+		return "package R {\n" + imports + "\tattribute c : ScalarValues::Real = f(" + arg + ");\n}\n"
+	}
+	const both = "\tprivate import P::*;\n\tprivate import Lib::*;\n"
+
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/overload_other.sysml", lib+realF+call(both, "1"))
+	msg := refuseRename(t, ws, name, "f {", "g")
+	wantRefusal(t, msg, `P::f cannot be renamed to "g"`, "reference to it in R", "would read Lib::g instead")
+
+	ws = model.NewWorkspace()
+	name = openRenameDoc(t, ws, "/tmp/overload_tie.sysml", lib+intF+call(both, "1"))
+	msg = refuseRename(t, ws, name, "f {", "g")
+	wantRefusal(t, msg, `P::f cannot be renamed to "g"`, "reference to it in R", "would name 2 elements at once")
+
+	ws = model.NewWorkspace()
+	name = openRenameDoc(t, ws, "/tmp/overload_alias.sysml", lib+realF+call(both, "1"))
+	msg = refuseRename(t, ws, name, "f {", "gg")
+	wantRefusal(t, msg, `P::f cannot be renamed to "gg"`, "reference to it in R", "would read Lib::gg instead")
+
+	// The name alone still reads the target through its short name; the arguments do not.
+	ws = model.NewWorkspace()
+	name = openRenameDoc(t, ws, "/tmp/overload_short.sysml", lib+strings.Replace(realF, "def f", "def <g> f", 1)+call(both, "1"))
+	msg = refuseRename(t, ws, name, "f {", "g")
+	wantRefusal(t, msg, `P::f cannot be renamed to "g"`, "reference to it in R", "would read Lib::g instead")
+
+	for _, imports := range []string{both, "\tprivate import Lib::*;\n\tprivate import P::*;\n"} {
+		ws = model.NewWorkspace()
+		name = openRenameDoc(t, ws, "/tmp/overload_kept.sysml", lib+realF+call(imports, "1.5"))
+		got, err := applyRename(t, ws, name, "f {", "g")
+		if err != nil {
+			t.Fatalf("Rename err = %v", err)
+		}
+		want := lib + strings.Replace(realF, "def f", "def g", 1) + strings.Replace(call(imports, "1.5"), "= f(", "= g(", 1)
+		if got[name] != want {
+			t.Fatalf("got:\n%s\nwant:\n%s", got[name], want)
+		}
+	}
+}
+
 // The same for a feature chain's qualified member, which is read outward from
 // the operand's type and whose failed reading the resolver otherwise discards.
 func TestRenameRefusesQualifierCaptureInFeatureChainMember(t *testing.T) {

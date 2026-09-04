@@ -26,9 +26,9 @@ func (m Model) renameSplices(i int, op Operation, sym *symbols.Symbol) ([]splice
 	if err := checkName(i, op.NewName); err != nil {
 		return nil, err
 	}
-	r := m.resolver()
+	r, sem := m.resolver()
 	occurrences := m.renameOccurrences(r, sym, ident)
-	if c := rename.Check(r, sym, ident.Name, op.NewName, occurrences); c != nil {
+	if c := rename.Check(r, sem, sym, ident.Name, op.NewName, occurrences); c != nil {
 		e := &Error{Failure: FailureInvalidName, OperationIndex: i, Message: c.Error()}
 		if c.Site != "" {
 			e.Referring = []string{c.Site}
