@@ -13,7 +13,9 @@
   `vectorScalarQuantityMult` and `vectorScalarQuantityDiv`, and the `*`/`/` operators between
   a scalar quantity and a vector, answer a vector quantity printed `⟨2.0, 4.0⟩ [m]` whose unit
   is composed by the same rule as the scalar quantities'; a vector of no components takes no
-  unit, as a quantity's `num` is `Number[1..*]`. A vector binds to a feature typed by any
+  unit, as a quantity's `num` is `Number[1..*]`. `inner`, `norm` and `angle` over vector
+  quantities answer the `Number` the library declares — the magnitude in the unit the axes
+  compose — so a `Number` feature takes them, as the checker already allowed. A vector binds to a feature typed by any
   `NumericalVectorValue` specialization whose fixed dimension and element type it fits — a
   model's own `:> NumericalVectorValue { :>> elements : Integer; }` as much as
   `CartesianThreeVectorValue` — and the refusal names the declaration it fails. Each new kind is handled wherever

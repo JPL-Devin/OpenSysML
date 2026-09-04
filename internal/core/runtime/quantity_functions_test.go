@@ -442,8 +442,12 @@ func TestVectorCalculations(t *testing.T) {
 		{"VectorCalculations::vectorScalarQuantityMult(VectorFunctions::VectorOf((1.0, 2.0)) [m], 2 [m])", "⟨2.0, 4.0⟩ [m**2]"},
 		{"VectorCalculations::vectorScalarQuantityDiv(VectorFunctions::VectorOf((2.0, 4.0)) [m], 2 [s])", "⟨1.0, 2.0⟩ [m/s]"},
 		{"VectorCalculations::'+'(VectorFunctions::VectorOf((1.0, 2.0)) [m], VectorFunctions::VectorOf((100.0, 200.0)) [cm])", "⟨2.0, 4.0⟩ [m]"},
-		{"VectorCalculations::inner(VectorFunctions::VectorOf((1.0, 2.0)) [m], VectorFunctions::VectorOf((3.0, 4.0)) [m])", "11.0 [m**2]"},
-		{"VectorCalculations::norm(VectorFunctions::VectorOf((3.0, 4.0)) [m])", "5.0 [m]"},
+		// inner and norm are declared `return : Number[1]`: the magnitude in the
+		// unit the axes compose ([m**2], [cm*m], [m]), the unit itself not carried.
+		{"VectorCalculations::inner(VectorFunctions::VectorOf((1.0, 2.0)) [m], VectorFunctions::VectorOf((3.0, 4.0)) [m])", "11.0"},
+		{"VectorCalculations::inner(VectorFunctions::VectorOf((1.0, 2.0)) [m], VectorFunctions::VectorOf((300.0, 400.0)) [cm])", "1100.0"},
+		{"VectorCalculations::norm(VectorFunctions::VectorOf((3.0, 4.0)) [m])", "5.0"},
+		{"VectorCalculations::norm(VectorFunctions::VectorOf((300.0, 400.0)) [cm])", "500.0"},
 		{"VectorCalculations::isZeroVectorQuantity(VectorFunctions::VectorOf((0.0, 0.0)) [m])", "true"},
 		{"2 [m] * VectorFunctions::VectorOf((1.0, 2.0))", "⟨2.0, 4.0⟩ [m]"},
 		{"VectorFunctions::VectorOf((2.0, 4.0)) [m] / 2 [s]", "⟨1.0, 2.0⟩ [m/s]"},

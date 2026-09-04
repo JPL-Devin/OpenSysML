@@ -587,7 +587,8 @@ func vectorScalarQuantityDiv(name string, ctx *Context, args []Value) (Value, er
 
 // vectorInner is the inner product of two vectors of equal dimension, keeping the
 // elements' kind: two Integer vectors have an Integer inner product. Vector
-// quantities give a scalar quantity in the product of their units.
+// quantities give the magnitude the library declares (Number), in the product of
+// their first axes' units.
 func vectorInner(name string, _ *Context, args []Value) (Value, error) {
 	v, err := readVector(name, `"v"`, args[0])
 	if err != nil {
@@ -619,37 +620,39 @@ func vectorInner(name string, _ *Context, args []Value) (Value, error) {
 	return Value{Kind: ValConst, Const: checked}, nil
 }
 
-// innerQuantity is the inner product over quantity axes: the sum of the axis
-// products, each in the unit the scalar product composes.
+// innerQuantity is the inner product over quantity axes: the axis products summed
+// in the unit the first composes, and that sum's magnitude, as the library declares
+// the result a Number.
 func innerQuantity(name string, v, w vectorOperand) (Value, error) {
 	if v.dimension() != w.dimension() {
 		return Value{}, dimensionMismatch(name, v, w)
 	}
-	var sum Value
+	if v.dimension() == 0 {
+		return integerValue(0), nil
+	}
+	var sum *Quantity
 	for i := 0; i < v.dimension(); i++ {
 		product, err := scaleQuantities(ast.OpMul, v.axis(i), w.axis(i))
 		if err != nil {
 			return Value{}, functionError(name, err)
 		}
+		term, _ := asQuantity(product)
 		if i == 0 {
-			sum = product
+			sum = term
 			continue
 		}
-		left, _ := asQuantity(sum)
-		right, _ := asQuantity(product)
-		if sum, err = addQuantities(ast.OpAdd, left, right); err != nil {
+		added, err := addQuantities(ast.OpAdd, sum, term)
+		if err != nil {
 			return Value{}, functionError(name, err)
 		}
+		sum, _ = asQuantity(added)
 	}
-	if v.dimension() == 0 {
-		return integerValue(0), nil
-	}
-	return sum, nil
+	return Value{Kind: ValConst, Const: sum.Num}, nil
 }
 
 // vectorNorm is the norm (magnitude) of a vector, the square root of its inner
-// product with itself; a vector quantity's is in the unit of its first axis, and
-// one of no axes has the plain norm 0.0, as its inner product is the plain 0.
+// product with itself; the library declares it a Number, so a vector quantity's is
+// the magnitude in the unit of its first axis.
 func vectorNorm(name string, _ *Context, args []Value) (Value, error) {
 	v, err := readVector(name, `"v"`, args[0])
 	if err != nil {
@@ -659,11 +662,7 @@ func vectorNorm(name string, _ *Context, args []Value) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	norm, err := checkedReal(euclideanNorm(reals))
-	if err != nil || !v.hasUnits() {
-		return norm, err
-	}
-	return inUnit(norm.Const, v.units[0])
+	return checkedReal(euclideanNorm(reals))
 }
 
 // euclideanNorm is the square root of the sum of the squares.
