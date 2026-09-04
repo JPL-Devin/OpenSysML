@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"math"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -20,31 +21,28 @@ var formatSource = format.Source
 // Formatting re-indents the whole document as one edit per changed region, so
 // the editor keeps its undo history, cursor and folds.
 func (s *Server) Formatting(ctx context.Context, params *protocol.DocumentFormattingParams) ([]protocol.TextEdit, error) {
-	return s.formattingEdits(params.TextDocument.URI, params.Options)
+	return s.formattingEdits(params.TextDocument.URI, params.Options, allLines)
 }
 
-// RangeFormatting formats the whole document as Formatting does and keeps only
-// the edits touching the requested lines, so nothing outside them moves.
+// RangeFormatting formats the whole document as Formatting does and returns only
+// the edits on the requested lines, so nothing outside them moves.
 func (s *Server) RangeFormatting(ctx context.Context, params *protocol.DocumentRangeFormattingParams) ([]protocol.TextEdit, error) {
-	edits, err := s.formattingEdits(params.TextDocument.URI, params.Options)
-	if err != nil || len(edits) == 0 {
-		return nil, err
-	}
 	first, last := lineSpan(params.Range)
-	var kept []protocol.TextEdit
-	for _, edit := range edits {
-		if from, to := lineSpan(edit.Range); from <= last && to >= first {
-			kept = append(kept, edit)
-		}
-	}
-	return kept, nil
+	return s.formattingEdits(params.TextDocument.URI, params.Options, lineWindow{int(first), int(last) + 1})
 }
 
-// formattingEdits returns the edits that turn the named document into its
-// formatted form, or none when there is nothing to do. A document that does not
-// parse is left alone: its brace structure is unreliable, and reformatting a
+// lineWindow is the half-open range of document lines an edit may touch.
+type lineWindow struct{ from, to int }
+
+var allLines = lineWindow{0, math.MaxInt}
+
+func (w lineWindow) has(line int) bool { return w.from <= line && line < w.to }
+
+// formattingEdits returns the edits within w that turn the named document into
+// its formatted form, or none when there is nothing to do. A document that does
+// not parse is left alone: its brace structure is unreliable, and reformatting a
 // file the author is midway through editing is worse than doing nothing.
-func (s *Server) formattingEdits(uri protocol.DocumentURI, opts protocol.FormattingOptions) ([]protocol.TextEdit, error) {
+func (s *Server) formattingEdits(uri protocol.DocumentURI, opts protocol.FormattingOptions, w lineWindow) ([]protocol.TextEdit, error) {
 	name := uriToName(uri)
 	doc := s.ws.Document(name)
 	if doc == nil || len(doc.ParseDiagnostics) > 0 {
@@ -62,7 +60,7 @@ func (s *Server) formattingEdits(uri protocol.DocumentURI, opts protocol.Formatt
 	if bytes.Equal(out, doc.Content) {
 		return nil, nil
 	}
-	return formatEdits(doc.Content, out), nil
+	return formatEdits(doc.Content, out, w), nil
 }
 
 // lineSpan returns the first and last line a range touches; a range ending at
@@ -87,13 +85,15 @@ func formatOptions(opts protocol.FormattingOptions) format.Options {
 	return out
 }
 
-// formatEdits returns the ordered, non-overlapping edits that turn content into
-// formatted. Lines are matched on their non-whitespace text, since that is all
-// the formatter preserves, and each changed line becomes one edit.
-func formatEdits(content, formatted []byte) []protocol.TextEdit {
+// formatEdits returns the ordered, non-overlapping edits on the lines of w that
+// turn content into formatted. Lines are matched on their non-whitespace text,
+// since that is all the formatter preserves; each changed line becomes one edit
+// and each run of dropped lines one deletion.
+func formatEdits(content, formatted []byte, w lineWindow) []protocol.TextEdit {
 	oldLines, oldOffsets := cutLines(content)
 	newLines, _ := cutLines(formatted)
 	table := newLineTable(content, oldOffsets)
+	w.from, w.to = max(w.from, 0), min(w.to, len(oldLines))
 
 	var edits []protocol.TextEdit
 	replace := func(start, end int, text string) {
@@ -102,31 +102,91 @@ func formatEdits(content, formatted []byte) []protocol.TextEdit {
 			NewText: text,
 		})
 	}
-	// Lines the diff pairs up may still differ in whitespace; edit each one.
+	// editLine rewrites old line i into new line j where their whitespace differs.
+	editLine := func(i, j int) {
+		if !w.has(i) {
+			return
+		}
+		if start, end, text, changed := trimCommon(oldLines[i], newLines[j]); changed {
+			replace(oldOffsets[i]+start, oldOffsets[i]+end, text)
+		}
+	}
 	pairLines := func(oldFrom, oldTo, newFrom int) {
 		for i, j := oldFrom, newFrom; i < oldTo; i, j = i+1, j+1 {
-			if start, end, text, changed := trimCommon(oldLines[i], newLines[j]); changed {
-				replace(oldOffsets[i]+start, oldOffsets[i]+end, text)
-			}
+			editLine(i, j)
 		}
 	}
 	oldNext, newNext := 0, 0
 	keys := lineKeys{ids: make(map[string]int, len(oldLines))}
-	hunks := diffLines(keys.of(oldLines, len(content)), keys.of(newLines, len(formatted)))
-	for _, h := range append(hunks, hunk{len(oldLines), len(oldLines), len(newLines), len(newLines)}) {
+	oldIDs, newIDs := keys.of(oldLines, len(content)), keys.of(newLines, len(formatted))
+	hunks := append(diffLines(oldIDs, newIDs), hunk{len(oldLines), len(oldLines), len(newLines), len(newLines)})
+	for k, h := range hunks {
+		surplus := (h.oldEnd - h.oldStart) - (h.newEnd - h.newStart)
+		if surplus > 0 && uniform(oldIDs[h.oldStart:h.oldEnd], oldIDs[h.oldStart]) && uniform(newIDs[h.newStart:h.newEnd], oldIDs[h.oldStart]) {
+			// Dropping from a run of like lines (blanks) has no natural place; widen
+			// the hunk over the run so any selected line of it may be the one to go.
+			id := oldIDs[h.oldStart]
+			for h.oldStart > oldNext && oldIDs[h.oldStart-1] == id {
+				h.oldStart, h.newStart = h.oldStart-1, h.newStart-1
+			}
+			for h.oldEnd < hunks[k+1].oldStart && oldIDs[h.oldEnd] == id {
+				h.oldEnd, h.newEnd = h.oldEnd+1, h.newEnd+1
+			}
+		}
 		pairLines(oldNext, h.oldStart, newNext)
 		oldNext, newNext = h.oldEnd, h.newEnd
-		if h.oldEnd-h.oldStart == h.newEnd-h.newStart {
+		if surplus == 0 {
 			pairLines(h.oldStart, h.oldEnd, h.newStart)
 			continue
 		}
-		oldText := string(content[oldOffsets[h.oldStart]:oldOffsets[h.oldEnd]])
-		newText := strings.Join(newLines[h.newStart:h.newEnd], "")
-		if start, end, text, changed := trimCommon(oldText, newText); changed {
-			replace(oldOffsets[h.oldStart]+start, oldOffsets[h.oldStart]+end, text)
+		if surplus < 0 {
+			// More new lines than old: pair in order, insert the rest after the hunk.
+			pairLines(h.oldStart, h.oldEnd, h.newStart)
+			if w.has(max(h.oldEnd-1, 0)) {
+				replace(oldOffsets[h.oldEnd], oldOffsets[h.oldEnd], strings.Join(newLines[h.newStart+h.oldEnd-h.oldStart:h.newEnd], ""))
+			}
+			continue
 		}
+		// The hunk drops lines (the formatter only ever removes blank ones). Take
+		// them from the end of the window's part first, so a selection never has
+		// to change a line outside it, and pair the survivors with the new lines.
+		from, to := max(h.oldStart, w.from), min(h.oldEnd, w.to)
+		if from >= to {
+			continue
+		}
+		dropFrom := max(to-surplus, from)
+		outside := surplus - (to - dropFrom)
+		dropped := func(i int) bool {
+			switch {
+			case i >= to:
+				return h.oldEnd-i <= outside
+			case i < from:
+				return i-h.oldStart < outside-(h.oldEnd-to)
+			default:
+				return i >= dropFrom
+			}
+		}
+		j := h.newStart
+		for i := h.oldStart; i < h.oldEnd; i++ {
+			if dropped(i) {
+				continue
+			}
+			editLine(i, j)
+			j++
+		}
+		replace(oldOffsets[dropFrom], oldOffsets[to], "")
 	}
 	return edits
+}
+
+// uniform reports whether every id is the given one.
+func uniform(ids []int, id int) bool {
+	for _, other := range ids {
+		if other != id {
+			return false
+		}
+	}
+	return true
 }
 
 // cutLines splits text after each newline, keeping terminators so the lines
@@ -186,8 +246,9 @@ func (k *lineKeys) of(lines []string, size int) []int {
 	return out
 }
 
-// trimCommon strips the shared prefix and suffix on rune boundaries and reports
-// the byte range of old that remains and the text replacing it.
+// trimCommon strips the shared prefix and suffix and reports the byte range of
+// old that remains and the text replacing it. The range never splits a rune or
+// a CRLF: a position between its CR and LF is not addressable in the protocol.
 func trimCommon(old, new string) (start, end int, text string, changed bool) {
 	if old == new {
 		return 0, 0, "", false
@@ -196,7 +257,7 @@ func trimCommon(old, new string) (start, end int, text string, changed bool) {
 	for start < len(old) && start < len(new) && old[start] == new[start] {
 		start++
 	}
-	for start > 0 && ((start < len(old) && !utf8.RuneStart(old[start])) || (start < len(new) && !utf8.RuneStart(new[start]))) {
+	for start > 0 && (splits(old, start) || splits(new, start)) {
 		start--
 	}
 	end, newEnd := len(old), len(new)
@@ -204,11 +265,19 @@ func trimCommon(old, new string) (start, end int, text string, changed bool) {
 		end--
 		newEnd--
 	}
-	for (end < len(old) && !utf8.RuneStart(old[end])) || (newEnd < len(new) && !utf8.RuneStart(new[newEnd])) {
+	for splits(old, end) || splits(new, newEnd) {
 		end++
 		newEnd++
 	}
 	return start, end, new[start:newEnd], true
+}
+
+// splits reports whether cutting s at i lands inside a rune or between a CR and its LF.
+func splits(s string, i int) bool {
+	if i <= 0 || i >= len(s) {
+		return false
+	}
+	return !utf8.RuneStart(s[i]) || (s[i] == '\n' && s[i-1] == '\r')
 }
 
 // lineTable converts byte offsets to protocol positions in O(log lines) each.

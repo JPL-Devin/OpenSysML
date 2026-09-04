@@ -70,17 +70,49 @@ func lines(from, to int) protocol.Range {
 	return protocol.Range{Start: pos(from, 0), End: pos(to, 0)}
 }
 
-// applyOrderedEdits checks edits are in document order and never overlap, then
-// applies them back to front as a client does.
+// clientOffset resolves a position the way an editor does: the line's text ends
+// before its CRLF or LF terminator, and the column must land on a UTF-16 code
+// unit boundary within that text. Anything else is not a valid position.
+func clientOffset(t *testing.T, content string, p protocol.Position) int {
+	t.Helper()
+	lines, offsets := cutLines([]byte(content))
+	if int(p.Line) == len(lines) && (len(content) == 0 || strings.HasSuffix(content, "\n")) {
+		if p.Character != 0 {
+			t.Fatalf("position %v: the empty last line has no column %d", p, p.Character)
+		}
+		return len(content)
+	}
+	if int(p.Line) >= len(lines) {
+		t.Fatalf("position %v: line beyond the document's %d lines", p, len(lines))
+	}
+	text := strings.TrimSuffix(strings.TrimSuffix(lines[p.Line], "\n"), "\r")
+	units := 0
+	for i, r := range text {
+		if units == int(p.Character) {
+			return offsets[p.Line] + i
+		}
+		if units > int(p.Character) {
+			t.Fatalf("position %v splits the surrogate pair of %q", p, r)
+		}
+		units += utf16RuneLen(r)
+	}
+	if units != int(p.Character) {
+		t.Fatalf("position %v: line %q is only %d UTF-16 units long", p, text, units)
+	}
+	return offsets[p.Line] + len(text)
+}
+
+// applyOrderedEdits checks edits are in document order, never overlap and use
+// positions a client can address, then applies them back to front as a client does.
 func applyOrderedEdits(t *testing.T, content string, edits []protocol.TextEdit) string {
 	t.Helper()
 	src := []byte(content)
 	type span struct{ start, end int }
 	spans := make([]span, len(edits))
 	for i, e := range edits {
-		start, end := positionToOffset(src, e.Range.Start), positionToOffset(src, e.Range.End)
+		start, end := clientOffset(t, content, e.Range.Start), clientOffset(t, content, e.Range.End)
 		if offsetToPosition(src, start) != e.Range.Start || offsetToPosition(src, end) != e.Range.End {
-			t.Fatalf("edit %d range %v does not land on a UTF-16 boundary of the document", i, e.Range)
+			t.Fatalf("edit %d range %v disagrees with offsetToPosition", i, e.Range)
 		}
 		if end < start {
 			t.Fatalf("edit %d %v ends before it starts", i, e.Range)
@@ -216,6 +248,98 @@ func TestFormattingKeepsCRLF(t *testing.T) {
 	}
 }
 
+// Mixed line endings are normalised to the dominant one. A protocol position
+// cannot sit between a CR and its LF, so the edit that drops or adds the CR
+// replaces the whole terminator, running to the start of the next line.
+func TestFormattingNormalisesMixedLineEndings(t *testing.T) {
+	cases := []struct {
+		name, src, want string
+		edits           []protocol.TextEdit
+	}{
+		{
+			name: "one CRLF line in an LF file",
+			src:  "package P {\r\n    part def Car;\n    part def Bus;\n}\n",
+			want: "package P {\n    part def Car;\n    part def Bus;\n}\n",
+			edits: []protocol.TextEdit{
+				{Range: protocol.Range{Start: pos(0, 11), End: pos(1, 0)}, NewText: "\n"},
+			},
+		},
+		{
+			name: "one LF line in a CRLF file",
+			src:  "package P {\r\n    part def Car;\n    part def Bus;\r\n}\r\n",
+			want: "package P {\r\n    part def Car;\r\n    part def Bus;\r\n}\r\n",
+			edits: []protocol.TextEdit{
+				{Range: protocol.Range{Start: pos(1, 17), End: pos(2, 0)}, NewText: "\r\n"},
+			},
+		},
+		{
+			name: "CRLF line that also needs re-indenting",
+			src:  "package P {\npart def Car;\r\n    part def Bus;\n}\n",
+			want: "package P {\n    part def Car;\n    part def Bus;\n}\n",
+			edits: []protocol.TextEdit{
+				{Range: protocol.Range{Start: pos(1, 0), End: pos(2, 0)}, NewText: "    part def Car;\n"},
+			},
+		},
+		{
+			name: "blank CRLF line in an LF file",
+			src:  "package P {\n    part def Car;\n\r\n    part def Bus;\n}\n",
+			want: "package P {\n    part def Car;\n\n    part def Bus;\n}\n",
+			edits: []protocol.TextEdit{
+				{Range: protocol.Range{Start: pos(2, 0), End: pos(3, 0)}, NewText: "\n"},
+			},
+		},
+		{
+			name: "CRLF inside a multi-line comment in an LF file",
+			src:  "package P {\n    /* one\r\n       two */\n    part def Car;\n}\n",
+			want: "package P {\n    /* one\n       two */\n    part def Car;\n}\n",
+			edits: []protocol.TextEdit{
+				{Range: protocol.Range{Start: pos(1, 10), End: pos(2, 0)}, NewText: "\n"},
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			edits, got := formatDoc(t, tc.src, spaces4)
+			if got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+			if len(edits) != len(tc.edits) {
+				t.Fatalf("edits = %+v, want %+v", edits, tc.edits)
+			}
+			for i := range edits {
+				if edits[i] != tc.edits[i] {
+					t.Fatalf("edit %d = %+v, want %+v", i, edits[i], tc.edits[i])
+				}
+			}
+		})
+	}
+}
+
+// trimCommon never cuts between a CR and its LF, whichever side has the CR.
+func TestTrimCommonKeepsCRLFWhole(t *testing.T) {
+	cases := []struct {
+		old, new   string
+		start, end int
+		text       string
+	}{
+		{"foo\r\n", "foo\n", 3, 5, "\n"},
+		{"foo\n", "foo\r\n", 3, 4, "\r\n"},
+		{"\r\n", "\n", 0, 2, "\n"},
+		{"\n", "\r\n", 0, 1, "\r\n"},
+		{"  foo\r\n", "foo\n", 0, 7, "foo\n"},
+		{"foo  \r\n", "foo\r\n", 3, 5, ""},
+	}
+	for _, tc := range cases {
+		start, end, text, changed := trimCommon(tc.old, tc.new)
+		if !changed || start != tc.start || end != tc.end || text != tc.text {
+			t.Errorf("trimCommon(%q, %q) = %d, %d, %q, %v; want %d, %d, %q, true", tc.old, tc.new, start, end, text, changed, tc.start, tc.end, tc.text)
+		}
+		if got := tc.old[:start] + text + tc.old[end:]; got != tc.new {
+			t.Errorf("trimCommon(%q, %q): applying the edit gives %q", tc.old, tc.new, got)
+		}
+	}
+}
+
 // Every corpus model formats to exactly what format.Source produces when the
 // edits are applied, including files that need no edits or do not parse.
 func TestFormattingEditsReproduceFormatterOutput(t *testing.T) {
@@ -331,12 +455,12 @@ func TestFormattingDiffIsCheaperThanFormatting(t *testing.T) {
 		return best
 	}
 	formatTime := fastest(func() { _, _ = format.Source("largest.sysml", mangled, format.DefaultOptions) })
-	diffTime := fastest(func() { formatEdits(mangled, formatted) })
+	diffTime := fastest(func() { formatEdits(mangled, formatted, allLines) })
 	t.Logf("%d bytes: format %v, diff %v", len(mangled), formatTime, diffTime)
 	if diffTime > formatTime {
 		t.Fatalf("diff took %v, formatter %v; the diff must not dominate", diffTime, formatTime)
 	}
-	edits := formatEdits(mangled, formatted)
+	edits := formatEdits(mangled, formatted, allLines)
 	if got := applyOrderedEdits(t, string(mangled), edits); got != string(formatted) {
 		t.Fatal("edits do not reproduce the formatter output")
 	}
@@ -354,7 +478,7 @@ func BenchmarkFormatEdits(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		formatEdits(mangled, formatted)
+		formatEdits(mangled, formatted, allLines)
 	}
 }
 
@@ -429,18 +553,77 @@ func TestRangeFormattingUsesWholeFileStructure(t *testing.T) {
 	}
 }
 
-// A deletion that spans lines is kept when any of those lines is selected.
-func TestRangeFormattingKeepsMultiLineEditTouchingRange(t *testing.T) {
+// A blank run the formatter collapses is only trimmed within the selection:
+// selected surplus blanks go, lines outside the selection are never touched.
+func TestRangeFormattingTrimsBlankRunWithinSelectionOnly(t *testing.T) {
+	// Lines 2-4 are blank; the formatter keeps one of them.
 	src := "package P {\n    part def Car;\n\n\n\n    part def Bus;\n}\n"
 	full := formatEditsFor(t, src, spaces4)
-	if len(full) != 1 {
-		t.Fatalf("full edits = %+v, want one deletion", full)
+	if want := []protocol.TextEdit{{Range: lines(3, 5), NewText: ""}}; len(full) != 1 || full[0] != want[0] {
+		t.Fatalf("full edits = %+v, want %+v", full, want)
 	}
-	if edits := rangeEditsFor(t, src, lines(4, 5)); len(edits) != 1 || edits[0] != full[0] {
-		t.Fatalf("edits = %+v, want %+v", edits, full)
+	cases := []struct {
+		name  string
+		sel   protocol.Range
+		edits []protocol.TextEdit
+		want  string
+	}{
+		{"one blank inside the run", lines(3, 4), []protocol.TextEdit{{Range: lines(3, 4)}},
+			"package P {\n    part def Car;\n\n\n    part def Bus;\n}\n"},
+		{"the blank the whole-file edit keeps", lines(2, 3), []protocol.TextEdit{{Range: lines(2, 3)}},
+			"package P {\n    part def Car;\n\n\n    part def Bus;\n}\n"},
+		{"the whole run", lines(2, 5), full,
+			"package P {\n    part def Car;\n\n    part def Bus;\n}\n"},
+		{"the run's tail and the line after", lines(3, 6), full,
+			"package P {\n    part def Car;\n\n    part def Bus;\n}\n"},
+		{"the line before and the run's head", lines(1, 3), []protocol.TextEdit{{Range: lines(2, 3)}},
+			"package P {\n    part def Car;\n\n\n    part def Bus;\n}\n"},
+		{"a cursor on the middle blank", protocol.Range{Start: pos(3, 0), End: pos(3, 0)}, []protocol.TextEdit{{Range: lines(3, 4)}},
+			"package P {\n    part def Car;\n\n\n    part def Bus;\n}\n"},
+		{"the line before the run", lines(1, 2), nil, src},
+		{"the line after the run", lines(5, 6), nil, src},
 	}
-	if edits := rangeEditsFor(t, src, lines(0, 1)); len(edits) != 0 {
-		t.Fatalf("edits = %+v, want none outside the blank run", edits)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			edits := rangeEditsFor(t, src, tc.sel)
+			if len(edits) != len(tc.edits) {
+				t.Fatalf("edits = %+v, want %+v", edits, tc.edits)
+			}
+			for i := range edits {
+				if edits[i] != tc.edits[i] {
+					t.Fatalf("edit %d = %+v, want %+v", i, edits[i], tc.edits[i])
+				}
+			}
+			if got := applyOrderedEdits(t, src, edits); got != tc.want {
+				t.Fatalf("applied = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// Every edit RangeFormatting returns lies on the selected lines, whatever the
+// selection, and selecting everything reproduces the formatter's output.
+func TestRangeFormattingNeverLeavesSelection(t *testing.T) {
+	src := "package P {\n\n\n  part def Car;   \n\n\n\n\tpart def Bus {\n  \n\n  attribute n;\n\n  }\n\n\n}\n\n\n"
+	want, err := format.Source("fmt.sysml", []byte(src), format.DefaultOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := applyOrderedEdits(t, src, formatEditsFor(t, src, spaces4)); got != string(want) {
+		t.Fatalf("formatting gives %q, want %q", got, want)
+	}
+	total := strings.Count(src, "\n")
+	for first := 0; first < total; first++ {
+		for last := first; last < total; last++ {
+			edits := rangeEditsFor(t, src, lines(first, last+1))
+			for _, e := range edits {
+				from, to := lineSpan(e.Range)
+				if int(from) < first || int(to) > last {
+					t.Fatalf("lines %d-%d: edit %+v leaves the selection", first, last, e)
+				}
+			}
+			applyOrderedEdits(t, src, edits)
+		}
 	}
 }
 
