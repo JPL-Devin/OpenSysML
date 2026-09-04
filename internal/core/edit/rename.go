@@ -24,7 +24,7 @@ type renameOccurrence struct {
 // token and every reference to it in this source. A rename that would capture or
 // shadow another name is refused.
 func (m Model) renameSplices(i int, op Operation, sym *symbols.Symbol) ([]splice, error) {
-	ident, ok := declIdent(sym.Decl)
+	ident, ok := symbols.DeclIdent(sym.Decl)
 	if !ok || ident.Name == "" || ident.NameSpan.Len == 0 {
 		return nil, &Error{
 			Failure:        FailureNotNamed,
@@ -60,7 +60,8 @@ func (m Model) renameSplices(i int, op Operation, sym *symbols.Symbol) ([]splice
 
 // renameOccurrences returns every reference spelling sym's declared name, in
 // source order. A reference written with the short name is left alone: the
-// rename does not change the short name.
+// rename does not change the short name. The LSP applies the same rule through
+// Workspace.NameReferencesTo.
 func (m Model) renameOccurrences(i int, op Operation, sym *symbols.Symbol,
 	ident ast.Identification) ([]renameOccurrence, error) {
 
@@ -83,10 +84,7 @@ func (m Model) renameOccurrences(i int, op Operation, sym *symbols.Symbol,
 			}
 			// A segment written as an alias name reads the alias membership, so
 			// renaming the alias rewrites it and renaming the target does not.
-			seg, ok := r.PartAlias(ref.QN, part)
-			if !ok {
-				seg, ok = r.PartSymbol(ref.QN, part)
-			}
+			seg, ok := r.PartName(ref.QN, part)
 			if !ok || !symbols.SameElement(seg, sym) {
 				continue
 			}

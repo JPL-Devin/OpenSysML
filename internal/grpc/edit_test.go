@@ -211,6 +211,32 @@ func TestApplyEditsRenameRewritesReferences(t *testing.T) {
 	}
 }
 
+// A rename through the edit API follows the batch edit layer's rule: a reference
+// written with the element's short name still resolves, so it is left as written.
+func TestApplyEditsRenameLeavesShortNameReferences(t *testing.T) {
+	srv := mustNewService(t, 10)
+	hash := mustParsedModel(t, srv, "package P {\n\tpart def <O> Old;\n\tpart a : O;\n\tpart b : Old;\n}\n")
+
+	resp, err := srv.ApplyEdits(context.Background(), &pb.ApplyEditsRequest{
+		ModelHash: hash,
+		Operations: []*pb.EditOperation{{Operation: &pb.EditOperation_Rename{
+			Rename: &pb.RenameEdit{Target: "P::Old", NewName: "Fresh"},
+		}}},
+	})
+	if err != nil {
+		t.Fatalf("ApplyEdits failed: %v", err)
+	}
+	if resp.Failure != pb.EditFailure_EDIT_FAILURE_UNSPECIFIED {
+		t.Fatalf("failure = %s: %s", resp.Failure, resp.Error)
+	}
+	if want := "package P {\n\tpart def <O> Fresh;\n\tpart a : O;\n\tpart b : Fresh;\n}\n"; resp.Content != want {
+		t.Fatalf("edited content:\n%s\nwant:\n%s", resp.Content, want)
+	}
+	if len(resp.Applied) != 2 {
+		t.Fatalf("applied %d edits, want 2 (declaration and long-name reference)", len(resp.Applied))
+	}
+}
+
 // TestApplyEditsUncachedModelIsNotFound verifies an evicted model is named as
 // such, the way convert names it, rather than edited as empty notation.
 func TestApplyEditsUncachedModelIsNotFound(t *testing.T) {

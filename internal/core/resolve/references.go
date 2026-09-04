@@ -150,13 +150,13 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 func (c *refCollector) namespaceDecl(scope *symbols.Scope, decl ast.Node) bool {
 	switch d := decl.(type) {
 	case *ast.Package:
-		c.prefixes(scope, d.Prefixes)
+		c.prefixes(scope, d, d.Prefixes)
 		if child := c.childScope(scope, d); child != nil {
 			c.walkMembers(child, d.Members)
 		}
 		return true
 	case *ast.Namespace:
-		c.prefixes(scope, d.Prefixes)
+		c.prefixes(scope, d, d.Prefixes)
 		if child := c.childScope(scope, d); child != nil {
 			c.walkMembers(child, d.Members)
 		}
@@ -178,7 +178,7 @@ func (c *refCollector) namespaceDecl(scope *symbols.Scope, decl ast.Node) bool {
 		}
 		return true
 	case *ast.Dependency:
-		c.prefixes(scope, d.Prefixes)
+		c.prefixes(scope, d, d.Prefixes)
 		for _, cl := range d.Clients {
 			c.add(scope, cl)
 		}
@@ -199,7 +199,7 @@ func (c *refCollector) namespaceDecl(scope *symbols.Scope, decl ast.Node) bool {
 		}
 		return true
 	case *ast.PrefixMetadata:
-		c.metadataPrefix(scope, d)
+		c.metadataPrefix(scope, scope, d)
 		return true
 	case *ast.FilterMember:
 		c.conditionExpr(scope, d.Condition)
@@ -214,14 +214,14 @@ func (c *refCollector) namespaceDecl(scope *symbols.Scope, decl ast.Node) bool {
 func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 	switch d := decl.(type) {
 	case *ast.Definition:
-		c.prefixes(scope, d.Prefixes)
+		c.prefixes(scope, d, d.Prefixes)
 		c.relationships(scope, d, d.Relationships)
 		if child := c.childScope(scope, d); child != nil {
 			c.walkMembers(child, d.Members)
 		}
 		return true
 	case *ast.Usage:
-		c.prefixes(scope, d.Prefixes)
+		c.prefixes(scope, d, d.Prefixes)
 		c.relationships(scope, d, d.Relationships)
 		c.multiplicity(scope, d.Multiplicity)
 		// An accept node keeps its trigger in the usage's value.
@@ -270,7 +270,7 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		}
 		return true
 	case *ast.SubjectMember:
-		c.prefixes(scope, d.Prefixes)
+		c.prefixes(scope, d, d.Prefixes)
 		c.add(scope, d.TypeRef)
 		c.multiplicity(scope, d.Multiplicity)
 		c.relationships(scope, d, d.Relationships)
@@ -295,7 +295,7 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		c.walkMembers(symbols.ConstraintBodyScope(scope, d), d.Body)
 		return true
 	case *ast.AssumeMember:
-		c.prefixes(scope, d.Prefixes)
+		c.prefixes(scope, d, d.Prefixes)
 		c.expr(scope, d.Expression)
 		c.add(scope, d.Reference)
 		c.relationships(scope, d, d.Relationships)
@@ -304,7 +304,7 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		c.walkMembers(symbols.ConstraintBodyScope(scope, d), d.Body)
 		return true
 	case *ast.RequireMember:
-		c.prefixes(scope, d.Prefixes)
+		c.prefixes(scope, d, d.Prefixes)
 		c.expr(scope, d.Expression)
 		c.add(scope, d.Reference)
 		c.relationships(scope, d, d.Relationships)
@@ -473,8 +473,8 @@ func (c *refCollector) relationships(scope *symbols.Scope, decl ast.Node, rels [
 		if fr, ok := target.(*ast.FeatureReference); ok {
 			target = fr.Name
 		}
-		// A subsetting other than of decl itself resolves as a redefinition
-		// does, as in resolveRelationships.
+		// A subsetting other than of decl itself reaches a sibling redefinition
+		// or resolves as a redefinition does, as in resolveRelationships.
 		if qn, ok := target.(*ast.QualifiedName); ok && rel.Kind == ast.RelSubsets {
 			c.push(Reference{Scope: scope, Subsetting: decl}.Spelled(qn))
 			continue
@@ -528,30 +528,34 @@ func (c *refCollector) multiplicity(scope *symbols.Scope, m *ast.Multiplicity) {
 	c.expr(scope, m.Upper)
 }
 
-func (c *refCollector) prefixes(scope *symbols.Scope, prefixes []*ast.PrefixMetadata) {
+// prefixes collects the prefix annotations of decl, a member of scope, in the
+// scopes the resolver resolves them in (see resolvePrefixes).
+func (c *refCollector) prefixes(scope *symbols.Scope, decl ast.Node, prefixes []*ast.PrefixMetadata) {
+	names := c.bodyScope(scope, decl)
 	for _, p := range prefixes {
 		if p != nil {
-			c.metadataPrefix(scope, p)
+			c.metadataPrefix(names, scope, p)
 		}
 	}
 }
 
-// metadataPrefix collects an annotation's metaclass name, the elements it is
-// about and the references its body carries, in the body's own scope — the same
-// scope the resolver resolves them in (see resolveMetadataPrefix). The
-// annotation is the member its own names are written in, prefix or not.
-func (c *refCollector) metadataPrefix(scope *symbols.Scope, p *ast.PrefixMetadata) {
+// metadataPrefix collects an annotation's metaclass name and the elements it is
+// about in names, and the references its body carries in the body's own scope,
+// hung off parent — the same scopes the resolver resolves them in (see
+// resolveMetadataPrefix). The annotation is the member its own names are
+// written in, prefix or not.
+func (c *refCollector) metadataPrefix(names, parent *symbols.Scope, p *ast.PrefixMetadata) {
 	prev := c.member
 	c.member = p
 	defer func() { c.member = prev }()
-	c.add(scope, p.Type)
+	c.add(names, p.Type)
 	for _, a := range p.About {
-		c.add(scope, a)
+		c.add(names, a)
 	}
 	if len(p.Body) == 0 {
 		return
 	}
-	if body := c.childScope(scope, p); body != nil {
+	if body := c.childScope(parent, p); body != nil {
 		c.walkMembers(body, p.Body)
 	}
 }

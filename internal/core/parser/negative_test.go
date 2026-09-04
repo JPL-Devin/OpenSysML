@@ -85,6 +85,9 @@ func TestNegative(t *testing.T) {
 		// (SysML.xtext:145-147).
 		{"metadata_about_no_target", "package P { metadata def M; @M about ; }"},
 		{"metadata_about_trailing_comma", "package P { metadata def M; part a; @M about a, ; }"},
+		// Each one is a qualified name, not a feature chain (SysML.xtext AnnotatedElement).
+		{"metadata_usage_about_feature_chain", "package P { metadata def M; part a { attribute x; } metadata m : M about a.x; }"},
+		{"metadata_usage_about_no_target", "package P { metadata def M; metadata m : M about ; }"},
 		// A prefixed dependency still states both of its ends
 		// (SysML.xtext:55-58).
 		{"prefixed_dependency_no_supplier", "package P { metadata def M; part a; #M dependency d from a to ; }"},
