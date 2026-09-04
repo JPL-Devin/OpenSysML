@@ -187,3 +187,88 @@ func TestRenameReportsEveryRewrittenSpan(t *testing.T) {
 	}
 	assertOnlySpanChanged(t, m, res)
 }
+
+// A constructor's argument label names a feature of the constructed type, so
+// renaming that feature rewrites the label and renaming a same-named feature of
+// the sender leaves it alone.
+func TestRenameRewritesConstructorLabels(t *testing.T) {
+	const src = "package App {\n\titem def Telemetry { attribute frames; }\n" +
+		"\titem def Burst :> Telemetry;\n\tpart def Station;\n\taction def Downlink {\n" +
+		"\t\tpart ground : Station;\n\t\tattribute frames;\n" +
+		"\t\tsend new Telemetry(frames = 3) to ground;\n" +
+		"\t\tsend new Burst(frames = frames) to ground;\n" +
+		"\t\tsend new Burst(Telemetry::frames = frames) to ground;\n\t}\n}\n"
+
+	got := renamed(t, "labels.sysml", src, "App::Telemetry::frames", "count")
+	for _, want := range []string{
+		"item def Telemetry { attribute count; }",
+		"send new Telemetry(count = 3) to ground;",
+		"send new Burst(count = frames) to ground;",
+		"send new Burst(Telemetry::count = frames) to ground;",
+		"\t\tattribute frames;\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q:\n%s", want, got)
+		}
+	}
+
+	got = renamed(t, "labels.sysml", src, "App::Downlink::frames", "local")
+	for _, want := range []string{
+		"item def Telemetry { attribute frames; }",
+		"\t\tattribute local;\n",
+		"send new Telemetry(frames = 3) to ground;",
+		"send new Burst(frames = local) to ground;",
+		"send new Burst(Telemetry::frames = local) to ground;",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q:\n%s", want, got)
+		}
+	}
+}
+
+// A transition's guard and effect see the parameter its accept declares, so
+// renaming a same-named feature of the machine leaves them alone.
+func TestRenameLeavesTriggerParameterReferencesAlone(t *testing.T) {
+	const src = "package App {\n\titem def Request;\n\tstate def Server {\n" +
+		"\t\tpart origin : Request;\n\t\tstate idle;\n\t\tstate busy;\n" +
+		"\t\ttransition first idle accept origin : Request if origin != null" +
+		" do send new Request() to origin then busy;\n\t}\n}\n"
+	got := renamed(t, "trigger.sysml", src, "App::Server::origin", "peer")
+
+	if !strings.Contains(got, "part peer : Request;") {
+		t.Fatalf("the declaration was not renamed:\n%s", got)
+	}
+	if !strings.Contains(got, "accept origin : Request if origin != null do send new Request() to origin then busy;") {
+		t.Fatalf("the accept's parameter or a reference to it was rewritten:\n%s", got)
+	}
+}
+
+// An unnamed transition's trailing body declares its own features: renaming a
+// same-named feature of the machine leaves the body's declaration and its uses
+// alone, while renaming the constructed type's feature rewrites the label there.
+func TestRenameSeesUnnamedTransitionBodyDeclarations(t *testing.T) {
+	const src = "package App {\n\titem def Request { attribute id; }\n\tstate def Server {\n" +
+		"\t\tattribute retries;\n\t\tstate idle;\n\t\tstate busy;\n" +
+		"\t\ttransition first idle accept origin : Request then busy {\n" +
+		"\t\t\tattribute retries;\n\t\t\tsend new Request(id = retries) to origin;\n\t\t}\n\t}\n}\n"
+
+	got := renamed(t, "body.sysml", src, "App::Server::retries", "attempts")
+	for _, want := range []string{
+		"\t\tattribute attempts;\n",
+		"\t\t\tattribute retries;\n\t\t\tsend new Request(id = retries) to origin;\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q:\n%s", want, got)
+		}
+	}
+
+	got = renamed(t, "body.sysml", src, "App::Request::id", "key")
+	for _, want := range []string{
+		"item def Request { attribute key; }",
+		"send new Request(key = retries) to origin;",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q:\n%s", want, got)
+		}
+	}
+}
