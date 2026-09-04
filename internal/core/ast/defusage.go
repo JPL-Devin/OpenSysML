@@ -477,6 +477,18 @@ func (u *Usage) ConjugatedTyping() (*Relationship, bool) {
 	return nil, false
 }
 
+// PerformedInvocation is the call an action usage performs as its value
+// (`action a = tag(x);`); nil for any other usage or value.
+func (u *Usage) PerformedInvocation() *InvocationExpr {
+	if u.Kind != UsageAction {
+		return nil
+	}
+	if inv, ok := u.Value.(*InvocationExpr); ok && inv.Type != nil {
+		return inv
+	}
+	return nil
+}
+
 // FlowEnds holds the ends of a flow usage: the `from`/`to` targets and an
 // optional payload from the `of` clause. It embeds NodeBase (spannable) but is
 // only ever reached through the *ast.Usage traversal case.

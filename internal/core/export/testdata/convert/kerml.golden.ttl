@@ -1,4 +1,5 @@
 @prefix elmt: <urn:sysmlv2:element:> .
+@prefix json: <urn:sysmlv2:annotation:json:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -16,7 +17,10 @@ elmt:Structural
     sysml:ownedMembership elmt:Structural__Frame_om, elmt:Structural__Move_om, elmt:Structural__Thing_om, elmt:Structural__Link_om ;
     sysml:ownedRelationship elmt:Structural__Frame_om, elmt:Structural__Move_om, elmt:Structural__Thing_om, elmt:Structural__Link_om ;
     sysx:sourceText "package Structural {\n" ;
-    sysx:sourceTail "}\n" .
+    sysx:sourceTail "}\n" ;
+    json:ownedMember "[{\"@id\":\"Structural__Frame\"},{\"@id\":\"Structural__Move\"},{\"@id\":\"Structural__Thing\"},{\"@id\":\"Structural__Link\"}]" ;
+    json:ownedMembership "[{\"@id\":\"Structural__Frame_om\"},{\"@id\":\"Structural__Move_om\"},{\"@id\":\"Structural__Thing_om\"},{\"@id\":\"Structural__Link_om\"}]" ;
+    json:ownedRelationship "[{\"@id\":\"Structural__Frame_om\"},{\"@id\":\"Structural__Move_om\"},{\"@id\":\"Structural__Thing_om\"},{\"@id\":\"Structural__Link_om\"}]" .
 
 elmt:Structural__Frame
     a sysml:Structure ;

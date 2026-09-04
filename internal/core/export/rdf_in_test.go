@@ -21,7 +21,7 @@ func TestReferenceNameReportsUnnameableIRIs(t *testing.T) {
 		"without qualified name": "urn:uuid:unnamed",
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := d.referenceName(rdf.IRI(iri), "")
+			_, err := d.referenceName(rdf.IRI(iri), &element{})
 			var unsupported *UnsupportedError
 			if !errors.As(err, &unsupported) {
 				t.Fatalf("want an UnsupportedError, got %v", err)

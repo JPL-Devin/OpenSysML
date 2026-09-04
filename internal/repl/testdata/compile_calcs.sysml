@@ -327,6 +327,7 @@ package Compiled {
 		calc def BodySel { in x : Integer[0..*]; return : Integer[0..*] = x->select {in v : Integer; attribute big : Boolean = v > 1; big}; }
 		calc def BodyUnread { in x : Integer[0..*]; return : Integer[0..*] = x->collect {in v : Integer; attribute d : Integer = x#(9); v + 1}; }
 		calc def BodyCond { in x : Integer[0..*]; return : Integer[0..*] = x->collect {in v : Integer; attribute d : Integer = x#(9); if v > 2 ? d else v}; }
+		calc def BodyDoc { in x : Integer[0..*]; return : Integer[0..*] = x->collect {doc /* doubled, plus one */ in v : Integer; attribute d : Integer = v * 2; d + 1}; }
 		calc def Cnt { in x : Integer[0..*]; return : Boolean = contains(x, 2); }
 		calc def IncAt { in x : Integer[0..*]; in i : Integer; return : Integer[0..*] = includingAt(x, 9, i); }
 		calc def Sub3 { in x : Integer[0..*]; in i : Integer; in j : Integer; return : Integer[0..*] = subsequence(x, i, j); }
@@ -339,6 +340,26 @@ package Compiled {
 		calc def ForB { in n : Integer; attribute s : Integer = 0; for v in 1..n { for w in 1..v { s = s + w; } } return : Integer = s; }
 		calc def RS { in x : Integer[0..*]; return : Real = RealFunctions::sum(x); }
 		calc def MaxS { in x : Real[0..*]; return : Real = x->maximize {in v; v}; }
+	}
+
+	// Overloads: the declaration a call compiles to is the one its arguments
+	// select, not the first its name is visible as.
+	package Overloads {
+		package ByFlag { calc def pick { in x : Boolean; return : Integer = 1; } }
+		package ByInt { calc def pick { in x : Integer; return : Integer = x * 2; } }
+		package ByReal { calc def pick { in x : Real; return : Real = x / 2.0; } }
+		package Both {
+			public import ByFlag::*;
+			public import ByInt::*;
+		}
+		private import ByFlag::*;
+		private import ByReal::*;
+		private import ByInt::*;
+
+		calc def PickInt { in n : Integer; return : Integer = pick(n); }
+		calc def PickReal { in r : Real; return : Real = pick(r); }
+		calc def PickFlag { in b : Boolean; return : Integer = pick(b); }
+		calc def PickQualified { in n : Integer; return : Integer = Both::pick(n) + Both::pick(n > 0); }
 	}
 }
 

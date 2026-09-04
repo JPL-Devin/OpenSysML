@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -32,8 +33,9 @@ var (
 // Names of the library elements the unit model is defined by (SysML v2
 // Quantities and Units domain library).
 const (
-	fqnMeasurementUnit  = "MeasurementReferences::MeasurementUnit"
-	fqnDimensionOneUnit = "MeasurementReferences::DimensionOneUnit"
+	fqnMeasurementUnit    = "MeasurementReferences::MeasurementUnit"
+	fqnDimensionOneUnit   = "MeasurementReferences::DimensionOneUnit"
+	fqnAngularMeasureUnit = "ISQSpaceTime::AngularMeasureUnit"
 
 	memberUnitConversion   = "unitConversion"
 	memberReferenceUnit    = "referenceUnit"
@@ -155,6 +157,11 @@ func (t UnitTerm) Commensurable(other UnitTerm) bool {
 	return true
 }
 
+// Same reports whether two terms are one reduction: commensurable at equal scale.
+func (t UnitTerm) Same(other UnitTerm) bool {
+	return t.Commensurable(other) && t.Scale.Num*other.Scale.Den == other.Scale.Num*t.Scale.Den
+}
+
 // DimensionKey identifies the base units the term is over, exponents included
 // but scale excluded: two terms share a key exactly when they are commensurable.
 func (t UnitTerm) DimensionKey() string {
@@ -204,6 +211,20 @@ func (t UnitTerm) Pow(exp float64) UnitTerm {
 		out.Factors = append(out.Factors, UnitFactor{Unit: f.Unit, Exponent: f.Exponent * exp})
 	}
 	return normalizeTerm(out)
+}
+
+// BaseProduct is the term's base units as a product named by their symbols
+// (`m`, `s`); a magnitude over it is the term's magnitude times the term's scale.
+func (t UnitTerm) BaseProduct() UnitProduct {
+	out := UnitProduct{}
+	for _, f := range t.Factors {
+		name := f.Unit.ShortName
+		if name == "" {
+			name = f.Unit.Name
+		}
+		out.Powers = append(out.Powers, UnitPower{Unit: f.Unit, Name: lexer.NameText(name), Exponent: f.Exponent})
+	}
+	return normalizeProduct(out)
 }
 
 // Normalized restores the term's invariant: repeated base units summed, those
@@ -262,6 +283,33 @@ func (m *Model) IsMeasurementUnit(sym *symbols.Symbol) bool {
 		return sym.Facts != nil && sym.Facts.Unit != nil
 	}
 	return m.Conforms(sym, unitDef)
+}
+
+// MeasurementUnitOf is the measurement unit sym names: sym itself, or the unit
+// an alias such as SI::'m/s²' stands for; false for anything else.
+func (m *Model) MeasurementUnitOf(sym *symbols.Symbol) (*symbols.Symbol, bool) {
+	if m == nil || sym == nil {
+		return nil, false
+	}
+	if m.resolver != nil {
+		if target, ok := m.resolver.ResolveAliasTarget(sym); ok {
+			sym = target
+		}
+	}
+	if !m.IsMeasurementUnit(sym) {
+		return nil, false
+	}
+	return sym, true
+}
+
+// IsAngularMeasureUnit reports whether sym is a unit of plane angle (rad, °, ′):
+// one of the dimension-one units a trigonometric function may take.
+func (m *Model) IsAngularMeasureUnit(sym *symbols.Symbol) bool {
+	if m == nil || sym == nil {
+		return false
+	}
+	angleDef := m.libSymbol(fqnAngularMeasureUnit)
+	return angleDef != nil && m.Conforms(sym, angleDef)
 }
 
 // UnitTermOf reduces a measurement unit to base units. A unit declared with a
@@ -619,17 +667,25 @@ func (m *Model) unitTermOfOperator(scope *symbols.Scope, n *ast.OperatorExpr) (U
 
 // UnitExprText renders an expression in unit position as written, so a
 // diagnostic, a printed value or an exported type fact names the unit the model
-// used rather than its reduction.
+// used rather than its reduction. Grouping and quoting the text needs to read
+// back are kept: `'A/m'` is one unit, `A/m` a quotient of two.
 func UnitExprText(node ast.Node) string {
 	switch n := node.(type) {
 	case *ast.FeatureReference:
-		return QualifiedNameText(n.Name)
+		return UnitNameText(n.Name)
 	case *ast.QualifiedName:
-		return QualifiedNameText(n)
+		return UnitNameText(n)
 	case *ast.OperatorExpr:
 		switch {
 		case len(n.Operands) == 2:
-			return UnitExprText(n.Operands[0]) + n.Operator.String() + UnitExprText(n.Operands[1])
+			left, right := UnitExprText(n.Operands[0]), UnitExprText(n.Operands[1])
+			if unitOperandGrouped(n.Operator, n.Operands[0], false) {
+				left = "(" + left + ")"
+			}
+			if unitOperandGrouped(n.Operator, n.Operands[1], true) {
+				right = "(" + right + ")"
+			}
+			return left + n.Operator.String() + right
 		case len(n.Operands) == 1:
 			return n.Operator.String() + UnitExprText(n.Operands[0])
 		}
@@ -639,6 +695,23 @@ func UnitExprText(node ast.Node) string {
 		return n.Value
 	}
 	return ""
+}
+
+// unitOperandGrouped reports whether operand, under op, must be parenthesised
+// to read back as itself: a product or quotient under `**` or right of `/`, and
+// a power left of `**`, which associates to the right.
+func unitOperandGrouped(op ast.OperatorKind, operand ast.Node, right bool) bool {
+	inner, ok := operand.(*ast.OperatorExpr)
+	if !ok || len(inner.Operands) != 2 {
+		return false
+	}
+	switch inner.Operator {
+	case ast.OpMul, ast.OpDiv:
+		return op == ast.OpPow || (op == ast.OpDiv && right)
+	case ast.OpPow:
+		return op == ast.OpPow && !right
+	}
+	return false
 }
 
 // libSymbol resolves a library element by qualified name, uniquely or not at
@@ -690,6 +763,19 @@ func qualifiedNameOf(node ast.Node) *ast.QualifiedName {
 	default:
 		return nil
 	}
+}
+
+// UnitNameText renders a unit's qualified name as the notation spells it, a
+// segment that is not a basic name in quotes: `SI::'A/m'`.
+func UnitNameText(qn *ast.QualifiedName) string {
+	if qn == nil {
+		return ""
+	}
+	parts := make([]string, len(qn.Parts))
+	for i, part := range qn.Parts {
+		parts[i] = lexer.NameText(part.Text)
+	}
+	return strings.Join(parts, "::")
 }
 
 // QualifiedNameText renders a qualified name as "A::B::C".

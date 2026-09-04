@@ -107,6 +107,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_symbol_is_not_a_calc", testCalcSymbolIsNotACalc)
 	t.Run("calc_direct_recursion", testCalcDirectRecursion)
 	t.Run("calc_mutual_recursion", testCalcMutualRecursion)
+	t.Run("calc_library_default_recursion", testCalcLibraryDefaultRecursion)
 	t.Run("calc_recursion_spends_step_budget", testCalcRecursionSpendsStepBudget)
 	t.Run("calc_recursion_at_depth_ceiling", testCalcRecursionAtDepthCeiling)
 	t.Run("calc_non_terminating_loop", testCalcNonTerminatingLoop)
@@ -257,6 +258,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("quantity_qualified_unit_is_not_shadowing", testQuantityQualifiedUnitIsNotShadowing)
 	t.Run("quantity_shadowed_unit_without_a_qualifier", testQuantityShadowedUnitWithoutAQualifier)
 	t.Run("quantity_cyclic_unit_definition", testQuantityCyclicUnitDefinition)
+	t.Run("quantity_calculation_that_has_no_value", testQuantityCalculationThatHasNoValue)
 	t.Run("satisfy_unresolved_requirement", testSatisfyUnresolvedRequirement)
 	t.Run("satisfy_requirement_without_conditions", testSatisfyRequirementWithoutConditions)
 	t.Run("satisfy_bounded_by_the_step_budget", testSatisfyBoundedByTheStepBudget)
@@ -4714,6 +4716,23 @@ func testCalcMutualRecursion(t *testing.T) {
 	assertCalcRecursionBounded(t, src, "ping", ErrCalcRecursionLimit)
 }
 
+// testCalcLibraryDefaultRecursion: a library specialization whose default invokes
+// itself nests through its own binding, so the depth budget reports it like any calc.
+func testCalcLibraryDefaultRecursion(t *testing.T) {
+	src := `
+		package test {
+			import ScalarValues::*;
+			import RealFunctions::*;
+			calc def again :> max {
+				in x :>> x;
+				in y :>> y = again(x);
+			}
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	assertCalcInvocationBounded(t, idx, ctx, "again", ErrCalcRecursionLimit)
+}
+
 // testCalcRecursionSpendsStepBudget: the two bounds are independent, so a
 // recursion whose evaluations run out first is reported by the step budget
 // rather than running on until the depth bound.
@@ -4757,8 +4776,13 @@ func testCalcRecursionAtDepthCeiling(t *testing.T) {
 // it fails the case rather than the package.
 func assertCalcRecursionBounded(t *testing.T, src, calcName string, want error, budgets ...func(*Context)) {
 	t.Helper()
-
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	assertCalcInvocationBounded(t, idx, ctx, calcName, want, budgets...)
+}
+
+func assertCalcInvocationBounded(t *testing.T, idx *symbols.Index, ctx *Context, calcName string, want error, budgets ...func(*Context)) {
+	t.Helper()
+
 	// The default step budget, so a recursion bounded by depth reaches that bound
 	// rather than running out of evaluations first.
 	ctx.maxSteps = DefaultMaxSteps

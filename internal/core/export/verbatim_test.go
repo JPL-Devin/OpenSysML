@@ -334,17 +334,24 @@ func TestPositionalSuccessionEditsRebuildTheirTarget(t *testing.T) {
 	}
 }
 
-// withoutMember drops the given member of P from a Turtle document, its own
-// members with it, as an edit to the graph after export would, leaving the
-// other members numbered as before.
+// withoutMember drops the given member of P from a Turtle document, its own members
+// with it, from the owner's typed triples and JSON annotations alike; the rest keep their numbers.
 func withoutMember(t *testing.T, turtle []byte, member string) []byte {
 	t.Helper()
+	id := strings.TrimPrefix(member, "elmt:")
 	var kept []string
 	for _, line := range strings.Split(string(turtle), "\n") {
 		if strings.Contains(line, member) && !strings.HasPrefix(line, member) {
 			for _, ref := range []string{member + "_om", member} {
 				line = strings.ReplaceAll(line, ", "+ref, "")
 				line = strings.ReplaceAll(line, ref+", ", "")
+			}
+		}
+		if strings.HasPrefix(strings.TrimSpace(line), "json:") {
+			for _, ref := range []string{id + "_om", id} {
+				entry := `{\"@id\":\"` + ref + `\"}`
+				line = strings.ReplaceAll(line, entry+",", "")
+				line = strings.ReplaceAll(line, ","+entry, "")
 			}
 		}
 		kept = append(kept, line)
@@ -571,11 +578,10 @@ func TestSourceTextOfAnExtensionlessBufferIsReadAsOne(t *testing.T) {
 		t.Errorf("round trip changed the notation:\n--- want ---\n%s--- got ---\n%s", src, back)
 	}
 	// Read as SysML instead, the same text names the part `all`: a different
-	// model, so the text is not trusted.
+	// model, so the text is not trusted, and no SysML declaration written in
+	// its place states an anonymous part of every T either.
 	sysml := editTurtle(t, turtle, `sysml:declaredName "P" ;`, `sysml:declaredName "P" ; sysx:sourceLanguage "sysml" ;`)
-	if back, want := toNotation(t, sysml), toNotation(t, withoutTriples(t, turtle, "sysx:sourceText")); back != want {
-		t.Errorf("text of another grammar was trusted:\n--- want ---\n%s--- got ---\n%s", want, back)
-	}
+	refusedAsUnsupported(t, "m", sysml, "the reference to P::T from P::@1")
 }
 
 // Roots recording different languages cannot be read as one document, so their

@@ -340,10 +340,12 @@ func (w *Workspace) memberSymbolsLocked(resolver *resolve.Resolver, sem *semanti
 // newResolver is a resolver over the index with a semantic model attached: an
 // inherited member and the element filters gating an import are both answered by
 // the model, so a read path without one resolves differently to a checked one.
+// Calls are selected under the checker's argument typing, as a checked document's are.
 func (w *Workspace) newResolver() (*resolve.Resolver, *semantics.Model) {
 	resolver := resolve.New(w.index)
 	sem := semantics.NewModel(resolver)
 	resolver.SetModel(sem)
+	sem.SetArgumentTyper(passes.NewArgumentTyper(resolver, sem))
 	return resolver, sem
 }
 
@@ -431,8 +433,58 @@ func (w *Workspace) ResolveQualifiedInDoc(name string, scope *symbols.Scope, qn 
 func (w *Workspace) ResolveReferenceInDoc(name string, ref resolve.Reference) (*symbols.Symbol, bool) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	resolver, _ := w.newResolver()
-	return resolver.ResolveReference(ref)
+	resolver, sem := w.newResolver()
+	sym, ok := resolver.ResolveReference(ref)
+	if sel := invocationSelection(resolver, sem, ref); sel != nil {
+		sym = calledDeclaration(sel, sym)
+		ok = sym != nil
+	}
+	return sym, ok
+}
+
+// AmbiguousInvocationInDoc returns the equally specific overloads an invocation's
+// arguments leave tied, when ref is the name it calls; nil for any other reference
+// and for a call that selects one declaration.
+func (w *Workspace) AmbiguousInvocationInDoc(name string, ref resolve.Reference) []*symbols.Symbol {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	resolver, sem := w.newResolver()
+	if sel := invocationSelection(resolver, sem, ref); sel != nil && sel.Ambiguous {
+		return sel.Tied
+	}
+	return nil
+}
+
+// invocationSelection is the overload selection for the call whose name ref is,
+// nil for a reference that names no call.
+func invocationSelection(resolver *resolve.Resolver, sem *semantics.Model, ref resolve.Reference) *semantics.InvocationSelection {
+	if ref.Invocation == nil {
+		return nil
+	}
+	return passes.SelectInvocation(resolver, sem, ref.Scope, ref.Invocation, performs(ref))
+}
+
+// performs is the kind of call site a reference is: an action performance when
+// the call is an action usage's value, else an expression.
+func performs(ref resolve.Reference) semantics.Performs {
+	if ref.Performed {
+		return semantics.PerformsAction
+	}
+	return semantics.PerformsBehavior
+}
+
+// calledDeclaration is what a call's name denotes once its arguments are read: the
+// overload they select, nothing when several tie, else the name-only resolution.
+func calledDeclaration(sel *semantics.InvocationSelection, nameOnly *symbols.Symbol) *symbols.Symbol {
+	switch {
+	case sel == nil:
+		return nameOnly
+	case sel.Ambiguous:
+		return nil
+	case sel.Selected != nil:
+		return sel.Selected
+	}
+	return nameOnly
 }
 
 // ResolveQualifiedSegmentsInDoc resolves a qualified name and returns the symbol
@@ -446,12 +498,12 @@ func (w *Workspace) ResolveQualifiedSegmentsInDoc(name string, scope *symbols.Sc
 // ResolveReferenceSegmentsInDoc is ResolveQualifiedSegmentsInDoc for one name
 // occurrence (see ResolveReferenceInDoc).
 func (w *Workspace) ResolveReferenceSegmentsInDoc(name string, ref resolve.Reference) []*symbols.Symbol {
-	if ref.QN == nil {
+	if ref.QN == nil || len(ref.QN.Parts) == 0 {
 		return nil
 	}
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	r, _ := w.newResolver()
+	r, sem := w.newResolver()
 	r.ResolveReference(ref)
 	out := make([]*symbols.Symbol, len(ref.QN.Parts))
 	for i := range ref.QN.Parts {
@@ -459,6 +511,8 @@ func (w *Workspace) ResolveReferenceSegmentsInDoc(name string, ref resolve.Refer
 			out[i] = sym
 		}
 	}
+	last := len(out) - 1
+	out[last] = calledDeclaration(invocationSelection(r, sem, ref), out[last])
 	return out
 }
 
@@ -466,12 +520,12 @@ func (w *Workspace) ResolveReferenceSegmentsInDoc(name string, ref resolve.Refer
 // what each segment's name *is* rather than the element it reaches, so a segment
 // written as an alias name is the alias. Rename edits names, not elements.
 func (w *Workspace) ResolveReferenceNameSegmentsInDoc(name string, ref resolve.Reference) []*symbols.Symbol {
-	if ref.QN == nil {
+	if ref.QN == nil || len(ref.QN.Parts) == 0 {
 		return nil
 	}
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	r, _ := w.newResolver()
+	r, sem := w.newResolver()
 	r.ResolveReference(ref)
 	out := make([]*symbols.Symbol, len(ref.QN.Parts))
 	for i := range ref.QN.Parts {
@@ -483,5 +537,25 @@ func (w *Workspace) ResolveReferenceNameSegmentsInDoc(name string, ref resolve.R
 			out[i] = sym
 		}
 	}
+	// A written alias stays the name — the alias naming the overload the call selects,
+	// when same-named aliases name several — unless the call is tied: then none is.
+	last := len(out) - 1
+	sel := invocationSelection(r, sem, ref)
+	if _, aliased := r.PartAlias(ref.QN, last); !aliased || (sel != nil && sel.Ambiguous) {
+		out[last] = calledDeclaration(sel, out[last])
+	} else if element, _ := r.PartSymbol(ref.QN, last); sel != nil && sel.Selected != nil && element != sel.Selected {
+		out[last] = selectedName(r, ref, sel.Selected)
+	}
 	return out
+}
+
+// selectedName is the name a call's written last segment is once selected names
+// the overload it runs: the first candidate alias for selected, else selected itself.
+func selectedName(r *resolve.Resolver, ref resolve.Reference, selected *symbols.Symbol) *symbols.Symbol {
+	for _, c := range r.InvocationCandidates(ref.Scope, ref.QN) {
+		if target, ok := r.ResolveAliasTarget(c); ok && target == selected {
+			return c
+		}
+	}
+	return selected
 }

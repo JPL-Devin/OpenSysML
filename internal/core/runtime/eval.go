@@ -9,6 +9,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
@@ -1929,18 +1930,19 @@ type invocationKey struct {
 // context; at most one implementation is set, in the order they are tried.
 type invocationTarget struct {
 	qualName    string
-	calc        *symbols.Symbol  // the declaration the written name resolves to, nil for none
-	builtin     builtinFunc      // the built-in the name denotes: the library declaration calc is
-	builtinName string           // the built-in's registered name, keying its declared signature
-	library     *libraryFunction // the library function the name denotes: the library declaration calc is
-	shape       *calcShape       // calc's invocation interface, nil when it has none
+	ambiguous   []*symbols.Symbol // the equally specific declarations the written name denotes
+	calc        *symbols.Symbol   // the declaration the written name resolves to, nil for none
+	builtin     builtinFunc       // the built-in the name denotes: the library declaration calc is
+	builtinName string            // the built-in's registered name, keying its declared signature
+	library     *libraryFunction  // the library function the name denotes: the library declaration calc is
+	shape       *calcShape        // calc's invocation interface, nil when it has none
 }
 
 // invocationTarget resolves what n denotes in this context's scope, memoized
 // per context: resolution reads only the model, which is fixed for its life.
-// The name resolves as the validator resolves it, so a library function is
-// callable only where the model imports it or writes it qualified, and a
-// declaration of the model's own is invoked as written even under a name a
+// The declaration is the one the checker selects for the call, so the two agree: a
+// library function is callable only where the model imports it or writes it qualified,
+// and a declaration of the model's own is invoked as written even under a name a
 // library built-in is registered by.
 func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget {
 	key := invocationKey{node: n, scope: ec.scope}
@@ -1948,18 +1950,43 @@ func (ec *EvalContext) invocationTarget(n *ast.InvocationExpr) *invocationTarget
 		return target
 	}
 	target := &invocationTarget{qualName: qualifiedNameToString(n.Type)}
-	if sym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, n.Type); ok && sym != nil {
-		target.calc = sym
-		if fn, ok := ec.ctx.builtinFor(sym); ok {
-			target.builtin, target.builtinName = fn, ec.ctx.qualifiedSymbolName(sym)
-		} else if fn, ok := ec.ctx.libraryFunctionFor(sym); ok {
-			target.library = fn
-		} else if shape, err := ec.ctx.calcShapeOf(sym); err == nil {
-			target.shape = shape
-		}
+	if sel := passes.SelectInvocation(ec.ctx.resolver, ec.ctx.model, ec.scope, n, semantics.PerformsBehavior); sel.Ambiguous {
+		target.ambiguous = sel.Tied
+	} else if sym := sel.Called(); sym != nil {
+		ec.ctx.implementInvocation(target, sym)
 	}
 	ec.ctx.invocationTargets[key] = target
 	return target
+}
+
+// implementInvocation records how a call of the selected sym is applied: by a
+// library implementation, by its calc shape, or — when a model calc binds the
+// arguments through parameters of its own — by invokeCalcWithSelf.
+func (ctx *Context) implementInvocation(target *invocationTarget, sym *symbols.Symbol) {
+	target.calc = sym
+	if perf := ctx.libraryCalcPerformed(sym); perf != nil {
+		if perf.signature != nil {
+			return
+		}
+		sym = perf.lib
+	}
+	if fn, ok := ctx.builtinFor(sym); ok {
+		target.builtin, target.builtinName = fn, ctx.qualifiedSymbolName(sym)
+	} else if fn, ok := ctx.libraryFunctionFor(sym); ok {
+		target.library = fn
+	} else if shape, err := ctx.calcShapeOf(sym); err == nil {
+		target.shape = shape
+	}
+}
+
+// ambiguousInvocationError names the equally specific declarations a call of
+// qualName denotes.
+func ambiguousInvocationError(qualName string, candidates []*symbols.Symbol) error {
+	names := make([]string, len(candidates))
+	for i, sym := range candidates {
+		names[i] = symbols.FQNOf(sym)
+	}
+	return fmt.Errorf("%w: %s denotes %s", ErrAmbiguousInvocation, qualName, strings.Join(names, ", "))
 }
 
 // unresolvedInvocation reports a call to a name that denotes nothing, with the
@@ -1975,6 +2002,9 @@ func (ec *EvalContext) unresolvedInvocation(qn *ast.QualifiedName, written strin
 func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 	target := ec.invocationTarget(n)
 	qualName := target.qualName
+	if len(target.ambiguous) > 0 {
+		return Value{}, ambiguousInvocationError(qualName, target.ambiguous)
+	}
 
 	// A receiver binds by position, so it has no meaning beside arguments that
 	// bind by name: reported rather than evaluated and dropped.

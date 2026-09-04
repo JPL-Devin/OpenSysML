@@ -109,6 +109,9 @@ func describeValue(val Value) string {
 	if val.Kind == ValComplex {
 		return "a Complex"
 	}
+	if val.Kind == ValQuantity {
+		return "a quantity in " + val.Quantity().Unit.String()
+	}
 	if val.Kind != ValConst {
 		return val.Kind.String()
 	}
@@ -257,6 +260,9 @@ func (ec *EvalContext) applyBody(val Value, args ...Value) (Value, error) {
 		decl := member
 		if membership, ok := member.(*ast.Membership); ok {
 			decl = membership.Member
+		}
+		if _, ok := decl.(*ast.Documentation); ok {
+			continue
 		}
 		if _, ok := decl.(*ast.Usage); !ok {
 			if decl == nil {
@@ -922,10 +928,8 @@ func aggregate(op string, args []Value, operator ast.OperatorKind, real bool) (V
 		}
 	}
 	// A Complex is a Number, so a collection holding one folds as ComplexFunctions'.
-	for _, elem := range elements {
-		if elem.Kind == ValComplex {
-			return aggregateComplex(op, args[0], operator)
-		}
+	if holdsComplex(elements) {
+		return aggregateComplex(op, args[0], operator)
 	}
 	identity := int64(0)
 	if operator == ast.OpMul {

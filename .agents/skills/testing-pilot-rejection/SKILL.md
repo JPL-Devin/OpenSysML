@@ -9,7 +9,7 @@ Sibling of `testing-pilot-differential` and `testing-pilot-xpect` (same pin
 `scripts/pilot-pin.sh`, same committed-baseline shape), but pointed the other way: the
 differential measures what the reference accepts and we reject; this oracle measures what the
 reference **rejects and we accept** — permissiveness gaps. Its corpus is committed under
-`cmd/pilot-reject/testdata/negative/` (173 hand-written invalid models, one violated rule + citation
+`cmd/pilot-reject/testdata/negative/` (216 hand-written invalid models, one violated rule + citation
 in each file's mandatory `// Invalid: ...` first line), so no corpus download exists. Method and
 findings: `docs/project/pilot-rejection.md`.
 
@@ -31,13 +31,14 @@ cmp build/pilot-reject/pilot-reject.json docs/project/pilot-rejection-baseline.j
 
 `docs/project/pilot-rejection-baseline.json` is the only authority for the counts; the numbers
 quoted here are as-of values, and `cmd/pilot-reject/doc_counts_test.go` fails if they drift from it.
-As of the SysML constraint census, with a fresh library cache:
-`173 case(s): 164 both reject, 9 only the pilot rejects, 0 only we reject, 0 both accept`,
+As of the `semantic/` source (named pilot constraints, KerML and SysML), with a fresh library cache:
+`216 case(s): 194 both reject, 22 only the pilot rejects, 0 only we reject, 0 both accept`,
 byte-identical to the committed baseline. Any `both accept` case is a bug in the corpus (the case
 is not actually invalid under the loaded standard library) — fix the case, never ignore it. A
 candidate the pilot accepts because it does not enforce the named constraint is not a case either:
 record it under "Constraints the pilot declares but does not enforce" in
-`docs/project/pilot-rejection.md` with the evidence from the pinned `SysMLValidator` source.
+`docs/project/pilot-rejection.md` with the evidence from the pinned `KerMLValidator` or
+`SysMLValidator` source.
 
 ## Conformance policy (`-conformance auto|default|strict`)
 
@@ -48,7 +49,7 @@ separately, so a strict agreement never reads as a default one.
 
 ```bash
 go run ./cmd/pilot-reject -conformance default -out build/pilot-reject-default
-# as of the constraint census: 161 agreements, 12 gaps — the numbers strict mode leaves alone
+# as of the `semantic/` source: 191 agreements, 25 gaps — the numbers strict mode leaves alone
 go run ./cmd/pilot-reject -conformance lenient   # must fail: unknown conformance policy
 ```
 
@@ -86,6 +87,7 @@ the candidate on both sides before committing it:
 
 ```bash
 build/pilot-sysml-validator/validate-sysml-batch --root <dir> <dir>/<file>.sysml   # empty output = accepted
+build/pilot-kerml-validator/validate-kerml <dir>/<file>.kerml
 ./bin/sysml -validate <dir>/<file>.sysml
 ```
 

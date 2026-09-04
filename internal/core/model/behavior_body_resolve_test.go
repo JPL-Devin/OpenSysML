@@ -90,6 +90,15 @@ func TestBehaviorBodyReferencesAreResolved(t *testing.T) {
 				transition first a do { assign v := zzz; } then b;
 			}
 		}`},
+		{"transition body member", `package P {
+			state S { entry; then i; state i; state a; state b; succession first i then a; transition t first a then b { attribute w : zzz; } }
+		}`},
+		{"unnamed transition body member", `package P {
+			state S { entry; then i; state i; state a; state b; succession first i then a; transition first a then b { attribute w : zzz; } }
+		}`},
+		{"initial succession body member", `package P {
+			action A { action a1; action a2; first a1 then a2 { attribute w : zzz; } }
+		}`},
 		{"action accept change trigger", `package P {
 			action A { first start; action wait accept when zzz > 1; done; succession first start then wait; succession first wait then done; }
 		}`},
@@ -194,6 +203,16 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 				succession first wait then done;
 			}
 		}`},
+		{"first label written before the action it starts at", `package P {
+			action def Focus { out image; }
+			action def TakePicture {
+				first focus then shoot;
+				action focus : Focus { out image; }
+				action shoot : Focus { out image; }
+				flow from focus.image to shoot.image;
+				flow from TakePicture::focus.image to TakePicture::shoot.image;
+			}
+		}`},
 		{"named transition trigger parameters", `package P {
 			private import ScalarValues::*;
 			item def Warning;
@@ -245,7 +264,44 @@ func TestTriggerParametersDoNotEscapeTheirTransition(t *testing.T) {
 		attribute speed = value;
 	}`
 	if got := diagnose(t, "trigparams", src); len(got) != 2 {
-		t.Errorf("references to imported trigger parameters reported %v, want two findings", got)
+		t.Errorf("references to imported trigger parameters reported %v, want three findings", got)
+	}
+}
+
+// TestTriggerParametersReachNestedEffects covers the other side: the effect
+// sees the parameters however deeply it nests, a succession in the effect names
+// the effect's own members, and a named transition's effect stays its feature.
+func TestTriggerParametersReachNestedEffects(t *testing.T) {
+	src := `package P {
+		private import ScalarValues::*;
+		item def Warning { attribute level : Integer; }
+		state S {
+			attribute level : Integer = 0;
+			port line;
+			state a; state b;
+			transition alert first a accept w : Warning do action {
+				first start;
+				then action record { in what = w.level; }
+				then action raise { in cause = w; }
+			} then b;
+			transition setSpeed first a accept req(value) if value > 0
+				do action set { in target = value; } then b;
+			transition relay first a accept w : Warning
+				do send w via line { in payload = w; } then b;
+		}
+		package Q {
+			private import P::S::**;
+			attribute effectOf = setSpeed.set;
+			attribute relayed = relay.payload;
+		}
+	}`
+	if got := diagnose(t, "nestedeffects", src); len(got) != 0 {
+		t.Errorf("expected no findings in a well-formed model, got %v", got)
+	}
+	// The nested bodies are walked: a name they misspell is reported.
+	misspelled := strings.NewReplacer("w.level", "ww.level", "= value;", "= vaule;", "relay.payload", "relay.paylaod").Replace(src)
+	if got := diagnose(t, "nestedeffects", misspelled); len(got) != 3 {
+		t.Errorf("misspelled parameters in nested effects reported %v, want three findings", got)
 	}
 }
 

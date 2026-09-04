@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -22,11 +24,11 @@ const maxActionNestingDepth = 32
 //	action call = Callee(1);   // named usage, invocation expression value
 type actionInvocation struct {
 	target *ast.QualifiedName
-	// invoked reports the `Callee(...)` form: the argument list, even an empty
-	// one, states every input the caller passes.
-	invoked bool
-	args    []ast.Node
-	named   []ast.NamedArg
+	args   []ast.Node
+	named  []ast.NamedArg
+	// expr is the `Callee(...)` form, whose argument list, even an empty one, states
+	// every input the caller passes and selects among same-named actions as for calcs.
+	expr *ast.InvocationExpr
 	// referrer is the usage owning a reference subsetting, whose own effective
 	// name is the one the target names (see resolve.ResolveReferenceTarget).
 	referrer ast.Node
@@ -37,13 +39,8 @@ type actionInvocation struct {
 // Only typing and reference-subsetting edges name a performed action: the port
 // of `accept msg : T via p` is a via edge, not a reference subsetting.
 func nestedInvocation(usage *ast.Usage) (actionInvocation, bool) {
-	if invocation, ok := usage.Value.(*ast.InvocationExpr); ok && invocation.Type != nil {
-		return actionInvocation{
-			target:  invocation.Type,
-			invoked: true,
-			args:    invocation.Args,
-			named:   invocation.NamedArgs,
-		}, true
+	if invocation := usage.PerformedInvocation(); invocation != nil {
+		return expressionInvocation(invocation), true
 	}
 	for _, rel := range usage.Relationships {
 		if rel.Kind != ast.RelTyping && rel.Kind != ast.RelReferences {
@@ -60,13 +57,29 @@ func nestedInvocation(usage *ast.Usage) (actionInvocation, bool) {
 	return actionInvocation{}, false
 }
 
+// expressionInvocation reads an invocation expression as the action call it
+// writes. A receiver is the first argument, as `seq->size()` is for a calc.
+func expressionInvocation(e *ast.InvocationExpr) actionInvocation {
+	args := e.Args
+	if e.Operand != nil {
+		args = append([]ast.Node{e.Operand}, e.Args...)
+	}
+	return actionInvocation{target: e.Type, args: args, named: e.NamedArgs, expr: e}
+}
+
 // invocationArguments evaluates the arguments of a `Callee(...)` invocation in ec, the
 // caller's context, keyed by the callee's input parameter they bind; nil for the other forms.
 func invocationArguments(
 	ctx *Context, scope *symbols.Scope, inv actionInvocation, ec *EvalContext,
 ) (map[string]Value, error) {
-	if !inv.invoked {
+	if inv.expr == nil {
 		return nil, nil
+	}
+	if inv.expr.Operand != nil && len(inv.named) > 0 {
+		return nil, fmt.Errorf(
+			"%w: %s is called with a receiver and named arguments",
+			ErrReceiverWithNamedArgs, qualifiedNameText(inv.target),
+		)
 	}
 	sym, err := resolveActionSymbol(ctx, scope, inv)
 	if err != nil {
@@ -97,7 +110,9 @@ func invokeAction(
 	data map[string]Value,
 	self *Instance,
 ) (features, outputs map[string]Value, err error) {
-	ec := NewEvalContext(ctx, scope)
+	// Arguments are evaluated as the caller's body is: over its values, performed by self.
+	ec := NewEvalContextIn(ctx, scope, self)
+	ec.inBehaviorBody = true
 	ec.Push(data)
 	defer ec.beginStep()()
 	arguments, err := invocationArguments(ctx, scope, inv, ec)
@@ -139,7 +154,7 @@ func invokeBoundAction(
 			inputs[name] = value
 		}
 	}
-	if !inv.invoked {
+	if inv.expr == nil {
 		// A bare `perform`/typed usage reads the caller's values of the parameters'
 		// own names, which is how data reaches an action performed inside a flow.
 		for _, name := range in {
@@ -185,9 +200,17 @@ func resolveActionSymbol(
 	}
 	var sym *symbols.Symbol
 	var ok bool
-	if inv.referrer != nil {
+	switch {
+	case inv.referrer != nil:
 		sym, ok = ctx.resolver.ResolveReferenceTarget(scope, inv.referrer, target)
-	} else {
+	case inv.expr != nil:
+		sel := passes.SelectInvocation(ctx.resolver, ctx.model, scope, inv.expr, semantics.PerformsAction)
+		if sel.Ambiguous {
+			return nil, ambiguousInvocationError(name, sel.Tied)
+		}
+		sym = sel.Called()
+		ok = sym != nil
+	default:
 		sym, ok = ctx.resolver.ResolveQualified(scope, target)
 	}
 	if !ok || sym == nil {
@@ -196,7 +219,7 @@ func resolveActionSymbol(
 	if inv.referrer != nil && sym.Decl == inv.referrer {
 		return nil, fmt.Errorf("unresolved action reference: %s (a perform statement cannot perform itself)", name)
 	}
-	if sym.Kind != symbols.SymbolActionDef && sym.Kind != symbols.SymbolActionUsage {
+	if !ctx.model.Performable(semantics.PerformsAction, sym) {
 		return nil, fmt.Errorf("%s is not an action (%v)", name, sym.Kind)
 	}
 	return sym, nil
@@ -255,9 +278,9 @@ type actionParameter struct {
 	// Direction is the parameter's declared direction, which decides whether the
 	// caller writes it, reads it back, or both.
 	Direction ast.FeatureDirection
-	// HasDefault reports whether the declaration gives the parameter a value, so
-	// an invocation binding no argument to it still binds a value.
-	HasDefault bool
+	// Optional reports whether an invocation may bind no argument to the parameter: it
+	// or a parameter it redefines gives a value, or its multiplicity admits none.
+	Optional bool
 	// IsResult marks the `return` parameter, what the action's value read yields.
 	IsResult bool
 }
@@ -270,12 +293,11 @@ func (ctx *Context) actionParametersOf(sym *symbols.Symbol) []actionParameter {
 		if param.Symbol == nil || param.Symbol.Name == "" {
 			continue
 		}
-		usage, _ := param.Symbol.Decl.(*ast.Usage)
 		params = append(params, actionParameter{
-			Name:       param.Symbol.Name,
-			Direction:  param.Direction,
-			HasDefault: usage != nil && usage.Value != nil,
-			IsResult:   param.IsResult,
+			Name:      param.Symbol.Name,
+			Direction: param.Direction,
+			Optional:  ctx.model.OptionalParameter(param.Symbol),
+			IsResult:  param.IsResult,
 		})
 	}
 	return params
