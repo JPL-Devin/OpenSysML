@@ -384,3 +384,123 @@ func TestConstraintBodyPerformIsNotAVerdict(t *testing.T) {
 		}
 	}
 }
+
+func TestConstraintBodyActionFlowIsNotAVerdict(t *testing.T) {
+	// Action nodes and the successions between them are steps of the body too:
+	// a verdict that skipped them would answer a different constraint.
+	src := `
+		package test {
+			constraint def Flowed {
+				attribute y = 1;
+				action a; action b;
+				first a then b;
+				y > 5
+			}
+			part def Rig {
+				attribute z = 1;
+				constraint edge { action a; action b; first a then b; z > 5 }
+				constraint attached { action a then b; action b; z > 5 }
+				constraint named { action a; action b; succession s first a then b; z > 5 }
+				constraint node { action a; action b; fork f; first a then f; first f then b; z > 5 }
+				constraint plain { action a; z > 5 }
+				constraint nested { assert constraint { action a; action b; first a then b; z > 5 } }
+				requirement required { require constraint { action a; action b; first a then b; z > 5 } }
+			}
+		}
+	`
+	file := parser.New(source.New("test.sysml", []byte(src))).ParseFile()
+	idx := symbols.NewIndex()
+	idx.AddDocument("test.sysml", file)
+	resolver := resolve.New(idx)
+	ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
+
+	testPkg := idx.DocumentRoot("test.sysml").Children()[0]
+	flowed, ok := testPkg.LookupLocal("Flowed")
+	if !ok {
+		t.Fatal("Flowed not found")
+	}
+	satisfied, err := ctx.EvaluateConstraint(flowed, testPkg)
+	if !errors.Is(err, ErrStatementNotExecuted) {
+		t.Fatalf("err = %v, want ErrStatementNotExecuted", err)
+	}
+	if want := "`action` statement"; err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err = %v, want it to name the %s", err, want)
+	}
+	if satisfied {
+		t.Error("a constraint whose action flow was skipped reported as satisfied")
+	}
+
+	rig, ok := testPkg.LookupLocal("Rig")
+	if !ok {
+		t.Fatal("Rig not found")
+	}
+	for _, name := range []string{"edge", "attached", "named", "node", "plain", "nested", "required"} {
+		feat := featureNamed(ctx, rig, name)
+		if feat == nil || feat.Symbol == nil {
+			t.Fatalf("%s not found", name)
+		}
+		evaluate := ctx.EvaluateConstraintOn
+		if name == "required" {
+			evaluate = ctx.EvaluateRequirementOn
+		}
+		satisfied, err := evaluate(feat.Symbol, feat.DeclScope(), nil)
+		if !errors.Is(err, ErrStatementNotExecuted) {
+			t.Errorf("%s: err = %v, want ErrStatementNotExecuted", name, err)
+		}
+		if want := "`action` statement"; err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v, want it to name the %s", name, err, want)
+		}
+		if satisfied {
+			t.Errorf("%s: reported as satisfied with its action flow skipped", name)
+		}
+	}
+}
+
+func TestConstraintBodySuccessionAloneIsNotAVerdict(t *testing.T) {
+	// A succession between actions declared outside the body is still a step
+	// the body states, and it is named by the keyword it was written with.
+	src := `
+		package test {
+			part def Rig {
+				attribute z = 1;
+				action a; action b;
+				constraint edge { first a then b; z > 5 }
+				constraint attached { then b; z > 5 }
+				constraint named { succession s first a then b; z > 5 }
+				constraint flow { succession flow from a to b; z > 5 }
+			}
+		}
+	`
+	file := parser.New(source.New("test.sysml", []byte(src))).ParseFile()
+	idx := symbols.NewIndex()
+	idx.AddDocument("test.sysml", file)
+	resolver := resolve.New(idx)
+	ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
+
+	testPkg := idx.DocumentRoot("test.sysml").Children()[0]
+	rig, ok := testPkg.LookupLocal("Rig")
+	if !ok {
+		t.Fatal("Rig not found")
+	}
+	for name, want := range map[string]string{
+		"edge":     "`first` statement",
+		"attached": "`then` statement",
+		"named":    "`succession` statement",
+		"flow":     "`succession flow` statement",
+	} {
+		feat := featureNamed(ctx, rig, name)
+		if feat == nil || feat.Symbol == nil {
+			t.Fatalf("%s not found", name)
+		}
+		satisfied, err := ctx.EvaluateConstraintOn(feat.Symbol, feat.DeclScope(), nil)
+		if !errors.Is(err, ErrStatementNotExecuted) {
+			t.Errorf("%s: err = %v, want ErrStatementNotExecuted", name, err)
+		}
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v, want it to name the %s", name, err, want)
+		}
+		if satisfied {
+			t.Errorf("%s: reported as satisfied with its succession skipped", name)
+		}
+	}
+}

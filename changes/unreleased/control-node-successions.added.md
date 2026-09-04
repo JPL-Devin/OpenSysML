@@ -14,5 +14,6 @@
   specification and recorded as pilot gaps.
   A constraint body now parses the action statements the specification's calculation body
   allows (`assign`, `if`, loops, `send`), so a control node inside one reaches the rule; checking
-  or solving a constraint that states such a statement refuses — `statement in a constraint body
-  is not executed by OpenSysML` — rather than reporting a verdict that ignored it.
+  or solving a constraint that states such a statement, an action node or a succession refuses —
+  `statement in a constraint body is not executed by OpenSysML` — rather than reporting a
+  verdict that ignored it. A case's own action steps are its procedure and still translate.

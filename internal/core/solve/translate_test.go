@@ -600,3 +600,40 @@ func TestPerformedActionRefuses(t *testing.T) {
 		}
 	}
 }
+
+// TestActionFlowRefuses: action nodes and the successions between them are steps
+// of a constraint body that translation refuses rather than drops.
+func TestActionFlowRefuses(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			constraint def C {
+				attribute y : Integer = 1;
+				action a; action b;
+				first a then b;
+				y > 5
+			}
+			part def Rig {
+				attribute z : Integer = 1;
+				action a; action b;
+				constraint edge { first a then b; z > 5 }
+				constraint node { action c; fork f; first c then f; z > 5 }
+				constraint nested { assert constraint { action c; z > 5 } }
+			}
+		}
+	`
+	for name, want := range map[string]string{
+		"test::C":           "`action` statement",
+		"test::Rig::edge":   "`first` statement",
+		"test::Rig::node":   "`action` statement",
+		"test::Rig::nested": "`action` statement",
+	} {
+		refused := refusal(t, src, name)
+		if refused.Construct != "body statement" {
+			t.Errorf("%s: refused construct is %q, want the body statement", name, refused.Construct)
+		}
+		if refused.Condition != want {
+			t.Errorf("%s: refused condition is %q, want %s", name, refused.Condition, want)
+		}
+	}
+}

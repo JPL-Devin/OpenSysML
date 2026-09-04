@@ -149,14 +149,10 @@ func (ctx *Context) appendConditions(out []Condition, node ast.Node, scope *symb
 		for _, nested := range m.Body {
 			out = ctx.appendConditions(out, nested, body, false, false, seen)
 		}
-	case *ast.AssignmentActionNode, *ast.IfActionNode, *ast.WhileLoopActionNode, *ast.SendStatement,
-		*ast.TerminateStatement, *ast.PerformActionNode:
-		out = append(out, Condition{Statement: m, Scope: scope, Required: required})
 	case *ast.Membership:
 		out = ctx.appendConditions(out, m.Member, scope, required, negated, seen)
-	case *ast.Usage:
-		// A performed action is a step of the body too (`perform a;`).
-		if m.IsPerformedAction() {
+	default:
+		if _, ok := statementKeyword(m); ok {
 			out = append(out, Condition{Statement: m, Scope: scope, Required: required})
 		}
 	}
@@ -177,21 +173,49 @@ func unexecutedStatement(conds []Condition) ast.Node {
 	return nil
 }
 
-// statementKeyword names the keyword an action statement was written with.
-func statementKeyword(node ast.Node) string {
-	switch node.(type) {
+// statementKeyword names the keyword a body item the evaluator does not run
+// was written with: an action statement, an action node, or a succession.
+func statementKeyword(node ast.Node) (string, bool) {
+	switch n := node.(type) {
 	case *ast.AssignmentActionNode:
-		return "assign"
+		return "assign", true
 	case *ast.IfActionNode:
-		return "if"
+		return "if", true
 	case *ast.WhileLoopActionNode:
-		return "loop"
+		return "loop", true
 	case *ast.SendStatement:
-		return "send"
+		return "send", true
 	case *ast.TerminateStatement:
-		return "terminate"
+		return "terminate", true
+	case *ast.PerformActionNode:
+		return "perform", true
+	case *ast.ActionExecutionNode, *ast.AcceptActionUsage:
+		return "action", true
+	case *ast.InitialNode:
+		return "first", true
+	case *ast.SuccessionEdge, *ast.ControlFlowEdge:
+		return "then", true
+	case *ast.ForkNode:
+		return "fork", true
+	case *ast.JoinNode:
+		return "join", true
+	case *ast.MergeNode:
+		return "merge", true
+	case *ast.DecisionNode:
+		return "decide", true
+	case *ast.Usage:
+		switch {
+		case n.IsPerformedAction():
+			return "perform", true
+		case n.Kind == ast.UsageAction:
+			return "action", true
+		case n.IsSuccessionFlow():
+			return "succession flow", true
+		case n.Kind == ast.UsageSuccession:
+			return "succession", true
+		}
 	}
-	return "perform"
+	return "", false
 }
 
 // appendReferencedConditions appends what a require/assume member that
@@ -287,8 +311,9 @@ func (ctx *Context) evaluateConditions(check conditionCheck, conds []Condition) 
 	// A statement anywhere in the body could change what the conditions read, so
 	// no verdict is reached, not even from a condition stated before it.
 	if stmt := unexecutedStatement(conds); stmt != nil {
+		keyword, _ := statementKeyword(stmt)
 		return false, fmt.Errorf("%s %s: %s evaluation failed: `%s` %w; bind the value as a feature value or compute it in a calc the condition reads",
-			check.kind, check.name(), check.what, statementKeyword(stmt), ErrStatementNotExecuted)
+			check.kind, check.name(), check.what, keyword, ErrStatementNotExecuted)
 	}
 	features := ctx.conditionFeatures(check.sym)
 	self := check.self
@@ -733,7 +758,8 @@ func (ctx *Context) conditionFeatures(sym *symbols.Symbol) map[string]scopedExpr
 // condition that failed, negation and grouping included.
 func conditionLabel(cond Condition) string {
 	if cond.Statement != nil {
-		return "`" + statementKeyword(cond.Statement) + "` statement"
+		keyword, _ := statementKeyword(cond.Statement)
+		return "`" + keyword + "` statement"
 	}
 	text := conditionText(cond.Expr)
 	if cond.Group != nil {
