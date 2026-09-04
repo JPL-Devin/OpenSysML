@@ -163,6 +163,33 @@ func TestAssignmentReferentFeatureOrUnresolvedIsNotReported(t *testing.T) {
 	}
 }
 
+// An alias names the element it is for (KerML 8.2.3.2): an alias to a feature
+// is a referent, an alias to a definition is none, directly and through a chain.
+func TestAssignmentReferentThroughAliasJudgesAliasedElement(t *testing.T) {
+	prefix := `package Test {
+	part def P { attribute x; alias ax for x; }
+	item i { attribute a; part p : P; alias aa for a; }
+	alias ai for i; alias aai for ai; alias aP for P;
+	package Q { alias qa for i::a; }
+	action def A { `
+	silent := "assign ai.a := null; assign aai.a := null; assign i.aa := null; assign ai.p.x := null; assign i.p.ax := null; assign Q::qa := null; } }"
+	for _, warm := range []bool{false, true} {
+		if got := assignmentDiags(t, prefix+silent, warm, "assignment-referent"); len(got) != 0 {
+			t.Errorf("warm=%v: got %v, want no referent diagnostic", warm, got)
+		}
+	}
+	for _, target := range []string{"aP", "Test::aP"} {
+		src := prefix + "assign " + target + " := null; } }"
+		for _, warm := range []bool{false, true} {
+			got := assignmentDiags(t, src, warm, "assignment-referent")
+			want := msgAssignmentReferent + " " + target + " is declared `part def`, not a feature."
+			if len(got) != 1 || got[0].Message != want {
+				t.Errorf("warm=%v target %s: got %v, want %q", warm, target, got, want)
+			}
+		}
+	}
+}
+
 // A target that is an expression rather than a feature name is the syntax
 // tier's error (SysML.xtext TargetParameter), so the pass adds nothing to it.
 func TestAssignmentReferentExpressionTargetIsSyntaxError(t *testing.T) {

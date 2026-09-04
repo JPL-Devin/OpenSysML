@@ -63,6 +63,41 @@ part ctx { `
 	}
 }
 
+// An alias names the element it is for (KerML 8.2.3.2), so the referent-kind
+// rule judges the aliased element, directly and through a chain.
+func TestAssertReferenceThroughAliasJudgesAliasedElement(t *testing.T) {
+	prefix := `constraint def CD; part def PD;
+part def Holder { constraint c : CD; part p; alias ac for c; alias ap for p; }
+part h : Holder; constraint c : CD; part p;
+alias ac for c; alias acc for ac; alias ap for p; alias apd for PD; alias ah for h;
+package Q { alias qc for c; }
+part ctx { `
+	silent := "assert ac; assert not ac; assert acc; assert Q::qc; assert ah.c; assert ah.ac; assert h.ac; }"
+	if diags := typeDiags(t, prefix+silent); len(diags) != 0 {
+		t.Errorf("expected no type diagnostics, got %v", diags)
+	}
+	tests := []struct {
+		name, target, found string
+	}{
+		{"alias to part usage", "assert ap;", "partUsage"},
+		{"alias to part definition", "assert apd;", "partDef"},
+		{"chain through alias", "assert ah.p;", "partUsage"},
+		{"chain ending in alias", "assert h.ap;", "partUsage"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			diags := typeDiags(t, prefix+tc.target+" }")
+			if len(diags) != 1 {
+				t.Fatalf("expected one type diagnostic, got %v", diags)
+			}
+			want := "assert target must be a constraint usage, found " + tc.found
+			if diags[0].Message != want {
+				t.Errorf("got %q, want %q", diags[0].Message, want)
+			}
+		})
+	}
+}
+
 // An unresolved assert target is the name-resolution tier's finding alone.
 func TestAssertReferenceUnresolvedIsNotAKindError(t *testing.T) {
 	src := "part def Derived; part v : Derived; part ctx { assert missing; assert v.missing; }" +
