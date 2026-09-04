@@ -155,6 +155,8 @@ func TestMetadataAnnotatedElementOnRequirementMembers(t *testing.T) {
 		assume #%[1]s constraint a : C;
 		require #%[1]s constraint r : C;
 		#%[1]s part p : Vehicle;
+		assume #%[1]s constraint { true }
+		require #%[1]s constraint : C { true }
 	}
 }`
 	ok := metadataDiagsNamed(t, "<t>.sysml", fmt.Sprintf(body, "OnUsage"))
@@ -168,6 +170,8 @@ func TestMetadataAnnotatedElementOnRequirementMembers(t *testing.T) {
 		msgCannotAnnotate + "ConstraintUsage",
 		msgCannotAnnotate + "ConstraintUsage",
 		msgCannotAnnotate + "PartUsage",
+		msgCannotAnnotate + "ConstraintUsage",
+		msgCannotAnnotate + "ConstraintUsage",
 	}
 	if len(bad) != len(want) {
 		t.Fatalf("definition-only metadata on usages: findings %v, want %d", bad, len(want))

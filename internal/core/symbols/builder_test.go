@@ -337,6 +337,54 @@ func TestRequirementConstraintMembersAreSymbols(t *testing.T) {
 	}
 }
 
+// An anonymous `assume`/`require constraint` is an anonymous constraint usage
+// symbol, as `constraint { … }` is, so metadata written on it is analysed; its
+// body stays a body-local scope owned by no symbol, so the conditions it states
+// remain the requirement's. A reference member declares no usage.
+func TestAnonymousRequirementConstraintsAreAnonymousSymbols(t *testing.T) {
+	src := `package P {
+		metadata def M;
+		constraint def C;
+		requirement def Other;
+		requirement def R {
+			require #M constraint { true }
+			assume constraint : C;
+			require Other;
+			assume Other;
+		}
+	}`
+	root := build(t, src)
+	pkg, _ := root.LookupLocal("P")
+	r, _ := pkg.Scope.LookupLocal("R")
+
+	anon := r.Scope.AnonymousMembers()
+	if len(anon) != 2 {
+		t.Fatalf("anonymous members of R = %d, want the two constraint declarations", len(anon))
+	}
+	require, assume := anon[0], anon[1]
+	if _, ok := require.Decl.(*ast.RequireMember); !ok || require.Kind != SymbolConstraintUsage {
+		t.Fatalf("first anonymous member = %v declared by %T, want a constraint usage of the require", require.Kind, require.Decl)
+	}
+	if _, ok := assume.Decl.(*ast.AssumeMember); !ok || assume.Kind != SymbolConstraintUsage {
+		t.Fatalf("second anonymous member = %v declared by %T, want a constraint usage of the assume", assume.Kind, assume.Decl)
+	}
+	if require.Name != "" || require.Scope != nil {
+		t.Fatalf("anonymous require = %q owning %v, want no name and no owned scope", require.Name, require.Scope)
+	}
+	body := ConstraintBodyScope(r.Scope, require.Decl)
+	if body == nil || body == r.Scope || !body.BodyLocal() || body.Owner() != nil {
+		t.Fatalf("anonymous require body = %v, want an ownerless body-local scope", body)
+	}
+	for _, sym := range r.Scope.AllMembers() {
+		if _, ok := sym.Decl.(*ast.RequireMember); ok && sym != require {
+			t.Fatalf("the reference form `require Other;` declares no symbol, got %v", sym)
+		}
+		if _, ok := sym.Decl.(*ast.AssumeMember); ok && sym != assume {
+			t.Fatalf("the reference form `assume Other;` declares no symbol, got %v", sym)
+		}
+	}
+}
+
 // A metadata usage with a body inside a subject, assume or require member's
 // body is a body-local scope, as it is inside any usage's body.
 func TestRequirementMemberMetadataBodiesGetScopes(t *testing.T) {

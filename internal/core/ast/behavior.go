@@ -501,6 +501,9 @@ type RequireMember struct {
 // `require` member owns (SysML.xtext RequirementConstraintUsage); Name is ""
 // for the anonymous and reference forms.
 type RequirementConstraint struct {
+	// Declared is true for the `constraint` declaration form, false for a
+	// member stating a reference or an inline condition.
+	Declared      bool
 	Prefixes      []*PrefixMetadata
 	Name          string
 	NameSpan      source.Span
@@ -513,6 +516,7 @@ type RequirementConstraint struct {
 // Constraint returns the constraint usage declaration the member owns.
 func (m *AssumeMember) Constraint() RequirementConstraint {
 	return RequirementConstraint{
+		Declared: m.Expression == nil && m.Reference == nil,
 		Prefixes: m.Prefixes, Name: m.Name, NameSpan: m.NameSpan, Relationships: m.Relationships,
 		Multiplicity: m.Multiplicity, Value: m.Value, Body: m.Body,
 	}
@@ -521,6 +525,7 @@ func (m *AssumeMember) Constraint() RequirementConstraint {
 // Constraint returns the constraint usage declaration the member owns.
 func (m *RequireMember) Constraint() RequirementConstraint {
 	return RequirementConstraint{
+		Declared: m.Expression == nil && m.Reference == nil,
 		Prefixes: m.Prefixes, Name: m.Name, NameSpan: m.NameSpan, Relationships: m.Relationships,
 		Multiplicity: m.Multiplicity, Value: m.Value, Body: m.Body,
 	}

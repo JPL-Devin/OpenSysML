@@ -79,11 +79,13 @@ func TestW8CMetadataAbstractTypeOnRequirementMembers(t *testing.T) {
 		subject #A s;
 		assume #A constraint a : C;
 		require #A constraint r : C;
+		assume #A constraint { true }
+		require #A constraint { true }
 	}
 }`
 	msgs := w8cLibraryMessagesIn(t, "meta-abstract-requirement-members.sysml", src)
-	if w8cCount(msgs, msgMetadataConcreteType) != 3 {
-		t.Errorf("want three %q, got %v", msgMetadataConcreteType, msgs)
+	if w8cCount(msgs, msgMetadataConcreteType) != 5 {
+		t.Errorf("want five %q, got %v", msgMetadataConcreteType, msgs)
 	}
 }
 

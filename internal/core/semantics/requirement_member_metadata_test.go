@@ -152,6 +152,48 @@ func TestPlainMetadataOnRequirementMembersAddsNoBase(t *testing.T) {
 	}
 }
 
+// An anonymous `assume`/`require constraint` carries its prefix too: the
+// anonymous constraint usage is annotated, and a semantic keyword gives it the
+// keyword's base, as on an anonymous `constraint { … }`.
+func TestMetadataOnAnonymousRequirementConstraints(t *testing.T) {
+	m, idx := requirementMemberModel(t, `package P {
+		private import Metaobjects::SemanticMetadata;
+		constraint def C;
+		constraint checks : C[*];
+		metadata def check :> SemanticMetadata {
+			:>> baseType = checks meta SysML::Usage;
+		}
+		metadata def Reviewed;
+		requirement def R {
+			assume #check constraint { true }
+			require #check #Reviewed constraint : C { true }
+		}
+	}`)
+	r := lookupFQN(t, idx, "P::R")
+	anon := r.Scope.AnonymousMembers()
+	if len(anon) != 2 {
+		t.Fatalf("anonymous members of R = %d, want 2", len(anon))
+	}
+	for i, want := range [][]string{{"check"}, {"check", "Reviewed"}} {
+		annots := semantics.MetadataAnnotationsOf(anon[i].Decl)
+		if len(annots) != len(want) {
+			t.Fatalf("anonymous member %d: %d annotations, want %d", i, len(annots), len(want))
+		}
+		for j, a := range annots {
+			if got := a.Node.Type.Parts[len(a.Node.Type.Parts)-1].Text; got != want[j] || !a.Prefix {
+				t.Errorf("anonymous member %d annotation %d = %q (prefix %v), want prefix %q", i, j, got, a.Prefix, want[j])
+			}
+		}
+		got := supertypeNames(m, anon[i])
+		if !containsName(got, "P::checks") || containsName(got, "P::Reviewed") {
+			t.Errorf("supertypes of anonymous member %d = %v, want P::checks and no P::Reviewed", i, got)
+		}
+	}
+	if got := supertypeNames(m, anon[1]); !containsName(got, "P::C") {
+		t.Errorf("supertypes of the typed anonymous require = %v, want P::C", got)
+	}
+}
+
 // The constraint usage an assume or require member owns has a constraint's
 // implicit base, and redefines what its `:>>` names.
 func TestRequirementConstraintUsageBases(t *testing.T) {

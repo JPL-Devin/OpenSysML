@@ -430,10 +430,16 @@ func buildConstraintBodyScope(scope *Scope, decl ast.Node, body []ast.Node) {
 }
 
 // buildRequirementConstraint declares the constraint usage an `assume`/`require`
-// member owns: a named one is a symbol with its own scope, an anonymous one only a body.
+// member owns. An anonymous one is an anonymous symbol whose body stays a
+// body-local scope, so the conditions it states are still owned by the
+// requirement; a reference or inline condition declares no usage at all.
 func buildRequirementConstraint(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Trivia) {
 	c, _ := ast.RequirementConstraintOf(decl)
 	if c.Name == "" {
+		if c.Declared {
+			sym := newSymbol(ast.Identification{}, SymbolConstraintUsage, decl, vis, nil, scope, trivia)
+			defineIdent(scope, ast.Identification{}, sym)
+		}
 		buildConstraintBodyScope(scope, decl, c.Body)
 		return
 	}
