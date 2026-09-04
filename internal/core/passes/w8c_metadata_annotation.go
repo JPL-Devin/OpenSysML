@@ -36,6 +36,9 @@ func (MetadataAnnotationPass) Run(ctx *Context, name string, root *ast.RootNames
 	}
 	w := &w8cWalker{ctx: ctx}
 	w.walk(rootScope, c.checkSymbol)
+	c.checkAnnotations(rootScope, root, func(typeRef *ast.QualifiedName) (string, bool) {
+		return c.model.OwnerAnnotatedElementViolation(rootScope, typeRef)
+	})
 	return c.diags
 }
 
@@ -49,23 +52,31 @@ type metadataAnnotationChecker struct {
 // element's own scope.
 func (c *metadataAnnotationChecker) checkSymbol(sym *symbols.Symbol) {
 	scope := semantics.AnnotationScope(sym)
+	c.checkAnnotations(scope, sym.Decl, func(typeRef *ast.QualifiedName) (string, bool) {
+		return c.model.AnnotatedElementViolation(sym, scope, typeRef)
+	})
+	if u, ok := sym.Decl.(*ast.Usage); ok && u.Kind == ast.UsageMetadata {
+		c.checkMetadataUsage(sym, u)
+	}
+}
+
+// checkAnnotations checks the annotations written on decl, read in scope;
+// violation judges whether the type an `about`-less one names may annotate decl.
+func (c *metadataAnnotationChecker) checkAnnotations(scope *symbols.Scope, decl ast.Node, violation func(*ast.QualifiedName) (string, bool)) {
 	if scope == nil {
 		return
 	}
-	for _, a := range semantics.MetadataAnnotationsOf(sym.Decl) {
-		if metaclass, bad := c.model.AnnotatedElementViolation(sym, scope, a.Node.Type); bad {
+	for _, a := range semantics.MetadataAnnotationsOf(decl) {
+		if metaclass, bad := violation(a.Node.Type); bad {
 			c.reportCannotAnnotate(a.Node.Span(), metaclass)
 		}
 		c.checkBody(scope, a.Node)
 	}
-	for _, a := range semantics.MetadataAnnotationsAboutOthers(sym.Decl) {
+	for _, a := range semantics.MetadataAnnotationsAboutOthers(decl) {
 		for _, metaclass := range c.model.AboutAnnotatedElementViolations(scope, a.Node.Type, a.Node.About) {
 			c.reportCannotAnnotate(a.Node.Span(), metaclass)
 		}
 		c.checkBody(scope, a.Node)
-	}
-	if u, ok := sym.Decl.(*ast.Usage); ok && u.Kind == ast.UsageMetadata {
-		c.checkMetadataUsage(sym, u)
 	}
 }
 
@@ -103,7 +114,7 @@ func (c *metadataAnnotationChecker) checkMetadataUsage(sym *symbols.Symbol, u *a
 		}
 		return
 	}
-	if metaclass, bad := c.model.AnnotatedElementViolation(sym.OwnerScope.Owner(), sym.OwnerScope, typeRef); bad {
+	if metaclass, bad := c.model.OwnerAnnotatedElementViolation(sym.OwnerScope, typeRef); bad {
 		c.reportCannotAnnotate(u.Span(), metaclass)
 	}
 }

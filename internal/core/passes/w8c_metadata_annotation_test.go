@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
@@ -334,6 +335,70 @@ func TestMetadataBodyValueIsJudgedInTheBodyScope(t *testing.T) {
 	for i, f := range found {
 		if f.Text != want[i] {
 			t.Errorf("finding %d is %q, want %q", i, f.Text, want[i])
+		}
+	}
+}
+
+// An annotation written in a document's root namespace annotates that namespace
+// and is judged like a package member's: the pilot draws exactly these findings.
+func TestMetadataAnnotationsInTheRootNamespace(t *testing.T) {
+	kerml := `metaclass M { :>> annotatedElement : KerML::Class; }
+metaclass P { :>> annotatedElement : KerML::Namespace; }
+metaclass W { feature k : ScalarValues::Integer; }
+class N;
+abstract metaclass Q;
+class C;
+feature g : ScalarValues::Integer;
+@N;
+@Q;
+@M;
+@P;
+@M about C;
+@P about C;
+@W { :>> k = ~3; }
+@W { :>> g = 1; }
+@W about C { :>> g = 1; }
+@W { :>> k = 1; }
+metadata m : M;
+metadata p : P;
+`
+	sysml := strings.NewReplacer(
+		"metaclass M", "metadata def M",
+		"metaclass P", "metadata def P",
+		"metaclass W { feature k", "metadata def W { attribute k",
+		"class N", "part def N",
+		"abstract metaclass Q", "abstract metadata def Q",
+		"class C", "part def C",
+		"feature g", "attribute g",
+	).Replace(kerml)
+	want := map[string][]string{
+		"metadata-concrete-type":       {"@Q;"},
+		"metadata-annotated-element":   {"@M;", "metadata m : M;"},
+		"metadata-value-not-evaluable": {"= ~3"},
+		"metadata-owning-type-feature": {":>> g = 1;", ":>> g = 1;"},
+	}
+	for name, src := range map[string]string{"root.kerml": kerml, "root.sysml": sysml} {
+		found := metadataDiagsNamed(t, name, src)
+		typed := findingsWithCode(found, "metadata-metaclass")
+		if name == "root.sysml" {
+			typed = nil
+			for _, f := range found {
+				if f.Msg == oneTypeUsageMessages[ast.UsageMetadata] {
+					typed = append(typed, f)
+				}
+			}
+		}
+		if len(typed) != 1 || strings.TrimSpace(typed[0].Text) != "@N;" {
+			t.Errorf("%s: metadata typing findings = %v, want one on @N;", name, typed)
+		}
+		for code, texts := range want {
+			var got []string
+			for _, f := range findingsWithCode(found, code) {
+				got = append(got, strings.TrimSpace(f.Text))
+			}
+			if fmt.Sprint(got) != fmt.Sprint(texts) {
+				t.Errorf("%s: %s on %v, want %v", name, code, got, texts)
+			}
 		}
 	}
 }

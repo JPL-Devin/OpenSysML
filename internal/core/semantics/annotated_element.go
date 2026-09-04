@@ -14,6 +14,25 @@ func (m *Model) AnnotatedElementViolation(annotated *symbols.Symbol, scope *symb
 	return m.annotatedElementViolationOf(annotated, m.resolveMetadataType(scope, typeRef))
 }
 
+// OwnerAnnotatedElementViolation judges an annotation written in scope with no
+// `about` against the element owning scope; a document root is a Namespace.
+func (m *Model) OwnerAnnotatedElementViolation(scope *symbols.Scope, typeRef *ast.QualifiedName) (string, bool) {
+	if m == nil || scope == nil {
+		return "", false
+	}
+	def := m.resolveMetadataType(scope, typeRef)
+	if owner := scope.Owner(); owner != nil {
+		return m.annotatedElementViolationOf(owner, def)
+	}
+	if _, root := scope.Node().(*ast.RootNamespace); root {
+		return m.metaclassAnnotatedElementViolation(m.kermlMetaclass(rootMetaclassName), def)
+	}
+	return "", false
+}
+
+// rootMetaclassName is the metaclass of a document's root namespace.
+const rootMetaclassName = "Namespace"
+
 // AboutAnnotatedElementViolations names, in order, the metaclass of each element
 // an `about` clause names that the metadata type typeRef names may not annotate.
 func (m *Model) AboutAnnotatedElementViolations(scope *symbols.Scope, typeRef *ast.QualifiedName, about []*ast.QualifiedName) []string {
@@ -62,12 +81,17 @@ func (m *Model) annotatedElementViolationOf(annotated, def *symbols.Symbol) (str
 	if def == nil {
 		return "", false
 	}
-	alternatives := m.annotatedElementFeatures(def)
-	if len(alternatives) == 0 {
+	return m.metaclassAnnotatedElementViolation(m.metaclassOf(annotated), def)
+}
+
+// metaclassAnnotatedElementViolation names meta when def may not annotate an
+// element of that metaclass.
+func (m *Model) metaclassAnnotatedElementViolation(meta, def *symbols.Symbol) (string, bool) {
+	if meta == nil || def == nil {
 		return "", false
 	}
-	meta := m.metaclassOf(annotated)
-	if meta == nil {
+	alternatives := m.annotatedElementFeatures(def)
+	if len(alternatives) == 0 {
 		return "", false
 	}
 	for _, feature := range alternatives {

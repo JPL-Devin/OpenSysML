@@ -3,9 +3,12 @@ package ast
 // DeclaredMetadata returns the prefix metadata a declaration is written with and
 // the body whose metadata members annotate it (KerML 8.2.4 PrefixMetadataMember;
 // SysML.xtext UsageExtensionKeyword on SubjectUsage and RequirementConstraintUsage).
-// ok is false for a node that carries neither.
+// A document root's members annotate the root namespace. ok is false for a node
+// that carries neither.
 func DeclaredMetadata(node Node) (prefixes []*PrefixMetadata, body []Node, ok bool) {
 	switch d := node.(type) {
+	case *RootNamespace:
+		return nil, d.Members, true
 	case *Definition:
 		return d.Prefixes, d.Members, true
 	case *Usage:

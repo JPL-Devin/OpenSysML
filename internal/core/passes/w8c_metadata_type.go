@@ -33,6 +33,7 @@ func (MetadataTypePass) Run(ctx *Context, name string, root *ast.RootNamespace) 
 	c := &metadataTypeChecker{ctx: ctx, resolver: ctx.Resolver()}
 	w := &w8cWalker{ctx: ctx}
 	w.walk(rootScope, c.checkSymbol)
+	c.checkAnnotations(rootScope, root)
 	return c.diags
 }
 
@@ -46,17 +47,23 @@ type metadataTypeChecker struct {
 }
 
 func (c *metadataTypeChecker) checkSymbol(sym *symbols.Symbol) {
-	if scope := semantics.AnnotationScope(sym); scope != nil {
-		for _, a := range semantics.MetadataAnnotationsWritten(sym.Decl) {
-			c.check(scope, a.Node.Type, a.Node.Span(), true)
-		}
-	}
+	c.checkAnnotations(semantics.AnnotationScope(sym), sym.Decl)
 	if u, ok := sym.Decl.(*ast.Usage); ok && u.Kind == ast.UsageMetadata && sym.OwnerScope != nil {
 		// A SysML usage typed by the wrong kind of element is the usage typing
 		// rule's; more than one type is the one-type rule's.
 		if typeRef := metadataUsageType(u); typeRef != nil {
 			c.check(sym.OwnerScope, typeRef, u.Span(), c.ctx.Kind == source.KindKerML)
 		}
+	}
+}
+
+// checkAnnotations checks the type of each annotation written on decl, read in scope.
+func (c *metadataTypeChecker) checkAnnotations(scope *symbols.Scope, decl ast.Node) {
+	if scope == nil {
+		return
+	}
+	for _, a := range semantics.MetadataAnnotationsWritten(decl) {
+		c.check(scope, a.Node.Type, a.Node.Span(), true)
 	}
 }
 
