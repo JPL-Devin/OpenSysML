@@ -29,19 +29,20 @@ elmt:Colors__Color
     sysml:owningRelationship elmt:Colors__Color_om ;
     sysml:owningMembership elmt:Colors__Color_om ;
     sysml:declaredName "Color" ;
+    sysml:isVariation "true"^^xsd:boolean ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Colors__Color__red, elmt:Colors__Color__green, elmt:Colors__Color__blue ;
     sysml:ownedMembership elmt:Colors__Color__red_om, elmt:Colors__Color__green_om, elmt:Colors__Color__blue_om ;
     sysml:ownedRelationship elmt:Colors__Color__red_om, elmt:Colors__Color__green_om, elmt:Colors__Color__blue_om ;
-    sysml:ownedFeature elmt:Colors__Color__red, elmt:Colors__Color__green, elmt:Colors__Color__blue ;
-    sysml:ownedFeatureMembership elmt:Colors__Color__red_om, elmt:Colors__Color__green_om, elmt:Colors__Color__blue_om ;
+    sysml:variant elmt:Colors__Color__red, elmt:Colors__Color__green, elmt:Colors__Color__blue ;
+    sysml:variantMembership elmt:Colors__Color__red_om, elmt:Colors__Color__green_om, elmt:Colors__Color__blue_om ;
     sysx:sourceText "    enum def Color {\n" ;
     sysx:sourceTail "    }\n" ;
     json:ownedMember "[{\"@id\":\"Colors__Color__red\"},{\"@id\":\"Colors__Color__green\"},{\"@id\":\"Colors__Color__blue\"}]" ;
     json:ownedMembership "[{\"@id\":\"Colors__Color__red_om\"},{\"@id\":\"Colors__Color__green_om\"},{\"@id\":\"Colors__Color__blue_om\"}]" ;
     json:ownedRelationship "[{\"@id\":\"Colors__Color__red_om\"},{\"@id\":\"Colors__Color__green_om\"},{\"@id\":\"Colors__Color__blue_om\"}]" ;
-    json:ownedFeature "[{\"@id\":\"Colors__Color__red\"},{\"@id\":\"Colors__Color__green\"},{\"@id\":\"Colors__Color__blue\"}]" ;
-    json:ownedFeatureMembership "[{\"@id\":\"Colors__Color__red_om\"},{\"@id\":\"Colors__Color__green_om\"},{\"@id\":\"Colors__Color__blue_om\"}]" .
+    json:variant "[{\"@id\":\"Colors__Color__red\"},{\"@id\":\"Colors__Color__green\"},{\"@id\":\"Colors__Color__blue\"}]" ;
+    json:variantMembership "[{\"@id\":\"Colors__Color__red_om\"},{\"@id\":\"Colors__Color__green_om\"},{\"@id\":\"Colors__Color__blue_om\"}]" .
 
 elmt:Colors__Color_om
     a sysml:OwningMembership ;
@@ -63,11 +64,12 @@ elmt:Colors__Color__red
     sysml:owningRelationship elmt:Colors__Color__red_om ;
     sysml:owningMembership elmt:Colors__Color__red_om ;
     sysml:declaredName "red" ;
+    sysml:isVariant "true"^^xsd:boolean ;
     sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        enum red;\n" .
 
 elmt:Colors__Color__red_om
-    a sysml:FeatureMembership ;
+    a sysml:VariantMembership ;
     sysml:elementId "Colors__Color__red_om" ;
     sysml:owner elmt:Colors__Color ;
     sysml:memberElement elmt:Colors__Color__red ;
@@ -75,8 +77,7 @@ elmt:Colors__Color__red_om
     sysml:ownedRelatedElement elmt:Colors__Color__red ;
     sysml:owningRelatedElement elmt:Colors__Color ;
     sysml:membershipOwningNamespace elmt:Colors__Color ;
-    sysml:ownedMemberFeature elmt:Colors__Color__red ;
-    sysml:owningType elmt:Colors__Color .
+    sysml:ownedVariantUsage elmt:Colors__Color__red .
 
 elmt:Colors__Color__green
     a sysml:EnumerationUsage ;
@@ -88,11 +89,12 @@ elmt:Colors__Color__green
     sysml:owningRelationship elmt:Colors__Color__green_om ;
     sysml:owningMembership elmt:Colors__Color__green_om ;
     sysml:declaredName "green" ;
+    sysml:isVariant "true"^^xsd:boolean ;
     sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        enum green;\n" .
 
 elmt:Colors__Color__green_om
-    a sysml:FeatureMembership ;
+    a sysml:VariantMembership ;
     sysml:elementId "Colors__Color__green_om" ;
     sysml:owner elmt:Colors__Color ;
     sysml:memberElement elmt:Colors__Color__green ;
@@ -100,8 +102,7 @@ elmt:Colors__Color__green_om
     sysml:ownedRelatedElement elmt:Colors__Color__green ;
     sysml:owningRelatedElement elmt:Colors__Color ;
     sysml:membershipOwningNamespace elmt:Colors__Color ;
-    sysml:ownedMemberFeature elmt:Colors__Color__green ;
-    sysml:owningType elmt:Colors__Color .
+    sysml:ownedVariantUsage elmt:Colors__Color__green .
 
 elmt:Colors__Color__blue
     a sysml:EnumerationUsage ;
@@ -113,11 +114,12 @@ elmt:Colors__Color__blue
     sysml:owningRelationship elmt:Colors__Color__blue_om ;
     sysml:owningMembership elmt:Colors__Color__blue_om ;
     sysml:declaredName "blue" ;
+    sysml:isVariant "true"^^xsd:boolean ;
     sysx:hasBody "false"^^xsd:boolean ;
     sysx:sourceText "        enum blue;\n" .
 
 elmt:Colors__Color__blue_om
-    a sysml:FeatureMembership ;
+    a sysml:VariantMembership ;
     sysml:elementId "Colors__Color__blue_om" ;
     sysml:owner elmt:Colors__Color ;
     sysml:memberElement elmt:Colors__Color__blue ;
@@ -125,5 +127,4 @@ elmt:Colors__Color__blue_om
     sysml:ownedRelatedElement elmt:Colors__Color__blue ;
     sysml:owningRelatedElement elmt:Colors__Color ;
     sysml:membershipOwningNamespace elmt:Colors__Color ;
-    sysml:ownedMemberFeature elmt:Colors__Color__blue ;
-    sysml:owningType elmt:Colors__Color .
+    sysml:ownedVariantUsage elmt:Colors__Color__blue .
