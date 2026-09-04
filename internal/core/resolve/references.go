@@ -276,9 +276,16 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		c.expr(scope, d.Guard)
 		c.walkBody(scope, d, d.Members)
 		return true
+	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
+		body := scope
+		if child := c.childScope(scope, d); child != nil {
+			body = child
+		}
+		c.walkMembers(body, ast.NodeBodyMembers(d))
+		return true
 	case *ast.ConstraintMember:
 		c.expr(scope, d.Expression)
-		c.walkMembers(scope, d.Body)
+		c.walkMembers(symbols.ConstraintBodyScope(scope, d), d.Body)
 		return true
 	case *ast.AssumeMember:
 		c.prefixes(scope, d.Prefixes)
@@ -350,11 +357,7 @@ func (c *refCollector) behaviorDecl(scope *symbols.Scope, decl ast.Node) bool {
 		body := symbols.TriggerScope(scope, d)
 		c.expr(body, d.Guard)
 		c.walkMembers(body, d.Effect)
-		members := scope
-		if child := c.childScope(scope, d); child != nil {
-			members = child
-		}
-		c.walkMembers(members, d.Members)
+		c.walkMembers(body, d.Members)
 		return true
 	case *ast.InitialNode:
 		c.edgeEnd(scope, d.Successor, nil, false)

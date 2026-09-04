@@ -36,7 +36,7 @@ func (w *bodyWalker) walkNode(scope *symbols.Scope, node ast.Node) {
 	case *ast.SubjectMember:
 		w.walk(childScopeOr(scope, n), n.Body)
 	case *ast.ConstraintMember:
-		w.walk(scope, n.Body)
+		w.walk(symbols.ConstraintBodyScope(scope, n), n.Body)
 	case *ast.AssumeMember:
 		w.walk(symbols.ConstraintBodyScope(scope, n), n.Body)
 	case *ast.RequireMember:

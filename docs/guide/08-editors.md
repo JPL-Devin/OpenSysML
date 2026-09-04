@@ -120,7 +120,12 @@ LSP client; only the syntax highlighting is specific to VS Code.
 - ✅ Completion (trigger characters `:` and `.`; typed kinds and details, `v.` offers members of `v`'s type, `Pkg::` offers that namespace's members, library names included)
 - ✅ Document symbols (outline view)
 - ✅ Workspace symbols (global search)
-- ✅ Document formatting (`textDocument/formatting`, whole-file edit)
+- ✅ Document formatting (`textDocument/formatting`; the reply is one small edit per changed
+  region, never a rewrite of the whole file, so the editor keeps its undo history, cursor,
+  selection and folds)
+- ✅ Range formatting (`textDocument/rangeFormatting`; formats the selected lines only, widening a
+  partial-line selection to whole lines. Indentation is computed from the whole file's structure,
+  so a selection deep in a nested block is indented consistently with its surroundings)
 - ✅ Rename, with prepare (`textDocument/prepareRename`, `textDocument/rename`)
 - ✅ Semantic tokens, full document and range (`textDocument/semanticTokens/full`,
   `textDocument/semanticTokens/range`; legend advertised at `initialize`,
@@ -144,8 +149,8 @@ LSP client; only the syntax highlighting is specific to VS Code.
   [element identity](../project/element-identity-annotations.md)
 
 **Not implemented:** semantic token deltas (`semanticTokens/full/delta`; the server keeps no
-previous result to diff against, so clients re-request the full set), signature help, range
-formatting, code lens and inlay hints. A client that requests one of these gets a
+previous result to diff against, so clients re-request the full set), signature help, code lens
+and inlay hints. A client that requests one of these gets a
 method-not-found response rather than a partial result. Quick fixes are offered only where the
 repair is unambiguous: a syntax error that could be fixed with either a body or a semicolon gets
 none.
@@ -156,8 +161,13 @@ file and renames a definition:
 
 ```
 → textDocument/formatting  (file: "package P {\npart def Wheel {\nattribute diameter = 16.0;\n}\npart w : Wheel;\n}\n")
-← [{"range": {"start": {"line": 0, "character": 0}, "end": {"line": 6, "character": 0}},
-    "newText": "package P {\n    part def Wheel {\n        attribute diameter = 16.0;\n    }\n    part w : Wheel;\n}\n"}]
+← [{"range": {"start": {"line": 1, "character": 0}, "end": {"line": 1, "character": 0}}, "newText": "    "},
+   {"range": {"start": {"line": 2, "character": 0}, "end": {"line": 2, "character": 0}}, "newText": "        "},
+   {"range": {"start": {"line": 3, "character": 0}, "end": {"line": 3, "character": 0}}, "newText": "    "},
+   {"range": {"start": {"line": 4, "character": 0}, "end": {"line": 4, "character": 0}}, "newText": "    "}]
+
+→ textDocument/rangeFormatting  (range: line 2, character 3 to line 2, character 9)
+← [{"range": {"start": {"line": 2, "character": 0}, "end": {"line": 2, "character": 0}}, "newText": "        "}]
 
 → textDocument/rename      (position: line 1, character 10; newName: "Tyre")
 ← {"changes": {"file:///tmp/lsp-demo.sysml": [
@@ -165,8 +175,10 @@ file and renames a definition:
       {"range": {"start": {"line": 4, "character": 9}, "end": {"line": 4, "character": 14}}, "newText": "Tyre"}]}}
 ```
 
-The rename edits the declaration and the `part w : Wheel` reference together, because it works
-from name resolution rather than textual replacement.
+Each formatting edit touches only the characters that change; lines the formatter would leave
+alone get no edit at all, and the range request answers only the edits on the selected lines. The
+rename edits the declaration and the `part w : Wheel` reference together, because it works from
+name resolution rather than textual replacement.
 
 To check the installation in an editor, open a file containing
 `part Wheel { attribute diameter = 16.0; }` and hover over `Wheel`.
