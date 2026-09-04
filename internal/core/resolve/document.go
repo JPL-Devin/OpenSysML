@@ -71,14 +71,14 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 func (r *Resolver) resolveNamespaceDecl(scope *symbols.Scope, decl ast.Node) bool {
 	switch d := decl.(type) {
 	case *ast.Package:
-		r.resolvePrefixes(scope, d.Prefixes)
+		r.resolvePrefixes(scope, d, d.Prefixes)
 		if child := r.childScope(scope, d); child != nil {
 			r.walkMembers(child, d.Members)
 			r.checkDistinguishability(child)
 		}
 		return true
 	case *ast.Namespace:
-		r.resolvePrefixes(scope, d.Prefixes)
+		r.resolvePrefixes(scope, d, d.Prefixes)
 		if child := r.childScope(scope, d); child != nil {
 			r.walkMembers(child, d.Members)
 			r.checkDistinguishability(child)
@@ -103,7 +103,7 @@ func (r *Resolver) resolveNamespaceDecl(scope *symbols.Scope, decl ast.Node) boo
 		}
 		return true
 	case *ast.Dependency:
-		r.resolvePrefixes(scope, d.Prefixes)
+		r.resolvePrefixes(scope, d, d.Prefixes)
 		for _, c := range d.Clients {
 			r.ResolveQualified(scope, c)
 		}
@@ -128,7 +128,7 @@ func (r *Resolver) resolveNamespaceDecl(scope *symbols.Scope, decl ast.Node) boo
 	case *ast.PrefixMetadata:
 		// A metadata usage written as a member of its own names its type the same
 		// way a prefix does.
-		r.resolveMetadataPrefix(scope, d)
+		r.resolveMetadataPrefix(scope, scope, d)
 		return true
 	case *ast.FilterMember:
 		r.InCondition(func() { r.resolveExpr(scope, d.Condition) })
@@ -143,7 +143,7 @@ func (r *Resolver) resolveNamespaceDecl(scope *symbols.Scope, decl ast.Node) boo
 func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 	switch d := decl.(type) {
 	case *ast.Definition:
-		r.resolvePrefixes(scope, d.Prefixes)
+		r.resolvePrefixes(scope, d, d.Prefixes)
 		child := r.childScope(scope, d)
 		r.resolveHeaderRelationships(scope, child, d, d.Relationships)
 		if child != nil {
@@ -152,7 +152,7 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		}
 		return true
 	case *ast.Usage:
-		r.resolvePrefixes(scope, d.Prefixes)
+		r.resolvePrefixes(scope, d, d.Prefixes)
 		child := r.childScope(scope, d)
 		r.resolveHeaderRelationships(scope, child, d, d.Relationships)
 		if d.Multiplicity != nil {
@@ -229,7 +229,7 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		}
 		return true
 	case *ast.SubjectMember:
-		r.resolvePrefixes(scope, d.Prefixes)
+		r.resolvePrefixes(scope, d, d.Prefixes)
 		if d.TypeRef != nil {
 			r.ResolveQualified(scope, d.TypeRef)
 		}
@@ -268,7 +268,7 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		r.walkConstraintBody(scope, d, nil, d.Body)
 		return true
 	case *ast.AssumeMember:
-		r.resolvePrefixes(scope, d.Prefixes)
+		r.resolvePrefixes(scope, d, d.Prefixes)
 		r.resolveExpr(scope, d.Expression)
 		r.resolveRelationships(scope, d, d.Relationships)
 		r.resolveMultiplicity(scope, d.Multiplicity)
@@ -276,7 +276,7 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		r.walkConstraintBody(scope, d, r.resolveConstraintReference(scope, d.Reference), d.Body)
 		return true
 	case *ast.RequireMember:
-		r.resolvePrefixes(scope, d.Prefixes)
+		r.resolvePrefixes(scope, d, d.Prefixes)
 		r.resolveExpr(scope, d.Expression)
 		r.resolveRelationships(scope, d, d.Relationships)
 		r.resolveMultiplicity(scope, d.Multiplicity)
@@ -515,27 +515,33 @@ func (r *Resolver) bodyScope(scope *symbols.Scope, node ast.Node) *symbols.Scope
 	return scope
 }
 
-func (r *Resolver) resolvePrefixes(scope *symbols.Scope, prefixes []*ast.PrefixMetadata) {
+// resolvePrefixes resolves the prefix annotations of decl, a member of scope.
+// The annotated element owns them (KerML 8.2.4.2 PrefixMetadataMember), so
+// their names resolve in its own scope.
+func (r *Resolver) resolvePrefixes(scope *symbols.Scope, decl ast.Node, prefixes []*ast.PrefixMetadata) {
+	names := r.bodyScope(scope, decl)
 	for _, p := range prefixes {
-		r.resolveMetadataPrefix(scope, p)
+		r.resolveMetadataPrefix(names, scope, p)
 	}
 }
 
-func (r *Resolver) resolveMetadataPrefix(scope *symbols.Scope, prefix *ast.PrefixMetadata) {
+// resolveMetadataPrefix resolves an annotation whose names are read in names
+// and whose body scope, if any, the builder hung off parent.
+func (r *Resolver) resolveMetadataPrefix(names, parent *symbols.Scope, prefix *ast.PrefixMetadata) {
 	if prefix == nil {
 		return
 	}
 	for _, a := range prefix.About {
-		r.ResolveQualified(scope, a)
+		r.ResolveQualified(names, a)
 	}
-	owner, ok := r.ResolveQualified(scope, prefix.Type)
+	owner, ok := r.ResolveQualified(names, prefix.Type)
 	if !ok || owner == nil || len(prefix.Body) == 0 {
 		return
 	}
 	if target, aliasOK := r.ResolveAliasTarget(owner); aliasOK {
 		owner = target
 	}
-	body := scope.ChildFor(prefix)
+	body := parent.ChildFor(prefix)
 	if body == nil {
 		return
 	}
@@ -582,6 +588,9 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rel
 			// Self-subsetting must resolve in the declaration scope so cycle checks see `p4 :> p4`.
 			if rel.Kind == ast.RelRedefines || (rel.Kind == ast.RelSubsets && !relationshipTargetsDecl(rel, decl)) {
 				if qn, ok := target.(*ast.QualifiedName); ok {
+					if rel.Kind == ast.RelSubsets && r.resolveOwnSibling(scope, qn, decl) {
+						continue
+					}
 					r.resolveRedefinition(scope, qn, decl)
 					continue
 				}
@@ -876,6 +885,44 @@ func (r *Resolver) generalsOf(sym *symbols.Symbol) []*symbols.Symbol {
 	generals := r.findSpecializationTargets(scope, rels)
 	generals = append(generals, r.findTypingTargets(scope, rels)...)
 	return append(generals, r.findFeaturedByTargets(scope, rels)...)
+}
+
+// resolveOwnSibling resolves a subsetting target to a sibling of decl that redefines
+// the inherited feature of that name, which it shadows in the owning type (KerML 7.3.4.5).
+func (r *Resolver) resolveOwnSibling(scope *symbols.Scope, qn *ast.QualifiedName, decl ast.Node) bool {
+	if qn == nil || len(qn.Parts) != 1 || scope == nil {
+		return false
+	}
+	switch scope.Node().(type) {
+	case *ast.Definition, *ast.Usage:
+	default:
+		return false
+	}
+	sym, ok := scope.LookupLocal(qn.Parts[0].Text)
+	if !ok || sym == nil || sym.Decl == decl {
+		return false
+	}
+	usage, isUsage := sym.Decl.(*ast.Usage)
+	if !isUsage || !redefinesUnderItsName(usage, sym.EffectiveName) {
+		return false
+	}
+	r.recordRedefined(qn, sym)
+	return true
+}
+
+// redefinesUnderItsName reports whether usage is a redefinition found under the
+// name it borrows from its target (`:>> x`) or restates itself (`x :>> x`).
+func redefinesUnderItsName(usage *ast.Usage, borrowed bool) bool {
+	if borrowed {
+		naming := ast.NamingFeature(usage)
+		return naming != nil && naming.Kind == ast.RelRedefines
+	}
+	for _, rel := range usage.Relationships {
+		if rel != nil && rel.Kind == ast.RelRedefines {
+			return true
+		}
+	}
+	return false
 }
 
 // resolveRedefinition resolves a redefinition target by looking up the inheritance chain.

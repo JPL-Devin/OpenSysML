@@ -296,6 +296,15 @@ func (r *Resolver) PartAlias(qn *ast.QualifiedName, i int) (*symbols.Symbol, boo
 	return aliases[i], true
 }
 
+// PartName returns the symbol whose name the i-th segment of qn wrote: the alias
+// membership when it was written as an alias name, else the element it reached.
+func (r *Resolver) PartName(qn *ast.QualifiedName, i int) (*symbols.Symbol, bool) {
+	if alias, ok := r.PartAlias(qn, i); ok {
+		return alias, true
+	}
+	return r.PartSymbol(qn, i)
+}
+
 // Index returns the symbol index this resolver operates over.
 func (r *Resolver) Index() *symbols.Index {
 	return r.idx

@@ -342,6 +342,7 @@ func TestStateSuccessionEndpointSpellingsAcceptVertices(t *testing.T) {
 		"inherited": `package P {
 			state def Base { state idle; }
 			state def Derived :> Base {
+				state busy;
 				EDGE
 			}
 		}`,

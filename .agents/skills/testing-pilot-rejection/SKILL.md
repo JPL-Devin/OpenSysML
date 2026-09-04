@@ -32,9 +32,9 @@ cmp build/pilot-reject/pilot-reject.json docs/project/pilot-rejection-baseline.j
 `docs/project/pilot-rejection-baseline.json` is the only authority for the counts; the numbers
 quoted here are as-of values, and `cmd/pilot-reject/doc_counts_test.go` fails if they drift from it.
 As of the `semantic/` source (named pilot constraints, KerML and SysML, the control-node
-succession rules, the feature-value overriding rule, the enumeration-variation rules, the send-action cases and the
-trigger-argument typing rules), with a fresh library cache:
-`234 case(s): 205 both reject, 21 only the pilot rejects, 8 only we reject, 0 both accept`,
+succession rules, the feature-value overriding rule, the enumeration-variation rules, the send-action cases,
+the metadata typing, annotated-element and body rules and the trigger-argument typing rules), with a fresh library cache:
+`234 case(s): 209 both reject, 17 only the pilot rejects, 8 only we reject, 0 both accept`,
 byte-identical to the committed baseline. Any `both accept` case is a bug in the corpus (the case
 is not actually invalid under the loaded standard library) — fix the case, never ignore it. A
 candidate the pilot accepts because it does not enforce the named constraint is not a case either:

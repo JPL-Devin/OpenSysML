@@ -271,7 +271,8 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		}
 		// Same-named subsettings and redefinitions target the inherited feature,
 		// not the binding that resolves first in the owner's scope.
-		if len(qn.Parts) == 1 && (rel.Kind == ast.RelRedefines || rel.Kind == ast.RelSubsets) {
+		if len(qn.Parts) == 1 && (rel.Kind == ast.RelRedefines ||
+			(rel.Kind == ast.RelSubsets && !subsetsSibling(sym, target))) {
 			if redefined := m.inheritedFeature(sym, qn); redefined != nil {
 				target = redefined
 			} else if target == sym {
@@ -454,6 +455,12 @@ func (m *Model) SupertypesProvisional(sym *symbols.Symbol) bool {
 // is answering nil for it.
 func (m *Model) supersUnstable(sym *symbols.Symbol) bool {
 	return m.provisionalSupers[sym] || m.computingSupers[sym]
+}
+
+// subsetsSibling reports whether sym's subsetting resolved to another member of
+// its own type, which shadows the inherited feature of that name (KerML 7.3.4.5).
+func subsetsSibling(sym, target *symbols.Symbol) bool {
+	return target != sym && sym.OwnerScope != nil && target.OwnerScope == sym.OwnerScope
 }
 
 // inheritedFeature returns the feature that sym's owner inherits under the name

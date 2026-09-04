@@ -30,7 +30,9 @@ prints a one-time deprecation warning to standard error that names the
 
 The three `OPENSYSML_SMT*` variables belong to the experimental solving extension
 (`%check`/`%explain`), which needs an external z3 or cvc5. Installing one is covered in
-[1. Install: installing a solver](../guide/01-install.md#installing-a-solver-optional).
+[1. Install: installing a solver](../guide/01-install.md#installing-a-solver-optional); the
+extension follows the design of OpenMBEE's [HMF](https://github.com/hivecore-dev/hmf)
+(see [Acknowledgements](../../README.md#acknowledgements)).
 `OPENSYSML_SMT` takes an executable name or a path and is consulted before `PATH` is searched
 (where `z3` is preferred over `cvc5`); a value that names no executable file is reported rather
 than falling back to the search. It may name **any** solver that speaks SMT-LIB2 on standard

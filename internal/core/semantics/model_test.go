@@ -60,6 +60,31 @@ func TestDirectSupertypes(t *testing.T) {
 	}
 }
 
+// A subsetting names a sibling redefinition, whether it took the redefined
+// feature's name or restates it; the inherited feature is shadowed (KerML 7.3.4.5).
+func TestDirectSupertypesSubsetsSiblingRedefinition(t *testing.T) {
+	for _, decl := range []string{"feature :>> x;", "feature x :>> x;", "private feature :>> x;", "protected feature :>> x;", "protected feature x :>> x;"} {
+		m, root := buildModelNamed(t, "t.kerml", `package P {
+		class A { feature x; }
+		class B :> A {
+			`+decl+`
+			feature y :> x;
+		}
+	}`)
+		p := sym(t, root, "P")
+		b := sym(t, p.Scope, "B")
+		a := sym(t, p.Scope, "A")
+		redefining := sym(t, b.Scope, "x")
+		inherited := sym(t, a.Scope, "x")
+		if got := m.DirectSupertypes(sym(t, b.Scope, "y")); len(got) != 1 || got[0] != redefining {
+			t.Fatalf("%s: DirectSupertypes(y) = %v, want the redefining B::x", decl, got)
+		}
+		if got := m.DirectSupertypes(redefining); len(got) != 1 || got[0] != inherited {
+			t.Fatalf("%s: DirectSupertypes(B::x) = %v, want A::x", decl, got)
+		}
+	}
+}
+
 func TestDirectSupertypesResolvesAliasTargets(t *testing.T) {
 	m, root := buildModel(t, `
 		part def Base { part inherited; }
