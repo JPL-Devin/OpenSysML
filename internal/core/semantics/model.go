@@ -33,6 +33,7 @@ type Model struct {
 	referenced      map[*symbols.Symbol]*symbols.Symbol
 	resolvingRef    map[*symbols.Symbol]bool
 	memberSources   map[*symbols.Symbol][]*symbols.Symbol
+	contributed     map[*symbols.Symbol][]*symbols.Symbol // memoized contributors
 	primTypes       map[*symbols.Symbol]PrimType
 	scalars         map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
 	params          map[*symbols.Symbol]behaviorParameters
@@ -76,6 +77,10 @@ type Model struct {
 	computingRedefinedFeatures int
 	// ctorSlots memoizes each type's constructible features (see shape.go).
 	ctorSlots map[*symbols.Symbol]constructorSlots
+	// members and shapes memoize MembersOf and ShapeFeatures once the member
+	// sources they read are complete (see members.go).
+	members map[memberKey][]*symbols.Symbol
+	shapes  map[*symbols.Symbol][]ShapeFeature
 }
 
 // declMaskKey keys the mask a declaration written in a type sees, by the type
@@ -100,6 +105,7 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		referenced:        make(map[*symbols.Symbol]*symbols.Symbol),
 		resolvingRef:      make(map[*symbols.Symbol]bool),
 		memberSources:     make(map[*symbols.Symbol][]*symbols.Symbol),
+		contributed:       make(map[*symbols.Symbol][]*symbols.Symbol),
 		primTypes:         make(map[*symbols.Symbol]PrimType),
 		params:            make(map[*symbols.Symbol]behaviorParameters),
 		invocations:       make(map[invocationKey]*InvocationSelection),
@@ -127,6 +133,8 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		redefClosure:          make(map[*symbols.Symbol]map[*symbols.Symbol]bool),
 		computingRedefClosure: make(map[*symbols.Symbol]bool),
 		ctorSlots:             make(map[*symbols.Symbol]constructorSlots),
+		members:               make(map[memberKey][]*symbols.Symbol),
+		shapes:                make(map[*symbols.Symbol][]ShapeFeature),
 	}
 	if resolver != nil {
 		resolver.SetModel(m)

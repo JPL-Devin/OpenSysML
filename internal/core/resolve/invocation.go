@@ -11,6 +11,7 @@ func (r *Resolver) ResolveInvocationName(scope *symbols.Scope, qn *ast.Qualified
 	if qn == nil {
 		return nil, false
 	}
+	journalNew(r, r.invocationNames, qn, qn)
 	r.invocationNames[qn] = true
 	return r.resolveQualified(scope, qn, nil)
 }
@@ -35,6 +36,7 @@ func (r *Resolver) InvocationCandidates(scope *symbols.Scope, qn *ast.QualifiedN
 // qualifiedCandidates resolves qn as an invocation name and widens the last
 // segment to every member it names under its qualifier, or at the root for `$::f`.
 func (r *Resolver) qualifiedCandidates(scope *symbols.Scope, qn *ast.QualifiedName) []*symbols.Symbol {
+	journalNew(r, r.invocationNames, qn, qn)
 	r.invocationNames[qn] = true
 	sym, ok := r.resolveQualified(scope, qn, nil)
 	if !ok || sym == nil {

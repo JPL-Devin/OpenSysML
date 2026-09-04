@@ -139,7 +139,7 @@ func (ctx *Context) aliasRedefinedFeatureValues(inst *Instance) error {
 		byName[features[i].Name] = &features[i]
 	}
 
-	for _, names := range ctx.redefinitionGroups(inst.Type, features) {
+	for _, names := range ctx.redefinitionGroups(inst.Type) {
 		chosen, err := ctx.sharedRedefinitionName(inst, byName, names)
 		if err != nil {
 			return err
@@ -155,8 +155,13 @@ func (ctx *Context) aliasRedefinedFeatureValues(inst *Instance) error {
 // redefinitionGroups groups the names of typ's features by the feature they name,
 // in feature order, keeping only names that share a feature with another. Each
 // group's names are ordered from the most specific declaration to the least,
-// which is the order the features are computed in.
-func (ctx *Context) redefinitionGroups(typ *symbols.Symbol, features []EffectiveFeature) [][]string {
+// which is the order the features are computed in. The answer is memoized per
+// type; callers read it and never write it.
+func (ctx *Context) redefinitionGroups(typ *symbols.Symbol) [][]string {
+	if groups, ok := ctx.redefGroups[typ]; ok {
+		return groups
+	}
+	features := ctx.FeaturesOf(typ)
 	declared := make(map[string]bool, len(features))
 	for _, feat := range features {
 		declared[feat.Name] = true
@@ -201,6 +206,7 @@ func (ctx *Context) redefinitionGroups(typ *symbols.Symbol, features []Effective
 		index[root] = len(groups)
 		groups = append(groups, []string{feat.Name})
 	}
+	ctx.redefGroups[typ] = groups
 	return groups
 }
 
@@ -208,7 +214,7 @@ func (ctx *Context) redefinitionGroups(typ *symbols.Symbol, features []Effective
 // feature called name: name itself and every name redefinition makes one with it.
 func (ctx *Context) redefinitionAliases(typ *symbols.Symbol, name string) map[string]bool {
 	aliases := map[string]bool{name: true}
-	for _, names := range ctx.redefinitionGroups(typ, ctx.FeaturesOf(typ)) {
+	for _, names := range ctx.redefinitionGroups(typ) {
 		for _, n := range names {
 			if n != name {
 				continue
