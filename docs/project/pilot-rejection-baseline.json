@@ -35,8 +35,8 @@
   },
   "totals": {
     "cases": 226,
-    "bothReject": 196,
-    "pilotOnlyRejects": 22,
+    "bothReject": 200,
+    "pilotOnlyRejects": 18,
     "oursOnlyRejects": 8,
     "bothAccept": 0
   },
@@ -65,8 +65,8 @@
     {
       "source": "semantic",
       "cases": 98,
-      "bothReject": 74,
-      "pilotOnlyRejects": 16,
+      "bothReject": 78,
+      "pilotOnlyRejects": 12,
       "oursOnlyRejects": 8,
       "bothAccept": 0
     },
@@ -1211,24 +1211,18 @@
       "source": "semantic",
       "rule": "a cross subsetting must be owned by an end feature of a type with two or more ends (KerML 8.3.3.3 validateCrossSubsettingCrossingFeature; pilot validateCrossSubsettingCrossingFeature).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 5: Cross subsetting must be owned by one of two or more end features"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/k17-crosses-not-through-opposite-end.kerml",
       "source": "semantic",
       "rule": "a crossed feature must chain through the opposite end feature (KerML 8.3.3.3 validateCrossSubsettingCrossedFeature; pilot validateCrossSubsettingCrossedFeature).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 6: Cross subsetting must chain through an opposite end feature"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/k18-cross-feature-type-differs.kerml",
@@ -1244,12 +1238,9 @@
       "source": "semantic",
       "rule": "a cross feature must specialize the cross features of redefined ends (KerML 8.3.3.3 validateFeatureCrossFeatureSpecialization; pilot validateFeatureCrossFeatureSpecialization).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 13: Cross feature must specialized redefined-end cross features"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/k20-datatype-specializes-class.kerml",
@@ -1475,13 +1466,9 @@
       "source": "semantic",
       "rule": "a feature may own at most one cross subsetting (KerML 8.3.3.3 validateFeatureOwnedCrossSubsetting; pilot validateFeatureOwnedCrossSubsetting).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 2,
-      "pilot": [
-        "line 0: Error executing EValidator",
-        "line 9: The opposite features 'crossingFeature' of 'org.omg.sysml.lang.sysml.impl.CrossSubsettingImpl{semantic/k42-two-cross-subsettings.kerml#//@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.2}' and 'ownedCrossSubsetting' of 'org.omg.sysml.lang.sysml.impl.FeatureImpl{semantic/k42-two-cross-subsettings.kerml#//@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0}' do not refer to each other"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
     },
     {
       "path": "semantic/s01-action-typed-by-part-def.sysml",
@@ -2259,8 +2246,8 @@
     ],
     "totals": {
       "cases": 226,
-      "bothReject": 196,
-      "pilotOnlyRejects": 22,
+      "bothReject": 200,
+      "pilotOnlyRejects": 18,
       "oursOnlyRejects": 8,
       "bothAccept": 0
     },
