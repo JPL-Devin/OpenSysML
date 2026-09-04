@@ -8,6 +8,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -225,6 +226,9 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 			cycleFeatures = attempt.cycleFeatures
 		}
 		if attempt.found {
+			if err := ctx.wholeBindingCounts(binding, attempt.value); err != nil {
+				return Value{}, false, false, nil, err
+			}
 			if end := bindingEndForPath(binding, endpointName); end >= 0 {
 				attempt.contributor = ctx.bindingEndpointText(binding, 1-end)
 			}
@@ -273,9 +277,15 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 // partialBinding reports an end admitting fewer values than its feature holds, which links one of them
 // per link (KerML 1.0 §7.4.9.2); a feature holding fewer than an end's lower bound violates multiplicity.
 func (ctx *Context) partialBinding(owner, targetInst *Instance, target *FeatureValue, binding lower.Binding) (bool, error) {
+	partial := false
 	for end := range binding.Ends {
 		stated, ok := ctx.model.RangeOf(binding.Ends[end].Multiplicity)
-		if !ok || !stated.Upper.Known || stated.Upper.Infinite {
+		if !ok {
+			continue
+		}
+		bounded := stated.Upper.Known && !stated.Upper.Infinite
+		required := stated.Lower.Known && stated.Lower.Value > 0
+		if !bounded && !required {
 			continue
 		}
 		endpoint, err := ctx.resolveBindingEndpoint(owner, binding, end)
@@ -286,28 +296,56 @@ func (ctx *Context) partialBinding(owner, targetInst *Instance, target *FeatureV
 		if loc.instance == nil {
 			continue
 		}
-		declared := loc.instance.FeatureValues[loc.name].Feature.Multiplicity.Upper
-		if !declared.Infinite && (!declared.Known || declared.Value <= stated.Upper.Value) {
+		fv := loc.instance.FeatureValues[loc.name]
+		declared := fv.Feature.Multiplicity.Upper
+		narrows := bounded && (declared.Infinite || (declared.Known && declared.Value > stated.Upper.Value))
+		if !narrows && !required {
 			continue
-		}
-		if bindingLocationCarries(loc, target, targetInst) {
-			return true, nil
 		}
 		val, found, err := ctx.bindingEndpointValue(endpoint, owner, false)
 		if err != nil {
 			return false, err
 		}
 		count := int64(len(elementsOf(val)))
-		if found && stated.Lower.Known && count < stated.Lower.Value {
-			return false, fmt.Errorf("%w: `%s` links %s of %s, which holds %d value(s)",
-				ErrMultiplicityViolation, ctx.bindingText(binding), stated.Text(),
-				ctx.bindingEndpointText(binding, end), count)
+		if found && required && count < stated.Lower.Value {
+			return false, ctx.bindingEndCountError(binding, end, stated, count)
 		}
-		if !found || count == 0 || count > stated.Upper.Value {
+		if !narrows {
+			continue
+		}
+		// The end being resolved holds only what it was given on its own, which
+		// cannot make the binding whole from its side.
+		if bindingLocationCarries(loc, target, targetInst) {
 			return true, nil
 		}
+		if !found || count == 0 || count > stated.Upper.Value {
+			partial = true
+		}
 	}
-	return false, nil
+	return partial, nil
+}
+
+// wholeBindingCounts checks the value a whole binding identifies its ends with
+// against the number of values each end states it links.
+func (ctx *Context) wholeBindingCounts(binding lower.Binding, val Value) error {
+	count := int64(len(elementsOf(val)))
+	for end := range binding.Ends {
+		stated, ok := ctx.model.RangeOf(binding.Ends[end].Multiplicity)
+		if !ok {
+			continue
+		}
+		if (stated.Lower.Known && count < stated.Lower.Value) ||
+			(stated.Upper.Known && !stated.Upper.Infinite && count > stated.Upper.Value) {
+			return ctx.bindingEndCountError(binding, end, stated, count)
+		}
+	}
+	return nil
+}
+
+func (ctx *Context) bindingEndCountError(binding lower.Binding, end int, stated semantics.Range, count int64) error {
+	return fmt.Errorf("%w: `%s` links %s of %s, which holds %d value(s)",
+		ErrMultiplicityViolation, ctx.bindingText(binding), stated.Text(),
+		ctx.bindingEndpointText(binding, end), count)
 }
 
 // bindingText spells a binding as written, end multiplicities included.

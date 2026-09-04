@@ -586,35 +586,46 @@ func testBindingMultipleCollectionContributors(t *testing.T) {
 	})
 
 	// An end stating how many values it links is not met by a feature holding fewer: the
-	// binding is a multiplicity violation, not a whole binding of what there is.
+	// binding is a multiplicity violation, not a whole binding of what there is — whichever
+	// end is read, whether the features admit more than the end links or exactly as many.
 	t.Run("under_lower_bound", func(t *testing.T) {
-		for name, ends := range map[string]string{"exact": "[2]", "ranged": "[2..3]"} {
-			t.Run(name, func(t *testing.T) {
-				idx, _, ctx := buildRuntime(t, "<binding-under-lower-bound>", parseAndBuild(t, `package P {
-					part def Sys {
-						attribute edges : Integer[*] = (7);
-						attribute pair : Integer[0..3];
-						binding [1] bind `+ends+` edges = `+ends+` pair;
+		for name, c := range map[string]struct{ ends, same string }{
+			"exact":  {"[2]", "[0..2]"},
+			"ranged": {"[2..3]", "[0..3]"},
+		} {
+			ends := c.ends
+			for shape, declared := range map[string]string{"wider": "[*]", "same": c.same} {
+				t.Run(name+"_"+shape, func(t *testing.T) {
+					idx, _, ctx := buildRuntime(t, "<binding-under-lower-bound>", parseAndBuild(t, `package P {
+						part def Sys {
+							attribute edges : Integer`+declared+` = (7);
+							attribute pair : Integer`+declared+`;
+							binding [1] bind `+ends+` edges = `+ends+` pair;
+						}
+					}`))
+					want := "multiplicity violation: `bind " + ends + " edges = " + ends + " pair` links " +
+						ends + " of edges, which holds 1 value(s)"
+					for _, order := range [][]string{{"pair", "edges", "pair"}, {"edges", "pair", "edges"}} {
+						inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+						if err != nil {
+							t.Fatalf("instantiate: %v", err)
+						}
+						for _, feature := range order {
+							_, err := inst.GetFeatureValue(ctx, feature)
+							if !errors.Is(err, ErrMultiplicityViolation) {
+								t.Fatalf("%v: %s = %v, want ErrMultiplicityViolation", order, feature, err)
+							}
+							if got := err.Error(); got != want {
+								t.Errorf("%v: %s error = %q, want %q", order, feature, got, want)
+							}
+						}
+						fv := inst.FeatureValues["pair"]
+						if fv.Materialized || fv.Written || fv.BindingDerived || fv.HeldValue().Kind != ValInvalid {
+							t.Errorf("%v: the refused binding left an assignment behind: %+v", order, *fv)
+						}
 					}
-				}`))
-				inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
-				if err != nil {
-					t.Fatalf("instantiate: %v", err)
-				}
-				_, err = inst.GetFeatureValue(ctx, "pair")
-				if !errors.Is(err, ErrMultiplicityViolation) {
-					t.Fatalf("pair = %v, want ErrMultiplicityViolation", err)
-				}
-				want := "multiplicity violation: `bind " + ends + " edges = " + ends + " pair` links " +
-					ends + " of edges, which holds 1 value(s)"
-				if got := err.Error(); got != want {
-					t.Errorf("error = %q, want %q", got, want)
-				}
-				fv := inst.FeatureValues["pair"]
-				if fv.Materialized || fv.Written || fv.BindingDerived || fv.HeldValue().Kind != ValInvalid {
-					t.Errorf("the refused binding left an assignment behind: %+v", *fv)
-				}
-			})
+				})
+			}
 		}
 	})
 
