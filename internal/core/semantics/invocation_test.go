@@ -31,7 +31,7 @@ func TestSetArgumentTyperKeepsSelectionsUnderTheSameTyping(t *testing.T) {
 }
 
 // sliced is an ArgumentTyper whose values cannot be compared.
-type sliced struct{ tags []int }
+type sliced []int
 
 func (sliced) InvocationArguments(_ *symbols.Scope, e *ast.InvocationExpr) []Argument {
 	return untypedArguments(e)
@@ -41,9 +41,9 @@ func (sliced) InvocationArguments(_ *symbols.Scope, e *ast.InvocationExpr) []Arg
 // cannot be shown to be the typing in place, drops the selections.
 func TestSetArgumentTyperTreatsAnIncomparableTyperAsNew(t *testing.T) {
 	m := NewModel(nil)
-	m.SetArgumentTyper(sliced{})
+	m.SetArgumentTyper(sliced(nil))
 	m.invocations[invocationKey{}] = &InvocationSelection{}
-	m.SetArgumentTyper(sliced{})
+	m.SetArgumentTyper(sliced(nil))
 	if m.MemoSize() != 0 {
 		t.Fatal("an incomparable typer kept selections it could not be shown to have made")
 	}
