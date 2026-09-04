@@ -250,21 +250,33 @@ func (ctx *Context) startClassifierBehaviorsOf(objects []*Instance, mark int) er
 // abandonCreationSince undoes a creation that failed: neither the objects it
 // registered after mark nor the behaviors attached after attached survive it.
 func (ctx *Context) abandonCreationSince(mark, attached int) {
-	ctx.forgetBehaviorsFrom(attached)
-	ctx.abandonInstancesSince(mark)
+	ctx.abandonCreationBetween(mark, len(ctx.created), attached, len(ctx.objectBehaviors))
+}
+
+// abandonCreationBetween undoes one stretch of creation: the objects registered
+// from mark up to end and the behaviors attached from attached up to started.
+func (ctx *Context) abandonCreationBetween(mark, end, attached, started int) {
+	ctx.forgetBehaviorsBetween(attached, started)
+	ctx.abandonInstancesBetween(mark, end)
 }
 
 // abandonInstancesSince removes objects registered after mark, which a failed
 // creation would otherwise leave behind, along with occurrences naming them.
 func (ctx *Context) abandonInstancesSince(mark int) {
+	ctx.abandonInstancesBetween(mark, len(ctx.created))
+}
+
+// abandonInstancesBetween removes the objects registered from mark up to end,
+// keeping those registered since, along with occurrences naming the removed.
+func (ctx *Context) abandonInstancesBetween(mark, end int) {
 	abandoned := make(map[int64]bool)
-	for _, id := range ctx.created[mark:] {
+	for _, id := range ctx.created[mark:end] {
 		if _, live := ctx.instances[id]; live {
 			abandoned[id] = true
 			delete(ctx.instances, id)
 		}
 	}
-	ctx.created = ctx.created[:mark]
+	ctx.created = append(ctx.created[:mark], ctx.created[end:]...)
 	if len(abandoned) == 0 {
 		return
 	}
@@ -502,17 +514,23 @@ func (ctx *Context) runAttachedBehaviors() error {
 // forgetBehaviorsFrom drops the behaviors attached since a start began, and the
 // work queued for them: a start that failed queues nothing for a later one.
 func (ctx *Context) forgetBehaviorsFrom(attached int) {
-	if attached > len(ctx.objectBehaviors) {
+	ctx.forgetBehaviorsBetween(attached, len(ctx.objectBehaviors))
+}
+
+// forgetBehaviorsBetween drops the behaviors attached from attached up to end,
+// keeping those attached since, and the work queued for the dropped.
+func (ctx *Context) forgetBehaviorsBetween(attached, end int) {
+	if attached >= end || end > len(ctx.objectBehaviors) {
 		return
 	}
-	dropped := make(map[*ObjectBehavior]bool, len(ctx.objectBehaviors)-attached)
-	for _, behavior := range ctx.objectBehaviors[attached:] {
+	dropped := make(map[*ObjectBehavior]bool, end-attached)
+	for _, behavior := range ctx.objectBehaviors[attached:end] {
 		dropped[behavior] = true
 	}
 	for behavior := range dropped {
 		behavior.Object.behaviors = behaviorsExcept(behavior.Object.behaviors, dropped)
 	}
-	ctx.objectBehaviors = ctx.objectBehaviors[:attached]
+	ctx.objectBehaviors = append(ctx.objectBehaviors[:attached], ctx.objectBehaviors[end:]...)
 	ctx.pendingBehaviors = behaviorsExcept(ctx.pendingBehaviors, dropped)
 }
 

@@ -24,7 +24,7 @@ package SendSubtypeAccept {
 
 			state sending {
 				entry action issue {
-					send Halt(9) via command;
+					send new Halt(9) via command;
 					assign sent := sent + 1;
 				}
 			}
@@ -51,7 +51,7 @@ package SendSubtypeAccept {
 
 			transition first standingBy
 				accept order : Command via command
-				do assign lastCode := order
+				do assign lastCode := order.code
 				then working;
 		}
 	}

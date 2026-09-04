@@ -470,7 +470,7 @@ elmt:ActionNodes__Drive___4013
     sysml:owningMembership elmt:ActionNodes__Drive___4013_om ;
     sysx:payload expr:ActionNodes__Drive___4013_ppayload ;
     sysx:receiver expr:ActionNodes__Drive___4013_preceiver ;
-    sysx:sourceText "        send Command() to antenna;\n" .
+    sysx:sourceText "        send new Command() to antenna;\n" .
 
 elmt:ActionNodes__Drive___4013_om
     a sysml:FeatureMembership ;
@@ -486,8 +486,9 @@ elmt:ActionNodes__Drive___4013_om
 
 expr:ActionNodes__Drive___4013_ppayload
     a sysml:InvocationExpression ;
-    sysx:sourceText "Command()" ;
+    sysx:sourceText "new Command()" ;
     sysml:elementId "ActionNodes__Drive___4013_ppayload" ;
+    sysx:isConstructor "true"^^xsd:boolean ;
     sysml:function elmt:ActionNodes__Command .
 
 expr:ActionNodes__Drive___4013_preceiver
@@ -508,7 +509,7 @@ elmt:ActionNodes__Drive___4014
     sysx:payload expr:ActionNodes__Drive___4014_ppayload ;
     sysx:receiver expr:ActionNodes__Drive___4014_preceiver ;
     sysx:isVia "true"^^xsd:boolean ;
-    sysx:sourceText "        send Command() via antenna;\n" .
+    sysx:sourceText "        send new Command() via antenna;\n" .
 
 elmt:ActionNodes__Drive___4014_om
     a sysml:FeatureMembership ;
@@ -524,8 +525,9 @@ elmt:ActionNodes__Drive___4014_om
 
 expr:ActionNodes__Drive___4014_ppayload
     a sysml:InvocationExpression ;
-    sysx:sourceText "Command()" ;
+    sysx:sourceText "new Command()" ;
     sysml:elementId "ActionNodes__Drive___4014_ppayload" ;
+    sysx:isConstructor "true"^^xsd:boolean ;
     sysml:function elmt:ActionNodes__Command .
 
 expr:ActionNodes__Drive___4014_preceiver
