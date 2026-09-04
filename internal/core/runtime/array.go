@@ -291,10 +291,8 @@ func (ctx *Context) structuredValueType(value Value) (*symbols.Symbol, error) {
 	return ctx.loadedLibraryType(fqn)
 }
 
-// structuredBaseType is the type a structured value is of whatever its shape:
-// Array, NumericalVectorValue, VectorQuantityValue, or the type of the object an
-// Array was read from. A specialization of it may hold the value when the shape
-// it fixes holds.
+// structuredBaseType is the type a structured value is of whatever its shape (Array,
+// NumericalVectorValue, VectorQuantityValue, or the type of the object an Array was read from).
 func (ctx *Context) structuredBaseType(value Value) (*symbols.Symbol, error) {
 	var fqn string
 	switch value.Kind {
