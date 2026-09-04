@@ -5,67 +5,156 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// AnnotatedElementViolation names the metaclass of annotated that the metadata
-// type of the annotation may not be applied to: the metaclass of an annotated
-// element conforms to every type of the annotatedElement feature of the
-// metadata type (KerML 1.0 §8.3.4.9, validateMetadataFeatureAnnotatedElement).
-func (m *Model) AnnotatedElementViolation(annotated *symbols.Symbol, scope *symbols.Scope, prefix *ast.PrefixMetadata) (string, bool) {
-	if m == nil || annotated == nil || prefix == nil || prefix.Type == nil {
+// AnnotatedElementViolation names the metaclass of annotated when the metadata
+// type typeRef names may not annotate it (validateMetadataFeatureAnnotatedElement).
+func (m *Model) AnnotatedElementViolation(annotated *symbols.Symbol, scope *symbols.Scope, typeRef *ast.QualifiedName) (string, bool) {
+	if m == nil || annotated == nil {
 		return "", false
 	}
-	def, ok := m.resolver.ResolveQualified(scope, prefix.Type)
+	return m.annotatedElementViolationOf(annotated, m.resolveMetadataType(scope, typeRef))
+}
+
+// AboutAnnotatedElementViolations names, in order, the metaclass of each element
+// an `about` clause names that the metadata type typeRef names may not annotate.
+func (m *Model) AboutAnnotatedElementViolations(scope *symbols.Scope, typeRef *ast.QualifiedName, about []*ast.QualifiedName) []string {
+	if m == nil || len(about) == 0 {
+		return nil
+	}
+	def := m.resolveMetadataType(scope, typeRef)
+	if def == nil {
+		return nil
+	}
+	var out []string
+	for _, qn := range about {
+		if qn == nil {
+			continue
+		}
+		annotated, ok := m.resolver.ResolveQualified(scope, qn)
+		if !ok || annotated == nil {
+			continue
+		}
+		if resolved, aliasOK := m.resolver.ResolveAliasTarget(annotated); aliasOK {
+			annotated = resolved
+		}
+		if metaclass, bad := m.annotatedElementViolationOf(annotated, def); bad {
+			out = append(out, metaclass)
+		}
+	}
+	return out
+}
+
+// resolveMetadataType resolves the type an annotation names, through aliases.
+func (m *Model) resolveMetadataType(scope *symbols.Scope, typeRef *ast.QualifiedName) *symbols.Symbol {
+	if typeRef == nil {
+		return nil
+	}
+	def, ok := m.resolver.ResolveQualified(scope, typeRef)
 	if !ok || def == nil {
-		return "", false
+		return nil
 	}
 	if resolved, aliasOK := m.resolver.ResolveAliasTarget(def); aliasOK {
-		def = resolved
+		return resolved
 	}
-	required := m.annotatedElementTypes(def)
-	if len(required) == 0 {
+	return def
+}
+
+func (m *Model) annotatedElementViolationOf(annotated, def *symbols.Symbol) (string, bool) {
+	if def == nil {
+		return "", false
+	}
+	alternatives := m.annotatedElementFeatures(def)
+	if len(alternatives) == 0 {
 		return "", false
 	}
 	meta := m.metaclassOf(annotated)
 	if meta == nil {
 		return "", false
 	}
-	for _, r := range required {
-		if !m.Conforms(meta, r) {
-			return leafName(meta.Name), true
+	for _, feature := range alternatives {
+		if m.conformsToTypesOf(meta, feature) {
+			return "", false
 		}
 	}
-	return "", false
+	return leafName(meta.Name), true
 }
 
-// annotatedElementTypes are the types restricting what a metadata type may
-// annotate: the typings of the annotatedElement feature it restates.
-func (m *Model) annotatedElementTypes(def *symbols.Symbol) []*symbols.Symbol {
-	var out []*symbols.Symbol
-	for _, member := range m.MembersOfIncludingRedefined(def) {
-		if !m.restatesAnnotatedElement(member) {
+// annotatedElementFeatures are the features of def specializing annotatedElement,
+// each an alternative; a concrete one supersedes the abstract ones.
+func (m *Model) annotatedElementFeatures(def *symbols.Symbol) []*symbols.Symbol {
+	var all, concrete []*symbols.Symbol
+	for _, member := range m.MembersOf(def) {
+		if !m.specializesAnnotatedElement(member) {
 			continue
 		}
-		if t := m.featureType(member); t != nil {
-			out = append(out, t)
+		all = append(all, member)
+		if !symbols.IsAbstract(member) {
+			concrete = append(concrete, member)
 		}
 	}
-	return out
+	if len(concrete) > 0 {
+		return concrete
+	}
+	return all
 }
 
-// restatesAnnotatedElement reports whether a member is the annotatedElement
-// feature, declared under that name or redefining it.
-func (m *Model) restatesAnnotatedElement(member *symbols.Symbol) bool {
-	if member == nil {
+// specializesAnnotatedElement reports whether a feature is the annotatedElement
+// feature or specializes it, by redefinition or subsetting at any distance.
+func (m *Model) specializesAnnotatedElement(feature *symbols.Symbol) bool {
+	if feature == nil || !isFeature(feature) {
 		return false
 	}
-	if leafName(member.Name) == annotatedElementName {
+	if leafName(feature.Name) == annotatedElementName {
 		return true
 	}
-	for _, redefined := range m.RedefinedFeatures(member) {
-		if redefined != nil && leafName(redefined.Name) == annotatedElementName {
+	for _, super := range m.AllSupertypes(feature) {
+		if super != nil && isFeature(super) && leafName(super.Name) == annotatedElementName {
 			return true
 		}
 	}
 	return false
+}
+
+// conformsToTypesOf reports whether meta conforms to every type of feature: the
+// ones it declares and those of the features it redefines or subsets.
+func (m *Model) conformsToTypesOf(meta, feature *symbols.Symbol) bool {
+	if !m.conformsToDeclaredTypesOf(meta, feature) {
+		return false
+	}
+	for _, super := range m.AllSupertypes(feature) {
+		if isFeature(super) && !m.conformsToDeclaredTypesOf(meta, super) {
+			return false
+		}
+	}
+	return true
+}
+
+// conformsToDeclaredTypesOf reports whether meta conforms to every type feature
+// declares; a feature declaring none restricts nothing.
+func (m *Model) conformsToDeclaredTypesOf(meta, feature *symbols.Symbol) bool {
+	for _, rel := range RelationshipsOf(feature) {
+		if rel == nil || rel.Kind != ast.RelTyping || rel.Target == nil {
+			continue
+		}
+		target := rel.Target
+		if fr, ok := target.(*ast.FeatureReference); ok {
+			target = fr.Name
+		}
+		qn, ok := target.(*ast.QualifiedName)
+		if !ok {
+			continue
+		}
+		typ, ok := m.resolver.ResolveQualified(feature.OwnerScope, qn)
+		if !ok || typ == nil {
+			continue
+		}
+		if canonical, aliasOK := m.resolver.ResolveAliasTarget(typ); aliasOK {
+			typ = canonical
+		}
+		if !m.Conforms(meta, typ) {
+			return false
+		}
+	}
+	return true
 }
 
 const annotatedElementName = "annotatedElement"

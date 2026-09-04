@@ -49,27 +49,91 @@ type metadataAnnotationChecker struct {
 // the annotated element's own body scope.
 func (c *metadataAnnotationChecker) checkSymbol(sym *symbols.Symbol) {
 	for _, a := range semantics.MetadataAnnotationsOf(sym.Decl) {
-		scope := sym.OwnerScope
-		if !a.Prefix && sym.Scope != nil {
-			scope = sym.Scope
+		scope := c.annotationScope(sym, a)
+		if scope == nil {
+			continue
 		}
-		c.check(sym, scope, a.Node)
+		if metaclass, bad := c.model.AnnotatedElementViolation(sym, scope, a.Node.Type); bad {
+			c.reportCannotAnnotate(a.Node.Span(), metaclass)
+		}
+		c.checkBody(scope, a.Node)
+	}
+	for _, a := range semantics.MetadataAnnotationsAboutOthers(sym.Decl) {
+		scope := c.annotationScope(sym, a)
+		if scope == nil {
+			continue
+		}
+		for _, metaclass := range c.model.AboutAnnotatedElementViolations(scope, a.Node.Type, a.Node.About) {
+			c.reportCannotAnnotate(a.Node.Span(), metaclass)
+		}
+		c.checkBody(scope, a.Node)
+	}
+	if u, ok := sym.Decl.(*ast.Usage); ok && u.Kind == ast.UsageMetadata {
+		c.checkMetadataUsage(sym, u)
 	}
 }
 
-func (c *metadataAnnotationChecker) check(sym *symbols.Symbol, scope *symbols.Scope, prefix *ast.PrefixMetadata) {
-	if scope == nil {
+// annotationScope is where an annotation names its type: a prefix in the owning
+// namespace, a member in the annotated element's own body scope.
+func (c *metadataAnnotationChecker) annotationScope(sym *symbols.Symbol, a semantics.MetadataAnnotation) *symbols.Scope {
+	if !a.Prefix && sym.Scope != nil {
+		return sym.Scope
+	}
+	return sym.OwnerScope
+}
+
+// checkMetadataUsage checks what `metadata m : M about x;` may annotate, or, with
+// no `about`, whether M may annotate the element owning the usage.
+func (c *metadataAnnotationChecker) checkMetadataUsage(sym *symbols.Symbol, u *ast.Usage) {
+	if sym.OwnerScope == nil {
 		return
 	}
-	if metaclass, bad := c.model.AnnotatedElementViolation(sym, scope, prefix); bad {
-		c.diags = append(c.diags, Diagnostic{
-			Severity: SeverityError,
-			Span:     prefix.Span(),
-			Message:  msgCannotAnnotate + metaclass,
-			Code:     "metadata-annotated-element",
-			Source:   "constraint",
-		})
+	var typeRef *ast.QualifiedName
+	var about []*ast.QualifiedName
+	for _, rel := range u.Relationships {
+		if rel == nil {
+			continue
+		}
+		qn, ok := rel.Target.(*ast.QualifiedName)
+		if !ok {
+			continue
+		}
+		switch rel.Kind {
+		case ast.RelTyping:
+			if typeRef == nil {
+				typeRef = qn
+			}
+		case ast.RelAnnotates:
+			about = append(about, qn)
+		}
 	}
+	if typeRef == nil {
+		return
+	}
+	if len(about) > 0 {
+		for _, metaclass := range c.model.AboutAnnotatedElementViolations(sym.OwnerScope, typeRef, about) {
+			c.reportCannotAnnotate(u.Span(), metaclass)
+		}
+		return
+	}
+	if metaclass, bad := c.model.AnnotatedElementViolation(sym.OwnerScope.Owner(), sym.OwnerScope, typeRef); bad {
+		c.reportCannotAnnotate(u.Span(), metaclass)
+	}
+}
+
+func (c *metadataAnnotationChecker) reportCannotAnnotate(span source.Span, metaclass string) {
+	c.diags = append(c.diags, Diagnostic{
+		Severity: SeverityError,
+		Span:     span,
+		Message:  msgCannotAnnotate + metaclass,
+		Code:     "metadata-annotated-element",
+		Source:   "constraint",
+	})
+}
+
+// checkBody checks that the annotation's body restates features of its type and
+// binds model-level evaluable values.
+func (c *metadataAnnotationChecker) checkBody(scope *symbols.Scope, prefix *ast.PrefixMetadata) {
 	for _, node := range c.model.MetadataBodyViolations(scope, prefix) {
 		c.diags = append(c.diags, Diagnostic{
 			Severity: SeverityError,

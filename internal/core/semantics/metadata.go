@@ -98,6 +98,18 @@ func (m *Model) resolveAnnotationType(sym *symbols.Symbol, a MetadataAnnotation)
 // MetadataAnnotationsOf returns the metadata features annotating a declaration,
 // in declaration order. `@A about x` annotates other elements, so it is not one.
 func MetadataAnnotationsOf(decl ast.Node) []MetadataAnnotation {
+	return metadataAnnotationsWritten(decl, false)
+}
+
+// MetadataAnnotationsAboutOthers returns the metadata features written on a
+// declaration that annotate other elements (`@A about x`), in declaration order.
+func MetadataAnnotationsAboutOthers(decl ast.Node) []MetadataAnnotation {
+	return metadataAnnotationsWritten(decl, true)
+}
+
+// metadataAnnotationsWritten returns the metadata features written on decl, as
+// prefixes then as members, keeping those with (about) or without an `about`.
+func metadataAnnotationsWritten(decl ast.Node, about bool) []MetadataAnnotation {
 	var prefixes []*ast.PrefixMetadata
 	var members []ast.Node
 	switch d := decl.(type) {
@@ -114,7 +126,7 @@ func MetadataAnnotationsOf(decl ast.Node) []MetadataAnnotation {
 	}
 	var out []MetadataAnnotation
 	for _, p := range prefixes {
-		if p != nil && len(p.About) == 0 {
+		if p != nil && (len(p.About) > 0) == about {
 			out = append(out, MetadataAnnotation{Node: p, Prefix: true})
 		}
 	}
@@ -122,7 +134,7 @@ func MetadataAnnotationsOf(decl ast.Node) []MetadataAnnotation {
 		if mem, ok := member.(*ast.Membership); ok {
 			member = mem.Member
 		}
-		if p, ok := member.(*ast.PrefixMetadata); ok && len(p.About) == 0 {
+		if p, ok := member.(*ast.PrefixMetadata); ok && (len(p.About) > 0) == about {
 			out = append(out, MetadataAnnotation{Node: p})
 		}
 	}

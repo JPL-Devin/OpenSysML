@@ -134,6 +134,92 @@ func TestMetadataAnnotatedElementMustConform(t *testing.T) {
 	}
 }
 
+// The annotatedElement feature is read through inheritance, redefinition and
+// subsetting, and in the `about`, usage and prefix spellings alike.
+func TestMetadataAnnotatedElementReadsEffectiveFeatures(t *testing.T) {
+	src := `package P {
+	metaclass M { :>> annotatedElement : KerML::Class; }
+	metaclass Inherits :> M;
+	metaclass Narrows :> M { :>> annotatedElement : KerML::Structure; }
+	metaclass Either { :>> annotatedElement : KerML::Class; feature alt :> annotatedElement : KerML::Package; }
+	metaclass Any;
+	class C { feature f; }
+	struct S;
+	package Q;
+	@M about C, C::f;
+	metadata mm : Inherits about C::f;
+	#Narrows class NC;
+	#Narrows struct NS;
+	@Either about Q, C, C::f;
+	@Any about Q, C, C::f;
+}`
+	var got []string
+	for _, f := range findingsWithCode(metadataDiags(t, src), "metadata-annotated-element") {
+		got = append(got, strings.TrimSpace(f.Text)+" => "+f.Msg)
+	}
+	want := []string{
+		"@M about C, C::f; => Cannot annotate Feature",
+		"metadata mm : Inherits about C::f; => Cannot annotate Feature",
+		"#Narrows => Cannot annotate Class",
+		"@Either about Q, C, C::f; => Cannot annotate Feature",
+		"@Either about Q, C, C::f; => Cannot annotate Package",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("findings\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// The SysML spelling reads the same feature, redefined to a SysML metaclass.
+func TestMetadataAnnotatedElementInSysML(t *testing.T) {
+	src := `package P {
+	metadata def M { :>> annotatedElement : SysML::PartUsage; }
+	part def PD;
+	part p : PD;
+	attribute a;
+	#M part q : PD;
+	@M about p;
+	metadata m : M about p, a;
+	#M attribute b;
+}`
+	var got []string
+	for _, d := range only(w8cLibraryDiagnostics(t, "meta-annotated.sysml", src), "metadata-annotated-element") {
+		got = append(got, strings.TrimSpace(src[d.Span.Offset:d.Span.End()])+" => "+d.Message)
+	}
+	want := []string{
+		"metadata m : M about p, a; => Cannot annotate AttributeUsage",
+		"#M => Cannot annotate AttributeUsage",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("findings\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// An explicit `:>>` in a body, nested or not, names a feature of the metadata
+// type or of a type it specializes.
+func TestMetadataBodyRedefinitionMustNameAnOwningTypeFeature(t *testing.T) {
+	src := `package P {
+	feature g;
+	metaclass Base { feature inherited; }
+	metaclass M :> Base {
+		feature x;
+		feature u { feature v; }
+	}
+	class C { feature own; }
+	@M about C { :>> g; }
+	@M about C { :>> C::own; }
+	@M about C { :>> x; :>> inherited; u { :>> v; } }
+	@M about C { u { :>> g; } }
+}`
+	var got []string
+	for _, f := range findingsWithCode(metadataDiags(t, src), "metadata-owning-type-feature") {
+		got = append(got, strings.TrimSpace(f.Text))
+	}
+	want := []string{":>> g;", ":>> C::own;", ":>> g;"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("findings %q, want %q", got, want)
+	}
+}
+
 // A metadata value calling an overloaded name is judged by the overload its
 // arguments select — the checker's and runtime's choice — not the first found.
 func TestMetadataBodyValueSelectsTheOverloadItCalls(t *testing.T) {
@@ -164,12 +250,12 @@ func TestMetadataBodyValueSelectsTheOverloadItCalls(t *testing.T) {
 
 // A body value is judged in the body's own scope, where the metadata type's
 // members shadow what the annotated element sees: the call and the read below
-// name A's own function and feature, not the imported one and the evaluable one.
+// name A's own function and feature, not the imported one and the unfoldable one.
 func TestMetadataBodyValueIsJudgedInTheBodyScope(t *testing.T) {
 	src := `package P {
 	private import ScalarValues::*;
 	private import ControlFunctions::*;
-	feature k = 2;
+	feature k = ~3;
 	metadata def A {
 		feature x;
 		feature y;
@@ -184,7 +270,7 @@ func TestMetadataBodyValueIsJudgedInTheBodyScope(t *testing.T) {
 	}
 }`
 	found := findingsWithCode(metadataDiags(t, src), "metadata-value-not-evaluable")
-	want := []string{"= 'if'(true, 1, 2)", "= k"}
+	want := []string{"= 'if'(true, 1, 2)"}
 	if len(found) != len(want) {
 		t.Fatalf("findings %v, want %v", found, want)
 	}

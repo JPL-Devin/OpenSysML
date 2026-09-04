@@ -577,6 +577,9 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rel
 			// Self-subsetting must resolve in the declaration scope so cycle checks see `p4 :> p4`.
 			if rel.Kind == ast.RelRedefines || (rel.Kind == ast.RelSubsets && !relationshipTargetsDecl(rel, decl)) {
 				if qn, ok := target.(*ast.QualifiedName); ok {
+					if rel.Kind == ast.RelSubsets && r.resolveOwnSibling(scope, qn, decl) {
+						continue
+					}
 					r.resolveRedefinition(scope, qn, decl)
 					continue
 				}
@@ -871,6 +874,33 @@ func (r *Resolver) generalsOf(sym *symbols.Symbol) []*symbols.Symbol {
 	generals := r.findSpecializationTargets(scope, rels)
 	generals = append(generals, r.findTypingTargets(scope, rels)...)
 	return append(generals, r.findFeaturedByTargets(scope, rels)...)
+}
+
+// resolveOwnSibling resolves a subsetting target to a sibling of decl that took
+// the name of the feature it redefines (KerML 7.3.4.5): that redefinition
+// shadows the inherited feature within the owning type.
+func (r *Resolver) resolveOwnSibling(scope *symbols.Scope, qn *ast.QualifiedName, decl ast.Node) bool {
+	if qn == nil || len(qn.Parts) != 1 || scope == nil {
+		return false
+	}
+	switch scope.Node().(type) {
+	case *ast.Definition, *ast.Usage:
+	default:
+		return false
+	}
+	sym, ok := scope.LookupLocal(qn.Parts[0].Text)
+	if !ok || sym == nil || sym.Decl == decl || !sym.EffectiveName || !inheritableMember(sym) {
+		return false
+	}
+	usage, isUsage := sym.Decl.(*ast.Usage)
+	if !isUsage {
+		return false
+	}
+	if naming := ast.NamingFeature(usage); naming == nil || naming.Kind != ast.RelRedefines {
+		return false
+	}
+	r.recordRedefined(qn, sym)
+	return true
 }
 
 // resolveRedefinition resolves a redefinition target by looking up the inheritance chain.

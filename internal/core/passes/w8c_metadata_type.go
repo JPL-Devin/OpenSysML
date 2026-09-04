@@ -2,14 +2,23 @@ package passes
 
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// KerMLValidator's validateMetadataFeatureMetaclassNotAbstract message.
-const msgMetadataConcreteType = "Must have a concrete type"
+const (
+	// KerMLValidator's validateMetadataFeatureMetaclassNotAbstract message.
+	msgMetadataConcreteType = "Must have a concrete type"
+	// KerMLValidator's validateMetadataFeatureMetaclass message.
+	msgMetadataMetaclass = "Must have exactly one metaclass"
+)
 
-// MetadataTypePass reports an annotation whose metaclass is abstract
-// (KerML 1.0 §8.3.4.9.2, validateMetadataFeatureMetaclassNotAbstract).
+// MetadataTypePass reports an annotation, written `@M`/`#M` or as a
+// `metadata m : M` usage, whose type is not a metaclass or metadata definition,
+// or is abstract (KerML 1.0 §8.3.4.9.2, validateMetadataFeatureMetaclass and
+// validateMetadataFeatureMetaclassNotAbstract; SysML v2 §8.4.14
+// validateMetadataUsageType).
 type MetadataTypePass struct{}
 
 func (MetadataTypePass) Level() PassLevel { return LevelType }
@@ -33,6 +42,7 @@ type metadataTypeChecker struct {
 	ctx      *Context
 	resolver interface {
 		ResolveQualified(*symbols.Scope, *ast.QualifiedName) (*symbols.Symbol, bool)
+		ResolveAliasTarget(*symbols.Symbol) (*symbols.Symbol, bool)
 	}
 	diags []Diagnostic
 }
@@ -46,28 +56,77 @@ func (c *metadataTypeChecker) checkSymbol(sym *symbols.Symbol) {
 		return
 	}
 	for _, pm := range w8cPrefixMetadata(sym.Decl) {
-		c.check(scope, pm)
+		c.check(scope, pm.Type, pm.Span(), true)
+	}
+	if u, ok := sym.Decl.(*ast.Usage); ok && u.Kind == ast.UsageMetadata && sym.OwnerScope != nil {
+		// A SysML usage typed by the wrong kind of element is the usage typing
+		// rule's; more than one type is the one-type rule's.
+		if typeRef := metadataUsageType(u); typeRef != nil {
+			c.check(sym.OwnerScope, typeRef, u.Span(), c.ctx.Kind == source.KindKerML)
+		}
 	}
 }
 
-func (c *metadataTypeChecker) check(scope *symbols.Scope, pm *ast.PrefixMetadata) {
-	if pm.Type == nil || c.ctx.DownstreamOfFailure(pm.Type) {
+// check judges the type an annotation at span names in scope; reportKind says
+// whether a type that is no metaclass is this pass's to report.
+func (c *metadataTypeChecker) check(scope *symbols.Scope, typeRef *ast.QualifiedName, span source.Span, reportKind bool) {
+	if typeRef == nil || c.ctx.DownstreamOfFailure(typeRef) {
 		return
 	}
-	target, ok := c.resolver.ResolveQualified(scope, pm.Type)
+	target, ok := c.resolver.ResolveQualified(scope, typeRef)
 	if !ok || target == nil {
 		return
 	}
-	if !symbols.IsAbstract(target) {
+	if resolved, aliasOK := c.resolver.ResolveAliasTarget(target); aliasOK {
+		target = resolved
+	} else {
 		return
 	}
+	if !semantics.IsMetadataType(target) {
+		if reportKind {
+			c.report(span, metadataMetaclassMessage(c.ctx.Kind), "metadata-metaclass")
+		}
+		return
+	}
+	if symbols.IsAbstract(target) {
+		c.report(span, msgMetadataConcreteType, "metadata-concrete-type")
+	}
+}
+
+func (c *metadataTypeChecker) report(span source.Span, msg, code string) {
 	c.diags = append(c.diags, Diagnostic{
 		Severity: SeverityError,
-		Span:     pm.Span(),
-		Message:  msgMetadataConcreteType,
-		Code:     "metadata-concrete-type",
+		Span:     span,
+		Message:  msg,
+		Code:     code,
 		Source:   "constraint",
 	})
+}
+
+// metadataUsageType returns the one type a `metadata m : M` usage declares, or
+// nil when it declares none or several.
+func metadataUsageType(u *ast.Usage) *ast.QualifiedName {
+	var typeRef *ast.QualifiedName
+	for _, rel := range u.Relationships {
+		if rel == nil || rel.Kind != ast.RelTyping {
+			continue
+		}
+		qn, ok := rel.Target.(*ast.QualifiedName)
+		if !ok || typeRef != nil {
+			return nil
+		}
+		typeRef = qn
+	}
+	return typeRef
+}
+
+// metadataMetaclassMessage names the rule in the words of the notation the
+// annotation is written in: SysML spells a metaclass `metadata def`.
+func metadataMetaclassMessage(kind source.Kind) string {
+	if kind == source.KindKerML {
+		return msgMetadataMetaclass
+	}
+	return oneTypeUsageMessages[ast.UsageMetadata]
 }
 
 // w8cPrefixMetadata returns the annotations a declaration carries, both as
