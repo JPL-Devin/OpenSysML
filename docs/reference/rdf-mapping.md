@@ -1083,13 +1083,17 @@ would be refused as a duplicate.
   that is negative or too large for the platform's `int`: it is a position the
   writer orders by, and one it cannot hold would otherwise be read as 0 and
   move the member to the front
-- a subject stating a single-valued `sysx:` property twice with different
-  objects — a body with two `sysx:resultExpression`s, an element with two
-  `sysx:memberIndex`es or two `sysx:isNamespaceImport` flags: only one could
-  be written, so the graph is refused naming both rather than the first being
-  kept. Every `sysx:` property is single-valued but the members and
-  parameters of a body, `sysx:relatedFeature`, `sysx:deferredEvent` and
-  `sysx:prefixMetadata`
+- a subject stating a single-valued property twice with different objects —
+  a body with two `sysx:resultExpression`s, an element with two
+  `sysx:memberIndex`es, two `sysx:isNamespaceImport` flags or a
+  `sysml:isDefault` stated both true and false: only one could be written, so
+  the graph is refused naming both rather than the first being kept. Every
+  `sysx:` property is single-valued but the members and parameters of a body,
+  `sysx:relatedFeature`, `sysx:deferredEvent` and `sysx:prefixMetadata`; of
+  the `sysml:` properties, the boolean `is…` flags are
+- a `sysml:isDefault` or `sysml:isInitial` of true on a subject with no
+  `sysml:value`: the flags spell the operator a feature value is written with
+  (`default =`, `:=`), so without a value there is nothing to write them on
 
 A graph that uses none of OpenSysML's `sysx:` properties (one produced by
 another tool) converts as far as the mapping allows and errors on the first

@@ -1,8 +1,11 @@
 package export_test
 
 import (
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 )
 
 // The operator a feature value is written with decides whether a redefinition
@@ -67,4 +70,47 @@ func TestOwnedConstraintDeclarationsSurviveRDF(t *testing.T) {
 	}
 }
 `)
+}
+
+// The flags spell a feature value's operator, so a graph stating one on a
+// feature with no value, or stating a flag twice, is refused rather than
+// written with the flag dropped or one of its values chosen.
+func TestFeatureValueFlagsWithoutAValueOrStatedTwiceAreReported(t *testing.T) {
+	src := "package P {\n\tprivate import ScalarValues::Integer;\n\tpart def V {\n\t\tattribute a : Integer default = 1;\n\t\tattribute b : Integer;\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structural := string(withoutTriples(t, turtle, "sysx:sourceText"))
+	const flag = `sysml:isDefault "true"^^xsd:boolean ;`
+	if !strings.Contains(structural, flag) || !strings.Contains(structural, `sysml:declaredName "b" ;`) {
+		t.Fatalf("the flagged and the unvalued attribute were not found in the graph:\n%s", structural)
+	}
+	refused := func(name, graph string, wants ...string) {
+		t.Helper()
+		_, err := export.Convert("m.ttl", []byte(graph), export.FormatTurtle, export.FormatSysML)
+		var unsupported *export.UnsupportedError
+		if !errors.As(err, &unsupported) {
+			t.Fatalf("%s: expected an unsupported error, got %v", name, err)
+		}
+		for _, want := range wants {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("%s: expected %q in error:\n%s", name, want, err.Error())
+			}
+		}
+	}
+	for _, property := range []string{"sysml:isDefault", "sysml:isInitial"} {
+		orphan := strings.Replace(structural, `sysml:declaredName "b" ;`, `sysml:declaredName "b" ;`+"\n    "+property+` "true"^^xsd:boolean ;`, 1)
+		refused(property+" without a value", orphan, "the subject <urn:sysmlv2:element:P__V__b>", "states "+property+" without a sysml:value")
+		for _, values := range []string{`"true"^^xsd:boolean, "false"^^xsd:boolean`, `"false"^^xsd:boolean, "true"^^xsd:boolean`} {
+			twice := strings.Replace(structural, flag, property+" "+values+" ;", 1)
+			refused(property+" as "+values, twice, "the subject <urn:sysmlv2:element:P__V__a>", "states "+property+" twice", "one of them would be dropped")
+		}
+	}
+	// A flag stated false on a feature without a value asks for nothing the
+	// notation lacks, so it is read as the absence it is.
+	unflagged := strings.Replace(structural, `sysml:declaredName "b" ;`, `sysml:declaredName "b" ;`+"\n    "+`sysml:isDefault "false"^^xsd:boolean ;`, 1)
+	if back, want := toNotation(t, []byte(unflagged)), toNotation(t, []byte(structural)); back != want {
+		t.Errorf("a false flag changed the notation:\n--- want ---\n%s--- got ---\n%s", want, back)
+	}
 }
