@@ -8,9 +8,11 @@
   this, and each holds for a model of your own: an object listed in a typed collection
   (`item :>> edges : Line = (e1, e2, e3, e4)`) is classified by the collection's type rather
   than refused, keeping its identity and taking on the classifier's bindings, subsettings,
-  connections and behaviors, while a value that cannot be so classified — an
-  `Integer` into `edges : Line` — stays `type mismatch`; a qualified name of an enclosing
-  type's feature read inside a nested usage (`attribute :>> length = Rectangle::length;`) is
+  connections and behaviors — and, where the classifier redefines a feature the object already
+  carries, reading that redefinition's default, type and multiplicity — while a value that
+  cannot be so classified — an `Integer` into `edges : Line` — stays `type mismatch`, and a
+  collection one object of which is refused is refused whole, every object as it was; a
+  qualified name of an enclosing type's feature read inside a nested usage (`attribute :>> length = Rectangle::length;`) is
   that feature of the enclosing object, and a sibling chain (`e3.length = e1.length`) the
   sibling's; a feature chain valued over a collection (`edges = faces.edges`) collects across
   it, and a required lower bound the named subsetting features fall short of is filled from an

@@ -512,6 +512,17 @@ func testBindingMultipleCollectionContributors(t *testing.T) {
 		if _, err := two.GetFeatureValue(ctx, "pick"); !errors.Is(err, ErrBindingEnd) {
 			t.Fatalf("two.pick = %v, want ErrBindingEnd", err)
 		}
+		// An end valued on its own — written, as one valued by a default — keeps that value.
+		if err := two.SetFeatureValue(ctx, "pick", integerValue(8)); err != nil {
+			t.Fatalf("write two.pick: %v", err)
+		}
+		fv, err = two.GetFeatureValue(ctx, "pick")
+		if err != nil {
+			t.Fatalf("two.pick after the write: %v", err)
+		}
+		if got := fv.HeldValue().Const.Int; got != 8 {
+			t.Errorf("two.pick = %s after writing 8, want 8", FormatValue(fv.HeldValue()))
+		}
 	})
 
 	// An end of multiplicity [0] links no value: each feature reads what it holds on its own.

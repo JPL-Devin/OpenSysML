@@ -41,6 +41,15 @@ func readInstance(t *testing.T, ctx *Context, inst *Instance, name string) *Inst
 	return obj
 }
 
+func readInt(t *testing.T, ctx *Context, inst *Instance, name string) int64 {
+	t.Helper()
+	fv, err := inst.GetFeatureValue(ctx, name)
+	if err != nil {
+		t.Fatalf("GetFeatureValue(%s): %v", name, err)
+	}
+	return intValue(t, map[string]Value{name: fv.HeldValue()}, name)
+}
+
 const classifiedValueModel = `
 	package test {
 		private import ScalarValues::*;
@@ -577,6 +586,124 @@ func TestRefusedClassificationUndoesWhatItsBehaviorsDid(t *testing.T) {
 	}
 	if after := FormatValue(hits.HeldValue()); raw.FeatureValues["hits"] != hits || after != before {
 		t.Fatalf("a refused classification changed hits from %s to %s", before, after)
+	}
+}
+
+// A collection is classified whole: when a later object's classification fails, the objects
+// classified before it are left as they were, behaviors, writes and all.
+func TestRefusedCollectionClassificationUndoesTheEarlierObjects(t *testing.T) {
+	ctx, idx := libraryShapeContext(t, `package test {
+		private import ScalarValues::*;
+		item def Counter { attribute hits : Integer; }
+		item def Tallied :> Counter {
+			exhibit state tally {
+				entry; then on;
+				state on { entry action bump { assign hits := 10 / hits; } }
+			}
+		}
+		item def Rack {
+			item lead : Counter [1] { :>> hits = 1; }
+			item trail : Counter [1] { :>> hits = 0; }
+			item tallied : Tallied [2] = (lead, trail);
+		}
+		item rack : Rack;
+	}`)
+	rack := instantiateQualified(t, ctx, idx, "test::rack")
+
+	// lead is classified before trail's behavior fails; the read materializes it all the same.
+	if _, err := rack.GetFeatureValue(ctx, "tallied"); !errors.Is(err, ErrDivisionByZero) {
+		t.Fatalf("rack.tallied = %v, want ErrDivisionByZero", err)
+	}
+	held := rack.FeatureValues["lead"].HeldValue()
+	lead, ok := ctx.getInstance(held.Instance)
+	if held.Kind != ValInstance || !ok {
+		t.Fatalf("lead = %s, want the object the failed read materialized", FormatValue(held))
+	}
+	if len(lead.classifiers) != 0 || len(lead.behaviors) != 0 || len(ctx.objectBehaviors) != 0 {
+		t.Fatalf("a refused collection left lead classified by %v running %d behaviors (context: %d)",
+			lead.classifiers, len(lead.behaviors), len(ctx.objectBehaviors))
+	}
+	if _, ok := lead.FeatureValues["tally"]; ok {
+		t.Fatal("a refused collection left lead with the tally feature")
+	}
+	if hits := lead.FeatureValues["hits"]; hits.Written {
+		t.Fatalf("a refused collection left lead.hits written to %s", FormatValue(hits.HeldValue()))
+	}
+}
+
+// A classifier redefining a feature the object carries refines it (KerML 1.0 §7.3.4.5): the
+// object reads the redefinition's default, type and multiplicity; what it held is kept where
+// the redefinition admits it, and refused whole where it does not.
+func TestNarrowerClassifierRefinesTheCarriedFeatures(t *testing.T) {
+	ctx, idx := libraryShapeContext(t, `package test {
+		private import ScalarValues::*;
+		item def Engine;
+		item def V8 :> Engine;
+		item def Car {
+			attribute doors : Integer default = 4;
+			attribute tags : String [0..2] default = ("a", "b");
+			item engine : Engine [1];
+		}
+		item def Coupe :> Car { attribute :>> doors default = 2; item :>> engine : V8; }
+		item def Tagged :> Car { attribute :>> tags : String [1]; }
+		item def Rack {
+			item raw : Car [1];
+			item sporty : Car [1] { attribute :>> doors default = 3; }
+			item coupe : Coupe [1] = raw;
+			item coupe2 : Coupe [1] = sporty;
+		}
+		item rack : Rack;
+		item car : Car;
+	}`)
+	rack := instantiateQualified(t, ctx, idx, "test::rack")
+	raw := readInstance(t, ctx, rack, "raw")
+	coupe := idx.LookupQualified("test::Coupe")[0]
+	if !ctx.instanceConforms(raw, coupe) {
+		t.Fatalf("raw held by coupe is classified by %v, want Coupe", raw.classifiers)
+	}
+	if doors := readInt(t, ctx, raw, "doors"); doors != 2 {
+		t.Errorf("raw.doors = %d as a Coupe, want Coupe's default 2", doors)
+	}
+	if feat := raw.FeatureValues["doors"].Feature; feat.OwnerType != coupe {
+		t.Errorf("raw.doors reads %s's declaration, want Coupe's", feat.OwnerType.Name)
+	}
+	if feat := raw.FeatureValues["tags"].Feature; feat.OwnerType == coupe {
+		t.Error("raw.tags, which Coupe does not redefine, reads a declaration of Coupe")
+	}
+	engine := readInstance(t, ctx, raw, "engine")
+	if v8 := idx.LookupQualified("test::V8")[0]; !ctx.instanceConforms(engine, v8) {
+		t.Errorf("raw.engine held by a Coupe's engine : V8 is classified by %v, want V8", engine.classifiers)
+	}
+
+	// A usage's own redefinition is not refined by a classifier redefining what it redefines.
+	sporty := readInstance(t, ctx, rack, "sporty")
+	if doors := readInt(t, ctx, sporty, "doors"); doors != 3 {
+		t.Errorf("sporty.doors = %d as a Coupe, want the usage's own default 3", doors)
+	}
+
+	// A written value stays through the refinement, read by the refining declaration.
+	car := instantiateQualified(t, ctx, idx, "test::car")
+	if err := car.SetFeatureValue(ctx, "doors", integerValue(5)); err != nil {
+		t.Fatalf("write car.doors: %v", err)
+	}
+	if err := ctx.classify(car, coupe); err != nil {
+		t.Fatalf("classify(car, Coupe): %v", err)
+	}
+	if doors := car.FeatureValues["doors"]; !doors.Written || doors.HeldValue().Const.Int != 5 || doors.Feature.OwnerType != coupe {
+		t.Errorf("car.doors = %s (written %t, declared by %s) after classifying, want the written 5 read by Coupe's declaration",
+			FormatValue(doors.HeldValue()), doors.Written, doors.Feature.OwnerType.Name)
+	}
+
+	// A held value the refined declaration does not admit refuses the classification whole.
+	if err := car.SetFeatureValue(ctx, "tags", sequenceOf([]Value{NewStringValue("x"), NewStringValue("y")})); err != nil {
+		t.Fatalf("write car.tags: %v", err)
+	}
+	if err := ctx.classify(car, idx.LookupQualified("test::Tagged")[0]); !errors.Is(err, ErrMultiplicityViolation) {
+		t.Fatalf("classify(car, Tagged) = %v, want ErrMultiplicityViolation for two values in tags [1]", err)
+	}
+	if len(car.classifiers) != 1 || car.FeatureValues["tags"].Feature.OwnerType == idx.LookupQualified("test::Tagged")[0] {
+		t.Errorf("a refused classification left car classified by %v reading tags from %s",
+			car.classifiers, car.FeatureValues["tags"].Feature.OwnerType.Name)
 	}
 }
 

@@ -1,7 +1,9 @@
 package runtime
 
 import (
+	"fmt"
 	"maps"
+	"slices"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -59,10 +61,12 @@ func (ctx *Context) comparableTypes(typ, other *symbols.Symbol, seen map[*symbol
 
 // classifyHeld classifies every object held as a value of feature by the feature itself,
 // so it carries the features its type and body declare; the caller has checked each may be held.
+// The value is classified whole: one object refused leaves every object as it was.
 func (ctx *Context) classifyHeld(feature *symbols.Symbol, val Value) error {
 	if feature == nil {
 		return nil
 	}
+	commit, rollback := ctx.beginJournal()
 	for _, el := range elementsOf(val) {
 		if el.Kind != ValInstance {
 			continue
@@ -72,9 +76,11 @@ func (ctx *Context) classifyHeld(feature *symbols.Symbol, val Value) error {
 			continue
 		}
 		if err := ctx.classify(inst, feature); err != nil {
+			rollback()
 			return err
 		}
 	}
+	commit()
 	return nil
 }
 
@@ -101,10 +107,14 @@ func (ctx *Context) classify(inst *Instance, typ *symbols.Symbol) error {
 	features := ctx.FeaturesOf(typ)
 	for i := range features {
 		feat := &features[i]
-		if carried[feat.Name] {
+		if !carried[feat.Name] {
+			inst.FeatureValues[feat.Name] = ctx.newFeatureValue(inst, feat)
 			continue
 		}
-		inst.FeatureValues[feat.Name] = ctx.newFeatureValue(inst, feat)
+		if err := ctx.refineFeatureValue(inst, inst.FeatureValues[feat.Name], feat, typ); err != nil {
+			rollback()
+			return err
+		}
 	}
 	if err := ctx.aliasRedefinedFeatureValuesOf(inst, typ, carried); err != nil {
 		rollback()
@@ -115,6 +125,40 @@ func (ctx *Context) classify(inst *Instance, typ *symbols.Symbol) error {
 		return err
 	}
 	commit()
+	return nil
+}
+
+// refineFeatureValue makes a carried feature value read the classifier's declaration redefining
+// the one it reads (KerML 1.0 §7.3.4.5); what it holds stays if the refined declaration admits it.
+func (ctx *Context) refineFeatureValue(inst *Instance, fv *FeatureValue, feat *EffectiveFeature, typ *symbols.Symbol) error {
+	have := fv.Feature
+	if feat.Symbol == nil || have.Symbol == nil || feat.Symbol == have.Symbol ||
+		!slices.Contains(ctx.redefinedFeatures(feat.Symbol, typ), have.Symbol) {
+		return nil
+	}
+	ctx.noteProbeWrite(fv)
+	if !fv.Materialized || (!fv.Written && feat.DefaultValue != have.DefaultValue) {
+		*fv = *ctx.newFeatureValue(inst, feat)
+		return nil
+	}
+	how := admitDeclared
+	if fv.Written {
+		how = admitWritten
+	}
+	held := fv.HeldValue()
+	if err := ctx.checkAdmits(feat, fmt.Sprintf("feature value %s.%s", inst.Type.Name, feat.Name), held, how); err != nil {
+		return err
+	}
+	val, err := ctx.admitted(feat, held, how)
+	if err != nil {
+		return err
+	}
+	fv.Feature, fv.Value, fv.Values = feat, Value{}, Value{}
+	if feat.Scalar() {
+		fv.Value = val
+	} else {
+		fv.Values = val
+	}
 	return nil
 }
 

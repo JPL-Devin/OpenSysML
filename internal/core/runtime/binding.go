@@ -178,9 +178,9 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 		}
 		if partial {
 			// A binding of one unspecified value per end constrains the ends
-			// without determining either: an end valued on its own keeps that
-			// value, one valued by nothing else is not evaluable.
-			if target.Feature.DefaultValue != nil {
+			// without determining either: an end valued on its own, by a default
+			// or a write, keeps that value; one valued by nothing else is not evaluable.
+			if target.Feature.DefaultValue != nil || target.Written {
 				continue
 			}
 			return Value{}, false, false, nil, fmt.Errorf(
