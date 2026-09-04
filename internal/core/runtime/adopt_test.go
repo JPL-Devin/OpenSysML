@@ -600,6 +600,70 @@ func TestAdoptCarriesAClassifiedObject(t *testing.T) {
 	}
 }
 
+const adoptRefinedSrc = `package Demo {
+	private import ScalarValues::*;
+	item def Engine;
+	item def V8 :> Engine;
+	item def Car { attribute tags : String [0..2]; item engine : Engine [1]; }
+	item def Coupe :> Car { attribute :>> tags : String [0..1]; item :>> engine : V8; }
+	item def Rack { item raw : Car [1]; item coupe : Coupe [1] = raw; }
+}`
+
+// A carried feature a classifier refined keeps reading the refining declaration across
+// adoption, so the narrowed type and multiplicity still govern its reads and writes.
+func TestAdoptKeepsTheFeaturesAClassifierRefined(t *testing.T) {
+	prev := contextOver(t, adoptRefinedSrc)
+	rack, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::Rack"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if _, err := rack.GetFeatureValue(prev, "coupe"); err != nil {
+		t.Fatalf("GetFeatureValue(coupe): %v", err)
+	}
+	id, ok := rack.FeatureValues["raw"].Value.Object()
+	if !ok {
+		t.Fatalf("raw holds %v, want an object", rack.FeatureValues["raw"].Value)
+	}
+	raw := prev.instances[id]
+	if err := raw.SetFeatureValue(prev, "tags", sequenceOf([]Value{NewStringValue("x")})); err != nil {
+		t.Fatalf("write raw.tags: %v", err)
+	}
+	shapes := prev.ShapesOf(rack)
+
+	ctx := contextOver(t, adoptRefinedSrc+"\npart def Widget;")
+	if _, err := ctx.Adopt(prev, shapes, rack); err != nil {
+		t.Fatalf("Adopt: %v", err)
+	}
+	idx := ctx.resolver.Index()
+	coupe := lookupOne(t, idx, "Demo::Rack::coupe")
+	if len(raw.classifiers) != 1 || raw.classifiers[0] != coupe {
+		t.Fatalf("raw is classified by %v, want the coupe feature of the new analysis", raw.classifiers)
+	}
+	features := ctx.FeaturesOf(coupe)
+	for _, name := range []string{"tags", "engine"} {
+		if feat := raw.FeatureValues[name].Feature; feat != &features[indexOfFeature(t, features, name)] {
+			t.Errorf("raw.%s reads %s's declaration after adoption, want Coupe's refinement", name, feat.OwnerType.Name)
+		}
+	}
+	if err := raw.SetFeatureValue(ctx, "tags", sequenceOf([]Value{NewStringValue("x"), NewStringValue("y")})); !errors.Is(err, ErrMultiplicityViolation) {
+		t.Errorf("write of two tags = %v, want ErrMultiplicityViolation under Coupe's tags [0..1]", err)
+	}
+	tags, err := raw.GetFeatureValue(ctx, "tags")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(tags): %v", err)
+	}
+	if got := FormatValue(tags.HeldValue()); !strings.Contains(got, "x") || strings.Contains(got, "y") {
+		t.Errorf("raw.tags = %s after the refused write, want the carried (\"x\")", got)
+	}
+	engine, err := raw.GetFeatureValue(ctx, "engine")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(engine): %v", err)
+	}
+	if held, ok := engine.Value.Object(); !ok || !ctx.instanceConforms(ctx.instances[held], lookupOne(t, idx, "Demo::V8")) {
+		t.Errorf("raw.engine = %s after adoption, want an object conforming to Coupe's engine : V8", FormatValue(engine.Value))
+	}
+}
+
 // A declaration that no longer resolves to the shape an object was materialized
 // against cannot hold that object, so it is refused rather than rebound onto
 // feature values that no longer mean the same thing.

@@ -141,26 +141,64 @@ func (ctx *Context) returnedArguments(scope *symbols.Scope, call *ast.Invocation
 	return args
 }
 
+// returnedAnalysis is the parameters a calc shape's returns pass on, as far as known.
+// Shapes calling each other are analysed together: each is provisional until the first
+// of them entered — the root of the cycle — is stable, when all of them are final.
+type returnedAnalysis struct {
+	passed map[string]bool
+	done   bool
+	// active is the shape's position on the analysis stack while its returns are
+	// followed, -1 otherwise; low is the lowest position a call reached from it.
+	active, low int
+}
+
 // returnedParameters names the parameters of a calc whose values its result may consist
 // of: those its return expressions pass on, a `for` variable standing for its collection.
-// Memoized per shape; a recursive call reads the set as far as it is known.
+// Memoized per shape; a call within a cycle reads the set as far as it is known, and the
+// cycle's root iterates every shape of it until none grows.
 func (ctx *Context) returnedParameters(shape *calcShape) map[string]bool {
-	if passed, ok := ctx.returnedParams[shape]; ok {
-		return passed
+	a, ok := ctx.returnedParams[shape]
+	if !ok {
+		a = &returnedAnalysis{passed: make(map[string]bool), active: -1}
+		ctx.returnedParams[shape] = a
 	}
-	passed := make(map[string]bool)
-	ctx.returnedParams[shape] = passed
+	if a.done {
+		return a.passed
+	}
+	if a.active >= 0 {
+		top := ctx.returnedStack[len(ctx.returnedStack)-1]
+		top.low = min(top.low, a.active)
+		return a.passed
+	}
+	a.active, a.low = len(ctx.returnedStack), len(ctx.returnedStack)
+	ctx.returnedStack = append(ctx.returnedStack, a)
+	provisional := len(ctx.returnedProvisional)
 	params := make(map[string]bool, len(shape.ParamNames))
 	for _, name := range shape.ParamNames {
 		params[name] = true
 	}
 	for {
-		known := len(passed)
-		ctx.collectReturnedParameters(shape, passed, params)
-		if len(passed) == known {
-			return passed
+		known := len(a.passed)
+		ctx.collectReturnedParameters(shape, a.passed, params)
+		if len(a.passed) == known {
+			break
 		}
 	}
+	index := a.active
+	ctx.returnedStack = ctx.returnedStack[:index]
+	a.active = -1
+	if a.low < index {
+		caller := ctx.returnedStack[index-1]
+		caller.low = min(caller.low, a.low)
+		ctx.returnedProvisional = append(ctx.returnedProvisional, a)
+		return a.passed
+	}
+	for _, member := range ctx.returnedProvisional[provisional:] {
+		member.done = true
+	}
+	ctx.returnedProvisional = ctx.returnedProvisional[:provisional]
+	a.done = true
+	return a.passed
 }
 
 // collectReturnedParameters adds to passed the parameters of shape the returns of its body

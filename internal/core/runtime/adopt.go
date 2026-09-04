@@ -441,8 +441,8 @@ func (a *adoption) plan(obj *Instance) error {
 		return err
 	}
 	fqn := a.ctx.fqnOf(typeSym)
-	byName := make(map[string]*EffectiveFeature)
-	a.indexFeatures(typeSym, byName)
+	declared := &declaredFeatures{byName: make(map[string]*EffectiveFeature), bySymbol: make(map[*symbols.Symbol]*EffectiveFeature)}
+	a.indexFeatures(typeSym, declared)
 	// A feature that classified the object declares features of it too, so the
 	// object is rebound to what that feature is declared as here.
 	classifiers := make([]*symbols.Symbol, 0, len(obj.classifiers))
@@ -452,12 +452,12 @@ func (a *adoption) plan(obj *Instance) error {
 			return err
 		}
 		classifiers = append(classifiers, found)
-		a.indexFeatures(found, byName)
+		a.indexFeatures(found, declared)
 	}
 	plan := &adoptPlan{obj: obj, typeSym: typeSym, classifiers: classifiers,
 		features: make(map[string]*EffectiveFeature, len(obj.FeatureValues))}
 	for _, name := range obj.featureNames() {
-		feat, err := a.planFeature(fqn, typeSym, name, obj.FeatureValues[name], byName)
+		feat, err := a.planFeature(fqn, typeSym, name, obj.FeatureValues[name], declared)
 		if err != nil {
 			return err
 		}
@@ -490,22 +490,37 @@ func (a *adoption) rebindShaped(sym *symbols.Symbol, what string) (*symbols.Symb
 	return found, nil
 }
 
-// indexFeatures adds the features sym declares to byName, keeping the ones a
-// declaration indexed before it already gave a name.
-func (a *adoption) indexFeatures(sym *symbols.Symbol, byName map[string]*EffectiveFeature) {
+// declaredFeatures indexes what an object's types declare for it here: by the
+// declaration a feature reads, and by name for the first type to give the name.
+type declaredFeatures struct {
+	byName   map[string]*EffectiveFeature
+	bySymbol map[*symbols.Symbol]*EffectiveFeature
+}
+
+// indexFeatures adds the features sym declares to declared, keeping the names a
+// declaration indexed before it already gave.
+func (a *adoption) indexFeatures(sym *symbols.Symbol, declared *declaredFeatures) {
 	features := a.ctx.FeaturesOf(sym)
 	for i := range features {
-		if _, taken := byName[features[i].Name]; !taken {
-			byName[features[i].Name] = &features[i]
+		feat := &features[i]
+		if _, taken := declared.byName[feat.Name]; !taken {
+			declared.byName[feat.Name] = feat
+		}
+		if _, taken := declared.bySymbol[feat.Symbol]; feat.Symbol != nil && !taken {
+			declared.bySymbol[feat.Symbol] = feat
 		}
 	}
 }
 
-// planFeature is the feature a feature value fills in this context: the effective feature
-// of the rebound declaration, or — for a feature value a connector added, which no
+// planFeature is the feature a feature value fills in this context: the declaration it
+// read, rebound (a classifier's refinement of a carried feature stays the one read), else
+// the one its name gives, or — for a feature value a connector added, which no
 // declaration of the type carries — the recorded one with its symbols rebound.
-func (a *adoption) planFeature(owner string, typeSym *symbols.Symbol, name string, fv *FeatureValue, byName map[string]*EffectiveFeature) (*EffectiveFeature, error) {
-	if feat, ok := byName[name]; ok {
+func (a *adoption) planFeature(owner string, typeSym *symbols.Symbol, name string, fv *FeatureValue, declared *declaredFeatures) (*EffectiveFeature, error) {
+	if feat := a.declarationRead(fv, declared); feat != nil {
+		return feat, nil
+	}
+	if feat, ok := declared.byName[name]; ok {
 		return feat, nil
 	}
 	if fv.Feature == nil || fv.Feature.DefaultValue != nil {
@@ -524,6 +539,19 @@ func (a *adoption) planFeature(owner string, typeSym *symbols.Symbol, name strin
 		*ref = found
 	}
 	return &feat, nil
+}
+
+// declarationRead is the feature declared here by the rebound declaration fv reads,
+// when one of the object's types declares it.
+func (a *adoption) declarationRead(fv *FeatureValue, declared *declaredFeatures) *EffectiveFeature {
+	if fv.Feature == nil || fv.Feature.Symbol == nil {
+		return nil
+	}
+	read, err := a.rebind(fv.Feature.Symbol, fmt.Sprintf("the feature %q", fv.Feature.Name))
+	if err != nil {
+		return nil
+	}
+	return declared.bySymbol[read]
 }
 
 func (a *adoption) planValue(owner string, val Value) error {

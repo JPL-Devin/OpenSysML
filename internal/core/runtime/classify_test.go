@@ -259,6 +259,45 @@ func TestOnlyFeaturesPassingObjectsOnHoldThem(t *testing.T) {
 	}
 }
 
+// Calcs returning through each other are analysed as one: a parameter one passes on only
+// through the other's returns is passed on, whichever calc is met first and wherever the
+// direct return stands beside the call.
+func TestMutuallyRecursiveCalcsPassArgumentsThroughEachOther(t *testing.T) {
+	for name, holdings := range map[string]string{
+		"through_first_met": "item viaA : Tallied [1] = pickA(lead, trail, true); item viaB : Tallied [1] = pickB(lead, trail, true);",
+		"through_last_met":  "item viaB : Tallied [1] = pickB(lead, trail, true); item viaA : Tallied [1] = pickA(lead, trail, true);",
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx, idx := libraryShapeContext(t, `package test {
+				private import ScalarValues::*;
+				item def Gauge;
+				item def Tallied { attribute tally : Integer = 7; }
+				calc def pickA {
+					in a : Gauge; in b : Gauge; in again : Boolean;
+					return : Gauge = if again ? pickB(a, b, false) else a;
+				}
+				calc def pickB {
+					in c : Gauge; in d : Gauge; in again : Boolean;
+					return : Gauge = if again ? pickA(d, c, false) else d;
+				}
+				item def Rack {
+					item lead : Gauge [1];
+					item trail : Gauge [1];
+					`+holdings+`
+				}
+			}`)
+			rack := idx.LookupQualified("test::Rack")[0]
+			for _, held := range []string{"lead", "trail"} {
+				got := ctx.holdingFeatures(rack, held)
+				sort.Strings(got)
+				if want := []string{"viaA", "viaB"}; !slices.Equal(got, want) {
+					t.Errorf("holdingFeatures(Rack, %s) = %v, want %v", held, got, want)
+				}
+			}
+		})
+	}
+}
+
 // The object a selected variant materialized is held like any other: a typed feature
 // holding a variation's value classifies that object, which then carries the feature's
 // own features and runs its behaviors, and stays the variant's object.
@@ -795,6 +834,47 @@ func TestRefusedClassificationUndoesWhatItsBehaviorsDid(t *testing.T) {
 	}
 	if after := FormatValue(hits.HeldValue()); raw.FeatureValues["hits"] != hits || after != before {
 		t.Fatalf("a refused classification changed hits from %s to %s", before, after)
+	}
+}
+
+// A variant a refused classification's behavior selected goes with it: a value variant
+// stands for no object to abandon, so the selection itself is undone.
+func TestRefusedClassificationUndoesTheVariantsItSelected(t *testing.T) {
+	ctx, idx := libraryShapeContext(t, `package test {
+		private import ScalarValues::*;
+		item def Counter { attribute hits : Integer = 0; }
+		item def Car {
+			variation attribute power : Real {
+				variant attribute strong = 150.0;
+				variant attribute weak = 120.0;
+			}
+		}
+		item def Tallied :> Counter {
+			item car : Car [1] { attribute :>> power = power::strong; }
+			exhibit state tally {
+				entry; then on;
+				state on { entry action bump { assign hits := car.power / hits; } }
+			}
+		}
+		item def Rack { item raw : Counter [1]; item own : Car [1] { attribute :>> power = power::weak; } }
+		item rack : Rack;
+	}`)
+	rack := instantiateQualified(t, ctx, idx, "test::rack")
+	raw := readInstance(t, ctx, rack, "raw")
+	own := readInstance(t, ctx, rack, "own")
+	if _, err := own.GetFeatureValue(ctx, "power"); err != nil {
+		t.Fatalf("own.power: %v", err)
+	}
+	before := maps.Clone(ctx.selectedVariants)
+	if got := before[variantSelection{owner: own.ID, variation: "power"}]; got != "weak" {
+		t.Fatalf("own selected %q before classifying, want weak", got)
+	}
+
+	if err := ctx.classify(raw, idx.LookupQualified("test::Tallied")[0]); !errors.Is(err, ErrDivisionByZero) {
+		t.Fatalf("classify(raw, Tallied) = %v, want ErrDivisionByZero", err)
+	}
+	if !maps.Equal(ctx.selectedVariants, before) {
+		t.Fatalf("a refused classification changed the variants selected from %v to %v", before, ctx.selectedVariants)
 	}
 }
 

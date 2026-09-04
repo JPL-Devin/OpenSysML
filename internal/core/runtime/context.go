@@ -3,7 +3,6 @@ package runtime
 import (
 	"errors"
 	"fmt"
-	"maps"
 	"slices"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -49,8 +48,12 @@ type Context struct {
 	// named feature of the type.
 	holders map[*symbols.Symbol]map[string][]string
 
-	// returnedParams memoizes, per calc shape, the parameters its result passes on.
-	returnedParams map[*calcShape]map[string]bool
+	// returnedParams memoizes, per calc shape, the parameters its result passes on;
+	// returnedStack is the shapes under analysis, returnedProvisional those awaiting
+	// the root of their call cycle.
+	returnedParams      map[*calcShape]*returnedAnalysis
+	returnedStack       []*returnedAnalysis
+	returnedProvisional []*returnedAnalysis
 
 	// redefined memoizes, per feature of a type, the features it redefines
 	// transitively; callers read the shared slice and never append to it.
@@ -263,7 +266,7 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		features:            make(map[*symbols.Symbol][]EffectiveFeature),
 		denotedFeatures:     make(map[*symbols.Symbol]map[*symbols.Symbol]string),
 		holders:             make(map[*symbols.Symbol]map[string][]string),
-		returnedParams:      make(map[*calcShape]map[string]bool),
+		returnedParams:      make(map[*calcShape]*returnedAnalysis),
 		calcShapes:          make(map[*symbols.Symbol]*calcShape),
 		libraryPerformances: make(map[*symbols.Symbol]*libraryPerformance),
 
@@ -440,7 +443,6 @@ func (ctx *Context) beginExecutorRun(started *bool) func() {
 // Behaviors the probe starts are the only ones it runs (see nextRunnableBehavior).
 func (ctx *Context) beginProbe() func() {
 	steps, elements, trace := ctx.steps, ctx.elements, ctx.trace
-	selected := maps.Clone(ctx.selectedVariants)
 	endBoundary := func() {}
 	if ctx.probes == 0 {
 		endBoundary = ctx.beginRunBoundary()
@@ -452,7 +454,6 @@ func (ctx *Context) beginProbe() func() {
 	return func() {
 		rollback()
 		endBoundary()
-		ctx.selectedVariants = selected
 		ctx.probes--
 		ctx.runDepth--
 		ctx.steps, ctx.elements, ctx.trace = steps, elements, trace
@@ -477,9 +478,9 @@ func (ctx *Context) beginRunBoundary() func() {
 
 // beginJournal brackets a change to be kept whole or not at all: the feature
 // values written (see noteProbeWrite), the other changes noted (see
-// noteProbeUndo), the bus, and the objects made and behaviors attached are
-// journaled until commit keeps them or rollback restores them. A commit inside
-// an enclosing journal leaves the entries to it.
+// noteProbeUndo — variant selections among them), the bus, and the objects made
+// and behaviors attached are journaled until commit keeps them or rollback
+// restores them. A commit inside an enclosing journal leaves the entries to it.
 func (ctx *Context) beginJournal() (commit, rollback func()) {
 	mark, undoMark := len(ctx.journalWrites), len(ctx.journalUndos)
 	created, attached := len(ctx.created), len(ctx.objectBehaviors)

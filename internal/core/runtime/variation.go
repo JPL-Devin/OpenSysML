@@ -71,8 +71,25 @@ func (ctx *Context) bindVariation(feat *EffectiveFeature, selection Value, owner
 		return Value{}, fmt.Errorf("%w: %s is not a variant of %s (%s)",
 			ErrNotAVariant, variant.Name, name, ctx.variantSummary(feat.Symbol))
 	}
-	ctx.selectedVariants[variantSelection{owner: owner, variation: name}] = variant.Name
+	ctx.selectVariant(variantSelection{owner: owner, variation: name}, variant.Name)
 	return ctx.variantValue(feat.Symbol, variant, owner)
+}
+
+// selectVariant records the variant a variation is bound to for routing to consult;
+// a probe or transaction rolled back restores the selection as it was.
+func (ctx *Context) selectVariant(selection variantSelection, variant string) {
+	prior, selected := ctx.selectedVariants[selection]
+	if selected && prior == variant {
+		return
+	}
+	ctx.noteProbeUndo(func() {
+		if selected {
+			ctx.selectedVariants[selection] = prior
+		} else {
+			delete(ctx.selectedVariants, selection)
+		}
+	})
+	ctx.selectedVariants[selection] = variant
 }
 
 // bindVariationOf binds a value read from a feature's declaration when that
