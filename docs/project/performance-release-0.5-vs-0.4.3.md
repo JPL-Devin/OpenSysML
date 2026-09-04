@@ -315,9 +315,12 @@ quarter of the profile scanning the cached model.
   grow by one expression's worth of entries per request for the life of the
   cached model; `Evaluate` runs under `Resolver.Scratch`, which drops what the
   request memoized about its own nodes (found by `astcodec.Reachable`) and
-  keeps what it resolved of the model's. `GRPCEvaluate` pays 1.4 µs and 25
-  allocations for it (11.1 → 12.5 µs), still −97% against 0.4.3; a test
-  checks the memo does not grow over 50 distinct expressions.
+  keeps what it resolved of the model's. The "did you mean" spellings an
+  unresolved name earns are memoized by name rather than node; they join the
+  same lifecycle through the node the name was written at, so a request's
+  misspellings go with it too. `GRPCEvaluate` pays 1.4 µs and 25 allocations
+  for it (11.1 → 12.5 µs), still −97% against 0.4.3; a test checks the memo
+  does not grow over 50 distinct expressions nor 50 distinct unresolved names.
 - Carrier-only instantiation was asked for and is not needed: `Instantiate`
   already materializes only the subject's own feature values and the
   composite parts whose type runs a classifier behavior (finding 2);

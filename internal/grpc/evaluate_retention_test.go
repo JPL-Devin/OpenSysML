@@ -42,23 +42,41 @@ package Demo {
 		return rs.Resolver.MemoSize(), rs.Model.MemoSize()
 	}
 
-	evaluate := func(expr string) {
+	evaluate := func(expr string) string {
 		resp, err := srv.Evaluate(context.Background(), &pb.EvaluateRequest{
 			ModelHash: parseResp.ModelHash, Expression: expr, SubjectSymbolId: "Demo::sedan",
 		})
-		if err != nil || resp.Error != "" {
-			t.Fatalf("Evaluate(%q): %v %s", expr, err, resp.GetError())
+		if err != nil {
+			t.Fatalf("Evaluate(%q): %v", expr, err)
+		}
+		return resp.GetError()
+	}
+	mustEvaluate := func(expr string) {
+		if msg := evaluate(expr); msg != "" {
+			t.Fatalf("Evaluate(%q): %s", expr, msg)
 		}
 	}
 	// The first request resolves the model's own syntax the expressions reach
 	// (Twice's parameters, the parts' types); that is the model's and stays.
-	evaluate("Twice(mass) + engine.power + Demo::sedan::mass + 1.0")
+	mustEvaluate("Twice(mass) + engine.power + Demo::sedan::mass + 1.0")
 	before, beforeSel := memoSize()
 	for i := 0; i < 50; i++ {
-		evaluate(fmt.Sprintf("Twice(mass) + engine.power + Demo::sedan::mass + %d.0", i))
+		mustEvaluate(fmt.Sprintf("Twice(mass) + engine.power + Demo::sedan::mass + %d.0", i))
 	}
 	if got, gotSel := memoSize(); got != before || gotSel != beforeSel {
 		t.Fatalf("shared memo grew from %d+%d to %d+%d over 50 unique expressions",
+			before, beforeSel, got, gotSel)
+	}
+
+	// A name that resolves to nothing is spell-checked, and the spellings are
+	// memoized by name: a request's misspelling is the request's too.
+	for i := 0; i < 50; i++ {
+		if msg := evaluate(fmt.Sprintf("nosuch%d(1.0) + masss%d", i, i)); msg == "" {
+			t.Fatalf("expression %d: unresolved names evaluated", i)
+		}
+	}
+	if got, gotSel := memoSize(); got != before || gotSel != beforeSel {
+		t.Fatalf("shared memo grew from %d+%d to %d+%d over 50 unresolved expressions",
 			before, beforeSel, got, gotSel)
 	}
 }

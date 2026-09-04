@@ -90,3 +90,28 @@ func TestScratchNests(t *testing.T) {
 		t.Fatalf("memo size %d after nested Scratch, want %d", got, before)
 	}
 }
+
+// The spellings suggested for a transient node's unresolved name are keyed by
+// the name, not the node; they are the node's all the same and go with it.
+func TestScratchDropsTransientSuggestions(t *testing.T) {
+	idx := indexOf(t, map[string]string{
+		"a.sysml": `package P { attribute mass; attribute speed; }`,
+	})
+	r := New(idx)
+	root := idx.DocumentRoot("a.sysml")
+	owned := qn(false, "maas")
+	r.UnresolvedName(root, "maas", owned)
+	before := r.MemoSize()
+	transient := qn(false, "sped")
+	r.Scratch(map[ast.Node]bool{transient: true}, func() {
+		if got := r.UnresolvedName(root, "sped", transient); got == "sped" {
+			t.Fatalf("no spelling suggested for sped: %q", got)
+		}
+		if r.MemoSize() <= before {
+			t.Fatal("Scratch did not memoize the suggestion while running")
+		}
+	})
+	if got := r.MemoSize(); got != before {
+		t.Fatalf("memo size %d after Scratch, want %d: a transient name's suggestions stayed", got, before)
+	}
+}

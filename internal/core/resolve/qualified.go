@@ -269,8 +269,8 @@ func (r *Resolver) unresolved(scope *symbols.Scope, qn *ast.QualifiedName) {
 	var fixes []quickfix.Fix
 	if len(qn.Parts) == 1 && !qn.Global {
 		name := qn.Parts[0].Text
-		msg = r.unresolvedMessage(scope, name)
-		fixes = r.unresolvedFixes(scope, name, qn.Span())
+		msg = r.unresolvedMessage(scope, name, qn)
+		fixes = r.unresolvedFixes(scope, name, qn)
 	}
 	r.reportQualified(qn, Diagnostic{
 		Span:    qn.Span(),

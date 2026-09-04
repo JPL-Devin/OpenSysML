@@ -2009,7 +2009,7 @@ func ambiguousInvocationError(qualName string, candidates []*symbols.Symbol) err
 // same "did you mean" hint the validator gives an unqualified reference.
 func (ec *EvalContext) unresolvedInvocation(qn *ast.QualifiedName, written string) error {
 	if qn != nil && len(qn.Parts) == 1 && !qn.Global && ec.ctx.resolver != nil {
-		return fmt.Errorf("%w: %s", ErrUnresolvedReference, ec.ctx.resolver.UnresolvedName(ec.scope, written))
+		return fmt.Errorf("%w: %s", ErrUnresolvedReference, ec.ctx.resolver.UnresolvedName(ec.scope, written, qn))
 	}
 	return fmt.Errorf("%w: %s", ErrUnresolvedReference, written)
 }

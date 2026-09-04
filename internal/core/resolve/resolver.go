@@ -204,7 +204,7 @@ func (r *Resolver) MemoSize() int {
 	return len(r.memo) + len(r.modeMemo) + len(r.filtered) + len(r.featureChains) +
 		len(r.parts) + len(r.aliasNames) + len(r.endpoints) + len(r.readings) +
 		len(r.invocationNames) + len(r.ambiguities) + len(r.reportedQualified) +
-		len(r.initials) + len(r.imports)
+		len(r.initials) + len(r.imports) + len(r.suggestions)
 }
 
 // journalNew lets the enclosing Scratch drop m[k], about to be written for
@@ -531,11 +531,10 @@ func (r *Resolver) ResolveName(scope *symbols.Scope, name string, at ast.Node) (
 		r.memoize(at, res)
 	}
 	if !res.ok {
-		span := spanOf(at)
 		r.report(Diagnostic{
-			Span:    span,
-			Message: r.unresolvedMessage(scope, name),
-			Fixes:   r.unresolvedFixes(scope, name, span),
+			Span:    spanOf(at),
+			Message: r.unresolvedMessage(scope, name, at),
+			Fixes:   r.unresolvedFixes(scope, name, at),
 		})
 	}
 	return res.sym, res.ok
