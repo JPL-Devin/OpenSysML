@@ -457,7 +457,11 @@ func TestFormattingDiffIsCheaperThanFormatting(t *testing.T) {
 	formatTime := fastest(func() { _, _ = format.Source("largest.sysml", mangled, format.DefaultOptions) })
 	diffTime := fastest(func() { formatEdits(mangled, formatted, allLines) })
 	t.Logf("%d bytes: format %v, diff %v", len(mangled), formatTime, diffTime)
-	if diffTime > formatTime {
+	// Coverage counters instrument this package but not the formatter's, so
+	// the two timings are only comparable in an uninstrumented build.
+	if mode := testing.CoverMode(); mode != "" {
+		t.Logf("coverage mode %q: timings not compared", mode)
+	} else if diffTime > formatTime {
 		t.Fatalf("diff took %v, formatter %v; the diff must not dominate", diffTime, formatTime)
 	}
 	edits := formatEdits(mangled, formatted, allLines)
