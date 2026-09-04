@@ -427,7 +427,8 @@ func (p *Parser) parseBase() ast.Node {
 	}
 }
 
-// parseParenOrSequence parses `( )`, `( expr )`, or `( expr, expr, ... )`.
+// parseParenOrSequence parses `( )` (the null expression), `( expr )`, or
+// `( expr, expr, ... )`.
 func (p *Parser) parseParenOrSequence(start int) ast.Node {
 	p.advance() // (
 
@@ -458,7 +459,12 @@ func (p *Parser) parseParenOrSequence(start int) ast.Node {
 		}
 	}
 	p.expect(lexer.RParen, msgExpectedCloseParen)
-	if len(elems) == 1 {
+	switch len(elems) {
+	case 0:
+		null := &ast.NullExpr{}
+		null.NodeSpan = p.spanFrom(start)
+		return null
+	case 1:
 		return elems[0]
 	}
 	seq := &ast.SequenceExpr{Elements: elems}
@@ -581,6 +587,7 @@ func (p *Parser) atBodyExprMember() bool {
 // parseBodyExpr parses `{ [doc] (in param ;)* (member)* resultExpr }`.
 func (p *Parser) parseBodyExpr(start int) ast.Node {
 	p.advance() // {
+	defer p.pushBodyContext(bodyOther)()
 	b := &ast.BodyExpr{}
 
 	// A body may open with documentation, a member of the body like its features.
@@ -670,9 +677,11 @@ func (p *Parser) parseBodyExpr(start int) ast.Node {
 			// Parse optional body members: in ref a { doc ... }
 			if p.at(lexer.LBrace) {
 				p.advance() // {
+				leave := p.pushBodyContext(bodyOther)
 				for !p.at(lexer.RBrace) && !p.atEOF() {
 					paramMembers = append(paramMembers, p.parseBodyMember())
 				}
+				leave()
 				p.expect(lexer.RBrace, "expected '}'")
 			}
 			b.Params = append(b.Params, ast.BodyParam{

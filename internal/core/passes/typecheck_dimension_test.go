@@ -39,6 +39,14 @@ func TestBoundQuantityOfAnotherDimension(t *testing.T) {
 		"cannot bind m (dimension L) to a feature typed by DurationValue (dimension T)")
 }
 
+// TestBoundNestedCollectionQuantityOfAnotherDimension: a collection binds flat,
+// so a unit inside a nested literal is measured against the target too.
+func TestBoundNestedCollectionQuantityOfAnotherDimension(t *testing.T) {
+	wantOneDimensionError(t, `attribute ls : LengthValue[*] = (1 [m], (2 [m], 3 [s]));`,
+		"cannot bind s (dimension T) to a feature typed by LengthValue (dimension L)")
+	wantNoDimensionDiags(t, `attribute ls : LengthValue[*] = (1 [m], (2 [m], 3 [mm]));`)
+}
+
 // TestBoundQuantityOfTheSameDimensionAtAnotherScale: a dimension has no scale,
 // so any unit measuring in it conforms.
 func TestBoundQuantityOfTheSameDimensionAtAnotherScale(t *testing.T) {

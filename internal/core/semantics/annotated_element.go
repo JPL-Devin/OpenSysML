@@ -142,14 +142,14 @@ func (m *Model) annotatedElementFeatures(def *symbols.Symbol) []*symbols.Symbol 
 // specializesAnnotatedElement reports whether a feature is the annotatedElement
 // feature or specializes it, by redefinition or subsetting at any distance.
 func (m *Model) specializesAnnotatedElement(feature *symbols.Symbol) bool {
-	if feature == nil || !isFeature(feature) {
+	if feature == nil || !feature.IsFeature() {
 		return false
 	}
 	if leafName(feature.Name) == annotatedElementName {
 		return true
 	}
 	for _, super := range m.AllSupertypes(feature) {
-		if super != nil && isFeature(super) && leafName(super.Name) == annotatedElementName {
+		if super != nil && super.IsFeature() && leafName(super.Name) == annotatedElementName {
 			return true
 		}
 	}
@@ -163,7 +163,7 @@ func (m *Model) conformsToTypesOf(meta, feature *symbols.Symbol) bool {
 		return false
 	}
 	for _, super := range m.AllSupertypes(feature) {
-		if isFeature(super) && !m.conformsToDeclaredTypesOf(meta, super) {
+		if super.IsFeature() && !m.conformsToDeclaredTypesOf(meta, super) {
 			return false
 		}
 	}

@@ -367,7 +367,8 @@ func TestParseConstraintBody_Multiple(t *testing.T) {
 
 // Phase C2: Requirement Body Tests
 
-// parseRequirementBodyTest is a helper that parses a requirement body from test input.
+// parseRequirementBodyTest is a helper that parses a requirement body from test
+// input, in the body context the requirement declaration would have entered.
 func parseRequirementBodyTest(t *testing.T, input string) []ast.Node {
 	src := source.New("test.sysml", []byte(input))
 	p := New(src)
@@ -378,6 +379,7 @@ func parseRequirementBodyTest(t *testing.T, input string) []ast.Node {
 		t.Fatalf("expected '{', got %v", p.peek().Kind)
 	}
 
+	defer p.pushBodyContext(bodyRequirement)()
 	return p.parseRequirementBody()
 }
 

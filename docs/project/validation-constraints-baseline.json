@@ -29,7 +29,7 @@
     {
       "name": "validateActorMembershipOwningType",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateAllocationUsageType",
@@ -56,7 +56,7 @@
     {
       "name": "validateAssertConstraintUsageReference",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateAssignmentActionUsageArguments",
@@ -66,7 +66,7 @@
     {
       "name": "validateAssignmentActionUsageReferent",
       "source": "sysml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateAssignmentActionUsageReferentIsTimeVarying",
@@ -388,7 +388,7 @@
     {
       "name": "validateFeatureConstantIsVariable",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateFeatureCrossFeatureSpecialization",
@@ -464,7 +464,7 @@
     {
       "name": "validateFeatureValueIsInitial",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateFeatureValueOverriding",
@@ -687,7 +687,7 @@
     {
       "name": "validateObjectiveMembershipOwningType",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateOccurrenceUsageIndividualDefinition",
@@ -909,7 +909,7 @@
     {
       "name": "validateStakeholderMembershipOwningType",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateStateDefinitionParallelSubactions",
@@ -924,7 +924,7 @@
     {
       "name": "validateStateSubactionMembershioOwningType",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateStateUsageParallelSubactions",
@@ -950,7 +950,7 @@
     {
       "name": "validateSubjectMembershipOwningType",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateSubsettingConstantConformance",
@@ -1015,17 +1015,17 @@
     {
       "name": "validateTriggerInvocationActionAfterArgument",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateTriggerInvocationActionAtArgument",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateTriggerInvocationActionWhenArgument",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateTypeAtMostOneConjugator",
@@ -1108,7 +1108,7 @@
     {
       "name": "validateViewRenderingMembershipOwningType",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateViewUsageOnlyOneRendering",

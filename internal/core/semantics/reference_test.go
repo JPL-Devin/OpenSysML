@@ -191,6 +191,40 @@ func TestNestedReferenceResultIsNotCached(t *testing.T) {
 	}
 }
 
+// A member view enumerated while a reference is in flight is provisional, and
+// MemberSourcesStable says so; once the finished view is memoized it says stable.
+func TestMemberSourcesStableTracksProvisionalViews(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		action takePicture { action focus; }
+		part camera { perform action takePhoto references takePicture; }
+	}`)
+
+	pkg := sym(t, root, "P")
+	camera := sym(t, pkg.Scope, "camera")
+	takePhoto := sym(t, camera.Scope, "takePhoto")
+	takePicture := sym(t, pkg.Scope, "takePicture")
+
+	if m.MemberSourcesStable(takePhoto) {
+		t.Fatalf("MemberSourcesStable true before any member query")
+	}
+
+	delete(m.memberSources, takePhoto)
+	delete(m.referenced, takePhoto)
+	m.resolvingRef[takePicture] = true
+	m.MembersOf(takePhoto)
+	if m.MemberSourcesStable(takePhoto) {
+		t.Errorf("a member view computed under an in-flight resolution reported stable")
+	}
+	delete(m.resolvingRef, takePicture)
+
+	if names := memberNames(m.MembersOf(takePhoto)); !names["focus"] {
+		t.Fatalf("MembersOf(takePhoto) = %v after recompute, want focus", names)
+	}
+	if !m.MemberSourcesStable(takePhoto) {
+		t.Errorf("a finished member view did not report stable")
+	}
+}
+
 // Two perform statements for the same action in one body both take its
 // effective name; neither may resolve to the other.
 func TestRepeatedPerformResolvesToTheAction(t *testing.T) {
