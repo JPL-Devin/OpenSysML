@@ -194,6 +194,16 @@ func (k SymbolKind) IsFeature() bool {
 	return false
 }
 
+// IsFeature reports whether s declares a KerML Feature: by its kind, or by its
+// usage declaration when the kind is unclassified (a named binding).
+func (s *Symbol) IsFeature() bool {
+	if s.Kind != SymbolUnknown {
+		return s.Kind.IsFeature()
+	}
+	_, ok := s.Decl.(*ast.Usage)
+	return ok
+}
+
 // Notation names a symbol the way the notation declares it — "part def",
 // "state", "render" — rather than by its internal classification.
 func (s *Symbol) Notation() string {

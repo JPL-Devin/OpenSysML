@@ -150,7 +150,7 @@ func (c *assignmentReferentChecker) check(scope *symbols.Scope, assignment *ast.
 	}
 	// The referent is the feature the target names (SysML v2 §8.3.16.2
 	// AssignmentActionUsage::referent); a type or a namespace is none.
-	if referent.Kind != symbols.SymbolUnknown && !referent.Kind.IsFeature() {
+	if !referent.IsFeature() {
 		c.report(span, fmt.Sprintf("%s %s is declared `%s`, not a feature.",
 			msgAssignmentReferent, targetText(assignment.Target), referent.Notation()),
 			"assignment-referent")

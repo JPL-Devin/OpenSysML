@@ -145,12 +145,13 @@ func TestAssignmentReferentNonFeatureRejected(t *testing.T) {
 func TestAssignmentReferentFeatureOrUnresolvedIsNotReported(t *testing.T) {
 	src := `package Test {
 	part def P { attribute x; }
-	item i { attribute a; part p : P; action d; }
+	item i { attribute a; part p : P; action d; binding b bind a = p.x; }
 	action def A {
 		assign i.a := null;
 		assign i.p := null;
 		assign i.p.x := null;
 		assign i.d := null;
+		assign i.b := null;
 		assign missing := null;
 		assign i.missing := null;
 	}
@@ -158,6 +159,24 @@ func TestAssignmentReferentFeatureOrUnresolvedIsNotReported(t *testing.T) {
 	for _, warm := range []bool{false, true} {
 		if got := assignmentDiags(t, src, warm, "assignment-referent"); len(got) != 0 {
 			t.Errorf("warm=%v: got %v, want no referent diagnostic", warm, got)
+		}
+	}
+}
+
+// A target that is an expression rather than a feature name is the syntax
+// tier's error (SysML.xtext TargetParameter), so the pass adds nothing to it.
+func TestAssignmentReferentExpressionTargetIsSyntaxError(t *testing.T) {
+	for _, target := range []string{"1", "i.a + 1", "pick()", "i.a[1]"} {
+		src := "package Test { item i { attribute a; } calc def pick { return : Integer = 1; } action def A { assign " + target + " := null; } }"
+		root, pd, idx := analyzeInputs(t, "a.sysml", src)
+		var codes []string
+		for _, d := range Analyze("a.sysml", root, pd, idx) {
+			if d.Severity == SeverityError {
+				codes = append(codes, d.Code)
+			}
+		}
+		if len(codes) != 1 || codes[0] != "syntax" {
+			t.Errorf("target %q: error codes %v, want the one syntax error", target, codes)
 		}
 	}
 }

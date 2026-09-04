@@ -32,7 +32,7 @@ func (m *Model) semanticMetadataBases(sym *symbols.Symbol) ([]*symbols.Symbol, b
 	default:
 		return nil, true
 	}
-	isDef := !sym.Kind.IsFeature()
+	isDef := !sym.IsFeature()
 
 	var out []*symbols.Symbol
 	complete := true
@@ -59,11 +59,11 @@ func (m *Model) semanticMetadataBases(sym *symbols.Symbol) ([]*symbols.Symbol, b
 			continue
 		}
 		switch {
-		case isDef && base.Kind.IsFeature():
+		case isDef && base.IsFeature():
 			// A definition cannot subclassify a feature: it subclassifies
 			// what the feature is typed by.
 			out = append(out, m.DirectSupertypes(base)...)
-		case isDef || base.Kind.IsFeature():
+		case isDef || base.IsFeature():
 			// Definition with a definition baseType, or usage with a usage
 			// baseType. A usage with a definition baseType adds nothing.
 			out = append(out, base)
