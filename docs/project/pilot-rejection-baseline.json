@@ -28,7 +28,7 @@
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
         "files": 228,
-        "digest": "sha256:afd0430c7402254cc738030412fbb6c5dc51eb1ed0a3f7f039dcc81bc944620f"
+        "digest": "sha256:a0a4d91f7b9a4277e6fba6edeef8f340cf411c639b719354d6a62f3e18518487"
       }
     ],
     "recorded": "2026-09-04"
