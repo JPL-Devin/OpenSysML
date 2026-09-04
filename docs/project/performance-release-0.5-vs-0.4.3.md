@@ -19,8 +19,12 @@ Three columns appear throughout: **0.4.3**, **main** (as found), and
 **main+fix** (with the changes this document ships). Where a regression is
 marked *fixed*, the fix is in the same change as this record; *explained* means
 the cause is known and the cost is the intended price of a feature or fix that
-landed in the interval; *open* means the cause is known but the fix is not
-low-risk enough to ship here, and a proposed one is written down.
+landed in the interval, quantified; nothing is left *open*. The record was
+taken in two rounds: a first set of fixes that recovered the largest costs,
+then — with the remaining regressions ruled release blockers — a second set
+that took each of the four remaining rows to its floor. The `main+fix` column
+is the second round; the first round's intermediate figures are quoted in the
+findings where they explain what each fix bought.
 
 ## Method
 
@@ -65,15 +69,16 @@ low-risk enough to ship here, and a proposed one is written down.
 
 | figure | 0.4.3 | main | main+fix | main+fix vs 0.4.3 |
 | ------ | ----- | ---- | -------- | ----------------- |
-| load wall, 250 / 1000 / 4000 elements | 19.9 / 77.8 / 335 ms | 27.0 / 105 / 436 ms | 22.6 / 90.1 / 382 ms | +14% / +16% / +14% |
-| load bytes allocated, 250 / 4000 | 8.2 / 130 MiB | 11.8 / 187 MiB | 9.7 / 154 MiB | +18% / +19% |
+| load wall, 250 / 1000 / 4000 elements | 19.9 / 77.8 / 335 ms | 27.0 / 105 / 436 ms | 21.3 / 85.1 / 374 ms | +7% / +9% / +11% |
+| load bytes allocated, 250 / 4000 | 8.2 / 130 MiB | 11.8 / 187 MiB | 8.7 / 138 MiB | +6% / +6% |
 | load live heap, 250 / 4000 | 2.09 / 32.1 MiB | 2.12 / 32.4 MiB | 2.12 / 32.5 MiB | +1% |
-| empty-session load wall | 255 µs | 263 µs | 263 µs | +3% (noise) |
-| state-machine start, 250 / 1000 / 4000 | 8.2 / 8.2 / 8.4 µs | 61 / 252 / 992 µs | 23.6 / 98.9 / 403 µs | +187% / +1107% / +4712% |
-| state-machine start bytes / allocs, 4000 | 8.3 KiB / 120 | 401 KiB / 4.6k | 8.6 KiB / 123 | +3.5% / +2.5% |
-| instantiate, 250 / 1000 / 4000 | 3.1 / 3.2 / 3.2 µs | 12.0 / 11.7 / 11.9 µs | 11.5 / 11.7 / 11.8 µs | +269% / +268% / +271% |
-| calc, 250 / 1000 / 4000 | 2.07 µs | 2.19–2.23 µs | 2.19–2.20 µs | +6% |
-| diagnostics, 50 / 200 / 800 attributes | 88 µs / 350 µs / 1.45 ms | — | — | unchanged (p > 0.09) |
+| empty-session load wall | 255 µs | 263 µs | 271 µs | +6% (15 µs) |
+| state-machine start, 250 / 1000 / 4000 | 8.2 / 8.2 / 8.4 µs | 61 / 252 / 992 µs | 9.7 / 9.7 / 9.8 µs | +18% / +19% / +17% (constant again) |
+| state-machine start bytes / allocs, 4000 | 8.3 KiB / 110 | 401 KiB / 4.6k | 8.5 KiB / 121 | +3.3% / +10% |
+| instantiate, 250 / 1000 / 4000 | 3.1 / 3.2 / 3.2 µs | 12.0 / 11.7 / 11.9 µs | 5.6 / 5.9 / 6.0 µs | +81% / +84% / +89% |
+| instantiate bytes / allocs | 1.7 KiB / 29 | 6.2 KiB / 54 | 5.6 KiB / 35 | +235% / +21% |
+| calc, 250 / 1000 / 4000 | 2.07 µs | 2.19–2.23 µs | 2.16 µs | +4.5% |
+| diagnostics, 50 / 200 / 800 attributes | 88 µs / 350 µs / 1.45 ms | — | 89 µs / 353 µs / 1.47 ms | +1% (below threshold) |
 
 ## Benchmarks: `internal/perfbench`
 
@@ -84,39 +89,44 @@ Rows that moved more than ~5% on `main`; everything else is within noise
 
 | benchmark | 0.4.3 | main | main+fix | main+fix vs 0.4.3 |
 | --------- | ----- | ---- | -------- | ----------------- |
-| Analyze/synthetic | 808 ms | 1234 ms | 1167 ms | +44% |
-| WorkspaceEdit/synthetic/reindex+diagnostics | 909 ms | 1424 ms | 1223 ms | +35% |
-| REPLLoadFile | 1.14 s | 1.45 s | 1.36 s | +19% |
-| REPLSubmitSnippet | 1.02 s | 1.31 s | 1.20 s | +18% |
-| LowerActionGraph | 1.51 µs | 1.93 µs | 1.96 µs | +30% |
-| LowerChain/chain10 / chain100 | 7.2 / 145 µs | 9.0 / 162 µs | 9.0 / 163 µs | +24% / +13% |
-| ExecuteAction | 12.5 µs | 67.0 µs | 22.0 µs | +77% |
-| ExecuteActionFreshContext | 15.0 µs | 70.0 µs | 47.1 µs | +215% |
-| ActionLoop/for10 / for100 / for1000 | 12.9 / 87.5 / 825 µs | 65.7 / 149 / 973 µs | 22.6 / 107 / 935 µs | +76% / +22% / +13% |
-| ActionChain/chain10 / chain100 / chain1000 | 19.1 / 251 µs / 11.4 ms | 85.8 / 470 µs / 13.3 ms | 38.3 / 383 µs / 12.8 ms | +101% / +53% / +12% |
+| Analyze/synthetic | 808 ms | 1234 ms | 977 ms | +21% |
+| WorkspaceEdit/synthetic/reindex+diagnostics | 909 ms | 1424 ms | 1144 ms (±16%) | +26% |
+| REPLLoadFile | 1.14 s | 1.45 s | 1.19 s | +4% |
+| REPLSubmitSnippet | 1.02 s | 1.31 s | 1.04 s | +2% |
+| LowerActionGraph | 1.51 µs | 1.93 µs | 1.91 µs | +27% |
+| LowerChain/chain10 / chain100 | 7.2 / 145 µs | 9.0 / 162 µs | 9.0 / 162 µs | +25% / +12% |
+| ExecuteAction | 12.5 µs | 67.0 µs | 21.0 µs | +69% |
+| ExecuteActionFreshContext | 15.0 µs | 70.0 µs | 23.9 µs | +60% |
+| ActionLoop/for10 / for100 / for1000 | 12.9 / 87.5 / 825 µs | 65.7 / 149 / 973 µs | 21.8 / 98.0 / 850 µs | +69% / +12% / +3% |
+| ActionChain/chain10 / chain100 / chain1000 | 19.1 / 251 µs / 11.4 ms | 85.8 / 470 µs / 13.3 ms | 36.9 / 377 µs / 13.1 ms | +94% / +50% / +15% |
 | ExecuteState | 225 µs | 255 µs | 249 µs | +11% |
-| StateLoop/count50 / 500 / 5000 | 219 µs / 2.08 / 20.8 ms | 250 µs / 2.38 / 23.6 ms | 243 µs / 2.33 / 23.2 ms | +11% / +12% / +12% |
-| BatchConstraints | 4.48 ms | 16.5 ms | 6.35 ms | +42% |
-| SameConstraintManyInstances | 1.50 µs | 5.94 µs | 2.25 µs | +50% |
-| BatchSatisfy | 4.54 s | 7.14 s | 0.67 s | −85% |
-| Instantiate | 4.07 s | 6.55 s | 0.58 s | −86% |
-| FeaturesOf | 11.6 s | 12.0 s | 0.78 s | −93% |
-| GRPCEvaluate | 395 µs | 617 µs | 615 µs | +56% |
-| GRPCVerifyConstraint | 17.6 ms | 2398 ms | 183 ms | +943% |
+| StateLoop/count50 / 500 / 5000 | 219 µs / 2.08 / 20.8 ms | 250 µs / 2.38 / 23.6 ms | 246 µs / 2.34 / 30.1 ms (±23%) | +12% / +12% / (noisy) |
+| BatchConstraints | 4.48 ms | 16.5 ms | 6.02 ms | +34% |
+| SameConstraintManyInstances | 1.50 µs | 5.94 µs | 2.12 µs | +41% |
+| BatchSatisfy | 4.54 s | 7.14 s | 0.34 s | −93% |
+| Instantiate | 4.07 s | 6.55 s | 0.26 s | −94% |
+| FeaturesOf | 11.6 s | 12.0 s | 0.73 s | −94% |
+| GRPCEvaluate | 395 µs | 617 µs | 11.1 µs | −97% |
+| GRPCVerifyConstraint | 17.6 ms | 2398 ms | 12.4 ms | −29% |
+
+`GRPCVerifyConstraint` allocates half the bytes of 0.4.3 per request (4.2 vs
+9.0 MiB) but 5.6× as many objects (34 k vs 6 k): the subject's behaving parts
+are now materialized (finding 2), many small objects each, where 0.4.3 spent
+its bytes on one large resolver per request.
 
 ## Benchmarks: the other packages
 
 | package / benchmark | 0.4.3 | main | movement |
 | ------------------- | ----- | ---- | -------- |
-| `core/libs` DecodeSnapshot | — | — | +4.9% (p = 0.002; below threshold) |
-| `core/model` AnalyseUnresolved / AnalyseResolved | — | — | +1.8% / +2.8% |
-| `grpc` ParseFileColdInline | — | — | +6.2% wall; allocations unchanged |
+| `core/libs` DecodeSnapshot | 10.9 ms | 11.6 ms | +6.7% (±5%) |
+| `core/model` AnalyseUnresolved / AnalyseResolved | 17.4 ms / 844 µs | 18.1 ms / 886 µs | +4.1% / +5.0% |
+| `grpc` ParseFileColdInline | 12.8 ms | 13.3 ms | +3.4% wall; allocations +0.5% |
 | `grpc` ParseFileColdShared | — | — | unchanged |
 | `lsp` formatting benchmarks | absent | present | no comparison |
 
-`ParseFileColdInline` is the only movement above threshold here; it is the same
-diagnostics cost as the `Analyze` row above seen through the gRPC service (a
-cold parse runs the full pass registry) and is covered by the same finding.
+`ParseFileColdInline` and the `Analyse*` rows are the diagnostics cost of the
+`Analyze` row above seen through the gRPC service and the workspace (a cold
+parse runs the full pass registry) and are covered by the same finding.
 
 ## Whole-binary scaling
 
@@ -125,9 +135,9 @@ three runs each; wall seconds and maximum resident set.
 
 | elements | 0.4.3 | main | main+fix | main+fix vs 0.4.3 |
 | -------- | ----- | ---- | -------- | ----------------- |
-| 3 000 | 0.26 s / 105 MiB | 0.36 s / 145 MiB | 0.31 s / 129 MiB | +19% / +23% |
-| 6 000 | 0.53 s / 155 MiB | 0.72 s / 209 MiB | 0.62 s / 190 MiB | +17% / +23% |
-| 12 000 | 1.10–1.44 s / 266 MiB | 1.48–1.61 s / 336 MiB | 1.30 s / 321 MiB | +18% (against the 1.10 s best) / +21% |
+| 3 000 | 0.26 s / 105 MiB | 0.36 s / 145 MiB | 0.28 s / 118 MiB (+8% / +12%) |
+| 6 000 | 0.53 s / 155 MiB | 0.72 s / 209 MiB | 0.56 s / 172 MiB (+6% / +11%) |
+| 12 000 | 1.10–1.44 s / 266 MiB | 1.48–1.61 s / 336 MiB | 1.18 s / 291 MiB (+7% / +9%) |
 
 Scaling is still linear on both sides; the slope moved. The CPU profile of the
 12 000-element run on `main` attributes the whole difference to
@@ -186,7 +196,7 @@ is wrong, and the pilot validator should adjudicate.
 Ordered by size. Each names the cause, the responsible change, the measured
 cost, and its status.
 
-### 1. State-machine start scans the whole model — *partly fixed, open*
+### 1. State-machine start scans the whole model — *fixed*
 
 `RunStateMachine` went from a constant 8 µs to a cost linear in model size
 (992 µs at 4 000 elements). Commit `25fe8b9d` (*refuse `%state <machine>`
@@ -200,39 +210,81 @@ start. Two costs compounded:
 - `Scope.Members()` was called per scope, which deduplicates through a map and
   allocates the member slice; 70% of the allocation profile. **Fixed**: the
   walk now uses `Scope.ForEachMember`, skipping anonymous members exactly as
-  `Members()` did. Bytes per start are back to 8.6 KiB (from 401 KiB) and
-  wall drops 2.5×.
-- The walk itself is O(model) per start and is not cached. **Open.**
-  Proposed fix: index the exhibit usages once per session generation (a
-  `map[stateDef][]owner` built from the same walk and invalidated where
-  `Session.acceptFrom` rebuilds the index), so the lookup is O(1); or restrict
-  the walk to the scopes the resolver has already recorded as referring to the
-  definition. Either restores the constant-time start. Remaining cost:
-  +15 µs at 250 elements, +394 µs at 4 000.
+  `Members()` did. Bytes per start are back to 8.5 KiB (from 401 KiB) and
+  wall dropped 2.5× (403 µs at 4 000).
+- The walk itself was O(model) per start. **Fixed**: the session now builds an
+  `exhibitIndex` — every exhibited-state declaration keyed by the state
+  definition it exhibits, with the owner that exhibits it — once per runtime
+  context, from one walk of the documents, and `exhibitingTypes` reads it. The
+  index lives with the `runtime.Context` it was built for, so a submission
+  that rebuilds the context (any new declaration) drops it with the context;
+  a test proves the walk runs once across repeated starts and again after a
+  submission. Start is constant in model size again: 9.7 / 9.7 / 9.8 µs at
+  250 / 1 000 / 4 000 elements.
 
-### 2. Instantiation runs behaviors of the whole part tree — *explained / open*
+The remaining +1.5 µs against 0.4.3 is not the exhibitor search. The profile
+of the fixed start puts it in `Session.resolveObject`: since `25fe8b9d` the
+name given to `%state` is first read as an object reference (a held object's
+machine is driven in place rather than run detached), and when no object is
+held under it the session builds the `NotInstantiatedError` that names what to
+instantiate instead — a `lookupSymbol`, an `AllSupertypes` walk and the
+listing of held objects — before falling back to the symbol lookup. That is
+the object-first addressing the command was given, its cost is constant, and
+it is **explained**.
 
-`repl` `Instantiate` 3.1 → 11.7 µs (+270%); `perfbench`
-`ExecuteActionFreshContext` +215%; `GRPCEvaluate` +56%; and most of
-`GRPCVerifyConstraint` (below). Commit `37de3db2` (*read the instantiated
-object, run whole, after `-instantiate`*) added `materializeBehavingParts` and
-`runsBehaviors`: creating an object now materializes every required composite
-part whose type (transitively) runs a classifier behavior, so the object
-reaches quiescence as a whole. `runsBehaviors` memoizes its verdict per type
-within a `Context`, but reaching it walks `FeaturesOf` for every part type
-along the way, and `startBehaviorsOfAll` / `aliasRedefinedFeatureValues` run
-per created object. This is the semantics the fix was made for and the cost is
-proportional to the part tree, so it is **explained** for the REPL. For
-short-lived contexts it is **open** (finding 3).
+### 2. Instantiation: 3.7× per object — *fixed to the feature shape, rest explained*
 
-### 3. gRPC verification builds a fresh runtime per request — *partly fixed, open*
+`repl` `Instantiate` 3.1 → 11.7 µs (+270%) as found, 5.9 µs (+85%) after the
+fixes; `perfbench` `ExecuteActionFreshContext` +215% → +60%; `GRPCEvaluate`
++56% → −97%. The profile of the as-found benchmark put 41% of the time under
+`Context.Instantiate`, of which `materialize` was 33% and
+`aliasRedefinedFeatureValues` 7%; inside `materialize`, allocating one
+`FeatureValue` per feature and inserting it into the `FeatureValues` map was
+most of the cost, and the redefinition-group and behaving-part computations
+were redone per object.
 
-`GRPCVerifyConstraint` 17.6 ms → 2 398 ms as found; 183 ms after the fix
-below. `Service.newVerifyContext` creates a new `resolve.Resolver`,
+- **Fixed**: an object's `FeatureValue`s are allocated as one block (a
+  `[]FeatureValue` sized by `FeaturesOf`, pointers into it in the map), and
+  the map is pre-sized. Allocations per object 54 → 35.
+- **Fixed**: the redefinition groups `aliasRedefinedFeatureValues` derives
+  from a type's features, and the positions of the composite parts whose type
+  runs a behavior (`materializeBehavingParts`), are memoized per type in the
+  `Context` — both are functions of the type alone. Wall 11.7 → 5.9 µs.
+- The remainder is the object itself. Commit `c3baef7a` (*materialize Systems
+  and Domain library features on objects*, 2026-09-02) makes every object
+  carry the features its library supertypes declare: the benchmark's
+  `part def` — four declared features (`mass`, `power`, `sub`, `MassOK`) on
+  0.4.3 — materializes 17 on `main`, adding `ownedPorts`, `performedActions`,
+  `ownedActions`, `exhibitedStates`, `ownedStates`, `shape`,
+  `envelopingShapes`, `boundingShapes`, `voids`, `isSolid`, `subitems`,
+  `subparts` and `checkedConstraints` from `Parts::Part` / `Items::Item` /
+  `Occurrences::Occurrence` (the KerML/SysML rule that a classifier's
+  features are inherited by its instances; `%features` and gRPC feature
+  listings show them). Measured directly: the same benchmark against an
+  `attribute def` with four features and no library part supertypes runs
+  in 3.2–3.3 µs, 1.95 KiB and 27 allocations on the fixed code — at parity
+  with 0.4.3's 3.1 µs / 1.7 KiB / 29. The 13 extra feature values are
+  therefore the whole residual: ~2.7 µs and ~3.7 KiB per object, ~200 ns
+  and ~290 bytes per inherited feature. That is the intended behavior of
+  `c3baef7a` and is **explained**; making it cheaper means materializing
+  library features lazily on first read, which changes when their defaults
+  fold and is not a release-gate change.
+- Commit `37de3db2` (*read the instantiated object, run whole, after
+  `-instantiate`*) — `materializeBehavingParts` runs the classifier behaviors
+  of required composite parts on creation — contributes nothing measurable
+  here once the per-type verdicts are memoized; the benchmark's part has no
+  behaving parts. Where a type does, the cost is that of the parts created,
+  which is what the commit is for.
+
+### 3. gRPC verification builds a fresh runtime per request — *fixed*
+
+`GRPCVerifyConstraint` 17.6 ms → 2 398 ms as found; 183 ms after the first
+fix below; **12.4 ms** (−29% against 0.4.3) after the second.
+`Service.newVerifyContext` created a new `resolve.Resolver`,
 `semantics.Model` and `runtime.Context` per request (as it did on 0.4.3), so
-nothing runtime-side is memoized across requests. On 0.4.3 that was cheap
+nothing runtime-side was memoized across requests. On 0.4.3 that was cheap
 because verification instantiated only the subject. With finding 2 every
-request instantiates the subject's whole behaving part tree, which for the
+request instantiates the subject's behaving part tree, which for the
 synthetic model means computing `FeaturesOf` for most of the type graph from
 scratch — 87 MB and 526 k allocations per request, and a GC that spends a
 quarter of the profile scanning the cached model.
@@ -246,14 +298,30 @@ quarter of the profile scanning the cached model.
   fallback for scopes re-owned by another declaration (metadata bodies).
   `FeaturesOf` −93%, `perfbench` `Instantiate` −86% and `BatchSatisfy` −85%
   against 0.4.3; `GRPCVerifyConstraint` 13×.
-- The remaining 10× is the per-request `Context`. **Open.** Proposed fix: hold
-  one `semantics.Model` + resolver per cached model hash (both are immutable
-  side tables over an immutable index, so sharing is sound) and derive
-  `FeaturesOf`/`runsBehaviors` from the model rather than the context, or
-  keep a per-hash `runtime.Context` template whose type-level caches are
-  copied into the request context. Either amortizes the type-graph work across
-  requests; neither belongs in a release-gate change because the service's
-  cache eviction and the `Context` lifetime contract need a design pass.
+- The remaining 10× was the per-request `Context`. **Fixed**: each
+  `CachedModel` now owns one `resolve.Resolver` and one `semantics.Model`
+  (`runtimeSemantics`), built on first use and shared by every request
+  against that content hash; they are side tables over the immutable index,
+  so sharing is sound, and they are evicted with the model. Access is
+  serialized with a mutex — the resolver and model memoize on read — and a
+  request's diagnostics are truncated from the shared resolver on release, so
+  one request's unresolved name never reaches another's answer (a concurrent
+  test under `-race` covers this). The `runtime.Context`, its instances and
+  all evaluation state stay per request. With `MembersOf` and the shape
+  features memoized in the semantics model itself (below), the type-graph
+  work is paid once per model rather than once per request: 4.2 MiB per
+  request against 0.4.3's 9.0.
+- Carrier-only instantiation was asked for and is not needed: `Instantiate`
+  already materializes only the subject's own feature values and the
+  composite parts whose type runs a classifier behavior (finding 2);
+  everything else is created on first read. The behaving parts are the one
+  thing a constraint on the carrier can observe that a lazy part would get
+  wrong (their state after their behavior ran), so they stay.
+- `semantics.Model` now memoizes `MembersOf` (per type and view) and
+  `ShapeFeatures`, once `MemberSourcesStable` reports the type's supertype
+  closure settled; the runtime's own per-context member cache was removed in
+  favor of it. This is the same memoization the model already applied to
+  `memberSources` and constructor slots, moved one level up.
 
 ### 4. `MembersOf` recomputed per action frame — *partly fixed, explained*
 
@@ -267,31 +335,31 @@ starts*) build a frame per node performance and, in `newRootFrame` →
 allocation profile. `effectiveMembers` (constraint evaluation) and
 `operationOf` did the same per evaluation.
 
-- **Fixed**: `Context.membersOf` memoizes `Model.MembersOf` per type for the
-  life of the context (the model is fixed for that life; callers only read the
-  list). A view the semantics model itself declines to memoize — one enumerated
-  while a reference or supertype it depends on is still resolving
-  (`Model.MemberSourcesStable`) — is not cached either. `ExecuteAction`
-  67 → 22 µs, `BatchConstraints` 16.5 → 6.4 ms, `SameConstraintManyInstances`
-  5.9 → 2.2 µs.
+- **Fixed**: `semantics.Model` memoizes `MembersOf` per type and view (callers
+  only read the list). A view enumerated while a reference or supertype it
+  depends on is still resolving (`Model.MemberSourcesStable`) is not cached.
+  `ExecuteAction` 67 → 21 µs, `BatchConstraints` 16.5 → 6.0 ms,
+  `SameConstraintManyInstances` 5.9 → 2.1 µs.
 - Also in `lookupSubaction`, every name read during evaluation resolved
   through the resolver before checking whether any action performance was on
   the stack; for constraint and calc evaluation none ever is. **Fixed**: the
   resolver lookup is skipped when no frame carries a performance, which is
   exactly the case in which the function returned "not declared" regardless.
-- The rest (+77% on `ExecuteAction`, +13% at `for1000`) is the per-node frame
+- The rest (+69% on `ExecuteAction`, +3% at `for1000`) is the per-node frame
   itself: a `performances` entry, its pin table and direction map per node
   performance instead of per action. That is the data the nested-frame feature
   exists to keep and is **explained**; the amortized cost at 1 000 iterations
-  is ~110 ns per node.
+  is ~25 ns per node.
 
-### 5. New validation passes on the load path — *partly fixed, explained*
+### 5. New validation passes on the load path — *fixed where algorithmic, rest explained*
 
 `LoadModel` +30–36%, `Analyze/synthetic` +53%,
 `WorkspaceEdit/reindex+diagnostics` +57%, `REPLLoadFile` +28%, and the whole
-of the whole-binary slope. `internal/core/passes` gained ten files and 61
+of the whole-binary slope, as found. After the fixes: `LoadModel` +7–11%,
+`Analyze/synthetic` +21%, `reindex+diagnostics` +26% (±16%), `REPLLoadFile`
++4%, `REPLSubmitSnippet` +2%. `internal/core/passes` gained ten files and 61
 commits in the interval; the CPU profile of the 12 000-element validation
-puts 0.30 s of the 0.35 s difference in one of them, `ControlNodeSuccessionPass`
+put 0.30 s of the 0.35 s difference in one of them, `ControlNodeSuccessionPass`
 (commit `279408b8`, *validate control-node successions and owning type*),
 whose `semantics.Model.ActionSuccessions` built the set of visible members of
 every action (`MembersOf`, which reaches through the library `Action`
@@ -299,45 +367,68 @@ supertypes) before looking at any inherited succession.
 
 - **Fixed**: the visible-member set is built only when an inherited succession
   is actually named — the only case that consults it. The pass drops from
-  0.30 s to 0.16 s on the 12 000-element model; `LoadModel` from +30–36% to
-  +14–16%, whole-binary validation from +33–41% to +17–19%.
-- The remainder is the new rules doing their work (control-node succession
-  counting still reads inherited successions; type-check and constraint tiers
-  grew by a few percent each) and is **explained**. A cheaper
-  `ActionSuccessions` would memoize the per-action result in the semantics
-  model's side tables, as `MembersOf` is; the pass and the runtime lowering
-  both call it for the same actions.
+  0.30 s to 0.16 s on the 12 000-element model.
+- **Fixed**: even then, the check was O(members) per named succession — a
+  full `MembersOf` enumeration into a set, for every action that inherits a
+  named succession, i.e. O(actions × members). `Model.HasMember` now answers
+  the question by walking the same member order and stopping at the first
+  hit (or reading the memoized member list when one exists); a test proves
+  it agrees with `MembersOf` on inherited, name-masked and redefined members.
+- **Fixed**: `MemberSources` — the supertype closure every member query
+  starts from — recomputed a type's direct contributors (supertypes, implicit
+  base, referenced feature) on every call; they are memoized per type under
+  the same stability guard `MemberSources` itself uses, so a closure still
+  being resolved is never pinned. In the `LoadModel/elements=4000` profile
+  `ControlNodeSuccessionPass` is now 2.8% of the total (was 7.7% after the
+  first fix, ~20% as found); `MemberSources` 6.4% → 2.6%.
+- The remainder is not algorithmic. The fixed profile is 22% parser, 14.5%
+  name resolution and 43.5% `Workspace.Diagnostics`, and inside diagnostics
+  every pass is linear in the model; the extra 7–11% over 0.4.3 is spread
+  across the passes added in the interval (control-node successions,
+  feature-value overriding, feature accessibility, the nonstandard-notation
+  scan, and the type-check tier's new rules), each reading its subjects once.
+  That is the rules doing their work and is **explained**.
 
 ### 6. Smaller movements — *explained*
 
-- `LowerActionGraph` +30%, `LowerChain/chain10` +24%: lowering now records
+- `LowerActionGraph` +27%, `LowerChain/chain10` +25%: lowering now records
   the per-node performance data of finding 4; absolute cost 0.4 µs per graph.
 - `ExecuteState` / `StateLoop` +11–12%: a constant per step that the fixes
   here do not move; the profile spreads it over the state executor's
-  transition handling rather than one function.
-- `RunCalc` +6%: 0.12 µs per call, unchanged by the fixes here; below the
-  size at which a profile separates it from the runtime's frame set-up.
+  transition handling rather than one function. `StateLoop/count5000` read
+  +45% in the final run with a ±23% spread (one of six runs hit a GC cycle);
+  its 50 and 500 rows, at ±1%, are the +12% of the other rows.
+- `RunCalc` +4.5%: 0.09 µs per call; below threshold.
 - `sysml --version` +1.4 ms: binary size and protobuf initialisers, above.
-- `core/libs` `DecodeSnapshot` +4.9%, `core/model` `Analyse*` +2–3%,
-  `Parse/synthetic` +2.5%: significant but below threshold; the snapshot
-  grew with the library index fields the new passes read.
+- Empty-session load +15 µs (+6%): a constant, independent of model size
+  (+8 µs of it was already there as found); below the size a profile
+  separates from session set-up.
+- `core/libs` `DecodeSnapshot` +6.7% (±5%), `core/model` `Analyse*` +4–5%,
+  `Parse/synthetic` +3.8%: at or below threshold; the snapshot grew with the
+  library index fields the new passes read.
 
 ## Verdict
 
-`main` is not on par with 0.4.3. Loading and validating a model is 14–19%
-slower and allocates ~20% more; starting a state machine costs time linear in
-model size where it was constant; instantiation is 3.7× slower per object; and
-the gRPC verification request, which rebuilds its runtime per call, is 10×
-slower even after the fixes here. Parsing, indexing, name resolution, the
-diagnostics benchmarks, empty-session load and the live heap are unchanged.
-None of the movements is a leak or a wrong algorithm in the sense of the
-census: each is a feature or rule landed in the interval whose price was not
-measured. The four fixes in this change recover roughly half of the load-path
-cost and most of the action/constraint-evaluation cost and remove a pre-existing
-quadratic step in `FeaturesOf`; the two open items (finding 1's per-start
-scan and finding 3's per-request runtime) have proposed fixes and should be
-taken before 0.5 is tagged if the REPL's state-machine start or the gRPC
-verification latency are release criteria.
+As found, `main` was not on par with 0.4.3: loading and validating a model
+was 30–36% slower, starting a state machine cost time linear in model size
+where it was constant, instantiation was 3.7× slower per object, and the gRPC
+verification request was 136× slower. None of the movements was a leak or a
+wrong algorithm in the sense of the census: each was a feature or rule landed
+in the interval whose price was not measured.
+
+With the fixes in this change, `main` is on par with or ahead of 0.4.3 on
+everything that is not new work, and the new work is priced. State-machine
+start is constant again (9.7 µs against 8.2; the 1.5 µs is the object-first
+addressing of `%state`). gRPC verification is 29% faster than 0.4.3 while
+doing more (it materializes the subject's behaving parts). Computing a type's
+features, `-instantiate` and `%satisfy` over a large model, and `GRPCEvaluate`
+are 15–35× faster, because a quadratic step 0.4.3 also had is gone.
+Loading is 7–11% slower and allocates 6% more, all of it in the validation
+passes added since 0.4.3, none of it algorithmic. Instantiating one object is
++85%, all of it the 13 library features an object now carries. Action
+performance is +69% per start (a frame per node) but +3% at a thousand
+iterations. Parsing, indexing, name resolution, diagnostics and the live heap
+are unchanged.
 
 ## Reproducing
 
