@@ -1,0 +1,269 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="ThenPastNonFeatures" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Step"))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Widget"))
+      (Membership visibility="default"
+        (Definition kind="metadata" abstract=false variation=false name="Note"))
+      (Membership visibility="default"
+        (Package name="Library" library=false standard=false
+          (Membership visibility="default"
+            (Definition kind="attribute" abstract=false variation=false name="Marker"))))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterDoc"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Documentation locale=""))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="a" target="b")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterComment"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Comment about="" locale=""))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="a" target="b")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterCommentAbout"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Comment about="a" locale=""))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="a" target="b")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterRepresentation"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (TextualRepresentation language="\"text\"" name="inOtherWords"))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="a" target="b")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterImport"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Import visibility="private" all=false kind=namespace recursive=false imported="Library" filtered=false)
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="a" target="b")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterAlias"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Alias visibility="default" name="Bump" for="Step")
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="a" target="b")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterNestedPartDef"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Definition kind="part" abstract=false variation=false name="Inner"))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="a" target="b")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterNestedActionDef"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Definition kind="action" abstract=false variation=false name="InnerStep")
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="a" target="b")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterNestedPackage"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Package name="Inner" library=false standard=false))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="a" target="b")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterMultiplicity"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (MultiplicityDecl name="m" subsets=""
+              (Multiplicity range=false
+                (LiteralInteger value="1"))))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="a" target="b")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterSeveral"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Documentation locale=""))
+          (Membership visibility="default"
+            (Definition kind="part" abstract=false variation=false name="Inner"))
+          (Import visibility="private" all=false kind=namespace recursive=false imported="Library" filtered=false)
+          (Membership visibility="default"
+            (Comment about="a" locale=""))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="a" target="b")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterMetadataAbout"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="metadata" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Note
+                (*ast.QualifiedName))
+              (Relationship kind="about" target=a
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="@metadata" target="b")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterMetadataPrefix"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (PrefixMetadata type="Note"))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="@*ast.PrefixMetadata" target="b")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterAttribute"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="k" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=ScalarValues::Integer
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="k" target="b")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterPart"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="p" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Widget
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="p" target="b")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterAction"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="a" target="b")))
+      (Membership visibility="default"
+        (Definition kind="state" abstract=false variation=false name="Lamp"
+          (SubstateMember name="on")
+          (Documentation locale="")
+          (SubstateMember name="off")
+          (SuccessionEdge source="on" target="off")
+          (DeferMember
+            (*ast.QualifiedName))
+          (SubstateMember name="broken")
+          (SuccessionEdge source="off" target="broken")))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Structural"
+          (Membership visibility="default"
+            (Usage kind="part" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Widget
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Documentation locale=""))
+          (Membership visibility="default"
+            (Definition kind="part" abstract=false variation=false name="Inner"))
+          (Membership visibility="default"
+            (Usage kind="part" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Widget
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="a" target="b")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="ThenAlone"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Documentation locale=""))
+          (SuccessionEdge source="a" target="b")
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName)))))))))
