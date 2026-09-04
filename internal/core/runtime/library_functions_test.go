@@ -1075,12 +1075,6 @@ func TestUnevaluableLibraryFunctionsNameThemselves(t *testing.T) {
 		{"ControlFunctions::.", []Value{constInt(1)}},
 		{"DataFunctions::~", []Value{constInt(1)}},
 		{"ScalarFunctions::~", []Value{constInt(1)}},
-		{"OccurrenceFunctions::===", []Value{constInt(1), constInt(1)}},
-		{"OccurrenceFunctions::isDuring", []Value{constInt(1)}},
-		{"OccurrenceFunctions::create", []Value{constInt(1)}},
-		{"OccurrenceFunctions::destroy", []Value{constInt(1)}},
-		{"OccurrenceFunctions::addNew", []Value{constInt(1), constInt(1)}},
-		{"OccurrenceFunctions::addNewAt", []Value{constInt(1), constInt(1), constInt(1)}},
 	}
 
 	for _, tc := range unevaluable {
@@ -1096,9 +1090,24 @@ func TestUnevaluableLibraryFunctionsNameThemselves(t *testing.T) {
 	}
 }
 
-// An unevaluable declaration keeps its multiplicities: `group [0..*]` may be
-// omitted by name, a missing required `occ`/`index` is an arity error first.
-func TestUnevaluableOccurrenceFunctionArity(t *testing.T) {
+// applyBuiltin binds args to a built-in's declared parameters as a direct
+// invocation does and applies it in a context with no caller.
+func applyBuiltin(t *testing.T, name string, args calcArgs) (Value, error) {
+	t.Helper()
+	fn, ok := builtins[name]
+	if !ok {
+		t.Fatalf("%s is not registered", name)
+	}
+	bound, err := bindBuiltinValues(name, args)
+	if err != nil {
+		return Value{}, err
+	}
+	return fn(NewEvalContext(libCtx(t), nil), bound)
+}
+
+// TestOccurrenceFunctionArity pins arity before binding: `group [0..*]` may be
+// omitted, a missing `occ`/`index` is an arity error, a data value is no occurrence.
+func TestOccurrenceFunctionArity(t *testing.T) {
 	one := constInt(1)
 	for _, tc := range []struct {
 		fn   string
@@ -1107,24 +1116,37 @@ func TestUnevaluableOccurrenceFunctionArity(t *testing.T) {
 	}{
 		{"OccurrenceFunctions::addNew", calcArgs{positional: []Value{one}}, ErrCalcArity},
 		{"OccurrenceFunctions::addNew", calcArgs{named: map[string]Value{"group": one}}, ErrCalcArity},
-		{"OccurrenceFunctions::addNew", calcArgs{named: map[string]Value{"occ": one}}, ErrUnevaluableLibraryFunction},
-		{"OccurrenceFunctions::addNew", calcArgs{positional: []Value{one, one}}, ErrUnevaluableLibraryFunction},
+		{"OccurrenceFunctions::addNew", calcArgs{named: map[string]Value{"occ": one}}, ErrNotAnOccurrence},
+		{"OccurrenceFunctions::addNew", calcArgs{positional: []Value{one, one}}, ErrNotAnOccurrence},
 		{"OccurrenceFunctions::addNewAt", calcArgs{positional: []Value{one, one}}, ErrCalcArity},
 		{"OccurrenceFunctions::addNewAt", calcArgs{named: map[string]Value{"occ": one}}, ErrCalcArity},
 		{"OccurrenceFunctions::addNewAt", calcArgs{named: map[string]Value{"group": one, "index": one}}, ErrCalcArity},
-		{"OccurrenceFunctions::addNewAt", calcArgs{named: map[string]Value{"occ": one, "index": one}}, ErrUnevaluableLibraryFunction},
-		{"OccurrenceFunctions::addNewAt", calcArgs{positional: []Value{one, one, one}}, ErrUnevaluableLibraryFunction},
+		{"OccurrenceFunctions::addNewAt", calcArgs{named: map[string]Value{"occ": one, "index": one}}, ErrNotAnOccurrence},
+		{"OccurrenceFunctions::addNewAt", calcArgs{positional: []Value{one, one, one}}, ErrNotAnOccurrence},
 		{"OccurrenceFunctions::create", calcArgs{}, ErrCalcArity},
-		{"OccurrenceFunctions::destroy", calcArgs{}, ErrUnevaluableLibraryFunction},
+		{"OccurrenceFunctions::create", calcArgs{positional: []Value{one}}, ErrNotAnOccurrence},
+		{"OccurrenceFunctions::isDuring", calcArgs{}, ErrCalcArity},
+		{"OccurrenceFunctions::isDuring", calcArgs{positional: []Value{one}}, ErrNotAnOccurrence},
+		{"OccurrenceFunctions::destroy", calcArgs{positional: []Value{one}}, ErrNotAnOccurrence},
+		{"OccurrenceFunctions::===", calcArgs{positional: []Value{one, one}}, ErrNotAnOccurrence},
+		{"OccurrenceFunctions::===", calcArgs{positional: []Value{one, one, one}}, ErrCalcArity},
 	} {
-		fn, ok := libraryFunctionByName(tc.fn)
-		if !ok {
-			t.Fatalf("%s is not registered", tc.fn)
-		}
-		_, err := fn.invoke(libCtx(t), tc.args)
+		_, err := applyBuiltin(t, tc.fn, tc.args)
 		if !errors.Is(err, tc.want) {
 			t.Errorf("%s(%+v) error = %v, want %v", tc.fn, tc.args, err, tc.want)
 		}
+		if errors.Is(err, ErrNotAnOccurrence) && !strings.Contains(err.Error(), writtenName(tc.fn)) {
+			t.Errorf("%s(%+v) error %q does not name the function", tc.fn, tc.args, err)
+		}
+	}
+
+	// `destroy` of nothing destroys nothing; `'==='` of nothing with nothing holds.
+	if got, err := applyBuiltin(t, "OccurrenceFunctions::destroy", calcArgs{}); err != nil || !isEmptyValue(got) {
+		t.Errorf("destroy() = %v, %v; want nothing", got, err)
+	}
+	nothing := calcArgs{positional: []Value{emptySequence(), emptySequence()}}
+	if got, err := applyBuiltin(t, "OccurrenceFunctions::===", nothing); err != nil || got.Kind != ValConst || !got.Const.Bool {
+		t.Errorf("===((), ()) = %v, %v; want true", got, err)
 	}
 }
 

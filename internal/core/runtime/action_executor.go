@@ -111,6 +111,9 @@ func newActionExecutorForOccurrence(
 	if action.Kind != symbols.SymbolActionUsage && action.Kind != symbols.SymbolActionDef {
 		return nil, fmt.Errorf("symbol %s is not an action", action.Name)
 	}
+	if err := ctx.checkPerformer(self); err != nil {
+		return nil, err
+	}
 
 	// A usage stating no body of its own performs the body of the action it
 	// names — the definition typing it — as a classifier behavior binding does.
@@ -715,6 +718,33 @@ func (e *ActionExecutor) hasFlow() bool {
 	return e.graph != nil && e.graph.Initial != nil
 }
 
+// completeWithoutFlow completes an action stating no flow: it performs no step,
+// so its performance begins, takes its inputs, and ends at once.
+func (e *ActionExecutor) completeWithoutFlow() error {
+	e.ctx.beginPerformanceLife(e.occurrence, e.ctx.newActivation())
+	if err := e.bindInputs(); err != nil {
+		return err
+	}
+	e.state = StateCompleted
+	e.ctx.endPerformanceLife(e.occurrence)
+	return nil
+}
+
+// bindInputs writes the supplied inputs into the performance, then the
+// attributes it declares: a default written in terms of an input reads it.
+func (e *ActionExecutor) bindInputs() error {
+	if err := e.checkInputNames(); err != nil {
+		return err
+	}
+	if err := e.setFrameFeatures(e.root, e.inputs); err != nil {
+		return err
+	}
+	if err := e.initializeAttributes(); err != nil {
+		return fmt.Errorf("initialize attributes: %w", err)
+	}
+	return nil
+}
+
 // parameterDirection reports the direction of the parameter of this name, and
 // whether the action declares one.
 func (e *ActionExecutor) parameterDirection(name string) (ast.FeatureDirection, bool) {
@@ -773,16 +803,9 @@ func (e *ActionExecutor) initialize() error {
 	}
 
 	initialNode := e.graph.Initial
-
-	// Bind the supplied inputs first: a default written in terms of one reads it.
-	if err := e.checkInputNames(); err != nil {
+	e.ctx.beginPerformanceLife(e.occurrence, e.ctx.newActivation())
+	if err := e.bindInputs(); err != nil {
 		return err
-	}
-	if err := e.setFrameFeatures(e.root, e.inputs); err != nil {
-		return err
-	}
-	if err := e.initializeAttributes(); err != nil {
-		return fmt.Errorf("initialize attributes: %w", err)
 	}
 
 	// Spawn initial token
@@ -930,6 +953,7 @@ func (e *ActionExecutor) retireToken(tokenIdx int) error {
 		e.removeToken(tokenIdx)
 		if len(e.tokens) == 0 {
 			e.state = StateCompleted
+			e.ctx.endPerformanceLife(e.occurrence)
 		}
 		return nil
 	}
