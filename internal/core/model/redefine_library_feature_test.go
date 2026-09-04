@@ -73,6 +73,35 @@ func TestFlowEndsRedefineImplicitMessageEnds(t *testing.T) {
 	}
 }
 
+// TestFlowEndsRedefineLibraryMessageEnds covers a flow whose ends borrow names
+// other than source/target: each still redefines the library end at its
+// position, reached through both general flows (Flows::Message :> MessageAction, Transfer).
+func TestFlowEndsRedefineLibraryMessageEnds(t *testing.T) {
+	ws := NewWorkspace()
+	src := `package test {
+	action battery {
+		out attribute output { attribute voltage; }
+	}
+	action resister {
+		in attribute input { attribute voltage; }
+	}
+	flow {
+		end ::> battery {
+			attribute :>> sourceOutput :>> output.voltage;
+		}
+		end ::> resister {
+			attribute :>> targetInput :>> input.voltage;
+		}
+	}
+}`
+	ws.Open("test.sysml", []byte(src), 1)
+	defer ws.Close("test.sysml")
+
+	if diags := ws.Diagnostics("test.sysml"); len(diags) != 0 {
+		t.Errorf("unexpected diagnostics: %v", diags)
+	}
+}
+
 func TestFlowEndsDoNotCrossImplicitMessageEnds(t *testing.T) {
 	ws := NewWorkspace()
 	src := `package test {

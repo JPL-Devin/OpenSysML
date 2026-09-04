@@ -410,3 +410,39 @@ func TestConnectorEndAttachments(t *testing.T) {
 		t.Fatalf("tri: %d attachments, want three", len(got))
 	}
 }
+
+// TestEndsInheritedThroughSeveralGenerals covers a connector that specializes
+// two connectors: its ends redefine the end at their position in each general,
+// and an inherited end that another inherited end redefines counts once.
+func TestEndsInheritedThroughSeveralGenerals(t *testing.T) {
+	m, root := buildModel(t, `package P {
+		part def A;
+		part def B;
+		connection def Base {
+			end [1] part a : A;
+			end [1] part b : B;
+		}
+		connection def Refined :> Base {
+			end [1] part a2 : A :>> Base::a;
+			end [1] part b2 : B :>> Base::b;
+		}
+		connection def Both :> Refined, Base;
+		part w {
+			part x : A;
+			part y : B;
+			connection : Both connect x to y;
+		}
+	}`)
+	p := sym(t, root, "P")
+	both := nested(t, p.Scope, "Both")
+	refined := nested(t, p.Scope, "Refined")
+	if ends := m.endsOf(both); len(ends) != 2 ||
+		ends[0] != nested(t, refined.Scope, "a2") || ends[1] != nested(t, refined.Scope, "b2") {
+		t.Fatalf("endsOf(Both) = %v, want [Refined::a2 Refined::b2]", ends)
+	}
+	conn := connector(t, nested(t, p.Scope, "w").Scope)
+	atts := m.ConnectorEndAttachments(conn)
+	if len(atts) != 2 || atts[0].Name != "a2" || atts[1].Name != "b2" {
+		t.Fatalf("ConnectorEndAttachments = %+v, want ends named a2 and b2", atts)
+	}
+}

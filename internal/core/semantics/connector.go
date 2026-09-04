@@ -72,10 +72,8 @@ func ownedEnds(sym *symbols.Symbol) []*symbols.Symbol {
 	return out
 }
 
-// endsOf returns the effective ends of the connector sym: its owned ends, in
-// declaration order, followed by the ends it inherits and does not redefine.
-// As with parameters, only a single general connector may leave ends
-// inherited. The result is memoized.
+// endsOf returns the effective ends of the connector sym: its owned ends in
+// declaration order, then the unredefined ends of each general. Memoized.
 func (m *Model) endsOf(sym *symbols.Symbol) []*symbols.Symbol {
 	if cached, ok := m.ends[sym]; ok {
 		return cached
@@ -100,16 +98,51 @@ func (m *Model) endsOf(sym *symbols.Symbol) []*symbols.Symbol {
 	owned := ownedEnds(sym)
 	out := owned
 
-	if general := m.generalConnectorEnds(sym); len(general) > 0 {
+	var inherited []*symbols.Symbol
+	contributing := 0
+	for _, sup := range m.DirectSupertypes(sym) {
+		if !m.isConnectorLike(sup) {
+			continue
+		}
+		general := m.endsOf(sup)
+		if len(general) == 0 {
+			continue
+		}
+		contributing++
 		claimed := claimedEnds(owned, general)
 		for i, end := range general {
 			if !endClaimed(end, i, owned, claimed) {
-				out = append(out, end)
+				inherited = append(inherited, end)
 			}
 		}
 	}
+	if contributing > 1 {
+		inherited = m.unmaskedEnds(inherited)
+	}
+	out = append(out, inherited...)
 
 	m.ends[sym] = out
+	return out
+}
+
+// unmaskedEnds drops duplicates and ends redefined by another end in the list,
+// so one feature inherited through several generals counts once.
+func (m *Model) unmaskedEnds(ends []*symbols.Symbol) []*symbols.Symbol {
+	masked := make(map[*symbols.Symbol]bool)
+	for _, end := range ends {
+		for _, redefined := range m.AllRedefinedFeatures(end) {
+			masked[redefined] = true
+		}
+	}
+	seen := make(map[*symbols.Symbol]bool)
+	out := make([]*symbols.Symbol, 0, len(ends))
+	for _, end := range ends {
+		if end != nil && (masked[end] || seen[end]) {
+			continue
+		}
+		seen[end] = true
+		out = append(out, end)
+	}
 	return out
 }
 
@@ -498,7 +531,6 @@ func (m *Model) ConnectorEndAttachments(sym *symbols.Symbol) []ConnectorEndAttac
 	}
 	usage := sym.Decl.(*ast.Usage)
 	owned := ownedEnds(sym)
-	general := m.generalConnectorEnds(sym)
 
 	out := make([]ConnectorEndAttachment, 0, len(usage.ConnectorEnds))
 	for i, end := range usage.ConnectorEnds {
@@ -506,11 +538,12 @@ func (m *Model) ConnectorEndAttachments(sym *symbols.Symbol) []ConnectorEndAttac
 			continue
 		}
 		att := ConnectorEndAttachment{Attachment: end.AttachedTarget(), End: end}
+		general := m.generalEndAt(sym, i)
 		switch {
 		case i < len(owned) && owned[i] != nil:
 			att.Name, att.EndFeature = leafName(owned[i].Name), owned[i]
-		case i < len(general) && general[i] != nil:
-			att.Name, att.EndFeature = leafName(general[i].Name), general[i]
+		case general != nil:
+			att.Name, att.EndFeature = leafName(general.Name), general
 		case len(usage.ConnectorEnds) == 2:
 			att.Name = binaryConnectorEndNames[i]
 		}
@@ -540,23 +573,16 @@ func (m *Model) FlowEndAttachments(sym *symbols.Symbol) []FlowEndAttachment {
 	return out
 }
 
-// generalConnectorEnds returns the effective ends of the connector sym
-// specializes, which its own ends redefine by position. As with parameters,
-// only a single general connector may supply them, and a general whose ends are
-// not enumerable — a library declaration indexed without its body — supplies
-// none.
-func (m *Model) generalConnectorEnds(sym *symbols.Symbol) []*symbols.Symbol {
-	var generals [][]*symbols.Symbol
+// generalEndAt returns the end at position i of the first connector sym
+// specializes that has one there, which sym's end at that position redefines.
+func (m *Model) generalEndAt(sym *symbols.Symbol, i int) *symbols.Symbol {
 	for _, sup := range m.DirectSupertypes(sym) {
 		if !m.isConnectorLike(sup) {
 			continue
 		}
-		if ends := m.endsOf(sup); len(ends) > 0 {
-			generals = append(generals, ends)
+		if ends := m.endsOf(sup); i < len(ends) && ends[i] != nil {
+			return ends[i]
 		}
 	}
-	if len(generals) != 1 {
-		return nil
-	}
-	return generals[0]
+	return nil
 }

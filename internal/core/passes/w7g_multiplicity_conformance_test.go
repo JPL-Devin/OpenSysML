@@ -103,12 +103,12 @@ func TestW7GEndAndNonEndFeaturesAreNotCompared(t *testing.T) {
 		part def P {
 			part parts[0..4];
 			connection c {
-				end p1[0..*] references parts;
-				end p2[0..*] references parts;
+				end p1[0..*] subsets parts;
+				end p2[0..*] subsets parts;
 			}
 		}
 	}`
-	if diags := constraintDiags(t, src); len(diags) != 0 {
+	if diags := multiplicityDiags(t, src, "subsetting-multiplicity"); len(diags) != 0 {
 		t.Fatalf("an end subsetting a non-end is exempt in the reference, got %v", diags)
 	}
 }

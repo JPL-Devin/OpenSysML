@@ -15,6 +15,6 @@ package BinaryConnector {
 		connector e ::> eng to tanks.main;
 		connector e references eng to tanks.main;
 		connector link from eng to tanks.main;
-		connector typed : Links::BinaryLink from eng to tanks.main;
+		connector binary : Links::BinaryLink from eng to tanks.main;
 	}
 }
