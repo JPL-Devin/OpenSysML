@@ -14,6 +14,7 @@ func DefaultRegistry() *Registry {
 	reg := NewRegistry()
 	reg.Register(SyntaxPass{})
 	reg.Register(ImportVisibilityPass{})
+	reg.Register(EnumerationBodyPass{})
 	reg.Register(NonstandardNotationPass{})
 	reg.Register(NameResolutionPass{})
 	reg.Register(StateTransitionPass{})
