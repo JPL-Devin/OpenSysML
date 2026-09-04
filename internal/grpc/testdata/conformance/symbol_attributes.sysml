@@ -5,7 +5,7 @@ package demo {
 	private import ScalarValues::*;
 
 	part def Base {
-		attribute mass : ISQ::MassValue = 1500.0 [SI::kg];
+		attribute mass : ISQ::MassValue default = 1500.0 [SI::kg];
 		attribute label : String = "base";
 		attribute inheritedOnly : Integer = 3;
 	}

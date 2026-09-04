@@ -47,9 +47,9 @@ func TestAliasSupertypeInheritanceWithGeometryAndUnits(t *testing.T) {
 		private import ShapeItems::CircularCylinder;
 		private import SI::mm;
 		part def AvionicsLRU :> Box {
-			:>> length = 100 [mm];
-			:>> width = 50 [mm];
-			:>> height = 20 [mm];
+			:>> length default = 100 [mm];
+			:>> width default = 50 [mm];
+			:>> height default = 20 [mm];
 		}
 		part def MountingBushing :> CircularCylinder {
 			:>> radius = 5 [mm];

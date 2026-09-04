@@ -86,6 +86,7 @@ func (cc *constraintChecker) check(sym *symbols.Symbol) {
 	cc.checkW10BCrossFeatures(sym)
 	cc.checkSubsettingFeaturingTypes(sym)
 	cc.checkUnnamedRedefinitionValue(sym)
+	cc.checkFeatureValueOverriding(sym)
 	cc.checkVariantOutsideVariation(sym)
 	cc.checkViewSatisfyTarget(sym)
 	cc.checkAtMostOneMember(sym)
@@ -247,10 +248,9 @@ func (cc *constraintChecker) checkMultiplicityRange(sym *symbols.Symbol) {
 	if !evaluable || valid {
 		return
 	}
-	u, isUsage := sym.Decl.(*ast.Usage)
 	span := sym.DeclSpan
-	if isUsage && u.Multiplicity != nil {
-		span = u.Multiplicity.Span()
+	if mult := semantics.UsageMultiplicityOf(sym); mult != nil {
+		span = mult.Span()
 	}
 	cc.diags = append(cc.diags, Diagnostic{
 		Severity: SeverityError,

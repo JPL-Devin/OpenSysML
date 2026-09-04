@@ -75,7 +75,7 @@ systematically from four sources, one subdirectory each:
    `Feature_invalid_noType.kerml.xt`) only error in a library-less resource set — with the
    standard library loaded, `feature f;` gets an implicit type and is legal — so only
    library-independent expectations became cases.
-4. **`semantic/` — the pilot validators' named constraints** (97 cases). The pinned
+4. **`semantic/` — the pilot validators' named constraints** (98 cases). The pinned
    `KerMLValidator` and `SysMLValidator` implement 217 named `validate*` constraints
    (`validate<Metaclass><Rule>`, the names of the specification's own constraint clauses), and
    before this source only the 34 `xpect/` cases tested any of them. Each case here is one minimal
@@ -89,7 +89,10 @@ systematically from four sources, one subdirectory each:
    an existing case where an `xpect/` or `grammar/` case already violates the rule (their headers
    now cite the `validate*` name), a new minimal model here otherwise — giving 45 `.sysml` cases
    (`s01`–`s45`); the full mapping is the [constraint census](#sysml-constraint-census) at the end
-   of this document. `cn01`–`cn09` are the control-node succession rules of SysML v2 8.3.17:
+   of this document. `s46` restates a bound feature value (`= 1`) from a redefining usage and a
+   redefining definition (`validateFeatureValueOverriding`), found by probing `bin/sysml` against
+   the reference validator rather than by an Xpect suite; the rule's own record is its row in
+   [spec-compliance.md](spec-compliance.md). `cn01`–`cn09` are the control-node succession rules of SysML v2 8.3.17:
    the count bounds (a fork or decision node with two incoming successions, a join or merge node
    with two outgoing), the end multiplicities (`1..1` into any control node and out of it, `0..1`
    into a merge and out of a decision), and the owning type (a control node in a constraint
@@ -103,7 +106,7 @@ systematically from four sources, one subdirectory each:
    [Permissiveness gaps](#permissiveness-gaps) below, since a both-accept case is a corpus bug
    and none was kept.
 
-What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 225
+What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 226
 cases ourselves**, so the denominator measures our coverage of the rejection surface, not our
 conformance: it is a **sample, not a proof** — a clean bucket here does not mean OpenSysML rejects
 everything the reference rejects, and no official conformance suite exists to make that claim
@@ -151,7 +154,7 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-225 case(s): 195 both reject, 22 only the pilot rejects, 8 only we reject, 0 both accept
+226 case(s): 197 both reject, 21 only the pilot rejects, 8 only we reject, 0 both accept
   of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -159,7 +162,7 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 8 | 8 | 0 | 0 | 0 |
 | grammar | 86 | 80 | 6 | 0 | 0 |
-| semantic | 97 | 73 | 16 | 8 | 0 |
+| semantic | 98 | 75 | 15 | 8 | 0 |
 | xpect | 34 | 34 | 0 | 0 | 0 |
 
 The eight ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
@@ -168,9 +171,12 @@ adjudicated as pilot gaps in the differential. The corpus grew from 79 cases to 
 120 with `g60` (an `alias` named by a keyword), and to 225 with the `semantic/` source (97 cases)
 and the 7 `grammar/` and 1 `extensions/` cases the SysML constraint census added beside it. The KerML constraints in that
 source reopened 14 gaps — all of them semantic rules the pilot enforces and we did not; the
-named-argument validation that landed alongside closed one of them (`k33`), leaving 13 — and the
+named-argument validation that landed alongside closed one of them (`k33`), and the duplicate
+parameter/feature binding rule closed `k34` by resolving each named argument to the parameter or
+feature it binds, leaving 12 — and the
 SysML census opened nine more, six of them `grammar/` (see
-[Permissiveness gaps](#permissiveness-gaps)). Before that source the default-mode gap count was 2
+[Permissiveness gaps](#permissiveness-gaps)); `s46` (the feature-value overriding rule) took the
+corpus to 226 with both implementations rejecting. Before that source the default-mode gap count was 2
 of 120: only the intended `extensions/` notation. Wave 11 closed two `xpect/` gaps: `p11`
 (11D's and 11G's model-level evaluability predicate on metadata body values) and `p15` (11F's
 attribute-usage typing rule), and wave 12C closed the last one, `p24`: a library metaclass now carries its
@@ -187,8 +193,8 @@ extensions that the default mode accepts on purpose and strict mode reports as e
 initial state marker), `x04` (`region r { … }`) and `x07` (`transition <src> to <tgt>`) left that
 list when that notation was removed: each is now a parse error in either mode, so both
 implementations reject it by default. Judged in
-the default mode the same corpus gives 192 agreements and 25 gaps, which is what `-conformance
-default` prints. `-conformance strict` gives 195 and 22. Reserved keywords recovered as declared
+the default mode the same corpus gives 194 agreements and 24 gaps, which is what `-conformance
+default` prints. `-conformance strict` gives 197 and 21. Reserved keywords recovered as declared
 names and SysML declaration keywords recovered in KerML are now errors in either mode; the parser
 still preserves their trees for editors and later analysis. Of the 14 gaps this document carried before wave 8, six were closed by the
 validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
@@ -197,7 +203,7 @@ validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wav
 Read those three as agreement *when asked strictly*, not as gaps that disappeared. An opt-in
 check is weaker evidence than a default one: it says the strict question has an answer we agree on,
 not that the pipeline a user gets by default rejects the notation — by design it does not. And
-because we authored all 225 cases ourselves, a small gap count means we ran out of questions we
+because we authored all 226 cases ourselves, a small gap count means we ran out of questions we
 thought to ask, not that we stopped being permissive: the denominator measures our coverage of the
 rejection surface, not our conformance.
 
@@ -209,8 +215,8 @@ we no longer accept it either.
 
 ## Permissiveness gaps
 
-All 22 gaps under `-conformance auto` are open, and all of them were opened by the `semantic/`
-source and the SysML constraint census: 13 named KerML constraints (`k11`–`k42`, `s80`) and 3
+All 21 gaps under `-conformance auto` are open, and all of them were opened by the `semantic/`
+source and the SysML constraint census: 12 named KerML constraints (`k11`–`k42`, `s80`) and 3
 named SysML constraints (`s04`, `s23`, `s43`) the pinned validators enforce as errors and
 OpenSysML does not report, plus 6 SysML body-item spellings (`g61`–`g66`) the pinned grammar
 rejects and our parser admits in any body. Every gap the corpus carried before is closed. The
@@ -236,7 +242,6 @@ silent in either mode.
 | `semantic/k19-cross-feature-not-specializing.kerml` | accepts | `Cross feature must specialized redefined-end cross features` | `internal/core/passes/w10b_cross_features.go` — the redefined-end specialization check does not reach a KerML `assoc` that specializes another and redefines its ends (`validateFeatureCrossFeatureSpecialization`) |
 | `semantic/k25-assoc-one-end.kerml` | accepts | `Must have at least two related elements` | `internal/core/passes/w10b_related_elements.go` — fires for a SysML `connection def` with one end (`xpect/p20`) but not for a KerML `assoc` with one end (`validateAssociationRelatedTypes`) |
 | `semantic/k26-binary-connector-three-ends.kerml` | accepts | `Cannot have more than two ends` | `internal/core/passes/constraint.go` `checkConnectorEndRedefinition` — counts declared `end` features (it rejects `k24`), not the positional ends of `connector c : BinaryLink (x, y, z)` (`validateConnectorBinarySpecialization`) |
-| `semantic/k34-constructor-feature-bound-twice.kerml` | accepts | `Feature already bound` | `internal/core/passes` — no duplicate-binding check for `new T(f = …, f = …)` (`validateConstructorExpressionNoDuplicateFeatureRedefinition`) |
 | `semantic/k35-metadata-annotates-wrong-kind.kerml` | accepts | `Cannot annotate Feature` | `internal/core/passes/w8c_metadata_annotation.go` — does not read a metaclass's own `annotatedElement` redefinition (`:>> annotatedElement : KerML::Class`) to restrict what `@M about …` may annotate (`validateMetadataFeatureAnnotatedElement`) |
 | `semantic/k36-metadata-body-redefines-outside.kerml` | accepts | `Must redefine an owning-type feature` | `internal/core/passes/w8d_metadata_usage.go` — emits this message for a SysML metadata usage body but is gated on `ast.UsageMetadata`, so a KerML `@M about C { :>> g; }` body is not checked (`validateMetadataFeatureBody`) |
 | `semantic/k37-multiplicity-bound-not-natural.kerml` | accepts | `Must have a Natural value` | `internal/core/passes/w8c_multiplicity_bounds.go` — only reports a bound whose primitive type is known and non-integer; a bound naming a feature typed by a class has no primitive type and is passed (`validateMultiplicityRangeResultTypes`) |

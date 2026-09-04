@@ -223,7 +223,10 @@ triples come); a set of classes with no such member is refused, naming the subje
   to one stays its name, even where it shadows a feature of the same name.
 - `sysml:lowerBound`, `sysml:upperBound` — multiplicity, as expression nodes
   ([Expressions](#expressions))
-- `sysml:value` — a feature's value, as an expression node
+- `sysml:value` — a feature's value, as an expression node, with
+  `sysml:isDefault` and `sysml:isInitial` stating the `default` and `:=` of the
+  operator it was written with (so `default = 1` does not come back as the
+  binding `= 1`, which a redefinition may not override)
 - `sysml:aliasedElement`, `sysml:client`, `sysml:supplier`, `sysml:body`,
   `sysml:language`, `sysml:locale`, `sysml:annotatedElement`
 - A metadata annotation — `@Safety;`, `@Safety { level = 2; }`, `metadata m :
@@ -894,7 +897,7 @@ expr:P__Car___402.end0
 | `fromTo` | `[of <payload>] from <end0> to <end1>` | `flow of P from a to b` |
 | `flowTo` | `[of <payload>] <end0> to <end1>` | `flow a to b` |
 | `satisfy` | `<requirement>` (the `sysml:subsets` end, written bare) | `satisfy R by v`, `verify R` |
-| `then` | the source end is the nearest member written before it that is not itself an edge | `then b;`, `then part b;` |
+| `then` | the source end is the nearest member written before it that is not a connector or a transition | `then b;`, `then part b;` |
 
 A head whose own keyword is the noun form writes a verb ahead of its ends, and
 that verb is `sysx:endVerb` (`connection c connect a to b`). Where the keyword
@@ -956,17 +959,29 @@ member before the succession, and a target that *is* that preceding member is
 the declaration the `then` was written ahead of.
 
 The member a `then` sequences from is the one the parser gives it: the nearest
-member before it that is not itself an edge. A `flow`, `bind`, `connect`,
-`succession` or `transition` relates other members rather than declaring one,
-so a `then` written after it is read past it, while an `attribute`, a `doc` or
-any other declaration is the source. The writer folds a succession back into
-`then` by the same rule, shared with the parser as `ast.UsageKind.IsEdge`, so
-`action a; flow from a.x to b.x; then action b;` comes back as written. The
+member before it that is not a connector or a transition. A connector of any
+kind, named or not (`connect p to q;`, `interface i connect …`, `allocate`,
+`bind`, `flow`, `succession`), and a transition relate other members rather than
+declaring one, so a `then` written after one is read past it, while an
+`attribute`, a `doc` or any other declaration is the source. This is the pilot
+implementation's rule (`UsageUtil.getPreviousFeature`), followed where the
+specification text is underdetermined: SysML v2 §7.17.4 describes the source as
+"the nearest occurrence lexically previous to the `then`, skipping over any
+intervening non-occurrence usages", which read literally would sequence from a
+connection (an occurrence usage) and read past an attribute (not one), the
+opposite of the pilot on both counts, and §8.3.13.6 `SuccessionAsUsage` states
+no constraint for the implied source (OMG issue SYSML21-171 records the
+omission). One part of the pilot's rule is not followed: the pilot sequences
+from a `flow` or `message` written with no ends (`message m;`), which this
+implementation reads past like any other connector — a known gap. The writer
+folds a succession back into `then` by the same rule, shared with the parser
+as `ast.UsageKind.IsEdge`, so `action a; flow from a.x to b.x; then action b;`
+and `action a; connect p to q; then action b;` come back as written. The
 source end is compared as the name the member answers to, which is what the
 parser records: a `first a then b;` sequences from `a`, and a `perform walk;`
 or `action redefines walk;` that declares no name of its own answers to `walk`
 (KerML 7.3.4.5). A graph describing a position the notation cannot express —
-sequencing from an earlier member, or from the flow the `then` is read past —
+sequencing from an earlier member, or from the connector the `then` is read past —
 is reported rather than written back somewhere else
 (`export_test.go:TestUnnamedSuccessionEndComesBackFromTheGraph`,
 `TestHalfNamedSuccessionInAGraphIsReported`,
@@ -992,7 +1007,7 @@ condition as `sysx:condition`: a constraint body's conditions (`assert`,
 `assume`/`require` members in all three forms (an expression, the constraint
 they name, or a body) together with the declaration of the constraint usage they
 own — `sysml:declaredName`, its specializations, `sysml:lowerBound`/`upperBound`
-and `sysml:value` (`require #Goal constraint braked [1] = true;`) — and
+and `sysml:value` with its `default`/`:=` operator (`require #Goal constraint braked [1] = true;`) — and
 `subject s : X;` as the `sysml:SubjectMembership` it declares. The `assert` prefixing a named usage
 (`assert constraint c : C`) is carried as `sysx:declaredPrefix`. The conditions
 themselves are notation, with the limits stated above. An `assume`/`require`
@@ -1080,13 +1095,19 @@ would be refused as a duplicate.
   that is negative or too large for the platform's `int`: it is a position the
   writer orders by, and one it cannot hold would otherwise be read as 0 and
   move the member to the front
-- a subject stating a single-valued `sysx:` property twice with different
-  objects — a body with two `sysx:resultExpression`s, an element with two
-  `sysx:memberIndex`es or two `sysx:isNamespaceImport` flags: only one could
-  be written, so the graph is refused naming both rather than the first being
-  kept. Every `sysx:` property is single-valued but the members and
-  parameters of a body, `sysx:relatedFeature`, `sysx:deferredEvent` and
-  `sysx:prefixMetadata`
+- a subject stating a single-valued property twice with different objects —
+  a body with two `sysx:resultExpression`s, an element with two
+  `sysx:memberIndex`es, two `sysx:isNamespaceImport` flags or a
+  `sysml:isDefault` stated both true and false: only one could be written, so
+  the graph is refused naming both rather than the first being kept. Every
+  `sysx:` property is single-valued but the members and parameters of a body,
+  `sysx:relatedFeature`, `sysx:deferredEvent` and `sysx:prefixMetadata`; of
+  the `sysml:` properties, the boolean `is…` flags are. A triple stated twice
+  is one triple to the graph, so only differing objects are a conflict
+- a `sysml:isDefault` or `sysml:isInitial`, whether true or false, on a subject
+  with no `sysml:value`: the flags spell the operator a feature value is
+  written with (`default =`, `:=`), so without a value there is nothing to
+  write them on
 
 A graph that uses none of OpenSysML's `sysx:` properties (one produced by
 another tool) converts as far as the mapping allows and errors on the first

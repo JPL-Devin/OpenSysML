@@ -10,7 +10,7 @@ package Demo {
 	 */
 	part def SC {
 		// dry mass, as a quantity with a unit
-		attribute unitMass : ISQ::MassValue = 1000.0[SI::kg];
+		attribute unitMass : ISQ::MassValue default = 1000.0[SI::kg];
 
 		attribute label : ScalarValues::String = "flight-1";
 		attribute active : ScalarValues::Boolean = true;
