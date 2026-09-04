@@ -2037,7 +2037,7 @@ func (p *Parser) parseRequirementMember() ast.Node {
 
 	// Check for requirement-specific keywords FIRST (before tryParseDeclaration)
 	// These keywords have special meaning in requirement context that differs from general usage
-	if p.acceptKeyword("subject") {
+	if p.bodyAdmitsMember("subject") && p.acceptKeyword("subject") {
 		return p.parseSubjectMember(start)
 	}
 	if p.acceptKeyword("assume") {
