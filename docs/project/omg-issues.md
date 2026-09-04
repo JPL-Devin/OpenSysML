@@ -115,6 +115,7 @@ and not from a disagreement alone.
 | `org.omg.sysml.xtext` — `checkTransitionFeatureMembership` (`validateTransitionFeatureMembershipGuardExpression`) | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | `TransitionUsage_invalid.sysml.xt` expects `Must be a Boolean expression.` at `if "test"`, yet the pinned validator with the full standard library accepts a `String` or arithmetic guard in the same shape | [pilot-rejection.md](pilot-rejection.md#constraints-the-pilot-declares-but-does-not-enforce) — established by running the pinned pilot's own SysML validator on the fixture's shape, not from a disagreement alone | **not filed** — question drafted below, awaiting maintainer authorisation |
 | `org.omg.sysml.xtext` — `SysMLValidator.checkControlNode`, `checkDecisionNode`, `checkForkNode`, `checkJoinNode`, `checkMergeNode` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a fork or decision node with two incoming successions, a join or merge node with two outgoing, and a succession end whose written multiplicity is not the one SysML v2 §7.17.3 requires all validate clean; only `validateControlNodeOwningType` is reported | established from the pilot's source: eight of the nine constraints are `// TODO: Check validate… (?)` comments in the check methods (`SysMLValidator.xtend:857–888` at `c7fc737`); the reproducers are `cmd/pilot-reject/testdata/negative/semantic/cn01`–`cn04`, `cn06`–`cn09`, run through the pinned batch validator | **not filed** — drafted below, awaiting maintainer authorisation |
 | `org.omg.kerml.xtext` — `KerMLValidator.checkFeature`, the `validateFeatureOwnedCrossSubsetting` check | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a feature with two `crosses` clauses reports `Error executing EValidator` instead of `At most one cross subsetting is allowed`: the loop indexes `refSubsettings` (the reference subsettings, collected for the check above it) with the cross-subsetting index, and throws | established from the pinned `KerMLValidator.xtend` line 649 and reproduced with `cmd/pilot-reject/testdata/negative/semantic/k42-two-cross-subsettings.kerml`; the same file is byte-identical at upstream `master` `13c32ea2` (2026-09-01), so the defect is still present; [pilot-rejection.md](pilot-rejection.md#permissiveness-gaps) records the case as a gap of ours | filed upstream as [Systems-Modeling/SysML-v2-Pilot-Implementation#794](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/794) **pending adjudication**, body below |
+| `org.omg.sysml.interactive` — the expression evaluator over `OccurrenceFunctions` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | `OccurrenceFunctions::'==='(w1, w1)` evaluates to `false` while `w1 === w1` and `BaseFunctions::'==='(w1, w1)` evaluate to `true`; `isDuring(1)` and `isDuring("x")` evaluate to `true`; `create`, `destroy`, `addNew` and `addNewAt` answer their `occ` argument for any argument, an out-of-range `addNewAt` index included | established by evaluating the calls through the pinned pilot's own headless evaluator (`build/pilot-evaluator/eval-sysml --cases`, transcript below): the evaluator folds each declared body over the *declarations* (`x.portionOfLife == y.portionOfLife` over features no value has, `notEmpty(during)` over the function's own feature) rather than over occurrences, so its answers contradict its own operator | **not filed** — question drafted below, awaiting maintainer authorisation |
 
 ### `Type::ownedDisjoining` does not contain a `Disjoining` whose `owningType` is that `Type` (pilot `2026-05`)
 
@@ -447,6 +448,72 @@ multiplicity constraints would reject the specification's own examples. Treating
 unwritten end multiplicity as the required one, and checking only written ones, is what a
 second implementation has to assume; a note in the release on the intended reading would
 help.
+````
+
+---
+
+### `OccurrenceFunctions` are evaluated over declarations rather than occurrences (pilot `2026-07`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream. OpenSysML's own semantics for the six functions are recorded in
+[spec-compliance.md](spec-compliance.md) (the *Occurrences have a lifetime* rows).
+
+The probe model and the pinned evaluator's verbatim answers
+(`jupyter-sysml-kernel-0.61.0-all.jar`, tag `2026-07`, through
+`build/pilot-evaluator/eval-sysml --cases`; the evaluator exited 0, every answer is
+its own):
+
+```sysml
+package OccProbe {
+    private import ScalarValues::*;
+    private import OccurrenceFunctions::*;
+    private import SequenceFunctions::*;
+    part def Widget { attribute mass : Real = 1.0; }
+    part w1 : Widget;
+    part w2 : Widget;
+    part group : Widget[0..*] ordered nonunique;
+}
+```
+
+| Expression | Pilot answer |
+|---|---|
+| `OccProbe::w1 === OccProbe::w1` | `LiteralBoolean true` |
+| `OccProbe::w1 === OccProbe::w2` | `LiteralBoolean false` |
+| `OccProbe::w1 !== OccProbe::w2` | `LiteralBoolean true` |
+| `BaseFunctions::'==='(OccProbe::w1, OccProbe::w1)` | `LiteralBoolean true` |
+| `OccurrenceFunctions::'==='(OccProbe::w1, OccProbe::w1)` | `LiteralBoolean false` |
+| `OccurrenceFunctions::'==='(OccProbe::w1, OccProbe::w2)` | `LiteralBoolean false` |
+| `OccurrenceFunctions::'==='(null, null)` | `LiteralBoolean true` |
+| `OccurrenceFunctions::isDuring(OccProbe::w1)` | `LiteralBoolean true` |
+| `OccurrenceFunctions::isDuring(1)` | `LiteralBoolean true` |
+| `OccurrenceFunctions::isDuring("x")` | `LiteralBoolean true` |
+| `OccurrenceFunctions::create(OccProbe::w1)` | `PartUsage w1` |
+| `OccurrenceFunctions::create(1)` | `LiteralInteger 1` |
+| `OccurrenceFunctions::destroy(OccProbe::w1)` | `PartUsage w1` |
+| `OccurrenceFunctions::destroy(null)` | (nothing) |
+| `OccurrenceFunctions::addNew(OccProbe::group, OccProbe::w1)` | `PartUsage w1` |
+| `OccurrenceFunctions::addNewAt(OccProbe::group, OccProbe::w1, 1)` | `PartUsage w1` |
+| `OccurrenceFunctions::addNewAt(OccProbe::group, OccProbe::w1, 5)` | `PartUsage w1` |
+| `OccurrenceFunctions::addNewAt((1, 2), 3, 9)` | `LiteralInteger 3` |
+| `SequenceFunctions::includingAt((1, 2), 3, 5)` | `EXCEPTION:java.lang.IndexOutOfBoundsException: toIndex = 4` |
+
+````markdown
+**Question, not a bug report:** the interactive evaluator answers the
+`OccurrenceFunctions` declarations by folding their declared bodies over the
+model elements the arguments name, which gives answers that contradict its own
+operators. With `part w1 : Widget;` in scope, `w1 === w1` and
+`BaseFunctions::'==='(w1, w1)` are `true` but `OccurrenceFunctions::'==='(w1, w1)`
+is `false` — the body `x.portionOfLife == y.portionOfLife` is evaluated over
+features that hold no value. `isDuring(1)` and `isDuring("x")` are `true`: the
+body `notEmpty(during)` is evaluated over the function's own `during` feature
+rather than the argument's lifetime, so a data value that is no occurrence is
+reported as happening during. `create`, `destroy`, `addNew` and `addNewAt` answer
+their `occ` argument for any argument, an `addNewAt` index past the group's end
+included, while `SequenceFunctions::includingAt` with the same index throws
+`IndexOutOfBoundsException`. Is the evaluator intended to answer these six at all
+outside an executing performance? If so, is `OccurrenceFunctions::'==='` intended
+to agree with the `===` operator, and `isDuring` to reject an argument that is
+not an `Occurrence`, as the declared parameter types say?
 ````
 
 ---
