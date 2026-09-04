@@ -2404,6 +2404,10 @@ func (p *Parser) parseBodyMember() ast.Node {
 	start := p.peek().Span.Offset
 	trivia := p.takeTrivia()
 	vis := p.parseVisibility()
+	// The enumeration context names this member only; bodies nested in it hold
+	// ordinary members, so it is consumed here rather than left set while they parse.
+	enumValue := p.inEnumBody
+	p.inEnumBody = false
 
 	// A member-attached `then` is taken by the body loop, which owns the member
 	// list the succession it desugars to is synthesised into (see
@@ -2414,6 +2418,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 	if p.atKeyword("then") {
 		tok := p.advance()
 		p.error(tok.Span, "`then` cannot prefix a member here: a succession sequences two members of a definition, usage, action, state, calculation or requirement body")
+		p.inEnumBody = enumValue
 		return p.parseBodyMember()
 	}
 
@@ -3142,14 +3147,10 @@ func (p *Parser) parseBodyMember() ast.Node {
 		}
 
 		kind := ast.UsageAttribute
-		if p.inEnumBody {
+		if enumValue {
 			kind = ast.UsageEnumeration
 		}
-		// A value's own body holds its members, not further enumerated values.
-		outer := p.inEnumBody
-		p.inEnumBody = false
 		members, hasBody := p.parseDefUsageBody()
-		p.inEnumBody = outer
 
 		u := &ast.Usage{
 			Kind:              kind,
