@@ -181,7 +181,9 @@ triples come); a set of classes with no such member is refused, naming the subje
   Every definition and usage keyword the parser accepts has a metaclass; the
   tables in `internal/core/export/kinds.go` are the source of truth, and the
   reverse direction is derived from them so the two cannot disagree.
-- `sysml:declaredName`, `sysml:declaredShortName`, `sysml:qualifiedName`
+- `sysml:declaredName`, `sysml:declaredShortName`, `sysml:qualifiedName` —
+  on a requirement's `subject`, `assume constraint` and `require constraint`
+  members as on any usage, so `subject <s> x : T;` comes back with its short name
 - `sysml:elementId` — the id the element's own IRI ends in, which is what the
   SysML v2 API addresses it by. Every element carries one, including the
   memberships below and the expression nodes of
