@@ -397,7 +397,8 @@ func (ctx *Context) materializeSubsettedCollections(inst *Instance, fv *FeatureV
 }
 
 // fillOptionalSubsetters makes up to n objects for the optional features subsetting the named
-// collection, in declaration order and within their upper bounds; undo puts every filled feature back.
+// collection, in declaration order and within their upper bounds; undo puts every filled feature
+// back, as does the journal under way (see noteProbeWrite).
 func (ctx *Context) fillOptionalSubsetters(inst *Instance, name string, n int) (made []*Instance, undo func(), err error) {
 	type filled struct {
 		fv     *FeatureValue
@@ -441,6 +442,7 @@ func (ctx *Context) fillOptionalSubsetters(inst *Instance, name string, n int) (
 		n -= spare
 	}
 	for _, fill := range fills {
+		ctx.noteProbeWrite(fill.fv)
 		if fill.fv.Feature.Scalar() {
 			fill.fv.Value = fill.held[0]
 		} else {

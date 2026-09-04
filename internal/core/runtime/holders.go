@@ -55,8 +55,8 @@ func (ctx *Context) mentionedFeatures(typ *symbols.Symbol, feat *EffectiveFeatur
 	}
 	var names []string
 	seen := make(map[string]bool)
-	for _, ref := range ctx.passedFeatureReferences(scope, feat.DefaultValue) {
-		sym := ctx.referencedSymbol(scope, ref.Name)
+	for _, passed := range ctx.passedFeatureReferences(scope, feat.DefaultValue) {
+		sym := passed.symbol(ctx)
 		if sym == nil {
 			continue
 		}
@@ -68,17 +68,30 @@ func (ctx *Context) mentionedFeatures(typ *symbols.Symbol, feat *EffectiveFeatur
 	return names
 }
 
+// passedReference is a feature reference an expression may answer the values of, in
+// the scope it is written in: a body's parameters are looked up in the body's own.
+type passedReference struct {
+	scope *symbols.Scope
+	ref   *ast.FeatureReference
+}
+
+// symbol resolves the reference where it is written.
+func (p passedReference) symbol(ctx *Context) *symbols.Symbol {
+	return ctx.referencedSymbol(p.scope, p.ref.Name)
+}
+
 // passedFeatureReferences lists the feature references an expression written in scope
 // may answer the values of as its own: a branch chosen, an element indexed or selected,
-// an argument a call returns — not a chain's values, a condition or an operand computed from.
-func (ctx *Context) passedFeatureReferences(scope *symbols.Scope, expr ast.Node) []*ast.FeatureReference {
-	var refs []*ast.FeatureReference
+// an argument a call returns, a collected element the body answers — not a chain's
+// values, a condition or an operand computed from.
+func (ctx *Context) passedFeatureReferences(scope *symbols.Scope, expr ast.Node) []passedReference {
+	var refs []passedReference
 	var visit func(nodes ...ast.Node)
 	visit = func(nodes ...ast.Node) {
 		for _, n := range nodes {
 			switch n := n.(type) {
 			case *ast.FeatureReference:
-				refs = append(refs, n)
+				refs = append(refs, passedReference{scope: scope, ref: n})
 			case *ast.SequenceExpr:
 				visit(n.Elements...)
 			case *ast.OperatorExpr:
@@ -95,17 +108,65 @@ func (ctx *Context) passedFeatureReferences(scope *symbols.Scope, expr ast.Node)
 			case *ast.InvocationExpr:
 				visit(ctx.returnedArguments(scope, n)...)
 			case *ast.CollectExpr:
-				visit(n.Body)
+				refs = append(refs, ctx.collectedReferences(scope, n.Operand, n.Body)...)
 			case *ast.SelectExpr:
 				visit(n.Operand)
 			case *ast.BodyExpr:
-				visit(n.Result)
+				refs = append(refs, ctx.bodyReferences(scope, n, nil)...)
 			case *ast.Usage:
 				visit(n.Value)
 			}
 		}
 	}
 	visit(expr)
+	return refs
+}
+
+// collectedReferences lists what `operand.body` may answer: what the body's result
+// answers, the operand's values where that is an element; every value of the operand
+// for a body not written there, whose result is not known here.
+func (ctx *Context) collectedReferences(scope *symbols.Scope, operand, body ast.Node) []passedReference {
+	b, ok := body.(*ast.BodyExpr)
+	if !ok {
+		return ctx.passedFeatureReferences(scope, operand)
+	}
+	return ctx.bodyReferences(scope, b, operand)
+}
+
+// bodyReferences lists what a body expression's result may answer, its parameters
+// standing for the elements of operand — for none when operand is nil — and the
+// features it declares for their values.
+func (ctx *Context) bodyReferences(scope *symbols.Scope, body *ast.BodyExpr, operand ast.Node) []passedReference {
+	bodyScope := symbols.BodyExprScope(scope, body)
+	if bodyScope == scope {
+		return ctx.passedFeatureReferences(scope, body.Result)
+	}
+	var refs []passedReference
+	seen := make(map[*symbols.Symbol]bool)
+	var expand func(passed []passedReference)
+	expand = func(passed []passedReference) {
+		for _, p := range passed {
+			sym := p.symbol(ctx)
+			if sym == nil || sym.OwnerScope != bodyScope {
+				refs = append(refs, p)
+				continue
+			}
+			if seen[sym] {
+				continue
+			}
+			seen[sym] = true
+			if sym.Decl == body {
+				if operand != nil {
+					refs = append(refs, ctx.passedFeatureReferences(scope, operand)...)
+				}
+				continue
+			}
+			if value := ctx.extractDefaultValue(sym); value != nil {
+				expand(ctx.passedFeatureReferences(bodyScope, value))
+			}
+		}
+	}
+	expand(ctx.passedFeatureReferences(bodyScope, body.Result))
 	return refs
 }
 
@@ -215,7 +276,7 @@ func (ctx *Context) collectReturnedParameters(shape *calcShape, passed, params m
 			return
 		}
 		for _, ref := range ctx.passedFeatureReferences(scope, expr) {
-			sym := ctx.referencedSymbol(scope, ref.Name)
+			sym := ref.symbol(ctx)
 			if sym == nil {
 				continue
 			}

@@ -259,6 +259,55 @@ func TestOnlyFeaturesPassingObjectsOnHoldThem(t *testing.T) {
 	}
 }
 
+// A collect body's parameter stands for the operand's elements: a body answering it, directly,
+// through a feature it declares, or in a nested body, passes the operand's objects on, so the
+// collecting feature holds them whichever is read first; a body answering another feature
+// passes that one on instead, and one chaining through the parameter passes nothing on.
+func TestCollectedObjectsAreHeldByTheCollectingFeature(t *testing.T) {
+	src := `package test {
+		private import ScalarValues::*;
+		item def Tallied { attribute tally : Integer = 7; }
+		item def Rack {
+			item lead [1] { item cell [1]; }
+			item trail [1] { item cell [1]; }
+			item spare [1];
+			item same : Tallied [2] = (lead, trail).{in x; x};
+			item local : Tallied [2] = (lead, trail).{in x; private item held = x; held};
+			item nested : Tallied [*] = (lead, trail).{in x; (x, spare).{in y; y}};
+			item other : Tallied [2] = (lead, trail).{in x; spare};
+			item cells [2] = (lead, trail).{in x; x.cell};
+		}
+		item rack : Rack;
+	}`
+	ctx, idx := libraryShapeContext(t, src)
+	rack := idx.LookupQualified("test::Rack")[0]
+	want := map[string][]string{
+		"lead":  {"same", "local", "nested"},
+		"trail": {"same", "local", "nested"},
+		"spare": {"nested", "other"},
+	}
+	for name, holders := range want {
+		if got := ctx.holdingFeatures(rack, name); !slices.Equal(got, holders) {
+			t.Errorf("holdingFeatures(Rack, %s) = %v, want %v", name, got, holders)
+		}
+	}
+
+	for _, order := range [][]string{{"lead", "same"}, {"same", "lead"}} {
+		ctx, idx := libraryShapeContext(t, src)
+		rack := instantiateQualified(t, ctx, idx, "test::rack")
+		tallied := idx.LookupQualified("test::Tallied")[0]
+		for _, name := range order {
+			if _, err := rack.GetFeatureValue(ctx, name); err != nil {
+				t.Fatalf("reading %v: %s: %v", order, name, err)
+			}
+			if lead := readInstance(t, ctx, rack, "lead"); !ctx.instanceConforms(lead, tallied) {
+				t.Errorf("reading %v, after %s lead is classified by %v, want Tallied",
+					order, name, lead.classifiers)
+			}
+		}
+	}
+}
+
 // Calcs returning through each other are analysed as one: a parameter one passes on only
 // through the other's returns is passed on, whichever calc is met first and wherever the
 // direct return stands beside the call.
@@ -608,6 +657,54 @@ func TestOptionalSubsetterFillsTheCollection(t *testing.T) {
 	els := elementsOf(sides.HeldValue())
 	if left := readInstance(t, ctx, panel, "left"); els[0].Instance != left.ID || els[1].Instance != top.ID {
 		t.Fatalf("sides = %s, want left (%d) then top (%d) first", FormatValue(sides.HeldValue()), left.ID, top.ID)
+	}
+}
+
+// A probe filling an optional subsetter that already holds an object is undone whole: the
+// objects made up go, and what the subsetter held before, written as it was, stays.
+func TestProbeFillingASubsetterKeepsWhatItHeld(t *testing.T) {
+	ctx, idx := libraryShapeContext(t, `package test {
+		item def Side;
+		item def Panel {
+			item sides : Side [4];
+			item left : Side [1] :> sides;
+			item spare : Side [0..3] :> sides;
+		}
+		item panel : Panel;
+		item extra : Side;
+	}`)
+	panel := instantiateQualified(t, ctx, idx, "test::panel")
+	extra := instantiateQualified(t, ctx, idx, "test::extra")
+	held := sequenceOf([]Value{{Kind: ValInstance, Instance: extra.ID}})
+	if err := panel.SetFeatureValue(ctx, "spare", held); err != nil {
+		t.Fatalf("SetFeatureValue(spare): %v", err)
+	}
+	before := *panel.FeatureValues["spare"]
+	objects := len(ctx.instances)
+
+	end := ctx.beginProbe()
+	sides, err := panel.GetFeatureValue(ctx, "sides")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(sides): %v", err)
+	}
+	if got := len(elementsOf(sides.HeldValue())); got != 4 {
+		t.Fatalf("sides holds %d objects in the probe, want 4", got)
+	}
+	if got := len(elementsOf(panel.FeatureValues["spare"].HeldValue())); got != 3 {
+		t.Fatalf("spare holds %d objects in the probe, want extra and two made up", got)
+	}
+	end()
+
+	if got := len(ctx.instances); got != objects {
+		t.Fatalf("the probe left %d objects behind", got-objects)
+	}
+	if after := *panel.FeatureValues["spare"]; !after.Materialized || !after.Written ||
+		FormatValue(after.HeldValue()) != FormatValue(before.HeldValue()) {
+		t.Fatalf("the probe changed spare from %s (written) to %s (materialized %t, written %t)",
+			FormatValue(before.HeldValue()), FormatValue(after.HeldValue()), after.Materialized, after.Written)
+	}
+	if sides := panel.FeatureValues["sides"]; sides.Materialized {
+		t.Fatalf("the probe left sides materialized as %s", FormatValue(sides.HeldValue()))
 	}
 }
 
