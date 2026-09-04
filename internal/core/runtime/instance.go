@@ -205,23 +205,22 @@ func (ctx *Context) materialize(sym *symbols.Symbol, id int64) (*Instance, error
 	}
 	ctx.ids.atLeast(id + 1)
 
+	// Get effective features
+	features := ctx.FeaturesOf(sym)
+
 	// Create instance
 	inst := &Instance{
 		ID:            id,
 		Type:          sym,
-		FeatureValues: make(map[string]*FeatureValue),
+		FeatureValues: make(map[string]*FeatureValue, len(features)),
 	}
 
-	// Get effective features
-	features := ctx.FeaturesOf(sym)
-
-	// Create feature value for each feature
+	// Create feature value for each feature, allocated as one block.
+	values := make([]FeatureValue, len(features))
 	for i := range features {
 		feat := &features[i]
-		fv := &FeatureValue{
-			Feature:      feat,
-			Materialized: false,
-		}
+		fv := &values[i]
+		fv.Feature = feat
 
 		// Fold constant defaults the feature admits eagerly; a default that is not constant
 		// may read sibling feature values, so GetFeatureValue evaluates (and reports) it.

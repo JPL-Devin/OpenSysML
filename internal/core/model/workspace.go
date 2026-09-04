@@ -2,6 +2,7 @@ package model
 
 import (
 	"path/filepath"
+	"slices"
 	"sync"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -330,7 +331,7 @@ func (w *Workspace) MembersOnPath(scope *symbols.Scope, path []string) []*symbol
 // Callers hold the read lock.
 func (w *Workspace) memberSymbolsLocked(resolver *resolve.Resolver, sem *semantics.Model,
 	scope *symbols.Scope, sym *symbols.Symbol) []*symbols.Symbol {
-	members := sem.MembersOf(sym)
+	members := slices.Clone(sem.MembersOf(sym))
 	// A cached library symbol has no scope, and a package's own scope does not
 	// hold what its imports brought in; both are reachable through the index,
 	// as seen from the namespace the completion is requested in so that another

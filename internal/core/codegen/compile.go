@@ -876,7 +876,7 @@ func (fc *funcCompiler) compileCall(n *ast.InvocationExpr) (Expr, error) {
 		// function of that name.
 		written := qnText(n.Type)
 		if len(n.Type.Parts) == 1 && !n.Type.Global {
-			written = fc.c.resolver.UnresolvedName(fc.scope, written)
+			written = fc.c.resolver.UnresolvedName(fc.scope, written, n.Type)
 		}
 		return nil, fc.unsupported(fmt.Sprintf("invocation of %s, which does not resolve", written))
 	}

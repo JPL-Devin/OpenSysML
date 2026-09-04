@@ -169,7 +169,7 @@ func TestStandardConstraintAndRequirementConditionsStaySilent(t *testing.T) {
 		{"bare_requirement_reference", "requirement def R { require c; }"},
 		{"concern_bare_reference", "concern def C { require c; }"},
 		{"requirement_feature_reference", "requirement r { assume x.y; }"},
-		{"objective_feature_reference", "objective o { require x.y; }"},
+		{"objective_feature_reference", "case def C { objective o { require x.y; } }"},
 		{"named_assumption_with_body", "requirement def R { assume constraint c { 1 > 0 } }"},
 		{"named_requirement_with_body", "requirement def R { require constraint c { 1 > 0 } }"},
 		{"anonymous_assumption_body", "requirement def R { assume constraint { 1 > 0 } }"},

@@ -189,6 +189,11 @@ func (m *Model) compileConstructor(scope *symbols.Scope, e *ast.ConstructorExpr)
 			return p
 		}
 	}
+	for _, arg := range e.NamedArgs {
+		if p := m.compileCondition(scope, arg.Value); p.Op == symbols.FilterUnsupported {
+			return p
+		}
+	}
 	return &symbols.FilterPredicate{
 		Op:    symbols.FilterConst,
 		Value: symbols.FilterValue{Kind: symbols.FilterValueInstance, RefFQN: typeFQN},

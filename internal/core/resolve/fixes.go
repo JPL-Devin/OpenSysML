@@ -5,18 +5,18 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/quickfix"
-	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/suggest"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // unresolvedFixes returns the edits resolving an unresolved simple name: writing
 // it as a ranked candidate, or importing the namespace declaring that name.
-func (r *Resolver) unresolvedFixes(scope *symbols.Scope, name string, span source.Span) []quickfix.Fix {
+func (r *Resolver) unresolvedFixes(scope *symbols.Scope, name string, at ast.Node) []quickfix.Fix {
+	span := spanOf(at)
 	if span.Len == 0 {
 		return nil
 	}
-	cands := r.suggestFor(scope, name)
+	cands := r.suggestFor(scope, name, at)
 	var fixes []quickfix.Fix
 	for _, cand := range cands {
 		if cand == name {
