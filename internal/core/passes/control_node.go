@@ -470,9 +470,9 @@ func declarationText(decl ast.Node) string {
 	case *ast.ConstraintMember:
 		return withName("constraint", d.Name)
 	case *ast.AssumeMember:
-		return withName("constraint", d.Name)
+		return withName("constraint", d.Ident.Name)
 	case *ast.RequireMember:
-		return withName("constraint", d.Name)
+		return withName("constraint", d.Ident.Name)
 	}
 	return ""
 }

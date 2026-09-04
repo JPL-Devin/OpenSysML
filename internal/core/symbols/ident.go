@@ -28,6 +28,12 @@ func DeclIdent(decl ast.Node) (ast.Identification, bool) {
 		return d.Ident, true
 	case *ast.TextualRepresentation:
 		return d.Ident, true
+	case *ast.SubjectMember:
+		return d.Ident, true
+	case *ast.AssumeMember:
+		return d.Ident, true
+	case *ast.RequireMember:
+		return d.Ident, true
 	default:
 		return ast.Identification{}, false
 	}

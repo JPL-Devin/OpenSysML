@@ -259,7 +259,17 @@ func (ctx *Context) sharedRedefinitionName(inst *Instance, byName map[string]*Ef
 // directly or through a redefinition of a redefinition: a restated redefinition
 // still declares the feature at the end of the chain (KerML 1.0 §7.3.4.5).
 func (ctx *Context) redefinedNames(sym, owner *symbols.Symbol) []string {
-	var names []string
+	features := ctx.redefinedFeatures(sym, owner)
+	names := make([]string, 0, len(features))
+	for _, feat := range features {
+		names = append(names, feat.Name)
+	}
+	return names
+}
+
+// redefinedFeatures is redefinedNames by symbol.
+func (ctx *Context) redefinedFeatures(sym, owner *symbols.Symbol) []*symbols.Symbol {
+	var features []*symbols.Symbol
 	seen := map[*symbols.Symbol]bool{sym: true}
 	for queue := []*symbols.Symbol{sym}; len(queue) > 0; {
 		cur := queue[0]
@@ -276,11 +286,11 @@ func (ctx *Context) redefinedNames(sym, owner *symbols.Symbol) []string {
 				continue
 			}
 			seen[redefined] = true
-			names = append(names, redefined.Name)
+			features = append(features, redefined)
 			queue = append(queue, redefined)
 		}
 	}
-	return names
+	return features
 }
 
 // SubsettingFeatures returns the features of typ subsetting the named feature under any
