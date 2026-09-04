@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 228,
-        "digest": "sha256:a0a4d91f7b9a4277e6fba6edeef8f340cf411c639b719354d6a62f3e18518487"
+        "files": 229,
+        "digest": "sha256:f40230e70992229219053e55fb16928778d757be363245e08ed9e8a3064edf98"
       }
     ],
     "recorded": "2026-09-04"
   },
   "totals": {
-    "cases": 228,
-    "bothReject": 198,
+    "cases": 229,
+    "bothReject": 199,
     "pilotOnlyRejects": 22,
     "oursOnlyRejects": 8,
     "bothAccept": 0
@@ -64,8 +64,8 @@
     },
     {
       "source": "semantic",
-      "cases": 100,
-      "bothReject": 76,
+      "cases": 101,
+      "bothReject": 77,
       "pilotOnlyRejects": 16,
       "oursOnlyRejects": 8,
       "bothAccept": 0
@@ -1899,7 +1899,16 @@
       "pilotErrors": 1
     },
     {
-      "path": "semantic/s46-after-trigger-not-duration.sysml",
+      "path": "semantic/s46-feature-value-overriding.sysml",
+      "source": "semantic",
+      "rule": "a feature bound with `=` may not be given another value by a redefining feature; only a `default =` value may be overridden (KerML 8.3.4.10.2; pilot validateFeatureValueOverriding).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 2
+    },
+    {
+      "path": "semantic/s47-after-trigger-not-duration.sysml",
       "source": "semantic",
       "rule": "The argument of an `after` trigger must be a DurationValue (SysML 7.16 TriggerInvocationExpression; pilot validateTriggerInvocationActionAfterArgument).",
       "mode": "default",
@@ -1908,7 +1917,7 @@
       "pilotErrors": 1
     },
     {
-      "path": "semantic/s47-at-trigger-not-time-instant.sysml",
+      "path": "semantic/s48-at-trigger-not-time-instant.sysml",
       "source": "semantic",
       "rule": "The argument of an `at` trigger must be a TimeInstantValue (SysML 7.16 TriggerInvocationExpression; pilot validateTriggerInvocationActionAtArgument).",
       "mode": "default",
@@ -1917,7 +1926,7 @@
       "pilotErrors": 1
     },
     {
-      "path": "semantic/s48-when-trigger-not-boolean.sysml",
+      "path": "semantic/s49-when-trigger-not-boolean.sysml",
       "source": "semantic",
       "rule": "The argument of a `when` trigger must be Boolean (SysML 7.16 TriggerInvocationExpression; pilot validateTriggerInvocationActionWhenArgument).",
       "mode": "default",
@@ -2276,8 +2285,8 @@
       }
     ],
     "totals": {
-      "cases": 228,
-      "bothReject": 198,
+      "cases": 229,
+      "bothReject": 199,
       "pilotOnlyRejects": 22,
       "oursOnlyRejects": 8,
       "bothAccept": 0

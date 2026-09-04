@@ -99,11 +99,12 @@ func (r *Resolver) bindsEffectiveName(sym *symbols.Symbol) bool {
 	if sym == nil || !sym.EffectiveName {
 		return true
 	}
-	usage, ok := sym.Decl.(*ast.Usage)
-	if !ok {
-		return true
+	var rel *ast.Relationship
+	if oc, ok := ast.OwnedConstraintOf(sym.Decl); ok {
+		rel = oc.NamingFeature()
+	} else if usage, ok := sym.Decl.(*ast.Usage); ok {
+		rel = ast.NamingFeature(usage)
 	}
-	rel := ast.NamingFeature(usage)
 	if rel == nil || rel.Kind != ast.RelRedefines {
 		return true
 	}
@@ -116,7 +117,7 @@ func (r *Resolver) bindsEffectiveName(sym *symbols.Symbol) bool {
 	r.naming[sym] = true
 	defer delete(r.naming, sym)
 	named := true
-	r.aside(func() { named = r.namesVisibleFeature(sym.OwnerScope, usage, rel.Target) })
+	r.aside(func() { named = r.namesVisibleFeature(sym.OwnerScope, sym.Decl, rel.Target) })
 	r.effNames[sym] = named
 	return named
 }

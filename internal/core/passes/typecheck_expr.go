@@ -57,14 +57,17 @@ func (ec *exprChecker) warnf(span source.Span, format string, args ...any) {
 	})
 }
 
-// checkUsageValue checks a feature's bound value (`attribute x : T = expr`)
-// against the type and multiplicity the feature declares.
-func (ec *exprChecker) checkUsageValue(scope *symbols.Scope, u *ast.Usage) {
-	if u.Value == nil {
+// checkDeclValue checks a feature's bound value (`attribute x : T = expr`)
+// against the type and multiplicity the feature declares; an accept's trigger
+// is checked by the body walk instead.
+func (ec *exprChecker) checkDeclValue(scope *symbols.Scope, d featureDecl) {
+	if d.value == nil || isTriggerValue(d.value) {
 		return
 	}
-	ec.markPerformed(u.PerformedInvocation())
-	ec.checkBoundValue(scope, scope, u, u.Value)
+	if u, ok := d.node.(*ast.Usage); ok {
+		ec.markPerformed(u.PerformedInvocation())
+	}
+	ec.checkBoundValue(scope, scope, d, d.value)
 }
 
 // checkPerform types the action a `perform` statement runs.
@@ -88,8 +91,8 @@ func (ec *exprChecker) markPerformed(inv *ast.InvocationExpr) {
 // feature it is bound to. The value's names resolve in valueScope and the
 // feature's declaration in declScope, which differ when the value is written by
 // an assignment rather than declared on the feature.
-func (ec *exprChecker) checkBoundValue(valueScope, declScope *symbols.Scope, u *ast.Usage, value ast.Node) {
-	want := ec.declaredPrimType(declScope, u.Relationships)
+func (ec *exprChecker) checkBoundValue(valueScope, declScope *symbols.Scope, d featureDecl, value ast.Node) {
+	want := ec.declaredPrimType(declScope, d.relationships)
 	// A collection literal binds elementwise, so each element is checked
 	// against the feature's type rather than the sequence as a whole.
 	for _, element := range valueElements(value) {
@@ -101,9 +104,9 @@ func (ec *exprChecker) checkBoundValue(valueScope, declScope *symbols.Scope, u *
 			ec.errorf(element.Span(), "cannot bind %s value to a feature typed by %s", got, want)
 		}
 	}
-	ec.checkValueConformance(valueScope, declScope, u, value)
-	ec.checkValueDimension(valueScope, declScope, u, value)
-	ec.checkValueCount(declScope, u, value)
+	ec.checkValueConformance(valueScope, declScope, d, value)
+	ec.checkValueDimension(valueScope, declScope, d, value)
+	ec.checkValueCount(declScope, d, value)
 }
 
 // bindable reports whether a got-typed value may bind to a want-typed feature: a literal's

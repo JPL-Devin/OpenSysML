@@ -50,6 +50,40 @@ func (m *Model) RedefinedFeatures(sym *symbols.Symbol) []*symbols.Symbol {
 	return out
 }
 
+// AllRedefinedFeatures returns every feature sym redefines, directly or through
+// the features those redefine: explicit clauses and the implicit redefinitions
+// of parameters, connector ends and case roles alike. sym itself is excluded.
+func (m *Model) AllRedefinedFeatures(sym *symbols.Symbol) []*symbols.Symbol {
+	if m == nil || sym == nil {
+		return nil
+	}
+	var out []*symbols.Symbol
+	seen := map[*symbols.Symbol]bool{sym: true}
+	var visit func(*symbols.Symbol)
+	visit = func(s *symbols.Symbol) {
+		for _, target := range m.directRedefinedFeatures(s) {
+			if target == nil || seen[target] {
+				continue
+			}
+			seen[target] = true
+			out = append(out, target)
+			visit(target)
+		}
+	}
+	visit(sym)
+	return out
+}
+
+// directRedefinedFeatures returns the features sym redefines by clause or by position.
+func (m *Model) directRedefinedFeatures(sym *symbols.Symbol) []*symbols.Symbol {
+	explicit := m.RedefinedFeatures(sym)
+	out := make([]*symbols.Symbol, 0, len(explicit))
+	out = append(out, explicit...)
+	out = append(out, m.implicitParameterRedefinitions(sym)...)
+	out = append(out, m.implicitEndRedefinitions(sym)...)
+	return append(out, m.ImplicitRoleRedefinitions(sym)...)
+}
+
 // EffectiveNameOf returns a declaration's name, including one inherited through a unique redefinition.
 func (m *Model) EffectiveNameOf(sym *symbols.Symbol) string {
 	return m.effectiveNameOf(sym, make(map[*symbols.Symbol]bool))

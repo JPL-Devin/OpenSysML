@@ -383,9 +383,8 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 
 	// Optional value (= expr, := expr, or default [=] expr)
 	var value ast.Node
-	var isDefault bool
-	if _, def, ok := p.acceptValueOperatorSpan(); ok {
-		isDefault = def
+	valueOp, hasValue := p.acceptValueOperator()
+	if hasValue {
 		value = p.ParseExpression()
 	}
 
@@ -411,21 +410,23 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 
 	// Create Usage node with direction
 	usage := &ast.Usage{
-		Kind:          kind,
-		Ident:         ident,
-		Relationships: relationships,
-		Multiplicity:  multiplicity,
-		Value:         value,
-		IsDefault:     isDefault,
-		Members:       members,
-		HasBody:       hasBody,
-		IsReference:   isRef,
-		Direction:     direction,
-		IsOrdered:     postMods.isOrdered,
-		IsNonunique:   postMods.isNonunique,
-		IsEvent:       isEvent,
-		IsIndividual:  isIndividual,
-		Portion:       portion,
+		Kind:              kind,
+		Ident:             ident,
+		Relationships:     relationships,
+		Multiplicity:      multiplicity,
+		Value:             value,
+		ValueOperatorSpan: valueOp.span,
+		ValueIsDefault:    valueOp.isDefault,
+		ValueIsInitial:    valueOp.isInitial,
+		Members:           members,
+		HasBody:           hasBody,
+		IsReference:       isRef,
+		Direction:         direction,
+		IsOrdered:         postMods.isOrdered,
+		IsNonunique:       postMods.isNonunique,
+		IsEvent:           isEvent,
+		IsIndividual:      isIndividual,
+		Portion:           portion,
 	}
 	usage.NodeSpan = p.spanFrom(start)
 
@@ -2087,33 +2088,14 @@ func usageIsSubstantive(u *ast.Usage) bool {
 		len(u.ConnectorEnds) > 0 || u.FlowEnds != nil
 }
 
-// parseSubjectMember parses: subject <name> : <Type>; OR subject = <expr>; OR subject <name> = <expr>;
+// parseSubjectMember parses a subject parameter: `subject [name] [: Type] [mult]
+// [specializations] [value] (; | body)`, the value written with any value operator.
 func (p *Parser) parseSubjectMember(start int) ast.Node {
 	// 'subject' already consumed
 
 	// A subject takes prefix metadata after its keyword: `subject #B s;`
 	// (SysML.xtext SubjectUsage, `'subject' UsageExtensionKeyword* Usage`).
 	prefixes := p.parsePrefixMetadata()
-
-	// Check for binding pattern: subject = <expr>; OR subject <name> = <expr>;
-	if p.at(lexer.Eq) {
-		// Anonymous binding: subject = <expr>;
-		p.advance() // consume '='
-
-		// Parse value expression
-		value := p.ParseExpression()
-
-		// Expect semicolon
-		p.expect(lexer.Semicolon, "expected ';' after subject binding")
-
-		node := &ast.SubjectMember{
-			Prefixes:    prefixes,
-			Name:        "", // Empty name means binding inherited subject
-			BindingExpr: value,
-		}
-		node.NodeSpan = p.spanFrom(start)
-		return node
-	}
 
 	// A bare `subject;` declares the subject parameter without naming or typing
 	// it, as the OMG viewpoint examples write it.
@@ -2125,25 +2107,11 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 	}
 
 	// A subject parameter is a full usage (SysML v2 8.2.2.16): an optional name,
-	// an optional specialization part, a multiplicity, a value and a body.
+	// an optional specialization part, a multiplicity, a value and a body. An
+	// anonymous one with just a value (`subject = p;`) binds the inherited subject.
 	var name string
 	if seg, ok := p.parseNameSegment(); ok {
 		name = seg.Text
-
-		// Named binding: subject <name> = <expr>;
-		if p.at(lexer.Eq) {
-			p.advance()
-			value := p.ParseExpression()
-			p.expect(lexer.Semicolon, "expected ';' after subject binding")
-
-			node := &ast.SubjectMember{
-				Prefixes:    prefixes,
-				Name:        name,
-				BindingExpr: value,
-			}
-			node.NodeSpan = p.spanFrom(start)
-			return node
-		}
 	}
 
 	var typeRef *ast.QualifiedName
@@ -2160,9 +2128,11 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 	// A subject may redefine the one it inherits: subject subj : View[1] :>> RequirementCheck::subj;
 	rels := p.parseRelationships(true)
 
-	if name == "" && typeRef == nil && len(rels) == 0 {
-		p.error(p.peek().Span, "expected a name, ':' or a specialization after 'subject'")
-		en := &ast.ErrorNode{Message: "expected a name, ':' or a specialization after 'subject'"}
+	// Value part: `= expr`, `:= expr` or `default [=] expr`.
+	valueOp, hasValue := p.acceptValueOperator()
+	if name == "" && typeRef == nil && len(rels) == 0 && !hasValue {
+		p.error(p.peek().Span, "expected a name, ':', a specialization or a value after 'subject'")
+		en := &ast.ErrorNode{Message: "expected a name, ':', a specialization or a value after 'subject'"}
 		if !p.atEOF() && !p.at(lexer.RBrace) {
 			p.advance()
 		}
@@ -2170,19 +2140,21 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 		return en
 	}
 
-	// Value part: `= expr`, `:= expr` or `default [=] expr`.
 	var value ast.Node
-	if _, _, ok := p.acceptValueOperatorSpan(); ok {
+	if hasValue {
 		value = p.ParseExpression()
 	}
 
 	node := &ast.SubjectMember{
-		Prefixes:      prefixes,
-		Name:          name,
-		TypeRef:       typeRef,
-		Multiplicity:  mult,
-		Relationships: rels,
-		BindingExpr:   value,
+		Prefixes:          prefixes,
+		Name:              name,
+		TypeRef:           typeRef,
+		Multiplicity:      mult,
+		Relationships:     rels,
+		BindingExpr:       value,
+		ValueOperatorSpan: valueOp.span,
+		ValueIsDefault:    valueOp.isDefault,
+		ValueIsInitial:    valueOp.isInitial,
 	}
 
 	if p.at(lexer.LBrace) {
@@ -2203,17 +2175,22 @@ func (p *Parser) parseAssumeMember(start int) ast.Node {
 	// Check for 'assume [#Meta...] [constraint] [<decl>] (; | { body })' pattern
 	prefixes := p.parsePrefixMetadata()
 	if p.atKeyword("constraint") || len(prefixes) > 0 {
+		declStart := p.peek().Span.Offset
 		p.acceptKeyword("constraint")
 		d := p.parseOwnedConstraintDecl("assume constraint")
 		node := &ast.AssumeMember{
-			Prefixes:      prefixes,
-			Name:          d.name,
-			NameSpan:      d.nameSpan,
-			Relationships: d.relationships,
-			Multiplicity:  d.multiplicity,
-			Value:         d.value,
-			HasBody:       d.hasBody,
-			Body:          d.body,
+			Prefixes:          prefixes,
+			Name:              d.name,
+			NameSpan:          d.nameSpan,
+			DeclSpan:          p.spanFrom(declStart),
+			Relationships:     d.relationships,
+			Multiplicity:      d.multiplicity,
+			Value:             d.value,
+			ValueOperatorSpan: d.valueOp.span,
+			ValueIsDefault:    d.valueOp.isDefault,
+			ValueIsInitial:    d.valueOp.isInitial,
+			HasBody:           d.hasBody,
+			Body:              d.body,
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
@@ -2249,17 +2226,22 @@ func (p *Parser) parseRequireMember(start int) ast.Node {
 	// Check for 'require [#Meta...] [constraint] [<decl>] (; | { body })' pattern
 	prefixes := p.parsePrefixMetadata()
 	if p.atKeyword("constraint") || len(prefixes) > 0 {
+		declStart := p.peek().Span.Offset
 		p.acceptKeyword("constraint")
 		d := p.parseOwnedConstraintDecl("require constraint")
 		node := &ast.RequireMember{
-			Prefixes:      prefixes,
-			Name:          d.name,
-			NameSpan:      d.nameSpan,
-			Relationships: d.relationships,
-			Multiplicity:  d.multiplicity,
-			Value:         d.value,
-			HasBody:       d.hasBody,
-			Body:          d.body,
+			Prefixes:          prefixes,
+			Name:              d.name,
+			NameSpan:          d.nameSpan,
+			DeclSpan:          p.spanFrom(declStart),
+			Relationships:     d.relationships,
+			Multiplicity:      d.multiplicity,
+			Value:             d.value,
+			ValueOperatorSpan: d.valueOp.span,
+			ValueIsDefault:    d.valueOp.isDefault,
+			ValueIsInitial:    d.valueOp.isInitial,
+			HasBody:           d.hasBody,
+			Body:              d.body,
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
@@ -2317,6 +2299,7 @@ type ownedConstraintDecl struct {
 	relationships []*ast.Relationship
 	multiplicity  *ast.Multiplicity
 	value         ast.Node
+	valueOp       valueOperator
 	body          []ast.Node
 	hasBody       bool
 }
@@ -2336,7 +2319,8 @@ func (p *Parser) parseOwnedConstraintDecl(what string) ownedConstraintDecl {
 	if p.at(lexer.LBracket) {
 		d.multiplicity = p.parseMultiplicity()
 	}
-	if _, _, ok := p.acceptValueOperatorSpan(); ok {
+	if op, ok := p.acceptValueOperator(); ok {
+		d.valueOp = op
 		d.value = p.ParseExpression()
 	}
 	if p.at(lexer.LBrace) {

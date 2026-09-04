@@ -13,8 +13,8 @@ import (
 // Like the scalar rules, every check is one-sided — it reports only when both
 // the expected and the actual property are known — so a partially typed model
 // never produces a false positive.
-func (ec *exprChecker) checkValueConformance(valueScope, declScope *symbols.Scope, u *ast.Usage, value ast.Node) {
-	want := ec.declaredTypeSymbol(declScope, u.Relationships)
+func (ec *exprChecker) checkValueConformance(valueScope, declScope *symbols.Scope, d featureDecl, value ast.Node) {
+	want := ec.declaredTypeSymbol(declScope, d.relationships)
 	if want == nil || ec.model.PrimTypeOf(want) != semantics.PrimUnknown {
 		// An untyped feature has nothing to conform to, and a scalar-typed one
 		// is the lattice rules' to report — in lattice terms (Natural vs
@@ -65,12 +65,12 @@ func literalPrimType(value ast.Node) semantics.PrimType {
 
 // checkValueCount checks a bound value's element count against the multiplicity
 // governing the feature.
-func (ec *exprChecker) checkValueCount(declScope *symbols.Scope, u *ast.Usage, value ast.Node) {
+func (ec *exprChecker) checkValueCount(declScope *symbols.Scope, d featureDecl, value ast.Node) {
 	count, known := exactCount(value)
 	if !known {
 		return
 	}
-	r, ok := ec.effectiveRange(declScope, u, 0)
+	r, ok := ec.effectiveRange(declScope, d, 0)
 	if !ok {
 		return
 	}
@@ -83,31 +83,31 @@ func (ec *exprChecker) checkValueCount(declScope *symbols.Scope, u *ast.Usage, v
 // is looked up along, so a cyclic chain terminates.
 const maxRedefinitionDepth = 32
 
-// effectiveRange returns the multiplicity governing a usage: the one it
+// effectiveRange returns the multiplicity governing a feature: the one it
 // declares, or the one it inherits from the feature it redefines
 // (KerML 1.0 §7.3.4.5).
-func (ec *exprChecker) effectiveRange(scope *symbols.Scope, u *ast.Usage, depth int) (semantics.Range, bool) {
-	if r, ok := ec.model.RangeOf(u.Multiplicity); ok {
+func (ec *exprChecker) effectiveRange(scope *symbols.Scope, d featureDecl, depth int) (semantics.Range, bool) {
+	if r, ok := ec.model.RangeOf(d.multiplicity); ok {
 		return r, true
 	}
 	if depth >= maxRedefinitionDepth {
 		return semantics.Range{}, false
 	}
-	for _, rel := range u.Relationships {
+	for _, rel := range d.relationships {
 		if rel == nil || rel.Kind != ast.RelRedefines || rel.Target == nil {
 			continue
 		}
 		// The redefining declaration may carry the redefined feature's name, so
 		// the target is resolved with the declaration's own bindings hidden.
-		target, ok := ec.resolver.ResolveReferenceTarget(scope, u, rel.Target)
+		target, ok := ec.resolver.ResolveReferenceTarget(scope, d.node, rel.Target)
 		if !ok || target == nil {
 			continue
 		}
-		tu, isUsage := target.Decl.(*ast.Usage)
-		if !isUsage || tu == u {
+		td, isFeature := featureDeclOf(target.Decl)
+		if !isFeature || td.node == d.node {
 			continue
 		}
-		if r, ok := ec.effectiveRange(target.OwnerScope, tu, depth+1); ok {
+		if r, ok := ec.effectiveRange(target.OwnerScope, td, depth+1); ok {
 			return r, true
 		}
 	}

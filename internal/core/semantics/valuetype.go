@@ -162,7 +162,7 @@ func (m *Model) featureConformance(sym *symbols.Symbol, want *symbols.Symbol) Co
 // checkFeatureValuationSpecialization), else nil.
 func (m *Model) typingValue(sym *symbols.Symbol) ast.Node {
 	u, ok := sym.Decl.(*ast.Usage)
-	if !ok || u.Value == nil || u.IsDefault || u.Direction != ast.DirNone {
+	if !ok || u.Value == nil || u.ValueIsDefault || u.Direction != ast.DirNone {
 		return nil
 	}
 	for _, rel := range u.Relationships {

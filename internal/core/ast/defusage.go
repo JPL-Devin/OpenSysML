@@ -452,10 +452,12 @@ type Usage struct {
 	CrossFeature      *CrossFeatureMember
 	Value             Node
 	ValueOperatorSpan source.Span
-	// IsDefault marks a `default` value (KerML FeatureValue::isDefault).
-	IsDefault bool
-	Members   []Node
-	HasBody   bool
+	// ValueIsDefault and ValueIsInitial are the `default` and `:=` of the value
+	// part (KerML FeatureValue::isDefault, isInitial).
+	ValueIsDefault bool
+	ValueIsInitial bool
+	Members        []Node
+	HasBody        bool
 
 	// Tier B connection/flow/port grammar. These are nil/zero for kinds
 	// that do not use them.
