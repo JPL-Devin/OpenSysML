@@ -687,7 +687,7 @@ func (d *decoder) readMembership(subject rdf.Term) error {
 	if err != nil {
 		return err
 	}
-	member, hasMember, err := d.agreedObject(subject, what, "member", pMemberElement, pOwnedMemberElement, pOwnedMemberFeature, pOwnedResultExpression, pOwnedRelatedElement)
+	member, hasMember, err := d.agreedObject(subject, what, "member", pMemberElement, pOwnedMemberElement, pOwnedMemberFeature, pOwnedVariantUsage, pOwnedResultExpression, pOwnedRelatedElement)
 	if err != nil {
 		return err
 	}
@@ -1189,7 +1189,9 @@ func (d *decoder) definitionHead(el *element, kind ast.DefinitionKind) (string, 
 	if d.boolOf(el, rdf.SysML+"isAbstract") {
 		words = append(words, "abstract")
 	}
-	if d.boolOf(el, rdf.SysML+"isVariation") {
+	// An enumeration definition is a variation by what it is, not by a keyword
+	// (SysML v2 EnumerationDefinition); its isVariation writes nothing back.
+	if d.boolOf(el, rdf.SysML+"isVariation") && kind != ast.DefEnumeration {
 		words = append(words, "variation")
 	}
 	if d.boolOf(el, rdf.SysML+"isConstant") {
@@ -1221,6 +1223,13 @@ func (d *decoder) definitionHead(el *element, kind ast.DefinitionKind) (string, 
 	}
 	words = append(words, relationships...)
 	return strings.Join(words, " "), nil
+}
+
+// enumeratedValue reports whether el is an enumerated value: an enumeration
+// usage owned by an enumeration definition, a variant by that ownership alone.
+func (d *decoder) enumeratedValue(el *element) bool {
+	return el.metaclass == usageMetaclass[ast.UsageEnumeration] &&
+		el.owner != nil && el.owner.metaclass == definitionMetaclass[ast.DefEnumeration]
 }
 
 func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
@@ -1276,6 +1285,11 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		// A keyword such as `snapshot` is both a modifier and a kind keyword;
 		// writing it here as well as below would declare it twice.
 		if flag.keyword == keyword {
+			continue
+		}
+		// An enumerated value is a variant by what it is, not by a keyword
+		// (SysML.xtext EnumerationUsageMember); its isVariant writes nothing back.
+		if flag.property == "isVariant" && d.enumeratedValue(el) {
 			continue
 		}
 		if d.boolOf(el, rdf.SysML+flag.property) {
