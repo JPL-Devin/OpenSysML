@@ -388,7 +388,7 @@
     {
       "name": "validateFeatureConstantIsVariable",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateFeatureCrossFeatureSpecialization",
@@ -464,7 +464,7 @@
     {
       "name": "validateFeatureValueIsInitial",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateFeatureValueOverriding",

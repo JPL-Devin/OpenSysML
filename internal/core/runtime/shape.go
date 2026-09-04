@@ -247,6 +247,12 @@ func (ctx *Context) findOwnerType(featureSym *symbols.Symbol) *symbols.Symbol {
 		return nil
 	}
 
+	// The scope records the symbol declaring it; a scope re-owned by another
+	// declaration (a metadata body owned by its definition) is searched below.
+	if owner := ownerScope.Owner(); owner != nil && owner.Decl == ownerNode {
+		return owner
+	}
+
 	// Look up the symbol for the owner node in the parent scope
 	parentScope := ownerScope.Parent()
 	if parentScope == nil {

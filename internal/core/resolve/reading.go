@@ -68,6 +68,7 @@ func (r *Resolver) ReadQualified(scope *symbols.Scope, qn *ast.QualifiedName) Re
 	r.restoreSegments(qn, saved)
 	delete(r.resolving, qn)
 	if r.inCondition == 0 && r.allVisible == 0 {
+		journalNew(r, r.readings, key, qn)
 		r.readings[key] = rd
 	}
 	return rd

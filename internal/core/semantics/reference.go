@@ -1,6 +1,8 @@
 package semantics
 
 import (
+	"slices"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -102,7 +104,7 @@ func (m *Model) MemberSources(sym *symbols.Symbol) []*symbols.Symbol {
 
 	var order []*symbols.Symbol
 	visited := map[*symbols.Symbol]bool{sym: true}
-	queue := m.contributors(sym)
+	queue := slices.Clone(m.contributors(sym))
 	provisional := m.supersUnstable(sym)
 	for len(queue) > 0 {
 		cur := queue[0]
@@ -122,6 +124,21 @@ func (m *Model) MemberSources(sym *symbols.Symbol) []*symbols.Symbol {
 		m.memberSources[sym] = order
 	}
 	return order
+}
+
+// MemberSourcesStable reports whether the last MemberSources answer for sym was
+// complete and memoized, so a caller may memoize what it derived from it.
+func (m *Model) MemberSourcesStable(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	if m.resolver != nil {
+		if target, ok := m.resolver.ResolveAliasTarget(sym); ok {
+			sym = target
+		}
+	}
+	_, ok := m.memberSources[sym]
+	return ok
 }
 
 // DirectMemberSources returns the symbols that contribute members to sym in one
@@ -149,6 +166,19 @@ func (m *Model) DirectMemberSources(sym *symbols.Symbol) []*symbols.Symbol {
 // KerML feature keyword implies, then the feature it reference-subsets. The two
 // bases contribute members only, not conformance.
 func (m *Model) contributors(sym *symbols.Symbol) []*symbols.Symbol {
+	if cached, ok := m.contributed[sym]; ok {
+		return cached
+	}
+	out := m.collectContributors(sym)
+	// Memoized under the condition MemberSources memoizes its closure: no reference
+	// mid-resolution and sym's own supertypes settled.
+	if len(m.resolvingRef) == 0 && !m.supersUnstable(sym) {
+		m.contributed[sym] = out
+	}
+	return out
+}
+
+func (m *Model) collectContributors(sym *symbols.Symbol) []*symbols.Symbol {
 	supers := m.DirectSupertypes(sym)
 	out := make([]*symbols.Symbol, 0, len(supers)+2)
 	out = append(out, supers...)
