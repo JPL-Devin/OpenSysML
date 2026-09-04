@@ -43,6 +43,21 @@ func (e *BindingCycleError) Error() string {
 
 func (e *BindingCycleError) Unwrap() error { return ErrBindingCycle }
 
+// UndeterminedBindingError reports a feature valued by nothing but bindings that each
+// link one unspecified value of it, so none of them determines what it holds.
+type UndeterminedBindingError struct {
+	Target   string
+	Binding  string
+	Endpoint string
+}
+
+func (e *UndeterminedBindingError) Error() string {
+	return fmt.Sprintf("%s: %s is bound by `%s`, which links one unspecified value of each end; the model does not determine which value %s holds",
+		ErrBindingEnd, e.Target, e.Binding, e.Endpoint)
+}
+
+func (e *UndeterminedBindingError) Unwrap() error { return ErrBindingEnd }
+
 type bindingLocation struct {
 	instance *Instance
 	name     string
@@ -141,6 +156,9 @@ func (ctx *Context) resolveBindingValue(inst *Instance, name string) (Value, boo
 		target.BindingDerived = false
 	}
 
+	// A binding linking one unspecified value determines nothing, so it is reported
+	// only once no binding at any level determines the feature.
+	var undetermined *UndeterminedBindingError
 	path := name
 	for current := inst; current != nil; {
 		bindings := ctx.bindingsOf(current, path)
@@ -150,6 +168,13 @@ func (ctx *Context) resolveBindingValue(inst *Instance, name string) (Value, boo
 				current, inst, target, path, bindings, key,
 			)
 			delete(ctx.resolvingBindings, key)
+			var partial *UndeterminedBindingError
+			if errors.As(err, &partial) {
+				if undetermined == nil {
+					undetermined = partial
+				}
+				err = nil
+			}
 			if err != nil || found {
 				return value, found, err
 			}
@@ -164,6 +189,9 @@ func (ctx *Context) resolveBindingValue(inst *Instance, name string) (Value, boo
 		path = ownerFeature + "." + path
 		current = owner
 	}
+	if undetermined != nil {
+		return Value{}, false, undetermined
+	}
 	return Value{}, false, nil
 }
 
@@ -171,23 +199,23 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 	endpointName string, bindings []lower.Binding, key featureValueRef) (Value, bool, bool, []string, error) {
 	var cycleFeatures []string
 	var attempts []bindingAttempt
+	var undetermined *UndeterminedBindingError
 	for _, binding := range bindings {
 		partial, err := ctx.partialBinding(owner, targetInst, target, binding)
 		if err != nil {
 			return Value{}, false, false, nil, err
 		}
 		if partial {
-			// A binding of one unspecified value per end constrains the ends
-			// without determining either: an end valued on its own, by a default
-			// or a write, keeps that value; one valued by nothing else is not evaluable.
-			if target.Feature.DefaultValue != nil || target.Written {
-				continue
+			// A binding of one unspecified value per end constrains the ends without
+			// determining either: the value comes from a default, a write or a whole binding.
+			if undetermined == nil && target.Feature.DefaultValue == nil && !target.Written {
+				undetermined = &UndeterminedBindingError{
+					Target:   bindingLocationText(bindingLocation{instance: targetInst, name: key.feature}),
+					Binding:  ctx.bindingText(binding),
+					Endpoint: endpointName,
+				}
 			}
-			return Value{}, false, false, nil, fmt.Errorf(
-				"%w: %s is bound by `%s`, which links one unspecified value of each end; the model does not determine which value %s holds",
-				ErrBindingEnd, bindingLocationText(bindingLocation{instance: targetInst, name: key.feature}),
-				ctx.bindingText(binding), endpointName,
-			)
+			continue
 		}
 		attempt := ctx.attemptBinding(owner, targetInst, target, binding, key)
 		if attempt.err != nil {
@@ -233,7 +261,13 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 	if len(attempts) != 0 {
 		return attempts[0].value, true, false, nil, nil
 	}
-	return Value{}, false, len(cycleFeatures) != 0, cycleFeatures, nil
+	if len(cycleFeatures) != 0 {
+		return Value{}, false, true, cycleFeatures, nil
+	}
+	if undetermined != nil {
+		return Value{}, false, false, nil, undetermined
+	}
+	return Value{}, false, false, nil, nil
 }
 
 // partialBinding reports an end admitting fewer values than its feature holds, which links

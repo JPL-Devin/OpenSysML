@@ -525,6 +525,37 @@ func testBindingMultipleCollectionContributors(t *testing.T) {
 		}
 	})
 
+	// A binding of the whole feature determines it whatever partial bindings it has
+	// besides, and in whatever order they are declared.
+	t.Run("whole_beside_partial", func(t *testing.T) {
+		for name, bindings := range map[string]string{
+			"partial_first": "binding [1] bind [0..1] edges = [0..1] pick; bind edges = every;",
+			"whole_first":   "bind edges = every; binding [1] bind [0..1] edges = [0..1] pick;",
+		} {
+			t.Run(name, func(t *testing.T) {
+				idx, _, ctx := buildRuntime(t, "<binding-whole-beside-partial>", parseAndBuild(t, `package P {
+					part def Sys {
+						attribute edges : Integer[*];
+						attribute every : Integer[*] = (1, 2, 3);
+						attribute pick : Integer[0..1] = (2);
+						`+bindings+`
+					}
+				}`))
+				inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+				if err != nil {
+					t.Fatalf("instantiate: %v", err)
+				}
+				fv, err := inst.GetFeatureValue(ctx, "edges")
+				if err != nil {
+					t.Fatalf("edges: %v", err)
+				}
+				if got := FormatValue(fv.HeldValue()); got != "[1, 2, 3]" {
+					t.Errorf("edges = %s, want [1, 2, 3], what the whole binding determines", got)
+				}
+			})
+		}
+	})
+
 	// An end of multiplicity [0] links no value: each feature reads what it holds on its own.
 	t.Run("zero_width_end", func(t *testing.T) {
 		idx, _, ctx := buildRuntime(t, "<binding-zero-width-end>", parseAndBuild(t, `package P {

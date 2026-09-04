@@ -49,6 +49,9 @@ type Context struct {
 	// named feature of the type.
 	holders map[*symbols.Symbol]map[string][]string
 
+	// returnedParams memoizes, per calc shape, the parameters its result passes on.
+	returnedParams map[*calcShape]map[string]bool
+
 	// redefined memoizes, per feature of a type, the features it redefines
 	// transitively; callers read the shared slice and never append to it.
 	redefined map[featureOfType][]*symbols.Symbol
@@ -260,6 +263,7 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		features:            make(map[*symbols.Symbol][]EffectiveFeature),
 		denotedFeatures:     make(map[*symbols.Symbol]map[*symbols.Symbol]string),
 		holders:             make(map[*symbols.Symbol]map[string][]string),
+		returnedParams:      make(map[*calcShape]map[string]bool),
 		calcShapes:          make(map[*symbols.Symbol]*calcShape),
 		libraryPerformances: make(map[*symbols.Symbol]*libraryPerformance),
 

@@ -27,7 +27,10 @@
   `[0..*]` bindings of one collection agree or are a `binding conflict`, while a `[0..1]`
   binding that links one unspecified value of each end (`bind [0..1] tf.edges = [0..1] tfe`)
   is reported as the binding end it cannot resolve rather than answered with a witness — so
-  `box.vertices` and `box.tfe`…`box.urre` are typed errors naming the binding. An optional
+  `box.vertices` and `box.tfe`…`box.urre` are typed errors naming the binding — and never
+  decides a feature also bound whole, whatever order the bindings are declared in. Only an
+  argument a calc's returns pass on is held by the feature its call values, so reading any
+  other argument computes neither that feature nor the object the call does return. An optional
   feature holding nothing is the empty sequence on every surface: `%features box` prints
   `shape = []` as `%eval box.shape` does, while a required feature holding nothing is still
   uninitialized and a valueless `Real` still `<unset>`. A read or write naming no feature of

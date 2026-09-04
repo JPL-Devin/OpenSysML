@@ -164,31 +164,90 @@ func TestComputedHoldingIsClassifiedWhicheverIsReadFirst(t *testing.T) {
 	}
 }
 
+// An argument a calc's returns never pass on is not held by the feature the call values:
+// reading it neither computes that feature — which may fail — nor classifies the object
+// the call does return, so no behavior starts on it.
+func TestArgumentNotReturnedIsNotHeldByTheCall(t *testing.T) {
+	ctx, idx := libraryShapeContext(t, `package test {
+		private import ScalarValues::*;
+		state def Glowing {
+			attribute cycles : Integer = 0;
+			entry; then lit;
+			state lit { entry action count { assign cycles := cycles + 1; } }
+		}
+		item def Tallied { attribute tally : Integer = 7; exhibit state glow : Glowing; }
+		calc def pickChosen { in chosen; in other; return : Anything = chosen; }
+		item def Rack {
+			item lead [1];
+			item trail [1];
+			item tallied : Tallied [1] = pickChosen(lead, trail);
+			item failing : Tallied [1] = pickChosen(3, trail);
+		}
+		item rack : Rack;
+	}`)
+	rack := instantiateQualified(t, ctx, idx, "test::rack")
+	tallied := idx.LookupQualified("test::Tallied")[0]
+
+	trail := readInstance(t, ctx, rack, "trail")
+	if ctx.instanceConforms(trail, tallied) {
+		t.Fatal("trail, which no call returns, is a Tallied")
+	}
+	if rack.FeatureValues["tallied"].Materialized || rack.FeatureValues["lead"].Materialized {
+		t.Fatal("reading trail computed tallied, which does not hold it")
+	}
+	lead := readInstance(t, ctx, rack, "lead")
+	if !ctx.instanceConforms(lead, tallied) {
+		t.Fatalf("lead, read first, is classified by %v, want Tallied", lead.classifiers)
+	}
+	if glow, ok := lead.Behavior("glow"); !ok || glow.State == nil || glow.State.stateData["cycles"].Const.Int != 1 {
+		t.Fatal("lead, read first, runs no glow state machine")
+	}
+	if _, err := rack.GetFeatureValue(ctx, "failing"); err == nil {
+		t.Fatal("failing holds 3 as a Tallied without error")
+	}
+}
+
 // Only a feature that may answer another's objects as its own holds them: an attribute
-// computing from a feature, a condition tested, and a chain through a feature hold nothing,
-// so reading those features forces no other.
+// computing from a feature, a condition tested, a chain through a feature, and an argument
+// a calc's returns do not pass on hold nothing, so reading those features forces no other.
+// A function whose body the model does not state may return any argument.
 func TestOnlyFeaturesPassingObjectsOnHoldThem(t *testing.T) {
 	ctx, idx := libraryShapeContext(t, `package test {
 		private import ScalarValues::*;
+		private import SequenceFunctions::*;
 		item def Gauge { item cell [1]; }
 		item def Tallied { attribute tally : Integer = 7; }
+		calc def pickFirst { in chosen : Gauge; in other : Gauge; return : Gauge = chosen; }
+		calc def pickAt { in gauges : Gauge [*]; in n : Integer; gauges#(n) }
+		calc def pickWhen {
+			in gauges : Gauge [*]; in fallback : Gauge; in wanted : Boolean;
+			if wanted { for g in gauges { return : Gauge = g; } }
+			return : Gauge = fallback;
+		}
 		item def Rack {
 			attribute pickLead : Boolean = true;
 			attribute count : Integer = 2;
 			attribute doubled : Integer = count * 2;
 			item lead : Gauge [1];
 			item trail : Gauge [1];
+			item spare : Gauge [1];
 			item tallied : Tallied [1] = if pickLead ? lead else trail;
 			item cells [2] = (lead, trail).cell;
 			item picked = (lead, trail)#(count - 1);
+			item led : Tallied [1] = pickFirst(lead, trail);
+			item trailed : Tallied [1] = pickFirst(chosen = trail, other = lead);
+			item indexed : Tallied [1] = pickAt((lead, trail), count);
+			item looped : Tallied [1] = pickWhen((lead, trail), spare, pickLead);
+			item headed : Tallied [1] = head((lead, count));
 		}
 		item rack : Rack;
 	}`)
 	rack := idx.LookupQualified("test::Rack")[0]
 
 	want := map[string][]string{
-		"lead":     {"tallied", "picked"},
-		"trail":    {"tallied", "picked"},
+		"lead":     {"tallied", "picked", "led", "indexed", "looped", "headed"},
+		"trail":    {"tallied", "picked", "trailed", "indexed", "looped"},
+		"spare":    {"looped"},
 		"pickLead": nil,
 		"count":    nil,
 		"doubled":  nil,

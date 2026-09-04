@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -13,12 +14,18 @@ func (ctx *Context) holdingFeatures(typ *symbols.Symbol, name string) []string {
 	index, ok := ctx.holders[typ]
 	if !ok {
 		index = make(map[string][]string)
-		for _, feat := range ctx.FeaturesOf(typ) {
-			if feat.DefaultValue == nil || !ctx.valueBinds(&feat) || ctx.holdsData(&feat) {
+		features := ctx.FeaturesOf(typ)
+		data := make(map[string]bool, len(features))
+		for i := range features {
+			data[features[i].Name] = ctx.holdsData(&features[i])
+		}
+		for i := range features {
+			feat := &features[i]
+			if feat.DefaultValue == nil || !ctx.valueBinds(feat) || data[feat.Name] {
 				continue
 			}
-			for _, held := range ctx.mentionedFeatures(typ, &feat) {
-				if held != feat.Name {
+			for _, held := range ctx.mentionedFeatures(typ, feat) {
+				if held != feat.Name && !data[held] {
 					index[held] = append(index[held], feat.Name)
 				}
 			}
@@ -48,7 +55,7 @@ func (ctx *Context) mentionedFeatures(typ *symbols.Symbol, feat *EffectiveFeatur
 	}
 	var names []string
 	seen := make(map[string]bool)
-	for _, ref := range passedFeatureReferences(feat.DefaultValue) {
+	for _, ref := range ctx.passedFeatureReferences(scope, feat.DefaultValue) {
 		sym := ctx.referencedSymbol(scope, ref.Name)
 		if sym == nil {
 			continue
@@ -61,10 +68,10 @@ func (ctx *Context) mentionedFeatures(typ *symbols.Symbol, feat *EffectiveFeatur
 	return names
 }
 
-// passedFeatureReferences lists the feature references an expression may answer the
-// values of as its own: a branch chosen, an element indexed or selected, a receiver or
-// argument a function may return — not a chain's values, a condition or an operand computed from.
-func passedFeatureReferences(expr ast.Node) []*ast.FeatureReference {
+// passedFeatureReferences lists the feature references an expression written in scope
+// may answer the values of as its own: a branch chosen, an element indexed or selected,
+// an argument a call returns — not a chain's values, a condition or an operand computed from.
+func (ctx *Context) passedFeatureReferences(scope *symbols.Scope, expr ast.Node) []*ast.FeatureReference {
 	var refs []*ast.FeatureReference
 	var visit func(nodes ...ast.Node)
 	visit = func(nodes ...ast.Node) {
@@ -86,9 +93,7 @@ func passedFeatureReferences(expr ast.Node) []*ast.FeatureReference {
 			case *ast.IndexExpr:
 				visit(n.Operand)
 			case *ast.InvocationExpr:
-				visit(n.Operand)
-				visit(n.Args...)
-				visit(namedArgValues(n.NamedArgs)...)
+				visit(ctx.returnedArguments(scope, n)...)
 			case *ast.CollectExpr:
 				visit(n.Body)
 			case *ast.SelectExpr:
@@ -104,13 +109,118 @@ func passedFeatureReferences(expr ast.Node) []*ast.FeatureReference {
 	return refs
 }
 
-// namedArgValues lists the value expressions of named arguments.
-func namedArgValues(args []ast.NamedArg) []ast.Node {
-	values := make([]ast.Node, 0, len(args))
-	for _, a := range args {
-		values = append(values, a.Value)
+// returnedArguments lists the arguments of a call its result may consist of: those bound
+// to parameters a calc's returns pass on; every one for a function whose body is not
+// written in the model; none for a call that denotes nothing or computes no result.
+func (ctx *Context) returnedArguments(scope *symbols.Scope, call *ast.InvocationExpr) []ast.Node {
+	target := NewEvalContext(ctx, scope).invocationTarget(call)
+	positional := call.Args
+	if call.Operand != nil {
+		positional = append([]ast.Node{call.Operand}, call.Args...)
 	}
-	return values
+	var args []ast.Node
+	switch {
+	case target.shape != nil:
+		passed := ctx.returnedParameters(target.shape)
+		for i, arg := range positional {
+			if i < len(target.shape.ParamNames) && passed[target.shape.ParamNames[i]] {
+				args = append(args, arg)
+			}
+		}
+		for _, named := range call.NamedArgs {
+			if named.Name != nil && len(named.Name.Parts) != 0 && passed[named.Name.Parts[len(named.Name.Parts)-1].Text] {
+				args = append(args, named.Value)
+			}
+		}
+	case target.builtin != nil || target.library != nil:
+		args = append(args, positional...)
+		for _, named := range call.NamedArgs {
+			args = append(args, named.Value)
+		}
+	}
+	return args
+}
+
+// returnedParameters names the parameters of a calc whose values its result may consist
+// of: those its return expressions pass on, a `for` variable standing for its collection.
+// Memoized per shape; a recursive call reads the set as far as it is known.
+func (ctx *Context) returnedParameters(shape *calcShape) map[string]bool {
+	if passed, ok := ctx.returnedParams[shape]; ok {
+		return passed
+	}
+	passed := make(map[string]bool)
+	ctx.returnedParams[shape] = passed
+	params := make(map[string]bool, len(shape.ParamNames))
+	for _, name := range shape.ParamNames {
+		params[name] = true
+	}
+	for {
+		known := len(passed)
+		ctx.collectReturnedParameters(shape, passed, params)
+		if len(passed) == known {
+			return passed
+		}
+	}
+}
+
+// collectReturnedParameters adds to passed the parameters of shape the returns of its body
+// and its result binding pass on.
+func (ctx *Context) collectReturnedParameters(shape *calcShape, passed, params map[string]bool) {
+	type loopVariable struct {
+		scope      *symbols.Scope
+		collection ast.Node
+	}
+	variables := make(map[*symbols.Symbol]loopVariable)
+	var follow func(scope *symbols.Scope, expr ast.Node)
+	follow = func(scope *symbols.Scope, expr ast.Node) {
+		if scope == nil {
+			return
+		}
+		for _, ref := range ctx.passedFeatureReferences(scope, expr) {
+			sym := ctx.referencedSymbol(scope, ref.Name)
+			if sym == nil {
+				continue
+			}
+			if variable, ok := variables[sym]; ok {
+				follow(variable.scope, variable.collection)
+				continue
+			}
+			if name, ok := ctx.denotedFeature(shape.Sym, sym); ok && params[name] {
+				passed[name] = true
+			}
+		}
+	}
+	var walk func(stmts []lower.Statement)
+	walk = func(stmts []lower.Statement) {
+		for _, stmt := range stmts {
+			switch s := stmt.(type) {
+			case lower.Return:
+				follow(s.Scope, s.Value)
+			case lower.If:
+				walk(s.Then.Steps())
+				if s.Else != nil {
+					walk(s.Else.Steps())
+				}
+			case lower.Loop:
+				if s.Variable != "" {
+					if sym, ok := ctx.resolver.LookupName(s.Body.Scope, s.Variable); ok {
+						variables[sym] = loopVariable{scope: s.Scope, collection: s.Collection}
+					}
+				}
+				walk(s.Body.Steps())
+			case lower.Block:
+				walk(s.Steps())
+			}
+		}
+	}
+	walk(shape.Body)
+	for _, binding := range shape.Bindings {
+		for i := range binding.Ends {
+			if binding.Ends[i].Path == "result" && binding.Ends[1-i].Expr != nil {
+				follow(binding.Scope, binding.Ends[1-i].Expr)
+			}
+		}
+	}
 }
 
 // referencedSymbol resolves a name the way the evaluator does: a single part by
