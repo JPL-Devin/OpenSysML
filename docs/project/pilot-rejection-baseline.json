@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 229,
-        "digest": "sha256:2577d648f444514b94cebb82687bc82bc99c8ef3f09aa660f8bed86f08e53934"
+        "files": 231,
+        "digest": "sha256:4a85c7b78d6c2d67365fd7cfcef451fb64c03d7ff459318b5183cea1b77eed63"
       }
     ],
     "recorded": "2026-09-04"
   },
   "totals": {
-    "cases": 229,
-    "bothReject": 200,
+    "cases": 231,
+    "bothReject": 202,
     "pilotOnlyRejects": 21,
     "oursOnlyRejects": 8,
     "bothAccept": 0
@@ -56,16 +56,16 @@
     },
     {
       "source": "grammar",
-      "cases": 86,
-      "bothReject": 80,
+      "cases": 87,
+      "bothReject": 81,
       "pilotOnlyRejects": 6,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     },
     {
       "source": "semantic",
-      "cases": 101,
-      "bothReject": 78,
+      "cases": 102,
+      "bothReject": 79,
       "pilotOnlyRejects": 15,
       "oursOnlyRejects": 8,
       "bothAccept": 0
@@ -787,6 +787,15 @@
       "path": "grammar/g67-expose-outside-view-body.sysml",
       "source": "grammar",
       "rule": "Expose is a ViewBodyItem; a part def body admits no 'expose' (SysML.xtext:2374 Expose, :2359 ViewBodyItem; pilot validateExposeOwningNamespace).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
+      "path": "grammar/g68-definition-in-enumeration-body.sysml",
+      "source": "grammar",
+      "rule": "an enumeration body admits only enumerated values and annotating elements, not a nested definition (SysML.xtext EnumerationBody).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -1905,6 +1914,15 @@
       "pilotErrors": 2
     },
     {
+      "path": "semantic/s47-enumeration-specializes-enumeration.sysml",
+      "source": "semantic",
+      "rule": "An enumeration definition is a variation and a variation must not specialize another variation (SysML v2 7.6.4 and 8.3.9 validateEnumerationDefinitionIsVariation, validateDefinitionVariationSpecialization; pilot validateDefinitionVariationSpecialization).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
       "path": "semantic/s80-constant-attribute-not-variable.sysml",
       "source": "semantic",
       "rule": "only a variable feature can be constant, and an attribute of a data type is not variable (KerML 8.3.3.3 validateFeatureConstantIsVariable; pilot validateFeatureConstantIsVariable).",
@@ -2282,8 +2300,8 @@
       }
     ],
     "totals": {
-      "cases": 229,
-      "bothReject": 200,
+      "cases": 231,
+      "bothReject": 202,
       "pilotOnlyRejects": 21,
       "oursOnlyRejects": 8,
       "bothAccept": 0

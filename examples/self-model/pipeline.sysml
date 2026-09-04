@@ -170,12 +170,13 @@ package OpenSysMLPipeline {
     #SemanticEngine part def PassRegistry :> Stage {
         attribute :>> goPackage = "internal/core/passes";
         attribute tierCount : Integer = 4;
-        attribute passCount : Integer = 49;
+        attribute passCount : Integer = 50;
         attribute sortsByLevel : Boolean = true;
         attribute skipsDocumentScopedAboveFailure : Boolean = true;
 
         part syntax : SyntaxCheck { attribute :>> goType = "SyntaxPass"; }
         part importVisibility : SyntaxCheck { attribute :>> goType = "ImportVisibilityPass"; }
+        part enumerationBody : SyntaxCheck { attribute :>> goType = "EnumerationBodyPass"; }
         // Non-standard notation is a syntax-level warning, not a constraint.
         part notation : SyntaxCheck { attribute :>> goType = "NonstandardNotationPass"; }
         part nameResolution : NameResolutionCheck { attribute :>> goType = "NameResolutionPass"; }

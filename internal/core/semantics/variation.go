@@ -21,6 +21,12 @@ func DeclaresVariation(sym *symbols.Symbol) bool {
 	return false
 }
 
+// IsVariation reports whether sym is a variation: declared `variation`, or an
+// enumeration definition, whose isVariation is always true (SysML v2 §8.3.9).
+func IsVariation(sym *symbols.Symbol) bool {
+	return DeclaresVariation(sym) || (sym != nil && sym.Kind == symbols.SymbolEnumerationDef)
+}
+
 // DeclaresVariant reports whether sym is declared with the `variant` keyword,
 // which makes it one of the choices of the variation that owns it.
 func DeclaresVariant(sym *symbols.Symbol) bool {
@@ -29,6 +35,12 @@ func DeclaresVariant(sym *symbols.Symbol) bool {
 	}
 	usage, ok := sym.Decl.(*ast.Usage)
 	return ok && usage.IsVariant
+}
+
+// IsVariant reports whether sym is a variant: declared `variant`, or an
+// enumerated value, held by a variant membership (SysML v2 §7.6.4).
+func IsVariant(sym *symbols.Symbol) bool {
+	return DeclaresVariant(sym) || EnumerationOwning(sym) != nil
 }
 
 // VariantValue returns the value expression a variant declares, or nil when it
@@ -42,13 +54,14 @@ func VariantValue(sym *symbols.Symbol) ast.Node {
 }
 
 // VariationOwning returns the variation sym is a variant of — the declaration
-// owning the variant membership — or nil when sym is not a variant.
+// owning the variant membership — or nil when sym is not a variant. An
+// enumerated value is a variant of the enumeration definition owning it.
 func VariationOwning(sym *symbols.Symbol) *symbols.Symbol {
-	if !DeclaresVariant(sym) || sym.OwnerScope == nil {
+	if !IsVariant(sym) || sym.OwnerScope == nil {
 		return nil
 	}
 	owner := sym.OwnerScope.Owner()
-	if !DeclaresVariation(owner) {
+	if !IsVariation(owner) {
 		return nil
 	}
 	return owner
@@ -58,7 +71,7 @@ func VariationOwning(sym *symbols.Symbol) *symbols.Symbol {
 // when sym is not a variant of one: unlike VariationOwning it accepts an owner
 // that is a variation by specialization without restating the modifier.
 func (m *Model) VariationPointOwning(sym *symbols.Symbol) *symbols.Symbol {
-	if !DeclaresVariant(sym) || sym.OwnerScope == nil {
+	if !IsVariant(sym) || sym.OwnerScope == nil {
 		return nil
 	}
 	owner := sym.OwnerScope.Owner()
@@ -68,15 +81,14 @@ func (m *Model) VariationPointOwning(sym *symbols.Symbol) *symbols.Symbol {
 	return owner
 }
 
-// IsVariationFeature reports whether sym is a variation point: declared
-// `variation` itself, or specializing one — a usage typed by a variation
-// definition and a usage redefining a variation usage are both variation
-// points, and neither restates the modifier.
+// IsVariationFeature reports whether sym is a variation point: a variation itself
+// (declared, or an enumeration definition) or a usage specializing a declared one.
+// A usage typed by an enumeration holds one of its values, as any attribute does.
 func (m *Model) IsVariationFeature(sym *symbols.Symbol) bool {
 	if sym == nil {
 		return false
 	}
-	if DeclaresVariation(sym) {
+	if IsVariation(sym) {
 		return true
 	}
 	for _, sup := range m.AllSupertypes(sym) {
@@ -88,9 +100,10 @@ func (m *Model) IsVariationFeature(sym *symbols.Symbol) bool {
 }
 
 // VariantsOf returns the variants sym offers, in declaration order: those
-// declared for it and those it inherits from the variation it specializes. A
-// `variant` inherited from a type that is not a variation point offers no choice,
-// so it is an ordinary member here too.
+// declared for it and those it inherits from the variation it specializes,
+// the enumerated values of an enumeration among them. A `variant` inherited
+// from a type that is not a variation point offers no choice, so it is an
+// ordinary member here too.
 func (m *Model) VariantsOf(sym *symbols.Symbol) []*symbols.Symbol {
 	if sym == nil {
 		return nil

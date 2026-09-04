@@ -20,7 +20,7 @@ the diagnostic it reports was recorded as that row's probe.
 
 ## Summary
 
-**Census:** 113 of 217 named constraints are reported by OpenSysML — 101 ✅ faithful and 12 ⚠️ approximate; 23 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 81 ❔ unknown.
+**Census:** 113 of 217 named constraints are reported by OpenSysML — 102 ✅ faithful and 11 ⚠️ approximate; 23 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 81 ❔ unknown.
 
 The figures on that line, and the pin and digest quoted above, are written by
 `go run ./cmd/validation-census` from the baseline; `-check` fails on a hand-edited figure or
@@ -213,8 +213,8 @@ parser/resolver location. *Our message* is given only where OpenSysML's wording 
 | `validateDecisionNodeOutgoingSuccessions` | SysML | Outgoing successions of a decision node have target multiplicity 0..1; no textual model made the pilot report it | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateDefinitionVariationIsAbstract` | SysML | A variation definition is abstract (implied by `variation`; no textual violation) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateDefinitionVariationMembership` | SysML | An owned usage of a variation definition is a variant | internal/core/passes/w8d_variability.go:W8DVariabilityPass.Run | — | `xpect/p09-variation-member-not-variant.sysml` | ✅ faithful |
-| `validateDefinitionVariationSpecialization` | SysML | A variation definition does not specialize another variation | internal/core/passes/w8d_variability.go:W8DVariabilityPass.Run | same wording; reported for `variation` definitions only, an enumeration definition specializing another is not reported | `xpect/p10-variation-specializes-variation.sysml` | ⚠️ approximate |
-| `validateEnumerationDefinitionIsVariation` | SysML | An enumeration definition is a variation (implied by `enum def`; the pilot reports `validateDefinitionVariationSpecialization` for the enum case instead) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
+| `validateDefinitionVariationSpecialization` | SysML | A variation definition does not specialize another variation | internal/core/passes/w8d_variability.go:W8DVariabilityPass.Run | same wording between two `variation` definitions; when an enumeration definition is involved the message names the implicit variation and the fix | `semantic/s47-enumeration-specializes-enumeration.sysml` | ✅ faithful |
+| `validateEnumerationDefinitionIsVariation` | SysML | An enumeration definition is a variation (fixed at `true` for every `enum def` in both tools, so no textual model violates it; the enum cases surface under `validateDefinitionVariationSpecialization` and `validateDefinitionVariationMembership`) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateEnumerationUsageType` | SysML | An enumeration usage is typed by one enumeration definition | internal/core/passes/one_type.go:checkOneType | — | `xpect/p18-enum-two-types.sysml` | ✅ faithful |
 | `validateEventOccurrenceUsageIsReference` | SysML | An event occurrence usage is referential (the grammar admits no composite `event`) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateEventOccurrenceUsageReferent` | SysML | An event occurrence usage references an occurrence | internal/core/passes/w8d_occurrence_typing.go:W8DOccurrenceTypingPass.Run | — | none | ✅ faithful |
@@ -303,8 +303,7 @@ parser/resolver location. *Our message* is given only where OpenSysML's wording 
 ## Out of scope for this census
 
 Rows are recorded as `main` stands at the recording date. Constraints being implemented in
-parallel (`validateFeatureValueOverriding`, the enumeration cases of
-`validateDefinitionVariationSpecialization`, the `validateTriggerInvocationAction*Argument`
+parallel (`validateFeatureValueOverriding`, the `validateTriggerInvocationAction*Argument`
 trio, and the control-node succession constraints) keep the status the evidence supports today; when their
 passes land, the row's status moves and `-update` is not needed — the baseline's statuses are
 edited by hand, the names are not. The feature-chain value bindings of
