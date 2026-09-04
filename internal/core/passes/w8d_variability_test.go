@@ -130,8 +130,8 @@ func TestW8DEnumerationDefinitionMembers(t *testing.T) {
 
 // Legal enumerations stay silent: literals with and without values, anonymous,
 // short-named or nameless ones stating a typing or multiplicity, the `enum`
-// keyword form, a scalar or attribute-definition general, and usages typed by
-// an enumeration.
+// keyword form, a scalar or attribute-definition general, KerML-only keywords
+// as names, globally qualified typings, and usages typed by an enumeration.
 func TestW8DLegalEnumerationStaysSilent(t *testing.T) {
 	const src = `package P {
 		private import ScalarValues::*;
@@ -142,6 +142,7 @@ func TestW8DLegalEnumerationStaysSilent(t *testing.T) {
 		enum def M :> AD { x; y; <s1> z : M; <s2>; : M; [1]; private <s3> w; }
 		metadata def Tag;
 		enum def T { #Tag a; #Tag b : T; #Tag enum c; private #Tag d; #Tag <e> ee; #Tag f [1]; #Tag g :> a; #Tag = 1; #Tag; }
+		enum def W { chains; type : W; namespace default = 1; class :> chains; k : $::P::W; }
 		attribute def Plain :> E;
 		enum def N :> Plain;
 		part def P1 { attribute e : E = E::a; enum f : E; attribute g : Real; }

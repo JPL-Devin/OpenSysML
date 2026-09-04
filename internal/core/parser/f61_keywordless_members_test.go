@@ -252,6 +252,40 @@ func TestF61KeywordlessMembers(t *testing.T) {
 		}
 	})
 
+	t.Run("kerml_keyword_named_and_globally_typed_enum_values", func(t *testing.T) {
+		pkg := parsePkg(t, "package B { enum def S { chains; type : S; namespace default = 1; class :> chains; a : $::B::S; b : $::B::S = 2; } }")
+		def := pkg.Members[0].(*ast.Membership).Member.(*ast.Definition)
+		if len(def.Members) != 6 {
+			t.Fatalf("members = %d, want 6", len(def.Members))
+		}
+		for i, want := range []string{"chains", "type", "namespace", "class", "a", "b"} {
+			if u := usageAt(t, def.Members, i); u.Kind != ast.UsageEnumeration || u.Ident.Name != want {
+				t.Errorf("member %d = %s %q, want enumerated value %q", i, u.Kind, u.Ident.Name, want)
+			}
+		}
+		if u := usageAt(t, def.Members, 1); len(u.Relationships) != 1 || u.Relationships[0].Kind != ast.RelTyping {
+			t.Errorf("type : S = %#v, want a typing", u)
+		}
+		if u := usageAt(t, def.Members, 2); u.Value == nil {
+			t.Errorf("namespace default = 1 = %#v, want a value", u)
+		}
+		if u := usageAt(t, def.Members, 3); len(u.Relationships) != 1 || u.Relationships[0].Kind != ast.RelSubsets {
+			t.Errorf("class :> chains = %#v, want a subsetting", u)
+		}
+		for _, i := range []int{4, 5} {
+			u := usageAt(t, def.Members, i)
+			if len(u.Relationships) != 1 || u.Relationships[0].Kind != ast.RelTyping {
+				t.Fatalf("member %d = %#v, want a typing", i, u)
+			}
+			if qn, ok := u.Relationships[0].Target.(*ast.QualifiedName); !ok || !qn.Global {
+				t.Errorf("member %d typing target = %#v, want a globally qualified name", i, u.Relationships[0].Target)
+			}
+		}
+		if u := usageAt(t, def.Members, 5); u.Value == nil {
+			t.Errorf("b : $::B::S = 2 = %#v, want a value", u)
+		}
+	})
+
 	t.Run("enum_value_trivia_stays_with_the_next_member", func(t *testing.T) {
 		pkg := parsePkg(t, "package B { enum def S { a; /* c */ b; /* d */ doc /* e */ } }")
 		def := pkg.Members[0].(*ast.Membership).Member.(*ast.Definition)

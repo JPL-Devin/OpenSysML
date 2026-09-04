@@ -608,13 +608,27 @@ func (p *Parser) atEnumeratedValueDeclaration() bool {
 		return true
 	case lexer.Semicolon, lexer.LBrace:
 		return prefixed
-	case lexer.Identifier, lexer.UnrestrictedName:
+	}
+	if p.atNameAt(off) {
 		off++
 		if endsEnumeratedValueName(p.peekN(off)) {
 			return true
 		}
 	}
 	return p.atFeatureSpecializationPartAt(off)
+}
+
+// atNameAt reports whether the token off positions ahead can begin a name
+// segment, as atName does for the current token.
+func (p *Parser) atNameAt(off int) bool {
+	t := p.peekN(off)
+	switch t.Kind {
+	case lexer.Identifier, lexer.UnrestrictedName:
+		return true
+	case lexer.Keyword:
+		return !p.reservedWord(t.KeywordID)
+	}
+	return false
 }
 
 // endsEnumeratedValueName reports whether t follows the name of an enumerated
@@ -663,8 +677,11 @@ func (p *Parser) atFeatureSpecializationPartAt(off int) bool {
 	case lexer.LBracket, lexer.ColonGt, lexer.ColonGtGt, lexer.ColonColonGt, lexer.EqGt:
 		return true
 	case lexer.Colon:
-		n := p.peekN(off + 1)
-		return n.Kind == lexer.Identifier || n.Kind == lexer.UnrestrictedName
+		off++
+		if p.peekN(off).Kind == lexer.Dollar && p.peekN(off+1).Kind == lexer.ColonColon {
+			off += 2
+		}
+		return p.atNameAt(off)
 	case lexer.Keyword:
 		switch t.KeywordID {
 		case "subsets", "references", "crosses", "redefines":
