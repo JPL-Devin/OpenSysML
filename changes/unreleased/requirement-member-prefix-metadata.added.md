@@ -10,5 +10,7 @@
   `c` and `r` in the requirement: they are found by name, typed by `: C`, bounded by their
   multiplicity, redefine what `:>>` names (and their bodies see names nested under it),
   take a constraint usage's implicit base, and go-to-definition on a `:>> c` lands on the
-  member. An anonymous `require constraint { … }` still declares nothing and its conditions
-  still belong to the requirement.
+  member. A value the member binds (`require constraint c = false;`) is its feature value,
+  read by `%eval`, materialized on requirement instances and replaced by a redefinition, as
+  a constraint usage's `= expr` is. An anonymous `require constraint { … }` still declares
+  nothing and its conditions still belong to the requirement.

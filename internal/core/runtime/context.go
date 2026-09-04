@@ -636,8 +636,6 @@ func RequireConstraint(sym *symbols.Symbol) error {
 		if decl.Kind == ast.UsageConstraint {
 			return nil
 		}
-	case *ast.AssumeMember, *ast.RequireMember:
-		return nil
 	}
 	return notOfKind(ErrNotAConstraint, sym, "constraint")
 }
