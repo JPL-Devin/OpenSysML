@@ -166,6 +166,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("collection_spends_the_element_budget", testCollectionSpendsTheElementBudget)
 	t.Run("usage_read_through_a_part_without_an_output", testUsageReadThroughAPartWithoutAnOutput)
 	t.Run("performed_action_binding_names_nothing", testPerformedActionBindingNamesNothing)
+	t.Run("no_flow_performed_action_checks_its_inputs", testNoFlowPerformedActionChecksItsInputs)
+	t.Run("binding_end_of_a_destroyed_object", testBindingEndOfADestroyedObject)
+	t.Run("operation_of_a_destroyed_object", testOperationOfADestroyedObject)
 	t.Run("structured_attribute_chain_of_an_unknown_feature", testStructuredAttributeChainOfAnUnknownFeature)
 	t.Run("elements_chain_of_a_non_numeric_collection", testElementsChainOfANonNumericCollection)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
@@ -1649,11 +1652,18 @@ func testNamedLibraryCallThatHasNoValue(t *testing.T) {
 		{`RationalFunctions::numer(1.0e19)`, semantics.ErrArithmeticOverflow},
 		{`RationalFunctions::denom(0.0001)`, semantics.ErrArithmeticOverflow},
 		{`CollectionFunctions::'array#'(xs, (1, 1))`, ErrUnevaluableLibraryFunction},
-		{`OccurrenceFunctions::isDuring(xs)`, ErrUnevaluableLibraryFunction},
+		{`OccurrenceFunctions::isDuring(xs)`, ErrMultiplicityViolation},
+		{`OccurrenceFunctions::isDuring(factor)`, ErrNotAnOccurrence},
+		{`OccurrenceFunctions::'==='(xs, xs)`, ErrMultiplicityViolation},
+		{`OccurrenceFunctions::'==='(factor, factor)`, ErrNotAnOccurrence},
+		{`OccurrenceFunctions::create(factor)`, ErrNotAnOccurrence},
+		{`OccurrenceFunctions::destroy(factor)`, ErrNotAnOccurrence},
 		{`OccurrenceFunctions::addNew(xs)`, ErrCalcArity},
-		{`OccurrenceFunctions::addNew(occ = xs)`, ErrUnevaluableLibraryFunction},
+		{`OccurrenceFunctions::addNew(occ = xs)`, ErrMultiplicityViolation},
+		{`OccurrenceFunctions::addNew(xs, factor)`, ErrNotAnOccurrence},
 		{`OccurrenceFunctions::addNewAt(xs, xs)`, ErrCalcArity},
-		{`OccurrenceFunctions::addNewAt(occ = xs, index = 1)`, ErrUnevaluableLibraryFunction},
+		{`OccurrenceFunctions::addNewAt(occ = xs, index = 1)`, ErrMultiplicityViolation},
+		{`OccurrenceFunctions::addNewAt((), factor, 0)`, ErrNotAnOccurrence},
 		{`IntegerFunctions::'+'("a", 1)`, ErrTypeMismatch},
 		{`IntegerFunctions::'/'(1, 0)`, ErrDivisionByZero},
 		{`NaturalFunctions::'/'(7, 2)`, semantics.ErrArithmeticDomain},
@@ -7933,6 +7943,93 @@ func testPerformedActionBindingNamesNothing(t *testing.T) {
 	}
 }
 
+// testBindingEndOfADestroyedObject: a binding end naming a destroyed object's
+// feature is ErrOccurrenceDestroyed, never a stale read of it or a write into it.
+func testBindingEndOfADestroyedObject(t *testing.T) {
+	instantiate, invoke, ctx := lifetimeFixture(t, `
+		package test {
+			private import ScalarValues::*;
+			private import OccurrenceFunctions::*;
+			part def Widget { attribute n : Integer = 1; attribute m : Integer; }
+			part def Rig {
+				part w : Widget;
+				attribute shown : Integer;
+				bind shown = w.n;
+				attribute knob : Integer = 9;
+				bind w.m = knob;
+			}
+			calc def DestroyWidget { in w : Widget; return : Widget = destroy(w); }
+		}
+	`)
+	rig := instantiate("Rig")
+	fv, err := rig.GetFeatureValue(ctx, "w")
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := fv.HeldValue().Object()
+	w, _ := ctx.getInstance(id)
+	if _, err := invoke("DestroyWidget", objectValue(w)); err != nil {
+		t.Fatalf("destroy(w): %v", err)
+	}
+	for _, name := range []string{"shown", "knob"} {
+		_, err := rig.GetFeatureValue(ctx, name)
+		if !errors.Is(err, ErrOccurrenceDestroyed) || !errors.Is(err, ErrBindingEnd) {
+			t.Errorf("%s bound to a destroyed end: %v; want %v naming the binding end", name, err, ErrOccurrenceDestroyed)
+		}
+	}
+	if m := w.FeatureValues["m"]; m.Materialized {
+		t.Errorf("destroyed w.m = %s; want it left unwritten", FormatValue(m.HeldValue()))
+	}
+}
+
+// testOperationOfADestroyedObject: an operation invoked on a destroyed object is
+// ErrOccurrenceDestroyed before it runs, even one reading no feature of it.
+func testOperationOfADestroyedObject(t *testing.T) {
+	instantiate, invoke, ctx := lifetimeFixture(t, `
+		package test {
+			private import OccurrenceFunctions::*;
+			item def Ping;
+			part def Beacon { action ping { first start; action fire { send Ping to tower; } succession first start then fire; } }
+			calc def DestroyBeacon { in b : Beacon; return : Beacon = destroy(b); }
+		}
+	`)
+	beacon := instantiate("Beacon")
+	if _, err := invoke("DestroyBeacon", objectValue(beacon)); err != nil {
+		t.Fatalf("destroy(beacon): %v", err)
+	}
+	if _, err := ctx.InvokeOperation(beacon, "ping", nil); !errors.Is(err, ErrOccurrenceDestroyed) {
+		t.Errorf("invoke ping on a destroyed object = %v; want %v", err, ErrOccurrenceDestroyed)
+	}
+	if sent := len(ctx.PendingMessages()); sent != 0 {
+		t.Errorf("a destroyed object sent %d message(s); want none", sent)
+	}
+}
+
+// testNoFlowPerformedActionChecksItsInputs: an action stating no flow takes its
+// inputs as a flowed one does, so a binding it cannot take fails the performer.
+func testNoFlowPerformedActionChecksItsInputs(t *testing.T) {
+	for name, tc := range map[string]struct {
+		binding string
+		want    error
+	}{
+		"output":  {"in r = 5;", ErrOutputActionInput},
+		"unknown": {"in bogus = 5;", ErrUnknownActionInput},
+	} {
+		src := `
+			package test {
+				private import ScalarValues::*;
+				action def Report { in n : Integer; out r : Integer; }
+				part def Camera { perform action report : Report { ` + tc.binding + ` } }
+			}
+		`
+		idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+		_, err := ctx.Instantiate(idx.LookupQualified("test::Camera")[0])
+		if !errors.Is(err, tc.want) {
+			t.Errorf("%s: Instantiate(Camera) = %v; want %v", name, err, tc.want)
+		}
+	}
+}
+
 // testStructuredAttributeChainOfAnUnknownFeature: a structured attribute usage
 // holds the features of its type, so a chain into one it does not have is
 // reported rather than answered as an empty value.
@@ -8132,7 +8229,7 @@ func testObjectPerformedActionOccurrenceHoldsANonObject(t *testing.T) {
 		}
 	}`
 	idx, _, ctx := buildRuntime(t, "<performed-action-non-object>", parseAndBuild(t, src))
-	inst, err := ctx.materialize(oneSymbol(t, idx, "test::Host"), 0)
+	inst, err := ctx.materialize(oneSymbol(t, idx, "test::Host"), 0, nil, "")
 	if err != nil {
 		t.Fatalf("materialize: %v", err)
 	}

@@ -25,6 +25,22 @@ func (m *Model) UsageMayTimeVary(sym *symbols.Symbol) bool {
 		(usage.Kind != ast.UsageAction && !m.conformsByName(sym, "Actions::Action"))
 }
 
+// FeatureIsVariable derives KerML Feature::isVariable (KerML 1.1 §8.3.3.1): declared by
+// `var` or `const` in KerML, and redefined as Usage::mayTimeVary for a SysML usage.
+func (m *Model) FeatureIsVariable(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || isKerMLTypeDecl(sym) {
+		return false
+	}
+	if m.isKerMLDoc(sym) {
+		return usage.IsVariable || usage.IsConstant
+	}
+	return m.UsageMayTimeVary(sym)
+}
+
 // usageIsReferential derives SysML Usage::isReference: attribute usages are
 // always referential; other usages are referential unless composite.
 func usageIsReferential(usage *ast.Usage) bool {

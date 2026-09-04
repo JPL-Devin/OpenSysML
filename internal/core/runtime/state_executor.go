@@ -126,6 +126,9 @@ func newStateExecutorForOccurrence(
 	if stateMachine.Kind != symbols.SymbolStateUsage && stateMachine.Kind != symbols.SymbolStateDef {
 		return nil, fmt.Errorf("symbol %s is not a state machine", stateMachine.Name)
 	}
+	if err := ctx.checkPerformer(self); err != nil {
+		return nil, err
+	}
 
 	// Lower to StateGraph, in the scope the machine's body was written in, so
 	// that everything the graph carries is evaluated where it was declared.
@@ -1264,6 +1267,7 @@ func (e *StateExecutor) completeIfDone(target *ast.StateNode) error {
 		return err
 	}
 	e.state = StateCompleted
+	e.ctx.endPerformanceLife(e.occurrence)
 	return nil
 }
 
@@ -2213,6 +2217,7 @@ func (e *StateExecutor) activeStates() []*ast.StateNode {
 // initialize sets current state to initial state and enters it.
 func (e *StateExecutor) initialize() error {
 	defer e.ctx.beginExecutorRun(&e.runStarted)()
+	e.ctx.beginPerformanceLife(e.occurrence, e.ctx.newActivation())
 
 	// Use initial state from graph
 	if e.graph.Initial != nil {

@@ -779,6 +779,101 @@ func TestAdoptRestartsACarriedObjectsBehavior(t *testing.T) {
 	}
 }
 
+const adoptNestedSrc = `package Demo {
+	part def Bolt { attribute torque = 1.0; }
+	part def Engine { part bolt : Bolt; part nut : Bolt; }
+	part def Vehicle { part engine : Engine; part spare : Engine; }
+}`
+
+// Every carried part begins with its whole, whatever order the objects are
+// carried in, and a carry-over of a carry-over keeps that so.
+func TestAdoptBeginsEveryPartWithItsWhole(t *testing.T) {
+	prev := contextOver(t, adoptNestedSrc)
+	obj, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::Vehicle"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	var held []int64
+	for _, engine := range []string{"engine", "spare"} {
+		fv, err := obj.GetFeatureValue(prev, engine)
+		if err != nil {
+			t.Fatalf("GetFeatureValue(%s): %v", engine, err)
+		}
+		id, _ := fv.HeldValue().Object()
+		held = append(held, id)
+		inner, _ := prev.Instance(id)
+		for _, bolt := range []string{"bolt", "nut"} {
+			fv, err := inner.GetFeatureValue(prev, bolt)
+			if err != nil {
+				t.Fatalf("GetFeatureValue(%s.%s): %v", engine, bolt, err)
+			}
+			id, _ := fv.HeldValue().Object()
+			held = append(held, id)
+		}
+	}
+	for round := 0; round < 8; round++ {
+		ctx := contextOver(t, adoptNestedSrc+fmt.Sprintf("\npart def Widget%d;", round))
+		if _, err := ctx.Adopt(prev, prev.ShapesOf(obj), obj); err != nil {
+			t.Fatalf("round %d: Adopt: %v", round, err)
+		}
+		whole, ok := ctx.OccurrenceLife(obj.ID)
+		if !ok || !whole.Alive() {
+			t.Fatalf("round %d: OccurrenceLife(vehicle) = %v, %v; want alive", round, whole, ok)
+		}
+		for _, id := range held {
+			if part, ok := ctx.OccurrenceLife(id); !ok || part.Began != whole.Began || part.Ended != 0 {
+				t.Errorf("round %d: OccurrenceLife(#%d) = %v, %v; want began at %d, alive", round, id, part, ok, whole.Began)
+			}
+		}
+		prev = ctx
+	}
+}
+
+const adoptCompletingSrc = `package Demo {
+	part def Counter {
+		attribute count = 0;
+		perform action go {
+			first start;
+			then action bump { assign count := count + 1; }
+			then done;
+		}
+	}
+}`
+
+// A destroyed object stays destroyed across a carry-over: the behavior it
+// performed is not started again over it, so nothing writes to what has ended.
+func TestAdoptKeepsADestroyedObjectFromPerformingAgain(t *testing.T) {
+	prev := contextOver(t, adoptCompletingSrc)
+	obj, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::Counter"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if count, err := obj.GetFeatureValue(prev, "count"); err != nil || count.Value.Const.Int != 1 {
+		t.Fatalf("count = %v, %v; want 1 after the action completed", count, err)
+	}
+	if err := prev.destroy(obj); err != nil {
+		t.Fatalf("destroy: %v", err)
+	}
+
+	ctx := contextOver(t, adoptCompletingSrc+"\npart def Widget;")
+	restarted, err := ctx.Adopt(prev, prev.ShapesOf(obj), obj)
+	if err != nil {
+		t.Fatalf("Adopt: %v", err)
+	}
+	if len(restarted) != 0 {
+		t.Errorf("Adopt restarted %v over a destroyed object, want nothing", restarted)
+	}
+	if l, ok := ctx.OccurrenceLife(obj.ID); !ok || !l.Destroyed {
+		t.Errorf("OccurrenceLife = %v, %v; want destroyed", l, ok)
+	}
+	if len(obj.Behaviors()) != 0 {
+		t.Errorf("the destroyed object performs %d behaviors, want none", len(obj.Behaviors()))
+	}
+	if _, err := obj.GetFeatureValue(ctx, "count"); !errors.Is(err, ErrOccurrenceDestroyed) {
+		t.Errorf("read of the carried destroyed object: %v, want %v", err, ErrOccurrenceDestroyed)
+	}
+}
+
 // A behavior that cannot be started again in the new context refuses the
 // carry-over rather than leaving an object running nothing, and the object is not
 // left registered in a context that cannot offer it.
@@ -804,6 +899,13 @@ func TestAdoptRefusesAnObjectWhoseBehaviorCannotRestart(t *testing.T) {
 	}
 	if len(obj.Behaviors()) != 0 {
 		t.Errorf("the refused object still holds %d behaviors", len(obj.Behaviors()))
+	}
+	// Neither the refused object nor anything its restart registered stays behind.
+	if _, ok := ctx.OccurrenceLife(obj.ID); ok {
+		t.Error("the refused object was left a lifetime in the context")
+	}
+	if len(ctx.lives) != 0 || len(ctx.instances) != 0 {
+		t.Errorf("the refused carry-over left %d lifetimes and %d objects in the context", len(ctx.lives), len(ctx.instances))
 	}
 }
 

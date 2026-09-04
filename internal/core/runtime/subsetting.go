@@ -441,7 +441,7 @@ func (ctx *Context) fillOptionalSubsetters(inst *Instance, name string, n int) (
 		}
 		composite := ctx.CompositeTypeOf(&feat)
 		for i := 0; i < spare; i++ {
-			obj, err := ctx.materializeOwnedBy(composite, 0, inst, feat.Name)
+			obj, err := ctx.materialize(composite, 0, inst, feat.Name)
 			if err != nil {
 				return made, undo, err
 			}

@@ -133,7 +133,7 @@ func (ctx *Context) HoldsNoValue(val Value) bool {
 // naming the usage or a feature path under it reads this object as it was run.
 func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
 	mark := len(ctx.created)
-	inst, err := ctx.materializeOwnedBy(sym, 0, nil, "")
+	inst, err := ctx.materialize(sym, 0, nil, "")
 	if err != nil {
 		ctx.abandonInstancesSince(mark)
 		return nil, err
@@ -168,7 +168,7 @@ func (ctx *Context) instantiateOwnedBy(sym *symbols.Symbol, id int64, owner *Ins
 	// A creation that fails leaves none of the objects it reached behind, however
 	// deeply nested or however a behavior of it addressed them.
 	mark := len(ctx.created)
-	inst, err := ctx.materializeOwnedBy(sym, id, owner, feature)
+	inst, err := ctx.materialize(sym, id, owner, feature)
 	if err != nil {
 		ctx.abandonInstancesSince(mark)
 		return nil, err
@@ -202,23 +202,13 @@ func (ctx *Context) initFeatureValue(inst *Instance, fv *FeatureValue, feat *Eff
 	}
 }
 
-// materializeOwnedBy materializes an object held by owner as the feature value
-// named feature, without starting its behaviors: a holder records the object it
-// holds before those behaviors run, so one addressing it back through its holder
-// reaches this object rather than materializing a second.
-func (ctx *Context) materializeOwnedBy(sym *symbols.Symbol, id int64, owner *Instance, feature string) (*Instance, error) {
-	inst, err := ctx.materialize(sym, id)
-	if err != nil {
-		return nil, err
-	}
-	inst.owner, inst.ownerFeature = owner, feature
-	return inst, nil
-}
-
 // materialize builds the object and its feature values and registers it, before
 // any behavior of it starts: an entry action reads the object's declared
-// defaults, and a behavior can already reach the object it belongs to.
-func (ctx *Context) materialize(sym *symbols.Symbol, id int64) (*Instance, error) {
+// defaults, and a behavior can already reach the object it belongs to. It is
+// held by owner as the feature named feature, or by nothing when owner is nil; a
+// holder records the object it holds before those behaviors run, so one
+// addressing it back through its holder reaches this object rather than a second.
+func (ctx *Context) materialize(sym *symbols.Symbol, id int64, owner *Instance, feature string) (*Instance, error) {
 	defer ctx.beginRun()()
 
 	// Check step limit (I3)
@@ -239,6 +229,8 @@ func (ctx *Context) materialize(sym *symbols.Symbol, id int64) (*Instance, error
 		ID:            id,
 		Type:          sym,
 		FeatureValues: make(map[string]*FeatureValue, len(features)),
+		owner:         owner,
+		ownerFeature:  feature,
 	}
 
 	// Create feature value for each feature, allocated as one block.
@@ -257,6 +249,7 @@ func (ctx *Context) materialize(sym *symbols.Symbol, id int64) (*Instance, error
 
 	// Register instance
 	ctx.registerInstance(inst)
+	ctx.beginLife(inst)
 
 	if ctx.trace != nil {
 		ctx.trace.RecordObjectMaterialized(symbolText(sym), inst.ID)
@@ -277,7 +270,7 @@ func (ctx *Context) occurrenceOf(sym *symbols.Symbol) (*Instance, error) {
 	// The occurrence is recorded before its behaviors start, so a behavior that
 	// reaches the usage it belongs to reads this object rather than a second one.
 	mark := len(ctx.created)
-	inst, err := ctx.materialize(sym, 0)
+	inst, err := ctx.materialize(sym, 0, nil, "")
 	if err != nil {
 		ctx.abandonInstancesSince(mark)
 		return nil, err
@@ -415,6 +408,9 @@ func (ctx *Context) admitted(feat *EffectiveFeature, val Value, how admission) (
 // so a caller can tell it from any other failure to evaluate, whatever the
 // expression it surfaced through.
 func (inst *Instance) GetFeatureValue(ctx *Context, name string) (*FeatureValue, error) {
+	if err := ctx.checkNotDestroyed(inst); err != nil {
+		return nil, err
+	}
 	if _, ok := inst.FeatureValues[name]; !ok {
 		// Naming no feature value of the object is no materialization of one.
 		return nil, fmt.Errorf("%w: feature %q not found in instance %d (type %s)", ErrNoSuchFeature, name, inst.ID, inst.Type.Name)
@@ -431,6 +427,9 @@ func (inst *Instance) GetFeatureValue(ctx *Context, name string) (*FeatureValue,
 // conform to the multiplicity governing the feature; a feature the object does
 // not have is reported rather than added.
 func (inst *Instance) SetFeatureValue(ctx *Context, name string, value Value) error {
+	if err := ctx.checkNotDestroyed(inst); err != nil {
+		return err
+	}
 	fv, ok := inst.FeatureValues[name]
 	if !ok {
 		return fmt.Errorf("%w: feature %q not found in instance %d (type %s)", ErrNoSuchFeature, name, inst.ID, inst.Type.Name)
@@ -576,7 +575,7 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 			// Scalar: instantiate one, held by this feature before its behaviors
 			// start, so one addressing it back reads the object held here.
 			mark := len(ctx.created)
-			childInst, err := ctx.materializeOwnedBy(composite, 0, inst, name)
+			childInst, err := ctx.materialize(composite, 0, inst, name)
 			if err != nil {
 				ctx.abandonInstancesSince(mark)
 				return nil, err
@@ -632,7 +631,7 @@ func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string
 				seq.Append(Value{Kind: ValInstance, Instance: child.ID})
 			}
 			for i := len(children); i < count; i++ {
-				childInst, err := ctx.materializeOwnedBy(composite, 0, inst, name)
+				childInst, err := ctx.materialize(composite, 0, inst, name)
 				if err != nil {
 					return fail(err)
 				}

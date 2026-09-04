@@ -48,6 +48,10 @@ type EvalContext struct {
 	// of that usage. It is zero outside a body, where nothing can change between
 	// two reads.
 	activation int64
+
+	// entered is the last activation allocated before the built-in being applied
+	// was entered: an occurrence begun since began during the call.
+	entered int64
 }
 
 // NewEvalContext creates an evaluation context with an empty frame stack. It

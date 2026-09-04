@@ -134,7 +134,7 @@ func (ctx *Context) materializeConnectorAs(owner *Instance, connSym, base *symbo
 		endBoundary()
 		rollback()
 	}
-	inst, err := ctx.materializeOwnedBy(base, id, nil, "")
+	inst, err := ctx.materialize(base, id, nil, "")
 	if err != nil {
 		abandon()
 		return err

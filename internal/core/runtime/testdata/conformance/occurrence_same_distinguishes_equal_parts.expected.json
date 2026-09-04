@@ -1,0 +1,14 @@
+{
+  "type": "instance",
+  "libraries": true,
+  "instantiate": "test::ctx",
+  "slots": {
+    "sameSelf": {"type": "Boolean", "value": true},
+    "sameOther": {"type": "Boolean", "value": true},
+    "equalValues": {"type": "Boolean", "value": true},
+    "sameByFunction": {"type": "Boolean", "value": true},
+    "otherByFunction": {"type": "Boolean", "value": false},
+    "nothingIsNothing": {"type": "Boolean", "value": true},
+    "nothingIsNotA": {"type": "Boolean", "value": false}
+  }
+}

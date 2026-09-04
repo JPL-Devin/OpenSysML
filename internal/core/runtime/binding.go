@@ -588,7 +588,7 @@ func (ctx *Context) resolveBindingLocation(owner *Instance, path string) (bindin
 	for _, part := range parts[:len(parts)-1] {
 		fv, err := current.GetFeatureValue(ctx, part)
 		if err != nil {
-			return bindingLocation{}, fmt.Errorf("%w %q: %v", ErrBindingEnd, path, err)
+			return bindingLocation{}, fmt.Errorf("%w %q: %w", ErrBindingEnd, path, err)
 		}
 		next, isObject := fv.HeldValue().Object()
 		if !isObject {
@@ -599,6 +599,11 @@ func (ctx *Context) resolveBindingLocation(owner *Instance, path string) (bindin
 		if !ok {
 			return bindingLocation{}, fmt.Errorf("%w %q: instance %d is not materialized", ErrBindingEnd, path, next)
 		}
+	}
+	// A destroyed object's feature is neither read into nor written from a
+	// binding, whichever end of it the object is.
+	if err := ctx.checkNotDestroyed(current); err != nil {
+		return bindingLocation{}, fmt.Errorf("%w %q: %w", ErrBindingEnd, path, err)
 	}
 	name := parts[len(parts)-1]
 	if _, ok := current.FeatureValues[name]; !ok {
