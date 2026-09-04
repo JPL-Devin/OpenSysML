@@ -1060,7 +1060,7 @@ func (ctx *Context) materializeAccepted(msg Message) (Value, error) {
 // one, or two entries name one feature.
 func (ctx *Context) materializeMessage(msg Message) (Value, error) {
 	mark := len(ctx.created)
-	inst, err := ctx.materialize(msg.Signal, 0)
+	inst, err := ctx.materialize(msg.Signal, 0, nil, "")
 	if err != nil {
 		ctx.abandonInstancesSince(mark)
 		return Value{}, fmt.Errorf("materialize: %w", err)

@@ -285,6 +285,7 @@ func (ctx *Context) abandonInstancesBetween(mark, end int) {
 			delete(ctx.occurrences, sym)
 		}
 	}
+	ctx.forgetLives(abandoned)
 	ctx.forgetVariantsNaming(abandoned)
 	ctx.forgetValuesNaming(abandoned)
 	ctx.forgetMessagesTo(abandoned)
@@ -688,11 +689,13 @@ func (ctx *Context) attachClassifierBehavior(inst *Instance, decl classifierBeha
 			exec.SetInputs(arguments)
 		}
 		// An action stating no flow performs no step; the object still performs it,
-		// with nothing to run, rather than failing to be created.
+		// completed at once, rather than failing to be created.
+		start := exec.completeWithoutFlow
 		if exec.hasFlow() {
-			if err := exec.initialize(); err != nil {
-				return nil, fmt.Errorf("performed action %s of %s: %w", decl.behavior.Name, symbolText(inst.Type), err)
-			}
+			start = exec.initialize
+		}
+		if err := start(); err != nil {
+			return nil, fmt.Errorf("performed action %s of %s: %w", decl.behavior.Name, symbolText(inst.Type), err)
 		}
 		behavior.Action = exec
 	default:
@@ -732,7 +735,7 @@ func (ctx *Context) performanceOccurrence(
 			sentinel, name, inst.ID, err)
 	}
 	if fv.HeldValue().Kind == ValInvalid {
-		occurrence, err := ctx.materializeOwnedBy(behavior, 0, inst, name)
+		occurrence, err := ctx.materialize(behavior, 0, inst, name)
 		if err != nil {
 			return nil, fmt.Errorf("%w: materialize %s of object #%d: %w",
 				sentinel, name, inst.ID, err)

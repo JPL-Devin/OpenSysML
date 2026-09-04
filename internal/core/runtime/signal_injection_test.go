@@ -1230,11 +1230,11 @@ func TestProbeDrainLeavesThePendingStartupRunsOfTheStartUnderWay(t *testing.T) {
 	`
 	idx, _, ctx := buildRuntimeWithLibraries(t, "twin.sysml", parseAndBuild(t, src))
 	root := idx.DocumentRoot("twin.sysml")
-	twin, err := ctx.materialize(resolveSymbol(t, root, "Twin"), 0)
+	twin, err := ctx.materialize(resolveSymbol(t, root, "Twin"), 0, nil, "")
 	if err != nil {
 		t.Fatalf("materialize(Twin): %v", err)
 	}
-	pump, err := ctx.materialize(resolveSymbol(t, root, "Pump"), 0)
+	pump, err := ctx.materialize(resolveSymbol(t, root, "Pump"), 0, nil, "")
 	if err != nil {
 		t.Fatalf("materialize(Pump): %v", err)
 	}
