@@ -50,8 +50,7 @@ type assignmentReferentChecker struct {
 	model    *semantics.Model
 	resolver *resolve.Resolver
 	inCalc   bool
-	// occurrence records whether Occurrences::Occurrence is loaded; the
-	// time-varying rule is derived from it and is not judged without it.
+	// occurrence: Occurrences::Occurrence is loaded, so time-varying is decidable.
 	occurrence bool
 	diags      []Diagnostic
 }
@@ -166,9 +165,8 @@ func (c *assignmentReferentChecker) check(scope *symbols.Scope, assignment *ast.
 	c.report(span, msgAssignmentReferentTimeVarying, "assignment-referent-time-varying")
 }
 
-// referentMayTimeVary derives whether the feature an assignment names may hold
-// different values over time (SysML v2 §8.3.16.2, Usage::mayTimeVary); a named
-// multiplicity (KerML §8.3.3.3) is a feature whose value never varies.
+// referentMayTimeVary reports whether the referent's value may vary over time
+// (SysML v2 §8.3.16.2, Usage::mayTimeVary); a named multiplicity never does.
 func (c *assignmentReferentChecker) referentMayTimeVary(referent *symbols.Symbol) bool {
 	if referent.Kind == symbols.SymbolMultiplicity {
 		return false
