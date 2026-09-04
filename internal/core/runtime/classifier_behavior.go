@@ -937,8 +937,8 @@ func assignPerformerFeature(ctx *Context, self *Instance, scope *symbols.Scope, 
 }
 
 // namesPerformerFeature reports whether name, resolved where the statement was
-// written, denotes a feature of the object performing the behavior: the
-// performer is not a namespace the body's names are looked up in.
+// written, denotes a feature of the object performing the behavior under any of
+// its types: the performer is not a namespace the body's names are looked up in.
 func namesPerformerFeature(ctx *Context, self *Instance, scope *symbols.Scope, name string) bool {
 	if ctx == nil || ctx.resolver == nil || self == nil || scope == nil {
 		return false
@@ -947,7 +947,12 @@ func namesPerformerFeature(ctx *Context, self *Instance, scope *symbols.Scope, n
 	if !ok || sym == nil {
 		return false
 	}
-	return ctx.typeHoldsFeature(self.Type, sym)
+	for _, typ := range self.types() {
+		if ctx.typeHoldsFeature(typ, sym) {
+			return true
+		}
+	}
+	return false
 }
 
 // typeHoldsFeature reports whether a feature symbol is one the type holds:

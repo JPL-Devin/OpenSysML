@@ -329,14 +329,22 @@ func dataOperand(ctx *Context, name, param string, val Value) (Value, error) {
 	return Value{}, operandMismatch(name, param, "a DataValue", val)
 }
 
-// isDataValue reports whether an object's type conforms to Base::DataValue.
+// isDataValue reports whether a type of an object conforms to Base::DataValue.
 func (ctx *Context) isDataValue(val Value) bool {
-	direct, err := ctx.directValueType(nil, val)
+	direct, err := ctx.directValueTypes(nil, val)
 	if err != nil {
 		return false
 	}
 	dataValue := ctx.librarySymbol("Base::DataValue")
-	return dataValue != nil && ctx.model.Conforms(direct, dataValue)
+	if dataValue == nil {
+		return false
+	}
+	for _, typ := range direct {
+		if ctx.model.Conforms(typ, dataValue) {
+			return true
+		}
+	}
+	return false
 }
 
 // numericalOperand admits the NumericalValues: Integers, Reals and Complexes.

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -1126,7 +1127,7 @@ func (ec *EvalContext) resolveClassificationType(qn *ast.QualifiedName) (*symbol
 }
 
 // evalTypeClassification evaluates `x hastype T`, `x istype T` and the value
-// form of `x @ T`; only `hastype` demands the value's direct type be T itself.
+// form of `x @ T`; only `hastype` demands T be one of the value's direct types.
 func (ec *EvalContext) evalTypeClassification(n *ast.OperatorExpr) (Value, error) {
 	if len(n.Operands) != 1 || n.TypeRef == nil {
 		return Value{}, fmt.Errorf("%w: '%s' requires one value and one type",
@@ -1137,7 +1138,7 @@ func (ec *EvalContext) evalTypeClassification(n *ast.OperatorExpr) (Value, error
 		return Value{}, fmt.Errorf("%w: %s", ErrUnresolvedType,
 			qualifiedNameToString(n.TypeRef))
 	}
-	value, err := ec.evalTypeSubject(n.Operands[0])
+	value, err := ec.Eval(n.Operands[0])
 	if err != nil {
 		return Value{}, err
 	}
@@ -1179,47 +1180,48 @@ func (ec *EvalContext) valueHasType(value Value, target *symbols.Symbol, exact b
 		}
 		return true, nil
 	}
-	direct, err := ec.ctx.directValueType(ec.scope, value)
+	direct, err := ec.ctx.directValueTypes(ec.scope, value)
 	if err != nil {
 		return false, err
 	}
-	if exact {
-		return direct == target, nil
-	}
-	return ec.ctx.model.Conforms(direct, target), nil
-}
-
-func (ec *EvalContext) evalTypeSubject(node ast.Node) (Value, error) {
-	qn := ast.AsQualifiedName(node)
-	if qn == nil {
-		return ec.Eval(node)
-	}
-	sym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, qn)
-	if !ok || sym == nil {
-		return ec.Eval(node)
-	}
-	// A variation is a choice, not an object or an empty collection: the
-	// evaluator reports one that nothing selected a variant for.
-	if ec.ctx.model.IsVariationFeature(sym) {
-		return ec.Eval(node)
-	}
-	// Classification treats an optional valueless usage as its empty collection.
-	if ec.ctx.optionalValueless(sym) {
-		return NewSequenceValue(NewSequence()), nil
-	}
-	if isOccurrenceUsage(sym) {
-		inst, err := ec.ctx.occurrenceOf(sym)
-		if err != nil {
-			return Value{}, err
+	for _, typ := range direct {
+		if (exact && typ == target) || (!exact && ec.ctx.model.Conforms(typ, target)) {
+			return true, nil
 		}
-		return Value{Kind: ValInstance, Instance: inst.ID}, nil
 	}
-	return ec.Eval(node)
+	return false, nil
 }
 
-// directValueType names the type a value is of, resolved in the scope reading
-// it: the scalar type of a constant, the type of the object an instance value
-// denotes, the enumeration a literal belongs to.
+// directValueTypes names the types a value is of, resolved in the scope reading it:
+// the scalar type of a constant, the enumeration a literal belongs to, and for an object
+// its declared type then the type of each feature it was held as a value of.
+func (ctx *Context) directValueTypes(scope *symbols.Scope, value Value) ([]*symbols.Symbol, error) {
+	if value.Kind != ValInstance {
+		typ, err := ctx.directValueType(scope, value)
+		if err != nil {
+			return nil, err
+		}
+		return []*symbols.Symbol{typ}, nil
+	}
+	inst, ok := ctx.instances[value.Instance]
+	if !ok || inst == nil || inst.Type == nil {
+		return nil, fmt.Errorf("%w: instance %d", ErrUndeterminedValueType, value.Instance)
+	}
+	types := inst.types()
+	out := make([]*symbols.Symbol, 0, len(types))
+	for _, sym := range types {
+		if typ := ctx.extractType(sym); typ != nil {
+			sym = typ
+		}
+		if !slices.Contains(out, sym) {
+			out = append(out, sym)
+		}
+	}
+	return out, nil
+}
+
+// directValueType names the one type a value is of (see directValueTypes); an object
+// answers with its declared type.
 func (ctx *Context) directValueType(scope *symbols.Scope, value Value) (*symbols.Symbol, error) {
 	var name string
 	switch value.Kind {
@@ -1237,14 +1239,11 @@ func (ctx *Context) directValueType(scope *symbols.Scope, value Value) (*symbols
 	case ValString:
 		name = "String"
 	case ValInstance:
-		inst, ok := ctx.instances[value.Instance]
-		if !ok || inst == nil || inst.Type == nil {
-			return nil, fmt.Errorf("%w: instance %d", ErrUndeterminedValueType, value.Instance)
+		types, err := ctx.directValueTypes(scope, value)
+		if err != nil {
+			return nil, err
 		}
-		if typ := ctx.extractType(inst.Type); typ != nil {
-			return typ, nil
-		}
-		return inst.Type, nil
+		return types[0], nil
 	case ValVariant:
 		if value.Variant() == nil {
 			return nil, fmt.Errorf("%w: variant", ErrUndeterminedValueType)

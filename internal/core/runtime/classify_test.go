@@ -53,6 +53,19 @@ func readInt(t *testing.T, ctx *Context, inst *Instance, name string) int64 {
 	return intValue(t, map[string]Value{name: fv.HeldValue()}, name)
 }
 
+func readBool(t *testing.T, ctx *Context, inst *Instance, name string) bool {
+	t.Helper()
+	fv, err := inst.GetFeatureValue(ctx, name)
+	if err != nil {
+		t.Fatalf("GetFeatureValue(%s): %v", name, err)
+	}
+	v := fv.HeldValue()
+	if v.Kind != ValConst || v.Const.Kind != semantics.ValBool {
+		t.Fatalf("%s = %s, want a Boolean", name, FormatValue(v))
+	}
+	return v.Const.Bool
+}
+
 const classifiedValueModel = `
 	package test {
 		private import ScalarValues::*;
@@ -1314,5 +1327,67 @@ func TestObjectWalksCoverTheFeaturesClassifiersAdd(t *testing.T) {
 	nested := ctx.nestedObjects(raw)
 	if len(nested) != 1 || nested[0].feature != "inner" || !ctx.instanceConforms(nested[0].instance, idx.LookupQualified("test::Common")[0]) {
 		t.Errorf("nestedObjects as a Loaded = %v, want the Common held by inner", nested)
+	}
+}
+
+// A classifier's behavior writes the features the classifier itself declares: the
+// performer is every type it is classified by, not only the one it was created as.
+func TestClassifierBehaviorsWriteTheFeaturesTheClassifierAdds(t *testing.T) {
+	ctx, idx := libraryShapeContext(t, `package test {
+		private import ScalarValues::*;
+		item def Counter { attribute hits : Integer = 0; }
+		item def Tallied :> Counter {
+			attribute tallies : Integer = 0;
+			exhibit state tally {
+				entry; then on;
+				state on { entry action bump { assign tallies := tallies + 1; } }
+			}
+		}
+		item def Rack { item raw : Counter [1]; }
+		item rack : Rack;
+	}`)
+	raw := readInstance(t, ctx, instantiateQualified(t, ctx, idx, "test::rack"), "raw")
+	if err := ctx.classify(raw, idx.LookupQualified("test::Tallied")[0]); err != nil {
+		t.Fatalf("classify(raw, Tallied): %v", err)
+	}
+	if tallies := readInt(t, ctx, raw, "tallies"); tallies != 1 {
+		t.Errorf("raw.tallies = %d after Tallied's behavior ran, want 1", tallies)
+	}
+}
+
+// istype and hastype judge an object by every type it is classified by (KerML 1.0
+// §7.4.9): hastype exactly, istype by conformance.
+func TestTypePredicatesSeeTheClassifiersOfAnObject(t *testing.T) {
+	ctx, idx := libraryShapeContext(t, `package test {
+		private import ScalarValues::*;
+		item def Curve;
+		item def Line :> Curve;
+		item def Segment :> Line;
+		item def Shape {
+			item raw [1];
+			item loose [1];
+			item edge : Line [1] = raw;
+			attribute looseIsLine = loose istype Line;
+			attribute isLine = raw istype Line;
+			attribute isCurve = raw istype Curve;
+			attribute isSegment = raw istype Segment;
+			attribute hasLine = raw hastype Line;
+			attribute hasCurve = raw hastype Curve;
+			attribute hasSegment = raw hastype Segment;
+		}
+		item shape : Shape;
+	}`)
+	shape := instantiateQualified(t, ctx, idx, "test::shape")
+	if readInstance(t, ctx, shape, "edge") != readInstance(t, ctx, shape, "raw") {
+		t.Fatal("edge holds an object other than raw")
+	}
+	for name, want := range map[string]bool{
+		"looseIsLine": false,
+		"isLine":      true, "isCurve": true, "isSegment": false,
+		"hasLine": true, "hasCurve": false, "hasSegment": false,
+	} {
+		if got := readBool(t, ctx, shape, name); got != want {
+			t.Errorf("%s = %t once edge : Line holds raw, want %t", name, got, want)
+		}
 	}
 }
