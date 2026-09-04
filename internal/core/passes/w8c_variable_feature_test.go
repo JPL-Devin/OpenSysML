@@ -166,3 +166,29 @@ func TestW8CVariableFeatureRulesNeedTheOccurrenceLibrary(t *testing.T) {
 		}
 	}
 }
+
+func TestW8CVariableFeatureRulesSurviveADuplicateOccurrenceName(t *testing.T) {
+	idx := newTestIndex()
+	shadow := "<shadow>.sysml"
+	shadowRoot := parser.New(source.New(shadow,
+		[]byte(`package Occurrences { occurrence def Occurrence; }`))).ParseFile()
+	idx.AddDocument(shadow, shadowRoot)
+	name := "<t>.sysml"
+	root := parser.New(source.New(name, []byte(`package P {
+	private import ScalarValues::*;
+	attribute def AD { attribute x : Integer := 1; }
+	part def PD { attribute y : Integer := 2; }
+}`))).ParseFile()
+	idx.AddDocument(name, root)
+	idx.ExpandWildcardImports()
+	got := 0
+	for _, d := range Analyze(name, root, nil, idx) {
+		if d.Message == msgInitialValueNotVariable {
+			got++
+		}
+	}
+	// A workspace symbol sharing the library's name must not switch the rules off.
+	if got != 1 {
+		t.Errorf("want one initial-value message, got %d", got)
+	}
+}

@@ -35,7 +35,8 @@ func (VariableFeaturePass) Run(ctx *Context, name string, root *ast.RootNamespac
 	model := ctx.Model()
 	occurrence := w8cLibraryType(ctx, "Occurrences::Occurrence")
 	// A SysML usage's variability is derived from the occurrence library; KerML declares it.
-	derivable := occurrence != nil || ctx.Kind == source.KindKerML
+	derivable := ctx.Kind == source.KindKerML ||
+		len(ctx.Index.LookupQualified("Occurrences::Occurrence")) > 0
 	var diags []Diagnostic
 	report := func(span source.Span, message, code string) {
 		diags = append(diags, Diagnostic{
