@@ -236,6 +236,48 @@ func (ec *exprChecker) infer(scope *symbols.Scope, n ast.Node) semantics.PrimTyp
 	return semantics.PrimUnknown
 }
 
+// checkPayload types the constructors a send payload contains, wherever they sit
+// in it; a call names a signal by its parameters and is not an arity-checked call.
+func (ec *exprChecker) checkPayload(scope *symbols.Scope, n ast.Node) {
+	switch e := n.(type) {
+	case *ast.ConstructorExpr:
+		ec.infer(scope, e)
+	case *ast.InvocationExpr:
+		ec.checkPayload(scope, e.Operand)
+		for _, a := range e.Args {
+			ec.checkPayload(scope, a)
+		}
+		for _, na := range e.NamedArgs {
+			ec.checkPayload(scope, na.Value)
+		}
+	case *ast.OperatorExpr:
+		for _, op := range e.Operands {
+			ec.checkPayload(scope, op)
+		}
+	case *ast.SequenceExpr:
+		for _, el := range e.Elements {
+			ec.checkPayload(scope, el)
+		}
+	case *ast.IndexExpr:
+		ec.checkPayload(scope, e.Operand)
+		ec.checkPayload(scope, e.Index)
+	case *ast.FeatureChainExpr:
+		ec.checkPayload(scope, e.Operand)
+	case *ast.CollectExpr:
+		ec.checkPayload(scope, e.Operand)
+		ec.checkPayload(scope, e.Body)
+	case *ast.SelectExpr:
+		ec.checkPayload(scope, e.Operand)
+		ec.checkPayload(scope, e.Body)
+	case *ast.BodyExpr:
+		ec.checkBodyMembers(scope, e)
+		for i := range e.Params {
+			ec.checkPayload(scope, e.Params[i].Value)
+		}
+		ec.checkPayload(ec.bodyScope(scope, e), e.Result)
+	}
+}
+
 // inferIndex types `seq#(i)`, the sequence index, and `n [unit]`, the quantity
 // expression the notation shares its node with — the bracket the expression was
 // written with says which of the two it is.
