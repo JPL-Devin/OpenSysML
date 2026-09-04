@@ -106,7 +106,7 @@ Rows that moved more than ~5% on `main`; everything else is within noise
 | BatchSatisfy | 4.54 s | 7.14 s | 0.34 s | −93% |
 | Instantiate | 4.07 s | 6.55 s | 0.26 s | −94% |
 | FeaturesOf | 11.6 s | 12.0 s | 0.73 s | −94% |
-| GRPCEvaluate | 395 µs | 617 µs | 11.1 µs | −97% |
+| GRPCEvaluate | 395 µs | 617 µs | 12.5 µs | −97% |
 | GRPCVerifyConstraint | 17.6 ms | 2398 ms | 12.4 ms | −29% |
 
 `GRPCVerifyConstraint` allocates half the bytes of 0.4.3 per request (4.2 vs
@@ -310,7 +310,14 @@ quarter of the profile scanning the cached model.
   all evaluation state stay per request. With `MembersOf` and the shape
   features memoized in the semantics model itself (below), the type-graph
   work is paid once per model rather than once per request: 4.2 MiB per
-  request against 0.4.3's 9.0.
+  request against 0.4.3's 9.0. `Evaluate` parses a request-owned expression,
+  and the resolver memoizes by AST node, so the shared resolver would otherwise
+  grow by one expression's worth of entries per request for the life of the
+  cached model; `Evaluate` runs under `Resolver.Scratch`, which drops what the
+  request memoized about its own nodes (found by `astcodec.Reachable`) and
+  keeps what it resolved of the model's. `GRPCEvaluate` pays 1.4 µs and 25
+  allocations for it (11.1 → 12.5 µs), still −97% against 0.4.3; a test
+  checks the memo does not grow over 50 distinct expressions.
 - Carrier-only instantiation was asked for and is not needed: `Instantiate`
   already materializes only the subject's own feature values and the
   composite parts whose type runs a classifier behavior (finding 2);

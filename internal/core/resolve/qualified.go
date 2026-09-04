@@ -297,6 +297,7 @@ func (r *Resolver) unresolvedNamespace(qn *ast.QualifiedName, ns string) {
 
 // ambiguous records an ambiguity diagnostic reporting the number of matches.
 func (r *Resolver) ambiguous(qn *ast.QualifiedName, n int) {
+	journalNew(r, r.ambiguities, qn, qn)
 	r.ambiguities[qn] = n
 	r.reportQualified(qn, Diagnostic{
 		Span:    qn.Span(),
@@ -309,6 +310,7 @@ func (r *Resolver) reportQualified(qn *ast.QualifiedName, d Diagnostic) {
 		if r.reportedQualified[qn] {
 			return
 		}
+		journalNew(r, r.reportedQualified, qn, qn)
 		r.reportedQualified[qn] = true
 	}
 	r.report(d)

@@ -163,8 +163,14 @@ func (m *Model) SelectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, ar
 		return sel
 	}
 	sel := m.selectInvocation(scope, e, args, performs)
+	m.resolver.Journal(e, func() { delete(m.invocations, key) })
 	m.invocations[key] = sel
 	return sel
+}
+
+// MemoSize is the number of invocation selections the model retains by node.
+func (m *Model) MemoSize() int {
+	return len(m.invocations)
 }
 
 func (m *Model) selectInvocation(scope *symbols.Scope, e *ast.InvocationExpr, args []Argument, performs Performs) *InvocationSelection {

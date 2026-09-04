@@ -10,6 +10,7 @@ import (
 	"connectrpc.com/connect"
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast/astcodec"
 	"github.com/Open-MBEE/OpenSysML/internal/core/conformance"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
@@ -596,9 +597,12 @@ func (s *Service) Evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.Ev
 		self = inst
 	}
 
-	// Create eval context and evaluate
+	// The expression is the request's, not the model's: the shared resolver
+	// must not keep what it memoizes about its nodes.
 	evalCtx := runtime.NewEvalContextIn(runtimeCtx, scope, self)
-	result, err := evalCtx.Eval(exprNode)
+	var result runtime.Value
+	var err error
+	runtimeCtx.Resolver().Scratch(astcodec.Reachable(exprNode), func() { result, err = evalCtx.Eval(exprNode) })
 	if err != nil {
 		return &pb.EvaluateResponse{
 			Error: fmt.Sprintf("evaluation failed: %v", err),
