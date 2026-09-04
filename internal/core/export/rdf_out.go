@@ -789,7 +789,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 	case *ast.AssumeMember:
 		head(rdf.OpenSysMLTerm(mAssume))
 		return e.requirementCondition(subject, fqn, owner, requirementConditionDecl{
-			prefixes: n.Prefixes, name: n.Name, relationships: n.Relationships, multiplicity: n.Multiplicity,
+			prefixes: n.Prefixes, ident: n.Ident, relationships: n.Relationships, multiplicity: n.Multiplicity,
 			value: n.Value, isDefault: n.ValueIsDefault, isInitial: n.ValueIsInitial,
 			expression: n.Expression, reference: n.Reference, hasBody: n.HasBody, body: n.Body,
 		})
@@ -797,7 +797,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 	case *ast.RequireMember:
 		head(rdf.OpenSysMLTerm(mRequire))
 		return e.requirementCondition(subject, fqn, owner, requirementConditionDecl{
-			prefixes: n.Prefixes, name: n.Name, relationships: n.Relationships, multiplicity: n.Multiplicity,
+			prefixes: n.Prefixes, ident: n.Ident, relationships: n.Relationships, multiplicity: n.Multiplicity,
 			value: n.Value, isDefault: n.ValueIsDefault, isInitial: n.ValueIsInitial,
 			expression: n.Expression, reference: n.Reference, hasBody: n.HasBody, body: n.Body,
 		})
@@ -812,9 +812,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		// A subject parameter is a usage of its own (SysML v2 8.2.2.16), so it
 		// is mapped as the SubjectMembership a `subject s : X` declares.
 		head(rdf.SysMLTerm(usageMetaclass[ast.UsageSubject]))
-		if n.Name != "" {
-			e.graph.Add(subject, e.sysml(pDeclaredName), rdf.String(n.Name))
-		}
+		e.ident(subject, n.Ident)
 		if n.TypeRef != nil {
 			e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelTyping]), e.reference(n.TypeRef))
 		}
@@ -1025,7 +1023,7 @@ func (e *encoder) condition(subject rdf.Term, fqn, owner string, expr ast.Node, 
 // for the constraint usage it owns, besides the condition itself.
 type requirementConditionDecl struct {
 	prefixes      []*ast.PrefixMetadata
-	name          string
+	ident         ast.Identification
 	relationships []*ast.Relationship
 	multiplicity  *ast.Multiplicity
 	value         ast.Node
@@ -1040,9 +1038,7 @@ type requirementConditionDecl struct {
 // requirementCondition emits an `assume`/`require` member together with its
 // constraint usage's declaration (`require #goal constraint c : C [1] = true`).
 func (e *encoder) requirementCondition(subject rdf.Term, fqn, owner string, n requirementConditionDecl) error {
-	if n.name != "" {
-		e.graph.Add(subject, e.sysml(pDeclaredName), rdf.String(n.name))
-	}
+	e.ident(subject, n.ident)
 	// The declaration form is keyed by its keyword: its `references C` is a
 	// specialization, where the reference form's `require C` is the head.
 	if n.expression == nil && n.reference == nil {
@@ -1605,11 +1601,11 @@ func declaredNameAndMembers(node ast.Node) (string, []ast.Node) {
 	case *ast.ConstraintMember:
 		return n.Name, n.Body
 	case *ast.AssumeMember:
-		return n.Name, n.Body
+		return n.Ident.Name, n.Body
 	case *ast.RequireMember:
-		return n.Name, n.Body
+		return n.Ident.Name, n.Body
 	case *ast.SubjectMember:
-		return n.Name, n.Body
+		return n.Ident.Name, n.Body
 	case *ast.PrefixMetadata:
 		return n.Ident.Name, n.Body
 	case *ast.Comment:

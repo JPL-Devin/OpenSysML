@@ -732,6 +732,8 @@ func namesDecl(qn *ast.QualifiedName, decl ast.Node) bool {
 			name = d.Ident.Name
 		case *ast.Usage:
 			name, _ = ast.EffectiveName(d)
+		case *ast.SubjectMember:
+			name, _ = d.EffectiveName()
 		}
 	}
 	return name != "" && qn.Parts[0].Text == name
@@ -902,27 +904,24 @@ func (r *Resolver) resolveOwnSibling(scope *symbols.Scope, qn *ast.QualifiedName
 	if !ok || sym == nil || sym.Decl == decl {
 		return false
 	}
-	usage, isUsage := sym.Decl.(*ast.Usage)
-	if !isUsage || !redefinesUnderItsName(usage, sym.EffectiveName) {
+	if !redefinesUnderItsName(sym.Decl, sym.EffectiveName) {
 		return false
 	}
 	r.recordRedefined(qn, sym)
 	return true
 }
 
-// redefinesUnderItsName reports whether usage is a redefinition found under the
-// name it borrows from its target (`:>> x`) or restates itself (`x :>> x`).
-func redefinesUnderItsName(usage *ast.Usage, borrowed bool) bool {
+// redefinesUnderItsName reports whether decl is a feature redefinition found under
+// the name it borrows from its target (`:>> x`) or restates itself (`x :>> x`).
+func redefinesUnderItsName(decl ast.Node, borrowed bool) bool {
+	if !isFeatureDecl(decl) {
+		return false
+	}
 	if borrowed {
-		naming := ast.NamingFeature(usage)
+		naming := ast.DeclNamingFeature(decl)
 		return naming != nil && naming.Kind == ast.RelRedefines
 	}
-	for _, rel := range usage.Relationships {
-		if rel != nil && rel.Kind == ast.RelRedefines {
-			return true
-		}
-	}
-	return false
+	return len(redefinesRelationships(decl)) > 0
 }
 
 // resolveRedefinition resolves a redefinition target by looking up the inheritance chain.

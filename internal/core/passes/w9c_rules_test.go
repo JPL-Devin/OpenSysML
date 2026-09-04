@@ -238,6 +238,53 @@ func TestW9CShortNameDistinguishability(t *testing.T) {
 	}
 }
 
+// A requirement's subject, assume and require members take part in
+// distinguishability under their short names like any other member.
+func TestW9CRequirementMemberShortNameDistinguishability(t *testing.T) {
+	tests := []struct {
+		name  string
+		src   string
+		lines []int
+	}{
+		{
+			name: "subject short name repeats a constraint short name",
+			src: `package Test {
+	requirement def R {
+		subject <s> x;
+		assume constraint <s> ac;
+	}
+}`,
+			lines: []int{3, 4},
+		},
+		{
+			name: "require short name repeats a member name",
+			src: `package Test {
+	requirement def R {
+		attribute rc;
+		require constraint <rc> c;
+	}
+}`,
+			lines: []int{3, 4},
+		},
+		{
+			name: "distinct short names",
+			src: `package Test {
+	requirement def R {
+		subject <s> x;
+		assume constraint <a> ac;
+		require constraint <r> rc;
+	}
+}`,
+			lines: nil,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w9cWantLines(t, tc.src, "name-conflict", tc.lines...)
+		})
+	}
+}
+
 // A member reusing a name its one library base supplies is indistinguishable
 // from it: `state start;` against StatePerformances::StateAction::start
 // (examples/orthogonal-regions-demo.sysml:12).
