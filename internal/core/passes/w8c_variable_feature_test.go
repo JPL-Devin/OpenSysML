@@ -1,6 +1,12 @@
 package passes
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+)
 
 // w8cVariableFeatureMessages counts the variability rules' messages for src analyzed under name.
 func w8cVariableFeatureMessages(t *testing.T, name, src string) map[string]int {
@@ -138,5 +144,25 @@ func TestW8CVariableFeatureRulesDoNotDoubleReport(t *testing.T) {
 	got := w8cVariableFeatureMessages(t, "<t>.sysml", src)
 	if got[msgVariableFeatureOwner] != 1 || got[msgInitialValueNotVariable] != 1 {
 		t.Errorf("want one owner and one initial message, got %v", got)
+	}
+}
+
+func TestW8CVariableFeatureRulesNeedTheOccurrenceLibrary(t *testing.T) {
+	src := `package P {
+	occurrence def O {
+		attribute x := 1;
+		constant attribute c = 2;
+	}
+	item def I { attribute y := 3; }
+}`
+	// Without Occurrences::Occurrence a SysML usage's variability cannot be derived: stay silent.
+	name := "<t>.sysml"
+	root := parser.New(source.New(name, []byte(src))).ParseFile()
+	idx := symbols.NewIndex()
+	idx.AddDocument(name, root)
+	for _, d := range Analyze(name, root, nil, idx) {
+		if d.Message == msgInitialValueNotVariable || d.Message == msgConstantNotVariable {
+			t.Errorf("library-free analysis reported %q", d.Message)
+		}
 	}
 }
