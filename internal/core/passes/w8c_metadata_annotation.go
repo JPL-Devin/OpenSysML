@@ -44,25 +44,21 @@ type metadataAnnotationChecker struct {
 	diags []Diagnostic
 }
 
-// checkSymbol checks each annotation of sym's declaration. A prefix annotation
-// names its type in the owning namespace; one written as a member names it in
-// the annotated element's own body scope.
+// checkSymbol checks each annotation of sym's declaration. The annotated element
+// owns its annotations, prefix or member, so each names its type in the
+// element's own scope.
 func (c *metadataAnnotationChecker) checkSymbol(sym *symbols.Symbol) {
+	scope := semantics.AnnotationScope(sym)
+	if scope == nil {
+		return
+	}
 	for _, a := range semantics.MetadataAnnotationsOf(sym.Decl) {
-		scope := c.annotationScope(sym, a)
-		if scope == nil {
-			continue
-		}
 		if metaclass, bad := c.model.AnnotatedElementViolation(sym, scope, a.Node.Type); bad {
 			c.reportCannotAnnotate(a.Node.Span(), metaclass)
 		}
 		c.checkBody(scope, a.Node)
 	}
 	for _, a := range semantics.MetadataAnnotationsAboutOthers(sym.Decl) {
-		scope := c.annotationScope(sym, a)
-		if scope == nil {
-			continue
-		}
 		for _, metaclass := range c.model.AboutAnnotatedElementViolations(scope, a.Node.Type, a.Node.About) {
 			c.reportCannotAnnotate(a.Node.Span(), metaclass)
 		}
@@ -71,15 +67,6 @@ func (c *metadataAnnotationChecker) checkSymbol(sym *symbols.Symbol) {
 	if u, ok := sym.Decl.(*ast.Usage); ok && u.Kind == ast.UsageMetadata {
 		c.checkMetadataUsage(sym, u)
 	}
-}
-
-// annotationScope is where an annotation names its type: a prefix in the owning
-// namespace, a member in the annotated element's own body scope.
-func (c *metadataAnnotationChecker) annotationScope(sym *symbols.Symbol, a semantics.MetadataAnnotation) *symbols.Scope {
-	if !a.Prefix && sym.Scope != nil {
-		return sym.Scope
-	}
-	return sym.OwnerScope
 }
 
 // checkMetadataUsage checks what `metadata m : M about x;` may annotate, or, with

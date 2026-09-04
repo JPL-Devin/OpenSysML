@@ -46,15 +46,10 @@ type metadataTypeChecker struct {
 }
 
 func (c *metadataTypeChecker) checkSymbol(sym *symbols.Symbol) {
-	scope := sym.Scope
-	if scope == nil {
-		scope = sym.OwnerScope
-	}
-	if scope == nil {
-		return
-	}
-	for _, pm := range w8cPrefixMetadata(sym.Decl) {
-		c.check(scope, pm.Type, pm.Span(), true)
+	if scope := semantics.AnnotationScope(sym); scope != nil {
+		for _, a := range semantics.MetadataAnnotationsWritten(sym.Decl) {
+			c.check(scope, a.Node.Type, a.Node.Span(), true)
+		}
 	}
 	if u, ok := sym.Decl.(*ast.Usage); ok && u.Kind == ast.UsageMetadata && sym.OwnerScope != nil {
 		// A SysML usage typed by the wrong kind of element is the usage typing
@@ -125,22 +120,4 @@ func metadataMetaclassMessage(kind source.Kind) string {
 		return msgMetadataMetaclass
 	}
 	return oneTypeUsageMessages[ast.UsageMetadata]
-}
-
-// w8cPrefixMetadata returns the annotations a declaration carries, both as
-// prefixes and as members of its body.
-func w8cPrefixMetadata(decl ast.Node) []*ast.PrefixMetadata {
-	prefixes, members, ok := ast.DeclaredMetadata(decl)
-	if !ok {
-		return nil
-	}
-	out := append([]*ast.PrefixMetadata(nil), prefixes...)
-	for _, m := range members {
-		if mem, ok := m.(*ast.Membership); ok {
-			if pm, ok := mem.Member.(*ast.PrefixMetadata); ok {
-				out = append(out, pm)
-			}
-		}
-	}
-	return out
 }

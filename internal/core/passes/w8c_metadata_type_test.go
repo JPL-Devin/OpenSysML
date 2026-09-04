@@ -147,6 +147,42 @@ func TestW8CMetadataTypeThroughAlias(t *testing.T) {
 	}
 }
 
+// The annotated element owns its annotations, prefix or member (KerML 8.2.4.2), so
+// a same-named type nested in its body shadows the outer one, as in the pilot.
+func TestW8CMetadataTypeIsReadInTheAnnotatedElement(t *testing.T) {
+	src := `package P {
+	metaclass M;
+	class N;
+	#M class A { class M; }
+	#N class B { metaclass N; }
+	class C { class M; @M; }
+	class D { metaclass N; @N; }
+}`
+	diags := w8cLibraryDiagnostics(t, "meta-annotation-scope.kerml", src)
+	if lines := linesOf(src, only(diags, "metadata-metaclass")); !equalInts(lines, []int{4, 6}) {
+		t.Errorf("metadata-metaclass at lines %v, want [4 6]: %v", lines, diags)
+	}
+
+	sysml := `package P {
+	metadata def M;
+	part def N;
+	#M part def A { part def M; }
+	#N part def B { metadata def N; }
+	part def C { part def M; @M; }
+	part def D { metadata def N; @N; }
+}`
+	diags = w8cLibraryDiagnostics(t, "meta-annotation-scope.sysml", sysml)
+	var typed []Diagnostic
+	for _, d := range diags {
+		if d.Message == oneTypeUsageMessages[ast.UsageMetadata] {
+			typed = append(typed, d)
+		}
+	}
+	if lines := linesOf(sysml, typed); !equalInts(lines, []int{4, 6}) {
+		t.Errorf("metadata typing reported at lines %v, want [4 6]: %v", lines, diags)
+	}
+}
+
 // linesOf returns the sorted 1-based lines of the diagnostics.
 func linesOf(src string, diags []Diagnostic) []int {
 	var lines []int

@@ -71,14 +71,14 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 func (r *Resolver) resolveNamespaceDecl(scope *symbols.Scope, decl ast.Node) bool {
 	switch d := decl.(type) {
 	case *ast.Package:
-		r.resolvePrefixes(scope, d.Prefixes)
+		r.resolvePrefixes(scope, d, d.Prefixes)
 		if child := r.childScope(scope, d); child != nil {
 			r.walkMembers(child, d.Members)
 			r.checkDistinguishability(child)
 		}
 		return true
 	case *ast.Namespace:
-		r.resolvePrefixes(scope, d.Prefixes)
+		r.resolvePrefixes(scope, d, d.Prefixes)
 		if child := r.childScope(scope, d); child != nil {
 			r.walkMembers(child, d.Members)
 			r.checkDistinguishability(child)
@@ -103,7 +103,7 @@ func (r *Resolver) resolveNamespaceDecl(scope *symbols.Scope, decl ast.Node) boo
 		}
 		return true
 	case *ast.Dependency:
-		r.resolvePrefixes(scope, d.Prefixes)
+		r.resolvePrefixes(scope, d, d.Prefixes)
 		for _, c := range d.Clients {
 			r.ResolveQualified(scope, c)
 		}
@@ -128,7 +128,7 @@ func (r *Resolver) resolveNamespaceDecl(scope *symbols.Scope, decl ast.Node) boo
 	case *ast.PrefixMetadata:
 		// A metadata usage written as a member of its own names its type the same
 		// way a prefix does.
-		r.resolveMetadataPrefix(scope, d)
+		r.resolveMetadataPrefix(scope, scope, d)
 		return true
 	case *ast.FilterMember:
 		r.InCondition(func() { r.resolveExpr(scope, d.Condition) })
@@ -143,7 +143,7 @@ func (r *Resolver) resolveNamespaceDecl(scope *symbols.Scope, decl ast.Node) boo
 func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 	switch d := decl.(type) {
 	case *ast.Definition:
-		r.resolvePrefixes(scope, d.Prefixes)
+		r.resolvePrefixes(scope, d, d.Prefixes)
 		child := r.childScope(scope, d)
 		r.resolveHeaderRelationships(scope, child, d, d.Relationships)
 		if child != nil {
@@ -152,7 +152,7 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		}
 		return true
 	case *ast.Usage:
-		r.resolvePrefixes(scope, d.Prefixes)
+		r.resolvePrefixes(scope, d, d.Prefixes)
 		child := r.childScope(scope, d)
 		r.resolveHeaderRelationships(scope, child, d, d.Relationships)
 		if d.Multiplicity != nil {
@@ -229,7 +229,7 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		}
 		return true
 	case *ast.SubjectMember:
-		r.resolvePrefixes(scope, d.Prefixes)
+		r.resolvePrefixes(scope, d, d.Prefixes)
 		if d.TypeRef != nil {
 			r.ResolveQualified(scope, d.TypeRef)
 		}
@@ -270,7 +270,7 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		r.walkConstraintBody(scope, d, nil, d.Body)
 		return true
 	case *ast.AssumeMember:
-		r.resolvePrefixes(scope, d.Prefixes)
+		r.resolvePrefixes(scope, d, d.Prefixes)
 		r.resolveExpr(scope, d.Expression)
 		r.resolveRelationships(scope, d, d.Relationships)
 		r.resolveMultiplicity(scope, d.Multiplicity)
@@ -278,7 +278,7 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		r.walkConstraintBody(scope, d, r.resolveConstraintReference(scope, d.Reference), d.Body)
 		return true
 	case *ast.RequireMember:
-		r.resolvePrefixes(scope, d.Prefixes)
+		r.resolvePrefixes(scope, d, d.Prefixes)
 		r.resolveExpr(scope, d.Expression)
 		r.resolveRelationships(scope, d, d.Relationships)
 		r.resolveMultiplicity(scope, d.Multiplicity)
@@ -517,27 +517,33 @@ func (r *Resolver) bodyScope(scope *symbols.Scope, node ast.Node) *symbols.Scope
 	return scope
 }
 
-func (r *Resolver) resolvePrefixes(scope *symbols.Scope, prefixes []*ast.PrefixMetadata) {
+// resolvePrefixes resolves the prefix annotations of decl, a member of scope.
+// The annotated element owns them (KerML 8.2.4.2 PrefixMetadataMember), so
+// their names resolve in its own scope.
+func (r *Resolver) resolvePrefixes(scope *symbols.Scope, decl ast.Node, prefixes []*ast.PrefixMetadata) {
+	names := r.bodyScope(scope, decl)
 	for _, p := range prefixes {
-		r.resolveMetadataPrefix(scope, p)
+		r.resolveMetadataPrefix(names, scope, p)
 	}
 }
 
-func (r *Resolver) resolveMetadataPrefix(scope *symbols.Scope, prefix *ast.PrefixMetadata) {
+// resolveMetadataPrefix resolves an annotation whose names are read in names
+// and whose body scope, if any, the builder hung off parent.
+func (r *Resolver) resolveMetadataPrefix(names, parent *symbols.Scope, prefix *ast.PrefixMetadata) {
 	if prefix == nil {
 		return
 	}
 	for _, a := range prefix.About {
-		r.ResolveQualified(scope, a)
+		r.ResolveQualified(names, a)
 	}
-	owner, ok := r.ResolveQualified(scope, prefix.Type)
+	owner, ok := r.ResolveQualified(names, prefix.Type)
 	if !ok || owner == nil || len(prefix.Body) == 0 {
 		return
 	}
 	if target, aliasOK := r.ResolveAliasTarget(owner); aliasOK {
 		owner = target
 	}
-	body := scope.ChildFor(prefix)
+	body := parent.ChildFor(prefix)
 	if body == nil {
 		return
 	}
