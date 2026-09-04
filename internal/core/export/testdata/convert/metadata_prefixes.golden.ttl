@@ -316,14 +316,15 @@ elmt:Prefixed__option
     sysx:sourceText "    variant #Reviewed part option : Car;\n" .
 
 elmt:Prefixed__option_om
-    a sysml:OwningMembership ;
+    a sysml:VariantMembership ;
     sysml:elementId "Prefixed__option_om" ;
     sysml:owner elmt:Prefixed ;
     sysml:memberElement elmt:Prefixed__option ;
     sysml:ownedMemberElement elmt:Prefixed__option ;
     sysml:ownedRelatedElement elmt:Prefixed__option ;
     sysml:owningRelatedElement elmt:Prefixed ;
-    sysml:membershipOwningNamespace elmt:Prefixed .
+    sysml:membershipOwningNamespace elmt:Prefixed ;
+    sysml:ownedVariantUsage elmt:Prefixed__option .
 
 elmt:Prefixed__option___400
     a sysml:MetadataUsage ;

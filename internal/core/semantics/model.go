@@ -168,6 +168,10 @@ func RelationshipsOf(sym *symbols.Symbol) []*ast.Relationship {
 		return bodyParamRelationships(d, sym.Name)
 	case *ast.SubjectMember:
 		return subjectRelationships(d)
+	case *ast.AssumeMember:
+		return d.Relationships
+	case *ast.RequireMember:
+		return d.Relationships
 	default:
 		return nil
 	}
