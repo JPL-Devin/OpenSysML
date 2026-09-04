@@ -2115,13 +2115,11 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 		return node
 	}
 
-	// A subject parameter is a full usage (SysML v2 8.2.2.16): an optional name,
-	// an optional specialization part, a multiplicity, a value and a body. An
-	// anonymous one with just a value (`subject = p;`) binds the inherited subject.
-	var name string
-	if seg, ok := p.parseNameSegment(); ok {
-		name = seg.Text
-	}
+	// A subject parameter is a full usage (SysML v2 8.2.2.16): an optional
+	// identification (`<short> name`), an optional specialization part, a
+	// multiplicity, a value and a body. An anonymous one with just a value
+	// (`subject = p;`) binds the inherited subject.
+	ident := p.parseIdentification()
 
 	var typeRef *ast.QualifiedName
 	if p.at(lexer.Colon) {
@@ -2139,7 +2137,7 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 
 	// Value part: `= expr`, `:= expr` or `default [=] expr`.
 	valueOp, hasValue := p.acceptValueOperator()
-	if name == "" && typeRef == nil && len(rels) == 0 && !hasValue {
+	if ident == (ast.Identification{}) && typeRef == nil && len(rels) == 0 && !hasValue {
 		p.error(p.peek().Span, "expected a name, ':', a specialization or a value after 'subject'")
 		en := &ast.ErrorNode{Message: "expected a name, ':', a specialization or a value after 'subject'"}
 		if !p.atEOF() && !p.at(lexer.RBrace) {
@@ -2156,7 +2154,7 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 
 	node := &ast.SubjectMember{
 		Prefixes:          prefixes,
-		Name:              name,
+		Ident:             ident,
 		TypeRef:           typeRef,
 		Multiplicity:      mult,
 		Relationships:     rels,
@@ -2189,8 +2187,7 @@ func (p *Parser) parseAssumeMember(start int) ast.Node {
 		d := p.parseOwnedConstraintDecl("assume constraint")
 		node := &ast.AssumeMember{
 			Prefixes:          prefixes,
-			Name:              d.name,
-			NameSpan:          d.nameSpan,
+			Ident:             d.ident,
 			DeclSpan:          p.spanFrom(declStart),
 			Relationships:     d.relationships,
 			Multiplicity:      d.multiplicity,
@@ -2240,8 +2237,7 @@ func (p *Parser) parseRequireMember(start int) ast.Node {
 		d := p.parseOwnedConstraintDecl("require constraint")
 		node := &ast.RequireMember{
 			Prefixes:          prefixes,
-			Name:              d.name,
-			NameSpan:          d.nameSpan,
+			Ident:             d.ident,
 			DeclSpan:          p.spanFrom(declStart),
 			Relationships:     d.relationships,
 			Multiplicity:      d.multiplicity,
@@ -2303,8 +2299,7 @@ func (p *Parser) parseRequirementCondition(start int, keyword string) ast.Node {
 // ownedConstraintDecl is the declaration and body of the constraint an
 // `assume`/`require constraint …` member owns.
 type ownedConstraintDecl struct {
-	name          string
-	nameSpan      source.Span
+	ident         ast.Identification
 	relationships []*ast.Relationship
 	multiplicity  *ast.Multiplicity
 	value         ast.Node
@@ -2319,10 +2314,8 @@ type ownedConstraintDecl struct {
 // `assume constraint { … }` are equally well formed.
 func (p *Parser) parseOwnedConstraintDecl(what string) ownedConstraintDecl {
 	var d ownedConstraintDecl
-	if p.atName() {
-		ident := p.parseIdentification()
-		d.name = ident.Name
-		d.nameSpan = ident.NameSpan
+	if p.atName() || p.at(lexer.Lt) {
+		d.ident = p.parseIdentification()
 	}
 	d.relationships = p.parseRelationships(true)
 	if p.at(lexer.LBracket) {
