@@ -24,6 +24,9 @@ type VariableFeaturePass struct{}
 
 func (VariableFeaturePass) Level() PassLevel { return LevelConstraint }
 
+// ElementScoped: each feature gates on its own head and its owner's.
+func (VariableFeaturePass) ElementScoped() {}
+
 func (VariableFeaturePass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
 	if ctx == nil || ctx.Index == nil || root == nil {
 		return nil
@@ -52,7 +55,7 @@ func (VariableFeaturePass) Run(ctx *Context, name string, root *ast.RootNamespac
 	w := &w8cWalker{ctx: ctx}
 	w.walk(rootScope, func(sym *symbols.Symbol) {
 		u, ok := sym.Decl.(*ast.Usage)
-		if !ok {
+		if !ok || w8cVariabilityDownstream(ctx, sym, u) {
 			return
 		}
 		if derivable && u.ValueIsInitial && u.Value != nil && !model.FeatureIsVariable(sym) {
@@ -77,6 +80,52 @@ func (VariableFeaturePass) Run(ctx *Context, name string, root *ast.RootNamespac
 		report(u.Span(), msgVariableFeatureOwner, "variable-feature-owner")
 	})
 	return diags
+}
+
+// w8cVariabilityDownstream reports whether what u's variability rests on, its own
+// head before the value and its owner's head in this document, has a lower-tier failure.
+func w8cVariabilityDownstream(ctx *Context, sym *symbols.Symbol, u *ast.Usage) bool {
+	head := w8cDeclarationHead(u)
+	if u.Value != nil {
+		if at := u.Value.Span().Offset; at > head.Offset && at < head.End() {
+			head.Len = at - head.Offset
+		}
+	}
+	if ctx.downstreamSpan(head) {
+		return true
+	}
+	if sym.OwnerScope == nil {
+		return false
+	}
+	owner := sym.OwnerScope.Owner()
+	if owner == nil || owner.Decl == nil {
+		return false
+	}
+	doc := symbols.DocNameOf(owner.OwnerScope)
+	if doc == "" {
+		doc = owner.DocName
+	}
+	return (doc == "" || doc == ctx.Name) && ctx.downstreamSpan(w8cDeclarationHead(owner.Decl))
+}
+
+// w8cDeclarationHead is a declaration's span before its first body member.
+func w8cDeclarationHead(node ast.Node) source.Span {
+	var members []ast.Node
+	switch d := node.(type) {
+	case *ast.Usage:
+		members = d.Members
+	case *ast.Definition:
+		members = d.Members
+	default:
+		return declarationHead(node)
+	}
+	span := node.Span()
+	if len(members) > 0 {
+		if at := members[0].Span().Offset; at > span.Offset && at < span.End() {
+			span.Len = at - span.Offset
+		}
+	}
+	return span
 }
 
 // w8cValueSpan is the span of a usage's feature value, operator through expression.
