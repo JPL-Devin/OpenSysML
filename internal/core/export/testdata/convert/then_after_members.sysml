@@ -71,6 +71,48 @@ package ThenAfterMembers {
         doc /* a is followed by b */
         then action b : Step;
     }
+    action def AfterComment {
+        action a : Step;
+        comment about a /* the first step */
+        then action b : Step;
+    }
+    package Library {
+        attribute def Marker;
+    }
+    action def AfterImport {
+        action a : Step;
+        private import Library::*;
+        then action b : Step;
+    }
+    action def AfterAlias {
+        action a : Step;
+        alias Bump for Step;
+        then action b : Step;
+    }
+    action def AfterNestedDefinition {
+        action a : Step;
+        part def Inner;
+        then action b : Step;
+    }
+    action def AfterNestedPackage {
+        action a : Step;
+        package Inner;
+        then action b : Step;
+    }
+    action def AfterSeveralNonFeatures {
+        action a : Step;
+        doc /* a is followed by b */
+        action def Inner;
+        private import Library::*;
+        comment about a /* the first step */
+        then action b : Step;
+    }
+    part def AfterNonFeatures {
+        part a : Widget;
+        doc /* a precedes b */
+        part def Inner;
+        then part b : Widget;
+    }
     action def AfterSuccession {
         action a : Step;
         action c : Step;

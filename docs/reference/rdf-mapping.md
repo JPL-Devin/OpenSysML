@@ -897,7 +897,7 @@ expr:P__Car___402.end0
 | `fromTo` | `[of <payload>] from <end0> to <end1>` | `flow of P from a to b` |
 | `flowTo` | `[of <payload>] <end0> to <end1>` | `flow a to b` |
 | `satisfy` | `<requirement>` (the `sysml:subsets` end, written bare) | `satisfy R by v`, `verify R` |
-| `then` | the source end is the nearest member written before it that is not a connector or a transition | `then b;`, `then part b;` |
+| `then` | the source end is the nearest feature written before it that is not a connector or a transition; a member that is not a feature is read past | `then b;`, `then part b;` |
 
 A head whose own keyword is the noun form writes a verb ahead of its ends, and
 that verb is `sysx:endVerb` (`connection c connect a to b`). Where the keyword
@@ -959,34 +959,44 @@ member before the succession, and a target that *is* that preceding member is
 the declaration the `then` was written ahead of.
 
 The member a `then` sequences from is the one the parser gives it: the nearest
-member before it that is not a connector or a transition. A connector of any
-kind, named or not (`connect p to q;`, `interface i connect …`, `allocate`,
-`bind`, `flow`, `succession`), and a transition relate other members rather than
-declaring one, so a `then` written after one is read past it, while an
-`attribute`, a `doc` or any other declaration is the source. This is the pilot
-implementation's rule (`UsageUtil.getPreviousFeature`), followed where the
-specification text is underdetermined: SysML v2 §7.17.4 describes the source as
+feature before it that is not a connector or a transition. A member that is not
+a feature — a `doc`, a `comment`, a `rep`, an `import`, an `alias`, a nested
+definition or `package` — declares nothing a succession can run from, so a
+`then` written after one is read past it. A connector of any kind, named or not
+(`connect p to q;`, `interface i connect …`, `allocate`, `bind`, `flow`,
+`succession`), and a transition relate other members rather than declaring one,
+so those are read past too, while an `attribute`, a `part`, an `action`, a
+metadata usage or any other feature is the source. This is the pilot
+implementation's rule (`UsageUtil.getPreviousFeature`, which walks back over
+every owned member that is not a Feature). Skipping the non-feature members is
+also the literal reading of SysML v2 §7.17.4, which describes the source as
 "the nearest occurrence lexically previous to the `then`, skipping over any
-intervening non-occurrence usages", which read literally would sequence from a
-connection (an occurrence usage) and read past an attribute (not one), the
-opposite of the pilot on both counts, and §8.3.13.6 `SuccessionAsUsage` states
-no constraint for the implied source (OMG issue SYSML21-171 records the
-omission). One part of the pilot's rule is not followed: the pilot sequences
-from a `flow` or `message` written with no ends (`message m;`), which this
-implementation reads past like any other connector — a known gap. The writer
-folds a succession back into `then` by the same rule, shared with the parser
-as `ast.UsageKind.IsEdge`, so `action a; flow from a.x to b.x; then action b;`
-and `action a; connect p to q; then action b;` come back as written. The
+intervening non-occurrence usages" — a `doc` or an import is not a usage at
+all. The connector part of the rule follows the pilot where that text is
+underdetermined: read literally it would sequence from a connection (an
+occurrence usage) and read past an attribute (not one), the opposite of the
+pilot on both counts, and §8.3.13.6 `SuccessionAsUsage` states no constraint for
+the implied source (OMG issue SYSML21-171 records the omission). Two parts of
+the pilot's rule are not followed: the pilot sequences from a `flow` or
+`message` written with no ends (`message m;`), which this implementation reads
+past like any other connector, and it resolves an `alias` of a feature to that
+feature, where this implementation reads past the alias as §7.17.4 does — both
+known gaps. The writer folds a succession back into `then` by the same rule,
+shared with the parser as `ast.IsSuccessionSource` (over `ast.UsageKind.IsEdge`
+for the connector kinds), so `action a; flow from a.x to b.x; then action b;`,
+`action a; connect p to q; then action b;` and `action a; doc /* */ then action
+b;` come back as written. The
 source end is compared as the name the member answers to, which is what the
 parser records: a `first a then b;` sequences from `a`, and a `perform walk;`
 or `action redefines walk;` that declares no name of its own answers to `walk`
 (KerML 7.3.4.5). A graph describing a position the notation cannot express —
-sequencing from an earlier member, or from the connector the `then` is read past —
-is reported rather than written back somewhere else
-(`export_test.go:TestUnnamedSuccessionEndComesBackFromTheGraph`,
+sequencing from an earlier member, or from the connector, documentation or
+definition the `then` is read past — is reported rather than written back
+somewhere else (`export_test.go:TestUnnamedSuccessionEndComesBackFromTheGraph`,
 `TestHalfNamedSuccessionInAGraphIsReported`,
 `behavior_test.go:TestThenComesBackPastTheMembersTheParserSkips`,
-`TestThenIsRefusedWhenTheGraphSequencesFromAnotherMember`).
+`TestThenIsRefusedWhenTheGraphSequencesFromAnotherMember`,
+`TestThenIsRefusedWhenTheGraphSequencesFromANonFeature`).
 
 Every body that can carry a succession (definition, usage, action, state,
 including a parallel state's regions, calculation and requirement) reads these

@@ -404,19 +404,58 @@ func TestThenIsRefusedWhenTheGraphSequencesFromAnotherMember(t *testing.T) {
 		"the flow written before": "elmt:P__A___402",
 	} {
 		t.Run(name, func(t *testing.T) {
-			if !strings.Contains(string(turtle), "\n"+source+"\n") {
-				t.Fatalf("%s is not an element of the graph:\n%s", source, turtle)
-			}
-			moved := strings.Replace(string(turtle), stated, "sysml:sourceFeature "+source, 1)
-			_, err := export.Convert("m.ttl", []byte(moved), export.FormatTurtle, export.FormatSysML)
-			var unsupported *export.UnsupportedError
-			if !errors.As(err, &unsupported) {
-				t.Fatalf("want an UnsupportedError, got %v", err)
-			}
-			if !strings.Contains(err.Error(), "sequences from the member written before the member it introduces") {
-				t.Errorf("the refusal should say which order the graph states: %v", err)
-			}
+			checkThenIsRefusedWithSource(t, turtle, stated, source)
 		})
+	}
+}
+
+// The non-feature members a `then` is read past are no source for it either: a
+// graph that sequences from the documentation or the nested definition written
+// before the `then`, or from a feature written earlier still, is refused.
+func TestThenIsRefusedWhenTheGraphSequencesFromANonFeature(t *testing.T) {
+	src := "package P {\n    action def Step;\n" +
+		"    action def A {\n        action x : Step;\n        action a : Step;\n        doc /* a then b */\n        part def Inner;\n        then action b : Step;\n    }\n}\n"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	const stated = "sysml:sourceFeature elmt:P__A__a"
+	if strings.Count(string(turtle), stated) != 1 {
+		t.Fatalf("the succession should state its source once as %s:\n%s", stated, turtle)
+	}
+	back, err := export.Convert("m.ttl", withoutSourceText(t, turtle), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation from the mapping alone: %v\n%s", err, turtle)
+	}
+	if string(back) != src {
+		t.Fatalf("the notation changed\n--- want ---\n%s\n--- got ---\n%s", src, back)
+	}
+	for name, source := range map[string]string{
+		"an earlier action":                    "elmt:P__A__x",
+		"the documentation written before":     "elmt:P__A___402",
+		"the nested definition written before": "elmt:P__A__Inner",
+	} {
+		t.Run(name, func(t *testing.T) {
+			checkThenIsRefusedWithSource(t, turtle, stated, source)
+		})
+	}
+}
+
+// checkThenIsRefusedWithSource moves the stated source of the one succession
+// in turtle to source, an element of the graph, and requires the refusal.
+func checkThenIsRefusedWithSource(t *testing.T, turtle []byte, stated, source string) {
+	t.Helper()
+	if !strings.Contains(string(turtle), "\n"+source+"\n") {
+		t.Fatalf("%s is not an element of the graph:\n%s", source, turtle)
+	}
+	moved := strings.Replace(string(turtle), stated, "sysml:sourceFeature "+source, 1)
+	_, err := export.Convert("m.ttl", []byte(moved), export.FormatTurtle, export.FormatSysML)
+	var unsupported *export.UnsupportedError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("want an UnsupportedError, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "sequences from the member written before the member it introduces") {
+		t.Errorf("the refusal should say which order the graph states: %v", err)
 	}
 }
 

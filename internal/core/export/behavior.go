@@ -880,9 +880,8 @@ func (d *decoder) positionalSuccessions(children []*element) ([]*element, error)
 	return kept, nil
 }
 
-// isSuccessionSource is ast.IsSuccessionSource read off a metaclass: a feature
-// that is not an edge. A subaction membership stands for the action it owns; a
-// metaclass this mapping invents is a feature unless it is the alias or filter.
+// isSuccessionSource is ast.IsSuccessionSource read off a metaclass: a feature that
+// is not an edge. A subaction membership stands for the action it owns.
 func isSuccessionSource(el *element) bool {
 	if kind, ok := metaclassUsage[el.metaclass]; ok {
 		return !kind.IsEdge()

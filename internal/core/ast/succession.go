@@ -1,11 +1,7 @@
 package ast
 
-// IsSuccessionSource reports whether a body member is one a positional `then`
-// after it sequences from: a feature that is not an edge. A definition, package,
-// import, alias, annotation or filter is not a feature, and an edge relates
-// other members (UsageKind.IsEdge), so a `then` passes over both to the nearest
-// member before them that is one. The parser reads `then` by this rule and the
-// RDF writer folds a succession back into `then` by it.
+// IsSuccessionSource reports whether a positional `then` sequences from this body
+// member: a feature that is not an edge (SysML v2 §7.17.4). Parser and RDF writer share it.
 func IsSuccessionSource(member Node) bool {
 	switch n := member.(type) {
 	case *Membership:

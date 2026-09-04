@@ -1,0 +1,8 @@
+{
+    "type": "state",
+    "finalState": "done",
+    "stateVisits": ["idle", "running", "done"],
+    "outputs": {
+        "log": { "type": "Integer", "value": 123 }
+    }
+}
