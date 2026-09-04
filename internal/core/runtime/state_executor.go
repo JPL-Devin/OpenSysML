@@ -971,10 +971,11 @@ func (e *StateExecutor) bindAcceptPayload(acceptEvent *ast.AcceptEvent, event *E
 		return unbind, fmt.Errorf("accept %s: event carries %T, not a message",
 			name.Text, event.Payload)
 	}
-	value, err := e.ctx.acceptedValue(msg)
+	value, err := e.ctx.acceptedValue(&msg)
 	if err != nil {
 		return unbind, fmt.Errorf("accept %s: %w", name.Text, err)
 	}
+	event.Payload = msg
 	e.stateData[name.Text] = value
 	return unbind, nil
 }
@@ -2120,12 +2121,7 @@ func (e *StateExecutor) decide(m Message) (Decision, error) {
 	if accepted, err := e.acceptableMessage(m); err != nil || !accepted {
 		return Decision{}, err
 	}
-	probe := m
-	probe.Payload = make(map[string]Value, len(m.Payload))
-	for name, value := range m.Payload {
-		probe.Payload[name] = value
-	}
-	event := Event{Type: EventAccept, Timestamp: e.currentTime, Payload: probe}
+	event := Event{Type: EventAccept, Timestamp: e.currentTime, Payload: m}
 	candidates, err := e.selectTransitions(&event)
 	if err != nil {
 		return Decision{}, err

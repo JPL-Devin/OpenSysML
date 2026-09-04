@@ -12,8 +12,9 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// A feature redefined under another name is one payload slot: filled once
-// positionally, and reported when named twice rather than resolved by map order.
+// A message built outside a send carries its payload by feature name: a feature
+// redefined under another name is one slot, reported when two entries name it
+// rather than resolved by map order, and an entry naming no feature is refused.
 func TestMaterializeAcceptedBindsRedefinedFeatureOnce(t *testing.T) {
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
 		private import ScalarValues::*;
@@ -27,9 +28,9 @@ func TestMaterializeAcceptedBindsRedefinedFeatureOnce(t *testing.T) {
 	message := func(payload map[string]Value) Message {
 		return Message{SignalType: "Sub", Signal: subs[0], Payload: payload}
 	}
-	got, err := ctx.materializeAccepted(message(map[string]Value{"arg1": integerValue(4), "arg2": integerValue(6)}))
+	got, err := ctx.materializeAccepted(message(map[string]Value{"b": integerValue(4), "k": integerValue(6)}))
 	if err != nil {
-		t.Fatalf("materialize positional payload: %v", err)
+		t.Fatalf("materialize payload: %v", err)
 	}
 	inst, ok := ctx.Instance(got.Instance)
 	if !ok {
@@ -40,18 +41,63 @@ func TestMaterializeAcceptedBindsRedefinedFeatureOnce(t *testing.T) {
 			t.Errorf("%s = %+v, want %d", name, v, want)
 		}
 	}
-	for _, payload := range []map[string]Value{
-		{"arg1": integerValue(4), "b": integerValue(5)},
-		{"a": integerValue(4), "b": integerValue(5)},
+	for _, tc := range []struct {
+		payload map[string]Value
+		want    string
+	}{
+		{map[string]Value{"a": integerValue(4), "b": integerValue(5)}, "a and b are one feature, bound twice"},
+		{map[string]Value{"arg1": integerValue(4)}, `"arg1" names no feature it carries`},
 	} {
 		created := len(ctx.created)
-		if _, err := ctx.materializeAccepted(message(payload)); err == nil || !strings.Contains(err.Error(), "bound twice") {
-			t.Errorf("payload %v: error %v, want the feature reported bound twice", payload, err)
+		if _, err := ctx.materializeAccepted(message(tc.payload)); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("payload %v: error %v, want %q", tc.payload, err, tc.want)
 		}
 		if len(ctx.created) != created {
-			t.Errorf("payload %v left %d instance(s) behind", payload, len(ctx.created)-created)
+			t.Errorf("payload %v left %d instance(s) behind", tc.payload, len(ctx.created)-created)
 		}
 	}
+}
+
+// Positional arguments bind features by name, so a feature named like a
+// position (`arg1`) takes the argument at its own position and no other.
+func TestSendNewBindsFeatureNamedLikeAPosition(t *testing.T) {
+	assertIntOutput(t, sendNewOutputs(t, `item def Pair { attribute head : Integer; attribute arg1 : Integer; }`,
+		"send new Pair(4, 6) to reader;", "assign got := p.head * 10 + p.arg1;", "Pair"), "got", 46)
+}
+
+// A feature named `value` is bound like any other: the accept still binds the
+// constructed occurrence, not the value that feature holds.
+func TestSendNewBindsFeatureNamedValue(t *testing.T) {
+	assertIntOutput(t, sendNewOutputs(t, `item def Data { attribute value : Integer; }`,
+		"send new Data(value = 7) to reader;", "assign got := p.value;", "Data"), "got", 7)
+}
+
+// sendNewOutputs runs a pipeline that sends as told and reads the accepted p into got.
+func sendNewOutputs(t *testing.T, def, send, read, typ string) map[string]Value {
+	t.Helper()
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		`+def+`
+		action pipeline {
+			attribute got : Integer = 0;
+			first start;
+			action sender { `+send+` }
+			action reader accept p : `+typ+` { `+read+` }
+			done;
+			succession first start then sender;
+			succession first sender then reader;
+			succession first reader then done;
+		}
+	}`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action pipeline not found")
+	}
+	outputs, err := ctx.ExecuteAction(sym)
+	if err != nil {
+		t.Fatalf("%s %v", send, err)
+	}
+	return outputs
 }
 
 // A constructor that labels one feature twice fails at the send, whichever
@@ -910,13 +956,8 @@ func TestAcceptParksTokenUntilMessageArrives(t *testing.T) {
 	}
 
 	// A message posted from outside the action resumes it.
-	ctx.PostMessage(Message{
-		SignalType: "Integer",
-		Target:     "reader",
-		Payload: map[string]Value{
-			"value": {Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 9}},
-		},
-	})
+	nine := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 9}}
+	ctx.PostMessage(Message{SignalType: "Integer", Target: "reader", Value: &nine})
 	if err := exec.RunToCompletion(); err != nil {
 		t.Fatalf("resume after the message arrived: %v", err)
 	}
@@ -956,12 +997,10 @@ func TestParkedAcceptTakesOnlyItsOwnMessage(t *testing.T) {
 	}
 
 	// A String arrives first and must be left in flight; the Integer resumes it.
-	ctx.PostMessage(Message{SignalType: "String", Target: "reader", Payload: map[string]Value{
-		"value": NewStringValue("not for you"),
-	}})
-	ctx.PostMessage(Message{SignalType: "Integer", Target: "reader", Payload: map[string]Value{
-		"value": {Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 4}},
-	}})
+	text := NewStringValue("not for you")
+	four := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 4}}
+	ctx.PostMessage(Message{SignalType: "String", Target: "reader", Value: &text})
+	ctx.PostMessage(Message{SignalType: "Integer", Target: "reader", Value: &four})
 	if err := exec.RunToCompletion(); err != nil {
 		t.Fatalf("resume after the message arrived: %v", err)
 	}

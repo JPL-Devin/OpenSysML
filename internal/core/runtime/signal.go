@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -55,7 +54,11 @@ type Message struct {
 	Object      int64
 	PortID      int64
 	Delivery    DeliveryKind
-	Payload     map[string]Value
+	// Payload binds features of the message's type by name, as the send's arguments did.
+	Payload map[string]Value
+	// Value is the one value a send of an expression carries (`send 7`, `send d`), or
+	// the occurrence an accept built from Payload; nil until either.
+	Value *Value
 }
 
 // DeliveryKind is what a message's destination resolved to, and so what a
@@ -978,7 +981,7 @@ func (e *EvalContext) buildMessage(scope *symbols.Scope, send lower.Send) (Messa
 		Event:      event,
 		EventName:  eventName,
 		Target:     target,
-		Payload:    map[string]Value{"value": value},
+		Value:      &value,
 	}
 	if event != nil && value.Kind == ValInstance {
 		msg.EventObject = value.Instance
@@ -1007,26 +1010,27 @@ func (e *EvalContext) sentFeature(scope *symbols.Scope, message ast.Node) (*symb
 // acceptedValue is the value an accept binds its payload name to: the single
 // value the message carries, or an occurrence of its signal built from the
 // arguments the send named, so `accept p : Ping` sees a Ping object either way.
-// The occurrence is cached on the message: a guard evaluated during transition
+// The occurrence is kept on the message: a guard evaluated during transition
 // selection and the firing that follows read the same object.
-func (ctx *Context) acceptedValue(msg Message) (Value, error) {
-	if value, ok := msg.Payload["value"]; ok {
-		return value, nil
+func (ctx *Context) acceptedValue(msg *Message) (Value, error) {
+	if msg.Value != nil {
+		return *msg.Value, nil
 	}
 	if msg.Signal == nil {
 		return Value{}, fmt.Errorf("%w: %s carries no single value to bind",
 			ErrNoValue, orAnonymousSignal(msg.SignalType))
 	}
-	value, err := ctx.materializeAccepted(msg)
+	value, err := ctx.materializeAccepted(*msg)
 	if err != nil {
 		return Value{}, err
 	}
-	msg.Payload["value"] = value
+	msg.Value = &value
 	return value, nil
 }
 
 // materializeAccepted builds the occurrence a typed message binds as, leaving no
-// instance behind when an argument does not fit it or two name one feature.
+// instance behind when a payload entry names no feature of it, does not fit
+// one, or two entries name one feature.
 func (ctx *Context) materializeAccepted(msg Message) (Value, error) {
 	mark := len(ctx.created)
 	inst, err := ctx.materialize(msg.Signal, 0)
@@ -1034,7 +1038,6 @@ func (ctx *Context) materializeAccepted(msg Message) (Value, error) {
 		ctx.abandonInstancesSince(mark)
 		return Value{}, fmt.Errorf("materialize accepted %s: %w", msg.SignalType, err)
 	}
-	positional := ctx.model.ConstructibleFeatures(msg.Signal)
 	names := make([]string, 0, len(msg.Payload))
 	for name := range msg.Payload {
 		names = append(names, name)
@@ -1042,45 +1045,25 @@ func (ctx *Context) materializeAccepted(msg Message) (Value, error) {
 	sort.Strings(names)
 	written := make(map[*FeatureValue]string, len(names))
 	for _, name := range names {
-		target := name
-		if _, held := inst.FeatureValues[name]; !held {
-			n := positionalArg(name)
-			if n == 0 || n > len(positional) {
-				ctx.abandonInstancesSince(mark)
-				return Value{}, fmt.Errorf("accepted %s: %q names no feature it carries",
-					msg.SignalType, name)
-			}
-			target = positional[n-1].Name
+		fv, held := inst.FeatureValues[name]
+		if !held {
+			ctx.abandonInstancesSince(mark)
+			return Value{}, fmt.Errorf("accepted %s: %q names no feature it carries", msg.SignalType, name)
 		}
-		if fv := inst.FeatureValues[target]; fv != nil {
+		if fv != nil {
 			if earlier, twice := written[fv]; twice {
 				ctx.abandonInstancesSince(mark)
-				if earlier == target {
-					return Value{}, fmt.Errorf("accepted %s: %s is bound twice", msg.SignalType, target)
-				}
 				return Value{}, fmt.Errorf("accepted %s: %s and %s are one feature, bound twice",
-					msg.SignalType, earlier, target)
+					msg.SignalType, earlier, name)
 			}
-			written[fv] = target
+			written[fv] = name
 		}
-		if err := inst.SetFeatureValue(ctx, target, msg.Payload[name]); err != nil {
+		if err := inst.SetFeatureValue(ctx, name, msg.Payload[name]); err != nil {
 			ctx.abandonInstancesSince(mark)
 			return Value{}, fmt.Errorf("accepted %s: %w", msg.SignalType, err)
 		}
 	}
 	return Value{Kind: ValInstance, Instance: inst.ID}, nil
-}
-
-// positionalArg returns N for a payload entry named argN, or 0 for any other.
-func positionalArg(name string) int {
-	if !strings.HasPrefix(name, "arg") {
-		return 0
-	}
-	n, err := strconv.Atoi(name[len("arg"):])
-	if err != nil || n <= 0 {
-		return 0
-	}
-	return n
 }
 
 // invokesCalc reports whether an invocation calls a calculation — the declaration
@@ -1110,14 +1093,7 @@ func (e *EvalContext) buildInvokedMessage(scope *symbols.Scope, invocation *ast.
 	if err != nil {
 		return Message{}, err
 	}
-	msg, err := e.buildTypedMessage(scope, invocation.Type, signalType, signal, invocation.Args, invocation.NamedArgs, target)
-	if err != nil {
-		return Message{}, err
-	}
-	if len(invocation.Args) == 1 && len(invocation.NamedArgs) == 0 {
-		msg.Payload["value"] = msg.Payload["arg1"]
-	}
-	return msg, nil
+	return e.buildTypedMessage(scope, invocation.Type, signalType, signal, invocation.Args, invocation.NamedArgs, target, true)
 }
 
 // buildConstructedMessage builds the message of `send new Telemetry(3) via
@@ -1134,7 +1110,7 @@ func (e *EvalContext) buildConstructedMessage(scope *symbols.Scope, constructor 
 			return Message{}, fmt.Errorf("send %s: new %s takes %d argument(s), found %d", signal.Name, signal.Name, n, len(constructor.Args))
 		}
 	}
-	return e.buildTypedMessage(scope, constructor.Type, signal.Name, signal, constructor.Args, constructor.NamedArgs, target)
+	return e.buildTypedMessage(scope, constructor.Type, signal.Name, signal, constructor.Args, constructor.NamedArgs, target, false)
 }
 
 // constructedType resolves the type `new T(…)` instantiates: a definition, or a
@@ -1172,19 +1148,34 @@ func (e *EvalContext) messageType(scope *symbols.Scope, typeRef *ast.QualifiedNa
 	return signal.Name, signal, nil
 }
 
-// buildTypedMessage builds a message typed by signal, named typeRef, carrying its arguments by
-// name or position. Two labels for one feature (the same label twice, qualified
-// or not, or a redefinition and its target) are an error rather than the last value.
-func (e *EvalContext) buildTypedMessage(scope *symbols.Scope, typeRef *ast.QualifiedName, signalType string, signal *symbols.Symbol, args []ast.Node, named []ast.NamedArg, target string) (Message, error) {
-	payload := make(map[string]Value, len(args)+len(named))
+// buildTypedMessage builds a message typed by signal, named typeRef, carrying each
+// argument under the feature it binds: a positional one the feature at its position
+// (`argN` where the type has none), a label the feature it names. Binding one feature
+// twice, by position and label or by two labels, is an error rather than the last
+// value. With loneValue a lone positional argument is also the message's Value.
+func (e *EvalContext) buildTypedMessage(scope *symbols.Scope, typeRef *ast.QualifiedName, signalType string, signal *symbols.Symbol, args []ast.Node, named []ast.NamedArg, target string, loneValue bool) (Message, error) {
+	msg := Message{SignalType: signalType, Signal: signal, Target: target,
+		Payload: make(map[string]Value, len(args)+len(named))}
+	var slots []*symbols.Symbol
+	if signal != nil && e.ctx != nil && e.ctx.model != nil {
+		slots = e.ctx.model.ConstructibleFeatures(signal)
+	}
+	bound := make(map[*symbols.Symbol]string, len(args)+len(named))
 	for i, arg := range args {
 		value, err := e.Eval(arg)
 		if err != nil {
 			return Message{}, fmt.Errorf("eval argument %d of send %s: %w", i+1, signalType, err)
 		}
-		payload[fmt.Sprintf("arg%d", i+1)] = value
+		name := fmt.Sprintf("arg%d", i+1)
+		if i < len(slots) {
+			name = slots[i].Name
+			bound[slots[i]] = name
+		}
+		msg.Payload[name] = value
+		if loneValue && len(args) == 1 && len(named) == 0 {
+			msg.Value = &value
+		}
 	}
-	bound := make(map[*symbols.Symbol]string, len(named))
 	for _, arg := range named {
 		label := ast.QualifiedText(arg.Name)
 		if label == "" {
@@ -1194,16 +1185,16 @@ func (e *EvalContext) buildTypedMessage(scope *symbols.Scope, typeRef *ast.Quali
 		if err != nil {
 			return Message{}, fmt.Errorf("send %s: %w", signalType, err)
 		}
-		if _, twice := payload[name]; twice {
+		if _, twice := msg.Payload[name]; twice {
 			return Message{}, fmt.Errorf("send %s: %s is bound twice", signalType, label)
 		}
 		value, err := e.Eval(arg.Value)
 		if err != nil {
 			return Message{}, fmt.Errorf("eval argument %s of send %s: %w", label, signalType, err)
 		}
-		payload[name] = value
+		msg.Payload[name] = value
 	}
-	return Message{SignalType: signalType, Signal: signal, Target: target, Payload: payload}, nil
+	return msg, nil
 }
 
 // constructorLabel returns the shape name of the member of signal a constructor

@@ -452,7 +452,7 @@ func (ctx *Context) beginRunBoundary() func() {
 // restores them. A commit inside an enclosing journal leaves the entries to it.
 func (ctx *Context) beginJournal() (commit, rollback func()) {
 	mark, undoMark := len(ctx.journalWrites), len(ctx.journalUndos)
-	messages := cloneMessages(ctx.messages)
+	messages := slices.Clone(ctx.messages)
 	ctx.journals++
 	commit = func() {
 		ctx.journals--
@@ -473,16 +473,6 @@ func (ctx *Context) beginJournal() (commit, rollback func()) {
 		ctx.messages = messages
 	}
 	return commit, rollback
-}
-
-// cloneMessages copies messages in flight, payloads included: what a probe caches
-// on a payload (see acceptedValue) names objects the probe discards.
-func cloneMessages(messages []Message) []Message {
-	cloned := slices.Clone(messages)
-	for i := range cloned {
-		cloned[i].Payload = maps.Clone(cloned[i].Payload)
-	}
-	return cloned
 }
 
 // journalWrite is a feature value a journal changed and what it held before.

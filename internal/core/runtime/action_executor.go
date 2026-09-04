@@ -1298,7 +1298,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 		}
 		token.Wait = nil
 		if accept.ParamName != "" {
-			value, err := e.ctx.acceptedValue(msg)
+			value, err := e.ctx.acceptedValue(&msg)
 			if err != nil {
 				return fmt.Errorf("accept %s: %w", accept.ParamName, err)
 			}
