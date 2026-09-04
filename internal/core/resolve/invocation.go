@@ -101,7 +101,7 @@ func (r *Resolver) surfacedMembers(cur *symbols.Symbol, from *symbols.Scope, nam
 		return nil
 	}
 	var out []*symbols.Symbol
-	if all, ok := r.model.(contributedMembersLookup); ok {
+	if all, ok := r.model.(contributedMembersLookuper); ok {
 		for _, found := range all.LookupContributedMembers(cur, name) {
 			if visibleAsInheritedMember(cur, found) && r.namedThroughNamespace(found) {
 				out = appendSymbol(out, found)
@@ -212,7 +212,7 @@ func (r *Resolver) visibleMemberCandidates(sym *symbols.Symbol, name string) ([]
 		}
 		out := []*symbols.Symbol{found}
 		// Each general type contributes its own declaration of a name sym does not declare.
-		if all, ok := r.model.(contributedMembersLookup); ok && !declaresLocally(sym, found, name) {
+		if all, ok := r.model.(contributedMembersLookuper); ok && !declaresLocally(sym, found, name) {
 			for _, other := range all.LookupContributedMembers(sym, name) {
 				if admits(other) && !r.AliasNamesNothing(other) {
 					out = appendSymbol(out, other)
@@ -238,9 +238,9 @@ func (r *Resolver) visibleMemberCandidates(sym *symbols.Symbol, name string) ([]
 	return out, len(out) > 0
 }
 
-// contributedMembersLookup is the member lookup that can list the declaration
+// contributedMembersLookuper is the member lookup that can list the declaration
 // each of a type's generals contributes under one name; *semantics.Model implements it.
-type contributedMembersLookup interface {
+type contributedMembersLookuper interface {
 	LookupContributedMembers(sym *symbols.Symbol, name string) []*symbols.Symbol
 }
 

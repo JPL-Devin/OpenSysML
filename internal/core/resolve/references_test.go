@@ -551,6 +551,7 @@ func memberOf(n ast.Node, i int) ast.Node {
 	return nil
 }
 
+// unwrapMember is the member a membership wraps, or the node itself.
 func unwrapMember(n ast.Node) ast.Node {
 	if m, ok := n.(*ast.Membership); ok {
 		return m.Member
@@ -810,9 +811,9 @@ func TestAnInitialReferenceReachesALaterDeclaration(t *testing.T) {
 }`
 	r, root, _ := resolvedDoc(t, src)
 	initials := map[string]*ast.InitialNode{}
-	for _, def := range declared(root.Members[0]).(*ast.Package).Members {
-		for _, member := range declared(def).(*ast.Definition).Members {
-			if n, ok := declared(member).(*ast.InitialNode); ok {
+	for _, def := range unwrapMember(root.Members[0]).(*ast.Package).Members {
+		for _, member := range unwrapMember(def).(*ast.Definition).Members {
+			if n, ok := unwrapMember(member).(*ast.InitialNode); ok {
 				initials[n.Name] = n
 			}
 		}
@@ -906,14 +907,6 @@ func resolvedDocNamed(t *testing.T, name, src string) (*resolve.Resolver, *ast.R
 	r.SetModel(semantics.NewModel(r))
 	r.ResolveDocument(name, root)
 	return r, root, idx.DocumentRoot(name)
-}
-
-// declared is the member a membership wraps, or the node itself.
-func declared(n ast.Node) ast.Node {
-	if m, ok := n.(*ast.Membership); ok {
-		return m.Member
-	}
-	return n
 }
 
 // nameText renders a qualified name the way it was written.

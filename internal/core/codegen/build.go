@@ -25,6 +25,18 @@ func Targets() []Target { return []Target{TargetC, TargetGo} }
 // CCompilerEnvVar names the C compiler TargetC drives (default: cc).
 const CCompilerEnvVar = "OPENSYSML_CC"
 
+// GoCommandEnvVar names the go command TargetGo drives (default: go).
+const GoCommandEnvVar = "OPENSYSML_GO"
+
+// goCommand resolves the go executable to an absolute path once, before it runs.
+func goCommand() (string, error) {
+	g := os.Getenv(GoCommandEnvVar)
+	if g == "" {
+		g = "go"
+	}
+	return exec.LookPath(g)
+}
+
 // CFlags are the C compiler options; the prelude's explicit checks keep -O3 safe,
 // and no contraction keeps every Real operation rounded as the interpreter rounds it.
 var CFlags = []string{"-O3", "-flto", "-ffp-contract=off", "-std=gnu11", "-Wall", "-Wextra", "-Wno-unused-function", "-Wno-unused-parameter"}
@@ -93,7 +105,11 @@ func Build(p *Program, target Target, output string) error {
 		if err != nil {
 			return err
 		}
-		cmd = exec.Command("go", "build", "-o", abs, ".") // #nosec G204 -- fixed executable, our arguments
+		goBin, err := goCommand()
+		if err != nil {
+			return fmt.Errorf("codegen: no go command: %w", err)
+		}
+		cmd = exec.Command(goBin, "build", "-o", abs, ".") // #nosec G204 -- the toolchain is the operator's choice, the arguments are ours
 		cmd.Dir = dir
 	}
 	var stderr bytes.Buffer

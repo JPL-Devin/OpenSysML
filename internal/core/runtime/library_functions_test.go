@@ -1457,7 +1457,7 @@ func TestBuiltinsListEveryFunctionWithItsPackage(t *testing.T) {
 	listed := make(map[string]Builtin)
 	for _, b := range Builtins() {
 		listed[b.FQN] = b
-		if want := b.Package + "::" + b.Name; b.FQN != want {
+		if b.FQN != b.Package+"::"+b.Name {
 			t.Errorf("%q is listed under package %q and name %q", b.FQN, b.Package, b.Name)
 		}
 	}

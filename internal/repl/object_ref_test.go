@@ -410,7 +410,7 @@ func TestObjectIDsStableAcrossCarryover(t *testing.T) {
 	if errs := errorDiagnostics(res.Diagnostics); len(errs) > 0 {
 		t.Fatalf("declaration has errors: %v", errs)
 	}
-	if kept := s.instances["Garage::car"]; kept != car {
+	if s.instances["Garage::car"] != car {
 		t.Fatalf("car was replaced across the carry-over")
 	}
 	wants(t, run(t, s, "%features "+id), fmt.Sprintf("Instance: %s (ID: %d)", id, car.ID), "mass = 1500.0")
@@ -427,7 +427,7 @@ func TestObjectIDsStableAcrossCarryover(t *testing.T) {
 	if errs := errorDiagnostics(res.Diagnostics); len(errs) > 0 {
 		t.Fatalf("declaration has errors: %v", errs)
 	}
-	if kept := s.instances["Garage::car"]; kept != second {
+	if s.instances["Garage::car"] != second {
 		t.Fatalf("the second car was replaced across the carry-over")
 	}
 	wants(t, run(t, s, "%features "+id), fmt.Sprintf("Instance: %s (ID: %d)", id, car.ID))

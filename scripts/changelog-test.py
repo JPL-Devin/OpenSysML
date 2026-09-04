@@ -39,6 +39,9 @@ Intro.
 """
 
 
+FIXED_FRAGMENT = "a.fixed.md"
+
+
 class FoldTest(unittest.TestCase):
     def test_appends_to_existing_section_and_creates_missing_in_order(self):
         out = changelog.fold(
@@ -97,25 +100,38 @@ class RenderTest(unittest.TestCase):
         (changelog.FRAGMENTS / "a.added.md").write_text("- **A.** a.\n", encoding="utf-8")
         (changelog.FRAGMENTS / "b.fixed.md").write_text("- **B.** b.\n\n- **B2.** b2.\n", encoding="utf-8")
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(changelog.render(), 0)
+            changelog.render()
         once = changelog.CHANGELOG.read_text(encoding="utf-8")
         self.assertEqual(sorted(p.name for p in changelog.FRAGMENTS.iterdir()), [])
         # Simulate a run that wrote the changelog but died before deleting a fragment.
         (changelog.FRAGMENTS / "b.fixed.md").write_text("- **B.** b.\n\n- **B2.** b2.\n", encoding="utf-8")
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(changelog.render(), 0)
+            changelog.render()
         self.assertEqual(changelog.CHANGELOG.read_text(encoding="utf-8"), once)
         self.assertEqual(sorted(p.name for p in changelog.FRAGMENTS.iterdir()), [])
 
     def test_same_text_in_another_section_or_inside_a_longer_entry_is_still_folded(self):
         # BASE already has "- **Old added entry.** Text." under Added only.
-        (changelog.FRAGMENTS / "a.fixed.md").write_text("- **Old added entry.** Text.\n", encoding="utf-8")
+        (changelog.FRAGMENTS / FIXED_FRAGMENT).write_text("- **Old added entry.** Text.\n", encoding="utf-8")
         (changelog.FRAGMENTS / "b.added.md").write_text("- **Old added entry.**\n", encoding="utf-8")
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(changelog.render(), 0)
+            changelog.render()
         out = changelog.CHANGELOG.read_text(encoding="utf-8")
         self.assertIn("### Added\n\n- **Old added entry.** Text.\n\n- **Old added entry.**\n\n### Fixed", out)
         self.assertIn("### Fixed\n\n- **Old fixed entry.** Text.\n\n- **Old added entry.** Text.\n\n## 0.4.3", out)
+
+    def test_release_rejects_a_malformed_version_or_date(self):
+        with self.assertRaises(SystemExit):
+            changelog.release("0.5", None)
+        with self.assertRaises(SystemExit):
+            changelog.release("0.5.0", "2026-13-01")
+        self.assertEqual(changelog.CHANGELOG.read_text(encoding="utf-8"), BASE)
+
+    def test_release_heads_the_unreleased_entries_with_the_version(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(changelog.release("v0.5.0", "2026-09-04"), 0)
+        out = changelog.CHANGELOG.read_text(encoding="utf-8")
+        self.assertIn("## Unreleased\n\n## 0.5.0 \u2014 2026-09-04\n", out)
 
 
 class FragmentTest(unittest.TestCase):
@@ -140,17 +156,17 @@ class FragmentTest(unittest.TestCase):
             changelog.parse_fragment(p)
 
     def test_empty(self):
-        p = self._frag("a.fixed.md", "\n\n")
+        p = self._frag(FIXED_FRAGMENT, "\n\n")
         with self.assertRaises(changelog.FragmentError):
             changelog.parse_fragment(p)
 
     def test_heading_rejected(self):
-        p = self._frag("a.fixed.md", "### Fixed\n\n- x")
+        p = self._frag(FIXED_FRAGMENT, "### Fixed\n\n- x")
         with self.assertRaises(changelog.FragmentError):
             changelog.parse_fragment(p)
 
     def test_not_a_list_item(self):
-        p = self._frag("a.fixed.md", "Plain prose.")
+        p = self._frag(FIXED_FRAGMENT, "Plain prose.")
         with self.assertRaises(changelog.FragmentError):
             changelog.parse_fragment(p)
 
