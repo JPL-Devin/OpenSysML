@@ -2,6 +2,7 @@ package semantics
 
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -14,24 +15,41 @@ func (m *Model) AnnotatedElementViolation(annotated *symbols.Symbol, scope *symb
 	return m.annotatedElementViolationOf(annotated, m.resolveMetadataType(scope, typeRef))
 }
 
-// OwnerAnnotatedElementViolation judges an annotation written in scope with no
-// `about` against the element owning scope; a document root is a Namespace.
+// OwnerAnnotatedElementViolation judges an `about`-less annotation written in scope
+// against scope's owner: a document root is a Namespace, an annotation body its metadata feature.
 func (m *Model) OwnerAnnotatedElementViolation(scope *symbols.Scope, typeRef *ast.QualifiedName) (string, bool) {
 	if m == nil || scope == nil {
 		return "", false
 	}
 	def := m.resolveMetadataType(scope, typeRef)
+	switch scope.Node().(type) {
+	case *ast.PrefixMetadata:
+		if scope.BodyLocal() {
+			return m.metaclassAnnotatedElementViolation(m.metadataFeatureMetaclass(scope), def)
+		}
+	case *ast.RootNamespace:
+		return m.metaclassAnnotatedElementViolation(m.kermlMetaclass(rootMetaclassName), def)
+	}
 	if owner := scope.Owner(); owner != nil {
 		return m.annotatedElementViolationOf(owner, def)
-	}
-	if _, root := scope.Node().(*ast.RootNamespace); root {
-		return m.metaclassAnnotatedElementViolation(m.kermlMetaclass(rootMetaclassName), def)
 	}
 	return "", false
 }
 
 // rootMetaclassName is the metaclass of a document's root namespace.
 const rootMetaclassName = "Namespace"
+
+// metadataFeatureMetaclass is the metaclass of a metadata feature written in
+// scope's document: KerML's MetadataFeature, or SysML's MetadataUsage.
+func (m *Model) metadataFeatureMetaclass(scope *symbols.Scope) *symbols.Symbol {
+	if m.resolver == nil || m.resolver.Index() == nil {
+		return nil
+	}
+	if m.resolver.Index().DocumentKind(scope.DocName()) == source.KindKerML {
+		return m.kermlMetaclass(kermlMetaclassNames["metadata"])
+	}
+	return m.sysmlMetaclass(metaclassName(symbols.SymbolMetadataUsage))
+}
 
 // AboutAnnotatedElementViolations names, in order, the metaclass of each element
 // an `about` clause names that the metadata type typeRef names may not annotate.

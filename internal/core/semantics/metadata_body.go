@@ -78,11 +78,8 @@ func valueScope(scope *symbols.Scope, node ast.Node) *symbols.Scope {
 // values of its declarations that the model cannot evaluate.
 func (m *Model) collectInevaluableValues(scope *symbols.Scope, body []ast.Node, out *[]ast.Node) {
 	for _, node := range body {
-		if mem, ok := node.(*ast.Membership); ok {
-			node = mem.Member
-		}
-		usage, ok := node.(*ast.Usage)
-		if !ok {
+		usage := metadataBodyFeature(node)
+		if usage == nil {
 			continue
 		}
 		if usage.Value != nil && !m.ModelLevelEvaluable(scope, usage.Value) {
@@ -99,11 +96,8 @@ func (m *Model) collectMetadataBodyViolations(owner *symbols.Symbol, scope *symb
 		return
 	}
 	for _, node := range body {
-		if mem, ok := node.(*ast.Membership); ok {
-			node = mem.Member
-		}
-		usage, ok := node.(*ast.Usage)
-		if !ok {
+		usage := metadataBodyFeature(node)
+		if usage == nil {
 			continue
 		}
 		var target *symbols.Symbol
@@ -122,6 +116,19 @@ func (m *Model) collectMetadataBodyViolations(owner *symbols.Symbol, scope *symb
 		}
 		m.collectMetadataBodyViolations(target, valueScope(scope, usage), usage.Members, out)
 	}
+}
+
+// metadataBodyFeature is the body feature a metadata body member declares, or nil for
+// a non-feature member or a metadata feature, which annotates the body's owner instead.
+func metadataBodyFeature(node ast.Node) *ast.Usage {
+	if mem, ok := node.(*ast.Membership); ok {
+		node = mem.Member
+	}
+	usage, ok := node.(*ast.Usage)
+	if !ok || usage.Kind == ast.UsageMetadata {
+		return nil
+	}
+	return usage
 }
 
 // metadataBodyRedefinition returns the redefined feature owned by a type owner

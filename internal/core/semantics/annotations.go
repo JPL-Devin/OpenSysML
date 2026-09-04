@@ -524,10 +524,57 @@ func (m *Model) metaclassOf(sym *symbols.Symbol) *symbols.Symbol {
 			return meta
 		}
 	}
+	if isMetadataBodyFeature(sym) {
+		return m.metadataBodyFeatureMetaclass(m.isKerMLDoc(sym))
+	}
 	if meta := m.kermlMetaclass(kermlMetaclassName(sym, m.isKerMLDoc(sym))); meta != nil {
 		return meta
 	}
-	name := metaclassName(sym.Kind)
+	return m.sysmlMetaclass(metaclassName(sym.Kind))
+}
+
+// isMetadataBodyFeature reports whether sym is a feature a metadata body declares,
+// at any depth, other than a metadata feature annotating the body's owner.
+func isMetadataBodyFeature(sym *symbols.Symbol) bool {
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || usage.Kind == ast.UsageMetadata {
+		return false
+	}
+	for scope := sym.OwnerScope; scope != nil; {
+		if scope.BodyLocal() {
+			_, prefix := scope.Node().(*ast.PrefixMetadata)
+			return prefix
+		}
+		owner := scope.Owner()
+		if owner == nil {
+			return false
+		}
+		if owner.Kind == symbols.SymbolMetadataUsage {
+			return true
+		}
+		if _, feature := owner.Decl.(*ast.Usage); !feature {
+			return false
+		}
+		scope = owner.OwnerScope
+	}
+	return false
+}
+
+// metadataBodyFeatureMetaclass is the metaclass of a metadata body's feature:
+// KerML.xtext MetadataBodyFeature is a Feature, SysML.xtext MetadataBodyUsage a ReferenceUsage.
+func (m *Model) metadataBodyFeatureMetaclass(isKerML bool) *symbols.Symbol {
+	if isKerML {
+		return m.kermlMetaclass(kermlMetaclassNames["feature"])
+	}
+	return m.sysmlMetaclass(referenceUsageMetaclassName)
+}
+
+// referenceUsageMetaclassName is the SysML metaclass of a usage written with no kind.
+const referenceUsageMetaclassName = "ReferenceUsage"
+
+// sysmlMetaclass is the library element declaring the named SysML metaclass,
+// or nil for an unnamed or undeclared one.
+func (m *Model) sysmlMetaclass(name string) *symbols.Symbol {
 	if name == "" {
 		return nil
 	}
@@ -605,6 +652,7 @@ var kermlMetaclassNames = map[string]string{
 	"predicate":    "Predicate",
 	"interaction":  "Interaction",
 	"metaclass":    "Metaclass",
+	"metadata":     "MetadataFeature",
 	"feature":      "Feature",
 	"step":         "Step",
 	"expr":         "Expression",
@@ -631,6 +679,8 @@ func kermlMetaclassName(sym *symbols.Symbol, isKerML bool) string {
 		return kermlMetaclassNames[d.Keyword]
 	case *ast.Usage:
 		return kermlMetaclassNames[d.Keyword]
+	case *ast.PrefixMetadata:
+		return kermlMetaclassNames["metadata"]
 	}
 	return ""
 }

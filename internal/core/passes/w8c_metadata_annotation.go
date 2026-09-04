@@ -71,13 +71,28 @@ func (c *metadataAnnotationChecker) checkAnnotations(scope *symbols.Scope, decl 
 			c.reportCannotAnnotate(a.Node.Span(), metaclass)
 		}
 		c.checkBody(scope, a.Node)
+		c.checkNested(scope, a.Node)
 	}
 	for _, a := range semantics.MetadataAnnotationsAboutOthers(decl) {
 		for _, metaclass := range c.model.AboutAnnotatedElementViolations(scope, a.Node.Type, a.Node.About) {
 			c.reportCannotAnnotate(a.Node.Span(), metaclass)
 		}
 		c.checkBody(scope, a.Node)
+		c.checkNested(scope, a.Node)
 	}
+}
+
+// checkNested checks what an unnamed annotation's body declares: annotations of
+// the annotation itself, and the symbols the walk does not reach.
+func (c *metadataAnnotationChecker) checkNested(scope *symbols.Scope, prefix *ast.PrefixMetadata) {
+	body := unnamedMetadataBody(scope, prefix)
+	if body == nil {
+		return
+	}
+	c.checkAnnotations(body, prefix, func(typeRef *ast.QualifiedName) (string, bool) {
+		return c.model.OwnerAnnotatedElementViolation(body, typeRef)
+	})
+	forEachBodySymbol(body, c.checkSymbol)
 }
 
 // checkMetadataUsage checks what `metadata m : M about x;` may annotate, or, with
@@ -108,7 +123,7 @@ func (c *metadataAnnotationChecker) checkMetadataUsage(sym *symbols.Symbol, u *a
 	if typeRef == nil {
 		return
 	}
-	if len(about) > 0 {
+	if symbols.UsageAnnotatesOthers(u) {
 		for _, metaclass := range c.model.AboutAnnotatedElementViolations(sym.OwnerScope, typeRef, about) {
 			c.reportCannotAnnotate(u.Span(), metaclass)
 		}

@@ -450,6 +450,112 @@ metadata p : P;
 	}
 }
 
+// An annotation body may carry annotations of its own metadata feature or of its
+// body features, at any depth; each is judged once, in the body's scope.
+func TestMetadataAnnotationsNestedInAnnotationBodies(t *testing.T) {
+	kerml := `package P {
+	metaclass OnlyMeta { :>> annotatedElement : KerML::MetadataFeature; }
+	metaclass OnlyClass { :>> annotatedElement : KerML::Class; }
+	metaclass OnlyFeature { :>> annotatedElement : KerML::Feature; }
+	class T { feature b : ScalarValues::Integer; }
+	metaclass W { feature k : ScalarValues::Integer; feature a : T; }
+	class N;
+	class C;
+	feature g : ScalarValues::Integer;
+	@W about C {
+		@OnlyMeta;
+		@OnlyClass;
+		@N;
+		metadata OnlyClass;
+		@W { :>> k = ~3; :>> g = 1; @OnlyMeta; @OnlyClass about C; @OnlyFeature; }
+		@n : W { @OnlyMeta; @OnlyFeature; }
+		a { @OnlyFeature; @OnlyClass; b { @OnlyFeature; @OnlyMeta; } }
+	}
+	metadata m : W about C {
+		@OnlyMeta;
+		@OnlyClass;
+		a { @OnlyFeature; @OnlyClass; @OnlyMeta; }
+	}
+}`
+	sysml := strings.NewReplacer(
+		"metaclass", "metadata def",
+		"KerML::Class", "SysML::PartDefinition",
+		"KerML::Feature", "SysML::Usage",
+		"class T { feature b", "attribute def T { attribute b",
+		"feature k", "attribute k",
+		"feature a", "attribute a",
+		"class N", "part def N",
+		"class C", "part def C",
+		"feature g", "attribute g",
+	).Replace(kerml)
+	want := []string{
+		"metadata-annotated-element on @OnlyClass;",
+		"metadata-annotated-element on @OnlyClass;",
+		"metadata-annotated-element on @OnlyClass;",
+		"metadata-annotated-element on @OnlyClass;",
+		"metadata-annotated-element on @OnlyMeta;",
+		"metadata-annotated-element on @OnlyMeta;",
+		"metadata-annotated-element on metadata OnlyClass;",
+		"metadata-owning-type-feature on :>> g = 1;",
+		"metadata-value-not-evaluable on = ~3",
+		"typing on @N;",
+	}
+	for name, src := range map[string]string{"nested.kerml": kerml, "nested.sysml": sysml} {
+		var got []string
+		for _, f := range metadataDiagsNamed(t, name, src) {
+			code := f.Code
+			if code == "metadata-metaclass" || f.Msg == oneTypeUsageMessages[ast.UsageMetadata] {
+				code = "typing"
+			}
+			got = append(got, fmt.Sprintf("%s on %s", code, strings.TrimSpace(f.Text)))
+		}
+		sort.Strings(got)
+		if fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("%s: findings\n%s\nwant\n%s", name, strings.Join(got, "\n"), strings.Join(want, "\n"))
+		}
+	}
+}
+
+// A metadata usage nested in an annotation body has its own body checked like
+// one written at the top level, in either spelling of the enclosing annotation.
+func TestMetadataUsagesNestedInAnnotationBodies(t *testing.T) {
+	kerml := `package P {
+	metaclass Outer;
+	metaclass Inner { feature i : ScalarValues::Integer; }
+	class C;
+	feature g : ScalarValues::Integer;
+	@Outer about C {
+		metadata m : Inner { :>> i = ~3; zz; }
+		@Inner { metadata n : Inner { :>> g = 1; } }
+	}
+	metadata o : Outer about C {
+		@Inner { metadata q : Inner { :>> i = ~4; i = 1; } }
+	}
+}`
+	sysml := strings.NewReplacer(
+		"metaclass", "metadata def",
+		"feature i", "attribute i",
+		"class C", "part def C",
+		"feature g", "attribute g",
+	).Replace(kerml)
+	want := []string{
+		"metadata-body-feature on :>> g = 1;",
+		"metadata-body-feature on zz;",
+		"metadata-value-not-evaluable on = ~3",
+		"metadata-value-not-evaluable on = ~4",
+	}
+	for name, src := range map[string]string{"nested.kerml": kerml, "nested.sysml": sysml} {
+		var got []string
+		for _, f := range metadataDiagsNamed(t, name, src) {
+			got = append(got, fmt.Sprintf("%s on %s", f.Code, strings.TrimSpace(f.Text)))
+		}
+		sort.Strings(got)
+		if fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("%s: findings\n%s\nwant\n%s", name, strings.Join(got, "\n"), strings.Join(want, "\n"))
+		}
+	}
+}
+
 // A body with no fault draws nothing: a value the model folds and a feature that
 // restates one of the metadata type are both legal.
 func TestMetadataBodyWithoutFaultsIsSilent(t *testing.T) {
