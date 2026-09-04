@@ -1,6 +1,9 @@
 package runtime
 
-import "github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+import (
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+)
 
 // outerFeatureValue reads the feature a name resolved to from the nearest object
 // in the bound object's ownership chain that carries it. A nested usage naming a
@@ -8,7 +11,7 @@ import "github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 // enclosing object's value of it, redefinitions included (KerML 1.0 §7.4.8.1:
 // a feature reference denotes the feature relative to the containing object).
 func (ec *EvalContext) outerFeatureValue(sym *symbols.Symbol) (Value, bool, error) {
-	if sym == nil || !isFeature(sym) {
+	if sym == nil || !semantics.IsShapeFeature(sym) {
 		return Value{}, false, nil
 	}
 	for inst := ec.self; inst != nil; inst, _ = inst.Owner() {

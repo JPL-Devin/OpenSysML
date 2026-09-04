@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -40,13 +40,26 @@ type Message struct {
 	// nil where the message's type is known only as a name. An accept matches it
 	// by conformance, so a subtype message satisfies a supertype accept and
 	// same-named definitions of different packages stay apart.
-	Signal   *symbols.Symbol
-	Target   string
-	Port     string
-	Object   int64
-	PortID   int64
-	Delivery DeliveryKind
-	Payload  map[string]Value
+	Signal *symbols.Symbol
+	// Event is the feature the message was sent from (`send shutDown to x`), nil
+	// where none or unresolved; EventName is its written name, the fallback then.
+	// EventObject is the occurrence that feature held when sent, or the object
+	// performing a behavioral feature (`send alert()`), 0 for none: two parts of
+	// one type hold their own occurrences of the one declared event.
+	Event       *symbols.Symbol
+	EventName   string
+	EventObject int64
+	Target      string
+	Port        string
+	Object      int64
+	PortID      int64
+	Delivery    DeliveryKind
+	// Payload binds features of the message's type by name, as the send's arguments did.
+	Payload map[string]Value
+	// Value is the one value a send of an expression carries (`send 7`, `send d`),
+	// the occurrence `send new T(…)` constructed, or the one an accept built from
+	// Payload; nil until any.
+	Value *Value
 }
 
 // DeliveryKind is what a message's destination resolved to, and so what a
@@ -812,14 +825,36 @@ func isPortFeature(feature *EffectiveFeature) bool {
 // isBehaviorFeature reports whether a feature is a behavior an object performs,
 // which receives by name rather than being an object of its own.
 func isBehaviorFeature(feature *EffectiveFeature) bool {
-	if feature == nil || feature.Symbol == nil {
+	return feature != nil && isBehaviorSymbol(feature.Symbol)
+}
+
+// isBehaviorSymbol reports whether sym declares a behavior an object performs.
+func isBehaviorSymbol(sym *symbols.Symbol) bool {
+	if sym == nil {
 		return false
 	}
-	switch feature.Symbol.Kind {
+	switch sym.Kind {
 	case symbols.SymbolActionUsage, symbols.SymbolStateUsage:
 		return true
 	}
 	return false
+}
+
+// send builds and posts the message a send statement describes; a message the
+// send cannot build or deliver leaves nothing building it created behind.
+func (ctx *Context) send(ec *EvalContext, scope *symbols.Scope, conns []lower.Connection, s lower.Send, self *Instance) error {
+	mark, attached := len(ctx.created), len(ctx.objectBehaviors)
+	msg, err := ec.buildMessage(scope, s)
+	if err != nil {
+		ctx.abandonCreationSince(mark, attached)
+		return err
+	}
+	built, started := len(ctx.created), len(ctx.objectBehaviors)
+	if err := ctx.post(conns, msg, s, self); err != nil {
+		ctx.abandonCreationBetween(mark, built, attached, started)
+		return err
+	}
+	return nil
 }
 
 // post delivers a built message the way the send addressed it: routed through
@@ -833,10 +868,65 @@ func (ctx *Context) post(conns []lower.Connection, msg Message, send lower.Send,
 	return ctx.postTo(msg, send, self)
 }
 
-// carriesSignal reports whether this message satisfies an accept of signalType.
-// An empty signalType accepts any message: the model asked for no type.
-func (m Message) carriesSignal(signalType string) bool {
-	return signalType == "" || signalType == m.SignalType
+// carriesEvent reports whether m was sent from the event feature an accept
+// subsets (`accept :> left.alert`), as evaluated in ec: the same declaration
+// once it resolves, so a typed message of a same-named type never satisfies it,
+// and the same occurrence where the message holds one, so a sibling part's event
+// or an accept path evaluating to none never does; by name where it does not resolve.
+func (ec *EvalContext) carriesEvent(m Message, subsets ast.Node) bool {
+	path := lower.FeaturePath(subsets)
+	if path == "" {
+		return true
+	}
+	want, ok := ec.ctx.featureSymbol(ec.scope, path)
+	if !ok {
+		name := lastSegment(path)
+		return name == m.EventName || name == m.SignalType
+	}
+	if m.Event == nil || want != m.Event {
+		return false
+	}
+	if m.EventObject == 0 {
+		return true
+	}
+	occurrence, ok := ec.eventOccurrence(subsets, want)
+	return ok && occurrence == m.EventObject
+}
+
+// eventOccurrence is the occurrence an accept's event path names in ec: what the
+// feature holds, or the object performing a behavioral feature (`left.alert`, `alert`).
+func (ec *EvalContext) eventOccurrence(subsets ast.Node, event *symbols.Symbol) (int64, bool) {
+	if isBehaviorSymbol(event) {
+		chain, ok := subsets.(*ast.FeatureChainExpr)
+		if !ok {
+			return objectID(ec.self), ec.self != nil
+		}
+		subsets = chain.Operand
+	}
+	value, err := ec.eval(subsets)
+	if err != nil || value.Kind != ValInstance {
+		return 0, false
+	}
+	return value.Instance, true
+}
+
+// lastSegment is the feature a dotted path ends at.
+func lastSegment(path string) string {
+	return path[strings.LastIndex(path, ".")+1:]
+}
+
+// featureSymbol resolves a dotted feature path written in scope to the feature
+// it names, through an alias.
+func (ctx *Context) featureSymbol(scope *symbols.Scope, path string) (*symbols.Symbol, bool) {
+	segments := strings.Split(path, ".")
+	if ctx.resolver == nil || (ctx.model == nil && len(segments) > 1) {
+		return nil, false
+	}
+	sym, ok := ctx.pathSymbol(scope, segments)
+	if !ok {
+		return nil, false
+	}
+	return ctx.resolver.AliasedElement(sym), true
 }
 
 // messageMatches reports whether a message satisfies an accept whose parameter
@@ -853,15 +943,13 @@ func (ctx *Context) messageMatches(m Message, want *ast.QualifiedName, scope *sy
 			return ctx.conforms(m.Signal, wantSym)
 		}
 	}
-	return m.carriesSignal(want.Parts[len(want.Parts)-1].Text)
+	return m.SignalType == want.Parts[len(want.Parts)-1].Text
 }
 
 // buildMessage evaluates a send statement into a message.
 //
-// A send whose message names a type sends that type with no payload
-// (`send Ping to m`, where `item def Ping;`) — the notation this subset offers
-// for a signal that carries nothing. Any other message expression is evaluated,
-// and the message is typed by the value's type, carrying it as `value`.
+// `send Ping to m` (a type) sends it with no payload; `send new Ping(3) to m`
+// sends it carrying the arguments; any other expression's value is sent as `value`.
 //
 // A via send keeps a receiver target when one was stated; postVia fills in the
 // reached port and final delivery kind.
@@ -879,16 +967,22 @@ func (e *EvalContext) buildMessage(scope *symbols.Scope, send lower.Send) (Messa
 	if sym, ok := e.namedType(scope, send.Message); ok {
 		return Message{SignalType: sym.Name, Signal: sym, Target: target, Payload: map[string]Value{}}, nil
 	}
+	if constructor, ok := send.Message.(*ast.ConstructorExpr); ok {
+		return e.buildConstructedMessage(scope, constructor, target)
+	}
 
-	// `send Data(data) via p`, `send shutDown() to self`: the invoked name is
-	// what the message is, whether it names a signal definition or an event
-	// feature, and its arguments are the payload it carries. An accept matches
-	// on that name, so building the message never evaluates the invocation as a
-	// call — there is no function of that name to call.
-	// A calculation of that name is called, though: what is sent is the value it
-	// returns, not a message named after it.
+	// `send shutDown() to self` sends the invoked behavioral feature carrying its
+	// arguments, never calling it; a calculation is called and its value sent.
 	if invocation, ok := send.Message.(*ast.InvocationExpr); ok && !e.invokesCalc(scope, invocation) {
-		return e.buildInvokedMessage(scope, invocation, target)
+		msg, err := e.buildInvokedMessage(scope, invocation, target)
+		if err != nil {
+			return Message{}, err
+		}
+		msg.Event, msg.EventName = e.sentFeature(scope, invocation.Type)
+		if isBehaviorSymbol(msg.Event) {
+			msg.EventObject = objectID(e.self)
+		}
+		return msg, nil
 	}
 
 	value, err := e.Eval(send.Message)
@@ -906,74 +1000,104 @@ func (e *EvalContext) buildMessage(scope *symbols.Scope, send lower.Send) (Messa
 	if signalType == "" {
 		return Message{}, fmt.Errorf("send: message of kind %v has no signal type", value.Kind)
 	}
-	return Message{
+	event, eventName := e.sentFeature(scope, send.Message)
+	msg := Message{
 		SignalType: signalType,
 		Signal:     signal,
+		Event:      event,
+		EventName:  eventName,
 		Target:     target,
-		Payload:    map[string]Value{"value": value},
-	}, nil
+		Value:      &value,
+	}
+	if event != nil && value.Kind == ValInstance {
+		msg.EventObject = value.Instance
+	}
+	return msg, nil
+}
+
+// sentFeature is the feature a send reads its message from (`send a.b via p`)
+// and its written name; nil where unresolved, both empty for other messages.
+func (e *EvalContext) sentFeature(scope *symbols.Scope, message ast.Node) (*symbols.Symbol, string) {
+	path := lower.FeaturePath(message)
+	if path == "" {
+		return nil, ""
+	}
+	name := lastSegment(path)
+	if scope == nil || e.ctx == nil {
+		return nil, name
+	}
+	sym, ok := e.ctx.featureSymbol(scope, path)
+	if !ok {
+		return nil, name
+	}
+	return sym, name
 }
 
 // acceptedValue is the value an accept binds its payload name to: the single
 // value the message carries, or an occurrence of its signal built from the
 // arguments the send named, so `accept p : Ping` sees a Ping object either way.
-// The occurrence is cached on the message: a guard evaluated during transition
+// The occurrence is kept on the message: a guard evaluated during transition
 // selection and the firing that follows read the same object.
-func (ctx *Context) acceptedValue(msg Message) (Value, error) {
-	if value, ok := msg.Payload["value"]; ok {
-		return value, nil
+func (ctx *Context) acceptedValue(msg *Message) (Value, error) {
+	if msg.Value != nil {
+		return *msg.Value, nil
 	}
 	if msg.Signal == nil {
 		return Value{}, fmt.Errorf("%w: %s carries no single value to bind",
 			ErrNoValue, orAnonymousSignal(msg.SignalType))
 	}
-	value, err := ctx.materializeAccepted(msg)
+	value, err := ctx.materializeAccepted(*msg)
 	if err != nil {
 		return Value{}, err
 	}
-	msg.Payload["value"] = value
+	msg.Value = &value
 	return value, nil
 }
 
-// materializeAccepted builds the occurrence a typed message binds as, leaving
-// no instance behind when a payload argument does not fit it.
+// materializeAccepted builds the occurrence an accept binds a typed message as.
 func (ctx *Context) materializeAccepted(msg Message) (Value, error) {
+	value, err := ctx.materializeMessage(msg)
+	if err != nil {
+		return Value{}, fmt.Errorf("accepted %s: %w", msg.SignalType, err)
+	}
+	return value, nil
+}
+
+// materializeMessage builds the occurrence a typed message carries, leaving no
+// instance behind when a payload entry names no feature of it, does not fit
+// one, or two entries name one feature.
+func (ctx *Context) materializeMessage(msg Message) (Value, error) {
 	mark := len(ctx.created)
 	inst, err := ctx.materialize(msg.Signal, 0)
 	if err != nil {
 		ctx.abandonInstancesSince(mark)
-		return Value{}, fmt.Errorf("materialize accepted %s: %w", msg.SignalType, err)
+		return Value{}, fmt.Errorf("materialize: %w", err)
 	}
-	features := ctx.FeaturesOf(msg.Signal)
-	for name, value := range msg.Payload {
-		target := name
-		if _, held := inst.FeatureValues[name]; !held {
-			n := positionalArg(name)
-			if n == 0 || n > len(features) {
-				ctx.abandonInstancesSince(mark)
-				return Value{}, fmt.Errorf("accepted %s: %q names no feature it carries",
-					msg.SignalType, name)
-			}
-			target = features[n-1].Name
-		}
-		if err := inst.SetFeatureValue(ctx, target, value); err != nil {
+	names := make([]string, 0, len(msg.Payload))
+	for name := range msg.Payload {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	written := make(map[*FeatureValue]string, len(names))
+	for _, name := range names {
+		fv, held := inst.FeatureValues[name]
+		if !held {
 			ctx.abandonInstancesSince(mark)
-			return Value{}, fmt.Errorf("accepted %s: %w", msg.SignalType, err)
+			return Value{}, fmt.Errorf("%q names no feature it carries", name)
+		}
+		if fv != nil {
+			if earlier, twice := written[fv]; twice {
+				ctx.abandonInstancesSince(mark)
+				return Value{}, fmt.Errorf("%s and %s are one feature, bound twice", earlier, name)
+			}
+			written[fv] = name
+		}
+		if err := inst.SetFeatureValue(ctx, name, msg.Payload[name]); err != nil {
+			ctx.abandonInstancesSince(mark)
+			return Value{}, err
 		}
 	}
 	return Value{Kind: ValInstance, Instance: inst.ID}, nil
-}
-
-// positionalArg returns N for a payload entry named argN, or 0 for any other.
-func positionalArg(name string) int {
-	if !strings.HasPrefix(name, "arg") {
-		return 0
-	}
-	n, err := strconv.Atoi(name[len("arg"):])
-	if err != nil || n <= 0 {
-		return 0
-	}
-	return n
 }
 
 // invokesCalc reports whether an invocation calls a calculation — the declaration
@@ -992,50 +1116,165 @@ func (e *EvalContext) invokesCalc(scope *symbols.Scope, invocation *ast.Invocati
 	return e.ctx.model.Evaluates(sel.Called())
 }
 
-// buildInvokedMessage builds the message of a send written as an invocation.
-// The invoked name types the message; each argument is a value it carries,
-// named where the send named it and by position where it did not. A single
-// positional argument is also carried as `value`, which is what an accept binds
-// its payload parameter to.
+// buildInvokedMessage builds the message of `send shutDown(7) to self`: the
+// invoked behavioral feature types it and the arguments are its payload, a lone
+// positional one also as `value`, which an accept binds its parameter to.
 func (e *EvalContext) buildInvokedMessage(scope *symbols.Scope, invocation *ast.InvocationExpr, target string) (Message, error) {
-	signalType := ast.SimpleName(invocation.Type)
-	if signalType == "" {
-		return Message{}, fmt.Errorf("send: the message names no signal")
-	}
 	if invocation.Operand != nil {
-		return Message{}, fmt.Errorf("send %s: a message is not sent through a receiver", signalType)
+		return Message{}, fmt.Errorf("send %s: a message is not sent through a receiver", ast.SimpleName(invocation.Type))
 	}
+	signalType, signal, err := e.messageType(scope, invocation.Type)
+	if err != nil {
+		return Message{}, err
+	}
+	return e.buildTypedMessage(scope, invocation.Type, signalType, signal, invocation.Args, invocation.NamedArgs, target, true)
+}
 
-	payload := make(map[string]Value, len(invocation.Args)+len(invocation.NamedArgs))
-	for i, arg := range invocation.Args {
+// buildConstructedMessage builds the message of `send new Telemetry(3) via
+// antenna`: the constructed definition types it and the arguments bind its
+// features, so an accept binds a Telemetry whose first feature is 3, never the 3.
+// The occurrence is constructed at the send, so an argument no feature admits, or
+// one beyond the features, is rejected there whether or not an accept consumes it.
+func (e *EvalContext) buildConstructedMessage(scope *symbols.Scope, constructor *ast.ConstructorExpr, target string) (Message, error) {
+	signal, err := e.constructedType(scope, constructor.Type)
+	if err != nil {
+		return Message{}, err
+	}
+	if e.ctx.model != nil {
+		if n := len(e.ctx.model.ConstructibleFeatures(signal)); len(constructor.Args) > n {
+			return Message{}, fmt.Errorf("send %s: new %s takes %d argument(s), found %d", signal.Name, signal.Name, n, len(constructor.Args))
+		}
+	}
+	msg, err := e.buildTypedMessage(scope, constructor.Type, signal.Name, signal, constructor.Args, constructor.NamedArgs, target, false)
+	if err != nil {
+		return Message{}, err
+	}
+	value, err := e.ctx.materializeMessage(msg)
+	if err != nil {
+		return Message{}, fmt.Errorf("send new %s: %w", signal.Name, err)
+	}
+	msg.Value = &value
+	return msg, nil
+}
+
+// constructedType resolves the type `new T(…)` instantiates: a definition, or a
+// usage, which is a type too. A name that resolves to nothing or to no type is an error.
+func (e *EvalContext) constructedType(scope *symbols.Scope, typeRef *ast.QualifiedName) (*symbols.Symbol, error) {
+	name := ast.QualifiedText(typeRef)
+	if name == "" {
+		return nil, fmt.Errorf("send: the constructor names no type")
+	}
+	if scope == nil || e.ctx == nil || e.ctx.resolver == nil {
+		return nil, fmt.Errorf("send new %s: no scope resolves the type", name)
+	}
+	sym, ok := e.ctx.resolver.ResolveQualified(scope, typeRef)
+	if !ok || sym == nil {
+		return nil, fmt.Errorf("send new %s: unresolved reference: %s", name, name)
+	}
+	switch sym.Decl.(type) {
+	case *ast.Definition, *ast.Usage:
+		return sym, nil
+	}
+	return nil, fmt.Errorf("send new %s: %s is a %s, not a type", name, name, sym.Kind)
+}
+
+// messageType names the type of an invoked message and resolves it to the
+// definition it reaches, nil when it reaches none.
+func (e *EvalContext) messageType(scope *symbols.Scope, typeRef *ast.QualifiedName) (string, *symbols.Symbol, error) {
+	signalType := ast.SimpleName(typeRef)
+	if signalType == "" {
+		return "", nil, fmt.Errorf("send: the message names no signal")
+	}
+	signal, ok := e.definitionNamed(scope, typeRef)
+	if !ok {
+		return signalType, nil, nil
+	}
+	return signal.Name, signal, nil
+}
+
+// buildTypedMessage builds a message typed by signal, named typeRef, carrying each
+// argument under the feature it binds: a positional one the feature at its position
+// (`argN` where the type has none), a label the feature it names. Binding one feature
+// twice, by position and label or by two labels, is an error rather than the last
+// value. With loneValue a lone positional argument is also the message's Value.
+func (e *EvalContext) buildTypedMessage(scope *symbols.Scope, typeRef *ast.QualifiedName, signalType string, signal *symbols.Symbol, args []ast.Node, named []ast.NamedArg, target string, loneValue bool) (Message, error) {
+	msg := Message{SignalType: signalType, Signal: signal, Target: target,
+		Payload: make(map[string]Value, len(args)+len(named))}
+	var slots []*symbols.Symbol
+	if signal != nil && e.ctx != nil && e.ctx.model != nil {
+		slots = e.ctx.model.ConstructibleFeatures(signal)
+	}
+	bound := make(map[*symbols.Symbol]string, len(args)+len(named))
+	for i, arg := range args {
 		value, err := e.Eval(arg)
 		if err != nil {
 			return Message{}, fmt.Errorf("eval argument %d of send %s: %w", i+1, signalType, err)
 		}
-		payload[fmt.Sprintf("arg%d", i+1)] = value
-		if len(invocation.Args) == 1 && len(invocation.NamedArgs) == 0 {
-			payload["value"] = value
+		name := fmt.Sprintf("arg%d", i+1)
+		if i < len(slots) {
+			name = slots[i].Name
+			bound[slots[i]] = name
+		}
+		msg.Payload[name] = value
+		if loneValue && len(args) == 1 && len(named) == 0 {
+			msg.Value = &value
 		}
 	}
-	for _, arg := range invocation.NamedArgs {
-		name := ast.SimpleName(arg.Name)
-		if name == "" {
+	for _, arg := range named {
+		label := ast.QualifiedText(arg.Name)
+		if label == "" {
 			return Message{}, fmt.Errorf("send %s: an argument is named by nothing", signalType)
+		}
+		name, err := e.constructorLabel(scope, signal, typeRef, arg.Name, bound)
+		if err != nil {
+			return Message{}, fmt.Errorf("send %s: %w", signalType, err)
+		}
+		if _, twice := msg.Payload[name]; twice {
+			return Message{}, fmt.Errorf("send %s: %s is bound twice", signalType, label)
 		}
 		value, err := e.Eval(arg.Value)
 		if err != nil {
-			return Message{}, fmt.Errorf("eval argument %s of send %s: %w", name, signalType, err)
+			return Message{}, fmt.Errorf("eval argument %s of send %s: %w", label, signalType, err)
 		}
-		payload[name] = value
+		msg.Payload[name] = value
 	}
+	return msg, nil
+}
 
-	var signal *symbols.Symbol
-	if scope != nil && e.ctx != nil && e.ctx.resolver != nil {
-		if sym, ok := e.ctx.resolver.ResolveQualified(scope, invocation.Type); ok && isDefinitionSymbol(sym) {
-			signal = sym
+// constructorLabel returns the shape name of the member of signal a constructor
+// label names (resolved as the checker does); a foreign, masked or rebound feature is an error.
+func (e *EvalContext) constructorLabel(scope *symbols.Scope, signal *symbols.Symbol, typeRef, qn *ast.QualifiedName, bound map[*symbols.Symbol]string) (string, error) {
+	label := ast.QualifiedText(qn)
+	if signal == nil || e.ctx == nil || e.ctx.resolver == nil || e.ctx.model == nil {
+		if len(qn.Parts) != 1 {
+			return "", fmt.Errorf("%s is not a feature of %s", label, ast.SimpleName(typeRef))
 		}
+		return qn.Parts[0].Text, nil
 	}
-	return Message{SignalType: signalType, Signal: signal, Target: target, Payload: payload}, nil
+	feature, ok := e.ctx.resolver.ResolveReference(resolve.Reference{Scope: scope, QN: qn, Constructed: typeRef})
+	if !ok || feature == nil || !slices.Contains(e.ctx.model.MembersOf(signal), feature) {
+		return "", fmt.Errorf("%s is not a feature of %s", label, signal.Name)
+	}
+	shape := e.ctx.model.ShapeFeatures(signal)
+	i := slices.IndexFunc(shape, func(f semantics.ShapeFeature) bool {
+		return f.Declared == feature || f.Symbol == feature
+	})
+	if i < 0 {
+		return "", fmt.Errorf("%s is not a feature of %s", label, signal.Name)
+	}
+	slot := e.ctx.model.ConstructibleFeatureFor(signal, shape[i].Declared)
+	if slot == nil {
+		return "", fmt.Errorf("%s is not a feature a constructor of %s binds", label, signal.Name)
+	}
+	name := shape[i].Name
+	if earlier, twice := bound[slot]; twice {
+		if earlier == name {
+			return "", fmt.Errorf("%s is bound twice", name)
+		}
+		return "", fmt.Errorf("%s and %s are one feature, bound twice", earlier, name)
+	}
+	bound[slot] = name
+	return name, nil
 }
 
 // triggerName describes a transition's trigger for traces. Traces are compared
@@ -1109,7 +1348,12 @@ func orAny(name string) string {
 // namedType reports the definition expr names when it names a type definition
 // rather than denoting a value.
 func (e *EvalContext) namedType(scope *symbols.Scope, expr ast.Node) (*symbols.Symbol, bool) {
-	qname := ast.AsQualifiedName(expr)
+	return e.definitionNamed(scope, ast.AsQualifiedName(expr))
+}
+
+// definitionNamed resolves a name to the definition it reaches (resolution
+// already follows an alias to its element) or reports that it names none.
+func (e *EvalContext) definitionNamed(scope *symbols.Scope, qname *ast.QualifiedName) (*symbols.Symbol, bool) {
 	if qname == nil || scope == nil || e.ctx == nil || e.ctx.resolver == nil {
 		return nil, false
 	}

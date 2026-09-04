@@ -3,6 +3,7 @@ package runtime
 import (
 	"maps"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -46,7 +47,7 @@ func (ctx *Context) comparableTypes(typ, other *symbols.Symbol, seen map[*symbol
 	if typ == nil || other == nil || ctx.model.Conforms(typ, other) || ctx.model.Conforms(other, typ) {
 		return true
 	}
-	if !isFeature(typ) || seen[typ] {
+	if !semantics.IsShapeFeature(typ) || seen[typ] {
 		return false
 	}
 	seen[typ] = true

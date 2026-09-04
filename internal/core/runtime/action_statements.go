@@ -49,11 +49,7 @@ func (h *actionStmtHost) describe() string {
 }
 
 func (h *actionStmtHost) send(ec *EvalContext, s lower.Send) error {
-	msg, err := ec.buildMessage(h.exec.root.scope, s)
-	if err != nil {
-		return err
-	}
-	return h.exec.ctx.post(h.perf.connections, msg, s, h.exec.self)
+	return h.exec.ctx.send(ec, h.exec.root.scope, h.perf.connections, s, h.exec.self)
 }
 
 // assignOuter writes a name the body's blocks do not declare: to the running performance,

@@ -1,0 +1,20 @@
+{
+  "type": "instance",
+  "instantiate": "test::site",
+  "objects": [
+    {
+      "path": "probe",
+      "finalState": "sending",
+      "stateVisits": ["sending"]
+    },
+    {
+      "path": "station",
+      "finalState": "gotLabelled",
+      "stateVisits": ["standingBy", "gotPositional", "gotLabelled"],
+      "slots": {
+        "positional": {"type": "Real", "value": 46.0},
+        "labelled": {"type": "Real", "value": 5.0}
+      }
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 exit: start
 enter: waitingGSPing (entry action)
 stmt send
+materialize: Ping #1
 transition: start -> waitingGSPing
 exit: waitingGSPing
 stmt assign received

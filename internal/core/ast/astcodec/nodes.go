@@ -733,6 +733,7 @@ func (e *Encoder) encodeFields(node ast.Node) {
 		e.base(&n.NodeBase)
 		e.node(n.Type)
 		e.nodes(n.Args)
+		e.namedArgs(n.NamedArgs)
 	case *ast.ControlFlowEdge:
 		e.base(&n.NodeBase)
 		e.node(n.Source)
@@ -1100,6 +1101,7 @@ func (e *Encoder) encodeFields(node ast.Node) {
 		e.w.Int(int64(n.Portion))
 		e.w.Bool(n.IsAccept)
 		e.w.Bool(n.IsBodyParameter)
+		e.w.Bool(n.IsActionNode)
 		e.w.Bool(n.IsResult)
 		e.w.Bool(n.IsNegated)
 		e.w.Bool(n.DeclaresRequirement)
@@ -1225,6 +1227,7 @@ func (d *Decoder) decodeFields(node ast.Node) {
 		d.base(&n.NodeBase)
 		n.Type = typed[*ast.QualifiedName](d)
 		n.Args = d.nodes()
+		n.NamedArgs = d.namedArgs()
 	case *ast.ControlFlowEdge:
 		d.base(&n.NodeBase)
 		n.Source = typed[*ast.QualifiedName](d)
@@ -1592,6 +1595,7 @@ func (d *Decoder) decodeFields(node ast.Node) {
 		n.Portion = ast.PortionKind(d.r.Int())
 		n.IsAccept = d.r.Bool()
 		n.IsBodyParameter = d.r.Bool()
+		n.IsActionNode = d.r.Bool()
 		n.IsResult = d.r.Bool()
 		n.IsNegated = d.r.Bool()
 		n.DeclaresRequirement = d.r.Bool()

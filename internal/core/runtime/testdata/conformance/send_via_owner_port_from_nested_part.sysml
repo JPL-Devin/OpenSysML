@@ -19,7 +19,7 @@ package test {
 
 				state sending {
 					entry action downlink {
-						send Telemetry(frames = 3.0) via antenna;
+						send new Telemetry(frames = 3.0) via antenna;
 					}
 				}
 			}

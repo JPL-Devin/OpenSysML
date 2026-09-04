@@ -38,7 +38,7 @@ func (m *Model) evaluable(scope *symbols.Scope, expr ast.Node, depth int) bool {
 		return m.evaluableOperator(scope, e, depth)
 	case *ast.ConstructorExpr:
 		// A constructor names a type and fills its features: the model decides it.
-		return m.allEvaluable(scope, e.Args, depth)
+		return m.allEvaluable(scope, constructorArgs(e), depth)
 	case *ast.InvocationExpr:
 		return m.evaluableInvocation(scope, e, depth)
 	case *ast.FeatureReference:
@@ -54,6 +54,15 @@ func (m *Model) evaluable(scope *symbols.Scope, expr ast.Node, depth int) bool {
 	}
 	// A cast, a body and anything else read the instance the expression runs on.
 	return false
+}
+
+// constructorArgs lists every argument expression of `new T(…)`, named or not.
+func constructorArgs(e *ast.ConstructorExpr) []ast.Node {
+	args := append([]ast.Node{}, e.Args...)
+	for _, na := range e.NamedArgs {
+		args = append(args, na.Value)
+	}
+	return args
 }
 
 func (m *Model) allEvaluable(scope *symbols.Scope, nodes []ast.Node, depth int) bool {
