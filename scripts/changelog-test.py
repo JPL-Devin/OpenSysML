@@ -127,6 +127,12 @@ class RenderTest(unittest.TestCase):
             changelog.release("0.5.0", "2026-13-01")
         self.assertEqual(changelog.CHANGELOG.read_text(encoding="utf-8"), BASE)
 
+    def test_version_follows_semver(self):
+        for ok in ("1.0.0", "0.5.0-rc.1", "1.0.0+build.7", "1.0.0-alpha-1.2+sha.5114f85"):
+            self.assertIsNotNone(changelog.VERSION.match(ok), ok)
+        for bad in ("1.0", "01.0.0", "1.0.0-", "1.0.0-rc..1", "1.0.0-01", "1.0.0+", "1.0.0 "):
+            self.assertIsNone(changelog.VERSION.match(bad), bad)
+
     def test_release_heads_the_unreleased_entries_with_the_version(self):
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(changelog.release("v0.5.0", "2026-09-04"), 0)

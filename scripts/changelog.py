@@ -40,7 +40,14 @@ FRAGMENT_NAME = re.compile(r"^(?P<slug>[A-Za-z0-9][A-Za-z0-9._-]*)\.(?P<section>
 UNRELEASED = re.compile(r"^## Unreleased[ \t]*\n", re.MULTILINE)
 VERSION_HEADING = re.compile(r"^## (?!Unreleased)", re.MULTILINE)
 SECTION_HEADING = re.compile(r"^### (?P<name>.*)$", re.MULTILINE)
-VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$")
+# Semantic Versioning 2.0.0, as published at semver.org.
+_NUM = r"(?:0|[1-9][0-9]*)"
+_PRE_ID = rf"(?:{_NUM}|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
+VERSION = re.compile(
+    rf"^{_NUM}\.{_NUM}\.{_NUM}"
+    rf"(?:-{_PRE_ID}(?:\.{_PRE_ID})*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+)
 
 
 class FragmentError(Exception):
@@ -185,7 +192,7 @@ def render(dry_run: bool = False) -> None:
 def release(version: str, date: str | None) -> int:
     version = version.lstrip("v")
     if not VERSION.match(version):
-        raise SystemExit(f"version {version!r} is not MAJOR.MINOR.PATCH")
+        raise SystemExit(f"version {version!r} is not a semantic version")
     if date is None:
         date = _dt.date.today().isoformat()
     else:
