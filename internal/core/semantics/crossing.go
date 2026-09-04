@@ -76,14 +76,24 @@ func (m *Model) OwnedCrossFeature(sym *symbols.Symbol) *symbols.Symbol {
 	return nil
 }
 
-// implicitCrossFeatureSubsettings returns the cross features of the ends redefined
-// by the end whose owned cross feature sym is; sym implicitly subsets each.
-func (m *Model) implicitCrossFeatureSubsettings(sym *symbols.Symbol) []*symbols.Symbol {
+// owningEndOf returns the end feature whose owned cross feature sym is, or nil.
+func (m *Model) owningEndOf(sym *symbols.Symbol) *symbols.Symbol {
 	end := ownerSymbol(sym)
 	if end == nil || m.OwnedCrossFeature(end) != sym {
 		return nil
 	}
-	var out []*symbols.Symbol
+	return end
+}
+
+// implicitCrossFeatureGenerals returns what an owned cross feature implicitly
+// specializes: its end's declared types, then the cross features of the ends its
+// end redefines (KerML 1.1 §8.3.3.3, checkFeatureOwnedCrossFeatureSpecialization).
+func (m *Model) implicitCrossFeatureGenerals(sym *symbols.Symbol) []*symbols.Symbol {
+	end := m.owningEndOf(sym)
+	if end == nil {
+		return nil
+	}
+	out := append([]*symbols.Symbol(nil), m.DeclaredFeatureTypes(end)...)
 	redefined := append([]*symbols.Symbol(nil), m.RedefinedFeatures(end)...)
 	for _, general := range append(redefined, m.implicitEndRedefinitions(end)...) {
 		if !declaresEnd(general) {

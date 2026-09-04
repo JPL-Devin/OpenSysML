@@ -379,14 +379,14 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		out = append(out, redefined)
 	}
 
-	// The cross feature an end declares in its body implicitly subsets the cross
-	// feature of each end its owner redefines (see crossing.go).
-	for _, cross := range m.implicitCrossFeatureSubsettings(sym) {
-		if seen[cross] {
+	// The cross feature an end owns is implicitly typed by the end's types and
+	// subsets the cross feature of each end the end redefines (see crossing.go).
+	for _, general := range m.implicitCrossFeatureGenerals(sym) {
+		if general == sym || seen[general] {
 			continue
 		}
-		seen[cross] = true
-		out = append(out, cross)
+		seen[general] = true
+		out = append(out, general)
 	}
 
 	// The subject or objective of a case, requirement or their usages implicitly

@@ -279,7 +279,7 @@ func isFeature(sym *symbols.Symbol) bool {
 			return false
 		}
 		return true
-	case *ast.SubjectMember, *ast.AssumeMember, *ast.RequireMember:
+	case *ast.SubjectMember, *ast.AssumeMember, *ast.RequireMember, *ast.CrossFeatureMember:
 		return true
 	}
 	return false
