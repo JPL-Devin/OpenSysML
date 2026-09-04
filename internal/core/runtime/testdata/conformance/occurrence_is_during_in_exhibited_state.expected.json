@@ -1,0 +1,15 @@
+{
+  "type": "instance",
+  "libraries": true,
+  "instantiate": "test::Rover",
+  "objects": [
+    {
+      "finalState": "driving",
+      "slots": {
+        "machineDuring": {"type": "Boolean", "value": true},
+        "partDuring": {"type": "Boolean", "value": true},
+        "partAfter": {"type": "Boolean", "value": false}
+      }
+    }
+  ]
+}

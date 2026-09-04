@@ -931,7 +931,7 @@ func (ctx *Context) acceptedValue(msg Message) (Value, error) {
 // no instance behind when a payload argument does not fit it.
 func (ctx *Context) materializeAccepted(msg Message) (Value, error) {
 	mark := len(ctx.created)
-	inst, err := ctx.materialize(msg.Signal, 0)
+	inst, err := ctx.materialize(msg.Signal, 0, nil, "")
 	if err != nil {
 		ctx.abandonInstancesSince(mark)
 		return Value{}, fmt.Errorf("materialize accepted %s: %w", msg.SignalType, err)

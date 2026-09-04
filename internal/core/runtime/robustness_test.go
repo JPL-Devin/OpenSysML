@@ -1357,11 +1357,18 @@ func testNamedLibraryCallThatHasNoValue(t *testing.T) {
 		{`RationalFunctions::rat(1, 3)`, ErrUnevaluableLibraryFunction},
 		{`RationalFunctions::numer(0.5)`, ErrUnevaluableLibraryFunction},
 		{`CollectionFunctions::'array#'(xs, (1, 1))`, ErrUnevaluableLibraryFunction},
-		{`OccurrenceFunctions::isDuring(xs)`, ErrUnevaluableLibraryFunction},
+		{`OccurrenceFunctions::isDuring(xs)`, ErrMultiplicityViolation},
+		{`OccurrenceFunctions::isDuring(factor)`, ErrNotAnOccurrence},
+		{`OccurrenceFunctions::'==='(xs, xs)`, ErrMultiplicityViolation},
+		{`OccurrenceFunctions::'==='(factor, factor)`, ErrNotAnOccurrence},
+		{`OccurrenceFunctions::create(factor)`, ErrNotAnOccurrence},
+		{`OccurrenceFunctions::destroy(factor)`, ErrNotAnOccurrence},
 		{`OccurrenceFunctions::addNew(xs)`, ErrCalcArity},
-		{`OccurrenceFunctions::addNew(occ = xs)`, ErrUnevaluableLibraryFunction},
+		{`OccurrenceFunctions::addNew(occ = xs)`, ErrMultiplicityViolation},
+		{`OccurrenceFunctions::addNew(xs, factor)`, ErrNotAnOccurrence},
 		{`OccurrenceFunctions::addNewAt(xs, xs)`, ErrCalcArity},
-		{`OccurrenceFunctions::addNewAt(occ = xs, index = 1)`, ErrUnevaluableLibraryFunction},
+		{`OccurrenceFunctions::addNewAt(occ = xs, index = 1)`, ErrMultiplicityViolation},
+		{`OccurrenceFunctions::addNewAt((), factor, 0)`, ErrNotAnOccurrence},
 		{`IntegerFunctions::'+'("a", 1)`, ErrTypeMismatch},
 		{`IntegerFunctions::'/'(1, 0)`, ErrDivisionByZero},
 		{`NaturalFunctions::'/'(7, 2)`, semantics.ErrArithmeticDomain},
@@ -7841,7 +7848,7 @@ func testObjectPerformedActionOccurrenceHoldsANonObject(t *testing.T) {
 		}
 	}`
 	idx, _, ctx := buildRuntime(t, "<performed-action-non-object>", parseAndBuild(t, src))
-	inst, err := ctx.materialize(oneSymbol(t, idx, "test::Host"), 0)
+	inst, err := ctx.materialize(oneSymbol(t, idx, "test::Host"), 0, nil, "")
 	if err != nil {
 		t.Fatalf("materialize: %v", err)
 	}

@@ -26,6 +26,8 @@ type Context struct {
 	maxSteps  int64
 	instances map[int64]*Instance
 	created   []int64
+	// lives holds, per registered object, when it began and ended (lifetimes.go).
+	lives map[int64]life
 
 	// maxActionSteps, maxStateEvents and maxDoSteps bound the executors this
 	// context runs: token-flow steps, dispatched events, and do actions.
@@ -237,6 +239,7 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		steps:               0,
 		maxSteps:            maxSteps,
 		instances:           make(map[int64]*Instance),
+		lives:               make(map[int64]life),
 		features:            make(map[*symbols.Symbol][]EffectiveFeature),
 		calcShapes:          make(map[*symbols.Symbol]*calcShape),
 		libraryPerformances: make(map[*symbols.Symbol]*libraryPerformance),

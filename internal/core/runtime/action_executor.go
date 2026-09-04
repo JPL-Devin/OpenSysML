@@ -772,6 +772,7 @@ func (e *ActionExecutor) initialize() error {
 	}
 
 	initialNode := e.graph.Initial
+	e.ctx.beginPerformanceLife(e.occurrence, e.ctx.newActivation())
 
 	// Bind the supplied inputs first: a default written in terms of one reads it.
 	if err := e.checkInputNames(); err != nil {
@@ -929,6 +930,7 @@ func (e *ActionExecutor) retireToken(tokenIdx int) error {
 		e.removeToken(tokenIdx)
 		if len(e.tokens) == 0 {
 			e.state = StateCompleted
+			e.ctx.endPerformanceLife(e.occurrence)
 		}
 		return nil
 	}

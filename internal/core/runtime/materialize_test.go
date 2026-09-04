@@ -96,6 +96,35 @@ func TestMaterializationErrorsReportsARedefinedFeatureValueOnce(t *testing.T) {
 	}
 }
 
+// A destroyed object holds no feature values to materialize, so the walk passes
+// it over rather than reporting each of its features as unreadable.
+func TestMaterializationErrorsSkipsDestroyedObjects(t *testing.T) {
+	inst, ctx := instantiateHolder(t, `
+		package test {
+			private import ScalarValues::Real;
+			part def Sub { attribute wrong : Real[3] = 1.0; }
+			part def Holder { part sub : Sub; }
+		}
+	`)
+	fv, err := inst.GetFeatureValue(ctx, "sub")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(sub): %v", err)
+	}
+	id, _ := fv.HeldValue().Object()
+	sub, _ := ctx.Instance(id)
+	if err := ctx.destroy(sub); err != nil {
+		t.Fatalf("destroy: %v", err)
+	}
+
+	errs, bounded := ctx.MaterializationErrors(inst)
+	if len(errs) != 0 || bounded {
+		t.Errorf("MaterializationErrors = %v, %v; want none after the part was destroyed", errs, bounded)
+	}
+	if errs, _ := ctx.MaterializationErrors(sub); len(errs) != 0 {
+		t.Errorf("MaterializationErrors(destroyed) = %v, want none", errs)
+	}
+}
+
 // Nesting multiplies and reading a feature value materializes the objects it holds, so a
 // wide model stops at the walk's budget rather than allocating without end.
 func TestMaterializationErrorsBoundsAWideModel(t *testing.T) {

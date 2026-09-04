@@ -1264,6 +1264,7 @@ func (e *StateExecutor) completeIfDone(target *ast.StateNode) error {
 		return err
 	}
 	e.state = StateCompleted
+	e.ctx.endPerformanceLife(e.occurrence)
 	return nil
 }
 
@@ -2216,6 +2217,7 @@ func (e *StateExecutor) activeStates() []*ast.StateNode {
 // initialize sets current state to initial state and enters it.
 func (e *StateExecutor) initialize() error {
 	defer e.ctx.beginExecutorRun(&e.runStarted)()
+	e.ctx.beginPerformanceLife(e.occurrence, e.ctx.newActivation())
 
 	// Use initial state from graph
 	if e.graph.Initial != nil {

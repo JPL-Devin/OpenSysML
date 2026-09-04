@@ -412,10 +412,13 @@ func (ctx *Context) invokeCalcWithSelf(sym *symbols.Symbol, args calcArgs, scope
 // already evaluated, bound to its declared parameters as a call would bind them.
 func (ctx *Context) invokeBuiltinValues(sym *symbols.Symbol, fn builtinFunc, args calcArgs, callerScope *symbols.Scope, self *Instance) (Value, error) {
 	name := ctx.qualifiedSymbolName(sym)
+	entered := ctx.activations
 	return tracedBuiltin(ctx.trace, name,
 		func() ([]Value, error) { return bindBuiltinValues(name, args) },
 		func(bound []Value) (Value, error) {
-			return fn(NewEvalContextIn(ctx, ctx.calcScope(sym, nil, callerScope), self), bound)
+			ec := NewEvalContextIn(ctx, ctx.calcScope(sym, nil, callerScope), self)
+			ec.entered = entered
+			return fn(ec, bound)
 		},
 	)
 }

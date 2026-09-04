@@ -273,6 +273,7 @@ func (ctx *Context) abandonInstancesSince(mark int) {
 			delete(ctx.occurrences, sym)
 		}
 	}
+	ctx.forgetLives(abandoned)
 	ctx.forgetVariantsNaming(abandoned)
 	ctx.forgetValuesNaming(abandoned)
 	ctx.forgetMessagesTo(abandoned)
@@ -690,7 +691,7 @@ func (ctx *Context) performanceOccurrence(
 			sentinel, name, inst.ID, err)
 	}
 	if fv.HeldValue().Kind == ValInvalid {
-		occurrence, err := ctx.materializeOwnedBy(behavior, 0, inst, name)
+		occurrence, err := ctx.materialize(behavior, 0, inst, name)
 		if err != nil {
 			return nil, fmt.Errorf("%w: materialize %s of object #%d: %w",
 				sentinel, name, inst.ID, err)
