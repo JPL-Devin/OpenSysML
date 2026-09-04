@@ -26,8 +26,12 @@ type ArgumentTyper interface {
 }
 
 // SetArgumentTyper installs the checker's argument typing on the model. Selections
-// memoized under the previous typing are dropped, so none outlives the typing it read.
+// memoized under a different typing are dropped, so none outlives the typing it
+// read; installing the typing already in place (typers compare by value) keeps them.
 func (m *Model) SetArgumentTyper(t ArgumentTyper) {
+	if m.arguments == t {
+		return
+	}
 	m.arguments = t
 	clear(m.invocations)
 }

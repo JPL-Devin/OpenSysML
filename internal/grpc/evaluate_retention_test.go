@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 )
 
 // Each Evaluate parses its own expression; the resolver and semantics shared
@@ -78,5 +79,62 @@ package Demo {
 	if got, gotSel := memoSize(); got != before || gotSel != beforeSel {
 		t.Fatalf("shared memo grew from %d+%d to %d+%d over 50 unresolved expressions",
 			before, beforeSel, got, gotSel)
+	}
+}
+
+// Each request builds its own runtime context over the shared semantics; the
+// overloads the model selected for one request must still be selected for the next.
+func TestEvaluateKeepsInvocationSelectionsAcrossRequests(t *testing.T) {
+	const model = `
+package Demo {
+  calc def Twice { in x : ScalarValues::Real; return : ScalarValues::Real = x * 2.0; }
+  part def Vehicle {
+    attribute mass = 1500.0;
+    attribute doubled = Twice(mass);
+  }
+  part sedan : Vehicle;
+}
+`
+	srv := mustNewService(t, 10)
+	parseResp, err := srv.ParseFile(context.Background(), &pb.ParseFileRequest{
+		Source:      &pb.ParseFileRequest_Content{Content: model},
+		ContentHash: "evaluate-selection-retention",
+	})
+	if err != nil {
+		t.Fatalf("ParseFile failed: %v", err)
+	}
+	cached, ok := srv.cache.Get(parseResp.ModelHash)
+	if !ok {
+		t.Fatal("parsed model not cached")
+	}
+	selections := func() int {
+		rs, release := cached.RuntimeSemantics()
+		defer release()
+		return rs.Model.MemoSize()
+	}
+	evaluate := func() {
+		resp, err := srv.Evaluate(context.Background(), &pb.EvaluateRequest{
+			ModelHash: parseResp.ModelHash, Expression: "doubled", SubjectSymbolId: "Demo::sedan",
+		})
+		if err != nil || resp.GetError() != "" {
+			t.Fatalf("Evaluate: %v %s", err, resp.GetError())
+		}
+	}
+	evaluate()
+	after := selections()
+	if after == 0 {
+		t.Fatal("evaluating doubled selected no invocation, or the selection was not kept")
+	}
+	// What the next request does first: build its context over the shared model.
+	rs, release := cached.RuntimeSemantics()
+	runtime.NewContext(rs.Model, rs.Resolver, srv.budgets.MaxSteps)
+	got := rs.Model.MemoSize()
+	release()
+	if got != after {
+		t.Fatalf("invocation selections %d after a new runtime context, want %d", got, after)
+	}
+	evaluate()
+	if got := selections(); got != after {
+		t.Fatalf("invocation selections %d after a second request, want %d", got, after)
 	}
 }
