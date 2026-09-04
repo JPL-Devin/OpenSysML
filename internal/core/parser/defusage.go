@@ -3759,22 +3759,18 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 	case ast.UsageFlow:
 		p.parseFlowEnds(u)
 	case ast.UsageMetadata:
-		// Metadata usage syntax: metadata Name about target1, target2, ...;
-		// The 'about' clause specifies what elements this metadata annotates
+		// `about` names the elements the usage annotates, each a qualified name
+		// (SysML.xtext AnnotatedElement: [Element|QualifiedName]).
 		if p.acceptKeyword("about") {
-			// Parse comma-separated list of targets
-			for {
-				target := p.parseRelationshipTarget()
-				if target != nil {
-					// Store as an annotation relationship: metadata annotates its target
-					u.Relationships = append(u.Relationships, &ast.Relationship{
-						Kind:   ast.RelAnnotates,
-						Target: target,
-					})
-				}
-				if !p.accept2(lexer.Comma) {
-					break
-				}
+			about := p.parseQualifiedNameList()
+			if len(about) == 0 {
+				p.error(p.peek().Span, "expected an annotated element after 'about'")
+			}
+			for _, target := range about {
+				u.Relationships = append(u.Relationships, &ast.Relationship{
+					Kind:   ast.RelAnnotates,
+					Target: target,
+				})
 			}
 		}
 	case ast.UsageOccurrence:

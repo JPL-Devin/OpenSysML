@@ -22,15 +22,23 @@ func evaluableIn(t *testing.T, src, expr string) bool {
 	return m.ModelLevelEvaluable(root, node)
 }
 
-const evaluableModel = `part def A { attribute y; }
+const evaluableModel = `part def A { attribute y; attribute z = 3; }
 enum def E { enum e; }
 attribute k = 2;
 attribute unset;
+attribute fromUnset = unset;
+attribute bad = ~3;
+attribute c1 = c2;
+attribute c2 = c1;
+part a : A;
+metadata def M { attribute q = 4; attribute q2; }
 calc def f { in x; return : ScalarValues::Integer = 1; }
 `
 
 // A metadata feature value and a filter condition must be decidable from the
-// model alone (KerML §7.4.9, Expression::isModelLevelEvaluable).
+// model alone (KerML §7.4.9, Expression::isModelLevelEvaluable). A feature read
+// is decided by FeatureReferenceExpression::modelLevelEvaluable: a feature of a
+// type other than a metaclass is not, an unfeatured one is as its value is.
 func TestModelLevelEvaluable(t *testing.T) {
 	for expr, want := range map[string]bool{
 		"1":                       true,
@@ -46,9 +54,18 @@ func TestModelLevelEvaluable(t *testing.T) {
 		"E::e":                    true,
 		"k":                       true,
 		"k + 1":                   true,
+		"unset":                   true,
+		"fromUnset":               true,
+		"a":                       true,
+		"a.y":                     true,
+		"M::q":                    true,
+		"M::q2":                   true,
 		"new A(null, 1, \"\")":    true,
 		"~3":                      false,
-		"unset":                   false,
+		"bad":                     false,
+		"c1":                      false,
+		"A::y":                    false,
+		"A::z":                    false,
 		"(as A).y":                false,
 		"f((as A).y)":             false,
 		"f(1)":                    false,
