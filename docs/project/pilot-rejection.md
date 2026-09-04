@@ -159,7 +159,7 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-231 case(s): 206 both reject, 17 only the pilot rejects, 8 only we reject, 0 both accept
+231 case(s): 208 both reject, 15 only the pilot rejects, 8 only we reject, 0 both accept
   of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -167,7 +167,7 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 8 | 8 | 0 | 0 | 0 |
 | grammar | 87 | 81 | 6 | 0 | 0 |
-| semantic | 102 | 83 | 11 | 8 | 0 |
+| semantic | 102 | 85 | 9 | 8 | 0 |
 | xpect | 34 | 34 | 0 | 0 | 0 |
 
 The eight ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
@@ -184,7 +184,9 @@ SysML census opened nine more, six of them `grammar/` (see
 with both implementations rejecting, as did `s47` (an enumeration definition specializing
 another) with `g68` (a definition nested in an enumeration body). The metadata rules
 then closed four more (`k35`, `k36`, `k40`, `s23`: metaclass typing, annotated-element conformance
-and body redefinition, in both notations). Before that source the default-mode gap count was 2
+and body redefinition, in both notations), and the feature-variability rules two more (`k11`, an
+initial `:=` value on a non-variable feature; `s80`, `constant` on a non-variable usage). Before
+that source the default-mode gap count was 2
 of 120: only the intended `extensions/` notation. Wave 11 closed two `xpect/` gaps: `p11`
 (11D's and 11G's model-level evaluability predicate on metadata body values) and `p15` (11F's
 attribute-usage typing rule), and wave 12C closed the last one, `p24`: a library metaclass now carries its
@@ -201,8 +203,8 @@ extensions that the default mode accepts on purpose and strict mode reports as e
 initial state marker), `x04` (`region r { … }`) and `x07` (`transition <src> to <tgt>`) left that
 list when that notation was removed: each is now a parse error in either mode, so both
 implementations reject it by default. Judged in
-the default mode the same corpus gives 203 agreements and 20 gaps, which is what `-conformance
-default` prints. `-conformance strict` gives 206 and 17. Reserved keywords recovered as declared
+the default mode the same corpus gives 205 agreements and 18 gaps, which is what `-conformance
+default` prints. `-conformance strict` gives 208 and 15. Reserved keywords recovered as declared
 names and SysML declaration keywords recovered in KerML are now errors in either mode; the parser
 still preserves their trees for editors and later analysis. Of the 14 gaps this document carried before wave 8, six were closed by the
 validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
@@ -223,8 +225,8 @@ we no longer accept it either.
 
 ## Permissiveness gaps
 
-All 17 gaps under `-conformance auto` are open, and all of them were opened by the `semantic/`
-source and the SysML constraint census: 9 named KerML constraints (`k11`–`k42`, `s80`) and 2
+All 15 gaps under `-conformance auto` are open, and all of them were opened by the `semantic/`
+source and the SysML constraint census: 7 named KerML constraints (`k16`–`k42`) and 2
 named SysML constraints (`s04`, `s43`) the pinned validators enforce as errors and
 OpenSysML does not report, plus 6 SysML body-item spellings (`g61`–`g66`) the pinned grammar
 rejects and our parser admits in any body. Every gap the corpus carried before is closed. The
@@ -244,7 +246,6 @@ silent in either mode.
 | `grammar/g64-stakeholder-outside-requirement-body.sysml` | accepts | `mismatched input 'stakeholder' expecting '}'` | `internal/core/parser` — same dispatch admits `stakeholder` outside a requirement body |
 | `grammar/g65-entry-action-outside-state-body.sysml` | accepts | `mismatched input 'entry' expecting '}'` | `internal/core/parser/defusage.go` `atKindPrefix` — outside a state body, `entry` before `action` is taken as a kind prefix and dropped, so the member parses as a plain `action init` with no diagnostic; the pilot's `EntryActionMember` is a `StateBodyItem` |
 | `grammar/g66-render-outside-view-body.sysml` | accepts | `mismatched input 'render' expecting '}'` | `internal/core/parser` — `render` is parsed in a part def body; the pilot's `ViewRenderingMember` is a `ViewBodyItem` (`expose`, the sibling case `g67`, is already rejected by `expose-owning-namespace`) |
-| `semantic/k11-initial-value-nonvariable.kerml` | accepts | `Initialized feature must be variable` | `internal/core/passes` — no pass relates the `:=` initial-value form to the feature's variability (`validateFeatureValueIsInitial`) |
 | `semantic/k16-crosses-from-nonend.kerml` | accepts | `Cross subsetting must be owned by one of two or more end features` | `internal/core/passes/w10b_cross_features.go` — checks the shape of a `crosses` chain on association ends, not that the owner is an end of a type with two or more ends (`validateCrossSubsettingCrossingFeature`) |
 | `semantic/k17-crosses-not-through-opposite-end.kerml` | accepts | `Cross subsetting must chain through an opposite end feature` | `internal/core/passes/w10b_cross_features.go` — the opposite-end check does not reach a `crosses` that names the opposite end itself instead of chaining through it (`validateCrossSubsettingCrossedFeature`) |
 | `semantic/k19-cross-feature-not-specializing.kerml` | accepts | `Cross feature must specialized redefined-end cross features` | `internal/core/passes/w10b_cross_features.go` — the redefined-end specialization check does not reach a KerML `assoc` that specializes another and redefines its ends (`validateFeatureCrossFeatureSpecialization`) |
@@ -254,7 +255,6 @@ silent in either mode.
 | `semantic/k42-two-cross-subsettings.kerml` | accepts | `Error executing EValidator` (the pilot's `validateFeatureOwnedCrossSubsetting` check indexes the wrong list and throws before it can say `At most one cross subsetting is allowed`; filed as [Systems-Modeling/SysML-v2-Pilot-Implementation#794](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/794), body in [omg-issues.md](omg-issues.md#validatefeatureownedcrosssubsetting-indexes-the-wrong-list-and-throws-pilot-2026-07)) | `internal/core/passes` — the one-reference-subsetting check that rejects `k09` has no counterpart for a second `crosses` clause (`validateFeatureOwnedCrossSubsetting`) |
 | `semantic/s04-assert-references-non-constraint.sysml` | accepts | `Must reference a constraint.` | `internal/core/passes/typecheck.go` — the referent-kind check on reference subsetting covers `satisfy` (`satisfy target must be a requirement usage`) but not `assert`; no pass checks that an asserted usage is a constraint usage |
 | `semantic/s43-assign-to-non-feature.sysml` | accepts | `An assignment must have a referent.` | `internal/core/passes/constraint.go` `assignmentReferentChecker` — returns silently when the resolved target is not a `*ast.Usage`, so assigning to a definition reports nothing. Pass exists, misses the shape |
-| `semantic/s80-constant-attribute-not-variable.sysml` | accepts | `Only a variable feature can be constant` | `internal/core/passes` — the `constant` usage prefix is parsed but no pass relates it to variability, which an attribute of a data type never has (`validateFeatureConstantIsVariable`) |
 
 Each pilot message above is the first error the validator reports for the case; the full lists are
 in the baseline JSON's `pilot` arrays. The six `grammar/` gaps share one cause: the pilot's grammar
