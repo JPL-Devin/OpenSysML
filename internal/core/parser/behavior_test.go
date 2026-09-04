@@ -396,8 +396,8 @@ func TestParseRequirementBody_Subject(t *testing.T) {
 	if !ok {
 		t.Errorf("node 0: expected *ast.SubjectMember, got %T", nodes[0])
 	} else {
-		if subject.Name != "vehicle" {
-			t.Errorf("SubjectMember.Name: expected 'vehicle', got '%s'", subject.Name)
+		if subject.Ident.Name != "vehicle" {
+			t.Errorf("SubjectMember.Name: expected 'vehicle', got '%s'", subject.Ident.Name)
 		}
 		if subject.TypeRef == nil {
 			t.Errorf("SubjectMember.TypeRef is nil")
