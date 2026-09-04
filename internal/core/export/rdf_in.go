@@ -1518,6 +1518,9 @@ func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 		if len(prefixes) > 0 {
 			return "", d.unprefixedCondition(el, "an inline condition")
 		}
+		if err := d.inlineConditionOnly(el, keyword, declared, references, hasBody); err != nil {
+			return "", err
+		}
 		words = append(words, condition)
 		return strings.Join(words, " "), nil
 	case declared:
@@ -1551,6 +1554,46 @@ func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 		head += " = " + value
 	}
 	return head, nil
+}
+
+// inlineConditionOnly refuses an inline condition that also carries facts of
+// the declaration or reference forms, which writing the condition alone would drop.
+func (d *decoder) inlineConditionOnly(el *element, keyword string, declared bool, references []string, hasBody bool) error {
+	var extra []string
+	if declared {
+		extra = append(extra, "declares a `constraint`")
+	}
+	if hasBody || len(d.bodyChildren(el)) > 0 {
+		extra = append(extra, "has a body")
+	}
+	if len(references) > 0 {
+		extra = append(extra, "states a constraint through sysml:"+relationshipProperty[ast.RelReferences])
+	}
+	if len(d.identWords(el)) > 0 {
+		extra = append(extra, "declares a name")
+	}
+	if relationships, err := d.relationshipWords(el, ""); err != nil {
+		return err
+	} else if len(relationships) > 0 {
+		extra = append(extra, "declares specializations")
+	}
+	if d.multiplicityText(el) != "" {
+		extra = append(extra, "declares a multiplicity")
+	}
+	if _, ok := d.stringOf(el, rdf.SysML+pValue); ok {
+		extra = append(extra, "has a value")
+	}
+	if len(extra) == 0 {
+		return nil
+	}
+	form := "condition"
+	if keyword != "" {
+		form = keyword
+	}
+	return &UnsupportedError{
+		What: fmt.Sprintf("the condition member <%s>", el.iri),
+		Note: fmt.Sprintf("it states an inline condition (sysx:%s) and also %s; a %s member is written in one form, and writing the condition alone would drop the rest", xCondition, strings.Join(extra, ", "), form),
+	}
 }
 
 // unprefixedCondition reports a prefix annotation on a condition member whose

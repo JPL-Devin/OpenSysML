@@ -998,6 +998,10 @@ and `sysml:value` (`require #Goal constraint braked [1] = true;`) — and
 themselves are notation, with the limits stated above. An `assume`/`require`
 member's `sysx:declaredKeyword`, when present, is `constraint`; any other value
 is reported rather than the member written in a form the keyword did not state.
+A member is written in one of these forms, so a graph stating an inline
+`sysx:condition` together with facts of another form — a `constraint` keyword,
+a body, a `sysml:references`, a name, specializations, a multiplicity or a
+value — is reported rather than the condition written and the rest dropped.
 
 The nodes in an action or state body are mapped under
 [Behavior](#behavior), together with the shapes still refused there.

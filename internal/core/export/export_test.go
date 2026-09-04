@@ -1659,6 +1659,62 @@ func TestConditionWithAnUnsupportedKeywordIsReported(t *testing.T) {
 	}
 }
 
+// A member stating an inline condition and also facts of the declaration or
+// reference form is refused: the notation writes one form, and writing the
+// condition alone would drop the rest.
+func TestInlineConditionWithDeclarationFactsIsReported(t *testing.T) {
+	src := "package P {\n\tconstraint def C;\n\trequirement def R {\n\t\trequire C;\n\t}\n\tconstraint q {\n\t\tassert C;\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	structural := string(withoutTriples(t, turtle, "sysx:sourceText"))
+	const require, assert = `sysx:condition expr:P__R___400_pcondition .`, `sysx:condition expr:P__q___400_pcondition .`
+	for _, inline := range []string{require, assert} {
+		if !strings.Contains(structural, inline) {
+			t.Fatalf("%s was not found in the graph:\n%s", inline, structural)
+		}
+	}
+	for _, tc := range []struct{ name, inline, added, drops string }{
+		{"declared constraint keyword", require, `sysx:declaredKeyword "constraint" ;`, "declares a `constraint`"},
+		{"stated constraint", require, `sysml:references elmt:P__C ;`, "states a constraint through sysml:references"},
+		{"body", require, `sysx:hasBody "true"^^xsd:boolean ;`, "has a body"},
+		{"name", require, `sysml:declaredName "c" ;`, "declares a name"},
+		{"specialization", require, `sysml:subsets elmt:P__C ;`, "declares specializations"},
+		{"multiplicity", require, `sysml:upperBound "1" ;`, "declares a multiplicity"},
+		{"value", require, `sysml:value "1" ;`, "has a value"},
+		{"asserted body", assert, `sysx:hasBody "true"^^xsd:boolean ;`, "has a body"},
+		{"asserted name", assert, `sysml:declaredName "c" ;`, "declares a name"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			edited := strings.Replace(structural, tc.inline, tc.added+"\n    "+tc.inline, 1)
+			if edited == structural {
+				t.Fatal("the graph was not edited")
+			}
+			_, err := export.Convert("m.ttl", []byte(edited), export.FormatTurtle, export.FormatSysML)
+			var unsupported *export.UnsupportedError
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("expected an unsupported error, got %v", err)
+			}
+			for _, want := range []string{"the condition member <", "states an inline condition", tc.drops} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("expected %q in error:\n%s", want, err.Error())
+				}
+			}
+		})
+	}
+	// The unedited graph still round-trips: the inline form alone is the form.
+	back, err := export.Convert("m.ttl", []byte(structural), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to sysml: %v", err)
+	}
+	for _, want := range []string{"require C;", "assert C;"} {
+		if !strings.Contains(string(back), want) {
+			t.Errorf("expected %q in:\n%s", want, back)
+		}
+	}
+}
+
 // A head kept as source text writes its prefix annotations in that text; when
 // the text and the graph disagree, the text is stale and the head is rebuilt
 // from the graph rather than the annotation lost.
