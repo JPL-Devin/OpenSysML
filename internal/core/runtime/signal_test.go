@@ -369,6 +369,80 @@ func TestSendNewLeavesNothingBehindWhenDeliveryFails(t *testing.T) {
 	}
 }
 
+// A constructed message that cannot be built — a later argument names no feature,
+// or does not fit the one it names — leaves nothing an earlier argument created
+// behind, not the object it materialized nor the behaviors that object started.
+func TestSendNewLeavesNothingBehindWhenBuildFails(t *testing.T) {
+	const src = `package test {
+		private import ScalarValues::*;
+		item def Tagged { ref source : Beacon; attribute count : Integer[2..3]; }
+		part def Beacon {
+			exhibit state machine { entry; then idle; state idle; }
+		}
+		part def Node {
+			port lonely;
+			action mislabel {
+				first start;
+				action sender { send new Tagged(source = station.beacon, bogus = 1) via lonely; }
+				done;
+				succession first start then sender;
+				succession first sender then done;
+			}
+			action misfit {
+				first start;
+				action sender { send new Tagged(source = station.beacon, count = 7) via lonely; }
+				done;
+				succession first start then sender;
+				succession first sender then done;
+			}
+			state mislabeling {
+				entry; then sending;
+				state sending { entry send new Tagged(source = station.beacon, bogus = 1) via lonely; }
+			}
+			state misfitting {
+				entry; then sending;
+				state sending { entry send new Tagged(source = station.beacon, count = 7) via lonely; }
+			}
+		}
+		part alpha : Node;
+		part station { part beacon : Beacon; }
+	}`
+	for _, tc := range []struct{ name, behavior, want string }{
+		{"action with an unknown label", "test::Node::mislabel", "bogus is not a feature of Tagged"},
+		{"action with a misfitting value", "test::Node::misfit", "multiplicity"},
+		{"state machine with an unknown label", "test::Node::mislabeling", "bogus is not a feature of Tagged"},
+		{"state machine with a misfitting value", "test::Node::misfitting", "multiplicity"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+			alpha := instanceOfUsage(t, ctx, idx, "test::alpha")
+			sym := oneSymbol(t, idx, tc.behavior)
+			var err error
+			if sym.Kind == symbols.SymbolStateUsage {
+				_, _, err = ctx.ExecuteStatePerformedBy(sym, alpha, nil)
+			} else {
+				_, err = ctx.ExecuteActionPerformedBy(sym, alpha, nil)
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("%s: error %v, want one mentioning %q", tc.behavior, err, tc.want)
+			}
+			for _, inst := range ctx.instances {
+				if inst.Type != nil && (inst.Type.Name == "Tagged" || inst.Type.Name == "station" || inst.Type.Name == "Beacon") {
+					t.Errorf("a %s the failed send created is still alive as instance %d", inst.Type.Name, inst.ID)
+				}
+			}
+			for _, behavior := range append(append([]*ObjectBehavior(nil), ctx.objectBehaviors...), ctx.pendingBehaviors...) {
+				if _, live := ctx.instances[behavior.Object.ID]; !live {
+					t.Errorf("%s still attached to abandoned instance %d", behavior.Describe(), behavior.Object.ID)
+				}
+			}
+			if len(ctx.PendingMessages()) != 0 {
+				t.Errorf("the failed send posted %+v", ctx.PendingMessages())
+			}
+		})
+	}
+}
+
 // A label names only a feature the constructor binds: an inherited library
 // descriptor is refused at the send; a restatement of it in the type binds.
 func TestSendNewLabelMustNameConstructibleFeature(t *testing.T) {

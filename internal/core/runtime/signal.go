@@ -832,12 +832,13 @@ func isBehaviorSymbol(sym *symbols.Symbol) bool {
 	return false
 }
 
-// send builds and posts the message a send statement describes; a delivery the
-// send cannot make leaves nothing building the message created behind.
+// send builds and posts the message a send statement describes; a message the
+// send cannot build or deliver leaves nothing building it created behind.
 func (ctx *Context) send(ec *EvalContext, scope *symbols.Scope, conns []lower.Connection, s lower.Send, self *Instance) error {
 	mark, attached := len(ctx.created), len(ctx.objectBehaviors)
 	msg, err := ec.buildMessage(scope, s)
 	if err != nil {
+		ctx.abandonCreationSince(mark, attached)
 		return err
 	}
 	built, started := len(ctx.created), len(ctx.objectBehaviors)
