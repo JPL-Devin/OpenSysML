@@ -66,6 +66,8 @@ const triggerFixture = `package P {
 		attribute waitTwice = d + d;
 		attribute alsoReady = ready;
 		attribute loop = loop;
+		attribute pair = (true, false);
+		attribute pairWait = (5 [s], 6 [s]);
 		in attribute given = true;
 		part h : Holder;
 		attribute viaDelay :> h.delay;
@@ -390,6 +392,36 @@ func TestNullTriggerArgumentIsRejected(t *testing.T) {
 	wantTriggerSilent(t, "attribute empty : ISQ::DurationValue = null;")
 	wantTriggerSilent(t, "entry action { if null { assign x := 1; } }")
 	wantTriggerSilent(t, "assert constraint { null }")
+}
+
+// A sequence `a, b` is typed Anything, so no trigger argument may be one (the
+// pilot rejects each shape); a parenthesized single value is that value.
+func TestSequenceTriggerArgumentIsRejected(t *testing.T) {
+	const found = "found a sequence of 2 elements, typed Anything"
+	for _, tc := range []struct{ trigger, code string }{
+		{"after (5 [s], 6 [s])", "trigger-after-duration"},
+		{"after (d, d)", "trigger-after-duration"},
+		{"after (5 [s], 5 [m])", "trigger-after-duration"},
+		{"after ((5 [s], 6 [s]))", "trigger-after-duration"},
+		{"after pairWait", "trigger-after-duration"},
+		{"at (t, t2)", "trigger-at-time-instant"},
+		{"at (t, null)", "trigger-at-time-instant"},
+		{"when (true, false)", "trigger-when-boolean"},
+		{"when (true, true)", "trigger-when-boolean"},
+		{"when (true, null)", "trigger-when-boolean"},
+		{"when (null, flag)", "trigger-when-boolean"},
+		{"when (x > 3, x < 9)", "trigger-when-boolean"},
+		{"when ((flag, ready))", "trigger-when-boolean"},
+		{"when pair", "trigger-when-boolean"},
+	} {
+		wantTriggerDiag(t, "transition first a accept "+tc.trigger+" then b;", tc.code, found)
+	}
+	for _, trigger := range []string{"after (5 [s])", "after (d)", "at (t)", "when (x > 3)", "when (flag)"} {
+		wantTriggerSilent(t, "transition first a accept "+trigger+" then b;")
+	}
+	wantTriggerSilent(t, "attribute flags : Boolean[2] = (true, false);")
+	wantTriggerSilent(t, "entry action { if (flag, ready) { assign x := 1; } }")
+	wantTriggerSilent(t, "assert constraint { (flag, ready) }")
 }
 
 // `transition ... when <expr>` without `accept` is a change trigger too; a bare

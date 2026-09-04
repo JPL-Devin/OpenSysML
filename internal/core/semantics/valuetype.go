@@ -104,6 +104,14 @@ func (m *Model) exprConformance(scope *symbols.Scope, node ast.Node, want *symbo
 			c.Untyped = true
 		}
 		return c
+	case *ast.SequenceExpr:
+		// `a, b` is the result of BaseFunctions::',', typed Anything.
+		c := m.typeConformance(m.libSymbol(fqnAnything), want)
+		if c.Known && !c.Holds {
+			c.Found = fmt.Sprintf("a sequence of %d elements, typed Anything", len(n.Elements))
+			c.Untyped = true
+		}
+		return c
 	case *ast.ConstructorExpr:
 		if n.Type == nil {
 			return conformanceUnknown()
