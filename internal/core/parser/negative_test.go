@@ -513,6 +513,11 @@ func TestNegativeKerML(t *testing.T) {
 		{"nary_connector_one_end", "package P { feature a; connector c (a); }"},
 		{"nary_connector_end_no_target", "package P { feature a; connector c ([1], a); }"},
 
+		// A binary connector states both ends around `to` (KerML.xtext:836).
+		{"binary_connector_no_second_end", "package P { feature a; connector a to ; }"},
+		{"binary_connector_named_end_no_target", "package P { feature a; feature b; connector e ::> to b; }"},
+		{"binary_connector_name_without_from", "package P { feature a; feature b; connector c : L a to b; }"},
+
 		// A succession states both ends around `then` (KerML.xtext:891).
 		{"succession_declaration_no_then", "package P { behavior B { step a; step b; succession s : L [1] first a b; } }"},
 		{"succession_declaration_no_target", "package P { behavior B { step a; succession s : L [1] first a then ; } }"},

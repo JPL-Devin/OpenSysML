@@ -1933,10 +1933,14 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 	// Check for anonymous succession BEFORE consuming multiplicity
 	var earlyMultiplicity *ast.Multiplicity
 	var isAnonymous bool
-	if kind == ast.UsageSuccession {
+	switch kind {
+	case ast.UsageSuccession:
 		isAnonymous = p.isAnonymousSuccession()
+	case ast.UsageConnector:
+		isAnonymous = p.atConnectorBinaryEnds()
 	}
-	if (kind == ast.UsageSuccession || kind == ast.UsageConnector || kind == ast.UsageFlow) && p.at(lexer.LBracket) {
+	anonymousConnector := kind == ast.UsageConnector && isAnonymous
+	if (kind == ast.UsageSuccession || kind == ast.UsageConnector || kind == ast.UsageFlow) && !anonymousConnector && p.at(lexer.LBracket) {
 		earlyMultiplicity = p.parseMultiplicity()
 	}
 
@@ -1952,7 +1956,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 	skipIdentification := (kind == ast.UsageFlow && (p.atFlowShorthand() || p.atKeyword("from"))) ||
 		(kind == ast.UsageSuccession && isAnonymous) ||
 		(kind == ast.UsageAllocation && p.atAllocateShorthand()) ||
-		(kind == ast.UsageConnector && (p.atKeyword("from") || p.atConnectorChainFirstEnd())) ||
+		(kind == ast.UsageConnector && p.atKeyword("from")) || anonymousConnector ||
 		((kind == ast.UsageConnection || kind == ast.UsageInterface) &&
 			(keyword == "connect" || p.atConnectorShorthandEnds()))
 	atGlobalName := p.at(lexer.Dollar) && p.peekN(1).Kind == lexer.ColonColon
@@ -1980,7 +1984,8 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 	// (KerML.xtext:891, SuccessionDeclaration's FeatureDeclaration alternative).
 	declared := u.Ident.Name != "" || u.Ident.ShortName != "" || len(u.Relationships) > 0
 	skipMultiplicity := ((kind == ast.UsageSuccession || kind == ast.UsageFlow) && !declared && earlyMultiplicity == nil) ||
-		((kind == ast.UsageConnection || kind == ast.UsageInterface) && skipIdentification)
+		((kind == ast.UsageConnection || kind == ast.UsageInterface) && skipIdentification) ||
+		anonymousConnector
 	if !skipMultiplicity {
 		if earlyMultiplicity != nil {
 			u.Multiplicity = earlyMultiplicity
@@ -3586,24 +3591,15 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 	case ast.UsageConnector:
 		// Connector can use four syntaxes:
 		// 1. "connect X to Y" - standard connector ends
-		// 2. "from X to Y" - from/to syntax
-		// 3. "to [mult] target" - single end typing (shorthand)
+		// 2. "[name] from X to Y" - from/to syntax
+		// 3. "X to Y" - anonymous binary ends (KerML.xtext:836 BinaryConnectorDeclaration)
 		// 4. "(X, Y, Z)" - n-ary end list (KerML.xtext:842 NaryConnectorDeclaration)
 		if p.atKeyword("connect") {
 			p.parseConnectorEnds(u, "connect")
 		} else if p.at(lexer.LParen) {
 			p.parseNaryConnectorEnds(u)
-		} else if p.atConnectorChainFirstEnd() {
-			// A feature chain as the first end states the ends after the keyword.
+		} else if !declaresConnector(u) && p.atConnectorBinaryEnds() {
 			p.parseConnectorEnds(u, "")
-		} else if p.atKeyword("to") {
-			// Single-end connector: "connector name to [mult] target"
-			// This is shorthand for a connector with one implicit end
-			p.advance() // consume "to"
-			end := p.parseConnectorEnd()
-			if end != nil {
-				u.ConnectorEnds = append(u.ConnectorEnds, end)
-			}
 		} else {
 			p.parseConnectorFromTo(u)
 		}
@@ -3836,16 +3832,30 @@ func (p *Parser) parseConnectorFromTo(u *ast.Usage) {
 	}
 }
 
-// atConnectorChainFirstEnd reports whether a connector states a feature chain as
-// its first end (`connector f.a to a.g;`), which cannot be its name
-// (KerML.xtext ConnectorEnd:854 over OwnedReferenceSubsetting:699).
-func (p *Parser) atConnectorChainFirstEnd() bool {
-	switch p.peekN(1).Kind {
-	case lexer.Dot, lexer.ColonColon:
+// declaresConnector reports whether a connector stated a declaration of its own
+// (name, specialization or multiplicity), after which ends need `from`.
+func declaresConnector(u *ast.Usage) bool {
+	return u.Ident.Name != "" || u.Ident.ShortName != "" || len(u.Relationships) > 0 || u.Multiplicity != nil
+}
+
+// atConnectorBinaryEnds reports whether a connector states its ends without
+// `from`: `connector a to b`, `connector [0..1] a to b`, `connector e ::> a.x to b`.
+// A name may only precede `from` (KerML.xtext BinaryConnectorDeclaration:836),
+// so the first token here is the first end (ConnectorEnd:854).
+func (p *Parser) atConnectorBinaryEnds() bool {
+	from := p.pastBracketed(0)
+	if p.endThenKeywordAt(from, "to") {
+		return true
+	}
+	switch p.peekN(from).Kind {
+	case lexer.Identifier, lexer.UnrestrictedName:
 	default:
 		return false
 	}
-	return p.atEndThenKeyword("to")
+	if p.peekN(from+1).Kind == lexer.ColonColonGt || p.peekIsKeyword(from+1, "references") {
+		return p.endThenKeywordAt(from+2, "to")
+	}
+	return false
 }
 
 // atEndThenKeyword reports whether the cursor is at a connector end — a name or

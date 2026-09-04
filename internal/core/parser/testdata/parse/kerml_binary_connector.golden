@@ -1,0 +1,75 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="BinaryConnector" library=false standard=false
+      (Membership visibility="default"
+        (Usage kind="class" name="Engine" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="class" name="Tank" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="main" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=Engine
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="class" name="Vehicle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="eng" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=Engine
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="tanks" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=Tank
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="connector" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="eng"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="main"
+                  (FeatureReference name="tanks")))))
+          (Membership visibility="default"
+            (Usage kind="connector" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="eng"
+                (Multiplicity range=true
+                  (LiteralInteger value="0")
+                  (LiteralInteger value="1"))
+                (*ast.QualifiedName))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (Multiplicity range=true
+                  (LiteralInteger value="1")
+                  (LiteralInfinity))
+                (FeatureChainExpr member="main"
+                  (FeatureReference name="tanks")))))
+          (Membership visibility="default"
+            (Usage kind="connector" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="e"
+                (*ast.QualifiedName)
+                (Relationship kind="references" target=eng
+                  (*ast.QualifiedName)))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="main"
+                  (FeatureReference name="tanks")))))
+          (Membership visibility="default"
+            (Usage kind="connector" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="e"
+                (*ast.QualifiedName)
+                (Relationship kind="references" target=eng
+                  (*ast.QualifiedName)))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="main"
+                  (FeatureReference name="tanks")))))
+          (Membership visibility="default"
+            (Usage kind="connector" name="link" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="eng"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="main"
+                  (FeatureReference name="tanks")))))
+          (Membership visibility="default"
+            (Usage kind="connector" name="typed" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Links::BinaryLink
+                (*ast.QualifiedName))
+              (ConnectorEnd target="eng"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (FeatureChainExpr member="main"
+                  (FeatureReference name="tanks"))))))))))

@@ -61,26 +61,51 @@ func (c *multiplicityBoundsChecker) checkBound(scope *symbols.Scope, bound ast.N
 		c.report(bound)
 		return
 	}
-	if _, isInf := bound.(*ast.LiteralInfinity); isInf {
-		return
-	}
-	prim := c.boundPrimType(scope, bound)
-	if prim != semantics.PrimUnknown && !semantics.PrimConforms(prim, semantics.PrimInteger) {
+	if !c.boundIsInteger(scope, bound) {
 		c.report(bound)
 	}
 }
 
-// boundPrimType types a bound expression, reading through a feature the bound
-// names to the value that feature is bound to.
-func (c *multiplicityBoundsChecker) boundPrimType(scope *symbols.Scope, bound ast.Node) semantics.PrimType {
-	silent := &exprChecker{resolver: c.resolver, model: c.model}
-	if w8cIsReference(bound) {
-		if sym, ok := c.resolver.ResolveTarget(scope, bound); ok && sym != nil {
-			return silent.featurePrimType(sym)
+// boundIsInteger reports whether a bound's result may be an Integer: a known
+// result type must conform to Integer (a class-typed feature does not), while
+// an unresolved or untyped bound is left to the tiers that own those gaps.
+func (c *multiplicityBoundsChecker) boundIsInteger(scope *symbols.Scope, bound ast.Node) bool {
+	switch e := bound.(type) {
+	case *ast.LiteralInteger, *ast.LiteralInfinity:
+		return true
+	case *ast.OperatorExpr:
+		if w8cIntegerOperator(e.Operator) {
+			for _, arg := range e.Operands {
+				if !c.boundIsInteger(scope, arg) {
+					return false
+				}
+			}
+			return true
 		}
-		return semantics.PrimUnknown
 	}
-	return silent.infer(scope, bound)
+	silent := &exprChecker{resolver: c.resolver, model: c.model}
+	if !w8cIsReference(bound) {
+		prim := silent.infer(scope, bound)
+		return prim == semantics.PrimUnknown || semantics.PrimConforms(prim, semantics.PrimInteger)
+	}
+	sym, ok := c.resolver.ResolveTarget(scope, bound)
+	if !ok || sym == nil {
+		return true
+	}
+	if prim := silent.featurePrimType(sym); prim != semantics.PrimUnknown {
+		return semantics.PrimConforms(prim, semantics.PrimInteger)
+	}
+	return !c.model.DeclaresResolvedType(sym)
+}
+
+// w8cIntegerOperator reports the arithmetic operators whose result is an
+// Integer whenever every operand is one; division may yield a Rational.
+func w8cIntegerOperator(op ast.OperatorKind) bool {
+	switch op {
+	case ast.OpAdd, ast.OpSub, ast.OpMul, ast.OpMod, ast.OpPow, ast.OpNeg, ast.OpPos:
+		return true
+	}
+	return false
 }
 
 func (c *multiplicityBoundsChecker) report(bound ast.Node) {

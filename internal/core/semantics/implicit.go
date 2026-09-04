@@ -95,6 +95,21 @@ var implicitDefinitionBases = map[ast.DefinitionKind]string{
 	ast.DefUseCase:          "UseCases::UseCase",
 }
 
+// implicitKerMLBinaryBases maps a KerML association keyword to the base a
+// declaration with exactly two ends specializes (KerML 1.1 §8.3.3.5): the binary
+// link rather than the n-ary one of its kind.
+var implicitKerMLBinaryBases = map[string]string{
+	"assoc":       binaryConnectorBaseFQN,
+	"association": binaryConnectorBaseFQN,
+	"interaction": binaryConnectorBaseFQN,
+}
+
+// implicitKerMLBinaryFeatureBases maps a KerML connector keyword to the base
+// feature a connector with exactly two ends subsets (KerML 1.1 §8.3.4.7).
+var implicitKerMLBinaryFeatureBases = map[string]string{
+	"connector": "Links::binaryLinks",
+}
+
 var implicitKerMLBases = map[string]string{
 	"classifier":  "Base::Anything",
 	"class":       occurrenceFQN,
@@ -104,7 +119,7 @@ var implicitKerMLBases = map[string]string{
 	"behavior":    "Performances::Performance",
 	"function":    "Performances::Evaluation",
 	"predicate":   "Performances::BooleanEvaluation",
-	"interaction": "Transfers::Transfer",
+	"interaction": "Links::Link",
 	"metaclass":   "Metaobjects::Metaobject",
 	"datatype":    dataValueFQN,
 	"type":        "Base::Anything",
@@ -165,7 +180,17 @@ func (m *Model) FeatureBaseFQN(sym *symbols.Symbol) (string, bool) {
 		// usage does, which is what types it (SysML v2 §7.3.2).
 		return baseUsageFQN, true
 	}
-	fqn, ok := implicitKerMLFeatureBases[keywordOf(sym)]
+	return kermlFeatureBaseFQN(sym)
+}
+
+// kermlFeatureBaseFQN returns the base feature a KerML feature declaration
+// subsets by its keyword, taking the binary base when it declares two ends.
+func kermlFeatureBaseFQN(sym *symbols.Symbol) (string, bool) {
+	keyword := keywordOf(sym)
+	if fqn, ok := implicitKerMLBinaryFeatureBases[keyword]; ok && len(ownedEnds(sym)) == 2 {
+		return fqn, true
+	}
+	fqn, ok := implicitKerMLFeatureBases[keyword]
 	return fqn, ok
 }
 
@@ -181,6 +206,9 @@ func kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
 	switch d := sym.Decl.(type) {
 	case *ast.Usage:
 		if isKerML {
+			if fqn, ok := implicitKerMLBinaryBases[d.Keyword]; ok && len(ownedEnds(sym)) == 2 {
+				return fqn, true
+			}
 			fqn, ok := implicitKerMLBases[d.Keyword]
 			return fqn, ok
 		}
@@ -202,6 +230,9 @@ func kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
 		return fqn, ok
 	case *ast.Definition:
 		if isKerML {
+			if fqn, ok := implicitKerMLBinaryBases[d.Keyword]; ok && len(ownedEnds(sym)) == 2 {
+				return fqn, true
+			}
 			fqn, ok := implicitKerMLBases[d.Keyword]
 			return fqn, ok
 		}
@@ -367,6 +398,9 @@ func (m *Model) implicitKerMLFeatureBase(sym *symbols.Symbol) *symbols.Symbol {
 	// keyword: `feature f : C` with C a class subsets Occurrences::occurrences.
 	if typed, tok := m.declaredTypeFeatureBase(sym); tok {
 		fqn, ok = typed, true
+	}
+	if binary, bok := implicitKerMLBinaryFeatureBases[usage.Keyword]; bok && len(ownedEnds(sym)) == 2 {
+		fqn, ok = binary, true
 	}
 	if !ok || m.declaredGeneralizationReaches(sym, fqn, nil) {
 		return nil

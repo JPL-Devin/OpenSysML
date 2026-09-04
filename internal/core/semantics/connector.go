@@ -28,7 +28,7 @@ func connectorLike(sym *symbols.Symbol) bool {
 		switch d.Kind {
 		case ast.UsageConnection, ast.UsageInterface, ast.UsageAllocation,
 			ast.UsageConnector, ast.UsageFlow, ast.UsageSuccession,
-			ast.UsageAssoc, ast.UsageBinding:
+			ast.UsageAssoc, ast.UsageInteraction, ast.UsageBinding:
 			return true
 		}
 	}
@@ -97,12 +97,13 @@ func (m *Model) endsOf(sym *symbols.Symbol) []*symbols.Symbol {
 		return out
 	}
 
-	out := ownedEnds(sym)
+	owned := ownedEnds(sym)
+	out := owned
 
 	if general := m.generalConnectorEnds(sym); len(general) > 0 {
-		claimed := claimedEnds(out, general)
-		for _, end := range general {
-			if !claimed[end] {
+		claimed := claimedEnds(owned, general)
+		for i, end := range general {
+			if !endClaimed(end, i, owned, claimed) {
 				out = append(out, end)
 			}
 		}
@@ -110,6 +111,15 @@ func (m *Model) endsOf(sym *symbols.Symbol) []*symbols.Symbol {
 
 	m.ends[sym] = out
 	return out
+}
+
+// endClaimed reports whether the general end at position i is redefined by an
+// owned end: by name, or by position when it has no symbol of its own.
+func endClaimed(end *symbols.Symbol, i int, owned []*symbols.Symbol, claimed map[*symbols.Symbol]bool) bool {
+	if end == nil {
+		return i < len(owned)
+	}
+	return claimed[end]
 }
 
 // claimedEnds returns the ends of general that owned redefines, each by the
@@ -274,6 +284,145 @@ func (m *Model) ConnectorEndCount(sym *symbols.Symbol) int {
 	return count
 }
 
+// BinaryConnectorExcessEnds returns the ends past the second of a connector or
+// association that conforms to Links::BinaryLink yet has more than two
+// effective ends (KerML 1.1 validateAssociationBinarySpecialization,
+// validateConnectorBinarySpecialization), with the effective end count. Each
+// node is an owned end beyond position two, or the declaration itself when only
+// inherited ends take the count past two.
+func (m *Model) BinaryConnectorExcessEnds(sym *symbols.Symbol) ([]ast.Node, int) {
+	if sym == nil || sym.Decl == nil || !connectorLike(sym) {
+		return nil, 0
+	}
+	total := m.ConnectorEndCount(sym)
+	if total <= 2 || !m.IsBinaryConnector(sym) {
+		return nil, total
+	}
+	usage, _ := sym.Decl.(*ast.Usage)
+	var excess []ast.Node
+	for i, end := range ownedEnds(sym) {
+		if i < 2 {
+			continue
+		}
+		switch {
+		case end != nil && end.Decl != nil:
+			excess = append(excess, end.Decl)
+		case usage != nil && i < len(usage.ConnectorEnds) && usage.ConnectorEnds[i] != nil:
+			excess = append(excess, usage.ConnectorEnds[i])
+		}
+	}
+	if len(excess) == 0 {
+		excess = []ast.Node{sym.Decl}
+	}
+	return excess, total
+}
+
+// RelatedFeatureCount returns how many features the ends of the connector sym
+// reference (KerML 1.1 Connector::relatedFeature): the ends of its `connect`,
+// `from`/`to` and binding clauses, its owned end features with a reference
+// clause, and the inherited ends it does not redefine that reference one.
+func (m *Model) RelatedFeatureCount(sym *symbols.Symbol) int {
+	return m.relatedFeatureCount(sym, make(map[*symbols.Symbol]bool))
+}
+
+func (m *Model) relatedFeatureCount(sym *symbols.Symbol, visited map[*symbols.Symbol]bool) int {
+	if sym == nil || visited[sym] {
+		return 0
+	}
+	visited[sym] = true
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || !connectorLike(sym) {
+		return 0
+	}
+	count := ownedRelatedFeatureCount(usage)
+	for _, member := range declMembers(sym) {
+		if end, ok := unwrapUsage(member); ok && end.IsEnd && referencesFeature(end.Relationships) {
+			count++
+		}
+	}
+	owned := ownedEnds(sym)
+	for _, sup := range m.DirectSupertypes(sym) {
+		if !m.isConnectorLike(sup) {
+			continue
+		}
+		// A general connector whose ends occupy no position of their own (`flow
+		// f from a to b`, `binding of a = b`) passes its related features on whole.
+		if _, isUsage := sup.Decl.(*ast.Usage); isUsage && len(owned) == 0 && len(ownedEnds(sup)) == 0 {
+			count += m.relatedFeatureCount(sup, visited)
+			continue
+		}
+		general := m.endsOf(sup)
+		claimed := claimedEnds(owned, general)
+		for i := range general {
+			if !endClaimed(general[i], i, owned, claimed) && m.endReferencesFeature(sup, general, i) {
+				count++
+			}
+		}
+	}
+	return count
+}
+
+// ownedRelatedFeatureCount counts the features the clauses of usage attach its
+// ends to: `connect a to b`, `from a to b`, `bind a = b`.
+func ownedRelatedFeatureCount(usage *ast.Usage) int {
+	count := 0
+	for _, end := range usage.ConnectorEnds {
+		if end.AttachedTarget() != nil {
+			count++
+		}
+	}
+	// `succession then b` states only its target; its source is the member before it.
+	if usage.Kind == ast.UsageSuccession && len(usage.ConnectorEnds) == 1 && count == 1 {
+		count++
+	}
+	if usage.FlowEnds != nil {
+		if usage.FlowEnds.From != nil {
+			count++
+		}
+		if usage.FlowEnds.To != nil {
+			count++
+		}
+	}
+	if usage.Kind == ast.UsageBinding {
+		for _, rel := range usage.Relationships {
+			if rel != nil && rel.Kind == ast.RelReferences && rel.Target != nil {
+				count++
+			}
+		}
+		if usage.Value != nil {
+			count++
+		}
+	}
+	return count
+}
+
+// endReferencesFeature reports whether the end at position i of the effective
+// ends of the connector owner references a feature: through its own reference
+// clause, or as an end of owner's `connect` clause when it has no symbol.
+func (m *Model) endReferencesFeature(owner *symbols.Symbol, ends []*symbols.Symbol, i int) bool {
+	if end := ends[i]; end != nil {
+		switch d := end.Decl.(type) {
+		case *ast.Usage:
+			return referencesFeature(d.Relationships)
+		case *ast.ConnectorEnd:
+			return d.AttachedTarget() != nil
+		}
+		return false
+	}
+	usage, ok := owner.Decl.(*ast.Usage)
+	return ok && i < len(usage.ConnectorEnds) && usage.ConnectorEnds[i].AttachedTarget() != nil
+}
+
+// referencesFeature reports whether rels carry a reference-subsetting clause.
+func referencesFeature(rels []*ast.Relationship) bool {
+	for _, rel := range rels {
+		if rel != nil && rel.Kind == ast.RelReferences && rel.Target != nil {
+			return true
+		}
+	}
+	return false
+}
+
 // IsConnectorUsage reports whether sym declares a connector usage that joins
 // features it names — a `connection`/`interface`/`allocation`/`connector` usage
 // with a `connect … to …` clause. Such a usage is materialized from the
@@ -329,6 +478,10 @@ type ConnectorEndAttachment struct {
 var binaryConnectorEndNames = [2]string{"source", "target"}
 
 const binaryConnectorBaseFQN = "Links::BinaryLink"
+
+// BinaryConnectorBaseFQN is the library base every binary association and
+// connector conforms to.
+const BinaryConnectorBaseFQN = binaryConnectorBaseFQN
 
 // IsBinaryConnector reports whether sym conforms to the library's binary-link
 // base, including through cached/index-only specialization edges.

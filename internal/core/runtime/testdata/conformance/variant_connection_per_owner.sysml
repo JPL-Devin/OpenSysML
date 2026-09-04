@@ -42,10 +42,10 @@ package VariantRouting {
 	}
 
 	part alpha : Router {
-		interface :>> link = link::direct;
+		ref :>> link = link::direct;
 	}
 
 	part beta : Router {
-		interface :>> link = link::indirect;
+		ref :>> link = link::indirect;
 	}
 }

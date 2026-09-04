@@ -78,7 +78,9 @@ func (cc *constraintChecker) check(sym *symbols.Symbol) {
 	cc.checkMultiplicityRange(sym)
 	cc.checkMultiplicityConformance(sym)
 	cc.checkConnectorEnds(sym)
-	cc.checkConnectorEndRedefinition(sym)
+	if !cc.checkBinaryConnectorEnds(sym) {
+		cc.checkConnectorEndRedefinition(sym)
+	}
 	cc.checkFlowEndSubsetting(sym)
 	cc.checkInterfaceEndConjugation(sym)
 	cc.checkRedefinition(sym)
@@ -289,15 +291,53 @@ func (cc *constraintChecker) checkConnectorEnds(sym *symbols.Symbol) {
 				cc.addConnectorEndsDiag(sym, u, "a connection must have at least two ends")
 			}
 		case ast.UsageInterface:
-			if n != 2 && cc.interfaceIsBinary(sym) {
+			if n < 2 && cc.interfaceIsBinary(sym) {
 				cc.addConnectorEndsDiag(sym, u, "an interface connection must be binary (exactly two ends)")
 			}
 		case ast.UsageAllocation:
-			if n != 2 {
+			if n < 2 {
 				cc.addConnectorEndsDiag(sym, u, "an allocation must be binary (exactly two ends)")
 			}
 		}
 	}
+}
+
+// checkBinaryConnectorEnds flags a connector or association that specializes a
+// binary link yet has more than two ends, counting the ends of its `connect`
+// clause, its `end` features and those it inherits (KerML 1.1 §8.3.3.5,
+// §8.3.4.7). Each end past the second is reported; the declaration is when only
+// inherited ends take the count past two. It reports whether it found any.
+func (cc *constraintChecker) checkBinaryConnectorEnds(sym *symbols.Symbol) bool {
+	excess, total := cc.model.BinaryConnectorExcessEnds(sym)
+	if len(excess) == 0 {
+		return false
+	}
+	name := sym.Name
+	if name == "" {
+		name = "this " + connectorKindName(sym)
+	}
+	for _, node := range excess {
+		cc.diags = append(cc.diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     node.Span(),
+			Message: fmt.Sprintf("%s has %d ends but specializes a binary link (%s), which cannot have more than two; "+
+				"drop the extra ends or specialize an n-ary link instead", name, total, semantics.BinaryConnectorBaseFQN),
+			Code:   "connector-ends",
+			Source: "constraint",
+		})
+	}
+	return true
+}
+
+// connectorKindName names the kind of connector sym declares for a diagnostic.
+func connectorKindName(sym *symbols.Symbol) string {
+	switch d := sym.Decl.(type) {
+	case *ast.Definition:
+		return d.Kind.String() + " definition"
+	case *ast.Usage:
+		return d.Kind.String()
+	}
+	return "connector"
 }
 
 func (cc *constraintChecker) interfaceIsBinary(sym *symbols.Symbol) bool {

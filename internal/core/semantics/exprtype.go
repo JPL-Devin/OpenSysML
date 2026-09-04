@@ -3,6 +3,7 @@ package semantics
 import (
 	"math"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -177,6 +178,24 @@ func (m *Model) PrimTypeOf(sym *symbols.Symbol) PrimType {
 	}
 	m.primTypes[sym] = prim
 	return prim
+}
+
+// DeclaresResolvedType reports whether sym's declared typing names at least one
+// type that resolves, distinguishing a feature typed by a class from one that is
+// untyped or whose type is unresolved (which the name-resolution tier reports).
+func (m *Model) DeclaresResolvedType(sym *symbols.Symbol) bool {
+	if m == nil || sym == nil {
+		return false
+	}
+	for _, rel := range RelationshipsOf(sym) {
+		if rel == nil || rel.Kind != ast.RelTyping || rel.Target == nil {
+			continue
+		}
+		if target, ok := m.resolver.ResolveTarget(sym.OwnerScope, rel.Target); ok && target != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // CouldHold reports whether a feature of the given type could hold a value of
