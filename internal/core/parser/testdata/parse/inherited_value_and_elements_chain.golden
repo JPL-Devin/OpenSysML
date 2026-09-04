@@ -6,12 +6,12 @@
       (Membership visibility="default"
         (Definition kind="attribute" abstract=false variation=false name="Cost"
           (Membership visibility="default"
-            (Usage kind="attribute" name="v" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="attribute" name="v" ref=false direction="none" composite=false derived=false ordered=false nonunique=false default=true
               (Relationship kind="typing" target=Real
                 (*ast.QualifiedName))
               (LiteralReal value="5.0")))
           (Membership visibility="default"
-            (Usage kind="attribute" name="w" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="attribute" name="w" ref=false direction="none" composite=false derived=false ordered=false nonunique=false default=true
               (Relationship kind="typing" target=Real
                 (*ast.QualifiedName))
               (LiteralReal value="2.0")))))

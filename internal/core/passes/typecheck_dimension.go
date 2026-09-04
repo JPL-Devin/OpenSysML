@@ -36,11 +36,11 @@ func (ec *exprChecker) checkDimensions(scope *symbols.Scope, e *ast.OperatorExpr
 // target's declared quantity value type does not measure in — a speed bound to
 // a DurationValue, whose mRef the libraries narrow to DurationUnit. A target
 // declaring no quantity kind, and a value stating no measurement, are silent.
-func (ec *exprChecker) checkValueDimension(valueScope, declScope *symbols.Scope, u *ast.Usage, value ast.Node) {
+func (ec *exprChecker) checkValueDimension(valueScope, declScope *symbols.Scope, d featureDecl, value ast.Node) {
 	if ec.model == nil {
 		return
 	}
-	declared := ec.declaredTypeSymbol(declScope, u.Relationships)
+	declared := ec.declaredTypeSymbol(declScope, d.relationships)
 	if declared == nil {
 		return
 	}
