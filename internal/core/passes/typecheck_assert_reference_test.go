@@ -65,9 +65,67 @@ part ctx { `
 
 // An unresolved assert target is the name-resolution tier's finding alone.
 func TestAssertReferenceUnresolvedIsNotAKindError(t *testing.T) {
-	src := "part def Derived; part v : Derived; part ctx { assert missing; assert v.missing; }"
+	src := "part def Derived; part v : Derived; part ctx { assert missing; assert v.missing; }" +
+		" constraint def K { assert missing; assert v.missing; }"
 	if diags := typeDiags(t, src); len(diags) != 0 {
 		t.Errorf("expected no type diagnostics, got %v", diags)
+	}
+}
+
+// In a constraint body `assert c;` is the same reference form, stated by a
+// constraint member rather than a usage, and a bare condition stays a condition.
+func TestAssertReferenceInConstraintBodyToConstraintIsSilent(t *testing.T) {
+	src := `constraint def CD; requirement def RD;
+part def Base { constraint inherited : CD; }
+part def Derived :> Base { constraint c : CD; requirement r : RD; }
+part v : Derived; attribute flag;
+constraint def K {
+	constraint local : CD;
+	assert local;
+	assert not local;
+	assert v.c;
+	assert v.inherited;
+	assert v.r;
+	assert constraint { assert local; }
+	flag
+}
+constraint k : K { assert local; }`
+	if diags := typeDiags(t, src); len(diags) != 0 {
+		t.Errorf("expected no type diagnostics, got %v", diags)
+	}
+}
+
+func TestAssertReferenceInConstraintBodyToNonConstraintRejected(t *testing.T) {
+	tests := []struct {
+		name, target, found string
+	}{
+		{"part usage", "assert p;", "partUsage"},
+		{"negated part usage", "assert not p;", "partUsage"},
+		{"attribute usage", "assert flag;", "attributeUsage"},
+		{"chained part usage", "assert v.p;", "partUsage"},
+		{"chained inherited part", "assert v.bp;", "partUsage"},
+		{"constraint definition", "assert CD;", "constraintDef"},
+		{"part definition", "assert PD;", "partDef"},
+		{"package", "assert Q;", "package"},
+		{"nested body", "assert constraint { assert p; }", "partUsage"},
+		{"constraint usage body", "} constraint k : K { assert p;", "partUsage"},
+	}
+	prefix := `constraint def CD; part def PD; package Q;
+part def Base { part bp; }
+part def Derived :> Base { part p; }
+part v : Derived; part p; attribute flag;
+constraint def K { `
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			diags := typeDiags(t, prefix+tc.target+" }")
+			if len(diags) != 1 {
+				t.Fatalf("expected one type diagnostic, got %v", diags)
+			}
+			want := "assert target must be a constraint usage, found " + tc.found
+			if diags[0].Message != want {
+				t.Errorf("got %q, want %q", diags[0].Message, want)
+			}
+		})
 	}
 }
 

@@ -121,7 +121,14 @@ func (tc *typeChecker) checkOwnedConstraint(scope *symbols.Scope, m ast.Node) {
 func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 	switch m := n.(type) {
 	case *ast.ConstraintMember:
-		tc.expr.checkBoolean(scope, m.Expression, "constraint expression")
+		// `assert [not] c;` in a body states a reference to a constraint usage
+		// (SysML.xtext AssertConstraintUsage), not a condition to be Boolean.
+		if m.Keyword == "assert" && w8cIsReference(m.Expression) {
+			tc.checkTypeTarget(scope, m.Expression, ast.RelReferences,
+				declKind{lang: tc.lang, useKind: ast.UsageConstraint, keyword: m.Keyword, span: m.Span()})
+		} else {
+			tc.expr.checkBoolean(scope, m.Expression, "constraint expression")
+		}
 		tc.walk(symbols.ConstraintBodyScope(scope, m), m.Body)
 	case *ast.AssumeMember:
 		tc.expr.checkBoolean(scope, m.Expression, "assume expression")
