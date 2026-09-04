@@ -49,6 +49,12 @@ func TestInitializeAdvertisesCapabilities(t *testing.T) {
 	if res.Capabilities.WorkspaceSymbolProvider != true {
 		t.Error("WorkspaceSymbolProvider not advertised")
 	}
+	if res.Capabilities.DocumentFormattingProvider != true {
+		t.Error("DocumentFormattingProvider not advertised")
+	}
+	if res.Capabilities.DocumentRangeFormattingProvider != true {
+		t.Error("DocumentRangeFormattingProvider not advertised")
+	}
 	if cp := res.Capabilities.CompletionProvider; cp == nil {
 		t.Error("CompletionProvider not advertised")
 	} else if !reflect.DeepEqual(cp.TriggerCharacters, []string{":", "."}) {
