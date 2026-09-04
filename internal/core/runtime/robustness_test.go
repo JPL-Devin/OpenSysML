@@ -585,6 +585,39 @@ func testBindingMultipleCollectionContributors(t *testing.T) {
 		}
 	})
 
+	// An end stating how many values it links is not met by a feature holding fewer: the
+	// binding is a multiplicity violation, not a whole binding of what there is.
+	t.Run("under_lower_bound", func(t *testing.T) {
+		for name, ends := range map[string]string{"exact": "[2]", "ranged": "[2..3]"} {
+			t.Run(name, func(t *testing.T) {
+				idx, _, ctx := buildRuntime(t, "<binding-under-lower-bound>", parseAndBuild(t, `package P {
+					part def Sys {
+						attribute edges : Integer[*] = (7);
+						attribute pair : Integer[0..3];
+						binding [1] bind `+ends+` edges = `+ends+` pair;
+					}
+				}`))
+				inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+				if err != nil {
+					t.Fatalf("instantiate: %v", err)
+				}
+				_, err = inst.GetFeatureValue(ctx, "pair")
+				if !errors.Is(err, ErrMultiplicityViolation) {
+					t.Fatalf("pair = %v, want ErrMultiplicityViolation", err)
+				}
+				want := "multiplicity violation: `bind " + ends + " edges = " + ends + " pair` links " +
+					ends + " of edges, which holds 1 value(s)"
+				if got := err.Error(); got != want {
+					t.Errorf("error = %q, want %q", got, want)
+				}
+				fv := inst.FeatureValues["pair"]
+				if fv.Materialized || fv.Written || fv.BindingDerived || fv.HeldValue().Kind != ValInvalid {
+					t.Errorf("the refused binding left an assignment behind: %+v", *fv)
+				}
+			})
+		}
+	})
+
 	t.Run("whole_unequal", func(t *testing.T) {
 		idx, _, ctx := buildRuntime(t, "<binding-multiple-collection-conflict>", parseAndBuild(t, `package P {
 			part def Sys {

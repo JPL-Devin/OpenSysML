@@ -270,8 +270,8 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 	return Value{}, false, false, nil, nil
 }
 
-// partialBinding reports an end admitting fewer values than its feature holds, which links
-// one of them per link, not all (KerML 1.0 §7.4.9.2); the end being resolved has none to count yet.
+// partialBinding reports an end admitting fewer values than its feature holds, which links one of them
+// per link (KerML 1.0 §7.4.9.2); a feature holding fewer than an end's lower bound violates multiplicity.
 func (ctx *Context) partialBinding(owner, targetInst *Instance, target *FeatureValue, binding lower.Binding) (bool, error) {
 	for end := range binding.Ends {
 		stated, ok := ctx.model.RangeOf(binding.Ends[end].Multiplicity)
@@ -297,7 +297,13 @@ func (ctx *Context) partialBinding(owner, targetInst *Instance, target *FeatureV
 		if err != nil {
 			return false, err
 		}
-		if count := int64(len(elementsOf(val))); !found || count == 0 || count > stated.Upper.Value {
+		count := int64(len(elementsOf(val)))
+		if found && stated.Lower.Known && count < stated.Lower.Value {
+			return false, fmt.Errorf("%w: `%s` links %s of %s, which holds %d value(s)",
+				ErrMultiplicityViolation, ctx.bindingText(binding), stated.Text(),
+				ctx.bindingEndpointText(binding, end), count)
+		}
+		if !found || count == 0 || count > stated.Upper.Value {
 			return true, nil
 		}
 	}
