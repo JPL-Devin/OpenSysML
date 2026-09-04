@@ -241,6 +241,24 @@ func (tr *TraceRecorder) RecordObjectMaterialized(typeName string, id int64) {
 	tr.entries = append(tr.entries, fmt.Sprintf("materialize: %s #%d", typeName, id))
 }
 
+// RecordOccurrenceCreated records `create` starting an object during a call.
+func (tr *TraceRecorder) RecordOccurrenceCreated(typeName string, id int64) {
+	if !tr.enabled {
+		return
+	}
+
+	tr.entries = append(tr.entries, fmt.Sprintf("create: %s #%d", typeName, id))
+}
+
+// RecordOccurrenceDestroyed records an object ending by `destroy`.
+func (tr *TraceRecorder) RecordOccurrenceDestroyed(typeName string, id int64) {
+	if !tr.enabled {
+		return
+	}
+
+	tr.entries = append(tr.entries, fmt.Sprintf("destroy: %s #%d", typeName, id))
+}
+
 // RecordBehaviorStart records an object's own execution of a behavior its type
 // exhibits or performs starting.
 func (tr *TraceRecorder) RecordBehaviorStart(kind, name string, id int64) {
