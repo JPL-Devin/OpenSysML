@@ -46,6 +46,9 @@ func (s *Server) Rename(ctx context.Context, params *protocol.RenameParams) (*pr
 	if err := validateNewName(params.NewName); err != nil {
 		return nil, err
 	}
+	if c := s.ws.RenameConflict(target.sym, target.name, params.NewName); c != nil {
+		return nil, c
+	}
 
 	changes := map[protocol.DocumentURI][]protocol.TextEdit{}
 	// One name occurrence is edited once however many times it is collected: a

@@ -4,6 +4,7 @@ import (
 	"sort"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/rename"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
@@ -20,12 +21,15 @@ type ReferenceLocation struct {
 
 // refEntry is a segment listed under an element: one it reaches, one whose name it
 // writes (an alias's own name), or both when the name is the element's own.
-// text is the name as written, telling a long-name spelling from a short one.
+// text is the name as written, telling a long-name spelling from a short one;
+// scope and qualifier are where a rename of that name is checked for capture.
 type refEntry struct {
 	ReferenceLocation
-	text    string
-	reached bool
-	named   bool
+	text      string
+	reached   bool
+	named     bool
+	scope     *symbols.Scope
+	qualifier *symbols.Symbol
 }
 
 // refIndex maps every element (by symbols.KeyOf) to the segments in the
@@ -35,12 +39,15 @@ type refIndex struct {
 }
 
 // add records one segment, spelled text, that reaches element and writes name
-// (either may be nil).
-func (x *refIndex) add(doc *Document, seg ast.NameSegment, element, name *symbols.Symbol) {
+// (either may be nil), read in scope after the segment reaching qualifier.
+func (x *refIndex) add(doc *Document, seg ast.NameSegment, scope *symbols.Scope,
+	qualifier, element, name *symbols.Symbol) {
+
 	loc := ReferenceLocation{Doc: doc.Name, Content: doc.Content, Span: seg.Span}
 	put := func(sym *symbols.Symbol, reached, named bool) {
 		key := symbols.KeyOf(sym)
-		x.entries[key] = append(x.entries[key], refEntry{ReferenceLocation: loc, text: seg.Text, reached: reached, named: named})
+		x.entries[key] = append(x.entries[key], refEntry{ReferenceLocation: loc, text: seg.Text,
+			reached: reached, named: named, scope: scope, qualifier: qualifier})
 	}
 	switch {
 	case element == nil && name == nil:
@@ -84,7 +91,11 @@ func (w *Workspace) referenceIndexLocked() *refIndex {
 			elements := segmentElements(r, ref, sel)
 			written := segmentNames(r, ref, sel)
 			for i, part := range ref.QN.Parts {
-				idx.add(doc, part, elements[i], written[i])
+				var qualifier *symbols.Symbol
+				if i > 0 {
+					qualifier = elements[i-1]
+				}
+				idx.add(doc, part, ref.Scope, qualifier, elements[i], written[i])
 			}
 		}
 	}
@@ -122,6 +133,25 @@ func (w *Workspace) referenceLocations(target *symbols.Symbol, keep func(refEntr
 		}
 	}
 	return out
+}
+
+// RenameConflict reports why renaming target's name (long or short, as written)
+// to newName is refused: the name already taken where target is declared, or a
+// reference in any workspace document that would read another element afterwards.
+func (w *Workspace) RenameConflict(target *symbols.Symbol, name, newName string) *rename.Conflict {
+	if target == nil {
+		return nil
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	var occurrences []rename.Occurrence
+	for _, e := range w.referenceIndexLocked().entries[symbols.KeyOf(target)] {
+		if e.named && e.text == name {
+			occurrences = append(occurrences, rename.Occurrence{Span: e.Span, Scope: e.scope, Qualifier: e.qualifier})
+		}
+	}
+	r, _ := w.newResolver()
+	return rename.Check(r, target, name, newName, occurrences)
 }
 
 // segmentElements is the element each segment of a resolved ref reaches (nil where

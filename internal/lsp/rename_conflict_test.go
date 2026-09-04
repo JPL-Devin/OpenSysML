@@ -1,0 +1,155 @@
+package lsp
+
+import (
+	"context"
+	"strings"
+	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/model"
+	"go.lsp.dev/protocol"
+	"go.lsp.dev/uri"
+)
+
+// refuseRename runs Rename and returns the refusal, failing when it succeeds.
+func refuseRename(t *testing.T, ws *model.Workspace, name, cursorAt, newName string) string {
+	t.Helper()
+	got, err := applyRename(t, ws, name, cursorAt, newName)
+	if err == nil {
+		t.Fatalf("rename at %q to %q succeeded:\n%v", cursorAt, newName, got)
+	}
+	return err.Error()
+}
+
+// wantRefusal fails unless the refusal names every want.
+func wantRefusal(t *testing.T, msg string, want ...string) {
+	t.Helper()
+	for _, w := range want {
+		if !strings.Contains(msg, w) {
+			t.Errorf("refusal does not say %q: %s", w, msg)
+		}
+	}
+}
+
+func TestRenameRefusesSiblingLongName(t *testing.T) {
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/collide_long.sysml",
+		"package P {\n\tpart def A;\n\tpart def B;\n\tpart a : A;\n}\n")
+	msg := refuseRename(t, ws, name, "A;", "B")
+	wantRefusal(t, msg, `P::A cannot be renamed to "B"`, "already means P::B")
+}
+
+func TestRenameRefusesSiblingShortName(t *testing.T) {
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/collide_short.sysml",
+		"package P {\n\tpart def A;\n\tpart def <b> Bee;\n\tpart a : A;\n}\n")
+	msg := refuseRename(t, ws, name, "A;", "b")
+	wantRefusal(t, msg, `P::A cannot be renamed to "b"`, "already means P::Bee")
+}
+
+func TestRenameRefusesShortNameOntoTakenName(t *testing.T) {
+	const src = "package P {\n\tpart def <a> Alpha;\n\tpart def <b> Beta;\n\tpart def Gamma;\n\tpart x : a;\n}\n"
+	for _, tt := range []struct{ newName, means string }{
+		{"Gamma", "P::Gamma"},
+		{"b", "P::Beta"},
+		{"Beta", "P::Beta"},
+	} {
+		ws := model.NewWorkspace()
+		name := openRenameDoc(t, ws, "/tmp/collide_short_decl.sysml", src)
+		msg := refuseRename(t, ws, name, "a> Alpha", tt.newName)
+		wantRefusal(t, msg, `P::Alpha cannot be renamed to "`+tt.newName+`"`, "already means "+tt.means)
+	}
+}
+
+func TestRenameRefusesCaptureByInterveningDeclaration(t *testing.T) {
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/capture_nested.sysml",
+		"package P {\n\tpart def Old;\n\tpart def Q {\n\t\tpart def New;\n\t\tpart u : Old;\n\t}\n}\n")
+	msg := refuseRename(t, ws, name, "Old;", "New")
+	wantRefusal(t, msg, `P::Old cannot be renamed to "New"`, "reference to it in P::Q", "would read P::Q::New instead")
+}
+
+func TestRenameRefusesQualifiedSegmentCollision(t *testing.T) {
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/capture_qualified.sysml",
+		"package A {\n\tpart def x;\n\tpart def y;\n}\npackage Q {\n\tpart p : A::x;\n}\n")
+	msg := refuseRename(t, ws, name, "x;\n}", "y")
+	wantRefusal(t, msg, `A::x cannot be renamed to "y"`, "already means A::y")
+}
+
+func TestRenameRefusesQualifiedCaptureThroughImport(t *testing.T) {
+	// The owner declares no `y`, but the reference reaches x through a namespace
+	// that does, so the rewritten segment `Q::y` would read it.
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/capture_qualified_member.sysml",
+		"package P {\n\tpart def x;\n}\npackage Q {\n\timport P::*;\n\tpart def y;\n}\n"+
+			"package R {\n\tpart p : Q::x;\n}\n")
+	msg := refuseRename(t, ws, name, "x;", "y")
+	wantRefusal(t, msg, `P::x cannot be renamed to "y"`, "reference to it in R", "would read Q::y instead")
+}
+
+func TestRenameRefusesCaptureInAnotherDocument(t *testing.T) {
+	ws := model.NewWorkspace()
+	declName := openRenameDoc(t, ws, "/tmp/capture_decl.sysml", "package P {\n\tpart def Old;\n}\n")
+	openRenameDoc(t, ws, "/tmp/capture_uses.sysml",
+		"package Q {\n\timport P::*;\n\tpart def New;\n\tpart u : Old;\n}\n")
+	msg := refuseRename(t, ws, declName, "Old;", "New")
+	wantRefusal(t, msg, `P::Old cannot be renamed to "New"`, "reference to it in Q", "would read Q::New instead")
+}
+
+func TestRenameRefusesShadowingAnOuterName(t *testing.T) {
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/shadow_outer.sysml",
+		"package Demo {\n\tattribute x = 1;\n\tpart def P {\n\t\tattribute y = 2;\n\t\tattribute z = x;\n\t}\n}\n")
+	msg := refuseRename(t, ws, name, "y = 2", "x")
+	wantRefusal(t, msg, `Demo::P::y cannot be renamed to "x"`, "already means Demo::x")
+}
+
+func TestRenameSucceedsWhenNameTakenOnlyInUnrelatedScope(t *testing.T) {
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/unrelated_scope.sysml",
+		"package P {\n\tpart def Old;\n\tpart u : Old;\n}\npackage Other {\n\tpart def New;\n}\n")
+	got, err := applyRename(t, ws, name, "Old;", "New")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	want := "package P {\n\tpart def New;\n\tpart u : New;\n}\npackage Other {\n\tpart def New;\n}\n"
+	if got[name] != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", got[name], want)
+	}
+}
+
+func TestRenameSucceedsWhenOnlySameNameIsTheTargetItself(t *testing.T) {
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/self_redefinition.sysml",
+		"part def Base { part x; }\npart def Derived :> Base { part redefines x; }\n")
+	got, err := applyRename(t, ws, name, "x; }", "y")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	want := "part def Base { part y; }\npart def Derived :> Base { part redefines y; }\n"
+	if got[name] != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", got[name], want)
+	}
+}
+
+// PrepareRename cannot know the new name, so a name whose every rename would be
+// refused is still offered for editing; the refusal comes from Rename.
+func TestPrepareRenameOffersNameWhoseRenameMayCollide(t *testing.T) {
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/prepare_collide.sysml", "package P {\n\tpart def A;\n\tpart def B;\n}\n")
+	s := NewServer(ws)
+	doc := ws.Document(name)
+	off := strings.Index(string(doc.Content), "A;")
+	rng, err := s.PrepareRename(context.Background(), &protocol.PrepareRenameParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+			Position:     offsetToPosition(doc.Content, off),
+		},
+	})
+	if err != nil || rng == nil {
+		t.Fatalf("PrepareRename = %v, %v", rng, err)
+	}
+	if rng.Start.Line != 1 || rng.Start.Character != 10 || rng.End.Character != 11 {
+		t.Fatalf("PrepareRename range = %+v, want the `A` identifier", *rng)
+	}
+}
