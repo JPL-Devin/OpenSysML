@@ -18,6 +18,53 @@ func metadataDiags(t *testing.T, src string) []metadataFinding {
 	return metadataDiagsNamed(t, "<t>.kerml", src)
 }
 
+// A body nested in a metadata body redefines the members of the feature the
+// enclosing declaration redefines, through its type, at every depth and in
+// every spelling; the redefinitions are neither duplicates nor unknown members.
+func TestNestedMetadataBodiesRedefineTheNestedFeatureMembers(t *testing.T) {
+	kerml := `package P {
+	class U { feature d : ScalarValues::Integer; }
+	class T { feature b : ScalarValues::Integer; feature c : U; }
+	metaclass M { feature a : T; }
+	feature f : ScalarValues::Integer;
+	class C {
+		@M { a { b = 1; c { d = 2; } } }
+	}
+	@M about C { :>> a { b = 1; c { d = 2; } } }
+	metadata m : M about C { a { :>> b = 1; c { :>> d = 2; } } }
+	%s
+}`
+	toSysML := strings.NewReplacer(
+		"class U", "attribute def U",
+		"class T", "attribute def T",
+		"class C", "part def C",
+		"metaclass", "metadata def",
+		"feature", "attribute",
+	)
+	for _, tc := range []struct{ member, want string }{
+		{"", ""},
+		{"@M about C { a { c { e = 3; } } }", "metadata-owning-type-feature on e = 3;"},
+		{"@M about C { :>> a { c { :>> f = 3; } } }", "metadata-owning-type-feature on :>> f = 3;"},
+		{"metadata n : M about C { a { c { e = 3; } } }", "metadata-body-feature on e = 3;"},
+		{"metadata n : M about C { :>> a { c { :>> f = 3; } } }", "metadata-body-feature on :>> f = 3;"},
+	} {
+		src := fmt.Sprintf(kerml, tc.member)
+		for name, src := range map[string]string{"nested.kerml": src, "nested.sysml": toSysML.Replace(src)} {
+			var got []string
+			for _, f := range metadataDiagsNamed(t, name, src) {
+				got = append(got, fmt.Sprintf("%s on %s", f.Code, strings.TrimSpace(f.Text)))
+			}
+			var want []string
+			if tc.want != "" {
+				want = []string{tc.want}
+			}
+			if fmt.Sprint(got) != fmt.Sprint(want) {
+				t.Errorf("%s with %q: findings %v, want %v", name, tc.member, got, want)
+			}
+		}
+	}
+}
+
 // metadataDiagsNamed is metadataDiags over a document of the given name, whose
 // extension decides the language it is analyzed as.
 func metadataDiagsNamed(t *testing.T, name, src string) []metadataFinding {

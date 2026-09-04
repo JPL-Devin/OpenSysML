@@ -5,8 +5,9 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// MetadataBodyOwner returns the metadata type whose features an annotation or
-// `metadata m : M { … }` body implicitly redefines (KerML 7.4.7); nil when it does not resolve.
+// MetadataBodyOwner returns the type whose features a metadata body implicitly
+// redefines (KerML 7.4.7): the metadata type of `@M { … }` / `metadata m : M { … }`,
+// or the redefined feature for a body nested in one; nil when it does not resolve.
 func (r *Resolver) MetadataBodyOwner(scope *symbols.Scope) *symbols.Symbol {
 	if scope == nil {
 		return nil
@@ -18,7 +19,7 @@ func (r *Resolver) MetadataBodyOwner(scope *symbols.Scope) *symbols.Symbol {
 		return r.scopeOwner(scope)
 	}
 	owner := scope.Owner()
-	if owner == nil || owner.Kind != symbols.SymbolMetadataUsage || owner.OwnerScope == nil {
+	if owner == nil || owner.OwnerScope == nil {
 		return nil
 	}
 	usage, ok := owner.Decl.(*ast.Usage)
@@ -30,13 +31,36 @@ func (r *Resolver) MetadataBodyOwner(scope *symbols.Scope) *symbols.Symbol {
 	}
 	r.bodyOwners[scope] = nil
 	var resolved *symbols.Symbol
-	r.aside(func() {
-		if types := r.findTypingTargets(owner.OwnerScope, usage.Relationships); len(types) == 1 {
-			resolved = types[0]
-		}
-	})
+	if owner.Kind == symbols.SymbolMetadataUsage {
+		r.aside(func() {
+			if types := r.findTypingTargets(owner.OwnerScope, usage.Relationships); len(types) == 1 {
+				resolved = types[0]
+			}
+		})
+	} else {
+		resolved = r.metadataBodyRedefined(owner, usage)
+	}
 	r.bodyOwners[scope] = resolved
 	return resolved
+}
+
+// metadataBodyRedefined returns the feature a declaration in a metadata body
+// redefines: its `:>>` target when it writes one, else the owner's feature of its name.
+func (r *Resolver) metadataBodyRedefined(sym *symbols.Symbol, usage *ast.Usage) *symbols.Symbol {
+	owner := r.MetadataBodyOwner(sym.OwnerScope)
+	if owner == nil {
+		return nil
+	}
+	if len(redefinesRelationships(usage)) > 0 {
+		if explicit := r.explicitRedefinitions(sym); len(explicit) > 0 {
+			return explicit[0]
+		}
+		return nil
+	}
+	if target := symbols.MetadataBodyTarget(r.model, owner, usage.Ident); target != sym {
+		return target
+	}
+	return nil
 }
 
 // scopeOwner returns the symbol whose members scope contributes to unqualified
