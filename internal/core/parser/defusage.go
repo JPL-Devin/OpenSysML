@@ -583,6 +583,117 @@ func (p *Parser) atKindlessFeatureTyping() bool {
 	return beginsDeclarationTail(next, p.peekN(2))
 }
 
+// atEnumeratedValueDeclaration reports whether the enum-body member ahead is an
+// EnumeratedValue the body loop reads itself: prefixed, anonymous or keywordless.
+func (p *Parser) atEnumeratedValueDeclaration() bool {
+	off := 0
+	if t := p.peek(); t.Kind == lexer.Keyword {
+		switch t.KeywordID {
+		case "public", "private", "protected":
+			off = 1
+		}
+	}
+	end := p.prefixMetadataEndAt(off)
+	prefixed := end > off
+	off = end
+	if t := p.peekN(off); t.Kind == lexer.Keyword && t.KeywordID == "enum" {
+		if prefixed {
+			return true
+		}
+		off++
+		return p.peekN(off).Kind == lexer.Eq || p.peekN(off).Kind == lexer.ColonEq
+	}
+	switch t := p.peekN(off); t.Kind {
+	case lexer.Eq, lexer.ColonEq, lexer.Lt:
+		return true
+	case lexer.Semicolon, lexer.LBrace:
+		return prefixed
+	}
+	if p.atNameAt(off) {
+		off++
+		if endsEnumeratedValueName(p.peekN(off)) {
+			return true
+		}
+	}
+	return p.atFeatureSpecializationPartAt(off)
+}
+
+// atNameAt reports whether the token off positions ahead can begin a name
+// segment, as atName does for the current token.
+func (p *Parser) atNameAt(off int) bool {
+	t := p.peekN(off)
+	switch t.Kind {
+	case lexer.Identifier, lexer.UnrestrictedName:
+		return true
+	case lexer.Keyword:
+		return !p.reservedWord(t.KeywordID)
+	}
+	return false
+}
+
+// endsEnumeratedValueName reports whether t follows the name of an enumerated
+// value that states no specialization: its value, body or `;`.
+func endsEnumeratedValueName(t lexer.Token) bool {
+	switch t.Kind {
+	case lexer.Semicolon, lexer.LBrace, lexer.Eq, lexer.ColonEq:
+		return true
+	case lexer.Keyword:
+		return t.KeywordID == "default"
+	}
+	return false
+}
+
+// prefixMetadataEndAt returns the offset just past the `#Name` prefixes that
+// begin off tokens ahead, reading each name as parseQualifiedNameRelaxed does.
+func (p *Parser) prefixMetadataEndAt(off int) int {
+	for p.peekN(off).Kind == lexer.Hash {
+		off++
+		if p.peekN(off).Kind == lexer.Dollar && p.peekN(off+1).Kind == lexer.ColonColon {
+			off += 2
+		}
+		for {
+			switch p.peekN(off).Kind {
+			case lexer.Identifier, lexer.UnrestrictedName, lexer.Keyword:
+				off++
+			default:
+				return off
+			}
+			if p.peekN(off).Kind != lexer.ColonColon {
+				break
+			}
+			off++
+		}
+	}
+	return off
+}
+
+// atFeatureSpecializationPartAt reports whether the token off positions ahead
+// opens a FeatureSpecializationPart (KerML.xtext): a specialization or a
+// multiplicity. Only such tokens are looked past, since reading beyond a `doc`
+// or `;` would pull the trivia that follows into the current member.
+func (p *Parser) atFeatureSpecializationPartAt(off int) bool {
+	t := p.peekN(off)
+	switch t.Kind {
+	case lexer.LBracket, lexer.ColonGt, lexer.ColonGtGt, lexer.ColonColonGt, lexer.EqGt:
+		return true
+	case lexer.Colon:
+		off++
+		if p.peekN(off).Kind == lexer.Dollar && p.peekN(off+1).Kind == lexer.ColonColon {
+			off += 2
+		}
+		return p.atNameAt(off)
+	case lexer.Keyword:
+		switch t.KeywordID {
+		case "subsets", "references", "crosses", "redefines":
+			return true
+		case "defined", "typed":
+			n := p.peekN(off + 1)
+			return n.Kind == lexer.Keyword && n.KeywordID == "by"
+		}
+	}
+	return false
+}
+
 // atKeywordlessFeature reports whether the cursor is at such a feature, either
 // directly or behind a `var` prefix (`var p : Real;`).
 func (p *Parser) atKeywordlessFeature() bool {
@@ -2305,22 +2416,28 @@ func (p *Parser) parseEnumBody() []ast.Node {
 	body := p.newBodyBuilder()
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		before := p.peek().Span.Offset
-		anonymousValue := p.at(lexer.Eq) || p.at(lexer.ColonEq)
-		if p.atKeyword("enum") &&
-			(p.peekN(1).Kind == lexer.Eq || p.peekN(1).Kind == lexer.ColonEq) {
-			anonymousValue = true
-		}
-		if anonymousValue {
+		// `= 60.0;`, `uncl : Level = 0;`, `<u> uncl;`, `: Level;` and `#M a;` are
+		// enumerated values (SysML.xtext EnumeratedValue), not keyword-less attributes.
+		if p.atEnumeratedValueDeclaration() {
 			start := p.peek().Span.Offset
 			trivia := p.takeTrivia()
-			if p.atKeyword("enum") {
-				p.advance()
+			vis := p.parseVisibility()
+			prefixes := p.parsePrefixMetadata()
+			keyword := ""
+			if p.acceptKeyword("enum") {
+				keyword = "enum"
 			}
-			u := &ast.Usage{Kind: ast.UsageEnumeration}
-			p.parseUsageValue(u)
-			p.expect(lexer.Semicolon, "expected ';' after enumerated value")
-			u.NodeSpan = p.spanFrom(start)
-			m := &ast.Membership{Member: u}
+			var u *ast.Usage
+			if p.at(lexer.Eq) || p.at(lexer.ColonEq) {
+				u = &ast.Usage{Kind: ast.UsageEnumeration, Keyword: keyword, Visibility: vis}
+				p.parseUsageValue(u)
+				p.expect(lexer.Semicolon, "expected ';' after enumerated value")
+				u.NodeSpan = p.spanFrom(start)
+			} else {
+				u = p.parseUsage(start, ast.UsageEnumeration, keyword, featureMods{visibility: vis}, false)
+			}
+			u.Prefixes = prefixes
+			m := &ast.Membership{Visibility: vis, Member: u}
 			m.NodeSpan = p.spanFrom(start)
 			m.SetLeadingTrivia(trivia)
 			body.add(m)

@@ -29,6 +29,10 @@ func Notation(node Node) string {
 		return "state"
 	case *SubjectMember:
 		return "subject"
+	case *AssumeMember:
+		return "assume constraint"
+	case *RequireMember:
+		return "require constraint"
 	case *TransitionMember:
 		return "transition"
 	case *PseudostateNode:

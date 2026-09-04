@@ -60,22 +60,10 @@ func (s *Server) Rename(ctx context.Context, params *protocol.RenameParams) (*pr
 	declDoc := s.ws.Document(target.DocName)
 	addEdit(target.DocName, declDoc.Content, target.NameSpan)
 
-	// Every reference, in every document, at whichever segment denotes target.
-	for _, docName := range s.ws.DocumentNames() {
-		doc := s.ws.Document(docName)
-		if doc == nil || doc.Scope == nil {
-			continue
-		}
-		for _, ref := range collectRefs(doc.AST, doc.Scope) {
-			// The name each segment writes, so an alias use is rewritten by
-			// renaming the alias and not by renaming its target.
-			segs := s.ws.ResolveReferenceNameSegmentsInDoc(docName, ref)
-			for i, seg := range segs {
-				if symbols.SameElement(seg, target) {
-					addEdit(docName, doc.Content, ref.QN.Parts[i].Span)
-				}
-			}
-		}
+	// Every segment, in every document, that writes target's name: an alias use
+	// is rewritten by renaming the alias and not by renaming its target.
+	for _, ref := range s.ws.NameReferencesTo(target) {
+		addEdit(ref.Doc, ref.Content, ref.Span)
 	}
 	return &protocol.WorkspaceEdit{Changes: changes}, nil
 }

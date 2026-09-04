@@ -121,19 +121,21 @@ func joinPath(segments []string) string {
 }
 
 // valueOf returns the finite sort and the value a reference to an enumeration
-// literal or a variant stands for.
+// literal or a variant stands for. An enumerated value is a variant of its
+// enumeration, whose sort is the enumeration's rather than a variation point's.
 func (t *translator) valueOf(sym *symbols.Symbol) (Sort, string, bool) {
-	if variation := t.model.VariationPointOwning(sym); variation != nil {
-		return t.datatype(variation, t.model.VariantsOf(variation)), t.fqn(sym), true
-	}
 	if enum := semantics.EnumerationOwning(sym); enum != nil {
-		return t.datatype(enum, t.model.LiteralsOf(enum)), t.fqn(sym), true
+		return t.datatype(enum, t.model.LiteralsOf(enum), false), t.fqn(sym), true
+	}
+	if variation := t.model.VariationPointOwning(sym); variation != nil {
+		return t.datatype(variation, t.model.VariantsOf(variation), true), t.fqn(sym), true
 	}
 	return Sort{}, "", false
 }
 
-// datatype declares, once per definition, the finite sort its values range over.
-func (t *translator) datatype(origin *symbols.Symbol, values []*symbols.Symbol) Sort {
+// datatype declares, once per definition, the finite sort its values range over;
+// variation marks the sort of a variation point rather than of an enumeration.
+func (t *translator) datatype(origin *symbols.Symbol, values []*symbols.Symbol, variation bool) Sort {
 	name := t.fqn(origin)
 	if sort, ok := t.sorts[name]; ok {
 		return sort
@@ -142,7 +144,7 @@ func (t *translator) datatype(origin *symbols.Symbol, values []*symbols.Symbol) 
 		Kind:      SortDatatype,
 		Name:      name,
 		Origin:    t.fqn(origin),
-		Variation: t.model.IsVariationFeature(origin),
+		Variation: variation,
 	}
 	for _, value := range values {
 		sort.Values = append(sort.Values, t.fqn(value))
@@ -219,14 +221,14 @@ func (t *translator) sortOf(
 		if len(variants) == 0 {
 			return Sort{}, "", t.refuse(node, written, "the variation point offers no variant")
 		}
-		return t.datatype(t.variationDeclaring(sym, variants), variants), "", nil
+		return t.datatype(t.variationDeclaring(sym, variants), variants, true), "", nil
 	}
 	if enum := t.enumerationTypeOf(sym); enum != nil {
 		literals := t.model.LiteralsOf(enum)
 		if len(literals) == 0 {
 			return Sort{}, "", t.refuse(node, written, "its enumeration declares no literal")
 		}
-		return t.datatype(enum, literals), "", nil
+		return t.datatype(enum, literals, false), "", nil
 	}
 	switch t.model.PrimTypeOf(sym) {
 	case semantics.PrimBoolean:
