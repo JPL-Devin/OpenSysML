@@ -69,7 +69,7 @@ func describeDecl(decl ast.Node) string {
 	switch decl.(type) {
 	case *ast.Definition:
 		return articleFor(written) + " " + written
-	case *ast.Usage:
+	case *ast.Usage, *ast.AssumeMember, *ast.RequireMember:
 		return articleFor(written) + " " + written + " usage"
 	case nil:
 		return "nothing"

@@ -757,14 +757,14 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 				fmt.Sprintf("  = %s", formatValue(ctx, val)),
 			}, nil
 		}
-		usage, ok := sym.Decl.(*ast.Usage)
-		if !ok {
+		// A valueless usage may still name a value its own features shape.
+		if _, isUsage := sym.Decl.(*ast.Usage); !isUsage && !declaresValue(sym) {
 			return nil, fmt.Errorf("%q has no value to evaluate", expr)
 		}
 		// Read as the declaration is read: in its own scope, against its declared type.
 		val, err := ctx.EvalDeclaredValue(sym)
 		if err != nil {
-			if usage.Value == nil && errors.Is(err, runtime.ErrNoValue) {
+			if !declaresValue(sym) && errors.Is(err, runtime.ErrNoValue) {
 				return nil, fmt.Errorf("%q has no value to evaluate", expr)
 			}
 			return nil, fmt.Errorf("evaluation failed: %w", err)
@@ -839,6 +839,16 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 		fmt.Sprintf("✓ %s", expr),
 		fmt.Sprintf("  = %s", formatValue(ctx, val)),
 	}, nil
+}
+
+// declaresValue reports whether sym's declaration binds a value of its own: a
+// usage's `= expr`, or the value a require/assume constraint binds.
+func declaresValue(sym *symbols.Symbol) bool {
+	if oc, ok := ast.OwnedConstraintOf(sym.Decl); ok {
+		return oc.Value != nil
+	}
+	usage, ok := sym.Decl.(*ast.Usage)
+	return ok && usage.Value != nil
 }
 
 // readsFeature reports whether an expression is a bare read (a name or a chain

@@ -770,6 +770,24 @@ func TestEvalArrayShapedByItsFeatures(t *testing.T) {
 	wants(t, run(t, s, "%eval Grid::bare"), "has no value to evaluate")
 }
 
+// A require/assume constraint binding a value reads that value, as a constraint
+// usage's `= expr` does; one binding none holds no value to evaluate.
+func TestEvalReadsRequirementConstraintValues(t *testing.T) {
+	s := NewSession()
+	s.Submit(`package Demo {
+		constraint plain = false;
+		requirement def R {
+			require constraint failed = false;
+			assume constraint granted = true;
+			require constraint bare;
+		}
+	}`)
+	wants(t, run(t, s, "%eval Demo::plain"), "= false")
+	wants(t, run(t, s, "%eval Demo::R::failed"), "= false")
+	wants(t, run(t, s, "%eval Demo::R::granted"), "= true")
+	wants(t, run(t, s, "%eval Demo::R::bare"), "has no value to evaluate")
+}
+
 // The namespace the session works in is the last one it declared, so declaring
 // another moves it: the earlier package is then reached by qualified name.
 func TestPromptScopeIsTheLastNamespaceDeclared(t *testing.T) {
