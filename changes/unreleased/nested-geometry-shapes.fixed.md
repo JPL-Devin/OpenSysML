@@ -34,7 +34,9 @@
   their union, counted as one sequence against the end's multiplicity — while each object keeps
   the part it holds on its own and one holding nothing of its own is a typed error naming the
   collection, not a partition the runtime picked; and `bind [m] a = [m] b` now states `m` as the
-  first end's multiplicity, as `binding [1] bind [m] a = [m] b` always did. Only an
+  first end's multiplicity, as `binding [1] bind [m] a = [m] b` always did, and the RDF mapping
+  carries each end's multiplicity as bounds on its end node, so `bind [0..1] a = [0..1] b` and
+  `connect [1] a to [0..1] b` come back from the graph without their source text. Only an
   argument a calc's returns pass on is held by the feature its call values, so reading any
   other argument computes neither that feature nor the object the call does return. An optional
   feature holding nothing is the empty sequence on every surface: `%features box` prints

@@ -1103,28 +1103,50 @@ func (e *encoder) bindingEnds(subject rdf.Term, owner string, n *ast.Usage) {
 		if end == nil {
 			continue
 		}
-		e.bindingEnd(subject, owner, fmt.Sprintf("end%d", i), i, "", end.Target)
+		e.bindingEnd(subject, owner, fmt.Sprintf("end%d", i), i, "", end.Target, end.Multiplicity)
 	}
 	if n.FlowEnds != nil {
-		e.bindingEnd(subject, owner, "flowSource", 0, "source", n.FlowEnds.From)
-		e.bindingEnd(subject, owner, "flowTarget", 1, "target", n.FlowEnds.To)
-		e.bindingEnd(subject, owner, "flowPayload", -1, "payload", n.FlowEnds.Payload)
+		e.bindingEnd(subject, owner, "flowSource", 0, "source", n.FlowEnds.From, nil)
+		e.bindingEnd(subject, owner, "flowTarget", 1, "target", n.FlowEnds.To, nil)
+		e.bindingEnd(subject, owner, "flowPayload", -1, "payload", n.FlowEnds.Payload, nil)
+	}
+	// `bind [m] a = [n] b` relates the features it references and its value node.
+	if n.Kind == ast.UsageBinding && len(n.ConnectorEnds) == 0 {
+		index := 0
+		for _, rel := range n.Relationships {
+			if rel == nil || rel.Kind != ast.RelReferences || rel.Target == nil {
+				continue
+			}
+			e.bindingEnd(subject, owner, fmt.Sprintf("end%d", index), index, "", rel.Target, rel.Multiplicity)
+			index++
+		}
+		if n.Value != nil {
+			value := rdf.ExpressionIRI(subject, pValue)
+			e.graph.Add(subject, e.sysx(xRelatedFeature), value)
+			e.endMarks(value, owner, index, "", n.ValueMultiplicity)
+		}
 	}
 }
 
 // bindingEnd emits one end as an expression node, tagged with its position.
-func (e *encoder) bindingEnd(subject rdf.Term, owner, slot string, index int, role string, target ast.Node) {
+func (e *encoder) bindingEnd(subject rdf.Term, owner, slot string, index int, role string, target ast.Node, mult *ast.Multiplicity) {
 	if target == nil {
 		return
 	}
 	e.expression(subject, e.sysx(xRelatedFeature), slot, owner, target)
-	end := rdf.ExpressionIRI(subject, slot)
+	e.endMarks(rdf.ExpressionIRI(subject, slot), owner, index, role, mult)
+}
+
+// endMarks tags an end node with its position, role and the bounds of the
+// multiplicity written ahead of it (`connect [1] a to [0..1] b`).
+func (e *encoder) endMarks(end rdf.Term, owner string, index int, role string, mult *ast.Multiplicity) {
 	if index >= 0 {
 		e.graph.Add(end, e.sysx(xEndIndex), rdf.Int(index))
 	}
 	if role != "" {
 		e.graph.Add(end, e.sysx(xEndRole), rdf.String(role))
 	}
+	e.multiplicity(end, owner, mult)
 }
 
 func (e *encoder) sysml(name string) rdf.Term { return rdf.SysMLTerm(name) }
@@ -1441,6 +1463,9 @@ func headNodes(n *ast.Usage) []ast.Node {
 	if n.Multiplicity != nil {
 		add(n.Multiplicity)
 	}
+	if n.ValueMultiplicity != nil {
+		add(n.ValueMultiplicity)
+	}
 	if n.CrossFeature != nil {
 		add(n.CrossFeature)
 	}
@@ -1452,6 +1477,9 @@ func headNodes(n *ast.Usage) []ast.Node {
 	for _, rel := range n.Relationships {
 		if rel != nil {
 			add(rel, rel.Target)
+			if rel.Multiplicity != nil {
+				add(rel.Multiplicity)
+			}
 		}
 	}
 	for _, end := range n.ConnectorEnds {
