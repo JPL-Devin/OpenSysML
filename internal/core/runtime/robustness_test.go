@@ -629,6 +629,99 @@ func testBindingMultipleCollectionContributors(t *testing.T) {
 		}
 	})
 
+	// An end that makes the binding partial does not excuse the other end from its
+	// lower bound, whichever end is read.
+	t.Run("under_lower_bound_beyond_partial_end", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-under-lower-bound-beyond-partial>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute edges : Integer[*];
+				attribute pair : Integer[0..3] = (5);
+				binding [1] bind [2] edges = [2] pair;
+			}
+		}`))
+		want := "multiplicity violation: `bind [2] edges = [2] pair` links [2] of pair, which holds 1 value(s)"
+		for _, order := range [][]string{{"edges", "pair"}, {"pair", "edges"}} {
+			inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+			if err != nil {
+				t.Fatalf("instantiate: %v", err)
+			}
+			for _, feature := range order {
+				_, err := inst.GetFeatureValue(ctx, feature)
+				if !errors.Is(err, ErrMultiplicityViolation) {
+					t.Fatalf("%v: %s = %v, want ErrMultiplicityViolation", order, feature, err)
+				}
+				if got := err.Error(); got != want {
+					t.Errorf("%v: %s error = %q, want %q", order, feature, got, want)
+				}
+			}
+			fv := inst.FeatureValues["edges"]
+			if fv.Written || fv.BindingDerived || fv.HeldValue().Kind != ValInvalid {
+				t.Errorf("%v: the refused binding left an assignment behind: %+v", order, *fv)
+			}
+		}
+	})
+
+	// Ends requiring a value are not met by two optional features holding none: the
+	// binding links nothing, a multiplicity violation rather than an unknown value or a
+	// cycle. Once anything values the features — a default, another binding — it is whole.
+	t.Run("empty_required_ends", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-empty-required-ends>", parseAndBuild(t, `package P {
+			part def Empty {
+				attribute a : Integer[0..1];
+				attribute b : Integer[0..1];
+				binding [1] bind [1] a = [1] b;
+			}
+			part def Defaulted {
+				attribute a : Integer[0..1] = 5;
+				attribute b : Integer[0..1];
+				binding [1] bind [1] a = [1] b;
+			}
+			part def Joined {
+				attribute a : Integer[0..1];
+				attribute b : Integer[0..1];
+				attribute c : Integer[0..1] = 5;
+				binding [1] bind [1] a = [1] b;
+				binding [1] bind [1] a = [1] c;
+			}
+		}`))
+		want := "multiplicity violation: `bind [1] a = [1] b` links [1] of a, which holds 0 value(s)"
+		for _, order := range [][]string{{"a", "b"}, {"b", "a"}} {
+			inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Empty"))
+			if err != nil {
+				t.Fatalf("instantiate: %v", err)
+			}
+			for _, feature := range order {
+				_, err := inst.GetFeatureValue(ctx, feature)
+				if !errors.Is(err, ErrMultiplicityViolation) {
+					t.Fatalf("Empty %v: %s = %v, want ErrMultiplicityViolation", order, feature, err)
+				}
+				if got := err.Error(); got != want {
+					t.Errorf("Empty %v: %s error = %q, want %q", order, feature, got, want)
+				}
+			}
+		}
+		for def, orders := range map[string][][]string{
+			"P::Defaulted": {{"a", "b"}, {"b", "a"}},
+			"P::Joined":    {{"a", "b", "c"}, {"b", "a", "c"}, {"c", "b", "a"}},
+		} {
+			for _, order := range orders {
+				inst, err := ctx.Instantiate(oneSymbol(t, idx, def))
+				if err != nil {
+					t.Fatalf("instantiate: %v", err)
+				}
+				for _, feature := range order {
+					fv, err := inst.GetFeatureValue(ctx, feature)
+					if err != nil {
+						t.Fatalf("%s %v: %s: %v", def, order, feature, err)
+					}
+					if got := fv.HeldValue(); got.Kind != ValConst || got.Const.Int != 5 {
+						t.Errorf("%s %v: %s = %s, want 5", def, order, feature, FormatValue(got))
+					}
+				}
+			}
+		}
+	})
+
 	t.Run("whole_unequal", func(t *testing.T) {
 		idx, _, ctx := buildRuntime(t, "<binding-multiple-collection-conflict>", parseAndBuild(t, `package P {
 			part def Sys {

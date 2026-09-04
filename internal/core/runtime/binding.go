@@ -72,9 +72,12 @@ type bindingEndpoint struct {
 }
 
 type bindingAttempt struct {
-	value         Value
-	found         bool
-	contributor   string
+	value       Value
+	found       bool
+	contributor string
+	// settled reports that no end waits on a resolution in progress, so an
+	// unfound value means the binding links nothing.
+	settled       bool
 	cycle         bool
 	cycleFeatures []string
 	assignment    *bindingAssignment
@@ -160,14 +163,13 @@ func (ctx *Context) resolveBindingValue(inst *Instance, name string) (Value, boo
 	// A binding linking one unspecified value determines nothing, so it is reported
 	// only once no binding at any level determines the feature.
 	var undetermined *UndeterminedBindingError
+	var unmet []lower.Binding
 	path := name
 	for current := inst; current != nil; {
 		bindings := ctx.bindingsOf(current, path)
 		if len(bindings) != 0 {
 			ctx.resolvingBindings[key] = true
-			value, found, cycle, cycleFeatures, err := ctx.resolveBindingSet(
-				current, inst, target, path, bindings, key,
-			)
+			result, err := ctx.resolveBindingSet(current, inst, target, path, bindings, key)
 			delete(ctx.resolvingBindings, key)
 			var partial *UndeterminedBindingError
 			if errors.As(err, &partial) {
@@ -176,11 +178,15 @@ func (ctx *Context) resolveBindingValue(inst *Instance, name string) (Value, boo
 				}
 				err = nil
 			}
-			if err != nil || found {
-				return value, found, err
+			if err != nil || result.found {
+				return result.value, result.found, err
 			}
-			if cycle {
-				return Value{}, false, &BindingCycleError{Features: cycleFeatures}
+			unmet = append(unmet, result.unmet...)
+			if len(result.cycleFeatures) != 0 {
+				if err := ctx.unmetBindingCounts(unmet); err != nil {
+					return Value{}, false, err
+				}
+				return Value{}, false, &BindingCycleError{Features: result.cycleFeatures}
 			}
 		}
 		owner, ownerFeature := current.Owner()
@@ -190,21 +196,58 @@ func (ctx *Context) resolveBindingValue(inst *Instance, name string) (Value, boo
 		path = ownerFeature + "." + path
 		current = owner
 	}
+	if err := ctx.unmetBindingCounts(unmet); err != nil {
+		return Value{}, false, err
+	}
 	if undetermined != nil {
 		return Value{}, false, undetermined
 	}
 	return Value{}, false, nil
 }
 
+// bindingSetResult is what the bindings of one owner determine about a feature.
+type bindingSetResult struct {
+	value         Value
+	found         bool
+	cycleFeatures []string
+	// unmet are the whole bindings that determined nothing, so their ends link no value.
+	unmet []lower.Binding
+}
+
+// unmetBindingCounts refuses a whole binding whose ends link no value while one
+// of them requires some: the feature and its other end both hold nothing.
+func (ctx *Context) unmetBindingCounts(unmet []lower.Binding) error {
+	for _, binding := range unmet {
+		if err := ctx.wholeBindingCounts(binding, Value{}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// claimBinding marks the binding as the one resolving key, so its own probe of the
+// other end is not mistaken for a genuine cycle; the returned func releases the claim.
+func (ctx *Context) claimBinding(key featureValueRef, decl *ast.Usage) func() {
+	previousOwner, hadOwner := ctx.bindingOwners[key]
+	ctx.bindingOwners[key] = decl
+	return func() {
+		if hadOwner {
+			ctx.bindingOwners[key] = previousOwner
+		} else {
+			delete(ctx.bindingOwners, key)
+		}
+	}
+}
+
 func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *FeatureValue,
-	endpointName string, bindings []lower.Binding, key featureValueRef) (Value, bool, bool, []string, error) {
-	var cycleFeatures []string
+	endpointName string, bindings []lower.Binding, key featureValueRef) (bindingSetResult, error) {
+	var result bindingSetResult
 	var attempts []bindingAttempt
 	var undetermined *UndeterminedBindingError
 	for _, binding := range bindings {
-		partial, err := ctx.partialBinding(owner, targetInst, target, binding)
+		partial, err := ctx.partialBinding(owner, targetInst, target, binding, key)
 		if err != nil {
-			return Value{}, false, false, nil, err
+			return result, err
 		}
 		if partial {
 			// A binding of one unspecified value per end constrains the ends without
@@ -220,27 +263,31 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 		}
 		attempt := ctx.attemptBinding(owner, targetInst, target, binding, key)
 		if attempt.err != nil {
-			return Value{}, false, false, nil, attempt.err
+			return result, attempt.err
 		}
 		if attempt.cycle {
-			cycleFeatures = attempt.cycleFeatures
+			result.cycleFeatures = attempt.cycleFeatures
 		}
-		if attempt.found {
-			if err := ctx.wholeBindingCounts(binding, attempt.value); err != nil {
-				return Value{}, false, false, nil, err
+		if !attempt.found {
+			if attempt.settled {
+				result.unmet = append(result.unmet, binding)
 			}
-			if end := bindingEndForPath(binding, endpointName); end >= 0 {
-				attempt.contributor = ctx.bindingEndpointText(binding, 1-end)
-			}
-			attempts = append(attempts, attempt)
+			continue
 		}
+		if err := ctx.wholeBindingCounts(binding, attempt.value); err != nil {
+			return result, err
+		}
+		if end := bindingEndForPath(binding, endpointName); end >= 0 {
+			attempt.contributor = ctx.bindingEndpointText(binding, 1-end)
+		}
+		attempts = append(attempts, attempt)
 	}
 	// Every binding of the whole feature identifies it with its other end, so
 	// two of them must agree on its values, a sequence like a scalar.
 	if len(attempts) > 1 {
 		for _, attempt := range attempts[1:] {
 			if !valueEqual(attempts[0].value, attempt.value) {
-				return Value{}, false, false, nil, &BindingConflictError{
+				return result, &BindingConflictError{
 					Target:     bindingLocationText(bindingLocation{instance: targetInst, name: key.feature}),
 					Left:       attempts[0].contributor,
 					Right:      attempt.contributor,
@@ -259,24 +306,24 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 		if err := ctx.assignBindingEndpoint(
 			assignment.endpoint, assignment.value, assignment.binding, assignment.end,
 		); err != nil {
-			return Value{}, false, false, nil, err
+			return result, err
 		}
 	}
 	if len(attempts) != 0 {
-		return attempts[0].value, true, false, nil, nil
+		result.value, result.found = attempts[0].value, true
+		return result, nil
 	}
-	if len(cycleFeatures) != 0 {
-		return Value{}, false, true, cycleFeatures, nil
+	if len(result.cycleFeatures) == 0 && undetermined != nil {
+		return result, undetermined
 	}
-	if undetermined != nil {
-		return Value{}, false, false, nil, undetermined
-	}
-	return Value{}, false, false, nil, nil
+	return result, nil
 }
 
 // partialBinding reports an end admitting fewer values than its feature holds, which links one of them
 // per link (KerML 1.0 §7.4.9.2); a feature holding fewer than an end's lower bound violates multiplicity.
-func (ctx *Context) partialBinding(owner, targetInst *Instance, target *FeatureValue, binding lower.Binding) (bool, error) {
+func (ctx *Context) partialBinding(owner, targetInst *Instance, target *FeatureValue,
+	binding lower.Binding, key featureValueRef) (bool, error) {
+	defer ctx.claimBinding(key, binding.Decl)()
 	partial := false
 	for end := range binding.Ends {
 		stated, ok := ctx.model.RangeOf(binding.Ends[end].Multiplicity)
@@ -302,7 +349,16 @@ func (ctx *Context) partialBinding(owner, targetInst *Instance, target *FeatureV
 		if !narrows && !required {
 			continue
 		}
-		val, found, err := ctx.bindingEndpointValue(endpoint, owner, false)
+		// The end being resolved counts what it holds on its own: reading it through
+		// its bindings is this very resolution, and cannot make the binding whole.
+		carries := bindingLocationCarries(loc, target, targetInst)
+		var val Value
+		var found bool
+		if carries {
+			val, found, err = ctx.ownEndpointValue(loc)
+		} else {
+			val, found, err = ctx.bindingEndpointValue(endpoint, owner, false)
+		}
 		if err != nil {
 			return false, err
 		}
@@ -310,19 +366,24 @@ func (ctx *Context) partialBinding(owner, targetInst *Instance, target *FeatureV
 		if found && required && count < stated.Lower.Value {
 			return false, ctx.bindingEndCountError(binding, end, stated, count)
 		}
-		if !narrows {
-			continue
-		}
-		// The end being resolved holds only what it was given on its own, which
-		// cannot make the binding whole from its side.
-		if bindingLocationCarries(loc, target, targetInst) {
-			return true, nil
-		}
-		if !found || count == 0 || count > stated.Upper.Value {
+		if narrows && (carries || !found || count == 0 || count > stated.Upper.Value) {
 			partial = true
 		}
 	}
 	return partial, nil
+}
+
+// ownEndpointValue is what a feature holds without resolving its bindings: its
+// written, defaulted or already-assigned value.
+func (ctx *Context) ownEndpointValue(loc bindingLocation) (Value, bool, error) {
+	fv := loc.instance.FeatureValues[loc.name]
+	if !fv.Materialized && !fv.BindingDerived && ctx.CompositeTypeOf(fv.Feature) == nil {
+		if _, err := loc.instance.materializeFeatureValueIntrinsic(ctx, loc.name); err != nil {
+			return Value{}, false, err
+		}
+	}
+	val := fv.HeldValue()
+	return val, val.Kind != ValInvalid, nil
 }
 
 // wholeBindingCounts checks the value a whole binding identifies its ends with
@@ -371,15 +432,7 @@ func bindingEndForPath(binding lower.Binding, path string) int {
 
 func (ctx *Context) attemptBinding(owner, targetInst *Instance, target *FeatureValue,
 	binding lower.Binding, key featureValueRef) (attempt bindingAttempt) {
-	previousOwner, hadOwner := ctx.bindingOwners[key]
-	ctx.bindingOwners[key] = binding.Decl
-	defer func() {
-		if hadOwner {
-			ctx.bindingOwners[key] = previousOwner
-		} else {
-			delete(ctx.bindingOwners, key)
-		}
-	}()
+	defer ctx.claimBinding(key, binding.Decl)()
 
 	left, err := ctx.resolveBindingEndpoint(owner, binding, 0)
 	if err != nil {
@@ -398,6 +451,7 @@ func (ctx *Context) attemptBinding(owner, targetInst *Instance, target *FeatureV
 	if !leftCarries && !rightCarries {
 		return attempt
 	}
+	attempt.settled = !ctx.resolvingBindingEnd(left, leftCarries) && !ctx.resolvingBindingEnd(right, rightCarries)
 
 	// Read the other end first: an object it already holds is what the
 	// materializing end becomes, not a fresh object of its own.
@@ -486,6 +540,14 @@ func (ctx *Context) attemptBinding(owner, targetInst *Instance, target *FeatureV
 		}
 	}
 	return attempt
+}
+
+// resolvingBindingEnd reports an end other than the one being resolved whose own
+// resolution is in progress, so what it holds is not yet known.
+func (ctx *Context) resolvingBindingEnd(endpoint bindingEndpoint, carries bool) bool {
+	loc := endpoint.location
+	return !carries && loc.instance != nil &&
+		ctx.resolvingBindings[featureValueRef{instance: loc.instance.ID, feature: loc.name}]
 }
 
 func (ctx *Context) genuineBindingCycle(ref featureValueRef, binding *ast.Usage) bool {
