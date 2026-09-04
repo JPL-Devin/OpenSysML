@@ -35,8 +35,8 @@
   },
   "totals": {
     "cases": 225,
-    "bothReject": 195,
-    "pilotOnlyRejects": 22,
+    "bothReject": 196,
+    "pilotOnlyRejects": 21,
     "oursOnlyRejects": 8,
     "bothAccept": 0
   },
@@ -65,8 +65,8 @@
     {
       "source": "semantic",
       "cases": 97,
-      "bothReject": 73,
-      "pilotOnlyRejects": 16,
+      "bothReject": 74,
+      "pilotOnlyRejects": 15,
       "oursOnlyRejects": 8,
       "bothAccept": 0
     },
@@ -1388,12 +1388,9 @@
       "source": "semantic",
       "rule": "a constructor expression cannot bind the same feature twice (KerML 8.3.4.8 validateConstructorExpressionNoDuplicateFeatureRedefinition; pilot validateConstructorExpressionNoDuplicateFeatureRedefinition).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 6: Feature already bound"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/k35-metadata-annotates-wrong-kind.kerml",
@@ -2250,8 +2247,8 @@
     ],
     "totals": {
       "cases": 225,
-      "bothReject": 195,
-      "pilotOnlyRejects": 22,
+      "bothReject": 196,
+      "pilotOnlyRejects": 21,
       "oursOnlyRejects": 8,
       "bothAccept": 0
     },

@@ -20,7 +20,7 @@ the diagnostic it reports was recorded as that row's probe.
 
 ## Summary
 
-**Census:** 108 of 217 named constraints are reported by OpenSysML — 97 ✅ faithful and 11 ⚠️ approximate; 27 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 82 ❔ unknown.
+**Census:** 110 of 217 named constraints are reported by OpenSysML — 99 ✅ faithful and 11 ⚠️ approximate; 25 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 82 ❔ unknown.
 
 The figures on that line, and the pin and digest quoted above, are written by
 `go run ./cmd/validation-census` from the baseline; `-check` fails on a hand-edited figure or
@@ -99,7 +99,7 @@ parser/resolver location. *Our message* is given only where OpenSysML's wording 
 | `validateConnectorBinarySpecialization` | KerML | A connector with more than two ends cannot specialize a binary connector (`Cannot have more than two ends`) | — | — | none | ❌ not implemented |
 | `validateConnectorRelatedFeatures` | KerML | A connector has at least two related features | internal/core/passes/w10b_related_elements.go:W10BRelatedElementsPass.Run | same wording; a parenthesized KerML end list with one end is a parse error (`expected at least two connector ends in a parenthesized end list`) | `xpect/p20-connection-with-one-end.sysml` | ✅ faithful |
 | `validateConnectorTypeFeaturing` | KerML | A connector's related features are accessible from its featuring type | internal/core/passes/w8d_connector_featuring.go:W8DConnectorFeaturingPass.Run | — | none | ✅ faithful |
-| `validateConstructorExpressionNoDuplicateFeatureRedefinition` | KerML | A constructor expression binds each feature of the instantiated type at most once (`Feature already bound`) | — | — | none | ❌ not implemented |
+| `validateConstructorExpressionNoDuplicateFeatureRedefinition` | KerML | A constructor expression binds each feature of the instantiated type at most once (`Feature already bound`) | internal/core/passes/typecheck_expr.go:inferConstructor | `C binds feature "x" twice` — the duplicate is found by the resolved feature (an alias, a qualified name or an inherited feature naming the same feature counts), reported at the second binding | `semantic/k34-constructor-feature-bound-twice.kerml` | ✅ faithful |
 | `validateConstructorExpressionOwnedFeatures` | KerML | Each argument of a constructor expression corresponds to one feature of the instantiated type | — | — | none | ❌ not implemented |
 | `validateCrossSubsettingCrossedFeature` | KerML | A cross subsetting chains through an opposite end feature | internal/core/passes/w10b_cross_features.go:checkW10BCrossFeatures | — | none | ✅ faithful |
 | `validateCrossSubsettingCrossingFeature` | KerML | A cross subsetting is owned by one of two or more end features | — | — | none | ❔ unknown — no case and no identifiable pass yet |
@@ -145,7 +145,7 @@ parser/resolver location. *Our message* is given only where OpenSysML's wording 
 | `validateInstantiationExpressionInstantiatedType` | KerML | An instantiation expression names an instantiated type; a probe fails name resolution first in both tools | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateInstantiationExpressionResult` | KerML | An instantiation expression owns its result parameter | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateInvocationExpressionInstantiatedType` | KerML | An invocation expression invokes a behavior or a behavioral feature | internal/core/passes/typecheck_expr.go:inferInvocation | — | none | ✅ faithful |
-| `validateInvocationExpressionNoDuplicateParameterRedefinition` | KerML | An invocation expression binds each parameter at most once (`Parameter already bound`) | — | — | none | ❌ not implemented |
+| `validateInvocationExpressionNoDuplicateParameterRedefinition` | KerML | An invocation expression binds each parameter at most once (`Parameter already bound`) | internal/core/passes/typecheck_expr.go:checkNamedArguments | `F binds parameter "x" twice` — the duplicate is found by the resolved parameter (a positional argument followed by a named binding of the same parameter, an alias or a redefining name count), reported at the second binding | `semantic/k33-parameter-bound-twice.kerml` | ✅ faithful |
 | `validateInvocationExpressionOwnedFeatures` | KerML | Each owned feature of an invocation expression is an in parameter (`Must be an in parameter`); no model made the pilot report it | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateInvocationExpressionParameterRedefinition` | KerML | Each named argument of an invocation redefines one input parameter of the invoked type (`Must correspond to one input parameter of the invoked type`) | internal/core/passes/typecheck_expr.go:checkArguments | `F has no parameter named "y"` | none | ⚠️ approximate |
 | `validateLibraryPackageNotStandard` | KerML | A user library package is not marked standard (warning) | internal/core/passes/w9c_owned_name_and_library.go:W9CUserStandardLibraryPass.Run | — | none | ✅ faithful |

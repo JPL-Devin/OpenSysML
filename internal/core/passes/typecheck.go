@@ -137,6 +137,12 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 		tc.expr.infer(scope, m.Expression)
 	case *ast.PerformActionNode:
 		tc.expr.checkPerform(scope, m)
+	case *ast.SendStatement:
+		// A payload constructed with `new` binds features of its type; a call as
+		// payload names a signal by its parameters and is not an arity-checked call.
+		if constructed, ok := m.Message.(*ast.ConstructorExpr); ok {
+			tc.expr.infer(scope, constructed)
+		}
 	case *ast.SubjectMember:
 		tc.checkSubjectMember(scope, m)
 	default:
