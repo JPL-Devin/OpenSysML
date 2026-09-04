@@ -701,14 +701,23 @@ the flat sequence of its elements:
   `CartesianThreeVectorValue` when its dimension is 3 (`structuredValueType`,
   `write_conformance.go`), so it binds to a feature typed by any of these and
   `CartesianThreeVectorOf` with two components is `ErrMultiplicityViolation`.
-  A structured value written to a feature typed by a *specialization* of its
-  own type is admitted only when the shape that type fixes holds — a
-  `dimension`, `dimensions`, `rank` or `flattenedSize` it redefines to a
-  constant, the multiplicity of its `dimensions`, and the type its `elements`
-  are declared of (`structuredConforms`, `shapeRefusal`, `elementsConform`) —
-  so a two-component vector does not bind to `CartesianThreeVectorValue`, nor a
-  2×3 Array to a type fixing `dimensions = (2, 2)`, and the refusal names the
-  declaration it fails (`it declares dimension = 3`).
+  A structured value written to a feature typed by any other *specialization*
+  of its kind's base type — `Collections::Array` for an Array (the type of the
+  object it was read from, for one that keeps its own members),
+  `NumericalVectorValue` for a vector, `VectorQuantityValue` for a vector
+  quantity (`structuredBaseType`) — is admitted only when the shape that type
+  fixes holds: a `dimension`, `dimensions`, `rank` or `flattenedSize` it
+  redefines to a constant, the multiplicity of its `dimensions`, and the type
+  its `elements` are declared of (`structuredConforms`, `shapeRefusal`,
+  `elementsConform`). So a two-component vector does not bind to
+  `CartesianThreeVectorValue` or `ThreeVectorValue`, nor a 2×3 Array to a type
+  fixing `dimensions = (2, 2)`, and the refusal names the declaration it fails
+  (`it declares dimension = 3`); while `VectorOf((1, 2, 3))` binds to a model's
+  own `attribute def IntegerVector :> NumericalVectorValue { :>> elements :
+  Integer; }` — a sibling of the Cartesian types, not a specialization — and
+  `VectorOf((1, 2.5, 3))` does not
+  (`calc_library_vector_custom_specialization*` conformance,
+  `testStructuredValueOutsideTheDeclaredShape`).
   A sequence of numbers written where a vector parameter is declared
   (`inner((1, 2), (3, 4))`) is still read as a vector — the pilot's
   `VectorOf((1,2,3))` argument form — while a sequence given several vectors'

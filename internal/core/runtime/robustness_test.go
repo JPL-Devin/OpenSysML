@@ -1591,7 +1591,8 @@ func testBaseIndexWithSeveralIndexes(t *testing.T) {
 
 // testStructuredValueOutsideTheDeclaredShape: a type specializing Array or a
 // vector type fixes a shape or element type, so a value of another shape or
-// element type is refused, while one that fits is held.
+// element type is refused, while one that fits is held — including by a
+// NumericalVectorValue specialization beside the Cartesian ones.
 func testStructuredValueOutsideTheDeclaredShape(t *testing.T) {
 	src := `
 		package test {
@@ -1604,6 +1605,9 @@ func testStructuredValueOutsideTheDeclaredShape(t *testing.T) {
 			attribute def IntArray :> Array { :>> elements : Integer; }
 			attribute def Fixed3 :> CartesianThreeVectorValue;
 			attribute def OneDim :> NumericalVectorValue;
+			attribute def IntVec :> NumericalVectorValue { :>> elements : Integer; }
+			attribute def IntThree :> ThreeVectorValue { :>> elements : Integer; }
+			attribute def Fixed2 :> NumericalVectorValue { :>> dimension = 2; }
 			attribute square : Array { :>> dimensions = (2, 2); :>> elements = (1, 2, 3, 4); }
 			attribute wide : Array { :>> dimensions = (2, 3); :>> elements = (1, 2, 3, 4, 5, 6); }
 			attribute row : Array { :>> dimensions = 4; :>> elements = (1, 2, 3, 4); }
@@ -1612,6 +1616,17 @@ func testStructuredValueOutsideTheDeclaredShape(t *testing.T) {
 			calc def TwoAsFixed3 { return : Fixed3 = VectorOf((1.0, 2.0)); }
 			calc def ThreeAsThree { return : CartesianThreeVectorValue = VectorOf((1.0, 2.0, 3.0)); }
 			calc def ThreeAsFixed3 { return : Fixed3 = VectorOf((1.0, 2.0, 3.0)); }
+			calc def TwoAsThreeVector { return : ThreeVectorValue = VectorOf((1, 2)); }
+			calc def ThreeAsThreeVector { return : ThreeVectorValue = VectorOf((1, 2, 3)); }
+			calc def IntsAsIntVec { return : IntVec = VectorOf((1, 2)); }
+			calc def RealsAsIntVec { return : IntVec = VectorOf((1.5, 2.0)); }
+			calc def IntsAsIntThree { return : IntThree = VectorOf((1, 2, 3)); }
+			calc def TwoAsIntThree { return : IntThree = VectorOf((1, 2)); }
+			calc def RealsAsIntThree { return : IntThree = VectorOf((1.5, 2.0, 3.0)); }
+			calc def TwoAsFixed2 { return : Fixed2 = VectorOf((1.0, 2.0)); }
+			calc def ThreeAsFixed2 { return : Fixed2 = VectorOf((1.0, 2.0, 3.0)); }
+			calc def VectorAsGrid { return : Grid = VectorOf((1, 2, 3, 4)); }
+			calc def VectorAsString { return : String = VectorOf((1, 2)); }
 			calc def WideAsGrid { return : Grid = wide; }
 			calc def SquareAsGrid { return : Grid = square; }
 			calc def SquareAsRow4 { return : Row4 = square; }
@@ -1622,12 +1637,19 @@ func testStructuredValueOutsideTheDeclaredShape(t *testing.T) {
 		}
 	`
 	for calc, fixes := range map[string]string{
-		"TwoAsThree":      "it declares dimension = 3",
-		"TwoAsFixed3":     "it declares dimension = 3",
-		"WideAsGrid":      "it declares dimensions = [2, 2]",
-		"SquareAsRow4":    "it declares rank = 1",
-		"SquareAsOneDim":  "it declares dimension : Positive[0..1], got 2 dimension(s)",
-		"RealsAsIntArray": "it declares elements : Integer, got element 1.5 (a Real)",
+		"TwoAsThree":       "it declares dimension = 3",
+		"TwoAsFixed3":      "it declares dimension = 3",
+		"TwoAsThreeVector": "it declares dimension = 3",
+		"TwoAsIntThree":    "it declares dimension = 3",
+		"ThreeAsFixed2":    "it declares dimension = 2",
+		"RealsAsIntVec":    "it declares elements : Integer, got element 1.5 (a Real)",
+		"RealsAsIntThree":  "it declares elements : Integer, got element 1.5 (a Real)",
+		"VectorAsGrid":     "cannot write ⟨1, 2, 3, 4⟩ (vector) to a feature typed by Grid",
+		"VectorAsString":   "cannot write ⟨1, 2⟩ (vector) to a feature typed by String",
+		"WideAsGrid":       "it declares dimensions = [2, 2]",
+		"SquareAsRow4":     "it declares rank = 1",
+		"SquareAsOneDim":   "it declares dimension : Positive[0..1], got 2 dimension(s)",
+		"RealsAsIntArray":  "it declares elements : Integer, got element 1.5 (a Real)",
 	} {
 		err := calcErrorWithLibraries(t, src, calc, nil, 10000)
 		if !errors.Is(err, ErrTypeMismatch) || !strings.Contains(err.Error(), fixes) {
@@ -1635,11 +1657,15 @@ func testStructuredValueOutsideTheDeclaredShape(t *testing.T) {
 		}
 	}
 	for calc, want := range map[string]string{
-		"ThreeAsThree":  "⟨1.0, 2.0, 3.0⟩",
-		"ThreeAsFixed3": "⟨1.0, 2.0, 3.0⟩",
-		"SquareAsGrid":  "Array(2, 2)[1, 2, 3, 4]",
-		"RowAsRow4":     "Array(4)[1, 2, 3, 4]",
-		"RowAsIntArray": "Array(4)[1, 2, 3, 4]",
+		"ThreeAsThree":       "⟨1.0, 2.0, 3.0⟩",
+		"ThreeAsFixed3":      "⟨1.0, 2.0, 3.0⟩",
+		"ThreeAsThreeVector": "⟨1, 2, 3⟩",
+		"IntsAsIntVec":       "⟨1, 2⟩",
+		"IntsAsIntThree":     "⟨1, 2, 3⟩",
+		"TwoAsFixed2":        "⟨1.0, 2.0⟩",
+		"SquareAsGrid":       "Array(2, 2)[1, 2, 3, 4]",
+		"RowAsRow4":          "Array(4)[1, 2, 3, 4]",
+		"RowAsIntArray":      "Array(4)[1, 2, 3, 4]",
 	} {
 		idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
 		sym, scope := calcByName(t, idx.DocumentRoot("<test>"), "test", calc)

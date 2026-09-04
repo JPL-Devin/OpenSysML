@@ -181,7 +181,8 @@ func TestElementBudgetBoundsStructuredValueReads(t *testing.T) {
 	}
 	// The Array object is materialized ahead of the budgeted runs, so what a run
 	// charges is only what reading the value costs. A vector is built by its run:
-	// v costs 6 (the literal and the vector), vq costs 9 (and the quantity).
+	// v costs 6 (the literal and the vector), vq costs 9 (and the quantity);
+	// cartesianZeroVector costs 9: three vectors of 1, 2 and 3 axes, grouped.
 	if _, err := evalIn(t, ctx, pkg.Scope, "grid.rank"); err != nil {
 		t.Fatalf("grid.rank: %v", err)
 	}
@@ -201,6 +202,8 @@ func TestElementBudgetBoundsStructuredValueReads(t *testing.T) {
 		{"vq.dimension", 9},
 		{"vq.num", 12},
 		{"CollectionFunctions::head(vq)", 12},
+		{"cartesianZeroVector", 9},
+		{"cartesianZeroVector#(3)", 9},
 	} {
 		if tc.fits > 0 {
 			ctx.maxElements = tc.fits - 1

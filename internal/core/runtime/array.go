@@ -205,6 +205,7 @@ const (
 const (
 	arrayTypeFQN                = "Collections::Array"
 	vectorTypeFQN               = "VectorValues::VectorValue"
+	numericalVectorTypeFQN      = "VectorValues::NumericalVectorValue"
 	cartesianVectorTypeFQN      = "VectorValues::CartesianVectorValue"
 	cartesianThreeVectorTypeFQN = "VectorValues::CartesianThreeVectorValue"
 	vectorQuantityTypeFQN       = "Quantities::VectorQuantityValue"
@@ -265,8 +266,9 @@ func (ctx *Context) answerSequence(elements []Value) (Value, bool, error) {
 	return seq, true, err
 }
 
-// structuredValueType is the library type a structured value is of: an Array, a
-// Cartesian (three-)vector, a vector quantity.
+// structuredValueType is the most specific library type a structured value is
+// of: the object it was read from or an Array, a Cartesian (three-)vector, a
+// vector quantity.
 func (ctx *Context) structuredValueType(value Value) (*symbols.Symbol, error) {
 	var fqn string
 	switch value.Kind {
@@ -286,9 +288,37 @@ func (ctx *Context) structuredValueType(value Value) (*symbols.Symbol, error) {
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUndeterminedValueType, value.Kind)
 	}
+	return ctx.loadedLibraryType(fqn)
+}
+
+// structuredBaseType is the type a structured value is of whatever its shape:
+// Array, NumericalVectorValue, VectorQuantityValue, or the type of the object an
+// Array was read from. A specialization of it may hold the value when the shape
+// it fixes holds.
+func (ctx *Context) structuredBaseType(value Value) (*symbols.Symbol, error) {
+	var fqn string
+	switch value.Kind {
+	case ValArray:
+		if inst, ok := ctx.instances[value.Array().Object]; ok {
+			return ctx.objectType(inst), nil
+		}
+		fqn = arrayTypeFQN
+	case ValVector:
+		fqn = numericalVectorTypeFQN
+	case ValVectorQuantity:
+		fqn = vectorQuantityTypeFQN
+	default:
+		return nil, fmt.Errorf("%w: %s", ErrUndeterminedValueType, value.Kind)
+	}
+	return ctx.loadedLibraryType(fqn)
+}
+
+// loadedLibraryType is the library type of the given name, an error if the
+// library declaring it is not loaded.
+func (ctx *Context) loadedLibraryType(fqn string) (*symbols.Symbol, error) {
 	sym := ctx.librarySymbol(fqn)
 	if sym == nil {
-		return nil, fmt.Errorf("%w: direct type %q is not loaded", ErrUndeterminedValueType, fqn)
+		return nil, fmt.Errorf("%w: type %q is not loaded", ErrUndeterminedValueType, fqn)
 	}
 	return sym, nil
 }

@@ -199,17 +199,20 @@ func isStructuredValue(value *Value) bool {
 	return value.Kind == ValArray || value.Kind == ValVector || value.Kind == ValVectorQuantity
 }
 
-// structuredConforms judges a written array, vector or vector quantity. Its
-// direct type is the library type its shape makes it, so a target specializing
-// that type may hold it only if the shape and element type the target fixes
-// hold; a vector quantity's axes are judged as quantityConforms judges a scalar.
+// structuredConforms judges a written array, vector or vector quantity: held by
+// its direct type's supertypes, or by a specialization of its kind's base type
+// whose fixed shape and element type it fits; vector quantity axes as scalars.
 func (ctx *Context) structuredConforms(scope *symbols.Scope, value Value, declared *symbols.Symbol) (bool, string, error) {
 	direct, err := ctx.structuredValueType(value)
 	if err != nil {
 		return false, "", err
 	}
 	if !ctx.model.Conforms(direct, declared) {
-		if !ctx.model.Conforms(declared, direct) {
+		base, err := ctx.structuredBaseType(value)
+		if err != nil {
+			return false, "", err
+		}
+		if !ctx.model.Conforms(declared, base) {
 			return false, "", nil
 		}
 		if refusal := ctx.shapeRefusal(value, declared); refusal != "" {

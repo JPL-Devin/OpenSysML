@@ -775,7 +775,7 @@ func init() {
 			}
 			zeros[i] = vec
 		}
-		return sequenceOf(zeros), nil
+		return ctx.newSequence(zeros)
 	})
 }
 
