@@ -1,0 +1,76 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="RequirementMemberShortNames" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="metadata" abstract=false variation=false name="M"))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="T"))
+      (Membership visibility="default"
+        (Definition kind="constraint" abstract=false variation=false name="C"))
+      (Membership visibility="default"
+        (Definition kind="requirement" abstract=false variation=false name="R1"
+          (SubjectMember name="<s> x" type="T")
+          (AssumeMember constraint="<a> ac"
+            (Relationship kind="typing" target=C
+              (*ast.QualifiedName)))
+          (RequireMember constraint="<r> rc"
+            (Relationship kind="typing" target=C
+              (*ast.QualifiedName)))))
+      (Membership visibility="default"
+        (Definition kind="requirement" abstract=false variation=false name="R2"
+          (SubjectMember name="<s>" type="T")
+          (AssumeMember constraint="<a>"
+            (Relationship kind="typing" target=C
+              (*ast.QualifiedName)))
+          (RequireMember constraint="<r>"
+            (Relationship kind="typing" target=C
+              (*ast.QualifiedName)))))
+      (Membership visibility="default"
+        (Definition kind="requirement" abstract=false variation=false name="R3"
+          (SubjectMember name="<s> x" type="T" default=true
+            (PrefixMetadata type="M")
+            (Multiplicity range=false
+              (LiteralInteger value="1"))
+            (Relationship kind="redefines" target=R1::s
+              (*ast.QualifiedName))
+            (Documentation locale=""))
+          (AssumeMember constraint="<a> ac"
+            (PrefixMetadata type="M")
+            (Relationship kind="typing" target=C
+              (*ast.QualifiedName))
+            (Multiplicity range=false
+              (LiteralInteger value="1"))
+            (LiteralBool value=true))
+          (RequireMember constraint="<r> rc"
+            (PrefixMetadata type="M")
+            (Relationship kind="typing" target=C
+              (*ast.QualifiedName))
+            (Multiplicity range=false
+              (LiteralInteger value="1"))
+            (LiteralBool value=true)
+            (ConstraintMember assert=true negated=false
+              (OperatorExpr operator="!="
+                (FeatureReference name="x")
+                (NullExpr))))))
+      (Membership visibility="default"
+        (Definition kind="requirement" abstract=false variation=false name="R5"
+          (Relationship kind="specializes" target=R1
+            (*ast.QualifiedName))
+          (SubjectMember name="" type=""
+            (Relationship kind="redefines" target=s
+              (*ast.QualifiedName)))
+          (AssumeMember
+            (Relationship kind="redefines" target=a
+              (*ast.QualifiedName)))
+          (RequireMember constraint="<r2>"
+            (Relationship kind="redefines" target=r
+              (*ast.QualifiedName)))))
+      (Membership visibility="default"
+        (Definition kind="requirement" abstract=false variation=false name="R4"
+          (SubjectMember name="<s>" type="")
+          (AssumeMember constraint="<a>"
+            (ConstraintMember assert=true negated=false
+              (LiteralBool value=true)))
+          (RequireMember constraint="<r>"
+            (ConstraintMember assert=true negated=false
+              (LiteralBool value=true))))))))

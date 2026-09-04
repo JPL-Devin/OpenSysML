@@ -101,6 +101,9 @@ var builtinSignatures = map[string][]declaredParam{
 // invokeBuiltin binds the arguments of a call to the built-in name to its
 // declared parameters and applies fn to them.
 func (ec *EvalContext) invokeBuiltin(name string, fn builtinFunc, exprs []ast.Node, named []ast.NamedArg) (Value, error) {
+	outer := ec.entered
+	ec.entered = ec.ctx.activations
+	defer func() { ec.entered = outer }()
 	return tracedBuiltin(ec.trace, name,
 		func() ([]Value, error) { return ec.bindBuiltinArgs(name, exprs, named) },
 		func(args []Value) (Value, error) { return fn(ec, args) },

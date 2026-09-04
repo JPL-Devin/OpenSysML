@@ -99,12 +99,7 @@ func (r *Resolver) bindsEffectiveName(sym *symbols.Symbol) bool {
 	if sym == nil || !sym.EffectiveName {
 		return true
 	}
-	var rel *ast.Relationship
-	if oc, ok := ast.OwnedConstraintOf(sym.Decl); ok {
-		rel = oc.NamingFeature()
-	} else if usage, ok := sym.Decl.(*ast.Usage); ok {
-		rel = ast.NamingFeature(usage)
-	}
+	rel := ast.DeclNamingFeature(sym.Decl)
 	if rel == nil || rel.Kind != ast.RelRedefines {
 		return true
 	}
@@ -308,6 +303,7 @@ func (r *Resolver) importsOf(node ast.Node) []*ast.Import {
 		return imports
 	}
 	imports := importsOf(node)
+	journalNew(r, r.imports, node, node)
 	r.imports[node] = imports
 	return imports
 }

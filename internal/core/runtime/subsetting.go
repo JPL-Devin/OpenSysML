@@ -152,7 +152,7 @@ func (ctx *Context) aliasRedefinedFeatureValues(inst *Instance) error {
 		byName[features[i].Name] = &features[i]
 	}
 
-	for _, names := range ctx.redefinitionGroups(inst.Type, features) {
+	for _, names := range ctx.redefinitionGroups(inst.Type) {
 		chosen, err := ctx.sharedRedefinitionName(inst, byName, names)
 		if err != nil {
 			return err
@@ -168,8 +168,13 @@ func (ctx *Context) aliasRedefinedFeatureValues(inst *Instance) error {
 // redefinitionGroups groups the names of typ's features by the feature they name,
 // in feature order, keeping only names that share a feature with another. Each
 // group's names are ordered from the most specific declaration to the least,
-// which is the order the features are computed in.
-func (ctx *Context) redefinitionGroups(typ *symbols.Symbol, features []EffectiveFeature) [][]string {
+// which is the order the features are computed in. The answer is memoized per
+// type; callers read it and never write it.
+func (ctx *Context) redefinitionGroups(typ *symbols.Symbol) [][]string {
+	if groups, ok := ctx.redefGroups[typ]; ok {
+		return groups
+	}
+	features := ctx.FeaturesOf(typ)
 	declared := make(map[string]bool, len(features))
 	for _, feat := range features {
 		declared[feat.Name] = true
@@ -214,6 +219,7 @@ func (ctx *Context) redefinitionGroups(typ *symbols.Symbol, features []Effective
 		index[root] = len(groups)
 		groups = append(groups, []string{feat.Name})
 	}
+	ctx.redefGroups[typ] = groups
 	return groups
 }
 
@@ -221,7 +227,7 @@ func (ctx *Context) redefinitionGroups(typ *symbols.Symbol, features []Effective
 // feature called name: name itself and every name redefinition makes one with it.
 func (ctx *Context) redefinitionAliases(typ *symbols.Symbol, name string) map[string]bool {
 	aliases := map[string]bool{name: true}
-	for _, names := range ctx.redefinitionGroups(typ, ctx.FeaturesOf(typ)) {
+	for _, names := range ctx.redefinitionGroups(typ) {
 		for _, n := range names {
 			if n != name {
 				continue
@@ -266,7 +272,17 @@ func (ctx *Context) sharedRedefinitionName(inst *Instance, byName map[string]*Ef
 // directly or through a redefinition of a redefinition: a restated redefinition
 // still declares the feature at the end of the chain (KerML 1.0 §7.3.4.5).
 func (ctx *Context) redefinedNames(sym, owner *symbols.Symbol) []string {
-	var names []string
+	features := ctx.redefinedFeatures(sym, owner)
+	names := make([]string, 0, len(features))
+	for _, feat := range features {
+		names = append(names, feat.Name)
+	}
+	return names
+}
+
+// redefinedFeatures is redefinedNames by symbol.
+func (ctx *Context) redefinedFeatures(sym, owner *symbols.Symbol) []*symbols.Symbol {
+	var features []*symbols.Symbol
 	seen := map[*symbols.Symbol]bool{sym: true}
 	for queue := []*symbols.Symbol{sym}; len(queue) > 0; {
 		cur := queue[0]
@@ -283,11 +299,11 @@ func (ctx *Context) redefinedNames(sym, owner *symbols.Symbol) []string {
 				continue
 			}
 			seen[redefined] = true
-			names = append(names, redefined.Name)
+			features = append(features, redefined)
 			queue = append(queue, redefined)
 		}
 	}
-	return names
+	return features
 }
 
 // SubsettingFeatures returns the features of typ subsetting the named feature under any

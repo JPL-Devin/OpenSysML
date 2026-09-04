@@ -1,0 +1,15 @@
+{
+  "type": "instance",
+  "libraries": true,
+  "trace": true,
+  "instantiate": "test::Robot",
+  "slots": {
+    "createdIsFresh": {"type": "Boolean", "value": true},
+    "freshDuringGo": {"type": "Boolean", "value": true},
+    "armDuring": {"type": "Boolean", "value": true},
+    "goDuring": {"type": "Boolean", "value": true},
+    "freshDuringWork": {"type": "Boolean", "value": true},
+    "spareCount": {"type": "Integer", "value": 1},
+    "armAfter": {"type": "Boolean", "value": false}
+  }
+}

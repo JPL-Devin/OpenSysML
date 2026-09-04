@@ -34,8 +34,8 @@ func TestF66AssumeConstraintDeclaration(t *testing.T) {
 		if !ok {
 			t.Fatalf("member = %T, want *ast.AssumeMember", members[0])
 		}
-		if a.Name != "c1" {
-			t.Errorf("name = %q, want c1", a.Name)
+		if a.Ident.Name != "c1" {
+			t.Errorf("name = %q, want c1", a.Ident.Name)
 		}
 		if len(a.Relationships) != 1 || a.Relationships[0].Kind != ast.RelTyping {
 			t.Fatalf("relationships = %v, want one typing", a.Relationships)
@@ -57,9 +57,9 @@ func TestF66AssumeConstraintDeclaration(t *testing.T) {
 		if !ok {
 			t.Fatalf("member = %T, want *ast.AssumeMember", members[1])
 		}
-		if a.Name != "fuelConstraint" || !a.HasBody || len(a.Body) == 0 {
+		if a.Ident.Name != "fuelConstraint" || !a.HasBody || len(a.Body) == 0 {
 			t.Errorf("got name=%q hasBody=%v conditions=%d, want a named constraint with a body",
-				a.Name, a.HasBody, len(a.Body))
+				a.Ident.Name, a.HasBody, len(a.Body))
 		}
 	})
 
@@ -71,9 +71,9 @@ func TestF66AssumeConstraintDeclaration(t *testing.T) {
 		if !ok {
 			t.Fatalf("member = %T, want *ast.AssumeMember", members[0])
 		}
-		if a.Name != "" || !a.HasBody || len(a.Body) != 1 {
+		if a.Ident.Name != "" || !a.HasBody || len(a.Body) != 1 {
 			t.Errorf("got name=%q hasBody=%v conditions=%d, want one anonymous condition",
-				a.Name, a.HasBody, len(a.Body))
+				a.Ident.Name, a.HasBody, len(a.Body))
 		}
 	})
 
@@ -86,9 +86,9 @@ func TestF66AssumeConstraintDeclaration(t *testing.T) {
 		if !ok {
 			t.Fatalf("member = %T, want *ast.RequireMember", members[0])
 		}
-		if r.Name != "r1" || len(r.Relationships) != 1 || r.HasBody {
+		if r.Ident.Name != "r1" || len(r.Relationships) != 1 || r.HasBody {
 			t.Errorf("got name=%q relationships=%v hasBody=%v, want r1 typed by C without a body",
-				r.Name, r.Relationships, r.HasBody)
+				r.Ident.Name, r.Relationships, r.HasBody)
 		}
 	})
 }

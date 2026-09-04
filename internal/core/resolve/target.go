@@ -103,11 +103,7 @@ func namedByReference(sym *symbols.Symbol) bool {
 	if !sym.EffectiveName {
 		return false
 	}
-	usage, ok := sym.Decl.(*ast.Usage)
-	if !ok {
-		return true
-	}
-	rel := ast.NamingFeature(usage)
+	rel := ast.DeclNamingFeature(sym.Decl)
 	return rel == nil || rel.Kind != ast.RelRedefines
 }
 
@@ -226,7 +222,8 @@ type Reference struct {
 	// private members the visibility rule would otherwise hide.
 	Import *ast.Import
 	// Subsetting is the declaration QN subsets, if any; its spelling decides
-	// whether it is read as a redefinition or as the declaration's own name.
+	// whether it is read as a redefinition, as a sibling redefining the name, or
+	// as the declaration's own name.
 	Subsetting ast.Node
 	// Member is the declaration whose text QN is written in, when known.
 	Member ast.Node
@@ -307,7 +304,10 @@ func (r *Resolver) ResolveReference(ref Reference) (*symbols.Symbol, bool) {
 		return r.memberChain(owner, ref.QN)
 	}
 	if ref.Redefines {
-		r.resolveRedefinition(ref.Scope, ref.QN, ref.Referrer)
+		// A subsetting reaches a sibling redefinition first, as resolveRelationships does.
+		if ref.Subsetting == nil || !r.resolveOwnSibling(ref.Scope, ref.QN, ref.Subsetting) {
+			r.resolveRedefinition(ref.Scope, ref.QN, ref.Referrer)
+		}
 		return r.PartSymbol(ref.QN, len(ref.QN.Parts)-1)
 	}
 	if ref.Endpoint {

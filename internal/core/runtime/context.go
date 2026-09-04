@@ -26,6 +26,8 @@ type Context struct {
 	maxSteps  int64
 	instances map[int64]*Instance
 	created   []int64
+	// lives holds, per registered object, when it began and ended (lifetimes.go).
+	lives map[int64]life
 
 	// maxActionSteps, maxStateEvents and maxDoSteps bound the executors this
 	// context runs: token-flow steps, dispatched events, and do actions.
@@ -80,6 +82,9 @@ type Context struct {
 	occurrences map[*symbols.Symbol]int64
 	// behaving memoizes runsBehaviors per type; the model is fixed for the context's life.
 	behaving map[*symbols.Symbol]bool
+	// behavingFeatures memoizes behavingParts and redefGroups redefinitionGroups, per type.
+	behavingFeatures map[*symbols.Symbol][]int
+	redefGroups      map[*symbols.Symbol][][]string
 
 	// variantObjects holds the object a variant stands for per owner that
 	// selected it, so repeated reads of one selection read the same object.
@@ -241,6 +246,7 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		steps:               0,
 		maxSteps:            maxSteps,
 		instances:           make(map[int64]*Instance),
+		lives:               make(map[int64]life),
 		features:            make(map[*symbols.Symbol][]EffectiveFeature),
 		calcShapes:          make(map[*symbols.Symbol]*calcShape),
 		libraryPerformances: make(map[*symbols.Symbol]*libraryPerformance),
@@ -260,6 +266,8 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 
 		occurrences:      make(map[*symbols.Symbol]int64),
 		behaving:         make(map[*symbols.Symbol]bool),
+		behavingFeatures: make(map[*symbols.Symbol][]int),
+		redefGroups:      make(map[*symbols.Symbol][][]string),
 		variantObjects:   make(map[variantObject]int64),
 		selectedVariants: make(map[variantSelection]string),
 
@@ -732,38 +740,94 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members 
 	}
 
 	for _, member := range members {
-		var what, name string
+		var what string
+		var names []string
 		var expr ast.Node
 		isSubject := false
 		switch rm := member.node.(type) {
 		case *ast.SubjectMember:
-			what, name, expr, isSubject = "subject", rm.Name, rm.BindingExpr, true
+			what, names, expr, isSubject = "subject", ctx.memberNames(sym, member, rm.Ident.Name, rm.Ident.ShortName), rm.BindingExpr, true
 		case *ast.Usage:
 			switch rm.Kind {
 			case ast.UsageSubject:
-				name, isSubject = effectiveName(rm), true
+				names, isSubject = ctx.memberNames(sym, member, effectiveName(rm), rm.Ident.ShortName), true
 			case ast.UsageActor:
-				what, name, expr = "actor", effectiveName(rm), rm.Value
+				what, names, expr = "actor", ctx.memberNames(sym, member, effectiveName(rm), rm.Ident.ShortName), rm.Value
 			}
 		default:
 			continue
 		}
 		if isSubject && subject != nil {
-			if name != "" {
+			for _, name := range names {
 				bindings[name] = Value{Kind: ValInstance, Instance: subject.ID}
 			}
 			continue
 		}
 		if expr == nil {
+			// A redeclaration valuing nothing reads the value the feature it
+			// redefines binds, under its own names too.
+			if value, ok := boundUnder(bindings, names); ok {
+				for _, name := range names {
+					bindings[name] = value
+				}
+			}
 			continue
 		}
 		value, err := evalIn(member.scope).Eval(expr)
 		if err != nil {
 			return nil, fmt.Errorf("requirement %s: %s binding evaluation failed: %w", element, what, err)
 		}
-		bindings[name] = value
+		for _, name := range names {
+			bindings[name] = value
+		}
 	}
 	return bindings, nil
+}
+
+// memberNames are the names a condition may read a bound member of owner by: its
+// own and those of every feature it redefines, one feature with it (KerML §7.3.4.5).
+func (ctx *Context) memberNames(owner *symbols.Symbol, member scopedMember, name, shortName string) []string {
+	names := bindingNames(name, shortName)
+	memberSym := memberSymbol(member.scope, member.node)
+	if memberSym == nil {
+		return names
+	}
+	seen := make(map[string]bool, len(names))
+	for _, n := range names {
+		seen[n] = true
+	}
+	for _, redefined := range ctx.redefinedFeatures(memberSym, owner) {
+		for _, n := range bindingNames(redefined.Name, redefined.ShortName) {
+			if !seen[n] {
+				seen[n] = true
+				names = append(names, n)
+			}
+		}
+	}
+	return names
+}
+
+// boundUnder returns the value bindings hold under any of names.
+func boundUnder(bindings map[string]Value, names []string) (Value, bool) {
+	for _, name := range names {
+		if value, ok := bindings[name]; ok {
+			return value, true
+		}
+	}
+	return Value{}, false
+}
+
+// bindingNames are the names a condition may read a bound member by: its name
+// and its short name, whichever it declares.
+func bindingNames(name, shortName string) []string {
+	var names []string
+	if name != "" {
+		names = append(names, name)
+	}
+	if shortName != "" && shortName != name {
+		names = append(names, shortName)
+	}
+	return names
 }
 
 // effectiveName is the name a usage answers to, which for a member written as a
@@ -933,14 +997,14 @@ func (ctx *Context) CheckRequirementOn(sym *symbols.Symbol, scope *symbols.Scope
 		negated:  NegatedDecl(sym),
 	}, conds)
 	if err != nil {
-		err = unboundSubjectError(err, "requirement", sym.Name, unboundSubjectNames(members, subject.instance))
+		err = unboundSubjectError(err, "requirement", sym.Name, ctx.unboundSubjectNames(sym, members, subject.instance))
 	}
 	return ctx.checkResultOf(holds, subject), err
 }
 
 // unboundSubjectNames are the subjects the members declare that nothing supplies
 // a value for: no binding expression, no object supplied from outside.
-func unboundSubjectNames(members []scopedMember, subject *Instance) map[string]bool {
+func (ctx *Context) unboundSubjectNames(sym *symbols.Symbol, members []scopedMember, subject *Instance) map[string]bool {
 	if subject != nil {
 		return nil
 	}
@@ -948,12 +1012,14 @@ func unboundSubjectNames(members []scopedMember, subject *Instance) map[string]b
 	for _, member := range members {
 		switch rm := member.node.(type) {
 		case *ast.SubjectMember:
-			if rm.BindingExpr == nil && rm.Name != "" {
-				names[rm.Name] = true
+			if rm.BindingExpr == nil {
+				for _, name := range ctx.memberNames(sym, member, rm.Ident.Name, rm.Ident.ShortName) {
+					names[name] = true
+				}
 			}
 		case *ast.Usage:
 			if rm.Kind == ast.UsageSubject {
-				if name := effectiveName(rm); name != "" {
+				for _, name := range ctx.memberNames(sym, member, effectiveName(rm), rm.Ident.ShortName) {
 					names[name] = true
 				}
 			}

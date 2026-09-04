@@ -4,9 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
-	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -46,9 +44,9 @@ func TestNewServiceResolvesBudgets(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewService: %v", err)
 		}
-		idx := symbols.NewIndex()
-		resolver := resolve.New(idx)
-		if got := svc.newRuntime(semantics.NewModel(resolver), resolver).Budgets(); got != svc.budgets {
+		ctx, _, release := svc.newRuntime(&CachedModel{Index: symbols.NewIndex()})
+		defer release()
+		if got := ctx.Budgets(); got != svc.budgets {
 			t.Errorf("context bounds = %+v, want the service's %+v", got, svc.budgets)
 		}
 	})

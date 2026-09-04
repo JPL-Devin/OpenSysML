@@ -13,6 +13,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
@@ -1160,6 +1161,10 @@ func (w *featureValueWalk) lines(inst *runtime.Instance, indent string, depth in
 // rows lists an object's values and, when asked, its behaviors; a behavior's
 // occurrence is listed without its own, since its row already reports what runs.
 func (w *featureValueWalk) rows(inst *runtime.Instance, indent string, depth int, withBehaviors bool) []string {
+	// A destroyed object's features hold nothing to list; its lifetime says so once.
+	if life, ok := w.ctx.OccurrenceLife(inst.ID); ok && life.Destroyed {
+		return w.emit(nil, fmt.Sprintf("%s(%s)", indent, life))
+	}
 	features := w.ctx.FeaturesOf(inst.Type)
 	connectors := w.connectors(inst, indent)
 	if len(features) == 0 && len(connectors) == 0 && withBehaviors {
@@ -1521,7 +1526,7 @@ func (s *Session) doInstances() ([]string, bool, error) {
 	slices.Sort(names)
 	lines := []string{"Instances:"}
 	for _, name := range names {
-		lines = append(lines, fmt.Sprintf("  %s (ID: %d)", s.declaredName(name), s.instances[name].ID))
+		lines = append(lines, fmt.Sprintf("  %s (ID: %d%s)", s.declaredName(name), s.instances[name].ID, s.destroyedNote(s.instances[name])))
 	}
 	// An object a later %instantiate unnamed is still held, and is listed as
 	// the id that reaches it.
@@ -1532,7 +1537,7 @@ func (s *Session) doInstances() ([]string, bool, error) {
 		if held, ok := s.rtCtx.Instance(u.obj.ID); !ok || held != u.obj {
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("  #%d (ID: %d, displaced from %s)", u.obj.ID, u.obj.ID, s.declaredName(u.fqn)))
+		lines = append(lines, fmt.Sprintf("  #%d (ID: %d, displaced from %s%s)", u.obj.ID, u.obj.ID, s.declaredName(u.fqn), s.destroyedNote(u.obj)))
 	}
 	// Some of what the session materialized may be gone even though the rest
 	// survived, which the list would otherwise not say.
@@ -1540,6 +1545,17 @@ func (s *Session) doInstances() ([]string, bool, error) {
 		lines = append(lines, note)
 	}
 	return lines, false, nil
+}
+
+// destroyedNote is the note an instance listing adds to an object `destroy` ended.
+func (s *Session) destroyedNote(inst *runtime.Instance) string {
+	if s.rtCtx == nil {
+		return ""
+	}
+	if life, ok := s.rtCtx.OccurrenceLife(inst.ID); ok && life.Destroyed {
+		return ", destroyed"
+	}
+	return ""
 }
 
 // formatFeatureValue renders what a feature value holds: a multi-valued feature keeps its
@@ -2634,16 +2650,51 @@ func (s *Session) exhibitorsOf(ctx *runtime.Context, sym *symbols.Symbol) []exhi
 // of sym's machine (the usage itself, or one typed by or naming it), in declaration order.
 func (s *Session) exhibitingTypes(ctx *runtime.Context, sym *symbols.Symbol) []*symbols.Symbol {
 	var types []*symbols.Symbol
+	for _, e := range s.exhibitEntries(ctx) {
+		// One mention per type: the entries of a type are contiguous.
+		if len(types) > 0 && types[len(types)-1] == e.owner {
+			continue
+		}
+		if ctx.ExhibitsState(e.member, sym) {
+			types = append(types, e.owner)
+		}
+	}
+	return types
+}
+
+// exhibitEntry is a named member declaring an exhibited state, with the type owning it.
+type exhibitEntry struct {
+	owner, member *symbols.Symbol
+}
+
+// exhibitIndex is the documents' exhibitEntry list in declaration order, valid
+// for the runtime context it was built alongside.
+type exhibitIndex struct {
+	ctx     *runtime.Context
+	entries []exhibitEntry
+}
+
+// exhibitEntries returns the session's exhibited-state declarations, indexed once
+// per runtime context: a submission rebuilds the context, and the scopes with it.
+func (s *Session) exhibitEntries(ctx *runtime.Context) []exhibitEntry {
+	if s.exhibits != nil && s.exhibits.ctx == ctx {
+		return s.exhibits.entries
+	}
+	idx := &exhibitIndex{ctx: ctx}
 	var collect func(scope *symbols.Scope)
 	collect = func(scope *symbols.Scope) {
 		if scope == nil {
 			return
 		}
-		for _, member := range scope.Members() {
-			if owner := scope.Owner(); owner != nil && ctx.ExhibitsState(member, sym) {
-				types = append(types, owner)
-				break
-			}
+		if owner := scope.Owner(); owner != nil {
+			scope.ForEachMember(func(member *symbols.Symbol) bool {
+				if member.Name != "" && member.Decl != nil {
+					if b, ok := lower.ClassifierBehaviorOf(member.Decl); ok && b.Kind == lower.ExhibitedState {
+						idx.entries = append(idx.entries, exhibitEntry{owner: owner, member: member})
+					}
+				}
+				return true
+			})
 		}
 		for _, child := range scope.Children() {
 			collect(child)
@@ -2652,7 +2703,8 @@ func (s *Session) exhibitingTypes(ctx *runtime.Context, sym *symbols.Symbol) []*
 	for _, scope := range s.docScopes() {
 		collect(scope)
 	}
-	return types
+	s.exhibits = idx
+	return idx.entries
 }
 
 // exhibitorsError reports sym's machine as one `%state <machine>` alone cannot

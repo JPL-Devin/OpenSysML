@@ -35,8 +35,8 @@
   },
   "totals": {
     "cases": 231,
-    "bothReject": 202,
-    "pilotOnlyRejects": 21,
+    "bothReject": 208,
+    "pilotOnlyRejects": 15,
     "oursOnlyRejects": 8,
     "bothAccept": 0
   },
@@ -65,8 +65,8 @@
     {
       "source": "semantic",
       "cases": 102,
-      "bothReject": 79,
-      "pilotOnlyRejects": 15,
+      "bothReject": 85,
+      "pilotOnlyRejects": 9,
       "oursOnlyRejects": 8,
       "bothAccept": 0
     },
@@ -1172,12 +1172,9 @@
       "source": "semantic",
       "rule": "only a variable feature can have an initial value (KerML 8.4.4.9 validateFeatureValueIsInitial; pilot validateFeatureValueIsInitial).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 4: Initialized feature must be variable"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/k12-chain-through-self.kerml",
@@ -1406,24 +1403,18 @@
       "source": "semantic",
       "rule": "a metadata feature's annotated element must conform to its annotatedElement redefinition (KerML 8.3.4.11 validateMetadataFeatureAnnotatedElement; pilot validateMetadataFeatureAnnotatedElement).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 9: Cannot annotate Feature"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/k36-metadata-body-redefines-outside.kerml",
       "source": "semantic",
       "rule": "a metadata body feature must redefine a feature of the metaclass (KerML 8.3.4.11 validateMetadataFeatureBody; pilot validateMetadataFeatureBody).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 7: Must redefine an owning-type feature"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/k37-multiplicity-bound-not-natural.kerml",
@@ -1460,12 +1451,9 @@
       "source": "semantic",
       "rule": "a metadata feature must be typed by a metaclass, not an ordinary class (KerML 8.3.4.11 validateMetadataFeatureMetadata; pilot validateMetadataFeatureMetadata).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 5: Must have a concrete type"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/k41-chain-expression-to-nested-class.kerml",
@@ -1695,13 +1683,9 @@
       "source": "semantic",
       "rule": "A metadata usage must be typed by one metadata definition (SysML 7.26 Metadata; pilot validateMetadataUsageType).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 2,
-      "pilot": [
-        "line 5: A metadata usage must be typed by one metadata definition.",
-        "line 5: Must have a concrete type"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
     },
     {
       "path": "semantic/s24-perform-references-non-action.sysml",
@@ -1927,12 +1911,9 @@
       "source": "semantic",
       "rule": "only a variable feature can be constant, and an attribute of a data type is not variable (KerML 8.3.3.3 validateFeatureConstantIsVariable; pilot validateFeatureConstantIsVariable).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 5: Only a variable feature can be constant"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/send-constructor-non-type.sysml",
@@ -2301,8 +2282,8 @@
     ],
     "totals": {
       "cases": 231,
-      "bothReject": 202,
-      "pilotOnlyRejects": 21,
+      "bothReject": 208,
+      "pilotOnlyRejects": 15,
       "oursOnlyRejects": 8,
       "bothAccept": 0
     },

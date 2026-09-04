@@ -86,17 +86,17 @@ func findMemberValuePart(node ast.Node, name string) (valuePart, bool) {
 	case *ast.Usage:
 		members = v.Members
 	case *ast.SubjectMember:
-		if v.Name == name {
+		if v.Ident.Name == name {
 			return valuePart{v.BindingExpr, v.ValueOperatorSpan, v.ValueIsDefault, v.ValueIsInitial}, true
 		}
 		return valuePart{}, false
 	case *ast.AssumeMember:
-		if v.Name == name {
+		if v.Ident.Name == name {
 			return valuePart{v.Value, v.ValueOperatorSpan, v.ValueIsDefault, v.ValueIsInitial}, true
 		}
 		return valuePart{}, false
 	case *ast.RequireMember:
-		if v.Name == name {
+		if v.Ident.Name == name {
 			return valuePart{v.Value, v.ValueOperatorSpan, v.ValueIsDefault, v.ValueIsInitial}, true
 		}
 		return valuePart{}, false
