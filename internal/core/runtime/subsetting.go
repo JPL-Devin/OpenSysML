@@ -349,7 +349,7 @@ func (ctx *Context) subsettingContributions(inst *Instance, name string) ([]Valu
 	defer delete(ctx.collectingSubsets, key)
 
 	var values []Value
-	for _, feat := range ctx.SubsettingFeatures(inst, inst.Type, name) {
+	for _, feat := range ctx.subsettingFeaturesOf(inst, name) {
 		sub, err := inst.GetFeatureValue(ctx, feat.Name)
 		if err != nil {
 			return nil, fmt.Errorf("subsetting feature %s of %s: %w", feat.Name, name, err)
@@ -382,7 +382,7 @@ func (ctx *Context) materializeSubsettedCollections(inst *Instance, fv *FeatureV
 	}
 	ctx.readingSubsetted[key] = true
 	defer delete(ctx.readingSubsetted, key)
-	for _, name := range ctx.subsettedNames(fv.Feature.Symbol, inst.Type) {
+	for _, name := range ctx.subsettedNamesOf(inst, fv.Feature.Symbol) {
 		sub, ok := inst.FeatureValues[name]
 		if !ok || sub.Materialized || sub.Feature.Scalar() ||
 			ctx.collectingSubsets[featureValueRef{instance: inst.ID, feature: name}] ||
@@ -410,7 +410,7 @@ func (ctx *Context) fillOptionalSubsetters(inst *Instance, name string, n int) (
 			*fill.fv = fill.before
 		}
 	}
-	for _, feat := range ctx.SubsettingFeatures(inst, inst.Type, name) {
+	for _, feat := range ctx.subsettingFeaturesOf(inst, name) {
 		if n == 0 {
 			break
 		}

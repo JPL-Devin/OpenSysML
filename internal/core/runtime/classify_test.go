@@ -537,3 +537,98 @@ func TestClassificationStartsTheClassifierBehaviors(t *testing.T) {
 		t.Fatalf("glow ran to cycles = %d, want 1", got)
 	}
 }
+
+// A classification whose behaviors fail to start is undone whole: what a behavior wrote to
+// a feature the object already had goes with the features and behaviors it added.
+func TestRefusedClassificationUndoesWhatItsBehaviorsDid(t *testing.T) {
+	ctx, idx := libraryShapeContext(t, `package test {
+		private import ScalarValues::*;
+		item def Counter { attribute hits : Integer = 0; }
+		item def Tallied :> Counter {
+			exhibit state tally {
+				entry; then on;
+				state on { entry action bump { assign hits := hits + 1; } }
+			}
+			exhibit state break {
+				entry; then on;
+				state on { entry action fail { assign hits := 1 / 0; } }
+			}
+		}
+		item def Rack { item raw : Counter [1]; }
+		item rack : Rack;
+	}`)
+	rack := instantiateQualified(t, ctx, idx, "test::rack")
+	raw := readInstance(t, ctx, rack, "raw")
+	hits, err := raw.GetFeatureValue(ctx, "hits")
+	if err != nil {
+		t.Fatalf("hits: %v", err)
+	}
+	before := FormatValue(hits.HeldValue())
+
+	if err := ctx.classify(raw, idx.LookupQualified("test::Tallied")[0]); !errors.Is(err, ErrDivisionByZero) {
+		t.Fatalf("classify(raw, Tallied) = %v, want ErrDivisionByZero", err)
+	}
+	if len(raw.classifiers) != 0 || len(raw.behaviors) != 0 || len(ctx.objectBehaviors) != 0 {
+		t.Fatalf("a refused classification left raw classified by %v running %d behaviors (context: %d)",
+			raw.classifiers, len(raw.behaviors), len(ctx.objectBehaviors))
+	}
+	if _, ok := raw.FeatureValues["tally"]; ok {
+		t.Fatal("a refused classification left raw with the tally feature")
+	}
+	if after := FormatValue(hits.HeldValue()); raw.FeatureValues["hits"] != hits || after != before {
+		t.Fatalf("a refused classification changed hits from %s to %s", before, after)
+	}
+}
+
+// An object's relationships are those of every type classifying it — declared type first,
+// then each classifier — and one a classifier inherits from a type already counted is not listed twice.
+func TestRelationshipsComeFromEveryTypeOfTheObject(t *testing.T) {
+	ctx, idx := libraryShapeContext(t, `package test {
+		private import ScalarValues::*;
+		item def Base {
+			attribute a : Integer;
+			attribute b : Integer = 1;
+			bind a = b;
+			attribute xs : Integer [*];
+			attribute x1 : Integer [*] :> xs = (1);
+			item p; item q;
+			connect p to q;
+		}
+		item def Wide :> Base {
+			attribute c : Integer = 2;
+			bind a = c;
+			attribute x2 : Integer [*] :> xs = (2);
+			item r;
+			connect q to r;
+		}
+		item def Rack { item raw : Base [1]; }
+		item rack : Rack;
+	}`)
+	raw := readInstance(t, ctx, instantiateQualified(t, ctx, idx, "test::rack"), "raw")
+	if err := ctx.classify(raw, idx.LookupQualified("test::Wide")[0]); err != nil {
+		t.Fatalf("classify(raw, Wide): %v", err)
+	}
+	bindings := ctx.bindingsOf(raw, "a")
+	if len(bindings) != 2 || bindings[0].Ends[1].Path != "b" || bindings[1].Ends[1].Path != "c" {
+		t.Fatalf("bindings of a = %+v, want Base's a = b then Wide's a = c", bindings)
+	}
+	var subsetters []string
+	for _, feat := range ctx.subsettingFeaturesOf(raw, "xs") {
+		subsetters = append(subsetters, feat.Name)
+	}
+	if strings.Join(subsetters, ",") != "x1,x2" {
+		t.Fatalf("subsetters of xs = %v, want x1 then x2", subsetters)
+	}
+	var conns []string
+	for _, conn := range ctx.connectionsOf(raw) {
+		if ends := strings.Join(conn.Ends, "-"); ends == "p-q" || ends == "q-r" {
+			conns = append(conns, ends)
+		}
+	}
+	if strings.Join(conns, ",") != "p-q,q-r" {
+		t.Fatalf("connections = %v, want Base's p-q then Wide's q-r, each once", conns)
+	}
+	if anon := ctx.anonymousConnectorsOf(raw.types()); len(anon) != 2 {
+		t.Fatalf("anonymous connectors = %d, want Base's and Wide's", len(anon))
+	}
+}

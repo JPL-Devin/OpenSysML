@@ -611,7 +611,7 @@ func (a *adoption) commit() {
 	adopted := make(map[int64]bool, len(a.plans))
 	for id, plan := range a.plans {
 		adopted[id] = true
-		prevType := plan.obj.Type
+		prevTypes := plan.obj.types()
 		plan.obj.Type = plan.typeSym
 		plan.obj.classifiers = plan.classifiers
 		// Names of one redefined feature share a feature value, which is rebound once, to
@@ -653,7 +653,7 @@ func (a *adoption) commit() {
 		// The connectors the owner names no name are reached by no name here, so
 		// they are materialized again against the declarations as they are now —
 		// under the identities they had, which name the same connectors.
-		plan.obj.keepAnonymous(a.ctx, a.prev, prevType)
+		plan.obj.keepAnonymous(a.ctx, a.prev, prevTypes)
 		a.ctx.registerInstance(plan.obj)
 		a.ctx.ids.atLeast(id + 1)
 	}

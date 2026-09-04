@@ -143,7 +143,7 @@ func (ctx *Context) resolveBindingValue(inst *Instance, name string) (Value, boo
 
 	path := name
 	for current := inst; current != nil; {
-		bindings := ctx.bindingsForFeature(current.Type, path)
+		bindings := ctx.bindingsOf(current, path)
 		if len(bindings) != 0 {
 			ctx.resolvingBindings[key] = true
 			value, found, cycle, cycleFeatures, err := ctx.resolveBindingSet(

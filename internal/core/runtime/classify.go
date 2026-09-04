@@ -2,8 +2,8 @@ package runtime
 
 import (
 	"maps"
-	"slices"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -78,21 +78,21 @@ func (ctx *Context) classifyHeld(feature *symbols.Symbol, val Value) error {
 	return nil
 }
 
-// classify records typ as a classifier of inst with the features and behaviors it adds;
-// a classification that fails or that a probe rolls back leaves the object as it was.
+// classify records typ as a classifier of inst with the features and behaviors it adds.
+// It is one transaction: a failure, or a probe rolling it back, leaves the object, what its
+// behaviors wrote, the bus and the objects they made as they were.
 func (ctx *Context) classify(inst *Instance, typ *symbols.Symbol) error {
 	if ctx.instanceConforms(inst, typ) {
 		return nil
 	}
-	classifiers, values := inst.classifiers, maps.Clone(inst.FeatureValues)
-	var started []*ObjectBehavior
-	restore := func() {
+	commit, rollback := ctx.beginJournal()
+	classifiers, values, running := inst.classifiers, maps.Clone(inst.FeatureValues), len(inst.behaviors)
+	ctx.noteProbeUndo(func() {
+		if len(inst.behaviors) > running {
+			ctx.forgetBehaviors(inst.behaviors[running:])
+		}
 		inst.classifiers, inst.FeatureValues = classifiers, values
-		ctx.forgetBehaviors(started)
-	}
-	if ctx.journals > 0 {
-		ctx.noteProbeUndo(restore)
-	}
+	})
 	inst.classifiers = append(inst.classifiers, typ)
 	carried := make(map[string]bool, len(inst.FeatureValues))
 	for name := range inst.FeatureValues {
@@ -107,14 +107,93 @@ func (ctx *Context) classify(inst *Instance, typ *symbols.Symbol) error {
 		inst.FeatureValues[feat.Name] = ctx.newFeatureValue(inst, feat)
 	}
 	if err := ctx.aliasRedefinedFeatureValuesOf(inst, typ, carried); err != nil {
-		restore()
+		rollback()
 		return err
 	}
-	running := len(inst.behaviors)
 	if err := ctx.startClassifierBehaviors(inst, len(ctx.created)); err != nil {
-		restore()
+		rollback()
 		return err
 	}
-	started = slices.Clone(inst.behaviors[running:])
+	commit()
 	return nil
+}
+
+// declaredBy gathers what each of an object's types declares for it, in type order and once
+// per declaring scope: a classifier adds only what the types before it do not declare.
+func declaredBy[T any](ctx *Context, types []*symbols.Symbol, of func(*symbols.Symbol) []T, scopeOf func(T) *symbols.Scope) []T {
+	if len(types) == 1 {
+		return of(types[0])
+	}
+	covered := map[*symbols.Scope]bool{}
+	var out []T
+	for _, typ := range types {
+		for _, rel := range of(typ) {
+			if scope := scopeOf(rel); scope == nil || !covered[scope] {
+				out = append(out, rel)
+			}
+		}
+		covered[declScope(typ)] = true
+		for _, sup := range ctx.model.AllSupertypes(typ) {
+			covered[declScope(sup)] = true
+		}
+	}
+	return out
+}
+
+// bindingsOf returns the binding connectors of inst's types involving the named feature.
+func (ctx *Context) bindingsOf(inst *Instance, name string) []lower.Binding {
+	return declaredBy(ctx, inst.types(),
+		func(typ *symbols.Symbol) []lower.Binding { return ctx.bindingsForFeature(typ, name) },
+		func(b lower.Binding) *symbols.Scope { return b.Scope })
+}
+
+// connectionsOf returns the connections inst owns through each of its types.
+func (ctx *Context) connectionsOf(inst *Instance) []lower.Connection {
+	return declaredBy(ctx, inst.types(), ctx.objectConnections,
+		func(c lower.Connection) *symbols.Scope { return c.Scope })
+}
+
+// anonymousConnectorsOf returns the unnamed connector usages an object of types owns.
+func (ctx *Context) anonymousConnectorsOf(types []*symbols.Symbol) []*symbols.Symbol {
+	return declaredBy(ctx, types, ctx.anonymousConnectors,
+		func(sym *symbols.Symbol) *symbols.Scope { return sym.OwnerScope })
+}
+
+// subsettingFeaturesOf returns the features of inst subsetting the named one through any
+// of its types, in declaration order, each once.
+func (ctx *Context) subsettingFeaturesOf(inst *Instance, name string) []EffectiveFeature {
+	types := inst.types()
+	if len(types) == 1 {
+		return ctx.SubsettingFeatures(inst, types[0], name)
+	}
+	seen := map[string]bool{}
+	var out []EffectiveFeature
+	for _, typ := range types {
+		for _, feat := range ctx.SubsettingFeatures(inst, typ, name) {
+			if !seen[feat.Name] {
+				seen[feat.Name] = true
+				out = append(out, feat)
+			}
+		}
+	}
+	return out
+}
+
+// subsettedNamesOf returns the features of inst that its feature sym subsets, through any of its types.
+func (ctx *Context) subsettedNamesOf(inst *Instance, sym *symbols.Symbol) []string {
+	types := inst.types()
+	if len(types) == 1 {
+		return ctx.subsettedNames(sym, types[0])
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, typ := range types {
+		for _, name := range ctx.subsettedNames(sym, typ) {
+			if !seen[name] {
+				seen[name] = true
+				out = append(out, name)
+			}
+		}
+	}
+	return out
 }
