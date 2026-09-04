@@ -10,7 +10,7 @@ package Depot {
 				entry action w {
 					assign level := level + 10;
 				}
-				accept after 5 then moving;
+				accept after 5 [SI::s] then moving;
 			}
 			state moving;
 		}

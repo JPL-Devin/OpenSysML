@@ -42,6 +42,7 @@ var metamodelTypeNames = map[symbols.SymbolKind]string{
 	symbols.SymbolCaseUsage: "CaseUsage", symbols.SymbolAnalysisCaseUsage: "AnalysisCaseUsage",
 	symbols.SymbolVerificationCaseUsage: "VerificationCaseUsage", symbols.SymbolUseCaseUsage: "UseCaseUsage",
 	symbols.SymbolConnectorEnd:            "ReferenceUsage",
+	symbols.SymbolCrossFeature:            "ReferenceUsage",
 	symbols.SymbolSatisfyRequirementUsage: "SatisfyRequirementUsage",
 }
 

@@ -223,7 +223,7 @@ func (m *Model) DeclaresResolvedType(sym *symbols.Symbol) bool {
 			if sup == base || seen[sup] {
 				continue
 			}
-			if !isFeature(sup) {
+			if !sup.IsFeature() {
 				return true
 			}
 			seen[sup] = true

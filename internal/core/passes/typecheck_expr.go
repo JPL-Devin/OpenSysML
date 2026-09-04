@@ -33,11 +33,16 @@ type exprChecker struct {
 }
 
 func (ec *exprChecker) errorf(span source.Span, format string, args ...any) {
+	ec.errorCode("type.expr", span, format, args...)
+}
+
+// errorCode is errorf under the code of a rule with its own.
+func (ec *exprChecker) errorCode(code string, span source.Span, format string, args ...any) {
 	ec.diags = append(ec.diags, Diagnostic{
 		Severity: SeverityError,
 		Span:     span,
 		Message:  fmt.Sprintf(format, args...),
-		Code:     "type.expr",
+		Code:     code,
 		Source:   "type",
 	})
 }
@@ -53,9 +58,10 @@ func (ec *exprChecker) warnf(span source.Span, format string, args ...any) {
 }
 
 // checkDeclValue checks a feature's bound value (`attribute x : T = expr`)
-// against the type and multiplicity the feature declares.
+// against the type and multiplicity the feature declares; an accept's trigger
+// is checked by the body walk instead.
 func (ec *exprChecker) checkDeclValue(scope *symbols.Scope, d featureDecl) {
-	if d.value == nil {
+	if d.value == nil || isTriggerValue(d.value) {
 		return
 	}
 	if u, ok := d.node.(*ast.Usage); ok {
@@ -173,6 +179,13 @@ func (ec *exprChecker) resolveTarget(scope *symbols.Scope, target ast.Node) *sym
 
 // checkBoolean checks an expression used where a condition is required.
 func (ec *exprChecker) checkBoolean(scope *symbols.Scope, n ast.Node, context string) {
+	ec.checkCondition(scope, n, "type.expr", context+" must be Boolean, found %s", false)
+}
+
+// checkCondition is checkBoolean reporting under a rule's own code and message,
+// whose one verb takes the type found. A condition naming an untyped feature is
+// left to evaluation unless the rule requires a Boolean statically (mustType).
+func (ec *exprChecker) checkCondition(scope *symbols.Scope, n ast.Node, code, format string, mustType bool) {
 	if n == nil {
 		return
 	}
@@ -181,24 +194,33 @@ func (ec *exprChecker) checkBoolean(scope *symbols.Scope, n ast.Node, context st
 		return
 	}
 	if got == semantics.PrimUnknown {
-		ec.checkNonScalarCondition(scope, n, context)
+		ec.checkNonScalarCondition(scope, n, code, format, mustType)
 		return
 	}
-	ec.errorf(n.Span(), "%s must be Boolean, found %s", context, got)
+	ec.errorCode(code, n.Span(), format, got)
 }
 
 // checkNonScalarCondition reports a condition naming a feature typed by
-// something no Boolean can come from: a part, an item, an enumeration.
-func (ec *exprChecker) checkNonScalarCondition(scope *symbols.Scope, n ast.Node, context string) {
+// something no Boolean can come from: a part, an item, an enumeration — or
+// one whose type is inherited, chained to or computed and is not Boolean: a
+// redefined duration, a quantity.
+func (ec *exprChecker) checkNonScalarCondition(scope *symbols.Scope, n ast.Node, code, format string, mustType bool) {
 	typeSym := ec.valueTypeSymbol(scope, n)
 	if typeSym == nil {
 		typeSym = ec.invocationResultTypeSymbol(scope, n)
 	}
-	if typeSym == nil || !ec.isDefinitelyNonBehavior(typeSym) ||
+	if typeSym == nil {
+		c := ec.model.ExprConformsToLibrary(scope, n, semantics.FQNBoolean)
+		if c.Known && !c.Holds && (mustType || !c.Untyped) {
+			ec.errorCode(code, n.Span(), format, c.Found)
+		}
+		return
+	}
+	if !ec.isDefinitelyNonBehavior(typeSym) ||
 		ec.model.CouldHold(typeSym, semantics.PrimBoolean) {
 		return
 	}
-	ec.errorf(n.Span(), "%s must be Boolean, found %s", context, typeSym.Name)
+	ec.errorCode(code, n.Span(), format, typeSym.Name)
 }
 
 // infer returns the scalar type of an expression, checking its operands on the
@@ -283,10 +305,7 @@ func (ec *exprChecker) inferIndex(scope *symbols.Scope, e *ast.IndexExpr) semant
 	// notation counting from 1, and any index beyond a sequence written out.
 	if lit, ok := e.Index.(*ast.LiteralInteger); ok {
 		if written, err := strconv.ParseInt(lit.Value, 10, 64); err == nil {
-			length, known := int64(0), false
-			if seq, isSeq := e.Operand.(*ast.SequenceExpr); isSeq {
-				length, known = writtenLength(seq)
-			}
+			length, known := writtenLength(e.Operand)
 			switch {
 			case written == 0:
 				ec.errorf(lit.Span(), "sequence index counts from 1, found 0")
@@ -299,24 +318,29 @@ func (ec *exprChecker) inferIndex(scope *symbols.Scope, e *ast.IndexExpr) semant
 	return elem
 }
 
-// writtenLength answers how many elements a sequence expression holds, and
-// whether that is knowable at all: a KerML sequence is flat, so an element that
-// is itself multi-valued contributes its own elements and the length is known
-// only from the values.
-func writtenLength(seq *ast.SequenceExpr) (int64, bool) {
-	for _, el := range seq.Elements {
-		if !isSingleValued(el) {
-			return 0, false
-		}
+// writtenLength answers how many elements an operand written out holds, and
+// whether that is knowable at all: a literal is one, `null` is none, and a KerML
+// sequence is flat, so a written element contributes its own count while a name
+// or a call may be a collection whose length only the values know.
+func writtenLength(operand ast.Node) (int64, bool) {
+	if isLiteral(operand) {
+		return 1, true
 	}
-	return int64(len(seq.Elements)), true
-}
-
-// isSingleValued reports whether an expression written as a sequence element is
-// one value whatever the model holds — a literal is, a name or a call may be a
-// collection.
-func isSingleValued(el ast.Node) bool {
-	return isLiteral(el)
+	switch n := operand.(type) {
+	case *ast.NullExpr:
+		return 0, true
+	case *ast.SequenceExpr:
+		total := int64(0)
+		for _, el := range n.Elements {
+			length, known := writtenLength(el)
+			if !known {
+				return 0, false
+			}
+			total += length
+		}
+		return total, true
+	}
+	return 0, false
 }
 
 // isLiteral reports whether an expression is a scalar literal, whose exact type is written out.
@@ -440,6 +464,10 @@ func (ec *exprChecker) inferQualified(scope *symbols.Scope, qn *ast.QualifiedNam
 // rather than of the enclosing scope (SysML 7.6.6), which is how a calc usage's
 // `out` feature — inherited from the calc it is typed by — is reached.
 func (ec *exprChecker) inferFeatureChain(scope *symbols.Scope, e *ast.FeatureChainExpr) semantics.PrimType {
+	// A constructed head's arguments are checked where they are written.
+	if c, isConstructor := chainHead(e).(*ast.ConstructorExpr); isConstructor {
+		ec.inferConstructor(scope, c)
+	}
 	sym, ok := ec.resolver.ResolveTarget(scope, e)
 	if !ok || sym == nil {
 		// An unresolved chain is reported by the name-resolution tier; typing it
@@ -447,6 +475,18 @@ func (ec *exprChecker) inferFeatureChain(scope *symbols.Scope, e *ast.FeatureCha
 		return semantics.PrimUnknown
 	}
 	return ec.featurePrimType(sym)
+}
+
+// chainHead returns the operand below every nested `.member` of a chain.
+func chainHead(e *ast.FeatureChainExpr) ast.Node {
+	head := e.Operand
+	for {
+		inner, ok := head.(*ast.FeatureChainExpr)
+		if !ok {
+			return head
+		}
+		head = inner.Operand
+	}
 }
 
 // featurePrimType returns the scalar type of the feature sym declares, falling
@@ -729,7 +769,7 @@ func (ec *exprChecker) inferNodeInvocation(scope *symbols.Scope, e *ast.Invocati
 	if !ok {
 		return semantics.PrimUnknown
 	}
-	ec.checkArguments(e, sym, args, argTypes, params, considered)
+	ec.checkArguments(scope, e, sym, args, argTypes, params, considered)
 	if considered != nil {
 		return semantics.PrimUnknown
 	}
@@ -739,6 +779,7 @@ func (ec *exprChecker) inferNodeInvocation(scope *symbols.Scope, e *ast.Invocati
 // checkArguments reports the arguments of e that do not bind to sym's `in` parameters,
 // listing considered (the other declarations the call could name) on each report.
 func (ec *exprChecker) checkArguments(
+	scope *symbols.Scope,
 	e *ast.InvocationExpr,
 	sym *symbols.Symbol,
 	args []ast.Node,
@@ -754,7 +795,7 @@ func (ec *exprChecker) checkArguments(
 		}
 	}
 	if len(e.NamedArgs) > 0 {
-		ec.checkNamedArguments(e, sym, argTypes.named, params, report)
+		ec.checkNamedArguments(scope, e, sym, args, argTypes, params, report)
 		return
 	}
 	// Arguments bind in order, so a call must reach the last required parameter.
@@ -939,11 +980,14 @@ func (ec *exprChecker) memberOf(typ, feature *symbols.Symbol) bool {
 }
 
 // checkNamedArguments reports named arguments that name no `in` parameter of sym or do
-// not bind to it, and default-less parameters no argument names.
+// not bind to it, a parameter bound twice (by whichever name or position), and default-less
+// parameters no argument names.
 func (ec *exprChecker) checkNamedArguments(
+	scope *symbols.Scope,
 	e *ast.InvocationExpr,
 	sym *symbols.Symbol,
-	namedTypes []semantics.Argument,
+	args []ast.Node,
+	argTypes argumentTypes,
 	params []parameter,
 	report func(source.Span, string, ...any),
 ) {
@@ -953,41 +997,72 @@ func (ec *exprChecker) checkNamedArguments(
 		report(e.Span(), "%s cannot be called with a receiver and named arguments", sym.Name)
 		return
 	}
-	byName := make(map[string]parameter, len(params))
-	for _, p := range params {
-		byName[p.name()] = p
+	if len(args) > len(params) {
+		report(e.Span(), "%s takes %d argument(s), found %d", sym.Name, len(params), len(args)+len(e.NamedArgs))
+		return
 	}
-	bound := make(map[string]bool, len(e.NamedArgs))
+	bound := make([]bool, len(params))
+	for i, arg := range args {
+		bound[i] = true
+		if mismatch := ec.argumentMismatch(arg, argTypes.positional[i], params[i]); mismatch != "" {
+			report(arg.Span(), "argument %d of %s %s", i+1, sym.Name, mismatch)
+		}
+	}
 	unknown := false
 	for i, arg := range e.NamedArgs {
-		name, ok := namedArgumentName(arg)
-		if !ok {
+		if arg.Name == nil || len(arg.Name.Parts) == 0 {
 			continue
 		}
-		p, declared := byName[name]
-		if !declared {
-			report(e.Span(), "%s has no parameter named %q", sym.Name, name)
+		at := ec.namedParameter(scope, sym, params, arg.Name)
+		if at < 0 {
+			report(e.Span(), "%s has no parameter named %q", sym.Name, semantics.QualifiedNameText(arg.Name))
 			unknown = true
 			continue
 		}
-		if bound[name] {
-			report(arg.Value.Span(), "%s binds parameter %q twice", sym.Name, name)
+		p := params[at]
+		if bound[at] {
+			report(arg.Value.Span(), "%s binds parameter %q twice", sym.Name, p.name())
 			continue
 		}
-		bound[name] = true
-		if mismatch := ec.argumentMismatch(arg.Value, namedTypes[i], p); mismatch != "" {
-			report(arg.Value.Span(), "argument %s of %s %s", name, sym.Name, mismatch)
+		bound[at] = true
+		if mismatch := ec.argumentMismatch(arg.Value, argTypes.named[i], p); mismatch != "" {
+			report(arg.Value.Span(), "argument %s of %s %s", p.name(), sym.Name, mismatch)
 		}
 	}
 	// A misspelt name is the likelier cause of a parameter left unbound.
 	if unknown {
 		return
 	}
-	for _, p := range params {
-		if !bound[p.name()] && p.required(ec.model) {
+	for i, p := range params {
+		if !bound[i] && p.required(ec.model) {
 			report(e.Span(), "%s requires an argument for parameter %s", sym.Name, p.name())
 		}
 	}
+}
+
+// namedParameter is the index in params of the parameter a named argument binds, or -1:
+// the one named as written, else the one the name resolves to within sym.
+func (ec *exprChecker) namedParameter(
+	scope *symbols.Scope,
+	sym *symbols.Symbol,
+	params []parameter,
+	name *ast.QualifiedName,
+) int {
+	if len(name.Parts) == 1 {
+		if i := indexOfName(params, name.Parts[0].Text); i >= 0 {
+			return i
+		}
+	}
+	target, ok := ec.model.LookupBinding(scope, sym, name)
+	if !ok {
+		return -1
+	}
+	for i, p := range params {
+		if p.usage == target.Decl {
+			return i
+		}
+	}
+	return -1
 }
 
 // parameterPrimType is the scalar type p is declared with, PrimUnknown when none is known.

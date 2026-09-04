@@ -1,0 +1,71 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="OwningBodies" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Vehicle"))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Person"))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Init"))
+      (Membership visibility="default"
+        (Definition kind="view" abstract=false variation=false name="Table"))
+      (Membership visibility="default"
+        (Definition kind="requirement" abstract=false variation=false name="Safe"
+          (SubjectMember name="v" type="Vehicle")
+          (Usage kind="actor" name="driver" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="typing" target=Person
+              (*ast.QualifiedName)))
+          (Usage kind="stakeholder" name="owner" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="typing" target=Person
+              (*ast.QualifiedName)))
+          (Usage kind="frame" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="references" target=c
+              (*ast.QualifiedName))
+            (Usage kind="stakeholder" name="s" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Person
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="use case" abstract=false variation=false name="Drive"
+          (Membership visibility="default"
+            (Usage kind="subject" name="v" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Vehicle
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="actor" name="driver" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Person
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="objective" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (RequireMember
+                (ConstraintMember assert=true negated=false
+                  (LiteralBool value=true)))))
+          (Membership visibility="default"
+            (Usage kind="use case" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="includes" target=park
+                (*ast.QualifiedName))
+              (Membership visibility="default"
+                (Usage kind="actor" name="driver" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="typing" target=Person
+                    (*ast.QualifiedName))))))))
+      (Membership visibility="default"
+        (Definition kind="state" abstract=false variation=false name="Running"
+          (EntryMember
+            (Membership visibility="default"
+              (Usage kind="action" name="init" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                (Relationship kind="typing" target=Init
+                  (*ast.QualifiedName)))))
+          (DoMember
+            (Membership visibility="default"
+              (Usage kind="action" name="run" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
+          (ExitMember)
+          (EntryMember)
+          (SuccessionEdge source="@entry" target="idle")
+          (SubstateMember name="idle")))
+      (Membership visibility="default"
+        (Definition kind="view" abstract=false variation=false name="Overview"
+          (Membership visibility="default"
+            (Usage kind="render" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="references" target=asTable
+                (*ast.QualifiedName))
+              (Relationship kind="typing" target=Table
+                (*ast.QualifiedName)))))))))

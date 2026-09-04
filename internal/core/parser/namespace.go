@@ -200,8 +200,10 @@ func (p *Parser) parseIdentificationStopping(stop ...string) ast.Identification 
 		}
 		switch kw {
 		case "default", "connect", "allocate", "from", "to", "then", "first", "do", "of":
-			// These keywords have special syntax meaning, not valid as identifier names here
-			return id
+			// These keywords continue a declaration where the language reserves them.
+			if p.reservedWord(kw) {
+				return id
+			}
 		}
 		// Any other keyword here is the name the author meant, so it is read as
 		// one rather than dropped. Only a word this language reserves needs the
@@ -306,6 +308,9 @@ func (p *Parser) parseMember() ast.Node {
 	}
 	if p.atRelationshipMember() {
 		return p.parseRelationshipMember(start, vis, trivia)
+	}
+	if en := p.parseMisplacedStateSubaction(start, trivia); en != nil {
+		return en
 	}
 
 	// A namespace member may be a succession stated without its keyword

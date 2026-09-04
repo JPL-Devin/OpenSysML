@@ -364,5 +364,5 @@ func isFeatureKind(kind symbols.SymbolKind) bool {
 	if !isTypeKind(kind) {
 		return false
 	}
-	return strings.HasSuffix(kind.String(), "Usage") || kind == symbols.SymbolConnectorEnd
+	return strings.HasSuffix(kind.String(), "Usage") || kind == symbols.SymbolConnectorEnd || kind == symbols.SymbolCrossFeature
 }

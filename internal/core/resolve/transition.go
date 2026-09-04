@@ -47,6 +47,7 @@ func (r *Resolver) ResolveEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) 
 		res = resolution{}
 	}
 	if res.ok || r.quiet == 0 {
+		journalNew(r, r.endpoints, qn, qn)
 		r.endpoints[qn] = res
 	}
 	return res.sym, res.ok

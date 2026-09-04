@@ -697,12 +697,12 @@ func tinyModel(loop, count int) []byte {
         attribute count : Integer = 0;
         entry; then s0;
         state s0 {
-            accept after 1 if count < %d then s1;
-            accept after 1 if count >= %d then done;
+            accept after 1 [SI::s] if count < %d then s1;
+            accept after 1 [SI::s] if count >= %d then done;
         }
         state s1 {
             entry assign count := count + 1;
-            accept after 1 then s0;
+            accept after 1 [SI::s] then s0;
         }
     }
 }
