@@ -52,20 +52,22 @@ func (ec *exprChecker) warnf(span source.Span, format string, args ...any) {
 	})
 }
 
-// checkUsageValue checks a feature's bound value (`attribute x : T = expr`)
+// checkDeclValue checks a feature's bound value (`attribute x : T = expr`)
 // against the type and multiplicity the feature declares.
-func (ec *exprChecker) checkUsageValue(scope *symbols.Scope, u *ast.Usage) {
-	if u.Value == nil {
+func (ec *exprChecker) checkDeclValue(scope *symbols.Scope, d featureDecl) {
+	if d.value == nil {
 		return
 	}
-	ec.markPerformed(u.PerformedInvocation())
+	if u, ok := d.node.(*ast.Usage); ok {
+		ec.markPerformed(u.PerformedInvocation())
+	}
 	// The node's own body folds over the parameters of an invocation written as
 	// its value (`action n = B(a = 1) { in b = 2; }`).
 	var node *symbols.Symbol
-	if body := scope.ChildFor(u); body != nil {
+	if body := scope.ChildFor(d.node); body != nil {
 		node = body.Owner()
 	}
-	ec.checkBoundValue(scope, scope, u, u.Value, node)
+	ec.checkBoundValue(scope, scope, d, d.value, node)
 }
 
 // checkPerform types the action a `perform` statement runs.
@@ -90,8 +92,8 @@ func (ec *exprChecker) markPerformed(inv *ast.InvocationExpr) {
 // feature's declaration in declScope, which differ when the value is written by
 // an assignment rather than declared on the feature. node is the feature's own
 // symbol when the value is declared on it, or nil.
-func (ec *exprChecker) checkBoundValue(valueScope, declScope *symbols.Scope, u *ast.Usage, value ast.Node, node *symbols.Symbol) {
-	want := ec.declaredPrimType(declScope, u.Relationships)
+func (ec *exprChecker) checkBoundValue(valueScope, declScope *symbols.Scope, d featureDecl, value ast.Node, node *symbols.Symbol) {
+	want := ec.declaredPrimType(declScope, d.relationships)
 	// A collection literal binds elementwise, so each element is checked
 	// against the feature's type rather than the sequence as a whole.
 	for _, element := range valueElements(value) {
@@ -108,9 +110,9 @@ func (ec *exprChecker) checkBoundValue(valueScope, declScope *symbols.Scope, u *
 			ec.errorf(element.Span(), "cannot bind %s value to a feature typed by %s", got, want)
 		}
 	}
-	ec.checkValueConformance(valueScope, declScope, u, value)
-	ec.checkValueDimension(valueScope, declScope, u, value)
-	ec.checkValueCount(declScope, u, value)
+	ec.checkValueConformance(valueScope, declScope, d, value)
+	ec.checkValueDimension(valueScope, declScope, d, value)
+	ec.checkValueCount(declScope, d, value)
 }
 
 // bindable reports whether a got-typed value may bind to a want-typed feature: a literal's
@@ -863,7 +865,7 @@ func (ec *exprChecker) checkFeatureBinding(scope *symbols.Scope, arg ast.Node, g
 		ec.checkObjectBinding(scope, arg, feature, typ)
 	}
 	if count, known := exactCount(arg); known {
-		if r, ok := ec.effectiveRange(feature.OwnerScope, u, 0); ok {
+		if r, ok := ec.effectiveRange(feature.OwnerScope, usageDecl(u), 0); ok {
 			if msg := r.CountViolation(count); msg != "" {
 				ec.errorf(arg.Span(), "%s of %s: %s", feature.Name, typ.Name, msg)
 			}

@@ -614,6 +614,9 @@ func (ctx *Context) EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope
 // RequireConstraint returns an ErrNotAConstraint usage error unless sym
 // declares a constraint, so a caller can settle the kind before evaluating.
 func RequireConstraint(sym *symbols.Symbol) error {
+	if _, ok := ast.OwnedConstraintOf(sym.Decl); ok {
+		return nil
+	}
 	switch decl := sym.Decl.(type) {
 	case *ast.Definition:
 		if decl.Kind == ast.DefConstraint {
@@ -668,7 +671,7 @@ func (ctx *Context) CheckConstraintOn(sym *symbols.Symbol, scope *symbols.Scope,
 	}
 
 	// Evaluate every condition the constraint states, inherited ones included.
-	conds := ctx.conditionsOf(ctx.chainMembers(sym, scope))
+	conds := ctx.conditionsOf(sym, ctx.chainMembers(sym, scope))
 	holds, err := ctx.evaluateConditions(conditionCheck{
 		sym:     sym,
 		kind:    "constraint",
@@ -785,15 +788,20 @@ type scopedMember struct {
 // definition (constraint limit : MassLimit) carries no members itself. A library
 // supertype states the metamodel frame every element specializes rather than the
 // model's own objectives, conditions or parameters, so it contributes none.
+// A supertype whose result expression a redefinition replaces keeps its other members.
 func (ctx *Context) chainMembers(sym *symbols.Symbol, scope *symbols.Scope) []scopedMember {
 	var out []scopedMember
 	supers := ctx.model.AllSupertypes(sym)
+	replaced := ctx.replacedResultExpressions(sym, supers)
 	for i := len(supers) - 1; i >= 0; i-- {
 		link := supers[i]
 		if link == nil || ctx.libraryDeclared(link) {
 			continue
 		}
 		for _, node := range declMembers(link.Decl) {
+			if replaced[link] && isResultExpression(node) {
+				continue
+			}
 			out = append(out, scopedMember{node: node, scope: bodyScope(link, link.OwnerScope)})
 		}
 	}
@@ -801,6 +809,62 @@ func (ctx *Context) chainMembers(sym *symbols.Symbol, scope *symbols.Scope) []sc
 		out = append(out, scopedMember{node: node, scope: bodyScope(sym, scope)})
 	}
 	return out
+}
+
+// replacedResultExpressions returns the supertypes a redefinition owning a result
+// expression replaces (and those only they reach); a body owning none inherits it.
+func (ctx *Context) replacedResultExpressions(sym *symbols.Symbol, supers []*symbols.Symbol) map[*symbols.Symbol]bool {
+	if !isConstraintSymbol(sym) {
+		return nil
+	}
+	replaced := map[*symbols.Symbol]bool{}
+	for _, link := range append([]*symbols.Symbol{sym}, supers...) {
+		if link == nil || !isConstraintSymbol(link) || !ownsResultExpression(declMembers(link.Decl)) {
+			continue
+		}
+		for _, redefined := range ctx.model.AllRedefinedFeatures(link) {
+			replaced[redefined] = true
+		}
+	}
+	if len(replaced) == 0 {
+		return nil
+	}
+	kept := map[*symbols.Symbol]bool{}
+	var keep func(*symbols.Symbol)
+	keep = func(s *symbols.Symbol) {
+		for _, direct := range ctx.model.DirectSupertypes(s) {
+			if direct == nil || direct == sym || replaced[direct] || kept[direct] {
+				continue
+			}
+			kept[direct] = true
+			keep(direct)
+		}
+	}
+	keep(sym)
+	skipped := map[*symbols.Symbol]bool{}
+	for _, link := range supers {
+		if link != nil && !kept[link] {
+			skipped[link] = true
+		}
+	}
+	return skipped
+}
+
+// ownsResultExpression reports whether one of a body's members is its result expression.
+func ownsResultExpression(members []ast.Node) bool {
+	for _, member := range members {
+		if isResultExpression(member) {
+			return true
+		}
+	}
+	return false
+}
+
+// isResultExpression reports whether node is a bare condition (`x > 0`), the body's
+// result expression; a nested `assert constraint { … }` or reference is a feature instead.
+func isResultExpression(node ast.Node) bool {
+	c, ok := node.(*ast.ConstraintMember)
+	return ok && c.Keyword == "" && c.Expression != nil
 }
 
 // bodyScope is the scope a member of sym's body was written in: sym's own body,
@@ -855,7 +919,7 @@ func (ctx *Context) CheckRequirementOn(sym *symbols.Symbol, scope *symbols.Scope
 	}
 
 	// Second pass: evaluate the assumed and required conditions.
-	conds := ctx.conditionsOf(members)
+	conds := ctx.conditionsOf(sym, members)
 	holds, err := ctx.evaluateConditions(conditionCheck{
 		sym:      sym,
 		kind:     "requirement",

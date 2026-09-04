@@ -176,7 +176,7 @@ func (c *sendActionChecker) check(scope *symbols.Scope, send *ast.SendStatement)
 	}
 	body := childScopeOr(scope, send)
 	if payload := lower.SendPayloadParameter(send); payload != nil && !c.ctx.DownstreamOfFailure(payload) {
-		c.expr.checkUsageValue(body, payload)
+		c.expr.checkDeclValue(body, usageDecl(payload))
 	}
 	receiver := send.Target
 	if send.IsVia {

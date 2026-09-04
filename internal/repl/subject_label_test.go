@@ -6,7 +6,7 @@ import "testing"
 // declaration and the object answer a condition over it differently.
 const nestedSubjectFixture = `package A {
     part def Inner {
-        attribute c = 5.0;
+        attribute c default = 5.0;
         constraint small { c < 10.0 }
     }
     part def Outer {

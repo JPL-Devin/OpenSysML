@@ -47,13 +47,11 @@ type Condition struct {
 // Label renders the condition as written, negation and grouping included.
 func (c Condition) Label() string { return conditionLabel(c) }
 
-// Owner is the element declaring the condition, which is the supertype it was
-// inherited from for an inherited one, or nil when the scope has no owner.
+// Owner is the nearest named element declaring the condition (the supertype an
+// inherited one came from), or nil; a body-local or anonymous scope is skipped.
 func (c Condition) Owner() *symbols.Symbol {
-	// A body-local scope owns no symbol, so the declaring element is the
-	// nearest enclosing scope that does.
 	for s := c.Scope; s != nil; s = s.Parent() {
-		if owner := s.Owner(); owner != nil {
+		if owner := s.Owner(); owner != nil && owner.Name != "" {
 			return owner
 		}
 	}
@@ -70,7 +68,7 @@ func (ctx *Context) ConditionsOf(sym *symbols.Symbol, scope *symbols.Scope) []Co
 	if scope == nil {
 		scope = sym.OwnerScope
 	}
-	return ctx.conditionsOf(ctx.chainMembers(sym, scope))
+	return ctx.conditionsOf(sym, ctx.chainMembers(sym, scope))
 }
 
 // scopedExpr is an expression with the scope its names resolve in.
@@ -79,15 +77,54 @@ type scopedExpr struct {
 	scope *symbols.Scope
 }
 
-// conditionsOf returns the conditions the members state, inherited ones first.
+// conditionsOf returns the conditions sym's members state, inherited ones first.
 // A member states its condition either directly (`require x < y;`, `assert x < y;`)
 // or through the body of an anonymous nested constraint (`require constraint { x < y }`).
-func (ctx *Context) conditionsOf(members []scopedMember) []Condition {
-	var out []Condition
+func (ctx *Context) conditionsOf(sym *symbols.Symbol, members []scopedMember) []Condition {
+	return ctx.appendMemberConditions(nil, sym, members, true, nil)
+}
+
+// appendMemberConditions appends the conditions sym's members state, leaving out
+// an inherited named constraint a closer one shadows or redefines (KerML 7.3.4.5);
+// an anonymous one, which no name can redefine, is always inherited.
+func (ctx *Context) appendMemberConditions(out []Condition, sym *symbols.Symbol, members []scopedMember,
+	required bool, seen map[*symbols.Symbol]bool) []Condition {
+	var effective map[*symbols.Symbol]bool
 	for _, member := range members {
-		out = ctx.appendConditions(out, member.node, member.scope, true, false, nil)
+		if owner := ctx.namedConstraintOf(member); owner != nil && owner != sym && owner.Name != "" {
+			if effective == nil {
+				effective = ctx.effectiveMembers(sym)
+			}
+			if !effective[owner] {
+				continue
+			}
+		}
+		out = ctx.appendConditions(out, member.node, member.scope, required, false, seen)
 	}
 	return out
+}
+
+// namedConstraintOf returns the constraint usage a require/assume constraint
+// member declares, named or anonymous; nil for any other member.
+func (ctx *Context) namedConstraintOf(member scopedMember) *symbols.Symbol {
+	if _, ok := ast.OwnedConstraintOf(member.node); !ok {
+		return nil
+	}
+	body := symbols.ConstraintBodyScope(member.scope, member.node)
+	if body == nil || body.Owner() == nil || body.Owner().Decl != member.node {
+		return nil
+	}
+	return body.Owner()
+}
+
+// effectiveMembers is the set of members sym has: MembersOf as a set.
+func (ctx *Context) effectiveMembers(sym *symbols.Symbol) map[*symbols.Symbol]bool {
+	members := ctx.model.MembersOf(sym)
+	set := make(map[*symbols.Symbol]bool, len(members))
+	for _, member := range members {
+		set[member] = true
+	}
+	return set
 }
 
 // appendConditions appends the conditions node states. required says whether the
@@ -134,27 +171,33 @@ func (ctx *Context) appendConditions(out []Condition, node ast.Node, scope *symb
 			out = append(out, Condition{Expr: m.Expression, Scope: scope, Required: true})
 		}
 		out = ctx.appendReferencedConditions(out, m.Reference, scope, true, seen)
-		// The body is a scope of its own, which is where a condition it states
-		// reads the names it declares.
-		body := symbols.ConstraintBodyScope(scope, m)
-		for _, nested := range m.Body {
-			out = ctx.appendConditions(out, nested, body, true, false, seen)
-		}
+		out = ctx.appendOwnedConditions(out, m, m.Body, scope, true, seen)
 	case *ast.AssumeMember:
 		if m.Expression != nil {
 			out = append(out, Condition{Expr: m.Expression, Scope: scope})
 		}
 		out = ctx.appendReferencedConditions(out, m.Reference, scope, false, seen)
-		body := symbols.ConstraintBodyScope(scope, m)
-		for _, nested := range m.Body {
-			out = ctx.appendConditions(out, nested, body, false, false, seen)
-		}
+		out = ctx.appendOwnedConditions(out, m, m.Body, scope, false, seen)
 	case *ast.Membership:
 		out = ctx.appendConditions(out, m.Member, scope, required, negated, seen)
 	default:
 		if _, ok := statementKeyword(m); ok {
 			out = append(out, Condition{Statement: m, Scope: scope, Required: required})
 		}
+	}
+	return out
+}
+
+// appendOwnedConditions appends what a require/assume member's constraint states:
+// a named one its whole chain, an anonymous body its own conditions.
+func (ctx *Context) appendOwnedConditions(out []Condition, member ast.Node, body []ast.Node, scope *symbols.Scope,
+	required bool, seen map[*symbols.Symbol]bool) []Condition {
+	if owner := ctx.namedConstraintOf(scopedMember{node: member, scope: scope}); owner != nil {
+		return ctx.appendMemberConditions(out, owner, ctx.chainMembers(owner, scope), required, seen)
+	}
+	bodyScope := symbols.ConstraintBodyScope(scope, member)
+	for _, nested := range body {
+		out = ctx.appendConditions(out, nested, bodyScope, required, false, seen)
 	}
 	return out
 }
@@ -241,10 +284,7 @@ func (ctx *Context) appendReferencedConditions(out []Condition, ref *ast.Qualifi
 	}
 	seen[sym] = true
 	defer delete(seen, sym)
-	var conds []Condition
-	for _, member := range ctx.chainMembers(sym, nil) {
-		conds = ctx.appendConditions(conds, member.node, member.scope, true, false, seen)
-	}
+	conds := ctx.appendMemberConditions(nil, sym, ctx.chainMembers(sym, nil), true, seen)
 	for i := range conds {
 		conds[i].Required = required
 	}
