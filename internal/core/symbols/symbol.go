@@ -84,6 +84,9 @@ const (
 	// SymbolConnectorEnd is an end feature a connector usage declares in its
 	// connect clause (`connect bead references t.bead`).
 	SymbolConnectorEnd
+	// SymbolCrossFeature is the cross feature an end feature declares inline
+	// ahead of its own declaration (`end x1 [0..1] feature x : C1`).
+	SymbolCrossFeature
 	// SymbolKerMLType classifies a KerML type declaration — `class`,
 	// `classifier`, `struct`, `assoc`, `behavior`, `predicate` — which the SysML
 	// definition taxonomy has no counterpart for.
@@ -166,6 +169,7 @@ var symbolKindNames = map[SymbolKind]string{
 	SymbolVerificationCaseUsage:   "verificationCaseUsage",
 	SymbolUseCaseUsage:            "useCaseUsage",
 	SymbolConnectorEnd:            "connectorEnd",
+	SymbolCrossFeature:            "crossFeature",
 	SymbolKerMLType:               "kermlType",
 }
 

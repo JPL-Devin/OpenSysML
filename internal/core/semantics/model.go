@@ -162,6 +162,8 @@ func RelationshipsOf(sym *symbols.Symbol) []*ast.Relationship {
 		return d.Relationships
 	case *ast.ConnectorEnd:
 		return d.Relationships
+	case *ast.CrossFeatureMember:
+		return d.Relationships
 	case *ast.BodyExpr:
 		// A body parameter is not a node of its own, so its symbol declares the
 		// body and names the parameter its typing is written on.

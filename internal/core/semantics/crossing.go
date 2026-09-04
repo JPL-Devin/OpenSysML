@@ -54,11 +54,15 @@ func (m *Model) CrossFeature(sym *symbols.Symbol) *symbols.Symbol {
 	return cross
 }
 
-// OwnedCrossFeature returns the first `member feature` in the body of the end
-// feature sym, which is its cross feature when it crosses nothing explicitly.
+// OwnedCrossFeature returns the feature the end sym declares inline ahead of
+// itself, else the first `member feature` in its body: its cross feature when
+// it crosses nothing explicitly.
 func (m *Model) OwnedCrossFeature(sym *symbols.Symbol) *symbols.Symbol {
 	if m == nil || sym == nil || sym.Scope == nil || !declaresEnd(sym) || ownerSymbol(sym) == nil {
 		return nil
+	}
+	if u, ok := sym.Decl.(*ast.Usage); ok && u.CrossFeature != nil {
+		return memberSymbol(sym.Scope, u.CrossFeature)
 	}
 	for _, member := range declMembers(sym) {
 		wrapper, ok := member.(*ast.Membership)

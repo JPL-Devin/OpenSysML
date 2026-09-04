@@ -284,6 +284,67 @@ func TestW10BCrossFeatureSpecializationOwnedCrossFeatureClean(t *testing.T) {
 	}
 }
 
+// A cross feature an end declares inline ahead of itself (`end x1 [0..1]
+// feature x`) is the cross feature a redefining end must specialize; one the
+// redefining end declares inline itself implicitly does.
+func TestW10BCrossFeatureSpecializationInlineCrossFeature(t *testing.T) {
+	const src = `package P {
+		class C1;
+		class C2 { feature g : C1; }
+		assoc A {
+			end x1 [0..1] feature x : C1;
+			end feature y : C2;
+		}
+		assoc B specializes A {
+			end feature x2 : C1 redefines x crosses y2.g;
+			end feature y2 : C2 redefines y;
+		}
+		assoc B2 specializes A {
+			end x3 [0..1] feature x2 : C1 redefines x;
+			end feature y2 : C2 redefines y;
+		}
+		assoc B3 specializes A {
+			end feature x2 : C1 redefines x { member feature x4 : C1; }
+			end feature y2 : C2 redefines y;
+		}
+	}`
+	diags := constraintDiagsKerML(t, src)
+	expectCrossDiag(t, src, diags, codeCrossFeatureSpecialization, msgCrossSpecialization, "y2.g")
+	if got := only(diags, codeCrossFeatureSpecialization); len(got) != 1 {
+		t.Errorf("expected the one crossing of an unrelated feature, got %v", got)
+	}
+	for _, code := range []string{codeCrossSubsettingOwner, codeCrossSubsettingAtMostOne, codeCrossSubsettingChain, codeCrossFeatureType} {
+		if got := only(diags, code); len(got) != 0 {
+			t.Errorf("%s fired on well-formed ends: %v", code, got)
+		}
+	}
+}
+
+// The inline cross feature spelling is shared with SysML connection ends.
+func TestW10BCrossFeatureSpecializationInlineCrossFeatureSysML(t *testing.T) {
+	const src = `package P {
+		part def Person { part friends : Person[*]; }
+		part def Pet { part owners : Person[*]; }
+		connection def Owns {
+			end owners [0..*] part owner : Person;
+			end ref pet : Pet;
+		}
+		connection def Sub :> Owns {
+			end ref owner2 : Person redefines owner crosses pet2.owners;
+			end ref pet2 : Pet redefines pet;
+		}
+		connection def Sub2 :> Owns {
+			end owners2 [0..*] part owner2 : Person redefines owner;
+			end ref pet2 : Pet redefines pet;
+		}
+	}`
+	diags := constraintDiags(t, src)
+	expectCrossDiag(t, src, diags, codeCrossFeatureSpecialization, msgCrossSpecialization, "pet2.owners")
+	if got := only(diags, codeCrossFeatureSpecialization); len(got) != 1 {
+		t.Errorf("expected the one crossing of an unrelated feature, got %v", got)
+	}
+}
+
 // The constraints are KerML-owned but reachable from SysML connection
 // definitions and part usages.
 func TestW10BCrossSubsettingSysML(t *testing.T) {

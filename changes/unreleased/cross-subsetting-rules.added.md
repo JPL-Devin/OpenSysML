@@ -11,6 +11,8 @@
   cross a feature that specializes what the redefined end crosses (`Cross feature must
   specialized redefined-end cross features`). The rules read the same for KerML `assoc` and
   `connector` ends and for SysML `connection def` and `connection` ends. A cross feature an
-  end declares in its own body (`end a : A { member feature x : B; }`) now implicitly subsets
-  the cross feature of each end its owner redefines, as the specification's implied
-  specializations require, so the n-ary association examples of the reference stay silent.
+  end declares in its own body (`end a : A { member feature x : B; }`) or inline ahead of
+  itself (`end x [0..1] feature a : A;`) now implicitly subsets the cross feature of each end
+  its owner redefines, as the specification's implied specializations require, so the n-ary
+  association examples of the reference stay silent; the inline cross feature is a member of
+  its end, so `A::a::x` resolves to it.

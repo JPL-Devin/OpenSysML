@@ -841,6 +841,7 @@ var usageSymbolKinds = map[symbols.SymbolKind]bool{
 	symbols.SymbolVerificationCaseUsage:   true,
 	symbols.SymbolUseCaseUsage:            true,
 	symbols.SymbolConnectorEnd:            true, // An end of a connect clause is a feature
+	symbols.SymbolCrossFeature:            true,
 	symbols.SymbolAlias:                   true, // Aliases can be subsetting targets
 }
 
