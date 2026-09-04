@@ -308,6 +308,7 @@ func (r *Resolver) importsOf(node ast.Node) []*ast.Import {
 		return imports
 	}
 	imports := importsOf(node)
+	journalNew(r, r.imports, node, node)
 	r.imports[node] = imports
 	return imports
 }

@@ -388,7 +388,7 @@
     {
       "name": "validateFeatureConstantIsVariable",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateFeatureCrossFeatureSpecialization",
@@ -464,7 +464,7 @@
     {
       "name": "validateFeatureValueIsInitial",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateFeatureValueOverriding",
@@ -1015,17 +1015,17 @@
     {
       "name": "validateTriggerInvocationActionAfterArgument",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateTriggerInvocationActionAtArgument",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateTriggerInvocationActionWhenArgument",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateTypeAtMostOneConjugator",

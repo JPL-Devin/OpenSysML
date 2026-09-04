@@ -79,6 +79,9 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 			} else {
 				tc.checkFeatureDecl(scope, usageDecl(d))
 			}
+			if d.IsAccept {
+				tc.expr.checkTrigger(scope, d)
+			}
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
 			}
@@ -173,7 +176,7 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 	case *ast.TransitionMember:
 		// The effect and body see the parameters the trigger declares; the
 		// guard is the transition guard pass's.
-		tc.checkTrigger(scope, m.Trigger)
+		tc.expr.checkTrigger(scope, m.Trigger)
 		body := symbols.TriggerScope(scope, m)
 		tc.walk(body, m.Effect)
 		tc.walk(body, m.Members)
@@ -238,24 +241,6 @@ func (tc *typeChecker) checkSubjectMember(scope *symbols.Scope, m *ast.SubjectMe
 			body = child
 		}
 		tc.walk(body, m.Body)
-	}
-}
-
-// checkTrigger types a transition trigger. A change event carries a Boolean
-// condition and a time event a duration expression; a signal or call trigger
-// names an event and has nothing to type here. `transition ... when <expr>`
-// leaves the trigger as a bare expression, which is a change-event condition
-// unless it is a bare name — that names a signal.
-func (tc *typeChecker) checkTrigger(scope *symbols.Scope, trigger ast.Node) {
-	switch t := trigger.(type) {
-	case nil:
-	case *ast.ChangeEvent:
-		tc.expr.checkBoolean(scope, t.Condition, "change event condition")
-	case *ast.TimeEvent:
-		tc.expr.infer(scope, t.Duration)
-	case *ast.FeatureReference, *ast.QualifiedName, *ast.AcceptEvent, *ast.CallEvent:
-	default:
-		tc.expr.checkBoolean(scope, trigger, "change event condition")
 	}
 }
 

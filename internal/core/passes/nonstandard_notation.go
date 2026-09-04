@@ -150,12 +150,16 @@ func (w *notationWalker) walk(members []ast.Node) {
 				"no notation states a deferred event")
 		case *ast.InitialNode:
 			w.initialNode(n)
-			w.walkActionBody(n.Members)
+			// `first a then b { … }` ends in the succession's UsageBody (SysML.xtext:1698).
+			w.walkDeclaration(n.Members, n)
 		case *ast.DecisionNode:
 			w.walkActionBody(n.Members)
 		case *ast.TransitionMember:
 			w.walkActionBody(n.Effect)
 			w.walkActionBody(n.Members)
+		case *ast.SuccessionEdge:
+			// `then b { … }` ends in the succession's UsageBody (SysML.xtext:1698).
+			w.walkDeclaration(n.Members, n)
 		case *ast.EntryMember:
 			w.walkActionBody(n.Actions)
 		case *ast.DoMember:
