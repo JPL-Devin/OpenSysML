@@ -108,7 +108,8 @@ class ModelExamplesTest {
         new Value.Sequence(
             List.of(new Value.IntegerValue(1), new Value.IntegerValue(2), new Value.IntegerValue(3))),
         model.eval("(1, 2, 3)"));
-    assertEquals(new Value.Sequence(List.of()), model.eval("()"));
+    assertEquals(new Value.Sequence(List.of()), model.eval("(1, 2, 3).?{in e; e > 5}"));
+    assertEquals(new Value.NullValue(), model.eval("()"));
   }
 
   @Test

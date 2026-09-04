@@ -536,6 +536,62 @@ func TestCompileReportsBindingMultiplicityMismatch(t *testing.T) {
 	}
 }
 
+// `()` and `null` are the one null expression, binding no value: within a
+// parameter's multiplicity that is a binding, outside it a mismatch.
+func TestCompileBindsNullToNoValues(t *testing.T) {
+	for name, binding := range map[string]string{"parens": "()", "null": "null"} {
+		t.Run(name, func(t *testing.T) {
+			fixture := loadPlanningFixture(t, `
+				calc def Names :> Query {
+					in root : Element;
+					in extra : Element[0..*];
+					OwnedElements(source = root)
+				}
+				part telescope;
+				part def Report :> Document {
+					attribute redefines title = "Report";
+					part list : List {
+						calc items : Names {
+							in root = telescope;
+							in extra = `+binding+`;
+						}
+					}
+				}
+			`)
+			plan, err := fixture.compile(t, "Report")
+			if err != nil {
+				t.Fatalf("compile: %v", err)
+			}
+			bindings := plan.Content()[0].Query().Bindings()
+			if len(bindings) != 2 || bindings[1].Parameter() != "extra" {
+				t.Fatalf("bindings = %+v", bindings)
+			}
+			if values := bindings[1].Values(); len(values) != 0 {
+				t.Fatalf("extra values = %+v, want none", values)
+			}
+		})
+	}
+	fixture := loadPlanningFixture(t, `
+		calc def Names :> Query {
+			in root : Element[1];
+			OwnedElements(source = root)
+		}
+		part def Report :> Document {
+			attribute redefines title = "Report";
+			part list : List {
+				calc items : Names {
+					in root = ();
+				}
+			}
+		}
+	`)
+	_, err := fixture.compile(t, "Report")
+	planning := planningError(t, err)
+	if planning.Kind != ErrorBindingMultiplicity || planning.Parameter != "root" || planning.Actual != "0" {
+		t.Fatalf("error = %+v", planning)
+	}
+}
+
 func TestCompileAcceptsSignedNumericBindings(t *testing.T) {
 	fixture := loadPlanningFixture(t, `
 		calc def Names :> Query {

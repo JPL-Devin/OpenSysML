@@ -287,10 +287,7 @@ func (ec *exprChecker) inferIndex(scope *symbols.Scope, e *ast.IndexExpr) semant
 	// notation counting from 1, and any index beyond a sequence written out.
 	if lit, ok := e.Index.(*ast.LiteralInteger); ok {
 		if written, err := strconv.ParseInt(lit.Value, 10, 64); err == nil {
-			length, known := int64(0), false
-			if seq, isSeq := e.Operand.(*ast.SequenceExpr); isSeq {
-				length, known = writtenLength(seq)
-			}
+			length, known := writtenLength(e.Operand)
 			switch {
 			case written == 0:
 				ec.errorf(lit.Span(), "sequence index counts from 1, found 0")
@@ -303,17 +300,23 @@ func (ec *exprChecker) inferIndex(scope *symbols.Scope, e *ast.IndexExpr) semant
 	return elem
 }
 
-// writtenLength answers how many elements a sequence expression holds, and
-// whether that is knowable at all: a KerML sequence is flat, so an element that
-// is itself multi-valued contributes its own elements and the length is known
-// only from the values.
-func writtenLength(seq *ast.SequenceExpr) (int64, bool) {
-	for _, el := range seq.Elements {
-		if !isSingleValued(el) {
-			return 0, false
+// writtenLength answers how many elements an operand written out holds, and
+// whether that is knowable at all: `null` holds none; a KerML sequence is flat,
+// so an element that is itself multi-valued contributes its own elements and
+// the length is known only from the values.
+func writtenLength(operand ast.Node) (int64, bool) {
+	switch n := operand.(type) {
+	case *ast.NullExpr:
+		return 0, true
+	case *ast.SequenceExpr:
+		for _, el := range n.Elements {
+			if !isSingleValued(el) {
+				return 0, false
+			}
 		}
+		return int64(len(n.Elements)), true
 	}
-	return int64(len(seq.Elements)), true
+	return 0, false
 }
 
 // isSingleValued reports whether an expression written as a sequence element is

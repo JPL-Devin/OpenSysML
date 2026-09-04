@@ -31,6 +31,17 @@ func TestIndexPastWrittenSequenceReported(t *testing.T) {
 		"sequence index 4 is outside 1..3")
 }
 
+// `()` and `null` are the same expression and hold nothing, so no position is
+// inside them.
+func TestIndexIntoNullReported(t *testing.T) {
+	wantOneDiag(t,
+		`package P { attribute x = ()#(1); }`,
+		"sequence index 1 is outside 1..0")
+	wantOneDiag(t,
+		`package P { attribute x = null#(1); }`,
+		"sequence index 1 is outside 1..0")
+}
+
 func TestIndexInRangeOK(t *testing.T) {
 	wantNoDiags(t, `package P { attribute x = (1, 2, 3)#(3); }`)
 }

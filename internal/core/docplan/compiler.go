@@ -1645,9 +1645,12 @@ func (c *compiler) bindingValues(
 	if node == nil {
 		return nil, c.unsupportedBinding(content, member, entry, parameter)
 	}
-	if sequenceExpr, ok := node.(*ast.SequenceExpr); ok {
-		values := make([]BindingValue, 0, len(sequenceExpr.Elements))
-		for _, element := range sequenceExpr.Elements {
+	switch expression := node.(type) {
+	case *ast.NullExpr:
+		return nil, nil
+	case *ast.SequenceExpr:
+		values := make([]BindingValue, 0, len(expression.Elements))
+		for _, element := range expression.Elements {
 			value, err := c.bindingValue(content, member, entry, parameter, element)
 			if err != nil {
 				return nil, err
