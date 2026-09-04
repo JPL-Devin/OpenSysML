@@ -49,6 +49,10 @@ type Context struct {
 	// named feature of the type.
 	holders map[*symbols.Symbol]map[string][]string
 
+	// redefined memoizes, per feature of a type, the features it redefines
+	// transitively; callers read the shared slice and never append to it.
+	redefined map[featureOfType][]*symbols.Symbol
+
 	// writeTargets memoizes the declaration an assignment's target names, per
 	// scope the statement was written in: what a value written must conform to.
 	writeTargets map[writeTargetKey]*writeTarget
@@ -213,6 +217,11 @@ type featureValueRef struct {
 	feature  string
 }
 
+// featureOfType names a declared feature read as a feature of one type.
+type featureOfType struct {
+	feature, owner *symbols.Symbol
+}
+
 // variantSelection identifies a variation point of one object: two objects of a
 // type each select their own variant of the same variation.
 type variantSelection struct {
@@ -282,6 +291,7 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		bindingFeatures:         make(map[*symbols.Symbol]map[string][]lower.Binding),
 		collectingSubsets:       make(map[featureValueRef]bool),
 		readingSubsetted:        make(map[featureValueRef]bool),
+		redefined:               make(map[featureOfType][]*symbols.Symbol),
 		sources:                 make(map[string]*source.SourceFile),
 	}
 }

@@ -272,6 +272,16 @@ func (ctx *Context) redefinedNames(sym, owner *symbols.Symbol) []string {
 // redefinedFeatures returns every feature of owner sym redefines, directly or
 // through a redefinition of a redefinition, in breadth-first order.
 func (ctx *Context) redefinedFeatures(sym, owner *symbols.Symbol) []*symbols.Symbol {
+	key := featureOfType{feature: sym, owner: owner}
+	if features, ok := ctx.redefined[key]; ok {
+		return features
+	}
+	features := ctx.collectRedefinedFeatures(sym, owner)
+	ctx.redefined[key] = features
+	return features
+}
+
+func (ctx *Context) collectRedefinedFeatures(sym, owner *symbols.Symbol) []*symbols.Symbol {
 	var features []*symbols.Symbol
 	seen := map[*symbols.Symbol]bool{sym: true}
 	for queue := []*symbols.Symbol{sym}; len(queue) > 0; {
