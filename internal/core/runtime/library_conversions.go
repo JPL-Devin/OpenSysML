@@ -45,11 +45,9 @@ func registerConversionFunctions() {
 	registerLibraryFunction("RationalFunctions::floor", []string{"x"}, floorToInteger)
 	registerLibraryFunction("RationalFunctions::round", []string{"x"}, roundToInteger)
 	registerLibraryFunction("RationalFunctions::gcd", []string{"x", "y"}, rationalGCD)
-
-	exactRational := "the runtime represents a Rational as a float64, not an exact numerator and denominator (docs/project/exact-rational-evaluation.md)"
-	registerUnevaluable("RationalFunctions::rat", []declaredParam{param("numer"), param("denum")}, exactRational)
-	registerUnevaluable("RationalFunctions::numer", []declaredParam{param("rat")}, exactRational)
-	registerUnevaluable("RationalFunctions::denom", []declaredParam{param("rat")}, exactRational)
+	registerLibraryFunction("RationalFunctions::rat", []string{"numer", "denum"}, integersToRational)
+	registerLibraryFunction("RationalFunctions::numer", []string{"rat"}, rationalNumerator)
+	registerLibraryFunction("RationalFunctions::denom", []string{"rat"}, rationalDenominator)
 }
 
 // anythingToString is BaseFunctions::ToString, the notation x is written with in
@@ -272,6 +270,53 @@ func rationalGCD(args []semantics.Value) (semantics.Value, error) {
 			semantics.ErrArithmeticOverflow, FormatConst(args[0]), FormatConst(args[1]))
 	}
 	return semantics.Value{Kind: semantics.ValInt, Int: gcd.Int64()}, nil
+}
+
+// integersToRational is RationalFunctions::rat: numer/denum rounded once to the
+// float64 a Rational is here, exactly as `/` computes it, zero denum included.
+func integersToRational(args []semantics.Value) (semantics.Value, error) {
+	numer, err := asInteger(args[0])
+	if err != nil {
+		return semantics.Value{}, err
+	}
+	denum, err := asInteger(args[1])
+	if err != nil {
+		return semantics.Value{}, err
+	}
+	q, ok := semantics.IntQuotient(numer, denum)
+	if !ok {
+		return semantics.Value{}, ErrDivisionByZero
+	}
+	return semantics.Value{Kind: semantics.ValReal, Real: q}, nil
+}
+
+// rationalNumerator is RationalFunctions::numer, the numerator of the ratio in
+// lowest terms the Rational holds (docs/project/exact-rational-evaluation.md).
+func rationalNumerator(args []semantics.Value) (semantics.Value, error) {
+	return exactRationalTerm("numer", args[0], (*big.Rat).Num)
+}
+
+// rationalDenominator is RationalFunctions::denom, the positive denominator of
+// the ratio in lowest terms the Rational holds.
+func rationalDenominator(args []semantics.Value) (semantics.Value, error) {
+	return exactRationalTerm("denom", args[0], (*big.Rat).Denom)
+}
+
+// exactRationalTerm reads one term of the exact ratio x holds: an Integer is
+// itself over 1, a float64 the dyadic ratio its bits denote; overflow is reported.
+func exactRationalTerm(fn string, x semantics.Value, term func(*big.Rat) *big.Int) (semantics.Value, error) {
+	var ratio *big.Rat
+	if x.Kind == semantics.ValInt {
+		ratio = new(big.Rat).SetInt64(x.Int)
+	} else if ratio = new(big.Rat).SetFloat64(x.Real); ratio == nil {
+		return semantics.Value{}, fmt.Errorf("%w: %s(%s) has no finite ratio", semantics.ErrArithmeticDomain, fn, FormatConst(x))
+	}
+	result := term(ratio)
+	if !result.IsInt64() {
+		return semantics.Value{}, fmt.Errorf("%w: %s(%s) is %s, which exceeds the Integer range",
+			semantics.ErrArithmeticOverflow, fn, FormatConst(x), result)
+	}
+	return semantics.Value{Kind: semantics.ValInt, Int: result.Int64()}, nil
 }
 
 // wholeInteger is the exact integer a whole numeric value holds: any Integer,

@@ -274,7 +274,11 @@ func metaCastOperand(value ast.Node) *ast.QualifiedName {
 func isFeature(sym *symbols.Symbol) bool {
 	switch sym.Decl.(type) {
 	case *ast.Usage:
-		return !isKerMLTypeDecl(sym)
+		switch sym.Kind {
+		case symbols.SymbolKerMLType, symbols.SymbolAttributeDef, symbols.SymbolCalcDef:
+			return false
+		}
+		return true
 	case *ast.SubjectMember, *ast.AssumeMember, *ast.RequireMember:
 		return true
 	}

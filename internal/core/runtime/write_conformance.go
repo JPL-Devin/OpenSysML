@@ -37,7 +37,7 @@ func (ctx *Context) writeTargetIn(scope *symbols.Scope, name string) (*writeTarg
 		return cached, cached != nil
 	}
 	var target *writeTarget
-	if sym, ok := ctx.resolver.LookupName(scope, name); ok && sym != nil && isFeature(sym) {
+	if sym, ok := ctx.resolver.LookupName(scope, name); ok && sym != nil && semantics.IsShapeFeature(sym) {
 		mult, _ := ctx.extractMultiplicity(sym)
 		target = &writeTarget{name: name, typ: ctx.extractType(sym), mult: mult}
 	}
@@ -244,7 +244,7 @@ func (ctx *Context) shapeRefusal(value Value, declared *symbols.Symbol) string {
 			FormatValue(value), describeValue(value), symbolText(declared), declares)
 	}
 	for _, member := range ctx.model.MembersOfIncludingRedefined(declared) {
-		if !isFeature(member) {
+		if !semantics.IsShapeFeature(member) {
 			continue
 		}
 		switch member.Name {

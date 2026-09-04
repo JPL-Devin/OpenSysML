@@ -1,0 +1,17 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="enum" abstract=false variation=false name="Level"
+      (Membership visibility="default"
+        (Usage kind="enum" name="low" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="ambient" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
+      (Membership visibility="default"
+        (Usage kind="enum" name="high" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="scale" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="unit" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="symbol" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
+      (Membership visibility="default"
+        (Usage kind="enum" name="medium" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))))
