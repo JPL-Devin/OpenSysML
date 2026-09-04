@@ -28,7 +28,7 @@ const baseTypeFeature = "baseType"
 // provisional and must not be memoized.
 func (m *Model) semanticMetadataBases(sym *symbols.Symbol) ([]*symbols.Symbol, bool) {
 	switch sym.Decl.(type) {
-	case *ast.Definition, *ast.Usage:
+	case *ast.Definition, *ast.Usage, *ast.SubjectMember, *ast.AssumeMember, *ast.RequireMember:
 	default:
 		return nil, true
 	}
@@ -98,18 +98,8 @@ func (m *Model) resolveAnnotationType(sym *symbols.Symbol, a MetadataAnnotation)
 // MetadataAnnotationsOf returns the metadata features annotating a declaration,
 // in declaration order. `@A about x` annotates other elements, so it is not one.
 func MetadataAnnotationsOf(decl ast.Node) []MetadataAnnotation {
-	var prefixes []*ast.PrefixMetadata
-	var members []ast.Node
-	switch d := decl.(type) {
-	case *ast.Definition:
-		prefixes, members = d.Prefixes, d.Members
-	case *ast.Usage:
-		prefixes, members = d.Prefixes, d.Members
-	case *ast.Package:
-		prefixes, members = d.Prefixes, d.Members
-	case *ast.Namespace:
-		prefixes, members = d.Prefixes, d.Members
-	default:
+	prefixes, members, ok := ast.DeclaredMetadata(decl)
+	if !ok {
 		return nil
 	}
 	var out []MetadataAnnotation
