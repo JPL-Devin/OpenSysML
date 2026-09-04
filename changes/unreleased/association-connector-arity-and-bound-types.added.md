@@ -9,7 +9,7 @@
   data type — a feature typed by a class, say — is rejected with `Must have a Natural value`; an
   unresolved or untyped bound stays silent.
 - **KerML binary connectors parse as the grammar reads them.** `connector a to b`,
-  `connector [0..1] a to [1..*] b`, `connector e ::> a.x to b.y` and `connector e references x to y`
-  declare an anonymous connector with two ends; only `connector c from a to b` names one. The
+  `connector [0..1] a to [1..*] b`, `connector e ::> a.x to b.y`, `connector e references x to y`
+  and `connector $::P::a to b` declare an anonymous connector with two ends; only `connector c from a to b` names one. The
   first end is no longer mistaken for the connector's name, so a model with two such connectors
   no longer reports a duplicate declaration.

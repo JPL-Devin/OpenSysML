@@ -3989,8 +3989,12 @@ func (p *Parser) atEndThenKeyword(kw string) bool {
 	return p.endThenKeywordAt(0, kw)
 }
 
-// endThenKeywordAt is atEndThenKeyword from the token at offset from.
+// endThenKeywordAt is atEndThenKeyword from the token at offset from; the end
+// may be a global `$::`-qualified name.
 func (p *Parser) endThenKeywordAt(from int, kw string) bool {
+	if p.peekN(from).Kind == lexer.Dollar && p.peekN(from+1).Kind == lexer.ColonColon {
+		from += 2
+	}
 	if !p.atNameAt(from) {
 		return false
 	}
