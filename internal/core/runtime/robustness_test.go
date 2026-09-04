@@ -4828,6 +4828,11 @@ func assertCalcInvocationBounded(t *testing.T, idx *symbols.Index, ctx *Context,
 		if !errors.Is(err, want) {
 			t.Errorf("expected %v, got: %v", want, err)
 		}
+		// One line per frame would make the message (and the memory building
+		// it) grow with the square of the depth.
+		if msg := err.Error(); len(msg) > 1024 {
+			t.Errorf("error for recursive calc %s is %d bytes; want frames collapsed: %.200s…", calcName, len(msg), msg)
+		}
 	case <-time.After(30 * time.Second):
 		t.Fatalf("recursive calc %s did not terminate", calcName)
 	}

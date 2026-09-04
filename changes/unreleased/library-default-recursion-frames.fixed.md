@@ -1,0 +1,1 @@
+- A calc specializing a library function whose parameter default recursed into it reported the recursion limit with one wrapped line per frame, building the message with the square of the depth (over 12 GiB under the race detector) and getting the test suite killed on memory-limited CI. The frames are now collapsed into a count, as a calc body's already were.

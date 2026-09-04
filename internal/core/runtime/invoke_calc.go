@@ -913,7 +913,10 @@ func (ctx *Context) invokeLibraryPerformance(perf *libraryPerformance, args calc
 			ctx.trace.RecordCalcExit(sig.Name, result)
 		}
 	}
-	return result, err
+	if err != nil {
+		return Value{}, calcFrame(sig.Name, err)
+	}
+	return result, nil
 }
 
 func (ctx *Context) applyLibraryPerformance(perf *libraryPerformance, args calcArgs, callerScope *symbols.Scope, self *Instance) (Value, error) {
