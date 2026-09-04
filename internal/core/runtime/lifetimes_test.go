@@ -178,6 +178,112 @@ func TestPerformedActionWithoutAFlowCompletes(t *testing.T) {
 	}
 }
 
+const createBehavingModel = `
+	package test {
+		private import ScalarValues::*;
+		private import OccurrenceFunctions::*;
+		action def Tick;
+		part def Sensor { attribute n : Integer = 1; }
+		part def Probe {
+			part sensor : Sensor;
+			perform action tick : Tick;
+			exhibit state modes { entry; then on; state on; }
+		}
+		part probe : Probe;
+		calc def CreateProbe { return : Probe = create(probe); }
+	}
+`
+
+// TestCreateBeginsBeforeWhatItReachesWith: a usage `create` first reaches begins
+// where the call reached it, ahead of the part reached with it and of the action
+// and state it performs, none of which predates its performer.
+func TestCreateBeginsBeforeWhatItReachesWith(t *testing.T) {
+	_, invoke, ctx := lifetimeFixture(t, createBehavingModel)
+	got, err := invoke("CreateProbe")
+	if err != nil {
+		t.Fatalf("create(probe): %v", err)
+	}
+	probeID, _ := got.Object()
+	probe, _ := ctx.getInstance(probeID)
+	life, _ := ctx.OccurrenceLife(probeID)
+	if !life.Alive() {
+		t.Fatalf("OccurrenceLife(probe) = %v; want alive", life)
+	}
+	fv, err := probe.GetFeatureValue(ctx, "sensor")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sensorID, _ := fv.HeldValue().Object()
+	if l, _ := ctx.OccurrenceLife(sensorID); l.Began != life.Began {
+		t.Errorf("OccurrenceLife(sensor) = %v; want begun with the probe at %d", l, life.Began)
+	}
+	for _, name := range []string{"tick", "modes"} {
+		behavior, ok := probe.Behavior(name)
+		if !ok {
+			t.Fatalf("probe performs no %s", name)
+		}
+		var occurrence *Instance
+		switch {
+		case behavior.Action != nil:
+			occurrence = behavior.Action.occurrence
+		case behavior.State != nil:
+			occurrence = behavior.State.occurrence
+		}
+		if occurrence == nil {
+			t.Fatalf("%s stands for no occurrence", name)
+		}
+		if l, _ := ctx.OccurrenceLife(occurrence.ID); l.Began < life.Began {
+			t.Errorf("OccurrenceLife(%s) = %v; want begun no earlier than its performer at %d", name, l, life.Began)
+		}
+	}
+}
+
+const aliasedPartModel = `
+	package test {
+		private import ScalarValues::*;
+		private import OccurrenceFunctions::*;
+		part def Widget { attribute n : Integer = 1; }
+		part def Base { part p : Widget; }
+		part def Derived :> Base { part q :>> p; }
+		calc def DestroyDerived { in d : Derived; return : Derived = destroy(d); }
+	}
+`
+
+// TestDestroyEndsAnAliasedPartOnce: a part two names of one redefined feature
+// hold is one portion, ended once with one trace event.
+func TestDestroyEndsAnAliasedPartOnce(t *testing.T) {
+	instantiate, invoke, ctx := lifetimeFixture(t, aliasedPartModel)
+	trace := NewTraceRecorder()
+	ctx.SetTrace(trace)
+	derived := instantiate("Derived")
+	p, err := derived.GetFeatureValue(ctx, "p")
+	if err != nil {
+		t.Fatal(err)
+	}
+	q, err := derived.GetFeatureValue(ctx, "q")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p != q {
+		t.Fatalf("p and q are different feature values; the fixture aliases nothing")
+	}
+	if portions := ctx.portionsOf(derived); len(portions) != 2 {
+		t.Errorf("portionsOf(derived) lists %d, want the object and its one part", len(portions))
+	}
+	if _, err := invoke("DestroyDerived", objectValue(derived)); err != nil {
+		t.Fatalf("destroy(derived): %v", err)
+	}
+	var destroyed []string
+	for _, entry := range trace.Entries() {
+		if strings.HasPrefix(entry, "destroy: ") {
+			destroyed = append(destroyed, entry)
+		}
+	}
+	if len(destroyed) != 2 {
+		t.Errorf("trace records %d destructions %q; want one for the object and one for its part", len(destroyed), destroyed)
+	}
+}
+
 // TestCreateOnlyWhatTheCallReaches: `create` begins an object the call first
 // reaches and refuses one that began before it; `addNewAt` refuses an index past
 // one beyond the group's end before it creates anything.

@@ -393,6 +393,7 @@ type adoption struct {
 	shapes  *Shapes
 	plans   map[int64]*adoptPlan
 	rebound map[*symbols.Symbol]*symbols.Symbol
+	mark    int // how many objects ctx had registered before the carry-over
 }
 
 // adoptPlan is what one object becomes in the new context: the declaration it is
@@ -571,6 +572,7 @@ func (ctx *Context) AdoptIdentities(prev *Context) {
 // commit moves the planned objects into this context, rebinding what each of
 // them points at and taking over the derived state that is about them.
 func (a *adoption) commit() {
+	a.mark = len(a.ctx.created)
 	a.ctx.AdoptIdentities(a.prev)
 	adopted := make(map[int64]bool, len(a.plans))
 	for id, plan := range a.plans {
@@ -698,13 +700,10 @@ func (a *adoption) plannedIDs() []int64 {
 }
 
 // abandon takes the carried objects back out of this context, for a carry-over
-// that cannot be completed after the objects were moved.
+// that cannot be completed after the objects were moved: them, their lifetimes,
+// and whatever the failed restart of their behaviors registered.
 func (a *adoption) abandon() {
-	for id, plan := range a.plans {
-		if a.ctx.instances[id] == plan.obj {
-			delete(a.ctx.instances, id)
-		}
-	}
+	a.ctx.abandonInstancesSince(a.mark)
 }
 
 // carryDerived takes over the state the previous context derived about the

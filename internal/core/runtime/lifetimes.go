@@ -93,6 +93,8 @@ func (ctx *Context) beginLife(inst *Instance) {
 
 // createDuring starts inst during the call entered at mark: only an object the
 // call itself first reached can start there; one reached before it began already.
+// It starts where the call reached it, ahead of the portions and performances
+// reached with it, which a part that had begun with the whole holding it joins.
 func (ctx *Context) createDuring(op string, inst *Instance, mark int64) error {
 	prior, err := ctx.lifeOf(op, inst)
 	if err != nil {
@@ -106,8 +108,14 @@ func (ctx *Context) createDuring(op string, inst *Instance, mark int64) error {
 		return fmt.Errorf("%w: function %s: object #%d (%s) began at %d, before the call",
 			ErrOccurrenceLifetime, writtenName(op), inst.ID, symbolText(inst.Type), prior.began)
 	}
-	ctx.lives[inst.ID] = life{reached: prior.reached, began: ctx.newActivation()}
+	ctx.lives[inst.ID] = life{reached: prior.reached, began: prior.reached}
 	ctx.noteProbeUndo(func() { ctx.lives[inst.ID] = prior })
+	for _, portion := range ctx.portionsOf(inst)[1:] {
+		if held := ctx.lives[portion.ID]; held.began < prior.reached {
+			ctx.lives[portion.ID] = life{reached: held.reached, began: prior.reached, ended: held.ended, destroyed: held.destroyed}
+			ctx.noteProbeUndo(func() { ctx.lives[portion.ID] = held })
+		}
+	}
 	if ctx.trace != nil {
 		ctx.trace.RecordOccurrenceCreated(symbolText(inst.Type), inst.ID)
 	}
@@ -143,18 +151,21 @@ func (ctx *Context) destroy(inst *Instance) error {
 }
 
 // portionsOf lists inst and, in identity order, the objects it holds as
-// portions of itself: those its feature values own, transitively.
+// portions of itself: those its feature values own, transitively, each once
+// however many names of a redefined feature hold it.
 func (ctx *Context) portionsOf(inst *Instance) []*Instance {
 	portions := []*Instance{inst}
+	listed := map[int64]bool{inst.ID: true}
 	for i := 0; i < len(portions); i++ {
 		var owned []*Instance
 		for _, fv := range portions[i].FeatureValues {
 			for _, element := range elementsOf(fv.HeldValue()) {
 				id, ok := element.Object()
-				if !ok {
+				if !ok || listed[id] {
 					continue
 				}
 				if held, found := ctx.instances[id]; found && held.owner == portions[i] {
+					listed[id] = true
 					owned = append(owned, held)
 				}
 			}

@@ -781,6 +781,13 @@ func TestAdoptRefusesAnObjectWhoseBehaviorCannotRestart(t *testing.T) {
 	if len(obj.Behaviors()) != 0 {
 		t.Errorf("the refused object still holds %d behaviors", len(obj.Behaviors()))
 	}
+	// Neither the refused object nor anything its restart registered stays behind.
+	if _, ok := ctx.OccurrenceLife(obj.ID); ok {
+		t.Error("the refused object was left a lifetime in the context")
+	}
+	if len(ctx.lives) != 0 || len(ctx.instances) != 0 {
+		t.Errorf("the refused carry-over left %d lifetimes and %d objects in the context", len(ctx.lives), len(ctx.instances))
+	}
 }
 
 // Changed names the declaration a context resolves differently, which is what a
