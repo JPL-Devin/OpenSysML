@@ -56,8 +56,9 @@ type Message struct {
 	Delivery    DeliveryKind
 	// Payload binds features of the message's type by name, as the send's arguments did.
 	Payload map[string]Value
-	// Value is the one value a send of an expression carries (`send 7`, `send d`), or
-	// the occurrence an accept built from Payload; nil until either.
+	// Value is the one value a send of an expression carries (`send 7`, `send d`),
+	// the occurrence `send new T(…)` constructed, or the one an accept built from
+	// Payload; nil until any.
 	Value *Value
 }
 
@@ -1028,15 +1029,24 @@ func (ctx *Context) acceptedValue(msg *Message) (Value, error) {
 	return value, nil
 }
 
-// materializeAccepted builds the occurrence a typed message binds as, leaving no
+// materializeAccepted builds the occurrence an accept binds a typed message as.
+func (ctx *Context) materializeAccepted(msg Message) (Value, error) {
+	value, err := ctx.materializeMessage(msg)
+	if err != nil {
+		return Value{}, fmt.Errorf("accepted %s: %w", msg.SignalType, err)
+	}
+	return value, nil
+}
+
+// materializeMessage builds the occurrence a typed message carries, leaving no
 // instance behind when a payload entry names no feature of it, does not fit
 // one, or two entries name one feature.
-func (ctx *Context) materializeAccepted(msg Message) (Value, error) {
+func (ctx *Context) materializeMessage(msg Message) (Value, error) {
 	mark := len(ctx.created)
 	inst, err := ctx.materialize(msg.Signal, 0)
 	if err != nil {
 		ctx.abandonInstancesSince(mark)
-		return Value{}, fmt.Errorf("materialize accepted %s: %w", msg.SignalType, err)
+		return Value{}, fmt.Errorf("materialize: %w", err)
 	}
 	names := make([]string, 0, len(msg.Payload))
 	for name := range msg.Payload {
@@ -1048,19 +1058,18 @@ func (ctx *Context) materializeAccepted(msg Message) (Value, error) {
 		fv, held := inst.FeatureValues[name]
 		if !held {
 			ctx.abandonInstancesSince(mark)
-			return Value{}, fmt.Errorf("accepted %s: %q names no feature it carries", msg.SignalType, name)
+			return Value{}, fmt.Errorf("%q names no feature it carries", name)
 		}
 		if fv != nil {
 			if earlier, twice := written[fv]; twice {
 				ctx.abandonInstancesSince(mark)
-				return Value{}, fmt.Errorf("accepted %s: %s and %s are one feature, bound twice",
-					msg.SignalType, earlier, name)
+				return Value{}, fmt.Errorf("%s and %s are one feature, bound twice", earlier, name)
 			}
 			written[fv] = name
 		}
 		if err := inst.SetFeatureValue(ctx, name, msg.Payload[name]); err != nil {
 			ctx.abandonInstancesSince(mark)
-			return Value{}, fmt.Errorf("accepted %s: %w", msg.SignalType, err)
+			return Value{}, err
 		}
 	}
 	return Value{Kind: ValInstance, Instance: inst.ID}, nil
@@ -1099,18 +1108,28 @@ func (e *EvalContext) buildInvokedMessage(scope *symbols.Scope, invocation *ast.
 // buildConstructedMessage builds the message of `send new Telemetry(3) via
 // antenna`: the constructed definition types it and the arguments bind its
 // features, so an accept binds a Telemetry whose first feature is 3, never the 3.
-// A positional argument beyond those features is rejected at the send.
+// The occurrence is constructed at the send, so an argument no feature admits, or
+// one beyond the features, is rejected there whether or not an accept consumes it.
 func (e *EvalContext) buildConstructedMessage(scope *symbols.Scope, constructor *ast.ConstructorExpr, target string) (Message, error) {
 	signal, err := e.constructedType(scope, constructor.Type)
 	if err != nil {
 		return Message{}, err
 	}
-	if e.ctx != nil && e.ctx.model != nil {
+	if e.ctx.model != nil {
 		if n := len(e.ctx.model.ConstructibleFeatures(signal)); len(constructor.Args) > n {
 			return Message{}, fmt.Errorf("send %s: new %s takes %d argument(s), found %d", signal.Name, signal.Name, n, len(constructor.Args))
 		}
 	}
-	return e.buildTypedMessage(scope, constructor.Type, signal.Name, signal, constructor.Args, constructor.NamedArgs, target, false)
+	msg, err := e.buildTypedMessage(scope, constructor.Type, signal.Name, signal, constructor.Args, constructor.NamedArgs, target, false)
+	if err != nil {
+		return Message{}, err
+	}
+	value, err := e.ctx.materializeMessage(msg)
+	if err != nil {
+		return Message{}, fmt.Errorf("send new %s: %w", signal.Name, err)
+	}
+	msg.Value = &value
+	return msg, nil
 }
 
 // constructedType resolves the type `new T(…)` instantiates: a definition, or a

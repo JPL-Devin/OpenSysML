@@ -238,6 +238,53 @@ func TestSendNewRejectsExcessPositionalArgumentsAtSend(t *testing.T) {
 	}
 }
 
+// An argument the feature does not admit, by type or by count, fails at the send
+// whether an accept consumes the message or none does. Nothing is validated first.
+func TestSendNewRejectsInadmissibleArgumentsAtSend(t *testing.T) {
+	const model = `package P {
+		private import ScalarValues::*;
+		item def Reading { attribute n : Integer; attribute pair : Integer[2]; }
+		action pipeline {
+			first start;
+			action sender { send new Reading(%s) to %s; }
+			action reader accept r : Reading;
+			done;
+			succession first start then sender;
+			succession first sender then %s;
+			succession first reader then done;
+		}
+	}`
+	for _, tc := range []struct{ args, want string }{
+		{`"seven", (1, 2)`, "feature value Reading.n: type mismatch"},
+		{`n = 7, pair = 1`, "feature value Reading.pair: multiplicity violation"},
+	} {
+		for _, receiver := range []string{"reader", "nobody"} {
+			t.Run(tc.args+" to "+receiver, func(t *testing.T) {
+				next := "reader"
+				if receiver == "nobody" {
+					next = "done"
+				}
+				idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, fmt.Sprintf(model, tc.args, receiver, next)))
+				sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+				if sym == nil {
+					t.Fatal("action pipeline not found")
+				}
+				created := len(ctx.created)
+				_, err := ctx.ExecuteAction(sym)
+				if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), "send new Reading") {
+					t.Fatalf("send new Reading(%s): error %v, want the send rejected with %q", tc.args, err, tc.want)
+				}
+				if errors.Is(err, ErrAcceptDeadlock) {
+					t.Errorf("send new Reading(%s): reported as a deadlock, want the send itself rejected", tc.args)
+				}
+				if len(ctx.created) != created {
+					t.Errorf("send new Reading(%s) left %d instance(s) behind", tc.args, len(ctx.created)-created)
+				}
+			})
+		}
+	}
+}
+
 // A label names only a feature the constructor binds: an inherited library
 // descriptor is refused at the send; a restatement of it in the type binds.
 func TestSendNewLabelMustNameConstructibleFeature(t *testing.T) {
