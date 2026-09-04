@@ -76,10 +76,8 @@ func taken(r *resolve.Resolver, sym *symbols.Symbol, newName string) (string, bo
 	return otherThan(r, sym, other, ok)
 }
 
-// capturedAt names what the reference would read at the segment once it is spelled
-// newName: a trial reading by the path the document walk takes for that reference
-// (a scope lookup, a namespace member, a feature chain step, a redefined feature, …).
-// A segment that would write an alias name is captured by the alias, even one for sym.
+// capturedAt names what the segment would read spelled newName, by a trial reading
+// of the reference; a segment that would write an alias is captured by it, even one for sym.
 func capturedAt(r *resolve.Resolver, sym *symbols.Symbol, occ Occurrence, newName string) (string, bool) {
 	qn := respelled(occ.Ref.QN, occ.Part, newName)
 	other, ok := r.ProbeReference(occ.Ref.Spelled(qn))
