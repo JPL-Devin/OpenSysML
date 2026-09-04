@@ -76,13 +76,16 @@ func (ctx *Context) FeaturesOf(typeSym *symbols.Symbol) []EffectiveFeature {
 	return features
 }
 
-// membersOf is Model.MembersOf memoized per type; callers read the list and never write it.
+// membersOf is Model.MembersOf memoized per type once the model reports the
+// answer complete; callers read the list and never write it.
 func (ctx *Context) membersOf(typeSym *symbols.Symbol) []*symbols.Symbol {
 	if cached, ok := ctx.members[typeSym]; ok {
 		return cached
 	}
 	members := ctx.model.MembersOf(typeSym)
-	ctx.members[typeSym] = members
+	if ctx.model.MemberSourcesStable(typeSym) {
+		ctx.members[typeSym] = members
+	}
 	return members
 }
 

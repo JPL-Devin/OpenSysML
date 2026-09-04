@@ -269,8 +269,11 @@ allocation profile. `effectiveMembers` (constraint evaluation) and
 
 - **Fixed**: `Context.membersOf` memoizes `Model.MembersOf` per type for the
   life of the context (the model is fixed for that life; callers only read the
-  list). `ExecuteAction` 67 → 22 µs, `BatchConstraints` 16.5 → 6.4 ms,
-  `SameConstraintManyInstances` 5.9 → 2.2 µs.
+  list). A view the semantics model itself declines to memoize — one enumerated
+  while a reference or supertype it depends on is still resolving
+  (`Model.MemberSourcesStable`) — is not cached either. `ExecuteAction`
+  67 → 22 µs, `BatchConstraints` 16.5 → 6.4 ms, `SameConstraintManyInstances`
+  5.9 → 2.2 µs.
 - Also in `lookupSubaction`, every name read during evaluation resolved
   through the resolver before checking whether any action performance was on
   the stack; for constraint and calc evaluation none ever is. **Fixed**: the

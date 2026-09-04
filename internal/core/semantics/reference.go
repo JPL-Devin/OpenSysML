@@ -124,6 +124,21 @@ func (m *Model) MemberSources(sym *symbols.Symbol) []*symbols.Symbol {
 	return order
 }
 
+// MemberSourcesStable reports whether the last MemberSources answer for sym was
+// complete and memoized, so a caller may memoize what it derived from it.
+func (m *Model) MemberSourcesStable(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	if m.resolver != nil {
+		if target, ok := m.resolver.ResolveAliasTarget(sym); ok {
+			sym = target
+		}
+	}
+	_, ok := m.memberSources[sym]
+	return ok
+}
+
 // DirectMemberSources returns the symbols that contribute members to sym in one
 // step, deduplicated: the edges MemberSources takes the closure of. A caller
 // enumerating names needs the steps, not the closure, to tell which types a
