@@ -160,6 +160,75 @@ type Resolver struct {
 	// invocationNames are the names invocations call, whose last segment may
 	// denote several declarations: see ResolveInvocationName.
 	invocationNames map[*ast.QualifiedName]bool
+	// scratch are the Scratch calls in progress, innermost last.
+	scratch []*scratchFrame
+}
+
+// scratchFrame is one Scratch call: the nodes it disowns and the entries
+// first memoized under it.
+type scratchFrame struct {
+	transient map[ast.Node]bool
+	journal   []journaled
+}
+
+type journaled struct {
+	node ast.Node
+	drop func()
+}
+
+// Scratch runs f, then forgets what f memoized about the transient nodes, so
+// syntax the model does not own (a request expression) is not retained.
+func (r *Resolver) Scratch(transient map[ast.Node]bool, f func()) {
+	frame := &scratchFrame{transient: transient}
+	r.scratch = append(r.scratch, frame)
+	defer func() {
+		r.scratch = r.scratch[:len(r.scratch)-1]
+		var parent *scratchFrame
+		if n := len(r.scratch); n > 0 {
+			parent = r.scratch[n-1]
+		}
+		for _, j := range frame.journal {
+			switch {
+			case frame.transient[j.node]:
+				j.drop()
+			case parent != nil:
+				parent.journal = append(parent.journal, j)
+			}
+		}
+	}()
+	f()
+}
+
+// MemoSize is the number of resolutions this resolver retains.
+func (r *Resolver) MemoSize() int {
+	return len(r.memo) + len(r.modeMemo) + len(r.filtered) + len(r.featureChains) +
+		len(r.parts) + len(r.aliasNames) + len(r.endpoints) + len(r.readings) +
+		len(r.invocationNames) + len(r.ambiguities) + len(r.reportedQualified) +
+		len(r.initials) + len(r.imports) + len(r.suggestions)
+}
+
+// journalNew lets the enclosing Scratch drop m[k], about to be written for
+// node the first time.
+func journalNew[K comparable, V any](r *Resolver, m map[K]V, k K, node ast.Node) {
+	if len(r.scratch) == 0 {
+		return
+	}
+	if _, had := m[k]; had {
+		return
+	}
+	r.Journal(node, func() { delete(m, k) })
+}
+
+// Journal registers drop to run when the enclosing Scratch, if any, ends with
+// node transient: how a side table keyed by node joins the resolver's lifecycle.
+func (r *Resolver) Journal(node ast.Node, drop func()) {
+	if r == nil {
+		return
+	}
+	if n := len(r.scratch); n > 0 {
+		frame := r.scratch[n-1]
+		frame.journal = append(frame.journal, journaled{node: node, drop: drop})
+	}
 }
 
 // New creates a resolver over the given index.
@@ -217,6 +286,7 @@ func (r *Resolver) resolvedPart(qn *ast.QualifiedName, i int, sym *symbols.Symbo
 	syms, ok := r.parts[qn]
 	if !ok {
 		syms = make([]*symbols.Symbol, len(qn.Parts))
+		journalNew(r, r.parts, qn, qn)
 		r.parts[qn] = syms
 	}
 	syms[i] = element
@@ -224,6 +294,7 @@ func (r *Resolver) resolvedPart(qn *ast.QualifiedName, i int, sym *symbols.Symbo
 		aliases, ok := r.aliasNames[qn]
 		if !ok {
 			aliases = make([]*symbols.Symbol, len(qn.Parts))
+			journalNew(r, r.aliasNames, qn, qn)
 			r.aliasNames[qn] = aliases
 		}
 		aliases[i] = sym
@@ -259,6 +330,7 @@ func (r *Resolver) resolveInitial(scope *symbols.Scope, n *ast.InitialNode) {
 		return
 	}
 	if sym, ok := memberPastLabels(scope, n.Name); ok {
+		journalNew(r, r.initials, n, n)
 		r.initials[n] = sym
 	}
 }
@@ -412,6 +484,7 @@ func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName,
 	// belongs to must still report when its own document is resolved.
 	if keyed {
 		if res.ok || r.quiet == 0 {
+			journalNew(r, r.modeMemo, mode, qn)
 			r.modeMemo[mode] = res
 		}
 	}
@@ -421,10 +494,12 @@ func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName,
 				r.memoize(qn, res)
 			}
 		} else if res.ok || r.quiet == 0 {
-			r.filtered[filteredMemoKey{
+			key := filteredMemoKey{
 				qn: qn, decl: hide.decl, prefix: hide.skipNamingTarget,
 				skipBorrowedName: hide.skipBorrowedName,
-			}] = res
+			}
+			journalNew(r, r.filtered, key, qn)
+			r.filtered[key] = res
 		}
 	}
 	return res.sym, res.ok
@@ -458,17 +533,17 @@ func (r *Resolver) ResolveName(scope *symbols.Scope, name string, at ast.Node) (
 	// A result found with the boundary lifted for an enclosing `import all` is
 	// not what this reference resolves to in general, so it is not memoized.
 	if keyed && (res.ok || r.quiet == 0) {
+		journalNew(r, r.modeMemo, mode, at)
 		r.modeMemo[mode] = res
 	}
 	if (res.ok || r.quiet == 0) && r.allVisible == 0 {
 		r.memoize(at, res)
 	}
 	if !res.ok {
-		span := spanOf(at)
 		r.report(Diagnostic{
-			Span:    span,
-			Message: r.unresolvedMessage(scope, name),
-			Fixes:   r.unresolvedFixes(scope, name, span),
+			Span:    spanOf(at),
+			Message: r.unresolvedMessage(scope, name, at),
+			Fixes:   r.unresolvedFixes(scope, name, at),
 		})
 	}
 	return res.sym, res.ok
@@ -559,12 +634,15 @@ func (r *Resolver) saveSegments(qn *ast.QualifiedName) segmentRecords {
 func (r *Resolver) restoreSegments(qn *ast.QualifiedName, saved segmentRecords) {
 	r.clearSegments(qn)
 	if saved.hadParts {
+		journalNew(r, r.parts, qn, qn)
 		r.parts[qn] = saved.parts
 	}
 	if saved.hadAliases {
+		journalNew(r, r.aliasNames, qn, qn)
 		r.aliasNames[qn] = saved.aliases
 	}
 	if saved.hadAmbiguity {
+		journalNew(r, r.ambiguities, qn, qn)
 		r.ambiguities[qn] = saved.ambiguity
 	}
 }
@@ -596,6 +674,7 @@ func (r *Resolver) memoize(at ast.Node, res resolution) {
 	if at == nil || r.inCondition > 0 {
 		return
 	}
+	journalNew(r, r.memo, at, at)
 	r.memo[at] = res
 }
 
@@ -604,7 +683,9 @@ func (r *Resolver) memoizeFeatureChain(scope *symbols.Scope, fc *ast.FeatureChai
 	if fc == nil || r.inCondition > 0 || (!res.ok && r.quiet > 0) {
 		return
 	}
-	r.featureChains[featureChainKey{scope: scope, node: fc}] = res
+	key := featureChainKey{scope: scope, node: fc}
+	journalNew(r, r.featureChains, key, fc)
+	r.featureChains[key] = res
 }
 
 // InCondition runs the resolution of a filter condition's own names, which its

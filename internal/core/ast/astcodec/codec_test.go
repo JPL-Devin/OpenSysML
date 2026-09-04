@@ -314,3 +314,18 @@ func TestDecodeRejectsCorruptStream(t *testing.T) {
 		}
 	}
 }
+
+func TestReachable(t *testing.T) {
+	lower := &ast.LiteralInteger{Value: "1"}
+	mult := &ast.Multiplicity{Lower: lower}
+	a := &ast.Usage{Multiplicity: mult}
+	got := Reachable(a)
+	for _, n := range []ast.Node{a, mult, lower} {
+		if !got[n] {
+			t.Errorf("%T not reached", n)
+		}
+	}
+	if len(got) != 3 || got[nil] {
+		t.Errorf("reached %d nodes, want 3 without nil", len(got))
+	}
+}

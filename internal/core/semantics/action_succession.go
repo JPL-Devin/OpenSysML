@@ -46,20 +46,13 @@ func (m *Model) ActionSuccessions(sym *symbols.Symbol) []ActionSuccession {
 	}
 	var out []ActionSuccession
 	sources := m.MemberSources(sym)
-	var visible map[*symbols.Symbol]bool
 	for i := len(sources) - 1; i >= 0; i-- {
 		src := sources[i]
 		if src == nil || src.Scope == nil {
 			continue
 		}
-		if visible == nil {
-			visible = make(map[*symbols.Symbol]bool)
-			for _, member := range m.MembersOf(sym) {
-				visible[member] = true
-			}
-		}
 		for _, s := range m.DeclaredSuccessions(src.Scope, src, actionBodyMembers(src)) {
-			if named, ok := namedSuccession(src.Scope, s.Decl); ok && !visible[named] {
+			if named, ok := namedSuccession(src.Scope, s.Decl); ok && !m.HasMember(sym, named) {
 				continue
 			}
 			out = append(out, s)

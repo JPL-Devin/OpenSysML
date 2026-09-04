@@ -84,6 +84,9 @@ type Session struct {
 
 	// Runtime execution context
 	rtCtx *runtime.Context
+	// exhibits indexes the documents' exhibited-state declarations for rtCtx;
+	// a different context invalidates it (see exhibitEntries).
+	exhibits *exhibitIndex
 	// replaced is a context a debugging session still runs against, whose identity
 	// sequence the context built next takes over.
 	replaced   *runtime.Context
