@@ -77,14 +77,16 @@ func taken(r *resolve.Resolver, sym *symbols.Symbol, newName string) (string, bo
 }
 
 // capturedAt names what the segment would read spelled newName, by a trial reading
-// of the reference; a segment that would write an alias is captured by it, even one for sym.
+// of the reference: a qualifier that reaches another element captures even where the
+// rest of the name then fails; a segment that would write an alias is captured by it.
 func capturedAt(r *resolve.Resolver, sym *symbols.Symbol, occ Occurrence, newName string) (string, bool) {
 	qn := respelled(occ.Ref.QN, occ.Part, newName)
-	other, ok := r.ProbeReference(occ.Ref.Spelled(qn))
-	if alias, aliased := r.PartAlias(qn, occ.Part); aliased {
+	rd := r.ProbeReading(occ.Ref.Spelled(qn))
+	other, ok := rd.Symbol()
+	if alias, aliased := rd.Alias(occ.Part); aliased {
 		other, ok = alias, true
 	} else if occ.Part < len(qn.Parts)-1 {
-		other, ok = r.PartSymbol(qn, occ.Part)
+		other, ok = rd.Part(occ.Part)
 	}
 	return otherThan(r, sym, other, ok)
 }

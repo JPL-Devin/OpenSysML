@@ -190,6 +190,28 @@ func TestRenameCapturingAQualifiedSegmentIsRefused(t *testing.T) {
 	}
 }
 
+// A qualifier respelled onto a visible element is captured by it even where that
+// element lacks the rest of the name, as a feature chain's outward-read member is.
+func TestRenameCapturingAQualifierWithoutTheSuffixIsRefused(t *testing.T) {
+	for _, tt := range []struct{ name, q, use string }{
+		{"redefined", "Q :> P::Old", "\t\tpart y :>> Old::x;\n"},
+		{"chain", "Q", "\t\tpart d : P::Old;\n\t\tpart e :> d.Old::x;\n"},
+	} {
+		src := "package P {\n\tpart def Old { part x; }\n\tpart def " + tt.q + " {\n\t\tpart def New;\n" + tt.use + "\t}\n}\n"
+		e := refusedRename(t, "capture-qualifier-"+tt.name+".sysml", src, "P::Old", "New")
+
+		if e.Failure != FailureInvalidName {
+			t.Fatalf("%s: failure is %s (%s), want invalid-name", tt.name, e.Failure, e.Message)
+		}
+		if !strings.Contains(e.Message, "P::Q::New") {
+			t.Fatalf("%s: refusal does not name P::Q::New: %s", tt.name, e.Message)
+		}
+		if len(e.Referring) != 1 || e.Referring[0] != "P::Q" {
+			t.Fatalf("%s: refusal reports referring %v, want [P::Q]", tt.name, e.Referring)
+		}
+	}
+}
+
 // Renaming onto a name declared in a scope the element's references are written
 // in is refused even when nothing at the declaration shadows it.
 func TestRenameShadowingAtAReferenceIsRefused(t *testing.T) {

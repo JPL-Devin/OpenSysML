@@ -10,7 +10,9 @@
   any open workspace document, as a whole name, a segment of a qualified one or a feature chain's
   member — would read another element afterwards. Each rewritten segment is checked by a trial
   reading of its reference with the new spelling, so a chain member is read in its operand's type
-  rather than where the chain is written, and a segment that would write an alias name is captured
+  rather than where the chain is written, a qualifier respelled onto another element is captured
+  even where that element lacks the member the rest of the name asks for (the reference would
+  otherwise be left unresolved), and a segment that would write an alias name is captured
   by the alias even when it aliases the renamed element (the rename would leave `alias New for
   New`); the batch edit API gains both checks too, where it previously let `d.x` be renamed onto
   a `y` that `d`'s type declares. A name taken only in an unrelated scope is not a conflict, nor

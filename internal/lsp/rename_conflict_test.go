@@ -87,6 +87,45 @@ func TestRenameRefusesQualifiedCaptureThroughImport(t *testing.T) {
 	wantRefusal(t, msg, `P::x cannot be renamed to "y"`, "reference to it in R", "would read Q::y instead")
 }
 
+// A qualifier respelled onto another element is captured even where that element
+// lacks the member the rest of the name asks for: `B::x` reads B, then fails.
+func TestRenameRefusesQualifierCaptureWhereTheSuffixIsMissing(t *testing.T) {
+	for _, tt := range []struct{ name, visible, means string }{
+		{"local", "\t\tpart def B;\n", "P::Q::B"},
+		{"imported", "\t\timport Lib::B;\n", "Lib::B"},
+	} {
+		ws := model.NewWorkspace()
+		name := openRenameDoc(t, ws, "/tmp/qualifier_"+tt.name+".sysml",
+			"package Lib {\n\tpart def B;\n}\npackage P {\n\tpart def A { part def x; }\n\tpart def Q {\n"+
+				tt.visible+"\t\tpart p : A::x;\n\t}\n}\n")
+		msg := refuseRename(t, ws, name, "A {", "B")
+		wantRefusal(t, msg, `P::A cannot be renamed to "B"`, "reference to it in P::Q", "would read "+tt.means+" instead")
+	}
+}
+
+// The same for a feature chain's qualified member, which is read outward from
+// the operand's type and whose failed reading the resolver otherwise discards.
+func TestRenameRefusesQualifierCaptureInFeatureChainMember(t *testing.T) {
+	const src = "package P {\n\tpart def A { part x; }\n\tpart def Q {\n\t\tpart def B;\n" +
+		"\t\tpart d : P::A;\n\t\tpart e :> d.A::x;\n\t}\n}\n"
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/qualifier_chain.sysml", src)
+	msg := refuseRename(t, ws, name, "A {", "B")
+	wantRefusal(t, msg, `P::A cannot be renamed to "B"`, "reference to it in P::Q", "would read P::Q::B instead")
+
+	ws = model.NewWorkspace()
+	name = openRenameDoc(t, ws, "/tmp/qualifier_chain_clean.sysml", src)
+	got, err := applyRename(t, ws, name, "A {", "C")
+	if err != nil {
+		t.Fatalf("Rename err = %v", err)
+	}
+	want := "package P {\n\tpart def C { part x; }\n\tpart def Q {\n\t\tpart def B;\n" +
+		"\t\tpart d : P::C;\n\t\tpart e :> d.C::x;\n\t}\n}\n"
+	if got[name] != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", got[name], want)
+	}
+}
+
 func TestRenameRefusesCaptureInAnotherDocument(t *testing.T) {
 	ws := model.NewWorkspace()
 	declName := openRenameDoc(t, ws, "/tmp/capture_decl.sysml", "package P {\n\tpart def Old;\n}\n")

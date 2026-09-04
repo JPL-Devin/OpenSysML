@@ -182,9 +182,11 @@ source → lexer → parser → AST → symbol index → resolve → passes
   `resolve.Reference` it is a segment of. Find References matches either;
   Rename edits only the written name, and `RenameConflict` checks each
   occurrence for capture through `internal/core/rename` — a trial reading of the
-  reference with that segment respelled (`Resolver.ProbeReference`), so a chain
-  member is read in its operand's type and a redefinition target among the
-  generals — the check the batch edit API shares. Built lazily on the first
+  reference with that segment respelled (`Resolver.ProbeReading`, which keeps
+  what each segment reached even where the whole name then fails), so a chain
+  member is read in its operand's type, a redefinition target among the
+  generals, and a qualifier respelled onto an element lacking the rest of the
+  name is still seen — the check the batch edit API shares. Built lazily on the first
   query after a change, over all documents with one shared resolver and
   semantic model, under the workspace's write lock; never built on the
   `didChange` path. Any mutation (`reindexLocked`, `removeLocked`, a
