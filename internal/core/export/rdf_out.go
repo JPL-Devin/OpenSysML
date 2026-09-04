@@ -450,7 +450,7 @@ func (e *encoder) encodeInline(members []ast.Node, owner string, ownerTerm rdf.T
 }
 
 func (e *encoder) encodeMembers(kept []ast.Node, regions []region, inline bool, owner string, ownerTerm rdf.Term) error {
-	// last and beforeLast are the latest members that are not edges; a
+	// last and beforeLast are the latest members a `then` sequences from; a
 	// member-attached `then` follows its target, so its source is beforeLast.
 	var last, beforeLast ast.Node
 	for i, member := range kept {
@@ -469,23 +469,11 @@ func (e *encoder) encodeMembers(kept []ast.Node, regions []region, inline bool, 
 		if err := e.encodeMember(node, visibility, regions[i], inline, owner, ownerTerm, i); err != nil {
 			return err
 		}
-		if !isEdgeNode(node) {
+		if ast.IsSuccessionSource(node) {
 			last, beforeLast = node, last
 		}
 	}
 	return nil
-}
-
-// isEdgeNode reports whether a member is an edge between other members, which a
-// `then` sequences past (parser.isEdgeMember).
-func isEdgeNode(node ast.Node) bool {
-	switch n := node.(type) {
-	case *ast.SuccessionEdge, *ast.ControlFlowEdge, *ast.ObjectFlowEdge, *ast.TransitionMember:
-		return true
-	case *ast.Usage:
-		return n.Kind.IsEdge()
-	}
-	return false
 }
 
 // kept filters out the identity annotations consumed into the graph's

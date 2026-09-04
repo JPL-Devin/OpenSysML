@@ -198,48 +198,6 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Performance
 
-- **A process starts in under 20 ms instead of 100.** Every `sysml`, `sysml-lsp` and `sysml-grpc`
-  start, and every test that builds a model, first parsed the 97 bundled OMG library files, indexed
-  them and expanded their wildcard imports — about 100 ms and 467k allocations before the model was
-  looked at. The library's frozen index is now serialized once, at `go generate` time, into
-  `internal/core/libs/stdlib.snapshot` — a hand-rolled binary format (varints over a string table,
-  a node table per syntax-node type, index references in place of pointers; no `encoding/gob`, no
-  reflection) that is embedded in the binary and decoded at start-up, reproducing the object graph a
-  fresh load builds. `bin/sysml -memstats -e "2+3"` over a one-part model goes from 95–102 ms,
-  53.3 MiB and 466.9k allocations to 17–23 ms, 32.4 MiB and 67.1k; the `sysml` binary grows from
-  16.9 to 20.5 MB. The OMG files stay the source of truth: the snapshot records their digest and a
-  format version, and a process whose bundled files, `OPENSYSML_LIBRARY_PATH` override or snapshot
-  format do not match parses the files as before. `make stdlib-snapshot` regenerates it; a test and
-  a CI check fail when the committed snapshot lags the files or the indexing code. The parse path
-  itself is also faster — the files are hashed and parsed concurrently and added to the index in
-  the same order as before, and wildcard expansion no longer re-sorts namespace children out of a
-  map on every enumeration (33 ms → 31 ms over the library).
-
-- **The calc evaluator does less work per invocation.** `runtime.Value` is 64 bytes instead of
-  120, so a value returned through the evaluator's nested frames copies half as much; parsed
-  literals and resolved invocation targets are memoized per evaluation context, keyed by the
-  syntax node an edit replaces; a calc's parameters bind into slot-indexed frames resolved once
-  per calc, with a bare name answered from the frames before the general resolution chain; and an
-  invocation's arguments and frame stack are borrowed from per-context storage. A recursive
-  `Fib(25)` costs 0.65 µs per calc invocation instead of 1.01 µs and allocates about 160 objects
-  per evaluation instead of 971 000. Results, errors, traces and step counts are unchanged; the
-  measurements are recorded in the
-  [execution-performance record](docs/project/execution-performance-2026-09.md).
-
-- **Pure calc bodies compile to a closure fast path.** A calc whose body is one scalar expression
-  — Integer, Real and Boolean literals, its own `in` parameters, the arithmetic, comparison,
-  equality, identity, logical and conditional operators, and invocations of other such calcs,
-  recursion and cycles included — is compiled on its first invocation into a tree of Go closures
-  over an unboxed scalar frame: parameters are slot indexes, callees are resolved once, and values
-  are boxed only at the invocation boundary. A recursive `Fib(25)` costs 21–22 ns per calc
-  invocation instead of 519–532 (CPython 3.12 takes 27 ns for the same function on the same
-  machine). Values, errors, error timing and step counts are identical to the reference evaluator's
-  — a differential test invokes every eligible calc in the fixture and example trees through both
-  tiers on generated edge arguments — and anything outside the subset (calc usages, `out` features,
-  feature chains, collections, quantities, strings, locals, non-literal defaults, redeclared
-  parameters) stays on the evaluator, as does every traced, named-argument or non-scalar
-  invocation. `OPENSYSML_CALC_COMPILE=0` turns the tier off for bisecting.
-
 - **The compiled calc tier takes the bodies analysis models write.** Four constructs join the
   compiled subset, each reproducing the reference evaluator's values, error text and step counts
   exactly: statement bodies of body-local scalar declarations, `return` and `if`/`else`, compiled
@@ -394,31 +352,6 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   and links to the record that reports it; the numbers stay in `README.md`,
   `docs/internals/architecture.md` and the conformance records, where `doc-counts` still generates
   and gates them. `overrides/home.html` is no longer a `doc-counts` consumer.
-- **The architecture self-model describes the library snapshot.** The standard library stage in
-  [`examples/self-model`](examples/self-model/README.md) now carries the embedded snapshot its
-  index is decoded from, the `internal/core/pack` and `internal/core/ast/astcodec` units that
-  encode it and the generator that writes it; `LoadLibrary` models the load as an action whose two
-  decisions — the digest and format match, then the checksum — choose between decoding the snapshot
-  and parsing the files; `stdlib-snapshot-check` is an eighth, gating conformance oracle; and a
-  ninth invariant, `snapshotIsDerived`, states that the snapshot is checked against the files and
-  never the only way to load them. The evaluator now declares itself memoized, since it keeps its
-  per-node caches in side tables beside the tree. The self-model test compares each new claim with
-  the implementation: the override variable, whether the embedded snapshot decodes for the bundled
-  files, the Make targets and the CI step, and the side tables `runtime.Context` keys by syntax
-  node. The architecture document gains a section and diagram on loading the library, and the
-  pilot differential baseline is re-recorded for the larger model: the eleven new rows are all the
-  reference's, of shapes the self-model already drew.
-- **The architecture self-model describes the compiled calc tier.** The evaluator now carries a
-  `CalcCompiler` part — memoized, switched off by `OPENSYSML_CALC_COMPILE`, falling back to the
-  evaluator — and `InvokeCalc` models one invocation as an action whose three decisions (a traced
-  run, a pure body, positional scalar arguments) send it to the compiled tier or to the evaluator
-  whole. A tenth invariant, `evaluatorIsReference`, states that the compiled tier is an optimization
-  of the evaluator and never a second semantics; `CalcDifferential` names the parity and
-  differential tests that verify it. The self-model test checks the variable's name against
-  `runtime.CalcCompileEnvVar` and the environment reference, that a fresh `runtime.Context`
-  compiles calcs until that variable says otherwise, and — invoking the model's own `StepBudget`
-  through both tiers — that they agree and that a traced run takes the evaluator. The architecture
-  document gains a paragraph and diagram on invoking a calc.
 - **`%features` lists an object's behaviors under their own heading instead of as `<unknown>`
   values.** A state or action a type declares holds no value, and the listing used to render each
   as a feature row reading `<unknown>` — `off = <unknown>`, nested state by nested state — while the
@@ -577,7 +510,7 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   (`succession S first A1 if x == 0 then A2;`) is spelled as a `transition` the parser does not
   read, which is a separate writer defect.
 
-## 0.4.3 — 2026-09-01
+## 0.4.3 — 2026-09-02
 
 Release 0.4.3 is where an element gets an identity the notation can carry. The SysML v2 textual
 notation deliberately records no element identity, so a model saved as `.sysml` and re-parsed had
@@ -774,6 +707,48 @@ No model that validated under 0.4.2 stops validating and no import path moves.
   measures evaluation throughput — ~1.5 µs per calc invocation — and names the optimization gaps
   the profiles show.
 
+- **A process starts in under 20 ms instead of 100.** Every `sysml`, `sysml-lsp` and `sysml-grpc`
+  start, and every test that builds a model, first parsed the 97 bundled OMG library files, indexed
+  them and expanded their wildcard imports — about 100 ms and 467k allocations before the model was
+  looked at. The library's frozen index is now serialized once, at `go generate` time, into
+  `internal/core/libs/stdlib.snapshot` — a hand-rolled binary format (varints over a string table,
+  a node table per syntax-node type, index references in place of pointers; no `encoding/gob`, no
+  reflection) that is embedded in the binary and decoded at start-up, reproducing the object graph a
+  fresh load builds. `bin/sysml -memstats -e "2+3"` over a one-part model goes from 95–102 ms,
+  53.3 MiB and 466.9k allocations to 17–23 ms, 32.4 MiB and 67.1k; the `sysml` binary grows from
+  16.9 to 20.5 MB. The OMG files stay the source of truth: the snapshot records their digest and a
+  format version, and a process whose bundled files, `OPENSYSML_LIBRARY_PATH` override or snapshot
+  format do not match parses the files as before. `make stdlib-snapshot` regenerates it; a test and
+  a CI check fail when the committed snapshot lags the files or the indexing code. The parse path
+  itself is also faster — the files are hashed and parsed concurrently and added to the index in
+  the same order as before, and wildcard expansion no longer re-sorts namespace children out of a
+  map on every enumeration (33 ms → 31 ms over the library).
+
+- **The calc evaluator does less work per invocation.** `runtime.Value` is 64 bytes instead of
+  120, so a value returned through the evaluator's nested frames copies half as much; parsed
+  literals and resolved invocation targets are memoized per evaluation context, keyed by the
+  syntax node an edit replaces; a calc's parameters bind into slot-indexed frames resolved once
+  per calc, with a bare name answered from the frames before the general resolution chain; and an
+  invocation's arguments and frame stack are borrowed from per-context storage. A recursive
+  `Fib(25)` costs 0.65 µs per calc invocation instead of 1.01 µs and allocates about 160 objects
+  per evaluation instead of 971 000. Results, errors, traces and step counts are unchanged; the
+  measurements are recorded in the
+  [execution-performance record](docs/project/execution-performance-2026-09.md).
+
+- **Pure calc bodies compile to a closure fast path.** A calc whose body is one scalar expression
+  — Integer, Real and Boolean literals, its own `in` parameters, the arithmetic, comparison,
+  equality, identity, logical and conditional operators, and invocations of other such calcs,
+  recursion and cycles included — is compiled on its first invocation into a tree of Go closures
+  over an unboxed scalar frame: parameters are slot indexes, callees are resolved once, and values
+  are boxed only at the invocation boundary. A recursive `Fib(25)` costs 21–22 ns per calc
+  invocation instead of 519–532 (CPython 3.12 takes 27 ns for the same function on the same
+  machine). Values, errors, error timing and step counts are identical to the reference evaluator's
+  — a differential test invokes every eligible calc in the fixture and example trees through both
+  tiers on generated edge arguments — and anything outside the subset (calc usages, `out` features,
+  feature chains, collections, quantities, strings, locals, non-literal defaults, redeclared
+  parameters) stays on the evaluator, as does every traced, named-argument or non-scalar
+  invocation. `OPENSYSML_CALC_COMPILE=0` turns the tier off for bisecting.
+
 ### Changed
 
 - **A `sat` is a witness the evaluator confirms; an `unsat` is claimed only where the arithmetics
@@ -798,6 +773,33 @@ No model that validated under 0.4.2 stops validating and no import path moves.
   naming the repository and tag it came from: a stale stamp triggers a re-download when the script
   next runs (keeping the old copy until its replacement has been fetched), a current one is left
   alone, and a directory without a stamp is left alone with a warning.
+
+- **The architecture self-model describes the library snapshot.** The standard library stage in
+  [`examples/self-model`](examples/self-model/README.md) now carries the embedded snapshot its
+  index is decoded from, the `internal/core/pack` and `internal/core/ast/astcodec` units that
+  encode it and the generator that writes it; `LoadLibrary` models the load as an action whose two
+  decisions — the digest and format match, then the checksum — choose between decoding the snapshot
+  and parsing the files; `stdlib-snapshot-check` is an eighth, gating conformance oracle; and a
+  ninth invariant, `snapshotIsDerived`, states that the snapshot is checked against the files and
+  never the only way to load them. The evaluator now declares itself memoized, since it keeps its
+  per-node caches in side tables beside the tree. The self-model test compares each new claim with
+  the implementation: the override variable, whether the embedded snapshot decodes for the bundled
+  files, the Make targets and the CI step, and the side tables `runtime.Context` keys by syntax
+  node. The architecture document gains a section and diagram on loading the library, and the
+  pilot differential baseline is re-recorded for the larger model: the eleven new rows are all the
+  reference's, of shapes the self-model already drew.
+
+- **The architecture self-model describes the compiled calc tier.** The evaluator now carries a
+  `CalcCompiler` part — memoized, switched off by `OPENSYSML_CALC_COMPILE`, falling back to the
+  evaluator — and `InvokeCalc` models one invocation as an action whose three decisions (a traced
+  run, a pure body, positional scalar arguments) send it to the compiled tier or to the evaluator
+  whole. A tenth invariant, `evaluatorIsReference`, states that the compiled tier is an optimization
+  of the evaluator and never a second semantics; `CalcDifferential` names the parity and
+  differential tests that verify it. The self-model test checks the variable's name against
+  `runtime.CalcCompileEnvVar` and the environment reference, that a fresh `runtime.Context`
+  compiles calcs until that variable says otherwise, and — invoking the model's own `StepBudget`
+  through both tiers — that they agree and that a traced run takes the evaluator. The architecture
+  document gains a paragraph and diagram on invoking a calc.
 
 ### Fixed
 

@@ -31,6 +31,20 @@ func (w *Workspace) MetadataBodyRedefines(sym *symbols.Symbol) (*symbols.Symbol,
 	return target, symbols.FQNOf(target), true
 }
 
+// EnclosingMetadataBody returns the nearest scope, from scope outward, whose
+// declarations redefine the features of a metadata type; nil outside one.
+func (w *Workspace) EnclosingMetadataBody(scope *symbols.Scope) *symbols.Scope {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	resolver, _ := w.newResolver()
+	for ; scope != nil; scope = scope.Parent() {
+		if resolver.MetadataBodyOwner(scope) != nil {
+			return scope
+		}
+	}
+	return nil
+}
+
 // MetadataBodyMembers returns the members of the metadata definition an
 // annotation body's declarations redefine, as seen from the body scope, or nil
 // when scope is not a metadata annotation body or its metaclass does not
