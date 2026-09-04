@@ -20,6 +20,7 @@ const (
 	fqnReal                       = "ScalarValues::Real"
 	fqnNumericalValue             = "ScalarValues::NumericalValue"
 	fqnAnything                   = "Base::Anything"
+	fqnCollection                 = "Collections::Collection"
 	fqnTensorMeasurementReference = "MeasurementReferences::TensorMeasurementReference"
 )
 
@@ -86,7 +87,7 @@ func (m *Model) exprConformance(scope *symbols.Scope, node ast.Node, want *symbo
 		return m.featureConformance(sym, want)
 	case *ast.IndexExpr:
 		if !n.Bracket {
-			return conformanceUnknown()
+			return m.indexConformance(scope, n, want, byUnit)
 		}
 		if !byUnit {
 			return m.typeConformance(m.libSymbol(fqnScalarQuantityValue), want)
@@ -126,6 +127,28 @@ func (m *Model) exprConformance(scope *symbols.Scope, node ast.Node, want *symbo
 		return m.typeConformance(def, want)
 	}
 	return conformanceUnknown()
+}
+
+// indexConformance judges `seq#(i)` as one element of seq, of seq's type — or as
+// Anything when seq is a Collection (KerML checkIndexExpressionResultSpecialization).
+func (m *Model) indexConformance(scope *symbols.Scope, n *ast.IndexExpr, want *symbols.Symbol, byUnit bool) Conformance {
+	collection := m.libSymbol(fqnCollection)
+	if collection == nil {
+		return conformanceUnknown()
+	}
+	seq := m.exprConformance(scope, n.Operand, collection, byUnit)
+	if !seq.Known {
+		return conformanceUnknown()
+	}
+	if !seq.Holds {
+		return m.exprConformance(scope, n.Operand, want, byUnit)
+	}
+	c := m.typeConformance(m.libSymbol(fqnAnything), want)
+	if c.Known && !c.Holds {
+		c.Found = "an element `#` selects from a Collection (every quantity value is one), typed Anything"
+		c.Untyped = true
+	}
+	return c
 }
 
 // typeConformance judges a value known to be of typ.

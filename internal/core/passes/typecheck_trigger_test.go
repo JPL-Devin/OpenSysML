@@ -68,6 +68,12 @@ const triggerFixture = `package P {
 		attribute loop = loop;
 		attribute pair = (true, false);
 		attribute pairWait = (5 [s], 6 [s]);
+		attribute flags : Boolean[2];
+		attribute counts : Integer[2];
+		attribute waits : DurationValue[2];
+		attribute times : TimeInstantValue[2];
+		attribute firstFlag = flags#(1);
+		attribute firstWait = waits#(1);
 		in attribute given = true;
 		part h : Holder;
 		attribute viaDelay :> h.delay;
@@ -419,9 +425,39 @@ func TestSequenceTriggerArgumentIsRejected(t *testing.T) {
 	for _, trigger := range []string{"after (5 [s])", "after (d)", "at (t)", "when (x > 3)", "when (flag)"} {
 		wantTriggerSilent(t, "transition first a accept "+trigger+" then b;")
 	}
-	wantTriggerSilent(t, "attribute flags : Boolean[2] = (true, false);")
 	wantTriggerSilent(t, "entry action { if (flag, ready) { assign x := 1; } }")
 	wantTriggerSilent(t, "assert constraint { (flag, ready) }")
+}
+
+// `seq#(i)` is one element of seq, of seq's type; a Collection (every quantity
+// value is one) is indexed as Anything. The pilot rejects each shape below.
+func TestIndexedTriggerArgument(t *testing.T) {
+	const anything = "found an element `#` selects from a Collection (every quantity value is one), typed Anything"
+	for _, tc := range []struct{ trigger, code, found string }{
+		{"after counts#(1)", "trigger-after-duration", "found Integer"},
+		{"after flags#(1)", "trigger-after-duration", "found Boolean"},
+		{"after waits#(1)", "trigger-after-duration", anything},
+		{"after d#(1)", "trigger-after-duration", anything},
+		{"after times#(1)", "trigger-after-duration", anything},
+		{"after firstWait", "trigger-after-duration", anything},
+		{"at counts#(2)", "trigger-at-time-instant", "found Integer"},
+		{"at times#(1)", "trigger-at-time-instant", anything},
+		{"at waits#(1)", "trigger-at-time-instant", anything},
+		{"when counts#(1)", "trigger-when-boolean", "found Integer"},
+		{"when counts#(1)#(1)", "trigger-when-boolean", "found Integer"},
+		{"when untyped#(1)", "trigger-when-boolean", "found an untyped feature"},
+	} {
+		wantTriggerDiag(t, "transition first a accept "+tc.trigger+" then b;", tc.code, tc.found)
+	}
+	for _, trigger := range []string{
+		"when flags#(1)",
+		"when flags#(1)#(1)",
+		"when firstFlag",
+		"when waits#(1) == 0 [s]",
+		"after undeclared#(1)",
+	} {
+		wantTriggerSilent(t, "transition first a accept "+trigger+" then b;")
+	}
 }
 
 // `transition ... when <expr>` without `accept` is a change trigger too; a bare
