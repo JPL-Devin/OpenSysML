@@ -72,16 +72,15 @@ type bindingLocation struct {
 	path     string
 }
 
-// bindingEndpoint is one end of a binding: the feature its path reaches on every object
-// along the way, one per object of a collection crossed (KerML 1.0 §7.3.4.6), or an expression.
+// bindingEndpoint is one end of a binding: an expression, or the feature its path reaches on every
+// object of each collection crossed (KerML 1.0 §7.3.4.6).
 type bindingEndpoint struct {
 	locations []bindingLocation
 	expr      ast.Node
 	scope     *symbols.Scope
 }
 
-// spread reports a feature end reaching several objects or none: it holds their values
-// together, in object order, and no one object's part of them.
+// spread reports a feature end reaching several objects or none, holding their values together.
 func (e bindingEndpoint) spread() bool { return e.expr == nil && len(e.locations) != 1 }
 
 // carries reports whether the end reaches the feature value being resolved.
@@ -352,11 +351,8 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 	return result, nil
 }
 
-// partialBinding reports a binding that does not determine the target whole: an end admitting fewer
-// values than its feature holds links one of them per link (KerML 1.0 §7.4.9.2), and an end reaching
-// the target among the objects of a collection binds their values together, so a value the other
-// end holds on its own is no one object's; across names that collection. A feature holding fewer
-// than an end's lower bound violates multiplicity.
+// partialBinding reports a binding not determining the target whole: an end linking fewer values than
+// its feature holds (KerML 1.0 §7.4.9.2), or one reaching the target across a collection (named by across).
 func (ctx *Context) partialBinding(owner, targetInst *Instance, target *FeatureValue,
 	binding lower.Binding, key featureValueRef) (partial bool, across string, err error) {
 	defer ctx.claimBinding(key, binding.Decl)()
@@ -605,10 +601,8 @@ func (ctx *Context) attemptBinding(owner, targetInst *Instance, target *FeatureV
 	return attempt
 }
 
-// readBindingEnds reads the other end first, so an object it already holds is what the carrying
-// end becomes rather than a fresh object of its own. A spread other end that holds nothing yet is
-// materialized only once the carrying end holds nothing of its own — a default included, but no
-// fresh object: its objects' values are their own, and cannot be assigned from the carrying end.
+// readBindingEnds reads the other end first, so an object it holds is what the carrying end becomes;
+// a spread other end is materialized only once the carrying end has nothing of its own, a default included.
 func (ctx *Context) readBindingEnds(owner *Instance, carrying, other bindingEndpoint, otherCarries bool,
 ) (carryingValue Value, carryingSet bool, otherValue Value, otherSet bool, err error) {
 	otherValue, otherSet, err = ctx.bindingEndpointValue(other, owner, otherCarries)
@@ -724,9 +718,8 @@ func (ctx *Context) resolveBindingLocations(owner *Instance, path string) ([]bin
 	return locations, nil
 }
 
-// bindingEndpointValue is what an end holds: its expression's value, its feature's value, or the
-// values of that feature on every object a spread end reaches, together and in order. A spread
-// end holds nothing while one of those values is undetermined: that object reports it when read.
+// bindingEndpointValue is what an end holds: its expression's or feature's value, or a spread end's
+// values together in object order — nothing while one of them is undetermined.
 func (ctx *Context) bindingEndpointValue(endpoint bindingEndpoint, owner *Instance, materialize bool) (Value, bool, error) {
 	if endpoint.expr != nil {
 		value, err := ctx.EvalWithScopeOn(endpoint.expr, endpoint.scope, owner)
