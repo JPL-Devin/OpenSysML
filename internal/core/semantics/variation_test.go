@@ -54,7 +54,7 @@ func TestVariationAndVariantModifiers(t *testing.T) {
 }
 
 // An enumeration definition is a variation without writing the modifier, and
-// its literals are ordinary members to the runtime's variation-point queries.
+// its values are variants of it; a usage typed by it holds a value, not a choice.
 func TestIsVariationIncludesEnumerationDefinitions(t *testing.T) {
 	m, root := buildModel(t, `
 		enum def Color { red; green; }
@@ -86,6 +86,60 @@ func TestIsVariationIncludesEnumerationDefinitions(t *testing.T) {
 	}
 	if IsVariant(sym(t, root, "c")) || IsVariant(nil) {
 		t.Error("an enumeration-typed attribute, or nothing, is no variant")
+	}
+	if !m.IsVariationFeature(color) {
+		t.Error("an enumeration definition is a variation point")
+	}
+	if VariationOwning(red) != color || m.VariationPointOwning(red) != color {
+		t.Error("an enumerated value is a variant of the enumeration owning it")
+	}
+	if m.VariationPointOwning(sym(t, root, "c")) != nil {
+		t.Error("an enumeration-typed attribute is a variant of nothing")
+	}
+}
+
+// The variant queries the runtime and solver select through offer an
+// enumeration's values as its variants, inherited ones included, and let a
+// usage typed by the enumeration select any of them.
+func TestVariantsOfAnEnumeration(t *testing.T) {
+	m, root := buildModel(t, `
+		package Paint {
+			enum def Finish { matte; gloss; }
+		}
+		variation attribute def Cut { variant attribute ideal; }
+		part def Panel {
+			attribute finish : Paint::Finish;
+			enum def Coat { thin; thick; }
+		}
+	`)
+	finish := member(t, m, sym(t, root, "Paint"), "Finish")
+	matte, gloss := member(t, m, finish, "matte"), member(t, m, finish, "gloss")
+	if variants := m.VariantsOf(finish); len(variants) != 2 || variants[0] != matte || variants[1] != gloss {
+		t.Fatalf("VariantsOf(Finish) = %v, want matte then gloss", variants)
+	}
+	if got, ok := m.VariantOf(finish, "gloss"); !ok || got != gloss {
+		t.Errorf("VariantOf(Finish, gloss) = %v, %v", got, ok)
+	}
+	if _, ok := m.VariantOf(finish, "satin"); ok {
+		t.Error("Finish offers no satin")
+	}
+	if !m.SelectsVariantOf(finish, matte) {
+		t.Error("an enumeration selects among its own values")
+	}
+	panel := sym(t, root, "Panel")
+	attr := member(t, m, panel, "finish")
+	if !m.SelectsVariantOf(attr, gloss) {
+		t.Error("a usage typed by an enumeration selects among its values")
+	}
+	if m.SelectsVariantOf(finish, member(t, m, sym(t, root, "Cut"), "ideal")) {
+		t.Error("a variant of another variation is not one of Finish")
+	}
+	coat := member(t, m, panel, "Coat")
+	if variants := m.VariantsOf(coat); len(variants) != 2 {
+		t.Errorf("VariantsOf(Panel::Coat) = %v, want thin and thick", variants)
+	}
+	if m.SelectsVariantOf(attr, member(t, m, coat, "thin")) {
+		t.Error("a value of a nested enumeration is not a value of Finish")
 	}
 }
 
