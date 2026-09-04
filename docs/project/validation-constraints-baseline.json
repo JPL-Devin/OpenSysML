@@ -651,7 +651,7 @@
     {
       "name": "validateMetadataFeatureMetadata",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateMetadataFeatureMetadataNotAbstract",
@@ -662,7 +662,7 @@
       "name": "validateMetadataUsageType",
       "raw": "validateMetadataUsageType_",
       "source": "sysml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateMultiplicityRangeBounds",

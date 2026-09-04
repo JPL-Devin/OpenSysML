@@ -39,7 +39,7 @@ func (s *Server) Completion(ctx context.Context, params *protocol.CompletionPara
 		// A declaration in a metadata annotation body redefines a feature of
 		// the metadata definition, so only its features are offered there. A
 		// value position resolves in the enclosing scope chain as usual.
-		if body := enclosingMetadataBody(scope); body != nil && !valuePositionAt(doc.Content, offset) {
+		if body := s.ws.EnclosingMetadataBody(bodyScopeAt(doc.Content, scope, offset)); body != nil && !valuePositionAt(doc.Content, offset) {
 			for _, sym := range s.ws.MetadataBodyMembers(body) {
 				c.addSymbol(s, sym)
 			}
@@ -332,6 +332,19 @@ func isDigit(b byte) bool {
 	return b >= '0' && b <= '9'
 }
 
+// bodyScopeAt returns scope, or its parent when offset lies in the header of
+// scope's owning declaration rather than inside its body.
+func bodyScopeAt(content []byte, scope *symbols.Scope, offset int) *symbols.Scope {
+	owner := scope.Owner()
+	if owner == nil {
+		return scope
+	}
+	if body, hasBody := bodyOf(content, owner.DeclSpan); !hasBody || offset <= body.Offset {
+		return scope.Parent()
+	}
+	return scope
+}
+
 // enclosingScope returns the deepest scope whose owning declaration span
 // contains offset, starting from root. Falls back to root. A metadata
 // annotation body scope has no owning symbol, so it is found by its own
@@ -339,7 +352,7 @@ func isDigit(b byte) bool {
 func enclosingScope(root *symbols.Scope, offset int) *symbols.Scope {
 	best := root
 	for _, child := range root.Children() {
-		if !isMetadataBodyScope(child) {
+		if !isAnnotationBodyScope(child) {
 			continue
 		}
 		sp := child.Node().Span()

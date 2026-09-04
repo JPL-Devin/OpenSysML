@@ -22,11 +22,10 @@ Read `AGENTS.md` first; it governs everything below.
 Release"); the tag's CI release job publishes `sysml`, `sysml-lsp` and `sysml-grpc` for five
 platforms and the Homebrew bundles, and the Python client is on PyPI as `opensysml` 0.4.0. The
 baseline is **ahead of the tag** by the work listed in the next paragraph, so the tracks below
-state what is on `main`, not what a `v0.4.3` binary does. `CHANGELOG.md` has not caught up with
-the tag either: the entries under **Unreleased** that predate `99e02003` (the serialized library
-snapshot, the calc-evaluator work and the self-model updates describing them) shipped in it, while
-the **0.4.3** heading is dated 2026-09-01 — see R1. Everything in "Release follow-through" is
-maintainer- or account-gated; everything after it is ordinary engineering work.
+state what is on `main`, not what a `v0.4.3` binary does. `CHANGELOG.md` agrees with the tag: its
+**0.4.3** section holds everything `99e02003` shipped and is dated to the tag (R1, done). Everything
+in "Release follow-through" is maintainer- or account-gated; everything after it is ordinary
+engineering work.
 
 **What closed between `1f136d27` (2026-09-02) and `4e3d5f2e`** — in `CHANGELOG.md` for the
 detail, listed here because each retires or narrows a roadmap line: native compilation landed in
@@ -143,15 +142,13 @@ The procedure and its post-tag verification are in `docs/project/releasing.md`.
 
 ## R1 — the changelog says "Unreleased" about work `v0.4.3` shipped
 
-`v0.4.3` was tagged at `99e02003`, which contains everything `CHANGELOG.md` files under
-**Unreleased** above the **0.4.3** heading; a reader of the changelog concludes the 20 ms
-start-up and the calc-evaluator work are not in the release they are running. Fold those entries
-into the 0.4.3 section and date it to the tag (2026-09-02), leaving Unreleased holding only what
-landed after the tag. Since #852 a change no longer edits `CHANGELOG.md`: it adds a fragment under
-`changes/unreleased/` and `python3 scripts/changelog.py render` folds the fragments in at release
-time (`releasing.md`), so the fold is the one remaining hand edit of the file. The gate recount
-above is no longer part of this item — #853 counts the compliance census at docs build instead of
-committing it.
+**Done.** `v0.4.3` was tagged at `99e02003`, which contained five entries `CHANGELOG.md` filed
+under **Unreleased** (the serialized library snapshot, the calc-evaluator work, the closure fast
+path and the two self-model updates describing them); they are now in the **0.4.3** section, dated
+to the tag (2026-09-02), and Unreleased holds only what landed after it. Since #852 a change no
+longer edits `CHANGELOG.md`: it adds a fragment under `changes/unreleased/` and
+`python3 scripts/changelog.py release X.Y.Z` folds the fragments in at release time
+(`releasing.md`), so that fold was the last hand edit of the file.
 
 ## R2 — the Node, Java and Rust clients are unpublished
 
@@ -1361,9 +1358,7 @@ thing.
 
 ## Track-local orders
 
-- **Release follow-through.** **R1** first — fold the shipped Unreleased entries into the 0.4.3
-  notes (the census recount that used to ride with it is generated at docs build since #853).
-  **R2**–**R5** as the accounts and hardware appear:
+- **Release follow-through.** **R1** is done. **R2**–**R5** as the accounts and hardware appear:
   publisher tokens for npm, Maven Central and crates.io, a real Mac for the tap, an Apple Developer
   and an OV/EV certificate to sign with, and a marketplace publisher for the extension. None gates
   the others or anything below.

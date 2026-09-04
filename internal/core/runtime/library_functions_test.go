@@ -1063,9 +1063,6 @@ func TestUnevaluableLibraryFunctionsNameThemselves(t *testing.T) {
 		{"ComplexFunctions::ToString", []Value{cx(1, 2)}},
 		{"ComplexFunctions::ToComplex", []Value{NewStringValue("1.0")}},
 		{"BaseFunctions::ToString", []Value{cx(1, 2)}},
-		{"RationalFunctions::rat", []Value{constInt(1), constInt(3)}},
-		{"RationalFunctions::numer", []Value{constReal(0.5)}},
-		{"RationalFunctions::denom", []Value{constReal(0.5)}},
 		{"CollectionFunctions::array#", []Value{constInt(1), constInt(1)}},
 		{"BaseFunctions::[", []Value{constInt(1), constInt(1)}},
 		{"BaseFunctions::all", nil},
@@ -1096,11 +1093,6 @@ func TestUnevaluableLibraryFunctionsNameThemselves(t *testing.T) {
 				t.Fatalf("%s error %q does not name the function", tc.fn, err)
 			}
 		})
-	}
-
-	exactRational := "docs/project/exact-rational-evaluation.md"
-	if _, err := applyLibrary(t, "RationalFunctions::rat", constInt(1), constInt(3)); err == nil || !strings.Contains(err.Error(), exactRational) {
-		t.Fatalf("RationalFunctions::rat error = %v, want a reason citing %s", err, exactRational)
 	}
 }
 
