@@ -33,11 +33,16 @@ type exprChecker struct {
 }
 
 func (ec *exprChecker) errorf(span source.Span, format string, args ...any) {
+	ec.errorCode("type.expr", span, format, args...)
+}
+
+// errorCode is errorf under the code of a rule with its own.
+func (ec *exprChecker) errorCode(code string, span source.Span, format string, args ...any) {
 	ec.diags = append(ec.diags, Diagnostic{
 		Severity: SeverityError,
 		Span:     span,
 		Message:  fmt.Sprintf(format, args...),
-		Code:     "type.expr",
+		Code:     code,
 		Source:   "type",
 	})
 }
@@ -53,9 +58,10 @@ func (ec *exprChecker) warnf(span source.Span, format string, args ...any) {
 }
 
 // checkDeclValue checks a feature's bound value (`attribute x : T = expr`)
-// against the type and multiplicity the feature declares.
+// against the type and multiplicity the feature declares; an accept's trigger
+// is checked by the body walk instead.
 func (ec *exprChecker) checkDeclValue(scope *symbols.Scope, d featureDecl) {
-	if d.value == nil {
+	if d.value == nil || isTriggerValue(d.value) {
 		return
 	}
 	if u, ok := d.node.(*ast.Usage); ok {
@@ -173,6 +179,13 @@ func (ec *exprChecker) resolveTarget(scope *symbols.Scope, target ast.Node) *sym
 
 // checkBoolean checks an expression used where a condition is required.
 func (ec *exprChecker) checkBoolean(scope *symbols.Scope, n ast.Node, context string) {
+	ec.checkCondition(scope, n, "type.expr", context+" must be Boolean, found %s", false)
+}
+
+// checkCondition is checkBoolean reporting under a rule's own code and message,
+// whose one verb takes the type found. A condition naming an untyped feature is
+// left to evaluation unless the rule requires a Boolean statically (mustType).
+func (ec *exprChecker) checkCondition(scope *symbols.Scope, n ast.Node, code, format string, mustType bool) {
 	if n == nil {
 		return
 	}
@@ -181,24 +194,33 @@ func (ec *exprChecker) checkBoolean(scope *symbols.Scope, n ast.Node, context st
 		return
 	}
 	if got == semantics.PrimUnknown {
-		ec.checkNonScalarCondition(scope, n, context)
+		ec.checkNonScalarCondition(scope, n, code, format, mustType)
 		return
 	}
-	ec.errorf(n.Span(), "%s must be Boolean, found %s", context, got)
+	ec.errorCode(code, n.Span(), format, got)
 }
 
 // checkNonScalarCondition reports a condition naming a feature typed by
-// something no Boolean can come from: a part, an item, an enumeration.
-func (ec *exprChecker) checkNonScalarCondition(scope *symbols.Scope, n ast.Node, context string) {
+// something no Boolean can come from: a part, an item, an enumeration — or
+// one whose type is inherited, chained to or computed and is not Boolean: a
+// redefined duration, a quantity.
+func (ec *exprChecker) checkNonScalarCondition(scope *symbols.Scope, n ast.Node, code, format string, mustType bool) {
 	typeSym := ec.valueTypeSymbol(scope, n)
 	if typeSym == nil {
 		typeSym = ec.invocationResultTypeSymbol(scope, n)
 	}
-	if typeSym == nil || !ec.isDefinitelyNonBehavior(typeSym) ||
+	if typeSym == nil {
+		c := ec.model.ExprConformsToLibrary(scope, n, semantics.FQNBoolean)
+		if c.Known && !c.Holds && (mustType || !c.Untyped) {
+			ec.errorCode(code, n.Span(), format, c.Found)
+		}
+		return
+	}
+	if !ec.isDefinitelyNonBehavior(typeSym) ||
 		ec.model.CouldHold(typeSym, semantics.PrimBoolean) {
 		return
 	}
-	ec.errorf(n.Span(), "%s must be Boolean, found %s", context, typeSym.Name)
+	ec.errorCode(code, n.Span(), format, typeSym.Name)
 }
 
 // infer returns the scalar type of an expression, checking its operands on the
@@ -283,10 +305,7 @@ func (ec *exprChecker) inferIndex(scope *symbols.Scope, e *ast.IndexExpr) semant
 	// notation counting from 1, and any index beyond a sequence written out.
 	if lit, ok := e.Index.(*ast.LiteralInteger); ok {
 		if written, err := strconv.ParseInt(lit.Value, 10, 64); err == nil {
-			length, known := int64(0), false
-			if seq, isSeq := e.Operand.(*ast.SequenceExpr); isSeq {
-				length, known = writtenLength(seq)
-			}
+			length, known := writtenLength(e.Operand)
 			switch {
 			case written == 0:
 				ec.errorf(lit.Span(), "sequence index counts from 1, found 0")
@@ -299,24 +318,29 @@ func (ec *exprChecker) inferIndex(scope *symbols.Scope, e *ast.IndexExpr) semant
 	return elem
 }
 
-// writtenLength answers how many elements a sequence expression holds, and
-// whether that is knowable at all: a KerML sequence is flat, so an element that
-// is itself multi-valued contributes its own elements and the length is known
-// only from the values.
-func writtenLength(seq *ast.SequenceExpr) (int64, bool) {
-	for _, el := range seq.Elements {
-		if !isSingleValued(el) {
-			return 0, false
-		}
+// writtenLength answers how many elements an operand written out holds, and
+// whether that is knowable at all: a literal is one, `null` is none, and a KerML
+// sequence is flat, so a written element contributes its own count while a name
+// or a call may be a collection whose length only the values know.
+func writtenLength(operand ast.Node) (int64, bool) {
+	if isLiteral(operand) {
+		return 1, true
 	}
-	return int64(len(seq.Elements)), true
-}
-
-// isSingleValued reports whether an expression written as a sequence element is
-// one value whatever the model holds — a literal is, a name or a call may be a
-// collection.
-func isSingleValued(el ast.Node) bool {
-	return isLiteral(el)
+	switch n := operand.(type) {
+	case *ast.NullExpr:
+		return 0, true
+	case *ast.SequenceExpr:
+		total := int64(0)
+		for _, el := range n.Elements {
+			length, known := writtenLength(el)
+			if !known {
+				return 0, false
+			}
+			total += length
+		}
+		return total, true
+	}
+	return 0, false
 }
 
 // isLiteral reports whether an expression is a scalar literal, whose exact type is written out.

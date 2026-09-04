@@ -2118,7 +2118,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 				// The right side is the second ConnectorEndMember (SysML.xtext:1020),
 				// so it names a feature; an expression there is an error.
 				u.Value = p.ParseExpression()
-				if _, failed := u.Value.(*ast.ErrorNode); u.Value != nil && !failed && !bindingEndReference(u.Value) {
+				if _, failed := u.Value.(*ast.ErrorNode); u.Value != nil && !failed && !namesFeature(u.Value) {
 					const msg = "a binding end names a feature, not an expression; " +
 						"declare a feature with the expression as its value and bind to that"
 					p.error(u.Value.Span(), msg)
@@ -3605,9 +3605,10 @@ func bindingEnd(target ast.Node) *ast.Relationship {
 	return &ast.Relationship{Kind: ast.RelReferences, Target: target}
 }
 
-// bindingEndReference reports whether a parsed value names a feature, as a
-// binding's right end must (SysML.xtext:1020 ConnectorEndMember).
-func bindingEndReference(n ast.Node) bool {
+// namesFeature reports whether a parsed expression names a feature, as a
+// binding's right end (SysML.xtext ConnectorEndMember) and an assignment's
+// target (SysML.xtext TargetParameter) must.
+func namesFeature(n ast.Node) bool {
 	switch n.(type) {
 	case *ast.QualifiedName, *ast.FeatureReference, *ast.FeatureChainExpr:
 		return true

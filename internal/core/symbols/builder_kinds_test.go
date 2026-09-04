@@ -40,6 +40,38 @@ func TestBuildNewKindSymbols(t *testing.T) {
 	}
 }
 
+// Every SysML usage declares a Feature, including a binding and a transition,
+// whose symbol kind does not say so on its own; a definition or a package does not.
+func TestSymbolIsFeature(t *testing.T) {
+	cases := []struct {
+		src  string
+		path []string
+		want bool
+	}{
+		{"part def D { attribute a; attribute b; binding bb bind a = b; }", []string{"D", "bb"}, true},
+		{"state def S { state a; state b; transition t first a then b; }", []string{"S", "t"}, true},
+		{"part def D { attribute a; }", []string{"D", "a"}, true},
+		{"part def D { part p; }", []string{"D", "p"}, true},
+		{"part def D;", []string{"D"}, false},
+		{"package P;", []string{"P"}, false},
+		{"datatype T;", []string{"T"}, false},
+	}
+	for _, c := range cases {
+		scope := buildScope(t, c.src)
+		var sym *Symbol
+		for _, name := range c.path {
+			syms := scope.LookupLocalAll(name)
+			if len(syms) != 1 {
+				t.Fatalf("%q: expected 1 symbol for %q, got %d", c.src, name, len(syms))
+			}
+			sym, scope = syms[0], syms[0].Scope
+		}
+		if got := sym.IsFeature(); got != c.want {
+			t.Errorf("%q: IsFeature() = %v, want %v (kind %v)", c.src, got, c.want, sym.Kind)
+		}
+	}
+}
+
 func TestBuildConnectorEndsDefineNoSymbols(t *testing.T) {
 	// Connector-end references must not register any symbols in the enclosing
 	// scope beyond the connection usage itself.

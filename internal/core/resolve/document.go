@@ -247,9 +247,7 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		r.resolveInitial(scope, d)
 		r.resolveEdgeEnd(scope, d.Successor, nil, false)
 		r.resolveExpr(scope, d.Guard)
-		if child := r.childScope(scope, d); child != nil {
-			r.walkMembers(child, d.Members)
-		}
+		r.walkMembers(r.bodyScope(scope, d), d.Members)
 		return true
 	case *ast.SuccessionEdge:
 		r.resolveSuccessionEdge(scope, d)

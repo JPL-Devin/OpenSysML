@@ -75,6 +75,31 @@ func TestDimensionMismatchWarnsInArithmetic(t *testing.T) {
 	}
 }
 
+// TestDimensionMismatchWarnsForCalcResult covers an operand that is a call: it is
+// measured in the dimension the quantity type of the calculation's result fixes.
+func TestDimensionMismatchWarnsForCalcResult(t *testing.T) {
+	warnings, errs := dimensionDiagnostics(t, `package Test {
+		private import ISQ::*;
+		private import SI::*;
+		calc def Limit { return : ISQ::LengthValue; }
+		part def Vehicle {
+			attribute mass : ISQ::MassValue = 1200.0 [kg];
+			constraint bad { mass < Limit() }
+		}
+	}`)
+	if len(errs) != 0 {
+		t.Fatalf("unexpected errors: %v", errs)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("want 1 dimensional warning, got %d: %v", len(warnings), warnings)
+	}
+	for _, want := range []string{"MassValue", "LengthValue (dimension L)"} {
+		if !strings.Contains(warnings[0], want) {
+			t.Errorf("warning %q does not name %q", warnings[0], want)
+		}
+	}
+}
+
 // TestDimensionMismatchWarnsThroughAlias covers an operand whose quantity type is
 // named through a library alias, which fixes the same dimension the type it
 // aliases does.
@@ -148,15 +173,16 @@ func TestDimensionlessSilent(t *testing.T) {
 }
 
 // TestDimensionUnknownSilent covers the documented limitation: a dimension that
-// only evaluation determines — a calculation result, an untyped parameter, an
-// unresolved reference, or a value an assignment may replace — is not guessed at.
-// A parameter that declares a quantity type does fix a dimension, and warns.
+// only evaluation determines — a calculation result of no quantity type, an
+// untyped parameter, an unresolved reference, or a value an assignment may
+// replace — is not guessed at. A parameter or result that declares a quantity
+// type does fix a dimension, and warns.
 func TestDimensionUnknownSilent(t *testing.T) {
 	for name, src := range map[string]string{
-		"calc result": `package Test {
+		"calc result of no quantity type": `package Test {
 			private import ISQ::*;
 			private import SI::*;
-			calc def Limit { return : ISQ::LengthValue; }
+			calc def Limit { return : ScalarValues::Real; }
 			part def Vehicle {
 				attribute mass : ISQ::MassValue = 1200.0 [kg];
 				constraint maybe { mass < Limit() }

@@ -83,7 +83,7 @@ func (c *refCollector) addEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) 
 // edgeEnd records a succession or control-flow end the author named; one bound
 // by position is no reference (see resolveEdgeEnd).
 func (c *refCollector) edgeEnd(scope *symbols.Scope, qn *ast.QualifiedName, member ast.Node, implied bool) {
-	if qn == nil || member != nil || implied {
+	if qn == nil || len(qn.Parts) == 0 || member != nil || implied {
 		return
 	}
 	if inStateMachine(scope) {
@@ -283,9 +283,7 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		// The node's own name is a label, not a reference.
 		c.edgeEnd(scope, d.Successor, nil, false)
 		c.expr(scope, d.Guard)
-		if child := c.childScope(scope, d); child != nil {
-			c.walkMembers(child, d.Members)
-		}
+		c.walkMembers(c.bodyScope(scope, d), d.Members)
 		return true
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
 		c.walkMembers(c.bodyScope(scope, d), ast.NodeBodyMembers(d))
@@ -369,9 +367,7 @@ func (c *refCollector) behaviorDecl(scope *symbols.Scope, decl ast.Node) bool {
 	case *ast.InitialNode:
 		c.edgeEnd(scope, d.Successor, nil, false)
 		c.expr(scope, d.Guard)
-		if child := c.childScope(scope, d); child != nil {
-			c.walkMembers(child, d.Members)
-		}
+		c.walkMembers(c.bodyScope(scope, d), d.Members)
 		return true
 	case *ast.SuccessionEdge:
 		c.edgeEnd(scope, d.Source, d.SourceMember, d.SourceImplied)

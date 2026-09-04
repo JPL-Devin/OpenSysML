@@ -1000,8 +1000,17 @@ func (p *Parser) enterTransitionEffect() func() {
 func (p *Parser) parseAssignmentAction(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 
-	// Parse target (feature reference or qualified name)
+	// The target names the feature assigned (SysML.xtext TargetParameter ends
+	// in a FeatureChainMember); an expression there is an error.
 	target := p.ParseExpression()
+	if _, failed := target.(*ast.ErrorNode); target != nil && !failed && !namesFeature(target) {
+		const msg = "an assignment target names a feature or a feature chain, not an expression; " +
+			"assign to the feature that holds the value"
+		p.error(target.Span(), msg)
+		en := &ast.ErrorNode{Message: msg}
+		en.NodeSpan = target.Span()
+		target = en
+	}
 
 	// Expect ':=' operator
 	if !p.at(lexer.ColonEq) {
