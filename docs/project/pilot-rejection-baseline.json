@@ -35,8 +35,8 @@
   },
   "totals": {
     "cases": 231,
-    "bothReject": 206,
-    "pilotOnlyRejects": 17,
+    "bothReject": 210,
+    "pilotOnlyRejects": 13,
     "oursOnlyRejects": 8,
     "bothAccept": 0
   },
@@ -65,8 +65,8 @@
     {
       "source": "semantic",
       "cases": 102,
-      "bothReject": 83,
-      "pilotOnlyRejects": 11,
+      "bothReject": 87,
+      "pilotOnlyRejects": 7,
       "oursOnlyRejects": 8,
       "bothAccept": 0
     },
@@ -1397,24 +1397,18 @@
       "source": "semantic",
       "rule": "a metadata feature's annotated element must conform to its annotatedElement redefinition (KerML 8.3.4.11 validateMetadataFeatureAnnotatedElement; pilot validateMetadataFeatureAnnotatedElement).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 9: Cannot annotate Feature"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/k36-metadata-body-redefines-outside.kerml",
       "source": "semantic",
       "rule": "a metadata body feature must redefine a feature of the metaclass (KerML 8.3.4.11 validateMetadataFeatureBody; pilot validateMetadataFeatureBody).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 7: Must redefine an owning-type feature"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/k37-multiplicity-bound-not-natural.kerml",
@@ -1451,12 +1445,9 @@
       "source": "semantic",
       "rule": "a metadata feature must be typed by a metaclass, not an ordinary class (KerML 8.3.4.11 validateMetadataFeatureMetadata; pilot validateMetadataFeatureMetadata).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 5: Must have a concrete type"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/k41-chain-expression-to-nested-class.kerml",
@@ -1682,13 +1673,9 @@
       "source": "semantic",
       "rule": "A metadata usage must be typed by one metadata definition (SysML 7.26 Metadata; pilot validateMetadataUsageType).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 2,
-      "pilot": [
-        "line 5: A metadata usage must be typed by one metadata definition.",
-        "line 5: Must have a concrete type"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
     },
     {
       "path": "semantic/s24-perform-references-non-action.sysml",
@@ -2288,8 +2275,8 @@
     ],
     "totals": {
       "cases": 231,
-      "bothReject": 206,
-      "pilotOnlyRejects": 17,
+      "bothReject": 210,
+      "pilotOnlyRejects": 13,
       "oursOnlyRejects": 8,
       "bothAccept": 0
     },

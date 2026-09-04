@@ -43,13 +43,32 @@ func TestReferenceIndexListsBothIdentities(t *testing.T) {
 		}
 	}
 	want(ws.ReferencesTo(cube), "Cube@46", "Box@61", "Box@100", "Cube@122")
-	want(ws.NameReferencesTo(cube), "Cube@46", "Cube@122")
+	want(ws.NameReferencesTo(cube, "Cube"), "Cube@46", "Cube@122")
 	want(ws.ReferencesTo(box), "Box@61", "Box@100")
-	want(ws.NameReferencesTo(box), "Box@61", "Box@100")
+	want(ws.NameReferencesTo(box, "Box"), "Box@61", "Box@100")
 	want(ws.ReferencesTo(shapes), "Shapes@92", "Shapes@114")
-	if ws.ReferencesTo(nil) != nil || ws.NameReferencesTo(nil) != nil {
+	if ws.ReferencesTo(nil) != nil || ws.NameReferencesTo(nil, "Cube") != nil {
 		t.Error("nil target should list nothing")
 	}
+}
+
+// A short-named element is reached by both spellings, but each name is written
+// only where it is spelled: renaming one leaves references using the other alone.
+func TestReferenceIndexTellsShortNameFromLongName(t *testing.T) {
+	ws := NewWorkspace()
+	ws.Open("short.sysml", []byte("package P { part def <O> Old { part x; } part a : O; part b : Old; part c : P::O::x; }\n"), 1)
+	old := oneSymbol(t, ws, "P::Old")
+
+	want := func(got []ReferenceLocation, texts ...string) {
+		t.Helper()
+		if g := fmt.Sprint(spanTexts(got)); g != fmt.Sprint(texts) {
+			t.Errorf("got %s, want %v", g, texts)
+		}
+	}
+	want(ws.ReferencesTo(old), "O@50", "Old@62", "O@79")
+	want(ws.NameReferencesTo(old, "Old"), "Old@62")
+	want(ws.NameReferencesTo(old, "O"), "O@50", "O@79")
+	want(ws.NameReferencesTo(old, "Fresh"))
 }
 
 // Locations come in document-name then position order, addressing the text the
@@ -136,7 +155,7 @@ func TestReferenceIndexConcurrentQueriesAndUpdates(t *testing.T) {
 				if n := len(ws.ReferencesTo(x)); n < 8 || n > 12 {
 					t.Errorf("references = %d, want between 8 and 12", n)
 				}
-				ws.NameReferencesTo(x)
+				ws.NameReferencesTo(x, "X")
 			}
 		}()
 	}

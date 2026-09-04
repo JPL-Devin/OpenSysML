@@ -159,7 +159,7 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-231 case(s): 206 both reject, 17 only the pilot rejects, 8 only we reject, 0 both accept
+231 case(s): 210 both reject, 13 only the pilot rejects, 8 only we reject, 0 both accept
   of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -183,7 +183,9 @@ rules closed four more (`k16`, `k17`, `k19`, `k42`), leaving 8 — and the
 SysML census opened nine more, six of them `grammar/` (see
 [Permissiveness gaps](#permissiveness-gaps)); `s46` (the feature-value overriding rule) landed
 with both implementations rejecting, as did `s47` (an enumeration definition specializing
-another) with `g68` (a definition nested in an enumeration body). Before that source the default-mode gap count was 2
+another) with `g68` (a definition nested in an enumeration body). The metadata rules
+then closed four more (`k35`, `k36`, `k40`, `s23`: metaclass typing, annotated-element conformance
+and body redefinition, in both notations). Before that source the default-mode gap count was 2
 of 120: only the intended `extensions/` notation. Wave 11 closed two `xpect/` gaps: `p11`
 (11D's and 11G's model-level evaluability predicate on metadata body values) and `p15` (11F's
 attribute-usage typing rule), and wave 12C closed the last one, `p24`: a library metaclass now carries its
@@ -200,8 +202,8 @@ extensions that the default mode accepts on purpose and strict mode reports as e
 initial state marker), `x04` (`region r { … }`) and `x07` (`transition <src> to <tgt>`) left that
 list when that notation was removed: each is now a parse error in either mode, so both
 implementations reject it by default. Judged in
-the default mode the same corpus gives 203 agreements and 20 gaps, which is what `-conformance
-default` prints. `-conformance strict` gives 206 and 17. Reserved keywords recovered as declared
+the default mode the same corpus gives 207 agreements and 16 gaps, which is what `-conformance
+default` prints. `-conformance strict` gives 210 and 13. Reserved keywords recovered as declared
 names and SysML declaration keywords recovered in KerML are now errors in either mode; the parser
 still preserves their trees for editors and later analysis. Of the 14 gaps this document carried before wave 8, six were closed by the
 validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
@@ -222,9 +224,9 @@ we no longer accept it either.
 
 ## Permissiveness gaps
 
-All 17 gaps under `-conformance auto` are open, and all of them were opened by the `semantic/`
-source and the SysML constraint census: 8 named KerML constraints (`k11`–`k40`, `s80`) and 3
-named SysML constraints (`s04`, `s23`, `s43`) the pinned validators enforce as errors and
+All 13 gaps under `-conformance auto` are open, and all of them were opened by the `semantic/`
+source and the SysML constraint census: 5 named KerML constraints (`k11`–`k37`, `s80`) and 2
+named SysML constraints (`s04`, `s43`) the pinned validators enforce as errors and
 OpenSysML does not report, plus 6 SysML body-item spellings (`g61`–`g66`) the pinned grammar
 rejects and our parser admits in any body. Every gap the corpus carried before is closed. The
 cross-subsetting family the `semantic/` source opened (`k16`, `k17`, `k19`, `k42`) was closed by
@@ -250,12 +252,8 @@ silent in either mode.
 | `semantic/k11-initial-value-nonvariable.kerml` | accepts | `Initialized feature must be variable` | `internal/core/passes` — no pass relates the `:=` initial-value form to the feature's variability (`validateFeatureValueIsInitial`) |
 | `semantic/k25-assoc-one-end.kerml` | accepts | `Must have at least two related elements` | `internal/core/passes/w10b_related_elements.go` — fires for a SysML `connection def` with one end (`xpect/p20`) but not for a KerML `assoc` with one end (`validateAssociationRelatedTypes`) |
 | `semantic/k26-binary-connector-three-ends.kerml` | accepts | `Cannot have more than two ends` | `internal/core/passes/constraint.go` `checkConnectorEndRedefinition` — counts declared `end` features (it rejects `k24`), not the positional ends of `connector c : BinaryLink (x, y, z)` (`validateConnectorBinarySpecialization`) |
-| `semantic/k35-metadata-annotates-wrong-kind.kerml` | accepts | `Cannot annotate Feature` | `internal/core/passes/w8c_metadata_annotation.go` — does not read a metaclass's own `annotatedElement` redefinition (`:>> annotatedElement : KerML::Class`) to restrict what `@M about …` may annotate (`validateMetadataFeatureAnnotatedElement`) |
-| `semantic/k36-metadata-body-redefines-outside.kerml` | accepts | `Must redefine an owning-type feature` | `internal/core/passes/w8d_metadata_usage.go` — emits this message for a SysML metadata usage body but is gated on `ast.UsageMetadata`, so a KerML `@M about C { :>> g; }` body is not checked (`validateMetadataFeatureBody`) |
 | `semantic/k37-multiplicity-bound-not-natural.kerml` | accepts | `Must have a Natural value` | `internal/core/passes/w8c_multiplicity_bounds.go` — only reports a bound whose primitive type is known and non-integer; a bound naming a feature typed by a class has no primitive type and is passed (`validateMultiplicityRangeResultTypes`) |
-| `semantic/k40-metadata-typed-by-class.kerml` | accepts | `Must have a concrete type` | `internal/core/passes/w8c_metadata_type.go` — checks that the type is not abstract (`xpect/p24`) but not that it is a metaclass at all (`validateMetadataFeatureMetadata`) |
 | `semantic/s04-assert-references-non-constraint.sysml` | accepts | `Must reference a constraint.` | `internal/core/passes/typecheck.go` — the referent-kind check on reference subsetting covers `satisfy` (`satisfy target must be a requirement usage`) but not `assert`; no pass checks that an asserted usage is a constraint usage |
-| `semantic/s23-metadata-typed-by-part-def.sysml` | accepts | `A metadata usage must be typed by one metadata definition.` / `Must have a concrete type` | `internal/core/passes/typecheck.go` `compatibleTyping` — a metadata usage is typed like an item, so any occurrence definition passes; `w8c_metadata_type.go` checks only abstractness. Pass exists, misses the shape |
 | `semantic/s43-assign-to-non-feature.sysml` | accepts | `An assignment must have a referent.` | `internal/core/passes/constraint.go` `assignmentReferentChecker` — returns silently when the resolved target is not a `*ast.Usage`, so assigning to a definition reports nothing. Pass exists, misses the shape |
 | `semantic/s80-constant-attribute-not-variable.sysml` | accepts | `Only a variable feature can be constant` | `internal/core/passes` — the `constant` usage prefix is parsed but no pass relates it to variability, which an attribute of a data type never has (`validateFeatureConstantIsVariable`) |
 
@@ -594,7 +592,7 @@ for the gaps, and names where in OpenSysML the rule would have to fire.
 | `validateInterfaceUsageEnd` | existing: `xpect/p27-interface-end-not-port.sysml` | both-reject | An interface end must be a port. | An interface end must be a port. | — |
 | `validateInterfaceUsageType` | `semantic/s22-interface-typed-by-connection-def.sysml` | both-reject | An interface must be typed by interface definitions. | An interface must be typed by interface definitions. | — |
 | `validateItemUsageType` | none: `checkItemUsage` is commented out in the pinned validator | not enforced by the pilot | — | — | — |
-| `validateMetadataUsageType` | `semantic/s23-metadata-typed-by-part-def.sysml` | pilot-only-rejects | A metadata usage must be typed by one metadata definition. / Must have a concrete type | — | `w8c_metadata_type.go` checks only abstractness of the metadata type, not that it is a metadata definition |
+| `validateMetadataUsageType` | `semantic/s23-metadata-typed-by-part-def.sysml` | both-reject | A metadata usage must be typed by one metadata definition. / Must have a concrete type | A metadata usage must be typed by one metadata definition. | — |
 | `validateObjectiveMembershipIsComposite` | none: `objective` admits no `ref` prefix | no violating model | — | — | — |
 | `validateObjectiveMembershipOwningType` | `grammar/g63-objective-outside-case-body.sysml` | pilot-only-rejects | mismatched input 'objective' expecting '}' / extraneous input '}' expecting EOF | — | `objective` is dispatched body-independently in `parser/defusage.go`; no pass checks the owner kind |
 | `validateOccurrenceUsageIndividualDefinition` | existing: `xpect/p25-two-individual-definitions.sysml` | both-reject | At most one individual definition is allowed. | At most one individual definition is allowed. | — |
