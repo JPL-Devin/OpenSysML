@@ -9,6 +9,25 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/solve"
 )
 
+// objectiveSession is checkSession for a model restating the library's bound `best`:
+// that override is the one expected diagnostic (a known gap); any other fails the fixture.
+func objectiveSession(t *testing.T, src string) *Session {
+	t.Helper()
+	s := NewSession()
+	res := s.Submit(src)
+	var overridden int
+	for _, d := range res.Diagnostics {
+		if d.Code != "feature-value-overriding" || !strings.Contains(d.Message, "TradeStudies::") {
+			t.Fatalf("fixture has diagnostics: %v", res.Diagnostics)
+		}
+		overridden++
+	}
+	if overridden == 0 {
+		t.Fatal("fixture restates no bound `best`; use checkSession")
+	}
+	return s
+}
+
 // requireOptimizingSolver skips when the backend on PATH implements no
 // (minimize)/(maximize): cvc5 refuses them, which %optimize reports rather than
 // works around.
@@ -116,7 +135,7 @@ func optimized(t *testing.T, s *Session, name string) (string, SolveReport) {
 
 func TestOptimizeReportsTheLeastValue(t *testing.T) {
 	requireOptimizingSolver(t)
-	s := checkSession(t, optimizeModel)
+	s := objectiveSession(t, optimizeModel)
 	got, report := optimized(t, s, "Bounded")
 	wants(t, got, "✓ Analysis Bounded is optimized", "minimize smallest = `size`: 3", "Trade::Bounded::size = 3")
 	rejects(t, got, "error:", "no optimum")
@@ -132,7 +151,7 @@ func TestOptimizeReportsTheLeastValue(t *testing.T) {
 // the evaluator's arithmetic need not attain: none is reported.
 func TestOptimizeDeclinesARoundedObjective(t *testing.T) {
 	requireSolver(t)
-	s := checkSession(t, `
+	s := objectiveSession(t, `
 		package Trade {
 			private import ScalarValues::*;
 			private import TradeStudies::*;
@@ -156,7 +175,7 @@ func TestOptimizeDeclinesARoundedObjective(t *testing.T) {
 // from above, so the greatest value comes from both together.
 func TestOptimizeReportsTheGreatestValue(t *testing.T) {
 	requireOptimizingSolver(t)
-	s := checkSession(t, optimizeModel)
+	s := objectiveSession(t, optimizeModel)
 	got, report := optimized(t, s, "Widest")
 	wants(t, got, "✓ Analysis Widest is optimized", "maximize largest = `size`: 9")
 	if report.Status != SolveSat {
@@ -168,7 +187,7 @@ func TestOptimizeReportsTheGreatestValue(t *testing.T) {
 // and no number is offered as one.
 func TestOptimizeReportsAnUnboundedObjective(t *testing.T) {
 	requireOptimizingSolver(t)
-	s := checkSession(t, optimizeModel)
+	s := objectiveSession(t, optimizeModel)
 	got, report := optimized(t, s, "Unbounded")
 	wants(t, got, "! Analysis Unbounded has no optimum", "no greatest value")
 	rejects(t, got, "is optimized", "error:")
@@ -179,7 +198,7 @@ func TestOptimizeReportsAnUnboundedObjective(t *testing.T) {
 
 func TestOptimizeReportsAnInfeasibleAnalysis(t *testing.T) {
 	requireOptimizingSolver(t)
-	s := checkSession(t, optimizeModel)
+	s := objectiveSession(t, optimizeModel)
 	got, report := optimized(t, s, "Impossible")
 	wants(t, got, "✗ Analysis Impossible has no values satisfying its conditions")
 	rejects(t, got, "is optimized", "=")
@@ -192,7 +211,7 @@ func TestOptimizeReportsAnInfeasibleAnalysis(t *testing.T) {
 // first, then the greatest margin among the assignments achieving it.
 func TestOptimizeReportsObjectivesInDeclarationOrder(t *testing.T) {
 	requireOptimizingSolver(t)
-	s := checkSession(t, optimizeModel)
+	s := objectiveSession(t, optimizeModel)
 	got, report := optimized(t, s, "Ordered")
 	wants(t, got, "minimize cheapest = `cost`: 3", "maximize widest = `margin`: 3")
 	if report.Status != SolveSat {
@@ -208,7 +227,7 @@ func TestOptimizeReportsObjectivesInDeclarationOrder(t *testing.T) {
 // there is no optimum and offers only the feasible value found.
 func TestOptimizeReportsABoundThatIsNotAttained(t *testing.T) {
 	requireOptimizingSolver(t)
-	s := checkSession(t, optimizeModel)
+	s := objectiveSession(t, optimizeModel)
 	got, report := optimized(t, s, "OpenBound")
 	if report.Status != SolveNoOptimum {
 		t.Fatalf("status is %s, want no-optimum: %s", report.Status, strings.Join(report.Lines, "\n"))
@@ -220,7 +239,7 @@ func TestOptimizeReportsABoundThatIsNotAttained(t *testing.T) {
 
 // Refusals need no solver: they are settled while translating.
 func TestOptimizeRefusesANonlinearObjective(t *testing.T) {
-	s := checkSession(t, optimizeModel)
+	s := objectiveSession(t, optimizeModel)
 	got, report := optimized(t, s, "Nonlinear")
 	wants(t, got, "error:", "not optimizable", "nonlinear")
 	if report.Status != SolveUnavailable {
@@ -229,7 +248,7 @@ func TestOptimizeRefusesANonlinearObjective(t *testing.T) {
 }
 
 func TestOptimizeRefusesAnObjectiveWithoutADirection(t *testing.T) {
-	s := checkSession(t, optimizeModel)
+	s := objectiveSession(t, optimizeModel)
 	got, report := optimized(t, s, "Undirected")
 	wants(t, got, "error:", "no direction", "MinimizeObjective")
 	if report.Status != SolveUnavailable {
@@ -238,30 +257,30 @@ func TestOptimizeRefusesAnObjectiveWithoutADirection(t *testing.T) {
 }
 
 func TestOptimizeReportsAnAnalysisStatingNoObjective(t *testing.T) {
-	s := checkSession(t, optimizeModel)
+	s := objectiveSession(t, optimizeModel)
 	got, _ := optimized(t, s, "NoObjective")
 	wants(t, got, "error:", "states no objective")
 }
 
 func TestOptimizeRejectsAnElementThatIsNoAnalysis(t *testing.T) {
-	s := checkSession(t, optimizeModel+"\npackage Other { part def P; }")
+	s := objectiveSession(t, optimizeModel+"\npackage Other { part def P; }")
 	wants(t, run(t, s, "%optimize Other::P"), "error:", "analysis")
 }
 
 func TestOptimizeReportsAnUnknownName(t *testing.T) {
-	s := checkSession(t, optimizeModel)
+	s := objectiveSession(t, optimizeModel)
 	wants(t, run(t, s, "%optimize Nope"), "error:")
 }
 
 func TestOptimizeWithoutAName(t *testing.T) {
-	s := checkSession(t, optimizeModel)
+	s := objectiveSession(t, optimizeModel)
 	wants(t, run(t, s, "%optimize"), "usage: %optimize <name>")
 }
 
 func TestOptimizeReportsAnAbsentSolver(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	t.Setenv(solve.SolverEnv, "")
-	s := checkSession(t, optimizeModel)
+	s := objectiveSession(t, optimizeModel)
 	got, report := optimized(t, s, "Bounded")
 	wants(t, got, "error:", "z3")
 	rejects(t, got, "is optimized", "no optimum")
@@ -283,7 +302,7 @@ func TestOptimizeReportsABackendWithoutOptimization(t *testing.T) {
 		t.Fatalf("write fake solver: %v", err)
 	}
 	t.Setenv(solve.SolverEnv, script)
-	s := checkSession(t, optimizeModel)
+	s := objectiveSession(t, optimizeModel)
 	got, report := optimized(t, s, "Bounded")
 	wants(t, got, "error:", "cvc5", "optimization")
 	rejects(t, got, "is optimized", "= 3")
@@ -298,7 +317,7 @@ func TestOptimizeReportsASolverProcessFailure(t *testing.T) {
 		t.Fatalf("write fake solver: %v", err)
 	}
 	t.Setenv(solve.SolverEnv, script)
-	s := checkSession(t, optimizeModel)
+	s := objectiveSession(t, optimizeModel)
 	got := run(t, s, "%optimize Bounded")
 	wants(t, got, "error:", "z3-mute")
 	rejects(t, got, "is optimized", "unknown")
@@ -312,7 +331,7 @@ func TestOptimizeReportsAnUndecidedAnswer(t *testing.T) {
 		t.Fatalf("write fake solver: %v", err)
 	}
 	t.Setenv(solve.SolverEnv, script)
-	s := checkSession(t, optimizeModel)
+	s := objectiveSession(t, optimizeModel)
 	got, report := optimized(t, s, "Bounded")
 	wants(t, got, "? Analysis Bounded is undecided", "Reason: incomplete")
 	rejects(t, got, "is optimized", "error:")
@@ -338,7 +357,7 @@ func TestOptimizeIsListedInHelpAndCompletion(t *testing.T) {
 // a debugging session running, since it declares nothing.
 func TestOptimizeKeepsADebuggingSessionAndMaterializesNothing(t *testing.T) {
 	requireOptimizingSolver(t)
-	s := checkSession(t, optimizeModel+`
+	s := objectiveSession(t, optimizeModel+`
 package Debug {
 	action def Walk {
 		first start;

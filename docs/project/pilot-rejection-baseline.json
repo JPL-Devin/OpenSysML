@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 225,
-        "digest": "sha256:7e0e48b3dfa79a7184eface8a980e1fe9241798e68e9e73e926b1dcab9ff67c7"
+        "files": 226,
+        "digest": "sha256:91f3388e06298cada6a348a89e0d90e208d7ea32d8d38f2ba19d625f7037e420"
       }
     ],
     "recorded": "2026-09-04"
   },
   "totals": {
-    "cases": 225,
-    "bothReject": 197,
+    "cases": 226,
+    "bothReject": 198,
     "pilotOnlyRejects": 20,
     "oursOnlyRejects": 8,
     "bothAccept": 0
@@ -64,8 +64,8 @@
     },
     {
       "source": "semantic",
-      "cases": 97,
-      "bothReject": 75,
+      "cases": 98,
+      "bothReject": 76,
       "pilotOnlyRejects": 14,
       "oursOnlyRejects": 8,
       "bothAccept": 0
@@ -1893,6 +1893,15 @@
       "pilotErrors": 1
     },
     {
+      "path": "semantic/s46-feature-value-overriding.sysml",
+      "source": "semantic",
+      "rule": "a feature bound with `=` may not be given another value by a redefining feature; only a `default =` value may be overridden (KerML 8.3.4.10.2; pilot validateFeatureValueOverriding).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 2
+    },
+    {
       "path": "semantic/s80-constant-attribute-not-variable.sysml",
       "source": "semantic",
       "rule": "only a variable feature can be constant, and an attribute of a data type is not variable (KerML 8.3.3.3 validateFeatureConstantIsVariable; pilot validateFeatureConstantIsVariable).",
@@ -2243,8 +2252,8 @@
       }
     ],
     "totals": {
-      "cases": 225,
-      "bothReject": 197,
+      "cases": 226,
+      "bothReject": 198,
       "pilotOnlyRejects": 20,
       "oursOnlyRejects": 8,
       "bothAccept": 0

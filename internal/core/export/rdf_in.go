@@ -98,6 +98,9 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 	if err := checkCardinality(graph); err != nil {
 		return nil, err
 	}
+	if err := checkValueFlags(graph); err != nil {
+		return nil, err
+	}
 	// The first rendering writes every reference fully qualified; reading it
 	// chooses each the shortest spelling that reaches its element. Later
 	// renderings are re-read the same way until every spelling still does.
@@ -329,6 +332,19 @@ var multiValuedProperties = map[string]bool{
 	xRelatedFeature: true,
 }
 
+// singleValued reports a property the decoder reads one value of: every sysx:
+// property not listed above, and the ontology's boolean `is…` flags.
+func singleValued(predicate string) bool {
+	name := rdf.LocalName(predicate)
+	switch {
+	case strings.HasPrefix(predicate, rdf.OpenSysML):
+		return !multiValuedProperties[name]
+	case strings.HasPrefix(predicate, rdf.SysML):
+		return strings.HasPrefix(name, "is")
+	}
+	return false
+}
+
 // checkCardinality refuses a subject stating a single-valued property twice
 // with different objects, since only one of them could be written.
 func checkCardinality(graph *rdf.Graph) error {
@@ -336,7 +352,7 @@ func checkCardinality(graph *rdf.Graph) error {
 	first := map[statement]rdf.Term{}
 	for _, triple := range graph.Triples() {
 		predicate := triple.Predicate.Value
-		if !strings.HasPrefix(predicate, rdf.OpenSysML) || multiValuedProperties[rdf.LocalName(predicate)] {
+		if !singleValued(predicate) {
 			continue
 		}
 		key := statement{triple.Subject, triple.Predicate}
@@ -348,6 +364,25 @@ func checkCardinality(graph *rdf.Graph) error {
 				Note: fmt.Sprintf("it states %s twice, as %s and %s, and the property holds one value, so one of them would be dropped",
 					curie(predicate), termText(seen), termText(triple.Object)),
 			}
+		}
+	}
+	return nil
+}
+
+// checkValueFlags refuses sysml:isDefault or sysml:isInitial, whatever its value,
+// on a subject with no sysml:value, since the flags spell a feature value's operator.
+func checkValueFlags(graph *rdf.Graph) error {
+	for _, triple := range graph.Triples() {
+		predicate := triple.Predicate.Value
+		if predicate != rdf.SysML+pIsDefault && predicate != rdf.SysML+pIsInitial {
+			continue
+		}
+		if graph.HasProperty(triple.Subject, rdf.SysML+pValue) {
+			continue
+		}
+		return &UnsupportedError{
+			What: fmt.Sprintf("the subject <%s>", triple.Subject.Value),
+			Note: fmt.Sprintf("it states %s without a sysml:value, and the flag is the operator of a feature value, so there is nothing to write it on", curie(predicate)),
 		}
 	}
 	return nil
@@ -1467,14 +1502,28 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	}
 	head := strings.Join(words, " ") + multPart
 	if value, ok := d.stringOf(el, rdf.SysML+pValue); ok {
-		head += " = " + value
+		head += " " + d.valueOperator(el) + " " + value
 	}
 	return head, nil
 }
 
+// valueOperator is the operator a feature value was written with, rebuilt from
+// its isDefault and isInitial flags: `=`, `:=`, `default =` or `default :=`.
+func (d *decoder) valueOperator(el *element) string {
+	op := "="
+	if d.boolOf(el, rdf.SysML+pIsInitial) {
+		op = ":="
+	}
+	if d.boolOf(el, rdf.SysML+pIsDefault) {
+		return "default " + op
+	}
+	return op
+}
+
 // conditionHead rebuilds a condition member from its properties: an inline
-// condition (`assert x > 0`), the constraint it states (`require R`), or a
-// nested constraint whose conditions are its body (`assume constraint { … }`).
+// condition (`assert x > 0`), the constraint it states (`require R`), or the
+// constraint it declares (`assume constraint c : C default = v`, or a nested
+// `constraint { … }`).
 func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 	var words []string
 	if keyword != "" {
@@ -1551,7 +1600,7 @@ func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 	words = append(words, relationships...)
 	head := strings.Join(words, " ") + d.multiplicityText(el)
 	if value, ok := d.stringOf(el, rdf.SysML+pValue); ok {
-		head += " = " + value
+		head += " " + d.valueOperator(el) + " " + value
 	}
 	return head, nil
 }

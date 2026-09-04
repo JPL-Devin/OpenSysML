@@ -71,11 +71,13 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 				hasType:      hasTypingRelationship(d.Relationships),
 				span:         d.Span(),
 			})
-			tc.checkOneType(scope, d)
-			tc.expr.checkUsageValue(scope, d)
+			tc.checkFeatureDecl(scope, usageDecl(d))
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
 			}
+		case *ast.AssumeMember, *ast.RequireMember:
+			tc.checkOwnedConstraint(scope, d)
+			tc.checkBehaviorMember(scope, d)
 		case *ast.Package:
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
@@ -88,6 +90,30 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 			tc.checkBehaviorMember(scope, d)
 		}
 	}
+}
+
+// checkFeatureDecl checks what a feature declares beyond its relationships: a
+// single type where the reference admits one, and a value it conforms to.
+func (tc *typeChecker) checkFeatureDecl(scope *symbols.Scope, d featureDecl) {
+	tc.checkOneType(scope, d)
+	tc.expr.checkDeclValue(scope, d)
+}
+
+// checkOwnedConstraint checks the constraint usage an assume/require member
+// declares as the usage it is; a reference or condition form declares none.
+func (tc *typeChecker) checkOwnedConstraint(scope *symbols.Scope, m ast.Node) {
+	d, ok := featureDeclOf(m)
+	if !ok {
+		return
+	}
+	tc.checkRelationships(scope, d.relationships, declKind{
+		lang:    tc.lang,
+		useKind: d.kind,
+		keyword: d.keyword,
+		hasType: d.hasTyping(),
+		span:    d.span,
+	})
+	tc.checkFeatureDecl(scope, d)
 }
 
 // checkBehaviorMember types the expressions carried by behavior body members
