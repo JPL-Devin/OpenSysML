@@ -738,24 +738,25 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members 
 	}
 
 	for _, member := range members {
-		var what, name string
+		var what string
+		var names []string
 		var expr ast.Node
 		isSubject := false
 		switch rm := member.node.(type) {
 		case *ast.SubjectMember:
-			what, name, expr, isSubject = "subject", rm.Ident.Name, rm.BindingExpr, true
+			what, names, expr, isSubject = "subject", bindingNames(rm.Ident.Name, rm.Ident.ShortName), rm.BindingExpr, true
 		case *ast.Usage:
 			switch rm.Kind {
 			case ast.UsageSubject:
-				name, isSubject = effectiveName(rm), true
+				names, isSubject = bindingNames(effectiveName(rm), rm.Ident.ShortName), true
 			case ast.UsageActor:
-				what, name, expr = "actor", effectiveName(rm), rm.Value
+				what, names, expr = "actor", bindingNames(effectiveName(rm), rm.Ident.ShortName), rm.Value
 			}
 		default:
 			continue
 		}
 		if isSubject && subject != nil {
-			if name != "" {
+			for _, name := range names {
 				bindings[name] = Value{Kind: ValInstance, Instance: subject.ID}
 			}
 			continue
@@ -767,9 +768,24 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members 
 		if err != nil {
 			return nil, fmt.Errorf("requirement %s: %s binding evaluation failed: %w", element, what, err)
 		}
-		bindings[name] = value
+		for _, name := range names {
+			bindings[name] = value
+		}
 	}
 	return bindings, nil
+}
+
+// bindingNames are the names a condition may read a bound member by: its name
+// and its short name, whichever it declares.
+func bindingNames(name, shortName string) []string {
+	var names []string
+	if name != "" {
+		names = append(names, name)
+	}
+	if shortName != "" && shortName != name {
+		names = append(names, shortName)
+	}
+	return names
 }
 
 // effectiveName is the name a usage answers to, which for a member written as a
@@ -954,12 +970,14 @@ func unboundSubjectNames(members []scopedMember, subject *Instance) map[string]b
 	for _, member := range members {
 		switch rm := member.node.(type) {
 		case *ast.SubjectMember:
-			if rm.BindingExpr == nil && rm.Ident.Name != "" {
-				names[rm.Ident.Name] = true
+			if rm.BindingExpr == nil {
+				for _, name := range bindingNames(rm.Ident.Name, rm.Ident.ShortName) {
+					names[name] = true
+				}
 			}
 		case *ast.Usage:
 			if rm.Kind == ast.UsageSubject {
-				if name := effectiveName(rm); name != "" {
+				for _, name := range bindingNames(effectiveName(rm), rm.Ident.ShortName) {
 					names[name] = true
 				}
 			}
