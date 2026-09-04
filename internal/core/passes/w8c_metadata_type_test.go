@@ -74,9 +74,8 @@ func TestW8CMetadataConcreteLibraryMetaclass(t *testing.T) {
 	}
 }
 
-// A metadata feature is typed by exactly one metaclass (KerML
-// validateMetadataFeatureMetadata): a concrete class, structure or datatype
-// is not one, in either spelling of the annotation.
+// A metadata feature is typed by exactly one metaclass (validateMetadataFeatureMetadata):
+// a concrete class, structure or datatype is not one, in either spelling of the annotation.
 func TestW8CMetadataTypeMustBeAMetaclass(t *testing.T) {
 	src := `package P {
 	class M;
@@ -104,9 +103,8 @@ func TestW8CMetadataTypeMustBeAMetaclass(t *testing.T) {
 	}
 }
 
-// The SysML spelling (validateMetadataUsageType): a metadata usage is typed by
-// one metadata definition, and each faulty typing is reported exactly once
-// whichever rule names it.
+// The SysML spelling (validateMetadataUsageType): a metadata usage is typed by one
+// metadata definition, and each faulty typing is reported exactly once whichever rule names it.
 func TestW8CMetadataUsageTypeMustBeOneMetadataDefinition(t *testing.T) {
 	src := `package P {
 	part def PD;

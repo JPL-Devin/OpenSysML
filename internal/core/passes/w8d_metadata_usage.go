@@ -11,10 +11,8 @@ import (
 // INVALID_METADATA_FEATURE_BODY.
 const msgMetadataBodyFeature = "Must redefine an owning-type feature"
 
-// W8DMetadataUsagePass checks the body of a `metadata m : A { … }` usage against
-// the metadata definition it is typed by: every feature it writes must redefine
-// one of the definition's own (KerML §7.5). The type itself is
-// MetadataTypePass's; a prefix annotation's body is MetadataAnnotationPass's.
+// W8DMetadataUsagePass checks that every feature in a `metadata m : A { … }` usage body
+// redefines one of A's own (KerML §7.5); the type itself is MetadataTypePass's.
 type W8DMetadataUsagePass struct{}
 
 func (W8DMetadataUsagePass) Level() PassLevel { return LevelConstraint }

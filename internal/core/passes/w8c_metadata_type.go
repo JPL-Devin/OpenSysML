@@ -14,11 +14,9 @@ const (
 	msgMetadataMetaclass = "Must have exactly one metaclass"
 )
 
-// MetadataTypePass reports an annotation, written `@M`/`#M` or as a
-// `metadata m : M` usage, whose type is not a metaclass or metadata definition,
-// or is abstract (KerML 1.0 §8.3.4.9.2, validateMetadataFeatureMetaclass and
-// validateMetadataFeatureMetaclassNotAbstract; SysML v2 §8.4.14
-// validateMetadataUsageType).
+// MetadataTypePass reports an annotation (`@M`, `#M` or `metadata m : M`) whose type is
+// not a concrete metaclass or metadata definition (KerML validateMetadataFeatureMetadata,
+// validateMetadataFeatureMetadataNotAbstract; SysML validateMetadataUsageType).
 type MetadataTypePass struct{}
 
 func (MetadataTypePass) Level() PassLevel { return LevelType }

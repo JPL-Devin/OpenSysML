@@ -876,9 +876,8 @@ func (r *Resolver) generalsOf(sym *symbols.Symbol) []*symbols.Symbol {
 	return append(generals, r.findFeaturedByTargets(scope, rels)...)
 }
 
-// resolveOwnSibling resolves a subsetting target to a sibling of decl that took
-// the name of the feature it redefines (KerML 7.3.4.5): that redefinition
-// shadows the inherited feature within the owning type.
+// resolveOwnSibling resolves a subsetting target to a sibling of decl that redefines
+// the inherited feature of that name, which it shadows in the owning type (KerML 7.3.4.5).
 func (r *Resolver) resolveOwnSibling(scope *symbols.Scope, qn *ast.QualifiedName, decl ast.Node) bool {
 	if qn == nil || len(qn.Parts) != 1 || scope == nil {
 		return false

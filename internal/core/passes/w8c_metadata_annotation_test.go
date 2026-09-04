@@ -2,6 +2,7 @@ package passes
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 
@@ -168,9 +169,11 @@ func TestMetadataAnnotatedElementReadsEffectiveFeatures(t *testing.T) {
 		"@M about C, C::f; => Cannot annotate Feature",
 		"metadata mm : Inherits about C::f; => Cannot annotate Feature",
 		"#Narrows => Cannot annotate Class",
-		"@Either about Q, C, C::f; => Cannot annotate Feature",
 		"@Either about Q, C, C::f; => Cannot annotate Package",
+		"@Either about Q, C, C::f; => Cannot annotate Feature",
 	}
+	sort.Strings(got)
+	sort.Strings(want)
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("findings\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}

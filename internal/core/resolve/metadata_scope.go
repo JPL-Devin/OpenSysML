@@ -5,9 +5,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// MetadataBodyOwner returns the metadata definition whose features a metadata
-// body's declarations implicitly redefine (KerML 7.4.7), for an annotation body
-// or a `metadata m : M { … }` usage body; nil otherwise or when M does not resolve.
+// MetadataBodyOwner returns the metadata type whose features an annotation or
+// `metadata m : M { … }` body implicitly redefines (KerML 7.4.7); nil when it does not resolve.
 func (r *Resolver) MetadataBodyOwner(scope *symbols.Scope) *symbols.Symbol {
 	if scope == nil {
 		return nil
