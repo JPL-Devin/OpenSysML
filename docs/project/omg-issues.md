@@ -112,6 +112,7 @@ and not from a disagreement alone.
 |---|---|---|---|---|
 | `org.omg.sysml` — `Type::ownedDisjoining` setting delegate | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | every `disjoint from` clause in a type declaration draws EMF's `The opposite features 'owningType' … and 'ownedDisjoining' … do not refer to each other` | [one cause for all six corpus diagnostics](pilot-differential.md#k6-diagnostic-by-diagnostic-f33), reproduced in three lines and probed through the pilot's API | filed upstream as [Systems-Modeling/SysML-v2-Pilot-Implementation#790](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/790) **pending adjudication**, body below |
 | `org.omg.sysml` — the `queryx/failing` Xpect fixtures | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | `QPE-Qualifier`, `QPE-Traversal` and `QPE-Wildcard` declare `XPECT noErrors`, yet the pinned validator rejects all three with `no viable alternative at input '/'`, `For input string: "."` and `no viable alternative at input '@'` | [wave12d-decisions.md](wave12d-decisions.md) — established by running the pinned pilot's own SysML validator on the three fixtures, not from a disagreement | **not filed** — question drafted below, awaiting maintainer authorisation |
+| `org.omg.sysml.xtext` — `checkTransitionFeatureMembership` (`validateTransitionFeatureMembershipGuardExpression`) | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | `TransitionUsage_invalid.sysml.xt` expects `Must be a Boolean expression.` at `if "test"`, yet the pinned validator with the full standard library accepts a `String` or arithmetic guard in the same shape | [pilot-rejection.md](pilot-rejection.md#constraints-the-pilot-declares-but-does-not-enforce) — established by running the pinned pilot's own SysML validator on the fixture's shape, not from a disagreement alone | **not filed** — question drafted below, awaiting maintainer authorisation |
 | `org.omg.sysml.xtext` — `SysMLValidator.checkControlNode`, `checkDecisionNode`, `checkForkNode`, `checkJoinNode`, `checkMergeNode` | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a fork or decision node with two incoming successions, a join or merge node with two outgoing, and a succession end whose written multiplicity is not the one SysML v2 §7.17.3 requires all validate clean; only `validateControlNodeOwningType` is reported | established from the pilot's source: eight of the nine constraints are `// TODO: Check validate… (?)` comments in the check methods (`SysMLValidator.xtend:857–888` at `c7fc737`); the reproducers are `cmd/pilot-reject/testdata/negative/semantic/cn01`–`cn04`, `cn06`–`cn09`, run through the pinned batch validator | **not filed** — drafted below, awaiting maintainer authorisation |
 | `org.omg.kerml.xtext` — `KerMLValidator.checkFeature`, the `validateFeatureOwnedCrossSubsetting` check | `2026-07` (`jupyter-sysml-kernel` 0.61.0) | a feature with two `crosses` clauses reports `Error executing EValidator` instead of `At most one cross subsetting is allowed`: the loop indexes `refSubsettings` (the reference subsettings, collected for the check above it) with the cross-subsetting index, and throws | established from the pinned `KerMLValidator.xtend` line 649 and reproduced with `cmd/pilot-reject/testdata/negative/semantic/k42-two-cross-subsettings.kerml`; the same file is byte-identical at upstream `master` `13c32ea2` (2026-09-01), so the defect is still present; [pilot-rejection.md](pilot-rejection.md#permissiveness-gaps) records the case as a gap of ours | filed upstream as [Systems-Modeling/SysML-v2-Pilot-Implementation#794](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/794) **pending adjudication**, body below |
 
@@ -327,6 +328,53 @@ if (crossSubsettings.size > 1) {
 clause on the feature that list is empty and the `get(1)` throws, which Xtext
 surfaces as `Error executing EValidator`. The intended target is
 `crossSubsettings.get(i)`.
+````
+
+---
+
+### A non-Boolean transition guard is accepted with the full library loaded (pilot `2026-07`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream. The observation is recorded under [constraints the pilot
+declares but does not enforce](pilot-rejection.md#constraints-the-pilot-declares-but-does-not-enforce).
+
+````markdown
+**Question, not a bug report:** `validateTransitionFeatureMembershipGuardExpression`
+is implemented in `SysMLValidator.checkTransitionFeatureMembership` and
+`validation/invalid/TransitionUsage_invalid.sysml.xt` expects its message:
+
+```sysml
+transition
+    first S2_1
+    // XPECT errors ---> "Must be a Boolean expression." at "if \"test\""
+    if "test"
+    then S2_2;
+```
+
+That fixture's `XPECT_SETUP` loads a reduced resource set (`Base`, `Occurrences`,
+`Performances`, `States`, ... but not `ScalarValues`). Running the release's
+SysML validator (`jupyter-sysml-kernel-0.61.0-all.jar`, tag `2026-07`) with the
+full standard library over the same shape reports no error:
+
+```sysml
+package T2 {
+    state def S2 {
+        state S2_1;
+        transition first S2_1 if "test" then S2_2;
+        state S2_2;
+    }
+    state def S3 {
+        state a;
+        state b;
+        transition t first a if 1 + 2 then b;
+    }
+}
+```
+
+Is the guard check intended to fire in a full-library workspace? A second
+implementation that rejects `if "test"` with the full library loaded, as the
+fixture suggests it should, currently disagrees with the release's validator on
+the same text.
 ````
 
 ---

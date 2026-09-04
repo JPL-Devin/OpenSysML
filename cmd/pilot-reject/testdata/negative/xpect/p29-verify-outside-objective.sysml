@@ -1,4 +1,4 @@
-// Invalid: A requirement verification must be in the objective of a verification case (SysML 7.21 validateRequirementVerificationMembership; pilot Verification_invalid.sysml.xt:30).
+// Invalid: A requirement verification must be in the objective of a verification case (SysML 7.21 validateRequirementVerificationMembershipOwningType; pilot Verification_invalid.sysml.xt:30).
 package P29VerifyOutsideObjective {
     requirement def R;
     requirement r : R;
