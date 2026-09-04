@@ -106,7 +106,7 @@ systematically from four sources, one subdirectory each:
    [Permissiveness gaps](#permissiveness-gaps) below, since a both-accept case is a corpus bug
    and none was kept.
 
-What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 226
+What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 228
 cases ourselves**, so the denominator measures our coverage of the rejection surface, not our
 conformance: it is a **sample, not a proof** — a clean bucket here does not mean OpenSysML rejects
 everything the reference rejects, and no official conformance suite exists to make that claim
@@ -154,15 +154,15 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-226 case(s): 200 both reject, 18 only the pilot rejects, 8 only we reject, 0 both accept
+228 case(s): 202 both reject, 18 only the pilot rejects, 8 only we reject, 0 both accept
   of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
 | Source | Cases | Both reject | Pilot only | Ours only | Both accept |
 | --- | --- | --- | --- | --- | --- |
 | extensions | 8 | 8 | 0 | 0 | 0 |
-| grammar | 86 | 80 | 6 | 0 | 0 |
-| semantic | 98 | 78 | 12 | 8 | 0 |
+| grammar | 87 | 81 | 6 | 0 | 0 |
+| semantic | 99 | 79 | 12 | 8 | 0 |
 | xpect | 34 | 34 | 0 | 0 | 0 |
 
 The eight ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
@@ -174,9 +174,10 @@ source reopened 14 gaps — all of them semantic rules the pilot enforces and we
 named-argument validation that landed alongside closed one of them (`k33`), leaving 13 — and the
 SysML census opened nine more, six of them `grammar/` (see
 [Permissiveness gaps](#permissiveness-gaps)); `s46` (the feature-value overriding rule) took the
-corpus to 226 with both implementations rejecting; the metadata rules then closed four more (`k35`,
-`k36`, `k40`, `s23`: metaclass typing, annotated-element conformance and body redefinition, in
-both notations). Before that source the default-mode gap count was 2
+corpus to 226 with both implementations rejecting, and `s47` (an enumeration definition specializing
+another) with `g68` (a definition nested in an enumeration body) took it to 228. The metadata rules
+then closed four more (`k35`, `k36`, `k40`, `s23`: metaclass typing, annotated-element conformance
+and body redefinition, in both notations). Before that source the default-mode gap count was 2
 of 120: only the intended `extensions/` notation. Wave 11 closed two `xpect/` gaps: `p11`
 (11D's and 11G's model-level evaluability predicate on metadata body values) and `p15` (11F's
 attribute-usage typing rule), and wave 12C closed the last one, `p24`: a library metaclass now carries its
@@ -203,7 +204,7 @@ validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wav
 Read those three as agreement *when asked strictly*, not as gaps that disappeared. An opt-in
 check is weaker evidence than a default one: it says the strict question has an answer we agree on,
 not that the pipeline a user gets by default rejects the notation — by design it does not. And
-because we authored all 226 cases ourselves, a small gap count means we ran out of questions we
+because we authored all 228 cases ourselves, a small gap count means we ran out of questions we
 thought to ask, not that we stopped being permissive: the denominator measures our coverage of the
 rejection surface, not our conformance.
 

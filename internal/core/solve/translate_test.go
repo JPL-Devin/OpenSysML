@@ -504,6 +504,11 @@ func TestEnumerationIsAFiniteSort(t *testing.T) {
 	if !strings.Contains(Script(q), "(declare-datatypes ((|test::Finish| 0)) (((|test::Finish::polished|) (|test::Finish::brushed|))))") {
 		t.Errorf("the script does not declare the enumeration:\n%s", Script(q))
 	}
+	// The enumeration's values are its variants, yet a feature holding one is a
+	// value to pin rather than a variation point to configure.
+	if sort.Variation || len(q.Variations()) != 0 {
+		t.Errorf("an enumeration-typed feature is not a variation point: %+v", sort)
+	}
 }
 
 // TestVariationPointIsAFiniteSort: the variant a variation point selects ranges

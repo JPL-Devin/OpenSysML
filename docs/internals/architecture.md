@@ -170,8 +170,23 @@ source → lexer → parser → AST → symbol index → resolve → passes
 ### 7. Workspace (`internal/core/model`)
 
 - **Single source of truth:** Owns document set + global index + diagnostic cache
+  + reverse reference index
 - **Document:** `{source, AST, scope, version}`
 - **One Workspace per session** (LSP/REPL)
+- **Reverse reference index** (`refindex.go`): every name segment written in a
+  workspace document, keyed by the element it denotes (`symbols.KeyOf`, i.e.
+  declaring document + declaration span — stable across reindexing, unlike a
+  `*Symbol`). Each segment is stored under two identities: the element it
+  *reaches* (after invocation overload selection; a tied call reaches nothing)
+  and the name it *writes* (an alias, where one was written). Find References
+  matches either; Rename edits only the written name. Built lazily on the first
+  query after a change, over all documents with one shared resolver and
+  semantic model, under the workspace's write lock; never built on the
+  `didChange` path. Any mutation (`reindexLocked`, `removeLocked`, a
+  conformance-mode switch) drops the whole index, because an edit to one
+  document can change what a name in another resolves to (a shadowing
+  declaration, an import target, an alias, an overload that ties a call).
+  Library documents are never enumerated; only workspace documents are.
 
 ### 8. Standard library (`internal/core/libs`)
 
@@ -364,6 +379,8 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - Find all usages of symbol, in every workspace document, at whichever segment
   of a qualified name denotes it
 - Include declaration option, reported in the declaring document
+- Answered from the workspace's reverse reference index (a lookup, not a scan);
+  Rename reads the same index
 
 **Completion (textDocument/completion):**
 - Trigger characters: `:`, `.`
@@ -705,8 +722,8 @@ Every behavioral feature must have:
 - **Corpus agreement:** 337 of 366 files agree diagnostic-by-diagnostic; 20 diagnostics are ours alone and 303 the reference's alone, and the first number must be read by root: our diagnostics against the reference's own corpora fell while our non-standard-notation warnings on our own example models rose ([differential](../project/pilot-differential.md), `go run ./cmd/pilot-diff`).
 - **Declared-diagnostic silence:** of the 511 declared `errors` rows in the reference's own Xpect suites, we report nothing for 0. 244 we report word-for-word; 248 wording-only and 7 location-only differences are agreement in substance and are not counted as gaps; 0 more we report as a warning and 2 elsewhere in the file ([Xpect oracle](../project/pilot-xpect.md), `go run ./cmd/pilot-xpect`).
 - **Scope agreement:** 230 of 230 declared scope assertions match exactly (same source).
-- **Permissiveness gaps:** of 226 invalid models we wrote ourselves, the reference rejects 21 that we accept by default, and 197 both reject; 3 further cases agree only when we are asked strictly. We authored every one of these cases ourselves, so the denominator measures the reach of our own corpus and not our conformance; agreement reached only under an opt-in strict mode is weaker evidence than agreement by default ([rejection oracle](../project/pilot-rejection.md), `go run ./cmd/pilot-reject`).
-- **Declared errata:** the registry declares 3 defect(s) in the published reference material — 1 with a specification-derived correction, 2 documented without one, since no intended reading can be inferred ([OMG issues](../project/omg-issues.md), `internal/errata`). Every figure above is as published and stays the conformance statement; running the same oracles over the corrected text instead reports 338 of 366 files agreeing, 19 diagnostics ours alone and 303 the reference's alone, 0 declared rows we are silent on, and 18 of 226 authored cases the reference alone rejects. The corrected figures are diagnostic only: an erratum never reclassifies a divergence category, and the published corpus is never edited.
+- **Permissiveness gaps:** of 228 invalid models we wrote ourselves, the reference rejects 21 that we accept by default, and 199 both reject; 3 further cases agree only when we are asked strictly. We authored every one of these cases ourselves, so the denominator measures the reach of our own corpus and not our conformance; agreement reached only under an opt-in strict mode is weaker evidence than agreement by default ([rejection oracle](../project/pilot-rejection.md), `go run ./cmd/pilot-reject`).
+- **Declared errata:** the registry declares 3 defect(s) in the published reference material — 1 with a specification-derived correction, 2 documented without one, since no intended reading can be inferred ([OMG issues](../project/omg-issues.md), `internal/errata`). Every figure above is as published and stays the conformance statement; running the same oracles over the corrected text instead reports 338 of 366 files agreeing, 19 diagnostics ours alone and 303 the reference's alone, 0 declared rows we are silent on, and 18 of 228 authored cases the reference alone rejects. The corrected figures are diagnostic only: an erratum never reclassifies a divergence category, and the published corpus is never edited.
 - **Self-assessed surface:** the action, state-machine and classifier-behavior rows have no external referee at all — the four refereed figures above cannot see them, because the pinned artifact evaluates expressions but executes neither actions nor state machines. [Spec compliance](../project/spec-compliance.md) counts them.
 
 What these numbers cannot show: the OMG corpora are demonstrations rather than an official conformance suite; the differential is one-directional, comparing the diagnostics the two implementations report on the same files; the Xpect suites are the pilot authors' test intent rather than a certification oracle; and none of these is a percentage of the specification — no global compliance figure is claimed anywhere.

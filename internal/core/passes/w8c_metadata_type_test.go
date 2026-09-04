@@ -171,6 +171,26 @@ func equalInts(a, b []int) bool {
 	return true
 }
 
+// A prefix on a subject, assume or require member names a metadata type like a
+// prefix on any usage, so an abstract one is reported on each of the three.
+func TestW8CMetadataAbstractTypeOnRequirementMembers(t *testing.T) {
+	src := `package P {
+	abstract metadata def A;
+	constraint def C;
+	requirement def R {
+		subject #A s;
+		assume #A constraint a : C;
+		require #A constraint r : C;
+		assume #A constraint { true }
+		require #A constraint { true }
+	}
+}`
+	msgs := w8cLibraryMessagesIn(t, "meta-abstract-requirement-members.sysml", src)
+	if w8cCount(msgs, msgMetadataConcreteType) != 5 {
+		t.Errorf("want five %q, got %v", msgMetadataConcreteType, msgs)
+	}
+}
+
 func TestW8CMetadataConcreteTypeLegal(t *testing.T) {
 	src := `package P {
 	metaclass A { feature :>> annotatedElement : KerML::Classifier; }

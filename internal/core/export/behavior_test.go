@@ -229,10 +229,11 @@ func TestUnsupportedBehavioralShapesAreReported(t *testing.T) {
 	}
 }
 
-// A `then` sequences from the member before it that is not an edge — past a
-// flow, a bind, a succession, and past the members that declare no action at
-// all — the way the parser reads it. The graph alone, without the text each
-// member was written as, has to bring every such `then` back where it stood.
+// A `then` sequences from the member before it that is not an edge — past the
+// connectors (flow, bind, connect, interface, allocate, succession) and the
+// transitions, and past the members that declare no action at all — the way the
+// parser reads it. The graph alone, without the text each member was written
+// as, has to bring every such `then` back where it stood.
 func TestThenComesBackPastTheMembersTheParserSkips(t *testing.T) {
 	path := filepath.Join("testdata", "convert", "then_after_members.sysml")
 	src, err := os.ReadFile(path)
@@ -240,7 +241,7 @@ func TestThenComesBackPastTheMembersTheParserSkips(t *testing.T) {
 		t.Fatal(err)
 	}
 	turtle := toTurtle(t, path)
-	back, err := export.Convert("m.ttl", withoutTriples(t, []byte(turtle), "sysx:sourceText"), export.FormatTurtle, export.FormatSysML)
+	back, err := export.Convert("m.ttl", withoutSourceText(t, []byte(turtle)), export.FormatTurtle, export.FormatSysML)
 	if err != nil {
 		t.Fatalf("back to notation from the mapping alone: %v", err)
 	}

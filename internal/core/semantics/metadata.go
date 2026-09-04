@@ -28,7 +28,7 @@ const baseTypeFeature = "baseType"
 // provisional and must not be memoized.
 func (m *Model) semanticMetadataBases(sym *symbols.Symbol) ([]*symbols.Symbol, bool) {
 	switch sym.Decl.(type) {
-	case *ast.Definition, *ast.Usage:
+	case *ast.Definition, *ast.Usage, *ast.SubjectMember, *ast.AssumeMember, *ast.RequireMember:
 	default:
 		return nil, true
 	}
@@ -110,18 +110,8 @@ func MetadataAnnotationsAboutOthers(decl ast.Node) []MetadataAnnotation {
 // metadataAnnotationsWritten returns the metadata features written on decl, as
 // prefixes then as members, keeping those with (about) or without an `about`.
 func metadataAnnotationsWritten(decl ast.Node, about bool) []MetadataAnnotation {
-	var prefixes []*ast.PrefixMetadata
-	var members []ast.Node
-	switch d := decl.(type) {
-	case *ast.Definition:
-		prefixes, members = d.Prefixes, d.Members
-	case *ast.Usage:
-		prefixes, members = d.Prefixes, d.Members
-	case *ast.Package:
-		prefixes, members = d.Prefixes, d.Members
-	case *ast.Namespace:
-		prefixes, members = d.Prefixes, d.Members
-	default:
+	prefixes, members, ok := ast.DeclaredMetadata(decl)
+	if !ok {
 		return nil
 	}
 	var out []MetadataAnnotation
@@ -294,8 +284,11 @@ func metaCastOperand(value ast.Node) *ast.QualifiedName {
 // isFeature reports whether sym declares a feature rather than a type. A KerML
 // type is recorded as a usage node, so the symbol kind decides (KerML §8.3).
 func isFeature(sym *symbols.Symbol) bool {
-	if _, ok := sym.Decl.(*ast.Usage); !ok {
-		return false
+	switch sym.Decl.(type) {
+	case *ast.Usage:
+		return !isKerMLTypeDecl(sym)
+	case *ast.SubjectMember, *ast.AssumeMember, *ast.RequireMember:
+		return true
 	}
-	return !isKerMLTypeDecl(sym)
+	return false
 }
