@@ -146,7 +146,7 @@ func exactCount(value ast.Node) (int64, bool) {
 }
 
 // valueElements returns the values a bound expression contributes: the elements
-// of a collection literal, or the expression itself.
+// of a collection literal, nested ones flattened, or the expression itself.
 func valueElements(value ast.Node) []ast.Node {
 	if value == nil {
 		return nil
@@ -155,7 +155,11 @@ func valueElements(value ast.Node) []ast.Node {
 	case *ast.NullExpr:
 		return nil
 	case *ast.SequenceExpr:
-		return n.Elements
+		var elements []ast.Node
+		for _, element := range n.Elements {
+			elements = append(elements, valueElements(element)...)
+		}
+		return elements
 	}
 	return []ast.Node{value}
 }
