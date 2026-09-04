@@ -42,12 +42,6 @@ func (p *Parser) parseCalcBody() []ast.Node {
 			body.takeSuccession()
 			continue
 		}
-		// A member-attached `then` desugars to `succession first a then b;`,
-		// which is the form used when writing the converted model back.
-		if p.atKeyword("then") {
-			body.add(p.parseSuccessionEdge(p.advance(), true))
-			continue
-		}
 
 		// A constraint body that declares parameters is read here, so its
 		// asserted conditions are members of this body too.
@@ -59,10 +53,7 @@ func (p *Parser) parseCalcBody() []ast.Node {
 		// `return` declares the result parameter (SysML.xtext ReturnParameterMember).
 		if p.isResultKeyword() {
 			body.add(p.parseResultMember())
-		} else if p.atCalcStatement() || p.atActionNodeMember() {
-			// A behavioural item of a calculation body — a conditional, a loop, an
-			// assignment — is read the way an action body reads it
-			// (SysML.xtext CalculationBodyItem carries ActionBodyItem).
+		} else if p.atCalcBodyItem() {
 			body.add(p.parseActionMember())
 		} else {
 			// Try parsing as body member (parameters, doc, import, etc.)
@@ -1422,6 +1413,17 @@ func (p *Parser) atCalcStatement() bool {
 	return false
 }
 
+// atCalcBodyItem reports whether the cursor begins a behavioural item of a
+// calculation body (SysML.xtext CalculationBodyItem carries ActionBodyItem): a
+// statement, an action node, or a succession (`first a then b;`, `then b;`, `else b;`).
+// A member-attached `then` is the body builder's to take before this is asked.
+func (p *Parser) atCalcBodyItem() bool {
+	if p.atCalcStatement() || p.atActionNodeMember() {
+		return true
+	}
+	return p.atKeyword("first") || p.atKeyword("then") || p.atKeyword("else")
+}
+
 // atActionNodeMember reports whether the cursor begins an action node a calculation or case
 // body carries (SysML.xtext:1389 ActionNodeMember, from Calculation/CaseBodyItem).
 func (p *Parser) atActionNodeMember() bool {
@@ -1740,36 +1742,54 @@ func (p *Parser) parseResultMember() ast.Node {
 // Expects '{' already consumed, returns list of ConstraintMember nodes.
 // Syntax: constraint example { assert x > 0; assume y != null; assert not z < 0; }
 func (p *Parser) parseConstraintBody() []ast.Node {
-	var members []ast.Node
+	return p.parseConstraintMembers(false)
+}
+
+// parseConstraintMembers parses the members of a constraint body through its
+// closing brace. A constraint body is a calculation body (SysML.xtext
+// CalculationBody), so beside its conditions it carries declarations, statements,
+// action nodes and successions; the owning-type rule rejects the nodes later.
+// A nested body keeps no documentation and no condition that failed to parse.
+func (p *Parser) parseConstraintMembers(nested bool) []ast.Node {
+	body := p.newBodyBuilder()
 
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		before := p.peek().Span.Offset
 
-		// Check for doc keyword → parse as documentation
-		if p.atKeyword("doc") {
-			members = append(members, p.parseDocumentation(before))
-		} else if p.atKeyword("assert") || p.atKeyword("assume") {
-			// Parse constraint expression (assert/assume)
-			members = append(members, p.parseConstraintMember())
-		} else if p.atConstraintBodyDeclaration() {
-			members = append(members, p.parseBodyMember())
-		} else if p.atCalcStatement() || p.atActionNodeMember() {
-			// A constraint body is a calculation body (SysML.xtext CalculationBody), so it
-			// carries statements and action nodes; the owning-type rule rejects the nodes later.
-			members = append(members, p.parseActionMember())
-		} else {
-			// Default: parse as constraint expression (bare expression)
-			members = append(members, p.parseConstraintMember())
+		// A member-attached `then` sequences the members either side of it.
+		if body.atSuccession() {
+			body.takeSuccession()
+			continue
 		}
 
-		// Safety check: if position hasn't advanced, force progress to avoid infinite loop
+		var member ast.Node
+		switch {
+		case p.atKeyword("doc"):
+			if doc := p.parseDocumentation(before); !nested {
+				member = doc
+			}
+		case p.atKeyword("assert") || p.atKeyword("assume"):
+			member = p.parseConstraintMember()
+		case p.atConstraintBodyDeclaration():
+			member = p.parseBodyMember()
+		case p.atCalcBodyItem():
+			member = p.parseActionMember()
+		default:
+			member = p.parseConstraintMember()
+		}
+		if c, ok := member.(*ast.ConstraintMember); ok && nested && c.Expression == nil && len(c.Body) == 0 {
+			member = nil
+		}
+		body.add(member)
+
+		// Force progress: a member that consumed nothing would spin the loop.
 		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
 			p.advance()
 		}
 	}
 
 	p.expect(lexer.RBrace, "expected '}' after constraint body")
-	return members
+	return body.finish()
 }
 
 // atConstraintBodyDeclaration reports whether a declaration member of a
@@ -2413,41 +2433,9 @@ func (p *Parser) tryParseNestedConstraint(start int, isAssert, isNegated bool, k
 // parseNestedConstraintConditions parses the body of the anonymous constraint an
 // `assume`/`require constraint { … }` member owns, through its closing brace,
 // and returns its members. Every condition is kept: a constraint body may state
-// more than one. Its declarations, statements and action nodes are kept too: a
-// constraint body is a calculation body (SysML.xtext CalculationBody).
+// more than one.
 func (p *Parser) parseNestedConstraintConditions() []ast.Node {
-	var conditions []ast.Node
-	for !p.at(lexer.RBrace) && !p.atEOF() {
-		before := p.peek().Span.Offset
-		if p.atKeyword("doc") {
-			p.parseDocumentation(before)
-			continue
-		}
-		var member ast.Node
-		switch {
-		case p.atKeyword("assert") || p.atKeyword("assume"):
-			member = p.parseConstraintMember()
-		case p.atConstraintBodyDeclaration():
-			member = p.parseBodyMember()
-		case p.atCalcStatement() || p.atActionNodeMember():
-			member = p.parseActionMember()
-		default:
-			member = p.parseConstraintMember()
-		}
-		// A condition with nothing in it is a reported parse error, not a member.
-		if c, ok := member.(*ast.ConstraintMember); ok && c.Expression == nil && len(c.Body) == 0 {
-			member = nil
-		}
-		if member != nil {
-			conditions = append(conditions, member)
-		}
-		// Force progress: a member that consumed nothing would spin the loop.
-		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
-			p.advance()
-		}
-	}
-	p.expect(lexer.RBrace, "expected '}' after constraint body")
-	return conditions
+	return p.parseConstraintMembers(true)
 }
 
 // Phase C4: State Body Parsing
