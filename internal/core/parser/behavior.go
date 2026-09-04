@@ -204,6 +204,7 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 func (p *Parser) parseNodeBody(start int, what string) ([]ast.Node, bool) {
 	if p.at(lexer.LBrace) {
 		p.advance() // consume '{'
+		defer p.pushBodyContext(bodyAction)()
 		return p.parseActionBodyMixed(), true
 	}
 	p.expectStatementEnd(start, "expected ';' or '{' after "+what)
@@ -470,6 +471,12 @@ func (p *Parser) parseActionMember() ast.Node {
 	// Try general declaration first (nested actions, features, etc.)
 	if node := p.tryParseDeclaration(); node != nil {
 		return node
+	}
+
+	// A member only some body kind owns is read by the body member parser,
+	// which reports it when this body is not that kind.
+	if _, owned := ownedMembers[p.peek().KeywordID]; owned && p.at(lexer.Keyword) {
+		return p.parseBodyMember()
 	}
 
 	// Handle doc keyword specially (parseDocumentation consumes it)
@@ -935,7 +942,9 @@ func (p *Parser) parseSuccessionEdge(tok lexer.Token, allowBody bool) ast.Node {
 	hasBody := false
 	if allowBody && p.accept2(lexer.LBrace) {
 		hasBody = true
+		leave := p.pushBodyContext(bodyAction)
 		members = p.parseActionBodyMixed()
+		leave()
 	} else {
 		p.expect(lexer.Semicolon, "expected ';' after succession edge")
 	}
@@ -1073,9 +1082,11 @@ func (p *Parser) parseWhileLoopAction(tok lexer.Token) ast.Node {
 		}
 		p.advance() // consume '{'
 
+		leave := p.pushBodyContext(bodyAction)
 		for !p.at(lexer.RBrace) && !p.atEOF() {
 			body = append(body, p.parseActionMember())
 		}
+		leave()
 
 		p.expect(lexer.RBrace, "expected '}' after while body")
 	}
@@ -1115,6 +1126,7 @@ func (p *Parser) parseLoopAction(tok lexer.Token) ast.Node {
 	}
 
 	// Parse loop body members until 'until' keyword or closing brace
+	leave := p.pushBodyContext(bodyAction)
 	for !p.atKeyword("until") && !p.at(lexer.RBrace) && !p.atEOF() {
 		before := p.peek().Span.Offset
 
@@ -1145,6 +1157,7 @@ func (p *Parser) parseLoopAction(tok lexer.Token) ast.Node {
 			p.advance()
 		}
 	}
+	leave()
 
 	if braced {
 		p.expect(lexer.RBrace, "expected '}' after loop body")
@@ -1224,6 +1237,7 @@ func (p *Parser) parseForAction(tok lexer.Token) ast.Node {
 
 	// Parse body as mixed content (declarations + behavioral statements)
 	var body []ast.Node
+	leave := p.pushBodyContext(bodyAction)
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		before := p.peek().Span.Offset
 
@@ -1253,6 +1267,7 @@ func (p *Parser) parseForAction(tok lexer.Token) ast.Node {
 			p.advance()
 		}
 	}
+	leave()
 
 	p.expect(lexer.RBrace, "expected '}'")
 
@@ -1364,6 +1379,7 @@ func (p *Parser) parseIfAction(tok lexer.Token) ast.Node {
 // `if <cond> { action x : Type { body }; first x then y; }` parses.
 func (p *Parser) parseIfBranch(kind ast.IfBranchKind, start int, closeMsg string) *ast.IfBranchNode {
 	var body []ast.Node
+	leave := p.pushBodyContext(bodyAction)
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		before := p.peek().Span.Offset
 
@@ -1387,6 +1403,7 @@ func (p *Parser) parseIfBranch(kind ast.IfBranchKind, start int, closeMsg string
 
 		body = append(body, p.parseActionMember())
 	}
+	leave()
 	p.expect(lexer.RBrace, closeMsg)
 
 	branch := &ast.IfBranchNode{Kind: kind, Body: body}
@@ -2661,7 +2678,9 @@ func (p *Parser) parseAcceptNode(start int, vis ast.Visibility, trivia []ast.Tri
 
 	if p.at(lexer.LBrace) {
 		p.advance()
+		leave := p.pushBodyContext(bodyAction)
 		action.Members = append(action.Members, p.parseActionBodyMixed()...)
+		leave()
 		action.HasBody = true
 	} else if !p.atKeyword("then") {
 		p.expect(lexer.Semicolon, "expected ';' after accept action")
@@ -2990,6 +3009,7 @@ func (p *Parser) parseStateSubactionActions(start int, kind stateSubactionKind) 
 // the '{' is at the cursor.
 func (p *Parser) parseStateSubactionBlock(kind stateSubactionKind) []ast.Node {
 	p.advance() // consume '{'
+	defer p.pushBodyContext(bodyAction)()
 	var actions []ast.Node
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		actions = append(actions, p.parseActionMember())
@@ -3234,6 +3254,7 @@ func (p *Parser) parseTransitionTail(start int, name ast.NameSegment, source *as
 func (p *Parser) parseTransitionEffect(start int) ([]ast.Node, ast.Node) {
 	if p.at(lexer.LBrace) {
 		p.advance() // consume '{'
+		defer p.pushBodyContext(bodyAction)()
 		var effect []ast.Node
 		for !p.at(lexer.RBrace) && !p.atEOF() {
 			effect = append(effect, p.parseActionMember())

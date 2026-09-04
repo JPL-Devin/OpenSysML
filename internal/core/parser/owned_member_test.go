@@ -54,6 +54,28 @@ func TestMemberOutsideOwningBodyIsRejected(t *testing.T) {
 		{"render rendering in part def", "part def P { render rendering r : R; }", "render", `kind="render"`},
 		{"render in viewpoint", "viewpoint def V { render asTable; }", "render", `kind="render"`},
 		{"render in requirement", "requirement def R { render asTable; }", "render", `kind="render"`},
+		// Nested action bodies under a case or requirement are action bodies, not
+		// the case or requirement body that owns these members.
+		{"objective in if branch under case", "case def C { action a { if true { objective o; } } }", "objective", `kind="objective"`},
+		{"actor in else branch under case", "case def C { action a { if true { x := 1; } else { actor a : Person; } } }", "actor", `kind="actor"`},
+		{"subject in while body under case", "case def C { action a { while true { subject s : S; } } }", "subject", "SubjectMember"},
+		{"objective in loop body under case", "case def C { action a { loop { objective o; } until true; } }", "objective", `kind="objective"`},
+		{"actor in for body under case", "case def C { action a { for i in 1..3 { actor a : Person; } } }", "actor", `kind="actor"`},
+		{"objective in fork body under case", "case def C { action a { fork f { objective o; } } }", "objective", `kind="objective"`},
+		{"subject in decide body under case", "case def C { action a { decide d { subject s : S; } } }", "subject", "SubjectMember"},
+		{"actor in merge body under case", "case def C { action a { merge m { actor a : Person; } } }", "actor", `kind="actor"`},
+		{"objective in join body under case", "case def C { action a { join j { objective o; } } }", "objective", `kind="objective"`},
+		{"subject in send body under case", "case def C { action a { send x to y { subject s : S; } } }", "subject", "SubjectMember"},
+		{"objective in accept body under case", "case def C { action a { accept e : E { objective o; } } }", "objective", `kind="objective"`},
+		{"actor in succession body under case", "case def C { action a { action b; first start then b { actor a : Person; } } }", "actor", `kind="actor"`},
+		{"stakeholder in if branch under requirement", "requirement def R { action a { if true { stakeholder s : Person; } } }", "stakeholder", `kind="stakeholder"`},
+		{"subject in while body under requirement", "requirement def R { action a { while true { subject s : S; } } }", "subject", "SubjectMember"},
+		{"actor in fork body under requirement", "requirement def R { action a { fork f { actor a : Person; } } }", "actor", `kind="actor"`},
+		{"entry in do block", "state def S { do { entry x; } }", "entry", "EntryMember"},
+		{"do in exit block", "state def S { exit { do y; } }", "do", "DoMember"},
+		{"objective in do block", "state def S { do { objective o; } }", "objective", `kind="objective"`},
+		{"entry in transition body", "state def S { state a; state b; transition first a then b { entry q; } }", "entry", "EntryMember"},
+		{"exit in transition effect block", "state def S { state a; state b; transition t first a accept e : E do { exit w; } then b; }", "exit", "ExitMember"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -127,6 +149,7 @@ func TestMemberInsideOwningBodyStaysClean(t *testing.T) {
 		{"exhibit reference body", "part def P { exhibit s { entry; do action run; } }"},
 		{"parallel state", "state def S parallel { state a { entry action init; } state b { exit; } }"},
 		{"keywords as names", "package P { attribute actor; attribute subject; part render; }"},
+		{"nested action bodies under case", "case def C { subject s : S; action a { if true { x := 1; } else { y := 2; } while true { z := 3; } for i in 1..3 { action n; } fork f { action g; } send x to y { in item q; } } }"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
