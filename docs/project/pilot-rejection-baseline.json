@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 229,
-        "digest": "sha256:f40230e70992229219053e55fb16928778d757be363245e08ed9e8a3064edf98"
+        "files": 231,
+        "digest": "sha256:034ec3111ca44e65171efd0c478d49b35226e59454febd16eb0a9c6fc9cf6882"
       }
     ],
     "recorded": "2026-09-04"
   },
   "totals": {
-    "cases": 229,
-    "bothReject": 199,
+    "cases": 231,
+    "bothReject": 201,
     "pilotOnlyRejects": 22,
     "oursOnlyRejects": 8,
     "bothAccept": 0
@@ -56,16 +56,16 @@
     },
     {
       "source": "grammar",
-      "cases": 86,
-      "bothReject": 80,
+      "cases": 87,
+      "bothReject": 81,
       "pilotOnlyRejects": 6,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     },
     {
       "source": "semantic",
-      "cases": 101,
-      "bothReject": 77,
+      "cases": 102,
+      "bothReject": 78,
       "pilotOnlyRejects": 16,
       "oursOnlyRejects": 8,
       "bothAccept": 0
@@ -787,6 +787,15 @@
       "path": "grammar/g67-expose-outside-view-body.sysml",
       "source": "grammar",
       "rule": "Expose is a ViewBodyItem; a part def body admits no 'expose' (SysML.xtext:2374 Expose, :2359 ViewBodyItem; pilot validateExposeOwningNamespace).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
+      "path": "grammar/g68-definition-in-enumeration-body.sysml",
+      "source": "grammar",
+      "rule": "an enumeration body admits only enumerated values and annotating elements, not a nested definition (SysML.xtext EnumerationBody).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
@@ -1908,7 +1917,16 @@
       "pilotErrors": 2
     },
     {
-      "path": "semantic/s47-after-trigger-not-duration.sysml",
+      "path": "semantic/s47-enumeration-specializes-enumeration.sysml",
+      "source": "semantic",
+      "rule": "An enumeration definition is a variation and a variation must not specialize another variation (SysML v2 7.6.4 and 8.3.9 validateEnumerationDefinitionIsVariation, validateDefinitionVariationSpecialization; pilot validateDefinitionVariationSpecialization).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "semantic/s48-after-trigger-not-duration.sysml",
       "source": "semantic",
       "rule": "The argument of an `after` trigger must be a DurationValue (SysML 7.16 TriggerInvocationExpression; pilot validateTriggerInvocationActionAfterArgument).",
       "mode": "default",
@@ -1917,7 +1935,7 @@
       "pilotErrors": 1
     },
     {
-      "path": "semantic/s48-at-trigger-not-time-instant.sysml",
+      "path": "semantic/s49-at-trigger-not-time-instant.sysml",
       "source": "semantic",
       "rule": "The argument of an `at` trigger must be a TimeInstantValue (SysML 7.16 TriggerInvocationExpression; pilot validateTriggerInvocationActionAtArgument).",
       "mode": "default",
@@ -1926,7 +1944,7 @@
       "pilotErrors": 1
     },
     {
-      "path": "semantic/s49-when-trigger-not-boolean.sysml",
+      "path": "semantic/s50-when-trigger-not-boolean.sysml",
       "source": "semantic",
       "rule": "The argument of a `when` trigger must be Boolean (SysML 7.16 TriggerInvocationExpression; pilot validateTriggerInvocationActionWhenArgument).",
       "mode": "default",
@@ -2285,8 +2303,8 @@
       }
     ],
     "totals": {
-      "cases": 229,
-      "bothReject": 199,
+      "cases": 231,
+      "bothReject": 201,
       "pilotOnlyRejects": 22,
       "oursOnlyRejects": 8,
       "bothAccept": 0

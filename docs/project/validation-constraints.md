@@ -20,7 +20,7 @@ the diagnostic it reports was recorded as that row's probe.
 
 ## Summary
 
-**Census:** 111 of 217 named constraints are reported by OpenSysML — 100 ✅ faithful and 11 ⚠️ approximate; 24 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 82 ❔ unknown.
+**Census:** 111 of 217 named constraints are reported by OpenSysML — 101 ✅ faithful and 10 ⚠️ approximate; 24 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 82 ❔ unknown.
 
 The figures on that line, and the pin and digest quoted above, are written by
 `go run ./cmd/validation-census` from the baseline; `-check` fails on a hand-edited figure or
@@ -213,8 +213,8 @@ parser/resolver location. *Our message* is given only where OpenSysML's wording 
 | `validateDecisionNodeOutgoingSuccessions` | SysML | Outgoing successions of a decision node have target multiplicity 0..1; no textual model made the pilot report it | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateDefinitionVariationIsAbstract` | SysML | A variation definition is abstract (implied by `variation`; no textual violation) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateDefinitionVariationMembership` | SysML | An owned usage of a variation definition is a variant | internal/core/passes/w8d_variability.go:W8DVariabilityPass.Run | — | `xpect/p09-variation-member-not-variant.sysml` | ✅ faithful |
-| `validateDefinitionVariationSpecialization` | SysML | A variation definition does not specialize another variation | internal/core/passes/w8d_variability.go:W8DVariabilityPass.Run | same wording; reported for `variation` definitions only, an enumeration definition specializing another is not reported | `xpect/p10-variation-specializes-variation.sysml` | ⚠️ approximate |
-| `validateEnumerationDefinitionIsVariation` | SysML | An enumeration definition is a variation (implied by `enum def`; the pilot reports `validateDefinitionVariationSpecialization` for the enum case instead) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
+| `validateDefinitionVariationSpecialization` | SysML | A variation definition does not specialize another variation | internal/core/passes/w8d_variability.go:W8DVariabilityPass.Run | same wording between two `variation` definitions; when an enumeration definition is involved the message names the implicit variation and the fix | `semantic/s47-enumeration-specializes-enumeration.sysml` | ✅ faithful |
+| `validateEnumerationDefinitionIsVariation` | SysML | An enumeration definition is a variation (fixed at `true` for every `enum def` in both tools, so no textual model violates it; the enum cases surface under `validateDefinitionVariationSpecialization` and `validateDefinitionVariationMembership`) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateEnumerationUsageType` | SysML | An enumeration usage is typed by one enumeration definition | internal/core/passes/one_type.go:checkOneType | — | `xpect/p18-enum-two-types.sysml` | ✅ faithful |
 | `validateEventOccurrenceUsageIsReference` | SysML | An event occurrence usage is referential (the grammar admits no composite `event`) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateEventOccurrenceUsageReferent` | SysML | An event occurrence usage references an occurrence | internal/core/passes/w8d_occurrence_typing.go:W8DOccurrenceTypingPass.Run | — | none | ✅ faithful |
@@ -281,9 +281,9 @@ parser/resolver location. *Our message* is given only where OpenSysML's wording 
 | `validateTransitionUsageParameters` | SysML | A transition usage has its parameters (implied by the grammar; no textual violation) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateTransitionUsageSuccession` | SysML | A transition owns a succession to its target (implied by the grammar; a syntax error in both tools otherwise) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateTransitionUsageTriggerActions` | SysML | A transition with an accepter has a state as its source | internal/core/passes/state_transition.go:transitionChecker.checkAccepterSource | — | `xpect/p34-accepter-source-not-state.sysml` | ✅ faithful |
-| `validateTriggerInvocationActionAfterArgument` | SysML | An `after` trigger argument is a DurationValue | internal/core/passes/typecheck_trigger.go:exprChecker.checkTimeEvent | names the found type and the fix (`an 'after' trigger's delay must be a DurationValue, found Natural: write it with a duration unit ...`) | `semantic/s47-after-trigger-not-duration.sysml` | ✅ faithful |
-| `validateTriggerInvocationActionAtArgument` | SysML | An `at` trigger argument is a TimeInstantValue | internal/core/passes/typecheck_trigger.go:exprChecker.checkTimeEvent | names the found type and the fix (`an 'at' trigger's time must be a TimeInstantValue, found DurationValue: name a feature typed by TimeInstantValue ...`) | `semantic/s48-at-trigger-not-time-instant.sysml` | ✅ faithful |
-| `validateTriggerInvocationActionWhenArgument` | SysML | A `when` trigger argument is Boolean | internal/core/passes/typecheck_trigger.go:exprChecker.checkCondition | names the found type and the fix (`a 'when' trigger's condition must be Boolean, found Integer: compare the value ...`) | `semantic/s49-when-trigger-not-boolean.sysml` | ✅ faithful |
+| `validateTriggerInvocationActionAfterArgument` | SysML | An `after` trigger argument is a DurationValue | internal/core/passes/typecheck_trigger.go:exprChecker.checkTimeEvent | names the found type and the fix (`an 'after' trigger's delay must be a DurationValue, found Natural: write it with a duration unit ...`) | `semantic/s48-after-trigger-not-duration.sysml` | ✅ faithful |
+| `validateTriggerInvocationActionAtArgument` | SysML | An `at` trigger argument is a TimeInstantValue | internal/core/passes/typecheck_trigger.go:exprChecker.checkTimeEvent | names the found type and the fix (`an 'at' trigger's time must be a TimeInstantValue, found DurationValue: name a feature typed by TimeInstantValue ...`) | `semantic/s49-at-trigger-not-time-instant.sysml` | ✅ faithful |
+| `validateTriggerInvocationActionWhenArgument` | SysML | A `when` trigger argument is Boolean | internal/core/passes/typecheck_trigger.go:exprChecker.checkCondition | names the found type and the fix (`a 'when' trigger's condition must be Boolean, found Integer: compare the value ...`) | `semantic/s50-when-trigger-not-boolean.sysml` | ✅ faithful |
 | `validateUsageIsReferential` | SysML | A usage owned by a non-occurrence is referential (derived; no textual violation found) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateUsageType` | SysML | A usage is typed by definitions (`A usage must be typed by definitions.`); the pilot reports the kind-specific typing constraint instead on every probe | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateUsageVariationIsAbstract` | SysML | A variation usage is abstract (implied by `variation`; no textual violation) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
@@ -303,8 +303,7 @@ parser/resolver location. *Our message* is given only where OpenSysML's wording 
 ## Out of scope for this census
 
 Rows are recorded as `main` stands at the recording date. Constraints being implemented in
-parallel (`validateFeatureValueOverriding`, the enumeration cases of
-`validateDefinitionVariationSpecialization`, the `validateTriggerInvocationAction*Argument`
+parallel (`validateFeatureValueOverriding`, the `validateTriggerInvocationAction*Argument`
 trio, `validateSendActionUsagePayloadArgument`/`validateSendActionUsageReceiver`, and the
 control-node succession constraints) keep the status the evidence supports today; when their
 passes land, the row's status moves and `-update` is not needed — the baseline's statuses are
