@@ -186,7 +186,6 @@ elmt:StateMachine__VehicleStates__off___400___400
     sysml:qualifiedName "StateMachine::VehicleStates::off::@0::@0" ;
     sysml:elementId "StateMachine__VehicleStates__off___400___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
-    sysml:owningNamespace elmt:StateMachine__VehicleStates__off___400 ;
     sysml:owner elmt:StateMachine__VehicleStates__off___400 ;
     sysml:owningRelationship elmt:StateMachine__VehicleStates__off___400 ;
     sysml:owningMembership elmt:StateMachine__VehicleStates__off___400 ;
@@ -243,7 +242,6 @@ elmt:StateMachine__VehicleStates__starting___400__ready
     sysml:qualifiedName "StateMachine::VehicleStates::starting::@0::ready" ;
     sysml:elementId "StateMachine__VehicleStates__starting___400__ready" ;
     sysx:memberIndex "0"^^xsd:integer ;
-    sysml:owningNamespace elmt:StateMachine__VehicleStates__starting___400 ;
     sysml:owner elmt:StateMachine__VehicleStates__starting___400 ;
     sysml:owningRelationship elmt:StateMachine__VehicleStates__starting___400 ;
     sysml:owningMembership elmt:StateMachine__VehicleStates__starting___400 ;
@@ -272,7 +270,6 @@ elmt:StateMachine__VehicleStates__starting___401__running
     sysml:qualifiedName "StateMachine::VehicleStates::starting::@1::running" ;
     sysml:elementId "StateMachine__VehicleStates__starting___401__running" ;
     sysx:memberIndex "0"^^xsd:integer ;
-    sysml:owningNamespace elmt:StateMachine__VehicleStates__starting___401 ;
     sysml:owner elmt:StateMachine__VehicleStates__starting___401 ;
     sysml:owningRelationship elmt:StateMachine__VehicleStates__starting___401 ;
     sysml:owningMembership elmt:StateMachine__VehicleStates__starting___401 ;
@@ -301,7 +298,6 @@ elmt:StateMachine__VehicleStates__starting___402___400
     sysml:qualifiedName "StateMachine::VehicleStates::starting::@2::@0" ;
     sysml:elementId "StateMachine__VehicleStates__starting___402___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
-    sysml:owningNamespace elmt:StateMachine__VehicleStates__starting___402 ;
     sysml:owner elmt:StateMachine__VehicleStates__starting___402 ;
     sysml:owningRelationship elmt:StateMachine__VehicleStates__starting___402 ;
     sysml:owningMembership elmt:StateMachine__VehicleStates__starting___402 ;
@@ -362,7 +358,6 @@ elmt:StateMachine__VehicleStates__active___400__monitor
     sysml:qualifiedName "StateMachine::VehicleStates::active::@0::monitor" ;
     sysml:elementId "StateMachine__VehicleStates__active___400__monitor" ;
     sysx:memberIndex "0"^^xsd:integer ;
-    sysml:owningNamespace elmt:StateMachine__VehicleStates__active___400 ;
     sysml:owner elmt:StateMachine__VehicleStates__active___400 ;
     sysml:owningRelationship elmt:StateMachine__VehicleStates__active___400 ;
     sysml:owningMembership elmt:StateMachine__VehicleStates__active___400 ;
@@ -662,7 +657,6 @@ elmt:StateMachine__Nested__idle__substate___400___400
     sysml:qualifiedName "StateMachine::Nested::idle::substate::@0::@0" ;
     sysml:elementId "StateMachine__Nested__idle__substate___400___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
-    sysml:owningNamespace elmt:StateMachine__Nested__idle__substate___400 ;
     sysml:owner elmt:StateMachine__Nested__idle__substate___400 ;
     sysml:owningRelationship elmt:StateMachine__Nested__idle__substate___400 ;
     sysml:owningMembership elmt:StateMachine__Nested__idle__substate___400 ;
@@ -812,7 +806,6 @@ elmt:StateMachine__Composite___404___400
     sysml:qualifiedName "StateMachine::Composite::@4::@0" ;
     sysml:elementId "StateMachine__Composite___404___400" ;
     sysx:memberIndex "0"^^xsd:integer ;
-    sysml:owningNamespace elmt:StateMachine__Composite___404 ;
     sysml:owner elmt:StateMachine__Composite___404 ;
     sysml:owningRelationship elmt:StateMachine__Composite___404 ;
     sysml:owningMembership elmt:StateMachine__Composite___404 ;

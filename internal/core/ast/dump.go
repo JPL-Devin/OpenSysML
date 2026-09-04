@@ -323,7 +323,10 @@ func dumpNamespaceMember(b *strings.Builder, n Node, depth int) bool {
 		if len(v.About) > 0 {
 			fmt.Fprintf(b, ` about=%q`, qnList(v.About))
 		}
-		b.WriteString(`)`)
+		if v.HasBody && len(v.Body) == 0 {
+			b.WriteString(` emptyBody=true`)
+		}
+		writeChildren(b, depth, v.Body)
 		return true
 	case *FilterMember:
 		b.WriteString(`(FilterMember`)

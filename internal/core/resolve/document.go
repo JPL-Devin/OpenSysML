@@ -229,7 +229,7 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		}
 		return true
 	case *ast.SubjectMember:
-		// Resolve subject type reference
+		r.resolvePrefixes(scope, d.Prefixes)
 		if d.TypeRef != nil {
 			r.ResolveQualified(scope, d.TypeRef)
 		}
@@ -519,6 +519,9 @@ func (r *Resolver) resolvePrefixes(scope *symbols.Scope, prefixes []*ast.PrefixM
 func (r *Resolver) resolveMetadataPrefix(scope *symbols.Scope, prefix *ast.PrefixMetadata) {
 	if prefix == nil {
 		return
+	}
+	for _, a := range prefix.About {
+		r.ResolveQualified(scope, a)
 	}
 	owner, ok := r.ResolveQualified(scope, prefix.Type)
 	if !ok || owner == nil || len(prefix.Body) == 0 {
@@ -894,6 +897,17 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 		ownerRels = owner.Relationships
 	case *ast.Usage:
 		ownerRels = owner.Relationships
+	case *ast.PrefixMetadata:
+		// An annotation body's declarations redefine the metaclass's own
+		// features (KerML 7.4.7), so the target is looked up there first.
+		if len(qn.Parts) == 1 {
+			if sym, ok := r.featureOf(r.scopeOwner(scope), qn.Parts[0].Text, map[*symbols.Symbol]bool{}); ok {
+				r.recordRedefined(qn, sym)
+				return
+			}
+		}
+		r.resolveQualified(scope, qn, hide)
+		return
 	case *ast.Package:
 		r.resolveQualified(scope, qn, hide)
 		return
