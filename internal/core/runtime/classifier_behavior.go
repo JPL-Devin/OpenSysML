@@ -215,7 +215,7 @@ func (ctx *Context) classifierBehaviorsOf(typeSym *symbols.Symbol) []classifierB
 		return cached
 	}
 	var out []classifierBehaviorDecl
-	for _, member := range ctx.membersOf(typeSym) {
+	for _, member := range ctx.model.MembersOf(typeSym) {
 		if member.Decl == nil {
 			continue
 		}

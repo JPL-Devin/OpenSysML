@@ -45,6 +45,13 @@ const (
 	memberViewDeclaring
 )
 
+// memberKey keys a memoized members answer: the declaring view is asked per
+// declaration and never memoized.
+type memberKey struct {
+	sym  *symbols.Symbol
+	view memberView
+}
+
 func (m *Model) membersOf(sym *symbols.Symbol, view memberView, declaring *symbols.Symbol) []*symbols.Symbol {
 	if sym == nil {
 		return nil
@@ -54,6 +61,22 @@ func (m *Model) membersOf(sym *symbols.Symbol, view memberView, declaring *symbo
 			sym = target
 		}
 	}
+	key := memberKey{sym: sym, view: view}
+	if view != memberViewDeclaring {
+		if cached, ok := m.members[key]; ok {
+			return cached
+		}
+	}
+	out := m.collectMembers(sym, view, declaring)
+	// Memoized once the sources are complete and no redefinition is mid-resolution,
+	// the same condition MemberSources and the constructor slots memoize under.
+	if view != memberViewDeclaring && m.MemberSourcesStable(sym) && m.computingRedefinedFeatures == 0 {
+		m.members[key] = out
+	}
+	return out
+}
+
+func (m *Model) collectMembers(sym *symbols.Symbol, view memberView, declaring *symbols.Symbol) []*symbols.Symbol {
 	var out []*symbols.Symbol
 	seenName := make(map[string]bool)
 	seenSym := make(map[*symbols.Symbol]bool)

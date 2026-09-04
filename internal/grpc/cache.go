@@ -10,6 +10,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -32,6 +34,38 @@ type CachedModel struct {
 
 	symCtxOnce sync.Once
 	symCtx     *SymbolContext
+
+	rtSemOnce sync.Once
+	rtSem     *runtimeSemantics
+}
+
+// runtimeSemantics is the resolver and semantic model the runtime RPCs over one
+// cached model evaluate against. Both memoize into plain maps, so the holder of
+// the lock has exclusive use of them for the length of its request.
+type runtimeSemantics struct {
+	mu       sync.Mutex
+	Resolver *resolve.Resolver
+	Model    *semantics.Model
+}
+
+// RuntimeSemantics locks and returns the model's shared runtime resolver and
+// semantic model, built on first use, with the function releasing them.
+func (m *CachedModel) RuntimeSemantics() (*runtimeSemantics, func()) {
+	m.rtSemOnce.Do(func() {
+		resolver := resolve.New(m.Index)
+		m.rtSem = &runtimeSemantics{Resolver: resolver, Model: semantics.NewModel(resolver)}
+	})
+	rs := m.rtSem
+	rs.mu.Lock()
+	// A name a request fails to resolve is that request's error, not a model
+	// diagnostic: drop what it appended so the shared list does not grow.
+	diags := len(rs.Resolver.Diagnostics)
+	return rs, func() {
+		if len(rs.Resolver.Diagnostics) > diags {
+			rs.Resolver.Diagnostics = rs.Resolver.Diagnostics[:diags]
+		}
+		rs.mu.Unlock()
+	}
 }
 
 // Primary is the document a model is named by: the only one of a single-document

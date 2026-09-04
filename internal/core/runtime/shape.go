@@ -76,19 +76,6 @@ func (ctx *Context) FeaturesOf(typeSym *symbols.Symbol) []EffectiveFeature {
 	return features
 }
 
-// membersOf is Model.MembersOf memoized per type once the model reports the
-// answer complete; callers read the list and never write it.
-func (ctx *Context) membersOf(typeSym *symbols.Symbol) []*symbols.Symbol {
-	if cached, ok := ctx.members[typeSym]; ok {
-		return cached
-	}
-	members := ctx.model.MembersOf(typeSym)
-	if ctx.model.MemberSourcesStable(typeSym) {
-		ctx.members[typeSym] = members
-	}
-	return members
-}
-
 // buildFeatures constructs the effective-feature list from the semantic shape.
 func (ctx *Context) buildFeatures(typeSym *symbols.Symbol) []EffectiveFeature {
 	// Redefined features stay in the shape: a redefinition shares its target's

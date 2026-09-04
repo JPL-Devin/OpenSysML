@@ -119,7 +119,7 @@ func (ctx *Context) namedConstraintOf(member scopedMember) *symbols.Symbol {
 
 // effectiveMembers is the set of members sym has: MembersOf as a set.
 func (ctx *Context) effectiveMembers(sym *symbols.Symbol) map[*symbols.Symbol]bool {
-	members := ctx.membersOf(sym)
+	members := ctx.model.MembersOf(sym)
 	set := make(map[*symbols.Symbol]bool, len(members))
 	for _, member := range members {
 		set[member] = true
