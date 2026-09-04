@@ -420,7 +420,7 @@ func (ctx *Context) beginExecutorRun(started *bool) func() {
 func (ctx *Context) beginProbe() func() {
 	steps, elements, trace := ctx.steps, ctx.elements, ctx.trace
 	selected := maps.Clone(ctx.selectedVariants)
-	endBoundary := func() {}
+	endBoundary := func() { /* no boundary to close */ }
 	if ctx.probes == 0 {
 		endBoundary = ctx.beginRunBoundary()
 	}

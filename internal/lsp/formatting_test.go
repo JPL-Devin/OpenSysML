@@ -465,7 +465,7 @@ func TestFormattingDiffIsCheaperThanFormatting(t *testing.T) {
 		t.Fatalf("diff took %v, formatter %v; the diff must not dominate", diffTime, formatTime)
 	}
 	edits := formatEdits(mangled, formatted, allLines)
-	if got := applyOrderedEdits(t, string(mangled), edits); got != string(formatted) {
+	if applyOrderedEdits(t, string(mangled), edits) != string(formatted) {
 		t.Fatal("edits do not reproduce the formatter output")
 	}
 }

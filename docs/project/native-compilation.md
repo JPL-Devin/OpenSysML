@@ -31,7 +31,8 @@ argument that is not the notation of its type at all (`inf`, `nan`, a hexadecima
 literals and `ToReal` are.
 
 The generated source is always written beside the executable (`fib.c` / `fib.go`), so what was
-compiled is inspectable. `OPENSYSML_CC` names the C compiler (default `cc`).
+compiled is inspectable. `OPENSYSML_CC` names the C compiler (default `cc`) and `OPENSYSML_GO`
+the go command (default `go`).
 
 Programmatically: `Session.CompileCalc(name)` in `internal/repl` yields a `codegen.Program`, which
 `codegen.Source` renders and `codegen.Build` compiles.

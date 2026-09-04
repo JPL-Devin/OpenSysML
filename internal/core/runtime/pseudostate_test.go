@@ -185,11 +185,11 @@ func TestJoinBranchArrivingFirstFiresNothing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateStateExecutor: %v", err)
 	}
-	go_ := Message{SignalType: "Go"}
-	if accepted, err := exec.AcceptsMessage(go_); err != nil || !accepted {
+	goMsg := Message{SignalType: "Go"}
+	if accepted, err := exec.AcceptsMessage(goMsg); err != nil || !accepted {
 		t.Fatalf("AcceptsMessage(Go) = %v, %v; want a in the left region to accept it", accepted, err)
 	}
-	if d, err := exec.Decide(go_); err != nil || d.Enabled() {
+	if d, err := exec.Decide(goMsg); err != nil || d.Enabled() {
 		t.Errorf("Decide(Go) with the right branch in b0 = %+v, %v; want nothing enabled", d, err)
 	}
 

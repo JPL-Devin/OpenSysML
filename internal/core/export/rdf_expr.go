@@ -16,6 +16,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf/ontology"
 )
 
+const literalStatesValue = "a literal expression states the value it evaluates to"
+
 // Metaclasses of the expression nodes, as SysML v2 8.4 names them.
 const (
 	mExpression       = "Expression"
@@ -525,13 +527,13 @@ func (d *decoder) expressionNodeText(node rdf.Term, in *element) (string, error)
 	switch metaclass {
 	case mLiteralBoolean:
 		if !d.graph.HasProperty(node, rdf.SysML+pValue) {
-			return "", unsupported("a literal expression states the value it evaluates to")
+			return "", unsupported(literalStatesValue)
 		}
 		return strconv.FormatBool(d.graph.BoolValue(node, rdf.SysML+pValue)), nil
 	case mLiteralInteger:
 		value, ok := d.graph.Lexical(node, rdf.SysML+pValue)
 		if !ok {
-			return "", unsupported("a literal expression states the value it evaluates to")
+			return "", unsupported(literalStatesValue)
 		}
 		if !lexer.IsDecimalValue(value) {
 			return "", unsupported(fmt.Sprintf("the notation spells an integer literal as digits alone, not %q; a sign is an OperatorExpression applied to it", value))
@@ -540,7 +542,7 @@ func (d *decoder) expressionNodeText(node rdf.Term, in *element) (string, error)
 	case mLiteralRational:
 		value, ok := d.graph.Lexical(node, rdf.SysML+pValue)
 		if !ok {
-			return "", unsupported("a literal expression states the value it evaluates to")
+			return "", unsupported(literalStatesValue)
 		}
 		text, ok := realValueText(value)
 		if !ok {
@@ -550,7 +552,7 @@ func (d *decoder) expressionNodeText(node rdf.Term, in *element) (string, error)
 	case mLiteralString:
 		value, ok := d.graph.Lexical(node, rdf.SysML+pValue)
 		if !ok {
-			return "", unsupported("a literal expression states the value it evaluates to")
+			return "", unsupported(literalStatesValue)
 		}
 		return lexer.StringText(value), nil
 	case mLiteralInfinity:
