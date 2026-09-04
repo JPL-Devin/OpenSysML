@@ -77,6 +77,9 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 	if err := checkExtensionNamespace(graph); err != nil {
 		return nil, err
 	}
+	if err := checkSupersededPredicates(graph); err != nil {
+		return nil, err
+	}
 	metaclasses, err := checkTypes(graph)
 	if err != nil {
 		return nil, err
@@ -136,6 +139,7 @@ func newDecoder(graph *rdf.Graph, metaclasses map[rdf.Term]string, names *nameCh
 		dupID:            map[string]bool{},
 		memberships:      map[string]membership{},
 		owningMembership: map[string]membership{},
+		prefixed:         map[*element]bool{},
 		names:            names,
 		wanted:           newWanted(),
 		demoted:          map[*element]bool{},
@@ -181,6 +185,29 @@ func legacyNamespaceError(iri string) error {
 		What: fmt.Sprintf("the term <%s>", iri),
 		Note: fmt.Sprintf("it is in the pre-rename extension namespace %s, which this version does not read; convert the model from source again to write %s", rdf.LegacyExtension, rdf.OpenSysML),
 	}
+}
+
+// supersededPredicates are properties an earlier version wrote for metadata
+// annotations, each with the term that carries the same fact now.
+var supersededPredicates = map[string]string{
+	rdf.OpenSysML + "prefixMetadata": "an owned sysml:MetadataUsage with sysx:declaredKeyword \"#\"",
+	rdf.SysML + "annotates":          "sysml:" + pAnnotatedElement,
+}
+
+// checkSupersededPredicates refuses a graph stating a metadata annotation with
+// a predicate this version no longer reads, which would otherwise be dropped.
+func checkSupersededPredicates(graph *rdf.Graph) error {
+	for _, triple := range graph.Triples() {
+		now, superseded := supersededPredicates[triple.Predicate.Value]
+		if !superseded || triple.Predicate.Kind != rdf.TermIRI {
+			continue
+		}
+		return &UnsupportedError{
+			What: fmt.Sprintf("the property <%s> of <%s>", triple.Predicate.Value, triple.Subject.Value),
+			Note: fmt.Sprintf("an earlier version wrote a metadata annotation this way; it is now %s, which this version reads, so convert the model from source again", now),
+		}
+	}
+	return nil
 }
 
 // checkTypes settles the one metaclass each subject is written as, keyed by
@@ -299,7 +326,6 @@ var multiValuedProperties = map[string]bool{
 	xBodyParameter:  true,
 	xDeferredEvent:  true,
 	xEffectMember:   true,
-	xPrefixMetadata: true,
 	xRelatedFeature: true,
 }
 
@@ -506,6 +532,8 @@ type decoder struct {
 	// the member each one owns.
 	memberships      map[string]membership
 	owningMembership map[string]membership
+	// prefixed marks the elements whose head wrote their `#M` annotations.
+	prefixed map[*element]bool
 	// names is the spelling chosen for each reference; while nil, references are
 	// written fully qualified. wanted notes what was written for chooseNames.
 	names  *nameChoices
@@ -930,6 +958,11 @@ func (d *decoder) printElement(b *strings.Builder, el *element, depth int) error
 	indent := strings.Repeat("    ", depth)
 	lead := indent + el.prefix
 	if text, ok := d.verbatim(el); ok {
+		// The text writes the `#` prefixes itself, so they are only checked here;
+		// one disagreeing with the graph demotes the text like any other triple.
+		if _, err := d.prefixWords(el); err != nil {
+			return err
+		}
 		// The member's lines as written, members, notes and prefix included.
 		b.WriteString(text)
 		d.printed[el] = true
@@ -950,13 +983,19 @@ func (d *decoder) printElement(b *strings.Builder, el *element, depth int) error
 	}
 	d.rebuilt[el] = true
 	if handled, err := d.printBehavior(b, el, lead, depth); handled {
-		return err
+		if err != nil {
+			return err
+		}
+		return d.unwrittenPrefix(el)
 	}
 	head, err := d.head(el)
 	if err != nil {
 		return err
 	}
 	b.WriteString(lead + head)
+	if err := d.unwrittenPrefix(el); err != nil {
+		return err
+	}
 	if annotationMetaclasses[el.metaclass] || d.isResultExpression(el) {
 		// A comment, doc or rep declaration ends with its comment body, and a
 		// result expression is bare: neither takes a terminator.
@@ -994,18 +1033,13 @@ func (d *decoder) printElement(b *strings.Builder, el *element, depth int) error
 	return nil
 }
 
-// bodyMembers lists the members written in an element's body, in order: an
-// accept parameter is written into its parent's head, and a succession stating
-// no source of its own folds into the member it introduces as `then`.
+// bodyMembers lists the members written in an element's body, in order: a `#`
+// prefix and an accept parameter are written into its head, and a succession
+// stating no source of its own folds into the member it introduces as `then`.
 func (d *decoder) bodyMembers(el *element) ([]*element, error) {
-	children := el.children
+	children := d.bodyChildren(el)
 	if accept := d.acceptParam(el); accept != nil {
-		children = nil
-		for _, child := range el.children {
-			if child != accept {
-				children = append(children, child)
-			}
-		}
+		children = slices.DeleteFunc(children, func(child *element) bool { return child == accept })
 	}
 	return d.positionalSuccessions(children)
 }
@@ -1040,7 +1074,7 @@ func (d *decoder) head(el *element) (string, error) {
 	}
 	switch el.metaclass {
 	case "Package", "Namespace":
-		return d.namespaceHead(el), nil
+		return d.namespaceHead(el)
 	case "Import":
 		return d.importHead(el)
 	case mAlias:
@@ -1073,6 +1107,28 @@ func (d *decoder) head(el *element) (string, error) {
 	case mRequire:
 		return d.conditionHead(el, "require")
 	}
+	// Every form of a metadata usage is typed by its one definition
+	// (SysML.xtext MetadataUsageDeclaration), whichever keyword writes it.
+	if el.metaclass == usageMetaclass[ast.UsageMetadata] {
+		if _, err := d.metadataDefinition(el); err != nil {
+			return "", err
+		}
+		keyword, err := d.metadataKeyword(el)
+		if err != nil {
+			return "", err
+		}
+		switch keyword {
+		case "@":
+			return d.metadataHead(el)
+		case "#":
+			// A `#` prefix is written into its owner's head, so one reaching
+			// here has no declaration to prefix.
+			return "", &UnsupportedError{
+				What: fmt.Sprintf("the prefix annotation <%s>", el.iri),
+				Note: "a prefix is written ahead of the declaration that owns it, and this one is owned by no declaration",
+			}
+		}
+	}
 	// A succession carrying its ends as references is the one the parser builds
 	// for a succession, written back as `succession first <source> then <target>;`.
 	// sequences the two members it names wherever they are declared, so the
@@ -1100,12 +1156,16 @@ func (d *decoder) head(el *element) (string, error) {
 	}
 }
 
-func (d *decoder) namespaceHead(el *element) string {
+func (d *decoder) namespaceHead(el *element) (string, error) {
 	var words []string
-	words = append(words, d.prefixWords(el)...)
 	if keyword := d.visibility(el); keyword != "" {
 		words = append(words, keyword)
 	}
+	prefixes, err := d.prefixWords(el)
+	if err != nil {
+		return "", err
+	}
+	words = append(words, prefixes...)
 	if el.metaclass == "Package" {
 		if d.boolOf(el, rdf.OpenSysML+"isStandardLibraryPackage") {
 			words = append(words, "standard")
@@ -1118,12 +1178,11 @@ func (d *decoder) namespaceHead(el *element) string {
 		words = append(words, "namespace")
 	}
 	words = append(words, d.identWords(el)...)
-	return strings.Join(words, " ")
+	return strings.Join(words, " "), nil
 }
 
 func (d *decoder) definitionHead(el *element, kind ast.DefinitionKind) (string, error) {
 	var words []string
-	words = append(words, d.prefixWords(el)...)
 	if keyword := d.visibility(el); keyword != "" {
 		words = append(words, keyword)
 	}
@@ -1139,6 +1198,13 @@ func (d *decoder) definitionHead(el *element, kind ast.DefinitionKind) (string, 
 	if d.boolOf(el, rdf.SysML+"isEvent") {
 		words = append(words, "event")
 	}
+	// Prefix metadata ends the definition prefix, ahead of the kind keyword
+	// (SysML.xtext DefinitionPrefix `BasicDefinitionPrefix? DefinitionExtensionKeyword*`).
+	prefixes, err := d.prefixWords(el)
+	if err != nil {
+		return "", err
+	}
+	words = append(words, prefixes...)
 	words = append(words, d.keywordOr(el, definitionKeyword(kind)))
 	if d.boolOf(el, rdf.SysML+"isAll") {
 		words = append(words, "all")
@@ -1216,9 +1282,14 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 			words = append(words, flag.keyword)
 		}
 	}
-	// Prefix metadata closes the usage prefix, after the modifiers and ahead
-	// of the kind keyword (SysML.xtext UsagePrefix): `end #derive r : R`.
-	words = append(words, d.prefixWords(el)...)
+	// Prefix metadata ends the usage prefix, ahead of the kind keyword
+	// (SysML.xtext UsagePrefix `UnextendedUsagePrefix UsageExtensionKeyword*`);
+	// a subject, actor, stakeholder or objective takes it after its keyword
+	// instead (SubjectUsage, ActorUsage, StakeholderUsage, ObjectiveRequirementUsage).
+	prefixes, err := d.prefixWords(el)
+	if err != nil {
+		return "", err
+	}
 	// A prefix qualifies the kind keyword after it, and the `not` of
 	// `assert not constraint c` negates the declaration that prefix introduces.
 	// Negation on its own has no notation, so it is reported rather than dropped.
@@ -1226,6 +1297,13 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	negated := d.boolOf(el, rdf.SysML+"isNegated")
 	switch {
 	case hasPrefix:
+		// `#M assert not constraint c` ends the occurrence prefix ahead of the
+		// qualifying keyword (SysML.xtext AssertConstraintUsage, PerformActionUsage);
+		// `assume #M constraint c` takes it after (RequirementConstraintUsage).
+		if !annotationsFollowPrefix[prefix] {
+			words = append(words, prefixes...)
+			prefixes = nil
+		}
 		words = append(words, prefix)
 		if negated {
 			words = append(words, "not")
@@ -1234,8 +1312,19 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		return "", d.missing(el, "sysx:"+xDeclaredPrefix, "the `not` of a negated declaration qualifies the prefix keyword it follows")
 	}
 	keywordAt := len(words)
-	if keyword != "" {
+	switch kind {
+	case ast.UsageSubject, ast.UsageActor, ast.UsageStakeholder, ast.UsageObjective:
+		if keyword == "" && len(prefixes) > 0 {
+			return "", d.missing(el, "sysx:"+xDeclaredKeyword, "a prefix annotation on a "+usageKeyword(kind)+" follows its keyword")
+		}
 		words = append(words, keyword)
+		words = append(words, prefixes...)
+	default:
+		words = append(words, prefixes...)
+		keywordAt = len(words)
+		if keyword != "" {
+			words = append(words, keyword)
+		}
 	}
 	// `chain` qualifies the kind keyword it follows, unlike the modifiers above.
 	if d.boolOf(el, rdf.SysML+"isChain") {
@@ -1354,6 +1443,12 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 			words = append(words, trigger)
 		}
 	}
+	// `metadata M about x;` writes its typing bare (SysML.xtext MetadataUsageDeclaration).
+	if kind == ast.UsageMetadata && len(identWords) == 0 && len(typed) == 1 {
+		words = append(words, typed[0]+typedPart)
+		typedPart = ""
+		skip = append(skip, ast.RelTyping)
+	}
 	relationships, err := d.relationshipWords(el, typedPart, skip...)
 	if err != nil {
 		return "", err
@@ -1388,24 +1483,126 @@ func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 	if d.boolOf(el, rdf.SysML+"isNegated") {
 		words = append(words, "not")
 	}
-	reference, err := d.referenceText(el, rdf.SysML+relationshipProperty[ast.RelReferences])
+	// Prefix metadata follows the member keyword and introduces a constraint
+	// declaration: `assume #goal constraint c` (RequirementConstraintUsage).
+	prefixes, err := d.prefixWords(el)
 	if err != nil {
 		return "", err
 	}
+	if len(prefixes) > 0 && keyword == "" {
+		return "", d.missing(el, "sysx:"+xDeclaredKeyword, "a prefix annotation on a condition follows its keyword")
+	}
+	words = append(words, prefixes...)
+	references, err := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelReferences])
+	if err != nil {
+		return "", err
+	}
+	var skip []ast.RelationshipKind
+	// The declaration form states its keyword; a graph written before it did
+	// is one only where a body follows and nothing is referenced.
+	hasBody := d.boolOf(el, rdf.OpenSysML+xHasBody)
+	declared := hasBody && len(references) == 0
+	if el.metaclass == mAssume || el.metaclass == mRequire {
+		if written, ok := d.stringOf(el, rdf.OpenSysML+xDeclaredKeyword); ok {
+			if written != "constraint" {
+				return "", &UnsupportedError{
+					What: fmt.Sprintf("the condition member <%s>", el.iri),
+					Note: fmt.Sprintf("its sysx:%s %q is not a form of a %s member, which declares a `constraint` or states one bare", xDeclaredKeyword, written, keyword),
+				}
+			}
+			declared = true
+		}
+	}
 	switch condition, ok := d.stringOf(el, rdf.OpenSysML+xCondition); {
 	case ok:
+		if len(prefixes) > 0 {
+			return "", d.unprefixedCondition(el, "an inline condition")
+		}
+		if err := d.inlineConditionOnly(el, keyword, declared, references, hasBody); err != nil {
+			return "", err
+		}
 		words = append(words, condition)
-	case reference != "":
-		words = append(words, reference)
-	case d.boolOf(el, rdf.OpenSysML+xHasBody):
+		return strings.Join(words, " "), nil
+	case declared:
 		// The nested-constraint form spells out the kind it declares, so the
 		// braces that follow are read as a constraint body rather than a name.
 		words = append(words, "constraint")
 		words = append(words, d.identWords(el)...)
+	case len(references) > 0:
+		if len(prefixes) > 0 {
+			return "", d.unprefixedCondition(el, "a constraint reference")
+		}
+		// The constraint the member states comes first; any further `::>` it
+		// declares follows with the other specializations.
+		words = append(words, references[0])
+		if rest := references[1:]; len(rest) > 0 {
+			words = append(words, relationshipSyntax[ast.RelReferences], strings.Join(rest, ", "))
+		}
+		skip = append(skip, ast.RelReferences)
 	default:
 		return "", d.missing(el, "sysx:"+xCondition, "a condition member states a condition")
 	}
-	return strings.Join(words, " "), nil
+	// The constraint usage's own head — specializations, then `[1]`, then
+	// `= value` — in the order the requirement member parser reads it.
+	relationships, err := d.relationshipWords(el, "", skip...)
+	if err != nil {
+		return "", err
+	}
+	words = append(words, relationships...)
+	head := strings.Join(words, " ") + d.multiplicityText(el)
+	if value, ok := d.stringOf(el, rdf.SysML+pValue); ok {
+		head += " = " + value
+	}
+	return head, nil
+}
+
+// inlineConditionOnly refuses an inline condition that also carries facts of
+// the declaration or reference forms, which writing the condition alone would drop.
+func (d *decoder) inlineConditionOnly(el *element, keyword string, declared bool, references []string, hasBody bool) error {
+	var extra []string
+	if declared {
+		extra = append(extra, "declares a `constraint`")
+	}
+	if hasBody || len(d.bodyChildren(el)) > 0 {
+		extra = append(extra, "has a body")
+	}
+	if len(references) > 0 {
+		extra = append(extra, "states a constraint through sysml:"+relationshipProperty[ast.RelReferences])
+	}
+	if len(d.identWords(el)) > 0 {
+		extra = append(extra, "declares a name")
+	}
+	if relationships, err := d.relationshipWords(el, ""); err != nil {
+		return err
+	} else if len(relationships) > 0 {
+		extra = append(extra, "declares specializations")
+	}
+	if d.multiplicityText(el) != "" {
+		extra = append(extra, "declares a multiplicity")
+	}
+	if _, ok := d.stringOf(el, rdf.SysML+pValue); ok {
+		extra = append(extra, "has a value")
+	}
+	if len(extra) == 0 {
+		return nil
+	}
+	form := "condition"
+	if keyword != "" {
+		form = keyword
+	}
+	return &UnsupportedError{
+		What: fmt.Sprintf("the condition member <%s>", el.iri),
+		Note: fmt.Sprintf("it states an inline condition (sysx:%s) and also %s; a %s member is written in one form, and writing the condition alone would drop the rest", xCondition, strings.Join(extra, ", "), form),
+	}
+}
+
+// unprefixedCondition reports a prefix annotation on a condition member whose
+// form has no prefix position; only a constraint declaration takes one.
+func (d *decoder) unprefixedCondition(el *element, form string) error {
+	return &UnsupportedError{
+		What: fmt.Sprintf("the condition member <%s>", el.iri),
+		Note: fmt.Sprintf("a prefix annotation qualifies a constraint declaration (`assume #M constraint c`), and this member states %s, which has no position for one", form),
+	}
 }
 
 // isResultExpression reports whether el is the result expression of a body:
@@ -1493,10 +1690,14 @@ func (d *decoder) aliasHead(el *element) (string, error) {
 
 func (d *decoder) dependencyHead(el *element) (string, error) {
 	var words []string
-	words = append(words, d.prefixWords(el)...)
 	if keyword := d.visibility(el); keyword != "" {
 		words = append(words, keyword)
 	}
+	prefixes, err := d.prefixWords(el)
+	if err != nil {
+		return "", err
+	}
+	words = append(words, prefixes...)
 	words = append(words, "dependency")
 	words = append(words, d.identWords(el)...)
 	clients, err := d.referenceList(el, rdf.SysML+pClient)
@@ -1714,12 +1915,185 @@ func qualifiedNameText(qname string) string {
 	return out
 }
 
-func (d *decoder) prefixWords(el *element) []string {
-	var words []string
-	for _, term := range d.graph.Objects(rdf.IRI(el.iri), rdf.OpenSysML+xPrefixMetadata) {
-		words = append(words, term.Value)
+// metadataKeyword reads the keyword a metadata usage was written with: `#` for
+// a prefix ahead of a declaration, `@` for a member of its own, and none for
+// `metadata`. Any other keyword is refused rather than read as one of those;
+// a repeated one is refused by checkCardinality before decoding starts.
+func (d *decoder) metadataKeyword(el *element) (string, error) {
+	keyword, ok := d.graph.Object(rdf.IRI(el.iri), rdf.OpenSysML+xDeclaredKeyword)
+	if !ok {
+		return "", nil
 	}
-	return words
+	switch keyword := keyword.Value; keyword {
+	case "#", "@":
+		return keyword, nil
+	default:
+		return "", &UnsupportedError{
+			What: fmt.Sprintf("the element <%s>", el.iri),
+			Note: fmt.Sprintf("its sysx:%s %q is not a metadata form; a metadata usage is written as `metadata`, `@` or `#`", xDeclaredKeyword, keyword),
+		}
+	}
+}
+
+// metadataSigil reports the sigil a metadata usage was written with, or none
+// for a `metadata` member and for a keyword its head will refuse.
+func (d *decoder) metadataSigil(el *element) string {
+	if el.metaclass != usageMetaclass[ast.UsageMetadata] {
+		return ""
+	}
+	keyword, err := d.metadataKeyword(el)
+	if err != nil {
+		return ""
+	}
+	return keyword
+}
+
+// annotationsFollowPrefix lists the qualifying keywords written ahead of the
+// `#M` annotations they own (RequirementConstraintUsage, KerML FeaturePrefix).
+var annotationsFollowPrefix = map[string]bool{
+	"assume":  true,
+	"require": true,
+	"var":     true,
+}
+
+// prefixWords writes the `#M` annotations a declaration owns as prefixes, which
+// are written into its head rather than its body.
+func (d *decoder) prefixWords(el *element) ([]string, error) {
+	d.prefixed[el] = true
+	var words []string
+	for _, child := range el.children {
+		if child.metaclass != usageMetaclass[ast.UsageMetadata] {
+			continue
+		}
+		// A head kept as source text prints no members, so a keyword the
+		// member form would refuse is refused here rather than dropped.
+		keyword, err := d.metadataKeyword(child)
+		if err != nil {
+			return nil, err
+		}
+		if keyword != "#" {
+			continue
+		}
+		definition, err := d.metadataDefinition(child)
+		if err != nil {
+			return nil, err
+		}
+		typed, err := d.referenceName(definition, child)
+		if err != nil {
+			return nil, err
+		}
+		// A prefix is spelled as its type alone (SysML.xtext PrefixMetadataUsage).
+		about, err := d.referenceList(child, rdf.SysML+pAnnotatedElement)
+		if err != nil {
+			return nil, err
+		}
+		if len(d.identWords(child)) > 0 || len(about) > 0 || len(child.children) > 0 || d.boolOf(child, rdf.OpenSysML+xHasBody) {
+			return nil, &UnsupportedError{
+				What: fmt.Sprintf("the prefix annotation <%s>", child.iri),
+				Note: "a prefix names only its metadata definition; a name, an about clause or a body is written by the `@` member form",
+			}
+		}
+		words = append(words, "#"+typed)
+	}
+	return words, nil
+}
+
+// unwrittenPrefix reports a `#M` annotation on an element whose head has no
+// place for one, so that it is refused rather than dropped.
+func (d *decoder) unwrittenPrefix(el *element) error {
+	if d.prefixed[el] {
+		return nil
+	}
+	for _, child := range el.children {
+		if d.metadataSigil(child) == "#" {
+			return &UnsupportedError{
+				What: fmt.Sprintf("the prefix annotation <%s>", child.iri),
+				Note: fmt.Sprintf("it prefixes a sysml:%s, whose notation takes no prefix annotation", el.metaclass),
+			}
+		}
+	}
+	return nil
+}
+
+// bodyChildren returns the members written in an element's body: every child
+// but the prefix annotations its head writes.
+func (d *decoder) bodyChildren(el *element) []*element {
+	var out []*element
+	for _, child := range el.children {
+		if d.metadataSigil(child) != "#" {
+			out = append(out, child)
+		}
+	}
+	return out
+}
+
+// metadataHead writes a metadata usage member: `@M`, `@ m : M`, with the
+// elements it is about (SysML.xtext MetadataUsage).
+func (d *decoder) metadataHead(el *element) (string, error) {
+	definition, err := d.metadataDefinition(el)
+	if err != nil {
+		return "", err
+	}
+	typed, err := d.referenceName(definition, el)
+	if err != nil {
+		return "", err
+	}
+	head := "@" + typed
+	if ident := d.identWords(el); len(ident) > 0 {
+		head = "@ " + strings.Join(ident, " ") + " : " + typed
+	}
+	if keyword := d.visibility(el); keyword != "" {
+		head = keyword + " " + head
+	}
+	about, err := d.referenceList(el, rdf.SysML+pAnnotatedElement)
+	if err != nil {
+		return "", err
+	}
+	if len(about) > 0 {
+		head += " about " + strings.Join(about, ", ")
+	}
+	return head, nil
+}
+
+// metadataDefinition is the one metadata definition a metadata usage applies;
+// a usage typed by none, by several, or by an element of another metaclass has
+// no notation and is refused. A literal type is a name the graph does not
+// define, so its metaclass cannot be checked; it must at least be a name.
+func (d *decoder) metadataDefinition(el *element) (rdf.Term, error) {
+	types := d.graph.Objects(rdf.IRI(el.iri), rdf.SysML+relationshipProperty[ast.RelTyping])
+	switch len(types) {
+	case 1:
+		if types[0].IsLiteral() {
+			why := notAName(types[0])
+			if types[0].Datatype == rdf.OpenSysML+dtExpression {
+				why = "it is an expression, not a name"
+			}
+			if why != "" {
+				return rdf.Term{}, &UnsupportedError{
+					What: fmt.Sprintf("the element <%s>", el.iri),
+					Note: fmt.Sprintf("its %s %s: %s, and a metadata usage names the one metadata definition it applies", sysmlPrefix+relationshipProperty[ast.RelTyping], types[0], why),
+				}
+			}
+			return types[0], nil
+		}
+		target, err := d.referencedElement(types[0].Value)
+		if err != nil {
+			return rdf.Term{}, err
+		}
+		if target.metaclass != definitionMetaclass[ast.DefMetadata] && target.metaclass != definitionMetaclass[ast.DefMetaclass] {
+			return rdf.Term{}, &UnsupportedError{
+				What: fmt.Sprintf("the element <%s>", el.iri),
+				Note: fmt.Sprintf("its %s <%s> is a sysml:%s, and a metadata usage names the one metadata definition it applies", sysmlPrefix+relationshipProperty[ast.RelTyping], target.iri, target.metaclass),
+			}
+		}
+		return types[0], nil
+	case 0:
+		return rdf.Term{}, d.missing(el, sysmlPrefix+relationshipProperty[ast.RelTyping], "a metadata usage names the one metadata definition it applies")
+	}
+	return rdf.Term{}, &UnsupportedError{
+		What: fmt.Sprintf("the element <%s>", el.iri),
+		Note: fmt.Sprintf("it has %d %s, and a metadata usage names the one metadata definition it applies, so no valid declaration can be written for it", len(types), sysmlPrefix+relationshipProperty[ast.RelTyping]),
+	}
 }
 
 // visibility reads the visibility a member was declared with, which the abstract
@@ -1807,11 +2181,18 @@ func (d *decoder) referenceList(el *element, property string) ([]string, error) 
 }
 
 // referenceName renders a reference term for the declaration of el: a literal
-// as written, an IRI as the spelling that resolves to its element there.
+// as written (refused unless it is a name), an IRI as the spelling that
+// resolves to its element there.
 func (d *decoder) referenceName(term rdf.Term, el *element) (string, error) {
 	if term.IsLiteral() {
 		if term.Datatype == rdf.OpenSysML+dtExpression {
 			return term.Value, nil
+		}
+		if why := notAName(term); why != "" {
+			return "", &UnsupportedError{
+				What: fmt.Sprintf("the reference %s", term),
+				Note: why + ", and a reference the graph does not define is carried as the plain name to write",
+			}
 		}
 		return qualifiedNameText(term.Value), nil
 	}
@@ -1948,6 +2329,26 @@ func relativeName(qname, scope string) string {
 		}
 		scope = scope[:cut]
 	}
+}
+
+// notAName says why a string literal cannot be written as a qualified name —
+// one whose every segment fits between unrestricted-name quotes. Its datatype
+// and tag are checked by checkLiterals before decoding starts.
+func notAName(term rdf.Term) string {
+	if term.Value == "" {
+		return "it is empty"
+	}
+	for _, segment := range strings.Split(strings.TrimPrefix(term.Value, "$::"), "::") {
+		switch {
+		case segment == "":
+			return "it has an empty name segment"
+		case strings.ContainsAny(segment, "\n\r"):
+			return "it has a name segment holding a line break"
+		case (len(segment)-len(strings.TrimRight(segment, `\`)))%2 == 1:
+			return "it has a name segment ending in a backslash"
+		}
+	}
+	return ""
 }
 
 // literalTargetName is the name a usage takes from a naming feature the graph

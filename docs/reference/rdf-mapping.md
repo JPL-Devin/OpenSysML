@@ -12,8 +12,8 @@ of the following is a deliberate property of the mapping rather than a defect to
 report:
 
 - **What is not mapped is refused, not partly converted**, and the refusal names
-  the construct. 285 of the 345 models under `examples/` (committed, training and
-  pilot corpora) convert to Turtle; the other 60 are refused. Of the 285, a second
+  the construct. 303 of the 345 models under `examples/` (committed, training and
+  pilot corpora) convert to Turtle; the other 42 are refused. Of the 303, a second
   conversion of the written-back notation reproduces the Turtle byte for byte for
   every one — the notation is written from the [source text](#source-text) the
   graph carries. These figures are the
@@ -77,6 +77,14 @@ mismatch remains: the reader ignores predicates outside `sysml:` and
 OpenSysML's own additions live in a separate `sysx:` namespace so a consumer can
 tell them apart from the standard vocabulary and ignore them if it wants only
 standard SysML.
+
+A graph an earlier release wrote with terms this one no longer reads is refused
+rather than read without what those terms said: the pre-rename namespace
+`urn:systemica:sysml:`, and the metadata properties `sysx:prefixMetadata` and
+`sysml:annotates` that release 0.4.3 wrote for a `#` prefix and an `about`
+target (now a `sysml:MetadataUsage` and `sysml:annotatedElement`, see
+[What each element carries](#what-each-element-carries)). The error names the
+term; re-export the model from its notation source.
 
 ### Element IRIs
 
@@ -181,8 +189,9 @@ triples come); a set of classes with no such member is refused, naming the subje
 - Ownership, described under [Ownership](#ownership): `sysml:owner`, plus
   `sysml:owningMembership` and `sysml:owningRelationship`, or
   `sysml:owningRelatedElement` for an element a relationship owns
-- `sysml:owningNamespace` — the containing element (absent on a root), kept
-  alongside `sysml:owner` as the compact spelling earlier releases wrote
+- `sysml:owningNamespace` — the containing namespace (absent on a root and on
+  an element a relationship owns, whose owner is no namespace), kept alongside
+  `sysml:owner` as the compact spelling earlier releases wrote
 - `sysml:visibility`, `sysml:direction`
 - Feature flags, written only when true, so an absent flag reads as false:
   `isAbstract`, `isVariation`, `isVariant`, `isReference`, `isComposite`, `isDerived`,
@@ -194,11 +203,15 @@ triples come); a set of classes with no such member is refused, naming the subje
   fully qualified spelling does — and as plain literals where it does not: `sysml:type`
   (the `:` clause), `specializes`, `subsets`, `redefines`, `references`,
   `crosses`, `disjointFrom`, `intersects`, `inverseOf`, `unions`, `chains`,
-  `includes`, `via`, `annotates`, `subject`, and the namespace or member an
-  import names, `importedNamespace`. A literal carries the name itself,
+  `includes`, `via`, `subject`, `annotatedElement` for an `about` clause, and
+  the namespace or member an import names, `importedNamespace`. A literal
+  carries the name itself,
   without the quotes an unrestricted name is written with; a target that is an
   expression rather than a name (a feature chain, say) is carried as the text it
-  was written as, typed `sysx:Expression` to tell the two apart. A feature
+  was written as, typed `sysx:Expression` to tell the two apart. Reading a graph
+  back, a literal that is neither — a number, a boolean, a language-tagged
+  string, an empty or broken qualified name — is refused rather than written
+  into the notation as it stands. A feature
   chain's `sysml:targetFeature` links the member the chain reaches in its
   operand's type, a redefinition the general's feature; written back, each is
   spelled by its own name where that reaches one feature among the operand's
@@ -213,6 +226,25 @@ triples come); a set of classes with no such member is refused, naming the subje
 - `sysml:value` — a feature's value, as an expression node
 - `sysml:aliasedElement`, `sysml:client`, `sysml:supplier`, `sysml:body`,
   `sysml:language`, `sysml:locale`, `sysml:annotatedElement`
+- A metadata annotation — `@Safety;`, `@Safety { level = 2; }`, `metadata m :
+  Safety about a, b;` or the prefix `#Safety part def P;` — is a
+  `sysml:MetadataUsage` owned by the element it is written in or ahead of,
+  through an `OwningMembership` (never a `FeatureMembership`: the annotation is
+  not a feature of what it annotates), even when that element is itself a
+  relationship such as a `dependency` or a `subject` membership. It carries
+  `sysml:type` for its metadata definition, one `sysml:annotatedElement` per
+  `about` target, `sysx:hasBody`,
+  and `sysx:declaredKeyword` `"@"` or `"#"` for the sigil it was written with
+  (`metadata` is the absence of both). The body's members are its owned members
+  like any other body's: a value binding (`level = 2;`) is a `sysml:ReferenceUsage`
+  carrying `sysml:value`, a redefinition (`:>> level = 3;`) carries
+  `sysml:redefines`, a nested feature keeps its own kind, and `sysx:memberIndex`
+  orders them. A `#` prefix is an owned member of the declaration it prefixes,
+  indexed after the body's members so their indices are the same with or without
+  it, and is written back at the head of that declaration rather than in its body,
+  in the grammar's position: ahead of the kind keyword and of `assert`/`perform`
+  (`#Safety assert not constraint c;`), after `subject`, `actor`, `stakeholder`,
+  `objective`, `variant`, `assume`, `require` and `var` (`assume #Safety constraint c;`).
 
 The `sysx:` properties:
 
@@ -222,7 +254,7 @@ The `sysx:` properties:
 | `sysx:hasBody` | Distinguishes `part def A;` from `part def A { }`, which are different source and would otherwise convert back identically. Also marks an expression body node, so `{}` rebuilds from structure. |
 | `sysx:sourceText`, `sysx:sourceTail` | The element's lines as written, comments and blank lines included, which a conversion back to notation prefers while they still state what the graph states. An element with members carries the lines ahead of them as its text and those after them as its tail. See [Source text](#source-text). |
 | `sysx:sourceLanguage` | On each root element, the grammar the file was written in — `sysml` or `kerml` — so the text is read back under the grammar it was written under. Absent for a buffer with no model extension (standard input, a REPL session), which the parser reads as SysML with KerML's `all` prefix. See [Source text](#source-text). |
-| `sysx:declaredKeyword` | The kind keyword as written, when it is one of the synonyms several keywords share (`datatype` and `attribute`, `function` and `calc`, `snapshot` and `occurrence`). The AST records one kind for all of them, so without this the notation would come back rewritten. Also the keyword a constraint body's condition is stated with (`assert`, `assume`, or absent for a bare condition, which asserts implicitly). |
+| `sysx:declaredKeyword` | The kind keyword as written, when it is one of the synonyms several keywords share (`datatype` and `attribute`, `function` and `calc`, `snapshot` and `occurrence`). The AST records one kind for all of them, so without this the notation would come back rewritten. Also the keyword a constraint body's condition is stated with (`assert`, `assume`, or absent for a bare condition, which asserts implicitly), the `constraint` of an `assume`/`require` member that declares a constraint usage (so its `references C` is read as a specialization, where `require C` alone states the constraint the member refers to), and the sigil a metadata annotation was written with: `@` for a member (`@Safety;`), `#` for a prefix ahead of a declaration (`#Safety part def P;`), absent for the `metadata` keyword. |
 | `sysx:declaredPrefix` | The keyword qualifying the kind keyword after it — the `assert` of `assert constraint c : C`. It says what the declaration is for, and the AST kind alone does not carry it. |
 | `sysx:endForm` | The notation an end-binding head writes its ends in — `to`, `nary`, `equals`, `firstThen`, `fromTo`, `flowTo`, `satisfy`, `then` — so the head is rebuilt from the graph rather than read back from its text. See [End-binding heads](#end-binding-heads). |
 | `sysx:endVerb` | The verb a head writes ahead of its ends when its own keyword is the noun form (`connection c connect a to b`). Without it the verb would be missing or doubled. |
@@ -230,7 +262,6 @@ The `sysx:` properties:
 | `sysx:condition` | The condition a condition member states, as its notation. |
 | `sysx:resultExpression` | The expression an expression body (`{ in y : Real; y + x }`) ends in, after its parameters. The bare expression a calculation or case body computes is not an extension: it is the Expression its `sysml:ResultExpressionMembership` owns. See [Result expressions](#result-expressions). |
 | `sysx:bodyParameter`, `sysx:bodyMember` | The `in` parameters an expression body declares, each a node carrying its name, type, bounds and value, and the other declarations it makes ahead of its result: a `doc` as a `sysml:Documentation` node, anything else as notation. Both share one `sysx:memberIndex` sequence, the order they were written in. |
-| `sysx:prefixMetadata` | A metadata annotation as written (`#Safety`). It states what the element it prefixes is, and the AST records no span for it, so the notation is read from the source. |
 | `sysx:declaredId` | The element's id came from an explicit `@IdentityMetadata::ElementId` annotation, see [Element identity](#element-identity). |
 | `sysx:projectId`, `sysx:branch`, `sysx:org` | The `@IdentityMetadata::ProjectRef` provenance of a scope root, see [Element identity](#element-identity). |
 | `sysx:isKindImplicit` | The declaration wrote no kind keyword (`in x : Real;`), which takes its kind from its owner. Without it the canonical keyword would come back written out, declaring what the author did not. A kind named in a comment in the head (`in /* attribute */ x : Real;`) is trivia, not a keyword the declaration wrote. |
@@ -738,7 +769,6 @@ What is still refused, naming the node:
   shape would mean inferring which node an edge belongs to from member position,
   which could silently reattach edges, so it is reported instead. Nine of the
   eighteen remaining refusals under `examples/` are this shape.
-- **Prefix metadata** (`#Safety part p;`, `@M { … }`), unchanged from before.
 
 ## Limitations
 
@@ -948,7 +978,7 @@ including a parallel state's regions, calculation and requirement) reads these
 forms back as the same node, and on the fixtures a second conversion writes the
 same Turtle byte for byte (`export_test.go:TestSuccessionRoundTripsInEveryBody`).
 That is a statement about the fixtures, not the mapping: over the example corpus
-the second hop reproduces the graph for all 285 files that convert, but from
+the second hop reproduces the graph for all 303 files that convert, but from
 the source text they carry, which the corpus gate does not strip
 ([rdf-corpus-roundtrip.md](../project/rdf-corpus-roundtrip.md)). An end
 whose name needs quotes (`first a then 'drive vehicle';`) is a reference to the
@@ -960,10 +990,18 @@ condition as `sysx:condition`: a constraint body's conditions (`assert`,
 `assume`, a bare condition, and the `not` of `assert not …` as
 `sysml:isNegated`), a nested `assert constraint [name] { … }`, a requirement's
 `assume`/`require` members in all three forms (an expression, the constraint
-they name, or a body), `subject s : X;` as the `sysml:SubjectMembership` it
-declares. The `assert` prefixing a named usage
+they name, or a body) together with the declaration of the constraint usage they
+own — `sysml:declaredName`, its specializations, `sysml:lowerBound`/`upperBound`
+and `sysml:value` (`require #Goal constraint braked [1] = true;`) — and
+`subject s : X;` as the `sysml:SubjectMembership` it declares. The `assert` prefixing a named usage
 (`assert constraint c : C`) is carried as `sysx:declaredPrefix`. The conditions
-themselves are notation, with the limits stated above.
+themselves are notation, with the limits stated above. An `assume`/`require`
+member's `sysx:declaredKeyword`, when present, is `constraint`; any other value
+is reported rather than the member written in a form the keyword did not state.
+A member is written in one of these forms, so a graph stating an inline
+`sysx:condition` together with facts of another form — a `constraint` keyword,
+a body, a `sysml:references`, a name, specializations, a multiplicity or a
+value — is reported rather than the condition written and the rest dropped.
 
 The nodes in an action or state body are mapped under
 [Behavior](#behavior), together with the shapes still refused there.
@@ -975,14 +1013,22 @@ the canonical `occurrence` would be a different declaration. It is reported
 instead. `perform a : A;` does convert: the `perform` is kept as the keyword it
 was written with.
 
-**A metadata annotation is carried as the notation it was written as**
-(`sysx:prefixMetadata "#Safety"`), read from the source because the AST records
-no span for the annotation itself. Two shapes are reported rather than written
-back: an annotation carrying a body of its own (`@M { isSet = true; }`), which
-the vocabulary has no properties for, and an `@` annotation ahead of a
-definition (`@Safety part def Car;`), which the parser records on the
-declaration *before* the one it prefixes, so writing it back would annotate a
-different element.
+**A metadata annotation is carried structurally**, as described under [What
+each element carries](#what-each-element-carries): its type, its `about`
+targets, the sigil it was written with and its body's members as owned members
+with their `sysml:value` expression trees, so `@Safety { level = 2; }` and
+`#Safety part def Car;` come back from the graph alone. Four shapes are reported
+rather than written, and only a graph from another tool can state them: a
+metadata usage whose one `sysml:type` is a subject of another metaclass (a
+`sysml:PartDefinition`, say — a literal type names an element the graph does not
+define, so it is written as it is), a `#`
+prefix carrying a name, an `about` clause or a body (the grammar's
+`PrefixMetadataUsage` is the type alone, so the parser never produces one), a
+`#` prefix owned by an element whose head has no prefix position (a state's
+`entry` action, say), and a `#` prefix on a head kept as `sysx:sourceText`
+(`#Safety connect x to y;`) whose text does not write it. `@Safety part def Car;` is not a prefix in the grammar —
+`@` introduces a member of its own, so the parser reports the missing `;` or
+`{` after `@Safety` — and it is refused at the parser, before conversion.
 
 **A name declared twice in one namespace is refused.** An element's derived id
 is the encoding of its qualified name, so `part def A; part def A;` in one

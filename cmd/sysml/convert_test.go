@@ -29,10 +29,12 @@ const sampleModel = `package Demo {
 }
 `
 
-// refusedModel carries inline metadata, which the RDF mapping refuses.
+// refusedModel declares one name twice in a namespace, which the RDF mapping
+// refuses: a name identifies an element in the graph.
 const refusedModel = `package Demo {
-    metadata def Safety;
-    part seat {@Safety{isMandatory = true;}}
+    part def Seat;
+    part seat : Seat;
+    part seat : Seat;
 }
 `
 
@@ -227,7 +229,7 @@ func TestConvertRDFIsMarkedExperimental(t *testing.T) {
 
 	refused := runCommand(t, exec.Command(binary, behavior, "-convert", "ttl"))
 	if refused.status == 0 {
-		t.Fatalf("expected the mapping to refuse inline metadata:\n%s", refused.stdout)
+		t.Fatalf("expected the mapping to refuse the duplicate declaration:\n%s", refused.stdout)
 	}
 	if !strings.Contains(refused.stderr, "RDF conversion is experimental") {
 		t.Errorf("a refusal is the experimental behavior, but was not marked:\n%s", refused.stderr)

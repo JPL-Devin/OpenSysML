@@ -891,6 +891,7 @@ elmt:Constraints__Rover__lightEnough___401
     sysml:owner elmt:Constraints__Rover__lightEnough ;
     sysml:owningRelationship elmt:Constraints__Rover__lightEnough___401_om ;
     sysml:owningMembership elmt:Constraints__Rover__lightEnough___401_om ;
+    sysx:declaredKeyword "constraint" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Constraints__Rover__lightEnough___401___400 ;
     sysml:ownedMembership elmt:Constraints__Rover__lightEnough___401___400_om ;
@@ -969,6 +970,7 @@ elmt:Constraints__Rover__lightEnough___402
     sysml:owner elmt:Constraints__Rover__lightEnough ;
     sysml:owningRelationship elmt:Constraints__Rover__lightEnough___402_om ;
     sysml:owningMembership elmt:Constraints__Rover__lightEnough___402_om ;
+    sysx:declaredKeyword "constraint" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Constraints__Rover__lightEnough___402___400 ;
     sysml:ownedMembership elmt:Constraints__Rover__lightEnough___402___400_om ;
@@ -1047,6 +1049,7 @@ elmt:Constraints__Rover__lightEnough___403
     sysml:owner elmt:Constraints__Rover__lightEnough ;
     sysml:owningRelationship elmt:Constraints__Rover__lightEnough___403_om ;
     sysml:owningMembership elmt:Constraints__Rover__lightEnough___403_om ;
+    sysx:declaredKeyword "constraint" ;
     sysx:hasBody "true"^^xsd:boolean ;
     sysml:ownedMember elmt:Constraints__Rover__lightEnough___403___400 ;
     sysml:ownedMembership elmt:Constraints__Rover__lightEnough___403___400_om ;
