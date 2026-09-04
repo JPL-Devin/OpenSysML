@@ -19,10 +19,10 @@
             (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="bind"
               (Relationship kind="references" target=(expr)
                 (FeatureChainExpr member="edges"
-                  (FeatureReference name="base")))
-              (Multiplicity range=true
-                (LiteralInteger value="0")
-                (LiteralInfinity))
+                  (FeatureReference name="base"))
+                (Multiplicity range=true
+                  (LiteralInteger value="0")
+                  (LiteralInfinity)))
               (FeatureReference name="be")
               (Multiplicity range=true
                 (LiteralInteger value="0")

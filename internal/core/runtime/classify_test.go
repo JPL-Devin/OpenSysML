@@ -771,6 +771,191 @@ func TestChainValueCollectsAcrossTheCollection(t *testing.T) {
 	}
 }
 
+// A binding end whose path crosses a collection reaches that feature on every object of it, in
+// order: the end holds their values together, and a value the other end holds on its own
+// determines none of the objects' parts (KerML 1.0 §7.3.4.6, §7.4.9.2).
+func TestBindingEndAcrossACollection(t *testing.T) {
+	model := func(shelf string) string {
+		return `package test {
+			private import ScalarValues::*;
+			item def Thing;
+			item def Group {
+				item items : Thing [2];
+				attribute weights : Real [2] = (1.0, 2.0);
+				attribute shares : Real [2];
+			}
+			item def Shelf {
+				item groups : Group [2];
+				item allItems : Thing [0..*];
+				attribute allWeights : Real [0..*];
+				attribute allShares : Real [0..*] = (0.1, 0.2, 0.3, 0.4);
+				` + shelf + `
+			}
+			item shelf : Shelf;
+		}`
+	}
+	values := func(t *testing.T, ctx *Context, inst *Instance, name string) string {
+		t.Helper()
+		fv, err := inst.GetFeatureValue(ctx, name)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		return FormatValue(fv.HeldValue())
+	}
+	groupsOf := func(t *testing.T, ctx *Context, shelf *Instance) []*Instance {
+		t.Helper()
+		fv, err := shelf.GetFeatureValue(ctx, "groups")
+		if err != nil {
+			t.Fatalf("groups: %v", err)
+		}
+		var groups []*Instance
+		for _, g := range elementsOf(fv.HeldValue()) {
+			obj, _ := ctx.getInstance(g.Instance)
+			groups = append(groups, obj)
+		}
+		return groups
+	}
+	union := func(t *testing.T, ctx *Context, groups []*Instance, name string) []Value {
+		t.Helper()
+		var all []Value
+		for _, g := range groups {
+			fv, err := g.GetFeatureValue(ctx, name)
+			if err != nil {
+				t.Fatalf("group.%s: %v", name, err)
+			}
+			all = append(all, elementsOf(fv.HeldValue())...)
+		}
+		return all
+	}
+	const bound = `bind [0..*] groups.items = [0..*] allItems;
+		bind [0..*] groups.weights = [0..*] allWeights;
+		bind [0..*] groups.shares = [0..*] allShares;`
+
+	for _, order := range []string{"union_first", "members_first"} {
+		t.Run(order, func(t *testing.T) {
+			ctx, idx := libraryShapeContext(t, model(bound))
+			shelf := instantiateQualified(t, ctx, idx, "test::shelf")
+			if order == "members_first" {
+				union(t, ctx, groupsOf(t, ctx, shelf), "items")
+			} else if shelf.FeatureValues["groups"].Materialized {
+				t.Fatal("groups materialized on instantiation")
+			}
+			all, err := shelf.GetFeatureValue(ctx, "allItems")
+			if err != nil {
+				t.Fatalf("allItems: %v", err)
+			}
+			got := elementsOf(all.HeldValue())
+			want := union(t, ctx, groupsOf(t, ctx, shelf), "items")
+			if len(got) != 4 || len(want) != 4 {
+				t.Fatalf("allItems holds %d objects, the groups' items %d, want 4 each", len(got), len(want))
+			}
+			for i := range want {
+				if got[i].Instance != want[i].Instance {
+					t.Fatalf("allItems.%d = %s, want %s, the groups' items in order", i+1, FormatValue(got[i]), FormatValue(want[i]))
+				}
+			}
+			if got := values(t, ctx, shelf, "allWeights"); got != "[1.0, 2.0, 1.0, 2.0]" {
+				t.Fatalf("allWeights = %s, want the groups' weights in order", got)
+			}
+		})
+	}
+
+	// The union's own value determines none of the members' parts: a member keeps what it
+	// holds on its own, and is undetermined without a value of its own, in either order.
+	for _, order := range []string{"union_first", "member_first"} {
+		t.Run("members_undetermined_by_the_union_"+order, func(t *testing.T) {
+			ctx, idx := libraryShapeContext(t, model(bound))
+			shelf := instantiateQualified(t, ctx, idx, "test::shelf")
+			groups := groupsOf(t, ctx, shelf)
+			if order == "union_first" {
+				if got := values(t, ctx, shelf, "allShares"); got != "[0.1, 0.2, 0.3, 0.4]" {
+					t.Fatalf("allShares = %s, want its own value", got)
+				}
+			}
+			_, err := groups[0].GetFeatureValue(ctx, "shares")
+			var undetermined *UndeterminedBindingError
+			if !errors.As(err, &undetermined) {
+				t.Fatalf("groups.1.shares = %v, want UndeterminedBindingError", err)
+			}
+			if want := "binding end cannot be resolved: Group.shares is bound by `bind [0..*] groups.shares = [0..*] allShares` " +
+				"through every object groups holds; the model does not determine which of the bound values Group.shares holds"; err.Error() != want {
+				t.Fatalf("error = %q\nwant    %q", err.Error(), want)
+			}
+			if got := values(t, ctx, shelf, "allShares"); got != "[0.1, 0.2, 0.3, 0.4]" {
+				t.Fatalf("allShares = %s, want its own value", got)
+			}
+			if got := values(t, ctx, groups[1], "weights"); got != "[1.0, 2.0]" {
+				t.Fatalf("groups.2.weights = %s, want its own default", got)
+			}
+		})
+	}
+
+	t.Run("union_disagrees_with_its_own_value", func(t *testing.T) {
+		ctx, idx := libraryShapeContext(t, model(bound+"\n:>> allWeights = (9.0, 9.0, 9.0, 9.0);"))
+		shelf := instantiateQualified(t, ctx, idx, "test::shelf")
+		_, err := shelf.GetFeatureValue(ctx, "allWeights")
+		var conflict *BindingConflictError
+		if !errors.As(err, &conflict) {
+			t.Fatalf("allWeights = %v, want BindingConflictError", err)
+		}
+	})
+
+	// An end's multiplicity counts the values of every object reached together: four
+	// weights satisfy [4] though each group holds two, and fall short of [5..*].
+	t.Run("end_multiplicity_over_the_union", func(t *testing.T) {
+		ctx, idx := libraryShapeContext(t, model("attribute four : Real [4]; bind [4] groups.weights = [4] four;"))
+		shelf := instantiateQualified(t, ctx, idx, "test::shelf")
+		if got := values(t, ctx, shelf, "four"); got != "[1.0, 2.0, 1.0, 2.0]" {
+			t.Fatalf("four = %s, want the groups' weights, four in all", got)
+		}
+		ctx, idx = libraryShapeContext(t, model("bind [5..*] groups.weights = [5..*] allWeights;"))
+		shelf = instantiateQualified(t, ctx, idx, "test::shelf")
+		_, err := shelf.GetFeatureValue(ctx, "allWeights")
+		if !errors.Is(err, ErrMultiplicityViolation) {
+			t.Fatalf("allWeights = %v, want ErrMultiplicityViolation", err)
+		}
+		if want := "`bind [5..*] groups.weights = [5..*] allWeights` links [5..*] of groups.weights, which holds 4 value(s)"; !strings.Contains(err.Error(), want) {
+			t.Fatalf("error = %q\nwant it to contain %q", err.Error(), want)
+		}
+	})
+
+	t.Run("path_reaching_no_object", func(t *testing.T) {
+		ctx, idx := libraryShapeContext(t, `package test {
+			item def Thing;
+			item def Group { item items : Thing [2]; }
+			item def Shelf {
+				item groups : Group [0..*];
+				item allItems : Thing [0..*];
+				bind [0..*] groups.items = [0..*] allItems;
+			}
+			item shelf : Shelf;
+		}`)
+		shelf := instantiateQualified(t, ctx, idx, "test::shelf")
+		all, err := shelf.GetFeatureValue(ctx, "allItems")
+		if err != nil {
+			t.Fatalf("allItems: %v", err)
+		}
+		if n := len(elementsOf(all.HeldValue())); n != 0 {
+			t.Fatalf("allItems holds %d objects, want none: groups holds no object", n)
+		}
+	})
+
+	// A step of the path that holds no object, or a feature the reached objects lack, is a typed refusal.
+	for _, tc := range []struct{ name, shelf, want string }{
+		{"non_object_step", "bind [0..*] allWeights.x = [0..*] allItems;", `binding end cannot be resolved "allWeights.x": allWeights is not an object`},
+		{"missing_feature", "bind [0..*] groups.nothing = [0..*] allItems;", `binding end cannot be resolved "groups.nothing": feature nothing not found`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, idx := libraryShapeContext(t, model(":>> allWeights = (1.0, 2.0);\n"+tc.shelf))
+			shelf := instantiateQualified(t, ctx, idx, "test::shelf")
+			_, err := shelf.GetFeatureValue(ctx, "allItems")
+			if !errors.Is(err, ErrBindingEnd) || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("allItems = %v, want ErrBindingEnd containing %q", err, tc.want)
+			}
+		})
+	}
+}
+
 // A collection short of its lower bound is made up through its optional subsetters first, within
 // their upper bounds, and through anonymous members only past them; a required one is never made twice.
 func TestOptionalSubsetterFillsTheCollection(t *testing.T) {

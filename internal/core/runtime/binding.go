@@ -45,14 +45,21 @@ func (e *BindingCycleError) Error() string {
 func (e *BindingCycleError) Unwrap() error { return ErrBindingCycle }
 
 // UndeterminedBindingError reports a feature valued by nothing but bindings that each
-// link one unspecified value of it, so none of them determines what it holds.
+// link one unspecified value of it, or bind it together with the same feature of other
+// objects a collection holds, so none of them determines what it holds.
 type UndeterminedBindingError struct {
 	Target   string
 	Binding  string
 	Endpoint string
+	// Across names the collection the binding's end path crosses to reach Target, if any.
+	Across string
 }
 
 func (e *UndeterminedBindingError) Error() string {
+	if e.Across != "" {
+		return fmt.Sprintf("%s: %s is bound by `%s` through every object %s holds; the model does not determine which of the bound values %s holds",
+			ErrBindingEnd, e.Target, e.Binding, e.Across, e.Target)
+	}
 	return fmt.Sprintf("%s: %s is bound by `%s`, which links one unspecified value of each end; the model does not determine which value %s holds",
 		ErrBindingEnd, e.Target, e.Binding, e.Endpoint)
 }
@@ -65,10 +72,35 @@ type bindingLocation struct {
 	path     string
 }
 
+// bindingEndpoint is one end of a binding: the feature its path reaches on every object
+// along the way, one per object of a collection crossed (KerML 1.0 §7.3.4.6), or an expression.
 type bindingEndpoint struct {
-	location bindingLocation
-	expr     ast.Node
-	scope    *symbols.Scope
+	locations []bindingLocation
+	expr      ast.Node
+	scope     *symbols.Scope
+}
+
+// spread reports a feature end reaching several objects or none: it holds their values
+// together, in object order, and no one object's part of them.
+func (e bindingEndpoint) spread() bool { return e.expr == nil && len(e.locations) != 1 }
+
+// carries reports whether the end reaches the feature value being resolved.
+func (e bindingEndpoint) carries(fv *FeatureValue, inst *Instance) bool {
+	for _, loc := range e.locations {
+		if bindingLocationCarries(loc, fv, inst) {
+			return true
+		}
+	}
+	return false
+}
+
+// across names the path an end crosses to reach its feature, "" for a feature of the owner.
+func (e bindingEndpoint) across() string {
+	if len(e.locations) == 0 {
+		return ""
+	}
+	loc := e.locations[0]
+	return strings.TrimSuffix(strings.TrimSuffix(loc.path, loc.name), ".")
 }
 
 type bindingAttempt struct {
@@ -245,18 +277,19 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 	var attempts []bindingAttempt
 	var undetermined *UndeterminedBindingError
 	for _, binding := range bindings {
-		partial, err := ctx.partialBinding(owner, targetInst, target, binding, key)
+		partial, across, err := ctx.partialBinding(owner, targetInst, target, binding, key)
 		if err != nil {
 			return result, err
 		}
 		if partial {
 			// A binding of one unspecified value per end constrains the ends without
 			// determining either: the value comes from a default, a write or a whole binding.
-			if undetermined == nil && target.Feature.DefaultValue == nil && !target.Written {
+			if undetermined == nil && target.Feature.DefaultValue == nil && !target.Written && !heldOnItsOwn(target) {
 				undetermined = &UndeterminedBindingError{
 					Target:   bindingLocationText(bindingLocation{instance: targetInst, name: key.feature}),
 					Binding:  ctx.bindingText(binding),
 					Endpoint: endpointName,
+					Across:   across,
 				}
 			}
 			continue
@@ -319,12 +352,32 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 	return result, nil
 }
 
-// partialBinding reports an end admitting fewer values than its feature holds, which links one of them
-// per link (KerML 1.0 §7.4.9.2); a feature holding fewer than an end's lower bound violates multiplicity.
+// partialBinding reports a binding that does not determine the target whole: an end admitting fewer
+// values than its feature holds links one of them per link (KerML 1.0 §7.4.9.2), and an end reaching
+// the target among the objects of a collection binds their values together, so a value the other
+// end holds on its own is no one object's; across names that collection. A feature holding fewer
+// than an end's lower bound violates multiplicity.
 func (ctx *Context) partialBinding(owner, targetInst *Instance, target *FeatureValue,
-	binding lower.Binding, key featureValueRef) (bool, error) {
+	binding lower.Binding, key featureValueRef) (partial bool, across string, err error) {
 	defer ctx.claimBinding(key, binding.Decl)()
-	partial := false
+	for end := range binding.Ends {
+		endpoint, err := ctx.resolveBindingEndpoint(owner, binding, end)
+		if err != nil {
+			return false, "", err
+		}
+		if !endpoint.spread() || !endpoint.carries(target, targetInst) {
+			continue
+		}
+		other, err := ctx.resolveBindingEndpoint(owner, binding, 1-end)
+		if err != nil {
+			return false, "", err
+		}
+		_, found, err := ctx.bindingEndpointValue(other, owner, false)
+		if err != nil || !found {
+			return false, "", err
+		}
+		return true, endpoint.across(), nil
+	}
 	for end := range binding.Ends {
 		stated, ok := ctx.model.RangeOf(binding.Ends[end].Multiplicity)
 		if !ok {
@@ -337,40 +390,58 @@ func (ctx *Context) partialBinding(owner, targetInst *Instance, target *FeatureV
 		}
 		endpoint, err := ctx.resolveBindingEndpoint(owner, binding, end)
 		if err != nil {
-			return false, err
+			return false, "", err
 		}
-		loc := endpoint.location
-		if loc.instance == nil {
+		if endpoint.expr != nil {
 			continue
 		}
-		fv := loc.instance.FeatureValues[loc.name]
-		declared := fv.Feature.Multiplicity.Upper
-		narrows := bounded && (declared.Infinite || (declared.Known && declared.Value > stated.Upper.Value))
+		narrows := bounded && endpointAdmitsMoreThan(endpoint, stated.Upper.Value)
 		if !narrows && !required {
 			continue
 		}
 		// The end being resolved counts what it holds on its own: reading it through
 		// its bindings is this very resolution, and cannot make the binding whole.
-		carries := bindingLocationCarries(loc, target, targetInst)
+		carries := endpoint.carries(target, targetInst)
 		var val Value
 		var found bool
 		if carries {
-			val, found, err = ctx.ownEndpointValue(loc)
+			val, found, err = ctx.ownEndpointValue(endpoint.locations[0])
 		} else {
 			val, found, err = ctx.bindingEndpointValue(endpoint, owner, false)
 		}
 		if err != nil {
-			return false, err
+			return false, "", err
 		}
 		count := int64(len(elementsOf(val)))
 		if found && required && count < stated.Lower.Value {
-			return false, ctx.bindingEndCountError(binding, end, stated, count)
+			return false, "", ctx.bindingEndCountError(binding, end, stated, count)
 		}
 		if narrows && (carries || !found || count == 0 || count > stated.Upper.Value) {
 			partial = true
 		}
 	}
-	return partial, nil
+	return partial, "", nil
+}
+
+// heldOnItsOwn reports a feature value holding what its own declaration gave it, not a binding.
+func heldOnItsOwn(fv *FeatureValue) bool {
+	return fv.Materialized && !fv.BindingDerived && fv.HeldValue().Kind != ValInvalid
+}
+
+// endpointAdmitsMoreThan reports whether the features an end reaches may hold more than n
+// values together, by their declared upper bounds.
+func endpointAdmitsMoreThan(endpoint bindingEndpoint, n int64) bool {
+	var total int64
+	for _, loc := range endpoint.locations {
+		declared := loc.instance.FeatureValues[loc.name].Feature.Multiplicity.Upper
+		if declared.Infinite {
+			return true
+		}
+		if declared.Known {
+			total += declared.Value
+		}
+	}
+	return total > n
 }
 
 // ownEndpointValue is what a feature holds without resolving its bindings: its
@@ -444,47 +515,35 @@ func (ctx *Context) attemptBinding(owner, targetInst *Instance, target *FeatureV
 		attempt.err = err
 		return attempt
 	}
-	leftCarries := left.location.instance != nil &&
-		bindingLocationCarries(left.location, target, targetInst)
-	rightCarries := right.location.instance != nil &&
-		bindingLocationCarries(right.location, target, targetInst)
+	leftCarries := left.carries(target, targetInst)
+	rightCarries := right.carries(target, targetInst)
 	if !leftCarries && !rightCarries {
+		return attempt
+	}
+	// An end reaching the target among several objects binds their values together, and
+	// so determines no one object's part: partialBinding reports the undetermined case.
+	if (leftCarries && left.spread()) || (rightCarries && right.spread()) {
 		return attempt
 	}
 	attempt.settled = !ctx.resolvingBindingEnd(left, leftCarries) && !ctx.resolvingBindingEnd(right, rightCarries)
 
-	// Read the other end first: an object it already holds is what the
-	// materializing end becomes, not a fresh object of its own.
 	var leftValue, rightValue Value
 	var leftSet, rightSet bool
 	if leftCarries {
-		rightValue, rightSet, err = ctx.bindingEndpointValue(right, owner, rightCarries)
-		if err == nil {
-			leftValue, leftSet, err = ctx.bindingEndpointValue(left, owner, !(rightSet && ctx.unmaterializedObjectEnd(left)))
-		}
+		leftValue, leftSet, rightValue, rightSet, err = ctx.readBindingEnds(owner, left, right, rightCarries)
 	} else {
-		leftValue, leftSet, err = ctx.bindingEndpointValue(left, owner, leftCarries)
-		if err == nil {
-			rightValue, rightSet, err = ctx.bindingEndpointValue(right, owner, !(leftSet && ctx.unmaterializedObjectEnd(right)))
-		}
+		rightValue, rightSet, leftValue, leftSet, err = ctx.readBindingEnds(owner, right, left, leftCarries)
 	}
 	if err != nil {
 		attempt.err = err
 		return attempt
 	}
-	if left.location.instance != nil &&
-		ctx.genuineBindingCycle(featureValueRef{
-			instance: left.location.instance.ID,
-			feature:  left.location.name,
-		}, binding.Decl) {
-		attempt.cycle = true
-	}
-	if right.location.instance != nil &&
-		ctx.genuineBindingCycle(featureValueRef{
-			instance: right.location.instance.ID,
-			feature:  right.location.name,
-		}, binding.Decl) {
-		attempt.cycle = true
+	for _, endpoint := range []bindingEndpoint{left, right} {
+		for _, loc := range endpoint.locations {
+			if ctx.genuineBindingCycle(featureValueRef{instance: loc.instance.ID, feature: loc.name}, binding.Decl) {
+				attempt.cycle = true
+			}
+		}
 	}
 	if attempt.cycle {
 		attempt.cycleFeatures = []string{
@@ -539,15 +598,57 @@ func (ctx *Context) attemptBinding(owner, targetInst *Instance, target *FeatureV
 			attempt.found = true
 		}
 	}
+	// The objects a spread end reaches keep their own parts of the bound values.
+	if attempt.assignment != nil && attempt.assignment.endpoint.spread() {
+		attempt.assignment = nil
+	}
 	return attempt
+}
+
+// readBindingEnds reads the other end first, so an object it already holds is what the carrying
+// end becomes rather than a fresh object of its own. A spread other end that holds nothing yet is
+// materialized only once the carrying end holds nothing of its own — a default included, but no
+// fresh object: its objects' values are their own, and cannot be assigned from the carrying end.
+func (ctx *Context) readBindingEnds(owner *Instance, carrying, other bindingEndpoint, otherCarries bool,
+) (carryingValue Value, carryingSet bool, otherValue Value, otherSet bool, err error) {
+	otherValue, otherSet, err = ctx.bindingEndpointValue(other, owner, otherCarries)
+	if err != nil {
+		return
+	}
+	if !otherSet && other.spread() {
+		carryingValue, carryingSet, err = ctx.bindingEndpointValue(carrying, owner, endpointDefaulted(carrying))
+		if err != nil || carryingSet {
+			return
+		}
+		otherValue, otherSet, err = ctx.bindingEndpointValue(other, owner, true)
+		return
+	}
+	carryingValue, carryingSet, err = ctx.bindingEndpointValue(carrying, owner, !(otherSet && ctx.unmaterializedObjectEnd(carrying)))
+	return
+}
+
+// endpointDefaulted reports a feature end whose every feature declares a default value.
+func endpointDefaulted(endpoint bindingEndpoint) bool {
+	for _, loc := range endpoint.locations {
+		if loc.instance.FeatureValues[loc.name].Feature.DefaultValue == nil {
+			return false
+		}
+	}
+	return len(endpoint.locations) != 0
 }
 
 // resolvingBindingEnd reports an end other than the one being resolved whose own
 // resolution is in progress, so what it holds is not yet known.
 func (ctx *Context) resolvingBindingEnd(endpoint bindingEndpoint, carries bool) bool {
-	loc := endpoint.location
-	return !carries && loc.instance != nil &&
-		ctx.resolvingBindings[featureValueRef{instance: loc.instance.ID, feature: loc.name}]
+	if carries {
+		return false
+	}
+	for _, loc := range endpoint.locations {
+		if ctx.resolvingBindings[featureValueRef{instance: loc.instance.ID, feature: loc.name}] {
+			return true
+		}
+	}
+	return false
 }
 
 func (ctx *Context) genuineBindingCycle(ref featureValueRef, binding *ast.Usage) bool {
@@ -571,47 +672,61 @@ func (ctx *Context) resolveBindingEndpoint(owner *Instance, binding lower.Bindin
 		}
 		return bindingEndpoint{}, fmt.Errorf("%w: empty endpoint", ErrBindingEnd)
 	}
-	loc, err := ctx.resolveBindingLocation(owner, path)
+	locations, err := ctx.resolveBindingLocations(owner, path)
 	if err != nil {
 		return bindingEndpoint{}, err
 	}
-	loc.path = path
-	return bindingEndpoint{location: loc}, nil
+	return bindingEndpoint{locations: locations}, nil
 }
 
-func (ctx *Context) resolveBindingLocation(owner *Instance, path string) (bindingLocation, error) {
+// resolveBindingLocations follows an end's path from owner to the named feature on every
+// object it reaches, visiting each object a collection-valued step holds, in order.
+func (ctx *Context) resolveBindingLocations(owner *Instance, path string) ([]bindingLocation, error) {
 	parts := strings.Split(path, ".")
 	if len(parts) == 0 || parts[0] == "" {
-		return bindingLocation{}, fmt.Errorf("%w: empty endpoint", ErrBindingEnd)
+		return nil, fmt.Errorf("%w: empty endpoint", ErrBindingEnd)
 	}
-	current := owner
+	reached := []*Instance{owner}
 	for _, part := range parts[:len(parts)-1] {
-		fv, err := current.GetFeatureValue(ctx, part)
-		if err != nil {
-			return bindingLocation{}, fmt.Errorf("%w %q: %w", ErrBindingEnd, path, err)
+		var next []*Instance
+		for _, current := range reached {
+			fv, err := current.GetFeatureValue(ctx, part)
+			if err != nil {
+				return nil, fmt.Errorf("%w %q: %w", ErrBindingEnd, path, err)
+			}
+			for _, held := range elementsOf(fv.HeldValue()) {
+				id, isObject := held.Object()
+				if !isObject {
+					return nil, fmt.Errorf("%w %q: %s is not an object", ErrBindingEnd, path, part)
+				}
+				obj, ok := ctx.instances[id]
+				if !ok {
+					return nil, fmt.Errorf("%w %q: instance %d is not materialized", ErrBindingEnd, path, id)
+				}
+				next = append(next, obj)
+			}
 		}
-		next, isObject := fv.HeldValue().Object()
-		if !isObject {
-			return bindingLocation{}, fmt.Errorf("%w %q: %s is not an object", ErrBindingEnd, path, part)
-		}
-		var ok bool
-		current, ok = ctx.instances[next]
-		if !ok {
-			return bindingLocation{}, fmt.Errorf("%w %q: instance %d is not materialized", ErrBindingEnd, path, next)
-		}
-	}
-	// A destroyed object's feature is neither read into nor written from a
-	// binding, whichever end of it the object is.
-	if err := ctx.checkNotDestroyed(current); err != nil {
-		return bindingLocation{}, fmt.Errorf("%w %q: %w", ErrBindingEnd, path, err)
+		reached = next
 	}
 	name := parts[len(parts)-1]
-	if _, ok := current.FeatureValues[name]; !ok {
-		return bindingLocation{}, fmt.Errorf("%w %q: feature %s not found", ErrBindingEnd, path, name)
+	locations := make([]bindingLocation, 0, len(reached))
+	for _, current := range reached {
+		// A destroyed object's feature is neither read into nor written from a
+		// binding, whichever end of it the object is.
+		if err := ctx.checkNotDestroyed(current); err != nil {
+			return nil, fmt.Errorf("%w %q: %w", ErrBindingEnd, path, err)
+		}
+		if _, ok := current.FeatureValues[name]; !ok {
+			return nil, fmt.Errorf("%w %q: feature %s not found", ErrBindingEnd, path, name)
+		}
+		locations = append(locations, bindingLocation{instance: current, name: name, path: path})
 	}
-	return bindingLocation{instance: current, name: name}, nil
+	return locations, nil
 }
 
+// bindingEndpointValue is what an end holds: its expression's value, its feature's value, or the
+// values of that feature on every object a spread end reaches, together and in order. A spread
+// end holds nothing while one of those values is undetermined: that object reports it when read.
 func (ctx *Context) bindingEndpointValue(endpoint bindingEndpoint, owner *Instance, materialize bool) (Value, bool, error) {
 	if endpoint.expr != nil {
 		value, err := ctx.EvalWithScopeOn(endpoint.expr, endpoint.scope, owner)
@@ -627,7 +742,28 @@ func (ctx *Context) bindingEndpointValue(endpoint bindingEndpoint, owner *Instan
 		}
 		return value, true, nil
 	}
-	loc := endpoint.location
+	if !endpoint.spread() {
+		return ctx.bindingLocationValue(endpoint.locations[0], materialize)
+	}
+	var all []Value
+	for _, loc := range endpoint.locations {
+		val, found, err := ctx.bindingLocationValue(loc, materialize)
+		var undetermined *UndeterminedBindingError
+		if errors.As(err, &undetermined) {
+			return Value{}, false, nil
+		}
+		if err != nil || !found {
+			return Value{}, false, err
+		}
+		all = append(all, elementsOf(val)...)
+	}
+	if err := ctx.chargeElements(int64(len(all))); err != nil {
+		return Value{}, false, err
+	}
+	return sequenceOf(all), true, nil
+}
+
+func (ctx *Context) bindingLocationValue(loc bindingLocation, materialize bool) (Value, bool, error) {
 	fv := loc.instance.FeatureValues[loc.name]
 	if fv.BindingDerived && materialize {
 		return Value{}, false, nil
@@ -672,19 +808,23 @@ func (ctx *Context) bindingEndpointValue(endpoint bindingEndpoint, owner *Instan
 // feature the run has not yet materialized, so materializing it would build a
 // fresh object rather than read one.
 func (ctx *Context) unmaterializedObjectEnd(endpoint bindingEndpoint) bool {
-	loc := endpoint.location
-	if loc.instance == nil {
-		return false
+	for _, loc := range endpoint.locations {
+		fv := loc.instance.FeatureValues[loc.name]
+		if !fv.Materialized && ctx.CompositeTypeOf(fv.Feature) != nil {
+			return true
+		}
 	}
-	fv := loc.instance.FeatureValues[loc.name]
-	return !fv.Materialized && ctx.CompositeTypeOf(fv.Feature) != nil
+	return false
 }
 
+// bindingEndpointDerived reports a feature end whose every value was assigned by a binding.
 func bindingEndpointDerived(endpoint bindingEndpoint) bool {
-	if endpoint.location.instance == nil {
-		return false
+	for _, loc := range endpoint.locations {
+		if !loc.instance.FeatureValues[loc.name].BindingDerived {
+			return false
+		}
 	}
-	return endpoint.location.instance.FeatureValues[endpoint.location.name].BindingDerived
+	return len(endpoint.locations) != 0
 }
 
 func (ctx *Context) assignBindingEndpoint(endpoint bindingEndpoint, val Value, binding lower.Binding, end int) error {
@@ -692,7 +832,12 @@ func (ctx *Context) assignBindingEndpoint(endpoint bindingEndpoint, val Value, b
 		return fmt.Errorf("%w: cannot assign %s from %s",
 			ErrBindingEnd, ctx.bindingEndpointText(binding, end), ctx.bindingEndpointText(binding, 1-end))
 	}
-	loc := endpoint.location
+	if endpoint.spread() {
+		// The objects a spread end reaches each hold a part of the value; which part is not stated.
+		return fmt.Errorf("%w: cannot assign %s from %s through every object %s holds",
+			ErrBindingEnd, ctx.bindingEndpointText(binding, end), ctx.bindingEndpointText(binding, 1-end), endpoint.across())
+	}
+	loc := endpoint.locations[0]
 	return ctx.assignBindingValue(loc.instance, loc.instance.FeatureValues[loc.name], loc.name, val)
 }
 

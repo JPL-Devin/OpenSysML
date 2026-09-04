@@ -28,7 +28,13 @@
   binding that links one unspecified value of each end (`bind [0..1] tf.edges = [0..1] tfe`)
   is reported as the binding end it cannot resolve rather than answered with a witness — so
   `box.vertices` and `box.tfe`…`box.urre` are typed errors naming the binding — and never
-  decides a feature also bound whole, whatever order the bindings are declared in. Only an
+  decides a feature also bound whole, whatever order the bindings are declared in. A binding end
+  whose path crosses a collection (`bind [0..*] groups.items = [0..*] allItems`) reaches every
+  object the collection holds, in order, and binds their values together — the other end is
+  their union, counted as one sequence against the end's multiplicity — while each object keeps
+  the part it holds on its own and one holding nothing of its own is a typed error naming the
+  collection, not a partition the runtime picked; and `bind [m] a = [m] b` now states `m` as the
+  first end's multiplicity, as `binding [1] bind [m] a = [m] b` always did. Only an
   argument a calc's returns pass on is held by the feature its call values, so reading any
   other argument computes neither that feature nor the object the call does return. An optional
   feature holding nothing is the empty sequence on every surface: `%features box` prints

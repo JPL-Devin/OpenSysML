@@ -1901,7 +1901,13 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 	if kind == ast.UsageBinding {
 		// Check for multiplicity before name: binding [mult] name ...
 		if p.at(lexer.LBracket) {
-			u.Multiplicity = p.parseMultiplicity()
+			if keyword == "bind" {
+				// `bind [mult] a = b` declares no connector, so the multiplicity is
+				// the first end's (SysML.xtext:1020 BindingConnectorAsUsage, ConnectorEnd).
+				p.parseBindingEnd(u)
+			} else {
+				u.Multiplicity = p.parseMultiplicity()
+			}
 		}
 
 		// The UsageDeclaration before `bind` may specialize without naming the
@@ -1910,8 +1916,8 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 
 		// `binding { … }` states its ends as body members and so names nothing
 		// at all (KerML.xtext BindingConnectorDeclaration).
-		if p.at(lexer.LBrace) || p.at(lexer.Semicolon) {
-			// no declaration and no ends before the body
+		if p.at(lexer.LBrace) || p.at(lexer.Semicolon) || hasBindingEnd(u) {
+			// no declaration and no ends before the body, or the first end is stated
 		} else if p.atKeyword("bind") {
 			// `binding [mult] bind [mult] src = [mult] tgt` states the connector's
 			// ends after the `bind` keyword instead of naming the connector, so the
