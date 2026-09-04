@@ -178,7 +178,10 @@ file and renames a definition:
 Each formatting edit touches only the characters that change; lines the formatter would leave
 alone get no edit at all, and the range request answers only the edits on the selected lines. The
 rename edits the declaration and the `part w : Wheel` reference together, because it works from
-name resolution rather than textual replacement.
+name resolution rather than textual replacement. A rename rewrites only the name under the
+cursor — an element's long name or its `<short>` name — where it is declared and wherever a
+reference spells it, so `part a : O;` still resolves and is left as written when `part def <O> Old;`
+is renamed to `Fresh`, and renaming from `<O>` rewrites that reference and not the `Old` ones.
 
 To check the installation in an editor, open a file containing
 `part Wheel { attribute diameter = 16.0; }` and hover over `Wheel`.

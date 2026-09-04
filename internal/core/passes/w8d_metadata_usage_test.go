@@ -29,8 +29,7 @@ func TestW8DMetadataBodyFeatureMustRedefineOwningTypeFeature(t *testing.T) {
 }
 
 // The reference's INVALID_METADATA_FEATURE_METACLASS_NOT_ABSTRACT on the
-// `metadata … : A` form, which MetadataTypePass (prefix annotations) does not
-// read. A prefix annotation must stay reported exactly once, by that pass.
+// `metadata … : A` form; either spelling is reported exactly once.
 func TestW8DMetadataUsageTypeMustBeConcrete(t *testing.T) {
 	src := `package Test {
 	abstract metadata def Abs;
@@ -60,6 +59,60 @@ func TestW8DMetadataUsageTypeMustBeConcrete(t *testing.T) {
 	}
 }
 
+// An explicit `:>>` in a usage body must name a feature of the metadata
+// definition or of one it specializes, nested bodies included.
+func TestW8DMetadataUsageBodyRedefinitionMustNameAnOwningTypeFeature(t *testing.T) {
+	src := `package Test {
+	attribute g;
+	metadata def Base { attribute inherited; }
+	metadata def A :> Base {
+		attribute x;
+		attribute u {
+			attribute v;
+		}
+	}
+	item p { attribute own; }
+	metadata m : A about p {
+		:>> x = 1;
+		:>> inherited = 2;
+		:>> g = 3;
+		:>> p::own = 4;
+		u {
+			:>> v = 5;
+			:>> g;
+		}
+	}
+}
+`
+	w8dWantLines(t, src, "metadata-body-feature", 14, 15, 18)
+}
+
+// A metadata usage body binds model-level evaluable values, at any nesting depth
+// (validateMetadataFeatureBody, Expression::isModelLevelEvaluable).
+func TestW8DMetadataUsageBodyValuesMustBeModelLevelEvaluable(t *testing.T) {
+	src := `package Test {
+	metadata def A {
+		attribute x;
+		attribute y;
+		attribute u {
+			attribute v;
+			attribute w;
+		}
+	}
+	item p { attribute own; }
+	metadata m : A about p {
+		:>> x = ~3;
+		:>> y = 1 + 2;
+		u {
+			:>> v = ~3;
+			:>> w = 4;
+		}
+	}
+}
+`
+	w8dWantLines(t, src, "metadata-value-not-evaluable", 12, 15)
+}
+
 func TestW8DLegalMetadataAnnotationsStaySilent(t *testing.T) {
 	src := `package Test {
 	metadata def A {
@@ -84,10 +137,13 @@ func TestW8DLegalMetadataAnnotationsStaySilent(t *testing.T) {
 	}
 	metadata m : A about p {
 		x = 4;
+		u {
+			v = 5 + 1;
+		}
 	}
 }
 `
-	for _, code := range []string{"metadata-body-feature", "metadata-concrete-type"} {
+	for _, code := range []string{"metadata-body-feature", "metadata-concrete-type", "metadata-value-not-evaluable"} {
 		if lines := w8dLines(t, src, code); len(lines) != 0 {
 			t.Fatalf("%s on a legal model at lines %v", code, lines)
 		}

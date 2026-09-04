@@ -4,7 +4,6 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
-	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -12,11 +11,9 @@ import (
 // INVALID_METADATA_FEATURE_BODY.
 const msgMetadataBodyFeature = "Must redefine an owning-type feature"
 
-// W8DMetadataUsagePass checks a `metadata m : A { … }` usage against the
-// metadata definition it is typed by: every feature its body writes must be one
-// of the definition's own (KerML §7.5), and the definition must be concrete.
-// Prefix annotations are RedefinitionConformancePass's (body features) and
-// MetadataTypePass's (concrete type).
+// W8DMetadataUsagePass checks that every feature in a `metadata m : A { … }` usage body
+// redefines one of A's own and binds a model-level evaluable value (KerML §7.5);
+// the type itself is MetadataTypePass's.
 type W8DMetadataUsagePass struct{}
 
 func (W8DMetadataUsagePass) Level() PassLevel { return LevelConstraint }
@@ -60,16 +57,16 @@ func (mc *w8dMetadataChecker) checkMetadataUsage(sym *symbols.Symbol, u *ast.Usa
 		if !ok {
 			continue
 		}
-		mc.checkAnnotation(sym.OwnerScope, qn, u.Members, u.Span())
+		mc.checkBody(sym, qn, u.Members)
 		return
 	}
 }
 
-func (mc *w8dMetadataChecker) checkAnnotation(scope *symbols.Scope, typeRef *ast.QualifiedName, body []ast.Node, span source.Span) {
-	if scope == nil || typeRef == nil {
+func (mc *w8dMetadataChecker) checkBody(sym *symbols.Symbol, typeRef *ast.QualifiedName, body []ast.Node) {
+	if sym.OwnerScope == nil || typeRef == nil {
 		return
 	}
-	typ, ok := mc.resolver.ResolveQualified(scope, typeRef)
+	typ, ok := mc.resolver.ResolveQualified(sym.OwnerScope, typeRef)
 	if !ok || typ == nil {
 		return
 	}
@@ -78,45 +75,27 @@ func (mc *w8dMetadataChecker) checkAnnotation(scope *symbols.Scope, typeRef *ast
 	} else {
 		return
 	}
-	if symbols.IsAbstract(typ) {
-		mc.diags = append(mc.diags, Diagnostic{
-			Severity: SeverityError,
-			Span:     span,
-			Message:  msgMetadataConcreteType,
-			Code:     "metadata-concrete-type",
-			Source:   "constraint",
-		})
+	// A type that is no concrete metaclass is MetadataTypePass's report; its
+	// body would only repeat it.
+	if !semantics.IsMetadataType(typ) || symbols.IsAbstract(typ) {
 		return
 	}
-	mc.checkBody(typ, body)
-}
-
-// checkBody reports every feature of an annotation body that names no feature of
-// the annotated type, and recurses into the body of the ones that do.
-func (mc *w8dMetadataChecker) checkBody(typ *symbols.Symbol, body []ast.Node) {
-	for _, member := range body {
-		if mem, ok := member.(*ast.Membership); ok {
-			member = mem.Member
-		}
-		u, ok := member.(*ast.Usage)
-		if !ok {
-			continue
-		}
-		name, _ := ast.EffectiveName(u)
-		if name == "" {
-			continue
-		}
-		feature, found := mc.model.LookupMember(typ, name)
-		if !found || feature == nil {
-			mc.diags = append(mc.diags, Diagnostic{
-				Severity: SeverityError,
-				Span:     u.Span(),
-				Message:  msgMetadataBodyFeature,
-				Code:     "metadata-body-feature",
-				Source:   "constraint",
-			})
-			continue
-		}
-		mc.checkBody(feature, u.Members)
+	for _, node := range mc.model.MetadataBodyViolationsOf(typ, sym.Scope, body) {
+		mc.diags = append(mc.diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     node.Span(),
+			Message:  msgMetadataBodyFeature,
+			Code:     "metadata-body-feature",
+			Source:   "constraint",
+		})
+	}
+	for _, value := range mc.model.MetadataBodyInevaluableValuesOf(sym.Scope, body) {
+		mc.diags = append(mc.diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     metadataValueSpan(body, value),
+			Message:  msgFilterNotEvaluable,
+			Code:     "metadata-value-not-evaluable",
+			Source:   "constraint",
+		})
 	}
 }

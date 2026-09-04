@@ -6,9 +6,9 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// isMetadataBodyScope reports whether scope is a metadata annotation body —
-// the anonymous scope 11G builds for the members of `@A { ... }`.
-func isMetadataBodyScope(scope *symbols.Scope) bool {
+// isAnnotationBodyScope reports whether scope is the anonymous scope built for
+// the members of a `@A { ... }` annotation body.
+func isAnnotationBodyScope(scope *symbols.Scope) bool {
 	if scope == nil || !scope.BodyLocal() {
 		return false
 	}
@@ -16,23 +16,11 @@ func isMetadataBodyScope(scope *symbols.Scope) bool {
 	return ok
 }
 
-// enclosingMetadataBody returns the nearest enclosing metadata annotation body
-// scope, or nil — a cursor on a body declaration sits in that declaration's own
-// child scope, one level below the body.
-func enclosingMetadataBody(scope *symbols.Scope) *symbols.Scope {
-	for ; scope != nil; scope = scope.Parent() {
-		if isMetadataBodyScope(scope) {
-			return scope
-		}
-	}
-	return nil
-}
-
-// metadataBodyDeclAt returns the metadata body declaration whose own name
-// contains offset, or nil when the cursor is elsewhere.
-func metadataBodyDeclAt(scope *symbols.Scope, offset int) *symbols.Symbol {
+// usageNameAt returns the usage declaration whose own name contains offset, or
+// nil when the cursor is elsewhere.
+func usageNameAt(scope *symbols.Scope, offset int) *symbols.Symbol {
 	sym := symbolAtOffset(scope, offset)
-	if sym == nil || !isMetadataBodyScope(sym.OwnerScope) {
+	if sym == nil {
 		return nil
 	}
 	usage, ok := sym.Decl.(*ast.Usage)
