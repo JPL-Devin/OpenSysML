@@ -13,6 +13,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
+	"github.com/Open-MBEE/OpenSysML/internal/core/rdf/ontology"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
@@ -833,10 +834,10 @@ func (d *decoder) positionalSuccessions(children []*element) ([]*element, error)
 		return kept[len(kept)-1]
 	}
 	// sourceBefore is the member a `then` after the last skip members of kept
-	// sequences from: like the parser, it passes over edges to the member before.
+	// sequences from: like the parser, it passes over edges and non-features.
 	sourceBefore := func(skip int) *element {
 		for i := len(kept) - 1 - skip; i >= 0; i-- {
-			if !isEdgeMember(kept[i]) {
+			if isSuccessionSource(kept[i]) {
 				return kept[i]
 			}
 		}
@@ -879,11 +880,22 @@ func (d *decoder) positionalSuccessions(children []*element) ([]*element, error)
 	return kept, nil
 }
 
-// isEdgeMember reports whether a member is an edge between other members, the
-// rule the parser reads `then` by (parser.isEdgeMember).
-func isEdgeMember(el *element) bool {
-	kind, ok := metaclassUsage[el.metaclass]
-	return ok && kind.IsEdge()
+// isSuccessionSource is ast.IsSuccessionSource read off a metaclass: a feature that
+// is not an edge. A subaction membership stands for the action it owns.
+func isSuccessionSource(el *element) bool {
+	if kind, ok := metaclassUsage[el.metaclass]; ok {
+		return !kind.IsEdge()
+	}
+	switch el.metaclass {
+	case mSubaction:
+		return true
+	case mAlias, mFilter, mMultiplicity, mDeferMember:
+		return false
+	}
+	if _, declared := ontology.LookupClass(el.metaclass); declared {
+		return ontology.IsAncestorOrSelf(el.metaclass, "Feature")
+	}
+	return true
 }
 
 // answersTo returns the end a `then` sequencing from member el records: the name
