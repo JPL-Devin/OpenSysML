@@ -265,6 +265,7 @@ func TestConstructorObjectAndCollectionArgumentsAreChecked(t *testing.T) {
 		"collection":      report + `send new Report(tags = ("a", "b", "c")) to ground;`,
 		"reference count": report + `attribute names : String[*]; send new Report(tags = names) to ground;`,
 		"redefined":       report + `send new Sub(src = new Telemetry(1, "x", 2)) to ground;`,
+		"scalar feature":  report + `send new Report(code = frames) to ground;`,
 	}
 	for name, send := range silent {
 		t.Run(name, func(t *testing.T) {
@@ -274,15 +275,18 @@ func TestConstructorObjectAndCollectionArgumentsAreChecked(t *testing.T) {
 		})
 	}
 	reported := map[string]struct{ send, at, want string }{
-		"feature":            {send: report + `send new Report(src = ground) to ground;`, at: "ground", want: "src of Report is typed by Telemetry; cannot bind a value of type Station"},
-		"positional":         {send: report + `send new Report(ground) to ground;`, at: "ground", want: "src of Report is typed by Telemetry; cannot bind a value of type Station"},
-		"constructor":        {send: report + `send new Report(src = new Station()) to ground;`, at: "new Station()", want: "src of Report is typed by Telemetry; cannot bind a value of type Station"},
-		"literal":            {send: report + `send new Report(where = 3) to ground;`, at: "3", want: "where of Report is typed by Station; cannot bind a value of type Natural"},
-		"redefined":          {send: report + `send new Sub(src = ground) to ground;`, at: "ground", want: "src of Sub is typed by Telemetry; cannot bind a value of type Station"},
-		"too few":            {send: report + `send new Report(tags = "a") to ground;`, at: `"a"`, want: "tags of Report: 1 value(s) bound to a feature with multiplicity lower bound 2"},
-		"too many":           {send: report + `send new Report(code = (1, 2)) to ground;`, at: "(1, 2)", want: "code of Report: 2 value(s) bound to a feature with multiplicity upper bound 1"},
-		"redefined too few":  {send: report + `send new Log(tags = "a") to ground;`, at: `"a"`, want: "tags of Log: 1 value(s) bound to a feature with multiplicity lower bound 2"},
-		"positional too few": {send: report + `send new Report(new Telemetry(1, "x", 2), ground, "a") to ground;`, at: `"a"`, want: "tags of Report: 1 value(s) bound to a feature with multiplicity lower bound 2"},
+		"feature":                       {send: report + `send new Report(src = ground) to ground;`, at: "ground", want: "src of Report is typed by Telemetry; cannot bind a value of type Station"},
+		"positional":                    {send: report + `send new Report(ground) to ground;`, at: "ground", want: "src of Report is typed by Telemetry; cannot bind a value of type Station"},
+		"constructor":                   {send: report + `send new Report(src = new Station()) to ground;`, at: "new Station()", want: "src of Report is typed by Telemetry; cannot bind a value of type Station"},
+		"literal":                       {send: report + `send new Report(where = 3) to ground;`, at: "3", want: "where of Report is typed by Station; cannot bind a value of type Natural"},
+		"redefined":                     {send: report + `send new Sub(src = ground) to ground;`, at: "ground", want: "src of Sub is typed by Telemetry; cannot bind a value of type Station"},
+		"object into scalar":            {send: report + `send new Report(code = ground) to ground;`, at: "ground", want: "code of Report is typed by Integer; cannot bind a value of type Station"},
+		"constructed into scalar":       {send: report + `send new Report(code = new Station()) to ground;`, at: "new Station()", want: "code of Report is typed by Integer; cannot bind a value of type Station"},
+		"positional object into scalar": {send: `send new Telemetry(ground) to ground;`, at: "ground", want: "frames of Telemetry is typed by Integer; cannot bind a value of type Station"},
+		"too few":                       {send: report + `send new Report(tags = "a") to ground;`, at: `"a"`, want: "tags of Report: 1 value(s) bound to a feature with multiplicity lower bound 2"},
+		"too many":                      {send: report + `send new Report(code = (1, 2)) to ground;`, at: "(1, 2)", want: "code of Report: 2 value(s) bound to a feature with multiplicity upper bound 1"},
+		"redefined too few":             {send: report + `send new Log(tags = "a") to ground;`, at: `"a"`, want: "tags of Log: 1 value(s) bound to a feature with multiplicity lower bound 2"},
+		"positional too few":            {send: report + `send new Report(new Telemetry(1, "x", 2), ground, "a") to ground;`, at: `"a"`, want: "tags of Report: 1 value(s) bound to a feature with multiplicity lower bound 2"},
 	}
 	for name, c := range reported {
 		t.Run(name, func(t *testing.T) {

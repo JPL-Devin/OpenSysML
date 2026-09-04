@@ -853,8 +853,10 @@ func (ec *exprChecker) checkFeatureBinding(scope *symbols.Scope, arg ast.Node, g
 	if !ok {
 		return
 	}
-	if want := ec.model.PrimTypeOf(feature); want != semantics.PrimUnknown {
-		if got != semantics.PrimUnknown && !bindable(arg, got, want) {
+	// An argument with no scalar type (an object, a constructor) is checked by
+	// conformance against the feature's types whether or not those are scalar.
+	if want := ec.model.PrimTypeOf(feature); want != semantics.PrimUnknown && got != semantics.PrimUnknown {
+		if !bindable(arg, got, want) {
 			ec.errorf(arg.Span(), "%s of %s expects %s, found %s", feature.Name, typ.Name, want, got)
 		}
 	} else {
