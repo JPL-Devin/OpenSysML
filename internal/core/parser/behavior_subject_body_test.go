@@ -47,7 +47,7 @@ func TestSubjectUnrestrictedName(t *testing.T) {
 	pkg := root.Members[0].(*ast.Membership).Member.(*ast.Package)
 	def := pkg.Members[0].(*ast.Membership).Member.(*ast.Definition)
 	subj := def.Members[0].(*ast.SubjectMember)
-	if subj.Name != "my subject" {
-		t.Errorf("Name = %q, want %q", subj.Name, "my subject")
+	if subj.Ident.Name != "my subject" {
+		t.Errorf("Name = %q, want %q", subj.Ident.Name, "my subject")
 	}
 }
