@@ -1,0 +1,253 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="ThenPastConnectors" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Step"))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Widget"))
+      (Membership visibility="default"
+        (Definition kind="port" abstract=false variation=false name="Plug"))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterConnect"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="p" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Widget
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="q" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Widget
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="connect"
+              (ConnectorEnd target="p"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="q"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="q" target="b")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterNamedConnection"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="p" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Widget
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="q" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Widget
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="connection" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="p"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="q"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="q" target="b")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterInterface"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="port" name="p1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Plug
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="port" name="p2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Plug conjugated=true
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="interface" name="i" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="p1"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="p2"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="p2" target="b")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterAllocate"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="p" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Widget
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="q" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Widget
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="allocation" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="allocate"
+              (ConnectorEnd target="p"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="q"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="q" target="b")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterNamedAllocation"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="p" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Widget
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="q" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Widget
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="allocation" name="al" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="p"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="q"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="q" target="b")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterSeveral"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="p" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Widget
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="q" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Widget
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="connect"
+              (ConnectorEnd target="p"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="q"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="allocation" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="allocate"
+              (ConnectorEnd target="p"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="q"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="bind"
+              (Relationship kind="references" target=p
+                (*ast.QualifiedName))
+              (FeatureReference name="q")))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="q" target="b")))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Structural"
+          (Membership visibility="default"
+            (Usage kind="part" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Widget
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="p" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Widget
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="q" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Widget
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="connect"
+              (ConnectorEnd target="p"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="q"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="allocation" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="allocate"
+              (ConnectorEnd target="p"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="q"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Widget
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="q" target="b")))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Ports"
+          (Membership visibility="default"
+            (Usage kind="part" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Widget
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="port" name="p1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Plug
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="port" name="p2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Plug conjugated=true
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="interface" name="i" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="p1"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="p2"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Widget
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="p2" target="b")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="AfterConnectionBody"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="p" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Widget
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="q" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Widget
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="connection" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="p"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="q"
+                (*ast.QualifiedName))
+              (Membership visibility="default"
+                (Documentation locale=""))))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Step
+                (*ast.QualifiedName))))
+          (SuccessionEdge source="q" target="b"))))))
