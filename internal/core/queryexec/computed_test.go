@@ -390,6 +390,42 @@ calc def Flags :> Query {
 	}
 }
 
+// An enumeration definition reads isVariation = true without declaring the
+// modifier, as the metamodel derives it.
+func TestExecuteComputedEnumerationVariationFlag(t *testing.T) {
+	fixture := loadExecutionFixture(t, `
+package Palette {
+	enum def Color { red; green; }
+	attribute def Plain;
+}
+calc def Variations :> Query {
+	in root : Element;
+	Project(
+		source = Descendants(source = root, maxDepth = 1),
+		properties = ("name"),
+		columns = (Column(name = "variation", expression = SysML::Definition::isVariation ?? false))
+	)
+}`)
+	result, err := fixture.execute(t, "Variations", Bindings{
+		"root": {ElementValue(fixture.symbol(t, "Palette"))},
+	}, Options{})
+	if err != nil {
+		t.Fatalf("execute Variations: %v", err)
+	}
+	values := make(map[string]bool)
+	for _, row := range result.Rows() {
+		name, _ := row.Cells()[0].Values()[0].String()
+		value, ok := row.Cells()[1].Values()[0].Boolean()
+		if !ok {
+			t.Fatalf("variation cell for %s = %+v", name, row.Cells()[1].Values())
+		}
+		values[name] = value
+	}
+	if !values["Color"] || values["Plain"] {
+		t.Fatalf("isVariation = %+v, want Color true and Plain false", values)
+	}
+}
+
 func TestExecuteComputedMultiValuedFeatureIsTyped(t *testing.T) {
 	fixture := loadExecutionFixture(t, `
 part def Box {
