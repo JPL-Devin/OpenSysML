@@ -574,6 +574,45 @@ func (c OwnedConstraint) EffectiveName() (string, source.Span) {
 	return "", source.Span{}
 }
 
+// NamingFeature returns the relationship naming a subject declared without a
+// name, as for a usage: `subject <s> :>> vehicle;` answers to `vehicle`.
+func (m *SubjectMember) NamingFeature() *Relationship {
+	if m == nil || m.Ident.Name != "" {
+		return nil
+	}
+	return namingRelationship(m.Relationships, true)
+}
+
+// EffectiveName returns the name the subject answers to: its declared name,
+// else the name its naming feature supplies.
+func (m *SubjectMember) EffectiveName() (string, source.Span) {
+	if m == nil {
+		return "", source.Span{}
+	}
+	if m.Ident.Name != "" {
+		return m.Ident.Name, m.Ident.NameSpan
+	}
+	if rel := m.NamingFeature(); rel != nil {
+		return TargetName(rel.Target)
+	}
+	return "", source.Span{}
+}
+
+// DeclNamingFeature is NamingFeature over every declaration that may borrow its
+// name: a usage, a requirement subject or an assume/require constraint.
+func DeclNamingFeature(decl Node) *Relationship {
+	if oc, ok := OwnedConstraintOf(decl); ok {
+		return oc.NamingFeature()
+	}
+	switch d := decl.(type) {
+	case *Usage:
+		return NamingFeature(d)
+	case *SubjectMember:
+		return d.NamingFeature()
+	}
+	return nil
+}
+
 // Phase C4: State Body Members
 
 // EntryMember represents entry behavior in a state body.

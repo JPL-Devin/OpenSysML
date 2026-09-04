@@ -66,3 +66,50 @@ func TestBuildRequirementMemberShortNameKeys(t *testing.T) {
 		}
 	}
 }
+
+// A redefining subject, assume or require member without a name of its own takes
+// the redefined feature's name (KerML 7.3.4.5), as `part <p> :>> x` does, and is
+// registered under that name and its short name alike.
+func TestBuildRequirementMemberShortNameEffectiveName(t *testing.T) {
+	root := build(t, `package P {
+	part def T;
+	constraint def C;
+	requirement def R {
+		subject x : T;
+		assume constraint ac : C;
+		require constraint rc : C;
+	}
+	requirement def R2 :> R {
+		subject <s> :>> x;
+		assume constraint <a> :>> ac;
+		require constraint <r> :>> rc;
+	}
+}`)
+	pkg, ok := root.LookupLocal("P")
+	if !ok || pkg.Scope == nil {
+		t.Fatal("P not found")
+	}
+	req, ok := pkg.Scope.LookupLocal("R2")
+	if !ok || req.Scope == nil {
+		t.Fatal("R2 not found")
+	}
+	for _, p := range []struct{ short, name string }{{"s", "x"}, {"a", "ac"}, {"r", "rc"}} {
+		byShort, ok := req.Scope.LookupLocal(p.short)
+		if !ok {
+			t.Fatalf("short name %q not found in R2", p.short)
+		}
+		byName, ok := req.Scope.LookupLocal(p.name)
+		if !ok {
+			t.Fatalf("redefined name %q not found in R2", p.name)
+		}
+		if byShort != byName {
+			t.Errorf("<%s> and %q map to different symbols", p.short, p.name)
+		}
+		if byShort.Name != p.name || byShort.ShortName != p.short {
+			t.Errorf("<%s> = %q <%s>, want %q <%s>", p.short, byShort.Name, byShort.ShortName, p.name, p.short)
+		}
+		if !byShort.EffectiveName || byShort.NamingTarget == nil {
+			t.Errorf("<%s> effective=%v target=%v; want a name borrowed from its redefinition", p.short, byShort.EffectiveName, byShort.NamingTarget)
+		}
+	}
+}

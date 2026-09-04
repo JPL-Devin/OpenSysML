@@ -734,13 +734,13 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members 
 		isSubject := false
 		switch rm := member.node.(type) {
 		case *ast.SubjectMember:
-			what, names, expr, isSubject = "subject", bindingNames(rm.Ident.Name, rm.Ident.ShortName), rm.BindingExpr, true
+			what, names, expr, isSubject = "subject", ctx.memberNames(sym, member, rm.Ident.Name, rm.Ident.ShortName), rm.BindingExpr, true
 		case *ast.Usage:
 			switch rm.Kind {
 			case ast.UsageSubject:
-				names, isSubject = bindingNames(effectiveName(rm), rm.Ident.ShortName), true
+				names, isSubject = ctx.memberNames(sym, member, effectiveName(rm), rm.Ident.ShortName), true
 			case ast.UsageActor:
-				what, names, expr = "actor", bindingNames(effectiveName(rm), rm.Ident.ShortName), rm.Value
+				what, names, expr = "actor", ctx.memberNames(sym, member, effectiveName(rm), rm.Ident.ShortName), rm.Value
 			}
 		default:
 			continue
@@ -752,6 +752,13 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members 
 			continue
 		}
 		if expr == nil {
+			// A redeclaration valuing nothing reads the value the feature it
+			// redefines binds, under its own names too.
+			if value, ok := boundUnder(bindings, names); ok {
+				for _, name := range names {
+					bindings[name] = value
+				}
+			}
 			continue
 		}
 		value, err := evalIn(member.scope).Eval(expr)
@@ -763,6 +770,39 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members 
 		}
 	}
 	return bindings, nil
+}
+
+// memberNames are the names a condition may read a bound member of owner by: its
+// own and those of every feature it redefines, one feature with it (KerML §7.3.4.5).
+func (ctx *Context) memberNames(owner *symbols.Symbol, member scopedMember, name, shortName string) []string {
+	names := bindingNames(name, shortName)
+	memberSym := memberSymbol(member.scope, member.node)
+	if memberSym == nil {
+		return names
+	}
+	seen := make(map[string]bool, len(names))
+	for _, n := range names {
+		seen[n] = true
+	}
+	for _, redefined := range ctx.redefinedFeatures(memberSym, owner) {
+		for _, n := range bindingNames(redefined.Name, redefined.ShortName) {
+			if !seen[n] {
+				seen[n] = true
+				names = append(names, n)
+			}
+		}
+	}
+	return names
+}
+
+// boundUnder returns the value bindings hold under any of names.
+func boundUnder(bindings map[string]Value, names []string) (Value, bool) {
+	for _, name := range names {
+		if value, ok := bindings[name]; ok {
+			return value, true
+		}
+	}
+	return Value{}, false
 }
 
 // bindingNames are the names a condition may read a bound member by: its name
@@ -945,14 +985,14 @@ func (ctx *Context) CheckRequirementOn(sym *symbols.Symbol, scope *symbols.Scope
 		negated:  NegatedDecl(sym),
 	}, conds)
 	if err != nil {
-		err = unboundSubjectError(err, "requirement", sym.Name, unboundSubjectNames(members, subject.instance))
+		err = unboundSubjectError(err, "requirement", sym.Name, ctx.unboundSubjectNames(sym, members, subject.instance))
 	}
 	return ctx.checkResultOf(holds, subject), err
 }
 
 // unboundSubjectNames are the subjects the members declare that nothing supplies
 // a value for: no binding expression, no object supplied from outside.
-func unboundSubjectNames(members []scopedMember, subject *Instance) map[string]bool {
+func (ctx *Context) unboundSubjectNames(sym *symbols.Symbol, members []scopedMember, subject *Instance) map[string]bool {
 	if subject != nil {
 		return nil
 	}
@@ -961,13 +1001,13 @@ func unboundSubjectNames(members []scopedMember, subject *Instance) map[string]b
 		switch rm := member.node.(type) {
 		case *ast.SubjectMember:
 			if rm.BindingExpr == nil {
-				for _, name := range bindingNames(rm.Ident.Name, rm.Ident.ShortName) {
+				for _, name := range ctx.memberNames(sym, member, rm.Ident.Name, rm.Ident.ShortName) {
 					names[name] = true
 				}
 			}
 		case *ast.Usage:
 			if rm.Kind == ast.UsageSubject {
-				for _, name := range bindingNames(effectiveName(rm), rm.Ident.ShortName) {
+				for _, name := range ctx.memberNames(sym, member, effectiveName(rm), rm.Ident.ShortName) {
 					names[name] = true
 				}
 			}

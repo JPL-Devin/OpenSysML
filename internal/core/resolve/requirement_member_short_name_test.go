@@ -25,6 +25,10 @@ const requirementMemberShortNameModel = `package P {
 	requirement def R3 :> R {
 		subject <s2> y :>> R::s;
 	}
+	requirement def R4 :> R {
+		subject <alias> :>> x;
+		require constraint { alias.v == x.v }
+	}
 }`
 
 // The short name of a subject, assume or require member resolves wherever the
@@ -83,6 +87,53 @@ func TestRequirementMemberShortNamesResolve(t *testing.T) {
 	if local(t, r3.Scope, "s2") != local(t, r3.Scope, "y") {
 		t.Error("R3's subject is not one symbol under both its names")
 	}
+
+	// A redefining subject with a short name but no name of its own takes the
+	// redefined feature's name (KerML 7.3.4.5), as `part <p> :>> x` does: R4's
+	// subject is one symbol under `alias` and `x`, its `:>> x` names R's subject
+	// and its condition reads its own subject by either name.
+	r4 := local(t, pkg.Scope, "R4")
+	aliased := local(t, r4.Scope, "alias")
+	if aliased != local(t, r4.Scope, "x") {
+		t.Error("R4's subject is not one symbol under `alias` and `x`")
+	}
+	if !aliased.EffectiveName || aliased.NamingTarget == nil || aliased.Name != "x" || aliased.ShortName != "alias" {
+		t.Errorf("R4's subject = %q <%s> effective=%v target=%v; want x <alias> named by its redefinition",
+			aliased.Name, aliased.ShortName, aliased.EffectiveName, aliased.NamingTarget)
+	}
+	inherited := local(t, req.Scope, "x")
+	var redefines, reads int
+	for _, ref := range resolve.References(root, rootScope) {
+		if ref.QN == nil || !within(ref.Scope, r4.Scope) {
+			continue
+		}
+		got, ok := r.ResolveReference(ref)
+		switch last := ref.QN.Parts[len(ref.QN.Parts)-1].Text; {
+		case ref.Redefines:
+			redefines++
+			if !ok || got != inherited {
+				t.Errorf("R4 :>> %s = %v, %v; want R::x", last, got, ok)
+			}
+		case last == "alias" || last == "x":
+			reads++
+			if !ok || got != aliased {
+				t.Errorf("R4 condition %s = %v, %v; want R4's own subject", last, got, ok)
+			}
+		}
+	}
+	if redefines != 1 || reads != 2 {
+		t.Errorf("R4 references: %d redefinition, %d reads; want 1 and 2", redefines, reads)
+	}
+}
+
+// within reports whether scope is outer or nested in it.
+func within(scope, outer *symbols.Scope) bool {
+	for ; scope != nil; scope = scope.Parent() {
+		if scope == outer {
+			return true
+		}
+	}
+	return false
 }
 
 func qualified(parts ...string) *ast.QualifiedName {
