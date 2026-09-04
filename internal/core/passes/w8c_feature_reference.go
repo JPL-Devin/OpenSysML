@@ -128,7 +128,7 @@ func (c *featureReferenceChecker) walkMember(site refSite, scope *symbols.Scope,
 	switch n := m.(type) {
 	case *ast.ConstraintMember:
 		c.walkExpr(site, scope, n.Expression)
-		c.walkMembers(site, scope, n.Body)
+		c.walkMembers(site, symbols.ConstraintBodyScope(scope, n), n.Body)
 	case *ast.AssumeMember:
 		c.walkExpr(site, scope, n.Expression)
 		c.walkExpr(site, scope, n.Value)

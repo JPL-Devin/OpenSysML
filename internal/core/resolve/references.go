@@ -253,6 +253,7 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		}
 		return true
 	case *ast.SubjectMember:
+		c.prefixes(scope, d.Prefixes)
 		c.add(scope, d.TypeRef)
 		c.multiplicity(scope, d.Multiplicity)
 		c.relationships(scope, d, d.Relationships)
@@ -269,9 +270,16 @@ func (c *refCollector) typeDecl(scope *symbols.Scope, decl ast.Node) bool {
 			c.walkMembers(child, d.Members)
 		}
 		return true
+	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
+		body := scope
+		if child := c.childScope(scope, d); child != nil {
+			body = child
+		}
+		c.walkMembers(body, ast.NodeBodyMembers(d))
+		return true
 	case *ast.ConstraintMember:
 		c.expr(scope, d.Expression)
-		c.walkMembers(scope, d.Body)
+		c.walkMembers(symbols.ConstraintBodyScope(scope, d), d.Body)
 		return true
 	case *ast.AssumeMember:
 		c.prefixes(scope, d.Prefixes)
@@ -343,11 +351,7 @@ func (c *refCollector) behaviorDecl(scope *symbols.Scope, decl ast.Node) bool {
 		body := symbols.TriggerScope(scope, d)
 		c.expr(body, d.Guard)
 		c.walkMembers(body, d.Effect)
-		members := scope
-		if child := c.childScope(scope, d); child != nil {
-			members = child
-		}
-		c.walkMembers(members, d.Members)
+		c.walkMembers(body, d.Members)
 		return true
 	case *ast.InitialNode:
 		c.edgeEnd(scope, d.Successor, nil, false)
@@ -517,11 +521,18 @@ func (c *refCollector) prefixes(scope *symbols.Scope, prefixes []*ast.PrefixMeta
 	}
 }
 
-// metadataPrefix collects an annotation's metaclass name and the references its
-// body carries, in the body's own scope — the same scope the resolver resolves
-// them in (see resolveMetadataPrefix).
+// metadataPrefix collects an annotation's metaclass name, the elements it is
+// about and the references its body carries, in the body's own scope — the same
+// scope the resolver resolves them in (see resolveMetadataPrefix). The
+// annotation is the member its own names are written in, prefix or not.
 func (c *refCollector) metadataPrefix(scope *symbols.Scope, p *ast.PrefixMetadata) {
+	prev := c.member
+	c.member = p
+	defer func() { c.member = prev }()
 	c.add(scope, p.Type)
+	for _, a := range p.About {
+		c.add(scope, a)
+	}
 	if len(p.Body) == 0 {
 		return
 	}

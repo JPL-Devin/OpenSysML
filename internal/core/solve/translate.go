@@ -308,6 +308,9 @@ func (t *translator) pinnedAssertions(offset int) []Assertion {
 // A group stands for the conjunction of its conditions, so negating a group
 // negates that conjunction.
 func (t *translator) condition(cond runtime.Condition) (*Term, error) {
+	if cond.Statement != nil {
+		return nil, t.refuse(cond.Statement, "body statement", "OpenSysML does not execute a statement in a constraint body")
+	}
 	if cond.Negated {
 		t.branched++
 		defer func() { t.branched-- }()
@@ -929,6 +932,9 @@ func conditionOrigin(cond runtime.Condition) (*symbols.Symbol, source.Span) {
 	span := declSpan(owner)
 	if cond.Expr != nil {
 		span = cond.Expr.Span()
+	}
+	if cond.Statement != nil {
+		span = cond.Statement.Span()
 	}
 	return owner, span
 }

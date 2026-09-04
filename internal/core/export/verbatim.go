@@ -17,6 +17,7 @@ func (d *decoder) render(roots []*element) (string, error) {
 	for {
 		d.printed = map[*element]bool{}
 		d.rebuilt = map[*element]bool{}
+		d.prefixed = map[*element]bool{}
 		d.usedExpr = map[string]bool{}
 		d.written = nil
 		if err := d.resolveExpressions(); err != nil {
@@ -228,13 +229,15 @@ func (d *decoder) writerAt(offset int) *element {
 	return best.el
 }
 
-// holderOf returns the subject a node hangs off: the namespace owning an
-// element, or the subject that points at a membership or expression node.
+// holderOf returns the subject a node hangs off: the namespace or relationship
+// owning an element, or the subject that points at a membership or expression node.
 func holderOf(g *rdf.Graph, iri string) string {
 	subject := rdf.IRI(iri)
 	if g.HasProperty(subject, rdf.SysML+pQualifiedName) {
-		if owner, ok := g.Object(subject, rdf.SysML+pOwningNamespace); ok && owner.IsIRI() {
-			return owner.Value
+		for _, property := range []string{pOwningNamespace, pOwner} {
+			if owner, ok := g.Object(subject, rdf.SysML+property); ok && owner.IsIRI() {
+				return owner.Value
+			}
 		}
 		return ""
 	}

@@ -229,7 +229,7 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		}
 		return true
 	case *ast.SubjectMember:
-		// Resolve subject type reference
+		r.resolvePrefixes(scope, d.Prefixes)
 		if d.TypeRef != nil {
 			r.ResolveQualified(scope, d.TypeRef)
 		}
@@ -261,11 +261,17 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		// Final nodes have no references
 		return true
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
-		// Control flow nodes have no references to resolve (names are just labels)
+		// The node's own name is a label; its action body resolves in the scope
+		// the body declares into (see symbols.buildControlNode).
+		body := scope
+		if child := r.childScope(scope, d); child != nil {
+			body = child
+		}
+		r.walkMembers(body, ast.NodeBodyMembers(d))
 		return true
 	case *ast.ConstraintMember:
 		r.resolveExpr(scope, d.Expression)
-		r.walkMembers(scope, d.Body)
+		r.walkConstraintBody(scope, d, nil, d.Body)
 		return true
 	case *ast.AssumeMember:
 		r.resolvePrefixes(scope, d.Prefixes)
@@ -346,13 +352,7 @@ func (r *Resolver) resolveBehaviorDecl(scope *symbols.Scope, decl ast.Node) bool
 		body := symbols.TriggerScope(scope, d)
 		r.resolveExpr(body, d.Guard)
 		r.walkMembers(body, d.Effect)
-		// The body's members are the transition's own, outside the trigger's
-		// parameters (see symbols.buildBehaviorDecl).
-		members := scope
-		if child := r.childScope(scope, d); child != nil {
-			members = child
-		}
-		r.walkMembers(members, d.Members)
+		r.walkMembers(body, d.Members)
 		return true
 	case *ast.SendStatement:
 		r.resolveExpr(scope, d.Message)
@@ -519,6 +519,9 @@ func (r *Resolver) resolvePrefixes(scope *symbols.Scope, prefixes []*ast.PrefixM
 func (r *Resolver) resolveMetadataPrefix(scope *symbols.Scope, prefix *ast.PrefixMetadata) {
 	if prefix == nil {
 		return
+	}
+	for _, a := range prefix.About {
+		r.ResolveQualified(scope, a)
 	}
 	owner, ok := r.ResolveQualified(scope, prefix.Type)
 	if !ok || owner == nil || len(prefix.Body) == 0 {
@@ -894,6 +897,17 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 		ownerRels = owner.Relationships
 	case *ast.Usage:
 		ownerRels = owner.Relationships
+	case *ast.PrefixMetadata:
+		// An annotation body's declarations redefine the metaclass's own
+		// features (KerML 7.4.7), so the target is looked up there first.
+		if len(qn.Parts) == 1 {
+			if sym, ok := r.featureOf(r.scopeOwner(scope), qn.Parts[0].Text, map[*symbols.Symbol]bool{}); ok {
+				r.recordRedefined(qn, sym)
+				return
+			}
+		}
+		r.resolveQualified(scope, qn, hide)
+		return
 	case *ast.Package:
 		r.resolveQualified(scope, qn, hide)
 		return

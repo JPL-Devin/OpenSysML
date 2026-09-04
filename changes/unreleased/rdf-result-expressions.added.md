@@ -14,4 +14,4 @@
   example files, none of the 13 refused for this reason is any longer: 12 convert, 11 of them to
   a graph that round-trips equal, and the 13th is refused for an unrelated `feature` declaration;
   80 of the 81 calculation conformance models convert, up from 62. See
-  [the mapping](docs/reference/rdf-mapping.md).
+  `docs/reference/rdf-mapping.md`.

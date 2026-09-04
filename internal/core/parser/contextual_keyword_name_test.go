@@ -87,7 +87,8 @@ func TestParseVarPrefixQualifiesTheKind(t *testing.T) {
 // `chain` is the feature chain modifier only when a name follows it; before
 // `=`, `:`, `;`, `[` or a word the grammar reserves — one that continues the
 // declaration (`default`, `ordered`, `subsets`, `specializes`) or ends it
-// (`about`) — it names the feature, on either side of the kind keyword.
+// (`about`) — it names the feature, on either side of the kind keyword. In
+// `metadata chain about x;` the name is the usage's type (MetadataUsageDeclaration).
 func TestParseChainIsANameBeforeAnythingButAName(t *testing.T) {
 	for _, src := range []string{
 		"package P { attribute chain = 1; attribute pt = chain + 1; }",
@@ -99,7 +100,6 @@ func TestParseChainIsANameBeforeAnythingButAName(t *testing.T) {
 		"package P { attribute chain defined by Integer; }",
 		"package P { attribute chain subsets other; attribute other; }",
 		"package P { attribute chain redefines other; attribute other; }",
-		"package P { metadata chain about other; attribute other; }",
 		"package P { attribute chain ordered :> other; attribute other : Integer[*]; }",
 		"package P { attribute chain nonunique :> other; attribute other : Integer[*]; }",
 		"package P { attribute chain ordered nonunique = other; attribute other : Integer[*]; }",
@@ -110,6 +110,14 @@ func TestParseChainIsANameBeforeAnythingButAName(t *testing.T) {
 		if u.Ident.Name != "chain" || u.IsChain {
 			t.Errorf("%s\ndeclared %q chain=%t, want the feature named chain", src, u.Ident.Name, u.IsChain)
 		}
+	}
+
+	src := "package P { metadata chain about other; attribute other; }"
+	root := parseClean(t, src)
+	pkg := root.(*ast.RootNamespace).Members[0].(*ast.Membership).Member.(*ast.Package)
+	u := firstUsage(t, pkg.Members[0].(*ast.Membership).Member)
+	if u.Ident.Name != "" || u.IsChain || len(u.Relationships) == 0 || ast.SimpleName(u.Relationships[0].Target) != "chain" {
+		t.Errorf("%s\ndeclared %q chain=%t, want an unnamed metadata usage typed by chain", src, u.Ident.Name, u.IsChain)
 	}
 
 	for _, src := range []string{

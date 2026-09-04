@@ -344,19 +344,21 @@ func (p *Parser) atVarPrefix() bool {
 		return false
 	}
 	next := p.peekN(1)
-	return p.isKindKeyword(next) ||
+	return p.isKindKeyword(next) || next.Kind == lexer.Hash ||
 		(next.Kind == lexer.Keyword && featureModifierKeywords[next.KeywordID])
 }
 
 // atVarDeclaration reports whether the cursor is at a `var`-prefixed
 // declaration, whose kind keyword may be left out (`var x : Integer;`). A
-// following name cannot continue an expression, so `var` there is the prefix.
+// following name or `#M` prefix cannot continue an expression, so `var` there
+// is the prefix; `var#(1)` indexes a feature named `var`.
 func (p *Parser) atVarDeclaration() bool {
 	if !p.atVarWord() {
 		return false
 	}
 	next := p.peekN(1).Kind
-	return p.isKindKeyword(p.peekN(1)) || next == lexer.Identifier || next == lexer.UnrestrictedName
+	return p.isKindKeyword(p.peekN(1)) || next == lexer.Identifier || next == lexer.UnrestrictedName ||
+		(next == lexer.Hash && p.peekN(2).Kind != lexer.LParen)
 }
 
 // kindPrefixWord returns the word at the cursor that may qualify a following
@@ -389,8 +391,8 @@ func (p *Parser) atKindPrefix() bool {
 	if p.atUseCase() {
 		return false
 	}
-	if kw == varPrefixWord && p.peekN(1).Kind == lexer.Keyword &&
-		featureModifierKeywords[p.peekN(1).KeywordID] {
+	if kw == varPrefixWord && (p.peekN(1).Kind == lexer.Hash ||
+		p.peekN(1).Kind == lexer.Keyword && featureModifierKeywords[p.peekN(1).KeywordID]) {
 		return true
 	}
 	if !p.isKindKeyword(p.peekN(1)) {
@@ -728,7 +730,8 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 		}
 		if t.Kind == lexer.Identifier && p.src.Text(t.Span) == varPrefixWord {
 			next := p.peekN(1)
-			isModifier := p.isKindKeyword(next) ||
+			// KerML FeaturePrefix puts prefix metadata after `var`: `var #M feature f`.
+			isModifier := p.isKindKeyword(next) || next.Kind == lexer.Hash ||
 				(next.Kind == lexer.Keyword && featureModifierKeywords[next.KeywordID]) ||
 				p.atVarPrefixedFeature()
 			if isModifier {
@@ -894,17 +897,7 @@ func (p *Parser) warnAmbiguousModifierKind(mods featureMods, isKind func(lexer.T
 // already established (via atDefUsageStart) that a def/usage begins here.
 func (p *Parser) parseDefUsage(start int) ast.Node {
 	// Parse optional `#MetadataType` prefixes (user-defined keywords)
-	var prefixes []*ast.PrefixMetadata
-	for p.at(lexer.Hash) {
-		p.advance() // consume #
-		// Allow keywords as metadata type names (e.g., #scenario, #cause)
-		metaName := p.parseQualifiedNameRelaxed()
-		if metaName != nil {
-			prefixes = append(prefixes, &ast.PrefixMetadata{
-				Type: metaName,
-			})
-		}
-	}
+	prefixes := p.parsePrefixMetadata()
 
 	// Helper to apply prefixes to result node
 	applyPrefixes := func(node ast.Node) ast.Node {
@@ -937,12 +930,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 
 	// UsagePrefix ends in UsageExtensionKeyword* (SysML.xtext:582), so prefix
 	// metadata may follow the modifiers: `abstract #Classified z;`.
-	for p.at(lexer.Hash) {
-		p.advance()
-		if metaName := p.parseQualifiedNameRelaxed(); metaName != nil {
-			prefixes = append(prefixes, &ast.PrefixMetadata{Type: metaName})
-		}
-	}
+	prefixes = append(prefixes, p.parsePrefixMetadata()...)
 
 	// `snapshot` and `timeslice` portion the occurrence usage they prefix:
 	// `timeslice item i;` as well as the bare `timeslice t;`
@@ -957,6 +945,9 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			p.error(tok.Span, "a usage declares at most one portion kind ('snapshot' or 'timeslice')")
 		}
 		mods.portion = portion
+		// The portion kind is part of the usage prefix, so prefix metadata may
+		// still follow it: `snapshot #Classified part s;`.
+		prefixes = append(prefixes, p.parsePrefixMetadata()...)
 		// Without a kind keyword the portion itself declares an occurrence usage.
 		if !p.atPortionedKind() {
 			isAll := p.acceptSufficientAll()
@@ -1019,16 +1010,15 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		}
 
 		p.advance() // consume the kind keyword
-		// A subject, actor or stakeholder takes prefix metadata after its
-		// keyword: `actor #B a;` (SysML.xtext SubjectUsage, ActorUsage,
-		// StakeholderUsage, each `'keyword' UsageExtensionKeyword* Usage`).
-		if kw == "subject" || kw == "actor" || kw == "stakeholder" {
-			for p.at(lexer.Hash) {
-				p.advance()
-				if metaName := p.parseQualifiedNameRelaxed(); metaName != nil {
-					prefixes = append(prefixes, &ast.PrefixMetadata{Type: metaName})
-				}
-			}
+		// A subject, actor, stakeholder or objective takes prefix metadata after
+		// its keyword: `actor #B a;` (SysML.xtext SubjectUsage, ActorUsage,
+		// StakeholderUsage, ObjectiveRequirementUsage, each `'keyword'
+		// UsageExtensionKeyword* …`), as does a keyword that qualifies the
+		// declaration after it: `variant #B part v;`, `assume #B constraint c;`
+		// (VariantUsageElement, RequirementConstraintUsage) — not `assert`, whose
+		// OccurrenceUsagePrefix puts them ahead of it: `#B assert not constraint c;`.
+		if kw == "subject" || kw == "actor" || kw == "stakeholder" || kw == "objective" || kw == "variant" || kw == "assume" || kw == "require" {
+			prefixes = append(prefixes, p.parsePrefixMetadata()...)
 		}
 		// `variant x` declares a variant of the variation that owns it
 		// (VariantMembership, SysML v2 §7.20).
@@ -1102,19 +1092,12 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			return applyPrefixes(p.parseTransitionMember(start))
 		}
 
-		// Special case: succession flow from X to Y
-		// If succession is followed by flow keyword, parse as flow usage with succession typing
+		// `succession flow from X to Y` is a flow that is also a succession
+		// (SysML.xtext:1278 SuccessionFlowUsage); the prefix keeps it apart.
 		if kw == "succession" && p.atKeyword("flow") {
-			p.advance() // consume 'flow'
-			u := p.parseUsage(start, ast.UsageFlow, "flow", mods, isAll)
-			// Add implicit succession typing - succession concept applies to this flow
-			// Use typing relationship to indicate this flow has succession semantics
-			if u != nil {
-				// Add succession as typing (could also use specialization)
-				// For now, treat as semantic annotation - flow inherits succession characteristics
-				// Implementation note: May need dedicated AST flag or relationship for this hybrid
-			}
-			return applyPrefixes(u)
+			p.advance()
+			mods.prefixKeyword = kw
+			return applyPrefixes(p.parseUsage(start, ast.UsageFlow, "flow", mods, isAll))
 		}
 
 		// `event m.start;` names an existing occurrence rather than declaring
@@ -1972,6 +1955,15 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		(kind == ast.UsageConnector && (p.atKeyword("from") || p.atConnectorChainFirstEnd())) ||
 		((kind == ast.UsageConnection || kind == ast.UsageInterface) &&
 			(keyword == "connect" || p.atConnectorShorthandEnds()))
+	atGlobalName := p.at(lexer.Dollar) && p.peekN(1).Kind == lexer.ColonColon
+	if kind == ast.UsageMetadata && !skipIdentification && (atGlobalName || p.atName() && !p.atMetadataIdentification()) {
+		// `metadata M about x;` states the typing M and no name of its own
+		// (SysML.xtext MetadataUsageDeclaration).
+		skipIdentification = true
+		if metaType := p.parseQualifiedName(); metaType != nil {
+			preRels = append(preRels, &ast.Relationship{Kind: ast.RelTyping, Target: metaType})
+		}
+	}
 	if !skipIdentification {
 		u.Ident = p.parseUsageIdentification(kind)
 	}
@@ -4259,6 +4251,7 @@ func (p *Parser) parseMetadataUsage(start int) *ast.PrefixMetadata {
 		}
 		p.expect(lexer.RBrace, "expected '}' after metadata body")
 		pm.Body = body
+		pm.HasBody = true
 	} else {
 		// A usage is a member of its own, so it ends here rather than annotating
 		// whatever follows it — `#Type` is the prefix spelling.
