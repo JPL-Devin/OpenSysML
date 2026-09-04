@@ -191,10 +191,14 @@ func TestDestroyEndsPortionsAndRefusesReads(t *testing.T) {
 	if err != nil || !valueIdentical(got, objectValue(bench)) {
 		t.Fatalf("destroy(bench) = %s, %v; want bench", FormatValue(got), err)
 	}
+	whole, _ := ctx.OccurrenceLife(bench.ID)
 	for _, inst := range []*Instance{bench, part} {
 		l, ok := ctx.OccurrenceLife(inst.ID)
 		if !ok || !l.Destroyed || l.Alive() {
 			t.Errorf("OccurrenceLife(#%d) = %v; want destroyed", inst.ID, l)
+		}
+		if l.Ended != whole.Ended {
+			t.Errorf("OccurrenceLife(#%d) ended at %d; want %d, with its whole", inst.ID, l.Ended, whole.Ended)
 		}
 	}
 	if _, err := bench.GetFeatureValue(ctx, "w"); !errors.Is(err, ErrOccurrenceDestroyed) {

@@ -139,9 +139,11 @@ func (ctx *Context) destroy(inst *Instance) error {
 		}
 		portions = append(portions, portion)
 	}
+	// One boundary ends the whole and its portions: none outlives its whole.
+	ended := ctx.newActivation()
 	for _, portion := range portions {
 		prior := ctx.lives[portion.ID]
-		ctx.lives[portion.ID] = life{reached: prior.reached, began: prior.began, ended: ctx.newActivation(), destroyed: true}
+		ctx.lives[portion.ID] = life{reached: prior.reached, began: prior.began, ended: ended, destroyed: true}
 		ctx.noteProbeUndo(func() { ctx.lives[portion.ID] = prior })
 		if ctx.trace != nil {
 			ctx.trace.RecordOccurrenceDestroyed(symbolText(portion.Type), portion.ID)
