@@ -151,7 +151,7 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-225 case(s): 195 both reject, 22 only the pilot rejects, 8 only we reject, 0 both accept
+225 case(s): 199 both reject, 18 only the pilot rejects, 8 only we reject, 0 both accept
   of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -159,7 +159,7 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 8 | 8 | 0 | 0 | 0 |
 | grammar | 86 | 80 | 6 | 0 | 0 |
-| semantic | 97 | 73 | 16 | 8 | 0 |
+| semantic | 97 | 77 | 12 | 8 | 0 |
 | xpect | 34 | 34 | 0 | 0 | 0 |
 
 The eight ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
@@ -168,7 +168,8 @@ adjudicated as pilot gaps in the differential. The corpus grew from 79 cases to 
 120 with `g60` (an `alias` named by a keyword), and to 225 with the `semantic/` source (97 cases)
 and the 7 `grammar/` and 1 `extensions/` cases the SysML constraint census added beside it. The KerML constraints in that
 source reopened 14 gaps — all of them semantic rules the pilot enforces and we did not; the
-named-argument validation that landed alongside closed one of them (`k33`), leaving 13 — and the
+named-argument validation that landed alongside closed one of them (`k33`), leaving 13, and the
+cross-subsetting rules closed four more (`k16`, `k17`, `k19`, `k42`), leaving 9 — and the
 SysML census opened nine more, six of them `grammar/` (see
 [Permissiveness gaps](#permissiveness-gaps)). Before that source the default-mode gap count was 2
 of 120: only the intended `extensions/` notation. Wave 11 closed two `xpect/` gaps: `p11`
@@ -187,8 +188,8 @@ extensions that the default mode accepts on purpose and strict mode reports as e
 initial state marker), `x04` (`region r { … }`) and `x07` (`transition <src> to <tgt>`) left that
 list when that notation was removed: each is now a parse error in either mode, so both
 implementations reject it by default. Judged in
-the default mode the same corpus gives 192 agreements and 25 gaps, which is what `-conformance
-default` prints. `-conformance strict` gives 195 and 22. Reserved keywords recovered as declared
+the default mode the same corpus gives 196 agreements and 21 gaps, which is what `-conformance
+default` prints. `-conformance strict` gives 199 and 18. Reserved keywords recovered as declared
 names and SysML declaration keywords recovered in KerML are now errors in either mode; the parser
 still preserves their trees for editors and later analysis. Of the 14 gaps this document carried before wave 8, six were closed by the
 validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
@@ -209,12 +210,16 @@ we no longer accept it either.
 
 ## Permissiveness gaps
 
-All 22 gaps under `-conformance auto` are open, and all of them were opened by the `semantic/`
-source and the SysML constraint census: 13 named KerML constraints (`k11`–`k42`, `s80`) and 3
+All 18 gaps under `-conformance auto` are open, and all of them were opened by the `semantic/`
+source and the SysML constraint census: 9 named KerML constraints (`k11`–`k40`, `s80`) and 3
 named SysML constraints (`s04`, `s23`, `s43`) the pinned validators enforce as errors and
 OpenSysML does not report, plus 6 SysML body-item spellings (`g61`–`g66`) the pinned grammar
 rejects and our parser admits in any body. Every gap the corpus carried before is closed. The
-last three of those were severity-policy gaps — the pinned grammar excluded the spellings, while
+cross-subsetting family the `semantic/` source opened (`k16`, `k17`, `k19`, `k42`) was closed by
+extending the cross-feature pass with the crossing-feature, crossed-feature, redefined-end
+specialization and at-most-one rules; `k42` is rejected by OpenSysML with the message the pilot's
+source intends (`At most one cross subsetting is allowed`) where the pinned pilot only crashes. The
+last three of the closed gaps were severity-policy gaps — the pinned grammar excluded the spellings, while
 OpenSysML retained recoverable trees and reported only warnings by default — and the approved
 policy closed them by reporting errors without removing that recovery.
 
@@ -231,9 +236,6 @@ silent in either mode.
 | `grammar/g65-entry-action-outside-state-body.sysml` | accepts | `mismatched input 'entry' expecting '}'` | `internal/core/parser/defusage.go` `atKindPrefix` — outside a state body, `entry` before `action` is taken as a kind prefix and dropped, so the member parses as a plain `action init` with no diagnostic; the pilot's `EntryActionMember` is a `StateBodyItem` |
 | `grammar/g66-render-outside-view-body.sysml` | accepts | `mismatched input 'render' expecting '}'` | `internal/core/parser` — `render` is parsed in a part def body; the pilot's `ViewRenderingMember` is a `ViewBodyItem` (`expose`, the sibling case `g67`, is already rejected by `expose-owning-namespace`) |
 | `semantic/k11-initial-value-nonvariable.kerml` | accepts | `Initialized feature must be variable` | `internal/core/passes` — no pass relates the `:=` initial-value form to the feature's variability (`validateFeatureValueIsInitial`) |
-| `semantic/k16-crosses-from-nonend.kerml` | accepts | `Cross subsetting must be owned by one of two or more end features` | `internal/core/passes/w10b_cross_features.go` — checks the shape of a `crosses` chain on association ends, not that the owner is an end of a type with two or more ends (`validateCrossSubsettingCrossingFeature`) |
-| `semantic/k17-crosses-not-through-opposite-end.kerml` | accepts | `Cross subsetting must chain through an opposite end feature` | `internal/core/passes/w10b_cross_features.go` — the opposite-end check does not reach a `crosses` that names the opposite end itself instead of chaining through it (`validateCrossSubsettingCrossedFeature`) |
-| `semantic/k19-cross-feature-not-specializing.kerml` | accepts | `Cross feature must specialized redefined-end cross features` | `internal/core/passes/w10b_cross_features.go` — the redefined-end specialization check does not reach a KerML `assoc` that specializes another and redefines its ends (`validateFeatureCrossFeatureSpecialization`) |
 | `semantic/k25-assoc-one-end.kerml` | accepts | `Must have at least two related elements` | `internal/core/passes/w10b_related_elements.go` — fires for a SysML `connection def` with one end (`xpect/p20`) but not for a KerML `assoc` with one end (`validateAssociationRelatedTypes`) |
 | `semantic/k26-binary-connector-three-ends.kerml` | accepts | `Cannot have more than two ends` | `internal/core/passes/constraint.go` `checkConnectorEndRedefinition` — counts declared `end` features (it rejects `k24`), not the positional ends of `connector c : BinaryLink (x, y, z)` (`validateConnectorBinarySpecialization`) |
 | `semantic/k34-constructor-feature-bound-twice.kerml` | accepts | `Feature already bound` | `internal/core/passes` — no duplicate-binding check for `new T(f = …, f = …)` (`validateConstructorExpressionNoDuplicateFeatureRedefinition`) |
@@ -241,7 +243,6 @@ silent in either mode.
 | `semantic/k36-metadata-body-redefines-outside.kerml` | accepts | `Must redefine an owning-type feature` | `internal/core/passes/w8d_metadata_usage.go` — emits this message for a SysML metadata usage body but is gated on `ast.UsageMetadata`, so a KerML `@M about C { :>> g; }` body is not checked (`validateMetadataFeatureBody`) |
 | `semantic/k37-multiplicity-bound-not-natural.kerml` | accepts | `Must have a Natural value` | `internal/core/passes/w8c_multiplicity_bounds.go` — only reports a bound whose primitive type is known and non-integer; a bound naming a feature typed by a class has no primitive type and is passed (`validateMultiplicityRangeResultTypes`) |
 | `semantic/k40-metadata-typed-by-class.kerml` | accepts | `Must have a concrete type` | `internal/core/passes/w8c_metadata_type.go` — checks that the type is not abstract (`xpect/p24`) but not that it is a metaclass at all (`validateMetadataFeatureMetadata`) |
-| `semantic/k42-two-cross-subsettings.kerml` | accepts | `Error executing EValidator` (the pilot's `validateFeatureOwnedCrossSubsetting` check indexes the wrong list and throws before it can say `At most one cross subsetting is allowed`; filed as [Systems-Modeling/SysML-v2-Pilot-Implementation#794](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/794), body in [omg-issues.md](omg-issues.md#validatefeatureownedcrosssubsetting-indexes-the-wrong-list-and-throws-pilot-2026-07)) | `internal/core/passes` — the one-reference-subsetting check that rejects `k09` has no counterpart for a second `crosses` clause (`validateFeatureOwnedCrossSubsetting`) |
 | `semantic/s04-assert-references-non-constraint.sysml` | accepts | `Must reference a constraint.` | `internal/core/passes/typecheck.go` — the referent-kind check on reference subsetting covers `satisfy` (`satisfy target must be a requirement usage`) but not `assert`; no pass checks that an asserted usage is a constraint usage |
 | `semantic/s23-metadata-typed-by-part-def.sysml` | accepts | `A metadata usage must be typed by one metadata definition.` / `Must have a concrete type` | `internal/core/passes/typecheck.go` `compatibleTyping` — a metadata usage is typed like an item, so any occurrence definition passes; `w8c_metadata_type.go` checks only abstractness. Pass exists, misses the shape |
 | `semantic/s43-assign-to-non-feature.sysml` | accepts | `An assignment must have a referent.` | `internal/core/passes/constraint.go` `assignmentReferentChecker` — returns silently when the resolved target is not a `*ast.Usage`, so assigning to a definition reports nothing. Pass exists, misses the shape |

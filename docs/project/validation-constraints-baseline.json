@@ -262,7 +262,7 @@
     {
       "name": "validateCrossSubsettingCrossingFeature",
       "source": "kerml",
-      "status": "unknown"
+      "status": "faithful"
     },
     {
       "name": "validateDataTypeSpecialization",
@@ -439,7 +439,7 @@
     {
       "name": "validateFeatureOwnedCrossSubsetting",
       "source": "kerml",
-      "status": "not-implemented"
+      "status": "faithful"
     },
     {
       "name": "validateFeatureOwnedReferenceSubsetting",
