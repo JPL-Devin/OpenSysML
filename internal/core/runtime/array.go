@@ -16,6 +16,9 @@ import (
 type Array struct {
 	Dimensions []int64
 	Elements   []Value
+	// Object is the Collections::Array object the value was read from, which keeps
+	// answering the members a specialization adds; 0 for an array made by value.
+	Object int64
 }
 
 // NewArrayValue wraps an array over its row-major elements; arrayOf checks the
@@ -261,6 +264,9 @@ func (ctx *Context) structuredValueType(value Value) (*symbols.Symbol, error) {
 	var fqn string
 	switch value.Kind {
 	case ValArray:
+		if inst, ok := ctx.instances[value.Array().Object]; ok {
+			return ctx.objectType(inst), nil
+		}
 		fqn = arrayTypeFQN
 	case ValVector:
 		// Every number is a Real, so a numerical vector is a Cartesian one.
@@ -287,22 +293,18 @@ func (ctx *Context) arrayOfObject(inst *Instance) (Value, bool, error) {
 	if arraySym == nil || inst == nil || inst.Type == nil {
 		return Value{}, false, nil
 	}
-	typ := ctx.extractType(inst.Type)
-	if typ == nil {
-		typ = inst.Type
-	}
-	if !ctx.model.Conforms(typ, arraySym) {
+	if !ctx.model.Conforms(ctx.objectType(inst), arraySym) {
 		return Value{}, false, nil
 	}
-	dims, err := ctx.objectFeatureElements(inst, arrayDimensionsFeature)
+	dims, dimsStated, err := ctx.objectFeatureElements(inst, arrayDimensionsFeature)
 	if err != nil {
 		return Value{}, true, err
 	}
-	elements, err := ctx.objectFeatureElements(inst, arrayElementsFeature)
+	elements, elementsStated, err := ctx.objectFeatureElements(inst, arrayElementsFeature)
 	if err != nil {
 		return Value{}, true, err
 	}
-	if len(dims) == 0 && len(elements) == 0 {
+	if !dimsStated && !elementsStated {
 		return Value{}, false, nil
 	}
 	op := arrayTypeFQN + " " + symbolText(inst.Type)
@@ -311,7 +313,20 @@ func (ctx *Context) arrayOfObject(inst *Instance) (Value, bool, error) {
 		return Value{}, true, err
 	}
 	val, err := arrayOf(op, dimensions, elements)
-	return val, true, err
+	if err != nil {
+		return Value{}, true, err
+	}
+	val.Array().Object = inst.ID
+	return val, true, nil
+}
+
+// objectType is the type an object instantiates: the type of the usage it
+// occurs as, else the definition itself.
+func (ctx *Context) objectType(inst *Instance) *symbols.Symbol {
+	if typ := ctx.extractType(inst.Type); typ != nil {
+		return typ
+	}
+	return inst.Type
 }
 
 // declaredArrayValue reads a valueless usage typed by Collections::Array as the
@@ -329,20 +344,23 @@ func (ctx *Context) declaredArrayValue(sym *symbols.Symbol) (Value, bool, error)
 	return ctx.arrayOfObject(inst)
 }
 
-// objectFeatureElements is the values an object's feature holds, materialized on demand.
-func (ctx *Context) objectFeatureElements(inst *Instance, name string) ([]Value, error) {
+// objectFeatureElements is the values an object's feature holds, materialized on
+// demand, and whether the feature is stated: bound to a value (an empty one too),
+// written by a run, or derived through a binding, rather than merely inherited.
+func (ctx *Context) objectFeatureElements(inst *Instance, name string) ([]Value, bool, error) {
 	if _, ok := inst.FeatureValues[name]; !ok {
-		return nil, nil
+		return nil, false, nil
 	}
 	fv, err := inst.GetFeatureValue(ctx, name)
 	if err != nil {
-		return nil, err
+		return nil, true, err
 	}
 	val, err := fv.ReadValue(name)
 	if err != nil {
-		return nil, err
+		return nil, true, err
 	}
-	return elementsOf(val), nil
+	stated := fv.Feature.DefaultValue != nil || fv.Written || fv.BindingDerived
+	return elementsOf(val), stated, nil
 }
 
 // objectValue is what a name denoting an object evaluates to: the Array a shaped

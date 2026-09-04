@@ -887,7 +887,15 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 	case ValSequence, ValSet:
 		return ec.chainOverElements(value, parts, from)
 	case ValArray, ValVector, ValVectorQuantity:
-		// An array's or vector's own features are answered from the value.
+		// An array read from an object keeps that object's members; any other
+		// array's or vector's own features are answered from the value.
+		if value.Kind == ValArray {
+			if id := value.Array().Object; id != 0 {
+				if _, ok := ec.ctx.instances[id]; ok {
+					return ec.chainMemberValue(Value{Kind: ValInstance, Instance: id}, parts, from)
+				}
+			}
+		}
 		member, ok, err := structuredFeature(value, parts[0].Text)
 		if err != nil {
 			return Value{}, err

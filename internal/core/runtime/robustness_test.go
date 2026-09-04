@@ -1322,6 +1322,7 @@ func testNumericLibraryCallThatHasNoValue(t *testing.T) {
 		{"VectorFunctions::VectorOf(flags)", ErrTypeMismatch},
 		{"VectorFunctions::CartesianThreeVectorOf(ys)", ErrMultiplicityViolation},
 		{"VectorFunctions::angle(VectorFunctions::VectorOf((0.0, 0.0)), VectorFunctions::VectorOf(ys))", semantics.ErrArithmeticDomain},
+		{"VectorFunctions::angle(VectorFunctions::CartesianVectorOf(()) [SI::m], VectorFunctions::CartesianVectorOf(()) [SI::m])", semantics.ErrArithmeticDomain},
 		{"VectorFunctions::VectorOf(xs) / 0", ErrDivisionByZero},
 		{"VectorCalculations::vectorScalarQuantityDiv(VectorFunctions::VectorOf(xs) [SI::m], 0 [SI::s])", ErrDivisionByZero},
 		{"VectorCalculations::scalarQuantityVectorMult(2 [SI::m], flags)", ErrTypeMismatch},

@@ -634,7 +634,8 @@ func innerQuantity(name string, v, w vectorOperand) (Value, error) {
 }
 
 // vectorNorm is the norm (magnitude) of a vector, the square root of its inner
-// product with itself; a vector quantity's is in the unit of its first axis.
+// product with itself; a vector quantity's is in the unit of its first axis, and
+// one of no axes has the plain norm 0.0, as its inner product is the plain 0.
 func vectorNorm(name string, _ *Context, args []Value) (Value, error) {
 	v, err := readVector(name, `"v"`, args[0])
 	if err != nil {
@@ -645,7 +646,7 @@ func vectorNorm(name string, _ *Context, args []Value) (Value, error) {
 		return Value{}, err
 	}
 	norm, err := checkedReal(euclideanNorm(reals))
-	if err != nil || !v.hasUnits() {
+	if err != nil || !v.hasUnits() || v.dimension() == 0 {
 		return norm, err
 	}
 	return inUnit(norm.Const, v.units[0])

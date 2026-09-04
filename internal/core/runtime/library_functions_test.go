@@ -1485,7 +1485,8 @@ func TestBuiltinsListEveryFunctionWithItsPackage(t *testing.T) {
 }
 
 // TestArraySpecializationKeepsOwnMembers: an attribute def specializing Array
-// answers Array's features from its shape and its own members from the object.
+// answers Array's features from its shape and its own members from the object,
+// directly and after the value passed through a calc, a parameter or an attribute.
 func TestArraySpecializationKeepsOwnMembers(t *testing.T) {
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
 		package test {
@@ -1495,11 +1496,17 @@ func TestArraySpecializationKeepsOwnMembers(t *testing.T) {
 				attribute label : String;
 				attribute scale : Real = 0.5;
 			}
+			attribute def OtherGrid :> Array;
 			attribute grid : LabeledGrid {
 				:>> dimensions = (2, 2);
 				:>> elements = (1, 2, 3, 4);
 				:>> label = "grid";
 			}
+			calc def pick { return : LabeledGrid = grid; }
+			calc def labelOf { in g : LabeledGrid; return : String = g.label; }
+			attribute copy : LabeledGrid = grid;
+			attribute plain : Array = grid;
+			attribute other : OtherGrid = grid;
 		}
 	`))
 	pkg, ok := idx.DocumentRoot("<test>").LookupLocal("test")
@@ -1513,6 +1520,14 @@ func TestArraySpecializationKeepsOwnMembers(t *testing.T) {
 		{"grid.elements#(3)", "3"},
 		{"grid.label", `"grid"`},
 		{"grid.scale", "0.5"},
+		{"pick()", "Array(2, 2)[1, 2, 3, 4]"},
+		{"pick().label", `"grid"`},
+		{"pick().scale", "0.5"},
+		{"pick().rank", "2"},
+		{"CollectionFunctions::'array#'(pick(), (2, 1))", "3"},
+		{"labelOf(grid)", `"grid"`},
+		{"copy.label", `"grid"`},
+		{"plain.label", `"grid"`},
 	} {
 		got, err := evalIn(t, ctx, pkg.Scope, tc.src)
 		if err != nil {
@@ -1525,5 +1540,9 @@ func TestArraySpecializationKeepsOwnMembers(t *testing.T) {
 	}
 	if _, err := evalIn(t, ctx, pkg.Scope, "grid.missing"); err == nil || !strings.Contains(err.Error(), "missing") {
 		t.Errorf("grid.missing = %v, want an error naming the member", err)
+	}
+	// The value stays a LabeledGrid, which no OtherGrid feature can hold.
+	if got, err := evalIn(t, ctx, pkg.Scope, "other"); !errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("other = (%s, %v), want %v", FormatValue(got), err, ErrTypeMismatch)
 	}
 }
