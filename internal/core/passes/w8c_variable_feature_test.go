@@ -68,6 +68,14 @@ func TestW8CInitialValueRequiresVariableSysML(t *testing.T) {
 		attribute w : Integer := 4;
 		attribute ok : Integer = 5;
 	}
+	requirement def R {
+		subject s : PD := null;
+		require constraint c := true;
+	}
+	requirement r : R {
+		subject := null;
+		assume constraint := true;
+	}
 	part top : PD := null;
 }`
 	// A usage of an occurrence type may time-vary, except a portion or a composite action.
