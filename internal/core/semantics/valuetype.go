@@ -384,6 +384,9 @@ func (m *Model) operandConformsTo(scope *symbols.Scope, operand ast.Node, typ *s
 func (m *Model) dimensionConformance(scope *symbols.Scope, node ast.Node, want *symbols.Symbol) Conformance {
 	got, ok := m.DimensionOfExpr(scope, node)
 	if !ok {
+		if sum, lhs, rhs, incommensurable := m.incommensurableSum(scope, node); incommensurable {
+			return Conformance{Known: true, Found: fmt.Sprintf("`%s` over incommensurable quantities of dimension %s and %s", sum.Operator, lhs, rhs)}
+		}
 		return conformanceUnknown()
 	}
 	found := "a value of dimension " + got.String()
@@ -404,6 +407,31 @@ func (m *Model) dimensionConformance(scope *symbols.Scope, node ast.Node, want *
 		return conformanceUnknown()
 	}
 	return Conformance{Known: true, Holds: got.Term.Commensurable(wantDim.Term), Found: found}
+}
+
+// incommensurableSum finds, in quantity arithmetic, a sum or difference of
+// operands whose dimensions are both known and incommensurable. Such an
+// expression has no value of any dimension, so it is a value of no quantity type.
+func (m *Model) incommensurableSum(scope *symbols.Scope, node ast.Node) (*ast.OperatorExpr, Dimension, Dimension, bool) {
+	e, ok := node.(*ast.OperatorExpr)
+	if !ok {
+		return nil, Dimension{}, Dimension{}, false
+	}
+	switch e.Operator {
+	case ast.OpAdd, ast.OpSub:
+		if lhs, rhs, ok := m.operandDimensions(scope, e); ok && !lhs.Term.Commensurable(rhs.Term) {
+			return e, lhs, rhs, true
+		}
+	case ast.OpNeg, ast.OpPos, ast.OpMul, ast.OpDiv, ast.OpPow:
+	default:
+		return nil, Dimension{}, Dimension{}, false
+	}
+	for _, operand := range e.Operands {
+		if sum, lhs, rhs, ok := m.incommensurableSum(scope, operand); ok {
+			return sum, lhs, rhs, true
+		}
+	}
+	return nil, Dimension{}, Dimension{}, false
 }
 
 // invocationConformance judges an invocation's value by the declared type of the

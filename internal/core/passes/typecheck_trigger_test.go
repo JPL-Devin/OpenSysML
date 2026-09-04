@@ -238,6 +238,51 @@ func TestTriggerTimeArithmeticIsJudgedByDimension(t *testing.T) {
 	}
 }
 
+// An incommensurable sum is a value of no dimension, so it is refused (as the
+// pilot refuses it) next to the operator's warning; an unmeasured operand stays silent.
+func TestTriggerIncommensurableArithmeticIsRejected(t *testing.T) {
+	for _, tc := range []struct{ trigger, code string }{
+		{"after 1 [s] + 1 [m]", "trigger-after-duration"},
+		{"after d - len", "trigger-after-duration"},
+		{"after (d + len) * 2 [one]", "trigger-after-duration"},
+		{"after -(Twice(d) + Len())", "trigger-after-duration"},
+		{"at t + 1 [m]", "trigger-at-time-instant"},
+		{"at t - Pick(len)", "trigger-at-time-instant"},
+		{"at Later(t) + Len() * 2 [one]", "trigger-at-time-instant"},
+	} {
+		body := "transition first a accept " + tc.trigger + " then b;"
+		diags := triggerDiags(t, body)
+		if len(diags) != 2 {
+			t.Fatalf("want the trigger error and the operator warning for %q, got %v", body, diags)
+		}
+		var errors, warnings int
+		for _, d := range diags {
+			switch {
+			case d.Severity == SeverityError && d.Code == tc.code && strings.Contains(d.Message, "over incommensurable quantities of dimension"):
+				errors++
+			case d.Severity == SeverityWarning && strings.Contains(d.Message, "combines incommensurable quantities"):
+				warnings++
+			}
+		}
+		if errors != 1 || warnings != 1 {
+			t.Errorf("%q: want one %s error and one incommensurable-operator warning, got %v", body, tc.code, diags)
+		}
+	}
+	for _, trigger := range []string{
+		"after untyped + 1 [m]",
+		"after d + missing",
+		"at t - untyped",
+		"at Twice(d) + h.other",
+	} {
+		diags := triggerDiags(t, "transition first a accept "+trigger+" then b;")
+		for _, d := range diags {
+			if d.Severity == SeverityError {
+				t.Errorf("%q: want no type error for an operand only evaluation measures, got %v", trigger, diags)
+			}
+		}
+	}
+}
+
 // The argument of `at` must be a TimeInstantValue (pilot
 // validateTriggerInvocationActionAtArgument).
 func TestTriggerAtRejectsNonTimeInstant(t *testing.T) {
