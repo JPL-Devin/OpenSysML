@@ -18,5 +18,5 @@
           (Membership visibility="default"
             (PrefixMetadata type="Security" name="m4"
               (Membership visibility="default"
-                (Usage kind="enum" name="classification" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                (Usage kind="attribute" name="classification" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
                   (LiteralString value="\"conf\""))))))))))

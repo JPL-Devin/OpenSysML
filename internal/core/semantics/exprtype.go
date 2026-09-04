@@ -147,6 +147,33 @@ func (m *Model) scalarTable() map[*symbols.Symbol]PrimType {
 	return table
 }
 
+// ScalarSymbol returns the library definition a lattice element stands for
+// (`ScalarValues::Natural` for PrimNatural), or nil when none is loaded.
+func (m *Model) ScalarSymbol(prim PrimType) *symbols.Symbol {
+	fqn, ok := scalarDefFQNs[prim]
+	if !ok || m == nil || m.resolver == nil || m.resolver.Index() == nil {
+		return nil
+	}
+	for _, sym := range m.resolver.Index().LookupQualified(fqn) {
+		if sym != nil {
+			return sym
+		}
+	}
+	return nil
+}
+
+// scalarDefFQNs names the definition each lattice element stands for.
+var scalarDefFQNs = map[PrimType]string{
+	PrimBoolean:  "ScalarValues::Boolean",
+	PrimString:   "ScalarValues::String",
+	PrimNatural:  "ScalarValues::Natural",
+	PrimInteger:  "ScalarValues::Integer",
+	PrimRational: "ScalarValues::Rational",
+	PrimReal:     "ScalarValues::Real",
+	PrimComplex:  "ScalarValues::Complex",
+	PrimNumber:   "ScalarValues::Number",
+}
+
 // PrimTypeOf classifies sym against the scalar lattice. A definition is
 // classified by itself or its nearest scalar supertype; a usage by the type it
 // is typed by (typing is a generalization edge, so the same walk covers both).

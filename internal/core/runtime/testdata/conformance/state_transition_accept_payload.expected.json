@@ -3,11 +3,9 @@
   "events": [
     {
       "signal": "Warning",
-      "args": {
-        "value": {
-          "type": "Integer",
-          "value": 3
-        }
+      "value": {
+        "type": "Integer",
+        "value": 3
       }
     }
   ],
