@@ -32,8 +32,8 @@ cmp build/pilot-reject/pilot-reject.json docs/project/pilot-rejection-baseline.j
 `docs/project/pilot-rejection-baseline.json` is the only authority for the counts; the numbers
 quoted here are as-of values, and `cmd/pilot-reject/doc_counts_test.go` fails if they drift from it.
 As of the `semantic/` source (named pilot constraints, KerML and SysML, the control-node
-succession rules and the feature-value overriding rule), with a fresh library cache:
-`226 case(s): 196 both reject, 22 only the pilot rejects, 8 only we reject, 0 both accept`,
+succession rules, the feature-value overriding rule and the feature-variability rules), with a fresh
+library cache: `226 case(s): 198 both reject, 20 only the pilot rejects, 8 only we reject, 0 both accept`,
 byte-identical to the committed baseline. Any `both accept` case is a bug in the corpus (the case
 is not actually invalid under the loaded standard library) — fix the case, never ignore it. A
 candidate the pilot accepts because it does not enforce the named constraint is not a case either:
@@ -50,7 +50,7 @@ separately, so a strict agreement never reads as a default one.
 
 ```bash
 go run ./cmd/pilot-reject -conformance default -out build/pilot-reject-default
-# as of the `semantic/` source: 193 agreements, 25 gaps — the numbers strict mode leaves alone
+# as of the `semantic/` source: 195 agreements, 23 gaps — the numbers strict mode leaves alone
 go run ./cmd/pilot-reject -conformance lenient   # must fail: unknown conformance policy
 ```
 

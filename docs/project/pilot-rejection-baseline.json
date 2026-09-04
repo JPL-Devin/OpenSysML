@@ -35,8 +35,8 @@
   },
   "totals": {
     "cases": 226,
-    "bothReject": 196,
-    "pilotOnlyRejects": 22,
+    "bothReject": 198,
+    "pilotOnlyRejects": 20,
     "oursOnlyRejects": 8,
     "bothAccept": 0
   },
@@ -65,8 +65,8 @@
     {
       "source": "semantic",
       "cases": 98,
-      "bothReject": 74,
-      "pilotOnlyRejects": 16,
+      "bothReject": 76,
+      "pilotOnlyRejects": 14,
       "oursOnlyRejects": 8,
       "bothAccept": 0
     },
@@ -1163,12 +1163,9 @@
       "source": "semantic",
       "rule": "only a variable feature can have an initial value (KerML 8.4.4.9 validateFeatureValueIsInitial; pilot validateFeatureValueIsInitial).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 4: Initialized feature must be variable"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "semantic/k12-chain-through-self.kerml",
@@ -1912,12 +1909,9 @@
       "source": "semantic",
       "rule": "only a variable feature can be constant, and an attribute of a data type is not variable (KerML 8.3.3.3 validateFeatureConstantIsVariable; pilot validateFeatureConstantIsVariable).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 5: Only a variable feature can be constant"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "xpect/p01-public-root-import.kerml",
@@ -2259,8 +2253,8 @@
     ],
     "totals": {
       "cases": 226,
-      "bothReject": 196,
-      "pilotOnlyRejects": 22,
+      "bothReject": 198,
+      "pilotOnlyRejects": 20,
       "oursOnlyRejects": 8,
       "bothAccept": 0
     },

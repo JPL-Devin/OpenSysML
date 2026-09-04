@@ -20,7 +20,7 @@ the diagnostic it reports was recorded as that row's probe.
 
 ## Summary
 
-**Census:** 108 of 217 named constraints are reported by OpenSysML — 97 ✅ faithful and 11 ⚠️ approximate; 27 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 82 ❔ unknown.
+**Census:** 110 of 217 named constraints are reported by OpenSysML — 99 ✅ faithful and 11 ⚠️ approximate; 26 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 81 ❔ unknown.
 
 The figures on that line, and the pin and digest quoted above, are written by
 `go run ./cmd/validation-census` from the baseline; `-check` fails on a hand-edited figure or
@@ -115,7 +115,7 @@ parser/resolver location. *Our message* is given only where OpenSysML's wording 
 | `validateFeatureChainingFeatureConformance` | KerML | Each chaining feature is featured within the previous one (`Must be a valid feature`); a probe fails name resolution first in both tools | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateFeatureChainingFeatureNotOne` | KerML | A feature chain has more than one chaining feature | internal/core/passes/w8c_type_relationships.go:TypeRelationshipsPass.Run | — | `xpect/p05-single-chaining-feature.kerml` | ✅ faithful |
 | `validateFeatureChainingFeaturesNotSelf` | KerML | A feature is not one of its own chaining features; a probe fails name resolution first in both tools | — | — | none | ❔ unknown — no case and no identifiable pass yet |
-| `validateFeatureConstantIsVariable` | KerML | Only a variable feature can be constant | — | — | none | ❔ unknown — no case and no identifiable pass yet |
+| `validateFeatureConstantIsVariable` | KerML | Only a variable feature can be constant | internal/core/passes/w8c_variable_feature.go:VariableFeaturePass.Run | same wording; KerML `const` implies `var`, so only SysML's `constant` prefix on a usage that cannot time-vary violates it | `semantic/s80-constant-attribute-not-variable.sysml` | ✅ faithful |
 | `validateFeatureCrossFeatureSpecialization` | KerML | A cross feature specializes the cross features of the ends it redefines | internal/core/passes/w10b_cross_features.go:checkW10BCrossFeatures | — | none | ✅ faithful |
 | `validateFeatureCrossFeatureType` | KerML | A cross feature has the same type as its feature | internal/core/passes/w10b_cross_features.go:checkW10BCrossFeatures | — | none | ✅ faithful |
 | `validateFeatureEndFeatureMultiplicity` | KerML | An end feature has multiplicity 1 (warning `End feature must have multiplicity 1`) | — | — | none | ❌ not implemented |
@@ -130,7 +130,7 @@ parser/resolver location. *Our message* is given only where OpenSysML's wording 
 | `validateFeaturePortionNotVariable` | KerML | A portion feature is not variable | internal/core/passes/w8c_variable_feature.go:VariableFeaturePass.Run | — | none | ✅ faithful |
 | `validateFeatureReferenceExpressionReferentIsFeature` | KerML | The referent of a feature reference expression is a feature | internal/core/passes/w8c_feature_reference.go:FeatureReferencePass.Run | — | none | ✅ faithful |
 | `validateFeatureReferenceExpressionResult` | KerML | A feature reference expression owns its result parameter | — | — | none | ❔ unknown — no case and no identifiable pass yet |
-| `validateFeatureValueIsInitial` | KerML | A feature with an initial value is variable (`Initialized feature must be variable`) | — | — | none | ❌ not implemented |
+| `validateFeatureValueIsInitial` | KerML | A feature with an initial value is variable (`Initialized feature must be variable`) | internal/core/passes/w8c_variable_feature.go:VariableFeaturePass.Run | same wording, on the `:=` value; the variability read is `semantics.Model.FeatureIsVariable` | `semantic/k11-initial-value-nonvariable.kerml` | ✅ faithful |
 | `validateFeatureValueOverriding` | KerML | A feature value does not override a binding feature value inherited from a redefined feature (`Cannot override a binding feature value`) | — | — | none | ❌ not implemented |
 | `validateFlowEndImplicitSubsetting` | KerML | A flow end whose owned feature is identified implicitly should use dot notation (warning `Flow ends should use dot notation`); no model made the pilot report it | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateFlowEndIsEnd` | KerML | A flow end is an end feature | — | — | none | ❔ unknown — no case and no identifiable pass yet |
