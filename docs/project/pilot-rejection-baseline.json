@@ -27,16 +27,16 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 225,
-        "digest": "sha256:7e0e48b3dfa79a7184eface8a980e1fe9241798e68e9e73e926b1dcab9ff67c7"
+        "files": 226,
+        "digest": "sha256:91f3388e06298cada6a348a89e0d90e208d7ea32d8d38f2ba19d625f7037e420"
       }
     ],
     "recorded": "2026-09-04"
   },
   "totals": {
-    "cases": 225,
-    "bothReject": 199,
-    "pilotOnlyRejects": 18,
+    "cases": 226,
+    "bothReject": 196,
+    "pilotOnlyRejects": 22,
     "oursOnlyRejects": 8,
     "bothAccept": 0
   },
@@ -64,9 +64,9 @@
     },
     {
       "source": "semantic",
-      "cases": 97,
-      "bothReject": 77,
-      "pilotOnlyRejects": 12,
+      "cases": 98,
+      "bothReject": 74,
+      "pilotOnlyRejects": 16,
       "oursOnlyRejects": 8,
       "bothAccept": 0
     },
@@ -1211,18 +1211,24 @@
       "source": "semantic",
       "rule": "a cross subsetting must be owned by an end feature of a type with two or more ends (KerML 8.3.3.3 validateCrossSubsettingCrossingFeature; pilot validateCrossSubsettingCrossingFeature).",
       "mode": "default",
-      "bucket": "both-reject",
-      "oursErrors": 1,
-      "pilotErrors": 1
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 5: Cross subsetting must be owned by one of two or more end features"
+      ]
     },
     {
       "path": "semantic/k17-crosses-not-through-opposite-end.kerml",
       "source": "semantic",
       "rule": "a crossed feature must chain through the opposite end feature (KerML 8.3.3.3 validateCrossSubsettingCrossedFeature; pilot validateCrossSubsettingCrossedFeature).",
       "mode": "default",
-      "bucket": "both-reject",
-      "oursErrors": 1,
-      "pilotErrors": 1
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 6: Cross subsetting must chain through an opposite end feature"
+      ]
     },
     {
       "path": "semantic/k18-cross-feature-type-differs.kerml",
@@ -1238,9 +1244,12 @@
       "source": "semantic",
       "rule": "a cross feature must specialize the cross features of redefined ends (KerML 8.3.3.3 validateFeatureCrossFeatureSpecialization; pilot validateFeatureCrossFeatureSpecialization).",
       "mode": "default",
-      "bucket": "both-reject",
-      "oursErrors": 1,
-      "pilotErrors": 1
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 13: Cross feature must specialized redefined-end cross features"
+      ]
     },
     {
       "path": "semantic/k20-datatype-specializes-class.kerml",
@@ -1466,9 +1475,13 @@
       "source": "semantic",
       "rule": "a feature may own at most one cross subsetting (KerML 8.3.3.3 validateFeatureOwnedCrossSubsetting; pilot validateFeatureOwnedCrossSubsetting).",
       "mode": "default",
-      "bucket": "both-reject",
-      "oursErrors": 1,
-      "pilotErrors": 2
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 2,
+      "pilot": [
+        "line 0: Error executing EValidator",
+        "line 9: The opposite features 'crossingFeature' of 'org.omg.sysml.lang.sysml.impl.CrossSubsettingImpl{semantic/k42-two-cross-subsettings.kerml#//@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.2}' and 'ownedCrossSubsetting' of 'org.omg.sysml.lang.sysml.impl.FeatureImpl{semantic/k42-two-cross-subsettings.kerml#//@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0}' do not refer to each other"
+      ]
     },
     {
       "path": "semantic/s01-action-typed-by-part-def.sysml",
@@ -1886,6 +1899,15 @@
       "pilotErrors": 1
     },
     {
+      "path": "semantic/s46-feature-value-overriding.sysml",
+      "source": "semantic",
+      "rule": "a feature bound with `=` may not be given another value by a redefining feature; only a `default =` value may be overridden (KerML 8.3.4.10.2; pilot validateFeatureValueOverriding).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 2
+    },
+    {
       "path": "semantic/s80-constant-attribute-not-variable.sysml",
       "source": "semantic",
       "rule": "only a variable feature can be constant, and an attribute of a data type is not variable (KerML 8.3.3.3 validateFeatureConstantIsVariable; pilot validateFeatureConstantIsVariable).",
@@ -2236,9 +2258,9 @@
       }
     ],
     "totals": {
-      "cases": 225,
-      "bothReject": 199,
-      "pilotOnlyRejects": 18,
+      "cases": 226,
+      "bothReject": 196,
+      "pilotOnlyRejects": 22,
       "oursOnlyRejects": 8,
       "bothAccept": 0
     },

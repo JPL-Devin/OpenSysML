@@ -450,6 +450,11 @@ type SubjectMember struct {
 	Relationships []*Relationship // specializations written after the type (`:>> RequirementCheck::subj`)
 	Body          []Node          // optional nested members
 	BindingExpr   Node            // value part: `subject = <expr>;` or a declaration's `= expr` / `default expr`
+	// ValueOperatorSpan, ValueIsDefault and ValueIsInitial describe BindingExpr's
+	// operator as Usage's fields of the same names do.
+	ValueOperatorSpan source.Span
+	ValueIsDefault    bool
+	ValueIsInitial    bool
 	// HasBody records that the declaration was written with braces, which an
 	// empty body does not otherwise show.
 	HasBody bool
@@ -465,12 +470,18 @@ type AssumeMember struct {
 	Reference  *QualifiedName // referenced constraint/requirement (reference-subsetting form)
 	Body       []Node         // ConstraintMembers of the nested constraint (for the braced form)
 	// Declaration of the constraint the member owns, when it is written with
-	// one: `assume constraint c1 : C;`.
+	// one: `assume constraint c1 : C;`. DeclSpan covers it from `constraint` on.
 	Name          string
 	NameSpan      source.Span
+	DeclSpan      source.Span
 	Relationships []*Relationship
 	Multiplicity  *Multiplicity
 	Value         Node
+	// ValueOperatorSpan covers the value operator; ValueIsDefault and
+	// ValueIsInitial are its `default` and `:=` (KerML FeatureValue).
+	ValueOperatorSpan source.Span
+	ValueIsDefault    bool
+	ValueIsInitial    bool
 	// HasBody records that the member was written with braces, which an empty
 	// body does not otherwise show.
 	HasBody bool
@@ -486,15 +497,83 @@ type RequireMember struct {
 	Reference  *QualifiedName // referenced requirement (reference-subsetting form, SysML v2 §7.20)
 	Body       []Node         // nested members: ConstraintMembers for the braced form, requirement members for the reference form
 	// Declaration of the constraint the member owns, when it is written with
-	// one: `require constraint c1 : C;`.
+	// one: `require constraint c1 : C;`. DeclSpan covers it from `constraint` on.
 	Name          string
 	NameSpan      source.Span
+	DeclSpan      source.Span
 	Relationships []*Relationship
 	Multiplicity  *Multiplicity
 	Value         Node
+	// ValueOperatorSpan covers the value operator; ValueIsDefault and
+	// ValueIsInitial are its `default` and `:=` (KerML FeatureValue).
+	ValueOperatorSpan source.Span
+	ValueIsDefault    bool
+	ValueIsInitial    bool
 	// HasBody records that the member was written with braces, which an empty
 	// body does not otherwise show.
 	HasBody bool
+}
+
+// OwnedConstraint is the constraint usage an assume or require member declares
+// with the `constraint` keyword (SysML.xtext RequirementConstraintUsage).
+type OwnedConstraint struct {
+	Name              string
+	NameSpan          source.Span
+	DeclSpan          source.Span
+	Relationships     []*Relationship
+	Multiplicity      *Multiplicity
+	Value             Node
+	ValueOperatorSpan source.Span
+	ValueIsDefault    bool
+	ValueIsInitial    bool
+	Body              []Node
+}
+
+// OwnedConstraintOf returns the constraint an assume or require member declares,
+// or false for one that references a requirement or states a condition instead.
+func OwnedConstraintOf(n Node) (OwnedConstraint, bool) {
+	switch m := n.(type) {
+	case *AssumeMember:
+		if m.Reference != nil || m.Expression != nil {
+			return OwnedConstraint{}, false
+		}
+		return OwnedConstraint{
+			Name: m.Name, NameSpan: m.NameSpan, DeclSpan: m.DeclSpan, Relationships: m.Relationships,
+			Multiplicity: m.Multiplicity, Value: m.Value, ValueOperatorSpan: m.ValueOperatorSpan,
+			ValueIsDefault: m.ValueIsDefault, ValueIsInitial: m.ValueIsInitial, Body: m.Body,
+		}, true
+	case *RequireMember:
+		if m.Reference != nil || m.Expression != nil {
+			return OwnedConstraint{}, false
+		}
+		return OwnedConstraint{
+			Name: m.Name, NameSpan: m.NameSpan, DeclSpan: m.DeclSpan, Relationships: m.Relationships,
+			Multiplicity: m.Multiplicity, Value: m.Value, ValueOperatorSpan: m.ValueOperatorSpan,
+			ValueIsDefault: m.ValueIsDefault, ValueIsInitial: m.ValueIsInitial, Body: m.Body,
+		}, true
+	}
+	return OwnedConstraint{}, false
+}
+
+// NamingFeature returns the relationship naming a constraint declared without a
+// name, as NamingFeature does for a usage.
+func (c OwnedConstraint) NamingFeature() *Relationship {
+	if c.Name != "" {
+		return nil
+	}
+	return namingRelationship(c.Relationships, true)
+}
+
+// EffectiveName returns the name the constraint answers to: its declared name,
+// else the name its naming feature supplies.
+func (c OwnedConstraint) EffectiveName() (string, source.Span) {
+	if c.Name != "" {
+		return c.Name, c.NameSpan
+	}
+	if rel := c.NamingFeature(); rel != nil {
+		return TargetName(rel.Target)
+	}
+	return "", source.Span{}
 }
 
 // Phase C4: State Body Members
