@@ -11,7 +11,10 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-const msgAssignmentReferentTimeVarying = "Referent must be time varying."
+const (
+	msgAssignmentReferent            = "An assignment must have a referent."
+	msgAssignmentReferentTimeVarying = "Referent must be time varying."
+)
 
 // AssignmentReferentPass checks SysML AssignmentActionUsage referents.
 type AssignmentReferentPass struct{}
@@ -141,20 +144,30 @@ func (c *assignmentReferentChecker) check(scope *symbols.Scope, assignment *ast.
 	if !ok || referent == nil {
 		return
 	}
-	if _, ok := referent.Decl.(*ast.Usage); !ok || c.model.UsageMayTimeVary(referent) {
-		return
-	}
 	span := assignment.Target.Span()
 	if _, targetSpan := ast.TargetName(assignment.Target); targetSpan != (span) {
 		span = targetSpan
 	}
-	c.diags = append(c.diags, Diagnostic{
-		Severity: SeverityError,
-		Span:     span,
-		Message:  msgAssignmentReferentTimeVarying,
-		Code:     "assignment-referent-time-varying",
-		Source:   "constraint",
-	})
+	// The referent is the feature the target names (SysML v2 §8.3.16.2
+	// AssignmentActionUsage::referent); a type or a namespace is none.
+	if referent.Kind != symbols.SymbolUnknown && !referent.Kind.IsFeature() {
+		c.report(span, fmt.Sprintf("%s %s is declared `%s`, not a feature.",
+			msgAssignmentReferent, targetText(assignment.Target), referent.Notation()),
+			"assignment-referent")
+		return
+	}
+	if _, ok := referent.Decl.(*ast.Usage); !ok || c.model.UsageMayTimeVary(referent) {
+		return
+	}
+	c.report(span, msgAssignmentReferentTimeVarying, "assignment-referent-time-varying")
+}
+
+// targetText renders an assignment target as written, for a message about it.
+func targetText(target ast.Node) string {
+	if qn := ast.AsQualifiedName(target); qn != nil {
+		return endpointText(qn)
+	}
+	return lower.FeaturePath(target)
 }
 
 // checkChain reports a chained assignment target the runtime cannot write: one

@@ -177,6 +177,23 @@ func (k SymbolKind) String() string {
 	return "unknown"
 }
 
+// IsFeature reports whether k classifies a KerML Feature (KerML 1.0 §8.3.3): a
+// usage of any kind, a connector end or a multiplicity, never a type or a namespace.
+func (k SymbolKind) IsFeature() bool {
+	switch k {
+	case SymbolPartUsage, SymbolAttributeUsage, SymbolItemUsage, SymbolOccurrenceUsage,
+		SymbolIndividualUsage, SymbolMetadataUsage, SymbolEnumerationUsage, SymbolViewUsage,
+		SymbolViewpointUsage, SymbolRenderingUsage, SymbolConcernUsage, SymbolConnectionUsage,
+		SymbolSuccessionUsage, SymbolFlowUsage, SymbolPortUsage, SymbolInterfaceUsage,
+		SymbolAllocationUsage, SymbolActionUsage, SymbolStateUsage, SymbolCalcUsage,
+		SymbolConstraintUsage, SymbolRequirementUsage, SymbolSatisfyRequirementUsage,
+		SymbolCaseUsage, SymbolAnalysisCaseUsage, SymbolVerificationCaseUsage, SymbolUseCaseUsage,
+		SymbolConnectorEnd, SymbolMultiplicity:
+		return true
+	}
+	return false
+}
+
 // Notation names a symbol the way the notation declares it — "part def",
 // "state", "render" — rather than by its internal classification.
 func (s *Symbol) Notation() string {
