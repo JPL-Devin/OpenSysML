@@ -178,8 +178,15 @@ source → lexer → parser → AST → symbol index → resolve → passes
   declaring document + declaration span — stable across reindexing, unlike a
   `*Symbol`). Each segment is stored under two identities: the element it
   *reaches* (after invocation overload selection; a tied call reaches nothing)
-  and the name it *writes* (an alias, where one was written). Find References
-  matches either; Rename edits only the written name. Built lazily on the first
+  and the name it *writes* (an alias, where one was written), with the
+  `resolve.Reference` it is a segment of. Find References matches either;
+  Rename edits only the written name, and `RenameConflict` checks each
+  occurrence for capture through `internal/core/rename` — a trial reading of the
+  reference with that segment respelled (`Resolver.ProbeReading`, which keeps
+  what each segment reached even where the whole name then fails), so a chain
+  member is read in its operand's type, a redefinition target among the
+  generals, and a qualifier respelled onto an element lacking the rest of the
+  name is still seen — the check the batch edit API shares. Built lazily on the first
   query after a change, over all documents with one shared resolver and
   semantic model, under the workspace's write lock; never built on the
   `didChange` path. Any mutation (`reindexLocked`, `removeLocked`, a
@@ -381,6 +388,13 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - Include declaration option, reported in the declaring document
 - Answered from the workspace's reverse reference index (a lookup, not a scan);
   Rename reads the same index
+
+**Rename (textDocument/prepareRename, textDocument/rename):**
+- Rewrites the name under the cursor — long or `<short>` — at its declaration
+  and wherever a reference in any workspace document writes it
+- Refused with an error naming the element the new name would mean when that
+  name is already taken where the element is declared, or when a rewritten
+  reference would afterwards read another element (`internal/core/rename`)
 
 **Completion (textDocument/completion):**
 - Trigger characters: `:`, `.`
