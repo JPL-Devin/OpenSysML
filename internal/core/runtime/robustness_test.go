@@ -1600,6 +1600,9 @@ func testStructuredValueOutsideTheDeclaredShape(t *testing.T) {
 			private import Collections::*;
 			private import VectorValues::*;
 			private import VectorFunctions::*;
+			private import Quantities::*;
+			private import ISQ::*;
+			private import SI::*;
 			attribute def Grid :> Array { :>> dimensions = (2, 2); }
 			attribute def Row4 :> Array { :>> rank = 1; :>> flattenedSize = 4; }
 			attribute def IntArray :> Array { :>> elements : Integer; }
@@ -1608,6 +1611,9 @@ func testStructuredValueOutsideTheDeclaredShape(t *testing.T) {
 			attribute def IntVec :> NumericalVectorValue { :>> elements : Integer; }
 			attribute def IntThree :> ThreeVectorValue { :>> elements : Integer; }
 			attribute def Fixed2 :> NumericalVectorValue { :>> dimension = 2; }
+			attribute def Four :> Array { :>> elements : Integer[4]; }
+			attribute def Vel3 :> VectorQuantityValue { :>> num : Real[3]; }
+			attribute def IntVQ :> VectorQuantityValue { :>> num : Integer; }
 			attribute square : Array { :>> dimensions = (2, 2); :>> elements = (1, 2, 3, 4); }
 			attribute wide : Array { :>> dimensions = (2, 3); :>> elements = (1, 2, 3, 4, 5, 6); }
 			attribute row : Array { :>> dimensions = 4; :>> elements = (1, 2, 3, 4); }
@@ -1634,6 +1640,14 @@ func testStructuredValueOutsideTheDeclaredShape(t *testing.T) {
 			calc def RowAsRow4 { return : Row4 = row; }
 			calc def RealsAsIntArray { return : IntArray = reals; }
 			calc def RowAsIntArray { return : IntArray = row; }
+			calc def RealsAsFour { return : Four = reals; }
+			calc def SquareAsFour { return : Four = square; }
+			calc def TwoAsVel3 { return : Vel3 = VectorOf((1.0, 2.0)) [m]; }
+			calc def ThreeAsVel3 { return : Vel3 = VectorOf((1.0, 2.0, 3.0)) [m]; }
+			calc def RealsAsIntVQ { return : IntVQ = VectorOf((1.5, 2.5)) [m]; }
+			calc def IntsAsIntVQ { return : IntVQ = VectorOf((1, 2)) [m]; }
+			calc def TwoAsScalar { return : ScalarQuantityValue = VectorOf((1.0, 2.0)) [m]; }
+			calc def TwoAsLength { return : LengthValue = VectorOf((1.0, 2.0)) [m]; }
 		}
 	`
 	for calc, fixes := range map[string]string{
@@ -1650,6 +1664,11 @@ func testStructuredValueOutsideTheDeclaredShape(t *testing.T) {
 		"SquareAsRow4":     "it declares rank = 1",
 		"SquareAsOneDim":   "it declares dimension : Positive[0..1], got 2 dimension(s)",
 		"RealsAsIntArray":  "it declares elements : Integer, got element 1.5 (a Real)",
+		"RealsAsFour":      "it declares elements : Integer[4], got 2 element(s)",
+		"TwoAsVel3":        "it declares num : Real[3], got 2 element(s)",
+		"RealsAsIntVQ":     "it declares num : Integer, got element 1.5 (a Real)",
+		"TwoAsScalar":      "to a feature typed by ScalarQuantityValue: it is a ScalarValue, which holds one scalar",
+		"TwoAsLength":      "to a feature typed by LengthValue: it is a ScalarValue, which holds one scalar",
 	} {
 		err := calcErrorWithLibraries(t, src, calc, nil, 10000)
 		if !errors.Is(err, ErrTypeMismatch) || !strings.Contains(err.Error(), fixes) {
@@ -1666,6 +1685,9 @@ func testStructuredValueOutsideTheDeclaredShape(t *testing.T) {
 		"SquareAsGrid":       "Array(2, 2)[1, 2, 3, 4]",
 		"RowAsRow4":          "Array(4)[1, 2, 3, 4]",
 		"RowAsIntArray":      "Array(4)[1, 2, 3, 4]",
+		"SquareAsFour":       "Array(2, 2)[1, 2, 3, 4]",
+		"ThreeAsVel3":        "⟨1.0, 2.0, 3.0⟩ [m]",
+		"IntsAsIntVQ":        "⟨1, 2⟩ [m]",
 	} {
 		idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
 		sym, scope := calcByName(t, idx.DocumentRoot("<test>"), "test", calc)

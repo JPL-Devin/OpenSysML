@@ -41,6 +41,10 @@ type Context struct {
 
 	features map[*symbols.Symbol][]EffectiveFeature
 
+	// arrayFeatures memoizes the declarations of Collections::Array's features
+	// by name; see arrayFeatureSymbols.
+	arrayFeatures map[*symbols.Symbol]string
+
 	// writeTargets memoizes the declaration an assignment's target names, per
 	// scope the statement was written in: what a value written must conform to.
 	writeTargets map[writeTargetKey]*writeTarget

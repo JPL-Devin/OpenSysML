@@ -14,11 +14,13 @@
   a scalar quantity and a vector, answer a vector quantity printed `⟨2.0, 4.0⟩ [m]` whose unit
   is composed by the same rule as the scalar quantities'; a vector of no components takes no
   unit, as a quantity's `num` is `Number[1..*]`. `inner`, `norm` and `angle` over vector
-  quantities answer the `Number` the library declares — the magnitude in the unit the axes
-  compose — so a `Number` feature takes them, as the checker already allowed. A vector binds to a feature typed by any
+  quantities answer the `Number` the library declares — the magnitude over the components, the
+  unit dropped by declaration — so a `Number` feature takes them, as the checker already allowed. A vector binds to a feature typed by any
   `NumericalVectorValue` specialization whose fixed dimension and element type it fits — a
   model's own `:> NumericalVectorValue { :>> elements : Integer; }` as much as
-  `CartesianThreeVectorValue` — and the refusal names the declaration it fails. Each new kind is handled wherever
+  `CartesianThreeVectorValue` — and the refusal names the declaration it fails; an object of
+  such a specialization reads as a vector that keeps its own members (`t.tag`), directly, through a
+  calc parameter and on a calc's result. Each new kind is handled wherever
   the runtime, REPL, traces, solver and gRPC bridge inspect a value's kind, and a test
   enumerates the kinds so a future one cannot be left out. Tensors, coordinate
   transformations and a measurement reference passed as an argument value stay typed

@@ -116,6 +116,9 @@ func (a *Array) Format(element func(Value) string) string {
 // dimension, its `dimension`.
 type Vector struct {
 	Elements []semantics.Value
+	// Object is the NumericalVectorValue object the value was read from, which keeps
+	// answering the members a specialization adds; 0 for a vector made by value.
+	Object int64
 }
 
 // NewVectorValue wraps the vector of the given numeric components.
@@ -201,6 +204,17 @@ const (
 	tensorOrderFeature        = "order"
 )
 
+// arrayFeatureNames are the features of Collections::Array a structured value
+// answers from itself.
+var arrayFeatureNames = []string{arrayDimensionsFeature, arrayRankFeature, arrayFlattenedSizeFeature, arrayElementsFeature}
+
+// vectorQuantityAliases are the TensorQuantityValue features that redefine an
+// Array feature (`num :>> elements`, `order :>> rank`), by the feature redefined.
+var vectorQuantityAliases = map[string]string{
+	vectorQuantityNumFeature: arrayElementsFeature,
+	tensorOrderFeature:       arrayRankFeature,
+}
+
 // Library types the structured kinds are values of.
 const (
 	arrayTypeFQN                = "Collections::Array"
@@ -209,6 +223,7 @@ const (
 	cartesianVectorTypeFQN      = "VectorValues::CartesianVectorValue"
 	cartesianThreeVectorTypeFQN = "VectorValues::CartesianThreeVectorValue"
 	vectorQuantityTypeFQN       = "Quantities::VectorQuantityValue"
+	scalarValueTypeFQN          = "ScalarValues::ScalarValue"
 )
 
 // structuredFeature reads a library feature of an array, vector or vector
@@ -222,7 +237,7 @@ func (ctx *Context) structuredFeature(val Value, name string) (Value, bool, erro
 		switch name {
 		case arrayDimensionsFeature:
 			return ctx.answerSequence(integerValues(a.Dimensions))
-		case arrayRankFeature, tensorOrderFeature:
+		case arrayRankFeature:
 			return integerValue(int64(a.Rank())), true, nil
 		case arrayFlattenedSizeFeature:
 			return integerValue(a.FlattenedSize()), true, nil
@@ -239,25 +254,99 @@ func (ctx *Context) structuredFeature(val Value, name string) (Value, bool, erro
 				ErrUnevaluableLibraryFunction, noMeasurementRefValue,
 			)
 		}
-		return ctx.oneDimensionalFeature(name, vq.Num, map[string]bool{vectorQuantityNumFeature: true})
+		return ctx.oneDimensionalFeature(name, vq.Num, vectorQuantityAliases)
 	}
 	return Value{}, false, nil
 }
 
-// oneDimensionalFeature answers the Array features of a vector of the given
-// components; aliases names further features that answer the components.
-func (ctx *Context) oneDimensionalFeature(name string, components []semantics.Value, aliases map[string]bool) (Value, bool, error) {
-	switch {
-	case name == vectorDimensionFeature || name == arrayFlattenedSizeFeature:
+// oneDimensionalFeature answers a vector's Array features and `dimension` from
+// its components; aliases maps the type's further names onto the Array feature.
+func (ctx *Context) oneDimensionalFeature(name string, components []semantics.Value, aliases map[string]string) (Value, bool, error) {
+	if base, ok := aliases[name]; ok {
+		name = base
+	}
+	switch name {
+	case vectorDimensionFeature, arrayFlattenedSizeFeature:
 		return integerValue(int64(len(components))), true, nil
-	case name == arrayDimensionsFeature:
+	case arrayDimensionsFeature:
 		return ctx.answerSequence(integerValues([]int64{int64(len(components))}))
-	case name == arrayRankFeature || name == tensorOrderFeature:
+	case arrayRankFeature:
 		return integerValue(1), true, nil
-	case name == arrayElementsFeature || aliases[name]:
+	case arrayElementsFeature:
 		return ctx.answerSequence(constValues(components))
 	}
 	return Value{}, false, nil
+}
+
+// arrayFeatureOf is the Collections::Array feature a member is or transitively
+// redefines (`dimension :>> dimensions`); false for a specialization's own member.
+func (ctx *Context) arrayFeatureOf(member *symbols.Symbol) (string, bool) {
+	names := ctx.arrayFeatureSymbols()
+	if name, ok := names[member]; ok {
+		return name, true
+	}
+	for _, redefined := range ctx.model.AllRedefinedFeatures(member) {
+		if name, ok := names[redefined]; ok {
+			return name, true
+		}
+	}
+	return "", false
+}
+
+// arrayFeatureNamed is the Collections::Array feature the member of typ named
+// name is or redefines, and that member; false for another member, or none.
+func (ctx *Context) arrayFeatureNamed(typ *symbols.Symbol, name string) (string, *symbols.Symbol, bool) {
+	member, ok := ctx.model.LookupMember(typ, name)
+	if !ok || member == nil {
+		return "", nil, false
+	}
+	base, ok := ctx.arrayFeatureOf(member)
+	return base, member, ok
+}
+
+// structuredMember answers an Array feature as the member of owner declares it:
+// `dimension[0..1] :>> dimensions` is the one dimension, not the sequence.
+func (ctx *Context) structuredMember(val Value, base string, member, owner *symbols.Symbol) (Value, error) {
+	if base == arrayDimensionsFeature {
+		if upper := ctx.featureMultiplicity(member, owner).Upper; upper.Known && !upper.Infinite && upper.Value == 1 {
+			dims := structuredDimensions(val)
+			if len(dims) == 0 {
+				return nullValue(), nil
+			}
+			return integerValue(dims[0]), nil
+		}
+	}
+	answer, ok, err := ctx.structuredFeature(val, base)
+	if err != nil {
+		return Value{}, err
+	}
+	if !ok {
+		return Value{}, fmt.Errorf("%w: %s has no feature %s", ErrTypeMismatch, describeValue(val), base)
+	}
+	return answer, nil
+}
+
+// arrayFeatureSymbols maps each declaration of a Collections::Array feature (and
+// those it redefines, `OrderedCollection::elements` included) to its name. Memoized.
+func (ctx *Context) arrayFeatureSymbols() map[*symbols.Symbol]string {
+	if ctx.arrayFeatures != nil {
+		return ctx.arrayFeatures
+	}
+	names := make(map[*symbols.Symbol]string)
+	if arraySym := ctx.librarySymbol(arrayTypeFQN); arraySym != nil {
+		for _, name := range arrayFeatureNames {
+			feat, ok := ctx.model.LookupMember(arraySym, name)
+			if !ok || feat == nil {
+				continue
+			}
+			names[feat] = name
+			for _, redefined := range ctx.model.AllRedefinedFeatures(feat) {
+				names[redefined] = name
+			}
+		}
+	}
+	ctx.arrayFeatures = names
+	return names
 }
 
 // answerSequence is a feature answered as a fresh, charged sequence of elements.
@@ -266,16 +355,34 @@ func (ctx *Context) answerSequence(elements []Value) (Value, bool, error) {
 	return seq, true, err
 }
 
+// backingObject is the object an array or vector was read from; 0 for a value
+// made by value, and for the other kinds.
+func backingObject(value Value) int64 {
+	switch value.Kind {
+	case ValArray:
+		return value.Array().Object
+	case ValVector:
+		return value.Vector().Object
+	}
+	return 0
+}
+
+// structuredObject is the live object an array or vector was read from, if any.
+func (ctx *Context) structuredObject(value Value) (*Instance, bool) {
+	inst, ok := ctx.instances[backingObject(value)]
+	return inst, ok
+}
+
 // structuredValueType is the most specific library type a structured value is
 // of: the object it was read from or an Array, a Cartesian (three-)vector, a
 // vector quantity.
 func (ctx *Context) structuredValueType(value Value) (*symbols.Symbol, error) {
+	if inst, ok := ctx.structuredObject(value); ok {
+		return ctx.objectType(inst), nil
+	}
 	var fqn string
 	switch value.Kind {
 	case ValArray:
-		if inst, ok := ctx.instances[value.Array().Object]; ok {
-			return ctx.objectType(inst), nil
-		}
 		fqn = arrayTypeFQN
 	case ValVector:
 		// Every number is a Real, so a numerical vector is a Cartesian one.
@@ -292,14 +399,14 @@ func (ctx *Context) structuredValueType(value Value) (*symbols.Symbol, error) {
 }
 
 // structuredBaseType is the type a structured value is of whatever its shape (Array,
-// NumericalVectorValue, VectorQuantityValue, or the type of the object an Array was read from).
+// NumericalVectorValue, VectorQuantityValue, or the type of the object it was read from).
 func (ctx *Context) structuredBaseType(value Value) (*symbols.Symbol, error) {
+	if inst, ok := ctx.structuredObject(value); ok {
+		return ctx.objectType(inst), nil
+	}
 	var fqn string
 	switch value.Kind {
 	case ValArray:
-		if inst, ok := ctx.instances[value.Array().Object]; ok {
-			return ctx.objectType(inst), nil
-		}
 		fqn = arrayTypeFQN
 	case ValVector:
 		fqn = numericalVectorTypeFQN
@@ -322,7 +429,8 @@ func (ctx *Context) loadedLibraryType(fqn string) (*symbols.Symbol, error) {
 }
 
 // arrayOfObject reads an object typed by Collections::Array as the Array value its
-// `dimensions` and `elements` shape; one stating neither stays an object.
+// `dimensions` and `elements` shape — the vector, for a NumericalVectorValue of
+// one dimension; one stating neither stays an object.
 func (ctx *Context) arrayOfObject(inst *Instance) (Value, bool, error) {
 	arraySym := ctx.librarySymbol(arrayTypeFQN)
 	if arraySym == nil || inst == nil || inst.Type == nil {
@@ -331,11 +439,11 @@ func (ctx *Context) arrayOfObject(inst *Instance) (Value, bool, error) {
 	if !ctx.model.Conforms(ctx.objectType(inst), arraySym) {
 		return Value{}, false, nil
 	}
-	dims, dimsStated, err := ctx.objectFeatureElements(inst, arrayDimensionsFeature)
+	dims, dimsStated, err := ctx.objectArrayFeature(inst, arrayDimensionsFeature)
 	if err != nil {
 		return Value{}, true, err
 	}
-	elements, elementsStated, err := ctx.objectFeatureElements(inst, arrayElementsFeature)
+	elements, elementsStated, err := ctx.objectArrayFeature(inst, arrayElementsFeature)
 	if err != nil {
 		return Value{}, true, err
 	}
@@ -347,12 +455,88 @@ func (ctx *Context) arrayOfObject(inst *Instance) (Value, bool, error) {
 	if err != nil {
 		return Value{}, true, err
 	}
+	if !dimsStated {
+		if fixed, ok := ctx.fixedDimensions(inst); ok {
+			dimensions = fixed
+		}
+	}
 	val, err := arrayOf(op, dimensions, elements)
 	if err != nil {
 		return Value{}, true, err
 	}
 	val.Array().Object = inst.ID
+	return ctx.vectorOfObject(inst, val)
+}
+
+// fixedDimensions is the dimensions an object's type fixes by a constant on
+// `dimensions` or a redefinition of it (`ThreeVectorValue::dimension = 3`).
+func (ctx *Context) fixedDimensions(inst *Instance) ([]int64, bool) {
+	typ := ctx.objectType(inst)
+	for _, member := range ctx.model.MembersOfIncludingRedefined(typ) {
+		if !semantics.IsShapeFeature(member) {
+			continue
+		}
+		if base, ok := ctx.arrayFeatureOf(member); !ok || base != arrayDimensionsFeature {
+			continue
+		}
+		if fixed, ok := ctx.constantIntegers(member, typ); ok {
+			return fixed, true
+		}
+	}
+	return nil, false
+}
+
+// vectorOfObject is the vector a NumericalVectorValue object of one dimension is;
+// a rank-0 one stays the Array, as does a VectorQuantityValue (no unit to take).
+func (ctx *Context) vectorOfObject(inst *Instance, array Value) (Value, bool, error) {
+	vectorSym := ctx.librarySymbol(numericalVectorTypeFQN)
+	typ := ctx.objectType(inst)
+	if vectorSym == nil || !ctx.model.Conforms(typ, vectorSym) {
+		return array, true, nil
+	}
+	a := array.Array()
+	op := numericalVectorTypeFQN + " " + symbolText(inst.Type)
+	if a.Rank() > 1 {
+		return Value{}, true, fmt.Errorf(
+			"%w: %s: %d dimensions, NumericalVectorValue declares dimension[0..1]",
+			ErrMultiplicityViolation, op, a.Rank(),
+		)
+	}
+	quantitySym := ctx.librarySymbol(vectorQuantityTypeFQN)
+	if a.Rank() == 0 || (quantitySym != nil && ctx.model.Conforms(typ, quantitySym)) {
+		return array, true, nil
+	}
+	components := make([]semantics.Value, len(a.Elements))
+	for i, elem := range a.Elements {
+		if elem.Kind != ValConst || !elem.Const.IsNumeric() {
+			return Value{}, true, fmt.Errorf(
+				"%w: %s: element %d is %s, NumericalVectorValue declares elements : NumericalValue",
+				ErrTypeMismatch, op, i+1, describeValue(elem),
+			)
+		}
+		components[i] = elem.Const
+	}
+	val, err := ctx.vectorValue(components)
+	if err != nil {
+		return Value{}, true, err
+	}
+	val.Vector().Object = inst.ID
 	return val, true, nil
+}
+
+// objectArrayFeature is the values an object holds under a Collections::Array
+// feature by whichever name its type declares it, and whether it is stated.
+func (ctx *Context) objectArrayFeature(inst *Instance, name string) ([]Value, bool, error) {
+	for _, feat := range ctx.FeaturesOf(inst.Type) {
+		if base, ok := ctx.arrayFeatureOf(feat.Symbol); !ok || base != name {
+			continue
+		}
+		elements, stated, err := ctx.objectFeatureElements(inst, feat.Name)
+		if err != nil || stated {
+			return elements, stated, err
+		}
+	}
+	return nil, false, nil
 }
 
 // objectType is the type an object instantiates: the type of the usage it

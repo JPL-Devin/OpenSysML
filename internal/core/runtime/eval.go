@@ -887,14 +887,10 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 	case ValSequence, ValSet:
 		return ec.chainOverElements(value, parts, from)
 	case ValArray, ValVector, ValVectorQuantity:
-		// An array read from an object keeps that object's members; any other
-		// array's or vector's own features are answered from the value.
-		if value.Kind == ValArray {
-			if id := value.Array().Object; id != 0 {
-				if _, ok := ec.ctx.instances[id]; ok {
-					return ec.chainMemberValue(Value{Kind: ValInstance, Instance: id}, parts, from)
-				}
-			}
+		// An array or vector read from an object keeps that object's members; any
+		// other's own features are answered from the value.
+		if inst, ok := ec.ctx.structuredObject(value); ok {
+			return ec.chainMemberValue(Value{Kind: ValInstance, Instance: inst.ID}, parts, from)
 		}
 		member, ok, err := ec.ctx.structuredFeature(value, parts[0].Text)
 		if err != nil {
@@ -928,17 +924,18 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 		return Value{}, fmt.Errorf("instance ID %d not found for member %s", id, from)
 	}
 	name := parts[0].Text
-	// A shaped Collections::Array object answers Array's own features (rank,
-	// flattenedSize) from the Array value; its other members stay the object's.
+	// A shaped Array object answers Array's features and their redefinitions from
+	// the value; its other members stay the object's, whatever their names.
 	if arr, isArray, err := ec.ctx.arrayOfObject(inst); isArray {
 		if err != nil {
 			return Value{}, err
 		}
-		if member, ok, err := ec.ctx.structuredFeature(arr, name); ok {
+		if base, member, ok := ec.ctx.arrayFeatureNamed(inst.Type, name); ok {
+			answer, err := ec.ctx.structuredMember(arr, base, member, inst.Type)
 			if err != nil {
 				return Value{}, err
 			}
-			return ec.chainMemberValue(member, parts[1:], name)
+			return ec.chainMemberValue(answer, parts[1:], name)
 		}
 	}
 	fvDecl, ok := inst.FeatureValues[name]

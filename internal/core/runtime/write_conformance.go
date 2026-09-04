@@ -199,9 +199,8 @@ func isStructuredValue(value *Value) bool {
 	return value.Kind == ValArray || value.Kind == ValVector || value.Kind == ValVectorQuantity
 }
 
-// structuredConforms judges a written array, vector or vector quantity: held by
-// its direct type's supertypes, or by a specialization of its kind's base type
-// whose fixed shape and element type it fits; vector quantity axes as scalars.
+// structuredConforms judges a written array, vector or vector quantity: its type's
+// supertypes, or a non-scalar specialization of its base type whose shape it fits.
 func (ctx *Context) structuredConforms(scope *symbols.Scope, value Value, declared *symbols.Symbol) (bool, string, error) {
 	direct, err := ctx.structuredValueType(value)
 	if err != nil {
@@ -214,6 +213,10 @@ func (ctx *Context) structuredConforms(scope *symbols.Scope, value Value, declar
 		}
 		if !ctx.model.Conforms(declared, base) {
 			return false, "", nil
+		}
+		if scalar := ctx.librarySymbol(scalarValueTypeFQN); scalar != nil && ctx.model.Conforms(declared, scalar) {
+			return false, fmt.Sprintf("cannot write %s (%s) to a feature typed by %s: it is a %s, which holds one scalar",
+				FormatValue(value), describeValue(value), symbolText(declared), symbolText(scalar)), nil
 		}
 		if refusal := ctx.shapeRefusal(value, declared); refusal != "" {
 			return false, refusal, nil
@@ -234,11 +237,8 @@ func (ctx *Context) structuredConforms(scope *symbols.Scope, value Value, declar
 	return true, "", nil
 }
 
-// shapeRefusal says why a structured value's dimensions violate the shape a
-// type fixes: a constant `dimensions`, `dimension`, `rank` or `flattenedSize`
-// one of its features (or what they redefine) states, or the multiplicity of
-// its `dimensions`. A shape stated by an expression only evaluation settles
-// (`mRef.dimensions`) is not judged here.
+// shapeRefusal says why a value's dimensions violate the shape a type fixes: a
+// constant on an Array shape feature or its redefinition, or `dimensions`' multiplicity.
 func (ctx *Context) shapeRefusal(value Value, declared *symbols.Symbol) string {
 	dims := structuredDimensions(value)
 	size, _ := flattenedSize(dims)
@@ -250,14 +250,14 @@ func (ctx *Context) shapeRefusal(value Value, declared *symbols.Symbol) string {
 		if !semantics.IsShapeFeature(member) {
 			continue
 		}
-		switch member.Name {
-		case arrayDimensionsFeature, vectorDimensionFeature:
+		feature, ok := ctx.arrayFeatureOf(member)
+		if !ok || feature == arrayElementsFeature {
+			continue
+		}
+		if feature == arrayDimensionsFeature {
 			if mult, stated := ctx.model.MultiplicityOf(member); stated && mult.CountViolation(int64(len(dims))) != "" {
 				return refuse(fmt.Sprintf("%s : Positive%s, got %d dimension(s)", member.Name, mult.Text(), len(dims)))
 			}
-		case arrayRankFeature, arrayFlattenedSizeFeature:
-		default:
-			continue
 		}
 		want, ok := ctx.constantIntegers(member, declared)
 		if !ok {
@@ -268,8 +268,8 @@ func (ctx *Context) shapeRefusal(value Value, declared *symbols.Symbol) string {
 			stated = fmt.Sprint(want[0])
 		}
 		declares := fmt.Sprintf("%s = %s", member.Name, stated)
-		switch member.Name {
-		case arrayDimensionsFeature, vectorDimensionFeature:
+		switch feature {
+		case arrayDimensionsFeature:
 			if !equalInt64s(want, dims) {
 				return refuse(declares)
 			}
@@ -320,31 +320,36 @@ func (ctx *Context) constantIntegers(member, owner *symbols.Symbol) ([]int64, bo
 	return out, true
 }
 
-// elementsConform judges each element of an array or vector against the type the
-// target's `elements` feature declares; a vector quantity's axes are judged as
-// quantities instead.
+// elementsConform judges the elements (a vector quantity's magnitudes) against each
+// effective feature that is or redefines Array's `elements`: count and element type.
 func (ctx *Context) elementsConform(scope *symbols.Scope, value Value, declared *symbols.Symbol) (bool, string, error) {
-	if value.Kind == ValVectorQuantity {
-		return true, "", nil
-	}
-	var elemType *symbols.Symbol
-	for _, feat := range ctx.FeaturesOf(declared) {
-		if feat.Name == arrayElementsFeature {
-			elemType = feat.Type
+	elements := structuredElements(value)
+	refuse := func(feat EffectiveFeature, mult, got string) string {
+		declares := feat.Name
+		if feat.Type != nil {
+			declares += " : " + symbolText(feat.Type)
 		}
+		return fmt.Sprintf("cannot write %s (%s) to a feature typed by %s: it declares %s%s, got %s",
+			FormatValue(value), describeValue(value), symbolText(declared), declares, mult, got)
 	}
-	if elemType == nil {
-		return true, "", nil
-	}
-	for _, elem := range structuredElements(value) {
-		ok, refusal, err := ctx.valueConforms(scope, &elem, elemType)
-		if err != nil || !ok {
-			if refusal == "" {
-				refusal = fmt.Sprintf("cannot write %s (%s) to a feature typed by %s: it declares elements : %s, got element %s (%s)",
-					FormatValue(value), describeValue(value), symbolText(declared),
-					symbolText(elemType), FormatValue(elem), describeValue(elem))
+	for _, feat := range ctx.FeaturesOf(declared) {
+		if base, ok := ctx.arrayFeatureOf(feat.Symbol); !ok || base != arrayElementsFeature {
+			continue
+		}
+		if feat.Multiplicity.CountViolation(int64(len(elements))) != "" {
+			return false, refuse(feat, feat.Multiplicity.Text(), fmt.Sprintf("%d element(s)", len(elements))), nil
+		}
+		if feat.Type == nil {
+			continue
+		}
+		for _, elem := range elements {
+			ok, refusal, err := ctx.valueConforms(scope, &elem, feat.Type)
+			if err != nil || !ok {
+				if refusal == "" {
+					refusal = refuse(feat, "", fmt.Sprintf("element %s (%s)", FormatValue(elem), describeValue(elem)))
+				}
+				return false, refusal, err
 			}
-			return false, refusal, err
 		}
 	}
 	return true, "", nil
@@ -363,13 +368,16 @@ func structuredDimensions(value Value) []int64 {
 	return nil
 }
 
-// structuredElements is the row-major elements of an array or vector.
+// structuredElements is the row-major elements of an array or vector, or the
+// magnitudes of a vector quantity's axes.
 func structuredElements(value Value) []Value {
 	switch value.Kind {
 	case ValArray:
 		return value.Array().Elements
 	case ValVector:
 		return constValues(value.Vector().Elements)
+	case ValVectorQuantity:
+		return constValues(value.VectorQuantity().Num)
 	}
 	return nil
 }

@@ -12,6 +12,7 @@ divergence is also a row in [spec-compliance.md](spec-compliance.md).
 | Library file | Declaration | What the vendored body says | What we implement | Why |
 |---|---|---|---|---|
 | `Kernel Libraries/Kernel Function Library/NaturalFunctions.kerml` | `function '/'` | `function '/' specializes IntegerFunctions::'/' { in x: Natural[1]; in y: Natural[1]; return : Natural[1]; }` — a Natural quotient, which `7 / 2` cannot inhabit without truncation | the quotient of two whole numbers is a Rational, never normalised back to a whole number even when exact: `divisionResult` types `Natural/Natural` as `Rational`, and the runtime answers a Real (`runtime/eval.go` `evalArithmetic`) | The pilot's evaluator answers `LiteralRational 2.5` for `5 / 2` even when both operands are `Natural`-typed attributes — it dispatches on value kind, and a whole-number value divides through `RationalFunctions::'/'`, which `IntegerFunctions::'/'` specializes with `return : Rational[1]`. The declared `Natural[1]` return is unimplementable without truncating, which the reference does not do; the draft below asks which of the two the specification intends |
+| `Domain Libraries/Quantities and Units/VectorCalculations.sysml` | `calc def inner`, `calc def norm` | `calc def inner :> VectorFunctions::inner { in : VectorQuantityValue[1]; in : VectorQuantityValue[1]; return : Number[1]; }` and `calc def norm :> VectorFunctions::norm { in : VectorQuantityValue[1]; return : Number[1]; }` — a bare `Number`, where `QuantityCalculations::'*'`, `'/'` and `sqrt` over scalar quantities return `ScalarQuantityValue[1]`, so the norm of a length vector has no unit while the square root of a length squared keeps one | the declaration: `inner`, `norm` and `angle` of a vector quantity answer the `Number` computed over the vector's `num` components (`norm(⟨3.0, 4.0⟩ [m])` is `5.0`, `inner` is `25.0`), never a quantity, and a `Number` feature takes them; the unit is dropped by declaration (`runtime/vector_functions.go` `vectorInner`, `vectorNorm`) | The checker already types the calls by their declared `Number` return, so a runtime answering a quantity would disagree with it; the pinned pilot evaluates neither, so there is no reference answer to follow. Recorded as a library inconsistency for review, not as a defect OpenSysML corrects |
 | `Kernel Libraries/Kernel Function Library/SequenceFunctions.kerml` | `function includingAt` | `(seq->subsequence(1, index - 1), values, seq->subsequence(index + 1))` — the prefix before `index`, then the values, then the tail from `index + 1`, so the element **at** `index` is dropped from the result | insertion: the values are inserted before the 1-based `index`, the tail from that position shifts right, and the result is longer than `seq` by the values inserted. `index == size + 1` appends; any other index outside `1..size + 1` is `ErrIndexOutOfRange` (`runtime.builtinSequenceIncludingAt`) | The body contradicts the declarations around it in the same file. `excludingAt` is the operation that removes at an index, and the behavior pairs are additive/subtractive: `add` calls `including` as `remove` calls `excluding`, and `addAt` calls `includingAt` (`seq->includingAt(values, index)`) as `removeAt` calls `excludingAt`. A removing `includingAt` would leave the library with two ways to delete at an index and none to insert at one, and would make `addAt` remove. The vendored expression is an off-by-one slip in the tail: the insertion body is `(seq->subsequence(1, index - 1), values, seq->subsequence(index))` |
 
 ## `includingAt` — the vendored declaration
@@ -70,6 +71,68 @@ declaration itself is the contract: it returns the Natural quotient when `y`
 divides `x` and reports a non-whole quotient (`ErrArithmeticDomain`) rather
 than truncating or answering a Rational (`runtime/library_operators.go`
 `naturalDivision`).
+
+---
+
+## `VectorCalculations::inner`/`norm` — a `Number` where the scalar calculations return a quantity
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream.
+
+Quoted verbatim from
+`internal/core/libs/stdlib/Domain Libraries/Quantities and Units/VectorCalculations.sysml`:
+
+```sysml
+	calc def inner :> VectorFunctions::inner { in : VectorQuantityValue[1]; in : VectorQuantityValue[1]; return : Number[1]; }
+	calc def norm :> VectorFunctions::norm { in : VectorQuantityValue[1]; return : Number[1]; }
+	calc def angle :> VectorFunctions::angle { in : VectorQuantityValue[1]; in : VectorQuantityValue[1]; return : Number[1]; }
+```
+
+and from `QuantityCalculations.sysml` in the same directory:
+
+```sysml
+	calc def '*' specializes NumericalFunctions::'*' { in x: ScalarQuantityValue[1]; in y: ScalarQuantityValue[1]; return : ScalarQuantityValue[1]; }
+	calc def '/' specializes NumericalFunctions::'/' { in x: ScalarQuantityValue[1]; in y: ScalarQuantityValue[1]; return : ScalarQuantityValue[1]; }
+	calc def sqrt{ in x: ScalarQuantityValue[1]; return : ScalarQuantityValue[1]; }
+```
+
+````markdown
+**Library inconsistency, question rather than bug report:** the scalar
+quantity calculations keep the quantity through an operation —
+`QuantityCalculations::'*'`, `'/'` and `sqrt` all declare
+`return : ScalarQuantityValue[1]`, so `sqrt(q * q)` of a length `q` is a
+length — but the vector quantity calculations drop it: `VectorCalculations::inner`
+and `norm` declare `return : Number[1]` over `VectorQuantityValue` operands.
+The norm of a length vector is therefore a bare number, and the inner product of
+two length vectors a bare number too, although each is a quantity of the operands'
+unit (or its square) in the same way `q * q` is. Only `angle` is naturally
+dimensionless. Is `Number[1]` the intended return for `inner` and `norm`, with
+the unit understood to be implied by the operands, or should they return
+`ScalarQuantityValue[1]` as the scalar calculations do? (A redefinition of
+`VectorFunctions::inner`/`norm`, whose returns are `Number`, could not narrow
+to `ScalarQuantityValue` since that is not a `Number`; a resolution would need
+the vector calculations declared independently of `VectorFunctions`, as
+`QuantityCalculations::'*'` is of `NumericalFunctions::'*'` only by
+specialization.)
+````
+
+The pinned pilot implementation (`2026-07`, `jupyter-sysml-kernel` 0.61.0)
+evaluates none of these: asked through `build/pilot-evaluator/eval-sysml` for
+`VectorFunctions::norm(CartesianVectorOf((3.0, 4.0)))`,
+`VectorCalculations::norm(...)`, a `Number` attribute bound to the former,
+`QuantityCalculations::sqrt(q * q)` and `q * q` over `q : ScalarQuantityValue = 2 [m]`,
+it answers the unevaluated `InvocationExpression norm`, `InvocationExpression sqrt`
+and `OperatorExpression *` for every case, so it offers no reference for either
+reading.
+
+OpenSysML follows the declarations: the checker types `inner`, `norm` and `angle`
+of vector quantities as `Number` (a `ScalarQuantityValue` feature bound to one is a
+static error, a `Number` feature is accepted), and the runtime answers the bare
+number computed over the vector's `num` components — `norm(⟨3.0, 4.0⟩ [m])` is
+`5.0`, `inner(⟨1.0, 2.0⟩ [m], ⟨3.0, 4.0⟩ [m])` is `11.0` — the unit dropped by
+declaration (`runtime/vector_functions.go`; conformance
+`calc_library_vector_quantity_norm`). The scalar calculations keep their quantity
+results as declared (`runtime/quantity_functions.go`).
 
 ---
 

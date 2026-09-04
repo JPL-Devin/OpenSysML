@@ -96,3 +96,151 @@ func integers(ns ...int64) []Value {
 	}
 	return values
 }
+
+// An array read from an object is unmaterialized with it when its creation is
+// undone, so the next read materializes the object again.
+func TestAbandonedArrayObjectIsForgottenByItsHolders(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			private import Collections::*;
+			attribute def LabeledGrid :> Array { attribute label : String; }
+			attribute grid : LabeledGrid {
+				:>> dimensions = (2, 2);
+				:>> elements = (1, 2, 3, 4);
+				:>> label = "grid";
+			}
+			part def Holder { attribute copy : LabeledGrid = grid; }
+			part holder : Holder;
+		}
+	`
+	model, resolver, root := parseAndBuildLibraryModel(t, src)
+	pkg := resolveSymbol(t, root, "test")
+	ctx := NewContext(model, resolver, 10000)
+	holder, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "holder"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mark := len(ctx.created)
+	label, err := evalIn(t, ctx, pkg.Scope, "holder.copy.label")
+	if err != nil || FormatValue(label) != `"grid"` {
+		t.Fatalf("holder.copy.label = %s, %v; want \"grid\"", FormatValue(label), err)
+	}
+	copied := holder.FeatureValues["copy"]
+	if copied == nil || !copied.Materialized || copied.Value.Kind != ValArray {
+		t.Fatalf("copy = %+v, want a materialized array", copied)
+	}
+	if backing := copied.Value.Array().Object; ctx.instances[backing] == nil {
+		t.Fatalf("copy is backed by object %d, which the session does not hold", backing)
+	}
+
+	ctx.abandonInstancesSince(mark)
+	if copied.Materialized {
+		t.Error("copy still holds an array read from an abandoned object")
+	}
+	label, err = evalIn(t, ctx, pkg.Scope, "holder.copy.label")
+	if err != nil || FormatValue(label) != `"grid"` {
+		t.Errorf("holder.copy.label after the rollback = %s, %v; want \"grid\" from a re-created object", FormatValue(label), err)
+	}
+}
+
+// A vector read from an object keeps it, answers its members, and is
+// unmaterialized with it when the creation is undone.
+func TestAbandonedVectorObjectIsForgottenByItsHolders(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			private import VectorValues::*;
+			attribute def Tagged :> NumericalVectorValue { attribute tag : String default "v"; }
+			attribute vec : Tagged {
+				:>> dimension = 2;
+				:>> elements = (1, 2);
+			}
+			part def Holder { attribute copy : Tagged = vec; }
+			part holder : Holder;
+		}
+	`
+	model, resolver, root := parseAndBuildLibraryModel(t, src)
+	pkg := resolveSymbol(t, root, "test")
+	ctx := NewContext(model, resolver, 10000)
+	holder, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "holder"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mark := len(ctx.created)
+	tag, err := evalIn(t, ctx, pkg.Scope, "holder.copy.tag")
+	if err != nil || FormatValue(tag) != `"v"` {
+		t.Fatalf("holder.copy.tag = %s, %v; want \"v\"", FormatValue(tag), err)
+	}
+	copied := holder.FeatureValues["copy"]
+	if copied == nil || !copied.Materialized || copied.Value.Kind != ValVector {
+		t.Fatalf("copy = %+v, want a materialized vector", copied)
+	}
+	if got := FormatValue(copied.Value); got != "⟨1, 2⟩" {
+		t.Errorf("copy = %s, want ⟨1, 2⟩", got)
+	}
+	if backing := copied.Value.Vector().Object; ctx.instances[backing] == nil {
+		t.Fatalf("copy is backed by object %d, which the session does not hold", backing)
+	}
+
+	ctx.abandonInstancesSince(mark)
+	if copied.Materialized {
+		t.Error("copy still holds a vector read from an abandoned object")
+	}
+	tag, err = evalIn(t, ctx, pkg.Scope, "holder.copy.tag")
+	if err != nil || FormatValue(tag) != `"v"` {
+		t.Errorf("holder.copy.tag after the rollback = %s, %v; want \"v\" from a re-created object", FormatValue(tag), err)
+	}
+}
+
+// A vector object answers `dimension` as the one Integer its type declares (none
+// for rank 0), `dimensions` as Array's sequence, a fixed dimension unrestated.
+func TestVectorObjectMemberReadsFollowTheDeclaration(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			private import VectorValues::*;
+			attribute two : NumericalVectorValue { :>> dimension = 2; :>> elements = (1, 2); }
+			attribute scalar : NumericalVectorValue { :>> elements = (7); }
+			attribute three : CartesianThreeVectorValue { :>> elements = (1.0, 2.0, 2.0); }
+			attribute short : CartesianThreeVectorValue { :>> elements = (1.0, 2.0); }
+			attribute grid : NumericalVectorValue { :>> dimensions = (2, 2); :>> elements = (1, 2, 3, 4); }
+		}
+	`
+	model, resolver, root := parseAndBuildLibraryModel(t, src)
+	pkg := resolveSymbol(t, root, "test")
+	ctx := NewContext(model, resolver, 10000)
+	for _, tc := range []struct{ expr, want string }{
+		{"two", "⟨1, 2⟩"},
+		{"two.dimension", "2"},
+		{"two.dimensions", "[2]"},
+		{"two.rank", "1"},
+		{"scalar", "Array()[7]"},
+		{"scalar.dimension", "null"},
+		{"three", "⟨1.0, 2.0, 2.0⟩"},
+		{"three.dimension", "3"},
+		{"three.elements", "[1.0, 2.0, 2.0]"},
+	} {
+		got, err := evalIn(t, ctx, pkg.Scope, tc.expr)
+		if err != nil {
+			t.Errorf("%s: %v", tc.expr, err)
+			continue
+		}
+		if FormatValue(got) != tc.want {
+			t.Errorf("%s = %s, want %s", tc.expr, FormatValue(got), tc.want)
+		}
+	}
+	for _, tc := range []struct {
+		expr string
+		want error
+	}{
+		{"short", ErrMultiplicityViolation},
+		{"grid", ErrMultiplicityViolation},
+	} {
+		if _, err := evalIn(t, ctx, pkg.Scope, tc.expr); !errors.Is(err, tc.want) {
+			t.Errorf("%s: err = %v, want %v", tc.expr, err, tc.want)
+		}
+	}
+}

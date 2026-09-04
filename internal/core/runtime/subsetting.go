@@ -23,6 +23,8 @@ import (
 
 // relatedFeatures returns the features of owner that sym's relationships of the given kind name:
 // the resolved target, or owner's own same-named declaration masking it; an unresolved name is looked up on owner.
+// A declaration that itself restates sym (`:>> elements` on an object, walked past
+// its library chain) masks nothing on that walk: the target stays the resolved one.
 func (ctx *Context) relatedFeatures(sym, owner *symbols.Symbol, kind ast.RelationshipKind) []*symbols.Symbol {
 	var features []*symbols.Symbol
 	for _, qn := range relationshipTargets(sym, kind) {
@@ -35,7 +37,7 @@ func (ctx *Context) relatedFeatures(sym, owner *symbols.Symbol, kind ast.Relatio
 			if !ctx.inheritsDeclaration(owner, resolved) {
 				continue
 			}
-			if own, declared := ctx.ownDeclarationNamed(owner, sym, qn.Parts[len(qn.Parts)-1].Text, resolved.Name, resolved.ShortName); declared {
+			if own, declared := ctx.ownDeclarationNamed(owner, sym, qn.Parts[len(qn.Parts)-1].Text, resolved.Name, resolved.ShortName); declared && !ctx.redefinesTransitively(own, sym) {
 				features = append(features, own)
 			} else {
 				features = append(features, resolved)
@@ -50,6 +52,17 @@ func (ctx *Context) relatedFeatures(sym, owner *symbols.Symbol, kind ast.Relatio
 		}
 	}
 	return features
+}
+
+// redefinesTransitively reports whether sym redefines feature, directly or through
+// the features those redefine.
+func (ctx *Context) redefinesTransitively(sym, feature *symbols.Symbol) bool {
+	for _, redefined := range ctx.model.AllRedefinedFeatures(sym) {
+		if redefined == feature {
+			return true
+		}
+	}
+	return false
 }
 
 // inheritsDeclaration reports whether owner takes its members from the type declaring feature.
