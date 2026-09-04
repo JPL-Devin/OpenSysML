@@ -400,16 +400,13 @@ jobs:
   scan:
     docker:
       - image: cimg/go:1.25
-    # The Go sensor parses a directory at a time and holds the whole parser
-    # output in memory, so the largest directories (internal/core/runtime, 117
-    # files) decide the heap: the scanner's default, a quarter of a medium
-    # container's 4 GB, dies there with OutOfMemoryError. This class has 8 GB,
-    # leaving room for the 4 GB below plus the sensor's own Go child process.
-    resource_class: large
+    # The Go sensor holds a whole directory's parse in memory; internal/core/runtime
+    # (168 files) overflows a 4 GB heap. 16 GB here fits the 12 GB below plus the Go parser.
+    resource_class: xlarge
     environment:
       # The pinned orb runs sonar-scanner-cli 8.0.1, whose launcher passes only
       # $SONAR_SCANNER_OPTS to the JVM; SONAR_SCANNER_JAVA_OPTS is ignored there.
-      SONAR_SCANNER_OPTS: -Xmx4g
+      SONAR_SCANNER_OPTS: -Xmx12g
     steps:
       # Forked PRs get no context, so the token is absent there: end green
       # rather than fail every outside contribution. With a token, a failing
