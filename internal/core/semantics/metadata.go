@@ -270,11 +270,16 @@ func metaCastOperand(value ast.Node) *ast.QualifiedName {
 }
 
 // isFeature reports whether sym declares a feature rather than a type. A KerML
-// type is recorded as a usage node, so the symbol kind decides (KerML §8.3).
+// type (`class`, `datatype`, `function`...) is recorded as a usage node, so the
+// symbol kind decides (KerML §8.3).
 func isFeature(sym *symbols.Symbol) bool {
 	switch sym.Decl.(type) {
 	case *ast.Usage:
-		return !isKerMLTypeDecl(sym)
+		switch sym.Kind {
+		case symbols.SymbolKerMLType, symbols.SymbolAttributeDef, symbols.SymbolCalcDef:
+			return false
+		}
+		return true
 	case *ast.SubjectMember, *ast.AssumeMember, *ast.RequireMember:
 		return true
 	}

@@ -67,6 +67,10 @@ func TestW8CMultiplicityBoundResultTypeNotNatural(t *testing.T) {
 		"integer exponent":   "class C { feature i : ScalarValues::Integer; feature f [2 ** i]; }",
 		"negated exponent":   "class C { feature n : ScalarValues::Natural; feature f [2 ** -n]; }",
 		"real exponent":      "class C { feature r : ScalarValues::Real; feature f [2 ^ r]; }",
+		"class typed subset": "class C { feature n : C; feature m subsets n; feature f [m]; }",
+		"class typed redef":  "class C { feature n : C; } class D specializes C { feature :>> n; feature f [n]; }",
+		"class typed chain":  "class C { feature n : C; feature m subsets n; feature k :> m; feature f [k]; }",
+		"real typed subset":  "class C { feature r : ScalarValues::Real; feature s subsets r; feature f [s]; }",
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -91,7 +95,11 @@ func TestW8CMultiplicityBoundResultTypeSilent(t *testing.T) {
 		"natural exponent":   "class C { feature n : ScalarValues::Natural; feature f [2 ** n]; }",
 		"positive exponent":  "class C { feature i : ScalarValues::Integer; feature p : ScalarValues::Positive; feature f [i ^ (p + 1)]; }",
 		"literal exponent":   "class C { feature i : ScalarValues::Integer; feature f [i ** 2]; }",
+		"natural subset":     "class C { feature n : ScalarValues::Natural; feature m subsets n; feature f [m]; }",
+		"natural redef":      "class C { feature n : ScalarValues::Natural; } class D specializes C { feature :>> n; feature f [n]; }",
 		"untyped":            "class C { feature u; feature f [u]; }",
+		"untyped subset":     "class C { feature u; feature v subsets u; feature f [v]; }",
+		"unresolved subset":  "class C { feature q : Undeclared; feature v subsets q; feature f [v]; }",
 		"unresolved type":    "class C { feature q : Undeclared; feature f [q]; }",
 		"unresolved bound":   "class C { feature f [nothere]; }",
 	}
