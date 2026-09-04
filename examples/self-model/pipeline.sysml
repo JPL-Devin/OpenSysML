@@ -51,8 +51,8 @@ package OpenSysMLArtifacts {
     // Every modelled unit names the Go package that implements it.
     abstract part def CodeUnit {
         attribute goPackage : String;
-        attribute lazy : Boolean = false;
-        attribute memoized : Boolean = false;
+        attribute lazy : Boolean default = false;
+        attribute memoized : Boolean default = false;
     }
 
     abstract part def Stage :> CodeUnit {
@@ -144,7 +144,7 @@ package OpenSysMLPipeline {
         attribute :>> goPackage = "internal/core/passes";
         attribute goType : String;
         attribute level : String;
-        attribute elementScoped : Boolean = false;
+        attribute elementScoped : Boolean default = false;
         out item findings : Diagnostic;
     }
 

@@ -16,7 +16,7 @@ import (
 // verification RPCs report.
 const verifyModelSource = `package Demo {
 	part def Vehicle {
-		attribute mass = 1500.0;
+		attribute mass default = 1500.0;
 
 		constraint massPositive {
 			mass > 0.0
@@ -318,7 +318,7 @@ func TestVerifySatisfactionNarrowedToASymbol(t *testing.T) {
 	srv := mustNewService(t, 10)
 	source := `package Demo {
 	part def Vehicle {
-		attribute mass = 1500.0;
+		attribute mass default = 1500.0;
 	}
 	requirement def MassLimit {
 		subject vehicle : Vehicle;
@@ -366,7 +366,7 @@ func TestVerifySatisfactionNarrowedToANamedAssertion(t *testing.T) {
 	srv := mustNewService(t, 10)
 	source := `package Demo {
 	part def Vehicle {
-		attribute mass = 1500.0;
+		attribute mass default = 1500.0;
 	}
 	requirement def MassLimit {
 		subject vehicle : Vehicle;

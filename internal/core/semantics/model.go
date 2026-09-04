@@ -152,6 +152,9 @@ func GeneralizationKind(k ast.RelationshipKind) bool {
 // RelationshipsOf returns the declared relationships of a symbol's def/usage
 // declaration, or nil for symbols that are not def/usage.
 func RelationshipsOf(sym *symbols.Symbol) []*ast.Relationship {
+	if oc, ok := ast.OwnedConstraintOf(sym.Decl); ok {
+		return oc.Relationships
+	}
 	switch d := sym.Decl.(type) {
 	case *ast.Definition:
 		return d.Relationships

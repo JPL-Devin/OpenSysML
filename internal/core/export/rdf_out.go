@@ -49,6 +49,8 @@ const (
 	pLowerBound                = "lowerBound"
 	pUpperBound                = "upperBound"
 	pValue                     = "value"
+	pIsDefault                 = "isDefault"
+	pIsInitial                 = "isInitial"
 	pImportedNamespace         = "importedNamespace"
 	pAliasFor                  = "aliasedElement"
 	pClient                    = "client"
@@ -679,7 +681,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		}
 		e.relationships(subject, owner, n.Relationships)
 		e.multiplicity(subject, owner, n.Multiplicity)
-		e.expression(subject, e.sysml(pValue), pValue, owner, n.Value)
+		e.featureValue(subject, owner, n.Value, n.ValueIsDefault, n.ValueIsInitial)
 		// A declaration head that binds ends (connect/bind/flow/succession),
 		// a transition, an accept action or a satisfy usage states its ends
 		// and form structurally, since the properties above do not.
@@ -800,14 +802,16 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		head(rdf.OpenSysMLTerm(mAssume))
 		return e.requirementCondition(subject, fqn, owner, requirementConditionDecl{
 			prefixes: n.Prefixes, name: n.Name, relationships: n.Relationships, multiplicity: n.Multiplicity,
-			value: n.Value, expression: n.Expression, reference: n.Reference, hasBody: n.HasBody, body: n.Body,
+			value: n.Value, isDefault: n.ValueIsDefault, isInitial: n.ValueIsInitial,
+			expression: n.Expression, reference: n.Reference, hasBody: n.HasBody, body: n.Body,
 		})
 
 	case *ast.RequireMember:
 		head(rdf.OpenSysMLTerm(mRequire))
 		return e.requirementCondition(subject, fqn, owner, requirementConditionDecl{
 			prefixes: n.Prefixes, name: n.Name, relationships: n.Relationships, multiplicity: n.Multiplicity,
-			value: n.Value, expression: n.Expression, reference: n.Reference, hasBody: n.HasBody, body: n.Body,
+			value: n.Value, isDefault: n.ValueIsDefault, isInitial: n.ValueIsInitial,
+			expression: n.Expression, reference: n.Reference, hasBody: n.HasBody, body: n.Body,
 		})
 
 	case *ast.PrefixMetadata:
@@ -831,7 +835,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, lines r
 		}
 		e.relationships(subject, owner, n.Relationships)
 		e.multiplicity(subject, owner, n.Multiplicity)
-		e.expression(subject, e.sysml(pValue), pValue, owner, n.BindingExpr)
+		e.featureValue(subject, owner, n.BindingExpr, n.ValueIsDefault, n.ValueIsInitial)
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Body, fqn, subject)
 
@@ -1037,6 +1041,8 @@ type requirementConditionDecl struct {
 	relationships []*ast.Relationship
 	multiplicity  *ast.Multiplicity
 	value         ast.Node
+	isDefault     bool
+	isInitial     bool
 	expression    ast.Node
 	reference     *ast.QualifiedName
 	hasBody       bool
@@ -1059,7 +1065,7 @@ func (e *encoder) requirementCondition(subject rdf.Term, fqn, owner string, n re
 	}
 	e.relationships(subject, owner, n.relationships)
 	e.multiplicity(subject, owner, n.multiplicity)
-	e.expression(subject, e.sysml(pValue), pValue, owner, n.value)
+	e.featureValue(subject, owner, n.value, n.isDefault, n.isInitial)
 	return e.condition(subject, fqn, owner, n.expression, n.reference, n.hasBody, n.body)
 }
 
@@ -1156,6 +1162,19 @@ func (e *encoder) ident(subject rdf.Term, ident ast.Identification) {
 	if ident.ShortName != "" {
 		e.graph.Add(subject, e.sysml(pDeclaredShortName), rdf.String(ident.ShortName))
 	}
+}
+
+// featureValue emits a feature's value with the `default` and `:=` of its
+// operator (FeatureValue::isDefault, isInitial), so the operator converts back.
+func (e *encoder) featureValue(subject rdf.Term, owner string, value ast.Node, isDefault, isInitial bool) {
+	if value == nil {
+		return
+	}
+	e.expression(subject, e.sysml(pValue), pValue, owner, value)
+	e.flags(subject, []boolProperty{
+		{pIsDefault, isDefault},
+		{pIsInitial, isInitial},
+	})
 }
 
 func (e *encoder) flags(subject rdf.Term, flags []boolProperty) {

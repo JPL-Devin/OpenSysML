@@ -27,15 +27,15 @@
         "name": "negative-corpus",
         "dir": "cmd/pilot-reject/testdata/negative",
         "origin": "ours",
-        "files": 227,
-        "digest": "sha256:c02c35f7493ee15915c57ce9f9c305290d64fb06c0f71a1ba1633c5001c76841"
+        "files": 228,
+        "digest": "sha256:6c370b347490cba00478296463db5267ae263fb0ec4e6f08610086a236872c97"
       }
     ],
     "recorded": "2026-09-04"
   },
   "totals": {
-    "cases": 227,
-    "bothReject": 197,
+    "cases": 228,
+    "bothReject": 198,
     "pilotOnlyRejects": 22,
     "oursOnlyRejects": 8,
     "bothAccept": 0
@@ -64,8 +64,8 @@
     },
     {
       "source": "semantic",
-      "cases": 98,
-      "bothReject": 74,
+      "cases": 99,
+      "bothReject": 75,
       "pilotOnlyRejects": 16,
       "oursOnlyRejects": 8,
       "bothAccept": 0
@@ -1908,7 +1908,16 @@
       "pilotErrors": 1
     },
     {
-      "path": "semantic/s46-enumeration-specializes-enumeration.sysml",
+      "path": "semantic/s46-feature-value-overriding.sysml",
+      "source": "semantic",
+      "rule": "a feature bound with `=` may not be given another value by a redefining feature; only a `default =` value may be overridden (KerML 8.3.4.10.2; pilot validateFeatureValueOverriding).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 2
+    },
+    {
+      "path": "semantic/s47-enumeration-specializes-enumeration.sysml",
       "source": "semantic",
       "rule": "An enumeration definition is a variation and a variation must not specialize another variation (SysML v2 7.6.4 and 8.3.9 validateEnumerationDefinitionIsVariation, validateDefinitionVariationSpecialization; pilot validateDefinitionVariationSpecialization).",
       "mode": "default",
@@ -2267,8 +2276,8 @@
       }
     ],
     "totals": {
-      "cases": 227,
-      "bothReject": 197,
+      "cases": 228,
+      "bothReject": 198,
       "pilotOnlyRejects": 22,
       "oursOnlyRejects": 8,
       "bothAccept": 0
