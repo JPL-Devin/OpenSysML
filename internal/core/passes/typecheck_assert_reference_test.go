@@ -98,6 +98,46 @@ part ctx { `
 	}
 }
 
+// A named binding is a feature the builder leaves unclassified, and a named
+// transition is an action usage; neither is a constraint or a requirement.
+func TestAssertReferenceToBindingOrTransitionRejected(t *testing.T) {
+	prefix := `part def Holder {
+	attribute x; attribute y; binding b bind x = y; alias ab for b;
+	state def SD { state s1; state s2; transition t first s1 then s2; }
+	state sm : SD;
+}
+part h : Holder; attribute x; attribute y; binding b bind x = y; alias ab for b;
+part ctx { `
+	tests := []struct {
+		name, target, want string
+	}{
+		{"binding", "assert b;", "assert target must be a constraint usage, found binding"},
+		{"negated binding", "assert not b;", "assert target must be a constraint usage, found binding"},
+		{"alias to binding", "assert ab;", "assert target must be a constraint usage, found binding"},
+		{"chained binding", "assert h.b;", "assert target must be a constraint usage, found binding"},
+		{"chained alias to binding", "assert h.ab;", "assert target must be a constraint usage, found binding"},
+		{"chained transition", "assert h.sm.t;", "assert target must be a constraint usage, found actionUsage"},
+		{"binding in constraint body", "} constraint def K { assert b;", "assert target must be a constraint usage, found binding"},
+		{"satisfy binding", "satisfy b;", "satisfy target must be a requirement usage, found binding"},
+		{"satisfy chained binding", "satisfy h.b;", "satisfy target must be a requirement usage, found binding"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			diags := typeDiags(t, prefix+tc.target+" }")
+			if len(diags) != 1 {
+				t.Fatalf("expected one type diagnostic, got %v", diags)
+			}
+			if diags[0].Message != tc.want {
+				t.Errorf("got %q, want %q", diags[0].Message, tc.want)
+			}
+		})
+	}
+	silent := "ref r references b; ref r2 :> b; ref r3 references h.b; }"
+	if diags := typeDiags(t, prefix+silent); len(diags) != 0 {
+		t.Errorf("expected no type diagnostics, got %v", diags)
+	}
+}
+
 // An unresolved assert target is the name-resolution tier's finding alone.
 func TestAssertReferenceUnresolvedIsNotAKindError(t *testing.T) {
 	src := "part def Derived; part v : Derived; part ctx { assert missing; assert v.missing; }" +

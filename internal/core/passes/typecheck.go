@@ -384,6 +384,10 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 		}
 	}
 	msg := compatMessage(decl, relKind, targetSym.Kind)
+	if (relKind == ast.RelReferences || relKind == ast.RelSubsets) &&
+		targetSym.Kind == symbols.SymbolUnknown && targetSym.IsFeature() {
+		msg = unclassifiedReferenceKindMessage(decl, relKind, targetSym)
+	}
 	if msg == "" {
 		return
 	}
@@ -444,6 +448,9 @@ func (tc *typeChecker) checkChainReferenceKind(scope *symbols.Scope, target ast.
 		return // unresolved: name-resolution tier owns this
 	}
 	msg := referenceKindMessage(decl, relKind, sym.Kind)
+	if sym.Kind == symbols.SymbolUnknown && sym.IsFeature() {
+		msg = unclassifiedReferenceKindMessage(decl, relKind, sym)
+	}
 	if msg == "" {
 		return
 	}
@@ -743,7 +750,20 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 // referenceKindMessage is the referent-kind rule shared by the reference forms
 // `satisfy r` (a requirement usage, SysML v2 §7.20) and `assert c` (a constraint usage, §7.19).
 func referenceKindMessage(decl declKind, rel ast.RelationshipKind, target symbols.SymbolKind) string {
-	if decl.isDef || target == symbols.SymbolUnknown {
+	if target == symbols.SymbolUnknown {
+		return ""
+	}
+	return referentKindMessage(decl, rel, target, target.String())
+}
+
+// unclassifiedReferenceKindMessage judges a referent the builder leaves without a
+// kind (a named binding): a feature of no constraint kind, named by its notation.
+func unclassifiedReferenceKindMessage(decl declKind, rel ast.RelationshipKind, sym *symbols.Symbol) string {
+	return referentKindMessage(decl, rel, sym.Kind, sym.Notation())
+}
+
+func referentKindMessage(decl declKind, rel ast.RelationshipKind, target symbols.SymbolKind, found string) string {
+	if decl.isDef {
 		return ""
 	}
 	switch {
@@ -751,13 +771,13 @@ func referenceKindMessage(decl declKind, rel ast.RelationshipKind, target symbol
 	// requirement usage; viewpoint and concern usages are requirement usages.
 	case decl.useKind == ast.UsageSatisfy && rel == ast.RelSubsets:
 		if !isRequirementUsageKind(target) {
-			return fmt.Sprintf("satisfy target must be a requirement usage, found %s", target)
+			return fmt.Sprintf("satisfy target must be a requirement usage, found %s", found)
 		}
 	// `assert [not] <name>` is a reference subsetting of an existing constraint
 	// usage; a requirement usage is a constraint usage.
 	case decl.isAssertedReference() && rel == ast.RelReferences:
 		if !isConstraintUsageKind(target) {
-			return fmt.Sprintf("assert target must be a constraint usage, found %s", target)
+			return fmt.Sprintf("assert target must be a constraint usage, found %s", found)
 		}
 	}
 	return ""
