@@ -12,7 +12,8 @@
   reading of its reference with the new spelling, so a chain member is read in its operand's type
   rather than where the chain is written, a qualifier respelled onto another element is captured
   even where that element lacks the member the rest of the name asks for (the reference would
-  otherwise be left unresolved), and a segment that would write an alias name is captured
+  otherwise be left unresolved), a segment that would name several members at once is refused as
+  leaving the reference ambiguous, and a segment that would write an alias name is captured
   by the alias even when it aliases the renamed element (the rename would leave `alias New for
   New`); the batch edit API gains both checks too, where it previously let `d.x` be renamed onto
   a `y` that `d`'s type declares. A name taken only in an unrelated scope is not a conflict, nor

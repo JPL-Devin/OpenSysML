@@ -34,6 +34,9 @@ type Conflict struct {
 	Means string
 	// Site is the namespace of the captured reference; empty for a taken name.
 	Site string
+	// Ambiguity is how many elements the reference would name at once, where the
+	// rename would leave it ambiguous rather than reading another element.
+	Ambiguity int
 }
 
 // Error describes the conflict, naming what the new name would mean.
@@ -42,6 +45,11 @@ func (c *Conflict) Error() string {
 		return fmt.Sprintf("%s cannot be renamed to %q: that name already means %s where"+
 			" %s is declared, so the rename would make it ambiguous or silently rebind"+
 			" what reads that name", c.Subject, c.NewName, c.Means, c.Subject)
+	}
+	if c.Ambiguity > 0 {
+		return fmt.Sprintf("%s cannot be renamed to %q: the reference to it in %s"+
+			" would name %d elements at once, so the rename would leave that reference ambiguous",
+			c.Subject, c.NewName, c.Site, c.Ambiguity)
 	}
 	return fmt.Sprintf("%s cannot be renamed to %q: the reference to it in %s"+
 		" would read %s instead, so the rename would change what that reference means",
@@ -59,8 +67,9 @@ func Check(r *resolve.Resolver, sym *symbols.Symbol, name, newName string, occur
 		return &Conflict{Subject: subject, NewName: newName, Means: means}
 	}
 	for _, occ := range occurrences {
-		if means, ok := capturedAt(r, sym, occ, newName); ok {
-			return &Conflict{Subject: subject, NewName: newName, Means: means, Site: site(r, occ, name)}
+		if c, ok := capturedAt(r, sym, occ, newName); ok {
+			c.Subject, c.NewName, c.Site = subject, newName, site(r, occ, name)
+			return &c
 		}
 	}
 	return nil
@@ -76,19 +85,24 @@ func taken(r *resolve.Resolver, sym *symbols.Symbol, newName string) (string, bo
 	return otherThan(r, sym, other, ok)
 }
 
-// capturedAt names what the segment would read spelled newName, by a trial reading
+// capturedAt reports what the segment would read spelled newName, by a trial reading
 // of the reference: a qualifier that reaches another element captures even where the
-// rest of the name then fails; a segment that would write an alias is captured by it.
-func capturedAt(r *resolve.Resolver, sym *symbols.Symbol, occ Occurrence, newName string) (string, bool) {
+// rest of the name then fails, a segment that would write an alias is captured by it,
+// and a name that would reach several elements leaves the reference ambiguous.
+func capturedAt(r *resolve.Resolver, sym *symbols.Symbol, occ Occurrence, newName string) (Conflict, bool) {
 	qn := respelled(occ.Ref.QN, occ.Part, newName)
 	rd := r.ProbeReading(occ.Ref.Spelled(qn))
+	if n, ambiguous := rd.Ambiguity(); ambiguous {
+		return Conflict{Ambiguity: n}, true
+	}
 	other, ok := rd.Symbol()
 	if alias, aliased := rd.Alias(occ.Part); aliased {
 		other, ok = alias, true
 	} else if occ.Part < len(qn.Parts)-1 {
 		other, ok = rd.Part(occ.Part)
 	}
-	return otherThan(r, sym, other, ok)
+	means, captured := otherThan(r, sym, other, ok)
+	return Conflict{Means: means}, captured
 }
 
 // respelled is qn with segment i spelled name, on a fresh node: the resolver

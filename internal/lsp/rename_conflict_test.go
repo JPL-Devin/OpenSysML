@@ -103,6 +103,17 @@ func TestRenameRefusesQualifierCaptureWhereTheSuffixIsMissing(t *testing.T) {
 	}
 }
 
+// A rewritten segment that would name several members leaves the reference
+// ambiguous: a conflict, though the trial reading reaches no element.
+func TestRenameRefusesSegmentLeftAmbiguous(t *testing.T) {
+	ws := model.NewWorkspace()
+	name := openRenameDoc(t, ws, "/tmp/ambiguous_segment.sysml",
+		"package P {\n\tpart def x;\n}\npackage Q {\n\timport P::*;\n\tpart def y;\n\tattribute def y;\n}\n"+
+			"package R {\n\tpart p : Q::x;\n}\n")
+	msg := refuseRename(t, ws, name, "x;", "y")
+	wantRefusal(t, msg, `P::x cannot be renamed to "y"`, "reference to it in R", "would name 2 elements at once")
+}
+
 // The same for a feature chain's qualified member, which is read outward from
 // the operand's type and whose failed reading the resolver otherwise discards.
 func TestRenameRefusesQualifierCaptureInFeatureChainMember(t *testing.T) {

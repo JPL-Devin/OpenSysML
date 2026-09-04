@@ -189,7 +189,8 @@ inherited name it would shadow), or a reference the rename rewrites, in any open
 afterwards read another element (`part w : Tyre;` in a scope that declares its own `Tyre`,
 `A::x` renamed to `y` when `A::y` exists, `A` in `A::x` renamed to `B` when a `B` is visible
 there — even one with no `x`, which would leave the reference unresolved — `d.x` renamed to `y`
-when `d`'s type declares its own `y`, or a name an alias — even an alias for the element itself —
+when `d`'s type declares its own `y`, a name that would reach several members at once and so
+leave the reference ambiguous, or a name an alias — even an alias for the element itself —
 already means there). A name taken only in an unrelated scope is no conflict, nor is renaming a
 name to itself.
 

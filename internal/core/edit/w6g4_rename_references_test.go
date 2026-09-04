@@ -212,6 +212,30 @@ func TestRenameCapturingAQualifierWithoutTheSuffixIsRefused(t *testing.T) {
 	}
 }
 
+// A rewritten segment that would name several members leaves the reference
+// ambiguous, which is refused too. Only a namespace with duplicate names makes a
+// segment ambiguous, so the fixture is deliberately ill-formed there.
+func TestRenameLeavingAQualifiedSegmentAmbiguousIsRefused(t *testing.T) {
+	const src = "package P {\n\tpart def Old;\n}\npackage Q {\n\timport P::*;\n\tpart def New;\n" +
+		"\tattribute def New;\n}\npackage R {\n\tpart p : Q::Old;\n}\n"
+	m := loadContent(t, "ambiguous-segment.sysml", src)
+	res, err := Apply(m, []Operation{Rename("P::Old", "New")})
+	if res != nil {
+		t.Fatalf("refused rename returned content:\n%s", res.Content)
+	}
+	e := editError(t, err)
+
+	if e.Failure != FailureInvalidName {
+		t.Fatalf("failure is %s (%s), want invalid-name", e.Failure, e.Message)
+	}
+	if !strings.Contains(e.Message, "would name 2 elements at once") {
+		t.Fatalf("refusal does not report the ambiguity: %s", e.Message)
+	}
+	if len(e.Referring) != 1 || e.Referring[0] != "R" {
+		t.Fatalf("refusal reports referring %v, want [R]", e.Referring)
+	}
+}
+
 // Renaming onto a name declared in a scope the element's references are written
 // in is refused even when nothing at the declaration shadows it.
 func TestRenameShadowingAtAReferenceIsRefused(t *testing.T) {
