@@ -32,19 +32,27 @@ func (cc *constraintChecker) checkW10BCrossFeatures(sym *symbols.Symbol) {
 	for _, rel := range crosses[1:] {
 		cc.addRedefineDiag(rel.Target, msgCrossSubsettingAtMostOne, codeCrossSubsettingAtMostOne)
 	}
-	rel := crosses[0]
 	owner := w10bOwningType(sym)
 	ends := cc.model.EndFeatures(owner)
-	if !w10bIsEndFeature(sym) || owner == nil || len(ends) < 2 {
-		cc.addRedefineDiag(rel.Target, msgCrossSubsettingOwner, codeCrossSubsettingOwner)
+	isEnd := w10bIsEndFeature(sym) && owner != nil
+	var cross *symbols.Symbol
+	for i, rel := range crosses {
+		if !isEnd || len(ends) < 2 {
+			cc.addRedefineDiag(rel.Target, msgCrossSubsettingOwner, codeCrossSubsettingOwner)
+		}
+		if !isEnd {
+			continue
+		}
+		base, crossed, isChain := cc.model.CrossedFeatureChain(sym, rel)
+		if !isChain || len(ends) == 2 && !w10bIsOppositeEnd(ends, sym, base) {
+			cc.addRedefineDiag(rel.Target, msgCrossSubsettingChain, codeCrossSubsettingChain)
+		}
+		if i == 0 {
+			cross = crossed
+		}
 	}
-	if !w10bIsEndFeature(sym) || owner == nil {
-		return
-	}
-	base, cross, isChain := cc.model.CrossedFeatureChain(sym, rel)
-	if !isChain || len(ends) == 2 && !w10bIsOppositeEnd(ends, sym, base) {
-		cc.addRedefineDiag(rel.Target, msgCrossSubsettingChain, codeCrossSubsettingChain)
-	}
+	// Feature::crossFeature is single-valued: only the first clause defines it.
+	rel := crosses[0]
 	if cross == nil {
 		return
 	}

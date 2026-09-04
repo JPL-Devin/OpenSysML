@@ -214,6 +214,35 @@ func TestW10BCrossSubsettingAtMostOne(t *testing.T) {
 	}
 }
 
+// Every cross subsetting is checked for its owner and chain shape, not only
+// the first; the type rule reads Feature::crossFeature, which the first defines.
+func TestW10BCrossSubsettingLaterClauseChain(t *testing.T) {
+	const src = `package P {
+		class A { feature x : A; feature y : A; }
+		assoc S {
+			end a : A;
+			end b : A crosses a.x crosses b.y;
+		}
+		class C {
+			feature p : A;
+			feature q : A crosses p.x crosses p.y;
+		}
+	}`
+	diags := constraintDiagsKerML(t, src)
+	expectCrossDiag(t, src, diags, codeCrossSubsettingChain, msgCrossSubsettingChain, "b.y")
+	if got := only(diags, codeCrossSubsettingAtMostOne); len(got) != 2 {
+		t.Errorf("at-most-one: got %d diagnostics, want one per excess clause: %v", len(got), got)
+	}
+	if got := only(diags, codeCrossSubsettingOwner); len(got) != 2 {
+		t.Errorf("owner: got %d diagnostics, want one per clause of the non-end: %v", len(got), got)
+	}
+	for _, code := range []string{codeCrossFeatureType, codeCrossFeatureSpecialization} {
+		if got := only(diags, code); len(got) != 0 {
+			t.Errorf("%s fired although the first crossing is well-formed: %v", code, got)
+		}
+	}
+}
+
 // An end that redefines an end of a general association, by name or by
 // position, must cross a feature specializing the redefined end's cross
 // feature (KerML validateFeatureCrossFeatureSpecialization).
