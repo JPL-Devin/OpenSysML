@@ -678,7 +678,7 @@ package Chains {
 
 // A subsetting of a name a sibling redefines reaches that sibling, which shadows
 // the inherited feature in the owning type, on its own and in the document walk
-// alike (KerML 7.3.4.5): `y :> x` beside `:>> x` names the redefining x.
+// alike (KerML 7.3.4.5): `y :> x` beside `:>> x` or `x :>> x` names the redefining x.
 func TestASubsettingReachesTheSiblingRedefinitionOnItsOwn(t *testing.T) {
 	for name, src := range map[string]string{
 		"sibling.kerml": `package P {
@@ -692,6 +692,20 @@ func TestASubsettingReachesTheSiblingRedefinitionOnItsOwn(t *testing.T) {
 	part def A { attribute x; }
 	part def B :> A {
 		attribute :>> x;
+		attribute y :> x;
+	}
+}`,
+		"named.kerml": `package P {
+	class A { feature x; }
+	class B :> A {
+		feature x :>> x;
+		feature y :> x;
+	}
+}`,
+		"named.sysml": `package P {
+	part def A { attribute x; }
+	part def B :> A {
+		attribute x :>> x;
 		attribute y :> x;
 	}
 }`,

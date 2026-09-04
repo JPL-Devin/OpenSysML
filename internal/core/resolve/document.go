@@ -901,18 +901,30 @@ func (r *Resolver) resolveOwnSibling(scope *symbols.Scope, qn *ast.QualifiedName
 		return false
 	}
 	sym, ok := scope.LookupLocal(qn.Parts[0].Text)
-	if !ok || sym == nil || sym.Decl == decl || !sym.EffectiveName {
+	if !ok || sym == nil || sym.Decl == decl {
 		return false
 	}
 	usage, isUsage := sym.Decl.(*ast.Usage)
-	if !isUsage {
-		return false
-	}
-	if naming := ast.NamingFeature(usage); naming == nil || naming.Kind != ast.RelRedefines {
+	if !isUsage || !redefinesUnderItsName(usage, sym.EffectiveName) {
 		return false
 	}
 	r.recordRedefined(qn, sym)
 	return true
+}
+
+// redefinesUnderItsName reports whether usage is a redefinition found under the
+// name it borrows from its target (`:>> x`) or restates itself (`x :>> x`).
+func redefinesUnderItsName(usage *ast.Usage, borrowed bool) bool {
+	if borrowed {
+		naming := ast.NamingFeature(usage)
+		return naming != nil && naming.Kind == ast.RelRedefines
+	}
+	for _, rel := range usage.Relationships {
+		if rel != nil && rel.Kind == ast.RelRedefines {
+			return true
+		}
+	}
+	return false
 }
 
 // resolveRedefinition resolves a redefinition target by looking up the inheritance chain.
