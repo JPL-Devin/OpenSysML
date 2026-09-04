@@ -286,14 +286,26 @@ func TestSendNewRejectsInadmissibleArgumentsAtSend(t *testing.T) {
 }
 
 // A constructed message whose delivery fails (bad address, unjoined port) leaves
-// no occurrence behind, in an action or a state machine alike.
+// nothing behind — not the occurrence, not an object its payload created, not the
+// behaviors that object started — in an action or a state machine alike.
 func TestSendNewLeavesNothingBehindWhenDeliveryFails(t *testing.T) {
 	const src = `package test {
 		private import ScalarValues::*;
 		item def Ping;
+		item def Tagged { ref source : Beacon; }
+		part def Beacon {
+			exhibit state machine { entry; then idle; state idle; }
+		}
 		part def Node {
 			attribute count : Integer = 0;
 			port lonely;
+			action tag {
+				first start;
+				action sender { send new Tagged(source = station.beacon) via lonely; }
+				done;
+				succession first start then sender;
+				succession first sender then done;
+			}
 			action listen {
 				first start;
 				action sender { send new Ping() to alpha.count; }
@@ -312,13 +324,20 @@ func TestSendNewLeavesNothingBehindWhenDeliveryFails(t *testing.T) {
 				entry; then sending;
 				state sending { entry send new Ping() via lonely; }
 			}
+			state tagging {
+				entry; then sending;
+				state sending { entry send new Tagged(source = station.beacon) via lonely; }
+			}
 		}
 		part alpha : Node;
+		part station { part beacon : Beacon; }
 	}`
 	for _, tc := range []struct{ name, behavior string }{
 		{"action addressed to an attribute", "test::Node::listen"},
 		{"action through an unjoined port", "test::Node::ship"},
+		{"action whose payload creates a behaving object", "test::Node::tag"},
 		{"state machine through an unjoined port", "test::Node::machine"},
+		{"state machine whose payload creates a behaving object", "test::Node::tagging"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
@@ -334,8 +353,13 @@ func TestSendNewLeavesNothingBehindWhenDeliveryFails(t *testing.T) {
 				t.Fatalf("%s: %v, want %v", tc.behavior, err, ErrUnroutableSend)
 			}
 			for _, inst := range ctx.instances {
-				if inst.Type != nil && inst.Type.Name == "Ping" {
-					t.Errorf("a Ping the failed send constructed is still alive as instance %d", inst.ID)
+				if inst.Type != nil && (inst.Type.Name == "Ping" || inst.Type.Name == "Tagged" || inst.Type.Name == "station" || inst.Type.Name == "Beacon") {
+					t.Errorf("a %s the failed send created is still alive as instance %d", inst.Type.Name, inst.ID)
+				}
+			}
+			for _, behavior := range append(append([]*ObjectBehavior(nil), ctx.objectBehaviors...), ctx.pendingBehaviors...) {
+				if _, live := ctx.instances[behavior.Object.ID]; !live {
+					t.Errorf("%s still attached to abandoned instance %d", behavior.Describe(), behavior.Object.ID)
 				}
 			}
 			if len(ctx.PendingMessages()) != 0 {
