@@ -47,7 +47,7 @@ func walkDocumentSymbols(content []byte, scope *symbols.Scope) []protocol.Docume
 		out = append(out, ds)
 	}
 	for _, child := range scope.Children() {
-		if isMetadataBodyScope(child) {
+		if isAnnotationBodyScope(child) {
 			out = append(out, walkDocumentSymbols(content, child)...)
 		}
 	}
@@ -112,7 +112,7 @@ func collectWorkspaceSymbols(scope *symbols.Scope, container, query string, cont
 		}
 	}
 	for _, child := range scope.Children() {
-		if isMetadataBodyScope(child) {
+		if isAnnotationBodyScope(child) {
 			collectWorkspaceSymbols(child, container, query, content, docURI, out)
 		}
 	}

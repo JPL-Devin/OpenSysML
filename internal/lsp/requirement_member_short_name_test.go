@@ -153,7 +153,7 @@ func TestCompletionOffersRequirementMemberShortNames(t *testing.T) {
 
 // Renaming from the declaration of a short-name-only subject renames the short
 // name and every reference to it, as for `part <p>;`. Renaming a subject's name
-// rewrites the references that reach it, as for `part <p> x`.
+// leaves references written with its short name alone, as for `part <p> x`.
 func TestRenameRequirementMemberShortName(t *testing.T) {
 	_, ws, name := openRequirementShortNameDoc(t)
 	got, err := applyRename(t, ws, name, "t> : T", "target")
@@ -171,8 +171,7 @@ func TestRenameRequirementMemberShortName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Rename err = %v", err)
 	}
-	want = strings.NewReplacer("<s> x : T", "<s> vehicle : T", ":>> s;", ":>> vehicle;").
-		Replace(requirementShortNameSrc)
+	want = strings.Replace(requirementShortNameSrc, "<s> x : T", "<s> vehicle : T", 1)
 	if got[name] != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", got[name], want)
 	}
