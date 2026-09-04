@@ -149,7 +149,7 @@ func buildNamespaceDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia 
 	case *ast.SubjectMember:
 		// SubjectMember represents requirement subject: subject <name> : <Type>;
 		// Create a part usage symbol (subject is structural usage like part)
-		id := ast.Identification{Name: d.Name}
+		id := d.Ident
 		child := NewScope(scope, d)
 		sym := newSymbol(id, SymbolPartUsage, d, vis, child, scope, trivia)
 		defineIdent(scope, id, sym)
@@ -438,7 +438,7 @@ func buildRequirementConstraint(scope *Scope, decl ast.Node, body []ast.Node, vi
 		buildConstraintBodyScope(scope, decl, body)
 		return
 	}
-	id := ast.Identification{Name: oc.Name, NameSpan: oc.NameSpan}
+	id := oc.Ident
 	var namingTarget ast.Node
 	if rel := oc.NamingFeature(); rel != nil {
 		if name, span := ast.TargetName(rel.Target); name != "" {

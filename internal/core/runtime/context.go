@@ -743,7 +743,7 @@ func (ctx *Context) memberBindings(sym *symbols.Symbol, element string, members 
 		isSubject := false
 		switch rm := member.node.(type) {
 		case *ast.SubjectMember:
-			what, name, expr, isSubject = "subject", rm.Name, rm.BindingExpr, true
+			what, name, expr, isSubject = "subject", rm.Ident.Name, rm.BindingExpr, true
 		case *ast.Usage:
 			switch rm.Kind {
 			case ast.UsageSubject:
@@ -954,8 +954,8 @@ func unboundSubjectNames(members []scopedMember, subject *Instance) map[string]b
 	for _, member := range members {
 		switch rm := member.node.(type) {
 		case *ast.SubjectMember:
-			if rm.BindingExpr == nil && rm.Name != "" {
-				names[rm.Name] = true
+			if rm.BindingExpr == nil && rm.Ident.Name != "" {
+				names[rm.Ident.Name] = true
 			}
 		case *ast.Usage:
 			if rm.Kind == ast.UsageSubject {

@@ -186,6 +186,16 @@ func TestNegative(t *testing.T) {
 		{"short_name_redefines_symbol_no_target", "part p { attribute <sn> :>>; }"},
 		{"short_name_defined_by_no_type", "part p { attribute <sn> defined by ; }"},
 
+		// A requirement's subject, assume and require members take an
+		// identification (SysML.xtext SubjectUsage, RequirementConstraintUsage →
+		// UsageDeclaration), so a malformed short name is an error there too.
+		{"subject_empty_short_name", "requirement def R { subject <> x; }"},
+		{"subject_unclosed_short_name", "requirement def R { subject <s x; }"},
+		{"assume_empty_short_name", "requirement def R { assume constraint <> c; }"},
+		{"assume_unclosed_short_name", "requirement def R { assume constraint <c x; }"},
+		{"require_empty_short_name", "requirement def R { require constraint <> c; }"},
+		{"require_unclosed_short_name", "requirement def R { require constraint <c x; }"},
+
 		// The notation has no definition of a rendering a view names, of a
 		// concern a body frames, or of a stakeholder or actor: those keywords own
 		// a usage, not a definition (SysML.xtext ViewRenderingUsage,

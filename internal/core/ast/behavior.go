@@ -438,13 +438,13 @@ type ConstraintMember struct {
 // Phase C2: Requirement Body Members
 
 // SubjectMember represents the subject declaration in a requirement body.
-// Syntax: subject <name> : <Type>; OR subject = <expr>;
+// Syntax: subject [<short>] [name] : <Type>; OR subject = <expr>;
 type SubjectMember struct {
 	NodeBase
 	// Prefixes are the metadata written after the keyword: the `#B` of
 	// `subject #B s` (SysML.xtext SubjectUsage UsageExtensionKeyword).
 	Prefixes      []*PrefixMetadata
-	Name          string
+	Ident         Identification  // `<short> name`, either or both optional (SysML.xtext Identification)
 	TypeRef       *QualifiedName  // subject type (for declaration form)
 	Multiplicity  *Multiplicity   // optional multiplicity
 	Relationships []*Relationship // specializations written after the type (`:>> RequirementCheck::subj`)
@@ -470,9 +470,8 @@ type AssumeMember struct {
 	Reference  *QualifiedName // referenced constraint/requirement (reference-subsetting form)
 	Body       []Node         // ConstraintMembers of the nested constraint (for the braced form)
 	// Declaration of the constraint the member owns, when it is written with
-	// one: `assume constraint c1 : C;`. DeclSpan covers it from `constraint` on.
-	Name          string
-	NameSpan      source.Span
+	// one: `assume constraint <c> c1 : C;`. DeclSpan covers it from `constraint` on.
+	Ident         Identification
 	DeclSpan      source.Span
 	Relationships []*Relationship
 	Multiplicity  *Multiplicity
@@ -497,9 +496,8 @@ type RequireMember struct {
 	Reference  *QualifiedName // referenced requirement (reference-subsetting form, SysML v2 §7.20)
 	Body       []Node         // nested members: ConstraintMembers for the braced form, requirement members for the reference form
 	// Declaration of the constraint the member owns, when it is written with
-	// one: `require constraint c1 : C;`. DeclSpan covers it from `constraint` on.
-	Name          string
-	NameSpan      source.Span
+	// one: `require constraint <c> c1 : C;`. DeclSpan covers it from `constraint` on.
+	Ident         Identification
 	DeclSpan      source.Span
 	Relationships []*Relationship
 	Multiplicity  *Multiplicity
@@ -517,8 +515,7 @@ type RequireMember struct {
 // OwnedConstraint is the constraint usage an assume or require member declares
 // with the `constraint` keyword (SysML.xtext RequirementConstraintUsage).
 type OwnedConstraint struct {
-	Name              string
-	NameSpan          source.Span
+	Ident             Identification
 	DeclSpan          source.Span
 	Relationships     []*Relationship
 	Multiplicity      *Multiplicity
@@ -538,7 +535,7 @@ func OwnedConstraintOf(n Node) (OwnedConstraint, bool) {
 			return OwnedConstraint{}, false
 		}
 		return OwnedConstraint{
-			Name: m.Name, NameSpan: m.NameSpan, DeclSpan: m.DeclSpan, Relationships: m.Relationships,
+			Ident: m.Ident, DeclSpan: m.DeclSpan, Relationships: m.Relationships,
 			Multiplicity: m.Multiplicity, Value: m.Value, ValueOperatorSpan: m.ValueOperatorSpan,
 			ValueIsDefault: m.ValueIsDefault, ValueIsInitial: m.ValueIsInitial, Body: m.Body,
 		}, true
@@ -547,7 +544,7 @@ func OwnedConstraintOf(n Node) (OwnedConstraint, bool) {
 			return OwnedConstraint{}, false
 		}
 		return OwnedConstraint{
-			Name: m.Name, NameSpan: m.NameSpan, DeclSpan: m.DeclSpan, Relationships: m.Relationships,
+			Ident: m.Ident, DeclSpan: m.DeclSpan, Relationships: m.Relationships,
 			Multiplicity: m.Multiplicity, Value: m.Value, ValueOperatorSpan: m.ValueOperatorSpan,
 			ValueIsDefault: m.ValueIsDefault, ValueIsInitial: m.ValueIsInitial, Body: m.Body,
 		}, true
@@ -556,9 +553,11 @@ func OwnedConstraintOf(n Node) (OwnedConstraint, bool) {
 }
 
 // NamingFeature returns the relationship naming a constraint declared without a
-// name, as NamingFeature does for a usage.
+// name, as NamingFeature does for a usage. A short name alone is no declared
+// name (KerML derives effectiveName from declaredName), so it leaves the
+// naming feature in place.
 func (c OwnedConstraint) NamingFeature() *Relationship {
-	if c.Name != "" {
+	if c.Ident.Name != "" {
 		return nil
 	}
 	return namingRelationship(c.Relationships, true)
@@ -567,8 +566,8 @@ func (c OwnedConstraint) NamingFeature() *Relationship {
 // EffectiveName returns the name the constraint answers to: its declared name,
 // else the name its naming feature supplies.
 func (c OwnedConstraint) EffectiveName() (string, source.Span) {
-	if c.Name != "" {
-		return c.Name, c.NameSpan
+	if c.Ident.Name != "" {
+		return c.Ident.Name, c.Ident.NameSpan
 	}
 	if rel := c.NamingFeature(); rel != nil {
 		return TargetName(rel.Target)

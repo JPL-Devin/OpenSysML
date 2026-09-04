@@ -492,7 +492,7 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 		writeChildren(b, depth, kids)
 		return true
 	case *SubjectMember:
-		fmt.Fprintf(b, `(SubjectMember name=%q type=%q`, v.Name, qnString(v.TypeRef))
+		fmt.Fprintf(b, `(SubjectMember name=%q type=%q`, identName(v.Ident), qnString(v.TypeRef))
 		writeValueOperator(b, v.ValueIsDefault, v.ValueIsInitial)
 		kids := make([]Node, 0)
 		for _, pm := range v.Prefixes {
@@ -515,8 +515,8 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 		} else if v.Expression == nil {
 			// Constraint form: require constraint [decl] (; | { expr })
 			b.WriteString(`(RequireMember`)
-			if v.Name != "" {
-				fmt.Fprintf(b, ` constraint=%q`, v.Name)
+			if name := identName(v.Ident); name != "" {
+				fmt.Fprintf(b, ` constraint=%q`, name)
 			}
 			writeValueOperator(b, v.ValueIsDefault, v.ValueIsInitial)
 			writeChildren(b, depth, prefixesAnd(v.Prefixes,
@@ -535,8 +535,8 @@ func dumpDeclaration(b *strings.Builder, n Node, depth int) bool {
 		}
 		b.WriteString(`(AssumeMember`)
 		if v.Expression == nil {
-			if v.Name != "" {
-				fmt.Fprintf(b, ` constraint=%q`, v.Name)
+			if name := identName(v.Ident); name != "" {
+				fmt.Fprintf(b, ` constraint=%q`, name)
 			}
 			writeValueOperator(b, v.ValueIsDefault, v.ValueIsInitial)
 			writeChildren(b, depth, prefixesAnd(v.Prefixes,

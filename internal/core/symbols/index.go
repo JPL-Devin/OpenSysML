@@ -1396,6 +1396,12 @@ func shortNameOf(decl ast.Node) string {
 		return d.Ident.ShortName
 	case *ast.RelationshipMember:
 		return d.Ident.ShortName
+	case *ast.SubjectMember:
+		return d.Ident.ShortName
+	case *ast.AssumeMember:
+		return d.Ident.ShortName
+	case *ast.RequireMember:
+		return d.Ident.ShortName
 	default:
 		return ""
 	}
