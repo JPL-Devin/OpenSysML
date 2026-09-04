@@ -520,8 +520,14 @@ func builtinSequenceIncludingAt(ec *EvalContext, args []Value) (Value, error) {
 	if err := checkArity(op, args, 3); err != nil {
 		return Value{}, err
 	}
-	elements, values := elementsOf(args[0]), elementsOf(args[1])
-	index, err := indexOf(op, args[2])
+	return ec.insertAt(op, args[0], args[1], args[2])
+}
+
+// insertAt is seq with values inserted before its index-th element, or after
+// its last when index is one past it; any other index is out of range.
+func (ec *EvalContext) insertAt(op string, seq, values, at Value) (Value, error) {
+	elements, inserted := elementsOf(seq), elementsOf(values)
+	index, err := indexOf(op, at)
 	if err != nil {
 		return Value{}, err
 	}
@@ -529,11 +535,11 @@ func builtinSequenceIncludingAt(ec *EvalContext, args []Value) (Value, error) {
 		return Value{}, fmt.Errorf("%w: %s insertion index %d is outside 1..%d",
 			ErrIndexOutOfRange, op, index, len(elements)+1)
 	}
-	inserted := make([]Value, 0, len(elements)+len(values))
-	inserted = append(inserted, elements[:index-1]...)
-	inserted = append(inserted, values...)
-	inserted = append(inserted, elements[index-1:]...)
-	return ec.newSequence(inserted)
+	result := make([]Value, 0, len(elements)+len(inserted))
+	result = append(result, elements[:index-1]...)
+	result = append(result, inserted...)
+	result = append(result, elements[index-1:]...)
+	return ec.newSequence(result)
 }
 
 // builtinSequenceSubsequence is SequenceFunctions::subsequence, the elements

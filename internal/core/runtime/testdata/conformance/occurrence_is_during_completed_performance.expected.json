@@ -1,0 +1,9 @@
+{
+  "type": "instance",
+  "libraries": true,
+  "instantiate": "test::Robot",
+  "slots": {
+    "goWhile": {"type": "Boolean", "value": true},
+    "goAfter": {"type": "Boolean", "value": false}
+  }
+}

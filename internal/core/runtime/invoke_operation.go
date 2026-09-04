@@ -18,6 +18,9 @@ func (ctx *Context) InvokeOperation(inst *Instance, name string, args map[string
 	if inst == nil {
 		return nil, fmt.Errorf("%w: no object to perform %s", ErrNoSuchBehavior, name)
 	}
+	if err := ctx.checkPerformer(inst); err != nil {
+		return nil, fmt.Errorf("invoke %s on object #%d: %w", name, inst.ID, err)
+	}
 	sym, err := ctx.operationOf(inst, name)
 	if err != nil {
 		return nil, err
