@@ -691,9 +691,8 @@ func TestPerformedActionWithoutAFlowStillMaterializes(t *testing.T) {
 	}
 }
 
-// TestPerformedActionDeclaringAnOutputDefaultStarts: the value an `out` member
-// of the binding declares is the answer's default, not an input the performer
-// seeds, so it neither fails the start nor is lost, with or without a flow.
+// The value an `out` member of the binding declares is the answer's default,
+// not an input, so it neither fails the start nor is lost, with or without a flow.
 func TestPerformedActionDeclaringAnOutputDefaultStarts(t *testing.T) {
 	for name, body := range map[string]string{
 		"flowed":  "out total : Integer = 7; first start; then done;",
