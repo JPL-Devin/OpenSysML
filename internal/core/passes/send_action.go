@@ -78,6 +78,12 @@ func (c *sendActionChecker) walkNode(scope *symbols.Scope, node ast.Node) {
 		c.walk(childScopeOr(scope, n), n.Members)
 	case *ast.SubjectMember:
 		c.walk(childScopeOr(scope, n), n.Body)
+	case *ast.ConstraintMember:
+		c.walk(symbols.ConstraintBodyScope(scope, n), n.Body)
+	case *ast.AssumeMember:
+		c.walk(symbols.ConstraintBodyScope(scope, n), n.Body)
+	case *ast.RequireMember:
+		c.walk(symbols.ConstraintBodyScope(scope, n), n.Body)
 	case *ast.EntryMember:
 		c.walkSubactions(scope, n.Actions)
 	case *ast.DoMember:

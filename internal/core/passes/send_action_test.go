@@ -385,6 +385,48 @@ func TestSendWellFormedShapesAreSilent(t *testing.T) {
 	}
 }
 
+// A constraint body carries action nodes: a send written in an asserted, assumed
+// or required constraint's body is checked like any other; a well-formed one is silent.
+func TestSendInConstraintBodiesIsChecked(t *testing.T) {
+	hosts := map[string]func(send string) string{
+		"asserted constraint": func(send string) string {
+			return `package P {` + sendPrelude + `
+				part def V { port q : PD; assert constraint c { ` + send + ` true } } }`
+		},
+		"assumed constraint": func(send string) string {
+			return `package P {` + sendPrelude + `
+				requirement def R { port q : PD; assume constraint { ` + send + ` true } } }`
+		},
+		"required constraint": func(send string) string {
+			return `package P {` + sendPrelude + `
+				requirement def R { port q : PD; require constraint { ` + send + ` true } } }`
+		},
+		"nested assertion": func(send string) string {
+			return `package P {` + sendPrelude + `
+				part def V { port q : PD; constraint c { assert constraint { ` + send + ` true } true } } }`
+		},
+	}
+	for name, host := range hosts {
+		t.Run(name, func(t *testing.T) {
+			bad := host(`send Sig() to q;`)
+			got := sendDiags(t, bad)
+			if len(got) != 2 {
+				t.Fatalf("expected the payload and receiver diagnostics, got %+v", got)
+			}
+			codes := map[string]bool{}
+			for _, d := range got {
+				codes[d.Code] = true
+			}
+			if !codes["invocation-not-behavior"] || !codes[CodeSendToPort] {
+				t.Errorf("got codes %v, want invocation-not-behavior and %s", codes, CodeSendToPort)
+			}
+			if got := sendDiags(t, host(`send Ping() via q;`)); len(got) != 0 {
+				t.Errorf("expected no send diagnostics on the valid send, got %+v", got)
+			}
+		})
+	}
+}
+
 // The payload parameter a send body redefines resolves wherever the send is
 // written: on an action node, bare in a definition, in a branch or a succession.
 func TestSendBodyPayloadResolvesInEveryHost(t *testing.T) {
