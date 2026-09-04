@@ -52,13 +52,12 @@ type materializeWalk struct {
 }
 
 func (w *materializeWalk) walk(inst *Instance, depth int) {
-	features := w.ctx.FeaturesOf(inst.Type)
-	for i := range features {
+	for _, of := range w.ctx.FeaturesOfObject(inst) {
 		if w.budget <= 0 {
 			w.bounded = true
 			return
 		}
-		feat := &features[i]
+		feat := of.Feature
 		// A constraint or requirement a part carries holds a verdict about the
 		// object rather than a value, so there is nothing to materialize.
 		if holdsVerdict(feat) {
@@ -72,14 +71,14 @@ func (w *materializeWalk) walk(inst *Instance, depth int) {
 		}
 		// A redefinition names the redefined feature again, and the two names read
 		// one feature value, so reading it once reports what it holds once.
-		if shared := inst.FeatureValues[feat.Name]; shared != nil {
+		if shared := inst.FeatureValues[of.Name]; shared != nil {
 			if w.read[shared] {
 				continue
 			}
 			w.read[shared] = true
 		}
 		w.budget--
-		fv, err := inst.GetFeatureValue(w.ctx, feat.Name)
+		fv, err := inst.GetFeatureValue(w.ctx, of.Name)
 		if err != nil {
 			w.errs = append(w.errs, err)
 			continue

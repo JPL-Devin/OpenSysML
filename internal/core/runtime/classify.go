@@ -129,12 +129,15 @@ func (ctx *Context) classify(inst *Instance, typ *symbols.Symbol) error {
 	return nil
 }
 
-// refineFeatureValue makes a carried feature value read the classifier's declaration redefining
-// the one it reads (KerML 1.0 §7.3.4.5); what it holds stays if the refined declaration admits it.
+// refineFeatureValue makes a carried feature value read the classifier's declaration when it redefines the
+// one read (KerML 1.0 §7.3.4.5), or the classifier specializes the type declaring it and so masks it (§7.3.2.1).
 func (ctx *Context) refineFeatureValue(inst *Instance, fv *FeatureValue, feat *EffectiveFeature, typ *symbols.Symbol) error {
 	have := fv.Feature
-	if feat.Symbol == nil || have.Symbol == nil || feat.Symbol == have.Symbol ||
-		!slices.Contains(ctx.redefinedFeatures(feat.Symbol, typ), have.Symbol) {
+	if feat.Symbol == nil || have.Symbol == nil || feat.Symbol == have.Symbol {
+		return nil
+	}
+	if !slices.Contains(ctx.redefinedFeatures(feat.Symbol, typ), have.Symbol) &&
+		(!ctx.model.Conforms(typ, have.OwnerType) || slices.Contains(ctx.redefinedFeatures(have.Symbol, have.OwnerType), feat.Symbol)) {
 		return nil
 	}
 	ctx.noteProbeWrite(fv)

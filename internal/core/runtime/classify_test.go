@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -1203,5 +1204,115 @@ func TestRelationshipsComeFromEveryTypeOfTheObject(t *testing.T) {
 	}
 	if anon := ctx.anonymousConnectorsOf(raw.types()); len(anon) != 2 {
 		t.Fatalf("anonymous connectors = %d, want Base's and Wide's", len(anon))
+	}
+}
+
+// Two comparable classifiers declaring one name without redefinition read the narrower
+// type's declaration, whichever was added first — as an object created as that type would.
+func TestSameNameFeaturesOfClassifiersReadTheNarrowerDeclaration(t *testing.T) {
+	const model = `package test {
+		private import ScalarValues::*;
+		item def Common;
+		item def A :> Common { attribute n : Real = 1.0; }
+		item def B :> A { attribute n : Real = 2.0; }
+		item def C :> A { attribute n : Integer [2] = (3, 4); }
+		item def Rack { item raw [1]; }
+		item rack : Rack;
+	}`
+	classified := func(t *testing.T, ctx *Context, idx *symbols.Index, order ...string) *Instance {
+		t.Helper()
+		raw := readInstance(t, ctx, instantiateQualified(t, ctx, idx, "test::rack"), "raw")
+		for _, name := range order {
+			if err := ctx.classify(raw, idx.LookupQualified("test::" + name)[0]); err != nil {
+				t.Fatalf("classify(raw, %s) after %v: %v", name, order, err)
+			}
+		}
+		return raw
+	}
+	for _, order := range [][]string{{"A", "B"}, {"B", "A"}} {
+		ctx, idx := libraryShapeContext(t, model)
+		raw := classified(t, ctx, idx, order...)
+		fv, err := raw.GetFeatureValue(ctx, "n")
+		if err != nil {
+			t.Fatalf("%v: n: %v", order, err)
+		}
+		if got := realValue(t, fv.HeldValue()); got != 2.0 || fv.Feature.OwnerType != idx.LookupQualified("test::B")[0] {
+			t.Errorf("%v: n = %v read by %s, want B's default 2.0 read by B's declaration", order, got, fv.Feature.OwnerType.Name)
+		}
+	}
+	for _, order := range [][]string{{"A", "C"}, {"C", "A"}} {
+		ctx, idx := libraryShapeContext(t, model)
+		raw := classified(t, ctx, idx, order...)
+		fv, err := raw.GetFeatureValue(ctx, "n")
+		if err != nil {
+			t.Fatalf("%v: n: %v", order, err)
+		}
+		if got := FormatValue(fv.HeldValue()); got != "[3, 4]" || fv.Feature.OwnerType != idx.LookupQualified("test::C")[0] {
+			t.Errorf("%v: n = %s read by %s, want C's [3, 4] read by C's declaration", order, got, fv.Feature.OwnerType.Name)
+		}
+	}
+
+	// A held value the narrower declaration does not admit refuses the classification, leaving the object as it was.
+	ctx, idx := libraryShapeContext(t, model)
+	raw := classified(t, ctx, idx, "A")
+	if err := raw.SetFeatureValue(ctx, "n", Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 1.5}}); err != nil {
+		t.Fatalf("write raw.n: %v", err)
+	}
+	err := ctx.classify(raw, idx.LookupQualified("test::C")[0])
+	if !errors.Is(err, ErrMultiplicityViolation) && !errors.Is(err, ErrTypeMismatch) {
+		t.Fatalf("classify(raw, C) with n = 1.5 = %v, want a typed refusal of a Real in n : Integer [2]", err)
+	}
+	fv := raw.FeatureValues["n"]
+	if len(raw.classifiers) != 1 || fv.Feature.OwnerType != idx.LookupQualified("test::A")[0] || realValue(t, fv.HeldValue()) != 1.5 {
+		t.Errorf("refused classification left raw classified by %v with n = %s read by %s, want A's declaration holding 1.5",
+			raw.classifiers, FormatValue(fv.HeldValue()), fv.Feature.OwnerType.Name)
+	}
+}
+
+// Walks over an object's feature values cover the features its classifiers add — their defaults,
+// their errors and the objects they hold — after the declared type's, each shared value once.
+func TestObjectWalksCoverTheFeaturesClassifiersAdd(t *testing.T) {
+	ctx, idx := libraryShapeContext(t, `package test {
+		private import ScalarValues::*;
+		item def Common;
+		item def Base { attribute mass : Real; }
+		item def Loaded :> Base {
+			attribute grossMass :>> mass = (1.0, 2.0);
+			attribute bad : Integer [1] = (5, 6);
+			item inner : Common;
+		}
+		item def Rack { item raw : Base [1]; }
+		item rack : Rack;
+	}`)
+	raw := readInstance(t, ctx, instantiateQualified(t, ctx, idx, "test::rack"), "raw")
+	if errs, _ := ctx.MaterializationErrors(raw); len(errs) != 0 {
+		t.Fatalf("MaterializationErrors as a Base = %v, want none", errs)
+	}
+	if nested := ctx.nestedObjects(raw); len(nested) != 0 {
+		t.Fatalf("nestedObjects as a Base = %d objects, want none", len(nested))
+	}
+	if err := ctx.classify(raw, idx.LookupQualified("test::Loaded")[0]); err != nil {
+		t.Fatalf("classify(raw, Loaded): %v", err)
+	}
+
+	var names []string
+	for _, of := range ctx.FeaturesOfObject(raw) {
+		names = append(names, of.Name)
+	}
+	if last := len(names) - 3; last < 1 || names[0] != "mass" || !slices.Equal(names[last:], []string{"grossMass", "bad", "inner"}) {
+		t.Errorf("FeaturesOfObject = %v, want the declared type's features then the classifier's grossMass, bad, inner", names)
+	}
+	errs, _ := ctx.MaterializationErrors(raw)
+	if len(errs) != 2 {
+		t.Fatalf("MaterializationErrors as a Loaded = %v, want mass/grossMass once and bad once", errs)
+	}
+	for _, err := range errs {
+		if !errors.Is(err, ErrMultiplicityViolation) {
+			t.Errorf("err = %v, want ErrMultiplicityViolation", err)
+		}
+	}
+	nested := ctx.nestedObjects(raw)
+	if len(nested) != 1 || nested[0].feature != "inner" || !ctx.instanceConforms(nested[0].instance, idx.LookupQualified("test::Common")[0]) {
+		t.Errorf("nestedObjects as a Loaded = %v, want the Common held by inner", nested)
 	}
 }

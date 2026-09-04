@@ -75,3 +75,42 @@ func (inst *Instance) types() []*symbols.Symbol {
 	}
 	return append([]*symbols.Symbol{inst.Type}, inst.classifiers...)
 }
+
+// ObjectFeature is a feature of an object under one of its names: the declaration its
+// feature value reads, or its type's when it holds no value under the name.
+type ObjectFeature struct {
+	Name    string
+	Feature *EffectiveFeature
+}
+
+// FeaturesOfObject returns the features of an object under every type of it: the declared
+// type's, then those each classifier adds, in declaration order, each name once.
+func (ctx *Context) FeaturesOfObject(inst *Instance) []ObjectFeature {
+	types := inst.types()
+	var out []ObjectFeature
+	var seen map[string]bool
+	if len(types) > 1 {
+		seen = make(map[string]bool)
+	}
+	for _, typ := range types {
+		features := ctx.FeaturesOf(typ)
+		if out == nil {
+			out = make([]ObjectFeature, 0, len(features))
+		}
+		for i := range features {
+			name := features[i].Name
+			if seen[name] {
+				continue
+			}
+			if seen != nil {
+				seen[name] = true
+			}
+			feat := &features[i]
+			if fv := inst.FeatureValues[name]; fv != nil && fv.Feature != nil {
+				feat = fv.Feature
+			}
+			out = append(out, ObjectFeature{Name: name, Feature: feat})
+		}
+	}
+	return out
+}
