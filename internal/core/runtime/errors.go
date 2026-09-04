@@ -503,3 +503,9 @@ func calcFrame(calc string, err error) error {
 	}
 	return &CalcFrameError{Calc: calc, Frames: 1, Err: err, calcs: map[string]bool{calc: true}}
 }
+
+// calcDefaultError reports err raised evaluating calc's default for param as one
+// frame of calc, so a default re-invoking its own calc collapses into a count.
+func calcDefaultError(calc, param string, err error) error {
+	return calcFrame(calc, fmt.Errorf("default for parameter %q: %w", param, err))
+}

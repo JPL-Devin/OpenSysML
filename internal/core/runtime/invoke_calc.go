@@ -729,9 +729,7 @@ func (ec *EvalContext) bindCalcParameter(
 	}
 	value, err := ec.Eval(param.Default)
 	if err != nil {
-		return Value{}, "", fmt.Errorf(
-			"calc %s: default for parameter %q: %w", shape.Name, param.Name, err,
-		)
+		return Value{}, "", calcDefaultError(shape.Name, param.Name, err)
 	}
 	return value, "default", nil
 }
