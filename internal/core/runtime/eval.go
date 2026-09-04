@@ -798,11 +798,7 @@ func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) 
 		if err != nil {
 			return Value{}, fmt.Errorf("usage %s: %w", sym.Name, err)
 		}
-		val, err := ec.ctx.objectValue(inst)
-		if err != nil {
-			return Value{}, err
-		}
-		return ec.chainMemberValue(val, parts, sym.Name)
+		return ec.chainMemberValue(Value{Kind: ValInstance, Instance: inst.ID}, parts, sym.Name)
 	}
 
 	// Evaluate the operand (left side of the chain)
@@ -923,15 +919,20 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 	if !ok {
 		return Value{}, fmt.Errorf("instance ID %d not found for member %s", id, from)
 	}
-	// A shaped Collections::Array object is the Array value, whose derived
-	// features (rank, flattenedSize) the value answers.
+	name := parts[0].Text
+	// A shaped Collections::Array object answers Array's own features (rank,
+	// flattenedSize) from the Array value; its other members stay the object's.
 	if arr, isArray, err := ec.ctx.arrayOfObject(inst); isArray {
 		if err != nil {
 			return Value{}, err
 		}
-		return ec.chainMemberValue(arr, parts, from)
+		if member, ok, err := structuredFeature(arr, name); ok {
+			if err != nil {
+				return Value{}, err
+			}
+			return ec.chainMemberValue(member, parts[1:], name)
+		}
 	}
-	name := parts[0].Text
 	fvDecl, ok := inst.FeatureValues[name]
 	if !ok {
 		// A calc usage is an evaluation rather than a feature value, so its outputs are

@@ -1483,3 +1483,47 @@ func TestBuiltinsListEveryFunctionWithItsPackage(t *testing.T) {
 		}
 	}
 }
+
+// TestArraySpecializationKeepsOwnMembers: an attribute def specializing Array
+// answers Array's features from its shape and its own members from the object.
+func TestArraySpecializationKeepsOwnMembers(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+		package test {
+			private import ScalarValues::*;
+			private import Collections::*;
+			attribute def LabeledGrid :> Array {
+				attribute label : String;
+				attribute scale : Real = 0.5;
+			}
+			attribute grid : LabeledGrid {
+				:>> dimensions = (2, 2);
+				:>> elements = (1, 2, 3, 4);
+				:>> label = "grid";
+			}
+		}
+	`))
+	pkg, ok := idx.DocumentRoot("<test>").LookupLocal("test")
+	if !ok || pkg.Scope == nil {
+		t.Fatal("test package not indexed")
+	}
+	for _, tc := range []struct{ src, want string }{
+		{"grid.rank", "2"},
+		{"grid.flattenedSize", "4"},
+		{"grid.dimensions", "[2, 2]"},
+		{"grid.elements#(3)", "3"},
+		{"grid.label", `"grid"`},
+		{"grid.scale", "0.5"},
+	} {
+		got, err := evalIn(t, ctx, pkg.Scope, tc.src)
+		if err != nil {
+			t.Errorf("%s: %v", tc.src, err)
+			continue
+		}
+		if rendered := FormatValue(got); rendered != tc.want {
+			t.Errorf("%s = %s, want %s", tc.src, rendered, tc.want)
+		}
+	}
+	if _, err := evalIn(t, ctx, pkg.Scope, "grid.missing"); err == nil || !strings.Contains(err.Error(), "missing") {
+		t.Errorf("grid.missing = %v, want an error naming the member", err)
+	}
+}

@@ -31,16 +31,21 @@ func (a *Array) Rank() int {
 
 // FlattenedSize is the product of the dimensions, one for an array of none.
 func (a *Array) FlattenedSize() int64 {
-	return flattenedSize(a.Dimensions)
+	size, _ := flattenedSize(a.Dimensions)
+	return size
 }
 
-// flattenedSize is the product of a list of dimensions, one for the empty list.
-func flattenedSize(dimensions []int64) int64 {
+// flattenedSize is the product of positive dimensions, one for the empty list;
+// false when the product does not fit an Integer.
+func flattenedSize(dimensions []int64) (int64, bool) {
 	size := int64(1)
 	for _, d := range dimensions {
+		if d > 0 && size > math.MaxInt64/d {
+			return 0, false
+		}
 		size *= d
 	}
-	return size
+	return size, true
 }
 
 // at is the element at one one-based index per dimension, row-major (the last
@@ -60,12 +65,34 @@ func (a *Array) at(op string, indexes []int64) (Value, error) {
 				ErrIndexOutOfRange, op, i+1, index, i+1, a.Dimensions[i],
 			)
 		}
-		offset = offset*a.Dimensions[i] + (index - 1)
+		next, ok := rowMajorOffset(offset, a.Dimensions[i], index-1)
+		if !ok {
+			return Value{}, fmt.Errorf(
+				"%w: %s: the row-major offset of %s in dimensions %s exceeds the Integer range",
+				semantics.ErrArithmeticOverflow, op, FormatValue(intSequence(indexes)), FormatValue(intSequence(a.Dimensions)),
+			)
+		}
+		offset = next
 	}
 	if offset >= int64(len(a.Elements)) {
-		return Value{}, fmt.Errorf("%w: %s: element %d of %d", ErrIndexOutOfRange, op, offset+1, len(a.Elements))
+		return Value{}, fmt.Errorf(
+			"%w: %s: %s addresses row-major offset %d, the array holds %d element(s)",
+			ErrIndexOutOfRange, op, FormatValue(intSequence(indexes)), offset, len(a.Elements),
+		)
 	}
 	return a.Elements[offset], nil
+}
+
+// rowMajorOffset is offset*dimension + index, false when it does not fit an Integer.
+func rowMajorOffset(offset, dimension, index int64) (int64, bool) {
+	if dimension > 0 && offset > math.MaxInt64/dimension {
+		return 0, false
+	}
+	scaled := offset * dimension
+	if index > math.MaxInt64-scaled {
+		return 0, false
+	}
+	return scaled + index, true
 }
 
 // Format renders `Array(2, 2)[1, 2, 3, 4]` with each element rendered by
@@ -403,7 +430,14 @@ func arrayOf(op string, dimensions []int64, elements []Value) (Value, error) {
 			)
 		}
 	}
-	if want := flattenedSize(dimensions); want != int64(len(elements)) {
+	want, ok := flattenedSize(dimensions)
+	if !ok {
+		return Value{}, fmt.Errorf(
+			"%w: %s: flattenedSize of dimensions %s exceeds the Integer range",
+			semantics.ErrArithmeticOverflow, op, FormatValue(intSequence(dimensions)),
+		)
+	}
+	if want != int64(len(elements)) {
 		return Value{}, fmt.Errorf(
 			"%w: %s: %d elements do not fill dimensions %s (flattenedSize %d)",
 			ErrMultiplicityViolation, op, len(elements), FormatValue(intSequence(dimensions)), want,

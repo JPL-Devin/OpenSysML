@@ -672,9 +672,13 @@ the flat sequence of its elements:
   Array { :>> dimensions = (2, 3); :>> elements = (1, 2, 3, 4, 5, 6); }` — and
   the object that usage names *is* the Array value wherever it is read
   (`arrayOfObject`, `objectValue`, `EvalDeclaredValue`): as an operand, through
-  a feature chain (`a.rank`), and at the REPL (`%eval a`). A usage whose
+  a feature chain (`a.rank`), and at the REPL (`%eval a`); a member the Array
+  does not declare (`grid.label` on an `attribute def LabeledGrid :> Array`)
+  is read from the object itself (`chainMemberValue`). A usage whose
   `elements` does not fill its `dimensions` is `ErrMultiplicityViolation`
-  naming both counts. The shape is the pinned pilot evaluator's: asked about
+  naming both counts, and dimensions whose product does not fit an Integer, or
+  an index offset that would not, are `ErrArithmeticOverflow` rather than a
+  wrapped size. The shape is the pinned pilot evaluator's: asked about
   that usage, `eval-sysml` answers `grid` itself as the unevaluated
   `AttributeUsage` (it prints no Array value), `grid.rank` as `2` and
   `CollectionFunctions::'array#'(grid, (2, 1))` as `4` — row-major, one-based —
@@ -691,6 +695,14 @@ the flat sequence of its elements:
   `CartesianThreeVectorValue` when its dimension is 3 (`structuredValueType`,
   `write_conformance.go`), so it binds to a feature typed by any of these and
   `CartesianThreeVectorOf` with two components is `ErrMultiplicityViolation`.
+  A structured value written to a feature typed by a *specialization* of its
+  own type is admitted only when the shape that type fixes holds — a
+  `dimension`, `dimensions`, `rank` or `flattenedSize` it redefines to a
+  constant, the multiplicity of its `dimensions`, and the type its `elements`
+  are declared of (`structuredConforms`, `shapeRefusal`, `elementsConform`) —
+  so a two-component vector does not bind to `CartesianThreeVectorValue`, nor a
+  2×3 Array to a type fixing `dimensions = (2, 2)`, and the refusal names the
+  declaration it fails (`it declares dimension = 3`).
   A sequence of numbers written where a vector parameter is declared
   (`inner((1, 2), (3, 4))`) is still read as a vector — the pilot's
   `VectorOf((1,2,3))` argument form — while a sequence given several vectors'

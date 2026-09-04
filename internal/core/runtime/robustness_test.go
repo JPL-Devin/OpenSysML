@@ -273,6 +273,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("bodiless_model_calc_named_as_a_builtin", testBodilessModelCalcNamedAsABuiltin)
 	t.Run("data_equality_over_a_part", testDataEqualityOverAPart)
 	t.Run("base_index_with_several_indexes", testBaseIndexWithSeveralIndexes)
+	t.Run("structured_value_outside_the_declared_shape", testStructuredValueOutsideTheDeclaredShape)
 	t.Run("real_literal_that_underflows", testRealLiteralThatUnderflows)
 	t.Run("string_operand_of_the_wrong_kind", testStringOperandOfTheWrongKind)
 	t.Run("collection_body_of_the_wrong_arity", testCollectionBodyOfTheWrongArity)
@@ -1532,7 +1533,8 @@ func testDataEqualityOverAPart(t *testing.T) {
 }
 
 // testBaseIndexWithSeveralIndexes: several indexes address an Array, so a flat
-// sequence, a rank mismatch, an out-of-range or ragged Array is each reported.
+// sequence, a rank mismatch, an out-of-range, ragged or oversized Array is each
+// reported.
 func testBaseIndexWithSeveralIndexes(t *testing.T) {
 	src := `
 		package test {
@@ -1540,6 +1542,7 @@ func testBaseIndexWithSeveralIndexes(t *testing.T) {
 			private import Collections::*;
 			attribute a : Array { :>> dimensions = (2, 3); :>> elements = (1, 2, 3, 4, 5, 6); }
 			attribute ragged : Array { :>> dimensions = (2, 2); :>> elements = (1, 2, 3); }
+			attribute vast : Array { :>> dimensions = (4611686018427387904, 4); :>> elements = (); }
 			calc def Cell { return : Integer = BaseFunctions::'#'((1, 2, 3, 4), (2, 2)); }
 			calc def NoIndex { return : Integer = BaseFunctions::'#'((1, 2, 3, 4), ()); }
 			calc def OneIndex { return : Integer = a#(4); }
@@ -1548,6 +1551,7 @@ func testBaseIndexWithSeveralIndexes(t *testing.T) {
 			calc def PastColumn { return : Integer = a#(1, 4); }
 			calc def ZeroIndex { return : Integer = a#(0, 1); }
 			calc def Ragged { return : Integer = ragged#(1, 1); }
+			calc def Vast { return : Integer = vast#(4611686018427387904, 4); }
 		}
 	`
 	for calc, want := range map[string]error{
@@ -1567,6 +1571,71 @@ func testBaseIndexWithSeveralIndexes(t *testing.T) {
 	err := calcErrorWithLibraries(t, src, "Ragged", nil, 10000)
 	if !errors.Is(err, ErrMultiplicityViolation) || !strings.Contains(err.Error(), "flattenedSize") {
 		t.Errorf("Ragged = %v, want %v naming flattenedSize", err, ErrMultiplicityViolation)
+	}
+	err = calcErrorWithLibraries(t, src, "Vast", nil, 10000)
+	if !errors.Is(err, semantics.ErrArithmeticOverflow) || !strings.Contains(err.Error(), "flattenedSize") {
+		t.Errorf("Vast = %v, want %v naming flattenedSize", err, semantics.ErrArithmeticOverflow)
+	}
+}
+
+// testStructuredValueOutsideTheDeclaredShape: a type specializing Array or a
+// vector type fixes a shape or element type, so a value of another shape or
+// element type is refused, while one that fits is held.
+func testStructuredValueOutsideTheDeclaredShape(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			private import Collections::*;
+			private import VectorValues::*;
+			private import VectorFunctions::*;
+			attribute def Grid :> Array { :>> dimensions = (2, 2); }
+			attribute def Row4 :> Array { :>> rank = 1; :>> flattenedSize = 4; }
+			attribute def IntArray :> Array { :>> elements : Integer; }
+			attribute def Fixed3 :> CartesianThreeVectorValue;
+			attribute def OneDim :> NumericalVectorValue;
+			attribute square : Array { :>> dimensions = (2, 2); :>> elements = (1, 2, 3, 4); }
+			attribute wide : Array { :>> dimensions = (2, 3); :>> elements = (1, 2, 3, 4, 5, 6); }
+			attribute row : Array { :>> dimensions = 4; :>> elements = (1, 2, 3, 4); }
+			attribute reals : Array { :>> dimensions = 2; :>> elements = (1.5, 2.5); }
+			calc def TwoAsThree { return : CartesianThreeVectorValue = VectorOf((1.0, 2.0)); }
+			calc def TwoAsFixed3 { return : Fixed3 = VectorOf((1.0, 2.0)); }
+			calc def ThreeAsThree { return : CartesianThreeVectorValue = VectorOf((1.0, 2.0, 3.0)); }
+			calc def ThreeAsFixed3 { return : Fixed3 = VectorOf((1.0, 2.0, 3.0)); }
+			calc def WideAsGrid { return : Grid = wide; }
+			calc def SquareAsGrid { return : Grid = square; }
+			calc def SquareAsRow4 { return : Row4 = square; }
+			calc def SquareAsOneDim { return : OneDim = square; }
+			calc def RowAsRow4 { return : Row4 = row; }
+			calc def RealsAsIntArray { return : IntArray = reals; }
+			calc def RowAsIntArray { return : IntArray = row; }
+		}
+	`
+	for calc, fixes := range map[string]string{
+		"TwoAsThree":      "it declares dimension = 3",
+		"TwoAsFixed3":     "it declares dimension = 3",
+		"WideAsGrid":      "it declares dimensions = [2, 2]",
+		"SquareAsRow4":    "it declares rank = 1",
+		"SquareAsOneDim":  "it declares dimension : Positive[0..1], got 2 dimension(s)",
+		"RealsAsIntArray": "it declares elements : Integer, got element 1.5 (a Real)",
+	} {
+		err := calcErrorWithLibraries(t, src, calc, nil, 10000)
+		if !errors.Is(err, ErrTypeMismatch) || !strings.Contains(err.Error(), fixes) {
+			t.Errorf("%s = %v, want %v naming %q", calc, err, ErrTypeMismatch, fixes)
+		}
+	}
+	for calc, want := range map[string]string{
+		"ThreeAsThree":  "⟨1.0, 2.0, 3.0⟩",
+		"ThreeAsFixed3": "⟨1.0, 2.0, 3.0⟩",
+		"SquareAsGrid":  "Array(2, 2)[1, 2, 3, 4]",
+		"RowAsRow4":     "Array(4)[1, 2, 3, 4]",
+		"RowAsIntArray": "Array(4)[1, 2, 3, 4]",
+	} {
+		idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+		sym, scope := calcByName(t, idx.DocumentRoot("<test>"), "test", calc)
+		got, err := ctx.InvokeCalc(sym, nil, scope)
+		if err != nil || FormatValue(got) != want {
+			t.Errorf("%s = (%s, %v), want %s", calc, FormatValue(got), err, want)
+		}
 	}
 }
 
