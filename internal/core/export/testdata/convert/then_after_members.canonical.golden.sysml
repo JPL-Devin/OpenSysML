@@ -16,6 +16,51 @@ package ThenAfterMembers {
         bind k = m;
         then action b : Step;
     }
+    part def Widget;
+    port def Plug;
+    action def AfterConnect {
+        action a : Step;
+        part p : Widget;
+        part q : Widget;
+        connect p to q;
+        then action b : Step;
+    }
+    action def AfterConnection {
+        action a : Step;
+        part p : Widget;
+        part q : Widget;
+        connection c connect p to q;
+        then action b : Step;
+    }
+    action def AfterInterface {
+        action a : Step;
+        port p1 : Plug;
+        port p2 : ~Plug;
+        interface i connect p1 to p2;
+        then action b : Step;
+    }
+    action def AfterAllocate {
+        action a : Step;
+        part p : Widget;
+        part q : Widget;
+        allocate p to q;
+        then action b : Step;
+    }
+    action def AfterAllocation {
+        action a : Step;
+        part p : Widget;
+        part q : Widget;
+        allocation al allocate p to q;
+        then action b : Step;
+    }
+    part def AfterConnectors {
+        part a : Widget;
+        part p : Widget;
+        part q : Widget;
+        connect p to q;
+        allocate p to q;
+        then part b : Widget;
+    }
     action def AfterAttribute {
         action a : Step;
         attribute k : ScalarValues::Integer;

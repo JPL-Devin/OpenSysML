@@ -373,25 +373,13 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 	}
 }
 
+// prefixMetadataOf returns the prefix metadata written on a declaration.
 func prefixMetadataOf(decl ast.Node) []*ast.PrefixMetadata {
-	switch d := decl.(type) {
-	case *ast.Package:
+	if d, ok := decl.(*ast.Dependency); ok {
 		return d.Prefixes
-	case *ast.Namespace:
-		return d.Prefixes
-	case *ast.Dependency:
-		return d.Prefixes
-	case *ast.Definition:
-		return d.Prefixes
-	case *ast.Usage:
-		return d.Prefixes
-	case *ast.AssumeMember:
-		return d.Prefixes
-	case *ast.RequireMember:
-		return d.Prefixes
-	default:
-		return nil
 	}
+	prefixes, _, _ := ast.DeclaredMetadata(decl)
+	return prefixes
 }
 
 func buildMetadataBodyScopes(scope *Scope, prefixes []*ast.PrefixMetadata) {

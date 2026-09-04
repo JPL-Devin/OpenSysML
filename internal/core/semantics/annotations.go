@@ -138,18 +138,8 @@ func sortedFeatureNames(values map[string]symbols.FilterValue) []string {
 // prefix metadata, the prefix metadata written among its members, and the
 // metadata usages in its body.
 func (m *Model) declaredAnnotations(sym *symbols.Symbol) []annotation {
-	var prefixes []*ast.PrefixMetadata
-	var members []ast.Node
-	switch d := sym.Decl.(type) {
-	case *ast.Definition:
-		prefixes, members = d.Prefixes, d.Members
-	case *ast.Usage:
-		prefixes, members = d.Prefixes, d.Members
-	case *ast.Package:
-		prefixes, members = d.Prefixes, d.Members
-	case *ast.Namespace:
-		prefixes, members = d.Prefixes, d.Members
-	default:
+	prefixes, members, ok := ast.DeclaredMetadata(sym.Decl)
+	if !ok {
 		return nil
 	}
 

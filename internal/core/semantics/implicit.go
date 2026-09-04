@@ -224,6 +224,11 @@ func kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
 		// gets the same base as `transition` written as a usage.
 		fqn, ok := implicitUsageBases[ast.UsageTransition]
 		return fqn, ok
+	case *ast.AssumeMember, *ast.RequireMember:
+		// An assume/require member owns a ConstraintUsage (SysML v2
+		// RequirementConstraintUsage), so it takes a constraint's base.
+		fqn, ok := implicitUsageBases[ast.UsageConstraint]
+		return fqn, ok
 	}
 	return "", false
 }
