@@ -12,7 +12,8 @@
   `CartesianVectorValue`. `VectorCalculations::scalarQuantityVectorMult`,
   `vectorScalarQuantityMult` and `vectorScalarQuantityDiv`, and the `*`/`/` operators between
   a scalar quantity and a vector, answer a vector quantity printed `⟨2.0, 4.0⟩ [m]` whose unit
-  is composed by the same rule as the scalar quantities'. Each new kind is handled wherever
+  is composed by the same rule as the scalar quantities'; a vector of no components takes no
+  unit, as a quantity's `num` is `Number[1..*]`. Each new kind is handled wherever
   the runtime, REPL, traces, solver and gRPC bridge inspect a value's kind, and a test
   enumerates the kinds so a future one cannot be left out. Tensors, coordinate
   transformations and a measurement reference passed as an argument value stay typed

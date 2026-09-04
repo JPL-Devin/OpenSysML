@@ -204,31 +204,32 @@ const (
 // Library types the structured kinds are values of.
 const (
 	arrayTypeFQN                = "Collections::Array"
+	vectorTypeFQN               = "VectorValues::VectorValue"
 	cartesianVectorTypeFQN      = "VectorValues::CartesianVectorValue"
 	cartesianThreeVectorTypeFQN = "VectorValues::CartesianThreeVectorValue"
 	vectorQuantityTypeFQN       = "Quantities::VectorQuantityValue"
 )
 
 // structuredFeature reads a library feature of an array, vector or vector
-// quantity; the second result is false for another name. A vector quantity's
-// mRef is a measurement reference, which has no value, so reading it is an error.
-func structuredFeature(val Value, name string) (Value, bool, error) {
+// quantity; the second result is false for another name. A sequence it answers
+// is charged to the element budget. A vector quantity's mRef is a measurement
+// reference, which has no value, so reading it is an error.
+func (ctx *Context) structuredFeature(val Value, name string) (Value, bool, error) {
 	switch val.Kind {
 	case ValArray:
 		a := val.Array()
 		switch name {
 		case arrayDimensionsFeature:
-			return intSequence(a.Dimensions), true, nil
+			return ctx.answerSequence(integerValues(a.Dimensions))
 		case arrayRankFeature, tensorOrderFeature:
 			return integerValue(int64(a.Rank())), true, nil
 		case arrayFlattenedSizeFeature:
 			return integerValue(a.FlattenedSize()), true, nil
 		case arrayElementsFeature:
-			return sequenceOf(append([]Value(nil), a.Elements...)), true, nil
+			return ctx.answerSequence(a.Elements)
 		}
 	case ValVector:
-		v := val.Vector()
-		return oneDimensionalFeature(name, constValues(v.Elements), nil)
+		return ctx.oneDimensionalFeature(name, val.Vector().Elements, nil)
 	case ValVectorQuantity:
 		vq := val.VectorQuantity()
 		if name == vectorQuantityMRefFeature {
@@ -237,25 +238,31 @@ func structuredFeature(val Value, name string) (Value, bool, error) {
 				ErrUnevaluableLibraryFunction, noMeasurementRefValue,
 			)
 		}
-		return oneDimensionalFeature(name, constValues(vq.Num), map[string]bool{vectorQuantityNumFeature: true})
+		return ctx.oneDimensionalFeature(name, vq.Num, map[string]bool{vectorQuantityNumFeature: true})
 	}
 	return Value{}, false, nil
 }
 
 // oneDimensionalFeature answers the Array features of a vector of the given
-// elements; aliases names further features that answer the elements.
-func oneDimensionalFeature(name string, elements []Value, aliases map[string]bool) (Value, bool, error) {
+// components; aliases names further features that answer the components.
+func (ctx *Context) oneDimensionalFeature(name string, components []semantics.Value, aliases map[string]bool) (Value, bool, error) {
 	switch {
 	case name == vectorDimensionFeature || name == arrayFlattenedSizeFeature:
-		return integerValue(int64(len(elements))), true, nil
+		return integerValue(int64(len(components))), true, nil
 	case name == arrayDimensionsFeature:
-		return intSequence([]int64{int64(len(elements))}), true, nil
+		return ctx.answerSequence(integerValues([]int64{int64(len(components))}))
 	case name == arrayRankFeature || name == tensorOrderFeature:
 		return integerValue(1), true, nil
 	case name == arrayElementsFeature || aliases[name]:
-		return sequenceOf(elements), true, nil
+		return ctx.answerSequence(constValues(components))
 	}
 	return Value{}, false, nil
+}
+
+// answerSequence is a feature answered as a fresh, charged sequence of elements.
+func (ctx *Context) answerSequence(elements []Value) (Value, bool, error) {
+	seq, err := ctx.newSequence(elements)
+	return seq, true, err
 }
 
 // structuredValueType is the library type a structured value is of: an Array, a
@@ -308,7 +315,7 @@ func (ctx *Context) arrayOfObject(inst *Instance) (Value, bool, error) {
 		return Value{}, false, nil
 	}
 	op := arrayTypeFQN + " " + symbolText(inst.Type)
-	dimensions, err := indexList(op+" dimensions", sequenceOf(dims))
+	dimensions, err := indexList(op+" dimensions", dims)
 	if err != nil {
 		return Value{}, true, err
 	}
@@ -414,13 +421,18 @@ func structuredKey(v Value) uint64 {
 	return h.Sum64()
 }
 
-// intSequence is the sequence of Integer constants.
-func intSequence(ns []int64) Value {
+// integerValues wraps counts as Integer values.
+func integerValues(ns []int64) []Value {
 	out := make([]Value, len(ns))
 	for i, n := range ns {
 		out[i] = integerValue(n)
 	}
-	return sequenceOf(out)
+	return out
+}
+
+// intSequence is the uncharged sequence of Integer constants a diagnostic renders.
+func intSequence(ns []int64) Value {
+	return sequenceOf(integerValues(ns))
 }
 
 // constValue wraps a numeric constant as a runtime value.
@@ -465,8 +477,7 @@ func arrayOf(op string, dimensions []int64, elements []Value) (Value, error) {
 }
 
 // indexList reads the Positive indexes of an indexing operation.
-func indexList(op string, val Value) ([]int64, error) {
-	indexes := elementsOf(val)
+func indexList(op string, indexes []Value) ([]int64, error) {
 	out := make([]int64, len(indexes))
 	for i, index := range indexes {
 		n, err := indexOf(op, index)

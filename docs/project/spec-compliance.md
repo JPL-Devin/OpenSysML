@@ -722,11 +722,12 @@ the flat sequence of its elements:
   `composedQuantity`: `[m] * [m]` is `[m**2]`, `[m] / [s]` is `[m/s]`) rather
   than a second rule. It prints as the vector followed by the unit, `⟨2.0, 4.0⟩ [m]`,
   and conforms to `Quantities::VectorQuantityValue`. Its `norm` is in the unit
-  of its first axis; `CartesianVectorOf` takes `Real[*]`, so a vector quantity
-  of no axes (`CartesianVectorOf(()) [m]`) exists and its `norm` is the plain
-  `0.0`, as its inner product is the plain `0` — there is no axis whose unit
-  could carry it (conformance `calc_library_vector_quantity_empty_norm`; its
-  `angle` is the zero-vector `ErrArithmeticDomain`). Its `mRef` — a
+  of its first axis. `CartesianVectorOf` takes `Real[*]`, but a quantity's `num`
+  is `Number[1..*]` (`Quantities::TensorQuantityValue`) and the unit lives on an
+  axis, so a vector of no components takes no unit: `CartesianVectorOf(()) [m]`,
+  and scaling the empty vector by a scalar quantity, are `ErrMultiplicityViolation`
+  (`vectorQuantityValue`, `scaleVectorQuantity`; conformance
+  `calc_library_vector_quantity_empty`) rather than a unitless empty value. Its `mRef` — a
   `VectorMeasurementReference` with a `CoordinateFrame` — has no value here: a
   measurement reference is a library declaration, and the runtime carries the
   unit only, so reading `mRef` is `ErrUnevaluableLibraryFunction` rather than
@@ -806,7 +807,7 @@ reports itself by name rather than answering:
 |---|---|
 | `MatrixFunctions` | The vendored Kernel Function Library declares no such package — only `docs/` mention it — so there is nothing to dispatch. Not implemented rather than invented. |
 | `ComplexFunctions::ToString`/`ToComplex`, `BaseFunctions::ToString` of a Complex | No string notation for a Complex value is defined; inventing a rendering would make `ToComplex(ToString(x))` a value nothing else in the library agrees on. |
-| `BaseFunctions::'['` | Declared abstract, and the operator notation `a[i, j]` is the quantity notation `num [unit]` to the parser and the evaluator (`evalIndexExpr`): over an Array, vector or sequence whose bracket names no unit the error (`ErrNotAQuantity`, `notAQuantityError`) says so and points at `a#(i, j)`, which `CollectionFunctions::'array#'` and `BaseFunctions::'#'` evaluate. Telling the two readings apart by the operand's static type would be a checker rule as well as a runtime one, and is not made here. |
+| `BaseFunctions::'['` | Declared abstract, and the operator notation `a[i, j]` is the quantity notation `num [unit]` to the parser and the evaluator (`evalIndexExpr`): over an operand whose bracket names no unit the error (`ErrNotAQuantity`, `notAQuantityError`) says so, and when the operand is declared an Array, a vector or a feature of more than one value (`declaredCollection`, from the declaration alone — the operand is not evaluated to diagnose it) points at `a#(i, j)`, which `CollectionFunctions::'array#'` and `BaseFunctions::'#'` evaluate. Reading `a[i, j]` as indexing by the operand's static type would be a checker rule as well as a runtime one, and is not made here. |
 | `BaseFunctions::all`, `as`, `meta`, `istype`, `hastype`, `'@'`, `'@@'`; `ControlFunctions::'.'` | The operator notations `x istype T`, `x @ M`, `x.f` **are** evaluated, from their own expression nodes (`istype`/`hastype`/`@`/`@@` take a *type*, which the function form would have to receive as a value); `as` needs the type a value was cast to, which `runtime.Value` does not carry; `all` needs the extent of a type, which the runtime does not enumerate. The function forms report themselves rather than pretend. |
 | `DataFunctions::'~'`, `ScalarFunctions::'~'` | Declared abstract and specialized by no concrete library function, so the complement denotes no operation on any value type — reported as the `~` operator is. |
 | Every `OccurrenceFunctions` declaration: `'==='`, `isDuring`, `create`, `destroy`, `addNew`, `addNewAt` | Occurrence-time and lifecycle semantics — when a performance happens, creating and destroying occurrences during one — are not represented by the evaluator. An unevaluable declaration keeps its declared multiplicities: `addNew(occ = o)` and `addNewAt(occ = o, index = 1)` omit the `[0..*]` `group` and reach the reason, while a call missing `occ` or `index` is `ErrCalcArity` first (`TestUnevaluableOccurrenceFunctionArity`). |

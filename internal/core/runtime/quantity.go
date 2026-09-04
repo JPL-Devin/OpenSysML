@@ -119,20 +119,44 @@ func (ec *EvalContext) evalIndexExpr(n *ast.IndexExpr) (Value, error) {
 	return NewQuantityValue(&Quantity{Num: magnitude.Const, Unit: unit}), nil
 }
 
-// notAQuantityError reports a bracket whose index is no unit; over a collection
-// it adds that `'['` is the quantity notation and `#(…)` the index.
+// notAQuantityError reports a bracket whose index is no unit; over an operand
+// declared a collection it adds that `#(…)` indexes. The operand is not evaluated.
 func (ec *EvalContext) notAQuantityError(n *ast.IndexExpr, cause error) error {
 	err := fmt.Errorf("%w: %w", ErrNotAQuantity, cause)
-	operand, evalErr := ec.Eval(n.Operand)
-	if evalErr != nil {
-		return err
-	}
-	switch operand.Kind {
-	case ValArray, ValVector, ValVectorQuantity, ValSequence:
-		return fmt.Errorf("%w; `[…]` is the quantity notation `num [unit]`, index %s with `#(…)`",
-			err, describeOperand(operand))
+	if what, ok := ec.declaredCollection(n.Operand); ok {
+		return fmt.Errorf("%w; `[…]` is the quantity notation `num [unit]`, index %s with `#(…)`", err, what)
 	}
 	return err
+}
+
+// declaredCollection names the collection an operand's declaration makes it:
+// an Array, a vector, or a feature of more than one value.
+func (ec *EvalContext) declaredCollection(operand ast.Node) (string, bool) {
+	var qn *ast.QualifiedName
+	switch node := operand.(type) {
+	case *ast.QualifiedName:
+		qn = node
+	case *ast.FeatureReference:
+		qn = node.Name
+	}
+	if qn == nil || ec.ctx.resolver == nil {
+		return "", false
+	}
+	sym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, qn)
+	if !ok || sym == nil || !semantics.IsShapeFeature(sym) {
+		return "", false
+	}
+	if typ := ec.ctx.extractType(sym); typ != nil {
+		for _, lib := range []struct{ fqn, what string }{{vectorTypeFQN, "a vector"}, {arrayTypeFQN, "an array"}} {
+			if libSym := ec.ctx.librarySymbol(lib.fqn); libSym != nil && ec.ctx.model.Conforms(typ, libSym) {
+				return lib.what, true
+			}
+		}
+	}
+	if !ec.ctx.occursOnce(sym) {
+		return "a sequence", true
+	}
+	return "", false
 }
 
 // unitOne is the unit a bare number is read in: no named unit, scale one.
@@ -158,11 +182,14 @@ func asQuantity(val Value) (*Quantity, bool) {
 // inUnit is a magnitude in the unit of a quantity asQuantity read; the unit a bare
 // number was read with is no unit at all, so the result is a bare number again.
 func inUnit(num semantics.Value, unit Unit) (Value, error) {
-	if unit.Text == "" && unit.Product.IsEmpty() {
+	if unit.none() {
 		return dimensionlessValue(num, unit.Term)
 	}
 	return NewQuantityValue(&Quantity{Num: num, Unit: unit}), nil
 }
+
+// none reports the unit a bare number is read with, which names nothing.
+func (u Unit) none() bool { return u.Text == "" && u.Product.IsEmpty() }
 
 // quantityOperands views both operands of an operation as quantities, reporting
 // false when neither is one — then the operation is ordinary arithmetic.

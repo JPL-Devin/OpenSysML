@@ -46,22 +46,34 @@ func elementsOf(val Value) []Value {
 
 // collectionElements views a value as the `elements` of the Collection it is:
 // an array's or a vector's elements, and elementsOf for every other value. This
-// is what CollectionFunctions operate on (`size(col.elements)`).
+// is what CollectionFunctions operate on (`size(col.elements)`). Like elementsOf
+// it is a view, not a collection the run keeps.
 func collectionElements(val Value) []Value {
 	switch val.Kind {
-	case ValArray, ValVector, ValVectorQuantity:
-		elements, _, _ := structuredFeature(val, arrayElementsFeature)
-		return elementsOf(elements)
+	case ValArray:
+		return val.Array().Elements
+	case ValVector:
+		return constValues(val.Vector().Elements)
+	case ValVectorQuantity:
+		return constValues(val.VectorQuantity().Num)
 	}
 	return elementsOf(val)
 }
 
 // overCollectionElements adapts a sequence operation to the CollectionFunctions
-// form that the library defines over `col.elements`.
+// form that the library defines over `col.elements`: an array or vector is
+// passed as the charged sequence of its elements, any other value as itself.
 func overCollectionElements(apply builtinFunc) builtinFunc {
 	return func(ec *EvalContext, args []Value) (Value, error) {
 		if len(args) > 0 {
-			args = append([]Value{sequenceOf(collectionElements(args[0]))}, args[1:]...)
+			switch args[0].Kind {
+			case ValArray, ValVector, ValVectorQuantity:
+				elements, err := ec.newSequence(collectionElements(args[0]))
+				if err != nil {
+					return Value{}, err
+				}
+				args = append([]Value{elements}, args[1:]...)
+			}
 		}
 		return apply(ec, args)
 	}
@@ -101,7 +113,12 @@ func sequenceOf(elements []Value) Value {
 // run's element budget: elements are the memory a collection keeps, so every
 // operation that materializes one goes through here.
 func (ec *EvalContext) newSequence(elements []Value) (Value, error) {
-	if err := ec.ctx.chargeElements(int64(len(elements))); err != nil {
+	return ec.ctx.newSequence(elements)
+}
+
+// newSequence is EvalContext.newSequence for a materialization outside an evaluation.
+func (ctx *Context) newSequence(elements []Value) (Value, error) {
+	if err := ctx.chargeElements(int64(len(elements))); err != nil {
 		return Value{}, err
 	}
 	return sequenceOf(elements), nil
@@ -400,7 +417,7 @@ func builtinArrayIndex(ec *EvalContext, args []Value) (Value, error) {
 // dimension — by its indexes in row-major order. The library body answers null
 // for an array of rank 0, which no index addresses.
 func arrayIndex(op string, arr Value, indexesVal Value) (Value, error) {
-	indexes, err := indexList(op, indexesVal)
+	indexes, err := indexList(op, elementsOf(indexesVal))
 	if err != nil {
 		return Value{}, err
 	}

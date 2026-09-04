@@ -156,3 +156,61 @@ func TestElementBudgetIsPerRun(t *testing.T) {
 		end()
 	}
 }
+
+// TestElementBudgetBoundsStructuredValueReads requires the sequences read off an
+// Array, a vector and a vector quantity — their own features and the elements a
+// CollectionFunctions operation views — to be charged like any other collection.
+func TestElementBudgetBoundsStructuredValueReads(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+		package test {
+			private import ScalarValues::*;
+			private import Collections::*;
+			private import VectorFunctions::*;
+			private import SI::*;
+			attribute grid : Array {
+				:>> dimensions = (2, 3);
+				:>> elements = (1, 2, 3, 4, 5, 6);
+			}
+			attribute v = VectorOf((1, 2, 3));
+			attribute vq = VectorOf((1, 2, 3)) [m];
+		}
+	`))
+	pkg, ok := idx.DocumentRoot("<test>").LookupLocal("test")
+	if !ok || pkg.Scope == nil {
+		t.Fatal("test package not indexed")
+	}
+	// The Array object is materialized ahead of the budgeted runs, so what a run
+	// charges is only what reading the value costs. A vector is built by its run:
+	// v costs 6 (the literal and the vector), vq costs 9 (and the quantity).
+	if _, err := evalIn(t, ctx, pkg.Scope, "grid.rank"); err != nil {
+		t.Fatalf("grid.rank: %v", err)
+	}
+	for _, tc := range []struct {
+		expr string
+		fits int64 // the least budget the expression evaluates under
+	}{
+		{"grid.rank", 0},
+		{"grid.flattenedSize", 0},
+		{"grid.dimensions", 2},
+		{"grid.elements", 6},
+		{"CollectionFunctions::size(grid)", 6},
+		{"CollectionFunctions::'array#'(grid, (2, 3))", 2},
+		{"v.dimension", 6},
+		{"v.elements", 9},
+		{"CollectionFunctions::size(v)", 9},
+		{"vq.dimension", 9},
+		{"vq.num", 12},
+		{"CollectionFunctions::head(vq)", 12},
+	} {
+		if tc.fits > 0 {
+			ctx.maxElements = tc.fits - 1
+			if _, err := evalIn(t, ctx, pkg.Scope, tc.expr); !errors.Is(err, ErrElementLimitExceeded) {
+				t.Errorf("%s under a budget of %d: error = %v, want ErrElementLimitExceeded", tc.expr, tc.fits-1, err)
+			}
+		}
+		ctx.maxElements = tc.fits
+		if _, err := evalIn(t, ctx, pkg.Scope, tc.expr); err != nil {
+			t.Errorf("%s under a budget of %d: %v", tc.expr, tc.fits, err)
+		}
+	}
+}

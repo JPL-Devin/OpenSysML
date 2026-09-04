@@ -896,7 +896,7 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 				}
 			}
 		}
-		member, ok, err := structuredFeature(value, parts[0].Text)
+		member, ok, err := ec.ctx.structuredFeature(value, parts[0].Text)
 		if err != nil {
 			return Value{}, err
 		}
@@ -934,7 +934,7 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 		if err != nil {
 			return Value{}, err
 		}
-		if member, ok, err := structuredFeature(arr, name); ok {
+		if member, ok, err := ec.ctx.structuredFeature(arr, name); ok {
 			if err != nil {
 				return Value{}, err
 			}

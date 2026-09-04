@@ -123,13 +123,24 @@ func (ctx *Context) vectorValue(elements []semantics.Value) (Value, error) {
 }
 
 // vectorQuantityValue builds a vector quantity of the components, each in the
-// unit at the same axis.
+// unit at the same axis; a quantity's num is Number[1..*], so none is a violation.
 func (ctx *Context) vectorQuantityValue(num []semantics.Value, units []Unit) (Value, error) {
+	if len(num) == 0 {
+		return Value{}, errEmptyVectorQuantity()
+	}
 	checked, err := ctx.checkedComponents(num)
 	if err != nil {
 		return Value{}, err
 	}
 	return NewVectorQuantityValue(checked, units), nil
+}
+
+// errEmptyVectorQuantity rejects the vector quantity of no components.
+func errEmptyVectorQuantity() error {
+	return fmt.Errorf(
+		"%w: %s: a vector quantity of no components, its num is Number[1..*]",
+		ErrMultiplicityViolation, vectorQuantityTypeFQN,
+	)
 }
 
 // checkedComponents charges and screens the components of a vector being built.
@@ -489,6 +500,9 @@ func scaleVector(name string, ctx *Context, scalar Value, scalarParam string, ve
 // scaleVectorQuantity multiplies or divides each axis of a vector by a scalar
 // quantity, composing the units as the scalar QuantityCalculations do.
 func (ctx *Context) scaleVectorQuantity(name string, op ast.OperatorKind, x *Quantity, v vectorOperand) (Value, error) {
+	if v.dimension() == 0 && !x.Unit.none() {
+		return Value{}, functionError(name, errEmptyVectorQuantity())
+	}
 	axes := make([]Value, v.dimension())
 	for i := range axes {
 		left, right := x, v.axis(i)
@@ -646,7 +660,7 @@ func vectorNorm(name string, _ *Context, args []Value) (Value, error) {
 		return Value{}, err
 	}
 	norm, err := checkedReal(euclideanNorm(reals))
-	if err != nil || !v.hasUnits() || v.dimension() == 0 {
+	if err != nil || !v.hasUnits() {
 		return norm, err
 	}
 	return inUnit(norm.Const, v.units[0])
