@@ -3,6 +3,7 @@ package model
 import (
 	"sort"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
@@ -19,8 +20,10 @@ type ReferenceLocation struct {
 
 // refEntry is a segment listed under an element: one it reaches, one whose name it
 // writes (an alias's own name), or both when the name is the element's own.
+// text is the name as written, telling a long-name spelling from a short one.
 type refEntry struct {
 	ReferenceLocation
+	text    string
 	reached bool
 	named   bool
 }
@@ -31,24 +34,26 @@ type refIndex struct {
 	entries map[symbols.ElementKey][]refEntry
 }
 
-// add records one segment that reaches element and writes name (either may be nil).
-func (x *refIndex) add(doc *Document, span source.Span, element, name *symbols.Symbol) {
-	loc := ReferenceLocation{Doc: doc.Name, Content: doc.Content, Span: span}
+// add records one segment, spelled text, that reaches element and writes name
+// (either may be nil).
+func (x *refIndex) add(doc *Document, seg ast.NameSegment, element, name *symbols.Symbol) {
+	loc := ReferenceLocation{Doc: doc.Name, Content: doc.Content, Span: seg.Span}
+	put := func(sym *symbols.Symbol, reached, named bool) {
+		key := symbols.KeyOf(sym)
+		x.entries[key] = append(x.entries[key], refEntry{ReferenceLocation: loc, text: seg.Text, reached: reached, named: named})
+	}
 	switch {
 	case element == nil && name == nil:
 		return
 	case symbols.SameElement(element, name):
-		key := symbols.KeyOf(element)
-		x.entries[key] = append(x.entries[key], refEntry{ReferenceLocation: loc, reached: true, named: true})
+		put(element, true, true)
 		return
 	}
 	if element != nil {
-		key := symbols.KeyOf(element)
-		x.entries[key] = append(x.entries[key], refEntry{ReferenceLocation: loc, reached: true})
+		put(element, true, false)
 	}
 	if name != nil {
-		key := symbols.KeyOf(name)
-		x.entries[key] = append(x.entries[key], refEntry{ReferenceLocation: loc, named: true})
+		put(name, false, true)
 	}
 }
 
@@ -79,7 +84,7 @@ func (w *Workspace) referenceIndexLocked() *refIndex {
 			elements := segmentElements(r, ref, sel)
 			written := segmentNames(r, ref, sel)
 			for i, part := range ref.QN.Parts {
-				idx.add(doc, part.Span, elements[i], written[i])
+				idx.add(doc, part, elements[i], written[i])
 			}
 		}
 	}
@@ -94,9 +99,11 @@ func (w *Workspace) ReferencesTo(target *symbols.Symbol) []ReferenceLocation {
 }
 
 // NameReferencesTo returns every segment in the workspace's documents that writes
-// target's own name — what a rename edits; an alias use is edited via the alias.
-func (w *Workspace) NameReferencesTo(target *symbols.Symbol) []ReferenceLocation {
-	return w.referenceLocations(target, func(e refEntry) bool { return e.named })
+// name as target's own name — what renaming that name edits. A segment spelling
+// target's other name (short for long, or the reverse) still resolves after the
+// rename and is left alone; an alias use is edited via the alias.
+func (w *Workspace) NameReferencesTo(target *symbols.Symbol, name string) []ReferenceLocation {
+	return w.referenceLocations(target, func(e refEntry) bool { return e.named && e.text == name })
 }
 
 // referenceLocations answers a reverse-index query for target, building the index
@@ -136,11 +143,7 @@ func segmentElements(r *resolve.Resolver, ref resolve.Reference, sel *semantics.
 func segmentNames(r *resolve.Resolver, ref resolve.Reference, sel *semantics.InvocationSelection) []*symbols.Symbol {
 	out := make([]*symbols.Symbol, len(ref.QN.Parts))
 	for i := range ref.QN.Parts {
-		if sym, ok := r.PartAlias(ref.QN, i); ok {
-			out[i] = sym
-			continue
-		}
-		if sym, ok := r.PartSymbol(ref.QN, i); ok {
+		if sym, ok := r.PartName(ref.QN, i); ok {
 			out[i] = sym
 		}
 	}
