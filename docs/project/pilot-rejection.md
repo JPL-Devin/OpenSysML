@@ -151,7 +151,7 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-225 case(s): 195 both reject, 22 only the pilot rejects, 8 only we reject, 0 both accept
+225 case(s): 197 both reject, 20 only the pilot rejects, 8 only we reject, 0 both accept
   of which 3 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -159,7 +159,7 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 8 | 8 | 0 | 0 | 0 |
 | grammar | 86 | 80 | 6 | 0 | 0 |
-| semantic | 97 | 73 | 16 | 8 | 0 |
+| semantic | 97 | 75 | 14 | 8 | 0 |
 | xpect | 34 | 34 | 0 | 0 | 0 |
 
 The eight ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
@@ -209,9 +209,9 @@ we no longer accept it either.
 
 ## Permissiveness gaps
 
-All 22 gaps under `-conformance auto` are open, and all of them were opened by the `semantic/`
-source and the SysML constraint census: 13 named KerML constraints (`k11`–`k42`, `s80`) and 3
-named SysML constraints (`s04`, `s23`, `s43`) the pinned validators enforce as errors and
+All 20 gaps under `-conformance auto` are open, and all of them were opened by the `semantic/`
+source and the SysML constraint census: 13 named KerML constraints (`k11`–`k42`, `s80`) and 1
+named SysML constraint (`s23`) the pinned validators enforce as errors and
 OpenSysML does not report, plus 6 SysML body-item spellings (`g61`–`g66`) the pinned grammar
 rejects and our parser admits in any body. Every gap the corpus carried before is closed. The
 last three of those were severity-policy gaps — the pinned grammar excluded the spellings, while
@@ -242,9 +242,7 @@ silent in either mode.
 | `semantic/k37-multiplicity-bound-not-natural.kerml` | accepts | `Must have a Natural value` | `internal/core/passes/w8c_multiplicity_bounds.go` — only reports a bound whose primitive type is known and non-integer; a bound naming a feature typed by a class has no primitive type and is passed (`validateMultiplicityRangeResultTypes`) |
 | `semantic/k40-metadata-typed-by-class.kerml` | accepts | `Must have a concrete type` | `internal/core/passes/w8c_metadata_type.go` — checks that the type is not abstract (`xpect/p24`) but not that it is a metaclass at all (`validateMetadataFeatureMetadata`) |
 | `semantic/k42-two-cross-subsettings.kerml` | accepts | `Error executing EValidator` (the pilot's `validateFeatureOwnedCrossSubsetting` check indexes the wrong list and throws before it can say `At most one cross subsetting is allowed`; filed as [Systems-Modeling/SysML-v2-Pilot-Implementation#794](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/794), body in [omg-issues.md](omg-issues.md#validatefeatureownedcrosssubsetting-indexes-the-wrong-list-and-throws-pilot-2026-07)) | `internal/core/passes` — the one-reference-subsetting check that rejects `k09` has no counterpart for a second `crosses` clause (`validateFeatureOwnedCrossSubsetting`) |
-| `semantic/s04-assert-references-non-constraint.sysml` | accepts | `Must reference a constraint.` | `internal/core/passes/typecheck.go` — the referent-kind check on reference subsetting covers `satisfy` (`satisfy target must be a requirement usage`) but not `assert`; no pass checks that an asserted usage is a constraint usage |
 | `semantic/s23-metadata-typed-by-part-def.sysml` | accepts | `A metadata usage must be typed by one metadata definition.` / `Must have a concrete type` | `internal/core/passes/typecheck.go` `compatibleTyping` — a metadata usage is typed like an item, so any occurrence definition passes; `w8c_metadata_type.go` checks only abstractness. Pass exists, misses the shape |
-| `semantic/s43-assign-to-non-feature.sysml` | accepts | `An assignment must have a referent.` | `internal/core/passes/constraint.go` `assignmentReferentChecker` — returns silently when the resolved target is not a `*ast.Usage`, so assigning to a definition reports nothing. Pass exists, misses the shape |
 | `semantic/s80-constant-attribute-not-variable.sysml` | accepts | `Only a variable feature can be constant` | `internal/core/passes` — the `constant` usage prefix is parsed but no pass relates it to variability, which an attribute of a data type never has (`validateFeatureConstantIsVariable`) |
 
 Each pilot message above is the first error the validator reports for the case; the full lists are
@@ -544,9 +542,9 @@ for the gaps, and names where in OpenSysML the rule would have to fire.
 | `validateActorMembershipOwningType` | `grammar/g61-actor-outside-requirement-body.sysml` | pilot-only-rejects | mismatched input 'actor' expecting '}' / extraneous input '}' expecting EOF | — | `actor` is dispatched body-independently in `parser/defusage.go`; no pass checks the owner kind |
 | `validateAllocationUsageType` | `semantic/s02-allocation-typed-by-connection-def.sysml` | both-reject | An allocation must be typed by allocation definitions. | An allocation must be typed by allocation definitions. | — |
 | `validateAnalysisCaseUsageType` | `semantic/s03-analysis-typed-by-case-def.sysml` | both-reject | An analysis case must be typed by one analysis case definition. | An analysis case must be typed by one analysis case definition. | — |
-| `validateAssertConstraintUsageReference` | `semantic/s04-assert-references-non-constraint.sysml` | pilot-only-rejects | Must reference a constraint. | — | `typecheck.go` checks the `satisfy` referent kind but has no `assert` counterpart |
+| `validateAssertConstraintUsageReference` | `semantic/s04-assert-references-non-constraint.sysml` | both-reject | Must reference a constraint. | assert target must be a constraint usage, found attributeUsage | — |
 | `validateAssignmentActionUsageArguments` | none: `AssignmentNode` always parses both arguments | no violating model | — | — | — |
-| `validateAssignmentActionUsageReferent` | `semantic/s43-assign-to-non-feature.sysml` | pilot-only-rejects | An assignment must have a referent. | — | the assignment referent checker in `constraint.go` returns silently when the referent is not a usage |
+| `validateAssignmentActionUsageReferent` | `semantic/s43-assign-to-non-feature.sysml` | both-reject | An assignment must have a referent. | An assignment must have a referent. PD is declared `part def`, not a feature. | — |
 | `validateAssignmentActionUsageReferentIsTimeVarying` | `semantic/s05-assign-to-package-level-attribute.sysml` | both-reject | Referent must be time varying. | Referent must be time varying. | — |
 | `validateAttributeDefinitionFeatures` | none: nested attribute features are normalised to referential | no violating model | — | — | — |
 | `validateAttributeUsageEnumerationType` | `semantic/s06-enum-attribute-two-types.sysml` | both-reject | An enumeration attribute cannot have more than one type. | An enumeration attribute cannot have more than one type. | — |

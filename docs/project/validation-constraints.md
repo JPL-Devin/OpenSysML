@@ -20,7 +20,7 @@ the diagnostic it reports was recorded as that row's probe.
 
 ## Summary
 
-**Census:** 108 of 217 named constraints are reported by OpenSysML — 97 ✅ faithful and 11 ⚠️ approximate; 27 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 82 ❔ unknown.
+**Census:** 110 of 217 named constraints are reported by OpenSysML — 99 ✅ faithful and 11 ⚠️ approximate; 26 ❌ not implemented, 0 ⛔ deliberate, 0 🚧 known failure, 81 ❔ unknown.
 
 The figures on that line, and the pin and digest quoted above, are written by
 `go run ./cmd/validation-census` from the baseline; `-check` fails on a hand-edited figure or
@@ -187,9 +187,9 @@ parser/resolver location. *Our message* is given only where OpenSysML's wording 
 | `validateActorMembershipOwningType` | SysML | Only requirements and cases have actors; the pilot grammar rejects `actor` elsewhere, OpenSysML's parser accepts it and reports nothing | — | — | none | ❌ not implemented |
 | `validateAllocationUsageType` | SysML | An allocation is typed by allocation definitions | internal/core/passes/typecheck.go:compatibleTyping (messages in w10b_usage_typing.go:pilotTypingMessage) | — | none | ✅ faithful |
 | `validateAnalysisCaseUsageType` | SysML | An analysis case is typed by one analysis case definition | internal/core/passes/one_type.go:checkOneType | — | none | ✅ faithful |
-| `validateAssertConstraintUsageReference` | SysML | An assert constraint usage references a constraint (`Must reference a constraint.`) | — | — | none | ❌ not implemented |
+| `validateAssertConstraintUsageReference` | SysML | An assert constraint usage references a constraint (`Must reference a constraint.`): `assert c`, `assert not c`, a feature chain (its last feature decides) and an inherited constraint alike; a requirement usage is a constraint usage | internal/core/passes/typecheck.go:referenceKindMessage (shared with `validateSatisfyRequirementUsageReference`; chains through typecheck.go:typeChecker.checkChainReferenceKind) | `assert target must be a constraint usage, found partUsage` | `semantic/s04-assert-references-non-constraint.sysml` | ✅ faithful |
 | `validateAssignmentActionUsageArguments` | SysML | An assignment action has two arguments (the grammar requires both; a syntax error in both tools otherwise) | — | — | none | ❔ unknown — no case and no identifiable pass yet |
-| `validateAssignmentActionUsageReferent` | SysML | An assignment action has a referent; a probe fails name resolution first in both tools | — | — | none | ❔ unknown — no case and no identifiable pass yet |
+| `validateAssignmentActionUsageReferent` | SysML | An assignment action has a referent (`An assignment must have a referent.`): the target names a feature, not a definition, a package or another namespace; an unresolved target is the name-resolution tier's error first, in both tools | internal/core/passes/w8d_assignment_referent.go:assignmentReferentChecker.check (over `symbols.SymbolKind.IsFeature`) | ``An assignment must have a referent. PD is declared `part def`, not a feature.`` — the pilot's sentence, followed by what the target is | `semantic/s43-assign-to-non-feature.sysml` | ✅ faithful |
 | `validateAssignmentActionUsageReferentIsTimeVarying` | SysML | The referent of an assignment action is time-varying | internal/core/passes/w8d_assignment_referent.go:AssignmentReferentPass.Run | — | none | ✅ faithful |
 | `validateAttributeDefinitionFeatures` | SysML | Features of an attribute definition are referential; the pilot grammar rejects a composite usage inside an attribute definition | — | — | none | ❔ unknown — no case and no identifiable pass yet |
 | `validateAttributeUsageEnumerationType` | SysML | An attribute typed by an enumeration definition has no other type | internal/core/passes/one_type.go:checkOneType | — | none | ✅ faithful |
