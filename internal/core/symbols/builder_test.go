@@ -281,3 +281,130 @@ func TestNamingFeatureIsRecordedOnTheSymbol(t *testing.T) {
 		t.Fatalf("NamingTarget = %v, want the redefinition's target", engine.NamingTarget)
 	}
 }
+
+// A named assume or require member owns a constraint usage, so it is a
+// constraint-usage symbol the enclosing requirement finds by name, spanning the
+// name and holding the body it declares; an anonymous one is an anonymous member.
+func TestRequirementConstraintMembersAreSymbols(t *testing.T) {
+	src := `package P {
+		constraint def C;
+		requirement def R {
+			assume constraint a : C[0..1] = true { attribute x; }
+			require constraint r : C;
+			require constraint { true }
+		}
+	}`
+	root := build(t, src)
+	pkg, _ := root.LookupLocal("P")
+	r, _ := pkg.Scope.LookupLocal("R")
+
+	a, ok := r.Scope.LookupLocal("a")
+	if !ok || a.Kind != SymbolConstraintUsage {
+		t.Fatalf("a = %v (found %v), want a constraint usage", a, ok)
+	}
+	if _, isAssume := a.Decl.(*ast.AssumeMember); !isAssume {
+		t.Fatalf("a declared by %T, want *ast.AssumeMember", a.Decl)
+	}
+	if got := src[a.NameSpan.Offset:a.NameSpan.End()]; got != "a" {
+		t.Fatalf("a name span covers %q, want the name", got)
+	}
+	if _, ok := a.Scope.LookupLocal("x"); !ok {
+		t.Fatalf("a members = %v, want its body member x", a.Scope.MemberNames())
+	}
+	if a.Scope.BodyLocal() {
+		t.Fatalf("a named constraint usage's scope is not body-local")
+	}
+
+	req, ok := r.Scope.LookupLocal("r")
+	if !ok || req.Kind != SymbolConstraintUsage {
+		t.Fatalf("r = %v (found %v), want a constraint usage", req, ok)
+	}
+	if _, isRequire := req.Decl.(*ast.RequireMember); !isRequire {
+		t.Fatalf("r declared by %T, want *ast.RequireMember", req.Decl)
+	}
+
+	if _, ok := r.Scope.LookupLocal(""); ok {
+		t.Fatalf("the anonymous require constraint must not be registered under the empty name")
+	}
+	if anon := r.Scope.AnonymousMembers(); len(anon) != 1 || anon[0].Kind != SymbolConstraintUsage {
+		t.Fatalf("anonymous members of R = %v, want the one anonymous require constraint", anon)
+	}
+}
+
+// A prefixed anonymous `assume`/`require constraint` is an anonymous constraint
+// usage symbol, as `constraint { … }` is, so metadata written on it is analysed.
+// A reference member (`require Other;`) declares no usage.
+func TestAnonymousRequirementConstraintsAreAnonymousSymbols(t *testing.T) {
+	src := `package P {
+		metadata def M;
+		constraint def C;
+		requirement def Other;
+		requirement def R {
+			require #M constraint { true }
+			assume constraint : C;
+			require Other;
+			assume Other;
+		}
+	}`
+	root := build(t, src)
+	pkg, _ := root.LookupLocal("P")
+	r, _ := pkg.Scope.LookupLocal("R")
+
+	anon := r.Scope.AnonymousMembers()
+	if len(anon) != 2 {
+		t.Fatalf("anonymous members of R = %d, want the two constraint declarations", len(anon))
+	}
+	require, assume := anon[0], anon[1]
+	if _, ok := require.Decl.(*ast.RequireMember); !ok || require.Kind != SymbolConstraintUsage {
+		t.Fatalf("first anonymous member = %v declared by %T, want a constraint usage of the require", require.Kind, require.Decl)
+	}
+	if _, ok := assume.Decl.(*ast.AssumeMember); !ok || assume.Kind != SymbolConstraintUsage {
+		t.Fatalf("second anonymous member = %v declared by %T, want a constraint usage of the assume", assume.Kind, assume.Decl)
+	}
+	if require.Name != "" || require.Scope == nil || require.Scope.Owner() != require {
+		t.Fatalf("anonymous require = %q owning %v, want no name and a scope of its own", require.Name, require.Scope)
+	}
+	if body := ConstraintBodyScope(r.Scope, require.Decl); body != require.Scope {
+		t.Fatalf("anonymous require body = %v, want its own scope", body)
+	}
+	for _, sym := range r.Scope.AllMembers() {
+		if _, ok := sym.Decl.(*ast.RequireMember); ok && sym != require {
+			t.Fatalf("the reference form `require Other;` declares no symbol, got %v", sym)
+		}
+		if _, ok := sym.Decl.(*ast.AssumeMember); ok && sym != assume {
+			t.Fatalf("the reference form `assume Other;` declares no symbol, got %v", sym)
+		}
+	}
+}
+
+// A metadata usage with a body inside a subject, assume or require member's
+// body is a body-local scope, as it is inside any usage's body.
+func TestRequirementMemberMetadataBodiesGetScopes(t *testing.T) {
+	root := build(t, `package P {
+		metadata def M { attribute level; }
+		part def Vehicle;
+		constraint def C;
+		requirement def R {
+			subject s : Vehicle { @M { level = 1; } }
+			assume constraint a : C { @M { level = 2; } }
+			require constraint r : C { @M { level = 3; } }
+		}
+	}`)
+	pkg, _ := root.LookupLocal("P")
+	r, _ := pkg.Scope.LookupLocal("R")
+	for _, name := range []string{"s", "a", "r"} {
+		member, ok := r.Scope.LookupLocal(name)
+		if !ok {
+			t.Fatalf("R members = %v, want %s", r.Scope.MemberNames(), name)
+		}
+		var bodies int
+		for _, child := range member.Scope.Children() {
+			if _, ok := child.Node().(*ast.PrefixMetadata); ok && child.BodyLocal() {
+				bodies++
+			}
+		}
+		if bodies != 1 {
+			t.Errorf("metadata body scopes under %s = %d, want 1", name, bodies)
+		}
+	}
+}

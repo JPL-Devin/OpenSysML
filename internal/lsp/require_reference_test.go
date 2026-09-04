@@ -47,3 +47,45 @@ func TestDefinitionQualifiedRequireReference(t *testing.T) {
 		t.Errorf("decl line = %d, want 2", locs[0].Range.Start.Line)
 	}
 }
+
+// The constraint usage an assume or require member owns is a declaration, so a
+// `:>>` naming it jumps to the member.
+func TestDefinitionOfRequirementConstraintMember(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	name := uri.File("/tmp/def_require_member.sysml").Filename()
+	src := `package P {
+	constraint def C;
+	requirement def R {
+		assume constraint assumed : C;
+		require constraint required : C;
+	}
+	requirement def S :> R {
+		assume constraint assumed2 :>> assumed;
+		require constraint required2 :>> required;
+	}
+}`
+	ws.Open(name, []byte(src), 1)
+
+	for _, tc := range []struct {
+		ref  string
+		line uint32
+	}{{":>> assumed", 3}, {":>> required", 4}} {
+		off := strings.Index(src, tc.ref) + len(":>> ")
+		locs, err := s.Definition(context.Background(), &protocol.DefinitionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(name)},
+				Position:     offsetToPosition([]byte(src), off),
+			},
+		})
+		if err != nil {
+			t.Fatalf("%s: Definition err = %v", tc.ref, err)
+		}
+		if len(locs) != 1 {
+			t.Fatalf("%s: locations = %d, want 1", tc.ref, len(locs))
+		}
+		if locs[0].Range.Start.Line != tc.line {
+			t.Errorf("%s: decl line = %d, want %d", tc.ref, locs[0].Range.Start.Line, tc.line)
+		}
+	}
+}

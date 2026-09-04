@@ -590,6 +590,10 @@ func (ec *EvalContext) evalNameGeneral(qn *ast.QualifiedName) (Value, error) {
 			return val, nil
 		}
 	}
+	// A require/assume constraint reads the value it binds, as a constraint usage does.
+	if oc, ok := ast.OwnedConstraintOf(currentSym.Decl); ok && oc.Value != nil {
+		return ec.declaredValue(currentSym, oc.Value)
+	}
 	// A subject is bound or, admitting nothing, empty; otherwise it awaits a binding.
 	if decl, ok := currentSym.Decl.(*ast.SubjectMember); ok {
 		if decl.BindingExpr != nil {
