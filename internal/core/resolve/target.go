@@ -103,11 +103,7 @@ func namedByReference(sym *symbols.Symbol) bool {
 	if !sym.EffectiveName {
 		return false
 	}
-	usage, ok := sym.Decl.(*ast.Usage)
-	if !ok {
-		return true
-	}
-	rel := ast.NamingFeature(usage)
+	rel := ast.DeclNamingFeature(sym.Decl)
 	return rel == nil || rel.Kind != ast.RelRedefines
 }
 

@@ -149,9 +149,11 @@ func buildNamespaceDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia 
 	case *ast.SubjectMember:
 		// SubjectMember represents requirement subject: subject <name> : <Type>;
 		// Create a part usage symbol (subject is structural usage like part)
-		id := ast.Identification{Name: d.Name}
+		id, namingTarget := namingIdent(d.Ident, d.NamingFeature())
 		child := NewScope(scope, d)
 		sym := newSymbol(id, SymbolPartUsage, d, vis, child, scope, trivia)
+		sym.EffectiveName = namingTarget != nil
+		sym.NamingTarget = namingTarget
 		defineIdent(scope, id, sym)
 		scope.AddChild(child)
 		if len(d.Body) > 0 {
@@ -433,14 +435,7 @@ func buildRequirementConstraint(scope *Scope, decl ast.Node, body []ast.Node, vi
 		buildConstraintBodyScope(scope, decl, body)
 		return
 	}
-	id := ast.Identification{Name: oc.Name, NameSpan: oc.NameSpan}
-	var namingTarget ast.Node
-	if rel := oc.NamingFeature(); rel != nil {
-		if name, span := ast.TargetName(rel.Target); name != "" {
-			id.Name, id.NameSpan = name, span
-			namingTarget = namingTargetNode(rel.Target)
-		}
-	}
+	id, namingTarget := namingIdent(oc.Ident, oc.NamingFeature())
 	child := NewScope(scope, decl)
 	sym := newSymbol(id, SymbolConstraintUsage, decl, vis, child, scope, trivia)
 	sym.EffectiveName = namingTarget != nil
@@ -606,15 +601,19 @@ func newSymbol(id ast.Identification, kind SymbolKind, decl ast.Node, vis ast.Vi
 // The naming feature's own effective name is approximated by the reference's
 // last segment, since resolution has not run when scopes are built.
 func effectiveIdent(u *ast.Usage) (ast.Identification, ast.Node) {
-	rel := ast.NamingFeature(u)
+	return namingIdent(u.Ident, ast.NamingFeature(u))
+}
+
+// namingIdent is effectiveIdent for any declaration: id completed with the name
+// its naming feature rel supplies, and the target that supplied it.
+func namingIdent(id ast.Identification, rel *ast.Relationship) (ast.Identification, ast.Node) {
 	if rel == nil {
-		return u.Ident, nil
+		return id, nil
 	}
 	name, span := ast.TargetName(rel.Target)
 	if name == "" {
-		return u.Ident, nil
+		return id, nil
 	}
-	id := u.Ident
 	id.Name, id.NameSpan = name, span
 	return id, namingTargetNode(rel.Target)
 }
