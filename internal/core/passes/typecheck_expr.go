@@ -874,7 +874,7 @@ func (ec *exprChecker) checkFeatureBinding(scope *symbols.Scope, arg ast.Node, g
 }
 
 // checkObjectBinding checks each value of a constructor argument against the
-// non-scalar types its feature declares or inherits, in either direction.
+// non-scalar types its feature declares or inherits; a `new T(…)` is exactly a T.
 func (ec *exprChecker) checkObjectBinding(scope *symbols.Scope, arg ast.Node, feature, typ *symbols.Symbol) {
 	wants := w8cMostSpecific(ec.model, ec.model.DeclaredFeatureTypes(feature))
 	if len(wants) == 0 {
@@ -885,10 +885,12 @@ func (ec *exprChecker) checkObjectBinding(scope *symbols.Scope, arg ast.Node, fe
 		if got == nil {
 			continue
 		}
+		_, exact := value.(*ast.ConstructorExpr)
 		for _, want := range wants {
-			if !ec.model.Conforms(got, want) && !ec.model.Conforms(want, got) {
-				ec.errorf(value.Span(), "%s of %s is typed by %s; cannot bind a value of type %s", feature.Name, typ.Name, want.Name, got.Name)
+			if ec.model.Conforms(got, want) || (!exact && ec.model.Conforms(want, got)) {
+				continue
 			}
+			ec.errorf(value.Span(), "%s of %s is typed by %s; cannot bind a value of type %s", feature.Name, typ.Name, want.Name, got.Name)
 		}
 	}
 }

@@ -240,10 +240,14 @@ func TestSendNewRejectsExcessPositionalArgumentsAtSend(t *testing.T) {
 
 // An argument the feature does not admit, by type or by count, fails at the send
 // whether an accept consumes the message or none does. Nothing is validated first.
+// An object is admitted by what it is, not by what its feature is typed by.
 func TestSendNewRejectsInadmissibleArgumentsAtSend(t *testing.T) {
 	const model = `package P {
 		private import ScalarValues::*;
-		item def Reading { attribute n : Integer; attribute pair : Integer[2]; }
+		item def Base;
+		item def Telemetry :> Base;
+		item def Reading { attribute n : Integer; attribute pair : Integer[2]; ref item src : Telemetry; }
+		part station { part base : Base; part tele : Telemetry; }
 		action pipeline {
 			first start;
 			action sender { send new Reading(%s) to %s; }
@@ -254,9 +258,20 @@ func TestSendNewRejectsInadmissibleArgumentsAtSend(t *testing.T) {
 			succession first reader then done;
 		}
 	}`
+	t.Run("special object admitted", func(t *testing.T) {
+		idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, fmt.Sprintf(model, `n = 7, pair = (1, 2), src = station.tele`, "reader", "reader")))
+		sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+		if sym == nil {
+			t.Fatal("action pipeline not found")
+		}
+		if _, err := ctx.ExecuteAction(sym); err != nil {
+			t.Fatalf("send new Reading(src = station.tele): %v", err)
+		}
+	})
 	for _, tc := range []struct{ args, want string }{
 		{`"seven", (1, 2)`, "feature value Reading.n: type mismatch"},
 		{`n = 7, pair = 1`, "feature value Reading.pair: multiplicity violation"},
+		{`n = 7, pair = (1, 2), src = station.base`, "feature value Reading.src: type mismatch"},
 	} {
 		for _, receiver := range []string{"reader", "nobody"} {
 			t.Run(tc.args+" to "+receiver, func(t *testing.T) {
