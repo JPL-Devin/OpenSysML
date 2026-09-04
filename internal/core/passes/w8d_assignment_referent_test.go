@@ -140,6 +140,58 @@ func TestAssignmentReferentNonFeatureRejected(t *testing.T) {
 	}
 }
 
+// The referent rule needs no library; only the time-varying rule, derived from
+// Occurrences::Occurrence, waits for one.
+func TestAssignmentReferentNonFeatureRejectedWithoutLibrary(t *testing.T) {
+	src := "package Test { part def P; package Q; part def PD { attribute a; } action def A { assign P := null; assign Q := null; assign PD::a := null; } }"
+	root, pd, idx := analyzeInputs(t, "a.sysml", src)
+	var got []string
+	for _, d := range Analyze("a.sysml", root, pd, idx) {
+		if d.Severity == SeverityError {
+			got = append(got, d.Code+": "+d.Message)
+		}
+	}
+	want := []string{
+		"assignment-referent: " + msgAssignmentReferent + " P is declared `part def`, not a feature.",
+		"assignment-referent: " + msgAssignmentReferent + " Q is declared `package`, not a feature.",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// A named multiplicity is a feature (KerML §8.3.3.3), so it is a referent; its
+// value never varies, so the time-varying rule is what rejects assigning to it.
+func TestAssignmentReferentMultiplicityIsNotTimeVarying(t *testing.T) {
+	src := `package Test {
+	private import Base::*;
+	item i { attribute a; }
+	action def A {
+		assign exactlyOne := null;
+		assign Base::zeroToMany := null;
+		assign i.a := null;
+	}
+}`
+	for _, warm := range []bool{false, true} {
+		if got := assignmentDiags(t, src, warm, "assignment-referent"); len(got) != 0 {
+			t.Errorf("warm=%v: got %v, want no referent diagnostic", warm, got)
+		}
+		got := assignmentReferentFindings(t, src, warm)
+		want := []int{
+			strings.Index(src, "exactlyOne := null"),
+			strings.Index(src, "zeroToMany := null"),
+		}
+		if len(got) != len(want) {
+			t.Fatalf("warm=%v: got %v, want the two multiplicity diagnostics", warm, got)
+		}
+		for i, diag := range got {
+			if diag.Span.Offset != want[i] {
+				t.Errorf("warm=%v diagnostic %d: offset %d, want %d", warm, i, diag.Span.Offset, want[i])
+			}
+		}
+	}
+}
+
 // A target that resolves to a feature is a referent, whatever else the rest of
 // the pass says about it; an unresolved one is the name-resolution tier's alone.
 func TestAssignmentReferentFeatureOrUnresolvedIsNotReported(t *testing.T) {

@@ -28,13 +28,14 @@ func (AssignmentReferentPass) Run(ctx *Context, name string, root *ast.RootNames
 		return nil
 	}
 	rootScope := ctx.Index.DocumentRoot(name)
-	if rootScope == nil || !assignmentOccurrenceLibraryPresent(ctx) {
+	if rootScope == nil {
 		return nil
 	}
 	c := &assignmentReferentChecker{
-		ctx:      ctx,
-		model:    ctx.Model(),
-		resolver: ctx.Resolver(),
+		ctx:        ctx,
+		model:      ctx.Model(),
+		resolver:   ctx.Resolver(),
+		occurrence: assignmentOccurrenceLibraryPresent(ctx),
 	}
 	c.walk(rootScope, root.Members)
 	return c.diags
@@ -49,7 +50,10 @@ type assignmentReferentChecker struct {
 	model    *semantics.Model
 	resolver *resolve.Resolver
 	inCalc   bool
-	diags    []Diagnostic
+	// occurrence records whether Occurrences::Occurrence is loaded; the
+	// time-varying rule is derived from it and is not judged without it.
+	occurrence bool
+	diags      []Diagnostic
 }
 
 // enterBody records whether the body being walked is a calculation's and returns
@@ -156,10 +160,23 @@ func (c *assignmentReferentChecker) check(scope *symbols.Scope, assignment *ast.
 			"assignment-referent")
 		return
 	}
-	if _, ok := referent.Decl.(*ast.Usage); !ok || c.model.UsageMayTimeVary(referent) {
+	if c.referentMayTimeVary(referent) {
 		return
 	}
 	c.report(span, msgAssignmentReferentTimeVarying, "assignment-referent-time-varying")
+}
+
+// referentMayTimeVary derives whether the feature an assignment names may hold
+// different values over time (SysML v2 §8.3.16.2, Usage::mayTimeVary); a named
+// multiplicity (KerML §8.3.3.3) is a feature whose value never varies.
+func (c *assignmentReferentChecker) referentMayTimeVary(referent *symbols.Symbol) bool {
+	if referent.Kind == symbols.SymbolMultiplicity {
+		return false
+	}
+	if _, ok := referent.Decl.(*ast.Usage); !ok || !c.occurrence {
+		return true
+	}
+	return c.model.UsageMayTimeVary(referent)
 }
 
 // targetText renders an assignment target as written, for a message about it.
