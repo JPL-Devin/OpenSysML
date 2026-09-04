@@ -280,8 +280,11 @@ func buildBehaviorDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia [
 	case *ast.ConstraintMember:
 		buildConstraintBodyScope(scope, d, d.Body)
 		return true
-	case *ast.AssumeMember, *ast.RequireMember:
-		buildRequirementConstraint(scope, d, vis, trivia)
+	case *ast.AssumeMember:
+		buildRequirementConstraint(scope, d, d.Body, vis, trivia)
+		return true
+	case *ast.RequireMember:
+		buildRequirementConstraint(scope, d, d.Body, vis, trivia)
 		return true
 	case *ast.EntryMember:
 		// An entry/do/exit action is a feature of the state declaring it, so a
@@ -415,6 +418,31 @@ func buildControlNode(scope *Scope, decl ast.Node, name string, nameSpan source.
 	buildMembers(child, body)
 }
 
+// buildRequirementConstraint registers the constraint usage an assume/require member
+// declares as a member of its requirement (SysML v2 §7.20.5), anonymous if unnamed.
+func buildRequirementConstraint(scope *Scope, decl ast.Node, body []ast.Node, vis ast.Visibility, trivia []ast.Trivia) {
+	oc, ok := ast.OwnedConstraintOf(decl)
+	if !ok {
+		buildConstraintBodyScope(scope, decl, body)
+		return
+	}
+	id := ast.Identification{Name: oc.Name, NameSpan: oc.NameSpan}
+	var namingTarget ast.Node
+	if rel := oc.NamingFeature(); rel != nil {
+		if name, span := ast.TargetName(rel.Target); name != "" {
+			id.Name, id.NameSpan = name, span
+			namingTarget = namingTargetNode(rel.Target)
+		}
+	}
+	child := NewScope(scope, decl)
+	sym := newSymbol(id, SymbolConstraintUsage, decl, vis, child, scope, trivia)
+	sym.EffectiveName = namingTarget != nil
+	sym.NamingTarget = namingTarget
+	defineIdent(scope, id, sym)
+	scope.AddChild(child)
+	buildMembers(child, oc.Body)
+}
+
 // buildConstraintBodyScope links the scope a nested constraint body declares
 // into. The body states the constraint its member owns (SysML v2 §7.20.5), so
 // its declarations are visible inside it and are no members of the namespace the
@@ -427,28 +455,6 @@ func buildConstraintBodyScope(scope *Scope, decl ast.Node, body []ast.Node) {
 	child.markBodyLocal()
 	scope.AddChild(child)
 	buildMembers(child, body)
-}
-
-// buildRequirementConstraint declares the constraint usage an `assume`/`require`
-// member owns. An anonymous one is an anonymous symbol whose body stays a
-// body-local scope, so the conditions it states are still owned by the
-// requirement; a reference or inline condition declares no usage at all.
-func buildRequirementConstraint(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Trivia) {
-	c, _ := ast.RequirementConstraintOf(decl)
-	if c.Name == "" {
-		if c.Declared {
-			sym := newSymbol(ast.Identification{}, SymbolConstraintUsage, decl, vis, nil, scope, trivia)
-			defineIdent(scope, ast.Identification{}, sym)
-		}
-		buildConstraintBodyScope(scope, decl, c.Body)
-		return
-	}
-	id := ast.Identification{Name: c.Name, NameSpan: c.NameSpan}
-	child := NewScope(scope, decl)
-	sym := newSymbol(id, SymbolConstraintUsage, decl, vis, child, scope, trivia)
-	defineIdent(scope, id, sym)
-	scope.AddChild(child)
-	buildMembers(child, c.Body)
 }
 
 // ConstraintBodyScope returns the scope a nested constraint body resolves against:

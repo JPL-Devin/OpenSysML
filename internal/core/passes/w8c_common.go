@@ -104,8 +104,6 @@ func w8cMultiplicityOf(sym *symbols.Symbol) *ast.Multiplicity {
 	switch d := sym.Decl.(type) {
 	case *ast.Definition:
 		return d.Multiplicity
-	case *ast.Usage:
-		return d.Multiplicity
 	case *ast.ConnectorEnd:
 		return d.Multiplicity
 	case *ast.SubjectMember:
@@ -115,7 +113,7 @@ func w8cMultiplicityOf(sym *symbols.Symbol) *ast.Multiplicity {
 	case *ast.RequireMember:
 		return d.Multiplicity
 	default:
-		return nil
+		return semantics.UsageMultiplicityOf(sym)
 	}
 }
 

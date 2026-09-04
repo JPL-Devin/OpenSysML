@@ -43,7 +43,7 @@ func TestRequirementConstraintMembersResolve(t *testing.T) {
 		case *ast.SubjectMember:
 			rels = d.Relationships
 		default:
-			c, _ := ast.RequirementConstraintOf(d)
+			c, _ := ast.OwnedConstraintOf(d)
 			rels = c.Relationships
 		}
 		if len(rels) != 1 || rels[0].Kind != ast.RelRedefines {

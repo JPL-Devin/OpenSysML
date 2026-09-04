@@ -10,7 +10,7 @@
       (Membership visibility="default"
         (Definition kind="state" abstract=false variation=false name="S"
           (Membership visibility="default"
-            (Usage kind="attribute" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="attribute" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false initial=true
               (Relationship kind="typing" target=ScalarValues::Integer
                 (*ast.QualifiedName))
               (LiteralInteger value="0")))

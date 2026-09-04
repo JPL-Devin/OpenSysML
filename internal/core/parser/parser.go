@@ -257,34 +257,47 @@ func (p *Parser) valueOperatorAt(n int) bool {
 		(t.Kind == lexer.Keyword && t.KeywordID == "default")
 }
 
-// acceptValueOperatorSpan consumes a feature value operator and returns the
-// source span from its first token through the last consumed operator token.
-func (p *Parser) acceptValueOperatorSpan() (source.Span, bool) {
+// valueOperator is a consumed feature value operator: its span from the first
+// token through the last, and the `default` and `:=` forms it was written in.
+type valueOperator struct {
+	span      source.Span
+	isDefault bool
+	isInitial bool
+}
+
+// acceptValueOperator consumes a feature value operator (`=`, `:=`, or
+// `default` followed by an optional `=` or `:=`).
+func (p *Parser) acceptValueOperator() (valueOperator, bool) {
 	if op, ok := p.accept(lexer.Eq); ok {
-		return op.Span, true
+		return valueOperator{span: op.Span}, true
 	}
 	if op, ok := p.accept(lexer.ColonEq); ok {
-		return op.Span, true
+		return valueOperator{span: op.Span, isInitial: true}, true
 	}
 	if p.atKeyword("default") {
 		first := p.advance()
 		last := first
+		isInitial := false
 		if op, ok := p.accept(lexer.Eq); ok {
 			last = op
 		} else if op, ok := p.accept(lexer.ColonEq); ok {
 			last = op
+			isInitial = true
 		}
-		return source.Span{Offset: first.Span.Offset, Len: last.Span.End() - first.Span.Offset}, true
+		span := source.Span{Offset: first.Span.Offset, Len: last.Span.End() - first.Span.Offset}
+		return valueOperator{span: span, isDefault: true, isInitial: isInitial}, true
 	}
-	return source.Span{}, false
+	return valueOperator{}, false
 }
 
 func (p *Parser) parseUsageValue(u *ast.Usage) bool {
-	span, ok := p.acceptValueOperatorSpan()
+	op, ok := p.acceptValueOperator()
 	if !ok {
 		return false
 	}
-	u.ValueOperatorSpan = span
+	u.ValueOperatorSpan = op.span
+	u.ValueIsDefault = op.isDefault
+	u.ValueIsInitial = op.isInitial
 	u.Value = p.ParseExpression()
 	return true
 }

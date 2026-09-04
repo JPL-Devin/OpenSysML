@@ -110,19 +110,19 @@ func (r *Resolver) nestedMember(sym *symbols.Symbol, name string, hide *refFilte
 // redefinesRelationships returns decl's explicit redefinitions.
 func redefinesRelationships(decl ast.Node) []*ast.Relationship {
 	var rels []*ast.Relationship
-	switch d := decl.(type) {
-	case *ast.Usage:
-		rels = d.Relationships
-	case *ast.Definition:
-		rels = d.Relationships
-	case *ast.SubjectMember:
-		rels = d.Relationships
-	default:
-		c, ok := ast.RequirementConstraintOf(decl)
-		if !ok {
+	if oc, ok := ast.OwnedConstraintOf(decl); ok {
+		rels = oc.Relationships
+	} else {
+		switch d := decl.(type) {
+		case *ast.Usage:
+			rels = d.Relationships
+		case *ast.Definition:
+			rels = d.Relationships
+		case *ast.SubjectMember:
+			rels = d.Relationships
+		default:
 			return nil
 		}
-		rels = c.Relationships
 	}
 	var out []*ast.Relationship
 	for _, rel := range rels {
@@ -135,8 +135,11 @@ func redefinesRelationships(decl ast.Node) []*ast.Relationship {
 
 // isFeatureDecl reports whether decl declares a feature rather than a type.
 func isFeatureDecl(decl ast.Node) bool {
+	if _, ok := ast.OwnedConstraintOf(decl); ok {
+		return true
+	}
 	switch decl.(type) {
-	case *ast.Usage, *ast.SubjectMember, *ast.AssumeMember, *ast.RequireMember:
+	case *ast.Usage, *ast.SubjectMember:
 		return true
 	}
 	return false

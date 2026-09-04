@@ -284,7 +284,7 @@ func TestNamingFeatureIsRecordedOnTheSymbol(t *testing.T) {
 
 // A named assume or require member owns a constraint usage, so it is a
 // constraint-usage symbol the enclosing requirement finds by name, spanning the
-// name and holding the body it declares; an anonymous one owns only its body.
+// name and holding the body it declares; an anonymous one is an anonymous member.
 func TestRequirementConstraintMembersAreSymbols(t *testing.T) {
 	src := `package P {
 		constraint def C;
@@ -326,21 +326,14 @@ func TestRequirementConstraintMembersAreSymbols(t *testing.T) {
 	if _, ok := r.Scope.LookupLocal(""); ok {
 		t.Fatalf("the anonymous require constraint must not be registered under the empty name")
 	}
-	var anonymous int
-	for _, child := range r.Scope.Children() {
-		if _, ok := child.Node().(*ast.RequireMember); ok && child.BodyLocal() {
-			anonymous++
-		}
-	}
-	if anonymous != 1 {
-		t.Fatalf("anonymous require constraint body scopes = %d, want 1", anonymous)
+	if anon := r.Scope.AnonymousMembers(); len(anon) != 1 || anon[0].Kind != SymbolConstraintUsage {
+		t.Fatalf("anonymous members of R = %v, want the one anonymous require constraint", anon)
 	}
 }
 
-// An anonymous `assume`/`require constraint` is an anonymous constraint usage
-// symbol, as `constraint { … }` is, so metadata written on it is analysed; its
-// body stays a body-local scope owned by no symbol, so the conditions it states
-// remain the requirement's. A reference member declares no usage.
+// A prefixed anonymous `assume`/`require constraint` is an anonymous constraint
+// usage symbol, as `constraint { … }` is, so metadata written on it is analysed.
+// A reference member (`require Other;`) declares no usage.
 func TestAnonymousRequirementConstraintsAreAnonymousSymbols(t *testing.T) {
 	src := `package P {
 		metadata def M;
@@ -368,12 +361,11 @@ func TestAnonymousRequirementConstraintsAreAnonymousSymbols(t *testing.T) {
 	if _, ok := assume.Decl.(*ast.AssumeMember); !ok || assume.Kind != SymbolConstraintUsage {
 		t.Fatalf("second anonymous member = %v declared by %T, want a constraint usage of the assume", assume.Kind, assume.Decl)
 	}
-	if require.Name != "" || require.Scope != nil {
-		t.Fatalf("anonymous require = %q owning %v, want no name and no owned scope", require.Name, require.Scope)
+	if require.Name != "" || require.Scope == nil || require.Scope.Owner() != require {
+		t.Fatalf("anonymous require = %q owning %v, want no name and a scope of its own", require.Name, require.Scope)
 	}
-	body := ConstraintBodyScope(r.Scope, require.Decl)
-	if body == nil || body == r.Scope || !body.BodyLocal() || body.Owner() != nil {
-		t.Fatalf("anonymous require body = %v, want an ownerless body-local scope", body)
+	if body := ConstraintBodyScope(r.Scope, require.Decl); body != require.Scope {
+		t.Fatalf("anonymous require body = %v, want its own scope", body)
 	}
 	for _, sym := range r.Scope.AllMembers() {
 		if _, ok := sym.Decl.(*ast.RequireMember); ok && sym != require {

@@ -32,7 +32,7 @@ package RelayMission {
     // The flight article. Its feature values are the probe as built; the
     // portions below are the same individual at particular times.
     individual part scout : Probe {
-        attribute :>> mass = 120.0;
+        attribute :>> mass default = 120.0;
 
         // The moments that structure the mission, in time order.
         event occurrence separation;

@@ -223,7 +223,10 @@ triples come); a set of classes with no such member is refused, naming the subje
   to one stays its name, even where it shadows a feature of the same name.
 - `sysml:lowerBound`, `sysml:upperBound` — multiplicity, as expression nodes
   ([Expressions](#expressions))
-- `sysml:value` — a feature's value, as an expression node
+- `sysml:value` — a feature's value, as an expression node, with
+  `sysml:isDefault` and `sysml:isInitial` stating the `default` and `:=` of the
+  operator it was written with (so `default = 1` does not come back as the
+  binding `= 1`, which a redefinition may not override)
 - `sysml:aliasedElement`, `sysml:client`, `sysml:supplier`, `sysml:body`,
   `sysml:language`, `sysml:locale`, `sysml:annotatedElement`
 - A metadata annotation — `@Safety;`, `@Safety { level = 2; }`, `metadata m :
@@ -992,7 +995,7 @@ condition as `sysx:condition`: a constraint body's conditions (`assert`,
 `assume`/`require` members in all three forms (an expression, the constraint
 they name, or a body) together with the declaration of the constraint usage they
 own — `sysml:declaredName`, its specializations, `sysml:lowerBound`/`upperBound`
-and `sysml:value` (`require #Goal constraint braked [1] = true;`) — and
+and `sysml:value` with its `default`/`:=` operator (`require #Goal constraint braked [1] = true;`) — and
 `subject s : X;` as the `sysml:SubjectMembership` it declares. The `assert` prefixing a named usage
 (`assert constraint c : C`) is carried as `sysx:declaredPrefix`. The conditions
 themselves are notation, with the limits stated above. An `assume`/`require`
@@ -1080,13 +1083,19 @@ would be refused as a duplicate.
   that is negative or too large for the platform's `int`: it is a position the
   writer orders by, and one it cannot hold would otherwise be read as 0 and
   move the member to the front
-- a subject stating a single-valued `sysx:` property twice with different
-  objects — a body with two `sysx:resultExpression`s, an element with two
-  `sysx:memberIndex`es or two `sysx:isNamespaceImport` flags: only one could
-  be written, so the graph is refused naming both rather than the first being
-  kept. Every `sysx:` property is single-valued but the members and
-  parameters of a body, `sysx:relatedFeature`, `sysx:deferredEvent` and
-  `sysx:prefixMetadata`
+- a subject stating a single-valued property twice with different objects —
+  a body with two `sysx:resultExpression`s, an element with two
+  `sysx:memberIndex`es, two `sysx:isNamespaceImport` flags or a
+  `sysml:isDefault` stated both true and false: only one could be written, so
+  the graph is refused naming both rather than the first being kept. Every
+  `sysx:` property is single-valued but the members and parameters of a body,
+  `sysx:relatedFeature`, `sysx:deferredEvent` and `sysx:prefixMetadata`; of
+  the `sysml:` properties, the boolean `is…` flags are. A triple stated twice
+  is one triple to the graph, so only differing objects are a conflict
+- a `sysml:isDefault` or `sysml:isInitial`, whether true or false, on a subject
+  with no `sysml:value`: the flags spell the operator a feature value is
+  written with (`default =`, `:=`), so without a value there is nothing to
+  write them on
 
 A graph that uses none of OpenSysML's `sysx:` properties (one produced by
 another tool) converts as far as the mapping allows and errors on the first
