@@ -20,7 +20,8 @@
   model's own `:> NumericalVectorValue { :>> elements : Integer; }` as much as
   `CartesianThreeVectorValue` — and the refusal names the declaration it fails; an object of
   such a specialization reads as a vector that keeps its own members (`t.tag`), directly, through a
-  calc parameter and on a calc's result. Each new kind is handled wherever
+  calc parameter, on a calc's result, and after a `%load` carries the object a run wrote it into
+  over into the re-analysis. Each new kind is handled wherever
   the runtime, REPL, traces, solver and gRPC bridge inspect a value's kind, and a test
   enumerates the kinds so a future one cannot be left out. Tensors, coordinate
   transformations and a measurement reference passed as an argument value stay typed

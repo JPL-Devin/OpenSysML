@@ -92,7 +92,7 @@ func (ctx *Context) recordShapes(obj *Instance, shapes *Shapes, seen map[int64]b
 			if v.Kind == ValVariant {
 				ctx.recordShape(v.Variant(), shapes)
 			}
-			if id, ok := v.Object(); ok {
+			if id, ok := carriedObject(v); ok {
 				if held, found := ctx.instances[id]; found {
 					ctx.recordShapes(held, shapes, seen)
 				}
@@ -197,11 +197,21 @@ func (ctx *Context) collectedFeatureValue(s *FeatureValue) bool {
 	}
 	object := false
 	ctx.walkValue(s.Values, func(v Value) {
-		if _, held := v.Object(); held {
+		if _, held := carriedObject(v); held {
 			object = true
 		}
 	})
 	return !object
+}
+
+// carriedObject is the object a value denotes or, for an array or vector, was read
+// from: what a carry-over takes along with the value.
+func carriedObject(v Value) (int64, bool) {
+	if id, ok := v.Object(); ok {
+		return id, true
+	}
+	id := backingObject(v)
+	return id, id != 0
 }
 
 // connectorFeatureValue reports whether the feature value holds the object of a connector, whose
@@ -225,6 +235,10 @@ func (ctx *Context) walkValue(val Value, visit func(Value)) {
 			for _, elem := range val.Set().Elements() {
 				ctx.walkValue(elem, visit)
 			}
+		}
+	case ValArray:
+		for _, elem := range val.Array().Elements {
+			ctx.walkValue(elem, visit)
 		}
 	}
 }
@@ -509,7 +523,7 @@ func (a *adoption) planValue(owner string, val Value) error {
 				return
 			}
 		}
-		if id, ok := v.Object(); ok {
+		if id, ok := carriedObject(v); ok {
 			err = a.planHeld(owner, id)
 		}
 	})
@@ -772,6 +786,15 @@ func (a *adoption) rewrite(val Value) Value {
 			set.Add(a.rewrite(elem))
 		}
 		return NewSetValue(set)
+	case ValArray:
+		arr := val.Array()
+		elements := make([]Value, len(arr.Elements))
+		for i, elem := range arr.Elements {
+			elements[i] = a.rewrite(elem)
+		}
+		out := NewArrayValue(arr.Dimensions, elements)
+		out.Array().Object = arr.Object
+		return out
 	default:
 		return val
 	}

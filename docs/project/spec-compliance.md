@@ -711,7 +711,11 @@ the flat sequence of its elements:
   (`vectorOfObject`; conformance `calc_library_vector_specialization_members`,
   `calc_library_vector_specialization_fixed_dimension`,
   `TestVectorObjectMemberReadsFollowTheDeclaration`,
-  `TestAbandonedVectorObjectIsForgottenByItsHolders`). A vector built by value
+  `TestAbandonedVectorObjectIsForgottenByItsHolders`). The object behind an
+  array or vector a run wrote is carried into a re-analysis with its holder
+  (`adopt.go` `carriedObject`, `walkValue`, `rewrite`;
+  `TestAdoptCarriesTheObjectsBehindWrittenArraysAndVectors`), so those members
+  still answer after `%load` re-reads the model. A vector built by value
   (`attribute w : Tagged = VectorOf((1, 2));`) has no object and so no members
   beyond the vector's own: `w.tag` is `ErrTypeMismatch`. It prints between
   angle brackets, `⟨1, 2, 3⟩`, distinct from a sequence's `[1, 2, 3]`; the pilot
