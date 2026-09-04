@@ -51,6 +51,7 @@ var builtinSignatures = map[string][]declaredParam{
 	"SequenceFunctions::last":         {optionalParam("seq")},
 
 	"CollectionFunctions::#":           {param("col"), param("index")},
+	"CollectionFunctions::array#":      {param("arr"), param("indexes")},
 	"CollectionFunctions::==":          {optionalParam("col1"), optionalParam("col2")},
 	"CollectionFunctions::size":        {param("col")},
 	"CollectionFunctions::isEmpty":     {param("col")},

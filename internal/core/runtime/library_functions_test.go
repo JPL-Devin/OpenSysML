@@ -464,21 +464,13 @@ func lookupOne(t *testing.T, idx *symbols.Index, fqn string) *symbols.Symbol {
 	return syms[0]
 }
 
-// vectorValues is the elements of a vector result, which is the sequence of its
-// elements.
+// vectorValues is the elements of a vector result, which is a vector value.
 func vectorValues(t *testing.T, val Value) []semantics.Value {
 	t.Helper()
-	if val.Kind != ValSequence {
-		t.Fatalf("result is %s, want a vector (a sequence of its elements)", val.Kind)
+	if val.Kind != ValVector {
+		t.Fatalf("result is %s, want a vector", val.Kind)
 	}
-	out := make([]semantics.Value, 0, val.Sequence().Size())
-	for _, elem := range val.Sequence().Elements() {
-		if elem.Kind != ValConst {
-			t.Fatalf("vector element is %s, want a constant", elem.Kind)
-		}
-		out = append(out, elem.Const)
-	}
-	return out
+	return val.Vector().Elements
 }
 
 func realConsts(reals ...float64) []semantics.Value {
@@ -1058,15 +1050,12 @@ func TestUnevaluableLibraryFunctionsNameThemselves(t *testing.T) {
 		fn   string
 		args []Value
 	}{
-		{"VectorFunctions::sum", []Value{realVec(1, 2, 3)}},
-		{"VectorFunctions::sum0", []Value{realVec(1, 2, 3), realVec(0, 0, 0)}},
 		{"ComplexFunctions::ToString", []Value{cx(1, 2)}},
 		{"ComplexFunctions::ToComplex", []Value{NewStringValue("1.0")}},
 		{"BaseFunctions::ToString", []Value{cx(1, 2)}},
 		{"RationalFunctions::rat", []Value{constInt(1), constInt(3)}},
 		{"RationalFunctions::numer", []Value{constReal(0.5)}},
 		{"RationalFunctions::denom", []Value{constReal(0.5)}},
-		{"CollectionFunctions::array#", []Value{constInt(1), constInt(1)}},
 		{"BaseFunctions::[", []Value{constInt(1), constInt(1)}},
 		{"BaseFunctions::all", nil},
 		{"BaseFunctions::as", []Value{constInt(1)}},
@@ -1357,30 +1346,38 @@ func TestLibraryFeatureValueLeavesAModelsOwnFeatureAlone(t *testing.T) {
 	}
 }
 
-// A library feature this runtime has no representation for the value of reports
-// itself, rather than a value of another shape.
-func TestLibraryFeatureValueUnrepresentable(t *testing.T) {
+// The zero-vector features are vectors, not flat sequences of Reals:
+// cartesianZeroVector groups the 1-, 2- and 3-dimensional zero vectors, and
+// every read builds its own value, so no reader can change another's.
+func TestLibraryFeatureZeroVectors(t *testing.T) {
 	ctx, idx := libraryContextForSource(t, `package VectorFunctions {
-	feature cartesianZeroVector : Real[3];
-	feature cartesian3DZeroVector : Real[3];
+	feature cartesianZeroVector : CartesianVectorValue[3];
+	feature cartesian3DZeroVector : CartesianThreeVectorValue;
 }`)
 
-	if _, _, err := ctx.libraryFeatureValue(lookupOne(t, idx, "VectorFunctions::cartesianZeroVector")); !errors.Is(err, ErrUnevaluableLibraryFunction) {
-		t.Fatalf("cartesianZeroVector error = %v, want %v", err, ErrUnevaluableLibraryFunction)
+	grouped, ok, err := ctx.libraryFeatureValue(lookupOne(t, idx, "VectorFunctions::cartesianZeroVector"))
+	if err != nil || !ok || grouped.Kind != ValSequence {
+		t.Fatalf("cartesianZeroVector = %+v, %v, %v; want a sequence of vectors", grouped, ok, err)
+	}
+	if rendered := FormatValue(grouped); rendered != "[⟨0.0⟩, ⟨0.0, 0.0⟩, ⟨0.0, 0.0, 0.0⟩]" {
+		t.Fatalf("cartesianZeroVector = %s, want the zero vectors of dimension 1, 2 and 3", rendered)
+	}
+	for i, zero := range grouped.Sequence().Elements() {
+		if elements := vectorValues(t, zero); len(elements) != i+1 {
+			t.Fatalf("cartesianZeroVector#(%d) has dimension %d, want %d", i+1, len(elements), i+1)
+		}
 	}
 
-	// The three-dimensional zero vector does have a representation, and every
-	// read builds its own sequence: no reader can change another's value.
 	first, ok, err := ctx.libraryFeatureValue(lookupOne(t, idx, "VectorFunctions::cartesian3DZeroVector"))
 	if err != nil || !ok {
 		t.Fatalf("cartesian3DZeroVector = %+v, %v, %v", first, ok, err)
 	}
 	if elements := vectorValues(t, first); len(elements) != 3 || elements[0].Real != 0 {
-		t.Fatalf("cartesian3DZeroVector = %v, want (0.0, 0.0, 0.0)", first)
+		t.Fatalf("cartesian3DZeroVector = %v, want ⟨0.0, 0.0, 0.0⟩", first)
 	}
 	second, _, _ := ctx.libraryFeatureValue(lookupOne(t, idx, "VectorFunctions::cartesian3DZeroVector"))
-	if first.Sequence() == second.Sequence() {
-		t.Fatalf("two reads of cartesian3DZeroVector share one sequence")
+	if first.Vector() == second.Vector() {
+		t.Fatalf("two reads of cartesian3DZeroVector share one vector")
 	}
 }
 
@@ -1480,7 +1477,7 @@ func TestBuiltinsListEveryFunctionWithItsPackage(t *testing.T) {
 			t.Errorf("%s is listed as %+v, want package %s", want.fqn, b, want.pkg)
 		}
 	}
-	for _, absent := range []string{"SequenceFunctions::#", "IntegerFunctions::..", "VectorFunctions::sum", "ComplexFunctions::ToString"} {
+	for _, absent := range []string{"SequenceFunctions::#", "IntegerFunctions::..", "VectorCalculations::transform", "ComplexFunctions::ToString"} {
 		if b, ok := listed[absent]; ok {
 			t.Errorf("%s is listed as %+v, want it left out", absent, b)
 		}

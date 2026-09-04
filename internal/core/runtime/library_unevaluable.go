@@ -15,9 +15,8 @@ func registerUnevaluableDeclarations() {
 	registerUnevaluable("BaseFunctions::meta", []declaredParam{optionalParam("seq")},
 		"metadata access is evaluated from a MetadataAccessExpression, not this function")
 	registerUnevaluable("BaseFunctions::[", []declaredParam{optionalParam("x"), optionalParam("y")},
-		"the runtime has no Array value kind to index into")
-	registerUnevaluable("CollectionFunctions::array#", []declaredParam{param("arr"), param("indexes")},
-		"the runtime has no Array value kind to index into")
+		"'[' is abstract: the runtime evaluates its operator notation `num [unit]`, and its "+
+			"QuantityCalculations, VectorCalculations and TensorCalculations specializations take a measurement reference as an argument value")
 	registerUnevaluable("ControlFunctions::.", []declaredParam{optionalParam("source")},
 		"a feature chain is evaluated from a FeatureChainExpression, not this function")
 

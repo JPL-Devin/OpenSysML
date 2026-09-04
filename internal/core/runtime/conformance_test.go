@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,8 +33,11 @@ type ExpectedValue struct {
 	// Im is the imaginary part of a Complex, whose value is its real part.
 	Im *float64 `json:"im,omitempty"`
 	// Elements are the members a Sequence holds, in order, for a case asserting a
-	// multi-valued feature. Set it instead of value.
+	// multi-valued feature. Set it instead of value. A Vector's are its numbers, a
+	// VectorQuantity's its axes as Quantity values, an Array's its row-major elements.
 	Elements []ExpectedValue `json:"elements,omitempty"`
+	// Dimensions are an Array's, in order.
+	Dimensions []int64 `json:"dimensions,omitempty"`
 	// Error is the text producing this value must fail with, for a feature value whose
 	// contract is a diagnostic. Set it instead of type and value.
 	Error string `json:"error,omitempty"`
@@ -1269,6 +1273,32 @@ func validateValue(t *testing.T, ctx *Context, name string, expected ExpectedVal
 		for i, want := range expected.Elements {
 			validateValue(t, ctx, fmt.Sprintf("%s#(%d)", name, i+1), want, elements[i])
 		}
+	case "Vector":
+		if actual.Kind != ValVector || actual.Vector() == nil {
+			t.Errorf("%s: type = %v, want Vector", name, actual.Kind)
+			return
+		}
+		validateElements(t, ctx, name, expected.Elements, constValues(actual.Vector().Elements))
+	case "VectorQuantity":
+		if actual.Kind != ValVectorQuantity || actual.VectorQuantity() == nil {
+			t.Errorf("%s: type = %v, want VectorQuantity", name, actual.Kind)
+			return
+		}
+		vq := actual.VectorQuantity()
+		axes := make([]Value, vq.Dimension())
+		for i := range axes {
+			axes[i] = NewQuantityValue(vq.component(i))
+		}
+		validateElements(t, ctx, name, expected.Elements, axes)
+	case "Array":
+		if actual.Kind != ValArray || actual.Array() == nil {
+			t.Errorf("%s: type = %v, want Array", name, actual.Kind)
+			return
+		}
+		if got := actual.Array().Dimensions; !slices.Equal(got, expected.Dimensions) {
+			t.Errorf("%s: dimensions = %v, want %v", name, got, expected.Dimensions)
+		}
+		validateElements(t, ctx, name, expected.Elements, actual.Array().Elements)
 	case "Instance":
 		if actual.Kind != ValInstance {
 			t.Errorf("%s: type = %v, want Instance", name, actual.Kind)
@@ -1377,6 +1407,17 @@ func validateValue(t *testing.T, ctx *Context, name string, expected ExpectedVal
 		}
 	default:
 		t.Errorf("%s: unknown expected type %s", name, expected.Type)
+	}
+}
+
+// validateElements checks the elements of a structured value one by one.
+func validateElements(t *testing.T, ctx *Context, name string, expected []ExpectedValue, actual []Value) {
+	if len(actual) != len(expected) {
+		t.Errorf("%s: %d elements, want %d", name, len(actual), len(expected))
+		return
+	}
+	for i, want := range expected {
+		validateValue(t, ctx, fmt.Sprintf("%s#(%d)", name, i+1), want, actual[i])
 	}
 }
 

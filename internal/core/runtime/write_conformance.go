@@ -158,6 +158,8 @@ func (ctx *Context) valueConforms(scope *symbols.Scope, value *Value, declared *
 		return true, "", nil
 	case ValQuantity:
 		return ctx.quantityConforms(*value, declared)
+	case ValVectorQuantity:
+		return ctx.vectorQuantityConforms(*value, declared)
 	case ValInstance:
 		// An object is what its usage is, implicit bases included: a `part box : Box`
 		// is a Part as well as a Box.
@@ -180,7 +182,7 @@ func (ctx *Context) valueConforms(scope *symbols.Scope, value *Value, declared *
 	if ctx.model.Conforms(direct, declared) {
 		return true, "", nil
 	}
-	if prim == semantics.PrimUnknown && isScalarConstant(value) {
+	if prim == semantics.PrimUnknown && (isScalarConstant(value) || isStructuredValue(value)) {
 		return ctx.model.Conforms(declared, direct), "", nil
 	}
 	return false, "", nil
@@ -189,6 +191,30 @@ func (ctx *Context) valueConforms(scope *symbols.Scope, value *Value, declared *
 // isScalarConstant reports a value written as one scalar constant.
 func isScalarConstant(value *Value) bool {
 	return value.Kind == ValConst || value.Kind == ValComplex || value.Kind == ValString
+}
+
+// isStructuredValue reports an array, vector or vector quantity value.
+func isStructuredValue(value *Value) bool {
+	return value.Kind == ValArray || value.Kind == ValVector || value.Kind == ValVectorQuantity
+}
+
+// vectorQuantityConforms judges a written vector quantity as quantityConforms
+// judges a scalar one, axis by axis, once the target may hold a vector quantity.
+func (ctx *Context) vectorQuantityConforms(value Value, declared *symbols.Symbol) (bool, string, error) {
+	direct, err := ctx.structuredValueType(value)
+	if err != nil {
+		return false, "", err
+	}
+	if !ctx.model.Conforms(direct, declared) && !ctx.model.Conforms(declared, direct) {
+		return false, "", nil
+	}
+	vq := value.VectorQuantity()
+	for i := 0; i < vq.Dimension(); i++ {
+		if ok, refusal, err := ctx.quantityConforms(NewQuantityValue(vq.component(i)), declared); !ok || err != nil {
+			return ok, refusal, err
+		}
+	}
+	return true, "", nil
 }
 
 // quantityConforms judges a written quantity: a scalar target by the lattice, a

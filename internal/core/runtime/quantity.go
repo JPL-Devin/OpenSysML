@@ -91,15 +91,15 @@ func (ec *EvalContext) evalIndexExpr(n *ast.IndexExpr) (Value, error) {
 	}
 	term, err := ec.ctx.model.UnitTermOfExpr(ec.scope, n.Index)
 	if err != nil {
-		return Value{}, fmt.Errorf("%w: %w", ErrNotAQuantity, err)
+		return Value{}, ec.notAQuantityError(n, err)
 	}
 
 	magnitude, err := ec.Eval(n.Operand)
 	if err != nil {
 		return Value{}, err
 	}
-	if magnitude.Kind != ValConst || !magnitude.Const.IsNumeric() {
-		return Value{}, fmt.Errorf("%w: magnitude of a quantity is %s, want a number", ErrNotAQuantity, magnitude.Kind)
+	if magnitude.Kind != ValVector && (magnitude.Kind != ValConst || !magnitude.Const.IsNumeric()) {
+		return Value{}, fmt.Errorf("%w: magnitude of a quantity is %s, want a number or a vector", ErrNotAQuantity, magnitude.Kind)
 	}
 
 	product, err := ec.ctx.model.UnitProductOfExpr(ec.scope, n.Index)
@@ -107,7 +107,37 @@ func (ec *EvalContext) evalIndexExpr(n *ast.IndexExpr) (Value, error) {
 		return Value{}, fmt.Errorf("%w: %w", ErrNotAQuantity, err)
 	}
 	unit := Unit{Text: semantics.UnitExprText(n.Index), Product: product, Term: term}
+	if magnitude.Kind == ValVector {
+		// A vector in a unit is the vector quantity with that unit on every axis.
+		num := magnitude.Vector().Elements
+		units := make([]Unit, len(num))
+		for i := range units {
+			units[i] = unit
+		}
+		return ec.ctx.vectorQuantityValue(num, units)
+	}
 	return NewQuantityValue(&Quantity{Num: magnitude.Const, Unit: unit}), nil
+}
+
+// notAQuantityError reports a bracket whose index is no unit; over a collection
+// it adds that `'['` is the quantity notation and `#(…)` the index.
+func (ec *EvalContext) notAQuantityError(n *ast.IndexExpr, cause error) error {
+	err := fmt.Errorf("%w: %w", ErrNotAQuantity, cause)
+	operand, evalErr := ec.Eval(n.Operand)
+	if evalErr != nil {
+		return err
+	}
+	switch operand.Kind {
+	case ValArray, ValVector, ValVectorQuantity, ValSequence:
+		return fmt.Errorf("%w; `[…]` is the quantity notation `num [unit]`, index %s with `#(…)`",
+			err, describeOperand(operand))
+	}
+	return err
+}
+
+// unitOne is the unit a bare number is read in: no named unit, scale one.
+func unitOne() Unit {
+	return Unit{Term: semantics.UnitTerm{Scale: semantics.UnitScale(1)}}
 }
 
 // asQuantity views a value as a quantity: a quantity as itself, and a bare
@@ -119,7 +149,7 @@ func asQuantity(val Value) (*Quantity, bool) {
 		return val.Quantity(), true
 	case ValConst:
 		if val.Const.IsNumeric() {
-			return &Quantity{Num: val.Const, Unit: Unit{Term: semantics.UnitTerm{Scale: semantics.UnitScale(1)}}}, true
+			return &Quantity{Num: val.Const, Unit: unitOne()}, true
 		}
 	}
 	return nil, false

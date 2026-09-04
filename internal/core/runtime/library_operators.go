@@ -312,10 +312,17 @@ func anyOperand(_ *Context, _, _ string, val Value) (Value, error) { return val,
 // whose type conforms to Base::DataValue — not a part, item or other occurrence.
 func dataOperand(ctx *Context, name, param string, val Value) (Value, error) {
 	switch val.Kind {
-	case ValConst, ValString, ValQuantity, ValEnumLiteral, ValComplex:
+	case ValConst, ValString, ValQuantity, ValEnumLiteral, ValComplex, ValVector, ValVectorQuantity:
 		return val, nil
 	case ValSequence, ValSet:
 		for _, element := range elementsOf(val) {
+			if _, err := dataOperand(ctx, name, param, element); err != nil {
+				return Value{}, err
+			}
+		}
+		return val, nil
+	case ValArray:
+		for _, element := range val.Array().Elements {
 			if _, err := dataOperand(ctx, name, param, element); err != nil {
 				return Value{}, err
 			}

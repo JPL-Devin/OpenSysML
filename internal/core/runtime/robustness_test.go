@@ -1310,7 +1310,20 @@ func testNumericLibraryCallThatHasNoValue(t *testing.T) {
 		{"VectorFunctions::cartesianAngle(xs, (0.0, 0.0, 0.0))", semantics.ErrArithmeticDomain},
 		{"VectorFunctions::vectorScalarDiv(xs, 0)", ErrDivisionByZero},
 		{"VectorFunctions::cartesianInner(xs)", ErrCalcArity},
-		{"VectorFunctions::sum(xs)", ErrUnevaluableLibraryFunction},
+		// Flat numbers are no collection of vectors; unequal dimensions have no
+		// sum or inner product; Booleans or a two-component three-vector are no vector.
+		{"VectorFunctions::sum(xs)", ErrTypeMismatch},
+		{"VectorFunctions::sum0(xs, VectorFunctions::VectorOf(xs))", ErrTypeMismatch},
+		{"VectorFunctions::sum0((), VectorFunctions::VectorOf(xs))", ErrTypeMismatch},
+		{"VectorFunctions::sum((VectorFunctions::VectorOf(xs), VectorFunctions::VectorOf(ys)))", ErrTypeMismatch},
+		{"VectorFunctions::inner(VectorFunctions::VectorOf(xs), VectorFunctions::VectorOf(ys))", ErrTypeMismatch},
+		{"VectorFunctions::VectorOf(xs) + VectorFunctions::VectorOf(ys)", ErrTypeMismatch},
+		{"VectorFunctions::VectorOf(flags)", ErrTypeMismatch},
+		{"VectorFunctions::CartesianThreeVectorOf(ys)", ErrMultiplicityViolation},
+		{"VectorFunctions::angle(VectorFunctions::VectorOf((0.0, 0.0)), VectorFunctions::VectorOf(ys))", semantics.ErrArithmeticDomain},
+		{"VectorFunctions::VectorOf(xs) / 0", ErrDivisionByZero},
+		{"VectorCalculations::vectorScalarQuantityDiv(VectorFunctions::VectorOf(xs) [SI::m], 0 [SI::s])", ErrDivisionByZero},
+		{"VectorCalculations::scalarQuantityVectorMult(2 [SI::m], flags)", ErrTypeMismatch},
 		{"ComplexFunctions::'/'(ComplexFunctions::rect(0.0, 1.0), ComplexFunctions::rect(0.0, 0.0))", ErrDivisionByZero},
 		{"ComplexFunctions::re(xs)", ErrTypeMismatch},
 		{"ComplexFunctions::re(ys)", ErrTypeMismatch},
@@ -1356,7 +1369,7 @@ func testNamedLibraryCallThatHasNoValue(t *testing.T) {
 		{`RationalFunctions::gcd(1.0e19, 1.0e19)`, semantics.ErrArithmeticOverflow},
 		{`RationalFunctions::rat(1, 3)`, ErrUnevaluableLibraryFunction},
 		{`RationalFunctions::numer(0.5)`, ErrUnevaluableLibraryFunction},
-		{`CollectionFunctions::'array#'(xs, (1, 1))`, ErrUnevaluableLibraryFunction},
+		{`CollectionFunctions::'array#'(xs, (1, 1))`, ErrTypeMismatch},
 		{`OccurrenceFunctions::isDuring(xs)`, ErrUnevaluableLibraryFunction},
 		{`OccurrenceFunctions::addNew(xs)`, ErrCalcArity},
 		{`OccurrenceFunctions::addNew(occ = xs)`, ErrUnevaluableLibraryFunction},
@@ -1518,22 +1531,42 @@ func testDataEqualityOverAPart(t *testing.T) {
 	}
 }
 
-// testBaseIndexWithSeveralIndexes: BaseFunctions::'#' declares `Positive[1..*]`
-// indexes; several address an Array the runtime cannot represent, and none is a
-// multiplicity violation, so each is reported rather than indexed anyhow.
+// testBaseIndexWithSeveralIndexes: several indexes address an Array, so a flat
+// sequence, a rank mismatch, an out-of-range or ragged Array is each reported.
 func testBaseIndexWithSeveralIndexes(t *testing.T) {
 	src := `
 		package test {
 			private import ScalarValues::*;
+			private import Collections::*;
+			attribute a : Array { :>> dimensions = (2, 3); :>> elements = (1, 2, 3, 4, 5, 6); }
+			attribute ragged : Array { :>> dimensions = (2, 2); :>> elements = (1, 2, 3); }
 			calc def Cell { return : Integer = BaseFunctions::'#'((1, 2, 3, 4), (2, 2)); }
 			calc def NoIndex { return : Integer = BaseFunctions::'#'((1, 2, 3, 4), ()); }
+			calc def OneIndex { return : Integer = a#(4); }
+			calc def ThreeIndexes { return : Integer = a#(1, 1, 1); }
+			calc def PastRow { return : Integer = a#(3, 1); }
+			calc def PastColumn { return : Integer = a#(1, 4); }
+			calc def ZeroIndex { return : Integer = a#(0, 1); }
+			calc def Ragged { return : Integer = ragged#(1, 1); }
 		}
 	`
-	for calc, want := range map[string]error{"Cell": ErrUnevaluableLibraryFunction, "NoIndex": ErrMultiplicityViolation} {
+	for calc, want := range map[string]error{
+		"Cell":         ErrTypeMismatch,
+		"NoIndex":      ErrMultiplicityViolation,
+		"OneIndex":     ErrMultiplicityViolation,
+		"ThreeIndexes": ErrMultiplicityViolation,
+		"PastRow":      ErrIndexOutOfRange,
+		"PastColumn":   ErrIndexOutOfRange,
+		"ZeroIndex":    ErrIndexOutOfRange,
+	} {
 		err := calcErrorWithLibraries(t, src, calc, nil, 10000)
 		if !errors.Is(err, want) || !strings.Contains(err.Error(), "BaseFunctions::'#'") {
 			t.Errorf("%s = %v, want %v naming BaseFunctions::'#'", calc, err, want)
 		}
+	}
+	err := calcErrorWithLibraries(t, src, "Ragged", nil, 10000)
+	if !errors.Is(err, ErrMultiplicityViolation) || !strings.Contains(err.Error(), "flattenedSize") {
+		t.Errorf("Ragged = %v, want %v naming flattenedSize", err, ErrMultiplicityViolation)
 	}
 }
 

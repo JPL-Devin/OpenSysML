@@ -325,6 +325,21 @@ func FormatTraceValue(v Value) string {
 		return v.LiteralText()
 	case ValComplex:
 		return FormatComplex(v.Complex())
+	case ValArray:
+		if v.Array() == nil {
+			return v.Kind.String()
+		}
+		return v.Array().Format(FormatTraceValue)
+	case ValVector:
+		if v.Vector() == nil {
+			return v.Kind.String()
+		}
+		return v.Vector().format(formatConst)
+	case ValVectorQuantity:
+		if v.VectorQuantity() == nil {
+			return v.Kind.String()
+		}
+		return v.VectorQuantity().format(formatConst)
 	case ValExpr:
 		return fmt.Sprintf("expr(%s)", TraceLabel(v.Expr()))
 	default:

@@ -300,7 +300,9 @@ func TestQuantityCalculationsReport(t *testing.T) {
 		{"MeasurementRefCalculations::'*'(1, 2)", ErrUnevaluableLibraryFunction, "MeasurementRefCalculations::'*': a measurement reference"},
 		{"MeasurementRefCalculations::ToString(1)", ErrUnevaluableLibraryFunction, "MeasurementRefCalculations::ToString"},
 		{"VectorCalculations::outer((1.0, 2.0), (3.0, 4.0))", ErrUnevaluableLibraryFunction, "VectorCalculations::outer: a tensor quantity has no representation"},
-		{"VectorCalculations::scalarQuantityVectorMult(2 [m], (1.0, 2.0))", ErrUnevaluableLibraryFunction, "VectorCalculations::scalarQuantityVectorMult: a vector quantity has no representation"},
+		{"VectorCalculations::vectorScalarQuantityDiv(VectorFunctions::VectorOf((1.0, 2.0)) [m], 0 [s])", ErrDivisionByZero, "function VectorCalculations::vectorScalarQuantityDiv"},
+		{"VectorCalculations::'+'(VectorFunctions::VectorOf((1.0, 2.0)) [m], VectorFunctions::VectorOf((1.0, 2.0)) [s])", ErrIncommensurableUnits, "function VectorCalculations::'+'"},
+		{"VectorCalculations::'+'(VectorFunctions::VectorOf((1.0, 2.0)) [m], VectorFunctions::VectorOf((1.0, 2.0, 3.0)) [m])", ErrTypeMismatch, "requires vectors of equal dimension, got 2 and 3"},
 		{"VectorCalculations::transform(1, (1.0, 2.0))", ErrUnevaluableLibraryFunction, "VectorCalculations::transform: a coordinate transformation has no representation"},
 		{"VectorCalculations::'+'((1 [m], 2 [m]), (3 [m], 4 [m]))", ErrTypeMismatch, `function VectorCalculations::'+' parameter "v" requires a vector of numeric values, element 1 is a quantity in m`},
 		{"VectorCalculations::norm((3 [m], 4 [m]))", ErrTypeMismatch, `function VectorCalculations::norm parameter "v" requires a vector of numeric values, element 1 is a quantity in m`},
@@ -413,10 +415,10 @@ func testQuantityCalculationThatHasNoValue(t *testing.T) {
 	}
 }
 
-// TestVectorCalculations: the VectorCalculations functions the vector
-// representation carries compute as their VectorFunctions counterparts over a
-// vector of dimension one, the only vector quantity the runtime holds; a vector
-// of unit-bearing elements is rejected (TestQuantityCalculationsReport).
+// TestVectorCalculations: the VectorCalculations functions compute as their
+// VectorFunctions counterparts over plain vectors, and over vector quantities
+// with each axis composed as the scalar QuantityCalculations compose it; a
+// sequence of unit-bearing numbers is no vector (TestQuantityCalculationsReport).
 func TestVectorCalculations(t *testing.T) {
 	ctx, scope := quantityCalculationsContext(t)
 
@@ -428,14 +430,23 @@ func TestVectorCalculations(t *testing.T) {
 		{"VectorCalculations::isZeroVectorQuantity((0.0, 1.0))", "false"},
 		{"VectorCalculations::isUnitVectorQuantity((0.0, 1.0))", "true"},
 		{"VectorCalculations::isUnitVectorQuantity((3.0, 4.0))", "false"},
-		{"VectorCalculations::'+'((1.0, 2.0), (3.0, 4.0))", "[4.0, 6.0]"},
-		{"VectorCalculations::'-'((3.0, 4.0), (1.0, 2.0))", "[2.0, 2.0]"},
-		{"VectorCalculations::scalarVectorMult(2.0, (1.0, 2.0))", "[2.0, 4.0]"},
-		{"VectorCalculations::vectorScalarMult((1.0, 2.0), 2.0)", "[2.0, 4.0]"},
-		{"VectorCalculations::vectorScalarDiv((2.0, 4.0), 2.0)", "[1.0, 2.0]"},
+		{"VectorCalculations::'+'((1.0, 2.0), (3.0, 4.0))", "⟨4.0, 6.0⟩"},
+		{"VectorCalculations::'-'((3.0, 4.0), (1.0, 2.0))", "⟨2.0, 2.0⟩"},
+		{"VectorCalculations::scalarVectorMult(2.0, (1.0, 2.0))", "⟨2.0, 4.0⟩"},
+		{"VectorCalculations::vectorScalarMult((1.0, 2.0), 2.0)", "⟨2.0, 4.0⟩"},
+		{"VectorCalculations::vectorScalarDiv((2.0, 4.0), 2.0)", "⟨1.0, 2.0⟩"},
 		{"VectorCalculations::inner((1.0, 2.0), (3.0, 4.0))", "11.0"},
 		{"VectorCalculations::norm((3.0, 4.0))", "5.0"},
 		{"VectorCalculations::angle((1.0, 0.0), (0.0, 1.0)) > 1.5707", "true"},
+		{"VectorCalculations::scalarQuantityVectorMult(2 [m], (1.0, 2.0))", "⟨2.0, 4.0⟩ [m]"},
+		{"VectorCalculations::vectorScalarQuantityMult(VectorFunctions::VectorOf((1.0, 2.0)) [m], 2 [m])", "⟨2.0, 4.0⟩ [m**2]"},
+		{"VectorCalculations::vectorScalarQuantityDiv(VectorFunctions::VectorOf((2.0, 4.0)) [m], 2 [s])", "⟨1.0, 2.0⟩ [m/s]"},
+		{"VectorCalculations::'+'(VectorFunctions::VectorOf((1.0, 2.0)) [m], VectorFunctions::VectorOf((100.0, 200.0)) [cm])", "⟨2.0, 4.0⟩ [m]"},
+		{"VectorCalculations::inner(VectorFunctions::VectorOf((1.0, 2.0)) [m], VectorFunctions::VectorOf((3.0, 4.0)) [m])", "11.0 [m**2]"},
+		{"VectorCalculations::norm(VectorFunctions::VectorOf((3.0, 4.0)) [m])", "5.0 [m]"},
+		{"VectorCalculations::isZeroVectorQuantity(VectorFunctions::VectorOf((0.0, 0.0)) [m])", "true"},
+		{"2 [m] * VectorFunctions::VectorOf((1.0, 2.0))", "⟨2.0, 4.0⟩ [m]"},
+		{"VectorFunctions::VectorOf((2.0, 4.0)) [m] / 2 [s]", "⟨1.0, 2.0⟩ [m/s]"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.src, func(t *testing.T) {

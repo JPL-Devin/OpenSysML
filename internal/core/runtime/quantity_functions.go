@@ -13,11 +13,10 @@ import (
 const (
 	noMeasurementRefValue = "a measurement reference is a library declaration, not a value the evaluator " +
 		"passes as an argument; write the quantity as `num [unit]`"
-	noVectorQuantity = "a vector quantity has no representation: a vector is a sequence of numbers " +
-		"and carries no measurement reference"
-	noTensorQuantity           = "a tensor quantity has no representation: the runtime has no tensor value kind"
-	noCoordinateTransformation = "a coordinate transformation has no representation: " +
-		"a coordinate frame is a library declaration, not a value"
+	noTensorQuantity = "a tensor quantity has no representation: the runtime has no tensor value kind, " +
+		"and TensorCalculations gives its calculations no bodies to compute one by"
+	noCoordinateTransformation = "a coordinate transformation has no representation: a coordinate frame is a " +
+		"library declaration, not a value, and transform has no body applying origin and basisDirections"
 )
 
 // init registers the Quantities and Units domain library's calculation packages:
@@ -77,8 +76,8 @@ func registerMeasurementRefCalculations() {
 // anonymous is an `in : Type` parameter: it has no name and binds by position only.
 const anonymous = ""
 
-// registerVectorCalculations registers VectorCalculations over a vector of numbers;
-// those needing a measurement reference, a quantity-scaled vector or a tensor are named.
+// registerVectorCalculations registers VectorCalculations over vectors and vector
+// quantities; those needing a measurement reference value or a tensor are named.
 // A parameter declared `in : Type` under a VectorFunctions general takes that
 // general's parameter name (KerML implicit redefinition); otherwise it is anonymous.
 func registerVectorCalculations() {
@@ -89,10 +88,10 @@ func registerVectorCalculations() {
 	registerValueFunction("VectorCalculations::-", []string{"v", "w"}, 2, vectorSubtract)
 	registerValueFunction("VectorCalculations::scalarVectorMult", []string{"x", "v"}, 2, scalarVectorMult)
 	registerValueFunction("VectorCalculations::vectorScalarMult", []string{"v", "x"}, 2, vectorScalarMult)
-	registerUnevaluable("VectorCalculations::scalarQuantityVectorMult", []declaredParam{param(anonymous), param(anonymous)}, noVectorQuantity)
-	registerUnevaluable("VectorCalculations::vectorScalarQuantityMult", []declaredParam{param(anonymous), param(anonymous)}, noVectorQuantity)
+	registerValueFunction("VectorCalculations::scalarQuantityVectorMult", []string{anonymous, anonymous}, 2, scalarQuantityVectorMult)
+	registerValueFunction("VectorCalculations::vectorScalarQuantityMult", []string{anonymous, anonymous}, 2, vectorScalarQuantityMult)
 	registerValueFunction("VectorCalculations::vectorScalarDiv", []string{"v", "x"}, 2, vectorScalarDiv)
-	registerUnevaluable("VectorCalculations::vectorScalarQuantityDiv", []declaredParam{param(anonymous), param(anonymous)}, noVectorQuantity)
+	registerValueFunction("VectorCalculations::vectorScalarQuantityDiv", []string{anonymous, anonymous}, 2, vectorScalarQuantityDiv)
 	registerValueFunction("VectorCalculations::inner", []string{"v", "w"}, 2, vectorInner)
 	registerUnevaluable("VectorCalculations::outer", []declaredParam{param(anonymous), param(anonymous)}, noTensorQuantity)
 	registerValueFunction("VectorCalculations::norm", []string{"v"}, 1, vectorNorm)
@@ -380,13 +379,13 @@ func quantityAggregate(op ast.OperatorKind) libraryApply {
 // vectorIsUnit is VectorCalculations::isUnitVectorQuantity: whether the norm of
 // its one anonymous parameter is one.
 func vectorIsUnit(name string, _ *Context, args []Value) (Value, error) {
-	elements, err := labelledVectorElements(name, positionLabel(0), args[0])
+	v, err := readVector(name, positionLabel(0), args[0])
 	if err != nil {
 		return Value{}, err
 	}
-	reals := make([]float64, len(elements))
-	for i, elem := range elements {
-		reals[i] = asReal(elem)
+	reals, err := v.reals(name)
+	if err != nil {
+		return Value{}, err
 	}
 	return boolValue(euclideanNorm(reals) == 1), nil
 }

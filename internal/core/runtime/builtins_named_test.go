@@ -318,7 +318,7 @@ func TestSequenceOperatorCallForms(t *testing.T) {
 }
 
 // BaseFunctions::'#' takes `Positive[1..*]` indexes: several address an Array,
-// which the runtime cannot represent, and none violates the multiplicity; the
+// so a flat sequence takes one, and none violates the multiplicity; the
 // scalar-index forms name themselves in their errors.
 func TestIndexCallFormErrors(t *testing.T) {
 	cases := []struct {
@@ -326,7 +326,7 @@ func TestIndexCallFormErrors(t *testing.T) {
 		want error
 		text string
 	}{
-		{"BaseFunctions::'#'((1, 2, 3, 4), (2, 2))", ErrUnevaluableLibraryFunction, "BaseFunctions::'#': 2 indexes address an Array"},
+		{"BaseFunctions::'#'((1, 2, 3, 4), (2, 2))", ErrTypeMismatch, "BaseFunctions::'#': 2 indexes address an Array, got sequence"},
 		{"BaseFunctions::'#'((1, 2), ())", ErrMultiplicityViolation, "BaseFunctions::'#' requires at least one index"},
 		{"BaseFunctions::'#'((1, 2), 3)", ErrIndexOutOfRange, "BaseFunctions::'#' index 3"},
 		{`BaseFunctions::'#'((1, 2), "1")`, ErrTypeMismatch, "BaseFunctions::'#' requires an Integer index"},

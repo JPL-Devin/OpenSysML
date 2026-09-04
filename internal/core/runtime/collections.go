@@ -22,7 +22,9 @@ import (
 
 // elementsOf views a value as the sequence of its elements: a sequence or a set
 // as its own elements, null as the empty sequence, and any other value as the
-// one-element sequence containing it.
+// one-element sequence containing it. An array or a vector is one value — a
+// Collection is a DataValue holding its `elements` — so it is not flattened
+// here; its elements are read through that feature.
 func elementsOf(val Value) []Value {
 	switch val.Kind {
 	case ValSequence:
@@ -39,6 +41,29 @@ func elementsOf(val Value) []Value {
 		return nil
 	default:
 		return []Value{val}
+	}
+}
+
+// collectionElements views a value as the `elements` of the Collection it is:
+// an array's or a vector's elements, and elementsOf for every other value. This
+// is what CollectionFunctions operate on (`size(col.elements)`).
+func collectionElements(val Value) []Value {
+	switch val.Kind {
+	case ValArray, ValVector, ValVectorQuantity:
+		elements, _, _ := structuredFeature(val, arrayElementsFeature)
+		return elementsOf(elements)
+	}
+	return elementsOf(val)
+}
+
+// overCollectionElements adapts a sequence operation to the CollectionFunctions
+// form that the library defines over `col.elements`.
+func overCollectionElements(apply builtinFunc) builtinFunc {
+	return func(ec *EvalContext, args []Value) (Value, error) {
+		if len(args) > 0 {
+			args = append([]Value{sequenceOf(collectionElements(args[0]))}, args[1:]...)
+		}
+		return apply(ec, args)
 	}
 }
 
@@ -153,10 +178,11 @@ func elementAtOrEmpty(elements []Value, index int64) Value {
 	return elements[index-1]
 }
 
-// evalSequenceIndex evaluates `seq#(i)`, the sequence index (KerML
-// SequenceFunctions::'#'): the i-th element of the operand's sequence, counting
-// from 1. It shares its AST node with the quantity expression `5 [m]`, which
-// the bracket form marks and evalIndexExpr handles.
+// evalSequenceIndex evaluates `seq#(i)`, the index operator (KerML
+// BaseFunctions::'#'): the i-th element of the operand's sequence, counting
+// from 1, or the element of an array at one index per dimension. It shares its
+// AST node with the quantity expression `5 [m]`, which the bracket form marks
+// and evalIndexExpr handles.
 func (ec *EvalContext) evalSequenceIndex(n *ast.IndexExpr) (Value, error) {
 	operand, err := ec.Eval(n.Operand)
 	if err != nil {
@@ -165,6 +191,9 @@ func (ec *EvalContext) evalSequenceIndex(n *ast.IndexExpr) (Value, error) {
 	indexVal, err := ec.Eval(n.Index)
 	if err != nil {
 		return Value{}, err
+	}
+	if indexes := elementsOf(indexVal); len(indexes) != 1 || isStructuredValue(&operand) {
+		return builtinBaseIndex(ec, []Value{operand, indexVal})
 	}
 	index, err := indexOf("sequence index", indexVal)
 	if err != nil {
@@ -316,9 +345,11 @@ func builtinSequenceIndex(ec *EvalContext, args []Value) (Value, error) {
 }
 
 // builtinCollectionIndex is CollectionFunctions::'#', the index over a
-// collection's elements.
+// collection's elements (`col.elements#(index)`).
 func builtinCollectionIndex(ec *EvalContext, args []Value) (Value, error) {
-	return sequenceIndex("CollectionFunctions::'#'", args)
+	return overCollectionElements(func(_ *EvalContext, args []Value) (Value, error) {
+		return sequenceIndex("CollectionFunctions::'#'", args)
+	})(ec, args)
 }
 
 // sequenceIndex is a scalar-index `'#'` form: the element at one Positive index.
@@ -333,22 +364,65 @@ func sequenceIndex(op string, args []Value) (Value, error) {
 	return elementAt(op+" index", elementsOf(args[0]), index)
 }
 
-// builtinBaseIndex is BaseFunctions::'#', whose `Positive[1..*]` index selects
-// from a sequence when single and addresses an Array's dimensions when several.
+// builtinBaseIndex is BaseFunctions::'#': over an Array (a vector included) it is
+// its specialization CollectionFunctions::'array#', one index per dimension;
+// over a sequence its one `Positive[1..*]` index selects the element.
 func builtinBaseIndex(ec *EvalContext, args []Value) (Value, error) {
 	const op = "BaseFunctions::'#'"
 	if err := checkArity(op, args, 2); err != nil {
 		return Value{}, err
 	}
-	indexes := elementsOf(args[1])
-	switch {
-	case len(indexes) == 0:
-		return Value{}, fmt.Errorf("%w: %s requires at least one index, got none", ErrMultiplicityViolation, op)
-	case len(indexes) > 1:
-		return Value{}, fmt.Errorf("%w: %s: %d indexes address an Array, and the runtime has no Array value kind",
-			ErrUnevaluableLibraryFunction, op, len(indexes))
+	if isStructuredValue(&args[0]) {
+		return arrayIndex(op, args[0], args[1])
 	}
-	return sequenceIndex(op, []Value{args[0], indexes[0]})
+	indexes := elementsOf(args[1])
+	switch len(indexes) {
+	case 0:
+		return Value{}, fmt.Errorf("%w: %s requires at least one index, got none", ErrMultiplicityViolation, op)
+	case 1:
+		return sequenceIndex(op, []Value{args[0], indexes[0]})
+	}
+	return Value{}, fmt.Errorf("%w: %s: %d indexes address an Array, got %s",
+		ErrTypeMismatch, op, len(indexes), describeValue(args[0]))
+}
+
+// builtinArrayIndex is CollectionFunctions::'array#': the element of an Array
+// at one Positive index per dimension.
+func builtinArrayIndex(ec *EvalContext, args []Value) (Value, error) {
+	const op = "CollectionFunctions::'array#'"
+	if err := checkArity(op, args, 2); err != nil {
+		return Value{}, err
+	}
+	return arrayIndex(op, args[0], args[1])
+}
+
+// arrayIndex addresses an array — or a vector, which is an Array of one
+// dimension — by its indexes in row-major order. The library body answers null
+// for an array of rank 0, which no index addresses.
+func arrayIndex(op string, arr Value, indexesVal Value) (Value, error) {
+	indexes, err := indexList(op, indexesVal)
+	if err != nil {
+		return Value{}, err
+	}
+	switch arr.Kind {
+	case ValArray:
+		a := arr.Array()
+		if a.Rank() == 0 && len(indexes) == 0 {
+			return nullValue(), nil
+		}
+		return a.at(op, indexes)
+	case ValVector:
+		v := arr.Vector()
+		return (&Array{Dimensions: []int64{int64(v.Dimension())}, Elements: constValues(v.Elements)}).at(op, indexes)
+	case ValVectorQuantity:
+		vq := arr.VectorQuantity()
+		elements := make([]Value, vq.Dimension())
+		for i := range elements {
+			elements[i] = NewQuantityValue(vq.component(i))
+		}
+		return (&Array{Dimensions: []int64{int64(vq.Dimension())}, Elements: elements}).at(op, indexes)
+	}
+	return Value{}, fmt.Errorf("%w: %s requires an Array (arr: Array[1]), got %s", ErrTypeMismatch, op, describeValue(arr))
 }
 
 // builtinSequenceSize is SequenceFunctions::size.
@@ -653,7 +727,7 @@ func builtinCollectionContainsAll(ec *EvalContext, args []Value) (Value, error) 
 	if err := checkArity("CollectionFunctions::containsAll", args, 2); err != nil {
 		return Value{}, err
 	}
-	return boolValue(includesAll(elementsOf(args[0]), elementsOf(args[1]))), nil
+	return boolValue(includesAll(elementsOf(args[0]), collectionElements(args[1]))), nil
 }
 
 // builtinControlSelect is ControlFunctions::select, the elements the selector
