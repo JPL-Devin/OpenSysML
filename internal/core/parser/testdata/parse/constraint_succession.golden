@@ -1,0 +1,102 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="constraint" abstract=false variation=false name="Ordered"
+      (Membership visibility="default"
+        (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (InitialNode name="a" successor="b")
+      (Membership visibility="default"
+        (Usage kind="action" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="action" name="d" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (SuccessionEdge source="c" target="d")
+      (SuccessionEdge source="d" target="c")
+      (Membership visibility="default"
+        (Usage kind="succession" name="s" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConnectorEnd target="a"
+            (*ast.QualifiedName))
+          (ConnectorEnd target="c"
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="action" name="e" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (ControlFlowEdge source="e" target="b" else=false
+        (FeatureReference name="a"))
+      (ControlFlowEdge source="e" target="d" else=true)
+      (ConstraintMember assert=true negated=false
+        (LiteralBool value=true))))
+  (Membership visibility="default"
+    (Definition kind="part" abstract=false variation=false name="Tank"
+      (Membership visibility="default"
+        (Usage kind="constraint" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (InitialNode name="a" successor="b")
+          (ConstraintMember assert=true negated=false
+            (OperatorExpr operator="and"
+              (FeatureReference name="a")
+              (FeatureReference name="b")))))))
+  (Membership visibility="default"
+    (Definition kind="requirement" abstract=false variation=false name="R"
+      (RequireMember constraint="q"
+        (Membership visibility="default"
+          (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+        (Membership visibility="default"
+          (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+        (InitialNode name="a" successor="b"))
+      (AssumeMember
+        (Membership visibility="default"
+          (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+        (Membership visibility="default"
+          (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+        (SuccessionEdge source="a" target="b")
+        (SuccessionEdge source="b" target="a"))
+      (AssumeMember
+        (Membership visibility="default"
+          (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+        (Membership visibility="default"
+          (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+        (ControlFlowEdge source="b" target="a" else=false
+          (LiteralBool value=true))
+        (ControlFlowEdge source="b" target="b" else=true))))
+  (Membership visibility="default"
+    (Definition kind="part" abstract=false variation=false name="Pump"
+      (Membership visibility="default"
+        (Usage kind="constraint" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="assert"
+          (Membership visibility="default"
+            (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (Membership visibility="default"
+            (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+          (InitialNode name="a" successor="b")
+          (ConstraintMember assert=true negated=false
+            (LiteralBool value=true))))))
+  (Membership visibility="default"
+    (Definition kind="constraint" abstract=false variation=false name="Parameterised"
+      (Membership visibility="default"
+        (Usage kind="attribute" name="x" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=ScalarValues::Boolean
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (InitialNode name="a" successor="b")
+      (Membership visibility="default"
+        (Usage kind="action" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (SuccessionEdge source="a" target="c")
+      (ConstraintMember assert=true negated=false
+        (FeatureReference name="x"))))
+  (Membership visibility="default"
+    (Definition kind="calc" abstract=false variation=false name="K"
+      (Membership visibility="default"
+        (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="action" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (InitialNode name="a" successor="b")
+      (Membership visibility="default"
+        (Usage kind="action" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (SuccessionEdge source="a" target="c")
+      (ControlFlowEdge source="c" target="b" else=true)
+      (LiteralInteger value="1"))))

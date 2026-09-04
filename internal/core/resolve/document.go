@@ -261,11 +261,17 @@ func (r *Resolver) resolveTypeDecl(scope *symbols.Scope, decl ast.Node) bool {
 		// Final nodes have no references
 		return true
 	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
-		// Control flow nodes have no references to resolve (names are just labels)
+		// The node's own name is a label; its action body resolves in the scope
+		// the body declares into (see symbols.buildControlNode).
+		body := scope
+		if child := r.childScope(scope, d); child != nil {
+			body = child
+		}
+		r.walkMembers(body, ast.NodeBodyMembers(d))
 		return true
 	case *ast.ConstraintMember:
 		r.resolveExpr(scope, d.Expression)
-		r.walkMembers(scope, d.Body)
+		r.walkConstraintBody(scope, d, nil, d.Body)
 		return true
 	case *ast.AssumeMember:
 		r.resolvePrefixes(scope, d.Prefixes)
@@ -346,13 +352,7 @@ func (r *Resolver) resolveBehaviorDecl(scope *symbols.Scope, decl ast.Node) bool
 		body := symbols.TriggerScope(scope, d)
 		r.resolveExpr(body, d.Guard)
 		r.walkMembers(body, d.Effect)
-		// The body's members are the transition's own, outside the trigger's
-		// parameters (see symbols.buildBehaviorDecl).
-		members := scope
-		if child := r.childScope(scope, d); child != nil {
-			members = child
-		}
-		r.walkMembers(members, d.Members)
+		r.walkMembers(body, d.Members)
 		return true
 	case *ast.SendStatement:
 		r.resolveExpr(scope, d.Message)

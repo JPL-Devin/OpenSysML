@@ -73,21 +73,29 @@ systematically from four sources, one subdirectory each:
    `Feature_invalid_noType.kerml.xt`) only error in a library-less resource set — with the
    standard library loaded, `feature f;` gets an implicit type and is legal — so only
    library-independent expectations became cases.
-4. **`semantic/` — the pilot validators' named constraints** (43 cases). The pinned
+4. **`semantic/` — the pilot validators' named constraints** (52 cases). The pinned
    `KerMLValidator` and `SysMLValidator` implement 217 named `validate*` constraints, and before
    this source only the 34 `xpect/` cases tested any of them. Each case here is one minimal
-   standalone model that violates one named KerML constraint (the constraints whose source is
-   KerML or shared with SysML; the SysML-only constraints are a separate slice) and whose header
-   cites that `validate*` name, so the constraint census can join on it. Coverage was derived by
-   reading every constraint's Java implementation and message string: 42 of the 43 cases are
-   `.kerml` (`k01`–`k42`); the one `.sysml` case (`s80`) is a shared constraint whose only
-   legal violating spelling is SysML's `constant` usage prefix. Two things this source records
+   standalone model that violates one named constraint and whose header cites that `validate*`
+   name, so the constraint census can join on it. `k01`–`k42` and `s80` are the KerML
+   constraints (those whose source is KerML or shared with SysML; the SysML-only constraints are
+   a separate slice), derived by reading every constraint's Java implementation and message
+   string: 42 are `.kerml`, and the one `.sysml` case (`s80`) is a shared constraint whose only
+   legal violating spelling is SysML's `constant` usage prefix. `cn01`–`cn09` are the
+   control-node succession rules of SysML v2 8.3.17: the count bounds (a fork or decision node
+   with two incoming successions, a join or merge node with two outgoing), the end
+   multiplicities (`1..1` into any control node and out of it, `0..1` into a merge and out of a
+   decision), and the owning type (a control node in a constraint body). The pinned pilot
+   implements only the owning-type rule (`validateControlNodeOwningType`), so `cn05` is a
+   both-reject case and the other eight land in **ours-only-rejects** by design — the header of
+   each says so. They are kept because the corpus documents the rule; the pilot gap is
+   adjudicated in [pilot-differential.md](pilot-differential.md). Two things this source records
    that the buckets cannot: constraints the pilot declares but only warns about or never
    checks, and constraints for which no legal violating model exists under the loaded standard
    library — both listed under [Permissiveness gaps](#permissiveness-gaps) below, since a
    both-accept case is a corpus bug and none was kept.
 
-What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 163
+What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 172
 cases ourselves**, so the denominator measures our coverage of the rejection surface, not our
 conformance: it is a **sample, not a proof** — a clean bucket here does not mean OpenSysML rejects
 everything the reference rejects, and no official conformance suite exists to make that claim
@@ -116,7 +124,9 @@ buckets every case:
 
 - **both-reject** — agreement; the case is settled.
 - **pilot-only-rejects** — a permissiveness gap; the report keeps the pilot's messages as evidence.
-- **ours-only-rejects** — already the differential's business; counted and moved past.
+- **ours-only-rejects** — already the differential's business; counted and moved past. The
+  `semantic/` cases whose header says the pilot has not implemented the constraint land here on
+  purpose.
 - **both-accept** — the case itself is wrong and must be fixed; a corpus revision, not a finding.
 
 It writes `build/pilot-reject/pilot-reject.txt` and `build/pilot-reject/pilot-reject.json`. The
@@ -133,7 +143,7 @@ measured at their own round and are not the current baseline.
 Under the default `-conformance auto`:
 
 ```
-163 case(s): 150 both reject, 13 only the pilot rejects, 0 only we reject, 0 both accept
+172 case(s): 151 both reject, 13 only the pilot rejects, 8 only we reject, 0 both accept
   of which 2 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -141,15 +151,17 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 7 | 7 | 0 | 0 | 0 |
 | grammar | 79 | 79 | 0 | 0 | 0 |
-| semantic | 43 | 30 | 13 | 0 | 0 |
+| semantic | 52 | 31 | 13 | 8 | 0 |
 | xpect | 34 | 34 | 0 | 0 | 0 |
 
-The corpus grew from 79 cases to 119 in wave 10G, to 120 with `g60` (an `alias` named by a
-keyword), and to 163 with the `semantic/` source, which reopened 14 gaps — all of them semantic
-rules the pilot enforces and we did not (see [Permissiveness gaps](#permissiveness-gaps)); the
-named-argument validation that landed alongside closed one of them (`k33`), leaving 13. Before
-that source the default-mode gap count was 2 of 120: only the intended `extensions/`
-notation. Wave 11 closed two `xpect/` gaps: `p11`
+The eight ours-only cases are the control-node succession rules (`cn01`–`cn04`, `cn06`–`cn09`)
+the pinned pilot does not implement; they are not permissiveness gaps on our side and are
+adjudicated as pilot gaps in the differential. The corpus grew from 79 cases to 119 in wave 10G, to
+120 with `g60` (an `alias` named by a keyword), and to 172 with the `semantic/` source, which
+reopened 14 gaps — all of them semantic rules the pilot enforces and we did not (see
+[Permissiveness gaps](#permissiveness-gaps)); the named-argument validation that landed alongside
+closed one of them (`k33`), leaving 13. Before that source the default-mode gap count was 2 of
+120: only the intended `extensions/` notation. Wave 11 closed two `xpect/` gaps: `p11`
 (11D's and 11G's model-level evaluability predicate on metadata body values) and `p15` (11F's
 attribute-usage typing rule), and wave 12C closed the last one, `p24`: a library metaclass now carries its
 declaration and its abstractness on every load path, which is what the rule reads. Wave 10C closed the two `grammar/` gaps
@@ -165,8 +177,8 @@ extensions that the default mode accepts on purpose and strict mode reports as e
 initial state marker), `x04` (`region r { … }`) and `x07` (`transition <src> to <tgt>`) left that
 list when that notation was removed: each is now a parse error in either mode, so both
 implementations reject it by default. Judged in
-the default mode the same corpus gives 148 agreements and 15 gaps, which is what `-conformance
-default` prints. `-conformance strict` gives 150 and 13. Reserved keywords recovered as declared
+the default mode the same corpus gives 149 agreements and 15 gaps, which is what `-conformance
+default` prints. `-conformance strict` gives 151 and 13. Reserved keywords recovered as declared
 names and SysML declaration keywords recovered in KerML are now errors in either mode; the parser
 still preserves their trees for editors and later analysis. Of the 14 gaps this document carried before wave 8, six were closed by the
 validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
@@ -175,7 +187,7 @@ validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wav
 Read those two as agreement *when asked strictly*, not as gaps that disappeared. An opt-in
 check is weaker evidence than a default one: it says the strict question has an answer we agree on,
 not that the pipeline a user gets by default rejects the notation — by design it does not. And
-because we authored all 163 cases ourselves, a small gap count means we ran out of questions we
+because we authored all 172 cases ourselves, a small gap count means we ran out of questions we
 thought to ask, not that we stopped being permissive: the denominator measures our coverage of the
 rejection surface, not our conformance.
 
