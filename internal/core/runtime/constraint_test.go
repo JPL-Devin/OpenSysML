@@ -468,6 +468,7 @@ func TestConstraintBodySuccessionAloneIsNotAVerdict(t *testing.T) {
 				constraint attached { then b; z > 5 }
 				constraint named { succession s first a then b; z > 5 }
 				constraint flow { succession flow from a to b; z > 5 }
+				constraint final { done; z > 5 }
 			}
 		}
 	`
@@ -487,6 +488,7 @@ func TestConstraintBodySuccessionAloneIsNotAVerdict(t *testing.T) {
 		"attached": "`then` statement",
 		"named":    "`succession` statement",
 		"flow":     "`succession flow` statement",
+		"final":    "`done` statement",
 	} {
 		feat := featureNamed(ctx, rig, name)
 		if feat == nil || feat.Symbol == nil {

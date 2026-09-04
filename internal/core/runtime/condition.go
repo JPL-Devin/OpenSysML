@@ -203,6 +203,8 @@ func statementKeyword(node ast.Node) (string, bool) {
 		return "merge", true
 	case *ast.DecisionNode:
 		return "decide", true
+	case *ast.FinalNode:
+		return "done", true
 	case *ast.Usage:
 		switch {
 		case n.IsPerformedAction():
