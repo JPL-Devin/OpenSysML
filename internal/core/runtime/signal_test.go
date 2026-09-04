@@ -285,6 +285,66 @@ func TestSendNewRejectsInadmissibleArgumentsAtSend(t *testing.T) {
 	}
 }
 
+// A constructed message whose delivery fails (bad address, unjoined port) leaves
+// no occurrence behind, in an action or a state machine alike.
+func TestSendNewLeavesNothingBehindWhenDeliveryFails(t *testing.T) {
+	const src = `package test {
+		private import ScalarValues::*;
+		item def Ping;
+		part def Node {
+			attribute count : Integer = 0;
+			port lonely;
+			action listen {
+				first start;
+				action sender { send new Ping() to alpha.count; }
+				done;
+				succession first start then sender;
+				succession first sender then done;
+			}
+			action ship {
+				first start;
+				action sender { send new Ping() via lonely; }
+				done;
+				succession first start then sender;
+				succession first sender then done;
+			}
+			state machine {
+				entry; then sending;
+				state sending { entry send new Ping() via lonely; }
+			}
+		}
+		part alpha : Node;
+	}`
+	for _, tc := range []struct{ name, behavior string }{
+		{"action addressed to an attribute", "test::Node::listen"},
+		{"action through an unjoined port", "test::Node::ship"},
+		{"state machine through an unjoined port", "test::Node::machine"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+			alpha := instanceOfUsage(t, ctx, idx, "test::alpha")
+			sym := oneSymbol(t, idx, tc.behavior)
+			var err error
+			if sym.Kind == symbols.SymbolStateUsage {
+				_, _, err = ctx.ExecuteStatePerformedBy(sym, alpha, nil)
+			} else {
+				_, err = ctx.ExecuteActionPerformedBy(sym, alpha, nil)
+			}
+			if !errors.Is(err, ErrUnroutableSend) {
+				t.Fatalf("%s: %v, want %v", tc.behavior, err, ErrUnroutableSend)
+			}
+			for _, inst := range ctx.instances {
+				if inst.Type != nil && inst.Type.Name == "Ping" {
+					t.Errorf("a Ping the failed send constructed is still alive as instance %d", inst.ID)
+				}
+			}
+			if len(ctx.PendingMessages()) != 0 {
+				t.Errorf("the failed send posted %+v", ctx.PendingMessages())
+			}
+		})
+	}
+}
+
 // A label names only a feature the constructor binds: an inherited library
 // descriptor is refused at the send; a restatement of it in the type binds.
 func TestSendNewLabelMustNameConstructibleFeature(t *testing.T) {

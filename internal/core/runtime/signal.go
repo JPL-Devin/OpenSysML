@@ -832,6 +832,22 @@ func isBehaviorSymbol(sym *symbols.Symbol) bool {
 	return false
 }
 
+// send builds and posts the message a send statement describes; a delivery the
+// send cannot make leaves no occurrence the message constructed behind.
+func (ctx *Context) send(ec *EvalContext, scope *symbols.Scope, conns []lower.Connection, s lower.Send, self *Instance) error {
+	mark := len(ctx.created)
+	msg, err := ec.buildMessage(scope, s)
+	if err != nil {
+		return err
+	}
+	built := len(ctx.created)
+	if err := ctx.post(conns, msg, s, self); err != nil {
+		ctx.abandonInstancesBetween(mark, built)
+		return err
+	}
+	return nil
+}
+
 // post delivers a built message the way the send addressed it: routed through
 // the connections of the sending port, or straight onto the bus. self is the
 // object performing the behavior that sent it, nil for a behavior no object

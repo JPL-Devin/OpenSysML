@@ -257,14 +257,20 @@ func (ctx *Context) abandonCreationSince(mark, attached int) {
 // abandonInstancesSince removes objects registered after mark, which a failed
 // creation would otherwise leave behind, along with occurrences naming them.
 func (ctx *Context) abandonInstancesSince(mark int) {
+	ctx.abandonInstancesBetween(mark, len(ctx.created))
+}
+
+// abandonInstancesBetween removes the objects registered from mark up to end,
+// keeping those registered since, along with occurrences naming the removed.
+func (ctx *Context) abandonInstancesBetween(mark, end int) {
 	abandoned := make(map[int64]bool)
-	for _, id := range ctx.created[mark:] {
+	for _, id := range ctx.created[mark:end] {
 		if _, live := ctx.instances[id]; live {
 			abandoned[id] = true
 			delete(ctx.instances, id)
 		}
 	}
-	ctx.created = ctx.created[:mark]
+	ctx.created = append(ctx.created[:mark], ctx.created[end:]...)
 	if len(abandoned) == 0 {
 		return
 	}
