@@ -121,7 +121,7 @@ func statesBehaviorBodyMember(member ast.Node) bool {
 	case *ast.Comment, *ast.Documentation, *ast.TextualRepresentation:
 		return false
 	case *ast.Usage:
-		if isBehaviorArgument(member) || member.Kind == ast.UsageMetadata {
+		if member.Direction != ast.DirNone || member.Kind == ast.UsageMetadata {
 			return false
 		}
 		if member.Kind == ast.UsageAttribute {
@@ -155,8 +155,8 @@ func behaviorArguments(members []ast.Node) []Attribute {
 }
 
 // isBehaviorArgument reports whether a member of an `exhibit`/`perform`
-// declaration binds one of the behavior's parameters rather than stating body.
-// The value of an `out` member is what the behavior answers, not an argument.
+// declaration supplies a value the behavior reads. An `out` member declares
+// what it answers: no argument, though no body either.
 func isBehaviorArgument(usage *ast.Usage) bool {
 	return usage.Direction == ast.DirIn || usage.Direction == ast.DirInOut
 }

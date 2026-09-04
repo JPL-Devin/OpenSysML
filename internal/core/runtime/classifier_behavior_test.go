@@ -709,15 +709,50 @@ func TestPerformedActionDeclaringAnOutputDefaultStarts(t *testing.T) {
 			t.Errorf("%s: Instantiate: %v", name, err)
 			continue
 		}
-		behavior, ok := inst.Behavior("tick")
-		if !ok || behavior.Action == nil {
-			t.Fatalf("%s: object performs no tick action, behaviors: %v", name, inst.Behaviors())
-		}
-		fv, err := behavior.Action.occurrence.GetFeatureValue(ctx, "total")
-		if err != nil || !valueIdentical(fv.HeldValue(), constInt(7)) {
-			t.Errorf("%s: tick.total = %s, %v; want 7", name, FormatValue(fv.HeldValue()), err)
+		if got := performedFeature(t, ctx, inst, "tick", "total"); !valueIdentical(got, constInt(7)) {
+			t.Errorf("%s: tick.total = %s; want 7", name, FormatValue(got))
 		}
 	}
+}
+
+// An `out` member on a typed binding redefines the answer's default; it does
+// not replace the body, so the referenced action's flow still runs.
+func TestPerformedActionOutputDefaultKeepsTheReferencedFlow(t *testing.T) {
+	model, resolver, root := parseAndBuildLibraryModel(t, `
+		private import ScalarValues::*;
+		action def Report {
+			out total : Integer;
+			attribute steps : Integer = 0;
+			action step { assign steps := steps + 1; }
+			first step;
+		}
+		part def Counter { perform action report : Report { out total = 7; } }
+	`)
+	ctx := NewContext(model, resolver, 10000)
+	inst, err := ctx.Instantiate(resolveSymbol(t, root, "Counter"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if got := performedFeature(t, ctx, inst, "report", "total"); !valueIdentical(got, constInt(7)) {
+		t.Errorf("report.total = %s; want the binding's default 7", FormatValue(got))
+	}
+	if got := performedFeature(t, ctx, inst, "report", "steps"); !valueIdentical(got, constInt(1)) {
+		t.Errorf("report.steps = %s; want 1, the referenced flow's one step", FormatValue(got))
+	}
+}
+
+// performedFeature reads a feature of the occurrence of the action an object performs.
+func performedFeature(t *testing.T, ctx *Context, inst *Instance, action, feature string) Value {
+	t.Helper()
+	behavior, ok := inst.Behavior(action)
+	if !ok || behavior.Action == nil {
+		t.Fatalf("object performs no %s action, behaviors: %v", action, inst.Behaviors())
+	}
+	fv, err := behavior.Action.occurrence.GetFeatureValue(ctx, feature)
+	if err != nil {
+		t.Fatalf("%s.%s: %v", action, feature, err)
+	}
+	return fv.HeldValue()
 }
 
 // A single value written to a many-valued feature is that collection's one

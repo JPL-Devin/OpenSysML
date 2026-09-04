@@ -129,6 +129,9 @@ func TestClassifierBehaviorOutMemberIsNotAnArgument(t *testing.T) {
 	if len(names) != 2 || names[0] != "n" || names[1] != "m" {
 		t.Errorf("arguments = %v, want [n m]", names)
 	}
+	if behaviors[0].StatesBody {
+		t.Error("parameter members were read as a replacement behavior body")
+	}
 }
 
 // classifierBehaviorsIn parses src and reports the behaviors the first part
